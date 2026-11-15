@@ -214,6 +214,72 @@ describe('WorkspaceCleanupDialog stale-while-revalidate', () => {
     vi.useRealTimers()
   })
 
+  it('keeps a held row checked after late reclassification, including across confirm and Back', async () => {
+    installApi({
+      scannedAt: CACHED_AT,
+      candidates: [
+        makeCandidate({ worktreeId: 'repo1::/tmp/alpha', displayName: 'alpha' }),
+        makeCandidate({ worktreeId: 'repo1::/tmp/beta', displayName: 'beta' })
+      ],
+      errors: []
+    })
+    const browse = holders.store.getState().workspaceCleanupBrowse as WorkspaceCleanupBrowseState
+    holders.store.setState({
+      workspaceCleanupBrowse: {
+        ...browse,
+        filters: {
+          ...browse.filters,
+          safety: { ...browse.filters.safety, blockers: ['dirty-files'], blockerMode: 'none-of' }
+        }
+      }
+    })
+    await renderDialog()
+    await openDialog()
+    await act(async () => {
+      holders.rig?.resolvers.at(-1)?.(cachedFleet())
+    })
+    await flush()
+    await act(async () => rowCheckbox('alpha')?.click())
+    expect(rowCheckbox('alpha')?.getAttribute('aria-checked')).toBe('true')
+
+    // Late evidence makes alpha dirty: it no longer matches the live filter but stays displayed and checked.
+    await act(async () => {
+      holders.store.setState({
+        workspaceCleanupScan: {
+          scannedAt: NOW,
+          candidates: [
+            makeCandidate({
+              worktreeId: 'repo1::/tmp/alpha',
+              displayName: 'alpha',
+              blockers: ['dirty-files']
+            }),
+            makeCandidate({ worktreeId: 'repo1::/tmp/beta', displayName: 'beta' })
+          ],
+          errors: []
+        }
+      })
+    })
+    await flush()
+    expect(rowNames()).toEqual(['alpha', 'beta'])
+    expect(rowCheckbox('alpha')?.getAttribute('aria-checked')).toBe('true')
+
+    const clickByText = async (text: string): Promise<void> => {
+      await act(async () => {
+        ;[...(container?.querySelectorAll('button') ?? [])]
+          .find((button) => button.textContent?.includes(text))
+          ?.click()
+      })
+      await flush()
+    }
+    await clickByText('Delete selected')
+    // Confirmation's header Back is the first button in the view.
+    await act(async () => container?.querySelector('button')?.click())
+    await flush()
+    expect(rowNames()).toEqual(['alpha', 'beta'])
+    expect(rowCheckbox('alpha')?.getAttribute('aria-checked')).toBe('true')
+    expect(holders.infoToasts).toEqual([])
+  })
+
   it('does not clear selection while free-text search hides the row', async () => {
     installApi(cachedFleet())
     await renderDialog()
@@ -323,69 +389,5 @@ describe('WorkspaceCleanupDialog stale-while-revalidate', () => {
     expect(rowCheckbox('alpha')?.getAttribute('aria-checked')).toBe('true')
     expect(rowNames()).not.toContain('beta')
     expect(holders.infoToasts).toContain('1 selected workspace no longer exists.')
-  })
-
-  it('keeps a held row checked after late reclassification, including across confirm and Back', async () => {
-    installApi({
-      scannedAt: CACHED_AT,
-      candidates: [
-        makeCandidate({ worktreeId: 'repo1::/tmp/alpha', displayName: 'alpha' }),
-        makeCandidate({ worktreeId: 'repo1::/tmp/beta', displayName: 'beta' })
-      ],
-      errors: []
-    })
-    const browse = holders.store.getState().workspaceCleanupBrowse as WorkspaceCleanupBrowseState
-    holders.store.setState({
-      workspaceCleanupBrowse: {
-        ...browse,
-        filters: {
-          ...browse.filters,
-          safety: { ...browse.filters.safety, blockers: ['dirty-files'], blockerMode: 'none-of' }
-        }
-      }
-    })
-    await renderDialog()
-    await openDialog()
-    await act(async () => {
-      holders.rig?.resolvers.at(-1)?.(cachedFleet())
-    })
-    await flush()
-    await act(async () => rowCheckbox('alpha')?.click())
-    expect(rowCheckbox('alpha')?.getAttribute('aria-checked')).toBe('true')
-
-    // Late evidence makes alpha dirty: it no longer matches the live filter but stays displayed and checked.
-    await act(async () => {
-      holders.store.setState({
-        workspaceCleanupScan: {
-          scannedAt: NOW,
-          candidates: [
-            makeCandidate({
-              worktreeId: 'repo1::/tmp/alpha',
-              displayName: 'alpha',
-              blockers: ['dirty-files']
-            }),
-            makeCandidate({ worktreeId: 'repo1::/tmp/beta', displayName: 'beta' })
-          ],
-          errors: []
-        }
-      })
-    })
-    await flush()
-    expect(rowNames()).toEqual(['alpha', 'beta'])
-    expect(rowCheckbox('alpha')?.getAttribute('aria-checked')).toBe('true')
-
-    const clickByText = async (text: string): Promise<void> => {
-      await act(async () => {
-        ;[...(container?.querySelectorAll('button') ?? [])]
-          .find((button) => button.textContent?.includes(text))
-          ?.click()
-      })
-      await flush()
-    }
-    await clickByText('Delete selected')
-    await clickByText('Back')
-    expect(rowNames()).toEqual(['alpha', 'beta'])
-    expect(rowCheckbox('alpha')?.getAttribute('aria-checked')).toBe('true')
-    expect(holders.infoToasts).toEqual([])
   })
 })
