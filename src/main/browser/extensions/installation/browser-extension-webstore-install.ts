@@ -26,8 +26,8 @@ import { notifyBrowserExtensionListChanged } from './browser-extension-list-chan
 import { withExtensionEnabled } from '../profile-sessions/browser-extension-profile-enablement'
 import { reloadBrowserExtensionWhereEnabled } from '../profile-sessions/browser-extension-profile-reload'
 import {
-  loadBrowserExtensionIntoProfile,
-  withBrowserExtensionProfileOperation,
+  admitBrowserExtensionEnable,
+  enableBrowserExtensionInProfile,
   unloadBrowserExtensionEverywhere
 } from '../profile-sessions/browser-extension-session-loader'
 
@@ -126,66 +126,82 @@ export async function commitStagedWebStoreExtension(
 ): Promise<InstalledBrowserExtension> {
   const store = getBrowserExtensionInstallStore()
   const { extensionId } = staged
-  const previous = store.get(extensionId)
-  if (previous?.source === 'unpacked') {
-    await discardStagedWebStoreExtension(staged)
-    throw new Error(
-      `${previous.name} is loaded unpacked; remove it before installing from the store`
-    )
-  }
-  const target = store.installDirectory(extensionId, staged.version)
-  if (previous?.path === target) {
-    // Same version already in use: keep the loaded folder untouched.
-    await discardStagedWebStoreExtension(staged)
-  } else {
-    await rm(target, { recursive: true, force: true })
-    await rename(staged.directory, target)
-  }
-  const { summary } = staged
-  const record = store.save({
-    id: extensionId,
-    name: summary.name,
-    version: staged.version,
-    path: target,
-    source: 'webstore',
-    iconPath: summary.iconPath,
-    permissions: summary.permissions,
-    hostPermissions: summary.hostPermissions,
-    optionsPage: summary.optionsPage
-  })
-  const replaced = previous && previous.path !== target ? previous : null
+  let admission: ReturnType<typeof admitBrowserExtensionEnable> | undefined
   try {
-    if (replaced) {
-      await reloadBrowserExtensionWhereEnabled(record)
-    }
-    if (enableInProfileId) {
-      await withBrowserExtensionProfileOperation(enableInProfileId, extensionId, async () => {
-        await loadBrowserExtensionIntoProfile(enableInProfileId, record)
-        browserSessionRegistry.updateEnabledExtensionIds((byProfile) =>
-          withExtensionEnabled(byProfile, enableInProfileId, extensionId, true)
-        )
-      })
-    }
+    admission = enableInProfileId
+      ? admitBrowserExtensionEnable(enableInProfileId, extensionId)
+      : undefined
   } catch (error) {
-    if (replaced) {
-      store.save(replaced)
-      await reloadBrowserExtensionWhereEnabled(replaced).catch(() => {})
-      await rm(target, { recursive: true, force: true })
-    } else if (!previous) {
-      await unloadBrowserExtensionEverywhere(extensionId)
-      await store.remove(extensionId)
-    }
+    await discardStagedWebStoreExtension(staged)
     throw error
   }
-  if (replaced && isOwnedVersionFolder(extensionId, replaced.path)) {
-    await rm(replaced.path, { recursive: true, force: true, maxRetries: 3 })
+  try {
+    const previous = store.get(extensionId)
+    if (previous?.source === 'unpacked') {
+      await discardStagedWebStoreExtension(staged)
+      throw new Error(
+        `${previous.name} is loaded unpacked; remove it before installing from the store`
+      )
+    }
+    const target = store.installDirectory(extensionId, staged.version)
+    if (previous?.path === target) {
+      // Same version already in use: keep the loaded folder untouched.
+      await discardStagedWebStoreExtension(staged)
+    } else {
+      await rm(target, { recursive: true, force: true })
+      await rename(staged.directory, target)
+    }
+    const { summary } = staged
+    const record = store.save({
+      id: extensionId,
+      name: summary.name,
+      version: staged.version,
+      path: target,
+      source: 'webstore',
+      iconPath: summary.iconPath,
+      permissions: summary.permissions,
+      hostPermissions: summary.hostPermissions,
+      optionsPage: summary.optionsPage
+    })
+    const replaced = previous && previous.path !== target ? previous : null
+    try {
+      if (replaced) {
+        await reloadBrowserExtensionWhereEnabled(record)
+      }
+      if (enableInProfileId) {
+        await enableBrowserExtensionInProfile(
+          enableInProfileId,
+          record,
+          () =>
+            browserSessionRegistry.updateEnabledExtensionIds((byProfile) =>
+              withExtensionEnabled(byProfile, enableInProfileId, extensionId, true)
+            ),
+          admission
+        )
+      }
+    } catch (error) {
+      if (replaced) {
+        store.save(replaced)
+        await reloadBrowserExtensionWhereEnabled(replaced).catch(() => {})
+        await rm(target, { recursive: true, force: true })
+      } else if (!previous) {
+        await unloadBrowserExtensionEverywhere(extensionId)
+        await store.remove(extensionId)
+      }
+      throw error
+    }
+    if (replaced && isOwnedVersionFolder(extensionId, replaced.path)) {
+      await rm(replaced.path, { recursive: true, force: true, maxRetries: 3 })
+    }
+    if (getHeldBrowserExtensionUpdate(extensionId)?.version === record.version) {
+      forgetHeldBrowserExtensionUpdate(extensionId)
+    }
+    if (!previous) {
+      recordBrowserExtensionInstalled('web_store')
+    }
+    notifyBrowserExtensionListChanged()
+    return record
+  } finally {
+    admission?.revoke()
   }
-  if (getHeldBrowserExtensionUpdate(extensionId)?.version === record.version) {
-    forgetHeldBrowserExtensionUpdate(extensionId)
-  }
-  if (!previous) {
-    recordBrowserExtensionInstalled('web_store')
-  }
-  notifyBrowserExtensionListChanged()
-  return record
 }

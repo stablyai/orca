@@ -19,6 +19,7 @@ import {
   type BrowserExtensionLoadKind
 } from './browser-extension-runtime-lifecycle'
 import {
+  awaitBrowserExtensionDataRemoval,
   noteBrowserExtensionStorageOpened,
   removeReinstalledBrowserExtensionData,
   throwIfBrowserExtensionStorageAwaitingRestart
@@ -54,6 +55,8 @@ export async function loadBrowserExtensionIntoSession(
   if (known) {
     return known
   }
+  await awaitBrowserExtensionDataRemoval(sess)
+  throwIfBrowserExtensionLoadCancelled(load)
   const store = getBrowserExtensionInstallStore()
   const generation = store.removalGeneration(extension.id)
   if (

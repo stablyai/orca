@@ -518,3 +518,31 @@ it('keeps committed state and ends a failed middle hydration without retrying or
   expect(fixture.events).toHaveLength(1)
   await retireBrowserExtensionExecution(session, 'vault')
 })
+
+it('commits storage writes and keeps the latest saved value when a paused content connection overflows', async () => {
+  const { caller, session } = open()
+  await call(caller, 'setAccessLevel', [{ accessLevel: 'TRUSTED_AND_UNTRUSTED_CONTEXTS' }])
+  const response = await handleBrowserExtensionContentRequest(
+    session,
+    new Request('https://orca-extension/events', {
+      method: 'POST',
+      body: `${JSON.stringify({ token: caller.execution.contentToken, context: 'paused-frame' })}\n`
+    })
+  )
+  const value = 'x'.repeat(1024 * 1024)
+  for (let index = 0; index < 80; index++) {
+    await call(caller, 'set', [{ saved: `${value}${index}` }])
+  }
+  expect(await call(caller, 'get', ['saved'])).toEqual({ saved: `${value}79` })
+  const reader = response.body!.getReader()
+  let last: unknown
+  for (;;) {
+    const next = await reader.read()
+    if (next.done) {
+      break
+    }
+    last = decodeBrowserExtensionWireJson(new TextDecoder().decode(next.value).trim())
+  }
+  expect(last).toEqual({ control: 'overflow' })
+  await retireBrowserExtensionExecution(session, 'vault')
+})

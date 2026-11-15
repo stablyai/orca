@@ -1,4 +1,5 @@
 import type * as NodeFs from 'node:fs'
+import { EventEmitter } from 'node:events'
 import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -23,6 +24,9 @@ const mocks = vi.hoisted(() => {
     storage,
     prepareGate,
     prepareCalls: 0,
+    preparedPaths: [] as string[],
+    missingPaths: new Set<string>(),
+    profiles: [] as { id: string }[],
     prepared,
     loaded,
     registrationListeners,
@@ -66,22 +70,26 @@ const mocks = vi.hoisted(() => {
 
 vi.mock('electron', () => {
   const inactiveSession = { ...mocks.session }
+  // Why: per-session cleanup state from earlier cases must not leak into isolated ones.
+  const fresh = new Map<string, typeof mocks.session>()
   return {
     app: { on: vi.fn(), getPath: () => mocks.userData },
     session: {
       fromPartition: (partition: string) =>
-        partition === 'persist:orca-browser-inactive'
-          ? inactiveSession
-          : partition === 'persist:orca-browser-retired'
-            ? {
-                ...mocks.session,
-                extensions: {
-                  ...mocks.session.extensions,
-                  getExtension: () => null,
-                  getAllExtensions: () => []
+        partition.startsWith('persist:fresh-')
+          ? (fresh.get(partition) ?? fresh.set(partition, { ...mocks.session }).get(partition)!)
+          : partition === 'persist:orca-browser-inactive'
+            ? inactiveSession
+            : partition === 'persist:orca-browser-retired'
+              ? {
+                  ...mocks.session,
+                  extensions: {
+                    ...mocks.session.extensions,
+                    getExtension: () => null,
+                    getAllExtensions: () => []
+                  }
                 }
-              }
-            : mocks.session
+              : mocks.session
     }
   }
 })
@@ -100,10 +108,21 @@ vi.mock('../api-runtime/browser-extension-api-host', () => ({
   getBrowserExtensionProfileIdForSession: vi.fn(() => null),
   emitBrowserExtensionWorkerStartEvent: mocks.emitWorkerStart
 }))
+vi.mock('../../sessions/profiles/browser-session-registry', () => ({
+  browserSessionRegistry: {
+    listProfiles: () => mocks.profiles,
+    getEnabledExtensionIds: (profileId: string) => mocks.enabled.get(profileId) ?? []
+  }
+}))
 vi.mock('../installation/browser-extension-load-directory', () => ({
-  prepareBrowserExtensionDirectory: async (extension: { id: string }) => {
+  refreshBrowserExtensionPackage: async () => {},
+  prepareBrowserExtensionDirectory: async (extension: { id: string; path: string }) => {
     mocks.prepareCalls++
+    mocks.preparedPaths.push(extension.path)
     await mocks.prepareGate.held
+    if (mocks.missingPaths.has(extension.path)) {
+      throw new Error('manifest.json not found')
+    }
     return {
       directory: `/orca/copy/${extension.id}`,
       extensionId: extension.id,
@@ -129,6 +148,8 @@ function attachProfile(
   )
 }
 await import('./browser-extension-load-errors')
+const { reloadBrowserExtensionWhereEnabled } = await import('./browser-extension-profile-reload')
+const { navigateBrowserExtensionPage } = await import('./browser-extension-page-navigation')
 const { getBrowserExtensionProfileStateStore } =
   await import('../profile-storage/browser-extension-profile-state-store')
 await import('../profile-storage/browser-extension-sync-storage-store')
@@ -425,7 +446,6 @@ it('does not restore stale enablement after uninstall and reinstall in another O
 })
 
 it('reuses completed full maintenance until the install store changes, and scopes page-less cleanup to its target', async () => {
-  const { EventEmitter } = await import('node:events')
   const store = getBrowserExtensionInstallStore()
   const states = getBrowserExtensionProfileStateStore()
   const profile = {
@@ -493,4 +513,218 @@ it('skips repeated no-worker cleanup only after completion and invalidates it fo
   await refreshWorkerRegistration(session, 'cleanup', prepared)
   await refreshWorkerRegistration(session, 'cleanup', prepared)
   expect(clearStorageData).toHaveBeenCalledTimes(4)
+})
+
+function makeTab(): Electron.WebContents & EventEmitter {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The owned fixture supplies the session identity and lifecycle methods accessed by this production path.
+  return Object.assign(new EventEmitter(), {
+    session: mocks.session,
+    isDestroyed: () => false
+  }) as unknown as Electron.WebContents & EventEmitter
+}
+
+/** An enabled, not-yet-demanded profile on its own session whose saved data is current. */
+async function attachDemandedProfile(id: string) {
+  setBrowserExtensionSupportEnabled(true)
+  await loader.detachBrowserExtensionsFromAllProfileSessions()
+  const profile = {
+    id,
+    scope: 'isolated' as const,
+    partition: `persist:fresh-${id}`,
+    label: id,
+    source: null
+  }
+  getBrowserExtensionProfileStateStore().update(id, ID, (state) => ({
+    ...state,
+    removalGeneration: getBrowserExtensionInstallStore().removalGeneration(ID)
+  }))
+  mocks.profileForSession = id
+  mocks.enabled.set(id, [ID])
+  attachProfile(profile, [ID])
+  return profile
+}
+
+describe('admitted target operations', () => {
+  afterEach(async () => {
+    mocks.prepareGate.held = null
+    mocks.missingPaths.clear()
+    mocks.profiles = []
+    await loader.detachBrowserExtensionsFromAllProfileSessions()
+    mocks.profileForSession = 'default'
+  })
+
+  it('a Disable admitted while an enable waits on its ready target wins', async () => {
+    getBrowserExtensionInstallStore().save(installed)
+    const profile = await attachDemandedProfile('enable-race')
+    const tab = makeTab()
+    await loader.retainBrowserExtensionPage(tab)
+    expect(mocks.loaded.has(ID)).toBe(true)
+    const commit = vi.fn()
+    const enabling = loader.enableBrowserExtensionInProfile(profile.id, installed, commit)
+    // Disable lands before the enable's already-fulfilled readiness continuation.
+    loader.revokeBrowserExtensionEnable(profile.id, ID)
+    mocks.enabled.set(profile.id, [])
+    const disabling = loader.unloadBrowserExtensionFromProfile(profile.id, ID)
+    await expect(enabling).rejects.toThrow('turned off')
+    await disabling
+    expect(commit).not.toHaveBeenCalled()
+    expect(mocks.loaded.has(ID)).toBe(false)
+    tab.emit('destroyed')
+  })
+
+  it('a first document staged across Reload waits for the replacement, not the cancelled load', async () => {
+    getBrowserExtensionInstallStore().save(installed)
+    let releaseFirst = (): void => {}
+    let releaseReplacement = (): void => {}
+    mocks.prepareGate.held = new Promise<void>((resolve) => (releaseFirst = resolve))
+    const profile = await attachDemandedProfile('reload-handoff')
+    mocks.profiles = [profile]
+    const calls = mocks.prepareCalls
+    const tab = makeTab()
+    void loader.retainBrowserExtensionPage(tab)
+    await vi.waitFor(() => expect(mocks.prepareCalls).toBe(calls + 1))
+    const navigate = vi.fn(async () => {})
+    const navigation = navigateBrowserExtensionPage(tab, navigate)
+    mocks.prepareGate.held = new Promise<void>((resolve) => (releaseReplacement = resolve))
+    const reloading = reloadBrowserExtensionWhereEnabled(installed)
+    releaseFirst()
+    await vi.waitFor(() => expect(mocks.prepareCalls).toBe(calls + 2))
+    expect(navigate).not.toHaveBeenCalled()
+    releaseReplacement()
+    await reloading
+    await navigation
+    expect(navigate).toHaveBeenCalledTimes(1)
+    expect(mocks.loaded.has(ID)).toBe(true)
+    tab.emit('destroyed')
+  })
+
+  it('Load unpacked runs the chosen same-id folder whether the old copy is loaded or gone', async () => {
+    const old = { ...installed, source: 'unpacked' as const, path: '/old/vault' }
+    const chosen = { ...old, path: '/new/vault' }
+    getBrowserExtensionInstallStore().save(old)
+    const profile = await attachDemandedProfile('candidate')
+    const tab = makeTab()
+    await loader.retainBrowserExtensionPage(tab)
+    expect(mocks.preparedPaths.at(-1)).toBe('/old/vault')
+    const options = { replaces: true, refresh: false }
+    const warm = vi.fn()
+    await expect(
+      loader.loadBrowserExtensionCandidateIntoProfile(
+        profile.id,
+        chosen,
+        loader.admitBrowserExtensionEnable(profile.id, ID),
+        options,
+        warm
+      )
+    ).resolves.toMatchObject({ id: ID })
+    expect(mocks.preparedPaths.at(-1)).toBe('/new/vault')
+    expect(warm).toHaveBeenCalledWith(
+      expect.objectContaining({ id: ID }),
+      expect.objectContaining({ path: '/new/vault' })
+    )
+
+    // Cold, with the saved folder gone: the old record is never a prerequisite.
+    tab.emit('destroyed')
+    mocks.missingPaths.add('/old/vault')
+    const before = mocks.preparedPaths.length
+    const cold = vi.fn()
+    await loader.loadBrowserExtensionCandidateIntoProfile(
+      profile.id,
+      chosen,
+      loader.admitBrowserExtensionEnable(profile.id, ID),
+      options,
+      cold
+    )
+    expect(mocks.preparedPaths.slice(before)).toEqual(['/new/vault'])
+    expect(cold).toHaveBeenCalledTimes(1)
+
+    // A failed candidate commits nothing.
+    mocks.session.extensions.loadExtension.mockRejectedValueOnce(new Error('Invalid manifest'))
+    const failed = vi.fn()
+    await expect(
+      loader.loadBrowserExtensionCandidateIntoProfile(
+        profile.id,
+        chosen,
+        loader.admitBrowserExtensionEnable(profile.id, ID),
+        options,
+        failed
+      )
+    ).rejects.toThrow('Invalid manifest')
+    expect(failed).not.toHaveBeenCalled()
+  })
+
+  it('waits for an admitted data deletion before a candidate opens native storage', async () => {
+    const candidate = { ...installed, id: 'c'.repeat(32), source: 'unpacked' as const }
+    const profile = await attachDemandedProfile('candidate-cleanup')
+    const session = loader.getBrowserExtensionSessionForProfile(profile.id)!
+    const { removeUninstalledBrowserExtensionData } =
+      await import('../profile-storage/browser-extension-data-removal')
+    getBrowserExtensionProfileStateStore().update(profile.id, candidate.id, (state) => ({
+      ...state,
+      grantedPermissions: ['tabs']
+    }))
+    let release = (): void => {}
+    let started = (): void => {}
+    const held = new Promise<void>((resolve) => (release = resolve))
+    const deleting = new Promise<void>((resolve) => (started = resolve))
+    const order: string[] = []
+    mocks.session.clearStorageData.mockImplementation(async (options?: unknown) => {
+      if (
+        options &&
+        typeof options === 'object' &&
+        'origin' in options &&
+        !('storages' in options) &&
+        options.origin === `chrome-extension://${candidate.id}`
+      ) {
+        started()
+        await held
+        order.push('deleted')
+      }
+    })
+    const cleanup = removeUninstalledBrowserExtensionData(session, profile.id)
+    await deleting
+    const native = mocks.session.extensions.loadExtension.getMockImplementation()!
+    mocks.session.extensions.loadExtension.mockImplementation(async (directory: string) => {
+      order.push('loaded')
+      return native(directory)
+    })
+    const loading = loader.loadBrowserExtensionCandidateIntoProfile(
+      profile.id,
+      candidate,
+      loader.admitBrowserExtensionEnable(profile.id, candidate.id),
+      { replaces: false, refresh: false },
+      () => {}
+    )
+    try {
+      // Let the admitted candidate reach its storage boundary while the delete is held.
+      await new Promise<void>((resolve) => setImmediate(resolve))
+      release()
+      await Promise.all([cleanup, loading])
+      expect(order).toEqual(['deleted', 'loaded'])
+    } finally {
+      release()
+      await Promise.allSettled([cleanup, loading])
+      mocks.session.extensions.loadExtension.mockImplementation(native)
+      mocks.session.clearStorageData.mockImplementation(async () => {})
+    }
+  })
+
+  it('a reopened page loads an extension explicitly enabled after a completed stale sweep', async () => {
+    const store = getBrowserExtensionInstallStore()
+    const profile = await attachDemandedProfile('stale-sweep-reopen')
+    // Uninstalled and reinstalled elsewhere: this profile's data is stale.
+    store.save(installed)
+    await store.remove(ID)
+    store.save(installed)
+    let tab = makeTab()
+    await loader.retainBrowserExtensionPage(tab)
+    expect(mocks.loaded.has(ID)).toBe(false)
+    await loader.loadBrowserExtensionIntoProfile(profile.id, installed)
+    tab.emit('destroyed')
+    await vi.waitFor(() => expect(mocks.loaded.has(ID)).toBe(false))
+    tab = makeTab()
+    await loader.retainBrowserExtensionPage(tab)
+    expect(mocks.loaded.has(ID)).toBe(true)
+    tab.emit('destroyed')
+  })
 })

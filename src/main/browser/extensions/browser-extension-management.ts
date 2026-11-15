@@ -14,10 +14,12 @@ import {
   readBrowserExtensionManifest
 } from './installation/browser-extension-manifest'
 import {
+  admitBrowserExtensionEnable,
   withBrowserExtensionProfileOperation,
+  enableBrowserExtensionInProfile,
   listBrowserExtensionSessions,
-  loadBrowserExtensionFolderIntoProfile,
-  loadBrowserExtensionIntoProfile,
+  loadBrowserExtensionCandidateIntoProfile,
+  revokeBrowserExtensionEnable,
   unloadBrowserExtensionEverywhere,
   unloadBrowserExtensionFromProfile
 } from './profile-sessions/browser-extension-session-loader'
@@ -99,6 +101,7 @@ export function setBrowserExtensionEnabled(
       throw new Error('Browser profile not found')
     }
     if (!enabled) {
+      revokeBrowserExtensionEnable(browserProfileId, extensionId)
       browserSessionRegistry.updateEnabledExtensionIds((byProfile) =>
         withExtensionEnabled(byProfile, browserProfileId, extensionId, false)
       )
@@ -110,12 +113,11 @@ export function setBrowserExtensionEnabled(
       if (!installed) {
         throw new Error('Extension is not installed')
       }
-      await withBrowserExtensionProfileOperation(browserProfileId, extensionId, async () => {
-        await loadBrowserExtensionIntoProfile(browserProfileId, installed)
+      await enableBrowserExtensionInProfile(browserProfileId, installed, () =>
         browserSessionRegistry.updateEnabledExtensionIds((byProfile) =>
           withExtensionEnabled(byProfile, browserProfileId, extensionId, true)
         )
-      })
+      )
     })
   })
 }
@@ -210,53 +212,56 @@ export function addUnpackedBrowserExtension(
     const summary = await readBrowserExtensionManifest(directory)
     const extensionId = await browserExtensionIdForUnpackedFolder(directory)
     // Why the lock: a removal finishing mid-load would be undone by the save below.
-    await withBrowserExtensionLock(extensionId, () =>
-      withBrowserExtensionProfileOperation(browserProfileId, extensionId, async () => {
-        const store = getBrowserExtensionInstallStore()
-        // Why before loading: a refused folder must leave no loaded copy and no rewritten profile records.
-        const existing = store.get(extensionId)
-        if (existing?.source === 'webstore') {
-          throw new Error(`${existing.name} is already installed from the Chrome Web Store`)
-        }
-        const record: InstalledBrowserExtension = {
-          id: extensionId,
-          name: summary.name,
-          version: summary.version,
-          path: directory,
-          source: 'unpacked',
-          iconPath: summary.iconPath,
-          permissions: summary.permissions,
-          hostPermissions: summary.hostPermissions,
-          optionsPage: summary.optionsPage
-        }
-        // Native load emits extension-loaded; precedence must already be durable then.
-        if (!existing) {
-          store.save(record)
-        }
-        let loaded: Electron.Extension
-        try {
-          loaded = await loadBrowserExtensionFolderIntoProfile(
-            browserProfileId,
-            extensionId,
-            directory,
-            { refresh: existing === null }
-          )
-        } catch (error) {
-          if (!existing) {
-            await unloadBrowserExtensionFromProfile(browserProfileId, extensionId)
-            await store.remove(extensionId)
+    await withBrowserExtensionLock(extensionId, async () => {
+      const store = getBrowserExtensionInstallStore()
+      // Why before loading: a refused folder must leave no loaded copy and no rewritten profile records.
+      const existing = store.get(extensionId)
+      if (existing?.source === 'webstore') {
+        throw new Error(`${existing.name} is already installed from the Chrome Web Store`)
+      }
+      // Same folder: a loaded copy already is the chosen package; another folder replaces it.
+      const moved = existing !== null && existing.path !== directory
+      const admission = admitBrowserExtensionEnable(browserProfileId, extensionId)
+      try {
+        await loadBrowserExtensionCandidateIntoProfile(
+          browserProfileId,
+          {
+            id: extensionId,
+            name: summary.name,
+            version: summary.version,
+            path: directory,
+            source: 'unpacked',
+            iconPath: summary.iconPath,
+            permissions: summary.permissions,
+            hostPermissions: summary.hostPermissions,
+            optionsPage: summary.optionsPage
+          },
+          admission,
+          { replaces: moved, refresh: existing === null || moved },
+          (loaded, record) => {
+            store.save({ ...record, version: loaded.version })
+            browserSessionRegistry.updateEnabledExtensionIds((byProfile) =>
+              withExtensionEnabled(byProfile, browserProfileId, loaded.id, true)
+            )
           }
-          throw error
-        }
-        store.save({ ...record, version: loaded.version })
-        browserSessionRegistry.updateEnabledExtensionIds((byProfile) =>
-          withExtensionEnabled(byProfile, browserProfileId, loaded.id, true)
         )
-        if (!existing) {
-          recordBrowserExtensionInstalled('unpacked')
+      } finally {
+        admission.revoke()
+      }
+      if (!existing) {
+        recordBrowserExtensionInstalled('unpacked')
+      } else if (moved) {
+        // Other profiles running the old folder switch now; cold ones load the new one on demand.
+        const committed = store.get(extensionId)
+        if (committed) {
+          await reloadBrowserExtensionWhereEnabled(committed, {
+            exceptProfileId: browserProfileId
+          }).catch((error: unknown) =>
+            console.warn(`[browser-extensions] Could not reload ${extensionId}:`, error)
+          )
         }
-      })
-    )
+      }
+    })
     notifyBrowserExtensionListChanged()
   })
 }

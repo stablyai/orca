@@ -1,8 +1,13 @@
 export {
   withBrowserExtensionProfileOperation,
   loadBrowserExtensionIntoProfile,
-  loadBrowserExtensionFolderIntoProfile
+  enableBrowserExtensionInProfile
 } from './browser-extension-profile-loading'
+import { trackInstalledBrowserExtensionLoad } from './browser-extension-profile-loading'
+export {
+  admitBrowserExtensionEnable,
+  revokeBrowserExtensionEnable
+} from './browser-extension-profile-session-state'
 import {
   sessionHooks,
   completeBrowserExtensionProfileLoad,
@@ -16,7 +21,8 @@ export {
 import {
   attachBrowserExtensionProfileDemand,
   detachBrowserExtensionProfileDemand,
-  forgetBrowserExtensionTargetDemand
+  forgetBrowserExtensionTargetDemand,
+  type BrowserExtensionTargetReplacement
 } from './browser-extension-profile-demand'
 export {
   retainBrowserExtensionPage,
@@ -54,11 +60,14 @@ import {
   forgetBrowserExtensionLoadFailures
 } from './browser-extension-load-errors'
 import {
+  BROWSER_EXTENSION_PROFILE_UNAVAILABLE,
   BrowserExtensionProfileLoads,
   throwIfBrowserExtensionLoadCancelled
 } from './browser-extension-profile-loads'
 import { removeBrowserExtensionFromSession } from './browser-extension-worker-registration'
 import { loadInstalledBrowserExtensionIntoSession } from './browser-extension-session-load'
+import type { InstalledBrowserExtension } from '../../../../shared/browser/extensions/browser-extension-types'
+export { loadBrowserExtensionCandidateIntoProfile } from './browser-extension-profile-candidate-load'
 
 const PRELOAD_FILE_NAME = 'browser-extension-preload.js'
 const PRELOAD_ID = 'orca-browser-extension-frame'
@@ -91,7 +100,8 @@ export function attachBrowserExtensionsToProfileSession(
     loads: new BrowserExtensionProfileLoads(),
     loading: Promise.resolve(),
     started: new Set(),
-    enabled
+    enabled,
+    enables: new Map()
   }
   stateByProfileId.set(profile.id, state)
   attachBrowserExtensionProfileDemand(
@@ -258,9 +268,26 @@ export function getBrowserExtensionProfileForPartition(
 /** Unloads it and cancels its loads in flight, which stop at their next step. */
 export function unloadBrowserExtensionFromProfile(
   profileId: string,
-  extensionId: string
+  extensionId: string,
+  replacement?: BrowserExtensionTargetReplacement
 ): Promise<unknown> {
-  return unloadAndCancel(profileId, extensionId)
+  return unloadAndCancel(profileId, extensionId, replacement)
+}
+
+/** A reload's replacement load settles the prerequisite its unload kept, without waiting on it. */
+export function replaceBrowserExtensionInProfile(
+  profileId: string,
+  extension: InstalledBrowserExtension,
+  replacement: BrowserExtensionTargetReplacement
+): Promise<Electron.Extension> {
+  const state = stateByProfileId.get(profileId)
+  if (!state) {
+    replacement.revoke()
+    return Promise.reject(new Error(BROWSER_EXTENSION_PROFILE_UNAVAILABLE))
+  }
+  return replacement.settle(
+    trackInstalledBrowserExtensionLoad(state, extension, 'reload', replacement)
+  )
 }
 
 function resetExtension(
@@ -276,13 +303,17 @@ function resetExtension(
   })
 }
 
-function unloadAndCancel(profileId: string, extensionId: string): Promise<unknown> {
+function unloadAndCancel(
+  profileId: string,
+  extensionId: string,
+  replacement?: BrowserExtensionTargetReplacement
+): Promise<unknown> {
   clearBrowserExtensionLoadFailure(profileId, extensionId)
   const state = stateByProfileId.get(profileId)
   if (!state) {
     return Promise.resolve()
   }
-  forgetBrowserExtensionTargetDemand(profileId, extensionId)
+  forgetBrowserExtensionTargetDemand(profileId, extensionId, replacement)
   const stopped = state.loads.cancel(extensionId)
   const retired = retireBrowserExtensionExecution(state.session, extensionId)
   if (state.session.extensions.getExtension(extensionId)) {

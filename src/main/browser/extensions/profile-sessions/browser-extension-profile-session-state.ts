@@ -2,7 +2,9 @@ import { retireBrowserExtensionExecution } from '../api-runtime/browser-extensio
 import { removeBrowserExtensionFromSession } from './browser-extension-worker-registration'
 import { recordBrowserExtensionLoadFailure } from './browser-extension-load-errors'
 import {
+  BROWSER_EXTENSION_PROFILE_UNAVAILABLE,
   throwIfBrowserExtensionLoadCancelled,
+  type BrowserExtensionLoadAuthority,
   type BrowserExtensionProfileLoad,
   type BrowserExtensionProfileLoads
 } from './browser-extension-profile-loads'
@@ -16,7 +18,11 @@ export type ProfileSessionState = {
   loads: BrowserExtensionProfileLoads
   started: Set<string>
   enabled: () => string[]
+  /** Outstanding enable/install admissions; Disable revokes one before its next step. */
+  enables: Map<string, BrowserExtensionEnableAdmission>
 }
+
+export type BrowserExtensionEnableAdmission = BrowserExtensionLoadAuthority & { revoke: () => void }
 
 /** Per-session services and per-extension restart restore, supplied by browser-extension-startup. */
 export type BrowserExtensionSessionHooks = {
@@ -41,6 +47,37 @@ export function setBrowserExtensionSessionHooks(hooks: BrowserExtensionSessionHo
 }
 
 export const stateByProfileId = new Map<string, ProfileSessionState>()
+
+/** Admitted synchronously once the caller holds the extension lock, before its first wait. */
+export function admitBrowserExtensionEnable(
+  profileId: string,
+  extensionId: string
+): BrowserExtensionEnableAdmission {
+  const state = stateByProfileId.get(profileId)
+  if (!state) {
+    throw new Error(BROWSER_EXTENSION_PROFILE_UNAVAILABLE)
+  }
+  let revoked = false
+  const admission: BrowserExtensionEnableAdmission = {
+    get current() {
+      return !revoked && stateByProfileId.get(profileId) === state
+    },
+    revoke: () => {
+      revoked = true
+      if (state.enables.get(extensionId) === admission) {
+        state.enables.delete(extensionId)
+      }
+    }
+  }
+  state.enables.get(extensionId)?.revoke()
+  state.enables.set(extensionId, admission)
+  return admission
+}
+
+/** Disable needs no lock: it revokes an outstanding enable before that enable's next step. */
+export function revokeBrowserExtensionEnable(profileId: string, extensionId: string): void {
+  stateByProfileId.get(profileId)?.enables.get(extensionId)?.revoke()
+}
 
 /** A restoration failure retires only this target and remains visible to its explicit caller. */
 export async function completeBrowserExtensionProfileLoad(

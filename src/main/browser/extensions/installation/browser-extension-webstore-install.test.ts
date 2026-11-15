@@ -1,4 +1,5 @@
-import { mkdtempSync, readdirSync, rmSync } from 'node:fs'
+import { existsSync, mkdtempSync, readdirSync, rmSync } from 'node:fs'
+import type * as FsPromises from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { strToU8, zipSync } from 'fflate'
@@ -13,6 +14,7 @@ const state = vi.hoisted(() => {
   const enabled: Record<string, string[]> = {}
   return {
     userData: '',
+    removeGate: null as Promise<void> | null,
     enabled,
     load: vi.fn(
       async (_profileId: string, _extension: InstalledBrowserExtension): Promise<unknown> => ({})
@@ -22,6 +24,30 @@ const state = vi.hoisted(() => {
 
 vi.mock('../../../telemetry/browser-extensions-banner', () => ({
   recordBrowserExtensionInstalled: vi.fn()
+}))
+
+vi.mock('node:fs/promises', async (importOriginal) => {
+  const actual = await importOriginal<typeof FsPromises>()
+  return {
+    ...actual,
+    rm: async (...args: Parameters<typeof actual.rm>) => {
+      await state.removeGate
+      return actual.rm(...args)
+    }
+  }
+})
+vi.mock('../profile-sessions/browser-extension-runtime-lifecycle', () => ({
+  fireRuntimeLifecycleEvents: vi.fn()
+}))
+vi.mock('../profile-sessions/browser-extension-session-load', () => ({
+  loadInstalledBrowserExtensionIntoSession: async (
+    _session: Electron.Session,
+    profileId: string,
+    extension: InstalledBrowserExtension
+  ) => {
+    await state.load(profileId, extension)
+    return { id: extension.id }
+  }
 }))
 
 vi.mock('electron', () => ({ app: { getPath: () => state.userData, on: vi.fn() } }))
@@ -44,21 +70,6 @@ vi.mock('../../sessions/profiles/browser-session-registry', () => ({
     }
   }
 }))
-vi.mock('../profile-sessions/browser-extension-session-loader', () => ({
-  withBrowserExtensionProfileOperation: async (
-    _profile: string,
-    _id: string,
-    run: (session: Electron.Session) => Promise<unknown>
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this fixture operation callback does not use native session members.
-  ) => run({} as Electron.Session),
-  hasBrowserExtensionProfileDemand: () => true,
-  getBrowserExtensionSessionForProfile: (profileId: string) =>
-    profileId === 'default' ? {} : null,
-  loadBrowserExtensionIntoProfile: (profileId: string, extension: InstalledBrowserExtension) =>
-    state.load(profileId, extension),
-  unloadBrowserExtensionEverywhere: vi.fn(),
-  unloadBrowserExtensionFromProfile: vi.fn()
-}))
 
 let key: CrxTestKey
 let extensionId: string
@@ -73,11 +84,68 @@ beforeAll(() => {
 beforeEach(async () => {
   state.userData = mkdtempSync(join(tmpdir(), 'orca-webstore-install-'))
   state.enabled = {}
+  state.removeGate = null
   state.load.mockReset()
   state.load.mockImplementation(async () => ({}))
   vi.resetModules()
+  vi.doMock('../profile-sessions/browser-extension-session-loader', async () => {
+    const { enableBrowserExtensionInProfile } =
+      await import('../profile-sessions/browser-extension-profile-loading')
+    const { admitBrowserExtensionEnable, revokeBrowserExtensionEnable } =
+      await import('../profile-sessions/browser-extension-profile-session-state')
+    return {
+      admitBrowserExtensionEnable,
+      revokeBrowserExtensionEnable,
+      withBrowserExtensionProfileOperation: async (
+        _profile: string,
+        _id: string,
+        run: (session: Electron.Session) => Promise<unknown>
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this fixture operation callback does not use native session members.
+      ) => run({} as Electron.Session),
+      enableBrowserExtensionInProfile,
+      hasBrowserExtensionProfileDemand: () => true,
+      getBrowserExtensionSessionForProfile: (profileId: string) =>
+        profileId === 'default' ? {} : null,
+      loadBrowserExtensionIntoProfile: (profileId: string, extension: InstalledBrowserExtension) =>
+        state.load(profileId, extension),
+      unloadBrowserExtensionEverywhere: vi.fn(),
+      unloadBrowserExtensionFromProfile: vi.fn()
+    }
+  })
   install = await import('./browser-extension-webstore-install')
   installStore = await import('./browser-extension-install-store')
+  const { stateByProfileId } =
+    await import('../profile-sessions/browser-extension-profile-session-state')
+  const { BrowserExtensionProfileLoads } =
+    await import('../profile-sessions/browser-extension-profile-loads')
+  const { attachBrowserExtensionProfileDemand } =
+    await import('../profile-sessions/browser-extension-profile-demand')
+  for (const id of ['default', 'work']) {
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Native loading is mocked; the real enable path only reads getExtension.
+    const session = { extensions: { getExtension: () => null } } as unknown as Electron.Session
+    const enabled = () => state.enabled[id] ?? []
+    stateByProfileId.set(id, {
+      profile: {
+        id,
+        scope: 'default',
+        partition: `persist:${id}`,
+        label: id,
+        source: null
+      },
+      session,
+      loads: new BrowserExtensionProfileLoads(),
+      loading: Promise.resolve(),
+      started: new Set(),
+      enabled,
+      enables: new Map()
+    })
+    attachBrowserExtensionProfileDemand(
+      id,
+      async () => {},
+      async () => {},
+      enabled
+    )
+  }
 })
 afterEach(() => {
   rmSync(state.userData, { recursive: true, force: true })
@@ -108,6 +176,46 @@ async function installVersion(version: string, profileId: string | null = 'defau
 }
 
 describe('store installs', () => {
+  it('discards an approved package when its profile disappears before commit', async () => {
+    const staged = await install.stageWebStoreExtension(crx('1.0.0'))
+    const { stateByProfileId } =
+      await import('../profile-sessions/browser-extension-profile-session-state')
+    stateByProfileId.delete('default')
+    await expect(install.commitStagedWebStoreExtension(staged, 'default')).rejects.toThrow(
+      'Browser profile is not available for extensions'
+    )
+    expect(existsSync(staged.directory)).toBe(false)
+    expect(store().get(extensionId)).toBe(null)
+  })
+
+  it.each(['1.0.0', '1.1.0'])(
+    'keeps an installed extension disabled when Disable overlaps the %s commit filesystem wait',
+    async (version) => {
+      await installVersion('1.0.0', null)
+      const staged = await install.stageWebStoreExtension(crx(version))
+      const { setBrowserExtensionEnabled } = await import('../browser-extension-management')
+      let release = () => {}
+      state.removeGate = new Promise<void>((resolve) => (release = resolve))
+      const committing = install.commitStagedWebStoreExtension(staged, 'default')
+      const rejected = expect(committing).rejects.toThrow(
+        'The extension was turned off before it finished loading'
+      )
+      try {
+        expect(await setBrowserExtensionEnabled('default', extensionId, false)).toEqual({
+          ok: true
+        })
+      } finally {
+        state.removeGate = null
+        release()
+      }
+      await rejected
+
+      expect(state.enabled.default).toEqual([])
+      expect(store().get(extensionId)?.version).toBe('1.0.0')
+      expect(readdirSync(root())).toEqual(['1.0.0'])
+    }
+  )
+
   it('keeps the old version when the new one fails to load', async () => {
     await installVersion('1.0.0')
     state.load.mockImplementation(async (_profileId, extension) => {

@@ -82,3 +82,16 @@ export function dnrRuleLimitError(
   }
   return null
 }
+
+export function dnrEnabledRulesetLimitError(
+  built: readonly { ruleCount: number; regexRuleCount: number }[],
+  limit: number
+): string | null {
+  if (built.reduce((sum, ruleset) => sum + ruleset.ruleCount, 0) > limit) {
+    return DNR_ERRORS.enabledRulesetsRuleCount
+  }
+  return built.reduce((sum, ruleset) => sum + ruleset.regexRuleCount, 0) >
+    DNR_API_CONSTANTS.MAX_NUMBER_OF_REGEX_RULES
+    ? DNR_ERRORS.enabledRulesetsRegexRuleCount
+    : null
+}

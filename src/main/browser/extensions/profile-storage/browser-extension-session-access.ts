@@ -13,6 +13,37 @@ type AccessState = {
 }
 const sessions = new WeakMap<Electron.Session, Promise<AccessState>>()
 const ready = new WeakMap<Electron.Session, AccessState>()
+const observers = new WeakMap<Electron.Session, Map<string, Set<() => void>>>()
+
+export function onBrowserExtensionSessionAccessChange(
+  session: Electron.Session,
+  extensionId: string,
+  listener: () => void
+): () => void {
+  let extensions = observers.get(session)
+  if (!extensions) {
+    extensions = new Map()
+    observers.set(session, extensions)
+  }
+  let listeners = extensions.get(extensionId)
+  if (!listeners) {
+    listeners = new Set()
+    extensions.set(extensionId, listeners)
+  }
+  listeners.add(listener)
+  return () => {
+    listeners.delete(listener)
+    if (!listeners.size) {
+      extensions.delete(extensionId)
+    }
+  }
+}
+
+function accessChanged(session: Electron.Session, extensionId: string): void {
+  for (const listener of observers.get(session)?.get(extensionId) ?? []) {
+    listener()
+  }
+}
 
 /** Native preferences distinguish integer enum values from strings and JSON doubles. */
 export function readBrowserExtensionSessionAccess(
@@ -160,6 +191,7 @@ export async function reconcileBrowserExtensionSessionAccess(
         signal
       )
       state.uncertain.delete(extensionId)
+      accessChanged(session, extensionId)
     }
   })
 }
@@ -176,19 +208,23 @@ export async function setBrowserExtensionSessionAccess(
     if (state.uncertain.has(extensionId)) {
       await nativeAccess(session, extensionId, committed, signal)
       state.uncertain.delete(extensionId)
+      accessChanged(session, extensionId)
     }
     try {
       await nativeAccess(session, extensionId, level, signal)
       state.levels.set(extensionId, level)
       state.uncertain.delete(extensionId)
+      accessChanged(session, extensionId)
     } catch (error) {
       if (error instanceof BrowserExtensionApiError) {
         throw error
       }
       state.uncertain.add(extensionId)
+      accessChanged(session, extensionId)
       if (!signal.aborted) {
         await nativeAccess(session, extensionId, committed, signal)
         state.uncertain.delete(extensionId)
+        accessChanged(session, extensionId)
       }
       throw error
     }

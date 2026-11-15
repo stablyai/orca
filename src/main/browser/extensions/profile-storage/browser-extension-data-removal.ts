@@ -25,8 +25,10 @@ const maintenanceBySession = new WeakMap<
     store: ReturnType<typeof getBrowserExtensionInstallStore>
     revision: number
     ready: Promise<ReadonlySet<string>>
+    completed: boolean
   }
 >()
+const NOTHING_STALE: ReadonlySet<string> = new Set()
 const sweepsBySession = new WeakMap<Electron.Session, Promise<unknown>>()
 
 export function noteBrowserExtensionStorageOpened(
@@ -150,18 +152,15 @@ export function reconcileBrowserExtensionProfileData(
   const store = getBrowserExtensionInstallStore()
   const previous = maintenanceBySession.get(sess)
   if (previous?.store === store && previous.revision === store.maintenanceRevision) {
-    return previous.ready
+    // Why: a finished sweep already handled its stale ids; only its participants act on them.
+    return previous.completed ? Promise.resolve(NOTHING_STALE) : previous.ready
   }
-  const entry = {
-    store,
-    revision: store.maintenanceRevision,
-    ready: removeUninstalledBrowserExtensionData(
-      sess,
-      profileId,
-      new Set(store.list().map((item) => item.id)),
-      onUninstalled
-    )
-  }
+  const swept = removeUninstalledBrowserExtensionData(sess, profileId, onUninstalled)
+  const entry = { store, revision: store.maintenanceRevision, completed: false, ready: swept }
+  entry.ready = swept.then((stale) => {
+    entry.completed = true
+    return stale
+  })
   maintenanceBySession.set(sess, entry)
   void entry.ready.catch(() => {
     if (maintenanceBySession.get(sess) === entry) {
@@ -175,17 +174,15 @@ export function reconcileBrowserExtensionProfileData(
  * Attach-time cleanup, like Chrome's extension garbage collector: before anything opens them,
  * delete what uninstalled extensions left in this profile, including storage marked at uninstall
  * whose id was installed again since. Uninstall reaches only the profiles open then, so another
- * Orca profile's leftovers go here. A disabled extension keeps its data.
+ * Orca profile's leftovers go here. A disabled extension, or a candidate still on its first load,
+ * keeps its data; that is read when the sweep deletes, not when it is queued.
  */
 export function removeUninstalledBrowserExtensionData(
   sess: Electron.Session,
   profileId: string,
-  installedIds: ReadonlySet<string>,
   onUninstalled?: (extensionIds: ReadonlySet<string>) => void
 ): Promise<ReadonlySet<string>> {
-  return queueDataRemoval(sess, () =>
-    removeUninstalledData(sess, profileId, { installedIds, onUninstalled })
-  )
+  return queueDataRemoval(sess, () => removeUninstalledData(sess, profileId, { onUninstalled }))
 }
 
 /** An explicit reinstall reconciles its own data while other additions may still be loading. */
@@ -206,9 +203,12 @@ function queueDataRemoval(
   return sweep
 }
 
-type RemovalScope =
-  | { installedIds: ReadonlySet<string>; onUninstalled?: (ids: ReadonlySet<string>) => void }
-  | { extensionId: string }
+/** A new native load must not open data an already-admitted sweep is still deleting. */
+export async function awaitBrowserExtensionDataRemoval(sess: Electron.Session): Promise<void> {
+  await sweepsBySession.get(sess)
+}
+
+type RemovalScope = { onUninstalled?: (ids: ReadonlySet<string>) => void } | { extensionId: string }
 
 async function removeUninstalledData(
   sess: Electron.Session,
@@ -243,7 +243,9 @@ async function removeUninstalledData(
     }
   } else {
     const previousIds = Object.keys(states.readProfile(profileId)).filter(isChromeExtensionId)
-    const retained = new Set([...scope.installedIds].filter((id) => !stale.has(id)))
+    // Why live: a reservation made while this sweep waited in the queue must survive it. Its later
+    // document writes are ordered after the queued deletes, so deciding here is enough for those.
+    const retained = new Set([...store.retainedIds()].filter((id) => !stale.has(id)))
     states.forgetExtensionsExcept(
       profileId,
       new Set([...retained, ...[...removals.keys()].filter((id) => !stale.has(id))])
@@ -253,12 +255,13 @@ async function removeUninstalledData(
       getBrowserExtensionDnrStore().forgetExtensionsExcept(profileId, retained)
     )
     const entries = folder ? await readdir(folder).catch(() => []) : []
+    // Read again after the await: a candidate reserved meanwhile may already be opening its storage.
+    const installedIds = store.retainedIds()
     for (const id of [
-      ...previousIds.filter((id) => !scope.installedIds.has(id) && !removals.has(id)),
+      ...previousIds.filter((id) => !installedIds.has(id) && !removals.has(id)),
       ...entries.filter(
         (id) =>
-          isChromeExtensionId(id) &&
-          (!scope.installedIds.has(id) || isStorageAwaitingRestart(sess, id))
+          isChromeExtensionId(id) && (!installedIds.has(id) || isStorageAwaitingRestart(sess, id))
       )
     ]) {
       removed.add(id)
@@ -277,7 +280,7 @@ async function removeUninstalledData(
   )
   // Why before the markers: a marker saved ahead of the deletes would skip them after a crash.
   await Promise.all(documentDeletes)
-  if ('installedIds' in scope) {
+  if (!('extensionId' in scope)) {
     scope.onUninstalled?.(stale)
   }
   for (const [id, generation] of removals) {

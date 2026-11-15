@@ -32,6 +32,7 @@ export class BrowserExtensionInstallStore {
   private cache: Map<string, InstalledBrowserExtension> | null = null
   private removals: Map<string, number> | null = null
   private maintenanceVersion = 0
+  private readonly reserved = new Map<string, InstalledBrowserExtension>()
 
   get maintenanceRevision(): number {
     return this.maintenanceVersion
@@ -93,7 +94,10 @@ export class BrowserExtensionInstallStore {
     return this.removalGenerations().get(extensionId) ?? 0
   }
 
-  save(extension: InstalledBrowserExtension, updated = false): InstalledBrowserExtension {
+  private withInstallTime(
+    extension: InstalledBrowserExtension,
+    updated: boolean
+  ): InstalledBrowserExtension {
     const entries = this.load()
     const previous = entries.get(extension.id)
     const latest = Math.max(0, ...[...entries.values()].map((entry) => entry.installTime ?? 0))
@@ -103,7 +107,43 @@ export class BrowserExtensionInstallStore {
         (!previous || previous.version !== extension.version
           ? Math.max(Date.now(), latest + 1)
           : (previous.installTime ?? 0)))
-    const installed = installedExtensionSchema.parse({ ...extension, installTime })
+    return installedExtensionSchema.parse({ ...extension, installTime })
+  }
+
+  /** A candidate's record while its first load runs; only `save` makes it installed. */
+  reserve(extension: InstalledBrowserExtension): {
+    record: InstalledBrowserExtension
+    release: () => void
+  } {
+    const record = this.withInstallTime(extension, false)
+    this.reserved.set(record.id, record)
+    return {
+      record,
+      release: () => {
+        if (this.reserved.get(record.id) === record) {
+          this.reserved.delete(record.id)
+          // Why: cleanup kept a failed candidate's data while reserved; the next sweep removes it.
+          if (!this.load().has(record.id)) {
+            this.maintenanceVersion++
+          }
+        }
+      }
+    }
+  }
+
+  /** Ids whose data cleanup must keep: installed, or a candidate whose first load is running. */
+  retainedIds(): ReadonlySet<string> {
+    return new Set([...this.load().keys(), ...this.reserved.keys()])
+  }
+
+  /** Precedence a native load runs under: its reserved candidate's, else the installed record's. */
+  loadInstallTime(extensionId: string): number {
+    return (this.reserved.get(extensionId) ?? this.get(extensionId))?.installTime ?? 0
+  }
+
+  save(extension: InstalledBrowserExtension, updated = false): InstalledBrowserExtension {
+    const entries = this.load()
+    const installed = this.withInstallTime(extension, updated)
     entries.set(extension.id, installed)
     this.persist(entries)
     this.maintenanceVersion++

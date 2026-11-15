@@ -2,6 +2,7 @@ import { EventEmitter } from 'node:events'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   acquireBrowserExtensionProfileDemand,
+  admitBrowserExtensionTargetReplacement,
   attachBrowserExtensionProfileDemand,
   detachBrowserExtensionProfileDemand,
   retainBrowserExtensionPage,
@@ -166,4 +167,29 @@ it('does not replay the staged URL after a newer programmatic main-frame navigat
   await Promise.resolve()
   expect(navigate).not.toHaveBeenCalled()
   tab.emit('destroyed')
+})
+
+it('activates again on the next page after a reload abandons its unfinished replacement', async () => {
+  setBrowserExtensionSupportEnabled(true)
+  const activate = vi.fn(async () => {})
+  attach('abandoned-reload', activate, async () => {})
+  const first = page('abandoned-reload')
+  await retainBrowserExtensionPage(first)
+  expect(activate).toHaveBeenCalledTimes(1)
+
+  // The reload failed before this profile's replacement started, so only its final revoke runs.
+  admitBrowserExtensionTargetReplacement('abandoned-reload', 'extension', false)!.revoke()
+  const second = page('abandoned-reload')
+  await retainBrowserExtensionPage(second)
+  expect(activate).toHaveBeenCalledTimes(2)
+
+  const finished = admitBrowserExtensionTargetReplacement('abandoned-reload', 'extension', false)!
+  await finished.settle(Promise.resolve())
+  finished.revoke()
+  const third = page('abandoned-reload')
+  await retainBrowserExtensionPage(third)
+  expect(activate).toHaveBeenCalledTimes(2)
+  for (const tab of [first, second, third]) {
+    tab.emit('destroyed')
+  }
 })

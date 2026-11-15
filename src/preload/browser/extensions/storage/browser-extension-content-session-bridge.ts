@@ -15,6 +15,10 @@ export function createBrowserExtensionContentSessionBridge(
   const context = crypto.randomUUID()
   const handlers: ((namespace: string, event: string, args: unknown[]) => void)[] = []
   let listening = false
+  let pageActive = true
+  let retired = false
+  let recoveryAvailable = true
+  let recovery: ReturnType<typeof setTimeout> | undefined
   let stream: AbortController | undefined
   const post = (
     route: string,
@@ -33,6 +37,7 @@ export function createBrowserExtensionContentSessionBridge(
   const token = (): Promise<string> => {
     capability ??= post('mint', { bootstrap }).then(async (response) => {
       if (!response.ok) {
+        retired = response.status === 403
         throw new Error('Extension context was unloaded')
       }
       const result: unknown = decodeBrowserExtensionWireJson(await response.text())
@@ -49,6 +54,8 @@ export function createBrowserExtensionContentSessionBridge(
     return capability
   }
   const events = async (controller: AbortController): Promise<void> => {
+    let reader: ReadableStreamDefaultReader<Uint8Array> | undefined
+    let interrupted = false
     try {
       const response = await post(
         'events',
@@ -56,22 +63,43 @@ export function createBrowserExtensionContentSessionBridge(
         [],
         controller.signal
       )
-      if (!response.ok || !response.body || controller.signal.aborted) {
+      if (controller.signal.aborted) {
+        void response.body?.cancel().catch(() => {})
         return
       }
-      const reader = response.body.getReader()
+      if (response.status === 403) {
+        retired = true
+        return
+      }
+      if (!response.ok || !response.body) {
+        interrupted = true
+        return
+      }
+      reader = response.body.getReader()
       const decoder = new TextDecoder()
-      let buffered = ''
+      let fragments: string[] = []
       for (;;) {
         const next = await reader.read()
-        if (next.done || controller.signal.aborted) {
+        if (controller.signal.aborted) {
           return
         }
-        buffered += decoder.decode(next.value, { stream: true })
-        let newline = buffered.indexOf('\n')
+        if (next.done) {
+          interrupted = true
+          return
+        }
+        const chunk = decoder.decode(next.value, { stream: true })
+        let cursor = 0
+        let newline = chunk.indexOf('\n', cursor)
         while (newline >= 0) {
-          const payload: unknown = decodeBrowserExtensionWireJson(buffered.slice(0, newline))
-          buffered = buffered.slice(newline + 1)
+          fragments.push(chunk.slice(cursor, newline))
+          const payload: unknown = decodeBrowserExtensionWireJson(fragments.join(''))
+          fragments = []
+          cursor = newline + 1
+          if (payload && typeof payload === 'object' && 'control' in payload) {
+            retired = payload.control === 'retired'
+            interrupted = !retired
+            return
+          }
           if (
             payload &&
             typeof payload === 'object' &&
@@ -82,36 +110,64 @@ export function createBrowserExtensionContentSessionBridge(
             payload.event === 'onChanged' &&
             Array.isArray(payload.args)
           ) {
+            recoveryAvailable = true
             for (const handler of handlers) {
-              handler(payload.namespace, payload.event, payload.args)
+              try {
+                handler(payload.namespace, payload.event, payload.args)
+              } catch (error) {
+                console.error('Extension storage change listener failed', error)
+              }
             }
           }
-          newline = buffered.indexOf('\n')
+          newline = chunk.indexOf('\n', cursor)
+        }
+        if (cursor < chunk.length) {
+          fragments.push(chunk.slice(cursor))
         }
       }
     } catch {
-      /* Navigation, revocation and last-listener removal end the stream. */
+      interrupted = true
     } finally {
+      void reader?.cancel().catch(() => {})
       if (stream === controller) {
         stream = undefined
+        if (interrupted && !controller.signal.aborted && !retired && listening && pageActive) {
+          console.warn('Extension storage change connection failed; changes may have been missed.')
+          if (recoveryAvailable) {
+            recoveryAvailable = false
+            recovery = setTimeout(() => {
+              recovery = undefined
+              open()
+            }, 0)
+          }
+        }
       }
     }
   }
   const open = (): void => {
-    if (!listening || stream) {
+    if (!listening || !pageActive || retired || stream || recovery !== undefined) {
       return
     }
     stream = new AbortController()
     void events(stream)
   }
-  globalThis.addEventListener(
-    'pagehide',
-    () => {
-      stream?.abort()
-      stream = undefined
-    },
-    { once: true }
-  )
+  const stop = (): void => {
+    clearTimeout(recovery)
+    recovery = undefined
+    stream?.abort()
+    stream = undefined
+  }
+  globalThis.addEventListener('pagehide', () => {
+    pageActive = false
+    stop()
+  })
+  globalThis.addEventListener('pageshow', (event) => {
+    if (event.persisted) {
+      pageActive = true
+      recoveryAvailable = true
+      open()
+    }
+  })
   return {
     call: async (_namespace, method, args): Promise<BrowserExtensionInvokeReply> => {
       try {
@@ -130,6 +186,7 @@ export function createBrowserExtensionContentSessionBridge(
           await response.text()
         ) as BrowserExtensionInvokeReply
         if (reply.ok) {
+          recoveryAvailable = true
           open()
         }
         return reply
@@ -138,12 +195,15 @@ export function createBrowserExtensionContentSessionBridge(
       }
     },
     listen: (_namespace, _event, active) => {
+      const changed = listening !== active
       listening = active
       if (active) {
+        if (changed) {
+          recoveryAvailable = true
+        }
         open()
       } else {
-        stream?.abort()
-        stream = undefined
+        stop()
       }
     },
     onEvent: (handler) => {

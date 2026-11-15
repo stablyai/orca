@@ -97,7 +97,15 @@ export class BrowserExtensionNativePage {
       }
       let timer: NodeJS.Timeout | undefined
       let onAbort: (() => void) | undefined
+      let onDestroyed: (() => void) | undefined
       try {
+        const destruction = new Promise<never>((_resolve, reject) => {
+          onDestroyed = () => reject(new Error('Extension context was unloaded'))
+          this.contents.once('destroyed', onDestroyed)
+          if (this.contents.isDestroyed()) {
+            onDestroyed()
+          }
+        })
         return await Promise.race([
           (async () => {
             await this.ready
@@ -120,9 +128,7 @@ export class BrowserExtensionNativePage {
               onAbort()
             }
           }),
-          this.destroyed.then(() => {
-            throw new Error('Extension context was unloaded')
-          })
+          destruction
         ])
       } catch (error) {
         // A timed-out request can still dispatch until its frame receiver is gone.
@@ -132,6 +138,9 @@ export class BrowserExtensionNativePage {
         clearTimeout(timer)
         if (onAbort) {
           signal.removeEventListener('abort', onAbort)
+        }
+        if (onDestroyed) {
+          this.contents.removeListener('destroyed', onDestroyed)
         }
       }
     })

@@ -6,12 +6,25 @@ export type BrowserExtensionProfileLoad = {
   settled: Promise<void>
 }
 
+/** An admitted enable or replacement; Disable, last demand or teardown makes it stale. */
+export type BrowserExtensionLoadAuthority = { readonly current: boolean }
+
 export const BROWSER_EXTENSION_PROFILE_UNAVAILABLE =
   'Browser profile is not available for extensions'
 
+const BROWSER_EXTENSION_LOAD_CANCELLED = 'The extension was turned off before it finished loading'
+
 export function throwIfBrowserExtensionLoadCancelled(load: BrowserExtensionProfileLoad): void {
   if (load.cancelled) {
-    throw new Error('The extension was turned off before it finished loading')
+    throw new Error(BROWSER_EXTENSION_LOAD_CANCELLED)
+  }
+}
+
+export function throwIfBrowserExtensionAuthorityRevoked(
+  authority: BrowserExtensionLoadAuthority | undefined
+): void {
+  if (authority && !authority.current) {
+    throw new Error(BROWSER_EXTENSION_LOAD_CANCELLED)
   }
 }
 

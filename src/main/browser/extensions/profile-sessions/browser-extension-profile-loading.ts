@@ -5,20 +5,25 @@ import {
   trackBrowserExtensionTargetReadiness
 } from './browser-extension-profile-demand'
 import {
+  admitBrowserExtensionEnable,
   completeBrowserExtensionProfileLoad,
-  stateByProfileId
+  stateByProfileId,
+  type ProfileSessionState
 } from './browser-extension-profile-session-state'
-import { BROWSER_EXTENSION_PROFILE_UNAVAILABLE } from './browser-extension-profile-loads'
 import {
-  loadInstalledBrowserExtensionIntoSession,
-  loadBrowserExtensionIntoSession
-} from './browser-extension-session-load'
+  BROWSER_EXTENSION_PROFILE_UNAVAILABLE,
+  throwIfBrowserExtensionAuthorityRevoked,
+  throwIfBrowserExtensionLoadCancelled,
+  type BrowserExtensionLoadAuthority
+} from './browser-extension-profile-loads'
+import { loadInstalledBrowserExtensionIntoSession } from './browser-extension-session-load'
 import type { BrowserExtensionLoadKind } from './browser-extension-runtime-lifecycle'
 
 export async function withBrowserExtensionProfileOperation<T>(
   profileId: string,
   extensionId: string,
-  run: (sess: Electron.Session) => Promise<T>
+  run: (sess: Electron.Session) => Promise<T>,
+  authority?: BrowserExtensionLoadAuthority
 ): Promise<T> {
   const state = stateByProfileId.get(profileId)
   const owner = state && acquireBrowserExtensionProfileDemand(profileId, extensionId)
@@ -27,83 +32,93 @@ export async function withBrowserExtensionProfileOperation<T>(
   }
   try {
     await owner.ready
+    throwIfBrowserExtensionAuthorityRevoked(authority)
     return await run(state.session)
   } finally {
     await owner.release()
   }
 }
 
+/** The tracked body for an installed record; a replacement producer calls it unguarded. */
+export function trackInstalledBrowserExtensionLoad(
+  state: ProfileSessionState,
+  extension: InstalledBrowserExtension,
+  kind: BrowserExtensionLoadKind,
+  authority?: BrowserExtensionLoadAuthority
+): Promise<Electron.Extension> {
+  return state.loads.track(extension.id, async (load) => {
+    throwIfBrowserExtensionLoadCancelled(load)
+    throwIfBrowserExtensionAuthorityRevoked(authority)
+    const known = state.session.extensions.getExtension(extension.id)
+    if (known) {
+      if (kind === 'reload') {
+        fireRuntimeLifecycleEvents(state.session, state.profile.id, known, kind)
+      }
+      return known
+    }
+    const loaded = await loadInstalledBrowserExtensionIntoSession(
+      state.session,
+      state.profile.id,
+      extension,
+      kind,
+      load
+    )
+    await completeBrowserExtensionProfileLoad(state, loaded, load)
+    throwIfBrowserExtensionAuthorityRevoked(authority)
+    return loaded
+  })
+}
+
 export async function loadBrowserExtensionIntoProfile(
   profileId: string,
   extension: InstalledBrowserExtension,
-  kind: BrowserExtensionLoadKind = 'other'
+  kind: BrowserExtensionLoadKind = 'other',
+  authority?: BrowserExtensionLoadAuthority
 ): Promise<Electron.Extension> {
   const state = stateByProfileId.get(profileId)
   if (!state) {
     throw new Error(BROWSER_EXTENSION_PROFILE_UNAVAILABLE)
   }
-  return withBrowserExtensionProfileOperation(profileId, extension.id, () =>
-    publishLoad(
-      profileId,
-      extension.id,
-      state.loads.track(extension.id, async (load) => {
-        const known = state.session.extensions.getExtension(extension.id)
-        if (known) {
-          if (kind === 'reload') {
-            fireRuntimeLifecycleEvents(state.session, profileId, known, kind)
-          }
-          return known
-        }
-        const loaded = await loadInstalledBrowserExtensionIntoSession(
-          state.session,
-          profileId,
-          extension,
-          kind,
-          load
-        )
-        await completeBrowserExtensionProfileLoad(state, loaded, load)
-        return loaded
-      })
-    )
+  return withBrowserExtensionProfileOperation(
+    profileId,
+    extension.id,
+    () =>
+      publishLoad(
+        profileId,
+        extension.id,
+        trackInstalledBrowserExtensionLoad(state, extension, kind, authority)
+      ),
+    authority
   )
 }
 
 /**
- * Developer "Load unpacked": loads Orca's copy of the folder, whose key gives it `extensionId`.
- * `refresh` copies the folder again, so pass it only when no profile can be running the copy.
+ * Loads an installed extension, then `commit` records it on. Pass earlier authority when the
+ * caller awaited before loading; otherwise call right after taking the extension lock.
  */
-export async function loadBrowserExtensionFolderIntoProfile(
+export async function enableBrowserExtensionInProfile(
   profileId: string,
-  extensionId: string,
-  directory: string,
-  options: { refresh: boolean }
-): Promise<Electron.Extension> {
-  const state = stateByProfileId.get(profileId)
-  if (!state) {
-    throw new Error(BROWSER_EXTENSION_PROFILE_UNAVAILABLE)
-  }
-  return withBrowserExtensionProfileOperation(profileId, extensionId, () =>
-    publishLoad(
+  extension: InstalledBrowserExtension,
+  commit: () => void,
+  authority?: BrowserExtensionLoadAuthority
+): Promise<void> {
+  const admission = authority ? undefined : admitBrowserExtensionEnable(profileId, extension.id)
+  const enableAuthority = authority ?? admission
+  try {
+    throwIfBrowserExtensionAuthorityRevoked(enableAuthority)
+    await withBrowserExtensionProfileOperation(
       profileId,
-      extensionId,
-      state.loads.track(extensionId, async (load) => {
-        const known = state.session.extensions.getExtension(extensionId)
-        if (known) {
-          return known
-        }
-        const loaded = await loadBrowserExtensionIntoSession(
-          state.session,
-          profileId,
-          { id: extensionId, source: 'unpacked', path: directory },
-          'other',
-          load,
-          options
-        )
-        await completeBrowserExtensionProfileLoad(state, loaded, load)
-        return loaded
-      })
+      extension.id,
+      async () => {
+        await loadBrowserExtensionIntoProfile(profileId, extension, 'other', enableAuthority)
+        throwIfBrowserExtensionAuthorityRevoked(enableAuthority)
+        commit()
+      },
+      enableAuthority
     )
-  )
+  } finally {
+    admission?.revoke()
+  }
 }
 
 function publishLoad<T>(profileId: string, extensionId: string, ready: Promise<T>): Promise<T> {

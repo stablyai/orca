@@ -166,13 +166,20 @@ function enqueue(
       retained.get(extension.id) ?? store.read(profileId, extension.id).contentScripts
     const restore = state.restored ? [] : original
     if (method === 'updateContentScripts' && Array.isArray(args[0])) {
+      let indexed: Map<unknown, Record<string, unknown>> | undefined
       args = [
-        args[0].map((script: Record<string, unknown>) => ({
-          ...script,
-          ...('world' in script && !('js' in script)
-            ? { js: original.find((entry) => entry.id === script.id)?.js }
-            : {})
-        }))
+        args[0].map((script: Record<string, unknown>) => {
+          if ('world' in script === 'js' in script) {
+            return script
+          }
+          indexed ??= new Map(original.map((entry) => [entry.id, entry]))
+          const registered = indexed.get(script.id)
+          return {
+            ...script,
+            ...('world' in script && !('js' in script) ? { js: registered?.js } : {}),
+            ...('js' in script && !('world' in script) ? { world: registered?.world } : {})
+          }
+        })
       ]
     }
     if (!method && restore.length === 0) {

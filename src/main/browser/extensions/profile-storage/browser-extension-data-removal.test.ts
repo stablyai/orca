@@ -127,14 +127,14 @@ describe('uninstall while another Orca profile is inactive', () => {
 
     const reopened = await openOrcaProfile(personalDirectory)
     const sess = fakeSession(false, partition)
-    await reopened.sweep(sess, 'default', new Set([ID]))
+    await reopened.sweep(sess, 'default')
     expect(reopened.sync.read('default', ID)).toEqual({})
     expect(reopened.states.read('default', ID).grantedPermissions).toEqual([])
     expect(existsSync(nativeSettings)).toBe(false)
     expect(sess.clearStorageData).toHaveBeenCalledWith({ origin: `chrome-extension://${ID}` })
 
     reopened.sync.write('default', ID, { token: 'new secret' })
-    await reopened.sweep(sess, 'default', new Set([ID]))
+    await reopened.sweep(sess, 'default')
     expect(reopened.sync.read('default', ID)).toEqual({ token: 'new secret' })
     await reopened.sync.flush()
   })
@@ -177,8 +177,8 @@ it('preserves newly opened native settings while another extension finishes rein
   })
   // Both sweeps receive the same pre-load directory snapshot, while deletion stays real.
   mocks.readdir.mockResolvedValue([ID, OTHER])
-  const first = removeUninstalledBrowserExtensionData(sess, 'concurrent', new Set([ID, OTHER]))
-  const second = removeUninstalledBrowserExtensionData(sess, 'concurrent', new Set([ID, OTHER]))
+  const first = removeUninstalledBrowserExtensionData(sess, 'concurrent')
+  const second = removeUninstalledBrowserExtensionData(sess, 'concurrent')
   try {
     await started
     releaseFirst()
@@ -284,5 +284,75 @@ it('records reinstall cleanup only after the old sync storage file is deleted', 
   } finally {
     releaseDelete()
     mocks.rm.mockImplementation(realFsPromises.rm)
+  }
+})
+
+it('keeps data of a candidate reserved while the sweep waited, until its load gives up', async () => {
+  const CANDIDATE = 'abcdefghijklmnopabcdefghijklmnop'
+  const store = getBrowserExtensionInstallStore()
+  const record = {
+    id: OTHER,
+    name: 'Unpacked',
+    version: '1',
+    path: join(tmpdir(), OTHER),
+    source: 'unpacked' as const,
+    iconPath: null,
+    permissions: [],
+    hostPermissions: [],
+    optionsPage: null
+  }
+  store.save(record)
+  await store.remove(OTHER)
+  const partition = mkdtempSync(join(tmpdir(), 'orca-extension-late-reservation-'))
+  const sess = fakeSession(false, partition)
+  const profileId = 'late-reservation'
+  const sync = getBrowserExtensionSyncStorageStore()
+  const states = getBrowserExtensionProfileStateStore()
+  let releaseEarlier: () => void = () => {}
+  let earlierStarted: () => void = () => {}
+  const started = new Promise<void>((resolve) => (earlierStarted = resolve))
+  const held = new Promise<void>((resolve) => (releaseEarlier = resolve))
+  vi.mocked(sess.clearStorageData).mockImplementationOnce(async () => {
+    earlierStarted()
+    await held
+  })
+  const earlier = removeReinstalledBrowserExtensionData(sess, profileId, OTHER)
+  try {
+    await started
+    // Queued behind the paused cleanup before the candidate exists, as a page activation would be.
+    const sweep = removeUninstalledBrowserExtensionData(sess, profileId)
+    const reservation = store.reserve({ ...record, id: CANDIDATE, path: join(tmpdir(), CANDIDATE) })
+    const nativeSettings = join(partition, 'Local Extension Settings', CANDIDATE)
+    mkdirSync(nativeSettings, { recursive: true })
+    noteBrowserExtensionStorageOpened(sess, CANDIDATE)
+    sync.write(profileId, CANDIDATE, { token: 'fresh secret' })
+    states.update(profileId, CANDIDATE, (state) => ({ ...state, grantedPermissions: ['tabs'] }))
+    releaseEarlier()
+    await Promise.all([earlier, sweep])
+    await sync.flush()
+
+    expect(sync.read(profileId, CANDIDATE)).toEqual({ token: 'fresh secret' })
+    expect(
+      existsSync(
+        join(mocks.userData, 'browser-extensions', 'sync-storage', profileId, `${CANDIDATE}.json`)
+      )
+    ).toBe(true)
+    expect(states.read(profileId, CANDIDATE).grantedPermissions).toEqual(['tabs'])
+    expect(existsSync(join(nativeSettings, 'orca-uninstalled'))).toBe(false)
+    expect(sess.clearStorageData).not.toHaveBeenCalledWith({
+      origin: `chrome-extension://${CANDIDATE}`
+    })
+
+    // A failed first load leaves nothing installed, so the next sweep must run and remove it.
+    const revision = store.maintenanceRevision
+    reservation.release()
+    expect(store.maintenanceRevision).toBeGreaterThan(revision)
+    await removeUninstalledBrowserExtensionData(sess, profileId)
+    expect(sync.read(profileId, CANDIDATE)).toEqual({})
+    expect(states.read(profileId, CANDIDATE).grantedPermissions).toEqual([])
+  } finally {
+    releaseEarlier()
+    await earlier.catch(() => {})
+    await sync.flush()
   }
 })

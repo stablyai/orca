@@ -41,7 +41,10 @@ async function removeOwnedDirectory(directory: string): Promise<void> {
 }
 
 function getRunDirectory(): Promise<string> {
-  runDirectory ??= (async () => {
+  if (runDirectory) {
+    return runDirectory
+  }
+  const initializing = (async () => {
     const root = join(getBrowserExtensionInstallStore().root, 'execution-cache')
     await mkdir(root, { recursive: true })
     const directory = await mkdtemp(join(root, 'run-'))
@@ -67,7 +70,13 @@ function getRunDirectory(): Promise<string> {
     })
     return directory
   })()
-  return runDirectory
+  runDirectory = initializing
+  void initializing.catch(() => {
+    if (runDirectory === initializing) {
+      runDirectory = undefined
+    }
+  })
+  return initializing
 }
 
 function releaseRevision(revision: BrowserExtensionPackageRevision): void {

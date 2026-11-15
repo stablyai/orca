@@ -192,3 +192,9 @@ export function releaseDnrStaticRuleset(
     cache.delete(key)
   }
 }
+
+export type DnrAttachedRuleset = {
+  source: DnrRulesetSource
+  built: DnrBuiltRuleset
+  disabledRuleIds: number[]
+}

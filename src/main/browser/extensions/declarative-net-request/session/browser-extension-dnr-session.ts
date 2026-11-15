@@ -103,7 +103,7 @@ export class DnrSessionRuntime {
         changed: () => this.refresh()
       },
       extension,
-      getBrowserExtensionInstallStore().get(extension.id)?.installTime ?? 0,
+      getBrowserExtensionInstallStore().loadInstallTime(extension.id),
       withHostAccessOnly
     )
     this.extensions.set(extension.id, {
@@ -148,8 +148,10 @@ export class DnrSessionRuntime {
 
   removeExtension(extensionId: string, suspend = false): void {
     const entry = this.extensions.get(extensionId)
-    if (suspend && entry) {
-      this.suspendedRules.set(extensionId, entry.rules.getRules('session'))
+    if (suspend) {
+      if (entry) {
+        this.suspendedRules.set(extensionId, entry.rules.sessionRulesForSuspension())
+      }
     } else {
       this.suspendedRules.delete(extensionId)
     }

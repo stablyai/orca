@@ -5,6 +5,7 @@ import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { ObservedWebRequestDetails } from '../../../sessions/requests/browser-session-web-request-observer'
 import { setBrowserSessionRequestDecider } from '../../../sessions/requests/browser-session-request-decisions'
+import { createDnrRequestState } from '../request-state'
 
 const mocks = vi.hoisted(() => ({
   userData: '',
@@ -20,7 +21,10 @@ vi.mock('electron', () => ({
   webFrameMain: { fromId: vi.fn() }
 }))
 vi.mock('../../installation/browser-extension-install-store', () => ({
-  getBrowserExtensionInstallStore: () => ({ get: (id: string) => mocks.installed.get(id) ?? null })
+  getBrowserExtensionInstallStore: () => ({
+    get: (id: string) => mocks.installed.get(id) ?? null,
+    loadInstallTime: () => 0
+  })
 }))
 vi.mock('../../profile-sessions/browser-extension-session-loader', () => ({
   whenBrowserExtensionProfileLoaded: () => mocks.profileLoaded
@@ -36,6 +40,8 @@ const { browserExtensionDnrRequestDecider: decider } =
 const { attachBrowserExtensionDnr, getDnrSessionRuntime } =
   await import('./browser-extension-dnr-session')
 const { observeBrowserExtensionDnrContents } = await import('./browser-extension-dnr-contents')
+const ruleCompilation = await import('./browser-extension-dnr-static-rulesets')
+const { DnrApiError } = await import('./browser-extension-dnr-extension-rules')
 await import('../../actions/browser-extension-action-registry')
 await import('../../requests/browser-extension-web-request-observer')
 
@@ -135,6 +141,170 @@ mocks.tabs.add(TAB)
 afterEach(() => setBrowserSessionRequestDecider(null))
 
 describe('declarativeNetRequest in Orca request handlers', () => {
+  it('retains session rules when suspension interrupts static acquisition and clears them on reset', async () => {
+    const extension = blocker([])
+    const { session, runtime } = await loadedSession(extension)
+    const rules = runtime.extensions.get(BLOCKER)?.rules
+    if (!rules) {
+      throw new Error('Missing extension rules')
+    }
+    await rules.updateRules(
+      'session',
+      [],
+      [{ id: 73, condition: { urlFilter: '||ads.example^' }, action: { type: 'block' } }]
+    )
+    runtime.removeExtension(BLOCKER, true)
+    const entered = Promise.withResolvers<void>()
+    const resume = Promise.withResolvers<void>()
+    const acquire = ruleCompilation.acquireDnrStaticRuleset
+    const paused = vi
+      .spyOn(ruleCompilation, 'acquireDnrStaticRuleset')
+      .mockImplementationOnce(async (...args) => {
+        entered.resolve()
+        await resume.promise
+        return acquire(...args)
+      })
+    const restoring = runtime.addExtension(extension)
+    try {
+      await entered.promise
+      expect(runtime.extensions.get(BLOCKER)?.rules.getRules('session')).toEqual([])
+      runtime.removeExtension(BLOCKER, true)
+      runtime.removeExtension(BLOCKER, true)
+      await runtime.addExtension(extension)
+      resume.resolve()
+      await restoring
+      expect(await decider.beforeRequest(session, details('https://ads.example/a.js'))).toEqual({
+        cancel: true
+      })
+
+      runtime.removeExtension(BLOCKER, true)
+      paused.mockRejectedValueOnce(new Error('Temporary static acquisition failure'))
+      await runtime.addExtension(extension)
+      runtime.removeExtension(BLOCKER, true)
+      await runtime.addExtension(extension)
+      expect(await decider.beforeRequest(session, details('https://ads.example/a.js'))).toEqual({
+        cancel: true
+      })
+      runtime.removeExtension(BLOCKER, true)
+      paused.mockRejectedValueOnce(new Error('Temporary static acquisition failure'))
+      await runtime.addExtension(extension)
+      await runtime.extensions
+        .get(BLOCKER)
+        ?.rules.updateRules(
+          'session',
+          [],
+          [{ id: 88, condition: { urlFilter: '||successor.example^' }, action: { type: 'block' } }]
+        )
+      runtime.removeExtension(BLOCKER, true)
+      await runtime.addExtension(extension)
+      expect(await decider.beforeRequest(session, details('https://ads.example/a.js'))).toBeNull()
+      expect(
+        await decider.beforeRequest(session, details('https://successor.example/a.js'))
+      ).toEqual({ cancel: true })
+      runtime.removeExtension(BLOCKER)
+      await runtime.addExtension(extension)
+      expect(await decider.beforeRequest(session, details('https://ads.example/a.js'))).toBeNull()
+    } finally {
+      resume.resolve()
+      await restoring
+      paused.mockRestore()
+      runtime.removeExtension(BLOCKER)
+    }
+  })
+
+  it('retains session input during compilation without allowing late completion to replace reset rules', async () => {
+    const extension = blocker([], { declarative_net_request: { rule_resources: [] } })
+    const { session, runtime } = await loadedSession(extension)
+    const rules = runtime.extensions.get(BLOCKER)?.rules
+    if (!rules) {
+      throw new Error('Missing extension rules')
+    }
+    await rules.updateRules(
+      'session',
+      [],
+      [{ id: 73, condition: { urlFilter: '||ads.example^' }, action: { type: 'block' } }]
+    )
+    runtime.removeExtension(BLOCKER, true)
+    const entered = Promise.withResolvers<void>()
+    const resume = Promise.withResolvers<void>()
+    const build = ruleCompilation.buildDnrRules
+    const paused = vi
+      .spyOn(ruleCompilation, 'buildDnrRules')
+      .mockImplementationOnce(async (...args) => {
+        entered.resolve()
+        await resume.promise
+        return build(...args)
+      })
+    const restoring = runtime.addExtension(extension)
+    try {
+      await entered.promise
+      expect(runtime.extensions.get(BLOCKER)?.rules.getRules('session')).toEqual([])
+      runtime.removeExtension(BLOCKER, true)
+      await runtime.addExtension(extension)
+      expect(
+        runtime.engine
+          .evaluateBeforeRequest(
+            {
+              url: 'https://ads.example/a.js',
+              method: 'GET',
+              type: 'script',
+              initiator: PAGE,
+              tabId: TAB
+            },
+            createDnrRequestState()
+          )
+          .actions.map((action) => action.type)
+      ).toEqual(['block'])
+
+      runtime.removeExtension(BLOCKER)
+      await runtime.addExtension(extension)
+      await runtime.extensions
+        .get(BLOCKER)
+        ?.rules.updateRules(
+          'session',
+          [],
+          [{ id: 88, condition: { urlFilter: '||successor.example^' }, action: { type: 'block' } }]
+        )
+      resume.resolve()
+      await restoring
+      expect(await decider.beforeRequest(session, details('https://ads.example/a.js'))).toBeNull()
+      expect(
+        await decider.beforeRequest(session, details('https://successor.example/a.js'))
+      ).toEqual({
+        cancel: true
+      })
+      runtime.removeExtension(BLOCKER, true)
+      await runtime.addExtension(extension)
+      expect(
+        await decider.beforeRequest(session, details('https://successor.example/a.js'))
+      ).toEqual({
+        cancel: true
+      })
+    } finally {
+      resume.resolve()
+      await restoring
+      paused.mockRestore()
+      runtime.removeExtension(BLOCKER)
+    }
+  })
+
+  it('discards retained session input only after completed invalid validation', async () => {
+    const extension = blocker([], { declarative_net_request: { rule_resources: [] } })
+    const { session, runtime } = await loadedSession(extension)
+    const rules = runtime.extensions.get(BLOCKER)?.rules
+    if (!rules) {
+      throw new Error('Missing extension rules')
+    }
+    await expect(
+      rules.load([{ id: 0, condition: { urlFilter: '||ads.example^' }, action: { type: 'block' } }])
+    ).rejects.toBeInstanceOf(DnrApiError)
+    expect(rules.sessionRulesForSuspension()).toEqual([])
+    runtime.removeExtension(BLOCKER, true)
+    await runtime.addExtension(extension)
+    expect(await decider.beforeRequest(session, details('https://ads.example/a.js'))).toBeNull()
+    runtime.removeExtension(BLOCKER)
+  })
+
   it('holds requests at startup until enabled blockers have loaded', async () => {
     const extension = blocker([
       { id: 1, condition: { urlFilter: '||ads.example^' }, action: { type: 'block' } }

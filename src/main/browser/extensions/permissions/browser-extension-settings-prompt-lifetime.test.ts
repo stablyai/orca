@@ -32,6 +32,7 @@ vi.mock('../../sessions/profiles/browser-session-registry', () => ({
 }))
 vi.mock('../browser-extension-management', () => ({ removeBrowserExtension: vi.fn() }))
 vi.mock('../profile-sessions/browser-extension-session-loader', () => ({
+  admitBrowserExtensionEnable: () => ({ current: true, revoke: () => {} }),
   withBrowserExtensionProfileOperation: async (
     _profile: string,
     _id: string,
@@ -41,6 +42,14 @@ vi.mock('../profile-sessions/browser-extension-session-loader', () => ({
   hasBrowserExtensionProfileDemand: () => true,
   getBrowserExtensionSessionForProfile: () => ({}),
   loadBrowserExtensionIntoProfile: () => state.load(),
+  enableBrowserExtensionInProfile: async (
+    _profile: string,
+    _extension: unknown,
+    commit: () => void
+  ) => {
+    await state.load()
+    commit()
+  },
   unloadBrowserExtensionEverywhere: vi.fn()
 }))
 vi.mock('../browser-extension-support', () => ({ isBrowserExtensionSupportEnabled: () => true }))

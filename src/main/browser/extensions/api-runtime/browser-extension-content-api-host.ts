@@ -9,7 +9,11 @@ import {
   type BrowserExtensionCaller
 } from './browser-extension-namespace-registry'
 import { handleBrowserExtensionApiRequest } from './browser-extension-api-request'
-import { browserExtensionUntrustedSessionAccess } from '../profile-storage/browser-extension-session-access'
+import {
+  browserExtensionUntrustedSessionAccess,
+  onBrowserExtensionSessionAccessChange
+} from '../profile-storage/browser-extension-session-access'
+import { createBrowserExtensionContentEvents } from './browser-extension-content-events'
 import {
   decodeBrowserExtensionWireJson,
   encodeBrowserExtensionWireJson
@@ -166,10 +170,6 @@ export async function handleBrowserExtensionContentRequest(
       headers
     })
   }
-  if (!browserExtensionUntrustedSessionAccess(session, extension.id)) {
-    await framed.cancel()
-    return refuse(403)
-  }
   const context =
     typeof header.context === 'string' && header.context.length <= 128 ? header.context : ''
   if (!context) {
@@ -178,56 +178,49 @@ export async function handleBrowserExtensionContentRequest(
   }
   if (route === '/events') {
     await framed.cancel()
-    if (!admitted(execution) || !browserExtensionUntrustedSessionAccess(session, extension.id)) {
+    if (!admitted(execution)) {
       return refuse(403)
     }
-    let close = (): void => {}
-    const body = new ReadableStream<Uint8Array>({
-      start(controller) {
-        let subscriptions = streams.get(execution)
-        if (!subscriptions) {
-          subscriptions = new Set()
-          streams.set(execution, subscriptions)
-        }
-        const subscription = {
-          context,
-          send: (value: Uint8Array) => {
-            if (
-              !admitted(execution) ||
-              !browserExtensionUntrustedSessionAccess(session, extension.id)
-            ) {
-              return
-            }
-            try {
-              controller.enqueue(value)
-            } catch {
-              close()
-            }
-          }
-        }
-        const abort = (): void => close()
-        close = () => {
-          if (!subscriptions.delete(subscription)) {
-            return
-          }
-          execution.controller.signal.removeEventListener('abort', abort)
-          try {
-            controller.close()
-          } catch {
-            /* Reader already cancelled. */
-          }
-        }
-        subscriptions.add(subscription)
-        execution.controller.signal.addEventListener('abort', abort, { once: true })
-        if (!isBrowserExtensionExecutionLive(execution)) {
-          close()
-        }
+    let subscriptions = streams.get(execution)
+    if (!subscriptions) {
+      subscriptions = new Set()
+      streams.set(execution, subscriptions)
+    }
+    const allowed = (): boolean =>
+      Boolean(admitted(execution)) && browserExtensionUntrustedSessionAccess(session, extension.id)
+    const events = createBrowserExtensionContentEvents(
+      allowed,
+      () => {
+        subscriptions.delete(subscription)
+        execution.controller.signal.removeEventListener('abort', retired)
+        request.signal.removeEventListener('abort', retired)
+        removeAccessListener()
       },
-      cancel() {
-        close()
+      () => subscriptions.delete(subscription)
+    )
+    const subscription = { context, send: events.send }
+    const retired = (): void => events.retire()
+    const removeAccessListener = onBrowserExtensionSessionAccessChange(
+      session,
+      extension.id,
+      () => {
+        if (!allowed()) {
+          events.revoke()
+        }
       }
-    })
+    )
+    subscriptions.add(subscription)
+    execution.controller.signal.addEventListener('abort', retired, { once: true })
+    request.signal.addEventListener('abort', retired, { once: true })
+    if (!admitted(execution) || request.signal.aborted) {
+      retired()
+    }
+    const body = events.body
     return new Response(body, { headers: { ...headers, 'content-type': 'application/x-ndjson' } })
+  }
+  if (!browserExtensionUntrustedSessionAccess(session, extension.id)) {
+    await framed.cancel()
+    return refuse(403)
   }
   if (route !== '/call' || typeof header.method !== 'string' || !METHODS.has(header.method)) {
     await framed.cancel()
