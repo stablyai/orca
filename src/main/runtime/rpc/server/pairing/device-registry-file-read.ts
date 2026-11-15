@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto'
 import { readFileSync } from 'node:fs'
 import {
   hardenExistingSecureFile,
@@ -15,14 +16,18 @@ export type DeviceRegistryFileRead = {
   doubtful: boolean
   /** A corrupt file must be set aside before the first rewrite. */
   corruptFilePending: boolean
+  corruptDigest: string | null
+  missing?: true
 }
 
 export function readDeviceRegistryFile(registryPath: string): DeviceRegistryFileRead {
   // Quarantined copies block revocation verdicts until removed, even if no rewrite landed.
   const doubtful = corruptRegistryCopyExists(registryPath)
+  let contents: Buffer | undefined
   try {
     hardenExistingSecureFile(registryPath)
-    const parsed: unknown = JSON.parse(readFileSync(registryPath, 'utf-8'))
+    contents = readFileSync(registryPath)
+    const parsed: unknown = JSON.parse(contents.toString('utf8'))
     if (!Array.isArray(parsed)) {
       throw new Error('Device registry is not an array')
     }
@@ -35,15 +40,30 @@ export function readDeviceRegistryFile(registryPath: string): DeviceRegistryFile
       devices,
       unreadable: false,
       doubtful: doubtful || droppedRows,
-      corruptFilePending: droppedRows
+      corruptFilePending: droppedRows,
+      corruptDigest: droppedRows ? createHash('sha256').update(contents).digest('hex') : null
     }
   } catch (error) {
     if (isMissingFileError(error)) {
-      return { devices: [], unreadable: false, doubtful, corruptFilePending: false }
+      return {
+        devices: [],
+        unreadable: false,
+        doubtful,
+        corruptFilePending: false,
+        corruptDigest: null,
+        missing: true
+      }
     }
     // Permission failure is not emptiness; saving here could erase every paired credential.
     const unreadable = isUnreadableError(error)
     // Corruption cannot prove revocation to a keyed client.
-    return { devices: [], unreadable, doubtful: true, corruptFilePending: !unreadable }
+    return {
+      devices: [],
+      unreadable,
+      doubtful: true,
+      corruptFilePending: !unreadable,
+      corruptDigest:
+        !unreadable && contents ? createHash('sha256').update(contents).digest('hex') : null
+    }
   }
 }

@@ -16,6 +16,8 @@ import { localizedHostedReviewCopy } from '@/i18n/hosted-review-localized-copy'
 import { isGitHubPRSuppressed } from '../../../../../../shared/worktree/hosted-review/github-pr-suppression'
 import type { ChecksPanelEmptyContentModel } from './empty-content-props'
 import { useNow } from '@/hooks/use-now'
+import { ChecksPanelPositiveReview } from './positive-review-status'
+import { ChecksPanelUnlinkedPullRequest } from './unlinked-pull-request'
 
 export function ChecksPanelEmptyContent({
   model
@@ -83,7 +85,8 @@ export function ChecksPanelEmptyContent({
     prGenerateDisabledReason,
     prGenerateError,
     prGenerating,
-    prNumber,
+    cachedPRNumber,
+    prDetailRecoveryContextKey,
     prRepoDefaultBaseRef,
     prStackedCreationSupported,
     prTitle,
@@ -131,26 +134,14 @@ export function ChecksPanelEmptyContent({
   }
 
   const currentGitHubPRIsSuppressed =
-    prNumber !== null && isGitHubPRSuppressed({ linkedPR, suppressedGitHubPR }, prNumber)
+    cachedPRNumber !== null &&
+    isGitHubPRSuppressed({ linkedPR, suppressedGitHubPR }, cachedPRNumber)
   if (!activeReview && linkedReviewNumber === null && currentGitHubPRIsSuppressed) {
     return (
-      <div className="px-4 py-6">
-        <div className="text-sm font-medium text-foreground">
-          {t('checksPanel.unlinked.title', 'Pull request unlinked')}
-        </div>
-        <div className="mt-1 text-xs text-muted-foreground">
-          {t(
-            'checksPanel.unlinked.description',
-            'PR #{{number}} is hidden for this workspace. Link it again to restore checks and review details.',
-            { number: suppressedGitHubPR }
-          )}
-        </div>
-        <Button size="xs" className="mt-3" onClick={handleLinkSuppressedPullRequest}>
-          {t('checksPanel.unlinked.relink', 'Link PR #{{number}}', {
-            number: suppressedGitHubPR
-          })}
-        </Button>
-      </div>
+      <ChecksPanelUnlinkedPullRequest
+        number={suppressedGitHubPR}
+        onRelink={handleLinkSuppressedPullRequest}
+      />
     )
   }
 
@@ -199,6 +190,7 @@ export function ChecksPanelEmptyContent({
         providerName: hostedReviewCreateCopy.providerName,
         isGitHubProvider: hostedReviewCreateProvider === 'github',
         reviewLookup: checksPanelReviewLookup,
+        reviewNumber: checksPanelReviewLookupResult.reviewNumber ?? null,
         openReviewUrl: checksPanelReviewLookupResult.openReviewUrl,
         eligibilityBlockedReason: hostedReviewCreation?.blockedReason,
         // Preserved-composer mode uses confirmed readiness rather than the live create gate.
@@ -211,6 +203,25 @@ export function ChecksPanelEmptyContent({
       },
       t
     )
+    if (reviewState.positiveReview) {
+      return (
+        <ChecksPanelPositiveReview
+          detachedHeadDisplay={detachedHeadDisplay}
+          reviewShortLabel={emptyReviewCopy.shortLabel}
+          providerName={hostedReviewCreateCopy.providerName}
+          reviewNumber={checksPanelReviewLookupResult.reviewNumber ?? null}
+          openReviewUrl={reviewState.openReviewUrl ?? null}
+          refresh={emptyRefreshInput}
+          manualRefreshFailed={Boolean(manualRefreshError)}
+          manualRetryInFlight={emptyRefreshing}
+          actionsDisabled={isPublishingBranch || isRemoteOperationActive}
+          worktreeId={activeWorktreeId}
+          recoveryContextKey={prDetailRecoveryContextKey}
+          onRetry={handleRefresh}
+          setRetrying={setEmptyRefreshing}
+        />
+      )
+    }
     // Classified GitHub states carry the next step (sign in, or wait for the limit), so they win.
     const refreshFailure =
       emptyRefreshInput?.status === 'error' || isRateLimitRefresh(emptyRefreshInput)
@@ -356,7 +367,9 @@ export function ChecksPanelEmptyContent({
                   })
                 }
               >
-                {t('auto.components.right.sidebar.ChecksPanel.review.open_review', 'Open Review')}
+                {t('checksPanel.positiveReview.open', 'Open {{shortLabel}}', {
+                  shortLabel: emptyReviewCopy.shortLabel
+                })}
               </Button>
             ) : null}
             {reviewShowRetryOrRefresh ? (

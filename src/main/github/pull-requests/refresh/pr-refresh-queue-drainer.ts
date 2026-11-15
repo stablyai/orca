@@ -1,20 +1,16 @@
+import { PRRefreshRecoveryLifecycle } from './pr-refresh-recovery-lifecycle'
 import type { GitHubPRRefreshCandidate } from '../../../../shared/github/pull-requests/refresh/pull-request-refresh-types'
 import {
-  preparePRBranchRead,
-  type PRReadSettlement
-} from '../../client/lookup/pr-for-branch-outcome'
-import { completePRBranchRead } from '../../client/lookup/pr-branch-read-resources'
-import {
-  bypassesFreshnessDelay,
-  candidateReadRequest,
   freshQueuedPROutcome,
   isBackground,
-  validateCandidate
+  validateCandidate,
+  refreshKey
 } from './pr-refresh-candidate-policy'
 import type { PRRefreshEventPublisher } from './pr-refresh-event-publisher'
 import type { PRRefreshPacing } from './pr-refresh-pacing'
 import type { PRRefreshQueue } from './pr-refresh-queue'
 import { PRWatchJobRunner } from './pr-refresh-watch-jobs'
+import { prRefreshRequestDigest, queuedRequestId } from './pr-refresh-request-registry'
 import { prRefreshRateLimitPausedUntil } from './pr-refresh-rate-limit-gate'
 import {
   blockedWslDistroForPath,
@@ -24,12 +20,12 @@ import type { PRRefreshRetryState } from './pr-refresh-retry-state'
 import type { PRRefreshVisibility } from './pr-refresh-visibility'
 import { HostedPRReadJobs } from './hosted-pr-read-jobs'
 import { PRRefreshQueueScheduler } from './pr-refresh-queue-scheduler'
-import { deliverLocalPRRead } from './pr-refresh-local-delivery'
+import { readQueuedPRRefresh } from './pr-refresh-queued-read'
 import { PRRefreshAdmission } from './pr-refresh-admission'
 
 export type PRRefreshRegistrationCheck = (candidate: GitHubPRRefreshCandidate) => boolean
 
-export class PRRefreshQueueDrainer {
+export class PRRefreshQueueDrainer extends PRRefreshRecoveryLifecycle {
   private draining = false
   registrationCheck: PRRefreshRegistrationCheck | null = null
   readonly watchJobs: PRWatchJobRunner
@@ -44,6 +40,7 @@ export class PRRefreshQueueDrainer {
     private readonly retry: PRRefreshRetryState,
     private readonly events: PRRefreshEventPublisher
   ) {
+    super()
     this.watchJobs = new PRWatchJobRunner(queue, retry, this)
     this.scheduler = new PRRefreshQueueScheduler(
       queue,
@@ -52,7 +49,10 @@ export class PRRefreshQueueDrainer {
       retry,
       events,
       this.watchJobs,
-      () => this.drain()
+      () => {
+        this.tickRecovery((delay) => this.schedule(delay))
+        return this.drain()
+      }
     )
     this.admission = new PRRefreshAdmission(queue, pacing, visibility, retry, events, this)
     this.hostedJobs = new HostedPRReadJobs(
@@ -60,12 +60,22 @@ export class PRRefreshQueueDrainer {
       pacing,
       retry,
       () => this.schedule(),
-      (candidate, outcome) => events.observe(candidate, outcome)
+      (candidate, outcome) => events.observe(candidate, outcome),
+      (entry) => {
+        const requestId = queuedRequestId(entry)
+        this.requests.start({
+          requestId,
+          slotKey: refreshKey(entry.candidate),
+          registrationOrder: entry.queuedAt,
+          identityDigest: prRefreshRequestDigest(entry.candidate)
+        })
+        return () => this.requests.settle(requestId)
+      }
     )
   }
 
   schedule(delay = 0): void {
-    this.scheduler.schedule(delay)
+    this.scheduler.schedule(this.recoveryWait(delay))
   }
 
   private async drain(): Promise<void> {
@@ -105,6 +115,13 @@ export class PRRefreshQueueDrainer {
           }
         }
 
+        if (next.recovery) {
+          await this.recovery?.run(next)
+          if (this.queue.get(next.key) === next && next.dueAt <= Date.now()) {
+            this.queue.delete(next.key)
+          }
+          continue
+        }
         this.queue.delete(next.key)
         if (this.hostedJobs.completeFromCache(next)) {
           continue
@@ -169,7 +186,7 @@ export class PRRefreshQueueDrainer {
           )
         }
 
-        let joinedRead = next.hosted?.prepared.pending()
+        const joinedRead = next.hosted?.prepared.pending()
         if (isBackground(next.reason) && !joinedRead) {
           const checkRateLimit = () => prRefreshRateLimitPausedUntil(next.candidate, true)
           const pausedUntil = await (next.hosted
@@ -199,75 +216,22 @@ export class PRRefreshQueueDrainer {
         if (await this.watchJobs.readHead(next)) {
           continue
         }
-        if (next.hosted) {
-          next.hosted.running = true
-        }
-        const prepared =
-          next.hosted?.prepared ??
-          (await preparePRBranchRead(
-            ...candidateReadRequest(next.candidate, next.reason, { watchPRKey: next.watch?.prKey })
-          ))
-        // Automatic work joins a read already running for its request; a user's action reads fresh.
-        joinedRead ??= bypassesFreshnessDelay(next.reason) ? undefined : prepared.pending()
-        const settle: PRReadSettlement = (outcome, producer) => {
-          if (!prepared.isCurrent()) {
-            return outcome
-          }
-          // A host job's failure keeps its job's own finite lifetime, so it takes no retry claim.
-          const settled = this.retry.settleProducerError(
-            outcome,
-            next.key,
-            next.hosted
-              ? { ...next.candidate, isSelected: false }
-              : this.visibility.candidate(next.key, next.candidate),
-            prepared,
-            this.queue,
-            next.hosted ? { retained: producer.retained } : producer,
-            Boolean(next.hosted) || this.visibility.has(next.key),
-            () => this.queue.ownsRequest(next.key, requestSequence)
-          )
-          this.events.observe(next.candidate, settled, aliases)
-          // A host job's read also plans the visible row of the same request, under its own claim.
-          const unretained = { ...producer, retained: false }
-          if (next.hosted) {
-            completePRBranchRead(settled, unretained, prepared, next.candidate)
-          }
-          return settled
-        }
-        // Nothing is awaited from this check to the provider start, so it sees current state.
-        if (
-          !next.hosted &&
-          !this.admission.admitPreparedRead(next, prepared, requestSequence, requestStartedAt)
-        ) {
-          continue
-        }
-        if (!next.watch && isBackground(next.reason) && !joinedRead) {
-          this.admission.chargeBudget(next)
-        }
-        const result = await (joinedRead ?? prepared.readResult(settle, Boolean(next.hosted)))
-        if (
-          !result ||
-          (next.hosted &&
-            (!next.hosted.prepared.isCurrent() ||
-              !next.hosted.prepared.accepts(result.outcome) ||
-              !this.queue.ownsRequest(next.key, requestSequence)))
-        ) {
-          next.hosted?.finish(null)
-          continue
-        }
-        const read = {
-          ...next,
-          // A user's action or a validated return stays owed; automatic work follows the cadence.
-          foreground: next.foreground === true || bypassesFreshnessDelay(next.reason),
+        const outcome = await readQueuedPRRefresh(
+          {
+            queue: this.queue,
+            retry: this.retry,
+            visibility: this.visibility,
+            events: this.events,
+            scheduler: this.scheduler,
+            admission: this.admission,
+            requests: this.requests
+          },
+          next,
           aliases,
           requestSequence,
-          requestStartedAt
-        }
-        const owners = { queue: this.queue, events: this.events, scheduler: this.scheduler }
-        const outcome =
-          next.hosted || next.watch
-            ? result.outcome
-            : deliverLocalPRRead(owners, read, prepared, result)
+          requestStartedAt,
+          joinedRead
+        )
         if (!outcome || !this.queue.ownsRequest(next.key, requestSequence)) {
           continue
         }

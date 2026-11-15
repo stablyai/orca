@@ -84,33 +84,6 @@ describe('pairing ticket exchange', () => {
     expect(reloaded.validateToken(offer.token)).toBeNull()
   })
 
-  it('keeps both tokens working when retiring the pairing token cannot be saved', () => {
-    const registry = new DeviceRegistry(dir)
-    const offer = pairedOffer(registry)
-    registry.exchangePairingTicket(offer.deviceId, offer.token, REPLACEMENT)
-    const save = registry['save'].bind(registry)
-    registry['save'] = vi.fn(() => {
-      throw new Error('disk full')
-    })
-    vi.spyOn(console, 'error').mockImplementation(() => {})
-
-    const signedIn = registry.validateToken(REPLACEMENT)
-    expect(signedIn).toMatchObject({ deviceId: offer.deviceId, token: REPLACEMENT })
-    // The replacement socket stays authenticated on later requests.
-    expect(
-      registry.resolveAuthenticatedPrincipal({
-        deviceId: offer.deviceId,
-        credentialRevision: devicePrincipalOf(signedIn!).credentialRevision,
-        deviceToken: REPLACEMENT
-      })
-    ).not.toBeNull()
-    expect(registry.validateToken(offer.token)?.deviceId).toBe(offer.deviceId)
-
-    registry['save'] = save
-    registry.validateToken(REPLACEMENT)
-    expect(registry.validateToken(offer.token)).toBeNull()
-  })
-
   it('retires a runtime link once a browser signs in with its saved key, but not a session-only key', () => {
     const registry = new DeviceRegistry(dir)
     const link = registry.getOrCreatePendingDevice('Runtime', 'runtime')

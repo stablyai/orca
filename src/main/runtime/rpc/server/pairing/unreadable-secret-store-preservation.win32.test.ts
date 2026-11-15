@@ -125,7 +125,7 @@ describeOnWindows('a secure store that exists but cannot be read', () => {
     const registry = new DeviceRegistry(dir)
     // Any mutator reaches save(); it must refuse rather than write the empty list it loaded.
     expect(() => registry.addDevice('Another phone', 'mobile')).toThrow(
-      /Refusing to (regenerate|overwrite)/
+      expect.objectContaining({ code: 'registry_unavailable' })
     )
 
     expectUntouched(filePath, locked)

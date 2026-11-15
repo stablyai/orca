@@ -12,7 +12,10 @@ export function exchangeSocketPairingTicket(
   params: ExchangePairingTicketParams
 ): ExchangePairingTicketResult {
   const presentedToken = socket.device.deviceToken
-  if (presentedToken === undefined || !registry.resolveAuthenticatedPrincipal(socket.device)) {
+  if (
+    presentedToken === undefined ||
+    !registry.resolveAuthenticatedPrincipal(socket.device, socket.device.authority)
+  ) {
     throw new Error('unauthorized')
   }
   registry.exchangePairingTicket(socket.device.deviceId, presentedToken, params.deviceToken)

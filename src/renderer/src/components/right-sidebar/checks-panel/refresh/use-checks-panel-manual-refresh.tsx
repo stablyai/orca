@@ -1,9 +1,15 @@
 import { getRepoExecutionHostId } from '../../../../../../shared/execution-host'
 import { useCallback } from 'react'
 import { useAppStore } from '@/store/index'
+import type { PRRefreshErrorType } from '../../../../../../shared/github/pull-requests/refresh/pull-request-refresh-types'
+import {
+  manualRefreshResult,
+  manualRetryPRHint,
+  type ChecksPanelManualRefreshResult
+} from './checks-panel-manual-refresh-result'
 import { buildGitHubPRRefreshStateClearToken } from '@/store/github/refresh/pr-refresh-state'
 import { getRuntimeGitStatus } from '@/runtime/source-control/git/runtime-git-status-client'
-import { getRuntimeGitUpstreamStatus } from '@/runtime/source-control/git/runtime-git-sync-client'
+import { readManualRefreshRemoteStatus } from './manual-refresh-remote-status'
 import { resolveWorktreeGitCopyNow } from '@/lib/workspace/ownership/worktree-git-copy'
 import {
   hasChecksPanelGitStatusBranchChanged,
@@ -34,6 +40,7 @@ export function useChecksPanelManualRefresh(model: ChecksPanelManualRefreshInput
     activeWorktreePushTarget,
     asyncResultKeyRef,
     branch,
+    checksPanelReviewLookupResult,
     expireGitHubPRRefreshState,
     fallbackGitHubPRNumber,
     fetchPRChecks,
@@ -69,13 +76,18 @@ export function useChecksPanelManualRefresh(model: ChecksPanelManualRefreshInput
     panelContextKey,
     hostedReviewCacheKey
   )
-  const handleRefresh = useCallback(async () => {
+  const retryHint = manualRetryPRHint(
+    linkedPR,
+    fallbackGitHubPRNumber,
+    checksPanelReviewLookupResult
+  )
+  const handleRefresh = useCallback(async (): Promise<ChecksPanelManualRefreshResult> => {
     if (!repo || !branch) {
-      return
+      return { kind: 'skipped' }
     }
     const repoOptions = { repoId: repo.id, repoOwnerExecutionHostId: getRepoExecutionHostId(repo) }
     if (refreshInFlightRef.current) {
-      return
+      return { kind: 'skipped' }
     }
     // Latch before render disables the button so double-clicks cannot duplicate Git subprocesses.
     refreshInFlightRef.current = true
@@ -94,19 +106,27 @@ export function useChecksPanelManualRefresh(model: ChecksPanelManualRefreshInput
     const refreshStartedAt = Date.now()
     const refreshProvider = checksPanelManualRefreshProvider(model)
     let refreshOutcome = 'started'
+    let failedErrorType: PRRefreshErrorType | undefined
+    const result = (): ChecksPanelManualRefreshResult =>
+      manualRefreshResult(refreshOutcome, isCurrentRequest(), failedErrorType)
     setIsRefreshing(true)
-    recordChecksPanelPRRefreshBreadcrumb({
-      event: 'start',
-      provider: refreshProvider,
-      repoId: repo.id,
-      worktreeId: activeWorktreeId,
-      branch,
-      prCacheKey,
-      prNumber: activeGitLabReview?.number ?? prNumber,
-      prState: activeGitLabReview?.state ?? pr?.state,
-      prChecksStatus: pr?.checksStatus,
-      refreshState: prCacheKey ? useAppStore.getState().prRefreshStates[prCacheKey] : null
-    })
+    const breadcrumb = (
+      fields: Pick<Parameters<typeof recordChecksPanelPRRefreshBreadcrumb>[0], 'event'> &
+        Partial<Parameters<typeof recordChecksPanelPRRefreshBreadcrumb>[0]>
+    ): void =>
+      recordChecksPanelPRRefreshBreadcrumb({
+        provider: refreshProvider,
+        repoId: repo.id,
+        worktreeId: activeWorktreeId,
+        branch,
+        prCacheKey,
+        prNumber: activeGitLabReview?.number ?? prNumber,
+        prState: activeGitLabReview?.state ?? pr?.state,
+        prChecksStatus: pr?.checksStatus,
+        refreshState: prCacheKey ? useAppStore.getState().prRefreshStates[prCacheKey] : null,
+        ...fields
+      })
+    breadcrumb({ event: 'start' })
     try {
       if (activeWorktreeId && activeWorktreePath && !isFolder && ownerTarget) {
         // Why one resolution: a same-path twin must not get this copy's transport, SSH target or answer.
@@ -125,7 +145,7 @@ export function useChecksPanelManualRefresh(model: ChecksPanelManualRefreshInput
           )
           // A discovered terminal branch switch must restart branch-keyed effects rather than refresh old PR data.
           refreshOutcome = 'branch-changed'
-          return
+          return result()
         }
         try {
           const statusContext = {
@@ -150,22 +170,13 @@ export function useChecksPanelManualRefresh(model: ChecksPanelManualRefreshInput
           ) {
             // A discovered terminal branch switch must restart branch-keyed effects rather than refresh old PR data.
             refreshOutcome = 'branch-changed'
-            return
+            return result()
           }
-          let freshRemoteStatus = status.upstreamStatus
-          if (activeWorktreePushTarget) {
-            freshRemoteStatus = await getRuntimeGitUpstreamStatus(
-              statusContext,
-              activeWorktreePushTarget
-            )
-          } else if (
-            !freshRemoteStatus ||
-            (freshRemoteStatus.ahead > 0 &&
-              freshRemoteStatus.behind > 0 &&
-              freshRemoteStatus.behindCommitsArePatchEquivalent === undefined)
-          ) {
-            freshRemoteStatus = await getRuntimeGitUpstreamStatus(statusContext)
-          }
+          const freshRemoteStatus = await readManualRefreshRemoteStatus(
+            statusContext,
+            status.upstreamStatus,
+            activeWorktreePushTarget
+          )
           if (
             isCurrentRequest() &&
             shouldCommitChecksPanelGitStatusSnapshot(panelContextKeyRef.current, panelContextKey)
@@ -191,7 +202,7 @@ export function useChecksPanelManualRefresh(model: ChecksPanelManualRefreshInput
           refreshProvider,
           isCurrentRequest
         )
-        return
+        return result()
       }
       const refreshStoreState = useAppStore.getState()
       const startedPRRefreshToken = buildGitHubPRRefreshStateClearToken(
@@ -206,7 +217,7 @@ export function useChecksPanelManualRefresh(model: ChecksPanelManualRefreshInput
           ...repoOptions,
           worktreeId: activeWorktreeId ?? undefined,
           linkedPRNumber: linkedPR,
-          fallbackPRNumber: fallbackGitHubPRNumber,
+          ...retryHint,
           reason: 'manual',
           userRefresh: true
         })
@@ -216,10 +227,11 @@ export function useChecksPanelManualRefresh(model: ChecksPanelManualRefreshInput
         }
       }
       // Read this click's settlement now; the key-wide slot can belong to another read after the card read.
-      const prLookupFailed =
-        !refreshedPR && useAppStore.getState().prRefreshStates[prCacheKey]?.status === 'error'
+      const prLookupState = useAppStore.getState().prRefreshStates[prCacheKey]
+      const prLookupFailed = !refreshedPR && prLookupState?.status === 'error'
+      failedErrorType = prLookupFailed ? prLookupState?.errorType : undefined
       if (!isCurrentRequest()) {
-        return
+        return result()
       }
       // The PR read above owns GitHub's refresh status, checks and comments; the review card read only refreshes the card.
       await refreshHostedReviewForClick(
@@ -229,11 +241,11 @@ export function useChecksPanelManualRefresh(model: ChecksPanelManualRefreshInput
         refreshedPR?.number ?? fallbackGitHubPRNumber
       ).catch(() => null)
       if (!isCurrentRequest()) {
-        return
+        return result()
       }
       if (prLookupFailed) {
         refreshOutcome = 'error'
-        return
+        return result()
       }
       if (refreshedPR) {
         refreshOutcome = 'pr'
@@ -245,7 +257,7 @@ export function useChecksPanelManualRefresh(model: ChecksPanelManualRefreshInput
           refreshedPR.headSha
         )
         if (!isCurrentAsyncResult(initialRequestKey) && !isCurrentRequest()) {
-          return
+          return result()
         }
         // Forced refresh may discover the number before React repaints; mark these checks current now.
         asyncResultKeyRef.current = prRequestKey
@@ -325,17 +337,8 @@ export function useChecksPanelManualRefresh(model: ChecksPanelManualRefreshInput
         setManualFailure(getHostedReviewManualRefreshError(refreshProvider))
       }
     } finally {
-      recordChecksPanelPRRefreshBreadcrumb({
+      breadcrumb({
         event: 'done',
-        provider: refreshProvider,
-        repoId: repo.id,
-        worktreeId: activeWorktreeId,
-        branch,
-        prCacheKey,
-        prNumber: activeGitLabReview?.number ?? prNumber,
-        prState: activeGitLabReview?.state ?? pr?.state,
-        prChecksStatus: pr?.checksStatus,
-        refreshState: prCacheKey ? useAppStore.getState().prRefreshStates[prCacheKey] : null,
         outcome: refreshOutcome,
         durationMs: Date.now() - refreshStartedAt,
         currentRequest: isCurrentRequest()
@@ -350,6 +353,7 @@ export function useChecksPanelManualRefresh(model: ChecksPanelManualRefreshInput
         setEligibilityRefreshNonce((value) => value + 1)
       }
     }
+    return result()
   }, [
     model,
     repo,
@@ -367,6 +371,7 @@ export function useChecksPanelManualRefresh(model: ChecksPanelManualRefreshInput
     prCacheKey,
     linkedPR,
     fallbackGitHubPRNumber,
+    retryHint,
     isFolder,
     gitStatusSnapshot,
     panelContextKey,

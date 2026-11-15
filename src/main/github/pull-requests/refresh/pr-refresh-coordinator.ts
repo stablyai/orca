@@ -1,3 +1,5 @@
+import { drainer, events, pacing, queue, retry, visibility } from './pr-refresh-coordinator-state'
+import { registerPRRefreshRequest } from './pr-detail-recovery-coordinator'
 import { sharedPromiseSettlementWaiters } from '../../../../shared/concurrency/promise-settlement-waiters'
 import { runImmediatePRRefresh } from './pr-refresh-immediate-read'
 import type {
@@ -14,14 +16,9 @@ import {
   refreshKey,
   validateCandidate
 } from './pr-refresh-candidate-policy'
-import {
-  PRRefreshEventPublisher,
-  type PRRefreshOutcomeObserver
-} from './pr-refresh-event-publisher'
+import type { PRRefreshOutcomeObserver } from './pr-refresh-event-publisher'
 import { retimeQueuedErrorRetries } from './pr-refresh-error-retry-retiming'
-import { PRRefreshPacing } from './pr-refresh-pacing'
-import { PRRefreshQueue } from './pr-refresh-queue'
-import { PRRefreshQueueDrainer, type PRRefreshRegistrationCheck } from './pr-refresh-queue-drainer'
+import type { PRRefreshRegistrationCheck } from './pr-refresh-queue-drainer'
 import {
   prWatchQueueKey,
   schedulePRWatchEntry,
@@ -29,45 +26,13 @@ import {
   type PRWatchJobHooks,
   type PRWatchPlan
 } from './pr-refresh-watch-jobs'
-import { PRRefreshRetryState } from './pr-refresh-retry-state'
-import { PRRefreshVisibility } from './pr-refresh-visibility'
 import { refreshPRPolicyContext } from '../../client/lookup/pr-quiet-policy-evidence'
 import { getPRAutoRefreshCadence } from '../../../../shared/review-refresh-policy'
 import {
   deliverablePRBranchOutcome,
-  setPRBranchReadCompletion,
   type PRBranchReadResult
 } from '../../client/lookup/pr-branch-read-resources'
 import { hostedPRReadSettlement } from './hosted-pr-read-settlement'
-
-const retry = new PRRefreshRetryState()
-// Dropping an old gate index entry must not forget a visible row's current failure.
-const queue = new PRRefreshQueue((key) => {
-  if (!visibility.has(key)) {
-    retry.reset(key)
-  }
-})
-const pacing = new PRRefreshPacing()
-// A row no longer shown owes no retry for its failure (only its rate-limit gate stays), and its
-// queued visible read is dropped.
-const visibility = new PRRefreshVisibility((key) => {
-  retry.releaseFailure(key)
-  const entry = queue.get(key)
-  if (entry?.reason === 'visible') {
-    queue.delete(key)
-    events.broadcast({
-      aliases: Array.from(entry.aliases.values()),
-      reason: 'visible',
-      status: 'skipped',
-      skippedReason: 'fresh'
-    })
-  }
-})
-const events = new PRRefreshEventPublisher()
-const drainer = new PRRefreshQueueDrainer(queue, pacing, visibility, retry, events)
-setPRBranchReadCompletion((outcome, producer, prepared, request) =>
-  drainer.scheduler.reconcileCompletion(outcome, prepared, request, producer)
-)
 
 export function addPRRefreshOutcomeObserver(observer: PRRefreshOutcomeObserver): () => void {
   return events.addOutcomeObserver(observer)
@@ -102,27 +67,36 @@ export function cancelPRWatchRead(job: PRWatchJob): void {
  *  its request; its caller still gets its own outcome. */
 export async function runHostedPRRead(
   candidate: GitHubPRRefreshCandidate,
-  read: (() => Promise<PRRefreshOutcome>) | PreparedPRBranchRead,
+  preparingRead:
+    | (() => Promise<PRRefreshOutcome>)
+    | PreparedPRBranchRead
+    | Promise<PreparedPRBranchRead>,
   didRead: () => boolean = () => true,
   release: () => void = () => {}
 ): Promise<PRRefreshOutcome> {
-  if (typeof read !== 'function') {
-    const owners = { queue, retry, observe: events.observe.bind(events) }
-    const settle = hostedPRReadSettlement(owners, candidate, read, false)
-    try {
-      return (await read.readResult(settle))!.outcome
-    } finally {
-      read.release()
-    }
-  }
+  const finishRequest = registerPRRefreshRequest(candidate, 'h', true)
   try {
-    const outcome = await read()
-    if (didRead()) {
-      events.observe(candidate, outcome)
+    const read = await preparingRead
+    if (typeof read !== 'function') {
+      const owners = { queue, retry, observe: events.observe.bind(events) }
+      const settle = hostedPRReadSettlement(owners, candidate, read, false)
+      try {
+        return (await read.readResult(settle))!.outcome
+      } finally {
+        read.release()
+      }
     }
-    return outcome
+    try {
+      const outcome = await read()
+      if (didRead()) {
+        events.observe(candidate, outcome)
+      }
+      return outcome
+    } finally {
+      release()
+    }
   } finally {
-    release()
+    finishRequest()
   }
 }
 
@@ -163,7 +137,8 @@ export async function runHostedPRSnapshot(
       : result.outcome
     return drainer.hostedJobs.complete(prepared, candidate, outcome, acceptRevalidationOnly)
   }
-  return drainer.hostedJobs.readCold(candidate, prepared, acceptRevalidationOnly)
+  const settle = registerPRRefreshRequest(candidate, 'h', false)
+  return drainer.hostedJobs.readCold(candidate, prepared, acceptRevalidationOnly).finally(settle)
 }
 
 export function clearVisiblePRRefreshWindow(windowId: number): void {
@@ -246,6 +221,9 @@ export function enqueuePRRefresh(
   }
 
   const enqueued = queue.enqueue(candidate, reason, priority, windowId)
+  if (reason !== 'visible') {
+    registerPRRefreshRequest(candidate, null, true)
+  }
   const pending = queue.get(key)
   if (pending && reason === 'visible' && candidate.isSelected && priority >= 80) {
     // Foreground exposure keeps retry gates while bypassing the list budget once.
@@ -286,31 +264,16 @@ export function reportVisiblePRRefreshCandidates(
   drainer.schedule()
 }
 
-export function _getVisiblePRRefreshWindowCountForTests(): number {
-  return visibility.windowCount
-}
-
-export function _getPRRefreshErrorBackoffCountForTests(): number {
-  return retry.errorBackoffCount
-}
-
-export function _getPRRefreshQueueSizeForTests(): number {
-  return queue.size
-}
-
-export function _getPRRefreshAliasCountForTests(key: string): number {
-  return queue.aliasCount(key)
-}
-
 export function refreshPRNow(
   candidate: GitHubPRRefreshCandidate,
   reason: GitHubPRRefreshReason = 'manual',
   options: { userRefresh?: boolean } = {}
 ): Promise<PRSnapshotReply> {
+  const settle = registerPRRefreshRequest(candidate, 'd', true)
   return runImmediatePRRefresh(
     { queue, retry, visibility, events, drainer },
     candidate,
     reason,
     options
-  )
+  ).finally(settle)
 }

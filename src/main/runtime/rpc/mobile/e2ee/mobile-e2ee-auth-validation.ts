@@ -101,7 +101,7 @@ export function authenticateMobileE2EE<TDevice extends { deviceToken?: string }>
   plaintext: string
   v2Session: DesktopMobileE2EEV2Session | null
   v2TokenCapabilities?: boolean
-  resolveDevice: (token: string) => TDevice | null
+  resolveDevice: (token: string) => TDevice | null | { kind: 'unavailable' }
   // Absent on a host that does not accept device keys: key auth is then bad_auth, as before.
   resolveDeviceKey?: (deviceId: string) => DeviceKeyResolution<TDevice>
 }):
@@ -110,6 +110,12 @@ export function authenticateMobileE2EE<TDevice extends { deviceToken?: string }>
   const auth = classifyE2EEAuth(args.plaintext, args.v2Session, args.v2TokenCapabilities)
   if (auth.kind === 'token') {
     const device = args.resolveDevice(auth.deviceToken)
+    if (device && 'kind' in device && device.kind === 'unavailable') {
+      return { ok: false, code: 'registry_unavailable' }
+    }
+    if (!device || !('deviceToken' in device)) {
+      return { ok: false, code: 'unauthorized' }
+    }
     // Why: a keyed row has no token, so presenting one can never match it.
     return device?.deviceToken === auth.deviceToken
       ? { ok: true, device, clientCapabilities: auth.clientCapabilities }

@@ -4,6 +4,7 @@ import {
 } from '../../../github/client/lookup/pr-for-branch-outcome'
 import type { GitHubRepositoryIdentity as GitHubOwnerRepo } from '../../../../shared/github/repositories/repository-identity'
 import type {
+  GitHubPRRefreshCandidate,
   GitHubPRRefreshReason,
   PRSnapshotReply
 } from '../../../../shared/github/pull-requests/refresh/pull-request-refresh-types'
@@ -33,7 +34,10 @@ import {
 import type { GitAdmissionTier } from '../../../../shared/rpc-contract/source-control/git-admission-tier-params'
 
 import { readHostedReviewForBranch } from '../../../source-control/hosted-review'
-import { getStoredRepoExecutionHostId } from '../../../workspaces/execution-host/repo-execution-host'
+import {
+  bindRepoExecutionHost,
+  getStoredRepoExecutionHostId
+} from '../../../workspaces/execution-host/repo-execution-host'
 import { hostedReviewSshConnectionId } from '../../../source-control/hosted-review-execution-host'
 import {
   createHostedReview,
@@ -42,6 +46,8 @@ import {
 import type { HostedReviewExecutionOptions } from '../../../source-control/hosted-review-git-options'
 import { createStackedHostedReview } from '../../../source-control/stacked-hosted-review-creation'
 import { guardWslUncPathAccess } from '../../../wsl/filesystem/wsl-unc-access-gate'
+import type { PRDetailRecoveryStartArgs } from '../../../../shared/github/pull-requests/refresh/pr-detail-recovery-contract'
+import { prDetailRecoveryCandidate } from '../../../github/pull-requests/refresh/pr-detail-recovery-candidate'
 
 type HostedReviewTargetArgs = { repoSelector: string; worktreeSelector?: string }
 
@@ -138,7 +144,7 @@ export class RuntimeHostedReviewCommands {
       localGitOptions: lookupOptions.localGitExecOptions,
       isSelected: reason === 'swr' && userRefresh !== true && selected
     }
-    const prepared = await preparePRBranchRead(
+    const prepared = preparePRBranchRead(
       repo.path,
       branch,
       linkedPRNumber ?? null,
@@ -147,9 +153,41 @@ export class RuntimeHostedReviewCommands {
       lookupOptions
     )
     if (reason === 'swr' && userRefresh !== true) {
-      return runHostedPRSnapshot(candidate, prepared, deadline, signal, acceptRevalidationOnly)
+      return runHostedPRSnapshot(
+        candidate,
+        await prepared,
+        deadline,
+        signal,
+        acceptRevalidationOnly
+      )
     }
     return runHostedPRRead(candidate, prepared)
+  }
+
+  /** Server-registered repo routing for a detail-recovery ticket; client paths are correlation only. */
+  async resolvePRDetailRecoveryCandidate(
+    args: PRDetailRecoveryStartArgs
+  ): Promise<GitHubPRRefreshCandidate | 'validation'> {
+    let repo: Repo
+    try {
+      repo = await this.deps.resolveRepo(`id:${args.identity.repoId}`)
+    } catch {
+      return 'validation'
+    }
+    const owner = bindRepoExecutionHost(repo, 'runtime-store')
+    // Matches runHostedPRRead's key so this host's direct reads for the alias supersede the ticket.
+    const candidate = prDetailRecoveryCandidate(args, `${repo.path}::${args.identity.branch}`)
+    if ((repo.kind ?? 'git') !== 'git' || !owner || !candidate) {
+      return 'validation'
+    }
+    const wslDistro = this.deps.getExecutionOptions(repo)?.localGitExecOptions?.wslDistro
+    return {
+      ...candidate,
+      repoId: repo.id,
+      repoPath: repo.path,
+      ...owner,
+      ...(wslDistro ? { localGitOptions: { wslDistro } } : {})
+    }
   }
 
   async getHostedReviewForBranch(args: {

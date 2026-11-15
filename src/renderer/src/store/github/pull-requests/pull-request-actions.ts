@@ -16,6 +16,7 @@ import { githubHostedReviewFallbackPRNumber, prLookupHintKey } from './pr-result
 import { nextLookupGeneration } from '../../slices/hosted-review/refresh/lookup-generation-sequence'
 import {
   inflightPRRequests,
+  notePRLookupIntent,
   prRequestGenerations,
   type InflightPR
 } from '../requests/request-coordination'
@@ -143,6 +144,7 @@ export const createPullRequestActions = (
     if (inflightRequest) {
       inflightRequest.superseded = true
     }
+    notePRLookupIntent(cacheKey)
     const generation = nextLookupGeneration()
     const requestStartedAt = Date.now()
     const requestStartedHostedReviewEntry = get().hostedReviewCache[hostedReviewCacheKey]

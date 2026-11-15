@@ -296,6 +296,10 @@ import {
 } from './github/github-project-params'
 import {
   PRCommentReaction,
+  PRDetailRecoveryCancel,
+  PRDetailRecoveryCommit,
+  PRDetailRecoveryStart,
+  PRDetailRecoveryWait,
   PrForBranch,
   PullRequest,
   PullRequestCheckDetails,
@@ -1203,6 +1207,10 @@ export const RPC_PARAMS_BY_METHOD = {
   'github.prCheckDetails': PullRequestCheckDetails,
   'github.prChecks': PullRequestChecks,
   'github.prComments': PullRequest,
+  'github.prDetailRecovery.cancel': PRDetailRecoveryCancel,
+  'github.prDetailRecovery.commit': PRDetailRecoveryCommit,
+  'github.prDetailRecovery.start': PRDetailRecoveryStart,
+  'github.prDetailRecovery.wait': PRDetailRecoveryWait,
   'github.prFileContents': PullRequestFileContents,
   'github.prForBranch': PrForBranch,
   'github.project.addIssueCommentBySlug': SlugIssueComment,

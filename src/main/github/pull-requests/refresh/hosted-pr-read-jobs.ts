@@ -39,7 +39,8 @@ export class HostedPRReadJobs {
     private readonly observe: (
       candidate: GitHubPRRefreshCandidate,
       outcome: PRRefreshOutcome
-    ) => void
+    ) => void,
+    private readonly register: (entry: PRRefreshQueueEntry) => () => void = () => () => {}
   ) {}
 
   private get owners(): Parameters<typeof hostedPRReadSettlement>[0] {
@@ -188,6 +189,7 @@ export class HostedPRReadJobs {
         dueAt: Math.min(expiresAt, Math.max(Date.now(), gate)),
         queuedAt: this.queue.nextOrder()
       }
+      const settled = this.register(entry)
       job = {
         prepared,
         promoteSelected: () => {
@@ -200,6 +202,7 @@ export class HostedPRReadJobs {
         expiresAt,
         listeners,
         finish: (outcome) => {
+          settled()
           releaseHold()
           if (this.jobs.get(key) === job) {
             this.jobs.delete(key)

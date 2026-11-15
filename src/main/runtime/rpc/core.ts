@@ -1,3 +1,4 @@
+import type { AuthorizationIncarnation } from '../../../shared/authorization-incarnation'
 import type { RuntimeClientCapabilities } from './callers/runtime-client-capabilities'
 import type { ZodError, ZodType } from 'zod'
 import type { TerminalStreamFrame } from '../../../shared/terminal/stream/terminal-stream-protocol'
@@ -122,6 +123,8 @@ export type RpcContext = {
   requestId?: string
   // Device-scoped handlers release owned state when that client disconnects.
   clientId?: string
+  // Captured at authentication; a revoked incarnation cannot revive after row restoration.
+  authenticatedCredential?: AuthorizationIncarnation
   // Key navigation by revocable device identity, never bearer token or socket id.
   pairedDeviceId?: string
   // Delegated phones use their parent desktop's workspaces.

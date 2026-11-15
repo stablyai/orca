@@ -13867,7 +13867,6 @@
             "495b2f8c4b": "Агент запущен, но не удалось закрыть выбранные обсуждения или ответить на комментарии.",
             "review": {
               "auto_retry": "Orca повторит попытку в {{time}}.",
-              "open_review": "Открыть ревью",
               "retry": "Повторить"
             },
             "sync": {
@@ -14538,10 +14537,6 @@
                   "network": "Orca также не удалось проверить статус {{reviewLabel}}: из этой среды нет доступа к {{provider}}.",
                   "untyped": "Orca также не удалось подтвердить, есть ли уже {{reviewLabel}} для этой ветки."
                 },
-                "positive": {
-                  "title": "Сведения о {{reviewLabelCap}} недоступны",
-                  "body": "У Orca есть сохранённые сведения о {{reviewLabel}} для этой ветки, но подтвердить текущий статус не удалось."
-                },
                 "no_review": {
                   "title": "{{reviewLabel}} не найден",
                   "body": "Создайте {{reviewLabel}}, чтобы начать проверки и ревью."
@@ -14635,10 +14630,6 @@
                 "needs_push": {
                   "title": "В ветке есть неотправленные коммиты",
                   "body": "Отправьте последние коммиты перед созданием {{reviewLabel}}."
-                },
-                "existing": {
-                  "title": "{{reviewLabelCap}} уже существует",
-                  "body": "Orca нашла существующий {{reviewLabel}} для этой ветки."
                 },
                 "detached": {
                   "title": "Нет текущей ветки",
@@ -21871,6 +21862,25 @@
       "title": "Пул-реквест отвязан",
       "description": "PR #{{number}} скрыт для этого рабочего пространства. Свяжите его заново для восстановления проверок и сведений о ревью.",
       "relink": "Связать PR #{{number}}"
+    },
+    "positiveReview": {
+      "status": {
+        "failed": "Не удалось загрузить сведения",
+        "queued": "Ожидание загрузки сведений",
+        "rateGate": "Достигнут лимит {{provider}}. Загрузка в {{time}}.",
+        "loading": "Загрузка сведений…",
+        "timeout": "{{provider}} не ответил",
+        "unusable": "Сведения нельзя показать здесь",
+        "notLoaded": "Сведения не загружены",
+        "retryGate": "Достигнут лимит {{provider}}. Повторите в {{time}}."
+      },
+      "title": "{{shortLabel}} #{{number}}",
+      "titleNoNumber": "{{shortLabel}} найден",
+      "open": "Открыть {{shortLabel}}",
+      "openAria": "Открыть {{shortLabel}} #{{number}} в {{provider}}",
+      "openAriaNoNumber": "Открыть {{shortLabel}} в {{provider}}",
+      "pushToUpdate": "Выполните push, чтобы обновить {{shortLabel}} #{{number}}.",
+      "pushToUpdateNoNumber": "Выполните push, чтобы обновить этот {{shortLabel}}."
     }
   },
   "sourceControl": {
