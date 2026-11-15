@@ -46,26 +46,23 @@ async function recentTiming(db: D1Database, column: 'create_ms' | 'wake_ms'): Pr
 }
 
 const CACHE_MS = 5 * 60_000
-let cache: { db: D1Database; at: number; value: Promise<HostedSandboxTiming | undefined> } | null = null
+// The settled value only (settled-cache.ts): an in-flight query shared across requests hangs them all if its
+// own request is cancelled.
+let cache: { db: D1Database; at: number; value: HostedSandboxTiming | undefined } | null = null
 
 /**
  * GET /v1/config is public, so the query runs at most once per isolate every 5 minutes; a failed
  * read is retried on the next request instead of being cached.
  */
-export function cachedCreateTiming(db: D1Database, now: number): Promise<HostedSandboxTiming | undefined> {
+export async function cachedCreateTiming(db: D1Database, now: number): Promise<HostedSandboxTiming | undefined> {
   if (cache && cache.db === db && now - cache.at < CACHE_MS) {
     return cache.value
   }
-  const entry = {
-    db,
-    at: now,
-    value: recentCreateTiming(db).catch(() => {
-      if (cache === entry) {
-        cache = null
-      }
-      return undefined
-    })
+  try {
+    const value = await recentCreateTiming(db)
+    cache = { db, at: now, value }
+    return value
+  } catch {
+    return undefined
   }
-  cache = entry
-  return entry.value
 }

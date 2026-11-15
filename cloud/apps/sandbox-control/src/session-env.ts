@@ -1,6 +1,7 @@
 // What one sandbox session's agents see: the resolved secret store (precedence applied), provider
 // presets filled in, and with egress placeholders on, model keys swapped for placeholders. The same
 // answer drives the egress allowlist and the proxy's credential routes, at boot and on refresh.
+import { settledCache } from './settled-cache'
 import type { LifecycleDeps } from './lifecycle'
 import { agentModesFor, withoutSignInCredentials, type AgentMode } from './agent-sources'
 import { accountProvider } from './account-providers'
@@ -46,32 +47,17 @@ export async function resolvedProviderEnv(
 // decrypt per session-minute instead of per model request. Isolate memory only; a secret edit
 // drops the sandbox's entry (in this isolate) so a rotated or deleted key stops being sent.
 const PROVIDER_ENV_CACHE_MS = 60_000
-const providerEnvCache = new Map<string, { at: number; value: Promise<ProviderEnv> }>()
+// Settled values only (settled-cache.ts): a shared in-flight promise hangs every request behind a cancelled one.
+const providerEnvCache = settledCache<ProviderEnv>(PROVIDER_ENV_CACHE_MS)
 
 export function cachedProviderEnv(db: D1Database, keyring: Keyring, row: SandboxRow, now: number): Promise<ProviderEnv> {
   // Visibility is part of the key: sharing a workspace stops its owner's personal keys at once (SEC-5).
   const key = `${row.id}:${row.session_id ?? ''}:${row.visibility}`
-  const hit = providerEnvCache.get(key)
-  if (hit && now - hit.at < PROVIDER_ENV_CACHE_MS) {
-    return hit.value
-  }
-  for (const [cached, entry] of providerEnvCache) {
-    if (now - entry.at >= PROVIDER_ENV_CACHE_MS) {
-      providerEnvCache.delete(cached)
-    }
-  }
-  const value = resolvedProviderEnv(db, keyring, row)
-  providerEnvCache.set(key, { at: now, value })
-  value.catch(() => providerEnvCache.delete(key))
-  return value
+  return providerEnvCache.get(key, now, () => resolvedProviderEnv(db, keyring, row))
 }
 
 export function forgetProviderEnv(sandboxId: string): void {
-  for (const key of providerEnvCache.keys()) {
-    if (key.startsWith(`${sandboxId}:`)) {
-      providerEnvCache.delete(key)
-    }
-  }
+  providerEnvCache.deleteWhere((key) => key.startsWith(`${sandboxId}:`))
 }
 
 /** Placeholders are switched on for this account (SECRETS_EGRESS_PLACEHOLDERS, minus the per-team kill switch). */
