@@ -15,7 +15,7 @@ import {
 } from './workspace-copy-processes'
 import { planWorkspaceCopyRemoval, type RemovalPlan } from './workspace-copy-removal-preview'
 import { resolveCopySource } from './workspace-copy-source'
-import { renameFileWithWindowsRetryAsync } from '../../windows-retry-file-operations'
+import { renameFileWithWindowsRetryAsync } from '../../file-write/windows-retry-file-operations'
 import type {
   WorkspaceCopyRemovalOptions,
   WorkspaceCopyRemovalPreview,

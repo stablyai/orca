@@ -3,7 +3,7 @@ import { release } from 'node:os'
 import { join, toNamespacedPath } from 'node:path'
 import { runProcess } from '@orca/process-host'
 import { windowsSystem32Binary } from '@orca/process-host/windows-system-binary'
-import { transientLockRemovalOptions } from '../../windows-transient-lock-removal'
+import { transientLockRemovalOptions } from '../../file-write/windows-transient-lock-removal'
 import { runP4, type P4CommandResult, type P4RunOptions } from '../p4-command'
 import { cloneTree, type TreeCopyResult, type TreeExclusions } from './workspace-copy-clone-tree'
 import {

@@ -23,7 +23,7 @@ import {
 import type { CommitMessageAgentEnvironmentResolvers } from '../text-generation/execution/commit-message-agent-environment'
 import type { GenerateCommitMessageResult } from '../text-generation/source-control-text-generation-types'
 import { isTuiAgent } from '../../shared/agent-launch/catalog/tui-agent-config'
-import { parseWslUncPath } from '../../shared/wsl-paths'
+import { parseWslUncPath } from '../../shared/file-access/wsl-paths'
 import type { TuiAgent } from '../../shared/agent-launch/catalog/tui-agent'
 import type { RuntimePerforceCopyCommands } from './runtime-perforce-copy-commands'
 

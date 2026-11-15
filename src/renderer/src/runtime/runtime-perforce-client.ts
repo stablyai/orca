@@ -22,7 +22,7 @@ import {
   PERFORCE_UPDATE_REQUIRED_MESSAGE
 } from '../../../shared/perforce/perforce-runtime-capability'
 import { isTuiAgent } from '../../../shared/agent-launch/catalog/tui-agent-config'
-import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import {
   getRuntimeGitScope,
   resolveLocalWorktreePath,
