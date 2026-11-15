@@ -11,6 +11,7 @@ describe('quoteCliCommandArgument on Windows', () => {
     expect(quoteCliCommandArgument('path:C:/work/$review')).toBe("'path:C:/work/$review'")
     expect(quoteCliCommandArgument("C:/it's `n $(x)")).toBe("'C:/it''s `n $(x)'")
     expect(quoteCliCommandArgument('App\n$(x)')).toBe("'App\n$(x)'")
+    expect(quoteCliCommandArgument('{"a": 1}')).toBe(`'{"a": 1}'`)
     expect(quoteCliCommandArgument('path:C:/my work')).toBe('"path:C:/my work"')
   })
 })

@@ -6,11 +6,9 @@ export function quoteCliCommandArgument(value: string): string {
     return value
   }
   if (process.platform === 'win32') {
-    // Why: PowerShell, Git Bash and cmd.exe read double quotes alike except for `$` and backticks;
-    // single quotes keep those literal in PowerShell and Git Bash, the shells agents run.
-    return /[$`]/.test(value)
-      ? quotePowerShellSingleQuoted(value)
-      : `"${value.replace(/"/g, '\\"')}"`
+    // Why: PowerShell expands `$`, escapes with backticks and doesn't take `\"`; single quotes keep
+    // those literal in PowerShell and Git Bash, the shells agents run.
+    return /[$`"\u201C-\u201E]/.test(value) ? quotePowerShellSingleQuoted(value) : `"${value}"`
   }
   return quotePosixShell(value)
 }
