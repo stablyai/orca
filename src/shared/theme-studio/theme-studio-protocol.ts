@@ -73,7 +73,9 @@ export const themeStudioPreviewSchema = z
         autoFixed: z.number().int().nonnegative().optional()
       })
       .optional(),
-    canUndo: z.boolean().optional()
+    canUndo: z.boolean().optional(),
+    /** Steps since the draft started, for "3 changes". */
+    changes: z.number().int().nonnegative().optional()
   })
   .nullable()
 export type ThemeStudioPreview = z.infer<typeof themeStudioPreviewSchema>

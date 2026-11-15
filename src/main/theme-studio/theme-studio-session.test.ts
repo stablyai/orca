@@ -36,7 +36,8 @@ describe('ThemeStudioSession', () => {
         revision: session.currentRevision,
         draft: draftWith('#222222'),
         last: { label: 'Two' },
-        canUndo: true
+        canUndo: true,
+        changes: 2
       }
     ])
   })

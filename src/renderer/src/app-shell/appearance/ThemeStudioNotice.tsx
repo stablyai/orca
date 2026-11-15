@@ -1,5 +1,6 @@
 import { Button } from '@/components/ui/button'
 import { useTranslate } from '@/i18n/use-translate'
+import { themeStudioDraftDetail } from './theme-studio-draft-detail'
 
 export type ThemeStudioNoticeProps = {
   name: string
@@ -7,6 +8,8 @@ export type ThemeStudioNoticeProps = {
   label?: string
   by?: string
   autoFixed?: number
+  /** Steps since the draft started. */
+  changes?: number
   canUndo: boolean
   onKeep: () => void
   onUndo: () => void
@@ -19,22 +22,14 @@ export function ThemeStudioNotice({
   label,
   by,
   autoFixed,
+  changes,
   canUndo,
   onKeep,
   onUndo,
   onDiscard
 }: ThemeStudioNoticeProps): React.JSX.Element {
   const t = useTranslate()
-  const detail = [
-    label && by
-      ? t('auto.app-shell.themeStudio.lastBy', '{{label}} · by {{by}}', { label, by })
-      : label,
-    autoFixed
-      ? t('auto.app-shell.themeStudio.autoFixed', '{{count}} issues auto-fixed', {
-          count: autoFixed
-        })
-      : null
-  ].filter(Boolean)
+  const detail = themeStudioDraftDetail({ label, by, autoFixed }, changes, t)
   return (
     <div
       className="w-[24rem] max-w-full rounded-lg border border-border bg-popover px-3.5 py-3 text-popover-foreground shadow-floating"
@@ -44,18 +39,19 @@ export function ThemeStudioNotice({
         {t('auto.app-shell.themeStudio.previewing', 'Previewing {{value0}}', { value0: name })}
       </div>
       <p className="mt-0.5 line-clamp-2 text-[12px] leading-snug text-muted-foreground">
-        {detail.length
-          ? detail.join(' · ')
-          : t(
-              'auto.app-shell.themeStudio.previewHint',
-              'An agent is editing this theme. Keep saves it as one of your themes.'
-            )}
+        {detail ??
+          t(
+            'auto.app-shell.themeStudio.previewHint',
+            'An agent is editing this theme. Keep saves it as one of your themes.'
+          )}
       </p>
       <div className="mt-2.5 flex gap-2">
         <Button size="sm" onClick={onKeep}>
           {t('auto.app-shell.themeStudio.keep', 'Keep')}
         </Button>
-        <Button size="sm" variant="outline" onClick={onUndo} disabled={!canUndo}>
+        {/* Why secondary and ghost: one affirmative action, a quiet step back, and Discard as
+            the back-out path (STYLEGUIDE: not destructive, no color). */}
+        <Button size="sm" variant="secondary" onClick={onUndo} disabled={!canUndo}>
           {t('auto.app-shell.themeStudio.undo', 'Undo')}
         </Button>
         <Button size="sm" variant="ghost" onClick={onDiscard}>

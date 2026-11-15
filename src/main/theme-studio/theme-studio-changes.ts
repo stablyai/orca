@@ -24,6 +24,7 @@ import {
   type ThemeStudioCore,
   type ThemeStudioMutation
 } from './theme-studio-core'
+import { themeStudioAdjustLabel } from '../../shared/theme-studio/theme-studio-labels'
 
 // Each change runs inside the service's queue, after its guards.
 
@@ -38,7 +39,7 @@ export async function editDraft(
       ? await core.currentDraft(params.name)
       : from.kind === 'installed'
         ? draftFromInstalled(await core.deps.installedThemes(), from.target, params.name)
-        : { draft: withName(from.draft, params.name), label: `Start from ${from.draft.name}` }
+        : { draft: withName(from.draft, params.name), label: `Started from ${from.draft.name}` }
   if (!started.draft.light && !started.draft.dark) {
     throw new ThemeStudioError(
       THEME_STUDIO_ERROR_CODES.invalid,
@@ -56,11 +57,7 @@ export async function adjustDraft(
   caller: ThemeStudioCaller
 ): Promise<ThemeStudioMutation> {
   const { separate } = params
-  const parts = [
-    ...Object.entries(params.adjustment).map(([key, value]) => `${key} ${value}`),
-    ...(separate ? [`separate ${separate.scope} ${separate.amount}`] : [])
-  ]
-  const label = `Adjust ${parts.join(', ')}`
+  const label = themeStudioAdjustLabel(params.adjustment, separate)
   const { changed, skipped } = await core.commitChange(caller, label, (draft) => {
     const next: ThemeStudioDraft = { ...draft }
     const changedKeys: Partial<Record<ThemeStudioMode, string[]>> = {}
@@ -108,8 +105,8 @@ export async function checkDraft(
     return core.mutation('Check')
   }
   if (!ids?.length) {
-    const autoFixed = await core.fixIntoCurrentStep({ label: 'Fix contrast', by: caller.by })
-    return core.mutation(autoFixed ? 'Fix contrast' : 'Check', { autoFixed })
+    const autoFixed = await core.fixIntoCurrentStep({ label: 'Fixed contrast', by: caller.by })
+    return core.mutation(autoFixed ? 'Fixed contrast' : 'Checked contrast', { autoFixed })
   }
   const report = await core.session.waitForReport(REPORT_TIMEOUT_MS)
   if (!report) {
@@ -125,7 +122,7 @@ export async function checkDraft(
       nextSteps: ['Run `orca theme check --json` for the current finding ids.']
     })
   }
-  const label = `Fix ${fixed.length} contrast finding${fixed.length === 1 ? '' : 's'}`
+  const label = `Fixed ${fixed.length} contrast issue${fixed.length === 1 ? '' : 's'}`
   core.session.commit(
     applyThemeStudioPatch(core.session.requireDraft(), patch).draft,
     label,

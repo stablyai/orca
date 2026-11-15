@@ -264,7 +264,8 @@ export class ThemeStudioSession {
         ...(current.by ? { by: current.by } : {}),
         ...(current.autoFixed ? { autoFixed: current.autoFixed } : {})
       },
-      canUndo: this.history.cursor > 0
+      canUndo: this.history.cursor > 0,
+      changes: this.history.cursor
     }
   }
 

@@ -1,3 +1,5 @@
+import { basename } from 'node:path'
+import { tuiAgentDisplayName } from '../../../../../shared/agent-launch/catalog/tui-agent-display-names'
 import { defineMethod, type RpcContext } from '../../core'
 import {
   ThemeStudioAdjustParams,
@@ -41,7 +43,7 @@ function requireThemeStudio(): ThemeStudioService {
   return themeStudioForRpc
 }
 
-/** The caller as history and the notice name it ("claude · Terminal 2"); a terminal the host
+/** The caller as history and the notice name it ("Claude · my-app"); a terminal the host
  *  cannot find still limits its own rate. */
 async function callerOf(
   params: { terminal?: string; ifRevision?: number },
@@ -57,10 +59,17 @@ async function callerOf(
     return base
   }
   const terminal = await context.runtime.showTerminal(params.terminal).catch(() => null)
-  const pane = terminal?.paneTitle ?? terminal?.title
-  return terminal
-    ? { ...base, by: [terminal.agentIdentity ?? 'agent', pane].filter(Boolean).join(' · ') }
-    : base
+  if (!terminal) {
+    return base
+  }
+  // Why names, not the pane title: titles are often a working-directory path.
+  const agent =
+    (terminal.agentIdentity ? tuiAgentDisplayName(terminal.agentIdentity) : null) ?? 'an agent'
+  const workspace = await context.runtime
+    .showManagedWorktree(`id:${terminal.worktreeId}`)
+    .then((worktree) => worktree.displayName)
+    .catch(() => basename(terminal.worktreePath))
+  return { ...base, by: [agent, workspace].filter(Boolean).join(' · ') }
 }
 
 // Why host-admin: a draft repaints the whole app for everyone looking at this window.
@@ -89,7 +98,7 @@ export const THEME_STUDIO_METHODS = [
     handler: async (params, context) =>
       requireThemeStudio().patch(
         params.patch,
-        params.label ?? 'Set tokens',
+        params.label ?? 'Changed colors',
         await callerOf(params, context)
       )
   }),

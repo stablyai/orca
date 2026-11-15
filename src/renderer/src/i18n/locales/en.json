@@ -20340,7 +20340,9 @@
         "discard": "Discard",
         "lastBy": "{{label}} · by {{by}}",
         "autoFixed": "{{count}} issues auto-fixed",
-        "undo": "Undo"
+        "undo": "Undo",
+        "changesLatest": "{{count}} changes · latest: {{label}}",
+        "by": "by {{by}}"
       }
     }
   },

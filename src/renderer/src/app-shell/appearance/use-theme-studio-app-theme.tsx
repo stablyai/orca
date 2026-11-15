@@ -27,6 +27,7 @@ function showNotice(preview: NonNullable<ThemeStudioPreview>): void {
         {...(last?.label ? { label: last.label } : {})}
         {...(last?.by ? { by: last.by } : {})}
         {...(last?.autoFixed ? { autoFixed: last.autoFixed } : {})}
+        {...(preview.changes ? { changes: preview.changes } : {})}
         canUndo={preview.canUndo === true}
         onKeep={() => sendThemeStudioUserAction('keep')}
         onUndo={() => sendThemeStudioUserAction('undo')}

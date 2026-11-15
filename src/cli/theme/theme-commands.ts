@@ -27,6 +27,7 @@ import {
 import { draftFromLocal } from './theme-local-draft'
 import { exportDraft, shot } from './theme-file-commands'
 import { history, show, tokens } from './theme-read-commands'
+import { themeStudioSetLabel } from '../../shared/theme-studio/theme-studio-labels'
 
 async function edit(ctx: HandlerContext): Promise<void> {
   const from = stringFlag(ctx, 'from') ?? 'current'
@@ -57,7 +58,10 @@ async function set(ctx: HandlerContext): Promise<void> {
   }
   await mutate(ctx, 'themeStudio.patch', {
     patch,
-    label: `Set ${listFlag(ctx, 'assignment').join(' ') || 'tokens'}`.slice(0, 256)
+    label: themeStudioSetLabel([...listFlag(ctx, 'assignment'), ...listFlag(ctx, 'unset')]).slice(
+      0,
+      256
+    )
   })
 }
 

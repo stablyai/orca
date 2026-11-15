@@ -55,6 +55,11 @@
     }
   },
   "auto": {
+    "app-shell": {
+      "themeStudio": {
+        "lastBy": "{{label}} · by {{by}}"
+      }
+    },
     "components": {
       "GitHubItemDialog": {
         "filesViewed_one": "{{viewed}} / {{count}} file viewed",

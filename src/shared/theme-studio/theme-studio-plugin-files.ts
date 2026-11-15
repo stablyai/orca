@@ -7,11 +7,7 @@ import {
 } from '../plugins/authoring/plugin-template-files'
 import { hasUsableTerminalThemeColors } from '../terminal-themes/terminal-custom-themes'
 import { THEME_STUDIO_ERROR_CODES, ThemeStudioError } from './theme-studio-errors'
-import {
-  THEME_STUDIO_MODES,
-  type ThemeStudioDraft,
-  type ThemeStudioMode
-} from './theme-studio-draft'
+import { THEME_STUDIO_MODES, type ThemeStudioDraft } from './theme-studio-draft'
 
 const FALLBACK_ID = 'my-theme'
 // Why: ids starting `orca-` install only from Orca's official catalog.
@@ -50,8 +46,8 @@ export function themeStudioPluginFiles(
     }
     return true
   })
-  const label = (mode: ThemeStudioMode): string =>
-    modes.length > 1 ? `${draft.name} ${mode === 'dark' ? 'Dark' : 'Light'}` : draft.name
+  // Why one name for both modes: each picker lists only its own mode, so the person sees the
+  // same theme in both slots and on its Settings row, not "X Light" next to "X".
   const input = { id, name: draft.name }
   const files: Record<string, string> = {
     'orca-plugin.json': manifest(
@@ -62,14 +58,14 @@ export function themeStudioPluginFiles(
         contributes: {
           themes: modes.map((mode) => ({
             id: `${id}-${mode}`,
-            title: label(mode),
+            title: draft.name,
             path: `themes/${mode}.json`
           })),
           ...(terminalModes.length
             ? {
                 terminalThemes: terminalModes.map((mode) => ({
                   id: `${id}-terminal-${mode}`,
-                  title: label(mode),
+                  title: draft.name,
                   path: `terminal/${mode}.json`
                 }))
               }

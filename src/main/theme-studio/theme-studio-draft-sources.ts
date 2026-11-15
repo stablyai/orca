@@ -64,7 +64,7 @@ export function draftFromResolved(resolved: ThemeStudioResolveResult, name?: str
       light: variant('light'),
       dark: variant('dark')
     },
-    label: `Start from ${shown?.themeLabel ?? 'Orca'}`
+    label: `Started from ${shown?.themeLabel ?? 'Orca'}`
   }
 }
 
@@ -99,6 +99,6 @@ export function draftFromInstalled(
   const label = matches[0].pluginName
   return {
     draft: { name: draftName(name ?? label), light: variant('light'), dark: variant('dark') },
-    label: `Start from ${label}`
+    label: `Started from ${label}`
   }
 }

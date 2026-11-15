@@ -20,6 +20,7 @@ import { getIntlLocale } from '@/i18n/i18n'
 import { usePluginThemes } from '@/store/plugins/appearance/plugin-themes'
 import { useThemeStudioPreviewStore } from '@/store/appearance/theme-studio-preview-store'
 import { sendThemeStudioUserAction } from '@/app-shell/appearance/theme-studio-bridge'
+import { themeStudioDraftDetail } from '@/app-shell/appearance/theme-studio-draft-detail'
 import { SettingsRow } from '../../form-controls/SettingsFormControls'
 import { CustomThemeDeleteDialog, CustomThemeRenameDialog } from './CustomThemeDialogs'
 import { customThemeEditPrompt, customThemePublishPrompt } from './custom-theme-prompts'
@@ -59,11 +60,26 @@ async function runAction(
   }
 }
 
+const DAY_MS = 86_400_000
+
+/** "today", "yesterday", "Nov 14", or "Nov 14, 2025" for another year. */
+function shortWhen(savedAt: number, now = Date.now()): string {
+  const locale = getIntlLocale()
+  const startOfDay = (time: number): number => new Date(time).setHours(0, 0, 0, 0)
+  const days = Math.round((startOfDay(now) - startOfDay(savedAt)) / DAY_MS)
+  if (days === 0 || days === 1) {
+    return new Intl.RelativeTimeFormat(locale, { numeric: 'auto' }).format(-days, 'day')
+  }
+  const sameYear = new Date(savedAt).getFullYear() === new Date(now).getFullYear()
+  return new Intl.DateTimeFormat(locale, {
+    month: 'short',
+    day: 'numeric',
+    ...(sameYear ? {} : { year: 'numeric' })
+  }).format(savedAt)
+}
+
 function madeByLine(theme: ThemeStudioSavedTheme, modes: string, t: Translate): string {
-  const when = new Intl.DateTimeFormat(getIntlLocale(), {
-    dateStyle: 'medium',
-    timeStyle: 'short'
-  }).format(theme.savedAt)
+  const when = shortWhen(theme.savedAt)
   return theme.by && theme.by !== 'you'
     ? t('settings.appearance.customTheme.madeBy', 'Made by {{by}} · {{when}} · {{modes}}', {
         by: theme.by,
@@ -203,14 +219,7 @@ function DraftRow(): React.JSX.Element | null {
           </Badge>
         </span>
       }
-      description={
-        last?.by
-          ? t('auto.app-shell.themeStudio.lastBy', '{{label}} · by {{by}}', {
-              label: last.label,
-              by: last.by
-            })
-          : last?.label
-      }
+      description={themeStudioDraftDetail(last, preview.changes, t) ?? undefined}
       control={
         <div className="flex items-center gap-1.5">
           <Button size="sm" onClick={() => sendThemeStudioUserAction('keep')}>
@@ -218,7 +227,7 @@ function DraftRow(): React.JSX.Element | null {
           </Button>
           <Button
             size="sm"
-            variant="outline"
+            variant="secondary"
             disabled={preview.canUndo !== true}
             onClick={() => sendThemeStudioUserAction('undo')}
           >
