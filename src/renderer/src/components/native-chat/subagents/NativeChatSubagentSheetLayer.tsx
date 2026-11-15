@@ -15,6 +15,7 @@ import {
   useNativeChatOpenSubagent
 } from './native-chat-open-subagent'
 import { NativeChatInSubagentSheet } from './native-chat-subagent-sheet-context'
+import { trapNativeChatSubagentSheetTab } from './native-chat-subagent-sheet-tab'
 
 export type NativeChatSubagentSheetHostValue = {
   paneKey: string
@@ -87,6 +88,12 @@ export function NativeChatSubagentSheetPromptSlot({
         <NativeChatInSubagentSheet value={inSheet}>
           <div
             className="contents"
+            onKeyDown={(event) => {
+              const sheet = slot?.closest<HTMLElement>('[role="dialog"]')
+              if (inSheet && sheet) {
+                trapNativeChatSubagentSheetTab(event, sheet)
+              }
+            }}
             onKeyDownCapture={(event) => {
               if (
                 !inSheet ||

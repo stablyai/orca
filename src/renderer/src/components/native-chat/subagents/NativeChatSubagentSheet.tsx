@@ -5,54 +5,12 @@ import {
   NATIVE_CHAT_SUBAGENT_SHEET_ATTRIBUTE
 } from './native-chat-open-subagent'
 import { NativeChatSubagentSheetHost } from './NativeChatSubagentSheetLayer'
-
-const TABBABLE =
-  'a[href], button:not(:disabled), input:not(:disabled), select:not(:disabled), textarea:not(:disabled), [tabindex]:not([tabindex="-1"]), [contenteditable="true"]'
+import { trapNativeChatSubagentSheetTab } from './native-chat-subagent-sheet-tab'
 
 // 80% of the pane, at least 320px; a pane under 400px tall gives the sheet all of it.
 const SHEET_STYLE: React.CSSProperties = {
   height: 'max(80%, min(100%, calc((400px - 100%) * 1000)))',
   minHeight: 'min(320px, 100%)'
-}
-
-function tabbables(sheet: HTMLElement): HTMLElement[] {
-  return Array.from(sheet.querySelectorAll<HTMLElement>(TABBABLE)).filter(
-    (element) => element.checkVisibility() && element.closest('[inert]') === null
-  )
-}
-
-/** Tab and Shift+Tab wrap inside the sheet; the rest of the window stays reachable by pointer. */
-function trapTab(event: React.KeyboardEvent<HTMLDivElement>): void {
-  const sheet = event.currentTarget
-  if (
-    event.key !== 'Tab' ||
-    event.defaultPrevented ||
-    event.altKey ||
-    event.ctrlKey ||
-    event.metaKey ||
-    !(event.target instanceof Node) ||
-    !sheet.contains(event.target)
-  ) {
-    return
-  }
-  const items = tabbables(sheet)
-  const active = document.activeElement
-  const first = items[0]
-  const last = items.at(-1)
-  const wrapTo =
-    !first || !last
-      ? sheet
-      : event.shiftKey
-        ? active === first || active === sheet
-          ? last
-          : null
-        : active === last
-          ? first
-          : null
-  if (wrapTo) {
-    event.preventDefault()
-    wrapTo.focus()
-  }
 }
 
 /** A subagent's view, slid up over its own chat pane; the conversation stays mounted, inert, under a scrim. */
@@ -106,7 +64,7 @@ export function NativeChatSubagentSheet({
         aria-labelledby={titleId}
         tabIndex={-1}
         onKeyDown={(event) => {
-          trapTab(event)
+          trapNativeChatSubagentSheetTab(event, event.currentTarget)
           closeNativeChatSubagentOnEscape(event, paneKey)
         }}
         style={SHEET_STYLE}

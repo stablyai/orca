@@ -159,3 +159,16 @@ it("keeps focus in the sheet when Esc on a nested subagent's own approval goes u
   expect(sheet.contains(screen.getByRole('button', { name: 'Allow', hidden: true }))).toBe(false)
   expect(sheet.contains(document.activeElement)).toBe(true)
 })
+
+it("wraps Tab from the subagent's own prompt card back to the sheet's first control", () => {
+  act(() => openNativeChatSubagent(PANE, 'a1'))
+  render(<Pane>{approval(() => {})}</Pane>)
+  const sheet = screen.getByRole('dialog')
+  const deny = screen.getByRole('button', { name: 'Deny' })
+  deny.focus()
+
+  fireEvent.keyDown(deny, { key: 'Tab' })
+
+  expect(sheet.contains(document.activeElement)).toBe(true)
+  expect(document.activeElement).not.toBe(deny)
+})
