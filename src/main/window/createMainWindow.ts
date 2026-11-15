@@ -46,6 +46,7 @@ import { installMainWindowWebviewSecurity } from './security/main-window-webview
 import { rectHasVisibleAreaOnAnyDisplay } from './presentation/window-bounds-validation'
 import { installWindowsPathRegistryChangeListener } from '../pty/environment/windows-path-registry-change'
 import { recordAgentSessionRuntimeEnd } from '../runtime/agent-session/records/agent-session-runtime-end-record'
+import { installNativeUnloadCoordinator } from './renderer-relays/native-unload-coordinator'
 
 // Node warns past this many listeners per event name. Headroom above normal subsystem fan-out,
 // still low enough that a real leak warns. Per-request listeners belong on addFanoutListener,
@@ -222,6 +223,7 @@ export function createMainWindow(
     store
   })
   installMainWindowWebviewSecurity(mainWindow)
+  installNativeUnloadCoordinator(mainWindow, opts?.onBeforeReload)
   const activity = installMainWindowActivityRelay(mainWindow)
   if (pumpHiddenFrames) {
     stopHiddenWindowFramePumpOnShow(mainWindow)

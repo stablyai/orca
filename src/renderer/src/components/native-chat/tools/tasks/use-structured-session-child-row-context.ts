@@ -24,9 +24,11 @@ export function structuredSessionChildRowContext(
 
 /** Use the sidebar’s parent verdict so the same child cannot disagree between strip and sidebar. */
 export function useStructuredSessionChildRowContext(
-  paneKey: string
+  paneKey: string,
+  active = true
 ): AgentChildRowContext | undefined {
-  const parent = useAgentStatus(paneKey)
+  // A hidden strip passes no key, so it holds no status subscription.
+  const parent = useAgentStatus(active ? paneKey : null)
   // The freshness window is thirty minutes; a coarse shared tick is well inside its precision.
   const now = useNow(30_000, parent !== undefined)
   const context = parent ? structuredSessionChildRowContext(parent, now) : undefined

@@ -12,6 +12,7 @@ import {
 import { prepareAndInvokeAppRestart } from '../renderer/restart/renderer-restart-wiring'
 import {
   awaitBeforeUnloadCheckpoint,
+  invokeRendererRequestedReload,
   startupDiagnosticsEnabled
 } from '../renderer/renderer-runtime'
 import type { PreloadApi } from '../api-types'
@@ -54,12 +55,7 @@ export const appApi = {
       () => ipcRenderer.invoke('app:restart'),
       awaitBeforeUnloadCheckpoint
     ),
-  reload: (): Promise<void> =>
-    prepareAndInvokeAppRestart(
-      window,
-      () => ipcRenderer.invoke('app:reload'),
-      awaitBeforeUnloadCheckpoint
-    ),
+  reload: (): Promise<void> => invokeRendererRequestedReload(),
   stageBeforeUnloadSync: (args: Parameters<PreloadApi['app']['stageBeforeUnloadSync']>[0]) => {
     const result: { ok?: unknown; error?: unknown } | null | undefined = ipcRenderer.sendSync(
       'app:stage-before-unload-sync',
