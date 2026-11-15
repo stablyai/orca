@@ -1,5 +1,4 @@
 import { shallow } from 'zustand/shallow'
-import { reuseArrayIfEqual } from './worktree-agent-row-selectors'
 import { resolveQualifiedWorktreeExecutionOwner } from '@/lib/workspace/ownership/qualified-worktree-execution-owner'
 import { isExecutionHostAliasForWorktree } from '@/lib/workspace/ownership/worktree-execution-host-alias'
 import { structuredAgentSessionOwnerInputs } from '@/runtime/native-chat/session-ownership/structured-agent-session-owner'
@@ -16,6 +15,7 @@ import {
 } from './worktree-card-status-inputs'
 import { buildWorktreeAgentRows } from './worktree-agent-rows'
 import {
+  reuseArrayIfEqual,
   selectLiveAgentStatusEntriesForWorktree,
   selectMigrationUnsupportedEntriesForWorktree,
   selectTerminalLayoutsForWorktree
