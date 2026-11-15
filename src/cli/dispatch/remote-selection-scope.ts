@@ -9,6 +9,8 @@ export function ignoresRemoteSelection(commandPath: readonly string[]): boolean 
     // Removes ids that `host list` printed from this runtime; an ambient selection must not retarget it.
     commandPath.join(' ') === 'host rm' ||
     commandPath[0] === 'serve' ||
+    // Each tool call re-runs the CLI with the forwarded selection, which resolves it there.
+    commandPath[0] === 'mcp' ||
     (commandPath[0] === 'agent' && commandPath[1] !== 'launch') ||
     commandPath[0] === 'vm' ||
     commandPath[0] === 'agent-context' ||
