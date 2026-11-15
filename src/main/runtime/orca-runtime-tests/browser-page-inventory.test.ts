@@ -114,7 +114,7 @@ describe('accepted saved browser page inventory', () => {
     const { live, sync, list } = fixture()
     live.clear()
     const first = { ...workspace, id: 'browser-first', activePageId: 'X', pageIds: ['X'] }
-    sync(
+    await sync(
       publication([page('C')], workspace, {
         browserTabsByWorktree: { [TEST_WORKTREE_ID]: [first, workspace] },
         browserPagesByWorkspace: {
@@ -134,7 +134,7 @@ describe('accepted saved browser page inventory', () => {
 
   it('lists reclaimed siblings and lazily switches only the requested saved identity', async () => {
     const { runtime, live, bridge, sync, list } = fixture()
-    sync()
+    await sync()
     const unavailableRenderer = vi.fn(() => {
       throw new Error('renderer unavailable')
     })
@@ -204,7 +204,7 @@ describe('accepted saved browser page inventory', () => {
       pageIds: ['D']
     }
     live.set('D', 40)
-    sync(
+    await sync(
       publication(undefined, undefined, {
         browserTabsByWorktree: { [TEST_WORKTREE_ID]: [workspace], [otherWorktree]: [other] },
         browserPagesByWorkspace: {
@@ -266,7 +266,7 @@ describe('accepted saved browser page inventory', () => {
     })
     const { sync, list } = fixture(runtime)
     electronMocks.BrowserWindow.fromId.mockReturnValue({ isDestroyed: () => false })
-    sync()
+    await sync()
     await vi.advanceTimersByTimeAsync(100)
     const before = await runtime.listMobileSessionTabs(`id:${TEST_WORKTREE_ID}`)
     expect(before.tabs).toEqual(
@@ -274,12 +274,12 @@ describe('accepted saved browser page inventory', () => {
     )
     const events: RuntimeMobileSessionTabsResult[] = []
     const unsubscribe = runtime.onMobileSessionTabsChanged((snapshot) => events.push(snapshot))
-    sync([], { unchangedMobileSessionWorktrees: [TEST_WORKTREE_ID] })
+    await sync([], { unchangedMobileSessionWorktrees: [TEST_WORKTREE_ID] })
     await vi.advanceTimersByTimeAsync(100)
     expect((await list()).tabs.map((tab) => tab.browserPageId)).toEqual(['C', 'A', 'B'])
     expect(await runtime.listMobileSessionTabs(`id:${TEST_WORKTREE_ID}`)).toEqual(before)
     expect(events).toEqual([])
-    sync([])
+    await sync([])
     await vi.advanceTimersByTimeAsync(100)
     expect((await list()).tabs.map((tab) => tab.browserPageId)).toEqual(['C'])
     unsubscribe()
@@ -288,7 +288,7 @@ describe('accepted saved browser page inventory', () => {
   it('updates the catalog silently, fences stale input, and publishes visible changes once', async () => {
     vi.useFakeTimers()
     const { runtime, sync, list, titles } = fixture()
-    sync()
+    await sync()
     await vi.advanceTimersByTimeAsync(100)
     const events: RuntimeMobileSessionTabsResult[] = []
     const unsubscribe = runtime.onMobileSessionTabsChanged((snapshot) => events.push(snapshot))
@@ -296,19 +296,19 @@ describe('accepted saved browser page inventory', () => {
     expect(initial.tabs).toHaveLength(1)
     expect(initial).not.toHaveProperty('browserPageInventory')
     const renamed = publication([page('A'), page('B', { title: 'Renamed B' }), page('C')])
-    sync(renamed)
+    await sync(renamed)
     await vi.advanceTimersByTimeAsync(100)
     expect((await list()).tabs.find((tab) => tab.browserPageId === 'B')?.title).toBe('Renamed B')
     expect(await runtime.listMobileSessionTabs(`id:${TEST_WORKTREE_ID}`)).toEqual(initial)
     expect(events).toEqual([])
-    sync(publication([page('A'), page('C')]))
-    sync(renamed)
+    await sync(publication([page('A'), page('C')]))
+    await sync(renamed)
     await vi.advanceTimersByTimeAsync(100)
     expect((await list()).tabs.map((tab) => tab.browserPageId)).toEqual(['C', 'A'])
     expect(events).toEqual([])
     expect(await runtime.listMobileSessionTabs(`id:${TEST_WORKTREE_ID}`)).toEqual(initial)
     titles.set('C', 'Visible C')
-    sync(publication([page('A'), page('C', { title: 'Visible C' })]))
+    await sync(publication([page('A'), page('C', { title: 'Visible C' })]))
     await vi.advanceTimersByTimeAsync(100)
     expect(events).toHaveLength(1)
     expect(events[0]).not.toHaveProperty('browserPageInventory')
@@ -321,7 +321,7 @@ describe('accepted saved browser page inventory', () => {
     vi.useFakeTimers()
     const { runtime, sync, list } = fixture()
     const hidden = Array.from({ length: count }, (_, index) => page(`saved-${index}`))
-    sync(publication([...hidden, page('C')]))
+    await sync(publication([...hidden, page('C')]))
     await vi.advanceTimersByTimeAsync(100)
     const initial = await runtime.listMobileSessionTabs(`id:${TEST_WORKTREE_ID}`)
     expect(initial.tabs).toEqual(
@@ -329,7 +329,7 @@ describe('accepted saved browser page inventory', () => {
     )
     const events: RuntimeMobileSessionTabsResult[] = []
     const unsubscribe = runtime.onMobileSessionTabsChanged((snapshot) => events.push(snapshot))
-    sync(
+    await sync(
       publication([...hidden.map((entry) => ({ ...entry, title: 'Updated sibling' })), page('C')])
     )
     await vi.advanceTimersByTimeAsync(100)
@@ -386,7 +386,7 @@ describe('accepted saved browser page inventory', () => {
         }
       }
     }
-    sync(publication(undefined, undefined, terminalState), { tabs, leaves })
+    await sync(publication(undefined, undefined, terminalState), { tabs, leaves })
     await vi.advanceTimersByTimeAsync(100)
     const initial = await runtime.listMobileSessionTabs(`id:${TEST_WORKTREE_ID}`)
     expect(initial.tabs).toEqual(
@@ -394,7 +394,7 @@ describe('accepted saved browser page inventory', () => {
     )
     const events: RuntimeMobileSessionTabsResult[] = []
     const unsubscribe = runtime.onMobileSessionTabsChanged((snapshot) => events.push(snapshot))
-    sync(
+    await sync(
       publication(
         [page('A'), page('B', { title: 'Renamed B' }), page('C')],
         workspace,
@@ -421,8 +421,8 @@ describe('accepted saved browser page inventory', () => {
     live.delete('C')
     live.set('extra', 40)
     const original = publication()
-    sync(original)
-    sync([
+    await sync(original)
+    await sync([
       {
         ...original[0]!,
         snapshotVersion: original[0]!.snapshotVersion + 1,
@@ -430,9 +430,9 @@ describe('accepted saved browser page inventory', () => {
       }
     ])
     expect((await list()).tabs.map((tab) => tab.browserPageId)).toEqual(['extra'])
-    sync([{ ...original[0]!, snapshotVersion: original[0]!.snapshotVersion + 2 }])
+    await sync([{ ...original[0]!, snapshotVersion: original[0]!.snapshotVersion + 2 }])
     expect((await list()).tabs.map((tab) => tab.browserPageId)).toEqual(['C', 'A', 'B', 'extra'])
-    sync([
+    await sync([
       {
         ...original[0]!,
         snapshotVersion: original[0]!.snapshotVersion + 3,
@@ -440,7 +440,7 @@ describe('accepted saved browser page inventory', () => {
       }
     ])
     expect((await list()).tabs.map((tab) => tab.browserPageId)).toEqual(['C', 'extra'])
-    expect(() =>
+    await expect(
       sync([
         {
           ...original[0]!,
@@ -450,7 +450,7 @@ describe('accepted saved browser page inventory', () => {
           ]
         }
       ])
-    ).toThrow('invalid_browser_page_inventory')
+    ).rejects.toThrow('invalid_browser_page_inventory')
     expect((await list()).tabs.map((tab) => tab.browserPageId)).toEqual(['C', 'extra'])
   })
 
@@ -476,7 +476,7 @@ describe('accepted saved browser page inventory', () => {
     )
     expect(snapshots[0]!.tabs).toEqual([])
     expect(snapshots[0]!.browserPageInventory!.map((entry) => entry.browserPageId)).toEqual(['A'])
-    sync(snapshots)
+    await sync(snapshots)
     expect((await list()).tabs.map((tab) => tab.browserPageId)).toEqual(['A', 'C'])
     expect((await runtime.listMobileSessionTabs(`id:${TEST_WORKTREE_ID}`)).tabs).toEqual([])
   })
