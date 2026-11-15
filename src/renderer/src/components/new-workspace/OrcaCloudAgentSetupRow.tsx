@@ -29,6 +29,11 @@ export function orcaCloudAgentCoveredLabel(
   t: Translate
 ): string {
   const agent = agentName(row.agent, t)
+  if (row.via === 'inWorkspace') {
+    return t('orcaCloudAgentRow.inWorkspace', '{{agent}} · signs in inside the workspace', {
+      agent
+    })
+  }
   return row.via === 'account'
     ? t('orcaCloudAgentRow.fromAccount', '{{agent}} · from your Orca account', { agent })
     : t('orcaCloudAgentRow.viaKey', '{{agent}} · {{key}}', {

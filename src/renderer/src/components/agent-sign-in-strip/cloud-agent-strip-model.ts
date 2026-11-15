@@ -25,6 +25,8 @@ export type CloudStripPrimary =
   | { kind: 'reopenSetup' }
   /** PC-3b: the setup finished; start the held agent. */
   | { kind: 'start' }
+  /** The quiet alternative to "Set up once": the agent signs in inside each workspace, Orca stores nothing. */
+  | { kind: 'signInInsideWorkspace' }
 
 export type CloudStripModel = {
   status: CloudStripStatus
@@ -57,6 +59,11 @@ export type CloudStripModel = {
   } | null
   /** "Other ways" under ⋯: the code fallback and the key path. */
   otherWays: boolean
+  /**
+   * A quiet second choice under ⋯ (the strip has no "Other ways"): a label and one sentence on what
+   * it means, e.g. "Sign in inside this workspace instead" on "Set up once".
+   */
+  alternative?: { label: string; detail: string; action: CloudStripPrimary }
   /** Already on a code: ⋯ offers the paste fallback and Cancel instead of "Use a code". */
   codeStep?: boolean
   /**

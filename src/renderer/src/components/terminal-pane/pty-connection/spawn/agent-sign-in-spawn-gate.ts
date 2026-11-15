@@ -95,6 +95,9 @@ export function gateFreshSpawnOnAgentSignIn(
 /** A first Claude/Codex launch on a signed-out host waits for its inline sign-in. */
 export function installAgentSignInSpawnGate(session: ConnectPanePtySession): void {
   const start = session.startFreshSpawn
+  // For a layer outside this gate whose launch must reach the host unasked (an Orca Cloud agent the
+  // person signs in inside the workspace, in the agent itself).
+  session.startFreshSpawnWithoutSignInGate = start
   session.startFreshSpawn = (startupOverride, options) => {
     const request = agentSignInGateRequest(session, startupOverride)
     return request

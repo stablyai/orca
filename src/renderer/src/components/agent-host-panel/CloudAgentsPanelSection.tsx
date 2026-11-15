@@ -85,7 +85,9 @@ function statusCopy(row: CloudAgentPanelRow, t: Translate): { line: string; deta
         detail:
           row.status.reason === 'paused'
             ? t('vmBuildAgents.paused', 'Orca account sign-in is paused')
-            : t('vmBuildAgents.notOffered', 'Signs in for each cloud workspace for now')
+            : row.status.reason === 'chosen'
+              ? t('agentHostPanel.cloud.signsInHereChosen', 'Orca doesn’t store this sign-in')
+              : t('vmBuildAgents.notOffered', 'Signs in for each cloud workspace for now')
       }
   }
 }

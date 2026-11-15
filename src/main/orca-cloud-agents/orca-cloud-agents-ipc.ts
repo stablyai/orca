@@ -3,6 +3,7 @@
 import { BrowserWindow, app, ipcMain, shell } from 'electron'
 import { z } from 'zod'
 import {
+  IN_WORKSPACE_SOURCE,
   ORCA_CLOUD_ACCOUNT_AGENTS,
   type OrcaCloudAgentSetups
 } from '../../shared/orca-cloud-agents/orca-cloud-agents-wire'
@@ -27,6 +28,10 @@ const PasteRequest = z.object({ token: z.string().min(1).max(1024) })
 // The code (or callback URL) from Claude's sign-in page; main normalizes it.
 const CodeRequest = z.object({ code: z.string().min(1).max(2048) })
 const SourceRequest = z.object({ agent: Agent, source: z.enum(['sign-in', 'key']).nullable() })
+const DefaultSourceRequest = z.object({
+  agent: Agent,
+  source: z.enum(['sign-in', 'key', IN_WORKSPACE_SOURCE]).nullable()
+})
 // A runtime environment, never a raw sandbox id: main resolves only sandboxes this desktop made.
 const RuntimeEnvironment = z.string().min(1).max(256)
 const WorkspaceRequest = z.object({ runtimeEnvironmentId: RuntimeEnvironment })
@@ -153,7 +158,7 @@ export function registerOrcaCloudAgentsHandlers(userDataPath: string): void {
     return request.success ? service.remove(request.data.agent) : invalid
   })
   ipcMain.handle('orcaCloudAgents:setDefaultSource', (_event, raw: unknown) => {
-    const request = SourceRequest.safeParse(raw)
+    const request = DefaultSourceRequest.safeParse(raw)
     return request.success
       ? service.setDefaultSource(request.data.agent, request.data.source)
       : invalid

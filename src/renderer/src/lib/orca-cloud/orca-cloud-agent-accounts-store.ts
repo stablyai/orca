@@ -5,6 +5,7 @@ import {
   IDLE_ORCA_CLOUD_AGENT_SETUPS,
   ORCA_CLOUD_ACCOUNT_AGENTS,
   type AgentCredentialsView,
+  type AgentDefaultSourceChoice,
   type AgentKeyKind,
   type AgentSourcesView,
   type OrcaCloudAccountAgent,
@@ -231,6 +232,29 @@ export function applyOrcaCloudAgentSources(sources: AgentSourcesView): void {
   if (state.load.kind === 'ready') {
     set({ load: { kind: 'ready', status: { ...state.load.status, sources } } })
   }
+}
+
+/**
+ * Saves a default Source and applies the reply (Settings and the "Set up once" strip). Resolves with
+ * an error code when nothing was saved. 'in-workspace': Orca stores and injects nothing for the agent.
+ */
+export async function setOrcaCloudAgentDefaultSource(
+  agent: OrcaCloudAccountAgent,
+  source: AgentDefaultSourceChoice
+): Promise<OrcaCloudAgentsErrorCode | null> {
+  const api = bridge()
+  if (!api) {
+    return 'not_configured'
+  }
+  const result = await api.setDefaultSource({ agent, source }).catch(() => null)
+  if (!result) {
+    return 'unknown'
+  }
+  if (!result.ok) {
+    return result.error
+  }
+  applyOrcaCloudAgentSources(result.value)
+  return null
 }
 
 /** Fixtures and tests only. */

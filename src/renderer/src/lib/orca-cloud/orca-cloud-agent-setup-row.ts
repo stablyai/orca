@@ -13,7 +13,7 @@ export type OrcaCloudAgentSetupRowModel =
   | { kind: 'hidden' }
   | { kind: 'loading'; agent: OrcaCloudAccountAgent }
   /** Collapsed to one line: nothing to do. */
-  | { kind: 'covered'; agent: OrcaCloudAccountAgent; via: 'account' | AgentKeyKind }
+  | { kind: 'covered'; agent: OrcaCloudAccountAgent; via: 'account' | 'inWorkspace' | AgentKeyKind }
   | { kind: 'notSetUp'; agent: OrcaCloudAccountAgent }
   | { kind: 'expired'; agent: OrcaCloudAccountAgent }
   /** §5c, info only. */
@@ -81,5 +81,8 @@ export function orcaCloudAgentSetupRow({
     case 'unavailable':
       // Never offered here: like an agent without an account path, the composer shows no row.
       return { kind: 'hidden' }
+    case 'inWorkspace':
+      // The person's own choice: nothing to set up, so the row is done.
+      return { kind: 'covered', agent, via: 'inWorkspace' }
   }
 }

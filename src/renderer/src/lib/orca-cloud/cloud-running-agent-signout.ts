@@ -139,6 +139,7 @@ export function cloudRunningStrip(args: {
     case 'killSwitch':
     case 'unavailable':
     case 'notSetUp':
+    case 'inWorkspace':
       return null
   }
 }

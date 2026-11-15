@@ -30,6 +30,20 @@ function base(agent: string, t: Translate): CloudStripModel {
   }
 }
 
+/** "Sign in inside this workspace instead": the in-VM login, as a quiet second choice to Set up once. */
+export function signInInsideWorkspaceAlternative(
+  t: Translate
+): NonNullable<CloudStripModel['alternative']> {
+  return {
+    label: t('agentSignInStrip.signInInsideWorkspace', 'Sign in inside this workspace instead'),
+    detail: t(
+      'agentSignInStrip.signInInsideWorkspaceDetail',
+      'Orca won’t store your sign-in. You’ll sign in again in each new workspace.'
+    ),
+    action: { kind: 'signInInsideWorkspace' }
+  }
+}
+
 /** A detail with `inline code` marks, as one sentence for a screen reader. */
 function plainText(text: string): string {
   return text.replaceAll('`', '')
@@ -100,7 +114,7 @@ export function cloudAgentSetupStripModel(args: {
   switch (setup.phase) {
     case 'idle':
     case 'saved':
-      return need
+      return { ...need, alternative: signInInsideWorkspaceAlternative(t) }
     case 'browser':
       return {
         ...need,
@@ -223,6 +237,7 @@ export function cloudAgentSetupStripModel(args: {
                 action: { kind: 'reopenSetup' }
               }
             : { label: t('agentSignInStrip.tryAgain', 'Try again'), action: { kind: 'setUpOnce' } },
+        alternative: signInInsideWorkspaceAlternative(t),
         announcement: copy.title
       }
     }

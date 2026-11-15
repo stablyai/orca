@@ -5,9 +5,10 @@ import { useTranslate } from '@/i18n/use-translate'
 import { Button } from '@/components/ui/button'
 import { InlineError } from '@/components/ui/inline-error'
 import type { OrcaCloudAccountRow } from '@/lib/orca-cloud/orca-cloud-agent-accounts-model'
-import type {
-  OrcaCloudAccountAgent,
-  OrcaCloudAgentsErrorCode
+import {
+  IN_WORKSPACE_SOURCE,
+  type OrcaCloudAccountAgent,
+  type OrcaCloudAgentsErrorCode
 } from '../../../../../shared/orca-cloud-agents/orca-cloud-agents-wire'
 import { RowShell } from './orca-cloud-account-row-shell'
 import {
@@ -69,19 +70,67 @@ export function AccountRow({
             </Button>
           }
         >
-          {/* The paste path stays reachable without the browser (RA-5), as a real action (JA-23). */}
-          {agent === 'claude' ? (
+          <div className="-ml-2.5 mt-1 flex flex-wrap items-center gap-x-1">
+            {/* The paste path stays reachable without the browser (RA-5), as a real action (JA-23). */}
+            {agent === 'claude' ? (
+              <Button type="button" variant="ghost" size="sm" onClick={actions.usePaste}>
+                {t('orcaCloudAccounts.pasteTokenInstead', 'Paste a token instead')}
+              </Button>
+            ) : null}
+            {/* The quiet alternative: the agent's own login inside each workspace; Orca stores nothing. */}
             <Button
               type="button"
               variant="ghost"
               size="sm"
-              className="-ml-2.5 mt-1"
-              onClick={actions.usePaste}
+              className="text-muted-foreground"
+              onClick={() =>
+                void actions.setSource(agent, IN_WORKSPACE_SOURCE).then((error) => {
+                  if (error) {
+                    setRowError(error)
+                  }
+                })
+              }
             >
-              {t('orcaCloudAccounts.pasteTokenInstead', 'Paste a token instead')}
+              {t(
+                'orcaCloudAccounts.signInInsideWorkspace',
+                'Sign in inside each workspace instead'
+              )}
             </Button>
-          ) : null}
+          </div>
         </RowShell>
+      )
+      break
+    case 'inWorkspace':
+      content = (
+        <RowShell
+          agent={agent}
+          tone="info"
+          title={t('orcaCloudAccounts.inWorkspace', 'Signs in inside each workspace')}
+          detail={t(
+            'orcaCloudAccounts.inWorkspaceDetail',
+            'Orca doesn’t store your {{product}} sign-in. You sign in again in each new cloud workspace.',
+            { product }
+          )}
+          actions={
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() =>
+                void actions.setSource(agent, null).then((error) => {
+                  if (error) {
+                    setRowError(error)
+                  } else if (!row.savedSignIn) {
+                    // Back to signing in once: the one-time setup starts right away.
+                    actions.start(agent)
+                  }
+                })
+              }
+            >
+              {useAccount}
+            </Button>
+          }
+        />
       )
       break
     case 'setup':
