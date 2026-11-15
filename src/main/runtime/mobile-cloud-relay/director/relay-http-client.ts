@@ -3,6 +3,7 @@ import { z } from 'zod'
 import type { E2EEKeypair } from '../../rpc/server/pairing/e2ee-keypair'
 import { cancelUnreadResponseBody } from '../../../lib/unread-response-body'
 import { parseRetryAfterHeaderMs } from '../../../../shared/retry-after-header'
+import { accountRelayFetch } from '../../../network/env-proxy-transport'
 import {
   RelayAssignAbortedError,
   RelayAssignRateLimitedError,
@@ -107,7 +108,7 @@ export async function exchangeRelayAuthorization(input: {
   requestDeadlineMs?: number
 }): Promise<RelayAuthorization> {
   const relayHostId = deriveRelayHostId(input.keypair.publicKey)
-  const response = await (input.fetch ?? globalThis.fetch)(input.endpoint, {
+  const response = await (input.fetch ?? accountRelayFetch())(input.endpoint, {
     method: 'POST',
     headers: {
       authorization: `Bearer ${input.accessToken}`,
@@ -171,7 +172,7 @@ async function sendRelayAssignment(
   if (input.isCurrent && !input.isCurrent()) {
     throw new RelayAssignAbortedError()
   }
-  const response = await (input.fetch ?? globalThis.fetch)(`${input.directorUrl}/v1/assign`, {
+  const response = await (input.fetch ?? accountRelayFetch())(`${input.directorUrl}/v1/assign`, {
     method: 'POST',
     headers: {
       authorization: `Bearer ${input.relayToken}`,

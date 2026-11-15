@@ -7,6 +7,7 @@ import type { OrcaCloudAuthConfig } from './profile-cloud-auth-config'
 import type { OrcaCloudSession } from '../cloud-session/profile-cloud-session-store'
 import type { OrcaCloudSessionExchangeResponse } from '../cloud-session/profile-cloud-session-exchange'
 import { cancelUnreadResponseBody } from '../../lib/unread-response-body'
+import { accountRelayFetch } from '../../network/env-proxy-transport'
 
 type ExchangeCodeArgs = {
   code: string
@@ -187,7 +188,7 @@ async function readCloudErrorCode(response: Response): Promise<string | undefine
 }
 
 async function postJson<T>(url: string, body: unknown, options?: PostJsonOptions): Promise<T> {
-  const response = await fetch(url, {
+  const response = await accountRelayFetch()(url, {
     method: 'POST',
     headers: {
       'content-type': 'application/json',

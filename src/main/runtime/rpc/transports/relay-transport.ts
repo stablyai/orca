@@ -1,12 +1,13 @@
-import WebSocket, { type RawData } from 'ws'
+import type WebSocket from 'ws'
+import type { RawData } from 'ws'
 import { forEachWithConcurrency } from '../../../../shared/map-with-concurrency'
 import type { RpcTransport } from '../transport'
 import type {
   MobileSocketTransport,
   MobileSocketTransportMetadata
 } from '../mobile/mobile-socket-wiring'
+import { createRelayRpcSocket } from './relay-rpc-socket'
 
-const MAX_RELAY_MESSAGE_BYTES = 1024 * 1024
 // Terminate normally closes next tick; cap slow teardown at 5s so dead sockets cannot block stop or quit.
 export const RELAY_SOCKET_CLOSE_TIMEOUT_MS = 5_000
 const RELAY_SOCKET_CLOSE_WAIT_CONCURRENCY = 32
@@ -76,10 +77,7 @@ export class CloudRelayTransport implements RpcTransport, MobileSocketTransport 
     this.generation = options.generation
     this.onConnectionClosed = options.onConnectionClosed
     this.onDataDialSettled = options.onDataDialSettled
-    this.createSocket =
-      options.createSocket ??
-      ((url) =>
-        new WebSocket(url, { perMessageDeflate: false, maxPayload: MAX_RELAY_MESSAGE_BYTES }))
+    this.createSocket = options.createSocket ?? createRelayRpcSocket
   }
 
   onMessage(handler: Parameters<MobileSocketTransport['onMessage']>[0]): void {
