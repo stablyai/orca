@@ -55,16 +55,24 @@ function runtimeCall(method, params) {
     socket.setEncoding('utf8')
     socket.on('error', reject)
     socket.on('connect', () =>
-      socket.write(`${JSON.stringify({ id: 'watch-bridge', authToken: metadata.authToken, method, params })}\n`)
+      socket.write(
+        `${JSON.stringify({ id: 'watch-bridge', authToken: metadata.authToken, method, params })}\n`
+      )
     )
     socket.on('data', (chunk) => {
       buffer += chunk
       const end = buffer.indexOf('\n')
-      if (end < 0) return
+      if (end === -1) {
+        return
+      }
       clearTimeout(timer)
       socket.end()
       const frame = JSON.parse(buffer.slice(0, end))
-      frame.ok ? resolve(frame.result) : reject(new Error(frame.error?.message ?? `${method} failed`))
+      if (frame.ok) {
+        resolve(frame.result)
+      } else {
+        reject(new Error(frame.error?.message ?? `${method} failed`))
+      }
     })
   })
 }
@@ -72,7 +80,9 @@ function runtimeCall(method, params) {
 async function orca(...args) {
   const { stdout } = await run(ORCA_CLI, [...args, '--json'], { timeout: 8000 })
   const frame = JSON.parse(stdout)
-  if (!frame.ok) throw new Error(frame.error?.message ?? `orca ${args[0]} ${args[1]} failed`)
+  if (!frame.ok) {
+    throw new Error(frame.error?.message ?? `orca ${args[0]} ${args[1]} failed`)
+  }
   return frame.result
 }
 
@@ -93,7 +103,9 @@ async function waitingClaudeTerminals() {
 // Claude Code draws: "Do you want to …?" then "❯ 1. Yes" / "  2. …" (wrapped lines indented further).
 export function parsePermissionDialog(lines) {
   const questionAt = lines.findLastIndex((line) => /^\s*Do you want to /.test(line))
-  if (questionAt < 0) return null
+  if (questionAt === -1) {
+    return null
+  }
   const options = []
   for (const line of lines.slice(questionAt + 1)) {
     const option = line.match(/^\s*(?:❯\s*)?(\d)\.\s+(.*)$/)
@@ -105,7 +117,9 @@ export function parsePermissionDialog(lines) {
       break
     }
   }
-  if (options.length === 0) return null
+  if (options.length === 0) {
+    return null
+  }
   const ruleAt = lines.slice(0, questionAt).findLastIndex((line) => /^─{10,}/.test(line))
   const context = lines
     .slice(ruleAt + 1, questionAt)
@@ -118,16 +132,28 @@ async function pendingPrompts() {
   const prompts = []
   for (const { tab, status } of await waitingClaudeTerminals()) {
     const handle = status.terminalHandle
-    const screen = await orca('terminal', 'read', '--terminal', handle, '--screen').catch(() => null)
+    const screen = await orca('terminal', 'read', '--terminal', handle, '--screen').catch(
+      () => null
+    )
     const dialog = screen && parsePermissionDialog(screen.terminal?.tail ?? [])
-    if (!dialog) continue
-    const identity = [handle, status.stateStartedAt, status.toolName, status.toolInput, dialog.question]
+    if (!dialog) {
+      continue
+    }
+    const identity = [
+      handle,
+      status.stateStartedAt,
+      status.toolName,
+      status.toolInput,
+      dialog.question
+    ]
     const workspace = basename((status.worktreeId ?? '').split('::').at(-1) ?? '')
     prompts.push({
       id: createHash('sha256').update(JSON.stringify(identity)).digest('hex').slice(0, 20),
       kind: 'approval',
       title: dialog.question,
-      detail: [`${status.toolName}: ${status.toolInput ?? ''}`, ...dialog.context].join('\n').slice(0, 1200),
+      detail: [`${status.toolName}: ${status.toolInput ?? ''}`, ...dialog.context]
+        .join('\n')
+        .slice(0, 1200),
       source: [status.terminalTitle || tab.title, workspace].filter(Boolean).join(' · '),
       options: dialog.options.map((option) => ({ ...option, label: option.label.slice(0, 90) })),
       allowsText: true,
@@ -140,7 +166,9 @@ async function pendingPrompts() {
 
 async function stillWaiting(handle, since) {
   const terminals = await waitingClaudeTerminals()
-  return terminals.some(({ status }) => status.terminalHandle === handle && status.stateStartedAt === since)
+  return terminals.some(
+    ({ status }) => status.terminalHandle === handle && status.stateStartedAt === since
+  )
 }
 
 let answerChain = Promise.resolve()
@@ -148,8 +176,12 @@ function answerPrompt(body) {
   const next = answerChain.then(async () => {
     // Re-read right before typing: a key sent to a changed screen would answer something else.
     const prompt = (await pendingPrompts()).find((entry) => entry.id === body.promptId)
-    console.log(`answer ${body.decision} option=${body.optionId ?? '-'} prompt=${body.promptId} found=${Boolean(prompt)}`)
-    if (!prompt) return { status: 409, body: { error: 'This prompt is no longer waiting' } }
+    console.log(
+      `answer ${body.decision} option=${body.optionId ?? '-'} prompt=${body.promptId} found=${Boolean(prompt)}`
+    )
+    if (!prompt) {
+      return { status: 409, body: { error: 'This prompt is no longer waiting' } }
+    }
     if (body.decision === 'option') {
       if (!prompt.options.some((option) => option.id === body.optionId)) {
         return { status: 400, body: { error: 'Unknown option' } }
@@ -159,7 +191,15 @@ function answerPrompt(body) {
       // Esc declines the tool call; the reply then goes in as the next message.
       await orca('terminal', 'send', '--terminal', prompt.handle, '--text', '\u001b')
       await sleep(600)
-      await orca('terminal', 'send', '--terminal', prompt.handle, '--text', body.text.slice(0, 2000), '--enter')
+      await orca(
+        'terminal',
+        'send',
+        '--terminal',
+        prompt.handle,
+        '--text',
+        body.text.slice(0, 2000),
+        '--enter'
+      )
     } else {
       return { status: 400, body: { error: 'Unsupported answer' } }
     }
@@ -193,7 +233,9 @@ function saveDevices(devices) {
 function registerDevice(body) {
   const deviceToken = String(body.deviceToken ?? '')
   const environment = body.environment === 'production' ? 'production' : 'development'
-  if (!/^[0-9a-f]{64,200}$/.test(deviceToken)) return { status: 400, body: { error: 'Bad device token' } }
+  if (!/^[0-9a-f]{64,200}$/.test(deviceToken)) {
+    return { status: 400, body: { error: 'Bad device token' } }
+  }
   const devices = loadDevices().filter((device) => device.deviceToken !== deviceToken)
   devices.push({ deviceToken, environment, registeredAt: Date.now() })
   saveDevices(devices)
@@ -202,25 +244,37 @@ function registerDevice(body) {
 }
 
 function loadApnsKey() {
-  const file = existsSync(APNS_DIR) && readdirSync(APNS_DIR).find((name) => /^AuthKey_\w{10}\.p8$/.test(name))
-  if (!file) return null
-  return { keyId: file.slice(8, 18), key: createPrivateKey(readFileSync(join(APNS_DIR, file), 'utf8')) }
+  const file =
+    existsSync(APNS_DIR) && readdirSync(APNS_DIR).find((name) => /^AuthKey_\w{10}\.p8$/.test(name))
+  if (!file) {
+    return null
+  }
+  return {
+    keyId: file.slice(8, 18),
+    key: createPrivateKey(readFileSync(join(APNS_DIR, file), 'utf8'))
+  }
 }
 
 let apnsJwt = null
 function apnsAuthorization(apnsKey) {
   // Apple accepts a provider token for up to an hour; refresh well before that.
-  if (apnsJwt && Date.now() - apnsJwt.issuedAt < 40 * 60 * 1000) return apnsJwt.value
+  if (apnsJwt && Date.now() - apnsJwt.issuedAt < 40 * 60 * 1000) {
+    return apnsJwt.value
+  }
   const encode = (value) => Buffer.from(JSON.stringify(value)).toString('base64url')
   const issuedAt = Date.now()
   const unsigned = `${encode({ alg: 'ES256', kid: apnsKey.keyId })}.${encode({ iss: APNS_TEAM_ID, iat: Math.floor(issuedAt / 1000) })}`
-  const signature = sign('sha256', Buffer.from(unsigned), { key: apnsKey.key, dsaEncoding: 'ieee-p1363' })
+  const signature = sign('sha256', Buffer.from(unsigned), {
+    key: apnsKey.key,
+    dsaEncoding: 'ieee-p1363'
+  })
   apnsJwt = { issuedAt, value: `bearer ${unsigned}.${signature.toString('base64url')}` }
   return apnsJwt.value
 }
 
 function sendApns(apnsKey, device, payload, collapseId) {
-  const host = device.environment === 'production' ? 'api.push.apple.com' : 'api.sandbox.push.apple.com'
+  const host =
+    device.environment === 'production' ? 'api.push.apple.com' : 'api.sandbox.push.apple.com'
   return new Promise((resolve) => {
     const client = connectHttp2(`https://${host}`)
     const timer = setTimeout(() => {
@@ -256,7 +310,9 @@ async function notifyWatch(prompt) {
   const apnsKey = loadApnsKey()
   const devices = loadDevices()
   console.log(`prompt waiting: ${prompt.title} (key=${Boolean(apnsKey)} devices=${devices.length})`)
-  if (!apnsKey || devices.length === 0) return
+  if (!apnsKey || devices.length === 0) {
+    return
+  }
   const no = prompt.options.find((option) => /^No\b/.test(option.label))
   const payload = {
     aps: {
@@ -271,8 +327,14 @@ async function notifyWatch(prompt) {
   for (const device of devices) {
     const started = Date.now()
     const result = await sendApns(apnsKey, device, payload, prompt.id)
-    console.log(`push …${device.deviceToken.slice(-6)} ${result.status} ${result.reason} ${Date.now() - started}ms`)
-    if (result.status === 410 || result.reason === 'BadDeviceToken' || result.reason === 'Unregistered') {
+    console.log(
+      `push …${device.deviceToken.slice(-6)} ${result.status} ${result.reason} ${Date.now() - started}ms`
+    )
+    if (
+      result.status === 410 ||
+      result.reason === 'BadDeviceToken' ||
+      result.reason === 'Unregistered'
+    ) {
       saveDevices(loadDevices().filter((entry) => entry.deviceToken !== device.deviceToken))
     }
   }
@@ -284,7 +346,9 @@ const attempts = new Map()
 async function watchForPrompts() {
   try {
     const waiting = await waitingClaudeTerminals()
-    const keys = new Set(waiting.map(({ status }) => `${status.terminalHandle}|${status.stateStartedAt}`))
+    const keys = new Set(
+      waiting.map(({ status }) => `${status.terminalHandle}|${status.stateStartedAt}`)
+    )
     for (const key of [...notified, ...attempts.keys()]) {
       if (!keys.has(key)) {
         notified.delete(key)
@@ -307,7 +371,7 @@ async function watchForPrompts() {
       }
     }
   } catch (error) {
-    console.log(`watch loop: ${error instanceof Error ? error.message : error}`)
+    console.log(`watch loop: ${error instanceof Error ? error.message : String(error)}`)
   }
   setTimeout(watchForPrompts, POLL_MS)
 }
@@ -335,12 +399,16 @@ const server = createServer(async (req, res) => {
   const reply = (status, body) => {
     res.writeHead(status, { 'content-type': 'application/json', 'cache-control': 'no-store' })
     res.end(JSON.stringify(body))
-    console.log(`${new Date().toISOString()} ${req.method} ${req.url} ${status} ${Date.now() - started}ms`)
+    console.log(
+      `${new Date().toISOString()} ${req.method} ${req.url} ${status} ${Date.now() - started}ms`
+    )
   }
   try {
-    if (!authorized(req)) return reply(401, { error: 'Unauthorized' })
+    if (!authorized(req)) {
+      return reply(401, { error: 'Unauthorized' })
+    }
     if (req.method === 'GET' && req.url === '/watch/v1/prompts') {
-      const prompts = (await pendingPrompts()).map(({ handle, ...prompt }) => prompt)
+      const prompts = (await pendingPrompts()).map(({ handle: _handle, ...prompt }) => prompt)
       return reply(200, { prompts })
     }
     if (req.method === 'POST' && req.url === '/watch/v1/register') {
@@ -360,7 +428,9 @@ const server = createServer(async (req, res) => {
 if (process.argv[1] && import.meta.url.endsWith(basename(process.argv[1]))) {
   server.listen(PORT, '127.0.0.1', () => {
     const apnsKey = loadApnsKey()
-    console.log(`watch bridge on http://127.0.0.1:${PORT}; push ${apnsKey ? `key ${apnsKey.keyId}` : 'off (no key)'}`)
+    console.log(
+      `watch bridge on http://127.0.0.1:${PORT}; push ${apnsKey ? `key ${apnsKey.keyId}` : 'off (no key)'}`
+    )
     void watchForPrompts()
   })
 }
