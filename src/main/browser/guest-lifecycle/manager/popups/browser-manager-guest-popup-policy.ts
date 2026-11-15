@@ -2,7 +2,7 @@ import { shell } from 'electron'
 import {
   normalizeExternalBrowserUrl,
   redactKagiSessionToken
-} from '../../../../../shared/browser-url'
+} from '../../../../../shared/browser/navigation/browser-url'
 import {
   trackBrowserGuestInputGesture,
   type ObservedBrowserGuestGesture

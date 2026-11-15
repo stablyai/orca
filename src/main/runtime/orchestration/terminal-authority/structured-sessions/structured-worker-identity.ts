@@ -16,7 +16,10 @@ import {
   makePaneKey,
   parsePaneKey
 } from '../../../../../shared/workspace-layout/stable-pane-id'
-import { isOrcaSessionId, type OrcaSessionId } from '../../../../../shared/orca-session-address'
+import {
+  isOrcaSessionId,
+  type OrcaSessionId
+} from '../../../../../shared/agent-session/identity/orca-session-address'
 import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent'
 import {
   STRUCTURED_WORKER_HANDLE_PREFIX,

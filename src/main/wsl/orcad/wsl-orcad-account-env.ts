@@ -7,7 +7,7 @@ import {
 } from '../../../shared/agent-launch/startup/agent-launch-account-env'
 import { isTuiAgent } from '../../../shared/agent-launch/catalog/tui-agent-config'
 import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
-import { parseWslUncPath } from '../../../shared/wsl-paths'
+import { parseWslUncPath } from '../../../shared/file-access/wsl-paths'
 import type { ClaudeRuntimeAuthPreparation } from '../../claude-accounts/runtime-auth/runtime-auth-types'
 import { AGENT_SESSION_ACCOUNT_ENV_RUNTIME_CAPABILITY } from '../../../shared/agent-session/agent-session-create-capabilities'
 import {

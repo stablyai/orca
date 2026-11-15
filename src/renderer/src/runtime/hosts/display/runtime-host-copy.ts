@@ -5,7 +5,7 @@ import type {
   ExecutionHostVmState
 } from '../../../../../shared/execution-host/execution-host-health'
 import type { RuntimeHostBlockedReason } from '../../../../../shared/remote-runtime/host-status/runtime-host-status'
-import type { RuntimeCompatVerdict } from '../../../../../shared/protocol-compat'
+import type { RuntimeCompatVerdict } from '../../../../../shared/remote-runtime/protocol/protocol-compat'
 
 export function getExecutionHostHealthLabel(
   health: ExecutionHostHealth,

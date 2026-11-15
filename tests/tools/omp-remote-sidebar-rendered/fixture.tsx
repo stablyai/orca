@@ -14,7 +14,7 @@ const state: Parameters<typeof selectLiveAgentStatusEntriesForWorktree>[0] = {
   agentStatusByPaneKey: {},
   tabsByWorktree: {},
   unifiedTabsByWorktree: {},
-  retainedAgentsByPaneKey: {},
+
   migrationUnsupportedByPtyId: {}
 }
 for (const [tabId, connectionId, prompt] of [
@@ -43,7 +43,6 @@ function Fixture() {
   const rows = buildWorktreeAgentRows({
     tabs: [],
     entries: selectLiveAgentStatusEntriesForWorktree(current, worktreeId),
-    retained: [],
     now
   })
   return (

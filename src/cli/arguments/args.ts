@@ -1,4 +1,5 @@
 import { RuntimeClientError } from '../runtime/connection/types'
+import { resolveInvokedCliCommand } from '../orchestration/recovery/runtime-compatibility'
 import { unknownCommandData, unknownFlagData } from '../discovery/command-suggestion'
 import { specPaths, type CommandSpec } from '../discovery/command-spec'
 import {
@@ -219,10 +220,15 @@ export function validateCommandAndFlags(specs: CommandSpec[], parsed: ParsedArgs
     const path = parsed.commandPath.join(' ')
     // A real group is not a typo; point at its help instead of unrelated suggestions.
     if (isCommandGroup(specs, parsed.commandPath)) {
-      throw new RuntimeClientError('invalid_argument', `Missing subcommand for: orca ${path}`, {
-        suggestions: [],
-        nextSteps: [`Run \`orca ${path} --help\` to list its commands.`]
-      })
+      const command = resolveInvokedCliCommand()
+      throw new RuntimeClientError(
+        'invalid_argument',
+        `Missing subcommand for: ${command} ${path}`,
+        {
+          suggestions: [],
+          nextSteps: [`Run \`${command} ${path} --help\` to list its commands.`]
+        }
+      )
     }
     throw new RuntimeClientError(
       'invalid_argument',

@@ -2,7 +2,7 @@ import type { Dispatch, SetStateAction } from 'react'
 
 import { translate } from '@/i18n/i18n'
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
-import type { RuntimeClientTarget } from '../../../../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import type { TaskPageGitHubMutationIntent } from '@/components/task-page/github/mutations/task-page-github-work-item-mutation-patches'
 import {
   normalizeGitHubReviewerLogins,

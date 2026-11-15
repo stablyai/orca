@@ -6,7 +6,7 @@ import {
   type ProjectHostSetupProjection
 } from './project-host-setup-projection'
 import type { Repo } from './repo-types'
-import type { RuntimeClientTarget } from './runtime-client-target'
+import type { RuntimeClientTarget } from './remote-runtime/host-catalog/runtime-client-target'
 
 const orcaRemote = {
   canonicalKey: 'github.com/stablyai/orca',

@@ -2,7 +2,7 @@ import {
   normalizeRuntimePathForComparison,
   relativePathInsideRoot
 } from '../../cross-platform-path'
-import { parseWslUncPath } from '../../wsl-paths'
+import { parseWslUncPath } from '../../file-access/wsl-paths'
 import {
   isRuntimePathAbsoluteForRepo,
   resolveConfiguredWorktreeBasePaths,
@@ -11,7 +11,7 @@ import {
 import {
   isAgentScratchWorktreePath,
   type AgentScratchWorktreePathMatcher
-} from '../../agent-scratch-worktrees'
+} from './agent-scratch-worktrees'
 import {
   createWorktreeVisibilitySourceMatcher,
   resolveCustomWorktreeVisibilitySources,

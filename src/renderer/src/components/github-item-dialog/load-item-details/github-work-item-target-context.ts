@@ -13,7 +13,7 @@ import type { GitHubWorkItem } from '../../../../../shared/github/work-items/wor
 import type { GitHubRepositoryIdentity as GitHubOwnerRepo } from '../../../../../shared/github/repositories/repository-identity'
 import { getWorkItemDetailsCacheKey } from './work-item-details-cache'
 
-import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import { createContext, useContext, useMemo } from 'react'
 
 export const GitHubWorkItemTargetContext = createContext<{

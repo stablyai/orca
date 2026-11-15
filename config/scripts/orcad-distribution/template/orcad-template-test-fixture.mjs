@@ -9,7 +9,7 @@ import {
   ORCAD_TEMPLATE_TARGETS_DIR,
   orcadTemplateCommonFilenames,
   orcadTemplateTargetFilenames
-} from '../../../../src/shared/orcad-artifacts.ts'
+} from '../../../../src/shared/remote-runtime/orcad-distribution/orcad-artifacts.ts'
 import {
   COMPAT_SERVER_TARGETS,
   ORCAD_TEMPLATE_TARGETS,

@@ -96,7 +96,7 @@ it.skipIf(!binary || process.platform === 'win32').each(trials)(
     const hooks = new AgentHookServer()
     await hooks.start()
     const db = createDatabase('orca-codex-mailbox-db-')
-    const { runtime } = createRuntime(db, {
+    const { runtime } = await createRuntime(db, {
       getAgentStatusSnapshot: () => hooks.getStatusSnapshot()
     })
     const run = createBoundRun(db, 'Real Codex completion')

@@ -8,7 +8,7 @@ import { repoMatchesHostIdentity } from '@/store/repos/repo-host-identity'
 import type { ExecutionHostId, ParsedExecutionHost } from '../../../../../shared/execution-host'
 import type { TaskSourceContext } from '../../../../../shared/work-items/task-source-context'
 import { runtimeTargetForOwnerEnvironment } from '@/runtime/rpc/targets/runtime-client-target'
-import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import { taskSourceRuntimeTarget } from '../task-source-runtime-target'
 import {
   getExplicitRuntimeOwnerEnvironmentId,

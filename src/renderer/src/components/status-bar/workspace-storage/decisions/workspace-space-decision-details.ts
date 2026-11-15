@@ -18,6 +18,7 @@ import { getWorkspaceSpaceBranchLabel } from '../workspace-space-format'
 import { formatHostedReviewLabel } from '../../resources/hosted-review-label'
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
+import { getWorktreeGitHubIssueRepository } from '../../../../../../shared/worktree/github-issue-repository'
 
 export type WorkspaceDecisionDetails = {
   isActive: boolean
@@ -25,7 +26,6 @@ export type WorkspaceDecisionDetails = {
   terminalTabCount: number
   liveTerminalCount: number
   activeAgentCount: number
-  completedAgentCount: number
   openEditorFileCount: number
   dirtyEditorBufferCount: number
   browserTabCount: number
@@ -48,7 +48,6 @@ export type WorkspaceDecisionInputs = {
   agentStatusByPaneKey: Record<string, AgentStatusEntry>
   migrationUnsupportedByPtyId: Record<string, MigrationUnsupportedPtyEntry>
   runtimePaneTitlesByTabId: Record<string, Record<number, string>>
-  retainedAgentsByPaneKey: Record<string, { worktreeId: string; entry: AgentStatusEntry }>
   openFiles: readonly { id: string; worktreeId: string; isDirty: boolean }[]
   editorDrafts: Record<string, string>
   browserTabsByWorktree: Record<string, unknown[]>
@@ -172,7 +171,7 @@ export function getWorkspaceDecisionDetails(
         : null
   const linkedIssue = workspaceRecord?.linkedIssue ?? null
   const issueCacheKey =
-    linkedIssue && repo
+    linkedIssue && repo && workspaceRecord
       ? getIssueCacheKey(
           repo.path,
           repo.id,
@@ -180,7 +179,8 @@ export function getWorkspaceDecisionDetails(
           inputs.settings,
           repo.connectionId,
           ownerExecutionHostId,
-          true
+          true,
+          getWorktreeGitHubIssueRepository(workspaceRecord)
         )
       : null
   const issue = issueCacheKey ? inputs.issueCache[issueCacheKey]?.data : null
@@ -219,9 +219,6 @@ export function getWorkspaceDecisionDetails(
       ptyIdsByTabId: inputs.ptyIdsByTabId,
       now: inputs.now
     }),
-    completedAgentCount: Object.values(inputs.retainedAgentsByPaneKey).filter(
-      (entry) => entry.worktreeId === worktree.worktreeId && entry.entry.state === 'done'
-    ).length,
     openEditorFileCount: openFiles.length,
     dirtyEditorBufferCount,
     browserTabCount: inputs.browserTabsByWorktree[worktree.worktreeId]?.length ?? 0,

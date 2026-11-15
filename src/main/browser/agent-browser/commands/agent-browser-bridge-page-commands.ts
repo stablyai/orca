@@ -17,7 +17,7 @@ import {
   cancelBrowserPasskeyRequests,
   getBrowserPasskeyRequest
 } from '../../webauthn/browser-passkey-requests'
-import { formatBrowserPasskeyRequest } from '../../../../shared/browser-passkey-request'
+import { formatBrowserPasskeyRequest } from '../../../../shared/browser/prompts/browser-passkey-request'
 import { browserGuestHasNothingToReload } from '../../../../shared/browser/guest-lifecycle/browser-guest-reloadability'
 import { cancelBrowserWebAuthnAccountRequests } from '../../webauthn/browser-webauthn-account-picker'
 import { captureRemoteCliBrowserRevocation } from '../../../runtime/desktop-browser-bridge/remote-cli-browser-scope'

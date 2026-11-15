@@ -1,5 +1,5 @@
 import type { DirEntry } from '../../../../../../shared/file-listing/directory-entry'
-import type { RuntimeClientTarget } from '../../../../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import type { RuntimeFileOperationArgs } from '@/runtime/files/runtime-file-client-types'
 import { readRuntimeDirectory } from '@/runtime/files/reads/runtime-directory-read'
 import { readRuntimeFileContent } from '@/runtime/files/reads/runtime-file-read-client'

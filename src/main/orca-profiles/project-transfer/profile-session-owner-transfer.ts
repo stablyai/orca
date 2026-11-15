@@ -1,7 +1,10 @@
 import { getDefaultWorkspaceSession } from '../../../shared/constants'
 import type { SleepingAgentSessionRecord } from '../../../shared/agent-session/lifecycle/agent-session-resume'
-import type { BrowserPage, BrowserWorkspace } from '../../../shared/browser-workspace-types'
-import { remapBrowserPageDocLocation } from '../../../shared/browser-page-doc-location'
+import type {
+  BrowserPage,
+  BrowserWorkspace
+} from '../../../shared/browser/workspaces/browser-workspace-types'
+import { remapBrowserPageDocLocation } from '../../../shared/browser/workspaces/browser-page-doc-location'
 import type { Tab, TabGroup } from '../../../shared/tab-types'
 import type { TerminalTab } from '../../../shared/workspace-layout/terminal-tab-types'
 import type {

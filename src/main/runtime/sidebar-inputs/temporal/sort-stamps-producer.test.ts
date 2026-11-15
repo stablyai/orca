@@ -3,7 +3,7 @@ import { AgentHookServer } from '../../../agent-hooks/server/agent-hook-server'
 import type { AgentStatusStoreView } from '../workspace-facts/workspace-activity-facts-producer'
 
 import '../../../../shared/agent-status/contracts/agent-status-subject'
-import type { RuntimeClientEvent } from '../../../../shared/runtime-client-events'
+import type { RuntimeClientEvent } from '../../../../shared/remote-runtime/session-graph/runtime-client-events'
 import type { TerminalSideEffectFact } from '../../../../shared/terminal/output/terminal-side-effect-facts'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 import type { Repo } from '../../../../shared/repo-types'

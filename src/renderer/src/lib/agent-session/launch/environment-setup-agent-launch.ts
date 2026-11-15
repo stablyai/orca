@@ -15,7 +15,7 @@ import type { Worktree } from '../../../../../shared/worktree/types'
 import {
   buildEnvironmentSetupAgentPrompt,
   type EnvironmentSetupFailureContext
-} from '../../../../../shared/environment-setup-agent-prompt'
+} from '../../../../../shared/workspace-setup/environment-doctor/environment-setup-agent-prompt'
 
 /** The Git project an environment-setup agent should work on: the active one, else the first. */
 export function pickEnvironmentSetupRepo(

@@ -12,12 +12,12 @@ import type {
   InternalTextGenerationResult,
   TextGenerationOperation
 } from '../source-control-text-generation-types'
-import { parseOpenCodeGenerationOutput } from '../../../shared/opencode-generation-output'
-import { parseAntigravityGenerationOutput } from '../../../shared/antigravity-generation-stream'
+import { parseOpenCodeGenerationOutput } from '../../../shared/text-generation/output/opencode-generation-output'
+import { parseAntigravityGenerationOutput } from '../../../shared/text-generation/output/antigravity-generation-stream'
 import {
   findKimiGenerationFailure,
   parseKimiGenerationOutput
-} from '../../../shared/kimi-generation-output'
+} from '../../../shared/text-generation/output/kimi-generation-output'
 import { formatKimiGenerationFailure } from './kimi-generation-failure'
 import type { CommitMessagePlan } from '../../../shared/source-control/ai/generation/commit-message-plan'
 import {

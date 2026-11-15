@@ -1,7 +1,7 @@
 import type { AgentChildWorkKind } from '../../../shared/agent-status/child-work/agent-status-child-work'
 // Task IDs alone cannot distinguish agents from shells or workflows; task_type identifies the kind.
 
-import { classifyClaudeBackgroundTaskKind } from '../../../shared/claude-background-task-kind'
+import { classifyClaudeBackgroundTaskKind } from '../../../shared/agent-hook-listener/providers/claude/background-tasks/claude-background-task-kind'
 import {
   taskId as claudeTaskId,
   isBoundedClaudeTaskId

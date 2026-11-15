@@ -1,4 +1,4 @@
-import { OPENCODE_NATIVE_PROMPT_VERSIONS } from '../../../shared/opencode-cli-version'
+import { OPENCODE_NATIVE_PROMPT_VERSIONS } from '../../../shared/agent-launch/startup/opencode-cli-version'
 import { cancelUnreadResponseBody } from '../../lib/unread-response-body'
 import { parseAgentHookEndpointFile } from '../../../shared/agent-hook-listener/transport/agent-hook-endpoint-file'
 import {

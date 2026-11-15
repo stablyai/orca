@@ -1,4 +1,4 @@
-import { SETTINGS_CHANGED_EVENT_RUNTIME_CAPABILITY } from '../../../src/shared/protocol-version'
+import { SETTINGS_CHANGED_EVENT_RUNTIME_CAPABILITY } from '../../../src/shared/remote-runtime/protocol/host-runtime-capabilities'
 import { useOptionalHostProtocolGates } from '../components/host-connection/host-protocol-gates-context'
 import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import { useRouteRelaysCapability } from '../worktree/execution-hosts/workspace-server-context'

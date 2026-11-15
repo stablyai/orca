@@ -5,7 +5,7 @@ import type { EventName, EventProps } from '../../../../shared/telemetry-events'
 import type { TelemetryConsentState } from '../../../../shared/telemetry-consent-types'
 import { utcDayIndex } from '../../../../shared/telemetry-day'
 
-import '../../../../shared/agent-kind'
+import '../../../../shared/agent-status/identity/agent-kind'
 
 // Single source-of-truth for the privacy doc URL so FirstLaunchBanner and PrivacyPane can't drift.
 export const PRIVACY_URL = 'https://orca.dev/docs/telemetry'

@@ -109,7 +109,7 @@ const CODEX_INDEX_HEAL_CONTRACT_PREFIXES = [
   'src/main/codex/trust/toml/config-toml-trust',
   'src/main/pty/shell-startup/codex-no-daemon-binary-contract',
   'src/main/pty/shell-startup/codex-shell-launch-preflight',
-  'src/shared/codex-shell-function',
+  'src/shared/shell/launch/agents/codex-shell-function',
   'src/main/codex/history/index/codex-index-heal-binary-contract',
   'src/main/codex/history/index/codex-session-index-heal',
   'src/main/codex/app-server/codex-app-server-session',
@@ -146,6 +146,7 @@ const DEPENDENCY_ISOLATION_PREFIXES = [
   'config/build-plugins/markdown-parser-exports',
   'config/tsconfig',
   'src/packages/',
+  'native/windows-notifications/package.json',
   'native/windows-registry/package.json',
   'native/windows-security/package.json'
 ]
@@ -232,7 +233,6 @@ const CROSS_VERSION_WIRE_PREFIXES = [
   'src/shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle.test.ts',
   'src/shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle.ts',
   'src/shared/agent-session/lifecycle/resume/agent-session-resume-marker.ts',
-  'src/shared/agent-session/failures/agent-session-wire-refusals.test.ts',
   'src/shared/agent-session/failures/agent-session-wire-refusals.ts',
   'src/shared/agent-session-mutation-envelope',
   // Cover client sends to release hosts and fingerprints re-derived by host ledger/journal.
@@ -278,7 +278,7 @@ const CROSS_VERSION_WIRE_PREFIXES = [
   'src/main/runtime/workspaces/process-listing/runtime-worktree-agent-',
   'src/main/runtime/workspaces/startup/runtime-worktree-agent-startup',
   'src/main/runtime/workspaces/process-listing/runtime-worktree-pty-agent-sources',
-  'src/shared/runtime-worktree-contracts',
+  'src/shared/worktree/catalog/runtime-worktree-contracts',
   'src/renderer/src/runtime/hosted-terminals/streams/',
   'src/renderer/src/runtime/hosted-terminals/snapshots/',
   'src/renderer/src/runtime/rpc/subscriptions/runtime-environment-subscription-handle.ts',
@@ -289,10 +289,9 @@ const CROSS_VERSION_WIRE_PREFIXES = [
   'src/shared/agent-session-turn-record',
   'src/shared/agent-session/view/structured-agent-session-agent-status',
   'src/shared/agent-session/view/structured-agent-session-projection',
-  'src/shared/agent-session/requests/structured-agent-session-projection-sender.spec.ts',
   'src/shared/workspace-session/workspace-session-sleeping-agents',
   // A current desktop's launch route against a released server's capabilities (cross-version-paired-structured-launch).
-  'src/shared/structured-native-chat-launch-route.ts',
+  'src/shared/agent-launch/choices/structured-native-chat-launch-route.ts',
   'src/renderer/src/lib/agent-session/launch/routing/agent-launch-routing.ts',
   'src/renderer/src/runtime/rpc/targets/paired-host-client-capabilities.ts',
   'src/shared/electron-remote-runtime-client-capabilities.ts',
@@ -349,6 +348,7 @@ const NATIVE_CACHE_PREFIXES = [
   'config/patches/node-pty@',
   'config/patches/@vscode__windows-process-tree',
   // The vendored addons' sources: build/ and bin/ beside them are ignored, so nothing else lands here.
+  'native/windows-notifications/',
   'native/windows-registry/',
   'native/windows-security/'
 ]

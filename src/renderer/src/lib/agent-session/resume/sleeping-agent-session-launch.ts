@@ -3,7 +3,7 @@ import { toast } from 'sonner'
 import { useAppStore } from '@/store/index'
 import { buildAgentResumeStartupPlan } from '../../../../../shared/agent-launch/startup/tui-agent-resume-startup'
 import '@/diagnostics/telemetry/telemetry'
-import { tuiAgentToAgentKind } from '../../../../../shared/agent-kind'
+import { tuiAgentToAgentKind } from '../../../../../shared/agent-status/identity/agent-kind'
 import { persistAgentLaunchTabOrder } from '@/lib/agent-session/launch/pane/launch-agent-tab-order'
 import {
   resolveRuntimeHostReportedPlatform,

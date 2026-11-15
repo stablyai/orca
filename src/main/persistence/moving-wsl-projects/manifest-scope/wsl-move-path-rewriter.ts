@@ -1,5 +1,5 @@
 // Convert only the moved distro's UNC paths; unrelated paths remain unchanged.
-import { wslUncPathToLinux } from '../../../../shared/wsl-paths'
+import { wslUncPathToLinux } from '../../../../shared/file-access/wsl-paths'
 import type { OrcadMigrationPathRewriter } from '../../migrating-orcad-catalog/path-rewrite/orcad-migration-path-rewrite'
 
 export function createUncToLinuxPathRewriter(distro: string): OrcadMigrationPathRewriter {

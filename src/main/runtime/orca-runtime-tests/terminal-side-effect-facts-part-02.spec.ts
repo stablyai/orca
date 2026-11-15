@@ -31,7 +31,7 @@ describe('terminal side-effect fact channel', () => {
         serializeProviderBuffer,
         hasRendererSerializer: () => false
       })
-      syncSinglePty(runtime)
+      await syncSinglePty(runtime)
       runtime.onPtyData('pty-1', 'available mirror\r\n', 100)
 
       const firstSnapshot = runtime.serializeAuthoritativeTerminalBuffer('pty-1', {
@@ -197,9 +197,9 @@ describe('terminal side-effect fact channel', () => {
     expect(runtime.isTerminalAlternateScreen('pty-tui-race')).toBe(false)
   })
 
-  it('parses synthetic frames statelessly so ticks cannot corrupt the bell detector', () => {
+  it('parses synthetic frames statelessly so ticks cannot corrupt the bell detector', async () => {
     const { runtime, batches } = createSideEffectRuntime()
-    syncSinglePty(runtime)
+    await syncSinglePty(runtime)
 
     runtime.onPtyData('pty-1', '\x1b]0;split ti', 100)
     // An 80ms spinner tick lands between the two halves of the real OSC.

@@ -11,19 +11,19 @@ import type {
   BundledSkillOp,
   BundledSkillOpOutcome,
   BundledSkillPlan
-} from '../../shared/bundled-skill-plan'
-import { isBundledSkillLeaveReason } from '../../shared/bundled-skill-plan'
+} from '../../shared/skills/bundled/bundled-skill-plan'
+import { isBundledSkillLeaveReason } from '../../shared/skills/bundled/bundled-skill-plan'
 import {
   BUNDLED_SKILL_LEAVE_REASON_TEXT,
   BUNDLED_SKILL_PLAN_OP_TEXT,
   summarizeBundledSkillOutcomes
-} from '../../shared/bundled-skill-summary'
+} from '../../shared/skills/bundled/bundled-skill-summary'
 import {
   isSkillInstallProviderId,
   SKILL_INSTALL_PROVIDERS,
   type SkillInstallProviderId
-} from '../../shared/skill-install-providers'
-import { SKILLS_CLI_AGENT_KEY_BY_TUI_AGENT } from '../../shared/skills-cli-agent-keys'
+} from '../../shared/skills/installation/skill-install-providers'
+import { SKILLS_CLI_AGENT_KEY_BY_TUI_AGENT } from '../../shared/skills/installation/skills-cli-agent-keys'
 import {
   installBundledSkills,
   previewBundledSkillInstall

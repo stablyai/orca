@@ -1,4 +1,4 @@
-import type { RuntimeTerminalAttention } from '../../../shared/runtime-terminal-contracts'
+import type { RuntimeTerminalAttention } from '../../../shared/terminal/runtime/runtime-terminal-contracts'
 import type { PaintedRestorePane } from '../../../shared/painted-restore-ack'
 import type {
   PtyFencedTerminationRequest,
@@ -42,7 +42,7 @@ import type { TerminalPanePlacement } from '../../../shared/workspace-layout/ter
 import type { AgentPaneLaunchRequest } from '../../../shared/agent-launch/contracts/agent-pane-launch-request'
 import type { PtyManagementApi } from './pty-management-api'
 import type { TerminalProcessInspection } from '../../../shared/terminal/pty/lifecycle/terminal-process-inspection'
-import type { CodexSharedServerStatus } from '../../../shared/codex-shared-server-command'
+import type { CodexSharedServerStatus } from '../../../shared/agent-launch/startup/codex-shared-server-command'
 import type {
   NewerDaemonHeldScreen,
   NewerDaemonReopenResult

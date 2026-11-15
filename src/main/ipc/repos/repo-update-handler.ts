@@ -23,7 +23,7 @@ import {
 } from '../../../shared/worktree/visibility/visibility-sources'
 import { prepareLocalWorktreeRootForRepo } from '../../workspaces/creation/worktree-root-preparation'
 import { commitProvenRepoKindChange } from '../../workspaces/catalog/folder-repo-git-conversion'
-import { normalizeDictationTerms } from '../../../shared/dictation-dictionary'
+import { normalizeDictationTerms } from '../../../shared/speech/dictation/dictation-dictionary'
 import { invalidateAuthorizedRootsCache } from '../worktrees/removal/registered-worktree-roots-cache'
 import { notifyReposChanged } from './repos-changed-notification'
 import {

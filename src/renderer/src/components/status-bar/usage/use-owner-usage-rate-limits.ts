@@ -9,7 +9,7 @@ import {
 } from '@/runtime/provider-accounts/observations/runtime-provider-accounts-client'
 import { useActiveAccountOwner } from '@/runtime/provider-accounts/ownership/use-active-account-owner'
 import type { RateLimitState } from '../../../../../shared/rate-limit-types'
-import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import { useAppStore } from '../../../store/index'
 import {
   resolveOwnerUsageRateLimits,
