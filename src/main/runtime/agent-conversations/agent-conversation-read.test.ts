@@ -128,31 +128,57 @@ it.each(['missing', 'unreadable', 'loop'] as const)(
   }
 )
 
-it('Codex completion cannot certify a previous turn reply after projection', async () => {
+const codexEvent = (payload: unknown) => JSON.stringify({ type: 'event_msg', payload })
+const codexRows = {
+  // A current rollout's tail: the completed item, then its unrendered raw copy.
+  'its own reply before a raw copy': [
+    codexEvent({ type: 'task_started', turn_id: 't1' }),
+    codexEvent({ type: 'user_message', message: 'reply FINISHED' }),
+    codexEvent({
+      type: 'item_completed',
+      turn_id: 't1',
+      item: { type: 'AgentMessage', id: 'm1', content: [{ type: 'Text', text: 'FINISHED' }] }
+    }),
+    JSON.stringify({
+      type: 'response_item',
+      payload: {
+        type: 'message',
+        id: 'm1',
+        role: 'assistant',
+        content: [{ type: 'output_text', text: 'FINISHED' }]
+      }
+    }),
+    codexEvent({ type: 'task_complete', turn_id: 't1', last_agent_message: 'FINISHED' })
+  ],
+  'only a previous turn reply': [
+    codexEvent({ type: 'task_started', turn_id: 't1' }),
+    codexEvent({ type: 'user_message', message: 'FIRST' }),
+    codexEvent({ type: 'agent_message', message: 'OLD ANSWER' }),
+    codexEvent({ type: 'task_complete', turn_id: 't1' }),
+    codexEvent({ type: 'task_started', turn_id: 't2' }),
+    JSON.stringify({
+      type: 'response_item',
+      payload: {
+        type: 'message',
+        role: 'user',
+        content: [{ type: 'input_image', image_url: 'https://example.test/image.png' }]
+      }
+    }),
+    codexEvent({ type: 'task_complete', turn_id: 't2', last_agent_message: 'NEW ANSWER' })
+  ]
+}
+
+it.each([
+  ['its own reply before a raw copy', 'reply FINISHED', 'FINISHED', 'done'],
+  ['only a previous turn reply', 'FIRST', 'OLD ANSWER', undefined]
+] as const)('reads a completed Codex turn with %s', async (shape, ask, answer, state) => {
   const { mkdtempSync, writeFileSync, rmSync } = await import('node:fs')
   const { tmpdir } = await import('node:os')
   const { join } = await import('node:path')
   const dir = mkdtempSync(join(tmpdir(), 'council-codex-'))
   try {
     const path = join(dir, 'rollout.jsonl')
-    const event = (payload: unknown) => JSON.stringify({ type: 'event_msg', payload })
-    const rows = [
-      event({ type: 'task_started', turn_id: 't1' }),
-      event({ type: 'user_message', message: 'FIRST' }),
-      event({ type: 'agent_message', message: 'OLD ANSWER' }),
-      event({ type: 'task_complete', turn_id: 't1' }),
-      event({ type: 'task_started', turn_id: 't2' }),
-      JSON.stringify({
-        type: 'response_item',
-        payload: {
-          type: 'message',
-          role: 'user',
-          content: [{ type: 'input_image', image_url: 'https://example.test/image.png' }]
-        }
-      }),
-      event({ type: 'task_complete', turn_id: 't2', last_agent_message: 'NEW ANSWER' })
-    ]
-    writeFileSync(path, `${rows.join('\n')}\n`)
+    writeFileSync(path, `${codexRows[shape].join('\n')}\n`)
     terminal.source.mockResolvedValue({
       key: {
         executionHost: 'local',
@@ -169,11 +195,11 @@ it('Codex completion cannot certify a previous turn reply after projection', asy
     const result = await readAgentConversation(ctx, resolved, {})
     expect(result).toMatchObject({
       entries: [
-        { role: 'user', text: 'FIRST' },
-        { role: 'assistant', text: 'OLD ANSWER' }
+        { role: 'user', text: ask },
+        { role: 'assistant', text: answer }
       ]
     })
-    expect(result.state).toBeUndefined()
+    expect(result.state).toBe(state)
   } finally {
     rmSync(dir, { recursive: true, force: true })
   }

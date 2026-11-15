@@ -139,7 +139,12 @@ async function dormantAgent() {
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a terminal read uses only the kind and the id.
   const resolved = { kind: 'terminal', orcaSessionId } as ResolvedAgentConversation
   server.identityClient.providerKeyRequests = 0
-  return { server, records, orcaSessionId, read: () => readAgentConversation(ctx, resolved, {}) }
+  return {
+    server,
+    records,
+    orcaSessionId,
+    read: (request: { limit?: number } = {}) => readAgentConversation(ctx, resolved, request)
+  }
 }
 
 /** Starts a read, runs `change` once its transcript I/O is done, then lets it finish. */
@@ -282,36 +287,37 @@ it.skipIf(process.platform === 'win32')(
   }
 )
 
+const row = (record: unknown) => `${JSON.stringify(record)}\n`
+const assistant = (uuid: string, content: unknown[], stop_reason: string) =>
+  row({
+    type: 'assistant',
+    uuid,
+    message: { id: uuid, role: 'assistant', content, stop_reason }
+  })
+const prompt = row({
+  type: 'user',
+  uuid: 'u1',
+  message: { role: 'user', content: [{ type: 'text', text: 'do task' }] }
+})
+const tool = assistant(
+  'a2',
+  [{ type: 'tool_use', id: 'tool1', name: 'Bash', input: { command: 'check' } }],
+  'tool_use'
+)
+const result = row({
+  type: 'user',
+  uuid: 'tool-result',
+  message: {
+    role: 'user',
+    content: [{ type: 'tool_result', tool_use_id: 'tool1', content: 'ok' }]
+  }
+})
+
 it.each(['thinking end', 'Stop continuation'])(
   'omits terminal completion for a %s without its own reply',
   async (shape) => {
     const agent = await dormantAgent()
     const path = agent.records.a.providerSession.transcriptPath
-    const row = (record: unknown) => `${JSON.stringify(record)}\n`
-    const assistant = (uuid: string, content: unknown[], stop_reason: string) =>
-      row({
-        type: 'assistant',
-        uuid,
-        message: { id: uuid, role: 'assistant', content, stop_reason }
-      })
-    const prompt = row({
-      type: 'user',
-      uuid: 'u1',
-      message: { role: 'user', content: [{ type: 'text', text: 'do task' }] }
-    })
-    const tool = assistant(
-      'a2',
-      [{ type: 'tool_use', id: 'tool1', name: 'Bash', input: { command: 'check' } }],
-      'tool_use'
-    )
-    const result = row({
-      type: 'user',
-      uuid: 'tool-result',
-      message: {
-        role: 'user',
-        content: [{ type: 'tool_result', tool_use_id: 'tool1', content: 'ok' }]
-      }
-    })
     writeFileSync(
       path,
       shape === 'thinking end'
@@ -343,3 +349,30 @@ it.each(['thinking end', 'Stop continuation'])(
     expect(read.state).toBeUndefined()
   }
 )
+
+// Real shape: a background-task notification continues a tool-using turn past the read limit.
+it('reads a finished turn done when its prompt is outside the limit', async () => {
+  const agent = await dormantAgent()
+  writeFileSync(
+    agent.records.a.providerSession.transcriptPath,
+    prompt +
+      assistant('a1', [{ type: 'text', text: 'Checking.' }], 'tool_use') +
+      tool +
+      result +
+      assistant('a3', [{ type: 'text', text: 'Waiting for the gate.' }], 'end_turn') +
+      row({
+        type: 'user',
+        uuid: 'notification',
+        message: { role: 'user', content: '<task-notification>\n<task-id>b1</task-id>' }
+      }) +
+      assistant('a4', [{ type: 'text', text: 'Still waiting on the rerun.' }], 'end_turn') +
+      row({ type: 'queue-operation', operation: 'dequeue' })
+  )
+  const read = await agent.read({ limit: 2 })
+  expect(read.entries.at(-1)).toEqual({
+    kind: 'message',
+    role: 'assistant',
+    text: 'Still waiting on the rerun.'
+  })
+  expect(read.state).toBe('done')
+})

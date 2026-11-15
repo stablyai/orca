@@ -96,7 +96,9 @@ export function createStructuredAgentSessionConversationReads(context: () => Rea
       )
       const record = deps.store.getRecord(sessionId)
       const session = sessions.get(sessionId)
+      // A dead owner cannot be working; a completion the snapshot proved stays proved.
       if (
+        page.state === 'working' &&
         record &&
         (agentSessionLeaseOwnerVerdict(record.lease) === 'exited' ||
           (!session?.child && session?.lastEndedChild?.rootGone))

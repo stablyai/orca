@@ -57,7 +57,7 @@ export type AgentReadResult = {
   source: 'chat' | 'transcript'
   /** The latest turn as this read's own history records it: `working`, an unfinished turn;
    *  `done`, an ended turn whose reply is in `entries`. Absent means unknown, never done. Live
-   *  `agent list`/`show` may differ. A terminal agent that exited mid-turn keeps reading
+   *  `agent list`/`show` may differ. A terminal agent that exited mid-turn may keep reading
    *  `working`; check `orca agent show`. */
   state?: AgentStatusState
   entries: AgentReadEntry[]
