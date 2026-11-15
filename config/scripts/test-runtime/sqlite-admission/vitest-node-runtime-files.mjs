@@ -11,7 +11,6 @@ const NODE_RUNTIME_INCLUDE = [
   'src/packages/process-host/src/run-process.test.ts',
   'tests/e2e/cursor-quota-transport.unit.test.ts',
   'tests/e2e/helpers/electron-process-shutdown.unit.test.ts',
-  'src/main/ai-vault-search/storage/session-search-index-writer.test.ts',
   // The parse cache persists through node:sqlite.
   'src/main/ai-vault/parse-cache/session-parse-cache-antigravity-upgrade.test.ts',
   'src/main/ai-vault/parse-cache/session-parse-cache-persistence.test.ts',
@@ -33,7 +32,6 @@ const NODE_RUNTIME_INCLUDE = [
   'src/main/claude/transcripts/claude-transcript-catch-up.test.ts',
   'tests/e2e/native-chat-startup-option-pickers.unit.test.ts',
   'src/main/ai-vault/transcripts/session-document-consumer-replacement.test.ts',
-  'src/main/ai-vault-search/indexing/session-search-list-reparse.test.ts',
   'src/main/runtime/rpc/server/orchestration-cli-subprocess.test.ts',
   'src/main/runtime/orchestration/mailbox/terminal-pointer/orchestration-mailbox-delivery.test.ts',
   'src/main/runtime/orchestration/mailbox/routing/orchestration-mailbox-routing.test.ts',
