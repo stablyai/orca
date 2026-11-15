@@ -1,0 +1,31 @@
+#!/bin/sh
+# PID 1's child (under `docker run --init`) in a boot-twice container. Each container start is one
+# VM boot: a fresh kernel boot id, as a restored Vercel VM gets. A container otherwise sees the
+# host's boot id on every start, and the start script would take a resumed disk for the same boot.
+set -eu
+cat /proc/sys/kernel/random/uuid >/run/boot-twice-boot-id
+mount --bind /run/boot-twice-boot-id /proc/sys/kernel/random/boot_id
+# Boot 2 resolves through the harness's DNS sink, which logs every name looked up (an offline boot
+# that tries to fetch something fails quietly; the lookup is what shows it).
+if [ -n "${BOOT_TWICE_DNS:-}" ]; then
+  printf 'nameserver %s\noptions attempts:1 timeout:1\n' "$BOOT_TWICE_DNS" >/run/boot-twice-resolv.conf
+  mount --bind /run/boot-twice-resolv.conf /etc/resolv.conf
+fi
+if [ -n "${BOOT_TWICE_TRACE:-}" ]; then
+  # Every 50 ms, the command line of each process not seen yet: a boot's installs and first-run work
+  # last far longer than that.
+  (
+    seen=' '
+    while :; do
+      for dir in /proc/[0-9]*; do
+        pid="${dir#/proc/}"
+        case "$seen" in *" $pid "*) continue ;; esac
+        seen="$seen$pid "
+        { tr '\0' ' ' <"$dir/cmdline"; echo; } >>/run/boot-twice-procs.log 2>/dev/null || true
+      done
+      sleep 0.05
+    done
+  ) &
+fi
+: >/run/boot-twice-ready
+exec sleep infinity
