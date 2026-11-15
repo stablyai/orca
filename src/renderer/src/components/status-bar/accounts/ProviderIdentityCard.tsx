@@ -5,17 +5,21 @@ import type { UsagePercentageDisplay } from '../../../../../shared/usage-percent
 import { useTranslate } from '@/i18n/use-translate'
 import { getProviderDisplayName } from '../../../../../shared/usage-provider-windows'
 import { formatTimeAgo, ProviderIcon, ProviderPanel } from '../usage/provider-usage-panel'
+import { UsageDisplayToggle } from '../usage/usage-meter'
 
 export function ProviderIdentityCard({
   p,
   accountLabel,
   footer,
-  usagePercentageDisplay
+  usagePercentageDisplay,
+  inMenu = false
 }: {
   p: ProviderRateLimits
   accountLabel?: string
   footer?: React.ReactNode
   usagePercentageDisplay: UsagePercentageDisplay
+  /** Inside a dropdown, the Used/Left toggle must be a menu item to stay keyboard reachable. */
+  inMenu?: boolean
 }): React.JSX.Element {
   const t = useTranslate()
   return (
@@ -35,9 +39,12 @@ export function ProviderIdentityCard({
       </div>
       <Card size="sm">
         <div className="space-y-3 px-2.5">
-          {accountLabel ? (
-            <div className="min-w-0 break-words text-sm font-medium">{accountLabel}</div>
-          ) : null}
+          <div className="flex items-center justify-between gap-2">
+            <div className="min-w-0 truncate text-sm font-medium" title={accountLabel}>
+              {accountLabel}
+            </div>
+            <UsageDisplayToggle asMenuItem={inMenu} />
+          </div>
           <ProviderPanel
             p={p}
             embedded

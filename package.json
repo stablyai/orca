@@ -393,6 +393,7 @@
     "zustand": "^5.1.0"
   },
   "optionalDependencies": {
+    "@orca/windows-notifications": "workspace:*",
     "@orca/windows-registry": "workspace:*",
     "@orca/windows-security": "workspace:*",
     "@transcribe-cpp/darwin-arm64-metal": "0.4.1",
