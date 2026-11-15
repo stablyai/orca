@@ -17,6 +17,7 @@ import {
   type ProviderGroupIdentity
 } from './provider-group-orphan-guard'
 import { PROVIDER_GROUP_REAP_TIMEOUT_MS } from './provider-process-supervisor'
+import { terminateProviderFaultDescendants } from './provider-fault-ownership'
 
 const row = z.object({
   pid: z.number().int().min(2),
@@ -193,6 +194,7 @@ async function scanOwnership(directory: string, bootId: string): Promise<void> {
     ) {
       continue
     }
+    await terminateProviderFaultDescendants(record)
     const swept = await sweepOrphanedProviderGroup(record)
     if (
       (swept === 'absent' || swept === 'killed') &&

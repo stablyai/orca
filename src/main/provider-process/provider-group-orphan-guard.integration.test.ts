@@ -79,7 +79,7 @@ function outputLine(stream: Readable, predicate: (line: string) => boolean): Pro
   })
 }
 
-async function gatedNative() {
+async function gatedNative(detachedTool = false) {
   const bootId = profileStateAccessBootIdentity()
   if (!bootId) {
     throw new Error('Missing host boot identity')
@@ -96,8 +96,8 @@ async function gatedNative() {
       '-e',
       String.raw`
       require('node:child_process').spawn(process.execPath, ['-e',
-        "process.stdout.write('EXECUTED\\n'); setInterval(() => {}, 60000)"
-      ], { stdio: ['ignore', 'inherit', 'inherit'] })
+        "process.on('SIGTERM', () => {}); process.stdout.write('EXECUTED' + JSON.stringify({ tool: process.pid }) + '\\n'); setInterval(() => {}, 60000)"
+      ], { detached: ${detachedTool}, stdio: ['ignore', 'inherit', 'inherit'] })
       setInterval(() => {}, 60000)
     `
     ],
@@ -260,82 +260,100 @@ describe.runIf(process.platform !== 'win32')('provider orphan ownership', () => 
     expect(await waitForProviderGroupReap(record.pgid)).toBe(true)
   })
 
-  it('recovers a dead owner’s leaderless group before allowing the next CLI to execute', async () => {
-    const gated = await gatedNative()
-    const deadOwner = spawn(process.execPath, ['-e', 'setInterval(() => {}, 60000)'], {
-      stdio: 'ignore'
-    })
-    const deadClosed = track(deadOwner)
-    if (!deadOwner.pid) {
-      throw new Error('Missing owner PID')
-    }
-    const owner = await proveProviderProcessIdentity(deadOwner.pid)
-    if (!owner) {
-      throw new Error('Missing owner identity')
-    }
-    deadOwner.kill('SIGKILL')
-    await deadClosed
-    const directory = join(state.root, 'provider-processes')
-    await mkdir(directory, { mode: 0o700 })
-    const recordPath = join(directory, `${randomUUID()}.json`)
-    await writeFile(
-      recordPath,
-      JSON.stringify({
-        version: 1,
-        nonce: randomUUID(),
-        hostname: 'before-network-change',
-        statePath: directory,
-        bootId: gated.boot.bootId,
-        owner,
-        leader: gated.leader,
-        watcher: gated.watcher,
-        pgid: gated.leader.pid
-      }),
-      { mode: 0o600 }
-    )
-    const gate = gated.child.stdio.at(4)
-    if (!(gate instanceof Writable)) {
-      throw new Error('Missing execution gate')
-    }
-    const executed = outputLine(gated.child.stdout!, (line) => line === 'EXECUTED')
-    gate.end('g\n')
-    await executed
-    process.kill(gated.watcher.pid, 'SIGSTOP')
-    process.kill(gated.leader.pid, 'SIGKILL')
-    await gated.exited
-    expect(providerGroupAbsent(gated.leader.pid)).toBe(false)
+  it.each(['leaderless group', 'stalled CLI with detached tools'])(
+    'recovers a dead owner’s %s before allowing the next CLI to execute',
+    async (mode) => {
+      const gated = await gatedNative(mode === 'stalled CLI with detached tools')
+      const deadOwner = spawn(process.execPath, ['-e', 'setInterval(() => {}, 60000)'], {
+        stdio: 'ignore'
+      })
+      const deadClosed = track(deadOwner)
+      if (!deadOwner.pid) {
+        throw new Error('Missing owner PID')
+      }
+      const owner = await proveProviderProcessIdentity(deadOwner.pid)
+      if (!owner) {
+        throw new Error('Missing owner identity')
+      }
+      deadOwner.kill('SIGKILL')
+      await deadClosed
+      const directory = join(state.root, 'provider-processes')
+      await mkdir(directory, { mode: 0o700 })
+      const recordPath = join(directory, `${randomUUID()}.json`)
+      await writeFile(
+        recordPath,
+        JSON.stringify({
+          version: 1,
+          nonce: randomUUID(),
+          hostname: 'before-network-change',
+          statePath: directory,
+          bootId: gated.boot.bootId,
+          owner,
+          leader: gated.leader,
+          watcher: gated.watcher,
+          pgid: gated.leader.pid
+        }),
+        { mode: 0o600 }
+      )
+      const gate = gated.child.stdio.at(4)
+      if (!(gate instanceof Writable)) {
+        throw new Error('Missing execution gate')
+      }
+      const executed = outputLine(gated.child.stdout!, (line) => line.startsWith('EXECUTED'))
+      gate.end('g\n')
+      const toolPid = JSON.parse((await executed).slice('EXECUTED'.length)).tool
+      const tool = await proveProviderProcessIdentity(toolPid)
+      if (!tool) {
+        throw new Error('Missing tool identity')
+      }
+      cleanups.push(async () => {
+        const live = await readPosixProcessRow(tool.pid)
+        if (live && live !== 'unverifiable' && sameProviderProcess(tool, live)) {
+          process.kill(tool.pid, 'SIGKILL')
+        }
+      })
+      process.kill(gated.watcher.pid, 'SIGSTOP')
+      if (mode === 'leaderless group') {
+        process.kill(gated.leader.pid, 'SIGKILL')
+        await gated.exited
+      } else {
+        process.kill(gated.leader.pid, 'SIGSTOP')
+      }
+      expect(providerGroupAbsent(gated.leader.pid)).toBe(false)
 
-    const spec = createProviderSpawnSpec(
-      {
-        command: process.execPath,
-        args: [
-          '-e',
-          String.raw`
+      const spec = createProviderSpawnSpec(
+        {
+          command: process.execPath,
+          args: [
+            '-e',
+            String.raw`
       try { process.kill(-Number(process.argv[1]), 0); process.stdout.write('group still alive\n') }
       catch (error) { process.stdout.write(error.code + '\n') }
     `,
-          '--',
-          String(gated.leader.pid)
-        ]
-      },
-      process.env,
-      process.platform,
-      { lifetime: 'one-shot' }
-    )
-    const child = spawnProviderProcess(spec)
-    child.on('error', () => {})
-    child.stderr.resume()
-    const closed = new Promise<void>((resolve) => child.once('close', () => resolve()))
-    cleanups.push(async () => {
-      child.kill('SIGKILL')
-      await closed
-    })
-    expect(await outputLine(child.stdout, () => true)).toBe('ESRCH')
-    await Promise.all([closed, gated.closed])
-    expect(providerGroupAbsent(gated.leader.pid)).toBe(true)
-    expect(child.groupVerdict).toBe('exited')
-    expect(await readdir(directory)).toEqual([])
-  })
+            '--',
+            String(gated.leader.pid)
+          ]
+        },
+        process.env,
+        process.platform,
+        { lifetime: 'one-shot' }
+      )
+      const child = spawnProviderProcess(spec)
+      child.on('error', () => {})
+      child.stderr.resume()
+      const closed = new Promise<void>((resolve) => child.once('close', () => resolve()))
+      cleanups.push(async () => {
+        child.kill('SIGKILL')
+        await closed
+      })
+      expect(await outputLine(child.stdout, () => true)).toBe('ESRCH')
+      await expect.poll(() => readPosixProcessRow(tool.pid)).toBeNull()
+      await Promise.all([closed, gated.closed])
+      expect(providerGroupAbsent(gated.leader.pid)).toBe(true)
+      expect(child.groupVerdict).toBe('exited')
+      expect(await readdir(directory)).toEqual([])
+    }
+  )
 
   it('preserves live-owner and refused records without signaling their group', async () => {
     const gated = await gatedNative()
