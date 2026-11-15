@@ -1,6 +1,6 @@
 import { useCallback, useEffect } from 'react'
 import type React from 'react'
-import type { OpenFile } from '@/store/slices/editor'
+import type { OpenFile } from '@/store/slices/editor/types/open-file'
 import type {
   GitBranchChangeEntry,
   GitDiffResult

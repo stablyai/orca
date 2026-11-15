@@ -1,5 +1,18 @@
 import type { AgentPickerEntry, AgentPickerDraft } from './agent-launch-picker'
 
+export function agentPickerCatalogAuthoritative(
+  entry: AgentPickerEntry
+): entry is AgentPickerEntry & {
+  catalog: Exclude<AgentPickerEntry['catalog'], { origin: 'unknown' }>
+} {
+  return (
+    (entry.catalogRead === undefined || entry.catalogRead === 'settled') &&
+    entry.catalog.origin !== 'unknown' &&
+    !entry.catalog.listingInProgress &&
+    entry.catalog.unavailable === undefined
+  )
+}
+
 export function agentPickerArgumentsKnown(
   entry: AgentPickerEntry,
   draft: AgentPickerDraft
@@ -41,4 +54,21 @@ export type AgentPickerRetainedSetup = {
   source: AgentPickerDraft | undefined
   draft: AgentPickerDraft
   active: boolean
+}
+
+/** Launch has no Arguments editor, so Arguments a speed edit copied from older settings yield to the current ones. */
+export function launchAgentPickerDraft(
+  entry: AgentPickerEntry,
+  draft: AgentPickerDraft
+): AgentPickerDraft {
+  if (draft.argumentsOwner === undefined || draft.argumentsOwner === entry.ownerKey) {
+    return draft
+  }
+  const {
+    arguments: _arguments,
+    pendingArguments: _pending,
+    argumentsOwner: _owner,
+    ...rest
+  } = draft
+  return rest
 }

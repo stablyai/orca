@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { createTestStore } from '../store-test-helpers'
+import { createTestStore } from '../../testing/app-store-test-fixture'
 import { sleepingRecordFromEntry } from './agent-status-sleeping-records'
 import { getAgentResumeArgv } from '../../../../../shared/agent-launch/startup/agent-resume-argv'
 
@@ -35,7 +35,7 @@ export function registerAgentStatusNestedResumeTests(): void {
           )
         const record = sleepingRecordFromEntry({
           state: store.getState(),
-          entry: store.getState().agentStatusByPaneKey[PANE],
+          entry: store.getState().agentStatusByPaneKey.get(PANE)!,
           worktreeId: 'wt-1',
           capturedAt: Date.now()
         })

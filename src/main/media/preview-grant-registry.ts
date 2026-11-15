@@ -1,10 +1,10 @@
 import { randomUUID } from 'node:crypto'
 import type { WebContents } from 'electron'
 import type { Store } from '../persistence/loading-store/store'
-import type { LocalFileAccess } from '../../shared/local-file-access'
-import { MEDIA_PREVIEW_SCHEME } from '../../shared/media-file-extensions'
-import { isDocumentPreview, type FilePreview } from '../../shared/file-preview-kind'
-import type { RemoteFilePreviewAddress } from '../../shared/remote-file-preview-address'
+import type { LocalFileAccess } from '../../shared/file-access/local-file-access'
+import { MEDIA_PREVIEW_SCHEME } from '../../shared/file-preview/media-preview-scheme'
+import { isDocumentPreview, type FilePreview } from '../../shared/file-preview/file-preview-kind'
+import type { RemoteFilePreviewAddress } from '../../shared/file-preview/remote-file-preview-address'
 import { abortWhenRendererGone } from '../ipc/renderer-lifetime-abort'
 import {
   RemotePreviewGrantLapsedError,

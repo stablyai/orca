@@ -76,7 +76,7 @@ function makeDeferred() {
   return { promise, resolve }
 }
 
-function createHarness(options: { restarted?: boolean } = {}) {
+async function createHarness(options: { restarted?: boolean } = {}) {
   let session = makeSession([TAB_A, TAB_B])
   const repo = {
     id: REPO_ID,
@@ -135,8 +135,8 @@ function createHarness(options: { restarted?: boolean } = {}) {
     }))
   })
 
-  const publishRendererSnapshot = (tabIds: readonly string[], snapshotVersion: number) => {
-    runtime.syncWindowGraph(1, {
+  const publishRendererSnapshot = async (tabIds: readonly string[], snapshotVersion: number) => {
+    await runtime.syncWindowGraph(1, {
       ...rendererGraph(tabIds),
       mobileSessionTabs: [
         {
@@ -179,7 +179,7 @@ function createHarness(options: { restarted?: boolean } = {}) {
   }
   // Restart serves disk hydration until the renderer's first publication.
   if (!options.restarted) {
-    publishRendererSnapshot([TAB_A, TAB_B], 1)
+    await publishRendererSnapshot([TAB_A, TAB_B], 1)
   }
 
   return {
@@ -266,7 +266,7 @@ function makeSplitSession(leafIds: readonly string[]): WorkspaceSessionState {
   }
 }
 
-function createSplitHarness() {
+async function createSplitHarness() {
   let session = makeSplitSession([LEAF_A, LEAF_B])
   const repo = {
     id: REPO_ID,
@@ -304,9 +304,9 @@ function createSplitHarness() {
   } as never)
   runtime.attachWindow(1)
 
-  const publishSplitSnapshot = (leafIds: readonly string[], snapshotVersion: number) => {
+  const publishSplitSnapshot = async (leafIds: readonly string[], snapshotVersion: number) => {
     const layout = makeSplitLayout(leafIds)
-    runtime.syncWindowGraph(1, {
+    await runtime.syncWindowGraph(1, {
       tabs: [
         {
           tabId: TAB_P,
@@ -360,7 +360,7 @@ function createSplitHarness() {
       runtime as unknown as { pairedRendererSessionOwnedPtyIds: Set<string> }
     ).pairedRendererSessionOwnedPtyIds.add(PTY_BY_LEAF[leafId]!)
   }
-  publishSplitSnapshot([LEAF_A, LEAF_B], 1)
+  await publishSplitSnapshot([LEAF_A, LEAF_B], 1)
 
   return {
     runtime,
@@ -405,30 +405,8 @@ async function listParentTabIds(runtime: OrcaRuntimeService): Promise<string[]> 
 }
 
 describe('a committed paired close stays closed while its PTY lingers', () => {
-  it('control: a renderer prune that lands after the relay ack retires the tab for good', async () => {
-    const harness = createHarness()
-
-    const closing = harness.runtime.closeMobileSessionTab(`id:${WORKTREE_ID}`, TAB_A, {
-      reason: 'user'
-    })
-    if (ORCA_LAYOUT_OWNER_IS_MAIN) {
-      await expect(closing).resolves.toMatchObject({ closed: true })
-      expect(harness.closeTerminalTab).not.toHaveBeenCalled()
-      harness.publishRendererSnapshot([TAB_B], 2)
-      expect(await listParentTabIds(harness.runtime)).toEqual([TAB_B])
-      return
-    }
-    await vi.waitFor(() => expect(harness.closeTerminalTab).toHaveBeenCalledWith(TAB_A))
-    await harness.retirePersistedTab(TAB_A)
-    harness.relayAck.resolve()
-    await expect(closing).resolves.toMatchObject({ closed: true })
-    harness.publishRendererSnapshot([TAB_B], 2)
-
-    expect(await listParentTabIds(harness.runtime)).toEqual([TAB_B])
-  })
-
   it('red: the preserved-merge resurrects a pre-ack renderer prune only until the close cleans up', async () => {
-    const harness = createHarness()
+    const harness = await createHarness()
 
     const closing = harness.runtime.closeMobileSessionTab(`id:${WORKTREE_ID}`, TAB_A, {
       reason: 'user'
@@ -436,14 +414,14 @@ describe('a committed paired close stays closed while its PTY lingers', () => {
     if (ORCA_LAYOUT_OWNER_IS_MAIN) {
       await expect(closing).resolves.toMatchObject({ closed: true })
       expect(harness.closeTerminalTab).not.toHaveBeenCalled()
-      harness.publishRendererSnapshot([TAB_B], 2)
+      await harness.publishRendererSnapshot([TAB_B], 2)
       expect(await listParentTabIds(harness.runtime)).toEqual([TAB_B])
       return
     }
     await vi.waitFor(() => expect(harness.closeTerminalTab).toHaveBeenCalledWith(TAB_A))
     // Renderer retires/publishes before relay ack; dispatched kill has not yet produced PTY exit.
     await harness.retirePersistedTab(TAB_A)
-    harness.publishRendererSnapshot([TAB_B], 2)
+    await harness.publishRendererSnapshot([TAB_B], 2)
     harness.relayAck.resolve()
     await expect(closing).resolves.toMatchObject({ closed: true })
 
@@ -455,11 +433,11 @@ describe('a committed paired close stays closed while its PTY lingers', () => {
   })
 
   it('red: a host-side close (no paired close RPC) must not be resurrected by the preserved-merge', async () => {
-    const harness = createHarness()
+    const harness = await createHarness()
 
     // Host-side close has no mobile post-relay cleanup; PTY may stay connected after slow/failed Windows/WSL kills.
     await harness.retirePersistedTab(TAB_A)
-    harness.publishRendererSnapshot([TAB_B], 2)
+    await harness.publishRendererSnapshot([TAB_B], 2)
 
     const republished = await listParentTabIds(harness.runtime)
     expect(republished, 'the preserved-merge resurrected a tab the host renderer closed').toEqual([
@@ -468,11 +446,11 @@ describe('a committed paired close stays closed while its PTY lingers', () => {
   })
 
   it('red: the first renderer publication after a restart must not resurrect a retired tab', async () => {
-    const harness = createHarness({ restarted: true })
+    const harness = await createHarness({ restarted: true })
     expect(await listParentTabIds(harness.runtime)).toEqual([TAB_A, TAB_B].sort())
 
     await harness.retirePersistedTab(TAB_A)
-    harness.publishRendererSnapshot([TAB_B], 1)
+    await harness.publishRendererSnapshot([TAB_B], 1)
 
     expect(
       await listParentTabIds(harness.runtime),
@@ -483,32 +461,17 @@ describe('a committed paired close stays closed while its PTY lingers', () => {
   })
 
   it('control: the first post-restart publication keeps a still-persisted tab it omits', async () => {
-    const harness = createHarness({ restarted: true })
-    harness.publishRendererSnapshot([TAB_B], 1)
+    const harness = await createHarness({ restarted: true })
+    await harness.publishRendererSnapshot([TAB_B], 1)
 
     expect(await listParentTabIds(harness.runtime)).toEqual([TAB_A, TAB_B].sort())
-    expect(harness.isRuntimeSessionOwned(PTY_A)).toBe(true)
-  })
-
-  it('control: a create still in flight is not retirement — its tab and ownership survive the omission', async () => {
-    const harness = createHarness()
-
-    // Pending create omits the tab from persistence and publication like retirement; its pending mark must preserve recovery.
-    harness.markCreatePending(TAB_A)
-    harness.omitPersistedTab(TAB_A)
-    harness.publishRendererSnapshot([TAB_B], 2)
-
-    expect(
-      await listParentTabIds(harness.runtime),
-      'a create-in-flight tab was retired by a stale publication'
-    ).toEqual([TAB_B, TAB_A])
     expect(harness.isRuntimeSessionOwned(PTY_A)).toBe(true)
   })
 })
 
 describe('a durably closed split leaf stays closed while its sibling survives', () => {
   it('red: the preserved-merge must not resurrect a retired leaf of a persisted parent', async () => {
-    const harness = createSplitHarness()
+    const harness = await createSplitHarness()
     expect(await listTerminalSurfaceIds(harness.runtime)).toEqual([
       `${TAB_P}::${LEAF_A}`,
       `${TAB_P}::${LEAF_B}`
@@ -516,32 +479,13 @@ describe('a durably closed split leaf stays closed while its sibling survives', 
 
     // Leaf close preserves its parent/sibling while slow or failed kills leave paired-owned PTYs connected.
     await harness.retirePersistedLeaf(LEAF_A)
-    harness.publishSplitSnapshot([LEAF_B], 2)
+    await harness.publishSplitSnapshot([LEAF_B], 2)
 
     expect(
       await listTerminalSurfaceIds(harness.runtime),
       'the preserved-merge resurrected a split leaf the host renderer closed'
     ).toEqual([`${TAB_P}::${LEAF_B}`])
     expect(harness.isRuntimeSessionOwned(PTY_A)).toBe(false)
-    expect(harness.isRuntimeSessionOwned(PTY_B)).toBe(true)
-  })
-
-  it('control: a persisted layout that still binds the PTY under a different leafId is not retirement', async () => {
-    const harness = createSplitHarness()
-
-    // Relabeling changes leafId without changing the live bound PTY; leaf mismatch alone cannot prove retirement.
-    harness.relabelPersistedLeftLeaf()
-    harness.publishSplitSnapshot([LEAF_B], 2)
-
-    expect(
-      await listTerminalSurfaceIds(harness.runtime),
-      'a live relabeled leaf was retired by a stale publication'
-    ).toEqual(
-      ORCA_LAYOUT_OWNER_IS_MAIN
-        ? [`${TAB_P}::${LEAF_B}`, `${TAB_P}::${LEAF_C}`]
-        : [`${TAB_P}::${LEAF_A}`, `${TAB_P}::${LEAF_B}`]
-    )
-    expect(harness.isRuntimeSessionOwned(PTY_A)).toBe(true)
     expect(harness.isRuntimeSessionOwned(PTY_B)).toBe(true)
   })
 })

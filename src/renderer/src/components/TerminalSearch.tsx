@@ -1,11 +1,11 @@
-import { ImeInput } from '@/lib/ime-text-field'
+import { ImeInput } from '@/lib/text-input/ime/ime-text-field'
 import { useEffect, useState, useCallback } from 'react'
 import { ChevronUp, ChevronDown, X, CaseSensitive, Regex } from 'lucide-react'
 import type { SearchAddon } from '@xterm/addon-search'
 import { Button } from '@/components/ui/button'
 import type { SearchState } from '@/components/terminal-pane/input/keyboard/terminal-keyboard-shortcut-matching'
-import { translate } from '@/i18n/i18n'
-import { getFindRequestQuery } from '@/lib/find-query-bounds'
+import { useTranslate } from '@/i18n/use-translate'
+import { getFindRequestQuery } from '@/lib/text-search/find-query-bounds'
 import { safeFind } from './terminal-search-safe-find'
 import { buildTerminalSearchOptions } from './terminal-search-options'
 
@@ -36,6 +36,7 @@ export default function TerminalSearch({
   searchStateRef,
   inputRef
 }: TerminalSearchProps): React.JSX.Element | null {
+  const t = useTranslate()
   const [query, setQuery] = useState('')
   const [caseSensitive, setCaseSensitive] = useState(false)
   const [regex, setRegex] = useState(false)
@@ -130,7 +131,7 @@ export default function TerminalSearch({
   const matchStatus = !requestQuery
     ? '0/0'
     : results.resultCount === 0
-      ? translate('auto.components.TerminalSearch.10e039b591', 'No results')
+      ? t('auto.components.TerminalSearch.10e039b591', 'No results')
       : results.resultIndex === -1
         ? `${results.resultCount}+`
         : `${results.resultIndex + 1}/${results.resultCount}`
@@ -147,7 +148,7 @@ export default function TerminalSearch({
         type="text"
         value={query}
         onChange={(e) => setQuery(e.target.value)}
-        placeholder={translate('auto.components.TerminalSearch.e07012f26e', 'Search...')}
+        placeholder={t('auto.components.TerminalSearch.e07012f26e', 'Search...')}
         className="min-w-0 flex-1 border-none bg-transparent text-sm text-popover-foreground outline-none placeholder:text-muted-foreground"
       />
 
@@ -158,7 +159,7 @@ export default function TerminalSearch({
         aria-pressed={caseSensitive}
         onClick={() => setCaseSensitive((v) => !v)}
         className="shrink-0"
-        title={translate('auto.components.TerminalSearch.90c61387d9', 'Case sensitive')}
+        title={t('auto.components.TerminalSearch.90c61387d9', 'Case sensitive')}
       >
         <CaseSensitive size={14} />
       </Button>
@@ -170,7 +171,7 @@ export default function TerminalSearch({
         aria-pressed={regex}
         onClick={() => setRegex((v) => !v)}
         className="shrink-0"
-        title={translate('auto.components.TerminalSearch.42e466b9f1', 'Regex')}
+        title={t('auto.components.TerminalSearch.42e466b9f1', 'Regex')}
       >
         <Regex size={14} />
       </Button>
@@ -187,7 +188,7 @@ export default function TerminalSearch({
         size="icon-xs"
         onClick={findPrevious}
         className="shrink-0"
-        title={translate('auto.components.TerminalSearch.0f3066256e', 'Previous match')}
+        title={t('auto.components.TerminalSearch.0f3066256e', 'Previous match')}
       >
         <ChevronUp size={14} />
       </Button>
@@ -198,7 +199,7 @@ export default function TerminalSearch({
         size="icon-xs"
         onClick={findNext}
         className="shrink-0"
-        title={translate('auto.components.TerminalSearch.7cb40c04eb', 'Next match')}
+        title={t('auto.components.TerminalSearch.7cb40c04eb', 'Next match')}
       >
         <ChevronDown size={14} />
       </Button>
@@ -211,7 +212,7 @@ export default function TerminalSearch({
         size="icon-xs"
         onClick={onClose}
         className="shrink-0"
-        title={translate('auto.components.TerminalSearch.db234b7519', 'Close')}
+        title={t('auto.components.TerminalSearch.db234b7519', 'Close')}
       >
         <X size={14} />
       </Button>

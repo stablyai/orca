@@ -4,9 +4,9 @@ import { expect } from './helpers/orca-app'
 import { waitForActiveWorktree, waitForSessionReady } from './helpers/store'
 import { buildFakeAgentCommandOverride } from './helpers/fake-agent-command-override'
 import { SUPPORTED, createChatOnHost, test } from './helpers/structured-claude-stub'
-import { resolveCliCommand } from '../../src/shared/node-cli-command-resolution'
+import { resolveCliCommand } from '../../src/shared/shell/command-resolution/node-cli-command-resolution'
 import { claudeSessionIdForOrcaSession } from '../../src/main/claude/structured/claude-structured-session-id'
-import { buildClaudeModelListArgs } from '../../src/shared/claude-model-list-probe'
+import { buildClaudeModelListArgs } from '../../src/shared/agent-session/options/model-catalog/claude-model-list-probe'
 
 type ChatTab = { id: string; entityId: string }
 
@@ -176,7 +176,8 @@ test.describe('structured chat tabs', () => {
         .poll(() => readStubRequests(claudeStub.launchLog, pid))
         .toEqual([
           { type: 'control_request', subtype: 'list_models' },
-          { type: 'control_request', subtype: 'get_settings' }
+          { type: 'control_request', subtype: 'get_settings' },
+          { type: 'control_request', subtype: 'initialize' }
         ])
     }
 

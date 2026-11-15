@@ -1,12 +1,17 @@
+import {
+  pickApprovedSetupHashes,
+  type ApprovedSetupHashes
+} from '../../../../../../shared/worktree/creation/approved-setup-hashes'
 import { useAppStore } from '@/store/index'
-import { MODAL_DISMISSED_KEY } from '@/store/slices/modal-slot-dismissal'
+import { MODAL_DISMISSED_KEY } from '@/store/slices/ui/modal-slot-dismissal'
 import './launch-work-item-direct-preflight'
 import { inspectRequiredWorkspaceSetup as resolveDirectSetupDecision } from '../setup/workspace-setup-preparation'
 import type { WorkspaceSetupInspection as DirectSetupInspection } from '../setup/workspace-setup-preparation'
-import { confirmWorkspaceSetupDecision } from '../../../workspace-setup-trust'
-import type { Repo } from '../../../../../../shared/repo-types'
+import { confirmWorkspaceSetupDecision } from '../setup/workspace-setup-trust'
+import type { Repo } from '../../../../../../shared/repository/repo-types'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
 import type { SetupDecision } from '../../../../../../shared/worktree/create-types'
+import type { SetupHooksCreateSource } from '../../../../../../shared/worktree/setup-hooks-create-source'
 
 export type DirectWorkItemLaunchResult = boolean | 'cancelled'
 
@@ -64,6 +69,7 @@ export function requestDirectWorkItemSetup(
   })
 }
 
+/** The setup choice only; the trust read waits for the start point (`confirmDirectWorkItemSetup`). */
 export async function prepareDirectWorkItemSetup(
   repo: Repo,
   ownerHostId: ExecutionHostId,
@@ -90,13 +96,27 @@ export async function prepareDirectWorkItemSetup(
   if (decision === 'cancelled' || signal?.aborted) {
     return 'cancelled'
   }
+  return decision
+}
+
+export async function confirmDirectWorkItemSetup(
+  repo: Repo,
+  ownerHostId: ExecutionHostId,
+  decision: SetupDecision,
+  createSource: SetupHooksCreateSource,
+  signal?: AbortSignal
+): Promise<({ setupDecision: SetupDecision } & ApprovedSetupHashes) | 'cancelled'> {
   const confirmed = await confirmWorkspaceSetupDecision(
     useAppStore.getState(),
     repo.id,
     decision,
     ownerHostId,
     () => signal?.aborted === true,
-    signal
+    signal,
+    createSource
   )
-  return confirmed === 'cancelled' ? 'cancelled' : confirmed.setupDecision
+  if (confirmed === 'cancelled') {
+    return 'cancelled'
+  }
+  return { setupDecision: confirmed.setupDecision, ...pickApprovedSetupHashes(confirmed) }
 }

@@ -1,8 +1,8 @@
 import { useEffect, useLayoutEffect, useRef } from 'react'
 import { lastVerifiedRuntimeStatus } from '../../../../shared/remote-runtime/host-status/runtime-host-status'
 import { useAppStore } from '../../store'
-import { useRuntimeSessionMirrorEnvironmentKeys } from '../use-runtime-session-mirror-environment-key'
-import { sessionTabsFreshnessKey } from './tracking'
+import { useRuntimeSessionMirrorEnvironmentKeys } from './subscriptions/use-runtime-session-mirror-environment-key'
+import { sessionTabsFreshnessKey } from './state'
 import { clearWebSessionTabsTrackingForEnvironment } from './tracking-lifecycle'
 import {
   installGlobalSessionTabsSubscriptions,

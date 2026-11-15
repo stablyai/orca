@@ -1,12 +1,13 @@
-import type { ProviderCheckSummary } from '../../../../../shared/github/pull-request-types'
+import type { ProviderCheckSummary } from '../../../../../shared/github/pull-requests/pull-request-types'
 import { PRCheckEmptyDetails } from '@/components/pr-check-empty-details'
 import React from 'react'
 import { LoaderCircle } from 'lucide-react'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import { CHECK_COLOR } from '@/components/right-sidebar/checks-panel/presentation/check-presentation'
 import { getCheckCountChips, type getCheckCounts } from '@/components/pr-check-counts'
 import { getCheckDetailsKey } from '@/components/github/pr-check-presentation'
-import type { PRCheckDetail } from '../../../../../shared/github/check-types'
+import type { PRCheckDetail } from '../../../../../shared/github/checks/check-types'
+import { useTranslate } from '@/i18n/use-translate'
 
 export function ChecksTabLayouts({
   owner,
@@ -39,6 +40,7 @@ export function ChecksTabLayouts({
   renderCheckRow: (check: PRCheckDetail) => React.JSX.Element
   fixChecksAgentDialog: React.JSX.Element
 }): React.JSX.Element {
+  const t = useTranslate()
   if (loading && listLength === 0) {
     return (
       <>
@@ -63,7 +65,7 @@ export function ChecksTabLayouts({
     )
   }
   if (variant === 'page') {
-    const countChips = getCheckCountChips(counts)
+    const countChips = getCheckCountChips(counts, t)
     return (
       <>
         <div className="flex flex-col gap-3 px-4 py-3">

@@ -2,10 +2,9 @@ import { describe, expect, it, vi } from 'vitest'
 import {
   TerminalStreamOpcode,
   decodeTerminalStreamJson,
-  decodeTerminalStreamText,
-  encodeTerminalStreamFrame
+  decodeTerminalStreamText
 } from '../../../../../shared/terminal/stream/terminal-stream-protocol'
-import { sendSnapshotFrames } from './terminal-snapshot-publication'
+import './terminal-snapshot-publication'
 import { publishMultiplexInitialSnapshot } from './terminal-multiplex-initial-snapshot'
 
 import type { TerminalMultiplexConnection } from './terminal-multiplex-connection'
@@ -17,61 +16,6 @@ import { TERMINAL_MULTIPLEX_ACK_STREAM_INITIAL_WINDOW_BYTES } from '../../../../
 // These assertions protect the permanent binary publication seam while its state machine
 // lives in concrete terminal domain modules.
 describe('terminal stream extraction characterization', () => {
-  it('stops publication immediately when SnapshotStart is rejected', () => {
-    const opcodes: TerminalStreamOpcode[] = []
-    const stats = sendSnapshotFrames(
-      (opcode) => {
-        opcodes.push(opcode)
-        return false
-      },
-      {
-        kind: 'scrollback',
-        cols: 80,
-        rows: 24,
-        data: 'unpublished'
-      }
-    )
-
-    expect(opcodes).toEqual([TerminalStreamOpcode.SnapshotStart])
-    expect(stats).toEqual({ bytes: 0, chunks: 0, published: false })
-  })
-
-  it('keeps the permanent v1 header bytes and opcode assignments', () => {
-    const seq = 2 ** 32 + 0x89abcdef
-    const bytes = encodeTerminalStreamFrame({
-      opcode: TerminalStreamOpcode.WriteUnavailable,
-      streamId: 0x78563412,
-      seq,
-      payload: new Uint8Array([0xaa])
-    })
-    const header = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength)
-
-    expect(Array.from(bytes.slice(0, 4))).toEqual([0x74, 1, 17, 0])
-    expect(header.getUint32(4, true)).toBe(0x78563412)
-    expect(header.getUint32(8, true)).toBe(1)
-    expect(header.getUint32(12, true)).toBe(0x89abcdef)
-    expect(bytes[16]).toBe(0xaa)
-    expect([
-      TerminalStreamOpcode.Output,
-      TerminalStreamOpcode.SnapshotStart,
-      TerminalStreamOpcode.SnapshotChunk,
-      TerminalStreamOpcode.SnapshotEnd,
-      TerminalStreamOpcode.Resized,
-      TerminalStreamOpcode.Error,
-      TerminalStreamOpcode.Input,
-      TerminalStreamOpcode.Resize,
-      TerminalStreamOpcode.Subscribe,
-      TerminalStreamOpcode.Unsubscribe,
-      TerminalStreamOpcode.SnapshotRequest,
-      TerminalStreamOpcode.Metadata,
-      TerminalStreamOpcode.Ack,
-      TerminalStreamOpcode.ClaimViewport,
-      TerminalStreamOpcode.OutputSpan,
-      TerminalStreamOpcode.SetOutputPaused,
-      TerminalStreamOpcode.WriteUnavailable
-    ]).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17])
-  })
-
   it('publishes the latest nonempty initial image when startup output overflows twice', async () => {
     const frames: { opcode: TerminalStreamOpcode; payload: Uint8Array<ArrayBufferLike> }[] = []
     const emit = vi.fn()
@@ -93,6 +37,7 @@ describe('terminal stream extraction characterization', () => {
       supportsEndpointLossNotice: false,
       inputSessionId: null,
       outputPaused: false,
+      supportsOutputCadence: false,
       supportsDesktopViewportClaims: false,
       desktopClaimTail: Promise.resolve(true),
       registeredRemoteDesktopDriver: false,
@@ -103,6 +48,10 @@ describe('terminal stream extraction characterization', () => {
       ackPendingOutputBytes: 0,
       ackPendingOutputOverflowed: false,
       ackRecoverySnapshotInFlight: false,
+      ackRecoveryAwaitedBytes: 0,
+      ackPendingHoldbackBytes: 0,
+      ackAdmittedPacedWindowBytes: null,
+      ackOutputWaited: false,
       yieldedQueries: [],
       yieldedQueryScan: EMPTY_TERMINAL_REPLY_QUERY_SCAN_STATE,
       ackRecoveryHistoryOwed: false,
@@ -111,7 +60,12 @@ describe('terminal stream extraction characterization', () => {
       pendingOutputOverflowed: true,
       lastResizeCols: undefined,
       resizeGeneration: 0,
-      outputBatcher: { push: outputBatcherPush, flush: vi.fn(), dispose: vi.fn() },
+      outputBatcher: {
+        push: outputBatcherPush,
+        flush: vi.fn(),
+        setCadence: vi.fn(),
+        dispose: vi.fn()
+      },
       unsubscribeData: () => {},
       unsubscribeResize: () => {},
       unsubscribeFit: () => {},

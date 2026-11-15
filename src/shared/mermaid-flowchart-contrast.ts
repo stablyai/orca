@@ -1,4 +1,4 @@
-const READABLE_CONTRAST = 4.5
+export const READABLE_CONTRAST = 4.5
 
 /** WCAG relative luminance of a `#rrggbb` or opaque `rgb()` colour; null for anything else. */
 function luminance(color: string): number | null {

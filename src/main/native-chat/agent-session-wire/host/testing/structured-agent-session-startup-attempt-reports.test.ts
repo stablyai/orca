@@ -1,11 +1,21 @@
 import { describe, expect, it } from 'vitest'
 import {
+  agentSessionFailureFact,
+  readWholeAgentSessionFailureFact
+} from '../../../../../shared/agent-session/failures/agent-session-failure'
+import {
+  AgentSessionAcquisitionExitProvenError,
+  AgentSessionAcquisitionExitUnprovenError
+} from '../../acquisition/structured-agent-session-acquisition-errors'
+import { AgentSessionStartFailure } from '../../startup/structured-agent-session-start-failure'
+import {
   HOST_TEST_NOW as NOW,
   HOST_TEST_SESSION as SESSION
-} from './structured-agent-session-host-test-data'
+} from './structured-agent-session-host-test-data.test-fixture'
 import {
   acquire,
-  dispatch,
+  accept,
+  advanceHostWallClock,
   eventually,
   heldBehindStart,
   host,
@@ -15,78 +25,55 @@ import {
   store,
   submission,
   registerStartupAttemptHostTests
-} from './structured-agent-session-startup-attempt-host-test-support'
+} from './structured-agent-session-startup-attempt-host.test-fixture'
 
 registerStartupAttemptHostTests()
 
-it.each([false, true])(
-  'keeps current-generation reports across readiness (replaced=%s)',
-  async (replaced) => {
-    await store.replaceSessionOptions({
-      sessionId: SESSION,
-      fence: store.getRecord(SESSION)!.lease.runtimeFence,
-      permissionMode: 'own',
-      now: NOW
-    })
-    await restartWith(publishFirst)
-    const id = await heldBehindStart('hello')
-    const fence = store.getRecord(SESSION)!.lease.runtimeFence
-    const acquisitionGeneration = `generation-${acquire.mock.calls.length}`
-    const report = (
-      reportedOptions: { reportedPermissionMode?: string | null },
-      generation = acquisitionGeneration,
-      reportFence = fence
-    ) =>
-      host.handleAdapterEvent({
-        type: 'options-reported',
-        sessionId: SESSION,
-        fence: reportFence,
-        acquisitionGeneration: generation,
-        reportedOptions
-      })
-    const early = report({ reportedPermissionMode: 'accept-edits' })
-    expect(host.readStatusSummary(SESSION)?.runtimePermission).toBeNull()
-    if (replaced) {
-      await host.close(SESSION, 'evict')
-      await early
-      await proveOpen()
-      await host.flushStreamedEvents(SESSION)
-      expect(host.readStatusSummary(SESSION)?.runtimePermission).toBeNull()
-      return
-    }
-    await proveOpen()
-    await early
-    await eventually(async () => expect((await submission(id))?.dispatchState).toBe('accepted'))
-    const current = () => host.readStatusSummary(SESSION)?.runtimePermission
-    expect(current()).toEqual({ fence, mode: 'accept-edits' })
-    await report({ reportedPermissionMode: 'full-access' }, 'foreign')
-    await report({ reportedPermissionMode: 'full-access' }, acquisitionGeneration, fence + 1)
-    await report({})
-    expect(current()).toEqual({ fence, mode: 'accept-edits' })
-    await report({ reportedPermissionMode: null })
-    expect(current()).toEqual({ fence, mode: null })
-    expect(store.getRecord(SESSION)?.permissionMode).toBe('own')
-    expect(dispatch).toHaveBeenCalledTimes(1)
-    await host.close(SESSION, 'evict')
-    expect(current()).toBeNull()
-  }
-)
-
 describe('what a started child reports', () => {
-  it('keeps provider reports out of the saved next-message choice', async () => {
-    await restartWith(publishFirst)
-    const id = await heldBehindStart('hello')
-    await proveOpen('reported')
-    await eventually(async () => expect((await submission(id))?.dispatchState).toBe('accepted'))
-    await host.handleAdapterEvent({
-      type: 'options-reported',
-      sessionId: SESSION,
-      fence: store.getRecord(SESSION)!.lease.runtimeFence,
-      acquisitionGeneration: `generation-${acquire.mock.calls.length}`,
-      reportedOptions: { model: 'from-settings' }
+  it('preserves a final provider answer through nested acquisition exit proofs', async () => {
+    await restartWith(async () => {
+      throw new AgentSessionAcquisitionExitProvenError(
+        new AgentSessionAcquisitionExitProvenError(
+          new AgentSessionStartFailure(new Error('the connection ended'), 'never', {
+            kind: 'providerStartFailed',
+            detail: { text: 'the provider declined startup', audience: 'person' }
+          })
+        )
+      )
     })
-    await host.flushStreamedEvents(SESSION)
-    expect(store.getRecord(SESSION)?.options).toBeUndefined()
+    const id = await accept('preserve the final answer')
+    await eventually(async () => {
+      const sent = await submission(id)
+      expect(sent?.dispatchState).toBe('rejected')
+      expect(readWholeAgentSessionFailureFact(sent?.rejection)).toMatchObject({
+        kind: 'providerStartFailed',
+        detail: { text: 'the provider declined startup', audience: 'person' }
+      })
+    })
+  })
+
+  it('keeps an unproven owner refusal ahead of an embedded provider failure', async () => {
+    await restartWith(async () => {
+      throw new AgentSessionAcquisitionExitUnprovenError(
+        new AgentSessionStartFailure(
+          new Error('provider exited'),
+          'safe',
+          agentSessionFailureFact('providerStartFailed')
+        )
+      )
+    })
+    const id = await accept('preserve ownership')
+    await eventually(async () => {
+      const sent = await submission(id)
+      expect(sent?.dispatchState).toBe('rejected')
+      expect(readWholeAgentSessionFailureFact(sent?.rejection)).toMatchObject({
+        kind: 'restartFailed',
+        refusal: {
+          code: 'agent_session_ownership_unknown',
+          details: { reason: 'ownerUnproven' }
+        }
+      })
+    })
   })
 
   it('preserves a later accepted pick when an older child reports options', async () => {
@@ -109,5 +96,16 @@ describe('what a started child reports', () => {
     })
     await host.flushStreamedEvents(SESSION)
     expect(store.getRecord(SESSION)?.options).toEqual({ model: 'picked' })
+  })
+})
+
+describe('a start across a sleep', () => {
+  it('lets a start that a sleep held past the idle window finish and deliver its message', async () => {
+    await restartWith(publishFirst)
+    const id = await heldBehindStart('hello')
+    advanceHostWallClock(2 * 60 * 60_000)
+    await host.collaboratorsForTests().lifetime.idleSweep.tick()
+    await proveOpen()
+    await eventually(async () => expect((await submission(id))?.dispatchState).toBe('accepted'))
   })
 })

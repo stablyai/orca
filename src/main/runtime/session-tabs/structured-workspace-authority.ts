@@ -10,15 +10,15 @@ import {
 } from '../../../shared/execution-host'
 import { resolveQualifiedFolderWorkspaceResult } from '../../../shared/folder-workspaces/folder-workspace-execution-host'
 import { isFloatingWorkspaceId } from '../../../shared/floating-workspace-worktree'
-import { isFolderRepo } from '../../../shared/repo-kind'
-import type { Repo } from '../../../shared/repo-types'
-import { withTimeout } from '../../../shared/promise-timeout-fallback'
-import { parseWorkspaceKey } from '../../../shared/workspace-scope'
+import { isFolderRepo } from '../../../shared/repository/repo-kind'
+import type { Repo } from '../../../shared/repository/repo-types'
+import { withTimeout } from '../../../shared/concurrency/promise-timeout-fallback'
+import { parseWorkspaceKey } from '../../../shared/workspace/identity/workspace-scope'
 import { splitWorktreeIdForFilesystem } from '../../../shared/worktree/id'
 import { beginWatcherInstall } from '../../workspaces/removal/watcher-removal-gate'
 import { areWorktreePathsEqual } from '../../git/worktrees/catalog/worktree-path-comparison'
 import { resolveFloatingWorkspacePath } from '../../persistence/restoring-sessions/floating-workspace-normalization'
-import { getAppEnvironment } from '../../../shared/app-environment'
+import { getAppEnvironment } from '../../../shared/app-lifecycle/app-environment'
 import { resolveLocalProjectRuntimeForRepo } from '../../workspaces/execution-host/local-project-runtime-resolution'
 import { localWorktreePathPresence } from '../../workspaces/catalog/local-worktree-path-presence'
 import {
@@ -30,7 +30,7 @@ import {
   getRuntimeFolderWorkspaceRootId
 } from '../workspaces/catalog/runtime-folder-workspace'
 import { scanRuntimeWorktreesUntilNotOvertaken } from '../workspaces/catalog/runtime-witnessed-worktree-scan'
-import type { RuntimeStore } from '../runtime-store-contract'
+import type { RuntimeStore } from '../construction/runtime-store-contract'
 import type { RuntimeWorktreeScanResult } from '../workspaces/catalog/repo-worktree-resolution-scan'
 
 export class StructuredWorkspaceUnavailable extends Error {

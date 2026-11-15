@@ -1,3 +1,4 @@
+import { terminalPendingReason } from './new-tab-agent-menu-model'
 import { searchAgentPickerSetups } from '../../../../shared/agent-launch/picker/agent-launch-picker-search'
 import type {
   AgentPickerDraft,
@@ -5,19 +6,22 @@ import type {
 } from '../../../../shared/agent-launch/picker/agent-launch-picker'
 import type { AgentPickerSetupIdentity } from '../agent/agent-launch-picker-drafts'
 import { rowLabel, rowId, chatUnavailableLabel } from './tab-agent-row-presentation'
-import { getAgentCatalog } from '@/lib/agent-catalog'
+import { getAgentCatalog } from '@/lib/agent-catalog/agent-catalog'
 import {
   orderAgentLaunchPickerAgents,
   type NewTabAgentMenuRow
 } from '../../../../shared/agent-launch/picker/agent-launch-picker-rows'
 import { normalizeMatchQuery, tokenizeMatchValue } from './query-token-match'
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
+import type { Translate } from '@/i18n/use-translate'
+import type { ActiveOption } from './tab-create-entry-active-option'
 
 export type TabAgentLaunchOption = {
   agent: TuiAgent
   aliases: readonly string[]
   label: string
   disabled?: boolean
+  terminalWaiting?: boolean
   id?: string
   row?: NewTabAgentMenuRow
   setup?: AgentPickerDraft
@@ -34,7 +38,12 @@ function compactAgentAlias(value: string): string {
   return normalizeAgentAlias(value).replace(/[\s_-]+/g, '')
 }
 
-function getCatalogEntry(agent: TuiAgent): { id: TuiAgent; label: string; cmd: string } | null {
+function getCatalogEntry(agent: TuiAgent): {
+  id: TuiAgent
+  label: string
+  cmd: string
+  searchAliases?: readonly string[]
+} | null {
   return getAgentCatalog().find((entry) => entry.id === agent) ?? null
 }
 
@@ -63,6 +72,10 @@ export function buildTabAgentLaunchOptions(
       aliases.add(normalizeAgentAlias(entry.cmd))
       aliases.add(compactAgentAlias(entry.cmd))
     }
+    for (const searchAlias of entry?.searchAliases ?? []) {
+      aliases.add(normalizeAgentAlias(searchAlias))
+      aliases.add(compactAgentAlias(searchAlias))
+    }
     const commandOverride = commandOverrides[agent]?.trim()
     if (commandOverride) {
       aliases.add(normalizeAgentAlias(commandOverride))
@@ -78,7 +91,8 @@ export function buildTabAgentLaunchOptions(
 
 export function buildTabAgentLaunchOptionsFromRows(
   rows: readonly NewTabAgentMenuRow[],
-  commandOverrides: Partial<Record<TuiAgent, string>> = {}
+  commandOverrides: Partial<Record<TuiAgent, string>> = {},
+  t?: Translate
 ): TabAgentLaunchOption[] {
   return rows.map((row) => {
     const base = buildTabAgentLaunchOptions([row.agent], commandOverrides)[0]
@@ -86,9 +100,9 @@ export function buildTabAgentLaunchOptionsFromRows(
       ...base,
       agent: row.agent,
       aliases: base?.aliases ?? [],
-      label: rowLabel(row),
+      label: rowLabel(row, t),
       disabled: row.kind === 'chat-unavailable',
-      reason: row.kind === 'chat-unavailable' ? chatUnavailableLabel(row.reason) : undefined,
+      reason: row.kind === 'chat-unavailable' ? chatUnavailableLabel(row.reason, t) : undefined,
       row,
       id: row.kind === 'terminal' ? `agent:${row.agent}` : rowId(row)
     }
@@ -97,7 +111,8 @@ export function buildTabAgentLaunchOptionsFromRows(
 
 export function buildAgentPickerLaunchOptions(
   entries: readonly AgentPickerEntry[],
-  commandOverrides: Partial<Record<TuiAgent, string>> = {}
+  commandOverrides: Partial<Record<TuiAgent, string>> = {},
+  t?: Translate
 ): TabAgentLaunchOption[] {
   return entries.flatMap((entry) => {
     const row = entry.rows.find((row) =>
@@ -106,7 +121,7 @@ export function buildAgentPickerLaunchOptions(
         : row.kind === 'cli' || row.kind === 'terminal'
     )
     return row
-      ? buildTabAgentLaunchOptionsFromRows([row], commandOverrides).map((option) => ({
+      ? buildTabAgentLaunchOptionsFromRows([row], commandOverrides, t).map((option) => ({
           ...option,
           label: entry.label,
           pickerEntry: entry
@@ -168,7 +183,8 @@ export function findMatchingTabAgentLaunchOptions(
       // Why: the first match takes Enter, so a row that can't launch never outranks one that can.
       .sort(
         (left, right) =>
-          Number(Boolean(left.option.disabled)) - Number(Boolean(right.option.disabled)) ||
+          Number(tabAgentLaunchOptionDisabled(left.option)) -
+            Number(tabAgentLaunchOptionDisabled(right.option)) ||
           right.score - left.score ||
           left.index - right.index
       )
@@ -201,15 +217,57 @@ export function matchingAgentPickerLaunchOptions(
 
 export function configuredAgentPickerLaunchOption(
   option: TabAgentLaunchOption,
-  draft: AgentPickerDraft
+  draft: AgentPickerDraft,
+  terminalPending?: boolean
 ): TabAgentLaunchOption {
-  return {
-    ...option,
-    row: {
-      agent: draft.agent,
-      kind: draft.surface === 'chat' ? 'chat' : 'cli',
-      executionHostId: option.row?.executionHostId
+  return terminalReadyOption(
+    {
+      ...option,
+      row: {
+        agent: draft.agent,
+        kind: draft.surface === 'chat' ? 'chat' : 'cli',
+        executionHostId: option.row?.executionHostId
+      },
+      setup: draft
     },
-    setup: draft
+    terminalPending
+  )
+}
+
+/** The omnibox result a setup panel launches, configured from its draft. */
+export function agentResultSetupOption(
+  option: Extract<ActiveOption, { kind: 'agent' }>,
+  draft: AgentPickerDraft,
+  terminalPending: boolean | undefined
+): ActiveOption {
+  return {
+    kind: 'agent',
+    option: configuredAgentPickerLaunchOption(option.option, draft, terminalPending)
   }
+}
+
+function terminalReadyOption(
+  option: TabAgentLaunchOption,
+  terminalPending: boolean | undefined
+): TabAgentLaunchOption {
+  return { ...option, terminalWaiting: Boolean(terminalPendingReason(terminalPending, option.row)) }
+}
+
+export function tabAgentLaunchOptionDisabled(option: TabAgentLaunchOption): boolean {
+  return Boolean(option.disabled || option.terminalWaiting)
+}
+
+/** The agent options a query lists; each one's surface waits the same way while the host connects. */
+export function matchingAgentLaunchOptions(
+  entries: readonly AgentPickerEntry[] | undefined,
+  options: readonly TabAgentLaunchOption[],
+  query: string,
+  terminalPending: boolean | undefined
+): TabAgentLaunchOption[] {
+  const ready = (option: TabAgentLaunchOption) => terminalReadyOption(option, terminalPending)
+  // Readiness applies before ranking, so a waiting terminal never outranks a usable chat.
+  return [
+    ...matchingAgentPickerLaunchOptions(entries ?? [], query).map(ready),
+    ...findMatchingTabAgentLaunchOptions(query, options.map(ready))
+  ]
 }

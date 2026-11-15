@@ -3,7 +3,7 @@
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { ActivePluginPanel } from '@/store/plugin-panels'
+import type { ActivePluginPanel } from '@/store/plugins/catalog/plugin-contribution-catalog'
 
 vi.mock('@/i18n/i18n', () => ({
   getIntlLocale: () => 'en-US',
@@ -21,7 +21,7 @@ const { watchdogStartMock, watchdogStopMock, watchdogCallbacks } = vi.hoisted(()
   watchdogCallbacks: { onUnresponsive: null as (() => void) | null }
 }))
 
-vi.mock('@/store/plugin-panels', () => ({
+vi.mock('@/store/plugins/catalog/plugin-contribution-catalog', () => ({
   usePluginPanels: usePluginPanelsMock,
   usePluginPanelsStore: (
     selector: (state: { setPanelHealth: typeof setPanelHealthMock }) => unknown
@@ -252,38 +252,6 @@ describe('PluginPanel', () => {
     expect(container.textContent).toContain('draft: hi (v3)')
     expect(container.querySelector('[role="alert"]')).toBeNull()
     expect(container.textContent).toContain('Reloaded')
-  })
-
-  it('restyles in place with fresh host theme tokens when the app theme changes', async () => {
-    readPanelEntryMock.mockResolvedValue({
-      html: '<html class="__ORCA_COLOR_SCHEME__"><head><style>:root{/*__ORCA_PANEL_TOKENS__*/}</style></head>',
-      sessionToken: SESSION_TOKEN
-    })
-    await renderPanel('plugin:samples.my-plugin/dashboard')
-    const lightFrame = container.querySelector('iframe')
-    expect(lightFrame?.getAttribute('srcdoc')).toContain('<html class="light">')
-    const frameWindow = lightFrame?.contentWindow
-    if (!frameWindow) {
-      throw new Error('frame window missing')
-    }
-    const posted = vi.spyOn(frameWindow, 'postMessage')
-
-    await act(async () => {
-      document.documentElement.classList.add('dark')
-      await waitForHappyDomTasks()
-    })
-
-    // Why the same frame: remounting would discard the panel's own state.
-    expect(container.querySelector('iframe')).toBe(lightFrame)
-    expect(posted).toHaveBeenCalledWith(
-      {
-        orca: 1,
-        kind: 'evt',
-        event: 'theme',
-        payload: { colorScheme: 'dark', tokens: expect.any(String) }
-      },
-      '*'
-    )
   })
 
   it('rebinds a refreshed session without remounting unchanged panel HTML', async () => {

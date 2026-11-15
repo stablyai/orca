@@ -13,8 +13,8 @@ import type { AgentSessionRefusalDetailsByCode } from '../../../../shared/agent-
 import type {
   AgentSessionOperationOutcome,
   AgentSessionOperationRow
-} from '../../../../shared/agent-session/lifecycle/agent-session-operation-ledger'
-import { agentSessionLeaseOwnerVerdict } from '../../../../shared/agent-session/lifecycle/agent-session-lease-adjudication'
+} from '../../../../shared/agent-session/lifecycle/operations/agent-session-operation-ledger'
+import { agentSessionLeaseOwnerVerdict } from '../../../../shared/agent-session/lifecycle/leases/agent-session-lease-adjudication'
 import type { AgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-record'
 import type { AgentSessionAcquisitionExitProof } from '../../../runtime/agent-session/agent-session-acquisition-failure-settlement'
 import '../providers/structured-agent-session-adapter'
@@ -39,8 +39,8 @@ import {
   providerExecutableMissing,
   providerLaunchFolderMissing
 } from '../../../provider-process/provider-executable-missing'
-import { argumentProblemOf } from '../../structured-agent-arguments-error'
-import { agentCliInstallationProblemOf } from '../../agent-cli-installation-error'
+import { argumentProblemOf } from '../../agent-launch/structured-agent-arguments-error'
+import { agentCliInstallationProblemOf } from '../../agent-launch/agent-cli-installation-error'
 import { agentCliInstallationFacts } from '../../../../shared/agent-launch/catalog/agent-cli-installation-problem'
 
 export type FailedAcquisitionWording = {

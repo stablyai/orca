@@ -1,6 +1,6 @@
 import type { Page } from '@stablyai/playwright-test'
 import { leafIdsInOrder } from './workspace-layout-oracle-model'
-import { readWorkspaceLayoutStreamFrame } from '../../../src/shared/workspace-layout/workspace-layout-stream-frames'
+import { readWorkspaceLayoutStreamFrame } from '../../../src/shared/workspace-layout/published-layout/workspace-layout-stream-frames'
 
 /** Terminal tab id → its pane ids in tree order, in tab-bar order. */
 export type TerminalLayout = [tabId: string, paneIds: string[]][]

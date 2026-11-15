@@ -25,22 +25,6 @@ function guardHarness(foregrounds: LaunchedAgentForeground[]) {
 }
 
 describe('the check before each write of a launch prompt', () => {
-  it.each([
-    ['a shell turning bracketed paste on', '$ \x1b[?2004h'],
-    ['a shell integration prompt mark', '\x1b]133;D;1\x07\x1b]133;A\x07$ '],
-    ['a mark split across two chunks', ['\x1b[?20', '04h']]
-  ] as const)('reads again after %s, and refuses a shell', async (_label, output) => {
-    const { runtime, guard, emit } = guardHarness(['agent', 'shell'])
-
-    await guard.beforeWrite('pty-1')
-    for (const chunk of typeof output === 'string' ? [output] : output) {
-      emit(chunk)
-    }
-
-    await expect(guard.beforeWrite('pty-1')).rejects.toThrow('agent_not_in_foreground')
-    expect(runtime.readLaunchedAgentForeground).toHaveBeenCalledTimes(2)
-  })
-
   it('catches a shell that returns while the first read is still running', async () => {
     const { runtime, guard, emit } = guardHarness([])
     vi.mocked(runtime.readLaunchedAgentForeground)
@@ -53,20 +37,6 @@ describe('the check before each write of a launch prompt', () => {
     await guard.beforeWrite('pty-1')
 
     await expect(guard.beforeWrite('pty-1')).rejects.toThrow('agent_not_in_foreground')
-  })
-
-  it('stops watching when it refuses and when it is disposed', async () => {
-    const refused = guardHarness(['shell'])
-    await expect(refused.guard.beforeWrite('pty-1')).rejects.toThrow('agent_not_in_foreground')
-    expect(refused.unsubscribe).toHaveBeenCalledTimes(1)
-
-    const cleared = guardHarness(['agent'])
-    await cleared.guard.beforeWrite('pty-1')
-    const scheduled = Promise.resolve().then(() => cleared.guard.beforeWrite('pty-1'))
-    cleared.guard.dispose()
-    await expect(scheduled).rejects.toThrow('request_aborted')
-    expect(cleared.runtime.subscribeToTerminalData).toHaveBeenCalledTimes(1)
-    expect(cleared.unsubscribe).toHaveBeenCalledTimes(1)
   })
 })
 

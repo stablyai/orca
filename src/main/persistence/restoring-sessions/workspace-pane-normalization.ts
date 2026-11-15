@@ -2,13 +2,13 @@ import type { LegacyPaneKeyAliasEntry, PersistedState } from '../../../shared/pe
 import type { TerminalLayoutSnapshot } from '../../../shared/workspace-layout/terminal-tab-types'
 import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
 import type { MigrationUnsupportedPtyEntry } from '../../../shared/agent-status/contracts/agent-status-ipc-payload'
-import { agentHookServer } from '../../agent-hooks/server'
+import { agentHookServer } from '../../agent-hooks/server/agent-hook-server'
 import {
   LOCAL_EXECUTION_HOST_ID,
   toSshExecutionHostId,
   type ExecutionHostId
 } from '../../../shared/execution-host'
-import type { SshRemotePtyLease } from '../../../shared/ssh-types'
+import type { SshRemotePtyLease } from '../../../shared/remote-runtime/ssh/ssh-types'
 import { isTerminalLeafId, parsePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
 import { findCrossHostPaneTabIds, withoutPaneTabIds } from './cross-host-pane-tab-ids'
 import {

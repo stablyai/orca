@@ -6,6 +6,7 @@ import {
   claudeFrame,
   identityFor,
   recordingJournalSink,
+  USER_MESSAGE,
   PROVIDER_SESSION_ID
 } from './claude-structured-session-test-support'
 import { claudeOpened } from './claude-structured-startup-settled-test-support'
@@ -63,10 +64,6 @@ describe('Claude host-awaited open', () => {
     }
   })
 
-  // Recorded result; the orderings are constructed. A start another failure ended reports that cause.
-
-  // Whichever ends the start first is its report: a hidden result is the open's error, else its row stays.
-
   it('leaves an open Stop aborted to Stop when Claude then reports a startup failure', async () => {
     const claude = fakeClaude({ holdInit: true, initProof: 'none' })
     const { adapter } = adapterFor(claude)
@@ -115,20 +112,25 @@ describe('Claude host-awaited open', () => {
     }
   })
 
-  it('lets the host abort a silent initialize wait and close the owned process', async () => {
-    const claude = fakeClaude({ initDelayMs: 12_000 })
+  it('opens a healthy Claude session whose initialize takes longer than a minute', async () => {
+    const claude = fakeClaude({ initDelayMs: 75_000 })
     const { adapter } = adapterFor(claude)
-    const acquisition = await adapter.acquire(ACQUIRE)
-    const controller = new AbortController()
-    const open = adapter.open({
-      sessionId: 'session-1',
-      fence: 7,
-      acquisitionGeneration: acquisition.acquisitionGeneration,
-      signal: controller.signal
+    await adapter.acquire(ACQUIRE)
+    const opened = expect(claudeOpened(adapter, 'session-1')).resolves.toMatchObject({
+      reportedOptions: expect.any(Object)
     })
-    controller.abort(new Error('host start expired'))
-    await expect(open).rejects.toThrow('host start expired')
-    await adapter.closeSession('session-1')
-    expect(claude.connections[0].closeCount).toBe(1)
+    await vi.advanceTimersByTimeAsync(75_000)
+    await opened
+    await expect(
+      adapter.dispatch({
+        sessionId: 'session-1',
+        fence: 7,
+        clientMessageId: 'slow-start',
+        body: USER_MESSAGE
+      })
+    ).resolves.toMatchObject({ state: 'admitted' })
+    expect(claude.connections[0].sent).toMatchObject([
+      { message: { content: [{ type: 'text', text: 'ship it' }] } }
+    ])
   })
 })

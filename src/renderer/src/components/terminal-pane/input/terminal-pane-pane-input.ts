@@ -1,7 +1,7 @@
 import type { IDisposable } from '@xterm/xterm'
 import type { ManagedPane } from '@/lib/pane-manager/pane-manager-types'
 import type { PaneManager } from '@/lib/pane-manager/pane-manager'
-import type { UseTerminalPaneLifecycleDeps } from '../terminal-pane-lifecycle-types'
+import type { UseTerminalPaneLifecycleDeps } from '../mounting/terminal-pane-lifecycle-types'
 import {
   armTerminalImePendingCandidateKeyRelease,
   clearTerminalImePendingCandidateKeyRelease,
@@ -14,7 +14,7 @@ import { createTerminalKittyOrphanKeyupGuard } from './keyboard/terminal-kitty-o
 import { installTerminalImeNativeTextForwarder } from './ime/terminal-ime-native-text-forwarder'
 import { installTerminalIosHangulPreedit } from './ime/terminal-ios-hangul-preedit'
 import { createTerminalIosHangulPreeditRenderer } from './ime/terminal-ios-hangul-preedit-overlay'
-import { isCurrentPlatformIosWeb } from '@/lib/ios-web-platform'
+import { isCurrentPlatformIosWeb } from '@/app-shell/platform/ios-web-platform'
 import { resolveTerminalJisYenInput } from './keyboard/terminal-jis-yen-input'
 import {
   isNonLatinControlChordKeyup,
@@ -29,8 +29,8 @@ import {
   shouldSuppressTerminalModifierKeyboardEvent,
   TERMINAL_INTERRUPT_INPUT
 } from './keyboard/xterm-bypass-policy'
-import { markTerminalPinnedViewport } from '@/lib/pane-manager/terminal-scroll-intent'
-import { syncTerminalScrollIntentSoon } from '@/lib/pane-manager/terminal-scroll-intent-settle'
+import { markTerminalPinnedViewport } from '@/lib/pane-manager/terminal-scroll/terminal-scroll-intent'
+import { syncTerminalScrollIntentSoon } from '@/lib/pane-manager/terminal-scroll/terminal-scroll-intent-settle'
 
 type PaneInputContext = {
   pane: Pick<ManagedPane, 'id' | 'terminal'>

@@ -1,6 +1,9 @@
-import type { AutomationRun, AutomationRunsPage } from '../../../../../shared/automations-types'
-import { automationRunCursor } from '../../../../../shared/automation-run-cursor'
-import { sliceAtCodeUnitLimit } from '../../../../../shared/surrogate-safe-text-slice'
+import type {
+  AutomationRun,
+  AutomationRunsPage
+} from '../../../../../shared/automations/history/automation-run'
+import { automationRunCursor } from '../../../../../shared/automations/history/automation-run-cursor'
+import { sliceAtCodeUnitLimit } from '../../../../../shared/text/surrogate-safe-text-slice'
 
 export const AUTOMATION_RUN_OUTPUT_PREVIEW_CHARS = 8_000
 

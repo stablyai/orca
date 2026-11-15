@@ -1,9 +1,9 @@
 import type { AgentStatusIpcPayload } from '../../../../../shared/agent-status/contracts/agent-status-ipc-payload'
-import type { ExactWorkerProviderSession } from '../../../../../shared/orchestration-worker-output'
+import type { ExactWorkerProviderSession } from '../../../../../shared/orchestration/workers/orchestration-worker-output'
 import {
   isWslHookRelayConnectionId,
   wslHookRelayConnectionId
-} from '../../../../../shared/wsl-hook-relay-contract'
+} from '../../../../../shared/agent-hook-listener/transport/wsl-hook-relay-contract'
 
 export function selectExactWorkerProviderSession(args: {
   paneKey: string

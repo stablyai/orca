@@ -2,7 +2,7 @@ import {
   StructuredAgentSessionInputNotAdmitted,
   type StructuredAgentSessionInputAdmission
 } from './structured-agent-session-input-admission'
-import { waitForPromiseWithSignal } from '../../../../shared/abort-signal-reason'
+import { waitForPromiseWithSignal } from '../../../../shared/concurrency/abort-signal-reason'
 import type { AgentJournalSubmission } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import { agentSessionFailureFact } from '../../../../shared/agent-session/failures/agent-session-failure'
 import { continuingStructuredAgentSessionInput } from './structured-agent-session-handing-over'
@@ -26,7 +26,7 @@ import { structuredAgentSessionEndedChildFailure } from '../termination/structur
 import { sameProviderChild } from '../host/structured-agent-session-provider-child'
 import { previousExitUnverifiableRefusal } from '../termination/structured-agent-session-child-close'
 
-type StartFailure = NonNullable<ReturnType<typeof startThatFailedWhileQueued>>
+type StartFailure = NonNullable<Awaited<ReturnType<typeof startThatFailedWhileQueued>>>
 
 /** The scheduler's selected input keeps one handover while its exact child binding changes. */
 export async function beginStructuredAgentSessionInputHandover(
@@ -39,9 +39,7 @@ export async function beginStructuredAgentSessionInputHandover(
 ): Promise<StructuredAgentSessionPendingHandover | null> {
   let binding = awaitedChild
   let recorder = deps.recordRanOptions?.(sessionId, binding.fence)
-  const ownsInput = () =>
-    deps.sessions.get(sessionId) === session &&
-    session.journal.submission(next.clientMessageId)?.dispatchState === 'pending'
+  const ownsInput = () => deps.sessions.get(sessionId) === session
   const isBound = () => deps.sessions.get(sessionId) === session && session.child === binding
   const isCurrent = () => isBound() && !binding.close
   const validate = (signal?: AbortSignal) =>
@@ -55,7 +53,7 @@ export async function beginStructuredAgentSessionInputHandover(
       signal
     })
   try {
-    validate()
+    await validate()
   } catch (error) {
     if (!(error instanceof StructuredAgentSessionInputNotAdmitted) || !error.outcome) {
       throw error
@@ -67,6 +65,7 @@ export async function beginStructuredAgentSessionInputHandover(
     })
     return null
   }
+  const failureTextContext = await deps.failureTextContext(sessionId)
   return beginSubmissionHandover(
     {
       sessionId,
@@ -74,15 +73,15 @@ export async function beginStructuredAgentSessionInputHandover(
       fence: awaitedChild.fence,
       adapter: deps.adapter,
       agents: deps.agents,
-      failureTextContext: deps.failureTextContext(sessionId),
+      failureTextContext: failureTextContext,
       record: () => deps.record(sessionId),
 
       admitFreshInput: async (enqueue, signal, prepare, kind = 'fresh') => {
         let admission: StructuredAgentSessionInputAdmission | undefined
         const invoked = deps.serialize(sessionId, async () => {
-          validate(signal)
+          await validate(signal)
           const body = kind === 'fresh' ? await prepare(binding.fence) : undefined
-          validate(signal)
+          await validate(signal)
           const mode = deps.immediatePermission?.(sessionId)
           if (
             mode &&
@@ -91,11 +90,9 @@ export async function beginStructuredAgentSessionInputHandover(
           ) {
             return { kind: 'acquire' as const, reason: 'permission' as const }
           }
-          admission = enqueue(
-            mode ?? 'own',
-            deps.retainedWork?.(sessionId, next.clientMessageId) === true,
-            body
-          )
+          const retained = await deps.retainedWork?.(sessionId, next.clientMessageId)
+          await validate(signal)
+          admission = enqueue(mode ?? 'own', retained === true, body)
           return admission
         })
         try {
@@ -105,7 +102,7 @@ export async function beginStructuredAgentSessionInputHandover(
           if (admission?.kind === 'sent') {
             return admission
           }
-          validate(signal)
+          await validate(signal)
           throw error
         }
       },
@@ -117,7 +114,7 @@ export async function beginStructuredAgentSessionInputHandover(
         ) =>
           failedStructuredAgentSessionInputContinuation(
             session.journal,
-            deps.failureTextContext(sessionId),
+            failureTextContext,
             cause,
             fence,
             startKey
@@ -125,7 +122,7 @@ export async function beginStructuredAgentSessionInputHandover(
         try {
           const mode = await waitForPromiseWithSignal(
             deps.serialize(sessionId, async () => {
-              validate(signal)
+              await validate(signal)
               return deps.immediatePermission?.(sessionId)
             }),
             signal
@@ -148,6 +145,7 @@ export async function beginStructuredAgentSessionInputHandover(
               signal
             ))
           ) {
+            // oxlint-disable-next-line typescript/return-await -- this already records the failure; the catch must not record a second one
             return deps.serialize(sessionId, () =>
               failed(
                 {
@@ -159,10 +157,9 @@ export async function beginStructuredAgentSessionInputHandover(
           }
           const claim = await waitForPromiseWithSignal(
             deps.serialize(sessionId, async () => {
-              validate(signal)
+              await validate(signal)
               if (
                 !ownsInput() ||
-                session.journal.submission(next.clientMessageId)?.fence !== binding.fence ||
                 !continuingStructuredAgentSessionInput(session.journal, next.clientMessageId)
               ) {
                 throw new Error('input continuation no longer owns its submission')
@@ -200,6 +197,7 @@ export async function beginStructuredAgentSessionInputHandover(
           }
           const started = await waitForPromiseWithSignal(claim.outcome, signal)
           if (!started.ok) {
+            // oxlint-disable-next-line typescript/return-await -- this already records the failure; the catch must not record a second one
             return deps.serialize(sessionId, () =>
               failed(
                 started.aborted
@@ -233,7 +231,7 @@ export async function beginStructuredAgentSessionInputHandover(
               binding = current
               recorder = deps.recordRanOptions?.(sessionId, binding.fence)
               await rebind(current.fence)
-              validate(signal)
+              await validate(signal)
               return null
             }),
             signal
@@ -271,6 +269,7 @@ export async function beginStructuredAgentSessionInputHandover(
       },
 
       currentWork: () => deps.currentWork(sessionId),
+      readWork: deps.readWork(sessionId),
       childWork: () => deps.readChildWork(sessionId),
       childWorkOpen: () => deps.childWorkOpen(sessionId),
       now: deps.now,
@@ -278,12 +277,7 @@ export async function beginStructuredAgentSessionInputHandover(
       deliveryOrder: deps.deliveryOrder,
       workChanged: () => deps.workChanged?.(sessionId),
       holdClosedInput: (id, fence, cause) =>
-        deps.holdClosedInput?.(
-          sessionId,
-          id,
-          session.journal.submission(id)?.fence ?? fence,
-          cause
-        ) ?? Promise.resolve(),
+        deps.holdClosedInput?.(sessionId, id, fence, cause) ?? Promise.resolve(),
       settleEndedInput: async (owner) => {
         if (session.lastEndedChild && sameProviderChild(session.lastEndedChild, binding)) {
           await deps.settleLeftovers?.(sessionId, owner)

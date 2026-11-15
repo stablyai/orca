@@ -1,4 +1,4 @@
-import type { PtyControllerInventory } from '../runtime-pty-controller-contract'
+import type { PtyControllerInventory } from '../terminal/lifecycle/runtime-pty-controller-contract'
 import { parseExecutionHostId } from '../../../shared/execution-host'
 import { OrcaRuntimeWithCollectMobileVisibleGraphChangedWorktrees } from './session-tabs-inventory'
 

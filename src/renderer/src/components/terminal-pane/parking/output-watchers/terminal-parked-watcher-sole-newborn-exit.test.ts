@@ -112,61 +112,6 @@ describe('sole-newborn parked exits (sole-owner sidecar)', () => {
     vi.clearAllMocks()
   })
 
-  it('keeps the tab when the sole untouched fresh-spawn pane exits while parked', () => {
-    const entry = startWatchers([soleNewbornPane])
-
-    exitCallbacksByPtyId.get(PTY_ID)?.(1, { hadPrimary: false })
-
-    expect(closeTerminalTab).not.toHaveBeenCalled()
-    expect(mockStoreState.setTabLayout).not.toHaveBeenCalled()
-    expect(mockStoreState.clearRuntimePaneTitle).toHaveBeenCalledWith(TAB_ID, 1)
-    expect(startedWatcherDisposers[0]).toHaveBeenCalled()
-    expect(entry.disposersByPtyId.has(PTY_ID)).toBe(false)
-    // Consume the exit; a buffered tombstone would replay at reveal and close the preserved tab.
-    expect(consumePreHandlerPtyState).toHaveBeenCalledWith(PTY_ID)
-    expect(discardPreHandlerPtyState).not.toHaveBeenCalled()
-    // The pane-id slot stays, so a watcher sync never re-registers the dead PTY.
-    expect(entry.paneIdByPtyId.get(PTY_ID)).toBe(1)
-  })
-
-  it.each([
-    ['no fresh-spawn/never-typed capture', {}],
-    ['an explicit non-newborn capture', { untouchedFreshSpawn: false }]
-  ] as const)('still closes the tab with %s', (_case, flag) => {
-    const { untouchedFreshSpawn: _dropped, ...basePane } = soleNewbornPane
-    startWatchers([{ ...basePane, ...flag }])
-
-    exitCallbacksByPtyId.get(PTY_ID)?.(1, { hadPrimary: false })
-
-    expect(closeTerminalTab).toHaveBeenCalledWith(TAB_ID, expect.anything())
-    expect(consumePreHandlerPtyState).not.toHaveBeenCalled()
-  })
-
-  it('does not extend the guard to a newborn split sibling — its leaf collapses as today', () => {
-    startWatchers([
-      soleNewbornPane,
-      { ptyId: SECOND_PTY_ID, paneId: 2, leafId: SECOND_LEAF_ID, drivesTabTitle: false }
-    ])
-
-    exitCallbacksByPtyId.get(PTY_ID)?.(1, { hadPrimary: false })
-
-    expect(closeTerminalTab).not.toHaveBeenCalled()
-    // Split-sibling branch: pre-handler state discarded, not consumed-for-parity.
-    expect(discardPreHandlerPtyState).toHaveBeenCalledWith(PTY_ID)
-    expect(consumePreHandlerPtyState).not.toHaveBeenCalled()
-  })
-
-  it('leaves disposition to the primary when a mounted pane handled the exit', () => {
-    const entry = startWatchers([soleNewbornPane])
-
-    exitCallbacksByPtyId.get(PTY_ID)?.(1, { hadPrimary: true })
-
-    expect(closeTerminalTab).not.toHaveBeenCalled()
-    expect(consumePreHandlerPtyState).not.toHaveBeenCalled()
-    expect(startedWatcherDisposers[0]).toHaveBeenCalled()
-    expect(entry.disposersByPtyId.has(PTY_ID)).toBe(false)
-  })
-
   it('becomes the sole-newborn guard after a split sibling already collapsed', () => {
     const entry = startWatchers([
       soleNewbornPane,

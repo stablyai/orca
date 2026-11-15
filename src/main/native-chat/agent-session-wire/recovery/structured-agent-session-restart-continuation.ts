@@ -21,17 +21,18 @@ import {
   type AgentSessionSendResult
 } from '../../../../shared/agent-session/agent-session-wire'
 import type { AgentSessionJournal } from '../../agent-session-journal/journal-store'
-import { RESTART_CONTINUATION_ROW_PREFIX } from '../../../../shared/agent-session/lifecycle/agent-session-stop-row-identity'
+import { RESTART_CONTINUATION_ROW_PREFIX } from '../../../../shared/agent-session/lifecycle/stopping/agent-session-stop-row-identity'
 import {
   AGENT_SESSION_RESTART_CONTINUATION_NOTE,
   AGENT_SESSION_RESTART_CONTINUATION_REFUSED_NOTE,
   AGENT_SESSION_RESTART_CONTINUATION_UNCONFIRMED_NOTE,
   AGENT_SESSION_RESTART_NOT_CONNECTED_NOTE
-} from '../../../../shared/agent-session/lifecycle/agent-session-restart-continuation'
+} from '../../../../shared/agent-session/lifecycle/stopping/agent-session-restart-continuation'
 import { AgentSessionPreDispatchError } from '../operations/structured-agent-session-operation-settlement'
 import { restartContinuationEnvelope } from './structured-agent-session-restart-continuation-envelope'
-import type { AgentSessionResumeMarker } from '../../../../shared/agent-session/lifecycle/agent-session-resume-marker'
+import type { AgentSessionResumeMarker } from '../../../../shared/agent-session/lifecycle/resume/agent-session-resume-marker'
 import type { StructuredAgentSessionLogger } from '../host/structured-agent-session-logger'
+import { liftStructuredQueueRestartHold } from '../delivery/structured-agent-session-queued-pause'
 
 /** Envelope acceptance proves only host ownership; preserve provider pending/unknown/rejected outcomes. */
 export type StructuredAgentSessionContinuationOutcome = {
@@ -49,7 +50,7 @@ export type StructuredAgentSessionContinuationHost = {
   send: (input: {
     envelope: AgentSessionMutationEnvelope
     body: AgentJournalMessageItem
-    beforeRun?: () => void
+    beforeRun?: () => void | Promise<void>
   }) => Promise<AgentSessionMutationResult<AgentSessionSendResult>>
   awaitSendSettlement: (
     sessionId: string,
@@ -62,21 +63,21 @@ export type StructuredAgentSessionContinuationHost = {
   logger: StructuredAgentSessionLogger
   now: () => number
   /** Recheck under acceptance serialization so the first post-restart message wins. */
-  stillResumable: (marker: AgentSessionResumeMarker) => boolean
+  stillResumable: (marker: AgentSessionResumeMarker) => Promise<boolean>
 }
 
 /** Bind serialized acceptance checks, settlement waits and attribution notes to the host. */
 export function continuationDeps(
   host: Omit<StructuredAgentSessionContinuationHost, 'stillResumable'>,
-  stillWanted: () => boolean
+  stillWanted: () => Promise<boolean>
 ): StructuredAgentSessionContinuationDeps {
   return {
     currentFence: host.conversationFence,
     send: (input) =>
       host.send({
         ...input,
-        beforeRun: () => {
-          if (!stillWanted()) {
+        beforeRun: async () => {
+          if (!(await stillWanted())) {
             throw new RestartContinuationSupersededError()
           }
         }
@@ -90,7 +91,14 @@ export function continuationDeps(
         (await host.awaitSendHandedOver(sessionId, clientMessageId))?.value
       ),
     logger: host.logger,
-    note: restartNoteWriter(host)
+    note: restartNoteWriter(host),
+    liftRestartHold: async (sessionId) => {
+      const session = host.sessions.get(sessionId)
+      const fence = host.conversationFence(sessionId)
+      if (session && fence !== null) {
+        await liftStructuredQueueRestartHold(session.journal, fence)
+      }
+    }
   }
 }
 
@@ -154,6 +162,8 @@ export type StructuredAgentSessionContinuationDeps = {
   ) => Promise<ContinuationSubmission | undefined>
   /** Attribute host continuation/failure; older clients render tone as plain text. */
   note: (sessionId: string, text: string, tone?: 'error' | 'warning') => Promise<void>
+  /** Release cards held only by the restart once the person's continuation is accepted. */
+  liftRestartHold: (sessionId: string) => Promise<void>
   /** Required to report best-effort note failures. */
   logger: StructuredAgentSessionLogger
   /** Answer at acceptance; caller reports pre-acceptance refusal without duplicate retry notes. */
@@ -198,11 +208,19 @@ export async function startStructuredAgentSessionContinuation(
 }
 
 async function noteOutcome(
-  deps: Pick<StructuredAgentSessionContinuationDeps, 'note' | 'logger'>,
+  deps: Pick<StructuredAgentSessionContinuationDeps, 'note' | 'logger' | 'liftRestartHold'>,
   sessionId: string,
   result: StructuredAgentSessionContinuationOutcome
 ): Promise<void> {
   if (result.outcome === 'continued') {
+    try {
+      await deps.liftRestartHold(sessionId)
+    } catch {
+      deps.logger.warn('releasing queued messages after a restart continuation failed', {
+        scope: 'restart-continuation-queue',
+        sessionId
+      })
+    }
     // Attribute only accepted dispatch; note failure must not turn delivered work into failure.
     try {
       await deps.note(sessionId, AGENT_SESSION_RESTART_CONTINUATION_NOTE)

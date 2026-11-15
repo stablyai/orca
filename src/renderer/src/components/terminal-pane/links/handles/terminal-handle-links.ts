@@ -2,10 +2,10 @@ import type { ILink, ILinkProvider, Terminal } from '@xterm/xterm'
 
 import type { AppState } from '@/store/types'
 import { useAppStore } from '@/store/index'
-import { activateTabAndFocusPane } from '@/lib/activate-tab-and-focus-pane'
-import { focusTerminalTabSurface } from '@/lib/focus-terminal-tab-surface'
-import { revealWorkspaceSurface } from '@/lib/workspace-surface-reveal'
-import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
+import { activateTabAndFocusPane } from '@/lib/workspace/tabs/activate-tab-and-focus-pane'
+import { focusTerminalTabSurface } from '@/components/terminal-pane/input/focus/focus-terminal-tab-surface'
+import { revealWorkspaceSurface } from '@/lib/workspace/activation/workspace-surface-reveal'
+import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import { parseRemoteRuntimePtyId } from '../../../../../../shared/remote-runtime/remote-runtime-pty-id'
 import {
   buildWrappedLogicalLine,
@@ -15,10 +15,10 @@ import {
   extractOrchestrationTaskLinks,
   focusRuntimeOrchestrationTask,
   ORCHESTRATION_TASK_PREFIX
-} from '../../terminal-orchestration-task-links'
+} from './terminal-orchestration-task-links'
 import {
-  isTerminalLinkActionActivation,
-  isTerminalLinkDirectActivation
+  isTerminalLinkDirectActivation,
+  isTerminalOwnedLinkGesture
 } from '../gestures/terminal-link-activation'
 import {
   requestTerminalLinkAction,
@@ -197,13 +197,11 @@ export function createTerminalHandleLinkProvider(
             range,
             text: parsed.text,
             activate: (event) => {
-              const directActivation = isTerminalLinkDirectActivation(event)
-              const actionActivation = isTerminalLinkActionActivation(event)
-              if (!directActivation && !actionActivation) {
+              if (!isTerminalOwnedLinkGesture(event)) {
                 return
               }
               let handled = false
-              if (directActivation) {
+              if (isTerminalLinkDirectActivation(event)) {
                 event?.preventDefault()
                 void activateParsedLink(parsed, deps.getRuntimeEnvironmentId())
                 handled = true

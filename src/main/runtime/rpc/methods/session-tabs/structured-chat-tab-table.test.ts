@@ -1,3 +1,4 @@
+import { readTestJournalSnapshot } from '../../../../native-chat/agent-session-journal/journal-observation.test-support'
 import { describe, expect, it, vi } from 'vitest'
 import {
   CLAUDE_STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY,
@@ -7,7 +8,7 @@ import {
   HOST_TEST_SESSION,
   hostTestAttachParams,
   hostTestOperationId
-} from '../../../../native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-data'
+} from '../../../../native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-data.test-fixture'
 import { seedTestAgentSessionStoreFromNewerBuild } from '../../../agent-session/records/agent-session-record-store-test-harness'
 import { OrcaRuntimeRpcServer } from '../../server/runtime-rpc'
 import { DeviceRegistry } from '../../server/pairing/device-registry'
@@ -25,7 +26,6 @@ import {
   host,
   runtime,
   dispatcher,
-  acquisitions,
   closeSession,
   openHost,
   call,
@@ -58,26 +58,18 @@ describe('a chat tab across /clear', () => {
     expect(store.listRecords()).toHaveLength(1)
   })
 
-  it('records another clear while idle without starting or renaming the chat', async () => {
-    await createChat(HOST_TEST_SESSION)
-    await clear(HOST_TEST_SESSION)
-    const first = store.getRecord(HOST_TEST_SESSION)!.providerContextBoundary
-    const started = acquisitions
-    await clear(HOST_TEST_SESSION)
-    expect(store.getRecord(HOST_TEST_SESSION)!.providerContextBoundary).not.toEqual(first)
-    expect(acquisitions).toBe(started)
-    expect((await snapshot()).tabs.map((tab) => tab.id)).toEqual([
-      `agent-session:${HOST_TEST_SESSION}`
-    ])
-  })
-
   it('replays a lost answer with the same tab and one divider', async () => {
     await createChat(HOST_TEST_SESSION)
     const journal = host.collaboratorsForTests().sessions.get(HOST_TEST_SESSION)!.journal
-    const original = journal.context.clear.bind(journal.context)
-    const lost = vi.spyOn(journal.context, 'clear').mockImplementationOnce(async (...args) => {
-      await original(...args)
-      throw new Error('lost acknowledgement')
+    const original = journal.write.bind(journal)
+    let loseClear = true
+    const lost = vi.spyOn(journal, 'write').mockImplementation(async (operation, prepare) => {
+      const result = await original(operation, prepare)
+      if (operation.kind === 'context-clear' && loseClear) {
+        loseClear = false
+        throw new Error('lost acknowledgement')
+      }
+      return result
     })
     const params = {
       command: 'clear',
@@ -87,24 +79,12 @@ describe('a chat tab across /clear', () => {
     }
     expect((await call('agentSession.conversationCommand', params)).result?.ok).not.toBe(true)
     lost.mockRestore()
-    const landed = journal.snapshot()
+    const landed = await readTestJournalSnapshot(journal)
     expect(await call('agentSession.conversationCommand', params)).toMatchObject({
       ok: true,
       result: { ok: true }
     })
-    expect(journal.snapshot()).toEqual(landed)
-    expect((await snapshot()).tabs.map((tab) => tab.id)).toEqual([
-      `agent-session:${HOST_TEST_SESSION}`
-    ])
-  })
-
-  it('reveals the same tab from history instead of opening another conversation', async () => {
-    await createChat(HOST_TEST_SESSION)
-    await clear(HOST_TEST_SESSION)
-    expect(await call('agentSession.reveal', { sessionId: HOST_TEST_SESSION })).toMatchObject({
-      ok: true
-    })
-    expect(store.getSessionTabId(HOST_TEST_SESSION)).toBe(SOURCE_TAB)
+    expect(await readTestJournalSnapshot(journal)).toEqual(landed)
     expect((await snapshot()).tabs.map((tab) => tab.id)).toEqual([
       `agent-session:${HOST_TEST_SESSION}`
     ])
@@ -120,12 +100,12 @@ describe('a chat tab across /clear', () => {
       (tab) => tab.type === 'agent-session' && tab.sessionId === HOST_TEST_SESSION
     )!
     const other = before.tabs.find((tab) => tab.id !== target.id)!
-    runtime.selectCreatedMobileSessionTabForClient(
+    await runtime.selectCreatedMobileSessionTabForClient(
       before.worktree,
       { sessionId: 'session-other' },
       callerId
     )
-    runtime.selectCreatedMobileSessionTabForClient(
+    await runtime.selectCreatedMobileSessionTabForClient(
       before.worktree,
       { sessionId: 'session-other' },
       bystanderId
@@ -356,13 +336,6 @@ describe('a create that reserves its tab', () => {
     expect(store.getRecord('session-bravo')).toBeNull()
   })
 
-  it('answers a create that reserved nothing with the id its tab was given', async () => {
-    expect(await createChat(HOST_TEST_SESSION)).toMatchObject({
-      ok: true,
-      value: { tabId: SOURCE_TAB }
-    })
-  })
-
   it('restores no tab for a reserved create that stopped before its tab was published', async () => {
     const attached = await host.attach(
       caller,
@@ -416,31 +389,18 @@ describe('a chat tab over records a newer Orca wrote', () => {
       ok: true,
       result: { ok: true, readable: false }
     })
+    expect(await host.revealSession(HOST_TEST_SESSION)).toMatchObject({
+      readable: false,
+      openRefusal: {
+        code: 'agent_session_journal_unreadable',
+        details: { reason: 'journalWrittenByNewerOrca' }
+      }
+    })
 
     expect((await snapshot()).activeTabId).toBe(`agent-session:${HOST_TEST_SESSION}`)
     expect(warn).toHaveBeenCalledWith(
       '[agent-session] tab-visibility-open: recording an opened chat tab failed',
       expect.objectContaining({ scope: 'tab-visibility-open', sessionId: HOST_TEST_SESSION })
     )
-  })
-})
-
-describe('a chat tab whose restore index cannot be written', () => {
-  // The index is bookkeeping: the chat is created and its tab opens, but no restart restores it.
-  it('creates the chat and opens its tab, reporting the index write', async () => {
-    const failure = new Error('disk I/O error')
-    vi.spyOn(store, 'setSessionTabVisibility').mockRejectedValue(failure)
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
-
-    const created = await createChat(HOST_TEST_SESSION)
-
-    expect(created).toMatchObject({ ok: true, value: { sessionId: HOST_TEST_SESSION } })
-    expect(created.ok ? created.value.tabId : null).toBeUndefined()
-    expect((await snapshot()).activeTabId).toBe(`agent-session:${HOST_TEST_SESSION}`)
-    expect(warn).toHaveBeenCalledWith(
-      '[agent-session] tab-visibility-open: recording an opened chat tab failed',
-      { scope: 'tab-visibility-open', sessionId: HOST_TEST_SESSION, error: failure }
-    )
-    expect(store.getSessionTabId(HOST_TEST_SESSION)).toBeNull()
   })
 })

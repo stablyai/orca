@@ -1,10 +1,10 @@
 // Restart only proven-stopped slots; unverifiable serving state never proves terminal exit.
 import type { KnownRuntimeEnvironment } from '../../../shared/remote-runtime/host-catalog/runtime-environments'
-import type { SshTarget } from '../../../shared/ssh-types'
+import type { SshTarget } from '../../../shared/remote-runtime/ssh/ssh-types'
 import { orcadBoundPort } from './orcad-managed-bound-port'
 import { managedOrcadSlot } from './orcad-managed-runtime-context'
 import { resolveOrcadRemoteContext } from '../install/orcad-remote-context'
-import type { OrcadHostTransport } from '../../ssh/orcad-host-transport'
+import type { OrcadHostTransport } from '../install/orcad-host-transport'
 import {
   getManagedOrcadCrashLoopBrake,
   wakeManagedOrcadUnlessCrashLooping

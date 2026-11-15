@@ -1,7 +1,7 @@
 import type { OrchestrationCliCommand } from './orchestration-cli-command'
 import type { RuntimeAgentPromptWriteOptions } from '../../../terminal/input/agent-prompt-write-options'
 import { ORCA_DISPATCH_PROMPT_LEAD_LINE } from '../../../../../shared/orca-dispatch-status-prompt'
-import { ORCA_SESSION_ADDRESS_PREFIX } from '../../../../../shared/orca-session-address-prefix'
+import { ORCA_SESSION_ADDRESS_PREFIX } from '../../../../../shared/agent-session/identity/orca-session-address-prefix'
 
 export type PreambleParams = {
   taskId: string
@@ -10,6 +10,8 @@ export type PreambleParams = {
   taskSpec: string
   /** A terminal handle, or a session's `orca_session_id:<id>`; each is labelled by its kind. */
   coordinatorHandle: string
+  /** The paired Orca's name when it coordinates this worker's Run from another computer. */
+  coordinatedFrom?: string
   workerHandle: string
   devMode?: boolean
   // Packaged WSL uses orca-ide; other hosts retain their existing launcher.
@@ -38,9 +40,11 @@ function isSessionHandle(handle: string): boolean {
 /** Terminal agents keep their handle's wording; only a session is named by its Orca session ID. */
 function dispatchIdentityLines(params: PreambleParams): string {
   return [
-    isSessionHandle(params.coordinatorHandle)
-      ? `Your coordinator's Orca session ID is: ${params.coordinatorHandle}`
-      : `Your coordinator's terminal handle is: ${params.coordinatorHandle}`,
+    params.coordinatedFrom
+      ? `You are coordinated from ${params.coordinatedFrom}. Your coordinator's address here is: ${params.coordinatorHandle}`
+      : isSessionHandle(params.coordinatorHandle)
+        ? `Your coordinator's Orca session ID is: ${params.coordinatorHandle}`
+        : `Your coordinator's terminal handle is: ${params.coordinatorHandle}`,
     `Your task ID is: ${params.taskId}`,
     ...(isSessionHandle(params.workerHandle)
       ? [`Your Orca session ID is: ${params.workerHandle}`]

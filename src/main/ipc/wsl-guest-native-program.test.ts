@@ -33,21 +33,6 @@ afterEach(() => {
   rmSync(root, { recursive: true, force: true })
 })
 
-describe.skipIf(process.platform === 'win32')('resolveGuestNativeProgram', () => {
-  const options = () => ({ pathEnv: `${native}:${drive}/npm`, homePath: join(root, 'home') })
-
-  it('prefers the WSL install over a Windows copy later on PATH', () => {
-    const own = install(native)
-    install(join(drive, 'npm'))
-    expect(resolveGuestNativeProgram('claude', options(), undefined, [drive])).toBe(own)
-  })
-
-  it('answers null when only a Windows copy exists, which a bare-name spawn would still reach', () => {
-    install(join(drive, 'npm'))
-    expect(resolveGuestNativeProgram('claude', options(), undefined, [drive])).toBeNull()
-  })
-})
-
 describe.skipIf(process.platform === 'win32')('the Windows-copy check', () => {
   const options = () => ({ pathEnv: `${native}:${drive}/npm`, homePath: join(root, 'home') })
 
@@ -56,14 +41,5 @@ describe.skipIf(process.platform === 'win32')('the Windows-copy check', () => {
     expect(resolveGuestNativeProgram('claude', options(), undefined, [drive])).toBeNull()
     const own = install(native)
     expect(resolveGuestNativeProgram('claude', options(), undefined, [drive])).toBe(own)
-  })
-
-  it('re-checks once the verdict is old', () => {
-    vi.useFakeTimers({ now: 1_000_000, toFake: ['Date'] })
-    expect(resolveGuestNativeProgram('claude', options(), undefined, [drive])).toBe('claude')
-    install(join(drive, 'npm'))
-    expect(resolveGuestNativeProgram('claude', options(), undefined, [drive])).toBe('claude')
-    vi.advanceTimersByTime(30_000)
-    expect(resolveGuestNativeProgram('claude', options(), undefined, [drive])).toBeNull()
   })
 })

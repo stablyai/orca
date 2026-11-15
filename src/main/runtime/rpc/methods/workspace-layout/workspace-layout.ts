@@ -1,3 +1,8 @@
+import { withoutGitGraph } from '../../../../../shared/workspace-layout/client-views/workspace-layout-client-visibility'
+import {
+  readsGitGraph,
+  createGitGraphFrameProjection
+} from '../../workspace-client-views/git-graph-layout-projection'
 // Paired desktops use layout read/stream/apply only when the server offers layout.intents.v1; mobile is excluded.
 
 import {
@@ -5,11 +10,11 @@ import {
   LayoutReportViewParams,
   LayoutSubscribeParams,
   LayoutUnsubscribeParams
-} from '../../../../../shared/rpc-contract/workspace-layout-params'
-import { LayoutReopenHeldPanesParams } from '../../../../../shared/rpc-contract/workspace-layout-held-panes-params'
-import type { WorkspaceLayoutStreamFrame } from '../../../../../shared/workspace-layout/workspace-layout-stream-frames'
+} from '../../../../../shared/rpc-contract/workspace-layout/workspace-layout-params'
+import { LayoutReopenHeldPanesParams } from '../../../../../shared/rpc-contract/workspace-layout/workspace-layout-held-panes-params'
+import type { WorkspaceLayoutStreamFrame } from '../../../../../shared/workspace-layout/published-layout/workspace-layout-stream-frames'
 import { defineMethod, defineStreamingMethod } from '../../core'
-import { getAppEnvironment } from '../../../../../shared/app-environment'
+import { getAppEnvironment } from '../../../../../shared/app-lifecycle/app-environment'
 import { listEnvironments } from '../../../../../shared/remote-runtime/host-store/runtime-environment-store'
 
 let layoutSubscriptionSeq = 0
@@ -23,9 +28,11 @@ export const WORKSPACE_LAYOUT_METHODS = [
     name: 'layout.subscribe',
     permission: 'workspace',
     params: LayoutSubscribeParams,
-    handler: async (params, { runtime, connectionId, signal }, emitFrame) => {
+    handler: async (params, { runtime, connectionId, signal, clientCapabilities }, emitFrame) => {
       // Keep emitted frames checked against the client contract.
-      const emit = (frame: WorkspaceLayoutStreamFrame): void => emitFrame(frame)
+      const project = createGitGraphFrameProjection()
+      const emit = (frame: WorkspaceLayoutStreamFrame): void =>
+        emitFrame(readsGitGraph(clientCapabilities) ? frame : project(frame))
       const keys = params?.workspaces
       const wanted = (key: string) => !Array.isArray(keys) || keys.includes(key)
       await new Promise<void>((resolve) => {
@@ -80,7 +87,7 @@ export const WORKSPACE_LAYOUT_METHODS = [
     handler: async (_params, { runtime }) => {
       // Removed servers' saved snapshots must not seed views again.
       const known = new Set(
-        listEnvironments(getAppEnvironment().getPath('userData')).map(({ id }) => id)
+        (await listEnvironments(getAppEnvironment().getPath('userData'))).map(({ id }) => id)
       )
       return {
         snapshots: Object.fromEntries(
@@ -97,7 +104,12 @@ export const LAYOUT_APPLY_METHODS = [
     name: 'layout.apply',
     permission: 'workspace',
     params: LayoutApplyParams,
-    handler: async (params, { runtime }) => runtime.applyLayoutCommand(params.command)
+    handler: async (params, { runtime, clientCapabilities }) => {
+      return runtime.applyLayoutCommand(
+        params.command,
+        readsGitGraph(clientCapabilities) ? undefined : { visibility: withoutGitGraph }
+      )
+    }
   }),
   // Reopen held panes; main's frames, not the reply, show their start.
   defineMethod({

@@ -1,9 +1,11 @@
+import { admitTerminalNoticeLifetime } from '../../provider-notices/terminal-notice-lifetime'
+import { hasPreHandlerPtyExit } from '../delivery/pty-pre-handler-buffer'
 import { RELEASE_SYNCHRONIZED_OUTPUT } from '../../../../../../shared/terminal/protocol/input-modes/terminal-mode-reset-profiles'
 import { ensurePtyDispatcher, getEagerPtyBufferHandle } from '../delivery/pty-dispatcher'
 import {
   hasTerminalDisplayContent,
   trimIncompleteTerminalControlTail
-} from '../../terminal-output-visibility'
+} from '../output/terminal-output-visibility'
 import type { createPtyOutputProcessor } from '../output/pty-output-processor'
 import type { IpcPtySessionHandlers } from './ipc-pty-session-handlers'
 import type { PtyTransport } from '../pty-transport-types'
@@ -30,11 +32,15 @@ export function attachIpcPty(options: PtyAttachOptions, context: IpcPtyAttachCon
   const id = options.existingPtyId
   context.bind(id)
   context.handlers.registerData(id)
+  const hadBufferedExit = hasPreHandlerPtyExit(id)
   context.handlers.registerExit(id)
   if (!context.isCurrent(id)) {
     return
   }
 
+  if (!hadBufferedExit) {
+    admitTerminalNoticeLifetime(id)
+  }
   replayEagerPtyBuffer(options, context)
   if (options.cols && options.rows) {
     window.api.pty.resize(id, options.cols, options.rows)

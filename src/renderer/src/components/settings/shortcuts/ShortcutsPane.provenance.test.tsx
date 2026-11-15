@@ -11,7 +11,9 @@ const fixtures = vi.hoisted(() => ({
   empty: [],
   chord: { key: 'j', code: 'KeyJ', metaKey: true, shiftKey: true }
 }))
-vi.mock('@/store/plugin-panels', () => ({ useEditablePluginCommands: () => fixtures.empty }))
+vi.mock('@/store/plugins/catalog/plugin-contribution-catalog', () => ({
+  useEditablePluginCommands: () => fixtures.empty
+}))
 vi.mock('./use-mac-captured-digit-chords', () => ({
   useMacCapturedDigitChords: () => fixtures.empty
 }))

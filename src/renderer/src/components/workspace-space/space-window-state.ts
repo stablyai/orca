@@ -3,7 +3,7 @@ import {
   selectDetectedWorktreesByRepo,
   selectFolderWorkspaces,
   selectWorktreesByRepo
-} from '@/store/workspace-record-selectors'
+} from '@/store/workspaces/catalog/workspace-record-fields'
 
 export function pickSpaceWindowState(state: AppState) {
   return {
@@ -28,7 +28,6 @@ export function pickSpaceWindowState(state: AppState) {
     migrationUnsupportedByPtyId: state.migrationUnsupportedByPtyId,
     runtimePaneTitlesByTabId: state.runtimePaneTitlesByTabId,
     agentStatusEpoch: state.agentStatusEpoch,
-    retainedAgentsByPaneKey: state.retainedAgentsByPaneKey,
     openFiles: state.openFiles,
     editorDrafts: state.editorDrafts,
     browserTabsByWorktree: state.browserTabsByWorktree,

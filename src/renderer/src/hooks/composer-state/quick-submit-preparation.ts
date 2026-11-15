@@ -1,11 +1,9 @@
 import type { QuickSubmitPreparationInput } from './quick-submit-input-contract'
 
 import { useCallback } from 'react'
-import { settleComposerSubmit } from '@/lib/composer-submit-cancellation'
-import {
-  getLinkedWorkItemProvider,
-  canUseIssueCommandForLinkedItemProvider
-} from '@/lib/new-workspace'
+import { settleComposerSubmit } from '@/lib/workspace/creation/composer-submit-cancellation'
+import { getWorkspaceSourceProvider } from '../../../../shared/new-workspace/workspace-source'
+import { canUseIssueCommandForLinkedItemProvider } from '@/lib/workspace/creation/new-workspace'
 import { getSetupConfig } from '../../../../shared/orca-hook-setup-config'
 import {
   deriveWorkspaceSetupState,
@@ -15,7 +13,9 @@ import {
 import type { SetupDecision } from '../../../../shared/worktree/create-types'
 import type { WorktreeCreationRequest } from '@/lib/workspace/creation/pending-worktree-creation'
 import { resolveComposerBranchNameOverrideForCreate } from '../composer-branch-selection'
-import { resolveWorktreeCreateBaseBranch } from '@/runtime/worktree-create-base'
+import { resolveFolderSetupSupported } from '@/lib/workspace/creation/setup/folder-setup-support'
+import { translate } from '@/i18n/i18n'
+import { resolveWorktreeCreateBaseBranch } from '@/runtime/source-control/worktree-creation/worktree-create-base'
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import type { PendingSmartGitHubSubmitResolution } from './source-selection-decisions'
 
@@ -38,9 +38,10 @@ export function useQuickSubmitPreparation(input: QuickSubmitPreparationInput) {
     selectedRepoExecutionHostId,
     selectedRepoHookContextKey,
     selectedRepoIsGit,
-    setAdvancedOpen,
+    revealSetupChoice,
     settings,
     setupConfig,
+    setupSupport,
     setupDecision,
     setupPolicy,
     smartNameMode
@@ -76,11 +77,31 @@ export function useQuickSubmitPreparation(input: QuickSubmitPreparationInput) {
 
       let submitResolvedSetupDecision = resolvedSetupDecision
 
+      // Create re-asks the host so a pending or stale answer can't drop an ask-policy prompt.
+      const supportSettlement = await settleComposerSubmit(
+        resolveFolderSetupSupported(selectedRepo).catch(() => {
+          throw new Error(
+            translate(
+              'auto.hooks.useComposerState.folderSetupSupportCheckFailed',
+              "Couldn't confirm whether this host runs folder setup scripts. Try again."
+            )
+          )
+        }),
+        isSubmissionCancelled
+      )
+      if (supportSettlement.status === 'cancelled') {
+        return null
+      }
+      const submitSetupSupported = supportSettlement.value
+      if (!submitSetupSupported) {
+        submitSetupConfig = null
+      }
+
       if (
-        selectedRepoIsGit &&
-        setupPolicy === 'ask' &&
+        submitSetupSupported &&
+        (setupSupport !== 'supported' || setupPolicy === 'ask') &&
         selectedRepoHookContextKey &&
-        checkedHooksContextKey !== selectedRepoHookContextKey
+        (setupSupport !== 'supported' || checkedHooksContextKey !== selectedRepoHookContextKey)
       ) {
         const outcome = await readWorkspaceSetupInspection(
           () => loadHookCheckForRepo(repoId),
@@ -99,34 +120,33 @@ export function useQuickSubmitPreparation(input: QuickSubmitPreparationInput) {
         submitResolvedSetupDecision = submitSetup.resolvedSetupDecision
       }
 
-      if (selectedRepoIsGit && submitSetupConfig && setupPolicy === 'ask' && !setupDecision) {
-        setAdvancedOpen(true)
+      if (submitSetupConfig && setupPolicy === 'ask' && !setupDecision) {
+        revealSetupChoice()
         return null
       }
 
-      const effectiveSetupDecision: SetupDecision = selectedRepoIsGit
-        ? (submitResolvedSetupDecision ?? 'inherit')
-        : 'skip'
+      // Hosts that predate folder setup ignore the decision for folders.
+      const effectiveSetupDecision: SetupDecision = submitResolvedSetupDecision ?? 'inherit'
       const submitLinkedWorkItemProvider = submitLinkedWorkItem
-        ? getLinkedWorkItemProvider(submitLinkedWorkItem)
+        ? getWorkspaceSourceProvider(submitLinkedWorkItem)
         : null
-      const hookPreparation: WorktreeCreationRequest['hookPreparation'] = selectedRepoIsGit
-        ? {
-            executionHostId: selectedRepoExecutionHostId ?? undefined,
-            issueCommand:
-              enableIssueAutomation &&
-              submitLinkedIssueNumber !== null &&
-              canUseIssueCommandForLinkedItemProvider(submitLinkedWorkItemProvider) &&
-              selectedRepoExecutionHostId &&
-              selectedRepoHookContextKey
-                ? {
-                    provider: submitLinkedWorkItemProvider,
-                    issueNumber: submitLinkedIssueNumber,
-                    artifactUrl: submitLinkedWorkItem?.url ?? null
-                  }
-                : undefined
-          }
-        : undefined
+      // Setup trust applies to folder projects too; the issue command needs a Git repo.
+      const hookPreparation: WorktreeCreationRequest['hookPreparation'] = {
+        executionHostId: selectedRepoExecutionHostId ?? undefined,
+        issueCommand:
+          selectedRepoIsGit &&
+          enableIssueAutomation &&
+          submitLinkedIssueNumber !== null &&
+          canUseIssueCommandForLinkedItemProvider(submitLinkedWorkItemProvider) &&
+          selectedRepoExecutionHostId &&
+          selectedRepoHookContextKey
+            ? {
+                provider: submitLinkedWorkItemProvider,
+                issueNumber: submitLinkedIssueNumber,
+                artifactUrl: submitLinkedWorkItem?.url ?? null
+              }
+            : undefined
+      }
 
       const linkedLinearIssue =
         submitLinkedWorkItem && submitLinkedWorkItemProvider === 'linear'
@@ -218,9 +238,10 @@ export function useQuickSubmitPreparation(input: QuickSubmitPreparationInput) {
       selectedRepoExecutionHostId,
       selectedRepoHookContextKey,
       selectedRepoIsGit,
-      setAdvancedOpen,
+      revealSetupChoice,
       settings,
       setupConfig,
+      setupSupport,
       setupDecision,
       setupPolicy,
       smartNameMode,

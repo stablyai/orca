@@ -8,8 +8,8 @@ import { parsePairingCode } from '../../../shared/remote-runtime/pairing/pairing
 import {
   type OrcadTerminalCensus,
   UNVERIFIABLE_ORCAD_TERMINAL_CENSUS
-} from '../../../shared/orcad-terminal-census'
-import { requestOrcadTerminalCensus } from '../../ssh/orcad-terminal-census-client'
+} from '../../../shared/remote-runtime/orcad-lifecycle/orcad-terminal-census'
+import { requestOrcadTerminalCensus } from '../../managed-server/lifecycle/orcad-terminal-census-client'
 import { subscribeSystemPowerLifecycle } from '../../power/system-power-lifecycle'
 import {
   deferUntilWslDistroRunning,
@@ -44,7 +44,7 @@ export function createWslOrcadLivenessSupervisor(options: {
   manager: WslOrcadConnectionManager
   bridgeActivity: WslOrcadBridgeActivity
   holder: WslDistroHolder
-  hasUserVisibleWork: (distro: string) => boolean
+  hasUserVisibleWork: (distro: string) => boolean | Promise<boolean>
 }): WslOrcadLivenessSupervisor {
   return new WslOrcadLivenessSupervisor({
     manager: options.manager,

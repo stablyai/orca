@@ -1,8 +1,8 @@
 import { beforeEach, type Mock, vi } from 'vitest'
-import type { Project } from '../../../../../../shared/project-types'
-import type { createWebRuntimeSessionTerminal } from '@/runtime/web-runtime-terminal-creation'
-import { setLocalRuntimeCapabilitiesForTests } from '@/runtime/local-runtime-capabilities'
-import type * as LaunchAgentKindModule from '../../../../../../shared/agent-kind'
+import type { Project } from '../../../../../../shared/project/project-types'
+import type { createWebRuntimeSessionTerminal } from '@/runtime/hosted-terminals/creation/web-runtime-terminal-creation'
+import { setLocalRuntimeCapabilitiesForTests } from '@/runtime/hosts/capabilities/local-runtime-capabilities'
+import type * as LaunchAgentKindModule from '../../../../../../shared/agent-status/identity/agent-kind'
 
 const mockCreateTab: Mock = vi.fn()
 function queuedStartups() {
@@ -94,7 +94,7 @@ const store = {
 }
 
 const mockLaunchUuid = vi.hoisted(() => () => 'tab-1')
-vi.mock('../../../../../../shared/non-secure-context-uuid', () => ({
+vi.mock('../../../../../../shared/identifiers/non-secure-context-uuid', () => ({
   createNonSecureContextUuid: mockLaunchUuid
 }))
 
@@ -124,20 +124,17 @@ vi.mock('@/components/tab-bar/reconcile-order', () => ({
   )
 }))
 
-vi.mock('@/lib/agent-paste-draft', () => ({
+vi.mock('@/lib/agent-session/messaging/paste/agent-paste-draft', () => ({
   pasteDraftWhenAgentReady: mockPasteDraftWhenAgentReady
 }))
 
-vi.mock('@/lib/agent-ready-wait', () => ({
+vi.mock('@/lib/agent-session/messaging/paste/agent-ready-wait', () => ({
   waitForAgentReady: mockWaitForAgentReady
 }))
 
-vi.mock('@/lib/telemetry', () => ({
-  track: mockTrack,
-  tuiAgentToAgentKind: mockLaunchAgentKind
-}))
+vi.mock('@/diagnostics/telemetry/telemetry', () => ({ track: mockTrack }))
 const mockLaunchAgentKind = vi.hoisted(() => (agent: string) => agent)
-vi.mock('../../../../../../shared/agent-kind', async (importOriginal) => ({
+vi.mock('../../../../../../shared/agent-status/identity/agent-kind', async (importOriginal) => ({
   ...(await importOriginal<typeof LaunchAgentKindModule>()),
   tuiAgentToAgentKind: mockLaunchAgentKind
 }))
@@ -145,7 +142,7 @@ vi.mock('../../../../../../shared/agent-kind', async (importOriginal) => ({
 const mockCreateWebRuntimeSessionTerminal: Mock = vi.fn()
 const mockIsWebRuntimeSessionActive = vi.fn(() => false)
 
-vi.mock('@/runtime/web-runtime-terminal-create-operation', () => ({
+vi.mock('@/runtime/hosted-terminals/creation/web-runtime-terminal-create-operation', () => ({
   createWebRuntimeSessionTerminalResult: async (
     args: Parameters<typeof createWebRuntimeSessionTerminal>[0]
   ) => {
@@ -160,11 +157,13 @@ vi.mock('@/runtime/web-runtime-terminal-create-operation', () => ({
     }
   }
 }))
-vi.mock('@/runtime/web-runtime-terminal-creation', () => ({
-  createWebRuntimeSessionTerminal: mockCreateWebRuntimeSessionTerminal,
+vi.mock('@/runtime/hosted-terminals/creation/web-runtime-terminal-creation', () => ({
+  createWebRuntimeSessionTerminal: mockCreateWebRuntimeSessionTerminal
+}))
+vi.mock('@/runtime/hosted-terminals/creation/web-runtime-created-agent-prompt-delivery', () => ({
   deliverCreatedWebRuntimeAgentSessionPrompt: vi.fn(async () => true)
 }))
-vi.mock('@/runtime/web-runtime-session-environment', () => ({
+vi.mock('@/runtime/web-session-tabs-sync/identity/web-runtime-session-environment', () => ({
   isWebRuntimeSessionActive: mockIsWebRuntimeSessionActive
 }))
 vi.mock('../../../../../../shared/workspace-layout/terminal-surface-id', () => ({

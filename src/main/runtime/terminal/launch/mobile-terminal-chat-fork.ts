@@ -5,8 +5,8 @@ import {
   type AgentLaunchRuntime,
   agentLaunchQuotingShell
 } from '../../../../shared/agent-launch/startup/agent-launch-runtime'
-import { isWslShellName } from '../../../../shared/local-windows-terminal-runtime'
-import { isWslUncPath } from '../../../../shared/wsl-paths'
+import { isWslShellName } from '../../../../shared/shell/launch/local-windows-terminal-runtime'
+import { isWslUncPath } from '../../../../shared/file-access/wsl-paths'
 import { isTuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent-config'
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import type { AgentStartupShell } from '../../../../shared/agent-launch/startup/tui-agent-startup-shell'

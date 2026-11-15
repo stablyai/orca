@@ -1,10 +1,9 @@
-import '../../../unused-default-rpc-methods.test-fixture'
 // At-rest repo config can determine model: clients accepting omission get repo defaults; others keep account model and the remaining catalog, never refusal.
 
 import { mkdir, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { AGENT_SESSION_OPTIONAL_MODEL_CLIENT_CAPABILITY } from '../../../../../../shared/agent-session/options/agent-session-optional-model-capability'
+import { AGENT_SESSION_OPTIONAL_MODEL_CLIENT_CAPABILITY } from '../../../../../../shared/agent-session/options/protocol/agent-session-optional-model-capability'
 import { STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY } from '../../../../../../shared/agent-session/agent-session-runtime-capabilities'
 import { agentModelCatalogFingerprintForRecord } from '../../../../../native-chat/agent-model-catalog/agent-model-catalog-fingerprint'
 import { createAgentModelCatalogService } from '../../../../../native-chat/agent-model-catalog/agent-model-catalog-service'
@@ -17,10 +16,10 @@ import { setStructuredAgentSessionHost } from '../../../../../native-chat/agent-
 import {
   createRestTestRig,
   foundRestTestChat
-} from '../../../../../native-chat/agent-session-wire/host/testing/structured-agent-session-rest-test-rig'
+} from '../../../../../native-chat/agent-session-wire/host/testing/structured-agent-session-rest-test-rig.test-fixture'
 
-import { HOST_TEST_SESSION as SESSION } from '../../../../../native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-data'
-import type { RestTestRig } from '../../../../../native-chat/agent-session-wire/host/testing/structured-agent-session-rest-test-rig'
+import { HOST_TEST_SESSION as SESSION } from '../../../../../native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-data.test-fixture'
+import type { RestTestRig } from '../../../../../native-chat/agent-session-wire/host/testing/structured-agent-session-rest-test-rig.test-fixture'
 import { OrcaRuntimeService } from '../../../../orca-runtime'
 import { RpcDispatcher } from '../../../dispatcher'
 import { STRUCTURED_AGENT_SESSION_METHODS } from '../structured-agent-session'
@@ -113,10 +112,11 @@ async function chatAtRest(repoConfig: {
     ...(repoConfig.complete
       ? {
           probes: {
+            // The listing runs from the account's folder and reports the account's config only.
             codex: async () => ({
               ...listing,
               complete: true,
-              configured: { model: 'gpt-5.5', effort: repoConfig.configured ? 'high' : 'medium' }
+              configured: { model: 'gpt-5.5', effort: 'medium' }
             })
           }
         }
@@ -232,22 +232,15 @@ describe('options at rest in a repo with no config of its own', () => {
   })
 })
 
-describe('completed discovery in the exact project scope', () => {
+describe('completed account discovery in a repo that sets its own effort', () => {
   it.each([OLDER_CLIENT, CURRENT_CLIENT])(
-    'shows what the project actually runs to $clientId',
+    "shows the account's model and effort to $clientId, as the CLI's own picker does",
     async (client) => {
       await chatAtRest({ configured: true, complete: true })
       const reply = await readOptions(client)
-      expect(reply).toMatchObject({
-        ok: true,
-        result: {
-          current: { model: 'gpt-5.5' },
-          models: expect.arrayContaining([
-            expect.objectContaining({ id: 'gpt-5.5', declaredDefaultEffort: 'high' })
-          ])
-        }
-      })
-      expect(reply).not.toHaveProperty('result.current.effort')
+      expect(reply).toMatchObject({ ok: true, result: { current: { model: 'gpt-5.5' } } })
+      expect(reply).toHaveProperty('result.models.0.id', 'gpt-5.5')
+      expect(reply).toHaveProperty('result.models.0.declaredDefaultEffort', 'medium')
       expect(rig.adapter.acquire).not.toHaveBeenCalled()
     }
   )

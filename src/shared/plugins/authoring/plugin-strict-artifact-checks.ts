@@ -52,8 +52,10 @@ function themeBackgroundErrors(read: PluginArtifactTextReader, themeText: string
     return []
   }
   try {
-    const path = parsePluginAppThemeArtifact(themeText, 'strict').background?.path
-    return path !== undefined && read(path) === null ? [`${path}: file not found`] : []
+    const background = parsePluginAppThemeArtifact(themeText, 'strict').background
+    return [background?.path, background?.videoPath].flatMap((path) =>
+      path !== undefined && read(path) === null ? [`${path}: file not found`] : []
+    )
   } catch {
     return []
   }

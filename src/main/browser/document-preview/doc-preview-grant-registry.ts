@@ -1,7 +1,7 @@
 import { randomBytes } from 'node:crypto'
 import { posix, win32 } from 'node:path'
 import { isWindowsAbsolutePathLike } from '../../../shared/cross-platform-path'
-import { parseDocPreviewUrl } from '../../../shared/doc-preview-scheme'
+import { parseDocPreviewUrl } from '../../../shared/document-preview/doc-preview-scheme'
 
 export type DocPreviewOwner =
   | { kind: 'ssh'; connectionId: string }

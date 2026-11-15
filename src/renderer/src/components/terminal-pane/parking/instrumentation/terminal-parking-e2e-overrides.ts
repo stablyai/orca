@@ -1,11 +1,11 @@
-import { e2eConfig } from '@/lib/e2e-config'
+import { e2eConfig } from '@/app-shell/startup/e2e-config'
 import {
   TERMINAL_TAB_COLD_PARK_DELAY_MS,
   type TerminalColdParkPolicyOverrides
 } from '../retention/terminal-hidden-view-parking'
 import '../output-watchers/terminal-parked-tab-watchers'
 import { getParkedTerminalWatcherTabIds } from '../output-watchers/terminal-parked-watcher-registry'
-import { resolveTabScrollbackBuffers } from '../../leaf-scrollback-resolution'
+import { resolveTabScrollbackBuffers } from '../../snapshots/leaf-scrollback-resolution'
 import { useAppStore } from '@/store/index'
 
 export type TerminalWorktreeParkingDebugVerdict = {

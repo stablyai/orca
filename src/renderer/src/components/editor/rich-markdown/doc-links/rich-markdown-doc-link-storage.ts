@@ -1,4 +1,4 @@
-import type { MarkdownDocument } from '../../../../../../shared/filesystem-entry-types'
+import type { MarkdownDocument } from '../../../../../../shared/file-listing/file-document'
 import {
   createMarkdownDocumentIndex,
   type MarkdownDocumentIndex

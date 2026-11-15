@@ -1,4 +1,5 @@
 import { i18n, translate } from '@/i18n/i18n'
+import type { Translate } from '@/i18n/use-translate'
 import { getTranslationResourceVersion } from '@/i18n/translation-resource-version'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 import type { Worktree } from '../../../../shared/worktree/types'
@@ -12,18 +13,13 @@ let cachedDisplayNameScope: string | undefined
 
 function buildStandaloneActivityWorktree(
   worktreeId: string,
-  executionHostId?: ExecutionHostId
+  executionHostId?: ExecutionHostId,
+  t: Translate = translate
 ): Worktree {
   const displayName =
     worktreeId === FLOATING_TERMINAL_WORKTREE_ID
-      ? translate(
-          'auto.components.activity.standaloneWorktree.floatingTerminal',
-          'Floating terminal'
-        )
-      : translate(
-          'auto.components.activity.standaloneWorktree.standaloneTerminal',
-          'Standalone terminal'
-        )
+      ? t('auto.components.activity.standaloneWorktree.floatingTerminal', 'Floating terminal')
+      : t('auto.components.activity.standaloneWorktree.standaloneTerminal', 'Standalone terminal')
   return {
     id: worktreeId,
     ...(executionHostId ? { hostId: executionHostId } : {}),
@@ -49,7 +45,8 @@ function buildStandaloneActivityWorktree(
 /** Return a stable synthetic worktree for terminal-only activity. */
 export function standaloneActivityWorktree(
   worktreeId: string,
-  executionHostId?: ExecutionHostId
+  executionHostId?: ExecutionHostId,
+  t?: Translate
 ): Worktree {
   const displayNameScope = `${i18n.language}\0${getTranslationResourceVersion()}`
   if (cachedDisplayNameScope !== displayNameScope) {
@@ -62,7 +59,7 @@ export function standaloneActivityWorktree(
     if (standaloneActivityWorktrees.size >= STANDALONE_ACTIVITY_WORKTREES_CAP) {
       standaloneActivityWorktrees.clear()
     }
-    worktree = buildStandaloneActivityWorktree(worktreeId, executionHostId)
+    worktree = buildStandaloneActivityWorktree(worktreeId, executionHostId, t)
     standaloneActivityWorktrees.set(cacheKey, worktree)
   }
   return worktree

@@ -4,12 +4,12 @@ import {
   agentSessionOperationKey,
   isAgentSessionOperationRow,
   type AgentSessionOperationRow
-} from '../../../../shared/agent-session/lifecycle/agent-session-operation-ledger'
+} from '../../../../shared/agent-session/lifecycle/operations/agent-session-operation-ledger'
 import {
   isAgentSessionId,
   isPersistedAgentSessionRecord
 } from '../../../../shared/agent-session/lifecycle/agent-session-record'
-import type { PersistedAgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-legacy-handoff-lease'
+import type { PersistedAgentSessionRecord } from '../../../../shared/agent-session/lifecycle/leases/agent-session-legacy-handoff-lease'
 import { isAgentSessionSurfaceTabId } from '../../../../shared/agent-session/view/agent-session-surface-tab-id'
 import type { RetiredAgentSessionClaimKey } from './agent-session-store-state'
 import type { PersistedAgentSessionTab } from '../agent-session-tab-table'

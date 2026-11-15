@@ -1,7 +1,8 @@
-import type { PluginHostListEntry } from '../../../../../preload/api-types'
+import type { PluginHostListEntry } from '../../../../../shared/plugins/plugin-list-entry'
 import { isWorkspaceScopedPluginContext } from '../../../../../shared/plugins/contributions/plugin-command-contribution'
 import { translate } from '@/i18n/i18n'
-import { canShowRightSidebarForView } from '@/lib/right-sidebar-visibility'
+import type { Translate } from '@/i18n/use-translate'
+import { canShowRightSidebarForView } from '@/components/right-sidebar/visibility/right-sidebar-visibility'
 import type { AppState } from '@/store/types'
 
 /** Only these statuses back the Adds rows with Orca's live registrations, so a "try it" does what it says. */
@@ -15,10 +16,11 @@ export function isPluginContributionLive(
 
 export function pluginCommandUnavailableReason(
   command: { context?: string },
-  activeWorktreeId: string | null
+  activeWorktreeId: string | null,
+  t: Translate = translate
 ): string | null {
   if (isWorkspaceScopedPluginContext(command.context) && !activeWorktreeId) {
-    return translate(
+    return t(
       'auto.components.settings.PluginContributionActionCommand.needsWorkspace',
       'Needs an open workspace'
     )

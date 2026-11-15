@@ -1,12 +1,13 @@
 import {
   IMAGE_AND_PDF_PREVIEW_MIME_TYPES,
   filePreviewExtension
-} from '../../../shared/file-preview-kind'
+} from '../../../shared/file-preview/file-preview-kind'
 import { localLogFileIdentity } from '../../ai-vault/transcripts/local-log-tail-reader'
-import { BINARY_PROBE_BYTES, isBinaryBuffer } from '../../../shared/binary-buffer'
+import { BINARY_PROBE_BYTES, isBinaryBuffer } from '../../../shared/file-preview/binary-buffer'
 import {
   fileTooLargeError,
   openLocalRegularFile,
+  readImageFileSignature,
   readLocalFileBounded,
   readLocalFilePrefix
 } from './local-regular-file-read'
@@ -27,10 +28,18 @@ export type LocalFileContent = {
 }
 
 /** One open, one handle: the size check, binary probe and read all see the same regular file. */
-export async function readLocalFileContent(filePath: string): Promise<LocalFileContent> {
+export async function readLocalFileContent(
+  filePath: string,
+  options: { imageBySignature?: boolean } = {}
+): Promise<LocalFileContent> {
   const { handle, stats } = await openLocalRegularFile(filePath)
   try {
-    const mimeType = IMAGE_AND_PDF_PREVIEW_MIME_TYPES[filePreviewExtension(filePath)]
+    const extension = filePreviewExtension(filePath)
+    const mimeType =
+      IMAGE_AND_PDF_PREVIEW_MIME_TYPES[extension] ??
+      (options.imageBySignature && extension === ''
+        ? (await readImageFileSignature(handle))?.mimeType
+        : undefined)
     const sizeLimit = mimeType ? MAX_PREVIEWABLE_BINARY_SIZE : MAX_TEXT_FILE_SIZE
     if (stats.size > sizeLimit) {
       throw fileTooLargeError(stats.size, sizeLimit)

@@ -68,7 +68,7 @@ vi.mock('electron', () => ({
     }
   }
 }))
-vi.mock('../../browser-manager', () => ({
+vi.mock('../../guest-lifecycle/manager/browser-manager', () => ({
   browserManager: {
     getWebContentsIdByTabId: () => {
       mocks.counts.registries += 1
@@ -90,7 +90,7 @@ vi.mock('../permissions/browser-extension-active-tab', () => ({
   hasBrowserExtensionActiveTab: (_extensionId: string, tabId: number) =>
     mocks.activeGrants.has(tabId)
 }))
-vi.mock('../api/permissions', () => ({
+vi.mock('../permissions/browser-extension-session-permissions', () => ({
   browserExtensionHostPatternsInSession: () => mocks.hostPatterns
 }))
 vi.mock('../api/tabs-capture', () => ({ captureVisibleTabMethod: {} }))

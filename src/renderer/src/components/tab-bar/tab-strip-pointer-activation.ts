@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef } from 'react'
 import { TAB_DRAG_ACTIVATION_DISTANCE_PX } from '../tab-group/useTabDragSplit'
 import { beginTabStripPointerGesture } from './tab-strip-pointer-gesture'
+import { isAgentInputMovingFocus } from '../browser-pane/host-guest/input/agent-input-focus-guard'
 
 /** Activate from release displacement, not asynchronously cleared drag state, so drags stay inactive and post-drag clicks still work. */
 function isGuestHoldingKeyboard(): boolean {
@@ -48,7 +49,7 @@ export function useTabStripPointerActivation({
         window.removeEventListener('pointerup', onPointerUp)
         window.removeEventListener('pointercancel', onPointerCancel)
         window.removeEventListener('contextmenu', onPointerCancel)
-        window.removeEventListener('blur', onPointerCancel)
+        window.removeEventListener('blur', onWindowBlur)
         window.removeEventListener('focus', onWindowFocus)
         releaseTabStripPointerGesture()
         cleanupRef.current = null
@@ -66,7 +67,20 @@ export function useTabStripPointerActivation({
       const onPointerCancel = (): void => {
         cleanup()
       }
+      // Pair an agent-caused blur with its focus, which can arrive after the guard settles.
+      let agentBlurPending = false
+      const onWindowBlur = (): void => {
+        if (isAgentInputMovingFocus()) {
+          agentBlurPending = true
+          return
+        }
+        cleanup()
+      }
       const onWindowFocus = (): void => {
+        if (agentBlurPending || isAgentInputMovingFocus()) {
+          agentBlurPending = false
+          return
+        }
         if (pendingGuestFocusHandoff) {
           pendingGuestFocusHandoff = false
           return
@@ -77,7 +91,7 @@ export function useTabStripPointerActivation({
       window.addEventListener('pointerup', onPointerUp)
       window.addEventListener('pointercancel', onPointerCancel)
       window.addEventListener('contextmenu', onPointerCancel)
-      window.addEventListener('blur', onPointerCancel)
+      window.addEventListener('blur', onWindowBlur)
       window.addEventListener('focus', onWindowFocus)
       cleanupRef.current = cleanup
     },

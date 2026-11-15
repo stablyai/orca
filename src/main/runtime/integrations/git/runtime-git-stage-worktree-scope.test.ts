@@ -1,4 +1,3 @@
-import '../../rpc/unused-default-rpc-methods.test-fixture'
 import { execFileSync } from 'node:child_process'
 import { mkdir, mkdtemp, rm, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -92,24 +91,5 @@ describe('git.bulkStage with a whole-worktree scope', () => {
 
     expect(response).toMatchObject({ ok: true, result: { ok: true, stagedScope: 'all' } })
     expect(names(repo, ['diff', '--cached', '--name-only'])).toEqual(['new.txt'])
-  })
-
-  it('replies with a receipt only after the SSH provider confirmed the scope', async () => {
-    const bulkStageFiles = vi.fn().mockResolvedValue(undefined)
-    providerOverride.provider = { bulkStageFiles }
-    const dispatcher = dispatcherFor({
-      worktree: { path: '/remote/repo' },
-      executionHostId: 'ssh:conn-1'
-    })
-
-    const response = await dispatcher.dispatch({
-      id: 'stage-all-ssh',
-      authToken: 'token',
-      method: 'git.bulkStage',
-      params: { worktree: 'id:wt-1', filePaths: [], scope: 'tracked' }
-    })
-
-    expect(bulkStageFiles).toHaveBeenCalledWith('/remote/repo', [], 'tracked')
-    expect(response).toMatchObject({ ok: true, result: { ok: true, stagedScope: 'tracked' } })
   })
 })

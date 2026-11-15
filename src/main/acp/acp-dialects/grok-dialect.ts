@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { acpNotificationEnvelopeSchema } from '../acp-context-usage'
+import { acpNotificationEnvelopeSchema } from '../protocol/acp-session-events'
 import type { AcpDialect, AcpDialectNotification, AcpHookBlock } from './acp-dialect'
 import type { AvailableCommand } from '../generated/acp-protocol.generated'
 import { grokRequest, grokSettleRequest } from './grok-requests'
@@ -244,6 +244,7 @@ export const GROK_ACP_DIALECT: AcpDialect = {
     return parsed.success ? parsed.data['x.ai/tool'].name : undefined
   },
   request: grokRequest,
+  elicitationComplete: (method) => method.replace(/^_/, '') === 'x.ai/mcp/elicit_complete',
   settleRequest: grokSettleRequest,
   toolBackgroundTasks: grokToolBackgroundTasks,
   toolSubagents: grokToolSubagents,

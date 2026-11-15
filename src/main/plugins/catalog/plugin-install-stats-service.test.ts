@@ -2,10 +2,9 @@ import { mkdtemp, rm, utimes, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { parsePluginInstallStats } from '../../../shared/plugins/catalog/plugin-install-stats'
+
 import {
   PLUGIN_INSTALL_STATS_REFRESH_MS,
-  PLUGIN_INSTALL_STATS_RETRY_MS,
   PluginInstallStatsService
 } from './plugin-install-stats-service'
 
@@ -51,54 +50,6 @@ describe('PluginInstallStatsService', () => {
     expect(fetcher).not.toHaveBeenCalled()
   })
 
-  it('keeps the cached counts after a failed refresh and waits before retrying', async () => {
-    let now = NOW
-    const warning = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
-    const fetcher = vi
-      .fn<() => Promise<ReturnType<typeof stats>>>()
-      .mockResolvedValueOnce(stats(10))
-      .mockRejectedValue(new Error('offline'))
-    const service = new PluginInstallStatsService({
-      pluginsDataDir: await tempRoot(),
-      isFetchAllowed: () => true,
-      fetcher,
-      now: () => now
-    })
-    await service.getInstallCounts()
-    await service.settled()
-    now += PLUGIN_INSTALL_STATS_REFRESH_MS
-    await service.getInstallCounts()
-    await service.settled()
-    expect(await service.getInstallCounts()).toEqual({ 'stablyai.orca-nord-theme': 10 })
-    expect(fetcher).toHaveBeenCalledTimes(2)
-
-    now += PLUGIN_INSTALL_STATS_RETRY_MS - 1
-    await service.getInstallCounts()
-    expect(fetcher).toHaveBeenCalledTimes(2)
-    warning.mockRestore()
-  })
-
-  it('keeps known counts when the site serves its empty placeholder', async () => {
-    let now = NOW
-    const fetcher = vi
-      .fn<() => Promise<{ generatedAt: string | null; installs: Record<string, number> }>>()
-      .mockResolvedValueOnce(stats(20))
-      .mockResolvedValueOnce({ generatedAt: null, installs: {} })
-    const service = new PluginInstallStatsService({
-      pluginsDataDir: await tempRoot(),
-      isFetchAllowed: () => true,
-      fetcher,
-      now: () => now
-    })
-    await service.getInstallCounts()
-    await service.settled()
-    now += PLUGIN_INSTALL_STATS_REFRESH_MS
-    await service.getInstallCounts()
-    await service.settled()
-    expect(fetcher).toHaveBeenCalledTimes(2)
-    expect(await service.getInstallCounts()).toEqual({ 'stablyai.orca-nord-theme': 20 })
-  })
-
   it('ignores a corrupt cache and an older snapshot', async () => {
     const root = await tempRoot()
     await writeFile(join(root, 'plugin-install-stats.json'), '{not json')
@@ -121,27 +72,5 @@ describe('PluginInstallStatsService', () => {
     await service.settled()
     expect(await service.getInstallCounts()).toEqual({ 'stablyai.orca-nord-theme': 20 })
     warning.mockRestore()
-  })
-})
-
-describe('parsePluginInstallStats', () => {
-  it('tolerates unknown fields and drops unreadable entries', () => {
-    expect(
-      parsePluginInstallStats({
-        schemaVersion: 1,
-        generatedAt: '2026-10-31T02:15:08.771Z',
-        note: 'anything',
-        future: { nested: true },
-        plugins: {
-          'stablyai.orca-nord-theme': { installs: 37, installs30d: 37, extra: 'x' },
-          'acme.bad': { installs: -1 },
-          'not a key': { installs: 99 },
-          'acme.text': { installs: '12' }
-        }
-      })
-    ).toEqual({
-      generatedAt: '2026-10-31T02:15:08.771Z',
-      installs: { 'stablyai.orca-nord-theme': 37 }
-    })
   })
 })

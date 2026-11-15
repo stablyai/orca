@@ -7,17 +7,20 @@ import {
   type PluginViewRequest
 } from '../../../../../shared/plugins/view/plugin-view-protocol'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../../shared/execution-host'
-import { detectLanguage } from '@/lib/language-detect'
+import { detectLanguage } from '../../../../../shared/editor-language/editor-language-detect'
 import { activateAndRevealWorkspace } from '@/lib/workspace/activation/worktree-activation'
-import { canShowRightSidebarForView } from '@/lib/right-sidebar-visibility'
-import { useAppStore } from '@/store'
-import { selectFolderWorkspaces, selectWorktreesByRepo } from '@/store/workspace-record-selectors'
-import { usePluginPanelsStore } from '@/store/plugin-panels'
+import { canShowRightSidebarForView } from '@/components/right-sidebar/visibility/right-sidebar-visibility'
+import { useAppStore } from '@/store/index'
+import {
+  selectFolderWorkspaces,
+  selectWorktreesByRepo
+} from '@/store/workspaces/catalog/workspace-record-fields'
+import { usePluginPanelsStore } from '@/store/plugins/catalog/plugin-contribution-catalog'
 import {
   collectActivePluginCustomEditors,
   useCustomEditorViewStore
-} from '@/store/plugin-custom-editors'
-import { usePluginViewCaptureStore } from '@/store/plugin-view-capture'
+} from '@/store/plugins/file-editors/plugin-custom-editors'
+import { usePluginViewCaptureStore } from '@/store/plugins/capture/plugin-view-capture'
 import {
   measurePluginPanelGuest,
   measurePluginPanelSurface,

@@ -1,15 +1,16 @@
 import { translate } from '@/i18n/i18n'
+import type { Translate } from '@/i18n/use-translate'
 import { searchKeywords } from '../search/settings-search-keywords'
 
-export function getNestedWorkerDepthTitle(): string {
-  return translate(
+export function getNestedWorkerDepthTitle(t: Translate = translate): string {
+  return t(
     'auto.components.settings.OrchestrationPane.nestedWorkerDepthTitle',
     'Nested worker depth'
   )
 }
 
-export function getNestedWorkerDepthDescription(): string {
-  return translate(
+export function getNestedWorkerDepthDescription(t: Translate = translate): string {
+  return t(
     'auto.components.settings.OrchestrationPane.nestedWorkerDepthDescription',
     'How many generations of dispatched workers may spawn their own workers. 1 keeps the agent tree flat: a coordinator dispatches workers, and those workers do not dispatch.'
   )

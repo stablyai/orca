@@ -1,18 +1,18 @@
 import { useCallback } from 'react'
+import { hasUnsentBrowserNotes } from '@/store/slices/browser/annotations/browser-page-annotation'
 import { useAppStore } from '../store'
-import { needsSavePromptOnClose } from '@/store/slices/editor/buffers/editor-buffer-close-rule'
+import { editorTabsNeedingSavePrompt } from '@/store/slices/editor/tabs/editor-tab-close-target'
+import { isEditorTabContentType } from '@/store/slices/editor/tabs/editor-tab-content-type'
+import { afterPendingTabs } from '@/runtime/workspace-layout/intents/layout-owner-pending-tabs'
 import {
   hasEditorFrameFlush,
   runAfterEditorFramesFlush
 } from './editor/save/flush/editor-pending-flush'
 import { closeTerminalTab } from './terminal/terminal-tab-actions'
-import { isWebRuntimeSessionActive } from '@/runtime/web-runtime-session-environment'
-import { closeBrowserWorkspaceTabOnHosts } from '@/runtime/browser-workspace-tab-close'
-import { destroyWorkspaceWebviews } from '../store/slices/browser-webview-cleanup'
-import {
-  getActiveWorktreeRuntimeEnvironmentId,
-  isPinnedEditorFileTab
-} from './terminal-workspace-model'
+import { isWebRuntimeSessionActive } from '@/runtime/web-session-tabs-sync/identity/web-runtime-session-environment'
+import { closeBrowserWorkspaceTabOnHosts } from '@/runtime/browser/closing/browser-workspace-tab-close'
+import { destroyWorkspaceWebviews } from '../store/slices/browser/cleanup/browser-webview-cleanup'
+import { getActiveWorktreeRuntimeEnvironmentId } from './terminal-workspace-model'
 import type { TerminalCloseController } from './use-terminal-close-actions'
 import { useBulkTabCloseConfirmation } from './use-bulk-tab-close-confirmation'
 
@@ -22,8 +22,7 @@ export function useTerminalBulkCloseActions(
     'activeWorktreeId' | 'closeBrowserTab' | 'closeFile' | 'closeTab' | 'queueEditorCloseRequests'
   >
 ) {
-  const { activeWorktreeId, closeBrowserTab, closeFile, closeTab, queueEditorCloseRequests } =
-    controller
+  const { activeWorktreeId, closeBrowserTab, closeTab, queueEditorCloseRequests } = controller
   const confirmBulkClose = useBulkTabCloseConfirmation()
   const closeTabBarTabsNow = useCallback(
     (tabIds: string[]) => {
@@ -31,12 +30,32 @@ export function useTerminalBulkCloseActions(
         return
       }
       const state = useAppStore.getState()
-      const dirtyFileIds: string[] = []
-      for (const id of tabIds) {
-        const unifiedTab = (state.unifiedTabsByWorktree[activeWorktreeId] ?? []).find(
-          (candidate) => candidate.id === id || candidate.entityId === id
+      const tabs = state.unifiedTabsByWorktree[activeWorktreeId] ?? []
+      const byId = new Map(tabs.map((tab) => [tab.id, tab]))
+      const byEntity = new Map(tabs.map((tab) => [tab.entityId, tab]))
+      const selectedEditors = [
+        ...new Set(
+          tabIds.flatMap((id) => {
+            const tab = byId.get(id) ?? byEntity.get(id)
+            return tab && !tab.isPinned && isEditorTabContentType(tab.contentType) ? [tab] : []
+          })
         )
-        if (unifiedTab?.isPinned) {
+      ]
+      const promptIds = editorTabsNeedingSavePrompt(state, selectedEditors)
+      const closingEditorIds = selectedEditors
+        .filter((tab) => !promptIds.has(tab.id))
+        .map((tab) => tab.id)
+      for (const id of tabIds) {
+        const unifiedTab = byId.get(id) ?? byEntity.get(id)
+        // Bulk closes keep pinned tabs and tabs holding unsent browser notes open.
+        if (
+          unifiedTab?.isPinned ||
+          (unifiedTab?.contentType === 'browser' &&
+            hasUnsentBrowserNotes(state, unifiedTab.entityId))
+        ) {
+          continue
+        }
+        if (unifiedTab && isEditorTabContentType(unifiedTab.contentType)) {
           continue
         }
         let browserCloseOptions: { reason: 'cleanup' } | undefined
@@ -72,15 +91,6 @@ export function useTerminalBulkCloseActions(
         if ((state.tabsByWorktree[activeWorktreeId] ?? []).some((tab) => tab.id === id)) {
           closeTab(id)
         } else if (
-          state.openFiles.some((file) => file.worktreeId === activeWorktreeId && file.id === id)
-        ) {
-          // Why fresh state: an earlier view of the same record may have just closed.
-          if (needsSavePromptOnClose(useAppStore.getState(), id)) {
-            dirtyFileIds.push(id)
-            continue
-          }
-          closeFile(id)
-        } else if (
           (state.browserTabsByWorktree[activeWorktreeId] ?? []).some((tab) => tab.id === id)
         ) {
           closeBrowserTab(id, browserCloseOptions)
@@ -90,20 +100,23 @@ export function useTerminalBulkCloseActions(
           state.closeUnifiedTab(unifiedTab.id)
         }
       }
-      if (dirtyFileIds.length > 0) {
-        queueEditorCloseRequests(dirtyFileIds)
+      state.closeUnifiedTabs(closingEditorIds)
+      if (promptIds.size > 0) {
+        afterPendingTabs(closingEditorIds, () => queueEditorCloseRequests([...promptIds]))
       }
     },
-    [activeWorktreeId, closeBrowserTab, closeFile, closeTab, queueEditorCloseRequests]
+    [activeWorktreeId, closeBrowserTab, closeTab, queueEditorCloseRequests]
   )
   const closeTabBarTabs = useCallback(
     (tabIds: string[]) => {
       const state = useAppStore.getState()
       const tabs = activeWorktreeId ? (state.unifiedTabsByWorktree[activeWorktreeId] ?? []) : []
-      const fileIdOf = (id: string): string => tabs.find((tab) => tab.id === id)?.entityId ?? id
+      const entityByTab = new Map(tabs.map((tab) => [tab.id, tab.entityId]))
+      const fileIdOf = (id: string): string => entityByTab.get(id) ?? id
       // Why: a custom editor frame may still hold edits the dirty checks must see; only its tabs wait.
       const framed = tabIds.filter((id) => hasEditorFrameFlush(state, fileIdOf(id)))
-      closeTabBarTabsNow(tabIds.filter((id) => !framed.includes(id)))
+      const framedIds = new Set(framed)
+      closeTabBarTabsNow(tabIds.filter((id) => !framedIds.has(id)))
       if (framed.length > 0) {
         runAfterEditorFramesFlush(state, framed.map(fileIdOf), () => closeTabBarTabsNow(framed))
       }
@@ -158,34 +171,13 @@ export function useTerminalBulkCloseActions(
     }
     confirmBulkClose(
       'editors',
-      () => {
-        const state = useAppStore.getState()
-        return state.openFiles
-          .filter(
-            (file) =>
-              file.worktreeId === activeWorktreeId &&
-              !isPinnedEditorFileTab(state, activeWorktreeId, file.id)
-          )
-          .map((file) => file.id)
-      },
-      (fileIds) =>
-        runAfterEditorFramesFlush(useAppStore.getState(), fileIds, () => {
-          const selectedIds = new Set(fileIds)
-          const files = useAppStore.getState().openFiles.filter((file) => selectedIds.has(file.id))
-          const dirtyFileIds: string[] = []
-          for (const file of files) {
-            if (needsSavePromptOnClose(useAppStore.getState(), file.id)) {
-              dirtyFileIds.push(file.id)
-            } else {
-              closeFile(file.id)
-            }
-          }
-          if (dirtyFileIds.length > 0) {
-            queueEditorCloseRequests(dirtyFileIds)
-          }
-        })
+      () =>
+        (useAppStore.getState().unifiedTabsByWorktree[activeWorktreeId] ?? [])
+          .filter((tab) => isEditorTabContentType(tab.contentType) && !tab.isPinned)
+          .map((tab) => tab.id),
+      closeTabBarTabs
     )
-  }, [activeWorktreeId, closeFile, confirmBulkClose, queueEditorCloseRequests])
+  }, [activeWorktreeId, closeTabBarTabs, confirmBulkClose])
 
   return {
     closeTabBarTabs,

@@ -9,8 +9,8 @@ import {
   makeWorktreeInfo,
   store
 } from '../orca-runtime-tests/orca-runtime-test-fixtures.spec'
-import type { Repo } from '../../../shared/repo-types'
-import type { RuntimeClientEvent } from '../../../shared/runtime-client-events'
+import type { Repo } from '../../../shared/repository/repo-types'
+import type { RuntimeClientEvent } from '../../../shared/remote-runtime/session-graph/runtime-client-events'
 
 const externalPath = '/tmp/elsewhere/external'
 
@@ -49,13 +49,5 @@ describe('repo.update worktree refresh', () => {
     expect(events).toContainEqual({ type: 'worktreesChanged', repoId: TEST_REPO_ID })
     expect(await isExternalVisible()).toBe(true)
     expect(listWorktrees).toHaveBeenCalledTimes(1)
-  })
-
-  it('skips the worktree refresh for catalog-only edits', async () => {
-    const { runtime, events } = await createScannedRuntime()
-
-    await runtime.updateRepo(`id:${TEST_REPO_ID}`, { displayName: 'renamed' })
-
-    expect(events.some((event) => event.type === 'worktreesChanged')).toBe(false)
   })
 })

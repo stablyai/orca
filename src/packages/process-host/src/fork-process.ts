@@ -2,9 +2,9 @@
 import {
   fork as nodeFork,
   type ForkOptions,
-  type SpawnOptions as NodeSpawnOptions
+  type SpawnOptions as NodeSpawnOptions,
+  type ChildProcess
 } from 'node:child_process'
-import type { SpawnedProcess } from './process-spec'
 
 // Preserve fork semantics for module resolution, execPath overrides, and inherited execArgv.
 export type ForkSpec = {
@@ -19,9 +19,11 @@ export type ForkSpec = {
   execPath?: string
   /** Replaces the inherited process.execArgv (Node/V8 flags placed before the module path). */
   execArgv?: readonly string[]
+  /** 'advanced' sends structured clones, so typed arrays survive IPC. */
+  serialization?: ForkOptions['serialization']
 }
 
-export function forkProcess(spec: ForkSpec): SpawnedProcess {
+export function forkProcess(spec: ForkSpec): ChildProcess {
   const options: ForkOptions = {
     cwd: spec.cwd,
     env: spec.env,
@@ -29,7 +31,8 @@ export function forkProcess(spec: ForkSpec): SpawnedProcess {
     stdio: spec.stdio,
     // Node treats an explicit undefined execPath differently from an absent key.
     ...(spec.execPath ? { execPath: spec.execPath } : {}),
-    ...(spec.execArgv ? { execArgv: [...spec.execArgv] } : {})
+    ...(spec.execArgv ? { execArgv: [...spec.execArgv] } : {}),
+    ...(spec.serialization ? { serialization: spec.serialization } : {})
   }
   // Node forwards this undocumented fork option to spawn, preventing console flashes on Windows.
   return nodeFork(

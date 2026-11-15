@@ -2,7 +2,7 @@
 import { readFileSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
 import type { RuntimeClient } from '../../src/cli/runtime/client'
-import type { RuntimeMobileSessionTabsResult } from '../../src/shared/runtime-session-contracts'
+import type { RuntimeMobileSessionTabsResult } from '../../src/shared/remote-runtime/session-graph/runtime-session-contracts'
 import type {
   RuntimeMarkdownReadTabResult,
   RuntimeMarkdownSaveTabResult

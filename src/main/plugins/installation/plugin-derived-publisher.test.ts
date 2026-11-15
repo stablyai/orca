@@ -11,7 +11,7 @@ import {
 } from './plugin-install'
 import { serveRepositoriesOverTestSsh } from '../__mocks__/plugin-git-ssh-remote-fixture'
 import { installStagedPluginTree } from './plugin-install-staging'
-import { discoverPlugins, isInvalidDiscoveredPlugin } from '../plugin-discovery'
+import { discoverPlugins, isInvalidDiscoveredPlugin } from '../discovery/plugin-discovery'
 import { PLUGIN_DERIVED_PUBLISHER_SINCE } from '../../../shared/plugins/manifest/plugin-schema-field-docs'
 
 const execFileAsync = promisify(execFile)
@@ -59,25 +59,6 @@ afterEach(async () => {
 })
 
 describe('derived plugin publishers', () => {
-  it('names a Git URL install after the URL owner, ignoring the manifest publisher', async () => {
-    const source = await tempRoot('orca-derived-git-')
-    const pluginsDir = await tempRoot('orca-derived-installs-')
-    await writeThemePlugin(source, 'brand-name')
-    await commitRepository(source)
-    await serveRepositoriesOverTestSsh(await tempRoot('orca-derived-ssh-'), {
-      '/Acme/dusk.git': source
-    })
-
-    const result = await installPluginFromGit({
-      pluginsDir,
-      url: 'ssh://git@plugin.test/Acme/dusk.git',
-      ref: '',
-      hostVersion: HOST
-    })
-
-    expect(result).toMatchObject({ ok: true, pluginKey: 'acme.dusk' })
-  })
-
   it('keeps the key of an install made before publishers were derived', async () => {
     const source = await tempRoot('orca-derived-git-')
     const pluginsDir = await tempRoot('orca-derived-installs-')

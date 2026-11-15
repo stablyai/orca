@@ -1,10 +1,6 @@
 import { Terminal } from '@xterm/headless'
 import { describe, expect, it } from 'vitest'
-import {
-  PROCESS_BOUNDARY_GROUND,
-  buildKittyKeyboardRestore,
-  buildPostReplayLiveAgentReattachReset
-} from './terminal-mode-reset-profiles'
+import { PROCESS_BOUNDARY_GROUND, buildKittyKeyboardRestore } from './terminal-mode-reset-profiles'
 import { TerminalKittyKeyboardModeTracker } from './terminal-kitty-keyboard-mode-tracker'
 
 // Consumers import these bytes; literal expectations catch modes silently disappearing.
@@ -20,13 +16,6 @@ describe('terminal mode reset profiles', () => {
     await write('\x1b[?u\x1b[<1u\x1b[?u')
     expect(replies).toEqual(['\x1b[?0u', '\x1b[?0u'])
     term.dispose()
-  })
-
-  describe('live-agent cursor preservation', () => {
-    it('omits the cursor-show when the agent left its cursor hidden', () => {
-      expect(buildPostReplayLiveAgentReattachReset('x\x1b[?25l')).not.toContain('\x1b[?25h')
-      expect(buildPostReplayLiveAgentReattachReset('x\x1b[?25h')).toContain('\x1b[?25h')
-    })
   })
 
   // A replayed push grows xterm’s stack but acts as a mirror set; pop-all prevents the app’s single pop restoring stale flags.

@@ -1,5 +1,5 @@
 import { isCurrentPtyExit, ptyOwnership } from './ownership-state'
-import { wslBridgePtyPresence } from '../../../agent-hooks/wsl-bridge-pty-presence'
+import { wslBridgePtyPresence } from '../../../agent-hooks/wsl-relay/wsl-bridge-pty-presence'
 import {
   localBackgroundStreamUnsub,
   localDataUnsub,
@@ -107,7 +107,7 @@ export function bindProviderListeners(session: PtyIpcSession): void {
       try {
         if (!payload.runtimeFed) {
           const viewShown = ORCA_LAYOUT_OWNER_IS_MAIN && visibleRendererPtys.has(payload.id)
-          clearProviderPtyState(payload.id)
+          clearProviderPtyState(payload.id, { exitProven: true })
           ptyOwnership.delete(payload.id)
           if (syntheticExit) {
             session.runtime?.markPtyStopRequested(payload.id)

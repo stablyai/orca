@@ -23,15 +23,7 @@ import {
   getWorkerAutoCloseState,
   keepWorkerTerminalOpen
 } from './worker-terminal-user-keep'
-
-export {
-  countWorkerTerminalInventory,
-  getWorkerAttentionFacts,
-  getWorkerAttentionFactsForDispatches,
-  allowWorkerTerminalAutoClose,
-  getWorkerAutoCloseState,
-  keepWorkerTerminalOpen
-}
+import { listWorkerReportWaitCandidates } from './worker-report-wait-candidates'
 
 /** `databaseId` is the real order key; the timestamp fields only satisfy pre-v3 cursors. */
 export type WorkerTerminalOrderingKey = {
@@ -112,6 +104,8 @@ export function listWorkerTerminalResources(
   pendingApproval: boolean
   terminationReason: TerminalExitCause['kind'] | null
   resource: WorkerTerminalResourceRow | null
+  /** The paired Orca's name when its Run here coordinates this worker. */
+  coordinatedFrom: string | null
   createdAt: string
   databaseId: number
 }[] {
@@ -179,6 +173,7 @@ export function listWorkerTerminalResources(
               t.parent_id AS parent_task_id,
               d.task_id, d.run_id, d.status AS dispatch_status,
               d.termination_reason,
+              (SELECT home_label FROM peer_runs WHERE run_id = d.run_id) AS coordinated_from,
               EXISTS (
                 SELECT 1 FROM question_threads q
                  WHERE q.dispatch_id = d.id AND q.status = 'pending'
@@ -208,6 +203,7 @@ export function listWorkerTerminalResources(
     termination_reason: TerminalExitCause['kind'] | null
     pending_input: number
     pending_approval: number
+    coordinated_from: string | null
     created_at: string
     database_id: number
   }[]
@@ -245,6 +241,7 @@ export function listWorkerTerminalResources(
       pendingApproval: row.pending_approval === 1,
       terminationReason: row.termination_reason,
       resource,
+      coordinatedFrom: row.coordinated_from,
       createdAt: row.created_at,
       databaseId: row.database_id
     }
@@ -292,6 +289,7 @@ export type WorkerTerminalListingMethods = {
   countWorkerTerminalInventory: typeof countWorkerTerminalInventory
   getWorkerAttentionFacts: typeof getWorkerAttentionFacts
   getWorkerAttentionFactsForDispatches: typeof getWorkerAttentionFactsForDispatches
+  listWorkerReportWaitCandidates: typeof listWorkerReportWaitCandidates
 }
 
 export function attachWorkerTerminalListing(ctor: { prototype: object }): void {
@@ -305,6 +303,7 @@ export function attachWorkerTerminalListing(ctor: { prototype: object }): void {
     getWorkerTerminalOrderingKey,
     countWorkerTerminalInventory,
     getWorkerAttentionFacts,
-    getWorkerAttentionFactsForDispatches
+    getWorkerAttentionFactsForDispatches,
+    listWorkerReportWaitCandidates
   })
 }

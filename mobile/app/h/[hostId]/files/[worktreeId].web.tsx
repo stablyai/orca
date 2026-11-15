@@ -1,6 +1,6 @@
 import { withWorkspaceRoute } from '../../../../src/navigation/workspace-route'
 import { useLocalSearchParams } from 'expo-router'
-import { MobileFileExplorerPanel } from '../../../../src/files/MobileFileExplorerPanel'
+import { MobileFileExplorerPanel } from '../../../../src/files/explorer/MobileFileExplorerPanel'
 import { firstParam } from '../../../../src/navigation/route-param-reader'
 
 // Render screen directly: native sibling imports a shell module that throws in browsers, and manifest imports every route.

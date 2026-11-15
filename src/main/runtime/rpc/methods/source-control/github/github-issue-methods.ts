@@ -1,17 +1,31 @@
 import { defineMethod } from '../../../core'
+import { UploadGitHubAttachment } from '../../../../../../shared/rpc-contract/github/github-attachment-params'
+import { claimClipboardImageUpload } from '../../clipboard/clipboard'
 import {
   CreateIssue,
   Issue,
   IssueComment,
   UpdateIssue
-} from '../../../../../../shared/rpc-contract/github-issue-params'
+} from '../../../../../../shared/rpc-contract/github/github-issue-params'
 
 export const GITHUB_ISSUE_METHODS = [
+  defineMethod({
+    name: 'github.uploadAttachment',
+    permission: 'workspace',
+    params: UploadGitHubAttachment,
+    handler: (params, ctx) =>
+      ctx.runtime.uploadGitHubAttachment(
+        params,
+        claimClipboardImageUpload(params.uploadId, ctx),
+        ctx.signal
+      )
+  }),
   defineMethod({
     name: 'github.issue',
     permission: 'workspace',
     params: Issue,
-    handler: async (params, { runtime }) => runtime.getRepoIssue(params.repo, params.number)
+    handler: async (params, { runtime }) =>
+      runtime.getRepoIssue(params.repo, params.number, params.ownerRepo)
   }),
   defineMethod({
     name: 'github.createIssue',

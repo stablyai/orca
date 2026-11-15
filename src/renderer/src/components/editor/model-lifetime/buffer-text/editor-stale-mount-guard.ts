@@ -1,5 +1,5 @@
 import { useAppStore } from '@/store/index'
-import { getDiskBaselineSignature } from '../../../../../../shared/disk-baseline-signature'
+import { getDiskBaselineSignature } from '../../../../../../shared/file-write/disk-baseline-signature'
 import { notifyEditorFileCacheStale } from '../../autosave/editor-autosave'
 import { isEditorModelDirty } from '../../save/queue/editor-save-disk-precondition'
 

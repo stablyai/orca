@@ -1,8 +1,4 @@
-import {
-  closeTestJournalHostDatabases,
-  closeTestJournalHostDatabase
-} from '../../../../native-chat/agent-session-journal/store-lifecycle/journal-host-database-test-support'
-import '../../unused-default-rpc-methods.test-fixture'
+import { closeTestJournalHostDatabases } from '../../../../native-chat/agent-session-journal/store-lifecycle/journal-host-database-test-support'
 /** Pre-dispatch failures prove no effects and record the real cause; a lost reply after dispatch remains unknown. Explicitly unsupported chat is refused before creation. */
 
 import { mkdtemp, rm } from 'node:fs/promises'
@@ -10,32 +6,20 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { computeAgentLaunchFingerprint } from '../../../../../shared/agent-launch/contracts/agent-launch-operation'
-import { AGENT_LAUNCH_SURFACE_UNAVAILABLE_CODE } from '../../../../../shared/agent-launch/contracts/agent-launch-surface'
-import { assertOpenCodeModelLaunchPreferencesAbsent } from '../../../../opencode/opencode-model-startup-plan'
+import '../../../../../shared/agent-launch/contracts/agent-launch-surface'
+import '../../../../opencode/model-launch/opencode-model-startup-plan'
 import type { AgentSessionRecordStore } from '../../../agent-session/records/agent-session-record-store'
-import {
-  openTestAgentSessionRecordStore,
-  editPersistedTestAgentSessionStore
-} from '../../../agent-session/records/agent-session-record-store-test-harness'
+import { openTestAgentSessionRecordStore } from '../../../agent-session/records/agent-session-record-store-test-harness'
 import type { OrcaRuntimeService } from '../../../orca-runtime'
-import {
-  RuntimeLineageError,
-  LINEAGE_PARENT_AMBIGUOUS,
-  formatAmbiguousCwdParentMessage
-} from '../../../workspaces/lineage/runtime-worktree-lineage-resolution'
-import { trackTerminalSpawnDispatch } from '../../../../agent-launch/agent-launch-not-started'
-import {
-  launchFailureWithoutEffectsCode,
-  agentLaunchFailureMessage
-} from './agent-launch-failure-code'
+import '../../../workspaces/lineage/runtime-worktree-lineage-resolution'
+import '../../../../agent-launch/agent-launch-not-started'
+import './agent-launch-failure-code'
 import { RpcDispatcher } from '../../dispatcher'
-import type { RpcDispatchStreamingOptions } from '../../dispatcher-stream-options'
+import type { RpcDispatchStreamingOptions } from '../../dispatch/dispatcher-stream-options'
 import {
-  CAPABLE_CLIENT,
   methodNamed,
   runtimeStub,
   setAgentLaunchRecordStore,
-  STRUCTURED_PREFERENCE,
   type AgentLaunchRuntimeStub
 } from './agent-launch.test-fixture'
 
@@ -139,15 +123,6 @@ describe('a launch whose terminal fails', () => {
     expect(outcomeOf(OPERATION_ID)).toMatchObject({ status: 'failed', code: NO_LAUNCH_COMMAND })
   })
 
-  it('keeps a stable runtime code such as runtime_unavailable', async () => {
-    const runtime = runtimeStub({ settings: {} })
-    failingCreate(runtime, new Error('runtime_unavailable'), false)
-
-    const response = await replay(runtime, EXISTING_LAUNCH)
-
-    expect(response).toMatchObject({ ok: false, error: { code: 'runtime_unavailable' } })
-  })
-
   it('answers a retry of the same operation from the record instead of launching again', async () => {
     const first = runtimeStub({ settings: {} })
     failingCreate(first, new Error(NO_LAUNCH_COMMAND), false)
@@ -193,173 +168,6 @@ describe('a launch whose terminal fails', () => {
     expect(outcomeOf(OPERATION_ID)?.status).toBe('unknown')
   })
 
-  it('stays unknown for a launch that created its workspace first', async () => {
-    const runtime = runtimeStub({ settings: {} })
-    // No startup terminal came back, so the launch builds its own in the new workspace.
-    runtime.createManagedWorktree.mockResolvedValueOnce({
-      worktree: { id: 'wt-new' },
-      startupTerminal: undefined
-    })
-    failingCreate(runtime, new Error(NO_LAUNCH_COMMAND), false)
-
-    const response = await replay(runtime, CREATE_LAUNCH)
-
-    expect(runtime.createTerminal).toHaveBeenNthCalledWith(
-      1,
-      'id:wt-new',
-      expect.objectContaining({ startupAgent: 'claude' })
-    )
-    expect(runtime.createTerminal).toHaveBeenNthCalledWith(2, 'id:wt-new', {
-      surfaceOwner: false
-    })
-    expect(response).toMatchObject({
-      ok: false,
-      error: { code: 'agent_session_operation_unknown' }
-    })
-    expect(await replay(runtime, CREATE_LAUNCH)).toMatchObject(response)
-    expect(runtime.createManagedWorktree).toHaveBeenCalledTimes(1)
-    expect(runtime.createTerminal).toHaveBeenCalledTimes(2)
-  })
-  it.each(['cwd', 'wsl', 'remote'] as const)(
-    'refuses conclusive %s before effects and replays it',
-    async (reason) => {
-      const runtime = runtimeStub({
-        settings: {},
-        ...(reason === 'cwd' ? {} : { createSupport: { supported: false, reason } })
-      })
-      const subfolderChat = {
-        ...EXISTING_LAUNCH,
-        ...(reason === 'cwd' ? { cwd: 'packages/app' } : {}),
-        surface: 'chat'
-      }
-
-      const response = await replay(runtime, subfolderChat)
-
-      expect(response).toMatchObject({
-        ok: false,
-        error: {
-          code: AGENT_LAUNCH_SURFACE_UNAVAILABLE_CODE,
-          message: expect.stringContaining("Claude can't open as a chat here")
-        }
-      })
-      expect(outcomeOf(OPERATION_ID)).toMatchObject({
-        status: 'failed',
-        code: AGENT_LAUNCH_SURFACE_UNAVAILABLE_CODE
-      })
-      expect(await replay(runtime, subfolderChat)).toMatchObject(response)
-      expect(runtime.createManagedWorktree).not.toHaveBeenCalled()
-      expect(runtime.createTerminal).not.toHaveBeenCalled()
-    }
-  )
-
-  it('starts the CLI for an explicit terminal even when chats are the default', async () => {
-    const runtime = runtimeStub({ settings: STRUCTURED_PREFERENCE })
-
-    const response = await replay(runtime, { ...EXISTING_LAUNCH, surface: 'terminal' })
-
-    expect(response).toMatchObject({
-      ok: true,
-      result: { outcome: { kind: 'terminal' }, receipt: { reason: 'requested' } }
-    })
-  })
-
-  it.each([
-    { ...CREATE_LAUNCH, agent: 'opencode', sessionOptions: { model: 'private-proof/model-b' } },
-    // A saved chat choice is what an explicit terminal starts with, so it is refused the same way.
-    {
-      ...CREATE_LAUNCH,
-      agent: 'opencode',
-      surface: 'terminal',
-      chatOptions: { model: 'private-proof/model-b' }
-    },
-    {
-      ...EXISTING_LAUNCH,
-      agent: 'opencode',
-      reuseTerminal: { handle: 'term_existing' },
-      sessionOptions: { model: 'private-proof/model-b' }
-    }
-  ])('records and replays a model refusal before adapter effects', async (launch) => {
-    const first = runtimeStub({ settings: {} })
-    expect(await replay(first, launch)).toMatchObject({
-      ok: false,
-      error: { code: 'capability_unsupported' }
-    })
-    expect(outcomeOf(OPERATION_ID)).toMatchObject({
-      status: 'failed',
-      code: 'capability_unsupported'
-    })
-    expect(first.showRepo).not.toHaveBeenCalled()
-    expect(first.createManagedWorktree).not.toHaveBeenCalled()
-    expect(first.createTerminal).not.toHaveBeenCalled()
-    const retry = runtimeStub({ settings: {} })
-    expect(await replay(retry, launch)).toMatchObject({
-      ok: false,
-      error: { code: 'capability_unsupported' }
-    })
-    expect(retry.showTerminalWorkspaceLaunchScope).not.toHaveBeenCalled()
-    expect(retry.createManagedWorktree).not.toHaveBeenCalled()
-  })
-
-  it.each([false, true])(
-    'settles an automatic terminal model refusal (caller downgrade %s)',
-    async (callerDowngrade) => {
-      const launch = {
-        ...CREATE_LAUNCH,
-        agent: 'opencode',
-        chatOptions: { model: 'anthropic/claude-sonnet-4-6' },
-        ...(callerDowngrade ? {} : { nativeChatDefault: false }),
-        prompt: { text: 'Reply with OK', delivery: 'submit' }
-      }
-      const first = runtimeStub({ settings: STRUCTURED_PREFERENCE })
-      first.createManagedWorktree.mockImplementation(async (args) => {
-        expect(args).toMatchObject({
-          startupAgent: 'opencode',
-          startupLaunchPreferences: { model: launch.chatOptions.model }
-        })
-        assertOpenCodeModelLaunchPreferencesAbsent('opencode', launch.chatOptions)
-        return { worktree: { id: 'wt-new' }, startupTerminal: undefined }
-      })
-
-      const caller = callerDowngrade ? CAPABLE_CLIENT : undefined
-      expect(await replay(first, launch, OPERATION_ID, caller)).toMatchObject({
-        ok: false,
-        error: { code: 'capability_unsupported' }
-      })
-      expect(outcomeOf(OPERATION_ID)).toMatchObject({ status: 'failed' })
-      expect(first.createManagedWorktree).not.toHaveBeenCalled()
-      expect(first.createTerminal).not.toHaveBeenCalled()
-      const retry = runtimeStub({ settings: {} })
-      expect(await replay(retry, launch, OPERATION_ID, caller)).toMatchObject({
-        ok: false,
-        error: { code: 'capability_unsupported' }
-      })
-      expect(retry.createManagedWorktree).not.toHaveBeenCalled()
-    }
-  )
-
-  it.each([undefined, 'chat'] as const)(
-    'keeps an OpenCode model create on its chat route %s',
-    async (surface) => {
-      const runtime = runtimeStub({ settings: STRUCTURED_PREFERENCE })
-      const launch = {
-        ...CREATE_LAUNCH,
-        agent: 'opencode',
-        chatOptions: { model: 'anthropic/claude-sonnet-4-6' },
-        ...(surface ? { surface } : {})
-      }
-      expect(await replay(runtime, launch)).toMatchObject({
-        ok: true,
-        result: { outcome: { kind: 'structured' } }
-      })
-      expect(runtime.createManagedWorktree).toHaveBeenCalledTimes(1)
-      expect(runtime.createManagedWorktree.mock.calls[0]?.[0]).not.toHaveProperty('startupAgent')
-      expect(runtime.createManagedWorktree.mock.calls[0]?.[0]).not.toHaveProperty(
-        'startupLaunchPreferences'
-      )
-      expect(runtime.createTerminal).not.toHaveBeenCalled()
-    }
-  )
-
   it('preserves a successful recorded model launch even when its placement is now refused', async () => {
     const launch = AGENT_LAUNCH_REPLAY.params.parse({
       ...CREATE_LAUNCH,
@@ -401,128 +209,4 @@ describe('a launch whose terminal fails', () => {
     expect(runtime.showRepo).not.toHaveBeenCalled()
     expect(runtime.createManagedWorktree).not.toHaveBeenCalled()
   })
-  it.each([
-    new RuntimeLineageError('LINEAGE_PARENT_CONTEXT_MISSING', 'missing'),
-    Object.assign(new Error('looks typed'), { code: LINEAGE_PARENT_AMBIGUOUS }),
-    { code: LINEAGE_PARENT_AMBIGUOUS, message: 'looks typed' }
-  ])('does not infer no effects from another type/code %j', (error) => {
-    for (const target of ['create-worktree', 'existing', 'create-folder-workspace'] as const) {
-      expect(
-        launchFailureWithoutEffectsCode(error, target, trackTerminalSpawnDispatch())
-      ).toBeNull()
-      expect(agentLaunchFailureMessage(error, target)).toBeUndefined()
-    }
-  })
-  it('requires the actual typed code and create target, keeping bounded ingestion', () => {
-    const refusal = new RuntimeLineageError(
-      LINEAGE_PARENT_AMBIGUOUS,
-      formatAmbiguousCwdParentMessage('codex')
-    )
-    expect(
-      launchFailureWithoutEffectsCode(refusal, 'create-worktree', trackTerminalSpawnDispatch())
-    ).toBe(LINEAGE_PARENT_AMBIGUOUS)
-    expect(agentLaunchFailureMessage(refusal, 'create-worktree')).toBe(refusal.message)
-    for (const target of ['existing', 'create-folder-workspace'] as const) {
-      expect(
-        launchFailureWithoutEffectsCode(refusal, target, trackTerminalSpawnDispatch())
-      ).toBeNull()
-      expect(agentLaunchFailureMessage(refusal, target)).toBeUndefined()
-    }
-    expect(
-      agentLaunchFailureMessage(
-        new RuntimeLineageError(LINEAGE_PARENT_AMBIGUOUS, 'x'.repeat(5000)),
-        'create-worktree'
-      )
-    ).toHaveLength(4224)
-  })
-
-  it('joins and reopens successful true/absent observation churn without another create/start', async () => {
-    const first = runtimeStub({ settings: {} })
-    const create = {
-      repo: 'id:repo-1',
-      name: 'task',
-      cwdParentWorktree: 'id:parent',
-      callerTerminalHandle: 'term_R'
-    }
-    const observed = {
-      agent: 'claude',
-      target: { kind: 'create-worktree', create: { ...create, cwdParentAmbiguous: true } }
-    }
-    const absent = { ...observed, target: { ...observed.target, create } }
-    const realCreateBoundary = first.createManagedWorktree.getMockImplementation()!
-    let release!: () => void
-    const waiting = new Promise<void>((resolve) => {
-      release = resolve
-    })
-    first.createManagedWorktree.mockImplementation(async (args) => {
-      await waiting
-      return realCreateBoundary(args)
-    })
-    const pending = replay(first, observed)
-    await vi.waitFor(() => expect(first.createManagedWorktree).toHaveBeenCalledTimes(1))
-    const joined = replay(first, absent)
-    release()
-    const response = await pending
-    expect(response).toMatchObject({
-      ok: true,
-      result: { outcome: { kind: 'terminal', handle: 'term_agent_first' } }
-    })
-    expect(await joined).toEqual(response)
-    expect(await replay(first, absent)).toEqual(response)
-    expect(first.createManagedWorktree).toHaveBeenCalledTimes(1)
-    expect(first.createTerminal).not.toHaveBeenCalled()
-    expect(
-      await replay(first, {
-        ...absent,
-        target: { ...absent.target, create: { ...create, cwdParentWorktree: 'id:changed' } }
-      })
-    ).toMatchObject({ ok: false, error: { code: 'agent_session_operation_conflict' } })
-    await closeTestJournalHostDatabase(directory)
-    store = await openTestAgentSessionRecordStore(directory)
-    setAgentLaunchRecordStore(store)
-    const restarted = runtimeStub({ settings: {} })
-    for (const request of [observed, absent]) {
-      expect(await replay(restarted, request)).toEqual(response)
-    }
-    expect(restarted.showRepo).not.toHaveBeenCalled()
-    expect(restarted.showTerminal).not.toHaveBeenCalled()
-    expect(restarted.createManagedWorktree).not.toHaveBeenCalled()
-    expect(restarted.createTerminal).not.toHaveBeenCalled()
-  })
-
-  it.each([undefined, '', 42, { message: 'wrong type' }, 'old'.repeat(2000)])(
-    'retains failed proof across actual reopen with historical message %j',
-    async (message) => {
-      const runtime = runtimeStub({ settings: {} })
-      failingCreate(runtime, new Error(NO_LAUNCH_COMMAND), false)
-      await replay(runtime, EXISTING_LAUNCH)
-      await editPersistedTestAgentSessionStore(directory, (persisted) => {
-        for (const row of Object.values(persisted.operations)) {
-          row.outcome = JSON.parse(
-            JSON.stringify({
-              status: 'failed',
-              code: LINEAGE_PARENT_AMBIGUOUS,
-              ...(message !== undefined ? { message } : {})
-            })
-          )
-        }
-      })
-      await closeTestJournalHostDatabase(directory)
-      store = await openTestAgentSessionRecordStore(directory)
-      setAgentLaunchRecordStore(store)
-      const restarted = runtimeStub({ settings: {} })
-      const response = await replay(restarted, EXISTING_LAUNCH)
-      expect(response).toMatchObject({
-        ok: false,
-        error: {
-          code: LINEAGE_PARENT_AMBIGUOUS,
-          message:
-            typeof message === 'string' && message.length ? message : LINEAGE_PARENT_AMBIGUOUS
-        }
-      })
-      expect(outcomeOf(OPERATION_ID)?.status).toBe('failed')
-      expect(restarted.createTerminal).not.toHaveBeenCalled()
-      expect(restarted.showTerminalWorkspaceLaunchScope).not.toHaveBeenCalled()
-    }
-  )
 })

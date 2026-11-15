@@ -2,8 +2,8 @@ import { useCallback, useState, useRef, type RefObject } from 'react'
 import {
   jiraIssueCommentsForTarget,
   jiraListTransitionsForTarget
-} from '@/runtime/runtime-jira-client'
-import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
+} from '@/runtime/jira/runtime-jira-detail-client'
+import type { RuntimeClientTarget } from '../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import type { JiraComment, JiraIssue, JiraTransition } from '../../../shared/jira/jira-types'
 import { translate } from '@/i18n/i18n'
 

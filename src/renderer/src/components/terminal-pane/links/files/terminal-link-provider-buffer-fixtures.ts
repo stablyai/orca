@@ -3,7 +3,7 @@ import type { IDisposable, ILink } from '@xterm/xterm'
 import type { PaneManager } from '@/lib/pane-manager/pane-manager'
 import { createFilePathLinkProvider } from './terminal-link-handlers'
 import { getTerminalFileOpenHint } from '../terminal-link-open-hints'
-import type { TerminalPathExistsCache } from '../../terminal-path-exists-cache'
+import type { TerminalPathExistsCache } from './terminal-path-exists-cache'
 
 import type { installFilePathLinkClickFallback } from './terminal-link-handlers'
 import type { openFilePathLinkAtBufferPosition } from './terminal-file-link-hit-testing'

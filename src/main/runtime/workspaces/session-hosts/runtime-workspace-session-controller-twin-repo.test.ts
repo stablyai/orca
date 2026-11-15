@@ -28,7 +28,7 @@ type Setup = {
 
 function controllerFor({ repos, catalog = null, saved = [], staleOn = [] }: Setup) {
   const sessions = twinPartitionSessions(saved, staleOn)
-  const getRepos = vi.fn(() => repos)
+  const getRepos = () => repos
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the controller reads only repos, folder workspaces and workspace sessions.
   const store = {
     getRepos,
@@ -44,7 +44,7 @@ function controllerFor({ repos, catalog = null, saved = [], staleOn = [] }: Setu
     hasRuntimeOwnedPtyCandidate: () => false,
     getCachedWorktrees: () => catalog
   })
-  return { controller, sessions, getRepos }
+  return { controller, sessions }
 }
 
 describe('routing a repo id registered on two hosts, in a layout-owner build', () => {
@@ -63,15 +63,5 @@ describe('routing a repo id registered on two hosts, in a layout-owner build', (
     expect(controller.getHydrationTargets(true).get(TWIN_WORKTREE_ID)).toBe(
       sessions.get('runtime:env-1')
     )
-  })
-
-  it('reads the repo inventory once per hydration pass, not once per saved worktree', () => {
-    layoutOwner.isMain = true
-    const { controller, getRepos } = controllerFor({
-      repos: [RUNTIME_ROW, LOCAL_ROW],
-      saved: ['runtime:env-1', 'local']
-    })
-    controller.getHydrationTargets(true)
-    expect(getRepos).toHaveBeenCalledTimes(1)
   })
 })

@@ -22,7 +22,6 @@ export type WorktreeRuntimeStub = {
   notifyWorktreesChangedForRemoteClients: ReturnType<typeof vi.fn>
   closeFileWatchersForRemoval: ReturnType<typeof vi.fn>
   acquireFileWatcherRemoval: ReturnType<typeof vi.fn>
-  hydrateInferredWorktreeLineage: ReturnType<typeof vi.fn>
   publishWorktreeRemovalChange: ReturnType<typeof vi.fn>
   workspaceLifecycle: WorkspaceLifecycleQueue | null
 }
@@ -62,7 +61,6 @@ export function createWorktreeRuntimeStub(mainWindow?: {
     notifyWorktreesChangedForRemoteClients: vi.fn(),
     closeFileWatchersForRemoval: vi.fn().mockResolvedValue(undefined),
     acquireFileWatcherRemoval: vi.fn(),
-    hydrateInferredWorktreeLineage: vi.fn().mockResolvedValue(undefined),
     publishWorktreeRemovalChange: vi.fn((repoId: string) => {
       mainWindow?.webContents.send('worktrees:changed', { repoId })
     })

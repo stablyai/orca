@@ -1,4 +1,4 @@
-import { LEGACY_RUN_ID } from '../contract-constants'
+import { ORCHESTRATION_LEGACY_RUN_ID as LEGACY_RUN_ID } from '../../../../../shared/orchestration/orchestration-rpc-contract'
 
 export function createCoreTablesSql(): string {
   return `
@@ -230,6 +230,7 @@ CREATE TABLE IF NOT EXISTS structured_mail_sends (
   PRIMARY KEY (mailbox_handle, message_id)
 );
 CREATE INDEX IF NOT EXISTS idx_structured_mail_sends_session ON structured_mail_sends(session_id);
+CREATE INDEX IF NOT EXISTS idx_structured_mail_sends_message ON structured_mail_sends(message_id);
 
 CREATE TABLE IF NOT EXISTS worker_terminal_archives (
   dispatch_id   TEXT PRIMARY KEY,

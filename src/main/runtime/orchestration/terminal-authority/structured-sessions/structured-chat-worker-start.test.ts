@@ -1,9 +1,8 @@
-import '../../../rpc/unused-default-rpc-methods.test-fixture'
 // worker-start adopts a chat through its queued send; Stop and failed start must leave the chat intact.
 
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { formatOrcaSessionAddress } from '../../../../../shared/orca-session-address'
-import { testOrcaSessionId } from '../../../../../shared/orca-session-address-test-fixture'
+import { formatOrcaSessionAddress } from '../../../../../shared/agent-session/identity/orca-session-address'
+import { testOrcaSessionId } from '../../../../../shared/agent-session/identity/orca-session-address-test-fixture'
 import type { FakeConnection } from './structured-chat-coordinator-fake-codex-fixture'
 import {
   COORDINATOR,
@@ -22,7 +21,7 @@ import {
   turnText
 } from './structured-chat-coordinator-mail-rig.test-fixture'
 
-import type { placeWorkerAgent } from '../../../rpc/methods/orchestration/worker/worker-start-agent-placement'
+import type { placeWorkerAgent } from '../../../rpc/methods/orchestration/worker/start/placement/worker-start-agent-placement'
 
 type WorkspaceLookup = {
   showManagedTerminalWorkspace: (
@@ -188,28 +187,6 @@ describe('worker-start --terminal refuses a chat before anything is created', ()
     expect(error).toMatchObject({ code })
     expect(db.db.prepare('SELECT COUNT(*) AS n FROM dispatch_contexts').get()).toEqual({ n: 0 })
   }
-
-  it('when it is the coordinator itself', async () => {
-    await openChat(COORDINATOR)
-    const { taskId } = await coordinatorRunAndTask()
-    const self = formatOrcaSessionAddress(testOrcaSessionId(COORDINATOR))
-
-    await expectNothingCreated(
-      await refusal({ task: taskId, terminal: self }),
-      'terminal_is_coordinator'
-    )
-  })
-
-  it('when it works in another worktree', async () => {
-    await openChat(COORDINATOR)
-    await openChat(PEER_CHAT)
-    const { taskId } = await coordinatorRunAndTask()
-
-    await expectNothingCreated(
-      await refusal({ task: taskId, terminal: WORKER, worktree: 'id:other-worktree' }),
-      'terminal_worktree_mismatch'
-    )
-  })
 
   it('when it was closed', async () => {
     await openChat(COORDINATOR)

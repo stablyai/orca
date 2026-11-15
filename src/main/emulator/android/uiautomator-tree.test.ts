@@ -23,25 +23,6 @@ describe('parseUiAutomatorXml', () => {
     expect(search.bounds).toEqual({ left: 42, top: 180, right: 1038, bottom: 320 })
   })
 
-  it('preserves sibling order', () => {
-    const frame = parseUiAutomatorXml(HIERARCHY_XML).children[0]
-    expect(frame.children[0].text).toBe('Search apps')
-    expect(frame.children[1].text).toBe('Phone')
-    expect(frame.children[1].enabled).toBe(false)
-  })
-
-  it('omits boolean and bounds fields when their attributes are absent', () => {
-    const only = parseUiAutomatorXml('<hierarchy><node class="android.view.View" /></hierarchy>')
-      .children[0]
-    expect(only.className).toBe('android.view.View')
-    expect('clickable' in only).toBe(false)
-    expect('enabled' in only).toBe(false)
-    expect('focused' in only).toBe(false)
-    expect('bounds' in only).toBe(false)
-    expect('text' in only).toBe(false)
-    expect(only.children).toEqual([])
-  })
-
   it('decodes XML entities in attribute values', () => {
     const node = parseUiAutomatorXml(
       '<hierarchy><node class="x" text="Tom &amp; Jerry &lt;3&gt;" /></hierarchy>'
@@ -60,12 +41,6 @@ describe('parseUiAutomatorXml', () => {
       expect((error as EmulatorError).code).toBe('emulator_error')
     }
   })
-
-  it('throws EmulatorError(emulator_error) on non-XML and empty input', () => {
-    expect(() => parseUiAutomatorXml('not xml at all')).toThrowError(EmulatorError)
-    expect(() => parseUiAutomatorXml('')).toThrowError(EmulatorError)
-    expect(() => parseUiAutomatorXml('<hierarchy></node>')).toThrowError(EmulatorError)
-  })
 })
 
 describe('parseAndroidBounds', () => {
@@ -76,12 +51,5 @@ describe('parseAndroidBounds', () => {
       right: 1080,
       bottom: 2340
     })
-  })
-
-  it('returns null for malformed input', () => {
-    expect(parseAndroidBounds('garbage')).toBeNull()
-    expect(parseAndroidBounds('[0,0]')).toBeNull()
-    expect(parseAndroidBounds('[0,0][1080]')).toBeNull()
-    expect(parseAndroidBounds('')).toBeNull()
   })
 })

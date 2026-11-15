@@ -1,7 +1,7 @@
 import type { OrcaRuntimeWithResolveBrowserNetworkExecutionHostForWorktree } from '../terminal/launch/terminal-workspace-scope'
 import type { OrcaRuntimeWithTransitionGraphReloadToTerminalState } from '../session-graph/session-graph-authority'
 import type { ResolvedWorktree } from './catalog/runtime-worktree-path-identity'
-import type { Repo } from '../../../shared/repo-types'
+import type { Repo } from '../../../shared/repository/repo-types'
 import {
   getConnectionExecutionHostId,
   LOCAL_EXECUTION_HOST_ID,

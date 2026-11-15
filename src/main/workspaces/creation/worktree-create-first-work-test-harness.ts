@@ -3,12 +3,15 @@ import type { CreateWorktreeArgs } from '../../../shared/worktree/create-types'
 import type { Worktree } from '../../../shared/worktree/types'
 import type { WorktreeMeta } from '../../../shared/worktree/meta-types'
 import { getDefaultSettings } from '../../../shared/constants'
-import { firstWorkRenameDeps } from '../../agent-hooks/first-work-rename-runtime'
+import { firstWorkRenameDeps } from '../../agent-hooks/first-work/first-work-rename-runtime'
 import {
   maybeAutoRenameBranchOnFirstWork,
   resetFirstWorkBranchRenameState
-} from '../../agent-hooks/first-work-branch-rename'
-import { gitResponder, workingEvent } from '../../agent-hooks/first-work-branch-rename-test-harness'
+} from '../../agent-hooks/first-work/first-work-branch-rename'
+import {
+  gitResponder,
+  workingEvent
+} from '../../agent-hooks/first-work/testing/first-work-branch-rename-test-harness'
 import { mergeWorktree } from '../../ipc/worktree-metadata-merge'
 
 export const typedLabelCreateRequests: Pick<

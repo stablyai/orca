@@ -1,6 +1,6 @@
 import { useLinearIssueResult } from '@/hooks/linear-issue-committed-state'
 import { getLinearSourceScope } from '@/store/slices/linear/linear-slice-scope'
-import { defaultScopeSource } from '@/lib/default-creation-host'
+import { defaultScopeSource } from '@/runtime/hosts/selection/default-creation-host'
 import { useAppStore } from '@/store'
 import type { TaskPageDetailRoutingModel } from '../use-task-page-detail-routing'
 import { useState, useMemo, useRef, useEffect } from 'react'
@@ -9,7 +9,7 @@ import { buildLinearIssueWorkspaceAttachmentIndex } from '@/lib/work-items/linea
 import {
   collectLinkedLinearIssueRefsFromWorktrees,
   linkedLinearIssueRefsSignature
-} from '@/components/task-page/linear/task-page-linear-in-orca-issues'
+} from '@/components/task-page/linear/issues/task-page-linear-in-orca-issues'
 import type { LinearMode } from '@/components/task-page/task-page-localized-options'
 import {
   type LinearViewMode,
@@ -33,8 +33,8 @@ import type { LinearIssueAttributeFilter } from '../../../../../shared/linear/is
 import type {
   LinearIssueListFilterRead,
   LinearPrimaryTeamObservation
-} from '@/components/task-page/linear/task-page-linear-issue-request'
-import type { LinearProjectTab } from './task-page-linear-issue-model'
+} from '@/components/task-page/linear/issues/task-page-linear-issue-request'
+
 import { useTaskPageLinearContextState } from './use-task-page-linear-context-state'
 export type TaskPageLinearViewStatePreludeModel = ReturnType<
   typeof useTaskPageLinearViewStatePrelude
@@ -255,3 +255,5 @@ export function useTaskPageLinearViewState(model: TaskPageDetailRoutingModel) {
   return useTaskPageLinearContextState(preludeModel)
 }
 export type TaskPageLinearViewStateModel = ReturnType<typeof useTaskPageLinearViewState>
+
+export type LinearProjectTab = 'overview' | 'issues'
