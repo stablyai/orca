@@ -1,7 +1,7 @@
 // Pre-stable-ID panes still persist numbered keys (tab:2) until their old panes retire.
 
 import type { SleepingAgentSessionRecord } from './agent-session/lifecycle/agent-session-resume'
-import { parseLegacyNumericPaneKey } from './stable-pane-id'
+import { parseLegacyNumericPaneKey } from './workspace-layout/stable-pane-id'
 
 /** One provider conversation in a workspace; aliases of one conversation share it. */
 export function getProviderSessionClaimKey(record: SleepingAgentSessionRecord): string {

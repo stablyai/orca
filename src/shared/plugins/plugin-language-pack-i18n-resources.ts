@@ -1,6 +1,6 @@
 import type { i18n as I18nInstance } from 'i18next'
 import { withPluralCategoriesFromOther } from '../i18n-plural-family'
-import { structuralValuesEqual } from '../structural-value-equality'
+import { structuralValuesEqual } from '../collections/structural-value-equality'
 import type { PluginLanguagePackRegistration } from './artifacts/plugin-language-pack-artifact'
 
 /** Re-registers only packs whose catalog changed; returns the resource languages it touched. */

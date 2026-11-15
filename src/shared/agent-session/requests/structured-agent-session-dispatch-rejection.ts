@@ -1,12 +1,11 @@
-// Rejected proves non-delivery. The host writes printable legacy reason plus typed rejection via agentSessionFailureWords;
-// classifyDispatchRejection owns interpretation. Rejected is terminal: Retry rotates message ID because the old ID never redelivers.
-
 import {
   isSubmissionRejectionKind,
   readAgentSessionFailureFact,
   type SubmissionRejectionKind
 } from '../failures/agent-session-failure'
 import type { AgentJournalSubmission } from '../journal/agent-session-journal-types'
+// Rejected proves non-delivery. The host writes printable legacy reason plus typed rejection via agentSessionFailureWords;
+// classifyDispatchRejection owns interpretation. Rejected is terminal: Retry rotates message ID because the old ID never redelivers.
 
 /** Bare marker is hidden by released clients; log the error separately. Older hosts append : <error>. */
 export const DISPATCH_REJECTED_WRITE_FAILED = 'provider_write_failed'
@@ -64,7 +63,9 @@ const KIND_CATEGORY = {
   hostRestarted: 'undelivered',
   chatClosed: 'undelivered',
   notDelivered: 'undelivered',
+  unconfirmed: 'undelivered',
   providerExited: 'undelivered',
+  pluginInputRequired: 'undelivered',
   hostStopped: 'undelivered',
   providerStartFailed: 'startFailed',
   savedConversationMissing: 'startFailed',
@@ -88,6 +89,7 @@ const KIND_CATEGORY = {
   restartFailed: 'startFailed',
   providerRejected: 'content',
   modelUnavailable: 'content',
+  modelNotSelected: 'content',
   claudeEffortInvalid: 'content',
   attachmentInvalid: 'content',
   attachmentUnreadable: 'content',
@@ -105,7 +107,9 @@ const KIND_VERDICT = {
   hostRestarted: null,
   chatClosed: null,
   notDelivered: null,
+  unconfirmed: null,
   providerExited: 'failure',
+  pluginInputRequired: 'failure',
   providerStartFailed: 'failure',
   savedConversationMissing: 'failure',
   startFailed: 'failure',
@@ -128,6 +132,7 @@ const KIND_VERDICT = {
   restartFailed: 'failure',
   providerRejected: 'failure',
   modelUnavailable: 'failure',
+  modelNotSelected: 'failure',
   claudeEffortInvalid: 'failure',
   attachmentInvalid: 'failure',
   attachmentUnreadable: 'failure',

@@ -1,7 +1,7 @@
 import { it, expect } from 'vitest'
 import * as pty from 'node-pty'
-import { Session } from '../../src/main/daemon/session.ts'
-import { TerminalSessionTeardown } from '../../src/main/daemon/terminal-session-teardown.ts'
+import { Session } from '../../src/main/daemon/sessions/session.ts'
+import { TerminalSessionTeardown } from '../../src/main/daemon/terminal-host/terminal-session-teardown.ts'
 import { createDaemonPtySubprocessHandle } from '../../src/main/daemon/pty-subprocess/subprocess-handle.ts'
 import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
@@ -10,7 +10,7 @@ import { runProcess } from '@orca/process-host'
 import {
   captureDescendantSnapshot,
   readProcessTable
-} from '../../src/main/pty-descendant-termination.ts'
+} from '../../src/main/pty/process-retirement/pty-descendant-termination.ts'
 import {
   createPtyPhysicalExit,
   shutdownLocalPty,

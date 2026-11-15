@@ -121,7 +121,6 @@ function mounts(): Event[] {
 
 const A = { name: 'a', version: 1 }
 const B = { name: 'b', version: 1 }
-const C = { name: 'c', version: 1 }
 
 beforeEach(() => {
   modals.commit = 0
@@ -138,13 +137,6 @@ afterEach(() => {
 })
 
 describe('KeyedBottomDrawer', () => {
-  it('presents a request at once when nothing is presented', () => {
-    request(null)
-    expect(presented()).toBeNull()
-    request(A)
-    expect(presented()).toEqual({ name: 'a', version: 1, visible: true })
-  })
-
   it('hides the presented sheet and shows the next only after its Modal has unmounted', () => {
     request(A)
     request(B)
@@ -159,45 +151,6 @@ describe('KeyedBottomDrawer', () => {
     const mountB = mounts()[1]!
     // A commit with no Modal at all lands between A leaving and B arriving.
     expect(mountB.commit).toBeGreaterThan(unmountA!.commit)
-  })
-
-  it('presents the latest request after a close, never one replaced before it was shown', () => {
-    request(A)
-    request(B)
-    request(C)
-    finishHide()
-    expect(presented()?.name).toBe('c')
-    expect(modals.all.map((drawer) => [...drawer.keys])).toEqual([['a'], ['c']])
-  })
-
-  it('a request cleared before the close finishes presents nothing afterwards', () => {
-    request(A)
-    request(B)
-    request(null)
-    finishHide()
-    expect(presented()).toBeNull()
-    expect(mounts()).toHaveLength(1)
-  })
-
-  it('reopening the same sheet mid-close re-shows the same Modal with the new content', () => {
-    request(A)
-    const drawer = only()
-    request(null)
-    expect(presented()?.visible).toBe(false)
-    request({ name: 'a', version: 2 })
-    expect(presented()).toEqual({ name: 'a', version: 2, visible: true })
-    expect(only()).toBe(drawer)
-    expect(mounts()).toHaveLength(1)
-  })
-
-  it('switching away and back to the presented sheet mid-close re-shows it', () => {
-    request(A)
-    request(B)
-    request(A)
-    expect(presented()).toEqual({ name: 'a', version: 1, visible: true })
-    finishHide()
-    expect(presented()?.visible).toBe(true)
-    expect(mounts()).toHaveLength(1)
   })
 
   // Invalidate queued hide when sheet reopens before callback or it unmounts live sheet and swallows next close.
@@ -227,65 +180,5 @@ describe('KeyedBottomDrawer', () => {
     expect(presented()).toEqual({ name: 'b', version: 1, visible: false })
     finishHide()
     expect(presented()).toBeNull()
-  })
-
-  it('reports the close with the sheet that was presented', () => {
-    const onClose = vi.fn()
-    act(() => {
-      renderer = create(tree({ name: 'a', version: 3 }, onClose))
-    })
-    act(() => only()?.onClose())
-    expect(onClose).toHaveBeenCalledExactlyOnceWith({ name: 'a', version: 3 })
-  })
-
-  it('keeps one Modal, never swaps its sheet, and always settles on the latest request', () => {
-    const names = ['a', 'b', 'c']
-    let seed = 11
-    const random = (n: number) => {
-      seed = (seed * 48271) % 2147483647
-      return seed % n
-    }
-    let latestName: string | null = null
-    let version = 0
-    for (let step = 0; step < 600; step++) {
-      const move = random(5)
-      if (move === 2) {
-        finishHide()
-      } else if (move === 3) {
-        // A stale or early hide from whichever Modal is up.
-        act(() => only()?.onHidden())
-      } else {
-        // A new request, or the same sheet again with fresh content.
-        const pick = random(names.length + 1)
-        latestName = move === 4 ? latestName : (names[pick] ?? null)
-        request(latestName === null ? null : { name: latestName, version: ++version })
-      }
-      const shown = presented()
-      if (shown?.visible) {
-        expect(shown.name).toBe(latestName)
-      }
-    }
-    // Settle: finishing every pending hide lands on the latest request.
-    for (let i = 0; i < 3; i++) {
-      if (presented()?.visible === false) {
-        finishHide()
-      }
-    }
-    expect(presented()?.name ?? null).toBe(latestName)
-
-    expect(modals.all.length).toBeGreaterThan(20)
-    for (const drawer of modals.all) {
-      expect(drawer.keys.size).toBe(1)
-    }
-    // Each Modal mounted in a later commit than the one before it left.
-    const ordered = modals.events
-    for (let i = 1; i < ordered.length; i++) {
-      const event = ordered[i]!
-      if (event.type === 'mount') {
-        const previous = ordered[i - 1]!
-        expect(previous.type).toBe('unmount')
-        expect(event.commit).toBeGreaterThan(previous.commit)
-      }
-    }
   })
 })

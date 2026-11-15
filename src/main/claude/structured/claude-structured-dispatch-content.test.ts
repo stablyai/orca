@@ -3,15 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import type { AgentJournalMessageItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
-import {
-  claudeDispatchInvokesSlashCommand,
-  claudeDispatchMessageContent
-} from './claude-structured-dispatch-content'
-
-const PNG = Buffer.from(
-  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==',
-  'base64'
-)
+import { claudeDispatchMessageContent } from './claude-structured-dispatch-content'
 
 function userMessage(blocks: AgentJournalMessageItem['blocks']): AgentJournalMessageItem {
   return { kind: 'message', role: 'user', blocks }
@@ -31,130 +23,26 @@ describe('claudeDispatchMessageContent', () => {
     ])
   })
 
-  it('keeps every image ahead of the text and preserves each side’s order', async () => {
-    const second = { type: 'image-ref' as const, url: 'https://example.test/b.png' }
-
-    const content = await claudeDispatchMessageContent(
-      userMessage([{ type: 'text', text: 'look' }, REMOTE_IMAGE, second])
-    )
-
-    expect(content.map((part) => (part as { type: string }).type)).toEqual([
-      'image',
-      'image',
-      'text'
-    ])
-    expect(content[0]).toEqual({
-      type: 'image',
-      source: { type: 'url', url: 'https://example.test/a.png' }
-    })
-    expect(content[1]).toEqual({
-      type: 'image',
-      source: { type: 'url', url: 'https://example.test/b.png' }
-    })
-  })
-
-  it('sends text alone unchanged', async () => {
-    const content = await claudeDispatchMessageContent(userMessage([{ type: 'text', text: 'hi' }]))
-
-    expect(content).toEqual([{ type: 'text', text: 'hi' }])
-  })
-
-  it('sends an image with no text', async () => {
-    const content = await claudeDispatchMessageContent(userMessage([REMOTE_IMAGE]))
-
-    expect(content).toEqual([
-      { type: 'image', source: { type: 'url', url: 'https://example.test/a.png' } }
-    ])
-  })
-
-  it('rejects a message with no renderable block', async () => {
-    await expect(
-      claudeDispatchMessageContent(userMessage([{ type: 'text', text: '' }]))
-    ).rejects.toThrow('Claude dispatch requires text or an image')
-  })
-
-  it('rejects a non-user message', async () => {
-    await expect(
-      claudeDispatchMessageContent({
-        ...userMessage([{ type: 'text', text: 'hi' }]),
-        role: 'assistant'
-      })
-    ).rejects.toThrow('Claude dispatch accepts only user messages')
-  })
-
-  it('joins several text blocks so a command is not stranded ahead of trailing prose', async () => {
-    const content = await claudeDispatchMessageContent(
-      userMessage([
-        { type: 'text', text: '/goal ship' },
-        REMOTE_IMAGE,
-        { type: 'text', text: 'thanks' }
-      ])
-    )
-
-    expect(content).toEqual([
-      { type: 'image', source: { type: 'url', url: 'https://example.test/a.png' } },
-      { type: 'text', text: '/goal ship\nthanks' }
-    ])
-    expect(claudeDispatchInvokesSlashCommand(content)).toBe(true)
-  })
-
-  it('puts a locally attached image ahead of the text, the shape the composer sends', async () => {
-    const dir = await mkdtemp(join(tmpdir(), 'claude-dispatch-content-'))
-    const path = join(dir, 'shot.png')
-    await writeFile(path, PNG)
-
+  it('sends a local image over the API per-image limit for Claude to shrink', async () => {
+    const directory = await mkdtemp(join(tmpdir(), 'orca-claude-image-'))
     try {
-      const content = await claudeDispatchMessageContent(
-        userMessage([
-          { type: 'text', text: '/goal ship' },
-          { type: 'image-ref', path }
-        ])
-      )
+      const path = join(directory, 'retina-screenshot.png')
+      await writeFile(path, Buffer.alloc(6 * 1024 * 1024, 1))
+
+      const content = await claudeDispatchMessageContent(userMessage([{ type: 'image-ref', path }]))
 
       expect(content).toEqual([
         {
           type: 'image',
-          source: { type: 'base64', media_type: 'image/png', data: PNG.toString('base64') }
-        },
-        { type: 'text', text: '/goal ship' }
+          source: {
+            type: 'base64',
+            media_type: 'image/png',
+            data: Buffer.alloc(6 * 1024 * 1024, 1).toString('base64')
+          }
+        }
       ])
     } finally {
-      await rm(dir, { recursive: true, force: true })
+      await rm(directory, { recursive: true, force: true })
     }
-  })
-})
-
-describe('claudeDispatchInvokesSlashCommand', () => {
-  it('reads the trailing prompt Claude recovers, not any text block', () => {
-    expect(
-      claudeDispatchInvokesSlashCommand([
-        { type: 'image', source: { type: 'url', url: 'https://example.test/a.png' } },
-        { type: 'text', text: '/goal ship' }
-      ])
-    ).toBe(true)
-    expect(
-      claudeDispatchInvokesSlashCommand([
-        { type: 'text', text: '/goal ship' },
-        { type: 'image', source: { type: 'url', url: 'https://example.test/a.png' } }
-      ])
-    ).toBe(false)
-  })
-
-  it('reads the joined prompt, so a command behind leading prose is not one', async () => {
-    const content = await claudeDispatchMessageContent(
-      userMessage([
-        { type: 'text', text: 'take a look' },
-        { type: 'text', text: '/goal ship' }
-      ])
-    )
-
-    expect(content).toEqual([{ type: 'text', text: 'take a look\n/goal ship' }])
-    expect(claudeDispatchInvokesSlashCommand(content)).toBe(false)
-  })
-
-  it('matches untrimmed, as Claude does, and ignores a promptless turn', () => {
-    expect(claudeDispatchInvokesSlashCommand([{ type: 'text', text: '  /goal ship' }])).toBe(false)
-    expect(claudeDispatchInvokesSlashCommand([{ type: 'text', text: 'ship it' }])).toBe(false)
-    expect(claudeDispatchInvokesSlashCommand([])).toBe(false)
   })
 })

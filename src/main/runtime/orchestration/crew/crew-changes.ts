@@ -1,5 +1,8 @@
 export type CrewFacet = 'topology' | 'records' | 'status' | 'names' | 'traffic'
-export type CrewInvalidation = ReadonlySet<CrewFacet> & { readonly recordIds?: readonly string[] }
+export type CrewInvalidation = ReadonlySet<CrewFacet> & {
+  readonly recordIds?: readonly string[]
+  readonly trafficAddresses?: ReadonlySet<string>
+}
 
 /** Invalidation is synchronous; the existing stream scheduler reads only after the commit. */
 export class CrewChanges {

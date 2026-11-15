@@ -1,4 +1,4 @@
-import { recordDaemonStreamBacklogEvent } from '../../../daemon/daemon-stream-backlog-probe'
+import { recordDaemonStreamBacklogEvent } from '../../../daemon/transport/stream/daemon-stream-backlog-probe'
 import { isRuntimeOwnedHiddenRendererPty } from './pty-hidden-delivery-gate'
 import { tryGetProviderForPty } from '../provider/registry'
 import {

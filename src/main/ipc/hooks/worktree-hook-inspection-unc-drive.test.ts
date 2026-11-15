@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { Repo } from '../../../shared/repo-types'
+import type { Repo } from '../../../shared/repository/repo-types'
 
 const mocks = vi.hoisted(() => ({
   handlers: new Map<string, (event: unknown, args: unknown) => unknown>(),
@@ -7,7 +7,9 @@ const mocks = vi.hoisted(() => ({
   stat: vi.fn(),
   blocked: vi.fn<(path: string) => Promise<{ distro: string; state: 'stopped' } | null>>()
 }))
-vi.mock('../../wsl/wsl-unc-access-gate', () => ({ blockedWslDistroForPath: mocks.blocked }))
+vi.mock('../../wsl/filesystem/wsl-unc-access-gate', () => ({
+  blockedWslDistroForPath: mocks.blocked
+}))
 
 vi.mock('electron', () => ({
   ipcMain: {

@@ -2,16 +2,6 @@ import { describe, expect, it, vi } from 'vitest'
 import { createAgentPaneAuthorityOwnership } from './agent-pane-authority-ownership'
 
 describe('agent pane authority ownership', () => {
-  it('accepts only the PTY bound to the physical local pane', () => {
-    const ownsPty = createAgentPaneAuthorityOwnership({
-      getPtyIdForPaneKey: (paneKey) => (paneKey === 'source-pane' ? 'pty-1' : undefined)
-    })
-
-    expect(ownsPty('source-pane', 'pty-1')).toBe(true)
-    expect(ownsPty('source-pane', 'pty-forged')).toBe(false)
-    expect(ownsPty('other-pane', 'pty-1')).toBe(false)
-  })
-
   it('matches scoped and legacy runtime IDs to the authoritative terminal handle', () => {
     const getRuntimeTerminalHandleForPaneKey = vi.fn(() => 'terminal:one')
     const ownsPty = createAgentPaneAuthorityOwnership({

@@ -113,7 +113,7 @@ jobs:
           # Keep capture under runner.temp; all-negation files would include checkout leftovers in app.asar.
           ORCA_WIN_UNINSTALLER_EXPORT_PATH: ${{ runner.temp }}\uninstaller-signing\unsigned\orca-uninstaller.exe
         run: |
-          node config/scripts/ensure-native-runtime.mjs --runtime=electron
+          node config/scripts/native-build/node-addons/ensure-native-runtime.mjs --runtime=electron
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           pnpm exec electron-builder --config config/electron-builder.config.cjs --win --publish never
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
@@ -248,7 +248,7 @@ jobs:
 
       # Recompute template checksums over the signed bytes, then verify the template as release-cut does.
       - name: Reseal the orcad template over its signed binaries
-        run: node config/scripts/packaged-orcad-template.cjs --reseal-signed dist/win-unpacked inner-signing-list.txt
+        run: node config/scripts/orcad-distribution/template/packaged-orcad-template.cjs --reseal-signed dist/win-unpacked inner-signing-list.txt
 
       - name: Restore signed uninstaller for the installer rebuild
         shell: pwsh
@@ -331,7 +331,7 @@ jobs:
             throw 'Signed Windows installer was not returned by SignPath.'
           }
           Copy-Item -Path $signedInstaller.FullName -Destination 'dist/orca-windows-setup.exe' -Force
-          node config/scripts/generate-windows-blockmap.mjs 'dist/orca-windows-setup.exe' 'dist/orca-windows-setup.exe.blockmap'
+          node config/scripts/desktop-distribution/windows/generate-windows-blockmap.mjs 'dist/orca-windows-setup.exe' 'dist/orca-windows-setup.exe.blockmap'
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
           $installer = Get-Item 'dist/orca-windows-setup.exe'
@@ -391,7 +391,7 @@ jobs:
           Test-Signature 'installer: orca-windows-setup.exe' 'dist/orca-windows-setup.exe'
 
           # Extract/verify shipped bytes, including #7785. Builder 26.9+ removed bundled 7zip-bin (#6487).
-          $7zaOutput = node config/scripts/resolve-7za-path.mjs
+          $7zaOutput = node config/scripts/archives/seven-zip/resolve-7za-path.mjs
           $7zaExitCode = $LASTEXITCODE
           if ($7zaExitCode -ne 0) {
             throw "The 7za resolver exited with code $7zaExitCode for the signing rehearsal."

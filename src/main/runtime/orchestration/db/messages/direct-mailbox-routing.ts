@@ -1,4 +1,4 @@
-import type { MessageType } from '../../types'
+import type { MessageType } from '../orchestration-records'
 import type { OrchestrationDb } from '../orchestration-db'
 import { ORCHESTRATION_DELIVERY_BATCH_LIMIT, type MailboxRoutingPage } from './mailbox-routing-page'
 import { activeDispatchOwnsAddressSql } from '../runs/run-coordinator-mail-routing'

@@ -1,9 +1,17 @@
 import { defineFixture } from '../../../../component-fixtures/component-fixture'
 import { CommitArea } from './commit-area'
-import { resolveCommitAreaPrimaryAction } from '../../source-control-primary-action'
+import { resolveCommitAreaPrimaryAction } from '../review/source-control-primary-action'
+import type { PrimaryActionInputs } from '../review/source-control-primary-action-types'
+import { resolveDropdownItems } from '../panel/source-control-dropdown-items'
 
-function PublishState({ anotherWorkspace }: { anotherWorkspace: boolean }) {
-  const primaryAction = resolveCommitAreaPrimaryAction({
+function PublishState({
+  anotherWorkspace,
+  publishing = true
+}: {
+  anotherWorkspace: boolean
+  publishing?: boolean
+}) {
+  const inputs = {
     stagedCount: 0,
     hasUnstagedChanges: false,
     hasStageableChanges: false,
@@ -11,11 +19,12 @@ function PublishState({ anotherWorkspace }: { anotherWorkspace: boolean }) {
     hasMessage: false,
     hasUnresolvedConflicts: false,
     isCommitting: false,
-    isRemoteOperationActive: true,
+    isRemoteOperationActive: publishing,
     isRemoteOperationInAnotherWorktree: anotherWorkspace,
-    inFlightRemoteOpKind: anotherWorkspace ? null : 'publish',
+    inFlightRemoteOpKind: publishing && !anotherWorkspace ? 'publish' : null,
     upstreamStatus: { hasUpstream: false, ahead: 0, behind: 0 }
-  })
+  } satisfies PrimaryActionInputs
+  const primaryAction = resolveCommitAreaPrimaryAction(inputs)
   return (
     <CommitArea
       worktreeId="fixture-workspace"
@@ -35,10 +44,10 @@ function PublishState({ anotherWorkspace }: { anotherWorkspace: boolean }) {
       stagedCount={0}
       hasPartiallyStagedChanges={false}
       hasUnresolvedConflicts={false}
-      isRemoteOperationActive
-      inFlightRemoteOpKind={anotherWorkspace ? null : 'publish'}
+      isRemoteOperationActive={publishing}
+      inFlightRemoteOpKind={inputs.inFlightRemoteOpKind}
       primaryAction={primaryAction}
-      dropdownItems={[]}
+      dropdownItems={resolveDropdownItems(inputs)}
       onCommitMessageChange={() => {}}
       onGenerate={() => {}}
       onCancelGenerate={() => {}}
@@ -53,6 +62,16 @@ function PublishState({ anotherWorkspace }: { anotherWorkspace: boolean }) {
 export const anotherWorkspacePublishing = defineFixture({
   width: 310,
   render: () => <PublishState anotherWorkspace />
+})
+
+export const actionDescriptions = defineFixture({
+  width: 310,
+  render: () => <PublishState anotherWorkspace={false} publishing={false} />,
+  interact: (frame) => {
+    frame
+      .querySelector('button[aria-haspopup="menu"]')
+      ?.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }))
+  }
 })
 
 export const thisWorkspacePublishing = defineFixture({

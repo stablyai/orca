@@ -6,7 +6,7 @@ import type { Store } from '../persistence/loading-store/store'
 import {
   resolveDesktopAuthorizedPath,
   resolveUserNamedRegularFile
-} from './local-file-access-resolution'
+} from './filesystem/access/local-file-access-resolution'
 import { createSenderScopedRequestCancellations } from './sender-scoped-request-cancellation'
 import { startNotebookKernel, type NotebookKernel } from '../notebook/notebook-kernel'
 import {

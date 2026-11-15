@@ -2,7 +2,10 @@ import type {
   AgentSessionAttachmentProblem,
   AgentSessionAttachmentProblemReason
 } from './agent-session-failure'
-import type { AgentSessionFailureSay } from './agent-session-failure-copy'
+import {
+  sayAgentSessionFailureEnglish,
+  type AgentSessionFailureSay
+} from './agent-session-failure-copy'
 import type { AgentSessionFailureWordsContext } from './agent-session-failure-words'
 
 const BYTES_PER_MB = 1024 * 1024
@@ -40,6 +43,19 @@ const ATTACHMENT_SENTENCES = {
     problem: AgentSessionAttachmentProblem
   ) => string
 >
+
+/** A long list stops short: every one of them has to go, and the next refusal names the rest. */
+const EXPIRED_NAMES_SHOWN = 3
+
+export function expiredAttachmentsSentence(
+  names: readonly string[],
+  say: AgentSessionFailureSay = sayAgentSessionFailureEnglish
+): string {
+  const shown = names.slice(0, EXPIRED_NAMES_SHOWN).join(', ')
+  return say('attachmentsExpired', {
+    names: names.length > EXPIRED_NAMES_SHOWN ? `${shown}…` : shown
+  })
+}
 
 export function attachmentProblemSentence(
   say: AgentSessionFailureSay,

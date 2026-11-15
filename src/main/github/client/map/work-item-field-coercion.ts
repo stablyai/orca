@@ -1,9 +1,9 @@
 import type {
   PRMergeableState,
   PRReviewDecision
-} from '../../../../shared/github/pull-request-types'
-import type { GitHubWorkItem } from '../../../../shared/github/work-item-types'
-import { summarizeProviderChecks } from '../../../../shared/provider-check-summary'
+} from '../../../../shared/github/pull-requests/pull-request-types'
+import type { GitHubWorkItem } from '../../../../shared/github/work-items/work-item-types'
+import { summarizeProviderChecks } from '../../../../shared/source-control/checks/provider-check-summary'
 // The renderer supplies repoId after IPC; main knows only the repository path.
 export type MainWorkItem = Omit<GitHubWorkItem, 'repoId'>
 
@@ -12,7 +12,7 @@ export const WORK_ITEM_PR_LIST_JSON_FIELDS =
 
 // Keep first-paint reviewers in list payloads; defer costly checks, review decisions and merge metadata.
 export const WORK_ITEM_PR_DETAIL_JSON_FIELDS =
-  'number,title,state,url,labels,updatedAt,author,isDraft,headRefName,baseRefName,headRefOid,headRepositoryOwner,additions,deletions,changedFiles,reviewDecision,reviewRequests,latestReviews,assignees,statusCheckRollup,mergeable,mergeStateStatus,autoMergeRequest,maintainerCanModify'
+  'number,title,state,url,labels,updatedAt,author,isDraft,headRefName,baseRefName,headRefOid,headRepositoryOwner,additions,deletions,changedFiles,reviewDecision,reviewRequests,latestReviews,assignees,mergeable,mergeStateStatus,autoMergeRequest,maintainerCanModify'
 
 /** Preserve API-provided avatars with logins; dotcom login-based URLs do not identify Enterprise avatars. */
 export function authorFieldsFromUnknown(

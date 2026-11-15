@@ -1,12 +1,26 @@
-import type { GitHubAssignableUser } from '../../../../../shared/github/pull-request-types'
-import type { GitHubWorkItem } from '../../../../../shared/github/work-item-types'
-import type { TaskSourceContext } from '../../../../../shared/task-source-context'
+import type { GitHubAssignableUser } from '../../../../../shared/github/pull-requests/pull-request-types'
+import type { GitHubWorkItem } from '../../../../../shared/github/work-items/work-item-types'
+import type { TaskSourceContext } from '../../../../../shared/work-items/task-source-context'
 import type {
   GitHubWorkItemProjectOrigin,
   ItemDialogTab
 } from '@/components/github/github-work-item-identity'
 
 export type GitHubItemDialogProjectOrigin = GitHubWorkItemProjectOrigin
+
+export type GitHubWorkItemDetailsArgs = {
+  workItem: GitHubWorkItem | null
+  repoPath: string | null
+  effectiveRepoId: string | null
+  sourceContext?: TaskSourceContext | null
+  initialTab?: ItemDialogTab
+  projectOrigin?: GitHubItemDialogProjectOrigin
+  onRefreshAccepted?: (item: GitHubWorkItem) => void
+  onReviewRequestsChange?: (
+    itemKey: { id: string; repoId: string },
+    reviewRequests: GitHubAssignableUser[]
+  ) => void
+}
 
 export type GitHubItemDialogProps = {
   workItem: GitHubWorkItem | null

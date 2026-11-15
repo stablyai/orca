@@ -1,7 +1,7 @@
-import type { CommandHandler } from '../dispatch'
-import { printResult } from '../format'
-import { getRequiredStringFlag, getRequiredStringFlagAllowingEmpty } from '../flags'
-import { getBrowserCommandTarget } from '../selectors'
+import type { CommandHandler } from '../dispatch/dispatch'
+import { printResult } from '../output/command-result-output'
+import { getRequiredStringFlag, getRequiredStringFlagAllowingEmpty } from '../arguments/flags'
+import { getBrowserCommandTarget } from './browser-command-target'
 
 export const BROWSER_STORAGE_HANDLERS: Record<string, CommandHandler> = {
   'storage local get': async ({ flags, client, cwd, json }) => {

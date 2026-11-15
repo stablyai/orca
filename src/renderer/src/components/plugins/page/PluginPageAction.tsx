@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Loader2, ShieldCheck } from 'lucide-react'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { Button } from '../../ui/button'
 import type { PluginListEntry } from '../list/plugin-list-entries'
 import { installedPluginTrust } from '../presentation/plugin-access-profile'
@@ -41,28 +41,20 @@ type PluginPageActionParts = {
 }
 
 function ContentOnlyNote(): React.JSX.Element {
+  const t = useTranslate()
   return (
     <span className="plugin-security-chrome inline-flex items-center gap-1.5 text-xs text-muted-foreground">
       <ShieldCheck className="size-3.5" aria-hidden="true" />
-      {translate('auto.components.settings.PluginPageAction.contentOnly', 'Content only')}
+      {t('auto.components.settings.PluginPageAction.contentOnly', 'Content only')}
     </span>
   )
 }
 
-/** A theme reserves its "Use now" line from first paint, so installing never moves the page. */
-function UseNowLine({
-  pluginKey,
-  reserved
-}: {
-  pluginKey: string | null
-  reserved: boolean
-}): React.JSX.Element | null {
-  if (!reserved) {
-    return null
-  }
+/** One-click "Use now" for an installed plugin's themes; empty (and hidden) for anything else. */
+function UseNowLine({ pluginKey }: { pluginKey: string }): React.JSX.Element {
   return (
-    <div data-use-now-line="" className="mt-3 flex min-h-7 items-center">
-      {pluginKey ? <PluginThemeUseNow pluginKey={pluginKey} /> : null}
+    <div data-use-now-line="" className="mt-3 flex items-center empty:hidden">
+      <PluginThemeUseNow pluginKey={pluginKey} />
     </div>
   )
 }
@@ -80,13 +72,11 @@ export function usePluginPageAction({
   install,
   onConsent
 }: PluginPageActionProps): PluginPageActionParts {
+  const t = useTranslate()
   const [consentError, setConsentError] = useState<string | null>(null)
   const { plugin, listing, execution, preview, trust } = model
   const inUse = usePluginInUse(plugin?.pluginKey ?? null)
   const phase = install.phaseOf(entry.pluginKey)
-  const themed = entry.types.some(
-    (type) => type === 'app-theme' || type === 'icon-theme' || type === 'terminal-theme'
-  )
   const none: PluginPageActionParts = { header: null, status: null, body: null }
 
   if (plugin && pluginNeedsReview(plugin) && plugin.consentFingerprint) {
@@ -98,22 +88,19 @@ export function usePluginPageAction({
         setConsentError(pluginConsentErrorMessage(cause))
       })
     }
-    const enableLabel = translate(
-      'auto.components.settings.PluginConsentDialog.enable',
-      'Enable plugin'
-    )
+    const enableLabel = t('auto.components.settings.PluginConsentDialog.enable', 'Enable plugin')
     return {
       ...none,
       header: (
         <>
           <Button variant="ghost" size="sm" disabled={busy} onClick={() => decide('keep-disabled')}>
-            {translate('auto.components.settings.PluginInstallConsent.keepOff', 'Keep off')}
+            {t('auto.components.settings.PluginInstallConsent.keepOff', 'Keep off')}
           </Button>
           <Button
             size="sm"
             className="w-36"
             disabled={busy}
-            aria-label={`${enableLabel}: ${plugin.name}`}
+            aria-label={`${enableLabel}: ${name}`}
             onClick={() => decide('approve')}
           >
             {busy ? <Loader2 className="animate-spin" /> : null}
@@ -146,7 +133,7 @@ export function usePluginPageAction({
         <PluginInUseAction pluginKey={plugin.pluginKey} name={name} inUse={inUse} size="sm" />
       ),
       status: plugin.execution === 'data' ? <ContentOnlyNote /> : null,
-      body: <UseNowLine pluginKey={plugin.pluginKey} reserved={themed} />
+      body: <UseNowLine pluginKey={plugin.pluginKey} />
     }
   }
 
@@ -158,7 +145,7 @@ export function usePluginPageAction({
     phase?.kind === 'error' ? (
       <PluginDetailAlert
         tone="destructive"
-        title={translate(
+        title={t(
           'auto.components.settings.PluginPageAction.failedTitle',
           'Couldn’t install {{value0}}',
           { value0: name }
@@ -175,7 +162,7 @@ export function usePluginPageAction({
           size="sm"
           className="w-36"
           disabled={installing || model.disarmed}
-          aria-label={translate(
+          aria-label={t(
             'auto.components.settings.PluginManagerRows.installName',
             'Install {{value0}}',
             { value0: name }
@@ -183,22 +170,17 @@ export function usePluginPageAction({
           onClick={() => void install.install(listing, preview ? { preview } : undefined)}
         >
           {installing ? <Loader2 className="animate-spin" /> : null}
-          {installButtonLabel(phase)}
+          {installButtonLabel(phase, t)}
         </Button>
       ),
       status: <ContentOnlyNote />,
-      body: (
-        <>
-          <UseNowLine pluginKey={null} reserved={themed} />
-          {errorAlert}
-        </>
-      )
+      body: errorAlert
     }
   }
 
   // Why the preview: it carries the fingerprint approved, and must be the release shown.
   const armed = preview !== null && !model.disarmed
-  const installLabel = translate(
+  const installLabel = t(
     'auto.components.settings.PluginInstallConsent.install',
     'Install & enable'
   )

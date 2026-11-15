@@ -1,18 +1,25 @@
 import { selectBareRecipientOwner, runMismatch } from './recipient-owner-selection'
-import type { LegacyAdoptedMailboxOwner, OrchestrationDb } from '../../../../orchestration/db'
+import type { LegacyAdoptedMailboxOwner } from '../../../../orchestration/db/runs/run-lookup'
+import type { OrchestrationDb } from '../../../../orchestration/db/orchestration-db'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
-import type { DispatchContextRow, DispatchStatus } from '../../../../orchestration/types'
+import type {
+  DispatchContextRow,
+  DispatchStatus
+} from '../../../../orchestration/db/orchestration-records'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
-import { resolveOrchestrationParty } from '../../../../orchestration/orchestration-party'
+import { resolveOrchestrationParty } from '../../../../orchestration/addressing/orchestration-party'
 import { isEquivalentPaneKey } from '../../../../orchestration/db/pane-key-match'
-import type { OrchestrationCoordinatorKey } from '../../../../orchestration/orchestration-caller-identity'
-import { CURRENT_CONTRACT_VERSION } from '../../../../orchestration/db/contract-constants'
-import { readAgentSessionRecordStore } from '../../../../orchestration/structured-session-lineage'
+import type { OrchestrationCoordinatorKey } from '../../../../orchestration/addressing/orchestration-caller-identity'
+import { ORCHESTRATION_CONTRACT_VERSION as CURRENT_CONTRACT_VERSION } from '../../../../../../shared/orchestration/orchestration-runtime-capabilities'
+import { readAgentSessionRecordStore } from '../../../../orchestration/addressing/session-lineage/structured-session-lineage'
 import {
   readSessionRecipient,
   refuseUndeliverableSessionRecipient,
+  type TerminalAgentRecipient,
   type SessionRecipientRefusal
 } from './session-recipient'
+import { reportFollowUpAction } from '../../../../orchestration/workers/reports/report-follow-up-action'
+import { formatReportFollowUpNext } from '../../../../../../shared/orchestration/mailbox/orchestration-report-follow-up'
 
 const ACTIVE_DISPATCH_STATUSES: readonly DispatchStatus[] = ['pending', 'dispatched']
 
@@ -26,10 +33,27 @@ export function assertDispatchMailboxDeliverable(
   if (!dispatch || ACTIVE_DISPATCH_STATUSES.includes(dispatch.status)) {
     return
   }
-  const recipientRun = currentDispatchAssigneeRun(runtime, db, dispatch)?.id ?? dispatch.run_id
+  const workerRun = currentDispatchAssigneeRun(runtime, db, dispatch)
+  // The owning Run is usually the sender's own; only a Run the worker itself coordinates is its mailbox.
+  if (workerRun && workerRun.id !== dispatch.run_id) {
+    throw new OrchestrationError(
+      'dispatch_inactive',
+      `Dispatch ${dispatchId} is ${dispatch.status}; its worker will never read that mailbox. Send to run:${workerRun.id} instead, or start a new Dispatch for follow-up work.`
+    )
+  }
+  const followUp = reportFollowUpAction(db, dispatchId)
   throw new OrchestrationError(
     'dispatch_inactive',
-    `Dispatch ${dispatchId} is ${dispatch.status}; its worker will never read that mailbox. Send to run:${recipientRun} instead, or start a new Dispatch for follow-up work.`
+    `Dispatch ${dispatchId} is ${dispatch.status}; its worker will never read that mailbox.${
+      followUp
+        ? ` ${formatReportFollowUpNext(followUp)}${
+            followUp.kind === 'send' && !followUp.active
+              ? ' Only --type status, dispatch or handoff continues a worker; status is the default.'
+              : ''
+          }`
+        : ''
+    }`,
+    followUp ? { followUp } : undefined
   )
 }
 
@@ -135,13 +159,14 @@ export function selectRunBoundDispatchRecipient(
   }
 }
 
-// Replies share send routing; unresolved historical senders keep their original address.
+// Replies share send routing; an unresolvable bare sender is refused rather than stored where nothing reads.
 export function resolveReplyRecipient(params: {
   runtime: OrcaRuntimeService
   db: OrchestrationDb
   originalFrom: string
   originalRunId: string | undefined
-}): { to: string; runId: string | undefined } {
+  terminalRecipient: TerminalAgentRecipient
+}): { to: string; runId: string | undefined; warning?: SendRecipientWarning } {
   const { runtime, db, originalFrom, originalRunId } = params
   const unchanged = { to: originalFrom, runId: originalRunId }
   if (originalFrom.startsWith('run:')) {
@@ -161,9 +186,19 @@ export function resolveReplyRecipient(params: {
     runtime,
     db,
     handle: originalFrom,
-    senderRunId: originalRunId
+    senderRunId: originalRunId,
+    terminalRecipient: params.terminalRecipient
   })
-  return recipient.ok ? { to: recipient.to, runId: recipient.runId ?? originalRunId } : unchanged
+  if (!recipient.ok) {
+    throw new OrchestrationError(recipient.code, `${recipient.message} No reply was sent.`, {
+      effectsApplied: false
+    })
+  }
+  return {
+    to: recipient.to,
+    runId: recipient.runId ?? originalRunId,
+    ...(recipient.warning ? { warning: recipient.warning } : {})
+  }
 }
 
 export type SendRecipientWarning = {
@@ -173,6 +208,8 @@ export type SendRecipientWarning = {
     | 'recipient_unreachable'
     | 'recipient_ambiguous'
     | 'recipient_run_mismatch'
+    | 'recipient_delivery_held'
+    | 'recipient_delivery_unknown'
   recipient: string
   message: string
 }
@@ -202,10 +239,14 @@ export function resolveBareOrchestrationRecipient(params: {
   senderRunId?: string
   explicitRunId?: string
   legacyAdoptedMailboxOwner?: LegacyAdoptedMailboxOwner | null
+  /** `resolveTerminalAgentRecipient(handle)`, awaited first; omit only where the handle cannot
+   *  name a terminal agent. */
+  terminalRecipient?: TerminalAgentRecipient
 }): BareRecipientResolution {
   const { runtime, db } = params
   const sessionStore = readAgentSessionRecordStore()
-  const session = readSessionRecipient(params.handle, sessionStore)
+  const terminal = params.terminalRecipient ?? null
+  const session = readSessionRecipient(params.handle, sessionStore, terminal)
   if (session && 'code' in session) {
     return refused(params.handle, session)
   }
@@ -215,7 +256,8 @@ export function resolveBareOrchestrationRecipient(params: {
     party.terminalHandle === null
       ? undefined
       : (runtime.getLiveTerminalPaneKey(party.terminalHandle) ?? undefined)
-  return selectBareRecipientOwner({
+  const dispatches = () => db.getActiveDispatchMailboxOwners(handle, paneKey)
+  const resolution = selectBareRecipientOwner({
     ...params,
     handle,
     boundRuns: () =>
@@ -224,11 +266,11 @@ export function resolveBareOrchestrationRecipient(params: {
         : paneKey
           ? db.runsBoundToPane(paneKey)
           : [],
-    dispatches: () => db.getActiveDispatchMailboxOwners(handle, paneKey),
+    dispatches,
     ownerRunIds: () => db.getRunMailboxOwnerIdsForHandle(handle, params.legacyAdoptedMailboxOwner),
     fallback: () => {
       if (session) {
-        const refusal = refuseUndeliverableSessionRecipient(session, sessionStore, db)
+        const refusal = refuseUndeliverableSessionRecipient(session, sessionStore, db, terminal)
         return refusal
           ? refused(params.handle, refusal)
           : { ok: true, to: handle, runId: params.senderRunId }
@@ -256,6 +298,16 @@ export function resolveBareOrchestrationRecipient(params: {
       }
     }
   })
+  if (resolution.ok || resolution.code !== 'recipient_run_mismatch') {
+    return resolution
+  }
+  // A terminal can coordinate one Run and work a Dispatch in the named one; its mail follows that Dispatch.
+  const worked = dispatches().filter((dispatch) => dispatch.run_id === params.explicitRunId)
+  const runBound =
+    worked.length === 1
+      ? resolveRunBoundDispatchRecipient(runtime, db, worked[0].id, params.explicitRunId)
+      : undefined
+  return runBound ? { ok: true, ...runBound } : resolution
 }
 
 function refused(recipient: string, refusal: SessionRecipientRefusal): BareRecipientResolution {
@@ -266,5 +318,3 @@ function refused(recipient: string, refusal: SessionRecipientRefusal): BareRecip
     warning: { code: 'recipient_unreachable', recipient, message: refusal.message }
   }
 }
-
-export { selectBareRecipientOwner } from './recipient-owner-selection'

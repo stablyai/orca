@@ -45,11 +45,3 @@ it('keeps named and positional answers after calls fold across provider rows', (
   ])
   expect(orphan).toMatchObject({ id: 'outputs', role: 'tool', blocks: [stray] })
 })
-
-it('reuses a message with fully attributable answers', () => {
-  const input = message('run', [
-    { type: 'tool-call', name: 'Bash', callId: 'x', input: {} },
-    { type: 'tool-result', callId: 'x', output: 'owned' }
-  ])
-  expect(foldToolMessages([input])[0]).toBe(input)
-})

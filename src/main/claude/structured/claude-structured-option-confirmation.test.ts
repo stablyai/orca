@@ -1,15 +1,10 @@
 import { describe, expect, it, vi } from 'vitest'
-import {
-  applyStructuredAgentSessionOptions,
-  createStructuredAgentSessionOptionState
-} from '../../../shared/agent-session/options/structured-agent-session-options'
-import { structuredAgentSessionOptionSnapshot } from '../../../shared/agent-session/options/structured-agent-session-option-snapshot'
-import { CLAUDE_SESSION_OPTION_CATALOG } from '../../../shared/agent-session/options/agent-session-option-catalog-claude-codex'
-import type { AgentSessionOptionsResult } from '../../../shared/agent-session/options/agent-session-options-result'
-import type { SessionOptionDescriptor } from '../../../shared/native-chat/input/native-chat-session-options'
 import { setClaudeStructuredOption } from './launch/claude-structured-options'
+import {
+  readClaudeStructuredSessionOptions,
+  refreshClaudeStructuredSessionOptions
+} from './launch/claude-structured-session-options'
 import type { ClaudeSession } from './claude-structured-session-state'
-import { PROVIDER_SESSION_ID, acquired, fakeClaude } from './claude-structured-session-test-support'
 
 /** Claude Code 2.1.260 list_models fixture; Haiku omits both effort keys. */
 const CATALOG = [
@@ -23,89 +18,10 @@ const CATALOG = [
   { value: 'haiku', resolvedModel: 'claude-haiku-4-5-20251001', displayName: 'Haiku' }
 ]
 
-function initFrame(model: string): Record<string, unknown> {
-  return {
-    type: 'system',
-    subtype: 'init',
-    session_id: PROVIDER_SESSION_ID,
-    uuid: 'turn-init-uuid',
-    model,
-    apiKeySource: 'none'
-  }
-}
-
-function modelPill(result: AgentSessionOptionsResult): SessionOptionDescriptor | undefined {
-  const state = applyStructuredAgentSessionOptions(
-    createStructuredAgentSessionOptionState('claude'),
-    CLAUDE_SESSION_OPTION_CATALOG,
-    result
-  )
-  return structuredAgentSessionOptionSnapshot(state).find((d) => d.category === 'model')
-}
-
-function modelSource(result: AgentSessionOptionsResult): string | undefined {
-  return modelPill(result)?.valueSource
-}
-
-function modelValue(result: AgentSessionOptionsResult): string | undefined {
-  const kind = modelPill(result)?.kind
-  return kind?.type === 'select' ? kind.currentValue : undefined
-}
-
-describe('structured option confirmation reaches the pill', () => {
-  it('marks the model reported once the provider names it back', async () => {
-    const claude = fakeClaude({
-      initModel: 'claude-sonnet-5',
-      routes: { list_models: () => CATALOG }
-    })
-    const adapter = await acquired(claude)
-    await adapter.setOption({ sessionId: 'session-1', key: 'model', value: 'haiku', fence: 7 })
-    claude.connections[0]!.handlers.onMessage?.(initFrame('claude-haiku-4-5-20251001'))
-
-    const result = await adapter.readOptions({ sessionId: 'session-1', fence: 7 })
-    expect(result.current.confirmed).toContain('model')
-    expect(modelSource(result)).toBe('reported')
-  })
-})
-
-describe('the provider report corrects the pill', () => {
-  it('moves the pill to the model the turn actually ran', async () => {
-    const claude = fakeClaude({
-      initModel: 'claude-sonnet-5',
-      routes: { list_models: () => CATALOG }
-    })
-    const adapter = await acquired(claude)
-    await adapter.setOption({ sessionId: 'session-1', key: 'model', value: 'haiku', fence: 7 })
-    expect(modelValue(await adapter.readOptions({ sessionId: 'session-1', fence: 7 }))).toBe(
-      'haiku'
-    )
-
-    claude.connections[0]!.handlers.onMessage?.(initFrame('claude-sonnet-5'))
-
-    const corrected = await adapter.readOptions({ sessionId: 'session-1', fence: 7 })
-    expect(modelValue(corrected)).toBe('claude-sonnet-5')
-    expect(corrected.current.confirmed).toContain('model')
-  })
-
-  it('lets a newer write outrank the report it precedes', async () => {
-    const claude = fakeClaude({
-      initModel: 'claude-sonnet-5',
-      routes: { list_models: () => CATALOG }
-    })
-    const adapter = await acquired(claude)
-    claude.connections[0]!.handlers.onMessage?.(initFrame('claude-sonnet-5'))
-    await adapter.setOption({ sessionId: 'session-1', key: 'model', value: 'haiku', fence: 7 })
-
-    const result = await adapter.readOptions({ sessionId: 'session-1', fence: 7 })
-    expect(modelValue(result)).toBe('haiku')
-    expect(result.current.confirmed ?? []).not.toContain('model')
-  })
-})
-
 describe('confirmation never outlives the write it belongs to', () => {
-  it('drops an earlier effort confirmation when the value changes', async () => {
+  it('corroborates only the current held effort across fresh native observations', async () => {
     const calls: string[] = []
-    let reported = 'low'
+    let settings: unknown = { applied: { effort: 'high' } }
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the fixture supplies every session member the option paths under test read.
     const session = {
       options: new Map<string, string>([['model', 'sonnet']]),
@@ -118,21 +34,59 @@ describe('confirmation never outlives the write it belongs to', () => {
         applyFlagSettings: async (s: { effortLevel?: string }) => {
           calls.push(`apply:${s.effortLevel}`)
         },
-        getSettings: async () => ({
-          applied: { effort: reported },
-          effective: { effortLevel: reported },
-          sources: {}
-        })
+        getSettings: async () => settings
       },
       startup: { state: 'proven' }
     } as unknown as ClaudeSession
 
-    await setClaudeStructuredOption(session, { key: 'effort', value: 'low' }, undefined)
-    await vi.waitFor(() => expect(session.confirmedOptions.has('effort')).toBe(true))
+    const current = async () => (await readClaudeStructuredSessionOptions(session)).current
+    await expect(
+      setClaudeStructuredOption(session, { key: 'effort', value: 'high' }, undefined)
+    ).resolves.toMatchObject({ effort: 'high' })
+    await vi.waitFor(async () => expect((await current()).confirmed).toContain('effort'))
+    const refresh = async (next: unknown) => {
+      settings = next
+      await refreshClaudeStructuredSessionOptions(
+        session,
+        undefined,
+        () => true,
+        () => {}
+      )
+      expect((await current()).effort).toBe('high')
+      expect(session.appliedInputOptions.get('effort')).toBe('high')
+    }
+    await refresh({})
+    expect((await current()).confirmed).toContain('effort')
+    await refresh({ applied: { effort: 'low' } })
+    expect((await current()).confirmed ?? []).not.toContain('effort')
+    await refresh({ applied: { effort: 'high' } })
+    expect((await current()).confirmed).toContain('effort')
+    await refresh({ applied: { effort: null } })
+    expect((await current()).confirmed ?? []).not.toContain('effort')
 
-    await setClaudeStructuredOption(session, { key: 'effort', value: 'max' }, undefined)
-    expect(session.options.get('effort')).toBe('max')
-    expect(session.confirmedOptions.has('effort')).toBe(false)
-    expect(calls).toEqual(['apply:low', 'apply:max'])
+    await refresh({ applied: { effort: 'high' } })
+    expect((await current()).confirmed).toContain('effort')
+    let releaseRead!: (value: unknown) => void
+    session.connection.getSettings = () =>
+      new Promise((resolve) => {
+        releaseRead = resolve
+      })
+    const lateRead = refreshClaudeStructuredSessionOptions(
+      session,
+      undefined,
+      () => true,
+      () => {}
+    )
+    await expect(
+      setClaudeStructuredOption(session, { key: 'effort', value: 'max' }, undefined)
+    ).resolves.toMatchObject({ effort: 'max' })
+    expect((await current()).effort).toBe('max')
+    expect((await current()).confirmed ?? []).not.toContain('effort')
+    releaseRead({ applied: { effort: 'max' } })
+    await lateRead
+    expect((await current()).effort).toBe('max')
+    expect(session.appliedInputOptions.get('effort')).toBe('max')
+    expect((await current()).confirmed ?? []).not.toContain('effort')
+    expect(calls).toEqual(['apply:high', 'apply:max'])
   })
 })

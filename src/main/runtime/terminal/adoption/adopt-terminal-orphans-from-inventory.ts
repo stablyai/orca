@@ -3,23 +3,23 @@ import {
   recordPtySurface,
   spawnSurfaceClaimSequence,
   SURFACE_CLAIM_WITHOUT_STANDING
-} from '../../pty-recorded-surface-topology'
-import { resolveStructuredWorkerAuthority } from '../../structured-worker-authority'
-import type { RuntimeLeafRecord } from '../../runtime-terminal-state-records'
+} from '../surface/pty-recorded-surface-topology'
+import { resolveStructuredWorkerAuthority } from '../../orchestration/terminal-authority/structured-sessions/structured-worker-authority'
+import type { RuntimeLeafRecord } from '../records/runtime-terminal-state-records'
 import { OrcaRuntimeWithSubscribeToTerminalResize } from '../layout/terminal-resize-listeners'
+import type { RuntimeMobileSessionTabsResult } from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import type {
-  RuntimeMobileSessionTabsResult,
   RuntimeTerminalOrphanAdoptionRequest,
   RuntimeTerminalOrphanAdoptionResult
-} from '../../../../shared/runtime-types'
-import type { TerminalWorkspaceLaunchScope } from '../../runtime-legacy-worker-terminal-recovery-types'
-import type { PtyControllerInventory } from '../../runtime-pty-controller-contract'
-import { resolveTerminalSessionWorktreeId } from '../../runtime-worktree-path-identity'
-import { getLocalProjectWorktreeGitOptions } from '../../../project-runtime-git-options'
-import { adoptRuntimeTerminalOrphansFromInventory } from '../../runtime-terminal-orphan-adoption'
+} from '../../../../shared/terminal/runtime/runtime-terminal-contracts'
+import type { TerminalWorkspaceLaunchScope } from '../../orchestration/terminal-authority/structured-sessions/runtime-legacy-worker-terminal-recovery-types'
+import type { PtyControllerInventory } from '../lifecycle/runtime-pty-controller-contract'
+import { resolveTerminalSessionWorktreeId } from '../../workspaces/catalog/runtime-worktree-path-identity'
+import { getLocalProjectWorktreeGitOptions } from '../../../workspaces/execution-host/project-runtime-git-options'
+import { adoptRuntimeTerminalOrphansFromInventory } from './runtime-terminal-orphan-adoption'
 import { getRepoIdFromWorktreeId } from '../../../../shared/worktree/id'
-import { getLatestPtyTitle } from '../../runtime-worktree-status-projection'
-import type { PtyLivenessVerdict } from '../../../../shared/pty-liveness-verdict'
+import { getLatestPtyTitle } from '../../workspaces/process-listing/runtime-worktree-status-projection'
+import type { PtyLivenessVerdict } from '../../../../shared/terminal/pty/lifecycle/pty-liveness-verdict'
 
 export abstract class OrcaRuntimeWithAdoptTerminalOrphansFromInventory extends OrcaRuntimeWithSubscribeToTerminalResize {
   protected abstract issueHandle(
@@ -114,18 +114,22 @@ export abstract class OrcaRuntimeWithAdoptTerminalOrphansFromInventory extends O
             onlyRuntimeOwnedTerminals: true
           }),
         notifySessionChanged: (worktreeId) => this.notifyMobileSessionTabsChanged(worktreeId),
-        getSnapshot: (worktreeId) => this.getTerminalOrphanAdoptionSnapshot(worktreeId)
+        getSnapshot: async (worktreeId) => await this.getTerminalOrphanAdoptionSnapshot(worktreeId)
       }
     })
   }
 
-  protected getTerminalOrphanAdoptionSnapshot(worktreeId: string): RuntimeMobileSessionTabsResult {
+  protected async getTerminalOrphanAdoptionSnapshot(
+    worktreeId: string
+  ): Promise<RuntimeMobileSessionTabsResult> {
     this.hydrateHeadlessMobileSessionTabsFromWorkspaceSession(worktreeId, {
       allowAttachedWindow: true,
       onlyRuntimeOwnedTerminals: true
     })
     this.hydrateHeadlessMobileSessionTabsFromWorkspaceSession(worktreeId)
-    return this.getMobileSessionTabsForWorktree(worktreeId)
+    return await this.getMobileSessionTabsForWorktree(worktreeId, undefined, {
+      includeAgentSenders: false
+    })
   }
 
   // Omitted --terminal follows the current worktree's active terminal, like browser active-tab resolution.
@@ -138,8 +142,12 @@ export abstract class OrcaRuntimeWithAdoptTerminalOrphansFromInventory extends O
         ? (await this.resolveWorkspaceSelector(worktreeSelector)).id
         : null
       const snapshots = targetWorktreeId
-        ? [this.getMobileSessionTabsForWorktree(targetWorktreeId)]
-        : await this.listAllMobileSessionTabs()
+        ? [
+            await this.getMobileSessionTabsForWorktree(targetWorktreeId, undefined, {
+              includeAgentSenders: false
+            })
+          ]
+        : await this.listAllMobileSessionTabs(undefined, { includeAgentSenders: false })
       // Active-tab focus cannot establish the caller's identity.
       for (const snapshot of options.requireUnambiguous ? [] : snapshots) {
         const activeTerminal = snapshot.tabs.find(

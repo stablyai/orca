@@ -1,6 +1,10 @@
-import type { CheckStatus } from '../../shared/github/pull-request-types'
+import type {
+  CheckStatus,
+  ProviderCheckSummary
+} from '../../shared/github/pull-requests/pull-request-types'
 import {
   deriveBitbucketBuildStatus,
+  summarizeBitbucketBuildStatuses,
   mapBitbucketPullRequest,
   mapBitbucketPullRequestState,
   type BitbucketPullRequestInfo,
@@ -121,15 +125,24 @@ function allStateFilter(): string {
 async function getBuildStatus(
   repo: BitbucketRepoRef,
   headSha: string | undefined
-): Promise<CheckStatus> {
+): Promise<{
+  status: CheckStatus
+  checksSummary?: ProviderCheckSummary
+}> {
   if (!headSha) {
-    return 'neutral'
+    return { status: 'neutral' }
   }
-  const data = await requestJson<{ values?: RawBitbucketBuildStatus[] }>(
+  const data = await requestJson<{ values?: RawBitbucketBuildStatus[]; next?: string }>(
     `/repositories/${encodedRepoPath(repo)}/commit/${encodeURIComponent(headSha)}/statuses/build`,
     { searchParams: { pagelen: '100' } }
   )
-  return deriveBitbucketBuildStatus(data?.values ?? [])
+  const statuses = data?.values ?? []
+  return {
+    status: deriveBitbucketBuildStatus(statuses),
+    ...(data && Array.isArray(data.values) && !data.next
+      ? { checksSummary: summarizeBitbucketBuildStatuses(statuses) }
+      : {})
+  }
 }
 
 async function normalizePullRequest(
@@ -137,8 +150,8 @@ async function normalizePullRequest(
   raw: RawBitbucketPullRequest
 ): Promise<BitbucketPullRequestInfo | null> {
   const headSha = raw.source?.commit?.hash?.trim()
-  const status = await getBuildStatus(repo, headSha)
-  return mapBitbucketPullRequest(raw, status)
+  const { status, checksSummary } = await getBuildStatus(repo, headSha)
+  return mapBitbucketPullRequest(raw, status, checksSummary)
 }
 
 // Avoid keychain prompts: validate stored credentials only when the secret is already cached.

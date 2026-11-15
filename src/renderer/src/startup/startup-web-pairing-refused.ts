@@ -1,6 +1,6 @@
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
-import { isWebClient } from '../components/sidebar/worktree-card-model'
+import { isWebClient } from '../components/sidebar/workspace-card/controller/worktree-card-model'
 import { isWebRuntimeUnauthorizedError } from '../web/web-runtime-client-error'
 
 // Credential refusals need their actionable translated reason; generic restore failure hides it.

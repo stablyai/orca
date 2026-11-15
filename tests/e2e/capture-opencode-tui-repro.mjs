@@ -2,7 +2,6 @@
 // Repro setup:
 //   git clone https://github.com/anomalyco/opencode.git .tmp/opencode
 //   node tests/e2e/capture-opencode-tui-repro.mjs
-// Then run the captured replay test documented in terminal-foreground-redraw-freeze.spec.ts.
 
 import { createRequire } from 'node:module'
 import { createWriteStream, existsSync, mkdirSync, writeFileSync } from 'node:fs'

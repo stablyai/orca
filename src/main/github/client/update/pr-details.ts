@@ -1,16 +1,13 @@
-import { invalidateReviewLookupsAfterPRMutation } from '../../pr-mutation-review-invalidation'
-import {
-  ghExecFileAsync,
-  acquire,
-  release,
-  classifyPullRequestUpdateError,
-  type LocalGitExecOptions
-} from '../../gh-utils'
+import { invalidateReviewLookupsAfterPRMutation } from '../../pull-requests/refresh/pr-mutation-review-invalidation'
+import { ghExecFileAsync } from '../../../git/command-runner/hosted-cli/gh-exec-file'
+import { acquire, release } from '../../execution/github-operation-slots'
+import { classifyPullRequestUpdateError } from '../../api/gh-error-classification'
+import type { LocalGitExecOptions } from '../../repositories/github-repository-identity'
 import {
   resolveGitHubRepoExecution,
-  type GitHubApiRepository,
   type GitHubRepoExecOptions
-} from '../../github-api-repository'
+} from '../../repositories/github-api-repository'
+import type { GitHubRepositoryIdentity as GitHubApiRepository } from '../../../../shared/github/repositories/repository-identity'
 import { codeHostFailure, classifiedFailure } from '../../../../shared/code-host-failure-copy'
 
 async function patchPullRequest(
@@ -51,12 +48,12 @@ export async function updatePRTitle(
   await acquire()
   try {
     await patchPullRequest(ownerRepo, prNumber, [`title=${title}`], ghOptions)
-    invalidateReviewLookupsAfterPRMutation(repoPath, connectionId)
     return true
   } catch (err) {
     console.warn('updatePRTitle failed:', err)
     return false
   } finally {
+    invalidateReviewLookupsAfterPRMutation(repoPath, connectionId)
     release()
   }
 }
@@ -97,13 +94,13 @@ export async function updatePRDetails(
   await acquire()
   try {
     await patchPullRequest(ownerRepo, prNumber, fields, ghOptions)
-    invalidateReviewLookupsAfterPRMutation(repoPath, connectionId)
     return { ok: true }
   } catch (err) {
     const message =
       err instanceof Error ? err.message : typeof err === 'string' ? err : 'Unknown error'
     return classifiedFailure(classifyPullRequestUpdateError(message))
   } finally {
+    invalidateReviewLookupsAfterPRMutation(repoPath, connectionId)
     release()
   }
 }

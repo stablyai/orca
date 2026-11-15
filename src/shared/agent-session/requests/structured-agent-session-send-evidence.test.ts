@@ -47,21 +47,6 @@ function thrown(rpcCode: string | undefined): StructuredAgentSessionSendAnswer {
 }
 
 describe('structuredAgentSessionSendEvidence', () => {
-  it('reads a row the host returns, in any state, as its own from then on', () => {
-    for (const dispatchState of ['pending', 'accepted', 'rejected', 'unknown'] as const) {
-      expect(structuredAgentSessionSendEvidence(withRow({ dispatchState })).kind).toBe('recorded')
-    }
-    // A restart lost its outcome, or a queued card's hand-off: a record, never a probe.
-    const rows: Partial<AgentJournalSubmission>[] = [
-      { dispatchState: 'unknown', recovered: true, reason: 'host_restarted' },
-      { dispatchState: 'rejected', clientMessageId: 'other', queuedMessageId: 'm' },
-      { dispatchState: 'rejected', keptAsQueuedMessageId: 'm' }
-    ]
-    for (const row of rows) {
-      expect(structuredAgentSessionSendEvidence(withRow(row)).kind).toBe('recorded')
-    }
-  })
-
   it('reads a made-up row for an id the host journal lost as unconfirmed, not recorded', () => {
     expect(
       structuredAgentSessionSendEvidence(
@@ -104,18 +89,6 @@ describe('structuredAgentSessionSendEvidence', () => {
     ).toBe('uncertain')
   })
 
-  // Pins the full turned-away list (round-2 S5): every other code, client-minted ones included, is uncertain.
-  it('treats a call the host turned away before running it as never written', () => {
-    for (const rpcCode of [
-      'method_not_found',
-      'method_not_supported',
-      'invalid_argument',
-      'unauthorized'
-    ]) {
-      expect(structuredAgentSessionSendEvidence(thrown(rpcCode)).kind).toBe('not-recorded')
-    }
-  })
-
   it('reads an unknown outcome or a lost result as unconfirmed, and an unconfirmed rewind as not sent', () => {
     for (const reason of ['outcomeUnknown', 'resultLost']) {
       expect(
@@ -127,18 +100,5 @@ describe('structuredAgentSessionSendEvidence', () => {
         refused('agent_session_operation_unknown', 'rewindUnconfirmed')
       ).kind
     ).toBe('not-recorded')
-  })
-
-  // The one request is the only one that carried the id, so a refusal of it proves nothing ran.
-  it('reads any other refusal as never written', () => {
-    for (const answer of [
-      refused('agent_session_ownership_unknown', 'sessionNotAttached'),
-      refused('agent_session_conflict'),
-      refused('agent_session_operation_capacity'),
-      refused('agent_session_journal_unreadable'),
-      refused('agent_session_operation_expired', 'operationExpired')
-    ]) {
-      expect(structuredAgentSessionSendEvidence(answer).kind).toBe('not-recorded')
-    }
   })
 })

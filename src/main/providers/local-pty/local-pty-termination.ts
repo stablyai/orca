@@ -1,12 +1,12 @@
 import type * as pty from 'node-pty'
 import { PhysicalExitTracker } from '../../../shared/physical-exit-tracker'
-import { killWithDescendantSweep } from '../../pty-descendant-termination'
-import { terminateShutdownDescendants } from '../../daemon/terminal-descendant-shutdown'
+import { killWithDescendantSweep } from '../../pty/process-retirement/pty-descendant-termination'
+import { terminateShutdownDescendants } from '../../daemon/sessions/terminal-descendant-shutdown'
 import {
   forceKillPosixPtyProcessGroups,
   forceKillPosixPtyProcessGroupsSync
-} from '../../pty/posix-pty-process-groups'
-import { PendingPtyGroupSweep } from '../../pty/pending-pty-group-sweep'
+} from '../../pty/process-retirement/posix-pty-process-groups'
+import { PendingPtyGroupSweep } from '../../pty/process-retirement/pending-pty-group-sweep'
 import { terminatePtyJob } from '../../windows/windows-pty-job'
 import {
   clearLocalPtyForceKillTimer,
@@ -17,6 +17,7 @@ import {
   ptyForceKillTimers,
   ptyPhysicalExits,
   ptyProcesses,
+  ptyReportsChildExitStatus,
   ptyShutdownOperations,
   ptyTerminationMode,
   ptyLoadGeneration,
@@ -205,7 +206,8 @@ async function shutdownTrackedPty(
     await killWithDescendantSweep(proc.pid, signalRoot, {
       ownsRoot: () => ptyProcesses.get(id) === proc,
       terminateOwnedTree: () => terminatePtyJob(proc),
-      terminateDescendants: terminateShutdownDescendants,
+      terminateDescendants: (snapshot) =>
+        terminateShutdownDescendants(snapshot, ptyReportsChildExitStatus.get(id) === false),
       // Group SIGKILL must wait out the SIGTERM grace so agents can run exit hooks (Claude SessionEnd).
       awaitEscalation: () => operation.immediate
     })

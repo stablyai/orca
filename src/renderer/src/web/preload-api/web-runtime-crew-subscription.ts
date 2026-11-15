@@ -1,4 +1,4 @@
-import { REMOTE_RUNTIME_SHARED_CONTROL_CAPABILITY } from '../../../../shared/protocol-version'
+import { REMOTE_RUNTIME_SHARED_CONTROL_CAPABILITY } from '../../../../shared/remote-runtime/protocol/host-runtime-capabilities'
 import {
   RuntimeEnvironmentSetupGuardError,
   runtimeEnvironmentSetupFailure,
@@ -7,7 +7,7 @@ import {
   type CrewSubscriptionAttemptCallbacks,
   type CrewSubscriptionSetupResult,
   type RuntimeEnvironmentSetupFailure
-} from '../../../../shared/runtime-environment-subscription-setup'
+} from '../../../../shared/remote-runtime/host-catalog/runtime-environment-subscription-setup'
 import type { WebRuntimeSubscriptionHandle } from '../web-runtime-client'
 import type { PreloadApi } from '../../../../preload/api-types'
 import { getPreferredWebRuntimeConnection } from '../web-runtime-environment'

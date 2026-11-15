@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type * as BackgroundDistroGate from '../wsl-background-distro-gate'
+import type * as BackgroundDistroGate from '../wsl/discovery/wsl-background-distro-gate'
 
 const mocks = vi.hoisted(() => ({
   handlers: new Map<string, (event: unknown, args?: unknown) => Promise<unknown>>(),
@@ -19,9 +19,11 @@ vi.mock('electron', () => ({
       mocks.handlers.set(channel, handler)
   }
 }))
-vi.mock('../wsl/wsl-runner', () => ({ runWslProcess: mocks.runWslProcess }))
-vi.mock('../wsl', () => ({ listWslDistrosAsync: mocks.listWslDistrosAsync }))
-vi.mock('../wsl-background-distro-gate', async (importOriginal) => ({
+vi.mock('../wsl/execution/wsl-runner', () => ({ runWslProcess: mocks.runWslProcess }))
+vi.mock('../wsl/discovery/distro-catalog', () => ({
+  listWslDistrosAsync: mocks.listWslDistrosAsync
+}))
+vi.mock('../wsl/discovery/wsl-background-distro-gate', async (importOriginal) => ({
   ...(await importOriginal<typeof BackgroundDistroGate>()),
   readWslDistroRunningState: mocks.readWslDistroRunningState,
   deferUntilWslDistroRunning: (distro: string, key: string, task: () => unknown) =>

@@ -4,7 +4,7 @@ import type {
   CreateHostedReviewResult,
   HostedReviewInfo,
   HostedReviewProvider
-} from '../../shared/hosted-review'
+} from '../../shared/source-control/hosted-review/hosted-review-contracts'
 import {
   getAzureDevOpsPullRequest,
   getAzureDevOpsPullRequestForBranchOrThrow,
@@ -23,14 +23,16 @@ import {
   getGiteaRepoSlug
 } from '../gitea/client'
 import { createGiteaPullRequest } from '../gitea/pull-request-creation'
+import { createGitHubPullRequest } from '../github/client/create/create-github-pull-request'
+import { getGitHubPRLookupRateLimitBlock } from '../github/client/lookup/pr-lookup-rate-limit'
+import { getPRForBranchOutcome } from '../github/client/lookup/pr-for-branch-outcome'
+import { getRepoSlug } from '../github/client/fetch/repo-slug-upstream'
 import {
-  createGitHubPullRequest,
-  getGitHubPRLookupRateLimitBlock,
-  getPRForBranchOutcome,
-  getRepoSlug
-} from '../github/client'
-import { getMergeRequest, getMergeRequestForBranchOrThrow, getProjectSlug } from '../gitlab/client'
-import { createGitLabMergeRequest } from '../gitlab/merge-request-creation'
+  getMergeRequest,
+  getMergeRequestForBranchOrThrow,
+  getProjectSlug
+} from '../gitlab/merge-requests/merge-request-lookup'
+import { createGitLabMergeRequest } from '../gitlab/merge-requests/merge-request-creation'
 import {
   mapAzureDevOpsReview,
   mapBitbucketReview,
@@ -57,8 +59,8 @@ export type ForgeReviewForBranchInput = ForgeProviderRepositoryContext & {
   branch: string
   linkedReviewNumber?: number | null
   fallbackReviewNumber?: number | null
-  // GitHub-only merged-at-head visibility; other providers ignore this inspected HEAD.
-  githubCurrentHeadOid?: string | null
+  // The inspected checkout HEAD scopes implicit merged-review visibility.
+  currentHeadOid?: string | null
   userRefresh?: boolean
 }
 
@@ -109,7 +111,7 @@ const gitLabForgeProvider = {
       input.branch,
       input.linkedReviewNumber ?? null,
       forgeConnectionId(input),
-      ...hostedReviewExecutionArgs(input)
+      { ...input, currentHeadOid: input.currentHeadOid }
     )
     return mr ? mapGitLabReview(mr) : null
   },
@@ -178,7 +180,7 @@ const gitHubForgeProvider = {
         ...executionArgs[0],
         ...(input.userRefresh === true ? { userRefresh: true } : {}),
         ...(fallbackReviewNumber !== null ? { acceptMergedFallbackPR: true } : {}),
-        currentHeadOid: input.githubCurrentHeadOid ?? null
+        currentHeadOid: input.currentHeadOid ?? null
       }
     )
     return unwrapGitHubPRForBranchOutcome(outcome)
@@ -309,21 +311,4 @@ export const FORGE_PROVIDERS = [
 
 export function getForgeProviderById(id: ForgeProviderId): ForgeProvider {
   return FORGE_PROVIDERS.find((provider) => provider.id === id) ?? gitHubForgeProvider
-}
-
-export async function getForgeProviderForRepository(
-  context: ForgeProviderRepositoryContext
-): Promise<ForgeProvider | null> {
-  for (const provider of FORGE_PROVIDERS) {
-    if (await provider.resolveRepository(context)) {
-      return provider
-    }
-  }
-  return null
-}
-
-export async function detectHostedReviewProvider(
-  context: ForgeProviderRepositoryContext
-): Promise<HostedReviewProvider> {
-  return (await getForgeProviderForRepository(context))?.id ?? 'unsupported'
 }

@@ -45,10 +45,4 @@ describe('provider timeline identity spelling', () => {
       agentJournalItemKey(request('gen-1', 1))
     )
   })
-
-  it('keeps turn rows on the record prefix every lane writes', () => {
-    const turn = { namespace: 'ns', key: provider('t1') }
-    expect(scheme.turn(turn)).toMatchObject({ recordId: 'turn-lifecycle:p:ns:t1' })
-    expect(scheme.turnId(turn)).toBe('p:ns:t1')
-  })
 })

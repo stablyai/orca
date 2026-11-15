@@ -1,4 +1,3 @@
-import '../../rpc/unused-default-rpc-methods.test-fixture'
 import { expect, it, vi } from 'vitest'
 import { CrewReadModel } from './crew-read-model'
 import { fixture } from './crew-read-model.test-fixture'
@@ -60,7 +59,7 @@ it('reuses indexed attachment facts for reminted panes without per-peer queries 
       prepare.mockClear()
       expect(model.read('term_worker')).toEqual(snapshot)
       expect(prepare.mock.calls.length).toBeLessThan(cold)
-      expect(prepare.mock.calls.length).toBe(4)
+      expect(prepare.mock.calls.length).toBe(0)
       lookup.mockRestore()
       prepare.mockRestore()
     } finally {

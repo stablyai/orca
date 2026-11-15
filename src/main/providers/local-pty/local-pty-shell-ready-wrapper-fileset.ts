@@ -2,12 +2,18 @@
 import {
   buildFishVendorConfWrapperFile,
   getFishVendorConfSnippetPath
-} from '../../fish-xdg-data-dirs-handoff'
-import { ZSH_WRAPPER_DIR_MARKER_CONTENT, ZSH_WRAPPER_DIR_MARKER_FILE } from '../../shell-templates'
-import type { ShellWrapperFile } from '../../shell-wrapper-file-writer'
-import { buildZshStartupHook, type ZshStartupHookSpec } from '../../zsh-startup-wrapper-builder'
+} from '../../pty/shell-startup/fish-xdg-data-dirs-handoff'
+import {
+  ZSH_WRAPPER_DIR_MARKER_CONTENT,
+  ZSH_WRAPPER_DIR_MARKER_FILE
+} from '../../pty/shell-startup/shell-templates'
+import type { ShellWrapperFile } from '../../pty/shell-startup/shell-wrapper-file-writer'
+import {
+  buildZshStartupHook,
+  type ZshStartupHookSpec
+} from '../../pty/shell-startup/zsh-startup-wrapper-builder'
 import { getBashShellReadyRcfileContent } from './local-pty-shell-ready-bash-rcfile'
-import { SH_WSL_ENV_FILE } from '../../wsl-shell-cwd-report'
+import { SH_WSL_ENV_FILE } from '../../wsl/filesystem/wsl-shell-cwd-report'
 import { SHELL_READY_MARKER_ESCAPED } from './local-pty-shell-ready-marker'
 
 /** Paths in the generated tree, kept separate so existence checks do not rebuild wrapper bytes. */

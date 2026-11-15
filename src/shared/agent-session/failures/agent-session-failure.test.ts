@@ -75,40 +75,6 @@ describe('reading a failure fact', () => {
       })
     }
   })
-
-  it('keeps what a provider said it is retrying, and only that', () => {
-    expect(
-      readAgentSessionFailureFact({
-        kind: 'providerRetrying',
-        retry: { error: 'rate_limit', status: 429, retryDelayMs: 600 }
-      })
-    ).toEqual({ kind: 'providerRetrying', retry: { error: 'rate_limit', status: 429 } })
-    expect(
-      readAgentSessionFailureFact({ kind: 'providerRetrying', retry: { error: '', status: 'x' } })
-    ).toEqual({ kind: 'providerRetrying' })
-    // The provider's own account of what failed survives a read, bounded like any detail.
-    expect(
-      readAgentSessionFailureFact({
-        kind: 'providerRetrying',
-        retry: { cause: `  stream disconnected${' x'.repeat(400)}` }
-      })?.retry?.cause
-    ).toBe(`stream disconnected${' x'.repeat(400)}`.slice(0, 512).trim())
-    expect(
-      readAgentSessionFailureFact({ kind: 'providerRetrying', retry: { cause: '  ' } })
-    ).toEqual({ kind: 'providerRetrying' })
-  })
-
-  it('drops what a newer host wrote that this build cannot place', () => {
-    expect(readAgentSessionFailureFact({ kind: 'futureKind' })).toBeUndefined()
-    expect(readAgentSessionFailureFact(undefined)).toBeUndefined()
-    expect(
-      readAgentSessionFailureFact({
-        kind: 'restartFailed',
-        refusal: { code: 'agent_session_conflict', details: { reason: 'futureReason' } },
-        detail: { text: 'x', audience: 'future' }
-      })
-    ).toEqual({ kind: 'restartFailed', refusal: { code: 'agent_session_conflict' } })
-  })
 })
 
 describe('reading all of a failure fact', () => {

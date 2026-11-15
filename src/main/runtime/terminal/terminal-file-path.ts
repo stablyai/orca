@@ -3,7 +3,8 @@ import {
   isWindowsAbsolutePathLike,
   resolveRuntimePath
 } from '../../../shared/cross-platform-path'
-import { parseWslPath, toWindowsWslPath } from '../../wsl'
+import { parseWslPath } from '../../wsl/filesystem/unc-path-access'
+import { toWindowsWslPath } from '../../../shared/file-access/wsl-paths'
 
 export function resolveTerminalAbsolutePath(args: {
   base: string

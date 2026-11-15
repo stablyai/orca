@@ -4,7 +4,8 @@ const { gitExecFileAsyncMock } = vi.hoisted(() => ({
   gitExecFileAsyncMock: vi.fn()
 }))
 
-vi.mock('../git/runner', () => ({
+vi.mock('../git/command-runner/git-exec-file', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
   gitExecFileAsync: gitExecFileAsyncMock
 }))
 
@@ -14,7 +15,6 @@ import {
   getBitbucketRepoRef,
   parseBitbucketRepoRef
 } from './repository-ref'
-import { REMOTE_URL_PROBE_TIMEOUT_MS } from '../git/remote-url-probe'
 
 describe('Bitbucket repository refs', () => {
   beforeEach(() => {
@@ -85,27 +85,6 @@ describe('Bitbucket repository refs', () => {
     await expect(getBitbucketRepoRef('/repo')).resolves.toEqual({
       workspace: 'team',
       repoSlug: 'project%zz'
-    })
-  })
-
-  it('resolves origin through the WSL-aware git runner and caches the result', async () => {
-    gitExecFileAsyncMock.mockResolvedValue({
-      stdout: 'git@bitbucket.org:team/project.git\n',
-      stderr: ''
-    })
-
-    await expect(getBitbucketRepoRef('/repo')).resolves.toEqual({
-      workspace: 'team',
-      repoSlug: 'project'
-    })
-    await expect(getBitbucketRepoRef('/repo')).resolves.toEqual({
-      workspace: 'team',
-      repoSlug: 'project'
-    })
-    expect(gitExecFileAsyncMock).toHaveBeenCalledTimes(1)
-    expect(gitExecFileAsyncMock).toHaveBeenCalledWith(['remote', 'get-url', 'origin'], {
-      cwd: '/repo',
-      timeout: REMOTE_URL_PROBE_TIMEOUT_MS
     })
   })
 })

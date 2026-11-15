@@ -1,10 +1,10 @@
 import { ipcMain } from 'electron'
 import type { Store } from '../persistence/loading-store/store'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
-import { parseTerminalSurfaceCloseTarget } from '../../shared/terminal-surface-close-target'
-import { isFrozenOrcadSourceSessionPartition } from '../ssh/orcad-retained-source'
-import { isWslMoveWindowWriteHeld } from '../persistence/moving-wsl-projects/wsl-move-window-write-hold'
-import { visibleSessionHostIds } from '../ssh/orcad-retained-source-session'
+import { parseTerminalSurfaceCloseTarget } from '../../shared/workspace-layout/terminal-surfaces/terminal-surface-close-target'
+import { isFrozenOrcadSourceSessionPartition } from '../persistence/migrating-orcad-catalog/source/catalog/orcad-source-visibility'
+import { isWslMoveWindowWriteHeld } from '../persistence/moving-wsl-projects/quiescence/wsl-move-window-write-hold'
+import { visibleSessionHostIds } from '../persistence/migrating-orcad-catalog/retained-source/orcad-retained-source-session'
 import { markAgentLaunchesClosedByUser } from '../agent-launch/agent-launch-pane-attachment'
 import { windowViewPatchForMain, windowViewSaveForMain } from '../persistence/window-save-view'
 import { reportWindowSaveDrift } from '../persistence/window-save-divergence'
@@ -13,7 +13,7 @@ import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../shared/layout-owner-switch'
 import type {
   WorkspaceSessionPatch,
   WorkspaceSessionState
-} from '../../shared/workspace-session-state-types'
+} from '../../shared/workspace-session/workspace-session-state-types'
 
 export function registerSessionHandlers(store: Store, runtime: OrcaRuntimeService): void {
   // Why: renderer saves would change a fenced host's frozen source partition, or write back what a
@@ -95,20 +95,9 @@ export function registerSessionHandlers(store: Store, runtime: OrcaRuntimeServic
     return store.flushPendingOrThrowAsync()
   })
 
-  ipcMain.on(
-    'session:read-terminal-scrollback-sync',
-    (event, args: { ref?: unknown } | undefined) => {
-      event.returnValue =
-        typeof args?.ref === 'string' ? store.readTerminalScrollbackSnapshot(args.ref) : null
-    }
-  )
-
-  // Why: render-time planning only needs to know a local copy exists; a stat never reads bytes.
-  ipcMain.on(
-    'session:has-terminal-scrollback-sync',
-    (event, args: { ref?: unknown } | undefined) => {
-      event.returnValue =
-        typeof args?.ref === 'string' ? store.hasTerminalScrollbackSnapshot(args.ref) : false
-    }
+  ipcMain.handle(
+    'session:read-terminal-scrollback',
+    (_event, args: { ref?: unknown } | undefined) =>
+      typeof args?.ref === 'string' ? store.readTerminalScrollbackSnapshotAsync(args.ref) : null
   )
 }

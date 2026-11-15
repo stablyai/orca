@@ -1,3 +1,7 @@
+import {
+  readTestJournalItems,
+  readTestJournalSubmissions
+} from '../../native-chat/agent-session-journal/journal-observation.test-support'
 // A reopened chat catches up on turns its agent replays that the chat never saw, against real
 // OpenCode 2.0.14 and Grok 1.0.62 recordings: once, in order, without a notice, and never a turn
 // the chat already holds.
@@ -13,13 +17,12 @@ import {
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { parseAgentJournalItemKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
 import type { AgentJournalRenderItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
-import { agentSessionFailureFact } from '../../../shared/agent-session/failures/agent-session-failure'
-import { agentSessionFailureWords } from '../../../shared/agent-session/failures/agent-session-failure-words'
+import '../../../shared/agent-session/failures/agent-session-failure'
+import '../../../shared/agent-session/failures/agent-session-failure-words'
 import {
   AGENT,
   closeProviderTimelineRigs,
   NAMESPACE,
-  SESSION,
   providerItemId
 } from '../../native-chat/agent-session-timeline/provider-timeline-assembler-test-support'
 import { GROK_ACP_DIALECT } from '../acp-dialects/grok-dialect'
@@ -27,20 +30,25 @@ import { OPENCODE_ACP_DIALECT } from '../acp-dialects/opencode-dialect'
 import {
   agentJournalTurnBody,
   readAgentJournalTurn
-} from '../../../shared/agent-session/lifecycle/agent-session-turn-record'
-import { acpNamedTextKey } from '../acp-turn-messages'
+} from '../../../shared/agent-session/lifecycle/records/agent-session-turn-record'
+import { acpNamedTextKey } from '../timeline/acp-turn-messages'
 import { isHistoricalProviderTimelineItem } from '../../native-chat/agent-session-timeline/provider-timeline-history'
-import { StructuredAgentSessionCurrentWork } from '../../native-chat/agent-session-wire/structured-agent-session-current-work'
-import { hasUnfinishedStructuredAgentSessionWork } from '../../native-chat/agent-session-wire/structured-agent-session-unfinished-work'
-import { planStructuredAgentSessionDeadGeneration } from '../../native-chat/agent-session-wire/structured-agent-session-dead-generation-settlement'
 import { AcpLoadHistory } from './acp-history-replay'
-import { asReattachHistory } from '../acp-structured-session'
-import { readAcpFixture, type AcpFixtureFrame } from '../acp-timeline-fixture.test-support'
+import { asReattachHistory } from './acp-reattach-history'
+import {
+  readAcpFixture,
+  type AcpFixtureFrame
+} from '../timeline/testing/acp-timeline-fixture.test-support'
 
 afterEach(async () => {
   vi.restoreAllMocks()
   await closeProviderTimelineRigs()
 })
+
+function savedItem(items: readonly AgentJournalRenderItem[]) {
+  const byId = new Map(items.map((item) => [item.itemId, item]))
+  return (itemId: string) => byId.get(itemId) ?? null
+}
 
 async function recording(name: string): Promise<AcpFixtureFrame[]> {
   // The rig's journal keys rows under its own provider session.
@@ -181,7 +189,7 @@ describe('ACP history catch-up', () => {
     await catchUp(partial)
     const imported = await rig.rows()
     const historical = imported.filter((item) =>
-      isHistoricalProviderTimelineItem(item, (key) => rig.journal.item(key))
+      isHistoricalProviderTimelineItem(item, savedItem(imported))
     )
     expect(historical).toHaveLength(4)
     const container = historical.map((item) => readAgentJournalTurn(item.body)).find(Boolean)
@@ -191,20 +199,6 @@ describe('ACP history catch-up', () => {
     expect(container).not.toHaveProperty('startedAt')
     const observedTool = historical.find((item) => item.body.kind === 'tool-call')!
     expect(observedTool.body).toMatchObject({ state: 'running' })
-    expect(
-      new StructuredAgentSessionCurrentWork(rig.journal, 1).isCurrentItem(observedTool.itemId)
-    ).toBe(false)
-    expect(hasUnfinishedStructuredAgentSessionWork(rig.journal)).toBe(false)
-    expect(
-      planStructuredAgentSessionDeadGeneration({
-        journal: rig.journal,
-        sessionId: SESSION,
-        fence: 1,
-        settlementId: 'exit',
-        verdict: { state: 'interrupted' },
-        pendingSubmissionReason: 'ended'
-      }).mutations
-    ).toEqual([])
     rig.assembler.apply({ type: 'session.ended', verdict: { state: 'interrupted' }, endedAt: 9000 })
     await fixture.restart()
     expect((await rig.row(observedTool.itemId))?.body).toEqual(observedTool.body)
@@ -240,14 +234,9 @@ describe('ACP history catch-up', () => {
     await catchUp(full)
     expect(await rig.rows()).toEqual(complete)
     const reopened = await rig.reopenJournal()
-    expect(
-      isHistoricalProviderTimelineItem(reopened.item(observedTool.itemId)!, (key) =>
-        reopened.item(key)
-      )
-    ).toBe(true)
-    expect(isHistoricalProviderTimelineItem(nativeBefore[0]!, (key) => reopened.item(key))).toBe(
-      false
-    )
+    const reread = savedItem(await readTestJournalItems(reopened))
+    expect(isHistoricalProviderTimelineItem(reread(observedTool.itemId)!, reread)).toBe(true)
+    expect(isHistoricalProviderTimelineItem(nativeBefore[0]!, reread)).toBe(false)
   })
 
   it('keeps same-text outside answers and reasoning while deduplicating exact native output', async () => {
@@ -343,7 +332,7 @@ describe('ACP history catch-up', () => {
       state: 'pending',
       turnScope: { kind: 'thread' }
     })
-    const submissions = journal.submissions()
+    const submissions = await readTestJournalSubmissions(journal)
     const replay = ['handed', 'queued'].flatMap((id) => [
       userReplay(id),
       {
@@ -356,11 +345,11 @@ describe('ACP history catch-up', () => {
       }
     ])
     await catchUp(replay)
-    expect(journal.submissions()).toEqual(submissions)
+    expect(await readTestJournalSubmissions(journal)).toEqual(submissions)
     expect(userTexts(await fixture.rig.rows())).toEqual(['repeat', 'repeat', 'repeat'])
-    expect(journal.receiptFor('queued')).toBeNull()
-    expect(journal.submission('queued')?.dispatchState).toBe('pending')
-    expect(journal.submission('queued')?.handedOverAt).toBeUndefined()
+    expect(await journal.reads.receiptFor('queued')).toBeNull()
+    expect((await journal.reads.submission('queued'))?.dispatchState).toBe('pending')
+    expect((await journal.reads.submission('queued'))?.handedOverAt).toBeUndefined()
   })
   it.each(['interleaved', 'adjacent', 'hidden-root', 'hidden-later'] as const)(
     'keeps Grok root and later messages in one execution across restart: %s',
@@ -438,7 +427,7 @@ describe('ACP history catch-up', () => {
         await catchUp([...rootBlocks, output('A')])
       }
       const before = await rig.rows()
-      const submissions = rig.journal.submissions()
+      const submissions = await readTestJournalSubmissions(rig.journal)
       await fixture.restart()
       const replay = [
         ...rootBlocks,
@@ -507,11 +496,9 @@ describe('ACP history catch-up', () => {
       )
       expect(readAgentJournalTurn(lifecycle[0]!.body)?.userItemId).toBe(opener.itemId)
       expect(opener.turnScope).toEqual({ kind: 'turn', turnItemId: lifecycle[0]!.itemId })
-      expect(
-        messages.every((row) =>
-          isHistoricalProviderTimelineItem(row, (key) => rig.journal.item(key))
-        )
-      ).toBe(true)
+      expect(messages.every((row) => isHistoricalProviderTimelineItem(row, savedItem(rows)))).toBe(
+        true
+      )
       for (const held of before) {
         const current = rows.find((row) => row.itemId === held.itemId)!
         expect(current.sequence).toBe(held.sequence)
@@ -524,7 +511,7 @@ describe('ACP history catch-up', () => {
         }
       }
       expect(dividers(rows)).toHaveLength(0)
-      expect(rig.journal.submissions()).toEqual(submissions)
+      expect(await readTestJournalSubmissions(rig.journal)).toEqual(submissions)
       await catchUp(replay)
       expect(await rig.rows()).toEqual(rows)
     }
@@ -601,66 +588,6 @@ describe('ACP history catch-up', () => {
     await catchUp(frames)
     expect(await fixture.rig.rows()).toEqual(rows)
   })
-  it.each(['refused', 'direct', 'queued', 'card', 'empty'] as const)(
-    'imports without a notice beside a %s submission',
-    async (scenario) => {
-      const { fixture, catchUp } = await setup(GROK_ACP_DIALECT, 'prompt-id')
-      const { journal } = fixture.rig
-      await journal.appendSubmission({
-        clientMessageId: 'retained',
-        payloadFingerprint: 'retained',
-        fence: 1,
-        ...(scenario === 'direct' ? {} : { handoverRecorded: true }),
-        body: {
-          kind: 'message',
-          role: 'user',
-          blocks: [{ type: 'text', text: scenario === 'empty' ? '' : 'keep my message' }]
-        }
-      })
-      if (scenario !== 'direct' && scenario !== 'queued') {
-        await journal.resolveDispatch({
-          clientMessageId: 'retained',
-          fence: 1,
-          state: 'pending',
-          turnScope: { kind: 'thread' }
-        })
-      }
-      if (scenario === 'refused' || scenario === 'card') {
-        await journal.resolveDispatch({
-          clientMessageId: 'retained',
-          fence: 1,
-          state: 'rejected',
-          ...agentSessionFailureWords(agentSessionFailureFact('providerRejected'), {
-            surface: 'rejection'
-          }),
-          ...(scenario === 'card' ? { keptAsQueuedMessageId: 'card' } : {})
-        })
-      }
-      const before = await fixture.rig.rows()
-      const submissions = journal.submissions()
-      const replay = [
-        userReplay('outside'),
-        {
-          method: 'session/update',
-          params: {
-            sessionId: NAMESPACE,
-            _meta: { promptId: 'outside' },
-            update: {
-              sessionUpdate: 'agent_message_chunk',
-              content: { type: 'text', text: 'answer' }
-            }
-          }
-        }
-      ]
-      await catchUp(replay)
-      const rows = await fixture.rig.rows()
-      expect(dividers(rows)).toHaveLength(0)
-      expect(rows.slice(0, before.length)).toEqual(before)
-      expect(journal.submissions()).toEqual(submissions)
-      await catchUp(replay)
-      expect(await fixture.rig.rows()).toEqual(rows)
-    }
-  )
   it.each(['queued-only', 'ownership-revision'] as const)(
     'captures immutable coverage before concurrent %s',
     async (scenario) => {
@@ -701,10 +628,15 @@ describe('ACP history catch-up', () => {
         (item) => item.body.kind === 'message' && item.body.role === 'assistant'
       )
       expect(answer?.body).toMatchObject({
-        blocks: [{ text: scenario === 'queued-only' ? 'full' : 'prefix' }]
+        blocks: [{ text: 'prefix' }]
       })
       if (scenario === 'queued-only') {
-        expect(rig.journal.submission('queued')?.handedOverAt).toBeUndefined()
+        expect((await rig.journal.reads.submission('queued'))?.handedOverAt).toBeUndefined()
+        await catchUp([userReplay('outside'), answerReplay('full')])
+        const caughtUp = (await rig.rows()).filter(
+          (item) => item.body.kind === 'message' && item.body.role === 'assistant'
+        )
+        expect(caughtUp.map((item) => item.body)).toMatchObject([{ blocks: [{ text: 'full' }] }])
       }
     }
   )
@@ -722,4 +654,61 @@ describe('ACP history catch-up', () => {
     history.keep('session/update', { sessionId: NAMESPACE })
     expect(onOverflow).toHaveBeenCalledOnce()
   })
+})
+
+it('skips the copied root after undo and imports each new root once without timestamps', async () => {
+  const { fixture, catchUp } = await setup(OPENCODE_ACP_DIALECT, 'user-message-id')
+  const journal = fixture.rig.journal
+  await journal.write({
+    kind: 'epoch-replace',
+    reason: 'session_created',
+    fence: 1,
+    items: [
+      {
+        identity: { provider: 'legacy', agent: AGENT, sessionId: 'source', recordId: 'rich' },
+        ownerFence: 0,
+        observedAt: 123,
+        body: {
+          kind: 'message',
+          role: 'assistant',
+          blocks: [{ type: 'text', text: 'rich copied history' }]
+        }
+      }
+    ],
+    historyOrigin: {
+      version: 1,
+      kind: 'native_copy',
+      agent: AGENT,
+      unit: 'acp-user-message',
+      providerHandle: { kind: 'opaque', agent: AGENT, value: NAMESPACE },
+      ids: ['U1', 'U2']
+    }
+  })
+  const frames = [
+    replayUpdate('user_message_chunk', {
+      messageId: 'U1',
+      content: { type: 'resource_link', uri: 'file:///image.png', name: 'image' }
+    }),
+    answerReplay('provider copy of inherited reply', 'A1'),
+    userReplay('U3', 'new after undo'),
+    answerReplay('new reply', 'A3')
+  ]
+  await catchUp(frames)
+  await catchUp(frames)
+  const next = [
+    ...frames,
+    userReplay('U4', 'local later'),
+    answerReplay('four', 'A4'),
+    userReplay('U5', 'CLI later'),
+    answerReplay('five', 'A5')
+  ]
+  await catchUp(next)
+  await catchUp(next)
+  expect(
+    (await readTestJournalItems(journal)).flatMap((item) =>
+      item.body.kind === 'message' && item.body.role === 'assistant'
+        ? item.body.blocks.flatMap((block) => (block.type === 'text' ? [block.text] : []))
+        : []
+    )
+  ).toEqual(['rich copied history', 'new reply', 'four', 'five'])
 })

@@ -1,19 +1,23 @@
-import { removeStaleDurableWriteTempFiles } from '../../durable-file-write'
+import { randomUUID } from 'node:crypto'
+import { removeStaleDurableWriteTempFiles } from '../../filesystem/durable-file-write'
 import type { GlobalSettings } from '../../../shared/global-settings-types'
 import type { PersistedState } from '../../../shared/persisted-state-types'
 import type {
   WorkspaceSessionOperationListener,
   WorkspaceSessionWriteListener
-} from './workspace-session-write-listeners'
+} from './workspace-sessions/workspace-session-write-listeners'
 import type { ExecutionHostId } from '../../../shared/execution-host'
-import type { StateWriteListener } from './write-scheduling'
-import type { PartitionEditorViews } from './layout-editor-views'
-import type { ActiveViewPreference } from '../../active-view-preference'
+import type {
+  StateWriteListener,
+  WorktreeMetaWriteListener
+} from './profile-writing/write-scheduling'
+import type { PartitionEditorViews } from './workspace-sessions/layout-editor-views'
+import type { ActiveViewPreference } from '../preferences/active-view-preference'
 import {
   getProfileTerminalScrollbackSnapshotRoot,
   type TerminalScrollbackSnapshotStorage
-} from '../../terminal-scrollback-snapshots'
-import { ProtectedSecretPersistence } from '../../protected-secret-persistence'
+} from '../../pty/scrollback/terminal-scrollback-snapshots'
+import { ProtectedSecretPersistence } from '../../credentials/protected-secret-persistence'
 import { getDataFile, getGithubCacheFile } from './user-data-path'
 import { dirname, join } from 'node:path'
 import { STALE_DURABLE_WRITE_TEMP_AGE_MS } from '../tracking-repos/worktree-metadata-normalization'
@@ -27,10 +31,10 @@ import type {
   AutomationListProjectionCache,
   AutomationStorageAuthority
 } from '../scheduling-automations/automation-owner-projection'
-import type { ProfileStatePersistenceAuthority } from './profile-state-authority'
-import type { AutomationRun } from '../../../shared/automations-types'
-import { resolveNewPaneShellPath } from '../migrating-orcad-catalog/orcad-shell-history-installer'
-import { OrcadTerminalRestoreHintStore } from '../migrating-orcad-catalog/orcad-terminal-restore-hint-store'
+import type { ProfileStatePersistenceAuthority } from './profile-writing/profile-state-authority'
+import type { AutomationRun } from '../../../shared/automations/history/automation-run'
+import { resolveNewPaneShellPath } from '../migrating-orcad-catalog/terminal-history/orcad-shell-history-installer'
+import { OrcadTerminalRestoreHintStore } from '../migrating-orcad-catalog/terminal-history/orcad-terminal-restore-hint-store'
 
 export type DurableProfileStateMutation<T> = {
   value: T
@@ -83,9 +87,14 @@ export class StoreRuntimeState {
   dirtyProfileStateDomains: Set<string> | null = new Set()
   pendingAutomationRunsAfter: readonly AutomationRun[] | undefined
   githubCacheDirty = false
-  githubCacheGeneration = 0
+  githubCachePersistedAt = Date.now()
+  githubCachePersistTimer: ReturnType<typeof setTimeout> | null = null
+  githubCacheRetryDelayMs = 0
+  /** Fingerprint of a sidecar the loaded cache imported or supersedes; retired once rows commit. */
+  githubCacheLegacyFileHash: string | null = null
+  /** The saved cache or an older build's sidecar was unreadable at load: save nothing this session. */
+  githubCachePersistenceDisabled = false
   readonly githubCacheWriteListeners = new Set<() => void>()
-  pendingGithubCacheWrite: Promise<void> | null = null
   readonly staleGithubCacheTempCleanup: Promise<void>
   readonly staleProfileStateTempCleanup: Promise<void>
   readonly gitUsernameCache = new Map<string, string>()
@@ -109,6 +118,9 @@ export class StoreRuntimeState {
   /** In-memory editor views by partition; layout-owner builds only. */
   readonly layoutEditorViews = new Map<ExecutionHostId, PartitionEditorViews>()
   readonly stateWriteListeners = new Set<StateWriteListener>()
+  readonly worktreeMetaWriteListeners = new Set<WorktreeMetaWriteListener>()
+  // This store's workspaceMetadata position: a new epoch per process, one seq per published record.
+  readonly workspaceMetadataCursor = { epoch: randomUUID(), seq: 0 }
   projectHostOperations: ProjectHostPersistenceOperations | null = null
   projectGroupOperations: ProjectGroupPersistenceOperations | null = null
   folderWorkspaceOperations: FolderWorkspacePersistenceOperations | null = null

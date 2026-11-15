@@ -1,4 +1,4 @@
-import type { AgentStatus } from '../agent-title-core'
+import type { AgentStatus } from '../agent-status/title/agent-title-core'
 import type { ProgramStatusRecord } from './records'
 
 /** Program-reported activity outranks title glyphs while its root record exists; null once reporting ends. */

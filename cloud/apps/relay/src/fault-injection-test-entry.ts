@@ -1,6 +1,6 @@
 import { loadRelayConfig } from './config.js'
-import { reconcileCellAdmissionAtStartup } from './cell-admission-startup.js'
-import { openRelayDatabase, type RelayDatabase } from './database.js'
+import { reconcileCellAdmissionAtStartup } from './cell/admission/cell-admission-startup.js'
+import { openRelayDatabase, type RelayDatabase } from './database/database.js'
 import { createRelayServer } from './relay-server.js'
 import { readFileSync } from 'node:fs'
 

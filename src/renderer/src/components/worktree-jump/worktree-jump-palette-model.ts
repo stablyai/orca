@@ -1,7 +1,7 @@
-import type { BrowserPaletteSearchResult } from '@/lib/browser-palette-search'
-import type { PaletteSearchResult } from '@/lib/worktree-palette-search'
-import type { SimulatorPaletteSearchResult } from '@/lib/simulator-palette-search-types'
-import type { WorkspaceTabPaletteSearchResult } from '@/lib/workspace-tab-palette-results'
+import type { BrowserPaletteSearchResult } from '@/lib/browser/palette/browser-palette-search'
+import type { PaletteSearchResult } from '@/lib/workspace/search/worktrees/worktree-palette-search'
+import type { SimulatorPaletteSearchResult } from '@/lib/simulator/search/simulator-palette-search-types'
+import type { WorkspaceTabPaletteSearchResult } from '@/lib/workspace/search/tabs/workspace-tab-palette-results'
 import type {
   CmdJActionResult,
   CmdJRankedMiddleResult,
@@ -11,12 +11,13 @@ import type {
   CmdJProjectSearchResult,
   CmdJRankedProjectSearchResult
 } from '@/components/cmd-j/palette-project-results'
-import type { RecentWorkspaceTabRow } from '@/lib/recent-workspace-tab-rows'
+import type { RecentWorkspaceTabRow } from '@/lib/workspace/search/palette/recent-workspace-tab-rows'
 import type { Worktree } from '../../../../shared/worktree/types'
 import { CREATE_WORKSPACE_QUICK_ACTION_ID } from '@/components/cmd-j/quick-actions'
-import type { CREATE_WORKTREE_ITEM_ID } from '@/lib/worktree-palette-create-action'
+import type { CREATE_WORKTREE_ITEM_ID } from '@/lib/workspace/search/worktrees/worktree-palette-create-action'
 
 import type { CmdJTaskSearchResult } from '../cmd-j/task-search-results'
+import type { PaletteExtraResult } from '../cmd-j/palette-extra-results'
 
 export type TaskPaletteItem = { id: string; type: 'task'; result: CmdJTaskSearchResult }
 
@@ -63,6 +64,13 @@ export type ProjectTargetPaletteItem = {
   result: CmdJProjectSearchResult & Pick<CmdJRankedProjectSearchResult, 'qualityClass'>
 }
 
+export type ExtraPaletteItem = {
+  id: string
+  type: 'extra'
+  sourceId: string
+  result: PaletteExtraResult
+}
+
 export type SectionHeader = { id: string; type: 'section-header'; label: string }
 export type HintRow = {
   id: string
@@ -84,6 +92,7 @@ export type PaletteItem =
   | BrowserPaletteItem
   | SimulatorPaletteItem
   | WorkspaceTabPaletteItem
+  | ExtraPaletteItem
 
 export type PaletteListEntry = PaletteItem | CreateWorktreePaletteItem | SectionHeader | HintRow
 export type OpenTabPaletteItem = BrowserPaletteItem | SimulatorPaletteItem | WorkspaceTabPaletteItem

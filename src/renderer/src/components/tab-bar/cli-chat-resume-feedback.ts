@@ -1,15 +1,17 @@
 import { toast } from 'sonner'
-import { useAppStore } from '@/store'
+import { useAppStore } from '@/store/index'
 import { translate } from '@/i18n/i18n'
 import {
   structuredLaunchConversationOwner,
   structuredLaunchFailure
 } from '@/lib/agent-session/launch/structured-agent-session-launch-failure'
-import { activateAiVaultStructuredSession } from '@/lib/activate-ai-vault-structured-session'
-import { agentSessionWriteFailureText } from '../native-chat/agent-session-write-notice-text'
-import { agentLabel } from '../../../../shared/ai-vault-session-filters'
-import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
-import { cliConversationExitGuidance } from '@/lib/cli-conversation-exit-guidance'
+import { activateAiVaultStructuredSession } from '@/lib/agent-session/open/activate-ai-vault-structured-session'
+import { agentSessionWriteFailureText } from '../native-chat/messages/notices/agent-session-write-notice-text'
+import { agentLabel } from '../../../../shared/ai-vault/session-display/ai-vault-session-filters'
+import { cliConversationExitGuidance } from '@/lib/agent-session/resume/history/cli-conversation-exit-guidance'
+import { retryStructuredAgentSessionLaunch } from '@/lib/agent-session/launch/structured-agent-session-launch'
+import { reopenNativeChatCliForkOrigin } from './native-chat-cli-fork-run'
+import type { RuntimeClientTarget } from '../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import type { AgentSessionConversationOwner } from '../../../../shared/agent-session/failures/agent-session-refusal-details'
 import type { CliChatResumeSource } from './cli-chat-resume-source'
 
@@ -56,12 +58,37 @@ export async function reportCliChatResumeFailureInChat(
   }
 }
 
-/** Said in the chat that took the terminal's place, since that terminal is gone. */
-export function cliChatResumeExitUnprovenText(source: CliChatResumeSource): string {
-  return translate(
-    'components.native-chat.resumeInNewChat.terminalExitUnprovenInChat',
-    "Orca closed {{agent}}'s terminal but couldn't confirm {{agent}} stopped. Make sure it has stopped, then try again.",
-    { agent: agentLabel(source.agent) }
+/** The host found no history to open for the conversation: none saved, or none it can reach. */
+function canRestartMissingConversation(error: unknown): boolean {
+  const refusal = structuredLaunchFailure(error)
+  return (
+    refusal?.code === 'agent_session_identity_required' &&
+    refusal.details?.reason === 'transcriptNotFound'
+  )
+}
+
+/** After the terminal closed with no history to open: an unsaved fork of a chat is still that chat's
+ *  conversation, so that chat comes back; otherwise the chat that took its place starts a new one. */
+export async function recoverMissingConversation(
+  error: unknown,
+  source: CliChatResumeSource,
+  chatTabId: string | null,
+  target: RuntimeClientTarget,
+  dropChat: () => void
+): Promise<boolean> {
+  if (!canRestartMissingConversation(error)) {
+    return false
+  }
+  const chatSessionId = (
+    useAppStore.getState().unifiedTabsByWorktree[source.workspaceId] ?? []
+  ).find((tab) => tab.id === chatTabId)?.entityId
+  if (await reopenNativeChatCliForkOrigin(source, chatSessionId, target)) {
+    dropChat()
+    return true
+  }
+  return (
+    !!chatSessionId &&
+    retryStructuredAgentSessionLaunch(source.workspaceId, chatSessionId, { fresh: true })
   )
 }
 
@@ -84,13 +111,13 @@ export async function reportCliChatResumeFailure(
     )
     return
   }
-  const row = useAppStore.getState().agentStatusByPaneKey[source.paneKey]
+  const row = useAppStore.getState().agentStatusByPaneKey.get(source.paneKey)
   const inThisTerminal = !!row && row.providerSession?.id === source.providerSessionId
   if (
     refusal?.code === 'agent_session_conflict' ||
     refusal?.code === 'agent_session_ownership_unknown'
   ) {
-    const owner = refusal.owner
+    const owner = refusal.owner ?? undefined
     if (
       refusal.code === 'agent_session_conflict' &&
       refusal.details?.reason === 'conversationHeldElsewhere' &&

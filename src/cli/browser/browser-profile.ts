@@ -5,17 +5,17 @@ import type {
   BrowserTabProfileCloneResult,
   BrowserTabProfileShowResult,
   BrowserTabSetProfileResult
-} from '../../shared/runtime-browser-contracts'
-import type { CommandHandler } from '../dispatch'
-import { getOptionalStringFlag, getRequiredStringFlag } from '../flags'
+} from '../../shared/browser/runtime/runtime-browser-contracts'
+import type { CommandHandler } from '../dispatch/dispatch'
+import { getOptionalStringFlag, getRequiredStringFlag } from '../arguments/flags'
 import {
   formatBrowserProfileList,
   formatTabProfileClone,
   formatTabProfileShow
 } from './browser-format'
-import { printResult } from '../format'
-import { RuntimeClientError } from '../runtime/types'
-import { getBrowserCommandTarget } from '../selectors'
+import { printResult } from '../output/command-result-output'
+import { RuntimeClientError } from '../runtime/connection/types'
+import { getBrowserCommandTarget } from './browser-command-target'
 
 function parseScopeFlag(flags: Map<string, string | boolean>): 'isolated' | 'imported' {
   const raw = getOptionalStringFlag(flags, 'scope')

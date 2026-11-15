@@ -20,6 +20,9 @@ description: >-
 If your prompt has a preamble with Task and Dispatch IDs, you are a worker:
 follow the preamble. To ask your coordinator, run `ask`, then end your turn;
 Orca wakes you with the answer. To hand work off with nothing back, use `orca-cli`.
+When you report your effort, take it from the dispatch's `--effort` or your process
+argv, not from a numeric `reasoning_effort`: that number is not on a 0–100 scale
+(claude-opus-5-5: low=5, medium=10, high=15, xhigh=40).
 
 ## Recipe
 
@@ -27,8 +30,13 @@ Orca wakes you with the answer. To hand work off with nothing back, use `orca-cl
 place and use it for every command.
 
 ```text
-ORCA orchestration worker-start --spec "<task>" --worktree current --agent codex
+ORCA orchestration worker-start --spec "<task>" --worktree current --agent <agent>
 ```
+
+`<agent>` is an Orca agent id: one the user named, else the agent you are
+running as when the worker shares your execution host. Otherwise, such as a
+different SSH/WSL host or `--on`, ask the user. `worker-start` does not check
+that the CLI is installed; a missing one fails as an `agent_readiness` timeout.
 
 - Start every independent worker, then **end your turn**. "Report back" and
   "tell me when it's done" still mean end your turn; Orca wakes you and you
@@ -36,7 +44,8 @@ ORCA orchestration worker-start --spec "<task>" --worktree current --agent codex
 - If a receipt has `next`, follow it. When Orca has nothing for you, end your
   turn.
 - `--worktree current` uses your workspace. Use a new one only when the user
-  asks or sharing would conflict:
+  asks or sharing would conflict: `--worktree new-child --name <short-name>`
+  nests it under yours. For one with no parent, use
   `--worktree new-top-level --repo id:<repoId> --name <short-name>`
   (`ORCA repo list --json` gives the id). If nothing needs to come back to you
   (the user will work in those chats), don't start workers; per workspace run
@@ -47,8 +56,9 @@ ORCA orchestration worker-start --spec "<task>" --worktree current --agent codex
   `references/recovery-and-cleanup.md`.
 - To talk to a worker, use
   `ORCA orchestration send --to dispatch:<dispatch_id> --subject "<topic>" --body "<message>"`
-  in any state: a working worker reads it now; a finished or closed one gets it
-  as a follow-up Task and reports with `worker_done`. The receipt says which.
+  in any state: a working worker gets it when its current turn ends; a finished
+  or closed one gets it as a follow-up Task and reports with `worker_done`. The
+  receipt says which.
   Except on a paired server: a finished worker there refuses `send`, so start
   new work there with `worker-start --on <server>` (load
   `references/placement-and-remote.md` first).
@@ -62,11 +72,14 @@ Never:
 
 ## When Orca wakes you
 
-- Run the `check` command the wake gives you. Answer a `question` with
+- In a chat, each message arrives whole as its own message: act on it. A wake
+  that names a `check` command (a terminal, or one message too large for a chat
+  message) means run that command. Answer a `question` with
   `ORCA orchestration reply --id <message_id> --body "<answer>"` when the answer
   follows from the task or the user's instructions; otherwise ask the user first.
 - An `escalation` with `stopReason` means the worker stopped without
   `worker_done`: steer it with `send`, stop and retry it, or tell the user.
+  `exited` or `lost` means it is gone: retry it or tell the user.
 - A `worker_done` settles its Task; never mark a reported failure completed.
 - When every worker has settled, report to the user per Task: outcome,
   evidence, open blockers.
@@ -102,11 +115,10 @@ assignment does not prove its agent stopped.
 
 `ORCA skills get orchestration --reference references/<file>.md`
 
-| Situation                                      | Reference                                 |
-| ---------------------------------------------- | ----------------------------------------- |
-| Task DAGs, several Runs                        | `references/coordinator-loop.md`          |
-| Child worktrees, SSH, WSL, a connected server  | `references/placement-and-remote.md`      |
-| Group messages                                 | `references/messaging-and-gates.md`       |
-| A failed or unknown worker; retry, stop, reset | `references/recovery-and-cleanup.md`      |
-| Custom argv or terminal layout                 | `references/low-level-topology.md`        |
-| Legacy labels, adopted Runs, takeover          | `references/legacy-contract-migration.md` |
+| Situation                                      | Reference                            |
+| ---------------------------------------------- | ------------------------------------ |
+| Task DAGs, several Runs                        | `references/coordinator-loop.md`     |
+| Child worktrees, SSH, WSL, a connected server  | `references/placement-and-remote.md` |
+| Group messages                                 | `references/messaging-and-gates.md`  |
+| A failed or unknown worker; retry, stop, reset | `references/recovery-and-cleanup.md` |
+| Custom argv or terminal layout                 | `references/low-level-topology.md`   |

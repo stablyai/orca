@@ -13,7 +13,7 @@ import {
   AGENT_SESSION_CLAIM_DIGEST_VERSION,
   type AgentSessionExecutionClaim
 } from '../../../../shared/agent-session/agent-session-host-authority'
-import { getAgentResumeArgv } from '../../../../shared/agent-resume-argv'
+import { getAgentResumeArgv } from '../../../../shared/agent-launch/startup/agent-resume-argv'
 import {
   isResumableTuiAgent,
   normalizeAgentProviderSession,

@@ -10,11 +10,11 @@ export function macosNotificationIdentity(
   request: NotificationDispatchRequest
 ): Pick<NotificationConstructorOptions, 'id' | 'groupId'> {
   // Windows toast Tag/Group has different replacement rules.
-  if (process.platform !== 'darwin' || !request.paneKey) {
+  if (process.platform !== 'darwin') {
     return {}
   }
   // Structured alerts retire only on reads covering their journal position; keep once-only IDs.
-  if (request.structuredOrigin) {
+  if (request.structuredOrigin || !request.paneKey) {
     return request.notificationId ? { id: request.notificationId } : {}
   }
   // Reused IDs bind clicks to the first shown Electron object, even after release.
@@ -24,13 +24,18 @@ export function macosNotificationIdentity(
 // Remove without a live object; close cannot work after retention expiry or restart.
 export function removeReadMacosNotifications(
   paneKey: string,
-  retired: readonly AnnouncedNotification[]
+  retired: readonly AnnouncedNotification[],
+  removeGroup = true
 ): void {
   if (process.platform !== 'darwin') {
     return
   }
-  Notification.removeGroup(paneGroupId(paneKey))
-  const ids = retired.filter((entry) => entry.origin).map((entry) => entry.id)
+  if (removeGroup) {
+    Notification.removeGroup(paneGroupId(paneKey))
+  }
+  const ids = retired
+    .filter((entry) => entry.origin || entry.paneKey?.startsWith('worktree:'))
+    .map((entry) => entry.id)
   if (ids.length > 0) {
     Notification.remove(ids)
   }

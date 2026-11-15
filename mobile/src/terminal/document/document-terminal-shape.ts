@@ -1,5 +1,5 @@
 import type { IUnicodeHandling } from '@xterm/xterm'
-import type { XtermUnicodeServiceCore } from '../../../../src/shared/terminal-unicode-provider'
+import type { XtermUnicodeServiceCore } from '../../../../src/shared/terminal/appearance/terminal-unicode-provider'
 
 // Describe only xterm members the document consumes; native globals and embedded imports satisfy the same seam.
 

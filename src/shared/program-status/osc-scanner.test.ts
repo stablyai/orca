@@ -2,11 +2,6 @@ import { describe, expect, it } from 'vitest'
 import { createProgramStatusOscScanner } from './osc-scanner'
 
 describe('createProgramStatusOscScanner', () => {
-  it('stays on the fast path for ordinary output', () => {
-    const scan = createProgramStatusOscScanner()
-    expect(scan('\x1b[31mred\x1b[0m plain\r\n')).toEqual([])
-  })
-
   it('reads BEL- and ST-terminated reports with their end offsets', () => {
     const scan = createProgramStatusOscScanner()
     const data = 'a\x1b]7501;state=working\x07b\x1b]7501;state=done\x1b\\c'

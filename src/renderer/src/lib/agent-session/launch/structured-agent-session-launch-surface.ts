@@ -1,13 +1,13 @@
 import {
   findIndexedProjectGroupOwner,
-  findIndexedWorktreeOwner,
-  getCatalogOwnerHostId
-} from '../../worktree-runtime-owner-index'
-import { findIndexedRepoOwner } from '../../repo-owner-index'
-import { folderWorkspaceToWorktree } from '../../../../../shared/folder-workspace-worktree'
+  findIndexedWorktreeOwner
+} from '../../workspace/ownership/worktree-runtime-owner-index'
+import '../../workspace/ownership/workspace-catalog-owner-index'
+import { findIndexedRepoOwner } from '../../workspace/ownership/repo-owner-index'
+import { folderWorkspaceToWorktree } from '../../../../../shared/folder-workspaces/folder-workspace-worktree'
 import type { Tab } from '../../../../../shared/tab-types'
-import type { ExecutionHostId } from '../../../../../shared/execution-host'
-import type { TuiAgent } from '../../../../../shared/tui-agent'
+import { getRepoExecutionHostId, type ExecutionHostId } from '../../../../../shared/execution-host'
+import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent'
 import { defaultAgentChatLabel } from '../../../../../shared/agent-session/agent-session-chat-label'
 import { structuredAgentSessionTabId } from '../../../../../shared/agent-session/view/structured-agent-session-projection'
 import { useAppStore } from '@/store/index'
@@ -18,26 +18,24 @@ import {
   readStructuredAgentLaunchRecords,
   writeStructuredAgentLaunchRecord
 } from './structured-agent-session-launch-persistence'
-import {
-  getStructuredAgentSessionLaunchOwner,
-  getStructuredLaunchStateBySessionId
-} from './structured-agent-session-launch-registry'
+import { getStructuredAgentSessionLaunchOwner } from './structured-agent-session-launch-registry'
+import { getStructuredLaunchStateBySessionId } from './structured-agent-session-launch-state-store'
 import {
   structuredAgentSessionFocusOwner,
   structuredAgentSessionTargetForHost
-} from '@/runtime/structured-agent-session-owner'
-import { holdFrameDrawnProvisionalChatTab } from '../../frame-drawn-chat-tab-placement'
+} from '@/runtime/native-chat/session-ownership/structured-agent-session-owner'
+import { holdFrameDrawnProvisionalChatTab } from '../../../store/workspace-layout/frames/frame-drawn-chat-tab-placement'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../shared/layout-owner-switch'
 import {
   openAgentSessionTabThroughLayoutOwner,
   type OpenedAgentSessionTab
-} from '../../structured-agent-session-tab-open-through-layout-owner'
+} from './pane/structured-agent-session-tab-open-through-layout-owner'
 import {
   clearWebSessionFocusIntentIfMatches,
   peekWebSessionFocusIntent,
   resolveWebSessionVisibleTabId
-} from '@/runtime/web-session-focus-intent'
-import { selectFolderWorkspaces } from '@/store/workspace-record-selectors'
+} from '@/runtime/web-session-tabs-sync/navigation/web-session-focus-intent'
+import { selectFolderWorkspaces } from '@/store/workspaces/catalog/workspace-record-fields'
 
 type LaunchSurface = {
   sessionId: string
@@ -257,7 +255,7 @@ export function restoreStructuredLaunchSurfaces(): void {
       ...selectFolderWorkspaces(state).flatMap((workspace) => {
         const group = findIndexedProjectGroupOwner(state.projectGroups, workspace.projectGroupId)
         const host = workspace.executionHostId || workspace.connectionId ? workspace : group
-        const owned = host && { ...workspace, executionHostId: getCatalogOwnerHostId(host) }
+        const owned = host && { ...workspace, executionHostId: getRepoExecutionHostId(host) }
         return owned ? [folderWorkspaceToWorktree(owned)] : []
       })
     ]
@@ -275,7 +273,7 @@ export function restoreStructuredLaunchSurfaces(): void {
       continue
     }
     const repo = findIndexedRepoOwner(state.repos, workspace.repoId)
-    const host = workspace.hostId ?? (repo ? getCatalogOwnerHostId(repo) : undefined)
+    const host = workspace.hostId ?? (repo ? getRepoExecutionHostId(repo) : undefined)
     if (host !== getStructuredAgentSessionLaunchOwner(record.sessionId)) {
       continue
     }

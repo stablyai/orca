@@ -5,6 +5,34 @@ const WINDOWS_LINUX_TOGGLE_BINDINGS = ['Mod+Shift+F11', 'Mod+Shift+J']
 
 export const KEYBINDING_DEFINITION_CORE_4: readonly KeybindingDefinition[] = [
   {
+    id: 'terminal.expandPane',
+    title: 'Expand / collapse pane',
+    group: 'Terminal Panes',
+    scope: 'terminal',
+    searchKeywords: ['shortcut', 'pane', 'expand', 'collapse'],
+    defaultBindings: platformBindings(['Mod+Shift+Enter'])
+  },
+  {
+    id: 'terminal.setTitle',
+    title: 'Set Title…',
+    group: 'Terminal Panes',
+    scope: 'terminal',
+    searchKeywords: ['shortcut', 'terminal', 'pane', 'set title', 'title', 'rename'],
+    defaultBindings: platformBindings([])
+  },
+  {
+    id: 'sidebar.projects.toggleCollapse',
+    title: 'Collapse / Expand All Projects',
+    group: 'Global',
+    scope: 'global',
+    searchKeywords: ['shortcut', 'sidebar', 'projects', 'collapse', 'expand', 'all'],
+    defaultBindings: {
+      darwin: ['Mod+Alt+P'],
+      linux: ['Mod+Shift+H'],
+      win32: ['Mod+Shift+H']
+    }
+  },
+  {
     id: 'chat.find',
     title: 'Find in chat',
     group: 'Chat',
@@ -57,6 +85,14 @@ export const KEYBINDING_DEFINITION_CORE_4: readonly KeybindingDefinition[] = [
     group: 'Terminal Panes',
     scope: 'terminal',
     searchKeywords: ['shortcut', 'terminal', 'pane', 'clear title', 'remove title', 'title'],
+    defaultBindings: platformBindings([])
+  },
+  {
+    id: 'terminal.copySessionId',
+    title: 'Copy Session ID',
+    group: 'Terminal Panes',
+    scope: 'terminal',
+    searchKeywords: ['shortcut', 'terminal', 'pane', 'agent', 'copy', 'session id', 'fork'],
     defaultBindings: platformBindings([])
   },
   {
@@ -115,5 +151,21 @@ export const KEYBINDING_DEFINITION_CORE_4: readonly KeybindingDefinition[] = [
     },
     // Why: macOS uses Shift+Space as an input-source shortcut; Orca otherwise rejects Shift-only bindings to avoid stealing typed text.
     allowShiftOnlyKeybindings: true
+  },
+  {
+    id: 'tab.moveLeft',
+    title: 'Move active tab left',
+    group: 'Tabs',
+    scope: 'tabs',
+    searchKeywords: ['shortcut', 'tab', 'move', 'left', 'reorder'],
+    defaultBindings: platformBindings([])
+  },
+  {
+    id: 'tab.moveRight',
+    title: 'Move active tab right',
+    group: 'Tabs',
+    scope: 'tabs',
+    searchKeywords: ['shortcut', 'tab', 'move', 'right', 'reorder'],
+    defaultBindings: platformBindings([])
   }
 ]

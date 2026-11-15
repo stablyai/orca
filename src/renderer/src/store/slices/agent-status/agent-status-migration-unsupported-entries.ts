@@ -1,4 +1,4 @@
-import type { MigrationUnsupportedPtyEntry } from '../../../../../shared/agent-status-ipc-payload'
+import type { MigrationUnsupportedPtyEntry } from '../../../../../shared/agent-status/contracts/agent-status-ipc-payload'
 
 export function pruneMigrationUnsupportedEntries(
   entries: Record<string, MigrationUnsupportedPtyEntry>,

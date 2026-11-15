@@ -1,15 +1,20 @@
+import { createMobileSessionTabsDelivery } from './mobile-session-tabs-delivery'
 import { OrcaRuntimeWithStoredMobileSnapshotHasStalePreservedTab } from './mobile-session-publication-preservation'
+import type { BrowserTabInfo } from '../../../shared/browser/runtime/runtime-browser-contracts'
 import type {
-  BrowserTabInfo,
   RuntimeMobileSessionClientTab,
-  RuntimeMobileSessionMarkdownTab,
+  RuntimeMobileSessionMarkdownTab
+} from '../../../shared/remote-runtime/session-graph/runtime-mobile-session-tab-contracts'
+import type {
   RuntimeMobileSessionTabGroup,
-  RuntimeMobileSessionTabsResult
-} from '../../../shared/runtime-types'
-import { UNPUBLISHED_WORKTREE_PUBLICATION_EPOCH } from '../../../shared/runtime-types'
-import { getRuntimeBrowserPageRegistry } from '../runtime-browser-page-registry'
-import { getMobileSessionTabOrderIds } from '../mobile-session-tab-merge'
+  RuntimeMobileSessionTabsResult,
+  RuntimeMobileSessionTabsSnapshot
+} from '../../../shared/remote-runtime/session-graph/runtime-session-contracts'
+import { UNPUBLISHED_WORKTREE_PUBLICATION_EPOCH } from '../../../shared/remote-runtime/session-graph/runtime-session-contracts'
+import { getRuntimeBrowserPageRegistry } from '../browser/client-pages/runtime-browser-page-registry'
+import { getMobileSessionTabOrderIds } from '../session-lifecycle/projection/mobile-session-tab-merge'
 import { readCreatedWorkspaceLaunch } from '../../agent-launch/agent-launch-created-workspace'
+import type { AgentSenderRevision } from '../../../shared/orchestration/mailbox/agent-sender-associations'
 import { worktreeIdsEqual } from '../../../shared/worktree/id'
 
 export abstract class OrcaRuntimeWithScheduleMobileSessionTabsChanged extends OrcaRuntimeWithStoredMobileSnapshotHasStalePreservedTab {
@@ -44,44 +49,125 @@ export abstract class OrcaRuntimeWithScheduleMobileSessionTabsChanged extends Or
       return
     }
     // Browser events are workspace-scoped; navigation/churn must not broadcast every workspace.
-    const result = this.toMobileSessionTabsResult(snapshot)
-    for (const subscription of this.mobileSessionTabListeners) {
-      subscription.listener(
-        this.projectMobileSessionTabsForClient(result, subscription.clientNavigationId),
-        changeSequence
-      )
-    }
+    this.createMobileSessionTabsDelivery()(this.toMobileSessionTabsResult(snapshot), changeSequence)
   }
 
   protected notifyMobileSessionTabSnapshots(): void {
     if (this.mobileSessionTabListeners.size === 0) {
       return
     }
+    const deliver = this.createMobileSessionTabsDelivery()
     for (const snapshot of this.mobileSessionTabsByWorktree.values()) {
-      const result = this.toMobileSessionTabsResult(snapshot)
-      const changeSequence = ++this.mobileSessionTabsChangeSequence
-      for (const subscription of this.mobileSessionTabListeners) {
-        subscription.listener(
-          this.projectMobileSessionTabsForClient(result, subscription.clientNavigationId),
-          changeSequence
-        )
-      }
+      deliver(this.toMobileSessionTabsResult(snapshot), ++this.mobileSessionTabsChangeSequence)
     }
   }
 
-  protected getMobileSessionTabsForWorktree(
+  protected createMobileSessionTabsDelivery() {
+    return createMobileSessionTabsDelivery({
+      senders: this.agentProjections.senders,
+      listeners: (worktree, navigation, candidates) =>
+        this.selectMobileSessionTabsListeners(worktree, navigation, candidates),
+      subscribed: (subscription) => this.mobileSessionTabListeners.has(subscription),
+      project: (frame, navigation) => this.projectMobileSessionTabsForClient(frame, navigation),
+      deliver: (subscription, frame, sequence, delivery) =>
+        this.deliverMobileSessionTabsFrame(subscription, frame, sequence, delivery),
+      source: (worktree) => this.mobileSessionTabsByWorktree.get(worktree),
+      epoch: () => this.getAuthoritativeSessionTabsInventoryEpoch(),
+      releaseHistory: () => this.releaseAgentSenderHistoryIfUnobserved()
+    })
+  }
+
+  protected agentSenderGraphReply(base: AgentSenderRevision | undefined) {
+    try {
+      return this.agentProjections.senders.buildForGraph(base)
+    } finally {
+      this.releaseAgentSenderHistoryIfUnobserved()
+    }
+  }
+
+  protected toMobileSessionTabsFrame(
+    snapshot: RuntimeMobileSessionTabsSnapshot,
+    includeAgentSenders = true
+  ): RuntimeMobileSessionTabsResult {
+    const result = this.toMobileSessionTabsResult(snapshot)
+    return includeAgentSenders ? this.withMobileSessionTabSenders(result) : result
+  }
+
+  protected withMobileSessionTabSenders(
+    result: RuntimeMobileSessionTabsResult
+  ): RuntimeMobileSessionTabsResult {
+    try {
+      return {
+        ...result,
+        agentSenderAssociations: this.agentProjections.senders.buildForFrame(result.worktree)
+      }
+    } finally {
+      this.releaseAgentSenderHistoryIfUnobserved()
+    }
+  }
+
+  protected async collectMobileSessionTabsFrames(
+    snapshots: Iterable<RuntimeMobileSessionTabsSnapshot>,
+    includeAgentSenders = true,
+    clientNavigationId?: string
+  ): Promise<{ snapshots: RuntimeMobileSessionTabsResult[]; changeSequence: number }> {
+    const consume = () => {
+      let senderScope:
+        | ReturnType<typeof this.agentProjections.senders.buildForFramePass>
+        | undefined
+      try {
+        const frames = [...snapshots].map((snapshot) => {
+          const result = this.toMobileSessionTabsResult(snapshot)
+          if (!includeAgentSenders) {
+            return result
+          }
+          senderScope ??= this.agentProjections.senders.buildForFramePass()
+          return { ...result, agentSenderAssociations: senderScope(snapshot.worktree) }
+        })
+        return {
+          snapshots: frames.map((frame) =>
+            this.projectMobileSessionTabsForClient(frame, clientNavigationId)
+          ),
+          changeSequence: this.mobileSessionTabsChangeSequence
+        }
+      } finally {
+        if (senderScope) {
+          this.releaseAgentSenderHistoryIfUnobserved()
+        }
+      }
+    }
+    return includeAgentSenders
+      ? this.agentProjections.senders.withPreparedPublication(consume)
+      : consume()
+  }
+
+  protected async getMobileSessionTabsForWorktree(
     worktreeId: string,
     clientNavigationId?: string,
-    options?: { includeInitialSurfaceLaunch?: true }
-  ): RuntimeMobileSessionTabsResult {
-    const snapshot = this.mobileSessionTabsByWorktree.get(worktreeId)
-    if (!snapshot) {
-      const publishedEpoch = this.getAuthoritativeSessionTabsInventoryEpoch()
-      if (publishedEpoch === null) {
-        this.notifyEmptyWorktreeOnPublication(worktreeId)
+    options?: { includeInitialSurfaceLaunch?: true; includeAgentSenders?: boolean }
+  ): Promise<RuntimeMobileSessionTabsResult> {
+    const consume = (): RuntimeMobileSessionTabsResult => {
+      const snapshot = this.mobileSessionTabsByWorktree.get(worktreeId)
+      if (!snapshot) {
+        const publishedEpoch = this.getAuthoritativeSessionTabsInventoryEpoch()
+        if (publishedEpoch === null) {
+          this.notifyEmptyWorktreeOnPublication(worktreeId)
+        }
+        const result = this.projectMobileSessionTabsForClient(
+          this.emptyMobileSessionTabsResult(
+            worktreeId,
+            publishedEpoch,
+            options?.includeAgentSenders
+          ),
+          clientNavigationId
+        )
+        const launch = options?.includeInitialSurfaceLaunch
+          ? readCreatedWorkspaceLaunch(this, worktreeId)
+          : undefined
+        return launch ? { ...result, initialSurfaceLaunch: launch } : result
       }
       const result = this.projectMobileSessionTabsForClient(
-        this.emptyMobileSessionTabsResult(worktreeId, publishedEpoch),
+        this.toMobileSessionTabsFrame(snapshot, options?.includeAgentSenders),
         clientNavigationId
       )
       const launch = options?.includeInitialSurfaceLaunch
@@ -89,22 +175,18 @@ export abstract class OrcaRuntimeWithScheduleMobileSessionTabsChanged extends Or
         : undefined
       return launch ? { ...result, initialSurfaceLaunch: launch } : result
     }
-    const result = this.projectMobileSessionTabsForClient(
-      this.toMobileSessionTabsResult(snapshot),
-      clientNavigationId
-    )
-    const launch = options?.includeInitialSurfaceLaunch
-      ? readCreatedWorkspaceLaunch(this, worktreeId)
-      : undefined
-    return launch ? { ...result, initialSurfaceLaunch: launch } : result
+    return options?.includeAgentSenders !== false
+      ? this.agentProjections.senders.withPreparedPublication(consume)
+      : consume()
   }
 
   // Only unpublished graphs mean ask later; published graphs without an entry are empty, allowing the first terminal create.
   protected emptyMobileSessionTabsResult(
     worktreeId: string,
-    publishedEpoch: number | null
+    publishedEpoch: number | null,
+    includeAgentSenders = true
   ): RuntimeMobileSessionTabsResult {
-    return {
+    const result: RuntimeMobileSessionTabsResult = {
       worktree: worktreeId,
       publicationEpoch:
         publishedEpoch === null
@@ -116,6 +198,7 @@ export abstract class OrcaRuntimeWithScheduleMobileSessionTabsChanged extends Or
       activeTabType: null,
       tabs: []
     }
+    return includeAgentSenders ? this.withMobileSessionTabSenders(result) : result
   }
 
   // Empty workspaces get no normal publication notice; explicitly settle clients previously told ask later.
@@ -134,14 +217,8 @@ export abstract class OrcaRuntimeWithScheduleMobileSessionTabsChanged extends Or
       ) {
         return
       }
-      const result = this.emptyMobileSessionTabsResult(worktreeId, publishedEpoch)
-      const changeSequence = ++this.mobileSessionTabsChangeSequence
-      for (const subscription of this.mobileSessionTabListeners) {
-        subscription.listener(
-          this.projectMobileSessionTabsForClient(result, subscription.clientNavigationId),
-          changeSequence
-        )
-      }
+      const result = this.emptyMobileSessionTabsResult(worktreeId, publishedEpoch, false)
+      this.createMobileSessionTabsDelivery()(result, ++this.mobileSessionTabsChangeSequence)
     }
     this.sessionTabsInventoryWaiters.add(onPublished)
   }
@@ -149,17 +226,14 @@ export abstract class OrcaRuntimeWithScheduleMobileSessionTabsChanged extends Or
   protected emitMobileSessionTabsSnapshotToClient(
     projected: RuntimeMobileSessionTabsResult,
     clientNavigationId: string,
-    follow = false
+    follow = false,
+    deliver = this.createMobileSessionTabsDelivery()
   ): void {
-    const changeSequence = ++this.mobileSessionTabsChangeSequence
-    for (const subscription of this.mobileSessionTabListeners) {
-      if (subscription.clientNavigationId === clientNavigationId) {
-        subscription.listener(
-          follow ? { ...projected, navigationIntent: 'follow' } : projected,
-          changeSequence
-        )
-      }
-    }
+    deliver(
+      follow ? { ...projected, navigationIntent: 'follow' } : projected,
+      ++this.mobileSessionTabsChangeSequence,
+      clientNavigationId
+    )
   }
 
   protected async resolveMobileMarkdownWorktreeId(
@@ -180,7 +254,7 @@ export abstract class OrcaRuntimeWithScheduleMobileSessionTabsChanged extends Or
     return worktreeId
   }
 
-  /** Every browser tab clients see: running pages and saved tabs whose page starts on first use. */
+  /** Every browser tab clients see: running pages and saved tabs whose page starts on first consume. */
   protected getListedBrowserTabsByPageId(worktreeId: string): Map<string, BrowserTabInfo> {
     const liveTabs = this.agentBrowserBridge?.tabList?.(worktreeId).tabs ?? []
     const byPageId = new Map(liveTabs.map((tab) => [tab.browserPageId, tab]))
@@ -223,14 +297,11 @@ export abstract class OrcaRuntimeWithScheduleMobileSessionTabsChanged extends Or
         if (tabOrder.length === 0) {
           return null
         }
-        const activeTabId =
-          group.activeTabId && tabOrder.includes(group.activeTabId)
-            ? group.activeTabId
-            : (tabOrder[0] ?? null)
         const recentTabIds = group.recentTabIds?.filter((tabId) => tabOrder.includes(tabId))
         return {
           id: group.id,
-          activeTabId,
+          activeTabId:
+            group.activeTabId && tabOrder.includes(group.activeTabId) ? group.activeTabId : null,
           tabOrder,
           ...(recentTabIds && recentTabIds.length > 0 ? { recentTabIds } : {})
         }

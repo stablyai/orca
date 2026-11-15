@@ -1,0 +1,216 @@
+export type RateLimitWindow = {
+  /** Percentage of the window consumed (0–100). */
+  usedPercent: number
+  /** Window duration in minutes: 300 (5h) or 10080 (7d). */
+  windowMinutes: number
+  /** Unix ms timestamp when the window resets, if known. */
+  resetsAt: number | null
+  /** Human-readable reset description, e.g. "2:30 PM" or "Thu". */
+  resetDescription: string | null
+}
+
+export type ProviderRateLimitStatus = 'idle' | 'fetching' | 'ok' | 'error' | 'unavailable'
+
+type ExtraUsageBalanceBase = {
+  enabled: boolean
+  disabledReason: string | null
+  resetsAt: number | null
+}
+
+type CurrencyExtraUsageBalance = ExtraUsageBalanceBase & {
+  unit: 'currency'
+  /** Null when the current balance is unavailable. */
+  balance: number | null
+  currencyCode: string
+  spent: number | null
+  spendLimit: number | null
+  spentPercent: number | null
+}
+
+type CreditExtraUsageBalance = ExtraUsageBalanceBase & {
+  unit: 'credits'
+  balance: number
+  unlimited: boolean
+}
+
+// Discriminate currency/credit balances so consumers cannot invent inappropriate currency or spend-limit fields.
+export type ExtraUsageBalance = CurrencyExtraUsageBalance | CreditExtraUsageBalance
+
+export type RateLimitBucket = RateLimitWindow & {
+  name: string
+  /** Model-group name the pool belongs to (Antigravity), when the provider groups pools. */
+  group?: string
+  /** Provider's own window name for the pool, e.g. agy's "Weekly Limit Remaining". */
+  windowName?: string
+}
+
+export type UsageRateLimitSource = 'oauth' | 'cli' | 'web' | 'live-session'
+
+export type UsageRateLimitFailureKind =
+  | 'missing-credentials'
+  | 'stale-token'
+  | 'refreshable-credentials-without-token'
+  | 'delegated-refresh-required'
+  | 'deferred-by-live-session'
+  | 'keychain-unavailable'
+  | 'missing-scope'
+  /** The account is authenticated but not entitled to the product being polled. */
+  | 'no-subscription'
+  | 'network'
+  | 'server'
+  | 'parse'
+  | 'rate-limited'
+  | 'cli-unavailable'
+  | 'usage-unavailable'
+  | 'unknown'
+
+/** Renderer-only: why a provider set up on this device shows no usage under the owning host. */
+export type OwnerNotSetUpPlaceholder =
+  | { kind: 'not-configured'; ownerLabel: string; signInSavedHereOnly: boolean }
+  /** The host reports Claude on API-key billing and with no login alike, so it cannot say which. */
+  | { kind: 'claude-unknown'; ownerLabel: string }
+
+export type UsageRateLimitMetadata = {
+  source?: UsageRateLimitSource
+  attemptedSources?: UsageRateLimitSource[]
+  failureKind?: UsageRateLimitFailureKind
+  credentialSource?: string
+  authProvenance?: string
+  lastSuccessfulSource?: UsageRateLimitSource
+  /** Unix ms timestamp before which usage refetches should not be attempted (from HTTP Retry-After). */
+  retryAtMs?: number
+  /** Renderer-only: the remote host that owns this usage cannot vouch for it. Hosts never set it. */
+  unverifiableOwner?: boolean
+  /** Renderer-only: set up on this device but not on the remote host that owns usage. Hosts never set it. */
+  ownerNotSetUp?: OwnerNotSetUpPlaceholder
+  /** Antigravity: the native login verified before and after the read; id is null for an unsaved login. */
+  account?: { id: string | null; email: string | null }
+}
+
+export type ProviderRateLimits = {
+  provider:
+    | 'claude'
+    | 'codex'
+    | 'gemini'
+    | 'opencode-go'
+    | 'kimi'
+    | 'minimax'
+    | 'grok'
+    | 'antigravity'
+    | 'cursor'
+    | 'zcode'
+    | 'muse'
+  /** 5-hour session window, null if not available. */
+  session: RateLimitWindow | null
+  /** 7-day weekly window, null if not available. */
+  weekly: RateLimitWindow | null
+  /** Claude Fable 7-day weekly window, null if not available. */
+  fableWeekly?: RateLimitWindow | null
+  /** 30-day monthly window (OpenCode Go, Grok unified billing, Cursor plan pools), null if not available. */
+  monthly?: RateLimitWindow | null
+  /** Overage / pay-as-you-go balance the plan spends into once its windows cap. */
+  extraUsage?: ExtraUsageBalance | null
+  /** Named per-model buckets (Gemini models, Cursor plan pools). */
+  buckets?: RateLimitBucket[]
+  /** Available earned Codex rate-limit reset credits, if reported. */
+  rateLimitResetCredits?: {
+    availableCount: number
+    /** Total earned reset credits, including spent or expired credits, if reported. */
+    totalEarnedCount?: number
+    /** Unix ms timestamp for the next available reset credit expiry, if reported. */
+    nextExpiresAt?: number | null
+    credits?: {
+      status: string
+      expiresAt: number | null
+      grantedAt: number | null
+    }[]
+  } | null
+  /** Subscription plan tier for the active account (Codex `plan_type`, e.g. "plus"). */
+  planType?: string | null
+  /** Unix ms timestamp of the last successful data update. */
+  updatedAt: number
+  /** Human-readable error message, null when status is 'ok'. */
+  error: string | null
+  status: ProviderRateLimitStatus
+  usageMetadata?: UsageRateLimitMetadata
+}
+
+export type CodexRateLimitResetOutcome = 'reset' | 'nothingToReset' | 'noCredit' | 'alreadyRedeemed'
+
+export type CodexRateLimitResetResult = {
+  outcome: CodexRateLimitResetOutcome
+  state: RateLimitState
+}
+
+export type RateLimitRuntimeTarget = {
+  runtime: 'host' | 'wsl'
+  wslDistro: string | null
+}
+
+export type InactiveAccountUsage = {
+  accountId: string
+  rateLimits: ProviderRateLimits | null
+  updatedAt: number
+  isFetching: boolean
+}
+
+/** One saved Antigravity account's last verified reading on the runtime the meter reads. */
+export type AntigravityAccountUsage = {
+  accountId: string
+  email: string | null
+  /** True when this account is the native agy login right now. */
+  active: boolean
+  /** Null until a reading verified as this account succeeded; `updatedAt` is when it was read. */
+  rateLimits: ProviderRateLimits | null
+}
+
+export type GrokAccountStatus = {
+  signedIn: boolean
+  email: string | null
+  teamId: string | null
+  tokenFresh: boolean
+  error: string | null
+}
+
+export type CursorAccountStatus = {
+  signedIn: boolean
+  email: string | null
+  displayName: string | null
+  /** Which local store the session came from: the macOS Keychain, the CLI auth file, or Cursor IDE. */
+  credentialSource: 'keychain' | 'cli' | 'desktop' | null
+  planType: string | null
+  tokenFresh: boolean
+  error: string | null
+}
+
+export type RateLimitState = {
+  claude: ProviderRateLimits | null
+  codex: ProviderRateLimits | null
+  gemini: ProviderRateLimits | null
+  opencodeGo: ProviderRateLimits | null
+  kimi: ProviderRateLimits | null
+  antigravity: ProviderRateLimits | null
+  minimax: ProviderRateLimits | null
+  grok: ProviderRateLimits | null
+  cursor: ProviderRateLimits | null
+  zcode: ProviderRateLimits | null
+  muse: ProviderRateLimits | null
+  /** Cookie is stored outside GlobalSettings; this durable flag keeps MiniMax visible across reloads/snapshot refreshes. */
+  minimaxCookieConfigured: boolean
+  /** Expose API-key presence only; main retains the secret. Combined with cookie presence, keeps MiniMax visible across reloads. */
+  minimaxApiKeyConfigured: boolean
+  /** Main resolves settings/env/OpenCode-connect keys but exposes only presence; combine with session cookie for persistent bar visibility. */
+  opencodeGoApiKeyConfigured: boolean
+  /** True when main finds a Grok CLI session file (~/.grok/auth.json or GROK_HOME). */
+  grokAuthConfigured: boolean
+  /** Presence of Cursor Keychain/legacy auth/IDE login only; tokens never leave main. */
+  cursorAuthConfigured: boolean
+  /** Expose GLM Coding Plan key presence only; retain secret in main and keep ZCode visible across reloads/refreshes. */
+  zcodePlanApiKeyConfigured?: boolean
+  claudeTarget: RateLimitRuntimeTarget
+  codexTarget: RateLimitRuntimeTarget
+  inactiveClaudeAccounts: InactiveAccountUsage[]
+  inactiveCodexAccounts: InactiveAccountUsage[]
+  /** Saved Antigravity accounts; agy has one shared login, so only the active one is ever read. */
+  antigravityAccounts: AntigravityAccountUsage[]
+}

@@ -1,11 +1,14 @@
 import {
   readPtyForegroundGroup,
   resolvePtyForegroundMembers
-} from '../../pty/pty-master-foreground-observation'
-import { readPtsName } from '../../pty/node-pty-pts-name'
-import { getSnapshotRowsOnTty, normalizePtyTty } from '../../pty/terminal-process-rows'
+} from '../../pty/process-retirement/pty-master-foreground-observation'
+import { readPtsName } from '../../pty/process-retirement/node-pty-pts-name'
+import {
+  getSnapshotRowsOnTty,
+  normalizePtyTty
+} from '../../pty/process-retirement/terminal-process-rows'
 import type { IPty } from 'node-pty'
-import { isShellProcess } from '../../../shared/shell-process-detection'
+import { isShellProcess } from '../../../shared/agent-status/process/shell-process-detection'
 import {
   getCommandTokenPathBasename,
   getFirstCommandToken
@@ -13,22 +16,25 @@ import {
 import {
   collectDescendantsFromIndex,
   getProcessTableIndex
-} from '../../../shared/process-table-index'
-import { hasControllingTty } from '../../../shared/posix-controlling-terminal'
-import { unreadableArgvName, type ProcessTableRow } from '../../../shared/process-table-snapshot'
+} from '../../../shared/process-observation/tables/process-table-index'
+import { hasControllingTty } from '../../../shared/terminal/pty/native-process/posix-controlling-terminal'
+import {
+  unreadableArgvName,
+  type ProcessTableRow
+} from '../../../shared/process-observation/tables/process-table-snapshot'
 import {
   getFreshProcessTableSnapshot,
   getProcessTableSnapshot
-} from '../../../shared/process-table-snapshot-reader'
-import { selectForegroundProcessCandidate } from '../../../shared/foreground-process-selection'
-import { resolveOuterWrapperForegroundProcess } from '../../../shared/foreground-wrapper-agent'
-import { recognizeAgentProcess } from '../../../shared/agent-process-recognition'
+} from '../../../shared/process-observation/tables/process-table-snapshot-reader'
+import { selectForegroundProcessCandidate } from '../../../shared/agent-status/process/foreground-process-selection'
+import { resolveOuterWrapperForegroundProcess } from '../../../shared/agent-status/process/foreground-wrapper-agent'
+import { recognizeAgentProcess } from '../../../shared/agent-status/process/agent-process-recognition'
 import {
   resolveAgentForegroundProcessWithAvailability,
-  type AgentForegroundProcessResolution,
-  type AgentForegroundResolutionOptions
-} from '../../providers/agent-foreground-process'
-import { readWindowsPtyJobProcessIds } from '../../providers/windows-pty-job-membership'
+  type AgentForegroundProcessResolution
+} from '../../providers/foreground/agent-process'
+import type { AgentForegroundResolutionOptions } from '../../providers/foreground/windows/agent-process'
+import { readWindowsPtyJobProcessIds } from '../../providers/foreground/windows/pty-job-membership'
 import { ptyShellProcessId } from '../../windows/windows-pty-job'
 import {
   readWindowsProcessIdentityTable,

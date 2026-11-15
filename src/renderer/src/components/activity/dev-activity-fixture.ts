@@ -1,7 +1,7 @@
 import { useAppStore } from '@/store'
-import type { Repo } from '../../../../shared/repo-types'
-import { makePaneKey } from '../../../../shared/stable-pane-id'
-import type { TerminalTab } from '../../../../shared/terminal-tab-types'
+import type { Repo } from '../../../../shared/repository/repo-types'
+import { makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
+import type { TerminalTab } from '../../../../shared/workspace-layout/terminal-tab-types'
 import type { Worktree } from '../../../../shared/worktree/types'
 
 const FIXTURE_REPO_ID = 'dev-fixture-repo'
@@ -63,7 +63,7 @@ function fixtureTab(id: string, title: string, sortOrder: number): TerminalTab {
 /** Populate a fresh development profile with representative activity rows. */
 export function seedDevActivityFixture(): void {
   const state = useAppStore.getState()
-  if (state.repos.length > 0 || Object.keys(state.agentStatusByPaneKey).length > 0) {
+  if (state.repos.length > 0 || Array.from(state.agentStatusByPaneKey.keys()).length > 0) {
     return
   }
 

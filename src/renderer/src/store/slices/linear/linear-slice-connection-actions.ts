@@ -5,7 +5,7 @@ import {
   linearDisconnectWorkspace,
   linearSelectWorkspace,
   linearTestConnection
-} from '@/runtime/runtime-linear-client'
+} from '@/runtime/linear/runtime-linear-client'
 import {
   beginLinearMutation,
   isCurrentLinearMutation,
@@ -14,7 +14,8 @@ import {
 } from './linear-slice-request-state'
 import { looksLikeAuthError } from './linear-cache'
 import { isIntegrationCredentialDecryptionError } from '../../../../../shared/integration-credential-errors'
-import { detachLinearIssuePublication } from './linear-issue-publication'
+import './linear-issue-read'
+import { detachLinearIssuePublication } from './linear-issue-write-publication'
 import { getLinearReadScope, isCurrentLinearRuntimeContext } from './linear-slice-scope'
 import {
   acknowledgeLinearAccount,

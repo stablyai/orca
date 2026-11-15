@@ -1,17 +1,19 @@
 import { useState } from 'react'
 import { ShieldAlert, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { readWebDeviceKeySupport } from './web-device-key-support'
 import { webPairingSecurityGuidance } from './web-pairing-security-guidance'
 import { readStoredWebRuntimeEnvironment } from './web-runtime-environment'
 
 /** A small corner notice while this browser holds its pairing in a weaker form. */
 export function WebPairingSecurityNotice(): React.JSX.Element | null {
+  const t = useTranslate()
   const [hidden, setHidden] = useState(false)
   const guidance = webPairingSecurityGuidance(
     readWebDeviceKeySupport(),
-    readStoredWebRuntimeEnvironment()
+    readStoredWebRuntimeEnvironment(),
+    t
   )
   if (hidden || !guidance) {
     return null
@@ -28,7 +30,7 @@ export function WebPairingSecurityNotice(): React.JSX.Element | null {
         variant="ghost"
         size="icon-xs"
         onClick={() => setHidden(true)}
-        aria-label={translate('auto.web.pairingSecurity.hide', 'Hide')}
+        aria-label={t('auto.web.pairingSecurity.hide', 'Hide')}
       >
         <X aria-hidden />
       </Button>

@@ -1,6 +1,6 @@
 import { EventEmitter } from 'node:events'
 import { describe, expect, it, vi } from 'vitest'
-import type { BrowserExtensionCaller } from '../browser-extension-namespace-registry'
+import type { BrowserExtensionCaller } from '../api-runtime/browser-extension-namespace-registry'
 
 type FakeFrame = {
   frameTreeNodeId: number
@@ -23,21 +23,20 @@ vi.mock('electron', () => ({
     fromId: (processId: number, routingId: number) => mocks.frames.get(`${processId}:${routingId}`)
   }
 }))
-vi.mock('../browser-extension-api-host', () => ({
+vi.mock('../api-runtime/browser-extension-api-host', () => ({
   emitBrowserExtensionEvent: (_target: unknown, _namespace: string, event: string, args: unknown) =>
     mocks.emitted.push([event, Array.isArray(args) ? args[0] : undefined])
 }))
-vi.mock('../browser-extension-tab-model', () => ({
+vi.mock('../tabs-and-windows/browser-extension-tab-model', () => ({
   resolveBrowserExtensionTab: () => mocks.state.tab,
   listBrowserExtensionTabs: () => (mocks.state.tab ? [mocks.state.tab] : [])
 }))
 
-const registry = await import('../browser-extension-namespace-registry')
+const registry = await import('../api-runtime/browser-extension-namespace-registry')
 const { observeBrowserExtensionWebNavigation, registerWebNavigationNamespace } =
   await import('./web-navigation')
-const { getBrowserExtensionDocumentId } = await import('../browser-extension-document-ids')
 const { PRELOAD_DOCUMENT_TARGETS_NAMESPACE } =
-  await import('../../../../preload/browser-extension-document-targets')
+  await import('../../../../preload/browser/extensions/documents/browser-extension-document-targets')
 
 function frame(frameTreeNodeId: number, url: string, parent: FakeFrame | null = null): FakeFrame {
   const created: FakeFrame = {
@@ -150,6 +149,5 @@ describe('webNavigation documentIds', () => {
     expect(invoke('getFrame', [{ documentId: firstDocument }])).toBeNull()
 
     contents.emit('destroyed')
-    expect(getBrowserExtensionDocumentId(10)).not.toBe(nextDocument)
   })
 })

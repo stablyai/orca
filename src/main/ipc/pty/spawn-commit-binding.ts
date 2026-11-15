@@ -1,16 +1,11 @@
 import type { Store } from '../../persistence/loading-store/store'
-import type { PersistPtyBindingArgs } from '../../persistence/loading-store/pty-binding-persistence'
-import { ptyBindingIsRefused } from '../../persistence/loading-store/pty-binding-refusals'
-import { makePaneKey } from '../../../shared/stable-pane-id'
-import { toSshExecutionHostId } from '../../../shared/execution-host'
-import { createTerminalSessionStateSaveFailureMessage } from '../../../shared/terminal-session-state-save-failure'
+import type { PersistPtyBindingArgs } from '../../persistence/loading-store/terminal-bindings/pty-binding-persistence'
+import { createTerminalSessionStateSaveFailureMessage } from '../../../shared/workspace-session/terminal-session-state-save-failure'
 import type { OrcaRuntimeService } from '../../runtime/orca-runtime'
-import type { IPtyProvider, PtySpawnResult } from '../../providers/pty-provider-contract'
-import {
-  isAbsentBindingReplay,
-  PaneOwnerContentionError,
-  type AbsentPaneBinding
-} from './pane/pane-spawn-operation'
+import type { IPtyProvider } from '../../providers/pty/provider-contract'
+import type { PtySpawnResult } from '../../providers/pty/spawn-result'
+import { PaneOwnerContentionError, type AbsentPaneBinding } from './pane/pane-spawn-operation'
+import { persistFreshPaneBinding } from './pane/fresh-pane-binding'
 import { swapReplacedPaneBinding } from './pane/pane-owner-replacement'
 import type { ReplacedPaneOwner } from './pane/replaced-pane-owner'
 import { discardUnpersistedPtySpawn } from './pane/spawn-registration'
@@ -61,37 +56,4 @@ export async function savePtySpawnPaneBinding(
       agentSessionOperationOutcome: 'unknown' as const
     })
   }
-}
-
-/** Runs inside the existing durable mutation, after source/topology checks and before any bind. */
-export async function persistFreshPaneBinding(
-  store: Store,
-  binding: PersistPtyBindingArgs,
-  connectionId?: string | null,
-  absentOwner?: AbsentPaneBinding
-): Promise<boolean> {
-  let targetChanged = false
-  const hostId = connectionId ? toSshExecutionHostId(connectionId) : undefined
-  const persisted = await store.persistPtyBinding(() => {
-    const session = store.getWorkspaceSession(hostId)
-    const paneKey = makePaneKey(binding.tabId, binding.leafId)
-    if (ptyBindingIsRefused(binding, session, binding.worktreeId, paneKey, [])) {
-      return binding
-    }
-    const bound = session.terminalLayoutsByTabId[binding.tabId]?.ptyIdsByLeafId?.[binding.leafId]
-    const stamp = session.terminalPtyIncarnationsByPaneKey?.[paneKey]
-    if (
-      bound &&
-      (bound !== binding.ptyId || stamp !== binding.incarnationId) &&
-      !isAbsentBindingReplay(absentOwner, bound, stamp)
-    ) {
-      targetChanged = true
-      return null
-    }
-    return binding
-  }, hostId)
-  if (targetChanged) {
-    throw new PaneOwnerContentionError()
-  }
-  return persisted
 }

@@ -1,4 +1,4 @@
-import { isNativeWindowsLocalPtySpawn } from '../../../runtime/terminal-model-query-authority'
+import { isNativeWindowsLocalPtySpawn } from '../../../runtime/terminal/output/terminal-model-query-authority'
 import { resolvePtySpawnHostEnv } from '../spawn-host-env'
 import type { PtyIpcSpawnState } from './spawn-state'
 

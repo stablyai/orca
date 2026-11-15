@@ -6,8 +6,8 @@ import {
   type LOCAL_EXECUTION_HOST_ID,
   type ParsedExecutionHost
 } from '../../shared/execution-host'
-import { createLocalFilesystemProvider } from './local-filesystem-provider'
-import { createLocalGitProvider } from './local-git-provider'
+import { createLocalFilesystemProvider } from './filesystem/local-provider'
+import { createLocalGitProvider } from './git/local-provider'
 import { SshHostNotServedError } from './ssh-host-not-served-error'
 
 export class UnresolvableExecutionHostError extends Error {

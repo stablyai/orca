@@ -6,11 +6,11 @@ import type { AgentJournalRenderItem } from '../../../shared/agent-session/journ
 import { agentSessionPromptAttentionKey } from '../../../shared/agent-session/agent-session-attention'
 import type { AgentSessionTurnCompletionEvent } from '../../../shared/agent-session/view/agent-session-turn-completion-wire'
 import { projectStructuredAgentSessionStatusState } from '../../../shared/agent-session/view/structured-agent-session-projection'
-import { StructuredAgentSessionTurnCompletionFeed } from '../../native-chat/agent-session-wire/structured-agent-session-turn-completion-feed'
+import { StructuredAgentSessionTurnCompletionFeed } from '../../native-chat/agent-session-wire/observations/structured-agent-session-turn-completion-feed'
 import {
   RuntimeMobileNotificationController,
   type MobileNotificationEvent
-} from '../runtime-mobile-notification-controller'
+} from '../push/notifications/runtime-mobile-notification-controller'
 import { createStructuredAttentionMobileDelivery } from './structured-agent-session-mobile-attention'
 
 const SCOPE = {
@@ -113,7 +113,7 @@ describe('host prompt delivery and retirement', () => {
               }
             ]
           ]),
-          readStatusState: () => projectStructuredAgentSessionStatusState(items),
+          readStatusState: async () => projectStructuredAgentSessionStatusState(items),
           readChildWork: () => undefined,
           now: () => 42
         })
@@ -128,16 +128,16 @@ describe('host prompt delivery and retirement', () => {
           },
           onState: delivery.reconcile
         })
-        feed.observe('session-1')
+        await feed.observe('session-1')
         if (announcedEarlier) {
           items = [USER, turn(), approval(false)]
           sequence += 1
-          feed.observe('session-1')
+          await feed.observe('session-1')
         }
         items = [USER, turn(outcome), approval(false)]
         sequence += 1
-        feed.observe('session-1')
-        feed.observe('session-1')
+        await feed.observe('session-1')
+        await feed.observe('session-1')
         const key = agentSessionPromptAttentionKey(SCOPE, 'session-1', 'approval-1')
         const promptAnnounced = outcome === 'success' || announcedEarlier
         expect(legacy).toEqual([
@@ -160,8 +160,8 @@ describe('host prompt delivery and retirement', () => {
         }
         items = [USER, turn(outcome), approval(true)]
         sequence += 1
-        feed.observe('session-1')
-        feed.observe('session-1')
+        await feed.observe('session-1')
+        await feed.observe('session-1')
         expect(
           events.filter((event) => event.type === 'dismiss').map((event) => event.notificationId)
         ).toEqual(promptAnnounced ? [key] : [])

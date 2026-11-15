@@ -1,7 +1,10 @@
-import type { PtySpawnResult } from '../../providers/pty-provider-contract'
+import type { PtySpawnResult } from '../../providers/pty/spawn-result'
 import { ptyIncarnationById } from './provider/ownership-state'
-import { ensureWslHookRelayForReattach } from '../../agent-hooks/wsl-hook-relay-reattach'
-import { noteWslDistroWoken, noteWslDistrosRunning } from '../../wsl-background-distro-gate'
+import { ensureWslHookRelayForReattach } from '../../agent-hooks/wsl-relay/wsl-hook-relay-reattach'
+import {
+  noteWslDistroWoken,
+  noteWslDistrosRunning
+} from '../../wsl/discovery/wsl-background-distro-gate'
 import {
   agentSessionOwners,
   assertSpawnReplyWasLive,
@@ -26,7 +29,7 @@ import { failPtySpawnExecute } from './spawn-execute-failure'
 import type { PtySpawnOperationState, PtySpawnExecutionFacts } from './spawn-operation-state'
 import { excludeReplacedPaneOwner } from './pane/replaced-pane-owner'
 import { attachViewWithoutOwner } from './pane/attach-only-view'
-import { wslBridgePtyPresence } from '../../agent-hooks/wsl-bridge-pty-presence'
+import { wslBridgePtyPresence } from '../../agent-hooks/wsl-relay/wsl-bridge-pty-presence'
 import { isWslTerminalSpawn } from './wsl-terminal-spawn'
 
 export async function executePtySpawn(

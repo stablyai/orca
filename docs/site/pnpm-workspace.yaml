@@ -27,3 +27,5 @@ overrides:
 patchedDependencies:
   zod@3.25.76: ../../config/patches/zod@3.25.76.patch
   braces@3.0.3: ../../config/patches/braces@3.0.3.patch
+  glob@13.0.6: ../../config/patches/glob@13.0.6.patch
+  minimatch@10.2.6: ../../config/patches/minimatch@10.2.6.patch

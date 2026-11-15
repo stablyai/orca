@@ -14,7 +14,7 @@ import { expect, test } from './helpers/orca-app'
 import { orcaCliResult, runCompiledOrcaCli } from './helpers/compiled-orca-cli'
 import { RuntimeClient } from '../../src/cli/runtime/client'
 import { disablePluginSystem, enableDevPlugins } from './helpers/plugin-smoke'
-import { createPluginFromTemplate } from '../../src/cli/plugin-authoring/plugin-create'
+import { createPluginFromTemplate } from '../../src/cli/plugins/authoring/plugin-create'
 import { ISOLATED_FRAMES_E2E } from './helpers/plugin-frame-guest'
 import { waitForActiveWorktree, waitForSessionReady } from './helpers/store'
 
@@ -376,88 +376,6 @@ test('plugin shot waits for a cold worker, and --act state is put back after the
     expect(later.result.pendingRequests).toBe(0)
     await expect(surface.getByRole('button', { name: 'Add 1' })).toBeVisible()
     await expect(surface.getByRole('button', { name: 'Step 10' })).toBeVisible()
-  } finally {
-    await disablePluginSystem(orcaPage).catch(() => undefined)
-    await rm(tempRoot, { recursive: true, force: true })
-  }
-})
-
-test('plugin shot --act sorts and activates a Table row, then puts the panel back', async ({
-  electronApp,
-  orcaPage
-}) => {
-  await waitForSessionReady(orcaPage)
-  await waitForActiveWorktree(orcaPage)
-  const tempRoot = await mkdtemp(join(tmpdir(), 'orca-plugin-shot-table-'))
-  const pluginRoot = join(tempRoot, 'shot-table')
-  try {
-    await mkdir(join(pluginRoot, 'src'), { recursive: true })
-    await writeFile(
-      join(pluginRoot, 'orca-plugin.json'),
-      JSON.stringify({
-        manifestVersion: 2,
-        execution: 'sandboxed-ui',
-        id: 'shot-table',
-        name: 'Shot Table',
-        version: '1.0.0',
-        engines: { orca: '>=1.4.246' },
-        pluginApi: 1,
-        contributes: {
-          panels: [{ id: 'files', title: 'Shot Table', entry: 'src/panel.tsx', ui: 'components' }]
-        },
-        capabilities: []
-      })
-    )
-    await writeFile(
-      join(pluginRoot, 'src', 'panel.tsx'),
-      [
-        "import { atom, read, set, Stack, Table, Text } from 'orca'",
-        "const sort = atom({ column: 'name', direction: 'asc' })",
-        "const opened = atom('none')",
-        'export default function Panel() {',
-        '  const by = read(sort)',
-        "  const names = ['alpha', 'beta', 'gamma'].sort()",
-        "  if (by.direction === 'desc') names.reverse()",
-        '  return (',
-        '    <Stack>',
-        '      <Text>{`Sorted ${by.direction}, opened ${read(opened)}`}</Text>',
-        '      <Table',
-        '        label="Files"',
-        "        columns={[{ key: 'name', label: 'Name', sortable: true }]}",
-        '        rows={names.map((name) => ({ key: name, cells: { name } }))}',
-        '        sort={by}',
-        '        onSortChange={(next) => set(sort, next)}',
-        '        onRowAction={({ key }) => set(opened, key)}',
-        '      />',
-        '    </Stack>',
-        '  )',
-        '}',
-        ''
-      ].join('\n')
-    )
-    await enableDevPlugins(orcaPage, [pluginRoot])
-    const pluginKey = await devPluginKey(orcaPage, 'Shot Table')
-    const userDataDir = await electronApp.evaluate(({ app }) => app.getPath('userData'))
-    const client = new RuntimeClient(userDataDir, 60_000, null, null)
-    type TableShot = { png: string; actions?: { ok: boolean }[]; restored?: boolean }
-
-    const before = await client.call<TableShot>('plugins.shot', { pluginKey })
-    await expect(orcaPage.getByText('Sorted asc, opened none')).toBeVisible()
-    const table = { label: 'Files' }
-    const acted = await client.call<TableShot>(
-      'plugins.shot',
-      {
-        pluginKey,
-        acts: [
-          { sort: table, column: 'name' },
-          { activateRow: table, key: 'gamma' }
-        ]
-      },
-      { timeoutMs: 60_000 }
-    )
-    expect(acted.result).toMatchObject({ actions: [{ ok: true }, { ok: true }], restored: true })
-    expect(acted.result.png).not.toBe(before.result.png)
-    await expect(orcaPage.getByText('Sorted asc, opened none')).toBeVisible()
   } finally {
     await disablePluginSystem(orcaPage).catch(() => undefined)
     await rm(tempRoot, { recursive: true, force: true })

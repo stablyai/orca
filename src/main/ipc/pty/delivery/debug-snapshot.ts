@@ -3,7 +3,7 @@ import {
   type PtyMainDeliveryDiagnostics,
   type PtyPerPtyDeliveryDiagnostics,
   redactPtyIdForDiagnostics
-} from '../../../../shared/pty-delivery-diagnostics'
+} from '../../../../shared/terminal/pty/diagnostics/pty-delivery-diagnostics'
 import {
   getHiddenRendererPtyDeliveryDebug,
   getHiddenRendererPtyIds,

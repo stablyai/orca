@@ -30,6 +30,7 @@ Fixes #
 
 - [ ] I manually tested these changes locally
 - [ ] Automated tests added/updated, or explained why not below
+- [ ] Every added test fails without this change and avoids the [test anti-patterns](https://github.com/stablyai/orca/blob/main/docs/agents-md-refs/test-antipatterns.md)
 
 ## Risk
 

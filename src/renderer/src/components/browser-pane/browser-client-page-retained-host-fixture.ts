@@ -1,5 +1,5 @@
 import { vi } from 'vitest'
-import type { BrowserClientPageRendererIdentity } from '../../../../shared/browser-client-page-renderer-protocol'
+import type { BrowserClientPageRendererIdentity } from '../../../../shared/browser/client-hosting/browser-client-page-renderer-protocol'
 import {
   BrowserClientPageRetainedRegistry,
   type BrowserClientPageVisibleAttachment
@@ -51,6 +51,7 @@ export function createRetainedHostFixture(): RetainedHostFixture {
   })
   openFixtures.push(registry)
   const container = document.createElement('div')
+  vi.spyOn(container, 'getBoundingClientRect').mockReturnValue(new DOMRect(0, 0, 800, 600))
   document.body.appendChild(container)
   return {
     registry,
@@ -62,6 +63,8 @@ export function createRetainedHostFixture(): RetainedHostFixture {
       const webview = webviews.at(-1)!
       webview.dataset.attached = 'true'
       webview.dispatchEvent(new Event('did-attach'))
+      webview.dispatchEvent(new Event('did-finish-load'))
+      webview.dispatchEvent(new Event('did-stop-loading'))
       await mounting
     },
     attach: (identity = RETAINED_FIXTURE_PAGE) => registry.attachPage(identity, container)

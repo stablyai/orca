@@ -5,8 +5,8 @@ import type {
   CheckStatus,
   PRConflictSummary,
   ProviderCheckSummary
-} from './github/pull-request-types'
-import type { HostedReviewDecision } from './hosted-review'
+} from './github/pull-requests/pull-request-types'
+import type { HostedReviewDecision } from './source-control/hosted-review/hosted-review-contracts'
 
 // Why: flat owner/repo is inadequate — projects nest (`group/subgroup/project`) and self-hosted hosts must travel with the path for URL/glab targeting.
 export type GitLabProjectRef = { host: string; path: string }
@@ -80,6 +80,8 @@ export type MRComment = {
   startLine?: number
   /** True when GitLab marks the author as a bot. Mirrors GitHub PRComment.isBot. */
   isBot?: boolean
+  /** True only when the author is the glab account that read the thread; not looked up by Checks polling or desktop detail reads. Mirrors GitHub PRComment.viewerDidAuthor. */
+  viewerDidAuthor?: boolean
 }
 
 export type GitLabCommentResult = { ok: true; comment: MRComment } | { ok: false; error: string }
@@ -248,9 +250,13 @@ export type GitLabPipelineJob = {
   stage: string
   /** Raw GitLab job status — 'success' / 'failed' / 'running' / 'pending' / 'canceled' / 'skipped' / 'manual' / 'created' / 'preparing'. */
   status: string
+  allowFailure?: boolean
   webUrl: string
   /** Duration in seconds. null when the job hasn't finished. */
   duration: number | null
+  /** Provider ISO times; absent from older Orca servers and from jobs that haven't started. */
+  startedAt?: string
+  finishedAt?: string
 }
 
 // The MR's own pipeline; its status is the pipeline verdict even when its job list is partial or empty.
@@ -260,6 +266,11 @@ export type GitLabPipeline = {
   /** Pipeline-level verdict, settled by the MR status rule from the same reply. */
   checkStatus?: CheckStatus
   webUrl?: string | null
+  /** Commit and ref the pipeline ran on; absent from older Orca servers. */
+  sha?: string
+  ref?: string
+  startedAt?: string
+  finishedAt?: string
 }
 
 // Flatten discussions into the work-item details comment list.
@@ -305,6 +316,9 @@ export type GitLabMRUpdate = {
 
 // Why: GitLab-native MR list filter replacing GitHub's search-DSL; 'all' maps to no state filter.
 export type MRListState = 'opened' | 'merged' | 'closed' | 'all'
+
+/** Narrows an MR list to the signed-in user's part in each MR; absent means everyone's. */
+export type GitLabMRInvolvement = 'authored' | 'reviewing'
 
 // Why: totalCount / totalPages come from X-Total / X-Total-Pages headers via `glab api -i`.
 export type GitLabPagedResult<T> = {

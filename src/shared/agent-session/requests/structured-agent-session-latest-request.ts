@@ -6,20 +6,21 @@ import type {
   AgentJournalTurnLifecycle,
   AgentJournalTurnLifecycleState
 } from '../journal/agent-session-journal-types'
-import type { AgentJournalTurnOutcome } from '../../agent-turn-outcome'
+import type { AgentJournalTurnOutcome } from '../../agent-status/lifecycle/agent-turn-outcome'
 import { agentJournalSubmissionKey } from '../journal/agent-session-journal-item-key'
 import { isRootAgentJournalItem } from '../journal/agent-session-journal-producer'
 import {
   readAgentJournalTurn,
   readAgentJournalTurnOutcome
-} from '../lifecycle/agent-session-turn-record'
+} from '../lifecycle/records/agent-session-turn-record'
 import { classifyDispatchRejection } from './structured-agent-session-dispatch-rejection'
 import { withoutNativeChatVisualDirectiveLines } from '../../native-chat/native-chat-visual-directive'
 import { isUnansweredStructuredAgentSessionDispatch } from './structured-agent-session-unanswered-dispatch'
 import {
+  commandTurnsOf,
   isStructuredAgentSessionCommandEntry,
   isStructuredAgentSessionCommandRow,
-  structuredAgentSessionCommandTurnItemIds
+  type AgentJournalBodyLookup
 } from '../structured-agent-session-command-entry'
 import type { NativeChatBlock } from '../../native-chat/native-chat-types'
 
@@ -52,57 +53,73 @@ export function isStructuredAgentSessionNonRequestRow(
 /** Skip accepted/unanswered sends and nonfailures (withdrawal/restart/close); null when no request has a verdict. */
 export function latestStructuredAgentSessionRequest(
   items: readonly AgentJournalRenderItem[],
-  submissions: readonly AgentJournalSubmission[]
+  submissions: readonly AgentJournalSubmission[],
+  /** With an indexed body read, only the turns this scan reaches are checked, not all history. */
+  bodyOf?: AgentJournalBodyLookup
 ): StructuredAgentSessionLatestRequest | null {
   const rejected = rejectedSubmissionsByItem(submissions)
-  const commandTurns = structuredAgentSessionCommandTurnItemIds(items)
+  const commandTurns = commandTurnsOf(items, bodyOf)
   for (let index = items.length - 1; index >= 0; index -= 1) {
     const item = items[index]
-    // Commands retain the last real request’s verdict.
-    if (
-      !item ||
-      !isRootAgentJournalItem(item) ||
-      isStructuredAgentSessionNonRequestRow(item, commandTurns)
-    ) {
-      continue
-    }
-    if (
-      item.body.kind === 'message' &&
-      item.body.role === 'user' &&
-      item.turnScope?.kind === 'unknown'
-    ) {
-      return null
-    }
-    const turn = readAgentJournalTurn(item.body)
-    if (turn) {
-      return {
-        kind: 'turn',
-        id: turn.turnId,
-        turnState: turn.state,
-        outcome: readAgentJournalTurnOutcome(turn),
-        settledAt: turn.state === 'running' ? undefined : turnEndedAt(item, turn),
-        ...(turn.userItemId === item.itemId && !steeredInto(submissions, item.itemId)
-          ? { selfStarted: true as const }
-          : {})
-      }
-    }
-    const submission = rejected.get(item.itemId)
-    // Rejection relocates a refused steer to the thread, but its turn remains the request.
-    if (
-      submission &&
-      submission.answeredInTurn?.via !== 'steer' &&
-      classifyDispatchRejection(submission).verdict === 'failure'
-    ) {
-      return {
-        kind: 'refused-send',
-        id: item.itemId,
-        turnState: null,
-        outcome: 'failure',
-        settledAt: submission.resolvedAt ?? submission.submittedAt
-      }
+    const request =
+      item &&
+      structuredAgentSessionRequestFromItem(
+        item,
+        rejected.get(item.itemId),
+        (turnItemId) => steeredInto(submissions, turnItemId),
+        commandTurns
+      )
+    if (request !== undefined) {
+      return request
     }
   }
   return null
+}
+
+/** Undefined skips a candidate; null is the unknown-user barrier that clears the verdict. */
+export function structuredAgentSessionRequestFromItem(
+  item: AgentJournalRenderItem,
+  rejected: AgentJournalSubmission | undefined,
+  steered: (turnItemId: string) => boolean,
+  commandTurns: Pick<ReadonlySet<string>, 'has'>
+): StructuredAgentSessionLatestRequest | null | undefined {
+  if (!isRootAgentJournalItem(item) || isStructuredAgentSessionNonRequestRow(item, commandTurns)) {
+    return undefined
+  }
+  if (
+    item.body.kind === 'message' &&
+    item.body.role === 'user' &&
+    item.turnScope?.kind === 'unknown'
+  ) {
+    return null
+  }
+  const turn = readAgentJournalTurn(item.body)
+  if (turn) {
+    return {
+      kind: 'turn',
+      id: turn.turnId,
+      turnState: turn.state,
+      outcome: readAgentJournalTurnOutcome(turn),
+      settledAt: turn.state === 'running' ? undefined : turnEndedAt(item, turn),
+      ...(turn.userItemId === item.itemId && !steered(item.itemId)
+        ? { selfStarted: true as const }
+        : {})
+    }
+  }
+  if (
+    rejected?.dispatchState === 'rejected' &&
+    rejected.answeredInTurn?.via !== 'steer' &&
+    classifyDispatchRejection(rejected).verdict === 'failure'
+  ) {
+    return {
+      kind: 'refused-send',
+      id: item.itemId,
+      turnState: null,
+      outcome: 'failure',
+      settledAt: rejected.resolvedAt ?? rejected.submittedAt
+    }
+  }
+  return undefined
 }
 
 /** A user message steered into a turn the agent started makes it the user's turn too. */
@@ -190,9 +207,10 @@ export function latestStructuredAgentSessionUserItem(
 
 /** Newest root-agent prose in the latest user turn; skip child/tool-only output and clear at the user boundary. */
 export function latestStructuredAgentSessionAssistantMessage(
-  items: readonly AgentJournalRenderItem[]
+  items: readonly AgentJournalRenderItem[],
+  bodyOf?: AgentJournalBodyLookup
 ): string {
-  const commandTurns = structuredAgentSessionCommandTurnItemIds(items)
+  const commandTurns = commandTurnsOf(items, bodyOf)
   for (let index = items.length - 1; index >= 0; index -= 1) {
     const item = items[index]
     const body = item?.body

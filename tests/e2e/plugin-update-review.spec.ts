@@ -2,7 +2,7 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { expect, test, type Page } from '@stablyai/playwright-test'
-import { hashPluginTree } from '../../src/main/plugins/plugin-content-hash'
+import { hashPluginTree } from '../../src/main/plugins/artifacts/plugin-content-hash'
 import { pluginManifestSchema } from '../../src/shared/plugins/manifest/plugin-manifest'
 import { pluginContributionSummary } from '../../src/shared/plugins/contributions/plugin-contribution-summary'
 import { pluginCatalogTypes } from '../../src/shared/plugins/catalog/plugin-catalog-release'
@@ -19,7 +19,7 @@ const PLUGINS = ['orca-review-notes', 'orca-review-tasks'] as const
 // Why: install and update review fetch Git; on a loaded runner that alone outlasts the 10s default.
 const GIT_STEP = { timeout: 60_000 }
 const FULL_ACCESS =
-  'Full access: runs as a normal program and can read your files, use the network and run other programs.'
+  'Full access: runs as a normal program and can read your files, use the network, run other programs and control Orca, including your terminals and agents.'
 
 /** Each fixture plugin's installed version and whether it waits on the page's review queue. */
 async function installedState(page: Page): Promise<{ version: string; review: boolean }[]> {

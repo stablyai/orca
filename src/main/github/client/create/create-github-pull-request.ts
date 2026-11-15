@@ -3,29 +3,30 @@ import { hostedReviewSshConnectionId } from '../../../source-control/hosted-revi
 import type {
   CreateHostedReviewInput,
   CreateHostedReviewResult
-} from '../../../../shared/hosted-review'
+} from '../../../../shared/source-control/hosted-review/hosted-review-contracts'
 import {
   normalizeHostedReviewBaseRef,
   normalizeHostedReviewHeadRef
-} from '../../../../shared/hosted-review-refs'
+} from '../../../../shared/source-control/hosted-review/hosted-review-refs'
 import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
+import { ghExecFileAsync } from '../../../git/command-runner/hosted-cli/gh-exec-file'
+import { acquire, release } from '../../execution/github-operation-slots'
 import {
-  ghExecFileAsync,
-  acquire,
-  release,
   ghRepoExecOptions,
-  githubRepoContext
-} from '../../gh-utils'
+  githubRepoContext,
+  withGitHubRepoExecution
+} from '../../repositories/github-repository-identity'
 import {
   getHostedReviewLocalGitOptions,
   type HostedReviewExecutionOptions
 } from '../../../source-control/hosted-review-git-options'
-import { getOriginGitHubApiRepository, githubHostExecOptions } from '../../github-api-repository'
+import { getOriginGitHubApiRepository } from '../../repositories/github-api-repository-remote-probe'
+import { githubHostExecOptions } from '../../repositories/github-repository-host'
 import { classifyCreatePRError, parseCreatePRPayload } from './create-pr-error-classification'
 import { findOpenPRByHeadBase, readPullRequestTemplate } from './pull-request-template'
-import { withGitHubRepoExecution } from '../../github-repository-identity'
+
 export async function createGitHubPullRequest(
   repoPath: string,
   input: CreateHostedReviewInput,

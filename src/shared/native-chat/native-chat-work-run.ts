@@ -1,7 +1,7 @@
 // Group tool calls and finished thoughts into one collapsible run between prose rows; thinking before each call must not double the visible rows.
 
-import { isNativeChatAskCall } from './input/native-chat-ask-row'
-import { deriveNativeChatRowContent } from './transcript/native-chat-row-content'
+import { isNativeChatAskCall } from './input/questions/native-chat-ask-row'
+import { deriveNativeChatRowContent } from './transcript/row-content/native-chat-row-content'
 import { isStoppedBeforeStartBlock } from './native-chat-stopped-before-start'
 import { pairToolBlocks } from './tools/native-chat-tool-pairs'
 import type { NativeChatBlock, NativeChatMessage } from './native-chat-types'
@@ -9,6 +9,8 @@ import type { NativeChatBlock, NativeChatMessage } from './native-chat-types'
 /** `lead`: the agent's words with calls already folded under them, which may head a run but
  *  never join one. */
 export type NativeChatWorkRunMember = 'lead' | 'tool' | 'thought'
+
+const memberFacts = new WeakMap<NativeChatMessage, NativeChatWorkRunMember | null>()
 
 /** Only prose/plain tool activity joins runs; rosters, tasks, questions and approval receipts keep separate rows. scopeIsWorking names the owning turn/subagent’s liveness. */
 export function nativeChatWorkRunMember(
@@ -23,6 +25,15 @@ export function nativeChatWorkRunMember(
     // Live thinking stays separate; ended thoughts join runs, including textless thoughts that render nothing.
     return scopeIsWorking && message.state === 'running' ? null : 'thought'
   }
+  if (memberFacts.has(message)) {
+    return memberFacts.get(message)!
+  }
+  const member = deriveWorkRunMember(message)
+  memberFacts.set(message, member)
+  return member
+}
+
+function deriveWorkRunMember(message: NativeChatMessage): NativeChatWorkRunMember | null {
   const content = deriveNativeChatRowContent(message.blocks)
   if (
     message.role !== 'assistant' ||
@@ -36,7 +47,7 @@ export function nativeChatWorkRunMember(
   ) {
     return null
   }
-  return content.markdown.length > 0 || content.hasImages ? 'lead' : 'tool'
+  return content.hasText || content.hasImages ? 'lead' : 'tool'
 }
 
 /** One row of a transcript as the run boundaries read it. */

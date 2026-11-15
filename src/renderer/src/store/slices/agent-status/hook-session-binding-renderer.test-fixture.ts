@@ -1,8 +1,9 @@
 import { expect } from 'vitest'
-import type { HookSessionBindingRendererFixture } from '../../../../../shared/agent-hook-session-binding.test-fixture'
-import { getAgentResumeArgv } from '../../../../../shared/agent-resume-argv'
-import { resumeRecordFromStatus } from '../../../../../shared/agent-resume-record-from-status'
-import { createTestStore, makeTab } from '../store-test-helpers'
+import type { HookSessionBindingRendererFixture } from '../../../../../shared/agent-hook-listener/state/agent-hook-session-binding.test-fixture'
+import { getAgentResumeArgv } from '../../../../../shared/agent-launch/startup/agent-resume-argv'
+import { resumeRecordFromStatus } from '../../../../../shared/agent-session/lifecycle/resume/agent-resume-record-from-status'
+import { createTestStore } from '../../testing/app-store-test-fixture'
+import { makeTab } from '../../terminals/testing/terminal-tab.test-fixture'
 import { isInheritedFromActivePane } from '../../../hooks/ipc-events/agent-status-routing'
 import { sleepingRecordFromEntry } from './agent-status-sleeping-records'
 
@@ -28,7 +29,7 @@ export const expectReturnedRenderer: HookSessionBindingRendererFixture['expectRe
       }
     )
   expect(
-    isInheritedFromActivePane(store.getState().agentStatusByPaneKey[paneKey], data, agent, {
+    isInheritedFromActivePane(store.getState().agentStatusByPaneKey.get(paneKey)!, data, agent, {
       connectionId: data.connectionId,
       worktreeId: data.worktreeId
     })
@@ -43,7 +44,7 @@ export const expectReturnedRenderer: HookSessionBindingRendererFixture['expectRe
       { connectionId: data.connectionId, worktreeId: data.worktreeId },
       { providerSession: data.providerSession, paneOwner: data.paneOwner }
     )
-  const entry = store.getState().agentStatusByPaneKey[paneKey]
+  const entry = store.getState().agentStatusByPaneKey.get(paneKey)!
   expect(entry).toMatchObject({ agentType: agent, providerSession: { id } })
   const record = resumeRecordFromStatus({
     entry,

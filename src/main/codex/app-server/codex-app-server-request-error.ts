@@ -7,15 +7,18 @@ import {
 export class CodexAppServerRequestError extends Error {
   /** Codex's own `error.message`, kept apart from the Orca text around it. */
   readonly providerDiagnostic?: ProviderDiagnostic
+  readonly data?: unknown
 
   constructor(
     readonly method: string,
     readonly code: number | null,
     message: string,
-    providerMessage?: string
+    providerMessage?: string,
+    data?: unknown
   ) {
     super(message)
     this.name = 'CodexAppServerRequestError'
+    Object.defineProperty(this, 'data', { value: data, enumerable: false })
     const diagnostic =
       providerMessage === undefined ? undefined : providerDiagnostic(providerMessage, 'person')
     if (diagnostic) {
