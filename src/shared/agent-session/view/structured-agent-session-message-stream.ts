@@ -8,7 +8,10 @@ import {
   isAgentSessionContextClear,
   isNativeChatContextClear
 } from '../agent-session-context-clear'
-import { isNativeChatProviderRetryRow } from '../../native-chat/native-chat-provider-retry-runs'
+import {
+  createNativeChatProviderRetryStamps,
+  isNativeChatProviderRetryRow
+} from '../../native-chat/native-chat-provider-retry-runs'
 import {
   compareNativeChatTranscriptMessages,
   sameNativeChatRowPlacement
@@ -171,6 +174,7 @@ export function createStructuredAgentSessionMessageProjection(
   projectItems: StructuredAgentSessionItemProjector = projectStructuredItemsToNativeChat
 ) {
   let previous: MessageStream | null = null
+  const retryStamps = createNativeChatProviderRetryStamps()
   return (
     items: readonly AgentJournalRenderItem[],
     optimistic: readonly StructuredAgentSessionOptimisticMessage[],
@@ -185,7 +189,13 @@ export function createStructuredAgentSessionMessageProjection(
     previous =
       reused ??
       withRowIndex(
-        projectStructuredAgentSessionMessageRows(items, optimistic, submissions, projectItems),
+        projectStructuredAgentSessionMessageRows(
+          items,
+          optimistic,
+          submissions,
+          projectItems,
+          retryStamps
+        ),
         items,
         optimistic,
         submissions
