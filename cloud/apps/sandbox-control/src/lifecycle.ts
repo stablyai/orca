@@ -224,7 +224,7 @@ export function phaseTimer(now: () => number = Date.now) {
     failed: null as { phase: string; ms: number } | null,
     async time<T>(phase: string, work: () => Promise<T>): Promise<T> {
       const started = now()
-      const limit = PHASE_DEADLINES_MS[phase]
+      const limit = PHASE_LIMITS[phase]
       let watch: ReturnType<typeof setTimeout> | undefined
       try {
         if (limit === undefined) {
@@ -260,11 +260,12 @@ export function phaseTimer(now: () => number = Date.now) {
  * Bounds for the phases before a create's write-ahead insert (D1 reads, billing, the pool claim).
  * The VM, policy and orcad phases are bounded by the provider calls inside them.
  */
-export const PHASE_DEADLINES_MS: Record<string, { ms: number; fail: boolean }> = {
+export const PHASE_DEADLINES_MS = {
   environment: { ms: 20_000, fail: true },
   entitlement: { ms: 20_000, fail: true },
   pool: { ms: 45_000, fail: false }
 }
+const PHASE_LIMITS: Partial<Record<string, { ms: number; fail: boolean }>> = PHASE_DEADLINES_MS
 
 /**
  * CREATE-BUILD-SNAPSHOT-404: a VM create from an environment build's snapshot can answer 404 just
