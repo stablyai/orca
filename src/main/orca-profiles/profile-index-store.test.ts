@@ -17,7 +17,7 @@ import {
   DEFAULT_LOCAL_ORCA_PROFILE_ID,
   ORCA_PROFILE_INDEX_SCHEMA_VERSION,
   type OrcaProfileIndex
-} from '../../shared/orca-profiles'
+} from '../../shared/orca-profiles/orca-profiles'
 
 const testState = { dir: '' }
 

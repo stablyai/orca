@@ -9,7 +9,7 @@ import type { ExecutionHostId } from '../../../../shared/execution-host'
 import { hashMarkdownContent } from '../../../../shared/mobile-markdown-document'
 import type { RuntimeMobileSessionMarkdownTab } from '../../../../shared/remote-runtime/session-graph/runtime-mobile-session-tab-contracts'
 import '../../../../shared/remote-runtime/remote-runtime-client-error'
-import '../../../../shared/protocol-version'
+import '../../../../shared/remote-runtime/protocol/protocol-version'
 import { FILE_MUTATION_OWNERSHIP_RUNTIME_CAPABILITY } from '../../../../shared/file-access/files-runtime-capabilities'
 import {
   FILE_WRITE_DISK_PRECONDITION_RUNTIME_CAPABILITY,

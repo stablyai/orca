@@ -12,8 +12,8 @@ import {
   ACTIVITY_GROUP_BY_VALUES,
   THREAD_READ_FILTER_VALUES
 } from '../../agents-view-thread-filters'
-import { isReleaseChannel } from '../../release-channel'
-import type { ReleaseChannel } from '../../release-channel'
+import { isReleaseChannel } from '../../updater/release-channel'
+import type { ReleaseChannel } from '../../updater/release-channel'
 import { ClientUiWorkspaceFilterFields } from './client-ui-workspace-filter-fields-params'
 import { TaskResumeState } from './task-resume-state-params'
 import { WorkspaceCleanup } from '../workspace-cleanup/workspace-cleanup-ui-params'

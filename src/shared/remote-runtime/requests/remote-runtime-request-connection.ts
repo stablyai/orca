@@ -32,7 +32,7 @@ import { openRemoteRuntimeWebSocket } from './remote-runtime-request-websocket'
 import * as sealedFrame from '../remote-runtime-sealed-frame'
 import { sendRemoteRuntimeTokenAuth } from '../remote-runtime-client-handshake'
 import { remoteRuntimeClientCapabilities } from '../remote-runtime-client-capabilities'
-import type { RuntimeCapability } from '../../protocol-version'
+import type { RuntimeCapability } from '../protocol/protocol-version'
 type ConnectionState = 'closed' | 'awaiting_ready' | 'awaiting_authenticated' | 'ready'
 const IDLE_CLOSE_MS = 60_000
 

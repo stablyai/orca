@@ -260,6 +260,7 @@ export const rosterFullUsed = rosterFixture(PRESETS.full, 'used')
 export const rosterFullLeft = rosterFixture(PRESETS.full, 'remaining')
 export const rosterFableUsed = rosterFixture(PRESETS.fable, 'used')
 export const rosterFableLeft = rosterFixture(PRESETS.fable, 'remaining')
+export const rosterHealthyCompact = rosterFixture(PRESETS.healthy, 'used', 'compact')
 export const rosterLowCompact = rosterFixture(PRESETS.low, 'used', 'compact')
 export const rosterNarrow300 = rosterFixture(PRESETS.low, 'used', 'compact', 324)
 
@@ -288,6 +289,7 @@ function focusToggle(frame: HTMLElement): void {
 }
 
 export const rosterFableOnly = rosterFixture(PRESETS.fableOnly, 'used', 'compact')
+export const rosterFableOnlyDetailed = rosterFixture(PRESETS.fableOnly, 'used', 'verbose')
 export const rosterFableOnlyNarrow300 = rosterFixture(PRESETS.fableOnly, 'used', 'compact', 324)
 export const rosterFableNarrow300 = rosterFixture(PRESETS.fable, 'used', 'compact', 324)
 export const rosterFullNarrow300 = rosterFixture(PRESETS.full, 'used', 'compact', 324)

@@ -1,5 +1,5 @@
 // Target claims preserve environment identity so interrupted deploys resume the same registration.
-import { getAppEnvironment } from '../../../shared/app-environment'
+import { getAppEnvironment } from '../../../shared/app-lifecycle/app-environment'
 import { randomUUID } from 'node:crypto'
 import { assertRuntimeEnvironmentNotReconciling } from '../../../shared/remote-runtime/host-catalog/runtime-environment-reconciliation-record'
 import { listEnvironments } from '../../../shared/remote-runtime/host-store/runtime-environment-store'

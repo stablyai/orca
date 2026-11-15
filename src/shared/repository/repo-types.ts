@@ -111,6 +111,8 @@ export type Repo = {
   orcadRetained?: OrcadRetainedMarker
   /** Dictation terms used only in this repo, kept in Orca (on the repo's host), never in the checkout. */
   dictationTerms?: DictationTerm[]
+  /** Browser profile new tabs in this repo use, on the repo's own host. Absent follows the Browser setting. */
+  browserProfileId?: string
 }
 
 /** Shared IPC shape for repos:getBaseRefDefault across main/preload/renderer; remoteCount avoids a second hint lookup. */

@@ -30,12 +30,12 @@ import {
 import {
   ORCA_APP_RESTART_ABORTED_EVENT,
   ORCA_UPDATER_QUIT_AND_INSTALL_ABORTED_EVENT
-} from '../../../shared/updater-renderer-events'
+} from '../../../shared/updater/updater-renderer-events'
 import {
   ORCA_NATIVE_UNLOAD_FAILED_EVENT,
   ORCA_RENDERER_SHUTDOWN_CHECKPOINT_ABORTED_EVENT,
   ORCA_RENDERER_UNLOAD_PREVENTED_EVENT
-} from '../../../shared/renderer-shutdown-events'
+} from '../../../shared/app-lifecycle/shutdown/renderer-shutdown-events'
 
 // Capture unchanged-skipping resume records each minute to bound hard-kill loss.
 const SLEEPING_AGENT_RESUME_CAPTURE_INTERVAL_MS = 60_000

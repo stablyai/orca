@@ -23,11 +23,11 @@ import { normalizeTaskProviderSettings } from '../../../shared/work-items/task-p
 import { normalizeOpenInApplications } from '../../../shared/open-in-applications'
 import { normalizeTerminalShortcutPolicy } from '../../../shared/keybindings/effective'
 import { normalizeSourceControlGroupOrder } from '../../../shared/source-control/listing/source-control-group-order'
-import { normalizeAppIconId } from '../../../shared/app-icon'
+import { normalizeAppIconId } from '../../../shared/app-lifecycle/identity/app-icon'
 import { normalizeUiLanguage } from '../../../shared/ui-language'
 import { normalizeWorktreeVisibilityDefaults } from '../../../shared/worktree/visibility/external-worktree-visibility'
 import { normalizePRBotAuthorOverrides } from '../../../shared/source-control/review-comments/pr-bot-author-overrides'
-import { normalizeMachineName } from '../../../shared/machine-name'
+import { normalizeMachineName } from '../../../shared/remote-runtime/host-metadata/machine-name'
 import { normalizeWorkspaceCleanupRules } from '../../../shared/workspace-cleanup/workspace-cleanup-policy'
 import type { PersistedState } from '../../../shared/persisted-state-types'
 import {

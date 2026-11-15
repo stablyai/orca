@@ -3,7 +3,7 @@ import {
   normalizeComputerAwakeMode,
   type ComputerAwakeMode,
   type ComputerAwakeStatus
-} from '../../shared/computer-awake-mode'
+} from '../../shared/app-lifecycle/computer-awake-mode'
 import { LinuxLidSleepAssertion } from './linux-lid-sleep-assertion'
 import { MacosSystemSleepAssertion } from './macos-system-sleep-assertion'
 import { AgentAwakeStatusLease, type AgentAwakeStatus } from './agent-awake-status-lease'

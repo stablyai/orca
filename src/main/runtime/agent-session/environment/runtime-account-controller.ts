@@ -1,5 +1,5 @@
 import type { ClaudeAccountService } from '../../../claude-accounts/service'
-import { hasAppEnvironment } from '../../../../shared/app-environment'
+import { hasAppEnvironment } from '../../../../shared/app-lifecycle/app-environment'
 import { getManagedDataAccountService } from '../../../managed-data-accounts/service'
 import type {
   ClaudeAccountSignIn,

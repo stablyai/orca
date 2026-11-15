@@ -3,7 +3,7 @@ import { describeRuntimeCompatBlock } from '@/runtime/hosts/display/runtime-host
 import {
   MIN_COMPATIBLE_RUNTIME_SERVER_VERSION,
   RUNTIME_PROTOCOL_VERSION
-} from '../../../../../shared/protocol-version'
+} from '../../../../../shared/remote-runtime/protocol/protocol-version'
 import type { RuntimeStatus } from '../../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 
 /** Marker on the compat-gate block error. Tagged as a `.code` on a plain Error

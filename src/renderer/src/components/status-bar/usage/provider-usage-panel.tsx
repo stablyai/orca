@@ -201,13 +201,14 @@ function ProviderRateLimitWindowSection({
         <UsageValue
           usedPercent={window.usedPercent}
           display={usagePercentageDisplay}
-          className="shrink-0 font-semibold"
+          className={`shrink-0 font-semibold ${textClass}`}
         />
       </div>
-      {/* Why: fill follows the selected percentage; color still signals consumption. */}
+      {/* Why: fill follows the selected percentage; only this card colors it by consumption. */}
       <UsageBar
         usedPercent={window.usedPercent}
         display={usagePercentageDisplay}
+        tone="health"
         className="h-[6px] w-full"
         trackClassName={emptyBarClass}
       />
