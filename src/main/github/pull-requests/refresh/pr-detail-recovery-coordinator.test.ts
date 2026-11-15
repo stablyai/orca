@@ -102,9 +102,10 @@ function noPR(): PRRefreshOutcome {
   return { kind: 'no-pr', fetchedAt: START_AT }
 }
 
+// Cold coordinator transforms can exceed the default setup budget on a shared host.
 beforeAll(async () => {
   await load()
-})
+}, 600_000)
 
 describe('PR detail recovery tickets', () => {
   beforeEach(() => {

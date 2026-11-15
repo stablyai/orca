@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import type {
   PRDetailRecoveryCommitArgs,
   PRDetailRecoveryStartArgs
@@ -162,6 +162,11 @@ function setup() {
   )
   return { store, cacheKey }
 }
+
+// Warm the cold host graph under a setup budget; test bodies keep their normal deadline.
+beforeAll(async () => {
+  await connectNativeBridge()
+}, 600_000)
 
 describe('Checks detail recovery through the host coordinator', () => {
   beforeEach(async () => {
