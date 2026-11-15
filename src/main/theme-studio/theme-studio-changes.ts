@@ -25,6 +25,10 @@ import {
   type ThemeStudioMutation
 } from './theme-studio-core'
 import { themeStudioAdjustLabel } from '../../shared/theme-studio/theme-studio-labels'
+import {
+  otherThemeStudioMode,
+  pairThemeStudioVariant
+} from '../../shared/theme-studio/theme-studio-pair'
 
 // Each change runs inside the service's queue, after its guards.
 
@@ -189,4 +193,48 @@ export async function applyDraft(core: ThemeStudioCore, name: string | undefined
     revision: core.session.currentRevision,
     modes: THEME_STUDIO_MODES.filter((mode) => draft[mode] !== null)
   }
+}
+
+/** `orca theme pair`: the other mode derived from one, then every contrast fix, as one step. */
+export async function pairDraft(
+  core: ThemeStudioCore,
+  from: ThemeStudioMode | undefined,
+  caller: ThemeStudioCaller
+): Promise<ThemeStudioMutation> {
+  // Why from what is painted when no draft is open: like every other change, pair starts one.
+  const draft = core.session.draft ?? (await core.currentDraft()).draft
+  const present = THEME_STUDIO_MODES.filter((mode) => draft[mode])
+  const source = from ?? (present.length === 1 ? present[0] : undefined)
+  if (!source) {
+    throw new ThemeStudioError(
+      THEME_STUDIO_ERROR_CODES.invalid,
+      'The theme has both modes; say which to derive from.',
+      {
+        nextSteps: [
+          'Run `orca theme pair --from dark` (or `--from light`); the other mode is replaced.'
+        ]
+      }
+    )
+  }
+  const target = otherThemeStudioMode(source)
+  const label = `Made the ${target} variant from the ${source} one`
+  const { kept } = await core.commitChange(caller, label, (open) => {
+    const variant = open[source]
+    if (!variant) {
+      throw new ThemeStudioError(
+        THEME_STUDIO_ERROR_CODES.invalid,
+        `The draft has no ${source} variant to derive from.`,
+        { nextSteps: [`Run \`orca theme pair --from ${target}\` instead.`] }
+      )
+    }
+    const paired = pairThemeStudioVariant(variant, target)
+    return { draft: { ...open, [target]: paired.variant }, kept: paired.kept }
+  })
+  // Why only the new mode: `--from` is the mode the person keeps as it is.
+  const autoFixed = await core.fixIntoCurrentStep(undefined, [target])
+  return core.mutation(label, {
+    changed: { [target]: Object.keys(core.session.requireDraft()[target]?.tokens ?? {}) },
+    ...(kept.length ? { skipped: { [target]: kept } } : {}),
+    ...(autoFixed ? { autoFixed } : {})
+  })
 }

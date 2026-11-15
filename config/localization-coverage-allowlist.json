@@ -264,5 +264,194 @@
     "text": "text-[13px] leading-5",
     "dynamic": false,
     "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/theme-specimen/SpecimenChat.tsx",
+    "kind": "jsx-text",
+    "text": "Agent",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/theme-specimen/SpecimenChat.tsx",
+    "kind": "jsx-text",
+    "text": "Welcome returning visitors back.",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/theme-specimen/SpecimenChat.tsx",
+    "kind": "jsx-text",
+    "text": "Updated",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/theme-specimen/SpecimenChat.tsx",
+    "kind": "jsx-text",
+    "text": "greet()",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/theme-specimen/SpecimenChat.tsx",
+    "kind": "jsx-text",
+    "text": "Tests pass.",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/theme-specimen/SpecimenChat.tsx",
+    "kind": "jsx-text",
+    "text": "View diff",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/theme-specimen/SpecimenChat.tsx",
+    "kind": "jsx-text",
+    "text": "return `Welcome back`",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/theme-specimen/SpecimenChat.tsx",
+    "kind": "jsx-text",
+    "text": "Ran npm test · 2s",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/theme-specimen/SpecimenChat.tsx",
+    "kind": "jsx-text",
+    "text": "Keep this theme?",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/theme-specimen/SpecimenChat.tsx",
+    "kind": "jsx-text",
+    "text": "It is saved as one of your themes.",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/theme-specimen/SpecimenChat.tsx",
+    "kind": "jsx-text",
+    "text": "Keep",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/theme-specimen/SpecimenChat.tsx",
+    "kind": "jsx-text",
+    "text": "Undo",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/theme-specimen/SpecimenChat.tsx",
+    "kind": "jsx-text",
+    "text": "Discard",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/theme-specimen/SpecimenSidebar.tsx",
+    "kind": "jsx-text",
+    "text": "Projects",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/theme-specimen/SpecimenSidebar.tsx",
+    "kind": "jsx-text",
+    "text": "Changes",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/theme-specimen/SpecimenTerminal.tsx",
+    "kind": "jsx-text",
+    "text": "~/aurora-app",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/theme-specimen/SpecimenTerminal.tsx",
+    "kind": "jsx-text",
+    "text": "feature/welcome-back",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/theme-specimen/SpecimenTerminal.tsx",
+    "kind": "jsx-text",
+    "text": "$ npm test",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/theme-specimen/SpecimenTerminal.tsx",
+    "kind": "jsx-text",
+    "text": "✓ 42 passed",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/theme-specimen/SpecimenTerminal.tsx",
+    "kind": "jsx-text",
+    "text": "○ 1 skipped",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/theme-specimen/SpecimenTerminal.tsx",
+    "kind": "jsx-text",
+    "text": "✗ 0 failed",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/theme-specimen/SpecimenTerminal.tsx",
+    "kind": "jsx-text",
+    "text": "Local:",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/theme-specimen/SpecimenTerminal.tsx",
+    "kind": "jsx-text",
+    "text": "http://localhost:5173/",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/theme-specimen/SpecimenTerminal.tsx",
+    "kind": "jsx-text",
+    "text": "selected text",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/theme-specimen/SpecimenTerminal.tsx",
+    "kind": "jsx-text",
+    "text": "dim note",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/theme-specimen.tsx",
+    "kind": "jsx-text",
+    "text": "greet.ts",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/theme-specimen.tsx",
+    "kind": "jsx-text",
+    "text": "README.md",
+    "dynamic": false,
+    "count": 1
   }
 ]

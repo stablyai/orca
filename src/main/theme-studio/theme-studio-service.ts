@@ -21,7 +21,14 @@ import {
   type ThemeStudioCaller,
   type ThemeStudioServiceDeps
 } from './theme-studio-core'
-import { adjustDraft, applyDraft, checkDraft, editDraft, stepDraft } from './theme-studio-changes'
+import {
+  adjustDraft,
+  applyDraft,
+  checkDraft,
+  editDraft,
+  pairDraft,
+  stepDraft
+} from './theme-studio-changes'
 import { reconcileSavedThemes, runSavedThemeAction } from './theme-studio-saved-actions'
 import type {
   ThemeStudioSavedAction,
@@ -34,6 +41,8 @@ export type {
   ThemeStudioServiceDeps,
   ThemeStudioWindow
 } from './theme-studio-core'
+import type { ThemeShotRegion } from '../../shared/plugins/view/plugin-view-protocol'
+import { draftFromResolved } from './theme-studio-draft-sources'
 
 /** `orca theme` on this host: every change is queued, guarded, undoable and reported. */
 export function createThemeStudioService(deps: ThemeStudioServiceDeps) {
@@ -107,6 +116,8 @@ export function createThemeStudioService(deps: ThemeStudioServiceDeps) {
       }),
     adjust: (params: z.infer<typeof ThemeStudioAdjustParams>, caller: ThemeStudioCaller) =>
       agentChange(caller, () => adjustDraft(core, params, caller)),
+    pair: (from: ThemeStudioMode | undefined, caller: ThemeStudioCaller) =>
+      agentChange(caller, () => pairDraft(core, from, caller)),
     check: (fix: boolean, ids: readonly string[] | undefined, caller: ThemeStudioCaller) =>
       agentChange(caller, () => checkDraft(core, fix, ids, caller)),
     step: (direction: 'undo' | 'redo', caller: ThemeStudioCaller) =>
@@ -121,13 +132,29 @@ export function createThemeStudioService(deps: ThemeStudioServiceDeps) {
         session.commit(start, 'Reset to the start', caller.by)
         return core.mutation('Reset to the start')
       }),
-    shot: (mode: ThemeStudioMode | undefined) =>
+    specimen: (modes: readonly ThemeStudioMode[]) =>
+      exclusive(async () => {
+        const window = core.requireWindow()
+        // Why the painted themes without a draft: the specimen then shows what Orca uses now.
+        const resolved = await window.resolve()
+        const draft = session.draft ?? draftFromResolved(resolved).draft
+        const unique = [...new Set(modes)]
+        const image = await window.specimen({
+          name: draft.name,
+          panels: unique.map((mode) => {
+            const terminalBase = resolved.modes.find((entry) => entry.mode === mode)?.terminal
+            return { mode, variant: draft[mode], ...(terminalBase ? { terminalBase } : {}) }
+          })
+        })
+        return { ...image, variants: unique, draft: session.draft !== null }
+      }),
+    shot: (mode: ThemeStudioMode | undefined, region?: ThemeShotRegion) =>
       exclusive(async () => {
         const window = core.requireWindow()
         if (session.draft) {
           await session.waitForReport(REPORT_TIMEOUT_MS)
         }
-        return { draft: session.draft !== null, ...(await window.capture(mode)) }
+        return { draft: session.draft !== null, ...(await window.capture(mode, region)) }
       }),
     apply: (name: string | undefined, caller: ThemeStudioCaller) =>
       agentChange(caller, () => applyDraft(core, name, caller.by)),

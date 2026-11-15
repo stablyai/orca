@@ -24,6 +24,13 @@ import {
 import { fixPatch, paintOutcome, type ThemeStudioPaint } from './theme-studio-fixes'
 import { checkThemeStudioPrediction, predictThemeStudioDrops } from './theme-studio-prediction'
 import type { ThemeStudioSavedThemes } from './theme-studio-saved'
+import type { ThemeShotRegion } from '../../shared/plugins/view/plugin-view-protocol'
+import {
+  themeStudioWarnings,
+  type ThemeStudioWarning
+} from '../../shared/theme-studio/theme-studio-warnings'
+import type { ThemeStudioSpecimenRequest } from '../../shared/theme-studio/theme-studio-specimen-request'
+import type { ThemeStudioSpecimenImage } from './theme-studio-specimen-window'
 
 export const REPORT_TIMEOUT_MS = 2_500
 const MAX_RESTORE_POINTS = 8
@@ -48,7 +55,9 @@ export type ThemeStudioWindow = {
   resolve(): Promise<ThemeStudioResolveResult>
   /** Selects an installed theme plugin's themes for app and terminal, with Switch back. */
   select(pluginKey: string): Promise<boolean>
-  capture(mode: ThemeStudioMode | undefined): Promise<OrcaChromeCapture>
+  capture(mode: ThemeStudioMode | undefined, region?: ThemeShotRegion): Promise<OrcaChromeCapture>
+  /** Draws Orca's parts in the asked variants in a hidden, short-lived window. */
+  specimen(request: ThemeStudioSpecimenRequest): Promise<ThemeStudioSpecimenImage>
 }
 
 export type ThemeStudioServiceDeps = {
@@ -86,6 +95,8 @@ export type ThemeStudioMutation = ThemeStudioStatus & {
   autoFixed?: number
   report: ThemeStudioReport | null
   paint: ThemeStudioPaint
+  /** Advice that never stops a color from painting (terminal colors, seams, pair coherence). */
+  warnings: ThemeStudioWarning[]
 }
 
 function needsDesktop(): ThemeStudioError {
@@ -133,7 +144,8 @@ export function createThemeStudioCore(deps: ThemeStudioServiceDeps) {
       label,
       ...extra,
       report,
-      paint: { ...paint, predicted }
+      paint: { ...paint, predicted },
+      warnings: themeStudioWarnings(session.draft)
     }
   }
 
@@ -157,10 +169,14 @@ export function createThemeStudioCore(deps: ThemeStudioServiceDeps) {
   /** Applies the smallest fix of every finding into the current step; returns how many. */
   /** Applies the smallest fix of every finding, in rounds, into the current step, or into a new
    *  step `newStep` names once there is something to fix; returns how many were fixed. */
-  async function fixIntoCurrentStep(newStep?: { label: string; by?: string }): Promise<number> {
+  async function fixIntoCurrentStep(
+    newStep?: { label: string; by?: string },
+    onlyModes?: readonly ThemeStudioMode[]
+  ): Promise<number> {
     let total = 0
     for (let round = 0; round < MAX_FIX_ROUNDS; round += 1) {
-      const { patch, fixed } = fixPatch(await session.waitForReport(REPORT_TIMEOUT_MS))
+      const report = await session.waitForReport(REPORT_TIMEOUT_MS)
+      const { patch, fixed } = fixPatch(report, undefined, onlyModes)
       if (fixed.length === 0) {
         break
       }

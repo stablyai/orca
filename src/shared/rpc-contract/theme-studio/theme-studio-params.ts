@@ -5,6 +5,7 @@ import {
   themeStudioPatchSchema
 } from '../../theme-studio/theme-studio-draft'
 import { THEME_STUDIO_SEPARATE_SCOPE_NAMES } from '../../theme-studio/theme-studio-separate'
+import { THEME_SHOT_REGIONS } from '../../plugins/view/plugin-view-protocol'
 
 const modeSchema = z.enum(THEME_STUDIO_MODES)
 const nameSchema = z.string().trim().min(1).max(64)
@@ -79,6 +80,20 @@ export const ThemeStudioStepParams = z.object({
 
 export const ThemeStudioCallerParams = z.object(callerFields)
 
-export const ThemeStudioShotParams = z.object({ mode: modeSchema.optional() })
+export const ThemeStudioPairParams = z.object({
+  /** The variant to derive from; the draft's only variant when omitted. */
+  from: modeSchema.optional(),
+  ...callerFields
+})
+
+export const ThemeStudioSpecimenParams = z.object({
+  variants: z.array(modeSchema).min(1).max(2).optional()
+})
+
+export const ThemeStudioShotParams = z.object({
+  mode: modeSchema.optional(),
+  /** Crops to one part of the window; the whole window when omitted. */
+  region: z.enum(THEME_SHOT_REGIONS).optional()
+})
 
 export const ThemeStudioApplyParams = z.object({ name: nameSchema.optional(), ...callerFields })

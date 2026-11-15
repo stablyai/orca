@@ -752,8 +752,10 @@ import {
   ThemeStudioCallerParams,
   ThemeStudioCheckParams,
   ThemeStudioEditParams,
+  ThemeStudioPairParams,
   ThemeStudioPatchParams,
   ThemeStudioShotParams,
+  ThemeStudioSpecimenParams,
   ThemeStudioStatusParams,
   ThemeStudioStepParams
 } from './theme-studio/theme-studio-params'
@@ -1672,9 +1674,11 @@ export const RPC_PARAMS_BY_METHOD = {
   'themeStudio.check': ThemeStudioCheckParams,
   'themeStudio.discard': ThemeStudioCallerParams,
   'themeStudio.edit': ThemeStudioEditParams,
+  'themeStudio.pair': ThemeStudioPairParams,
   'themeStudio.patch': ThemeStudioPatchParams,
   'themeStudio.reset': ThemeStudioCallerParams,
   'themeStudio.shot': ThemeStudioShotParams,
+  'themeStudio.specimen': ThemeStudioSpecimenParams,
   'themeStudio.status': ThemeStudioStatusParams,
   'themeStudio.step': ThemeStudioStepParams,
   'ui.get': null,

@@ -171,13 +171,38 @@ export const THEME_COMMAND_SPECS: CommandSpec[] = [
     examples: ['orca theme redo --json']
   },
   {
+    path: ['theme', 'pair'],
+    summary: 'Make the other mode from this one, then fix its contrast, as one step',
+    usage: 'orca theme pair [--from dark|light] [--if-revision <n>] [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'from', 'if-revision'],
+    notes: [
+      'Mirrors OKLCH lightness of every token, terminal color and syntax color (dark surfaces become light, light text dark), keeping hue and chroma, then applies the contrast fixes. One `orca theme undo` takes it all back.',
+      '--from defaults to the only mode the draft has; with both, it says which to keep. The other mode is replaced.'
+    ],
+    examples: ['orca theme pair --json', 'orca theme pair --from dark --json']
+  },
+  {
+    path: ['theme', 'specimen'],
+    summary: 'Save one PNG of the draft on Orca parts, light and dark side by side',
+    usage: 'orca theme specimen [--variant dark|light|both] [--out <file.png>] [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'variant', 'out'],
+    notes: [
+      'Draws the sidebar (cards, badges, git colors), tabs, editor (syntax and diff colors), terminal (16 ANSI colors and selection), chat and a dialog with made-up content, in a hidden window that is never shown or focused, so both modes can be seen without switching Orca. Without a draft it shows the themes in use.',
+      'Writes to --out, else to a file in the system temp folder; --json prints { path, width, height, variants, draft }.',
+      DESKTOP_NOTE
+    ],
+    examples: ['orca theme specimen --json', 'orca theme specimen --variant dark --out ./dark.png']
+  },
+  {
     path: ['theme', 'shot'],
     summary: 'Save a PNG of the whole Orca window with the draft painted',
-    usage: 'orca theme shot [--mode light|dark] [--out <file.png>] [--json]',
-    allowedFlags: [...GLOBAL_FLAGS, 'mode', 'out'],
+    usage:
+      'orca theme shot [--mode light|dark] [--region sidebar|tabs|editor|terminal|chat] [--out <file.png>] [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'mode', 'region', 'out'],
     notes: [
       "Read the image to see the result. --mode paints that mode for this capture only, and only while Orca's window is hidden or minimized; with the window on screen it captures the mode shown (`themeApplied: false` and `themeReason` say so). The window is never shown or focused.",
-      'Writes to --out, else to a file in the system temp folder; --json prints { path, width, height, mode, themeApplied, themeReason?, draft }.',
+      'Writes to --out, else to a file in the system temp folder; --json prints { path, width, height, mode, region, themeApplied, themeReason?, draft }.',
+      "--region crops to the sidebar, tab bar, code editor, terminal or chat, for a close look at one surface; it fails when that part is not on screen. Terminals keep the mode Orca shows; `orca theme specimen` shows the other mode's terminal.",
       DESKTOP_NOTE
     ],
     examples: ['orca theme shot --json', 'orca theme shot --mode light --out ./light.png --json']
