@@ -1,6 +1,6 @@
 import { onPRDetailRecoveryAuthorityLost } from './pr-detail-recovery-authority'
 import type { StateCreator } from 'zustand'
-import { createNonSecureContextUuid } from '../../../../../shared/non-secure-context-uuid'
+import { createNonSecureContextUuid } from '../../../../../shared/identifiers/non-secure-context-uuid'
 import type { AppState } from '../../types'
 import type { PRDetailRecoverySnapshot } from '../../../../../shared/github/pull-requests/refresh/pr-detail-recovery-contract'
 import {

@@ -1,5 +1,5 @@
 import type { StateCreator } from 'zustand'
-import { createNonSecureContextUuid } from '../../../../../shared/non-secure-context-uuid'
+import { createNonSecureContextUuid } from '../../../../../shared/identifiers/non-secure-context-uuid'
 import { capturePRCheckContract } from '@/lib/source-control/checks/pr-check-observation-contract'
 import type { AppState } from '../../types'
 import type {

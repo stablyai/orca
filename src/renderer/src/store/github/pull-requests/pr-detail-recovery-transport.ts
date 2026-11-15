@@ -1,5 +1,5 @@
 import { capturePRDetailRecoveryAuthority } from './pr-detail-recovery-authority'
-import { createNonSecureContextUuid } from '../../../../../shared/non-secure-context-uuid'
+import { createNonSecureContextUuid } from '../../../../../shared/identifiers/non-secure-context-uuid'
 import {
   GITHUB_PR_DETAIL_RECOVERY_RUNTIME_CAPABILITY,
   PR_DETAIL_RECOVERY_WAIT_MAX_MS,
