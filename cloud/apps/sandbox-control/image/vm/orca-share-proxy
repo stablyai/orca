@@ -6,6 +6,11 @@
 // `until` (the link's expiry, at most 30 minutes out), so a revoked or expired link also loses open
 // streams. Signed requests are reverse-proxied to 127.0.0.1:<port>: streaming both ways, no
 // buffering, WebSocket upgrades piped raw. Anything unsigned gets a bare 404.
+// Vercel closes a WebSocket on a *.vercel.run route after ~340 s with no traffic (1006). A preview
+// app's socket can sit silent that long, so once an upgrade is a WebSocket the proxy watches the app's
+// frames and, after KEEPALIVE_MS with nothing either way, sends the visitor a ping control frame
+// between two frames (never inside one). The visitor's pong reaches the app, which RFC 6455 says to
+// ignore (an unsolicited pong needs no answer).
 // The key arrives on stdin (orca-sandbox-start pipes it), so it is never in this process's
 // environment or argv; ORCA_SHARE_PROXY_KEY in the env is accepted for tests. Optional
 // ORCA_SHARE_PROXY_PORT (default 6769). Plain Node, no dependencies.
@@ -24,6 +29,10 @@ delete process.env.ORCA_SHARE_PROXY_KEY
 const BLOCKED_PORTS = new Set([2222, 6080, 6768, LISTEN_PORT])
 const MAX_SKEW_SECONDS = 300
 const MAX_CONNECTION_SECONDS = 3600
+// Well under Vercel's ~340 s idle cut. ORCA_SHARE_PROXY_KEEPALIVE_MS is for tests.
+const KEEPALIVE_MS = Number(process.env.ORCA_SHARE_PROXY_KEEPALIVE_MS || 30_000)
+// FIN + ping opcode, empty payload, unmasked (server to client).
+const PING_FRAME = Buffer.from([0x89, 0x00])
 const HOP_BY_HOP = ['connection', 'keep-alive', 'proxy-connection', 'transfer-encoding', 'te', 'trailer', 'upgrade']
 
 if (KEY.length < 32) {
@@ -72,6 +81,70 @@ function upstreamHeaders(raw, port) {
 function refuse(res) {
   res.writeHead(404, { 'content-type': 'text/plain', 'cache-control': 'no-store' })
   res.end('not found')
+}
+
+/**
+ * Follows the app's WebSocket frames (server to client: header, then payload) just closely enough to
+ * know when the stream sits between two frames, where a control frame may be inserted.
+ */
+function frameBoundaries() {
+  let header = []
+  let remaining = 0
+  return {
+    push(chunk) {
+      let i = 0
+      while (i < chunk.length) {
+        if (remaining > 0) {
+          const take = Math.min(remaining, chunk.length - i)
+          remaining -= take
+          i += take
+          continue
+        }
+        header.push(chunk[i++])
+        if (header.length < 2) {
+          continue
+        }
+        const len7 = header[1] & 0x7f
+        const need = 2 + (len7 === 126 ? 2 : len7 === 127 ? 8 : 0) + (header[1] & 0x80 ? 4 : 0)
+        if (header.length < need) {
+          continue
+        }
+        const bytes = Buffer.from(header)
+        remaining = len7 === 126 ? bytes.readUInt16BE(2) : len7 === 127 ? Number(bytes.readBigUInt64BE(2)) : len7
+        header = []
+      }
+    },
+    atBoundary: () => header.length === 0 && remaining === 0
+  }
+}
+
+/** The app's answer to the upgrade: its head is passed through; only a 101 to `websocket` gets keepalives. */
+function upgradeAnswer() {
+  let head = Buffer.alloc(0)
+  let state = 'head'
+  const frames = frameBoundaries()
+  return {
+    push(chunk) {
+      if (state === 'head') {
+        head = Buffer.concat([head, chunk])
+        const end = head.indexOf('\r\n\r\n')
+        if (end === -1) {
+          if (head.length > 64 * 1024) {
+            state = 'raw'
+          }
+          return
+        }
+        const text = head.subarray(0, end).toString('latin1')
+        state = /^HTTP\/1\.1 101/.test(text) && /^upgrade:\s*websocket\s*$/im.test(text) ? 'ws' : 'raw'
+        chunk = head.subarray(end + 4)
+        head = Buffer.alloc(0)
+      }
+      if (state === 'ws') {
+        frames.push(chunk)
+      }
+    },
+    canPing: () => state === 'ws' && frames.atBoundary()
+  }
 }
 
 /** Ends `close` at the grant's deadline; the timer goes away with the connection. */
@@ -139,7 +212,28 @@ server.on('upgrade', (req, socket, head) => {
       target.write(head)
     }
     socket.pipe(target)
-    target.pipe(socket)
+    // App to visitor by hand (with backpressure) so the keepalive knows where frames start and end.
+    const answer = upgradeAnswer()
+    let lastTraffic = Date.now()
+    socket.on('data', () => {
+      lastTraffic = Date.now()
+    })
+    target.on('data', (chunk) => {
+      lastTraffic = Date.now()
+      answer.push(chunk)
+      if (!socket.write(chunk)) {
+        target.pause()
+        socket.once('drain', () => target.resume())
+      }
+    })
+    target.on('end', () => socket.end())
+    const keepalive = setInterval(() => {
+      if (Date.now() - lastTraffic >= KEEPALIVE_MS && answer.canPing() && socket.writable) {
+        socket.write(PING_FRAME)
+        lastTraffic = Date.now()
+      }
+    }, Math.max(50, Math.floor(KEEPALIVE_MS / 3)))
+    socket.once('close', () => clearInterval(keepalive))
   })
   const close = () => {
     socket.destroy()
