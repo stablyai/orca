@@ -121,7 +121,7 @@ scripts:
 - **Output and status:** a toast shows the hook running, then its last lines of output. The full output is appended to `~/.orca-sandbox/archive-hook/archive.log` in the VM.
 - **Failure never traps the workspace:** a failed or timed-out hook shows its output with **Archive anyway** and **Keep it**. A delete shows **Delete anyway**. Every outcome is logged.
 - **Asleep workspaces:** Orca learns whether the repo has a hook each time the workspace goes to sleep. If it has one that hasn't run since the workspace last woke, archive and delete wake it first to run the hook; the archive's Undo toast offers **Skip hook**. A workspace whose repo has no hook, or that has never slept since this was added, isn't woken.
-- **Archives without a desktop** (the API, a phone, the team list) run the hook on a running VM first and archive even if it fails. They never wake an asleep workspace for it.
+- **Archives without a desktop** (the API, a phone, the team list) run the hook on a running VM first, for up to 30 seconds, and archive even if it fails. They never wake an asleep workspace for it, and an archived workspace is never woken for it either.
 - **Unarchive** doesn't re-run `scripts.setup`: recreate what the archive hook removed yourself.
 
 ### Run actions

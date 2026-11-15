@@ -32,7 +32,7 @@ export type HostedArchiveClient = {
   archiveHookState(
     sandboxId: string,
     signal?: AbortSignal
-  ): Promise<{ memo: HostedArchiveHookMemo | null; running: boolean }>
+  ): Promise<{ memo: HostedArchiveHookMemo | null; running: boolean; archived?: boolean }>
 }
 
 export function archiveClientMethods(

@@ -28,7 +28,12 @@ export async function cloudArchiveHookNeedsWake(target: CloudWorkspaceTarget): P
   const state = await cloudWorkspaceApi()
     ?.getArchiveHookState(target)
     .catch(() => null)
-  return state?.ok === true && !state.value.running && state.value.memo === 'pending'
+  return (
+    state?.ok === true &&
+    !state.value.running &&
+    state.value.archived !== true &&
+    state.value.memo === 'pending'
+  )
 }
 
 export function archiveHookOutputTail(runs: readonly HostedArchiveHookRun[]): string {

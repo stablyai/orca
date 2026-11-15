@@ -12,8 +12,9 @@ export const ArchiveHookRequestSchema = z.object({ wake: z.boolean().optional() 
 /** A wake normally takes seconds; past this the hook would not finish inside the desktop's wait. */
 const WAKE_BUDGET_MS = 90_000
 
-export function archiveHookView(row: SandboxRow): { memo: ReturnType<typeof archiveHookMemo>; running: boolean } {
-  return { memo: archiveHookMemo(row), running: row.status === 'running' }
+/** `archived`: its disk is never woken for the hook, so an asleep delete doesn't offer it. */
+export function archiveHookView(row: SandboxRow): { memo: ReturnType<typeof archiveHookMemo>; running: boolean; archived: boolean } {
+  return { memo: archiveHookMemo(row), running: row.status === 'running', archived: row.status === 'archived' }
 }
 
 async function wakeForHook(deps: LifecycleDeps, row: SandboxRow, config: WorkspaceConfig): Promise<SandboxRow | null> {
@@ -36,7 +37,8 @@ export async function runArchiveHookForRow(
   deps: LifecycleDeps,
   row: SandboxRow,
   request: z.infer<typeof ArchiveHookRequestSchema>,
-  config: WorkspaceConfig
+  config: WorkspaceConfig,
+  timeoutMs?: number
 ): Promise<HostedArchiveHookResult> {
   if (row.status === 'archived') {
     // Archived after its hook ran (or was waived): an archived disk is not woken for it.
@@ -61,7 +63,7 @@ export async function runArchiveHookForRow(
     current = woken
   }
   const startedAt = deps.now()
-  const result = await runArchiveHook(deps.provider, current.session_id!)
+  const result = await runArchiveHook(deps.provider, current.session_id!, timeoutMs ? { timeoutMs } : {})
   const memo = result.state === 'not_configured' ? 'none' : result.state === 'succeeded' ? 'done' : 'pending'
   await recordArchiveHookMemo(deps.db, current.id, memo)
   console.log(
@@ -77,15 +79,18 @@ export async function runArchiveHookForRow(
   return result
 }
 
+/** Callers of an unattended archive wait on the whole request (the desktop's team list: 60 s). */
+const UNATTENDED_HOOK_TIMEOUT_MS = 30_000
+
 /**
  * Archives no desktop prepared (the public API, a phone, the team list): a running VM runs its hook
- * first. Nobody is there to choose "Archive anyway", so a failure is logged, never a refusal.
+ * first, for up to 30 s. Nobody is there to choose "Archive anyway", so a failure is logged, never a refusal.
  */
 export async function runArchiveHookBeforeUnattendedArchive(deps: LifecycleDeps, row: SandboxRow, config: WorkspaceConfig): Promise<void> {
   if (row.status !== 'running' || !row.session_id || archiveHookMemo(row) === 'done') {
     return
   }
-  await runArchiveHookForRow(deps, row, {}, config).catch((error: unknown) =>
+  await runArchiveHookForRow(deps, row, {}, config, UNATTENDED_HOOK_TIMEOUT_MS).catch((error: unknown) =>
     console.log(JSON.stringify({ event: 'archive_hook_error', sandboxId: row.id, error: String(error).slice(0, 120) }))
   )
 }

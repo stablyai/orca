@@ -117,7 +117,13 @@ export type OrcaCloudWorkspaceApi = {
   /** What the control plane knows about the hook, without touching the VM. */
   getArchiveHookState: (
     args: CloudWorkspaceTarget
-  ) => Promise<CloudWorkspaceResult<{ memo: HostedArchiveHookMemo | null; running: boolean }>>
+  ) => Promise<
+    CloudWorkspaceResult<{
+      memo: HostedArchiveHookMemo | null
+      running: boolean
+      archived?: boolean
+    }>
+  >
   /** Workspace ids of every Orca Cloud workspace this desktop knows (the sidebar dot / hover card). */
   listCloudWorkspaceIds: () => Promise<string[]>
   /** Product constants and measured timings; null when the control plane can't be reached. */

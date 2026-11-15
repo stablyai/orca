@@ -36,5 +36,9 @@ export const HostedArchiveHookResponseSchema = z.object({
   archiveHook: HostedArchiveHookResultSchema
 })
 export const HostedArchiveHookStateResponseSchema = z.object({
-  archiveHook: z.object({ memo: HostedArchiveHookMemoSchema.nullable(), running: z.boolean() })
+  archiveHook: z.object({
+    memo: HostedArchiveHookMemoSchema.nullable(),
+    running: z.boolean(),
+    archived: z.boolean().optional()
+  })
 })

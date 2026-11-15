@@ -75,7 +75,7 @@ describe('archive hook route', () => {
   it('asleep: learned at Sleep, it asks before waking; with wake it wakes, runs, and is not run twice', async () => {
     const { h, id, hook, hookCalls } = await running()
     await h.call('POST', `/v1/sandboxes/${id}/suspend`)
-    expect((await h.call('GET', `/v1/sandboxes/${id}/archive-hook`)).body).toEqual({ archiveHook: { memo: 'pending', running: false } })
+    expect((await h.call('GET', `/v1/sandboxes/${id}/archive-hook`)).body).toEqual({ archiveHook: { memo: 'pending', running: false, archived: false } })
     expect(await hook()).toEqual({ state: 'asleep', memo: 'pending' })
     expect(hookCalls).toHaveLength(0)
 
@@ -110,6 +110,7 @@ describe('archive hook route', () => {
     await h.call('POST', `/v1/sandboxes/${id}/archive`, { body: {} })
     const res = await h.call('POST', `/v1/sandboxes/${id}/archive-hook`, { body: { wake: true } })
     expect(res).toMatchObject({ status: 409, body: { reason: 'sandbox_archived' } })
+    expect((await h.call('GET', `/v1/sandboxes/${id}/archive-hook`)).body.archiveHook.archived).toBe(true)
   })
 })
 
@@ -120,6 +121,8 @@ describe('unattended archive (team list, public API)', () => {
     const res = await h.call('PATCH', `/v1/team/workspaces/${id}`, { body: { archived: true } })
     expect(res.status).toBe(200)
     expect(hookCalls).toHaveLength(1)
+    // Bounded: the caller waits on the whole request.
+    expect(hookCalls[0]!.args![4]).toBe('30')
     expect(h.vercel.boxes.get(`orca-test-${id}`)!.status).toBe('stopped')
   })
 })
