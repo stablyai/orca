@@ -65,6 +65,8 @@ describe('graph and annotated worktree scans', () => {
     const first = await listWorktreesSharedStrict('/synthetic/repo-a')
     const second = await listWorktreesSharedStrict('/synthetic/repo-b')
 
+    expect(first).toHaveLength(1492)
+    expect(second).toHaveLength(1492)
     expect(first.every((row) => row.isSparse !== true)).toBe(true)
     expect(second.every((row) => row.isSparse !== true)).toBe(true)
   })

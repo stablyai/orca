@@ -57,6 +57,23 @@ afterEach(async () => {
 })
 
 describe('sparse checkout cache authority', () => {
+  it('bounds incidental answers even when most listed paths have not been probed', async () => {
+    probe.mockResolvedValue(false)
+    retainSparseCheckoutWorkingSet(root, [
+      worktree,
+      ...Array.from({ length: 1491 }, (_, index) => `${worktree}-${index}`)
+    ])
+    expect(await detectSparseCheckoutCached(root, worktree)).toBe(false)
+    for (let index = 0; index < 512; index += 1) {
+      await detectSparseCheckoutCached(root, join(root, `incidental-${index}`))
+    }
+    probe.mockResolvedValue(true)
+    expect(await detectSparseCheckoutCached(root, join(root, 'incidental-overflow'))).toBe(true)
+
+    expect(await detectSparseCheckoutCached(root, join(root, 'incidental-0'))).toBe(true)
+    expect(await detectSparseCheckoutCached(root, worktree)).toBe(false)
+  })
+
   it.skipIf(process.platform !== 'darwin')(
     'retains the same answer through macOS temporary path aliases',
     async () => {

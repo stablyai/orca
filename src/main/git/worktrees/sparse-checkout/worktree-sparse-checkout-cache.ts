@@ -29,6 +29,7 @@ export type SparseCheckoutChangeListener = (
 type SparseCheckoutCache = {
   repoPath: string
   workingSet: Set<string>
+  unlisted: Set<string>
   entries: Map<string, SparseCheckoutCacheEntry>
   pending: Map<string, Promise<boolean>>
 }
@@ -43,6 +44,7 @@ function resolveCache(repoPath: string, options: SparseCheckoutProbeOptions): Sp
     cache = {
       repoPath: canonicalWorktreePath(repoPath),
       workingSet: new Set(),
+      unlisted: new Set(),
       entries: new Map(),
       pending: new Map()
     }
@@ -62,6 +64,7 @@ function resolveCache(repoPath: string, options: SparseCheckoutProbeOptions): Sp
 function retireCache(key: string): void {
   const cache = sparseCheckoutStateCache.get(key)
   cache?.entries.clear()
+  cache?.unlisted.clear()
   cache?.pending.clear()
   sparseCheckoutStateCache.delete(key)
 }
@@ -71,19 +74,17 @@ function retainSparseCheckoutCacheEntry(
   key: string,
   entry: SparseCheckoutCacheEntry
 ): void {
-  cache.entries.delete(key)
   cache.entries.set(key, entry)
-  let excess =
-    cache.entries.size - cache.workingSet.size - MAX_UNLISTED_SPARSE_CHECKOUT_CACHE_ENTRIES
-  if (excess <= 0) {
+  if (cache.workingSet.has(key)) {
     return
   }
-  for (const candidate of cache.entries.keys()) {
-    if (!cache.workingSet.has(candidate)) {
-      cache.entries.delete(candidate)
-      if (--excess <= 0) {
-        break
-      }
+  cache.unlisted.delete(key)
+  cache.unlisted.add(key)
+  if (cache.unlisted.size > MAX_UNLISTED_SPARSE_CHECKOUT_CACHE_ENTRIES) {
+    const oldest = cache.unlisted.values().next().value
+    if (oldest !== undefined) {
+      cache.unlisted.delete(oldest)
+      cache.entries.delete(oldest)
     }
   }
 }
@@ -96,6 +97,7 @@ export function retainSparseCheckoutWorkingSet(
   throwIfSignalAborted(options.signal)
   const cache = resolveCache(repoPath, options)
   cache.workingSet = new Set(Array.from(worktreePaths, (path) => canonicalWorktreePath(path)))
+  cache.unlisted.clear()
   for (const key of cache.entries.keys()) {
     if (!cache.workingSet.has(key)) {
       cache.entries.delete(key)
@@ -193,6 +195,7 @@ export function invalidateSparseCheckoutState(repoPath: string, worktreePath: st
   for (const cache of sparseCheckoutStateCache.values()) {
     if (cache.repoPath === repo) {
       cache.entries.delete(worktree)
+      cache.unlisted.delete(worktree)
       cache.pending.delete(worktree)
     }
   }
