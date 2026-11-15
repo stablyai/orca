@@ -42,6 +42,7 @@ import { getCanonicalUserDataPath } from '../../persistence/loading-store/user-d
 import { flushUnsavedCloudSessions } from '../../orca-profiles/cloud-session/profile-cloud-session-owner'
 import { getWorkspaceCleanupRunner } from '../../workspaces/cleanup/workspace-cleanup-runner-registry'
 import { closeBrowserExtensionProfileDocumentStores } from '../../browser/extensions/profile-storage/browser-extension-profile-document-store'
+import { flushBrowserSessionCookiesOnQuit } from '../../browser/cookies/session-restore/browser-session-cookie-restore'
 
 // First will-quit pass awaits teardown; the re-fired pass must exit without starting writes again.
 let daemonDisconnectDone = false
@@ -207,6 +208,7 @@ function installWillQuitHandler(): void {
     // A closed WSL-host channel still in its EOF grace must not outlive the app.
     killWslChannelsInCloseGrace()
     const statsFlush = state.stats?.flushAsync() ?? Promise.resolve()
+    const browserSessionCookieFlush = flushBrowserSessionCookiesOnQuit()
     // Await per-session close children so browser daemons cannot retain ports/state after quit (#16367); retire headless owners first to avoid duplicate fanout.
     const browserShutdown = (async (): Promise<void> => {
       await state.runtime?.getOffscreenBrowserBackend()?.destroyAll?.()
@@ -292,6 +294,7 @@ function installWillQuitHandler(): void {
       { name: 'state-checkpoint', promise: state.profileShutdownCheckpoint },
       { name: 'daemon', promise: daemonTeardown },
       { name: 'browser', promise: browserShutdown },
+      { name: 'browser-session-cookies', promise: browserSessionCookieFlush },
       { name: 'runtime-rpc', promise: rpcStopAndClear },
       { name: 'watchers', promise: watcherShutdown },
       { name: 'emulator', promise: emulatorShutdown },
