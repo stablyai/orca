@@ -3,7 +3,7 @@ import {
   createSettleNotifier,
   monotonicNow,
   type Settled
-} from '../../deadline-settle-notifier'
+} from '../../concurrency/deadline-settle-notifier'
 
 type NamingPass = {
   claimedAtMs: number

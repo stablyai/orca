@@ -1,4 +1,4 @@
-import { stripAnsiEscapeSequences } from '../../../shared/ansi-escape-sequences'
+import { stripAnsiEscapeSequences } from '../../../shared/terminal/protocol/escape/ansi-escape-sequences'
 
 const AUTH_URL_MARKER = 'navigate to this url to authenticate:'
 const CODEX_AUTH_HOST = 'auth.openai.com'

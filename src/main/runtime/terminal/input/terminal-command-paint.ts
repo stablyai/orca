@@ -1,4 +1,4 @@
-import { stripAnsiEscapeSequences } from '../../../../shared/ansi-escape-sequences'
+import { stripAnsiEscapeSequences } from '../../../../shared/terminal/protocol/escape/ansi-escape-sequences'
 import { createOsc133CommandFinishedScanner } from '../../../../shared/terminal/output/terminal-osc133-command-finished'
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import type {
@@ -10,7 +10,7 @@ import {
   createDraftPasteReadyScanner,
   draftPasteReadySignalHasMarker,
   type DraftPasteReadyScanner
-} from '../../../../shared/draft-paste-ready-scanner'
+} from '../../../../shared/agent-launch/startup/readiness/draft-paste-ready-scanner'
 import { normalizeTerminalChunk } from '../output/terminal-ansi-normalization'
 
 // eslint-disable-next-line no-control-regex -- control bytes are exactly what is not visible.

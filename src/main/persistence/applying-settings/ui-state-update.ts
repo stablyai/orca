@@ -7,10 +7,10 @@ import {
   normalizeWorkspaceStatuses,
   clampWorkspaceBoardColumnWidth,
   clampWorkspaceBoardOpacity
-} from '../../../shared/workspace-statuses'
-import { normalizeUsagePercentageDisplay } from '../../../shared/usage-percentage-display'
-import { normalizeStatusBarUsageMode } from '../../../shared/status-bar-usage-mode'
-import { normalizeStatusBarUsageFormat } from '../../../shared/status-bar-usage-format'
+} from '../../../shared/workspace/status/workspace-statuses'
+import { normalizeUsagePercentageDisplay } from '../../../shared/agent-usage/display/usage-percentage-display'
+import { normalizeStatusBarUsageMode } from '../../../shared/status-bar/status-bar-usage-mode'
+import { normalizeStatusBarUsageFormat } from '../../../shared/status-bar/status-bar-usage-format'
 import { clampMarkdownTocPanelWidth } from '../../../shared/markdown-toc-panel-width'
 import { clampCombinedDiffFileTreeWidth } from '../../../shared/combined-diff-file-tree-width'
 import {

@@ -27,7 +27,7 @@ import { useTranslate } from '@/i18n/use-translate'
 import { checklistItemsFromVersion } from './skill-package-checklist-items'
 import { summarizeSkillInstallRisk } from './skill-package-install-risk'
 import { retryableSkillIds } from './skill-bundle-retry-selection'
-import { createNonSecureContextUuid as createBrowserUuid } from '../../../../../shared/non-secure-context-uuid'
+import { createNonSecureContextUuid as createBrowserUuid } from '../../../../../shared/identifiers/non-secure-context-uuid'
 import {
   selectFolderWorkspaces,
   selectWorktreesByRepo

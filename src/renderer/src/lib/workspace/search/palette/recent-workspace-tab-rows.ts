@@ -10,7 +10,7 @@ import {
   isAgentStatusFresh,
   AGENT_STATUS_STALE_AFTER_MS
 } from '../../../../../../shared/agent-status/contracts/agent-status-freshness'
-import type { WorktreeStatus } from '../../../../../../shared/worktree-status-rollup'
+import type { WorktreeStatus } from '../../../../../../shared/worktree/row-display/worktree-status-rollup'
 import type { TerminalTab } from '../../../../../../shared/workspace-layout/terminal-tab-types'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
 

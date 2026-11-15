@@ -8,7 +8,7 @@ import {
   getRepoSshConnectionId,
   parseExecutionHostId
 } from '../../../../../shared/execution-host'
-import type { Repo } from '../../../../../shared/repo-types'
+import type { Repo } from '../../../../../shared/repository/repo-types'
 import type { SshConnectionStatus } from '../../../../../shared/remote-runtime/ssh/ssh-types'
 
 /** The SSH target holding a repo's files; `environmentId` is the paired server that owns it. */

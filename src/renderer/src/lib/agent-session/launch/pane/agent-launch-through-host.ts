@@ -2,7 +2,7 @@
 
 import { useAppStore } from '@/store/index'
 
-import { createNonSecureContextUuid as createBrowserUuid } from '../../../../../../shared/non-secure-context-uuid'
+import { createNonSecureContextUuid as createBrowserUuid } from '../../../../../../shared/identifiers/non-secure-context-uuid'
 import { persistAgentLaunchTabOrder } from '@/lib/agent-session/launch/pane/launch-agent-tab-order'
 import { rememberAgentLaunchPanePrompt } from '@/lib/agent-session/launch/pane/agent-launch-pane-prompt'
 import { awaitAgentLaunchPaneStart } from '@/lib/agent-session/launch/pane/agent-launch-pane-start'

@@ -1,4 +1,4 @@
-import { withTimeout } from '../../shared/promise-timeout-fallback'
+import { withTimeout } from '../../shared/concurrency/promise-timeout-fallback'
 import type { ChildProcess } from 'node:child_process'
 import { EventEmitter } from 'node:events'
 import {

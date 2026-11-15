@@ -28,10 +28,10 @@ import {
   type HookWorkspaceIdentity
 } from './setup-hook-env-vars'
 import { ignoreFolderSetupRunners, newFolderSetupRunnerPath } from './folder-setup-runner-files'
-import { isFolderRepo } from '../../shared/repo-kind'
+import { isFolderRepo } from '../../shared/repository/repo-kind'
 import { buildPosixRunnerScript, buildWindowsRunnerScript } from './setup-runner-script-text'
 
-import type { WorkspaceHookOwner } from '../../shared/workspace-hook-owner'
+import type { WorkspaceHookOwner } from '../../shared/workspace-setup/hooks/workspace-hook-owner'
 import type { WorktreeSetupLaunch } from '../../shared/worktree/creation/launch-types'
 import type { SetupAgentStartupPolicy } from '../../shared/orca-yaml-hook-types'
 import type { ProjectExecutionRuntimeResolution } from '../../shared/execution-host/project-execution-runtime'

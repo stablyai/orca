@@ -13,7 +13,7 @@ import {
 import {
   resolveAntigravityChatAuthConfig,
   type AntigravityChatAuthConfig
-} from '../../../shared/antigravity-chat-auth-config'
+} from '../../../shared/agent-accounts/antigravity/antigravity-chat-auth-config'
 import type { GlobalSettings } from '../../../shared/global-settings-types'
 import { assertAntigravityChatAuthPublished } from '../../antigravity/antigravity-chat-auth-publication'
 import { prepareAntigravityAcpProxyEnvironment } from '../../antigravity/antigravity-acp-proxy-environment'

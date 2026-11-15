@@ -4,7 +4,7 @@ import { mobileForkAccessibleName } from '../session/fork/mobile-fork-marked-nam
 import { Fragment, memo, useCallback, useState } from 'react'
 import { Alert, Pressable, Text, View } from 'react-native'
 import { formatAgentTypeLabel } from '../../../src/shared/agent-status/presentation/agent-type-label'
-import type { WorktreeStatus } from '../../../src/shared/worktree-status-rollup'
+import type { WorktreeStatus } from '../../../src/shared/worktree/row-display/worktree-status-rollup'
 import { AgentSpinner, agentStatusColors } from './presentation/AgentSpinner'
 import { MobileAgentIcon } from '../components/icons/MobileAgentIcon'
 import { SwipeRowActions } from '../components/list/SwipeRowActions'

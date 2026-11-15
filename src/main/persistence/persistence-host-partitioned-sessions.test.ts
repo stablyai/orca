@@ -16,7 +16,7 @@ import { tmpdir } from 'node:os'
 import type { WorkspaceSessionState } from '../../shared/workspace-session/workspace-session-state-types'
 import { getDefaultWorkspaceSession } from '../../shared/constants'
 
-import { worktreeWorkspaceKey } from '../../shared/workspace-scope'
+import { worktreeWorkspaceKey } from '../../shared/workspace/identity/workspace-scope'
 
 const { loadUserSshConfigMock, sshConfigHostsToTargetsMock } = vi.hoisted(() => ({
   loadUserSshConfigMock: vi.fn(),

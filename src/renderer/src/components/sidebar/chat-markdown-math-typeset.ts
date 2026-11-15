@@ -4,7 +4,7 @@ import { toText } from 'hast-util-to-text'
 import katex from 'katex'
 import { SKIP, visitParents } from 'unist-util-visit-parents'
 import type { VFile } from 'vfile'
-import { BoundedMap } from '../../../../shared/bounded-map'
+import { BoundedMap } from '../../../../shared/collections/bounded-map'
 import { MARKDOWN_MATH_KATEX_SETTINGS as settings } from '../../../../shared/markdown-math-rules'
 
 type MathResult = Readonly<{

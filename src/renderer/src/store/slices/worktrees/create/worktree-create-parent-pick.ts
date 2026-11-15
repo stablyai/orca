@@ -6,8 +6,8 @@ import {
   folderWorkspaceKey,
   parseWorkspaceKey,
   worktreeWorkspaceKey
-} from '../../../../../../shared/workspace-scope'
-import type { WorkspaceKey } from '../../../../../../shared/workspace-scope'
+} from '../../../../../../shared/workspace/identity/workspace-scope'
+import type { WorkspaceKey } from '../../../../../../shared/workspace/identity/workspace-scope'
 import {
   getIndexedAllWorktrees,
   getIndexedWorktreesById

@@ -9,7 +9,7 @@ import {
   getDisplayedUsagePercentage,
   normalizeUsagePercentageDisplay,
   type UsagePercentageDisplay
-} from '../../../../../shared/usage-percentage-display'
+} from '../../../../../shared/agent-usage/display/usage-percentage-display'
 import { formatBareUsagePercentage } from './usage-percentage-label'
 import { usageBarClass, usageTextClass } from './usage-health-tone'
 

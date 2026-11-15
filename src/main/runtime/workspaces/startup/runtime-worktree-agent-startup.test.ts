@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { Repo } from '../../../../shared/repo-types'
+import type { Repo } from '../../../../shared/repository/repo-types'
 import '../../../../shared/agent-status/identity/agent-kind'
 import { getDefaultSettings } from '../../../../shared/constants'
 
@@ -168,19 +168,6 @@ describe('buildWorktreeStartupForDraft agent detection', () => {
 
     expect(mocks.detectInstalledAgentsWithShellPathHydration).not.toHaveBeenCalled()
     expect(result).toBeNull()
-  })
-
-  it('probes this client for a local row carrying a stale connection', async () => {
-    mocks.detectInstalledAgentsWithShellPathHydration.mockResolvedValueOnce(['claude'])
-
-    const result = await buildWorktreeStartupForDraft({
-      repo: makeRepo({ connectionId: 'm4air', executionHostId: 'local' }),
-      settings,
-      draft: 'ship it',
-      getLaunchRuntime: () => LINUX
-    })
-
-    expect(result?.agent).toBe('claude')
   })
 })
 

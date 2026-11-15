@@ -1,5 +1,5 @@
 import { withGitHubRepoExecution } from '../../repositories/github-repository-identity'
-import type { IssueSourcePreference } from '../../../../shared/repo-types'
+import type { IssueSourcePreference } from '../../../../shared/repository/repo-types'
 import type { GhAccountBinding } from '../../../../shared/github/accounts/account-binding'
 import type { GitHubPrStartPoint, GitPushTarget } from '../../../../shared/worktree/types'
 import { fetchCompareBaseRefWithLocalFallback } from '../../../git/remotes/compare-base-ref-fetch'

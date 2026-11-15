@@ -1,10 +1,10 @@
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../types'
-import type { Repo } from '../../../../shared/repo-types'
+import type { Repo } from '../../../../shared/repository/repo-types'
 import { applyManualRepoOrder } from '../../../../shared/manual-repo-order'
 import { retainValidFilterRepoIds } from './repo-filter-selection'
 import { readRuntimeWorktreeVisibilitySnapshot } from '../slices/settings/worktree-visibility-owner-settings'
-import { getRepoHostIdentity } from '../../../../shared/repo-host-identity'
+import { getRepoHostIdentity } from '../../../../shared/repository/repo-host-identity'
 import { filterSetupScriptPromptDismissalsToValidRepos } from '@/runtime/repo-hooks/setup-script-prompt'
 import { getRepoExecutionHostId } from '../../../../shared/execution-host'
 import { isRemovedRuntimeHostId } from '../host-catalog/removed-runtime-host-rows'
@@ -31,7 +31,7 @@ import {
   reconcileSupersededSshRepos
 } from './repo-catalog-merge'
 import { getRuntimeTargetHostId } from '../../runtime/rpc/targets/runtime-client-target'
-import { mergeFetchedHostProjectCatalog } from '../../../../shared/project-compatibility-host-merge'
+import { mergeFetchedHostProjectCatalog } from '../../../../shared/project/catalog/project-compatibility-host-merge'
 import { scheduleSafeAutoForkSync } from './safe-auto-fork-sync'
 import { noteLiveRepoCatalogApplied } from './saved-host-catalog-rows'
 import {

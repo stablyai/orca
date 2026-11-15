@@ -1,7 +1,7 @@
 import type { ChildProcess } from 'node:child_process'
 import { EventEmitter } from 'node:events'
 import { Duplex, PassThrough, Readable, Writable } from 'node:stream'
-import { withTimeout } from '../../shared/promise-timeout-fallback'
+import { withTimeout } from '../../shared/concurrency/promise-timeout-fallback'
 import type { ProviderChild } from './provider-child'
 import { ignoreProviderTransportError, notifyProviderChild } from './provider-child'
 import type { ProviderSpawnSpec } from './provider-process-supervisor'

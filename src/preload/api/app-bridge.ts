@@ -8,7 +8,7 @@ import type { WriteTerminalRenderDesyncEvidenceArgs } from '../../shared/termina
 import {
   KEYBOARD_LAYOUT_CHANGED_CHANNEL,
   type KeyboardLayoutChangeEvent
-} from '../../shared/keyboard-layout-events'
+} from '../../shared/keybindings/keyboard-layout-events'
 import { prepareAndInvokeAppRestart } from '../renderer/restart/renderer-restart-wiring'
 import {
   awaitBeforeUnloadCheckpoint,

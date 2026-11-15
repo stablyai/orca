@@ -1,4 +1,4 @@
-import { withTimeout } from '../../../../shared/promise-timeout-fallback'
+import { withTimeout } from '../../../../shared/concurrency/promise-timeout-fallback'
 import { dedupeInFlightRun } from '../../../runtime/concurrency/in-flight-run-dedupe'
 import { resolveCodexCommand, resolveCodexCommandForSpawn } from '../../../codex-cli/command'
 import { getManagedScriptPath } from '../../hooks/definitions/codex-hook-definition'

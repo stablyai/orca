@@ -1,4 +1,4 @@
-import type { KeybindingActionId } from '../../../shared/keybindings'
+import type { KeybindingActionId } from '../../../shared/keybindings/types'
 import { useAppStore } from '../store/index'
 import {
   ORCA_EDITOR_REQUEST_CMD_SAVE_EVENT,

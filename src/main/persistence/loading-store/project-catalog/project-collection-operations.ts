@@ -1,5 +1,5 @@
 import type { FolderWorkspace } from '../../../../shared/folder-workspaces/folder-workspace-types'
-import type { ProjectGroup } from '../../../../shared/project-group-types'
+import type { ProjectGroup } from '../../../../shared/project/groups/project-group-types'
 import type {
   Project,
   ProjectHostSetup,
@@ -10,9 +10,9 @@ import type {
   ProjectHostSetupUpdateArgs,
   ProjectHostSetupUpdateResult,
   ProjectUpdateArgs
-} from '../../../../shared/project-types'
-import type { Repo } from '../../../../shared/repo-types'
-import type { RepoHostTarget } from '../../../../shared/repo-host-identity'
+} from '../../../../shared/project/project-types'
+import type { Repo } from '../../../../shared/repository/repo-types'
+import type { RepoHostTarget } from '../../../../shared/repository/repo-host-identity'
 import { ProjectGroupPersistenceOperations } from '../../tracking-repos/project-group-operations'
 import { FolderWorkspacePersistenceOperations } from '../../restoring-sessions/folder-workspace-operations'
 import { ProjectHostPersistenceOperations } from '../../tracking-repos/project-host-operations'
@@ -33,7 +33,7 @@ import {
 } from '../workspace-lineage/metadata-lineage-operations'
 import { bumpLocalWorktreeScanGeneration } from '../../../workspaces/catalog/local-worktree-scan-generation'
 import { dropOrcadTerminalRestoreHintsForWorktrees } from '../../migrating-orcad-catalog/terminal-history/orcad-terminal-restore-hint-store'
-import { folderWorkspaceKey } from '../../../../shared/workspace-scope'
+import { folderWorkspaceKey } from '../../../../shared/workspace/identity/workspace-scope'
 import {
   applyWslMoveRetainedMarks,
   type WslMoveRetainedMark

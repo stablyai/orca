@@ -1,7 +1,7 @@
 vi.mock('@/store/index', () => ({ useAppStore: { getState: () => ({}) } }))
 import { beforeEach, expect, it, vi } from 'vitest'
 import type { HostedReviewInfo } from '../../../../../../shared/source-control/hosted-review/hosted-review-contracts'
-import type { Repo } from '../../../../../../shared/repo-types'
+import type { Repo } from '../../../../../../shared/repository/repo-types'
 import { bumpProviderRuntimeSessionGeneration } from '@/runtime/hosts/observations/provider-runtime-context'
 import { makeWorktree } from '../worktree.test-fixture'
 import {

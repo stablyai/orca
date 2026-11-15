@@ -1,16 +1,16 @@
 import type { PersistedState } from '../../../shared/persisted-state-types'
-import type { Repo } from '../../../shared/repo-types'
+import type { Repo } from '../../../shared/repository/repo-types'
 import { type ExecutionHostId, getRepoExecutionHostId } from '../../../shared/execution-host'
-import type { RepoHostTarget } from '../../../shared/repo-host-identity'
+import type { RepoHostTarget } from '../../../shared/repository/repo-host-identity'
 
-import { isLegacyRepoForExternalWorktreeVisibility } from '../../../shared/external-worktree-visibility'
+import { isLegacyRepoForExternalWorktreeVisibility } from '../../../shared/worktree/visibility/external-worktree-visibility'
 import { normalizeRepoSourceControlAiOverrides } from '../../../shared/source-control/ai/settings/source-control-ai-repo-settings'
 import { normalizeRepoWorkspaceCleanupPolicy } from '../../../shared/workspace-cleanup/workspace-cleanup-policy'
 import { normalizeWorktreeVisibilitySourcePreferences } from '../../../shared/worktree/visibility/visibility-sources'
 import type { GhAccountBinding } from '../../../shared/github/accounts/account-binding'
 import { invalidateGhAccountTokenCache } from '../../github/accounts/gh-account-token'
 import { sanitizeRepoUpdatesForPersistence } from './repo-sanitization'
-import { isFolderRepo } from '../../../shared/repo-kind'
+import { isFolderRepo } from '../../../shared/repository/repo-kind'
 import { findExtraFolderWorkspaceIds } from '../../workspaces/catalog/folder-workspace-meta-presence'
 
 export type RepoUpdateMutationOperations = {

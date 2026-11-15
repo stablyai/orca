@@ -1,6 +1,6 @@
 // Cancelled idle stops may leave daemon admission closed. Replace only after atomic retirement
 // agreement: replacement could otherwise kill the old daemon’s live sessions.
-import { withTimeout } from '../../../shared/promise-timeout-fallback'
+import { withTimeout } from '../../../shared/concurrency/promise-timeout-fallback'
 import type { OrcadDaemonRetirement } from './orcad-daemon-retirement'
 import { ORCAD_DAEMON_RETIREMENT_TIMEOUT_MS } from '../host-lifecycle/managed-stop/orcad-stop-deadlines'
 

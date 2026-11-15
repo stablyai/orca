@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { createDraftPasteReadyScanner } from '../../../draft-paste-ready-scanner'
+import { createDraftPasteReadyScanner } from './draft-paste-ready-scanner'
 
 const MODES = '\x1b[?2004h\x1b[?1049h'
 const BEGIN = '\x1b[?2026h\x1b[?25l'

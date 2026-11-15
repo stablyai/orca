@@ -6,7 +6,7 @@ import {
 } from './editor-file-operation-provenance'
 
 import { parseExecutionHostId, toSshExecutionHostId } from '../../../../../shared/execution-host'
-import { parseWorkspaceKey } from '../../../../../shared/workspace-scope'
+import { parseWorkspaceKey } from '../../../../../shared/workspace/identity/workspace-scope'
 import type { AppState } from '@/store/types'
 import type { OpenFile } from '@/store/slices/editor/types/open-file'
 import { runtimeTargetForOwnerEnvironment } from '@/runtime/rpc/targets/runtime-client-target'

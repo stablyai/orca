@@ -1,3 +1,7 @@
+import {
+  startBrowserPageAttach,
+  waitForBrowserPageReady
+} from '../../guest-lifecycle/browser-page-memory'
 import type { BrowserRouteWebContentsRegistryDependencies } from './browser-route-webcontents-registry-dependencies'
 import { normalizeBrowserNavigationUrl } from '../../../../shared/browser/navigation/browser-url'
 import '../../../../shared/constants'
@@ -118,7 +122,9 @@ export async function navigateBrowserRouteGuest(
     return false
   }
   try {
-    await state.guest.loadURL(normalized)
+    await (startBrowserPageAttach(state.guest, normalized)
+      ? waitForBrowserPageReady(registration.browserPageId, state.guest)
+      : state.guest.loadURL(normalized))
     return true
   } catch {
     return false

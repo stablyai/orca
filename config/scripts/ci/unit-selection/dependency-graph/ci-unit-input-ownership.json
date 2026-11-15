@@ -58,7 +58,7 @@
       "contextSha256": "747ec5af67a0b60890da900a83fa255d3b96e2fa17d9199f8e483ef5051b213c"
     },
     {
-      "file": "src/shared/repo-icon.ts",
+      "file": "src/shared/repository/appearance/repo-icon.ts",
       "inputs": [],
       "emptyEnv": [],
       "sourceClosureSha256": "9ed9b45d83816f7da3d92dc71e66fdf52b60eeda4e19e5652817adfbd4f7090e",
@@ -82,7 +82,7 @@
       "sourceClosureSha256": "89a62d9b524eaffb56788bacb0fcee64948d012df5240333293b5be70b77601f"
     },
     {
-      "file": "src/shared/project-host-setup-projection.ts",
+      "file": "src/shared/project/host-setup/project-host-setup-projection.ts",
       "inputs": [],
       "emptyEnv": [],
       "reason": "Reviewed URL/data projection only; no indirect repository reads. The entire local source closure and dependency/runtime context are fingerprinted.",

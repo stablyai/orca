@@ -1,5 +1,5 @@
 import { getVisibleWorkspaceHostIdSet } from '@/components/sidebar/worktree-list/listing/visible-worktree-host-scope'
-import { getPairedDeviceIdsByEnvironment } from '../../../../shared/workspace-creator-visibility'
+import { getPairedDeviceIdsByEnvironment } from '../../../../shared/workspace-view/workspace-creator-visibility'
 import { getIndexedRepoMap } from '@/store/repos/repository-catalog-index'
 import type { AppState } from '@/store/types'
 import { getSettingsFocusedExecutionHostId } from '../../../../shared/execution-host'
@@ -7,7 +7,7 @@ import type { Worktree } from '../../../../shared/worktree/types'
 import { sameBucketRecords } from './unread-bucket-record-equality'
 import { getUnreadBadgeCount } from './unread-badge-count'
 import { hasLiveTabMarker } from '@/store/slices/workspace-attention/workspace-live-markers'
-import { folderWorkspaceKey } from '../../../../shared/workspace-scope'
+import { folderWorkspaceKey } from '../../../../shared/workspace/identity/workspace-scope'
 import {
   selectFolderWorkspaces,
   selectWorktreesByRepo

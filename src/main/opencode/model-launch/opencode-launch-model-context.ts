@@ -6,7 +6,7 @@ import {
 import { randomBytes } from 'node:crypto'
 import { setTimeout as delay } from 'node:timers/promises'
 import { z } from 'zod'
-import { withTimeout } from '../../../shared/promise-timeout-fallback'
+import { withTimeout } from '../../../shared/concurrency/promise-timeout-fallback'
 import { createOutputSink } from '@orca/process-host/bounded-output-sink'
 import { readFetchResponseJsonWithinLimit } from '../../../shared/fetch-response-body'
 import { cancelUnreadResponseBody } from '../../lib/unread-response-body'

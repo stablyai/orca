@@ -13,9 +13,9 @@ import {
   withWorktreeSpan
 } from '../../../observability/instrumentation'
 import { workspaceSourceSchema } from '../../../../shared/telemetry/schemas/telemetry-property-schemas'
-import type { WorkspaceSource } from '../../../../shared/workspace-source'
+import type { WorkspaceSource } from '../../../../shared/workspace/creation/workspace-source'
 
-import { isFolderRepo } from '../../../../shared/repo-kind'
+import { isFolderRepo } from '../../../../shared/repository/repo-kind'
 import { createLocalWorktree, notifyWorktreesChanged } from '../../worktree-remote'
 import { SshHostNotServedError } from '../../../providers/ssh-host-not-served-error'
 import { track } from '../../../telemetry/client'

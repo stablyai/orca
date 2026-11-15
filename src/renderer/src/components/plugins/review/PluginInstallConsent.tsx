@@ -10,7 +10,7 @@ import {
   pluginCapabilityDescription,
   shownPluginCapabilities
 } from '../presentation/plugin-capability-presentation'
-import { formatKeybindingList } from '../../../../../shared/keybindings'
+import { formatKeybindingList } from '../../../../../shared/keybindings/formatting'
 import { useAppStore } from '@/store'
 import type { PluginTrust } from '../presentation/plugin-access-profile'
 import { pluginTrustLabel, pluginTrustWarnings } from '../presentation/plugin-consent-copy'

@@ -1,7 +1,7 @@
 import { getDefaultWorkspaceSession } from '../../../shared/constants'
 import type { ExecutionHostId } from '../../../shared/execution-host'
 import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
-import { parseWorkspaceKey } from '../../../shared/workspace-scope'
+import { parseWorkspaceKey } from '../../../shared/workspace/identity/workspace-scope'
 import { SESSION_FIELDS_PRUNED_BY_OWNER_KEY } from './profile-project-session-field-disposition'
 import { markdownFileIdCandidates } from './profile-session-markdown-transfer'
 import {

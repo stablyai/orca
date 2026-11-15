@@ -22,7 +22,7 @@ import {
 } from './agent-session-usage-limit-words'
 import { commandRefusedByReason } from './agent-session-command-refusal-words'
 import { agent, attachmentProblemSentence } from './agent-session-attachment-failure-words'
-import { joinSentences } from '../../sentence-joining'
+import { joinSentences } from '../../text/sentence-joining'
 import { modelUnavailableSentence } from './agent-session-model-failure-words'
 import { quotingPersonDetail } from './agent-session-failure-quoted-detail'
 import { requestTimeoutSeconds } from '../agent-session-request-timeout'

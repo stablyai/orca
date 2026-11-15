@@ -1,5 +1,5 @@
 import { withOrcaClaudeChatEntrypoint } from '../../../../shared/agent-launch/startup/claude-chat-entrypoint'
-import { waitForPromiseWithSignal } from '../../../../shared/abort-signal-reason'
+import { waitForPromiseWithSignal } from '../../../../shared/concurrency/abort-signal-reason'
 import {
   assertStructuredAgentResolutionCurrent,
   resolveAgainAfterRefreshOnMissingProgram,

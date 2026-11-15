@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import type { CodexRateLimitAccountsState } from '../../../../../shared/managed-account-types'
-import type { ProviderRateLimits } from '../../../../../shared/rate-limit-types'
+import type { CodexRateLimitAccountsState } from '../../../../../shared/agent-accounts/managed-account-types'
+import type { ProviderRateLimits } from '../../../../../shared/agent-usage/rate-limits/rate-limit-types'
 import { useAppStore } from '../../../store/index'
 import { defaultScopeHost } from '@/runtime/hosts/selection/default-creation-host'
 import { useActiveAccountOwner } from '@/runtime/provider-accounts/ownership/use-active-account-owner'

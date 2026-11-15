@@ -1,5 +1,5 @@
 import { translate } from '@/i18n/i18n'
-import { createNonSecureContextUuid } from '../../../../../shared/non-secure-context-uuid'
+import { createNonSecureContextUuid } from '../../../../../shared/identifiers/non-secure-context-uuid'
 import {
   INVALID_RASTER_IMAGE_PREVIEW_ERROR,
   RASTER_IMAGE_PREVIEW_TOO_LARGE_ERROR,

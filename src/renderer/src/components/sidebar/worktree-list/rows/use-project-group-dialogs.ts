@@ -5,8 +5,8 @@ import { projectRemovalTargets } from '../../workspace-actions/deletion/removal-
 import { confirmUnsavedDiscard } from '@/store/slices/worktrees/teardown/removed-workspace-unsaved-files'
 import { translate } from '@/i18n/i18n'
 import { selectProjectGroupRemovalTargets } from '@/store/project-groups/project-group-removal-targets'
-import type { ProjectGroup } from '../../../../../../shared/project-group-types'
-import type { Repo } from '../../../../../../shared/repo-types'
+import type { ProjectGroup } from '../../../../../../shared/project/groups/project-group-types'
+import type { Repo } from '../../../../../../shared/repository/repo-types'
 import {
   getRepoExecutionHostId,
   type ExecutionHostId

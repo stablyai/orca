@@ -1,5 +1,5 @@
 import { getFishClaudeShellFunction } from '../launch/agents/claude-shell-function'
-import { FISH_WSL_CWD_REPORT_FUNCTION } from '../../fish-wsl-cwd-report'
+import { FISH_WSL_CWD_REPORT_FUNCTION } from './fish-wsl-cwd-report'
 import { buildPosixStdoutFence, type PosixStdoutFence } from '../launch/posix-stdout-fence'
 import { quotePosixShell } from '../launch/shell-argument-quoting'
 

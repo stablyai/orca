@@ -1,6 +1,6 @@
 import { z } from 'zod'
 import { AGENT_HOOK_TARGETS } from '../../agent-hook-listener/configuration/agent-hook-types'
-import { ERRNO_CODE_PATTERN } from '../../errno-code'
+import { ERRNO_CODE_PATTERN } from '../../errors/errno-code'
 import {
   DAEMON_LIFECYCLE_SESSION_BUCKETS,
   DAEMON_LIFECYCLE_TRANSITIONS,

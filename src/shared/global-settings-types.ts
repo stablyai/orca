@@ -25,12 +25,12 @@ import type {
   ClaudeManagedAccountRuntimeSelection,
   CodexManagedAccount,
   CodexManagedAccountRuntimeSelection
-} from './managed-account-types'
+} from './agent-accounts/managed-account-types'
 import type { NotificationSettings } from './notification-settings-types'
 import type { CtrlTabOrderMode } from './tab-types'
 import type { TerminalQuickCommand } from './terminal/quick-commands/terminal-quick-command-types'
 import type { TuiAgent } from './agent-launch/catalog/tui-agent'
-import type { ZcodePlanSite } from './zcode-plan-sites'
+import type { ZcodePlanSite } from './agent-accounts/usage-credentials/zcode-plan-sites'
 import type {
   AgentDashboardMode,
   BranchPrefixStrategy,
@@ -42,9 +42,9 @@ import type {
   SourceControlViewMode,
   TaskViewPresetId
 } from './ui-chrome-types'
-import type { WorktreeVisibilityDefaults } from './repo-types'
+import type { WorktreeVisibilityDefaults } from './repository/repo-types'
 
-export type { WorktreeVisibilityDefaults } from './repo-types'
+export type { WorktreeVisibilityDefaults } from './repository/repo-types'
 
 /** MiniMax account region used to select the quota endpoint. */
 export type MiniMaxEndpoint = 'overseas' | 'cn'
@@ -325,8 +325,6 @@ export type GlobalSettings = GlobalSettingsBase & {
   terminalSshViewParking?: boolean
   /** Kill switch for the hidden-worktree retention budget (C1): force-parks the least-recently-hidden un-parkable worktrees beyond a count budget or TTL. */
   terminalHiddenWorktreeRetentionBudget?: boolean
-  /** Kill switch for the browser-guest worktree retention budget: destroys the least-recently-activated hidden worktrees' webview guests beyond an LRU count budget. */
-  browserGuestWorktreeRetentionBudget?: boolean
   /** Kill switch for main-process PTY side-effect authority; on (default) = title/bell/agent facts via pty:sideEffect channel, not renderer byte parsing. */
   terminalMainSideEffectAuthority?: boolean
   /** Kill switch for main's hidden-delivery gate (Phase 4): drops PTY bytes to hidden views after model ingestion; requires terminalMainSideEffectAuthority. */

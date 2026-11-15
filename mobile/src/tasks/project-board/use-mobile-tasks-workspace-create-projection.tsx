@@ -1,6 +1,6 @@
 import type { ProjectMetadataLoadingModel } from './use-mobile-tasks-project-metadata-loading'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
-import type { BaseRefSearchResult } from '../../../../src/shared/repo-types'
+import type { BaseRefSearchResult } from '../../../../src/shared/repository/repo-types'
 import { MobileAgentIcon } from '../../components/icons/MobileAgentIcon'
 import type { PickerOption } from '../../components/sheets/PickerModal'
 import {

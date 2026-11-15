@@ -1,7 +1,7 @@
 import React from 'react'
 import { ChevronRight } from 'lucide-react'
 import { cn } from '@/lib/class-names'
-import type { WorkspacePort } from '../../../../../shared/workspace-ports'
+import type { WorkspacePort } from '../../../../../shared/workspace/ports/workspace-ports'
 import { LocalPortRow } from './local-port-row'
 
 export function LocalPortSection({

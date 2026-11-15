@@ -20,7 +20,7 @@ import { resolveUiLocale } from './supported-languages'
 import type { SupportedUiLocale } from '../../../shared/ui-locale'
 import type { UiLanguage } from '../../../shared/ui-language'
 import type { PluginLanguagePackRegistration } from '../../../shared/plugins/artifacts/plugin-language-pack-artifact'
-import { withTimeout } from '../../../shared/promise-timeout-fallback'
+import { withTimeout } from '../../../shared/concurrency/promise-timeout-fallback'
 import { supportedIntlLocale } from './intl-locale-support'
 import { createOrcaI18n } from '../../../shared/orca-i18n-instance'
 

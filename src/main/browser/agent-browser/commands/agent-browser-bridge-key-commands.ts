@@ -2,7 +2,7 @@ import type {
   BrowserKeypressResult,
   BrowserTypeResult
 } from '../../../../shared/browser/runtime/runtime-browser-contracts'
-import { assertClipboardTextWriteWithinLimitWithYield } from '../../../../shared/clipboard-text'
+import { assertClipboardTextWriteWithinLimitWithYield } from '../../../../shared/clipboard/clipboard-text'
 import { BrowserError } from '../../browser-error'
 import { acquireElectronDebugger } from '../../cdp/debugger/electron-debugger-lease'
 import {

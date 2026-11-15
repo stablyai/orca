@@ -1,9 +1,9 @@
-import type { RepoProjectHostSetupMethod } from '../../../shared/project-types'
-import type { Repo } from '../../../shared/repo-types'
+import type { RepoProjectHostSetupMethod } from '../../../shared/project/project-types'
+import type { Repo } from '../../../shared/repository/repo-types'
 import { editorFormatterSchema } from '../../../shared/editor-formatter'
 import type { GitRemoteIdentity } from '../../../shared/git/remotes/git-remote-identity'
-import { normalizeRepoBadgeColor } from '../../../shared/repo-badge-color'
-import { sanitizeRepoIcon } from '../../../shared/repo-icon'
+import { normalizeRepoBadgeColor } from '../../../shared/repository/appearance/repo-badge-color'
+import { sanitizeRepoIcon } from '../../../shared/repository/appearance/repo-icon'
 import {
   normalizeGhAccountBinding,
   type GhAccountBinding

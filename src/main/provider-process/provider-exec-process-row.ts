@@ -1,5 +1,5 @@
 import { runProcess } from '@orca/process-host'
-import { monotonicNow } from '../../shared/deadline-settle-notifier'
+import { monotonicNow } from '../../shared/concurrency/deadline-settle-notifier'
 import { resolveProviderExecPath } from './provider-process-supervisor'
 import type { ProcessRowRead } from './provider-process-row-read'
 

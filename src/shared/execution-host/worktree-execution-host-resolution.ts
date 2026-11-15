@@ -1,7 +1,7 @@
 /** Share main/renderer routing so a repo ID present on multiple hosts cannot send PTYs, file reads or reconnects to a sibling host (#11163, #6648, #17799).
  * Unresolved ownership never authorizes a local read of a remote path; callers must handle each reason. */
 
-import type { Repo } from '../repo-types'
+import type { Repo } from '../repository/repo-types'
 import {
   getRepoExecutionHostId,
   getRepoSshConnectionId,

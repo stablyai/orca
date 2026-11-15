@@ -2,12 +2,12 @@ import { join } from 'node:path'
 import {
   resolveAntigravityChatAuthConfig,
   type AntigravityChatAuthConfig
-} from '../../shared/antigravity-chat-auth-config'
+} from '../../shared/agent-accounts/antigravity/antigravity-chat-auth-config'
 import { durableWriteTempPath, writeFileDurableIfCurrent } from '../filesystem/durable-file-write'
 import type {
   AntigravityChatAuth,
   AntigravityChatSignInState
-} from '../../shared/antigravity-account-types'
+} from '../../shared/agent-accounts/antigravity/antigravity-account-types'
 import { hostFolderAccountBinding } from '../acp/launch/acp-account-binding'
 import type { AcpAgentConnection } from '../acp/process/acp-agent-connection'
 import { ProviderAcquisitionStarts } from '../provider-process/provider-acquisition-starts'

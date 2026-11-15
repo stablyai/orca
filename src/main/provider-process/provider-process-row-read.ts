@@ -6,7 +6,7 @@ import {
   registerNativeRequest,
   isNativeReaderHealthy
 } from '../../shared/process-observation/darwin/libproc-native-reads'
-import { monotonicNow, DEADLINE_PASSED } from '../../shared/deadline-settle-notifier'
+import { monotonicNow, DEADLINE_PASSED } from '../../shared/concurrency/deadline-settle-notifier'
 import {
   inProcessSliceMs,
   runPsInProcess

@@ -16,7 +16,7 @@ import {
   readAgentSessionRequestTimeout,
   type AgentSessionRequestTimeout
 } from '../agent-session-request-timeout'
-import { structuralValuesEqualIgnoringUndefined } from '../../structural-value-equality'
+import { structuralValuesEqualIgnoringUndefined } from '../../collections/structural-value-equality'
 import {
   readAgentSessionRefusalReference,
   type AgentSessionRefusalReference

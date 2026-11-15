@@ -3,7 +3,7 @@ import type { PreloadApi } from '../../../../preload/api-types'
 import type {
   ClaudeRateLimitAccountsState,
   CodexRateLimitAccountsState
-} from '../../../../shared/managed-account-types'
+} from '../../../../shared/agent-accounts/managed-account-types'
 import { callRuntimeResult } from './web-runtime-calls'
 import { fetchAccountsSnapshot } from './web-rate-limits-api'
 

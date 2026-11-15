@@ -5,7 +5,7 @@ import type { WorktreeMeta } from '../../../../shared/worktree/meta-types'
 import type { FolderWorkspace } from '../../../../shared/folder-workspaces/folder-workspace-types'
 import { AgentHookServer } from '../../../agent-hooks/server/agent-hook-server'
 import { OrcaRuntimeService } from '../../orca-runtime'
-import { folderWorkspaceKey } from '../../../../shared/workspace-scope'
+import { folderWorkspaceKey } from '../../../../shared/workspace/identity/workspace-scope'
 import {
   hostWorktreeTarget,
   type HostWorktreeTarget

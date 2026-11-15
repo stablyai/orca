@@ -25,7 +25,10 @@ import {
 } from '../../wsl/filesystem/wsl-unc-access-gate'
 import { wslDistroHoldMessage } from '../../../shared/remote-runtime/wsl-hosts/wsl-distro-stopped-hold'
 import type { TerminalWorkspaceLaunchScope } from '../orchestration/terminal-authority/structured-sessions/runtime-legacy-worker-terminal-recovery-types'
-import { folderWorkspaceKey, parseWorkspaceKey } from '../../../shared/workspace-scope'
+import {
+  folderWorkspaceKey,
+  parseWorkspaceKey
+} from '../../../shared/workspace/identity/workspace-scope'
 import {
   folderCatalogOf,
   resolveKeyedFolderWorkspace,

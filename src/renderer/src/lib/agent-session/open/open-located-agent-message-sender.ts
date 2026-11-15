@@ -107,7 +107,7 @@ async function openUnheldTerminal(
   const environmentId = host.kind === 'environment' ? host.environmentId : null
   const gone = () =>
     toast.info(agentMessageSenderUnavailableText({ kind: 'gone', sender: 'terminal' }, name))
-  const row = useAppStore.getState().agentStatusByPaneKey[location.paneKey]
+  const row = useAppStore.getState().agentStatusByPaneKey.get(location.paneKey)
   let handle =
     row?.worktreeId === location.worktreeId && (row.connectionId ?? null) === environmentId
       ? row.terminalHandle

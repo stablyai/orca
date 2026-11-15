@@ -13,8 +13,8 @@ import type { MarkdownDocument } from '../../shared/file-listing/file-document'
 import type { PersistedUIState } from '../../shared/persisted-ui-state-types'
 import type { FloatingTerminalCwdRequest } from '../../shared/ui-chrome-types'
 import type { WorkspaceSessionState } from '../../shared/workspace-session/workspace-session-state-types'
-import type { KeyboardLayoutSnapshot } from '../../shared/keyboard-layout-snapshot'
-import type { KeyboardLayoutChangeEvent } from '../../shared/keyboard-layout-events'
+import type { KeyboardLayoutSnapshot } from '../../shared/keybindings/keyboard-layout-snapshot'
+import type { KeyboardLayoutChangeEvent } from '../../shared/keybindings/keyboard-layout-events'
 
 export type AppApi = {
   getSystemLanguageDetection?: (

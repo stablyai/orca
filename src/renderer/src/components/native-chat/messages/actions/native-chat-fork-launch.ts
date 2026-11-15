@@ -4,7 +4,7 @@ import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store'
 
-import { createNonSecureContextUuid } from '../../../../../../shared/non-secure-context-uuid'
+import { createNonSecureContextUuid } from '../../../../../../shared/identifiers/non-secure-context-uuid'
 import { startStructuredAgentLaunch } from '@/lib/agent-session/launch/structured-agent-session-launch'
 import { captureStructuredLaunchSurfaceAddress } from '@/lib/agent-session/launch/structured-agent-session-launch-surface'
 import type { StructuredLaunchSurfaceAddress } from '@/lib/agent-session/launch/structured-agent-session-launch-record'

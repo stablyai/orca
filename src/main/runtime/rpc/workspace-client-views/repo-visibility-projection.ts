@@ -1,9 +1,9 @@
 import {
   effectiveExternalWorktreeVisibility,
   isLegacyRepoForExternalWorktreeVisibility
-} from '../../../../shared/external-worktree-visibility'
+} from '../../../../shared/worktree/visibility/external-worktree-visibility'
 import { WORKTREE_VISIBILITY_DEFAULTS_RUNTIME_CAPABILITY } from '../../../../shared/remote-runtime/protocol/worktree-runtime-capabilities'
-import type { Repo } from '../../../../shared/repo-types'
+import type { Repo } from '../../../../shared/repository/repo-types'
 import type { RpcContext } from '../core'
 
 type RepoProjectionContext = Pick<RpcContext, 'clientCapabilities' | 'runtime'>

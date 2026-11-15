@@ -5,6 +5,16 @@ export function headlessMobileSnapshotContentUnchanged(
   existing: RuntimeMobileSessionTabsSnapshot,
   next: RuntimeMobileSessionTabsSnapshot
 ): boolean {
+  return (
+    mobileSnapshotVisibleContentUnchanged(existing, next) &&
+    mobileSnapshotValueEqual(existing.browserPageInventory, next.browserPageInventory)
+  )
+}
+
+export function mobileSnapshotVisibleContentUnchanged(
+  existing: RuntimeMobileSessionTabsSnapshot,
+  next: RuntimeMobileSessionTabsSnapshot
+): boolean {
   if (
     existing.worktree !== next.worktree ||
     existing.activeGroupId !== next.activeGroupId ||
@@ -72,5 +82,17 @@ export function mobileSnapshotIdentityUnchanged(
         isHeadlessBuiltPublication(next.publicationEpoch))) &&
     (next.retiredTerminalSurfaces === undefined ||
       mobileSnapshotValueEqual(next.retiredTerminalSurfaces, existing.retiredTerminalSurfaces))
+  )
+}
+
+/** Catalog-only changes stay local while renderer admission still advances. */
+export function mobileSnapshotInventoryOnlyChanged(
+  existing: RuntimeMobileSessionTabsSnapshot,
+  next: RuntimeMobileSessionTabsSnapshot
+): boolean {
+  return (
+    !mobileSnapshotValueEqual(existing.browserPageInventory, next.browserPageInventory) &&
+    mobileSnapshotIdentityUnchanged(existing, next) &&
+    mobileSnapshotVisibleContentUnchanged(existing, next)
   )
 }

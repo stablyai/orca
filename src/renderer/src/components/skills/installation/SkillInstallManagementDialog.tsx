@@ -18,7 +18,7 @@ import {
 import { translate } from '@/i18n/i18n'
 import { useTranslate } from '@/i18n/use-translate'
 import { SkillInstallManagementDialogContent } from './SkillInstallManagementDialogContent'
-import { createNonSecureContextUuid as createBrowserUuid } from '../../../../../shared/non-secure-context-uuid'
+import { createNonSecureContextUuid as createBrowserUuid } from '../../../../../shared/identifiers/non-secure-context-uuid'
 
 export function SkillInstallManagementDialog({
   open,

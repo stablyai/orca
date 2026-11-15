@@ -611,7 +611,7 @@
 1 src/shared/remote-runtime/serve-supervisor/serve-user-data-path.ts
 3 src/shared/source-scan/source-tree-scan.ts
 2 src/shared/speech/native-recognizer/speech-recognizer-package.ts
-5 src/shared/startup-command-staging.ts
+5 src/shared/shell/launch/startup-command-staging.ts
 1 src/shared/terminal/pty/native-process/pty-process-ceiling-state.ts
 8 src/main/orcad/runtime-launch/windows-breakaway-launcher.ts
 2 src/main/providers/shell-launch/windows/windows-interactive-login-spawn.ts

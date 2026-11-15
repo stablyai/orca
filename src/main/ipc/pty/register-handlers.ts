@@ -1,4 +1,5 @@
-import { settledDaemonRestart } from '../../daemon/providers/lifecycle/daemon-restart-state'
+import { createLocalPtyStartupPromises } from './local-startup-promises'
+
 import { getAppEnvironment } from '../../../shared/app-environment'
 import type { OrcaRuntimeService } from '../../runtime/orca-runtime'
 import type { Store } from '../../persistence/loading-store/store'
@@ -9,7 +10,7 @@ import {
   getHiddenRendererPtyDeliveryDebug,
   resetRendererScopedHiddenPtyDeliveryState
 } from './delivery/pty-hidden-delivery-gate'
-import { localProvider, type ResolvedPtyHost } from './provider/registry'
+import { localProvider } from './provider/registry'
 import { finishPtyShutdown } from './provider/liveness'
 import type { GetSelectedCodexHomePath, PrepareClaudeAuth } from './host-env/types'
 import { installPtyInspectIpcHandlers } from './ipc/inspect'
@@ -67,7 +68,8 @@ import {
   stripSequencedStartupResumeArgv
 } from './host-env/codex-resume'
 import { ensureLinuxTerminalOrcaCliShimDir } from '../../cli/launchers/linux-terminal-orca-cli-shim'
-import { LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host'
+
+import { bindTerminalPaneStatusLifecycle } from './pane/terminal-pane-status-lifecycle'
 
 export function registerPtyHandlers(
   mainWindow?: PtyRendererDelivery,
@@ -96,29 +98,8 @@ export function registerPtyHandlers(
   setRebindProviderListeners(() => {})
   registerRendererLifecycleResetHandlers(mainWindow?.webContents)
 
-  // Only local PTYs change ownership during this machine's daemon swap.
-  const getLocalPtyStartupPromise = (
-    hostId: ResolvedPtyHost = LOCAL_EXECUTION_HOST_ID
-  ): Promise<void> | undefined => {
-    if (hostId !== LOCAL_EXECUTION_HOST_ID) {
-      return undefined
-    }
-    // Cold-start local spawns must await daemon handoff; other hosts own their startup.
-    const startup = options?.awaitLocalPtyStartup?.()
-    // Restart replacements must reach the new daemon.
-    const restart = settledDaemonRestart()
-    return startup && restart
-      ? Promise.all([startup, restart]).then(() => undefined)
-      : (startup ?? restart)
-  }
-
-  const getLocalPtyProviderStartupPromise = (
-    hostId: ResolvedPtyHost = LOCAL_EXECUTION_HOST_ID
-  ): Promise<void> | undefined => {
-    return hostId === LOCAL_EXECUTION_HOST_ID
-      ? (options?.awaitLocalPtyProviderStartup?.() ?? options?.awaitLocalPtyStartup?.())
-      : undefined
-  }
+  const { getLocalPtyStartupPromise, getLocalPtyProviderStartupPromise } =
+    createLocalPtyStartupPromises(options)
 
   // macOS window reactivation can re-register; remove old handlers first.
   ipcMain.removeHandler('pty:spawn')
@@ -166,6 +147,7 @@ export function registerPtyHandlers(
     options
   })
   wirePtyIpcSession(session)
+  bindTerminalPaneStatusLifecycle(runtime, store)
   configureLocalPtyProvider({
     runtime,
     getSettings,
