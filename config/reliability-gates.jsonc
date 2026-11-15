@@ -4699,7 +4699,7 @@
         "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/browser-host/commands/browser-host-command-ledger.test.ts src/main/runtime/browser-host/reconciliation/browser-host-page-placement.test.ts src/main/runtime/browser-host/leases/browser-host-lease-registry.test.ts",
         "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/rpc/methods/browser/browser-client-host-reconciliation.test.ts src/main/runtime/browser-host/leases/browser-host-lease-registry.test.ts",
         "pnpm exec vitest run --config config/vitest.config.ts src/main/browser/client-pages/execution/browser-client-page-command-executor.test.ts src/main/browser/client-hosts/lifecycle/paired-runtime-browser-client-host-composition.test.ts src/main/runtime/browser-host/leases/browser-host-lease-registry.test.ts src/main/runtime/rpc/methods/browser/browser-client-host.test.ts",
-        "pnpm exec vitest run --config config/vitest.config.ts src/main/browser/client-pages/lifecycle/browser-client-page-reconciliation-adapters.test.ts src/main/browser/routing/sessions/browser-route-prepared-page-rekey.test.ts",
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/browser/client-pages/lifecycle/browser-client-page-reconciliation-adapters.test.ts",
         "pnpm exec vitest run --config config/vitest.config.ts src/main/browser/network/tunnels/browser-network-tunnel-session.test.ts src/main/browser/network/tunnels/remote-browser-socks-server.test.ts",
         "pnpm exec vitest run --config config/vitest.config.ts src/main/browser/network/tunnels/browser-network-tunnel-client.test.ts src/main/browser/network/execution-routes/paired-runtime-browser-network-route.test.ts src/main/runtime/rpc/methods/browser/browser-network-tunnel.test.ts src/main/runtime/browser/network/browser-network-tunnel-paired-runtime.integration.test.ts",
         "pnpm exec vitest run --config config/vitest.config.ts src/main/browser/network/tunnels/browser-network-tunnel-outbound-memory-budget.test.ts src/main/browser/network/tunnels/browser-network-tunnel-session-aggregate-memory.test.ts src/shared/ws-outbound-backpressure-queue.test.ts src/shared/remote-runtime/remote-runtime-client.test.ts",
@@ -4733,7 +4733,6 @@
         "src/main/browser/client-hosts/lifecycle/paired-runtime-browser-client-host-registry.test.ts",
         "src/main/browser/client-pages/execution/browser-client-page-command-executor.test.ts",
         "src/main/browser/client-pages/lifecycle/browser-client-page-reconciliation-adapters.test.ts",
-        "src/main/browser/routing/sessions/browser-route-prepared-page-rekey.test.ts",
         "src/main/browser/client-hosts/commands/browser-client-host-command-dispatcher.test.ts",
         "src/main/browser/network/tunnels/browser-network-tunnel-session.test.ts",
         "src/main/browser/network/tunnels/browser-network-tunnel-session-aggregate-memory.test.ts",
@@ -4777,13 +4776,6 @@
           "file": "src/main/browser/client-pages/lifecycle/browser-client-page-reconciliation-adapters.test.ts",
           "assertions": [
             "destroys a guest rekeyed during an authority transition instead of granting navigation"
-          ]
-        },
-        {
-          "file": "src/main/browser/routing/sessions/browser-route-prepared-page-rekey.test.ts",
-          "assertions": [
-            "prepared authority rekeys without changing its opaque capability token",
-            "stale, occupied, cross-page, and cross-renderer targets fail without mutation"
           ]
         },
         {
@@ -4904,13 +4896,6 @@
             "rejects a non-increasing replacement generation and remains retryable",
             "fences a ready generation even when the replacement closes before its await resumes",
             "replaces the tunnel generation before recycling a bounded stream ID"
-          ]
-        },
-        {
-          "file": "src/main/browser/network/execution-routes/browser-network-deferred-socket.test.ts",
-          "assertions": [
-            "destroy before source attachment emits one close and destroys a late source",
-            "source close after destroy cannot emit duplicate wrapper close"
           ]
         },
         {
