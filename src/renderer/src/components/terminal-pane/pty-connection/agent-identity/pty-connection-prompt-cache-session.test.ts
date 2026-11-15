@@ -161,6 +161,24 @@ describe('prompt cache countdown follows the agent session', () => {
     expect(mockStoreState.cacheTimerByKey[PANE_KEY]).toEqual(expect.any(Number))
   })
 
+  it('keeps the countdown through a leaked command-finished whose read never names Claude', async () => {
+    const dispatch = await connectClaudePane()
+    dispatch(
+      { kind: 'title', normalizedTitle: '✳ Claude Code', rawTitle: '✳ Claude Code' },
+      { kind: 'agent-working' }
+    )
+    // An unrecognized foreground process (e.g. a Windows wrapper) leaves the read inconclusive.
+    vi.mocked(window.api.pty.confirmForegroundProcess).mockResolvedValue('vim')
+
+    dispatch({ kind: 'command-finished', exitCode: 0 })
+    expect(mockStoreState.cacheTimerByKey[PANE_KEY]).toBe('requested')
+    dispatch(claudeIdle)
+    await vi.advanceTimersByTimeAsync(5_000)
+    await flushAsyncTicks()
+
+    expect(mockStoreState.cacheTimerByKey[PANE_KEY]).toEqual(expect.any(Number))
+  })
+
   it('does not restore a killed session for a Claude typed before the shell read', async () => {
     const dispatch = await connectClaudePane()
     dispatch(
@@ -198,6 +216,20 @@ describe('prompt cache countdown follows the agent session', () => {
     await flushAsyncTicks()
 
     expect(mockStoreState.cacheTimerByKey).not.toHaveProperty(PANE_KEY)
+  })
+
+  it('keeps the countdown through a leaked command-finished before any title is seen', async () => {
+    const dispatch = await connectClaudePane()
+    dispatch({ kind: 'agent-working' }, claudeIdle)
+    const startedAt = mockStoreState.cacheTimerByKey[PANE_KEY]
+    expect(startedAt).toEqual(expect.any(Number))
+    vi.mocked(window.api.pty.confirmForegroundProcess).mockResolvedValue('claude')
+
+    dispatch({ kind: 'command-finished', exitCode: 0 })
+    await vi.advanceTimersByTimeAsync(400)
+    await flushAsyncTicks()
+
+    expect(mockStoreState.cacheTimerByKey[PANE_KEY]).toBe(startedAt)
   })
 
   // Background shells fold to monitoring; a working background subagent folds to plain working.

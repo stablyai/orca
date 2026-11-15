@@ -177,6 +177,32 @@ describe('createParkedTerminalCommandStatusPolicy', () => {
       expect(mockStoreState.cacheTimerByKey[PANE_KEY]).toBe(1_000)
       policy.dispose()
     })
+
+    it.each([
+      ['a remote pane it cannot read', PTY_ID_SSH, false],
+      ['a pane revealed before its read lands', PTY_ID_LOCAL, true]
+    ])(
+      "keeps a live Claude's cache session through a leaked 133;D in %s",
+      async (_label, ptyId, reveal) => {
+        mockStoreState.paneForegroundAgentByPaneKey[PANE_KEY] = {
+          agent: 'claude',
+          shellForeground: false
+        }
+        confirmForegroundProcess.mockResolvedValue('claude')
+        mockStoreState.cacheTimerByKey[PANE_KEY] = 1_000
+        const policy = await createPolicy(ptyId)
+        policy.observeTitle('Build feature')
+
+        policy.onCommandFinished(0)
+        if (reveal) {
+          policy.dispose()
+        }
+        await flushMicrotasks()
+
+        expect(mockStoreState.cacheTimerByKey[PANE_KEY]).toBe(1_000)
+        policy.dispose()
+      }
+    )
   })
 
   it('settles a still-working Command Code row to done after the settle window', async () => {

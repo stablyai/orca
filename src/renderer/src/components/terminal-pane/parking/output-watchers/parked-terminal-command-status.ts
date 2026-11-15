@@ -5,9 +5,9 @@ import { parseAppSshPtyId } from '../../../../../../shared/ssh-pty-id'
 import { isShellProcess } from '../../../../../../shared/agent-status/process/shell-process-detection'
 import { recognizeAgentProcess } from '../../../../../../shared/agent-status/process/agent-process-recognition'
 import {
-  createPromptCacheCommandFinishedHold,
-  type PromptCacheCommandFinishedHold
-} from '../../agent-status/prompt-cache-command-finished-hold'
+  createPromptCacheCommandBoundary,
+  type PromptCacheCommandBoundary
+} from '../../agent-status/prompt-cache-command-boundary'
 import { createParkedRestoredPromptCacheTimer } from './parked-restored-prompt-cache-timer'
 import { dispatchTerminalCommandFinishedEvent } from '@/hooks/terminal-command-finished-event'
 import { resolveLiveAgentStatusConnectionRouting } from '@/lib/agent-status/ownership/agent-status-connection-ownership'
@@ -24,7 +24,7 @@ import { canCommandCodeOutputOwnPane } from '../../agent-completion/command-code
 import { isRemoteExecutionHostPtyId } from '../../../../../../shared/execution-host/remote-execution-host-pty-id'
 
 export type ParkedTerminalCommandStatusPolicy = {
-  promptCacheHold: PromptCacheCommandFinishedHold
+  promptCacheBoundary: PromptCacheCommandBoundary
   observeTitle: (rawTitle: string) => void
   onCommandStarted: () => void
   onCommandFinished: (bestEffortExitCode: number | null) => void
@@ -55,7 +55,7 @@ export function createParkedTerminalCommandStatusPolicy(options: {
 }): ParkedTerminalCommandStatusPolicy {
   const { ptyId, worktreeId, tabId, paneId, paneKey } = options
   let disposed = false
-  const promptCacheHold = createPromptCacheCommandFinishedHold({
+  const promptCacheBoundary = createPromptCacheCommandBoundary({
     paneKey,
     initialTitle: options.initialTitle,
     setCacheTimerStartedAt: (key, entry) =>
@@ -170,7 +170,6 @@ export function createParkedTerminalCommandStatusPolicy(options: {
   const retireForegroundAgentUnlessConfirmed = async (): Promise<void> => {
     const entry = useAppStore.getState().paneForegroundAgentByPaneKey[paneKey]
     if (!entry?.agent) {
-      promptCacheHold.discard()
       return
     }
     // Why: a parked pane holds no remote incarnation to fence host evidence with, so it has no answer.
@@ -185,19 +184,24 @@ export function createParkedTerminalCommandStatusPolicy(options: {
     }
     const state = useAppStore.getState()
     if (disposed || state.paneForegroundAgentByPaneKey[paneKey] !== entry) {
-      promptCacheHold.discard()
       return
     }
-    promptCacheHold.onForegroundRead(recognizeAgentProcess(processName)?.agent ?? null)
+    // Only a shell or an agent answer is evidence about the cache session; no answer leaves it.
+    const agent = recognizeAgentProcess(processName)?.agent
+    if (agent) {
+      promptCacheBoundary.onAgentRead(agent)
+    } else if (processName !== null && isShellProcess(processName)) {
+      promptCacheBoundary.end()
+    }
     if (processName === null || isShellProcess(processName)) {
       state.setPaneForegroundAgent(paneKey, { agent: null, shellForeground: false })
     }
   }
 
   return {
-    promptCacheHold,
+    promptCacheBoundary,
     observeTitle: (rawTitle: string): void => {
-      promptCacheHold.observeTitle(rawTitle)
+      promptCacheBoundary.observeTitle(rawTitle)
       restoredCacheTimer.observeTitle(rawTitle)
       if (!observedTitle) {
         observedTitle = true
@@ -206,7 +210,7 @@ export function createParkedTerminalCommandStatusPolicy(options: {
     },
     // Only byte mode sees 133;C; main facts carry no command start.
     onCommandStarted: (): void => {
-      promptCacheHold.discard()
+      promptCacheBoundary.onCommandStarted()
       restoredCacheTimer.endWait()
     },
     onCommandFinished: (bestEffortExitCode: number | null): void => {
@@ -215,7 +219,7 @@ export function createParkedTerminalCommandStatusPolicy(options: {
       }
       // Commands can change HEAD/index; nudge git UI immediately rather than wait for polling.
       dispatchTerminalCommandFinishedEvent(worktreeId, bestEffortExitCode)
-      promptCacheHold.onCommandFinished()
+      promptCacheBoundary.onCommandFinished()
       restoredCacheTimer.endWait()
       void retireForegroundAgentUnlessConfirmed()
       // Mirror SSH’s unprobed same-turn drop; local PTYs require mounted foreground confirmation against nested-shell 133;D.

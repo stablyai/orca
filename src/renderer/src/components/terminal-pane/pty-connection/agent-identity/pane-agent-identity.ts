@@ -153,9 +153,7 @@ export function installPaneAgentIdentity(session: ConnectPanePtySession): void {
     publish: (entry) => {
       useAppStore.getState().setPaneForegroundAgent(session.cacheKey, entry)
       // Why lazy: title observation, which owns both, is installed after this tracker.
-      session.promptCacheCommandFinishedHold?.onForegroundRead(
-        entry.agentEvidence === 'process-read' ? entry.agent : null
-      )
+      session.promptCacheCommandBoundary?.onForegroundPublished(entry)
       session.restoredCacheTimer?.retry()
     },
     getPublishedEntry: () => useAppStore.getState().paneForegroundAgentByPaneKey[session.cacheKey],
@@ -178,7 +176,7 @@ export function installPaneAgentIdentity(session: ConnectPanePtySession): void {
       }
       session.clearStaleAgentTabTitleOnConfirmedShell()
       // The agent is gone even when its title stayed, so its cache countdown ends with it.
-      session.deps.setCacheTimerStartedAt(session.cacheKey, null)
+      session.promptCacheCommandBoundary?.end()
       // Confirmed hard-kill exit must disarm leftover mouse/focus/Kitty modes; guard reset auto-replies from reaching the shell.
       session.writeInputModeGround(CONFIRMED_SHELL_MODE_RESET)
       // Agents that leave their OSC title (grok, codex) never trip the title exit; Orca's own hibernation stop keeps its chat.
@@ -282,7 +280,6 @@ export function installPaneAgentIdentity(session: ConnectPanePtySession): void {
       session.paneForegroundAgentTracker.onVisiblePtyBound(expectsAgent)
   }
   session.startAcceptedInferredCommand = (agent) => {
-    session.promptCacheCommandFinishedHold.discard()
     session.paneForegroundAgentTracker.onCommandStarted(agent)
   }
   session.requestKnownWindowsShiftEnterReconfirmation = () => {

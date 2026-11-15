@@ -166,9 +166,9 @@ export function startParkedTerminalByteWatcher(
       }
       const state = useAppStore.getState()
       const entry = state.agentStatusByPaneKey[paneKey]
-      const startedAt = commandStatusPolicy.promptCacheHold.entry()
+      const startedAt = state.cacheTimerByKey[paneKey]
       if (canStartPromptCacheCountdown({ title, entry, settings: state.settings, startedAt })) {
-        commandStatusPolicy.promptCacheHold.startCountdown()
+        state.setCacheTimerStartedAt(paneKey, Date.now())
       }
       if (!isAgentTaskCompleteTrackingEnabled(state)) {
         return
@@ -210,7 +210,7 @@ export function startParkedTerminalByteWatcher(
     },
     onAgentBecameWorking: (): void => {
       // Why: a new API call refreshes the prompt-cache TTL, so clear the running countdown; it restarts when the agent next becomes idle.
-      useAppStore.getState().setCacheTimerStartedAt(paneKey, 'requested')
+      commandStatusPolicy.promptCacheBoundary.onRequest()
       clearAgentTaskCompleteTimer()
       if (pendingBellNotification) {
         scheduleTerminalBellNotification()
@@ -218,7 +218,7 @@ export function startParkedTerminalByteWatcher(
     },
     onAgentExited: (): void => {
       // Why: title reverting to a plain shell means the agent session ended; end it so the countdown doesn't survive in the sidebar while parked.
-      commandStatusPolicy.promptCacheHold.end()
+      commandStatusPolicy.promptCacheBoundary.end()
     }
   }
 

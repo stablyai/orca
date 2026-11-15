@@ -24,10 +24,10 @@ export function installPaneAgentTitleLifecycle(session: ConnectPanePtySession): 
         title,
         entry: activeHookStatus,
         settings: currentState.settings,
-        startedAt: session.promptCacheCommandFinishedHold.entry()
+        startedAt: currentState.cacheTimerByKey[session.cacheKey]
       })
     ) {
-      session.promptCacheCommandFinishedHold.startCountdown()
+      session.deps.setCacheTimerStartedAt(session.cacheKey, Date.now())
     }
     if (suppressed) {
       // Idle titles can appear mid-tool while hooks still own an active turn.
@@ -53,7 +53,7 @@ export function installPaneAgentTitleLifecycle(session: ConnectPanePtySession): 
       session.agentCompletionCoordinator.observeTitleWorking()
     }
     // New API calls refresh cache TTL; the countdown restarts at the next idle transition.
-    session.deps.setCacheTimerStartedAt(session.cacheKey, 'requested')
+    session.promptCacheCommandBoundary.onRequest()
     session.clearPendingAgentTaskCompleteNotification()
     if (session.pendingTerminalBellNotification) {
       session.scheduleTerminalBellNotification()
@@ -66,7 +66,7 @@ export function installPaneAgentTitleLifecycle(session: ConnectPanePtySession): 
     session.clearCommandInferredPaneAgent()
     session.requestKnownWindowsShiftEnterReconfirmation()
     // Title returned to the shell: end the cache session; process/PTY lifecycle owns actual agent-row removal.
-    session.promptCacheCommandFinishedHold.end()
+    session.promptCacheCommandBoundary.end()
     session.clearTitleOnlyInterruptTimer()
     // Why: title reversion alone is not process death. The process/PTY tracker
     // owns removing agent rows when the TUI actually exits.

@@ -128,6 +128,8 @@ export function bindPanePtyExit(session: ConnectPanePtySession): void {
     }
     // Abrupt exits may omit title reset; always end the cache session.
     session.endPromptCacheWaitsOnCommandStarted?.()
+    // Ending through the boundary also drops a pending 133;D check that would act on a restarted PTY's reads.
+    session.promptCacheCommandBoundary?.end()
     session.deps.setCacheTimerStartedAt(session.cacheKey, null)
     useAppStore.getState().removeAgentStatus(session.cacheKey)
     useAppStore.getState().clearPaneForegroundAgent(session.cacheKey)

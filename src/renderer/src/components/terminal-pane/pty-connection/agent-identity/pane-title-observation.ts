@@ -1,13 +1,13 @@
 import { resolvePaneTitleDecision } from '../../titles/terminal-title-evidence'
 import { useAppStore } from '@/store'
 import { createRestoredPromptCacheTimer } from '../../titles/restored-prompt-cache-timer'
-import { createPromptCacheCommandFinishedHold } from '../../agent-status/prompt-cache-command-finished-hold'
+import { createPromptCacheCommandBoundary } from '../../agent-status/prompt-cache-command-boundary'
 import { foregroundIsLiveClaude } from '@/lib/agent-status/evidence/prompt-cache-request-evidence'
 import { resolveExplicitTerminalTitleAgentType } from '../../../../../../shared/agent-status/title/terminal-title-agent-type'
 import type { ConnectPanePtySession } from '../connect-pane-pty-session'
 
 export function installPaneTitleObservation(session: ConnectPanePtySession): void {
-  session.promptCacheCommandFinishedHold = createPromptCacheCommandFinishedHold({
+  session.promptCacheCommandBoundary = createPromptCacheCommandBoundary({
     paneKey: session.cacheKey,
     setCacheTimerStartedAt: session.deps.setCacheTimerStartedAt
   })
@@ -21,13 +21,13 @@ export function installPaneTitleObservation(session: ConnectPanePtySession): voi
     requestProcessRead: () => session.paneForegroundAgentTracker.onAgentStartupObserved(),
     setCacheTimerStartedAt: session.deps.setCacheTimerStartedAt
   })
-  // A command boundary means a later read finds a newer session than the one either wait restores.
+  // A command boundary means a later read finds a newer session than the one a restore waits for.
   session.endPromptCacheWaitsOnCommandStarted = (): void => {
-    session.promptCacheCommandFinishedHold.discard()
+    session.promptCacheCommandBoundary.onCommandStarted()
     session.restoredCacheTimer.endWait()
   }
   session.endPromptCacheWaitsOnCommandFinished = (): void => {
-    session.promptCacheCommandFinishedHold.onCommandFinished()
+    session.promptCacheCommandBoundary.onCommandFinished()
     session.restoredCacheTimer.endWait()
   }
   session.onTitleChange = (
@@ -63,7 +63,7 @@ export function installPaneTitleObservation(session: ConnectPanePtySession): voi
       session.deps.updateTabTitle(session.deps.tabId, paneTitle)
     }
 
-    session.promptCacheCommandFinishedHold.observeTitle(rawTitle)
+    session.promptCacheCommandBoundary.observeTitle(rawTitle)
     session.restoredCacheTimer.observeTitle(rawTitle)
     if (!session.hasConsideredInitialCacheTimerSeed) {
       session.hasConsideredInitialCacheTimerSeed = true

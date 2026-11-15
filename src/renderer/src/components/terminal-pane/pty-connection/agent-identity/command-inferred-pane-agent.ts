@@ -202,8 +202,7 @@ export function installCommandInferredPaneAgent(session: ConnectPanePtySession):
     title: string,
     agentType: AgentType | undefined
   ): void => {
-    const hold = session.promptCacheCommandFinishedHold
-    const startedAt = hold.entry()
+    const startedAt = useAppStore.getState().cacheTimerByKey[session.cacheKey]
     // A number means the suppressed title's countdown already started; restarting it would overstate cache life.
     if (
       startedAt === 'requested' &&
@@ -214,7 +213,7 @@ export function installCommandInferredPaneAgent(session: ConnectPanePtySession):
         startedAt
       })
     ) {
-      hold.startCountdown()
+      session.deps.setCacheTimerStartedAt(session.cacheKey, Date.now())
     }
   }
   session.applyAgentCompletionSideEffects = (
