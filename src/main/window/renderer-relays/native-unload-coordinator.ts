@@ -14,10 +14,8 @@ type NativeUnload = { prepare(): Promise<PrepareOutcome>; beforeReload?: BeforeR
 export const NATIVE_UNLOAD_PREPARE_DEADLINE_MS =
   QUIT_RENDERER_ACK_TIMEOUT_MS + WILL_QUIT_TEARDOWN_DEADLINE_MS
 
-const reloads = new WeakMap<
-  WebContents,
-  { options: { ignoreCache: boolean }; promise: Promise<void> }
->()
+type ReloadOptions = { ignoreCache: boolean; replacedByClose?: boolean }
+const reloads = new WeakMap<WebContents, { options: ReloadOptions; promise: Promise<void> }>()
 const coordinators = new WeakMap<WebContents, NativeUnload>()
 
 /** Native reloads join the document's durable checkpoint, like the renderer's own restart/reload. */
@@ -109,14 +107,14 @@ export async function reloadWithRendererCheckpoint(
     existing.options.ignoreCache ||= ignoreCache
     return existing.promise
   }
-  const options = { ignoreCache }
+  const options: ReloadOptions = { ignoreCache }
   const coordinator = coordinators.get(contents)
   const reload = (async () => {
     const outcome = (await coordinator?.prepare()) ?? 'unreachable'
     if (outcome === 'failed') {
       throw new Error('Renderer reload was canceled because its state could not be saved.')
     }
-    if (outcome === 'superseded' || contents.isDestroyed()) {
+    if (outcome === 'superseded' || options.replacedByClose || contents.isDestroyed()) {
       return
     }
     ;(beforeReload ?? coordinator?.beforeReload)?.({
@@ -131,4 +129,14 @@ export async function reloadWithRendererCheckpoint(
   })().finally(() => reloads.delete(contents))
   reloads.set(contents, { options, promise: reload })
   return reload
+}
+
+/** A close requested mid-reload waits for that checkpoint's verdict, then replaces the reload. */
+export function replacePendingReloadWithClose(contents: WebContents): Promise<void> | undefined {
+  const pending = reloads.get(contents)
+  if (!pending) {
+    return undefined
+  }
+  pending.options.replacedByClose = true
+  return pending.promise.catch(() => {})
 }

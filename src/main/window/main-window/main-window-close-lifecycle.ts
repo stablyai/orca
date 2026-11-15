@@ -8,6 +8,7 @@ import type { MainWindowFocusLifecycle } from './main-window-focus-lifecycle'
 import type { MainWindowStateLifecycle } from './main-window-state-lifecycle'
 import { syncTrafficLightPosition } from './main-window-visual-lifecycle'
 import { consumeUserQuitWindowClose } from './user-quit-window-close'
+import { replacePendingReloadWithClose } from '../renderer-relays/native-unload-coordinator'
 
 export function installMainWindowCloseLifecycle(args: {
   focus: MainWindowFocusLifecycle
@@ -25,6 +26,8 @@ export function installMainWindowCloseLifecycle(args: {
   const closeCancelledChannel = 'window:close-cancelled'
   let closeRequestSequence = 0
   let quitRendererAckRequestId: number | null = null
+  // A quit close the renderer acknowledged but has not yet confirmed or cancelled.
+  let quitCloseInFlight = false
   let quitRendererAckTimer: ReturnType<typeof setTimeout> | null = null
   const clearQuitRendererAckTimer = (): void => {
     quitRendererAckRequestId = null
@@ -62,6 +65,20 @@ export function installMainWindowCloseLifecycle(args: {
     if (requestId === quitRendererAckRequestId) {
       clearQuitRendererAckTimer()
     }
+  }
+
+  // A reload's checkpoint already holds the renderer; asking it to close mid-way would skip that durable verdict.
+  const sendCloseRequestAfterPendingReload = (send: () => void): void => {
+    const pendingReload = replacePendingReloadWithClose(mainWindow.webContents)
+    if (!pendingReload) {
+      send()
+      return
+    }
+    void pendingReload.then(() => {
+      if (!mainWindow.isDestroyed()) {
+        send()
+      }
+    })
   }
 
   // Windows tray minimization owns close when enabled; callers must skip their normal close path.
@@ -120,19 +137,33 @@ export function installMainWindowCloseLifecycle(args: {
     }
     e.preventDefault()
     const isQuitting = opts?.getIsQuitting?.() ?? false
-    const requestId = ++closeRequestSequence
-    // User Quit on serve closes windows without quitting the host; still bound frozen-renderer acknowledgement.
-    if (isQuitting || userQuitClose) {
-      armQuitRendererAckTimer(requestId)
-    }
-    // The always-mounted App subscription can confirm even before a workspace exists (#5144).
-    mainWindow.webContents.send('window:close-requested', {
-      isQuitting,
-      requestId
+    sendCloseRequestAfterPendingReload(() => {
+      const requestId = ++closeRequestSequence
+      // User Quit on serve closes windows without quitting the host; still bound frozen-renderer acknowledgement.
+      if (isQuitting || userQuitClose) {
+        quitCloseInFlight = true
+        armQuitRendererAckTimer(requestId)
+      }
+      // The always-mounted App subscription can confirm even before a workspace exists (#5144).
+      mainWindow.webContents.send('window:close-requested', {
+        isQuitting,
+        requestId
+      })
     })
+  })
+  // Acknowledgement disarms the frozen-renderer timer, so a renderer that dies before confirming must not strand quit.
+  mainWindow.webContents.on('render-process-gone', () => {
+    if (!quitCloseInFlight || mainWindow.isDestroyed()) {
+      return
+    }
+    clearQuitRendererAckTimer()
+    console.warn('[window] Renderer exited during a quit close; destroying window')
+    state.freezeBoundsOnQuit()
+    mainWindow.destroy()
   })
   // A veto cancels quit; resume bounds persistence for subsequent user resizing.
   const abortQuit = (): void => {
+    quitCloseInFlight = false
     state.resumeBoundsPersistence()
     clearQuitRendererAckTimer()
     opts?.onQuitAborted?.()
@@ -153,6 +184,7 @@ export function installMainWindowCloseLifecycle(args: {
   }
 
   const onConfirmClose = (): void => {
+    quitCloseInFlight = false
     clearQuitRendererAckTimer()
     windowCloseConfirmed = true
     if (!mainWindow.isDestroyed()) {
@@ -193,7 +225,9 @@ export function installMainWindowCloseLifecycle(args: {
     if (hideToTrayIfEnabled()) {
       return
     }
-    mainWindow.webContents.send('window:close-requested', { isQuitting: false })
+    sendCloseRequestAfterPendingReload(() => {
+      mainWindow.webContents.send('window:close-requested', { isQuitting: false })
+    })
   }
   // Custom titlebar menu replaces Alt reveal of the hidden Windows/Linux menu.
   const popupMenuChannel = 'menu:popup'

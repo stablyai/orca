@@ -8,7 +8,8 @@ vi.mock('electron', async () => {
 })
 import {
   installNativeUnloadCoordinator,
-  reloadWithRendererCheckpoint
+  reloadWithRendererCheckpoint,
+  replacePendingReloadWithClose
 } from './native-unload-coordinator'
 
 function fixture() {
@@ -22,7 +23,10 @@ function fixture() {
     reloadIgnoringCache: vi.fn()
   })
   const window = Object.assign(new EventEmitter(), { webContents: contents })
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the double implements the window events and webContents members the coordinator uses.
   installNativeUnloadCoordinator(window as unknown as BrowserWindow)
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the double implements the webContents members the coordinator uses.
+  const webContents = contents as unknown as WebContents
   const reply = (ok: boolean, senderFrame: unknown = frame): void => {
     const requestId = frame.send.mock.calls.find(
       ([channel]) => channel === 'app:prepare-native-unload'
@@ -33,8 +37,8 @@ function fixture() {
     contents,
     frame,
     reply,
-    reload: (ignoreCache = false) =>
-      reloadWithRendererCheckpoint(contents as unknown as WebContents, ignoreCache)
+    reload: (ignoreCache = false) => reloadWithRendererCheckpoint(webContents, ignoreCache),
+    replaceWithClose: () => replacePendingReloadWithClose(webContents)
   }
 }
 
@@ -89,6 +93,21 @@ describe('native reload checkpoint', () => {
     contents.emit('did-frame-navigate', {}, 'file:///replacement.html', 200, 'OK', true)
     reply(true)
     await result
+    expect(contents.reload).not.toHaveBeenCalled()
+  })
+
+  it('lets a close requested mid-checkpoint wait for the verdict and replace the reload', async () => {
+    const { contents, reply, reload, replaceWithClose } = fixture()
+    const result = reload()
+    let closeMayProceed = false
+    const close = replaceWithClose()?.then(() => {
+      closeMayProceed = true
+    })
+    await Promise.resolve()
+    expect(closeMayProceed).toBe(false)
+    reply(true)
+    await Promise.all([result, close])
+    expect(closeMayProceed).toBe(true)
     expect(contents.reload).not.toHaveBeenCalled()
   })
 })
