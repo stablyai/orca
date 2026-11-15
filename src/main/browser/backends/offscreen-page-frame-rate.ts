@@ -11,12 +11,16 @@ const WATCHED_GRACE_MS = 20_000
 /** Runs the page at full rate while a command, capture or screencast lease needs its frames. */
 export function followPublicationLeasesWithFrameRate(contents: WebContents): void {
   let slowDown: ReturnType<typeof setTimeout> | undefined
+  let current = UNWATCHED_FRAME_RATE
   const setRate = (rate: number): void => {
+    current = rate
     if (!contents.isDestroyed()) {
       contents.setFrameRate(rate)
     }
   }
   setRate(UNWATCHED_FRAME_RATE)
+  // A cross-site view created before a rate change commits with the old rate; reapply on commit.
+  contents.on('did-navigate', () => setRate(current))
   const stopObserving = rendererPublicationThrottle.observe(contents, (leased) => {
     clearTimeout(slowDown)
     if (leased) {
