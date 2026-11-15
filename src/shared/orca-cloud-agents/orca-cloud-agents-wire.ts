@@ -62,21 +62,41 @@ export function orcaCloudProviderState(
 const Source = z.enum(['sign-in', 'key']).nullable()
 export type AgentSource = z.infer<typeof Source>
 const PerAgentSource = z.object({ claude: Source.optional(), codex: Source.optional() })
+/**
+ * A default Source that is a choice, not a credential: "Sign in inside this workspace". Orca stores and
+ * injects nothing for the agent, and its own login inside each cloud workspace wins. Default only.
+ */
+export const IN_WORKSPACE_SOURCE = 'in-workspace'
+/** What a default Source can be set to (PUT /v1/agent-sources without a workspace). */
+export type AgentDefaultSourceChoice = AgentSource | typeof IN_WORKSPACE_SOURCE
 
 export const AgentSourcesResponseSchema = z.looseObject({
   /** The default Source ("New cloud workspaces"); null = never chosen. */
   defaults: PerAgentSource,
   effective: z
     .object({
-      claude: z.looseObject({ source: Source }).optional(),
-      codex: z.looseObject({ source: Source }).optional()
+      claude: z.looseObject({ source: Source, origin: z.string().optional() }).optional(),
+      codex: z.looseObject({ source: Source, origin: z.string().optional() }).optional()
     })
     .optional(),
   /** Some agent key the caller's workspaces would get covers the agent. */
   coveredByKey: z.object({ claude: z.boolean(), codex: z.boolean() }),
+  /** The person signs in inside each workspace (IN_WORKSPACE_SOURCE); absent from older servers. */
+  inWorkspace: z.object({ claude: z.boolean(), codex: z.boolean() }).optional(),
   sharedWorkspace: z.boolean().optional()
 })
 export type AgentSourcesView = z.infer<typeof AgentSourcesResponseSchema>
+
+/**
+ * The person signs this agent in inside each cloud workspace: their default says so and no
+ * workspace override (when the view is for one workspace) picks something else.
+ */
+export function signsInInsideWorkspace(
+  view: AgentSourcesView,
+  agent: OrcaCloudAccountAgent
+): boolean {
+  return view.inWorkspace?.[agent] === true && view.effective?.[agent]?.origin !== 'workspace'
+}
 
 export const CodexBrokerStartResponseSchema = z.object({
   // Used in a request path: a leading letter or digit, so never '.' or '..'.

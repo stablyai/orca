@@ -182,4 +182,45 @@ describe('OrcaCloudAccountsView', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Sign in' }))
     expect(handlers.signIn).toHaveBeenCalled()
   })
+
+  it('offers signing in inside each workspace as a quiet choice, and switching back starts the setup', async () => {
+    const handlers = view({
+      claude: NOT_SET_UP,
+      codex: { kind: 'inWorkspace', savedSignIn: false }
+    })
+    const choose = screen.getByRole('button', { name: 'Sign in inside each workspace instead' })
+    fireEvent.click(choose)
+    expect(handlers.setSource).toHaveBeenCalledWith('claude', 'in-workspace')
+    expect(screen.getByText('Signs in inside each workspace')).toBeTruthy()
+    expect(
+      screen.getByText(
+        'Orca doesn’t store your ChatGPT sign-in. You sign in again in each new cloud workspace.'
+      )
+    ).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Use my ChatGPT account' }))
+    expect(handlers.setSource).toHaveBeenCalledWith('codex', null)
+    await waitFor(() => expect(handlers.start).toHaveBeenCalledWith('codex'))
+  })
+
+  it('switching back with a saved sign-in only clears the choice', async () => {
+    const handlers = view({ claude: { kind: 'inWorkspace', savedSignIn: true }, codex: NOT_SET_UP })
+    fireEvent.click(screen.getByRole('button', { name: 'Use my Claude account' }))
+    await waitFor(() => expect(handlers.setSource).toHaveBeenCalledWith('claude', null))
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    expect(handlers.start).not.toHaveBeenCalled()
+  })
+
+  it('a choice that fails to save says so and changes nothing', async () => {
+    const handlers = view(
+      { claude: NOT_SET_UP, codex: NOT_SET_UP },
+      actions({ setSource: vi.fn(async () => 'unavailable' as const) })
+    )
+    fireEvent.click(
+      screen.getAllByRole('button', { name: 'Sign in inside each workspace instead' })[0]!
+    )
+    await waitFor(() =>
+      expect(screen.getByText('Couldn’t save to your Orca account.')).toBeTruthy()
+    )
+    expect(handlers.setSource).toHaveBeenCalledWith('claude', 'in-workspace')
+  })
 })

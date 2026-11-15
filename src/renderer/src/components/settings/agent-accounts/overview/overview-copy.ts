@@ -76,6 +76,11 @@ export function overviewCellText(
         text: t('vmBuildAgents.notOffered', 'Signs in for each cloud workspace for now'),
         tone: 'muted'
       }
+    case 'cloudInWorkspace':
+      return {
+        text: t('orcaCloudAccounts.inWorkspace', 'Signs in inside each workspace'),
+        tone: 'muted'
+      }
   }
 }
 
