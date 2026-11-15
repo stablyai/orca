@@ -59,10 +59,20 @@ export type EdgeDrainResult = { outcome: 'drained'; controls: number } | { outco
 
 export type EdgeAdminCallOptions = { timeoutMs?: number }
 
+// A phone credential check (read-only on the edge): devices paired or rotated while the host is on
+// the edge live only in its object. not_here: the object does not hold the host (moved, frozen).
+export type EdgeVerifyBody = { relayHostId: string; kind: 'resume' | 'invite'; tokenHash: string }
+export type EdgeVerifyResult =
+  | { outcome: 'verified'; userId: string; relayDeviceId: string; assignmentEpoch: number }
+  | { outcome: 'none' }
+  | { outcome: 'not_here' }
+
 export interface EdgeAdmin {
   assign(body: EdgeAssignBody, options?: EdgeAdminCallOptions): Promise<EdgeAssignResult>
   exportHost(relayHostId: string): Promise<EdgeExportResult>
   drain(relayHostId: string): Promise<EdgeDrainResult>
+  // Optional so a fake without it reads as an edge without the op (today's 401).
+  verify?(body: EdgeVerifyBody): Promise<EdgeVerifyResult>
 }
 
 // The edge did not give a usable answer (network, timeout, 5xx, auth); the caller retries later.
@@ -88,7 +98,7 @@ export function createEdgeAdmin(options: {
 }): EdgeAdmin {
   const send = options.fetch ?? fetch
   const call = async (
-    op: 'assign' | 'export' | 'drain',
+    op: 'assign' | 'export' | 'drain' | 'verify',
     body: unknown,
     timeoutMs = options.timeoutMs ?? EDGE_ADMIN_TIMEOUT_MS
   ): Promise<{ status: number; json: unknown }> => {
@@ -149,6 +159,29 @@ export function createEdgeAdmin(options: {
         throw new EdgeAdminUnavailableError('export_answer')
       }
       return result as EdgeExportResult
+    },
+    // An edge from before the op answers 404, which throws EdgeAdminUnavailableError like any outage.
+    async verify(body) {
+      const { status, json } = await call('verify', body)
+      const result = json as Partial<{ outcome: string; userId: unknown; relayDeviceId: unknown; assignmentEpoch: unknown }>
+      if (status === 200 && (result.outcome === 'none' || result.outcome === 'not_here')) {
+        return { outcome: result.outcome }
+      }
+      if (
+        status !== 200 ||
+        result.outcome !== 'verified' ||
+        typeof result.userId !== 'string' ||
+        typeof result.relayDeviceId !== 'string' ||
+        !Number.isSafeInteger(result.assignmentEpoch)
+      ) {
+        throw new EdgeAdminUnavailableError('verify_answer')
+      }
+      return {
+        outcome: 'verified',
+        userId: result.userId,
+        relayDeviceId: result.relayDeviceId,
+        assignmentEpoch: result.assignmentEpoch as number
+      }
     },
     async drain(relayHostId) {
       const { status, json } = await call('drain', { relayHostId })

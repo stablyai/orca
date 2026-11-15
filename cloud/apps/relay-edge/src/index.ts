@@ -9,7 +9,7 @@ import { metric, requestPlace } from './metrics'
 import { admitPreAuth, notOnEdge } from './preauth'
 import { INGRESS_HEADER } from '../../../packages/relay-contract/src/ingress-header'
 import { fromTokenSource, readIngress, type Ingress } from './ingress'
-import { AssignBodySchema, EraseBodySchema, ExportBodySchema, verifyAdminRequest, type AdminOp } from './admin'
+import { AssignBodySchema, EraseBodySchema, ExportBodySchema, VerifyBodySchema, verifyAdminRequest, type AdminOp } from './admin'
 
 export { HostRelay, SpliceRelay }
 
@@ -76,6 +76,12 @@ async function handleAdminCall(env: Env, request: Request, op: AdminOp): Promise
     const result = await host(body.data.relayHostId).adminExport()
     return Response.json(result, { status: result.outcome === 'exported' ? 200 : 409 })
   }
+  if (op === 'verify') {
+    const body = VerifyBodySchema.safeParse(verified.body)
+    if (!body.success) { return reject(400) }
+    // Every answer is 200: none and not_here are decisions, not failures.
+    return Response.json(await host(body.data.relayHostId).adminVerify(body.data))
+  }
   const body = EraseBodySchema.safeParse(verified.body)
   if (!body.success) return reject(400)
   const { outcome } = await host(body.data.relayHostId).adminErase(body.data.userId)
@@ -93,7 +99,7 @@ export default {
     if (url.search) return reject(400)
     // Director admin calls are signature-authenticated and never go through a front door: matched
     // before the ingress rules, so an egress overlap with a front door's ranges cannot 403 them.
-    const admin = url.pathname.match(/^\/__admin\/(assign|export|erase)$/)
+    const admin = url.pathname.match(/^\/__admin\/(assign|export|erase|verify)$/)
     if (admin) return handleAdmin(env, request, admin[1] as AdminOp)
     // A trusted ingress hop (ingress.ts) stands in for the Worker's own URL and the caller's address;
     // anything else, including a header that fails to verify, is treated as absent.

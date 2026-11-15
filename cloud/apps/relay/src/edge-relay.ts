@@ -24,6 +24,7 @@ import {
   type EdgeControlFlags
 } from './edge-relay-control.js'
 import { EdgeRegionCountryTally } from './edge-region-country-log.js'
+import { hashCredential } from './credential-store.js'
 import type { IpCountryLookup } from './ip-country.js'
 
 // Hosts the director has moved to the relay edge carry this cell id on their assignment row. The
@@ -31,6 +32,10 @@ import type { IpCountryLookup } from './ip-country.js'
 // never HOST_OFFLINE) and so the admission selector carries it as existing-only. It is never
 // enabled, has no capacity, no runtime row, no fence and is never a reserve cell.
 export const EDGE_CELL_ID = 'edge'
+// Phone credentials the edge just refused, per host and token hash: retries within this window are
+// answered from memory, so 401 traffic cannot turn into edge calls one for one.
+export const EDGE_VERIFY_NEGATIVE_TTL_MS = 60_000
+const EDGE_VERIFY_NEGATIVE_MAX = 4_096
 
 export type EdgeRelayConfig = {
   cellUrl: string
@@ -262,6 +267,8 @@ export class EdgeAssignments {
   private lockedCalls = 0
   // Asks by requested region × country (observe only; relay-server starts it with an IP table).
   readonly regionCountries = new EdgeRegionCountryTally()
+  // verifyOnEdge's refused credentials: key → time the refusal lapses.
+  private readonly verifyRefused = new Map<string, number>()
 
   // With `admin` (the edge keeps host data in its objects) every move onto the edge pushes the
   // host's devices before the answer, and every move off exports them back first.
@@ -330,6 +337,61 @@ export class EdgeAssignments {
     )[0]
     if (!row || text(row, 'cell_id') !== EDGE_CELL_ID) return null
     return this.answer(identity, integer(row, 'assignment_epoch'), integer(row, 'lease_expires_at'))
+  }
+
+  // Phone paths again, for a credential Postgres does not hold: devices paired or rotated while the
+  // host is on the edge live only in its object (Postgres gets them back when the host leaves). Asks
+  // the edge, read-only, and only for a host whose row is on the edge. Any edge failure, including
+  // an edge from before the op, answers null: the caller's 401, as before this check existed.
+  async verifyOnEdge(
+    relayHostId: string,
+    kind: 'resume' | 'invite',
+    token: string
+  ): Promise<{ identity: Identity; relayDeviceId: string; assignment: RelayAssignment } | null> {
+    if (!this.seeded || !this.admin?.verify) { return null }
+    const tokenHash = hashCredential(token)
+    const cacheKey = `${relayHostId}:${kind}:${tokenHash}`
+    const refusedUntil = this.verifyRefused.get(cacheKey)
+    if (refusedUntil !== undefined) {
+      if (refusedUntil > this.now()) { return null }
+      this.verifyRefused.delete(cacheKey)
+    }
+    // relay_edge_host_regions holds a row for every host moved onto the edge (and is small), so this
+    // finds the account without the credential; the join keeps only rows still on the edge.
+    const users = (
+      await this.database.query(
+        `SELECT r.user_id FROM relay_edge_host_regions r
+         JOIN relay_assignments a ON a.user_id = r.user_id AND a.relay_host_id = r.relay_host_id
+         WHERE r.relay_host_id = ? AND a.cell_id = ?`,
+        [relayHostId, EDGE_CELL_ID]
+      )
+    ).map((row) => text(row, 'user_id'))
+    if (users.length === 0) { return null }
+    let result
+    try {
+      result = await this.admin.verify({ relayHostId, kind, tokenHash })
+    } catch (error) {
+      if (!(error instanceof EdgeAdminUnavailableError)) { throw error }
+      console.warn(JSON.stringify({ event: 'orca_relay_edge_verify_unavailable', kind, reason: error.message }))
+      return null
+    }
+    if (result.outcome !== 'verified' || !users.includes(result.userId)) {
+      this.refuseVerify(cacheKey)
+      console.warn(JSON.stringify({ event: 'orca_relay_edge_verify', kind, outcome: result.outcome === 'verified' ? 'user_mismatch' : result.outcome }))
+      return null
+    }
+    const identity = { userId: result.userId, relayHostId }
+    const assignment = await this.edgeAssignment(identity)
+    console.warn(JSON.stringify({ event: 'orca_relay_edge_verify', kind, outcome: assignment ? 'verified' : 'not_on_edge' }))
+    return assignment ? { identity, relayDeviceId: result.relayDeviceId, assignment } : null
+  }
+
+  private refuseVerify(cacheKey: string): void {
+    if (this.verifyRefused.size >= EDGE_VERIFY_NEGATIVE_MAX) {
+      const oldest = this.verifyRefused.keys().next()
+      if (!oldest.done) { this.verifyRefused.delete(oldest.value) }
+    }
+    this.verifyRefused.set(cacheKey, this.now() + EDGE_VERIFY_NEGATIVE_TTL_MS)
   }
 
   // As edgeAssignment, plus the front door the host's own ask recorded: its phones dial the host's
