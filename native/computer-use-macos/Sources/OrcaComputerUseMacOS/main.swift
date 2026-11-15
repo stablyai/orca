@@ -344,7 +344,7 @@ final class Provider {
         // Why: after the delivery read, so a click that brought the app forward still reports foreground.
         defer {
             if let click = unfocusedTargetClick, let userFrontApp {
-                restoreUserFrontApp(userFrontApp, target: app, focusedWindowBeforeClick: click.focusedWindowID)
+                restoreUserFrontApp(userFrontApp, target: app, before: click)
             }
         }
         var action = try runAction(params)
@@ -1826,12 +1826,14 @@ private func topmostSyntheticClickRecipient(
     snapshot: Snapshot,
     point: CGPoint
 ) -> SyntheticMouseClickDelivery.RecipientObservation {
-    let candidates = WindowCapture.candidates(pid: snapshot.app.pid)
-    return SyntheticMouseClickDelivery.topmostObservation(
-        hit: hitTestSyntheticClickRecipient(at: point, targetPID: snapshot.app.pid) { candidates },
-        target: syntheticClickRecipient(pid: snapshot.app.pid, windowId: snapshot.windowId),
-        targetOnScreen: candidates.contains { $0.windowId == snapshot.windowId }
-    )
+    let target = syntheticClickRecipient(pid: snapshot.app.pid, windowId: snapshot.windowId)
+    let hit = hitTestSyntheticClickRecipient(at: point, targetPID: snapshot.app.pid) {
+        WindowCapture.candidates(pid: snapshot.app.pid)
+    }
+    // Why: read after the hit test, so a target that closed meanwhile isn't taken as still covered by the window beneath.
+    let targetOnScreen = hit == .focused(target)
+        || WindowCapture.candidates(pid: snapshot.app.pid).contains { $0.windowId == snapshot.windowId }
+    return SyntheticMouseClickDelivery.topmostObservation(hit: hit, target: target, targetOnScreen: targetOnScreen)
 }
 
 private func focusedSyntheticClickRecipient(
@@ -2152,17 +2154,19 @@ private func matchingWindow(appElement: AXUIElement, capture: WindowCapture, foc
     } ?? focused
 }
 
-/// A --restore-window click that went to a target window that never took focus, and the app's focused window just before it.
+/// A --restore-window click on a target window its app never focused, with the app's focused and on-screen windows just before it.
 struct UnfocusedTargetClick {
     let focusedWindowID: CGWindowID?
+    let windowIDs: Set<CGWindowID>
 }
 
 /// After a click on a target window that refused focus (#32040), puts back the app the user had in front if the target's
-/// app is now in front without the click having focused anything new: the raise and the click only brought the app forward.
-private func restoreUserFrontApp(_ previous: NSRunningApplication, target app: AppDescriptor, focusedWindowBeforeClick: CGWindowID?) {
+/// app is now in front but the click opened and focused nothing (a new window, menu or popover needs its app in front).
+private func restoreUserFrontApp(_ previous: NSRunningApplication, target app: AppDescriptor, before click: UnfocusedTargetClick) {
     guard previous.processIdentifier != app.pid, !previous.isTerminated,
           NSWorkspace.shared.frontmostApplication?.processIdentifier == app.pid,
-          focusedWindowId(of: app) == focusedWindowBeforeClick
+          focusedWindowId(of: app) == click.focusedWindowID,
+          Set(WindowCapture.candidates(pid: app.pid).map(\.windowId)).isSubset(of: click.windowIDs)
     else { return }
     _ = previous.activate(options: [])
     _ = AXUIElementSetAttributeValue(AXUIElementCreateApplication(previous.processIdentifier), kAXFrontmostAttribute as CFString, kCFBooleanTrue)
@@ -3581,7 +3585,14 @@ private enum Input {
         let observe = refusedFocus
             ? { topmostSyntheticClickRecipient(snapshot: targetWindow, point: point) }
             : { currentSyntheticClickRecipient(snapshot: targetWindow, point: point) }
-        let unfocusedClick = refusedFocus ? UnfocusedTargetClick(focusedWindowID: focusedWindowId(of: targetWindow.app)) : nil
+        // Why: only a window its own app doesn't focus refused focus; a target still activating takes this route too but keeps its app in front.
+        let appFocusedWindow = refusedFocus ? focusedWindowId(of: targetWindow.app) : nil
+        let unfocusedClick = refusedFocus && appFocusedWindow != targetWindow.windowId
+            ? UnfocusedTargetClick(
+                focusedWindowID: appFocusedWindow,
+                windowIDs: Set(WindowCapture.candidates(pid: targetWindow.app.pid).map(\.windowId))
+            )
+            : nil
         if refusedFocus {
             let topmost = observe()
             guard topmost == .focused(target) else {
