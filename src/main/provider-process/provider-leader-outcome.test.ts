@@ -1,13 +1,12 @@
-import { ChildProcess } from 'node:child_process'
+import { createFakeSpawnedChild } from '../../shared/__fixtures__/fake-spawned-child'
 import { PassThrough } from 'node:stream'
 import { describe, expect, it } from 'vitest'
 import { observeProviderLeaderOutcome } from './provider-leader-outcome'
 
 function parent() {
-  const raw = new ChildProcess()
+  const raw = createFakeSpawnedChild(9_999_999)
   const pipe = new PassThrough()
-  Object.defineProperty(raw, 'pid', { value: 9_999_999, configurable: true })
-  Object.assign(raw, { stdio: [null, null, null, null, null, null, pipe] })
+  raw.stdio.push(null, pipe)
   return { raw, pipe }
 }
 
