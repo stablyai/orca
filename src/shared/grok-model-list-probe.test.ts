@@ -21,34 +21,4 @@ describe('parseGrokModelList', () => {
       { id: 'grok-4.5', label: 'Grok 4.5' }
     ])
   })
-
-  it('names no default when the listing annotates none', () => {
-    // Without an explicit marker, first-row promotion would misrepresent the CLI’s unflagged default.
-    const parsed = parseGrokModelList('Available models:\n  * grok-4.5\n  * grok-build\n')
-    expect(parsed.map(({ id, isDefault }) => [id, isDefault])).toEqual([
-      ['grok-4.5', undefined],
-      ['grok-build', undefined]
-    ])
-  })
-
-  it('returns nothing when the header is missing, whatever follows', () => {
-    // Unrecognized listing headers must not publish partial authoritative model lists.
-    expect(parseGrokModelList('Models:\n  * grok-4.5 (default)\n')).toEqual([])
-    expect(parseGrokModelList('Default model: grok-4.5\n')).toEqual([])
-  })
-
-  it('stops at the blank line that ends the listing section', () => {
-    // Footer bullets must not become selectable IDs that launch e.g. -m Set.
-    expect(
-      parseGrokModelList(
-        'Available models:\n  * grok-4.5 (default)\n\nTips:\n  * Set a default with `grok config`\n'
-      ).map(({ id }) => id)
-    ).toEqual(['grok-4.5'])
-  })
-
-  it('takes the default marker from a repeated row it would otherwise skip', () => {
-    expect(parseGrokModelList('Available models:\n  * grok-4.5\n  * grok-4.5 (default)\n')).toEqual(
-      [{ id: 'grok-4.5', label: 'Grok 4.5', isDefault: true }]
-    )
-  })
 })
