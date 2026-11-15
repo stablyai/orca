@@ -7,7 +7,7 @@ import { createTrackedJournalOpener } from '../../agent-session-journal/store-li
 import { createDeferredStructuredAgentSessionEventSink } from '../journal-ingress/structured-agent-session-event-sink'
 import { StructuredAgentSessionSnapshotRoutes } from './structured-agent-session-snapshot-routes'
 import { testEventSinkLogging } from './testing/structured-agent-session-logger.test-fixture'
-import { withTestAgentSessionDatabase } from '../../../runtime/agent-session/records/agent-session-record-store-test-harness'
+import { withTestAgentSessionDatabase } from '../../../runtime/agent-session/records/agent-session-record-store-persistence.test-fixture'
 
 const journals = createTrackedJournalOpener()
 let root: string

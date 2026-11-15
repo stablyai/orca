@@ -11,10 +11,8 @@ import { codexProviderHandle } from '../../../shared/agent-session/lifecycle/pro
 import { createTrackedJournalOpener } from '../../native-chat/agent-session-journal/store-lifecycle/journal-host-database-test-support'
 import type { AgentSessionJournal } from '../../native-chat/agent-session-journal/journal-store'
 import { prWatchStorage } from './pr-watch-storage'
-import {
-  openTestAgentSessionDatabase,
-  withTestAgentSessionDatabase
-} from '../../runtime/agent-session/records/agent-session-record-store-test-harness'
+import { openTestAgentSessionDatabase } from '../../runtime/agent-session/records/agent-session-record-store-test-harness'
+import { withTestAgentSessionDatabase } from '../../runtime/agent-session/records/agent-session-record-store-persistence.test-fixture'
 import type { PRPendingActionResumeDeps } from './pr-pending-action-types'
 import { PRPendingActionResume } from './pr-pending-action-resume'
 import { prInfoFixture } from './pr-watch-test-fixtures'
