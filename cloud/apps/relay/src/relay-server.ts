@@ -736,12 +736,14 @@ export function createRelayServer(
               const identity = invite ? { userId: invite.userId, relayHostId: hostId } : null
               // Released combined-service invites gain their first durable cell assignment here.
               // A host on the relay edge is answered there; the liveness rule would re-place it.
+              // An invite created on the edge is only in the host's object, so the edge checks it.
               const assignment = identity
                 ? ((await edgeAssignments?.edgeAssignment(identity)) ??
                   (await assignments.resolve(identity)) ??
                   (await assignments.assign(identity)))
-                : null
-              if (!invite || !assignment) {
+                : ((await edgeAssignments?.verifyOnEdge(hostId, 'invite', auth.data.credential))
+                    ?.assignment ?? null)
+              if (!assignment) {
                 phoneAdmission?.hostData.release()
                 observability.recordAuth(false)
                 webSocket.send(

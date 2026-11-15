@@ -35,8 +35,9 @@ import { verifyRelayJwt } from './jwt'
 import { SPLICE_SLOTS, makeConnId, parseConnId } from './splice-slot'
 import { metric } from './metrics'
 import { RelayCredentialStore } from '../../relay/src/credential-store'
-import type { AssignBody, DeviceRow } from './admin'
+import type { AssignBody, DeviceRow, VerifyBody, VerifyResult } from './admin'
 import { ObjectStore, type AssignResult, type StoredAssignment } from './object-store'
+import { verifyCredential } from './verify'
 import { edgeConfig, type EdgeClaims, type EdgeConfig, type Env } from './env'
 import { controlErrorCode, edgeBackend, type CredentialReservation, type EdgeBackend } from './edge-backend'
 import { CONTROL_MAX_FRAME_BYTES, MESSAGE_TOO_BIG, b64, b64url, frameOver, fromB64, hmacSha256, sha256B64url, timingSafeEqualStr } from './bytes'
@@ -145,6 +146,11 @@ export class HostRelay extends DurableObject<Env> {
     await this.closeSplices(() => true, RELAY_CLOSE_CODE.WRONG_CELL, 'host moving')
     await this.reschedule()
     return { outcome: 'exported', assignment: this.store.assignment(), devices }
+  }
+
+  // The director's phone credential check (/v1/resolve, the invite move): read-only (verify.ts).
+  async adminVerify(body: VerifyBody): Promise<VerifyResult> {
+    return await verifyCredential(this.store, this.config.cellId, body)
   }
 
   // Erasure: refused while the host is live, as today's guard; otherwise every byte of the object goes.

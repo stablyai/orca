@@ -102,3 +102,31 @@ it('falls through to the cell paths for an invite of a host that is not on the e
   ])
   expect(code).toBe(RELAY_CLOSE_CODE.DRAINING)
 })
+
+it('moves an invite created on the edge (not in Postgres) to the edge once the edge verifies it', async () => {
+  const { relay, port } = await director()
+  const identity = { userId: 'user-1', relayHostId: HOST }
+  vi.spyOn(relay.store, 'resolveInviteForMove').mockResolvedValue(null)
+  const verify = vi.spyOn(EdgeAssignments.prototype, 'verifyOnEdge').mockResolvedValue({
+    identity,
+    relayDeviceId: 'device-edge',
+    assignment: { ...identity, cellId: EDGE_CELL_ID, cellUrl: EDGE_URL, assignmentEpoch: 4, leaseExpiresAt: Date.now() + 60_000 }
+  })
+  const assign = vi.spyOn(relay.assignments, 'assign')
+  const { messages, code } = await inviteMove(port)
+  expect(verify).toHaveBeenCalledWith(HOST, 'invite', CREDENTIAL)
+  expect(messages).toEqual([{ type: 'relay-moved', v: 1, cellUrl: EDGE_URL, assignmentEpoch: 4 }])
+  expect(code).toBe(RELAY_CLOSE_CODE.DRAINING)
+  expect(assign).not.toHaveBeenCalled()
+})
+
+it('still refuses an invite neither Postgres nor the edge knows', async () => {
+  const { relay, port } = await director()
+  vi.spyOn(relay.store, 'resolveInviteForMove').mockResolvedValue(null)
+  vi.spyOn(EdgeAssignments.prototype, 'verifyOnEdge').mockResolvedValue(null)
+  const assign = vi.spyOn(relay.assignments, 'assign')
+  const { messages, code } = await inviteMove(port)
+  expect(messages).toEqual([{ type: 'relay-hello', ok: false, code: RELAY_CLOSE_CODE.BAD_OUTER_CREDENTIAL }])
+  expect(code).toBe(RELAY_CLOSE_CODE.BAD_OUTER_CREDENTIAL)
+  expect(assign).not.toHaveBeenCalled()
+})

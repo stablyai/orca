@@ -833,7 +833,21 @@ export function createRelayApp(
         body.data.relayHostId,
         body.data.resumeToken
       )
-      if (!resolved) return context.json({ error: 'invalid_credential' }, 401)
+      if (!resolved) {
+        // A phone paired or rotated while its host is on the edge: only the host's object knows it.
+        const onEdge = await operations.edgeAssignments?.verifyOnEdge(
+          body.data.relayHostId,
+          'resume',
+          body.data.resumeToken
+        )
+        if (!onEdge) { return context.json({ error: 'invalid_credential' }, 401) }
+        return context.json({
+          v: 1,
+          cellUrl: onEdge.assignment.cellUrl,
+          assignmentEpoch: onEdge.assignment.assignmentEpoch,
+          leaseExpiresAt: onEdge.assignment.leaseExpiresAt
+        })
+      }
       const identity = {
         userId: resolved.userId,
         relayHostId: body.data.relayHostId
