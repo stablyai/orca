@@ -10,6 +10,8 @@ type SettingsGroupDisclosureProps = {
   label?: string
   /** A muted hint after the label naming what the disclosure holds. */
   description?: string
+  /** A muted line under the label, for a disclosure that stands as a card row of its own. */
+  summary?: React.ReactNode
   forceOpen?: boolean
   children: React.ReactNode
 }
@@ -18,6 +20,7 @@ type SettingsGroupDisclosureProps = {
 export function SettingsGroupDisclosure({
   label,
   description,
+  summary,
   forceOpen = false,
   children
 }: SettingsGroupDisclosureProps): React.JSX.Element {
@@ -34,18 +37,35 @@ export function SettingsGroupDisclosure({
         onClick={() => setOpen((prev) => !prev)}
         // Unsaved edits must remain reachable.
         disabled={forceOpen}
-        className="flex min-h-11 w-full items-center gap-2 text-sm font-semibold text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring/50 disabled:cursor-default"
+        className={cn(
+          'flex min-h-11 w-full items-center gap-2 text-left text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring/50 disabled:cursor-default',
+          summary ? 'py-[9px]' : 'font-semibold'
+        )}
       >
         <ChevronRight
           className={cn(
-            'size-3.5 text-muted-foreground transition-transform',
+            'size-3.5 shrink-0 text-muted-foreground transition-transform',
             expanded && 'rotate-90'
           )}
         />
-        {label ?? t('auto.components.settings.AppearanceAdvancedDisclosure.advanced', 'Advanced')}
-        {description ? (
-          <span className="truncate text-xs font-normal text-muted-foreground">{description}</span>
-        ) : null}
+        {summary ? (
+          <span className="min-w-0 flex-1">
+            <span className="block">{label}</span>
+            <span className="mt-0.5 block text-settings-detail text-muted-foreground">
+              {summary}
+            </span>
+          </span>
+        ) : (
+          <>
+            {label ??
+              t('auto.components.settings.AppearanceAdvancedDisclosure.advanced', 'Advanced')}
+            {description ? (
+              <span className="truncate text-xs font-normal text-muted-foreground">
+                {description}
+              </span>
+            ) : null}
+          </>
+        )}
       </button>
       {/* Stays mounted while collapsed so a settings jump can find and reveal its rows. */}
       <div hidden={!expanded} className={SETTINGS_GROUP_NESTED_INSET_CLASS}>
