@@ -1143,7 +1143,11 @@
     "native-chat": {
       "composer": {
         "planMode": "プラン",
-        "exitPlanMode": "プランモードを終了"
+        "exitPlanMode": "プランモードを終了",
+        "permissionAsk": "承認を求める",
+        "permissionAcceptEdits": "編集を許可",
+        "permissionAuto": "代わりに承認",
+        "permissionFullAccess": "フルアクセス"
       },
       "goal": {
         "sentAsGoal": "ゴールとして送信されました"
