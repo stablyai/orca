@@ -874,7 +874,7 @@
         "profile": "Browser profile",
         "empty": "No sites have been allowed or blocked yet.",
         "title": "Site permissions",
-        "description": "Sites ask before using your camera, microphone, location and more. Change what you allowed or blocked for each site.",
+        "description": "Sites ask before using your camera, microphone, location, opening other apps and more. Change what you allowed or blocked for each site.",
         "search": {
           "permissions": "permissions",
           "camera": "camera",
@@ -882,7 +882,8 @@
           "location": "location",
           "notifications": "notifications",
           "clipboard": "clipboard",
-          "localNetwork": "local network"
+          "localNetwork": "local network",
+          "apps": "apps"
         }
       },
       "profileScope": {
@@ -19854,7 +19855,11 @@
           "confirm": "Open {{app}}",
           "confirmLink": "Open link",
           "cancel": "Cancel",
-          "launchFailed": "Couldn't open an app for this {{scheme}} link. It may not be installed."
+          "launchFailed": "Couldn't open an app for this {{scheme}} link. It may not be installed.",
+          "localFileDescription": "A local file wants to open another application.",
+          "tabSiteDescription": "A page on {{site}} wants to open another application.",
+          "alwaysAllowLocalFiles": "Always allow local files to open {{scheme}} links",
+          "alwaysAllow": "Always allow {{site}} to open {{scheme}} links"
         },
         "httpAuth": {
           "title": "Sign in",
@@ -19883,7 +19888,8 @@
             "midi": "MIDI devices",
             "windowManagement": "Window management",
             "idleDetection": "Device use",
-            "localNetwork": "Local network"
+            "localNetwork": "Local network",
+            "externalApp": "Open {{scheme}} links"
           },
           "ask": {
             "camera": "Use your camera",
