@@ -1,7 +1,7 @@
 import { readdirSync } from 'node:fs'
 import { readFile } from 'node:fs/promises'
 import { basename, isAbsolute, join, relative, resolve } from 'node:path'
-import { RuntimeClientError } from '../runtime/types'
+import { RuntimeClientError } from '../runtime/connection/types'
 import {
   isThemeColorValue,
   parsePluginAppThemeArtifact

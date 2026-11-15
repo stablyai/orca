@@ -1,6 +1,6 @@
 import { readFile } from 'node:fs/promises'
 import type { HandlerContext } from '../dispatch/dispatch'
-import { RuntimeClientError } from '../runtime/types'
+import { RuntimeClientError } from '../runtime/connection/types'
 import type { ThemeColorAdjustment } from '../../shared/color/oklch-color-transform'
 import {
   THEME_STUDIO_MODES,

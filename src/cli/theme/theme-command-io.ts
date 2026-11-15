@@ -1,6 +1,6 @@
 import { isAbsolute, resolve } from 'node:path'
 import type { HandlerContext } from '../dispatch/dispatch'
-import { RuntimeClientError, RuntimeRpcFailureError } from '../runtime/types'
+import { RuntimeClientError, RuntimeRpcFailureError } from '../runtime/connection/types'
 import { writeStdoutLine } from '../output/stdout-line'
 import { REPEATED_FLAG_SEPARATOR } from '../arguments/args'
 import {

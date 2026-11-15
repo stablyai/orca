@@ -1,6 +1,6 @@
 import { existsSync } from 'node:fs'
 import type { CommandHandler, HandlerContext } from '../dispatch/dispatch'
-import { RuntimeClientError } from '../runtime/types'
+import { RuntimeClientError } from '../runtime/connection/types'
 import {
   THEME_STUDIO_MODES,
   type ThemeStudioMode
