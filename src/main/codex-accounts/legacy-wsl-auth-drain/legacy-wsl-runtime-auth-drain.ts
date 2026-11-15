@@ -3,6 +3,10 @@ import { posix as pathPosix } from 'node:path'
 import { wslCodexRuntimeHomeForGuestHome } from '../../pty/shell-startup/codex-home-wsl-env'
 import { WSL_SESSION_BRIDGE_TIMEOUT_MS } from '../../codex/history/bridges/wsl-codex-session-bridge-script'
 import { runWslProcess } from '../../wsl/execution/wsl-runner'
+import {
+  describeWslProcessFailure,
+  isWslHostFailureExitCode
+} from '../../wsl/execution/wsl-process-failure'
 import { compareCodexAuthFreshness, codexAuthIsFresher } from '../credentials/codex-auth-identity'
 import {
   APPLY_LEGACY_AUTH_SCRIPT,
@@ -126,7 +130,9 @@ export async function drainLegacyWslRuntimeAuth(
   if (inspection.code === SOURCE_AUTH_ABSENT_EXIT) {
     return 'pending'
   }
-  assertSuccessfulDrainStep('inspect', inspection)
+  if (!assertSuccessfulDrainStep('inspect', inspection)) {
+    return 'pending'
+  }
 
   const inspected = parseLegacyRuntimeInspection(inspection.stdout)
   if (!inspected) {
@@ -166,9 +172,8 @@ export async function drainLegacyWslRuntimeAuth(
     timeoutMs: bridgeAllSessions ? WSL_SESSION_BRIDGE_TIMEOUT_MS : 5_000,
     maxOutputBytes: 16 * 1024
   })
-  try {
-    assertSuccessfulDrainStep('apply', result)
-  } catch {
+  if (result.code !== 0 || result.timedOut) {
+    // Any apply failure — guest script exits or wsl.exe host failures (#42641) — re-inspects for the truth.
     return recoverAfterFailedApply(options.distro, paths)
   }
   if (!deleteSource) {
@@ -200,6 +205,7 @@ async function recoverAfterFailedApply(
   ) {
     return 'pending'
   }
+  // Throws on guest-side defects; wsl.exe host failures here only delay the retry (#42641).
   assertSuccessfulDrainStep('recover', recovery)
   return 'pending'
 }
@@ -261,20 +267,34 @@ async function finalizeAbsentLegacyAuth(
   if (result.code === LEGACY_HOME_STILL_PRESENT_EXIT) {
     return 'pending'
   }
-  assertSuccessfulDrainStep('finalize', result)
+  if (!assertSuccessfulDrainStep('finalize', result)) {
+    return 'pending'
+  }
   return 'complete'
 }
 
+/**
+ * Throws for guest-side migration defects. Returns false when wsl.exe itself failed (exit
+ * 4294967295, its diagnostic on stdout, per #42641) or timed out: an environment problem says
+ * nothing about migration state, so the drain retries on the next launch instead of blocking
+ * this one — a genuinely broken WSL surfaces through the launch spawn's own error.
+ */
 function assertSuccessfulDrainStep(
   step: string,
-  result: { code: number | null; stderr: string; timedOut: boolean }
-): void {
+  result: { code: number | null; stdout: string; stderr: string; timedOut: boolean }
+): boolean {
   if (result.code === 0 && !result.timedOut) {
-    return
+    return true
+  }
+  if (result.timedOut || isWslHostFailureExitCode(result.code)) {
+    console.warn(
+      `[codex-wsl-auth-drain] ${step} step could not reach WSL, will retry: ${describeWslProcessFailure(result)}`
+    )
+    return false
   }
   const detail = result.stderr.trim()
   throw new Error(
-    `Legacy WSL auth drain ${step} failed (${result.timedOut ? 'timeout' : `exit ${result.code}`})${detail ? `: ${detail}` : ''}`
+    `Legacy WSL auth drain ${step} failed (exit ${result.code})${detail ? `: ${detail}` : ''}`
   )
 }
 
