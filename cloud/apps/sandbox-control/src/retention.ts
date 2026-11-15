@@ -5,6 +5,9 @@ import { RETENTION_HOLD_REASONS } from './entitlements'
 import { destroySandbox, goldenSnapshotIds, suspendSandbox, type LifecycleDeps } from './lifecycle'
 import { getControlState, setControlState } from './guardrails'
 import { ACTIVE_STATUSES, getSandboxByProviderName, listByStatus, type SandboxRow } from './store'
+import { releaseBuildSnapshots } from './auto-environments'
+import { releaseRetiredGoldens } from './golden-images'
+import { snapshotsInUse } from './snapshot-refs'
 
 const HOUR_MS = 60 * 60_000
 const DAY_MS = 24 * HOUR_MS
@@ -55,6 +58,10 @@ export type HousekeepingSummary = {
   orphanSandboxesDeleted: number
   orphanSnapshotsSeen: number
   orphanSnapshotsDeleted: number
+  /** Retired golden images and deleted environments' build snapshots freed this sweep. */
+  releasedSnapshotsDeleted: number
+  /** Ones still in use (or whose delete failed): retried next sweep. */
+  releasedSnapshotsKept: number
   rowsMissingProvider: number
   holdsOpened: number
   holdsCleared: number
@@ -271,8 +278,10 @@ async function sweepOrphans(deps: LifecycleDeps, summary: HousekeepingSummary): 
     }
     if (now - orphan.first_seen_at >= grace) {
       await deps.provider.deleteSandbox(box.name)
-      for (const snapshot of await deps.provider.listSnapshots(box.name)) {
-        if (snapshot.status === 'created' && !goldenSnapshotIds(deps.config).includes(snapshot.id) && !(await isEnvironmentBuildSnapshot(deps.db, snapshot.id))) {
+      const left = (await deps.provider.listSnapshots(box.name)).filter((snapshot) => snapshot.status === 'created')
+      const inUse = await snapshotsInUse(deps.db, deps.config, left.map((snapshot) => snapshot.id))
+      for (const snapshot of left) {
+        if (!inUse.has(snapshot.id) && !(await isEnvironmentBuildSnapshot(deps.db, snapshot.id))) {
           await deps.provider.deleteSnapshot(snapshot.id)
         }
       }
@@ -328,6 +337,11 @@ async function sweepSnapshots(deps: LifecycleDeps, sandboxNames: string[], summa
   for (const r of results) {
     owned.add(r.snapshot_id)
   }
+  // Belt and braces for the D1-side references (pool images, live boot images, goldens of any status).
+  const automatic = listed.snapshots.filter((s) => s.status === 'created' && s.creationMethod === 'automatic' && !owned.has(s.id))
+  for (const id of await snapshotsInUse(deps.db, deps.config, automatic.map((s) => s.id))) {
+    owned.add(id)
+  }
   for (const snapshot of listed.snapshots) {
     if (snapshot.status !== 'created' || snapshot.creationMethod !== 'automatic' || owned.has(snapshot.id)) {
       if (owned.has(snapshot.id)) {
@@ -343,6 +357,36 @@ async function sweepSnapshots(deps: LifecycleDeps, sandboxNames: string[], summa
       summary.orphanSnapshotsDeleted++
       log('orphan_snapshot_deleted', { id: snapshot.id, createdAt: snapshot.createdAt, firstSeenAt: orphan.first_seen_at })
     }
+  }
+}
+
+// ---- released images ----
+
+/**
+ * Snapshots Orca stopped needing but could not delete at the time: retired golden images beyond the
+ * one-per-region rollback, and the builds of deleted environments (an admin's delete, auto-environment
+ * expiry, a deleted team). Each is deleted only once nothing live boots from it (snapshot-refs.ts).
+ */
+async function sweepReleasedSnapshots(deps: LifecycleDeps, summary: HousekeepingSummary): Promise<void> {
+  const { results: builds } = await deps.db
+    .prepare(
+      `SELECT b.id, b.snapshot_id FROM environment_builds b JOIN environments e ON e.id = b.environment_id
+         WHERE e.deleted_at IS NOT NULL AND b.snapshot_id IS NOT NULL AND b.snapshot_deleted_at IS NULL LIMIT 50`
+    )
+    .all<{ id: string; snapshot_id: string }>()
+  const tallies = [await releaseBuildSnapshots(deps, builds)]
+  const { results: regions } = await deps.db
+    .prepare(`SELECT region FROM golden_images WHERE status = 'retired' GROUP BY region HAVING COUNT(*) > 1`)
+    .all<{ region: string }>()
+  for (const { region } of regions) {
+    tallies.push(await releaseRetiredGoldens(deps, region))
+  }
+  for (const tally of tallies) {
+    summary.releasedSnapshotsDeleted += tally.deleted
+    summary.releasedSnapshotsKept += tally.kept
+  }
+  if (summary.releasedSnapshotsDeleted + summary.releasedSnapshotsKept > 0) {
+    log('released_snapshots_swept', { deleted: summary.releasedSnapshotsDeleted, kept: summary.releasedSnapshotsKept })
   }
 }
 
@@ -376,6 +420,8 @@ export async function housekeeping(
     orphanSandboxesDeleted: 0,
     orphanSnapshotsSeen: 0,
     orphanSnapshotsDeleted: 0,
+    releasedSnapshotsDeleted: 0,
+    releasedSnapshotsKept: 0,
     rowsMissingProvider: 0,
     holdsOpened: 0,
     holdsCleared: 0,
@@ -394,6 +440,7 @@ export async function housekeeping(
   const notifier = options.notifier ?? LOG_NOTIFIER
   for (const step of [
     () => sweepOrphans(deps, summary),
+    () => sweepReleasedSnapshots(deps, summary),
     () => probeHolds(deps, summary),
     () => enforceHolds(deps, notifier, summary),
     () => enforceIdle(deps, notifier, summary)

@@ -7,7 +7,8 @@
 // A team can only be deleted once it has no cloud workspaces in any state (running, asleep or
 // archived): the user deletes them first through the normal workspace delete, which destroys the
 // sandbox and its snapshots. Then auth purges the team's cloud secrets (org-scoped and the team's
-// repo-scoped ones; members' personal secrets are theirs) and deletes the team.
+// repo-scoped ones; members' personal secrets are theirs) and deletes the team. The purge also marks
+// the team's environments deleted, so housekeeping deletes their build snapshots.
 
 const ACCOUNT_PATH = /^\/v1\/internal\/accounts\/((?:org|dev:org):[A-Za-z0-9_.:-]{1,150})\/(delete-check|secrets\/purge)$/
 
@@ -41,7 +42,8 @@ export async function teamWorkspaceCount(db: D1Database, accountId: string): Pro
  */
 export async function purgeTeamSecrets(
   db: D1Database,
-  accountId: string
+  accountId: string,
+  now: number = Date.now()
 ): Promise<{ ok: true; purged: number } | { ok: false; workspaces: number }> {
   const workspaces = await teamWorkspaceCount(db, accountId)
   if (workspaces > 0) {
@@ -58,7 +60,12 @@ export async function purgeTeamSecrets(
     // The team's secret activity (names, who, when) goes with the team.
     db.prepare('DELETE FROM secret_events WHERE account_id = ?').bind(accountId),
     // So do its owner-change notices (workspace names, who): nobody can sign in to the team to read them.
-    db.prepare('DELETE FROM owner_transfer_notices WHERE account_id = ?').bind(accountId)
+    db.prepare('DELETE FROM owner_transfer_notices WHERE account_id = ?').bind(accountId),
+    // And its environments: their build snapshots (manual, no provider expiry) are freed by the hourly
+    // housekeeping sweep (retention.ts sweepReleasedSnapshots), which this route has no provider for.
+    db
+      .prepare('UPDATE environments SET deleted_at = ?, active_build_id = NULL WHERE account_id = ? AND deleted_at IS NULL')
+      .bind(now, accountId)
   ])
   return { ok: true, purged: Number(result?.meta?.changes ?? 0) }
 }

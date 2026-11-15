@@ -10,6 +10,8 @@ import type { SandboxCaller } from './auth'
 import { listBuilds, startBuild, TERMINAL, type BuildConfig, type BuildDeps } from './environment-builds'
 import { canonicalRepoUrl, parseRepos, repoDir, type EnvironmentRow } from './environments'
 import { normalizeRepo } from './secrets'
+import type { SandboxProviderApi } from './sandbox-provider'
+import { snapshotsInUse } from './snapshot-refs'
 
 export const AUTO_ENVIRONMENT_USER = 'system:auto-environment'
 export const AUTO_ENVIRONMENT_UNUSED_MS = 14 * 24 * 60 * 60_000
@@ -129,7 +131,7 @@ export async function touchEnvironment(db: D1Database, environmentId: string, no
  * Shared by an admin's Delete and the automatic expiry.
  */
 export async function deleteEnvironmentAndSnapshots(
-  deps: Pick<BuildDeps, 'db' | 'provider' | 'now'>,
+  deps: Pick<BuildDeps, 'db' | 'now'> & { provider: Pick<SandboxProviderApi, 'deleteSnapshot'> },
   environmentId: string
 ): Promise<void> {
   await deps.db
@@ -140,10 +142,38 @@ export async function deleteEnvironmentAndSnapshots(
     .prepare(`SELECT id, snapshot_id FROM environment_builds WHERE environment_id = ? AND snapshot_id IS NOT NULL AND snapshot_deleted_at IS NULL`)
     .bind(environmentId)
     .all<{ id: string; snapshot_id: string }>()
-  for (const row of results) {
-    await deps.provider.deleteSnapshot(row.snapshot_id).catch(() => undefined)
+  await releaseBuildSnapshots(deps, results)
+}
+
+/**
+ * Deletes build snapshots nothing live boots from any more (snapshot-refs.ts) and marks them deleted.
+ * A snapshot still in use, or whose delete failed, keeps snapshot_deleted_at NULL: the hourly
+ * housekeeping sweep (retention.ts) retries it, so a provider hiccup never leaks it for good.
+ */
+export async function releaseBuildSnapshots(
+  deps: Pick<BuildDeps, 'db' | 'now'> & { provider: Pick<SandboxProviderApi, 'deleteSnapshot'> },
+  builds: readonly { id: string; snapshot_id: string }[]
+): Promise<{ deleted: number; kept: number }> {
+  // No golden id applies: an environment build never boots from a golden snapshot id of its own.
+  const inUse = await snapshotsInUse(deps.db, { goldenSnapshotId: '' }, builds.map((b) => b.snapshot_id))
+  let deleted = 0
+  let kept = 0
+  for (const row of builds) {
+    if (inUse.has(row.snapshot_id)) {
+      kept++
+      continue
+    }
+    try {
+      await deps.provider.deleteSnapshot(row.snapshot_id)
+    } catch (error) {
+      log('environment_snapshot_delete_failed', { buildId: row.id, error: String(error).slice(0, 120) })
+      kept++
+      continue
+    }
     await deps.db.prepare('UPDATE environment_builds SET snapshot_deleted_at = ? WHERE id = ?').bind(deps.now(), row.id).run()
+    deleted++
   }
+  return { deleted, kept }
 }
 
 /** Cron: automatic environments no create used for 14 days go, with their snapshots. */

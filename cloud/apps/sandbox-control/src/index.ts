@@ -1392,7 +1392,7 @@ async function routeRequest(request: Request, env: Env, deps: Deps): Promise<Res
         if (teamDelete.action === 'delete-check') {
           return json({ workspaces: await teamWorkspaceCount(env.SANDBOX_DB, teamDelete.accountId) })
         }
-        const purged = await purgeTeamSecrets(env.SANDBOX_DB, teamDelete.accountId)
+        const purged = await purgeTeamSecrets(env.SANDBOX_DB, teamDelete.accountId, (deps.now ?? Date.now)())
         return purged.ok
           ? json({ purged: purged.purged })
           : json({ error: 'workspaces_exist', workspaces: purged.workspaces }, 409)

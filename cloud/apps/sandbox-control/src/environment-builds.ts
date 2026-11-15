@@ -25,6 +25,7 @@ import { compileNetworkPolicy, gitBasicAuthorization, type CredentialRoute, type
 import { SWAPPED_CREDENTIALS } from './provider-env'
 import { ProviderError, type SandboxProviderApi } from './sandbox-provider'
 import { ORCAD_PORT, startOrcad } from './sandbox-vm-commands'
+import { snapshotsInUse } from './snapshot-refs'
 import type { Keyring } from './secrets-crypto'
 import { SANDBOX_VCPUS } from './machine-size'
 
@@ -681,8 +682,12 @@ export async function pruneSnapshots(deps: Pick<BuildDeps, 'db' | 'provider' | '
     .bind(environmentId)
     .all<BuildRow>()
   let pruned = 0
-  for (const old of results.slice(KEPT_BUILDS)) {
-    if (old.id === env?.active_build_id) {
+  const candidates = results.slice(KEPT_BUILDS).filter((old) => old.id !== env?.active_build_id)
+  // A workspace still booting from an old build (no snapshot of its own yet) keeps it; a later prune
+  // or the housekeeping sweep takes it once nothing needs it.
+  const inUse = await snapshotsInUse(deps.db, { goldenSnapshotId: '' }, candidates.map((old) => old.snapshot_id!))
+  for (const old of candidates) {
+    if (inUse.has(old.snapshot_id!)) {
       continue
     }
     try {
