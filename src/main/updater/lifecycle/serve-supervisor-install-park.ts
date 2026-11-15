@@ -207,11 +207,28 @@ export async function commitServeSupervisorPark(
   activePark = { ...activePark, record }
 }
 
+/** One install-on-quit commit per process; repeated will-quit passes share it. */
+let quitCommit: Promise<void> | null = null
+
 /** Install-on-quit has no park handshake: commit so running supervisors stop and new ones wait for the new bundle. */
-export async function commitServeSupervisorParkOnQuit(
+export function commitServeSupervisorParkOnQuit(
   executable: string,
   macUserDataRoot: string,
   now: () => number = Date.now
+): Promise<void> {
+  quitCommit ??= writeQuitCommit(executable, macUserDataRoot, now)
+  return quitCommit
+}
+
+/** Quit teardown waits on this so the process cannot exit before the record lands. */
+export function pendingServeSupervisorQuitCommit(): Promise<void> {
+  return quitCommit ?? Promise.resolve()
+}
+
+async function writeQuitCommit(
+  executable: string,
+  macUserDataRoot: string,
+  now: () => number
 ): Promise<void> {
   const appBundle = macAppBundleOf(executable)
   if (activePark?.record.phase === 'commit' || !appBundle) {
@@ -243,6 +260,7 @@ export async function commitServeSupervisorParkOnQuit(
 export async function releaseServeSupervisorPark(): Promise<void> {
   const park = activePark
   activePark = null
+  quitCommit = null
   if (!park) {
     return
   }

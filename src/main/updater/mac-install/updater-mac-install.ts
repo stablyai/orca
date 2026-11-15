@@ -42,9 +42,9 @@ export function registerMacUpdaterEvents({
         })
       })
     })
-    // will-quit is past every quit veto, and its first pass runs Orca's async teardown before exit.
+    // will-quit is past every quit veto; prepend so quit teardown sees the commit it must wait for.
     // Squirrel installs whatever it staged once this process exits.
-    app.on('will-quit', () => {
+    app.prependListener('will-quit', () => {
       if (shouldDeferMacQuitForInstall() && squirrelReady) {
         void commitServeSupervisorParkOnQuit(process.execPath, macCoordinationRoot(homedir()))
       }
