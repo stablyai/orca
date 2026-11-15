@@ -10,7 +10,7 @@ import {
 import {
   formatOrcaSessionAddress,
   isOrcaSessionId
-} from '../../../../../../../shared/orca-session-address'
+} from '../../../../../../../shared/agent-session/identity/orca-session-address'
 
 type State = {
   snapshot: WorkerDockSnapshot | null

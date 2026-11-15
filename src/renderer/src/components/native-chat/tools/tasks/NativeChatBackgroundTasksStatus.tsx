@@ -1,3 +1,5 @@
+import { useTranslate } from '@/i18n/use-translate'
+import { workerDockKindLabel } from './dock/worker-dock-labels'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Activity, Bot, CircleHelp, SquareTerminal, Workflow } from 'lucide-react'
 import type { AgentSessionBackgroundTask } from '../../../../../../shared/agent-session/agent-session-background-task-wire'
@@ -92,6 +94,7 @@ export function NativeChatBackgroundTasksStatus(liveProps: {
   onClearAll?: () => void
   loadWindow?: (anchor: string) => Promise<void>
 }): React.JSX.Element {
+  const t = useTranslate()
   const props = useWorkerDockStructuralValue(liveProps)
   const root = useRef<HTMLDivElement>(null)
   const narrow = useNarrowStrip(root)
@@ -177,7 +180,7 @@ export function NativeChatBackgroundTasksStatus(liveProps: {
             dispatchId: row.id,
             source: props.sessionId ?? '',
             kind: row.kind,
-            name: view?.name ?? row.agentType ?? (row.kind === 'command' ? 'Command' : 'Agent'),
+            name: view?.name ?? row.agentType ?? workerDockKindLabel(t, row.kind),
             title:
               view?.description ??
               agentChildRowName(row) ??
@@ -202,7 +205,8 @@ export function NativeChatBackgroundTasksStatus(liveProps: {
     props.childViews,
     props.sessionId,
     props.supportsTaskStop,
-    props.ownerActionsAvailable
+    props.ownerActionsAvailable,
+    t
   ])
   const rows = useMemo(
     () =>

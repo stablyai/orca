@@ -1,3 +1,4 @@
+import { useTranslate } from '@/i18n/use-translate'
 import { workerDockResultLabel } from './worker-dock-result-label'
 import { useMemo, useState } from 'react'
 import { ChevronRight, CircleCheck, CircleAlert } from 'lucide-react'
@@ -23,6 +24,7 @@ function WorkerResult({
   target: RuntimeClientTarget
   party: string
 }) {
+  const t = useTranslate()
   const [open, setOpen] = useState(false)
   const [result, setResult] = useState<WorkerDockResult | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -63,8 +65,8 @@ function WorkerResult({
         <Icon aria-hidden="true" className="size-3.5" />
         <span className="min-w-0 flex-1 truncate">
           {result
-            ? `${result.name} · ${workerDockResultLabel(result.outcome)} · ${result.title}`
-            : `${reference.name} · ${workerDockResultLabel(reference.outcome)} · ${reference.summary || reference.title}`}
+            ? `${result.name} · ${workerDockResultLabel(t, result.outcome)} · ${result.title}`
+            : `${reference.name} · ${workerDockResultLabel(t, reference.outcome)} · ${reference.summary || reference.title}`}
         </span>
         <ChevronRight aria-hidden="true" className={open ? 'size-3 rotate-90' : 'size-3'} />
       </button>
@@ -95,7 +97,7 @@ function WorkerResult({
                     )
                   }
                 >
-                  Open worker
+                  {t('components.native-chat.workerDock.openWorker', 'Open worker')}
                 </Button>
                 {result.acknowledged ? (
                   <Button
@@ -104,7 +106,10 @@ function WorkerResult({
                     disabled={target.kind !== 'local' || !result.ownerActionsAvailable}
                     title={
                       target.kind !== 'local' || !result.ownerActionsAvailable
-                        ? 'Stop or clear this from the computer it runs on'
+                        ? t(
+                            'components.native-chat.workerDock.remoteOwner',
+                            'Stop or clear this from the computer it runs on'
+                          )
                         : undefined
                     }
                     onClick={() =>
@@ -120,17 +125,20 @@ function WorkerResult({
                       )
                     }
                   >
-                    Show in dock again
+                    {t('components.native-chat.workerDock.restore', 'Show in dock again')}
                   </Button>
                 ) : null}
               </div>
             </>
           ) : (
-            <p>{error ?? 'Loading result…'}</p>
+            <p>
+              {error ?? t('components.native-chat.workerDock.loadingResult', 'Loading result…')}
+            </p>
           )}
+          {error ? <p role="alert">{error}</p> : null}
           {error ? (
             <Button variant="ghost" size="xs" onClick={load}>
-              Retry
+              {t('components.native-chat.workerDock.retry', 'Retry')}
             </Button>
           ) : null}
         </div>
@@ -150,6 +158,7 @@ export function NativeChatWorkerResultTimeline({
   isVisible: boolean
   children: (rows: readonly NativeChatTimedRow[]) => React.ReactNode
 }) {
+  const t = useTranslate()
   const feed = useWorkerDockResults(target, sessionId, isVisible)
   const [older, setOlder] = useState<readonly WorkerDockResultRef[]>([])
   const refs = useMemo(
@@ -189,7 +198,7 @@ export function NativeChatWorkerResultTimeline({
             node: (
               <div className="px-3 sm:px-4">
                 <Button variant="ghost" size="xs" onClick={loadOlder}>
-                  Older worker results
+                  {t('components.native-chat.workerDock.olderResults', 'Older worker results')}
                 </Button>
               </div>
             )

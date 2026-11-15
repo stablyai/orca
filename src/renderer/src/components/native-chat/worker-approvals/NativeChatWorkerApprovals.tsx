@@ -76,7 +76,7 @@ export function NativeChatWorkerApprovalStack({
 }): React.JSX.Element | null {
   const t = useTranslate()
   const seenPrompts = useRef(new Set<string>())
-  const [announcement, setAnnouncement] = useState('')
+  const [announcement, setAnnouncement] = useState<{ id: string; text: string } | null>(null)
   useEffect(() => {
     const arrived = approvals.filter(
       (entry) =>
@@ -86,11 +86,19 @@ export function NativeChatWorkerApprovalStack({
       seenPrompts.current.add(entry.approval.approvalId)
     }
     if (arrived.length) {
-      setAnnouncement(
-        `${arrived.length} new worker ${arrived.length === 1 ? 'question' : 'questions'} waiting on you`
-      )
+      setAnnouncement({
+        id: arrived.at(-1)!.approval.approvalId,
+        text: t(
+          'components.native-chat.workerDock.newQuestions',
+          '{{count}} new worker questions waiting on you',
+          {
+            count: arrived.length,
+            defaultValue_one: '{{count}} new worker question waiting on you'
+          }
+        )
+      })
     }
-  }, [approvals])
+  }, [approvals, t])
   approvals = useWorkerDockStructuralValue(approvals)
   const roster = useWorkerDockRosterState()
   const root = useRef<HTMLDivElement>(null)
@@ -161,8 +169,8 @@ export function NativeChatWorkerApprovalStack({
   }
   if (approvals.length === 0) {
     return (
-      <span className="sr-only" role="status" aria-live="polite">
-        {announcement}
+      <span key={announcement?.id} className="sr-only" role="status" aria-live="polite">
+        {announcement?.text}
       </span>
     )
   }
@@ -209,14 +217,20 @@ export function NativeChatWorkerApprovalStack({
   }
   return (
     <div ref={root} className="min-h-0 border-t border-border" data-native-chat-worker-approvals="">
-      <span className="sr-only" role="status" aria-live="polite">
-        {announcement}
+      <span key={announcement?.id} className="sr-only" role="status" aria-live="polite">
+        {announcement?.text}
       </span>
       {shown ? (
         <div data-native-chat-worker-approval={shown.approval.approvalId}>
           <div className="flex min-h-8 items-center gap-2 px-4 pt-1 text-xs text-muted-foreground">
             <CircleHelp className="size-4" />
-            <span>{shown.worker.label} · Waiting on you</span>
+            <span>
+              {t(
+                'components.native-chat.workerDock.waitingOnYouName',
+                '{{name}} · Waiting on you',
+                { name: shown.worker.label }
+              )}
+            </span>
           </div>
           {card(shown)}
         </div>
@@ -224,11 +238,22 @@ export function NativeChatWorkerApprovalStack({
       {queued.length ? (
         <>
           <p className="flex h-6 items-center px-4 text-xs text-muted-foreground">
-            {queued.length} {shown ? 'more ' : ''}waiting on you
+            {shown
+              ? t(
+                  'components.native-chat.workerDock.moreQuestions',
+                  '{{count}} more waiting on you',
+                  { count: queued.length }
+                )
+              : t('components.native-chat.workerDock.questions', '{{count}} waiting on you', {
+                  count: queued.length
+                })}
           </p>
           <div
             role="region"
-            aria-label="Queued worker questions"
+            aria-label={t(
+              'components.native-chat.workerDock.queuedQuestions',
+              'Queued worker questions'
+            )}
             className="scrollbar-sleek max-h-22 overflow-y-auto overscroll-contain"
             style={{ scrollSnapType: 'y mandatory' }}
           >
@@ -247,7 +272,11 @@ export function NativeChatWorkerApprovalStack({
                   variant="ghost"
                   size="sm"
                   className="h-11 min-w-11 shrink-0"
-                  aria-label={`Show ${entry.worker.label} question`}
+                  aria-label={t(
+                    'components.native-chat.workerDock.showQuestion',
+                    'Show {{name}} question',
+                    { name: entry.worker.label }
+                  )}
                   onFocus={(event) =>
                     event.currentTarget
                       .closest('[data-native-chat-worker-question-summary]')
@@ -266,7 +295,7 @@ export function NativeChatWorkerApprovalStack({
                     }
                   }}
                 >
-                  Show
+                  {t('components.native-chat.workerDock.show', 'Show')}
                 </Button>
               </div>
             ))}

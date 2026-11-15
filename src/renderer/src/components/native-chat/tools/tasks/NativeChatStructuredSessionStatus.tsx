@@ -1,3 +1,4 @@
+import { useTranslate } from '@/i18n/use-translate'
 import { lazy, Suspense, useCallback, useMemo, useRef, useState } from 'react'
 import type { RuntimeClientTarget } from '../../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import { WorkerDockResult } from '../../../../../../shared/orchestration/dock/worker-dock'
@@ -33,6 +34,7 @@ export function NativeChatStructuredSessionStatus(props: {
   /** The agent whose view the pane shows, marked current in the strip. */
   currentAgentId?: string | null
 }): React.JSX.Element {
+  const t = useTranslate()
   const [expanded, setExpanded] = useState<{ sessionId: string; expanded: boolean } | null>(null)
   const childRowContext = useStructuredSessionChildRowContext(
     props.paneKey,
@@ -274,11 +276,11 @@ export function NativeChatStructuredSessionStatus(props: {
           {error}
           {retryAction.current ? (
             <Button variant="ghost" size="xs" onClick={() => retryAction.current?.()}>
-              Retry
+              {t('components.native-chat.workerDock.retry', 'Retry')}
             </Button>
           ) : null}
           <Button variant="ghost" size="xs" onClick={() => setError(null)}>
-            Dismiss
+            {t('components.native-chat.workerDock.dismiss', 'Dismiss')}
           </Button>
         </div>
       ) : null}
@@ -313,7 +315,10 @@ export function NativeChatStructuredSessionStatus(props: {
                 void acknowledge(
                   [{ dispatchId: result.dispatchId, settlement: result.settlement }],
                   false
-                ).then(() => setResult({ ...result, acknowledged: false }))
+                ).then(
+                  () => setResult({ ...result, acknowledged: false }),
+                  (value) => setError(value instanceof Error ? value.message : String(value))
+                )
               }
             }}
           />

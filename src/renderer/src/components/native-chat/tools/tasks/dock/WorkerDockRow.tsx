@@ -1,3 +1,5 @@
+import { useTranslate } from '@/i18n/use-translate'
+import { workerDockKindLabel, workerDockStateLabel } from './worker-dock-labels'
 import { memo, useRef } from 'react'
 import {
   Bot,
@@ -13,24 +15,13 @@ import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
 import { useNowSnapshot } from '@/hooks/use-now'
 import { formatShortTimeAgo } from '@/lib/time-format/short-time-ago'
+import { formatCompactDuration } from '../../../../../../../shared/agent-status/presentation/agent-row-decay-state'
 import { getIntlLocale } from '@/i18n/i18n'
 import { cn } from '@/lib/class-names'
 import type { WorkerDockEntry } from '../../../../../../../shared/orchestration/dock/worker-dock'
 
-export const workerDockStateLabel: Record<WorkerDockEntry['state'], string> = {
-  starting: 'Starting',
-  running: 'Running',
-  waiting: 'Waiting on coordinator',
-  coordinator: 'Waiting on coordinator',
-  idle: 'Idle',
-  saving: 'Saving result…',
-  failed: 'Failed',
-  unexpected: 'Stopped unexpectedly',
-  stopping: 'Stopping…',
-  unavailable: 'Status unavailable',
-  'needs-you': 'Waiting on you'
-}
 function Age({ at, visible }: { at: number | null; visible: boolean }) {
+  const t = useTranslate()
   const label = useNowSnapshot(
     30_000,
     (now) => (at === null ? '—' : formatShortTimeAgo(at, now)),
@@ -39,7 +30,11 @@ function Age({ at, visible }: { at: number | null; visible: boolean }) {
   return (
     <span
       className="shrink-0 text-xs tabular-nums text-muted-foreground"
-      title={at === null ? 'Status time unavailable' : new Date(at).toLocaleString(getIntlLocale())}
+      title={
+        at === null
+          ? t('components.native-chat.workerDock.timeUnavailable', 'Status time unavailable')
+          : new Date(at).toLocaleString(getIntlLocale())
+      }
     >
       {label}
     </span>
@@ -69,6 +64,12 @@ export const WorkerDockRow = memo(function WorkerDockRow({
   onOpen: (row: WorkerDockRowView, opener: HTMLElement) => void
   onAction: (row: WorkerDockRowView, action: 'stop' | 'clear') => void
 }) {
+  const t = useTranslate()
+  const elapsed = useNowSnapshot(
+    30_000,
+    (now) => (row.startedAt === null ? '' : formatCompactDuration(now - row.startedAt)),
+    visible && row.startedAt !== null
+  )
   const gesture = useRef<{
     row: WorkerDockRowView
     action: 'stop' | 'clear'
@@ -84,7 +85,9 @@ export const WorkerDockRow = memo(function WorkerDockRow({
     row.state === 'saving' ||
     !row.stoppable ||
     pending
-  const state = row.retired ? 'Done · open result' : workerDockStateLabel[row.state]
+  const state = row.retired
+    ? t('components.native-chat.workerDock.doneResult', 'Done · open result')
+    : workerDockStateLabel(t, row.state)
   const Icon = failed
     ? CircleAlert
     : row.state === 'needs-you'
@@ -112,7 +115,7 @@ export const WorkerDockRow = memo(function WorkerDockRow({
           narrow ? 'pr-0' : 'items-center'
         )}
         aria-label={`${row.name} · ${row.title} · ${state}${row.reason ? ` · ${row.reason}` : ''}`}
-        title={`${row.name} · ${row.title}${row.model ? ` · ${row.model}` : ''}${row.startedAt ? ` · Started ${new Date(row.startedAt).toLocaleString(getIntlLocale())}` : ''}`}
+        title={`${row.name} · ${row.title}${row.model ? ` · ${row.model}` : ''}${row.startedAt ? t('components.native-chat.workerDock.startedAt', ' · Started {{time}} · {{elapsed}} elapsed', { time: new Date(row.startedAt).toLocaleString(getIntlLocale()), elapsed }) : ''}${t('components.native-chat.workerDock.contactUnavailable', ' · Last confirmed contact unavailable')}`}
         onClick={(event) => onOpen(row, event.currentTarget)}
       >
         <Icon
@@ -133,9 +136,7 @@ export const WorkerDockRow = memo(function WorkerDockRow({
           </span>
           {mixed || row.state !== 'running' || row.retired ? (
             <span data-worker-dock-state="" className="block text-xs text-muted-foreground">
-              {mixed
-                ? `${row.kind === 'worker' ? 'Worker' : row.kind === 'command' ? 'Command' : 'Agent'} · `
-                : ''}
+              {mixed ? `${workerDockKindLabel(t, row.kind)} · ` : ''}
               {row.state === 'running' && !row.retired ? '' : state}
             </span>
           ) : null}
@@ -180,10 +181,34 @@ export const WorkerDockRow = memo(function WorkerDockRow({
                 )}
                 aria-label={
                   action === 'clear'
-                    ? `Clear ${row.name}`
+                    ? t('components.native-chat.workerDock.clearName', 'Clear {{name}}', {
+                        name: row.name
+                      })
                     : unavailable
-                      ? `Stop ${row.name} · ${row.title} unavailable · ${row.state === 'saving' ? 'saving result' : row.retired ? 'result ready' : pending ? 'stopping' : 'status unavailable'}`
-                      : `Stop ${row.name} · ${row.title}`
+                      ? t(
+                          'components.native-chat.workerDock.stopUnavailable',
+                          'Stop {{name}} · {{title}} unavailable · {{reason}}',
+                          {
+                            name: row.name,
+                            title: row.title,
+                            reason:
+                              row.state === 'saving'
+                                ? workerDockStateLabel(t, 'saving')
+                                : row.retired
+                                  ? t(
+                                      'components.native-chat.workerDock.resultReady',
+                                      'result ready'
+                                    )
+                                  : pending
+                                    ? workerDockStateLabel(t, 'stopping')
+                                    : workerDockStateLabel(t, 'unavailable')
+                          }
+                        )
+                      : t(
+                          'components.native-chat.workerDock.stopName',
+                          'Stop {{name}} · {{title}}',
+                          { name: row.name, title: row.title }
+                        )
                 }
                 aria-disabled={
                   row.ownerActionsAvailable === false || (action === 'stop' ? unavailable : pending)
@@ -280,12 +305,15 @@ export const WorkerDockRow = memo(function WorkerDockRow({
             </TooltipTrigger>
             <TooltipContent side="top" sideOffset={4}>
               {row.ownerActionsAvailable === false
-                ? 'Stop or clear this from the computer it runs on'
+                ? t(
+                    'components.native-chat.workerDock.remoteOwner',
+                    'Stop or clear this from the computer it runs on'
+                  )
                 : pending
-                  ? 'Stopping…'
+                  ? t('components.native-chat.workerDock.stopping', 'Stopping…')
                   : action === 'clear'
-                    ? 'Clear'
-                    : 'Stop'}
+                    ? t('components.native-chat.workerDock.clear', 'Clear')
+                    : t('components.native-chat.workerDock.stop', 'Stop')}
             </TooltipContent>
           </Tooltip>
         ) : null}

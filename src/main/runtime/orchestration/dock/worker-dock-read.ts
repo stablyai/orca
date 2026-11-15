@@ -11,7 +11,7 @@ import {
   WorkerDockResult,
   type WorkerDockSnapshot
 } from '../../../../shared/orchestration/dock/worker-dock'
-import { parseOrcaSessionAddress } from '../../../../shared/orca-session-address'
+import { parseOrcaSessionAddress } from '../../../../shared/agent-session/identity/orca-session-address'
 import { OrchestrationError } from '../orchestration-error'
 import { exposeUtcTimestamp } from '../db/utc-timestamp'
 

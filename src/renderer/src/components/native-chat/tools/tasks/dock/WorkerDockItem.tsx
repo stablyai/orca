@@ -1,3 +1,4 @@
+import { useTranslate } from '@/i18n/use-translate'
 import { workerDockNeedsAttention } from '../../../../../../../shared/orchestration/dock/worker-dock'
 import { WorkerDockRow, type WorkerDockRowView } from './WorkerDockRow'
 
@@ -34,6 +35,7 @@ export function WorkerDockItem({
   onOpen: (row: WorkerDockRowView, opener: HTMLElement) => void
   onAction: (row: WorkerDockRowView, action: 'stop' | 'clear') => void
 }) {
+  const t = useTranslate()
   return (
     <div
       data-index={index}
@@ -49,10 +51,16 @@ export function WorkerDockItem({
       {identity.heading ? (
         <div className="flex h-6 items-center justify-between bg-muted px-4 text-2xs">
           <h3 className="font-medium">
-            {workerDockNeedsAttention(identity.state) ? 'Needs attention' : 'Open work'}
-            {orderHeld ? ' · Order held' : ''}
+            {workerDockNeedsAttention(identity.state)
+              ? t('components.native-chat.workerDock.attention', 'Needs attention')
+              : t('components.native-chat.workerDock.openWork', 'Open work')}
+            {orderHeld
+              ? ` · ${t('components.native-chat.workerDock.orderHeld', 'Order held')}`
+              : ''}
           </h3>
-          {index === 0 ? <span>Status changed</span> : null}
+          {index === 0 ? (
+            <span>{t('components.native-chat.workerDock.statusChanged', 'Status changed')}</span>
+          ) : null}
         </div>
       ) : null}
       {row ? (
@@ -67,7 +75,9 @@ export function WorkerDockItem({
           onAction={onAction}
         />
       ) : (
-        <div className="min-h-10 px-4 py-2">Loading worker…</div>
+        <div className="min-h-10 px-4 py-2">
+          {t('components.native-chat.workerDock.loadingWorker', 'Loading worker…')}
+        </div>
       )}
     </div>
   )

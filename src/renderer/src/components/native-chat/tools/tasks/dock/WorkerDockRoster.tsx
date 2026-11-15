@@ -1,3 +1,4 @@
+import { useTranslate } from '@/i18n/use-translate'
 import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { defaultRangeExtractor, useVirtualizer } from '@tanstack/react-virtual'
 import { Button } from '@/components/ui/button'
@@ -29,6 +30,7 @@ export function WorkerDockRoster(props: {
   onClearAll: () => void
   loadWindow?: (anchor: string) => Promise<void>
 }) {
+  const t = useTranslate()
   const onOpen = useLatestHandler(props.onOpen)
   const onAction = useLatestHandler(props.onAction)
   const id = useId()
@@ -81,10 +83,11 @@ export function WorkerDockRoster(props: {
       (row.ownerActionsAvailable === false ||
         cached.current.get(row.id)?.ownerActionsAvailable === false)
   )
-  const { failures } = workerDockSummary(props.identities, cached.current)
+  const { failures } = workerDockSummary(props.identities, cached.current, t)
   const { mixed, total, count } = workerDockSummary(
     props.countIdentities ?? props.identities,
-    cached.current
+    cached.current,
+    t
   )
   const [height, setHeight] = useState(props.narrow ? 120 : 100)
   const [more, setMore] = useState(false)
@@ -315,7 +318,7 @@ export function WorkerDockRoster(props: {
         <>
           {orderHeld ? (
             <div className="flex h-7 items-center justify-between px-4 text-xs">
-              <span>Order held</span>
+              <span>{t('components.native-chat.workerDock.orderHeld', 'Order held')}</span>
               <Button
                 variant="ghost"
                 size="xs"
@@ -325,7 +328,7 @@ export function WorkerDockRoster(props: {
                   virtual.scrollToOffset(0)
                 }}
               >
-                Show latest
+                {t('components.native-chat.workerDock.showLatest', 'Show latest')}
               </Button>
             </div>
           ) : null}
@@ -333,7 +336,11 @@ export function WorkerDockRoster(props: {
             ref={viewport}
             id={id}
             role="region"
-            aria-label={more ? 'Workers · more workers below' : 'Workers'}
+            aria-label={
+              more
+                ? t('components.native-chat.workerDock.workersMore', 'Workers · more workers below')
+                : t('components.native-chat.workerDock.workersRegion', 'Workers')
+            }
             tabIndex={0}
             className="scrollbar-sleek overflow-y-auto border-t border-border focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
             style={{ height }}
@@ -375,7 +382,7 @@ export function WorkerDockRoster(props: {
           </div>
           {more ? (
             <div className="flex h-6 items-center justify-center bg-gradient-to-b from-muted/30 to-muted text-2xs">
-              More below
+              {t('components.native-chat.workerDock.moreBelow', 'More below')}
             </div>
           ) : null}
         </>

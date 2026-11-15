@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import { OrchestrationDb } from '../../src/main/runtime/orchestration/db/orchestration-db'
-import { isOrcaSessionId } from '../../src/shared/orca-session-address'
+import { isOrcaSessionId } from '../../src/shared/agent-session/identity/orca-session-address'
 import { approvalReportId } from '../../src/main/runtime/orchestration/workers/approvals/worker-approval-report'
 
 /** Synthetic lifecycle records in the harness's disposable profile; no agent or terminal is launched. */

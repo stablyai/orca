@@ -1,3 +1,4 @@
+import { useTranslate } from '@/i18n/use-translate'
 import { useRef, type RefObject } from 'react'
 import { useWorkerDockGestureHeld } from './NativeChatWorkerDockFrame'
 import { ChevronDown } from 'lucide-react'
@@ -32,6 +33,7 @@ export function WorkerDockHeader({
   onToggle: () => void
   onClear: () => void
 }) {
+  const t = useTranslate()
   const held = useWorkerDockGestureHeld()
   const header = useRef<HTMLDivElement>(null)
   const heldHeight = useRef<number | undefined>(undefined)
@@ -51,7 +53,12 @@ export function WorkerDockHeader({
       <button
         ref={summary}
         type="button"
-        aria-label={count || (incomplete ? 'Worker status unavailable' : '0 workers')}
+        aria-label={
+          count ||
+          (incomplete
+            ? t('components.native-chat.workerDock.unavailable', 'Worker status unavailable')
+            : t('components.native-chat.workerDock.empty', '0 workers'))
+        }
         aria-expanded={expanded}
         aria-controls={listId}
         className="flex min-h-8 min-w-0 flex-1 items-center px-2 text-left text-xs font-medium text-foreground hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
@@ -60,8 +67,17 @@ export function WorkerDockHeader({
         }}
       >
         <span>
-          {count || (incomplete ? 'Worker status unavailable' : '0 workers')}
-          {incomplete && total > 0 ? ` · ${total} shown · total unavailable` : ''}
+          {count ||
+            (incomplete
+              ? t('components.native-chat.workerDock.unavailable', 'Worker status unavailable')
+              : t('components.native-chat.workerDock.empty', '0 workers'))}
+          {incomplete && total > 0
+            ? t(
+                'components.native-chat.workerDock.partial',
+                ' · {{count}} shown · total unavailable',
+                { count: total }
+              )
+            : ''}
         </span>
         <ChevronDown
           aria-hidden="true"
@@ -75,7 +91,11 @@ export function WorkerDockHeader({
               type="button"
               variant="ghost"
               size="xs"
-              aria-label={`Clear all ${failures} failed workers`}
+              aria-label={t(
+                'components.native-chat.workerDock.clearAllLabel',
+                'Clear all {{count}} failed workers',
+                { count: failures, defaultValue_one: 'Clear failed worker' }
+              )}
               aria-disabled={clearUnavailable || clearing}
               onClick={() => {
                 if (clearUnavailable || clearing) {
@@ -85,11 +105,16 @@ export function WorkerDockHeader({
                 summary.current?.focus()
               }}
             >
-              Clear all
+              {t('components.native-chat.workerDock.clearAll', 'Clear all')}
             </Button>
           </TooltipTrigger>
           {clearUnavailable ? (
-            <TooltipContent>Stop or clear this from the computer it runs on</TooltipContent>
+            <TooltipContent>
+              {t(
+                'components.native-chat.workerDock.remoteOwner',
+                'Stop or clear this from the computer it runs on'
+              )}
+            </TooltipContent>
           ) : null}
         </Tooltip>
       ) : null}

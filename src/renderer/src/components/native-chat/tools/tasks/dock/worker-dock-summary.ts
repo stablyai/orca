@@ -1,8 +1,11 @@
+import type { Translate } from '@/i18n/use-translate'
+import { workerDockKindCount } from './worker-dock-labels'
 import type { WorkerDockRowView } from './WorkerDockRow'
 
 export function workerDockSummary(
   identities: readonly { id: string; state: WorkerDockRowView['state']; kind?: string }[],
-  rows: ReadonlyMap<string, WorkerDockRowView>
+  rows: ReadonlyMap<string, WorkerDockRowView>,
+  t: Translate
 ) {
   const failures = identities.filter(
     (row) => row.state === 'failed' || row.state === 'unexpected'
@@ -18,13 +21,37 @@ export function workerDockSummary(
   const total = identities.length
   const count =
     failures === total && failures > 0
-      ? `${failures} failed`
+      ? t('components.native-chat.workerDock.failedCount', '{{count}} failed', { count: failures })
       : [
-          ...(mixed ? [`${total} total`] : []),
-          ...[...kinds].map(([kind, count]) => `${count} ${kind}${count === 1 ? '' : 's'}`),
-          ...(needsYou ? [`${needsYou} needs you`] : []),
-          ...(failures ? [`${failures} failed`] : []),
-          ...(unavailable ? [`${unavailable} unavailable`] : [])
+          ...(mixed
+            ? [
+                t('components.native-chat.workerDock.totalCount', '{{count}} total', {
+                  count: total
+                })
+              ]
+            : []),
+          ...[...kinds].map(([kind, count]) => workerDockKindCount(t, kind, count)),
+          ...(needsYou
+            ? [
+                t('components.native-chat.workerDock.needsYouCount', '{{count}} needs you', {
+                  count: needsYou
+                })
+              ]
+            : []),
+          ...(failures
+            ? [
+                t('components.native-chat.workerDock.failedCount', '{{count}} failed', {
+                  count: failures
+                })
+              ]
+            : []),
+          ...(unavailable
+            ? [
+                t('components.native-chat.workerDock.unavailableCount', '{{count}} unavailable', {
+                  count: unavailable
+                })
+              ]
+            : [])
         ].join(' · ')
   return { failures, mixed, total, count }
 }

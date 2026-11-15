@@ -109,7 +109,7 @@ test('captures the worker strip in an isolated hidden native chat', async ({
     }
   }
   await page.setViewportSize({ width: 900, height: 720 })
-  await expect(page.getByText('Stub reply.', { exact: true })).toBeVisible()
+  await expect(page.getByText('Stub reply.', { exact: true }).last()).toBeVisible()
   const input =
     scenario === 'workers' && count >= 8 && seeded
       ? await verifyStickyInput(page, chat.composer, seeded.database, seeded.sessionId)

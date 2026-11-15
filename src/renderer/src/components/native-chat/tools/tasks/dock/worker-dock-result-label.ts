@@ -1,14 +1,18 @@
+import type { Translate } from '@/i18n/use-translate'
 import type { WorkerDockResult } from '../../../../../../../shared/orchestration/dock/worker-dock'
 
-export function workerDockResultLabel(outcome: WorkerDockResult['outcome'] | undefined): string {
+export function workerDockResultLabel(
+  t: Translate,
+  outcome: WorkerDockResult['outcome'] | undefined
+): string {
   if (outcome === 'failed') {
-    return 'Failed'
+    return t('components.native-chat.workerDock.failed', 'Failed')
   }
   if (outcome === 'unexpected') {
-    return 'Stopped unexpectedly'
+    return t('components.native-chat.workerDock.unexpected', 'Stopped unexpectedly')
   }
   if (outcome === 'stopped') {
-    return 'Stopped by you'
+    return t('components.native-chat.workerDock.stoppedByYou', 'Stopped by you')
   }
-  return 'Finished'
+  return t('components.native-chat.workerDock.finished', 'Finished')
 }

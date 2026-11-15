@@ -1,3 +1,4 @@
+import { useTranslate } from '@/i18n/use-translate'
 import { workerDockResultLabel } from './worker-dock-result-label'
 import {
   Dialog,
@@ -25,6 +26,7 @@ export function WorkerDockResultDialog({
   onRestore: () => void
   ownerActionsAvailable: boolean
 }) {
+  const t = useTranslate()
   return (
     <Dialog
       open={result !== null || error !== null}
@@ -38,15 +40,23 @@ export function WorkerDockResultDialog({
         <DialogHeader>
           <DialogTitle>
             {result
-              ? `${result.name} · ${workerDockResultLabel(result.outcome)}`
-              : 'Worker result unavailable'}
+              ? `${result.name} · ${workerDockResultLabel(t, result.outcome)}`
+              : t(
+                  'components.native-chat.workerDock.resultUnavailable',
+                  'Worker result unavailable'
+                )}
           </DialogTitle>
           <DialogDescription>{result?.title ?? error}</DialogDescription>
         </DialogHeader>
+        {error ? (
+          <p role="alert" className="text-sm text-muted-foreground">
+            {error}
+          </p>
+        ) : null}
         {result ? <NativeChatMarkdown content={result.body} /> : null}
         <div className="flex gap-2">
           <Button variant="ghost" size="sm" onClick={onOpen}>
-            Open worker
+            {t('components.native-chat.workerDock.openWorker', 'Open worker')}
           </Button>
           {result?.acknowledged ? (
             <Button
@@ -56,11 +66,14 @@ export function WorkerDockResultDialog({
               title={
                 ownerActionsAvailable
                   ? undefined
-                  : 'Stop or clear this from the computer it runs on'
+                  : t(
+                      'components.native-chat.workerDock.remoteOwner',
+                      'Stop or clear this from the computer it runs on'
+                    )
               }
               onClick={onRestore}
             >
-              Show in dock again
+              {t('components.native-chat.workerDock.restore', 'Show in dock again')}
             </Button>
           ) : null}
         </div>

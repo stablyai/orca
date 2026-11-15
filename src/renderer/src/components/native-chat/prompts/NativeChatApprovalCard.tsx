@@ -165,7 +165,7 @@ export function NativeChatApprovalCard({
                   disabled={isSubmitting}
                   className="min-h-11 shrink-0 rounded-md px-2 text-xs text-muted-foreground hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
                 >
-                  Not now
+                  {t('components.native-chat.workerDock.notNow', 'Not now')}
                 </button>
               ) : onCollapse ? (
                 <NativeChatPromptCollapseToggle
