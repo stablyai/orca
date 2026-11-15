@@ -45,6 +45,8 @@ const HISTORY_DIRECTORIES = new Set(['sessions', 'archived_sessions'])
 const WRITER_LOCKS = 'thread-writer-locks'
 /** The account's own databases from before sharing stopped; kept, never read again. */
 const PRE_SHARE_DATABASES_DIR = '.orca-pre-share-db'
+// Present from the first unlinked folder until the databases moved aside, so a retry finishes.
+const UNSHARE_PENDING = '.orca-unshare-pending'
 
 /** `shared` once the home's history resolves to the store; `private` when a step refused. */
 export type CodexAccountHistoryShareResult = 'shared' | 'private' | 'busy'
@@ -218,6 +220,15 @@ export async function shareCodexAccountHistory(
     args.onWarning(error)
     return 'private'
   }
+  // A user's own link elsewhere would split the lock namespace from the history's.
+  if (
+    !(await isLinkedDirectory(
+      join(args.accountHome, WRITER_LOCKS),
+      join(args.storeHome, WRITER_LOCKS)
+    ))
+  ) {
+    return 'private'
+  }
   for (const name of await sharedDirectoryNames(args.storeHome, args.accountHome)) {
     try {
       await link(name)
@@ -255,6 +266,9 @@ export async function unshareCodexAccountHistory(args: {
       continue
     }
     try {
+      if (!unlinked) {
+        await writeFile(join(args.accountHome, UNSHARE_PENDING), '')
+      }
       await removeDirectoryLink(link)
       await mkdir(link)
       unlinked = true
@@ -264,7 +278,8 @@ export async function unshareCodexAccountHistory(args: {
     }
   }
   await writeSharedSqliteHome(args.accountHome, null)
-  if (!unlinked) {
+  const pending = join(args.accountHome, UNSHARE_PENDING)
+  if (!unlinked && !(await lstatIfPresent(pending))) {
     return complete
   }
   const holding = join(args.accountHome, PRE_SHARE_DATABASES_DIR, String(Date.now()))
@@ -279,6 +294,9 @@ export async function unshareCodexAccountHistory(args: {
       complete = false
       args.onWarning(error)
     }
+  }
+  if (complete) {
+    await unlink(pending)
   }
   return complete
 }

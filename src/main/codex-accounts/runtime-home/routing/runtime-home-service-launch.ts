@@ -115,16 +115,17 @@ export abstract class CodexRuntimeHomeLaunch extends CodexRuntimeHomeRouting {
   ): Promise<string | null> {
     if (target?.runtime !== 'wsl') {
       // Codex must start on linked history, so the launched home's pass finishes first; the
-      // selection may change while it runs, so prepare until the launched home is the last one.
+      // selection or the setting may change while it runs, so prepare until both held still.
       let prepared: string | null = null
       for (let attempt = 0; attempt < 3; attempt += 1) {
         const account = this.getSelfContainedManagedHostAccount()
         const accountHome = account ? this.getTrustedSelfContainedManagedHomePath(account) : null
-        if (!accountHome || accountHome === prepared) {
+        const shared = isCodexHistorySharedAcrossAccounts(this.store.getSettings())
+        if (!accountHome || `${accountHome}\0${shared}` === prepared) {
           break
         }
         await this.prepareAccountHistory(accountHome)
-        prepared = accountHome
+        prepared = `${accountHome}\0${shared}`
       }
       this.prepareAllAccountHistoryInBackground()
       return this.prepareForCodexLaunch(target, launchEnv, options)

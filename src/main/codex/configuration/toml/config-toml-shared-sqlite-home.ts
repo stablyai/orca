@@ -29,7 +29,8 @@ export function stripCodexSharedSqliteHome(config: string): string {
 
 /** The store path in Orca's own line, or null when the config has none. */
 export function readCodexSharedSqliteHome(config: string): string | null {
-  for (const line of config.split('\n')) {
+  const line = findTopLevelSqliteHomeLine(config)
+  if (line) {
     const match = /^sqlite_home = (".*") # orca: /.exec(line.trimEnd())
     if (match && line.trimEnd().endsWith(CODEX_SHARED_SQLITE_HOME_MARKER)) {
       try {

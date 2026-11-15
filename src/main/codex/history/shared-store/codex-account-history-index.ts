@@ -10,6 +10,12 @@ import { listCodexIndexPendingRollouts } from './codex-account-history-links'
 let stopping = false
 const hostHealsByPendingDir = new Map<string, Promise<void>>()
 const rerunRequested = new Set<string>()
+// Stores whose last heal stopped or failed with work left; a later launch retries them.
+const incompleteHeals = new Set<string>()
+
+export function hasIncompleteHostCodexIndexHeal(pendingDir: string): boolean {
+  return incompleteHeals.has(normalizeRuntimePathForComparison(pendingDir))
+}
 
 /** Stops background index work at quit; settled rows and markers are kept. */
 export function stopCodexAccountHistoryWork(): void {
@@ -29,8 +35,10 @@ export async function healCodexIndexPendingRollouts(args: {
   storeHome: string
   rolloutNames: readonly string[]
   clear: (rolloutNames: readonly string[]) => Promise<void>
+  /** True once a history pass started after this heal did: its markers may name unmoved files. */
+  passStartedSince?: () => boolean
   options?: CodexSessionIndexHealOptions
-}): Promise<void> {
+}): Promise<boolean> {
   const pending = new Map<string, string>()
   // A thread may own several rollouts (a .zst twin, a revert); one read settles them all.
   const markersByThreadId = new Map<string, string[]>()
@@ -52,22 +60,28 @@ export async function healCodexIndexPendingRollouts(args: {
     // No thread id means no read can ever settle it.
     await args.clear(withoutThread)
   }
-  if (pending.size === 0 || stopping) {
-    return
+  if (pending.size === 0) {
+    return true
+  }
+  if (stopping) {
+    return false
   }
   const options = args.options ?? {}
-  await healPendingCodexAccountThreads(args.storeHome, pending, {
+  const summary = await healPendingCodexAccountThreads(args.storeHome, pending, {
     ...options,
     shouldStop: () => stopping || options.shouldStop?.() === true,
     afterBatch: async (settled) => {
       await options.afterBatch?.(settled)
+      // A file a newer pass has yet to move reads as missing; its marker must stay.
+      const keepMissing = args.passStartedSince?.() === true
       await args.clear(
         settled
-          .filter(({ outcome }) => outcome !== 'failed')
+          .filter(({ outcome }) => outcome === 'healed' || (outcome === 'missing' && !keepMissing))
           .flatMap(({ threadId }) => markersByThreadId.get(threadId) ?? [])
       )
     }
   })
+  return summary.outcome === 'completed' || summary.outcome === 'up-to-date'
 }
 
 /**
@@ -78,8 +92,9 @@ export async function healCodexIndexPendingRollouts(args: {
 export function requestHostCodexIndexHeal(
   pendingDir: string,
   storeHome: string,
-  isPaused: () => boolean
+  passes: { isPaused: () => boolean; started: () => number }
 ): void {
+  const { isPaused } = passes
   const key = normalizeRuntimePathForComparison(pendingDir)
   if (stopping || isPaused()) {
     return
@@ -88,6 +103,7 @@ export function requestHostCodexIndexHeal(
     rerunRequested.add(key)
     return
   }
+  const startedAtRequest = passes.started()
   const task = listCodexIndexPendingRollouts(pendingDir)
     .then((rolloutNames) =>
       healCodexIndexPendingRollouts({
@@ -102,16 +118,25 @@ export function requestHostCodexIndexHeal(
             })
           }
         },
+        passStartedSince: () => passes.started() !== startedAtRequest,
         options: { shouldStop: isPaused }
       })
     )
+    .then((finished) => {
+      if (finished) {
+        incompleteHeals.delete(key)
+      } else {
+        incompleteHeals.add(key)
+      }
+    })
     .catch((error: unknown) => {
+      incompleteHeals.add(key)
       console.warn('[codex-account-history] Indexing shared history failed:', error)
     })
     .finally(() => {
       hostHealsByPendingDir.delete(key)
       if (rerunRequested.delete(key)) {
-        requestHostCodexIndexHeal(pendingDir, storeHome, isPaused)
+        requestHostCodexIndexHeal(pendingDir, storeHome, passes)
       }
     })
   hostHealsByPendingDir.set(key, task)
@@ -122,5 +147,6 @@ export const _internals = {
     stopping = false
     hostHealsByPendingDir.clear()
     rerunRequested.clear()
+    incompleteHeals.clear()
   }
 }

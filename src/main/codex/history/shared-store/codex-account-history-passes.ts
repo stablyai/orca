@@ -4,7 +4,10 @@ import {
   getOrcaUserDataPath,
   getSystemCodexHomePath
 } from '../../configuration/homes/codex-home-paths'
-import { requestHostCodexIndexHeal } from './codex-account-history-index'
+import {
+  hasIncompleteHostCodexIndexHeal,
+  requestHostCodexIndexHeal
+} from './codex-account-history-index'
 import { shareCodexAccountHistory, unshareCodexAccountHistory } from './codex-account-history-links'
 
 type QueuedPass = { shared: boolean; pass: Promise<void> }
@@ -20,6 +23,11 @@ export class CodexAccountHistoryPasses {
   private readonly latest = new Map<string, QueuedPass>()
   private readonly settledThisRun = new Map<string, boolean>()
   private activePasses = 0
+  private startedPasses = 0
+  private readonly passProgress = {
+    isPaused: (): boolean => this.activePasses > 0,
+    started: (): number => this.startedPasses
+  }
 
   run(accountHome: string, shared: boolean): Promise<void> {
     const key = normalizeRuntimePathForComparison(accountHome)
@@ -29,20 +37,25 @@ export class CodexAccountHistoryPasses {
     }
     const pass = (previous?.pass ?? Promise.resolve()).then(async () => {
       if (this.settledThisRun.get(key) === shared) {
+        // Moves are done; only index work a stopped or failed heal left behind is retried.
+        if (hasIncompleteHostCodexIndexHeal(INDEX_PENDING_DIR())) {
+          requestHostCodexIndexHeal(
+            INDEX_PENDING_DIR(),
+            getSystemCodexHomePath(),
+            this.passProgress
+          )
+        }
         return
       }
       this.activePasses += 1
+      this.startedPasses += 1
       try {
         await this.runPass(key, accountHome, shared)
       } finally {
         this.activePasses -= 1
       }
       // Index once no pass is moving files.
-      requestHostCodexIndexHeal(
-        INDEX_PENDING_DIR(),
-        getSystemCodexHomePath(),
-        () => this.activePasses > 0
-      )
+      requestHostCodexIndexHeal(INDEX_PENDING_DIR(), getSystemCodexHomePath(), this.passProgress)
     })
     this.latest.set(key, { shared, pass })
     void pass.finally(() => {

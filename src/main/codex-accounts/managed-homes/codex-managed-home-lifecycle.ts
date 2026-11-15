@@ -71,7 +71,8 @@ async function removeManagedHomeKeepingSharedHistory(home: string): Promise<bool
       retryDelay: WINDOWS_RM_RETRY_DELAY_MS
     })
   }
-  return entries.some(kept)
+  // Read again: history a writer created meanwhile must not fall to the whole-home removal.
+  return (await readdir(home, { withFileTypes: true })).some(kept)
 }
 
 function removeManagedHomeTreeSync(targetPath: string): void {
