@@ -14,6 +14,32 @@ async function writeSkill(root: string, directory: string, markdown: string): Pr
 }
 
 describe('generated WSL skill name filter', () => {
+  it.skipIf(process.platform !== 'linux')('prunes Claude sync scratch directories', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'orca-wsl-claude-scratch-'))
+    const scanRoot: SkillScanRoot = {
+      id: 'home',
+      owner: 'agents',
+      path: root,
+      label: 'Home',
+      sourceKind: 'home',
+      providers: ['agent-skills']
+    }
+    const markdown = '---\nname: docs\n---\n'
+    await writeSkill(root, 'docs', markdown)
+    await writeSkill(root, '.trash/round/docs', markdown)
+    await writeSkill(root, 'synced/account/.staging/docs', markdown)
+    try {
+      const output = execFileSync('/bin/bash', ['-c', buildWslSkillDiscoveryCommand([scanRoot])], {
+        encoding: 'utf8'
+      })
+      expect(
+        parseWslSkillDiscoveryOutput(output, [scanRoot]).skills.map((skill) => skill.directoryPath)
+      ).toEqual([join(root, 'docs')])
+    } finally {
+      await rm(root, { recursive: true, force: true })
+    }
+  })
+
   it.skipIf(process.platform !== 'linux')(
     'rejects only known scalar mismatches and passes uncertain names to TypeScript',
     async () => {

@@ -1,7 +1,10 @@
 import type { Dirent } from 'node:fs'
 import { stat } from 'node:fs/promises'
 import { isAbsolute, join, relative, sep } from 'node:path'
-import { isSkillStagingEntryName } from '../filesystem/skill-transaction-staging-names'
+import {
+  isClaudeSyncScratchDirectory,
+  isSkillStagingEntryName
+} from '../filesystem/skill-transaction-staging-names'
 import { createDirectoryReadAhead, type WalkOrder } from './skill-directory-read-ahead'
 
 export const SKILL_FILE_NAME = 'SKILL.md'
@@ -28,6 +31,7 @@ function entersDirectory(name: string, options: SkillFileWalkOptions): boolean {
   return (
     name !== SKILL_FILE_NAME &&
     !isSkillStagingEntryName(name) &&
+    !isClaudeSyncScratchDirectory(name) &&
     !(options.skipHiddenDirectories && name.startsWith('.'))
   )
 }
