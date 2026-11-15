@@ -63,6 +63,23 @@ const CommandLine = z.looseObject({ command: z.looseObject({ exitCode: z.number(
 const OutputLine = z.looseObject({ stream: z.enum(['stdout', 'stderr']), data: z.string() })
 const FailureLine = z.looseObject({ stream: z.literal('error'), data: z.looseObject({ code: z.string() }) })
 
+/** A provider call with no answer by then has stalled (lookups and updates answer in well under a second). */
+export const PROVIDER_REQUEST_DEADLINE_MS = 30_000
+/** Booting a VM from a snapshot answers in a few seconds; past this it is stuck, and create falls back. */
+const CREATE_DEADLINE_MS = 60_000
+/** Snapshotting a sleeping VM's disk can legitimately take minutes. */
+const SNAPSHOT_DEADLINE_MS = 5 * 60_000
+const COMMAND_DEADLINE_MARGIN_MS = 20_000
+/** A caller waiting on a long command (an environment build) has its own bound; this only stops a dead socket. */
+const UNBOUNDED_WAIT_DEADLINE_MS = 3 * 60 * 60_000
+
+/** Aborts after `ms`; a stalled provider call becomes an error instead of an open-ended wait. */
+function deadline(ms: number): AbortSignal {
+  const controller = new AbortController()
+  setTimeout(() => controller.abort(new DOMException('provider call timed out', 'TimeoutError')), ms)
+  return controller.signal
+}
+
 export function createVercelSandboxApi(
   config: VercelSandboxApiConfig
 ): SandboxProviderApi & GoldenImageProviderApi {
@@ -72,7 +89,7 @@ export function createVercelSandboxApi(
   async function request(
     method: string,
     path: string,
-    options: { query?: Record<string, string | undefined>; body?: unknown; signal?: AbortSignal } = {}
+    options: { query?: Record<string, string | undefined>; body?: unknown; signal?: AbortSignal; deadlineMs?: number } = {}
   ): Promise<Response> {
     const url = new URL(`${base}${path}`)
     url.searchParams.set('teamId', config.teamId)
@@ -89,7 +106,9 @@ export function createVercelSandboxApi(
       },
       body: options.body === undefined ? undefined : JSON.stringify(options.body),
       redirect: 'manual',
-      signal: options.signal
+      // Every call has a deadline: a stalled provider connection otherwise held the Worker until
+      // the desktop gave up (2 min on create and on opening a workspace), with nothing logged.
+      signal: options.signal ?? deadline(options.deadlineMs ?? PROVIDER_REQUEST_DEADLINE_MS)
     })
     if (!response.ok) {
       const parsed = ErrorBody.safeParse(await response.json().catch(() => null))
@@ -146,6 +165,7 @@ export function createVercelSandboxApi(
     async createSandbox(params) {
       // No `runtime` selects /v3, which boots from `source` (the golden snapshot).
       const response = await request('POST', '/v3/sandboxes', {
+        deadlineMs: CREATE_DEADLINE_MS,
         body: {
           projectId: config.projectId,
           name: params.name,
@@ -235,7 +255,9 @@ export function createVercelSandboxApi(
           wait: true,
           logs: true,
           timeout: params.timeoutMs
-        }
+        },
+        // The command's own timeout, plus room for the provider to report it.
+        deadlineMs: params.timeoutMs + COMMAND_DEADLINE_MARGIN_MS
       })
       return readCommandStream(response)
     },
@@ -278,7 +300,8 @@ export function createVercelSandboxApi(
         method: 'POST',
         headers: { authorization: `Bearer ${config.token}`, 'content-type': 'application/gzip', 'x-cwd': '/' },
         body,
-        redirect: 'manual'
+        redirect: 'manual',
+        signal: deadline(PROVIDER_REQUEST_DEADLINE_MS)
       })
       if (!response.ok) {
         const parsed = ErrorBody.safeParse(await response.json().catch(() => null))
@@ -297,6 +320,7 @@ export function createVercelSandboxApi(
     async createBuildSandbox(params) {
       // A managed image (not a deprecated `runtime`): sandboxes cloned from the snapshot get its 64 GB disk.
       const response = await request('POST', '/v3/sandboxes', {
+        deadlineMs: CREATE_DEADLINE_MS,
         body: {
           projectId: config.projectId,
           name: params.name,
@@ -314,6 +338,7 @@ export function createVercelSandboxApi(
 
     async createSnapshot(sessionId, expirationMs) {
       const response = await request('POST', `/v2/sandboxes/sessions/${encodeURIComponent(sessionId)}/snapshot`, {
+        deadlineMs: SNAPSHOT_DEADLINE_MS,
         body: { expiration: expirationMs }
       })
       return (await json(z.looseObject({ snapshot: Snapshot }), response)).snapshot.id
@@ -341,7 +366,8 @@ export function createVercelSandboxApi(
         response = await request(
           'GET',
           `/v2/sandboxes/sessions/${encodeURIComponent(sessionId)}/cmd/${encodeURIComponent(commandId)}`,
-          { query: { wait: options?.wait ? 'true' : undefined }, signal }
+          // An unbounded wait (a build's exit) keeps waiting as before; a plain read gets the default deadline.
+          { query: { wait: options?.wait ? 'true' : undefined }, signal, ...(options?.wait && !signal ? { deadlineMs: UNBOUNDED_WAIT_DEADLINE_MS } : {}) }
         )
       } catch (error) {
         if (signal?.aborted) {

@@ -21,6 +21,8 @@ import { WorkspaceError, canOpen, isOrgAdmin, isOwner } from './workspaces'
 export const GRANT_COMMAND = '/opt/orca/bin/orca-sandbox-grant'
 const GRANT_TIMEOUT_MS = 45_000
 const MAX_ACTIVE_GRANTS_PER_USER = 8
+/** A grant slower than this logs its phases. */
+const SLOW_GRANT_MS = 10_000
 
 const B64_32 = z
   .string()
@@ -111,7 +113,15 @@ export async function issueGrant(
   if (n >= MAX_ACTIVE_GRANTS_PER_USER) {
     throw new WorkspaceError('conflict', 'too_many_devices')
   }
+  const started = deps.now()
+  const timings: Record<string, number> = {}
+  const mark = (phase: string, since: number): number => {
+    timings[phase] = deps.now() - since
+    return deps.now()
+  }
+  let at = started
   const live = await liveSession(deps, row)
+  at = mark('session', at)
   const id = randomGrantId()
   const now = deps.now()
   await deps.db
@@ -139,10 +149,13 @@ export async function issueGrant(
       throw new Error(`grant_exit_${result.exitCode}`)
     }
     output = GrantOutputSchema.parse(JSON.parse(result.stdout.trim().split('\n').at(-1) ?? ''))
-  } catch {
+  } catch (error) {
+    mark('grant', at)
+    console.log(JSON.stringify({ event: 'grant_failed', sandboxId: row.id, timings, error: String(error).slice(0, 160) }))
     await deps.db.prepare(`UPDATE workspace_grants SET status = 'failed' WHERE id = ?`).bind(id).run()
     throw new LifecycleError('provider_unavailable', 'grant_failed')
   }
+  at = mark('grant', at)
   // Re-check after the slow VM call: if the workspace went private or changed hands, or the phone
   // that asked was revoked meanwhile, the device is revoked at once instead of slipping through.
   const after = await getSandbox(deps.db, row.id)
@@ -171,8 +184,9 @@ export async function issueGrant(
   await touchActivity(deps.db, row.id, caller.userId, deps.now())
   // The new member's own GitHub identity becomes usable for pushes from this workspace.
   await syncMemberGit(deps, after, live.sessionId)
-  // Counts only; never the sealed box or the device id.
-  console.log(JSON.stringify({ event: 'grant_issued', sandboxId: row.id, kind: body.deviceKind }))
+  mark('memberGit', at)
+  // Counts and timings only; never the sealed box or the device id. A slow open names its phase.
+  console.log(JSON.stringify({ event: 'grant_issued', sandboxId: row.id, kind: body.deviceKind, ms: deps.now() - started, ...(deps.now() - started > SLOW_GRANT_MS ? { timings } : {}) }))
   return { grant: grantView(grant), sealed: output.sealed }
 }
 
