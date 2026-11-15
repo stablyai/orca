@@ -12,12 +12,10 @@ import { assertNoRetainedProfileStateExports } from '../../persistence/profile-s
 
 /** Histories lack profile segments, so include inactive profiles before GC.
  * Read persisted IDs without Store migrations; unreadable profiles must prevent pruning. */
-export function getOtherProfileWorktreeIdsForHistoryGc(userDataPath = getProfileUserDataPath()): {
-  ids: Set<string>
-  unreadableProfiles: number
-} {
-  const { ids, unreadableProfiles } = readOtherProfileWorkspaceCatalog(userDataPath)
-  return { ids, unreadableProfiles }
+export function getOtherProfileWorktreeIdsForHistoryGc(
+  userDataPath = getProfileUserDataPath()
+): ProfileWorkspaceIds & { unreadableProfiles: number } {
+  return readOtherProfileWorkspaceCatalog(userDataPath)
 }
 
 type ProfileWorkspaceIds = {
