@@ -1,13 +1,18 @@
 import type { PermissionMode, PermissionResult } from '@anthropic-ai/claude-agent-sdk'
+import type { AgentSessionPromptResponse } from '../../../../shared/agent-session/agent-session-question-answer'
 import type { ClaudePendingPrompt } from './claude-prompt-registry'
 import type { ClaudeSession } from '../claude-structured-session-state'
 
-/** This process's requested mode, else its first init's; anything else asks for each edit. */
+/** Active build mode override, else requested mode, else first init's; anything else asks for each edit. */
 export function claudePlanApprovalMode(
-  session: Pick<ClaudeSession, 'launchIntent' | 'firstRootInit'>
+  session: Pick<ClaudeSession, 'launchIntent' | 'firstRootInit'> &
+    Partial<Pick<ClaudeSession, 'appliedInputOptions'>>
 ): PermissionMode {
   const mode =
-    session.launchIntent?.permissionMode ?? session.firstRootInit?.permissionMode ?? 'default'
+    session.appliedInputOptions?.get('buildPermissionMode') ??
+    session.launchIntent?.permissionMode ??
+    session.firstRootInit?.permissionMode ??
+    'default'
   switch (mode) {
     case 'default':
     case 'acceptEdits':
@@ -43,6 +48,22 @@ function logPlanExitFailure(error: unknown): void {
   }
 }
 
+function approvedPlanPermissionMode(
+  session: Pick<ClaudeSession, 'launchIntent' | 'firstRootInit'> &
+    Partial<Pick<ClaudeSession, 'appliedInputOptions'>>,
+  response?: AgentSessionPromptResponse
+): PermissionMode {
+  if (response?.kind === 'option') {
+    if (response.optionId === 'allowAcceptEdits') {
+      return 'acceptEdits'
+    }
+    if (response.optionId === 'allowAsk') {
+      return 'default'
+    }
+  }
+  return claudePlanApprovalMode(session)
+}
+
 /** Claude stays in plan after an approved ExitPlanMode until told. The request is written
  *  before the allow and never awaited, so its failure cannot hold or reject the approval.
  *  Full access reads the mode in wire order: its presentation report can lag behind the plan. */
@@ -55,7 +76,8 @@ export function leaveClaudePlanModeOnApproval(
       connection: Pick<ClaudeSession['connection'], 'setPermissionMode'>
     },
   prompt: Pick<ClaudePendingPrompt, 'toolName'>,
-  reply: PermissionResult
+  reply: PermissionResult,
+  response?: AgentSessionPromptResponse
 ): void {
   const mode = session.orderedPermissionMode
     ? session.orderedPermissionMode()
@@ -64,7 +86,7 @@ export function leaveClaudePlanModeOnApproval(
     return
   }
   try {
-    const restored = claudePlanApprovalMode(session)
+    const restored = approvedPlanPermissionMode(session, response)
     session.connection.setPermissionMode(restored).then(() => {
       session.appliedInputOptions?.set('interactionMode', 'default')
       session.appliedInputOptions?.set('buildPermissionMode', restored)

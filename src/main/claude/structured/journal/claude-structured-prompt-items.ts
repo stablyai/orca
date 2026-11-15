@@ -1,3 +1,4 @@
+import type { PermissionMode } from '@anthropic-ai/claude-agent-sdk'
 import type {
   AgentJournalApprovalItem,
   AgentJournalPromptOption,
@@ -22,10 +23,39 @@ const APPROVAL_OPTIONS: readonly AgentJournalPromptOption[] = [
   { id: 'deny', label: 'Deny', intent: 'reject_once' }
 ]
 
-const PLAN_APPROVAL_OPTIONS: readonly AgentJournalPromptOption[] = [
+const PLAN_APPROVAL_OPTIONS_BYPASS: readonly AgentJournalPromptOption[] = [
   { id: 'allow', label: 'Approve plan', intent: 'allow_once' },
+  { id: 'allowAcceptEdits', label: 'Approve and auto-accept edits', intent: 'allow_always' },
   { id: 'deny', label: 'Keep planning', intent: 'reject_once' }
 ]
+
+const PLAN_APPROVAL_OPTIONS_ACCEPT_EDITS: readonly AgentJournalPromptOption[] = [
+  { id: 'allow', label: 'Approve and auto-accept edits', intent: 'allow_once' },
+  { id: 'allowAsk', label: 'Approve and ask before edits', intent: 'allow_always' },
+  { id: 'deny', label: 'Keep planning', intent: 'reject_once' }
+]
+
+const PLAN_APPROVAL_OPTIONS_DEFAULT: readonly AgentJournalPromptOption[] = [
+  { id: 'allowAcceptEdits', label: 'Approve and auto-accept edits', intent: 'allow_always' },
+  { id: 'allow', label: 'Approve and ask before edits', intent: 'allow_once' },
+  { id: 'deny', label: 'Keep planning', intent: 'reject_once' }
+]
+
+function planApprovalOptions(
+  basePermissionMode?: PermissionMode
+): readonly AgentJournalPromptOption[] {
+  if (
+    basePermissionMode === 'bypassPermissions' ||
+    basePermissionMode === 'auto' ||
+    basePermissionMode === 'dontAsk'
+  ) {
+    return PLAN_APPROVAL_OPTIONS_BYPASS
+  }
+  if (basePermissionMode === 'acceptEdits') {
+    return PLAN_APPROVAL_OPTIONS_ACCEPT_EDITS
+  }
+  return PLAN_APPROVAL_OPTIONS_DEFAULT
+}
 
 const PENDING = {
   state: 'pending',
@@ -46,7 +76,10 @@ export function claudePromptIdentity(input: {
   }
 }
 
-export function claudeApprovalItem(prompt: ClaudePendingPrompt): AgentJournalApprovalItem {
+export function claudeApprovalItem(
+  prompt: ClaudePendingPrompt,
+  basePermissionMode?: PermissionMode
+): AgentJournalApprovalItem {
   const planSubject = isPlanApprovalSubject(prompt.subject) ? prompt.subject : null
   const detail = truncateToolDetail(planSubject?.text ?? formatToolInput(prompt.input))
   return boundJournalPromptBody({
@@ -60,9 +93,10 @@ export function claudeApprovalItem(prompt: ClaudePendingPrompt): AgentJournalApp
     ...(prompt.subject ? { subject: prompt.subject } : {}),
     ...(prompt.personOnly ? { personOnly: true } : {}),
     detail: detail || null,
-    options: (planSubject ? PLAN_APPROVAL_OPTIONS : APPROVAL_OPTIONS).map((option) => ({
-      ...option
-    })),
+    options: (planSubject ? planApprovalOptions(basePermissionMode) : APPROVAL_OPTIONS).map(
+      (option) => ({ ...option })
+    ),
+    ...(planSubject ? { freeTextInput: { multiline: true } } : {}),
     resolution: { ...PENDING }
   })
 }

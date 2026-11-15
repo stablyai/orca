@@ -4,7 +4,11 @@ import {
   parseNativeChatStartupMenuEnvelope
 } from './approvals/native-chat-approval-envelope'
 import { formatAgentTypeLabel } from '../../agent-status/presentation/agent-type-label'
-import type { AgentJournalApprovalItem } from '../../agent-session/journal/agent-session-journal-types'
+import type {
+  AgentJournalApprovalItem,
+  AgentJournalFreeTextInput,
+  AgentJournalPromptIntent
+} from '../../agent-session/journal/agent-session-journal-types'
 import type { AgentJournalApprovalSubject } from '../../agent-session/journal/agent-session-journal-approval-subject'
 import { parseAskFromStatus, resolveNativeChatAsk } from './native-chat-ask'
 import type { AskPrompt } from './questions/native-chat-ask-types'
@@ -19,7 +23,9 @@ export type ChatApproval = {
   blockedPath?: string
   subject?: AgentJournalApprovalSubject
   detail?: string
-  options: { label: string; send: string }[]
+  options: { label: string; send: string; intent?: AgentJournalPromptIntent }[]
+  /** Present when denying this approval accepts user revision feedback. */
+  freeTextInput?: AgentJournalFreeTextInput
   /**
    * The screen-read startup dialog envelope this card answers. It can't collapse (a freed composer's
    * Return would answer the dialog), and the host writes a choice only while its screen still reads as it.
@@ -39,7 +45,12 @@ export function chatApprovalFromJournal(body: AgentJournalApprovalItem): ChatApp
     ...(body.blockedPath ? { blockedPath: body.blockedPath } : {}),
     ...(body.subject ? { subject: body.subject } : {}),
     ...(body.detail ? { detail: body.detail } : {}),
-    options: body.options.map((option) => ({ label: option.label, send: option.id }))
+    ...(body.freeTextInput ? { freeTextInput: body.freeTextInput } : {}),
+    options: body.options.map((option) => ({
+      label: option.label,
+      send: option.id,
+      ...(option.intent ? { intent: option.intent } : {})
+    }))
   }
 }
 

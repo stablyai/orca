@@ -54,3 +54,30 @@ export const narrowFileChangesExpanded = defineFixture({
   ...narrowFileChanges,
   interact: expandDetails
 })
+
+export const planReview = defineFixture({
+  width: 720,
+  render: () => (
+    <NativeChatApprovalCard
+      approval={{
+        title: 'Review proposed plan',
+        subject: {
+          kind: 'plan',
+          text: '## Plan\n\n1. Add multi-choice plan approval options.\n2. Allow inline revision feedback.',
+          filePath: '/workspace/.claude/plans/plan-review.md'
+        },
+        options: [
+          {
+            label: 'Approve and auto-accept edits',
+            send: 'allowAcceptEdits',
+            intent: 'allow_always'
+          },
+          { label: 'Approve and ask before edits', send: 'allow', intent: 'allow_once' },
+          { label: 'Keep planning', send: 'deny', intent: 'reject_once' }
+        ],
+        freeTextInput: { multiline: true }
+      }}
+      onChoose={() => {}}
+    />
+  )
+})

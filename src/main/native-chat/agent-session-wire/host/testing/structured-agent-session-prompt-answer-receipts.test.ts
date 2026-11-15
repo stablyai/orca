@@ -171,3 +171,100 @@ it.each(['allow', 'deny'])(
     })
   }
 )
+
+it('persists and replays plan revision feedback on deny and rejects feedback on invalid targets', async () => {
+  const originalAcquire = acquire.getMockImplementation()!
+  acquire.mockImplementation(async (input) => {
+    const result = await originalAcquire(input)
+    return { ...result, link: { ...result.link!, handle: claudeProviderHandle(THREAD, null) } }
+  })
+  expect(
+    await host.attach(
+      CALLER,
+      attachParams({
+        provider: 'claude',
+        agent: 'claude',
+        accountHome: { variable: 'CLAUDE_CONFIG_DIR', path: '/test-claude' },
+        providerHandle: { kind: 'claude', sessionId: THREAD, leafUuid: null }
+      })
+    )
+  ).toMatchObject({ ok: true })
+  await store.replaceSessionOptions({
+    sessionId: SESSION,
+    fence: store.getRecord(SESSION)!.lease.runtimeFence,
+    now: NOW,
+    options: { model: 'opus[1m]', interactionMode: 'plan' }
+  })
+  const identity = { provider: 'orca' as const, clientMessageId: 'plan-feedback-approval' }
+  const events = acquire.mock.calls.at(-1)?.[0].events
+  if (!events) {
+    throw new Error('Expected acquired Claude events')
+  }
+  events.appendItem(
+    identity,
+    {
+      kind: 'approval',
+      title: 'Review proposed plan',
+      detail: null,
+      subject: { kind: 'plan', text: 'Implement this plan' },
+      options: [
+        { id: 'allow', label: 'Approve plan', intent: 'allow_once' },
+        { id: 'deny', label: 'Keep planning', intent: 'reject_once' }
+      ],
+      freeTextInput: { multiline: true },
+      resolution: { state: 'pending', selectedOptionId: null, resolvedBy: null, resolvedAt: null }
+    },
+    { turnScope: AGENT_JOURNAL_THREAD_SCOPE }
+  )
+  await host.flushStreamedEvents(SESSION)
+  const itemId = agentJournalItemKey(identity)
+  const page = await host.history({ sessionId: SESSION, direction: 'tail' })
+  const prompt = page.ok ? page.page.items.find((item) => item.itemId === itemId)! : null
+  expect(prompt).not.toBeNull()
+
+  const badFields = {
+    itemId: prompt!.itemId,
+    expectedRevision: prompt!.revision,
+    optionId: 'allow',
+    feedback: 'Should not attach to allow'
+  }
+  expect(
+    await host.respondToPrompt(CALLER, {
+      envelope: envelope('agentSession.respondTo:approval', badFields, {
+        clientOperationId: opId()
+      }),
+      kind: 'approval',
+      ...badFields
+    })
+  ).toMatchObject({ ok: false })
+
+  const fields = {
+    itemId: prompt!.itemId,
+    expectedRevision: prompt!.revision,
+    optionId: 'deny',
+    feedback: 'Make step 2 atomic'
+  }
+  const params = {
+    envelope: envelope('agentSession.respondTo:approval', fields, { clientOperationId: opId() }),
+    kind: 'approval' as const,
+    ...fields
+  }
+  expect(await host.respondToPrompt(CALLER, params)).toMatchObject({ ok: true })
+  expect(answerPrompt).toHaveBeenCalledWith(
+    expect.objectContaining({
+      response: { kind: 'option', optionId: 'deny', feedback: 'Make step 2 atomic' }
+    })
+  )
+  expect(await promptBody(itemId)).toMatchObject({
+    resolution: {
+      state: 'resolved',
+      selectedOptionId: 'deny',
+      feedback: 'Make step 2 atomic'
+    }
+  })
+  expect(store.getRecord(SESSION)?.options).toEqual({
+    model: 'opus[1m]',
+    interactionMode: 'plan'
+  })
+  expect(await host.respondToPrompt(CALLER, params)).toMatchObject({ ok: true, replayed: true })
+})

@@ -131,6 +131,8 @@ export type AgentJournalResolution = {
   selectedOptionId: string | null
   /** Question answers. Absent on approvals and on rows written before hosts recorded it. */
   answers?: AgentSessionQuestionAnswer[]
+  /** Free-text revision feedback paired with a reject-once approval option. */
+  feedback?: string
   /** Opaque client identity of the resolver, for "answered on <device>". */
   resolvedBy: string | null
   /** Read-time device description; never written back into the journal. */
@@ -199,6 +201,8 @@ export type AgentJournalApprovalItem = {
   personOnly?: true
   detail: string | null
   options: AgentJournalPromptOption[]
+  /** Present when denying this approval accepts user revision feedback. */
+  freeTextInput?: AgentJournalFreeTextInput
   resolution: AgentJournalResolution
 }
 

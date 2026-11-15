@@ -1,6 +1,6 @@
 import { SecuritySurface } from '@/components/ui/security-surface'
 import { useRef, useState } from 'react'
-import { ChevronDown, Loader2, ShieldQuestion, X } from 'lucide-react'
+import { ChevronDown, ShieldQuestion, X } from 'lucide-react'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import { approvalDetailPreview } from '../../../../../shared/agent-session/agent-session-approval-detail-preview'
 import { cn } from '@/lib/class-names'
@@ -13,13 +13,15 @@ import {
 } from '../../../../../shared/agent-session/agent-session-approval-subject'
 import { NativeChatCodeBlock } from '../markdown/code/NativeChatCodeBlock'
 import type { ChatApproval } from '../../../../../shared/native-chat/input/native-chat-interactive-prompt'
+import { isEditableTarget } from '@/lib/text-input/focus/editable-target'
+import { NativeChatPlanApprovalActions } from './NativeChatPlanApprovalActions'
 import { NativeChatPromptCollapseToggle } from './NativeChatPromptCollapse'
 import { useNativeChatPromptCardFocus } from './use-native-chat-prompt-card-focus'
 
 export type NativeChatApprovalCardProps = {
   approval: ChatApproval
-  /** Deliver the option's transport-specific response token. */
-  onChoose: (option: string) => void
+  /** Deliver the option's transport-specific response token and optional revision feedback. */
+  onChoose: (option: string, feedback?: string) => void
   /** Cancel the active provider turn while this card owns the composer region. */
   onCancel?: () => void
   /** Without `onCancel`: fold the card to a strip and give the input back, writing nothing. */
@@ -59,6 +61,8 @@ export function NativeChatApprovalCard({
   const neededPath = approvalBlockedPathToShow(approval)
   // A newer Orca's subject: its detail is shown, and only the card's cancel answers.
   const newerSubject = isNewerApprovalSubject(approval.subject)
+  const planSubject = isPlanApprovalSubject(approval.subject) ? approval.subject : null
+  const isPlanChoices = planSubject !== null && approval.options.length > 0 && !newerSubject
   const stacked = placement === 'stacked'
   const hasContext = Boolean(
     countdown ||
@@ -88,7 +92,13 @@ export function NativeChatApprovalCard({
             aria-label={approval.title}
             tabIndex={-1}
             onKeyDown={(event) => {
-              if (event.key === 'Escape' && !event.nativeEvent.isComposing && escape) {
+              // Escape inside the revision field preserves the user's draft.
+              if (
+                event.key === 'Escape' &&
+                !event.nativeEvent.isComposing &&
+                escape &&
+                !isEditableTarget(event.target)
+              ) {
                 event.preventDefault()
                 event.stopPropagation()
                 escape()
@@ -164,21 +174,21 @@ export function NativeChatApprovalCard({
                     <span className="font-mono">{neededPath}</span>
                   </p>
                 ) : null}
-                {isPlanApprovalSubject(approval.subject) ? (
+                {planSubject ? (
                   <div data-native-chat-approval-plan="true">
                     <NativeChatMarkdown
-                      content={approval.subject.text}
+                      content={planSubject.text}
                       variant="document"
                       className="text-sm text-chat-foreground"
                       renderCodeBlock={NativeChatCodeBlock}
                       linkifyFilePaths
                     />
-                    {approval.subject.filePath ? (
+                    {planSubject.filePath ? (
                       <p className="mt-2 break-all">
                         <span className="font-medium text-foreground">
                           {t('components.native-chat.approval.plan.file', 'Plan file')}:{' '}
                         </span>
-                        <span className="font-mono">{approval.subject.filePath}</span>
+                        <span className="font-mono">{planSubject.filePath}</span>
                       </p>
                     ) : null}
                   </div>
@@ -198,40 +208,20 @@ export function NativeChatApprovalCard({
                 ) : null}
               </div>
             ) : null}
-            <div data-native-chat-approval-actions="true" className="flex shrink-0 flex-wrap gap-2">
-              {approval.options.map((opt, i) => (
-                <button
-                  key={`${opt.label}-${i}`}
-                  type="button"
-                  disabled={newerSubject || isSubmitting}
-                  onClick={() => onChoose(opt.send)}
-                  className={cn(
-                    'rounded-md px-4 py-1.5 text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50',
-                    i === 0 && !approval.neutralOptions
-                      ? 'bg-primary text-primary-foreground hover:bg-primary/90'
-                      : 'border border-border bg-background text-foreground hover:bg-accent hover:text-accent-foreground'
-                  )}
-                >
-                  {isSubmitting && opt.send === submittingOption ? (
-                    <span className="inline-flex items-center gap-1.5">
-                      <Loader2 className="size-3.5 animate-spin" aria-hidden />
-                      {opt.label}
-                    </span>
-                  ) : (
-                    opt.label
-                  )}
-                </button>
-              ))}
-              {approval.options.length === 0 && onOpenTerminal ? (
-                <button
-                  type="button"
-                  onClick={onOpenTerminal}
-                  className="rounded-md bg-primary px-4 py-1.5 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                >
-                  {t('components.native-chat.question.openTerminal', 'Answer in terminal')}
-                </button>
-              ) : null}
-            </div>
+            <NativeChatPlanApprovalActions
+              cardRef={cardRef}
+              options={approval.options}
+              neutralOptions={approval.neutralOptions}
+              freeTextInput={approval.freeTextInput}
+              newerSubject={newerSubject}
+              isSubmitting={isSubmitting}
+              submittingOption={submittingOption}
+              shouldFocus={shouldFocus}
+              stacked={stacked}
+              isPlanChoices={isPlanChoices}
+              onOpenTerminal={onOpenTerminal}
+              onChoose={onChoose}
+            />
           </div>
         </div>
       </div>

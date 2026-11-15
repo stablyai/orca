@@ -37,6 +37,8 @@ export type AgentSessionPromptRequest = {
   /** Legacy clients pack question answers into optionId. */
   optionId?: string
   answers?: AgentSessionQuestionAnswer[]
+  /** Revision feedback paired with a reject-once approval option. */
+  feedback?: string
 }
 
 function invalid(
@@ -52,9 +54,25 @@ function readPromptChoice(
 ): { response: AgentSessionPromptResponse; selectedOptionId: string } | null {
   if (prompt.kind === 'approval') {
     const optionId = input.optionId
-    return optionId !== undefined && prompt.options.some((option) => option.id === optionId)
-      ? { response: { kind: 'option', optionId }, selectedOptionId: optionId }
-      : null
+    const matched =
+      optionId !== undefined ? prompt.options.find((option) => option.id === optionId) : undefined
+    if (!matched) {
+      return null
+    }
+    if (input.feedback !== undefined) {
+      if (
+        !prompt.freeTextInput ||
+        matched.intent !== 'reject_once' ||
+        input.feedback.trim().length === 0
+      ) {
+        return null
+      }
+      return {
+        response: { kind: 'option', optionId: matched.id, feedback: input.feedback },
+        selectedOptionId: matched.id
+      }
+    }
+    return { response: { kind: 'option', optionId: matched.id }, selectedOptionId: matched.id }
   }
   const answers =
     input.answers ??
@@ -83,9 +101,17 @@ async function resolvedWithSameChoice(
   }
   const { item, prompt } = settled
   const choice = readPromptChoice(prompt, input)
-  return choice?.selectedOptionId === prompt.resolution.selectedOptionId
-    ? { itemId: item.itemId, revision: item.revision, resolution: prompt.resolution }
-    : null
+  if (!choice || choice.selectedOptionId !== prompt.resolution.selectedOptionId) {
+    return null
+  }
+  if (
+    prompt.kind === 'approval' &&
+    (choice.response.kind === 'option' ? choice.response.feedback : undefined) !==
+      prompt.resolution.feedback
+  ) {
+    return null
+  }
+  return { itemId: item.itemId, revision: item.revision, resolution: prompt.resolution }
 }
 
 export async function performPrompt(
@@ -115,7 +141,9 @@ export async function performPrompt(
     return invalid(
       'optionRejected',
       input.optionId !== undefined
-        ? `Option ${input.optionId} is not offered by item ${input.itemId}.`
+        ? input.feedback !== undefined
+          ? `Feedback is not valid for option ${input.optionId} on item ${input.itemId}.`
+          : `Option ${input.optionId} is not offered by item ${input.itemId}.`
         : `The answers do not match the questions on item ${input.itemId}.`
     )
   }
@@ -129,6 +157,9 @@ export async function performPrompt(
     state: 'resolved',
     selectedOptionId: choice.selectedOptionId,
     ...(response.kind === 'answers' ? { answers: response.answers } : {}),
+    ...(response.kind === 'option' && response.feedback !== undefined
+      ? { feedback: response.feedback }
+      : {}),
     resolvedBy: ctx.resolvedBy,
     resolvedAt: ctx.now()
   }

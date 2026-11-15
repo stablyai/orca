@@ -21119,7 +21119,9 @@
         "plan": {
           "file": "Plan file",
           "reviewTitle": "Review proposed plan",
-          "refineHint": "Refine plan closes the review so you can send what to change."
+          "refineHint": "Refine plan closes the review so you can send what to change.",
+          "otherPlaceholder": "Type what to change in the plan…",
+          "sendFeedback": "Submit"
         },
         "worker": "Worker · {{name}}",
         "openWorker": "Open worker",

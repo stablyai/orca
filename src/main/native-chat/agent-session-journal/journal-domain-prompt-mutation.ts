@@ -70,7 +70,10 @@ export function applyJournalDomainPromptMutation(
       ? input.resolution.selectedOptionId
       : undefined
   const planApprovalMode =
-    choice === 'allow' || choice === 'allowForSession'
+    choice === 'allow' ||
+    choice === 'allowForSession' ||
+    choice === 'allowAcceptEdits' ||
+    choice === 'allowAsk'
       ? ('default' as const)
       : choice === 'deny'
         ? ('plan' as const)

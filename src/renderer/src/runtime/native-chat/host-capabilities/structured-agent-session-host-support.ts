@@ -1,5 +1,6 @@
 import '../../../../../shared/agent-session/agent-session-attention-capabilities'
 import {
+  AGENT_SESSION_APPROVAL_FEEDBACK_RUNTIME_CAPABILITY,
   AGENT_SESSION_CONTINUATION_CONTEXT_RUNTIME_CAPABILITY,
   AGENT_SESSION_QUESTION_ANSWERS_RUNTIME_CAPABILITY,
   AGENT_SESSION_ITEM_DETAIL_RUNTIME_CAPABILITY
@@ -114,6 +115,15 @@ export function supportsStructuredAgentSessionQuestionAnswers(
   return structuredAgentSessionHostSupports(
     target,
     AGENT_SESSION_QUESTION_ANSWERS_RUNTIME_CAPABILITY
+  )
+}
+
+export function supportsStructuredAgentSessionApprovalFeedback(
+  target: RuntimeClientTarget
+): Promise<boolean> {
+  return structuredAgentSessionHostSupports(
+    target,
+    AGENT_SESSION_APPROVAL_FEEDBACK_RUNTIME_CAPABILITY
   )
 }
 

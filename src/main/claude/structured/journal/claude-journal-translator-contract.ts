@@ -15,6 +15,7 @@ import type { ClaudeJournalPrompts } from './claude-structured-journal-prompts'
 import type { ClaudeStructuredSessionEvent } from '../claude-structured-session-event'
 import type { ClaudeCommandStart } from '../turns/claude-command-turn'
 
+import type { PermissionMode } from '@anthropic-ai/claude-agent-sdk'
 import type { AgentSessionDeltaCoalescerDeps } from '../../../native-chat/agent-session-wire/publication/subscribers/agent-session-delta-coalescer'
 import type { ClaudeGoalBackgroundWork } from '../../background-tasks/claude-background-task-tracker'
 import type { AgentSessionAccountKind } from '../../../../shared/agent-session/agent-session-availability'
@@ -30,6 +31,7 @@ export type ClaudeJournalTranslatorDeps = {
   account?: () => AgentSessionAccountKind | undefined
   model?: () => string | undefined
   goalBackgroundWork?: () => ClaudeGoalBackgroundWork
+  planApprovalMode?: () => PermissionMode
   /** True when this acquisition's pending startup took a turnless failure result and will fail with it. */
   acceptStartupFailure?: (message: Record<string, unknown>) => boolean
 }

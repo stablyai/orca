@@ -12,7 +12,14 @@ import {
 } from '../permissions/claude-prompt-registry'
 
 /** Keep `cancel` for older cards; it now means dismissal. */
-export const CLAUDE_APPROVAL_DECISIONS = ['allow', 'allowForSession', 'deny', 'cancel'] as const
+export const CLAUDE_APPROVAL_DECISIONS = [
+  'allow',
+  'allowForSession',
+  'allowAcceptEdits',
+  'allowAsk',
+  'deny',
+  'cancel'
+] as const
 export type ClaudeApprovalDecision = (typeof CLAUDE_APPROVAL_DECISIONS)[number]
 
 /** Questions require Stop; approvals can be dismissed without interrupting the session. */
@@ -94,12 +101,21 @@ function sessionScopedPermission(suggestion: PermissionUpdate): PermissionUpdate
   return { ...suggestion, destination: 'session' }
 }
 
-function approvalResponse(prompt: ClaudePendingPrompt, optionId: string): PermissionResult {
+function approvalResponse(
+  prompt: ClaudePendingPrompt,
+  optionId: string,
+  feedback?: string
+): PermissionResult {
   if (!isClaudeApprovalDecision(optionId)) {
     throw new Error(`${optionId} is not a Claude approval decision`)
   }
   const decision = optionId
-  if (decision === 'allow' || decision === 'allowForSession') {
+  if (
+    decision === 'allow' ||
+    decision === 'allowForSession' ||
+    decision === 'allowAcceptEdits' ||
+    decision === 'allowAsk'
+  ) {
     return {
       behavior: 'allow',
       updatedInput: prompt.input,
@@ -114,12 +130,14 @@ function approvalResponse(prompt: ClaudePendingPrompt, optionId: string): Permis
   if (decision === 'cancel') {
     return claudePromptDismissal(prompt)
   }
+  const customFeedback = prompt.subject?.kind === 'plan' ? feedback?.trim() : undefined
   return {
     behavior: 'deny',
     message:
-      prompt.subject?.kind === 'plan'
+      customFeedback ||
+      (prompt.subject?.kind === 'plan'
         ? 'The user asked you to keep planning. Revise the plan and call ExitPlanMode again.'
-        : 'User denied this action.',
+        : 'User denied this action.'),
     toolUseID: prompt.toolUseId
   }
 }
@@ -174,7 +192,7 @@ export function buildClaudePromptReply(
     if (response.kind !== 'option') {
       throw new Error(`Claude prompt ${prompt.promptKey} takes a decision, not answers`)
     }
-    return approvalResponse(prompt, response.optionId)
+    return approvalResponse(prompt, response.optionId, response.feedback)
   }
   if (response.kind !== 'answers') {
     throw new Error(`Claude prompt ${prompt.promptKey} takes answers, not a decision`)

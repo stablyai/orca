@@ -62,4 +62,26 @@ describe('worker approval option', () => {
     // Two refuse-once options would be a guess.
     expect(pick(acpOptions(['reject_once', 'reject_once']), 'deny')).toBeNull()
   })
+
+  it('keeps unique allow_once and reject_once options on Claude plan approvals across base modes', () => {
+    for (const mode of ['default', 'acceptEdits', 'bypassPermissions'] as const) {
+      const plan = claudeApprovalItem(
+        {
+          requestId: 'r-plan',
+          promptKey: 'p-plan',
+          toolUseId: 't-plan',
+          toolName: 'ExitPlanMode',
+          kind: 'approval',
+          input: { plan: 'Step 1' },
+          subject: { kind: 'plan', text: 'Step 1' },
+          suggestions: [],
+          questionIds: [],
+          settle: () => {}
+        },
+        mode
+      ).options
+      expect(pick(plan, 'allow')).toBe('allow')
+      expect(pick(plan, 'deny')).toBe('deny')
+    }
+  })
 })

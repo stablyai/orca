@@ -8,6 +8,7 @@ import type { StructuredAgentSessionHostCapabilityState } from '../../../../../s
 import { useEffect, useState } from 'react'
 import { AGENT_SESSION_CONVERSATION_STOP_RUNTIME_CAPABILITY } from '../../../../../shared/agent-session/lifecycle/stopping/agent-session-stop-capabilities'
 import {
+  AGENT_SESSION_APPROVAL_FEEDBACK_RUNTIME_CAPABILITY,
   AGENT_SESSION_QUEUED_COMMANDS_RUNTIME_CAPABILITY,
   AGENT_SESSION_QUEUED_MESSAGE_EDIT_RUNTIME_CAPABILITY,
   AGENT_SESSION_QUEUED_MESSAGE_REORDER_RUNTIME_CAPABILITY,
@@ -237,5 +238,16 @@ export function useStructuredAgentSessionHostEditsQueuedSkills(
   return useStructuredAgentSessionHostCapability(
     target,
     AGENT_SESSION_QUEUED_MESSAGE_SKILLS_EDIT_RUNTIME_CAPABILITY
+  )
+}
+
+/** Whether the host accepts inline revision feedback when answering a plan approval. Until it
+ *  says so, and against an older host, the approval card omits the inline feedback box. */
+export function useStructuredAgentSessionHostApprovalFeedback(
+  target: RuntimeClientTarget
+): boolean {
+  return useStructuredAgentSessionHostCapability(
+    target,
+    AGENT_SESSION_APPROVAL_FEEDBACK_RUNTIME_CAPABILITY
   )
 }
