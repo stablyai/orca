@@ -14,11 +14,11 @@ const INDEX_PENDING_DIR = (): string =>
 
 /**
  * Host account history passes, in request order per home: a request joins only the latest one
- * queued for that home with the same mode. A home shared once this run skips later passes.
+ * queued for that home with the same mode. A home settled in a mode this run skips later passes in it.
  */
 export class CodexAccountHistoryPasses {
   private readonly latest = new Map<string, QueuedPass>()
-  private readonly sharedThisRun = new Set<string>()
+  private readonly settledThisRun = new Map<string, boolean>()
   private activePasses = 0
 
   run(accountHome: string, shared: boolean): Promise<void> {
@@ -28,13 +28,16 @@ export class CodexAccountHistoryPasses {
       return previous.pass
     }
     const pass = (previous?.pass ?? Promise.resolve()).then(async () => {
+      if (this.settledThisRun.get(key) === shared) {
+        return
+      }
       this.activePasses += 1
       try {
         await this.runPass(key, accountHome, shared)
       } finally {
         this.activePasses -= 1
       }
-      // Index once no pass is moving files; a pass that recorded nothing leaves no work.
+      // Index once no pass is moving files.
       requestHostCodexIndexHeal(
         INDEX_PENDING_DIR(),
         getSystemCodexHomePath(),
@@ -51,10 +54,7 @@ export class CodexAccountHistoryPasses {
   }
 
   private async runPass(key: string, accountHome: string, shared: boolean): Promise<void> {
-    if (shared && this.sharedThisRun.has(key)) {
-      return
-    }
-    this.sharedThisRun.delete(key)
+    this.settledThisRun.delete(key)
     const storeHome = getSystemCodexHomePath()
     const onWarning = (error: unknown): void => {
       console.warn('[codex-account-history] Account history was not fully shared:', error)
@@ -62,6 +62,7 @@ export class CodexAccountHistoryPasses {
     try {
       if (!shared) {
         await unshareCodexAccountHistory({ accountHome, storeHome, onWarning })
+        this.settledThisRun.set(key, false)
         return
       }
       const indexPendingDir = INDEX_PENDING_DIR()
@@ -75,7 +76,7 @@ export class CodexAccountHistoryPasses {
         onWarning
       })
       if (result === 'shared') {
-        this.sharedThisRun.add(key)
+        this.settledThisRun.set(key, true)
       }
     } catch (error) {
       onWarning(error)

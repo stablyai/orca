@@ -32,13 +32,18 @@ export async function healCodexIndexPendingRollouts(args: {
   options?: CodexSessionIndexHealOptions
 }): Promise<void> {
   const pending = new Map<string, string>()
-  const markerByThreadId = new Map<string, string>()
+  // A thread may own several rollouts (a .zst twin, a revert); one read settles them all.
+  const markersByThreadId = new Map<string, string[]>()
   const withoutThread: string[] = []
   for (const name of args.rolloutNames) {
     const rollout = parseCodexRolloutThreadId(name)
     if (rollout) {
-      pending.set(rollout.threadId, rollout.rolloutStamp)
-      markerByThreadId.set(rollout.threadId, name)
+      if ((pending.get(rollout.threadId) ?? '') < rollout.rolloutStamp) {
+        pending.set(rollout.threadId, rollout.rolloutStamp)
+      }
+      const markers = markersByThreadId.get(rollout.threadId) ?? []
+      markers.push(name)
+      markersByThreadId.set(rollout.threadId, markers)
     } else {
       withoutThread.push(name)
     }
@@ -59,7 +64,7 @@ export async function healCodexIndexPendingRollouts(args: {
       await args.clear(
         settled
           .filter(({ outcome }) => outcome !== 'failed')
-          .flatMap(({ threadId }) => markerByThreadId.get(threadId) ?? [])
+          .flatMap(({ threadId }) => markersByThreadId.get(threadId) ?? [])
       )
     }
   })

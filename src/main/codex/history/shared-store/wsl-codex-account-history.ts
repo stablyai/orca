@@ -168,8 +168,8 @@ export class WslCodexAccountHistoryLaunches {
     { target: WslCodexAccountHistoryTarget; output: HelperOutput }
   >()
   private readonly activePasses = new Map<string, number>()
-  // A home shared once this run skips later guest passes.
-  private readonly sharedThisRun = new Set<string>()
+  // A home settled in a mode this run skips later guest passes in it.
+  private readonly settledThisRun = new Map<string, boolean>()
 
   constructor(private readonly dependencies: WslAccountHistoryDependencies = defaultDependencies) {}
 
@@ -185,15 +185,15 @@ export class WslCodexAccountHistoryLaunches {
     }
     const pass = (previous?.pass ?? Promise.resolve())
       .then(async () => {
-        if (target.shared && this.sharedThisRun.has(key)) {
+        if (this.settledThisRun.get(key) === target.shared) {
           return
         }
-        this.sharedThisRun.delete(key)
+        this.settledThisRun.delete(key)
         this.activePasses.set(distroKey, (this.activePasses.get(distroKey) ?? 0) + 1)
         try {
           const output = await linkInGuest(target, this.dependencies)
-          if (output?.result === 'shared') {
-            this.sharedThisRun.add(key)
+          if (output && output.result === (target.shared ? 'shared' : 'unshared')) {
+            this.settledThisRun.set(key, target.shared)
           }
           if (output && output.pending.length > 0) {
             this.owedHeals.set(distroKey, { target, output })

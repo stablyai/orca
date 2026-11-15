@@ -20,9 +20,10 @@ import type { CodexManagedHomePath } from './codex-managed-home-path'
 
 const WSL_MANAGED_HOME_TIMEOUT_MS = 5_000
 
-// Codex recorded the account's conversations under its own path in the shared index, and a
-// merge keeps its conflicting copies beside the links; both outlive the login.
-const KEPT_HISTORY_LINKS = ['sessions', 'archived_sessions']
+// Codex recorded the account's conversations under its own path in the shared index, a home
+// that was busy at every launch may still hold its only copy, and a merge keeps conflicting
+// copies beside the links; all of it outlives the login.
+const KEPT_HISTORY = ['sessions', 'archived_sessions']
 const KEEP_ON_REMOVAL_SCRIPT = [
   'set -u',
   'home=$1',
@@ -55,8 +56,7 @@ const KEEP_ON_REMOVAL_SCRIPT = [
 async function removeManagedHomeKeepingSharedHistory(home: string): Promise<boolean> {
   const entries = await readdir(home, { withFileTypes: true })
   const kept = (entry: Dirent): boolean =>
-    (entry.isSymbolicLink() && KEPT_HISTORY_LINKS.includes(entry.name)) ||
-    entry.name.endsWith(MERGE_PENDING_SUFFIX)
+    KEPT_HISTORY.includes(entry.name) || entry.name.endsWith(MERGE_PENDING_SUFFIX)
   for (const entry of entries.filter((candidate) => !kept(candidate))) {
     const path = join(home, entry.name)
     if (entry.isSymbolicLink()) {

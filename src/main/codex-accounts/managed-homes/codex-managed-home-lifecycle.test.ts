@@ -55,6 +55,18 @@ describe('CodexManagedHomeLifecycle.safeRemove', () => {
     expect(readFileSync(join(f.store, 'sessions', 'rollout.jsonl'), 'utf8')).toBe('shared\n')
   })
 
+  it('keeps history that never moved into the store', async () => {
+    const f = fixture()
+    mkdirSync(join(f.home, 'sessions'))
+    writeFileSync(join(f.home, 'sessions', 'rollout.jsonl'), 'only copy\n')
+    writeFileSync(join(f.home, 'auth.json'), '{}')
+
+    await f.lifecycle.safeRemove(f.home, 'a')
+
+    expect(readdirSync(f.home)).toEqual(['sessions'])
+    expect(readFileSync(join(f.home, 'sessions', 'rollout.jsonl'), 'utf8')).toBe('only copy\n')
+  })
+
   it('removes a home that never shared history entirely', async () => {
     const f = fixture()
     writeFileSync(join(f.home, 'auth.json'), '{}')

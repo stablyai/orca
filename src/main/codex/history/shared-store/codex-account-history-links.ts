@@ -166,11 +166,17 @@ async function writeSharedSqliteHome(
   throw new Error(`Codex config kept changing; sqlite_home not updated in ${configPath}`)
 }
 
-export function isCodexAccountHistoryLinked(
+/** Both history folders: Codex archives by moving a rollout between them. */
+export async function isCodexAccountHistoryLinked(
   accountHome: string,
   storeHome: string
 ): Promise<boolean> {
-  return isLinkedDirectory(join(accountHome, 'sessions'), join(storeHome, 'sessions'))
+  const linked = await Promise.all(
+    [...HISTORY_DIRECTORIES].map((name) =>
+      isLinkedDirectory(join(accountHome, name), join(storeHome, name))
+    )
+  )
+  return linked.every(Boolean)
 }
 
 /**

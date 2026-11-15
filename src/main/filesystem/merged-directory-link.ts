@@ -1,5 +1,4 @@
 import {
-  copyFile,
   link,
   lstat,
   mkdir,
@@ -11,7 +10,7 @@ import {
   symlink,
   unlink
 } from 'node:fs/promises'
-import { constants as fsConstants, type BigIntStats } from 'node:fs'
+import type { BigIntStats } from 'node:fs'
 import { join } from 'node:path'
 import { isDefinitiveAbsence } from '../../shared/definitive-filesystem-absence'
 import { renameFileWithWindowsRetryAsync } from '../../shared/windows-retry-file-operations'
@@ -66,25 +65,25 @@ type MoveResult = { retained: number; failed: unknown[] }
 
 const HARD_LINK_UNSUPPORTED = new Set(['EPERM', 'ENOTSUP', 'EOPNOTSUPP', 'EMLINK', 'EXDEV'])
 
-// A plain rename replaces an existing file (and on Windows a racing one), so files and links are
-// published with calls that fail on an existing name and only then lose their old name.
-async function moveEntry(from: string, to: string, item: BigIntStats): Promise<void> {
+// A plain rename replaces an existing file (and on Windows a racing one), and a copy would detach
+// a live writer's handle, so a file moves only by a new name for its inode; false keeps it in place.
+async function moveEntry(from: string, to: string, item: BigIntStats): Promise<boolean> {
   if (item.isDirectory()) {
     // A directory rename never replaces a non-empty one.
     await renameFileWithWindowsRetryAsync(from, to)
-    return
+    return true
   }
   try {
     await (item.isSymbolicLink() ? symlink(await readlink(from), to) : link(from, to))
   } catch (error) {
     const code = (error as NodeJS.ErrnoException | null)?.code ?? ''
-    // Some filesystems refuse hard links; an exclusive copy publishes without replacing a name.
-    if (!HARD_LINK_UNSUPPORTED.has(code) || !item.isFile()) {
-      throw error
+    if (HARD_LINK_UNSUPPORTED.has(code) && item.isFile()) {
+      return false
     }
-    await copyFile(from, to, fsConstants.COPYFILE_EXCL)
+    throw error
   }
   await unlink(from)
+  return true
 }
 
 // One locked entry must not prevent merging the rest.
@@ -104,7 +103,9 @@ async function moveTree(
       ])
       if (!existing) {
         await options.beforeShare?.(from)
-        await moveEntry(from, to, item)
+        if (!(await moveEntry(from, to, item))) {
+          result.retained += 1
+        }
       } else if (item.isDirectory() && existing.isDirectory()) {
         await moveTree(from, to, result, options)
       } else if (item.isFile() && item.dev === existing.dev && item.ino === existing.ino) {
