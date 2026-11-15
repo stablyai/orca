@@ -217,6 +217,12 @@
         }
       },
       "billing": {
+        "plans": {
+          "sandboxHoursLeftResets_one": "{{count}} sandbox hour left · resets {{date}}",
+          "sandboxHoursLeftResets_other": "{{count}} sandbox hours left · resets {{date}}",
+          "seatsBilled_one": "{{count}} seat · {{billed}}",
+          "seatsBilled_other": "{{count}} seats · {{billed}}"
+        },
         "sandboxHoursLeftCount_one": "{{count}} sandbox hour left",
         "sandboxHoursLeftCount_other": "{{count}} sandbox hours left",
         "sandboxHoursOverIncluded_one": "{{count}} sandbox hour over the included amount this month",

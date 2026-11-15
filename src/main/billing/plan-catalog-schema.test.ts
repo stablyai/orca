@@ -24,7 +24,8 @@ const team = {
   },
   seats: { min: 1, max: 500 },
   warnAtPercent: [75, 90, 100],
-  checkout: { available: true, intervals: ['month', 'year'] }
+  checkout: { available: true, intervals: ['month', 'year'] },
+  marketing: { tagline: 'For your team', featuresLead: null, ctaLabel: 'Continue in browser' }
 }
 const enterprise = {
   id: 'enterprise',
@@ -56,7 +57,8 @@ describe('parsePlanCatalog', () => {
       seats: { min: 1, max: 500 },
       includedHoursPerSeat: 60,
       checkoutAvailable: true,
-      supportUrl: null
+      supportUrl: null,
+      marketing: { tagline: 'For your team', featuresLead: null, ctaLabel: 'Continue in browser' }
     })
     expect(catalog?.plans[1]).toEqual({
       kind: 'contact_sales',
@@ -66,7 +68,8 @@ describe('parsePlanCatalog', () => {
       features: enterprise.features,
       contactUrl: 'https://orca.dev/enterprise',
       priceLabel: 'Custom',
-      supportUrl: null
+      supportUrl: null,
+      marketing: null
     })
   })
 
@@ -95,6 +98,19 @@ describe('parsePlanCatalog', () => {
     expect(first && 'prices' in first ? first.prices : null).toEqual([team.prices[0]])
     expect(first?.features).toHaveLength(1)
     expect(catalog?.plans[1]?.kind).toBe('free')
+  })
+
+  it('drops copy that is too long or not text, keeping the rest of the plan', () => {
+    const catalog = parsePlanCatalog({
+      schemaVersion: 1,
+      catalogVersion: 'c_3',
+      plans: [{ ...team, marketing: { tagline: 'x'.repeat(141), ctaLabel: 7, featuresLead: ' ' } }]
+    })
+    expect(catalog?.plans[0]?.marketing).toEqual({
+      tagline: null,
+      featuresLead: null,
+      ctaLabel: null
+    })
   })
 
   it('never offers checkout without a price, and refuses a non-v1 body', () => {

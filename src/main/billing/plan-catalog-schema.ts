@@ -22,6 +22,14 @@ const Feature = z.object({
   text: z.string().min(1).max(200)
 })
 
+const Copy = (max: number) => z.string().trim().min(1).max(max).nullable().catch(null).optional()
+
+const Marketing = z
+  .object({ tagline: Copy(140), featuresLead: Copy(60), ctaLabel: Copy(40) })
+  .nullable()
+  .catch(null)
+  .optional()
+
 const Price = z.object({
   interval: z.enum(ORCA_BILLING_INTERVALS),
   unitAmountCents: z.number().int().nonnegative(),
@@ -35,6 +43,7 @@ const Base = z.object({
   version: z.number().int().nonnegative().catch(0),
   features: z.array(z.unknown()).max(100).catch([]),
   entitlements: z.record(z.string(), z.unknown()).catch({}).optional(),
+  marketing: Marketing,
   // "Contact us" for this plan. https only: the desktop opens links through shell:openUrl, which
   // refuses other schemes (a mailto: from billing falls back to the Enterprise contact).
   supportUrl: z.string().url().startsWith('https://').max(500).nullable().catch(null).optional()
@@ -71,6 +80,17 @@ function features(raw: unknown[]): OrcaPlanFeature[] {
   })
 }
 
+function marketing(raw: z.infer<typeof Marketing>): OrcaPlanCatalogPlan['marketing'] {
+  if (!raw) {
+    return null
+  }
+  return {
+    tagline: raw.tagline ?? null,
+    featuresLead: raw.featuresLead ?? null,
+    ctaLabel: raw.ctaLabel ?? null
+  }
+}
+
 function prices(raw: unknown[]): OrcaPlanPrice[] {
   const seen = new Set<string>()
   return raw.flatMap((entry) => {
@@ -102,6 +122,7 @@ function plan(raw: unknown): OrcaPlanCatalogPlan | null {
     name: base.data.name,
     version: base.data.version,
     features: features(base.data.features),
+    marketing: marketing(base.data.marketing),
     supportUrl: base.data.supportUrl ?? null
   }
   if (base.data.kind === 'self_serve') {

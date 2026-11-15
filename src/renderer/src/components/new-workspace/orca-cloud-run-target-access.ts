@@ -1,5 +1,5 @@
 import type { OrcaBillingStatusResult } from '../../../../shared/orca-billing'
-import { openCloudConsole } from '@/lib/orca-cloud/open-cloud-console'
+import { openPlansDialog } from '@/components/billing/plans/plans-dialog-store'
 import { useAppStore } from '@/store/index'
 import { sandboxHoursLeft } from '@/components/billing/plan-billing-format'
 import {
@@ -24,7 +24,7 @@ function signInThenSelectOrcaCloud(): void {
 
 /** Plans are chosen in the web console; the row re-reads billing when the composer reopens. */
 function choosePlanInBrowser(): void {
-  void openCloudConsole('billing')
+  openPlansDialog()
 }
 
 /**

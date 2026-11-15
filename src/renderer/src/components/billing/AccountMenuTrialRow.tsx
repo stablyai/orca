@@ -11,7 +11,7 @@ import { useTranslate } from '@/i18n/use-translate'
 import { cn } from '@/lib/class-names'
 import type { OrcaBillingStatusResult } from '../../../../shared/orca-billing'
 import { accountMenuTrialRow } from './plan-billing-usage-copy'
-import { openCloudConsole } from '@/lib/orca-cloud/open-cloud-console'
+import { openPlansDialog } from './plans/plans-dialog-store'
 
 export function AccountMenuTrialRow({
   result
@@ -35,7 +35,7 @@ export function AccountMenuTrialRow({
       {row.canChoosePlan ? (
         <DropdownMenuItem
           data-account-menu-trial=""
-          onSelect={() => void openCloudConsole('billing')}
+          onSelect={() => openPlansDialog()}
           aria-label={t('auto.components.billing.trialRowChoosePlan', '{{trial}}. Choose plan', {
             trial: row.label
           })}

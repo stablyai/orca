@@ -9,6 +9,7 @@ import {
   subscribeBillingSummary
 } from './billing-summary-store'
 import { openCloudConsole } from '@/lib/orca-cloud/open-cloud-console'
+import { openPlansDialog } from './plans/plans-dialog-store'
 
 /** Cloud capability flag that turns billing on per account (server-controlled rollout). */
 export const BILLING_CAPABILITY = 'billing'
@@ -16,22 +17,23 @@ export const BILLING_CAPABILITY = 'billing'
 const UPGRADE_ITEM_ID = 'orca.upgrade'
 
 /**
- * Account menu: "Team" and "Plan & billing" open the web console in the browser. Accounts without
- * a plan get "Upgrade to Orca Cloud" (also the console's billing page) in place of Plan & billing.
+ * Account menu: "Plan & billing" opens the plans dialog (status and plans, then the web console);
+ * "Team" opens the console. Owners and admins of a team without a plan get "Upgrade to Orca Cloud"
+ * (the same dialog) in place of Plan & billing; members keep Plan & billing, read-only.
  */
 export function registerPlanBillingMenuItem(): () => void {
-  const registerBilling = (): (() => void) =>
+  const registerBilling = (hideFromTeamAdmin: boolean): (() => void) =>
     registerAccountMenuItem({
       id: 'orca.plan-billing',
       label: () => translate('auto.components.billing.menuItem', 'Plan & billing'),
       icon: CreditCard,
       order: 11,
       requiredCapability: BILLING_CAPABILITY,
-      // The console's billing page is owners and admins only; don't offer members a dead end.
-      requiresTeamAdmin: true,
-      onSelect: () => void openCloudConsole('billing')
+      hideFromTeamAdmin,
+      onSelect: openPlansDialog
     })
-  let disposeBilling: (() => void) | null = registerBilling()
+  let billingHiddenFromAdmins = false
+  let disposeBilling: () => void = registerBilling(false)
   const disposeTeam = registerAccountMenuItem({
     id: 'orca.team',
     label: () => translate('auto.components.billing.team.menuItem', 'Team'),
@@ -46,12 +48,11 @@ export function registerPlanBillingMenuItem(): () => void {
   const syncUpgrade = (): void => {
     // Only a known "no plan" shows it: never flash an upsell at a paying team while loading.
     const show = getBillingSummary().subscribed === false
-    // One entry at a time: "Upgrade to Orca Cloud" replaces "Plan & billing" until there is a plan.
-    if (show && disposeBilling) {
+    // One entry at a time for admins: "Upgrade to Orca Cloud" replaces "Plan & billing".
+    if (show !== billingHiddenFromAdmins) {
+      billingHiddenFromAdmins = show
       disposeBilling()
-      disposeBilling = null
-    } else if (!show && !disposeBilling) {
-      disposeBilling = registerBilling()
+      disposeBilling = registerBilling(show)
     }
     if (show && !disposeUpgrade) {
       disposeUpgrade = registerAccountMenuItem({
@@ -62,7 +63,7 @@ export function registerPlanBillingMenuItem(): () => void {
         tone: 'accent',
         requiredCapability: BILLING_CAPABILITY,
         requiresTeamAdmin: true,
-        onSelect: () => void openCloudConsole('billing')
+        onSelect: openPlansDialog
       })
     } else if (!show && disposeUpgrade) {
       disposeUpgrade()
@@ -104,7 +105,7 @@ export function registerPlanBillingMenuItem(): () => void {
   onAuth()
 
   return () => {
-    disposeBilling?.()
+    disposeBilling()
     disposeTeam()
     disposeUpgrade?.()
     unsubscribeSummary()

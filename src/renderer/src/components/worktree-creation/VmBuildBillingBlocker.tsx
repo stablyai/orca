@@ -8,7 +8,7 @@ import type {
   OrcaBillingOverageResult
 } from '../../../../shared/orca-billing'
 import { overageFailureCopy } from '../billing/plan-billing-copy'
-import { openCloudConsole } from '@/lib/orca-cloud/open-cloud-console'
+import { openPlansDialog } from '@/components/billing/plans/plans-dialog-store'
 import { formatCents } from '../../../../shared/orca-billing-usage-alerts'
 
 /** The four ways billing can refuse a create (JA-21 progressive billing). */
@@ -386,7 +386,7 @@ export function VmBuildBillingBlocker({
       onRaiseCap={(dollars) => void saveOverage(dollars * 100)}
       onComparePlans={() => {
         setPhase({ kind: 'browser', checking: false, stillBlocked: false })
-        void openCloudConsole('billing')
+        openPlansDialog()
       }}
       onUpdatePayment={() => {
         setPhase({ kind: 'browser', checking: false, stillBlocked: false })

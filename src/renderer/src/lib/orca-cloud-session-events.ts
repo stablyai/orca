@@ -20,7 +20,7 @@ import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store'
 import { findWorktreeById } from '@/store/github/refresh/worktree-refresh'
 import { runSleepWorktree } from '@/components/sidebar/workspace-actions/sleep/sleep-worktree-flow'
-import { openCloudConsole } from '@/lib/orca-cloud/open-cloud-console'
+import { openPlansDialog } from '@/components/billing/plans/plans-dialog-store'
 import { activateWorktreeFromSidebar } from '@/lib/workspace/activation/sidebar-worktree-activation'
 import { installOrcaCloudWorkspaceStore } from '@/lib/orca-cloud/orca-cloud-workspace-store'
 import { installCloudPredictiveWake } from '@/lib/orca-cloud/install-cloud-predictive-wake'
@@ -125,7 +125,7 @@ export function showOrcaCloudPlanUpsell(message: string): void {
   toast.error(message, {
     action: {
       label: translate('auto.components.billing.comparePlans', 'Compare plans'),
-      onClick: () => void openCloudConsole('billing')
+      onClick: () => openPlansDialog()
     }
   })
 }

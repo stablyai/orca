@@ -11,7 +11,7 @@ import {
   isAwaitingVmEnvironmentCheckDecision,
   resolveVmEnvironmentCheckDecision
 } from '@/runtime/ephemeral-vm/ephemeral-vm-environment-check-decision'
-import { openCloudConsole } from '@/lib/orca-cloud/open-cloud-console'
+import { openPlansDialog } from '@/components/billing/plans/plans-dialog-store'
 import { ORCA_BILLING_OVERAGE_SECTION_ID } from '@/components/new-workspace/orca-cloud-run-target-access'
 import type { PendingWorktreeCreation } from '@/lib/workspace/creation/pending-worktree-creation'
 import { toast } from 'sonner'
@@ -352,7 +352,7 @@ export function VmBuildSheet({
                   isBillingFailure(failure) && typedComposerPrompt(entry).trim()
                     ? () => onReturnToComposer({ local: false })
                     : onDismiss,
-                onSeePlans: () => void openCloudConsole('billing'),
+                onSeePlans: () => openPlansDialog(),
                 onCreateLocally: () => onReturnToComposer({ local: true }),
                 onOpenBilling: () => {
                   const store = useAppStore.getState()

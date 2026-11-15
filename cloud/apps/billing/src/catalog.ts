@@ -50,6 +50,21 @@ const VersionSchema = z
   })
   .strict()
 
+// How clients present the plan (desktop plans dialog, console): copy only, never terms. Not
+// versioned: changing it never changes what anyone bought.
+const MarketingSchema = z
+  .object({
+    tagline: z.string().min(1).max(140).optional(),
+    // Heading over the feature list, e.g. "Everything in Team, plus:".
+    featuresLead: z.string().min(1).max(60).optional(),
+    // The plan card's button, e.g. "Continue in browser", "Contact sales".
+    ctaLabel: z.string().min(1).max(40).optional(),
+    // Features a version lists that clients should not advertise yet (not offered to teams).
+    omitFeatures: z.array(z.string().regex(/^[a-z][a-z0-9_]{0,59}$/)).max(20).optional()
+  })
+  .strict()
+export type PlanMarketing = z.infer<typeof MarketingSchema>
+
 const PlanSchema = z
   .object({
     id: PlanIdSchema,
@@ -73,6 +88,7 @@ const PlanSchema = z
       .regex(/^(https:\/\/[^\s]+|mailto:[^\s@]+@[^\s@]+)$/)
       .optional(),
     priceLabel: z.string().max(40).optional(),
+    marketing: MarketingSchema.optional(),
     versions: z.array(VersionSchema).min(1)
   })
   .strict()
@@ -91,6 +107,7 @@ export type PlanConfig = {
   contactUrl?: string
   supportUrl?: string
   priceLabel?: string
+  marketing?: PlanMarketing
 }
 
 export type CatalogVersion = {
@@ -206,7 +223,8 @@ export async function catalogStatements(file: CatalogFile, applied: readonly App
       ...(plan.stripe ? { stripe: plan.stripe } : {}),
       ...(plan.contactUrl ? { contactUrl: plan.contactUrl } : {}),
       ...(plan.supportUrl ? { supportUrl: plan.supportUrl } : {}),
-      ...(plan.priceLabel ? { priceLabel: plan.priceLabel } : {})
+      ...(plan.priceLabel ? { priceLabel: plan.priceLabel } : {}),
+      ...(plan.marketing ? { marketing: plan.marketing } : {})
     }
     statements.push({
       sql: `INSERT INTO plans (plan_id, kind, display_name, sort, public, current_version, config_json, updated_at)

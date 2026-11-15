@@ -57,6 +57,16 @@ describe('GET /v1/plans', () => {
     expect(JSON.stringify(body)).not.toContain('price_')
   })
 
+  it('serves each plan\'s presentation copy and leaves out the features it omits', async () => {
+    const h = await createHarness()
+    const body = (await h.call('GET', '/v1/plans')).body
+    const plan = (id: string) => body.plans.find((entry: { id: string }) => entry.id === id)
+    expect(plan('team').marketing).toEqual({ tagline: 'Hosted sandboxes for your whole team, billed per seat', featuresLead: null, ctaLabel: 'Continue in browser' })
+    expect(plan('enterprise').marketing).toMatchObject({ featuresLead: 'Everything in Team, plus:', ctaLabel: 'Contact sales' })
+    expect(plan('enterprise').features.map((feature: { id: string }) => feature.id)).not.toContain('egress_controls')
+    expect(plan('enterprise').marketing).not.toHaveProperty('omitFeatures')
+  })
+
   it('answers 304 to a matching ETag, and the ETag changes when a Stripe price changes', async () => {
     const h = await createHarness()
     const first = await h.call('GET', '/v1/plans')
