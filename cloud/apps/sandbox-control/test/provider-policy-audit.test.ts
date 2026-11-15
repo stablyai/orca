@@ -6,7 +6,7 @@ import { createHarness } from './harness'
 const OP = 'o'.repeat(40)
 const MARKER = 'orcaprobebogus-0123456789'
 
-async function setup(env: Record<string, string>) {
+async function setup(env: Record<string, string>, account = 'acme') {
   const h = await createHarness({
     SECRETS_KEK: Buffer.alloc(32, 7).toString('base64'),
     EGRESS_PROXY_URL: 'https://sandbox.test/v1/egress/proxy',
@@ -15,12 +15,12 @@ async function setup(env: Record<string, string>) {
     EGRESS_SWAP_MODE: 'firewall',
     ...env
   })
-  const mia = await h.token('mia', 'acme', 'sandbox', {})
+  const mia = await h.token('mia', account, 'sandbox', {})
   await h.call('PUT', '/v1/secrets/personal/ANTHROPIC_API_KEY', { body: { value: `sk-ant-api03-${MARKER}` }, bearer: mia })
   const created = await h.call('POST', '/v1/sandboxes', { bearer: mia, body: { workspaceId: 'ws-1', machineSize: 'standard' } })
   const id: string = created.body.sandbox.id
   const box = () => [...h.vercel.boxes.values()].find((b) => b.params.tags.orcaSandbox === id)!
-  return { h, id, box }
+  return { h, id, box, mia }
 }
 
 describe('provider-policy-audit (dev only)', () => {
@@ -53,8 +53,57 @@ describe('provider-policy-audit (dev only)', () => {
 })
 
 describe('policyFacts', () => {
-  it('counts transform rules and keeps header names only', () => {
-    const body = JSON.stringify({ session: { networkPolicy: { transformRules: [{ domain: 'a.com', headerNames: ['Authorization', 'x-api-key'] }, { domain: 'b.com', headerNames: ['bad header'] }] } } })
-    expect(policyFacts(body, MARKER)).toEqual({ hasNetworkPolicy: true, transformRuleCount: 2, headerNames: ['authorization', 'x-api-key'], markerFound: false })
+  it('counts injection, forward and response rules separately, with header names per kind only', () => {
+    const live = JSON.stringify({ session: { networkPolicy: { injectionRules: [{ domain: 'a.com', headerNames: ['Authorization', 'x-api-key'] }], forwardRules: [{ domain: 'b.com', headerNames: ['bad header'] }], responseRules: [{ domain: 'a.com', statusCode: 403 }] } } })
+    expect(policyFacts(live, MARKER)).toEqual({
+      hasNetworkPolicy: true,
+      injectionRules: { count: 1, headerNames: ['authorization', 'x-api-key'] },
+      forwardRules: { count: 1, headerNames: [] },
+      responseRules: { count: 1, headerNames: [] },
+      markerFound: false
+    })
+    // A scrubbed policy reads as no injection rules, response rules only.
+    const scrubbed = JSON.stringify({ session: { networkPolicy: { responseRules: [{ domain: 'a.com', statusCode: 403 }, { domain: 'a.com', statusCode: 403 }] } } })
+    expect(policyFacts(scrubbed, MARKER)).toMatchObject({ injectionRules: { count: 0 }, responseRules: { count: 2 } })
+  })
+})
+
+describe('resume-raw and echo-probe (dev only, probe accounts only)', () => {
+  const probeAccount = async (h: Awaited<ReturnType<typeof createHarness>>, id: string) =>
+    h.env.SANDBOX_DB.prepare("UPDATE sandboxes SET account_id = 'dev:egress-probe-1' WHERE id = ?").bind(id).run()
+
+  it('echo-probe answers only whether the marker came back; placeholders only; nothing written in the VM', async () => {
+    const { h, id } = await setup({ SANDBOX_ENV: 'dev' })
+    await probeAccount(h, id)
+    const scripts: string[] = []
+    h.vercel.commandHandler = (params) => {
+      if (params.command === 'bash' && params.args?.[1]?.includes('grep -c')) {
+        scripts.push(params.args[1]!)
+        return { exitCode: 0, stdout: '1\n', stderr: '' }
+      }
+      return undefined
+    }
+    const placeholder = `orca-ph-anthropic-api-key-${id}`
+    const ok = await h.call('POST', `/v1/internal/sandboxes/${id}/echo-probe?marker=${MARKER}`, { bearer: OP, body: { host: 'httpbin.org', header: 'x-api-key', placeholder } })
+    expect(ok.body).toEqual({ sandboxId: id, markerFound: true })
+    expect(scripts[0]).not.toMatch(/-o |> ?\/|tmp/)
+    expect((await h.call('POST', `/v1/internal/sandboxes/${id}/echo-probe?marker=${MARKER}`, { bearer: OP, body: { host: 'httpbin.org', header: 'x-api-key', placeholder: 'sk-ant-real' } })).status).toBe(400)
+    expect((await h.call('POST', `/v1/internal/sandboxes/${id}/echo-probe?marker=${MARKER}`, { bearer: OP, body: { host: 'evil.example', header: 'x-api-key', placeholder } })).status).toBe(400)
+  })
+
+  it('refuses a real dev user’s workspace', async () => {
+    const { h, id } = await setup({ SANDBOX_ENV: 'dev' })
+    expect((await h.call('POST', `/v1/internal/sandboxes/${id}/resume-raw`, { bearer: OP })).status).toBe(403)
+    expect((await h.call('POST', `/v1/internal/sandboxes/${id}/echo-probe?marker=${MARKER}`, { bearer: OP, body: { host: 'httpbin.org', header: 'x-api-key', placeholder: `orca-ph-x-${id}` } })).status).toBe(403)
+  })
+
+  it('resume-raw resumes the provider session without writing a policy', async () => {
+    const { h, id, box, mia } = await setup({ SANDBOX_ENV: 'dev' })
+    expect((await h.call('POST', `/v1/sandboxes/${id}/suspend`, { bearer: mia })).status).toBe(200)
+    await probeAccount(h, id)
+    const before = JSON.stringify(box().policy)
+    const res = await h.call('POST', `/v1/internal/sandboxes/${id}/resume-raw`, { bearer: OP })
+    expect(res.body.sandboxId).toBe(id)
+    expect(JSON.stringify(box().policy)).toBe(before)
   })
 })

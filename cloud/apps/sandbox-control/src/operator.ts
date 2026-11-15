@@ -93,7 +93,7 @@ export async function handleOperator(
   }
   // Dev only (probe 2, egress-docs): redacted facts about what Vercel holds for one sandbox, read with the
   // Worker's own token. Never a value or a body; anywhere but dev, these routes don't exist.
-  const policyAudit = /^\/v1\/internal\/sandboxes\/([A-Za-z0-9_]+)\/(provider-policy-audit|provider-policy-scrub-test)$/.exec(path)
+  const policyAudit = /^\/v1\/internal\/sandboxes\/([A-Za-z0-9_]+)\/(provider-policy-audit|provider-policy-scrub-test|resume-raw|echo-probe)$/.exec(path)
   if (policyAudit && life.config.environment === 'dev') {
     const row = await getSandbox(life.db, policyAudit[1]!)
     if (!row) {
@@ -103,6 +103,41 @@ export async function handleOperator(
       const outcome = await scrubRecordPolicy(life, row)
       console.log(JSON.stringify({ event: 'provider_policy_scrub_test', sandboxId: row.id, outcome: typeof outcome === 'string' ? outcome : 'failed' }))
       return Response.json({ sandboxId: row.id, outcome })
+    }
+    // resume-raw and echo-probe act on a workspace, so only on throwaway probe accounts (dev:egress-…), never a
+    // real dev user's workspace.
+    if ((policyAudit[2] === 'resume-raw' || policyAudit[2] === 'echo-probe') && !row.account_id.startsWith('dev:egress-')) {
+      return Response.json({ error: 'not_a_probe_account' }, { status: 403 })
+    }
+    if (policyAudit[2] === 'resume-raw' && request.method === 'POST') {
+      // Probe 2 only: resume the provider session from its stored record with NO policy write of ours, so a probe
+      // can see which value the resumed session swaps. The row is left as it was (dev throwaways only).
+      const state = await life.provider.getSandbox(row.provider_name, { resume: true })
+      console.log(JSON.stringify({ event: 'provider_resume_raw', sandboxId: row.id, sessionStatus: state?.session.status ?? null }))
+      return Response.json({ sandboxId: row.id, sessionStatus: state?.session.status ?? null })
+    }
+    if (policyAudit[2] === 'echo-probe' && request.method === 'POST') {
+      // Probe 2 only: one fixed request from inside the VM to an echo host, carrying a placeholder header; the
+      // answer is whether the echoed request contained the marker (i.e. what the firewall swapped in). No body back.
+      const body = EchoProbeBody.safeParse(await deps.readJson())
+      const marker = new URL(request.url).searchParams.get('marker') ?? ''
+      if (!body.success || marker.length < 12 || !marker.startsWith('orcaprobebogus')) {
+        return Response.json({ error: 'invalid_request' }, { status: 400 })
+      }
+      const state = await life.provider.getSandbox(row.provider_name, { resume: false })
+      if (!state || state.session.status !== 'running') {
+        return Response.json({ error: 'not_running' }, { status: 409 })
+      }
+      const url = body.data.host === 'httpbin.org' ? 'https://httpbin.org/headers' : 'https://postman-echo.com/headers'
+      const result = await life.provider.runCommand(state.session.id, {
+        command: 'bash',
+        // Straight into grep -c: the echoed request (whatever the firewall swapped in) never touches the VM's disk.
+        args: ['-c', 'curl -s --max-time 20 -H "$1: $2" "$3" | grep -c -- "$4" || true', 'echo-probe', body.data.header, body.data.placeholder, url, marker],
+        timeoutMs: 30_000
+      })
+      const markerFound = Number(result.stdout.trim().split('\n').at(-1) ?? '0') > 0
+      console.log(JSON.stringify({ event: 'provider_echo_probe', sandboxId: row.id, markerFound }))
+      return Response.json({ sandboxId: row.id, markerFound })
     }
     if (policyAudit[2] === 'provider-policy-audit' && request.method === 'GET') {
       const marker = new URL(request.url).searchParams.get('marker') ?? ''
@@ -250,8 +285,24 @@ export async function handleOperator(
 
 const EgressModeBody = z.object({ mode: z.enum(['proxy', 'firewall']).nullable() })
 
-/** Redacted facts about a raw provider body: rule counts and header NAMES only, plus a marker substring test. */
-export function policyFacts(body: string, marker: string): { hasNetworkPolicy: boolean; transformRuleCount: number; headerNames: string[]; markerFound: boolean } {
+/** Rule kinds in Vercel's redacted policy shapes (probe 2): injection = a header swap, forward, response. */
+const RULE_KINDS: Record<string, 'injection' | 'forward' | 'response'> = {
+  injectionrules: 'injection',
+  transformrules: 'injection',
+  forwardrules: 'forward',
+  responserules: 'response'
+}
+
+type RuleFacts = { count: number; headerNames: string[] }
+
+/**
+ * Redacted facts about a raw provider body: per rule kind, a count and header NAMES only, plus a marker
+ * substring test. A scrubbed policy reads as 0 injection rules and some response rules.
+ */
+export function policyFacts(
+  body: string,
+  marker: string
+): { hasNetworkPolicy: boolean; injectionRules: RuleFacts; forwardRules: RuleFacts; responseRules: RuleFacts; markerFound: boolean } {
   let parsed: unknown = null
   try {
     parsed = JSON.parse(body)
@@ -259,14 +310,20 @@ export function policyFacts(body: string, marker: string): { hasNetworkPolicy: b
     // Facts from the substring test only.
   }
   let hasNetworkPolicy = false
-  let transformRuleCount = 0
-  const headerNames = new Set<string>()
-  const walk = (value: unknown, key: string): void => {
-    if (Array.isArray(value)) {
-      if (/transform/i.test(key)) {
-        transformRuleCount += value.length
+  const kinds = { injection: { count: 0, names: new Set<string>() }, forward: { count: 0, names: new Set<string>() }, response: { count: 0, names: new Set<string>() } }
+  const collectNames = (rule: unknown, into: Set<string>): void => {
+    const names = (rule as { headerNames?: unknown } | null)?.headerNames
+    if (Array.isArray(names)) {
+      for (const header of names) {
+        if (typeof header === 'string' && /^[A-Za-z0-9-]{1,64}$/.test(header)) {
+          into.add(header.toLowerCase())
+        }
       }
-      value.forEach((item) => walk(item, key))
+    }
+  }
+  const walk = (value: unknown): void => {
+    if (Array.isArray(value)) {
+      value.forEach(walk)
       return
     }
     if (value && typeof value === 'object') {
@@ -274,17 +331,23 @@ export function policyFacts(body: string, marker: string): { hasNetworkPolicy: b
         if (/^networkpolicy$/i.test(name)) {
           hasNetworkPolicy = true
         }
-        if (/^headerNames$/i.test(name) && Array.isArray(child)) {
-          for (const header of child) {
-            if (typeof header === 'string' && /^[A-Za-z0-9-]{1,64}$/.test(header)) {
-              headerNames.add(header.toLowerCase())
-            }
-          }
+        const kind = RULE_KINDS[name.toLowerCase()]
+        if (kind && Array.isArray(child)) {
+          kinds[kind].count += child.length
+          child.forEach((rule) => collectNames(rule, kinds[kind].names))
         }
-        walk(child, name)
+        walk(child)
       }
     }
   }
-  walk(parsed, '')
-  return { hasNetworkPolicy, transformRuleCount, headerNames: [...headerNames].sort(), markerFound: body.includes(marker) }
+  walk(parsed)
+  const facts = (kind: keyof typeof kinds): RuleFacts => ({ count: kinds[kind].count, headerNames: [...kinds[kind].names].sort() })
+  return { hasNetworkPolicy, injectionRules: facts('injection'), forwardRules: facts('forward'), responseRules: facts('response'), markerFound: body.includes(marker) }
 }
+
+const EchoProbeBody = z.object({
+  host: z.enum(['httpbin.org', 'postman-echo.com']),
+  header: z.string().regex(/^[A-Za-z0-9-]{1,64}$/),
+  // A placeholder (ours are orca-ph-…, or Bearer orca-ph-…): never a value worth echoing.
+  placeholder: z.string().regex(/^(Bearer |token )?orca-ph-(?:[a-z0-9-]{1,80}-)?sbx_[a-f0-9]{24}$/)
+})
