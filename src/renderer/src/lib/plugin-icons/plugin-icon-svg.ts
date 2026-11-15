@@ -1,33 +1,21 @@
 import {
   isSafePluginIconAttributeValue,
+  pluginIconSvgMonochromeError,
   PLUGIN_ICON_SVG_ATTRIBUTES,
-  PLUGIN_ICON_SVG_ELEMENTS
+  PLUGIN_ICON_SVG_ELEMENTS,
+  type PluginIconSvgNode
 } from '../../../../shared/plugins/contributions/plugin-panel-icon'
 
 const SVG_NS = 'http://www.w3.org/2000/svg'
 
-const PAINT_ATTRIBUTES = ['fill', 'stroke', 'stop-color', 'color']
-
-const SHAPES = new Set(['path', 'rect', 'circle', 'ellipse', 'polygon', 'polyline', 'text', 'use'])
-
-function declaredFill(element: Element): string | null {
-  const style = element.getAttribute('style')?.match(/(?:^|;)\s*fill\s*:\s*([^;]+)/i)?.[1]
-  return style ?? element.getAttribute('fill')
-}
-
-/** Whether any painted shape falls back to SVG's default black fill. */
-function hasDefaultFill(root: Element): boolean {
-  return Array.from(root.getElementsByTagName('*')).some((element) => {
-    if (!SHAPES.has(element.localName) || element.closest('defs, clipPath, mask, symbol')) {
-      return false
-    }
-    for (let node: Element | null = element; node; node = node.parentElement) {
-      if (declaredFill(node) !== null) {
-        return false
-      }
-    }
-    return true
-  })
+function paintNode(element: Element): PluginIconSvgNode {
+  return {
+    name: element.localName,
+    attributes: Object.fromEntries(
+      Array.from(element.attributes, (attribute) => [attribute.localName, attribute.value])
+    ),
+    children: Array.from(element.children, paintNode)
+  }
 }
 
 export type SanitizedPluginIcon = {
@@ -55,7 +43,6 @@ export function sanitizePluginIconSvg(source: string): SanitizedPluginIcon | nul
   ) {
     return null
   }
-  const paints = new Set<string>()
   const visit = (element: Element): void => {
     // Why copies: removing nodes mutates the live collections.
     for (const child of Array.from(element.children)) {
@@ -72,21 +59,12 @@ export function sanitizePluginIconSvg(source: string): SanitizedPluginIcon | nul
         !isSafePluginIconAttributeValue(attribute.value)
       ) {
         element.removeAttributeNode(attribute)
-      } else if (PAINT_ATTRIBUTES.includes(attribute.localName)) {
-        paints.add(attribute.value.trim().toLowerCase())
-      } else if (attribute.localName === 'style') {
-        for (const match of attribute.value.matchAll(
-          /(?:^|;)\s*(?:fill|stroke|stop-color|color)\s*:\s*([^;]+)/gi
-        )) {
-          paints.add((match[1] ?? '').trim().toLowerCase())
-        }
       }
     }
   }
   visit(root)
-  paints.delete('none')
   return {
     svg: new XMLSerializer().serializeToString(root),
-    monochrome: paints.size === 1 && paints.has('currentcolor') && !hasDefaultFill(root)
+    monochrome: pluginIconSvgMonochromeError(paintNode(root)) === null
   }
 }

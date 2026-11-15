@@ -8,6 +8,7 @@ import { resolvePluginIconGlyph } from './plugin-icon-glyphs'
 export type PluginPanelIconProps = { size?: number; className?: string }
 
 const panelIconComponents = new Map<string, ComponentType<PluginPanelIconProps>>()
+const loadedPanelIconUrls = new Set<string>()
 
 function cachedPanelIcon(
   key: string,
@@ -27,14 +28,19 @@ function SvgPanelIcon({
   size = 18,
   className
 }: PluginPanelIconProps & { url: string }): React.JSX.Element {
-  const [ready, setReady] = useState(false)
+  const [ready, setReady] = useState(() => loadedPanelIconUrls.has(url))
   useEffect(() => {
+    if (loadedPanelIconUrls.has(url)) {
+      setReady(true)
+      return
+    }
     setReady(false)
     let current = true
     const image = new Image()
     image.crossOrigin = 'anonymous'
     image.onload = () => {
       if (current) {
+        loadedPanelIconUrls.add(url)
         setReady(true)
       }
     }

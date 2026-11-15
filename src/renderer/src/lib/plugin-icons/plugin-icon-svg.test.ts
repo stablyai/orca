@@ -62,6 +62,13 @@ describe('sanitizePluginIconSvg', () => {
     expect(icon?.svg).not.toContain('evil')
   })
 
+  it('does not treat a shape with the default black fill as monochrome', () => {
+    const icon = sanitizePluginIconSvg(
+      '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1 1"><path d="M0 0h1v1z" stroke="currentColor"/></svg>'
+    )
+    expect(icon?.monochrome).toBe(false)
+  })
+
   it('rejects documents that are not one SVG', () => {
     expect(sanitizePluginIconSvg('<html/>')).toBeNull()
     expect(sanitizePluginIconSvg('<svg xmlns="urn:other"><path/></svg>')).toBeNull()

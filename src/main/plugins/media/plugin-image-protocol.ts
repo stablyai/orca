@@ -16,7 +16,7 @@ import { declaredPluginPanelIcons, readCheckedPluginPanelIcon } from './plugin-p
 export type PluginImageProtocolDependencies = {
   cache: PluginImageCache
   findValidPlugin: (pluginKey: string) => ValidDiscoveredPlugin | null
-  /** Enabled and consented; fonts are served only for these. */
+  /** Enabled and consented; fonts and panel icons are served only for these. */
   findApprovedPlugin: (pluginKey: string) => ValidDiscoveredPlugin | null
 }
 
@@ -67,26 +67,27 @@ export function createPluginImageRequestHandler(
       const isFont = reference?.kind === 'installed' && parsePluginFontSlot(reference.slot) !== null
       const isPanelIcon =
         reference?.kind === 'installed' && reference.slot.startsWith('panel-icon-')
+      const needsApproval = isFont || isPanelIcon
+      const findPlugin = needsApproval
+        ? dependencies.findApprovedPlugin
+        : dependencies.findValidPlugin
+      const plugin = reference?.kind === 'installed' ? findPlugin(reference.pluginKey) : null
       if (reference?.kind === 'sha') {
         asset = await dependencies.cache.get(reference.sha256)
-      } else if (reference?.kind === 'installed' && isFont) {
-        const plugin = dependencies.findApprovedPlugin(reference.pluginKey)
-        asset =
-          plugin && isCurrentContent(plugin, reference.contentHash)
+      } else if (reference?.kind === 'installed' && plugin) {
+        asset = isCurrentContent(plugin, reference.contentHash)
+          ? isFont
             ? await readPluginFontSlot(plugin.rootDir, plugin.manifest, reference.slot)
-            : null
-      } else if (reference?.kind === 'installed') {
-        const plugin = dependencies.findValidPlugin(reference.pluginKey)
-        asset = plugin
-          ? await readInstalledImage(plugin, reference.contentHash, reference.slot)
+            : await readInstalledImage(plugin, reference.contentHash, reference.slot)
           : null
       }
       if (!asset) {
         return new Response(null, { status: 404 })
       }
+      const isSvg = asset.mimeType === 'image/svg+xml'
       return new Response(request.method === 'HEAD' ? null : new Uint8Array(asset.bytes), {
         headers: {
-          'Content-Type': asset.mimeType,
+          'Content-Type': isSvg ? 'image/svg+xml; charset=utf-8' : asset.mimeType,
           'Content-Length': String(asset.bytes.byteLength),
           // Why immutable is safe: a hash or install hash names exact bytes; dev trees change in place.
           'Cache-Control':
@@ -94,6 +95,11 @@ export function createPluginImageRequestHandler(
               ? 'no-store'
               : 'private, max-age=31536000, immutable',
           'X-Content-Type-Options': 'nosniff',
+          ...(isSvg
+            ? {
+                'Content-Security-Policy': "default-src 'none'; style-src 'unsafe-inline'; sandbox"
+              }
+            : {}),
           // Why: web fonts and CSS masks load in CORS mode; only the default session handles this
           // scheme, so plugin frames and browser tabs, which use their own sessions, still cannot.
           ...(isFont || isPanelIcon ? { 'Access-Control-Allow-Origin': '*' } : {})

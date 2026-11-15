@@ -212,9 +212,11 @@ root, such as `icons/inbox.svg`. File icons need manifest format 2 and `engines.
 older Orca releases only know the built-in names.
 
 File icons are limited to 32 KB. The file must stay inside the plugin folder, and the SVG must be
-one static document with a `viewBox`. Validation refuses scripts, event handlers, external URLs,
-foreign content and document types. Orca draws SVG icons as a one-color mask, so they follow the
-activity bar's theme and active state. An invalid icon falls back to `plug` and
+one static document with a `viewBox`. The SVG must also be monochrome: every `fill` and `stroke` is
+`currentColor` or `none`, and every painted shape sets its own fill, because an omitted fill draws
+in SVG's default black. Validation refuses multi-colour icons, scripts, event handlers, external
+URLs, foreign content and document types. Orca draws SVG icons as a one-color mask, so they follow
+the activity bar's theme and active state. An invalid icon falls back to `plug` and
 `orca plugin check` reports a warning.
 
 Declare the contract once, in a file both sides include, and both type-check against it:

@@ -7,9 +7,14 @@ export {
   pluginPanelIconFileError
 } from './plugin-panel-icon-file'
 export {
+  PLUGIN_ICON_MONOCHROME_ERROR,
+  pluginIconSvgMonochromeError,
+  type PluginIconSvgNode
+} from './plugin-icon-svg-monochrome'
+export { isSafePluginIconAttributeValue } from './plugin-icon-svg-attribute-safety'
+export {
   PLUGIN_ICON_SVG_ATTRIBUTES,
   PLUGIN_ICON_SVG_ELEMENTS,
-  isSafePluginIconAttributeValue,
   pluginPanelIconSvgError
 } from './plugin-panel-icon-svg'
 

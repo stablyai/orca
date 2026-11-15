@@ -38,6 +38,21 @@ describe('plugin panel icons', () => {
 })
 
 describe('plugin panel icon files', () => {
+  it('accepts a strict XML declaration', () => {
+    expect(
+      pluginPanelIconSvgError(`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>${SVG}`)
+    ).toBeNull()
+    expect(pluginPanelIconSvgError(`<?xml version="1.1"?>${SVG}`)).toBeNull()
+  })
+
+  it('accepts fills and strokes that are only currentColor or none', () => {
+    expect(
+      pluginPanelIconSvgError(
+        '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none"><path d="M1 1h22v22H1z" fill="none" stroke="currentColor"/><g fill="currentColor"><rect width="4" height="4"/></g></svg>'
+      )
+    ).toBeNull()
+  })
+
   it('checks SVG structure and bytes', () => {
     expect(pluginPanelIconFileError('icons/panel.svg', Buffer.from(SVG))).toBeNull()
     expect(
@@ -113,8 +128,37 @@ describe('plugin panel icon files', () => {
       'an XML-encoded CSS escape',
       '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1 1"><rect style="fill:u&#92;72l(&#92;68ttps:&#92;2f&#92;2f example.com/a.svg#p)"/></svg>',
       /attribute/
+    ],
+    [
+      'an XML stylesheet processing instruction',
+      '<?xml-stylesheet type="text/css" href="https://example.invalid/x.css"?><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1 1"/>',
+      /processing instructions/
+    ],
+    [
+      'a non-UTF-8 encoding',
+      '<?xml version="1.0" encoding="ISO-8859-1"?><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1 1"/>',
+      /UTF-8/
+    ],
+    [
+      'an XML declaration that is not version 1.x',
+      '<?xml version="2.0"?><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1 1"/>',
+      /XML declarations/
+    ],
+    [
+      'a multi-colour paint',
+      '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1 1"><rect width="1" height="1" fill="currentColor"/><rect width="1" height="1" fill="#ff0000"/></svg>',
+      /monochrome/
+    ],
+    [
+      'an implicit black fill',
+      '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1 1"><path d="M0 0h1v1z" stroke="currentColor"/></svg>',
+      /monochrome/
     ]
   ])('refuses %s', (_label, svg, error) => {
     expect(pluginPanelIconSvgError(svg)).toMatch(error)
+  })
+
+  it('rejects a stray tag start without rescanning the whole document', () => {
+    expect(pluginPanelIconSvgError('<a'.repeat(16 * 1024))).toMatch(/malformed|one SVG/)
   })
 })

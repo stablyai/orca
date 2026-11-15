@@ -12,6 +12,7 @@ describe('panel icon fixture', () => {
     expect(report).toMatchObject({ kind: 'plugin', valid: true, errors: [] })
   })
 
+  // Why 60s: checking a components panel boots a sandboxed renderer worker.
   it('passes plugin check for both panels', async () => {
     const checks = await checkPluginPanels(FIXTURE)
     expect(

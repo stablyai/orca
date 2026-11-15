@@ -198,11 +198,11 @@ export async function buildPluginList(
           plugin.manifest.manifestVersion === 2 &&
           pluginPanelIconKind(panel.icon) === 'file'
             ? {
-                iconUrl: pluginInstalledImageUrl(
+                iconUrl: `${pluginInstalledImageUrl(
                   plugin.pluginKey,
                   plugin.contentHash ?? 'dev',
                   `panel-icon-${index}`
-                )
+                )}${plugin.isDev ? `?v=${plugin.devChangeCount ?? 0}` : ''}`
               }
             : {}),
           tabKey: pluginPanelTabKey(plugin.pluginKey, panel.id)

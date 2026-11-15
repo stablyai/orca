@@ -4,7 +4,7 @@
   "id": "panel-icons",
   "name": "Panel Icons",
   "version": "1.0.0",
-  "description": "Fixture for built-in and file panel icons.",
+  "description": "Fixture for built-in and monochrome SVG panel icons.",
   "engines": { "orca": ">=1.4.260" },
   "pluginApi": 1,
   "contributes": {

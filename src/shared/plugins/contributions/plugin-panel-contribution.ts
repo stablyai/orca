@@ -50,7 +50,7 @@ export const pluginPanelContributionSchema = z
     ),
     icon: pluginPanelIconSchema.optional().meta({
       ...pluginFieldDoc(
-        `Icon shown in the right-sidebar activity bar: a built-in name or a plugin-relative \`.svg\` file (at most 32 KB; static, monochrome-ready and with a \`viewBox\`). Defaults to \`plug\`. File icons need manifest format 2 and Orca >=${PLUGIN_PANEL_ICON_SINCE}.`,
+        `Icon shown in the right-sidebar activity bar: a built-in name or a plugin-relative \`.svg\` file (at most 32 KB; one static document with a \`viewBox\`; monochrome, with every fill and stroke \`currentColor\` or \`none\` and an explicit fill on every painted shape). Defaults to \`plug\`. File icons need manifest format 2 and Orca >=${PLUGIN_PANEL_ICON_SINCE}.`,
         PLUGIN_SCHEMA_SINCE_V1,
         ['database', 'icons/panel.svg']
       ),

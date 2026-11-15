@@ -30,4 +30,11 @@ describe('pluginPanelIconUrl', () => {
     ).toBeNull()
     expect(pluginPanelIconUrl('https://evil.example/panel-icon-0')).toBeNull()
   })
+
+  it('keeps only the dev content revision', () => {
+    const url = pluginInstalledImageUrl('acme.icons', 'dev', 'panel-icon-0')
+    expect(pluginPanelIconUrl(`${url}?v=7#fragment`)).toBe(`${url}?v=7`)
+    expect(pluginPanelIconUrl(`${url}?v=7&x=1`)).toBe(`${url}?v=7`)
+    expect(pluginPanelIconUrl(`${url}?x=1`)).toBe(url)
+  })
 })

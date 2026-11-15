@@ -75,6 +75,19 @@ describe('panel icon artifacts', () => {
     })
   })
 
+  it('warns about a multi-colour SVG', async () => {
+    const multiColour =
+      '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1 1"><rect width="1" height="1" fill="currentColor"/><rect width="1" height="1" fill="#ff0000"/></svg>'
+    const { root, manifest } = await pluginWith('icons/panel.svg', {
+      path: 'icons/panel.svg',
+      contents: multiColour
+    })
+
+    await expect(pluginPanelIconWarnings(root, manifest)).resolves.toEqual([
+      expect.stringContaining('SVG must be monochrome')
+    ])
+  })
+
   it('serves panel icon masks with CORS for preload and mask requests', async () => {
     const { root, manifest } = await pluginWith('icons/panel.svg', {
       path: 'icons/panel.svg',
@@ -98,8 +111,34 @@ describe('panel icon artifacts', () => {
     const response = await handler(new Request(url))
 
     expect(response.status).toBe(200)
-    expect(response.headers.get('content-type')).toBe('image/svg+xml')
+    expect(response.headers.get('content-type')).toBe('image/svg+xml; charset=utf-8')
     expect(response.headers.get('access-control-allow-origin')).toBe('*')
+    expect(response.headers.get('content-security-policy')).toBe(
+      "default-src 'none'; style-src 'unsafe-inline'; sandbox"
+    )
     expect(Buffer.from(await response.arrayBuffer())).toEqual(Buffer.from(SVG))
+  })
+
+  it('serves panel icons only for approved plugins', async () => {
+    const { root, manifest } = await pluginWith('icons/panel.svg', {
+      path: 'icons/panel.svg',
+      contents: SVG
+    })
+    const plugin: ValidDiscoveredPlugin = {
+      pluginKey: 'acme.icons',
+      rootDir: root,
+      manifest,
+      consentFingerprint: 'fingerprint',
+      isDev: false,
+      contentHash: 'a'.repeat(64)
+    }
+    const handler = createPluginImageRequestHandler({
+      cache: new PluginImageCache(root),
+      findValidPlugin: () => plugin,
+      findApprovedPlugin: () => null
+    })
+    const url = pluginInstalledImageUrl('acme.icons', plugin.contentHash!, 'panel-icon-0')
+
+    expect((await handler(new Request(url))).status).toBe(404)
   })
 })

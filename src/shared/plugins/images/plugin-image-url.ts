@@ -63,12 +63,20 @@ export function parsePluginImageUrl(url: string): PluginImageReference | null {
   return null
 }
 
-/** Whether a client may load a panel icon URL, canonicalized so it carries no query or fragment. */
+/** Whether a client may load a panel icon URL, canonicalized so it carries no query or fragment.
+ *  A dev plugin keeps its numeric content revision, which is how an edited icon refreshes. */
 export function pluginPanelIconUrl(url: string): string | null {
   const reference = parsePluginImageUrl(url)
-  return reference?.kind === 'installed' && /^panel-icon-\d{1,2}$/.test(reference.slot)
-    ? pluginInstalledImageUrl(reference.pluginKey, reference.contentHash, reference.slot)
-    : null
+  if (reference?.kind !== 'installed' || !/^panel-icon-\d{1,2}$/.test(reference.slot)) {
+    return null
+  }
+  const canonical = pluginInstalledImageUrl(
+    reference.pluginKey,
+    reference.contentHash,
+    reference.slot
+  )
+  const revision = reference.contentHash === 'dev' ? new URL(url).searchParams.get('v') : null
+  return revision && /^\d+$/.test(revision) ? `${canonical}?v=${revision}` : canonical
 }
 
 /** Only the images main serves over the plugin image scheme. Why: entries can come from a paired

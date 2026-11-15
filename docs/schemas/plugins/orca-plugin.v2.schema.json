@@ -483,7 +483,7 @@
           ]
         },
         "icon": {
-          "description": "Icon shown in the right-sidebar activity bar: a built-in name or a plugin-relative `.svg` file (at most 32 KB; static, monochrome-ready and with a `viewBox`). Defaults to `plug`. File icons need manifest format 2 and Orca >=1.4.260.",
+          "description": "Icon shown in the right-sidebar activity bar: a built-in name or a plugin-relative `.svg` file (at most 32 KB; one static document with a `viewBox`; monochrome, with every fill and stroke `currentColor` or `none` and an explicit fill on every painted shape). Defaults to `plug`. File icons need manifest format 2 and Orca >=1.4.260.",
           "x-orca-since": "1.4.160",
           "examples": [
             "database",
