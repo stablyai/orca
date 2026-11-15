@@ -7,6 +7,8 @@ export type WorkspaceCleanupHeldRowOrder = {
   key: string
   /** Host-qualified identity -> slot. Slots are never reused, so a row keeps its place. */
   positions: ReadonlyMap<string, number>
+  /** Next unused slot; never derived from the map size, so released slots are not reused. */
+  next: number
 }
 
 export function createWorkspaceCleanupHeldRowOrder(
@@ -15,7 +17,8 @@ export function createWorkspaceCleanupHeldRowOrder(
 ): WorkspaceCleanupHeldRowOrder {
   return {
     key,
-    positions: new Map(rows.map((row, index) => [row.identity, index]))
+    positions: new Map(rows.map((row, index) => [row.identity, index])),
+    next: rows.length
   }
 }
 
@@ -25,14 +28,16 @@ export function extendWorkspaceCleanupHeldRowOrder(
   order: WorkspaceCleanupHeldRowOrder
 ): WorkspaceCleanupHeldRowOrder {
   let positions: Map<string, number> | null = null
+  let next = order.next
   for (const row of rows) {
     if (order.positions.has(row.identity)) {
       continue
     }
     positions ??= new Map(order.positions)
-    positions.set(row.identity, positions.size)
+    positions.set(row.identity, next)
+    next += 1
   }
-  return positions === null ? order : { ...order, positions }
+  return positions === null ? order : { ...order, positions, next }
 }
 
 /**
@@ -75,6 +80,7 @@ export function useWorkspaceCleanupHeldRows<Row extends HeldRow>({
   resetKey,
   open,
   loading,
+  gitChecking = false,
   shouldResortAtSettle
 }: {
   /** Query result in the active sort; the order a reset adopts. */
@@ -85,13 +91,20 @@ export function useWorkspaceCleanupHeldRows<Row extends HeldRow>({
   resetKey: string
   open: boolean
   loading: boolean
+  /** Targeted git checks are still running; their completion counts as a settle. */
+  gitChecking?: boolean
   /** Read at scan settle: false once the user is mid-selection, scrolling or pointing at rows. */
   shouldResortAtSettle: () => boolean
-}): { rows: readonly Row[]; resetOrder: () => void } {
+}): {
+  rows: readonly Row[]
+  resetOrder: () => void
+  /** Forget these rows' slots: they vanish if no longer matching, else reappear at the end. */
+  releaseRows: (identities: readonly string[]) => void
+} {
   const [epoch, setEpoch] = useState(0)
   const [held, setHeld] = useState<WorkspaceCleanupHeldRowOrder | null>(null)
   const fullKey = `${resetKey}#${epoch}`
-  const previousRef = useRef({ open, loading })
+  const previousRef = useRef({ open, loading, gitChecking })
 
   const rows = useMemo(
     () =>
@@ -102,17 +115,31 @@ export function useWorkspaceCleanupHeldRows<Row extends HeldRow>({
   )
 
   const resetOrder = useCallback(() => setEpoch((current) => current + 1), [])
+  const releaseRows = useCallback((identities: readonly string[]) => {
+    setHeld((current) => {
+      if (current === null || !identities.some((identity) => current.positions.has(identity))) {
+        return current
+      }
+      const positions = new Map(current.positions)
+      for (const identity of identities) {
+        positions.delete(identity)
+      }
+      return { ...current, positions }
+    })
+  }, [])
   const readSettlePolicy = useEffectEvent(() => shouldResortAtSettle())
   useEffect(() => {
     const previous = previousRef.current
-    previousRef.current = { open, loading }
+    previousRef.current = { open, loading, gitChecking }
     const opened = open && !previous.open
     const scanStarted = open && loading && !previous.loading
-    const scanSettled = open && !loading && previous.loading && readSettlePolicy()
-    if (opened || scanStarted || scanSettled) {
+    const scanSettled = open && !loading && previous.loading
+    const gitSettled = open && !loading && !gitChecking && previous.gitChecking
+    const settledNow = (scanSettled || gitSettled) && readSettlePolicy()
+    if (opened || scanStarted || settledNow) {
       setEpoch((current) => current + 1)
     }
-  }, [loading, open])
+  }, [gitChecking, loading, open])
 
   const captureOrder = useEffectEvent(() => {
     // Only committed renders advance the held order.
@@ -126,5 +153,5 @@ export function useWorkspaceCleanupHeldRows<Row extends HeldRow>({
     captureOrder()
   }, [fullKey, liveRows])
 
-  return { rows, resetOrder }
+  return { rows, resetOrder, releaseRows }
 }

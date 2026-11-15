@@ -36,6 +36,24 @@ function mount(counts: { bulk: number; selectedBulk: number; selectedDisplayed: 
 }
 
 describe('WorkspaceCleanupSortHeader select-all control', () => {
+  it('names the control by what it does', () => {
+    expect(
+      mount({ bulk: 3, selectedBulk: 0, selectedDisplayed: 0 }).box.getAttribute('aria-label')
+    ).toMatch(/Select all 3/)
+    act(() => root?.unmount())
+    expect(
+      mount({ bulk: 3, selectedBulk: 1, selectedDisplayed: 1 }).box.getAttribute('aria-label')
+    ).toBe('Clear selection')
+    act(() => root?.unmount())
+    expect(
+      mount({ bulk: 0, selectedBulk: 0, selectedDisplayed: 1 }).box.getAttribute('aria-label')
+    ).toBe('Clear selection')
+    act(() => root?.unmount())
+    expect(
+      mount({ bulk: 0, selectedBulk: 0, selectedDisplayed: 0 }).box.getAttribute('aria-label')
+    ).not.toMatch(/Select all 0/)
+  })
+
   it('selects all from empty', () => {
     const { box, onToggleSelectAll } = mount({ bulk: 3, selectedBulk: 0, selectedDisplayed: 0 })
     expect(box.getAttribute('aria-checked')).toBe('false')

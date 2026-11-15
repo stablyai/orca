@@ -15,7 +15,7 @@ export function StatusPill({
   return (
     <span
       className={cn(
-        'inline-flex h-5 items-center rounded-full border px-2 text-[11px] font-medium',
+        'inline-flex h-5 min-w-0 items-center rounded-full border px-2 text-[11px] font-medium',
         tone === 'neutral' && 'border-border bg-background text-muted-foreground',
         tone === 'ready' &&
           'border-status-success-border bg-status-success-background text-status-success',
@@ -25,7 +25,7 @@ export function StatusPill({
         toneClassName
       )}
     >
-      {children}
+      <span className="truncate">{children}</span>
     </span>
   )
 }
