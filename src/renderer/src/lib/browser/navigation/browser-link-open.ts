@@ -119,16 +119,19 @@ export async function openLocalBrowserLink(params: {
       }
       const intent = context.linkIntent
       // Why: activating a page behind its source would cover the source; move it beside instead.
-      const moveMatch = resolveHiddenDestinationMove({
-        layout: state.layoutByWorktree[destination.worktreeId],
-        groups: state.groupsByWorktree[destination.worktreeId] ?? [],
-        groupId: match.groupId,
-        sourceTabId:
-          intent?.workspaceId === destination.worktreeId && !intent.targetGroupId
-            ? intent.sourceTabId
-            : undefined,
-        destinationTabId: match.unifiedTabId
-      })
+      const opensOnScreen = params.options?.activate !== false && reveal.canReveal()
+      const moveMatch =
+        opensOnScreen &&
+        resolveHiddenDestinationMove({
+          layout: state.layoutByWorktree[destination.worktreeId],
+          groups: state.groupsByWorktree[destination.worktreeId] ?? [],
+          groupId: match.groupId,
+          sourceTabId:
+            intent?.workspaceId === destination.worktreeId && !intent.targetGroupId
+              ? intent.sourceTabId
+              : undefined,
+          destinationTabId: match.unifiedTabId
+        })
       const moved =
         moveMatch &&
         ('split' in moveMatch
@@ -143,10 +146,6 @@ export async function openLocalBrowserLink(params: {
               unifiedTabId: match.unifiedTabId,
               groupId: moveMatch.groupId
             }))
-      if (moved === 'owner') {
-        // Main draws the move and selects the moved tab.
-        return { status: 'opened', result: match }
-      }
       if (moved === 'moved') {
         result = browserOpenResultForPage(
           useAppStore.getState(),
