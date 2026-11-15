@@ -30,7 +30,7 @@ import type { PtyProcessInfo } from '../../../providers/pty/process-info'
 import type { PtySpawnResult } from '../../../providers/pty/spawn-result'
 import type { TerminalProcessInspection as PtyProcessInspection } from '../../../../shared/terminal/pty/lifecycle/terminal-process-inspection'
 import type { WriteSettlement } from '../../../../shared/terminal/pty/lifecycle/pty-write-settlement'
-import type { StartupCwdFallback } from '../../../../shared/startup-cwd-fallback'
+import type { StartupCwdFallback } from '../../../../shared/shell/launch/startup-cwd-fallback'
 import type { TerminalInputKind } from '../../../../shared/terminal/input/terminal-input-kind'
 import type { PaneResumeOutcome } from '../../../../shared/workspace-layout/published-layout/workspace-layout-published'
 

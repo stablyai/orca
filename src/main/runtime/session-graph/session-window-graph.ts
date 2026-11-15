@@ -4,11 +4,12 @@ import type {
   RuntimeSyncedTab,
   RuntimeSyncWindowGraph,
   RuntimeSyncWindowGraphResult
-} from '../../../shared/runtime-session-contracts'
-import { HEADLESS_RUNTIME_WINDOW_ID } from '../../../shared/runtime-session-contracts'
+} from '../../../shared/remote-runtime/session-graph/runtime-session-contracts'
+import { HEADLESS_RUNTIME_WINDOW_ID } from '../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import type { RuntimeLeafRecord } from '../terminal/records/runtime-terminal-state-records'
 
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
+import { assertBrowserPageInventoryFrames } from '../session-tabs/mobile-session-inventory-base'
 
 type Graph = RuntimeSyncWindowGraph
 
@@ -45,13 +46,14 @@ export abstract class OrcaRuntimeWithSyncWindowGraph extends OrcaRuntimeWithAdmi
     return this.authoritativeWindowId === HEADLESS_RUNTIME_WINDOW_ID
   }
 
-  syncWindowGraph(
+  async syncWindowGraph(
     windowId: number,
     graph: RuntimeSyncWindowGraph | RuntimeRendererSyncWindowGraph,
     options?: { includeAgentSenders?: boolean }
-  ): RuntimeSyncWindowGraphResult {
+  ): Promise<RuntimeSyncWindowGraphResult> {
     // Reject duplicate bare tab ids before mutating authority/state or indexes could route PTYs to the wrong worktree.
     assertUniqueRuntimeGraphTabIds(graph.tabs)
+    assertBrowserPageInventoryFrames(graph.mobileSessionTabs)
     const rendererGeneration = this.admitWindowPublisher(windowId, graph)
     const previousTitleAuthority = this.captureSessionTitleAuthority()
     const publishedMobileSessionTabs = graph.mobileSessionTabs
@@ -295,21 +297,36 @@ export abstract class OrcaRuntimeWithSyncWindowGraph extends OrcaRuntimeWithAdmi
       cb()
     }
 
-    const agentOrchestrationByPaneKey = this.agentOrchestrationProjection.buildByPaneKey()
-    const nativeChatLaunchDraftResolutions =
-      this.getNativeChatLaunchDraftResolutionClientEventSnapshot().map(
-        ({ tabId, text, createdAt }) => ({ tabId, text, createdAt })
-      )
-    return {
-      ...this.getStatus(),
-      ...(options?.includeAgentSenders === false || windowId === HEADLESS_RUNTIME_WINDOW_ID
-        ? {}
-        : this.agentSenderGraphReply(graph.agentSenderBase)),
-      ...(agentOrchestrationByPaneKey ? { agentOrchestrationByPaneKey } : {}),
-      ...(nativeChatLaunchDraftResolutions.length > 0 ? { nativeChatLaunchDraftResolutions } : {}),
-      ...(mobileSessionResyncWorktrees.size > 0
-        ? { mobileSessionResyncWorktrees: [...mobileSessionResyncWorktrees] }
-        : {})
+    const replyLeaves = this.leaves
+    const consume = () => {
+      if (
+        this.leaves !== replyLeaves ||
+        this.authoritativeWindowId !== windowId ||
+        this.graphStatus !== 'ready'
+      ) {
+        throw new Error('Runtime graph publisher belongs to a superseded renderer generation')
+      }
+      const agentOrchestrationByPaneKey = this.agentOrchestrationProjection.buildByPaneKey()
+      const nativeChatLaunchDraftResolutions =
+        this.getNativeChatLaunchDraftResolutionClientEventSnapshot().map(
+          ({ tabId, text, createdAt }) => ({ tabId, text, createdAt })
+        )
+      return {
+        ...this.getStatus(),
+        ...(options?.includeAgentSenders === false || windowId === HEADLESS_RUNTIME_WINDOW_ID
+          ? {}
+          : this.agentSenderGraphReply(graph.agentSenderBase)),
+        ...(agentOrchestrationByPaneKey ? { agentOrchestrationByPaneKey } : {}),
+        ...(nativeChatLaunchDraftResolutions.length > 0
+          ? { nativeChatLaunchDraftResolutions }
+          : {}),
+        ...(mobileSessionResyncWorktrees.size > 0
+          ? { mobileSessionResyncWorktrees: [...mobileSessionResyncWorktrees] }
+          : {})
+      }
     }
+    return options?.includeAgentSenders === false || windowId === HEADLESS_RUNTIME_WINDOW_ID
+      ? consume()
+      : this.agentProjections.senders.withPreparedPublication(consume)
   }
 }

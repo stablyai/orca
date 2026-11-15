@@ -9,7 +9,7 @@ import { resolveOrcadExitCode } from '../serve-startup/orcad-exit-code'
 import {
   ORCA_SERVE_SUPERVISED_ENV,
   ORCAD_EXIT_TERMINALS_NOT_DURABLE
-} from '../../../shared/serve-supervised-terminal-durability'
+} from '../../../shared/remote-runtime/serve-supervisor/serve-supervised-terminal-durability'
 
 afterEach(() => {
   vi.restoreAllMocks()

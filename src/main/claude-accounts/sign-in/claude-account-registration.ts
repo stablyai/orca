@@ -3,7 +3,7 @@ import type {
   ClaudeAccountSignIn,
   ClaudeRateLimitAccountsState,
   ClaudeSignInRequest
-} from '../../../shared/managed-account-types'
+} from '../../../shared/agent-accounts/managed-account-types'
 import { claudeStateFile, readClaudeFolderLogin } from './claude-account-folder'
 import type {
   ClaudeAccountRuntime,

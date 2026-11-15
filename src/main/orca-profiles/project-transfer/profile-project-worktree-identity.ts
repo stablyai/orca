@@ -1,12 +1,12 @@
 import { normalizeRuntimePathForComparison } from '../../../shared/cross-platform-path'
 import { getRepoExecutionHostId } from '../../../shared/execution-host'
 
-import type { Repo } from '../../../shared/repo-types'
+import type { Repo } from '../../../shared/repository/repo-types'
 import {
   type WorkspaceKey,
   parseWorkspaceKey,
   worktreeWorkspaceKey
-} from '../../../shared/workspace-scope'
+} from '../../../shared/workspace/identity/workspace-scope'
 import '../../../shared/worktree/id'
 import { WORKTREE_ID_SEPARATOR } from '../../../shared/terminal/pty/lifecycle/pty-session-id-format'
 import {

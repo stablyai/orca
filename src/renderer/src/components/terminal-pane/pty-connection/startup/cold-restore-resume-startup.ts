@@ -3,9 +3,9 @@ import {
   getConnectionIdFromState
 } from '@/lib/workspace/ownership/connection-owner-resolution'
 import { normalizeExecutionHostId } from '../../../../../../shared/execution-host'
-import { parseWorkspaceKey } from '../../../../../../shared/workspace-scope'
+import { parseWorkspaceKey } from '../../../../../../shared/workspace/identity/workspace-scope'
 import { useAppStore } from '@/store/index'
-import { createNonSecureContextUuid as createBrowserUuid } from '../../../../../../shared/non-secure-context-uuid'
+import { createNonSecureContextUuid as createBrowserUuid } from '../../../../../../shared/identifiers/non-secure-context-uuid'
 import { buildAgentResumeStartupPlan } from '../../../../../../shared/agent-launch/startup/tui-agent-resume-startup'
 import {
   resolveRuntimeHostReportedPlatform,
@@ -19,10 +19,10 @@ import {
 } from '@/lib/agent-session/resume/sleeping-record-execution-host-scope'
 import { resolveResumeLaunchRecipe } from '../../../../../../shared/agent-launch/choices/resume-launch-recipe'
 import {
-  agentProviderSessionsEqual,
   isResumableTuiAgent,
   normalizeAgentProviderSession
 } from '../../../../../../shared/agent-session/lifecycle/agent-session-resume'
+import { agentProviderSessionsEqual } from '../../../../../../shared/agent-session/lifecycle/resume/agent-provider-session-equality'
 
 import type { HeldPaneReopenOutcome } from '../../session-restore/newer-daemon/newer-daemon-hold-state'
 import type { ColdRestoreAgentResumeStartup } from './fresh-spawn-types'

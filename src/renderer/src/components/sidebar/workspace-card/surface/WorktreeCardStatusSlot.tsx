@@ -7,7 +7,7 @@ import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { cn } from '@/lib/class-names'
 import { observeOffscreenAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import { getWorktreeStatusLabel } from '@/lib/workspace/activity/worktree-status'
-import type { WorktreeStatus } from '../../../../../../shared/worktree-status-rollup'
+import type { WorktreeStatus } from '../../../../../../shared/worktree/row-display/worktree-status-rollup'
 import '../activity/worktree-card-empty-inputs'
 import { FilledBellIcon } from '../identity/worktree-card-glyphs'
 import { checksLabel } from '../review/workspace-review-check-label'
@@ -25,7 +25,7 @@ import { getEphemeralVmHostState } from '../../../../../../shared/execution-host
 import { getVmStateLabel, VmStateIcon, WorktreeCardVmStateBadge } from './WorktreeCardVmStateBadge'
 import type { WorktreeCardPrDisplay } from '../review/worktree-card-pr-display'
 import { getReviewLabel, ReviewIcon } from '../review/worktree-review-presentation'
-import type { WorkspaceReviewChecksSummary } from '../../../../../../shared/workspace-review-checks'
+import type { WorkspaceReviewChecksSummary } from '../../../../../../shared/workspace-attachments/workspace-review-checks'
 import {
   WorkspaceReviewChecksIndicator,
   workspaceReviewChecksLabel
@@ -118,9 +118,6 @@ function getReviewStatusLabel(review: WorktreeCardPrDisplay, t: Translate = tran
   if (outcome === 'success') {
     return t('workspace.reviewStatus.checksPassing', '{{review}} checks: Passing', values)
   }
-  if (!review.state && !outcome) {
-    return getReviewLabel(review)
-  }
   return t('workspace.reviewStatus.open', '{{review}}: Open', values)
 }
 
@@ -156,17 +153,14 @@ export function WorktreeCardStatusSlot({
   const vmState = vmRuntime ? getEphemeralVmHostState(vmRuntime.status, vmWaking) : null
   const vmFailure = vmRuntime?.failure ?? null
   const statusLabel = getWorktreeStatusLabel(status) || status
+  // Sleeping remains distinct from quiet done/branch/review states; attention keeps its own glyph.
+  const canShowSleepingStatus =
+    newCardStyle && showStatus && isSleeping && QUIET_REVIEW_REPLACEABLE_STATUSES.has(status)
   const canShowReviewStatus =
     newCardStyle &&
     showStatus &&
     (prDisplay !== null || Boolean(collectionChecks)) &&
-    QUIET_REVIEW_REPLACEABLE_STATUSES.has(status)
-  // Review outranks sleep: the dimmed row already shows sleep, only the glyph can show the PR.
-  const canShowSleepingStatus =
-    newCardStyle &&
-    showStatus &&
-    isSleeping &&
-    !canShowReviewStatus &&
+    !canShowSleepingStatus &&
     QUIET_REVIEW_REPLACEABLE_STATUSES.has(status)
   const canShowBranchStatus =
     newCardStyle &&
@@ -189,14 +183,10 @@ export function WorktreeCardStatusSlot({
     isReviewStale && canShowReviewStatus && (collectionChecks || prDisplay)
       ? `${passiveStatusLabel} · ${t('workspace.links.lastKnownStatus', 'Last known status')}`
       : passiveStatusLabel
-  const laneLabel =
-    canShowReviewStatus && isSleeping
-      ? `${reviewLabel} · ${getSleepingStatusLabel(t)}`
-      : reviewLabel
   const passiveStatusAnnouncement =
     newCardStyle && isUnread
-      ? t('workspace.activity.unreadLabel', '{{status}} · Unread', { status: laneLabel })
-      : laneLabel
+      ? t('workspace.activity.unreadLabel', '{{status}} · Unread', { status: reviewLabel })
+      : reviewLabel
   // Working/permission own the lane; retain unread in accessible copy and restore its dot afterward.
   const showNewCardUnreadAlert =
     newCardStyle && isUnread && showStatus && status !== 'working' && status !== 'permission'

@@ -3,8 +3,8 @@
  * and what are that workspace's id and paths on the host. Ids keep their repo; only a UNC path of
  * the moved distro changes, as the main-side rewrite (wsl-move-rewrite-scope.ts) maps it.
  */
-import { parseWorkspaceKey } from '../workspace-scope'
-import { wslUncPathToLinux } from '../wsl-paths'
+import { parseWorkspaceKey } from '../workspace/identity/workspace-scope'
+import { wslUncPathToLinux } from '../file-access/wsl-paths'
 import { getRepoIdFromWorktreeId, rewriteWorktreeIdPath } from '../worktree/id'
 import type { WslMovePendingRendererRewrite } from './wsl-move-renderer-rewrite-types'
 

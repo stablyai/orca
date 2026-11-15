@@ -1,4 +1,4 @@
-import { folderWorkspaceKey } from '../../../../../../shared/workspace-scope'
+import { folderWorkspaceKey } from '../../../../../../shared/workspace/identity/workspace-scope'
 import {
   folderWorkspaceToWorktree,
   getFolderWorkspaceHostIdentity

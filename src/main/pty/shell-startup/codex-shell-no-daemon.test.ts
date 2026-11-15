@@ -15,9 +15,9 @@ import {
   CODEX_COMMAND_IDENTITY_ENV_KEYS,
   getFishCodexShellLaunchPreflight,
   getPosixCodexShellLaunchPreflight
-} from '../../../shared/codex-shell-function'
-import { resolveFishBinary } from '../../../shared/fish-binary-requirement'
-import { getPowerShellAgentWrappers } from '../../../shared/powershell-agent-wrappers'
+} from '../../../shared/shell/launch/agents/codex-shell-function'
+import { resolveFishBinary } from '../../../shared/shell/testing/fish-binary-requirement'
+import { getPowerShellAgentWrappers } from '../../../shared/shell/launch/agents/powershell-agent-wrappers'
 import {
   CODEX_REMOTE_VIEWER_SSH_CONNECTION,
   REMOTE_VIEWER_CLIPBOARD_ENV

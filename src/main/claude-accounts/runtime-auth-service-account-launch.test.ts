@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { getDefaultSettings } from '../../shared/constants'
 import type { GlobalSettings } from '../../shared/global-settings-types'
-import type { ClaudeManagedAccount } from '../../shared/managed-account-types'
+import type { ClaudeManagedAccount } from '../../shared/agent-accounts/managed-account-types'
 
 const fakes = vi.hoisted(() => ({
   prepareClaudePinnedAccountLaunch: vi.fn(

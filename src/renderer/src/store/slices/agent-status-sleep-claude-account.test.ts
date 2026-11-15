@@ -8,7 +8,7 @@ import { makeTab } from '../terminals/testing/terminal-tab.test-fixture'
 import {
   recoveryRecordMatches,
   sleepingRecordsEquivalentIgnoringCaptureTime
-} from '../../../../shared/agent-session/lifecycle/agent-resume-record-equivalence'
+} from '../../../../shared/agent-session/lifecycle/resume/agent-resume-record-equivalence'
 
 const NOW = 1_800_000_000_000
 const PANE_KEY = 'tab-1:leaf-1'

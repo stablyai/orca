@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { resolveProjectClaudeAccount } from './project-claude-account-resolution'
 import { ACTIVE_CLAUDE_ACCOUNT } from '../../shared/claude/project-claude-account-preference'
 import { getRepoMainWorktreeId } from '../../shared/worktree/id'
-import type { Repo } from '../../shared/repo-types'
+import type { Repo } from '../../shared/repository/repo-types'
 
 const worktreeId = getRepoMainWorktreeId({ id: 'repo-1', path: '/w/app' })
 const repo = (agentAccounts?: Repo['agentAccounts']): Repo | undefined =>

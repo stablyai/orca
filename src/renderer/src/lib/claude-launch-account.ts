@@ -1,6 +1,6 @@
-import { createNonSecureContextUuid } from '../../../shared/non-secure-context-uuid'
+import { createNonSecureContextUuid } from '../../../shared/identifiers/non-secure-context-uuid'
 import type { LaunchAgentInNewTabArgs } from '@/lib/agent-session/launch/new-tab/launch-agent-in-new-tab-args'
-import type { Repo } from '../../../shared/repo-types'
+import type { Repo } from '../../../shared/repository/repo-types'
 import type { SleepingAgentLaunchConfig } from '../../../shared/agent-session/lifecycle/agent-session-resume'
 import { getRepoIdFromWorktreeId } from '../../../shared/worktree/id'
 import type { AppState } from '@/store/types'
@@ -10,7 +10,7 @@ import { getIndexedWorktreeById } from '@/store/slices/worktrees/listing/worktre
 import { selectWorktreesByRepo } from '@/store/workspaces/catalog/workspace-record-fields'
 import { claudeAccountPinningUnsupportedReasonInState } from '@/components/settings/repository-claude-account'
 import { runtimeTargetForRepoOwner } from '@/lib/workspace/ownership/repo-runtime-owner'
-import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../shared/remote-runtime/host-catalog/runtime-client-target'
 
 /** Where a project's Claude accounts live: its owner host; a repo with no row reads this app's. */
 export function claudeAccountsTargetForRepo(

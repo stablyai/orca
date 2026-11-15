@@ -27,6 +27,10 @@ import type {
 import type { GeneratePullRequestFieldsResult } from '../../../text-generation/commit-message-text-generation'
 import { getPullRequestDraftContext } from '../../../text-generation/pull-request-context/pull-request-context'
 import {
+  CANCELED_GENERATION_RESULT,
+  runCancelableLocalGeneration
+} from '../../../text-generation/execution/source-control-generation-lanes'
+import {
   localGitOptionsForTarget,
   runtimeGitRouteForTarget,
   type RuntimeGitCommandHost
@@ -80,35 +84,44 @@ export class RuntimeGitGenerationCommands {
       return { success: false, error: SSH_HOST_NOT_SERVED_MESSAGE }
     }
 
-    let context: CommitMessageDraftContext | null
-    try {
-      context = await getStagedCommitContext(target.worktree.path, {
-        ...localGitOptionsForTarget(target),
-        admissionTier: 'interactive'
-      })
-    } catch (error) {
-      console.error('[runtime-git] Failed to read staged commit context:', error)
-      return {
-        success: false,
-        ...textGenerationFailure('stagedChangesReadFailed')
+    return runCancelableLocalGeneration<GenerateCommitMessageResult>(
+      'commit-message',
+      target.worktree.path,
+      async (isCanceled) => {
+        let context: CommitMessageDraftContext | null
+        try {
+          context = await getStagedCommitContext(target.worktree.path, {
+            ...localGitOptionsForTarget(target),
+            admissionTier: 'interactive'
+          })
+        } catch (error) {
+          console.error('[runtime-git] Failed to read staged commit context:', error)
+          return {
+            success: false,
+            ...textGenerationFailure('stagedChangesReadFailed')
+          }
+        }
+        if (!context) {
+          return { success: false, ...textGenerationFailure('noStagedChanges') }
+        }
+        context = withLinkedIssueDraftContext(context, linkedIssueForTarget(this.host, target))
+        const localEnv = await prepareLocalCommitMessageAgentEnv(
+          resolvedSettings.params.agentId,
+          this.host.getCommitMessageAgentEnvironment?.(),
+          localAgentRuntimeTargetForTarget(target)
+        )
+        if (!localEnv.ok) {
+          return { success: false, error: localEnv.error }
+        }
+        if (isCanceled()) {
+          return CANCELED_GENERATION_RESULT
+        }
+        return generateCommitMessageFromContext(
+          context,
+          resolvedSettings.params,
+          localTextGenerationTargetForTarget(target, localEnv.env)
+        )
       }
-    }
-    if (!context) {
-      return { success: false, ...textGenerationFailure('noStagedChanges') }
-    }
-    context = withLinkedIssueDraftContext(context, linkedIssueForTarget(this.host, target))
-    const localEnv = await prepareLocalCommitMessageAgentEnv(
-      resolvedSettings.params.agentId,
-      this.host.getCommitMessageAgentEnvironment?.(),
-      localAgentRuntimeTargetForTarget(target)
-    )
-    if (!localEnv.ok) {
-      return { success: false, error: localEnv.error }
-    }
-    return generateCommitMessageFromContext(
-      context,
-      resolvedSettings.params,
-      localTextGenerationTargetForTarget(target, localEnv.env)
     )
   }
 

@@ -1,7 +1,7 @@
 import { OrcaRuntimeWithResolveWorktreeRemovalTarget } from '../../workspaces/workspace-removal-target'
 import type { TerminalWorkspaceLaunchScope } from '../../orchestration/terminal-authority/structured-sessions/runtime-legacy-worker-terminal-recovery-types'
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
-import { parseWslUncPath } from '../../../../shared/wsl-paths'
+import { parseWslUncPath } from '../../../../shared/file-access/wsl-paths'
 import type {
   AgentLaunchPreferences,
   RuntimeAgentSessionRpcCaller,

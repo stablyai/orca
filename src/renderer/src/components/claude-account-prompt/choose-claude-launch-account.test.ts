@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { Repo } from '../../../../shared/repo-types'
+import type { Repo } from '../../../../shared/repository/repo-types'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
-import type { ClaudeManagedAccountSummary } from '../../../../shared/managed-account-types'
+import type { ClaudeManagedAccountSummary } from '../../../../shared/agent-accounts/managed-account-types'
 import { useAppStore } from '@/store'
 import { toast } from 'sonner'
 import {

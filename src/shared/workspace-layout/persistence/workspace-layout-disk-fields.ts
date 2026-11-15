@@ -1,7 +1,7 @@
 // Map every disk field to one source; Loader diffs through these tables and fact-location tests mutate each source to verify ownership.
 
 import type { SleepingAgentSessionRecord } from '../../agent-session/lifecycle/agent-session-resume'
-import type { BrowserWorkspace } from '../../browser-workspace-types'
+import type { BrowserWorkspace } from '../../browser/workspaces/browser-workspace-types'
 import type { ClosedTerminalTabTombstone } from '../terminal-surfaces/closed-terminal-tab-tombstones'
 import type { Tab, TabGroup } from '../../tab-types'
 import type { TerminalLayoutSnapshot, TerminalTab } from '../terminal-tab-types'

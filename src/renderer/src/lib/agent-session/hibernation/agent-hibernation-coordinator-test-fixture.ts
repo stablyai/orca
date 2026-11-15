@@ -20,7 +20,7 @@ import {
   type RuntimeEnvironmentCallRequest
 } from '../../../runtime/rpc/testing/runtime-compatibility-test-fixture'
 import { clearRuntimeCompatibilityCache as clearRuntimeCompatibilityCacheForTests } from '../../../runtime/rpc/compatibility/runtime-compatibility-cache'
-import type { RuntimeTerminalAttention } from '../../../../../shared/runtime-terminal-contracts'
+import type { RuntimeTerminalAttention } from '../../../../../shared/terminal/runtime/runtime-terminal-contracts'
 
 export const NOW = 10_000_000
 export const LEAF = '11111111-1111-4111-8111-111111111111'

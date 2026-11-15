@@ -6,7 +6,7 @@ import {
   type ExecutionHostId,
   getRepoExecutionHostId
 } from '../../../../../../shared/execution-host'
-import { parseWorkspaceKey } from '../../../../../../shared/workspace-scope'
+import { parseWorkspaceKey } from '../../../../../../shared/workspace/identity/workspace-scope'
 import { getRepoIdFromWorktreeId } from '../../../../../../shared/worktree/id'
 import type { WorktreePurgeTarget } from './worktree-purge-target'
 import { getFolderWorkspaceHostId } from '../../../../../../shared/folder-workspaces/folder-workspace-host-id'

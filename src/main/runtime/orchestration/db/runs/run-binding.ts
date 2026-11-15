@@ -3,7 +3,7 @@ import { OrchestrationError } from '../../orchestration-error'
 import { LEGACY_CONTRACT_VERSION } from '../contract-constants'
 import { isEquivalentPaneKey } from '../pane-key-match'
 import type { OrchestrationDb } from '../orchestration-db'
-import type { OrcaSessionId } from '../../../../../shared/orca-session-address'
+import type { OrcaSessionId } from '../../../../../shared/agent-session/identity/orca-session-address'
 import { findCallerWorkerDispatches, workerRunBindingRefusal } from './worker-run-binding'
 import {
   mailboxAddressOf,

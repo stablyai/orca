@@ -14,7 +14,7 @@ import type {
   AgentStatusEntry,
   AgentStatusOrchestrationContext
 } from '../../../../../../shared/agent-status/contracts/agent-status-types'
-import type { Repo } from '../../../../../../shared/repo-types'
+import type { Repo } from '../../../../../../shared/repository/repo-types'
 import type { TerminalTab } from '../../../../../../shared/workspace-layout/terminal-tab-types'
 import type { WorktreeCardProperty } from '../../../../../../shared/ui-chrome-types'
 import type { WorktreeLineage } from '../../../../../../shared/worktree/lineage-types'
@@ -316,7 +316,7 @@ function setAgentLineageState(options: {
     reportVisibleGitHubPRRefreshCandidates: vi.fn(),
     setVisibleReviewCardWorktreeIds: mockStore.setVisibleReviewCardWorktreeIds,
     repos: [repo],
-    retainedAgentsByPaneKey: {},
+
     revealWorktreeInSidebar: vi.fn(),
     runtimePaneTitlesByTabId: {},
     runtimeAgentOrchestrationByPaneKey: {},
@@ -353,7 +353,6 @@ function setAgentLineageState(options: {
     agentSendPopoverTargetMode: null,
     acknowledgedAgentsByPaneKey: {},
     dropAgentStatus: vi.fn(),
-    dismissRetainedAgent: vi.fn(),
     sendPromptToSidebarAgentTarget: vi.fn(),
     tabsByWorktree: { parent: [makeParentTab()] },
     unifiedTabsByWorktree: {},

@@ -12,7 +12,7 @@ import {
   continueMainAgentStatus,
   mainAgentTurnInterrupted
 } from '../../../../agent-status/lifecycle/agent-lead-status-fold'
-import type { ClaudeSubagentRoster } from '../../../../claude-subagent-roster'
+import type { ClaudeSubagentRoster } from './claude-subagent-roster'
 import type { AgentHookEventPayload } from '../../../listener-event'
 import type { HookListenerState } from '../../../listener-state'
 import type { ClaudeLeadTurnState } from '../../../main-agent-turn-state'

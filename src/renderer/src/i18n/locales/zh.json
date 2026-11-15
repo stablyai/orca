@@ -185,6 +185,7 @@
         "fontKeywordTypeface": "字体",
         "fontKeywordTypography": "排版",
         "inheritFont": "与 IDE 字体相同",
+        "systemFont": "系统字体",
         "fontPreviewLabel": "聊天字体预览",
         "fontPreview": "这段文字用于预览聊天字体",
         "title": "聊天界面",
@@ -330,6 +331,8 @@
       }
     },
     "agents": {
+      "installedRegion": "已安装的智能体",
+      "availableRegion": "可安装的智能体",
       "permissionsTitle": "权限",
       "permissionsChoiceExplanation": "每个智能体无需询问即可执行的操作。你可以在下方为单个智能体单独设置",
       "permissionEachOwn": "各智能体自己的设置",
@@ -3407,6 +3410,7 @@
             "1e4b81d892": "扑通",
             "86af8d938c": "咚",
             "80f7cc95b3": "二音",
+            "silent": "静音",
             "017abebfa6": "系统默认值"
           }
         }
@@ -3607,8 +3611,7 @@
             "stop_command_description": "关闭此终端将停止其中正在运行的命令",
             "dont_ask_again": "对有运行中进程的终端不再询问",
             "stop_agent_confirm": "停止代理",
-            "stop_command_confirm": "停止并关闭",
-            "automatic_resume_warning": "此终端不会自动恢复，若要稍后恢复，请取消并让工作区进入休眠"
+            "stop_command_confirm": "停止并关闭"
           },
           "MobileDriverOverlay": {
             "c6460cf584": "收回",
@@ -3677,7 +3680,8 @@
             "ptyAllocationLimit": "系统无法再分配 pty 设备，请在 Orca 或其他程序中关闭一些不用的终端，然后重试",
             "terminalProcessLimit": "系统无法再启动终端进程，请关闭不用的终端或退出不用的进程，然后重试",
             "hostTerminalCap": "主机上运行的终端数量已达到 Orca 允许的上限，请关闭一个不再需要的终端，然后重试",
-            "ownerHostMismatch": "此终端保存的会话属于另一个主机连接，因此 Orca 无法在此重新附加它，请打开新终端以继续"
+            "ownerHostMismatch": "此终端保存的会话属于另一个主机连接，因此 Orca 无法在此重新附加它，请打开新终端以继续",
+            "copyErrorDetails": "复制错误详情"
           },
           "ClaudePinnedLaunch": {
             "accountMissing": "此项目保存的 Claude 账户已不再登录。请在设置 → 仓库中更改，或使用当前账户启动。",
@@ -4277,7 +4281,6 @@
             "c8857b40f7": "刷新使用数据",
             "75ded02687": "管理账户…",
             "ff0fbe9311": "当前",
-            "7657e3db9c": "Codex 账户",
             "38b5647724": "Codex 使用量运行时",
             "ba55303942": "打开 Codex 详情和账户切换器",
             "c35af53b73": "登录",
@@ -4285,7 +4288,6 @@
             "5c938d39ac": "周",
             "54e8d6bb2d": "Fable",
             "a79c64f87e": "Fable",
-            "d450654fa2": "Claude 账户",
             "11e2354daf": "Claude 使用量运行时",
             "3dd7ddfae1": "打开 Claude 详情和账户切换器",
             "59c6e7b4e0": "可见会话将立即重启，其他会话会在其工作树变为活动状态时重启",
@@ -4555,7 +4557,8 @@
             "compact": "精简",
             "footerDetailAria": "使用情况页脚详情",
             "detailedTooltip": "完整使用情况，包含条形图、标签和百分比",
-            "compactTooltip": "精简使用情况：每个提供方显示一项汇总"
+            "compactTooltip": "精简使用情况：每个提供方显示一项汇总",
+            "notChecked": "未检查"
           },
           "RemoteServerUpdateStatusSegment": {
             "updating": "正在更新 {{value0}}/{{value1}}",
@@ -4682,9 +4685,6 @@
             "ahead": "领先 {{ahead}}",
             "behind": "落后 {{behind}}",
             "activeAgents_other": "{{count}} 个活动智能体",
-            "completedAgents_other": "{{count}} 个已完成的智能体",
-            "activeAndCompletedAgents": "{{active}}，{{completed}}",
-            "completedAgentsRetained_other": "保留了 {{count}} 个已完成的智能体",
             "noTrackedAgents": "没有正在运行的受跟踪智能体",
             "noTerminalTabs": "没有终端标签页",
             "liveTerminalTabs_other": "{{count}} 个终端标签页中有 {{live}} 个正在运行",
@@ -4730,12 +4730,17 @@
           "AccountSwitchList": {
             "used": "已用",
             "left": "剩余",
-            "reset": "重置"
+            "reset": "重置",
+            "accounts": "账户"
           },
           "InlineUsageBars": {
             "now": "现在",
             "resetsNow": "现在重置",
             "resetsIn": "{{duration}}后重置"
+          },
+          "UsageDisplayToggle": {
+            "showRemaining": "显示剩余用量",
+            "showUsed": "显示已用用量"
           }
         }
       },
@@ -7351,7 +7356,10 @@
           "b4e9d3f2a1c5": "已从 {{value1}} 导入 {{value0}} 个 Cookie 到 {{value2}}",
           "c5a273a809": "从 {{value0}}",
           "80bffd32bf": "导入 Cookie",
-          "bd7d68f138": "从文件..."
+          "bd7d68f138": "从文件...",
+          "4054c458e1": "清除默认 cookie",
+          "3b662becd5": "要清除默认配置文件中的 cookie 吗？",
+          "f159cf5a3e": "这可能会让你退出此配置文件中的网站。"
         },
         "BrowserUseComputerUseNotice": {
           "79209b37b9": "如果 cookie 导入不合适，“计算机使用”可以控制本地应用程序，并可以在适用的情况下使用现有的登录浏览器会话。安装 Orca Computer Use 技能； macOS 还需要隐私权限。",
@@ -11210,6 +11218,7 @@
           "e27c8d45bf": "诊断已被环境变量停用"
         },
         "ShortcutCommandBlock": {
+          "retryAfterError": "按下其他快捷键，或按 Esc 取消",
           "eb72c52c28": "按下快捷键，或双击修饰键(例如 {{value0}})，Esc 取消",
           "70b5d25583": "{{value0}} 快捷键",
           "287e07ddde": "已修改",
@@ -12875,7 +12884,8 @@
           "catalog": "目录",
           "clear": "清除筛选",
           "themes": "主题",
-          "languages": "语言",
+          "codeLanguages": "编程语言",
+          "translations": "翻译",
           "icons": "图标",
           "commands": "命令和面板",
           "catalogLabel": "按目录筛选",
@@ -16192,10 +16202,9 @@
           "725868c75d": "浏览文件夹",
           "5e7f0d8a80": "文件夹选择器不可用于远程文件",
           "30099dca46": "文件夹",
-          "2d7d39dc63": ".md",
           "c8ac7868e6": "文件名",
           "b6ed807cc6": "名称",
-          "e365f3c638": "为您的 Markdown 文件命名并选择一个文件夹",
+          "description": "为您的文件命名并选择一个文件夹",
           "674b046582": "另存为",
           "nameEmpty": "名称不能为空",
           "nameHasSeparators": "名称不能包含路径分隔符",
@@ -16808,7 +16817,8 @@
                     },
                     "extensions": {
                       "intro": {
-                        "title": "Chrome 扩展程序",
+                        "title": "带上你的 Chrome 扩展程序",
+                        "everydayTitle": "你常用的浏览器工具，尽在 Orca",
                         "body": "从 Chrome 应用商店安装扩展程序，并将其固定在地址栏旁。",
                         "action": "打开应用商店",
                         "secondaryAction": "知道了"
@@ -19375,7 +19385,8 @@
         "safetyReviewApproved": "{{agent}} 已批准此操作。查看详情。",
         "safetyReview": "{{agent}} 报告了安全审查警告。查看详情。",
         "truncatedResponse": "提供方响应已截断（原始大小：{{bytes}} 字节）。",
-        "forkedFrom": "分支来源"
+        "forkedFrom": "分支来源",
+        "forkedFromUnknown": "分支来源：另一个聊天"
       },
       "providerFrame": {
         "byteCount_other": "{{count}} 字节"
@@ -19532,7 +19543,7 @@
         "listLabel": "排队的消息",
         "steer": "立即发送",
         "send": "发送",
-        "steerHint": "提交且不中断模型",
+        "steerHint": "在智能体工作时立即发送",
         "sendHint": "立即发送此消息",
         "delete": "删除",
         "moreActions": "更多操作",
@@ -19815,7 +19826,12 @@
         "failed": "{{agent}} 无法从此聊天创建分支",
         "hostUnsupported": "此主机运行的是旧版 Orca。请更新主机上的 Orca 后重试。",
         "failedDetail": "聊天未发生更改。请重试。",
-        "commandWorking": "{{agent}} 回复期间无法创建分支。回复结束后，请再次运行 /fork。"
+        "commandWorking": "{{agent}} 回复期间无法创建分支。回复结束后，请再次运行 /fork。",
+        "mark": "分支 ·",
+        "markedName": "{{mark}} {{name}}",
+        "accessibleName": "分支：{{name}}",
+        "sourceTooltip": "{{name}} 的分支",
+        "unknownSourceTooltip": "另一个聊天的分支"
       },
       "cardKindHidden": {
         "description": "你可以随时在此处更改",
@@ -19915,7 +19931,7 @@
               "comment": "评论",
               "prunable": "可修剪",
               "locked": "已锁定",
-              "retainedAgents": "已完成的代理"
+              "finishedAgents": "已完成的代理"
             }
           },
           "noSizes": "尚未测量工作区大小",
@@ -19973,7 +19989,7 @@
           "pinned": "已固定",
           "unread": "未读",
           "comment": "有评论",
-          "retainedDoneAgents": "已完成的代理记录",
+          "finishedAgents": "已完成的代理",
           "contextPresence": "打开的标签页、终端和评论",
           "completelyEmpty": "没有任何需保留的内容",
           "noWorkspaces": "未找到工作区",
@@ -20159,7 +20175,8 @@
       "TerminalContextMenu": {
         "copySessionId": "复制会话 ID",
         "copySessionIdSuccess": "已复制会话 ID",
-        "copySessionIdError": "复制会话 ID 失败"
+        "copySessionIdError": "复制会话 ID 失败",
+        "copySessionIdUnavailable": "没有可复制的会话 ID"
       },
       "hostFile": {
         "updateHostForOutsideFiles": "更新 {{value0}} 上的 Orca 以打开其工作区之外的文件"
@@ -22771,6 +22788,8 @@
       "tabCloseAll": "关闭所有编辑器标签页",
       "tabRename": "重命名当前标签页",
       "tabReopenClosed": "重新打开已关闭的标签页",
+      "tabMoveLeft": "将活动标签页左移",
+      "tabMoveRight": "将活动标签页右移",
       "tabNextSameType": "下一个标签页（同类型）",
       "tabPreviousSameType": "上一个标签页（同类型）",
       "tabNextAllTypes": "下一个标签页（所有类型）",
@@ -22781,6 +22800,7 @@
       "tabOpenQuickCommandsMenu": "切换快捷命令菜单",
       "editorFind": "在编辑器中查找",
       "editorReplace": "在编辑器中替换",
+      "editorToggleChangesView": "切换更改视图",
       "fileExplorerUndo": "撤销文件操作",
       "fileExplorerRedo": "重做文件操作",
       "fileExplorerCopyPath": "复制文件路径",
@@ -22798,6 +22818,7 @@
       "chatFind": "在聊天中查找",
       "terminalToggleNativeChat": "在聊天界面和终端之间切换",
       "terminalClosePane": "关闭当前窗格",
+      "terminalCopySessionId": "复制会话 ID",
       "terminalSplitRight": "向右拆分终端",
       "terminalSplitDown": "向下拆分终端",
       "terminalSwitchInputSource": "切换输入法/语言（原生）",

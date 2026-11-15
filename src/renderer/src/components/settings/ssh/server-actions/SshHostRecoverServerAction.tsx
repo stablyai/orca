@@ -1,11 +1,11 @@
 import { Loader2 } from 'lucide-react'
 import { useEffect, useState } from 'react'
-import type { OrcadManagedStaleLockReclaimResult } from '../../../../../../shared/orcad-managed-runtime'
+import type { OrcadManagedStaleLockReclaimResult } from '../../../../../../shared/remote-runtime/orcad-lifecycle/orcad-managed-runtime'
 import {
   ORCAD_RECLAIM_STALE_LOCK_FLAG,
   type OrcadStaleLockEvidence
-} from '../../../../../../shared/orcad-stale-lock-reclaim'
-import type { SshManagedServerStatus } from '../../../../../../shared/ssh-types'
+} from '../../../../../../shared/remote-runtime/orcad-lifecycle/orcad-stale-lock-reclaim'
+import type { SshManagedServerStatus } from '../../../../../../shared/remote-runtime/ssh/ssh-types'
 import type { ManagedOrcadPreloadApi } from '../../../../../../preload/api/runtime/managed-orcad-api'
 import { quotePosixShellUnlessPlain } from '../../../../../../shared/shell/launch/shell-argument-quoting'
 import { useMountedRef } from '@/hooks/useMountedRef'

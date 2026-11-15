@@ -7,7 +7,7 @@ import {
 export { listSessionTabsInventory } from './session-tabs-inventory-collection'
 import { isDeepStrictEqual } from 'node:util'
 import '../../../../../shared/protocol-version'
-import type { RuntimeMobileSessionTabsResult } from '../../../../../shared/runtime-session-contracts'
+import type { RuntimeMobileSessionTabsResult } from '../../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import type { RpcContext } from '../../core'
 import { createSessionTabsStreamDelta } from './session-tabs-sender-delta'
 import { prepareStructuredTabsIfSupported } from './structured-session-tab-restore'

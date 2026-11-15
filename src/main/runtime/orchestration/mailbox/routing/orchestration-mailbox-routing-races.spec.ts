@@ -31,7 +31,7 @@ describe('orchestration mailbox routing races', () => {
 
   it('fences a Run consumer rebound during a routing-page yield', async () => {
     const db = createDatabase('orca-mailbox-run-routing-fence-')
-    const harness = createRuntime(db)
+    const harness = await createRuntime(db)
     const run = createBoundRun(db, 'Run routing fence')
     for (let index = 0; index < 51; index += 1) {
       insertDirectRunMessage(db, run.id, `Before rebind ${index}`)
@@ -62,8 +62,8 @@ describe('orchestration mailbox routing races', () => {
 
   it('fences a Dispatch completed during a routing-page yield', async () => {
     const db = createDatabase('orca-mailbox-dispatch-routing-fence-')
-    const harness = createRuntime(db)
-    registerSecondPane(harness.runtime)
+    const harness = await createRuntime(db)
+    await registerSecondPane(harness.runtime)
     const run = db.createRun({
       objective: 'Dispatch routing fence',
       coordinatorHandle: SECOND_TERMINAL_HANDLE,
@@ -129,8 +129,8 @@ describe('orchestration mailbox routing races', () => {
 
   it('reconciles filtered-out mail when a Dispatch wait loses authority', async () => {
     const db = createDatabase('orca-mailbox-dispatch-wait-fence-')
-    const harness = createRuntime(db)
-    registerSecondPane(harness.runtime)
+    const harness = await createRuntime(db)
+    await registerSecondPane(harness.runtime)
     const run = db.createRun({
       objective: 'Dispatch wait fence',
       coordinatorHandle: SECOND_TERMINAL_HANDLE,
@@ -178,8 +178,8 @@ describe('orchestration mailbox routing races', () => {
 
   it('finishes only the captured inactive-Dispatch snapshot after cancellation', async () => {
     const db = createDatabase('orca-mailbox-dispatch-migration-cancel-')
-    const harness = createRuntime(db)
-    registerSecondPane(harness.runtime)
+    const harness = await createRuntime(db)
+    await registerSecondPane(harness.runtime)
     const run = db.createRun({
       objective: 'Dispatch migration cancellation',
       coordinatorHandle: SECOND_TERMINAL_HANDLE,
@@ -245,7 +245,7 @@ describe('orchestration mailbox routing races', () => {
 
   it('drains current and stored Run handles in one check', async () => {
     const db = createDatabase('orca-mailbox-split-run-handles-')
-    const harness = createRuntime(db)
+    const harness = await createRuntime(db)
     const run = db.createRun({
       objective: 'Split Run handles',
       coordinatorHandle: 'term_previous_coordinator',
@@ -273,7 +273,7 @@ describe('orchestration mailbox routing races', () => {
 
   it('drains current and stored Dispatch handles in one check', async () => {
     const db = createDatabase('orca-mailbox-split-dispatch-handles-')
-    const harness = createRuntime(db)
+    const harness = await createRuntime(db)
     const run = db.createRun({
       objective: 'Split Dispatch handles',
       coordinatorHandle: 'term_coordinator',
@@ -304,7 +304,7 @@ describe('orchestration mailbox routing races', () => {
 
   it('routes only the direct-mail snapshot captured when the check starts', async () => {
     const db = createDatabase('orca-mailbox-routing-snapshot-')
-    const harness = createRuntime(db)
+    const harness = await createRuntime(db)
     const run = createBoundRun(db, 'Routing snapshot')
     for (let index = 0; index < 51; index += 1) {
       insertDirectRunMessage(db, run.id, `Initial ${index}`)

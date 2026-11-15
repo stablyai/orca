@@ -1,12 +1,12 @@
 import { applyRemoteViewerLaunchEnv } from './remote-viewer-launch-env'
 import type { TerminalCreateOptions } from './terminal-create-options'
-import type { RuntimeTerminalCreate } from '../../../../shared/runtime-terminal-create-contract'
+import type { RuntimeTerminalCreate } from '../../../../shared/terminal/runtime/runtime-terminal-create-contract'
 import { randomUUID } from 'node:crypto'
 import { getRuntimeDesktopSurface } from '../../construction/runtime-desktop-surface'
 import type { IpcMainEvent } from 'electron'
 import { ownerSurfacing } from './terminal-presentation'
 import type { OrcaRuntimeWithCreateTerminal } from './terminal-create'
-import type { RuntimeTerminalPresentation } from '../../../../shared/runtime-terminal-contracts'
+import type { RuntimeTerminalPresentation } from '../../../../shared/terminal/runtime/runtime-terminal-contracts'
 
 // Without a window, the missing piece the caller can supply is the workspace, so name that.
 const NO_WORKSPACE_OR_WINDOW_MESSAGE =

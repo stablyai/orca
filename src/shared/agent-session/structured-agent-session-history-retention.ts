@@ -5,7 +5,7 @@ import {
   mergeSubmissions,
   trimRetainedItems
 } from './view/structured-agent-session-item-retention'
-import { readAgentJournalTurn } from './lifecycle/agent-session-turn-record'
+import { readAgentJournalTurn } from './lifecycle/records/agent-session-turn-record'
 import { agentSessionHasOlderTranscript } from './agent-session-context-clear'
 
 export function trimStructuredAgentSessionHistory(

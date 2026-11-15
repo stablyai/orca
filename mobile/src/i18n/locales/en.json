@@ -292,6 +292,33 @@
       "textSizePickerTitle": "Terminal text size"
     }
   },
+  "appMove": {
+    "play": {
+      "title": "Orca is now on Google Play",
+      "description": "This app still works, but updates now come from Google Play. Switching takes a few minutes.",
+      "installTitle": "Install Orca from Google Play",
+      "installDescription": "You can do this now, wherever you are.",
+      "openGooglePlay": "Open Google Play",
+      "cantUseGooglePlay": "I can't use Google Play"
+    },
+    "download": {
+      "title": "Get the new Orca app",
+      "description": "This app still works, but updates and security fixes now come through the new app. Switching takes a few minutes.",
+      "installTitle": "Download the new app",
+      "installDescription": "If your phone asks, allow your browser to install apps.",
+      "download": "Download",
+      "keepThisVersion": "Keep using this version",
+      "keepThisVersionNote": "You'll miss security fixes. We'll remind you in a week."
+    },
+    "pairTitle": "Pair it with your computer",
+    "pairDescription": "In Orca on your computer, go to Settings → Mobile and scan the code.",
+    "deleteTitle": "Delete this app",
+    "deleteDescription": "Once the new app shows your agents. Until then, keep using this one.",
+    "dataKept": "Your agents, chats and workspaces are saved on your computer, so you'll see them all in the new app.",
+    "banner": {
+      "seeHowToSwitch": "See how to switch"
+    }
+  },
   "accounts": {
     "screen": {
       "invalidSnapshot": "Invalid accounts snapshot from host",
@@ -1274,11 +1301,14 @@
       "refreshWorkspaceTitle": "Refresh the mobile workspace",
       "refreshWorkspaceBody": "The workspace cached for this host is older than the desktop expects. Reconnect to this host to download the current one.",
       "mobileTooOldAppStore": "This desktop needs a newer Orca Mobile app. Update Orca Mobile from the App Store, then try this host again.",
+      "mobileTooOldGooglePlay": "This desktop needs a newer Orca Mobile app. Update Orca Mobile from Google Play, then try this host again.",
       "mobileTooOldGitHubReleases": "This desktop needs a newer Orca Mobile app. Update Orca Mobile from GitHub Releases, then try this host again.",
       "workspaceNeedsUpdateAppStore": "This desktop's mobile workspace needs a newer Orca Mobile app. Update Orca Mobile from the App Store, then try this host again.",
+      "workspaceNeedsUpdateGooglePlay": "This desktop's mobile workspace needs a newer Orca Mobile app. Update Orca Mobile from Google Play, then try this host again.",
       "workspaceNeedsUpdateGitHubReleases": "This desktop's mobile workspace needs a newer Orca Mobile app. Update Orca Mobile from GitHub Releases, then try this host again.",
       "desktopTooOldBody": "This paired desktop app is too old for your current Orca Mobile app. Update Orca on your computer, then try this host again.",
       "openAppStore": "Open App Store",
+      "openGooglePlay": "Open Google Play",
       "openGitHubReleases": "Open GitHub Releases",
       "getVersion": "Get Orca {{version}}",
       "refreshRecoveryNote": "If this message stays, remove this host and pair it again.",
@@ -3410,7 +3440,10 @@
       "busy": "Another chat or terminal is opening. Wait, then fork the {{agent}} chat again.",
       "unconfirmed": "{{agent}} couldn't confirm the fork. It may have opened anyway; check Session History before forking again.",
       "failed": "{{agent}} couldn't fork this chat. {{detail}}",
-      "unsupported": "This host runs an older Orca. Update Orca on the host, then try again."
+      "unsupported": "This host runs an older Orca. Update Orca on the host, then try again.",
+      "mark": "Fork ·",
+      "markedName": "{{mark}} {{name}}",
+      "accessibleName": "Fork: {{name}}"
     },
     "hostOutage": {
       "offlineAsOf": "{{host}} is offline · as of {{time}}",

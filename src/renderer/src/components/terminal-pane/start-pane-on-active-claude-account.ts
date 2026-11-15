@@ -1,5 +1,5 @@
 import { launchAgentInNewTabWithOutcome } from '@/lib/agent-session/launch/new-tab/launch-agent-in-new-tab'
-import { createNonSecureContextUuid } from '../../../../shared/non-secure-context-uuid'
+import { createNonSecureContextUuid } from '../../../../shared/identifiers/non-secure-context-uuid'
 import { ACTIVE_CLAUDE_ACCOUNT } from '../../../../shared/claude/project-claude-account-preference'
 import type { PtyPaneStartup } from './pty-connection/startup/pty-pane-startup'
 import { agentLaunchPanePrompt } from '@/lib/agent-session/launch/pane/agent-launch-pane-prompt'

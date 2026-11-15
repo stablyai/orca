@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { CLAUDE_LAUNCH_ACCOUNT_RUNTIME_CAPABILITY } from '../shared/account-runtime-capabilities'
+import { CLAUDE_LAUNCH_ACCOUNT_RUNTIME_CAPABILITY } from '../shared/remote-runtime/protocol/account-runtime-capabilities'
 
 const {
   callMock,
@@ -34,12 +34,12 @@ vi.mock('./runtime/launch', async (importOriginal) => ({
   serveOrcaApp: serveOrcaAppMock
 }))
 
-vi.mock('./runtime/metadata', async (importOriginal) => ({
+vi.mock('./runtime/profile/metadata', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   getDefaultUserDataPath: getDefaultUserDataPathMock
 }))
 
-vi.mock('./runtime/environments', () => ({
+vi.mock('./runtime/pairing/environments', () => ({
   addEnvironmentFromPairingCode: addEnvironmentFromPairingCodeMock,
   removeEnvironment: vi.fn(),
   resolveEnvironment: vi.fn()

@@ -28,7 +28,6 @@ export function nextPetDragAnimation(
 
 export type PetAnimationInput = {
   entries: AgentStatusEntry[]
-  retainedCount: number
   dragging: boolean
   dragAnimation: PetDragAnimation
   hovering: boolean
@@ -38,7 +37,6 @@ export type PetAnimationInput = {
 
 function agentStateAnimation(
   entries: AgentStatusEntry[],
-  retainedCount: number,
   now: number,
   staleAfterMs: number
 ): PetAnimationName {
@@ -62,7 +60,7 @@ function agentStateAnimation(
   if (hasWorking) {
     return 'running'
   }
-  if (hasDone || retainedCount > 0) {
+  if (hasDone) {
     return 'review'
   }
   return 'idle'
@@ -70,14 +68,13 @@ function agentStateAnimation(
 
 export function selectPetAnimationName({
   entries,
-  retainedCount,
   dragging,
   dragAnimation,
   hovering,
   now,
   staleAfterMs
 }: PetAnimationInput): PetAnimationName {
-  const base = agentStateAnimation(entries, retainedCount, now, staleAfterMs)
+  const base = agentStateAnimation(entries, now, staleAfterMs)
   // Horizontal drags run toward the pointer; stationary grabs retain live agent state, and plain hover jumps.
   if (dragging) {
     return dragAnimation ?? base

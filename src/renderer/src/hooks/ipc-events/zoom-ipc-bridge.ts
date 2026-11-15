@@ -10,11 +10,11 @@ import { dispatchZoomLevelChanged } from '@/app-shell/chrome/zoom-events'
 
 import { useAppStore } from '../../store/index'
 import { focusedBrowserPageId, resolveZoomTarget } from '../resolve-zoom-target'
-import { dispatchBrowserPageZoom } from '@/components/browser-pane/host-guest/browser-page-zoom'
+import { dispatchBrowserPageZoom } from '@/components/browser-pane/host-guest/viewport/browser-page-zoom'
 import {
   requestFrontDialogViewerZoom,
   requestViewerZoom
-} from '@/components/editor/viewer-zoom-request'
+} from '@/components/editor/viewer-viewport/viewer-zoom-request'
 
 export function registerZoomIpcBridge(unsubs: (() => void)[]): void {
   unsubs.push(

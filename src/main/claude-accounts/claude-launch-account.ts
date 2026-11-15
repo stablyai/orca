@@ -1,4 +1,4 @@
-import type { ClaudeRateLimitAccountsState } from '../../shared/managed-account-types'
+import type { ClaudeRateLimitAccountsState } from '../../shared/agent-accounts/managed-account-types'
 
 export type ClaudeLaunchAccountResolution = {
   accountId: string

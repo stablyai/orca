@@ -1,6 +1,6 @@
-import type { Repo } from '../../../../shared/repo-types'
+import type { Repo } from '../../../../shared/repository/repo-types'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
-import type { ClaudeManagedAccountSummary } from '../../../../shared/managed-account-types'
+import type { ClaudeManagedAccountSummary } from '../../../../shared/agent-accounts/managed-account-types'
 import type { RepoAgentAccounts } from '../../../../shared/claude/project-claude-account-preference'
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import { getRepoExecutionHostId } from '../../../../shared/execution-host'

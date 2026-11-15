@@ -1,14 +1,17 @@
 import { existsSync, mkdirSync, readFileSync, symlinkSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { installFakeAppEnvironment } from '../../../config/scripts/test-runtime/environment/vitest-host-ports-setup'
-import type { Project, ProjectHostSetup } from '../../shared/project-types'
-import type { Repo } from '../../shared/repo-types'
+import type { Project, ProjectHostSetup } from '../../shared/project/project-types'
+import type { Repo } from '../../shared/repository/repo-types'
 import type { WorkspaceLineage, WorktreeLineage } from '../../shared/worktree/lineage-types'
-import { folderWorkspaceKey, worktreeWorkspaceKey } from '../../shared/workspace-scope'
+import {
+  folderWorkspaceKey,
+  worktreeWorkspaceKey
+} from '../../shared/workspace/identity/workspace-scope'
 import { getRepoIdFromWorktreeId } from '../../shared/worktree/id'
 import type { PersistedState } from '../../shared/persisted-state-types'
 import { getDefaultPersistedState } from '../../shared/constants'
-import type { SshRemotePtyLease } from '../../shared/ssh-types'
+import type { SshRemotePtyLease } from '../../shared/remote-runtime/ssh/ssh-types'
 import { hydrateWorktreeMetaAliasProjection } from './loading-store/worktree-metadata/worktree-meta-alias-projection'
 import { Store } from './loading-store/store'
 import { getDataFile, initDataPath } from './loading-store/user-data-path'

@@ -1,4 +1,4 @@
-import type { ClaudeManagedAccountSummary } from '../../../../shared/managed-account-types'
+import type { ClaudeManagedAccountSummary } from '../../../../shared/agent-accounts/managed-account-types'
 
 export type ClaudeAccountPromptAnswer =
   | { kind: 'start'; accountId: string; remember: boolean }

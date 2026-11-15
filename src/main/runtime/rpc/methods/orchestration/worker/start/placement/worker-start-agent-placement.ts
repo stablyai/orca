@@ -1,4 +1,4 @@
-import type { RuntimeTerminalCreate } from '../../../../../../../../shared/runtime-terminal-create-contract'
+import type { RuntimeTerminalCreate } from '../../../../../../../../shared/terminal/runtime/runtime-terminal-create-contract'
 /** Use the shared executor for new workers; structured worktrees omit startup agent, then resolve host support before chat creation.
  * Keep worker lineage/effects and background presentation in factories; caller passes the pre-decided mode.
  * Structured create refusals fail start through the worker error contract instead of silently downgrading. */

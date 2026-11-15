@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { claudeTabAccountLabel } from './claude-tab-account-label'
 import { ACTIVE_CLAUDE_ACCOUNT } from '../../../shared/claude/project-claude-account-preference'
 import type { SleepingAgentLaunchConfig } from '../../../shared/agent-session/lifecycle/agent-session-resume'
-import type { ClaudeManagedAccountSummary } from '../../../shared/managed-account-types'
+import type { ClaudeManagedAccountSummary } from '../../../shared/agent-accounts/managed-account-types'
 
 function account(
   overrides: Partial<ClaudeManagedAccountSummary> = {}

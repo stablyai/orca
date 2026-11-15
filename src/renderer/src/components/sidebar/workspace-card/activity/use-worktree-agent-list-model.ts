@@ -4,8 +4,8 @@ import { useCallback, useMemo } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { useAppStore } from '@/store'
 import { deriveRunningAgentSendTargets } from '@/lib/agent-session/messaging/running-agent-targets'
-import type { DashboardAgentRow as DashboardAgentRowData } from '@/components/dashboard/useDashboardData'
-import { buildAgentRowLineageTree } from '@/components/dashboard/agent-row-lineage-model'
+import type { DashboardAgentRow as DashboardAgentRowData } from '@/components/dashboard/rows/dashboard-agent-row'
+import { buildAgentRowLineageTree } from '@/components/dashboard/rows/agent-row-lineage-model'
 import { useTranslate } from '@/i18n/use-translate'
 import { agentSendDisabledReasonLabel } from '@/lib/agent-session/messaging/agent-send-disabled-reason-label'
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
@@ -17,7 +17,6 @@ import { useWorktreeAgentActivation } from './use-worktree-agent-activation'
 import { useWorktreeAgentDisplay } from './use-worktree-agent-display'
 import { useFocusedAgentPaneKey } from './focused-agent-row-highlight'
 import { useWorktreeAgentExpansionState } from './worktree-card-agents-expansion-state'
-import { activateRetainedAgentRow } from './activate-retained-agent-row'
 import { selectAgentRowsUnread } from './worktree-card-agent-ack-inputs'
 import { lineageAncestorPaneKeys } from './worktree-card-agent-lineage-disclosure'
 import { buildCollapsedChildAgentSignalStates } from './worktree-card-idle-child-agents'
@@ -44,7 +43,6 @@ export function useWorktreeAgentListModel(
   const languageRevision = useUiLanguageRevision()
   const { agentActivityDisplayMode, showAgentModels } = useWorktreeAgentDisplay()
   const dropAgentStatus = useAppStore((s) => s.dropAgentStatus)
-  const dismissRetainedAgent = useAppStore((s) => s.dismissRetainedAgent)
   const { targetMode: agentSendPopoverTargetMode, agentStatusEpoch } = useAppStore(
     useShallow((s) => selectSendTargetControlInputs(s, worktreeId))
   )
@@ -65,9 +63,8 @@ export function useWorktreeAgentListModel(
   const handleDismissAgent = useCallback(
     (paneKey: string) => {
       dropAgentStatus(paneKey)
-      dismissRetainedAgent(paneKey)
     },
-    [dropAgentStatus, dismissRetainedAgent]
+    [dropAgentStatus]
   )
 
   const isAgentSendTargetModeActive = agentSendPopoverTargetMode !== null
@@ -121,11 +118,6 @@ export function useWorktreeAgentListModel(
   )
 
   const handleActivateAgentTab = useWorktreeAgentActivation(worktreeId, executionHostId)
-  const handleActivateRetainedAgent = useCallback(
-    (tabId: string, paneKey: string) =>
-      activateRetainedAgentRow(worktreeId, tabId, paneKey, executionHostId),
-    [worktreeId, executionHostId]
-  )
 
   const lineageTree = useMemo(() => buildAgentRowLineageTree(agents), [agents])
   const { rootRows: rootAgents, childrenByParentPaneKey } = lineageTree
@@ -188,7 +180,6 @@ export function useWorktreeAgentListModel(
     sendTargetFor,
     handleSendTargetClick,
     handleActivateAgentTab,
-    handleActivateRetainedAgent,
     rootAgents,
     childrenByParentPaneKey,
     hasLineage,

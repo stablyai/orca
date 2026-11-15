@@ -1,4 +1,4 @@
-import { resolveRepoBadgeColor } from '../../../../src/shared/repo-badge-color'
+import { resolveRepoBadgeColor } from '../../../../src/shared/repository/appearance/repo-badge-color'
 import { getRepoExecutionHostId, parseExecutionHostId } from '../../../../src/shared/execution-host'
 import {
   getHostContextLabel,

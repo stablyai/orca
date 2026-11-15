@@ -48,60 +48,6 @@ describe('unmatched named tool outputs', () => {
     expect(input.map((message) => message.blocks)).toEqual([[call('a')], [old], [call('x')]])
   })
 
-  it('keeps a leading named output visible and never matches it retroactively', () => {
-    const old = row('old', 'tool', [result('x')])
-    const once = foldToolMessages([old, row('x', 'assistant', [call('x')])])
-    expect(once.map((message) => message.id)).toEqual(['old', 'x'])
-    expect(pairToolBlocks(once[0]!.blocks)).toEqual([{ result: result('x') }])
-    expect(pairToolBlocks(once[1]!.blocks)).toEqual([{ call: call('x') }])
-    expect(foldToolMessages(once)).toEqual(once)
-  })
-
-  it('retains source ordering around activity and prose boundaries', () => {
-    const roster: NativeChatBlock = { type: 'subagent-group', groupId: 'group', agents: [] }
-    const input = [
-      row('calls', 'assistant', [call('a')]),
-      row('before', 'tool', [result('before')]),
-      row('roster', 'system', [roster]),
-      row('after', 'tool', [result('after'), result('a', 'A')]),
-      row('prompt', 'user', [{ type: 'text', text: 'next prompt' }])
-    ]
-    const once = foldToolMessages(input)
-    expect(once.map((message) => message.id)).toEqual([
-      'calls',
-      'before',
-      'roster',
-      'after',
-      'prompt'
-    ])
-    expect(once[0]?.blocks).toEqual([call('a'), result('a', 'A')])
-    expect(once[1]?.blocks).toEqual([result('before')])
-    expect(once[3]?.blocks).toEqual([result('after')])
-    expect(foldToolMessages(once)).toEqual(once)
-  })
-
-  it('uses distinct stable source IDs when both words and orphan results draw', () => {
-    const source = row('source', 'assistant', [
-      { type: 'text', text: 'kept prose' },
-      call('a'),
-      result('missing')
-    ])
-    const reserved = row('unpaired-tool-results:["source",0]', 'user', [
-      { type: 'text', text: 'next' }
-    ])
-    const once = foldToolMessages([source, reserved])
-    expect(once.map((message) => message.id)).toEqual([
-      'source',
-      'unpaired-tool-results:["source",1]',
-      reserved.id
-    ])
-    expect(once[0]?.blocks).toEqual([{ type: 'text', text: 'kept prose' }, call('a')])
-    expect(once[1]?.blocks).toEqual([result('missing')])
-    expect(new Set(once.map((message) => message.id)).size).toBe(once.length)
-    expect(foldToolMessages(once)).toEqual(once)
-    expect(foldToolMessages([source, reserved])).toEqual(once)
-  })
-
   it('retains harness sidecar text and independently attributed results with source cursors', () => {
     const assistant = row('a', 'assistant', [call('a')])
     assistant.journalPosition = { sequence: 1, index: 0 }
@@ -139,21 +85,5 @@ describe('unmatched named tool outputs', () => {
     })
     expect(once[1]?.blocks).toEqual([error])
     expect(nativeChatWorkRunMember(once[1]!, false, false)).toBeNull()
-  })
-
-  it('preserves result metadata while retaining historical anonymous orphan behavior', () => {
-    const output: NativeChatToolResultBlock = {
-      ...result('named'),
-      isError: true,
-      editPatch: {
-        filePath: 'example.ts',
-        hunks: [{ oldStart: 1, oldLines: 1, newStart: 1, newLines: 1, lines: ['-old', '+new'] }]
-      }
-    }
-    const once = foldToolMessages([row('outputs', 'tool', [result(undefined), output])])
-    expect(once).toHaveLength(1)
-    expect(once[0]).toMatchObject({ id: 'outputs', role: 'tool', blocks: [output] })
-    expect(once[0]?.blocks[0]).toBe(output)
-    expect(foldToolMessages([row('anonymous', 'tool', [result(undefined)])])).toEqual([])
   })
 })

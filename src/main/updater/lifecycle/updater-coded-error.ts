@@ -4,7 +4,7 @@ import {
   type UpdaterFailureCode,
   type UpdaterFailureParams
 } from '../../../shared/updater-failure-copy'
-import { errorMessage } from '../../../shared/error-message'
+import { errorMessage } from '../../../shared/errors/error-message'
 
 /** Thrown inside main only; handlers copy its code onto the status or IPC result. */
 export class UpdaterCodedError extends Error {

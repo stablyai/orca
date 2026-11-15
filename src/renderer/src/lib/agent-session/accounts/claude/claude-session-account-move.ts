@@ -20,8 +20,8 @@ import type { TerminalProcessInspection as RuntimeTerminalProcessInspection } fr
 import {
   getCodexSelectionLaneKey,
   normalizeCodexAccountSelectionTarget
-} from '../../../../../../shared/codex-selection-lane'
-import type { CodexAccountSelectionTarget } from '../../../../../../shared/codex-selection-lane'
+} from '../../../../../../shared/agent-accounts/codex/codex-selection-lane'
+import type { CodexAccountSelectionTarget } from '../../../../../../shared/agent-accounts/codex/codex-selection-lane'
 import { resolvePaneAgentSessionId } from '@/lib/agent-session/identity/pane-agent-session-id'
 import { resolveAgentAccountRestartResumeStartup } from '../agent-account-restart-startup'
 import { isSessionHeldByAnotherPane } from '../../identity/claude-session-pane-holders'
@@ -34,11 +34,11 @@ import {
   resolveCodexPaneSelectionLane
 } from '../codex-pane-selection-lane'
 import type { AppState } from '@/store/types'
-import type { RuntimeClientTarget } from '../../../../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import type {
   ClaudeManagedAccount,
   ClaudeRateLimitAccountsState
-} from '../../../../../../shared/managed-account-types'
+} from '../../../../../../shared/agent-accounts/managed-account-types'
 import type { TerminalTab } from '../../../../../../shared/workspace-layout/terminal-tab-types'
 
 export type ClaudeSessionMoveCandidate = {

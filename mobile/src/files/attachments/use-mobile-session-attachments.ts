@@ -5,11 +5,11 @@ import { triggerSelection, triggerError } from '../../platform/haptics/haptics'
 import { resolveMobileImageAttachmentAgent } from './mobile-image-paste-agent'
 import { useMobileNewTabAgentOptions } from '../../session/agent-launch/use-mobile-new-tab-agent-options'
 import { useMobileSessionImageAttachments } from './use-mobile-session-image-attachments'
-import { useMobileNativeChatStructuredComposer } from '../../session/native-chat/composer/use-mobile-native-chat-structured-composer'
+import { useMobileNativeChatStructuredComposer } from '../../session/native-chat/composer/commands/use-mobile-native-chat-structured-composer'
 import {
   isMobileNativeChatAgentConfirmed,
   resolveMobileNativeChatSessionId
-} from '../../session/native-chat/mobile-native-chat-eligibility'
+} from '../../session/native-chat/conversation/mobile-native-chat-eligibility'
 import { useMobileAttachmentInputLeaseGate } from './use-mobile-attachment-input-lease-gate'
 import { useMobileTerminalPaste } from '../../terminal/session/input-controls/use-mobile-terminal-paste'
 import type { MobileSessionAccessorySelectionModel } from '../../terminal/session/accessory-keys/use-mobile-session-accessory-selection'

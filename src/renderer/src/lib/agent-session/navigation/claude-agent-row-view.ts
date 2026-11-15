@@ -1,6 +1,6 @@
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
-import type { DashboardAgentRow } from '@/components/dashboard/useDashboardData'
+import type { DashboardAgentRow } from '@/components/dashboard/rows/dashboard-agent-row'
 import { useAppStore } from '@/store/index'
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import { hostRouteForAuthority } from '@/runtime/rpc/targets/runtime-client-target'
@@ -8,8 +8,8 @@ import { getRuntimeEnvironmentRevision } from '@/runtime/rpc/environment-revisio
 import { resolveOwnerOrLocal } from '../../workspace/ownership/worktree-runtime-owner'
 import { findActiveRuntimeTerminal } from '../messaging/terminal/active-agent-note-target'
 import { parsePaneKey } from '../../../../../shared/workspace-layout/stable-pane-id'
-import { authorityKey } from '../../../../../shared/host-authority'
-import type { ClaudeAgentViewResult } from '../../../../../shared/claude-agent-view'
+import { authorityKey } from '../../../../../shared/execution-host/host-authority'
+import type { ClaudeAgentViewResult } from '../../../../../shared/agent-hook-listener/providers/claude/view/claude-agent-view'
 import { openNativeChatSubagent } from '@/components/native-chat/subagents/native-chat-open-subagent'
 
 const pendingViews = new Map<string, AbortController>()

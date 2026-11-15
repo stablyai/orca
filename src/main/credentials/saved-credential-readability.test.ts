@@ -2,7 +2,7 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { _resetSecretStoreForTests, setSecretStore } from '../../shared/secret-store'
+import { _resetSecretStoreForTests, setSecretStore } from '../../shared/secure-storage/secret-store'
 import { savedCredentialUnreadable } from './saved-credential-readability'
 
 const PREFIX = 'orca-test-key:v1:'

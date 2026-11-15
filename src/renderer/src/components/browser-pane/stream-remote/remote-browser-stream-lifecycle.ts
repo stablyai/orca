@@ -1,4 +1,4 @@
-import type { RuntimeStatus } from '../../../../../shared/runtime-types'
+import type { RuntimeStatus } from '../../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import { RemoteBrowserPageSession } from './remote-browser-page-session'
 import { RemoteBrowserJavaScriptDialog } from './remote-browser-javascript-dialog'
 import { openRemoteBrowserScreencastStream } from './remote-browser-screencast-subscription'

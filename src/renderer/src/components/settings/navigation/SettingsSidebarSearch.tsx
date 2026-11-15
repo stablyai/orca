@@ -1,6 +1,6 @@
 import type { KeyboardEvent, RefObject } from 'react'
 import { Search, X } from 'lucide-react'
-import type { RepoIcon } from '../../../../../shared/repo-icon'
+import type { RepoIcon } from '../../../../../shared/repository/appearance/repo-icon'
 import { useShortcutKeyComboDetails } from '@/hooks/useShortcutLabel'
 import { ShortcutKeyCombo } from '../../ShortcutKeyCombo'
 import { cn } from '@/lib/class-names'
@@ -8,7 +8,7 @@ import { RepoIconGlyph } from '../../repo/repo-icon'
 import { Button } from '../../ui/button'
 import { Input } from '../../ui/input'
 import { useTranslate } from '@/i18n/use-translate'
-import { HighlightedText } from '../../worktree-jump/worktree-jump-palette-primitives'
+import { HighlightedText } from '../../worktree-jump/rows/worktree-jump-palette-row-content'
 import {
   getSettingsSearchTitleMatchRanges,
   type SettingsSearchResult

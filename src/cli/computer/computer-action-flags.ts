@@ -8,10 +8,10 @@ import {
   getOptionalNumberFlag,
   getOptionalPositiveIntegerFlag,
   getOptionalStringFlag,
-  getRequiredStringFlag,
-  getRequiredStringFlagAllowingEmpty
+  getRequiredStringFlag
 } from '../arguments/flags'
-import { RuntimeClientError } from '../runtime/types'
+import { getFlagOrStdinPayload } from '../arguments/flag-or-stdin-payload'
+import { RuntimeClientError } from '../runtime/connection/types'
 import {
   validateDragTarget,
   validateElementOrCoordinates,
@@ -140,7 +140,7 @@ export function getComputerDragActionFlags(flags: Map<string, string | boolean>)
 export async function getComputerTextActionFlags(flags: Map<string, string | boolean>): Promise<{
   text: string
 }> {
-  return { text: await getTextPayload(flags, 'text') }
+  return { text: await getFlagOrStdinPayload(flags, 'text') }
 }
 
 export async function getComputerTypeTextActionFlags(
@@ -190,42 +190,8 @@ export async function getComputerSetValueActionFlags(
 }> {
   return {
     elementIndex: getRequiredNonNegativeIntegerFlag(flags, 'element-index'),
-    value: await getTextPayload(flags, 'value')
+    value: await getFlagOrStdinPayload(flags, 'value', { allowEmptyStdin: true })
   }
-}
-
-async function getTextPayload(
-  flags: Map<string, string | boolean>,
-  name: 'text' | 'value'
-): Promise<string> {
-  const stdinFlag = `${name}-stdin`
-  if (flags.has(stdinFlag)) {
-    if (flags.has(name)) {
-      throw new RuntimeClientError(
-        'invalid_argument',
-        `Use either --${name} or --${stdinFlag}, not both`
-      )
-    }
-    const payload = await readStdin()
-    if (name === 'text' && payload.length === 0) {
-      throw new RuntimeClientError('invalid_argument', 'Missing text from stdin')
-    }
-    return payload
-  }
-  return name === 'value'
-    ? getRequiredStringFlagAllowingEmpty(flags, name)
-    : getRequiredStringFlag(flags, name)
-}
-
-async function readStdin(): Promise<string> {
-  if (process.stdin.isTTY) {
-    throw new RuntimeClientError('invalid_argument', 'stdin payload requested but stdin is a TTY')
-  }
-  const chunks: Buffer[] = []
-  for await (const chunk of process.stdin) {
-    chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(String(chunk)))
-  }
-  return Buffer.concat(chunks).toString('utf8')
 }
 
 function getOptionalPositiveNumberFlag(

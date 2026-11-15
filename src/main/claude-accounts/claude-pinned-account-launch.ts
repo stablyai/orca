@@ -1,5 +1,5 @@
 import { access } from 'node:fs/promises'
-import { CLAUDE_INJECTED_CONFIG_DIR_ENV } from '../../shared/claude-profile-routing'
+import { CLAUDE_INJECTED_CONFIG_DIR_ENV } from '../../shared/agent-accounts/claude/claude-profile-routing'
 import { isDirectory } from './profiles/claude-profile-homes'
 import { claudeProfileSetupFailed } from './profiles/routing/claude-profile-launch-errors'
 import { claudeProfileMarkerPath, describeClaudeProfile } from './profiles/claude-profile-paths'

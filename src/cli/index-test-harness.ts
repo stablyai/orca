@@ -18,7 +18,8 @@ export type WorktreeAwarenessMocks = {
 
 export async function createRuntimeClientModuleMock(mocks: RuntimeClientModuleMocks) {
   // Error formatting uses instanceof, so the mock must preserve the production classes.
-  const { RuntimeClientError, RuntimeRpcFailureError } = await import('./runtime/types.js')
+  const { RuntimeClientError, RuntimeRpcFailureError } =
+    await import('./runtime/connection/types.js')
 
   class RuntimeClient {
     readonly isRemote: boolean

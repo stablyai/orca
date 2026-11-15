@@ -1,5 +1,5 @@
 // COMPAT(wsl-bridge): removed when WSL runs as an orcad host.
-import { buildAgentFeatureSkillInstallCommand as buildPinnedSkillInstallCommand } from '../../../../../shared/agent-feature-install-commands'
+import { buildAgentFeatureSkillInstallCommand as buildPinnedSkillInstallCommand } from '../../../../../shared/skills/installation/agent-feature-install-commands'
 import {
   ORCA_CLI_SKILL_NAME,
   ORCA_LINEAR_SKILL_NAME,

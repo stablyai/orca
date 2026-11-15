@@ -1,5 +1,5 @@
 import type { SessionOptionValue } from '../../../../shared/native-chat/input/native-chat-session-options'
-import type { RuntimeTerminalCreate } from '../../../../shared/runtime-terminal-create-contract'
+import type { RuntimeTerminalCreate } from '../../../../shared/terminal/runtime/runtime-terminal-create-contract'
 import type { AgentLaunchPreferences } from '../../../../shared/agent-session/agent-session-host-authority'
 import type { CreateWorktreeArgs } from '../../../../shared/worktree/create-types'
 import type {
@@ -11,7 +11,7 @@ import type {
   Worktree
 } from '../../../../shared/worktree/types'
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
-import type { WorkspaceSource as WorkspaceCreateTelemetrySource } from '../../../../shared/workspace-source'
+import type { WorkspaceSource as WorkspaceCreateTelemetrySource } from '../../../../shared/workspace/creation/workspace-source'
 import type { WorktreeStartupLaunch } from '../../../../shared/worktree/creation/launch-types'
 import type {
   CrossStoreInferredSource,
@@ -19,7 +19,7 @@ import type {
 } from '../../../../shared/worktree/lineage-types'
 import type { TaskSourceContext } from '../../../../shared/work-items/task-source-context'
 import type { WorktreeStartupDraftPaste } from '../startup/runtime-worktree-agent-startup'
-import type { RuntimeNavigationTarget } from '../../../../shared/runtime-navigation'
+import type { RuntimeNavigationTarget } from '../../../../shared/remote-runtime/session-graph/runtime-navigation'
 import type { RuntimeRepoSelector } from '../catalog/runtime-repo-selector'
 
 export type RuntimeManagedWorktreeCreateArgs = {

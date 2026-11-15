@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { RuntimeMobileSessionTabsSnapshot } from '../../../../shared/runtime-session-contracts'
+import type { RuntimeMobileSessionTabsSnapshot } from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import { applyBrowserSessionTabSelection } from './browser-session-tab-selection-snapshot'
 
 function makeSnapshot(): RuntimeMobileSessionTabsSnapshot {
@@ -7,6 +7,17 @@ function makeSnapshot(): RuntimeMobileSessionTabsSnapshot {
     worktree: 'wt-1',
     publicationEpoch: 'headless:before',
     snapshotVersion: 4,
+    browserPageInventory: [
+      {
+        browserPageId: 'page-new',
+        browserWorkspaceId: 'page-new',
+        title: 'Saved',
+        url: 'https://example.com/saved',
+        profileId: 'default',
+        loadError: null,
+        certificateFailure: null
+      }
+    ],
     activeGroupId: 'group-left',
     activeTabId: 'terminal-tab',
     activeTabType: 'terminal',
@@ -53,6 +64,8 @@ describe('applyBrowserSessionTabSelection', () => {
       focusesHost: true
     })
 
+    expect(snapshot.browserPageInventory?.map((entry) => entry.browserPageId)).toEqual(['page-new'])
+    expect(snapshot.browserPageInventory?.[0]?.url).toBe('https://example.com/saved')
     expect(snapshot.activeGroupId).toBe('group-right')
     expect(snapshot.activeTabId).toBe('page-new')
     expect(snapshot.tabs.filter((tab) => tab.isActive).map((tab) => tab.id)).toEqual(['page-new'])

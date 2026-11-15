@@ -5,7 +5,7 @@ import {
   CreateAgentSessionParams,
   EnsureAgentSessionParams
 } from './rpc-contract/terminal/agent-session-params'
-import { buildSleepingAgentLaunchConfig } from './agent-session/lifecycle/sleeping-agent-launch-config'
+import { buildSleepingAgentLaunchConfig } from './agent-session/lifecycle/resume/sleeping-agent-launch-config'
 import { ACTIVE_CLAUDE_ACCOUNT } from './claude/project-claude-account-preference'
 
 function persistedLaunchConfig(claudeAccountId: unknown) {

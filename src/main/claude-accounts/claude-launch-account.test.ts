@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { ClaudeManagedAccountSummary } from '../../shared/managed-account-types'
+import type { ClaudeManagedAccountSummary } from '../../shared/agent-accounts/managed-account-types'
 import { ClaudeLaunchAccountError, resolveClaudeLaunchAccount } from './claude-launch-account'
 
 function summary(

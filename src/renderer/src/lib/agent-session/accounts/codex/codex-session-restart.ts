@@ -22,8 +22,8 @@ import {
   resolveCodexPaneSelectionLane
 } from '../codex-pane-selection-lane'
 import type { AppState } from '@/store/types'
-import type { CodexAccountSelectionTarget } from '../../../../../../shared/codex-selection-lane'
-import type { RuntimeClientTarget } from '../../../../../../shared/runtime-client-target'
+import type { CodexAccountSelectionTarget } from '../../../../../../shared/agent-accounts/codex/codex-selection-lane'
+import type { RuntimeClientTarget } from '../../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import type { TuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-agent'
 
 export type CodexPaneScanResult = {

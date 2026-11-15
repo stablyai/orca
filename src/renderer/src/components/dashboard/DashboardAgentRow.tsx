@@ -4,7 +4,7 @@ import {
   opensClaudeParentConversation,
   viewClaudeAgentFromRow
 } from '@/lib/agent-session/navigation/claude-agent-row-view'
-import { useClaudeAgentRowView } from './use-claude-agent-row-view'
+import { useClaudeAgentRowView } from './rows/use-claude-agent-row-view'
 import {
   AgentStateDot,
   agentStateLabel,
@@ -14,9 +14,9 @@ import {
 import { AgentTypeIcon } from '@/components/agent/icons/agent-type-icon'
 import { formatAgentTypeLabel } from '../../../../shared/agent-status/presentation/agent-type-label'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { DashboardAgentRowMessage } from './DashboardAgentRowMessage'
-import { DashboardAgentRowTrailingControls } from './DashboardAgentRowTrailingControls'
-import { DashboardAgentRowToolStep } from './DashboardAgentRowToolStep'
+import { DashboardAgentRowMessage } from './rows/DashboardAgentRowMessage'
+import { DashboardAgentRowTrailingControls } from './rows/DashboardAgentRowTrailingControls'
+import { DashboardAgentRowToolStep } from './rows/DashboardAgentRowToolStep'
 import { programStatusAttentionLine } from '../../../../shared/program-status/presentation'
 import {
   agentRowToolInput,
@@ -37,10 +37,10 @@ import {
   agentVerdictDisplayMark
 } from '../../../../shared/agent-status/lifecycle/agent-main-agent-verdict'
 import { agentVerdictStatusLine } from '@/lib/agent-status/presentation/agent-verdict-status-line'
-import type { DashboardAgentRow as DashboardAgentRowData } from './useDashboardData'
+import type { DashboardAgentRow as DashboardAgentRowData } from './rows/dashboard-agent-row'
 import { getAgentRowPrimaryText } from '../../../../shared/agent-status/presentation/agent-row-primary-text'
-import { useAgentRowConversationName } from './use-agent-row-conversation-name'
-import { lastEnteredDoneAt } from './agent-finished-timestamp'
+import { useAgentRowConversationName } from './rows/use-agent-row-conversation-name'
+import { lastEnteredDoneAt } from './rows/agent-finished-timestamp'
 import {
   agentChildRowMessageLine,
   agentChildRowNoUpdateLabel

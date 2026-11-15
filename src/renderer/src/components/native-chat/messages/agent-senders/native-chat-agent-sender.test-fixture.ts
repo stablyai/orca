@@ -1,5 +1,5 @@
 import { structuredAgentSessionPaneKey } from '../../../../../../shared/agent-session/view/structured-agent-session-projection'
-import type { OrcaSessionId } from '../../../../../../shared/orca-session-address'
+import type { OrcaSessionId } from '../../../../../../shared/agent-session/identity/orca-session-address'
 import { useAppStore } from '@/store'
 import { makeTab } from '@/store/terminals/testing/terminal-tab.test-fixture'
 import { makeUnifiedTab } from '@/store/slices/tabs/tab-group.test-fixture'
@@ -39,7 +39,7 @@ export function resetSenderStore(): void {
       tabsByWorktree: { workspace: [makeTab({ id: 'tab-0', worktreeId: 'workspace' })] },
       unifiedTabsByWorktree: {},
       agentStatusByPaneKey: { [status(0).paneKey]: status(0) },
-      retainedAgentsByPaneKey: {},
+
       migrationUnsupportedByPtyId: {},
       runtimeAgentOrchestrationByPaneKey: {},
       runtimePaneTitlesByTabId: {},

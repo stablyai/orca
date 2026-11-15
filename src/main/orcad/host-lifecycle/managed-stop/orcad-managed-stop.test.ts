@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os'
 import { basename, dirname, join, sep } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type * as WindowsAcl from '../../../../shared/secure-storage/secure-path-windows-acl'
-import type { OrcadManagedStopRequest } from '../../../../shared/orcad-stop-request'
+import type { OrcadManagedStopRequest } from '../../../../shared/remote-runtime/orcad-lifecycle/orcad-stop-request'
 import { acquireOrcadInstanceLock } from '../../instance-lock/orcad-instance-lock'
 import type { OrcadInstanceLock } from '../../instance-lock/orcad-instance-lock-hold'
 import {

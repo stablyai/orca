@@ -1,4 +1,4 @@
-import type { RuntimeMobileSessionTabsResult } from '../../../../../../shared/runtime-session-contracts'
+import type { RuntimeMobileSessionTabsResult } from '../../../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import { e2eConfig } from '@/app-shell/startup/e2e-config'
 
 type BrowserCreationFaultSnapshot = {

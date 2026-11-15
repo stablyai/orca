@@ -1,6 +1,6 @@
 import { toast } from 'sonner'
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
-import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import { notifyWorkItemDetailsMutation } from '@/components/github/github-work-item-comment-mutations'
 import { runPullRequestStateUpdate } from '@/components/github/github-work-item-edit-mutations'
 import { getGitHubRuntimeRepoId } from '@/lib/work-items/github/github-source-runtime-context'

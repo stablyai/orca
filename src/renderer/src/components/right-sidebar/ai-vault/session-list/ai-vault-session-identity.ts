@@ -2,7 +2,7 @@ import type {
   AiVaultListResult,
   AiVaultSession
 } from '../../../../../../shared/ai-vault/contracts/ai-vault-types'
-import { structuralValuesEqual } from '../../../../../../shared/structural-value-equality'
+import { structuralValuesEqual } from '../../../../../../shared/collections/structural-value-equality'
 import { reuseEqualCatalogRows } from '@/lib/catalog-reconciliation/catalog-row-reconciliation'
 
 // Freeze the shared sentinel so one consumer cannot mutate every panel's initial rows.

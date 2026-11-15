@@ -3,6 +3,7 @@ import { launchAgentInNewTabWithOutcome } from '@/lib/agent-session/launch/new-t
 import { settleAgentTabLaunch } from '@/lib/agent-session/launch/new-tab/launch-agent-in-new-tab-host-agents'
 import { newAgentPromptOutcome } from '@/lib/agent-session/launch/prompt/new-agent-prompt-outcome'
 import { buildAgentSessionForkPrompt } from '@/lib/agent-session/context/agent-session-fork-context'
+import { readTerminalContextText } from '@/lib/agent-session/context/terminal-context-text'
 import { activateAndRevealWorktree } from '@/lib/workspace/activation/worktree-activation'
 import { resolveOwner } from '@/lib/workspace/ownership/resolve-owner'
 import { toRuntimeExecutionHostId } from '../../../../../shared/execution-host'
@@ -11,13 +12,13 @@ import { useAppStore } from '@/store/index'
 import { makePaneKey } from '../../../../../shared/workspace-layout/stable-pane-id'
 import { TUI_AGENT_CONFIG } from '../../../../../shared/agent-launch/catalog/tui-agent-config'
 import { getForkAgentLaunchPlatform } from './terminal-agent-session-fork-launch-platform'
-import { slugifyForWorkspaceName } from '../../../../../shared/workspace-name'
+import { slugifyForWorkspaceName } from '../../../../../shared/workspace/naming/workspace-name'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../shared/constants'
 import { getLocalProjectExecutionRuntimeContext } from '@/runtime/hosts/preflight/local-preflight-context'
 import { translate } from '@/i18n/i18n'
 import { planAgentSessionLaunch } from '@/lib/agent-session/launch/routing/agent-session-launch-plan'
 
-import { createNonSecureContextUuid } from '../../../../../shared/non-secure-context-uuid'
+import { createNonSecureContextUuid } from '../../../../../shared/identifiers/non-secure-context-uuid'
 import type { ManagedPane } from '@/lib/pane-manager/pane-manager-types'
 import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent'
 
@@ -104,7 +105,7 @@ export function prepareAgentSessionForkFromPane({
   const agent = sourceAgent ?? tabAgent
   // This forks context, not the process; xterm capture works for both local and SSH panes.
   const prompt = buildAgentSessionForkPrompt({
-    capturedText: pane.serializeAddon.serialize({ scrollback: 800 }),
+    capturedText: readTerminalContextText(pane.terminal),
     sourceLabel: paneKey,
     agentLabel: agent
   })

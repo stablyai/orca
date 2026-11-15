@@ -5,7 +5,10 @@ import {
 } from '../host/structured-agent-session-logger'
 import { StructuredAgentSessionStatusFeed } from './structured-agent-session-status-feed'
 
-import type { StructuredAgentSessionStatusFeedDeps } from './structured-agent-session-status-feed-deps'
+import type {
+  StatusFeedSession,
+  StructuredAgentSessionStatusFeedDeps
+} from './structured-agent-session-status-feed-deps'
 import type { StructuredAgentSessionStatusSink } from './structured-agent-session-status-ownership'
 import {
   StructuredAgentSessionSubagentRows,
@@ -13,10 +16,11 @@ import {
 } from './structured-agent-session-subagent-rows'
 import { structuredAgentSessionConversationFence } from '../host/structured-agent-session-provider-child'
 import type { StructuredAgentSessionConversationNaming } from '../host/structured-agent-session-host-types'
+import type { AgentSessionJournal } from '../../agent-session-journal/journal-store'
 
 /** Resolve deps lazily because field initializers run before host constructor assignments. */
 export function createStructuredAgentSessionHostStatusFeed(args: {
-  sessions: StructuredAgentSessionStatusFeedDeps['sessions']
+  sessions: ReadonlyMap<string, StatusFeedSession & { journal: AgentSessionJournal }>
   starting?: (sessionId: string) => boolean
   readUsageLimitContinue?: StructuredAgentSessionStatusFeedDeps['readUsageLimitContinue']
   now: () => number
@@ -80,7 +84,8 @@ export function createStructuredAgentSessionHostStatusFeed(args: {
     onChildWorkChanged: (sessionId, producer) => {
       subagentRows.changed(sessionId, producer)
       args.onChildWorkChanged?.(sessionId)
-    }
+    },
+    drainChildWork: (sessionId) => subagentRows.drain(sessionId)
   })
   return feed
 }

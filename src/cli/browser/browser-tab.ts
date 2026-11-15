@@ -19,8 +19,8 @@ import {
   getPresentStringFlag,
   getRequiredStringFlag
 } from '../arguments/flags'
-import { RuntimeClientError } from '../runtime/types'
-import { isBrowserTabSplitDirection } from '../../shared/browser-tab-split-direction'
+import { RuntimeClientError } from '../runtime/connection/types'
+import { isBrowserTabSplitDirection } from '../../shared/browser/workspaces/browser-tab-split-direction'
 import { getBrowserWorktreeSelector } from '../workspace-selection/workspace-selector'
 import { getBrowserCommandTarget, getScopedBrowserWorktreeSelector } from './browser-command-target'
 

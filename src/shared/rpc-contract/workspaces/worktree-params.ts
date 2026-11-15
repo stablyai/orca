@@ -10,7 +10,7 @@ import {
   OptionalString,
   TriStateLinkedIssue
 } from '../rpc-param-primitives'
-import { RUNTIME_NAVIGATION_TARGETS } from '../../runtime-navigation'
+import { RUNTIME_NAVIGATION_TARGETS } from '../../remote-runtime/session-graph/runtime-navigation'
 import { WorkspaceLinkedItemSchema } from '../../workspace-attachments/workspace-linked-item-schema'
 import { WorkspaceAttachmentsSchema } from '../../workspace-attachments/workspace-attachment-schema'
 import { DiffCommentSchema, MobileDiffReviewSchema } from '../../diff-comment-schema'

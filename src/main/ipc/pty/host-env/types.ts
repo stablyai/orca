@@ -6,7 +6,7 @@ import type {
   ClaudeRuntimeAuthPreparation
 } from '../../../claude-accounts/runtime-auth/runtime-auth-types'
 import type { ClaudeAccountSelectionTarget } from '../../../claude-accounts/selection/runtime-selection'
-import type { CodexAccountSelectionTarget } from '../../../../shared/codex-selection-lane'
+import type { CodexAccountSelectionTarget } from '../../../../shared/agent-accounts/codex/codex-selection-lane'
 import type { CodexPaneHomeRoute } from '../../../codex/configuration/homes/codex-pane-account-registry-types'
 import type { CodexSessionResumePreparation } from '../../../codex/history/resume/codex-session-resume-home'
 

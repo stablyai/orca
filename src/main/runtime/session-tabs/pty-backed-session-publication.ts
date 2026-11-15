@@ -5,8 +5,8 @@ import type { RuntimePtyWorktreeRecord } from '../terminal/records/runtime-termi
 import { normalizeCompatibleAgentTitleForOwner } from '../../../shared/agent-status/title/agent-title-owner'
 import { getLatestPtyTitle } from '../workspaces/process-listing/runtime-worktree-status-projection'
 import type { OrcaRuntimeWithBuildPtyTerminalSummary as PtyTerminalSummaryMethods } from '../terminal/query/pty-terminal-summary'
-import type { RuntimeMobileSessionTabsSnapshot } from '../../../shared/runtime-session-contracts'
-import type { RuntimeMobileSessionTerminalTab } from '../../../shared/runtime-mobile-session-tab-contracts'
+import type { RuntimeMobileSessionTabsSnapshot } from '../../../shared/remote-runtime/session-graph/runtime-session-contracts'
+import type { RuntimeMobileSessionTerminalTab } from '../../../shared/remote-runtime/session-graph/runtime-mobile-session-tab-contracts'
 import {
   buildMaterializedHeadlessParentLayout,
   getHeadlessMobileSessionGroupId

@@ -1,4 +1,4 @@
-import type { ProviderRateLimits } from '../../../../../shared/rate-limit-types'
+import type { ProviderRateLimits } from '../../../../../shared/agent-usage/rate-limits/rate-limit-types'
 import type { GlobalSettings } from '../../../../../shared/global-settings-types'
 import { usageLimitAccountSources } from '../../../../runtime/agent-session/installation/usage-limit-account-usage'
 

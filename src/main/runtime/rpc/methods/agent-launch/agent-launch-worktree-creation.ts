@@ -1,4 +1,4 @@
-import type { RuntimeTerminalCreate } from '../../../../../shared/runtime-terminal-create-contract'
+import type { RuntimeTerminalCreate } from '../../../../../shared/terminal/runtime/runtime-terminal-create-contract'
 /** Terminal launches create agent-first worktrees; structured launches create the workspace without an agent and add chat afterwards.
  * The executor chooses; setup, default tabs, provenance and lineage use the normal create path. */
 

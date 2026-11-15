@@ -6,7 +6,7 @@ import {
 } from './claude-launch-account'
 import { ACTIVE_CLAUDE_ACCOUNT } from '../../../shared/claude/project-claude-account-preference'
 import { getRepoMainWorktreeId } from '../../../shared/worktree/id'
-import type { Repo } from '../../../shared/repo-types'
+import type { Repo } from '../../../shared/repository/repo-types'
 import { useAppStore } from '@/store'
 
 describe('resolveLaunchClaudeAccountId', () => {

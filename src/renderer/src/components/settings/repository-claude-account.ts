@@ -1,5 +1,5 @@
-import type { Repo } from '../../../../shared/repo-types'
-import type { ClaudeManagedAccountSummary } from '../../../../shared/managed-account-types'
+import type { Repo } from '../../../../shared/repository/repo-types'
+import type { ClaudeManagedAccountSummary } from '../../../../shared/agent-accounts/managed-account-types'
 import type { ProjectClaudeAccountPreference } from '../../../../shared/claude/project-claude-account-preference'
 import type { ProjectExecutionRuntimeResolution } from '../../../../shared/execution-host/project-execution-runtime'
 import { translate } from '@/i18n/i18n'

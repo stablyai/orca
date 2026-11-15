@@ -1,6 +1,6 @@
 import type { SleepingAgentLaunchConfig } from '../../../shared/agent-session/lifecycle/agent-session-resume'
 import { isPinnableClaudeAccountId } from '../../../shared/claude/project-claude-account-preference'
-import type { ClaudeManagedAccountSummary } from '../../../shared/managed-account-types'
+import type { ClaudeManagedAccountSummary } from '../../../shared/agent-accounts/managed-account-types'
 
 export type ClaudeTabAccountSource = {
   /** Main's pinned-PTY record, stamped on the pane's agent-status row; survives restarts. */

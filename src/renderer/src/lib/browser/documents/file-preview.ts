@@ -1,4 +1,4 @@
-import { browserPageDocLocationsEqual } from '../../../../../shared/browser-page-doc-location'
+import { browserPageDocLocationsEqual } from '../../../../../shared/browser/workspaces/browser-page-doc-location'
 import { openPlannedFileBrowserLink } from './file-preview-link-open'
 import type { FileBrowserLinkTarget } from './file-preview-link-open'
 import { toast } from 'sonner'

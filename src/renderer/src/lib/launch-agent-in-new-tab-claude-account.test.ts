@@ -51,9 +51,12 @@ vi.mock('@/lib/workspace/ownership/connection-context', () => ({
   getConnectionIdFromState: () => null
 }))
 
-vi.mock('../../../shared/native-chat/transcript/native-chat-transcript-readability', () => ({
-  isNativeChatTranscriptLocalReadable: () => true
-}))
+vi.mock(
+  '../../../shared/native-chat/transcript/messages/native-chat-transcript-readability',
+  () => ({
+    isNativeChatTranscriptLocalReadable: () => true
+  })
+)
 
 vi.mock('@/runtime/web-session-tabs-sync/identity/web-runtime-session-environment', () => ({
   isWebRuntimeSessionActive: mockIsWebRuntimeSessionActive
@@ -78,9 +81,12 @@ vi.mock('@/diagnostics/telemetry/telemetry', () => ({
   tuiAgentToAgentKind: (agent: string) => agent
 }))
 
-vi.mock('../../../shared/native-chat/input/native-chat-session-option-cache', () => ({
-  seedNativeChatAppliedSessionOptions: vi.fn()
-}))
+vi.mock(
+  '../../../shared/native-chat/input/session-options/native-chat-session-option-cache',
+  () => ({
+    seedNativeChatAppliedSessionOptions: vi.fn()
+  })
+)
 
 function queuedLaunchConfig(): Record<string, unknown> | undefined {
   return mockCreateTab.mock.calls[0]?.[3]?.pendingStartup?.launchConfig

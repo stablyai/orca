@@ -1,7 +1,7 @@
 import { copyFileSync, lstatSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { join } from 'node:path'
-import { ORCAD_WINDOWS_PROCESS_TREE_FILENAME } from '../../../../src/shared/orcad-artifacts.ts'
+import { ORCAD_WINDOWS_PROCESS_TREE_FILENAME } from '../../../../src/shared/remote-runtime/orcad-distribution/orcad-artifacts.ts'
 import {
   inspectWindowsProcessTreeAddon,
   windowsProcessTreeAddonPath

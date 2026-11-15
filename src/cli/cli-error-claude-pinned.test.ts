@@ -1,6 +1,6 @@
 import { afterEach, expect, it, vi } from 'vitest'
 import { formatCliError, reportCliError } from './output/cli-error'
-import { RuntimeRpcFailureError } from './runtime/types'
+import { RuntimeRpcFailureError } from './runtime/connection/types'
 
 function pinnedRefusal(): RuntimeRpcFailureError {
   return new RuntimeRpcFailureError({

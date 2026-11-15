@@ -1,4 +1,4 @@
-import type { Repo } from '../../repo-types'
+import type { Repo } from '../../repository/repo-types'
 import type { TerminalLayoutSnapshot, TerminalTab } from '../../workspace-layout/terminal-tab-types'
 import type { Worktree } from '../../worktree/types'
 import type { AgentStatusEntry } from '../../agent-status/contracts/agent-status-types'

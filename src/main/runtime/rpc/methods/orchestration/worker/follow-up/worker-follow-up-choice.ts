@@ -3,7 +3,7 @@
  *  whose agent is proven gone, so the replacement never sits beside it. */
 
 import { isResumableTuiAgent } from '../../../../../../../shared/agent-session/lifecycle/agent-session-resume'
-import { agentProviderSessionsEqual } from '../../../../../../../shared/agent-session/lifecycle/agent-provider-session-equality'
+import { agentProviderSessionsEqual } from '../../../../../../../shared/agent-session/lifecycle/resume/agent-provider-session-equality'
 import { isStructuredWorkerHandle } from '../../../../../../../shared/orchestration/workers/structured-worker-handle'
 import type { OrcaRuntimeService } from '../../../../../orca-runtime'
 import type { OrchestrationDb } from '../../../../../orchestration/db/orchestration-db'

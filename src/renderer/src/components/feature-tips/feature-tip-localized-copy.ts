@@ -1,4 +1,4 @@
-import type { FeatureTip, FeatureTipId } from '../../../../shared/feature-tips'
+import type { FeatureTip, FeatureTipId } from '../../../../shared/feature-education/feature-tips'
 import { translate } from '@/i18n/i18n'
 import { createLocalizedCatalog } from '@/i18n/localized-catalog'
 

@@ -1,3 +1,4 @@
+import { readTestHostJournal } from '../../../../native-chat/agent-session-journal/journal-observation.test-support'
 // End-to-end coordinator-mail rig: real session/orchestration state and RPC, fake Codex child. Import registers lifecycle hooks.
 
 import { mkdtemp, rm } from 'node:fs/promises'
@@ -5,7 +6,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, expect, vi } from 'vitest'
 import type { AgentJournalRenderItem } from '../../../../../shared/agent-session/journal/agent-session-journal-types'
-import { computeAgentSessionPayloadFingerprint } from '../../../../../shared/agent-session/lifecycle/agent-session-mutation-envelope'
+import { computeAgentSessionPayloadFingerprint } from '../../../../../shared/agent-session/lifecycle/operations/agent-session-mutation-envelope'
 import '../../../../../shared/protocol-version'
 import { ORCHESTRATION_CONTRACT_VERSION } from '../../../../../shared/orchestration/orchestration-runtime-capabilities'
 import type { StructuredAgentSessionHost } from '../../../../native-chat/agent-session-wire/host/structured-agent-session-host'
@@ -21,11 +22,9 @@ import { OrchestrationDb } from '../../db/orchestration-db'
 
 import { RpcDispatcher } from '../../../rpc/dispatcher'
 import { ORCHESTRATION_METHODS } from '../../../rpc/methods/orchestration/orchestration'
-import { idOf, isRecord, resultOf } from '../../../rpc/orchestration/callers/session.test-fixture'
-import {
-  ensureStructuredAgentSessionHost,
-  stopStructuredAgentSessionRuntime
-} from '../../../agent-session/structured-agent-session-runtime'
+import { idOf, resultOf } from '../../../rpc/orchestration/callers/session.test-fixture'
+import { stopStructuredAgentSessionRuntime } from '../../../agent-session/structured-agent-session-runtime'
+import { ensureTestStructuredAgentSessionHost as ensureStructuredAgentSessionHost } from '../../../agent-session/records/agent-session-record-store-test-harness'
 import { createCoordinatorMailObservationClock } from './structured-chat-coordinator-observation-clock.test-fixture'
 import {
   attachParams,
@@ -97,7 +96,7 @@ export function connectionFor(sessionId: string): FakeConnection {
   // A cleared context starts on its first message; its record then names its new thread.
   const record = host.deps.store.getRecord(sessionId)
   const head = record ? activeProviderContext(record).head : null
-  const thread = threadBySession.get(sessionId) ?? head?.handle.nativeId
+  const thread = head?.handle.nativeId ?? threadBySession.get(sessionId)
   const connection = codex.connections.findLast((candidate) => candidate.threadId === thread)
   if (!connection) {
     throw new Error(`no app-server for ${sessionId}`)
@@ -149,10 +148,11 @@ export function sendUserMessage(sessionId: string, text: string) {
 }
 
 export async function userTexts(sessionId: string): Promise<string[]> {
-  return (await host.journalSnapshot(sessionId)).items.flatMap((item: AgentJournalRenderItem) =>
-    item.body?.kind === 'message' && item.body.role === 'user'
-      ? item.body.blocks.map((block) => (block.type === 'text' ? block.text : ''))
-      : []
+  return (await readTestHostJournal(host, sessionId)).items.flatMap(
+    (item: AgentJournalRenderItem) =>
+      item.body?.kind === 'message' && item.body.role === 'user'
+        ? item.body.blocks.map((block) => (block.type === 'text' ? block.text : ''))
+        : []
   )
 }
 
@@ -241,6 +241,7 @@ export async function startClearedContext(sessionId: string): Promise<void> {
 }
 
 beforeEach(async () => {
+  observationClock.install()
   resetProviderFaults()
   root = await mkdtemp(join(tmpdir(), 'orca-structured-coordinator-mail-'))
   testState.dir = root
@@ -286,44 +287,32 @@ export function startRuntime(): OrcaRuntimeService {
 }
 
 afterEach(async () => {
-  try {
-    await stopStructuredAgentSessionRuntime()
-    db.close()
-    await observationClock.drainClosedDatabaseRepair()
-    await closeTestStores()
-    vi.restoreAllMocks()
-    await rm(root, { recursive: true, force: true })
-  } finally {
-    observationClock.restore()
+  let firstFailure: unknown
+  const cleanup = async (action: () => unknown) => {
+    try {
+      await action()
+    } catch (error) {
+      firstFailure ??= error
+    }
+  }
+  await cleanup(() => stopStructuredAgentSessionRuntime())
+  await cleanup(() => db.close())
+  await cleanup(() => observationClock.drainClosedDatabaseRepair())
+  await cleanup(() => closeTestStores())
+  await cleanup(() => vi.restoreAllMocks())
+  await cleanup(() => rm(root, { recursive: true, force: true }))
+  await cleanup(() => observationClock.restore())
+  if (firstFailure !== undefined) {
+    throw firstFailure
   }
 })
 
 // Asynchronous pointer edges need slack under parallel load.
 export const WAIT = { timeout: 10_000, interval: 10 }
 
-/** A chat got the whole orchestration message: its subject and its reply command. */
-export function isWholeMail(text: string): boolean {
-  return text.includes('\nSubject: ') && /\[[^\]\n]*: orca(-dev)? orchestration /.test(text)
-}
-
-export function turnText(turn: { text: string }): string {
-  const input: unknown = JSON.parse(turn.text)
-  return Array.isArray(input)
-    ? input.map((item: unknown) => (isRecord(item) ? String(item.text) : '')).join('')
-    : ''
-}
+export { isWholeMail, turnText } from './structured-chat-coordinator-fake-codex-fixture'
 
 export function restartRuntime(): void {
   runtime = startRuntime()
   dispatcher = new RpcDispatcher({ runtime, methods: ORCHESTRATION_METHODS })
-}
-
-export async function queuedCardTexts(sessionId = COORDINATOR): Promise<string[]> {
-  const page = await host.history({ sessionId, direction: 'tail' })
-  if (!page.ok) {
-    throw new Error('history refused')
-  }
-  return (page.page.queuedMessages ?? []).flatMap((card) =>
-    card.body.blocks.map((block) => (block.type === 'text' ? block.text : ''))
-  )
 }

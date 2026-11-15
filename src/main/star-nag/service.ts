@@ -8,7 +8,7 @@ import type {
   StarNagOutcome,
   StarNagPromptMode,
   StarNagPromptSource
-} from '../../shared/star-nag-telemetry'
+} from '../../shared/telemetry/star-nag-telemetry'
 import { type StarNagPromptSession, trackStarNagSessionOutcome } from './prompt-session-telemetry'
 import { createStarNagPromptContext } from './prompt-context'
 import { logStarNagConsoleEvent } from './console-events'

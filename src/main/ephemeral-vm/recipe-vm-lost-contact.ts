@@ -1,5 +1,5 @@
-import type { EphemeralVmRuntimeRecord } from '../../shared/ephemeral-vm-runtimes'
-import type { SshConnectionStatus } from '../../shared/ssh-types'
+import type { EphemeralVmRuntimeRecord } from '../../shared/remote-runtime/ephemeral-vm-store/ephemeral-vm-runtimes'
+import type { SshConnectionStatus } from '../../shared/remote-runtime/ssh/ssh-types'
 
 /** Recorded as up, but its host stopped answering. */
 const RECOVERABLE_STATUSES: ReadonlySet<EphemeralVmRuntimeRecord['status']> = new Set([

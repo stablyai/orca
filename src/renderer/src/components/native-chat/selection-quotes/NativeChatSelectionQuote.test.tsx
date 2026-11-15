@@ -1,10 +1,15 @@
 // @vitest-environment happy-dom
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { Editor } from '@tiptap/react'
+import StarterKit from '@tiptap/starter-kit'
 import { useRef } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as I18n from '@/i18n/i18n'
+import { getShortcutPlatform } from '@/lib/keyboard/shortcut-platform'
 import { createGlobalSettingsFixture } from '../../../../../shared/global-settings-test-fixture'
 import { useAppStore } from '../../../store/index'
+import { focusMountedNativeChatEditor } from '../composer/editor/native-chat-mounted-editor-view'
+import { routeNativeChatRootKeyToInput } from '../composer/focus/native-chat-root-key-routing'
 import type { NativeChatComposerHandle } from '../composer/native-chat-composer-types'
 import { NativeChatMarkdown } from '../markdown/NativeChatMarkdown'
 import { NativeChatSelectionQuote } from './NativeChatSelectionQuote'
@@ -28,11 +33,25 @@ const composer: NativeChatComposerHandle = {
   contains: () => false
 }
 
-function Chat({ mathSource }: { mathSource?: string }): React.JSX.Element {
+function Chat({
+  mathSource,
+  routedComposer
+}: {
+  mathSource?: string
+  /** Routes root keydowns to this composer, as the chat pane does. */
+  routedComposer?: NativeChatComposerHandle
+}): React.JSX.Element {
   const rootRef = useRef<HTMLDivElement>(null)
   return (
-    <div ref={rootRef}>
-      <div data-native-chat-scroll="">
+    <div
+      ref={rootRef}
+      onKeyDownCapture={
+        routedComposer
+          ? (event) => routeNativeChatRootKeyToInput(event, routedComposer, null)
+          : undefined
+      }
+    >
+      <div data-testid="transcript" data-native-chat-scroll="" tabIndex={0}>
         <p data-testid="user">my own prompt</p>
         <div {...NATIVE_CHAT_QUOTE_SOURCE_PROPS}>
           {mathSource ? (
@@ -47,7 +66,11 @@ function Chat({ mathSource }: { mathSource?: string }): React.JSX.Element {
         <p data-testid="next">a tool line</p>
       </div>
       <p data-testid="composer">a draft reply</p>
-      <NativeChatSelectionQuote rootRef={rootRef} composerRef={{ current: composer }} enabled />
+      <NativeChatSelectionQuote
+        rootRef={rootRef}
+        composerRef={{ current: routedComposer ?? composer }}
+        enabled
+      />
     </div>
   )
 }
@@ -99,6 +122,30 @@ describe('NativeChatSelectionQuote', () => {
 
     releaseSelection(screen.getByTestId('first'), screen.getByTestId('next'))
     expect(screen.queryByRole('button', { name: 'Add to chat' })).toBeNull()
+  })
+
+  it('moves focus to the composer on a paste chord while the offer is open', () => {
+    const editor = new Editor({ element: document.body, extensions: [StarterKit] })
+    const promptEditor: NativeChatComposerHandle = {
+      ...composer,
+      focus: () => {
+        focusMountedNativeChatEditor(editor)
+        return true
+      }
+    }
+    try {
+      render(<Chat routedComposer={promptEditor} />)
+      const transcript = screen.getByTestId('transcript')
+      transcript.focus()
+      releaseSelection(screen.getByTestId('first'))
+      expect(screen.getByRole('button', { name: 'Add to chat' })).toBeTruthy()
+
+      const isMac = getShortcutPlatform() === 'darwin'
+      fireEvent.keyDown(transcript, { key: 'v', metaKey: isMac, ctrlKey: !isMac })
+      expect(editor.view.dom.contains(document.activeElement)).toBe(true)
+    } finally {
+      editor.destroy()
+    }
   })
 })
 

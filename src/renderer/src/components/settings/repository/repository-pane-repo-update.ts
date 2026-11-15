@@ -1,6 +1,6 @@
 import type { GhAccountBinding } from '../../../../../shared/github/accounts/account-binding'
 import type { RepoAgentAccounts } from '../../../../../shared/claude/project-claude-account-preference'
-import type { Repo } from '../../../../../shared/repo-types'
+import type { Repo } from '../../../../../shared/repository/repo-types'
 
 export type RepositoryPaneRepoUpdate = Omit<
   Partial<Repo>,

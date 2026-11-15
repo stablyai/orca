@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react'
-import type { Repo } from '../../../../../shared/repo-types'
-import type { ClaudeManagedAccountSummary } from '../../../../../shared/managed-account-types'
+import type { Repo } from '../../../../../shared/repository/repo-types'
+import type { ClaudeManagedAccountSummary } from '../../../../../shared/agent-accounts/managed-account-types'
 import type { RepoAgentAccounts } from '../../../../../shared/claude/project-claude-account-preference'
 import { repoAgentAccountsEqual } from '../../../../../shared/claude/project-claude-account-preference'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../ui/select'

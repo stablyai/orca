@@ -1,4 +1,4 @@
-import type { WorktreeStatus } from '../../../../../../shared/worktree-status-rollup'
+import type { WorktreeStatus } from '../../../../../../shared/worktree/row-display/worktree-status-rollup'
 import type { SlotException } from '../../worktree-card-slot-signal'
 
 // Only the states loud enough to take over a collapsed parent's lane; unread stays on the bold title.

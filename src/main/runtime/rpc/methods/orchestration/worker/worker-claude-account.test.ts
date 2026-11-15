@@ -1,6 +1,6 @@
 import { EVERY_AGENT_CHAT } from '../../../../../../shared/native-chat/every-agent-chat.test-fixture'
 import { describe, expect, it, vi } from 'vitest'
-import type { ClaudeManagedAccountSummary } from '../../../../../../shared/managed-account-types'
+import type { ClaudeManagedAccountSummary } from '../../../../../../shared/agent-accounts/managed-account-types'
 import { WorkerStartParams } from '../../../../../../shared/rpc-contract/orchestration/orchestration-worker-start-params'
 import {
   createWorkerLaunchReceipt,

@@ -1,14 +1,17 @@
 import { getDefaultWorkspaceSession } from '../../../shared/constants'
 import type { SleepingAgentSessionRecord } from '../../../shared/agent-session/lifecycle/agent-session-resume'
-import type { BrowserPage, BrowserWorkspace } from '../../../shared/browser-workspace-types'
-import { remapBrowserPageDocLocation } from '../../../shared/browser-page-doc-location'
+import type {
+  BrowserPage,
+  BrowserWorkspace
+} from '../../../shared/browser/workspaces/browser-workspace-types'
+import { remapBrowserPageDocLocation } from '../../../shared/browser/workspaces/browser-page-doc-location'
 import type { Tab, TabGroup } from '../../../shared/tab-types'
 import type { TerminalTab } from '../../../shared/workspace-layout/terminal-tab-types'
 import type {
   PersistedOpenFile,
   WorkspaceSessionState
 } from '../../../shared/workspace-session/workspace-session-state-types'
-import { isWorkspaceKey } from '../../../shared/workspace-scope'
+import { isWorkspaceKey } from '../../../shared/workspace/identity/workspace-scope'
 import { SESSION_FIELDS_COPIED_BY_OWNER_KEY } from './profile-project-session-field-disposition'
 import { mapMarkdownFrontmatterVisible } from './profile-session-markdown-transfer'
 

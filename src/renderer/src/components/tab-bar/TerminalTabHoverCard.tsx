@@ -15,6 +15,8 @@ export function TerminalTabHoverCard({
   shell,
   icon,
   alert,
+  description,
+  showWhenUnclipped = false,
   children
 }: {
   tab: Pick<TerminalTab, 'id' | 'worktreeId'>
@@ -23,6 +25,8 @@ export function TerminalTabHoverCard({
   shell: string | null | undefined
   icon: ReactNode
   alert?: ComponentProps<typeof TabHoverCard>['alert']
+  description?: ComponentProps<typeof TabHoverCard>['description']
+  showWhenUnclipped?: boolean
   children: ReactNode
 }): React.JSX.Element {
   const t = useTranslate()
@@ -38,7 +42,8 @@ export function TerminalTabHoverCard({
       programName={programName}
       icon={icon}
       alert={alert}
-      showWhenUnclipped={pinned && agent !== null}
+      description={description}
+      showWhenUnclipped={showWhenUnclipped || (pinned && agent !== null)}
       onOpenChange={onTooltipOpenChange}
     >
       {children}

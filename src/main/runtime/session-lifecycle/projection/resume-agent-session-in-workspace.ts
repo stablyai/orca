@@ -1,11 +1,11 @@
 import { OrcaRuntimeWithAgentSessionResumeOwnership } from './agent-session-resume-ownership'
 import { makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import {
-  agentProviderSessionsEqual,
   normalizeAgentProviderSession,
   type AgentProviderSessionMetadata,
   type SleepingAgentLaunchConfig
 } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
+import { agentProviderSessionsEqual } from '../../../../shared/agent-session/lifecycle/resume/agent-provider-session-equality'
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import {
   getConnectionExecutionHostId,

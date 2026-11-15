@@ -3,7 +3,7 @@ import DashboardAgentRow from '@/components/dashboard/DashboardAgentRow'
 import { useNow } from '@/hooks/use-now'
 import { useWorktreeAgentRows } from './useWorktreeAgentRows'
 import { cn } from '@/lib/class-names'
-import type { DashboardAgentRow as DashboardAgentRowData } from '@/components/dashboard/useDashboardData'
+import type { DashboardAgentRow as DashboardAgentRowData } from '@/components/dashboard/rows/dashboard-agent-row'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
 import { CompactAgentExpansion, CompactAgentSummaryButton } from './worktree-card-compact-agents'
 import { CompactAgentRow } from './worktree-card-compact-agent-row'
@@ -72,7 +72,6 @@ const WorktreeCardAgentsBody = React.memo(function WorktreeCardAgentsBody({
     sendTargetFor,
     handleSendTargetClick,
     handleActivateAgentTab,
-    handleActivateRetainedAgent,
     rootAgents,
     childrenByParentPaneKey,
     hasLineage,
@@ -146,9 +145,7 @@ const WorktreeCardAgentsBody = React.memo(function WorktreeCardAgentsBody({
           agent={agent}
           showModel={showAgentModels}
           onDismiss={handleDismissAgent}
-          onActivate={
-            agent.rowSource === 'retained' ? handleActivateRetainedAgent : handleActivateAgentTab
-          }
+          onActivate={handleActivateAgentTab}
           now={now}
           // Keep rows bold until visiting the tab auto-acknowledges attention.
           isUnvisited={unvisitedByPaneKey[agent.paneKey] ?? false}
@@ -210,9 +207,7 @@ const WorktreeCardAgentsBody = React.memo(function WorktreeCardAgentsBody({
               : undefined
           }
           isUnvisited={unvisitedByPaneKey[agent.paneKey] ?? false}
-          onActivate={
-            agent.rowSource === 'retained' ? handleActivateRetainedAgent : handleActivateAgentTab
-          }
+          onActivate={handleActivateAgentTab}
           sendTargetStatus={sendTarget?.status}
           sendTargetDisabledReason={sendTarget?.disabledReason}
           onSendTargetClick={isAgentSendTargetModeActive ? handleSendTargetClick : undefined}
