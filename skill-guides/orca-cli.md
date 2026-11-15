@@ -2,10 +2,11 @@
 name: orca-cli
 description: >-
   Operate Orca-managed worktrees, folder contexts, terminals, repos, automations, worktree
-  comments, and Orca's embedded browser through the `orca` CLI. Use when the user says
-  "$orca-cli", "Orca worktree", "child worktree", "spawn codex/claude in a worktree",
-  "read/wait/send Orca terminal", "handoff" / "handover" / "give this to another agent", or
-  "Orca browser". Also use for opening, testing, screenshotting, or checking how a local or
+  comments, Orca's embedded browser, and Orca's own colors through the `orca` CLI. Use when
+  the user says "$orca-cli", "Orca worktree", "child worktree", "spawn codex/claude in a
+  worktree", "read/wait/send Orca terminal", "handoff" / "handover" / "give this to another
+  agent", "Orca browser", or asks to restyle Orca live ("make my theme warmer", "more contrast
+  in the sidebar", "change Orca's colors"). Also use for opening, testing, screenshotting, or checking how a local or
   external web page renders while working in Orca, unless the user or project names another
   browser tool; plain HTTP or API calls (curl, fetch) do not need it. Prefer it over raw git
   worktree, ad hoc PTYs, or Computer Use when Orca state is involved. Use Computer Use only
@@ -366,4 +367,5 @@ This guide covers worktrees, terminals, and handoffs on its own. At a gate below
 | Driving Orca's embedded browser: navigation, snapshots, refs, tabs, concurrent pages, or `browser_*` recoveries | `references/browser.md`          |
 | Creating, editing, running, or inspecting scheduled automations                                                 | `references/automations.md`      |
 | Creating, loading, installing, updating, approving, or publishing an Orca plugin, or adding a plugin catalog    | `references/plugins.md`          |
+| Changing Orca's colors live: previewing, checking, keeping or sharing an app, terminal or syntax theme          | `references/themes.md`           |
 | Mobile emulator taps, gestures, typing, buttons, camera, or permissions                                         | invoke the `orca-emulator` skill |

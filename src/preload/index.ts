@@ -13,6 +13,7 @@ import { wslDriveUncConversionApi } from './api/wsl/wsl-drive-unc-conversion-bri
 import { pwshApi } from './api/terminal/pwsh-bridge'
 import { gitBashApi } from './api/terminal/git-bash-bridge'
 import { pluginsApi } from './api/plugins/plugins-bridge'
+import { themeStudioApi } from './api/theme-studio/theme-studio-bridge'
 import { reposApi } from './api/projects/repos-bridge'
 import { projectsApi } from './api/projects/projects-bridge'
 import { projectGroupsApi } from './api/projects/project-groups-bridge'
@@ -117,6 +118,7 @@ const api = {
   pwsh: pwshApi,
   gitBash: gitBashApi,
   plugins: pluginsApi,
+  themeStudio: themeStudioApi,
   repos: reposApi,
   projects: projectsApi,
   projectGroups: projectGroupsApi,

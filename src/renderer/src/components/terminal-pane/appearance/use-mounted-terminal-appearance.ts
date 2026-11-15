@@ -2,6 +2,7 @@ import { useEffect } from 'react'
 import { applyTerminalAppearance } from './terminal-appearance'
 import { useThemeBackgroundStore } from '@/store/appearance/theme-background'
 import { usePluginFontReady } from '@/store/plugins/appearance/plugin-fonts'
+import { useThemeStudioTerminalPreview } from '@/store/appearance/theme-studio-preview-store'
 import type { MountedTerminalPaneLifecycleDeps } from '../mounting/terminal-pane-lifecycle-types'
 import type { TerminalPaneLifecycleRefs } from '../mounting/use-terminal-pane-lifecycle-refs'
 
@@ -25,6 +26,8 @@ export function useMountedTerminalAppearance(
   const themeBackgroundActive = useThemeBackgroundStore((state) => state.active)
   // Why: a plugin terminal font joins the font list only once it loads, so cells re-measure then.
   const terminalFontReady = usePluginFontReady(deps.settings?.terminalFontFamily)
+  // Why: an `orca theme` draft's palette repaints terminals without a settings change.
+  const draftPalette = useThemeStudioTerminalPreview()
   useEffect(() => {
     const manager = deps.managerRef.current
     const currentSettings = deps.settingsRef.current
@@ -50,6 +53,7 @@ export function useMountedTerminalAppearance(
     deps.settings,
     themeBackgroundActive,
     terminalFontReady,
+    draftPalette,
     deps.systemPrefersDark,
     deps.effectiveMacOptionAsAlt,
     deps.managerRef,

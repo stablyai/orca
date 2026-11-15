@@ -1,4 +1,5 @@
 import type React from 'react'
+import { useThemeStudioPreviewStore } from '@/store/appearance/theme-studio-preview-store'
 import { Loader2, Store, Zap } from 'lucide-react'
 import type { GlobalSettings } from '../../../../../../shared/global-settings-types'
 import type { PluginThemeRegistration } from '../../../../../../shared/plugins/artifacts/plugin-theme-artifact'
@@ -76,7 +77,8 @@ function browseThemesActions(t?: Translate): SettingsSearchableSelectAction[] {
 function pluginThemeGroups(
   themes: readonly PluginThemeRegistration[],
   labels: ReadonlyMap<string, string> = themeOptionLabels(themes),
-  t?: Translate
+  t?: Translate,
+  customKeys: ReadonlySet<string> = new Set()
 ): SettingsSearchableSelectGroup[] {
   const pluginNames = disambiguatedContentPluginNames(themes, t)
   return [...Map.groupBy(themes, (theme) => theme.pluginKey).values()].map((group) => ({
@@ -86,7 +88,11 @@ function pluginThemeGroups(
       value: theme.id,
       label: labels.get(theme.id) ?? theme.label,
       keywords: [theme.base],
-      icon: <PluginThemeSwatch theme={theme} />
+      icon: <PluginThemeSwatch theme={theme} />,
+      // Why a label, not a separate list: custom themes sit with installed ones, marked.
+      ...(customKeys.has(theme.pluginKey)
+        ? { detail: (t ?? translate)('settings.appearance.customTheme.badge', 'Custom') }
+        : {})
     }))
   }))
 }
@@ -189,6 +195,9 @@ export function AppearanceThemeSlotSelect({
   const terminalInUse =
     terminal !== undefined && isPluginTerminalThemeSelected(settings, terminal, base === 'dark')
   const labels = themeOptionLabels(themes, catalog.themes, t)
+  const customKeys = new Set(
+    useThemeStudioPreviewStore((s) => s.saved).map((theme) => theme.pluginKey)
+  )
   return (
     <div className="flex flex-col items-end gap-1">
       <SettingsSearchableSelect
@@ -234,7 +243,7 @@ export function AppearanceThemeSlotSelect({
               }
             ]
           },
-          ...pluginThemeGroups(themes, labels, t),
+          ...pluginThemeGroups(themes, labels, t, customKeys),
           {
             key: 'catalog',
             heading: t('auto.components.settings.AppearanceThemeControl.moreThemes', 'More themes'),
