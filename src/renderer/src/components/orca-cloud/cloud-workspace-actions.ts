@@ -8,7 +8,7 @@ import { RotateCw } from 'lucide-react'
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 import { runSleepWorktree } from '@/components/sidebar/workspace-actions/sleep/sleep-worktree-flow'
-import { openCloudConsole } from '@/lib/orca-cloud/open-cloud-console'
+import { openPlansDialog } from '@/components/billing/plans/plans-dialog-store'
 import { signInAgainMessage } from '@/lib/orca-cloud/orca-sign-in-again'
 import { signInAgainToastAction } from '@/lib/orca-cloud/orca-sign-in-again-action'
 import type { ConfirmationDialogContextValue } from '@/components/confirmation-dialog-context'
@@ -42,7 +42,7 @@ function failureToast(title: string, result: CloudWorkspaceResult<null>): void {
         ? {
             action: {
               label: translate('auto.components.billing.comparePlans', 'Compare plans'),
-              onClick: () => void openCloudConsole('billing')
+              onClick: () => openPlansDialog()
             }
           }
         : {})

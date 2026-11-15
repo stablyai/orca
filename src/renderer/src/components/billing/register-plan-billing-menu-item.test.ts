@@ -5,7 +5,9 @@ const auth = vi.hoisted(() => {
   return state
 })
 const openCloudConsole = vi.hoisted(() => vi.fn())
+const openPlansDialog = vi.hoisted(() => vi.fn())
 vi.mock('@/lib/orca-cloud/open-cloud-console', () => ({ openCloudConsole }))
+vi.mock('./plans/plans-dialog-store', () => ({ openPlansDialog }))
 vi.mock('@/store/index', () => ({
   useAppStore: {
     getState: () => ({ orcaProfileAuthStatus: auth.status }),
@@ -41,6 +43,7 @@ afterEach(() => {
   vi.unstubAllGlobals()
   recordBillingStatus({ status: 'signed-out' })
   openCloudConsole.mockReset()
+  openPlansDialog.mockReset()
 })
 
 describe('account menu billing items', () => {
@@ -57,11 +60,12 @@ describe('account menu billing items', () => {
     ).toEqual(['orca.team'])
     expect(visible()).toEqual(['orca.team', 'orca.plan-billing'])
     expect(visible('Admin')).toEqual(['orca.team', 'orca.plan-billing'])
-    // The console refuses members Plan & billing, so the menu doesn't offer it (n64 P3 #4).
-    expect(visible('Member')).toEqual(['orca.team'])
+    // Members get the read-only plans dialog (the console itself refuses them).
+    expect(visible('Member')).toEqual(['orca.team', 'orca.plan-billing'])
     const plans = getRegisteredAccountMenuItems().find((item) => item.id === 'orca.plan-billing')
     plans?.onSelect()
-    expect(openCloudConsole).toHaveBeenCalledWith('billing')
+    expect(openPlansDialog).toHaveBeenCalledTimes(1)
+    expect(openCloudConsole).not.toHaveBeenCalled()
     dispose()
     expect(getRegisteredAccountMenuItems()).toHaveLength(0)
   })
@@ -74,6 +78,7 @@ describe('account menu billing items', () => {
       entitlement: { ...sampleTeam, plan: null, planLabel: null, status: 'none' }
     })
     expect(visible()).toEqual(['orca.upgrade', 'orca.team'])
+    expect(visible('Member')).toEqual(['orca.team', 'orca.plan-billing'])
     expect(getRegisteredAccountMenuItems().find((item) => item.id === 'orca.upgrade')?.tone).toBe(
       'accent'
     )

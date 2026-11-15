@@ -10,6 +10,10 @@
       "public": true,
       "currentVersion": 2,
       "supportUrl": "https://orca.dev/enterprise",
+      "marketing": {
+        "tagline": "Hosted sandboxes for your whole team, billed per seat",
+        "ctaLabel": "Continue in browser"
+      },
       "stripe": {
         "seatLookupKeys": { "month": "orca_team_seat_monthly", "year": "orca_team_seat_annual" },
         "overageLookupKey": "orca_sandbox_overage_per_minute"
@@ -76,6 +80,12 @@
       "currentVersion": 2,
       "contactUrl": "https://orca.dev/enterprise",
       "priceLabel": "Custom",
+      "marketing": {
+        "tagline": "Your cloud, your identity provider, your terms",
+        "featuresLead": "Everything in Team, plus:",
+        "ctaLabel": "Contact sales",
+        "omitFeatures": ["egress_controls"]
+      },
       "versions": [
         {
           "version": 1,
@@ -116,6 +126,9 @@
       "sort": 0,
       "public": true,
       "currentVersion": 1,
+      "marketing": {
+        "tagline": "Try Orca Cloud with your team before you pick a plan"
+      },
       "versions": [
         {
           "version": 1,

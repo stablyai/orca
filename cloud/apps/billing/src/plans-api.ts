@@ -72,6 +72,14 @@ export async function offersFor(env: Env, now: number) {
   return catalogOffers(await loadCatalog(env.BILLING_DB, now), planCatalog(env).team.idleSleepMinutes)
 }
 
+function marketingView(plan: CatalogPlan) {
+  const marketing = plan.config.marketing
+  if (!marketing) {
+    return null
+  }
+  return { tagline: marketing.tagline ?? null, featuresLead: marketing.featuresLead ?? null, ctaLabel: marketing.ctaLabel ?? null }
+}
+
 /** GET /v1/plans: the public catalog. Prices only ever come from Stripe (no price, no checkout). */
 export function plansView(catalog: Catalog) {
   const plans = [...catalog.plans.values()]
@@ -85,7 +93,9 @@ export function plansView(catalog: Catalog) {
         name: plan.name,
         version: plan.currentVersion,
         entitlements: version.entitlements,
-        features: version.features,
+        features: version.features.filter((feature) => !plan.config.marketing?.omitFeatures?.includes(feature.id)),
+        // Additive: presentation copy (tagline, feature-list lead, button label), or null.
+        marketing: marketingView(plan),
         // "Contact us" for this plan (https: or mailto:); clients fall back to Enterprise's contact.
         supportUrl: plan.config.supportUrl ?? null
       }

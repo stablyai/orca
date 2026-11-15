@@ -10,6 +10,15 @@ export type OrcaPlanFeature = {
   text: string
 }
 
+/** Billing's presentation copy for a plan (English); each field null when the catalog has none. */
+export type OrcaPlanMarketing = {
+  tagline: string | null
+  /** Heading over the feature list, e.g. "Everything in Team, plus:". */
+  featuresLead: string | null
+  /** The plan card's button label. */
+  ctaLabel: string | null
+}
+
 export type OrcaPlanPrice = {
   interval: OrcaBillingInterval
   unitAmountCents: number
@@ -22,6 +31,7 @@ export type OrcaSelfServePlan = {
   name: string
   version: number
   features: OrcaPlanFeature[]
+  marketing: OrcaPlanMarketing | null
   /** Where "Contact us" goes for this plan (https), or null: fall back to the Enterprise contact. */
   supportUrl: string | null
   /** Only intervals Stripe has a price for; empty when none is on sale. */
@@ -43,6 +53,7 @@ export type OrcaContactSalesPlan = {
   name: string
   version: number
   features: OrcaPlanFeature[]
+  marketing: OrcaPlanMarketing | null
   /** Where "Contact us" goes for this plan (https), or null: fall back to the Enterprise contact. */
   supportUrl: string | null
   contactUrl: string | null
@@ -56,6 +67,7 @@ export type OrcaOtherPlan = {
   name: string
   version: number
   features: OrcaPlanFeature[]
+  marketing: OrcaPlanMarketing | null
   /** Where "Contact us" goes for this plan (https), or null: fall back to the Enterprise contact. */
   supportUrl: string | null
 }

@@ -17,6 +17,8 @@ export type AccountMenuItem = {
   requiresSignIn?: boolean
   /** Show only to an owner or admin of the active team (the console refuses members). */
   requiresTeamAdmin?: boolean
+  /** Hide from owners and admins of the active team (they get a different entry in its place). */
+  hideFromTeamAdmin?: boolean
   /** 'accent' marks a call to action (e.g. upgrade); default rows stay neutral. */
   tone?: 'accent'
   onSelect: () => void
@@ -62,6 +64,7 @@ export function selectVisibleAccountMenuItems(
     .filter((item) => !item.requiredCapability || flags?.[item.requiredCapability] === true)
     .filter((item) => !item.requiresSignIn || authStatus?.state === 'connected')
     .filter((item) => !item.requiresTeamAdmin || canManageActiveTeam(authStatus))
+    .filter((item) => !item.hideFromTeamAdmin || !canManageActiveTeam(authStatus))
     .map((item, index) => ({ item, index }))
     .sort((a, b) => (a.item.order ?? 0) - (b.item.order ?? 0) || a.index - b.index)
     .map(({ item }) => item)
