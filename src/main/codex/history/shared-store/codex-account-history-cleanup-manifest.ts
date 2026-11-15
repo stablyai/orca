@@ -4,6 +4,7 @@ import { readFile, readdir, unlink, writeFile } from 'node:fs/promises'
 import { join, relative } from 'node:path'
 import { isDefinitiveAbsence } from '../../../../shared/definitive-filesystem-absence'
 import { renameFileWithWindowsRetryAsync } from '../../../../shared/file-write/windows-retry-file-operations'
+import { withFileTransactionLock } from '../../../filesystem/file-transaction-lock'
 import { MERGE_PENDING_SUFFIX, lstatIfPresent } from '../../../filesystem/merged-directory-link'
 import { listRolloutTwinPairs, rolloutTwinPath } from '../rollouts/codex-rollout-compressed-twin'
 import { parseCodexRolloutThreadId } from '../rollouts/codex-rollout-thread-id'
@@ -126,28 +127,38 @@ export async function readManifest(
   return isCurrentManifest(parsed) ? parsed : null
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null
+}
+
+function isFileFacts(value: unknown): boolean {
+  return (
+    isRecord(value) &&
+    typeof value.path === 'string' &&
+    typeof value.bytes === 'number' &&
+    typeof value.mtimeMs === 'number'
+  )
+}
+
+// Every field a later pass or the cleanup release reads; anything else is rebuilt from disk.
+function isLeftBehindRollout(value: unknown): boolean {
+  return (
+    isFileFacts(value) &&
+    isRecord(value) &&
+    (value.storePath === null || typeof value.storePath === 'string') &&
+    (value.check === null || (isRecord(value.check) && isFileFacts(value.check.store)))
+  )
+}
+
 function isCurrentManifest(value: unknown): value is CodexHistoryCleanupManifest {
   return (
-    typeof value === 'object' &&
-    value !== null &&
-    'version' in value &&
+    isRecord(value) &&
     value.version === MANIFEST_VERSION &&
-    'rollouts' in value &&
+    typeof value.sharedPasses === 'number' &&
     Array.isArray(value.rollouts) &&
-    value.rollouts.every(
-      (rollout: unknown) =>
-        typeof rollout === 'object' &&
-        rollout !== null &&
-        'path' in rollout &&
-        typeof rollout.path === 'string' &&
-        'bytes' in rollout &&
-        typeof rollout.bytes === 'number' &&
-        'mtimeMs' in rollout &&
-        typeof rollout.mtimeMs === 'number'
-    ) &&
-    'databases' in value &&
+    value.rollouts.every(isLeftBehindRollout) &&
     Array.isArray(value.databases) &&
-    'storeTwinPairs' in value &&
+    value.databases.every(isFileFacts) &&
     Array.isArray(value.storeTwinPairs)
   )
 }
@@ -167,19 +178,22 @@ async function writeManifest(
   }
 }
 
-// One read-modify-write at a time per home in this process (a pass and its background check).
+// One read-modify-write at a time per home (a pass and its background check).
 const manifestUpdates = new Map<string, Promise<void>>()
 
 export function updateManifest(
   accountHome: string,
   update: (current: CodexHistoryCleanupManifest | null) => Promise<CodexHistoryCleanupManifest>
 ): Promise<void> {
-  const run = (manifestUpdates.get(accountHome) ?? Promise.resolve()).then(async () => {
-    const current = await readManifest(accountHome)
-    if (current !== 'newer') {
-      await writeManifest(accountHome, await update(current))
-    }
-  })
+  // The file lock covers other processes too: each WSL pass and check is its own guest helper.
+  const run = (manifestUpdates.get(accountHome) ?? Promise.resolve()).then(() =>
+    withFileTransactionLock(join(accountHome, HISTORY_CLEANUP_MANIFEST), async () => {
+      const current = await readManifest(accountHome)
+      if (current !== 'newer') {
+        await writeManifest(accountHome, await update(current))
+      }
+    })
+  )
   const settled = run.catch(() => {})
   manifestUpdates.set(accountHome, settled)
   void settled.then(() => {
