@@ -64,7 +64,7 @@ export function getAddRepoLocalStartActions(
         ),
         description: t(
           'auto.components.sidebar.add.repo.local.start.actions.serverSshAddOnThisComputer',
-          'Not available from a server. Add the SSH host on this computer to open its projects.'
+          "This server can't open projects from its SSH hosts. Select that host's managed Orca server from Host, or open a folder on this server."
         ),
         disabled: true,
         onClick: onOpenRemoteStep

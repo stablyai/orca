@@ -6,7 +6,7 @@ import { activateAndRevealWorktree } from '@/lib/workspace/activation/worktree-a
 import { markOnboardingProjectAdded } from '@/components/onboarding/onboarding-project-checklist'
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import { isGitRepoKind } from '../../../../../../shared/repo-kind'
-import type { Repo } from '../../../../../../shared/repo-types'
+import type { Repo, RepoKind } from '../../../../../../shared/repo-types'
 import type { RepoCreateFailure } from '../../../../../../shared/repo-create-failure-copy'
 import { repoCreateErrorText } from './repo-create-error-copy'
 import { translate } from '@/i18n/i18n'
@@ -42,9 +42,18 @@ export function useCreateRepo(
   const { onWindowsDriveRefusal } = options
   const [createName, setCreateName] = useState('')
   const [createParent, setCreateParent] = useState('')
+  const [createKind, setCreateKind] = useState<RepoKind>('git')
   const [createError, setCreateError] = useState<string | null>(null)
   const [isCreating, setIsCreating] = useState(false)
   const mountedRef = useMountedRef()
+  const setCreateNameAndClearError = useCallback((value: string) => {
+    setCreateName(value)
+    setCreateError(null)
+  }, [])
+  const setCreateKindAndClearError = useCallback((kind: RepoKind) => {
+    setCreateKind(kind)
+    setCreateError(null)
+  }, [])
   const hostToken = options.hostId ?? ''
   const hostTokenRef = useRef(hostToken)
   hostTokenRef.current = hostToken
@@ -56,6 +65,7 @@ export function useCreateRepo(
     createGenRef.current++
     setCreateName('')
     setCreateParent('')
+    setCreateKind('git')
     setCreateError(null)
     setIsCreating(false)
   }, [])
@@ -98,7 +108,6 @@ export function useCreateRepo(
     setCreateError(null)
     try {
       const target = resolveAddRepoRuntimeTarget(options.runtimeEnvironmentId)
-      const createKind = 'git' as const
       const result =
         target.kind === 'environment'
           ? await callRuntimeRpc<
@@ -206,6 +215,7 @@ export function useCreateRepo(
   }, [
     createName,
     createParent,
+    createKind,
     fetchWorktrees,
     mountedRef,
     closeModal,
@@ -218,10 +228,12 @@ export function useCreateRepo(
   return {
     createName,
     createParent,
+    createKind,
     createError,
     isCreating,
-    setCreateName,
+    setCreateName: setCreateNameAndClearError,
     setCreateParent,
+    setCreateKind: setCreateKindAndClearError,
     setCreateError,
     resetCreateState,
     handlePickParent,

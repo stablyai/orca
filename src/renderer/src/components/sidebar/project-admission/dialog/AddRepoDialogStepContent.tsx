@@ -13,6 +13,7 @@ import type {
   SshTarget
 } from '../../../../../../shared/remote-runtime/ssh/ssh-types'
 import type { GitAvailability } from '../create/create-project-defaults'
+import type { RepoKind } from '../../../../../../shared/repo-types'
 import type { CloneFolderOverride } from '../clone-folder/use-clone-folder-override'
 
 type AddRepoDialogStepContentProps = {
@@ -46,6 +47,7 @@ type AddRepoDialogStepContentProps = {
   nestedGroupName: string
   createName: string
   createParent: string
+  createKind: RepoKind
   createError: string | null
   isCreating: boolean
   hostSelector?: ReactNode
@@ -80,6 +82,7 @@ type AddRepoDialogStepContentProps = {
   onOpenNestedRootFolder: () => void
   onCreateNameChange: (name: string) => void
   onCreateParentChange: (parent: string) => void
+  onCreateKindChange: (kind: RepoKind) => void
   onPickCreateParent: () => void
   onCreate: () => void
 }
@@ -114,6 +117,7 @@ export function AddRepoDialogStepContent({
   nestedGroupName,
   createName,
   createParent,
+  createKind,
   createError,
   isCreating,
   hostSelector,
@@ -147,6 +151,7 @@ export function AddRepoDialogStepContent({
   onOpenNestedRootFolder,
   onCreateNameChange,
   onCreateParentChange,
+  onCreateKindChange,
   onPickCreateParent,
   onCreate
 }: AddRepoDialogStepContentProps): React.JSX.Element | null {
@@ -259,6 +264,7 @@ export function AddRepoDialogStepContent({
       <CreateStep
         createName={createName}
         createParent={createParent}
+        createKind={createKind}
         createError={createError}
         isCreating={isCreating}
         defaultParent={createDefaultParent}
@@ -269,6 +275,7 @@ export function AddRepoDialogStepContent({
         runtimeEnvironmentId={activeRuntimeEnvironmentId}
         onNameChange={onCreateNameChange}
         onParentChange={onCreateParentChange}
+        onKindChange={onCreateKindChange}
         onPickParent={onPickCreateParent}
         onCreate={onCreate}
         submitDisabled={actionsDisabled}
