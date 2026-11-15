@@ -20,6 +20,7 @@ import {
   installBrowserSessionPermissionHandlers,
   type BrowserSessionPermissionOptions
 } from '../../site-settings/permissions/browser-session-permission-handlers'
+import { hasBrowserDisplayCaptureSystemPicker } from '../../site-settings/permissions/browser-display-capture-policy'
 
 const configuredPartitions = new Set<string>()
 const userAgentPolicyDisposerBySession = new WeakMap<Session, () => void>()
@@ -88,9 +89,15 @@ export async function installBrowserSessionPartitionPolicies(
   } else {
     installBrowserSessionPermissionHandlers(sess, profile, options)
   }
-  sess.setDisplayMediaRequestHandler((_request, callback) => {
-    callback({ video: undefined, audio: undefined })
-  })
+  // The handler only runs where no system picker is used; it never picks a source itself.
+  sess.setDisplayMediaRequestHandler(
+    (_request, callback) => {
+      callback({ video: undefined, audio: undefined })
+    },
+    {
+      useSystemPicker: options?.permissions !== 'deny' && hasBrowserDisplayCaptureSystemPicker()
+    }
+  )
   sess.removeListener('will-download', handleWillDownload)
   sess.removeListener('will-download', handleDeniedWillDownload)
   sess.on(

@@ -11,6 +11,7 @@ const mocks = vi.hoisted(() => ({
   clearBrowserWebAuthnAccessHandlers: vi.fn(),
   installBrowserWebAuthnAccessHandlers: vi.fn(),
   isRemoteCliDrivenGuest: vi.fn((_webContentsId?: number) => false),
+  hasBrowserDisplayCaptureSystemPicker: vi.fn(() => false),
   requestExternalAppLaunch: vi.fn(),
   notifyPermissionDenied: vi.fn(),
   resolvePagePromptTarget: vi.fn()
@@ -93,6 +94,9 @@ vi.mock('../../document-preview/doc-preview-download-block-notice', () => ({
 vi.mock('../../site-settings/permissions/browser-media-access', () => ({
   hasSystemMediaAccess: () => false,
   requestSystemMediaAccess: async () => false
+}))
+vi.mock('../../site-settings/permissions/browser-display-capture-policy', () => ({
+  hasBrowserDisplayCaptureSystemPicker: mocks.hasBrowserDisplayCaptureSystemPicker
 }))
 vi.mock('../../identity/requests/browser-session-ua', () => ({
   installBrowserSessionUserAgentPolicy: vi.fn(() => vi.fn())
@@ -189,6 +193,68 @@ describe('partition permission policy', () => {
     })
     expect(checkHandler(guest(7), 'clipboard-read', 'https://a.test')).toBe(false)
     expect(checkHandler(guest(8), 'clipboard-read', 'https://a.test')).toBe(true)
+  })
+
+  it('lets only the system picker start screen sharing, and never for SSH-driven pages (#19676)', async () => {
+    mocks.isRemoteCliDrivenGuest.mockImplementation((id?: number) => id === 7)
+    const install = await loadInstaller()
+    const store = await import('../../site-settings/permissions/browser-site-permission-store')
+    store.configureBrowserSitePermissionStore(mkdtempSync(join(tmpdir(), 'orca-site-permissions-')))
+    const guest = (id: number) => ({ id, getURL: () => 'https://meet.test/' })
+    const answersFor = async (partition: string, permissions?: 'deny') => {
+      install(profileFor(partition), permissions ? { permissions } : {})
+      const sess = sessionsByPartition.get(partition)
+      if (!sess) {
+        throw new Error('Expected the browsing session')
+      }
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the installer registered exactly this handler on the fake session.
+      const requestHandler = sess.setPermissionRequestHandler.mock.calls[0]?.[0] as (
+        webContents: { id: number; getURL: () => string },
+        permission: string,
+        callback: (allowed: boolean) => void,
+        details: Partial<Electron.PermissionRequest>
+      ) => void
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the installer registered exactly this handler on the fake session.
+      const checkHandler = sess.setPermissionCheckHandler.mock.calls[0]?.[0] as (
+        webContents: { id: number; getURL: () => string },
+        permission: string,
+        requestingOrigin: string
+      ) => boolean
+      const request = (id: number): Promise<boolean> =>
+        new Promise((resolve) => requestHandler(guest(id), 'display-capture', resolve, {}))
+      return {
+        request: await request(8),
+        drivenRequest: await request(7),
+        check: checkHandler(guest(8), 'display-capture', 'https://meet.test'),
+        drivenCheck: checkHandler(guest(7), 'display-capture', 'https://meet.test'),
+        useSystemPicker: sess.setDisplayMediaRequestHandler.mock.calls[0]?.[1]?.useSystemPicker
+      }
+    }
+
+    mocks.hasBrowserDisplayCaptureSystemPicker.mockReturnValue(true)
+    expect(await answersFor('persist:share-picker')).toEqual({
+      request: true,
+      drivenRequest: false,
+      check: true,
+      drivenCheck: false,
+      useSystemPicker: true
+    })
+    expect(await answersFor('persist:share-denied', 'deny')).toEqual({
+      request: false,
+      drivenRequest: false,
+      check: false,
+      drivenCheck: false,
+      useSystemPicker: false
+    })
+
+    mocks.hasBrowserDisplayCaptureSystemPicker.mockReturnValue(false)
+    expect(await answersFor('persist:share-no-picker')).toEqual({
+      request: false,
+      drivenRequest: false,
+      check: false,
+      drivenCheck: false,
+      useSystemPicker: false
+    })
   })
 
   it("answers a notification from a frame with an inherited origin as the frame's real site", async () => {
