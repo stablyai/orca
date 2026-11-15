@@ -25,9 +25,16 @@ export type LocalBaseBranchRefs = {
 type LocalBaseRefRefreshStatus = LocalBaseRefRefreshResult['status']
 
 export type LocalBaseBranchInspection =
-  /** Nothing Orca may move: local matches, does not exist yet (#15331), or a worktree has it checked out. */
+  /** Nothing Orca may move: local matches, does not exist yet (#15331), or its checkout or a rebase/bisect owns it. */
   | { status: 'nothing_to_do' }
-  | { status: 'behind'; behind: number; localOid: string; remoteOid: string }
+  | {
+      status: 'behind'
+      behind: number
+      localOid: string
+      remoteOid: string
+      /** Set when a worktree has the branch checked out; only that checkout may move it. */
+      ownerWorktreePath?: string
+    }
   | {
       status: Exclude<LocalBaseRefRefreshStatus, 'updated'>
       shallowHistory?: true
@@ -37,7 +44,33 @@ export type LocalBaseBranchFastForwardOutcome =
   | { status: 'nothing_to_do' }
   | { status: LocalBaseRefRefreshStatus; ownerWorktreePath?: string; shallowHistory?: true }
 
-/** Read-only inspection of local drift. A checked-out branch belongs to its checkout, so it is never offered for update. */
+// Force a plain fast-forward without hooks, auto-GC, autostash, branch mergeOptions, signature refusal or ignored-file overwrite. Flags override config; older Git ignores unknown keys.
+// /dev/null/<hook> never exists. Git 2.25 has neither ort nor --no-autostash.
+function ownerFastForwardArgs(branch: string, targetOid: string): string[] {
+  return [
+    '-c',
+    'core.hooksPath=/dev/null',
+    '-c',
+    'gc.auto=0',
+    '-c',
+    'maintenance.auto=false',
+    '-c',
+    'merge.autoStash=false',
+    '-c',
+    `branch.${branch}.mergeOptions=`,
+    'merge',
+    '--ff-only',
+    '-s',
+    'recursive',
+    '--no-verify-signatures',
+    '--no-overwrite-ignore',
+    '--no-stat',
+    '-q',
+    targetOid
+  ]
+}
+
+/** Read-only inspection of local drift. A checked-out branch is reported only when strictly behind, so its checkout stays silent otherwise. */
 export async function inspectLocalBaseBranch(
   git: LocalBaseBranchGit,
   refs: LocalBaseBranchRefs
@@ -58,13 +91,17 @@ export async function inspectLocalBaseBranch(
       : { status: 'skipped_not_fast_forward' }
   }
 
+  let owner: { path: string } | undefined
   try {
-    if (await isBranchInUse(git, repoPath, fullRef)) {
+    // Git's in-use rule also counts a branch a rebase or bisect has reserved.
+    if ((await git.listReservedBranches(repoPath)).has(fullRef)) {
       return { status: 'nothing_to_do' }
     }
+    owner = (await git.listWorktrees(repoPath)).find((wt) => wt.branch === fullRef)
   } catch {
     return { status: 'skipped_error' }
   }
+  const ownerPath = owner ? { ownerWorktreePath: owner.path } : {}
 
   let counts: ReturnType<typeof parseGitRevListAheadBehindCounts>
   try {
@@ -74,10 +111,13 @@ export async function inspectLocalBaseBranch(
     )
     counts = parseGitRevListAheadBehindCounts(stdout)
   } catch {
-    return { status: 'skipped_not_fast_forward' }
+    return owner ? { status: 'nothing_to_do' } : { status: 'skipped_not_fast_forward' }
   }
   if (counts.status === 'ok' && counts.ahead === 0 && counts.behind > 0) {
-    return { status: 'behind', behind: counts.behind, localOid, remoteOid }
+    return { status: 'behind', behind: counts.behind, localOid, remoteOid, ...ownerPath }
+  }
+  if (owner) {
+    return { status: 'nothing_to_do' }
   }
   return (await isHistoryCutByShallowClone(git, repoPath, localOid, remoteOid))
     ? { status: 'skipped_not_fast_forward', shallowHistory: true }
@@ -92,6 +132,10 @@ export async function fastForwardLocalBaseBranch(
   const inspection = await inspectLocalBaseBranch(git, refs)
   if (inspection.status !== 'behind') {
     return inspection
+  }
+  if (inspection.ownerWorktreePath) {
+    // Its checkout is updated after the create returns (fastForwardCheckedOutLocalBaseBranch).
+    return { status: 'nothing_to_do' }
   }
   const { repoPath, fullRef, remoteTrackingRef } = refs
   const { localOid, remoteOid } = inspection
@@ -124,6 +168,36 @@ export async function fastForwardLocalBaseBranch(
   }
 }
 
+/** Fast-forward a checked-out branch in its own checkout when it has no tracked changes; Git refuses a held index.lock, overwritten untracked files and dropped commits. Silent; never rejects. */
+export async function fastForwardCheckedOutLocalBaseBranch(
+  git: LocalBaseBranchGit,
+  refs: LocalBaseBranchRefs
+): Promise<void> {
+  const inspection = await inspectLocalBaseBranch(git, refs)
+  if (inspection.status !== 'behind' || !inspection.ownerWorktreePath) {
+    return
+  }
+  const { ownerWorktreePath, remoteOid } = inspection
+  const branch = refs.fullRef.slice('refs/heads/'.length)
+  // Why: `-c branch.<name>.mergeOptions=` splits at the first `=`, so such a name cannot be pinned.
+  if (branch.includes('=')) {
+    return
+  }
+  try {
+    if (await hasTrackedChanges(git, ownerWorktreePath)) {
+      return
+    }
+    // Recheck right before merging HEAD: the checkout may have switched branches since the listing.
+    const { stdout: head } = await git.exec(['symbolic-ref', '-q', 'HEAD'], ownerWorktreePath)
+    if (head.trim() !== refs.fullRef) {
+      return
+    }
+    await git.exec(ownerFastForwardArgs(branch, remoteOid), ownerWorktreePath)
+  } catch {
+    // A skipped update stays silent; the next create tries again.
+  }
+}
+
 export function toLocalBaseRefRefreshResult(
   names: { baseRef: string; localBranch: string },
   outcome: LocalBaseBranchFastForwardOutcome | undefined
@@ -140,16 +214,13 @@ export function toLocalBaseRefRefreshResult(
   }
 }
 
-/** Git's in-use rule: checked out in a worktree, or reserved by a rebase or bisect there. */
-async function isBranchInUse(
-  git: LocalBaseBranchGit,
-  repoPath: string,
-  fullRef: string
-): Promise<boolean> {
-  return (
-    (await git.listReservedBranches(repoPath)).has(fullRef) ||
-    (await git.listWorktrees(repoPath)).some((wt) => wt.branch === fullRef)
+async function hasTrackedChanges(git: LocalBaseBranchGit, worktreePath: string): Promise<boolean> {
+  // Read without index.lock so inspection cannot fail the user's concurrent Git command.
+  const { stdout } = await git.exec(
+    ['--no-optional-locks', 'status', '--porcelain', '--untracked-files=no'],
+    worktreePath
   )
+  return stdout.trim().length > 0
 }
 
 async function revParseCommit(
@@ -218,43 +289,4 @@ async function isAncestor(
     }
     throw error
   }
-}
-
-const REFRESH_STATUSES: readonly LocalBaseRefRefreshStatus[] = [
-  'updated',
-  'skipped_dirty_worktree',
-  'skipped_not_fast_forward',
-  'skipped_error'
-]
-
-/** Reject unrecognized relay replies as errors rather than implying success. */
-export function parseLocalBaseBranchFastForwardOutcome(
-  value: unknown
-): LocalBaseBranchFastForwardOutcome {
-  if (typeof value !== 'object' || value === null || !('status' in value)) {
-    return { status: 'skipped_error' }
-  }
-  if (value.status === 'nothing_to_do') {
-    return { status: 'nothing_to_do' }
-  }
-  const status = REFRESH_STATUSES.find((candidate) => candidate === value.status)
-  if (!status) {
-    return { status: 'skipped_error' }
-  }
-  const ownerWorktreePath = 'ownerWorktreePath' in value ? value.ownerWorktreePath : undefined
-  const shallowHistory = 'shallowHistory' in value && value.shallowHistory === true
-  return {
-    status,
-    ...(typeof ownerWorktreePath === 'string' && ownerWorktreePath ? { ownerWorktreePath } : {}),
-    ...(shallowHistory ? { shallowHistory: true } : {})
-  }
-}
-
-/** How many commits a relay's inspection says local is behind, when it may be fast-forwarded. */
-export function readFastForwardableBehindCount(value: unknown): number | undefined {
-  if (typeof value !== 'object' || value === null || !('status' in value) || !('behind' in value)) {
-    return undefined
-  }
-  const { behind } = value
-  return value.status === 'behind' && typeof behind === 'number' && behind > 0 ? behind : undefined
 }

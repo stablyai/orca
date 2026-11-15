@@ -32,6 +32,12 @@ vi.mock('../../command-runner/host-routing/wsl-path-translation', async (importO
   translateWslOutputPaths: translateWslOutputPathsMock
 }))
 
+// The detached checkout fast-forward would drain later tests' queues; real-Git tests cover it.
+vi.mock('./worktree-base-refresh', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  fastForwardCheckedOutLocalBaseAfterCreate: vi.fn()
+}))
+
 // Keep the ordered runner queues; worktree-checkout-progress-real-git covers the checkout.workers read.
 vi.mock('./checkout-workers-git-args', () => ({
   checkoutWorkersGitArgs: async () => []
@@ -127,40 +133,6 @@ describe('addWorktree', () => {
         'old-main'
       ],
       expect.objectContaining({ cwd: '/repo', beforeStart: expect.any(Function) })
-    ])
-  })
-
-  it('creates from the remote base and leaves a checked-out local base alone', async () => {
-    queueBehindInspection({ worktrees: 'worktree /repo\nHEAD abc123\nbranch refs/heads/main\n' })
-
-    const result = await addWorktree('/repo', '/repo-feature', 'feature/test', 'origin/main', true)
-
-    expect(result.localBaseRefRefresh).toBeUndefined()
-    expect(refreshGitMock.mock.calls.map(([args]) => args[0])).toEqual([
-      'rev-parse',
-      'rev-parse',
-      'rev-parse',
-      'worktree'
-    ])
-    expect(checkoutGitMock.mock.calls.map((call) => call[0])).toEqual([
-      [
-        'worktree',
-        'add',
-        '--no-track',
-        '-b',
-        'feature/test',
-        '/repo-feature',
-        'refs/remotes/origin/main'
-      ],
-      [
-        'config',
-        '--local',
-        '--replace-all',
-        'branch.feature/test.base',
-        'refs/remotes/origin/main'
-      ],
-      ['config', '--get', 'push.autoSetupRemote'],
-      ['config', '--local', 'push.autoSetupRemote', 'true']
     ])
   })
 

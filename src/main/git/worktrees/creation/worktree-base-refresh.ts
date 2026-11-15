@@ -8,6 +8,7 @@ import { normalizeRuntimePathForComparison } from '../../../../shared/cross-plat
 import { createCoalescingKeyedRunner } from '../../../../shared/concurrency/coalescing-keyed-runner'
 import { parseWorktreeList } from '../../../../shared/git/worktrees/git-worktree-porcelain-parser'
 import {
+  fastForwardCheckedOutLocalBaseBranch,
   fastForwardLocalBaseBranch,
   inspectLocalBaseBranch,
   toLocalBaseRefRefreshResult,
@@ -22,6 +23,7 @@ import {
 import { routeLocalGitOptions } from '../../command-runner/host-routing/local-git-runtime-route'
 import type { GitExecOptions } from '../../command-runner/git-exec-options'
 import { runWithGitReadCacheInvalidation } from '../../source-control/git-read-cache-invalidation'
+import { withRepoRefMaintenancePaused } from '../../refs/maintenance/local-repo-ref-maintenance'
 import type { AddWorktreeOptions, GitWorktreeExecOptions } from '../worktree-operation-options'
 
 // Bound the create's wait on the shared ref-only refresh.
@@ -29,6 +31,9 @@ export const LOCAL_BASE_REF_REFRESH_WAIT_MS = 30_000
 
 // Serialize per branch to avoid ref-lock races; coalesce only matching targets.
 const runPerLocalBaseBranch = createCoalescingKeyedRunner<LocalBaseBranchFastForwardOutcome>()
+
+// One checkout fast-forward per repo; creates during one share a single follow-up to the latest remote ref.
+const runPerRepoCheckoutFastForward = createCoalescingKeyedRunner<void>()
 
 export function parseRemoteTrackingLocalBaseRef(
   baseBranch: string,
@@ -93,6 +98,39 @@ export async function refreshLocalBaseRefForWorktreeCreate(
   return toLocalBaseRefRefreshResult(parsed, outcome)
 }
 
+/** Fast-forward a checked-out base in its own checkout once a create is done; nothing waits on it. */
+export function fastForwardCheckedOutLocalBaseAfterCreate(
+  repoPath: string,
+  baseBranch: string,
+  remoteTrackingRef: string,
+  options: AddWorktreeOptions
+): void {
+  const parsed = parseRemoteTrackingLocalBaseRef(
+    baseBranch,
+    remoteTrackingRef,
+    options.remoteTrackingBase
+  )
+  if (!parsed) {
+    return
+  }
+  const key = `${options.wslDistro ?? ''}\0${normalizeRuntimePathForComparison(repoPath)}`
+  // Admission-exempt (bounded by the per-repo runner) so a stalled checkout never holds a slot creates wait on; no deadline, since killing a merge mid-checkout strands a half-updated tree.
+  const git = localBaseBranchGit(options, { admissionExempt: true })
+  void runPerRepoCheckoutFastForward(key, parsed.fullRef, () =>
+    runWithGitReadCacheInvalidation(() =>
+      withRepoRefMaintenancePaused('local-base-checkout-fast-forward', () =>
+        fastForwardCheckedOutLocalBaseBranch(git, {
+          repoPath,
+          fullRef: parsed.fullRef,
+          remoteTrackingRef
+        })
+      )
+    )
+  ).catch((error: unknown) => {
+    console.warn('addWorktree: checked-out local base fast-forward failed unexpectedly', error)
+  })
+}
+
 export async function getLocalBaseRefUpdateSuggestionForWorktreeCreate(
   repoPath: string,
   baseBranch: string,
@@ -114,12 +152,16 @@ export async function getLocalBaseRefUpdateSuggestionForWorktreeCreate(
     : undefined
 }
 
-function localBaseBranchGit(options: GitWorktreeExecOptions): LocalBaseBranchGit {
+function localBaseBranchGit(
+  options: GitWorktreeExecOptions,
+  admission: Pick<GitExecOptions, 'admissionExempt'> = {}
+): LocalBaseBranchGit {
   // Shared refreshes cannot use any individual create's cancellation signal or timeout.
   const execOptions = (cwd: string): GitExecOptions => ({
     cwd,
     ...(options.wslDistro ? { wslDistro: options.wslDistro } : {}),
-    ...(options.admissionTier ? { admissionTier: options.admissionTier } : {})
+    ...(options.admissionTier ? { admissionTier: options.admissionTier } : {}),
+    ...admission
   })
   // The runner may route a Windows drive repo into WSL; its Linux output paths need the same distro.
   const routed = (cwd: string) => routeLocalGitOptions({ cwd, wslDistro: options.wslDistro })
