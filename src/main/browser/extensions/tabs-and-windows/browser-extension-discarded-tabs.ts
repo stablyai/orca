@@ -4,8 +4,8 @@ import type { BrowserPage, BrowserWorkspace } from '../../../../shared/browser-w
 // oxlint-disable-next-line import/no-cycle -- browser subsystem singleton hub (browserManager); breaking it needs DI and test-mock updates, left for a human
 import { browserManager } from '../../guest-lifecycle/manager/browser-manager'
 import { emitBrowserExtensionEvent } from '../api-runtime/browser-extension-api-host'
+import { browserSessionRegistry } from '../../sessions/profiles/browser-session-registry'
 import {
-  getBrowserExtensionProfile,
   getBrowserExtensionProfileForPartition,
   getBrowserExtensionSessionForProfile
 } from '../profile-sessions/browser-extension-session-loader'
@@ -46,10 +46,9 @@ const assignedByPageId = new Map<string, { tabId: number; session: Electron.Sess
 
 /** The extension session a tab's guest would load in, as the renderer picks its partition. */
 function extensionSessionFor(tab: BrowserWorkspace): Electron.Session | null {
-  const profile = tab.sessionPartition
-    ? getBrowserExtensionProfileForPartition(tab.sessionPartition)
-    : (getBrowserExtensionProfile(tab.sessionProfileId ?? 'default') ??
-      getBrowserExtensionProfile('default'))
+  const partition =
+    tab.sessionPartition || browserSessionRegistry.resolveKnownPartition(tab.sessionProfileId)
+  const profile = partition ? getBrowserExtensionProfileForPartition(partition) : null
   return profile ? getBrowserExtensionSessionForProfile(profile.id) : null
 }
 

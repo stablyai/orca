@@ -78,6 +78,13 @@ vi.mock('../actions/browser-extension-action-registry', () => ({
   forgetBrowserExtensionActionTab: vi.fn()
 }))
 vi.mock('../browser-extension-support', () => ({ isBrowserExtensionSupportEnabled: () => true }))
+// 'idle' is a profile whose extensions have not started: it has no extension session.
+vi.mock('../../sessions/profiles/browser-session-registry', () => ({
+  browserSessionRegistry: {
+    resolveKnownPartition: (id: string | null | undefined) =>
+      id && !(id in mocks.sessions) && id !== 'idle' ? null : `persist:${id ?? 'default'}`
+  }
+}))
 vi.mock('../profile-sessions/browser-extension-session-loader', () => {
   const profile = (id: string) => (id in mocks.sessions ? { id, partition: `persist:${id}` } : null)
   return {
@@ -85,7 +92,8 @@ vi.mock('../profile-sessions/browser-extension-session-loader', () => {
     getBrowserExtensionProfileForPartition: (partition: string) =>
       profile(partition.replace('persist:', '')),
     getBrowserExtensionSessionForProfile: (id: string) =>
-      id === 'default' || id === 'work' ? mocks.sessions[id] : null
+      id === 'default' || id === 'work' ? mocks.sessions[id] : null,
+    isBrowserExtensionProfileLoading: () => false
   }
 })
 vi.mock('./browser-extension-window-model', () => ({
@@ -308,6 +316,21 @@ describe('restored browser pages without a guest are discarded tabs', () => {
     expect((await query({ discarded: true })).map((entry) => entry.url)).not.toContain(
       'https://cold.test/'
     )
+  })
+
+  it("lists no page of a profile whose extensions have not started, not even to Default's", async () => {
+    saved.local.browserTabsByWorktree = {
+      ...saved.local.browserTabsByWorktree,
+      'wt-2': [tab('bt-idle', { sessionProfileId: 'idle' })]
+    }
+    saved.local.browserPagesByWorkspace = {
+      ...saved.local.browserPagesByWorkspace,
+      'bt-idle': [page('idle', 'bt-idle')]
+    }
+    writeListener?.('local')
+    const urls = (await query({ discarded: true })).map((entry) => entry.url)
+    expect(urls).toContain('https://cold.test/')
+    expect(urls).not.toContain('https://idle.test/')
   })
 
   it('does not list a closed page until the session save drops it, nor an evicted one after', async () => {
