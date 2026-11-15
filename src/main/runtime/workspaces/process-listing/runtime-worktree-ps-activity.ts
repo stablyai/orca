@@ -1,5 +1,5 @@
-import type { RuntimeSyncedTab } from '../../../../shared/runtime-session-contracts'
-import type { RuntimeWorktreePsSummary } from '../../../../shared/runtime-worktree-contracts'
+import type { RuntimeSyncedTab } from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
+import type { RuntimeWorktreePsSummary } from '../../../../shared/worktree/catalog/runtime-worktree-contracts'
 import type { Repo } from '../../../../shared/repo-types'
 import type { WorkspaceSessionState } from '../../../../shared/workspace-session/workspace-session-state-types'
 import { getRepoExecutionHostId, type ExecutionHostId } from '../../../../shared/execution-host'

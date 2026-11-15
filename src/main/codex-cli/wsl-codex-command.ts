@@ -3,7 +3,7 @@ import {
   buildWslCapturedLoginShellCommand,
   buildWslExecArgs,
   buildWslLoginShellCommand
-} from '../../shared/wsl-login-shell-command'
+} from '../../shared/shell/wsl/wsl-login-shell-command'
 import { quotePosixShell } from '../../shared/shell/launch/shell-argument-quoting'
 
 export const WSL_CODEX_AVAILABILITY_TIMEOUT_MS = 5_000

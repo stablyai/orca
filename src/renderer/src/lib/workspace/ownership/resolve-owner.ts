@@ -28,7 +28,7 @@ import {
   hostAuthorityFromOperationRoute,
   SELF_LOCAL_AUTHORITY,
   type HostAuthority
-} from '../../../../../shared/host-authority'
+} from '../../../../../shared/execution-host/host-authority'
 import type { ExecutionHostOwnerMatch } from '../../../../../shared/execution-host/worktree-execution-host-resolution'
 import {
   getFloatingWorkspaceOperationRoute,
@@ -45,7 +45,7 @@ import {
 import { parseWorkspaceKey } from '../../../../../shared/workspace-scope'
 import { warnAmbiguousOwnerOnce } from './ambiguous-owner-warning'
 import { hostRouteForAuthority } from '@/runtime/rpc/targets/runtime-client-target'
-import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 
 /** A worktree id, a `folder:` workspace key, or the floating workspace; `hostId` when the row names one. */
 export type WorkspaceOwnerRef = { workspaceId: string; hostId?: ExecutionHostId }

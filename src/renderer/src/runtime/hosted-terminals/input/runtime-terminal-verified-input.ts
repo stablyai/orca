@@ -1,4 +1,4 @@
-import type { RuntimeTerminalSend } from '../../../../../shared/runtime-terminal-send-contract'
+import type { RuntimeTerminalSend } from '../../../../../shared/terminal/runtime/runtime-terminal-send-contract'
 import type { TerminalInputKind } from '../../../../../shared/terminal/input/terminal-input-kind'
 import { isTerminalInputTooLargeWithDeferredMeasurement } from '../../../../../shared/terminal/input/terminal-input'
 import { readTerminalSendAcknowledgment } from '../../../../../shared/terminal/pty/lifecycle/terminal-send-acknowledgment'

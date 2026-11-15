@@ -17,7 +17,7 @@ import { RuntimeRpcCallError } from '@/runtime/rpc/calls/runtime-rpc-result'
 import type { RuntimeRpcSubscriptionHandlers } from '@/runtime/rpc/subscriptions/runtime-rpc-subscribe'
 import type { AntigravityChatAuthConfig } from '../../../../shared/antigravity-chat-auth-config'
 import type { AntigravityChatSignInStatus } from '../../../../shared/antigravity-account-types'
-import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 
 const streams = vi.hoisted(() => {
   const releases: (() => void)[] = []

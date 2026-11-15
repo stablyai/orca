@@ -14,7 +14,7 @@ import { applyClaudeEnvPatch } from '../../../claude-accounts/runtime-auth/envir
 import { resolveClaudeCommand } from '../../../codex-cli/command'
 import { withoutInheritedClaudeConfigDir } from './claude-config-dir-pin'
 import { stripInheritedAgentSessionEnv } from '../../../../shared/agent-launch/startup/parent-agent-session-env'
-import { overlayEnvironmentVariables } from '../../../../shared/environment-overlay'
+import { overlayEnvironmentVariables } from '../../../../shared/shell/launch/environment-overlay'
 
 function cloneDefinedEnv(env: NodeJS.ProcessEnv | Record<string, string>): Record<string, string> {
   const next: Record<string, string> = {}

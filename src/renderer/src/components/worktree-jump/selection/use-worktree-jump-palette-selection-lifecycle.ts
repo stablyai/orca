@@ -2,7 +2,7 @@ import { useCallback, useEffect, useLayoutEffect } from 'react'
 import {
   ORCA_BROWSER_FOCUS_REQUEST_EVENT,
   queueBrowserFocusRequest
-} from '@/components/browser-pane/host-guest/browser-focus'
+} from '@/components/browser-pane/host-guest/input/browser-focus'
 import { captureCmdJActiveGroupSnapshot } from '@/components/cmd-j/quick-action-context'
 import { resolvePaletteFocusRestoreTarget } from '@/components/cmd-j/palette-focus-restore-target'
 import {

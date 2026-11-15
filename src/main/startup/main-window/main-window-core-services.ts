@@ -21,7 +21,7 @@ import {
   prepareCodexSessionResumeForLaunch
 } from '../agent-accounts/codex-session-resume-launch'
 import { isRecoveryReloadInFlight } from './main-window-lifecycle-flags'
-import { RELAY_HOST_CLOSE_REASON } from '../../../shared/relay-host-close-reason'
+import { RELAY_HOST_CLOSE_REASON } from '../../../shared/remote-runtime/relay/relay-host-close-reason'
 import { holdLaunchReconnectOptOuts } from '../../ipc/ssh/ssh-host-user-disconnect'
 
 export function attachMainWindowCoreServices(

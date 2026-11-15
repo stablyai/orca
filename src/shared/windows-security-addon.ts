@@ -2,7 +2,7 @@ import { realpathSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { basename, isAbsolute, join, relative, toNamespacedPath } from 'node:path'
 import type * as WindowsSecurityModule from '@orca/windows-security'
-import { ORCAD_WINDOWS_SECURITY_FILENAME } from './orcad-artifacts'
+import { ORCAD_WINDOWS_SECURITY_FILENAME } from './remote-runtime/orcad-distribution/orcad-artifacts'
 
 export type {
   GrantAccessOptions,

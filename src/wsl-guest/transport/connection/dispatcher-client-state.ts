@@ -1,4 +1,4 @@
-import type { DecodedFrame } from '../../../shared/relay-frame-decoder-contract'
+import type { DecodedFrame } from '../../../shared/remote-runtime/relay/relay-frame-decoder-contract'
 import type { JsonRpcNotification, JsonRpcRequest, JsonRpcResponse } from '../wire/protocol'
 import { ClientRequestAborts } from './client-request-aborts'
 import type { PtyConsumerCloseCause } from '../../../shared/terminal/pty/lifecycle/pty-consumer-session-contract'

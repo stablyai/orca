@@ -5,7 +5,7 @@ const viewportMocks = vi.hoisted(() => ({
   removeBrowserPageViewport: vi.fn()
 }))
 
-vi.mock('./browser-page-viewport', () => viewportMocks)
+vi.mock('./viewport/browser-page-viewport', () => viewportMocks)
 
 type ListenerRecord = {
   type: string
@@ -92,8 +92,8 @@ describe('webview registry drag listeners', () => {
   })
 
   it('keeps webviews in passthrough until every renderer drag releases', async () => {
-    const { acquireWebviewsDragPassthrough, registerPersistentWebview } =
-      await import('./webview-registry')
+    const { registerPersistentWebview } = await import('./webview-registry')
+    const { acquireWebviewsDragPassthrough } = await import('./drag/webview-drag-passthrough')
     const activeWebview = createWebview()
     activeWebview.style.pointerEvents = 'auto'
     const lockedWebview = createWebview()
@@ -120,8 +120,8 @@ describe('webview registry drag listeners', () => {
   })
 
   it('applies active passthrough to webviews registered mid-drag', async () => {
-    const { acquireWebviewsDragPassthrough, registerPersistentWebview } =
-      await import('./webview-registry')
+    const { registerPersistentWebview } = await import('./webview-registry')
+    const { acquireWebviewsDragPassthrough } = await import('./drag/webview-drag-passthrough')
     const releaseDrag = acquireWebviewsDragPassthrough()
     const webview = createWebview()
     webview.style.pointerEvents = 'auto'

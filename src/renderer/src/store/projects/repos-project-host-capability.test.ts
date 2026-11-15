@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { PROJECT_HOST_SETUP_RUNTIME_CAPABILITY } from '../../../../shared/worktree-runtime-capabilities'
+import { PROJECT_HOST_SETUP_RUNTIME_CAPABILITY } from '../../../../shared/remote-runtime/protocol/worktree-runtime-capabilities'
 import { clearRuntimeCompatibilityCache as clearRuntimeCompatibilityCacheForTests } from '../../runtime/rpc/compatibility/runtime-compatibility-cache'
 import type { RuntimeEnvironmentCallRequest } from '../../runtime/rpc/testing/runtime-compatibility-test-fixture'
 import { createTestStore } from '../testing/app-store-test-fixture'

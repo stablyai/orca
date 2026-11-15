@@ -3,7 +3,7 @@ import { createHash } from 'node:crypto'
 import { readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { basename, dirname, join } from 'node:path'
-import { ORCAD_SERVER_ENTRY_FILENAME } from '../../../../src/shared/orcad-artifacts.ts'
+import { ORCAD_SERVER_ENTRY_FILENAME } from '../../../../src/shared/remote-runtime/orcad-distribution/orcad-artifacts.ts'
 
 const root = join(import.meta.dirname, '../../..', '..')
 const { turnedOnDarkBuildDefines } = createRequire(import.meta.url)(

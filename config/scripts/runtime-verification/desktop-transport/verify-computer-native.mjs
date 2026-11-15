@@ -14,7 +14,7 @@ const checks = [
     enabled: process.platform === 'darwin'
   },
   {
-    name: 'Linux snapshot renderer tests',
+    name: 'Linux portal file tests',
     command: 'python3',
     args: ['native/computer-use-linux/runtime_render_test.py'],
     enabled: true

@@ -22,7 +22,7 @@ import { runtimeHostContactFromSnapshot } from '../../src/shared/remote-runtime/
 import type {
   RuntimeTerminalListResult,
   RuntimeTerminalRead
-} from '../../src/shared/runtime-terminal-contracts'
+} from '../../src/shared/terminal/runtime/runtime-terminal-contracts'
 
 const HOST = process.env[ORCAD_CONVERT_HOST_ENV]
 const TEMPLATE = process.env.ORCA_E2E_ORCAD_CONVERT_TEMPLATE

@@ -3,7 +3,7 @@ import type { ExecutionHostId } from '../../../../shared/execution-host'
 import type {
   RuntimeSyncWindowGraph,
   RuntimeMobileSessionTabsSnapshot
-} from '../../../../shared/runtime-session-contracts'
+} from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import type { RuntimeStore } from '../../construction/runtime-store-contract'
 import type { WorkspaceLayoutReads } from './workspace-layout-stream'
 import type { BoundTerminal } from './terminal-surface-index'

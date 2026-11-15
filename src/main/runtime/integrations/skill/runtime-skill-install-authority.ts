@@ -1,6 +1,6 @@
 import { homedir } from 'node:os'
 import { getWslHome } from '../../../wsl/discovery/distro-catalog'
-import { parseWslUncPath } from '../../../../shared/wsl-paths'
+import { parseWslUncPath } from '../../../../shared/file-access/wsl-paths'
 import {
   getConnectionExecutionHostId,
   getRepoExecutionHostId,

@@ -8,7 +8,7 @@ import {
   setupHostMatchesRunContext,
   repoHostMatchesRunContext
 } from './automation-run-context-host-match'
-import { evaluateRuntimeCompat } from '../../../../../shared/protocol-compat'
+import { evaluateRuntimeCompat } from '../../../../../shared/remote-runtime/protocol/protocol-compat'
 import { describeRuntimeCompatBlock } from '@/runtime/hosts/display/runtime-host-copy'
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
@@ -17,7 +17,7 @@ import {
   RUNTIME_PROTOCOL_VERSION
 } from '../../../../../shared/protocol-version'
 import type { AutomationHostTarget } from './automation-host-client'
-import type { SshConnectionState } from '../../../../../shared/ssh-types'
+import type { SshConnectionState } from '../../../../../shared/remote-runtime/ssh/ssh-types'
 import type { ProjectHostSetup } from '../../../../../shared/project-types'
 import type { Repo } from '../../../../../shared/repo-types'
 import type { RuntimeEnvironmentStatus } from '../../../../../shared/remote-runtime/host-status/runtime-host-status'

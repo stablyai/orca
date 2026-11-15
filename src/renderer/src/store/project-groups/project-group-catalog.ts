@@ -1,6 +1,6 @@
 import type { ProjectGroup } from '../../../../shared/project-group-types'
 import { callRuntimeRpc } from '../../runtime/rpc/calls/runtime-rpc-call'
-import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import { catalogOwnsHost } from './project-group-owner-routing'
 import { getRepoExecutionHostId } from '../../../../shared/execution-host'
 import { getRuntimeTargetHostId } from '../../runtime/rpc/targets/runtime-client-target'

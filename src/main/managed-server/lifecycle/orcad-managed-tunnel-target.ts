@@ -19,7 +19,7 @@ import { managedOrcadSlot } from './orcad-managed-runtime-context'
 import { OrcadCrashLoopError, wakeManagedOrcadUnlessCrashLooping } from './orcad-managed-crash-loop'
 import { resolveOrcadRemoteContext } from '../install/orcad-remote-context'
 import type { SshConnection } from '../../ssh/connection/ssh-connection'
-import type { PortForwardEntry } from '../../../shared/ssh-types'
+import type { PortForwardEntry } from '../../../shared/remote-runtime/ssh/ssh-types'
 import type { SshPortForwardManager } from '../../ssh/port-forwarding/ssh-port-forward'
 
 export type OrcadManagedTunnelTargeting = {

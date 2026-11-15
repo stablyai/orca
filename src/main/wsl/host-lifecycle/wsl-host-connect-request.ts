@@ -1,4 +1,4 @@
-import type { WslHostConnectIntent } from '../../../shared/wsl-host-types'
+import type { WslHostConnectIntent } from '../../../shared/remote-runtime/wsl-hosts/wsl-host-types'
 
 /** What a renderer's `wslHosts:connect` asks of the service. */
 export function wslHostConnectOptions(request: {

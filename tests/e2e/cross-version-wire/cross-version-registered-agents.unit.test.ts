@@ -11,7 +11,7 @@ import '../../../src/shared/agent-session/lifecycle/provider-handles/agent-sessi
 import '../../../src/shared/protocol-version'
 import { STRUCTURED_AGENT_SESSION_REGISTERED_AGENTS_RUNTIME_CAPABILITY } from '../../../src/shared/agent-session/structured-agent-session-surface-capabilities'
 import '../../../src/shared/agent-session/agent-session-runtime-capabilities'
-import type { RuntimeMobileSessionTabsSnapshot } from '../../../src/shared/runtime-types'
+import type { RuntimeMobileSessionTabsSnapshot } from '../../../src/shared/remote-runtime/session-graph/runtime-session-contracts'
 import '../../../src/shared/structured-native-chat-launch-route'
 import { parseWorkspaceSession } from '../../../src/shared/workspace-session/workspace-session-schema'
 import {

@@ -4,7 +4,7 @@ import type { PtyLivenessVerdict } from '../../../../shared/terminal/pty/lifecyc
 import type {
   RuntimeSyncedLeaf,
   RuntimeSyncedTab
-} from '../../../../shared/runtime-session-contracts'
+} from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import type { RuntimeLeafPtyFacts } from './runtime-leaf-record-projection'
 import type { RuntimeLeafRecord } from './runtime-terminal-state-records'
 

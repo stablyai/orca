@@ -23,8 +23,7 @@ export function useClaudeAgentRowView(agent: DashboardAgentRow) {
     const environment = state.runtimeEnvironments.find((item) => item.id === environmentId)
     return environment?.pairingRevision ?? environment?.createdAt
   })
-  const enabled =
-    parent.agentType === 'claude' && !parent.structuredHostOwned && agent.rowSource !== 'retained'
+  const enabled = parent.agentType === 'claude' && !parent.structuredHostOwned
   const key = `${environmentId ?? 'local'}:${revision ?? ''}`
   const subscribe = useCallback(
     (listener: () => void) =>

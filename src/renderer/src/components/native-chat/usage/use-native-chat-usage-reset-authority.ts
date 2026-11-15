@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { useAppStore } from '@/store'
 import { watchProviderAccounts } from '@/runtime/provider-accounts/observations/runtime-provider-accounts-client'
 import type { RateLimitState } from '../../../../../shared/rate-limit-types'
-import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 
 /** The host is still reading Codex; its state is about to change again. */
 export const CODEX_RESET_AUTHORITY_READING = 'reading'

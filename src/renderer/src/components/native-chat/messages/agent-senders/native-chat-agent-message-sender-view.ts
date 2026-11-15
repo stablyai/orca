@@ -7,7 +7,7 @@ import {
 import type { AgentMessageSenderTarget } from './native-chat-agent-message-sender-target'
 import type { AppState } from '@/store/types'
 import type { AgentMessageSender } from '../../../../../../shared/agent-session/agent-session-message-source'
-import type { RuntimeClientTarget } from '../../../../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import {
   agentMessageSenderCandidateLocation,
   agentMessageSenderOpens,

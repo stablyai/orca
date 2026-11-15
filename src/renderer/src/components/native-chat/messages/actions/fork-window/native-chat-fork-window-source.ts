@@ -1,6 +1,6 @@
 import type { TuiAgent } from '../../../../../../../shared/agent-launch/catalog/tui-agent'
 import type { NativeChatMessage } from '../../../../../../../shared/native-chat/native-chat-types'
-import type { RuntimeClientTarget } from '../../../../../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import type { NativeChatForkRowAction } from '../use-native-chat-fork'
 
 /** The chat a Fork window copies, and which of the window's choices its host can carry out. */

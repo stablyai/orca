@@ -6,7 +6,7 @@ import { z } from 'zod'
 import {
   OrcadManagedStopRequestSchema,
   type OrcadManagedStopRequest
-} from '../../../../shared/orcad-stop-request'
+} from '../../../../shared/remote-runtime/orcad-lifecycle/orcad-stop-request'
 import { acquireOrcadInstanceLock } from '../../instance-lock/orcad-instance-lock'
 import { orcadManagedStopRequestPath } from './orcad-managed-stop-request'
 import {

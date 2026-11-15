@@ -7,7 +7,7 @@ import {
   AiVaultReadChatForkExportParams,
   AiVaultReleaseChatForkExportParams
 } from '../../../../../shared/rpc-contract/ai-vault/ai-vault-fork-transfer-params'
-import { isWslUncPath } from '../../../../../shared/wsl-paths'
+import { isWslUncPath } from '../../../../../shared/file-access/wsl-paths'
 import { claudeDestinationBucket } from '../../../../claude/transcripts/claude-conversation-copy'
 import { exportChatFork } from '../../../../ai-vault/fork-transfer/chat-fork-export'
 import { placeChatForkImport } from '../../../../ai-vault/fork-transfer/chat-fork-import-placement'

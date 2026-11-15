@@ -18,11 +18,11 @@ import { createStructuredChatNamingHandler } from '../../native-chat/structured-
 
 import { recordingStructuredAgentSessionLogger } from '../../native-chat/agent-session-wire/host/testing/structured-agent-session-logger.test-fixture'
 
+import { ensureTestStructuredAgentSessionHost as ensureStructuredAgentSessionHost } from '../agent-session/records/agent-session-record-store-test-harness'
 import {
-  ensureTestStructuredAgentSessionHost as ensureStructuredAgentSessionHost,
   readPersistedTestAgentSessionStore,
   seedTestAgentSessionRecordStore
-} from '../agent-session/records/agent-session-record-store-test-harness'
+} from '../agent-session/records/agent-session-record-store-persistence.test-fixture'
 
 import { stopStructuredAgentSessionRuntime } from '../agent-session/structured-agent-session-runtime'
 

@@ -1,6 +1,6 @@
 import { capturePRCheckContract } from '@/lib/source-control/checks/pr-check-observation-contract'
 import type { StateCreator } from 'zustand'
-import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import type { AppState } from '../../types'
 import type { RuntimeFocusSettings } from '../../../../../shared/github/cache/github-cache-key'
 import type { GitHubSlice } from '../github-slice-contract'
@@ -147,6 +147,7 @@ export function startPullRequestLookup(args: {
                   ...requestOptions,
                   repoOwnerExecutionHostId: options?.repoOwnerExecutionHostId
                 })
+            // Why: a reply without data leaves the shown PR as it is; queued work delivers the newer one.
             return isPRRevalidationOnly(response)
               ? response
               : normalizeGitHubPRForBranchOutcome(response)

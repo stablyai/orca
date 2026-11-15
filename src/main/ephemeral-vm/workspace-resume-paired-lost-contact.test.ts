@@ -29,10 +29,10 @@ const mocks = vi.hoisted(() => ({
 }))
 
 vi.mock('electron', () => ({ app: { getPath: () => state.desktopDataPath } }))
-vi.mock('../../shared/ephemeral-vm-runtime-store', () => ({
+vi.mock('../../shared/remote-runtime/ephemeral-vm-store/ephemeral-vm-runtime-store', () => ({
   updateEphemeralVmRuntimeStatus: mocks.updateStatus
 }))
-vi.mock('../../shared/ephemeral-vm-workspace-runtime', () => ({
+vi.mock('../../shared/remote-runtime/ephemeral-vm-store/ephemeral-vm-workspace-runtime', () => ({
   findWorkspaceEphemeralVmRuntime: () => state.record
 }))
 vi.mock('../ipc/ephemeral-vm-recipe-context', () => ({
@@ -69,7 +69,7 @@ import { getPreferredPairedRuntimeConnection } from '../../shared/remote-runtime
 import { sendRemoteRuntimeRequestOnSocket } from '../../shared/remote-runtime/requests/remote-runtime-request-socket'
 import { ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES } from '../../shared/electron-remote-runtime-client-capabilities'
 import { runtimeHostStatusError } from '../../shared/remote-runtime/host-status/runtime-host-status'
-import type { RuntimeStatus } from '../../shared/runtime-session-contracts'
+import type { RuntimeStatus } from '../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import { DeviceRegistry } from '../runtime/rpc/server/pairing/device-registry'
 import {
   clearRuntimeEnvironmentContactLoss,

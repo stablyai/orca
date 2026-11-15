@@ -5,7 +5,7 @@ import { buildAgentSessionHandoffContext } from '../../../../shared/agent-sessio
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
 import { projectStructuredAgentSessionMessages } from '../../../../shared/agent-session/view/structured-agent-session-message-projection'
 import { formatWorkerTranscriptMessage } from '../../../../shared/worker-transcript-text'
-import { toLinuxPath } from '../../../../shared/wsl-paths'
+import { toLinuxPath } from '../../../../shared/file-access/wsl-paths'
 import { writeAgentSessionContextSnapshot } from '../../conversation-context/agent-session-context-snapshots'
 import type {
   StructuredAgentSessionHostDeps,

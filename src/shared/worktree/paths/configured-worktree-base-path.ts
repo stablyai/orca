@@ -5,7 +5,7 @@ import {
   resolveRuntimePath
 } from '../../cross-platform-path'
 import type { Repo } from '../../repo-types'
-import { resolveWslRepoWorktreeBasePath } from '../../wsl-paths'
+import { resolveWslRepoWorktreeBasePath } from '../../file-access/wsl-paths'
 
 export function isRuntimePathAbsoluteForRepo(repoPath: string, layoutPath: string): boolean {
   const pathFlavor =

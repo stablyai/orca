@@ -1,5 +1,5 @@
 import { redactRuntimeEnvironment } from '../../../shared/remote-runtime/host-catalog/runtime-environments'
-import type { OrcadManagedRecoveryResult } from '../../../shared/orcad-managed-runtime'
+import type { OrcadManagedRecoveryResult } from '../../../shared/remote-runtime/orcad-lifecycle/orcad-managed-runtime'
 import { recoverInterruptedOrcadActivation } from '../activation/orcad-activation-recovery'
 import { managedOrcadSlot, resolveLinkedOrcadContext } from './orcad-managed-runtime-context'
 

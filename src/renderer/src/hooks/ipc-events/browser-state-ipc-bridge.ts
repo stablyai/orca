@@ -1,7 +1,7 @@
 import {
   acceptBrowserGuestMetadata,
   clearBrowserGuestMetadata
-} from '@/components/browser-pane/host-guest/browser-guest-metadata-cache'
+} from '@/components/browser-pane/host-guest/metadata/browser-guest-metadata-cache'
 import { rememberLiveBrowserUrl } from '@/components/browser-pane/describe-page/live-browser-url-registry'
 import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/workspace/ownership/worktree-runtime-owner'
 import { findVisibleBrowserLinkTarget } from '@/lib/browser/navigation/visible-browser-link-target'
@@ -12,21 +12,21 @@ import {
 } from '@/lib/browser/palette/open-client-hosted-link-beside-page'
 import { redactKagiSessionToken } from '../../../../shared/browser-url'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
-import { useAppStore } from '../../store'
+import { useAppStore } from '../../store/index'
 import { findPage } from '../../store/slices/browser/pages/browser-page-records'
 import {
   acquireBrowserAutomationVisibility,
   releaseBrowserAutomationVisibility
-} from '@/components/browser-pane/host-guest/browser-automation-visibility'
+} from '@/components/browser-pane/host-guest/retention/browser-automation-visibility'
 import { acquireBrowserAutomationBootstrapLease } from './browser-automation-bootstrap-lease'
-import { markBrowserPageOpenedByPage } from '@/components/browser-pane/host-guest/browser-page-window-close'
-import { setBrowserPageAgentViewportSize } from '@/components/browser-pane/host-guest/browser-page-viewport'
+import { markBrowserPageOpenedByPage } from '@/components/browser-pane/host-guest/lifecycle/browser-page-window-close'
+import { setBrowserPageAgentViewportSize } from '@/components/browser-pane/host-guest/viewport/browser-page-viewport'
 import {
   beginAgentInputFocusGuard,
   clearAgentInputFocusGuards,
   endAgentInputFocusGuard,
   watchUserComposition
-} from '@/components/browser-pane/host-guest/agent-input-focus-guard'
+} from '@/components/browser-pane/host-guest/input/agent-input-focus-guard'
 import {
   setBrowserAgentPageActive,
   showBrowserAgentCursor

@@ -8,7 +8,7 @@ import {
   toSshExecutionHostId,
   type ExecutionHostId
 } from '../../execution-host'
-import { isWslUncPath, parseWslUncPath } from '../../wsl-paths'
+import { isWslUncPath, parseWslUncPath } from '../../file-access/wsl-paths'
 import { antigravitySessionOrigin } from '../../antigravity-session-origin'
 import { getRepoIdFromWorktreeId } from '../../worktree/id'
 import { parseWorkspaceKey } from '../../workspace-scope'

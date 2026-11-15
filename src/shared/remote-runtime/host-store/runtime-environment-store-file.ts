@@ -38,7 +38,7 @@ import {
   type WslHostDeployments,
   WslHostDeploymentStoreInvalidError
 } from './wsl-host-deployment-store'
-import { isWslHostsServing } from '../../wsl-host-internal-gate'
+import { isWslHostsServing } from '../wsl-hosts/wsl-host-internal-gate'
 import { createSecureFileContentCache } from './runtime-environment-store-read-cache'
 
 /** Readable records only; writeEnvironmentStore preserves unreadable corrupt/newer records verbatim. */

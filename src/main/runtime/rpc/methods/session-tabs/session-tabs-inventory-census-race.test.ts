@@ -1,10 +1,10 @@
 import { describe, expect, it, vi } from 'vitest'
 import '../../../../../shared/protocol-version'
-import { SESSION_TABS_AUTHORITATIVE_INVENTORY_RUNTIME_CAPABILITY } from '../../../../../shared/session-tabs-runtime-capabilities'
+import { SESSION_TABS_AUTHORITATIVE_INVENTORY_RUNTIME_CAPABILITY } from '../../../../../shared/remote-runtime/protocol/session-tabs-runtime-capabilities'
 import type {
   RuntimeMobileSessionTabsSnapshot,
   RuntimeMobileSessionTabsResult
-} from '../../../../../shared/runtime-session-contracts'
+} from '../../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 
 import { OrcaRuntimeService } from '../../../orca-runtime'
 import { subscribeSessionTabsInventory } from './session-tabs-inventory'

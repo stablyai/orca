@@ -3,10 +3,10 @@ import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import type {
   RuntimeRendererSyncWindowGraph,
   RuntimeStatus,
-  RuntimeSyncWindowGraphResult
-} from '../../shared/runtime-types'
-import type { RuntimeTerminalDriverState } from '../../shared/runtime-session-contracts'
-import type { RuntimeRpcResponse } from '../../shared/runtime-rpc-envelope'
+  RuntimeSyncWindowGraphResult,
+  RuntimeTerminalDriverState
+} from '../../shared/remote-runtime/session-graph/runtime-session-contracts'
+import type { RuntimeRpcResponse } from '../../shared/remote-runtime/rpc/runtime-rpc-envelope'
 import type { ClientHostedBrowserRowsEvent } from '../../shared/client-hosted-browser-rows'
 import { TERMINAL_FIT_RESTORE_DEADLINE_MS } from '../../shared/terminal/viewport/terminal-fit-restore-deadline'
 import { DESKTOP_RENDERER_RUNTIME_CLIENT_CAPABILITIES } from './desktop-renderer-runtime-capabilities'

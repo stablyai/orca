@@ -15,7 +15,7 @@ import {
 import type { AiVaultCommitChatForkImportResult } from '../../../../../../../shared/rpc-contract/ai-vault/ai-vault-fork-transfer-params'
 import { createNonSecureContextUuid } from '../../../../../../../shared/non-secure-context-uuid'
 import type { ExecutionHostId } from '../../../../../../../shared/execution-host'
-import type { RuntimeClientTarget } from '../../../../../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import { resumeClaudeCopyInNewTerminalTab } from '../native-chat-terminal-fork-launch'
 import type { NativeChatForkWindowSource } from './native-chat-fork-window-source'
 import type { ChatForkSurface } from '../../../../../../../shared/native-chat/chat-fork-path'

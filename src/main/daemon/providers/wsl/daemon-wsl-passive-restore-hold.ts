@@ -1,5 +1,5 @@
 import { readWslDistroRunningState } from '../../../wsl/discovery/wsl-background-distro-gate'
-import { wslDistroHoldMessage } from '../../../../shared/wsl-distro-stopped-hold'
+import { wslDistroHoldMessage } from '../../../../shared/remote-runtime/wsl-hosts/wsl-distro-stopped-hold'
 import type { PtySpawnOptions } from '../../../providers/pty/provider-contract'
 
 /** A probe started this close before a hold still counts as that spawn's own read. */

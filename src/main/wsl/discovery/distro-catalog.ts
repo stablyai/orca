@@ -1,6 +1,6 @@
 import { runProcessSync } from '@orca/process-host'
-import { buildWslExecArgs } from '../../../shared/wsl-login-shell-command'
-import { toWindowsWslPath } from '../../../shared/wsl-paths'
+import { buildWslExecArgs } from '../../../shared/shell/wsl/wsl-login-shell-command'
+import { toWindowsWslPath } from '../../../shared/file-access/wsl-paths'
 import { filterUserWslDistros, parseWslDistros } from './wsl-distro-list-output'
 import { wslDistroListRetryDelayMs } from './wsl-distro-retry'
 import {

@@ -1,4 +1,4 @@
-import type { RuntimeMobileSessionTabsResult } from '../../../../../shared/runtime-session-contracts'
+import type { RuntimeMobileSessionTabsResult } from '../../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import { withoutSessionTabs } from './session-tab-browser-placement-projection'
 
 /** A desktop's tab on a file or page of one of its servers is for its phone, which reaches that server

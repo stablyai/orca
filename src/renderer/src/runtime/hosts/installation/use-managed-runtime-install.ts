@@ -14,7 +14,7 @@ import {
   MANAGED_RUNTIME_REMOVE_RUNTIME_CAPABILITY
 } from '../../../../../shared/managed-runtime-install'
 import { lastVerifiedRuntimeStatus } from '../../../../../shared/remote-runtime/host-status/runtime-host-status'
-import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import {
   hostStructuredAgentsReadFailed,
   loadHostStructuredAgents,

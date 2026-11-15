@@ -14,7 +14,7 @@ import type {
   OrcadManagedRestartResult,
   OrcadManagedStaleLockReclaimRequest,
   OrcadManagedStaleLockReclaimResult
-} from '../../../../shared/orcad-managed-runtime'
+} from '../../../../shared/remote-runtime/orcad-lifecycle/orcad-managed-runtime'
 import { restartManagedOrcadEnvironment } from '../../../managed-server/lifecycle/orcad-managed-launch-session'
 import { forgetManagedOrcadAutomaticFailures } from '../../../managed-server/lifecycle/orcad-managed-tunnel'
 import { runManagedOrcadStaleLockReclaim } from '../../../managed-server/lifecycle/orcad-managed-stale-lock-reclaim'

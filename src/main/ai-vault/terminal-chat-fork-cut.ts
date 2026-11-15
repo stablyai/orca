@@ -9,7 +9,7 @@ import { materializeClaudeConversationTranscript } from '../claude/transcripts/c
 import { homedir } from 'node:os'
 import { getClaudeProfileRouter } from '../claude-accounts/profiles/routing/claude-profile-installed-router'
 import { resolveSessionFilePath } from '../native-chat/session-file-resolver'
-import { isWslUncPath } from '../../shared/wsl-paths'
+import { isWslUncPath } from '../../shared/file-access/wsl-paths'
 
 /** A terminal Claude chat's fork: a new conversation ending at one transcript entry, placed in the
  *  project folder Claude resumes from (the destination worktree's, or the source's). Null when the

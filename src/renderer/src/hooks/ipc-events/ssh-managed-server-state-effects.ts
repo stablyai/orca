@@ -1,7 +1,7 @@
 import type {
   SshConnectionState,
   SshManagedServerLinkedProject
-} from '../../../../shared/ssh-types'
+} from '../../../../shared/remote-runtime/ssh/ssh-types'
 import { normalizeRuntimePathForComparison } from '../../../../shared/cross-platform-path'
 import { splitWorktreeId } from '../../../../shared/worktree/id'
 import { parseWorkspaceKey } from '../../../../shared/workspace-scope'
