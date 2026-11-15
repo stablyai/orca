@@ -575,8 +575,8 @@
 5 src/shared/agent-hook-listener/transport/endpoint-publication.ts
 4 src/shared/agent-launch/startup/omp-fresh-config.ts
 2 src/shared/desktop-distribution/appimage/appimage-cache-identity.ts
-2 src/shared/bundled-web-client-manifest.ts
-3 src/shared/bundled-web-client-root.ts
+2 src/shared/web-client/bundled-web-client-manifest.ts
+3 src/shared/web-client/bundled-web-client-root.ts
 5 src/shared/shell/command-resolution/cli-fs-reads.ts
 3 src/shared/shell/launch/cli-runtime-pairing-inputs.ts
 9 src/shared/agent-hook-listener/providers/codex/codex-rollout-jsonl-cursor.ts

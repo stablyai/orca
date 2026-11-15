@@ -14,7 +14,7 @@ import { isWslMoveWindowWriteHeld } from '../persistence/moving-wsl-projects/qui
 import { windowViewSaveForMain, type ReconnectFactsFor } from '../persistence/window-save-view'
 import { reportWindowSaveDrift } from '../persistence/window-save-divergence'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../shared/layout-owner-switch'
-import { formatShutdownCheckpointFailureReason } from '../../shared/renderer-shutdown-events'
+import { formatShutdownCheckpointFailureReason } from '../../shared/app-lifecycle/shutdown/renderer-shutdown-events'
 
 type StageBeforeUnloadSyncArgs = {
   sessions: { state: WorkspaceSessionState; hostId?: ExecutionHostId }[]

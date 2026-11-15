@@ -1,6 +1,6 @@
 import { existsSync, readdirSync } from 'node:fs'
 import { join } from 'node:path'
-import { getAppEnvironment } from '../../../shared/app-environment'
+import { getAppEnvironment } from '../../../shared/app-lifecycle/app-environment'
 
 const HISTORY_DIR_NAME = 'terminal-history'
 const HISTORY_DIR_NAME_WSL = 'terminal-history-wsl'

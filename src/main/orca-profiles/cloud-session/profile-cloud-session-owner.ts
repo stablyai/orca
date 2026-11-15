@@ -3,7 +3,7 @@ import type {
   OrcaCloudOrgSummary,
   OrcaProfileCloudSummary,
   OrcaProfileListState
-} from '../../../shared/orca-profiles'
+} from '../../../shared/orca-profiles/orca-profiles'
 import { linkOrcaProfileToCloud } from '../cloud-auth/profile-cloud-index'
 import { getOrcaProfileListState, loadOrCreateProfileIndex } from '../profile-index-store'
 import type { OrcaCloudSessionExchangeResponse } from './profile-cloud-session-exchange'
