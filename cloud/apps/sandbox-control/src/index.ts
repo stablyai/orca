@@ -66,6 +66,7 @@ import { tickRoutines } from './routines/runs'
 import { activeGoldenSnapshots, advanceGoldenImages } from './golden-images'
 import { sandboxRegions, seedRegion } from './regions'
 import { handleRuntimeBundleRoute, runtimeBundleFor, runtimeBundleUrl } from './runtime-bundles'
+import { createIdTokenSource, relayingFetch } from './chatgpt-relay'
 import { NO_CREDENTIALS, handleEgressProxy, type CredentialBroker, type ProxiedRoute } from './egress-proxy'
 import {
   BillingUnavailableError,
@@ -1317,7 +1318,7 @@ async function routeRequest(request: Request, env: Env, deps: Deps): Promise<Res
         projectId: env.VERCEL_PROJECT_ID,
         findSandbox: (name) => getSandboxByProviderName(env.SANDBOX_DB, name),
         routesFor: egressRoutes(env, deps),
-        fetch: deps.egressFetch,
+        fetch: chatgptRelayFetch(env, deps.egressFetch),
         keysForIssuer: deps.egressKeysForIssuer
       })
     }
@@ -2858,4 +2859,24 @@ async function agentSourcesRoute(request: Request, url: URL, env: Env, deps: Dep
     }
     throw error
   }
+}
+
+// CODEX-RELAY: one ID-token source per isolate and relay config (the token is cached for its hour).
+let relayIdTokens: { key: string; source: () => Promise<string> } | null = null
+function chatgptRelayFetch(env: Env, egressFetch: typeof fetch | undefined): typeof fetch | undefined {
+  if (!env.CHATGPT_RELAY_URL || !env.CHATGPT_RELAY_SERVICE_ACCOUNT) {
+    return egressFetch
+  }
+  const key = `${env.CHATGPT_RELAY_URL}\n${env.CHATGPT_RELAY_SERVICE_ACCOUNT.length}`
+  if (relayIdTokens?.key !== key) {
+    relayIdTokens = {
+      key,
+      source: createIdTokenSource({
+        serviceAccountJson: env.CHATGPT_RELAY_SERVICE_ACCOUNT,
+        audience: env.CHATGPT_RELAY_URL,
+        ...(egressFetch ? { fetch: egressFetch } : {})
+      })
+    }
+  }
+  return relayingFetch({ relayUrl: env.CHATGPT_RELAY_URL, idToken: relayIdTokens.source, ...(egressFetch ? { fetch: egressFetch } : {}) })
 }

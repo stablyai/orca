@@ -11,6 +11,9 @@
 //   (that is what `refresh_token_reused` punishes).
 import { decodeJwt } from 'jose'
 import type { AccountProvider } from './account-providers'
+import { codexPathAllowed } from './codex-paths'
+
+export { codexPathAllowed }
 import { credentialBinding, putAgentCredential, readUsableAgentCredential } from './agent-credentials'
 import type { Keyring } from './secrets-crypto'
 import type { SandboxRow } from './store'
@@ -116,32 +119,6 @@ export function codexPlaceholder(row: Pick<SandboxRow, 'id'>): string {
 function formatCodex(credential: string): string {
   const stored = credential.startsWith('{') ? parseStoredCodex(credential) : null
   return `Bearer ${stored ? stored.access_token : credential}`
-}
-
-/**
- * The ChatGPT backend calls Codex makes with its login (seen live, Codex 0.166): the Codex API itself, its
- * plugin catalog and usage. Nothing else on chatgpt.com (conversations, memories, connectors) gets the token.
- */
-const CODEX_PREFIXES = ['/backend-api/codex/']
-const CODEX_EXACT_GETS = new Set([
-  '/backend-api/ps/plugins/list',
-  '/backend-api/ps/plugins/installed',
-  '/backend-api/ps/plugins/suggested/codex',
-  '/backend-api/plugins/featured',
-  '/backend-api/plugins/export/curated',
-  '/backend-api/wham/usage'
-])
-
-export function codexPathAllowed(method: string, path: string): boolean {
-  const pathname = path.split('?')[0] ?? ''
-  // Plain segments only: no encoded or dot segments that could walk out of an allowed prefix.
-  if (!/^(\/[A-Za-z0-9_~-][A-Za-z0-9._~-]*)+\/?$/.test(pathname) || /(^|\/)\.\.?(\/|$)/.test(pathname)) {
-    return false
-  }
-  if (CODEX_PREFIXES.some((prefix) => pathname.startsWith(prefix))) {
-    return true
-  }
-  return method.toUpperCase() === 'GET' && CODEX_EXACT_GETS.has(pathname)
 }
 
 export const codexAccount: AccountProvider = {

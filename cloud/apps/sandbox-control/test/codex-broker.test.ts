@@ -1,6 +1,6 @@
 // Codex via the person's Orca account (contract D11, flag S2): the broker sandbox login, the lease refresher,
 // the placeholder auth.json and the chatgpt.com egress swap. Fake provider; no real OpenAI call.
-import { SignJWT, createLocalJWKSet, exportJWK, generateKeyPair } from 'jose'
+import { SignJWT, createLocalJWKSet, exportJWK, exportPKCS8, generateKeyPair } from 'jose'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { BROKER_AUTH_PATH, BROKER_EXIT_PATH, BROKER_START_MARKER, parseDeviceCode } from '../src/codex-broker'
 import { CODEX_TOKEN_URL, codexPlaceholder, refreshCodexCredential, refreshCodexLeases, setCodexTokenFetch } from '../src/codex-credentials'
@@ -83,6 +83,11 @@ async function setup(overrides: Record<string, string> = {}) {
       egressKeysForIssuer: () => createLocalJWKSet(jwks),
       credentials: { authorizationFor: async () => null },
       egressFetch: async (input, init) => {
+        if (String(input) === 'https://oauth2.googleapis.com/token') {
+          // CODEX-RELAY: Google's ID token for the relay (only asked when a relay is configured).
+          const enc = (o: unknown) => Buffer.from(JSON.stringify(o)).toString('base64url')
+          return Response.json({ id_token: `${enc({ alg: 'RS256' })}.${enc({ exp: 4e9 })}.sig` })
+        }
         upstream.push({ url: String(input), headers: new Headers(init?.headers) })
         if (edgeBlock.on) {
           return new Response('<html><body>Unable to load site</body></html>', {
@@ -489,5 +494,27 @@ describe('CODEX-EGRESS-BLOCKED: chatgpt.com refuses the proxy itself', () => {
     expect(tokenCalls.length).toBe(refreshesBefore)
     edgeBlock.on = false
     expect((await proxied(id, 'chatgpt.com', auth)).status).toBe(200)
+  })
+})
+
+describe('CODEX-RELAY: chatgpt.com through the Cloud Run relay', () => {
+  it('sends the swapped request to the relay with a Google ID token; the path and the ChatGPT credential are unchanged', async () => {
+    const { privateKey } = await generateKeyPair('RS256', { extractable: true })
+    const RELAY = 'https://orca-chatgpt-relay-x.us-central1.run.app'
+    const { h, as, signIn, proxied, upstream } = await setup({
+      CHATGPT_RELAY_URL: RELAY,
+      CHATGPT_RELAY_SERVICE_ACCOUNT: JSON.stringify({ client_email: 'invoker@p.iam.gserviceaccount.com', private_key: await exportPKCS8(privateKey) })
+    })
+    const mia = await as('mia', 'acme', 'member')
+    await signIn(mia)
+    const created = await h.call('POST', '/v1/sandboxes', { body: { workspaceId: 'ws-1', machineSize: 'standard' }, bearer: mia })
+    const id: string = created.body.sandbox.id
+    const res = await proxied(id, 'chatgpt.com', { authorization: `Bearer ${codexPlaceholder({ id })}` }, '/backend-api/codex/models?client_version=0.166.0', 'GET')
+    expect(res.status).toBe(200)
+    const sent = upstream.at(-1)!
+    expect(sent.url).toBe(`${RELAY}/backend-api/codex/models?client_version=0.166.0`)
+    expect(sent.headers.get('authorization')).toBe(`Bearer ${ACCESS}`)
+    expect(sent.headers.get('chatgpt-account-id')).toBe('acct-1')
+    expect(sent.headers.get('x-serverless-authorization')).toMatch(/^Bearer [\w-]+\.[\w-]+\.sig$/)
   })
 })
