@@ -14,12 +14,12 @@ type ControlRequest = (
 ) => Promise<RuntimeRpcResponse<unknown>>
 
 /** Sent on the control socket itself, so the server ties the tag to exactly that socket. */
-export function declareWslHostClient(
+export async function declareWslHostClient(
   environmentId: string,
   request: ControlRequest,
-  isWslHost: (environmentId: string) => boolean = isWslHostEnvironment
-): void {
-  if (!isWslHost(environmentId)) {
+  isWslHost: (environmentId: string) => boolean | Promise<boolean> = isWslHostEnvironment
+): Promise<void> {
+  if (!(await isWslHost(environmentId))) {
     return
   }
   void request(
@@ -38,9 +38,12 @@ export function declareWslHostClient(
     })
 }
 
-function isWslHostEnvironment(environmentId: string): boolean {
+async function isWslHostEnvironment(environmentId: string): Promise<boolean> {
   try {
-    const environment = resolveEnvironment(getAppEnvironment().getPath('userData'), environmentId)
+    const environment = await resolveEnvironment(
+      getAppEnvironment().getPath('userData'),
+      environmentId
+    )
     return environment.orcadDeployment?.kind === 'wsl'
   } catch {
     return false

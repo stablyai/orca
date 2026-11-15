@@ -1,3 +1,4 @@
+import { setSshStartupReady } from './ssh-startup-ready'
 import { ipcMain, type BrowserWindow } from 'electron'
 import type { Store } from '../../persistence/loading-store/store'
 import { SshConnectionStore } from '../../ssh/targets/ssh-connection-store'
@@ -103,11 +104,12 @@ const SSH_IPC_CHANNELS = [
   'ssh:listDetectedPorts'
 ] as const
 
-export function registerSshHandlers(
+export async function registerSshHandlers(
   store: Store,
   getMainWindow: () => BrowserWindow | null,
-  runtime?: OrcaRuntimeService
-): { connectionManager: SshConnectionManager; sshStore: SshConnectionStore } {
+  runtime?: OrcaRuntimeService,
+  hostInitialization?: Promise<void>
+): Promise<{ connectionManager: SshConnectionManager; sshStore: SshConnectionStore }> {
   initializeSshConnectionGenerationSession()
   // macOS window recreation re-registers handlers; remove old channels to avoid duplicate registration.
   for (const ch of SSH_IPC_CHANNELS) {
@@ -118,10 +120,17 @@ export function registerSshHandlers(
   setCurrentRuntime(runtime)
   setSshTargetRegistryStore(new SshConnectionStore(store))
   setPersistedStore(store)
-  reconcileManagedOrcadSshTargets(getAppEnvironment().getPath('userData'), store)
-  void retainUnretainedOrcadMigrationSources(getAppEnvironment().getPath('userData'), store)
-  installOrcadMigrationScrollbackRetention(getAppEnvironment().getPath('userData'), store)
-  installManagedOrcadStartStatus()
+  const ready = (async () => {
+    await hostInitialization
+    await holdLaunchReconnectOptOuts(getSshTargetRegistryStore()!.listTargets())
+    await reconcileManagedOrcadSshTargets(getAppEnvironment().getPath('userData'), store)
+  })()
+  setSshStartupReady(ready)
+  const handle: typeof ipcMain.handle = (channel, listener) =>
+    ipcMain.handle(channel, async (...args) => {
+      await ready
+      return listener(...args)
+    })
 
   registerCredentialHandler()
 
@@ -132,7 +141,6 @@ export function registerSshHandlers(
     setConnectionManager(new SshConnectionManager(callbacks))
     // Window re-registration must not re-gate hosts already signed in during this process.
     awaitSignInForCredentialHosts(getSshTargetRegistryStore()!)
-    holdLaunchReconnectOptOuts(getSshTargetRegistryStore()!.listTargets())
   }
   setPortForwardManager(portForwardManager ?? new SshPortForwardManager())
   portForwardManager!.setCallbacks({
@@ -161,10 +169,10 @@ export function registerSshHandlers(
   registerSshBrowseHandler(() => connectionManager)
   setSshConnectionManagerResolver(() => connectionManager)
 
-  registerSshTargetCrudHandlers()
-  registerSshConnectionHandlers()
-  registerSshPortForwardHandlers()
-  registerPlainSshTerminalHandlers()
+  registerSshTargetCrudHandlers(handle)
+  registerSshConnectionHandlers(handle)
+  registerSshPortForwardHandlers(handle)
+  registerPlainSshTerminalHandlers(handle)
   // COMPAT(legacy-relay-bridge): terminals an older Orca's relay still runs.
   registerLegacyRelayBridgeIpc({
     store,
@@ -184,6 +192,10 @@ export function registerSshHandlers(
       })
   )
 
+  await ready
+  void retainUnretainedOrcadMigrationSources(getAppEnvironment().getPath('userData'), store)
+  installOrcadMigrationScrollbackRetention(getAppEnvironment().getPath('userData'), store)
+  installManagedOrcadStartStatus()
   if (runtime) {
     installDesktopBrowserBridge({
       userDataPath: getAppEnvironment().getPath('userData'),
@@ -200,6 +212,7 @@ export function registerSshHandlers(
 }
 
 export async function resetSshHandlerStateForTests(): Promise<void> {
+  setSshStartupReady(Promise.resolve())
   unregisterPowerMonitorReconnect()
   for (const ch of SSH_IPC_CHANNELS) {
     ipcMain.removeHandler(ch)

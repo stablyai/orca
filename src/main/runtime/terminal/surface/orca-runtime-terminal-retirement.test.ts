@@ -79,8 +79,11 @@ function makeSplitSnapshot(): RuntimeMobileSessionTabsSnapshot {
   }
 }
 
-function syncSplit(runtime: OrcaRuntimeService, snapshot = makeSplitSnapshot()): void {
-  runtime.syncWindowGraph(1, {
+async function syncSplit(
+  runtime: OrcaRuntimeService,
+  snapshot = makeSplitSnapshot()
+): Promise<void> {
+  await runtime.syncWindowGraph(1, {
     tabs: [
       {
         tabId: 'tab',
@@ -150,7 +153,7 @@ describe('OrcaRuntimeService terminal surface retirement', () => {
   it('fences an early-exited replacement even when its pane already exists', async () => {
     const runtime = new OrcaRuntimeService()
     runtime.attachWindow(1)
-    syncSplit(runtime)
+    await syncSplit(runtime)
     runtime.registerPty('pty-left', WORKTREE_ID, null, {
       tabId: 'tab',
       leafId: 'left',
@@ -174,7 +177,7 @@ describe('OrcaRuntimeService terminal surface retirement', () => {
     const runtime = new OrcaRuntimeService()
     runtime.attachWindow(1)
     const staleSnapshot = makeSplitSnapshot()
-    syncSplit(runtime, staleSnapshot)
+    await syncSplit(runtime, staleSnapshot)
     const leftBeforeExit = (await runtime.listMobileSessionTabs(`id:${WORKTREE_ID}`)).tabs.find(
       (tab) => tab.type === 'terminal' && tab.id === 'tab::left'
     )
@@ -211,7 +214,7 @@ describe('OrcaRuntimeService terminal surface retirement', () => {
       ]
     })
 
-    syncSplit(runtime, { ...staleSnapshot, snapshotVersion: 2 })
+    await syncSplit(runtime, { ...staleSnapshot, snapshotVersion: 2 })
 
     const afterStaleFrame = await runtime.listMobileSessionTabs(`id:${WORKTREE_ID}`)
     expect(afterStaleFrame.tabs.map((tab) => tab.id)).toEqual(['tab::right'])
@@ -226,7 +229,7 @@ describe('OrcaRuntimeService terminal surface retirement', () => {
       })
     )
     runtime.attachWindow(1)
-    syncSplit(runtime)
+    await syncSplit(runtime)
     runtime.registerPty('pty-left', WORKTREE_ID, null, {
       tabId: 'tab',
       leafId: 'left',
@@ -289,7 +292,7 @@ describe('OrcaRuntimeService terminal surface retirement', () => {
           : tab
       )
     }
-    syncSplit(runtime, sharedSnapshot)
+    await syncSplit(runtime, sharedSnapshot)
     runtime.registerPty('pty-shared', WORKTREE_ID, null, {
       tabId: 'tab',
       leafId: 'left',
@@ -341,7 +344,7 @@ describe('OrcaRuntimeService terminal surface retirement', () => {
       )
     )
     runtime.attachWindow(1)
-    syncSplit(runtime)
+    await syncSplit(runtime)
     runtime.registerPty('pty-left', WORKTREE_ID, null, {
       tabId: 'tab',
       leafId: 'left',

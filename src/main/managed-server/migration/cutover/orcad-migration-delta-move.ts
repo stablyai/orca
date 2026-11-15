@@ -150,7 +150,7 @@ async function commitDelta(
   store.updateSshTarget(target.id, { orcadFence: { environmentId: plan.environmentId } })
   await args.claims.flush()
   // Record before any new/resumed commit so rollback cannot cross the migration.
-  recordManagedOrcadMigration(userDataPath, plan.environmentId, now().toISOString())
+  await recordManagedOrcadMigration(userDataPath, plan.environmentId, now().toISOString())
   let destination: OrcadMigrationDestinationCatalog
   try {
     destination = await args.connectDestination()

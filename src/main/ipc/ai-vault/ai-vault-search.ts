@@ -63,7 +63,7 @@ export function registerAiVaultSearchHandlers(options: AiVaultSearchHandlerOptio
     const request = AiVaultSearchRequestSchema.parse(raw)
     // Only the desktop fans out: a runtime or CLI caller would make it two hops.
     if (scopeSchema.parse(rawScope) === ALL_EXECUTION_HOSTS_SCOPE) {
-      return searchAllExecutionHosts(request, allExecutionHostLegs())
+      return searchAllExecutionHosts(request, await allExecutionHostLegs())
     }
     return searchByExecutionHostScope(request, requestedSearchScope(rawScope))
   })
@@ -149,12 +149,12 @@ async function searchLocalSessions(request: AiVaultSearchRequest): Promise<AiVau
 }
 
 /** One leg per list-visible host; broken enumeration loses only its own host class. */
-function allExecutionHostLegs(): SessionSearchHostLeg[] {
+async function allExecutionHostLegs(): Promise<SessionSearchHostLeg[]> {
   const localLeg: SessionSearchHostLeg = {
     executionHostId: LOCAL_EXECUTION_HOST_ID,
     search: searchLocalSessions
   }
-  const runtimeLegs = getActiveRuntimeAiVaultHostInfosResult().hostInfos.map((hostInfo) =>
+  const runtimeLegs = (await getActiveRuntimeAiVaultHostInfosResult()).hostInfos.map((hostInfo) =>
     remoteHostLeg({
       kind: 'runtime',
       id: hostInfo.executionHostId,

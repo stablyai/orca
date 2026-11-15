@@ -57,7 +57,9 @@ function endSessionsWithOwner(sender: WebContents): void {
   })
 }
 
-export function registerPlainSshTerminalHandlers(): void {
+export function registerPlainSshTerminalHandlers(
+  handle: typeof ipcMain.handle = ipcMain.handle.bind(ipcMain)
+): void {
   const { open, write, resize, close, ack, event } = PLAIN_SSH_TERMINAL_CHANNELS
   ipcMain.removeHandler(open)
   ipcMain.removeAllListeners(write)
@@ -65,24 +67,21 @@ export function registerPlainSshTerminalHandlers(): void {
   ipcMain.removeAllListeners(close)
   ipcMain.removeAllListeners(ack)
 
-  ipcMain.handle(
-    open,
-    async (ipcEvent, args: { targetId?: unknown; cols?: unknown; rows?: unknown }) => {
-      const sender = ipcEvent.sender
-      endSessionsWithOwner(sender)
-      return openPlainSshTerminal(
-        deps,
-        { targetId: args?.targetId, cols: args?.cols, rows: args?.rows, owner: sender.id },
-        (payload: PlainSshTerminalEvent) => {
-          if (sender.isDestroyed()) {
-            return false
-          }
-          sender.send(event, payload)
-          return true
+  handle(open, async (ipcEvent, args: { targetId?: unknown; cols?: unknown; rows?: unknown }) => {
+    const sender = ipcEvent.sender
+    endSessionsWithOwner(sender)
+    return openPlainSshTerminal(
+      deps,
+      { targetId: args?.targetId, cols: args?.cols, rows: args?.rows, owner: sender.id },
+      (payload: PlainSshTerminalEvent) => {
+        if (sender.isDestroyed()) {
+          return false
         }
-      )
-    }
-  )
+        sender.send(event, payload)
+        return true
+      }
+    )
+  })
   ipcMain.on(write, (ipcEvent, args: { sessionId?: unknown; data?: unknown }) => {
     writePlainSshTerminal(args?.sessionId, ipcEvent.sender.id, args?.data)
   })

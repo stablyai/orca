@@ -76,7 +76,7 @@ export async function showFederatedWorker(args: {
       `Federated Worker Dispatch ${dispatchId} has no observation projection.`
     )
   }
-  const server = resolvePinnedFederatedServer(runtime, args.federated)
+  const server = await resolvePinnedFederatedServer(runtime, args.federated)
   runtime.ensureOrchestrationFederationRelay(args.dispatch.run_id)
   const remote = await callFederatedWorkerShow(runtime, args.federated)
   const attachment = remote.attachment

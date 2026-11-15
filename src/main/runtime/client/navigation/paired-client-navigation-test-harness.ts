@@ -199,7 +199,7 @@ export function snapshotVersion(response: Record<string, unknown>): number {
   return (response.result as RuntimeMobileSessionTabsResult | undefined)?.snapshotVersion ?? -1
 }
 
-export function seedSessionTabs(runtime: OrcaRuntimeService): void {
+export async function seedSessionTabs(runtime: OrcaRuntimeService): Promise<void> {
   const tabs = ['host-tab', 'client-a-tab', 'client-a2-tab', 'client-b-tab'].map((id, index) => ({
     type: 'terminal' as const,
     id,
@@ -209,7 +209,7 @@ export function seedSessionTabs(runtime: OrcaRuntimeService): void {
     title: id,
     isActive: id === 'host-tab'
   }))
-  runtime.syncWindowGraph(1, {
+  await runtime.syncWindowGraph(1, {
     tabs: [],
     leaves: [],
     mobileSessionTabs: [

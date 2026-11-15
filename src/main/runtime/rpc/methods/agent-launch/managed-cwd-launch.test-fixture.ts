@@ -33,7 +33,7 @@ type MetadataWrite = {
 }
 
 // Real managed creation/authority/metadata; only external Git and terminal effects are substituted.
-export function managedCwdLaunchFixture(
+export async function managedCwdLaunchFixture(
   records: AgentSessionRecordStore,
   parent: Pick<Worktree, 'id' | 'path' | 'repoId'>,
   directory: string
@@ -154,7 +154,7 @@ export function managedCwdLaunchFixture(
   const caller = runtime.preAllocateHandleForPty(ptyId)
   registerLivePty(runtime, ptyId, parent.id, null, { tabId, leafId })
   runtime.attachWindow(1)
-  runtime.syncWindowGraph(1, {
+  await runtime.syncWindowGraph(1, {
     tabs: [{ tabId, worktreeId: parent.id, title: 'Codex', activeLeafId: leafId, layout: null }],
     leaves: [{ tabId, worktreeId: parent.id, leafId, paneRuntimeId: 1, ptyId, paneTitle: null }]
   })

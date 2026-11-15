@@ -17,8 +17,9 @@ export type WslHostRuntimeCallPort = {
   /** Hosts a confirmed stop parked: no runtime call reconnects them until the distro runs again. */
   parked: Set<string>
   isVisible: () => boolean
-  /** Bumped by every ready publish, so a read that a newer connect overtook is retried, not shown. */
+  /** Bumped when Ready arrives, so an older probe cannot overtake its pending registry read. */
   readyGeneration: () => number
+  retireConnectionChange: (distro: string) => void
   /** Shown as liveness shows a stop, so the host's panes offer Start. */
   publishStopped: (record: WslHostDeploymentRecord) => void
   publishReady: (record: WslHostDeploymentRecord, connection: WslOrcadConnection) => void
@@ -43,13 +44,13 @@ export async function ensureWslHostForRuntimeCall(
   if (reachability === 'available') {
     return
   }
-  // A Start or New Terminal connected during the read: its 'stopped' would mark live terminals exited.
+  assertWslHostRunAllowed(deps, port.removing, environmentId)
+  // A pending host never reconnects for a runtime call.
+  await admitConnectToPendingHost(deps.userDataPath(), record, false)
+  // A Start or New Terminal connected during preparation: its 'stopped' would mark live terminals exited.
   if (port.readyGeneration() !== generation) {
     return ensureWslHostForRuntimeCall(environmentId, port)
   }
-  assertWslHostRunAllowed(deps, port.removing, environmentId)
-  // A pending host never reconnects for a runtime call.
-  admitConnectToPendingHost(deps.userDataPath(), record, false)
   if (reachability === 'stopped') {
     parkStopped(record, port)
   }
@@ -70,6 +71,7 @@ export async function ensureWslHostForRuntimeCall(
 // verify-7: a keystroke met the stop before liveness did; parked silently, the pane died unexplained.
 function parkStopped(record: WslHostDeploymentRecord, port: WslHostRuntimeCallPort): void {
   const { environmentId, distro } = record
+  port.retireConnectionChange(distro)
   if (!port.parked.has(environmentId)) {
     port.parked.add(environmentId)
     port.publishStopped(record)

@@ -49,10 +49,10 @@ export function registerRepoCatalogHandlers(
   )
 
   // Desktop-only reads (environment registry and saved state): never wakes a stopped distro.
-  ipcMain.handle('repos:listHostCatalogSnapshots', () =>
+  ipcMain.handle('repos:listHostCatalogSnapshots', async () =>
     listHostRepoCatalogSnapshots(
       store,
-      listEnvironments(getRuntimeEnvironmentRegistryRoot()).filter(
+      (await listEnvironments(getRuntimeEnvironmentRegistryRoot())).filter(
         (environment) => !isGatedOffWslHost(environment)
       )
     )

@@ -37,7 +37,7 @@ export async function prepareRecipeVmEnvironmentCall(
   askDesktopToWake: (environmentId: string) => Promise<DesktopRecipeVmWake> = (environmentId) =>
     askDesktopToWakeRecipeVm(userDataPath, environmentId)
 ): Promise<'unchanged' | 'reload'> {
-  const environment = resolveEnvironment(userDataPath, environmentSelector)
+  const environment = await resolveEnvironment(userDataPath, environmentSelector)
   const vm = findEnvironmentEphemeralVmRuntime(userDataPath, environment)
   if (!vm) {
     return 'unchanged'
