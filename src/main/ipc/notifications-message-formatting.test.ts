@@ -32,16 +32,20 @@ describe('registerNotificationHandlers', () => {
   })
 
   it('keeps a readable body when no assistant response was captured', async () => {
-    registerNotificationHandlers({
-      getSettings: () => ({
-        notifications: {
-          enabled: true,
-          agentTaskComplete: true,
-          terminalBell: false,
-          suppressWhenFocused: true
-        }
-      })
-    } as never)
+    registerNotificationHandlers(
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: dispatch reads only getSettings and getRepo; Store is a class, so a structural double needs the cast.
+      {
+        getRepo: () => undefined,
+        getSettings: () => ({
+          notifications: {
+            enabled: true,
+            agentTaskComplete: true,
+            terminalBell: false,
+            suppressWhenFocused: true
+          }
+        })
+      } as never
+    )
 
     const handler = getDispatchHandler()
     expect(
