@@ -3,7 +3,7 @@ import { filterPathsToRunningWslDistrosAsync } from '../../wsl/filesystem/wsl-ru
 import {
   createTranscriptNativeWatcher,
   type TranscriptNativeWatcher
-} from '../../../shared/transcript-native-watcher'
+} from '../../../shared/agent-hook-listener/transcripts/transcript-native-watcher'
 import { parseSshTranscriptPath } from './ssh-transcript-path'
 
 export function isWslTranscriptWatcherPath(filePath: string): boolean {

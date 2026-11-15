@@ -2,7 +2,7 @@ import { CodexSubagentPollScheduler } from './codex-subagent-poll-scheduler'
 import {
   createTranscriptNativeWatcher,
   type TranscriptNativeWatcher
-} from '../../transcript-native-watcher'
+} from './transcript-native-watcher'
 import { isWslUncPath } from '../../file-access/wsl-paths'
 
 const ROOT_RECONCILIATION_MS = 5_000

@@ -4,7 +4,7 @@ import { OrcaRuntimeWithGetUnpersistedTrackedTitleForPty } from './terminal-titl
 import type { TerminalTitleFactMeta } from '../../../../shared/terminal/output/terminal-output-side-effects'
 import { detectAgentStatusFromTitle } from '../../../../shared/agent-status/title/agent-title-status'
 import { terminalTitleBlocksExplicitAgentStatus } from '../../workspaces/process-listing/runtime-worktree-status-projection'
-import type { ClaudeTerminalEvidence } from '../../../../shared/claude-terminal-interrupt'
+import type { ClaudeTerminalEvidence } from '../../../../shared/agent-hook-listener/providers/claude/lifecycle/claude-terminal-interrupt'
 import { agentStatusTakesTypedInput } from '../../orchestration/mailbox/routing/mailbox-owner'
 import { hermesNativeTitleStatus } from '../../../../shared/agent-status/title/providers/hermes-terminal-title'
 import { jcodePaneTitleStatus } from '../../../../shared/agent-status/title/providers/jcode-terminal-title'

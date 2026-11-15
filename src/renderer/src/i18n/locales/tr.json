@@ -4011,7 +4011,8 @@
             "remoteTerminalClosed": "Uzak terminal kapatıldı.",
             "ptyAllocationLimit": "Sisteminiz daha fazla pty aygıtı ayıramıyor. Orca'da veya başka bir programda kullanmadığınız terminalleri kapatıp tekrar deneyin.",
             "terminalProcessLimit": "Sisteminiz başka bir terminal süreci başlatamıyor. Kullanmadığınız terminalleri kapatın veya kullanılmayan süreçlerden çıkıp tekrar deneyin.",
-            "hostTerminalCap": "Bu ana makine zaten Orca'nın izin verdiği en yüksek sayıda terminali çalıştırıyor. Artık ihtiyacınız olmayan bir terminali kapatıp tekrar deneyin."
+            "hostTerminalCap": "Bu ana makine zaten Orca'nın izin verdiği en yüksek sayıda terminali çalıştırıyor. Artık ihtiyacınız olmayan bir terminali kapatıp tekrar deneyin.",
+            "copyErrorDetails": "Hata ayrıntılarını kopyala"
           },
           "TerminalProcessExitOverlay": {
             "capacityTitle": "Git Bash konsol sınırına ulaşıldı",
@@ -13185,7 +13186,8 @@
           "catalog": "Katalog",
           "clear": "Filtreleri temizle",
           "themes": "Temalar",
-          "languages": "Diller",
+          "codeLanguages": "Programlama dilleri",
+          "translations": "Çeviriler",
           "icons": "Simgeler",
           "commands": "Komutlar ve paneller",
           "catalogLabel": "Kataloğa göre filtrele",
@@ -16531,10 +16533,9 @@
           "725868c75d": "Klasörlere göz at",
           "5e7f0d8a80": "Uzak dosyalar için klasör seçici kullanılamıyor",
           "30099dca46": "Klasör",
-          "2d7d39dc63": ".md",
           "c8ac7868e6": "dosya adı",
           "b6ed807cc6": "Ad",
-          "e365f3c638": "Markdown dosyanıza bir ad verin ve bir klasör seçin.",
+          "description": "Dosyanıza bir ad verin ve bir klasör seçin.",
           "674b046582": "Farklı kaydet",
           "nameEmpty": "Ad boş olamaz",
           "nameHasSeparators": "Ad yol ayırıcıları içeremez",

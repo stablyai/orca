@@ -9,7 +9,7 @@ import {
   resolveAgentStatusIdentity,
   shouldSuppressInheritedTerminalStatus
 } from '../../../../../shared/agent-status/identity/agent-status-identity'
-import { isCommandCodeNewTurnWhileWorking } from '../../../../../shared/command-code-turn-boundary'
+import { isCommandCodeNewTurnWhileWorking } from '../../../../../shared/agent-status/output/command-code-turn-boundary'
 import {
   invocationLaunchConfig,
   ownerLaunchAttested,

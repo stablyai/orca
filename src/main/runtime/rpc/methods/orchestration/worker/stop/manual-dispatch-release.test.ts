@@ -9,7 +9,7 @@ import '../../../../../orchestration/db/attempt-outcome-projection'
 import type { OrchestrationSessionCaller } from '../../../../../orchestration/addressing/orchestration-caller-identity'
 import { ORCHESTRATION_METHODS } from '../../orchestration'
 import { isStreamingMethod, eraseRpcMethods, type RpcContext } from '../../../../core'
-import { parseOrcaSessionAddress } from '../../../../../../../shared/orca-session-address'
+import { parseOrcaSessionAddress } from '../../../../../../../shared/agent-session/identity/orca-session-address'
 
 const COORDINATOR = 'term_coordinator'
 const TARGET = 'term_target'

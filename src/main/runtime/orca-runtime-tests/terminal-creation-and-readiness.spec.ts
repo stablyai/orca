@@ -18,7 +18,7 @@ import {
   store
 } from './orca-runtime-test-fixtures.spec'
 import { spawnedPtyEnv } from '../terminal/launch/spawned-pty-env-fixtures'
-import '../../../shared/jcode-runtime-dir'
+import '../../../shared/agent-launch/startup/jcode-runtime-dir'
 
 describe('OrcaRuntimeService', () => {
   it('retires inherited launch authority when the agent command exits', async () => {

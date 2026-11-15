@@ -3,7 +3,7 @@
 
 import type { OrchestrationDb } from '../../db/orchestration-db'
 import { resolveStructuredWorkerAuthority } from './structured-worker-authority'
-import { parseOrcaSessionAddress } from '../../../../../shared/orca-session-address'
+import { parseOrcaSessionAddress } from '../../../../../shared/agent-session/identity/orca-session-address'
 
 const TERMINAL_HANDLE_STALE = 'terminal_handle_stale'
 const AGENT_SESSION_HAS_NO_TERMINAL = 'terminal_unsupported_for_agent_session'

@@ -2,7 +2,7 @@ import type {
   AgentSenderAssociation,
   AgentSenderPublication,
   AgentSenderRevision
-} from '../../../shared/agent-sender-associations'
+} from '../../../shared/orchestration/mailbox/agent-sender-associations'
 import type { RuntimeAgentOrchestrationDependencies } from '../orchestration/crew/runtime-agent-orchestration-projection'
 import { readLiveAgentSenderPanes, type AgentSenderPane } from './agent-sender-live-panes'
 import { readAgentSenderPrincipals, type AgentSenderPrincipal } from './agent-sender-principals'

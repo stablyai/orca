@@ -10,12 +10,12 @@ import {
 } from '../agent-status/transport/agent-status-legacy-adapter'
 import type { AgentStatusLegacyIngressCaller } from '../agent-status/transport/agent-status-legacy-ingress-manifest'
 import type { ClaudeLaunchedBackgroundTasks } from './providers/claude/background-tasks/claude-owed-task-notifications'
-import type { ClaudeSubagentRoster } from '../claude-subagent-roster'
+import type { ClaudeSubagentRoster } from './providers/claude/lifecycle/claude-subagent-roster'
 import type { ClaudeToolRequest } from './claude-tool-request-identity'
-import type { CodexSubagentRoster } from '../codex-subagent-roster'
-import type { CodexSubagentTranscriptState } from '../codex-subagent-transcript'
+import type { CodexSubagentRoster } from './providers/codex/codex-subagent-roster'
+import type { CodexSubagentTranscriptState } from './providers/codex/codex-subagent-transcript'
 import type { CodexAsyncQuestions } from './providers/codex/codex-async-questions'
-import type { MuseSessionLogState } from '../muse-session-log'
+import type { MuseSessionLogState } from './providers/muse/muse-session-log'
 import type { AgentHookEventPayload, ToolSnapshot } from './listener-event'
 import {
   deletePaneScopedCacheEntry,
@@ -23,7 +23,7 @@ import {
   movePaneScopedMapEntries,
   movePaneScopedSetEntries
 } from './pane-scoped-cache-entries'
-import type { JcodeUserPromptEvidence } from '../jcode-session-files'
+import type { JcodeUserPromptEvidence } from './providers/jcode/jcode-session-files'
 import type { JcodeHelperPermissionWait } from './providers/jcode/jcode-helper-permission-wait'
 import type { HookRootAttempt } from './presence/hook-process-root-evidence'
 import {

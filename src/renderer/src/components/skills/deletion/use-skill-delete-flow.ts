@@ -7,8 +7,8 @@ import type {
   SkillDeletePlan,
   SkillDeleteRequest,
   SkillDeleteResult
-} from '../../../../../shared/skill-delete-contract'
-import type { DiscoveredSkill } from '../../../../../shared/skills'
+} from '../../../../../shared/skills/deletion/skill-delete-contract'
+import type { DiscoveredSkill } from '../../../../../shared/skills/discovery/skills'
 import {
   deleteSkillsOnRuntimeTarget,
   previewSkillDeletionOnRuntimeTarget,

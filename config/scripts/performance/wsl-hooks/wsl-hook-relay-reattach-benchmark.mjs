@@ -319,7 +319,7 @@ async function main() {
       '../../../../src/main/codex/hooks/installation/hook-service.ts'
     )
     const { MANAGED_AGENT_HOOK_TARGETS } = await jiti.import(
-      '../../../../src/shared/managed-agent-hook-targets.ts'
+      '../../../../src/shared/agent-hook-listener/configuration/managed-agent-hook-targets.ts'
     )
     const { toWindowsWslPath } = await jiti.import(
       '../../../../src/shared/file-access/wsl-paths.ts'

@@ -18,7 +18,7 @@ import { foldMainAgentWithRowChildWork } from '../../../shared/agent-hook-listen
 import {
   ClaudeTerminalInterruptTracker,
   type ClaudeTerminalEvidence
-} from '../../../shared/claude-terminal-interrupt'
+} from '../../../shared/agent-hook-listener/providers/claude/lifecycle/claude-terminal-interrupt'
 
 export abstract class AgentHookServerStatusInference extends AgentHookServerQuestionAnswered {
   private remoteInterruptListeners = new Set<(command: RemoteAgentInterruptDispatch) => void>()

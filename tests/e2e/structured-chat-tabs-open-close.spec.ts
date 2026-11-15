@@ -6,7 +6,7 @@ import { buildFakeAgentCommandOverride } from './helpers/fake-agent-command-over
 import { SUPPORTED, createChatOnHost, test } from './helpers/structured-claude-stub'
 import { resolveCliCommand } from '../../src/shared/node-cli-command-resolution'
 import { claudeSessionIdForOrcaSession } from '../../src/main/claude/structured/claude-structured-session-id'
-import { buildClaudeModelListArgs } from '../../src/shared/claude-model-list-probe'
+import { buildClaudeModelListArgs } from '../../src/shared/agent-session/options/model-catalog/claude-model-list-probe'
 
 type ChatTab = { id: string; entityId: string }
 

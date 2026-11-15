@@ -10,7 +10,7 @@ import {
   type SettledAgentIdentityPlace
 } from '../identity/pane-agent-identities'
 import type { SleepingAgentSessionRecord } from '../../../shared/agent-session/lifecycle/agent-session-resume'
-import type { OrcaSessionId } from '../../../shared/orca-session-address'
+import type { OrcaSessionId } from '../../../shared/agent-session/identity/orca-session-address'
 
 import type { EnrichedAgentHookEventPayload } from './server-types'
 import type { AgentStatusIpcPayload } from '../../../shared/agent-status/contracts/agent-status-ipc-payload'

@@ -3,7 +3,7 @@ import { supportsStructuredAgentSessionContinuationContext } from '@/runtime/nat
 import type { RuntimeClientTarget } from '../../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import type { AgentSessionContinuationContext } from '../../../../../../shared/agent-session/agent-session-wire'
 import type { NativeChatMessage } from '../../../../../../shared/native-chat/native-chat-types'
-import { buildAgentSessionHandoffContext } from '../../../../../../shared/agent-session-handoff-context'
+import { buildAgentSessionHandoffContext } from '../../../../../../shared/native-chat/transcript/agent-session-handoff-context'
 import { withTimeout } from '../../../../../../shared/promise-timeout-fallback'
 
 export type NativeChatSessionContextSource = {
