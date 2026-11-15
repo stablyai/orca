@@ -72,6 +72,7 @@ import { flushUsage, queueUsage } from './usage'
 import { SANDBOX_VCPUS } from './machine-size'
 import { isRegionalFailure } from './regions'
 import { forgetWorkspaceFollows } from './workspace-follows'
+import { learnArchiveHook, resetArchiveHookMemo } from './archive-hook'
 
 export const LEASE_MS = 30 * 60_000
 /**
@@ -1601,6 +1602,8 @@ export async function suspendSandbox(deps: LifecycleDeps, row: SandboxRow): Prom
   if (row.status !== 'running') {
     throw new LifecycleError('conflict', `sandbox_${row.status}`)
   }
+  // Read while orcad still serves: an asleep archive or delete can then ask before waking it for the hook.
+  await learnArchiveHook(deps.provider, deps.db, row)
   const suspending = await claim(deps, row, { status: 'suspending' })
   const suspended = await stopForSuspend(deps, suspending)
   await flushUsage(deps.db, deps.entitlements, deps.now(), row.id)
@@ -1692,6 +1695,7 @@ export async function bootLiveSession(deps: LifecycleDeps, row: SandboxRow, stat
 
 export async function wake(deps: LifecycleDeps, row: SandboxRow): Promise<Ready> {
   assertEgressAllowlistUsable(deps, row)
+  await resetArchiveHookMemo(deps.db, row.id).catch(() => undefined)
   const timer = phaseTimer(deps.now)
   // The provider boot is the long pole; secrets and the repo token resolve alongside it.
   const [state, prep] = await Promise.all([

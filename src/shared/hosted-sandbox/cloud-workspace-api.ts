@@ -1,6 +1,7 @@
 // Window ↔ main contract for Orca Cloud workspace lifecycle surfaces: status panel, Restart,
 // archive/unarchive, wake progress, OOM notices. Keyed by the renderer's workspace (worktree) id;
 // main maps it to the Orca Cloud runtime record and its sandbox.
+import type { HostedArchiveHookMemo, HostedArchiveHookResult } from './hosted-archive-hook-wire'
 import type {
   HostedArchivePullRequest,
   HostedArchiveResponse,
@@ -106,6 +107,23 @@ export type OrcaCloudWorkspaceApi = {
   /** A paired one also names its server (PAIRED-ARCHIVE), as for status and restart. */
   unarchive: (args: CloudWorkspaceTarget) => Promise<CloudWorkspaceResult<null>>
   getArchive: (args: CloudWorkspaceTarget) => Promise<CloudWorkspaceResult<CloudArchiveInfo | null>>
+  /**
+   * ARCHIVE-HOOK: runs the repo's orca.yaml `scripts.archive` in the VM (up to 2 min). Asleep, it
+   * answers `asleep` unless `wake` asks the control plane to wake it for the hook first.
+   */
+  runArchiveHook: (
+    args: CloudWorkspaceTarget & { wake?: boolean }
+  ) => Promise<CloudWorkspaceResult<HostedArchiveHookResult>>
+  /** What the control plane knows about the hook, without touching the VM. */
+  getArchiveHookState: (
+    args: CloudWorkspaceTarget
+  ) => Promise<
+    CloudWorkspaceResult<{
+      memo: HostedArchiveHookMemo | null
+      running: boolean
+      archived?: boolean
+    }>
+  >
   /** Workspace ids of every Orca Cloud workspace this desktop knows (the sidebar dot / hover card). */
   listCloudWorkspaceIds: () => Promise<string[]>
   /** Product constants and measured timings; null when the control plane can't be reached. */
@@ -174,6 +192,8 @@ export const ORCA_CLOUD_WORKSPACE_CHANNELS = {
   archive: 'orcaCloudWorkspace:archive',
   unarchive: 'orcaCloudWorkspace:unarchive',
   getArchive: 'orcaCloudWorkspace:getArchive',
+  runArchiveHook: 'orcaCloudWorkspace:runArchiveHook',
+  archiveHookState: 'orcaCloudWorkspace:archiveHookState',
   listCloudWorkspaceIds: 'orcaCloudWorkspace:listIds',
   getConfig: 'orcaCloudWorkspace:getConfig',
   connectGitHub: 'orcaCloudWorkspace:connectGitHub',

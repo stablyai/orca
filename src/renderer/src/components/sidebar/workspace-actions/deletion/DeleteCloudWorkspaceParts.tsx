@@ -1,6 +1,7 @@
 // The delete dialog's Orca Cloud variant (DS-07): it names the sandbox and its disk, offers
 // Archive instead, and deletes an asleep sandbox without waking it or a Force step (this dialog is
-// the confirmation that its uncommitted changes go with it).
+// the confirmation that its uncommitted changes go with it). One whose repo has an archive hook is
+// woken for the hook first, and the dialog says so.
 import { ArchiveSnapshotTooltip } from '@/components/orca-cloud/ArchiveSnapshotTooltip'
 import type React from 'react'
 import { useEffect, useState } from 'react'
@@ -17,6 +18,8 @@ import { CloudStateDot } from '@/components/orca-cloud/CloudStateDot'
 import { cloudStateLabel } from '@/components/orca-cloud/cloud-state-copy'
 import { useCloudWorkspaceView } from '@/components/orca-cloud/use-cloud-workspace-view'
 import { runArchiveCloudWorkspace } from '@/components/orca-cloud/cloud-workspace-actions'
+import { cloudArchiveHookNeedsWake } from '@/components/orca-cloud/cloud-archive-hook-flow'
+import { cloudWorkspaceTarget } from '@/lib/orca-cloud/orca-cloud-workspace-store'
 
 export function DeleteCloudWorkspaceHeader({
   worktree,
@@ -39,6 +42,7 @@ export function DeleteCloudWorkspaceHeader({
     .join(' · ')
   const running = view.state === 'running'
   const localCopy = useCloudSyncRemovalPreview(worktree.id)
+  const hookWakes = useArchiveHookNeedsWake(worktree.id)
   return (
     <>
       <DialogTitle className="text-sm">
@@ -86,10 +90,33 @@ export function DeleteCloudWorkspaceHeader({
               : t('orcaCloudSync.removal', 'The copy on this computer is removed too.')}
           </div>
         ) : null}
+        {hookWakes ? (
+          <div className="mt-0.5 text-muted-foreground" data-cloud-archive-hook-wake>
+            {t(
+              'auto.components.sidebar.DeleteCloudWorkspace.archiveHookWake',
+              'It wakes first to run its archive hook (orca.yaml scripts.archive).'
+            )}
+          </div>
+        ) : null}
       </div>
       <DeleteCloudSandboxAgentsNote worktree={worktree} />
     </>
   )
+}
+
+/** ARCHIVE-HOOK: an asleep workspace whose repo has a hook is woken for it before the delete. */
+function useArchiveHookNeedsWake(workspaceId: string): boolean {
+  const [needsWake, setNeedsWake] = useState(false)
+  useEffect(() => {
+    let live = true
+    void cloudArchiveHookNeedsWake(cloudWorkspaceTarget(workspaceId)).then(
+      (next) => live && setNeedsWake(next)
+    )
+    return () => {
+      live = false
+    }
+  }, [workspaceId])
+  return needsWake
 }
 
 /** What this computer synced from the workspace, for the line that says it goes too. */
