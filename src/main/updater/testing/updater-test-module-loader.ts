@@ -1,5 +1,9 @@
 import { beforeAll, TestRunner } from 'vitest'
 import type * as UpdaterModule from '../updater-service'
+import { ZOTZ_ENABLE_UPDATER_ENV } from '../zotz-updater-policy'
+
+// Upstream updater behavior stays covered behind the Zotz opt-in.
+process.env[ZOTZ_ENABLE_UPDATER_ENV] = '1'
 
 // Warm the module graph under hookTimeout so initial transforms do not consume testTimeout.
 export function warmUpdaterModule(): void {

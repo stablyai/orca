@@ -1089,7 +1089,9 @@
     "worktree.nestedRemoval.review",
     "worktree.setupTrust.branchDiffersBody",
     "worktree.setupTrust.branchDiffersTitle",
-    "worktree.setupTrust.branchSetupScript"
+    "worktree.setupTrust.branchSetupScript",
+    "zotz.updater.manualUpdate",
+    "zotz.updater.manualUpdateDetail"
   ],
   "prefixes": []
 }
