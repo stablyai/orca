@@ -2,7 +2,7 @@
 // The Worker's tests parse its responses with these schemas, so either side drifting fails a test.
 import { z } from 'zod'
 import { HostedEnvironmentHeldSchema } from './hosted-environment-held-wire'
-import { HostedWorkspaceMemorySchema } from './hosted-workspace-memory-wire'
+import { HostedVmMetricsSchema, HostedWorkspaceMemorySchema } from './hosted-workspace-vm-wire'
 
 /**
  * Minutes of no agent work and no input before a cloud sandbox sleeps. The one source for every
@@ -239,24 +239,6 @@ export const HOSTED_WORKSPACE_STATES = [
   'failed'
 ] as const
 export type HostedWorkspaceState = (typeof HOSTED_WORKSPACE_STATES)[number]
-
-const Bytes = z.number().int().nonnegative()
-export const HostedVmMetricsSchema = z
-  .object({
-    cpuPercent: z.number().int().min(0).max(100),
-    cpus: z.number().int().min(1),
-    load1: z.number().min(0),
-    memTotalBytes: Bytes,
-    memUsedBytes: Bytes,
-    diskTotalBytes: Bytes,
-    diskUsedBytes: Bytes,
-    uptimeSeconds: z.number().int().nonnegative(),
-    oomKills: z.number().int().nonnegative(),
-    lastOomVictim: z.string().max(64).nullable(),
-    orcadAlive: z.boolean()
-  })
-  .strict()
-export type HostedVmMetrics = z.infer<typeof HostedVmMetricsSchema>
 
 export const HostedWorkspaceStatusSchema = z
   .object({
