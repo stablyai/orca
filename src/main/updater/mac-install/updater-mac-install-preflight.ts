@@ -46,7 +46,8 @@ export abstract class UpdaterMacInstallPreflight extends UpdaterPackageRecovery 
           })
         : null
     // Registered serve supervisors can park their servers; other blockers remain refused.
-    if (park?.kind === 'refused' && blockers.length > 0) {
+    // Only a bundle that cannot be resolved refuses with no pids, and then nothing can block it.
+    if (park?.kind === 'refused' && park.pids.length > 0) {
       const instances = await describeMacUpdateBlockers(process.execPath, park.pids)
       this.resetQuitForUpdateState()
       this.sendToMainWindow('updater:quitAndInstallAborted')

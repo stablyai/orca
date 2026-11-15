@@ -42,9 +42,9 @@ export function registerMacUpdaterEvents({
         })
       })
     })
-    // will-quit is past every quit veto; Squirrel installs the staged update once this process exits.
+    // will-quit is past every quit veto; Squirrel installs whatever it staged once this process exits.
     app.on('will-quit', () => {
-      if (shouldDeferMacQuitForInstall() && squirrelReady && hasInstallableDownloadedVersion()) {
+      if (shouldDeferMacQuitForInstall() && squirrelReady) {
         commitServeSupervisorParkOnQuit(process.execPath, macCoordinationRoot(homedir()))
       }
     })
