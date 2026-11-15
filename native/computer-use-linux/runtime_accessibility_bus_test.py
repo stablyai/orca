@@ -10,12 +10,7 @@ from pathlib import Path
 RUNTIME = Path(__file__).with_name("runtime.py")
 
 
-def real_atspi_loads():
-    probe = "import gi; gi.require_version('Atspi', '2.0'); from gi.repository import Atspi"
-    return subprocess.run([sys.executable, "-c", probe], capture_output=True).returncode == 0
-
-
-@unittest.skipUnless(sys.platform.startswith("linux") and real_atspi_loads(), "needs Linux with PyGObject and libatspi")
+@unittest.skipUnless(sys.platform.startswith("linux"), "drives the real libatspi")
 class AccessibilityBusTest(unittest.TestCase):
     """Runs the bridge against real libatspi in a private runtime dir, never the desktop's buses."""
 
@@ -45,7 +40,7 @@ class AccessibilityBusTest(unittest.TestCase):
     @unittest.skipUnless(shutil.which("dbus-run-session"), "needs dbus-run-session")
     def test_reachable_bus_lists_apps(self):
         env = {name: value for name, value in os.environ.items()
-               if name not in ("DBUS_SESSION_BUS_ADDRESS", "AT_SPI_BUS_ADDRESS")}
+               if name not in ("DBUS_SESSION_BUS_ADDRESS", "AT_SPI_BUS_ADDRESS", "DISPLAY", "WAYLAND_DISPLAY")}
         with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as runtime_dir:
             result = self.run_list_apps(runtime_dir, env, ("dbus-run-session", "--"))
         # Why the last line: the registry daemon the session activates shares stdout and prints a banner.
