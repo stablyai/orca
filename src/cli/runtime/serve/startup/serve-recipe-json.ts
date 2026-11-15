@@ -3,7 +3,7 @@ import { StringDecoder } from 'node:string_decoder'
 import {
   getEphemeralVmRecipeResultConnection,
   parseEphemeralVmRecipeResult
-} from '../../../../shared/ephemeral-vm-recipes'
+} from '../../../../shared/remote-runtime/ephemeral-vm-recipes/ephemeral-vm-recipes'
 import { RuntimeClientError } from '../../connection/types'
 
 const IGNORED_NON_RECIPE_STDOUT = '[serve] ignored non-recipe stdout'

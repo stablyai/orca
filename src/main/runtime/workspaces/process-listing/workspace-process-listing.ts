@@ -6,7 +6,7 @@ import { getStructuredAgentSessionHost } from '../../../native-chat/agent-sessio
 import { collectRuntimeWorktreeAgentSources } from './runtime-worktree-agent-sources'
 import { RuntimeChatWorkerEvents } from '../../orchestration/workers/turn-stops/chat-worker-runtime-events'
 
-import type { RuntimeWorktreePsResult } from '../../../../shared/runtime-worktree-contracts'
+import type { RuntimeWorktreePsResult } from '../../../../shared/worktree/catalog/runtime-worktree-contracts'
 import type { ResolvedWorktreeSnapshot } from '../catalog/runtime-resolved-worktree-cache'
 import { buildRuntimeWorktreePsSummaries } from './runtime-worktree-ps-summaries'
 import {

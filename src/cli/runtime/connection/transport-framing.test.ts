@@ -1,6 +1,6 @@
 import { EventEmitter } from 'node:events'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { RuntimeMetadata } from '../../../shared/runtime-bootstrap'
+import type { RuntimeMetadata } from '../../../shared/remote-runtime/bootstrap/runtime-bootstrap'
 import { sendRequest } from './transport'
 
 const { createConnection } = vi.hoisted(() => ({ createConnection: vi.fn() }))

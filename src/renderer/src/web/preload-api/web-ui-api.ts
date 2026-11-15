@@ -7,8 +7,8 @@ import { assertClipboardTextWithinLimitWithYield } from '../../../../shared/clip
 import type { ReadClipboardTextOptions } from '../../../../shared/clipboard-text'
 import { normalizeFeatureInteractions } from '../../../../shared/feature-interactions'
 import type { FeatureInteractionId } from '../../../../shared/feature-interactions'
-import { omitPairingLocalUiFields } from '../../../../shared/pairing-local-ui-fields'
-import type { PairedUiState } from '../../../../shared/pairing-local-ui-fields'
+import { omitPairingLocalUiFields } from '../../../../shared/remote-runtime/pairing/pairing-local-ui-fields'
+import type { PairedUiState } from '../../../../shared/remote-runtime/pairing/pairing-local-ui-fields'
 import {
   clipboardHasImage,
   readClipboardImageThumbnail,

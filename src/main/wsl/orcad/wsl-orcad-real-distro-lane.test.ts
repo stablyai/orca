@@ -14,11 +14,11 @@ import { ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES } from '../../../shared/ele
 import { pairedRuntimeConnectionFromOffer } from '../../../shared/remote-runtime/pairing/paired-runtime-connection'
 import { parsePairingCode } from '../../../shared/remote-runtime/pairing/pairing'
 import { sendRemoteRuntimeRequestOnSocket } from '../../../shared/remote-runtime/requests/remote-runtime-request-socket'
-import { buildWslExecArgs } from '../../../shared/wsl-login-shell-command'
+import { buildWslExecArgs } from '../../../shared/shell/wsl/wsl-login-shell-command'
 import {
   ORCAD_LAUNCHER_FILENAME,
   ORCAD_TEMPLATE_MANIFEST_FILENAME
-} from '../../../shared/orcad-artifacts'
+} from '../../../shared/remote-runtime/orcad-distribution/orcad-artifacts'
 import { requestOrcadTerminalCensus } from '../../managed-server/lifecycle/orcad-terminal-census-client'
 import { execCommand } from '../../ssh/remote-exec/remote-exec-command'
 import { readConfirmedRunningWslDistros } from '../discovery/wsl-background-distro-gate'

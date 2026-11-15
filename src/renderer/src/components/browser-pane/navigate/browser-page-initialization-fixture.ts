@@ -1,6 +1,6 @@
 import { act } from '@testing-library/react'
 import { useAppStore } from '@/store'
-import type { RuntimeMobileSessionTabsResult } from '../../../../../shared/runtime-session-contracts'
+import type { RuntimeMobileSessionTabsResult } from '../../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import { applyWebRuntimeSessionTabsAnswer } from '@/runtime/web-session-tabs-sync/inventory/web-runtime-session-snapshot'
 import { nextReceivedSessionTabsFrame } from '@/runtime/web-session-tabs-sync/state'
 import {

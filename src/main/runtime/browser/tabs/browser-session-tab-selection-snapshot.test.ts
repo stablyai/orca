@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { RuntimeMobileSessionTabsSnapshot } from '../../../../shared/runtime-session-contracts'
+import type { RuntimeMobileSessionTabsSnapshot } from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import { applyBrowserSessionTabSelection } from './browser-session-tab-selection-snapshot'
 
 function makeSnapshot(): RuntimeMobileSessionTabsSnapshot {

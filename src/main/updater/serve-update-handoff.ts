@@ -9,8 +9,8 @@ import {
   parseServeUpdateHandoffState,
   type ServeSupervisorMessage,
   type ServeUpdateHandoffState
-} from '../../shared/serve-update-handoff'
-import { isSameUserDataPath } from '../../shared/serve-user-data-path'
+} from '../../shared/remote-runtime/serve-supervisor/serve-update-handoff'
+import { isSameUserDataPath } from '../../shared/remote-runtime/serve-supervisor/serve-user-data-path'
 import { getCanonicalUserDataPath } from '../persistence/loading-store/user-data-path'
 
 function getConfiguredHandoffPath(): string | null {

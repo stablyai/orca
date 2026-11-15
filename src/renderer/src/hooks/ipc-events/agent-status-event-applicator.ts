@@ -1,4 +1,4 @@
-import { isWslHookRelayConnectionId } from '../../../../shared/wsl-hook-relay-contract'
+import { isWslHookRelayConnectionId } from '../../../../shared/agent-hook-listener/transport/wsl-hook-relay-contract'
 import { AgentHookAttributionDiagnostics } from '../../../../shared/agent-hook-listener/state/agent-hook-attribution-diagnostics'
 import { pickHostTurnEnd } from '../../../../shared/agent-status/contracts/agent-status-types'
 import type { AgentStatusIpcPayload } from '../../../../shared/agent-status/contracts/agent-status-ipc-payload'

@@ -9,7 +9,7 @@ import {
   type StructuredAgentResolutionOperation
 } from '../../../native-chat/agent-launch/structured-agent-command-resolution'
 import { codexStructuredLaunchArgs } from '../launch/codex-structured-launch-args'
-import { overlayEnvironmentVariables } from '../../../../shared/environment-overlay'
+import { overlayEnvironmentVariables } from '../../../../shared/shell/launch/environment-overlay'
 import {
   catalogListingDirectory,
   envWithPathRelativeTo

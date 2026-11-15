@@ -1,6 +1,6 @@
 import type { GitHubAttachmentTarget } from '../../../../shared/rpc-contract/github/github-attachment-params'
-import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
-import type { RuntimeStatus } from '../../../../shared/runtime-types'
+import type { RuntimeClientTarget } from '../../../../shared/remote-runtime/host-catalog/runtime-client-target'
+import type { RuntimeStatus } from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import {
   assertGitHubImage,
   GITHUB_IMAGE_ATTACHMENT_CAPABILITY

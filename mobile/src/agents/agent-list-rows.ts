@@ -2,7 +2,7 @@ import {
   AGENT_LIST_STATUS_RANK,
   type AgentListVerdict
 } from '../../../src/shared/agent-status/presentation/agent-list-status'
-import type { RuntimeWorktreeAgentRow } from '../../../src/shared/runtime-types'
+import type { RuntimeWorktreeAgentRow } from '../../../src/shared/worktree/catalog/runtime-worktree-contracts'
 import type { ConnectionState } from '../transport/connection/connection-state'
 import {
   agentDotState,

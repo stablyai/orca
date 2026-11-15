@@ -1,7 +1,7 @@
 import { getRuntimeDesktopSurface } from '../../../runtime/construction/runtime-desktop-surface'
 import { sendRemoteRuntimeRequestOnSocket } from '../../../../shared/remote-runtime/requests/remote-runtime-request-socket'
 import '../../../../shared/protocol-version'
-import { REMOTE_RUNTIME_SHARED_CONTROL_CAPABILITY } from '../../../../shared/host-runtime-capabilities'
+import { REMOTE_RUNTIME_SHARED_CONTROL_CAPABILITY } from '../../../../shared/remote-runtime/protocol/host-runtime-capabilities'
 import { ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES } from '../../../../shared/electron-remote-runtime-client-capabilities'
 import {
   getPreferredPairedRuntimeConnection,
@@ -11,7 +11,7 @@ import { managedOrcadRefusalNeedingUserCode } from '../../../managed-server/life
 import { recoverRefusedPairing } from '../pairing/runtime-environment-pairing-refusal-registry'
 import { recordRuntimeEnvironmentUsage } from '../../../../shared/remote-runtime/host-store/runtime-environment-usage-record'
 import { RuntimeHostStatusOwner } from '../../../../shared/remote-runtime/host-status/runtime-host-status-owner'
-import type { RuntimeStatus } from '../../../../shared/runtime-session-contracts'
+import type { RuntimeStatus } from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import {
   RUNTIME_HOST_STATUS_CHANNEL,
   type RuntimeHostStatusSnapshot,

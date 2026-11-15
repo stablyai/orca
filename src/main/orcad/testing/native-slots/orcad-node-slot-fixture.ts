@@ -14,7 +14,7 @@ import {
   ORCAD_NODE_RUNTIME_MARKER_FILENAME,
   ORCAD_SERVER_TARGET_FILENAME,
   orcadNodeRuntimeRelativePath
-} from '../../../../shared/orcad-artifacts'
+} from '../../../../shared/remote-runtime/orcad-distribution/orcad-artifacts'
 import { detectNativeHostAbi, nativeSlotName } from '../../native-runtime/native-host-abi'
 
 export function hostServerTarget(): ServerTarget {

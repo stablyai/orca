@@ -17,7 +17,10 @@ export function NativeChatStructuredSessionStatus(props: {
   currentAgentId?: string | null
 }): React.JSX.Element {
   const [expanded, setExpanded] = useState<{ sessionId: string; expanded: boolean } | null>(null)
-  const childRowContext = useStructuredSessionChildRowContext(props.paneKey)
+  const childRowContext = useStructuredSessionChildRowContext(
+    props.paneKey,
+    props.isVisible && props.backgroundTasks.show && Boolean(props.backgroundTasks.children?.length)
+  )
   const { backgroundTasks, stop } = props
 
   return (

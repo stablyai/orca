@@ -1,6 +1,6 @@
 import type { Dispatch, SetStateAction } from 'react'
 import type { GlobalSettings } from '../../../../../shared/global-settings-types'
-import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import type { FeatureInteractionId } from '../../../../../shared/feature-interaction-catalog'
 import type {
   ClaudeRateLimitAccountsState,

@@ -7,8 +7,8 @@ import {
 } from '../../../../../shared/workspace-layout/stable-pane-id'
 import { resolveTerminalTitleAgentType } from '../../../../../shared/agent-status/title/terminal-title-agent-type'
 import { detectAgentSendTitleStatus } from './agent-send-title-status'
-import { resolveRuntimePaneTitleLeafResolution } from '../../../../../shared/runtime-pane-title-leaf-id'
-import type { RuntimePaneTitleLeafResolution } from '../../../../../shared/runtime-pane-title-leaf-id'
+import { resolveRuntimePaneTitleLeafResolution } from '../../../../../shared/workspace-layout/terminal-topology/runtime-pane-title-leaf-id'
+import type { RuntimePaneTitleLeafResolution } from '../../../../../shared/workspace-layout/terminal-topology/runtime-pane-title-leaf-id'
 import {
   deriveRunningAgentSendTargets,
   deriveStatuslessStructuredAgentSendTargets,

@@ -8,7 +8,7 @@ import { pathToFileURL } from 'node:url'
 import { runProcessSync } from '@orca/process-host'
 import { NODE_RUNTIME_ASSETS } from '../../../../src/shared/node-runtime-pin.ts'
 import { sha256Of } from '../../orcad-distribution/prebuilds/orcad-prebuild-slot-contents.mjs'
-import { ORCAD_WINDOWS_SECURITY_FILENAME } from '../../../../src/shared/orcad-artifacts.ts'
+import { ORCAD_WINDOWS_SECURITY_FILENAME } from '../../../../src/shared/remote-runtime/orcad-distribution/orcad-artifacts.ts'
 
 const { PE_MACHINE, describePeMachine, readPeMachine } = createRequire(import.meta.url)(
   './windows-pe-machine.cjs'

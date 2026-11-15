@@ -6,7 +6,7 @@ import type {
   RateLimitWindow,
   UsageRateLimitMetadata
 } from '../../../../shared/rate-limit-types'
-import { parseWslUncPath } from '../../../../shared/wsl-paths'
+import { parseWslUncPath } from '../../../../shared/file-access/wsl-paths'
 import { getHostKimiHome, type KimiHomeResolution } from '../../../kimi/kimi-runtime-home'
 import { resolveKimiCodeRuntimeAuth } from '../../../kimi/kimi-code-runtime-auth'
 import {

@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, onTestFinished, vi } from 'vitest'
 import { parsePairingCode } from '../../../../shared/remote-runtime/pairing/pairing'
-import type { RuntimeMobileSessionTabsResult } from '../../../../shared/runtime-session-contracts'
+import type { RuntimeMobileSessionTabsResult } from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import { OrcaRuntimeService } from '../../orca-runtime'
 import { OrcaRuntimeRpcServer } from '../../rpc/server/runtime-rpc'
 import {

@@ -43,14 +43,14 @@ import {
 } from '../../ephemeral-vm/recipe-vm-asleep'
 import { openRecipeVmEnvironment } from '../../ipc/runtime-environments/managed-orcad/runtime-environment-recipe-vm-wake'
 import { resolveEnvironment } from '../../../shared/remote-runtime/host-store/runtime-environment-store'
-import { findWorkspaceEphemeralVmRuntime } from '../../../shared/ephemeral-vm-workspace-runtime'
+import { findWorkspaceEphemeralVmRuntime } from '../../../shared/remote-runtime/ephemeral-vm-store/ephemeral-vm-workspace-runtime'
 import { installWslOrcadAccountShim } from '../wsl-startup/wsl-orcad-account-env-wiring'
 import {
   codexStructuredLaunchHomeResolvers,
   prepareCodexRuntimeHomeForLaunch
 } from '../agent-accounts/codex-launch-preparation'
 import { resolveHostAgentBaseEnvironment } from '../../runtime/agent-session/environment/structured-agent-shell-environment'
-import type { RuntimeDesktopWindowStatus } from '../../../shared/runtime-session-contracts'
+import type { RuntimeDesktopWindowStatus } from '../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import { ArtifactCloudService } from '../../artifacts/artifact-cloud-service'
 import { SkillCloudService } from '../../skills/cloud/skill-cloud-package-service'
 import { isArtifactSharingEnabled } from '../../../shared/artifacts/artifact-sharing-gate'

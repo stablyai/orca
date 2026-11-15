@@ -25,10 +25,8 @@ import {
   createTestParams,
   CREATE_TEST_CALLER
 } from '../../../native-chat/agent-session-wire/host/testing/structured-agent-session-create.test-fixture'
-import {
-  seedTestAgentSessionRecordStore,
-  openTestAgentSessionRecordStoreSlot
-} from '../records/agent-session-record-store-test-harness'
+import { openTestAgentSessionRecordStoreSlot } from '../records/agent-session-record-store-test-harness'
+import { seedTestAgentSessionRecordStore } from '../records/agent-session-record-store-persistence.test-fixture'
 import { createStructuredAgentSessionLogger } from '../../../native-chat/agent-session-wire/host/structured-agent-session-logger'
 import { OrcaRuntimeService } from '../../orca-runtime'
 import { withChatTabChanges } from '../agent-session-tab-layout'

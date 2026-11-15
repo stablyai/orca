@@ -10,7 +10,7 @@ import { createNonSecureContextUuid as createBrowserUuid } from '../../../../sha
 import { BROWSER_SCREENCAST_RUNTIME_CAPABILITY } from '../../../../shared/browser/runtime/browser-runtime-capabilities'
 import { RUNTIME_BROWSER_UNAVAILABLE_MESSAGE } from '../workspace/creation/surface-policy/client-creation-action-policy'
 import type { useAppStore } from '@/store/index'
-import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import type {
   WorkspacePort,
   WorkspacePortKillResult,

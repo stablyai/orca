@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import type { RuntimeClientEvent } from '../../../shared/runtime-client-events'
+import type { RuntimeClientEvent } from '../../../shared/remote-runtime/session-graph/runtime-client-events'
 import {
   createRuntimeClientEventsSync,
   type RuntimeClientEventSubscriptionHandle

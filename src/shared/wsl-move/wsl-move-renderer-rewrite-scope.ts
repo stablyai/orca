@@ -4,7 +4,7 @@
  * the moved distro changes, as the main-side rewrite (wsl-move-rewrite-scope.ts) maps it.
  */
 import { parseWorkspaceKey } from '../workspace-scope'
-import { wslUncPathToLinux } from '../wsl-paths'
+import { wslUncPathToLinux } from '../file-access/wsl-paths'
 import { getRepoIdFromWorktreeId, rewriteWorktreeIdPath } from '../worktree/id'
 import type { WslMovePendingRendererRewrite } from './wsl-move-renderer-rewrite-types'
 

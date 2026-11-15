@@ -28,7 +28,7 @@ import {
   selectWorktreesByRepo
 } from '@/store/workspaces/catalog/workspace-record-fields'
 import type { AppState } from '@/store/types'
-import type { HostAuthority } from '../../../../../shared/host-authority'
+import type { HostAuthority } from '../../../../../shared/execution-host/host-authority'
 
 export type EditorFileOperationProvenance = {
   generation: WorktreeOperationGenerationSnapshot

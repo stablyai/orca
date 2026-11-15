@@ -3,7 +3,7 @@
 import { z } from 'zod'
 import { errorMessage } from '../../../shared/error-message'
 import { quotePosixShell } from '../../../shared/shell/launch/shell-argument-quoting'
-import type { WslHostServerStop } from '../../../shared/wsl-host-types'
+import type { WslHostServerStop } from '../../../shared/remote-runtime/wsl-hosts/wsl-host-types'
 import { execCommand } from '../../ssh/remote-exec/remote-exec-command'
 import { listRunningWslDistrosAsync } from '../discovery/distro-catalog'
 import { readWslHostRecordsQuietly } from './wsl-host-connection-record'

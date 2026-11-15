@@ -19,8 +19,11 @@ import type { ExecutionHostRegistryEntry } from '../../../../../../shared/execut
 import { getExecutionHostHealthLabel } from '@/runtime/hosts/display/runtime-host-copy'
 import { pickerExecutionHosts } from '../../../../../../shared/execution-host/managed-orcad-execution-host'
 import { getCheckedHostRows } from '../../../../../../shared/workspace-view/workspace-host-visibility'
-import type { RuntimeCompatVerdict } from '../../../../../../shared/protocol-compat'
-import type { SshConnectionState, SshConnectionStatus } from '../../../../../../shared/ssh-types'
+import type { RuntimeCompatVerdict } from '../../../../../../shared/remote-runtime/protocol/protocol-compat'
+import type {
+  SshConnectionState,
+  SshConnectionStatus
+} from '../../../../../../shared/remote-runtime/ssh/ssh-types'
 import { translateHostDisplayLabel } from '../../execution-host-label'
 import {
   isWslHostRuntimeEnvironment,
@@ -30,7 +33,7 @@ import type {
   RuntimeEnvironmentStatus,
   RuntimeHostBlockedReason
 } from '../../../../../../shared/remote-runtime/host-status/runtime-host-status'
-import type { WslHostStatus } from '../../../../../../shared/wsl-host-types'
+import type { WslHostStatus } from '../../../../../../shared/remote-runtime/wsl-hosts/wsl-host-types'
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
 import { sshConnectFailureText } from '@/ssh/ssh-host-server-status-copy'

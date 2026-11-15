@@ -1,5 +1,5 @@
 import { appendFileSync } from 'node:fs'
-import type { SshConnectionState } from '../../../shared/ssh-types'
+import type { SshConnectionState } from '../../../shared/remote-runtime/ssh/ssh-types'
 import { createCancelledConnectAttemptError } from '../../ssh/connection/reconnect/ssh-connect-attempt-cancellation'
 import {
   getSshProviderAuthority,
@@ -11,7 +11,7 @@ import {
   runAttributedToSshOwner
 } from '../../ssh/connection/ssh-connection-attribution'
 import { getSshTargetRegistryStore } from '../../ssh/targets/ssh-target-registry'
-import { getManagedOrcadFenceEnvironmentId } from '../../../shared/managed-orcad-ssh-owner'
+import { getManagedOrcadFenceEnvironmentId } from '../../../shared/remote-runtime/ssh/managed-orcad-ssh-owner'
 import { noteRuntimeEnvironmentConnectRequested } from '../runtime-environments/pairing/runtime-environment-pairing-refusal-registry'
 import {
   decideHostServer,

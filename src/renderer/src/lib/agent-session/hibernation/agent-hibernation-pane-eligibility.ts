@@ -11,7 +11,7 @@ import { lastInputBlocksHibernation } from './agent-hibernation-input-guard'
 import { isLiveResumeAnchorForCompletedAgent } from '../../../../../shared/agent-session/lifecycle/resume/live-resume-anchor-record'
 import { agentTurnEndedUncleanly } from '../../../../../shared/agent-status/lifecycle/agent-main-agent-verdict'
 import type { AgentHibernationPlannerSnapshot } from './agent-hibernation-planner-snapshot'
-import type { RuntimeTerminalAttention } from '../../../../../shared/runtime-terminal-contracts'
+import type { RuntimeTerminalAttention } from '../../../../../shared/terminal/runtime/runtime-terminal-contracts'
 
 export type EligiblePane = {
   paneKey: string

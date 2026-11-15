@@ -5,7 +5,7 @@ import {
 } from '../../../../shared/agent-session/lifecycle/resume/agent-resume-record-from-status'
 import type { SleepingAgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
 import type { AgentStatusIpcPayload } from '../../../../shared/agent-status/contracts/agent-status-ipc-payload'
-import { isLocalHookConnectionId } from '../../../../shared/wsl-hook-relay-contract'
+import { isLocalHookConnectionId } from '../../../../shared/agent-hook-listener/transport/wsl-hook-relay-contract'
 import { resumeStatusFromHookRow } from '../../terminal/stop/hook-status-resume-records'
 
 /** A row this host's own pane wrote for this workspace; a relayed SSH row names another host's transcript. */

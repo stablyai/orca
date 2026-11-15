@@ -6,7 +6,7 @@ import {
   nodeRuntimeExecutablePath
 } from '../../../shared/node-runtime-pin'
 import type { NodeRuntimeTarget } from '../../../shared/node-runtime-pin'
-import { ORCAD_NODE_RUNTIME_WINDOWS_EXECUTABLE } from '../../../shared/orcad-artifacts'
+import { ORCAD_NODE_RUNTIME_WINDOWS_EXECUTABLE } from '../../../shared/remote-runtime/orcad-distribution/orcad-artifacts'
 import {
   REMOTE_NODE_RUNTIME_EXIT_PREFIX,
   REMOTE_NODE_RUNTIME_MISSING,

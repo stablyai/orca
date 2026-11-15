@@ -1,5 +1,5 @@
 import WebSocket from 'ws'
-import type { RuntimeRpcResponse } from '../../runtime-rpc-envelope'
+import type { RuntimeRpcResponse } from '../rpc/runtime-rpc-envelope'
 import { remoteRuntimeUnavailableError } from '../requests/remote-runtime-request-frames'
 import { SharedControlAppHeartbeat } from './remote-runtime-shared-control-app-heartbeat'
 import { isRetryHeld } from './remote-runtime-shared-control-hold'

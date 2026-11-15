@@ -2128,6 +2128,10 @@
           "description_one": "This change makes 1 more workspace match right now. It'll be deleted a few seconds after you apply it.",
           "description_other": "This change makes {{count}} more workspaces match right now. They'll be deleted a few seconds after you apply it."
         },
+        "disableIgnoredFiles": {
+          "matches_one": "Without pinning, {{count}} additional workspace will be deleted a few seconds after you turn off protection.",
+          "matches_other": "Without pinning, {{count}} additional workspaces will be deleted a few seconds after you turn off protection."
+        },
         "enable": {
           "description_one": "1 workspace matches right now. It'll be deleted a few seconds after you turn this on.",
           "description_other": "{{count}} workspaces match right now. They'll be deleted a few seconds after you turn this on."

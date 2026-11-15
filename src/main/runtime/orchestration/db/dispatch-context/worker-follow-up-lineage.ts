@@ -13,7 +13,7 @@ import {
 import type { ExactWorkerProviderSession } from '../../../../../shared/orchestration/workers/orchestration-worker-output'
 import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent'
 import { isTuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent-config'
-import { isLocalHookConnectionId } from '../../../../../shared/wsl-hook-relay-contract'
+import { isLocalHookConnectionId } from '../../../../../shared/agent-hook-listener/transport/wsl-hook-relay-contract'
 import type { DispatchContextRow } from '../orchestration-records'
 import type { WorkerTerminalResourceRow } from '../../terminal-authority/release/worker-terminal-ownership'
 import type { OrchestrationDb } from '../orchestration-db'

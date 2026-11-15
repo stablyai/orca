@@ -1,5 +1,5 @@
-import type { RuntimeMobileSessionTabsResult } from '../../../../shared/runtime-session-contracts'
-import type { RuntimeTerminalOrphanAdoptionResult } from '../../../../shared/runtime-terminal-contracts'
+import type { RuntimeMobileSessionTabsResult } from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
+import type { RuntimeTerminalOrphanAdoptionResult } from '../../../../shared/terminal/runtime/runtime-terminal-contracts'
 import type { WorkspaceSessionState } from '../../../../shared/workspace-session/workspace-session-state-types'
 import type { RuntimePtyWorktreeRecord } from '../records/runtime-terminal-state-records'
 import { rollbackWorkspaceSessionAfterFailedAsyncWrite } from '../../../persistence/restoring-sessions/workspace-session-write-rollback'

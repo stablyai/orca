@@ -1,4 +1,4 @@
-import type { RuntimeMobileSessionTabsSnapshot } from '../../../shared/runtime-session-contracts'
+import type { RuntimeMobileSessionTabsSnapshot } from '../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 
 /** The snapshot as stored: its version moves past the stored one so readers always see a newer stamp. */
 export function stampMobileSnapshotVersion(

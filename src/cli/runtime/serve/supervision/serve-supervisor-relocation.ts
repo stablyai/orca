@@ -4,7 +4,7 @@ import { constants, readFileSync, rmSync, statSync } from 'node:fs'
 import { cp, mkdir, readdir, rename, rm, stat, writeFile } from 'node:fs/promises'
 import { basename, dirname, isAbsolute, join, relative, resolve } from 'node:path'
 import { cloneMacTree } from '../../../../main/filesystem/macos-tree-clone'
-import { isProcessAlive } from '../../../../shared/serve-bundle-coordination'
+import { isProcessAlive } from '../../../../shared/remote-runtime/serve-supervisor/serve-bundle-coordination'
 
 /** Relocated supervisors can no longer derive the app root from __dirname. */
 export const SERVE_SUPERVISOR_APP_ROOT_ENV = 'ORCA_SERVE_SUPERVISOR_APP_ROOT'

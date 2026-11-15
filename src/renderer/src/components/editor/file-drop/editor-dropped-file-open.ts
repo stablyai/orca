@@ -27,7 +27,7 @@ import {
 import type { EditorFileDropDestination } from './editor-file-drop-destination'
 import type { WorktreeRuntimeOwnerState } from '@/lib/workspace/ownership/worktree-runtime-owner-state'
 import type { RuntimeFileOperationArgs } from '@/runtime/files/runtime-file-client-types'
-import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 
 export function shouldUploadRemoteEditorFileDrop(
   target: RuntimeClientTarget,

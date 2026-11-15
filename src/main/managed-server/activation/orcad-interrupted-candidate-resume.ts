@@ -10,7 +10,7 @@ import { orcadLivenessProvenExited } from '../install/orcad-remote-launch'
 import {
   ORCAD_RECOVERY_CHANGED_STATE_CODE,
   type OrcadManagedRefusal
-} from '../../../shared/orcad-managed-runtime'
+} from '../../../shared/remote-runtime/orcad-lifecycle/orcad-managed-runtime'
 import {
   ensureOrcadSlotServing,
   orcadSlotDir,

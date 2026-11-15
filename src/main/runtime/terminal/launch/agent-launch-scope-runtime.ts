@@ -10,7 +10,7 @@ import type { Repo } from '../../../../shared/repo-types'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import { getRepoSshConnectionId } from '../../../../shared/execution-host'
 import { isFolderRepo } from '../../../../shared/repo-kind'
-import { isWslUncPath } from '../../../../shared/wsl-paths'
+import { isWslUncPath } from '../../../../shared/file-access/wsl-paths'
 import { getWorktreePathSettings } from '../../../ipc/worktree-logic'
 import type { ProjectExecutionRuntimeResolution } from '../../../../shared/execution-host/project-execution-runtime'
 import {
@@ -24,7 +24,7 @@ import { OrchestrationError } from '../../orchestration/orchestration-error'
 import {
   agentLaunchRepairRefusal,
   PROJECT_RUNTIME_REPAIR_REQUIRED_CODE
-} from '../../../../shared/project-runtime-repair-message'
+} from '../../../../shared/execution-host/project-runtime-repair-message'
 import type { TerminalWorkspaceLaunchScope } from '../../orchestration/terminal-authority/structured-sessions/runtime-legacy-worker-terminal-recovery-types'
 
 type AgentLaunchRuntimeStore = Omit<LaunchScopeRuntimeStore, 'getSettings'> &
