@@ -234,6 +234,16 @@ describe('registerShellHandlers', () => {
       )
     })
 
+    it('reveals scripts linked with a line instead of opening them at it', async () => {
+      inspectLinkedFileMock.mockResolvedValue('view-as-text')
+
+      await expect(
+        getHandler('shell:openFilePath')({}, scriptPath, 'local', { line: 4 })
+      ).resolves.toBe(true)
+      expect(openPathMock).not.toHaveBeenCalled()
+      expect(showItemInFolderMock).toHaveBeenCalledWith(scriptPath)
+    })
+
     it('refuses non-local owners and remote file URIs before inspecting', async () => {
       const handler = getHandler('shell:openFileUri')
 
