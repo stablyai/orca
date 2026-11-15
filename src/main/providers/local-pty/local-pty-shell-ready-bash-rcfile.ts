@@ -1,11 +1,11 @@
 /** Bash has one --rcfile wrapper, so login startup, OSC hooks and readiness share this file. */
 import { BASH_PROMPT_COMMAND_COMPOSITION_BLOCK } from '../../pty/shell-startup/bash-prompt-command-composition'
 import { ORCA_CLI_POSIX_PATH_RESTORE } from '../../../shared/orca-cli-shell-path'
-import { MANAGED_DATA_ACCOUNT_POSIX_RESTORE } from '../../../shared/managed-data-account-shell'
+import { MANAGED_DATA_ACCOUNT_POSIX_RESTORE } from '../../../shared/shell/launch/agents/managed-data-account-shell'
 import { WSL_MANAGED_CLI_PATH_RESTORE } from '../../wsl/execution/wsl-managed-cli-path-restore'
 import { getPosixOmpShellWrapper } from '../../pty/shell-startup/omp-shell-wrapper'
-import { getPosixCodexShellLaunchPreflight } from '../../../shared/codex-shell-function'
-import { getPosixClaudeShellFunction } from '../../../shared/claude-shell-function'
+import { getPosixCodexShellLaunchPreflight } from '../../../shared/shell/launch/agents/codex-shell-function'
+import { getPosixClaudeShellFunction } from '../../../shared/shell/launch/agents/claude-shell-function'
 import { getBashStartupCommandPromptBlock } from '../../pty/shell-startup/posix-shell-startup-command'
 import {
   BASH_FEATURE_CHANNEL_BLOCK,

@@ -4,8 +4,8 @@ import {
   getPowerShellOsc133Bootstrap,
   isPowerShellExecutableName
 } from '../../pty/shell-startup/powershell-osc133-bootstrap'
-import { getFishCodexShellLaunchPreflight } from '../../../shared/codex-shell-function'
-import { getFishClaudeShellFunction } from '../../../shared/claude-shell-function'
+import { getFishCodexShellLaunchPreflight } from '../../../shared/shell/launch/agents/codex-shell-function'
+import { getFishClaudeShellFunction } from '../../../shared/shell/launch/agents/claude-shell-function'
 import { getFishXdgDataDirsLaunchEnv } from '../../pty/shell-startup/fish-xdg-data-dirs-handoff'
 import { POSIX_SHELL_STARTUP_COMMAND_ENV } from '../../pty/shell-startup/posix-shell-startup-command'
 import { getFishShellReadyInitCommand } from '../../pty/shell-startup/shell-templates'

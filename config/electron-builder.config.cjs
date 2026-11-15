@@ -357,6 +357,7 @@ module.exports = {
     'out/main/persistence/profile-state/**',
     'out/main/plugins/artifacts/plugin-artifact-validation.js',
     'out/main/plugins/artifacts/plugin-content-hash.js',
+    'out/main/plugins/artifacts/plugin-host-call-validation.js',
     'out/main/plugins/catalog/plugin-catalog-release-entry.js',
     'out/main/environment-doctor/environment-doctor.js',
     'out/main/environment-doctor/environment-doctor-host.js',

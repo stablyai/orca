@@ -3,7 +3,7 @@ import {
   SkillInstallFailureSchema,
   classifySkillInstallFailureCode,
   type SkillInstallFailure
-} from '../../../shared/skill-install-failure'
+} from '../../../shared/skills/installation/skill-install-failure'
 import { SkillCloudRequestError } from '../cloud/skill-cloud-request-error'
 
 export class SkillInstallOperationError extends Error {

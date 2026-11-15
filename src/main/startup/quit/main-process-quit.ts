@@ -33,6 +33,7 @@ import { shutdownTelemetry } from '../../telemetry/client'
 import { shutdownObservability } from '../../observability/index'
 import { isQuittingForUpdate } from '../../updater/updater-service'
 import { recordUpdaterLifecycle } from '../../updater/updater-lifecycle-diagnostics'
+import { pendingServeSupervisorQuitCommit } from '../../updater/lifecycle/serve-supervisor-install-park'
 import { stopTccPromptNotice } from '../../macos-permissions/macos-tcc-prompt-notice'
 import { cancelHistoryGc } from '../../pty/history/terminal-history-gc'
 import { installWindowAllClosedHandler } from './window-all-closed-quit-handler'
@@ -289,6 +290,7 @@ function installWillQuitHandler(): void {
     // Extension storage's final save runs after this, unbounded, as its old synchronous will-quit save was.
     settleTeardownWithinDeadline([
       { name: 'worktree-removals', promise: removalShutdown },
+      { name: 'install-park', promise: pendingServeSupervisorQuitCommit() },
       { name: 'state-checkpoint', promise: state.profileShutdownCheckpoint },
       { name: 'daemon', promise: daemonTeardown },
       { name: 'browser', promise: browserShutdown },

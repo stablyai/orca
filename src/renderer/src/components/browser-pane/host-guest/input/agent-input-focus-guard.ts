@@ -21,6 +21,11 @@ function settle(): void {
   }
 }
 
+/** Agent input bounces window blur/focus through its guest while a guard is open; the user did not leave the window. */
+export function isAgentInputMovingFocus(): boolean {
+  return inFlight > 0
+}
+
 function isUserComposing(): boolean {
   return composingElement !== null && composingElement === document.activeElement
 }

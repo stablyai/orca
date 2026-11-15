@@ -1,4 +1,4 @@
-import type { ClaudeBackgroundFailedExit } from '../../../shared/claude-background-run-isolation'
+import type { ClaudeBackgroundFailedExit } from '../../../shared/text-generation/launch/claude-background-run-isolation'
 import type { PipedProcessSpawner } from '@orca/process-host/process-spec'
 import { StringDecoder } from 'node:string_decoder'
 import { withTimeout } from '../../../shared/promise-timeout-fallback'

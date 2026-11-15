@@ -21,7 +21,7 @@ import {
   TERMINAL_QUICK_COMMAND_LONG_PROMPTS_RUNTIME_CAPABILITY
 } from '../terminal/quick-commands/terminal-quick-command-capabilities'
 import { AGENT_SESSION_BACKGROUND_TASK_CHILD_VIEWS_CAPABILITY } from '../agent-session/agent-session-background-task-child-views-capability'
-import { SKILL_INSTALL_RESULT_V2_CAPABILITY } from '../skill-install-capability'
+import { SKILL_INSTALL_RESULT_V2_CAPABILITY } from '../skills/capabilities/skill-install-capability'
 import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../sidebar-inputs-switch'
 import { WORKSPACE_UNREAD_HOST_RAISES_CAPABILITY } from '../workspace-unread-raise-capability'
 import {

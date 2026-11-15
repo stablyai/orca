@@ -26,7 +26,7 @@ import {
   selectWorktreesByRepo
 } from '@/store/workspaces/catalog/workspace-record-fields'
 import type { ProjectExecutionRuntimeResolution } from '../../../../../shared/execution-host/project-execution-runtime'
-import type { SkillDiscoveryTarget } from '../../../../../shared/skills'
+import type { SkillDiscoveryTarget } from '../../../../../shared/skills/discovery/skills'
 import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 
 type ActiveProjectSkillRuntime = {

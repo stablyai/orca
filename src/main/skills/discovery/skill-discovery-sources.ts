@@ -1,13 +1,17 @@
 import { homedir } from 'node:os'
 import { basename, join, type posix } from 'node:path'
-import type { SkillDiscoverySource, SkillProvider, SkillSourceKind } from '../../../shared/skills'
+import type {
+  SkillDiscoverySource,
+  SkillProvider,
+  SkillSourceKind
+} from '../../../shared/skills/discovery/skills'
 import type { AgentType } from '../../../shared/agent-status/contracts/agent-status-types'
 import type { Repo } from '../../../shared/repo-types'
 import { getRepoExecutionHostId, LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host'
 import {
   SKILL_INSTALL_PROVIDERS,
   type SkillInstallProviderId
-} from '../../../shared/skill-install-providers'
+} from '../../../shared/skills/installation/skill-install-providers'
 import type { SkillProviderRootOverrides } from '../providers/skill-provider-destinations'
 import { stablePathId } from './skill-discovery-classification'
 import {

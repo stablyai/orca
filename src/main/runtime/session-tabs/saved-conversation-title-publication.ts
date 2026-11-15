@@ -4,7 +4,7 @@ import { retitleStructuredConversationTabs } from './structured-conversation-tab
 import { savedWorkspaceCatalog } from '../../persistence/profile-save-domains'
 import { getStructuredAgentSessionHost } from '../../native-chat/agent-session-wire/host/structured-agent-session-registry'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
-import { structuredChatDisplayName } from '../../../shared/structured-chat-row-name'
+import { structuredChatDisplayName } from '../../../shared/agent-session/view/structured-chat-row-name'
 import { agentSessionRecordShownName } from '../agent-session/records/agent-session-record-shown-name'
 import type { ExecutionHostId } from '../../../shared/execution-host'
 import type { RuntimeMobileSessionTabsSnapshot } from '../../../shared/remote-runtime/session-graph/runtime-session-contracts'

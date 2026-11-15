@@ -1,11 +1,11 @@
 import { posix as pathPosix } from 'node:path'
-import { summarizeSkillMarkdown } from '../../../shared/skill-metadata'
+import { summarizeSkillMarkdown } from '../../../shared/skills/discovery/skill-metadata'
 import type {
   DiscoveredSkill,
   SkillDiscoveryResult,
   SkillDiscoverySource,
   SkillSourceKind
-} from '../../../shared/skills'
+} from '../../../shared/skills/discovery/skills'
 import {
   sortDiscoveredSkills,
   sortSkillDiscoverySources,
@@ -16,7 +16,10 @@ import {
 import type { SkillScanRoot } from './skill-discovery-sources'
 import { rootMayContainSourceKind } from './skill-discovery-source-filter'
 import { bundledSkillDiscoveryName } from './bundled-skill-discovery-name'
-import { bundledSkillNames, requestedBundledSkillName } from '../../../shared/bundled-skill-names'
+import {
+  bundledSkillNames,
+  requestedBundledSkillName
+} from '../../../shared/skills/bundled/bundled-skill-names'
 
 export type WslSkillDiscoveryObservation = {
   rows: { canonicalSkillFilePath: string; skill: DiscoveredSkill }[]

@@ -63,8 +63,10 @@ export const BROWSER_BASIC_COMMAND_SPECS: CommandSpec[] = withBrowserPageTarget(
   {
     path: ['fill'],
     summary: 'Clear and fill a browser input by ref',
-    usage: 'orca fill --element <ref> --value <text> [--worktree <selector>] [--json]',
-    allowedFlags: [...GLOBAL_FLAGS, 'element', 'value', 'worktree']
+    usage:
+      'orca fill --element <ref> (--value <text> | --value-stdin) [--worktree <selector>] [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'element', 'value', 'value-stdin', 'worktree'],
+    notes: ['--value-stdin drops one trailing newline and rejects empty input.']
   },
   {
     path: ['type'],

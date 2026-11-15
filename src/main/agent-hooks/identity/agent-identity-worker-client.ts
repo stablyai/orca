@@ -8,7 +8,10 @@ import type {
   WorkerRequestTransport,
   WorkerThreadFactory
 } from '../../worker-threads/worker-thread-transport'
-import { isOrcaSessionId, type OrcaSessionId } from '../../../shared/orca-session-address'
+import {
+  isOrcaSessionId,
+  type OrcaSessionId
+} from '../../../shared/agent-session/identity/orca-session-address'
 import type { AgentProviderKey } from './agent-provider-key'
 import type {
   AgentIdentityWorkerRequest,

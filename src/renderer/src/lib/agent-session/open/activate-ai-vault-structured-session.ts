@@ -11,7 +11,7 @@ import type {
   StructuredSessionOpenSource,
   StructuredSessionOpenResult,
   StructuredSessionOpenDeps
-} from '../../../../../shared/open-structured-agent-session'
+} from '../../../../../shared/agent-session/view/open-structured-agent-session'
 import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 
 type StructuredSessionActivationDeps = StructuredSessionOpenAdapterDeps & {

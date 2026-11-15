@@ -7,7 +7,7 @@ import type {
   RuntimeTerminalProgramStatusFacetEvent
 } from '../terminal/output/terminal-agent-status-events'
 import type { TerminalSideEffectBatch } from '../../../shared/terminal/output/terminal-side-effect-facts'
-import type { ClaudeTerminalEvidence } from '../../../shared/claude-terminal-interrupt'
+import type { ClaudeTerminalEvidence } from '../../../shared/agent-hook-listener/providers/claude/lifecycle/claude-terminal-interrupt'
 import type { AgentStatusIpcPayload } from '../../../shared/agent-status/contracts/agent-status-ipc-payload'
 import type { StructuredAgentSessionStatusSink } from '../../native-chat/agent-session-wire/observations/structured-agent-session-status-ownership'
 import type { ObservedAgentStatusPaneIdentity } from '../../ipc/agent-status-ipc-boundary'

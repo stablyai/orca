@@ -3,7 +3,7 @@ import { selectAgentSessionCurrentRequests } from '../../../../../../src/shared/
 import { useCallback } from 'react'
 import { runningStructuredAgentSessionTurnId } from '../../../../../../src/shared/agent-session/view/structured-agent-session-live-turn'
 import { mobileStructuredAgentSessionWorking } from '../../agent-session/mobile-structured-agent-session-working'
-import { structuredSessionBackgroundTasksView } from '../../../../../../src/shared/structured-session-background-tasks-view'
+import { structuredSessionBackgroundTasksView } from '../../../../../../src/shared/agent-session/view/structured-session-background-tasks-view'
 import { agentSessionVisibleFailureFacts } from '../../../../../../src/shared/agent-session/failures/agent-session-visible-failures'
 import { tuiAgentDisplayName } from '../../../../../../src/shared/agent-launch/catalog/tui-agent-display-names'
 import { pendingPromptsAllUnanswerableHere } from '../../../../../../src/shared/agent-session/agent-session-approval-subject'

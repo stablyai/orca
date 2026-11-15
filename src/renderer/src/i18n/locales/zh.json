@@ -3669,7 +3669,8 @@
             "ptyAllocationLimit": "系统无法再分配 pty 设备，请在 Orca 或其他程序中关闭一些不用的终端，然后重试",
             "terminalProcessLimit": "系统无法再启动终端进程，请关闭不用的终端或退出不用的进程，然后重试",
             "hostTerminalCap": "主机上运行的终端数量已达到 Orca 允许的上限，请关闭一个不再需要的终端，然后重试",
-            "ownerHostMismatch": "此终端保存的会话属于另一个主机连接，因此 Orca 无法在此重新附加它，请打开新终端以继续"
+            "ownerHostMismatch": "此终端保存的会话属于另一个主机连接，因此 Orca 无法在此重新附加它，请打开新终端以继续",
+            "copyErrorDetails": "复制错误详情"
           },
           "TerminalProcessExitOverlay": {
             "capacityTitle": "已达到 Git Bash 控制台上限",
@@ -7337,7 +7338,10 @@
           "b4e9d3f2a1c5": "已从 {{value1}} 导入 {{value0}} 个 Cookie 到 {{value2}}",
           "c5a273a809": "从 {{value0}}",
           "80bffd32bf": "导入 Cookie",
-          "bd7d68f138": "从文件..."
+          "bd7d68f138": "从文件...",
+          "4054c458e1": "清除默认 cookie",
+          "3b662becd5": "要清除默认配置文件中的 cookie 吗？",
+          "f159cf5a3e": "这可能会让你退出此配置文件中的网站。"
         },
         "BrowserUseComputerUseNotice": {
           "79209b37b9": "如果 cookie 导入不合适，“计算机使用”可以控制本地应用程序，并可以在适用的情况下使用现有的登录浏览器会话。安装 Orca Computer Use 技能； macOS 还需要隐私权限。",
@@ -12839,7 +12843,8 @@
           "catalog": "目录",
           "clear": "清除筛选",
           "themes": "主题",
-          "languages": "语言",
+          "codeLanguages": "编程语言",
+          "translations": "翻译",
           "icons": "图标",
           "commands": "命令和面板",
           "catalogLabel": "按目录筛选",
@@ -16156,10 +16161,9 @@
           "725868c75d": "浏览文件夹",
           "5e7f0d8a80": "文件夹选择器不可用于远程文件",
           "30099dca46": "文件夹",
-          "2d7d39dc63": ".md",
           "c8ac7868e6": "文件名",
           "b6ed807cc6": "名称",
-          "e365f3c638": "为您的 Markdown 文件命名并选择一个文件夹",
+          "description": "为您的文件命名并选择一个文件夹",
           "674b046582": "另存为",
           "nameEmpty": "名称不能为空",
           "nameHasSeparators": "名称不能包含路径分隔符",
@@ -22742,6 +22746,8 @@
       "tabCloseAll": "关闭所有编辑器标签页",
       "tabRename": "重命名当前标签页",
       "tabReopenClosed": "重新打开已关闭的标签页",
+      "tabMoveLeft": "将活动标签页左移",
+      "tabMoveRight": "将活动标签页右移",
       "tabNextSameType": "下一个标签页（同类型）",
       "tabPreviousSameType": "上一个标签页（同类型）",
       "tabNextAllTypes": "下一个标签页（所有类型）",
