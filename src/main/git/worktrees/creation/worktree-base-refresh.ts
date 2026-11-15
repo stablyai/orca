@@ -150,24 +150,25 @@ function localBaseBranchGit(options: GitWorktreeExecOptions): LocalBaseBranchGit
       (await readGitDirState(await commonDirOf(repoPath))).reserved,
     updateRefUnlessInUse: async (repoPath, fullRef, args) => {
       const commonDir = await commonDirOf(repoPath)
-      // HEAD files are read before the listing, so a checkout after it shows up as a changed HEAD.
-      const before = await readGitDirState(commonDir)
-      if (
-        before.reserved.has(fullRef) ||
-        (await listWorktrees(repoPath)).some((wt) => wt.branch === fullRef)
-      ) {
+      const worktrees = await listWorktrees(repoPath)
+      if (worktrees.some((wt) => wt.branch === fullRef)) {
         return false
       }
+      // A bare repo's own HEAD names a branch without checking it out.
+      const bareCommonDir = worktrees[0]?.isBare === true
       let inUse = false
       try {
         await gitExecFileAsync(args, {
           ...execOptions(repoPath),
           beforeStart: async () => {
-            const now = await readGitDirState(commonDir)
+            const { heads, reserved } = await readGitDirState(commonDir)
             inUse =
-              now.reserved.has(fullRef) ||
-              [...now.heads].some(
-                ([gitDir, head]) => head === `ref: ${fullRef}` && before.heads.get(gitDir) !== head
+              reserved.has(fullRef) ||
+              [...heads].some(
+                ([gitDir, head]) =>
+                  !(bareCommonDir && gitDir === commonDir) &&
+                  // Reftable keeps HEAD elsewhere and leaves this placeholder: fail closed.
+                  (head === `ref: ${fullRef}` || head === 'ref: refs/heads/.invalid')
               )
             return !inUse
           }
@@ -244,7 +245,8 @@ async function readOptional(path: string): Promise<string> {
 }
 
 function rethrowUnlessMissing(error: unknown): void {
-  const code = (error as NodeJS.ErrnoException | null)?.code
+  const code =
+    typeof error === 'object' && error !== null && 'code' in error ? error.code : undefined
   if (code !== 'ENOENT' && code !== 'ENOTDIR') {
     throw error
   }
