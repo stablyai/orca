@@ -26,6 +26,7 @@ export type StructuredAgentSessionReadOwner = {
     effect: (attempt: StructuredAgentSessionAdmission) => void | Promise<void>
   ) => Promise<void>
   publishCreated: (page: AgentSessionHistoryPage) => void
+  retain: () => () => void
   activate: (effects: StructuredAgentSessionReadEffects) => () => void
   resync?: () => void
   dispose: () => void

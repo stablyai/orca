@@ -1,3 +1,4 @@
+import { useNativeChatPaneLifetimeEffect } from '../pane/ownership/native-chat-pane-lifetime'
 import { useCallback, useLayoutEffect, useMemo, useRef, useSyncExternalStore } from 'react'
 import {
   aggregateAsyncQuestions,
@@ -33,7 +34,9 @@ export function useNativeChatAsyncQuestions({
       active.current = null
     }
   }, [owner])
-  useLayoutEffect(() => () => dismissals.forgetAsync(scopeKey), [scopeKey])
+  useNativeChatPaneLifetimeEffect(
+    useCallback(() => () => dismissals.forgetAsync(scopeKey), [scopeKey])
+  )
   const hidden = useSyncExternalStore(dismissals.subscribe, () => dismissals.readAsync(scopeKey))
   const scan = useMemo(() => (settled ? scanPendingAsks(messages) : null), [messages, settled])
   const prompt = useMemo(
