@@ -1,6 +1,7 @@
 import { parsePluginAppThemeArtifact } from '../artifacts/plugin-theme-artifact'
 import type { PluginManifest } from '../manifest/plugin-manifest'
 import { cssColorProbe } from '../../theme/css-color-probe'
+import { splitUncheckedColors } from '../../theme/css-color-unchecked'
 import {
   evaluatePluginThemeTokens,
   type PluginThemeTokenDrop
@@ -15,6 +16,8 @@ export type PluginThemeContrastFinding = {
   base: 'light' | 'dark'
   /** Tokens left at Orca's own colors because of this check. */
   dropped: string[]
+  /** Valid CSS this check cannot resolve without the app (system colors, relative colors). */
+  unchecked?: string[]
   message: string
 }
 
@@ -64,16 +67,29 @@ export function pluginThemeContrastFindings(
       // Why skip: the strict artifact checks already report a theme that does not parse.
       return []
     }
+    // Why set aside: system colors, relative colors and calc() are valid CSS the renderer
+    // resolves; this check cannot, so it says so instead of calling them invalid.
+    const { checked, unchecked } = splitUncheckedColors(artifact.tokens)
     const { drops } = evaluatePluginThemeTokens(
-      artifact.tokens,
+      checked,
       artifact.base,
       THEME_BUILT_IN_VALUES[artifact.base],
       cssColorProbe
     )
-    return drops.map((drop) => {
-      const { dropped, message } = describe(drop)
-      return { theme: theme.id, path: theme.path, base: artifact.base, dropped, message }
-    })
+    const at = { theme: theme.id, path: theme.path, base: artifact.base }
+    return [
+      ...drops.map((drop) => ({ ...at, ...describe(drop) })),
+      ...(unchecked.length > 0
+        ? [
+            {
+              ...at,
+              dropped: [],
+              unchecked,
+              message: `not checked: ${unchecked.join(', ')} use CSS only the app can resolve`
+            }
+          ]
+        : [])
+    ]
   })
 }
 
@@ -81,8 +97,22 @@ export function pluginThemeContrastFindings(
 export function pluginThemeContrastMessages(
   findings: readonly PluginThemeContrastFinding[]
 ): string[] {
-  return findings.map(
-    (finding) =>
-      `contributes.themes "${finding.theme}" (${finding.path}): ${finding.message}; Orca keeps its own ${finding.dropped.join(', ')} (contrast)`
-  )
+  return findings
+    .filter((finding) => finding.dropped.length > 0)
+    .map(
+      (finding) =>
+        `contributes.themes "${finding.theme}" (${finding.path}): ${finding.message}; Orca keeps its own ${finding.dropped.join(', ')} (contrast)`
+    )
+}
+
+/** Notes for tokens the check could not resolve; never errors, even under --strict. */
+export function pluginThemeContrastNotes(
+  findings: readonly PluginThemeContrastFinding[]
+): string[] {
+  return findings
+    .filter((finding) => finding.unchecked)
+    .map(
+      (finding) =>
+        `contributes.themes "${finding.theme}" (${finding.path}): contrast ${finding.message}`
+    )
 }

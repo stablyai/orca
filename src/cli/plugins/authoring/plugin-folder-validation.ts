@@ -30,6 +30,7 @@ import {
 import {
   pluginThemeContrastFindings,
   pluginThemeContrastMessages,
+  pluginThemeContrastNotes,
   type PluginThemeContrastFinding
 } from '../../../shared/plugins/authoring/plugin-theme-contrast-findings'
 
@@ -132,6 +133,7 @@ export async function validatePluginTarget(
   const warnings = strictPluginArtifactWarnings(manifest, manifestTextReader(root))
   const contrast = pluginThemeContrastFindings(manifest, manifestTextReader(root))
   ;(options.strict ? errors : warnings).push(...pluginThemeContrastMessages(contrast))
+  warnings.push(...pluginThemeContrastNotes(contrast))
   return {
     path: root,
     file,

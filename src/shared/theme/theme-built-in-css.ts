@@ -44,8 +44,9 @@ function collect(css: string, selector: ':root' | '.dark', into: Map<string, str
         buffer = ''
         if (prelude.startsWith('@')) {
           // Why not media rules: a rule for another screen or scheme is not this mode's built-in.
+          // Why keep inMatching: the build nests `@supports` inside `:root` for color-mix values.
           const keeps = /^@(layer|supports)\b/.test(prelude)
-          walk(false, skip || !keeps)
+          walk(keeps && inMatching, skip || !keeps)
         } else {
           const matches = prelude.split(',').some((part) => part.trim() === selector)
           walk(!skip && matches, skip)

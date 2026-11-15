@@ -2,7 +2,8 @@ import { describe, expect, it } from 'vitest'
 import { parsePluginManifest } from '../manifest/plugin-manifest'
 import {
   pluginThemeContrastFindings,
-  pluginThemeContrastMessages
+  pluginThemeContrastMessages,
+  pluginThemeContrastNotes
 } from './plugin-theme-contrast-findings'
 
 function themePlugin(tokens: Record<string, string>) {
@@ -49,5 +50,14 @@ describe('pluginThemeContrastFindings', () => {
     expect(pluginThemeContrastMessages(findings)[0]).toMatch(
       /^contributes\.themes "dusk-dark" \(themes\/dark\.json\): --worktree-sidebar-foreground on --worktree-sidebar is 1\.\d\d:1, needs 4\.5:1/
     )
+  })
+
+  it('sets aside valid CSS it cannot resolve as a note, never an error', () => {
+    const { manifest, read } = themePlugin({ '--accent': 'Canvas' })
+    const findings = pluginThemeContrastFindings(manifest, read)
+    expect(pluginThemeContrastMessages(findings)).toEqual([])
+    expect(pluginThemeContrastNotes(findings)).toEqual([
+      expect.stringContaining('not checked: --accent')
+    ])
   })
 })

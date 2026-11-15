@@ -37,7 +37,10 @@ function collectDeclarations(
         collectStyle(rule.style, into)
         collectNested(rule.cssRules, into)
       }
-    } else if (rule instanceof CSSLayerBlockRule || rule instanceof CSSSupportsRule) {
+    } else if (
+      rule instanceof CSSLayerBlockRule ||
+      (rule instanceof CSSSupportsRule && CSS.supports(rule.conditionText))
+    ) {
       // Why not media rules: a rule for another screen or scheme is not this mode's built-in.
       collectDeclarations(rule.cssRules, selector, into)
     }

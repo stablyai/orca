@@ -8,7 +8,10 @@ const CSS = `
   --accent: var(--missing, var(--background));
   --mask: url("data:image/svg+xml;utf8,<svg>{}</svg>");
   &[data-x] { --background: #f00; }
-  --border: color-mix(in srgb, var(--foreground) 10%, transparent);
+  --border: #888;
+  @supports (color: color-mix(in lab, red, red)) {
+    --border: color-mix(in srgb, var(--foreground) 10%, transparent);
+  }
   --foreground: #111;
 }
 @media (prefers-contrast: more) { :root { --background: #000; } }

@@ -1,5 +1,6 @@
 import { completePluginAppThemeTokens } from '../../shared/plugins/artifacts/plugin-theme-artifact'
 import { cssColorProbe } from '../../shared/theme/css-color-probe'
+import { splitUncheckedColors } from '../../shared/theme/css-color-unchecked'
 import { evaluatePluginThemeTokens } from '../../shared/theme/theme-contrast-engine'
 import { THEME_BUILT_IN_VALUES } from '../../shared/theme/theme-built-in-values.generated'
 import type {
@@ -22,7 +23,8 @@ export function predictThemeStudioDrops(
     if (!variant) {
       continue
     }
-    const tokens = completePluginAppThemeTokens(variant.tokens)
+    // Why without unchecked values: the renderer resolves them; guessing would log false drift.
+    const tokens = splitUncheckedColors(completePluginAppThemeTokens(variant.tokens)).checked
     const { safe } = evaluatePluginThemeTokens(
       tokens,
       mode,

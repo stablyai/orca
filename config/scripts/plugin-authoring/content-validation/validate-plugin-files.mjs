@@ -28,9 +28,8 @@ const { strictPluginArtifactErrors, strictPluginArtifactWarnings } = loadPluginS
   'authoring/plugin-strict-artifact-checks.ts'
 )
 // Why shared: the same contrast gate the renderer runs before painting a theme.
-const { pluginThemeContrastFindings, pluginThemeContrastMessages } = loadPluginSchemaModule(
-  'authoring/plugin-theme-contrast-findings.ts'
-)
+const { pluginThemeContrastFindings, pluginThemeContrastMessages, pluginThemeContrastNotes } =
+  loadPluginSchemaModule('authoring/plugin-theme-contrast-findings.ts')
 
 const { englishSourceLookup } = loadPluginSchemaModule(
   'languages/plugin-translation-string-policy.ts'
@@ -70,8 +69,8 @@ async function installContentErrors(root, manifest) {
 
 // Why --strict: a theme color Orca refuses to paint is a warning, or an error for a release gate.
 const strict = process.argv.includes('--strict')
-function contrastMessages(manifest, root) {
-  return pluginThemeContrastMessages(pluginThemeContrastFindings(manifest, readPluginText(root)))
+function contrastFindings(manifest, root) {
+  return pluginThemeContrastFindings(manifest, readPluginText(root))
 }
 
 const targets = process.argv.slice(2).filter((arg) => arg !== '--strict')
@@ -123,7 +122,7 @@ for (const target of targets) {
       errors.push(...strictPluginArtifactErrors(manifest, readPluginText(root), englishLookup()))
       errors.push(...(await installContentErrors(root, manifest)))
       if (strict) {
-        errors.push(...contrastMessages(manifest, root))
+        errors.push(...pluginThemeContrastMessages(contrastFindings(manifest, root)))
       }
     }
     for (const error of errors) {
@@ -134,7 +133,8 @@ for (const target of targets) {
       for (const warning of [
         ...pluginManifestWarnings(raw),
         ...strictPluginArtifactWarnings(manifest, readPluginText(root)),
-        ...(strict ? [] : contrastMessages(manifest, root))
+        ...(strict ? [] : pluginThemeContrastMessages(contrastFindings(manifest, root))),
+        ...pluginThemeContrastNotes(contrastFindings(manifest, root))
       ]) {
         console.warn(`${file}: warning: ${warning}`)
       }
