@@ -8,7 +8,7 @@ import type {
   SshManagedServerStatus,
   SshManagedServerUpdateNote,
   SshTarget
-} from '../../../../shared/ssh-types'
+} from '../../../../shared/remote-runtime/ssh/ssh-types'
 import { managedServerUpdateDeps } from '../../../ssh/host-server/managed-server-update-deps'
 import {
   ensureOrcadManagedTunnel,

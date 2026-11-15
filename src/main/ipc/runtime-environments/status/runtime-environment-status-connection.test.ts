@@ -5,7 +5,7 @@ import { afterEach, expect, it, vi } from 'vitest'
 import { encodePairingOffer } from '../../../../shared/remote-runtime/pairing/pairing'
 import { addEnvironmentFromPairingCode } from '../../../../shared/remote-runtime/host-store/runtime-environment-store'
 import '../../../../shared/protocol-version'
-import { REMOTE_RUNTIME_SHARED_CONTROL_CAPABILITY } from '../../../../shared/host-runtime-capabilities'
+import { REMOTE_RUNTIME_SHARED_CONTROL_CAPABILITY } from '../../../../shared/remote-runtime/protocol/host-runtime-capabilities'
 import {
   createSharedControlTestServer,
   closeSharedControlTestServers

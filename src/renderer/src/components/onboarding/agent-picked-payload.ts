@@ -1,5 +1,5 @@
 import '@/diagnostics/telemetry/telemetry'
-import { tuiAgentToAgentKind } from '../../../../shared/agent-kind'
+import { tuiAgentToAgentKind } from '../../../../shared/agent-status/identity/agent-kind'
 import type { EventProps } from '../../../../shared/telemetry-events'
 import type {
   PathSource,

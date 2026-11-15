@@ -1,6 +1,9 @@
 import { join } from 'node:path'
-import type { SkillInstallResult, SkillRemoveRequest } from '../../../shared/skill-install-contract'
-import { SKILL_INSTALL_PROVIDERS } from '../../../shared/skill-install-providers'
+import type {
+  SkillInstallResult,
+  SkillRemoveRequest
+} from '../../../shared/skills/installation/skill-install-contract'
+import { SKILL_INSTALL_PROVIDERS } from '../../../shared/skills/installation/skill-install-providers'
 import { resolveSkillInstallDestination } from '../install/skill-install-destinations'
 import type { ManagementDependencies } from '../install/skill-install-preview'
 import { canonicalPath } from '../install/skill-install-paths'

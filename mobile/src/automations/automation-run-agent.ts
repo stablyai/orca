@@ -5,7 +5,7 @@ import {
   type ExecutionHostId
 } from '../../../src/shared/execution-host'
 import { parsePaneKey } from '../../../src/shared/workspace-layout/stable-pane-id'
-import { hostScopeCensusIsComplete } from '../../../src/shared/runtime-listing-host-scope'
+import { hostScopeCensusIsComplete } from '../../../src/shared/execution-host/runtime-listing-host-scope'
 import { salvagingArray } from '../../../src/shared/zod-salvage'
 import { bindDeferredRpcOperation, defineRpcOperation } from '../transport/rpc/rpc-operation'
 import { rpcResultVariant } from '../transport/rpc/rpc-operation-result-reader'

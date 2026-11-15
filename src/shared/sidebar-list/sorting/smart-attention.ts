@@ -10,7 +10,7 @@ import { migrationUnsupportedToAgentStatusEntry } from '../../migration-unsuppor
 import { resolveDecayedAgentRowState } from '../../agent-status/presentation/agent-row-decay-state'
 import { tabHasLivePty } from '../../tab-has-live-pty'
 import { isSyntheticAgentPermissionTitle } from '../../agent-status/title/synthetic-agent-title'
-import { resolveRuntimePaneTitleLeafId } from '../../runtime-pane-title-leaf-id'
+import { resolveRuntimePaneTitleLeafId } from '../../workspace-layout/terminal-topology/runtime-pane-title-leaf-id'
 import type { AgentStatus } from '../../agent-status/title/agent-title-core'
 import type { TerminalLayoutSnapshot, TerminalTab } from '../../workspace-layout/terminal-tab-types'
 import type { Worktree } from '../../worktree/types'

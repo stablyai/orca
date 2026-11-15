@@ -14,7 +14,7 @@ import { getWorktreeRowLocalPathOpenOwner } from '@/lib/workspace/ownership/work
 import { cn } from '@/lib/class-names'
 import { getWorktreeExecutionHostId, parseExecutionHostId } from '../../../../shared/execution-host'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
-import { getHostDisplayLabelOverrides } from '../../../../shared/host-setting-overrides'
+import { getHostDisplayLabelOverrides } from '../../../../shared/execution-host/host-setting-overrides'
 import CommentMarkdown from '../sidebar/CommentMarkdown'
 import { getTranslatedExecutionHostLabel } from '../sidebar/execution-host-label'
 import {

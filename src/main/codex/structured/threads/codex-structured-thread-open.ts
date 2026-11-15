@@ -10,7 +10,7 @@ import {
   type CodexAppServerRequestError
 } from '../../app-server/codex-app-server-request-error'
 import type { CodexAppServerConnection } from '../../app-server/codex-app-server-connection-types'
-import type { CodexStructuredPermissionPolicy } from '../../../../shared/codex-permission-policy'
+import type { CodexStructuredPermissionPolicy } from '../../../../shared/agent-launch/permissions/codex-permission-policy'
 import { readCodexThreadId } from '../../app-server/codex-structured-thread-facts'
 import {
   readCodexSandboxPolicy,

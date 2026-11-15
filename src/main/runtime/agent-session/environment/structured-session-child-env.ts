@@ -13,7 +13,7 @@ import {
   ORCA_SCRUB_SAFE_LAUNCH_ENV,
   ORCA_SCRUB_SAFE_PANE_ENV
 } from '../../../../shared/agent-hook-listener/transport/agent-hook-scrub-safe-env'
-import { ORCA_STRUCTURED_SESSION_ENV } from '../../../../shared/structured-session-marker'
+import { ORCA_STRUCTURED_SESSION_ENV } from '../../../../shared/agent-launch/environment/structured-session-marker'
 import { withCliRuntimeOnPath } from '../../../../shared/node-cli-command-resolution'
 import { prependOrcaCliDirToChildPath } from '../../../cli/launchers/orca-cli-child-path'
 import { AGENT_HOOK_RUNTIME_ENV_KEYS } from '../../../ipc/pty/host-env/spawn-env-keys'

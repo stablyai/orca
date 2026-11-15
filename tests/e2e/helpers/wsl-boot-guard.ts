@@ -5,7 +5,7 @@
 import { execFile } from 'node:child_process'
 import type { Page } from '@stablyai/playwright-test'
 import { expect } from './orca-app'
-import { buildWslExecArgs } from '../../../src/shared/wsl-login-shell-command'
+import { buildWslExecArgs } from '../../../src/shared/shell/wsl/wsl-login-shell-command'
 import {
   PTY_SPAWN,
   readDiagnosticLog,

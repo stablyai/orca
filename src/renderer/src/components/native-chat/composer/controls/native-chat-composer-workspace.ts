@@ -4,7 +4,7 @@ import { findIndexedRepoOwnerForHost } from '@/lib/workspace/ownership/repo-owne
 import { getWslDistroFromPath } from '@/runtime/hosts/preflight/local-preflight-context'
 import { selectWslHostDistro } from '@/components/wsl-host-mark/WslHostMark'
 import { resolvePaneWslDistro } from '@/components/terminal-pane/host-state/terminal-pane-wsl-distro'
-import { getHostSettingOverride } from '../../../../../../shared/host-setting-overrides'
+import { getHostSettingOverride } from '../../../../../../shared/execution-host/host-setting-overrides'
 import { isFolderRepo } from '../../../../../../shared/repo-kind'
 import { parseWorkspaceKey } from '../../../../../../shared/workspace-scope'
 import { getKnownExecutionHostIdForWorktree } from '@/lib/workspace/ownership/worktree-runtime-owner'

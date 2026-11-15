@@ -13,7 +13,7 @@ import {
   ORCAD_NODE_RUNTIME_POSIX_EXECUTABLE,
   ORCAD_RUNTIMES_DIRNAME,
   orcadNodeRuntimeExecutable
-} from '../../../shared/orcad-artifacts'
+} from '../../../shared/remote-runtime/orcad-distribution/orcad-artifacts'
 import type { OrcadHostTransport } from './orcad-host-transport'
 import { quotePosixShell } from '../../../shared/shell/launch/shell-argument-quoting'
 import {

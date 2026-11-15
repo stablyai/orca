@@ -10,8 +10,7 @@ import {
   clampUsedPercent
 } from '../../../../../shared/usage-percentage-display'
 import { useResetCountdownClock } from '@/hooks/useResetCountdownClock'
-import { barColor } from './provider-extra-usage-section'
-
+import { usageBarClass, usageTextClass } from './usage-health-tone'
 import { formatWindowLabel } from '../../../../../shared/rate-limit-window-label'
 import { formatResetDuration } from '../../../../../shared/rate-limit-reset-format'
 import { formatBareUsagePercentage, formatUsagePercentageLabel } from './usage-percentage-label'
@@ -123,11 +122,11 @@ export function InlineUsageBars({
             <span className="w-8 shrink-0 truncate">{window.label}</span>
             <div className="h-1 min-w-0 flex-1 overflow-hidden rounded-full bg-muted">
               <div
-                className={`h-full rounded-full ${barColor(window.used)}`}
+                className={`h-full rounded-full ${usageBarClass(window.used)}`}
                 style={{ width: `${getDisplayedUsagePercentage(window.used, display)}%` }}
               />
             </div>
-            <span className="w-8 shrink-0 text-right tabular-nums">
+            <span className={`w-8 shrink-0 text-right tabular-nums ${usageTextClass(window.used)}`}>
               {formatBareUsagePercentage(window.used, display, t)}
             </span>
             <span className="w-11 shrink-0 break-all text-right tabular-nums">{resetDuration}</span>

@@ -8,7 +8,7 @@ import {
 import type { AgentJournalRenderItem } from '../../../../../../shared/agent-session/journal/agent-session-journal-types'
 import { useAppStore } from '@/store'
 import { runtimeEnvironmentStatusFromSnapshot } from '../../../../../../shared/remote-runtime/host-status/runtime-host-status'
-import type { RuntimeStatus } from '../../../../../../shared/runtime-session-contracts'
+import type { RuntimeStatus } from '../../../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import { launchNativeChatFork } from './native-chat-fork-launch'
 import { useNativeChatFork } from './use-native-chat-fork'
 import { useNativeChatSideChatForkOffer } from './use-native-chat-side-chat'

@@ -3,7 +3,7 @@ import {
   RuntimeSshAccessUnlinkRequestSchema,
   type RuntimeSshAccessLinkRequest,
   type RuntimeSshAccessUnlinkRequest
-} from '../../../shared/runtime-ssh-access'
+} from '../../../shared/remote-runtime/host-catalog/runtime-ssh-access'
 import { resolveEnvironment } from '../../../shared/remote-runtime/host-store/runtime-environment-store'
 import { assertRuntimeEnvironmentNotReconciling } from '../../../shared/remote-runtime/host-catalog/runtime-environment-reconciliation-record'
 import { redactRuntimeEnvironment } from '../../../shared/remote-runtime/host-catalog/runtime-environments'
@@ -14,8 +14,8 @@ import {
   prepareRuntimeEnvironmentSshAccessLink,
   prepareRuntimeEnvironmentSshAccessUnlink
 } from '../../../shared/remote-runtime/host-store/runtime-environment-ssh-access-store'
-import { getManagedOrcadFenceEnvironmentId } from '../../../shared/managed-orcad-ssh-owner'
-import type { SshTarget } from '../../../shared/ssh-types'
+import { getManagedOrcadFenceEnvironmentId } from '../../../shared/remote-runtime/ssh/managed-orcad-ssh-owner'
+import type { SshTarget } from '../../../shared/remote-runtime/ssh/ssh-types'
 import { runTargetLifecycle } from '../../ipc/ssh/ssh-target-lifecycle-queue'
 import { requireManagedOrcadInfrastructure } from '../../managed-server/lifecycle/orcad-managed-runtime-context'
 import {

@@ -9,7 +9,7 @@ import { createRuntimeFixture } from './active-tab-publication.test-fixture'
 import type {
   RuntimeMobileSessionTabsResult,
   RuntimeMobileSessionTabsSnapshot
-} from '../../../src/shared/runtime-session-contracts'
+} from '../../../src/shared/remote-runtime/session-graph/runtime-session-contracts'
 import { electronMocks } from '../../../src/main/runtime/orca-runtime-test-mocks/setup.spec'
 import { getDefaultWorkspaceSession } from '../../../src/shared/constants'
 

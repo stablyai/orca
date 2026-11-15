@@ -27,7 +27,7 @@ import { isUnmodeledClaudeSystemFrame } from '../../../native-chat/agent-session
 import {
   isClaudeToolUseContent,
   isClaudeToolResultContent
-} from '../../../../shared/claude-tool-content'
+} from '../../../../shared/agent-hook-listener/providers/claude/transcripts/claude-tool-content'
 import type { ClaudeRowStamp } from '../../subagents/claude-provisional-row-corrections'
 import { writeClaudeStopReadings, type ClaudeStopCheck } from '../../claude-stop-readings'
 import { estimateStructuredAgentSessionItemBytes } from '../../../native-chat/agent-session-wire/journal-ingress/structured-agent-session-event-sink-estimate'

@@ -5,7 +5,7 @@ import { resolvePathEnvKey } from '../../pty/environment/windows-path-segment-me
 import { expandWindowsEnvironmentVariables } from '../../../shared/windows-environment-expansion'
 import { resolveSafePtyDefaultCwd } from '../working-directory/default-cwd'
 import { REMOTE_VIEWER_CLIPBOARD_ENV } from '../../../shared/remote-viewer-clipboard-env'
-import { ORCAD_SERVER_LAUNCH_ENV_KEYS } from '../../../shared/orcad-server-launch-env'
+import { ORCAD_SERVER_LAUNCH_ENV_KEYS } from '../../../shared/remote-runtime/serve-supervisor/orcad-server-launch-env'
 import { isLocalCounterPtyId } from '../../../shared/terminal/pty/lifecycle/pty-session-id-format'
 
 const PANE_IDENTITY_ENV_KEYS = [

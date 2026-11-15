@@ -17,7 +17,7 @@ import { collectLayoutLeafIdsInOrder } from '../../../../shared/workspace-layout
 import { folderWorkspaceKey, parseWorkspaceKey } from '../../../../shared/workspace-scope'
 import { getRepoIdFromWorktreeId } from '../../../../shared/worktree/id'
 import type { Worktree } from '../../../../shared/worktree/types'
-import { parseWslUncPath } from '../../../../shared/wsl-paths'
+import { parseWslUncPath } from '../../../../shared/file-access/wsl-paths'
 import type {
   WslMoveBlocker,
   WslMoveRowRef

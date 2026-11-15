@@ -14,7 +14,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import {
   ORCAD_WSL_HOLDER_BLOCKED_FILENAME,
   ORCAD_WSL_HOLDER_RELEASE_FILENAME
-} from '../../../shared/orcad-idle-exit'
+} from '../../../shared/remote-runtime/orcad-lifecycle/orcad-idle-exit'
 import { buildWslDistroHolderScript, WSL_DISTRO_HOLDER_MARKER } from './wsl-distro-holder-command'
 
 // The script runs inside the distro; any POSIX sh here exercises the same text. A fake /proc stands

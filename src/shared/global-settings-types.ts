@@ -11,7 +11,7 @@ import type { GitLabProjectSettings } from './gitlab-types'
 import type { TaskProvider } from './work-items/task-providers'
 import type { AppIconId } from './app-icon'
 import type { SourceControlAiSettings } from './source-control/ai/settings/source-control-ai-settings-types'
-import type { ClaudeAgentTeamsMode } from './claude-agent-teams-tmux-compat'
+import type { ClaudeAgentTeamsMode } from './agent-launch/startup/claude-agent-teams-tmux-compat'
 import type { TerminalCustomTheme } from './terminal-themes/terminal-custom-themes'
 import type { UiLanguage } from './ui-language'
 import type { GlobalWindowsRuntimeDefault } from './execution-host/project-runtime-preference'
@@ -19,7 +19,7 @@ import type { PersistedNativeChatSessionOptions } from './native-chat/input/nati
 import type { AgentChatPermissionMode } from './agent-launch/permissions/agent-chat-permission-mode'
 import type { ComputerAwakeMode } from './computer-awake-mode'
 import type { CommitMessageAiSettings } from './source-control/ai/generation/commit-message-ai-types'
-import type { HostSettingOverrides } from './host-setting-overrides'
+import type { HostSettingOverrides } from './execution-host/host-setting-overrides'
 import type {
   ClaudeManagedAccount,
   ClaudeManagedAccountRuntimeSelection,

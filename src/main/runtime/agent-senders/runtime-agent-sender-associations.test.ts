@@ -38,7 +38,7 @@ import {
 } from '../../../shared/agent-session/lifecycle/records/agent-session-record.test-fixture'
 import '../orchestration/terminal-authority/structured-sessions/structured-worker-identity'
 
-import { testOrcaSessionId } from '../../../shared/orca-session-address-test-fixture'
+import { testOrcaSessionId } from '../../../shared/agent-session/identity/orca-session-address-test-fixture'
 
 import '../rpc/methods/session-tabs/session-tabs-inventory'
 import { AGENT_SENDER_PANE_READS } from './runtime-agent-sender-worker-history'
@@ -46,10 +46,8 @@ import {
   scaleDirectory,
   scaleRecord
 } from '../agent-session/records/agent-session-scale.test-fixture'
-import {
-  openTestAgentSessionRecordStore,
-  seedTestAgentSessionRecordStore
-} from '../agent-session/records/agent-session-record-store-test-harness'
+import { openTestAgentSessionRecordStore } from '../agent-session/records/agent-session-record-store-test-harness'
+import { seedTestAgentSessionRecordStore } from '../agent-session/records/agent-session-record-store-persistence.test-fixture'
 
 const unissued = (): never => {
   throw new Error('a sender build issued a terminal handle')

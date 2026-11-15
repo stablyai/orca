@@ -3935,7 +3935,6 @@
         },
         "pane": {
           "CloseTerminalDialog": {
-            "automatic_resume_warning": "Bu terminal otomatik olarak devam etmeyecek. Daha sonra devam ettirmek için iptal edin ve çalışma alanını uyku moduna alın.",
             "1d1a7a9c1f": "İptal",
             "stop_agent_title": "Bu ajan durdurulsun mu?",
             "stop_command_title": "Çalışan komut durdurulsun mu?",
@@ -4012,7 +4011,8 @@
             "remoteTerminalClosed": "Uzak terminal kapatıldı.",
             "ptyAllocationLimit": "Sisteminiz daha fazla pty aygıtı ayıramıyor. Orca'da veya başka bir programda kullanmadığınız terminalleri kapatıp tekrar deneyin.",
             "terminalProcessLimit": "Sisteminiz başka bir terminal süreci başlatamıyor. Kullanmadığınız terminalleri kapatın veya kullanılmayan süreçlerden çıkıp tekrar deneyin.",
-            "hostTerminalCap": "Bu ana makine zaten Orca'nın izin verdiği en yüksek sayıda terminali çalıştırıyor. Artık ihtiyacınız olmayan bir terminali kapatıp tekrar deneyin."
+            "hostTerminalCap": "Bu ana makine zaten Orca'nın izin verdiği en yüksek sayıda terminali çalıştırıyor. Artık ihtiyacınız olmayan bir terminali kapatıp tekrar deneyin.",
+            "copyErrorDetails": "Hata ayrıntılarını kopyala"
           },
           "TerminalProcessExitOverlay": {
             "capacityTitle": "Git Bash konsol sınırına ulaşıldı",
@@ -4606,7 +4606,6 @@
             "c8857b40f7": "Kullanım verilerini yenile",
             "75ded02687": "Hesapları Yönet…",
             "ff0fbe9311": "Etkin",
-            "7657e3db9c": "Codex Hesabı",
             "38b5647724": "Codex kullanım çalışma zamanı",
             "ba55303942": "Codex ayrıntılarını ve hesap değiştiriciyi aç",
             "c35af53b73": "Oturum aç",
@@ -4614,7 +4613,6 @@
             "5c938d39ac": "hf",
             "54e8d6bb2d": "Fable",
             "a79c64f87e": "Fable",
-            "d450654fa2": "Claude Hesabı",
             "11e2354daf": "Claude kullanım çalışma zamanı",
             "3dd7ddfae1": "Claude ayrıntılarını ve hesap değiştiriciyi aç",
             "59c6e7b4e0": "Görünür oturumlar şimdi yeniden başlar. Diğerleri, worktree'leri etkin hale geldiğinde yeniden başlar.",
@@ -4903,7 +4901,8 @@
             "compact": "Kompakt",
             "detailedTooltip": "Çubuklar, etiketler ve yüzdelerle tam kullanım",
             "compactTooltip": "Özet kullanım: sağlayıcı başına tek özet",
-            "footerDetailAria": "Kullanım altbilgi ayrıntısı"
+            "footerDetailAria": "Kullanım altbilgi ayrıntısı",
+            "notChecked": "Kontrol edilmedi"
           },
           "RemoteServerUpdateStatusSegment": {
             "updating": "{{value0}}/{{value1}} güncelleniyor",
@@ -5088,12 +5087,17 @@
           "AccountSwitchList": {
             "used": "Kullanılan",
             "left": "Kalan",
-            "reset": "Sıfırlanma"
+            "reset": "Sıfırlanma",
+            "accounts": "Hesaplar"
           },
           "InlineUsageBars": {
             "now": "şimdi",
             "resetsNow": "şimdi sıfırlanır",
             "resetsIn": "{{duration}} içinde sıfırlanır"
+          },
+          "UsageDisplayToggle": {
+            "showRemaining": "Kalan kullanımı göster",
+            "showUsed": "Kullanılan miktarı göster"
           }
         }
       },
@@ -7768,7 +7772,10 @@
           "b4e9d3f2a1c5": "{{value1}} kaynağından {{value0}} çerez, {{value2}} içine aktarıldı.",
           "c5a273a809": "{{value0}} kaynağından",
           "80bffd32bf": "Çerezleri İçe Aktar",
-          "bd7d68f138": "Dosyadan…"
+          "bd7d68f138": "Dosyadan…",
+          "4054c458e1": "Varsayılan çerezleri temizle",
+          "3b662becd5": "Varsayılan profildeki çerezler temizlensin mi?",
+          "f159cf5a3e": "Bu profildeki sitelerden çıkış yapmanıza neden olabilir."
         },
         "BrowserUseComputerUseNotice": {
           "79209b37b9": "Çerez içe aktarma uygun değilse Computer Use, yerel uygulamaları kontrol edebilir ve uygun olduğunda mevcut oturum açılmış tarayıcı oturumlarını kullanabilir. Orca Computer Use becerisini yükleyin; macOS ayrıca gizlilik izinleri gerektirir.",
@@ -11556,6 +11563,7 @@
           "e27c8d45bf": "Tanılama bir ortam değişkeni tarafından devre dışı bırakıldı."
         },
         "ShortcutCommandBlock": {
+          "retryAfterError": "Başka bir kısayola basın veya iptal etmek için Esc tuşuna basın.",
           "eb72c52c28": "Bir kısayola basın veya bir değiştirici tuşa iki kez dokunun (ör. {{value0}}). Esc iptal eder.",
           "70b5d25583": "{{value0}} kısayolu",
           "287e07ddde": "Değiştirildi",
@@ -13178,7 +13186,8 @@
           "catalog": "Katalog",
           "clear": "Filtreleri temizle",
           "themes": "Temalar",
-          "languages": "Diller",
+          "codeLanguages": "Programlama dilleri",
+          "translations": "Çeviriler",
           "icons": "Simgeler",
           "commands": "Komutlar ve paneller",
           "catalogLabel": "Kataloğa göre filtrele",
@@ -16524,10 +16533,9 @@
           "725868c75d": "Klasörlere göz at",
           "5e7f0d8a80": "Uzak dosyalar için klasör seçici kullanılamıyor",
           "30099dca46": "Klasör",
-          "2d7d39dc63": ".md",
           "c8ac7868e6": "dosya adı",
           "b6ed807cc6": "Ad",
-          "e365f3c638": "Markdown dosyanıza bir ad verin ve bir klasör seçin.",
+          "description": "Dosyanıza bir ad verin ve bir klasör seçin.",
           "674b046582": "Farklı kaydet",
           "nameEmpty": "Ad boş olamaz",
           "nameHasSeparators": "Ad yol ayırıcıları içeremez",
@@ -22598,6 +22606,8 @@
       "tabCloseAll": "Tüm düzenleyici sekmelerini kapat",
       "tabRename": "Etkin sekmeyi yeniden adlandır",
       "tabReopenClosed": "Kapatılan sekmeyi yeniden aç",
+      "tabMoveLeft": "Etkin sekmeyi sola taşı",
+      "tabMoveRight": "Etkin sekmeyi sağa taşı",
       "tabNextSameType": "Sonraki sekme (aynı tür)",
       "tabPreviousSameType": "Önceki sekme (aynı tür)",
       "tabNextAllTypes": "Sonraki sekme (tüm türler)",

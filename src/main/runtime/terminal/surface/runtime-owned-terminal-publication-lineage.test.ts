@@ -1,5 +1,5 @@
 import { expect, it, vi } from 'vitest'
-import type { RuntimeMobileSessionTabsResult } from '../../../../shared/runtime-session-contracts'
+import type { RuntimeMobileSessionTabsResult } from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 
 // Fragments stay side-effect ordered: mocks, then lifecycle, then fixtures.
 await import('../../orca-runtime-tests/runtime-test-module-registration.spec')

@@ -5,7 +5,7 @@ import type {
   StructuredChatStartTelemetryEvent,
   StructuredChatPromptTelemetryEvent,
   StructuredChatTelemetryEvent
-} from '../../shared/structured-chat-dispatch-telemetry'
+} from '../../shared/agent-session/requests/structured-chat-dispatch-telemetry'
 import { agentKindSchema } from '../../shared/telemetry-property-schemas'
 import { isTelemetryInitialized, track } from './client'
 import type { EventProps } from '../../shared/telemetry-events'

@@ -23,7 +23,7 @@ import type { BrowserPage, BrowserWorkspace } from '../../../shared/browser-work
 import type {
   RuntimeMobileSessionTabsResult,
   RuntimeSyncWindowGraph
-} from '../../../shared/runtime-session-contracts'
+} from '../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 
 const workspace: BrowserWorkspace = {
   id: 'browser-w',

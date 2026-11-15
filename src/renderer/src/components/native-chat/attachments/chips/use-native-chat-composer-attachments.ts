@@ -32,7 +32,7 @@ import {
   settlePendingImageReferences,
   takePendingImageWithReferences
 } from '../../composer/editor/native-chat-composer-image-references'
-import { isAgentInlineImagePath } from '../../../../../../shared/agent-inline-image-types'
+import { isAgentInlineImagePath } from '../../../../../../shared/native-chat/input/composer/agent-inline-image-types'
 import { useNativeChatPastedTextAdmission } from '../../composer/editor/native-chat-pasted-text-state'
 
 export function useNativeChatComposerAttachments({

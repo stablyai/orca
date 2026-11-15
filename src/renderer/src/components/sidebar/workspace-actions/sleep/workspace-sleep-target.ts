@@ -3,8 +3,11 @@ import {
   toRuntimeExecutionHostId,
   type ExecutionHostId
 } from '../../../../../../shared/execution-host'
-import { authorityKey, SELF_LOCAL_AUTHORITY } from '../../../../../../shared/host-authority'
-import type { RuntimeClientTarget } from '../../../../../../shared/runtime-client-target'
+import {
+  authorityKey,
+  SELF_LOCAL_AUTHORITY
+} from '../../../../../../shared/execution-host/host-authority'
+import type { RuntimeClientTarget } from '../../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import type {
   WorkspaceSleepHost,
   WorkspaceSleepTarget

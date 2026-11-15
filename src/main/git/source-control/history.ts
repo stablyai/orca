@@ -1,5 +1,5 @@
 import { resolveWorktreeHostPath } from '../../../shared/git/metadata/git-metadata-path'
-import { parseWslUncPath } from '../../../shared/wsl-paths'
+import { parseWslUncPath } from '../../../shared/file-access/wsl-paths'
 import { loadGitHistoryRefs } from '../../../shared/git/history/git-history-revisions'
 import type {
   GitHistoryOptions,

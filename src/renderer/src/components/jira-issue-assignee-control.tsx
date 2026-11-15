@@ -11,7 +11,7 @@ import {
   getTaskSourceCacheScope,
   type TaskSourceContext
 } from '../../../shared/work-items/task-source-context'
-import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import type { JiraIssue, JiraIssueUpdate, JiraUser } from '../../../shared/jira/jira-types'
 
 export function JiraIssueAssigneeControl({

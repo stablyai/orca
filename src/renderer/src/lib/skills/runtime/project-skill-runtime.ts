@@ -1,6 +1,6 @@
 // COMPAT(wsl-bridge): removed when WSL runs as an orcad host.
 import type { ProjectExecutionRuntimeResolution } from '../../../../../shared/execution-host/project-execution-runtime'
-import type { SkillDiscoveryTarget } from '../../../../../shared/skills'
+import type { SkillDiscoveryTarget } from '../../../../../shared/skills/discovery/skills'
 import type { GlobalSettings } from '../../../../../shared/global-settings-types'
 import { resolveWindowsShellStartupFamily } from '../../../../../shared/windows-terminal-shell'
 import { translate } from '@/i18n/i18n'

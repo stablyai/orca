@@ -10,7 +10,7 @@ import {
   isClaudeToolResultContent,
   claudeToolResultText,
   claudeToolResultFailed
-} from '../../../shared/claude-tool-content'
+} from '../../../shared/agent-hook-listener/providers/claude/transcripts/claude-tool-content'
 
 export function toolResultOutput(value: unknown): string {
   if (typeof value === 'string') {

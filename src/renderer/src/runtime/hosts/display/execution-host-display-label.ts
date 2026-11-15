@@ -4,7 +4,7 @@ import {
   parseExecutionHostId,
   type ExecutionHostId
 } from '../../../../../shared/execution-host'
-import { getHostSettingOverride } from '../../../../../shared/host-setting-overrides'
+import { getHostSettingOverride } from '../../../../../shared/execution-host/host-setting-overrides'
 import { getExecutionHostIdForWorktree } from '@/lib/workspace/ownership/worktree-runtime-owner'
 import { runtimeEnvironmentIdUnlessTwin } from '@/lib/workspace/ownership/resolve-owner'
 import { selectRuntimeAwareSshTargetLabel } from '@/store/slices/ssh/runtime-environment-ssh-selectors'

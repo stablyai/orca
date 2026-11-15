@@ -13,14 +13,14 @@ import {
   type ManagedRuntimeCallPreparation
 } from '../managed-orcad/runtime-environment-managed-tunnel'
 import { recordRuntimeEnvironmentUsage } from '../../../../shared/remote-runtime/host-store/runtime-environment-usage-record'
-import type * as Rpc from '../../../../shared/runtime-rpc-envelope'
+import type * as Rpc from '../../../../shared/remote-runtime/rpc/runtime-rpc-envelope'
 import { subscribeRemoteRuntimeTransport } from '../../../../shared/remote-runtime/requests/remote-runtime-subscription-transport'
 import type { RemoteRuntimeTransportSubscription } from '../../../../shared/remote-runtime/requests/remote-runtime-subscription-contract'
 import { withRuntimeUnreachableHint } from './runtime-environment-unreachable-hint'
 import { decodeRuntimeEnvironmentSubscriptionEvents } from '../subscriptions/runtime-environment-subscription-events'
 import { runtimeCallQueuePool } from './runtime-environment-call-queue'
-import { isTimedPRRead } from '../../../../shared/runtime-rpc-call-queue'
-import { enqueueRuntimeSubscription } from '../../../../shared/runtime-rpc-subscription-queue'
+import { isTimedPRRead } from '../../../../shared/remote-runtime/rpc/runtime-rpc-call-queue'
+import { enqueueRuntimeSubscription } from '../../../../shared/remote-runtime/rpc/runtime-rpc-subscription-queue'
 import {
   shouldRouteSubscriptionBySupport,
   subscribeSupportRoutedRuntimeEnvironment

@@ -36,10 +36,15 @@ vi.mock('../../../source-control/pull-request-linked-issue', () => ({
 vi.mock('../../../text-generation/execution/commit-message-agent-environment', () => ({
   prepareLocalCommitMessageAgentEnv: mocks.prepareLocalCommitMessageAgentEnv
 }))
-vi.mock('../../../text-generation/commit-message-text-generation', () => ({
-  generateCommitMessageFromContext: mocks.generateCommitMessageFromContext,
-  generatePullRequestFieldsFromContext: mocks.generatePullRequestFieldsFromContext
-}))
+vi.mock('../../../text-generation/commit-message-text-generation', async () => {
+  const { cancelLocalGeneration } =
+    await import('../../../text-generation/execution/source-control-generation-lanes')
+  return {
+    cancelGenerateCommitMessageLocal: (cwd: string) => cancelLocalGeneration('commit-message', cwd),
+    generateCommitMessageFromContext: mocks.generateCommitMessageFromContext,
+    generatePullRequestFieldsFromContext: mocks.generatePullRequestFieldsFromContext
+  }
+})
 vi.mock('../../../source-control/pull-request-template', () => ({
   resolveHostedReviewBodyForGeneration: mocks.resolveHostedReviewBodyForGeneration
 }))
@@ -89,6 +94,25 @@ describe('RuntimeGitGenerationCommands admission', () => {
     mocks.prepareLocalCommitMessageAgentEnv.mockResolvedValue({ ok: true, env: {} })
     mocks.generateCommitMessageFromContext.mockResolvedValue({ success: true, message: 'feat' })
     mocks.generatePullRequestFieldsFromContext.mockResolvedValue({ success: true, fields: {} })
+  })
+
+  it('honors a commit message cancel issued while staged context is loading', async () => {
+    const stagedContext = Promise.withResolvers<unknown>()
+    mocks.getStagedCommitContext.mockReturnValue(stagedContext.promise)
+    const commands = makeCommands(makeTarget('/repo'))
+
+    const result = commands.generateRuntimeCommitMessage('id:wt-1', settingsOverride)
+    await vi.waitFor(() => expect(mocks.getStagedCommitContext).toHaveBeenCalledOnce())
+    await commands.cancelRuntimeGenerateCommitMessage('id:wt-1')
+
+    await expect(result).resolves.toEqual({
+      success: false,
+      error: 'Generation canceled.',
+      canceled: true
+    })
+    stagedContext.resolve({ branch: 'main', stagedSummary: 'M\tREADME.md', stagedPatch: '+hello' })
+    await nextTurn()
+    expect(mocks.generateCommitMessageFromContext).not.toHaveBeenCalled()
   })
 
   describe('linked-issue lifetime', () => {

@@ -5,7 +5,7 @@ import type { RpcRequest } from '../../core'
 import type { OrcaRuntimeService } from '../../../orca-runtime'
 import { WORKTREE_METHODS } from './worktree'
 import '../../../../../shared/protocol-version'
-import '../../../../../shared/worktree-runtime-capabilities'
+import '../../../../../shared/remote-runtime/protocol/worktree-runtime-capabilities'
 
 import '../../../../../shared/electron-remote-runtime-client-capabilities'
 

@@ -3,7 +3,7 @@ import {
   includeTargetResolvedWorktree,
   type ResolvedWorktree
 } from '../../workspaces/catalog/runtime-worktree-path-identity'
-import type { RuntimeWorktreeTerminalSleepResult } from '../../../../shared/runtime-terminal-contracts'
+import type { RuntimeWorktreeTerminalSleepResult } from '../../../../shared/terminal/runtime/runtime-terminal-contracts'
 
 import { teardownRpcDeadline } from '../../workspaces/removal/worktree-teardown-deadline'
 import { sleptNothing } from './worktree-terminal-sleep-result'

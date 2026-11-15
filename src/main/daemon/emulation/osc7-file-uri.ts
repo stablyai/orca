@@ -1,4 +1,4 @@
-import { toWindowsWslPath } from '../../../shared/wsl-paths'
+import { toWindowsWslPath } from '../../../shared/file-access/wsl-paths'
 import { escapeLiteralPercent, hasNulCharacter } from '../../../shared/osc7-path-text'
 
 export type ParsedFileUriPath = {

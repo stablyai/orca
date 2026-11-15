@@ -6,7 +6,7 @@ import { z } from 'zod'
 import '../../../shared/agent-session/view/structured-agent-session-projection'
 import '../orchestration/addressing/session-lineage/structured-session-lineage'
 import '../../../shared/execution-host'
-import type { AgentSenderPublication } from '../../../shared/agent-sender-associations'
+import type { AgentSenderPublication } from '../../../shared/orchestration/mailbox/agent-sender-associations'
 import type { OrchestrationDb } from '../orchestration/db/orchestration-db'
 import { tolerant } from './agent-sender-row-decoding'
 

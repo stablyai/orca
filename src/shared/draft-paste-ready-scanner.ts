@@ -4,8 +4,8 @@ import type {
   DraftPasteReadySignal,
   TuiAgentConfig
 } from './agent-launch/catalog/tui-agent-config-types'
-import { createOpenCodeAgentRowScanner } from './opencode-agent-row-scanner'
-import { createCodexComposerReadyScanner } from './codex-composer-ready-scanner'
+import { createOpenCodeAgentRowScanner } from './agent-launch/startup/readiness/opencode-agent-row-scanner'
+import { createCodexComposerReadyScanner } from './agent-launch/startup/readiness/codex-composer-ready-scanner'
 
 // Paste mode precedes composer readiness; per-agent markers avoid guessing from output silence.
 const DECSET_BRACKETED_PASTE = '\x1b[?2004h'

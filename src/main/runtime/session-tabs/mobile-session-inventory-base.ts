@@ -2,7 +2,7 @@ import type { BrowserPageInventoryEntry } from '../../../shared/browser/runtime/
 import type {
   RuntimeMobileSessionTabsPublication,
   RuntimeMobileSessionTabsSnapshot
-} from '../../../shared/runtime-session-contracts'
+} from '../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 
 type AcceptedInventoryBase = {
   publicationEpoch: string

@@ -5,7 +5,7 @@ import type { MobileSessionWorktreeInputs } from './types'
 import type {
   RuntimeMobileSessionTabsPublication,
   RuntimeMobileSessionTabsSnapshot
-} from '../../../../shared/runtime-session-contracts'
+} from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 
 export function buildBrowserPageInventory(
   inputs: Pick<

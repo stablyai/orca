@@ -1,4 +1,4 @@
-import { tuiAgentToAgentKind } from '../../shared/agent-kind'
+import { tuiAgentToAgentKind } from '../../shared/agent-status/identity/agent-kind'
 import { isTuiAgent } from '../../shared/agent-launch/catalog/tui-agent-config'
 import type { EventProps } from '../../shared/telemetry-events'
 import type { JournalWriterCommit } from '../native-chat/agent-session-journal/journal-writer-changes'

@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { promisify } from 'node:util'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
-import { CODEX_NO_DAEMON_SKIP_ARGS } from '../../../shared/codex-shell-function'
+import { CODEX_NO_DAEMON_SKIP_ARGS } from '../../../shared/shell/launch/agents/codex-shell-function'
 
 // Fake binaries cannot detect renamed flags or subcommands rejecting the wrapper's --no-daemon rule.
 

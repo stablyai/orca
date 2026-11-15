@@ -3,7 +3,7 @@ import { createServer, type Socket } from 'node:net'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { getRuntimeMetadataPath } from '../../../shared/runtime-bootstrap'
+import { getRuntimeMetadataPath } from '../../../shared/remote-runtime/bootstrap/runtime-bootstrap'
 import { RuntimeClient } from '../client'
 
 const servers = new Set<ReturnType<typeof createServer>>()

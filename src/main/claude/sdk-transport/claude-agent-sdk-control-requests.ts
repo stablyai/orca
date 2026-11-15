@@ -3,6 +3,10 @@ import type {
   Query,
   SDKControlInterruptResponse
 } from '@anthropic-ai/claude-agent-sdk'
+import {
+  providerDiagnostic,
+  withProviderDiagnostic
+} from '../../../shared/agent-session/failures/agent-session-failure'
 
 export class ClaudeControlRequestError extends Error {
   constructor(
@@ -77,7 +81,13 @@ export function runClaudeControl<T>(
       if (error instanceof ClaudeControlRequestError || message === QUERY_CLOSED_MESSAGE) {
         throw error
       }
-      throw new ClaudeControlRequestError(subtype, message, { cause: error })
+      // SDK tags only its own transport failures; untagged errors carry Claude's answer for Details.
+      const answered =
+        error instanceof Error && !('errorClass' in error && typeof error.errorClass === 'string')
+      throw withProviderDiagnostic(
+        new ClaudeControlRequestError(subtype, message, { cause: error }),
+        answered ? providerDiagnostic(message, 'log') : undefined
+      )
     })
   if (timeoutMs === null) {
     return request

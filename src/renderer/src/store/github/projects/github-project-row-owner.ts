@@ -1,6 +1,6 @@
 import type { GlobalSettings } from '../../../../../shared/global-settings-types'
 import type { Repo } from '../../../../../shared/repo-types'
-import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import { runtimeTargetForRepoOwner } from '@/lib/workspace/ownership/repo-runtime-owner'
 import { lookupReposBySlugFromCache } from '@/lib/workspace/catalog/repo-slug-cache'
 

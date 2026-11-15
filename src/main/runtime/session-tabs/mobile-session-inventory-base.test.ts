@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { BrowserPageInventoryEntry } from '../../../shared/browser/runtime/browser-page-inventory'
 import { browserPageInventorySchema } from '../../../shared/browser/runtime/browser-page-inventory'
-import type { RuntimeMobileSessionTabsPublication } from '../../../shared/runtime-session-contracts'
+import type { RuntimeMobileSessionTabsPublication } from '../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import type { WorktreeMeta } from '../../../shared/worktree/meta-types'
 import type { RuntimeStore } from '../construction/runtime-store-contract'
 import { AgentBrowserBridge } from '../../browser/agent-browser/agent-browser-bridge'

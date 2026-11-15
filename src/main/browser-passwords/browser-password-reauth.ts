@@ -58,12 +58,6 @@ export async function confirmBrowserPasswordOwner(
   return true
 }
 
-/** Test seam: forget the last successful check and the enrollment lookup. */
-export function resetBrowserPasswordReauthForTests(): void {
-  lastReauthAt = null
-  touchIdEnrolled = null
-}
-
 export async function confirmBrowserPasswordFill(): Promise<boolean> {
   return (
     !browserPasswordSettings().fillRequiresReauth ||

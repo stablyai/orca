@@ -1,13 +1,13 @@
 import type { BrowserInitializationPresentation } from './browser-initialization-presentation'
 import type { AppState } from '../../store/types'
 import type { RetiredTerminalTabSweepState } from '../../store/terminals/retirement/retired-terminal-tab-state-sweep'
-import type { RuntimeMobileSessionTabsResult } from '../../../../shared/runtime-types'
+import type { RuntimeMobileSessionTabsResult } from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import type {
   RuntimeMobileSessionBrowserTab,
   RuntimeMobileSessionFileTab,
   RuntimeMobileSessionMarkdownTab,
   RuntimeMobileSessionTerminalClientTab
-} from '../../../../shared/runtime-mobile-session-tab-contracts'
+} from '../../../../shared/remote-runtime/session-graph/runtime-mobile-session-tab-contracts'
 import type {
   BrowserCertificateFailure,
   BrowserPage,
@@ -19,7 +19,7 @@ import type {
   TerminalTab
 } from '../../../../shared/workspace-layout/terminal-tab-types'
 import type { OpenFile } from '../../store/slices/editor/types/open-file'
-import type { RuntimeBrowserPlacement } from '../../../../shared/runtime-browser-placement'
+import type { RuntimeBrowserPlacement } from '../../../../shared/browser/client-hosting/runtime-browser-placement'
 
 export const WEB_SESSION_GROUP_PREFIX = 'web-session-tabs:'
 export const WEB_SESSION_TABS_VISIBILITY_RESUME_STAGGER_MS = 100

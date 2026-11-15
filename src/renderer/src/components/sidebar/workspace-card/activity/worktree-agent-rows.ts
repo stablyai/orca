@@ -19,7 +19,7 @@ import type {
   TerminalLayoutSnapshot,
   TerminalTab
 } from '../../../../../../shared/workspace-layout/terminal-tab-types'
-import { resolveRuntimePaneTitleLeafId } from '../../../../../../shared/runtime-pane-title-leaf-id'
+import { resolveRuntimePaneTitleLeafId } from '../../../../../../shared/workspace-layout/terminal-topology/runtime-pane-title-leaf-id'
 import { resolveAgentRowState } from '../../../../../../shared/agent-status/presentation/agent-row-decay-state'
 import { tabHasLivePty } from '../../../../../../shared/tab-has-live-pty'
 import { buildTitleDerivedAgentRows } from './worktree-title-derived-agent-rows'

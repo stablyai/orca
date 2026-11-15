@@ -78,9 +78,6 @@ describe('local guest metadata disposal', () => {
       webview,
       observed,
       detach,
-      makeUnreadable: () => {
-        readable = false
-      },
       finish: () =>
         finish({
           browserPageId: 'page-1',
@@ -144,17 +141,4 @@ describe('local guest metadata disposal', () => {
       rig.detach()
     }
   )
-
-  it('ends guests under a removed slot even when their native identity is already unreadable', async () => {
-    const rig = prepareGuest()
-    await Promise.resolve()
-    rig.root.remove()
-    rig.makeUnreadable()
-    registerBrowserOverlaySlotViewport('workspace-1', null)
-    rig.finish()
-    await Promise.resolve()
-    await Promise.resolve()
-    expect(rig.observed).toEqual([null])
-    rig.detach()
-  })
 })

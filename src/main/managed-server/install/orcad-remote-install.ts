@@ -1,6 +1,9 @@
 import { randomUUID } from 'node:crypto'
-import { orcadNodePtyNativeArtifacts, orcadRipgrepArtifact } from '../../../shared/orcad-artifacts'
-import { orcadAgentBrowserNativeName } from '../../../shared/orcad-agent-browser-name'
+import {
+  orcadNodePtyNativeArtifacts,
+  orcadRipgrepArtifact
+} from '../../../shared/remote-runtime/orcad-distribution/orcad-artifacts'
+import { orcadAgentBrowserNativeName } from '../../../shared/remote-runtime/orcad-distribution/orcad-agent-browser-name'
 import type { NodeRuntimeTarget } from '../../../shared/node-runtime-pin'
 import { ensureRemoteOrcadNodeRuntime } from './orcad-remote-node-runtime'
 import { recordedRemoteNodeRuntimeProbeCommand } from './orcad-remote-node-runtime-recorded-probe'

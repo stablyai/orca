@@ -1,6 +1,6 @@
 import { basename } from 'node:path'
 import type { AiVaultScanIssue } from '../../../../../shared/ai-vault/contracts/ai-vault-types'
-import { isWslUncPath } from '../../../../../shared/wsl-paths'
+import { isWslUncPath } from '../../../../../shared/file-access/wsl-paths'
 import {
   aiVaultScanIssueText,
   type AiVaultScanIssueText
