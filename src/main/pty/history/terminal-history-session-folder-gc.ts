@@ -2,6 +2,7 @@
 
 import { lstat, stat } from 'node:fs/promises'
 import { dirname, resolve } from 'node:path'
+import { errnoCodeOrUnknown } from '../../../shared/errors/errno-code'
 import { parsePtySessionId } from '../../../shared/terminal/pty/lifecycle/pty-session-id-format'
 import { parseWorkspaceKey } from '../../../shared/workspace/identity/workspace-scope'
 import { FOLDER_WORKSPACE_INSTANCE_SEPARATOR, splitWorktreeId } from '../../../shared/worktree/id'
@@ -89,7 +90,7 @@ async function isLocalWorktreeGone(
     await lstat(parsed.worktreePath)
     return false
   } catch (error) {
-    return (error as NodeJS.ErrnoException)?.code === 'ENOENT'
+    return errnoCodeOrUnknown(error) === 'ENOENT'
   }
 }
 
