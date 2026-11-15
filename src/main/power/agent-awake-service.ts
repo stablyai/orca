@@ -100,6 +100,14 @@ export class AgentAwakeService {
     this.refresh('status-change')
   }
 
+  updateStatus(paneKey: string, status?: AgentAwakeStatus): void {
+    this.statusLease.remove(paneKey)
+    if (status) {
+      this.statusLease.renew(status)
+    }
+    this.refresh('status-change')
+  }
+
   /** Renew one accepted observation without rescanning every active agent. */
   observeStatusFreshness(status: AgentAwakeStatus): void {
     if (!this.statusLease.renew(status)) {

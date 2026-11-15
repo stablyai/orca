@@ -1,3 +1,4 @@
+import { acceptedAgentStatuses } from '@/store/slices/agent-status/accepted-agent-statuses'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { getDefaultWorkspaceSession } from '../../src/shared/constants'
 import type { RuntimeMobileSessionTabsSnapshot } from '../../src/shared/remote-runtime/session-graph/runtime-session-contracts'
@@ -33,7 +34,7 @@ function makeViewerState(): WebSessionTabsSyncState {
     activeTabType: 'terminal',
     activeTabTypeByWorktree: {},
     activeWorktreeId: WORKTREE_ID,
-    agentStatusByPaneKey: {},
+    agentStatusByPaneKey: acceptedAgentStatuses(Object.entries({})),
     agentStatusEpoch: 0,
     browserCertificateFailuresByPageId: {},
     browserPagesByWorkspace: {},

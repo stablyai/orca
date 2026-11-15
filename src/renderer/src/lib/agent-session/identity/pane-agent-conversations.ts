@@ -146,7 +146,7 @@ export function collectAgentPaneConversations<Agent extends AgentType>(
         worktreeId: options.pane.worktreeId,
         tabId: tabIdFromPaneKey(
           options.pane.paneKey,
-          state.agentStatusByPaneKey[options.pane.paneKey]?.tabId ??
+          state.agentStatusByPaneKey.get(options.pane.paneKey)?.tabId ??
             state.sleepingAgentSessionsByPaneKey[options.pane.paneKey]?.tabId
         )
       }
@@ -200,7 +200,12 @@ export function collectAgentPaneConversations<Agent extends AgentType>(
       worktreeId: record.worktreeId
     })
   }
-  for (const entry of records(state.agentStatusByPaneKey)) {
+  const live = options.pane
+    ? [state.agentStatusByPaneKey.get(options.pane.paneKey)].filter(
+        (entry): entry is NonNullable<typeof entry> => entry !== undefined
+      )
+    : state.agentStatusByPaneKey.values()
+  for (const entry of live) {
     registerCandidate(state, tabsById, candidates, isAgent, liveCandidate(entry))
   }
 
