@@ -34,6 +34,7 @@ import { claudeChildToolQueries } from '../../subagents/claude-child-tool-querie
 import { journalClaudeMessage, journalClaudeStream } from './claude-message-journaling'
 import type { ClaudeMessageJournalContext } from './claude-message-journaling'
 import { journalClaudeResult } from './claude-result-journaling'
+import { endClaudeStreams } from './claude-open-stream-endings'
 import type { ClaudeResultJournalContext } from './claude-result-journaling'
 import { ClaudeAssistantFailures } from './claude-assistant-failures'
 import { ClaudeUsageLimits } from './claude-usage-limits'
@@ -63,7 +64,7 @@ export function createClaudeJournalTranslator(
     sink: deps.sink,
     // Keep existing stamps when superseding a turn ends pending attribution corrections.
     turnSuperseded: () => corrections.abandon(),
-    endOpenWork: (completedAt) => streamedThinking.finishOpen(completedAt),
+    endOpenWork: (at) => endClaudeStreams(streamedThinking, streamedText, streamedBlocks, at),
     onOpen: () => context.markActivity()
   })
   const context = new ClaudeContextFacts(turn, deps.sink)

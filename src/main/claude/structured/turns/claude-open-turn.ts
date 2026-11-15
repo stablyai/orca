@@ -210,10 +210,11 @@ export class ClaudeOpenTurn {
     contextUsage?: AgentSessionContextUsage,
     stopped?: ClaudeStoppedTurnEnd
   ): void {
-    // Only a verdictless end (idle) takes the held ending; a real result keeps its own.
+    // Only a verdictless end (idle) takes the held verdict, at idle's time; a real result keeps its own.
+    const held = this.steerHandoffEnd
     const end =
-      settled.outcome === undefined && settled.state === 'completed'
-        ? (this.steerHandoffEnd ?? settled)
+      held && settled.outcome === undefined && settled.state === 'completed'
+        ? { state: held.state, outcome: held.outcome, completedAt: settled.completedAt }
         : settled
     this.steerHandoffEnd = null
     const quotaEnd = (ending: ClaudeTurnEnd) =>

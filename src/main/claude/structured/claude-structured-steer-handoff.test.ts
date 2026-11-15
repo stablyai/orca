@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import type { AgentJournalItemBody } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentJournalItemIdentity } from '../../../shared/agent-session/journal/agent-session-journal-identity'
 import { readAgentJournalTurn } from '../../../shared/agent-session/lifecycle/records/agent-session-turn-record'
+import { createClaudeJournalTranslator } from './journal/claude-structured-journal-translation'
 import type { StructuredAgentSessionEventSink } from '../../native-chat/agent-session-wire/journal-ingress/structured-agent-session-event-sink'
 import {
   PROVIDER_SESSION_ID,
@@ -159,6 +160,63 @@ describe('a Claude steer during foreground work', () => {
       turnId: 'turn-1',
       state: 'interrupted',
       outcome: 'cancellation'
+    })
+  })
+})
+
+describe('a subagent text stream after a steer hand-off', () => {
+  it('ends when the turn goes idle, so cancelled turns retain no blocks', () => {
+    const writes: { body: AgentJournalItemBody; lifecycle?: boolean }[] = []
+    const translator = createClaudeJournalTranslator({
+      sink: {
+        appendItem: (_identity, body, options) =>
+          writes.push({ body, lifecycle: options?.lifecycle }),
+        appendTombstone: () => {},
+        publish: () => {}
+      },
+      steerAwaitingEcho: () => true
+    })
+    const frame = (message: Record<string, unknown>, observedAt: number, startsTurn = false) =>
+      translator.handle({
+        type: 'message',
+        sessionId: 'orca-session',
+        observedAt,
+        ...(startsTurn ? { startsTurn: true } : {}),
+        message: { session_id: 'claude-session', parent_tool_use_id: null, ...message }
+      })
+    frame({ type: 'user', uuid: 'prompt', message: { role: 'user', content: 'go' } }, 1_000, true)
+    frame(
+      {
+        type: 'stream_event',
+        uuid: 'child-delta',
+        parent_tool_use_id: 'agent-tool',
+        event: {
+          type: 'content_block_delta',
+          index: 0,
+          delta: { type: 'text_delta', text: 'Half' }
+        }
+      },
+      2_000
+    )
+    frame(
+      {
+        type: 'result',
+        subtype: 'success',
+        uuid: 'r',
+        is_error: false,
+        terminal_reason: 'aborted_tools'
+      },
+      3_000
+    )
+    expect(translator.pendingStreamedBlocks).toBe(1)
+
+    frame({ type: 'system', subtype: 'session_state_changed', state: 'idle', uuid: 'idle' }, 9_000)
+
+    expect(translator.pendingStreamedBlocks).toBe(0)
+    // The ending write must survive backpressure: no later frame would end the row.
+    expect(writes.at(-2)).toMatchObject({
+      body: { role: 'assistant', blocks: [{ type: 'text', text: 'Half' }] },
+      lifecycle: true
     })
   })
 })
