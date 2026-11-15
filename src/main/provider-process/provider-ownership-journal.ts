@@ -1,4 +1,4 @@
-import { constants } from 'node:fs'
+import { constants, accessSync, lstatSync, mkdirSync } from 'node:fs'
 import { mkdir, lstat, open, opendir, rename, unlink } from 'node:fs/promises'
 import { randomUUID } from 'node:crypto'
 import { hostname } from 'node:os'
@@ -6,6 +6,7 @@ import { join, resolve } from 'node:path'
 import { setTimeout as delay } from 'node:timers/promises'
 import { z } from 'zod'
 import { getAppEnvironment } from '../../shared/app-environment'
+import { profileStateAccessBootIdentity } from '../persistence/profile-state/access/profile-state-access-identity'
 import { readPosixProcessRow, type ProcessRowRead } from './provider-process-row-read'
 import {
   proveProviderProcessIdentity,
@@ -37,10 +38,35 @@ const recordSchema = z.object({
 })
 const startups = new Map<string, Promise<void>>()
 const MAX_RECORD_BYTES = 16_384
+const availableDirectories = new Map<string, boolean>()
 let ownerIdentity: ReturnType<typeof proveProviderProcessIdentity> | undefined
 
 export function providerOwnershipDirectory(): string {
   return join(getAppEnvironment().getPath('userData'), 'provider-processes')
+}
+
+/** This synchronous launch seam checks host capability once, never once per chat. */
+export function providerOwnershipAvailable(): boolean {
+  const directory = providerOwnershipDirectory()
+  const previous = availableDirectories.get(directory)
+  if (previous !== undefined) {
+    return previous
+  }
+  let available = false
+  try {
+    const bootId = profileStateAccessBootIdentity()
+    if (bootId && /^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/i.test(bootId)) {
+      mkdirSync(directory, { recursive: true, mode: 0o700 })
+      const info = lstatSync(directory)
+      accessSync(directory, constants.R_OK | constants.W_OK | constants.X_OK)
+      available =
+        info.isDirectory() &&
+        (info.mode & 0o077) === 0 &&
+        (!process.getuid || info.uid === process.getuid())
+    }
+  } catch {}
+  availableDirectories.set(directory, available)
+  return available
 }
 
 export async function waitForProviderGroupReap(
@@ -209,7 +235,8 @@ export async function publishProviderOwnership(
   directory: string,
   bootId: string,
   leaderPid: number,
-  watcherPid: number
+  watcherPid: number,
+  parentPid = process.pid
 ): Promise<{
   identity: ProviderGroupIdentity
   remove: () => Promise<void>
@@ -217,10 +244,11 @@ export async function publishProviderOwnership(
 }> {
   await recoverProviderOwnership(directory, bootId)
   ownerIdentity ??= proveProviderProcessIdentity(process.pid)
-  const [owner, leader, watcher] = await Promise.all([
+  const [owner, leader, watcher, parent] = await Promise.all([
     ownerIdentity,
     proveProviderProcessIdentity(leaderPid),
-    proveProviderProcessIdentity(watcherPid)
+    proveProviderProcessIdentity(watcherPid),
+    parentPid === process.pid ? ownerIdentity : proveProviderProcessIdentity(parentPid)
   ])
   if (!owner) {
     ownerIdentity = undefined
@@ -229,7 +257,9 @@ export async function publishProviderOwnership(
     !owner ||
     !leader ||
     !watcher ||
-    leader.ppid !== process.pid ||
+    !parent ||
+    (parentPid !== process.pid && parent.ppid !== process.pid) ||
+    leader.ppid !== parentPid ||
     leader.pgid !== leaderPid ||
     watcher.ppid !== leaderPid ||
     watcher.pgid !== watcherPid ||
@@ -254,17 +284,10 @@ export async function publishProviderOwnership(
   try {
     try {
       await file.writeFile(JSON.stringify(record))
-      await file.sync()
     } finally {
       await file.close()
     }
     await rename(pending, path)
-    const dir = await open(directory, 'r')
-    try {
-      await dir.sync()
-    } finally {
-      await dir.close()
-    }
   } catch (error) {
     await unlink(pending).catch(() => {})
     throw error

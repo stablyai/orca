@@ -1,18 +1,20 @@
 import type { Readable } from 'node:stream'
 
 export function readBootstrapStatus(stream: Readable): {
-  initial: Promise<{ watcherPid: number; bootId: string }>
+  initial: Promise<{ leaderPid: number; watcherPid: number; bootId: string }>
   ended: Promise<number | null>
   checkGated: () => void
 } {
-  let ready: (value: { watcherPid: number; bootId: string }) => void = () => {}
+  let ready: (value: { leaderPid: number; watcherPid: number; bootId: string }) => void = () => {}
   let failReady: (error: Error) => void = () => {}
   let finish: (errno: number | null) => void = () => {}
   let failEnd: (error: Error) => void = () => {}
-  const initial = new Promise<{ watcherPid: number; bootId: string }>((resolve, reject) => {
-    ready = resolve
-    failReady = reject
-  })
+  const initial = new Promise<{ leaderPid: number; watcherPid: number; bootId: string }>(
+    (resolve, reject) => {
+      ready = resolve
+      failReady = reject
+    }
+  )
   const ended = new Promise<number | null>((resolve, reject) => {
     finish = resolve
     failEnd = reject
@@ -51,6 +53,10 @@ export function readBootstrapStatus(stream: Readable): {
         }
         if (
           !bootstrapped &&
+          'leaderPid' in value &&
+          typeof value.leaderPid === 'number' &&
+          Number.isSafeInteger(value.leaderPid) &&
+          value.leaderPid > 1 &&
           'watcherPid' in value &&
           typeof value.watcherPid === 'number' &&
           Number.isSafeInteger(value.watcherPid) &&
@@ -61,7 +67,7 @@ export function readBootstrapStatus(stream: Readable): {
           value.bootId.length <= 255
         ) {
           bootstrapped = true
-          ready({ watcherPid: value.watcherPid, bootId: value.bootId })
+          ready({ leaderPid: value.leaderPid, watcherPid: value.watcherPid, bootId: value.bootId })
         } else if (
           bootstrapped &&
           errno === null &&
@@ -103,5 +109,19 @@ export function readBootstrapStatus(stream: Readable): {
         throw new Error('Provider bootstrap closed before gate release')
       }
     }
+  }
+}
+
+export async function withProviderBootstrapDeadline(start: () => Promise<void>): Promise<void> {
+  let timer: NodeJS.Timeout | undefined
+  try {
+    await Promise.race([
+      start(),
+      new Promise<never>((_, reject) => {
+        timer = setTimeout(() => reject(new Error('Provider ownership startup timed out')), 15_000)
+      })
+    ])
+  } finally {
+    clearTimeout(timer)
   }
 }

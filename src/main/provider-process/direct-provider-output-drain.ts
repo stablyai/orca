@@ -1,5 +1,20 @@
 import { PassThrough, type Readable } from 'node:stream'
+import type { ChildProcess } from 'node:child_process'
 import { PROVIDER_OUTPUT_DRAIN_TIMEOUT_MS } from './provider-process-supervisor'
+
+export function pipeDirectProviderOutput(
+  raw: ChildProcess,
+  stdout: PassThrough,
+  stderr: PassThrough
+): void {
+  raw.stdout?.on('error', (error) => stdout.destroy(error))
+  raw.stderr?.on('error', (error) => stderr.destroy(error))
+  stdout.on('error', () => {})
+  stderr.on('error', () => {})
+  // Protocol peers see EOF after group cleanup and drain, including readers attached after exit.
+  raw.stdout?.pipe(stdout, { end: false })
+  raw.stderr?.pipe(stderr, { end: false })
+}
 
 export function drainDirectProviderOutput(
   stdout: Readable | null,
@@ -19,22 +34,32 @@ export function drainDirectProviderOutput(
     }
   }
   const sources = [stdout, stderr].filter((stream): stream is Readable => stream !== null)
-  return drainOutput(sources, [outputStdout, outputStderr]).finally(() => {
+  return drainOutput(sources, [outputStdout, outputStderr]).finally(async () => {
+    const finalReaders: (() => void)[] = []
     for (const [source, output] of [
       [stdout, outputStdout],
       [stderr, outputStderr]
     ] as const) {
       if (source && !source.destroyed) {
         source.unpipe(output)
-        source.pause()
-        const remaining = source.readableLength
-        if (remaining > 0) {
-          output.write(source.read(remaining))
+        const forward = (chunk: Buffer): void => {
+          output.write(chunk)
         }
-        source.destroy()
+        source.on('data', forward)
+        source.resume()
+        finalReaders.push(() => {
+          source.off('data', forward)
+          source.destroy()
+        })
       }
-      output.end()
     }
+    // An overdue deadline still gives kernel-buffered tail bytes one poll phase to arrive.
+    await new Promise<void>((resolve) => setImmediate(resolve))
+    for (const cleanup of finalReaders) {
+      cleanup()
+    }
+    outputStdout.end()
+    outputStderr.end()
   })
 }
 

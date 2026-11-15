@@ -1,4 +1,5 @@
 import { mkdtemp, rm, writeFile, readdir, readFile } from 'node:fs/promises'
+import type * as FsPromises from 'node:fs/promises'
 import { setTimeout as delay } from 'node:timers/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -11,7 +12,22 @@ import {
 } from './provider-process-supervisor'
 import type { ProviderChild } from './provider-child'
 
-const state = vi.hoisted(() => ({ root: '' }))
+const state = vi.hoisted(() => ({
+  root: '',
+  holdPublication: undefined as Promise<void> | undefined,
+  publicationStarted: undefined as (() => void) | undefined
+}))
+vi.mock('node:fs/promises', async (importOriginal) => {
+  const fs = await importOriginal<typeof FsPromises>()
+  return {
+    ...fs,
+    rename: async (...args: Parameters<typeof fs.rename>) => {
+      await fs.rename(...args)
+      state.publicationStarted?.()
+      await state.holdPublication
+    }
+  }
+})
 vi.mock('../../shared/app-environment', () => ({
   getAppEnvironment: () => ({
     getPath: () => state.root,
@@ -304,12 +320,64 @@ describe.runIf(process.platform !== 'win32')('direct provider ownership', () => 
     expect(run.output()).toBe('')
   })
 
-  it('keeps the execution gate shut when ownership publication fails', async () => {
-    await writeFile(join(state.root, 'provider-processes'), 'blocked')
-    const run = launch("process.stdout.write('MUST NOT EXECUTE')", { lifetime: 'one-shot' })
-    await expect(run.child.ready).rejects.toThrow()
+  it('retires a stopped launch canceled while its ownership publication is in flight', async () => {
+    let release = (): void => {}
+    let publicationStarted = (): void => {}
+    const published = new Promise<void>((resolve) => {
+      publicationStarted = resolve
+    })
+    state.holdPublication = new Promise<void>((resolve) => {
+      release = resolve
+    })
+    state.publicationStarted = publicationStarted
+    const marker = join(state.root, 'executed')
+    const run = launch(`require('node:fs').writeFileSync(${JSON.stringify(marker)}, 'ran')`, {
+      lifetime: 'one-shot'
+    })
+    try {
+      await published
+      run.child.kill('SIGSTOP')
+      run.child.kill('SIGKILL')
+    } finally {
+      release()
+      state.holdPublication = undefined
+      state.publicationStarted = undefined
+    }
     await run.closed
-    expect(run.output()).toBe('')
-    expect(run.errors).toHaveLength(1)
+    await expect(readFile(marker)).rejects.toMatchObject({ code: 'ENOENT' })
+    expect(await readdir(join(state.root, 'provider-processes'))).toEqual([])
+  })
+
+  it('distinguishes a missing CLI from a real exit 127 on the compatibility path', async () => {
+    await writeFile(join(state.root, 'provider-processes'), 'blocked')
+    const missing = launch(
+      '',
+      { lifetime: 'one-shot' },
+      { command: join(state.root, 'absent-cli') }
+    )
+    await missing.closed
+    expect(missing.errors[0]).toMatchObject({ code: 'ENOENT', providerExecutableMissing: true })
+    const real = launch('process.exit(127)', { lifetime: 'one-shot' })
+    await expect(real.exit).resolves.toEqual({ code: 127, signal: null })
+    expect(real.errors).toEqual([])
+  })
+
+  it('cleans the CLI group when a compatibility supervisor is killed', async () => {
+    await writeFile(join(state.root, 'provider-processes'), 'blocked')
+    const run = launch("process.stdout.write('ready\\n'); setInterval(() => {}, 60000)")
+    await run.untilOutput('ready')
+    run.child.kill('SIGKILL')
+    await run.closed
+    expect(run.child.groupVerdict).toBe('exited')
+  })
+
+  it('keeps provider launches working through the legacy supervisor when recovery storage is unavailable', async () => {
+    await writeFile(join(state.root, 'provider-processes'), 'blocked')
+    const run = launch("process.stdout.end('answer from compatibility path')", {
+      lifetime: 'one-shot'
+    })
+    await expect(run.exit).resolves.toEqual({ code: 0, signal: null })
+    expect(run.output()).toBe('answer from compatibility path')
+    expect(run.errors).toEqual([])
   })
 })

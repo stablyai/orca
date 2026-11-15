@@ -101,7 +101,7 @@ describe('terminateProviderProcessTree', () => {
 })
 
 it('records a held provider kill without claiming unobserved descendants exited', async () => {
-  const target = child()
+  const target = { ...child(), leaderExited: false, writerPid: 1234 }
   await expect(
     terminateWithEvidence(target, {
       site: 'writer-kill-proof',

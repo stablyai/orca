@@ -1,5 +1,4 @@
 import { constants } from 'node:os'
-import type { ChildProcess } from 'node:child_process'
 import { recordSelfInitiatedTreeKill } from '../crash-reporting/process-exits/self-initiated-tree-kill-log'
 import {
   type publishProviderOwnership,
@@ -13,7 +12,7 @@ import type { ProviderControlCompletion } from './provider-control-completion'
 export function reapDirectProviderGroup(
   delivered: boolean,
   pid: () => number | undefined,
-  ownership: () => Awaited<ReturnType<typeof publishProviderOwnership>> | undefined,
+  ownership: () => Promise<Awaited<ReturnType<typeof publishProviderOwnership>>> | undefined,
   setVerdict: (verdict: 'exited' | 'unverifiable') => void,
   onFinished: () => void,
   completion?: ProviderControlCompletion,
@@ -35,7 +34,7 @@ export function reapDirectProviderGroup(
       setVerdict('unverifiable')
       return
     }
-    const registered = ownership()
+    const registered = await ownership()
     if (completion === 'group-absent') {
       // The native frame plus EOF proves the group was absent and the session watcher exited.
       setVerdict('exited')
@@ -62,7 +61,7 @@ export function reapDirectProviderGroup(
     }
     setVerdict(absent ? 'exited' : 'unverifiable')
     if (absent) {
-      await ownership()?.remove()
+      await registered?.remove()
     }
   }
   return Promise.race([
@@ -88,8 +87,16 @@ export function reapDirectProviderGroup(
     })
 }
 
+export function signalDirectProviderRoot(pid: number, signal: NodeJS.Signals | number): boolean {
+  try {
+    process.kill(pid, signal)
+    return true
+  } catch {
+    return false
+  }
+}
+
 export function signalDirectProviderGroup(
-  raw: ChildProcess,
   pid: number,
   signal: NodeJS.Signals,
   recordDelivery: (delivered: boolean) => void
@@ -98,7 +105,7 @@ export function signalDirectProviderGroup(
     process.kill(-pid, signal)
     recordDelivery(true)
   } catch {
-    const delivered = raw.kill(signal)
+    const delivered = signalDirectProviderRoot(pid, signal)
     recordDelivery(delivered)
     return delivered
   }

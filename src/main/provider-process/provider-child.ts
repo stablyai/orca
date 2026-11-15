@@ -15,22 +15,15 @@ export type ProviderChild = Pick<
   | 'kill'
 > &
   EventEmitter & {
-    rootAbsent?: boolean
     spawnAbsenceKnown?: boolean
+    /** Actual CLI writer, which differs from the root on the compatibility path. */
+    readonly writerPid?: number
     ready?: Promise<void>
-    signalRoot?: (signal: NodeJS.Signals) => Promise<boolean>
     /** Group observation is independent of the real leader's outcome. */
     readonly groupVerdict?: DescendantTreeVerdict
-    /** Prevent PID-based tree reads after the held OS leader has actually exited. */
+    /** Prevent PID-based tree reads after the held OS root has actually exited. */
     readonly leaderExited?: boolean
   }
-
-export async function signalProviderRoot(
-  child: Pick<ProviderChild, 'kill' | 'signalRoot'>,
-  signal: NodeJS.Signals
-): Promise<boolean> {
-  return child.signalRoot ? child.signalRoot(signal) : child.kill(signal)
-}
 
 export async function awaitProviderChildSpawn(child: ProviderChild): Promise<void> {
   if (child.ready) {
@@ -55,10 +48,4 @@ export async function awaitProviderChildSpawn(child: ProviderChild): Promise<voi
     child.once('spawn', onSpawn)
     child.once('error', onError)
   })
-}
-
-export function providerSpawnAbsenceKnown(
-  child: Pick<ProviderChild, 'pid' | 'spawnAbsenceKnown'>
-): boolean {
-  return child.spawnAbsenceKnown ?? child.pid === undefined
 }

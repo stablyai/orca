@@ -7,6 +7,7 @@ import { Readable, Writable } from 'node:stream'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createProviderSpawnSpec, resolveProviderExecPath } from './provider-process-supervisor'
 import { spawnProviderProcess } from './provider-process-spawn'
+import { readProviderLeaderOutcome } from './provider-leader-outcome'
 import {
   proveProviderProcessIdentity,
   providerGroupAbsent,
@@ -96,11 +97,15 @@ async function gatedNative() {
     {
       env: process.env,
       detached: true,
-      stdio: ['pipe', 'pipe', 'pipe', 'pipe', 'pipe', 'pipe']
+      stdio: ['pipe', 'pipe', 'pipe', 'pipe', 'pipe', 'pipe', 'pipe']
     }
   )
   const closed = track(child)
-  const exited = new Promise<void>((resolve) => child.once('exit', () => resolve()))
+  const outcome = child.stdio.at(6)
+  if (!(outcome instanceof Readable)) {
+    throw new Error('Missing leader outcome')
+  }
+  const exited = readProviderLeaderOutcome(outcome)
   const status = child.stdio.at(5)
   const control = child.stdio.at(3)
   if (!(status instanceof Readable) || !(control instanceof Writable) || !child.pid) {
@@ -116,17 +121,17 @@ async function gatedNative() {
   if (control instanceof Readable) {
     control.resume()
   }
-  const boot: { watcherPid: number; bootId: string } = JSON.parse(
+  const boot: { leaderPid: number; watcherPid: number; bootId: string } = JSON.parse(
     await outputLine(status, () => true)
   )
   const [leader, watcher] = await Promise.all([
-    proveProviderProcessIdentity(child.pid),
+    proveProviderProcessIdentity(boot.leaderPid),
     proveProviderProcessIdentity(boot.watcherPid)
   ])
   if (!leader || !watcher) {
     throw new Error('Could not identify native fixture')
   }
-  const identity = { pgid: child.pid, leader, watcher }
+  const identity = { pgid: boot.leaderPid, leader, watcher }
   cleanups.push(async () => {
     await sweepOrphanedProviderGroup(identity)
     await waitForProviderOwnershipReap(identity)
@@ -193,16 +198,17 @@ describe.runIf(process.platform !== 'win32')('provider orphan ownership', () => 
         String.raw`
       const { spawn } = require('node:child_process')
       const child = spawn(process.argv[1], ['20', '100', 'session', 'stdin-end-and-sigterm', '--', process.execPath, process.argv[3]],
-        { detached: true, env: process.env, stdio: ['pipe', 'pipe', 'pipe', 'pipe', 'pipe', 'pipe'] })
+        { detached: true, env: process.env, stdio: ['pipe', 'pipe', 'pipe', 'pipe', 'pipe', 'pipe', 'pipe'] })
       child.stdout.pipe(process.stdout)
       child.stderr.pipe(process.stderr)
       child.stdio[3].resume()
+      child.stdio[6].resume()
       let status = ''
       child.stdio[5].on('data', chunk => {
         status += chunk
         if (!status.includes('\n')) return
         const boot = JSON.parse(status.split('\n')[0])
-        require('node:fs').writeFileSync(process.argv[2], JSON.stringify({ pgid: child.pid, ...boot }))
+        require('node:fs').writeFileSync(process.argv[2], JSON.stringify({ pgid: boot.leaderPid, ...boot }))
         child.stdio[4].end('g\n')
       })
       child.on('error', error => { throw error })
@@ -266,7 +272,7 @@ describe.runIf(process.platform !== 'win32')('provider orphan ownership', () => 
         owner,
         leader: gated.leader,
         watcher: gated.watcher,
-        pgid: gated.child.pid
+        pgid: gated.leader.pid
       }),
       { mode: 0o600 }
     )
@@ -278,7 +284,7 @@ describe.runIf(process.platform !== 'win32')('provider orphan ownership', () => 
     gate.end('g\n')
     await executed
     process.kill(gated.watcher.pid, 'SIGSTOP')
-    gated.child.kill('SIGKILL')
+    process.kill(gated.leader.pid, 'SIGKILL')
     await gated.exited
     expect(providerGroupAbsent(gated.leader.pid)).toBe(false)
 
@@ -330,7 +336,7 @@ describe.runIf(process.platform !== 'win32')('provider orphan ownership', () => 
       owner,
       leader: gated.leader,
       watcher: gated.watcher,
-      pgid: gated.child.pid
+      pgid: gated.leader.pid
     }
     await writeFile(
       join(directory, 'live.json'),

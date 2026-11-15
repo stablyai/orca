@@ -19,7 +19,7 @@ export type ProviderProcessTeardownVerdict =
 
 const activeTeardowns = new WeakMap<object, Promise<ProviderProcessTeardownVerdict>>()
 
-type TeardownChild = Pick<ProviderChild, 'pid' | 'kill' | 'leaderExited'>
+type TeardownChild = Pick<ProviderChild, 'pid' | 'kill' | 'leaderExited' | 'writerPid'>
 
 export type ProviderProcessTeardownDeps = {
   site: string
@@ -57,13 +57,28 @@ function terminateDedicatedPosixGroup(
   return { tree: null, killDelivered: true }
 }
 
-/** The retained root is the provider; delivered termination and descendant observation stay separate. */
+/** Native handles address the writer; a compatibility supervisor needs its held child group. */
 export function killProviderWriter(
   child: TeardownChild,
-  _snapshot: DescendantSnapshot | null,
-  _deps: Pick<ProviderProcessTeardownDeps, 'supervised' | 'signalProcessGroup'>
+  snapshot: DescendantSnapshot | null,
+  deps: Pick<ProviderProcessTeardownDeps, 'supervised' | 'signalProcessGroup'>
 ): boolean {
-  return child.kill('SIGKILL')
+  if (!deps.supervised || child.writerPid === child.pid) {
+    return child.kill('SIGKILL')
+  }
+  const signalGroup =
+    deps.signalProcessGroup ??
+    ((pgid: number, signal: NodeJS.Signals) => process.kill(-pgid, signal))
+  let delivered = false
+  for (const descendant of snapshot?.descendants ?? []) {
+    if (descendant.ppid === child.pid && descendant.pgid === descendant.pid) {
+      try {
+        signalGroup(descendant.pid, 'SIGKILL')
+        delivered = true
+      } catch {}
+    }
+  }
+  return delivered
 }
 
 async function terminatePosixTree(
@@ -80,6 +95,9 @@ async function terminatePosixTree(
   if (!snapshot) {
     // Preserve Codex compatibility: missing snapshot is no observation (null), not an unverifiable verdict.
     const delivered = killProviderWriter(child, null, deps)
+    if (deps.supervised && child.writerPid !== child.pid) {
+      child.kill('SIGKILL')
+    }
     return delivered ? { tree: null, killDelivered: true } : null
   }
   const terminate =
@@ -128,6 +146,9 @@ async function terminatePosixTree(
     }
     try {
       killDelivered = killProviderWriter(child, snapshot, deps)
+      if (deps.supervised && child.writerPid !== child.pid) {
+        child.kill('SIGKILL')
+      }
     } catch {
       // A wrapper failure cannot undo termination of its writer.
     }
