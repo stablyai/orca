@@ -18,6 +18,7 @@ it('reads current child evidence when a hidden strip becomes visible', () => {
     paneKey,
     agentType: 'codex' as const,
     state: 'working' as const,
+    prompt: 'Task',
     structuredHostOwned: true as const,
     updatedAt: 1000,
     stateStartedAt: 1000,
