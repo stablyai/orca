@@ -17,8 +17,26 @@ type Options = Omit<Partial<EditorOptions>, 'onTransaction'> & {
 type OwnedEditor = {
   editor: Editor
   historyPaths: HistoryPaths
+  selection: EditorSelection
   options: Options
   release: () => void
+}
+
+class EditorSelection {
+  private userOwned = false
+  private appliedPosition: unknown
+  claim(): void {
+    this.userOwned = true
+  }
+  isUserOwned(): boolean {
+    return this.userOwned
+  }
+  hasApplied(position: unknown): boolean {
+    return this.appliedPosition === position
+  }
+  markApplied(position: unknown): void {
+    this.appliedPosition = position
+  }
 }
 
 class ComposerEditors {
@@ -51,6 +69,7 @@ class ComposerEditors {
       options,
       release: () => {},
       historyPaths: createNativeChatPastedTextHistory(scope),
+      selection: new EditorSelection(),
       editor: new Editor({
         ...options,
         onTransaction: (event) => entry.options.onTransaction?.(event, entry.historyPaths),
@@ -84,7 +103,7 @@ export function NativeChatComposerEditorOwner({ children }: { children: React.Re
 export function useNativeChatComposerEditor(
   scope: string,
   options: Options
-): Pick<OwnedEditor, 'editor' | 'historyPaths'> {
+): Pick<OwnedEditor, 'editor' | 'historyPaths' | 'selection'> {
   const owner = useContext(ComposerEditorOwner)
   const local = useMemo(() => ({ scope, editors: new ComposerEditors() }), [scope])
   const entry = (owner ?? local.editors).get(scope, options)

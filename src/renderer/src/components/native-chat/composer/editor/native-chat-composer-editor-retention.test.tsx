@@ -11,6 +11,7 @@ import {
 } from '../../drafts/native-chat-composer-draft-store'
 import {
   closeNativeChatEditDraft,
+  installNativeChatDraftRecord,
   redirectNativeChatEditDraft
 } from '../../drafts/native-chat-composer-draft-memory'
 import { promptEditor } from './native-chat-prompt-editor.test-support'
@@ -137,4 +138,35 @@ it('restores a deleted pasted-text file with undo after the composer remounts', 
   })
   view.unmount()
   closeNativeChatEditDraft(scope)
+})
+
+it('keeps a user selection in a loaded draft when the composer is replaced', () => {
+  const scope = 'agent-session:retained-loaded-selection'
+  installNativeChatDraftRecord(
+    scope,
+    { text: 'hello', images: [], savedAt: 1 },
+    { at: 'start', pending: true }
+  )
+  const input = createRef<NativeChatComposerInput>()
+  const pane = (shown: boolean) => (
+    <NativeChatComposerEditorOwner>
+      {shown && (
+        <NativeChatPromptEditor
+          scopeKey={scope}
+          inputRef={input}
+          initialValue="hello"
+          disabled={false}
+          placeholder="Message"
+          onChange={() => {}}
+          onSelect={() => {}}
+        />
+      )}
+    </NativeChatComposerEditorOwner>
+  )
+  const view = render(pane(true))
+  act(() => input.current!.setSelectionRange(1, 5))
+  view.rerender(pane(false))
+  view.rerender(pane(true))
+  act(() => input.current!.insertText!('X'))
+  expect(input.current!.value).toBe('hX')
 })

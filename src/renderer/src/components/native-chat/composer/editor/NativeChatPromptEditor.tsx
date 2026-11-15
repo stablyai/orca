@@ -67,16 +67,14 @@ function NativePromptEditor({
   ...events
 }: NativeChatPromptEditorProps): React.JSX.Element {
   const adopted = useRef(readNativeChatDraftSnapshot(scopeKey, initialValue))
-  const userOwned = useRef(false)
-  const appliedPosition = useRef<unknown>(undefined)
   const claimSelection = () => {
-    userOwned.current = true
+    selection.claim()
     const position = adopted.current && nativeChatDraftPositions.get(adopted.current)
     if (position && position.at !== 'start' && position.target === positionTarget) {
       position.pending = false
     }
   }
-  const { editor, historyPaths } = useNativeChatComposerEditor(scopeKey ?? '', {
+  const { editor, historyPaths, selection } = useNativeChatComposerEditor(scopeKey ?? '', {
     extensions: [
       StarterKit.configure({
         blockquote: false,
@@ -189,12 +187,12 @@ function NativePromptEditor({
       if (
         !editor ||
         !position?.pending ||
-        appliedPosition.current === position ||
+        selection.hasApplied(position) ||
         (position.at !== 'start' && position.target !== positionTarget)
       ) {
         return
       }
-      if (userOwned.current) {
+      if (selection.isUserOwned()) {
         if (position.at !== 'start') {
           position.pending = false
         } else if (previousRange) {
@@ -205,7 +203,7 @@ function NativePromptEditor({
         }
         return
       }
-      appliedPosition.current = position
+      selection.markApplied(position)
       editor.view.dispatch(
         editor.state.tr
           .setSelection(
@@ -225,7 +223,7 @@ function NativePromptEditor({
         position.pending = false
       }
     },
-    [editor, positionTarget]
+    [editor, positionTarget, selection]
   )
   useLayoutEffect(() => applyPosition(), [applyPosition])
 
