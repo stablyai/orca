@@ -3,7 +3,7 @@ import { getDefaultPersistedState, getDefaultWorkspaceSession } from '../../../s
 import type { PersistedState } from '../../../shared/persisted-state-types'
 import type { Project } from '../../../shared/project-types'
 import type { Repo } from '../../../shared/repo-types'
-import type { SshRemotePtyLease } from '../../../shared/ssh-types'
+import type { SshRemotePtyLease } from '../../../shared/remote-runtime/ssh/ssh-types'
 import { worktreeWorkspaceKey } from '../../../shared/workspace-scope'
 import type { WorktreeMeta } from '../../../shared/worktree/meta-types'
 import {

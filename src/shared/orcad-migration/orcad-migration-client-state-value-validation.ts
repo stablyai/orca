@@ -1,5 +1,5 @@
 import type { WorkspaceHostScope } from '../ui-chrome-types'
-import type { SavedPortForward } from '../ssh-types'
+import type { SavedPortForward } from '../remote-runtime/ssh/ssh-types'
 import { requiredRecord } from './orcad-migration-dormant-value-validation'
 import { boundedStringArray } from './orcad-migration-manifest-fields'
 

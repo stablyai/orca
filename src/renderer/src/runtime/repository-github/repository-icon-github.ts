@@ -3,7 +3,7 @@ import type { Repo } from '../../../../shared/repo-types'
 import { githubAvatarIcon, githubAvatarSlug, type RepoIcon } from '../../../../shared/repo-icon'
 import { githubRepoIdentityKey } from '../../../../shared/github/repositories/repository-identity-key'
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
-import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 
 type ResolveRepositoryGitHubAvatarOptions = {
   forceLive?: boolean

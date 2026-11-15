@@ -3,7 +3,7 @@ import type { OrcaRuntimeWithBindPtyIncarnationHandle as BindPtyIncarnationHandl
 import { OrcaRuntimeWithSessionTitleAuthority } from '../session-tabs/session-title-publisher'
 import type { RuntimeRendererReloadFence } from './renderer-reload-fence'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
-import { HEADLESS_RUNTIME_WINDOW_ID } from '../../../shared/runtime-session-contracts'
+import { HEADLESS_RUNTIME_WINDOW_ID } from '../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 
 export abstract class OrcaRuntimeWithHasTerminalsForWorktree extends OrcaRuntimeWithSessionTitleAuthority {
   protected abstract assertStableReadyGraph(

@@ -1,5 +1,5 @@
 import type { TerminalTabCloseReason } from '@/store/terminals/retirement/terminal-tab-retirement'
-import type { RuntimeSessionTabCloseReason } from '../../../../shared/runtime-types'
+import type { RuntimeSessionTabCloseReason } from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 
 /**
  * Who declared a terminal tab close, so only real intent reaches a host's destructive close (#37245).

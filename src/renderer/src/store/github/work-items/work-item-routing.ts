@@ -24,7 +24,7 @@ import {
   runtimeTargetForOwnerEnvironment,
   ipcOrRuntimeTargetForHostId
 } from '@/runtime/rpc/targets/runtime-client-target'
-import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import { workItemsCacheKey } from '../cache/cache-identity'
 import { findRepoForGitHubOwner, getRuntimeRepoTarget } from '../repositories/repository-routing'
 

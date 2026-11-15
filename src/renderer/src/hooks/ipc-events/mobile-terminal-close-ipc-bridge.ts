@@ -21,7 +21,7 @@ import type { EditorTabSelection } from '../../store/slices/editor/types/open-fi
 import {
   navigationTargetsHost,
   type RuntimeNavigationTarget
-} from '../../../../shared/runtime-navigation'
+} from '../../../../shared/remote-runtime/session-graph/runtime-navigation'
 
 // Non-host targets stay off-screen without visit accounting; files.open always names a target, so absence is only legacy switching.
 function openRuntimeEditorTab(

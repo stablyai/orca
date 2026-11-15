@@ -3,7 +3,7 @@ import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync 
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { WslHostServerStop } from '../../../shared/wsl-host-types'
+import type { WslHostServerStop } from '../../../shared/remote-runtime/wsl-hosts/wsl-host-types'
 
 const { execCommand, decommission, dispose } = vi.hoisted(() => ({
   execCommand: vi.fn<(conn: unknown, command: string) => Promise<string>>(),

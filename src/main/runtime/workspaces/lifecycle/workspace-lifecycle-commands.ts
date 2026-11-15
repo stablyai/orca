@@ -2,7 +2,7 @@ import type { NestedWorktreeRemovalApproval } from '../../../../shared/worktree/
 import type {
   RuntimeWorktreeTerminalCloseResult,
   RuntimeWorktreeTerminalSleepResult
-} from '../../../../shared/runtime-terminal-contracts'
+} from '../../../../shared/terminal/runtime/runtime-terminal-contracts'
 import {
   LOCAL_EXECUTION_HOST_ID,
   parseExecutionHostId,

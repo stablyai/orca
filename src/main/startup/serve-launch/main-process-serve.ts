@@ -1,6 +1,6 @@
 import { app } from 'electron'
 import { notifyServeSupervisorReady } from '../../updater/serve-update-handoff'
-import { clearServeAbortPark } from '../../../shared/serve-abort-park'
+import { clearServeAbortPark } from '../../../shared/remote-runtime/serve-supervisor/serve-abort-park'
 import { findBundledWebClientRoot } from '../../../shared/bundled-web-client-root'
 import { buildServePairingReadiness, servePublishMode } from '../../server/serve-pairing-readiness'
 import { mainProcessState as state } from '../main-process-state'

@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { stringify } from 'yaml'
-import type { LocalBuildCompatibility } from '../../shared/local-build-compatibility'
+import type { LocalBuildCompatibility } from '../../shared/remote-runtime/orcad-distribution/local-build-compatibility'
 import { loadLocalBuildCandidate } from './local-build-candidate'
 import { startLocalBuildFeed } from './local-build-feed-server'
 

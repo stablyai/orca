@@ -107,7 +107,7 @@ export function TerminalWorkspaceDialogs({
               autoFocus
               onClick={() => {
                 setWindowCloseDialogOpen(false)
-                confirmNativeWindowClose()
+                void confirmNativeWindowClose()
               }}
             >
               {t('auto.components.Terminal.73768427cf', 'Close')}

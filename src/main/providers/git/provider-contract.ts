@@ -29,7 +29,7 @@ import type { CommitMessageDraftContext } from '../../../shared/source-control/a
 import type { ConflictResolution } from '../../../shared/source-control/listing/source-control-entry-actions'
 import type { GitProviderStatusOptions } from './status-options'
 import type { BranchSwitchCreation } from '../../../shared/git/branch-switch-target'
-import type { RuntimeGitLocalBranches } from '../../../shared/runtime-worktree-contracts'
+import type { RuntimeGitLocalBranches } from '../../../shared/worktree/catalog/runtime-worktree-contracts'
 import type { GitAdmissionTier } from '../../../shared/rpc-contract/source-control/git-admission-tier-params'
 
 export type IGitProvider = {

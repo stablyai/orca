@@ -1,6 +1,9 @@
 // Standalone Electron-free protocol; mirror src/main/ssh/remote-exec/remote-frame-protocol.ts.
 
-import { HEADER_LENGTH, MAX_MESSAGE_SIZE } from '../../../shared/relay-frame-decoder'
+import {
+  HEADER_LENGTH,
+  MAX_MESSAGE_SIZE
+} from '../../../shared/remote-runtime/relay/relay-frame-decoder'
 
 export const RELAY_VERSION = '0.1.0'
 export const RELAY_SENTINEL = `ORCA-RELAY v${RELAY_VERSION} READY\n`

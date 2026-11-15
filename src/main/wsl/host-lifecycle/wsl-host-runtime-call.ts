@@ -5,7 +5,7 @@ import { deferUntilWslDistroRunning } from '../discovery/wsl-background-distro-g
 import { rethrowRetryable, settlingConnectFailure } from './wsl-host-connect-failure'
 import type { WslHostConnector, WslHostServiceDependencies } from './wsl-host-connector-contract'
 import { wslHostNotConnectedMessage } from './wsl-host-add-admission'
-import { wslHostStoppedMessage } from '../../../shared/wsl-host-stopped-message'
+import { wslHostStoppedMessage } from '../../../shared/remote-runtime/wsl-hosts/wsl-host-stopped-message'
 import { admitConnectToPendingHost } from './wsl-host-removal'
 import type { WslOrcadConnection } from '../orcad/wsl-orcad-connection-types'
 

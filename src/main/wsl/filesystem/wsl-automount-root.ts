@@ -8,7 +8,7 @@
  */
 import { runProcess } from '@orca/process-host'
 import { buildPosixStdoutFence } from '../../../shared/posix-stdout-fence'
-import { buildWslExecArgs } from '../../../shared/wsl-login-shell-command'
+import { buildWslExecArgs } from '../../../shared/shell/wsl/wsl-login-shell-command'
 import {
   onWslDistroGateNote,
   wasWslDistroLastSeenRunningSettled

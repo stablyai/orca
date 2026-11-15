@@ -4,8 +4,8 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { spawnProcess } from '@orca/process-host'
-import { ORCAD_NODE_RUNTIME_MARKER_FILENAME } from '../../../../shared/orcad-artifacts'
-import { ORCAD_STOP_REQUEST_FILENAME } from '../../../../shared/orcad-stop-request'
+import { ORCAD_NODE_RUNTIME_MARKER_FILENAME } from '../../../../shared/remote-runtime/orcad-distribution/orcad-artifacts'
+import { ORCAD_STOP_REQUEST_FILENAME } from '../../../../shared/remote-runtime/orcad-lifecycle/orcad-stop-request'
 import {
   killChildAndWait,
   killProfileDaemons,

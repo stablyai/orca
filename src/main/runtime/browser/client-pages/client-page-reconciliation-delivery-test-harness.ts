@@ -1,5 +1,5 @@
 import { OrcaRuntimeService } from '../../orca-runtime'
-import type { RuntimeMobileSessionTabsResult } from '../../../../shared/runtime-session-contracts'
+import type { RuntimeMobileSessionTabsResult } from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import { createProfile } from './client-hosted-browser-persistence-test-harness'
 import { RpcDispatcher } from '../../rpc/dispatcher'
 import { BROWSER_CLIENT_HOST_METHODS } from '../../rpc/methods/browser/browser-client-host'

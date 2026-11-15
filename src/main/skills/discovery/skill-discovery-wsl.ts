@@ -11,7 +11,10 @@ import { buildSkillDiscoverySources, type SkillScanRoot } from './skill-discover
 import { rootMayContainSourceKind } from './skill-discovery-source-filter'
 import { discoverClaudePluginSkillSourcesInWsl } from './claude-plugin-skill-sources-wsl'
 import type { SkillProviderRootOverrides } from '../providers/skill-provider-destinations'
-import { SKILL_STAGING_GLOB } from '../filesystem/skill-transaction-staging-names'
+import {
+  CLAUDE_SYNC_SCRATCH_DIRECTORY_NAMES,
+  SKILL_STAGING_GLOB
+} from '../filesystem/skill-transaction-staging-names'
 import { skillFileMaxDepth } from '../../../shared/skill-discovery-depth'
 import { bundledSkillNames } from '../../../shared/bundled-skill-names'
 
@@ -106,6 +109,9 @@ export function buildWslSkillDiscoveryCommand(
       '    fi'
     )
   }
+  const claudeScratchPrune = CLAUDE_SYNC_SCRATCH_DIRECTORY_NAMES.map(
+    (name) => `-name '${name}'`
+  ).join(' -o ')
   const lines = [
     'set -u',
     'set -o pipefail',
@@ -128,7 +134,7 @@ export function buildWslSkillDiscoveryCommand(
     `    printf '%s\\0%s\\0%s\\0%s\\0%s\\0' S "$root_index" "$skill_file" "$canonical_path" "$updated_at"`,
     `    printf '%s' "$encoded_markdown"`,
     `    printf '\\0'`,
-    `  done < <(find -L "$root_path" -mindepth 1 -maxdepth "$max_depth" \\( -name '${SKILL_STAGING_GLOB}' -prune \\) -o \\( -type f -name 'SKILL.md' -print0 \\) 2>/dev/null)`,
+    `  done < <(find -L "$root_path" -mindepth 1 -maxdepth "$max_depth" \\( \\( -name '${SKILL_STAGING_GLOB}' -o ${claudeScratchPrune} \\) -prune \\) -o \\( -type f -name 'SKILL.md' -print0 \\) 2>/dev/null)`,
     '}'
   ]
   roots.forEach((root, index) => {

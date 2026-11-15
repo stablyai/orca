@@ -26,8 +26,8 @@ import type { ResolvedWorktree } from '../workspaces/catalog/runtime-worktree-pa
 import type {
   RuntimeTerminalShow,
   RuntimeTerminalSummary
-} from '../../../shared/runtime-terminal-contracts'
-import type { RuntimeSyncedLeaf } from '../../../shared/runtime-session-contracts'
+} from '../../../shared/terminal/runtime/runtime-terminal-contracts'
+import type { RuntimeSyncedLeaf } from '../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import type { readOrchestrationFleetAgentStatusSnapshot } from '../orchestration/addressing/orchestration-fleet-agent-status-snapshot'
 import type { ExecutionHostId } from '../../../shared/execution-host'
 import type { Repo } from '../../../shared/repo-types'

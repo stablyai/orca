@@ -3,15 +3,15 @@ import { OrcaRuntimeWithMergePreservedHeadlessMobileSessionTabs } from './mobile
 import type {
   RuntimeMobileSessionBrowserTab,
   RuntimeMobileSessionSnapshotTab
-} from '../../../shared/runtime-mobile-session-tab-contracts'
+} from '../../../shared/remote-runtime/session-graph/runtime-mobile-session-tab-contracts'
 import type {
   RuntimeMobileSessionTabsRemovedResult,
   RuntimeMobileSessionTabsSnapshot
-} from '../../../shared/runtime-session-contracts'
+} from '../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import { getMobileSessionSnapshotTabIdentityKeys } from '../session-lifecycle/projection/mobile-session-tab-merge'
 import { getRuntimeBrowserPageRegistry } from '../browser/client-pages/runtime-browser-page-registry'
 import { isHeadlessBuiltPublication } from './mobile-session-snapshot-equality'
-import { sameRuntimeBrowserPlacement } from '../../../shared/runtime-browser-placement'
+import { sameRuntimeBrowserPlacement } from '../../../shared/browser/client-hosting/runtime-browser-placement'
 import type { ClientHostedBrowserRowsEvent } from '../../../shared/client-hosted-browser-rows'
 
 export abstract class OrcaRuntimeWithStoredMobileSnapshotHasStalePreservedTab extends OrcaRuntimeWithMergePreservedHeadlessMobileSessionTabs {

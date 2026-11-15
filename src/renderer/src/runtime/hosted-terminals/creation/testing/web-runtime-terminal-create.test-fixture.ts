@@ -1,5 +1,5 @@
 import { vi } from 'vitest'
-import type { RuntimeMobileSessionTabsResult } from '../../../../../../shared/runtime-session-contracts'
+import type { RuntimeMobileSessionTabsResult } from '../../../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import { toRuntimeExecutionHostId } from '../../../../../../shared/execution-host'
 import { clearRuntimeCompatibilityCache as clearRuntimeCompatibilityCacheForTests } from '../../../rpc/compatibility/runtime-compatibility-cache'
 import { resetWebSessionBrowserPlacementsForTests } from '../../../browser/placement/web-session-browser-placement'

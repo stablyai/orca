@@ -19,7 +19,7 @@ import type { PersistedNativeChatSessionOptions } from './native-chat/input/nati
 import type { AgentChatPermissionMode } from './agent-launch/permissions/agent-chat-permission-mode'
 import type { ComputerAwakeMode } from './computer-awake-mode'
 import type { CommitMessageAiSettings } from './source-control/ai/generation/commit-message-ai-types'
-import type { HostSettingOverrides } from './host-setting-overrides'
+import type { HostSettingOverrides } from './execution-host/host-setting-overrides'
 import type {
   ClaudeManagedAccount,
   ClaudeManagedAccountRuntimeSelection,

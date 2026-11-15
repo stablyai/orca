@@ -5,11 +5,11 @@ import { beforeEach, afterEach, vi } from 'vitest'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import type { RuntimeClientTarget } from '../../src/shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../src/shared/remote-runtime/host-catalog/runtime-client-target'
 import type { NotificationSettings } from '../../src/shared/notification-settings-types'
 import type { AgentJournalRenderItem } from '../../src/shared/agent-session/journal/agent-session-journal-types'
 import type { AgentSessionHistoryPage } from '../../src/shared/agent-session/agent-session-wire'
-import type { RuntimeRpcResponse } from '../../src/shared/runtime-rpc-envelope'
+import type { RuntimeRpcResponse } from '../../src/shared/remote-runtime/rpc/runtime-rpc-envelope'
 import { createGlobalSettingsFixture } from '../../src/shared/global-settings-test-fixture'
 import {
   structuredAgentSessionPaneKey,

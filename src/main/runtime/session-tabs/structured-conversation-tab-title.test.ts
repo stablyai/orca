@@ -3,7 +3,7 @@ import {
   retitleStructuredConversationTabs,
   titleStructuredConversationTabs
 } from './structured-conversation-tab-title'
-import type { RuntimeMobileSessionTabsSnapshot } from '../../../shared/runtime-session-contracts'
+import type { RuntimeMobileSessionTabsSnapshot } from '../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 
 const snapshot: RuntimeMobileSessionTabsSnapshot = {
   worktree: 'workspace',

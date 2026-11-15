@@ -17,7 +17,7 @@ import {
 
 import { testOrcaSessionId } from '../../../../../shared/orca-session-address-test-fixture'
 
-import '../../../../../shared/wsl-hook-relay-contract'
+import '../../../../../shared/agent-hook-listener/transport/wsl-hook-relay-contract'
 import { OrchestrationDb } from '../../db/orchestration-db'
 
 import '../../db/contract-constants'

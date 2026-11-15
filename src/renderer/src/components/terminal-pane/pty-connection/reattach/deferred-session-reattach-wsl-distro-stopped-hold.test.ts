@@ -6,7 +6,7 @@ import {
   noteUserWorkspaceSwitch,
   resetWorkspaceSwitchUserActsForTests
 } from '@/lib/workspace/activation/workspace-switch-user-act'
-import { wslDistroHoldMessage } from '../../../../../../shared/wsl-distro-stopped-hold'
+import { wslDistroHoldMessage } from '../../../../../../shared/remote-runtime/wsl-hosts/wsl-distro-stopped-hold'
 import {
   startHeldPanesForWslDistro,
   wslDistroStoppedHoldStore

@@ -5,8 +5,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import type {
   OrcadDeltaMovePreview,
   OrcadDeltaMoveResult
-} from '../../../../../../shared/orcad-managed-runtime'
-import type { SshTarget } from '../../../../../../shared/ssh-types'
+} from '../../../../../../shared/remote-runtime/orcad-lifecycle/orcad-managed-runtime'
+import type { SshTarget } from '../../../../../../shared/remote-runtime/ssh/ssh-types'
 import type { ManagedOrcadPreloadApi } from '../../../../../../preload/api/runtime/managed-orcad-api'
 import { SshHostDeltaMoveDialog } from './SshHostDeltaMoveDialog'
 

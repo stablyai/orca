@@ -12,7 +12,6 @@ const NODE_RUNTIME_INCLUDE = [
   'tests/e2e/cursor-quota-transport.unit.test.ts',
   'tests/e2e/helpers/electron-process-shutdown.unit.test.ts',
   'src/main/ai-vault-search/storage/session-search-index-writer.test.ts',
-  'src/main/ai-vault/parsing/session-scanner-unlimited-dedup.test.ts',
   // The parse cache persists through node:sqlite.
   'src/main/ai-vault/parse-cache/session-parse-cache-antigravity-upgrade.test.ts',
   'src/main/ai-vault/parse-cache/session-parse-cache-persistence.test.ts',
@@ -35,7 +34,6 @@ const NODE_RUNTIME_INCLUDE = [
   'src/main/claude/transcripts/claude-transcript-catch-up.test.ts',
   'tests/e2e/native-chat-startup-option-pickers.unit.test.ts',
   'src/main/ai-vault/transcripts/session-document-consumer-replacement.test.ts',
-  'src/main/ai-vault-search/indexing/session-search-dependent-transcripts.test.ts',
   'src/main/ai-vault-search/indexing/session-search-list-reparse.test.ts',
   'src/main/runtime/rpc/server/orchestration-cli-subprocess.test.ts',
   'src/main/runtime/orchestration/mailbox/terminal-pointer/orchestration-mailbox-delivery.test.ts',
@@ -111,7 +109,7 @@ const NODE_RUNTIME_INCLUDE = [
   'src/main/computer/desktop-script/runtime-host/desktop-script-serve-channel.test.ts',
   'src/main/providers/working-directory/validation.test.ts',
   'src/main/pty/process-retirement/posix-pty-process-groups.integration.test.ts',
-  'src/shared/ephemeral-vm-recipe-output-capture.test.ts',
+  'src/shared/remote-runtime/ephemeral-vm-recipes/ephemeral-vm-recipe-output-capture.test.ts',
   'src/main/native-chat/agent-session-journal/**/*.test.ts',
   'src/main/runtime/agent-session/records/agent-session-conversation-name-store.test.ts',
   'src/main/runtime/rpc/methods/structured-sessions/attachments/structured-agent-session-visual.test.ts',
@@ -137,7 +135,6 @@ const NODE_RUNTIME_INCLUDE = [
   'config/scripts/test-runtime/node-worker/vitest-node-runtime-pool.test.ts',
   // Reopen WAL-backed row caches read-only, which Bun on macOS cannot.
   'src/main/agent-hooks/server/testing/identity/server-hook-session-binding.test.ts',
-  'src/main/agent-hooks/server/testing/persistence/server-last-status-claude-model.test.ts',
   'tests/e2e/helpers/persisted-profile-state.unit.test.ts',
   'src/main/runtime/push/notifications/mobile-notification-dismissal-store.test.ts',
   'src/main/runtime/push/notifications/mobile-notification-dismissal-read-failure.test.ts',

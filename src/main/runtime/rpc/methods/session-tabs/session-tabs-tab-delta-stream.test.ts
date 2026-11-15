@@ -7,8 +7,8 @@ import '../../../../../shared/protocol-version'
 import {
   SESSION_TABS_RETIREMENT_PROOF_DELTA_RUNTIME_CAPABILITY,
   SESSION_TABS_TAB_DELTA_RUNTIME_CAPABILITY
-} from '../../../../../shared/session-tabs-runtime-capabilities'
-import type { RuntimeMobileSessionTabsResult } from '../../../../../shared/runtime-session-contracts'
+} from '../../../../../shared/remote-runtime/protocol/session-tabs-runtime-capabilities'
+import type { RuntimeMobileSessionTabsResult } from '../../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import { createSessionTabsTabDeltaDecoder } from '../../../../../shared/session-tabs-tab-delta'
 import { RpcDispatcher } from '../../dispatcher'
 import { SESSION_TAB_METHODS } from './session-tabs'

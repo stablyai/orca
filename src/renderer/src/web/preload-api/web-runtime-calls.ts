@@ -7,8 +7,8 @@ import type { WebRuntimeSubscribeOptions } from '../web-runtime-subscription-con
 import { parseExecutionHostId, toRuntimeExecutionHostId } from '../../../../shared/execution-host'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 import type { Repo } from '../../../../shared/repo-types'
-import type { RuntimeRpcResponse } from '../../../../shared/runtime-rpc-envelope'
-import type { RuntimeStatus } from '../../../../shared/runtime-types'
+import type { RuntimeRpcResponse } from '../../../../shared/remote-runtime/rpc/runtime-rpc-envelope'
+import type { RuntimeStatus } from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import type { Worktree } from '../../../../shared/worktree/types'
 import {
   getClientForEnvironment,

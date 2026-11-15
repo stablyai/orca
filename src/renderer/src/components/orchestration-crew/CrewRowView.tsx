@@ -11,7 +11,7 @@ import { CrewRowMenu } from './CrewRowMenu'
 import { CrewAgentIcons } from './CrewAgentIcons'
 import type { CrewRowLook } from './CrewAgentIcons'
 import type { OrchestrationCrewRow } from '../../../../shared/orchestration/orchestration-crew'
-import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 
 export function IconButton({
   label,
