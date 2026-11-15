@@ -164,6 +164,19 @@ export function decodeAgentSessionQuestionAnswers(
   }
 }
 
+/** Whether an answer entry carries a choice or typed text; an empty entry is a skipped question. */
+export function isAgentSessionQuestionAnswered(
+  question: Pick<AgentJournalQuestion, 'freeTextInput'>,
+  answer: AgentSessionQuestionAnswer
+): boolean {
+  return (
+    answer.optionIds.length > 0 ||
+    (answer.other !== undefined &&
+      (question.freeTextInput?.allowEmpty === true || answer.other.trim().length > 0))
+  )
+}
+
+/** One entry per question; a question may be skipped (empty entry) as long as one is answered. */
 export function isValidAgentSessionQuestionAnswers(
   questions: readonly AgentJournalQuestion[],
   answers: readonly AgentSessionQuestionAnswer[]
@@ -175,7 +188,7 @@ export function isValidAgentSessionQuestionAnswers(
   if (byId.size !== answers.length) {
     return false
   }
-  return questions.every((question) => {
+  const shaped = questions.every((question) => {
     const answer = byId.get(question.id)
     if (!answer) {
       return false
@@ -191,6 +204,10 @@ export function isValidAgentSessionQuestionAnswers(
       return false
     }
     const answerCount = answer.optionIds.length + (hasOther ? 1 : 0)
-    return answerCount > 0 && (question.multiSelect || answerCount === 1)
+    return question.multiSelect || answerCount <= 1
   })
+  return (
+    shaped &&
+    questions.some((question) => isAgentSessionQuestionAnswered(question, byId.get(question.id)!))
+  )
 }

@@ -80,13 +80,24 @@ describe('agent-session grouped question answers', () => {
 
     expect(isValidAgentSessionQuestionAnswers(questions, answers)).toBe(true)
     expect(isValidAgentSessionQuestionAnswers(questions, answers.toReversed())).toBe(true)
+    // A skipped question is an empty entry, accepted while another question is answered.
+    expect(
+      isValidAgentSessionQuestionAnswers(questions, [
+        { ...answers[0]!, optionIds: [] },
+        answers[1]!
+      ])
+    ).toBe(true)
     const invalid = [
       [],
       [...answers, { questionId: 'q3', optionIds: [] }],
       [answers[0]!, answers[0]!],
       [{ ...answers[0]!, questionId: 'unknown' }, answers[1]!],
-      [{ ...answers[0]!, optionIds: [] }, answers[1]!],
-      [{ ...answers[0]!, other: 'not offered' }, answers[1]!]
+      [{ ...answers[0]!, other: 'not offered' }, answers[1]!],
+      // Every question skipped: nothing to submit.
+      [
+        { questionId: 'q1', optionIds: [] },
+        { questionId: 'q2', optionIds: [], other: '  ' }
+      ]
     ]
     for (const candidate of invalid) {
       expect(isValidAgentSessionQuestionAnswers(questions, candidate)).toBe(false)
