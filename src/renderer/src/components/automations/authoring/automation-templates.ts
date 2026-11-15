@@ -1,4 +1,7 @@
-import type { AutomationSchedulePreset } from '../../../../../shared/automations/automation-definition'
+import type {
+  AutomationSchedulePreset,
+  AutomationWorkspaceMode
+} from '../../../../../shared/automations/automation-definition'
 import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent'
 import { translate } from '@/i18n/i18n'
 import { createLocalizedCatalog } from '@/i18n/localized-catalog'
@@ -15,6 +18,7 @@ export type AutomationTemplate = {
   dayOfWeek?: string
   agentId?: TuiAgent
   missedRunGraceMinutes?: string
+  workspaceMode?: AutomationWorkspaceMode
 }
 
 export const getAutomationTemplates = createLocalizedCatalog((): AutomationTemplate[] => [
@@ -122,5 +126,34 @@ export const getAutomationTemplates = createLocalizedCatalog((): AutomationTempl
     preset: 'hourly',
     time: '00:15',
     missedRunGraceMinutes: '30'
+  },
+  {
+    id: 'docs-refresh-weekly',
+    category: translate(
+      'auto.components.automations.automation.templates.docsRefresh.category',
+      'Documentation'
+    ),
+    label: translate(
+      'auto.components.automations.automation.templates.docsRefresh.label',
+      'Weekly docs refresh'
+    ),
+    description: translate(
+      'auto.components.automations.automation.templates.docsRefresh.description',
+      "Update the README and docs that last week's commits made outdated, for review."
+    ),
+    name: translate(
+      'auto.components.automations.automation.templates.docsRefresh.name',
+      'Weekly docs refresh'
+    ),
+    prompt: translate(
+      'auto.components.automations.automation.templates.docsRefresh.prompt',
+      'Review the commits from the last 7 days and find the documentation they made outdated: the README, files under docs/, and setup or usage instructions. Update only what those changes require, keep the existing tone and structure, and do not document behavior the code does not have. Commit the edits on this branch and summarize what changed and why so a human can review it. If nothing needs updating, say so and make no changes.'
+    ),
+    preset: 'weekly',
+    time: '10:00',
+    dayOfWeek: '1',
+    missedRunGraceMinutes: '1440',
+    // Each run edits a fresh workspace, so the user's own workspaces stay untouched.
+    workspaceMode: 'new_per_run'
   }
 ])
