@@ -68,10 +68,8 @@ export class DirectProviderChild extends EventEmitter implements ProviderChild {
   ) {
     super()
     this.stop = new DirectProviderStop(spec, () => this.control, this.forceReap.bind(this))
-    const control = raw.stdio?.at(3)
-    const gate = raw.stdio?.at(4)
-    const destination = raw.stdio?.at(7)
-    const status = destination instanceof Writable ? raw.stdio?.at(5) : null
+    const [control, gate, rawStatus, , destination] = raw.stdio.slice(3)
+    const status = destination instanceof Writable ? rawStatus : null
     this.control = control instanceof Duplex ? control : undefined
     this.gate = gate instanceof Writable ? gate : undefined
     this.input = pipeDirectProviderInput(
@@ -143,10 +141,9 @@ export class DirectProviderChild extends EventEmitter implements ProviderChild {
 
   private async start(bootstrap: ReturnType<typeof readBootstrapStatus> | null): Promise<void> {
     if (this.raw.pid === undefined) {
-      if (this.failure) {
-        throw await this.failure
-      }
-      await new Promise<never>((_resolve, reject) => this.raw.once('error', reject))
+      throw this.failure
+        ? await this.failure
+        : await new Promise<Error>((resolve) => this.raw.once('error', resolve))
     }
     if (!bootstrap || !this.gate || !this.control || !this.raw.pid) {
       throw new Error('Provider bootstrap control pipes are unavailable')
@@ -283,14 +280,18 @@ export class DirectProviderChild extends EventEmitter implements ProviderChild {
   }
 
   private reportFailure(error: unknown): Promise<Error> {
-    return reportProviderLaunchFailure(error, this.spec, (failure) =>
-      notifyProviderChild(this, 'error', failure)
-    )
+    const notify = (failure: Error): void => notifyProviderChild(this, 'error', failure)
+    return reportProviderLaunchFailure(error, this.spec, notify)
   }
 
   private async settle(): Promise<void> {
     await this.ready.catch(() => {}).then(() => this.failure)
     await this.faultOwnership.task
+    // Keep W's proof channel through retirement; overlap its bound with the existing ladder.
+    const watcherRetirement =
+      this.outcome === null &&
+      this.connected &&
+      withTimeout(this.watcherEnded.promise, this.stop.maxStopMs, undefined)
     await joinCurrentProviderReap(() => this.reapTask)
     if (this.raw.pid !== undefined && this.groupVerdict !== 'exited') {
       const ladder = this.outcome === null ? this.reapRequested : this.watcherEnded
@@ -300,6 +301,7 @@ export class DirectProviderChild extends EventEmitter implements ProviderChild {
       // The owner-death ladder is spent; its group still owes the validated reap.
       this.forceReap()
     }
+    await watcherRetirement
     await joinCurrentProviderReap(() => this.reapTask)
     await drainDirectProviderOutput(this.raw.stdout, this.raw.stderr, this.stdout, this.stderr)
     await joinCurrentProviderReap(() => this.reapTask)
