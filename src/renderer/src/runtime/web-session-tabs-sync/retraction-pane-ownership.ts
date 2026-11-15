@@ -55,7 +55,6 @@ export function collectCollidingRetractionPaneKeys(
   }
   const keys = new Set(batchAgentPaneKeysForTabs(state, tabIds, batchContext))
   for (const record of [
-    state.retainedAgentsByPaneKey,
     state.acknowledgedAgentsByPaneKey,
     state.agentLaunchConfigByPaneKey,
     state.paneForegroundAgentByPaneKey
@@ -79,8 +78,7 @@ export function collectCollidingRetractionPaneKeys(
     if (!tabId || !tabIds.has(tabId)) {
       continue
     }
-    const entry =
-      state.agentStatusByPaneKey[paneKey] ?? state.retainedAgentsByPaneKey?.[paneKey]?.entry
+    const entry = state.agentStatusByPaneKey[paneKey]
     if (entry && isMirroredAgentStatusOwnedBy(entry, environmentId, worktreeId)) {
       const panes = owned.get(tabId) ?? new Set<string>()
       panes.add(paneKey)

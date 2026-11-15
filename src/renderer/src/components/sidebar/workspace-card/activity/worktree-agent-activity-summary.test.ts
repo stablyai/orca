@@ -89,7 +89,6 @@ describe('selectWorktreeAgentActivitySummary', () => {
         [paneKey]: makeAgentStatusEntry({ paneKey, worktreeId, state: 'working' })
       },
       migrationUnsupportedByPtyId: {},
-      retainedAgentsByPaneKey: {},
       runtimeAgentOrchestrationByPaneKey: {}
     }
 
@@ -110,8 +109,7 @@ describe('selectWorktreeAgentActivitySummary', () => {
     const replacementPaneKey = makePaneKey('tab-3', LEAF_ID)
     const sharedInputs = {
       migrationUnsupportedByPtyId: {},
-      runtimeAgentOrchestrationByPaneKey: {},
-      retainedAgentsByPaneKey: {}
+      runtimeAgentOrchestrationByPaneKey: {}
     }
     const initial: AgentActivityInput = {
       ...sharedInputs,
@@ -174,8 +172,7 @@ describe('selectWorktreeAgentActivitySummary', () => {
       agentStatusEpoch: 0,
       agentStatusByPaneKey: { [paneKey]: entry },
       migrationUnsupportedByPtyId: {},
-      runtimeAgentOrchestrationByPaneKey: {},
-      retainedAgentsByPaneKey: {}
+      runtimeAgentOrchestrationByPaneKey: {}
     }
 
     const summary = selectWorktreeAgentActivitySummary(state, 'repo::/wt-1')

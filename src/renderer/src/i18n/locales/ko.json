@@ -3406,8 +3406,7 @@
             "stop_command_description": "이 terminal을 닫으면 내부에서 실행 중인 명령이 중지됩니다.",
             "dont_ask_again": "실행 중인 terminals에 대해 다시 묻지 않기",
             "stop_agent_confirm": "Agent 중지",
-            "stop_command_confirm": "중지하고 닫기",
-            "automatic_resume_warning": "이 터미널은 자동으로 재개되지 않습니다. 나중에 다시 시작하려면 취소하고 워크스페이스를 절전 모드로 전환하세요."
+            "stop_command_confirm": "중지하고 닫기"
           },
           "MobileDriverOverlay": {
             "c6460cf584": "제어권 가져오기",
@@ -4460,9 +4459,6 @@
             "ahead": "{{ahead}}개 앞섬",
             "behind": "{{behind}}개 뒤처짐",
             "activeAgents_other": "활성 에이전트 {{count}}개",
-            "completedAgents_other": "완료된 에이전트 {{count}}개",
-            "activeAndCompletedAgents": "{{active}}, {{completed}}",
-            "completedAgentsRetained_other": "완료된 에이전트 {{count}}개 보관됨",
             "noTrackedAgents": "실행 중인 추적 대상 에이전트 없음",
             "noTerminalTabs": "터미널 탭 없음",
             "liveTerminalTabs_other": "터미널 탭 {{count}}개 중 {{live}}개 실행 중",
@@ -19618,7 +19614,7 @@
               "comment": "댓글",
               "prunable": "정리 가능",
               "locked": "잠김",
-              "retainedAgents": "완료된 에이전트"
+              "finishedAgents": "완료된 에이전트"
             }
           },
           "noSizes": "아직 측정된 워크스페이스 크기가 없습니다.",
@@ -19676,7 +19672,7 @@
           "pinned": "고정됨",
           "unread": "읽지 않음",
           "comment": "댓글 있음",
-          "retainedDoneAgents": "완료된 에이전트 기록",
+          "finishedAgents": "완료된 에이전트",
           "contextPresence": "탭, 터미널, 댓글 열기",
           "completelyEmpty": "잃을 게 하나도 없어",
           "noWorkspaces": "워크스페이스를 찾을 수 없습니다.",

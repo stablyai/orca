@@ -239,8 +239,7 @@ export const createWorkspaceAttentionSlice: StateCreator<
           .map((tab) => [tab.entityId, tab.executionHostId])
       )
       const hostPaneKeys = [...paneKeys].filter((paneKey) => {
-        const retained = state.retainedAgentsByPaneKey[paneKey]
-        const entry = state.agentStatusByPaneKey[paneKey] ?? retained?.entry
+        const entry = state.agentStatusByPaneKey[paneKey]
         const tabId = paneKeyTabId(paneKey)
         const tab = tabId ? tabsById.get(tabId) : undefined
         return isExecutionHostForWorktree(
@@ -251,7 +250,7 @@ export const createWorkspaceAttentionSlice: StateCreator<
             state,
             paneKey,
             entry,
-            tab?.ptyId ?? retained?.tab.ptyId,
+            tab?.ptyId,
             tabId ? stampedHosts.get(tabId) : undefined
           )
         )

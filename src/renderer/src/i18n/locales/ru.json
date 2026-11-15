@@ -4057,7 +4057,6 @@
         },
         "pane": {
           "CloseTerminalDialog": {
-            "automatic_resume_warning": "Этот терминал не восстановится автоматически. Отмените закрытие и переведите рабочее пространство в сон, чтобы продолжить позже.",
             "1d1a7a9c1f": "Отмена",
             "stop_agent_title": "Остановить этого агента?",
             "stop_command_title": "Остановить выполняемую команду?",
@@ -5222,15 +5221,6 @@
             "activeAgents_few": "{{count}} активных агента",
             "activeAgents_many": "{{count}} активных агентов",
             "activeAgents_other": "{{count}} активного агента",
-            "completedAgents_one": "{{count}} завершённый агент",
-            "completedAgents_few": "{{count}} завершённых агента",
-            "completedAgents_many": "{{count}} завершённых агентов",
-            "completedAgents_other": "{{count}} завершённого агента",
-            "activeAndCompletedAgents": "{{active}}, {{completed}}",
-            "completedAgentsRetained_one": "Сохранён {{count}} завершённый агент",
-            "completedAgentsRetained_few": "Сохранены {{count}} завершённых агента",
-            "completedAgentsRetained_many": "Сохранено {{count}} завершённых агентов",
-            "completedAgentsRetained_other": "Сохранено {{count}} завершённого агента",
             "noTrackedAgents": "Нет запущенных отслеживаемых агентов",
             "noTerminalTabs": "Нет вкладок терминала",
             "liveTerminalTabs_one": "Активных вкладок терминала: {{live}} из {{count}}",
@@ -21007,7 +20997,7 @@
           "pinned": "Закреплено",
           "unread": "Непрочитанные",
           "comment": "Есть комментарий",
-          "retainedDoneAgents": "Истории завершённых агентов",
+          "finishedAgents": "Завершённые агенты",
           "contextPresence": "Открытые вкладки, терминалы, комментарии",
           "completelyEmpty": "Нечего терять",
           "noWorkspaces": "Рабочие пространства не найдены.",
@@ -21125,7 +21115,7 @@
               "comment": "Комментарий",
               "prunable": "Можно очистить",
               "locked": "Заблокировано",
-              "retainedAgents": "Завершённые агенты"
+              "finishedAgents": "Завершённые агенты"
             }
           },
           "forceDeleteRisk_one": "Для {{count}} рабочего пространства сейчас выявлены риски; может потребоваться принудительное удаление",
