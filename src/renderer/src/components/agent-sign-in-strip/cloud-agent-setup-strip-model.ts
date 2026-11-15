@@ -3,6 +3,7 @@
 // and once it's saved the strip offers "Start {{agent}}". Pure: the strip renders what this returns.
 import type { Translate } from '@/i18n/use-translate'
 import {
+  deviceCodeOffHint,
   setupFailureCopy,
   setupFailureTone
 } from '@/components/settings/agent-accounts/orca-cloud-accounts-copy'
@@ -170,6 +171,8 @@ export function cloudAgentSetupStripModel(args: {
           action: { kind: 'copyAndOpen', url: setup.verificationUrl, code: setup.userCode }
         },
         code: setup.userCode,
+        // Said up front: OpenAI's page refuses the code when the account has device code sign-in off.
+        hint: deviceCodeOffHint(t),
         announcement: t('agentSignInStrip.deviceAnnounce', 'Enter the code on auth.openai.com.')
       }
     case 'paste': {

@@ -179,3 +179,14 @@ export function setupFailureCopy(
       }
   }
 }
+
+/**
+ * Under a Codex device code (strip and Settings): the RS-3 fix said before it's needed. OpenAI's
+ * page refuses the code when the ChatGPT account has device code sign-in off.
+ */
+export function deviceCodeOffHint(t: Translate): string {
+  return t(
+    'orcaCloudAccounts.deviceCodeOffHint',
+    'If OpenAI says device code sign-in is off, turn it on in ChatGPT → Settings → Security, then try again.'
+  )
+}

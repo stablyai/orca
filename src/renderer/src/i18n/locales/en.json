@@ -28642,7 +28642,8 @@
     "allUnavailable": "Claude and Codex sign in for each cloud workspace for now.",
     "pasteTokenInstead": "Paste a token instead",
     "rowMenu": "{{agent}} account options",
-    "helpAccountWide": "Set up once. Every cloud workspace uses it, including new, cloned and restarted ones."
+    "helpAccountWide": "Set up once. Every cloud workspace uses it, including new, cloned and restarted ones.",
+    "deviceCodeOffHint": "If OpenAI says device code sign-in is off, turn it on in ChatGPT → Settings → Security, then try again."
   },
   "vmBuildAgents": {
     "menu": {
