@@ -3,7 +3,7 @@
 // framed response (works around undici hanging on transform-rule responses). Real tokens never
 // enter the VM or Vercel's policy store.
 import { createRemoteJWKSet, decodeJwt, jwtVerify, type JWTVerifyGetKey } from 'jose'
-import type { SandboxRow } from './store'
+import type { SandboxRow, SandboxStatus } from './store'
 import { secretLog } from './secret-log'
 
 const VERCEL_OIDC_HOSTNAME = 'oidc.vercel.com'
@@ -23,6 +23,15 @@ const DROP_HEADERS = [
   'transfer-encoding',
   'upgrade'
 ]
+
+/**
+ * Row states whose VM is up and may use its own credential routes. A booting VM is already doing git
+ * (the create's clone, a wake's fetch) before the control plane records it running: refusing it then
+ * made a fresh workspace on an App-installed private repo clone nothing (`remote: sandbox_not_running`).
+ * Only the VM Vercel's OIDC token names gets its own row's routes; suspending, stopped, failed and
+ * destroyed rows are still refused.
+ */
+export const EGRESS_SERVING_STATUSES: ReadonlySet<SandboxStatus> = new Set<SandboxStatus>(['creating', 'resuming', 'running'])
 
 export type CredentialBroker = {
   /** Authorization header value for `host` on behalf of this sandbox's workspace, or null. */
@@ -139,7 +148,7 @@ export async function handleEgressProxy(request: Request, deps: EgressProxyDeps)
   }
   const name = typeof claims.sandbox_name === 'string' ? claims.sandbox_name : null
   const row = name ? await deps.findSandbox(name) : null
-  if (!row || row.status !== 'running') {
+  if (!row || !EGRESS_SERVING_STATUSES.has(row.status)) {
     return deny('sandbox_not_running')
   }
   const routes = await deps.routesFor(row, host)
