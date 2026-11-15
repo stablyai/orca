@@ -176,7 +176,9 @@ describe('history GC daemon session folders', () => {
     const workspaces = join(userDataDir, 'workspaces')
     const repoPath = join(userDataDir, 'repo')
     mkdirSync(join(workspaces, 'kept-on-disk'), { recursive: true })
-    mkdirSync(join(userDataDir, 'empty-mount-point'))
+    mkdirSync(join(workspaces, 'live'))
+    mkdirSync(join(userDataDir, 'unmounted-mount-point'))
+    writeFileSync(join(userDataDir, 'unmounted-mount-point', '.keep'), '')
     mkdirSync(repoPath)
     writeFileSync(join(repoPath, 'README'), 'x')
     symlinkSync(join(userDataDir, 'ejected-volume', 'wt'), join(workspaces, 'linked'), 'junction')
@@ -194,17 +196,17 @@ describe('history GC daemon session folders', () => {
     sessionFolder('forgotten-on-disk', `repo-1::${join(workspaces, 'kept-on-disk')}`)
     sessionFolder('live-missing', `repo-1::${join(workspaces, 'live-missing')}`)
     sessionFolder('unmounted', `repo-1::${join(userDataDir, 'unmounted-volume', 'wt')}`)
-    sessionFolder('empty-mount-point', `repo-1::${join(userDataDir, 'empty-mount-point', 'wt')}`)
+    sessionFolder('mount-point', `repo-1::${join(userDataDir, 'unmounted-mount-point', 'wt')}`)
     sessionFolder('dangling-link', `repo-1::${join(workspaces, 'linked')}`)
     sessionFolder('saved-tab', `repo-1::${join(workspaces, 'saved-tab')}`)
     sessionFolder('remote-repo', `ssh-repo::${join(workspaces, 'deleted')}`)
     sessionFolder('folder-workspace', 'folder:gone-folder')
 
-    await runHistoryGc(new Set([`repo-1::${join(workspaces, 'live-missing')}`]), {
+    const live = ['live', 'live-missing'].map((name) => `repo-1::${join(workspaces, name)}`)
+    await runHistoryGc(new Set(live), {
       localRepoPaths: new Map([['repo-1', repoPath]]),
       liveSessionIds: new Set([`${deleted}@@running1`]),
-      persistedSessionOwners: (ids) =>
-        new Set([...ids].filter((id) => id === `repo-1::${join(workspaces, 'saved-tab')}`))
+      referencedSessionIds: () => new Set([`repo-1::${join(workspaces, 'saved-tab')}@@abcd1234`])
     })
 
     const kept = [...survivingDirs()].map((name) =>
@@ -213,10 +215,10 @@ describe('history GC daemon session folders', () => {
     expect(kept.sort()).toEqual([
       'dangling-link',
       'deleted-running',
-      'empty-mount-point',
       'folder-workspace',
       'forgotten-on-disk',
       'live-missing',
+      'mount-point',
       'remote-repo',
       'saved-tab',
       'unmounted'
@@ -275,7 +277,7 @@ describe('history GC concurrency behaviour', () => {
     resolveLiveIds({
       liveWorktreeIds: new Set([LIVE_WORKTREE_ID]),
       localRepoPaths: new Map(),
-      persistedSessionOwners: () => new Set()
+      referencedSessionIds: () => new Set()
     })
     await vi.advanceTimersByTimeAsync(0)
 

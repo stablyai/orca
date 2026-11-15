@@ -120,9 +120,7 @@ function readProfileWorktreeIdsFromDatabase(
     } else if (!isRecord(worktreeMeta)) {
       return null
     } else {
-      for (const id of Object.keys(worktreeMeta)) {
-        ids.add(id)
-      }
+      addWorktreeMetaIds(worktreeMeta, ids)
     }
   }
   const folderWorkspaces = domains.values.get('folderWorkspaces')
@@ -174,10 +172,8 @@ function readProfileWorktreeIdsFromJson(dataFile: string): ProfileWorkspaceIds |
   }
   const state = parsed
   const ids = new Set<string>()
-  if (state.worktreeMeta && typeof state.worktreeMeta === 'object') {
-    for (const id of Object.keys(state.worktreeMeta)) {
-      ids.add(id)
-    }
+  if (isRecord(state.worktreeMeta)) {
+    addWorktreeMetaIds(state.worktreeMeta, ids)
   }
   if (Array.isArray(state.folderWorkspaces)) {
     for (const workspace of state.folderWorkspaces) {
@@ -189,6 +185,17 @@ function readProfileWorktreeIdsFromJson(dataFile: string): ProfileWorkspaceIds |
   }
   const repoIds = repoIdsOf(state.repos)
   return repoIds ? { ids, repoIds } : null
+}
+
+/** Prior ids count: a renamed worktree's panes keep session ids embedding its old path. */
+function addWorktreeMetaIds(worktreeMeta: Record<string, unknown>, ids: Set<string>): void {
+  for (const [id, meta] of Object.entries(worktreeMeta)) {
+    ids.add(id)
+    const prior = isRecord(meta) ? meta.priorWorktreeIds : undefined
+    if (Array.isArray(prior)) {
+      prior.forEach((priorId) => typeof priorId === 'string' && ids.add(priorId))
+    }
+  }
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

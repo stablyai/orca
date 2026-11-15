@@ -1,7 +1,7 @@
 // Daemon session folders record no owner in meta.json; their name is the session id, which embeds the worktree id.
 
-import { lstat, opendir } from 'node:fs/promises'
-import { dirname } from 'node:path'
+import { lstat, stat } from 'node:fs/promises'
+import { dirname, resolve } from 'node:path'
 import { parsePtySessionId } from '../../../shared/terminal/pty/lifecycle/pty-session-id-format'
 import { parseWorkspaceKey } from '../../../shared/workspace/identity/workspace-scope'
 import { FOLDER_WORKSPACE_INSTANCE_SEPARATOR, splitWorktreeId } from '../../../shared/worktree/id'
@@ -12,15 +12,18 @@ export type SessionFolderGcOwners = {
   localRepoPaths: ReadonlyMap<string, string>
   /** Every daemon session still running, whatever its worktree. */
   liveSessionIds: ReadonlySet<string>
-  /** The candidates a saved tab, layout or group still references, on any host. */
-  persistedSessionOwners: (candidateWorktreeIds: ReadonlySet<string>) => ReadonlySet<string>
+  /** The candidates' session ids that a saved session on any host still references. */
+  referencedSessionIds: (
+    candidates: readonly { sessionId: string; worktreeId: string }[]
+  ) => ReadonlySet<string>
 }
 
 export type SessionFolderGcScan = SessionFolderGcOwners & {
   liveWorktreeIds: ReadonlySet<string>
   goneByWorktreeId: Map<string, Promise<boolean>>
-  dirHasEntriesByPath: Map<string, Promise<boolean>>
-  candidates: { root: string; entryPath: string; worktreeId: string }[]
+  presentByParentKey: Map<string, Promise<boolean>>
+  knownPathsByParentKey?: Map<string, string[]>
+  candidates: { root: string; entryPath: string; sessionId: string; worktreeId: string }[]
 }
 
 /** Null for folders whose name does not prove a git worktree owner. */
@@ -73,12 +76,12 @@ async function isLocalWorktreeGone(
   ) {
     return false
   }
-  // A missing repo root, or a missing or empty parent (an unmounted mount point), is not a deletion.
-  const [repoReachable, parentReachable] = await Promise.all([
-    cachedDirHasEntries(repoPath, scan),
-    cachedDirHasEntries(dirname(parsed.worktreePath), scan)
+  // Only a known worktree present beside it proves the volume is mounted; a bare mount point can hold files.
+  const [repoReachable, volumeReachable] = await Promise.all([
+    isDirectory(repoPath),
+    cachedKnownSiblingPresent(parsed.worktreePath, scan)
   ])
-  if (!repoReachable || !parentReachable) {
+  if (!repoReachable || !volumeReachable) {
     return false
   }
   try {
@@ -95,20 +98,53 @@ function isProbeableLocalPath(path: string): boolean {
   return process.platform === 'win32' ? /^[A-Za-z]:[\\/]/.test(path) : path.startsWith('/')
 }
 
-function cachedDirHasEntries(path: string, scan: SessionFolderGcScan): Promise<boolean> {
-  let hasEntries = scan.dirHasEntriesByPath.get(path)
-  if (!hasEntries) {
-    hasEntries = dirHasEntries(path).catch(() => false)
-    scan.dirHasEntriesByPath.set(path, hasEntries)
+function cachedKnownSiblingPresent(
+  worktreePath: string,
+  scan: SessionFolderGcScan
+): Promise<boolean> {
+  const parentKey = pathKey(dirname(worktreePath))
+  let present = scan.presentByParentKey.get(parentKey)
+  if (!present) {
+    const siblings = knownPathsByParentKey(scan).get(parentKey) ?? []
+    present = Promise.all(siblings.map(isDirectory)).then((found) => found.includes(true))
+    scan.presentByParentKey.set(parentKey, present)
   }
-  return hasEntries
+  return present
 }
 
-async function dirHasEntries(path: string): Promise<boolean> {
-  const dir = await opendir(path)
-  try {
-    return (await dir.read()) !== null
-  } finally {
-    await dir.close()
+function knownPathsByParentKey(scan: SessionFolderGcScan): Map<string, string[]> {
+  if (!scan.knownPathsByParentKey) {
+    const byParent = new Map<string, string[]>()
+    const known = [...scan.localRepoPaths.values()]
+    for (const worktreeId of scan.liveWorktreeIds) {
+      const path = splitWorktreeId(worktreeId)?.worktreePath
+      if (
+        path &&
+        isProbeableLocalPath(path) &&
+        !path.includes(FOLDER_WORKSPACE_INSTANCE_SEPARATOR)
+      ) {
+        known.push(path)
+      }
+    }
+    for (const path of known) {
+      const key = pathKey(dirname(path))
+      byParent.set(key, [...(byParent.get(key) ?? []), path])
+    }
+    scan.knownPathsByParentKey = byParent
   }
+  return scan.knownPathsByParentKey
+}
+
+function pathKey(path: string): string {
+  const resolved = resolve(path)
+  return process.platform === 'win32' || process.platform === 'darwin'
+    ? resolved.toLowerCase()
+    : resolved
+}
+
+function isDirectory(path: string): Promise<boolean> {
+  return stat(path).then(
+    (info) => info.isDirectory(),
+    () => false
+  )
 }

@@ -39,7 +39,7 @@ let activeHistoryGcAbort: AbortController | null = null
 export type HistoryGcOwners = {
   liveWorktreeIds: Set<string>
   localRepoPaths: ReadonlyMap<string, string>
-  persistedSessionOwners: SessionFolderGcOwners['persistedSessionOwners']
+  referencedSessionIds: SessionFolderGcOwners['referencedSessionIds']
   /** Null when the daemon inventory is unknown; session folders are then kept. */
   liveSessionIds?: ReadonlySet<string> | null
 }
@@ -82,7 +82,7 @@ async function gcScanEntry(
         (await isSessionFolderOfGoneWorktree(entryPath, owner, sessionFolders)) &&
         now - (await stat(entryPath)).mtimeMs >= GC_MIN_AGE_MS
       ) {
-        sessionFolders.candidates.push({ root, entryPath, worktreeId: owner.worktreeId })
+        sessionFolders.candidates.push({ root, entryPath, ...owner })
       }
       return
     }
@@ -164,7 +164,7 @@ async function executeHistoryGc(
       ...sessionFolderOwners,
       liveWorktreeIds,
       goneByWorktreeId: new Map(),
-      dirHasEntriesByPath: new Map(),
+      presentByParentKey: new Map(),
       candidates: []
     }
     const main = await gcScanRoot(getHistoryRoot(), liveWorktreeIds, sessionFolders, signal)
@@ -226,13 +226,11 @@ function pruneGoneWorktreeSessionFolders(scan: SessionFolderGcScan): {
   if (scan.candidates.length === 0) {
     return { orphaned: 0, pruned: 0 }
   }
-  const owned = scan.persistedSessionOwners(
-    new Set(scan.candidates.map((candidate) => candidate.worktreeId))
-  )
+  const referenced = scan.referencedSessionIds(scan.candidates)
   let orphaned = 0
   let pruned = 0
-  for (const { root, entryPath, worktreeId } of scan.candidates) {
-    if (owned.has(worktreeId)) {
+  for (const { root, entryPath, sessionId } of scan.candidates) {
+    if (referenced.has(sessionId)) {
       continue
     }
     orphaned++
