@@ -125,7 +125,9 @@ export const REPO_HANDLERS: Record<string, CommandHandler> = {
     ) {
       throw new RuntimeClientError(
         'incompatible_runtime',
-        'This Orca host does not support per-repo browser profiles. Update Orca on that host.'
+        visibility === undefined
+          ? 'This Orca host does not support per-repo browser profiles. Update Orca on that host.'
+          : 'This Orca host does not support per-repo browser profiles, so only the worktree visibility was saved. Update Orca on that host.'
       )
     }
     printResult(result, json, formatRepoShow)

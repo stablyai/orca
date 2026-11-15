@@ -2,7 +2,10 @@ import { translate } from '@/i18n/i18n'
 import type { AppState } from '../../../types'
 import type { NewBrowserTabProfile } from '../browser-slice-contract'
 import { findFirstIndexedWorktree } from '../../../../lib/workspace/ownership/worktree-runtime-owner-index'
-import { getDefaultBrowserProfileForHost } from '../hosts/browser-host-state'
+import {
+  getBrowserProfileHostId,
+  getDefaultBrowserProfileForHost
+} from '../hosts/browser-host-state'
 import {
   selectFolderWorkspaces,
   selectWorktreesByRepo
@@ -10,7 +13,6 @@ import {
 import { parseWorkspaceKey } from '../../../../../../shared/workspace/identity/workspace-scope'
 import {
   getRepoExecutionHostId,
-  LOCAL_EXECUTION_HOST_ID,
   parseExecutionHostId,
   type ExecutionHostId
 } from '../../../../../../shared/execution-host'
@@ -54,22 +56,22 @@ export function getRepoBrowserProfileId(
   if (parseWorkspaceKey(worktreeId)?.type === 'folder') {
     return undefined
   }
-  // Why the tab's host: profile ids belong to one host, so another host's copy of the repo can't name one here.
+  // Why profile hosts: ids belong to one host's profile list, and agent opens name SSH pages by this desktop.
+  const profileHostId = getBrowserProfileHostId(hostId)
   const repoId = getRepoIdFromWorktreeId(worktreeId)
-  const profileId = state.repos.find(
-    (repo) => repo.id === repoId && getRepoExecutionHostId(repo) === hostId
-  )?.browserProfileId
+  const rows = state.repos.filter(
+    (repo) =>
+      repo.id === repoId && getBrowserProfileHostId(getRepoExecutionHostId(repo)) === profileHostId
+  )
+  const profileId = (rows.find((repo) => getRepoExecutionHostId(repo) === hostId) ?? rows[0])
+    ?.browserProfileId
   if (typeof profileId !== 'string' || !profileId) {
     return undefined
   }
   if (profileId === 'default') {
     return null
   }
-  // Why: SSH pages render on this desktop's profiles; only paired runtimes keep their own.
-  const profiles =
-    state.browserSessionProfilesByHostId[
-      parseExecutionHostId(hostId)?.kind === 'runtime' ? hostId : LOCAL_EXECUTION_HOST_ID
-    ]
+  const profiles = state.browserSessionProfilesByHostId[profileHostId]
   // A deleted pick would load nowhere, so it falls back; an unloaded list (no Default yet) proves nothing.
   if (profiles?.length && !profiles.some((profile) => profile.id === profileId)) {
     return undefined

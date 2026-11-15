@@ -3,11 +3,8 @@ import { useAppStore } from '@/store'
 import { translate } from '@/i18n/i18n'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
 import type { Repo } from '../../../../../shared/repository/repo-types'
-import {
-  getRepoExecutionHostId,
-  LOCAL_EXECUTION_HOST_ID,
-  parseExecutionHostId
-} from '../../../../../shared/execution-host'
+import { getRepoExecutionHostId } from '../../../../../shared/execution-host'
+import { getBrowserProfileHostId } from '@/store/slices/browser/hosts/browser-host-state'
 import {
   Select,
   SelectContent,
@@ -57,10 +54,7 @@ export function RepositoryBrowserProfileSection({
   const entry = getRepositoryBrowserProfileSearchEntry(t)
   const selectLabelId = useId()
   const [saveFailed, setSaveFailed] = useState(false)
-  // Why: SSH pages render on this desktop's profiles; only paired runtimes keep their own.
-  const repoHostId = getRepoExecutionHostId(repo)
-  const profileHostId =
-    parseExecutionHostId(repoHostId)?.kind === 'runtime' ? repoHostId : LOCAL_EXECUTION_HOST_ID
+  const profileHostId = getBrowserProfileHostId(getRepoExecutionHostId(repo))
   const profiles = useAppStore((s) => s.browserSessionProfilesByHostId[profileHostId])
   const fetchProfiles = useAppStore((s) => s.fetchBrowserSessionProfiles)
   const scope = useAppStore((s) => s.settings?.browserProfileScope ?? 'shared')

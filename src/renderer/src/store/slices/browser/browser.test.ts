@@ -174,7 +174,12 @@ describe('createBrowserSlice annotations', () => {
       browserProfileId
     })
     const { store, main } = await createTestStoreDrawnFromMain({
-      repos: [repo('work', 'work-profile'), repo('plain', 'default'), repo('stale', 'deleted')],
+      repos: [
+        repo('work', 'work-profile'),
+        repo('plain', 'default'),
+        repo('stale', 'deleted'),
+        { ...repo('remote', 'work-profile'), connectionId: 'conn-1' }
+      ],
       browserSessionProfilesByHostId: { local: [profile('default'), profile('work-profile')] },
       settings: { ...getDefaultSettings('/tmp'), browserProfileScope: 'repo' }
     })
@@ -182,9 +187,14 @@ describe('createBrowserSlice annotations', () => {
     const work = store.getState().createBrowserTab('work::/work/one', 'about:blank')
     const plain = store.getState().createBrowserTab('plain::/plain/one', 'about:blank')
     const stale = store.getState().createBrowserTab('stale::/stale/one', 'about:blank')
+    // Agent opens render an SSH workspace's page on this desktop, so they name the local host.
+    const agentOnSsh = store.getState().createBrowserTab('remote::/remote/one', 'about:blank', {
+      browserRuntimeEnvironmentId: null
+    })
     await main.settle()
 
     expect(work.sessionProfileId).toBe('work-profile')
+    expect(agentOnSsh.sessionProfileId).toBe('work-profile')
     expect(plain.sessionProfileId).toBeNull()
     expect(ensureMock.mock.calls.map(([args]) => args)).toEqual([
       expect.objectContaining({ owner: { kind: 'repo', id: 'stale' } })
