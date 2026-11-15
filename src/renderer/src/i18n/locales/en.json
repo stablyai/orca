@@ -25798,5 +25798,11 @@
       "title": "Report a freeze",
       "uncheckAttachments": "Uncheck \"Attach saved freeze report and diagnostic logs\" and try again, or copy the details."
     }
+  },
+  "zotz": {
+    "updater": {
+      "manualUpdate": "Zotz updates with git pull + build.",
+      "manualUpdateDetail": "See docs/zotz/UPDATE.md. Set ZOTZ_ENABLE_UPDATER=1 to turn the built-in updater back on."
+    }
   }
 }
