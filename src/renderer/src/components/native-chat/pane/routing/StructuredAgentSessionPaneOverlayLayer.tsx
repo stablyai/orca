@@ -9,6 +9,7 @@ import {
 } from '@/runtime/native-chat/session-ownership/structured-agent-session-owner'
 import { RetainedPaneHost } from '../../../tab-group/RetainedPaneHost'
 import NativeChatView from '../../NativeChatView'
+import { NativeChatComposerEditorOwner } from '../../composer/editor/native-chat-composer-editor-owner'
 import { isStructuredTab } from '../../../../../../shared/agent-session/view/structured-agent-session-tab'
 
 type StructuredAgentSessionTab = Tab & {
@@ -50,16 +51,18 @@ const StructuredAgentSessionOverlaySlot = memo(function StructuredAgentSessionOv
       data-structured-agent-session-overlay-tab-id={tab.id}
       onFocusOwningGroup={onFocusOwningGroup}
     >
-      <NativeChatView
-        mode="structured"
-        tabId={tab.id}
-        groupId={groupId}
-        sessionId={tab.entityId}
-        agent={tab.agentSessionAgent}
-        isVisible={isActive}
-        isFocusedGroup={isFocusedGroup}
-        target={target}
-      />
+      <NativeChatComposerEditorOwner key={`${owner}:${tab.entityId}`}>
+        <NativeChatView
+          mode="structured"
+          tabId={tab.id}
+          groupId={groupId}
+          sessionId={tab.entityId}
+          agent={tab.agentSessionAgent}
+          isVisible={isActive}
+          isFocusedGroup={isFocusedGroup}
+          target={target}
+        />
+      </NativeChatComposerEditorOwner>
     </RetainedPaneHost>
   )
 })
