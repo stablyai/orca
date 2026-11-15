@@ -612,7 +612,6 @@
 5 src/shared/startup-command-staging.ts
 1 src/shared/terminal/pty/native-process/pty-process-ceiling-state.ts
 8 src/main/orcad/runtime-launch/windows-breakaway-launcher.ts
-3 src/cli/accounts/windows-console-input.ts
 2 src/main/providers/shell-launch/windows/windows-interactive-login-spawn.ts
 2 src/shared/file-write/windows-retry-file-operations.ts
 2 src/shared/secure-storage/windows-security-addon.ts
