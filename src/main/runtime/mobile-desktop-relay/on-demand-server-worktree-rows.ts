@@ -27,8 +27,10 @@ export class OnDemandServerWorktreeRows implements ServerWorktreeRows {
   constructor(private readonly hosts: MobileDesktopRelayHosts) {}
 
   // Disconnects retain rows; prune only removed servers when syncing.
-  sync(): void {
-    const configured = new Set(this.hosts.list().environments.map((environment) => environment.id))
+  async sync(): Promise<void> {
+    const configured = new Set(
+      (await this.hosts.list()).environments.map((environment) => environment.id)
+    )
     for (const environmentId of this.cached.keys()) {
       if (!configured.has(environmentId)) {
         this.cached.delete(environmentId)
@@ -36,12 +38,12 @@ export class OnDemandServerWorktreeRows implements ServerWorktreeRows {
     }
   }
 
-  refresh(environmentId: string): Promise<void> {
-    const host = describeRelayHosts(this.hosts).find(
+  async refresh(environmentId: string): Promise<void> {
+    const host = (await describeRelayHosts(this.hosts)).find(
       (entry) => entry.environmentId === environmentId
     )
     if (!host) {
-      return Promise.resolve()
+      return
     }
     const key = `${host.environmentId}\0${relayHostFence(host.identity)}`
     const inFlight = this.refreshing.get(key)
@@ -71,7 +73,11 @@ export class OnDemandServerWorktreeRows implements ServerWorktreeRows {
       // Removed servers must not repopulate rows with late replies.
       if (
         !reply?.success ||
-        !this.hosts.list().environments.some((entry) => entry.id === host.environmentId)
+        !(await this.hosts.list()).environments.some(
+          (entry) =>
+            entry.id === host.environmentId &&
+            relayHostFence(entry) === relayHostFence(host.identity)
+        )
       ) {
         return
       }

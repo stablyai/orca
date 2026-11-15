@@ -2,7 +2,7 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import { AGENT_PLUGIN_SCHEMA_V1 } from '../../../shared/skill-bundle-manifest'
+import { AGENT_PLUGIN_SCHEMA_V1 } from '../../../shared/skills/packages/skill-bundle-manifest'
 import { createSkillBundleArchive } from './skill-bundle-creation'
 import { extractSkillBundleArchive } from './skill-bundle-extraction'
 import '../package-archive/skill-package-tar'
@@ -66,6 +66,34 @@ describe('skill bundle creation and extraction', () => {
     expect(await readFile(join(extracted.skillsDirectory, 'beta-skill', 'notes.txt'), 'utf8')).toBe(
       'beta-skill notes\n'
     )
+  })
+
+  it('round trips a file whose name extends a sibling directory name', async () => {
+    const root = await temporaryDirectory()
+    const source = await createSkill(root, 'alpha-skill', 'Alpha')
+    await mkdir(join(source, 'references', 'refs'), { recursive: true })
+    await writeFile(join(source, 'references', 'refs.md'), 'reference\n')
+    await writeFile(join(source, 'references', 'refs', 'image.webp'), Buffer.from([0, 1, 2]))
+    const created = await createSkillBundleArchive({
+      sources: [{ sourceDirectory: source }],
+      archivePath: join(root, 'bundle.tar.gz'),
+      packageId: 'package_1',
+      versionId: 'version_1',
+      bundleName: 'team-skills'
+    })
+
+    const extracted = await extractSkillBundleArchive({
+      archivePath: created.archivePath,
+      destinationDirectory: join(root, 'extracted'),
+      expectedBundleDigest: created.manifest.bundleDigest
+    })
+
+    expect(extracted.manifest.skills[0].files.map((file) => file.path)).toEqual([
+      'SKILL.md',
+      'notes.txt',
+      'references/refs.md',
+      'references/refs/image.webp'
+    ])
   })
 
   it('rejects conflicting staging roots without changing their imported namespace', async () => {

@@ -10,8 +10,6 @@ import type { UnvalidatedRpcRequestPort, SendRequestOptions } from './unvalidate
 import type { RpcMethodName } from '../../../../src/shared/rpc-contract/rpc-params-catalog.generated'
 import type { RpcSendParams } from '../../../../src/shared/rpc-contract/rpc-send-params'
 import { classifyRpcReply } from './rpc-operation-reply'
-import { sendSingleFlightRequest } from './request-single-flight'
-import type { RpcClient } from './rpc-client-contract'
 import type { RpcResponse } from './rpc-wire-types'
 import type {
   AnyRpcOperation,
@@ -267,15 +265,6 @@ export function bindDeferredRpcOperation<
     operation,
     request(client: UnvalidatedRpcRequestPort, ...args: RpcSendArguments<Method>) {
       return client.sendRequest(operation.method, ...args)
-    },
-    requestSingleFlight(
-      client: RpcClient,
-      hostId: string,
-      ...args: RpcParamsOmittable<Method> extends true
-        ? [params?: RpcSendParams<Method>]
-        : [params: RpcSendParams<Method>]
-    ) {
-      return sendSingleFlightRequest(client, hostId, operation.method, args[0])
     },
     interpret(response: RpcResponse): Verdict {
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Preserve the established response shape at this boundary.

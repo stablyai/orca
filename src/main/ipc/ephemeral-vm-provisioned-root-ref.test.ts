@@ -1,7 +1,8 @@
 import { execFileSync } from 'node:child_process'
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { removeTempDirs } from '../../shared/testing/remove-temp-dirs.test-support'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 
 const handlers = new Map<string, (_event: unknown, args: never) => unknown>()
@@ -15,6 +16,7 @@ const { connectRuntimeOwnedSshTargetMock, getPathMock, handleMock, removeHandler
 )
 
 vi.mock('electron', () => ({
+  BrowserWindow: { getAllWindows: () => [] },
   app: { getPath: getPathMock },
   ipcMain: { handle: handleMock, removeHandler: removeHandlerMock }
 }))
@@ -42,9 +44,8 @@ beforeEach(() => {
   })
 })
 
-afterEach(() => {
-  rmSync(userDataPath, { recursive: true, force: true })
-  rmSync(repoPath, { recursive: true, force: true })
+afterEach(async () => {
+  await removeTempDirs([userDataPath, repoPath])
   vi.clearAllMocks()
 })
 

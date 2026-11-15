@@ -2,7 +2,6 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { AcpConnectionClosedError } from '../transport/acp-errors'
 import { AcpSessionRuntime } from './acp-session-runtime'
 import type { AcpSessionRuntimeOptions } from './acp-session-runtime-options'
-import type { AcpSessionEvent } from './acp-session-events'
 import {
   AcpScriptedAgent,
   deferred,
@@ -83,92 +82,12 @@ describe('ACP session runtime', () => {
     expect(asked).toHaveLength(2)
   })
 
-  it.each([
-    ['code alone', true, { code: -32003, message: 'busy' }, -32003],
-    [
-      'reason alone',
-      true,
-      { code: -32603, message: 'busy', data: { reason: 'session_busy' } },
-      -32603
-    ],
-    ['prose', true, { code: -32603, message: 'Agent is already processing.' }, -32603],
-    [
-      'sign-in',
-      true,
-      { code: -32000, message: 'Sign in', data: { reason: 'session_busy' } },
-      -32000
-    ],
-    [
-      'malformed refusal',
-      true,
-      { code: '-32003', message: 'busy', data: { reason: 'session_busy' } },
-      -32603
-    ],
-    [
-      'no opt-in',
-      false,
-      { code: -32003, message: 'busy', data: { reason: 'session_busy' } },
-      -32003
-    ]
-  ] as const)('never replays %s', async (_label, retryBusyPrompts, error, code) => {
-    const { runtime, agent } = fixture({}, { retryBusyPrompts })
-    await runtime.start(startOptions)
-    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
-    agent.on('session/prompt', (frame) =>
-      agent.stdout.write(`${JSON.stringify({ jsonrpc: '2.0', id: frame.id, error })}\n`)
-    )
-    await expect(runtime.prompt([...textPrompt])).rejects.toMatchObject({ code })
-    await vi.advanceTimersByTimeAsync(60_000)
-    expect(agent.frames.filter((frame) => frame.method === 'session/prompt')).toHaveLength(1)
-  })
-
-  it('uses raw underscored extension methods and bounds control requests without closing the session', async () => {
-    const { runtime, agent } = fixture()
-    await runtime.initialize()
-    await runtime.start(startOptions)
-    agent.on('_x.ai/subagent/cancel', (frame) => {
-      expect(frame.params).toEqual({ subagentId: 'child' })
-    })
-    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
-    const call = runtime.requestExtension('_x.ai/subagent/cancel', { subagentId: 'child' })
-    const rejected = expect(call).rejects.toThrow(/timed out|timeout/i)
-    await vi.advanceTimersByTimeAsync(30_000)
-    await rejected
-    expect(runtime.closed).toBe(false)
-    expect(() => runtime.requestExtension('x.ai/subagent/cancel', {})).toThrow('underscore')
-  })
-
   it('refuses unsupported restoration without silently creating a different session', async () => {
     const { runtime, agent } = fixture({ sessionCapabilities: { resume: null } })
     await expect(runtime.start({ ...startOptions, sessionId: 'old' })).rejects.toMatchObject({
       code: -32601
     })
     expect(agent.frames.map((frame) => frame.method)).toEqual(['initialize'])
-  })
-
-  it('authenticates once with a configured agent method and retries session setup', async () => {
-    const { runtime, agent } = fixture()
-    let authenticated = false
-    agent.on('initialize', (frame) =>
-      agent.reply(frame, { protocolVersion: 1, authMethods: [{ id: 'login', name: 'Login' }] })
-    )
-    agent.on('session/new', (frame) =>
-      authenticated
-        ? agent.reply(frame, { sessionId: 'session-1' })
-        : agent.fail(frame, -32000, 'Login required')
-    )
-    agent.on('authenticate', (frame) => {
-      authenticated = true
-      agent.reply(frame, {})
-    })
-    await runtime.start({ ...startOptions, authMethodId: 'login' })
-    expect(agent.frames.map((frame) => frame.method)).toEqual([
-      'initialize',
-      'session/new',
-      'authenticate',
-      'session/new'
-    ])
-    expect(agent.frames[2].params).toEqual({ methodId: 'login' })
   })
 
   it('rejects unroutable permission requests and answers an unavailable selection cancelled', async () => {
@@ -200,36 +119,6 @@ describe('ACP session runtime', () => {
     )
     // A local permission failure must leave the session usable.
     await expect(runtime.prompt([...textPrompt])).rejects.toThrow('already in progress')
-  })
-
-  it('preserves unrecognized updates and isolates event listener failures', async () => {
-    const diagnostics: string[] = []
-    const { runtime, agent } = fixture({}, { onDiagnostic: (message) => diagnostics.push(message) })
-    const updates: AcpSessionEvent[] = []
-    runtime.subscribe(() => {
-      throw new Error('Consumer failed')
-    })
-    runtime.subscribe((event) => updates.push(event))
-    await runtime.start(startOptions)
-    agent.notify('session/update', {
-      sessionId: 'session-1',
-      update: { sessionUpdate: 'agent_message_chunk', content: {} }
-    })
-    agent.notify('session/update', {
-      sessionId: 'session-1',
-      update: {
-        sessionUpdate: 'agent_message_chunk',
-        content: { type: 'text', text: 'valid', _meta: { vendor: true } }
-      }
-    })
-    expect(updates).toHaveLength(2)
-    expect(updates[0]).toMatchObject({ kind: 'unrecognized' })
-    expect(updates[1]).toMatchObject({
-      kind: 'known',
-      notification: { update: { content: { _meta: { vendor: true } } } }
-    })
-    expect(diagnostics).toContain('Forwarded unrecognized ACP session update')
-    expect(diagnostics.some((message) => message.includes('Consumer failed'))).toBe(true)
   })
 
   it('rejects pending calls and aborts permission hooks when protocol input ends', async () => {

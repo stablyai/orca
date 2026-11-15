@@ -1,16 +1,21 @@
-import { useAppStore } from '@/store'
+import { useAppStore } from '@/store/index'
 import { Suspense } from 'react'
-import { lazyWithRetry as lazy } from '@/lib/lazy-with-retry'
+import { lazyWithRetry as lazy } from '@/app-shell/startup/lazy-with-retry'
 import type { ActiveRightSidebarTab } from '../../../../shared/ui-chrome-types'
-import { isPluginPanelTabKey } from '../../../../shared/plugins/manifest/plugin-manifest'
+import '../../../../shared/plugins/manifest/plugin-manifest'
+import { isPluginPanelTabKey } from '../../../../shared/plugins/frames/plugin-tab-key'
 
 const FileExplorer = lazy(() => import('./file-explorer/panel/FileExplorer'))
-const FolderWorkspaceSourceControl = lazy(() => import('./FolderWorkspaceSourceControlPanel'))
+const FolderWorkspaceSourceControl = lazy(
+  () => import('./folder-workspaces/FolderWorkspaceSourceControlPanel')
+)
 const SourceControl = lazy(() => import('./source-control/panel/SourceControl'))
 const ChecksPanel = lazy(() => import('./checks-panel/ChecksPanel'))
-const PortsPanel = lazy(() => import('./PortsPanel'))
+const PortsPanel = lazy(() => import('./ports/PortsPanel'))
 const AiVaultSidebarPanel = lazy(() => import('./ai-vault/panel/AiVaultSidebarPanel'))
-const FolderWorkspaceWorktreesPanel = lazy(() => import('./FolderWorkspaceWorktreesPanel'))
+const FolderWorkspaceWorktreesPanel = lazy(
+  () => import('./folder-workspaces/FolderWorkspaceWorktreesPanel')
+)
 const FolderWorkspacePrChecksPanel = lazy(
   () => import('./hosted-review/folder-checks/FolderWorkspacePrChecksPanel')
 )

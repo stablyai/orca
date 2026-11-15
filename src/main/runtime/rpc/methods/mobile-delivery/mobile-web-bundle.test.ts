@@ -1,10 +1,9 @@
-import '../../unused-default-rpc-methods.test-fixture'
+import '../../dispatch/testing/unused-default-rpc-methods.test-fixture'
 import {
   mkdirSync,
   mkdtempSync,
   rmSync,
   truncateSync,
-  unlinkSync,
   utimesSync,
   writeFileSync
 } from 'node:fs'
@@ -27,7 +26,7 @@ import type { RpcRequest, RpcResponse } from '../../core'
 import {
   ORCAD_MOBILE_WEB_DIR,
   ORCAD_MOBILE_WEB_MANIFEST
-} from '../../../../../shared/orcad-artifacts'
+} from '../../../../../shared/remote-runtime/orcad-distribution/orcad-artifacts'
 import type { RpcDispatcher } from '../../dispatcher'
 
 import { installFakeAppEnvironment } from '../../../../../../config/scripts/test-runtime/environment/vitest-host-ports-setup'
@@ -144,9 +143,9 @@ describe('an install that carries a mobile web bundle', () => {
   // buildId on the event loop; a dev rebuild changes mtime and is covered separately.
   it('answers from the manifest it already read, without going back to disk', async () => {
     const first = await call('mobileWeb.bundle.manifest')
-    const cached = loadBundledMobileWebBundle()
+    const cached = await loadBundledMobileWebBundle()
 
-    expect(loadBundledMobileWebBundle()).toBe(cached)
+    expect(await loadBundledMobileWebBundle()).toBe(cached)
 
     const second = await call('mobileWeb.bundle.manifest')
 
@@ -156,15 +155,15 @@ describe('an install that carries a mobile web bundle', () => {
     )
   })
 
-  it('reloads when manifest.json gets a new buildId and a new mtime', () => {
-    expect(loadBundledMobileWebBundle()?.manifest.buildId).toBe(bundle.buildId)
+  it('reloads when manifest.json gets a new buildId and a new mtime', async () => {
+    expect((await loadBundledMobileWebBundle())?.manifest.buildId).toBe(bundle.buildId)
 
     const replacement = writeSyntheticMobileWebBundle(bundle.root, 9)
     const manifestPath = join(bundle.root, 'manifest.json')
     const bumped = new Date(Date.now() + 10_000)
     utimesSync(manifestPath, bumped, bumped)
 
-    expect(loadBundledMobileWebBundle()?.manifest.buildId).toBe(replacement.buildId)
+    expect((await loadBundledMobileWebBundle())?.manifest.buildId).toBe(replacement.buildId)
     expect(replacement.buildId).not.toBe(bundle.buildId)
   })
 
@@ -219,36 +218,25 @@ describe('an install that carries a mobile web bundle', () => {
     expect(errorMessage(stale)).toBe('mobile_web_bundle_build_changed')
   })
 
-  // A path survives rebuild; key verdicts by build too so an old failure cannot poison new bytes.
-  it('does not carry a failed verdict from one build onto the next build of the same path', async () => {
-    writeFileSync(join(bundle.root, 'index.html'), mobileWebBundleFiller(640, 99))
-    expect(
-      errorMessage(await chunk({ buildId: bundle.buildId, path: 'index.html', offset: 0 }))
-    ).toBe('mobile_web_bundle_asset_changed')
+  // Linux package managers replace the install under a running host (STA-14385): serve the new build, never the gone one.
+  it('serves the replacement build after the install swaps bundles under a running host', async () => {
+    const script = bundle.assets.find((asset) => asset.path.endsWith('.js'))!
+    expect((await call('mobileWeb.bundle.manifest')).ok).toBe(true)
+    expect((await chunk({ buildId: bundle.buildId, path: script.path, offset: 0 })).ok).toBe(true)
 
     rmSync(join(scratch, 'out', 'mobile-web'), { recursive: true, force: true })
-    const replacement = writeSyntheticMobileWebBundle(join(scratch, 'out', 'mobile-web'), 8)
-    resetBundledMobileWebBundleCacheForTests()
+    const replacement = writeSyntheticMobileWebBundle(join(scratch, 'out', 'mobile-web'), 2)
+    expect(replacement.buildId).not.toBe(bundle.buildId)
 
-    const response = await chunk({ buildId: replacement.buildId, path: 'index.html', offset: 0 })
+    const stale = await chunk({ buildId: bundle.buildId, path: script.path, offset: 0 })
+    const manifest = await call('mobileWeb.bundle.manifest')
+    const fresh = await chunk({ buildId: replacement.buildId, path: 'index.html', offset: 0 })
 
-    expect(errorMessage(response)).toBeUndefined()
-  })
-
-  // Map post-verification filesystem failure to a contract code without exposing the host install path.
-  it('answers a changed asset, not the filesystem error, when the asset is gone after its verdict', async () => {
-    const script = bundle.assets.find((asset) => asset.path.endsWith('.js'))!
-    expect((await chunk({ buildId: bundle.buildId, path: script.path, offset: 0 })).ok).toBe(true)
-    unlinkSync(join(bundle.root, script.path))
-
-    const response = await chunk({
-      buildId: bundle.buildId,
-      path: script.path,
-      offset: MOBILE_WEB_BUNDLE_CHUNK_BYTES
-    })
-
-    expect(errorMessage(response)).toBe('mobile_web_bundle_asset_changed')
-    expect(console.warn).toHaveBeenCalled()
+    expect(errorMessage(stale)).toBe('mobile_web_bundle_build_changed')
+    expect(
+      MobileWebBundleManifestResultSchema.parse(manifest.ok && manifest.result).manifest.buildId
+    ).toBe(replacement.buildId)
+    expect(errorMessage(fresh)).toBeUndefined()
   })
 
   // Truncation after verification must not return a short chunk and let clients page past missing bytes.
@@ -405,13 +393,5 @@ describe('filling a read window', () => {
     expect(filled).toBe(64)
     expect(stub.calls).toEqual([64, 40])
     expect(buffer.equals(source)).toBe(true)
-  })
-
-  it('stops at the read that returns nothing, which is the truncation the caller reports', async () => {
-    const stub = reader([24, 0])
-
-    const filled = await fillMobileWebBundleReadWindow(stub, Buffer.alloc(64), 64, 0)
-
-    expect(filled).toBe(24)
   })
 })

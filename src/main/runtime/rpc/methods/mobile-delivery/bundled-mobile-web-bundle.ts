@@ -1,8 +1,12 @@
-import { existsSync, readFileSync, statSync } from 'node:fs'
+import { existsSync, statSync } from 'node:fs'
+import { readFile } from 'node:fs/promises'
 import { join } from 'node:path'
-import { getAppEnvironment, hasAppEnvironment } from '../../../../../shared/app-environment'
 import {
-  MobileWebBundleManifestSchema,
+  getAppEnvironment,
+  hasAppEnvironment
+} from '../../../../../shared/app-lifecycle/app-environment'
+import {
+  InstalledMobileWebBundleManifestSchema,
   type MobileWebBundleManifest
 } from '../../../../../shared/mobile-web-bundle/manifest-contract'
 
@@ -13,10 +17,16 @@ export type BundledMobileWebBundle = {
   manifest: MobileWebBundleManifest
 }
 
+let probedRoot: { appPath: string; root: string } | undefined
+
+// Same root and mtime skip the read. Identical bytes skip the parse. A failed re-read must not
+// replace a bundle already served: Linux package managers replace the install under a running app.
+let cached: { root: string; raw: Buffer; mtimeMs: number; bundle: BundledMobileWebBundle | null } | undefined
+
 /** AppEnvironment keeps runtime imports Node-safe; absent environment means no install root.
- * Probe app.asar/out and unpacked entrypoint layouts like getBundledWebClientRoot. The bundle
- * ships under out/ inside app.asar, so layouts that move appPath move it.
- * `ORCA_MOBILE_WEB_BUNDLE_DIR` wins when set. */
+ * Probe app.asar/out, repo, and unpacked entrypoint layouts like getBundledWebClientRoot and
+ * findBundledWebClientRoot. The bundle ships under out/ inside app.asar, so layouts that move
+ * appPath move it. `ORCA_MOBILE_WEB_BUNDLE_DIR` wins when set. */
 export function getBundledMobileWebBundleRoot(): string | undefined {
   const override = process.env.ORCA_MOBILE_WEB_BUNDLE_DIR
   if (override && existsSync(join(override, MANIFEST_FILENAME))) {
@@ -27,6 +37,9 @@ export function getBundledMobileWebBundleRoot(): string | undefined {
   }
   const environment = getAppEnvironment()
   const appPath = environment.getAppPath()
+  if (probedRoot?.appPath === appPath) {
+    return probedRoot.root
+  }
   // Why: resources/app in dist/win-unpacked is four levels under the repo, and an unpackaged
   // app path uses the same relative probe. `build:mobile-web` refreshes that out/ in place.
   // A packaged install must not look outside itself.
@@ -38,66 +51,75 @@ export function getBundledMobileWebBundleRoot(): string | undefined {
     appPath.endsWith('.asar') || appPath.includes('app.asar')
       ? join(appPath, '..', 'app.asar.unpacked', 'out', 'mobile-web')
       : undefined
+  // Electron reads app.asar paths through the header it parsed at launch, which misses files an in-place update wrote.
+  const filesPath = appPath.endsWith('.asar') ? `${appPath}.unpacked` : appPath
   const roots = [
     repoBundle,
     unpackedAsarBundle,
-    join(appPath, 'out', 'mobile-web'),
+    join(filesPath, 'out', 'mobile-web'),
     // Unpacked electron-vite sets appPath to out/main.
-    join(appPath, '..', 'mobile-web')
+    join(filesPath, '..', 'mobile-web'),
+    filesPath === appPath ? undefined : join(appPath, 'out', 'mobile-web')
   ].filter((root): root is string => root !== undefined)
-  return roots.find((root) => existsSync(join(root, MANIFEST_FILENAME)))
+  const root = roots.find((candidate) => existsSync(join(candidate, MANIFEST_FILENAME)))
+  // An install keeps its layout, so only a miss is probed again (a dev build may produce the bundle later).
+  if (root) {
+    probedRoot = { appPath, root }
+  }
+  return root
 }
 
-// `undefined` means unprobed, `null` means absent (no usable bundle). Same root and mtime skip the parse.
-let cachedBundle: BundledMobileWebBundle | null | undefined
-let cachedMtimeMs: number | undefined
-let cachedRoot: string | undefined
+export function resetBundledMobileWebBundleCacheForTests(): void {
+  probedRoot = undefined
+  cached = undefined
+}
 
-export function loadBundledMobileWebBundle(): BundledMobileWebBundle | null {
+export async function loadBundledMobileWebBundle(): Promise<BundledMobileWebBundle | null> {
   const root = getBundledMobileWebBundleRoot()
   if (!root) {
-    cachedBundle = null
-    cachedMtimeMs = undefined
-    cachedRoot = undefined
+    cached = undefined
     return null
   }
 
   const manifestPath = join(root, MANIFEST_FILENAME)
-  let mtimeMs = 0
+  let mtimeMs: number | undefined
   try {
     mtimeMs = statSync(manifestPath).mtimeMs
   } catch {
     // Gone between existsSync and stat: keep the phone path from throwing.
   }
 
-  if (cachedBundle !== undefined && cachedRoot === root && cachedMtimeMs === mtimeMs) {
-    return cachedBundle
+  if (mtimeMs !== undefined && cached?.root === root && cached.mtimeMs === mtimeMs) {
+    return cached.bundle
   }
 
-  const nextBundle = readBundledMobileWebBundle(root)
-  if (nextBundle !== null || cachedBundle === undefined) {
-    cachedBundle = nextBundle
-    cachedMtimeMs = mtimeMs
-    cachedRoot = root
-  }
-  return cachedBundle
-}
-
-export function resetBundledMobileWebBundleCacheForTests(): void {
-  cachedBundle = undefined
-  cachedMtimeMs = undefined
-  cachedRoot = undefined
-}
-
-function readBundledMobileWebBundle(root: string): BundledMobileWebBundle | null {
-  const manifestPath = join(root, MANIFEST_FILENAME)
-  let raw: string
+  let raw: Buffer
   try {
-    raw = readFileSync(manifestPath, 'utf8')
+    raw = await readFile(manifestPath)
   } catch (error) {
     console.warn(`[mobile-web-bundle] cannot read ${manifestPath}:`, error)
-    return null
+    return cached?.root === root ? cached.bundle : null
   }
+
+  if (cached?.root === root && cached.raw.equals(raw)) {
+    if (mtimeMs !== undefined) {
+      cached.mtimeMs = mtimeMs
+    }
+    return cached.bundle
+  }
+
+  const bundle = parseBundledMobileWebBundle(root, manifestPath, raw.toString('utf8'))
+  if (bundle !== null || cached === undefined || cached.root !== root) {
+    cached = { root, raw, mtimeMs: mtimeMs ?? Number.NaN, bundle }
+  }
+  return cached.root === root ? cached.bundle : bundle
+}
+
+function parseBundledMobileWebBundle(
+  root: string,
+  manifestPath: string,
+  raw: string
+): BundledMobileWebBundle | null {
   let parsed: unknown
   try {
     parsed = JSON.parse(raw)
@@ -105,7 +127,7 @@ function readBundledMobileWebBundle(root: string): BundledMobileWebBundle | null
     console.warn(`[mobile-web-bundle] ${manifestPath} is not valid JSON:`, error)
     return null
   }
-  const manifest = MobileWebBundleManifestSchema.safeParse(parsed)
+  const manifest = InstalledMobileWebBundleManifestSchema.safeParse(parsed)
   if (!manifest.success) {
     // Bad dev/hand-edited bundles must degrade to absent, not crash a phone-accessible path.
     console.warn(`[mobile-web-bundle] ${manifestPath} does not match the manifest contract:`, {

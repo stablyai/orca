@@ -1,5 +1,5 @@
 import type { WebContents } from 'electron'
-import type { BrowserScreencastFrameMetadata } from '../../../../shared/browser-screencast-protocol'
+import type { BrowserScreencastFrameMetadata } from '../../../../shared/browser/screencast/browser-screencast-protocol'
 import type { BrowserScreencastViewport } from './browser-screencast-stream-types'
 
 export type BrowserScreencastGuestViewSize = {

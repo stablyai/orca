@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { useRef, useState } from 'react'
+import { StrictMode, useRef, useState } from 'react'
 import { act, cleanup, fireEvent, render, waitFor } from '@testing-library/react'
 import { afterEach, expect, it, vi } from 'vitest'
 import { MentionTextarea } from '@/components/pull-request-page/mentions/textarea'
@@ -148,3 +148,47 @@ it('removes an undo-restored owned label after an incomplete user label prefix',
   await act(async () => held.resolve('https://github.com/user-attachments/assets/deleted'))
   expect(view.container.querySelector('output')?.textContent).toBe(prefix)
 })
+
+it.each([10, 100])(
+  'retires the active upload and %i queued files without reviving them',
+  async (count) => {
+    let active: AbortSignal | undefined
+    upload.mockReset().mockImplementation((_file: File, signal: AbortSignal) => {
+      active = signal
+      return new Promise((_resolve, reject) =>
+        signal.addEventListener('abort', () => reject(signal.reason), { once: true })
+      )
+    })
+    const onChange = vi.fn()
+    const view = render(
+      <StrictMode>
+        <Draft onChange={onChange} />
+      </StrictMode>
+    )
+    fireEvent.paste(view.getByRole('textbox'), {
+      clipboardData: {
+        files: Array.from(
+          { length: count },
+          () => new File(['png'], 'image.png', { type: 'image/png' })
+        )
+      }
+    })
+    await waitFor(() => expect(upload).toHaveBeenCalledTimes(1))
+    const changes = onChange.mock.calls.length
+    await act(async () => view.unmount())
+    expect(active?.aborted).toBe(true)
+    expect(upload).toHaveBeenCalledTimes(1)
+    expect(onChange).toHaveBeenCalledTimes(changes)
+    upload.mockResolvedValue('https://github.com/user-attachments/assets/live')
+    const successor = render(
+      <StrictMode>
+        <Draft />
+      </StrictMode>
+    )
+    paste(textareaField(successor.getByRole('textbox')))
+    await waitFor(() =>
+      expect(successor.container.querySelector('output')?.textContent).toContain('assets/live')
+    )
+    expect(upload).toHaveBeenCalledTimes(2)
+  }
+)

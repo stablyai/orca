@@ -32,10 +32,10 @@ const mocks = vi.hoisted(() => {
   }
 })
 
-vi.mock('@/components/browser-pane/host-guest/webview-registry', () => ({
-  destroyPersistentWebview: vi.fn()
+vi.mock('@/components/browser-pane/host-guest/browser-webview-disposal', () => ({
+  closePersistentBrowserPage: vi.fn()
 }))
-vi.mock('../../store', () => ({ useAppStore: { getState: mocks.getState } }))
+vi.mock('../../store/index', () => ({ useAppStore: { getState: mocks.getState } }))
 vi.mock('./browser-automation-bootstrap-lease', () => ({
   acquireBrowserAutomationBootstrapLease: vi.fn()
 }))
@@ -73,6 +73,7 @@ function storeState(activeWorktreeId: string) {
       [LOCAL_WT]: [{ id: 'ws-local' }],
       [REMOTE_WT]: [{ id: 'ws-remote' }]
     },
+    browserAnnotationsByPageId: {},
     browserPagesByWorkspace: {
       'ws-local': [{ id: 'page-local' }],
       'ws-remote': [{ id: 'page-remote' }]

@@ -1,5 +1,5 @@
 import { readFile, stat } from 'node:fs/promises'
-import type { Repo } from '../../../../shared/repo-types'
+import type { Repo } from '../../../../shared/repository/repo-types'
 import {
   getRuntimePathBasename,
   normalizeRuntimePathSeparators,

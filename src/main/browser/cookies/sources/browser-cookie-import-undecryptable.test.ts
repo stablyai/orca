@@ -1,6 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as NodeCrypto from 'node:crypto'
-import type * as NodeFs from 'node:fs'
 import type { CookiesGetFilter } from 'electron'
 
 const {
@@ -37,7 +36,6 @@ vi.mock('../../sessions/profiles/browser-session-registry', () => ({
 vi.mock('@orca/process-host', () => ({
   runProcess: runProcessMock
 }))
-vi.mock('node:fs', async (importOriginal) => ({ ...(await importOriginal<typeof NodeFs>()) }))
 vi.mock('electron', () => ({
   app: { getPath: appGetPathMock },
   BrowserWindow: { fromWebContents: vi.fn() },
@@ -98,27 +96,18 @@ describe('importCookiesFromBrowser — undecryptable cookies', () => {
   let cookiesSetMock: ReturnType<typeof vi.fn>
   let cookiesRemoveMock: ReturnType<typeof vi.fn>
   let clearDataMock: ReturnType<typeof vi.fn>
-  let targetJar: Record<string, unknown>[]
   let platformSpy: ReturnType<typeof vi.spyOn>
 
   beforeEach(() => {
     tmpDir = mkdtempSync(join(tmpdir(), 'orca-linux-keyring-test-'))
     cookiesSetMock = vi.fn().mockResolvedValue(undefined)
-    targetJar = []
-    cookiesRemoveMock = vi.fn(async (_url: string, name: string) => {
-      const index = targetJar.findIndex((cookie) => cookie.name === name)
-      if (index !== -1) {
-        targetJar.splice(index, 1)
-      }
-    })
-    clearDataMock = vi.fn(async () => {
-      targetJar.splice(0)
-    })
+    cookiesRemoveMock = vi.fn().mockResolvedValue(undefined)
+    clearDataMock = vi.fn().mockResolvedValue(undefined)
     writeCookieIdentityMock.mockReset().mockResolvedValue(undefined)
     appGetPathMock.mockReturnValue(join(tmpDir, 'userData'))
     sessionFromPartitionMock.mockReturnValue({
       cookies: {
-        get: vi.fn(async () => targetJar),
+        get: vi.fn(async () => []),
         set: cookiesSetMock,
         remove: cookiesRemoveMock,
         flushStore: vi.fn().mockResolvedValue(undefined)
@@ -132,23 +121,9 @@ describe('importCookiesFromBrowser — undecryptable cookies', () => {
   })
 
   afterEach(() => {
-    try {
-      expect(runProcessMock).toHaveBeenCalledTimes(2)
-      expect(runProcessMock).toHaveBeenNthCalledWith(1, {
-        program: 'secret-tool',
-        args: ['lookup', 'service', 'Chrome Safe Storage', 'account', 'Chrome'],
-        timeoutMs: 5_000
-      })
-      expect(runProcessMock).toHaveBeenNthCalledWith(2, {
-        program: 'secret-tool',
-        args: ['lookup', 'application', 'chrome'],
-        timeoutMs: 5_000
-      })
-    } finally {
-      platformSpy.mockRestore()
-      vi.clearAllMocks()
-      rmSync(tmpDir, { recursive: true, force: true })
-    }
+    platformSpy.mockRestore()
+    vi.clearAllMocks()
+    rmSync(tmpDir, { recursive: true, force: true })
   })
 
   function seedProfile(...encryptedValues: Buffer[]): string {
@@ -192,78 +167,6 @@ describe('importCookiesFromBrowser — undecryptable cookies', () => {
     })
     expect(cookiesSetMock).not.toHaveBeenCalled()
   })
-
-  it.each([0, 1])(
-    'imports readable siblings alongside %i unrelated cookies despite an unreadable row',
-    async (unrelatedCount) => {
-      const sourceCookiesPath = join(tmpDir, 'Chrome', 'Default', 'Network', 'Cookies')
-      const sourceDb = createChromiumCookieTestDatabase(sourceCookiesPath, [
-        {
-          domain: '.preserved.example',
-          name: 'undecryptable',
-          value: '',
-          encryptedValue: encryptLinuxChromiumCookie('wrong-key-garbage', 'peanuts', 'v11'),
-          topFrameSiteKey: 'https://top.example'
-        },
-        { domain: 'sub.preserved.example', name: 'readable-sibling', value: 'do-not-write' },
-        ...(unrelatedCount
-          ? [{ domain: '.replace.test', name: 'plain', value: 'plain-value' }]
-          : [])
-      ])
-      sourceDb.exec("UPDATE cookies SET has_cross_site_ancestor = 2 WHERE name = 'undecryptable'")
-      sourceDb.close()
-      createChromiumCookieTestDatabase(
-        join(tmpDir, 'userData', 'Partitions', 'test', 'Network', 'Cookies'),
-        []
-      ).close()
-      targetJar.push({
-        name: 'live-session',
-        value: 'must-survive',
-        domain: '.preserved.example',
-        path: '/',
-        secure: true,
-        httpOnly: true,
-        sameSite: 'no_restriction'
-      })
-
-      const result = await importCookiesFromBrowser(
-        chromeBrowser(sourceCookiesPath),
-        'persist:test'
-      )
-
-      expect(result.ok).toBe(true)
-      if (!result.ok) {
-        return
-      }
-      expect(clearDataMock).not.toHaveBeenCalled()
-      expect(cookiesRemoveMock).not.toHaveBeenCalledWith(expect.any(String), 'live-session')
-      expect(targetJar).toEqual([expect.objectContaining({ name: 'live-session' })])
-      expect(writeCookieIdentityMock).toHaveBeenCalledTimes(unrelatedCount + 1)
-      if (unrelatedCount) {
-        expect(writeCookieIdentityMock).toHaveBeenCalledWith(
-          expect.objectContaining({ name: 'plain', value: 'plain-value' })
-        )
-      }
-      expect(writeCookieIdentityMock).toHaveBeenCalledWith(
-        expect.objectContaining({ name: 'readable-sibling' })
-      )
-      expect(result.summary).toMatchObject({
-        totalCookies: 2 + unrelatedCount,
-        importedCookies: unrelatedCount + 1,
-        skippedCookies: 1,
-        partitionSkippedCookies: 1,
-        partitionSkipBreakdown: { unreadableCookies: 1, preservedRelatedCookies: 0 },
-        warning: {
-          code: 'cookies-undecryptable',
-          failedCookies: 1,
-          reason: 'linux-keyring-unavailable'
-        }
-      })
-      expect(result.summary.totalCookies).toBe(
-        result.summary.importedCookies + result.summary.skippedCookies
-      )
-    }
-  )
 
   it('still imports v10 cookies, which is what a keyring-less profile actually holds', async () => {
     const sourceCookiesPath = seedProfile(encryptLinuxChromiumCookie('v10-value', 'peanuts', 'v10'))

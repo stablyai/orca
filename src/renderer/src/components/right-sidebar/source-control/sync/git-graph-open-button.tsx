@@ -8,7 +8,7 @@ import {
   gitGraphUpdateMessage,
   openGitGraph,
   probeGitGraphSupport
-} from '@/lib/git-graph-tab'
+} from '@/lib/source-control/graph/git-graph-tab'
 import { toSourceControlRowOpenEvent, type SourceControlRowOpenEvent } from '../listing/split-open'
 import { useTranslate } from '@/i18n/use-translate'
 import { CommitsHeaderIconButton } from './commits-header-icon-button'

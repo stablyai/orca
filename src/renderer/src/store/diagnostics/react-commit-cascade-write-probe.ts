@@ -2,7 +2,7 @@
 import {
   noteReactCommitCascadeStoreWrite,
   reactCommitCascadeWriteProbe
-} from '@/lib/react-commit-cascade-store-write-samples'
+} from '@/diagnostics/react-commits/react-commit-cascade-store-write-samples'
 import type { StateCreator } from 'zustand'
 
 /** zustand's two `setState` call shapes, as a union so a wrapper can forward them uncast. */

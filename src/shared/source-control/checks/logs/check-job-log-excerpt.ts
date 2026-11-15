@@ -1,9 +1,9 @@
 import {
   stripAnsiEscapeSequences,
   TERMINAL_CONTROL_CHARACTER_PATTERN
-} from '../../../ansi-escape-sequences'
-import { ownRetainedString } from '../../../own-retained-string'
-import { clampUtf8TextTail, isUtf8ByteLengthWithinLimit } from '../../../utf8-byte-limits'
+} from '../../../terminal/protocol/escape/ansi-escape-sequences'
+import { ownRetainedString } from '../../../text/own-retained-string'
+import { clampUtf8TextTail, isUtf8ByteLengthWithinLimit } from '../../../text/utf8-byte-limits'
 
 export const PR_CHECK_LOG_TAIL_BYTES = 16 * 1024
 

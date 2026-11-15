@@ -43,6 +43,12 @@ type ServerOptions = {
   silentMethods?: string[]
   /** Refuses every auth the way a server that dropped this device does. */
   rejectAuth?: boolean
+  /** The server's host key, so a restarted server can keep (or change) its identity. */
+  keyPair?: { publicKey: Uint8Array; secretKey: Uint8Array }
+  /** The token printed in the server's pairing offer. */
+  deviceToken?: string
+  /** Accepts only the auths this returns true for; refused like `rejectAuth`. */
+  authorize?: (auth: unknown) => boolean
 }
 
 const servers: WebSocketServer[] = []
@@ -64,7 +70,7 @@ export async function closeSharedControlTestServers(): Promise<void> {
 export async function createSharedControlTestServer(
   options: ServerOptions = {}
 ): Promise<SharedControlTestServer> {
-  const serverKeyPair = generateKeyPair()
+  const serverKeyPair = options.keyPair ?? generateKeyPair()
   const requests: SharedControlTestServer['requests'] = []
   const auths: unknown[] = []
   const delayedResponses: (() => void)[] = []
@@ -115,8 +121,9 @@ export async function createSharedControlTestServer(
         return
       }
       if (!authenticated) {
-        auths.push(JSON.parse(plaintext))
-        if (options.rejectAuth) {
+        const auth: unknown = JSON.parse(plaintext)
+        auths.push(auth)
+        if (options.rejectAuth || (options.authorize && !options.authorize(auth))) {
           sendEncrypted(ws, sharedKey, { type: 'e2ee_error', error: { code: 'unauthorized' } })
           return
         }
@@ -153,7 +160,7 @@ export async function createSharedControlTestServer(
     encodePairingOffer({
       v: 2,
       endpoint: `ws://127.0.0.1:${address.port}`,
-      deviceToken: 'device-token',
+      deviceToken: options.deviceToken ?? 'device-token',
       publicKeyB64: publicKeyToBase64(serverKeyPair.publicKey)
     })
   )

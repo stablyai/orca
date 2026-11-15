@@ -13,7 +13,9 @@ async function makeRuntimeWithHookRow(
 ) {
   const statusStore = new AgentHookServer()
   const runtime = new OrcaRuntimeService(store, undefined, {
-    getAgentStatusSnapshot: () => statusStore.getStatusSnapshot()
+    getAgentStatusSnapshot: () => statusStore.getStatusSnapshot(),
+    getPublicAgentStatusSnapshotForPane: (paneKey, terminalHandle) =>
+      statusStore.getPublicStatusSnapshotForPane(paneKey, terminalHandle)
   })
   runtime.setPtyController({
     spawn: vi.fn().mockResolvedValue({ id: 'pty-ps-agent-wait' }),
@@ -22,7 +24,7 @@ async function makeRuntimeWithHookRow(
     getForegroundProcess: async () => null
   })
   runtime.attachWindow(1)
-  runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
+  await runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
   const { handle } = await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`, {
     command: 'claude'
   })

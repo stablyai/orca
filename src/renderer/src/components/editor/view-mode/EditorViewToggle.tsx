@@ -126,7 +126,7 @@ export default function EditorViewToggle({
   // Metadata uses getters; subscribe here so language changes repaint labels.
   useTranslation()
   return (
-    <TooltipProvider delayDuration={300}>
+    <TooltipProvider>
       <ToggleGroup
         type="single"
         size="sm"

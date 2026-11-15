@@ -13,4 +13,3 @@ To update a tool, change its exact version in this package's manifest, run
 `pnpm --dir config/audit-tools install --ignore-scripts`, and review both the manifest
 and generated lockfile. The workspace enforces a three-day release delay and
 disables install scripts. Keep its package-manager pin aligned with the root.
-Run `node config/scripts/verify-locked-audit-tools.mjs` to exercise both tools.

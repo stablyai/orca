@@ -7,7 +7,7 @@ import {
   AGENT_OWNED_THREAD_GOAL_CLEAR_COMMAND,
   agentSessionThreadGoalReport
 } from '../../../../../../shared/agent-session/agent-session-thread-goal-report'
-import type { AgentSessionOptionsResult } from '../../../../../../shared/agent-session/options/agent-session-options-result'
+import type { AgentSessionOptionsResult } from '../../../../../../shared/agent-session/options/protocol/agent-session-options-result'
 import type {
   AgentSessionThreadGoalChange,
   AgentSessionThreadGoalResult

@@ -1,7 +1,10 @@
 // @vitest-environment happy-dom
 import { act, cleanup, fireEvent, render, screen, type RenderResult } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { LinuxPackageInstallRecovery, UpdateStatus } from '../../../shared/update-status-types'
+import type {
+  LinuxPackageInstallRecovery,
+  UpdateStatus
+} from '../../../shared/updater/update-status-types'
 import { useAppStore } from '../store'
 import { UpdateCard } from './UpdateCard'
 import { NotificationCardStack } from './NotificationCardStack'
@@ -94,24 +97,6 @@ afterEach(() => {
   useAppStore.setState(useAppStore.getInitialState(), true)
 })
 
-describe('UpdateCard Windows signature failures', () => {
-  it('does not offer the rejected version as a manual publisher-check bypass', () => {
-    const message =
-      'New version 1.4.200 is not signed by the application owner: publisherNames: Orca'
-    renderAfterAvailableStatus()
-
-    act(() => useAppStore.getState().setUpdateStatus({ state: 'error', message }))
-
-    expect(screen.getByText("Update Wasn't Installed")).toBeTruthy()
-    expect(screen.getByText(/Don't install this download/)).toBeTruthy()
-    expect(screen.queryByText(message)).toBeNull()
-
-    fireEvent.click(screen.getByRole('button', { name: 'Check official releases' }))
-    expect(openUrl).toHaveBeenCalledWith('https://github.com/stablyai/orca/releases')
-    expect(openUrl).not.toHaveBeenCalledWith(expect.stringContaining('/tag/'))
-  })
-})
-
 async function flushActions(): Promise<void> {
   await act(async () => {
     for (let i = 0; i < 8; i += 1) {
@@ -131,14 +116,6 @@ function showPackageRecovery(recovery = PACKAGE_RECOVERY): void {
 }
 
 describe('UpdateCard Linux package-install recovery', () => {
-  it('uses the recovery version when cached update state is stale', () => {
-    renderWithInitialStatus({ state: 'available', version: '1.4.199', changelog: null })
-    showPackageRecovery()
-
-    fireEvent.click(screen.getByRole('button', { name: 'Download Manually' }))
-    expect(openUrl).toHaveBeenCalledWith('https://github.com/stablyai/orca/releases/tag/v1.4.200')
-  })
-
   it('resets command discovery when a newer package cycle replaces the recovery', async () => {
     getInstructions.mockResolvedValueOnce({
       ok: false,

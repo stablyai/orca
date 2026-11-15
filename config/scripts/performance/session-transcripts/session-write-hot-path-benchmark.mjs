@@ -59,7 +59,7 @@ const { remapAcknowledgedAgentPaneKeys } = await import(
     .href
 )
 const { clampUtf8TextTail, measureUtf8ByteLength } = await import(
-  pathToFileURL(path.join(ROOT, 'src/shared/utf8-byte-limits.ts')).href
+  pathToFileURL(path.join(ROOT, 'src/shared/text/utf8-byte-limits.ts')).href
 )
 const { isTerminalLeafId, makePaneKey, parsePaneKey } = await import(
   pathToFileURL(path.join(ROOT, 'src/shared/workspace-layout/stable-pane-id.ts')).href

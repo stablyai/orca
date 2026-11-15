@@ -11,7 +11,7 @@ import type { AppState } from '../../../../store/types'
 import type { WorktreeMetaBatchUpdate } from '../../../../store/slices/worktrees/metadata/worktree-meta-update-options'
 import { getIndexedAllWorktrees } from '../../../../store/slices/worktrees/listing/worktree-catalog-index'
 import '../../workspace-status/presentation/workspace-status'
-import { getWorkspaceStatus } from '../../../../../../shared/workspace-statuses'
+import { getWorkspaceStatus } from '../../../../../../shared/workspace/status/workspace-statuses'
 import { selectFolderWorkspaces } from '@/store/workspaces/catalog/workspace-record-fields'
 
 /** The cards a drag picked up, by host: a twin on another host shares each card's id. */

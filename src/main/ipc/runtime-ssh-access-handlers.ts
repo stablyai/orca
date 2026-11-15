@@ -2,7 +2,7 @@ import { ipcMain } from 'electron'
 import {
   RuntimeSshAccessLinkRequestSchema,
   RuntimeSshAccessUnlinkRequestSchema
-} from '../../shared/runtime-ssh-access'
+} from '../../shared/remote-runtime/host-catalog/runtime-ssh-access'
 import {
   linkRuntimeSshAccess,
   unlinkRuntimeSshAccess
@@ -30,7 +30,7 @@ export function registerRuntimeSshAccessHandlers(options: {
   })
   ipcMain.handle('runtimeEnvironments:unlinkSshAccess', async (_event, input: unknown) => {
     const args = RuntimeSshAccessUnlinkRequestSchema.parse(input)
-    return unlinkRuntimeSshAccess(options.getUserDataPath(), args, {
+    return await unlinkRuntimeSshAccess(options.getUserDataPath(), args, {
       invalidateTransport: options.invalidateTransport
     })
   })

@@ -1,9 +1,9 @@
 /** Sweep provider sessions and local registry independently of the teardown entrypoint to avoid a dependency cycle. */
 
-import type { IPtyProvider } from '../../../providers/pty-provider-contract'
+import type { IPtyProvider } from '../../../providers/pty/provider-contract'
 import { listRegisteredPtys } from '../../../memory/pty-registry'
-import { worktreePtyOwnership } from '../../../providers/worktree-pty-ownership'
-import { mapWithConcurrency } from '../../../../shared/map-with-concurrency'
+import { worktreePtyOwnership } from '../../../providers/pty/worktree-ownership'
+import { mapWithConcurrency } from '../../../../shared/concurrency/map-with-concurrency'
 import { teardownRpcDeadline } from './worktree-teardown-deadline'
 
 // Bound provider/RPC fanout while allowing normal shutdown requests to coalesce into one process scan.

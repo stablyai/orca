@@ -1,13 +1,16 @@
 import {
   OPENCODE_CONFIG_DIR_ENV_KEYS,
   isOpenCodeLegacySharedConfigDir
-} from '../../../opencode/legacy-shared-config-dir'
-import { openCode2HookService, openCodeHookService } from '../../../opencode/hook-service'
+} from '../../../opencode/status-hooks/legacy-shared-config-dir'
+import {
+  openCode2HookService,
+  openCodeHookService
+} from '../../../opencode/status-hooks/hook-service'
 import { resolveOpenCodeSourceConfigDir } from './pi-agent'
 import { restoreOrStripOverlayEnv } from '../../../../shared/agent-launch/startup/agent-overlay-env'
-import { selectOpenCodeHookAgent } from '../../../../shared/opencode-launch-command'
+import { selectOpenCodeHookAgent } from '../../../../shared/agent-launch/startup/opencode-launch-command'
 import { isTuiAgentEnabled } from '../../../../shared/agent-launch/catalog/tui-agent-selection'
-import { resolveOpenCodeConfigDirectory } from '../../../../shared/opencode-config-directory'
+import { resolveOpenCodeConfigDirectory } from '../../../../shared/agent-launch/plugins/opencode/opencode-config-directory'
 import { readSessionShellStartupEnvVar } from '../../../pty/shell-startup/shell-startup-env'
 import type { BuildPtyHostEnvOptions } from './types'
 

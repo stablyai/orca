@@ -1,10 +1,13 @@
-import type { PRCheckRunDetails } from '../../../../shared/github/check-types'
-import { ghExecFileAsync, acquire, release, type LocalGitExecOptions } from '../../gh-utils'
-import { resolveGitHubRepoExecution, type GitHubApiRepository } from '../../github-api-repository'
+import type { PRCheckRunDetails } from '../../../../shared/github/checks/check-types'
+import { ghExecFileAsync } from '../../../git/command-runner/hosted-cli/gh-exec-file'
+import { acquire, release } from '../../execution/github-operation-slots'
+import type { LocalGitExecOptions } from '../../repositories/github-repository-identity'
+import { resolveGitHubRepoExecution } from '../../repositories/github-api-repository'
+import type { GitHubRepositoryIdentity as GitHubApiRepository } from '../../../../shared/github/repositories/repository-identity'
 import {
   GITHUB_CHECK_DETAILS_HOST_TIMEOUT_MS,
   GITHUB_CHECK_DETAILS_TIMEOUT_MESSAGE
-} from '../../../../shared/github/check-details-deadline'
+} from '../../../../shared/github/checks/check-details-deadline'
 import type { GhExecOptions } from './../github-exec-scope'
 import {
   nullableString,
@@ -23,6 +26,7 @@ import {
   runCheckDetailsCall
 } from './check-details-admission-lifetime'
 import { snapshotCheckJobLogExecution } from './check-job-log-execution'
+import { isCheckRunsPermissionDenied } from './rest-pr-check-pages'
 export async function getPRCheckDetails(
   repoPath: string,
   args: {
@@ -80,11 +84,20 @@ export async function getPRCheckDetails(
     let checkRun: Record<string, unknown> | null = null
     let output: Record<string, unknown> | null = null
     let annotations: PRCheckRunDetails['annotations'] = []
+    let checkRunReadRefused = false
     if (args.checkRunId) {
-      const { stdout } = await fetchMetadata([
-        'api',
-        `repos/${ownerRepo.owner}/${ownerRepo.repo}/check-runs/${args.checkRunId}`
-      ])
+      const checkRunPath = `repos/${ownerRepo.owner}/${ownerRepo.repo}/check-runs/${args.checkRunId}`
+      const { stdout } = await fetchMetadata(['api', checkRunPath]).catch((err: unknown) => {
+        if (!isCheckRunsPermissionDenied(err)) {
+          throw err
+        }
+        // Why: fine-grained tokens can't read check runs, but a job's id is its check run's id.
+        checkRunReadRefused = true
+        return fetchMetadata([
+          'api',
+          `repos/${ownerRepo.owner}/${ownerRepo.repo}/actions/jobs/${args.checkRunId}`
+        ])
+      })
       const parsed: unknown = JSON.parse(stdout)
       checkRun =
         parsed && typeof parsed === 'object' && !Array.isArray(parsed)
@@ -94,7 +107,10 @@ export async function getPRCheckDetails(
         checkRun?.output && typeof checkRun.output === 'object'
           ? Object.fromEntries(Object.entries(checkRun.output))
           : null
-      if (checkRun?.status !== 'completed' || output?.annotations_count !== 0) {
+      if (
+        !checkRunReadRefused &&
+        (checkRun?.status !== 'completed' || output?.annotations_count !== 0)
+      ) {
         try {
           const annotationsResult = await fetchMetadata([
             'api',

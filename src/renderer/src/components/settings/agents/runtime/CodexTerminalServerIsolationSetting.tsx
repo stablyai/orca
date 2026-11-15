@@ -2,8 +2,8 @@ import type { GlobalSettings } from '../../../../../../shared/global-settings-ty
 import {
   isCodexSharedServerWarningEnabled,
   isCodexTerminalServerIsolationEnabled
-} from '../../../../../../shared/codex-terminal-server-isolation'
-import { CODEX_TERMINAL_SERVER_ISOLATION_SETTINGS_TARGET_ID } from '@/lib/settings-navigation-types'
+} from '../../../../../../shared/agent-launch/startup/codex-terminal-server-isolation'
+import { CODEX_TERMINAL_SERVER_ISOLATION_SETTINGS_TARGET_ID } from '@/components/settings/navigation/settings-navigation-types'
 import {
   getCodexSharedServerWarningDescription,
   getCodexSharedServerWarningTitle,

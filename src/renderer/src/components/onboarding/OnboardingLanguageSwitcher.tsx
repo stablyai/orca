@@ -9,9 +9,9 @@ import { i18n, loadRendererUiLanguage } from '@/i18n/i18n'
 import { useTranslate } from '@/i18n/use-translate'
 import { getUiLanguageNativeLabel } from '@/i18n/supported-languages'
 import { useLanguageReadiness } from '@/i18n/language-readiness'
-import { track } from '@/lib/telemetry'
-import { isWebClientLocation } from '@/lib/web-client-location'
-import { useAppStore } from '@/store'
+import { track } from '@/diagnostics/telemetry/telemetry'
+import { isWebClientLocation } from '@/app-shell/platform/web-client-location'
+import { useAppStore } from '@/store/index'
 import {
   SUPPORTED_UI_LOCALES,
   type SupportedUiLocale,
@@ -27,7 +27,6 @@ export function OnboardingLanguageSwitcher({
   onOpenChange: (open: boolean) => void
 }): React.JSX.Element | null {
   const t = useTranslate()
-  const cohort = useAppStore((state) => state.settings?.telemetry?.onboardingLanguageCohort)
   const language = useAppStore((state) => state.settings?.uiLanguage ?? 'system')
   const updateSettings = useAppStore((state) => state.updateSettingsOrThrow)
   const catalogError = useLanguageReadiness((state) => state.error)
@@ -127,10 +126,7 @@ export function OnboardingLanguageSwitcher({
     }
   }
 
-  if (
-    cohort === 'control' ||
-    (!open && !shouldShowLanguageSwitcher(detection) && !catalogError && !recoveryVisible)
-  ) {
+  if (!open && !shouldShowLanguageSwitcher(detection) && !catalogError && !recoveryVisible) {
     return null
   }
 

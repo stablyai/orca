@@ -82,6 +82,30 @@ describe('Store', () => {
     expect(isLocalWorktreeScanGenerationCurrent('r1', generation)).toBe(false)
   })
 
+  it('saves a pasted workspace directory with leading spaces as the absolute path it names', async () => {
+    const store = await createStore()
+    store.updateSettings({ workspaceDir: '/Users/me/dev' })
+    const historyBefore = store.getSettings().workspaceDirHistory
+
+    // Padding before an absolute path would otherwise resolve inside every repo.
+    expect(store.updateSettings({ workspaceDir: '  /Users/me/dev' }).workspaceDir).toBe(
+      '/Users/me/dev'
+    )
+    expect(store.getSettings().workspaceDirHistory).toEqual(historyBefore)
+    // Trailing characters and relative paths can be real folder names.
+    expect(store.updateSettings({ workspaceDir: '/tmp/workspaces ' }).workspaceDir).toBe(
+      '/tmp/workspaces '
+    )
+    expect(store.updateSettings({ workspaceDir: ' ~notes' }).workspaceDir).toBe(' ~notes')
+    if (process.platform === 'win32') {
+      expect(store.updateSettings({ workspaceDir: ' C:\\work' }).workspaceDir).toBe('C:\\work')
+    } else {
+      // ~\ and a leading \ are relative off Windows, so the value stays exact.
+      expect(store.updateSettings({ workspaceDir: ' ~\\work' }).workspaceDir).toBe(' ~\\work')
+      expect(store.updateSettings({ workspaceDir: ' \\work' }).workspaceDir).toBe(' \\work')
+    }
+  })
+
   it('updateSettings deep-merges and clamps notification custom sound volume', async () => {
     const store = await createStore()
     store.updateSettings({
@@ -99,5 +123,44 @@ describe('Store', () => {
     expect(updated.notifications.customSoundVolume).toBe(0)
     expect(updated.notifications.enabled).toBe(false)
     expect(updated.notifications.customSoundPath).toBe('/sounds/custom.wav')
+  })
+
+  it('repairs workspace cleanup rules when loading and when writing', async () => {
+    writeDataFile({
+      settings: {
+        workspaceCleanupPolicy: { merged: { enabled: true }, unchanged: { afterDays: -4 } }
+      },
+      repos: [
+        { ...makeRepo({ id: 'r1' }), workspaceCleanupPolicy: { mode: 'off', extra: 1 } },
+        { ...makeRepo({ id: 'r2', path: '/repo2' }), workspaceCleanupPolicy: { mode: 'sometimes' } }
+      ]
+    })
+    const store = await createStore()
+    const offRules = {
+      merged: { enabled: false },
+      unchanged: { enabled: false, afterDays: 1 },
+      inactive: { enabled: false, afterDays: 30, action: 'archive' },
+      automationRuns: { enabled: false },
+      orchestrationWorkers: { enabled: false },
+      keepWhen: 'any-local-files'
+    }
+    expect(store.getSettings().workspaceCleanupPolicy).toEqual({
+      ...offRules,
+      merged: { enabled: true }
+    })
+    expect(store.getRepo('r1')?.workspaceCleanupPolicy).toEqual({ mode: 'off' })
+    expect(store.getRepo('r2')).not.toHaveProperty('workspaceCleanupPolicy')
+
+    store.updateSettings({
+      // @ts-expect-error -- Malformed writes can arrive from untyped writers.
+      workspaceCleanupPolicy: { inactive: { enabled: true, action: 'delete', afterDays: 'soon' } }
+    })
+    expect(store.getSettings().workspaceCleanupPolicy).toEqual({
+      ...offRules,
+      inactive: { enabled: true, afterDays: 30, action: 'delete' }
+    })
+
+    store.updateRepo({ id: 'r1' }, { workspaceCleanupPolicy: null })
+    expect(store.getRepo('r1')).not.toHaveProperty('workspaceCleanupPolicy')
   })
 })

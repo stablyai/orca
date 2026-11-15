@@ -1,3 +1,6 @@
+import { followTestSinkSnapshots } from '../../../native-chat/agent-session-wire/host/testing/structured-agent-session-direct-sink.test-fixture'
+import { readTestJournalItems } from '../../../native-chat/agent-session-journal/journal-observation.test-support'
+import { openTestAgentSessionDatabase } from '../../../runtime/agent-session/records/agent-session-record-store-test-harness'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -8,12 +11,9 @@ import { openAgentSessionJournal } from '../../../native-chat/agent-session-jour
 import { createDeferredStructuredAgentSessionEventSink } from '../../../native-chat/agent-session-wire/journal-ingress/structured-agent-session-event-sink'
 import { createClaudeJournalTranslator } from '../journal/claude-structured-journal-translation'
 import type { ClaudeStructuredSessionEvent } from '../claude-structured-session-state'
-import {
-  closeTestJournalHostDatabases,
-  openTestJournalHostDatabase
-} from '../../../native-chat/agent-session-journal/store-lifecycle/journal-host-database-test-support'
-import { testEventSinkLogging } from '../../../native-chat/agent-session-wire/host/testing/structured-agent-session-logger-test-support'
-import { claudeProviderHandle } from '../../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
+import { closeTestJournalHostDatabases } from '../../../native-chat/agent-session-journal/store-lifecycle/journal-host-database-test-support'
+import { testEventSinkLogging } from '../../../native-chat/agent-session-wire/host/testing/structured-agent-session-logger.test-fixture'
+import { claudeProviderHandle } from '../../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle-encoding'
 
 const IDENTITY: AgentSessionJournalIdentity = {
   sessionId: 'session-1',
@@ -129,11 +129,12 @@ describe('Claude provider fallback', () => {
   it('keeps provider-fallback rows distinct across acquisitions', async () => {
     const journal = await openAgentSessionJournal({
       identity: IDENTITY,
-      database: openTestJournalHostDatabase(root),
+      database: await openTestAgentSessionDatabase(root),
       now: () => 1_700_000_000_000,
       mintEpoch: () => 'epoch-1'
     })
     const deferred = createDeferredStructuredAgentSessionEventSink(testEventSinkLogging())
+    await followTestSinkSnapshots(deferred, journal)
     deferred.bind({
       journal,
       fence: 1,
@@ -150,17 +151,82 @@ describe('Claude provider fallback', () => {
     )
     await deferred.drained()
 
-    const fallbackRows = journal
-      .snapshot()
-      .items.filter(
-        (item) =>
-          item.body.kind === 'status' &&
-          item.body.providerFrame?.kind === 'message:assistant:content:future_event'
-      )
+    const fallbackRows = (await readTestJournalItems(journal)).filter(
+      (item) =>
+        item.body.kind === 'status' &&
+        item.body.providerFrame?.kind === 'message:assistant:content:future_event'
+    )
 
     expect(fallbackRows).toHaveLength(2)
     expect(fallbackRows.map(statusText)).toEqual(['first', 'second'])
   })
+
+  it.each([false, true])(
+    'keeps unknown quota result disclosure only for a stopped turn (stopped: %s)',
+    async (stopped) => {
+      const journal = await openAgentSessionJournal({
+        identity: IDENTITY,
+        database: await openTestAgentSessionDatabase(root),
+        now: () => 1_000
+      })
+      const deferred = createDeferredStructuredAgentSessionEventSink(testEventSinkLogging())
+      await followTestSinkSnapshots(deferred, journal)
+      deferred.bind({ journal, fence: 1, publish: () => {} })
+      const translator = createClaudeJournalTranslator({ sink: deferred.sink })
+      const quota = message('assistant', 'quota', [{ type: 'text', text: 'Usage exhausted' }])
+      if (quota.type !== 'message') {
+        throw new Error('expected provider message')
+      }
+      translator.handle({
+        ...quota,
+        observedAt: 100,
+        message: { ...quota.message, api_error: 'usage_limit_reached' }
+      })
+      await deferred.drained()
+      if (stopped) {
+        await journal.appendStopEvent({ reason: 'user-stop', turnId: 'quota' }, 1)
+      }
+      translator.handle({
+        type: 'message',
+        sessionId: 'orca-session',
+        observedAt: 2_000,
+        message: {
+          type: 'result',
+          subtype: 'future_error',
+          is_error: true,
+          session_id: 'provider-1',
+          uuid: 'quota-result',
+          result: 'Usage exhausted',
+          terminal_reason: 'api_error'
+        }
+      })
+      await deferred.drained()
+      const items = await readTestJournalItems(journal)
+      const disclosure = items.filter(
+        (item) =>
+          item.body.kind === 'status' &&
+          item.body.providerFrame?.kind === 'message:result:future_error'
+      )
+      expect(disclosure).toHaveLength(stopped ? 1 : 0)
+      if (stopped) {
+        expect(disclosure[0]?.body).not.toHaveProperty('tone')
+        expect(disclosure[0]?.body).not.toHaveProperty('failure')
+      }
+      expect(items.find((item) => item.body.kind === 'turn')?.body).toMatchObject({
+        kind: 'turn',
+        state: stopped ? 'interrupted' : 'completed',
+        ...(stopped ? {} : { outcome: 'failure' })
+      })
+      deferred.close()
+      await journal.close()
+      const reopened = await openAgentSessionJournal({
+        identity: IDENTITY,
+        database: await openTestAgentSessionDatabase(root)
+      })
+      expect(await readTestJournalItems(reopened)).toEqual(items)
+      await reopened.close()
+    }
+  )
 })
 
 function statusText(row: { body: AgentJournalItemBody }): string {

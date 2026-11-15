@@ -1,17 +1,17 @@
 import { formatTerminalStartFailure } from '../../../../shared/terminal/pty/lifecycle/terminal-start-failure'
-import { readableWslDistroHoldText } from '../../../../shared/wsl-distro-stopped-hold'
+import { readableWslDistroHoldText } from '../../../../shared/remote-runtime/wsl-hosts/wsl-distro-stopped-hold'
 import { paneIdentity } from '../../terminal/identity/runtime-terminal-pane-identity'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
-import { shouldSeedWorktreePrimaryTerminal } from '../../../../shared/worktree-first-surface'
+import { shouldSeedWorktreePrimaryTerminal } from '../../../../shared/worktree/creation/worktree-first-surface'
 import type { CreateWorktreeResult } from '../../../../shared/worktree/create-types'
-import type { Repo } from '../../../../shared/repo-types'
+import type { Repo } from '../../../../shared/repository/repo-types'
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import type { Worktree } from '../../../../shared/worktree/types'
-import type { WorktreeStartupLaunch } from '../../../../shared/worktree/launch-types'
+import type { WorktreeStartupLaunch } from '../../../../shared/worktree/creation/launch-types'
 import type { AgentLaunchRuntime } from '../../../../shared/agent-launch/startup/agent-launch-runtime'
 import { createSequencedSetupAgentCommands } from '../../../../shared/agent-launch/startup/setup-agent-sequencing'
 import { getSetupRunnerCommandPlatformForPath } from '../../../../shared/agent-launch/startup/setup-runner-command'
-import type { RuntimeTerminalCreate } from '../../../../shared/runtime-terminal-create-contract'
+import type { RuntimeTerminalCreate } from '../../../../shared/terminal/runtime/runtime-terminal-create-contract'
 import type { TerminalCreateOptions } from '../../terminal/launch/terminal-create-options'
 import type { RuntimeManagedWorktreeCreateArgs } from '../creation/runtime-managed-worktree-create-types'
 import type {
@@ -23,7 +23,7 @@ import type {
   WorktreeTerminalProvisioningArgs
 } from './runtime-worktree-terminal-provisioning'
 
-type Ports = {
+export type RuntimeLocalWorktreeTerminalPorts = {
   canSpawn: boolean
   provisionInBackground?: () => boolean
   createTerminal: (
@@ -63,8 +63,8 @@ export type RuntimeLocalWorktreeTerminalStartupResult = {
 }
 
 export async function startRuntimeLocalWorktreeTerminals(args: {
-  request: RuntimeManagedWorktreeCreateArgs
-  repo: Repo
+  request: Omit<RuntimeManagedWorktreeCreateArgs, 'repoSelector' | 'name'>
+  repo: Pick<Repo, 'id'>
   worktree: Worktree
   setup?: CreateWorktreeResult['setup']
   defaultTabs?: CreateWorktreeResult['defaultTabs']
@@ -76,7 +76,7 @@ export async function startRuntimeLocalWorktreeTerminals(args: {
   promisedAgentChat?: boolean
   draftPaste?: WorktreeStartupDraftPaste
   warning?: string
-  ports: Ports
+  ports: RuntimeLocalWorktreeTerminalPorts
 }): Promise<RuntimeLocalWorktreeTerminalStartupResult> {
   const { request, repo, worktree, defaultTabs, startup, ports } = args
   let { setup } = args

@@ -3,20 +3,20 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { WslMoveCutover } from '../../../shared/wsl-move/wsl-move-cutover'
-import { WSL_HOSTS_INTERNAL_GATE_ENV } from '../../../shared/wsl-host-internal-gate'
+import { WSL_HOSTS_INTERNAL_GATE_ENV } from '../../../shared/remote-runtime/wsl-hosts/wsl-host-internal-gate'
 import { wslMoveCutoverFixture as cutover } from '../../persistence/__fixtures__/wsl-mover/wsl-move-cutover-fixture'
 import { seedWslMoveCutover } from '../../persistence/__fixtures__/wsl-mover/wsl-move-journal-seeding'
-import { listWslMoveCutovers } from '../../persistence/moving-wsl-projects/wsl-move-cutover-journal'
+import { listWslMoveCutovers } from '../../persistence/moving-wsl-projects/cutover-recovery/wsl-move-cutover-journal'
 import {
   isWslMoveProjectBlocked,
   loadWslMoveFence,
   resetWslMoveFenceForTests
-} from '../../persistence/moving-wsl-projects/wsl-move-scope-guard'
-import { setWslMoveReloadableWindow } from '../../persistence/moving-wsl-projects/wsl-move-window-write-hold'
+} from '../../persistence/moving-wsl-projects/quiescence/wsl-move-scope-guard'
+import { setWslMoveReloadableWindow } from '../../persistence/moving-wsl-projects/quiescence/wsl-move-window-write-hold'
 import {
   registerWslMoveDesktopRewriteStore,
   resetWslMoveDesktopRewriteStoresForTests
-} from '../../persistence/moving-wsl-projects/wsl-move-desktop-rewrite-stores'
+} from '../../persistence/moving-wsl-projects/desktop-state/wsl-move-desktop-rewrite-stores'
 
 type Handler = (event: unknown, request?: unknown) => unknown
 

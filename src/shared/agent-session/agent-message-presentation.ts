@@ -11,6 +11,8 @@ export function agentMessageIsCompact(
 
 export type AgentMessageHeading =
   | 'started'
+  | 'reopened-worker'
+  | 'followed-up-worker'
   | 'handed-off'
   | 'started-agent'
   | 'task'
@@ -38,10 +40,13 @@ export type AgentMessageSenderView = Readonly<{
  *  creation card as a plain message, a handoff as a started worker, or a handoff with no task as work handed over. */
 export function agentMessageHeading(
   from: AgentMessageSource,
-  creation: Pick<NativeChatMessage, 'agentStart' | 'agentHandoff' | 'blocks'>
+  creation: Pick<NativeChatMessage, 'agentStart' | 'agentHandoff' | 'agentFollowUp' | 'blocks'>
 ): AgentMessageHeading {
   if (creation.agentStart) {
     if (!creation.agentHandoff) {
+      if (creation.agentFollowUp) {
+        return creation.agentFollowUp === 'reopened' ? 'reopened-worker' : 'followed-up-worker'
+      }
       return 'started'
     }
     return agentMessageTranscriptText(creation.blocks, from) ? 'handed-off' : 'started-agent'

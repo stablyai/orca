@@ -11,7 +11,7 @@ import { writeFileSync, rmSync, mkdtempSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { getDefaultWorkspaceSession } from '../../shared/constants'
-import { createProfileStateStore } from './profile-state/profile-state-store-factory'
+import { createProfileStateStore } from './profile-state/startup/profile-state-store-factory'
 import { hostWorktreeTarget } from '../../shared/worktree/host-qualified-identity'
 
 const { loadUserSshConfigMock, sshConfigHostsToTargetsMock } = vi.hoisted(() => ({

@@ -1,3 +1,4 @@
+import { applyLocalWorktreeMetadataSet } from './worktree-metadata-set-events'
 import { applyWorktreeHeadIdentities } from '../worktree-head-identity-apply'
 import type { WorktreeChangeRefreshQueue } from '../worktree-change-refresh-queue'
 import { useAppStore } from '../../store'
@@ -45,6 +46,10 @@ export function registerProjectCatalogIpcBridge(
       }
     )
   )
+
+  if (window.api.worktrees.onMetadataSet) {
+    unsubs.push(window.api.worktrees.onMetadataSet(applyLocalWorktreeMetadataSet))
+  }
 
   if (window.api.worktrees.onHeadIdentitiesChanged) {
     unsubs.push(

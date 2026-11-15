@@ -1,5 +1,5 @@
 import type { GlobalSettings } from '../../shared/global-settings-types'
-import { normalizeNodeDistMirrorUrl } from '../../shared/node-dist-mirror'
+import { normalizeNodeDistMirrorUrl } from '../../shared/node-runtime/node-dist-mirror'
 import { normalizeProxyBypassRules, normalizeProxyUrl } from '../../shared/network-proxy'
 
 /** Network fields as they may be stored: an invalid URL is saved as empty, never as typed. */

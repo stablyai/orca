@@ -16,6 +16,7 @@ import { beginPendingTab } from '@/runtime/workspace-layout/intents/layout-owner
 import { newGroupSplitOf } from '@/runtime/workspace-layout/commands/layout-owner-new-group-split'
 import { editorTabContent } from './editor-tab-open-through-layout-owner'
 import { isEditorTabContentType } from './editor-tab-content-type'
+import { markHydratedBrowserPageHandles } from '../../browser/hosts/browser-initialization-presentation-ownership'
 
 export const EDITOR_OWNER = 'repo1::/repo'
 export const EDITOR_PLACEMENT = 'folder:feature'
@@ -24,7 +25,16 @@ export function seedEditorPlacementConsumers(
   overrides: Partial<OpenFile> = {},
   ownerPlacement = true
 ) {
-  useAppStore.setState(useAppStore.getInitialState(), true)
+  const initialState = useAppStore.getInitialState()
+  useAppStore.setState(
+    {
+      ...initialState,
+      remoteBrowserPageHandlesByPageId: markHydratedBrowserPageHandles({
+        ...initialState.remoteBrowserPageHandlesByPageId
+      })
+    },
+    true
+  )
   const file = makeOpenFile({
     id: overrides.mode === 'edit' ? (overrides.filePath ?? '/repo/notes.md') : 'content',
     filePath: '/repo/notes.md',

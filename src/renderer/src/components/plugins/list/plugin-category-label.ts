@@ -8,7 +8,9 @@ function kindLabel(kind: PluginFilterKind, t: Translate = translate): string {
     case 'themes':
       return t('auto.components.settings.PluginFilterPopover.themes', 'Themes')
     case 'languages':
-      return t('auto.components.settings.PluginFilterPopover.languages', 'Languages')
+      return t('auto.components.settings.PluginFilterPopover.codeLanguages', 'Code languages')
+    case 'translations':
+      return t('auto.components.settings.PluginFilterPopover.translations', 'Translations')
     case 'icons':
       return t('auto.components.settings.PluginFilterPopover.icons', 'Icons')
     case 'editors':
@@ -17,6 +19,8 @@ function kindLabel(kind: PluginFilterKind, t: Translate = translate): string {
       return t('auto.components.settings.PluginFilterPopover.commands', 'Commands & panels')
     case 'machines':
       return t('auto.components.settings.PluginFilterPopover.remoteVms', 'Remote/VMs')
+    case 'games':
+      return t('auto.components.settings.PluginFilterPopover.games', 'Games')
   }
 }
 

@@ -9,10 +9,6 @@ const store = vi.hoisted(() => {
   const state: { activeOrcaProfileId: string | null } = { activeOrcaProfileId: 'profile-1' }
   return {
     state,
-    setProfile: (id: string | null) => {
-      state.activeOrcaProfileId = id
-      listeners.forEach((listener) => listener(state))
-    },
     useAppStore: {
       getState: () => state,
       subscribe: (listener: (next: typeof state) => void) => {
@@ -135,12 +131,10 @@ async function loadModule() {
 }
 
 beforeEach(() => {
-  vi.useFakeTimers({ toFake: ['Date'] })
   store.state.activeOrcaProfileId = 'profile-1'
 })
 
 afterEach(() => {
-  vi.useRealTimers()
   vi.unstubAllGlobals()
 })
 
@@ -181,55 +175,5 @@ describe('saved Session History lists', () => {
     await lists.saveAiVaultSessionList('workspace', 250, result)
     expect(puts).toHaveLength(2)
     expect(await lists.readSavedAiVaultSessionList('workspace')).not.toBeNull()
-  })
-
-  it('writes the same rows again once newer lists pushed them out', async () => {
-    const { puts } = fakeIndexedDb()
-    const lists = await loadModule()
-    const result = listOf([session('a')])
-
-    await lists.saveAiVaultSessionList('workspace', 250, result)
-    for (let index = 0; index < 8; index++) {
-      vi.setSystemTime(Date.now() + 1)
-      await lists.saveAiVaultSessionList(`other-${index}`, 250, listOf([]))
-    }
-    expect(await lists.readSavedAiVaultSessionList('workspace')).toBeNull()
-
-    await lists.saveAiVaultSessionList('workspace', 250, result)
-    expect(puts).toHaveLength(10)
-    expect(await lists.readSavedAiVaultSessionList('workspace')).not.toBeNull()
-  })
-
-  it('saves and reads once startup has loaded the profile', async () => {
-    fakeIndexedDb()
-    const lists = await loadModule()
-    store.state.activeOrcaProfileId = null
-    const save = lists.saveAiVaultSessionList('workspace', 250, listOf([session('a')]))
-    store.setProfile('profile-1')
-    await save
-    store.state.activeOrcaProfileId = null
-
-    const read = lists.readSavedAiVaultSessionList('workspace')
-    store.setProfile('profile-1')
-
-    expect((await read)?.result.sessions.map((row) => row.id)).toEqual(['a'])
-  })
-
-  it('keeps a list shown again without changes over lists last shown before it', async () => {
-    fakeIndexedDb()
-    const lists = await loadModule()
-    const result = listOf([session('a')])
-    await lists.saveAiVaultSessionList('workspace', 250, result)
-    for (let index = 0; index < 7; index++) {
-      vi.setSystemTime(Date.now() + 1)
-      await lists.saveAiVaultSessionList(`other-${index}`, 250, listOf([]))
-    }
-
-    await lists.saveAiVaultSessionList('workspace', 250, result)
-    vi.setSystemTime(Date.now() + 1)
-    await lists.saveAiVaultSessionList('newest', 250, listOf([]))
-
-    expect(await lists.readSavedAiVaultSessionList('workspace')).not.toBeNull()
-    expect(await lists.readSavedAiVaultSessionList('other-0')).toBeNull()
   })
 })

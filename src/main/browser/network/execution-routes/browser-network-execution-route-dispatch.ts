@@ -1,7 +1,5 @@
-import {
-  resolveNativeBrowserNetworkExecutionRoute,
-  type BrowserNetworkExecutionRouteResolver
-} from './browser-network-execution-route'
+import { resolveNativeBrowserNetworkExecutionRoute } from './browser-network-execution-route'
+import type { BrowserNetworkExecutionRouteResolver } from './browser-network-execution-route-contract'
 
 // Keep SSH imports lazy and use the registry: ipc/ssh would pull Electron into the plain-Node runtime.
 export const resolveBrowserNetworkExecutionRoute: BrowserNetworkExecutionRouteResolver = async (

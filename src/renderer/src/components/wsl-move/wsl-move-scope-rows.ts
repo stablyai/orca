@@ -4,7 +4,7 @@
  */
 import type { FolderWorkspace } from '../../../../shared/folder-workspaces/folder-workspace-types'
 import { getRepoExecutionHostId, LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
-import type { Repo } from '../../../../shared/repo-types'
+import type { Repo } from '../../../../shared/repository/repo-types'
 import {
   isWslHostRuntimeEnvironment,
   type PublicKnownRuntimeEnvironment
@@ -12,11 +12,15 @@ import {
 import { parsePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import type { Tab } from '../../../../shared/tab-types'
 import type { TerminalLayoutSnapshot } from '../../../../shared/workspace-layout/terminal-tab-types'
-import { collectLeafIdsInOrder } from '../terminal-pane/layout/terminal-layout-leaf-traversal'
-import { folderWorkspaceKey, parseWorkspaceKey } from '../../../../shared/workspace-scope'
+import '../terminal-pane/layout/terminal-layout-leaf-traversal'
+import { collectLayoutLeafIdsInOrder } from '../../../../shared/workspace-layout/terminal-topology/terminal-pane-tree'
+import {
+  folderWorkspaceKey,
+  parseWorkspaceKey
+} from '../../../../shared/workspace/identity/workspace-scope'
 import { getRepoIdFromWorktreeId } from '../../../../shared/worktree/id'
 import type { Worktree } from '../../../../shared/worktree/types'
-import { parseWslUncPath } from '../../../../shared/wsl-paths'
+import { parseWslUncPath } from '../../../../shared/file-access/wsl-paths'
 import type {
   WslMoveBlocker,
   WslMoveRowRef
@@ -136,7 +140,7 @@ export function wslMoveCounts(
 function terminalPaneCount(catalog: WslMoveCatalog, tab: Pick<Tab, 'id' | 'entityId'>): number {
   const layout =
     catalog.terminalLayoutsByTabId?.[tab.entityId] ?? catalog.terminalLayoutsByTabId?.[tab.id]
-  return Math.max(1, collectLeafIdsInOrder(layout?.root).length)
+  return Math.max(1, collectLayoutLeafIdsInOrder(layout?.root).length)
 }
 
 function projectOfWorkspaceKey(key: string): WslMoveRowRef {

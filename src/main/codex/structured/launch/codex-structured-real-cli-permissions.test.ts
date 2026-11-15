@@ -5,7 +5,7 @@ import { describe, expect, it, vi } from 'vitest'
 import type { AgentChatPermissionMode } from '../../../../shared/agent-launch/permissions/agent-chat-permission-mode'
 import { resolveCodexCommand } from '../../../codex-cli/command'
 import { openCodexAppServerConnection } from '../../app-server/codex-app-server-connection'
-import { codexStructuredPermissionPolicy } from '../../../../shared/codex-permission-policy'
+import { codexStructuredPermissionPolicy } from '../../../../shared/agent-launch/permissions/codex-permission-policy'
 import { openCodexThread } from '../threads/codex-structured-thread-open'
 
 const enabled = process.env.ORCA_REAL_CODEX_CLI_TEST === '1'

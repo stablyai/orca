@@ -5,7 +5,7 @@ import { ACCOUNT_METHODS } from './accounts'
 import type {
   HostAccountSignInChannel,
   HostAccountSignInStatus
-} from '../../../../../shared/host-account-sign-in-types'
+} from '../../../../../shared/agent-accounts/host-account-sign-in-types'
 
 function method(name: string) {
   const found = eraseRpcMethods(ACCOUNT_METHODS).find((candidate) => candidate.name === name)
