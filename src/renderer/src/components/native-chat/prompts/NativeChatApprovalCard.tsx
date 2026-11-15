@@ -73,7 +73,10 @@ export function NativeChatApprovalCard({
 
   return (
     <SecuritySurface>
-      <div className={stacked ? 'bg-chat-pane' : 'min-h-0 shrink overflow-hidden bg-chat-pane'}>
+      <div
+        data-native-chat-queue-dock={stacked ? undefined : ''}
+        className={stacked ? 'bg-chat-pane' : 'min-h-0 shrink overflow-hidden bg-chat-pane'}
+      >
         <div
           className={cn(
             'mx-auto flex w-full max-w-(--chat-content-max-width) px-3 pt-2 pb-1 sm:px-4',
@@ -94,9 +97,14 @@ export function NativeChatApprovalCard({
                 escape()
               }
             }}
-            className="flex min-h-0 w-full flex-1 flex-col gap-2 overflow-hidden rounded-lg border border-input bg-card px-4 py-3 shadow-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            // The chat's own approval keeps its title and choices visible as the dock fits a short pane.
+            data-native-chat-dock-clip={stacked ? undefined : ''}
+            className="relative z-[1] flex min-h-0 w-full flex-1 flex-col gap-2 overflow-hidden rounded-lg border border-input bg-card px-4 py-3 shadow-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
-            <div className="flex shrink-0 items-start gap-2">
+            <div
+              data-native-chat-dock-pinned={stacked ? undefined : ''}
+              className="flex shrink-0 items-start gap-2"
+            >
               <ShieldQuestion className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
               <div className="min-w-0 flex-1">
                 <p className="line-clamp-2 break-words text-sm font-semibold text-foreground">
@@ -142,6 +150,8 @@ export function NativeChatApprovalCard({
                 ref={contentRef}
                 data-native-chat-approval-content="true"
                 tabIndex={0}
+                // The dock fit must leave two lines of the request in view (or all of it, if shorter).
+                data-native-chat-dock-floor-lines={stacked ? undefined : 2}
                 className="min-h-0 max-h-72 shrink space-y-2 overflow-auto text-sm text-muted-foreground scrollbar-sleek focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
               >
                 {countdown ? <p className="tabular-nums">{countdown}</p> : null}
@@ -198,7 +208,11 @@ export function NativeChatApprovalCard({
                 ) : null}
               </div>
             ) : null}
-            <div data-native-chat-approval-actions="true" className="flex shrink-0 flex-wrap gap-2">
+            <div
+              data-native-chat-approval-actions="true"
+              data-native-chat-dock-pinned={stacked ? undefined : ''}
+              className="flex shrink-0 flex-wrap gap-2"
+            >
               {approval.options.map((opt, i) => (
                 <button
                   key={`${opt.label}-${i}`}

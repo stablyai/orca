@@ -19827,7 +19827,17 @@
         "skip": "Überspringen",
         "sending": "Wird gesendet…",
         "terminalRequired": "Diese OMP-Frage im Terminal beantworten.",
-        "openTerminal": "Im Terminal antworten"
+        "openTerminal": "Im Terminal antworten",
+        "recommended": "Empfohlen",
+        "stepAnswered": "{{value0}}, beantwortet",
+        "stepOf": "{{value0}} von {{value1}}",
+        "answered": "Beantwortet",
+        "title": "Frage",
+        "previous": "Vorherige Frage",
+        "nextQuestion": "Nächste Frage",
+        "back": "Zurück",
+        "skipAndSubmit": "Überspringen und senden",
+        "stepLabel": "{{value0}}, {{value1}} von {{value2}}: {{value3}}"
       },
       "ask": {
         "awaiting": "Warten auf Benutzereingabe:",
@@ -20007,7 +20017,11 @@
         "queued": "In der Warteschlange",
         "clearAll": "Warteschlange leeren",
         "editReturned": "Die bearbeitete Nachricht ist im Chat-Eingabefeld.",
-        "commandsUnsupported": "Befehle können nicht in einer Nachricht in der Warteschlange gespeichert werden."
+        "commandsUnsupported": "Befehle können nicht in einer Nachricht in der Warteschlange gespeichert werden.",
+        "couldNotSend": "Senden fehlgeschlagen",
+        "retry": "Wiederholen",
+        "showLessRows": "Weniger anzeigen",
+        "moreRows": "+{{value0}} weitere"
       },
       "thought": "Gedanke",
       "thoughtForDuration": "{{duration}} nachgedacht",
@@ -20246,7 +20260,10 @@
         "many_other": "{{count}} Pull Requests erstellt"
       },
       "splitRight": "Rechts teilen",
-      "splitDown": "Unten teilen"
+      "splitDown": "Unten teilen",
+      "dock": {
+        "label": "Nachrichtenfeld und Abfragen"
+      }
     },
     "tab": {
       "bar": {

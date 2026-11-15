@@ -57,6 +57,7 @@ import { useNativeChatRewindHost } from '@/components/native-chat/messages/actio
 import { NativeChatRowActionsProvider } from '@/components/native-chat/messages/actions/NativeChatRowActionsProvider'
 import { useNativeChatPaneFork } from '@/components/native-chat/messages/actions/use-native-chat-fork'
 import { NativeChatQueuedMessageList } from '@/components/native-chat/queue/NativeChatQueuedMessageList'
+import { NativeChatDock } from '@/components/native-chat/pane/dock/NativeChatDock'
 import {
   cancelStructuredPrompt,
   nativeChatStructuredStopControls
@@ -277,6 +278,7 @@ export function NativeChatStructuredSession(props: Omit<NativeChatStructuredView
     >
       {nativeChatPaneHeader(props, ownerWorktreeId, appearanceStyle.colorScheme, handOff)}
       <NativeChatCrewFrame
+        keepsFloor
         panel={<NativeChatCrewPanel {...props} composerRef={composerRef} canMention={canMention} />}
       >
         <NativeChatContextClearFade
@@ -343,17 +345,7 @@ export function NativeChatStructuredSession(props: Omit<NativeChatStructuredView
         </NativeChatContextClearFade>
       </NativeChatCrewFrame>
       {readFailure?.final ? null : (
-        <>
-          {/* Keep queued drafts outside the transcript and above the background-task dock. */}
-          <NativeChatQueuedMessageList
-            controller={submits.queuedMessages}
-            chatWorktreeId={ownerWorktreeId ?? null}
-            agentName={agentLabel}
-            statedFailures={startFailures}
-            steerHeld={stopControls.stopping || hostHeld}
-            focusComposer={focusComposer}
-            editAttachTo={{ terminalTabId: props.tabId, agent: props.agent, transport }}
-          />
+        <NativeChatDock>
           {subagents.strip}
           {/* Workers' open prompts stay pinned here, above this chat's own prompt. */}
           <NativeChatPartyWorkerApprovalStack
@@ -374,6 +366,16 @@ export function NativeChatStructuredSession(props: Omit<NativeChatStructuredView
             />
           )}
           {composerShown || subagentOpen ? null : <NativeChatPromptSlotNotices notices={notices} />}
+          {/* A tab on whichever input surface comes next: the prompt card, an async question or the composer. */}
+          <NativeChatQueuedMessageList
+            controller={submits.queuedMessages}
+            chatWorktreeId={ownerWorktreeId ?? null}
+            agentName={agentLabel}
+            statedFailures={startFailures}
+            steerHeld={stopControls.stopping || hostHeld}
+            focusComposer={focusComposer}
+            editAttachTo={{ terminalTabId: props.tabId, agent: props.agent, transport }}
+          />
           <NativeChatStructuredPromptCard
             key={prompt ? `${prompt.itemId}:${prompt.revision}` : undefined}
             prompt={prompt}
@@ -401,7 +403,7 @@ export function NativeChatStructuredSession(props: Omit<NativeChatStructuredView
               recallSource={{ messages: session.messages, withoutImageMarkers: true }}
             />
           ) : null}
-        </>
+        </NativeChatDock>
       )}
       {paneCommands.menu}
       {handOff.dialog}

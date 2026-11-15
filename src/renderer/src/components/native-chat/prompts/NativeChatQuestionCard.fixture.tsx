@@ -357,7 +357,7 @@ function FocusedQuestion({ steps = 1 }: { steps?: number }) {
   )
 }
 
-// Keyboard focus lands on option 1 as the card opens; it must not look picked.
+// The card takes focus as it opens; no option may look picked or ringed.
 export const keyboardFocus = defineFixture({
   width: 720,
   render: () => <FocusedQuestion />
@@ -373,13 +373,47 @@ export const narrow = defineFixture({
   render: () => <FocusedQuestion />
 })
 
-// Answered the first step, then skipped to the last: the footer must still offer Submit.
+// Answered the first step, then skipped to the last: the footer offers Skip and submit.
 export const skippedLastStep = defineFixture({
   width: 720,
   render: () => <FocusedQuestion steps={2} />,
   interact: async (frame) => {
     frame.querySelectorAll<HTMLButtonElement>('button[aria-pressed]')[0]?.click()
     frame.querySelectorAll<HTMLButtonElement>('[data-native-chat-question-step]')[1]?.click()
+    await new Promise(requestAnimationFrame)
+  }
+})
+
+// A single-select pick before its auto-advance: the tile fills, rings and its number turns into a check.
+export const pickedSingle = defineFixture({
+  width: 720,
+  render: () => <FocusedQuestion />,
+  interact: async (frame) => {
+    frame.querySelectorAll<HTMLButtonElement>('button[aria-pressed]')[1]?.click()
+    await new Promise(requestAnimationFrame)
+  }
+})
+
+// Keyboard focus on an option: an outline outside the tile, never the picked look.
+export const optionFocus = defineFixture({
+  width: 720,
+  render: () => <FocusedQuestion />,
+  interact: async (frame) => {
+    frame
+      .querySelectorAll<HTMLButtonElement>('button[aria-pressed]')[1]
+      ?.focus({ focusVisible: true })
+    await new Promise(requestAnimationFrame)
+  }
+})
+
+// Picked and keyboard-focused at once: the inner ring and check, plus the outside outline.
+export const pickedFocus = defineFixture({
+  width: 720,
+  render: () => <FocusedQuestion steps={2} />,
+  interact: async (frame) => {
+    const row = frame.querySelectorAll<HTMLButtonElement>('button[aria-pressed]')[1]
+    row?.focus({ focusVisible: true })
+    row?.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }))
     await new Promise(requestAnimationFrame)
   }
 })

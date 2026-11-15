@@ -23,13 +23,16 @@ export function NativeChatAgentMessageSenders({
   target,
   queued = false,
   dispatchId,
-  compact = false
+  compact = false,
+  inline = false
 }: {
   from: AgentMessageSource
   chatWorktreeId: string | null
   target?: RuntimeClientTarget
   compact?: boolean
   queued?: boolean
+  /** A queued row's one-line sender: no "From", muted and truncating after the message. */
+  inline?: boolean
   dispatchId?: string
 }): React.JSX.Element {
   const t = useTranslate()
@@ -38,11 +41,23 @@ export function NativeChatAgentMessageSenders({
   const worktreeId = owner?.worktreeId ?? chatWorktreeId
   return (
     <div
-      className={`flex min-w-0 max-w-full ${compact ? 'flex-nowrap' : 'flex-wrap'} items-center ${queued ? 'text-xs text-chat-foreground-faint' : compact ? 'text-sm text-foreground' : '-ml-2.5 text-sm text-foreground'}`}
+      className={`flex min-w-0 max-w-full ${compact || inline ? 'flex-nowrap' : 'flex-wrap'} items-center ${inline ? 'text-xs text-muted-foreground' : queued ? 'text-xs text-chat-foreground-faint' : compact ? 'text-sm text-foreground' : '-ml-2.5 text-sm text-foreground'}`}
     >
-      <span>{queued ? t('components.native-chat.queuedMessages.fromSender', 'From') : null}</span>
+      {inline ? null : (
+        <span>{queued ? t('components.native-chat.queuedMessages.fromSender', 'From') : null}</span>
+      )}
       {shown.length === 0 ? (
-        <span className={compact ? 'min-w-0 truncate px-1.5' : queued ? 'px-2' : 'px-2.5'}>
+        <span
+          className={
+            inline
+              ? 'min-w-0 truncate'
+              : compact
+                ? 'min-w-0 truncate px-1.5'
+                : queued
+                  ? 'px-2'
+                  : 'px-2.5'
+          }
+        >
           {unnamedSenderLabel(t)}
         </span>
       ) : null}
@@ -54,12 +69,16 @@ export function NativeChatAgentMessageSenders({
             sender={sender}
             chatWorktreeId={worktreeId}
             target={owner?.target ?? target}
-            queued={queued}
+            queued={queued || inline}
             compact={compact}
+            inline={inline}
           />
           {/* Outside compact, pulled back over the name's padding so it reads "A, B". */}
           {index < shown.length - 1 ? (
-            <span aria-hidden className={compact ? undefined : queued ? '-ml-2' : '-ml-2.5'}>
+            <span
+              aria-hidden
+              className={compact ? undefined : inline ? 'mr-1' : queued ? '-ml-2' : '-ml-2.5'}
+            >
               ,
             </span>
           ) : null}
@@ -77,7 +96,8 @@ function SenderName({
   chatWorktreeId,
   target,
   queued,
-  compact
+  compact,
+  inline = false
 }: {
   dispatchId?: string
   from: AgentMessageSource
@@ -86,6 +106,7 @@ function SenderName({
   target?: RuntimeClientTarget
   queued: boolean
   compact: boolean
+  inline?: boolean
 }): React.JSX.Element {
   const t = useTranslate()
   const label = useAgentMessageSenderLabel(sender, chatWorktreeId, target, dispatchId)
@@ -93,11 +114,26 @@ function SenderName({
   if (!opens || !chatWorktreeId) {
     return (
       <span
-        className={`min-w-0 truncate ${compact ? 'max-w-fit flex-1 basis-0 px-1.5' : queued ? 'max-w-full px-2' : 'max-w-full px-2.5'}`}
+        className={`min-w-0 truncate ${inline ? 'max-w-full' : compact ? 'max-w-fit flex-1 basis-0 px-1.5' : queued ? 'max-w-full px-2' : 'max-w-full px-2.5'}`}
         title={label}
       >
         {label}
       </span>
+    )
+  }
+  const open = (): void =>
+    void openAgentMessageSender(from, sender, chatWorktreeId, target, dispatchId, label)
+  if (inline) {
+    // Muted text in a one-line queued row, not a padded button.
+    return (
+      <button
+        type="button"
+        title={label}
+        onClick={open}
+        className="min-w-0 max-w-full truncate rounded-sm text-muted-foreground hover:text-foreground hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      >
+        {label}
+      </button>
     )
   }
   return (
@@ -111,9 +147,7 @@ function SenderName({
           ? label
           : t('components.native-chat.agentMessage.goToAgent', 'Go to agent')
       }
-      onClick={() =>
-        void openAgentMessageSender(from, sender, chatWorktreeId, target, dispatchId, label)
-      }
+      onClick={open}
     >
       <span className="min-w-0 truncate">{label}</span>
       {!queued ? <ArrowUpRight className="size-3" aria-hidden /> : null}

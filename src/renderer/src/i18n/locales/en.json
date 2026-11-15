@@ -21081,7 +21081,17 @@
         "skip": "Skip",
         "sending": "Sending…",
         "terminalRequired": "Answer this OMP question in the terminal.",
-        "openTerminal": "Answer in terminal"
+        "openTerminal": "Answer in terminal",
+        "recommended": "Recommended",
+        "stepAnswered": "{{value0}}, answered",
+        "stepOf": "{{value0}} of {{value1}}",
+        "answered": "Answered",
+        "title": "Question",
+        "previous": "Previous question",
+        "nextQuestion": "Next question",
+        "back": "Back",
+        "skipAndSubmit": "Skip and submit",
+        "stepLabel": "{{value0}}, {{value1}} of {{value2}}: {{value3}}"
       },
       "ask": {
         "awaiting": "Awaiting user input:",
@@ -21319,7 +21329,11 @@
         "clearAll": "Clear all",
         "editReturned": "Your edit is in the chat box.",
         "commandsUnsupported": "Commands can't be saved in a queued message.",
-        "imageCount": "{{count}} images"
+        "imageCount": "{{count}} images",
+        "couldNotSend": "Couldn't send",
+        "retry": "Retry",
+        "showLessRows": "Show less",
+        "moreRows": "+{{value0}} more"
       },
       "thought": "Thought",
       "thoughtForDuration": "Thought for {{duration}}",
@@ -21614,6 +21628,9 @@
         "questionNotSentDetail": "Your question is still in this chat. Send /btw again to retry.",
         "questionUnconfirmed": "{{agent}} couldn't confirm the side chat got your question",
         "questionUnconfirmedDetail": "Check the side chat before asking again. Your question is still in this chat."
+      },
+      "dock": {
+        "label": "Message box and prompts"
       }
     },
     "tab": {

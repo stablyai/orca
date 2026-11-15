@@ -20464,7 +20464,17 @@
         "skip": "Пропустить",
         "sending": "Отправка…",
         "terminalRequired": "Ответьте на этот вопрос OMP в терминале.",
-        "openTerminal": "Ответить в терминале"
+        "openTerminal": "Ответить в терминале",
+        "recommended": "Рекомендуется",
+        "stepAnswered": "{{value0}}, есть ответ",
+        "stepOf": "{{value0}} из {{value1}}",
+        "answered": "Есть ответ",
+        "title": "Вопрос",
+        "previous": "Предыдущий вопрос",
+        "nextQuestion": "Следующий вопрос",
+        "back": "Назад",
+        "skipAndSubmit": "Пропустить и отправить",
+        "stepLabel": "{{value0}}, {{value1}} из {{value2}}: {{value3}}"
       },
       "ask": {
         "awaiting": "Ждёт вашего ответа:",
@@ -20660,7 +20670,11 @@
         "collapse": "Свернуть",
         "expand": "Развернуть",
         "queued": "В очереди",
-        "clearAll": "Очистить всё"
+        "clearAll": "Очистить всё",
+        "couldNotSend": "Не удалось отправить",
+        "retry": "Повторить",
+        "showLessRows": "Свернуть",
+        "moreRows": "+{{value0}} ещё"
       },
       "thought": "Размышлял",
       "thoughtForDuration": "Размышлял {{duration}}",
@@ -20900,7 +20914,10 @@
         "many_many": "Создано {{count}} запросов на слияние"
       },
       "splitRight": "Разделить вправо",
-      "splitDown": "Разделить вниз"
+      "splitDown": "Разделить вниз",
+      "dock": {
+        "label": "Поле сообщения и запросы"
+      }
     },
     "tab": {
       "bar": {
