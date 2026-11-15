@@ -74,6 +74,7 @@ function SvgPanelIcon({
     setReady(false)
     let current = true
     const image = new Image()
+    image.crossOrigin = 'anonymous'
     image.onload = () => {
       if (current) {
         setReady(true)

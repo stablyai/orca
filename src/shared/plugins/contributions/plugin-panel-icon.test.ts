@@ -18,6 +18,10 @@ describe('plugin panel icons', () => {
   it.each([
     ['database', 'builtin'],
     ['🧩', 'emoji'],
+    ['1️⃣', 'emoji'],
+    ['#️⃣', 'emoji'],
+    ['*️⃣', 'emoji'],
+    ['❤️', 'emoji'],
     ['👩🏽‍💻', 'emoji'],
     ['icons/panel.svg', 'file'],
     ['icons/panel.PNG', 'file']
@@ -32,6 +36,8 @@ describe('plugin panel icons', () => {
 
   it.each([
     'mail',
+    '❤',
+    '1',
     '🧩🧩',
     '../panel.svg',
     '/assets/panel.svg',
@@ -116,6 +122,11 @@ describe('plugin panel icon files', () => {
     [
       'an unknown entity',
       '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1 1"><rect fill="&external;"/></svg>',
+      /attribute/
+    ],
+    [
+      'an XML-encoded CSS escape',
+      '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1 1"><rect style="fill:u&#92;72l(&#92;68ttps:&#92;2f&#92;2f example.com/a.svg#p)"/></svg>',
       /attribute/
     ]
   ])('refuses %s', (_label, svg, error) => {

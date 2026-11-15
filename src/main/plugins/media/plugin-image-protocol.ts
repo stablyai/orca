@@ -65,6 +65,8 @@ export function createPluginImageRequestHandler(
     try {
       let asset: CheckedPluginImage | CheckedPluginFont | null = null
       const isFont = reference?.kind === 'installed' && parsePluginFontSlot(reference.slot) !== null
+      const isPanelIcon =
+        reference?.kind === 'installed' && reference.slot.startsWith('panel-icon-')
       if (reference?.kind === 'sha') {
         asset = await dependencies.cache.get(reference.sha256)
       } else if (reference?.kind === 'installed' && isFont) {
@@ -92,9 +94,9 @@ export function createPluginImageRequestHandler(
               ? 'no-store'
               : 'private, max-age=31536000, immutable',
           'X-Content-Type-Options': 'nosniff',
-          // Why: web fonts load in CORS mode; only the default session handles this scheme, so
-          // plugin frames and browser tabs, which use their own sessions, still cannot reach it.
-          ...(isFont ? { 'Access-Control-Allow-Origin': '*' } : {})
+          // Why: web fonts and CSS masks load in CORS mode; only the default session handles this
+          // scheme, so plugin frames and browser tabs, which use their own sessions, still cannot.
+          ...(isFont || isPanelIcon ? { 'Access-Control-Allow-Origin': '*' } : {})
         }
       })
     } catch {

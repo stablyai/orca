@@ -134,7 +134,7 @@ export function isSafePluginIconAttributeValue(value: string): boolean {
   if (
     decoded === null ||
     /javascript:|expression\s*\(|@import|[<>]/i.test(decoded) ||
-    value.includes('\\')
+    decoded.includes('\\')
   ) {
     return false
   }

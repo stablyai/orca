@@ -82,6 +82,8 @@ const PANEL_ICON_BY_FOLDED_NAME = new Map<string, PluginPanelIconName>(
 )
 const EMOJI_SEGMENTER = new Intl.Segmenter('en', { granularity: 'grapheme' })
 const EMOJI_CHARACTER = /[\p{Extended_Pictographic}\p{Regional_Indicator}]/u
+const EMOJI_PRESENTATION = /\p{Emoji_Presentation}/u
+const KEYCAP = /^[0-9#*]\uFE0F\u20E3$/u
 
 /** Accepts both Lucide spellings (`file-text`, `FileText`); null for any other name. */
 export function canonicalPluginPanelIcon(name: string): PluginPanelIconName | null {
@@ -89,16 +91,18 @@ export function canonicalPluginPanelIcon(name: string): PluginPanelIconName | nu
 }
 
 export function isPluginPanelIconEmoji(value: string): boolean {
-  if (value.length === 0 || value.length > 32 || !EMOJI_CHARACTER.test(value)) {
+  if (value.length === 0 || value.length > 32) {
     return false
   }
-  let count = 0
-  for (const _segment of EMOJI_SEGMENTER.segment(value)) {
-    if (++count > 1) {
-      return false
-    }
-  }
-  return count === 1
+  const segments = [...EMOJI_SEGMENTER.segment(value)]
+  const grapheme = segments.length === 1 ? segments[0]?.segment : undefined
+  return (
+    grapheme !== undefined &&
+    (KEYCAP.test(grapheme) ||
+      EMOJI_PRESENTATION.test(grapheme) ||
+      /^\p{Regional_Indicator}$/u.test(grapheme) ||
+      (grapheme.includes('\uFE0F') && EMOJI_CHARACTER.test(grapheme)))
+  )
 }
 
 export function pluginPanelIconKind(value: string): PluginPanelIconKind | null {
