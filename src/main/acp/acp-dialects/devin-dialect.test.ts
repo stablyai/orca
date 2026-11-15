@@ -1,6 +1,8 @@
 import { afterEach, describe, expect, it } from 'vitest'
-import { NAMESPACE } from '../../native-chat/agent-session-timeline/provider-timeline-assembler-test-support'
-import { closeProviderTimelineRigs } from '../../native-chat/agent-session-timeline/provider-timeline-assembler-test-support'
+import {
+  closeProviderTimelineRigs,
+  NAMESPACE
+} from '../../native-chat/agent-session-timeline/provider-timeline-assembler-test-support'
 import { openAcpFixtureRig } from '../timeline/testing/acp-timeline-fixture.test-support'
 import { DEVIN_ACP_DIALECT } from './devin-dialect'
 

@@ -68,5 +68,6 @@ describe('devinTranscriptImport', () => {
 })
 
 function unmanaged() {
-  return { transcriptEnvironments: () => [] as Record<string, string>[] }
+  const transcriptEnvironments = (): Record<string, string>[] => []
+  return { transcriptEnvironments }
 }
