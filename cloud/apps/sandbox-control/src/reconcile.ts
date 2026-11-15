@@ -13,7 +13,7 @@ import {
   suspendSandbox,
   type LifecycleDeps
 } from './lifecycle'
-import { applySandboxPolicy, configChangeNarrows, guardrails, policyConfigHash } from './lifecycle'
+import { applySandboxPolicy, configChangeNarrows, guardrails, policyConfigHash, rowsToScrub, scrubStoppedRecord } from './lifecycle'
 import { killSwitchOn } from './guardrails'
 import { drainAll, housekeeping, openHold, type HousekeepingSummary } from './retention'
 import { CREATE_ABANDONED_MS, listByStatus, transition, type SandboxRow } from './store'
@@ -92,6 +92,10 @@ export async function reconcile(deps: LifecycleDeps): Promise<ReconcileSummary> 
         await applySandboxPolicy(deps, row, reason)
       })
     }
+  }
+  // A4: stopped records that may still hold firewall values (a failed scrub, a timeout, the deploy sweep).
+  for (const row of await rowsToScrub(deps.db)) {
+    await guard(() => scrubStoppedRecord(deps, row))
   }
   const now = deps.now()
   for (const row of await listByStatus(deps.db, ['creating', 'failed', 'destroying', 'suspending', 'resuming'])) {

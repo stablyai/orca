@@ -66,6 +66,9 @@ export type SandboxRow = {
   policy_stale_at?: number | null
   egress_swap_mode?: string | null
   policy_config_hash?: string | null
+  /** A4 (0067): see migrations/0067_policy_scrub.sql. */
+  policy_scrubbed_at?: number | null
+  policy_scrub_pending?: number | null
   archived_at: number | null
   archive_expires_at: number | null
   /** Registry (0006). `user_id` is the current owner (reassignable); `created_by` never changes. */
