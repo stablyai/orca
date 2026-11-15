@@ -153,6 +153,18 @@ Omitting a flag leaves its link unchanged. On `set`, literal `null` clears only 
 
 Folder-based repositories can store numeric links through these commands, but a number does not supply a provider host or project. Without existing source context or a stored remote, pasted GitLab URLs are refused and provider details or clickable links may be unavailable. These flags use fields already supported by the runtime; an older runtime that predates a field may ignore it, so check `worktree show --json` after writing to an older host.
 
+### Review notes
+
+```bash
+orca worktree notes add --file src/auth.ts --line 42 --body "token can be null after logout" --json
+orca worktree notes add --file src/auth.ts --start-line 40 --line 48 --body-file - --json < finding.md
+orca worktree notes list --file src/auth.ts --json
+orca worktree notes clear --id <note-id> --json
+orca worktree notes clear --all
+```
+
+These read and write the review notes shown in the diff, so a script or agent can leave findings on specific lines. `--file` is relative to the workspace root, or an absolute path inside it; `--line` is 1-based and `--start-line` makes the note cover a range. `add` keeps existing notes and prints the new note's id. `clear` takes `--id` (repeat for several), `--file` or `--all`. Without `--worktree`, the commands use the workspace that contains the current directory; folder workspaces work too.
+
 ### Workspace cleanup
 
 ```bash
