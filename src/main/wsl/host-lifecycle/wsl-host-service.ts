@@ -342,6 +342,7 @@ export class WslHostService {
     status: WslOrcadConnectionStatus,
     connection: WslOrcadConnection | null = null
   ): void {
+    this.connectionChanges.delete(wslDistroHolderKey(record.distro))
     if (status.state === 'ready') {
       const generation = this.readyGenerations.get(record.environmentId) ?? 0
       this.readyGenerations.set(record.environmentId, generation + 1)
