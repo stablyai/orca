@@ -3,7 +3,10 @@ import { join } from 'node:path'
 import type { AiVaultSession } from '../../../shared/ai-vault/contracts/ai-vault-types'
 import type { AiVaultSessionDeleteRemoval } from '../../../shared/ai-vault/contracts/ai-vault-session-deletion'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host'
-import { splitOpenCodeSqliteCandidate } from '../../../shared/agent-session/lifecycle/provider-handles/opencode-sqlite-session-path'
+import {
+  buildOpenCodeSqliteCandidatePath,
+  splitOpenCodeSqliteCandidate
+} from '../../../shared/agent-session/lifecycle/provider-handles/opencode-sqlite-session-path'
 import { yieldToEventLoop } from '../../../shared/concurrency/event-loop-yield'
 import type { WorkspaceAgentHistoryTranscriptTally } from '../../../shared/workspace-agent-history/workspace-agent-history-types'
 import { scanAiVaultSessions } from '../session-scanner'
@@ -49,9 +52,13 @@ export async function runWorkspaceHistory(
     ...(scope.kind === 'removed' ? { scopePaths: scope.paths, scopeOnly: true } : {}),
     signal
   })
+  // Database child sessions are their own rows; file-backed subagents go with their parent's folder.
   const sessions = scan.sessions.filter(
-    (session) => session.executionHostId === LOCAL_EXECUTION_HOST_ID && !session.subagent
+    (session) =>
+      session.executionHostId === LOCAL_EXECUTION_HOST_ID &&
+      (!session.subagent || SQLITE_AGENTS.has(session.agent))
   )
+
   const owns = createWorkspaceHistoryOwner(request.ownership)
   const result: WorkspaceHistoryResult = {
     total: sessions.length,
@@ -88,8 +95,9 @@ export async function runWorkspaceHistory(
       throwIfAiVaultScanCancelled(signal)
     }
     if (SQLITE_AGENTS.has(session.agent)) {
+      // Database rows name the database file; the session is a row inside it.
       const row = splitOpenCodeSqliteCandidate(
-        session.filePath,
+        buildOpenCodeSqliteCandidatePath(session.filePath, session.sessionId),
         session.agent === 'zcode' ? 'zcode' : 'opencode'
       )
       if (row) {
@@ -109,10 +117,20 @@ export async function runWorkspaceHistory(
     if (request.mode === 'measure') {
       continue
     }
+    // The scan may be minutes old, and other homes' Codex copies were never scanned: any file written since is in use.
+    const files = removals
+      .filter((removal) => removal.kind === 'file')
+      .map((removal) => removal.path)
+    if (await anyChangedSince(files, request.inUseSince)) {
+      result.inUse++
+      continue
+    }
     if (await removeAll(removals)) {
       result.deleted++
-      result.deletedFilePaths.push(session.filePath)
-      invalidateSessionParseCacheEntry(session.filePath)
+      for (const path of new Set([session.filePath, ...files])) {
+        result.deletedFilePaths.push(path)
+        invalidateSessionParseCacheEntry(path)
+      }
     } else {
       result.failed++
     }
@@ -127,13 +145,26 @@ export async function runWorkspaceHistory(
     const outcome = deleteWorkspaceHistorySqliteSessions(dbPath, [...rows.keys()])
     result.inUse += outcome.busy.length
     for (const sessionId of outcome.deleted) {
-      const session = rows.get(sessionId)!
+      const rowPath = buildOpenCodeSqliteCandidatePath(dbPath, sessionId)
       result.deleted++
-      result.deletedFilePaths.push(session.filePath)
-      invalidateSessionParseCacheEntry(session.filePath)
+      result.deletedFilePaths.push(rowPath)
+      invalidateSessionParseCacheEntry(rowPath)
     }
   }
   return result
+}
+
+async function anyChangedSince(filePaths: readonly string[], since: number): Promise<boolean> {
+  for (const filePath of filePaths) {
+    try {
+      if ((await lstat(filePath)).mtimeMs >= since) {
+        return true
+      }
+    } catch {
+      // A missing companion or alias is not in use.
+    }
+  }
+  return false
 }
 
 // Companions go first, so a refusal part way leaves the transcript listed for a retry.

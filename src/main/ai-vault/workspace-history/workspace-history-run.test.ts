@@ -1,4 +1,12 @@
-import { existsSync, linkSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import {
+  existsSync,
+  linkSync,
+  mkdirSync,
+  mkdtempSync,
+  rmSync,
+  utimesSync,
+  writeFileSync
+} from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -9,6 +17,7 @@ vi.mock('../session-scanner', () => ({ scanAiVaultSessions }))
 
 const { runWorkspaceHistory } = await import('./workspace-history-run')
 
+const OLD = new Date('2026-11-01T00:00:00.000Z')
 let root: string
 
 beforeEach(() => {
@@ -49,6 +58,7 @@ function writeRollout(sessionsDir: string, name: string): string {
   mkdirSync(dir, { recursive: true })
   const path = join(dir, name)
   writeFileSync(path, '{"type":"session_meta"}\n')
+  utimesSync(path, OLD, OLD)
   return path
 }
 
@@ -59,11 +69,13 @@ describe('runWorkspaceHistory', () => {
     const removed = join(root, 'workspaces', 'repo', 'gone')
     const owned = writeRollout(systemSessions, 'rollout-a.jsonl')
     writeFileSync(`${owned}.zst`, 'archived')
+    utimesSync(`${owned}.zst`, OLD, OLD)
     const accountLink = writeRollout(accountSessions, 'rollout-a.jsonl')
     rmSync(accountLink)
     linkSync(owned, accountLink)
     const nested = writeRollout(systemSessions, 'rollout-b.jsonl')
     const recent = writeRollout(systemSessions, 'rollout-c.jsonl')
+    utimesSync(recent, new Date(), new Date())
     scanAiVaultSessions.mockResolvedValue({
       sessions: [
         codexSession(owned, join(removed, 'src'), '2026-11-01T00:00:00.000Z'),

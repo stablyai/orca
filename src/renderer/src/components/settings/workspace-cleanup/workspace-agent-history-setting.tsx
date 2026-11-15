@@ -65,6 +65,16 @@ export function WorkspaceAgentHistorySetting({
   )
 }
 
+// Revisiting Settings reuses a recent measurement instead of rescanning every transcript.
+const MEASUREMENT_REUSE_MS = 10 * 60_000
+let lastMeasurement: { tally: WorkspaceAgentHistoryTally; at: number } | null = null
+
+function freshMeasurement(): WorkspaceAgentHistoryTally | null {
+  return lastMeasurement && Date.now() - lastMeasurement.at < MEASUREMENT_REUSE_MS
+    ? lastMeasurement.tally
+    : null
+}
+
 type Measurement =
   | { state: 'measuring' }
   | { state: 'ready'; tally: WorkspaceAgentHistoryTally }
@@ -73,17 +83,28 @@ type Measurement =
 function DeletedWorkspacesHistoryRow(): React.JSX.Element {
   const t = useTranslate()
   const mountedRef = useMountedRef()
-  const [measurement, setMeasurement] = useState<Measurement>({ state: 'measuring' })
+  const [measurement, setMeasurement] = useState<Measurement>(() => {
+    const cached = freshMeasurement()
+    return cached ? { state: 'ready', tally: cached } : { state: 'measuring' }
+  })
   const [confirming, setConfirming] = useState(false)
   const [deleting, setDeleting] = useState(false)
 
   const [generation, setGeneration] = useState(0)
 
-  // Measured when the row appears and after a delete, never per render: it scans every transcript.
+  // Measured when the row first appears and after a delete, never per render: it scans every transcript.
   useEffect(() => {
+    if (generation === 0 && freshMeasurement()) {
+      return
+    }
     let current = true
     window.api.aiVault.measureDeletedWorkspaceHistory().then(
-      (tally) => current && setMeasurement({ state: 'ready', tally }),
+      (tally) => {
+        lastMeasurement = { tally, at: Date.now() }
+        if (current) {
+          setMeasurement({ state: 'ready', tally })
+        }
+      },
       (error: unknown) =>
         current && setMeasurement({ state: 'error', message: errorMessage(error) })
     )
@@ -130,6 +151,7 @@ function DeletedWorkspacesHistoryRow(): React.JSX.Element {
       if (mountedRef.current) {
         setDeleting(false)
         setConfirming(false)
+        lastMeasurement = null
         setMeasurement({ state: 'measuring' })
         setGeneration((value) => value + 1)
       }

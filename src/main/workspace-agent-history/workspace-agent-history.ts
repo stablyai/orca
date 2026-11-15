@@ -39,8 +39,10 @@ export type WorkspaceAgentHistoryStore = {
   getAllWorktreeMeta: () => Record<string, unknown>
 }
 
-// A transcript written this recently may belong to an agent that is still running.
-const IN_USE_WINDOW_MS = 15 * 60_000
+// An agent can sit idle at its prompt for hours; old history is the target, so recent writes are kept.
+const IN_USE_WINDOW_MS = 24 * 60 * 60_000
+
+const EMPTY_TRANSCRIPTS = { total: 0, matched: 0, bytes: 0, inUse: 0, deleted: 0, failed: 0 }
 
 let store: WorkspaceAgentHistoryStore | null = null
 let ensureChatHost: () => Promise<unknown> = () => Promise.resolve()
@@ -64,10 +66,12 @@ export function deleteAgentHistoryForRemovedWorkspace(event: RuntimeWorktreeLife
     return
   }
   const removedAt = Date.now()
+  // Removing a folder workspace keeps the folder, so only the chats Orca bound to it are its own.
+  const paths = parseWorkspaceKey(event.worktreeId)?.type === 'folder' ? [] : [event.path]
   void serialize(() =>
     runWorkspaceAgentHistory(
       'delete',
-      { kind: 'removed', paths: [event.path] },
+      { kind: 'removed', paths },
       {
         inUseSince: removedAt,
         ownsChat: (location) => worktreeIdsEqual(location.workspaceId, event.worktreeId)
@@ -97,13 +101,12 @@ async function runAlreadyDeleted(mode: 'measure' | 'delete'): Promise<WorkspaceA
   const scope = { kind: 'already-deleted' as const, layouts: safeWorkspaceLayouts(current) }
   const keepPaths = keepWorkspacePaths(current)
   const ownsWorktreePath = createWorkspaceHistoryOwner({ scope, keepPaths })
-  const folderIds = new Set((current.getFolderWorkspaces?.() ?? []).map((folder) => folder.id))
   return runWorkspaceAgentHistory(mode, scope, {
     inUseSince: Date.now() - IN_USE_WINDOW_MS,
     ownsChat: async (location) => {
+      // Removing a folder workspace keeps its folder, so a missing row proves nothing about the chat.
       if (location.workspaceKind === 'folder') {
-        const key = parseWorkspaceKey(location.workspaceId)
-        return key?.type === 'folder' && !folderIds.has(key.folderWorkspaceId)
+        return false
       }
       const path = worktreeIdPath(location.workspaceId)
       return path !== null && (await ownsWorktreePath({ cwd: path, filePath: '' }))
@@ -120,12 +123,15 @@ async function runWorkspaceAgentHistory(
   }
 ): Promise<WorkspaceAgentHistoryTally> {
   const current = requireStore()
-  const transcripts = await runWorkspaceHistoryInService({
-    mode,
-    ownership: { scope, keepPaths: keepWorkspacePaths(current) },
-    inUseSince: chats.inUseSince,
-    options: await historyScanOptions()
-  })
+  const transcripts =
+    scope.kind === 'removed' && scope.paths.length === 0
+      ? { ...EMPTY_TRANSCRIPTS, deletedFilePaths: [] }
+      : await runWorkspaceHistoryInService({
+          mode,
+          ownership: { scope, keepPaths: keepWorkspacePaths(current) },
+          inUseSince: chats.inUseSince,
+          options: await historyScanOptions()
+        })
   if (transcripts.deletedFilePaths.length > 0) {
     invalidateAiVaultSessionListCache()
     invalidateAiVaultHostLegCache()
@@ -210,7 +216,7 @@ function removedWorkspaceIsLocal(
   if (event.hostId) {
     return isLocalExecutionHost(event.hostId)
   }
-  // A folder workspace without a host stamp is this computer's.
+  // Folder events carry no SSH stamp; runChats keeps only this computer's chats.
   if (parseWorkspaceKey(event.worktreeId)?.type === 'folder') {
     return true
   }

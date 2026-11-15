@@ -184,9 +184,14 @@ export class AgentSessionRecordStore extends AgentSessionRecordTabs {
   /** Unreadable records still count as present and can never grant writers. */
   /** Delete chats nothing holds, then their journals; returns the ids actually deleted. */
   async forgetConversations(sessionIds: readonly string[]): Promise<string[]> {
-    const forgotten = await this.transactions.command({ kind: 'forget', sessionIds })
-    for (const sessionId of forgotten) {
-      await purgeForgottenJournalChat(this.journalDatabase, sessionId)
+    const forgotten: string[] = []
+    // One chat at a time: an interruption strands at most one journal whose record is gone.
+    for (const sessionId of sessionIds) {
+      const [deleted] = await this.transactions.command({ kind: 'forget', sessionIds: [sessionId] })
+      if (deleted) {
+        await purgeForgottenJournalChat(this.journalDatabase, deleted)
+        forgotten.push(deleted)
+      }
     }
     return forgotten
   }

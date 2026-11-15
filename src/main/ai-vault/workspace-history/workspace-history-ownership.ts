@@ -1,4 +1,4 @@
-import { lstat, stat } from 'node:fs/promises'
+import { lstat, readdir, stat } from 'node:fs/promises'
 import { join, relative } from 'node:path'
 import type { AiVaultSession } from '../../../shared/ai-vault/contracts/ai-vault-types'
 import {
@@ -42,11 +42,10 @@ export function createWorkspaceHistoryOwner(
   const rootExists = (root: string): Promise<boolean> => {
     let known = rootPresence.get(root)
     if (!known) {
-      // An unmounted volume or unreadable root proves nothing about the folders under it.
-      known = stat(root).then(
-        (stats) => stats.isDirectory(),
-        () => false
-      )
+      // An unmounted volume or unreadable root proves nothing; an empty one may be a bare mount point.
+      known = stat(root)
+        .then(async (stats) => stats.isDirectory() && (await readdir(root)).length > 0)
+        .catch(() => false)
       rootPresence.set(root, known)
     }
     return known
@@ -68,7 +67,15 @@ export function createWorkspaceHistoryOwner(
       (spelling): spelling is string => Boolean(spelling)
     )
     for (const folder of spellings.flatMap((cwd) => workspaceFolders(cwd, scope.layouts))) {
-      if (keepPaths.some((keep) => isPathInsideOrEqual(folder.path, keep))) {
+      // A workspace that still exists keeps its history, whether it sits inside this folder or holds it.
+      const survives = keepPaths.some(
+        (keep) =>
+          isPathInsideOrEqual(folder.path, keep) ||
+          (keep !== folder.root &&
+            isPathInsideOrEqual(folder.root, keep) &&
+            isPathInsideOrEqual(keep, folder.path))
+      )
+      if (survives) {
         continue
       }
       if ((await rootExists(folder.root)) && (await folderGone(folder.path))) {
