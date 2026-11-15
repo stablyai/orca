@@ -25,7 +25,8 @@ vi.mock('./worktree-list-reader', () => ({
 import {
   _resetWorktreeScanCacheForTests,
   listWorktreeGraph,
-  listWorktrees
+  listWorktrees,
+  listWorktreesSharedStrict
 } from './worktree-scan-cache'
 import { __resetSparseCheckoutStateCacheForTests } from '../sparse-checkout/worktree-sparse-checkout-cache'
 
@@ -48,6 +49,24 @@ describe('graph and annotated worktree scans', () => {
     readTranslatedWorktreeGraphMock.mockResolvedValue([ROW])
     _resetWorktreeScanCacheForTests()
     __resetSparseCheckoutStateCacheForTests()
+  })
+
+  it('retains negative sparse answers for two large catalogs until reconciliation is due', async () => {
+    const rows = Array.from({ length: 1492 }, (_, index) => ({
+      ...ROW,
+      path: `/synthetic/checkout-${index}`
+    }))
+    readWorktreeListMock.mockResolvedValue(rows)
+    detectSparseCheckoutMock.mockResolvedValue(false)
+    await listWorktreesSharedStrict('/synthetic/repo-a')
+    await listWorktreesSharedStrict('/synthetic/repo-b')
+    detectSparseCheckoutMock.mockResolvedValue(true)
+
+    const first = await listWorktreesSharedStrict('/synthetic/repo-a')
+    const second = await listWorktreesSharedStrict('/synthetic/repo-b')
+
+    expect(first.every((row) => row.isSparse !== true)).toBe(true)
+    expect(second.every((row) => row.isSparse !== true)).toBe(true)
   })
 
   it('resolves a graph scan while the annotated scan is still probing', async () => {
