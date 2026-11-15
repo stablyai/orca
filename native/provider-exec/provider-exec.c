@@ -1,5 +1,8 @@
-// Gated exec for POSIX provider CLIs. Forks the same-session owner-pipe watcher, reports it on fd 5,
-// waits for the owner's GO on fd 4, then execs the CLI with its argv and environment unchanged.
+// Gated exec for POSIX provider CLIs. This pid is a small parent that forks the leader, reports the
+// leader's wait status on fd 6 and reaps it; on Linux it is a subreaper and reaps the watcher and
+// adopted descendants too. The leader starts its own session, forks the same-session owner-pipe
+// watcher, reports both on fd 5, waits for the owner's GO on fd 4, then execs the CLI with its argv,
+// environment, signal mask and dispositions unchanged.
 // Usage: orca-provider-exec <stdinEndGraceMs> <sigtermGraceMs> <session|one-shot>
 //          <stdin-end|stdin-end-and-sigterm> -- <command> [args...]
 #if !defined(__APPLE__)
@@ -20,9 +23,19 @@
 #if defined(__APPLE__)
 #include <sys/sysctl.h>
 #endif
+#if defined(__linux__)
+#include <sys/prctl.h>
+#endif
 
-enum { OWNER_FD = 3, GATE_FD = 4, STATUS_FD = 5 };
-enum { EXIT_USAGE = 64, EXIT_GATE_CLOSED = 69, EXIT_BOOTSTRAP = 71, EXIT_EXEC_FAILED = 127 };
+enum { OWNER_FD = 3, GATE_FD = 4, STATUS_FD = 5, OUTCOME_FD = 6 };
+enum {
+    EXIT_USAGE = 64,
+    EXIT_GATE_CLOSED = 69,
+    EXIT_NO_SUBREAPER = 70,
+    EXIT_BOOTSTRAP = 71,
+    EXIT_OUTCOME_LOST = 74,
+    EXIT_EXEC_FAILED = 127,
+};
 enum { STDIN_END_GRACE_MAX_MS = 1000, SIGTERM_GRACE_MAX_MS = 3000 };
 
 static const int STOP_SIGNALS[] = {SIGTERM, SIGINT, SIGHUP};
@@ -31,6 +44,7 @@ enum { STOP_SIGNAL_COUNT = sizeof STOP_SIGNALS / sizeof STOP_SIGNALS[0] };
 static volatile sig_atomic_t stop_signal = 0;
 static struct sigaction saved_stop_actions[STOP_SIGNAL_COUNT];
 static struct sigaction saved_pipe_action;
+static struct sigaction saved_child_action;
 static sigset_t saved_mask;
 static sigset_t stop_set;
 static pid_t watcher_pid = -1;
@@ -474,48 +488,19 @@ static void restore_signal_actions(void) {
     sigaction(SIGPIPE, &saved_pipe_action, NULL);
 }
 
-int main(int argc, char *argv[]) {
-    unsigned stdin_end_grace_ms;
-    unsigned sigterm_grace_ms;
-    if (argc < 7 || parse_ms(argv[1], STDIN_END_GRACE_MAX_MS, &stdin_end_grace_ms) != 0 ||
-            parse_ms(argv[2], SIGTERM_GRACE_MAX_MS, &sigterm_grace_ms) != 0 ||
-            (strcmp(argv[3], "session") != 0 && strcmp(argv[3], "one-shot") != 0) ||
-            (strcmp(argv[4], "stdin-end") != 0 && strcmp(argv[4], "stdin-end-and-sigterm") != 0) ||
-            strcmp(argv[5], "--") != 0 || argv[6][0] == '\0') {
-        return EXIT_USAGE;
-    }
-    // The CLI leads its group and session; the watcher will retain that session reservation.
-    for (int fd = 0; fd <= STATUS_FD; fd++) {
-        if (fcntl(fd, F_GETFD) < 0) {
-            return EXIT_USAGE;
-        }
-    }
-    if (getpid() != getpgrp() || getpid() != getsid(0)) {
-        return EXIT_USAGE;
-    }
-
-    sigemptyset(&stop_set);
-    for (int i = 0; i < STOP_SIGNAL_COUNT; i++) {
-        sigaddset(&stop_set, STOP_SIGNALS[i]);
-    }
-    if (sigprocmask(SIG_SETMASK, NULL, &saved_mask) != 0 || install_stop_handlers() != 0 ||
-            set_cloexec(OWNER_FD, 1) != 0 || set_cloexec(GATE_FD, 1) != 0 ||
-            set_cloexec(STATUS_FD, 1) != 0) {
+// The leader: runs today's bootstrap in a session of its own, then becomes the CLI.
+static _Noreturn void run_leader(struct watcher *watcher, char *command[]) {
+    // Only the parent may hold the outcome pipe, so its EOF means the parent is gone.
+    close(OUTCOME_FD);
+    if (setsid() < 0 || sigaction(SIGCHLD, &saved_child_action, NULL) != 0 ||
+            install_stop_handlers() != 0 || set_cloexec(OWNER_FD, 1) != 0 ||
+            set_cloexec(GATE_FD, 1) != 0 || set_cloexec(STATUS_FD, 1) != 0) {
         fail(EXIT_BOOTSTRAP);
     }
+    watcher->group = getpid();
 
-    struct watcher watcher = {
-        .group = getpid(),
-        .stdin_end_grace_ms = stdin_end_grace_ms,
-        .sigterm_grace_ms = sigterm_grace_ms,
-        .session = strcmp(argv[3], "session") == 0,
-        .close_stdin_end = strcmp(argv[4], "stdin-end") == 0,
-        .phase = WATCH_IDLE,
-    };
-
-    // Blocked across fork so the watcher installs its ignores before any stop signal can land.
-    sigprocmask(SIG_BLOCK, &stop_set, NULL);
-    int started = stop_signal == 0 ? start_watcher(&watcher) : -1;
+    // Stop signals stay blocked from the parent's fork, so the watcher installs its ignores first.
+    int started = start_watcher(watcher);
     sigprocmask(SIG_SETMASK, &saved_mask, NULL);
     if (started != 0 || stop_signal != 0) {
         fail(EXIT_BOOTSTRAP);
@@ -525,12 +510,14 @@ int main(int argc, char *argv[]) {
 
     char boot_id[37];
     read_boot_id(boot_id);
-    char status[96];
+    char status[128];
     int length = boot_id[0] != '\0'
-                     ? snprintf(status, sizeof status, "{\"watcherPid\":%ld,\"bootId\":\"%s\"}\n",
-                                (long)watcher_pid, boot_id)
-                     : snprintf(status, sizeof status, "{\"watcherPid\":%ld,\"bootId\":null}\n",
-                                (long)watcher_pid);
+                     ? snprintf(status, sizeof status,
+                                "{\"leaderPid\":%ld,\"watcherPid\":%ld,\"bootId\":\"%s\"}\n",
+                                (long)watcher->group, (long)watcher_pid, boot_id)
+                     : snprintf(status, sizeof status,
+                                "{\"leaderPid\":%ld,\"watcherPid\":%ld,\"bootId\":null}\n",
+                                (long)watcher->group, (long)watcher_pid);
     if (length <= 0 || (size_t)length >= sizeof status ||
             write_all(STATUS_FD, status, (size_t)length) != 0) {
         fail(EXIT_BOOTSTRAP);
@@ -555,7 +542,7 @@ int main(int argc, char *argv[]) {
     }
     sigprocmask(SIG_SETMASK, &saved_mask, NULL);
 
-    execvp(argv[6], &argv[6]);
+    execvp(command[0], command);
     int error = errno;
     signal(SIGPIPE, SIG_IGN);
     length = snprintf(status, sizeof status, "{\"errno\":%d}\n", error);
@@ -564,4 +551,128 @@ int main(int argc, char *argv[]) {
     }
     reap_watcher();
     _exit(EXIT_EXEC_FAILED);
+}
+
+// One frame for the leader's actual wait status, then EOF.
+static int publish_outcome(int status) {
+    char frame[48];
+    int length = WIFSIGNALED(status)
+                     ? snprintf(frame, sizeof frame, "{\"code\":null,\"signal\":%d}\n",
+                                WTERMSIG(status))
+                     : snprintf(frame, sizeof frame, "{\"code\":%d,\"signal\":null}\n",
+                                WEXITSTATUS(status));
+    int written = length > 0 && (size_t)length < sizeof frame &&
+                  write_all(OUTCOME_FD, frame, (size_t)length) == 0;
+    close(OUTCOME_FD);
+    return written ? 0 : -1;
+}
+
+// Holds nothing the owner reads EOF from: stdio and fds 3-5 now belong to the leader and watcher.
+// Survives stop signals, which the watcher turns into the group stop, and blocks in wait only.
+static _Noreturn void await_leader(pid_t leader) {
+    static const int IGNORED_SIGNALS[] = {SIGTERM, SIGINT, SIGHUP, SIGPIPE};
+    struct sigaction ignore;
+    memset(&ignore, 0, sizeof ignore);
+    ignore.sa_handler = SIG_IGN;
+    sigemptyset(&ignore.sa_mask);
+    for (size_t i = 0; i < sizeof IGNORED_SIGNALS / sizeof IGNORED_SIGNALS[0]; i++) {
+        sigaction(IGNORED_SIGNALS[i], &ignore, NULL);
+    }
+    sigprocmask(SIG_SETMASK, &saved_mask, NULL);
+    int null_fd = open("/dev/null", O_RDWR | O_CLOEXEC);
+    for (int fd = 0; fd <= STATUS_FD; fd++) {
+        if (fd > 2 || null_fd < 0 || dup2(null_fd, fd) < 0) {
+            close(fd);
+        }
+    }
+    if (null_fd > STATUS_FD) {
+        close(null_fd);
+    }
+
+    if (chdir("/") != 0) {
+        // Keep reaping even if the current directory cannot be released.
+    }
+    int outcome = 1;
+    for (;;) {
+        int status;
+        pid_t pid = waitpid(-1, &status, 0);
+        if (pid < 0) {
+            if (errno == EINTR) {
+                continue;
+            }
+            break;
+        }
+        if (pid != leader) {
+            continue;
+        }
+        outcome = publish_outcome(status);
+#if !defined(__linux__)
+        // Only the leader is this pid's child here; init reaps the watcher.
+        break;
+#endif
+    }
+    _exit(outcome == 0 ? 0 : outcome < 0 ? EXIT_OUTCOME_LOST : EXIT_BOOTSTRAP);
+}
+
+int main(int argc, char *argv[]) {
+    unsigned stdin_end_grace_ms;
+    unsigned sigterm_grace_ms;
+    if (argc < 7 || parse_ms(argv[1], STDIN_END_GRACE_MAX_MS, &stdin_end_grace_ms) != 0 ||
+            parse_ms(argv[2], SIGTERM_GRACE_MAX_MS, &sigterm_grace_ms) != 0 ||
+            (strcmp(argv[3], "session") != 0 && strcmp(argv[3], "one-shot") != 0) ||
+            (strcmp(argv[4], "stdin-end") != 0 && strcmp(argv[4], "stdin-end-and-sigterm") != 0) ||
+            strcmp(argv[5], "--") != 0 || argv[6][0] == '\0') {
+        return EXIT_USAGE;
+    }
+    for (int fd = 0; fd <= OUTCOME_FD; fd++) {
+        if (fcntl(fd, F_GETFD) < 0) {
+            return EXIT_USAGE;
+        }
+    }
+
+    struct watcher watcher = {
+        .stdin_end_grace_ms = stdin_end_grace_ms,
+        .sigterm_grace_ms = sigterm_grace_ms,
+        .session = strcmp(argv[3], "session") == 0,
+        .close_stdin_end = strcmp(argv[4], "stdin-end") == 0,
+        .phase = WATCH_IDLE,
+    };
+    sigset_t fork_set;
+    sigemptyset(&stop_set);
+    sigemptyset(&fork_set);
+    for (int i = 0; i < STOP_SIGNAL_COUNT; i++) {
+        sigaddset(&stop_set, STOP_SIGNALS[i]);
+        sigaddset(&fork_set, STOP_SIGNALS[i]);
+    }
+    sigaddset(&fork_set, SIGPIPE);
+    // An inherited SIGCHLD ignore would auto-reap the leader and lose its status; the leader
+    // restores it for the CLI.
+    struct sigaction child_default;
+    memset(&child_default, 0, sizeof child_default);
+    child_default.sa_handler = SIG_DFL;
+    sigemptyset(&child_default.sa_mask);
+    if (set_cloexec(OUTCOME_FD, 1) != 0 ||
+            sigaction(SIGCHLD, &child_default, &saved_child_action) != 0) {
+        return EXIT_BOOTSTRAP;
+    }
+#if defined(__linux__)
+    // Without it the watcher and orphaned descendants would be left to a possibly non-reaping init,
+    // so refuse before any CLI starts.
+    if (prctl(PR_SET_CHILD_SUBREAPER, 1, 0, 0, 0) != 0) {
+        return EXIT_NO_SUBREAPER;
+    }
+#endif
+    // Blocked across fork so a stop signal lands either before it (default action, nothing started)
+    // or on the leader's handler or this pid's ignore, never on the defaults in between.
+    if (sigprocmask(SIG_BLOCK, &fork_set, &saved_mask) != 0) {
+        return EXIT_BOOTSTRAP;
+    }
+    pid_t leader = fork();
+    if (leader == 0) {
+        run_leader(&watcher, &argv[6]);
+    }
+    if (leader < 0) {
+        return EXIT_BOOTSTRAP;
+    }
+    await_leader(leader);
 }
