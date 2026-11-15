@@ -96,7 +96,8 @@ export type OrcaCloudWorkspaceApi = {
    * `applied` false says why not (`not_installed`, `not_running`, ...). Absent on clients without it.
    */
   refreshGitAccess?: (
-    args: CloudWorkspaceTarget
+    // CREATE-GH-STEP: the create wizard names its sandbox before it has a workspace.
+    args: CloudWorkspaceTarget | { environmentId: string } | { sandboxId: string }
   ) => Promise<CloudWorkspaceResult<{ applied: boolean; reason?: string }>>
   /** Sleep, then archive with a snapshot TTL; metadata captured in the VM or from the client cache. */
   archive: (
