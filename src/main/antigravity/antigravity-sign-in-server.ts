@@ -4,7 +4,7 @@ import type { AcpLaunchSpec } from '../acp/launch/acp-launch-contract'
 import { acpSessionStartMeta } from '../acp/launch/acp-session-meta'
 import type { AcpAgentConnection, AcpSignInWatch } from '../acp/process/acp-agent-connection'
 import type { ConnectAcpAgent } from '../acp/process/acp-structured-connection'
-import { AcpAgentError, AcpAuthRequiredError } from '../acp/transport/acp-errors'
+import { AcpAgentError, AcpSignInPromptError } from '../acp/transport/acp-errors'
 import { ANTIGRAVITY_ACP_HOME } from '../../shared/antigravity-session-origin'
 import { AntigravitySignInSentence, closeAntigravitySignInOwner } from './antigravity-chat-account'
 import { SIGN_IN_FAILED, antigravitySignInFailure } from './antigravity-sign-in-failure'
@@ -15,26 +15,32 @@ const SAVED_SIGN_IN_UNUSABLE =
   "Google sign-in finished, but Antigravity can't use the saved sign-in. Start sign-in again and allow every permission Google asks for."
 
 type SignInServerInput = {
-  connect: ConnectAcpAgent<AcpAgentConnection>
+  /** A new private temp folder per server: each server's exit removes its own. */
+  connectServer: () => Promise<ConnectAcpAgent<AcpAgentConnection>>
   home: string
   launch: Parameters<ConnectAcpAgent<AcpAgentConnection>>[0] & { cwd: string }
   signal: AbortSignal
   closed: () => void
+  /** Every server, so cleanup can wait for each one's exit. */
+  spawned: (server: AcpAgentConnection) => void
 }
 
-/** Sign-in's server processes; each call returns only once its server's exit is proven. */
+/** Sign-in's server processes; each call returns only after its server's close is accepted. */
 export function antigravitySignInServers({
-  connect,
+  connectServer,
   home,
   launch,
   signal,
-  closed
+  closed,
+  spawned
 }: SignInServerInput) {
   const run = async <T>(
     watch: AcpSignInWatch,
     body: (server: AcpAgentConnection) => Promise<T>
   ): Promise<T> => {
+    const connect = await connectServer()
     const server = connect(launch, { clientInfo: { name: 'orca', version: '1' }, signIn: watch })
+    spawned(server)
     const stop = (): void => void server.close().catch(() => false)
     signal.addEventListener('abort', stop, { once: true })
     try {
@@ -49,13 +55,13 @@ export function antigravitySignInServers({
   // fewer scopes than requested, and the server then saves a token it can never refresh.
   const startOnSavedSignIn = (
     spec: AcpLaunchSpec & { signIn: AcpSignInWatch },
-    spawned: (server: AcpAgentConnection) => void
+    // Before close, so a server whose exit is unproven still hands over its session's files.
+    started: (sessionId: string) => void
   ) =>
     run({ read: spec.signIn.read, answered: spec.signIn.answered }, async (server) => {
-      spawned(server)
       await server.initialize()
       closed()
-      const started = await server
+      const session = await server
         .start({ cwd: launch.cwd, mcpServers: [], ...acpSessionStartMeta(spec) })
         .catch((error: unknown) => {
           const plain = error instanceof AcpAgentError && error.code === -32603
@@ -63,12 +69,14 @@ export function antigravitySignInServers({
             ? new AntigravitySignInSentence(SESSION_FAILED)
             : error
         })
-      return { started, live: !server.exited }
+      started(session.sessionId)
+      return { started: session, live: !server.exited }
     }).catch(async (error: unknown) => {
-      if (!(error instanceof AcpAuthRequiredError)) {
+      // Only the server asking for a browser sign-in proves the token unusable; other refusals keep
+      // their own wording. An unusable token would still keep new chats off the host's own agy.
+      if (!(error instanceof AcpSignInPromptError)) {
         throw error
       }
-      // An unusable token would still keep new chats off the host's own agy.
       await rm(join(home, ANTIGRAVITY_ACP_HOME, 'acp_token.json'), { force: true })
       throw new AntigravitySignInSentence(SAVED_SIGN_IN_UNUSABLE, { cause: error })
     })

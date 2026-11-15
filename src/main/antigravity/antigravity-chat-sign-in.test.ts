@@ -312,9 +312,10 @@ it('signs in from the address a browser on another computer ended on', async () 
 
 it('fails, and drops the token, when a new server cannot use the saved sign-in', async () => {
   vi.spyOn(console, 'warn').mockImplementation(() => {})
-  const { flowId, folder, finishBrowser, openSession } = await signInAgainst(printed(GOOGLE_LINK), {
-    savedSignInUnusable: true
-  })
+  const { flowId, folder, host, finishBrowser, openSession } = await signInAgainst(
+    printed(GOOGLE_LINK),
+    { savedSignInUnusable: true }
+  )
   expect(await stateAfter(flowId, 'starting')).toMatchObject({ phase: 'waiting' })
   const token = join(folder, 'antigravity-acp', 'acp_token.json')
   await mkdir(join(folder, 'antigravity-acp'), { recursive: true })
@@ -329,4 +330,7 @@ it('fails, and drops the token, when a new server cannot use the saved sign-in',
   openSession()
   expect(await ended.promise.finally(close)).toMatchObject({ phase: 'failed' })
   expect(existsSync(token)).toBe(false)
+  // Each server's exit removes its own temp folder, so the verifier must not share the first's.
+  const temps = host.connect.mock.calls.map(([launch]) => launch.env?.TMPDIR)
+  expect(new Set(temps).size).toBe(2)
 })

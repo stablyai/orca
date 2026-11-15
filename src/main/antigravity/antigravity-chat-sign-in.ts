@@ -176,7 +176,6 @@ async function signIn(current: Flow, host: AntigravityChatSignInHost): Promise<v
     })
   // Reuse chat launch resolution without downloading a runtime.
   const launch = await prepareAcpLaunch(resolve, closed)
-  const connect = await acpPrivateTempConnect(deps, closed)
   const home = launch.env.GEMINI_HOME
   const cwd = await mkdtemp(join(tmpdir(), 'orca-antigravity-sign-in-'))
   const serverLaunch = {
@@ -184,11 +183,11 @@ async function signIn(current: Flow, host: AntigravityChatSignInHost): Promise<v
     args: launch.spec.args({ fullAccess: false, pluginDir: null }),
     cwd
   }
-  const verifying: { server?: AcpAgentConnection } = {}
-  // Wait for proven exit and session ownership before deleting files.
-  const owned = { sessionId: '', exited: false, done: false, disposed: false }
+  const liveServers = new Set<AcpAgentConnection>()
+  // Wait for every server's proven exit and session ownership before deleting files.
+  const owned = { sessionId: '', done: false, disposed: false }
   const disposeWhenGone = async (): Promise<void> => {
-    if (!owned.exited || !owned.done || owned.disposed) {
+    if (liveServers.size > 0 || !owned.done || owned.disposed) {
       return
     }
     owned.disposed = true
@@ -197,7 +196,20 @@ async function signIn(current: Flow, host: AntigravityChatSignInHost): Promise<v
       console.warn('[antigravity] sign-in session files not removed:', error)
     )
   }
-  const servers = antigravitySignInServers({ connect, home, launch: serverLaunch, signal, closed })
+  const servers = antigravitySignInServers({
+    connectServer: () => acpPrivateTempConnect(deps, closed),
+    home,
+    launch: serverLaunch,
+    signal,
+    closed,
+    spawned: (server) => {
+      liveServers.add(server)
+      server.onExit(() => {
+        liveServers.delete(server)
+        void disposeWhenGone()
+      })
+    }
+  })
   try {
     const watch = { ...spec.signIn, link: (link: string) => receiveLink(current, link) }
     await servers.run(watch, async (server) => {
@@ -215,18 +227,18 @@ async function signIn(current: Flow, host: AntigravityChatSignInHost): Promise<v
     })
     closed()
     publish(current, { phase: 'verifying' })
-    const { started, live } = await servers.startOnSavedSignIn(spec, (server) => {
-      verifying.server = server
-      server.onExit(() => {
-        owned.exited = true
-        void disposeWhenGone()
-      })
-    })
-    owned.sessionId = started.sessionId
+    const { started, live } = await servers.startOnSavedSignIn(
+      spec,
+      (sessionId) => (owned.sessionId = sessionId)
+    )
     publishModels(accountHome, started, live)
   } finally {
     owned.done = true
-    owned.exited ||= !verifying.server || verifying.server.exited
+    for (const server of liveServers) {
+      if (server.exited) {
+        liveServers.delete(server)
+      }
+    }
     await disposeWhenGone()
   }
 }
