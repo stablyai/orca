@@ -4,7 +4,7 @@ import {
   isPathInsideOrEqual,
   normalizeRuntimePathForComparison
 } from '../../../../shared/cross-platform-path'
-import { parseWslUncPath } from '../../../../shared/wsl-paths'
+import { parseWslUncPath } from '../../../../shared/file-access/wsl-paths'
 
 /** Account storage stays private even when its ownership marker has been lost. */
 export function matchesManagedCodexHomePath(
