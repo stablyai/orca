@@ -12,7 +12,7 @@ import {
   type CloudCreateGitHubEvaluation,
   type CloudCreateGitHubGate
 } from './cloud-create-github-access-model'
-import { emit, entries, subscribe } from './cloud-create-github-access-registry'
+import { emit, entries, subscribe, type Entry } from './cloud-create-github-access-registry'
 import { useAppStore } from '@/store'
 import { selectWorktreeCreationSurfaceShown } from '@/lib/workspace/creation/worktree-creation-surface'
 import { openOrcaGitHubAppInstall } from './cloud-setup-notice-actions'
