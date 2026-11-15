@@ -71,13 +71,9 @@ function getComputerScreenshotFlags(flags: Map<string, string | boolean>): {
   }
 }
 
-export function getComputerActionObserveFlags(flags: Map<string, string | boolean>): {
-  noScreenshot?: boolean
-  restoreWindow?: boolean
-  treeDiff?: boolean
-  windowId?: number
-  windowIndex?: number
-} {
+export function getComputerActionObserveFlags(
+  flags: Map<string, string | boolean>
+): ReturnType<typeof getComputerObserveFlags> & { treeDiff?: boolean } {
   return {
     ...getComputerObserveFlags(flags),
     ...(flags.has('full-tree') ? {} : { treeDiff: true })

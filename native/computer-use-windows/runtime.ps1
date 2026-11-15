@@ -1547,8 +1547,9 @@ function Get-OrcaBoundedScreenshotPayload([System.Drawing.Bitmap]$Bitmap, $Reque
 
     $tried = $null
     foreach ($candidateScale in $scales) {
-        $width = [int][Math]::Max(1, [Math]::Round($originalWidth * $candidateScale))
-        $height = [int][Math]::Max(1, [Math]::Round($originalHeight * $candidateScale))
+        # Rounds down, so a requested scale or edge is a ceiling; the epsilon keeps an exact product such as 0.5 x 200 whole.
+        $width = [int][Math]::Max(1, [Math]::Floor($originalWidth * $candidateScale + 1e-9))
+        $height = [int][Math]::Max(1, [Math]::Floor($originalHeight * $candidateScale + 1e-9))
         if ("${width}x${height}" -eq $tried) { continue }
         $tried = "${width}x${height}"
 

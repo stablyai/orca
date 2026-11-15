@@ -1373,8 +1373,7 @@ def bounded_screenshot_payload(pixbuf, request):
         requested = min(requested, request["maxEdge"] / max(original_width, original_height))
     tried = None
     for scale in screenshot_scales(requested, original_width, original_height):
-        width = max(1, round(original_width * scale))
-        height = max(1, round(original_height * scale))
+        width, height = pixel_size(original_width, scale), pixel_size(original_height, scale)
         if (width, height) == tried:
             continue
         tried = (width, height)
@@ -1390,6 +1389,11 @@ def bounded_screenshot_payload(pixbuf, request):
             "message": "screenshot exceeded the computer-use payload cap after downscaling; retry with --no-screenshot or target a smaller window",
         }
     }
+
+
+def pixel_size(length, scale):
+    """Rounds down, so a requested scale or edge is a ceiling; the epsilon keeps an exact product such as 0.5 x 200 whole."""
+    return max(1, math.floor(length * scale + 1e-9))
 
 
 def screenshot_scales(requested, original_width, original_height):

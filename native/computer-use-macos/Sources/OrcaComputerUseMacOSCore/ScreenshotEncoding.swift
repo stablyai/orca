@@ -52,6 +52,10 @@ public enum ScreenshotEncoding {
         var scale = min(requested, fallbackEdge / edge)
         var best = first
         while scale >= minScale {
+            if pixelSize(image.width, scale) == best.width && pixelSize(image.height, scale) == best.height {
+                scale *= scaleStep
+                continue
+            }
             guard let resized = encode(image, scale: scale, format: options.format) else {
                 break
             }
@@ -65,8 +69,8 @@ public enum ScreenshotEncoding {
     }
 
     private static func encode(_ image: CGImage, scale: CGFloat, format: ScreenshotFormat) -> EncodedScreenshot? {
-        let width = max(1, Int(CGFloat(image.width) * scale))
-        let height = max(1, Int(CGFloat(image.height) * scale))
+        let width = pixelSize(image.width, scale)
+        let height = pixelSize(image.height, scale)
         // Why: JPEG has no alpha, so transparent window corners would turn black without an opaque white backing.
         let source = width == image.width && height == image.height && format == .png
             ? image
@@ -81,6 +85,11 @@ public enum ScreenshotEncoding {
         CGImageDestinationAddImage(destination, source, properties as CFDictionary)
         guard CGImageDestinationFinalize(destination) else { return nil }
         return EncodedScreenshot(data: data as Data, format: format, width: width, height: height)
+    }
+
+    /// Rounds down, so a requested scale or edge is a ceiling; the epsilon keeps an exact product such as 0.5 × 200 whole.
+    private static func pixelSize(_ length: Int, _ scale: CGFloat) -> Int {
+        max(1, Int((CGFloat(length) * scale + 1e-9).rounded(.down)))
     }
 
     private static func redraw(_ image: CGImage, width: Int, height: Int, opaque: Bool) -> CGImage? {
