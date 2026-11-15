@@ -1,7 +1,7 @@
 import './worker/session-search-worker.test-fixture'
 import { existsSync } from 'node:fs'
 import { unlink } from 'node:fs/promises'
-import * as fileRemoval from '../../shared/windows-transient-lock-removal'
+import * as fileRemoval from '../../shared/file-write/windows-transient-lock-removal'
 import { join } from 'node:path'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { resetSessionParseCacheForTests } from '../ai-vault/parse-cache/session-parse-cache-store'

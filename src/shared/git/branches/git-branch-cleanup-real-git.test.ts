@@ -9,7 +9,7 @@ import {
   type GitBranchCleanupExec
 } from './git-branch-cleanup'
 import { GitCapabilityCache } from '../commands/git-capability-cache'
-import { removeTree } from '../../windows-transient-lock-removal'
+import { removeTree } from '../../file-write/windows-transient-lock-removal'
 
 const execFileAsync = promisify(execFile)
 

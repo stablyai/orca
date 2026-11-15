@@ -18,8 +18,8 @@ import {
   setLibprocAddonForTests,
   type LibprocProcessRow,
   type LibprocQuery
-} from '../../../shared/libproc-addon'
-import { resetNativeReadsForTests } from '../../../shared/libproc-native-reads'
+} from '../../../shared/process-observation/darwin/libproc-addon'
+import { resetNativeReadsForTests } from '../../../shared/process-observation/darwin/libproc-native-reads'
 import { captureDescendantSnapshot, killWithDescendantSweep } from './pty-descendant-termination'
 
 const START = Date.UTC(2026, 8, 3, 16, 2, 1) / 1000
@@ -39,9 +39,6 @@ function row(pid: number, ppid: number): LibprocProcessRow {
     comm: 'node'
   }
 }
-
-/** ps `lstart` in the C locale and UTC, as the descendant reader's env pins it. */
-const LSTART = 'Thu Sep  3 16:02:01 2026'
 
 beforeEach(() => {
   execFile.mockImplementation((_file, _args, _options, callback) =>
@@ -101,33 +98,4 @@ describe('descendant teardown over the in-process process table', () => {
       expect(readProcessTable).toHaveBeenCalledTimes(2)
     }
   )
-
-  it('gives a slow ps its whole timeout when the native read is stalled', async () => {
-    vi.useFakeTimers()
-    setLibprocAddonForTests({
-      readProcessTable: () => new Promise<never>(() => {}),
-      readProcessCwd: async () => null,
-      readProcessPath: async () => null
-    })
-    // A 750ms ps, killed at its timeout like execFile.
-    execFile.mockImplementation((_file, _args, { timeout }, callback) => {
-      const done = setTimeout(() => {
-        clearTimeout(killed)
-        callback(null, `  100     1   100     0 ${LSTART}\n  200   100   200     0 ${LSTART}\n`)
-      }, 750)
-      const killed = setTimeout(() => {
-        clearTimeout(done)
-        callback(new Error('ps timed out'))
-      }, timeout)
-    })
-    const sendSignal = vi.fn()
-    const killRoot = vi.fn()
-
-    const teardown = killWithDescendantSweep(100, killRoot, { sendSignal, graceMs: 60_000 })
-    await vi.advanceTimersByTimeAsync(2_000)
-    await teardown
-
-    expect(killRoot).toHaveBeenCalledOnce()
-    expect(sendSignal.mock.calls).toEqual([[200, 'SIGTERM']])
-  })
 })

@@ -1,7 +1,7 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { getAppEnvironment } from '../../../shared/app-environment'
-import { buildPosixStdoutFence } from '../../../shared/posix-stdout-fence'
+import { buildPosixStdoutFence } from '../../../shared/shell/launch/posix-stdout-fence'
 import { quotePosixShell } from '../../../shared/shell/launch/shell-argument-quoting'
 import { parseWslUncPath, toWindowsWslPath } from '../../../shared/file-access/wsl-paths'
 import type { CodexManagedAccount } from '../../../shared/managed-account-types'

@@ -3,7 +3,7 @@ import { createRequire } from 'node:module'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { removeTree } from '../../../../src/shared/windows-transient-lock-removal.ts'
+import { removeTree } from '../../../../src/shared/file-write/windows-transient-lock-removal.ts'
 
 const require = createRequire(import.meta.url)
 const {

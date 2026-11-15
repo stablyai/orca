@@ -2,7 +2,7 @@ import { toast } from 'sonner'
 import {
   classifyRejectedWindowsPath,
   type WindowsPathAccess
-} from '../../../../../../shared/windows-path-access'
+} from '../../../../../../shared/file-access/windows-path-access'
 import {
   normalizeExecutionHostId,
   type ExecutionHostId

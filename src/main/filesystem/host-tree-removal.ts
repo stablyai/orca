@@ -6,8 +6,8 @@ import { join, win32 } from 'node:path'
 import { lstat, readdir, rm, rmdir, unlink } from './asar-transparent-fs'
 import { isWindowsAbsolutePathLike } from '../../shared/cross-platform-path'
 import { isWslUncPath } from '../../shared/file-access/wsl-paths'
-import { stripWin32LongPathPrefix } from '../../shared/windows-path-access'
-import { removeTree } from '../../shared/windows-transient-lock-removal'
+import { stripWin32LongPathPrefix } from '../../shared/file-access/windows-path-access'
+import { removeTree } from '../../shared/file-write/windows-transient-lock-removal'
 
 /** Convert a native host filesystem path to the Win32 long-path namespace. */
 export function toHostFilesystemPath(targetPath: string): string {

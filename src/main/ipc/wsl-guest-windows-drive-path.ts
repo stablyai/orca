@@ -1,7 +1,7 @@
 // WSL-host orcad must ignore Windows CLI shims; identify mounts by type because the automount root is configurable.
 import { existsSync, readFileSync } from 'node:fs'
 import { isAbsolute } from 'node:path'
-import { resolveCliCommand } from '../../shared/node-cli-command-resolution'
+import { resolveCliCommand } from '../../shared/shell/command-resolution/node-cli-command-resolution'
 
 const WINDOWS_DRIVE_MOUNT_TYPES = new Set(['drvfs', '9p', 'virtiofs'])
 

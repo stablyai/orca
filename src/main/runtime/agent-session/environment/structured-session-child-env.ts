@@ -14,7 +14,7 @@ import {
   ORCA_SCRUB_SAFE_PANE_ENV
 } from '../../../../shared/agent-hook-listener/transport/agent-hook-scrub-safe-env'
 import { ORCA_STRUCTURED_SESSION_ENV } from '../../../../shared/agent-launch/environment/structured-session-marker'
-import { withCliRuntimeOnPath } from '../../../../shared/node-cli-command-resolution'
+import { withCliRuntimeOnPath } from '../../../../shared/shell/command-resolution/node-cli-command-resolution'
 import { prependOrcaCliDirToChildPath } from '../../../cli/launchers/orca-cli-child-path'
 import { AGENT_HOOK_RUNTIME_ENV_KEYS } from '../../../ipc/pty/host-env/spawn-env-keys'
 import { resolveStructuredWorkerIdentityForSession } from '../../orchestration/terminal-authority/structured-sessions/structured-worker-authority'

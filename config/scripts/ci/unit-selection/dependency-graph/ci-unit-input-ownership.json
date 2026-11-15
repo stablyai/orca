@@ -74,7 +74,7 @@
       "contextSha256": "747ec5af67a0b60890da900a83fa255d3b96e2fa17d9199f8e483ef5051b213c"
     },
     {
-      "file": "src/shared/node-dist-mirror.ts",
+      "file": "src/shared/node-runtime/node-dist-mirror.ts",
       "inputs": [],
       "emptyEnv": [],
       "reason": "Reviewed URL/data projection only; no indirect repository reads. The entire local source closure and dependency/runtime context are fingerprinted.",

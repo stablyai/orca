@@ -14,9 +14,12 @@ import {
   lookupProcessTableIndex,
   type ProcessTableIndex,
   type ProcessTableIndexStats
-} from '../../../shared/process-table-index'
-import { unreadableArgvName, type ProcessTableRow } from '../../../shared/process-table-snapshot'
-import { getStrictProcessTableSnapshot } from '../../../shared/process-table-snapshot-reader'
+} from '../../../shared/process-observation/tables/process-table-index'
+import {
+  unreadableArgvName,
+  type ProcessTableRow
+} from '../../../shared/process-observation/tables/process-table-snapshot'
+import { getStrictProcessTableSnapshot } from '../../../shared/process-observation/tables/process-table-snapshot-reader'
 import { resolveRemoteForegroundEvidenceFromRows } from './remote-evidence'
 
 export type BatchedForegroundProcessRequest = {

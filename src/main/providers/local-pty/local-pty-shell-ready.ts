@@ -1,5 +1,5 @@
 import { basename, win32 as pathWin32 } from 'node:path'
-import { encodePowerShellCommand } from '../../../shared/powershell-command-encoding'
+import { encodePowerShellCommand } from '../../../shared/shell/launch/powershell-command-encoding'
 import {
   getPowerShellOsc133Bootstrap,
   isPowerShellExecutableName
