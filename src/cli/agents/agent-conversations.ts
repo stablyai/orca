@@ -153,7 +153,9 @@ function formatAgentRead(result: AgentReadResult): string {
       ? `${formatEntry(entry)}\n[shortened to fit; open it in Orca to see it whole]`
       : formatEntry(entry)
   )
-  if (lines.length === 0) {
+  if (result.limited) {
+    lines.push('[Some conversation content was omitted or shortened; open it in Orca to see more.]')
+  } else if (lines.length === 0) {
     lines.push('Nothing new.')
   }
   if (result.state) {

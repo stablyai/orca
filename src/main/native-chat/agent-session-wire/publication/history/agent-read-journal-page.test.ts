@@ -172,6 +172,27 @@ it('reports the byte stop and preserves an oversized-item notice as incomplete',
   })
 })
 
+it('finds the requested entries behind non-entry root rows', async () => {
+  const f = fixture()
+  f.seedItem(message(1, 'older reply'))
+  f.seedItem(message(2, 'latest reply'))
+  for (let sequence = 3; sequence <= 12; sequence++) {
+    f.seedItem({ ...message(sequence, ''), body: { kind: 'status', text: 'working' } })
+  }
+  f.head(12)
+  expect(await f.read(1)).toEqual({
+    entries: [{ kind: 'message', role: 'assistant', text: 'latest reply' }],
+    limited: true
+  })
+  expect(await f.read(2)).toEqual({
+    entries: [
+      { kind: 'message', role: 'assistant', text: 'older reply' },
+      { kind: 'message', role: 'assistant', text: 'latest reply' }
+    ],
+    limited: false
+  })
+})
+
 it('bounds a root-only tail that produces no entries', async () => {
   const f = fixture()
   f.seedItem(message(1, 'older reply'))
@@ -180,5 +201,5 @@ it('bounds a root-only tail that produces no entries', async () => {
   }
   f.head(1_000)
   expect(await f.read(1)).toEqual({ entries: [], limited: true })
-  expect(f.counts).toEqual({ pages: 1, bodies: 3 })
+  expect(f.counts).toEqual({ pages: 1, bodies: 200 })
 })

@@ -79,6 +79,9 @@ export function createStructuredAgentSessionConversationReads(context: () => Rea
     /** Opened at rest; pending prompts wait only while the conversation can answer them. */
     agentReadPage: async (sessionId: string, limit: number) => {
       const journal = await journalOf(sessionId)
+      // Child death can publish idle before its admitted tail has reached the writer.
+      context().seal(sessionId)
+      await journal.readInOrder(() => {})
       const { deps, sessions } = context()
       const work = await hostStructuredAgentSessionCurrentWork(
         { store: deps.store, sessions },

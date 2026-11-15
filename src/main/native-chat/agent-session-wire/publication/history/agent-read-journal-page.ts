@@ -25,7 +25,7 @@ export async function readAgentJournalPage(
     {
       sessionId: request.sessionId,
       direction: 'tail',
-      limit: Math.min(AGENT_SESSION_HISTORY_MAX_LIMIT, 2 * request.limit + 1)
+      limit: AGENT_SESSION_HISTORY_MAX_LIMIT
     },
     { scope: 'own-agent' }
   )

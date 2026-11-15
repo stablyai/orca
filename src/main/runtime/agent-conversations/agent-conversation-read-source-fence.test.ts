@@ -16,7 +16,7 @@ import type { ResolvedAgentConversation } from './agent-conversation-address'
 /** The real hook server and transcript reader; a read can be held after its I/O, before it returns. */
 const io = vi.hoisted(() => {
   const state: {
-    server: null | { terminalAgentTranscriptSource: (...args: never[]) => unknown }
+    server: null | HookServerModule.AgentHookServer
     hold: null | { read: () => void; released: Promise<void> }
   } = { server: null, hold: null }
   return state
@@ -24,8 +24,15 @@ const io = vi.hoisted(() => {
 vi.mock('../../agent-hooks/server/agent-hook-server', async (load) => ({
   ...(await load<typeof HookServerModule>()),
   agentHookServer: {
-    terminalAgentTranscriptSource: (...args: never[]) =>
-      io.server!.terminalAgentTranscriptSource(...args)
+    terminalAgentTranscriptSource: (
+      ...args: Parameters<HookServerModule.AgentHookServer['terminalAgentTranscriptSource']>
+    ) => io.server!.terminalAgentTranscriptSource(...args),
+    terminalAgentPlaces: (
+      ...args: Parameters<HookServerModule.AgentHookServer['terminalAgentPlaces']>
+    ) => io.server!.terminalAgentPlaces(...args),
+    getPublicStatusSnapshotForPane: (
+      ...args: Parameters<HookServerModule.AgentHookServer['getPublicStatusSnapshotForPane']>
+    ) => io.server!.getPublicStatusSnapshotForPane(...args)
   }
 }))
 vi.mock('../orchestration/workers/transcripts/worker-transcript-read', async (load) => {

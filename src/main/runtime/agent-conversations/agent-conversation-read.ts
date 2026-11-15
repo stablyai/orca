@@ -43,11 +43,11 @@ export async function readAgentConversation(
   request: ReadRequest
 ): Promise<AgentReadResult> {
   const limit = request.limit ?? AGENT_READ_DEFAULT_LIMIT
+  // Sample first so a turn ending during history I/O cannot label an older page done.
+  const state = await agentConversationState(resolved)
   const page = await (resolved.kind === 'chat'
     ? readChat(ctx, resolved, limit)
     : readTerminalTranscript(ctx, resolved.orcaSessionId, limit))
-  // A running turn's prompt reads like a finished exchange; the state says it isn't.
-  const state = await agentConversationState(resolved)
   return state ? { ...page, state } : page
 }
 

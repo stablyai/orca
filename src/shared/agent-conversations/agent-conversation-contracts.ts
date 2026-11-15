@@ -59,7 +59,7 @@ export type AgentReadResult = {
    *  isn't open. */
   state?: AgentStatusState
   entries: AgentReadEntry[]
-  /** Older entries exist that this page did not include. */
+  /** Conversation content was omitted or an entry was shortened. */
   limited: boolean
 }
 
