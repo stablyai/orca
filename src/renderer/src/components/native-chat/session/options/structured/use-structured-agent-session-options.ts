@@ -80,7 +80,7 @@ export function useStructuredAgentSessionOptions(args: StructuredAgentSessionOpt
   )
   const acceptsTurnPicks =
     acceptsPicks && (!(args.isWorking ?? turnId !== null) || takesSendOptions || takesSelection)
-  const interactionReadyRef = useRef(acceptsTurnPicks)
+  const interactionReadyRef = useRef(acceptsPicks)
   const lockSnapshotRef = useRef(
     (snapshot: ReturnType<typeof structuredAgentSessionOptionSnapshot>) => snapshot
   )
@@ -112,7 +112,7 @@ export function useStructuredAgentSessionOptions(args: StructuredAgentSessionOpt
         : choices
   }
   useLayoutEffect(() => {
-    interactionReadyRef.current = acceptsTurnPicks
+    interactionReadyRef.current = acceptsPicks
     lockSnapshotRef.current = (snapshot) =>
       lockSnapshot(
         snapshot,
@@ -156,7 +156,7 @@ export function useStructuredAgentSessionOptions(args: StructuredAgentSessionOpt
       record: optionStateRef.current.record,
       view,
       snapshot: lockSnapshotRef.current(structuredAgentSessionOptionSnapshot(view)),
-      ready: acceptsTurnPicks && writes.current.count === 0 && interactionReadyRef.current,
+      ready: acceptsPicks && writes.current.count === 0 && interactionReadyRef.current,
       providerStarting,
       existingChat: !newLaunch || args.hasTurn === true,
       isCurrentContext,

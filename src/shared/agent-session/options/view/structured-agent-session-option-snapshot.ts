@@ -292,11 +292,16 @@ export function canSetStructuredAgentSessionOption(
   interactionReady = true,
   pending = false
 ): boolean {
-  if (!interactionReady || pending || (id === 'fastMode' && state.fastModeRestricted)) {
+  const descriptor = snapshot.find((entry) => entry.id === id)
+  if (
+    !interactionReady ||
+    pending ||
+    descriptor?.disabledReason === 'host-update-required' ||
+    (id === 'fastMode' && state.fastModeRestricted)
+  ) {
     return false
   }
   if (id === 'permissionMode' || id === 'interactionMode') {
-    const descriptor = snapshot.find((entry) => entry.id === id)
     return (
       descriptor?.settable === true &&
       descriptor.kind.type === 'select' &&
