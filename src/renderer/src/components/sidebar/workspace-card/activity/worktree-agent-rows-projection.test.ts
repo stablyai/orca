@@ -109,3 +109,33 @@ it('updates pre-hydration row ownership when global PTY and layout bindings arri
     'tab:11111111-1111-4111-8111-111111111111'
   ])
 })
+
+it('keeps an unchanged sibling row while another chat changes its preview', () => {
+  const { store, tab, entry } = setup()
+  const siblingKey = 'sibling:22222222-2222-4222-8222-222222222222'
+  store.setState({
+    tabsByWorktree: {
+      workspace: [tab, makeTab({ id: 'sibling', worktreeId: 'workspace', ptyId: null })]
+    },
+    agentStatusByPaneKey: acceptedAgentStatuses([
+      [entry.paneKey, entry],
+      [siblingKey, { ...entry, paneKey: siblingKey, prompt: 'Another chat' }]
+    ])
+  })
+  const select = createWorktreeAgentRowsSelector('workspace')
+  const before = select(store.getState())
+  const sibling = before.find((row) => row.paneKey === siblingKey)
+  expect(sibling?.entry.prompt).toBe('Another chat')
+  store.setState({
+    agentStatusByPaneKey: store
+      .getState()
+      .agentStatusByPaneKey.replace([
+        [entry.paneKey, { ...entry, lastAssistantMessage: 'New answer' }]
+      ])
+  })
+  const after = select(store.getState())
+  expect(after.find((row) => row.paneKey === entry.paneKey)?.entry.lastAssistantMessage).toBe(
+    'New answer'
+  )
+  expect(after.find((row) => row.paneKey === siblingKey)).toBe(sibling)
+})
