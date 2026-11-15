@@ -28103,7 +28103,9 @@
       "renewAbove": "Renew {{agent}} sign-in above to send"
     },
     "chatSignIn": {
-      "renewAbove": "Your {{agent}} sign-in for Orca Cloud didn’t work. Renew it above, then send your message again."
+      "renewAbove": "Your {{agent}} sign-in for Orca Cloud didn’t work. Renew it above, then send your message again.",
+      "inside": "{{agent}} needs you to sign in inside this workspace",
+      "openTerminal": "Open terminal to sign in"
     },
     "chatHold": {
       "notSetUp": "Set up {{agent}} above to start",
@@ -28686,7 +28688,7 @@
     "deviceCodeOffHint": "If OpenAI says device code sign-in is off, turn it on in ChatGPT → Settings → Security, then try again.",
     "signInInsideWorkspace": "Sign in inside each workspace instead",
     "inWorkspace": "Signs in inside each workspace",
-    "inWorkspaceDetail": "Orca doesn’t store your {{product}} sign-in. You sign in again in each new cloud workspace."
+    "inWorkspaceDetail": "Orca doesn’t store your {{product}} sign-in. You sign in again in each new cloud workspace. Team API keys aren’t used for this agent."
   },
   "vmBuildAgents": {
     "menu": {
@@ -28862,7 +28864,7 @@
     "pasteAgentTokenDetail": "Run `claude setup-token` in any terminal where {{agent}} is installed, then paste the token here. It’s saved to your Orca account, never to a sandbox.",
     "moreChoices": "More choices",
     "signInInsideWorkspace": "Sign in inside this workspace instead",
-    "signInInsideWorkspaceDetail": "Orca won’t store your sign-in. You’ll sign in again in each new workspace."
+    "signInInsideWorkspaceDetail": "Orca won’t store your sign-in. You’ll sign in again in each new workspace. Team API keys won’t be used for this agent."
   },
   "cloudSetupPage": {
     "back": "Back",

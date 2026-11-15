@@ -213,12 +213,12 @@ export async function deleteAgentSourcesForSandbox(db: D1Database, sandboxId: st
 /**
  * How each agent authenticates in this session (D10):
  * - 'account': the owner's Orca-account credential through an egress placeholder (keys for that agent dropped);
- * - 'omit':    the agent's own login in the sandbox, keys dropped: the owner signs in inside each workspace
- *              ('in-workspace'), or the kill-switch fallback (Source sign-in, provider off);
+ * - 'inside':  the owner signs in inside each workspace ('in-workspace'): keys dropped, the agent's own login;
+ * - 'omit':    kill-switch fallback (Source sign-in, provider off): keys dropped, the agent's own login in the sandbox;
  * - 'keep':    API keys as resolved (precedence), the default.
  * Source: explicit (workspace, then default), else implicit: a covering key wins, else a usable account.
  */
-export type AgentMode = 'account' | 'omit' | 'keep'
+export type AgentMode = 'account' | 'inside' | 'omit' | 'keep'
 export async function agentModesFor(
   db: D1Database,
   row: Pick<SandboxRow, 'id' | 'user_id' | 'visibility' | 'ownership_transferred_at'>,
@@ -240,7 +240,7 @@ export async function agentModesFor(
     if (!workspace[agent] && inWorkspace[agent]) {
       // Nothing of Orca's for this agent: no placeholder, no key, no egress route, so the login the person
       // makes inside the sandbox (stored in its home, kept across sleep) reaches the vendor untouched.
-      modes[agent] = 'omit'
+      modes[agent] = 'inside'
       continue
     }
     const explicit = workspace[agent] ?? defaults[agent]
