@@ -316,7 +316,7 @@ function setAgentLineageState(options: {
     reportVisibleGitHubPRRefreshCandidates: vi.fn(),
     setVisibleReviewCardWorktreeIds: mockStore.setVisibleReviewCardWorktreeIds,
     repos: [repo],
-    retainedAgentsByPaneKey: {},
+
     revealWorktreeInSidebar: vi.fn(),
     runtimePaneTitlesByTabId: {},
     runtimeAgentOrchestrationByPaneKey: {},
@@ -353,7 +353,6 @@ function setAgentLineageState(options: {
     agentSendPopoverTargetMode: null,
     acknowledgedAgentsByPaneKey: {},
     dropAgentStatus: vi.fn(),
-    dismissRetainedAgent: vi.fn(),
     sendPromptToSidebarAgentTarget: vi.fn(),
     tabsByWorktree: { parent: [makeParentTab()] },
     unifiedTabsByWorktree: {},

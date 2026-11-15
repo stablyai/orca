@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { withTestAgentSessionDatabase } from '../../../../runtime/agent-session/records/agent-session-record-store-test-harness'
+import { withTestAgentSessionDatabase } from '../../../../runtime/agent-session/records/agent-session-record-store-persistence.test-fixture'
 import type { AgentSessionOwnerProbe } from '../../../../../shared/agent-session/lifecycle/leases/agent-session-lease-adjudication'
 import {
   EMPTY_STRUCTURED_AGENT_SESSION,
