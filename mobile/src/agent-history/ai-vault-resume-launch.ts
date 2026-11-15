@@ -14,7 +14,7 @@ import {
 import { isTuiAgent } from '../../../src/shared/agent-launch/catalog/tui-agent-config'
 import type { TuiAgent } from '../../../src/shared/agent-launch/catalog/tui-agent'
 import { parseWslUncPath } from '../../../src/shared/file-access/wsl-paths'
-import { resolveWindowsShellStartupFamily } from '../../../src/shared/windows-terminal-shell'
+import { resolveWindowsShellStartupFamily } from '../../../src/shared/shell/launch/windows-terminal-shell'
 import { RESUME_RPC_TIMEOUT_MS } from './ai-vault-resume-preparation'
 import type { UnvalidatedRpcRequestPort } from '../transport/rpc/unvalidated-rpc-request-port'
 import { interpretOrThrowRefusalMessage } from '../transport/rpc/rpc-refusal-message'

@@ -1,9 +1,9 @@
 import {
   hasFeatureInteraction,
-  type FeatureInteractionId,
   type FeatureInteractionState
-} from './feature-interactions'
-import type { TelemetrySettings } from './telemetry-settings-types'
+} from './interactions/feature-interactions'
+import type { FeatureInteractionId } from './interactions/feature-interaction-catalog'
+import type { TelemetrySettings } from '../telemetry/telemetry-settings-types'
 
 export type FeatureTipId =
   | 'chat-ui-here'

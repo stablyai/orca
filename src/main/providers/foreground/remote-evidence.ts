@@ -4,7 +4,7 @@ import type {
   PosixFence,
   RemoteForegroundEvidence,
   WindowsFence
-} from '../../../shared/foreground-process-evidence'
+} from '../../../shared/terminal/pty/foreground/foreground-process-evidence'
 import { buildProcessTableIndex, type ProcessTableIndex } from '../../../shared/process-table-index'
 import type { ProcessTableRow } from '../../../shared/process-table-snapshot'
 import type {

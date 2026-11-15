@@ -1,7 +1,7 @@
 import { z } from 'zod'
 
 import { eventSchemas } from './telemetry-event-registry'
-import type { cohortSchema } from './telemetry-onboarding-foundation-schemas'
+import type { cohortSchema } from './schemas/telemetry-onboarding-foundation-schemas'
 
 export type EventMap = { [N in keyof typeof eventSchemas]: z.infer<(typeof eventSchemas)[N]> }
 export type EventName = keyof EventMap

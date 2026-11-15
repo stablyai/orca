@@ -103,7 +103,7 @@
       "emptyEnv": [],
       "reason": "Reviewed URL/data projection only; no indirect repository reads. The entire local source closure and dependency/runtime context are fingerprinted.",
       "contextSha256": "3c069468bcb4a681493c94dad98bc2e4d2d56d0cbf641e797684fa307922d9e1",
-      "sourceClosureSha256": "621e920d69528ad4e9d3976ef3ca4821a162b8130830ca0e182711ac0e3b6aa2"
+      "sourceClosureSha256": "38b77f62aefd7dd361825a98cf2fa9cfac1924c72d9e2a5f21d427e54381c04e"
     },
     {
       "file": "src/main/daemon/emulation/testing/serialize-grid-transcript-replay.test.ts",

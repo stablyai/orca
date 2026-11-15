@@ -43,7 +43,7 @@ import {
   CLAUDE_INJECTED_CONFIG_DIR_ENV,
   CLAUDE_PROFILE_POINTER_ENV
 } from '../../../shared/claude-profile-routing'
-import { WINDOWS_GIT_BASH_SHELL } from '../../../shared/windows-terminal-shell'
+import { WINDOWS_GIT_BASH_SHELL } from '../../../shared/shell/launch/windows-terminal-shell'
 import { getShellLaunchConfig, resolvePtyShellPath } from '../shell-readiness/shell-ready'
 import { resolveWslSessionContext } from './wsl-session-context'
 import { finalizeDaemonPtyEnvironment, rescrubDaemonPtyEnvironment } from './spawn-environment'

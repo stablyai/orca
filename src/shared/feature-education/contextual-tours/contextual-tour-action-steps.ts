@@ -1,4 +1,7 @@
-import { hasFeatureInteraction, type FeatureInteractionState } from './feature-interactions'
+import {
+  hasFeatureInteraction,
+  type FeatureInteractionState
+} from '../interactions/feature-interactions'
 import type { ContextualTour, ContextualTourStep } from './contextual-tours'
 
 // A step that waits for a user action is done only once that action succeeded, never when it is shown.

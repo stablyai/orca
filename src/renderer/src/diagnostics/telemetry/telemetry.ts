@@ -1,9 +1,12 @@
 // Typed renderer-side wrapper around the preload bridge: gives call sites EventMap type safety, while main stays the single validator.
 // Security invariant: the renderer bundles no PostHog SDK — the sole client lives in main, off the renderer's attack surface.
 
-import type { EventName, EventProps } from '../../../../shared/telemetry-events'
-import type { TelemetryConsentState } from '../../../../shared/telemetry-consent-types'
-import { utcDayIndex } from '../../../../shared/telemetry-day'
+import type {
+  EventName,
+  EventProps
+} from '../../../../shared/telemetry/telemetry-event-classification'
+import type { TelemetryConsentState } from '../../../../shared/telemetry/telemetry-consent-types'
+import { utcDayIndex } from '../../../../shared/telemetry/telemetry-day'
 
 import '../../../../shared/agent-status/identity/agent-kind'
 

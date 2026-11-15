@@ -1,10 +1,10 @@
 /** Narrow raw connect/setup codes to fixed enums; unknowns become other, never host/user strings. */
-import type { EventProps } from '../../../shared/telemetry-event-classification'
+import type { EventProps } from '../../../shared/telemetry/telemetry-event-classification'
 import {
   SSH_HOST_SERVER_FAILURE_VALUES,
   SSH_HOST_SERVER_REASON_VALUES,
   SSH_HOST_SERVER_REFUSAL_VALUES
-} from '../../../shared/telemetry-ssh-host-server-event-schemas'
+} from '../../../shared/telemetry/schemas/telemetry-ssh-host-server-event-schemas'
 import { track } from '../../telemetry/client'
 import type { HostServerConnectEvent } from './ssh-host-server-connect-events'
 import type { SshHostPlatformFacts } from '../remote-host/ssh-host-platform-memo'

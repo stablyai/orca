@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { isQualifiedPluginKey } from './plugins/frames/plugin-tab-key'
+import { isQualifiedPluginKey } from '../../plugins/frames/plugin-tab-key'
 
 // Why only these two: both catalogs are public, so a key from them names nothing private.
 // Private catalogs, git URLs, local folders and dev plugins never report.

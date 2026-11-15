@@ -1,9 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import {
-  formatCrashReportText,
-  sanitizeCrashReportString,
-  type CrashReportRecord
-} from './crash-reporting'
+import { formatCrashReportText, type CrashReportRecord } from './crash-reporting'
+import { sanitizeCrashReportString } from './crash-report-redaction'
 
 function notesReport(overrides: Partial<CrashReportRecord> = {}): CrashReportRecord {
   return {

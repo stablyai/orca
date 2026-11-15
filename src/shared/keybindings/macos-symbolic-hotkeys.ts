@@ -1,11 +1,7 @@
-import {
-  getEffectiveKeybindingsForDefinition,
-  getKeybindingConflictIdentity,
-  isDigitIndexActionId,
-  type KeybindingActionId,
-  type KeybindingDefinition,
-  type KeybindingOverrides
-} from './keybindings'
+import { getEffectiveKeybindingsForDefinition } from './effective'
+import { getKeybindingConflictIdentity } from './matching-key'
+import { isDigitIndexActionId } from './definitions'
+import type { KeybindingActionId, KeybindingDefinition, KeybindingOverrides } from './types'
 
 export type MacDigitRowCode =
   | 'Digit1'

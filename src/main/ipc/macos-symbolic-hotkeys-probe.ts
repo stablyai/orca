@@ -2,7 +2,7 @@ import { ipcMain } from 'electron'
 import {
   capturedDigitRowChordsFromSymbolicHotkeysJson,
   type MacCapturedDigitRowChord
-} from '../../shared/macos-symbolic-hotkeys'
+} from '../../shared/keybindings/macos-symbolic-hotkeys'
 
 // Export live preferences; the plist may be stale.
 const MAC_SYMBOLIC_HOTKEYS_JSON_COMMAND = [

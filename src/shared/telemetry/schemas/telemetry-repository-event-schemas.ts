@@ -8,7 +8,7 @@ import {
   NESTED_REPO_TELEMETRY_RUNTIME_KINDS,
   NESTED_REPO_TELEMETRY_SURFACES,
   bucketNestedRepoTelemetryCount
-} from './nested-repo-telemetry'
+} from '../nested-repo-telemetry'
 import { nthRepoAddedSchema } from './telemetry-app-event-schemas'
 import { workspaceCreateFailedProperties } from './telemetry-workspace-create-schemas'
 import {

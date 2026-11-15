@@ -2,7 +2,7 @@ import { arch as osArch, platform as osPlatform, release as osRelease } from 'no
 import type * as PostHogSdk from 'posthog-node'
 import { getAppEnvironment } from '../../shared/app-environment'
 import { getMainHttpClient } from '../network/http-client'
-import type { CommonProps, EventName } from '../../shared/telemetry-events'
+import type { CommonProps, EventName } from '../../shared/telemetry/telemetry-event-classification'
 import type { ConsentState } from './consent'
 
 const OPT_OUT_CAPTURE_ENQUEUE_TIMEOUT_MS = 1_000

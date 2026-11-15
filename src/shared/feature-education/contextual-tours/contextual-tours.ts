@@ -1,5 +1,5 @@
-import { BROWSER_EXTENSION_DISCOVERY_TOUR } from './browser/extensions/browser-extension-discovery-tour'
-import type { FeatureInteractionId } from './feature-interactions'
+import { BROWSER_EXTENSION_DISCOVERY_TOUR } from '../../browser/extensions/browser-extension-discovery-tour'
+import type { FeatureInteractionId } from '../interactions/feature-interaction-catalog'
 
 export type ContextualTourId =
   | 'workspace-board'

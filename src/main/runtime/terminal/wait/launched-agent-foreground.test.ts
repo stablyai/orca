@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { RemoteForegroundEvidence } from '../../../../shared/foreground-process-evidence'
+import type { RemoteForegroundEvidence } from '../../../../shared/terminal/pty/foreground/foreground-process-evidence'
 import type { ProcessTableRow } from '../../../../shared/process-table-snapshot'
 import type * as TerminalForegroundGroup from '../../../pty/process-retirement/terminal-process-rows'
 
