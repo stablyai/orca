@@ -6,10 +6,12 @@ import {
 import {
   browserColorProbe,
   HOST_PILL_OUTLINE_MIX_TOKEN,
-  hostPillOutlineMix,
+  hostPillOutlineMix
+} from './plugin-theme-tokens'
+import {
   safePluginThemeTokens,
   type ColorProbe
-} from './plugin-theme-tokens'
+} from '../../../../shared/theme/theme-contrast-engine'
 import { CHAT_SELECTION_MIX_TOKEN, chatSelectionMix } from './chat-selection-mix'
 import { noticeSurfaceTokens } from './notice-surface-tokens'
 

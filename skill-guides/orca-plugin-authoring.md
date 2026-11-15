@@ -82,7 +82,9 @@ with `terminal:send` can.
 ## Ship
 
 1. `ORCA plugin validate <dir> --json` until it exits `0`, and show the user
-   `ORCA plugin inspect <dir> --json`: what it contributes and the access it asks for.
+   `ORCA plugin inspect <dir> --json`: what it contributes and the access it asks for. For an app
+   theme, also clear its `contrast` warnings: each is a color Orca refuses to paint (it keeps its
+   own), and `--strict` turns them into errors.
 2. Publish only when the user asks; it is public and uses their GitHub identity. Commit and push to
    the repository that will own it, set `version`, tag `v<version>`, add the `orca-plugin` topic,
    and for a catalog paste what `ORCA plugin release-entry <dir> --json` prints. The Git and `gh`

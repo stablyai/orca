@@ -18,7 +18,11 @@ import type {
   ThemeStudioResolvedMode,
   ThemeStudioTokenSource
 } from '../../../../shared/theme-studio/theme-studio-protocol'
-import { browserColorProbe, paintedThemeColors, safePluginThemeTokens } from './plugin-theme-tokens'
+import { browserColorProbe } from './plugin-theme-tokens'
+import {
+  paintedThemeColors,
+  safePluginThemeTokens
+} from '../../../../shared/theme/theme-contrast-engine'
 import { synthesizeTerminalAppTheme } from './terminal-app-theme'
 import { themeBuiltInTokens } from './theme-built-in-tokens'
 

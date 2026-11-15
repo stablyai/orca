@@ -26,7 +26,13 @@ export type Mutation = {
   skipped?: Partial<Record<ThemeStudioMode, string[]>>
   autoFixed?: number
   report: ThemeStudioReport | null
-  paint?: { status: string; mode?: ThemeStudioMode; dropped: string[]; editor?: string }
+  paint?: {
+    status: string
+    mode?: ThemeStudioMode
+    dropped: string[]
+    editor?: string
+    predicted?: Partial<Record<ThemeStudioMode, string[]>>
+  }
 }
 
 export function print(ctx: HandlerContext, result: unknown, text: string): void {
@@ -149,11 +155,22 @@ function formatMutation(result: Mutation): string {
     ...(result.autoFixed ? [`Fixed ${result.autoFixed} contrast issue(s) in the same step.`] : []),
     ...(result.paint
       ? [
-          `Paint: ${result.paint.status}${result.paint.mode ? ` (${result.paint.mode})` : ''}${result.paint.dropped.length ? `; left unpainted: ${result.paint.dropped.join(', ')}` : ''}${result.paint.editor === 'pinned' ? '; the editor keeps its own theme' : ''}`
+          `Paint: ${result.paint.status}${result.paint.mode ? ` (${result.paint.mode})` : ''}${result.paint.dropped.length ? `; left unpainted: ${result.paint.dropped.join(', ')}` : ''}${result.paint.editor === 'pinned' ? '; the editor keeps its own theme' : ''}`,
+          ...predictedLines(result.paint)
         ]
       : []),
     ...formatReport(result.report)
   ].join('\n')
+}
+
+/** Without a paint to read, what the contrast gate is expected to leave unpainted per mode. */
+function predictedLines(paint: NonNullable<Mutation['paint']>): string[] {
+  if (paint.status === 'painted' || !paint.predicted) {
+    return []
+  }
+  return Object.entries(paint.predicted)
+    .filter(([, tokens]) => tokens.length > 0)
+    .map(([mode, tokens]) => `  expected unpainted in ${mode}: ${tokens.join(', ')}`)
 }
 
 /** Who is asking and the revision they read, sent with every change. */

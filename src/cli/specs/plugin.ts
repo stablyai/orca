@@ -82,15 +82,15 @@ export const PLUGIN_AUTHORING_COMMAND_SPECS: CommandSpec[] = [
   {
     path: ['plugin', 'validate'],
     summary: 'Check a plugin folder, manifest or catalog the way Orca will load it',
-    usage: 'orca plugin validate <dir|orca-plugin.json|orca-catalog.json> [--json]',
-    allowedFlags: [...LOCAL_COMMAND_FLAGS, 'path'],
+    usage: 'orca plugin validate <dir|orca-plugin.json|orca-catalog.json> [--strict] [--json]',
+    allowedFlags: [...LOCAL_COMMAND_FLAGS, 'path', 'strict'],
     positionalArgs: ['path'],
     notes: [
       'Runs the strict checks of `pnpm validate:plugin`: manifest, limits, execution profile, every theme, icon, syntax and translation file, and every file the manifest names.',
-      'Offline; never runs plugin code. The result says whether loading needs --approve and what it would grant.',
+      "Offline; never runs plugin code. Says whether loading needs --approve and what it grants. Theme colors Orca's contrast gate would refuse are warnings, or errors with --strict.",
       EXIT_CODES_NOTE
     ],
-    examples: ['orca plugin validate .', 'orca plugin validate ./dusk-theme --json']
+    examples: ['orca plugin validate .', 'orca plugin validate ./dusk-theme --strict --json']
   },
   {
     path: ['plugin', 'inspect'],

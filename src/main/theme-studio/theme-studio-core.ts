@@ -22,6 +22,7 @@ import {
   type StartedDraft
 } from './theme-studio-draft-sources'
 import { fixPatch, paintOutcome, type ThemeStudioPaint } from './theme-studio-fixes'
+import { checkThemeStudioPrediction, predictThemeStudioDrops } from './theme-studio-prediction'
 import type { ThemeStudioSavedThemes } from './theme-studio-saved'
 
 export const REPORT_TIMEOUT_MS = 2_500
@@ -121,14 +122,18 @@ export function createThemeStudioCore(deps: ThemeStudioServiceDeps) {
     extra: Partial<ThemeStudioMutation> = {}
   ): Promise<ThemeStudioMutation> {
     const revision = session.currentRevision
+    // Why before waiting: the prediction is of this revision, and later edits may land meanwhile.
+    const predicted = predictThemeStudioDrops(session.draft)
     const report = await session.waitForReport(REPORT_TIMEOUT_MS)
     const modes = extra.changed ? changedModes(extra.changed) : (session.status().modes ?? [])
+    const paint = paintOutcome(report, revision, modes, deps.window() !== null)
+    checkThemeStudioPrediction(paint, predicted)
     return {
       ...session.status(),
       label,
       ...extra,
       report,
-      paint: paintOutcome(report, revision, modes, deps.window() !== null)
+      paint: { ...paint, predicted }
     }
   }
 

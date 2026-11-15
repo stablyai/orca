@@ -8,7 +8,7 @@
 - `ORCA plugin types <dir> [--json]`: Write the TypeScript typings for Orca plugins into a plugin folder
 - `ORCA plugin test [dir] [--json]`: Run a plugin's own tests on this machine, unsandboxed: only for code you trust
 - `ORCA plugin check [dir] [--json]`: Validate a plugin, render each components panel once on this machine (unsandboxed: only for code you trust), and statically check each custom editor
-- `ORCA plugin validate <dir|orca-plugin.json|orca-catalog.json> [--json]`: Check a plugin folder, manifest or catalog the way Orca will load it
+- `ORCA plugin validate <dir|orca-plugin.json|orca-catalog.json> [--strict] [--json]`: Check a plugin folder, manifest or catalog the way Orca will load it
 - `ORCA plugin inspect <dir> [--json]`: Show what a plugin folder contributes, the access it asks for, and its content hash
 - `ORCA plugin release-entry <dir> [--json]`: Print the catalog release entry for a plugin folder's committed HEAD
 - `ORCA plugin list [--json]`: List plugins on the Orca host with their status and access level

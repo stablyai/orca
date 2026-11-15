@@ -1,4 +1,4 @@
-// Which theme colors must stay readable together; plugin-theme-tokens.ts runs the checks.
+// Which theme colors must stay readable together; theme-contrast-engine.ts runs the checks.
 
 export type ContrastRule = {
   surface: string

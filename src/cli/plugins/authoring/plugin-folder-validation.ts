@@ -27,6 +27,11 @@ import {
   qualifiedPluginKey,
   type PluginManifest
 } from '../../../shared/plugins/manifest/plugin-manifest'
+import {
+  pluginThemeContrastFindings,
+  pluginThemeContrastMessages,
+  type PluginThemeContrastFinding
+} from '../../../shared/plugins/authoring/plugin-theme-contrast-findings'
 
 export type PluginFolderSummary = {
   pluginKey: string
@@ -45,7 +50,14 @@ export type PluginValidationReport = {
   errors: string[]
   /** Handled safely at load (e.g. protected language-pack copy); never makes the file invalid. */
   warnings?: string[]
+  /** Theme colors Orca's contrast gate will not paint; errors under `strict`, else warnings. */
+  contrast?: PluginThemeContrastFinding[]
   plugin?: PluginFolderSummary
+}
+
+export type PluginValidationOptions = {
+  /** Contrast findings fail validation instead of warning. */
+  strict?: boolean
 }
 
 function manifestTextReader(root: string) {
@@ -95,7 +107,10 @@ async function contentErrors(root: string, manifest: PluginManifest): Promise<st
 }
 
 /** The checks `pnpm validate:plugin` runs, plus every file Orca reads at load. Offline; never runs plugin code. */
-export async function validatePluginTarget(target: string): Promise<PluginValidationReport> {
+export async function validatePluginTarget(
+  target: string,
+  options: PluginValidationOptions = {}
+): Promise<PluginValidationReport> {
   const file = resolveTargetFile(target)
   const root = dirname(file)
   const name = basename(file)
@@ -115,6 +130,8 @@ export async function validatePluginTarget(target: string): Promise<PluginValida
   const { manifest } = parsed
   errors.push(...(await contentErrors(root, manifest)))
   const warnings = strictPluginArtifactWarnings(manifest, manifestTextReader(root))
+  const contrast = pluginThemeContrastFindings(manifest, manifestTextReader(root))
+  ;(options.strict ? errors : warnings).push(...pluginThemeContrastMessages(contrast))
   return {
     path: root,
     file,
@@ -122,6 +139,7 @@ export async function validatePluginTarget(target: string): Promise<PluginValida
     valid: errors.length === 0,
     errors,
     ...(warnings.length > 0 ? { warnings } : {}),
+    ...(contrast.length > 0 ? { contrast } : {}),
     plugin: {
       // Why derived: a folder loads under its declared publisher, else `local`, like dev discovery.
       pluginKey: qualifiedPluginKey(

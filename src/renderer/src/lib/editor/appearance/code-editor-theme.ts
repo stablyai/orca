@@ -6,7 +6,7 @@ import type { AppThemePaint } from '../../../app-shell/appearance/document-theme
 import {
   safePluginThemeTokens,
   type ColorProbe
-} from '../../../app-shell/appearance/plugin-theme-tokens'
+} from '../../../../../shared/theme/theme-contrast-engine'
 
 type ThemeBase = 'light' | 'dark'
 
