@@ -57,6 +57,8 @@ class WorkerThreadChildStdin extends EventEmitter {
 /** Main-thread stand-in for a piped ChildProcess whose real process lives on the worker. */
 export class WorkerThreadChildProcess extends EventEmitter {
   ownedGroupStopping = false
+  ownedGroupTerminated = false
+  closed = false
   pid: number | undefined = undefined
   exitCode: number | null = null
   signalCode: NodeJS.Signals | null = null
@@ -87,6 +89,7 @@ export class WorkerThreadChildProcess extends EventEmitter {
   receive(event: WorkerThreadChildEvent): void {
     switch (event.type) {
       case 'group-terminated':
+        this.ownedGroupTerminated = true
         this.emit('group-terminated')
         return
       case 'spawn':
@@ -119,6 +122,7 @@ export class WorkerThreadChildProcess extends EventEmitter {
         this.emit('exit', event.code, event.signal)
         return
       case 'close':
+        this.closed = true
         this.emit('close', event.code, event.signal)
     }
   }
@@ -196,9 +200,8 @@ export class WorkerThreadChildProcessHost {
       this.post({ type: 'release', id: event.id })
     }
     if (
-      event.type === 'group-terminated' ||
       event.type === 'spawn-error' ||
-      (event.type === 'close' && !child.ownedGroupStopping)
+      (child.closed && (!child.ownedGroupStopping || child.ownedGroupTerminated))
     ) {
       this.forget(event.id)
     }

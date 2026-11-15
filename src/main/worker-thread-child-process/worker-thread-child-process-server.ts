@@ -33,6 +33,7 @@ export function serveWorkerThreadChildProcesses(port: WorkerThreadChildPort): vo
       group?: ReturnType<typeof createPosixGroupTermination>
       stopping: boolean
       closed: boolean
+      groupTerminated: boolean
     }
   >()
 
@@ -48,11 +49,15 @@ export function serveWorkerThreadChildProcesses(port: WorkerThreadChildPort): vo
       child,
       pendingOutputBytes: 0,
       stopping: false,
-      closed: false
+      closed: false,
+      groupTerminated: false
     }
     if (spec.terminationBarrier && process.platform !== 'win32') {
       state.group = createPosixGroupTermination(child, () => {
-        children.delete(id)
+        state.groupTerminated = true
+        if (state.closed) {
+          children.delete(id)
+        }
         port.postMessage({ type: 'group-terminated', id })
       })
     }
@@ -81,7 +86,7 @@ export function serveWorkerThreadChildProcesses(port: WorkerThreadChildPort): vo
     child.on('exit', (code, signal) => port.postMessage({ type: 'exit', id, code, signal }))
     child.on('close', (code, signal) => {
       state.closed = true
-      if (!state.group) {
+      if (!state.group || state.groupTerminated) {
         children.delete(id)
       }
       port.postMessage({ type: 'close', id, code, signal })
