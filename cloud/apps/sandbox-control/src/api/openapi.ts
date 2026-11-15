@@ -474,7 +474,7 @@ export const OPERATIONS: Record<string, Record<string, Op>> = {
       scope: 'messages:write',
       summary: 'Send a message to an agent',
       description: 'Queues the message and returns 202 at once. A sleeping workspace is woken first. Without `session` a new agent session starts with the text as its prompt; with `session` the text is typed into that session. Poll the message for `delivered`.',
-      params: [WS],
+      params: [WS, { name: 'Idempotency-Key', in: 'header', description: 'Optional, 8-128 chars. A retry with the same key and body within 24 h returns the first message (header `idempotent-replayed: true`) instead of sending it again.', schema: { type: 'string' } }],
       body: obj(
         {
           text: { type: 'string', maxLength: 32000 },
@@ -498,7 +498,7 @@ export const OPERATIONS: Record<string, Record<string, Op>> = {
       summary: 'Start a new agent session (a new chat)',
       description:
         'Starts another agent session in the workspace, waking it first if it sleeps, and returns its handle once the agent is up. Optional: `model` and `effort` (see GET /v1/models; a known model with an effort it does not take answers 400), `name`, and a first `message` with `attachments`. Without `message` the agent waits for send_message.',
-      params: [WS],
+      params: [WS, { name: 'Idempotency-Key', in: 'header', description: 'Optional, 8-128 chars. A retry with the same key and body within 24 h returns the first session (header `idempotent-replayed: true`) instead of starting another agent.', schema: { type: 'string' } }],
       body: obj({
         agent: { type: 'string', enum: [...AGENTS], default: 'claude' },
         model: { type: 'string' },

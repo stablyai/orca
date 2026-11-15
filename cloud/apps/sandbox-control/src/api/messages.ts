@@ -5,6 +5,7 @@ import { getSandbox } from '../store'
 import { withSenderEnvelope, parseSenderEnvelope } from '../../../../../src/shared/cloud-workspaces/sender-envelope'
 import { memberNamesFor } from '../member-names'
 import { randomId } from './keys'
+import { CommandOutcomeError } from '../command-once'
 import { launchAgent, sendToSession, VmAgentError, type AgentId } from './vm-agent'
 import type { WorkspaceRow } from './workspaces'
 
@@ -141,16 +142,28 @@ export async function deliverMessage(life: LifecycleDeps, message: MessageRow): 
     const sessionId = row.session_id!
     const text = await agentText(life.db, row, message.sent_by, message.body)
     let handle: string
+    // One ledger id per message: a retry (this attempt's own, or the cron's after a lost answer)
+    // replays the first delivery's result on the VM instead of typing the message again.
+    const onceId = `msg-${message.id}`
     if (message.session_handle) {
-      await sendToSession(life.provider, sessionId, message.session_handle, text)
+      await sendToSession(life.provider, sessionId, message.session_handle, text, { onceId })
       handle = message.session_handle
     } else {
-      handle = await launchAgent(life.provider, sessionId, message.agent, text)
+      handle = await launchAgent(life.provider, sessionId, message.agent, text, { onceId })
     }
     await settle(life.db, message.id, attempt, { status: 'delivered', result_handle: handle, error: null }, life.now())
   } catch (error) {
-    const code = error instanceof VmAgentError || error instanceof LifecycleError ? error.code : 'delivery_failed'
-    const permanent = code === 'workspace_gone' || code === 'terminal_not_found' || code === 'selector_not_found' || attempt >= MAX_ATTEMPTS
+    const code =
+      error instanceof VmAgentError || error instanceof LifecycleError
+        ? error.code
+        : error instanceof CommandOutcomeError
+          ? error.code === 'command_outcome_unknown'
+            ? 'delivery_outcome_unknown'
+            : 'delivery_in_progress'
+          : 'delivery_failed'
+    // An unknown outcome is never re-sent blindly (the caller checks the session); one still in
+    // progress is retried, and that retry replays the first run's result.
+    const permanent = code === 'delivery_outcome_unknown' || code === 'workspace_gone' || code === 'terminal_not_found' || code === 'selector_not_found' || attempt >= MAX_ATTEMPTS
     // Codes only: never the provider body or the message text.
     console.log(JSON.stringify({ event: 'message_delivery_failed', messageId: message.id, code, permanent }))
     await settle(life.db, message.id, attempt, { status: permanent ? 'failed' : 'queued', error: code }, life.now())

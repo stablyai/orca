@@ -13,7 +13,7 @@ import { readIdempotencyKey, withIdempotency } from './idempotency'
 import { allowed, authorize, canSee, isOrgAdmin, isWorkspaceOwner } from './access'
 import { ApiError, actorOf, authenticateApi, isAdmin, requireAdmin, requireScope, scopesForRole, type ApiCaller } from './caller'
 import { auditCaller, auditView, consumeRate, listAudit, rateHeaders, RateLimitedError, type RateLimit } from './audit'
-import { API_SCOPES, ADMIN_SCOPES, apiKeyView, getApiKey, listApiKeys, mintApiKey, revokeApiKey, type ApiScope } from './keys'
+import { API_SCOPES, ADMIN_SCOPES, apiKeyView, getApiKey, listApiKeys, mintApiKey, revokeApiKey, sha256Hex, type ApiScope } from './keys'
 import { agentText, deliverMessage, getMessage, listMessages, MAX_MESSAGE_CHARS, messageView, queueMessage } from './messages'
 import { getAccountSettings, putAccountSettings } from './settings'
 import { interruptSession, launchAgent, listSessions, readSession, renameSession, VmAgentError } from './vm-agent'
@@ -562,7 +562,13 @@ async function route(request: Request, url: URL, caller: ApiCaller, ctx: ApiCont
         // A new chat: start another agent session in this workspace (optionally with a first prompt).
         requireScope(caller, 'messages:write')
         authorize(caller, row, 'open')
-        const body = parse(CreateSessionBody, await ctx.readJson())
+        const idempotencyKey = readIdempotencyKey(request)
+        const raw = await ctx.readJson()
+        const body = parse(CreateSessionBody, raw)
+        // A retried create with the same Idempotency-Key replays the first answer; one that takes over a
+        // died attempt replays the first launch on the VM (command-once.ts) instead of starting a second agent.
+        const onceId = idempotencyKey ? `ses-${(await sha256Hex(`${caller.accountId}|${caller.userId}|${row.id}|${idempotencyKey}`)).slice(0, 40)}` : undefined
+        return withIdempotency(ctx.db, { accountId: caller.accountId, scope: `workspace.session.create:${caller.userId}:${row.id}`, key: idempotencyKey, body: raw, now }, async () => {
         const agent = body.agent ?? 'claude'
         if (body.model && body.effort) {
           const efforts = knownEfforts(agent, body.model)
@@ -578,7 +584,7 @@ async function route(request: Request, url: URL, caller: ApiCaller, ctx: ApiCont
         const sessionId = await runningSession()
         // A teammate's first prompt names its sender, exactly like a message (deliverMessage).
         const prompt = body.message ? await agentText(ctx.db, row, caller.userId, withAttachmentPaths(body.message, attachments)) : null
-        const handle = await launchAgent(life().provider, sessionId, agent, prompt, { model: body.model, effort: body.effort })
+        const handle = await launchAgent(life().provider, sessionId, agent, prompt, { model: body.model, effort: body.effort, onceId })
         if (body.name) {
           await renameSession(life().provider, sessionId, handle, body.name)
         }
@@ -588,7 +594,8 @@ async function route(request: Request, url: URL, caller: ApiCaller, ctx: ApiCont
           { action: 'workspace.session.create', targetType: 'workspace', targetId: row.id, detail: { handle, agent, model: body.model ?? null, prompt: Boolean(prompt), attachments: attachments.length, ms: Math.round(performance.now() - started) } },
           ctx.now()
         )
-        return json({ session: { handle, workspaceId: row.id, agent, model: body.model ?? null, effort: body.effort ?? null, name: body.name ?? null } }, 201)
+        return { status: 201, body: { session: { handle, workspaceId: row.id, agent, model: body.model ?? null, effort: body.effort ?? null, name: body.name ?? null } } }
+        })
       }
       if (sub === 'sessions' && subId && parts[4] && method === 'POST') {
         requireScope(caller, 'messages:write')
@@ -679,15 +686,25 @@ async function route(request: Request, url: URL, caller: ApiCaller, ctx: ApiCont
         requireScope(caller, 'messages:write')
         authorize(caller, row, 'open')
         const life = requireLife(ctx)
-        await consumeRate(ctx.db, messageBucket(caller), MESSAGES_PER_MINUTE, now)
-        const body = parse(MessageBody, await ctx.readJson())
-        const attachments = await resolveAttachments(ctx.db, row.id, body.attachments ?? [])
-        const text = withAttachmentPaths(body.text, attachments)
-        const queued = await queueMessage(ctx.db, { workspace: row, sentBy: caller.userId, agent: body.agent ?? 'claude', text, session: body.session }, now)
-        await auditCaller(ctx.db, caller, { action: 'workspace.message', targetType: 'workspace', targetId: row.id, detail: { messageId: queued.id, chars: body.text.length, continues: Boolean(body.session), attachments: attachments.length } }, now)
-        // Queued now, delivered in the background (waking the VM if it sleeps); poll the message.
-        ctx.waitUntil(deliverMessage(life, queued))
-        return json({ message: messageView(queued) }, 202, { location: `/v1/workspaces/${row.id}/messages/${queued.id}` })
+        const idempotencyKey = readIdempotencyKey(request)
+        const raw = await ctx.readJson()
+        const body = parse(MessageBody, raw)
+        // A retried POST with the same Idempotency-Key gets the first message back, never a second one.
+        const answer = await withIdempotency(ctx.db, { accountId: caller.accountId, scope: `workspace.message:${caller.userId}:${row.id}`, key: idempotencyKey, body: raw, now }, async () => {
+          await consumeRate(ctx.db, messageBucket(caller), MESSAGES_PER_MINUTE, now)
+          const attachments = await resolveAttachments(ctx.db, row.id, body.attachments ?? [])
+          const text = withAttachmentPaths(body.text, attachments)
+          const queued = await queueMessage(ctx.db, { workspace: row, sentBy: caller.userId, agent: body.agent ?? 'claude', text, session: body.session }, now)
+          await auditCaller(ctx.db, caller, { action: 'workspace.message', targetType: 'workspace', targetId: row.id, detail: { messageId: queued.id, chars: body.text.length, continues: Boolean(body.session), attachments: attachments.length } }, now)
+          // Queued now, delivered in the background (waking the VM if it sleeps); poll the message.
+          ctx.waitUntil(deliverMessage(life, queued))
+          return { status: 202, body: { message: messageView(queued) } }
+        })
+        const view = ((await answer.clone().json()) as { message?: { id?: string } }).message
+        if (view?.id) {
+          answer.headers.set('location', `/v1/workspaces/${row.id}/messages/${view.id}`)
+        }
+        return answer
       }
     }
   }
