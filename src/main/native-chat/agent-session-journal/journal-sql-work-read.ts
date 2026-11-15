@@ -158,7 +158,7 @@ export function readJournalSqlWorkInput(
       operation.now,
       operation.facts,
       operation.allowSteer,
-      eligibility()
+      { resolved: eligibility() }
     )
     return { kind: 'input', state, queue: { card: pick.kind === 'selected' ? pick.card : null } }
   } catch (error) {

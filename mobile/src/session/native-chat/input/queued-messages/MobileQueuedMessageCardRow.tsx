@@ -9,7 +9,10 @@ import {
   Send
 } from 'lucide-react-native'
 import { colors, pressedStyle } from '../../../../theme/mobile-theme'
-import { queuedMessageCardSteers } from '../../../../../../src/shared/agent-session/view/structured-agent-session-queued-cards'
+import {
+  queuedMessageCardCanSend,
+  queuedMessageCardSteers
+} from '../../../../../../src/shared/agent-session/view/structured-agent-session-queued-cards'
 import { useMobileColorScheme } from '../../../../theme/use-mobile-color-scheme'
 import type { MobileQueuedMessageCard } from './mobile-structured-queued-message-cards'
 import type { MobileQueuedMessageInlineEditor } from './mobile-queued-message-edit-draft'
@@ -173,7 +176,7 @@ function QueuedMessageCardContents({
             </Text>
           ) : null}
         </View>
-        {card.waitsForAgent || card.hold === 'steer' ? null : (
+        {queuedMessageCardCanSend(card) ? (
           <Pressable
             accessibilityRole="button"
             accessibilityState={{ disabled: busy || steerHeld }}
@@ -214,7 +217,7 @@ function QueuedMessageCardContents({
                 : t('session.queuedMessageCardRow.send', 'Send')}
             </Text>
           </Pressable>
-        )}
+        ) : null}
         <Pressable
           accessibilityRole="button"
           accessibilityState={{ disabled: busy }}

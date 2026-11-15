@@ -9,6 +9,7 @@ import type { AgentSessionRecordStore } from '../../../runtime/agent-session/rec
 import type { SqlAgentSessionJournal as AgentSessionJournal } from '../../agent-session-journal/journal-sql-store'
 import type { QueuedMessageRow } from '../../agent-session-journal/queued-messages/queued-message-table'
 import {
+  queuePauseHolding,
   queuePauseLiftOnItsWay,
   resumableQueuePause,
   type DerivedQueuePause
@@ -79,26 +80,29 @@ export function structuredQueueSendGate(
   }
 }
 
-/** Waiting and returned rows only. `paused` is a per-card hold (a failed conversion); a person's
- *  Stop pauses the queue, published once beside it. */
+/** Restart-held steers need their own Send action because restart pauses have no queue header. */
 function computePublishedQueuedMessages(
-  rows: readonly QueuedMessageRow[]
+  rows: readonly QueuedMessageRow[],
+  pauses: readonly DerivedQueuePause[]
 ): AgentSessionQueuedMessage[] {
   const published: AgentSessionQueuedMessage[] = []
+  const restarted = pauses.filter((pause) => pause.reason === 'restarted')
   for (const row of rows) {
     if (row.state !== 'waiting' && row.state !== 'returned') {
       continue
     }
     const held = row.state === 'waiting' && row.holdReason !== null
+    const restartHeld = row.deliveryMode === 'steer' && queuePauseHolding(restarted, row)
     published.push({
       messageId: row.messageId,
       position: row.position,
       body: row.body,
       state: row.state,
       ...(row.deliveryMode ? { deliveryMode: row.deliveryMode } : {}),
-      ...(held ? { paused: true as const } : {}),
+      ...(held || restartHeld ? { paused: true as const } : {}),
       // Unknown stored reasons remain plain holds.
       ...(held && isPublishedPausedReason(row.holdReason) ? { pausedReason: row.holdReason } : {}),
+      ...(restartHeld ? { pausedReason: 'restarted' as const } : {}),
       ...(row.state === 'returned' ? { returnedReason: row.returnedReason } : {}),
       ...(row.state === 'returned' && row.returnedRejection
         ? { returnedRejection: row.returnedRejection }
@@ -135,7 +139,7 @@ async function publishedQueueRows(journal: AgentSessionJournal): Promise<ListMem
   }
   const rows = await journal.queuedMessages.list()
   const pauses = await structuredQueuePauses(journal)
-  const list = computePublishedQueuedMessages(rows)
+  const list = computePublishedQueuedMessages(rows, pauses)
   const serialized = JSON.stringify(list)
   const next = {
     key,

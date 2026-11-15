@@ -165,6 +165,19 @@ export function applyJournalDomainQueueCommand(
     case 'queue-steer': {
       const prior = current(operation.messageId)
       if (prior && isUnsettledQueuedMessage(prior.card)) {
+        if (prior.card.state !== 'waiting' || prior.card.deliveryMode !== 'steer') {
+          const last = db
+            .prepare(`SELECT MAX(position) AS position FROM journal_queue_cards
+              WHERE session_id=? AND epoch=?`)
+            .get(target.sessionId, target.epoch)
+          // Promotion joins accepted steers at the tail, regardless of the draft's age.
+          placements = [
+            {
+              messageId: operation.messageId,
+              position: Math.max(0, Number(last?.position ?? 0)) + 1
+            }
+          ]
+        }
         changes = [
           {
             prior,

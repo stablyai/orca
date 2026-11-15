@@ -1,6 +1,7 @@
 import { afterEach, expect, it } from 'vitest'
 import { agentSessionFailureFact } from '../../../../../shared/agent-session/failures/agent-session-failure'
 import { agentSessionFailureWords } from '../../../../../shared/agent-session/failures/agent-session-failure-words'
+import type { AgentSessionDispatchOutcome } from '../../providers/structured-agent-session-adapter'
 import {
   createQueuedMessageTestRig,
   type QueuedMessageTestRig
@@ -24,17 +25,23 @@ it('delivers a second steer before the running turn ends or the first steer echo
   await openRigTurnFor(r, opener)
   const a = r.send('A')
   expect(await a.result).toMatchObject({ ok: true, value: { queued: { messageId: a.id } } })
-  await eventually(async () => expect((await r.handoff(a.id))?.handedOverAt).toBeDefined())
+  await eventually(() =>
+    expect(r.dispatch.mock.calls.map(([input]) => input.body.blocks)).toEqual([
+      [{ type: 'text', text: 'work on this' }],
+      [{ type: 'text', text: 'A' }]
+    ])
+  )
   const b = r.send('B')
   expect(await b.result).toMatchObject({ ok: true, value: { queued: { messageId: b.id } } })
-  await eventually(async () => expect((await r.handoff(b.id))?.handedOverAt).toBeDefined())
+  await eventually(() =>
+    expect(r.dispatch.mock.calls.map(([input]) => input.body.blocks)).toEqual([
+      [{ type: 'text', text: 'work on this' }],
+      [{ type: 'text', text: 'A' }],
+      [{ type: 'text', text: 'B' }]
+    ])
+  )
   expect((await r.handoff(a.id))?.dispatchState).toBe('pending')
   expect((await r.handoff(b.id))?.dispatchState).toBe('pending')
-  expect(r.dispatch.mock.calls.map(([input]) => input.body.blocks)).toEqual([
-    [{ type: 'text', text: 'work on this' }],
-    [{ type: 'text', text: 'A' }],
-    [{ type: 'text', text: 'B' }]
-  ])
 })
 
 it('accepts Send now while A is in flight, keeps B cancellable and replays without redelivery', async () => {
@@ -53,7 +60,12 @@ it('accepts Send now while A is in flight, keeps B cancellable and replays witho
   try {
     const a = r.send('A')
     await a.result
-    await eventually(async () => expect((await r.handoff(a.id))?.handedOverAt).toBeDefined())
+    await eventually(() =>
+      expect(r.dispatch.mock.calls.map(([input]) => input.body.blocks)).toEqual([
+        [{ type: 'text', text: 'work on this' }],
+        [{ type: 'text', text: 'A' }]
+      ])
+    )
     const b = r.send('B', 'queue-if-active')
     await b.result
     const operation = hostTestOperationId()
@@ -71,67 +83,58 @@ it('accepts Send now while A is in flight, keeps B cancellable and replays witho
     release()
     const c = r.send('C')
     await c.result
-    await eventually(async () => expect((await r.handoff(c.id))?.handedOverAt).toBeDefined())
+    await eventually(() =>
+      expect(r.dispatch.mock.calls.map(([input]) => input.body.blocks)).toEqual([
+        [{ type: 'text', text: 'work on this' }],
+        [{ type: 'text', text: 'A' }],
+        [{ type: 'text', text: 'C' }]
+      ])
+    )
     expect(await r.sendNow(b.id, operation)).toMatchObject({
       ok: true,
       value: { queued: { state: 'withdrawn' } }
     })
-    expect(r.dispatch.mock.calls.map(([input]) => input.body.blocks)).toEqual([
-      [{ type: 'text', text: 'work on this' }],
-      [{ type: 'text', text: 'A' }],
-      [{ type: 'text', text: 'C' }]
-    ])
   } finally {
     release()
   }
 })
 
-it.each(['unknown', 'rejected'] as const)(
-  'retains A as %s and delivers the accepted B steer without draining ordinary follow-ups',
-  async (state) => {
-    const r = (rig = await createQueuedMessageTestRig())
-    const opener = await r.workingSend()
-    await r.settleAccepted(opener, 'opening')
-    await openRigTurnFor(r, opener)
-    let release!: () => void
-    const held = new Promise<void>((resolve) => {
-      release = resolve
+async function verifySteerDeliveryWithInFlightOutcome(
+  outcome: Extract<AgentSessionDispatchOutcome, { state: 'unknown' } | { state: 'rejected' }>
+) {
+  const r = (rig = await createQueuedMessageTestRig())
+  const opener = await r.workingSend()
+  await r.settleAccepted(opener, 'opening')
+  await openRigTurnFor(r, opener)
+  let release!: () => void
+  const held = new Promise<void>((resolve) => {
+    release = resolve
+  })
+  r.dispatch.mockImplementationOnce(async () => {
+    await held
+    return outcome
+  })
+  try {
+    const a = r.send('A')
+    await a.result
+    await eventually(() =>
+      expect(r.dispatch.mock.calls.map(([input]) => input.body.blocks)).toEqual([
+        [{ type: 'text', text: 'work on this' }],
+        [{ type: 'text', text: 'A' }]
+      ])
+    )
+    const ordinary = r.send('after the turn', 'queue-if-active')
+    await ordinary.result
+    const b = r.send('B', 'queue-if-active')
+    await b.result
+    const operation = hostTestOperationId()
+    expect(await r.sendNow(b.id, operation)).toMatchObject({
+      ok: true,
+      value: { queued: { state: 'waiting' } }
     })
-    r.dispatch.mockImplementationOnce(async () => {
-      await held
-      return state === 'unknown'
-        ? { state, reason: 'transport failed' }
-        : {
-            state,
-            ...agentSessionFailureWords(agentSessionFailureFact('writeFailed'), {
-              surface: 'rejection'
-            })
-          }
-    })
-    try {
-      const a = r.send('A')
-      await a.result
-      await eventually(async () => expect((await r.handoff(a.id))?.handedOverAt).toBeDefined())
-      const ordinary = r.send('after the turn', 'queue-if-active')
-      await ordinary.result
-      const b = r.send('B', 'queue-if-active')
-      await b.result
-      const operation = hostTestOperationId()
-      expect(await r.sendNow(b.id, operation)).toMatchObject({
-        ok: true,
-        value: { queued: { state: 'waiting' } }
-      })
-      expect(await r.handoff(b.id)).toBeUndefined()
-      release()
-      await eventually(async () => expect((await r.handoff(b.id))?.handedOverAt).toBeDefined())
-      expect((await r.handoff(a.id))?.dispatchState).toBe(state)
-      const bId = await r.handoffId(b.id)
-      await r.settleAccepted(bId, 'B-received')
-      expect(await r.sendNow(b.id, operation)).toMatchObject({
-        ok: true,
-        value: { submission: { dispatchState: 'accepted' } }
-      })
-      expect(await r.handoff(ordinary.id)).toBeUndefined()
+    expect(await r.handoff(b.id)).toBeUndefined()
+    release()
+    await eventually(() =>
       expect(
         r.dispatch.mock.calls.map(([input]) => ({
           sessionId: input.sessionId,
@@ -142,8 +145,29 @@ it.each(['unknown', 'rejected'] as const)(
         { sessionId: 'session-alpha', blocks: [{ type: 'text', text: 'A' }] },
         { sessionId: 'session-alpha', blocks: [{ type: 'text', text: 'B' }] }
       ])
-    } finally {
-      release()
-    }
+    )
+    expect((await r.handoff(a.id))?.dispatchState).toBe(outcome.state)
+    const bId = await r.handoffId(b.id)
+    await r.settleAccepted(bId, 'B-received')
+    expect(await r.sendNow(b.id, operation)).toMatchObject({
+      ok: true,
+      value: { submission: { dispatchState: 'accepted' } }
+    })
+    expect(await r.handoff(ordinary.id)).toBeUndefined()
+  } finally {
+    release()
   }
-)
+}
+
+it('retains in-flight A as unknown on transport drop and delivers the accepted B steer without draining ordinary follow-ups', async () => {
+  await verifySteerDeliveryWithInFlightOutcome({ state: 'unknown', reason: 'transport failed' })
+})
+
+it('retains in-flight A as rejected on provider error and delivers the accepted B steer without draining ordinary follow-ups', async () => {
+  await verifySteerDeliveryWithInFlightOutcome({
+    state: 'rejected',
+    ...agentSessionFailureWords(agentSessionFailureFact('writeFailed'), {
+      surface: 'rejection'
+    })
+  })
+})

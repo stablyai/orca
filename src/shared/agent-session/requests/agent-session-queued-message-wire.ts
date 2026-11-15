@@ -6,9 +6,11 @@ import type { AgentJournalMessageItem } from '../journal/agent-session-journal-t
 /** The draft could not be converted into a send; an explicit Send retries it. */
 export const QUEUED_MESSAGE_PAUSED_SEND_FAILED = 'send_failed' as const
 
-export type AgentSessionQueuedMessagePausedReason = typeof QUEUED_MESSAGE_PAUSED_SEND_FAILED
+export type AgentSessionQueuedMessagePausedReason =
+  | typeof QUEUED_MESSAGE_PAUSED_SEND_FAILED
+  | 'restarted'
 
-/** Stop/failure pause automatic sends until Resume or a new turn starts. Send-now delivers one card; others wait for that turn. /clear/reopen holds are unpublished because nothing runs then. Unknown reasons render a plain pause. */
+/** Stop/failure pauses offer Resume; reopen-held steers publish a per-card pause instead. */
 export type AgentSessionQueuePause = { reason: 'stopped' | 'failed' }
 
 /** What rides beside a frame's `queuedMessages`, published together with the list. */
@@ -42,9 +44,9 @@ export type AgentSessionQueuedMessage = {
   state: 'waiting' | 'returned'
   /** Accepted steer intent; not evidence of provider receipt. */
   deliveryMode?: 'queue' | 'steer'
-  /** This one card is held, whatever the queue's pause: its conversion failed. */
+  /** Automatic delivery is held; an explicit Send can recover this card. */
   paused?: true
-  /** send_failed needs explicit Send; unknown markers remain held. queuePause is separate and published with the list. */
+  /** Conversion failure or a steer held after reopening; unknown markers remain held. */
   pausedReason?: AgentSessionQueuedMessagePausedReason
   /** Only failed submissions return cards with reason/rejection; Stop/restart withdrawals wait again. Classify returnedRejection with returnedReason as the legacy fallback, exactly as submission rejection. */
   returnedReason?: string | null

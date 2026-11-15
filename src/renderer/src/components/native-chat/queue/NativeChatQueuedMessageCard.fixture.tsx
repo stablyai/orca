@@ -44,3 +44,26 @@ export const ordinaryQueue = defineFixture({
     </ul>
   )
 })
+
+export const restartedSteer = defineFixture({
+  width: 420,
+  render: () => (
+    <ul className="native-chat-appearance rounded-md border bg-card p-2">
+      <NativeChatQueuedMessageCard
+        card={{
+          messageId: 'restarted-steer',
+          position: 1,
+          text: 'B: Also check the remote session.',
+          state: 'waiting',
+          hold: 'paused',
+          pausedReason: 'restarted'
+        }}
+        chatWorktreeId={null}
+        agentWorking={false}
+        showsSteerShortcut={false}
+        onSteer={() => {}}
+        onDelete={() => {}}
+      />
+    </ul>
+  )
+})

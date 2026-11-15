@@ -161,11 +161,12 @@ export function sendQueuedStructuredAgentMessage(
           ))
       ) {
         await ctx.journal.queuedMessages.steer(messageId, ctx.operationReceipt)
+        const queued = await ctx.journal.queuedMessages.get(messageId)
         return {
           ok: true,
           value: {
             clientMessageId: operationId,
-            queued: { messageId, position: row.position, state: 'waiting' }
+            queued: { messageId, position: queued?.position ?? row.position, state: 'waiting' }
           }
         }
       }

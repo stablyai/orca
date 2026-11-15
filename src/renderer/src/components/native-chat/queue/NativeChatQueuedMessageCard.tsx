@@ -27,6 +27,7 @@ import { agentSessionWriteNoticeText } from '@/components/native-chat/messages/n
 import { QUEUED_MESSAGE_PAUSED_SEND_FAILED } from '../../../../../shared/agent-session/requests/agent-session-queued-message-wire'
 import { isMacPlatform } from '@/components/native-chat/pane/routing/native-chat-shortcut'
 import {
+  queuedMessageCardCanSend,
   queuedMessageCardLine,
   queuedMessageCardNeedsAttention,
   queuedMessageCardSteers,
@@ -67,6 +68,9 @@ export function queuedMessageCardCaption(
         : agentSessionWriteNoticeText(notice)
     }
     case 'paused':
+      if (card.pausedReason === 'restarted') {
+        return t('components.native-chat.queuedMessages.pausedRestarted', 'Paused after reopening')
+      }
       // Localize known pause markers; unknown newer-host markers fall back to a plain pause.
       if (card.pausedReason === QUEUED_MESSAGE_PAUSED_SEND_FAILED) {
         // Its Send shows only while the agent is idle; the words match what is on the card.
@@ -268,7 +272,7 @@ export function NativeChatQueuedMessageCard({
         {card.hold === 'sending' ? null : (
           <>
             {/* A command never steers: its Send shows only while the agent is idle. */}
-            {card.waitsForAgent || card.hold === 'steer' ? null : (
+            {queuedMessageCardCanSend(card) ? (
               <Tooltip>
                 <TooltipTrigger asChild>
                   <Button
@@ -299,7 +303,7 @@ export function NativeChatQueuedMessageCard({
                   </span>
                 </TooltipContent>
               </Tooltip>
-            )}
+            ) : null}
             <Tooltip>
               <TooltipTrigger asChild>
                 <Button

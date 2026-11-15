@@ -39,6 +39,9 @@ function queuedMessageCardCaption(
         : mobileAgentSessionWriteNoticeText(notice)
     }
     case 'paused':
+      if (card.pausedReason === 'restarted') {
+        return 'Paused after reopening'
+      }
       // Absent or unknown (newer host) marker: a plain pause, promising no release rule.
       if (card.pausedReason !== QUEUED_MESSAGE_PAUSED_SEND_FAILED) {
         return 'Paused'
