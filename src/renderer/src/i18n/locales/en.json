@@ -28189,7 +28189,8 @@
       "setUp": "Set up",
       "granted": "Orca can push to {{repo}} now.",
       "waiting": "Waiting for GitHub… This continues on its own once access is granted.",
-      "holding": "Your sandbox is ready. It opens as soon as you grant access or skip."
+      "holding": "Your sandbox is ready. It opens as soon as you grant access or skip.",
+      "openNow": "Open now, set up later"
     }
   },
   "runActions": {

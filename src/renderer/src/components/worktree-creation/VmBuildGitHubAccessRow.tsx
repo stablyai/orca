@@ -3,13 +3,13 @@ import { CircleSlash, ExternalLink, Github } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/class-names'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
+import type { CloudCreateGitHubAccess } from '@/lib/orca-cloud/cloud-create-github-access'
 import {
   openCloudCreateGitHubAccess,
   recheckCloudCreateGitHubAccess,
   reopenCloudCreateGitHubAccess,
-  skipCloudCreateGitHubAccess,
-  type CloudCreateGitHubAccess
-} from '@/lib/orca-cloud/cloud-create-github-access'
+  skipCloudCreateGitHubAccess
+} from '@/lib/orca-cloud/cloud-create-github-access-actions'
 import { useCloudCreateGitHubAccess } from '@/lib/orca-cloud/cloud-create-github-access-registry'
 import { ownerRequestLabel, useOwnerRequestCopy } from '@/lib/orca-cloud/owner-request'
 import { StepIcon } from './WorktreeSetupSteps'
@@ -17,6 +17,8 @@ import { StepIcon } from './WorktreeSetupSteps'
 export type VmBuildGitHubAccessActions = {
   open: () => void
   skip: () => void
+  /** "Open now, set up later": this create goes on; the next one asks again. */
+  openNow: () => void
   reopen: () => void
   copyRequest: () => void
   copied: boolean
@@ -158,8 +160,19 @@ export function VmBuildGitHubAccessRowView({
             </p>
           ) : null}
           <div className="flex flex-wrap items-center gap-2">
+            {/* Held a while with no answer: opening leads; granting stays one click away. */}
+            {access.holdingLong ? (
+              <Button type="button" size="xs" onClick={actions.openNow}>
+                {t('orcaCloud.createGitHubAccess.openNow', 'Open now, set up later')}
+              </Button>
+            ) : null}
             {access.ask === 'install' || access.ask === 'configure' ? (
-              <Button type="button" size="xs" onClick={actions.open}>
+              <Button
+                type="button"
+                size="xs"
+                variant={access.holdingLong ? 'outline' : 'default'}
+                onClick={actions.open}
+              >
                 <ExternalLink aria-hidden />
                 {access.ask === 'configure'
                   ? t('orcaCloud.createGitHubAccess.configure', 'Add repository on GitHub')
@@ -207,6 +220,7 @@ export function VmBuildGitHubAccessRow({
       actions={{
         open: () => openCloudCreateGitHubAccess(creationId),
         skip: () => skipCloudCreateGitHubAccess(creationId),
+        openNow: () => skipCloudCreateGitHubAccess(creationId, { remember: false }),
         reopen: () => reopenCloudCreateGitHubAccess(creationId),
         copyRequest: request.copy,
         copied: request.copied

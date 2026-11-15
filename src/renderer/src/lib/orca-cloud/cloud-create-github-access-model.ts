@@ -28,6 +28,8 @@ export type CloudCreateGitHubAccess = {
   remembered: boolean
   /** The sandbox is up and the create is waiting on this step before Open workspace. */
   holding: boolean
+  /** Held ~2 min without an answer: "Open now, set up later" leads instead of waiting silently. */
+  holdingLong?: boolean
 }
 
 export type CloudCreateGitHubGate = { proceed: boolean; grantedDuringCreate: boolean }

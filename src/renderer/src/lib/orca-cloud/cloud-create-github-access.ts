@@ -15,12 +15,7 @@ import {
 import { emit, entries, subscribe, type Entry } from './cloud-create-github-access-registry'
 import { useAppStore } from '@/store'
 import { selectWorktreeCreationSurfaceShown } from '@/lib/workspace/creation/worktree-creation-surface'
-import { openOrcaGitHubAppInstall } from './cloud-setup-notice-actions'
-import {
-  forgetGitHubAccessSkip,
-  isGitHubAccessSkipped,
-  rememberGitHubAccessSkip
-} from './cloud-create-github-skip'
+import { forgetGitHubAccessSkip, isGitHubAccessSkipped } from './cloud-create-github-skip'
 import {
   fetchOrcaCloudRepoAccess,
   invalidateOrcaCloudRepoAccess
@@ -33,8 +28,10 @@ const SLOW_POLL_MS = 10_000
 const GIVE_UP_MS = 30 * 60_000
 /** The check started with the create; a gate never waits longer than this for its first answer. */
 const FIRST_ANSWER_WAIT_MS = 5_000
+/** Held this long with the sheet open and no answer: offer "Open now, set up later" up front. */
+const HOLD_NUDGE_MS = 2 * 60_000
 
-function update(creationId: string, patch: Partial<CloudCreateGitHubAccess>): void {
+export function update(creationId: string, patch: Partial<CloudCreateGitHubAccess>): void {
   const entry = entries.get(creationId)
   if (!entry) {
     return
@@ -47,7 +44,7 @@ function update(creationId: string, patch: Partial<CloudCreateGitHubAccess>): vo
   emit()
 }
 
-function settle(creationId: string, gate: CloudCreateGitHubGate): void {
+export function settle(creationId: string, gate: CloudCreateGitHubGate): void {
   const entry = entries.get(creationId)
   if (!entry) {
     return
@@ -57,7 +54,7 @@ function settle(creationId: string, gate: CloudCreateGitHubGate): void {
     resolve(gate)
   }
   if (entry.state.holding) {
-    entry.state = { ...entry.state, holding: false }
+    entry.state = { ...entry.state, holding: false, holdingLong: false }
     emit()
   }
 }
@@ -153,7 +150,7 @@ export function beginCloudCreateGitHubAccess(creationId: string, repoUrl: string
     })
 }
 
-function schedulePoll(creationId: string, delayMs?: number): void {
+export function schedulePoll(creationId: string, delayMs?: number): void {
   const entry = entries.get(creationId)
   if (!entry || entry.state.phase !== 'needed') {
     return
@@ -220,64 +217,6 @@ function markGranted(creationId: string): void {
   settle(creationId, { proceed: true, grantedDuringCreate: entry.wasNeeded })
 }
 
-/** Install GitHub App / Add the repository on GitHub: opens GitHub, then keeps polling. */
-export function openCloudCreateGitHubAccess(creationId: string): void {
-  const entry = entries.get(creationId)
-  if (!entry || entry.state.phase !== 'needed') {
-    return
-  }
-  const { repoUrl, configureUrl, ask } = entry.state
-  const opened =
-    ask === 'configure' && configureUrl
-      ? window.api.shell.openUrl(configureUrl).then(
-          () => true,
-          () => openOrcaGitHubAppInstall(repoUrl)
-        )
-      : openOrcaGitHubAppInstall(repoUrl)
-  void opened.then((ok) => {
-    if (ok && entries.get(creationId) === entry) {
-      update(creationId, { opened: true })
-      // Back from the browser: ask now instead of at the next poll.
-      schedulePoll(creationId, 0)
-    }
-  })
-}
-
-/** Orca regained focus (an install finished in the browser): check now. */
-export function recheckCloudCreateGitHubAccess(creationId: string): void {
-  schedulePoll(creationId, 0)
-}
-
-/** "Skip for now": the create goes on, and later creates of this repository don't hold for it. */
-export function skipCloudCreateGitHubAccess(creationId: string): void {
-  const entry = entries.get(creationId)
-  if (!entry || entry.state.phase !== 'needed') {
-    return
-  }
-  if (entry.timer) {
-    clearTimeout(entry.timer)
-    entry.timer = null
-  }
-  rememberGitHubAccessSkip(entry.state.repoUrl)
-  update(creationId, { phase: 'skipped', remembered: false, opened: false })
-  settle(creationId, { proceed: true, grantedDuringCreate: false })
-}
-
-/**
- * "Set up" on a skipped step: asks again (and polls). The create isn't held a second time; a grant
- * that lands before Open still reaches the sandbox.
- */
-export function reopenCloudCreateGitHubAccess(creationId: string): void {
-  const entry = entries.get(creationId)
-  if (!entry || entry.state.phase !== 'skipped' || !entry.state.ask) {
-    return
-  }
-  forgetGitHubAccessSkip(entry.state.repoUrl)
-  entry.neededSince = null
-  update(creationId, { phase: 'needed', remembered: false })
-  schedulePoll(creationId)
-}
-
 /**
  * Before Open workspace: proceeds at once unless the step is asking; then waits for a grant or
  * Skip. A create whose sheet isn't on screen isn't held (it goes on as a skip for this create).
@@ -321,6 +260,11 @@ export async function gateCloudCreateOnGitHubAccess(
   }
   const held = new Promise<CloudCreateGitHubGate>((resolve) => entry.waiters.push(resolve))
   update(creationId, { holding: true })
+  setTimeout(() => {
+    if (entries.get(creationId) === entry && entry.state.holding) {
+      update(creationId, { holdingLong: true })
+    }
+  }, HOLD_NUDGE_MS)
   return held
 }
 

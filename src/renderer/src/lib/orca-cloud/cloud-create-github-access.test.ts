@@ -48,11 +48,13 @@ vi.mock('./cloud-setup-notice-actions', () => ({
 import {
   beginCloudCreateGitHubAccess,
   disposeCloudCreateGitHubAccess,
-  gateCloudCreateOnGitHubAccess,
+  gateCloudCreateOnGitHubAccess
+} from './cloud-create-github-access'
+import {
   openCloudCreateGitHubAccess,
   reopenCloudCreateGitHubAccess,
   skipCloudCreateGitHubAccess
-} from './cloud-create-github-access'
+} from './cloud-create-github-access-actions'
 import { getCloudCreateGitHubAccess } from './cloud-create-github-access-registry'
 import { isGitHubAccessSkipped, rememberGitHubAccessSkip } from './cloud-create-github-skip'
 
@@ -237,5 +239,20 @@ describe('the create wizard’s GitHub access step', () => {
     expect(getCloudCreateGitHubAccess('c1')?.phase).toBe('hidden')
     beginCloudCreateGitHubAccess('c1', null)
     expect(getCloudCreateGitHubAccess('c1')).toBeNull()
+  })
+
+  it('held 2 minutes with no answer: Open now leads, and it isn’t remembered as a skip', async () => {
+    mocks.answers = [NOT_INSTALLED]
+    beginCloudCreateGitHubAccess('c1', REPO)
+    await settled()
+    const gate = gateCloudCreateOnGitHubAccess('c1')
+    await settled()
+    expect(getCloudCreateGitHubAccess('c1')?.holdingLong).toBeFalsy()
+    await vi.advanceTimersByTimeAsync(2 * 60_000)
+    expect(getCloudCreateGitHubAccess('c1')).toMatchObject({ holding: true, holdingLong: true })
+    skipCloudCreateGitHubAccess('c1', { remember: false })
+    await expect(gate).resolves.toEqual({ proceed: true, grantedDuringCreate: false })
+    expect(getCloudCreateGitHubAccess('c1')).toMatchObject({ phase: 'skipped', holding: false })
+    expect(isGitHubAccessSkipped(REPO)).toBe(false)
   })
 })

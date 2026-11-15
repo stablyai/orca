@@ -72,6 +72,11 @@ export const installHolding = fixture(
   CLONED,
   T0 + 9_000
 )
+export const installHoldingLong = fixture(
+  { phase: 'needed', ask: 'install', opened: true, holding: true, holdingLong: true },
+  CLONED,
+  T0 + 130_000
+)
 export const configure = fixture({ phase: 'needed', ask: 'configure' })
 export const ownerOnly = fixture({ phase: 'needed', ask: 'request' })
 export const requested = fixture({ phase: 'needed', ask: 'requested' })
