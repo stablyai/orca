@@ -25,6 +25,7 @@ type Keys = Pick<MobileNativeChatRowKeys, 'current' | 'placement'>
 
 export type MobileNativeChatReadingUnit = {
   key: string
+  /** From the scroller's top, so a place saved on an earlier visit holds if the scroller moved. */
   top: number
   member?: string
   placed: string
@@ -83,7 +84,7 @@ function unitsOf(
       break
     }
     if (id === 'run' ? box.top >= view.top : onScreen(box, view)) {
-      shown.push({ ...self, top: box.top, member: id })
+      shown.push({ ...self, top: box.top - view.top, member: id })
     }
   }
   const lines = shown.filter((unit) => unit.member !== 'run')
@@ -172,7 +173,7 @@ export function mobileNativeChatReadingPlace(
   }
   const unit = ({ id, node }: { id: string; node: Tagged }): MobileNativeChatReadingUnit => ({
     key: id,
-    top: node.getBoundingClientRect().top,
+    top: node.getBoundingClientRect().top - view.top,
     placed: placement(id)
   })
   const units = rows.slice(low, end).flatMap((node) => {
@@ -219,7 +220,7 @@ export function mobileNativeChatReadingDrift(
   for (const unit of place) {
     const node = drawn(unit, rows, keys, roots)
     if (node) {
-      return node.getBoundingClientRect().top - unit.top
+      return node.getBoundingClientRect().top - scroller.getBoundingClientRect().top - unit.top
     }
   }
   return undefined

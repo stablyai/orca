@@ -136,14 +136,19 @@ export function useMobileNativeChatTailFollow(args: {
     [setAtTail, setFollowing]
   )
 
-  const jumpToTail = useCallback(() => {
+  const followTail = useCallback(() => {
     clearUserScrollSettle()
     userScrollActiveRef.current = false
-    forgetMobileNativeChatPlace(scopeKeyRef.current)
     setAtTail(true)
     setFollowing(true)
     pinToTail()
   }, [clearUserScrollSettle, pinToTail, setAtTail, setFollowing])
+
+  // The reader chose the tail (send, jump to latest), even while the chat's rows are still loading.
+  const jumpToTail = useCallback(() => {
+    forgetMobileNativeChatPlace(scopeKeyRef.current)
+    followTail()
+  }, [followTail])
 
   // Release the follow first, as desktop's scrollMessageToTop does, so streaming cannot pull the row away.
   const scrollRowToTop = useCallback(
@@ -231,10 +236,11 @@ export function useMobileNativeChatTailFollow(args: {
     scopeKeyRef.current = scopeKey
     const restored = restoredScopeRef.current === scopeKey
     restoredScopeRef.current = null
+    // Rows still loading keep the chat's saved place, for the list to put back once they draw.
     if (!restored) {
-      jumpToTail()
+      followTail()
     }
-  }, [scopeKey, jumpToTail])
+  }, [scopeKey, followTail])
 
   useEffect(() => clearUserScrollSettle, [clearUserScrollSettle])
 
