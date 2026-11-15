@@ -3,10 +3,14 @@ import { readNativeChatDraftDocument } from '../../drafts/native-chat-draft-view
 import { createRef } from 'react'
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, describe, expect, it, onTestFinished, vi } from 'vitest'
+import type { JSONContent } from '@tiptap/react'
+import type { Node as ProseMirrorNode } from '@tiptap/pm/model'
+import { AllSelection, NodeSelection, TextSelection, type Selection } from '@tiptap/pm/state'
 import { NativeChatPromptEditor } from './NativeChatPromptEditor'
 import type { NativeChatComposerInput } from './native-chat-composer-input'
 import { promptEditor } from './native-chat-prompt-editor.test-support'
 import { updateNativeChatComposerDraft } from '../../drafts/native-chat-composer-draft-store'
+import { serializeNativeChatAgentReferences } from '../pickers/native-chat-agent-reference-send'
 
 afterEach(cleanup)
 
@@ -181,37 +185,202 @@ it('replaces the selection with literal pasted text as one undoable edit', async
   expect(input.value).toBe('hello world')
 })
 
-it.each([
-  ['a', 4],
-  ['e', 7]
-])('moves Ctrl-%s on macOS to the edge of the hard-break line holding the caret', (key, offset) => {
+const pill: JSONContent = {
+  type: 'nativeChatFileReference',
+  attrs: { token: '@src/main.ts', path: '' }
+}
+
+it.each<[string, (string | JSONContent)[][], (doc: ProseMirrorNode) => Selection, string, number]>([
+  ['at the caret', [['see  please']], (doc) => TextSelection.create(doc, 5), 'see \n please', 5],
+  [
+    'in place of a selected pill',
+    [['see ', pill, ' please']],
+    (doc) => NodeSelection.create(doc, 5),
+    'see \n please',
+    5
+  ],
+  ['in place of everything', [['abc'], ['def']], (doc) => new AllSelection(doc), '\n', 1],
+  [
+    'in place of a whole selected line',
+    [['abc'], ['def']],
+    (doc) => NodeSelection.create(doc, 5),
+    'abc\n\n',
+    5
+  ]
+])('starts a new paragraph on Shift+Enter %s', (_name, lines, select, expected, caret) => {
+  const { input, editor } = setup()
+  act(() => {
+    editor.commands.setContent({
+      type: 'doc',
+      content: lines.map((line) => ({
+        type: 'paragraph',
+        content: line.map((part) =>
+          typeof part === 'string' ? { type: 'text', text: part } : part
+        )
+      }))
+    })
+    editor.view.dispatch(editor.state.tr.setSelection(select(editor.state.doc)))
+  })
+  act(() => {
+    fireEvent.keyDown(editor.view.dom, { key: 'Enter', shiftKey: true })
+  })
+  expect(
+    editor
+      .getJSON()
+      .content?.some((line) => line.content?.some((node) => node.type === 'hardBreak'))
+  ).toBe(false)
+  expect([input.value, input.selectionStart]).toEqual([expected, caret])
+})
+
+function mockMacPlatform(): void {
   const userAgent = vi.spyOn(navigator, 'userAgent', 'get').mockReturnValue('Macintosh')
   const platform = vi.spyOn(navigator, 'platform', 'get').mockReturnValue('MacIntel')
   onTestFinished(() => {
     userAgent.mockRestore()
     platform.mockRestore()
   })
-  const { input, editor } = setup()
+}
+
+function saveHardBreakDraft(scopeKey: string): string {
+  const text = 'abc\ndef\nghi'
+  updateNativeChatComposerDraft(
+    scopeKey,
+    {
+      text,
+      document: {
+        type: 'doc',
+        content: [
+          {
+            type: 'paragraph',
+            content: [
+              { type: 'text', text: 'abc' },
+              { type: 'hardBreak' },
+              { type: 'text', text: 'def' },
+              { type: 'hardBreak' },
+              { type: 'text', text: 'ghi' }
+            ]
+          }
+        ]
+      }
+    },
+    'immediate'
+  )
+  return text
+}
+
+it('splits a saved hard-break draft adopted through value into lines without an update', () => {
+  const scopeKey = 'hard-break-draft-adopted'
+  const inputRef = createRef<NativeChatComposerInput>()
+  const onChange = vi.fn()
+  const view = render(
+    <NativeChatPromptEditor
+      scopeKey={scopeKey}
+      inputRef={inputRef}
+      initialValue=""
+      disabled={false}
+      placeholder="Message"
+      onChange={onChange}
+      onSelect={vi.fn()}
+    />
+  )
+  const editor = promptEditor(within(view.container).getByRole('textbox'))
+  const text = saveHardBreakDraft(scopeKey)
   act(() => {
-    editor.commands.setContent({
-      type: 'doc',
-      content: [
-        {
-          type: 'paragraph',
-          content: [
-            { type: 'text', text: 'abc' },
-            { type: 'hardBreak' },
-            { type: 'text', text: 'def' },
-            { type: 'hardBreak' },
-            { type: 'text', text: 'ghi' }
-          ]
-        }
-      ]
+    inputRef.current!.value = text
+  })
+  expect(editor.getJSON().content?.map((line) => line.content?.map((node) => node.type))).toEqual([
+    ['text'],
+    ['text'],
+    ['text']
+  ])
+  expect([inputRef.current!.value, onChange.mock.calls.length]).toEqual([text, 0])
+})
+
+it.each([
+  ['a', 4],
+  ['e', 7]
+])(
+  'moves Ctrl-%s on macOS to the edge of the caret line in a saved hard-break draft',
+  (key, offset) => {
+    mockMacPlatform()
+    const scopeKey = `hard-break-draft-${key}`
+    const text = saveHardBreakDraft(scopeKey)
+    const inputRef = createRef<NativeChatComposerInput>()
+    const view = render(
+      <NativeChatPromptEditor
+        scopeKey={scopeKey}
+        inputRef={inputRef}
+        initialValue={text}
+        disabled={false}
+        placeholder="Message"
+        onChange={vi.fn()}
+        onSelect={vi.fn()}
+      />
+    )
+    const editor = promptEditor(within(view.container).getByRole('textbox'))
+    const input = inputRef.current!
+    input.setSelectionRange(6, 6)
+    act(() => {
+      fireEvent.keyDown(editor.view.dom, { key, ctrlKey: true })
+    })
+    expect([input.value, input.selectionStart, input.selectionEnd]).toEqual([text, offset, offset])
+  }
+)
+
+it.each([
+  ['a', 4],
+  ['e', 7]
+])('moves Ctrl-%s on macOS to the edge of the caret line after a rich-text drop', (key, offset) => {
+  mockMacPlatform()
+  const { input, editor } = setup()
+  vi.spyOn(editor.view, 'posAtCoords').mockReturnValue({ pos: 1, inside: -1 })
+  act(() => {
+    fireEvent.drop(editor.view.dom, {
+      dataTransfer: {
+        types: ['text/html', 'text/plain'],
+        getData: (format: string) =>
+          format === 'text/html' ? '<p>abc<br>def<br>ghi</p>' : 'abc\ndef\nghi'
+      }
     })
   })
-  input.setSelectionRange(6, 6)
+  expect(editor.getJSON().content?.map((line) => line.content?.map((node) => node.type))).toEqual([
+    ['text'],
+    ['text'],
+    ['text']
+  ])
+  act(() => input.setSelectionRange(6, 6))
   act(() => {
     fireEvent.keyDown(editor.view.dom, { key, ctrlKey: true })
   })
-  expect([input.selectionStart, input.selectionEnd]).toEqual([offset, offset])
+  expect([input.value, input.selectionStart, input.selectionEnd]).toEqual([
+    'abc\ndef\nghi',
+    offset,
+    offset
+  ])
+})
+
+it('hides the placeholder on the first line of a blank multi-line draft', () => {
+  const { input, editor } = setup()
+  const root = editor.view.dom
+  const placeholderLine = root.className.match(
+    /\[&_([^\]]+)\]:before:content-\[attr\(data-placeholder\)\]/
+  )?.[1]
+  expect(placeholderLine).toBeDefined()
+  const placeholderShown = () => root.querySelector(String(placeholderLine)) !== null
+  expect(placeholderShown()).toBe(true)
+  act(() => {
+    fireEvent.keyDown(root, { key: 'Enter', shiftKey: true })
+  })
+  act(() => input.setSelectionRange(0, 0))
+  expect([input.value, input.selectionStart]).toEqual(['\n', 0])
+  expect(placeholderShown()).toBe(false)
+})
+
+it('sends an agent mentioned at the end of a non-final line without a space before the newline', () => {
+  const { input, editor } = setup('abc\ndef')
+  act(() => input.setSelectionRange(3, 3))
+  act(() => input.insertAgentReferences?.([{ label: 'Agent', address: 'term_agent', hostKey: '' }]))
+  expect(serializeNativeChatAgentReferences(input.value, editor.getJSON())).toMatch(
+    /^abc@Agent\ndef/
+  )
 })

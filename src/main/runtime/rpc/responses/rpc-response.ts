@@ -20,8 +20,8 @@ import { ORCHESTRATION_FEDERATION_ERROR_CODES } from '../../../../shared/orchest
 import { computerUseErrorRecoveryData } from '../../../../shared/computer-use-error-recovery'
 import { COMPUTER_ERROR_CODES } from '../../../../shared/computer-use-runtime-types'
 import { TerminalSplitOutcomeError } from '../../../../shared/workspace-layout/terminal-topology/terminal-split-outcome'
-import { WslHostWindowsDriveRefusalError } from '../../../../shared/wsl-host-windows-drive-refusal'
-import { wslDistroHoldRpcFailure } from '../../../../shared/wsl-distro-stopped-hold'
+import { WslHostWindowsDriveRefusalError } from '../../../../shared/remote-runtime/wsl-hosts/wsl-host-windows-drive-refusal'
+import { wslDistroHoldRpcFailure } from '../../../../shared/remote-runtime/wsl-hosts/wsl-distro-stopped-hold'
 import { LINEAR_ERROR_CODES } from '../../../../shared/linear/agent-access'
 import { AGENT_SESSION_RPC_ERROR_CODES } from '../../../../shared/agent-session/agent-session-host-authority'
 import { ARTIFACT_SHARING_DISABLED_CODE } from '../../../../shared/artifacts/artifact-sharing-gate'
@@ -44,7 +44,7 @@ import { GIT_DIFF_TOO_LARGE_CODE } from '../../../../shared/git/diff/git-diff-tr
 import { AUTOMATION_OWNER_CONFLICT_CODES } from '../../../../shared/automations/ownership/automation-owner-conflict'
 import { ARCHIVE_HOOK_FAILED_REMOVAL_CODE } from '../../../../shared/worktree/removal/archive-hook-removal-gate'
 import { NESTED_WORKER_DEPTH_EXCEEDED_CODE } from '../../../../shared/orchestration/workers/nested-worker-depth'
-import { PROJECT_RUNTIME_REPAIR_REQUIRED_CODE } from '../../../../shared/project-runtime-repair-message'
+import { PROJECT_RUNTIME_REPAIR_REQUIRED_CODE } from '../../../../shared/execution-host/project-runtime-repair-message'
 import {
   WORKTREE_CREATE_COLLISION_CODE,
   WORKTREE_CREATE_EXACT_NAME_TAKEN_CODE

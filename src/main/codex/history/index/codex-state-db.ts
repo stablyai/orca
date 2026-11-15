@@ -1,7 +1,7 @@
 import { readdirSync } from 'node:fs'
 import { join } from 'node:path'
 import SyncDatabase from '../../../sqlite/sync-database'
-import { parseWslUncPath, toWindowsWslPath } from '../../../../shared/wsl-paths'
+import { parseWslUncPath, toWindowsWslPath } from '../../../../shared/file-access/wsl-paths'
 import { readAgentStateFileSync } from '../../configuration/agent-state-file-reader'
 import { readCodexConfiguredSqliteHome } from '../../configuration/toml/config-toml-shared-sqlite-home'
 

@@ -1,7 +1,7 @@
 import type {
   RuntimeOrchestrationEnvelope,
   RuntimeRequestPreparation
-} from '../../runtime-rpc-envelope'
+} from '../rpc/runtime-rpc-envelope'
 
 type SerializeRequest = (
   params: unknown,

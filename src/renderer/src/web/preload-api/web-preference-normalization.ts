@@ -24,7 +24,10 @@ import {
 } from '../../../../shared/feature-interactions'
 
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
-import type { PairedUiState, PairingLocalUiField } from '../../../../shared/pairing-local-ui-fields'
+import type {
+  PairedUiState,
+  PairingLocalUiField
+} from '../../../../shared/remote-runtime/pairing/pairing-local-ui-fields'
 import type { PersistedUIState } from '../../../../shared/persisted-ui-state-types'
 import { normalizeStatusBarUsageMode } from '../../../../shared/status-bar-usage-mode'
 import { normalizeStatusBarUsageFormat } from '../../../../shared/status-bar-usage-format'

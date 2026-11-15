@@ -1,5 +1,5 @@
 import { parseWorkerTerminalHostScope } from '../../../../../../../shared/orchestration/workers/worker-terminal-host-scope'
-import type { RuntimeTerminalInteractiveWait } from '../../../../../../../shared/runtime-terminal-contracts'
+import type { RuntimeTerminalInteractiveWait } from '../../../../../../../shared/terminal/runtime/runtime-terminal-contracts'
 import type { WorkerTerminalReleaseRuntime } from '../../../../../orchestration/terminal-authority/release/worker-terminal-release-runtime'
 import type { OrchestrationDb } from '../../../../../orchestration/db/orchestration-db'
 import type { OrchestrationFleetWorker } from '../../../../../../../shared/orchestration/fleet/orchestration-fleet-projection'

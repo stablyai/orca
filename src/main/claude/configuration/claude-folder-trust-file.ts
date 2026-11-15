@@ -15,7 +15,7 @@ import { lock } from 'proper-lockfile'
 import '../../filesystem/atomic-file-publication'
 import { renameFileWithWindowsRetry } from '../../../shared/windows-retry-file-operations'
 import { runKeyedSerializedOperation } from '../../../shared/concurrency/keyed-serialized-operations'
-import { parseWslUncPath } from '../../../shared/wsl-paths'
+import { parseWslUncPath } from '../../../shared/file-access/wsl-paths'
 import { runWslProcess } from '../../wsl/execution/wsl-runner'
 import type { ClaudeRuntimeAuthPreparation } from '../../claude-accounts/runtime-auth/runtime-auth-types'
 

@@ -1,5 +1,9 @@
 import { posix as pathPosix } from 'node:path'
-import { parseWslUncPath, toLinuxPath, toWindowsWslUncPath } from '../../../../shared/wsl-paths'
+import {
+  parseWslUncPath,
+  toLinuxPath,
+  toWindowsWslUncPath
+} from '../../../../shared/file-access/wsl-paths'
 import { normalizeRuntimePathForComparison } from '../../../../shared/cross-platform-path'
 import { getDefaultWslDistro, getWslHome } from '../../../wsl/discovery/distro-catalog'
 import { getCachedWslHome } from '../../../wsl/discovery/wsl-home-cache'

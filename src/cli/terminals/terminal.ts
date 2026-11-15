@@ -1,4 +1,4 @@
-import type { RuntimeTerminalCreate } from '../../shared/runtime-terminal-create-contract'
+import type { RuntimeTerminalCreate } from '../../shared/terminal/runtime/runtime-terminal-create-contract'
 import type {
   RuntimeTerminalFocus,
   RuntimeTerminalListResult,
@@ -8,7 +8,7 @@ import type {
   RuntimeTerminalShow,
   RuntimeTerminalSplit,
   RuntimeTerminalWait
-} from '../../shared/runtime-terminal-contracts'
+} from '../../shared/terminal/runtime/runtime-terminal-contracts'
 import type { CommandHandler } from '../dispatch/dispatch'
 import { shouldUseRendererBackedInteractiveTerminal } from './codex-command-classification'
 import {

@@ -1,6 +1,6 @@
 import type { LocalGitExecOptions } from '../refs/resolution/repo-default-base-ref'
 import type { GitExecOptions } from '../command-runner/git-exec-options'
-import { parseWslUncPath, toWslExecutionSpace } from '../../../shared/wsl-paths'
+import { parseWslUncPath, toWslExecutionSpace } from '../../../shared/file-access/wsl-paths'
 import { gitExecFileAsync } from '../command-runner/git-exec-file'
 import { resolveRevParsePath } from '../worktrees/catalog/worktree-path-comparison'
 

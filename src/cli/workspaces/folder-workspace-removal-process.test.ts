@@ -10,7 +10,7 @@ import { z } from 'zod'
 import {
   FOLDER_WORKSPACE_UNIQUE_ID_MUTATION_RUNTIME_CAPABILITY,
   PROJECT_GROUP_FOLDER_ARCHIVE_RUNTIME_CAPABILITY
-} from '../../shared/worktree-runtime-capabilities'
+} from '../../shared/remote-runtime/protocol/worktree-runtime-capabilities'
 
 // Real CLI processes share this budget, including their runtime startup.
 it('real CLI folder removal preserves explicit archive approval and refuses unsupported hosts', async () => {

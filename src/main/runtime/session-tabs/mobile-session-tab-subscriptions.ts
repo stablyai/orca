@@ -2,7 +2,7 @@ import type {
   ClientHostedPageObservation,
   MobileSessionTabSubscription
 } from '../construction/runtime-identity-state'
-import type { RuntimeMobileSessionTabsResult } from '../../../shared/runtime-session-contracts'
+import type { RuntimeMobileSessionTabsResult } from '../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import { RuntimeWorkspaceFileTargets } from '../workspaces/workspace-file-session-targets'
 export abstract class RuntimeMobileSessionTabSubscriptions extends RuntimeWorkspaceFileTargets {
   onMobileSessionTabsChanged(

@@ -1,6 +1,6 @@
 // Capable streams stamp tabsRevision and may encode updated tabs as previous-frame indexes or full tabs.
 // Bases are per-worktree/per-stream; non-tab fields stay whole, and legacy clients see neither delta nor revision.
-import { SESSION_TABS_TAB_DELTA_RUNTIME_CAPABILITY } from './session-tabs-runtime-capabilities'
+import { SESSION_TABS_TAB_DELTA_RUNTIME_CAPABILITY } from './remote-runtime/protocol/session-tabs-runtime-capabilities'
 
 export type SessionTabsTabDeltaRef = number | Record<string, unknown>
 

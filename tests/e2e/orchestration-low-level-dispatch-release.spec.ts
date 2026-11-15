@@ -1,6 +1,6 @@
 import { test, expect } from './helpers/orca-app'
 import { RuntimeClient } from '../../src/cli/runtime/client'
-import type { RuntimeTerminalListResult } from '../../src/shared/runtime-types'
+import type { RuntimeTerminalListResult } from '../../src/shared/terminal/runtime/runtime-terminal-contracts'
 import { waitForSessionReady, ensureTerminalVisible } from './helpers/store'
 import {
   waitForActivePaneHookDescriptor,

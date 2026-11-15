@@ -1,4 +1,4 @@
-import type { SshConnectionStatus } from '../../../../../../shared/ssh-types'
+import type { SshConnectionStatus } from '../../../../../../shared/remote-runtime/ssh/ssh-types'
 import type { Repo } from '../../../../../../shared/repo-types'
 import { isGitRepoKind } from '../../../../../../shared/repo-kind'
 import { getSelectedRepoSshGate } from '../../../../lib/workspace/creation/new-workspace-ssh-gate'

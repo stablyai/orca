@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { createTestStore } from '../testing/app-store-test-fixture'
 import type { Repo } from '../../../../shared/repo-types'
-import type { HostRepoCatalogSnapshot } from '../../../../shared/host-repo-catalog-snapshot'
+import type { HostRepoCatalogSnapshot } from '../../../../shared/execution-host/host-repo-catalog-snapshot'
 import {
   createCompatibleRuntimeStatusResponseIfNeeded,
   type RuntimeEnvironmentCallRequest

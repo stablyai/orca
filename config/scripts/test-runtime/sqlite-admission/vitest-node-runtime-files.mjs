@@ -12,7 +12,6 @@ const NODE_RUNTIME_INCLUDE = [
   'tests/e2e/cursor-quota-transport.unit.test.ts',
   'tests/e2e/helpers/electron-process-shutdown.unit.test.ts',
   'src/main/ai-vault-search/storage/session-search-index-writer.test.ts',
-  'src/main/ai-vault/parsing/session-scanner-unlimited-dedup.test.ts',
   // The parse cache persists through node:sqlite.
   'src/main/ai-vault/parse-cache/session-parse-cache-antigravity-upgrade.test.ts',
   'src/main/ai-vault/parse-cache/session-parse-cache-persistence.test.ts',
@@ -20,7 +19,6 @@ const NODE_RUNTIME_INCLUDE = [
   // The forced-probe handoff race opens only under V8's promise scheduling, which Electron main uses.
   'src/main/github/api/rate-limit.test.ts',
   // Electron main bridges streams with Node's implementation.
-  'src/main/host/electron-http-client.test.ts',
   'src/main/browser/extensions/native-messaging/browser-extension-native-host-process-backpressure.test.ts',
   'src/main/daemon/providers/lifecycle/testing/daemon-init-provider-installation.test.ts',
   'src/renderer/src/components/terminal-pane/pty-transport/input/pty-input-write-queue.test.ts',
@@ -35,7 +33,6 @@ const NODE_RUNTIME_INCLUDE = [
   'src/main/claude/transcripts/claude-transcript-catch-up.test.ts',
   'tests/e2e/native-chat-startup-option-pickers.unit.test.ts',
   'src/main/ai-vault/transcripts/session-document-consumer-replacement.test.ts',
-  'src/main/ai-vault-search/indexing/session-search-dependent-transcripts.test.ts',
   'src/main/ai-vault-search/indexing/session-search-list-reparse.test.ts',
   'src/main/runtime/rpc/server/orchestration-cli-subprocess.test.ts',
   'src/main/runtime/orchestration/mailbox/terminal-pointer/orchestration-mailbox-delivery.test.ts',
@@ -111,16 +108,13 @@ const NODE_RUNTIME_INCLUDE = [
   'src/main/computer/desktop-script/runtime-host/desktop-script-serve-channel.test.ts',
   'src/main/providers/working-directory/validation.test.ts',
   'src/main/pty/process-retirement/posix-pty-process-groups.integration.test.ts',
-  'src/shared/ephemeral-vm-recipe-output-capture.test.ts',
+  'src/shared/remote-runtime/ephemeral-vm-recipes/ephemeral-vm-recipe-output-capture.test.ts',
   'src/main/native-chat/agent-session-journal/**/*.test.ts',
-  'src/main/runtime/agent-session/records/agent-session-conversation-name-store.test.ts',
   'src/main/runtime/rpc/methods/structured-sessions/attachments/structured-agent-session-visual.test.ts',
   // Bun resolves 'ws' to its built-in client, which bypasses the patched package.
   'src/main/runtime/rpc/transports/websocket/ws-empty-payload-frame-write.test.ts',
   'src/shared/remote-runtime/remote-runtime-client.test.ts',
   'src/shared/remote-runtime/remote-runtime-connect-bound.test.ts',
-  // Bun's built-in ws client ignores maxPayload; the product opener only runs on Node.
-  'src/shared/remote-runtime/requests/remote-runtime-request-websocket.test.ts',
   'src/shared/remote-runtime/requests/remote-runtime-subscription-connect-bound.test.ts',
   'src/main/codex/configuration/shared-server/codex-shared-server-probe.test.ts',
   'src/main/opencode/model-launch/opencode-launch-model-context-supervision.test.ts',
@@ -137,7 +131,6 @@ const NODE_RUNTIME_INCLUDE = [
   'config/scripts/test-runtime/node-worker/vitest-node-runtime-pool.test.ts',
   // Reopen WAL-backed row caches read-only, which Bun on macOS cannot.
   'src/main/agent-hooks/server/testing/identity/server-hook-session-binding.test.ts',
-  'src/main/agent-hooks/server/testing/persistence/server-last-status-claude-model.test.ts',
   'tests/e2e/helpers/persisted-profile-state.unit.test.ts',
   'src/main/runtime/push/notifications/mobile-notification-dismissal-store.test.ts',
   'src/main/runtime/push/notifications/mobile-notification-dismissal-read-failure.test.ts',

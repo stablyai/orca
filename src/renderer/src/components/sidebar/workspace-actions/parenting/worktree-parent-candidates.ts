@@ -19,7 +19,7 @@ import {
   lastVerifiedRuntimeStatus,
   type RuntimeEnvironmentStatus
 } from '../../../../../../shared/remote-runtime/host-status/runtime-host-status'
-import { supportsFolderParent } from '../../../../../../shared/worktree-runtime-capabilities'
+import { supportsFolderParent } from '../../../../../../shared/remote-runtime/protocol/worktree-runtime-capabilities'
 import { getWorktreeHostIdentity } from '../../../../../../shared/worktree/host-qualified-identity'
 
 type ParentCandidateArgs = {

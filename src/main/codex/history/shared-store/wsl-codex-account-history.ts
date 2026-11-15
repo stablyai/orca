@@ -1,4 +1,4 @@
-import { WSL_CODEX_ACCOUNT_HISTORY_HELPER_FILENAME } from '../../../../shared/remote-bundle-artifacts'
+import { WSL_CODEX_ACCOUNT_HISTORY_HELPER_FILENAME } from '../../../../shared/remote-runtime/orcad-distribution/remote-bundle-artifacts'
 import { runWslGuestNodeHelper } from '../../../wsl/execution/wsl-guest-node-helper'
 import { runWslProcess } from '../../../wsl/execution/wsl-runner'
 import { assertWslUncPathRunning } from '../../../wsl/filesystem/wsl-unc-access-gate'

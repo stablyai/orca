@@ -1,5 +1,5 @@
 import { dirname, join, resolve } from 'node:path'
-import { SERVE_USER_DATA_PATH_ENV } from '../../../shared/serve-user-data-path'
+import { SERVE_USER_DATA_PATH_ENV } from '../../../shared/remote-runtime/serve-supervisor/serve-user-data-path'
 import { getPlatformUserDataPath } from './metadata'
 
 /** Dev builds read ORCA_DEV_USER_DATA_PATH rather than --user-data-dir. */

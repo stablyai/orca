@@ -3,7 +3,7 @@ import { stopAfterSilenceSeconds } from '../../../shared/dictation-silence-stop'
 import type {
   RuntimeSpeechModelSummary,
   RuntimeSpeechSetupState
-} from '../../../shared/runtime-worktree-contracts'
+} from '../../../shared/worktree/catalog/runtime-worktree-contracts'
 import { getDefaultVoiceSettings } from '../../../shared/constants'
 import { dictationShortcutModeSettings } from '../../../shared/dictation-shortcut-mode'
 import {

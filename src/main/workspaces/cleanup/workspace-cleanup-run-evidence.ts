@@ -11,7 +11,7 @@ import {
   LOCAL_EXECUTION_HOST_ID,
   normalizeExecutionHostId
 } from '../../../shared/execution-host'
-import type { RuntimeWorktreePsSummary } from '../../../shared/runtime-worktree-contracts'
+import type { RuntimeWorktreePsSummary } from '../../../shared/worktree/catalog/runtime-worktree-contracts'
 import {
   getPersistedWorkspaceCleanupActivityAt,
   WORKSPACE_CLEANUP_TARGET_BATCH_LIMIT,

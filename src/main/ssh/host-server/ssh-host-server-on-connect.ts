@@ -2,7 +2,7 @@
 import type {
   OrcadManagedConversionResult,
   OrcadManagedDeployResult
-} from '../../../shared/orcad-managed-runtime'
+} from '../../../shared/remote-runtime/orcad-lifecycle/orcad-managed-runtime'
 import type {
   SshManagedServerRelayReason,
   SshManagedServerLinkedProject,
@@ -10,7 +10,7 @@ import type {
   SshManagedServerServingNote,
   SshManagedServerUpdateNote,
   SshTarget
-} from '../../../shared/ssh-types'
+} from '../../../shared/remote-runtime/ssh/ssh-types'
 import type { OrcadManagedServing } from '../../managed-server/lifecycle/orcad-managed-serving'
 import {
   checkManagedServerUpdate,

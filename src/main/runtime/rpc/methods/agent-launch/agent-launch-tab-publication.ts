@@ -15,7 +15,7 @@ import type {
 import {
   navigationTargetsHost,
   resolveRuntimeNavigationTarget
-} from '../../../../../shared/runtime-navigation'
+} from '../../../../../shared/remote-runtime/session-graph/runtime-navigation'
 import { makePaneKey, parsePaneKey } from '../../../../../shared/workspace-layout/stable-pane-id'
 import { workspaceKindForWorktreeId } from '../../../../../shared/agent-launch/contracts/workspace-launch-kind'
 import { trackRunningAgentLaunchPane } from '../../../../agent-launch/agent-launch-pane-attachment'

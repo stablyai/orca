@@ -15,7 +15,7 @@ import {
 } from '@/store/workspaces/catalog/workspace-record-fields'
 import type { AppState } from '../../../../store/types'
 import type { SkillDiscoveryTarget } from '../../../../../../shared/skills'
-import type { RuntimeClientTarget } from '../../../../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 
 export type NativeChatSkillStateInputs = Pick<
   AppState,

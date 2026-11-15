@@ -1,7 +1,7 @@
 import type { ClaimedAgentPtyOwnerRegistry } from '../../../shared/claimed-agent-pty-owner'
 import type { Session } from '../sessions/session'
 import type { SessionInfo } from '../protocol/daemon-session-info'
-import type { WslGuestRoot } from '../../../shared/wsl-guest-root-marker'
+import type { WslGuestRoot } from '../../../shared/shell/wsl/wsl-guest-root-marker'
 
 // Why a side table: only the listing reads it, and Session is at its max-lines cap.
 const spawnPaneKeys = new WeakMap<Session, string>()

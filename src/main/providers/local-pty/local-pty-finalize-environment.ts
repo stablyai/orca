@@ -20,7 +20,7 @@ import {
   logHistoryInjection,
   type HistoryInjectionResult
 } from '../../pty/history/terminal-history'
-import { addWslEnvKeys } from '../../../shared/wsl-env'
+import { addWslEnvKeys } from '../../../shared/shell/wsl/wsl-env'
 import { dropInheritedOrcaHistFile } from '../../pty/history/worktree-history-file-path'
 import { promoteAgentTeamsShimPath } from './local-pty-launch-context'
 import type { LocalPtyLaunchPlan } from './local-pty-launch-plan'

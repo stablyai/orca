@@ -1,7 +1,7 @@
 // Tell each paired host which of its workspaces hold this window's unsaved edits, so its cleanup keeps them.
 import { useEffect } from 'react'
 import { errorMessage } from '../../../../shared/error-message'
-import { hasRuntimeRpcErrorCode } from '../../../../shared/runtime-rpc-error-code'
+import { hasRuntimeRpcErrorCode } from '../../../../shared/remote-runtime/rpc/runtime-rpc-error-code'
 import { useAppStore } from '@/store/index'
 import type { AppState } from '@/store/types'
 import { callRuntimeRpc } from '../rpc/calls/runtime-rpc-call'

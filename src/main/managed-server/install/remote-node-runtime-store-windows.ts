@@ -4,7 +4,7 @@ import {
   ORCAD_NODE_RUNTIME_DIR_PREFIX,
   ORCAD_NODE_RUNTIME_MARKER_FILENAME,
   ORCAD_RUNTIMES_DIRNAME
-} from '../../../shared/orcad-artifacts'
+} from '../../../shared/remote-runtime/orcad-distribution/orcad-artifacts'
 import { RUNTIME_STORE_STAGE_PREFIX } from './orcad-remote-node-runtime'
 import {
   INVENTORY_OK,

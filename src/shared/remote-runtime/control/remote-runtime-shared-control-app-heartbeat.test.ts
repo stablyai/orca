@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { SharedControlAppHeartbeat } from './remote-runtime-shared-control-app-heartbeat'
 import { RemoteRuntimeClientError } from '../remote-runtime-client-error'
 import { remoteRuntimeTimeoutError } from '../requests/remote-runtime-request-frames'
-import type { RuntimeRpcResponse } from '../../runtime-rpc-envelope'
+import type { RuntimeRpcResponse } from '../rpc/runtime-rpc-envelope'
 
 type Probe = (timeoutMs: number) => Promise<RuntimeRpcResponse<unknown>>
 

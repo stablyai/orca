@@ -5,7 +5,7 @@ import type * as ResolveOwnerModule from '@/lib/workspace/ownership/resolve-owne
 
 import type * as RuntimeFileMutationClient from '../../files/mutations/runtime-file-mutation-client'
 import type * as FrameDrawnModule from '../../web-session-tabs-sync/frame-drawn-server-workspaces'
-import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import type {
   LayoutApplyReply,
   LayoutCommand

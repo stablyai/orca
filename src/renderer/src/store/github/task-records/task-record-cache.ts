@@ -9,7 +9,7 @@ import { lookupReposBySlugFromCache } from '@/lib/workspace/catalog/repo-slug-ca
 import { getRepoExecutionHostId } from '../../../../../shared/execution-host'
 import { structuralValuesEqual } from '../../../../../shared/structural-value-equality'
 import { projectViewSourceScope } from '../cache/cache-identity'
-import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import { githubRepoIdentityKey } from '../../../../../shared/github/repositories/repository-identity-key'
 import { patchGitHubProjectRowContent } from '../projects/project-row-actions'
 import { buildProjectWorkItem } from '@/components/github-project/row-actions/project-work-item'

@@ -7,7 +7,7 @@ import { getRepoExecutionHostId, LOCAL_EXECUTION_HOST_ID } from '../../shared/ex
 import { isFolderRepo } from '../../shared/repo-kind'
 import { findExtraFolderWorkspaceIds } from '../workspaces/catalog/folder-workspace-meta-presence'
 import { normalizeRuntimePathForComparison } from '../../shared/cross-platform-path'
-import { isWslUncPath } from '../../shared/wsl-paths'
+import { isWslUncPath } from '../../shared/file-access/wsl-paths'
 import { resolveFolderToGitConversion } from '../workspaces/catalog/folder-repo-git-conversion'
 import { prepareLocalWorktreeRootForRepo } from '../workspaces/creation/worktree-root-preparation'
 import { invalidateAuthorizedRootsCache } from './worktrees/removal/registered-worktree-roots-cache'

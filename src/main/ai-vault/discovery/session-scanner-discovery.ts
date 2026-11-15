@@ -2,7 +2,7 @@ import type { Dirent } from 'node:fs'
 import { extname, join } from 'node:path'
 import { mapWithConcurrency } from '../../../shared/map-with-concurrency'
 import { PrioritySemaphore } from '../../../shared/priority-semaphore'
-import { isWslUncPath } from '../../../shared/wsl-paths'
+import { isWslUncPath } from '../../../shared/file-access/wsl-paths'
 import { SessionNewestFiles } from './session-newest-files'
 import type { SessionSidecarObservation } from '../parse-cache/session-sidecar-stat'
 import type {

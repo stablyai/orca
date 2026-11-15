@@ -6,7 +6,7 @@ import type { ProjectGroup } from '../../../../../shared/project-group-types'
 import type { ProjectHostSetup } from '../../../../../shared/project-types'
 import type { OrcadMigrationSourceCutover } from '../../../../../shared/orcad-migration/orcad-migration-source-cutover'
 import type { Repo } from '../../../../../shared/repo-types'
-import type { SshTarget } from '../../../../../shared/ssh-types'
+import type { SshTarget } from '../../../../../shared/remote-runtime/ssh/ssh-types'
 import type { Store } from '../../../loading-store/store'
 import {
   orcadSourceFolderWorkspaceIds,

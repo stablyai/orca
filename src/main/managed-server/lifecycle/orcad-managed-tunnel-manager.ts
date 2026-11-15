@@ -2,7 +2,7 @@ import {
   getRuntimeSshAccess,
   type KnownRuntimeEnvironment
 } from '../../../shared/remote-runtime/host-catalog/runtime-environments'
-import type { SshTarget } from '../../../shared/ssh-types'
+import type { SshTarget } from '../../../shared/remote-runtime/ssh/ssh-types'
 import type { SshConnection } from '../../ssh/connection/ssh-connection'
 import { isAuthError } from '../../ssh/connection/reconnect/ssh-reconnect-error-classification'
 import type { SshConnectionManager } from '../../ssh/connection/ssh-connection-manager'

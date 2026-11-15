@@ -9,7 +9,7 @@ import { syncSystemConfigIntoManagedCodexHome } from '../../../codex/configurati
 import { CodexAccountHistoryPasses } from '../../../codex/history/shared-store/codex-account-history-passes'
 import { isCodexHistorySharedAcrossAccounts } from './codex-history-sharing'
 import { resolveHostCodexSessionSourceHome } from '../../../codex/history/rollouts/codex-session-source-home'
-import { parseWslUncPath } from '../../../../shared/wsl-paths'
+import { parseWslUncPath } from '../../../../shared/file-access/wsl-paths'
 import { normalizeRuntimePathForComparison } from '../../../../shared/cross-platform-path'
 import { normalizeCodexRuntimeSelection } from '../../account-management/runtime-selection'
 import {
