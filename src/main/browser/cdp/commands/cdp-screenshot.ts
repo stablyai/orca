@@ -9,6 +9,7 @@ import {
   assertRemoteCliPageAccess,
   readRemoteCliAdmittedPage
 } from '../../routing/input-ownership/remote-cli-page-admission'
+import { readCaptureViewport, type CaptureViewport } from './cdp-capture-scale'
 
 export const SCREENSHOT_TIMEOUT_MS = 8000
 // Probe offsets leave time for the original capture to finish before the deadline.
@@ -16,7 +17,8 @@ const FRAME_PROBE_OFFSETS_MS = [250, 750, 1750, 3750]
 // No clip: the probe's frame answers the pending capture too, and a clip shifts it by scrollY.
 const FRAME_PROBE_PARAMS = { format: 'jpeg', quality: 1 }
 const FALLBACK_CAPTURE_TIMEOUT_MS = 1000
-const SCREENSHOT_TIMEOUT_MESSAGE = 'Screenshot timed out — the browser page did not draw a frame.'
+export const SCREENSHOT_TIMEOUT_MESSAGE =
+  'Screenshot timed out — the browser page did not draw a frame.'
 
 function applyFallbackClip(
   image: Electron.NativeImage,
@@ -93,33 +95,6 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null
 }
 
-function getLayoutClip(
-  metrics: unknown
-): { x: number; y: number; width: number; height: number; scale: number } | null {
-  // Clips use CSS pixels; HiDPI contentSize can cause duplicated tiles.
-  const size = isRecord(metrics) ? (metrics.cssContentSize ?? metrics.contentSize) : undefined
-  const width = isRecord(size) ? size.width : undefined
-  const height = isRecord(size) ? size.height : undefined
-  if (
-    typeof width !== 'number' ||
-    !Number.isFinite(width) ||
-    width <= 0 ||
-    typeof height !== 'number' ||
-    !Number.isFinite(height) ||
-    height <= 0
-  ) {
-    return null
-  }
-
-  return {
-    x: 0,
-    y: 0,
-    width: Math.ceil(width),
-    height: Math.ceil(height),
-    scale: 1
-  }
-}
-
 export function withTimeout<T>(
   promise: Promise<T>,
   timeoutMs: number,
@@ -139,7 +114,7 @@ export function withTimeout<T>(
 }
 
 // Undrawn pages can leave captures pending; cheap probes trigger a frame for the original request.
-function captureUntilDrawn(
+export function captureUntilDrawn(
   webContents: WebContents,
   params: Record<string, unknown>,
   holdPaint: CapturePaintHold
@@ -187,63 +162,58 @@ function captureUntilDrawn(
     }
     const deadline = setTimeout(() => finish(() => resolve(null)), SCREENSHOT_TIMEOUT_MS)
     let probes: NodeJS.Timeout[] = []
+    let captureSent = false
+    const sendCapture = (): void => {
+      if (captureSent || settled) {
+        return
+      }
+      captureSent = true
+      send(params)?.then(
+        (result) => finish(() => resolve(result?.data ? { data: result.data } : null)),
+        (error: unknown) =>
+          finish(() => reject(error instanceof Error ? error : new Error(String(error))))
+      )
+    }
     if (params.clip || params.captureBeyondViewport) {
       // A probe sent during a clipped or beyond-viewport capture leaves its emulation applied
       // afterwards; one sent just before is safe, and the emulation change then draws the frame.
-      send(FRAME_PROBE_PARAMS)?.catch(() => {})
+      // Wait for its frame too: a capture pending beside it is answered with that unclipped frame.
+      probes = [setTimeout(sendCapture, FRAME_PROBE_OFFSETS_MS[0])]
+      send(FRAME_PROBE_PARAMS)?.then(sendCapture, sendCapture)
     } else {
       probes = FRAME_PROBE_OFFSETS_MS.map((offsetMs) =>
         setTimeout(() => send(FRAME_PROBE_PARAMS)?.catch(() => {}), offsetMs)
       )
+      sendCapture()
     }
-    send(params)?.then(
-      (result) => finish(() => resolve(result?.data ? { data: result.data } : null)),
-      (error: unknown) =>
-        finish(() => reject(error instanceof Error ? error : new Error(String(error))))
-    )
   })
 }
 
-export async function captureFullPageScreenshot(
-  webContents: WebContents,
-  format: 'png' | 'jpeg',
-  holdPaint: CapturePaintHold
-): Promise<{ data: string; format: 'png' | 'jpeg' }> {
-  if (webContents.isDestroyed()) {
-    throw new Error('WebContents destroyed')
-  }
-  if (!webContents.debugger.isAttached()) {
-    throw new Error('Debugger not attached')
-  }
+const DEVICE_PIXEL_RATIO_WORLD_ID = 1_209
 
-  const release = holdPaint()
-  try {
-    // Layout works before drawing; only pixel capture needs a frame.
-    const metrics = await withTimeout(
-      sendGuestCdpCommand(webContents, 'Page.getLayoutMetrics', {}),
-      SCREENSHOT_TIMEOUT_MS,
-      'Screenshot timed out — the browser page did not respond.'
-    )
-    const clip = getLayoutClip(metrics)
-    if (!clip) {
-      throw new Error('Unable to determine full-page screenshot bounds')
-    }
-    const frame = await captureUntilDrawn(
-      webContents,
-      {
-        format,
-        captureBeyondViewport: true,
-        clip
-      },
-      holdPaint
-    )
-    if (!frame) {
-      throw new Error(SCREENSHOT_TIMEOUT_MESSAGE)
-    }
-    return { data: frame.data, format }
-  } finally {
-    release()
-  }
+/** Reads what a capture may ask for; layout and script answer before the page draws. */
+export async function measureCaptureViewport(
+  webContents: WebContents
+): Promise<CaptureViewport | null> {
+  const metrics = await withTimeout(
+    sendGuestCdpCommand(webContents, 'Page.getLayoutMetrics', {}),
+    SCREENSHOT_TIMEOUT_MS,
+    'Screenshot timed out — the browser page did not respond.'
+  )
+  // An isolated world reads the real ratio even when the page redefines window.devicePixelRatio.
+  const devicePixelRatio = await withTimeout(
+    Promise.resolve().then(() =>
+      webContents.executeJavaScriptInIsolatedWorld(DEVICE_PIXEL_RATIO_WORLD_ID, [
+        { code: 'window.devicePixelRatio' }
+      ])
+    ),
+    SCREENSHOT_TIMEOUT_MS,
+    'Screenshot timed out — the browser page did not respond.'
+  ).catch(() => null)
+  return readCaptureViewport(
+    metrics,
+    typeof devicePixelRatio === 'number' ? devicePixelRatio : null
+  )
 }
 
 // Prefer CDP for beyond-viewport capture; bound stalls below agent-browser’s 30-second timeout.
@@ -278,6 +248,14 @@ export async function captureScreenshot(
 
   const release = holdPaint()
   try {
+    if (!screenshotParams.clip && !screenshotParams.captureBeyondViewport) {
+      // A page that cannot report its layout is captured as asked.
+      const viewport = await measureCaptureViewport(webContents).catch(() => null)
+      if (viewport?.emulatedDensity) {
+        // Chromium copies an emulated ratio's full pixel count from the smaller drawn surface and tiles it.
+        screenshotParams.clip = { ...viewport.viewport, scale: viewport.scale }
+      }
+    }
     const frame = await captureUntilDrawn(webContents, screenshotParams, holdPaint)
     if (frame) {
       return frame

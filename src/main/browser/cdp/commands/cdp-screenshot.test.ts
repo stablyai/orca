@@ -10,6 +10,7 @@ function createMockWebContents() {
     isDestroyed: vi.fn(() => false),
     invalidate: vi.fn(),
     capturePage: vi.fn(),
+    executeJavaScriptInIsolatedWorld: vi.fn(async (): Promise<unknown> => 1),
     debugger: {
       isAttached: vi.fn(() => true),
       sendCommand: vi.fn()
@@ -34,7 +35,10 @@ describe('an SSH host’s capture', () => {
 
   it('refuses a capture whose frame was drawn after the page moved to a desktop file', async () => {
     const webContents = createMockWebContents()
-    webContents.debugger.sendCommand.mockImplementation(async () => {
+    webContents.debugger.sendCommand.mockImplementation(async (method: string) => {
+      if (method !== 'Page.captureScreenshot') {
+        return {}
+      }
       url = 'file:///Users/me/private.txt'
       return { data: 'private-pixels' }
     })
@@ -47,12 +51,49 @@ describe('an SSH host’s capture', () => {
   it('stops at the next probe once the page moved to a desktop file, never falling back', async () => {
     // Fake timers do not carry the host command context into probes.
     const webContents = createMockWebContents()
-    webContents.debugger.sendCommand.mockImplementation(() => new Promise(() => {}))
+    webContents.debugger.sendCommand.mockImplementation((method: string) =>
+      method === 'Page.captureScreenshot' ? new Promise(() => {}) : Promise.resolve({})
+    )
     const capture = asHost(() => captureScreenshot(webContents.guest, { format: 'png' }, noHold))
+    await vi.waitFor(() => expect(webContents.debugger.sendCommand).toHaveBeenCalledTimes(2))
     url = 'file:///Users/me/private.txt'
 
     await expect(capture).rejects.toThrow(REFUSED)
-    expect(webContents.debugger.sendCommand).toHaveBeenCalledTimes(1)
+    expect(webContents.debugger.sendCommand).toHaveBeenCalledTimes(2)
     expect(webContents.capturePage).not.toHaveBeenCalled()
+  })
+})
+
+describe('a capture of a page with an emulated device pixel ratio', () => {
+  it('asks for the visible area at the density the page really draws, so it is not tiled', async () => {
+    const webContents = createMockWebContents()
+    // `orca viewport --scale 3` on a 125% Windows display.
+    webContents.executeJavaScriptInIsolatedWorld.mockResolvedValue(3)
+    webContents.debugger.sendCommand.mockImplementation(async (method: string) =>
+      method === 'Page.getLayoutMetrics'
+        ? {
+            cssContentSize: { width: 390, height: 844 },
+            cssVisualViewport: {
+              pageX: 0,
+              pageY: 0,
+              clientWidth: 390,
+              clientHeight: 844,
+              scale: 1,
+              zoom: 1
+            },
+            visualViewport: { clientWidth: 487.5, clientHeight: 1055 }
+          }
+        : { data: 'pixels' }
+    )
+
+    await expect(
+      captureScreenshot(webContents.guest, { format: 'png', fromSurface: true }, noHold)
+    ).resolves.toEqual({ data: 'pixels' })
+    const captures = webContents.debugger.sendCommand.mock.calls.filter(
+      ([method]) => method === 'Page.captureScreenshot'
+    )
+    const clip = captures.at(-1)?.[1]?.clip
+    expect(clip).toMatchObject({ x: 0, y: 0, width: 390, height: 844 })
+    expect(clip.scale).toBeCloseTo(0.4167, 4)
   })
 })
