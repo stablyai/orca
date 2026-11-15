@@ -13,6 +13,8 @@ export function exposeDispatchContext(dispatch: DispatchContextRow) {
     assigneeHandle: dispatch.assignee_handle,
     assigneePaneKey: dispatch.assignee_pane_key,
     processIncarnation: dispatch.process_incarnation,
+    creatorOrcaSessionId: dispatch.creator_orca_session_id,
+    assigneeOrcaSessionId: dispatch.assignee_orca_session_id,
     capabilityRevokedAt: dispatch.capability_revoked_at,
     retryOfDispatchId: dispatch.retry_of_dispatch_id,
     creatorDispatchId: dispatch.creator_dispatch_id,

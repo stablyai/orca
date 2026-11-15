@@ -98,6 +98,8 @@ If the user turns on **Let coordinators approve worker permission prompts** in O
 orca orchestration approve --dispatch <dispatchId> --prompt <approvalId> --reason "<reason>"
 ```
 
+The concise `worker-show` view omits session IDs. Use `orca orchestration worker-show --dispatch <id> --full --json` to read `dispatch.creatorOrcaSessionId` and `dispatch.assigneeOrcaSessionId`: bare stored Orca session IDs, or `null` when absent. In contrast, `orca status --json` reports `caller.orcaSessionId` as a prefixed `orca_session_id:` address; the representations are distinct.
+
 Do not leave completed worker terminals open just to re-read output — use `worker-read` after `worker-release`. Do not substitute a broad `terminal close` when release returns `release_pending` or `release_unknown`; follow the receipt's recovery action.
 
 ## Federated workers (optional)
