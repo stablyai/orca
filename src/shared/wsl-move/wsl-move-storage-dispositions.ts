@@ -236,11 +236,12 @@ export const SQLITE_TABLE_DISPOSITIONS: Record<string, WslMoveFieldDisposition> 
         'legacy_mail_receipts',
         'legacy_operation_receipts',
         'removed_orchestration_work',
-        'removed_orchestration_work_coverage'
+        'removed_orchestration_work_coverage',
+        'orchestration_maintenance'
       ],
       notApplicableDisposition(
         53,
-        'Idempotency receipts: a replay returns the bytes first answered.'
+        'Idempotency receipts (a replay returns the bytes first answered) and when maintenance last ran.'
       )
     ),
     ...tables(

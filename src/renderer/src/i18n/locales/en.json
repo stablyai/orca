@@ -9262,7 +9262,20 @@
           "coordinatorApprovalsKeywordApprove": "approve",
           "coordinatorApprovalsKeywordPermission": "permission",
           "7bc082f4de": "Copy install command",
-          "8a94078d05": "Agent orchestration"
+          "8a94078d05": "Agent orchestration",
+          "storageShrinksItself": "Uses {{size}} on this computer. Orca returns space it no longer needs to the disk on its own.",
+          "storageReclaimable": "Uses {{size}} on this computer, {{reclaimable}} of it unused. Reclaim space returns the unused part to the disk, and Orca keeps doing so on its own afterwards.",
+          "storageReclaimTitle": "Restart Orca to reclaim space?",
+          "storageReclaimWarning": "Orca restarts and rewrites its orchestration database before it opens again. On a large database that can take a minute or more. Runs, tasks and messages are kept.",
+          "storageReclaimConfirm": "Restart and reclaim",
+          "storageReclaimDiskSpace": "Reclaiming needs {{needed}} of free disk space, and {{free}} is free. Free up disk space, then try again.",
+          "storageReclaimError": "Could not restart Orca to reclaim space. Try again.",
+          "storageReclaim": "Reclaim space",
+          "storageTitle": "Orchestration storage",
+          "storageDescription": "Disk space the orchestration database uses on this computer, and Reclaim space to return what it no longer needs.",
+          "storageKeywordDisk": "disk space",
+          "storageKeywordDatabase": "database",
+          "storageKeywordReclaim": "reclaim"
         },
         "OrchestrationSetupCard": {
           "e7d2a5146c": "Enables agents to hand off context and coordinate work through Orca.",

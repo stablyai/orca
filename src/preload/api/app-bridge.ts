@@ -16,6 +16,10 @@ import {
   startupDiagnosticsEnabled
 } from '../renderer/renderer-runtime'
 import type { PreloadApi } from '../api-types'
+import type {
+  OrchestrationDbReclaimRequest,
+  OrchestrationDbStorage
+} from '../../shared/orchestration/orchestration-db-storage'
 
 export const appApi = {
   getSystemLanguageDetection: (browserPreferences?: readonly string[]) =>
@@ -48,6 +52,15 @@ export const appApi = {
       window,
       () => ipcRenderer.invoke('app:relaunch'),
       awaitBeforeUnloadCheckpoint
+    ),
+  getOrchestrationStorage: (): Promise<OrchestrationDbStorage | null> =>
+    ipcRenderer.invoke('app:getOrchestrationStorage'),
+  relaunchReclaimingOrchestrationStorage: (): Promise<OrchestrationDbReclaimRequest> =>
+    prepareAndInvokeAppRestart(
+      window,
+      () => ipcRenderer.invoke('app:relaunchReclaimingOrchestrationStorage'),
+      awaitBeforeUnloadCheckpoint,
+      (request: OrchestrationDbReclaimRequest) => request.ok
     ),
   restart: (): Promise<void> =>
     prepareAndInvokeAppRestart(
