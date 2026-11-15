@@ -139,8 +139,7 @@ export function themeBuiltInValuesFromCss(
   tokens: readonly string[]
 ): Record<Mode, Record<string, string>> {
   const css = stripComments(cssText)
-  const result = {} as Record<Mode, Record<string, string>>
-  for (const mode of ['light', 'dark'] as const) {
+  const valuesFor = (mode: Mode): Record<string, string> => {
     const declared = new Map<string, string>()
     collect(css, ':root', declared)
     if (mode === 'dark') {
@@ -150,9 +149,11 @@ export function themeBuiltInValuesFromCss(
       const raw = declared.get(token)
       return raw === undefined ? '' : (substitute(raw, declared, new Set([token])) ?? '')
     }
-    result[mode] = Object.fromEntries(tokens.map((token) => [token, read(token)]))
-    // Why: chat paints an omitted link color as --callout-note, as the renderer reads it.
-    result[mode]['--text-link'] = read('--text-link') || read('--callout-note')
+    return {
+      ...Object.fromEntries(tokens.map((token) => [token, read(token)])),
+      // Why: chat paints an omitted link color as --callout-note, as the renderer reads it.
+      '--text-link': read('--text-link') || read('--callout-note')
+    }
   }
-  return result
+  return { light: valuesFor('light'), dark: valuesFor('dark') }
 }

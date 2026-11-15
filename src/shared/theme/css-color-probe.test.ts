@@ -6,12 +6,20 @@ import { THEME_BUILT_IN_VALUES } from './theme-built-in-values.generated'
 
 type Row = [string, [number, number, number, number] | null]
 
+function isRow(value: unknown): value is Row {
+  return (
+    Array.isArray(value) &&
+    typeof value[0] === 'string' &&
+    (value[1] === null || Array.isArray(value[1]))
+  )
+}
+
 // Why a looser bound for these: Chromium maps far-out-of-gamut Lab slightly differently than a
 // plain clip; no theme value or built-in is this far out.
 const OUT_OF_GAMUT = new Set(['lab(10 -100 100 / 0.3)', 'color(xyz-d65 0.2 0.3 0.4 / 50%)'])
 
 describe('cssColorProbe parity with the renderer canvas probe', () => {
-  const rows = fixture.rows as Row[]
+  const rows: Row[] = fixture.rows.flatMap((row: unknown) => (isRow(row) ? [row] : []))
 
   it('resolves every sample within one 8-bit step of Chromium', () => {
     const mismatches = rows.flatMap(([input, expected]) => {
