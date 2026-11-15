@@ -9,6 +9,7 @@ import {
   recoveryRecordMatches,
   sleepingRecordsEquivalentIgnoringCaptureTime
 } from '../../../../shared/agent-session/lifecycle/resume/agent-resume-record-equivalence'
+import { acceptedAgentStatuses } from '@/store/slices/agent-status/accepted-agent-statuses'
 
 const NOW = 1_800_000_000_000
 const PANE_KEY = 'tab-1:leaf-1'
@@ -60,7 +61,7 @@ function restartedStore(
   const store = createTestStore()
   store.setState({
     tabsByWorktree: { 'wt-1': [makeTab({ id: 'tab-1', worktreeId: 'wt-1' })] },
-    agentStatusByPaneKey: { [PANE_KEY]: entry },
+    agentStatusByPaneKey: acceptedAgentStatuses([[PANE_KEY, entry]]),
     agentLaunchConfigByPaneKey: {},
     sleepingAgentSessionsByPaneKey: records
   })

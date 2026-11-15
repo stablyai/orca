@@ -23,7 +23,7 @@ export function useClaudeTabAccountLabel(tab: Pick<TerminalTab, 'id' | 'worktree
     return leafId && isTerminalLeafId(leafId) ? makePaneKey(tab.id, leafId) : null
   })
   const statusAccountId = useAppStore((s) =>
-    paneKey ? s.agentStatusByPaneKey?.[paneKey]?.claudeAccountId : undefined
+    paneKey ? s.agentStatusByPaneKey?.get(paneKey)?.claudeAccountId : undefined
   )
   const launchConfig = useAppStore((s) =>
     paneKey ? s.agentLaunchConfigByPaneKey?.[paneKey]?.launchConfig : undefined

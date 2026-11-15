@@ -84,6 +84,7 @@ export function launchSleepingAgentSession(
     return false
   }
 
+  const expectedStatus = state.agentStatusByPaneKey.get(record.paneKey)
   const tab = state.createTab(record.worktreeId, undefined, undefined, {
     launchAgent: record.agent,
     pendingStartup: {
@@ -95,12 +96,12 @@ export function launchSleepingAgentSession(
       resumeSource: {
         cancelled: false,
         record,
-        ...(state.agentStatusByPaneKey[record.paneKey]
+        ...(expectedStatus
           ? {
               expectedStatus: {
                 paneKey: record.paneKey,
-                receivedAt: state.agentStatusByPaneKey[record.paneKey].updatedAt,
-                stateStartedAt: state.agentStatusByPaneKey[record.paneKey].stateStartedAt
+                receivedAt: expectedStatus.updatedAt,
+                stateStartedAt: expectedStatus.stateStartedAt
               }
             }
           : {})

@@ -64,7 +64,7 @@ function rememberForkOrigin(
     }
     const leafId = launchedLeafId(state.terminalLayoutsByTabId[terminalTabId]?.root)
     const fork = leafId
-      ? state.agentStatusByPaneKey[`${terminalTabId}:${leafId}`]?.providerSession?.id
+      ? state.agentStatusByPaneKey.get(`${terminalTabId}:${leafId}`)?.providerSession?.id
       : undefined
     if (fork) {
       forkOrigins.set(forkOriginKey(origin.workspaceId, fork), origin)

@@ -68,7 +68,7 @@ describe("main's pinned Claude account on the agent-status row", () => {
     expect(
       claudeTabAccountLabel(
         {
-          statusAccountId: state.agentStatusByPaneKey[PANE_KEY]?.claudeAccountId,
+          statusAccountId: state.agentStatusByPaneKey.get(PANE_KEY)?.claudeAccountId,
           launchConfig: state.agentLaunchConfigByPaneKey[PANE_KEY]?.launchConfig
         },
         [
@@ -95,9 +95,9 @@ describe("main's pinned Claude account on the agent-status row", () => {
       prompt: 'x',
       agentType: 'claude'
     })
-    expect(store.getState().agentStatusByPaneKey[PANE_KEY]?.claudeAccountId).toBe('acct-b')
+    expect(store.getState().agentStatusByPaneKey.get(PANE_KEY)?.claudeAccountId).toBe('acct-b')
 
     ingest(store, hostRow(6_000))
-    expect(store.getState().agentStatusByPaneKey[PANE_KEY]?.claudeAccountId).toBeUndefined()
+    expect(store.getState().agentStatusByPaneKey.get(PANE_KEY)?.claudeAccountId).toBeUndefined()
   })
 })

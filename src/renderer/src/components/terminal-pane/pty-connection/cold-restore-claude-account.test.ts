@@ -5,11 +5,12 @@ import { parseWorkspaceSession } from '../../../../../shared/workspace-session/w
 import { resolveProjectClaudeAccount } from '../../../../../main/claude-accounts/project-claude-account-resolution'
 import type { ConnectPanePtySession } from './connect-pane-pty-session'
 import { bindBuildColdRestoreAgentResumeStartup } from './startup/cold-restore-resume-startup'
+import { acceptedAgentStatuses } from '@/store/slices/agent-status/accepted-agent-statuses'
 
 const PANE_KEY = 'tab1:pane-1'
 const store = {
   // Why empty: after a restart this renderer never saw the original launch.
-  agentStatusByPaneKey: {},
+  agentStatusByPaneKey: acceptedAgentStatuses(),
   agentLaunchConfigByPaneKey: {},
   getAgentLaunchConfigForStatusEntry: () => undefined,
   settings: { agentCmdOverrides: {}, agentDefaultArgs: {}, agentDefaultEnv: {} }

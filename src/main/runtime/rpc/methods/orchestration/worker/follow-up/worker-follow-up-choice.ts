@@ -215,7 +215,10 @@ export async function userTabHoldingSession(
   runtime: OrcaRuntimeService,
   session: WorkerResumeSession
 ): Promise<string | undefined> {
-  for (const row of runtime.getAgentStatusSnapshotFn?.() ?? []) {
+  for (const row of runtime.getAgentRowsForProviderSession(
+    session.agent,
+    session.providerSession
+  )) {
     const handle =
       row.agentType === session.agent &&
       !row.structuredHost &&

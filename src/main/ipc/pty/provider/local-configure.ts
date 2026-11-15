@@ -158,7 +158,7 @@ export function configureLocalPtyProvider(args: {
         return
       }
       const viewShown = ORCA_LAYOUT_OWNER_IS_MAIN && visibleRendererPtys.has(id)
-      clearProviderPtyState(id)
+      clearProviderPtyState(id, { exitProven: true })
       ptyOwnership.delete(id)
       runtime?.onPtyExit(id, code, incarnationId, {
         providerExitObserved: true,

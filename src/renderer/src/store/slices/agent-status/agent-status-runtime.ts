@@ -88,15 +88,11 @@ export function createAgentStatusRuntime(
     before: AppState,
     paneKeys: ReadonlySet<string>
   ): void => {
-    if (!listeners.size) {
-      storeSet(patch, false)
-      return
-    }
     const changes: AgentStatusChange[] = []
     const rows = patch.agentStatusByPaneKey ?? before.agentStatusByPaneKey
     for (const paneKey of paneKeys) {
-      const previous = before.agentStatusByPaneKey[paneKey]
-      const current = rows[paneKey]
+      const previous = before.agentStatusByPaneKey.get(paneKey)
+      const current = rows.get(paneKey)
       if (!structuralValuesEqualIgnoringUndefined(previous, current)) {
         changes.push({ paneKey, previous, current })
       }
@@ -105,6 +101,9 @@ export function createAgentStatusRuntime(
     pendingChanges.push(changes)
     try {
       storeSet(patch, false)
+      if (storeGet() !== before) {
+        freshness.noteChanges(changes)
+      }
     } finally {
       // A middleware rejection before commit must never advertise accepted rows.
       if (storeGet() === before) {
@@ -276,9 +275,10 @@ export function createAgentStatusRuntime(
 
   const freshness = createFreshnessScheduler({
     getStatusEntries: () => get().agentStatusByPaneKey,
-    bumpEpochs: () => {
+    bumpEpochs: (keys = []) => {
       // Time-based staleness changes ordering without output; bump freshness/sort epochs at boundaries.
       set((s) => ({
+        agentStatusByPaneKey: s.agentStatusByPaneKey.refresh(keys),
         agentStatusEpoch: s.agentStatusEpoch + 1,
         sortEpoch: s.sortEpoch + 1
       }))

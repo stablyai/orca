@@ -1,3 +1,4 @@
+import { acceptedAgentStatuses } from '@/store/slices/agent-status/accepted-agent-statuses'
 import type * as RuntimeCapabilityProofModule from '@/runtime/rpc/compatibility/runtime-capability-proof'
 // @vitest-environment happy-dom
 
@@ -111,7 +112,7 @@ function pins(): AppState['structuredSessionLaunchDirectoryByTabId'] {
 }
 
 function statuses() {
-  return Object.values(useAppStore.getState().agentStatusByPaneKey)
+  return Array.from(useAppStore.getState().agentStatusByPaneKey.values())
 }
 function feed(index = 0): { target: unknown; emit: (event: AgentSessionStatusEvent) => void } {
   const call = mocks.subscribeStatus.mock.calls[index]
@@ -129,7 +130,7 @@ describe('StructuredAgentSessionStatusBridge pinned launch directory', () => {
     mocks.store?.setState({
       structuredSessionLaunchDirectoryByTabId: {},
       structuredChatSleptAtByPaneKey: {},
-      agentStatusByPaneKey: {},
+      agentStatusByPaneKey: acceptedAgentStatuses(Object.entries({})),
       unifiedTabsByWorktree: { [FLOATING_TERMINAL_WORKTREE_ID]: [floatingTab] }
     })
   })
