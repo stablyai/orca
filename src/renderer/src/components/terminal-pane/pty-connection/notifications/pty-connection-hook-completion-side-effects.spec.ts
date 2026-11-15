@@ -131,6 +131,9 @@ export function registerPtyConnectionHookCompletionSideEffectsTests(): void {
       }
 
       titleHandler('Claude working', 'Claude working')
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: connectPanePty registers onAgentBecameWorking as a () => void transport callback
+      const becameWorking = createdTransportOptions[0]?.onAgentBecameWorking as () => void
+      becameWorking()
       titleHandler('Claude done', 'Claude done')
       idleHandler('Claude done')
       vi.advanceTimersByTime(AGENT_TASK_COMPLETE_NOTIFICATION_MAX_WAIT_MS)
@@ -398,6 +401,10 @@ export function registerPtyConnectionHookCompletionSideEffectsTests(): void {
         paneKey,
         stateHistory: []
       }
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: connectPanePty registers onAgentBecameWorking as a () => void transport callback
+      const replacementBecameWorking = createdTransportOptions[0]
+        ?.onAgentBecameWorking as () => void
+      replacementBecameWorking()
       idleHandler('Claude done')
       getForegroundProcess.mockResolvedValue('claude')
       await vi.advanceTimersByTimeAsync(1_000)

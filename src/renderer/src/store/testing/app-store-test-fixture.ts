@@ -65,9 +65,7 @@ import { markHydratedBrowserPageHandles } from '../slices/browser/hosts/browser-
 const withTestStorePolicies = (creator: StateCreator<AppState, [], []>, check: boolean) =>
   withEditorBufferRecords(withAgentConversationRetention(creator), check)
 
-export function createTestStore(
-  isClaudeAgent: Parameters<typeof createTerminalSlice>[3] = undefined
-) {
+export function createTestStore() {
   // Why: the session generation is module state; a shared test worker would carry another file's bumps into this store.
   resetProviderRuntimeSessionGenerationForTests()
   // Why the record middleware: views of one file share a record only through it, as in the app.
@@ -77,7 +75,7 @@ export function createTestStore(
         ...createRepoSlice(...a),
         ...createSparsePresetsSlice(...a),
         ...createWorktreeSlice(...a),
-        ...createTerminalSlice(...a, isClaudeAgent),
+        ...createTerminalSlice(...a),
         ...createTabsSlice(...a),
         ...createUISlice(...a),
         ...createSettingsSlice(...a),

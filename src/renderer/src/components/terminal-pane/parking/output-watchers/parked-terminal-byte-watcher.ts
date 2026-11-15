@@ -1,5 +1,5 @@
 /** Keep mounted-pane bell/title/completion/PR-link policy active while parking unmounts TerminalPane. */
-import { isClaudeIdleEdge } from '@/components/terminal-pane/agent-status/agent-idle-edge'
+import { canStartPromptCacheCountdown } from '@/components/terminal-pane/agent-status/agent-idle-edge'
 import type { AgentIdleEdgeMeta } from '../../../../../../shared/terminal/output/terminal-output-side-effects'
 import { resolveTerminalNotificationOwner } from '@/attention/notification-subject-owner'
 import type { NotificationWorkspaceOwner } from '../../../../../../shared/notification-source'
@@ -141,8 +141,9 @@ export function startParkedTerminalByteWatcher(
 
   // Byte mode and fact mode share policy so switching authority preserves behavior.
   const sideEffectCallbacks = {
-    onTitleChange: (title: string): void => {
+    onTitleChange: (title: string, rawTitle: string): void => {
       const state = useAppStore.getState()
+      commandStatusPolicy.observeTitle(rawTitle)
       wroteRuntimeTitleSlot = true
       state.setRuntimePaneTitle(tabId, paneId, title)
       if (drivesTabTitle) {
@@ -164,11 +165,9 @@ export function startParkedTerminalByteWatcher(
         return
       }
       const state = useAppStore.getState()
-      // Why: null settings means "not hydrated yet"; a spurious timestamp is harmless while a dropped one loses the timer.
-      if (
-        isClaudeIdleEdge(title, state.agentStatusByPaneKey[paneKey]) &&
-        (state.settings === null || state.settings.promptCacheTimerEnabled)
-      ) {
+      const entry = state.agentStatusByPaneKey[paneKey]
+      const startedAt = state.cacheTimerByKey[paneKey]
+      if (canStartPromptCacheCountdown({ title, entry, settings: state.settings, startedAt })) {
         state.setCacheTimerStartedAt(paneKey, Date.now())
       }
       if (!isAgentTaskCompleteTrackingEnabled(state)) {
@@ -211,15 +210,15 @@ export function startParkedTerminalByteWatcher(
     },
     onAgentBecameWorking: (): void => {
       // Why: a new API call refreshes the prompt-cache TTL, so clear the running countdown; it restarts when the agent next becomes idle.
-      useAppStore.getState().setCacheTimerStartedAt(paneKey, null)
+      commandStatusPolicy.promptCacheBoundary.onRequest()
       clearAgentTaskCompleteTimer()
       if (pendingBellNotification) {
         scheduleTerminalBellNotification()
       }
     },
     onAgentExited: (): void => {
-      // Why: title reverting to a plain shell means the agent session ended; clear the countdown so it doesn't survive in the sidebar while parked.
-      useAppStore.getState().setCacheTimerStartedAt(paneKey, null)
+      // Why: title reverting to a plain shell means the agent session ended; end it so the countdown doesn't survive in the sidebar while parked.
+      commandStatusPolicy.promptCacheBoundary.end()
     }
   }
 
@@ -229,7 +228,9 @@ export function startParkedTerminalByteWatcher(
     worktreeId,
     tabId,
     paneId,
-    paneKey
+    paneKey,
+    initialTitle: options.initialTitle,
+    allowInitialIdleCacheSeed: options.restoreTitleOnRegister === true
   })
 
   // Main-derived facts own policy under main authority; byte parsers would double-fire side effects.
@@ -258,7 +259,10 @@ export function startParkedTerminalByteWatcher(
   // Byte mode uses the same shared parsers as mounted panes; main mode receives equivalent facts.
   const commandFinishedScanner = factSideEffectAuthority
     ? null
-    : createOsc133CommandFinishedScanner(commandStatusPolicy.onCommandFinished)
+    : createOsc133CommandFinishedScanner(
+        commandStatusPolicy.onCommandFinished,
+        commandStatusPolicy.onCommandStarted
+      )
   // Seed Command Code’s in-flight turn: the banner is gone and the recreated detector otherwise misses return to idle.
   const commandCodeOutputStatusDetector = factSideEffectAuthority
     ? null

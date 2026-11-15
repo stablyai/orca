@@ -1,5 +1,5 @@
 import type { FreshWorkspaceAgentLaunch } from '@/lib/workspace/creation/worktree-startup-payload'
-import type { TerminalState } from './terminal-state'
+import type { PromptCacheTimerEntry, TerminalState } from './terminal-state'
 import type { Tab } from '../../../../shared/tab-types'
 import type { TabSplitTarget } from '../slices/tabs/tabs-slice-contract'
 import type {
@@ -274,7 +274,8 @@ export type TerminalActions = {
     command: string
     env?: Record<string, string>
   } | null
-  setCacheTimerStartedAt: (key: string, ts: number | null) => void
+  /** null ends the agent session's cache state, forgetting its request evidence. */
+  setCacheTimerStartedAt: (key: string, entry: PromptCacheTimerEntry | null) => void
   recordTerminalInput: (paneKey: string, timestamp?: number) => void
   seedCacheTimersForIdleTabs: () => void
   setDeferredSshReconnectTargets: (targetIds: string[]) => void

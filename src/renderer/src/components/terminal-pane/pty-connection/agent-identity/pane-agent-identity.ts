@@ -150,7 +150,12 @@ export function installPaneAgentIdentity(session: ConnectPanePtySession): void {
         : window.api.pty.confirmForegroundProcess(id),
     isRemotePtyId: isRemoteExecutionHostPtyId,
     getExpectedIncarnationId: () => session.remotePtyIncarnationId ?? null,
-    publish: (entry) => useAppStore.getState().setPaneForegroundAgent(session.cacheKey, entry),
+    publish: (entry) => {
+      useAppStore.getState().setPaneForegroundAgent(session.cacheKey, entry)
+      // Why lazy: title observation, which owns both, is installed after this tracker.
+      session.promptCacheCommandBoundary?.onForegroundPublished(entry)
+      session.restoredCacheTimer?.retry()
+    },
     getPublishedEntry: () => useAppStore.getState().paneForegroundAgentByPaneKey[session.cacheKey],
     // Why lazy: the completion coordinator is installed after this tracker.
     onAgentProcessRead: (process) =>
@@ -170,6 +175,8 @@ export function installPaneAgentIdentity(session: ConnectPanePtySession): void {
         session.clearSleepingRecordProviderDuplicates(state, sleepingRecord)
       }
       session.clearStaleAgentTabTitleOnConfirmedShell()
+      // The agent is gone even when its title stayed, so its cache countdown ends with it.
+      session.promptCacheCommandBoundary?.end()
       // Confirmed hard-kill exit must disarm leftover mouse/focus/Kitty modes; guard reset auto-replies from reaching the shell.
       session.writeInputModeGround(CONFIRMED_SHELL_MODE_RESET)
       // Agents that leave their OSC title (grok, codex) never trip the title exit; Orca's own hibernation stop keeps its chat.
@@ -212,6 +219,7 @@ export function installPaneAgentIdentity(session: ConnectPanePtySession): void {
   session.handleCommandFinished = (bestEffortExitCode: number | null): void => {
     session.clearCommandInferredPaneAgentAfterPtySideEffects()
     session.visibleForegroundSamplePending = false
+    session.endPromptCacheWaitsOnCommandFinished()
     const shouldDeferStatusDrop = session.paneForegroundAgentTracker.onCommandFinished()
     // Commands can change HEAD/index; nudge git UI immediately instead of waiting for polling.
     dispatchTerminalCommandFinishedEvent(session.deps.worktreeId, bestEffortExitCode)
@@ -313,6 +321,7 @@ export function installPaneAgentIdentity(session: ConnectPanePtySession): void {
       dismissRetainedProgramResult(session.cacheKey, useAppStore.getState())
       session.visibleForegroundSamplePending = false
       session.visibleForegroundSampleSettled = false
+      session.endPromptCacheWaitsOnCommandStarted()
       // Typed aliases may widen confirmation timing but cannot supply routing evidence.
       session.paneForegroundAgentTracker.onCommandStarted(session.commandInferredPaneAgent)
     },

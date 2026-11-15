@@ -1,10 +1,35 @@
 import { resolvePaneTitleDecision } from '../../titles/terminal-title-evidence'
 import { useAppStore } from '@/store'
-import { shouldSeedCacheTimerOnInitialTitle } from '../../titles/cache-timer-seeding'
+import { createRestoredPromptCacheTimer } from '../../titles/restored-prompt-cache-timer'
+import { createPromptCacheCommandBoundary } from '../../agent-status/prompt-cache-command-boundary'
+import { foregroundIsLiveClaude } from '@/lib/agent-status/evidence/prompt-cache-request-evidence'
 import { resolveExplicitTerminalTitleAgentType } from '../../../../../../shared/agent-status/title/terminal-title-agent-type'
 import type { ConnectPanePtySession } from '../connect-pane-pty-session'
 
 export function installPaneTitleObservation(session: ConnectPanePtySession): void {
+  session.promptCacheCommandBoundary = createPromptCacheCommandBoundary({
+    paneKey: session.cacheKey,
+    setCacheTimerStartedAt: session.deps.setCacheTimerStartedAt
+  })
+  // The foreground tracker's publish retries it, so a restore waits on this pane's evidence only.
+  session.restoredCacheTimer = createRestoredPromptCacheTimer({
+    paneKey: session.cacheKey,
+    allowInitialIdleSeed: () => session.allowInitialIdleCacheSeed,
+    liveClaude: () =>
+      foregroundIsLiveClaude(useAppStore.getState().paneForegroundAgentByPaneKey[session.cacheKey]),
+    // A reattached pane gets no command boundary to read on, so ask for the tracker's bounded startup read.
+    requestProcessRead: () => session.paneForegroundAgentTracker.onAgentStartupObserved(),
+    setCacheTimerStartedAt: session.deps.setCacheTimerStartedAt
+  })
+  // A command boundary means a later read finds a newer session than the one a restore waits for.
+  session.endPromptCacheWaitsOnCommandStarted = (): void => {
+    session.promptCacheCommandBoundary.onCommandStarted()
+    session.restoredCacheTimer.endWait()
+  }
+  session.endPromptCacheWaitsOnCommandFinished = (): void => {
+    session.promptCacheCommandBoundary.onCommandFinished()
+    session.restoredCacheTimer.endWait()
+  }
   session.onTitleChange = (
     title: string,
     rawTitle: string,
@@ -38,19 +63,11 @@ export function installPaneTitleObservation(session: ConnectPanePtySession): voi
       session.deps.updateTabTitle(session.deps.tabId, paneTitle)
     }
 
+    session.promptCacheCommandBoundary.observeTitle(rawTitle)
+    session.restoredCacheTimer.observeTitle(rawTitle)
     if (!session.hasConsideredInitialCacheTimerSeed) {
       session.hasConsideredInitialCacheTimerSeed = true
-      const state = useAppStore.getState()
-      if (
-        shouldSeedCacheTimerOnInitialTitle({
-          rawTitle,
-          allowInitialIdleSeed: session.allowInitialIdleCacheSeed,
-          existingTimerStartedAt: state.cacheTimerByKey[session.cacheKey],
-          promptCacheTimerEnabled: state.settings?.promptCacheTimerEnabled ?? null
-        })
-      ) {
-        session.deps.setCacheTimerStartedAt(session.cacheKey, Date.now())
-      }
+      session.restoredCacheTimer.restore(rawTitle)
     }
   }
 }

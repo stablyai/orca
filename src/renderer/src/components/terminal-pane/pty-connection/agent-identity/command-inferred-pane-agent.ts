@@ -1,6 +1,7 @@
 import { detectAgentStatusFromTitle as detectAgentStatusFromTitleDefault } from '../../../../../../shared/agent-status/title/agent-title-status'
-import { isClaudeAgent as isClaudeAgentDefault } from '../../../../../../shared/agent-status/title/agent-title-identity'
 import { useAppStore } from '@/store/index'
+import { canStartPromptCacheCountdown } from '../../agent-status/agent-idle-edge'
+import { leadTurnEndedUnderChildWork } from '@/lib/agent-status/evidence/prompt-cache-request-evidence'
 import { isFreshNonDoneAgentStatus } from '../../../../../../shared/agent-status/contracts/agent-status-freshness'
 import type {
   AgentStatusEntry,
@@ -21,7 +22,6 @@ import type { ConnectPanePtySession } from '../connect-pane-pty-session'
 export function installCommandInferredPaneAgent(session: ConnectPanePtySession): void {
   const detectAgentStatusFromTitle =
     session.deps.detectAgentStatusFromTitle ?? detectAgentStatusFromTitleDefault
-  const isClaudeAgent = session.deps.isClaudeAgent ?? isClaudeAgentDefault
   // Shadow typed shell commands to infer manual agent launches without launch metadata.
   session.commandInferredPaneAgent = null
   session.pendingShellCommandLine = ''
@@ -37,6 +37,10 @@ export function installCommandInferredPaneAgent(session: ConnectPanePtySession):
   session.rememberCommandInferredPaneAgent = (): void => {
     const commandLine = session.pendingShellCommandLine.trim()
     session.resetPendingShellCommandLine()
+    // Main-side facts carry no 133;C, so a submitted line is the start this pane sees.
+    if (commandLine) {
+      session.endPromptCacheWaitsOnCommandStarted()
+    }
     const candidateAgent = commandLine
       ? (recognizeAgentLaunchCommand(commandLine)?.agent ?? null)
       : null
@@ -194,17 +198,29 @@ export function installCommandInferredPaneAgent(session: ConnectPanePtySession):
   session.clearSuppressedTitleSideEffects = (): void => {
     session.pendingSuppressedTitleSideEffects = null
   }
+  const startSuppressedTitlePromptCacheCountdown = (
+    title: string,
+    agentType: AgentType | undefined
+  ): void => {
+    const startedAt = useAppStore.getState().cacheTimerByKey[session.cacheKey]
+    // A number means the suppressed title's countdown already started; restarting it would overstate cache life.
+    if (
+      startedAt === 'requested' &&
+      canStartPromptCacheCountdown({
+        title,
+        entry: { agentType },
+        settings: useAppStore.getState().settings,
+        startedAt
+      })
+    ) {
+      session.deps.setCacheTimerStartedAt(session.cacheKey, Date.now())
+    }
+  }
   session.applyAgentCompletionSideEffects = (
     title: string,
     agentType: AgentType | undefined
   ): void => {
-    const settings = useAppStore.getState().settings
-    if (
-      (agentType === 'claude' || isClaudeAgent(title)) &&
-      (settings === null || settings.promptCacheTimerEnabled)
-    ) {
-      session.deps.setCacheTimerStartedAt(session.cacheKey, Date.now())
-    }
+    startSuppressedTitlePromptCacheCountdown(title, agentType)
     session.setFocusReportSuppressionForAgentCompletion(title, agentType)
     session.queueAgentIdleTerminalModeReset()
   }
@@ -237,6 +253,13 @@ export function installCommandInferredPaneAgent(session: ConnectPanePtySession):
       payload.agentType === 'unknown' ||
       payloadAgentForPending === pending.agentType
     if (!belongsToPendingAgent || payload.state === 'working') {
+      // The suppressed idle title was the lead's turn end.
+      if (belongsToPendingAgent && leadTurnEndedUnderChildWork(payload)) {
+        startSuppressedTitlePromptCacheCountdown(
+          pending.title,
+          payload.agentType ?? pending.agentType
+        )
+      }
       session.clearSuppressedTitleSideEffects()
       return
     }
@@ -246,6 +269,13 @@ export function installCommandInferredPaneAgent(session: ConnectPanePtySession):
       return
     }
     if (payload.state === 'waiting' || payload.state === 'blocked') {
+      // A child's prompt can land after the lead's idle title; only a still-'requested' entry starts.
+      if (leadTurnEndedUnderChildWork(payload)) {
+        startSuppressedTitlePromptCacheCountdown(
+          pending.title,
+          payload.agentType ?? pending.agentType
+        )
+      }
       session.suppressNativeWindowsIdleCodexFocusReports = false
       session.queueAgentIdleTerminalModeReset()
     }

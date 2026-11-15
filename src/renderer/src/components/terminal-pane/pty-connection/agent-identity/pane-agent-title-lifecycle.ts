@@ -1,9 +1,10 @@
 import type { ConnectPanePtySession } from '../connect-pane-pty-session'
 import type { AgentIdleEdgeMeta } from '../../../../../../shared/terminal/output/terminal-output-side-effects'
 import {
-  idleEdgeSettledAtRest,
-  isClaudeIdleEdge
+  canStartPromptCacheCountdown,
+  idleEdgeSettledAtRest
 } from '@/components/terminal-pane/agent-status/agent-idle-edge'
+import { leadTurnEndedUnderChildWork } from '@/lib/agent-status/evidence/prompt-cache-request-evidence'
 import { useAppStore } from '@/store/index'
 
 export function installPaneAgentTitleLifecycle(session: ConnectPanePtySession): void {
@@ -16,20 +17,24 @@ export function installPaneAgentTitleLifecycle(session: ConnectPanePtySession): 
     }
     const currentState = useAppStore.getState()
     const activeHookStatus = currentState.agentStatusByPaneKey[session.cacheKey]
-    if (session.shouldSuppressTitleCompletionForFreshHook(title, activeHookStatus)) {
+    const suppressed = session.shouldSuppressTitleCompletionForFreshHook(title, activeHookStatus)
+    if (
+      (!suppressed || leadTurnEndedUnderChildWork(activeHookStatus)) &&
+      canStartPromptCacheCountdown({
+        title,
+        entry: activeHookStatus,
+        settings: currentState.settings,
+        startedAt: currentState.cacheTimerByKey[session.cacheKey]
+      })
+    ) {
+      session.deps.setCacheTimerStartedAt(session.cacheKey, Date.now())
+    }
+    if (suppressed) {
       // Idle titles can appear mid-tool while hooks still own an active turn.
       if (activeHookStatus) {
         session.preserveSuppressedTitleSideEffects(title, activeHookStatus)
       }
       return
-    }
-    // Only Claude uses this cache timer; allow pre-hydration timestamps so restored idle transitions are not lost before settings arrive.
-    const settings = currentState.settings
-    if (
-      isClaudeIdleEdge(title, activeHookStatus) &&
-      (settings === null || settings.promptCacheTimerEnabled)
-    ) {
-      session.deps.setCacheTimerStartedAt(session.cacheKey, Date.now())
     }
     if (idleEdgeSettledAtRest(title, meta)) {
       session.setFocusReportSuppressionForAgentCompletion(title, activeHookStatus?.agentType)
@@ -47,8 +52,8 @@ export function installPaneAgentTitleLifecycle(session: ConnectPanePtySession): 
       session.requiresFreshWorkingForAgentTaskCompleteNotification = false
       session.agentCompletionCoordinator.observeTitleWorking()
     }
-    // New API calls refresh cache TTL; restart the countdown only at the next idle transition.
-    session.deps.setCacheTimerStartedAt(session.cacheKey, null)
+    // New API calls refresh cache TTL; the countdown restarts at the next idle transition.
+    session.promptCacheCommandBoundary.onRequest()
     session.clearPendingAgentTaskCompleteNotification()
     if (session.pendingTerminalBellNotification) {
       session.scheduleTerminalBellNotification()
@@ -60,8 +65,8 @@ export function installPaneAgentTitleLifecycle(session: ConnectPanePtySession): 
     session.clearSuppressedTitleSideEffects()
     session.clearCommandInferredPaneAgent()
     session.requestKnownWindowsShiftEnterReconfirmation()
-    // Clear cache countdown when title returns to shell; process/PTY lifecycle owns actual agent-row removal.
-    session.deps.setCacheTimerStartedAt(session.cacheKey, null)
+    // Title returned to the shell: end the cache session; process/PTY lifecycle owns actual agent-row removal.
+    session.promptCacheCommandBoundary.end()
     session.clearTitleOnlyInterruptTimer()
     // Why: title reversion alone is not process death. The process/PTY tracker
     // owns removing agent rows when the TUI actually exits.
