@@ -153,14 +153,6 @@ export const KEYBINDING_DEFINITION_CORE_2: readonly KeybindingDefinition[] = [
     defaultBindings: platformBindings(['Mod+Alt+W'])
   },
   {
-    id: 'tab.togglePin',
-    title: 'Pin or unpin active tab',
-    group: 'Tabs',
-    scope: 'tabs',
-    searchKeywords: ['shortcut', 'pin', 'unpin', 'tab', 'keep', 'open'],
-    defaultBindings: platformBindings(['Mod+Alt+Shift+P'])
-  },
-  {
     id: 'tab.rename',
     title: 'Rename active tab',
     group: 'Tabs',

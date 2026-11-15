@@ -1,6 +1,7 @@
 import { reopenClosedWorkspaceTab } from './reopen-closed-workspace-tab'
 import { toast } from 'sonner'
 import { dispatchWorkspaceTabCommand } from '@/lib/workspace/tabs/workspace-tab-commands'
+import { saveAndCloseActiveUnpinnedEditorTabs } from '@/lib/workspace/tabs/unpinned-editor-tabs'
 import { keybindingMatchesAction } from '../../../shared/keybindings'
 import type { KeybindingActionId } from '../../../shared/keybindings'
 import { matchesRecentTabSwitcherChord } from '../../../shared/window-shortcut-policy'
@@ -226,6 +227,12 @@ export function handleTerminalWorkspaceKeyDown(
     event.preventDefault()
     notifyTerminalCapture('tab.togglePin')
     dispatchWorkspaceTabCommand({ type: 'toggle-pin' })
+    return
+  }
+  if (!event.repeat && matchShortcut('tab.saveAndCloseUnpinned')) {
+    event.preventDefault()
+    notifyTerminalCapture('tab.saveAndCloseUnpinned')
+    void saveAndCloseActiveUnpinnedEditorTabs()
     return
   }
   if (

@@ -83,6 +83,7 @@ export function EditorFileTabContextMenu({
   const renameShortcut = useOptionalShortcutLabel('tab.rename')
   const closeShortcut = useOptionalShortcutLabel('tab.close')
   const closeAllShortcut = useOptionalShortcutLabel('tab.closeAll')
+  const saveAndCloseShortcut = useOptionalShortcutLabel('tab.saveAndCloseUnpinned')
   const revealOwner = useAppStore((s) =>
     getWorkspaceFileRevealOwner(s, file.worktreeId, {
       connectionId: file.externalSshTargetId ?? repoConnectionId,
@@ -147,6 +148,9 @@ export function EditorFileTabContextMenu({
           'components.tab.bar.EditorFileTabContextMenu.saveAndCloseUnpinned',
           'Save and Close Unpinned Tabs'
         )}
+        {saveAndCloseShortcut ? (
+          <ContextMenuShortcut>{saveAndCloseShortcut}</ContextMenuShortcut>
+        ) : null}
       </ContextMenuItem>
       <CloseSplitPaneMenuItem menuKind="context" onCloseSplitPane={onCloseSplitPane} />
       {isVirtualEditorFile(file) ? null : <ContextMenuSeparator />}

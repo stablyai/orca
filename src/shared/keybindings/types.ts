@@ -72,6 +72,7 @@ export type KeybindingActionId =
   | 'tab.close'
   | 'tab.closeAll'
   | 'tab.togglePin'
+  | 'tab.saveAndCloseUnpinned'
   | 'tab.rename'
   | 'tab.reopenClosed'
   | 'tab.nextSameType'

@@ -24758,7 +24758,8 @@
       "e9da9f872a": "Send review notes to agent",
       "1524825c2c": "Toggle workspace board",
       "d286d1ab85": "Clear pane title",
-      "tabTogglePin": "Pin or unpin active tab"
+      "tabTogglePin": "Pin or unpin active tab",
+      "tabSaveAndCloseUnpinned": "Save and close unpinned tabs"
     },
     "group": {
       "global": "Global",

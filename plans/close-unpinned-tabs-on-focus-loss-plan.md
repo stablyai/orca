@@ -15,9 +15,9 @@ Add a setting that closes unpinned editor file tabs when focus leaves the tab ba
 | Which tabs close                   | Editor file tabs only. Terminals, browser tabs, simulator and agent sessions are never auto-closed. |
 | Unpinned tabs with unsaved changes | Stay open.                                                                                          |
 | Way to clear dirty tabs            | A separate "save all and close unpinned tabs" action.                                               |
-| Pin toggle shortcut                | `Mod+Alt+Shift+P`. Checked: no default binding on any platform.                                     |
+| Pin toggle shortcut                | No default binding. The action is registered and the user binds it in Settings > Shortcuts.         |
 
-Rejected: `Mod+Alt+P`. It is bound on macOS to **Collapse / Expand All Projects** (`src/shared/keybindings/definitions-core-4.ts`). Rejected also: `Mod+Alt+K`. It has no default binding, but the keybinding conflict tests use it as the "free" sample chord for `terminal.toggleNativeChat` overrides, so it would fail them.
+Rejected: `Mod+Alt+P`. It is bound on macOS to **Collapse / Expand All Projects** (`src/shared/keybindings/definitions-core-4.ts`). Rejected also: `Mod+Alt+K`. It has no default binding, but the keybinding conflict tests use it as the "free" sample chord for `terminal.toggleNativeChat` overrides, so it would fail them. Later decision: ship `tab.togglePin` unbound rather than pick a default chord.
 
 ## What the codebase already does
 
@@ -38,7 +38,7 @@ Add `closeUnpinnedEditorTabsOnFocusLoss: boolean`, default `false`. Opt-in, so e
 
 ### 2. Pin keybinding
 
-Add `tab.togglePin` to the `tab.*` definitions with `platformBindings(['Mod+Alt+Shift+P'])`, add it to the action union, and add a title entry. Dispatch it from `terminal-workspace-keydown.ts`, and from `use-global-keybindings.ts` if the chord must also work outside terminal and editor focus. Check the existing `tab.closeAll` handling in both files and copy it.
+Add `tab.togglePin` to the `tab.*` definitions with `platformBindings([])` (unbound by default), add it to the action union, and add a title entry. Dispatch it from `terminal-workspace-keydown.ts`, and from `use-global-keybindings.ts` if the chord must also work outside terminal and editor focus. Check the existing `tab.closeAll` handling in both files and copy it.
 
 ### 3. Toggle-pin command
 
@@ -98,6 +98,7 @@ Answers from review. These replace the earlier open questions.
 9. **Focus zones.** Stable selectors are `data-tab-focus-zone="tab-bar"` on `TabBarSurface` and `data-tab-focus-zone="editor"` on `EditorPanelShell`.
 10. **Overlays.** `relatedTarget` inside `[role=menu|listbox|dialog|alertdialog]` or a Radix popper wrapper is ignored.
 11. **Detached targets.** A `focusout` whose target has been removed from the DOM is ignored, so closing a tab does not cascade into closing the rest.
+12. **Save-all shortcut.** `tab.saveAndCloseUnpinned` is registered with no default binding, like `tab.togglePin`. The user binds it in Settings > Shortcuts. The context menu item shows the bound chord.
 
 ## Risks
 

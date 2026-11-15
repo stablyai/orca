@@ -61,3 +61,8 @@ export async function saveAndCloseUnpinnedEditorTabs(worktreeId: string): Promis
     )
   }
 }
+
+export function saveAndCloseActiveUnpinnedEditorTabs(): Promise<void> {
+  const worktreeId = useAppStore.getState().activeWorktreeId
+  return worktreeId ? saveAndCloseUnpinnedEditorTabs(worktreeId) : Promise.resolve()
+}
