@@ -29311,6 +29311,7 @@
   "terminalPane": {
     "agentStarting": {
       "title": "Starting {{agent}}…",
+      "still": "Still starting {{agent}}…",
       "slow": "Taking longer than usual. It opens here as soon as it’s ready."
     }
   }

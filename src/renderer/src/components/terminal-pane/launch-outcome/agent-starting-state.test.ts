@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import {
+  AGENT_STARTING_SLOW_MS,
+  AGENT_STARTING_STILL_MS,
   AGENT_STARTING_WINDOW_MS,
+  agentStartingPhase,
   isAgentLaunchLeaf,
   terminalHasVisibleContent
 } from './agent-starting-state'
@@ -34,5 +37,12 @@ describe('agent starting status', () => {
     expect(
       isAgentLaunchLeaf({ ...tab, createdAt: now - AGENT_STARTING_WINDOW_MS - 1 }, 'leaf-1', 1, now)
     ).toBe(false)
+  })
+
+  it('says "still starting" past 10 s and adds the slow line past 20 s', () => {
+    expect(agentStartingPhase(AGENT_STARTING_STILL_MS - 1)).toBe('starting')
+    expect(agentStartingPhase(AGENT_STARTING_STILL_MS)).toBe('still')
+    expect(agentStartingPhase(AGENT_STARTING_SLOW_MS - 1)).toBe('still')
+    expect(agentStartingPhase(AGENT_STARTING_SLOW_MS)).toBe('slow')
   })
 })

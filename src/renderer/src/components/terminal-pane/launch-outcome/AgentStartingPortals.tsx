@@ -9,7 +9,7 @@ import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-ag
 import type { TerminalPaneController } from '../controller/use-terminal-pane-controller'
 import {
   AGENT_STARTING_DELAY_MS,
-  AGENT_STARTING_SLOW_MS,
+  agentStartingPhase,
   isAgentLaunchLeaf,
   terminalHasVisibleContent
 } from './agent-starting-state'
@@ -53,6 +53,7 @@ export function AgentStartingStatus({
     return null
   }
   const name = TUI_AGENT_DISPLAY_NAMES[agent] ?? agent
+  const phase = agentStartingPhase(elapsed)
   return (
     <div
       data-agent-starting=""
@@ -65,13 +66,15 @@ export function AgentStartingStatus({
         <span className="flex items-center gap-2">
           <Loader2 className="size-4 animate-spin" aria-hidden="true" />
           <span className="font-medium text-foreground">
-            {t('terminalPane.agentStarting.title', 'Starting {{agent}}…', { agent: name })}
+            {phase === 'starting'
+              ? t('terminalPane.agentStarting.title', 'Starting {{agent}}…', { agent: name })
+              : t('terminalPane.agentStarting.still', 'Still starting {{agent}}…', { agent: name })}
           </span>
           <span className="tabular-nums" aria-hidden="true">
             {Math.floor(elapsed / 1000)}s
           </span>
         </span>
-        {elapsed >= AGENT_STARTING_SLOW_MS ? (
+        {phase === 'slow' ? (
           <span className="text-xs">
             {t(
               'terminalPane.agentStarting.slow',
