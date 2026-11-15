@@ -240,10 +240,12 @@ CREATE TABLE IF NOT EXISTS worker_terminal_archives (
   created_at    TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
--- When background maintenance last pruned settled history (epoch ms), so a restart waits out the interval.
+-- When maintenance last pruned settled history (epoch ms), so a restart waits out the interval,
+-- and whether the last Reclaim space rewrite failed, for Settings to say so.
 CREATE TABLE IF NOT EXISTS orchestration_maintenance (
-  id        INTEGER PRIMARY KEY CHECK(id = 1),
-  pruned_at INTEGER NOT NULL
+  id             INTEGER PRIMARY KEY CHECK(id = 1),
+  pruned_at      INTEGER,
+  reclaim_failed INTEGER NOT NULL DEFAULT 0
 );
 
   `

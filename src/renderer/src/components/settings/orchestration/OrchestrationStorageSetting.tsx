@@ -70,7 +70,7 @@ export function OrchestrationStorageSetting(): React.JSX.Element | null {
       ),
       description: t(
         'auto.components.settings.OrchestrationPane.storageReclaimWarning',
-        'Orca restarts and rewrites its orchestration database before it opens again. On a large database that can take a minute or more. Runs, tasks and messages are kept.'
+        'Orca restarts and rewrites its orchestration database before it opens again. On a large database that can take a minute or more, and agents that use orchestration wait until Orca is back. Runs, tasks and messages are kept.'
       ),
       confirmLabel: t(
         'auto.components.settings.OrchestrationPane.storageReclaimConfirm',
@@ -133,7 +133,15 @@ export function OrchestrationStorageSetting(): React.JSX.Element | null {
           )
         }
       />
-      {error ? <p className="pb-3 text-xs text-destructive">{error}</p> : null}
+      {(error ?? storage?.lastReclaimFailed) ? (
+        <p className="pb-3 text-xs text-destructive">
+          {error ??
+            t(
+              'auto.components.settings.OrchestrationPane.storageReclaimFailed',
+              'The last reclaim could not finish, so the database was left as it was. Free up disk space, then try again.'
+            )}
+        </p>
+      ) : null}
     </div>
   )
 }

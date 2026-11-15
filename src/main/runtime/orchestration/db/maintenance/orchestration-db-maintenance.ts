@@ -31,7 +31,8 @@ export class OrchestrationDbMaintenance {
 
   constructor(
     private readonly db: Database.Database,
-    private readonly filename: string
+    private readonly filename: string,
+    private readonly chatIsReadable: (dispatchId: string) => boolean
   ) {}
 
   start(): void {
@@ -45,7 +46,13 @@ export class OrchestrationDbMaintenance {
   }
 
   storage(): OrchestrationDbStorage {
-    return readOrchestrationDbStorage(this.db)
+    const row = this.db
+      .prepare('SELECT reclaim_failed FROM orchestration_maintenance WHERE id = 1')
+      .get()
+    return {
+      ...readOrchestrationDbStorage(this.db),
+      lastReclaimFailed: Boolean(row?.reclaim_failed)
+    }
   }
 
   /** VACUUM copies the live pages to a temporary file, then writes them again to the WAL. */
@@ -63,14 +70,23 @@ export class OrchestrationDbMaintenance {
    */
   reclaimWhileRestarting(): void {
     this.stop()
-    for (let after: string | null = ''; after !== null;) {
-      after = pruneSettledChatOutputCopies(this.db, after).next
+    try {
+      for (let after: string | null = ''; after !== null;) {
+        after = pruneSettledChatOutputCopies(this.db, after, this.chatIsReadable).next
+      }
+      this.recordPrune()
+      // The copy VACUUM builds is the size of the live data; keep it on disk, not in memory.
+      this.db.pragma('temp_store = FILE')
+      // Only VACUUM switches an existing file to incremental auto_vacuum.
+      this.db.pragma('auto_vacuum = INCREMENTAL')
+      this.db.exec('VACUUM')
+      this.db.pragma('wal_checkpoint(TRUNCATE)')
+      this.recordReclaim(false)
+    } catch (error) {
+      // VACUUM rolls back whole; Settings says so after the restart.
+      this.recordReclaim(true)
+      throw error
     }
-    this.recordPrune()
-    // Only VACUUM switches an existing file to incremental auto_vacuum.
-    this.db.pragma('auto_vacuum = INCREMENTAL')
-    this.db.exec('VACUUM')
-    this.db.pragma('wal_checkpoint(TRUNCATE)')
   }
 
   private arm(): void {
@@ -93,7 +109,9 @@ export class OrchestrationDbMaintenance {
   private async pass(): Promise<void> {
     if (this.pruneIsDue()) {
       for (let after: string | null = ''; after !== null;) {
-        const page = await this.slice(() => pruneSettledChatOutputCopies(this.db, after!))
+        const page = await this.slice(() =>
+          pruneSettledChatOutputCopies(this.db, after!, this.chatIsReadable)
+        )
         if (!page) {
           return
         }
@@ -125,6 +143,15 @@ export class OrchestrationDbMaintenance {
          ON CONFLICT(id) DO UPDATE SET pruned_at = excluded.pruned_at`
       )
       .run(Date.now())
+  }
+
+  private recordReclaim(failed: boolean): void {
+    this.db
+      .prepare(
+        `INSERT INTO orchestration_maintenance (id, reclaim_failed) VALUES (1, ?)
+         ON CONFLICT(id) DO UPDATE SET reclaim_failed = excluded.reclaim_failed`
+      )
+      .run(failed ? 1 : 0)
   }
 
   /** True while free pages remain. */

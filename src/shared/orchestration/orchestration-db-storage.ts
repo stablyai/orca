@@ -5,6 +5,8 @@ export type OrchestrationDbStorage = {
   reclaimableBytes: number
   /** The file returns free pages on its own, so Reclaim space has nothing left to do. */
   shrinksItself: boolean
+  /** The last Reclaim space rewrite failed and left the file as it was. */
+  lastReclaimFailed?: boolean
 }
 
 /** The rewrite runs while Orca restarts; it is refused up front when the disk lacks room for it. */

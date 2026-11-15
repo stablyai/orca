@@ -1,6 +1,8 @@
 import { getWorkerTerminalAutoReleaseScheduler } from '../terminal-authority/release/worker-terminal-auto-release-scheduler'
 import { OrchestrationDb } from './orchestration-db'
 import { OrchestrationDbMaintenance } from './maintenance/orchestration-db-maintenance'
+import { resolveStructuredWorkerForDispatch } from '../../rpc/methods/orchestration/structured-workers/orchestration-structured-worker-lifecycle'
+import { requireRunningStructuredWorker } from '../terminal-authority/structured-sessions/structured-worker-authority'
 import { committedHandBackTypes, type MailHandBack } from './messages/helper-mailbox-hand-back'
 import { existsSync } from 'node:fs'
 import { closeOrphanedTerminalApprovals } from '../workers/approvals/terminal-approval-orphans'
@@ -24,9 +26,9 @@ export abstract class RuntimeOrchestrationDatabaseAccess extends OrcaRuntimeWith
     if (!this._orchestrationDb) {
       const path = this.orchestrationDbPath()
       this._orchestrationDb = new OrchestrationDb(path)
-      this.orchestrationDbMaintenance = new OrchestrationDbMaintenance(
-        this._orchestrationDb.db,
-        path
+      const db = this._orchestrationDb
+      this.orchestrationDbMaintenance = new OrchestrationDbMaintenance(db.db, path, (dispatchId) =>
+        isReleasedChatReadable(db, dispatchId)
       )
       this.orchestrationDbMaintenance.start()
       this.bindMailHandBack(this._orchestrationDb)
@@ -91,5 +93,19 @@ export abstract class RuntimeOrchestrationDatabaseAccess extends OrcaRuntimeWith
       console.warn('[orchestration] failed to offer handed-back helper mail', error)
       this.mailPointerRepointScheduler.schedule(handBack.mailbox)
     }
+  }
+}
+
+/** Whether a released chat worker's reference read would find its chat on this host. */
+function isReleasedChatReadable(db: OrchestrationDb, dispatchId: string): boolean {
+  const identity = resolveStructuredWorkerForDispatch(db, dispatchId)
+  if (!identity) {
+    return false
+  }
+  try {
+    requireRunningStructuredWorker(identity)
+    return true
+  } catch {
+    return false
   }
 }

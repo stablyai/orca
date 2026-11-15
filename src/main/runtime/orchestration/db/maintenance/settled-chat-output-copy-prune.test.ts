@@ -51,20 +51,23 @@ describe('pruning settled chat output copies', () => {
     )
   }
 
-  it('points copies of Runs settled over a day ago at their chat and keeps the rest', () => {
+  it('points copies of Runs settled over a day ago at their readable chat and keeps the rest', () => {
     db = new OrchestrationDb(':memory:')
     worker('settled', 'run_settled')
     worker('terminal', 'run_settled', { kind: 'transcript_pin' })
     worker('recent', 'run_recent', { completedDaysAgo: 0.1 })
     worker('live_done', 'run_live')
     worker('live_working', 'run_live', { status: 'dispatched' })
+    worker('unreadable', 'run_settled')
 
-    expect(pruneSettledChatOutputCopies(db.db, '')).toEqual({ pruned: 1, next: null })
+    expect(
+      pruneSettledChatOutputCopies(db.db, '', (dispatchId) => dispatchId !== 'unreadable')
+    ).toEqual({ pruned: 1, next: null })
 
     expect(content('settled')).toMatch(
       /^\{"version":3,"agent":"claude","processIncarnation":"pi_1","messages":\[\],"limited":true,/
     )
-    for (const kept of ['terminal', 'recent', 'live_done', 'live_working']) {
+    for (const kept of ['terminal', 'recent', 'live_done', 'live_working', 'unreadable']) {
       expect(content(kept)).toBe(CHAT_COPY)
     }
   })
