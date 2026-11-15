@@ -63,6 +63,8 @@ export class ClaudeOpenTurn {
   private cycleWorkObserved = false
   /** Input choices follow actual work; correlation also includes API errors. */
   inputChoiceWorkObserved = false
+  /** The ending of a step a steer cut short, until the steer's own cycle starts. */
+  private steerHandoffEnd: ClaudeTurnEnd | null = null
   private startedSend: ClaudeStartedSend | null = null
   private readonly opener: (
     frame: Record<string, unknown>,
@@ -126,7 +128,13 @@ export class ClaudeOpenTurn {
     this.startedSend = send
   }
 
+  /** Stop or idle before the steer runs ends the turn as that step ended, not as completed. */
+  holdForSteer(end: ClaudeTurnEnd): void {
+    this.steerHandoffEnd = this.current ? end : null
+  }
+
   observeProviderCycleStart(): void {
+    this.steerHandoffEnd = null
     this.cycleWorkObserved = false
     this.inputChoiceWorkObserved = false
   }
@@ -137,6 +145,7 @@ export class ClaudeOpenTurn {
 
   /** Supersede the previous turn before opening another; a missing result must not leave old work live. */
   open(turn: ClaudeCurrentTurn, observedAt: number): void {
+    this.steerHandoffEnd = null
     this.usageLimitEvidence = null
     this.deps.onOpen?.()
     if (this.current) {
@@ -196,10 +205,12 @@ export class ClaudeOpenTurn {
 
   /** Settle activity and context facts in the same turn revision. */
   settle(
-    end: ClaudeTurnEnd,
+    settled: ClaudeTurnEnd,
     contextUsage?: AgentSessionContextUsage,
     stopped?: ClaudeStoppedTurnEnd
   ): void {
+    const end = this.steerHandoffEnd ?? settled
+    this.steerHandoffEnd = null
     const quotaEnd = (ending: ClaudeTurnEnd) =>
       this.current !== null &&
       ending.outcome === undefined &&

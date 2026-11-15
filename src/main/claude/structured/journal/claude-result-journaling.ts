@@ -22,6 +22,7 @@ export type ClaudeResultJournalContext = Pick<
   | 'sink'
   | 'streamedBlocks'
   | 'streamedText'
+  | 'streamedThinking'
   | 'providerFallback'
   | 'corrections'
   | 'turn'
@@ -54,6 +55,7 @@ export function journalClaudeResult(
     sink,
     streamedBlocks,
     streamedText,
+    streamedThinking,
     providerFallback,
     corrections,
     turn,
@@ -100,8 +102,10 @@ export function journalClaudeResult(
     // The steer continues this open turn, so only the cut-off step's streamed output ends here.
     corrections.abandon()
     streamedText.finish({ completedAt: observedAt })
+    streamedThinking.finishRoot(String(message.session_id), observedAt)
     streamedBlocks.clear()
     streamedText.settle()
+    turn.holdForSteer(claudeTurnEndForResult(message, observedAt))
     return
   }
   const failure = claudeResultFailure(message)
