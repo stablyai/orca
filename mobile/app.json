@@ -2,7 +2,7 @@
   "expo": {
     "name": "Orca",
     "slug": "orca-mobile",
-    "version": "0.0.64",
+    "version": "0.0.65",
     "orientation": "default",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "automatic",
@@ -91,7 +91,7 @@
       "permissions": ["RECORD_AUDIO", "MODIFY_AUDIO_SETTINGS"],
       "blockedPermissions": ["android.permission.SYSTEM_ALERT_WINDOW"],
       "package": "com.stably.orca.mobile",
-      "versionCode": 28,
+      "versionCode": 29,
       "googleServicesFile": "./google-services.json"
     },
     "plugins": [
