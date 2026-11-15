@@ -1,43 +1,7 @@
-// MEMGUARD: the guard-kill banner should follow the kill closely, not the next minute's poll.
-// Two pieces: (1) any status read that shows a newer guard kill raises the notice right away
-// (main's minute-long OOM poll announces the same count later, which changes nothing); (2) the
-// active cloud workspace's status is re-read when the window regains focus or the user types,
-// throttled, so the read that carries the kill happens when someone is there to see it.
-import type {
-  CloudOomEvent,
-  CloudWorkspaceStatus
-} from '../../../../shared/hosted-sandbox/cloud-workspace-api'
-
-const seenKillAt = new Map<string, number>()
-
-/** The notice for a guard kill this status shows and no earlier read did; null otherwise. */
-export function guardKillFromStatus(
-  workspaceId: string,
-  status: CloudWorkspaceStatus,
-  now = Date.now()
-): CloudOomEvent | null {
-  const memory = status.memory
-  if (!memory || memory.guardKills === 0 || memory.lastGuardKillAt === null) {
-    return null
-  }
-  if (memory.lastGuardKillAt <= (seenKillAt.get(workspaceId) ?? 0)) {
-    return null
-  }
-  seenKillAt.set(workspaceId, memory.lastGuardKillAt)
-  return {
-    workspaceId,
-    // The count main's tracker uses (kernel + guard), so a dismissal holds for both sources.
-    oomKills: (status.metrics?.oomKills ?? 0) + memory.guardKills,
-    victim: memory.lastGuardVictim,
-    stoppedBy: 'guard',
-    at: now
-  }
-}
-
-/** Test seam. */
-export function resetGuardKillSeen(): void {
-  seenKillAt.clear()
-}
+// MEMGUARD: the guard-kill banner should follow the kill closely, not the next minute's poll. The
+// VM rewrites the guard's state at the kill, and main's OOM tracker observes every status read
+// (hosted-workspace-service getStatus), so all it takes is a read soon after: re-read the active
+// cloud workspace when the window regains focus or the user types, throttled.
 
 export const ACTIVITY_REFRESH_MS = 15_000
 

@@ -1,46 +1,5 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { CloudWorkspaceStatus } from '../../../../shared/hosted-sandbox/cloud-workspace-api'
-import {
-  ACTIVITY_REFRESH_MS,
-  guardKillFromStatus,
-  installCloudActivityRefresh,
-  resetGuardKillSeen
-} from './cloud-guard-kill-refresh'
-
-const status = (guardKills: number, lastGuardKillAt: number | null): CloudWorkspaceStatus => ({
-  state: 'ready',
-  metrics: null,
-  memory: {
-    pressure: 'ok',
-    guardKills,
-    lastGuardVictim: guardKills ? 'tsc' : null,
-    lastGuardKillAt,
-    guarded: true
-  },
-  uptimeMs: 0,
-  usage: { totalMs: 0, centsPerHour: 75, costCents: 0 },
-  archive: null,
-  checkedAt: 1
-})
-
-beforeEach(() => resetGuardKillSeen())
-
-describe('guardKillFromStatus', () => {
-  it('raises each guard kill once, from whichever read sees it first', () => {
-    expect(guardKillFromStatus('ws', status(0, null))).toBeNull()
-    expect(guardKillFromStatus('ws', status(1, 1_000), 5)).toEqual({
-      workspaceId: 'ws',
-      oomKills: 1,
-      victim: 'tsc',
-      stoppedBy: 'guard',
-      at: 5
-    })
-    expect(guardKillFromStatus('ws', status(1, 1_000))).toBeNull()
-    expect(guardKillFromStatus('ws', status(2, 2_000))?.oomKills).toBe(2)
-    // Another workspace keeps its own memory.
-    expect(guardKillFromStatus('other', status(1, 1_000))).not.toBeNull()
-  })
-})
+import { describe, expect, it, vi } from 'vitest'
+import { ACTIVITY_REFRESH_MS, installCloudActivityRefresh } from './cloud-guard-kill-refresh'
 
 describe('installCloudActivityRefresh', () => {
   it('re-reads the active running cloud workspace on focus or typing, throttled', () => {
