@@ -2,7 +2,9 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react
 import type {
   BrowserGrabPayload,
   BrowserGrabRejectReason,
-  BrowserGrabScreenshot
+  BrowserGrabResult,
+  BrowserGrabScreenshot,
+  BrowserSetGrabModeResult
 } from '../../../../../../shared/browser/element-grab/browser-grab-types'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { translate } from '@/i18n/i18n'
@@ -91,10 +93,10 @@ export function useGrabMode(browserPageId: string): GrabModeHook {
     grabTabIdRef.current = tabId
     setState('armed')
 
-    const setResult = await window.api.browser.setGrabMode({
-      browserPageId: tabId,
-      enabled: true
-    })
+    // A rejected invoke (lost reply) must end in the error state, not a stuck 'armed'.
+    const setResult = await window.api.browser
+      .setGrabMode({ browserPageId: tabId, enabled: true })
+      .catch((): BrowserSetGrabModeResult => ({ ok: false, reason: 'injection-failed' }))
     if (
       !mountedRef.current ||
       armGenerationRef.current !== armGeneration ||
@@ -123,10 +125,9 @@ export function useGrabMode(browserPageId: string): GrabModeHook {
     activeOpIdRef.current = opId
 
     setState('awaiting')
-    const result = await window.api.browser.awaitGrabSelection({
-      browserPageId: tabId,
-      opId
-    })
+    const result = await window.api.browser
+      .awaitGrabSelection({ browserPageId: tabId, opId })
+      .catch((): BrowserGrabResult => ({ opId, kind: 'error', reason: 'Selection failed' }))
 
     if (!mountedRef.current || activeOpIdRef.current !== opId || grabTabIdRef.current !== tabId) {
       return
@@ -170,24 +171,27 @@ export function useGrabMode(browserPageId: string): GrabModeHook {
   }, [browserPageId, mountedRef])
 
   const cancel = useCallback(() => {
-    const targetTabId = grabTabIdRef.current ?? browserPageId
+    const targetTabId = grabTabIdRef.current
     armGenerationRef.current += 1
-    void window.api.browser.setGrabMode({
-      browserPageId: targetTabId,
-      enabled: false
-    })
-    if (activeOpIdRef.current) {
-      void window.api.browser.cancelGrab({
-        browserPageId: targetTabId
+    // Navigation cancels every page's capture; an idle page has nothing in main to tear down.
+    if (targetTabId !== null) {
+      void window.api.browser.setGrabMode({
+        browserPageId: targetTabId,
+        enabled: false
       })
-      activeOpIdRef.current = null
+      if (activeOpIdRef.current) {
+        void window.api.browser.cancelGrab({
+          browserPageId: targetTabId
+        })
+      }
     }
+    activeOpIdRef.current = null
     grabTabIdRef.current = null
     setState('idle')
     setPayload(null)
     setError(null)
     setContextMenu(false)
-  }, [browserPageId])
+  }, [])
 
   const toggle = useCallback(() => {
     if ((state === 'idle' || state === 'error') && grabTabIdRef.current === null) {
