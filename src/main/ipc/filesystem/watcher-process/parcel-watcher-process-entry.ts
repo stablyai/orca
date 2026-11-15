@@ -146,10 +146,7 @@ function main(): void {
                   )
               }
             },
-            // The host sends the canonical root; decide exclusions here, off Electron main.
-            withMacosProtectedWatchExclusions(dir, opts, {
-              realpath: realpathSync.native
-            }) as ParcelWatcher.Options
+            opts as ParcelWatcher.Options
           )
         } finally {
           activeSubscriptionCrawlId = null
@@ -222,7 +219,15 @@ function main(): void {
     if (message.op === 'subscribe') {
       subscriptions.set(
         message.id,
-        handleSubscribe(message.id, message.dir, message.opts, message.delivery)
+        handleSubscribe(
+          message.id,
+          message.dir,
+          // The host sends the canonical root; decide exclusions here, off Electron main.
+          withMacosProtectedWatchExclusions(message.dir, message.opts, {
+            realpath: realpathSync.native
+          }),
+          message.delivery
+        )
       )
       return
     }
