@@ -1,8 +1,8 @@
-// PARITY-FOLLOW: what each teammate is doing now, from the team workspace list's live presence.
+// PARITY-FOLLOW: the workspaces this member follows, from the team workspace list's live read.
 import type { CloudWorkspace } from '../../../../../shared/cloud-workspaces/cloud-workspaces-wire'
 import { formatWorkspaceNumber } from '../../../../../shared/cloud-workspaces/cloud-workspaces-wire'
 import { repoLabel } from '@/components/cloud-workspaces/cloud-workspace-format'
-import type { SidebarFollowedWorkspace, SidebarTeammate } from './SidebarTeamSections'
+import type { SidebarFollowedWorkspace } from './SidebarFollowingSection'
 
 /** A workspace by name (people recognise names); its W-number, then its repo, as fallbacks. */
 export function workspaceDisplayLabel(
@@ -16,36 +16,6 @@ export function workspaceDisplayLabel(
     return formatWorkspaceNumber(w.number)
   }
   return w.repo ? repoLabel(w.repo.url) : w.id
-}
-
-/**
- * One row per teammate, in roster order: typing wins over viewing, and the most recent presence
- * wins between workspaces of the same state.
- */
-export function teammateActivities(
-  memberIds: readonly string[],
-  workspaces: readonly CloudWorkspace[] | null
-): SidebarTeammate[] {
-  const best = new Map<string, { state: 'viewing' | 'typing'; at: number; label: string }>()
-  for (const w of workspaces ?? []) {
-    for (const p of w.presence) {
-      const current = best.get(p.userId)
-      const better =
-        !current ||
-        (p.state === 'typing' && current.state !== 'typing') ||
-        (p.state === current.state && p.at > current.at)
-      if (better) {
-        best.set(p.userId, { state: p.state, at: p.at, label: workspaceDisplayLabel(w) })
-      }
-    }
-  }
-  return memberIds.map((userId) => {
-    const found = best.get(userId)
-    return {
-      userId,
-      activity: found ? { state: found.state, workspaceLabel: found.label } : null
-    }
-  })
 }
 
 function followedStatus(w: CloudWorkspace): SidebarFollowedWorkspace['status'] {

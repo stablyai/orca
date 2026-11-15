@@ -49,8 +49,12 @@ export function parseOrcaCloudConsoleBillingHint(
 }
 
 export type OrcaCloudConsoleOpenResult =
-  /** `signedIn: false`: no ticket, so the browser asks the person to sign in. */
-  | { status: 'opened'; signedIn: boolean }
+  /**
+   * `signedIn: false`: no ticket, so the browser asks the person to sign in. `ticketError`: a
+   * signed-in desktop's ticket couldn't be minted (`failed`) or pointed somewhere not allowed
+   * (`rejected`), so the person should hear why the console asks them to sign in.
+   */
+  | { status: 'opened'; signedIn: boolean; ticketError?: 'failed' | 'rejected' }
   /** This build has no Orca Cloud, so there is no console to open. */
   | { status: 'unconfigured' }
   | { status: 'failed'; error: string }

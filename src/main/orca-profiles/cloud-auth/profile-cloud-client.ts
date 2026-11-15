@@ -1,3 +1,4 @@
+import { cleanCloudServiceOrigin } from '../../../shared/cloud-service-url'
 import type {
   OrcaCloudCapabilities,
   OrcaCloudOrgSummary,
@@ -87,12 +88,17 @@ function normalizeCapabilities(value: unknown): OrcaCloudCapabilities {
       }
     }
   }
+  const consoleOrigin =
+    typeof record.consoleOrigin === 'string'
+      ? cleanCloudServiceOrigin(record.consoleOrigin, false)
+      : null
   return {
     flags,
     refreshedAt:
       typeof record.refreshedAt === 'number' && Number.isFinite(record.refreshedAt)
         ? record.refreshedAt
-        : Date.now()
+        : Date.now(),
+    ...(consoleOrigin ? { consoleOrigin } : {})
   }
 }
 

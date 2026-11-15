@@ -5,6 +5,7 @@ vi.mock('electron', () => ({ app: { isPackaged: false }, shell: { openExternal: 
 import { CLOUD_CONSOLE_TICKET_PATH, cloudConsoleOrigin } from './cloud-console-config'
 import {
   acceptedTicketUrl,
+  advertisedConsoleOrigin,
   cloudConsoleTicketBody,
   requestCloudConsoleTicket
 } from './cloud-console-link'
@@ -115,6 +116,21 @@ describe('console ticket', () => {
         fakeFetch(Response.json({ error: 'recent_sign_in_required' }, { status: 403 }))
       )
     ).rejects.toMatchObject({ statusCode: 403, errorCode: 'recent_sign_in_required' })
+  })
+
+  it('trusts only an https console origin from auth, and nothing but the origin', () => {
+    expect(advertisedConsoleOrigin('https://console-staging.orca.dev')).toBe(
+      'https://console-staging.orca.dev'
+    )
+    for (const bad of [
+      'http://console-staging.orca.dev',
+      'https://console-staging.orca.dev/console',
+      'javascript:alert(1)',
+      7,
+      undefined
+    ]) {
+      expect(advertisedConsoleOrigin(bad)).toBeNull()
+    }
   })
 
   it('opens only a ticket URL on the console or auth origin', () => {
