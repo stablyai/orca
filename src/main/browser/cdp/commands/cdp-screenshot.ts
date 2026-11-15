@@ -195,10 +195,11 @@ export async function measureCaptureViewport(
   webContents: WebContents,
   timeoutMs = SCREENSHOT_TIMEOUT_MS
 ): Promise<CaptureViewport | null> {
+  const deadline = Date.now() + timeoutMs
   const read = (method: string, params: Record<string, unknown>): Promise<unknown> =>
     withTimeout(
       sendGuestCdpCommand(webContents, method, params),
-      timeoutMs,
+      Math.max(0, deadline - Date.now()),
       'Screenshot timed out — the browser page did not respond.'
     )
   const metrics = await read('Page.getLayoutMetrics', {})

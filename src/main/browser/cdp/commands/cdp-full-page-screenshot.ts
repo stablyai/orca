@@ -13,6 +13,8 @@ const MAX_FULL_PAGE_EDGE_PX = 16_384
 const MAX_FULL_PAGE_PIXELS = 32 * 1024 * 1024
 // Each tile is a capture of its own; keeps a long page in a small pane under the CLI's timeout.
 const MAX_FULL_PAGE_TILES = 32
+// Stops issuing tiles in time for one last tile to finish before the CLI's 60-second request timeout.
+const FULL_PAGE_TIMEOUT_MS = 45_000
 
 /** CSS pixels a tile asks for, and the device pixels it fills in the stitched image. */
 type Span = { start: number; length: number; offset: number; size: number }
@@ -123,12 +125,22 @@ export async function captureFullPageScreenshot(
       throw new Error('Unable to determine full-page screenshot bounds')
     }
     const plan = planFullPageTiles(viewport)
+    if (
+      plan.columns.every((column) => column.size === 0) ||
+      plan.rows.every((row) => row.size === 0)
+    ) {
+      throw new Error('The page is too large to capture as one image.')
+    }
+    const deadline = Date.now() + FULL_PAGE_TIMEOUT_MS
     const single = plan.rows.length === 1 && plan.columns.length === 1
     const tiles: NativeImage[][] = []
     // Sequential: a capture sent while a clipped one is pending leaves its emulation applied.
     for (const row of plan.rows) {
       const tileRow: NativeImage[] = []
       for (const column of plan.columns) {
+        if (Date.now() > deadline) {
+          throw new Error(SCREENSHOT_TIMEOUT_MESSAGE)
+        }
         const frame = await captureUntilDrawn(
           webContents,
           {
