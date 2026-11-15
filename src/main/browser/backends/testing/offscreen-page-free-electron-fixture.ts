@@ -51,7 +51,12 @@ async function run(): Promise<void> {
   const savedGuest = pageOf(saved.browserPageId)
   // Navigating under a command's lease; the idle time only starts once the lease ends.
   const releaseNavigation = rendererPublicationThrottle.acquire(savedGuest)
-  await waitUntil(() => !savedGuest.isLoading())
+  await waitUntil(
+    () =>
+      savedGuest.getURL() !== '' &&
+      new URL(savedGuest.getURL()).pathname === '/first' &&
+      !savedGuest.isLoading()
+  )
   await savedGuest.loadURL(`${origin}/second`)
   releaseNavigation()
 
