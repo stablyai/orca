@@ -77,7 +77,9 @@ describe('mac build binding to its parent run', () => {
       'mac release build ${{ needs.build-mac.outputs.run_id }} for ${{ needs.cut.outputs.tag }}'
     )
     expect(binding.needs).toEqual(['cut', 'build-mac'])
-    expect(binding.if).toBeUndefined()
+    // Implicit success() would also need build-mac's ancestors, and orcad-template is skipped for older tags.
+    expect(binding.if).toBe("${{ !cancelled() && needs.build-mac.result == 'success' }}")
+    expect(releaseCut.jobs['build-mac'].needs).toContain('orcad-template')
     expect(binding.permissions).toEqual({})
     expect(releaseCut.jobs['build-mac'].outputs.run_id).toBe('${{ steps.dispatch.outputs.run_id }}')
     const verify = macBuild.jobs['build-mac'].steps[1]
