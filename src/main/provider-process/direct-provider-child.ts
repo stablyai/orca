@@ -1,7 +1,6 @@
 import type { ChildProcess } from 'node:child_process'
 import { EventEmitter } from 'node:events'
 import { Duplex, PassThrough, Readable, Writable } from 'node:stream'
-import { constants } from 'node:os'
 import { withTimeout } from '../../shared/promise-timeout-fallback'
 import type { ProviderChild } from './provider-child'
 import { ignoreProviderTransportError, notifyProviderChild } from './provider-child'
@@ -13,16 +12,19 @@ import {
   readProviderControlCompletion,
   type ProviderControlCompletion
 } from './provider-control-completion'
-import { DirectProviderStop, type ProviderControlCommand } from './direct-provider-stop'
+import { DirectProviderStop } from './direct-provider-stop'
 import { drainDirectProviderOutput, pipeDirectProviderOutput } from './direct-provider-output-drain'
 import { pipeDirectProviderInput } from './direct-provider-input'
 import { providerExecFailure, reportProviderLaunchFailure } from './provider-launch-failure'
+import { ProviderFaultOwnership } from './provider-fault-ownership'
 import {
   joinCurrentProviderReap,
+  isProviderProbeOrPause,
   isProviderReapSignal,
   isProviderTermSignal,
   reapDirectProviderGroup,
   signalDirectProviderGroup,
+  signalLiveDirectProviderRoot,
   signalDirectProviderRoot
 } from './direct-provider-group-reap'
 
@@ -45,16 +47,19 @@ export class DirectProviderChild extends EventEmitter implements ProviderChild {
   private control?: Duplex
   private gate?: Writable
   private readonly releaseRaw: () => void
+  private readonly input: ReturnType<typeof pipeDirectProviderInput>
   private readonly stop: DirectProviderStop
   private canceled = false
   private released = false
   private outcome?: ProviderLeaderOutcome | null
   private settled = false
   private failure?: Promise<Error>
+  private readonly faultOwnership = new ProviderFaultOwnership()
   private reapTask?: Promise<void>
   private reapAbort?: AbortController
   private nativeCompletion?: ProviderControlCompletion
-  private readonly watcherEnded: Promise<void>
+  private readonly watcherEnded = Promise.withResolvers<void>()
+  private readonly reapRequested = Promise.withResolvers<void>()
 
   constructor(
     private readonly raw: ChildProcess,
@@ -62,26 +67,22 @@ export class DirectProviderChild extends EventEmitter implements ProviderChild {
     private readonly bootId: string
   ) {
     super()
-    this.stop = new DirectProviderStop(spec, this.send.bind(this), () => this.forceReap())
-    let watcherEnded = (): void => {}
-    this.watcherEnded = new Promise((resolve) => {
-      watcherEnded = resolve
-    })
+    this.stop = new DirectProviderStop(spec, () => this.control, this.forceReap.bind(this))
     const control = raw.stdio?.at(3)
     const gate = raw.stdio?.at(4)
     const status = raw.stdio?.at(5)
     this.control = control instanceof Duplex ? control : undefined
     this.gate = gate instanceof Writable ? gate : undefined
-    const releaseInput = pipeDirectProviderInput(raw, this.stdin, () => this.stdinEnded())
+    this.input = pipeDirectProviderInput(raw, this.stdin, () => this.stdinEnded())
     const releaseOutput = pipeDirectProviderOutput(raw, this.stdout, this.stderr)
     if (this.control) {
       readProviderControlCompletion(this.control, (completion) => {
         this.connected = false
-        this.forceReap(completion)
-        watcherEnded()
+        this.transportEnded(completion)
+        this.watcherEnded.resolve()
       })
     } else {
-      watcherEnded()
+      this.watcherEnded.resolve()
     }
     const gateError = (): boolean => this.cancelLaunch()
     this.gate?.on('error', gateError)
@@ -95,15 +96,16 @@ export class DirectProviderChild extends EventEmitter implements ProviderChild {
       raw.on('error', ignoreProviderTransportError)
       this.gate?.off('error', gateError)
       this.gate?.on('error', ignoreProviderTransportError)
-      releaseInput()
+      this.input.release()
       releaseOutput()
     }
     void observeProviderLeaderOutcome(raw).then((outcome) => {
       this.outcome = outcome
-      if (this.leaderExited) {
+      if (this.leaderExited && this.connected) {
         this.stop.leaderExited(this.released)
-      } else {
-        this.forceReap()
+      } else if (this.leaderExited || this.connected) {
+        // A lost watcher already started the ladder that a lost parent would.
+        this.transportEnded()
       }
       void this.settle()
     })
@@ -126,6 +128,10 @@ export class DirectProviderChild extends EventEmitter implements ProviderChild {
       this.raw.pid !== undefined &&
       (this.outcome != null || (this.writerPid !== undefined && this.groupVerdict === 'exited'))
     )
+  }
+
+  get outcomeLost(): boolean {
+    return this.outcome === null && this.launchedPid !== undefined && !this.failure
   }
 
   get numericIdentityRetired(): boolean {
@@ -182,12 +188,7 @@ export class DirectProviderChild extends EventEmitter implements ProviderChild {
     if (this.settled || this.groupVerdict === 'exited') {
       return false
     }
-    if (
-      !this.released &&
-      signal !== 0 &&
-      signal !== 'SIGSTOP' &&
-      signal !== constants.signals.SIGSTOP
-    ) {
+    if (!this.released && !isProviderProbeOrPause(signal)) {
       return this.cancelLaunch()
     }
     if (isProviderReapSignal(signal)) {
@@ -196,27 +197,13 @@ export class DirectProviderChild extends EventEmitter implements ProviderChild {
     if (isProviderTermSignal(signal)) {
       return this.startTerm()
     }
-    // SIGSTOP pins only the held root; stopping the watcher would disable the independent backstop.
-    const delivered =
-      this.outcome === undefined &&
-      this.writerPid !== undefined &&
-      signalDirectProviderRoot(this.writerPid, signal)
-    if (delivered && signal !== 0) {
-      this.killed = true
-    }
-    return delivered
+    return signalLiveDirectProviderRoot(this, signal)
   }
 
   private cancelLaunch(): boolean {
     this.canceled = true
     this.gate?.destroy()
     return this.forceReap()
-  }
-
-  private send(command: ProviderControlCommand): void {
-    if (!this.control?.destroyed && this.control?.writable) {
-      this.control.write(`${command}\n`)
-    }
   }
 
   private stdinEnded(): void {
@@ -230,26 +217,33 @@ export class DirectProviderChild extends EventEmitter implements ProviderChild {
     this.stop.stdinEnded()
   }
 
-  private startTerm(): boolean {
-    if (!this.stop.term()) {
+  private startTerm(resend = false): boolean {
+    if (this.stop.reaping || (!this.stop.term() && !resend)) {
       return false
     }
-    const watcherConnected = this.control?.writable && !this.control.destroyed
+    const watcherConnected = this.connected && this.control?.writable && !this.control.destroyed
     // The watcher sends TERM once; queueing control is not proof of signal delivery.
-    return watcherConnected ? false : this.signalLiveGroup('SIGTERM')
+    return watcherConnected ? false : signalDirectProviderGroup(this, 'SIGTERM')
   }
 
-  private signalLiveGroup(signal: NodeJS.Signals): boolean {
-    if (!this.writerPid || this.numericIdentityRetired) {
-      return false
+  private transportEnded(completion?: ProviderControlCompletion): void {
+    if (completion || this.settled || !this.released || this.stop.reaping || this.leaderExited) {
+      this.forceReap(completion)
+      return
     }
-    return signalDirectProviderGroup(this.writerPid, signal, (delivered) => {
-      this.killed ||= delivered
+    this.faultOwnership.stopAfterCapture(this.publication, () => {
+      if (!this.settled && !this.stop.reaping && !this.leaderExited) {
+        this.input.end()
+        this.stop.ownerLost(this.connected, () => this.startTerm(true))
+      }
     })
   }
 
   private forceReap(completion = this.nativeCompletion): boolean {
     if (this.settled || (this.reapTask && !completion)) {
+      return false
+    }
+    if (!completion && this.faultOwnership.deferReap(this.forceReap.bind(this))) {
       return false
     }
     this.nativeCompletion = completion
@@ -269,7 +263,7 @@ export class DirectProviderChild extends EventEmitter implements ProviderChild {
       this.stop.reap()
     }
     this.reapAbort = new AbortController()
-    const delivered = completion || gated ? false : this.signalLiveGroup('SIGKILL')
+    const delivered = completion || gated ? false : signalDirectProviderGroup(this, 'SIGKILL')
     this.reapTask = reapDirectProviderGroup(
       delivered,
       () => this.writerPid,
@@ -280,6 +274,7 @@ export class DirectProviderChild extends EventEmitter implements ProviderChild {
       completion,
       this.reapAbort.signal
     )
+    this.reapRequested.resolve()
     return delivered
   }
 
@@ -291,12 +286,15 @@ export class DirectProviderChild extends EventEmitter implements ProviderChild {
 
   private async settle(): Promise<void> {
     await this.ready.catch(() => {}).then(() => this.failure)
-    if (this.outcome === null && !this.failure && !this.canceled) {
-      notifyProviderChild(this, 'error', new Error('The agent stopped unexpectedly. Try again.'))
-    }
+    await this.faultOwnership.task
     await joinCurrentProviderReap(() => this.reapTask)
-    if (this.raw.pid !== undefined && this.groupVerdict !== 'exited' && this.connected) {
-      await withTimeout(this.watcherEnded, this.stop.maxStopMs, undefined)
+    if (this.raw.pid !== undefined && this.groupVerdict !== 'exited') {
+      const ladder = this.outcome === null ? this.reapRequested : this.watcherEnded
+      await withTimeout(ladder.promise, this.stop.maxStopMs, undefined)
+    }
+    if (this.outcome === null) {
+      // The owner-death ladder is spent; its group still owes the validated reap.
+      this.forceReap()
     }
     await joinCurrentProviderReap(() => this.reapTask)
     await drainDirectProviderOutput(this.raw.stdout, this.raw.stderr, this.stdout, this.stderr)

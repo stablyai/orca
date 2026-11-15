@@ -16,6 +16,7 @@ import {
 import { createCodexAppServerRecordDispatcher } from './codex-app-server-record-dispatch'
 import { createProviderRecordReader } from '../../provider-process/provider-record-reader'
 import { withProviderRequestTimeout } from '../../provider-process/provider-request-timeout'
+import { withLostProviderOutcome } from '../../provider-process/provider-process-exit-status'
 import type {
   CodexAppServerConnection,
   CodexAppServerConnectionHandlers
@@ -53,7 +54,7 @@ async function connectCodexAppServer(
 
   function buildExitError(cause?: Error, protocolFailure = false): Error {
     const error = buildCodexAppServerExitError(managed.stderrTail(), cause, protocolFailure)
-    return withProviderSpawnAbsence(error, managed.spawnAbsence)
+    return withLostProviderOutcome(withProviderSpawnAbsence(error, managed.spawnAbsence), child)
   }
 
   const dispatcher = createCodexAppServerRecordDispatcher({
@@ -78,6 +79,7 @@ async function connectCodexAppServer(
         afterProviderOutputDrains(child.stdout, () => dispatcher.failPending(error), child)
       }
     }
+    withLostProviderOutcome(terminalError, child)
     if (managed.rootVerdict === 'exited' && closesInFlight === 0 && !exitReported) {
       exitReported = true
       handlers.onExit?.(terminalError, { expected: closing })

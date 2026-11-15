@@ -178,8 +178,9 @@ describe.runIf(process.platform !== 'win32')('provider orphan ownership', () => 
       const record = JSON.parse(await readFile(join(directory, name), 'utf8'))
       process.kill(record[target].pid, 'SIGKILL')
       await closed
-      expect(child.signalCode).toBe('SIGKILL')
+      expect(child.signalCode).toBe(target === 'watcher' ? 'SIGTERM' : 'SIGKILL')
       expect(child.groupVerdict).toBe('exited')
+      expect(await readdir(directory)).toEqual([])
     }
   )
 

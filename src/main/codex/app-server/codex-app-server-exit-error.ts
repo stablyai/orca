@@ -12,9 +12,10 @@ const EXIT_DETAIL_MAX_CHARS = 400
 export class CodexAppServerExitError extends Error {
   constructor(
     message: string,
-    readonly protocolFailure = false
+    readonly protocolFailure = false,
+    options?: ErrorOptions
   ) {
-    super(message)
+    super(message, options)
     this.name = 'CodexAppServerExitError'
   }
 }
@@ -38,7 +39,8 @@ export function buildCodexAppServerExitError(
   const detail = cause ? `: ${cause.message}` : tail ? `: ${tail}` : ''
   const error = new CodexAppServerExitError(
     `codex app-server connection ended${detail}`,
-    protocolFailure
+    protocolFailure,
+    cause ? { cause } : undefined
   )
   return cause ? error : withProviderDiagnostic(error, diagnostic)
 }

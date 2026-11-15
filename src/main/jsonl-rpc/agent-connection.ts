@@ -10,6 +10,7 @@ import {
   type ProviderProcessExit
 } from '../provider-process/managed-provider-process'
 import type { ProviderProcessLaunch } from '../provider-process/provider-process-launch'
+import { withLostProviderOutcome } from '../provider-process/provider-process-exit-status'
 import { awaitProviderChildSpawn } from '../provider-process/provider-child'
 import {
   afterProviderOutputDrains,
@@ -128,6 +129,7 @@ export class JsonlRpcAgentConnection {
         ),
         managed.spawnAbsence
       )
+      withLostProviderOutcome(error, exit)
       this.peer.finishOnInputEnd(error)
       const finish = (): void => {
         this.finishObservedExit = undefined
@@ -167,6 +169,9 @@ export class JsonlRpcAgentConnection {
   }
   get processless(): boolean {
     return this.managed.processless
+  }
+  get outcomeLost(): boolean {
+    return this.managed.child.outcomeLost === true
   }
   /** What a spawn ENOENT proved absent: the agent's CLI or its launch folder. */
   get spawnAbsence(): ProviderSpawnAbsence | null {

@@ -8,6 +8,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { cancelGenerateCommitMessageLocal } from '../commit-message-text-generation'
 import { spawnSourceControlAgent } from './source-control-agent-launch'
+import { runLocalSourceControlPlan } from './source-control-local-process'
 
 import { generateCommitMessage } from '../requests/source-control-text-generation-requests'
 
@@ -31,6 +32,33 @@ function isAlive(pid: number): boolean {
 afterEach(() => {
   vi.useRealTimers()
   terminateTreeMock.mockClear()
+})
+
+it('does not expose a CLI failure result when the one-shot outcome was lost', async () => {
+  const child = Object.assign(new EventEmitter(), {
+    pid: 9_999_999,
+    outcomeLost: true,
+    stdin: new PassThrough(),
+    stdout: new PassThrough(),
+    stderr: new PassThrough(),
+    exitCode: null,
+    signalCode: null,
+    kill: vi.fn(() => false)
+  })
+  const execution = runLocalSourceControlPlan({
+    plan: { binary: 'fixture-agent', args: [], label: 'Codex', stdinPayload: 'generate' },
+    cwd: tmpdir(),
+    env: process.env,
+    operation: 'commit-message',
+    spawnAgent: () => child
+  })
+  child.stdout.write('partial answer')
+  child.emit('exit', null, null)
+  child.emit('close', null, null)
+  const result = await execution.result
+  await execution.processClosed
+  expect(result).toMatchObject({ success: false })
+  expect(result).not.toHaveProperty('failureOutput')
 })
 
 describe.runIf(process.platform !== 'win32')(

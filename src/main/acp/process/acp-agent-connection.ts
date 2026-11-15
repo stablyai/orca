@@ -7,6 +7,7 @@ import {
   type ProviderProcessExit
 } from '../../provider-process/managed-provider-process'
 import type { ProviderProcessLaunch } from '../../provider-process/provider-process-launch'
+import { withLostProviderOutcome } from '../../provider-process/provider-process-exit-status'
 import {
   afterProviderOutputDrains,
   PROVIDER_EXIT_OUTPUT_DRAIN_MS
@@ -203,6 +204,7 @@ export class AcpAgentConnection extends AcpSessionRuntime {
               : new AcpAgentExitedError(detail, managed.stderrTail().trim())),
           managed.spawnAbsence
         )
+        withLostProviderOutcome(error, exit)
         super.close(error)
         try {
           options.onExit?.(error, { expected, exit })

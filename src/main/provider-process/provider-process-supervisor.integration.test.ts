@@ -1,11 +1,14 @@
+import { spawnProcess } from '@orca/process-host'
+import { once } from 'node:events'
 import { mkdtemp, rm, writeFile, readdir, readFile } from 'node:fs/promises'
 import type * as FsPromises from 'node:fs/promises'
 import { setTimeout as delay } from 'node:timers/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { createServer, type Socket } from 'node:net'
 import type { Readable } from 'node:stream'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { spawnProviderProcess } from './provider-process-spawn'
+import { spawnProviderProcess, type ProviderProcessSpawner } from './provider-process-spawn'
 import {
   createProviderSpawnSpec,
   type ProviderSupervisorOptions
@@ -59,6 +62,7 @@ type LaunchOptions = {
   cwd?: string
   env?: NodeJS.ProcessEnv
   captureOutput?: boolean
+  spawn?: ProviderProcessSpawner
 }
 
 function launch(
@@ -69,7 +73,8 @@ function launch(
     command = process.execPath,
     cwd = state.root,
     env = process.env,
-    captureOutput = true
+    captureOutput = true,
+    spawn
   }: LaunchOptions = {}
 ) {
   const spec = createProviderSpawnSpec(
@@ -78,7 +83,7 @@ function launch(
     process.platform,
     options
   )
-  const child = spawnProviderProcess(spec)
+  const child = spawnProviderProcess(spec, spawn)
   let output = ''
   let stderr = ''
   const errors: Error[] = []
@@ -246,6 +251,48 @@ describe.runIf(process.platform !== 'win32')('direct provider ownership', () => 
     expect(run.output()).toContain('descendant flushed')
     expect(run.child.groupVerdict).toBe('exited')
   })
+
+  it.runIf(process.platform === 'linux')(
+    'exits the native parent after the provider ends and leaves its detached daemon running',
+    async () => {
+      const path = join(state.root, 'daemon.sock')
+      const server = createServer()
+      const connected = new Promise<Socket>((resolve) => server.once('connection', resolve))
+      await new Promise<void>((resolve) => server.listen(path, resolve))
+      let parentExit: Promise<number | null> | undefined
+      let daemonPid = 0
+      try {
+        const run = launch(
+          String.raw`
+          require('node:child_process').spawn(process.execPath, ['-e',
+            "require('node:net').connect(process.argv[1]).on('data', function () { this.write('alive') }).write(String(process.pid)); setInterval(() => {}, 60000)", ${JSON.stringify(path)}
+          ], { detached: true, stdio: 'ignore' }).unref()
+          process.stdin.resume().once('end', () => process.exit(0))
+        `,
+          { lifetime: 'one-shot' },
+          {
+            spawn: (spec) => {
+              const parent = spawnProcess(spec)
+              parentExit = new Promise((resolve) => parent.once('exit', (code) => resolve(code)))
+              return parent
+            }
+          }
+        )
+        const daemon = await connected
+        daemonPid = Number(String((await once(daemon, 'data'))[0]))
+        run.child.stdin.end()
+        await expect(run.exit).resolves.toEqual({ code: 0, signal: null })
+        await expect(parentExit).resolves.toBe(0)
+        daemon.write('?')
+        expect(String((await once(daemon, 'data'))[0])).toBe('alive')
+      } finally {
+        if (daemonPid > 0) {
+          process.kill(daemonPid, 'SIGKILL')
+        }
+        server.close()
+      }
+    }
+  )
 
   it('routes SIGUSR2 to immediate cleanup and retains the actual CLI signal', async () => {
     const run = launch(String.raw`

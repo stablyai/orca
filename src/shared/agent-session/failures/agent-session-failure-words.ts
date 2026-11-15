@@ -256,8 +256,8 @@ const FAILURE_SENTENCES = {
   backgroundTaskNotStopped: (_context, fact, _surface, say) =>
     say(fact.backgroundStop === 'task' ? 'backgroundTaskNotStopped' : 'backgroundTasksNotStopped'),
   answerUnconfirmed: (_context, _fact, _surface, say) => say('answerUnconfirmed'),
-  hostFault: ({ retryControl }, _fact, _surface, say) =>
-    say(retryControl ? 'hostFault' : 'hostFaultTryAgain'),
+  hostFault: ({ agentName, retryControl }, _fact, _surface, say) =>
+    (agentName ? `${agentName}: ` : '') + say(retryControl ? 'hostFault' : 'hostFaultTryAgain'),
   hostStopped: (context, _fact, _surface, say) => say('hostStopped', agent(say, context)),
   // A provider that says how its retry is going, for a person, is quoted: that is the progress.
   providerRetrying: (context, { retry, detail }, _surface, say) =>

@@ -1,4 +1,5 @@
 import { spawnManagedProviderProcess } from '../../provider-process/managed-provider-process'
+import { withLostProviderOutcome } from '../../provider-process/provider-process-exit-status'
 import { resolveProviderChildEnv } from '../../provider-process/provider-process-launch'
 import { processEnvWithoutAgentSession } from '../../../shared/agent-launch/startup/parent-agent-session-env'
 import { stderrIndicatesMissingAppServer } from './codex-app-server-capability-signal'
@@ -130,7 +131,7 @@ export async function runCodexAppServerSession<T>(
   })
   // close guarantees complete stderr for classifying missing-subcommand versus transient failure.
   child.on('close', () => {
-    failPending(buildEarlyExitError())
+    failPending(withLostProviderOutcome(buildEarlyExitError(), child))
   })
   // Exit can race stdin.write(); reject RPCs on EPIPE instead of leaving an unhandled stream error.
   child.stdin.on('error', (error) => {

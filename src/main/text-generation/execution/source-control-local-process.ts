@@ -8,6 +8,7 @@ import { removeTree } from '../../../shared/windows-transient-lock-removal'
 import { WindowsCmdLineBreakError } from '@orca/process-host/windows-command-line'
 import { WindowsCommandLineBudgetError } from '../../../shared/windows-command-line-budget'
 import {
+  agentHostFailure,
   finalizeFromAgentOutput,
   userFacingUnsafeWindowsBatchArgs
 } from '../failures/source-control-agent-failure'
@@ -215,6 +216,10 @@ export function runLocalSourceControlPlan(
       }
       if (outputLimitExceeded) {
         finalize({ success: false, ...textGenerationFailure('outputTooLarge', labelValue) })
+        return
+      }
+      if (child.outcomeLost) {
+        finalize({ success: false, ...agentHostFailure(plan.label) })
         return
       }
       finalize(

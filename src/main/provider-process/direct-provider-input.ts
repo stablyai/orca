@@ -7,7 +7,7 @@ export function pipeDirectProviderInput(
   raw: ChildProcess,
   input: PassThrough,
   onFinish: () => void
-): () => void {
+): { release: () => void; end: () => void } {
   const onError = (error: Error): void => {
     input.destroy(error)
   }
@@ -24,12 +24,21 @@ export function pipeDirectProviderInput(
   if (raw.stdin) {
     input.pipe(raw.stdin)
   }
-  return () => {
-    raw.stdin?.off('close', onClose)
-    raw.stdin?.off('finish', onFinish)
-    raw.stdin?.off('error', onError)
-    raw.stdin?.on('error', ignoreProviderTransportError)
-    input.unpipe(raw.stdin ?? undefined)
-    raw.stdin?.destroy()
+  return {
+    release: () => {
+      raw.stdin?.off('close', onClose)
+      raw.stdin?.off('finish', onFinish)
+      raw.stdin?.off('error', onError)
+      raw.stdin?.on('error', ignoreProviderTransportError)
+      input.unpipe(raw.stdin ?? undefined)
+      raw.stdin?.destroy()
+    },
+    // Ends the CLI's input as an owner death would; later owner writes stay buffered, not failed.
+    end: () => {
+      input.unpipe(raw.stdin ?? undefined)
+      if (raw.stdin && !raw.stdin.writableEnded) {
+        raw.stdin.end()
+      }
+    }
   }
 }

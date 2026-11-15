@@ -9,6 +9,9 @@ import type { ProviderProcessClosePolicy } from '../../provider-process/provider
 import type { ProviderProcessLaunch } from '../../provider-process/provider-process-launch'
 import { PROVIDER_SUPERVISOR_MAX_STOP_MS } from '../../provider-process/provider-process-supervisor'
 import { providerLaunchFailed } from '../../provider-process/provider-executable-missing'
+import { withLostProviderOutcome } from '../../provider-process/provider-process-exit-status'
+import { agentSessionFailureFact } from '../../../shared/agent-session/failures/agent-session-failure'
+import { agentSessionFailureWords } from '../../../shared/agent-session/failures/agent-session-failure-words'
 
 // Allow cold network-backed listings; timed-out pickers retain their existing catalog.
 export const AGENT_MODEL_CATALOG_PROBE_TIMEOUT_MS = 15_000
@@ -97,11 +100,14 @@ export async function runAgentModelCatalogListing(
         failedExit?: ClaudeBackgroundFailedExit
       ): void =>
         reject(
-          new AgentModelCatalogProbeError(
-            message,
-            reason,
-            reason === 'spawn' && managed.executableMissing,
-            failedExit
+          withLostProviderOutcome(
+            new AgentModelCatalogProbeError(
+              message,
+              reason,
+              reason === 'spawn' && managed.executableMissing,
+              failedExit
+            ),
+            child
           )
         )
       // Required replies already in hand outlive an optional reply that runs out of time or room.
@@ -164,9 +170,16 @@ export async function runAgentModelCatalogListing(
         } else {
           const detail = stderrDetail()
           fail(
-            `${launch.command} exited ${code ?? 'by signal'}${detail ? `: ${detail}` : ''}`,
+            child.outcomeLost
+              ? agentSessionFailureWords(agentSessionFailureFact('hostFault'), {
+                  agentName: launch.command,
+                  surface: 'rejection'
+                }).reason
+              : `${launch.command} exited ${code ?? 'by signal'}${detail ? `: ${detail}` : ''}`,
             'exit',
-            { exitCode: code, stdout: output.text(), stderr: managed.stderrTail() }
+            child.outcomeLost
+              ? undefined
+              : { exitCode: code, stdout: output.text(), stderr: managed.stderrTail() }
           )
         }
       })

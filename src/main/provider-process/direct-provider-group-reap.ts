@@ -8,6 +8,7 @@ import {
 import { sweepOrphanedProviderGroup } from './provider-group-orphan-guard'
 import { PROVIDER_GROUP_REAP_TIMEOUT_MS } from './provider-process-supervisor'
 import type { ProviderControlCompletion } from './provider-control-completion'
+import type { ProviderChild } from './provider-child'
 
 export function reapDirectProviderGroup(
   delivered: boolean,
@@ -92,14 +93,32 @@ export function signalDirectProviderRoot(pid: number, signal: NodeJS.Signals | n
   }
 }
 
-export function signalDirectProviderGroup(
-  pid: number,
-  signal: NodeJS.Signals,
-  recordDelivery: (delivered: boolean) => void
+export function signalLiveDirectProviderRoot(
+  child: Pick<ProviderChild, 'writerPid' | 'numericIdentityRetired'> & { killed: boolean },
+  signal: NodeJS.Signals | number
 ): boolean {
+  // SIGSTOP pins only the held root; stopping W would disable the independent backstop.
+  const delivered =
+    !child.numericIdentityRetired &&
+    child.writerPid !== undefined &&
+    signalDirectProviderRoot(child.writerPid, signal)
+  if (delivered && signal !== 0) {
+    child.killed = true
+  }
+  return delivered
+}
+
+export function signalDirectProviderGroup(
+  child: Pick<ProviderChild, 'writerPid' | 'numericIdentityRetired'> & { killed: boolean },
+  signal: NodeJS.Signals
+): boolean {
+  const pid = child.writerPid
+  if (!pid || child.numericIdentityRetired) {
+    return false
+  }
   try {
     process.kill(-pid, signal)
-    recordDelivery(true)
+    child.killed = true
   } catch {
     // The leader's session is fixed before its pid is known, so a missing group means a missing leader.
     return false
@@ -123,6 +142,10 @@ export function isProviderTermSignal(signal: NodeJS.Signals | number): boolean {
     signal === constants.signals.SIGINT ||
     signal === constants.signals.SIGHUP
   )
+}
+
+export function isProviderProbeOrPause(signal: NodeJS.Signals | number): boolean {
+  return signal === 0 || signal === 'SIGSTOP' || signal === constants.signals.SIGSTOP
 }
 
 export function isProviderReapSignal(signal: NodeJS.Signals | number): boolean {

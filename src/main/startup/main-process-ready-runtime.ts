@@ -106,8 +106,13 @@ export async function initializeReadyRuntimeServices(): Promise<void> {
   // Only Orca-managed emulator helpers belong to workspaces; external serve-sim stays independent. macOS capability gates live in CLI/runtime.
   state.emulatorBridge = new EmulatorBridge()
   runtime.setEmulatorBridge(state.emulatorBridge)
+  let releaseProviderMaintenance: () => void
+  const providerMaintenanceReady = new Promise<void>((resolve) => {
+    releaseProviderMaintenance = resolve
+  })
   // Finish recorded deletes and old trash left across crashes; defer disk sweeps so they do not compete with first paint/catalog hydration.
   runAfterFirstWindowShown(() => {
+    releaseProviderMaintenance()
     void sweepStaleWorktreeTrash(
       collectWorktreeTrashSweepRoots(store.getRepos(), store.getSettings())
     ).catch((error) => {
@@ -146,9 +151,6 @@ export async function initializeReadyRuntimeServices(): Promise<void> {
     })
   }, WORKTREE_TRASH_SWEEP_FALLBACK_MS)
   nativeTheme.themeSource = store.getSettings().theme ?? 'system'
-  const providerMaintenanceReady = new Promise<void>((resolve) => {
-    runAfterFirstWindowShown(resolve, WORKTREE_TRASH_SWEEP_FALLBACK_MS)
-  })
   void providerMaintenanceReady.then(() =>
     startCodexStateDbBackfillRecoveryInBackground(getOrcaManagedCodexHomePath())
   )

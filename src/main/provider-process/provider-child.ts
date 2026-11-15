@@ -21,7 +21,9 @@ export type ProviderChild = Pick<
     ready?: Promise<void>
     /** Group observation is independent of the real leader's outcome. */
     readonly groupVerdict?: DescendantTreeVerdict
-    /** Prevent PID-based tree reads after the held OS root has actually exited. */
+    /** The CLI ran, but its real exit code or signal could not be recovered. */
+    readonly outcomeLost?: boolean
+    /** Proven root absence; group cleanup alone supplies no CLI wait status. */
     readonly leaderExited?: boolean
     /** Lost outcome or retirement revokes unvalidated numeric signals without proving exit. */
     readonly numericIdentityRetired?: boolean

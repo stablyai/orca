@@ -1,6 +1,7 @@
 // Gated exec for POSIX provider CLIs. This pid is a small parent that forks the leader, reports the
-// leader's wait status on fd 6 and reaps it; on Linux it is a subreaper and reaps the watcher and
-// adopted descendants too. The leader starts its own session, forks the same-session owner-pipe
+// leader's wait status on fd 6 and reaps it; on Linux it is a subreaper that reaps the watcher and
+// adopted descendants until leader and watcher are gone, then exits and leaves live descendants to
+// the next reaper. The leader starts its own session, forks the same-session owner-pipe
 // watcher, reports both on fd 5, waits for the owner's GO on fd 4, then execs the CLI with its argv,
 // environment, signal mask and dispositions unchanged.
 // Usage: orca-provider-exec <stdinEndGraceMs> <sigtermGraceMs> <session|one-shot>
@@ -45,6 +46,10 @@ static struct sigaction saved_child_action;
 static sigset_t saved_mask;
 static sigset_t stop_set;
 static pid_t watcher_pid = -1;
+#if defined(__linux__)
+// The parent's read end; only the leader before exec and the watcher hold the write end.
+static int watcher_gone_fd = -1;
+#endif
 
 static void on_stop_signal(int signal_number) { stop_signal = signal_number; }
 
@@ -443,6 +448,9 @@ static void restore_signal_actions(void) {
 static _Noreturn void run_leader(struct watcher *watcher, char *command[]) {
     // Only the parent may hold the outcome pipe, so its EOF means the parent is gone.
     close(OUTCOME_FD);
+#if defined(__linux__)
+    close(watcher_gone_fd);
+#endif
     if (setsid() < 0 || sigaction(SIGCHLD, &saved_child_action, NULL) != 0 ||
             install_stop_handlers() != 0 || set_cloexec(OWNER_FD, 1) != 0 ||
             set_cloexec(GATE_FD, 1) != 0 || set_cloexec(STATUS_FD, 1) != 0) {
@@ -511,6 +519,14 @@ static int publish_outcome(int status) {
     return written ? 0 : -1;
 }
 
+#if defined(__linux__)
+// Hangup means the watcher exited; on a failed probe it falls to the next reaper instead.
+static int watcher_exited(void) {
+    struct pollfd watcher = {.fd = watcher_gone_fd, .events = POLLIN};
+    return poll(&watcher, 1, 0) != 0;
+}
+#endif
+
 // Holds nothing the owner reads EOF from: stdio and fds 3-5 now belong to the leader and watcher.
 // Survives stop signals, which the watcher turns into the group stop, and blocks in wait only.
 static _Noreturn void await_leader(pid_t leader) {
@@ -536,6 +552,7 @@ static _Noreturn void await_leader(pid_t leader) {
     if (chdir("/") != 0) {
         // Keep reaping even if the current directory cannot be released.
     }
+    // Stays 1 until the leader is reaped.
     int outcome = 1;
     for (;;) {
         int status;
@@ -546,13 +563,20 @@ static _Noreturn void await_leader(pid_t leader) {
             }
             break;
         }
-        if (pid != leader) {
-            continue;
-        }
-        outcome = publish_outcome(status);
+        if (pid == leader) {
+            outcome = publish_outcome(status);
 #if !defined(__linux__)
-        // Only the leader is this pid's child here; init reaps the watcher.
-        break;
+            // Only the leader is this pid's child here; init reaps the watcher.
+            break;
+#endif
+        }
+#if defined(__linux__)
+        // A watcher outliving the leader is adopted here, so its exit is a later wake of this wait.
+        if (outcome != 1 && watcher_exited()) {
+            while (waitpid(-1, NULL, WNOHANG) > 0) {
+            }
+            break;
+        }
 #endif
     }
     _exit(outcome == 0 ? 0 : outcome < 0 ? EXIT_OUTCOME_LOST : EXIT_BOOTSTRAP);
@@ -605,6 +629,12 @@ int main(int argc, char *argv[]) {
     if (prctl(PR_SET_CHILD_SUBREAPER, 1, 0, 0, 0) != 0) {
         return EXIT_NO_SUBREAPER;
     }
+    int watcher_alive[2];
+    if (pipe(watcher_alive) != 0 || set_cloexec(watcher_alive[0], 1) != 0 ||
+            set_cloexec(watcher_alive[1], 1) != 0) {
+        return EXIT_BOOTSTRAP;
+    }
+    watcher_gone_fd = watcher_alive[0];
 #endif
     // Blocked across fork so a stop signal lands either before it (default action, nothing started)
     // or on the leader's handler or this pid's ignore, never on the defaults in between.
@@ -618,5 +648,8 @@ int main(int argc, char *argv[]) {
     if (leader < 0) {
         return EXIT_BOOTSTRAP;
     }
+#if defined(__linux__)
+    close(watcher_alive[1]);
+#endif
     await_leader(leader);
 }

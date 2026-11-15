@@ -25,6 +25,7 @@ import { withProviderSpawnAbsence } from '../provider-process/provider-executabl
 import { claudeStreamJsonExitError } from './sdk-transport/claude-stream-json-exit-error'
 import { withObservedProviderExit } from '../native-chat/agent-session-wire/startup/structured-agent-session-failure-text'
 import type { ProviderProcessCloseOptions } from '../provider-process/provider-process-close'
+import { withLostProviderOutcome } from '../provider-process/provider-process-exit-status'
 
 /** Bound output draining after proven exit so inherited pipes cannot hold close open. */
 export const CLAUDE_READER_DRAIN_AFTER_EXIT_MS = 2_000
@@ -51,13 +52,6 @@ export type ClaudeStreamJsonLaunch = {
   env?: Record<string, string>
   /** Delete these keys after merging inherited and launch env. */
   envToDelete?: readonly string[]
-}
-
-function withoutKeys(env: Record<string, string>, keys: readonly string[]): Record<string, string> {
-  for (const key of keys) {
-    delete env[key]
-  }
-  return env
 }
 
 export type ClaudeStreamJsonConnectionHandlers = {
@@ -110,12 +104,10 @@ export async function openClaudeStreamJsonConnection(
   const spawner = createClaudeCodeProcessSpawn(spawnImpl, process.platform, launch, startup.feed)
   // Always supply scrubbed env to prevent ambient auth leaks; only launch.env may pin CLAUDE_CONFIG_DIR.
   const env = await withoutRejectedClaudeApiKey(
-    withoutKeys(
-      buildClaudeChildProcessEnv(launch.env, {
-        inheritedEnv: withoutInheritedClaudeConfigDir(process.env)
-      }),
-      launch.envToDelete ?? []
-    )
+    buildClaudeChildProcessEnv(launch.env, {
+      inheritedEnv: withoutInheritedClaudeConfigDir(process.env),
+      envToDelete: launch.envToDelete
+    })
   )
   const inbox = createClaudeUserMessageQueue()
   const session = (queryImpl ?? query)({
@@ -181,11 +173,16 @@ export async function openClaudeStreamJsonConnection(
     armTreeOnOutput()
   }
 
-  const handleUnexpectedEnd = (cause?: Error): void => {
+  const handleUnexpectedEnd = (cause?: Error, settled = false): void => {
     resumeReading()
     if (!terminalError) {
       const error = claudeStreamJsonExitError(managed.stderrTail(), managed.exitStatus, cause)
       terminalError = withProviderSpawnAbsence(error, managed.spawnAbsence)
+    }
+    withLostProviderOutcome(terminalError, child)
+    // Drained EOF can reach the SDK before the same child's exit/close publishes its proof.
+    if (child.outcomeLost && !managed.exitStatus && !settled) {
+      return
     }
     // One physical exit reaches both callbacks; mark it first so onFault cannot treat it as live-root.
     if (managed.rootExitObserved && !closing) {
@@ -196,7 +193,7 @@ export async function openClaudeStreamJsonConnection(
       faultReported = true
       handlers.onFault?.(terminalError)
     }
-    if (managed.rootExitObserved && !exitReported) {
+    if (managed.rootVerdict === 'exited' && !managed.processless && !exitReported) {
       exitReported = true
       handlers.onExit?.(terminalError, { expected: closing })
       exited.resolve(terminalError)
@@ -243,7 +240,7 @@ export async function openClaudeStreamJsonConnection(
     handleUnexpectedEnd(error)
   })
   child.on('close', () => {
-    handleUnexpectedEnd()
+    handleUnexpectedEnd(undefined, true)
   })
   child.stdin.on('error', (error) => {
     if (!closing) {

@@ -12,6 +12,7 @@ import {
   type ClaudeStreamJsonLaunch
 } from '../claude-stream-json-connection'
 import { CLAUDE_STRUCTURED_BASE_OPTIONS } from '../structured/launch/claude-structured-launch-resolution'
+import { providerStartupFailureFact } from '../../native-chat/agent-session-wire/startup/structured-agent-session-failure-text'
 
 // Exercise the real SDK against a scripted child CLI.
 const FAKE_CLI = join(__dirname, '../__fixtures__', 'claude-agent-sdk-scripted-cli.mjs')
@@ -94,6 +95,35 @@ async function open(
 }
 
 describe('Claude stream-json connection', () => {
+  it.runIf(process.platform !== 'win32')(
+    'reports lost parent outcome once through the real SDK',
+    async () => {
+      const faults: Error[] = []
+      const exits: Error[] = []
+      const rootsAtFault: string[] = []
+      const scenario = scriptScenario([HOLD_OPEN])
+      const connection = await open(launchFor(scenario), {
+        onFault: (error) => {
+          faults.push(error)
+          rootsAtFault.push(connection.exitVerdict.root)
+        },
+        onExit: (error) => exits.push(error)
+      })
+      await connection.initializationResult()
+      const parent = spawnedChildren[0]
+      if (!parent) {
+        throw new Error('Missing native parent')
+      }
+      parent.kill('SIGKILL')
+      const error = await connection.exited
+      expect(faults).toEqual([error])
+      expect(rootsAtFault).toEqual(['exited'])
+      expect(exits).toEqual([error])
+      expect(providerStartupFailureFact(error)).toEqual({ kind: 'hostFault' })
+      await connection.close()
+    }
+  )
+
   it('completes task Stop through the real SDK while semantic reading is paused', async () => {
     const scenario = scriptScenario([HOLD_OPEN])
     const connection = await open(launchFor(scenario))

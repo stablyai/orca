@@ -31,6 +31,8 @@ export type ProviderProcessExit = {
   code: number | null
   signal: NodeJS.Signals | null
   processless: boolean
+  /** Root absence is known independently of the missing CLI wait status. */
+  outcomeLost?: true
 }
 
 type ManagedProviderProcessOptions = {
@@ -56,9 +58,9 @@ export type ManagedProviderProcess = {
   supervised: boolean
   /** The spawn failed before a process existed: absence is proven, but no exit was observed. */
   readonly processless: boolean
-  /** `exited` covers a processless child too; use `rootExitObserved` for "a real process exited". */
+  /** `exited` proves absence, including processless spawn or group cleanup with lost outcome. */
   readonly rootVerdict: DescendantTreeVerdict
-  /** A process that existed was seen to exit; never true for a processless child. */
+  /** A real CLI exit status was observed; absence or a processless spawn is not an outcome. */
   readonly rootExitObserved: boolean
   /** Retained close evidence on this handle; a late root event keeps its earlier diagnostic. */
   readonly lastCloseResult: ProviderProcessCloseResult | null
@@ -159,7 +161,14 @@ export function spawnManagedProviderProcess(
     }
     listeners.clear()
   }
-  child.on('exit', (code, signal) => observeExit({ code, signal, processless: false }))
+  child.on('exit', (code, signal) =>
+    observeExit({
+      code,
+      signal,
+      processless: false,
+      ...(child.outcomeLost ? { outcomeLost: true } : {})
+    })
+  )
   child.on('error', (error) => {
     spawnFailed ||= child.pid === undefined
     spawnError ??= error
@@ -245,7 +254,7 @@ export function spawnManagedProviderProcess(
       return rootVerdict()
     },
     get rootExitObserved() {
-      return observed !== null && !observed.processless
+      return observed !== null && !observed.processless && !observed.outcomeLost
     },
     get executableMissing() {
       return spawnAbsence() === 'executable'

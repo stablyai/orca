@@ -22,7 +22,10 @@ import {
   SOURCE_CONTROL_GENERATION_TIMEOUT_MS
 } from '../execution/source-control-generation-limits'
 import { runCodexProcessWithHomeLock } from '../execution/source-control-local-generation'
-import { formatAgentCliFailureMessage } from '../failures/source-control-agent-failure'
+import {
+  agentHostFailure,
+  formatAgentCliFailureMessage
+} from '../failures/source-control-agent-failure'
 import {
   settleCodexModelListing,
   startCodexModelListDiscovery,
@@ -213,6 +216,10 @@ async function discoverModelsOnce(
       const onClose = (code: number | null): void => {
         markClosedAfterTermination()
         listing?.fail(new Error(`${spec.label} app-server exited`))
+        if (child.outcomeLost) {
+          finish({ success: false, ...agentHostFailure(spec.label) })
+          return
+        }
         if (!settled && !outputLimitExceeded) {
           failedExit = { exitCode: code, stdout, stderr }
         }
