@@ -28,16 +28,19 @@ afterEach(async () => {
 
 const rows = journalSqlRetryRows(false)
 
-const savedTurn = rows.find((row) => row.kind === 'item' && row.itemId === 'failed')!
+type ItemRow = Extract<JournalRow, { kind: 'item' }>
+const savedTurn = rows.find(
+  (row): row is ItemRow => row.kind === 'item' && row.itemId === 'failed'
+)!
 const tip = Math.max(...rows.map((row) => row.seq))
 
-function turn(itemId: string, seq: number): JournalRow {
+function turn(itemId: string, seq: number): ItemRow {
   return {
     ...savedTurn,
     seq,
     itemId,
     body: { kind: 'turn', turnId: itemId, state: 'completed', outcome: 'success' }
-  } as JournalRow
+  }
 }
 
 /** An older Orca's writable open, adding a chat with its record, tab and saved history. */
@@ -91,6 +94,7 @@ it('keeps every chat and turn an older Orca saved after a downgrade, without cha
   cleanup.push(() => original.close())
   olderOrcaChat(original, 'converted', rows)
   olderOrcaChat(original, 'unopened', rows)
+  olderOrcaChat(original, 'closed', rows)
   original
     .prepare('INSERT INTO agent_session_records VALUES(?,?)')
     .run('empty', JSON.stringify({ sessionId: 'empty', lease: { sessionId: 'empty' } }))
@@ -103,11 +107,14 @@ it('keeps every chat and turn an older Orca saved after a downgrade, without cha
   first.db.prepare("DELETE FROM agent_session_records WHERE session_id='unopened'").run()
   first.db.prepare("DELETE FROM agent_session_tabs WHERE session_id='unopened'").run()
   first.db.prepare("DELETE FROM agent_session_records WHERE session_id='empty'").run()
+  // Closed here (record kept), then continued in the older Orca.
+  first.db.prepare("DELETE FROM agent_session_tabs WHERE session_id='closed'").run()
   await first.close()
 
   runJournalTransaction(original, () => {
     insertJournalRow(original, 'converted', turn('older-turn', tip + 1))
     insertJournalRow(original, 'unopened', turn('older-unopened-turn', tip + 1))
+    insertJournalRow(original, 'closed', turn('older-closed-turn', tip + 1))
     original
       .prepare('INSERT INTO agent_session_attachment_claims VALUES(?,?,?)')
       .run('older-upload', 'converted', 100)
@@ -135,7 +142,7 @@ it('keeps every chat and turn an older Orca saved after a downgrade, without cha
   expect(items(db, 'converted')).toEqual(converted)
   const [copy] = db
     .prepare(`SELECT session_id FROM agent_session_records
-      WHERE session_id NOT IN ('converted','unopened','started-older')`)
+      WHERE session_id NOT IN ('converted','unopened','started-older','closed')`)
     .all()
     .map((row) => String(row.session_id))
   expect(items(db, copy)).toEqual([...converted, 'older-turn'])
@@ -153,7 +160,7 @@ it('keeps every chat and turn an older Orca saved after a downgrade, without cha
       .all()
       .map((row) => String(row.session_id))
       .toSorted()
-  ).toEqual([copy, 'converted', 'started-older', 'unopened'])
+  ).toEqual([copy, 'closed', 'converted', 'started-older', 'unopened'].toSorted())
   expect(await second.convert('started-older')).toBe('epoch')
   expect(items(db, 'started-older')).toEqual(['started-turn'])
   expect(await second.convert('unopened')).toBe('epoch')
@@ -180,7 +187,7 @@ it('keeps every chat and turn an older Orca saved after a downgrade, without cha
   const third = await upgrade(root)
   cleanup.push(third.close)
   expect(third.db.prepare('SELECT COUNT(*) AS records FROM agent_session_records').get()).toEqual({
-    records: 4
+    records: 5
   })
 })
 

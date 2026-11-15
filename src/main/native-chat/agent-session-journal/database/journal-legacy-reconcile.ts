@@ -174,27 +174,22 @@ function adoptChat(
     source.prepare('SELECT record_json FROM agent_session_records WHERE session_id=?').get(id)!
       .record_json
   )
-  const known = db.prepare('SELECT 1 FROM agent_session_records WHERE session_id=?').get(as)
   // A copy takes its own id and leaves the original's /clear successor to the original.
   db.prepare(`INSERT INTO agent_session_records(session_id,record_json) VALUES(?1,
     CASE WHEN ?1=?3 THEN ?2 ELSE json_remove(json_set(?2,'$.sessionId',?1,'$.lease.sessionId',?1),
       '$.conversationCommand') END)
     ON CONFLICT(session_id) DO UPDATE SET record_json=excluded.record_json`).run(as, record, id)
-  // A chat new to this file gets a tab; one it already holds keeps the visibility it has here.
-  if (!known) {
-    if (!adoption.tabsRecorded) {
-      recordTabIndex(db, adoption)
-    }
-    const saved = as === id ? adoption.savedTabs.get(id) : undefined
-    addTab(
-      db,
-      adoption,
-      as,
-      saved !== undefined && !adoption.takenTabs.has(saved)
-        ? saved
-        : structuredAgentSessionTabId(as)
-    )
+  // The older build wrote this chat, so it is shown even if it was closed here.
+  if (!adoption.tabsRecorded) {
+    recordTabIndex(db, adoption)
   }
+  const saved = as === id ? adoption.savedTabs.get(id) : undefined
+  addTab(
+    db,
+    adoption,
+    as,
+    saved !== undefined && !adoption.takenTabs.has(saved) ? saved : structuredAgentSessionTabId(as)
+  )
   const session = source
     .prepare('SELECT workspace_id FROM journal_sessions WHERE session_id=?')
     .get(id)
