@@ -56,7 +56,7 @@ export async function resolveManagedRuntimeEnvironment(
   /** The request that needs the server: only one that opens a workspace wakes a sleeping recipe VM. */
   method?: string,
   signal?: AbortSignal
-): Promise<ReturnType<typeof resolveEnvironment>> {
+): Promise<Awaited<ReturnType<typeof resolveEnvironment>>> {
   return (await prepareManagedRuntimeRequest(userDataPath, selector, preparation, method, signal))
     .environment
 }
@@ -69,7 +69,7 @@ export async function prepareManagedRuntimeRequest(
   method?: string,
   signal?: AbortSignal
 ): Promise<PreparedManagedRuntimeRequest> {
-  const environment = resolveEnvironment(userDataPath, selector)
+  const environment = await resolveEnvironment(userDataPath, selector)
   // Enforce the WSL gate for calls, subscriptions and status probes.
   assertWslHostReachable(environment)
   const vm = await prepareRecipeVm(
@@ -89,7 +89,7 @@ export async function prepareManagedRuntimeRequest(
       await prepareNetworkServerForCall(userDataPath, environment)
       break
   }
-  const prepared = resolveEnvironment(userDataPath, environment.id)
+  const prepared = await resolveEnvironment(userDataPath, environment.id)
   return {
     environment: prepared,
     before: environment,
@@ -111,7 +111,7 @@ export async function requireWslHostWithoutStart(
   selector: string,
   preparation: ManagedRuntimeCallPreparation
 ): Promise<void> {
-  const environment = resolveEnvironment(userDataPath, selector)
+  const environment = await resolveEnvironment(userDataPath, selector)
   if (classifyRuntimeEnvironmentHost(environment).kind === 'wsl') {
     assertWslHostReachable(environment)
     await prepareWslHostForCall(environment, preparation)

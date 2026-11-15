@@ -116,7 +116,7 @@ describe('OrcaRuntimeService', () => {
       terminalDriverChanged: vi.fn()
     })
     runtime.attachWindow(1)
-    runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
+    await runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
     const a = await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`, {
       title: 'a',
       presentation: 'background'

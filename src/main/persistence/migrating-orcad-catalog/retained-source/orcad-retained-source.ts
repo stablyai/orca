@@ -119,22 +119,25 @@ function reviewRetainedOrcadSource(
 }
 
 /** At startup, restore generation-matched managed fences and detect retained-source additions. Failed reconciliation leaves state unchanged. */
-export function reconcileManagedOrcadSshTargets(
+export async function reconcileManagedOrcadSshTargets(
   userDataPath: string,
   store: CatalogStore & TargetStore,
   now: () => Date = () => new Date()
-): void {
+): Promise<void> {
   try {
-    restoreFencesFromManagedServers(userDataPath, store)
+    await restoreFencesFromManagedServers(userDataPath, store)
     markChangedRetainedSources(userDataPath, store, now)
   } catch (error) {
     console.warn('[ssh] Could not reconcile managed Orca server hosts:', error)
   }
 }
 
-function restoreFencesFromManagedServers(userDataPath: string, store: TargetStore): void {
+async function restoreFencesFromManagedServers(
+  userDataPath: string,
+  store: TargetStore
+): Promise<void> {
   const targets = new Map(store.getSshTargets().map((target) => [target.id, target]))
-  for (const environment of listEnvironments(userDataPath)) {
+  for (const environment of await listEnvironments(userDataPath)) {
     const deployment = getOrcadSshDeployment(environment)
     const target = deployment ? targets.get(deployment.sshTargetId) : undefined
     // Recreated ids identify new registrations; restore fences only for matching generation.

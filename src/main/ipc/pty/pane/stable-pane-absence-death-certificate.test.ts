@@ -63,7 +63,7 @@ function paneStore(): { store: Store; read: () => WorkspaceSessionState } {
   }
 }
 
-function runtimeOwning(store: Store): OrcaRuntimeService {
+async function runtimeOwning(store: Store): Promise<OrcaRuntimeService> {
   const runtime = new OrcaRuntimeService(store as never)
   runtime.setPtyController({
     write: () => true,
@@ -73,7 +73,7 @@ function runtimeOwning(store: Store): OrcaRuntimeService {
     getForegroundProcess: async () => null
   } as never)
   runtime.attachWindow(1)
-  runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
+  await runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
   runtime.registerPty(PTY_ID, WORKTREE, CONNECTION)
   return runtime
 }
@@ -82,7 +82,7 @@ describe('a stable pane whose reattach was refused', () => {
   it('refuses to abandon the binding on an untyped "not found" string', async () => {
     const { store, read } = paneStore()
     const before = JSON.stringify(read())
-    const runtime = runtimeOwning(store)
+    const runtime = await runtimeOwning(store)
     const spawn = vi.fn().mockRejectedValue(new Error(`PTY "pty2:epoch-a:1" not found`))
 
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the rejected attachment calls only spawn and never admits this provider.

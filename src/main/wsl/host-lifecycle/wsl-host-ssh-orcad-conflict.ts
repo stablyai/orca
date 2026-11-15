@@ -48,7 +48,7 @@ export async function wslHostSshManagedRefusal(
   try {
     const sharing = findServerSharingWslOrcad(
       // A conflict check before an add: a crash-zeroed list (#18766) must read as empty here.
-      listEnvironments(userDataPath, { recoverBlankStore: true }),
+      await listEnvironments(userDataPath, { recoverBlankStore: true }),
       await readPublicKey(distro)
     )
     return sharing

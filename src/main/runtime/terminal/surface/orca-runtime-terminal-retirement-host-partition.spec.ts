@@ -141,8 +141,11 @@ export function registerOrcaRuntimeTerminalRetirementHostPartitionTests(): void 
     return { store, sessions, writes, reads }
   }
 
-  function syncSshSplit(runtime: OrcaRuntimeService, snapshot: RuntimeMobileSessionTabsSnapshot) {
-    runtime.syncWindowGraph(1, {
+  async function syncSshSplit(
+    runtime: OrcaRuntimeService,
+    snapshot: RuntimeMobileSessionTabsSnapshot
+  ) {
+    await runtime.syncWindowGraph(1, {
       tabs: [
         {
           tabId: 'tab',
@@ -245,7 +248,7 @@ export function registerOrcaRuntimeTerminalRetirementHostPartitionTests(): void 
         getForegroundProcess: async () => null
       })
       runtime.attachWindow(1)
-      runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
+      await runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
       runtime.registerPty('local-pty', SSH_WORKTREE_ID, null, {
         tabId: 'local-tab',
         leafId: 'leaf'
@@ -277,7 +280,7 @@ export function registerOrcaRuntimeTerminalRetirementHostPartitionTests(): void 
         stopAndWait,
         getForegroundProcess: async () => null
       })
-      syncSshSplit(runtime, makeSshSnapshot())
+      await syncSshSplit(runtime, makeSshSnapshot())
       runtime.registerPty(SSH_PTY_LEFT, SSH_WORKTREE_ID, CONNECTION_ID, {
         tabId: 'tab',
         leafId: 'left'
@@ -314,7 +317,7 @@ export function registerOrcaRuntimeTerminalRetirementHostPartitionTests(): void 
         stopAndWait,
         getForegroundProcess: async () => null
       })
-      syncSshSplit(runtime, makeSshSnapshot())
+      await syncSshSplit(runtime, makeSshSnapshot())
       runtime.registerPty(SSH_PTY_LEFT, SSH_WORKTREE_ID, CONNECTION_ID, {
         tabId: 'tab',
         leafId: 'left'
@@ -338,7 +341,7 @@ export function registerOrcaRuntimeTerminalRetirementHostPartitionTests(): void 
       const localBefore = harness.sessions.get(LOCAL_EXECUTION_HOST_ID)!
       const runtime = new OrcaRuntimeService(harness.store)
       runtime.attachWindow(1)
-      syncSshSplit(runtime, makeSshSnapshot())
+      await syncSshSplit(runtime, makeSshSnapshot())
       runtime.registerPty(SSH_PTY_LEFT, SSH_WORKTREE_ID, CONNECTION_ID, {
         tabId: 'tab',
         leafId: 'left',

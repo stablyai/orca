@@ -187,7 +187,7 @@ List each in `contributes.hooks` (`{ "event", "onError"? }`; `main` and `trusted
 - `storage:own` (since 1.4.245): Store data in the plugin's own storage folder
 - `secrets:own` (since 1.4.245): Store and read secrets in the plugin's own encrypted file
 - `settings:own` (since 1.4.160): Read and change the plugin's own settings
-- `appearance:write` (since 1.4.249): Publish and select desktop application, editor and terminal colors
+- `appearance:write` (since 1.4.251): Publish and select desktop application, editor and terminal colors
 - `workspace:create` (since 1.4.259): Create workspaces (new Git branches and worktrees) in your projects, local and SSH; a project's setup script runs as its settings say
 - `automation:read` (since 1.4.259): Read your automations: their names, prompts, agents, projects, workspaces and schedules
 - `automation:write` (since 1.4.259): Create automations that start agents in your projects on a schedule, even when the plugin is not running, and change or delete them (Orca asks you first for ones the plugin did not create, and before it changes what one with extra agent settings runs)

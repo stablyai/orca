@@ -18,26 +18,28 @@ import {
   isSshCredentialDeclined
 } from '../../ssh/authentication/ssh-credential-decline'
 
-export function registerSshConnectionHandlers(): void {
+export function registerSshConnectionHandlers(
+  handle: typeof ipcMain.handle = ipcMain.handle.bind(ipcMain)
+): void {
   setSshTargetRegistryHandlers({
     connect: connectTarget,
     getState: (targetId: string) => getPublicSshState(targetId)
   })
 
-  ipcMain.handle('ssh:connect', async (_event, args: { targetId: string; automatic?: boolean }) => {
+  handle('ssh:connect', async (_event, args: { targetId: string; automatic?: boolean }) => {
     return connectTarget(args.targetId, { automatic: args.automatic === true })
   })
 
-  ipcMain.handle('ssh:disconnect', async (_event, args: { targetId: string }) => {
+  handle('ssh:disconnect', async (_event, args: { targetId: string }) => {
     await disconnectSshHostForUser(args.targetId)
   })
 
-  ipcMain.handle('ssh:getState', (_event, args: { targetId: string }) => {
+  handle('ssh:getState', (_event, args: { targetId: string }) => {
     return getPublicSshState(args.targetId)
   })
 
   // Auto-connect callers need to avoid prompts when credentials were declined or are no longer cached.
-  ipcMain.handle('ssh:needsPassphrasePrompt', (_event, args: { targetId: string }) => {
+  handle('ssh:needsPassphrasePrompt', (_event, args: { targetId: string }) => {
     if (isSshCredentialDeclined(args.targetId)) {
       return true
     }
@@ -48,7 +50,7 @@ export function registerSshConnectionHandlers(): void {
     return !connectionManager!.hasCachedCredential(target)
   })
 
-  ipcMain.handle('ssh:testConnection', async (_event, args: { targetId: string }) => {
+  handle('ssh:testConnection', async (_event, args: { targetId: string }) => {
     const target = getSshTargetRegistryStore()!.getTarget(args.targetId)
     if (!target) {
       throw new Error(`SSH target "${args.targetId}" not found`)

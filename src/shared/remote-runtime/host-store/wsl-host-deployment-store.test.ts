@@ -3,8 +3,11 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { encodePairingOffer } from '../pairing/pairing'
-import { addManagedOrcadEnvironment } from './runtime-environment-managed-orcad-store'
-import { addEnvironmentFromPairingCode, listEnvironments } from './runtime-environment-store'
+import { addManagedOrcadEnvironment } from './runtime-environment-managed-orcad-operations'
+import {
+  addEnvironmentFromPairingCode,
+  listEnvironments
+} from './runtime-environment-store-operations'
 import {
   getWslHostDeploymentStorePath,
   readWslHostDeployments,
