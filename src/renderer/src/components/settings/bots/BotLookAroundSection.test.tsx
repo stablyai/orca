@@ -1,15 +1,16 @@
 // @vitest-environment happy-dom
 
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Bot } from '../../../../../shared/bot-types'
 
+const mocks = vi.hoisted(() => ({ lookNow: vi.fn(async () => true) }))
 vi.mock('@/components/bots/use-bot-activity', () => ({
   useBotActivity: () => ({
     upNext: { state: { running: false, lastLookedAt: 1, tookMs: 180_000, seenAt: 0 }, items: [] }
   })
 }))
-vi.mock('@/components/bots/bot-up-next-actions', () => ({ lookNow: vi.fn() }))
+vi.mock('@/components/bots/bot-up-next-actions', () => ({ lookNow: mocks.lookNow }))
 
 import { BotLookAroundSection } from './BotLookAroundSection'
 
@@ -32,6 +33,7 @@ const base: Bot = {
   updatedAt: 1
 }
 
+beforeEach(() => mocks.lookNow.mockResolvedValue(true))
 afterEach(() => cleanup())
 
 describe('Look around settings', () => {

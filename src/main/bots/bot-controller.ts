@@ -13,7 +13,7 @@ import { assertBotNameFree, freeBotName } from './bot-free-name'
 import { BotsDisabledError, isBotsEnabled } from '../../shared/bots-switch'
 import { type BotRosterEntry, botRosterFields, soulSpecialty } from '../../shared/bot-roster'
 import {
-  applyBotUpdates,
+  applyHostBotUpdates,
   type BotCreateParams,
   type BotDeleteParams,
   type BotHostUpdates
@@ -212,7 +212,7 @@ export class BotController {
       if (updates.name !== undefined) {
         assertBotNameFree(store.getBots(), updates.name, botId)
       }
-      const updated: Bot = { ...applyBotUpdates(bot, updates), updatedAt: Date.now() }
+      const updated: Bot = { ...applyHostBotUpdates(bot, updates), updatedAt: Date.now() }
       const next = stampBotLinkOwners(bot, updated, () => this.deps.accountUserId?.() ?? null)
       await writeBotHome(this.deps.filesystem, botHomeFolder(next, this.deps.botsRoot()), next)
       if (next.name !== bot.name) {

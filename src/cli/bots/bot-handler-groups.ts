@@ -13,7 +13,7 @@ export const BOT_HANDLER_GROUPS: HandlerGroup[] = [
   },
   {
     name: 'bot-look-around',
-    keys: ['bot suggest', 'bot look-around set'],
+    keys: ['bot suggest', 'bot look-around set', 'bot look-around show'],
     load: async () => (await import('./bot-look-around.js')).BOT_LOOK_AROUND_HANDLERS
   },
   {

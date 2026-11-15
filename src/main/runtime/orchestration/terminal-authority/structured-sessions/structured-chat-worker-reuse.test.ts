@@ -1,3 +1,4 @@
+// @orca-isolated-worker -- shared module resets split the mocked host and provider fault bindings.
 import { queuedCardTexts } from './structured-chat-coordinator-journal.test-fixture'
 import { readTestHostJournal } from '../../../../native-chat/agent-session-journal/journal-observation.test-support'
 // A finished structured worker takes follow-up work in its own chat through worker-start --terminal <handle>, or a send to its Dispatch.

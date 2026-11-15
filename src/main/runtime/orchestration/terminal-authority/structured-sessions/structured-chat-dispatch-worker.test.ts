@@ -1,3 +1,4 @@
+// @orca-isolated-worker -- shared module resets split the mocked host and provider fault bindings.
 import { queuedRows, queuedCardTexts } from './structured-chat-coordinator-journal.test-fixture'
 import { readTestHostJournal } from '../../../../native-chat/agent-session-journal/journal-observation.test-support'
 import '../../../rpc/dispatch/testing/unused-default-rpc-methods.test-fixture'

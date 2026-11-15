@@ -2,14 +2,10 @@
 import { translate } from '@/i18n/i18n'
 import { uiDateTimeFormat } from '@/i18n/ui-intl-formatters'
 import type { BotTools } from '../../../../shared/bot-tools'
-import {
-  LOOK_AROUND_EVERY_LABELS,
-  lookedDay,
-  type BotLookAround,
-  type LookAroundEvery
-} from '../../../../shared/bots/bot-look-around'
+import { lookedDay, type BotLookAround, type LookAroundEvery } from '../../../../shared/bots/bot-look-around'
 import type { BotTidyUp } from '../../../../shared/bots/bot-tidy-up'
 import { botToolsLine } from '../../../../shared/bots/bot-tool-labels'
+import { lookAroundScheduleLine } from './bot-look-around-copy'
 
 const CLOCK = { hour: 'numeric', minute: '2-digit' } as const
 const DATE = { month: 'short', day: 'numeric' } as const
@@ -44,16 +40,18 @@ function tidiedWhen(at: number, now: number): string {
       : uiDateTimeFormat(DATE).format(at)
 }
 
-/** "Every 4 hours, 8 AM to 8 PM · last looked 12:04 PM". */
+/** "Every 4 hours on weekdays, 8 AM to 8 PM · last looked 12:04 PM"; `zone` names the schedule's
+ *  zone when it isn't the viewer's. */
 export function lookAroundLine(
   setting: BotLookAround,
   lastLookedAt: number | undefined,
+  zone?: string,
   now = Date.now()
 ): string {
   if (!setting.on) {
     return off()
   }
-  const every = LOOK_AROUND_EVERY_LABELS[setting.every]
+  const every = lookAroundScheduleLine(setting, zone)
   return lastLookedAt
     ? `${every} · ${translate('bots.settingsPage.lastLooked', 'last looked {{when}}', {
         when: lookedWhen(lastLookedAt, now)
@@ -101,7 +99,8 @@ const LOOK_AROUND_SHORT: Record<LookAroundEvery, () => string> = {
   'every-4h': () => translate('bots.settingsView.lookAroundShort.every4h', '4h'),
   'every-2h': () => translate('bots.settingsView.lookAroundShort.every2h', '2h'),
   'twice-daily': () => translate('bots.settingsView.lookAroundShort.twiceDaily', 'Twice a day'),
-  mornings: () => translate('bots.settingsView.lookAroundShort.mornings', 'Mornings')
+  mornings: () => translate('bots.settingsView.lookAroundShort.mornings', 'Mornings'),
+  custom: () => translate('bots.settingsView.lookAroundShort.custom', 'Custom')
 }
 
 /** "4h"; null while it is off, as its switch says. */

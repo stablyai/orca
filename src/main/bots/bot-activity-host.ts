@@ -22,7 +22,8 @@ import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import { readDispatchWorkers } from '../runtime/rpc/methods/orchestration/worker/session-workers-method'
 import type { BotUpNext } from '../../shared/bots/bot-look-around'
 import { lookAroundUpNext } from './bot-look-around-state'
-import { lookAroundDueAt, lookAroundNextAt } from './bot-look-around-schedule'
+import { lookAroundScheduleState } from './bot-look-around-status'
+import { systemBackgroundRunPower } from './bot-background-run-power'
 import { botLookAround } from '../../shared/bots/bot-look-around'
 import { createSharedBotBuilds } from './shared-bot-builds'
 import type { BotActivityRead } from '../../shared/bots/bot-activity-schema'
@@ -227,11 +228,15 @@ export function runtimeBotActivityHost(runtime: OrcaRuntimeService): BotActivity
     },
     upNext: (bot) => {
       const now = Date.now()
-      const setting = botLookAround(bot)
-      const state = runtime.lookAround.get(bot.id)
-      const nextAt = lookAroundNextAt(setting, state, now)
-      const dueNow = !bot.paused && lookAroundDueAt(setting, state, now, false) !== null
-      return lookAroundUpNext(runtime.lookAround, bot, now, nextAt, dueNow)
+      return lookAroundUpNext(
+        runtime.lookAround,
+        bot,
+        now,
+        lookAroundScheduleState(botLookAround(bot), runtime.lookAround.get(bot.id), now, {
+          settled: systemBackgroundRunPower().settled(),
+          paused: bot.paused === true
+        })
+      )
     },
     automations: () => runtime.listAutomationsForScope().automations,
     automationRuns: (automationIds) => runtime.listAutomationRunsByAutomation(automationIds),

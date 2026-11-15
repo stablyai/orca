@@ -189,6 +189,38 @@ describe('Look around over RPC', () => {
     })
   })
 
+  it('sets its own times from the chat, says them, and shows them with the next look', async () => {
+    const { dispatcher, bot } = lookRuntime()
+    expect(
+      await dispatcher.dispatch(
+        request('bots.lookAround.set', { botId: 'b1', times: ['14:00', '09:30'] })
+      )
+    ).toMatchObject({
+      ok: true,
+      result: { change: 'Look around updated: Weekdays at 9:30 AM and 2 PM' }
+    })
+    expect(bot().lookAround).toMatchObject({ every: 'custom', times: ['09:30', '14:00'] })
+    expect(
+      await dispatcher.dispatch(request('bots.lookAround.get', { botId: 'b1' }))
+    ).toMatchObject({
+      ok: true,
+      result: { setting: { every: 'custom', times: ['09:30', '14:00'] } }
+    })
+  })
+
+  it('refuses times too close together and an unknown zone, saying the rule', async () => {
+    const { dispatcher, bot } = lookRuntime()
+    const close = await dispatcher.dispatch(
+      request('bots.lookAround.set', { botId: 'b1', times: ['09:30', '10:00'] })
+    )
+    expect(JSON.stringify(close)).toContain('at least 60 min apart')
+    const zone = await dispatcher.dispatch(
+      request('bots.lookAround.set', { botId: 'b1', timezone: 'PST' })
+    )
+    expect(JSON.stringify(zone)).toContain('Unknown time zone')
+    expect(bot().lookAround).toBeUndefined()
+  })
+
   it('refuses a look changing its own Look around or making an automation', async () => {
     const { dispatcher, runtime } = lookRuntime()
 

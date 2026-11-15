@@ -42,12 +42,14 @@ export {
   withBackgroundRun,
   withoutBackgroundRun,
   type BackgroundRuns,
-  type LookAroundRun
+  type LookAroundRun,
+  type LookSlot
 } from './bot-background-run-history'
 import {
   withBackgroundRun,
   type BackgroundRuns,
   type LookAroundRun,
+  type LookSlot,
   type LookUsageLimit
 } from './bot-background-run-history'
 
@@ -61,6 +63,9 @@ export type BotLookState = BackgroundRuns & {
   /** When the owner last saw Up next; suggestions made after it count as new. */
   seenAt?: number
   tidyUp?: BotTidyUpState
+  /** Slots that went by with no look while it was on, newest last; they never count toward the
+   *  failures that turn Look around off. */
+  missedSlots?: number[]
 }
 
 /** `key` is the suggestion's key (see `suggestionKey`); absent in a record from before links keyed it. */
@@ -117,8 +122,19 @@ export function expired(state: BotLookState, now: number): BotLookState {
   return { ...state, suggestions, dismissals }
 }
 
-export function beginRun(state: BotLookState, sessionId: string, now: number): BotLookState {
-  return withBackgroundRun(state, sessionId, now, MAX_RUNS)
+const MAX_MISSED = 50
+
+export function withMissedSlot(state: BotLookState, slot: number): BotLookState {
+  return { ...state, missedSlots: [...(state.missedSlots ?? []), slot].slice(-MAX_MISSED) }
+}
+
+export function beginRun(
+  state: BotLookState,
+  sessionId: string,
+  now: number,
+  slot?: LookSlot
+): BotLookState {
+  return withBackgroundRun(state, sessionId, now, MAX_RUNS, slot)
 }
 
 /** A finished look replaces the open list with what it suggested; a failed one only adds. */
@@ -274,10 +290,14 @@ export function upNextItems(state: BotLookState, now: number): Suggestion[] {
     .map(visible)
 }
 
-export function upNextState(state: BotLookState, nextAt: number | undefined): UpNextState {
+export function upNextState(state: BotLookState, schedule: Partial<UpNextState> = {}): UpNextState {
   const current = state.runs.find((run) => run.endedAt === undefined)
   const last = state.runs.toReversed().find((run) => run.endedAt !== undefined)
+  // A running look is the due one: nothing is owed or held while it runs.
+  const { dueNow, nextHeld, ...rest } = schedule
   return {
+    ...rest,
+    ...(current ? {} : { ...(dueNow ? { dueNow } : {}), ...(nextHeld ? { nextHeld } : {}) }),
     running: current !== undefined,
     ...(current ? { runSessionId: current.sessionId } : {}),
     seenAt: state.seenAt ?? 0,
@@ -285,8 +305,7 @@ export function upNextState(state: BotLookState, nextAt: number | undefined): Up
       ? { lastLookedAt: last.endedAt, tookMs: last.endedAt - last.startedAt }
       : {}),
     ...(last ? { lastSessionId: last.sessionId } : {}),
-    ...(last?.error ? { error: last.error } : {}),
-    ...(nextAt !== undefined ? { nextAt } : {})
+    ...(last?.error ? { error: last.error } : {})
   }
 }
 
@@ -316,17 +335,11 @@ export function lookAroundUpNext(
   store: { get: (botId: string) => BotLookState },
   bot: Pick<Bot, 'id' | 'agent' | 'lookAround'>,
   now: number,
-  nextAt?: number,
-  /** A slot is owed now and starts once the host is in full wake. */
-  dueNow = false
+  schedule?: Partial<UpNextState>
 ): BotUpNext | undefined {
   if (!lookAroundOn(bot)) {
     return undefined
   }
   const state = store.get(bot.id)
-  const upNext = upNextState(state, nextAt)
-  return {
-    state: dueNow && !upNext.running ? { ...upNext, dueNow: true } : upNext,
-    items: upNextItems(state, now)
-  }
+  return { state: upNextState(state, schedule), items: upNextItems(state, now) }
 }

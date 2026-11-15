@@ -1,3 +1,5 @@
+export { LOOK_FAILURES, LOOK_RUN_LIMIT_MS } from './bot-look-around-run-outcome'
+import { LOOK_FAILURES, LOOK_RUN_LIMIT_MS, lookFailureOf } from './bot-look-around-run-outcome'
 // Starts each bot's looks: on its Look around hours, and on Look now (Settings, or a bot's onboarding).
 // A look is a new conversation in the bot's home whose session the store records before it starts,
 // which is how its launch, its tool calls and Orca's own commands know it may only read.
@@ -6,15 +8,17 @@ import { randomUUID } from 'node:crypto'
 import type { Bot } from '../../shared/bot-types'
 import { botLookAround, lookAroundSupported } from '../../shared/bots/bot-look-around'
 import type { BotAutomationSessions } from '../automations/bot-automation-launch'
-import type { BotTurnEnd, BotTurnWatch } from './bot-run-turn-watch'
+import type { BotTurnWatch } from './bot-run-turn-watch'
 import type { LookUsageLimit } from './bot-background-run-history'
 import type { BotLookAroundStore } from './bot-look-around-store'
 import {
   beginRun,
   endRun,
   lookHistory,
+  withMissedSlot,
   withoutBackgroundRun,
-  type BotLookState
+  type BotLookState,
+  type LookSlot
 } from './bot-look-around-state'
 import {
   failedLooksInARow,
@@ -23,7 +27,7 @@ import {
   usageLimitAlreadyNoted
 } from './bot-look-around-failures'
 import { lookAroundPrompt } from './bot-look-around-prompt'
-import { lookAroundDueAt } from './bot-look-around-schedule'
+import { lookAroundDecision, lookAroundDueAt } from './bot-look-around-schedule'
 import {
   BACKGROUND_RUN_STOP_GRACE_MS,
   type BackgroundRunPower,
@@ -36,18 +40,8 @@ import {
   watchBackgroundRun
 } from './bot-background-run'
 
-/** A look still going after this long awake is stopped on its host and recorded as stopped. */
-export const LOOK_RUN_LIMIT_MS = 10 * 60 * 1000
 /** How long a stopped look's turn gets to end before its Stop is asked again. */
 export const LOOK_STOP_GRACE_MS = BACKGROUND_RUN_STOP_GRACE_MS
-
-export const LOOK_FAILURES = {
-  unfinished: "The last look didn't finish.",
-  timedOut: `The last look was stopped after ${LOOK_RUN_LIMIT_MS / 60_000} min.`,
-  interrupted: 'Orca stopped during the last look.',
-  couldNotStart: "The last look couldn't start.",
-  asleep: 'The last look was missed because this computer was asleep.'
-} as const
 
 export type LookNowRefusal = 'not_found' | 'unsupported' | 'off' | 'paused' | 'running'
 export type LookNowOutcome = { started: true } | { refused: LookNowRefusal }
@@ -74,11 +68,10 @@ export type BotLookAroundRunnerDeps = {
   now: () => number
 }
 
-function failureOf(ended: BotTurnEnd | 'timed_out'): string | undefined {
-  if (ended === 'timed_out') {
-    return LOOK_FAILURES.timedOut
-  }
-  return 'outcome' in ended && ended.outcome === 'success' ? undefined : LOOK_FAILURES.unfinished
+/** What a bot's looks are due under, to tell a held slot from one an edit made due. */
+function scheduleKey(bot: Bot): string {
+  const setting = botLookAround(bot)
+  return JSON.stringify([setting.every, setting.times, setting.weekdaysOnly, setting.timezone])
 }
 
 export class BotLookAroundRunner {
@@ -86,6 +79,9 @@ export class BotLookAroundRunner {
   private readonly running = new Set<string>()
   private ticking = false
   private checkedAbandoned = false
+  /** Per bot, the due slot the host's power held back (asleep, just woken or in a dark wake), and
+   *  the schedule it was due under; only that slot, still due under that schedule, runs as late. */
+  private readonly held = new Map<string, { slot: number; schedule: string }>()
   /** Looks this process started; only a recorded run outside it was cut off by a restart. */
   private readonly ownSessions = new Set<string>()
 
@@ -93,6 +89,44 @@ export class BotLookAroundRunner {
 
   private change(botId: string, next: (state: BotLookState) => BotLookState): void {
     this.deps.store.update(botId, (state) => ({ state: next(state), result: null }))
+  }
+
+  private noteHeld(bot: Bot, slot: number): void {
+    if (this.held.get(bot.id)?.slot !== slot) {
+      console.info('[bots] look-around held until the host is in full wake', {
+        botId: bot.id,
+        slot
+      })
+    }
+    this.held.set(bot.id, { slot, schedule: scheduleKey(bot) })
+  }
+
+  /** The slot was held for the host's power and is still due under the schedule it was held under. */
+  private heldLate(bot: Bot, slot: number): boolean {
+    const hold = this.held.get(bot.id)
+    return hold?.slot === slot && hold.schedule === scheduleKey(bot)
+  }
+
+  /** A receipt only for a bot unchanged since the slot, seen by an awake host: one paused, turned
+   *  off or edited since may simply not have been due then. */
+  private noteMissed(bot: Bot, state: BotLookState, missedAt: number, settled: boolean): void {
+    if (
+      !settled ||
+      bot.updatedAt > missedAt ||
+      state.missedSlots?.includes(missedAt) ||
+      !this.deps
+        .bots()
+        .some(
+          (current) =>
+            current.id === bot.id &&
+            !current.paused &&
+            botLookAround(current).on &&
+            current.updatedAt === bot.updatedAt
+        )
+    ) {
+      return
+    }
+    this.change(bot.id, (current) => withMissedSlot(current, missedAt))
   }
 
   /** Called on the automation scheduler's tick. */
@@ -126,7 +160,10 @@ export class BotLookAroundRunner {
           }
           continue
         }
-        const slot = lookAroundDueAt(setting, state, now)
+        const { due: slot, missedAt } = lookAroundDecision(setting, state, now)
+        if (missedAt !== undefined) {
+          this.noteMissed(bot, state, missedAt, settled)
+        }
         const limited = state.runs.findLast((run) => run.endedAt !== undefined)
         // Only the slot the limited look took finishes in its chat; later slots are their own.
         if (
@@ -142,11 +179,20 @@ export class BotLookAroundRunner {
       }
       // Never in a dark wake, where the host sleeps again within seconds and the look is cut off.
       // On a Mac the full-wake check asks the system, so it runs only when a look is due.
-      if (settled && due.length > 0 && (await this.deps.power.checkFullWake())) {
+      if (due.length === 0) {
+        return
+      }
+      if (settled && (await this.deps.power.checkFullWake())) {
         for (const { bot, slot } of due) {
           if (!this.running.has(bot.id)) {
-            void this.run(bot, slot)
+            const late = this.heldLate(bot, slot)
+            void this.run(bot, { scheduledFor: slot, ...(late ? { late: true } : {}) })
           }
+        }
+      } else {
+        // Remembered, so the look reads as late once it starts.
+        for (const { bot, slot } of due) {
+          this.noteHeld(bot, slot)
         }
       }
     } finally {
@@ -206,7 +252,7 @@ export class BotLookAroundRunner {
   }
 
   /** `slot` is the scheduled slot it takes; Look now has none and is never held back. */
-  private async run(bot: Bot, slot?: number): Promise<void> {
+  private async run(bot: Bot, slot?: LookSlot): Promise<void> {
     this.running.add(bot.id)
     const sessionId = randomUUID()
     this.ownSessions.add(sessionId)
@@ -215,16 +261,19 @@ export class BotLookAroundRunner {
       focus: botLookAround(bot).focus,
       history: lookHistory(this.deps.store.get(bot.id), startedAt)
     })
+    if (slot) {
+      this.held.delete(bot.id)
+    }
     // Recorded before the session exists, so its launch already knows it only reads.
     let before: BotLookState | undefined
-    this.change(bot.id, (state) => beginRun((before = state), sessionId, startedAt))
+    this.change(bot.id, (state) => beginRun((before = state), sessionId, startedAt, slot))
     const watch = watchBackgroundRun(this.deps.power, sessionId)
     let failure: string | undefined
     let notifies = false
     let usageLimited: LookUsageLimit | undefined
     const gate = runGate(this.deps.power, {
       scheduled: slot !== undefined,
-      mayStart: () => slot !== undefined && this.mayStart(bot.id, sessionId, slot)
+      mayStart: () => slot !== undefined && this.mayStart(bot.id, sessionId, slot.scheduledFor)
     })
     let start: RunStart | undefined
     try {
@@ -252,7 +301,7 @@ export class BotLookAroundRunner {
       )
       gate.attach(start)
       const ended = await awaitRunEnd(watch, this.deps, sessionId, start)
-      failure = failureOf(ended)
+      failure = lookFailureOf(ended)
       notifies = turnFailed(ended)
       if (notifies) {
         usageLimited = (await this.deps.usageLimitOf(sessionId).catch(() => null)) ?? undefined
@@ -289,6 +338,10 @@ export class BotLookAroundRunner {
               usageLimited
             )
       )
+      // Taken back at its opening message, its slot still due: the host's power held it.
+      if (deferred && slot && this.mayStart(bot.id, sessionId, slot.scheduledFor)) {
+        this.noteHeld(bot, slot.scheduledFor)
+      }
       this.running.delete(bot.id)
       this.ownSessions.delete(sessionId)
       void this.deps.sessions.release(sessionId)

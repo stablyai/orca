@@ -17,7 +17,11 @@ import { mascotAvatar } from '../../../shared/bot-avatar'
 import type { Bot } from '../../../shared/bot-types'
 import type { BotActivity, BotWorkerRow } from '../../../shared/bots/bot-activity-model'
 import type { BotAutomationRow } from '../../../shared/bots/bot-automation-rows'
-import { suggestionSource, type Suggestion } from '../../../shared/bots/bot-look-around'
+import {
+  botLookAround,
+  suggestionSource,
+  type Suggestion
+} from '../../../shared/bots/bot-look-around'
 import type { AgentDotState } from '../../../shared/agent-dot-state'
 import type { BotChatTreeChat } from '../../../shared/bots/bot-chat-tree'
 import type { BotItem } from '../../../shared/bots/bot-items'
@@ -81,7 +85,15 @@ export function stubBotPanel(
               : // A host without search, so the list searches the chats read here.
                 request.method === 'bots.chats.search'
                 ? { ok: false, error: { code: METHOD_NOT_FOUND, message: METHOD_NOT_FOUND } }
-                : fallback(request)
+                : request.method === 'bots.lookAround.get'
+                  ? {
+                      ok: true,
+                      result: {
+                        setting: botLookAround(bot),
+                        upNext: activity.upNext?.state ?? { running: false, seenAt: 0 }
+                      }
+                    }
+                  : fallback(request)
     })
     withBotConnectorRuntime(window.api)
   }

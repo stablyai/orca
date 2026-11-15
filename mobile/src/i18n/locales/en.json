@@ -5496,7 +5496,8 @@
       "focusDetail": "Optional. Leave it empty and it looks for anything waiting on you.",
       "save": "Save",
       "back": "Back to Settings",
-      "backToLookAround": "Back to Look around"
+      "backToLookAround": "Back to Look around",
+      "customOnDesktop": "Custom times. Edit them on desktop."
     },
     "new": {
       "failed": "Couldn’t create the bot",

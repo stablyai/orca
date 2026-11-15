@@ -28,7 +28,18 @@ import { botMembersFullError, planBotMemberAdds } from '../bots/bot-member-capac
 import { HANDED_WORKSPACES_MAX, HandedWorkspaceSchema } from '../bots/bot-made-for-workspaces'
 import { BotProposalSchema, BotProposalSeedSchema } from '../bots/bot-proposal'
 import { BotTakeOverSchema } from '../bots/bot-take-over'
-import { BotLookAroundSchema, botLookAround, patchLookAround } from '../bots/bot-look-around'
+import {
+  BotLookAroundSchema,
+  botLookAround,
+  LOOK_AROUND_EVERY_CHOICES,
+  patchesLookSchedule,
+  patchLookAround
+} from '../bots/bot-look-around'
+import {
+  assertLookScheduleRunnable,
+  LookAroundTimeZoneInput,
+  LookAroundTimesInput
+} from '../bots/bot-look-around-times'
 import { BotLaunchSchema } from '../bots/bot-launch'
 import {
   BOT_OFFER_ALREADY_ANSWERED,
@@ -151,7 +162,15 @@ export const BotUpdate = z.object({
       github: BotGitHubSchema.nullable().optional(),
       skillProjects: z.array(z.string().min(1)).max(BOT_MAX_SKILL_PROJECTS).optional(),
       // Only the changed fields; the host merges them into the saved setting.
-      lookAround: BotLookAroundSchema.omit({ since: true }).partial().optional(),
+      lookAround: BotLookAroundSchema.omit({ since: true })
+        .partial()
+        .extend({
+          every: z.enum(LOOK_AROUND_EVERY_CHOICES).optional(),
+          times: LookAroundTimesInput.optional(),
+          timezone: LookAroundTimeZoneInput.optional(),
+          editorTimeZone: z.string().trim().min(1).max(100).optional()
+        })
+        .optional(),
       // Only the changed fields, like Look around.
       tidyUp: z
         .object({ on: z.boolean().optional(), every: z.enum(TIDY_UP_EVERY_CHOICES).optional() })
@@ -322,8 +341,14 @@ export function applyBotMemberUpdates(
   return plan.members
 }
 
-/** A null permission mode clears the override, so the bot's chats follow the native chat default. */
-export function applyBotUpdates(bot: Bot, updates: BotHostUpdates): Bot {
+/** `applyBotUpdates` on the bot's own host, which knows its zone. */
+export function applyHostBotUpdates(bot: Bot, updates: BotHostUpdates): Bot {
+  return applyBotUpdates(bot, updates, Intl.DateTimeFormat().resolvedOptions().timeZone)
+}
+
+/** A null permission mode clears the override, so the bot's chats follow the native chat default.
+ *  `hostTimeZone` is the bot's host's own zone, given on the host (see `patchLookAround`). */
+export function applyBotUpdates(bot: Bot, updates: BotHostUpdates, hostTimeZone?: string): Bot {
   const {
     permissionMode,
     launch,
@@ -344,7 +369,11 @@ export function applyBotUpdates(bot: Bot, updates: BotHostUpdates): Bot {
     next.cancelledWaits = withBotCancelledWait(bot.cancelledWaits, cancelledWait)
   }
   if (lookAround) {
-    next.lookAround = patchLookAround(botLookAround(bot), lookAround, Date.now())
+    next.lookAround = patchLookAround(botLookAround(bot), lookAround, Date.now(), hostTimeZone)
+    if (patchesLookSchedule(lookAround)) {
+      // Throws, saving nothing, when the schedule the edit leaves can't run as the owner set it.
+      assertLookScheduleRunnable(next.lookAround)
+    }
   }
   if (tidyUp) {
     next.tidyUp = patchTidyUp(botTidyUp(bot), tidyUp, Date.now())

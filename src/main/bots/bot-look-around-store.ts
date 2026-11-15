@@ -34,7 +34,9 @@ const RunSchema = z.object({
   error: z.string().optional(),
   alerted: z.literal(true).optional(),
   asleep: z.literal(true).optional(),
-  usageLimited: z.object({ resetsAt: z.number().optional() }).optional()
+  usageLimited: z.object({ resetsAt: z.number().optional() }).optional(),
+  scheduledFor: z.number().optional().catch(undefined),
+  late: z.literal(true).optional().catch(undefined)
 })
 
 const BotLookSchema = z.object({
@@ -53,6 +55,7 @@ const BotLookSchema = z.object({
     )
     .default([]),
   seenAt: z.number().optional(),
+  missedSlots: z.array(z.number()).optional().catch(undefined),
   tidyUp: z
     .object({
       runs: z.array(RunSchema),

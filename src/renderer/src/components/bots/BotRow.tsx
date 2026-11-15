@@ -1,6 +1,6 @@
 import React, { useEffect } from 'react'
 import { openBotSettings } from './bot-settings-open'
-import { ChevronDown, Copy, Pause, Play, Server, Settings, Trash2 } from 'lucide-react'
+import { ChevronDown, Copy, Eye, Pause, Play, Server, Settings, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { ContextMenuItem, ContextMenuSeparator } from '@/components/ui/context-menu'
 import StatusIndicator from '@/components/sidebar/workspace-card/surface/StatusIndicator'
@@ -10,6 +10,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { useBotUpNextUnseen } from '@/lib/bot-up-next-unseen'
 import { cn } from '@/lib/class-names'
 import type { Bot } from '../../../../shared/bot-types'
+import { lookAroundSupported } from '../../../../shared/bots/bot-look-around'
 import type { FolderWorkspace } from '../../../../shared/folder-workspaces/folder-workspace-types'
 import { botErrorMessage } from './bot-presentation'
 import {
@@ -28,6 +29,8 @@ import { revealBotUpNext } from './bot-up-next-reveal'
 import { useDeleteBot } from './use-delete-bot'
 import { setBotPurpose } from './bot-purpose-cache'
 import { botSidebarEntryKey } from './bot-sidebar-entry-keys'
+import { BotLookNeedsYouBadge } from './BotHoverLookLine'
+import { useLookAroundFailing } from './use-look-around-status'
 
 type BotRowFold = {
   folded: boolean
@@ -60,6 +63,7 @@ export function BotRow({
   const { workspaceId, status, hostLabel, offline, description, line, limit, now } = details
   const isUnread = home.isUnread && !offline
   const upNextNew = useBotUpNextUnseen(bot)
+  const lookNeedsYou = useLookAroundFailing(offline ? null : bot) > 0
   const age = offline ? null : botRowLineAge(line, now)
   const hostPill = hostLabel ? <BotRowHostIcon label={hostLabel} /> : null
   // The Bots search matches purposes from what each listed row shows; it never reads SOUL.md.
@@ -104,7 +108,7 @@ export function BotRow({
       age={age}
       line={
         // Time by the name, Up next count under it; both end where the fold strip starts.
-        line || limit || description || fold || upNextNew > 0 || hostPill || offline ? (
+        line || limit || description || fold || upNextNew > 0 || lookNeedsYou || hostPill || offline ? (
           <BotRowLineView
             line={line}
             limit={offline ? null : limit}
@@ -114,16 +118,19 @@ export function BotRow({
             disconnected={offline}
             leading={hostPill}
             trailing={
-              upNextNew > 0 && !offline ? (
-                <BotUpNextCount
-                  count={upNextNew}
-                  onReveal={() => {
-                    if (openBotFromSidebar(bot, onOpen)) {
-                      revealBotUpNext(bot.id)
-                    }
-                  }}
-                />
-              ) : null
+              <>
+                {upNextNew > 0 && !offline ? (
+                  <BotUpNextCount
+                    count={upNextNew}
+                    onReveal={() => {
+                      if (openBotFromSidebar(bot, onOpen)) {
+                        revealBotUpNext(bot.id)
+                      }
+                    }}
+                  />
+                ) : null}
+                {lookNeedsYou ? <BotLookNeedsYouBadge bot={bot} /> : null}
+              </>
             }
           />
         ) : null
@@ -142,6 +149,13 @@ export function BotRow({
             <Settings className="size-3.5" />
             {t('bots.row.settings', 'Bot settings…')}
           </ContextMenuItem>
+          {/* The keyboard's way to what the hover card's Look around line opens. */}
+          {lookAroundSupported(bot.agent) ? (
+            <ContextMenuItem onSelect={() => openBotSettings(bot.id, 'look-around')}>
+              <Eye className="size-3.5" />
+              {t('bots.row.lookAround', 'Look around settings…')}
+            </ContextMenuItem>
+          ) : null}
           <ContextMenuItem
             disabled={offline}
             onSelect={() => run(updateBot(bot, { paused: !bot.paused }))}

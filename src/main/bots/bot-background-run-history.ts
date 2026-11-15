@@ -1,7 +1,11 @@
 // A bot's background runs (looks, tidy-ups) as their record keeps them: the newest in full, the
 // sessions of older ones, and which scheduled slot a run took.
 
-export type LookAroundRun = {
+/** The schedule slot a scheduled look ran for; absent for Look now and tidy-ups. `late`: the host
+ *  was asleep or not yet in full wake at the slot, so the look waited for it. */
+export type LookSlot = { scheduledFor: number; late?: true }
+
+export type LookAroundRun = Partial<LookSlot> & {
   sessionId: string
   startedAt: number
   endedAt?: number
@@ -29,9 +33,10 @@ export function withBackgroundRun<S extends BackgroundRuns>(
   state: S,
   sessionId: string,
   now: number,
-  max: number
+  max: number,
+  slot?: LookSlot
 ): S {
-  const all: LookAroundRun[] = [...state.runs, { sessionId, startedAt: now }]
+  const all: LookAroundRun[] = [...state.runs, { sessionId, startedAt: now, ...slot }]
   // Runs a sleeping host cut short go first, so retries never push out what really happened.
   const over = all.length - max
   const cut = all.filter((run) => run.asleep === true).slice(0, Math.max(0, over))
@@ -45,7 +50,7 @@ export function withBackgroundRun<S extends BackgroundRuns>(
 }
 
 /** Cut short by the host's sleep or a usage limit: the run never used its slot up. */
-function missedRun(run: LookAroundRun): boolean {
+export function missedRun(run: LookAroundRun): boolean {
   return run.asleep === true || run.usageLimited !== undefined
 }
 

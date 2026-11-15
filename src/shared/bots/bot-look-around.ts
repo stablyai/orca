@@ -12,16 +12,14 @@ export function lookAroundSupported(agent: string): boolean {
   return LOOK_AROUND_AGENTS.some((entry) => entry === agent)
 }
 
-export const LOOK_AROUND_EVERY_CHOICES = [
-  'every-4h',
-  'every-2h',
-  'twice-daily',
-  'mornings'
-] as const
+export const LOOK_AROUND_PRESETS = ['every-4h', 'every-2h', 'twice-daily', 'mornings'] as const
+export type LookAroundPreset = (typeof LOOK_AROUND_PRESETS)[number]
+/** The presets, or `custom`: the owner's own `times`. */
+export const LOOK_AROUND_EVERY_CHOICES = [...LOOK_AROUND_PRESETS, 'custom'] as const
 export type LookAroundEvery = (typeof LOOK_AROUND_EVERY_CHOICES)[number]
 
 /** Local hours each preset looks at; nothing runs at night. */
-export const LOOK_AROUND_EVERY: Record<LookAroundEvery, readonly number[]> = {
+export const LOOK_AROUND_EVERY: Record<LookAroundPreset, readonly number[]> = {
   'every-4h': [8, 12, 16, 20],
   'every-2h': [8, 10, 12, 14, 16, 18, 20],
   'twice-daily': [8, 13],
@@ -29,7 +27,7 @@ export const LOOK_AROUND_EVERY: Record<LookAroundEvery, readonly number[]> = {
 }
 
 /** Each preset as Settings and the chat line say it. */
-export const LOOK_AROUND_EVERY_LABELS: Record<LookAroundEvery, string> = {
+export const LOOK_AROUND_EVERY_LABELS: Record<LookAroundPreset, string> = {
   'every-4h': 'Every 4 hours, 8 AM to 8 PM',
   'every-2h': 'Every 2 hours, 8 AM to 8 PM',
   'twice-daily': 'Twice a day, 8 AM and 1 PM',
@@ -37,6 +35,11 @@ export const LOOK_AROUND_EVERY_LABELS: Record<LookAroundEvery, string> = {
 }
 
 export const LOOK_AROUND_FOCUS_MAX_LENGTH = 500
+/** Custom times a day, and how far apart, so a schedule can't quietly spend the owner's plan. */
+export const LOOK_AROUND_MAX_TIMES = 12
+export const LOOK_AROUND_MIN_GAP_MINUTES = 60
+/** A wall-clock time, `HH:MM`, 24-hour. */
+export const LOOK_AROUND_TIME_PATTERN = /^([01]\d|2[0-3]):[0-5]\d$/
 
 export const BotLookAroundSchema = z.object({
   on: z.boolean(),
@@ -45,6 +48,15 @@ export const BotLookAroundSchema = z.object({
   weekdaysOnly: z.boolean(),
   /** What to look for, in the owner's words; empty means anything waiting on them. */
   focus: z.string().max(LOOK_AROUND_FOCUS_MAX_LENGTH),
+  /** `every: 'custom'`'s times; kept while a preset is chosen, so Custom comes back as it was. */
+  times: z
+    .array(z.string().regex(LOOK_AROUND_TIME_PATTERN))
+    .min(1)
+    .max(LOOK_AROUND_MAX_TIMES)
+    .optional()
+    .catch(undefined),
+  /** The IANA zone the times are read in; absent means the host's own clock. */
+  timezone: z.string().min(1).max(100).optional().catch(undefined),
   /** When it was last turned on; a slot before it is never caught up. Absent: on all along. */
   since: z.number().optional()
 })
@@ -70,34 +82,58 @@ export function lookedDay(at: number, now: number): 'today' | 'yesterday' | 'ear
   return day === today ? 'today' : day === startOfLocalDay(today - 1) ? 'yesterday' : 'earlier'
 }
 
-/** Only the fields an edit names change, so two quick edits never undo each other. Turning it on
- *  stamps when, so a slot from before is never caught up. */
+/** An edit: the fields it names. `timezone`: omitted keeps the saved zone, null follows the host's
+ *  clock from now on (saved as "host"), a name sets it. `editorTimeZone` is the editing client's own
+ *  zone. `since` is the host's stamp, never an edit's. */
+export type LookAroundPatch = Partial<Omit<BotLookAround, 'timezone' | 'since'>> & {
+  timezone?: string | null
+  editorTimeZone?: string
+}
+
+/** Only the fields an edit names change, so two quick edits never undo each other. Times alone
+ *  mean Custom. A schedule edit on a bot with no saved zone saves the editor's, when it is the
+ *  host's own (`hostTimeZone`); an editor elsewhere is asked which zone they mean instead. Read
+ *  against the saved setting inside the host's update queue, so two first edits can't race.
+ *  Turning it on stamps when, so a slot from before is never caught up. */
 export function patchLookAround(
   setting: BotLookAround,
-  patch: Partial<Omit<BotLookAround, 'since'>>,
-  now: number
+  patch: LookAroundPatch,
+  now: number,
+  hostTimeZone?: string
 ): BotLookAround {
   const on = patch.on ?? setting.on
   const since = on && !setting.on ? now : setting.since
+  const times = patch.times ?? setting.times
+  const stamp =
+    !setting.timezone &&
+    patch.timezone === undefined &&
+    (patch.every !== undefined || patch.times !== undefined) &&
+    patch.editorTimeZone !== undefined &&
+    patch.editorTimeZone === hostTimeZone
+      ? patch.editorTimeZone
+      : undefined
+  // null is the owner choosing the host's clock: saved as "host", so no later edit stamps a zone.
+  const timezone = patch.timezone === null ? 'host' : (patch.timezone ?? setting.timezone ?? stamp)
   return {
     on,
-    every: patch.every ?? setting.every,
+    every: patch.every ?? (patch.times ? 'custom' : setting.every),
     weekdaysOnly: patch.weekdaysOnly ?? setting.weekdaysOnly,
     focus: patch.focus ?? setting.focus,
+    ...(times ? { times } : {}),
+    ...(timezone ? { timezone } : {}),
     ...(since !== undefined ? { since } : {})
   }
 }
 
-/** The schedule as a cron line the automation scheduler evaluates, on the host's wall clock. */
-export function lookAroundSchedule(setting: Pick<BotLookAround, 'every' | 'weekdaysOnly'>): string {
-  return `0 ${LOOK_AROUND_EVERY[setting.every].join(',')} * * ${setting.weekdaysOnly ? '1-5' : '*'}`
-}
-
-/** Hours between looks, for "one interval after the first conversation". */
-export function lookAroundIntervalMs(every: LookAroundEvery): number {
-  const [first, second] = LOOK_AROUND_EVERY[every]
-  const gap = first !== undefined && second !== undefined ? second - first : 24
-  return gap * 60 * 60 * 1000
+/** Whether an edit changes when looks run, so the whole schedule it leaves must be valid. */
+export function patchesLookSchedule(patch: LookAroundPatch): boolean {
+  return (
+    patch.every !== undefined ||
+    patch.times !== undefined ||
+    patch.timezone !== undefined ||
+    patch.weekdaysOnly !== undefined ||
+    patch.on === true
+  )
 }
 
 export const SUGGESTION_LIMITS = {
@@ -131,8 +167,32 @@ export type UpNextState = {
   /** How long the last look took. */
   tookMs?: number
   nextAt?: number
-  /** A slot the host slept through is owed now; it starts once the host is in full wake. */
+  /** A slot is owed now, on time or caught up after the host slept; it starts once the host is in
+   *  full wake. */
   dueNow?: true
+  /** ...held there because the machine is asleep or just woke. */
+  nextHeld?: true
+  /** When a due slot's catch-up ends (the next slot, or the day's end): it runs if it can start by
+   *  then, else it's skipped. */
+  nextGraceEndsAt?: number
+  /** A slot before `nextAt` that won't run, because a Look now started just before it. */
+  nextSkipped?: { at: number; lookedAt: number }
+  /** The zone the schedule's times are read in: the setting's, else the host's. */
+  timeZone?: string
+  /** The host's own zone, for asking which zone an edit means when the viewer's differs. */
+  hostTimeZone?: string
+  /** The latest slot that passed without a look. */
+  missedAt?: number
+  /** The last look waited for the machine to settle after this slot. */
+  lastLateFor?: number
+  failedInARow?: number
+  /** A listed time that failed or went by unrun at least twice in its last `of` scheduled slots;
+   *  `scheduledFor` is its latest such slot. */
+  repeatTrouble?: { scheduledFor: number; failed: number; missed: number; of: number }
+  /** The saved zone can't be read on this host, so the times follow the host's clock until fixed. */
+  zoneUnreadable?: true
+  /** A slot missed while the machine slept runs later the same day. */
+  catchUp?: true
   running: boolean
   /** The running look's session, whose steps clients can show; absent while no look runs. */
   runSessionId?: string

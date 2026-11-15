@@ -1,3 +1,4 @@
+// @orca-isolated-worker -- shared module resets split the mocked host and provider fault bindings.
 import { readTestHostJournal } from '../../../../native-chat/agent-session-journal/journal-observation.test-support'
 import { EVERY_AGENT_CHAT } from '../../../../../shared/native-chat/every-agent-chat.test-fixture'
 import { expect, it, vi } from 'vitest'

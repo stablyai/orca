@@ -22,6 +22,7 @@ export function stubBots(bots: Bot[], purposes?: Record<string, string>): void {
     'bots.list': { bots },
     'bots.groups.list': { groups: [] },
     'bots.upNext.unseen': { unseen: {} },
+    'bots.lookAround.failing': { unseen: {} },
     'bots.chatTree': { chats: [], workspaceChats: {} }
   }
   const runtime: unknown = window.api.runtime
@@ -72,6 +73,7 @@ export function stubServerBots(
         'bots.list': { bots },
         'bots.groups.list': { groups: [] },
         'bots.upNext.unseen': { unseen: {} },
+        'bots.lookAround.failing': { unseen: {} },
         'bots.chatTree': { chats: [], workspaceChats: {} }
       }
       return method in results

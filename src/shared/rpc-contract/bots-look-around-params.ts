@@ -4,6 +4,7 @@ import {
   LOOK_AROUND_FOCUS_MAX_LENGTH,
   SUGGESTION_LIMITS
 } from '../bots/bot-look-around'
+import { LookAroundTimeZoneInput, LookAroundTimesInput } from '../bots/bot-look-around-times'
 import { OFFER_SOURCES } from '../bots/bot-connector-offer'
 import { OptionalString, requiredString } from './rpc-param-primitives'
 
@@ -43,11 +44,24 @@ export const BotLookAroundSet = z.object({
   on: z.boolean().optional(),
   every: z.enum(LOOK_AROUND_EVERY_CHOICES).optional(),
   weekdaysOnly: z.boolean().optional(),
-  focus: z.string().trim().max(LOOK_AROUND_FOCUS_MAX_LENGTH).optional()
+  focus: z.string().trim().max(LOOK_AROUND_FOCUS_MAX_LENGTH).optional(),
+  /** Custom times; alone they mean `every: 'custom'`. */
+  times: LookAroundTimesInput.optional(),
+  /** null goes back to the host's clock. */
+  timezone: LookAroundTimeZoneInput.optional(),
+  /** The editing client's zone, saved with a schedule edit when none is and it is the host's. */
+  editorTimeZone: z.string().trim().min(1).max(100).optional()
+})
+
+/** `orca bot look-around show`: the setting and when the next look is, as Settings shows them. */
+export const BotLookAroundGet = z.object({
+  botId: OptionalString,
+  callerSessionId: OptionalString
 })
 
 export type BotSuggestParams = z.infer<typeof BotSuggest>
 export type BotLookAroundSetParams = z.infer<typeof BotLookAroundSet>
+export type BotLookAroundGetParams = z.infer<typeof BotLookAroundGet>
 
 /** `orca bot connectors --offer`: the bot asks Orca to show its owner a Connect card in this chat. */
 export const BotConnectorOffer = z

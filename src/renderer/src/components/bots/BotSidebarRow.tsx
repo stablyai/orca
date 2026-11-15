@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useRef, useState } from 'react'
 import { Bell, BellOff, Pencil } from 'lucide-react'
 import {
   ContextMenu,
@@ -83,6 +83,8 @@ export function BotSidebarRow({
   const setWorkspaceUnreadByUser = useAppStore((s) => s.setWorkspaceUnreadByUser)
   const [renameRequested, setRenameRequested] = useState(false)
   const [hoverOpen, setHoverOpen] = useState(false)
+  const hoverContent = useRef<HTMLDivElement>(null)
+  const hoverTrigger = useRef<HTMLDivElement>(null)
   const toggleUnread = (): void => setWorkspaceUnreadByUser(workspaceId, !isUnread, hostId)
   const badge = {
     status,
@@ -134,7 +136,28 @@ export function BotSidebarRow({
             onOpenChange={setHoverOpen}
             closeDelay={120}
             trigger={
-              <div className="flex min-w-0 flex-1 gap-1 self-stretch">
+              <div
+                ref={hoverTrigger}
+                className="flex min-w-0 flex-1 gap-1 self-stretch"
+                onKeyDown={(event) => {
+                  if (hoverOpen && event.key === 'Tab' && !event.shiftKey) {
+                    const action = hoverContent.current?.querySelector<HTMLButtonElement>('button')
+                    if (action) {
+                      event.preventDefault()
+                      event.stopPropagation()
+                      action.focus()
+                    }
+                  }
+                }}
+                onBlur={(event) => {
+                  if (
+                    event.relatedTarget instanceof Node &&
+                    hoverContent.current?.contains(event.relatedTarget)
+                  ) {
+                    event.preventDefault()
+                  }
+                }}
+              >
                 <div className="flex min-w-0 flex-1 flex-col justify-center">
                   <div className="flex min-w-0 items-center gap-1.5">
                     <WorktreeTitleInlineRename
@@ -162,6 +185,27 @@ export function BotSidebarRow({
             }
           >
             <HoverCardContent
+              ref={hoverContent}
+              onKeyDown={(event) => {
+                if (event.key === 'Escape' || (event.key === 'Tab' && event.shiftKey)) {
+                  event.preventDefault()
+                  event.stopPropagation()
+                  hoverTrigger.current
+                    ?.querySelector<HTMLElement>('[data-worktree-title-inline-rename]')
+                    ?.focus()
+                  if (event.key === 'Escape') {
+                    setHoverOpen(false)
+                  }
+                }
+              }}
+              onBlur={(event) => {
+                if (
+                  !(event.relatedTarget instanceof Node) ||
+                  !event.currentTarget.contains(event.relatedTarget)
+                ) {
+                  setHoverOpen(false)
+                }
+              }}
               side="right"
               align="start"
               sideOffset={8}

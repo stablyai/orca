@@ -217,20 +217,32 @@ export const BOT_COMMAND_SPECS: CommandSpec[] = [
     hidden: true,
     summary: 'Change what a bot looks for, how often, or turn Look around on or off',
     usage:
-      'orca bot look-around set [--bot <name>] [--on|--off] [--every every-4h|every-2h|twice-daily|mornings] [--weekdays-only|--every-day] [--focus <text>] [--json]',
+      'orca bot look-around set [--bot <name>] [--on|--off] [--every every-4h|every-2h|twice-daily|mornings|custom] [--at <HH:MM,HH:MM>] [--weekdays-only|--every-day] [--timezone <IANA zone>|host] [--focus <text>] [--json]',
     allowedFlags: [
       ...GLOBAL_FLAGS,
       'bot',
       'on',
       'off',
       'every',
+      'at',
       'weekdays-only',
       'every-day',
+      'timezone',
       'focus'
     ],
     notes: [
       'Run from a bot’s chat it changes that bot; the chat shows what changed.',
+      '--at sets its own times (24-hour HH:MM, at least 60 min apart, up to 12) and means --every custom.',
+      '--timezone host reads the times on the host’s own clock again.',
       '--focus "" clears it, so the bot looks for anything waiting on its owner.'
     ]
+  },
+  {
+    path: ['bot', 'look-around', 'show'],
+    hidden: true,
+    summary: 'Show when a bot looks around, in which time zone, and when it looks next',
+    usage: 'orca bot look-around show [--bot <name>] [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'bot'],
+    notes: ['Run from a bot’s chat it shows that bot.']
   }
 ]

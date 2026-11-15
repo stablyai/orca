@@ -10,6 +10,7 @@ import {
   automationsChangedWindowDetail
 } from '@/components/automations/events/automations-changed-window-event'
 import type { Bot } from '../../../../shared/bot-types'
+import { hasRuntimeRpcErrorCode } from '../../../../shared/remote-runtime/rpc/runtime-rpc-error-code'
 import { reuseEqualJson } from '../../../../shared/reuse-equal-json'
 import type { BotChangeKind } from '../../../../shared/bots/bot-change-scope'
 import { folderWorkspaceKey } from '../../../../shared/workspace/identity/workspace-scope'
@@ -20,6 +21,8 @@ type BotReadEntry<T> = {
   value: T | null
   /** The last read failed. */
   failure: 'failed' | null
+  /** The latest read's error, null once a read lands. */
+  error: unknown
   listeners: Set<() => void>
   /** Only the latest read lands, so an older one finishing late cannot overwrite it. */
   latest: number
@@ -43,6 +46,7 @@ export type BotHostRead<T> = {
   state: (key: string) => BotHostReadState
   /** A value landed, but the latest read of it failed: what's shown is the last good one. */
   refreshFailed: (key: string) => boolean
+  errorSnapshot: (key: string) => unknown
 }
 
 export type BotHostReadState = 'loading' | 'ready' | 'failed'
@@ -70,6 +74,7 @@ export function createBotHostRead<T>(
         bot: ref,
         value: lastValues.get(key) ?? null,
         failure: null,
+        error: null,
         listeners: new Set(),
         latest: 0,
         scheduled: false,
@@ -90,9 +95,10 @@ export function createBotHostRead<T>(
     try {
       const result = await callBotRpc<never>(entry.bot, method, { botId: entry.bot.id })
       if (current === entry.latest && entries.get(key) === entry) {
-        // What the answer repeats keeps its identity; an unchanged answer tells no one.
+        const hadError = entry.error !== null
+        entry.error = null
         const value = reuseEqualJson(entry.value, pick(result))
-        if (value !== entry.value || entry.failure) {
+        if (value !== entry.value || entry.failure || hadError) {
           entry.value = value
           entry.failure = null
           if (keepLast && value) {
@@ -102,9 +108,20 @@ export function createBotHostRead<T>(
         }
       }
     } catch (error) {
-      console.error(failure, error)
-      if (current === entry.latest && entries.get(key) === entry && entry.failure !== 'failed') {
+      // An older host lacks the method on every change notice; its surface falls back quietly. One
+      // that answered before and now lacks it (the host went back to an older Orca) drops that
+      // answer, so nothing keeps acting on what it no longer has. Other failures keep the last read.
+      const unsupported = hasRuntimeRpcErrorCode(error, 'method_not_found')
+      if (!unsupported) {
+        console.error(failure, error)
+      }
+      if (current === entry.latest && entries.get(key) === entry) {
         entry.failure = 'failed'
+        entry.error = error
+        if (unsupported) {
+          entry.value = null
+          lastValues.delete(key)
+        }
         entry.listeners.forEach((listener) => listener())
       }
     } finally {
@@ -175,7 +192,8 @@ export function createBotHostRead<T>(
     refreshFailed: (key) => {
       const entry = entries.get(key)
       return Boolean(entry?.value) && entry?.failure === 'failed'
-    }
+    },
+    errorSnapshot: (key) => entries.get(key)?.error ?? null
   }
 }
 
@@ -315,4 +333,17 @@ export function useBotHostRead<T>(read: BotHostRead<T>, bot: Bot | null): T | nu
   usePairedActivityRefresh((bot?.handedPairedWorkspaces?.length ?? 0) > 0, refresh)
 
   return value
+}
+
+export function useBotHostReadError<T>(read: BotHostRead<T>, bot: Bot | null): unknown {
+  const hostId = bot?.hostId
+  const id = bot?.id
+  const key = bot ? botRefKey(bot) : null
+  const subscribe = useCallback(
+    (listener: () => void) =>
+      hostId && id ? read.subscribe({ hostId, id }, listener) : NO_SUBSCRIPTION(),
+    [read, hostId, id]
+  )
+  const snapshot = useCallback(() => (key ? read.errorSnapshot(key) : null), [read, key])
+  return useSyncExternalStore(subscribe, snapshot, snapshot)
 }

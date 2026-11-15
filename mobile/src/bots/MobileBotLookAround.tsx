@@ -1,8 +1,9 @@
 import { useState, type ReactNode } from 'react'
+import { Text } from 'react-native'
 import {
   botLookAround,
-  LOOK_AROUND_EVERY_CHOICES,
   LOOK_AROUND_EVERY_LABELS,
+  LOOK_AROUND_PRESETS,
   LOOK_AROUND_FOCUS_MAX_LENGTH,
   type BotLookAround,
   type BotUpNext
@@ -20,7 +21,9 @@ import { useBackClaim } from '../navigation/use-back-claim'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import type { SheetBot } from './bot-sheet-operations'
 import { lookedWhen } from './bot-up-next-copy'
+import { lookAroundScheduleText } from '../../../src/shared/bots/bot-look-around-times'
 import { SettingsNote, SettingsSection } from '../settings/settings-screen-frame'
+import { optionStyles } from './mobile-bot-option-styles'
 
 export type LookAroundPage = 'every' | 'focus'
 
@@ -58,14 +61,28 @@ export function MobileLookAroundSection(props: {
       />
       {setting.on
         ? [
-            <DrillRow
-              key="every"
-              label={t('bots.lookAround.every', 'How often')}
-              value={LOOK_AROUND_EVERY_LABELS[setting.every]}
-              detail
-              disabled={props.disabled}
-              onPress={() => props.onOpen('every')}
-            />,
+            setting.every === 'custom' ? (
+              // Custom times are edited on desktop; the phone shows them and keeps them as they are.
+              <ListRow
+                key="every"
+                title={t('bots.lookAround.every', 'How often')}
+                subtitle={lookAroundScheduleText(setting)}
+                detail={
+                  <Text style={optionStyles.optionRowDetail}>
+                    {t('bots.lookAround.customOnDesktop', 'Custom times. Edit them on desktop.')}
+                  </Text>
+                }
+              />
+            ) : (
+              <DrillRow
+                key="every"
+                label={t('bots.lookAround.every', 'How often')}
+                value={LOOK_AROUND_EVERY_LABELS[setting.every]}
+                detail
+                disabled={props.disabled}
+                onPress={() => props.onOpen('every')}
+              />
+            ),
             <SwitchRow
               key="weekdays"
               label={t('bots.lookAround.weekdaysOnly', 'Weekdays only')}
@@ -192,7 +209,7 @@ export function MobileLookAroundPage(props: {
       {props.banner}
       {props.page === 'every' ? (
         <ChoiceRows
-          choices={LOOK_AROUND_EVERY_CHOICES.map((id) => ({
+          choices={LOOK_AROUND_PRESETS.map((id) => ({
             id,
             label: LOOK_AROUND_EVERY_LABELS[id]
           }))}

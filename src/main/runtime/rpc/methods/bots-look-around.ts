@@ -1,21 +1,25 @@
 // Look around over RPC: a look's `orca bot suggest`, the owner's Start and Dismiss, and the bot
 // changing its own Look around when its owner asks in chat.
 import {
+  BotLookAroundGet,
   BotLookAroundSet,
   BotLookNow,
   BotSuggest,
   BotSuggestionAct,
   BotUpNextSeen,
+  type BotLookAroundGetParams,
   type BotLookAroundSetParams
 } from '../../../../shared/rpc-contract/bots-look-around-params'
 import {
   botLookAround,
   lookAroundSupported,
-  LOOK_AROUND_EVERY_LABELS,
   type BotLookAround
 } from '../../../../shared/bots/bot-look-around'
+import { lookAroundScheduleText } from '../../../../shared/bots/bot-look-around-times'
+import { lookAroundNeedsYou, lookAroundScheduleState } from '../../../bots/bot-look-around-status'
+import { systemBackgroundRunPower } from '../../../bots/bot-background-run-power'
 import type { Bot } from '../../../../shared/bot-types'
-import { resolve, suggest } from '../../../bots/bot-look-around-state'
+import { resolve, suggest, upNextState } from '../../../bots/bot-look-around-state'
 import { markUpNextSeen, upNextUnseenByBot } from '../../../bots/bot-look-around-seen'
 import { botOfSession } from '../../../bots/bot-session-tabs'
 import { runtimeLookAroundRunner } from '../../../bots/bot-look-around-runtime'
@@ -47,26 +51,29 @@ export function lookAroundChangeText(before: BotLookAround, after: BotLookAround
   if (before.focus !== after.focus) {
     parts.push(after.focus ? `looks for: ${after.focus}` : 'looks for anything waiting on you')
   }
-  if (before.every !== after.every || before.weekdaysOnly !== after.weekdaysOnly) {
-    parts.push(
-      `${LOOK_AROUND_EVERY_LABELS[after.every]}${after.weekdaysOnly ? ', weekdays' : ', every day'}`
-    )
+  if (
+    before.every !== after.every ||
+    before.weekdaysOnly !== after.weekdaysOnly ||
+    (after.every === 'custom' && before.times?.join() !== after.times?.join())
+  ) {
+    parts.push(lookAroundScheduleText(after))
+  }
+  if (before.timezone !== after.timezone) {
+    parts.push(after.timezone ? `times in ${after.timezone}` : "times on this computer's clock")
   }
   return parts.length > 0 ? `Look around updated: ${parts.join('; ')}` : 'Look around unchanged'
 }
 
-async function setLookAround(params: BotLookAroundSetParams, context: RpcContext) {
-  const { runtime } = context
-  runtime.bots.assertEnabled()
+/** The bot a look-around command names, or the one whose chat ran it. */
+function lookAroundBot(
+  params: { botId?: string; callerSessionId?: string },
+  context: RpcContext
+): { bot: Bot; caller: string | undefined } {
   const caller = callerOf(params.callerSessionId, context)
-  // A look itself only reads, so it can't widen or turn off what it is.
-  if (caller && runtime.lookAround.botOfLook(caller)) {
-    throw new InvalidArgumentError('Looking around can only read.')
-  }
   const bot = params.botId
     ? botById(context, params.botId)
     : caller
-      ? botOfSession(runtime.bots, caller)
+      ? botOfSession(context.runtime.bots, caller)
       : null
   if (!bot) {
     throw new InvalidArgumentError('Name the bot with --bot, or run this from the bot’s chat.')
@@ -74,12 +81,24 @@ async function setLookAround(params: BotLookAroundSetParams, context: RpcContext
   if (!lookAroundSupported(bot.agent)) {
     throw new InvalidArgumentError('Look around needs a Claude Code or Codex bot.')
   }
-  const { on, every, weekdaysOnly, focus } = params
+  return { bot, caller }
+}
+
+async function setLookAround(params: BotLookAroundSetParams, context: RpcContext) {
+  const { runtime } = context
+  runtime.bots.assertEnabled()
+  // A look itself only reads, so it can't widen or turn off what it is.
+  const looking = callerOf(params.callerSessionId, context)
+  if (looking && runtime.lookAround.botOfLook(looking)) {
+    throw new InvalidArgumentError('Looking around can only read.')
+  }
+  const { bot, caller } = lookAroundBot(params, context)
+  const { on, every, weekdaysOnly, focus, times, timezone, editorTimeZone } = params
   // Read as saved, inside the update queue, so an owner's edit in Settings is not undone.
   let before = botLookAround(bot)
   const saved = await runtime.bots.update(bot.id, (current) => {
     before = botLookAround(current)
-    return { lookAround: { on, every, weekdaysOnly, focus } }
+    return { lookAround: { on, every, weekdaysOnly, focus, times, timezone, editorTimeZone } }
   })
   const change = lookAroundChangeText(before, botLookAround(saved))
   noteInChat(caller, change)
@@ -182,5 +201,49 @@ export const BOT_LOOK_AROUND_METHODS = [
     permission: 'workspace',
     params: BotLookAroundSet,
     handler: setLookAround
+  }),
+  defineMethod({
+    name: 'bots.lookAround.get',
+    permission: 'workspace',
+    params: BotLookAroundGet,
+    handler: (params: BotLookAroundGetParams, context) => {
+      context.runtime.bots.assertEnabled()
+      const { bot } = lookAroundBot(params, context)
+      const setting = botLookAround(bot)
+      const state = context.runtime.lookAround.get(bot.id)
+      return {
+        setting,
+        upNext: upNextState(
+          state,
+          lookAroundScheduleState(setting, state, Date.now(), {
+            settled: systemBackgroundRunPower().settled(),
+            paused: bot.paused === true
+          })
+        )
+      }
+    }
+  }),
+  defineMethod({
+    name: 'bots.lookAround.failing',
+    permission: 'workspace',
+    params: null,
+    // Failed looks in a row per bot whose owner should step in, for its sidebar badge.
+    handler: (_params, { runtime }) => {
+      const unseen: Record<string, number> = {}
+      for (const bot of runtime.bots.list()) {
+        if (!lookAroundSupported(bot.agent)) {
+          continue
+        }
+        const failed = lookAroundNeedsYou(
+          botLookAround(bot),
+          runtime.lookAround.get(bot.id),
+          Date.now()
+        )
+        if (failed !== undefined) {
+          unseen[bot.id] = failed
+        }
+      }
+      return { unseen }
+    }
   })
 ]

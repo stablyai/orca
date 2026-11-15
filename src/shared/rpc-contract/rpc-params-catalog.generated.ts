@@ -178,6 +178,7 @@ import {
 import {
   BotConnectorOffer,
   BotConnectors,
+  BotLookAroundGet,
   BotLookAroundSet,
   BotLookNow,
   BotRequestOutcomeParams,
@@ -1270,6 +1271,8 @@ export const RPC_PARAMS_BY_METHOD = {
   'bots.linear.state': null,
   'bots.linear.unlink': BotLinearWorkspace,
   'bots.list': null,
+  'bots.lookAround.failing': null,
+  'bots.lookAround.get': BotLookAroundGet,
   'bots.lookAround.lookNow': BotLookNow,
   'bots.lookAround.set': BotLookAroundSet,
   'bots.memory.edit': BotMemoryEdit,

@@ -1,8 +1,20 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
+import { hasRuntimeRpcErrorCode } from '../../../../../shared/remote-runtime/rpc/runtime-rpc-error-code'
 import { useBotActivity } from '@/components/bots/use-bot-activity'
-import { lookNow } from '@/components/bots/bot-up-next-actions'
 import { botAgentLabel } from '@/components/bots/bot-presentation'
-import { formatAutomationDateTime } from '@/components/automations/automation-page-parts'
+import {
+  foreignZone,
+  lookAroundPresetLabel,
+  lookAroundScheduleLine
+} from '@/components/bots/bot-look-around-copy'
+import { LookStatusToken } from '@/components/bots/LookStatusToken'
+import { useBotHostLabel } from '@/components/bots/use-bot-host-label'
+import {
+  useLookAroundReadError,
+  refreshLookAroundStatus,
+  useLookAroundFailing,
+  useLookAroundStatus
+} from '@/components/bots/use-look-around-status'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -10,22 +22,23 @@ import {
   Select,
   SelectContent,
   SelectItem,
+  SelectSeparator,
   SelectTrigger,
   SelectValue
 } from '@/components/ui/select'
-import { translate } from '@/i18n/i18n'
 import { useTranslate } from '@/i18n/use-translate'
 import type { Bot } from '../../../../../shared/bot-types'
 import {
   botLookAround,
-  LOOK_AROUND_EVERY_CHOICES,
-  LOOK_AROUND_EVERY_LABELS,
   LOOK_AROUND_FOCUS_MAX_LENGTH,
+  LOOK_AROUND_PRESETS,
   lookAroundSupported,
-  type BotLookAround,
-  type LookAroundEvery,
-  type UpNextState
+  type LookAroundPreset
 } from '../../../../../shared/bots/bot-look-around'
+import {
+  lookAroundTimes,
+  lookAroundTimesProblem
+} from '../../../../../shared/bots/bot-look-around-times'
 import type { BotUpdateParams } from '../../../../../shared/rpc-contract/bots-params'
 import { Switch } from '@/components/ui/switch'
 import { lookAroundLine } from '@/components/bots/bot-settings-row-states'
@@ -35,29 +48,19 @@ import {
   SettingsSwitchRow
 } from '../form-controls/SettingsFormControls'
 import { useSaveOnClose } from './use-save-on-close'
+import { BotLookAroundStatus } from './BotLookAroundStatus'
+import { BotLookAroundTimes } from './BotLookAroundTimes'
+import { BotLookAroundZone } from './BotLookAroundZone'
+import { useLookAroundEdit } from './use-look-around-edit'
 
-function isEvery(value: string): value is LookAroundEvery {
-  return LOOK_AROUND_EVERY_CHOICES.some((choice) => choice === value)
+const CUSTOM = 'custom'
+
+function isPreset(value: string): value is LookAroundPreset {
+  return LOOK_AROUND_PRESETS.some((choice) => choice === value)
 }
 
-/** "Today, 12:04 PM · took 3 min · 4 suggestions", or when the first look comes. */
-function lastLookedText(state: UpNextState | undefined, count: number): string {
-  if (!state?.lastLookedAt) {
-    return state?.nextAt
-      ? translate('settings.bots.lookAround.firstLook', 'First look: {{time}}', {
-          time: formatAutomationDateTime(state.nextAt)
-        })
-      : translate(
-          'settings.bots.lookAround.notArmed',
-          'The first look comes a few hours after your first conversation.'
-        )
-  }
-  const minutes = Math.max(1, Math.round((state.tookMs ?? 0) / 60_000))
-  return [
-    formatAutomationDateTime(state.lastLookedAt),
-    translate('settings.bots.lookAround.took', 'took {{value}} min', { value: minutes }),
-    translate('settings.bots.lookAround.suggestions', '{{value}} suggestions', { value: count })
-  ].join(' · ')
+function sameTimes(a: readonly string[], b: readonly string[] | undefined): boolean {
+  return b !== undefined && a.length === b.length && [...a].sort().join() === [...b].sort().join()
 }
 
 export function BotLookAroundSection({
@@ -70,8 +73,25 @@ export function BotLookAroundSection({
   const t = useTranslate()
   const setting = botLookAround(bot)
   const { upNext } = useBotActivity(bot)
+  // Null from a host too old for custom times: it would save them as every 4 hours.
+  const status = useLookAroundStatus(bot)
+  const readError = useLookAroundReadError(bot)
+  const failing = useLookAroundFailing(bot)
+  const hostLabel = useBotHostLabel(bot.hostId)
   const [focus, setFocus] = useState(setting.focus)
   const [savedFocus, setSavedFocus] = useState(setting.focus)
+  const [draftTimes, setDraftTimes] = useState<string[] | null>(null)
+  const latestDraft = useRef<string[] | null>(null)
+  const { change, heldEdit, asking, answerZone, dismissZone } = useLookAroundEdit(
+    bot,
+    update,
+    status,
+    readError
+  )
+  const changeDraft = (draft: string[] | null): void => {
+    latestDraft.current = draft
+    setDraftTimes(draft)
+  }
   if (setting.focus !== savedFocus) {
     // Changed elsewhere (the bot, asked in chat): follow it unless the owner is typing.
     setSavedFocus(setting.focus)
@@ -79,22 +99,42 @@ export function BotLookAroundSection({
       setFocus(setting.focus)
     }
   }
-  // Only the changed field, so quick edits and the bot's own chat edits never undo each other.
-  const change = (next: Partial<BotLookAround>): void => {
-    void update({ lookAround: next })
-  }
+  const hostZone = status?.upNext.hostTimeZone
   const typedFocus = focus.trim()
-  useSaveOnClose(typedFocus !== setting.focus ? () => change({ focus: typedFocus }) : null)
+  const unsavedTimes =
+    draftTimes !== null && !sameTimes(draftTimes, setting.times) ? draftTimes : null
+  const shown = { ...setting, ...heldEdit }
+  useSaveOnClose(() => {
+    if (typedFocus !== setting.focus) {
+      change({ focus: typedFocus })
+    }
+    const times = latestDraft.current
+    if (
+      times &&
+      !sameTimes(times, setting.times) &&
+      shown.every === CUSTOM &&
+      !heldEdit &&
+      !lookAroundTimesProblem(times)
+    ) {
+      change({ times })
+    }
+  })
 
   if (!lookAroundSupported(bot.agent)) {
     return null
   }
-  const state = upNext?.state
+  const state = status?.upNext ?? upNext?.state
+  const where = hostLabel ?? t('settings.bots.lookAround.thisComputer', 'this computer')
+  const zone = foreignZone(state?.timeZone)
+  // The host lists an off bot as failing only when its failures turned it off.
+  const turnedOff = !setting.on && failing > 0
+  const offerCustom = status !== null || setting.every === CUSTOM
+
   return (
-    <section className="space-y-4">
+    <section className="@container space-y-4">
       <SettingsSubsectionHeader
         title={t('settings.bots.lookAround.title', 'Look around')}
-        description={lookAroundLine(setting, state?.lastLookedAt)}
+        description={lookAroundLine(setting, state?.lastLookedAt, zone)}
         action={
           <Switch
             checked={setting.on}
@@ -104,16 +144,64 @@ export function BotLookAroundSection({
         }
       />
       {setting.on ? null : (
-        <p className="text-xs text-muted-foreground">
-          {t(
-            'settings.bots.lookAround.onDescription',
-            'Reads connected apps and projects to suggest next steps. Read-only; it can’t post or change files.',
-            { name: bot.name }
-          )}
-        </p>
+        <div className="space-y-2 text-xs text-muted-foreground">
+          {turnedOff ? (
+            <div className="flex flex-wrap items-center gap-2 rounded-md border border-border p-3">
+              <LookStatusToken severity="need">
+                {t('settings.bots.lookAround.turnedOff', 'Turned off')}
+              </LookStatusToken>
+              <span className="min-w-0 flex-1">
+                {t(
+                  'settings.bots.lookAround.turnedOffWhy',
+                  'Look around turned itself off after {{count}} failed looks in a row. Your schedule is kept.',
+                  { count: failing }
+                )}
+              </span>
+              <Button variant="outline" size="sm" onClick={() => change({ on: true })}>
+                {t('settings.bots.lookAround.turnOn', 'Turn on')}
+              </Button>
+            </div>
+          ) : null}
+          <p>
+            {t(
+              'settings.bots.lookAround.onDescription',
+              'Reads connected apps and projects to suggest next steps. Read-only; it can’t post or change files.',
+              { name: bot.name }
+            )}
+          </p>
+          <p>
+            {t('settings.bots.lookAround.whenOn', 'When on: {{schedule}}', {
+              schedule: lookAroundScheduleLine(setting, zone)
+            })}
+          </p>
+        </div>
       )}
       {setting.on ? (
         <>
+          {readError ? (
+            <p className="text-xs text-muted-foreground" role="status">
+              {hasRuntimeRpcErrorCode(readError, 'method_not_found') ? (
+                t(
+                  'settings.bots.lookAround.hostTooOld',
+                  'This bot’s computer runs an older Orca. Update it to edit custom times or a time zone.'
+                )
+              ) : (
+                <>
+                  {t(
+                    'settings.bots.lookAround.readFailed',
+                    'Couldn’t read this bot’s schedule. Your saved settings are kept.'
+                  )}{' '}
+                  <Button
+                    variant="link"
+                    size="inlineText"
+                    onClick={() => refreshLookAroundStatus(bot)}
+                  >
+                    {t('common.retry', 'Retry')}
+                  </Button>
+                </>
+              )}
+            </p>
+          ) : null}
           <SettingsRow
             label={t('settings.bots.lookAround.every', 'How often')}
             description={t(
@@ -123,10 +211,22 @@ export function BotLookAroundSection({
             )}
             control={
               <Select
-                value={setting.every}
+                value={shown.every}
                 onValueChange={(value) => {
-                  if (isEvery(value)) {
+                  if (isPreset(value)) {
+                    changeDraft(null)
                     change({ every: value })
+                  } else if (value === CUSTOM) {
+                    // Opens with the schedule it had, so "each morning" becomes one 8:00 AM row.
+                    change(
+                      setting.times?.length
+                        ? { every: CUSTOM }
+                        : {
+                            times: lookAroundTimes(setting).length
+                              ? lookAroundTimes(setting)
+                              : ['09:00']
+                          }
+                    )
                   }
                 }}
               >
@@ -138,19 +238,55 @@ export function BotLookAroundSection({
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  {LOOK_AROUND_EVERY_CHOICES.map((choice) => (
+                  {LOOK_AROUND_PRESETS.map((choice) => (
                     <SelectItem key={choice} value={choice}>
-                      {LOOK_AROUND_EVERY_LABELS[choice]}
+                      {lookAroundPresetLabel(choice)}
                     </SelectItem>
                   ))}
+                  {offerCustom ? (
+                    <>
+                      <SelectSeparator />
+                      <SelectItem value={CUSTOM}>
+                        {t('settings.bots.lookAround.customTimes', 'Custom times…')}
+                      </SelectItem>
+                    </>
+                  ) : null}
                 </SelectContent>
               </Select>
             }
           />
+          {shown.every === CUSTOM ? (
+            <BotLookAroundTimes
+              saved={shown.times ?? []}
+              initialDraft={draftTimes}
+              onSave={(times) => change({ times })}
+              onDraftChange={changeDraft}
+            />
+          ) : null}
+          {status ? (
+            <BotLookAroundZone
+              setting={setting}
+              hostTimeZone={hostZone}
+              hostLabel={hostLabel}
+              asking={asking}
+              unreadable={status.upNext.zoneUnreadable === true}
+              onChange={(timezone) => (heldEdit ? answerZone(timezone) : change({ timezone }))}
+              onNotNow={dismissZone}
+            />
+          ) : null}
           <SettingsSwitchRow
             label={t('settings.bots.lookAround.weekdaysOnly', 'Weekdays only')}
             checked={setting.weekdaysOnly}
             onChange={() => change({ weekdaysOnly: !setting.weekdaysOnly })}
+          />
+          <BotLookAroundStatus
+            bot={bot}
+            setting={setting}
+            state={state}
+            suggestions={upNext?.items.length ?? 0}
+            unsaved={unsavedTimes !== null || heldEdit !== null}
+            where={where}
+            needsYou={failing > 0}
           />
           <div className="space-y-2 py-3">
             <Label htmlFor={`bot-look-for-${bot.id}`}>
@@ -185,38 +321,6 @@ export function BotLookAroundSection({
               )}
             </p>
           </div>
-          <SettingsRow
-            label={t('settings.bots.lookAround.lastLooked', 'Last looked')}
-            description={
-              <>
-                {lastLookedText(state, upNext?.items.length ?? 0)}
-                {state?.error ? (
-                  <>
-                    <br />
-                    {state.error}
-                  </>
-                ) : null}
-                <br />
-                {t(
-                  'settings.bots.lookAround.whileRunning',
-                  'Orca must be running on this computer.',
-                  { name: bot.name }
-                )}
-              </>
-            }
-            control={
-              <Button
-                variant="outline"
-                size="sm"
-                disabled={state?.running === true || bot.paused}
-                onClick={() => void lookNow(bot)}
-              >
-                {state?.running
-                  ? t('settings.bots.lookAround.looking', 'Looking…')
-                  : t('bots.upNext.lookNow', 'Look now')}
-              </Button>
-            }
-          />
         </>
       ) : null}
     </section>

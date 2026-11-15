@@ -1,7 +1,7 @@
 // The agent and launch a bot automation's new conversations start on, and how a save compares them.
 import * as z from 'zod'
 import type { AutomationBotTarget } from '../automation-bot-target'
-import { BOT_AGENTS, type Bot } from '../bot-types'
+import { BOT_AGENTS, type Bot, type BotAgent } from '../bot-types'
 import { BotLaunchSchema } from './bot-launch'
 
 /** An agent with the launch that belongs to it; a launch never rides into another agent. */
@@ -51,4 +51,10 @@ export function botOnSetup<B extends Pick<Bot, 'agent' | 'launch'>>(
 
 export function chatRunAgentSetupRefusal(): string {
   return "A run in a chat continues on that chat's agent, so --agent, --model and --effort need --runs-in new."
+}
+
+/** The bot as a chat on `agent` runs it: another agent starts on its own defaults, since the bot's
+ *  launch belongs to its agent. */
+export function botOnAgent(bot: Bot, agent: BotAgent | undefined): Bot {
+  return agent && agent !== bot.agent ? botOnSetup(bot, { agent }) : bot
 }

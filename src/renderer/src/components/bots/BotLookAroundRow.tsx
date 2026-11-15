@@ -8,7 +8,9 @@ import { botLookAround, type UpNextState } from '../../../../shared/bots/bot-loo
 import { folderWorkspaceKey } from '../../../../shared/workspace/identity/workspace-scope'
 import type { BotAutomationCardRow } from './bot-automation-card'
 import { openBotSettings } from './bot-settings-open'
-import { everyText, ranText, upcomingAt } from './bot-upcoming-copy'
+import { ranText, upcomingAt } from './bot-upcoming-copy'
+import { foreignZone, lookAroundScheduleShort } from './bot-look-around-copy'
+import { useLookAroundFailing, useLookAroundStatus } from './use-look-around-status'
 import {
   BotPanelRow,
   BotRowIconButton,
@@ -41,7 +43,7 @@ const NOT_LOOKED: UpNextState = { running: false, seenAt: 0 }
 export function LookAroundRow({
   bot,
   row,
-  state,
+  state: activityState,
   now,
   folded
 }: {
@@ -53,11 +55,24 @@ export function LookAroundRow({
 }): React.JSX.Element | null {
   const t = useTranslate()
   const setting = botLookAround(bot)
+  // The host's own Look around read, which refreshes as Next look passes; Activity's slice is the fallback.
+  const status = useLookAroundStatus(bot)?.upNext
+  const state = status ?? activityState
   const { looking, lookNowClicked } = useLooking(bot, state ?? NOT_LOOKED)
+  const failing = useLookAroundFailing(bot)
+  const needsYou = t('bots.lookAround.needsYou', 'Needs you')
   // Its last look stopped on the usage limit: the stop says so in place of Failed.
   const stop = useLastLookStop(bot, looking ? undefined : state?.lastSessionId)
   const rowState: BotRowState | null = !setting.on
-    ? paused(t)
+    ? failing > 0
+      ? {
+          kind: 'alert',
+          label: needsYou,
+          reason: t('bots.upcoming.lookTurnedOff', 'Turned itself off after {{count}} failed looks', {
+            count: failing
+          })
+        }
+      : paused(t)
     : looking
       ? { kind: 'running', label: t('bots.upNext.lookingShort', 'Looking around') }
       : stop
@@ -67,12 +82,21 @@ export function LookAroundRow({
             reason: usageLimitStopTip(t, stop)
           }
         : state?.error && !state.running
-          ? { kind: 'failed', label: t('bots.automations.failed', 'Failed'), reason: state.error }
+          ? {
+              kind: 'failed',
+              label: failing > 0 ? needsYou : t('bots.automations.failed', 'Failed'),
+              reason: state.error
+            }
           : null
   if (folded && !isBotRowTrouble(rowState)) {
     return null
   }
-  const every = everyText(setting.every)
+  const every = lookAroundScheduleShort(setting, foreignZone(state?.timeZone))
+  const nextAt = status
+    ? status.nextAt !== undefined && status.nextAt > now && !status.running
+      ? status.nextAt
+      : null
+    : row.nextAt
   const dueNow = setting.on && !looking && state?.dueNow === true
   const name = t('settings.bots.lookAround.title', 'Look around')
   const setOn = (on: boolean): void => updateBotReporting(bot, { lookAround: { on } })
@@ -97,10 +121,10 @@ export function LookAroundRow({
       card={{
         state: dueNow ? { kind: 'note', label: t('bots.upcoming.dueNow', 'Due now') } : rowState,
         facts: [
-          setting.on && !dueNow && row.nextAt !== null
+          setting.on && !dueNow && nextAt !== null
             ? {
                 label: t('bots.automations.next', 'Next'),
-                text: `${upcomingAt(row.nextAt, now)} · ${every}`
+                text: `${upcomingAt(nextAt, now)} · ${every}`
               }
             : {
                 text:

@@ -14,6 +14,7 @@ import { runtimeBotAutomationSessions } from './bot-automation-sessions'
 import * as BotChatSession from './bot-chat-session'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import { testRunPower, WITH_CLOCKS } from './bot-background-run.test-fixture'
+import { lookAroundDecision } from './bot-look-around-schedule'
 
 const { startBotSession } = BotChatSession
 vi.mock('./bot-chat-session', async (original) => ({
@@ -182,6 +183,139 @@ describe('Look around runner', () => {
       expect.objectContaining({ title: 'Look around', text: expect.stringContaining('NO_REPLY') })
     )
     expect(store.get('b1').runs[0]?.error).toBeUndefined()
+  })
+
+  it('starts no look until the host is in full wake, and records a held slot as late', async () => {
+    const { runner, store, sessions, setNow, host } = harness({ turn: success })
+    store.update('b1', (state) => ({
+      state: { ...state, armedAt: MONDAY_NOON - 86_400_000 },
+      result: null
+    }))
+    // 4:00 PM: the host just woke, so no look starts.
+    host.setSettled(false)
+    setNow(new Date(2026, 9, 26, 16, 0, 30).getTime())
+    await runner.tick()
+    expect(sessions.startConversation).not.toHaveBeenCalled()
+    // In full wake a few minutes later: the 4:00 PM look runs, late.
+    host.setSettled(true)
+    setNow(new Date(2026, 9, 26, 16, 3).getTime())
+    await runner.tick()
+    await vi.waitFor(() => expect(store.get('b1').runs[0]?.endedAt).toBeDefined())
+    expect(store.get('b1').runs[0]).toMatchObject({
+      scheduledFor: new Date(2026, 9, 26, 16).getTime(),
+      late: true
+    })
+  })
+
+  it('records an on-time scheduled look with its slot and not as late', async () => {
+    const { runner, store, setNow } = harness({ turn: success })
+    store.update('b1', (state) => ({
+      state: { ...state, armedAt: MONDAY_NOON - 86_400_000 },
+      result: null
+    }))
+    setNow(new Date(2026, 9, 26, 16, 1).getTime())
+    await runner.tick()
+    await vi.waitFor(() => expect(store.get('b1').runs[0]?.endedAt).toBeDefined())
+    expect(store.get('b1').runs[0]?.scheduledFor).toBe(new Date(2026, 9, 26, 16).getTime())
+    expect(store.get('b1').runs[0]).not.toHaveProperty('late')
+  })
+
+  it.each([
+    ['before the slot', new Date(2026, 9, 26, 15, 59).getTime()],
+    ['at the slot', new Date(2026, 9, 26, 16, 0, 20).getTime()],
+    ['caught up later the same day', new Date(2026, 9, 26, 17, 30).getTime()],
+    ['the next morning, before its first slot', new Date(2026, 9, 27, 7, 30).getTime()]
+  ])('starts exactly the look Next look names as due, %s', async (_case, time) => {
+    const { runner, store, sessions, setNow } = harness({ turn: success })
+    store.update('b1', (state) => ({
+      state: { ...state, armedAt: MONDAY_NOON - 86_400_000 },
+      result: null
+    }))
+    setNow(time)
+    const said = lookAroundDecision(LOOK_AROUND_DEFAULTS, store.get('b1'), time).next
+    await runner.tick()
+    if (said?.due) {
+      await vi.waitFor(() => expect(store.get('b1').runs[0]?.scheduledFor).toBe(said.at))
+    } else {
+      expect(sessions.startConversation).not.toHaveBeenCalled()
+      expect(store.get('b1').runs).toEqual([])
+    }
+  })
+
+  it('records a slot whose catch-up ended unrun once, apart from failures', async () => {
+    const { runner, store, setNow } = harness({ turn: success })
+    store.update('b1', (state) => ({
+      state: { ...state, armedAt: MONDAY_NOON - 86_400_000 },
+      result: null
+    }))
+    // Back Tuesday at 7:30 AM: Monday's 8:00 PM look went by while Orca wasn't running.
+    setNow(new Date(2026, 9, 27, 7, 30).getTime())
+    await runner.tick()
+    await runner.tick()
+    expect(store.get('b1').missedSlots).toEqual([new Date(2026, 9, 26, 20).getTime()])
+    expect(store.get('b1').runs).toEqual([])
+  })
+
+  it('records no missed slot while the host is just waking', async () => {
+    const { runner, store, setNow, host } = harness({ turn: success })
+    store.update('b1', (state) => ({
+      state: { ...state, armedAt: MONDAY_NOON - 86_400_000 },
+      result: null
+    }))
+    host.setSettled(false)
+    setNow(new Date(2026, 9, 27, 7, 30).getTime())
+    await runner.tick()
+    expect(store.get('b1').missedSlots).toBeUndefined()
+  })
+
+  it('leaves the slot open, and late, when full wake ends while its session is made', async () => {
+    let dark = true
+    const ctx: { h?: ReturnType<typeof harness> } = {}
+    const h = harness({ turn: success, preparing: () => ctx.h!.host.setFullWake(!dark) })
+    ctx.h = h
+    h.store.update('b1', (state) => ({
+      state: { ...state, armedAt: MONDAY_NOON - 86_400_000 },
+      result: null
+    }))
+    h.setNow(new Date(2026, 9, 26, 16, 1).getTime())
+    await h.runner.tick()
+    await vi.waitFor(() => expect(h.sessions.release).toHaveBeenCalledTimes(1))
+    expect(h.store.get('b1').runs).toEqual([])
+    dark = false
+    h.host.setFullWake(true)
+    h.setNow(new Date(2026, 9, 26, 16, 5).getTime())
+    await h.runner.tick()
+    await vi.waitFor(() => expect(h.store.get('b1').runs[0]?.endedAt).toBeDefined())
+    expect(h.store.get('b1').runs[0]).toMatchObject({
+      scheduledFor: new Date(2026, 9, 26, 16).getTime(),
+      late: true
+    })
+  })
+
+  it('doesn’t call a slot late when the hold was before the owner turned it on or moved a time', async () => {
+    const { runner, store, setNow, setBot, host } = harness({
+      turn: success,
+      bot: {
+        lookAround: { on: true, every: 'custom', weekdaysOnly: true, focus: '', times: ['15:00'] }
+      }
+    })
+    store.update('b1', (state) => ({
+      state: { ...state, armedAt: MONDAY_NOON - 86_400_000 },
+      result: null
+    }))
+    // 3:00 PM is held for the host's wake, then the owner moves it to 4:00 PM.
+    host.setSettled(false)
+    setNow(new Date(2026, 9, 26, 15, 0, 30).getTime())
+    await runner.tick()
+    setBot({
+      lookAround: { on: true, every: 'custom', weekdaysOnly: true, focus: '', times: ['16:00'] }
+    })
+    host.setSettled(true)
+    setNow(new Date(2026, 9, 26, 16, 3).getTime())
+    await runner.tick()
+    await vi.waitFor(() => expect(store.get('b1').runs[0]?.endedAt).toBeDefined())
+    expect(store.get('b1').runs[0]?.scheduledFor).toBe(new Date(2026, 9, 26, 16).getTime())
+    expect(store.get('b1').runs[0]).not.toHaveProperty('late')
   })
 
   it('stays unarmed until the bot has a conversation', async () => {

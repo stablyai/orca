@@ -16,6 +16,7 @@ import type { FolderWorkspace } from '../../../../shared/folder-workspaces/folde
 import { folderWorkspaceKey } from '../../../../shared/workspace/identity/workspace-scope'
 import { BotAvatar } from './BotAvatar'
 import { BotHoverNeedsYou } from './BotHoverNeedsYou'
+import { BotHoverLookLine } from './BotHoverLookLine'
 import { BotHoverLatestLine, useBotRowLine } from './BotRowActivityLine'
 import { useBotSoulDescription } from './bot-soul-description'
 import { useBotHostLabel } from './use-bot-host-label'
@@ -116,6 +117,7 @@ export function BotHoverDetails({
       {/* Needs you names its asks below, so the bare count line would repeat it. */}
       {line?.kind === 'needYouElsewhere' ? null : <BotHoverLatestLine line={line} now={now} />}
       {offline || bot.paused ? null : <BotHoverNeedsYou bot={bot} onReview={onOpenHome} />}
+      {offline ? null : <BotHoverLookLine bot={bot} />}
     </div>
   )
 }

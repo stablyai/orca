@@ -93,7 +93,8 @@ function TimeDigitInput({
   max,
   pad = true,
   ariaLabel,
-  onCommit
+  onCommit,
+  onDraftChange
 }: {
   value: number
   min: number
@@ -101,6 +102,7 @@ function TimeDigitInput({
   pad?: boolean
   ariaLabel: string
   onCommit: (value: number) => void
+  onDraftChange?: (value: number) => void
 }): React.JSX.Element {
   const [text, setText] = React.useState(pad ? pad2(value) : String(value))
   const [focused, setFocused] = React.useState(false)
@@ -144,6 +146,7 @@ function TimeDigitInput({
       onChange={(event) => {
         const next = event.target.value.replace(/\D/g, '').slice(0, 2)
         setText(next)
+        onDraftChange?.(resolveDigitCommit(next, value, min, max))
         if (next.length === 2) {
           commit(next)
         }
@@ -172,11 +175,14 @@ export function AutomationTimeField({
   time,
   mode = 'time',
   onTimeChange,
+  onDraftTimeChange,
   className
 }: {
   time: string
   mode?: 'time' | 'minute'
   onTimeChange: (time: string) => void
+  /** A resolved preview of incomplete digits, for saving when the containing editor closes. */
+  onDraftTimeChange?: (time: string) => void
   className?: string
 }): React.JSX.Element {
   const t = useTranslate()
@@ -194,6 +200,12 @@ export function AutomationTimeField({
     onTimeChange(formatAutomationTimeFromClockParts(next))
   }
 
+  const draftTime = (patch: Partial<AutomationClockParts>): void => {
+    const next = { ...clockRef.current, ...patch }
+    clockRef.current = next
+    onDraftTimeChange?.(formatAutomationTimeFromClockParts(next))
+  }
+
   return (
     <div className={cn(TIME_SHELL_CLASS, className)}>
       <Clock className="size-4 shrink-0 text-muted-foreground" aria-hidden />
@@ -207,6 +219,7 @@ export function AutomationTimeField({
               pad={false}
               ariaLabel={t('auto.components.automations.AutomationTimeField.aa593eb5e2', 'Hour')}
               onCommit={(hour12) => patchTime({ hour12 })}
+              onDraftChange={onDraftTimeChange ? (hour12) => draftTime({ hour12 }) : undefined}
             />
             <span className="select-none text-sm text-muted-foreground" aria-hidden>
               :
@@ -217,6 +230,7 @@ export function AutomationTimeField({
               max={59}
               ariaLabel={t('auto.components.automations.AutomationTimeField.32a5e4e35e', 'Minute')}
               onCommit={(minute) => patchTime({ minute })}
+              onDraftChange={onDraftTimeChange ? (minute) => draftTime({ minute }) : undefined}
             />
             <button
               type="button"
@@ -243,6 +257,7 @@ export function AutomationTimeField({
               max={59}
               ariaLabel={t('auto.components.automations.AutomationTimeField.32a5e4e35e', 'Minute')}
               onCommit={(minute) => patchTime({ minute })}
+              onDraftChange={onDraftTimeChange ? (minute) => draftTime({ minute }) : undefined}
             />
           </>
         )}

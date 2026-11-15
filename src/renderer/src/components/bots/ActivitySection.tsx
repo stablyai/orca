@@ -56,11 +56,14 @@ export function ActivityRow({
   detail,
   note,
   alert,
+  badge,
   aside,
   onOpen
 }: {
   icon: React.ReactNode
   title: string
+  /** A status word beside the title. */
+  badge?: React.ReactNode
   detail: string
   /** Short status at the title line's end, so the detail keeps the full width. */
   aside?: React.ReactNode
@@ -80,13 +83,17 @@ export function ActivityRow({
       <span className="min-w-0 flex-1">
         {aside ? (
           <span className="flex min-w-0 items-baseline gap-2">
-            <span className="min-w-0 flex-1 truncate text-[13px] font-medium text-foreground">
-              {title}
+            <span className="flex min-w-0 flex-1 items-center gap-1.5">
+              <span className="truncate text-[13px] font-medium text-foreground">{title}</span>
+              {badge}
             </span>
             {aside}
           </span>
         ) : (
-          <span className="block truncate text-[13px] font-medium text-foreground">{title}</span>
+          <span className="flex min-w-0 items-center gap-1.5">
+            <span className="truncate text-[13px] font-medium text-foreground">{title}</span>
+            {badge}
+          </span>
         )}
         <span className="block truncate text-2xs text-muted-foreground">{detail}</span>
         {note ? (

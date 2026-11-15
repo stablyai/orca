@@ -1,7 +1,7 @@
 // How the Automations card words when things run and ran.
 import { translate } from '@/i18n/i18n'
 import { uiDateTimeFormat } from '@/i18n/ui-intl-formatters'
-import { lookedDay, type LookAroundEvery } from '../../../../shared/bots/bot-look-around'
+import { lookedDay } from '../../../../shared/bots/bot-look-around'
 import { formatWaitTime } from './bot-wait-copy'
 
 const CLOCK = { hour: 'numeric', minute: '2-digit' } as const
@@ -16,19 +16,6 @@ export function upcomingAt(at: number, now = Date.now()): string {
   return lookedDay(now, at) === 'yesterday'
     ? translate('bots.upcoming.tomorrow', 'Tomorrow at {{time}}', { time })
     : formatWaitTime(at, now)
-}
-
-export function everyText(every: LookAroundEvery): string {
-  switch (every) {
-    case 'every-4h':
-      return translate('bots.upcoming.every4h', 'every 4 hours')
-    case 'every-2h':
-      return translate('bots.upcoming.every2h', 'every 2 hours')
-    case 'twice-daily':
-      return translate('bots.upcoming.twiceDaily', 'twice a day')
-    case 'mornings':
-      return translate('bots.upcoming.mornings', 'each morning')
-  }
 }
 
 export const pausedText = (): string => translate('bots.automations.paused', 'Paused')
