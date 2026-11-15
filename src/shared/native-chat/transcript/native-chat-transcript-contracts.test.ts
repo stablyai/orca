@@ -1,4 +1,3 @@
-import '../native-chat-reasoning-order.spec'
 import '../tools/native-chat-tool-pair-limit.spec'
 import '../tools/native-chat-tool-fold-attribution.spec'
 import '../tools/native-chat-tool-pairing.spec'

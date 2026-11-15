@@ -1948,14 +1948,14 @@
       "id": "terminal-performance.vertical-control-scan",
       "title": "Main terminal preview scanning skips ordinary output between controls",
       "maturity": "experimental",
-      "protection": "partial",
+      "protection": "none",
       "owner": "terminal-runtime",
       "layer": "main-runtime-unit",
       "surfaces": ["terminal output ingestion", "terminal preview and read tails"],
       "platforms": ["macos", "linux", "windows"],
       "providers": ["local", "daemon", "ssh", "remote-runtime"],
-      "coveredPlatforms": ["macos"],
-      "coveredProviders": ["local"],
+      "coveredPlatforms": [],
+      "coveredProviders": [],
       "motivatingLinks": [
         "https://github.com/stablyai/orca/blob/main/.agents/skills/perf/SKILL.md"
       ],
@@ -1967,35 +1967,13 @@
         "Complete CI soak with zero unexplained flakes and preserve the observable oracle."
       ],
       "demotionRule": "Keep experimental until CI soak; investigate failures without relaxing fidelity or resource-count assertions.",
-      "coverageNotes": "Audit2168: Current retained source covers chunk-carried normalization, embedded/incomplete string-control framing and complete tail redraw semantics only; removed recognition and scan-resumption inventories accept coverage loss. Historical execution and measured performance refer to earlier bytes. Prior account preserved verbatim: Pure shared-host string semantics and main runtime tests cover the production scanner on macOS. Folder/git workspaces, local/daemon/SSH/remote-runtime authority, wire content and mobile/relay behavior are unchanged. No live native remote session was launched.",
+      "coverageNotes": "Audit5872 removes the complete remaining scanner suite, including chunk-carried normalization, embedded/incomplete string-control framing and tail redraw checks. No current test coverage is claimed. Historical scope: Audit2168: Current retained source covers chunk-carried normalization, embedded/incomplete string-control framing and complete tail redraw semantics only; removed recognition and scan-resumption inventories accept coverage loss. Historical execution and measured performance refer to earlier bytes. Prior account preserved verbatim: Pure shared-host string semantics and main runtime tests cover the production scanner on macOS. Folder/git workspaces, local/daemon/SSH/remote-runtime authority, wire content and mobile/relay behavior are unchanged. No live native remote session was launched.",
       "invariant": "Main terminal preview/read tails choose the same append/redraw path while ordinary text is skipped without a JavaScript code-unit walk. Complete string-control payloads are not interpreted as vertical controls; incomplete controls stop at the same point.",
-      "oracle": "Current retained callbacks preserve printable spans and carried controls across chunks, skip embedded CSI and stop at incomplete OSC/DCS/SOS/PM/APC strings, and verify resulting cursor-up tail redraw rows. No code-unit work budget or exhaustive parameter/final recognition matrix is asserted by this reduced source.",
-      "commands": [
-        "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/main/runtime/terminal/output/terminal-vertical-control-scan.test.ts"
-      ],
-      "testFiles": ["src/main/runtime/terminal/output/terminal-vertical-control-scan.test.ts"],
-      "assertionRefs": [
-        {
-          "file": "src/main/runtime/terminal/output/terminal-vertical-control-scan.test.ts",
-          "assertions": [
-            "preserves printable spans and carried controls across chunk boundaries",
-            "skips embedded CSI and stops at an incomplete %s",
-            "preserves tail rows when ordinary output is followed by a cursor-up redraw"
-          ]
-        }
-      ],
-      "evidenceRuns": [
-        {
-          "date": "2026-09-07",
-          "runner": "local",
-          "platform": "macos",
-          "command": "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/main/runtime/terminal-vertical-control-scan.test.ts",
-          "result": "passed",
-          "durationSeconds": 0.325,
-          "summary": "29 scanner work-budget, control recognition, scan-resumption and complete-tail integration tests passed.",
-          "currentCommand": "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/main/runtime/terminal/output/terminal-vertical-control-scan.test.ts"
-        }
-      ],
+      "oracle": "No current automated oracle remains after Audit5872 removes the sole selected scanner suite. Historical oracle: Current retained callbacks preserve printable spans and carried controls across chunks, skip embedded CSI and stop at incomplete OSC/DCS/SOS/PM/APC strings, and verify resulting cursor-up tail redraw rows. No code-unit work budget or exhaustive parameter/final recognition matrix is asserted by this reduced source.",
+      "commands": [],
+      "testFiles": [],
+      "assertionRefs": [],
+      "evidenceRuns": [],
       "runtimeBudget": {
         "p95Seconds": 15,
         "scope": "Focused scanner and tail-contract suite; local runtime budget, not an established p95."
@@ -2011,7 +1989,8 @@
       "knownGaps": [
         "No live end-to-end input latency, many-pane frame measurement or launched Electron/SSH/WSL/Linux/Windows journey.",
         "Existing preview fidelity and incomplete-control handling remain unchanged; broader runtime suite has one existing skipped case.",
-        "Audit2168: Intentionally remove the long retained-CSI identity, exact retained-final inventory, long plain/colored/vertical boolean table, numeric/noncanonical parameter table and scan-resumption table from src/main/runtime/terminal/output/terminal-vertical-control-scan.test.ts. Retain carried-control chunk framing, embedded/incomplete OSC/DCS/SOS/PM/APC skipping and actual tail cursor-up redraw. Accepted coverage loss; retained callbacks are not equivalent replacements. The 2026-09-07 evidenceRun (including currentCommand), redGreenEvidence and performanceBudget describe historical bytes and remain verbatim; they do not validate the changed source. No fresh execution, scanner work budget, runtime latency, real provider, remote/mobile or cross-platform result is claimed."
+        "Audit2168: Intentionally remove the long retained-CSI identity, exact retained-final inventory, long plain/colored/vertical boolean table, numeric/noncanonical parameter table and scan-resumption table from src/main/runtime/terminal/output/terminal-vertical-control-scan.test.ts. Retain carried-control chunk framing, embedded/incomplete OSC/DCS/SOS/PM/APC skipping and actual tail cursor-up redraw. Accepted coverage loss; retained callbacks are not equivalent replacements. The 2026-09-07 evidenceRun (including currentCommand), redGreenEvidence and performanceBudget describe historical bytes and remain verbatim; they do not validate the changed source. No fresh execution, scanner work budget, runtime latency, real provider, remote/mobile or cross-platform result is claimed.",
+        "Audit5872 removed the sole current scanner suite. No current automated test coverage or replacement is claimed. Historical evidence runs, preserved as complete records: [{\"date\":\"2026-09-07\",\"runner\":\"local\",\"platform\":\"macos\",\"command\":\"ORCA_BACKGROUND_LAUNCH=1 pnpm test src/main/runtime/terminal-vertical-control-scan.test.ts\",\"result\":\"passed\",\"durationSeconds\":0.325,\"summary\":\"29 scanner work-budget, control recognition, scan-resumption and complete-tail integration tests passed.\",\"currentCommand\":\"ORCA_BACKGROUND_LAUNCH=1 pnpm test src/main/runtime/terminal/output/terminal-vertical-control-scan.test.ts\"}]"
       ]
     },
     {
@@ -2791,46 +2770,39 @@
       "surfaces": ["SSH filesystem reads", "AI Vault remote scanning", "system sleep/wake"],
       "platforms": ["macos", "linux", "windows"],
       "providers": ["ssh2", "system-ssh"],
-      "coveredPlatforms": ["macos"],
-      "coveredProviders": ["ssh2", "system-ssh"],
-      "coverageNotes": "Deterministic fake-clock coverage proves inactivity cancellation, active-transfer renewal, sticky suspend replay before metadata, failure-isolated lifecycle fanout, committed-quit bridge disposal, timer cleanup, and listener cleanup. A real Docker SSH relay previously proved active and stalled transfer behavior; physical sleep/wake and Windows/Linux clients remain gaps.",
+      "coveredPlatforms": ["linux"],
+      "coveredProviders": [],
+      "coverageNotes": "Audit5872 removes the power lifecycle suite and accepts losing late/reentrant suspend replay and throwing-listener isolation alarms. The remaining mocked resume bridge suite checks unsubscription and sleep-duration breadcrumbs; it does not replace those alarms or validate SSH stream inactivity. Historical scope: Deterministic fake-clock coverage proves inactivity cancellation, active-transfer renewal, sticky suspend replay before metadata, failure-isolated lifecycle fanout, committed-quit bridge disposal, timer cleanup, and listener cleanup. A real Docker SSH relay previously proved active and stalled transfer behavior; physical sleep/wake and Windows/Linux clients remain gaps.",
       "motivatingLinks": [
         "https://github.com/stablyai/orca/issues/11362",
         "https://github.com/stablyai/orca/pull/11364"
       ],
       "invariant": "A non-empty SSH file stream that produces no valid frame for 30 seconds must cancel at its authoritative stream reader and release all local lifecycle state. System suspend is sticky across metadata and subscription races, resume grants every still-live stream one fresh inactivity window, one failing consumer cannot block the others, and the sole Electron bridge survives a vetoed before-quit without retaining a per-stream Electron listener.",
-      "oracle": "Publish suspend before stream metadata resolves, jump wall time by one hour, and require the late-subscribing stream to remain pending until resume grants a fresh 30-second window. Deliver a valid final chunk and end frame, require exact content, then publish another resume and require zero timers, multiplexer listeners, or renewed work; separately require stalled cancellation at 30 seconds, atomic state replay, failure-isolated fanout, and bridge disposal only after the committed will-quit gate.",
+      "oracle": "The remaining mocked resume bridge suite checks unsubscription and sleep-duration breadcrumbs. Late/reentrant replay and failure-isolated fanout checks were removed by Audit5872. Historical stream oracle, not current coverage: Publish suspend before stream metadata resolves, jump wall time by one hour, and require the late-subscribing stream to remain pending until resume grants a fresh 30-second window. Deliver a valid final chunk and end frame, require exact content, then publish another resume and require zero timers, multiplexer listeners, or renewed work; separately require stalled cancellation at 30 seconds, atomic state replay, failure-isolated fanout, and bridge disposal only after the committed will-quit gate.",
       "commands": [
-        "ORCA_BACKGROUND_LAUNCH=1 pnpm exec vitest run --config config/vitest.config.ts src/main/power/system-resume-broadcast.test.ts src/main/power/system-power-lifecycle.test.ts --reporter=dot --maxWorkers=2"
+        "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/main/power/system-resume-broadcast.test.ts"
       ],
-      "testFiles": [
-        "src/main/power/system-resume-broadcast.test.ts",
-        "src/main/power/system-power-lifecycle.test.ts"
-      ],
+      "testFiles": ["src/main/power/system-resume-broadcast.test.ts"],
       "assertionRefs": [
         {
           "file": "src/main/power/system-resume-broadcast.test.ts",
-          "assertions": ["publishes suspend and resume to main-process lifecycle consumers"]
-        },
-        {
-          "file": "src/main/power/system-power-lifecycle.test.ts",
           "assertions": [
-            "replays suspended state to a late subscriber",
-            "atomically replays a transition to a subscriber added during publication",
-            "isolates a failing listener from the remaining subscribers"
+            "stops broadcasting after unsubscribe",
+            "spans from the first suspend when dark wake swallows the intervening resume",
+            "ignores sleeps too short to open a gap, keeping ring slots for real evidence",
+            "measures each reportable sleep independently across repeated cycles"
           ]
         }
       ],
       "evidenceRuns": [
         {
-          "date": "2026-10-06",
+          "date": "2026-11-15",
           "runner": "local",
-          "platform": "macos",
+          "platform": "linux",
           "result": "passed",
-          "command": "ORCA_BACKGROUND_LAUNCH=1 pnpm exec vitest run --config config/vitest.config.ts src/main/system-resume-broadcast.test.ts src/main/system-power-lifecycle.test.ts --reporter=dot --maxWorkers=2",
-          "currentCommand": "ORCA_BACKGROUND_LAUNCH=1 pnpm exec vitest run --config config/vitest.config.ts src/main/power/system-resume-broadcast.test.ts src/main/power/system-power-lifecycle.test.ts --reporter=dot --maxWorkers=2",
-          "durationSeconds": 8.141,
-          "summary": "The retained behavioral cohort passed 25 tests after removing source-only ordering tests. Historical pre-removal receipts are preserved verbatim with their originally executed commands: [{\"date\":\"2026-08-01\",\"runner\":\"local\",\"platform\":\"macos\",\"command\":\"pnpm exec vitest run --config config/vitest.config.ts src/main/system-resume-broadcast.test.ts src/main/system-power-lifecycle.test.ts src/main/startup/desktop-startup-ordering.test.ts --reporter=dot\",\"result\":\"passed\",\"durationSeconds\":1.6,\"summary\":\"Four focused files and 33 tests passed, including stalled cancellation, active progress, late metadata replay, failure isolation, committed-quit bridge lifetime, and post-settlement cleanup.\"}] No new native desktop or hosted run is claimed."
+          "command": "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/main/power/system-resume-broadcast.test.ts",
+          "durationSeconds": 5.393,
+          "summary": "Audit5872 fresh run of the remaining mocked resume bridge suite: unsubscription and sleep-duration breadcrumbs. No late/reentrant replay, throwing-listener isolation, physical sleep or live SSH coverage is claimed. See local resume-runtime.log for exact case count."
         }
       ],
       "runtimeBudget": {
@@ -2856,7 +2828,8 @@
       ],
       "knownGaps": [
         "Suspend/resume is injected at the authoritative main-process event seam rather than by physically sleeping the runner.",
-        "Slow links that produce no complete valid frame for 30 uninterrupted awake seconds remain intentionally retryable failures."
+        "Slow links that produce no complete valid frame for 30 uninterrupted awake seconds remain intentionally retryable failures.",
+        "Audit5872 retires the complete original dated receipt as historical evidence before selector reduction: [{\"date\":\"2026-10-06\",\"runner\":\"local\",\"platform\":\"macos\",\"result\":\"passed\",\"command\":\"ORCA_BACKGROUND_LAUNCH=1 pnpm exec vitest run --config config/vitest.config.ts src/main/system-resume-broadcast.test.ts src/main/system-power-lifecycle.test.ts --reporter=dot --maxWorkers=2\",\"currentCommand\":\"ORCA_BACKGROUND_LAUNCH=1 pnpm exec vitest run --config config/vitest.config.ts src/main/power/system-resume-broadcast.test.ts src/main/power/system-power-lifecycle.test.ts --reporter=dot --maxWorkers=2\",\"durationSeconds\":8.141,\"summary\":\"The retained behavioral cohort passed 25 tests after removing source-only ordering tests. Historical pre-removal receipts are preserved verbatim with their originally executed commands: [{\\\"date\\\":\\\"2026-08-01\\\",\\\"runner\\\":\\\"local\\\",\\\"platform\\\":\\\"macos\\\",\\\"command\\\":\\\"pnpm exec vitest run --config config/vitest.config.ts src/main/system-resume-broadcast.test.ts src/main/system-power-lifecycle.test.ts src/main/startup/desktop-startup-ordering.test.ts --reporter=dot\\\",\\\"result\\\":\\\"passed\\\",\\\"durationSeconds\\\":1.6,\\\"summary\\\":\\\"Four focused files and 33 tests passed, including stalled cancellation, active progress, late metadata replay, failure isolation, committed-quit bridge lifetime, and post-settlement cleanup.\\\"}] No new native desktop or hosted run is claimed.\"}]"
       ],
       "demotionRule": "Keep experimental or demote if sleep consumes inactivity evidence, stalled streams become unbounded, or settled reads retain timers or lifecycle subscriptions."
     },
@@ -4714,7 +4687,7 @@
         "pnpm exec vitest run --config config/vitest.config.ts src/main/browser/network/client-routes/browser-client-network-route-registry.test.ts src/main/browser/client-hosts/lifecycle/paired-runtime-browser-client-host-composition.test.ts src/main/browser/client-hosts/lifecycle/paired-runtime-browser-client-host-reconnect.test.ts src/main/browser/network/execution-routes/paired-runtime-browser-network-route.test.ts src/main/runtime/browser-host/commands/browser-host-command-ledger.test.ts src/main/runtime/browser-host/commands/browser-host-command-ledger-capacity.test.ts src/main/runtime/browser-host/leases/browser-host-lease-registry.test.ts src/main/runtime/rpc/methods/browser/browser-client-host.test.ts",
         "pnpm exec vitest run --config config/vitest.config.ts src/main/browser/network/client-routes/browser-client-network-route-registry.test.ts src/main/browser/client-hosts/lifecycle/paired-runtime-browser-client-host-composition.test.ts src/main/browser/client-hosts/lifecycle/paired-runtime-browser-client-host-registry.test.ts src/main/browser/client-pages/execution/browser-client-page-command-executor.test.ts",
         "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/browser-host/commands/browser-host-command-ledger.test.ts src/main/runtime/browser-host/commands/browser-host-command-ledger-capacity.test.ts src/main/runtime/browser-host/leases/browser-host-lease-registry.test.ts src/main/runtime/rpc/methods/browser/browser-client-host.test.ts",
-        "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/browser-host/leases/browser-host-lease-registry.test.ts src/main/browser/network/execution-routes/browser-network-deferred-socket.test.ts src/main/browser/network/execution-routes/paired-runtime-browser-network-route.test.ts src/main/runtime/rpc/methods/browser/browser-network-tunnel.test.ts src/main/browser/network/execution-routes/ssh-browser-network-execution-route.test.ts src/main/browser/network/tunnels/system-ssh-socks-client-socket.test.ts src/main/ssh/system-transport/forwarding/system-ssh-dynamic-forward-process.test.ts src/main/ssh/system-transport/forwarding/system-ssh-forward-process.test.ts src/main/ssh/system-transport/system-ssh-operations.test.ts src/main/ssh/port-forwarding/ssh-port-forward.test.ts",
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/browser-host/leases/browser-host-lease-registry.test.ts src/main/browser/network/execution-routes/browser-network-deferred-socket.test.ts src/main/browser/network/execution-routes/paired-runtime-browser-network-route.test.ts src/main/runtime/rpc/methods/browser/browser-network-tunnel.test.ts src/main/browser/network/execution-routes/ssh-browser-network-execution-route.test.ts src/main/ssh/system-transport/forwarding/system-ssh-dynamic-forward-process.test.ts src/main/ssh/system-transport/forwarding/system-ssh-forward-process.test.ts src/main/ssh/system-transport/system-ssh-operations.test.ts src/main/ssh/port-forwarding/ssh-port-forward.test.ts",
         "ORCA_RUN_DOCKER_SSH_BROWSER_E2E=1 pnpm exec vitest run --config config/vitest.config.ts tests/e2e/ssh-browser-network-execution-route.docker.unit.test.ts",
         "ORCA_RUN_DOCKER_SSH_BROWSER_E2E=1 node_modules/.bin/vitest run --config config/vitest.config.ts tests/e2e/ssh-browser-network-execution-route.docker.unit.test.ts"
       ],
@@ -4741,7 +4714,6 @@
         "src/main/browser/network/execution-routes/browser-network-deferred-socket.test.ts",
         "src/main/browser/network/execution-routes/paired-runtime-browser-network-route.test.ts",
         "src/main/browser/network/execution-routes/ssh-browser-network-execution-route.test.ts",
-        "src/main/browser/network/tunnels/system-ssh-socks-client-socket.test.ts",
         "src/main/ssh/system-transport/forwarding/system-ssh-dynamic-forward-process.test.ts",
         "src/main/ssh/port-forwarding/ssh-port-forward.test.ts",
         "src/main/browser/network/tunnels/remote-browser-socks-server.test.ts",
@@ -4907,12 +4879,6 @@
             "reaches external sites over ssh2 through the host proxy and keeps local names direct",
             "dials directly while the host environment is unreadable and adopts it once a retry reads it",
             "reaches external sites over system SSH through the host proxy"
-          ]
-        },
-        {
-          "file": "src/main/browser/network/tunnels/system-ssh-socks-client-socket.test.ts",
-          "assertions": [
-            "the internal SOCKS5 client encodes the exact destination as a domain request"
           ]
         },
         {
