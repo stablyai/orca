@@ -550,7 +550,6 @@
 1 test-timeout-needs-reason:src/main/sqlite/sync-database-concurrent-backup.test.ts
 2 test-timeout-needs-reason:src/main/ssh/connection/ssh-connection-sftp-wire.test.ts
 2 test-timeout-needs-reason:src/main/ssh/system-transport/forwarding/system-ssh-forward-process-real-openssh.test.ts
-1 test-timeout-needs-reason:src/main/window/visibility/renderer-publication-throttle.electron.test.ts
 1 test-timeout-needs-reason:src/main/windows/windows-administrator-restart.win32.test.ts
 1 test-timeout-needs-reason:src/main/windows/windows-host-job.win32.test.ts
 1 test-timeout-needs-reason:src/main/windows/windows-msys-job.win32.test.ts
