@@ -223,8 +223,17 @@ describe('assertMacRun', () => {
     expect(() => check({})).not.toThrow()
   })
 
+  it.each(['@main', '@refs/heads/main'])('accepts its path qualified with %s', (suffix) => {
+    expect(() => check({ path: `${run.path}${suffix}` })).not.toThrow()
+  })
+
   it.each([
     ['another workflow', { path: '.github/workflows/adhoc-mac-build.yml' }],
+    [
+      'its path qualified with another ref',
+      { path: '.github/workflows/release-mac-build.yml@feature' }
+    ],
+    ['its path qualified twice', { path: '.github/workflows/release-mac-build.yml@main@main' }],
     ['another branch', { head_branch: 'feature' }],
     ['another release run', { display_title: `Mac release build ${TAG} (101)` }],
     ['another tag', { display_title: 'Mac release build v1.2.4 (100)' }],
