@@ -1,6 +1,7 @@
 // Opening a cloud workspace from the team list or a link. The owner already has it locally (the
 // hosted runtime they created); anyone else pairs this device through a per-device E2EE grant and
 // the workspace's server joins the sidebar like any remote Orca server.
+import { uniqueCloudServerName } from './cloud-server-name'
 import { hasLocalSidebarRow } from './cloud-local-row'
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
@@ -242,9 +243,7 @@ async function pairAndReveal(
     }
   }
   const added = await window.api.runtimeEnvironments.verifyAndAddFromPairingCode({
-    name: translate('auto.components.cloudWorkspaces.environmentName', '{{value0}} (cloud)', {
-      value0: name
-    }).slice(0, 120),
+    name: await uniqueCloudServerName(name, workspace.number ?? null),
     pairingCode: grant.value.pairingCode
   })
   if (!added.ok) {
