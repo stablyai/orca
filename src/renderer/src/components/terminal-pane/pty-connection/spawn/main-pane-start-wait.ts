@@ -3,13 +3,13 @@
 import { useAppStore } from '@/store/index'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../../shared/layout-owner-switch'
 import { recordPtyConnectDiagnostic } from '../instrumentation/pty-connect-diagnostics'
-import type { PaneStartStatus } from '../../../../../../shared/workspace-layout/workspace-layout-published'
+import type { PaneStartStatus } from '../../../../../../shared/workspace-layout/published-layout/workspace-layout-published'
 import type { ConnectPanePtySession } from '../connect-pane-pty-session'
 import { resolveTerminalTabId } from '../terminal-tab-id'
 import {
   findWslDistroHoldInText,
   wslDistroHoldUserMessage
-} from '../../../../../../shared/wsl-distro-stopped-hold'
+} from '../../../../../../shared/remote-runtime/wsl-hosts/wsl-distro-stopped-hold'
 import { holdPaneForStoppedWslDistro } from '../../session-restore/wsl-distro/wsl-distro-stopped-hold-state'
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 

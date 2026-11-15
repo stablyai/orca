@@ -5,6 +5,7 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
+import { translateUnassignedLabel } from '@/i18n/unassigned-label'
 import { cn } from '@/lib/class-names'
 import type { LinearProjectSummary } from '../../../shared/linear/project-types'
 import {
@@ -182,8 +183,7 @@ export function LinearProjectTableContent({
               {linearProjectPriorityLabel(presentation.priority, presentation.priorityLabel, t)}
             </span>
             <span className="truncate text-[12px] text-muted-foreground">
-              {linearProjectUnknownText(presentation.lead) ??
-                t('auto.components.linear.project.view.surfaces.df4bd63c1d', 'Unassigned')}
+              {linearProjectUnknownText(presentation.lead) ?? translateUnassignedLabel()}
             </span>
             <span className="truncate text-[12px] text-muted-foreground">
               {linearProjectDateLabel(project.targetDate, t, intlLocale)}

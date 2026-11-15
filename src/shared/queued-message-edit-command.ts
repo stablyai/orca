@@ -1,4 +1,4 @@
-import { agentSessionInteractionCommand } from './agent-session/options/agent-session-interaction-mode'
+import { agentSessionInteractionCommand } from './agent-session/options/permissions/agent-session-interaction-mode'
 import type { AgentType } from './agent-status/contracts/agent-status-types'
 import type { AgentSessionSlashCommand } from './agent-session/agent-session-wire'
 import {

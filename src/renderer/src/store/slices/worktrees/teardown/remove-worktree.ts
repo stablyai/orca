@@ -1,14 +1,11 @@
 import { getRepoIdFromWorktreeId } from '../../../../../../shared/worktree/id'
-import type { WorktreeSlice } from '../worktree-slice-contract'
-import type { WorktreeSliceGet, WorktreeSliceSet } from '../listing/worktree-slice-types'
-import type { RemoveWorktreeResult } from '../../../../../../shared/worktree/create-types'
 import { parseExecutionHostId } from '../../../../../../shared/execution-host'
 import { ensureHooksConfirmed } from '@/runtime/repo-hooks/ensure-hooks-confirmed'
 import { runtimeTargetForOwnerEnvironment } from '../../../../runtime/rpc/targets/runtime-client-target'
 import { forgetHugeRepoWarningDismissalsForWorktrees } from '@/lib/source-control/warnings/source-control-huge-repo-warning-dismissals'
-import { forgetWorktreeSleepIntent } from '@/lib/worktree-sleep-intent'
+import { forgetWorktreeSleepIntent } from '@/lib/workspace/sleep/worktree-sleep-intent'
 import { readIpcErrorDetail } from '@/runtime/errors/ipc-error'
-import { isArchiveHookRemovalError } from '../../../../../../shared/worktree/archive-hook-removal-gate'
+import { isArchiveHookRemovalError } from '../../../../../../shared/worktree/removal/archive-hook-removal-gate'
 import {
   resolveWorktreeOperationRouteResult,
   resolveWorktreeOperationRouteResultForHost
@@ -27,7 +24,7 @@ import {
   classifyWorktreeForceDeleteReason,
   getLockedWorktreeRemovalReason,
   isLockedWorktreeRemovalError
-} from '../../../../../../shared/worktree/removal'
+} from '../../../../../../shared/worktree/removal/removal'
 import '../../../../../../shared/git/branches/preserved-branch-cleanup'
 import { getWorktreeDeleteStateKey } from './worktree-delete-state'
 import { pruneHostedReviewLinkMutationGenerations } from '../metadata/hosted-review-link-mutation'
@@ -47,6 +44,9 @@ import {
 } from './worktree-state-before-removal'
 import { resolveWorktreeRemovalPreference } from './worktree-removal-preference'
 import { completePreservedBranchCleanup } from './complete-preserved-branch-cleanup'
+import type { WorktreeSlice } from '../worktree-slice-contract'
+import type { WorktreeSliceGet, WorktreeSliceSet } from '../listing/worktree-slice-types'
+import type { RemoveWorktreeResult } from '../../../../../../shared/worktree/create-types'
 
 export function createRemoveWorktree(
   set: WorktreeSliceSet,

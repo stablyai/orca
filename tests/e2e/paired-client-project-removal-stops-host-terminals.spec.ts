@@ -12,7 +12,7 @@ import {
 } from './helpers/paired-electron-client'
 import { createRestartSession } from './helpers/orca-restart'
 import { readFreshTerminalInventory } from './helpers/terminal-inventory-observation'
-import type { RuntimeTerminalListResult } from '../../src/shared/runtime-types'
+import type { RuntimeTerminalListResult } from '../../src/shared/terminal/runtime/runtime-terminal-contracts'
 
 function seededRepoPathOrSkip(): string {
   const repoPath = existsSync(TEST_REPO_PATH_FILE)

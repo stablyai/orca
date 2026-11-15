@@ -56,43 +56,7 @@ const {
   }
 })
 
-vi.mock('../../gitlab/client', async (importOriginal) => {
-  const actual = (await importOriginal()) as Record<string, unknown>
-  return {
-    ...actual,
-    listMergeRequests: listGitLabMergeRequestsMock,
-    listWorkItems: listGitLabWorkItemsMock,
-    listIssues: listGitLabIssuesMock,
-    listLabels: listGitLabLabelsMock,
-    listAssignableUsers: listGitLabAssignableUsersMock,
-    listTodos: listGitLabTodosMock,
-    getProjectRefForRemote: getGitLabProjectRefForRemoteMock,
-    getWorkItemByProjectRef: getGitLabWorkItemByProjectRefMock,
-    createIssue: createGitLabIssueMock,
-    updateIssue: updateGitLabIssueMock,
-    addIssueComment: addGitLabIssueCommentMock,
-    addMRComment: addGitLabMRCommentMock,
-    addMRInlineComment: addGitLabMRInlineCommentMock,
-    resolveMRDiscussion: resolveGitLabMRDiscussionMock,
-    getJobTrace: getGitLabJobTraceMock,
-    retryJob: retryGitLabJobMock,
-    mergeMR: mergeGitLabMRMock,
-    closeMR: closeGitLabMRMock,
-    reopenMR: reopenGitLabMRMock,
-    updateMR: updateGitLabMRMock,
-    updateMRReviewers: updateGitLabMRReviewersMock
-  }
-})
-
-vi.mock('../../gitlab/gl-utils', async (importOriginal) => {
-  const actual = (await importOriginal()) as Record<string, unknown>
-  return {
-    ...actual,
-    getGlabKnownHosts: getGlabKnownHostsMock
-  }
-})
-
-vi.mock('../../gitlab/work-item-details', async (importOriginal) => {
+vi.mock('../../gitlab/work-items/work-item-details', async (importOriginal) => {
   const actual = (await importOriginal()) as Record<string, unknown>
   return {
     ...actual,
@@ -100,68 +64,77 @@ vi.mock('../../gitlab/work-item-details', async (importOriginal) => {
   }
 })
 
-vi.mock(import('../../gitlab/merge-request-list'), async (importOriginal) => ({
+vi.mock(import('../../gitlab/merge-requests/merge-request-list'), async (importOriginal) => ({
   ...(await importOriginal()),
   listMergeRequests: listGitLabMergeRequestsMock
 }))
 
-vi.mock(import('../../gitlab/work-item-queries'), async (importOriginal) => ({
+vi.mock(import('../../gitlab/work-items/work-item-queries'), async (importOriginal) => ({
   ...(await importOriginal()),
   listWorkItems: listGitLabWorkItemsMock,
   listTodos: listGitLabTodosMock,
   getWorkItemByProjectRef: getGitLabWorkItemByProjectRefMock
 }))
 
-vi.mock(import('../../gitlab/issues'), async (importOriginal) => ({
+vi.mock(import('../../gitlab/issues/gitlab-issue-queries'), async (importOriginal) => ({
   ...(await importOriginal()),
   listIssues: listGitLabIssuesMock,
   createIssue: createGitLabIssueMock,
   addIssueComment: addGitLabIssueCommentMock
 }))
 
-vi.mock(import('../../gitlab/project-label-and-member-lookup'), async (importOriginal) => ({
-  ...(await importOriginal()),
-  listLabels: listGitLabLabelsMock,
-  listAssignableUsers: listGitLabAssignableUsersMock
-}))
+vi.mock(
+  import('../../gitlab/projects/project-label-and-member-lookup'),
+  async (importOriginal) => ({
+    ...(await importOriginal()),
+    listLabels: listGitLabLabelsMock,
+    listAssignableUsers: listGitLabAssignableUsersMock
+  })
+)
 
-vi.mock(import('../../gitlab/gitlab-project-ref-resolution'), async (importOriginal) => ({
+vi.mock(import('../../gitlab/projects/gitlab-project-ref-resolution'), async (importOriginal) => ({
   ...(await importOriginal()),
   getProjectRefForRemote: getGitLabProjectRefForRemoteMock
 }))
 
-vi.mock(import('../../gitlab/issue-update'), async (importOriginal) => ({
+vi.mock(import('../../gitlab/issues/issue-update'), async (importOriginal) => ({
   ...(await importOriginal()),
   updateIssue: updateGitLabIssueMock
 }))
 
-vi.mock(import('../../gitlab/merge-request-review-mutations'), async (importOriginal) => ({
-  ...(await importOriginal()),
-  addMRComment: addGitLabMRCommentMock,
-  addMRInlineComment: addGitLabMRInlineCommentMock,
-  resolveMRDiscussion: resolveGitLabMRDiscussionMock,
-  updateMRReviewers: updateGitLabMRReviewersMock
-}))
+vi.mock(
+  import('../../gitlab/merge-requests/merge-request-review-mutations'),
+  async (importOriginal) => ({
+    ...(await importOriginal()),
+    addMRComment: addGitLabMRCommentMock,
+    addMRInlineComment: addGitLabMRInlineCommentMock,
+    resolveMRDiscussion: resolveGitLabMRDiscussionMock,
+    updateMRReviewers: updateGitLabMRReviewersMock
+  })
+)
 
-vi.mock(import('../../gitlab/pipeline-job-mutations'), async (importOriginal) => ({
+vi.mock(import('../../gitlab/pipelines/pipeline-job-mutations'), async (importOriginal) => ({
   ...(await importOriginal()),
   getJobTrace: getGitLabJobTraceMock,
   retryJob: retryGitLabJobMock
 }))
 
-vi.mock(import('../../gitlab/merge-request-state-mutations'), async (importOriginal) => ({
-  ...(await importOriginal()),
-  mergeMR: mergeGitLabMRMock,
-  closeMR: closeGitLabMRMock,
-  reopenMR: reopenGitLabMRMock
-}))
+vi.mock(
+  import('../../gitlab/merge-requests/merge-request-state-mutations'),
+  async (importOriginal) => ({
+    ...(await importOriginal()),
+    mergeMR: mergeGitLabMRMock,
+    closeMR: closeGitLabMRMock,
+    reopenMR: reopenGitLabMRMock
+  })
+)
 
-vi.mock(import('../../gitlab/merge-request-update'), async (importOriginal) => ({
+vi.mock(import('../../gitlab/merge-requests/merge-request-update'), async (importOriginal) => ({
   ...(await importOriginal()),
   updateMR: updateGitLabMRMock
 }))
 
-vi.mock(import('../../gitlab/gitlab-known-host-probe'), async (importOriginal) => ({
+vi.mock(import('../../gitlab/projects/gitlab-known-host-probe'), async (importOriginal) => ({
   ...(await importOriginal()),
   getGlabKnownHosts: getGlabKnownHostsMock
 }))

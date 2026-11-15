@@ -2,14 +2,14 @@ import { useMemo } from 'react'
 import { useAppStore } from '../../../store/index'
 import '../../../lib/workspace/ownership/worktree-runtime-owner'
 import '../../../lib/files/access/file-owner-runtime-target'
-import '../../../lib/resolved-worktree-execution-host'
+import '../../../lib/workspace/ownership/resolved-worktree-execution-host'
 import '../../rpc/targets/runtime-client-target'
 import {
   wslHostDistroForTarget,
   accountOwnerFor,
   type AccountOwner
 } from './wsl-host-account-owner'
-import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import { useActiveWorkspaceOwnerTarget } from '../../rpc/targets/use-worktree-runtime-target'
 
 /** Who owns the focused workspace's provider accounts (see {@link resolveAccountOwner}). */

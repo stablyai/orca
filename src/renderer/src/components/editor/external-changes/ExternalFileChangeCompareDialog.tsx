@@ -15,7 +15,7 @@ import { editorTabFileAccess } from '@/lib/files/access/local-file-access'
 import { detectLanguage } from '../../../../../shared/editor-language/editor-language-detect'
 import { readRuntimeFileContent } from '@/runtime/files/reads/runtime-file-read-client'
 import {
-  FILE_OWNER_UNRESOLVED_MESSAGE,
+  fileOwnerUnresolvedMessage,
   getRuntimeTargetForFileOwner
 } from '@/lib/files/access/file-owner-runtime-target'
 import { useAppStore } from '@/store/index'
@@ -64,7 +64,7 @@ export function ExternalFileChangeCompareDialog({
       file.runtimeEnvironmentId
     )
     if (!target) {
-      setDiskState({ kind: 'error', message: FILE_OWNER_UNRESOLVED_MESSAGE })
+      setDiskState({ kind: 'error', message: fileOwnerUnresolvedMessage() })
       return
     }
     void readRuntimeFileContent({

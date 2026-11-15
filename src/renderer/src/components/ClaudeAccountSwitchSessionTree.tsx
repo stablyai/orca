@@ -13,9 +13,9 @@ import {
 import {
   resolveWorktreeBranchLabel,
   resolveWorktreeDisplayName
-} from '@/lib/worktree-default-display-name'
+} from '@/lib/workspace/display/worktree-default-display-name'
 import { makePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
-import { useAppStore } from '../store'
+import { useAppStore } from '../store/index'
 import { ResumeTreeRow } from './native-chat-recovery/tree/NativeChatResumeTreeRow'
 import {
   resumeSelectionState,

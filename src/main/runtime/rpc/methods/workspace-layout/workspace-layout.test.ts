@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { OrcaRuntimeService } from '../../../orca-runtime'
-import type { WorkspaceLayoutStreamEvent } from '../../../../../shared/workspace-layout/workspace-layout-stream-frames'
+import type { WorkspaceLayoutStreamEvent } from '../../../../../shared/workspace-layout/published-layout/workspace-layout-stream-frames'
 import { eraseRpcMethods, isStreamingMethod, type RpcContext } from '../../core'
 import { ALL_RPC_METHODS } from '../rpc-method-registry'
 

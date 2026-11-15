@@ -1,5 +1,4 @@
-import { codexOpenCodeTokenSessions } from '../usage/agent-token-usage'
-import { app } from 'electron'
+import { codexOpenCodeTokenSessions } from '../usage/reporting/token-usage/agent-token-usage'
 import { join } from 'node:path'
 import type {
   OpenCodeUsageBreakdownKind,
@@ -11,7 +10,7 @@ import type {
   OpenCodeUsageSnapshot,
   OpenCodeUsageSummary
 } from '../../shared/opencode-usage-types'
-import type { Store } from '../persistence/loading-store/store'
+import type { UsageStoreHost } from '../usage/usage-store-host'
 import type {
   OpenCodeUsageDailyAggregate,
   OpenCodeUsagePersistedState,
@@ -29,35 +28,22 @@ import {
   buildOpenCodeUsageRecentSessions,
   buildOpenCodeUsageSummary
 } from './snapshot-rollups'
-import { UsageProviderStoreLifecycle } from '../usage/usage-provider-store-lifecycle'
-import { splitUsageCacheFileViaWorker } from '../usage/usage-scan-worker-spawn'
-
-let _openCodeUsageFile: string | null = null
-
-export function initOpenCodeUsagePath(): void {
-  _openCodeUsageFile = join(app.getPath('userData'), 'orca-opencode-usage.json')
-}
-
-function getOpenCodeUsageFile(): string {
-  if (!_openCodeUsageFile) {
-    _openCodeUsageFile = join(app.getPath('userData'), 'orca-opencode-usage.json')
-  }
-  return _openCodeUsageFile
-}
+import { UsageProviderStoreLifecycle } from '../usage/provider-lifecycle/usage-provider-store-lifecycle'
+import { splitUsageCacheFileViaWorker } from '../usage/scan-worker/usage-scan-worker-spawn'
 
 export class OpenCodeUsageStore extends UsageProviderStoreLifecycle<
   'processedDatabases',
   OpenCodeUsagePersistedState,
   'hasAnyOpenCodeData'
 > {
-  constructor(store: Pick<Store, 'getRepos' | 'getAllWorktreeMeta'>) {
-    super(store, {
+  constructor(host: UsageStoreHost) {
+    super(host, {
       tokenUsage: {
         provider: 'opencode',
         selectSessions: (state) => codexOpenCodeTokenSessions(state.sessions)
       },
       logTag: '[opencode-usage]',
-      resolveCacheFile: getOpenCodeUsageFile,
+      resolveCacheFile: () => join(host.userDataPath, 'orca-opencode-usage.json'),
       createDefaultState: getDefaultState,
       normalizeState: normalizePersistedState,
       sourceKey: 'processedDatabases',

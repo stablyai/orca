@@ -1,8 +1,8 @@
-import type { RuntimeMobileSessionTabsResult } from '../../../../../../shared/runtime-session-contracts'
+import type { RuntimeMobileSessionTabsResult } from '../../../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import {
   appendRetiredTerminalSurfaceProofs,
   dropRetirementProofsForLiveSurfaces
-} from '../../../../../../shared/workspace-layout/terminal-retirement-proof-ledger'
+} from '../../../../../../shared/workspace-layout/terminal-surfaces/terminal-retirement-proof-ledger'
 import { getRuntimeEnvironmentConnectionGeneration } from '@/store/slices/runtime-status/runtime-status-connection-generation'
 import { isRemovedSnapshot } from '../surfaces/web-session-terminal-orphan-recovery-surface-index'
 

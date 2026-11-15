@@ -12,9 +12,9 @@ import { ORCAD_MIGRATION_BLOB_KIND_CONTRACTS } from '../../../../shared/orcad-mi
 import {
   ORCAD_MIGRATION_BLOB_CHANNEL_RUNTIME_CAPABILITY,
   ORCAD_MIGRATION_LOCAL_WSL_SOURCE_RUNTIME_CAPABILITY
-} from '../../../../shared/orcad-runtime-capabilities'
+} from '../../../../shared/remote-runtime/protocol/orcad-runtime-capabilities'
 import type { Store } from '../../loading-store/store'
-import type { WslMoveHost } from '../../moving-wsl-projects/wsl-move-driver-ports'
+import type { WslMoveHost } from '../../moving-wsl-projects/execution/wsl-move-driver-ports'
 
 export class WslMoveKilled extends Error {}
 

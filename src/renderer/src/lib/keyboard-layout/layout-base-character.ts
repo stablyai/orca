@@ -171,8 +171,6 @@ export function _setLayoutSnapshotForTests(snapshot: KeyboardLayoutSnapshot | nu
   }
 }
 
-export const _refreshLayoutCharactersForTests = refreshLayoutMap
-
 export function _resetLayoutCharacterListenersForTests(): void {
   attachedWindow?.removeEventListener('focus', refreshOnFocus)
   unsubscribeLayoutChange?.()

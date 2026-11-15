@@ -5,19 +5,22 @@ import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { translate } from '@/i18n/i18n'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
-import { useAppStore } from '@/store'
+import { useAppStore } from '@/store/index'
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import type {
   AgentSessionAccountUsage,
   AgentSessionUsageAccount
 } from '../../../../../shared/agent-session/agent-session-account-usage'
 import type { CodexRateLimitResetOutcome } from '../../../../../shared/rate-limit-types'
-import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import { normalizeUsagePercentageDisplay } from '../../../../../shared/usage-percentage-display'
 import { getProviderDisplayName } from '../../../../../shared/usage-provider-windows'
-import { ProviderIdentityCard } from '../../status-bar/ProviderIdentityCard'
-import { CodexResetConfirmation, CodexResetCredits } from '../../status-bar/CodexResetCredits'
-import { formatResetCreditExpiry, ProviderIcon } from '../../status-bar/tooltip'
+import { ProviderIdentityCard } from '../../status-bar/accounts/ProviderIdentityCard'
+import {
+  CodexResetConfirmation,
+  CodexResetCredits
+} from '../../status-bar/accounts/CodexResetCredits'
+import { formatResetCreditExpiry, ProviderIcon } from '../../status-bar/usage/provider-usage-panel'
 
 type UsageResult = Extract<AgentSessionAccountUsage, { status: 'ok' }>
 

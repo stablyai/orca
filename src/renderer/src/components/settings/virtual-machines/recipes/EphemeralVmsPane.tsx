@@ -37,6 +37,7 @@ export function EphemeralVmsPane(): React.JSX.Element {
   const [agentLaunching, setAgentLaunching] = useState(false)
   const activeSkillRuntime = useActiveProjectSkillRuntime()
   const [catalog, setCatalog] = useState<RecipeCatalogEntry[]>([])
+  const [credentialEnvNames, setCredentialEnvNames] = useState<string[] | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [promptCopied, setPromptCopied] = useState(false)
   const mountedRef = useMountedRef()
@@ -92,6 +93,18 @@ export function EphemeralVmsPane(): React.JSX.Element {
   useEffect(() => {
     void refresh()
   }, [refresh])
+
+  useEffect(() => {
+    // The warning is advisory; if the names can't be read the list still works without it.
+    void window.api.ephemeralVm
+      .listCredentialEnvNames()
+      .then((names) => {
+        if (mountedRef.current) {
+          setCredentialEnvNames(names)
+        }
+      })
+      .catch(() => undefined)
+  }, [mountedRef])
 
   useEffect(() => {
     if (!window.api.plugins?.onChanged) {
@@ -302,6 +315,7 @@ export function EphemeralVmsPane(): React.JSX.Element {
                   key={`${entry.repoId}:${recipe.id}`}
                   entry={entry}
                   recipe={recipe}
+                  credentialEnvNames={credentialEnvNames}
                   onUse={() => openWorkspaceComposerForRecipe(entry.repoId, recipe.id)}
                 />
               ))}

@@ -57,6 +57,7 @@ const NON_UNIT_TEST_RUNNERS = [
   },
   ...[
     'cloud/apps/relay-fence-broker',
+    'cloud/apps/relay-ingress',
     'cloud/packages/cloud-database',
     'cloud/packages/connector-contract',
     'cloud/packages/postgres-schema',
@@ -79,19 +80,6 @@ const NON_UNIT_TEST_RUNNERS = [
       'dev/scripts/run-relay-tests.test.mjs',
       '../.github/actions/cloud-sql-rollout-lease/*.test.mjs'
     ]
-  },
-  {
-    // `orca plugin test` runs every example's own tests in Node; the unit test drives it.
-    name: 'example plugin tests (orca plugin test)',
-    include: ['examples/plugins/*/src/**/*.test.ts', 'examples/plugins/*/src/**/*.test.tsx'],
-    sources: ['src/cli/plugin-authoring/plugin-test-runner.test.ts'],
-    mirrors: ['readdirSync(EXAMPLES)']
-  },
-  {
-    name: 'docs site',
-    include: ['docs/site/tests/*.test.mjs'],
-    sources: ['docs/site/package.json'],
-    mirrors: ['node --test tests/*.test.mjs']
   }
 ]
 

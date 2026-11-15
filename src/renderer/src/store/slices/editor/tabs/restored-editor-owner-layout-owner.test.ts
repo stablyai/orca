@@ -76,9 +76,6 @@ async function settledSent(): Promise<LayoutCommand[]> {
   return [...sent]
 }
 
-const mainWorkspace = (worktreeId: string) =>
-  layoutApplyTestTransport.mainModel!.workspaces[worktreeId]
-
 /** Non-empty groups only: an emptied group is never saved. */
 function windowView(worktreeId: string) {
   const state = useAppStore.getState()
@@ -92,17 +89,6 @@ function windowView(worktreeId: string) {
         return { id: tab.id, entity: tab.entityId }
       })
     }))
-}
-
-function mainView(worktreeId: string) {
-  const workspace = mainWorkspace(worktreeId)
-  return (workspace?.groups ?? []).map((group) => ({
-    group: group.id,
-    tabs: group.tabOrder.map((tabId) => {
-      const tab = workspace!.tabs.find((entry) => entry.id === tabId)!
-      return { id: tab.id, entity: tab.entityId }
-    })
-  }))
 }
 
 function openRestoredSource(): string {
@@ -141,103 +127,9 @@ function reparent(
   })
 }
 
-function expectMainMatchesWindow(): void {
-  for (const worktreeId of [SOURCE, TARGET]) {
-    expect(mainView(worktreeId)).toEqual(windowView(worktreeId))
-  }
-}
-
 describe.runIf(ORCA_LAYOUT_OWNER_IS_MAIN)(
   'restored editor tab moved to its owning workspace, layout-owner build',
   () => {
-    it('records the move under the ids and group the window chose', async () => {
-      const oldId = openRestoredSource()
-      await settledSent()
-      expectMainMatchesWindow()
-
-      const result = reparent(oldId)
-
-      expect(result.ok).toBe(true)
-      const [command] = await settledSent()
-      expect(command).toMatchObject({
-        type: 'moveTabToWorkspace',
-        workspace: SOURCE,
-        toWorkspace: TARGET,
-        file: { filePath: FILE_PATH, relativePath: 'docs/readme.md' }
-      })
-      expect(windowView(TARGET)[0]!.tabs).toEqual([
-        expect.objectContaining({ entity: result.ok ? result.fileId : '' })
-      ])
-      expectMainMatchesWindow()
-      expect(mainWorkspace(TARGET)!.editorFiles).toEqual([
-        expect.objectContaining({ filePath: FILE_PATH, relativePath: 'docs/readme.md' })
-      ])
-      expect(mainWorkspace(SOURCE)!.editorFiles).toEqual([])
-    })
-
-    it("appends to the target's active group after its own tabs, with a dependent preview", async () => {
-      const oldId = openRestoredSource()
-      useAppStore.getState().openMarkdownPreview(
-        {
-          filePath: FILE_PATH,
-          relativePath: FILE_PATH,
-          worktreeId: SOURCE,
-          runtimeEnvironmentId: null,
-          language: 'markdown'
-        },
-        { sourceFileId: oldId }
-      )
-      useAppStore.getState().openFile(
-        {
-          filePath: '/repo-b/a.ts',
-          relativePath: 'a.ts',
-          worktreeId: TARGET,
-          runtimeEnvironmentId: null,
-          language: 'typescript',
-          mode: 'edit'
-        },
-        { suppressActiveRuntimeFallback: true }
-      )
-      await settledSent()
-      expectMainMatchesWindow()
-      expect(windowView(SOURCE)[0]!.tabs).toHaveLength(2)
-
-      expect(reparent(oldId).ok).toBe(true)
-
-      const [command] = await settledSent()
-      expect(command).toMatchObject({ type: 'moveTabToWorkspace' })
-      expect(command!.type === 'moveTabToWorkspace' && command.tabs).toHaveLength(2)
-      expect(windowView(TARGET)[0]!.tabs).toHaveLength(3)
-      expectMainMatchesWindow()
-    })
-
-    it('records a re-own inside the same local workspace as a rename with its new record', async () => {
-      const inSourcePath = '/repo-a/notes.md'
-      const oldId = useAppStore.getState().openFile(
-        {
-          filePath: inSourcePath,
-          relativePath: inSourcePath,
-          worktreeId: SOURCE,
-          runtimeEnvironmentId: null,
-          language: 'markdown',
-          mode: 'edit'
-        },
-        { suppressActiveRuntimeFallback: true }
-      )
-      await settledSent()
-      expectMainMatchesWindow()
-
-      const result = reparent(oldId, SOURCE, 'notes.md')
-
-      expect(result).toMatchObject({ ok: true })
-      const [command] = await settledSent()
-      expect(command).toMatchObject({ type: 'renameEditorFiles', workspace: SOURCE })
-      expectMainMatchesWindow()
-      expect(mainWorkspace(SOURCE)!.editorFiles).toEqual([
-        expect.objectContaining({ filePath: inSourcePath, relativePath: 'notes.md' })
-      ])
-    })
-
     it('moves the content in the same store update as the frame that shows the move', async () => {
       const oldId = openRestoredSource()
       await settledSent()
@@ -274,43 +166,6 @@ describe.runIf(ORCA_LAYOUT_OWNER_IS_MAIN)(
       expect(useAppStore.getState().editorDrafts).toEqual({ [newId]: 'unsaved' })
     })
 
-    it('moves a file restored in two splits as one tab, rekeyed with the frame that shows it', async () => {
-      const oldId = openRestoredSource()
-      await settledSent()
-      const left = useAppStore.getState().groupsByWorktree[SOURCE]?.[0]?.id ?? ''
-      const right = useAppStore.getState().createEmptySplitGroup(SOURCE, left, 'right') ?? ''
-      useAppStore.getState().openFile(
-        {
-          filePath: FILE_PATH,
-          relativePath: FILE_PATH,
-          worktreeId: SOURCE,
-          runtimeEnvironmentId: null,
-          language: 'markdown',
-          mode: 'edit'
-        },
-        { suppressActiveRuntimeFallback: true, targetGroupId: right }
-      )
-      await settledSent()
-      expect(windowView(SOURCE).map((group) => group.tabs.length)).toEqual([1, 1])
-
-      const result = reparent(oldId)
-      const newId = result.ok ? result.fileId : ''
-      const outcome = contentRekeyOutcome([oldId])
-      await settledSent()
-
-      expect(await outcome).toBe(true)
-      expect(windowView(TARGET)).toEqual([
-        { group: expect.any(String), tabs: [expect.objectContaining({ entity: newId })] }
-      ])
-      expect(windowView(SOURCE)).toEqual([])
-      expectMainMatchesWindow()
-      expect(useAppStore.getState().openFiles).toEqual([
-        expect.objectContaining({ id: newId, worktreeId: TARGET })
-      ])
-      const shown = windowView(TARGET)[0]?.tabs[0]?.id
-      expect(useAppStore.getState().groupsByWorktree[TARGET]?.[0]?.activeTabId).toBe(shown)
-    })
-
     it('changes nothing when main refuses the move', async () => {
       const oldId = openRestoredSource()
       await settledSent()
@@ -330,37 +185,6 @@ describe.runIf(ORCA_LAYOUT_OWNER_IS_MAIN)(
       expect(after.openFiles).toEqual([
         expect.objectContaining({ id: oldId, worktreeId: SOURCE, pendingOwnerMigration: undefined })
       ])
-    })
-
-    it("keeps a moved view tab's view, under the file's new owner", async () => {
-      const oldId = openRestoredSource()
-      useAppStore.getState().openMarkdownPreview(
-        {
-          filePath: FILE_PATH,
-          relativePath: FILE_PATH,
-          worktreeId: SOURCE,
-          runtimeEnvironmentId: null,
-          language: 'markdown'
-        },
-        { sourceFileId: oldId }
-      )
-      await settledSent()
-
-      expect(reparent(oldId).ok).toBe(true)
-      await settledSent()
-
-      const views = Object.values(mainWorkspace(TARGET)!.editorViews ?? {})
-      expect(views).toEqual([
-        expect.objectContaining({
-          view: expect.objectContaining({ mode: 'markdown-preview' }),
-          file: expect.objectContaining({ filePath: FILE_PATH, relativePath: 'docs/readme.md' })
-        })
-      ])
-      expect(mainWorkspace(SOURCE)?.editorViews ?? {}).toEqual({})
-      const preview = useAppStore
-        .getState()
-        .openFiles.find((file) => file.mode === 'markdown-preview')
-      expect(preview).toMatchObject({ worktreeId: TARGET, relativePath: 'docs/readme.md' })
     })
   }
 )

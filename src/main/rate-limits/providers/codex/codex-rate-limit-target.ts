@@ -3,7 +3,7 @@ import {
   getWslSelectionKey,
   type CodexAccountSelectionTarget
 } from '../../../../shared/codex-selection-lane'
-import { normalizeCodexRuntimeSelection } from '../../../codex-accounts/runtime-selection'
+import { normalizeCodexRuntimeSelection } from '../../../codex-accounts/account-management/runtime-selection'
 import { getInitialAccountRateLimitTarget } from '../../initial-account-rate-limit-target'
 
 export function getInitialCodexRateLimitTarget(

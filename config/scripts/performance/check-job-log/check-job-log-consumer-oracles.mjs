@@ -13,7 +13,7 @@ export async function loadAnsiConsumers(root = process.cwd()) {
       'restoredSnapshotPaintsPrintableContent',
       'renderer/src/components/terminal-pane/snapshots/restored-snapshot-coverage'
     ],
-    ['parseCodexLoginAuthUrl', 'main/codex-accounts/codex-login-auth-url'],
+    ['parseCodexLoginAuthUrl', 'main/codex-accounts/login/codex-login-auth-url'],
     ['TerminalCommandPaint', 'main/runtime/terminal/input/terminal-command-paint'],
     ['claudePermissionSubject', 'main/claude/claude-permission-presentation'],
     ['terminalSafe', 'shared/terminal/output/terminal-safe-text']

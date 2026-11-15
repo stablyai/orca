@@ -1,7 +1,7 @@
 import { release } from 'node:os'
 import type { UpdateInfo } from 'electron-updater'
 import type { UnsupportedSystemUpdate } from '../../../shared/update-status-types'
-import { macosVersionForDarwinFloor } from '../../../shared/macos-darwin-floor'
+import { macosVersionForDarwinFloor } from '../../../shared/updater/requirements/macos-darwin-floor'
 import { compareVersions } from './updater-fallback'
 
 function darwinParts(version: string): number[] | null {

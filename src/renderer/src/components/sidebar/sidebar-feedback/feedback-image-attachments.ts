@@ -9,7 +9,7 @@ import {
   MAX_FEEDBACK_IMAGE_BYTES,
   MAX_FEEDBACK_IMAGE_COUNT,
   MAX_FEEDBACK_IMAGE_TOTAL_BYTES
-} from '../../../../../shared/feedback-image-limits'
+} from '../../../../../shared/feedback/feedback-image-limits'
 import { shrinkFeedbackImage } from './feedback-image-shrink'
 
 export const SUPPORTED_FEEDBACK_IMAGE_TYPES = [

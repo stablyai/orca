@@ -1,17 +1,18 @@
 import type { Dispatch, SetStateAction } from 'react'
 import { Plus, Search } from 'lucide-react'
-import type { Repo } from '../../../../../shared/repo-types'
+import type { Repo } from '../../../../../shared/repository/repo-types'
 import type { ExecutionHostId } from '../../../../../shared/execution-host'
 import { Button } from '../../ui/button'
 import { Input } from '../../ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../ui/select'
 import { useTranslate } from '@/i18n/use-translate'
+import { translateHostDisplayLabel } from '../../sidebar/execution-host-label'
 import { QuickCommandsScopeFilter } from './QuickCommandsScopeFilter'
 
 type QuickCommandsToolbarProps = {
   query: string
   setQuery: (query: string) => void
-  hostOptions: readonly { id: ExecutionHostId; label: string }[]
+  hostOptions: readonly { id: ExecutionHostId; label: string; isDefaultLocalLabel?: boolean }[]
   showHostSelect: boolean
   selectedHostId: ExecutionHostId
   onHostChange: (hostId: ExecutionHostId) => void
@@ -91,7 +92,7 @@ export function QuickCommandsToolbar({
           <SelectContent>
             {hostOptions.map((host) => (
               <SelectItem key={host.id} value={host.id}>
-                {host.label}
+                {translateHostDisplayLabel(host)}
               </SelectItem>
             ))}
           </SelectContent>

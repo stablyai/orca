@@ -17,11 +17,16 @@ const { validatePluginFile, pluginManifestWarnings } = loadPluginSchemaModule(
 const { parsePluginManifest } = loadPluginSchemaModule('manifest/plugin-manifest.ts')
 // Why the CLI's main entry: `orca plugin validate` and `release-entry` run these same checks, and
 // the printed contentHash must be what Orca computes at install.
-const {
-  pluginCatalogReleaseForHead,
-  validateDeclaredPluginArtifacts,
-  validatePluginInstallContent
-} = loadPluginSchemaModule('../../main/plugins/plugin-authoring-checks.ts')
+const { pluginCatalogReleaseForHead } = loadPluginSchemaModule(
+  '../../main/plugins/catalog/plugin-catalog-release-entry.ts'
+)
+const { validateDeclaredPluginArtifacts, validatePluginInstallContent } = loadPluginSchemaModule(
+  '../../main/plugins/artifacts/plugin-artifact-validation.ts'
+)
+// Why shared: `orca plugin validate` runs these same host-call checks.
+const { validatePluginHostCalls } = loadPluginSchemaModule(
+  '../../main/plugins/artifacts/plugin-host-call-validation.ts'
+)
 // Why shared: `orca plugin validate` runs these same strict artifact checks.
 const { strictPluginArtifactErrors, strictPluginArtifactWarnings } = loadPluginSchemaModule(
   'authoring/plugin-strict-artifact-checks.ts'
@@ -107,10 +112,14 @@ for (const target of targets) {
       return { bytes, sha256: createHash('sha256').update(bytes).digest('hex') }
     }
     const errors = validatePluginFile(path.basename(file), raw, readCatalogFile)
+    let hostCallWarnings = []
     if (errors.length === 0 && path.basename(file) === 'orca-plugin.json') {
       const { manifest } = parsePluginManifest(raw)
       errors.push(...strictPluginArtifactErrors(manifest, readPluginText(root), englishLookup()))
       errors.push(...(await installContentErrors(root, manifest)))
+      const hostCalls = await validatePluginHostCalls(root, manifest)
+      errors.push(...hostCalls.errors)
+      hostCallWarnings = hostCalls.warnings
     }
     for (const error of errors) {
       console.error(`${file}: ${error}`)
@@ -119,7 +128,8 @@ for (const target of targets) {
       const { manifest } = parsePluginManifest(raw)
       for (const warning of [
         ...pluginManifestWarnings(raw),
-        ...strictPluginArtifactWarnings(manifest, readPluginText(root))
+        ...strictPluginArtifactWarnings(manifest, readPluginText(root)),
+        ...hostCallWarnings
       ]) {
         console.warn(`${file}: warning: ${warning}`)
       }

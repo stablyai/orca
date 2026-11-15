@@ -1,3 +1,7 @@
+import {
+  isTerminalNoticeLifetimeCurrent,
+  type TerminalNoticeLifetime
+} from '../../provider-notices/terminal-notice-lifetime'
 /** Store-free registry/disposal lets shutdown slices stop watchers synchronously without re-entering store initialization through the watcher lifecycle import. */
 import { WorkspaceParkedTerminalRegistry } from './workspace-parked-terminal-registry'
 import { invalidateTerminalParkingInputs } from '../terminal-parking-input-events'
@@ -8,9 +12,10 @@ import {
 } from '../../pty-transport/delivery/pty-pre-handler-buffer'
 import { parseRemoteRuntimePtyId } from '../../../../../../shared/remote-runtime/remote-runtime-pty-id'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../../shared/constants'
-import { releaseTerminalScrollIntentKey } from '../../../../lib/pane-manager/terminal-scroll-intent-key-store'
+import { releaseTerminalScrollIntentKey } from '../../../../lib/pane-manager/terminal-scroll/terminal-scroll-intent-key-store'
 
 export type ParkedTerminalPaneCapture = {
+  noticeLifetime?: TerminalNoticeLifetime
   workspaceOwner?: NotificationWorkspaceOwner
   ptyId: string | null
   /** PaneManager numeric pane id the live pane used for runtime titles. */
@@ -108,6 +113,20 @@ export function captureParkedTerminalPaneCandidates(
   worktreeId: string,
   panes: ParkedTerminalPaneCapture[]
 ): void {
+  const previous = new Map(
+    capturedPanesByTabId.get(tabId)?.panes.map((pane) => [pane.leafId, pane])
+  )
+  for (const pane of panes) {
+    const prior = previous.get(pane.leafId)?.noticeLifetime
+    if (
+      !pane.noticeLifetime &&
+      prior &&
+      prior.ptyId === pane.ptyId &&
+      isTerminalNoticeLifetimeCurrent(prior)
+    ) {
+      pane.noticeLifetime = prior
+    }
+  }
   capturedPanesByTabId.set(tabId, { worktreeId, panes })
 }
 

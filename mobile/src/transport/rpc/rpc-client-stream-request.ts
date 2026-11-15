@@ -1,4 +1,4 @@
-import type { BrowserScreencastFrame } from '../../browser/browser-screencast-protocol'
+import type { BrowserScreencastFrame } from '../../browser/screencast/browser-screencast-protocol'
 import type { RpcEnvelopeFields, RpcRequestFrame } from './rpc-envelope-fields'
 import type { ConnectionState } from '../connection/connection-state'
 

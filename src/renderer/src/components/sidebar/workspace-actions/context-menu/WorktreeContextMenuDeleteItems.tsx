@@ -78,7 +78,10 @@ export function WorktreeContextMenuDeleteItems({ model }: { model: WorktreeConte
       >
         <Trash2 className="size-3.5" />
         {label}
-        {!isMultiContext && !removesProject && deleteShortcut ? (
+        {!removesProject &&
+        !projectMissing &&
+        (!isMultiContext || batchDeleteWorktrees.length > 0) &&
+        deleteShortcut ? (
           <DropdownMenuShortcut>{deleteShortcut}</DropdownMenuShortcut>
         ) : null}
       </DropdownMenuItem>

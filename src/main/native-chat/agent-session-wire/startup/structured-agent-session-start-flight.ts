@@ -21,6 +21,7 @@ export type StructuredAgentSessionStartFlight = {
 }
 
 export class StructuredAgentSessionStartFlights {
+  constructor(private readonly workChanged?: (sessionId: string) => void) {}
   private readonly flying = new Map<string, StructuredAgentSessionStartFlight>()
   /** Buffer exits before child publication. */
   private readonly exits = new Map<string, StructuredAgentSessionEndedEvent[]>()
@@ -39,6 +40,7 @@ export class StructuredAgentSessionStartFlights {
 
   register(sessionId: string, flight: StructuredAgentSessionStartFlight): void {
     this.flying.set(sessionId, flight)
+    this.workChanged?.(sessionId)
   }
 
   published(sessionId: string, child: StructuredAgentSessionProviderChildIdentity): void {
@@ -61,6 +63,7 @@ export class StructuredAgentSessionStartFlights {
     if (this.isCurrent(sessionId, attemptId)) {
       this.flying.delete(sessionId)
       this.exits.delete(sessionId)
+      this.workChanged?.(sessionId)
     }
   }
 

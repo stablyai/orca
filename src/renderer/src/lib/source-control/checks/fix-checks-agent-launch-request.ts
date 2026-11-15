@@ -1,6 +1,6 @@
-import type { GitHubWorkItem } from '../../../../../shared/github/work-item-types'
-import type { WorkspaceSource as WorkspaceCreateTelemetrySource } from '../../../../../shared/workspace-source'
-import type { LaunchSource } from '../../../../../shared/telemetry-property-schemas'
+import type { GitHubWorkItem } from '../../../../../shared/github/work-items/work-item-types'
+import type { WorkspaceSource as WorkspaceCreateTelemetrySource } from '../../../../../shared/workspace/creation/workspace-source'
+import type { LaunchSource } from '../../../../../shared/telemetry/schemas/telemetry-property-schemas'
 
 export type StartFixChecksAgentArgs = {
   repoId: string

@@ -4,7 +4,7 @@ import { act, cleanup, renderHook } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import '../../../../../shared/workspace-layout/stable-pane-id'
 import '../../../../../shared/workspace-layout/terminal-surface-id'
-import type { RuntimeMobileSessionTabsResult } from '../../../../../shared/runtime-session-contracts'
+import type { RuntimeMobileSessionTabsResult } from '../../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import { resetStaleDocumentVisibilityForTesting } from '@/components/terminal-pane/viewport/visibility/stale-document-visibility'
 import type * as WebRuntimeTerminalCreationModule from '../../hosted-terminals/creation/web-runtime-terminal-creation'
 
@@ -44,11 +44,7 @@ import '@/store/slices/editor/file-ids/editor-file-ids'
 import { replaceRuntimeEnvironmentRevisions } from '../../rpc/environment-revisions/runtime-environment-revision'
 import '../../../../../shared/remote-runtime/remote-runtime-pty-id'
 import '../terminal-handles/web-session-terminal-handle-events'
-import {
-  _getWebSessionTabsReceiptTrackingCountsForTest,
-  _getWebSessionTabsTrackingCountsForTest,
-  resetWebSessionTabsSnapshotFreshnessForTests
-} from '../tracking-lifecycle'
+import { resetWebSessionTabsSnapshotFreshnessForTests } from '../tracking-lifecycle'
 import { useWebSessionTabsSync } from '../use-web-session-tabs-sync'
 import '../state'
 import '../../../lib/window-activity/window-park-visibility'

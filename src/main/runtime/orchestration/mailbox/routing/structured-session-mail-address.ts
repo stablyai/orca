@@ -10,8 +10,11 @@
  * points its mail starts it again. For mail, a conversation has ended only when its chat was closed.
  */
 
-import type { AgentSessionConversationView } from '../../../../../shared/agent-session/lifecycle/agent-session-conversation-view'
-import { isOrcaSessionId, type OrcaSessionId } from '../../../../../shared/orca-session-address'
+import type { AgentSessionConversationView } from '../../../../../shared/agent-session/lifecycle/leases/agent-session-conversation-view'
+import {
+  isOrcaSessionId,
+  type OrcaSessionId
+} from '../../../../../shared/agent-session/identity/orca-session-address'
 import { ORCHESTRATION_SESSION_CALLER_ERROR_CODES as CODES } from '../../../../../shared/orchestration/orchestration-session-caller-codes'
 import type { OrchestrationDb } from '../../db/orchestration-db'
 import { OrchestrationError } from '../../orchestration-error'
@@ -39,10 +42,15 @@ export function lookupOrcaAgentSession(
   if (record) {
     return { kind: 'found', record }
   }
-  const owner = store
-    .listRecords()
-    .find((candidate) => candidate.providerHandleChain.some(({ handle }) => handle.nativeId === id))
-  return owner ? { kind: 'provider-id', orcaSessionId: owner.sessionId } : { kind: 'unknown' }
+  // The store's commit-kept alias index answers without walking the history.
+  const owner = store.providerAliasOwner
+    ? store.providerAliasOwner(id)
+    : (store
+        .listRecords()
+        .find((candidate) =>
+          candidate.providerHandleChain.some(({ handle }) => handle.nativeId === id)
+        )?.sessionId ?? null)
+  return owner ? { kind: 'provider-id', orcaSessionId: owner } : { kind: 'unknown' }
 }
 
 export type StructuredSessionMailReach =

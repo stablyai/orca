@@ -1,15 +1,15 @@
 import { measureSidebarHeaderDragRect } from './sidebar-header-drag-geometry'
-import type { ProjectGroup } from '../../../../../../shared/project-group-types'
-import type { Repo } from '../../../../../../shared/repo-types'
+import type { ProjectGroup } from '../../../../../../shared/project/groups/project-group-types'
+import type { Repo } from '../../../../../../shared/repository/repo-types'
 import {
   compareRootProjectEntries,
   getRootProjectEntryKey,
   getRootProjectEntryRank,
   type RootProjectEntry
 } from '../../../../../../shared/root-project-order'
-import { getDistinctProjectGroups } from '../../../../../../shared/project-groups'
-import { getLogicalRepoOrderRankById } from '../../../../../../shared/project-section-order'
-import type { HostSectionRow } from '../../../../../../shared/sidebar-list/host-section-rows'
+import { getDistinctProjectGroups } from '../../../../../../shared/project/groups/project-groups'
+import { getLogicalRepoOrderRankById } from '../../../../../../shared/sidebar-list/sections/project-section-order'
+import type { HostSectionRow } from '../../../../../../shared/sidebar-list/hosts/host-section-rows'
 import type { GroupHeaderRow } from '../../../../../../shared/sidebar-list/row-types'
 
 export type RootProjectHeaderDrag = {

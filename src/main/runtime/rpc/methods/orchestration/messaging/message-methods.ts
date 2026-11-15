@@ -4,12 +4,13 @@ import { inspectedRunAccess, taskCreateAccess, taskUpdateAccess } from '../acces
 import type { TaskStatus } from '../../../../orchestration/db/orchestration-records'
 import { abbreviateOrchestrationTasks } from '../../../../../../shared/orchestration/orchestration-task-summary'
 import { orchestrationCallerIdentity } from '../runs/run-scope'
+import { OrchestrationError } from '../../../../orchestration/orchestration-error'
 import { resolveOrchestrationParty } from '../../../../orchestration/addressing/orchestration-party'
 import {
   InboxParams,
   TaskCreateParams,
   TaskListParams
-} from '../../../../../../shared/rpc-contract/orchestration-params'
+} from '../../../../../../shared/rpc-contract/orchestration/orchestration-params'
 import { TaskUpdateParams } from './task-update-params'
 
 export const ORCHESTRATION_MESSAGE_METHODS = [
@@ -18,16 +19,25 @@ export const ORCHESTRATION_MESSAGE_METHODS = [
     name: 'orchestration.inbox',
     permission: 'workspace',
     params: InboxParams,
-    access: { kind: 'reads', targets: { terminal: 'party' }, collection: true },
+    access: { kind: 'reads', targets: { terminal: 'party', run: 'run' }, collection: true },
     handler: (params, { runtime }) => {
       const db = runtime.getOrchestrationDb()
+      // Why: an empty list for a mistyped Run (or a `run:` mailbox address) reads as "no mail".
+      if (params.run && !db.getRun(params.run)) {
+        const hint = params.run.startsWith('run:')
+          ? ' --run takes the bare Run id; --terminal takes the run:<id> mailbox.'
+          : ''
+        throw new OrchestrationError('run_not_found', `Run ${params.run} was not found.${hint}`)
+      }
       // Return empty for stale/unknown handles because historical mail outlives handle deletion (design doc §3.3).
       const messages = params.terminal
         ? db.getAllMessagesForHandle(
             resolveOrchestrationParty(params.terminal, db).address,
-            params.limit
+            params.limit,
+            undefined,
+            params.run
           )
-        : db.getInbox(params.limit)
+        : db.getInbox(params.limit, params.run)
       return {
         messages: messages.map(({ answer_sender_snapshot: _answer, ...message }) => message),
         count: messages.length

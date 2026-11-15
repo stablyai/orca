@@ -2,21 +2,21 @@ import './mobile-prompt-render-mocks'
 import { createElement } from 'react'
 import { Pressable } from 'react-native'
 import type { NativeChatMessage } from '../../../../src/shared/native-chat/native-chat-types'
-import type { MobileNativeChatSendOutcome } from '../native-chat/composer/mobile-native-chat-send'
+import type { MobileNativeChatSendOutcome } from '../native-chat/composer/delivery/mobile-native-chat-send'
 import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
 import type { RpcResponse } from '../../transport/rpc/rpc-wire-types'
 import type { ConnectionState } from '../../transport/connection/connection-state'
-import type { MobileNativeChatTab } from '../native-chat/mobile-native-chat-eligibility'
+import type { MobileNativeChatTab } from '../native-chat/conversation/mobile-native-chat-eligibility'
 import type { MobileNativeChatController } from '../native-chat/mobile-native-chat-controller-contract'
 import { act, type ReactTestRenderer } from 'react-test-renderer'
 import { createWithQueryClient } from '../../test-support/query-client-test-renderer'
 import { vi } from 'vitest'
 import { useMobileNativeChatController } from '../native-chat/use-mobile-native-chat-controller'
 import { MobileNativeChatOverlay } from '../native-chat/MobileNativeChatOverlay'
-import { MobileNativeChatAsk } from '../native-chat/input/MobileNativeChatAsk'
-import type { AskAnswerSelection } from '../../../../src/shared/native-chat/input/native-chat-ask-answer'
-import { mobileNativeChatPromptDismissals } from '../native-chat/input/mobile-native-chat-prompt-dismissals'
-import { setMobileNativeChatDraftText } from '../native-chat/composer/mobile-native-chat-draft-store'
+import { MobileNativeChatAsk } from '../native-chat/input/prompts/MobileNativeChatAsk'
+import type { AskAnswerSelection } from '../../../../src/shared/native-chat/input/questions/native-chat-ask-answer'
+import { mobileNativeChatPromptDismissals } from '../native-chat/input/prompts/mobile-native-chat-prompt-dismissals'
+import { setMobileNativeChatDraftText } from '../native-chat/composer/drafts/mobile-native-chat-draft-store'
 export const visible = { value: true }
 const messages: NativeChatMessage[] = []
 export const session = {
@@ -58,11 +58,11 @@ vi.mock('../use-mobile-session-view-mode', () => ({
 vi.mock('../native-chat/preferences/use-mobile-native-chat-ci-result-lines', () => ({
   useMobileNativeChatCiResultLines: () => false
 }))
-vi.mock('../native-chat/use-mobile-native-chat-session-lane', () => ({
+vi.mock('../native-chat/conversation/use-mobile-native-chat-session-lane', () => ({
   useMobileNativeChatSessionLane: () => ({ session, structuredSession, sessionCommands })
 }))
 setMobileNativeChatDraftText('draft', 'ordinary message')
-vi.mock('../native-chat/composer/use-mobile-native-chat-drafts', () => ({
+vi.mock('../native-chat/composer/drafts/use-mobile-native-chat-drafts', () => ({
   useMobileNativeChatDrafts: () => ({
     draftKey: 'draft',
     setComposerText: vi.fn(),
@@ -79,16 +79,19 @@ vi.mock('../native-chat/composer/use-mobile-native-chat-drafts', () => ({
     holdUnconfirmedSend: vi.fn()
   })
 }))
-vi.mock('../native-chat/input/use-mobile-native-chat-session-option-controller', () => ({
-  useMobileNativeChatSessionOptionController: () => ({
-    nativeChatSessionOptions: undefined,
-    recordCommand: vi.fn()
+vi.mock(
+  '../native-chat/input/session-options/use-mobile-native-chat-session-option-controller',
+  () => ({
+    useMobileNativeChatSessionOptionController: () => ({
+      nativeChatSessionOptions: undefined,
+      recordCommand: vi.fn()
+    })
   })
-}))
-vi.mock('../native-chat/composer/use-mobile-native-chat-file-search', () => ({
+)
+vi.mock('../native-chat/composer/attachments/use-mobile-native-chat-file-search', () => ({
   useMobileNativeChatFileSearch: () => ({ nativeChatFilePaths: [], loadNativeChatFiles: vi.fn() })
 }))
-vi.mock('../native-chat/composer/use-mobile-native-chat-composer-tray', () => ({
+vi.mock('../native-chat/composer/menus/use-mobile-native-chat-composer-tray', () => ({
   NO_COMPOSER_TRAY: {},
   useMobileNativeChatComposerTray: () => ({})
 }))

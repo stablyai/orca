@@ -58,7 +58,7 @@ async function heldPaneRuntime() {
     getForegroundProcess: async () => null,
     listProcesses: async () => []
   })
-  runtime.syncWindowGraph(0, { tabs: [], leaves: [] })
+  await runtime.syncWindowGraph(0, { tabs: [], leaves: [] })
   await expect(runtime.ensureRestoredPaneStarted(PANE)).rejects.toThrow(NEWER_DAEMON_HOLD_ERROR)
   return { runtime, spawn, getSession, setSession, desktopStream }
 }

@@ -1,4 +1,4 @@
-import { acpSelectChoices } from './acp-select-choices'
+import { acpListedModels, acpSelectChoices } from './acp-select-choices'
 import { acpInitializeForkSupport } from '../capabilities/acp-fork-support'
 import type {
   AgentSessionModelOption,
@@ -6,7 +6,7 @@ import type {
   AgentSessionSlashCommand
 } from '../../../shared/agent-session/agent-session-wire'
 
-import type { AgentSessionOptionsResult } from '../../../shared/agent-session/options/agent-session-options-result'
+import type { AgentSessionOptionsResult } from '../../../shared/agent-session/options/protocol/agent-session-options-result'
 import type { AcpDialect } from '../acp-dialects/acp-dialect'
 import {
   unpickedSessionConfiguredChoice,
@@ -37,6 +37,7 @@ export class AcpStructuredOptions {
     private readonly dialect: Pick<
       AcpDialect,
       | 'modelEfforts'
+      | 'familyEfforts'
       | 'withheldCommands'
       | 'effortChangesModel'
       | 'clampsUnlistedEffort'
@@ -55,6 +56,8 @@ export class AcpStructuredOptions {
   readonly picked = new Set<string>()
   readonly appliedInput = new Map<string, string>()
   readonly applied = new Map<string, string>()
+  // A control without refreshed options leaves the prior current values unproven.
+  private readonly unobservedCurrent = new Set<'model' | 'effort'>()
   writeRevision = 0
   /** Orca's own writes in flight; config changes outside them are the agent's own. */
   writing = 0
@@ -86,11 +89,16 @@ export class AcpStructuredOptions {
 
   invalidateInput(key: string): void {
     this.appliedInput.delete(key)
+    if (key === 'model' || key === 'effort') {
+      this.unobservedCurrent.add(key)
+    }
     if (key === 'model') {
       this.appliedInput.delete('effort')
+      this.unobservedCurrent.add('effort')
     }
     if (key === 'effort' && this.dialect.effortChangesModel) {
       this.appliedInput.delete('model')
+      this.unobservedCurrent.add('model')
     }
   }
 
@@ -106,6 +114,7 @@ export class AcpStructuredOptions {
     this.models = response.models ?? null
     this.resolvesConfig = origin === 'new'
     this.appliedInput.clear()
+    this.unobservedCurrent.clear()
     this.selectorProof = null
   }
 
@@ -128,14 +137,11 @@ export class AcpStructuredOptions {
     }
   }
 
-  matchesNativeRestoredModel(value: string): boolean {
-    if (this.resolvesConfig || this.picked.has('model')) {
+  matchesNativeRestoredOption(key: 'model' | 'effort', value: string): boolean {
+    if (this.resolvesConfig || this.picked.has(key) || this.unobservedCurrent.has(key)) {
       return false
     }
-    return (
-      value.length > 0 &&
-      (this.select('model')?.currentValue ?? this.models?.currentModelId) === value
-    )
+    return value.length > 0 && this.currentValues()[key] === value
   }
 
   notePick(key: string): void {
@@ -147,6 +153,14 @@ export class AcpStructuredOptions {
       return
     }
     this.configOptions = configOptions
+    if (this.writing === 0 && this.unsettled.size === 0) {
+      if (this.select('model')) {
+        this.unobservedCurrent.delete('model')
+      }
+      if (this.select('thought_level')) {
+        this.unobservedCurrent.delete('effort')
+      }
+    }
     const proof = this.selectorProof
     if (!proof || this.writing > 0) {
       return
@@ -231,29 +245,21 @@ export class AcpStructuredOptions {
         }))
       : []
     const currentModel = (modelOption?.currentValue ?? this.models?.currentModelId) || undefined
-    const listed: { id: string; label: string; description?: string }[] = modelOption
-      ? acpSelectChoices(modelOption).map((choice) => ({
-          id: choice.value,
-          label: choice.name,
-          ...(choice.description ? { description: choice.description } : {})
-        }))
-      : (this.models?.availableModels.map((model) => ({
-          id: model.modelId,
-          label: model.name,
-          ...(model.description ? { description: model.description } : {})
-        })) ?? [])
+    const listed = acpListedModels(modelOption, this.models)
     const models: AgentSessionModelOption[] = listed.map((model) => {
       const info = this.models?.availableModels.find((entry) => entry.modelId === model.id)
-      const advertised = info ? this.dialect.modelEfforts?.(info) : undefined
+      // The running model's live menu outranks variants advertised for its family.
+      const advertised = info
+        ? this.dialect.modelEfforts?.(info)
+        : model.id === currentModel
+          ? undefined
+          : this.dialect.familyEfforts?.(model.id, this.models?.availableModels ?? [])
       // A current-session menu supplies no negative evidence about an unobserved model.
       const sessionMenu =
         model.id === currentModel
           ? { efforts: sessionEfforts }
           : (modelOption || effortOption) && !advertised
-            ? {
-                efforts: this.dialect.clampsUnlistedEffort ? sessionEfforts : [],
-                effortsKnown: false as const
-              }
+            ? { efforts: [], effortsKnown: false as const }
             : { efforts: [] }
       return {
         ...model,

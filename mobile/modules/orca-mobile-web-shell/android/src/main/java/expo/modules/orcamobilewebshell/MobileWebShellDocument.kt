@@ -201,7 +201,7 @@ internal class MobileWebShellDocument(private val context: Context) {
     view.destroy()
   }
 
-  // Keep explicit settings for the Chromium 83 floor, even where newer WebViews ignore deprecated options.
+  // Keep explicit settings even where newer WebViews ignore deprecated options; the floor is Chromium 101.
   // B4 requires device proofs: no network, persistent state, file/content access, cleartext or navigation escape.
   @Suppress("DEPRECATION")
   private fun createWebView(): WebView {

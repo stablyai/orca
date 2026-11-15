@@ -7,9 +7,9 @@ import {
 } from '../../../../shared/keybindings'
 import { textInputOwnsComposition } from '../../../../shared/text-input-shortcut-policy'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
-import { dictationShortcutMode } from '../../../../shared/dictation-shortcut-mode'
+import { dictationShortcutMode } from '../../../../shared/speech/dictation/dictation-shortcut-mode'
 import { addAppKeyListener, removeAppKeyListener } from '@/lib/keyboard/app-keyboard-router'
-import { showTerminalShortcutCaptureNotification } from '@/lib/terminal-shortcut-capture-notification'
+import { showTerminalShortcutCaptureNotification } from '@/lib/notifications/terminal-shortcut-capture-notification'
 import { getKeybindingContext } from '../terminal-workspace-model'
 
 type HoldDictationGestureOptions = {

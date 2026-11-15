@@ -1,29 +1,30 @@
 import { app, BrowserWindow, ipcMain } from 'electron'
 import type { Store } from '../persistence/loading-store/store'
+import { listCredentialLikeEnvNames } from '../../shared/remote-runtime/ephemeral-vm-recipes/ephemeral-vm-recipe-env'
 import {
   listEphemeralVmRuntimes,
   updateEphemeralVmRuntimeStatus
-} from '../../shared/ephemeral-vm-runtime-store'
+} from '../../shared/remote-runtime/ephemeral-vm-store/ephemeral-vm-runtime-store'
 import {
   EPHEMERAL_VM_RUNTIMES_CHANGED_CHANNEL,
   onEphemeralVmRuntimesChanged
-} from '../../shared/ephemeral-vm-runtime-store-events'
-import type { EphemeralVmRuntimeRecord } from '../../shared/ephemeral-vm-runtimes'
+} from '../../shared/remote-runtime/ephemeral-vm-store/ephemeral-vm-runtime-store-events'
+import type { EphemeralVmRuntimeRecord } from '../../shared/remote-runtime/ephemeral-vm-store/ephemeral-vm-runtimes'
 import { cleanupOwnedEphemeralVmRuntime } from '../ephemeral-vm/owned-runtime-cleanup'
 import { stopEphemeralVmRuntimeCleanup } from '../ephemeral-vm/runtime-cleanup-control'
 import {
   buildEphemeralVmRecipeCleanupCommand,
   buildEphemeralVmRecipeCleanupPayload
-} from '../../shared/ephemeral-vm-recipe-lifecycle-payload'
+} from '../../shared/remote-runtime/ephemeral-vm-recipes/ephemeral-vm-recipe-lifecycle-payload'
 import { getRuntimeRecipeContext } from './ephemeral-vm-recipe-context'
-import { ephemeralVmFailure } from '../../shared/ephemeral-vm-failure-copy'
+import { ephemeralVmFailure } from '../../shared/remote-runtime/ephemeral-vm-recipes/ephemeral-vm-failure-copy'
 import { attachEphemeralVmRuntimeToWorkspace } from '../ephemeral-vm/runtime-attachment'
 import { forgetInterruptedEphemeralVmProvision } from '../ephemeral-vm/runtime-provisioning-persistence'
 import { pendingVmCheckouts } from '../ephemeral-vm/pending-vm-checkouts'
 import {
   parsePendingVmCheckouts,
   PENDING_VM_CHECKOUTS_CHANGED_CHANNEL
-} from '../../shared/pending-vm-checkouts'
+} from '../../shared/remote-runtime/ephemeral-vm-store/pending-vm-checkouts'
 
 let stopRuntimesChangedBroadcast: (() => void) | null = null
 let runtimesChangedBroadcastQueued = false
@@ -91,6 +92,7 @@ function registerPendingVmCheckoutHandlers(): void {
       // window publishes its empty set when it starts.
       const drop = (): void => {
         pendingCheckoutOwners.delete(ownerId)
+        sender.removeListener('destroyed', drop)
         sender.removeListener('render-process-gone', drop)
         pendingVmCheckouts.publish(ownerId, [])
       }
@@ -112,8 +114,14 @@ export function registerEphemeralVmRuntimeHandlers(store: Store): void {
   ipcMain.removeHandler('ephemeralVm:stopCleanup')
   ipcMain.removeHandler('ephemeralVm:forgetRuntime')
   ipcMain.removeHandler('ephemeralVm:getCleanupCommand')
+  ipcMain.removeHandler('ephemeralVm:listCredentialEnvNames')
   stopRuntimesChangedBroadcast?.()
   stopRuntimesChangedBroadcast = onEphemeralVmRuntimesChanged(broadcastEphemeralVmRuntimesChanged)
+
+  // Names only: the recipe list warns which credentials scripts inherit, never their values.
+  ipcMain.handle('ephemeralVm:listCredentialEnvNames', () =>
+    listCredentialLikeEnvNames(process.env)
+  )
 
   ipcMain.handle('ephemeralVm:listRuntimes', (): EphemeralVmRuntimeRecord[] => {
     return listEphemeralVmRuntimes(app.getPath('userData'))

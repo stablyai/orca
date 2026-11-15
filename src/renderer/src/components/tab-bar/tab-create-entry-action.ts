@@ -10,7 +10,7 @@ import {
   DEFAULT_SEARCH_ENGINE,
   type SearchEngine,
   type SearchUrlOptions
-} from '../../../../shared/browser-url'
+} from '../../../../shared/browser/navigation/browser-url'
 import type { RuntimeFileListState } from '../quick-open-file-list'
 import { openWorkspaceBrowserTab } from '@/lib/browser/workspace/workspace-browser-tab-open'
 import {

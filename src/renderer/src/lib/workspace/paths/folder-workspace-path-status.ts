@@ -2,10 +2,9 @@ import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
 
-import {
-  type FolderWorkspacePathStatus,
-  type FolderWorkspacePathStatusReason,
-  blocksFolderWorkspaceActivation
+import type {
+  FolderWorkspacePathStatus,
+  FolderWorkspacePathStatusReason
 } from '../../../../../shared/folder-workspaces/folder-workspace-path-status'
 import { isHandledWireDiscriminant } from '../../../../../shared/handled-wire-discriminant'
 
@@ -186,12 +185,6 @@ export function formatFolderWorkspaceCreateError(error: unknown): {
       description: message
     }
   )
-}
-
-export function folderWorkspaceActivationBlocked(
-  status: FolderWorkspacePathStatus | null | undefined
-): boolean {
-  return blocksFolderWorkspaceActivation(status)
 }
 
 export function notifyBlockedFolderWorkspacePath(

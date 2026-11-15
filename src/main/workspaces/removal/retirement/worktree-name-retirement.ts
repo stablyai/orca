@@ -9,10 +9,10 @@ import {
   isEmptyRetiredNameRegistry,
   mergeRetiredNameRegistries,
   type RetiredNameRegistry
-} from '../../../../shared/worktree/retired-name-registry'
-import { isFolderRepo } from '../../../../shared/repo-kind'
+} from '../../../../shared/worktree/naming/retired-name-registry'
+import { isFolderRepo } from '../../../../shared/repository/repo-kind'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
-import type { Repo } from '../../../../shared/repo-types'
+import type { Repo } from '../../../../shared/repository/repo-types'
 import {
   computeRemoteWorktreePath,
   computeWorktreePathAsync,

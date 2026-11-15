@@ -5,6 +5,7 @@ import {
   resolveAgentSessionContinuationTranscriptPath,
   type AgentSessionContinuationRequest
 } from '@/lib/agent-session/context/agent-session-continuation'
+import { readTerminalContextText } from '@/lib/agent-session/context/terminal-context-text'
 import { useAppStore } from '@/store/index'
 import { makePaneKey } from '../../../../../shared/workspace-layout/stable-pane-id'
 import { isTuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent-config'
@@ -58,9 +59,9 @@ export function prepareAgentSessionContinuationFromPane({
     sourceAgent,
     transcriptPath: status?.providerSession?.transcriptPath
   })
-  const capturedText = transcriptPath ? '' : pane.serializeAddon.serialize({ scrollback: 800 })
+  const capturedText = transcriptPath ? '' : readTerminalContextText(pane.terminal)
   const source = {
-    // Why: prefer the same-host transcript so opening the dialog does not serialize large scrollback.
+    // Why: prefer the same-host transcript so opening the dialog does not read large scrollback.
     capturedText,
     sourceAgent,
     sourceLabel: paneKey,

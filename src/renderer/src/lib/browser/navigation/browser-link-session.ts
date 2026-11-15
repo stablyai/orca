@@ -1,5 +1,5 @@
 import type { AppState } from '@/store/types'
-import type { BrowserWorkspace } from '../../../../../shared/browser-workspace-types'
+import type { BrowserWorkspace } from '../../../../../shared/browser/workspaces/browser-workspace-types'
 import type { ExecutionHostId } from '../../../../../shared/execution-host'
 import { LOCAL_EXECUTION_HOST_ID, parseExecutionHostId } from '../../../../../shared/execution-host'
 import '../../../../../shared/constants'

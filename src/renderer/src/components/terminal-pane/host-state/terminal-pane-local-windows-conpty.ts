@@ -4,7 +4,7 @@ import { isRemoteRuntimePtyId } from '../../../../../shared/remote-runtime/remot
 import { getConnectionIdFromState } from '@/lib/workspace/ownership/connection-owner-resolution'
 import { getExecutionHostIdForWorktree } from '@/lib/workspace/ownership/worktree-runtime-owner'
 import type { WorktreeRuntimeOwnerState } from '@/lib/workspace/ownership/worktree-runtime-owner-state'
-import { isLocalNativeWindowsConpty } from '@/lib/pane-manager/windows-pty-compatibility'
+import { isLocalNativeWindowsConpty } from '@/lib/pane-manager/terminal-protocol/windows-pty-compatibility'
 import type { PaneCwdMap } from '../layout/split/resolve-split-cwd'
 import type { PtyTransport } from '../pty-transport/pty-transport-types'
 

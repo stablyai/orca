@@ -1,5 +1,5 @@
-import { extractString } from '../../session-scanner-values'
-import { normalizeTitleText } from '../../session-scanner-text-normalization'
+import { extractString } from '../../../../shared/trimmed-string'
+import { normalizeTitleText } from '../../parsing/session-scanner-text-normalization'
 
 export function extractCodexSessionMetadataTitle(payload: Record<string, unknown>): string | null {
   return (

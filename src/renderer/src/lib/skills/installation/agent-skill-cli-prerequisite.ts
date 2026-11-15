@@ -1,6 +1,7 @@
 import { toast } from 'sonner'
 import type { CliInstallStatus } from '../../../../../shared/cli-install-types'
 import { translate } from '@/i18n/i18n'
+import { formatCliUserFacingDetail } from '@/lib/cli/cli-user-facing-detail'
 
 type EnsureOrcaCliAvailableOptions = {
   onStatusChange?: (status: CliInstallStatus) => void
@@ -46,7 +47,7 @@ export async function ensureOrcaCliAvailableForAgentSkillTerminal({
   } catch (error) {
     toast.error(
       error instanceof Error
-        ? error.message
+        ? formatCliUserFacingDetail(error.message) || error.message
         : translate(
             'auto.lib.agent.skill.cli.prerequisite.8d6eedf97e',
             'Failed to register the Orca CLI in PATH.'
@@ -79,7 +80,7 @@ function showCliPrerequisiteWarning(status: CliInstallStatus): void {
       ),
       {
         description:
-          status.detail ??
+          formatCliUserFacingDetail(status.detail) ||
           translate(
             'auto.lib.agent.skill.cli.prerequisite.15cbedc3e3',
             'Install the Orca CLI before running agent skill setup.'
@@ -97,7 +98,7 @@ function showCliPrerequisiteWarning(status: CliInstallStatus): void {
       ),
       {
         description:
-          status.detail ??
+          formatCliUserFacingDetail(status.detail) ||
           translate(
             'auto.lib.agent.skill.cli.prerequisite.15cbedc3e3',
             'Install the Orca CLI before running agent skill setup.'
@@ -115,7 +116,7 @@ function showCliPrerequisiteWarning(status: CliInstallStatus): void {
       ),
       {
         description:
-          status.detail ??
+          formatCliUserFacingDetail(status.detail) ||
           translate(
             'auto.lib.agent.skill.cli.prerequisite.refreshCliRegistration',
             'Refresh CLI registration status and try again.'
@@ -134,7 +135,7 @@ function showCliPrerequisiteWarning(status: CliInstallStatus): void {
       ),
       {
         description:
-          status.detail ??
+          formatCliUserFacingDetail(status.detail) ||
           translate(
             'auto.lib.agent.skill.cli.prerequisite.0f116999f1',
             'Restart your shell or add the Orca CLI directory to PATH before setup.'

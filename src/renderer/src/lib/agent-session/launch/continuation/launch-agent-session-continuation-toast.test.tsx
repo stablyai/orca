@@ -14,7 +14,7 @@ const mocks = vi.hoisted(() => ({
   launch: vi.fn<(args: LaunchAgentInNewTabArgs) => LaunchAgentInNewTabResult>()
 }))
 vi.mock('@/lib/agent-session/launch/new-tab/launch-agent-in-new-tab', () => ({
-  launchAgentInNewTab: mocks.launch
+  launchAgentInNewTabWithOutcome: mocks.launch
 }))
 vi.mock('@/runtime/native-chat/tab-retirement/structured-agent-session-tab-retirement', () => ({
   beginStructuredAgentSessionTabClose: vi.fn()

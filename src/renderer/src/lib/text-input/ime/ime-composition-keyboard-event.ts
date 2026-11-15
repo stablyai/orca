@@ -41,7 +41,11 @@ export function useImeEnterGestureOwnership(): {
   reset: () => void
   setComposing: (active: boolean, committedText?: string) => void
 } {
-  const stateRef = useRef<{ composing: boolean; pendingEnter: object | null }>({
+  // A carry from a key known to be Enter expires after its keyup; others may never send one.
+  const stateRef = useRef<{
+    composing: boolean
+    pendingEnter: { awaitsKeyUp: boolean } | null
+  }>({
     composing: false,
     pendingEnter: null
   })
@@ -58,6 +62,14 @@ export function useImeEnterGestureOwnership(): {
             stateRef.current.pendingEnter = null
           }
         })
+      }
+    }
+    const settleCarryAtCompositionEnd = (committedText: string): void => {
+      if (HANGUL_ONLY.test(committedText)) {
+        stateRef.current.pendingEnter = null
+      } else if (stateRef.current.pendingEnter?.awaitsKeyUp === false) {
+        // A commit key with an unknown code may never send the keyup that would expire its carry.
+        expirePendingEnter()
       }
     }
     // Shift+Enter is a newline, never a submit — it must never be owned or swallowed.
@@ -78,7 +90,13 @@ export function useImeEnterGestureOwnership(): {
             (event.key === 'Enter' && event.keyCode === 229) ||
             isProcessedEnterKey(event))
         if (markedEnter) {
-          stateRef.current.pendingEnter = {}
+          const awaitsKeyUp =
+            event.key === 'Enter' || event.code === 'Enter' || event.code === 'NumpadEnter'
+          stateRef.current.pendingEnter = { awaitsKeyUp }
+          if (!awaitsKeyUp && !stateRef.current.composing) {
+            // No composition end will come to expire it.
+            expirePendingEnter()
+          }
           return true
         }
         // Continued typing ends the confirmation even when hidden renderers delay the frame.
@@ -111,19 +129,21 @@ export function useImeEnterGestureOwnership(): {
       onCompositionEnd: (committedText = '') => {
         const compositionWasActive = stateRef.current.composing
         stateRef.current.composing = false
-        if (HANGUL_ONLY.test(committedText)) {
-          stateRef.current.pendingEnter = null
-        } else if (compositionWasActive && !stateRef.current.pendingEnter) {
+        if (
+          compositionWasActive &&
+          !stateRef.current.pendingEnter &&
+          !HANGUL_ONLY.test(committedText)
+        ) {
           // IBus can finish composition before its only unmarked confirming Enter.
-          stateRef.current.pendingEnter = {}
-          expirePendingEnter()
+          stateRef.current.pendingEnter = { awaitsKeyUp: false }
         }
+        settleCarryAtCompositionEnd(committedText)
       },
       reset,
       setComposing: (active: boolean, committedText = '') => {
         stateRef.current.composing = active
-        if (!active && HANGUL_ONLY.test(committedText)) {
-          stateRef.current.pendingEnter = null
+        if (!active) {
+          settleCarryAtCompositionEnd(committedText)
         }
       }
     }

@@ -1,5 +1,5 @@
 import '../../components/terminal-pane/layout/terminal-layout-leaf-traversal'
-import { collectLayoutLeafIdsInOrder } from '../../../../shared/workspace-layout/terminal-pane-tree'
+import { collectLayoutLeafIdsInOrder } from '../../../../shared/workspace-layout/terminal-topology/terminal-pane-tree'
 import type { AppState } from '@/store/types'
 import { isTerminalLeafId } from '../../../../shared/workspace-layout/stable-pane-id'
 import { isWebTerminalSurfaceTabId } from '../../../../shared/workspace-layout/terminal-surface-id'

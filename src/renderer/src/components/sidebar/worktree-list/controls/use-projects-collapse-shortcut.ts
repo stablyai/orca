@@ -1,10 +1,10 @@
 import { useEffect } from 'react'
-import { useAppStore } from '@/store'
+import { useAppStore } from '@/store/index'
 import { addAppKeyListener, removeAppKeyListener } from '@/lib/keyboard/app-keyboard-router'
 import { textFieldClaimsActionKey } from '@/lib/keyboard/text-field-shortcut-policy'
 import { getShortcutPlatform } from '@/lib/keyboard/shortcut-platform'
-import { hasVisibleOverlay } from '@/lib/visible-overlay'
-import { showTerminalShortcutCaptureNotification } from '@/lib/terminal-shortcut-capture-notification'
+import { hasVisibleOverlay } from '@/lib/overlay-interaction/visible-overlay'
+import { showTerminalShortcutCaptureNotification } from '@/lib/notifications/terminal-shortcut-capture-notification'
 import { keybindingMatchesAction } from '../../../../../../shared/keybindings'
 import {
   ModifierDoubleTapDetector,

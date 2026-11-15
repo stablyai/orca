@@ -17,7 +17,7 @@ import { buildPaletteTabDocument } from '../../../../../shared/palette-match/tab
 import {
   resolveWorktreeBranchLabel,
   resolveWorktreeDisplayName
-} from '../../worktree-default-display-name'
+} from '../../workspace/display/worktree-default-display-name'
 import type { MatchRange } from '../../../../../shared/palette-match/normalized-text'
 import {
   createPaletteSearchContext,
@@ -60,10 +60,6 @@ function isSimulatorPaletteQueryTooLarge(
   return isClipboardTextByteLengthOverLimit(query, maxBytes)
 }
 
-function compareText(a: string, b: string): number {
-  return compareBaseSensitivityLocaleText(a, b)
-}
-
 function compareEmptyQueryResults(
   a: SimulatorPaletteSearchResult,
   b: SimulatorPaletteSearchResult
@@ -77,11 +73,11 @@ function compareEmptyQueryResults(
   if (a.score !== b.score) {
     return a.score - b.score
   }
-  const worktreeCmp = compareText(a.worktreeName, b.worktreeName)
+  const worktreeCmp = compareBaseSensitivityLocaleText(a.worktreeName, b.worktreeName)
   if (worktreeCmp !== 0) {
     return worktreeCmp
   }
-  return compareText(a.title, b.title)
+  return compareBaseSensitivityLocaleText(a.title, b.title)
 }
 
 // Empty queries use deterministic context order; lastActiveAt only breaks equal-ranked match ties.

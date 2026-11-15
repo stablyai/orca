@@ -3,7 +3,7 @@ import {
   toRuntimeExecutionHostId,
   type ExecutionHostId
 } from '../../../../shared/execution-host'
-import { isPairedWebClientWindow } from '../../lib/desktop-window-chrome'
+import { isPairedWebClientWindow } from '../chrome/desktop-window-chrome'
 
 type HostRouteState = { runtimeEnvironments?: readonly { id: string }[] }
 

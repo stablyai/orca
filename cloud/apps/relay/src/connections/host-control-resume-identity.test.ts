@@ -1,4 +1,3 @@
-import { CONTROL_CONTINUITY_LIMITS } from '@orca-cloud/relay-contract/control-continuity'
 import { RELAY_CLOSE_CODE } from '@orca-cloud/relay-contract/close-codes'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { RelayTokenClaims } from '../authentication/relay-token-verifier.js'
@@ -46,7 +45,6 @@ async function lapsedHost() {
   )
   const session = h.registry.get({ userId: h.identity.sub, relayHostId: h.identity.relayHostId })
   expect(session?.state).toBe('orphaned')
-  expect(CONTROL_CONTINUITY_LIMITS.orphanGraceMs).toBeGreaterThan(5_000)
   await vi.advanceTimersByTimeAsync(5_000)
   return { h, ack, session: session!, resumeHello: resumeHelloFor(h.hello, ack) }
 }

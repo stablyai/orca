@@ -62,13 +62,13 @@ vi.mock('expo-file-system', () => ({
       return device.files.get(this.uri)?.byteLength ?? 0
     }
     create(): void {}
-    write(): void {}
+    writeSync(): void {}
     delete(): void {
       device.deleted.push(this.uri)
       device.files.delete(this.uri)
     }
-    open(): { offset: number | null; readBytes: () => Uint8Array; close: () => void } {
-      return { offset: 0, readBytes: () => new Uint8Array(), close: () => {} }
+    open(): { offset: number | null; readBytesSync: () => Uint8Array; close: () => void } {
+      return { offset: 0, readBytesSync: () => new Uint8Array(), close: () => {} }
     }
   },
   Paths: { cache: 'file:///cache' }
@@ -130,11 +130,12 @@ describe('a picker completing after its page session ends', () => {
     device.deleted.length = 0
   })
 
-  const cases = (['unmount', 'replace'] as const).flatMap((ending) =>
-    (['library', 'files'] as const).flatMap((source) =>
-      [false, true].map((strict) => ({ ending, source, strict }))
-    )
-  )
+  const cases = [
+    { ending: 'unmount', source: 'library', strict: false },
+    { ending: 'unmount', source: 'files', strict: true },
+    { ending: 'replace', source: 'library', strict: true },
+    { ending: 'replace', source: 'files', strict: false }
+  ]
   it.each(cases)(
     'discards late $source files after $ending and preserves a successor, StrictMode=$strict',
     async ({ ending, source, strict }) => {

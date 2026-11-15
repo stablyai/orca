@@ -3,8 +3,8 @@ import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { projectHostSetupProjectionFromRepos } from '../../../shared/project-host-setup-projection'
-import type { Repo } from '../../../shared/repo-types'
+import { projectHostSetupProjectionFromRepos } from '../../../shared/project/host-setup/project-host-setup-projection'
+import type { Repo } from '../../../shared/repository/repo-types'
 import { RuntimeProjectHostSetupController } from './runtime-project-host-setup-controller'
 
 const PROJECT_ID = 'git:gitlab.com/group/app'
@@ -26,6 +26,7 @@ async function clonedRepo(remoteUrl: string): Promise<Repo> {
 function makeController(cloned: Repo) {
   const repos: Repo[] = []
   const store = {
+    getRepos: () => repos,
     getProjects: () => projectHostSetupProjectionFromRepos(repos).projects,
     getProjectHostSetups: () => projectHostSetupProjectionFromRepos(repos).setups,
     updateRepo: ({ id }: Pick<Repo, 'id'>, updates: Partial<Repo>) => {
@@ -55,6 +56,8 @@ function makeController(cloned: Repo) {
     invalidateResolvedWorktrees: vi.fn(),
     invalidateWorktreeScan: vi.fn(),
     notifyReposChanged: vi.fn(),
+    enqueueRepositoryMetadata: vi.fn(),
+    resolveRepositoryMetadata: vi.fn().mockResolvedValue(true),
     countLiveTerminalsForRepo: () => 0
   })
   return { controller, repos }

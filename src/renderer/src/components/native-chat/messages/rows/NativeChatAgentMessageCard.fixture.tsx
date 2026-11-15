@@ -1,11 +1,11 @@
 import type { AgentStatusEntry } from '../../../../../../shared/agent-status/contracts/agent-status-types'
 import type { NativeChatMessage } from '../../../../../../shared/native-chat/native-chat-types'
 import { defineFixture } from '../../../../component-fixtures/component-fixture'
-import { makeTab } from '@/store/terminals/terminal-tab.test-fixture'
+import { makeTab } from '@/store/terminals/testing/terminal-tab.test-fixture'
 import type { AgentMessageSource } from '../../../../../../shared/agent-session/agent-session-message-source'
 import { NativeChatAgentMessageCard } from './NativeChatAgentMessageCard'
 import { MessageRow } from './NativeChatMessageRow'
-import { projectStructuredAgentStartItem } from '../../../../../../shared/structured-agent-start-projection'
+import { projectStructuredAgentStartItem } from '../../../../../../shared/native-chat/transcript/messages/structured-agent-start-projection'
 import { NativeChatUserMessageRow } from './NativeChatUserMessageRow'
 import { orchestrationMailFixture } from '../../../../../../shared/agent-session/orchestration-mail.test-fixture'
 
@@ -39,12 +39,19 @@ function cards() {
   }
   return (
     <div className="space-y-4 p-4">
-      <MessageRow
-        message={started}
-        expandSignal={false}
-        onScrollMessageToTop={() => {}}
-        runtimeContext={{ worktreeId: workspace, worktreePath: null, target: { kind: 'local' } }}
-      />
+      {[
+        started,
+        { ...started, id: 'reopened', agentFollowUp: 'reopened' as const },
+        { ...started, id: 'followed-up', agentFollowUp: 'fresh' as const }
+      ].map((message) => (
+        <MessageRow
+          key={message.id}
+          message={message}
+          expandSignal={false}
+          onScrollMessageToTop={() => {}}
+          runtimeContext={{ worktreeId: workspace, worktreePath: null, target: { kind: 'local' } }}
+        />
+      ))}
       {(['task', 'coordinator', 'worker', 'generic'] as const).map((kind, i) => {
         const from: AgentMessageSource = {
           kind: 'agent',

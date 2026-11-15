@@ -5,7 +5,7 @@ import { isRemoteRuntimePtyId } from '../../../../../../shared/remote-runtime/re
 import { useAppStore } from '@/store/index'
 import { hasWorktreeTeardownStarted } from '@/store/slices/worktrees/teardown/worktree-delete-state-types'
 import { hasPtySerializer } from '../../snapshots/pty-buffer-serializer'
-import { writeTerminalOutput } from '@/lib/pane-manager/pane-terminal-output-scheduler'
+import { writeTerminalOutput } from '@/lib/pane-manager/terminal-output/pane-terminal-output-scheduler'
 
 import { settleSpawnThatLeftPaneUnbound } from './unbound-pane-spawn-recovery'
 import { STARTUP_CWD_FALLBACK_NOTICE } from '../../../../../../shared/startup-cwd-fallback'

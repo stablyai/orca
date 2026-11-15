@@ -2,7 +2,7 @@ import type { RemoteAgentInterruptDispatch } from '../../../shared/agent-hook-li
 import {
   markClaudeLeadTurnDone,
   clearClaudeAnsweredQuestionWait
-} from '../../../shared/agent-hook-listener/providers/claude-roster-state'
+} from '../../../shared/agent-hook-listener/providers/claude/lifecycle/claude-roster-state'
 import {
   isAgentInterruptInputIntent,
   isNavigationEscapeIntent,
@@ -23,7 +23,7 @@ import { foldMainAgentWithRowChildWork } from '../../../shared/agent-hook-listen
 import {
   ClaudeTerminalInterruptTracker,
   type ClaudeTerminalEvidence
-} from '../../../shared/claude-terminal-interrupt'
+} from '../../../shared/agent-hook-listener/providers/claude/lifecycle/claude-terminal-interrupt'
 
 export abstract class AgentHookServerStatusInference extends AgentHookServerRowOwnership {
   private remoteInterruptListeners = new Set<(command: RemoteAgentInterruptDispatch) => void>()

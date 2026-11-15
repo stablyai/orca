@@ -36,8 +36,6 @@ class MockWebSocket {
   onclose: (() => void) | null = null
   onmessage: ((event: { data: unknown }) => void) | null = null
   onerror: (() => void) | null = null
-  throwOnSend = false
-  throwForMethod: string | null = null
   readonly sent: string[] = []
   close = vi.fn(() => {
     this.readyState = MockWebSocket.CLOSED
@@ -49,12 +47,6 @@ class MockWebSocket {
   }
 
   send(payload: string): void {
-    if (
-      this.throwOnSend ||
-      (this.throwForMethod && payload.includes(`"method":"${this.throwForMethod}"`))
-    ) {
-      throw new Error('socket send failed')
-    }
     this.sent.push(payload)
   }
 

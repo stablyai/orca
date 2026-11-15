@@ -1,4 +1,4 @@
-import type { PRCheckDetail } from '../../github/check-types'
+import type { PRCheckDetail } from '../../github/checks/check-types'
 
 // GitHub reports an unset time as the zero date; anything before the epoch is that sentinel, not a run.
 export function normalizeCheckTimestamp(value: unknown): string | undefined {
