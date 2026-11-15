@@ -335,8 +335,18 @@ final class Provider {
             frontmost: app.app.isActive,
             focusedWindowID: app.app.isActive ? focusedWindowId(of: app) : nil
         )
+        let userFrontApp = isForegroundRequest(requestParams) ? NSWorkspace.shared.frontmostApplication : nil
         // Why: raise once, before the action's reads, so the pre and post observations never raise again.
         let params = isForegroundRequest(requestParams) ? try recoverRequestedWindow(params: requestParams) : requestParams
+        let raisedWindowId = params["windowId"]?.number.flatMap { boundedInteger($0, as: CGWindowID.self) }
+        let raise = frontmostObservation(of: app)
+        let refusedFocus = userFrontApp != nil && raisedWindowId != nil && !(raise.frontmost && raise.focusedWindowID == raisedWindowId)
+        // Why: after the delivery read, so a click that brought the app forward still reports foreground.
+        defer {
+            if refusedFocus, let userFrontApp, let raisedWindowId {
+                restoreUserFrontApp(userFrontApp, target: app, windowId: raisedWindowId)
+            }
+        }
         var action = try runAction(params)
         // Why: the action's currentSnapshot just cached this target's tree from before the action;
         // a subtree read can't be compared with the whole-window read that follows.
@@ -1811,6 +1821,19 @@ private func currentSyntheticClickRecipient(
     }
 }
 
+/// The window that receives a click at the point, for a target that stayed unfocused: a click goes to the topmost window, focused or not.
+private func topmostSyntheticClickRecipient(
+    snapshot: Snapshot,
+    point: CGPoint
+) -> SyntheticMouseClickDelivery.RecipientObservation {
+    let candidates = WindowCapture.candidates(pid: snapshot.app.pid)
+    return SyntheticMouseClickDelivery.topmostObservation(
+        hit: hitTestSyntheticClickRecipient(at: point, targetPID: snapshot.app.pid) { candidates },
+        target: syntheticClickRecipient(pid: snapshot.app.pid, windowId: snapshot.windowId),
+        targetOnScreen: candidates.contains { $0.windowId == snapshot.windowId }
+    )
+}
+
 private func focusedSyntheticClickRecipient(
     targetPID: pid_t,
     targetCandidates: () -> [WindowCandidate]
@@ -2127,6 +2150,17 @@ private func matchingWindow(appElement: AXUIElement, capture: WindowCapture, foc
     return windows.first {
         usableWindow($0) && stringAttribute($0, kAXTitleAttribute as String) == titleHint
     } ?? focused
+}
+
+/// For a target window that refused focus when raised (#32040): if the raise or the action left its app in front without
+/// that window focused, puts back the app the user had in front, since only the target window was meant to come forward.
+private func restoreUserFrontApp(_ previous: NSRunningApplication, target app: AppDescriptor, windowId: CGWindowID) {
+    guard previous.processIdentifier != app.pid, !previous.isTerminated,
+          NSWorkspace.shared.frontmostApplication?.processIdentifier == app.pid,
+          focusedWindowId(of: app) != windowId
+    else { return }
+    _ = previous.activate(options: [])
+    _ = AXUIElementSetAttributeValue(AXUIElementCreateApplication(previous.processIdentifier), kAXFrontmostAttribute as CFString, kCFBooleanTrue)
 }
 
 /// Brings only the target window forward: no other window of the app, and no LaunchServices reopen that can open a new one.
@@ -3537,13 +3571,30 @@ private enum Input {
         }
         let flags = eventFlags(modifiers)
         let target = syntheticClickRecipient(pid: targetWindow.app.pid, windowId: targetWindow.windowId)
+        // Why: some windows never take focus even when raised (#32040), yet a real click reaches the topmost window at the point.
+        let refusedFocus = currentSyntheticClickRecipient(snapshot: targetWindow, point: point) != .focused(target)
+        let observe = refusedFocus
+            ? { topmostSyntheticClickRecipient(snapshot: targetWindow, point: point) }
+            : { currentSyntheticClickRecipient(snapshot: targetWindow, point: point) }
+        if refusedFocus {
+            let topmost = observe()
+            guard topmost == .focused(target) else {
+                let cover = if case let .focused(other) = topmost {
+                    "pid \(other.ownerPID) window \(other.windowID) covers the click point"
+                } else {
+                    "Orca can't tell which window is at the click point"
+                }
+                throw ProviderError.coded(
+                    "window_not_focused",
+                    "window \(target.windowID) is not in front at the click point although --restore-window was requested: \(cover), so nothing was sent; ask the user to uncover the window, then run get-app-state again"
+                )
+            }
+        }
         try hidGesture { post in
             try SyntheticMouseClickDelivery.deliver(
                 clickCount: count,
                 target: target,
-                currentObservation: {
-                    currentSyntheticClickRecipient(snapshot: targetWindow, point: point)
-                },
+                currentObservation: observe,
                 makeEvent: { step in
                     let type: CGEventType
                     switch step {
