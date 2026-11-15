@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { ProviderError } from '../src/sandbox-provider'
 import { createVercelSandboxApi } from '../src/vercel-sandbox-api'
 
@@ -55,6 +55,30 @@ const sandboxBody = {
   session: { id: 'sess_1', status: 'running', startedAt: 1000, timeout: 1_800_000, memory: 8192, vcpus: 4 },
   routes: [{ port: 6768, url: 'https://sb-1.vercel.run', subdomain: 'sb-1' }]
 }
+
+describe('provider deadlines', () => {
+  it('a command whose provider call stalls fails at its own timeout plus a margin, never hangs', async () => {
+    vi.useFakeTimers()
+    try {
+      const client = createVercelSandboxApi({
+        token: 'vercel_test_token',
+        teamId: 'team_orca',
+        projectId: 'prj_orca',
+        // A stalled connection: nothing comes back until the caller aborts.
+        fetch: (_input, init) =>
+          new Promise<Response>((_, reject) => init?.signal?.addEventListener('abort', () => reject(init.signal!.reason)))
+      })
+      const run = client.runCommand('sess_1', { command: '/opt/orca/bin/orca-sandbox-grant', timeoutMs: 45_000 })
+      const settled = run.then(() => 'answered', () => 'failed')
+      await vi.advanceTimersByTimeAsync(45_000)
+      expect(await Promise.race([settled, Promise.resolve('pending')])).toBe('pending')
+      await vi.advanceTimersByTimeAsync(20_000)
+      expect(await settled).toBe('failed')
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+})
 
 describe('Vercel Sandbox REST client', () => {
   it('creates a persistent sandbox from the golden snapshot on the v3 endpoint', async () => {
