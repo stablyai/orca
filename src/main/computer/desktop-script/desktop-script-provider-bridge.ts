@@ -1,4 +1,5 @@
 import { execFile } from 'node:child_process'
+import { realpath } from 'node:fs/promises'
 import { windowsPowerShellPath } from '@orca/process-host/windows-system-binary'
 import { reportComputerDiagnostic } from '../sidecar-transport/computer-sidecar-diagnostics'
 import { RuntimeClientError } from '../runtime-client-error'
@@ -12,6 +13,11 @@ import {
 
 const REQUEST_TIMEOUT_MS = 30_000
 const FORCE_KILL_GRACE_MS = 1_000
+// Why: distro python3-gi/AT-SPI packages install only for the system interpreter.
+const SYSTEM_PYTHON = '/usr/bin/python3'
+const MISSING_PYGOBJECT = /PyGObject unavailable in interpreter: (.+)/
+
+let linuxPython = 'python3'
 
 export async function execBridge(
   platform: DesktopScriptPlatform,
@@ -19,7 +25,7 @@ export async function execBridge(
   operationPath: string
 ): Promise<{ stdout: string; stderr: string }> {
   if (platform !== 'windows') {
-    return await mapped(runBridgeProcess('python3', [scriptPath, operationPath]))
+    return await execLinuxBridge(scriptPath, operationPath)
   }
   const command = windowsPowerShellPath()
   try {
@@ -41,6 +47,70 @@ export async function execBridge(
       )
     )
   }
+}
+
+/** Try PATH python3 first, then the system one when PATH's can't load PyGObject (#42146). */
+async function execLinuxBridge(
+  scriptPath: string,
+  operationPath: string
+): Promise<{ stdout: string; stderr: string }> {
+  const args = [scriptPath, operationPath]
+  const command = linuxPython
+  let failedInterpreter: string
+  try {
+    return await runBridgeProcess(command, args)
+  } catch (error) {
+    if (!(error instanceof BridgeProcessFailure)) {
+      throw error
+    }
+    const interpreter = missingPyGObjectInterpreter(error)
+    if (!interpreter) {
+      throw error.mapped
+    }
+    linuxPython = 'python3'
+    if (command === SYSTEM_PYTHON || !(await isOtherFile(SYSTEM_PYTHON, interpreter))) {
+      throw error.mapped
+    }
+    failedInterpreter = interpreter
+  }
+  reportComputerDiagnostic(
+    `${failedInterpreter} cannot load PyGObject; retrying once with ${SYSTEM_PYTHON}`
+  )
+  try {
+    const result = await runBridgeProcess(SYSTEM_PYTHON, args)
+    linuxPython = SYSTEM_PYTHON
+    return result
+  } catch (error) {
+    if (!(error instanceof BridgeProcessFailure)) {
+      throw error
+    }
+    if (!missingPyGObjectInterpreter(error)) {
+      throw error.mapped
+    }
+    throw new RuntimeClientError(
+      'unsupported_capability',
+      `Linux Computer Use requires python3-gi and AT-SPI packages, which neither the python3 on PATH (${failedInterpreter}) nor the system Python (${SYSTEM_PYTHON}) can load. Install python3-gi gir1.2-atspi-2.0 at-spi2-core for the system Python, then retry.`
+    )
+  }
+}
+
+/** runtime.py prints this before doing anything, so a retry cannot repeat an action. */
+function missingPyGObjectInterpreter(error: BridgeProcessFailure): string | null {
+  if (error.stdout.trim()) {
+    return null
+  }
+  return MISSING_PYGOBJECT.exec(error.stderr)?.[1]?.trim() || null
+}
+
+async function isOtherFile(candidate: string, interpreter: string): Promise<boolean> {
+  let candidateFile: string
+  try {
+    candidateFile = await realpath(candidate)
+  } catch {
+    return false
+  }
+  const interpreterFile = await realpath(interpreter).catch(() => interpreter)
+  return candidateFile !== interpreterFile
 }
 
 async function mapped(
@@ -193,11 +263,11 @@ export function mapBridgeError(message: string): RuntimeClientError {
     return new RuntimeClientError('invalid_argument', text)
   }
   if (/ModuleNotFoundError: No module named 'gi'|PyGObject|python3-gi/i.test(text)) {
-    const interpreter = /PyGObject unavailable in interpreter: (.+)/.exec(text)?.[1]?.trim()
+    const interpreter = MISSING_PYGOBJECT.exec(text)?.[1]?.trim()
     return new RuntimeClientError(
       'unsupported_capability',
       interpreter
-        ? `Linux Computer Use requires python3-gi and AT-SPI packages, which the python3 it ran (${interpreter}) cannot load. Install python3-gi gir1.2-atspi-2.0 at-spi2-core for that interpreter, or put a python3 that has them (usually /usr/bin/python3) first on PATH, then retry.`
+        ? `Linux Computer Use requires python3-gi and AT-SPI packages, which the python3 it ran (${interpreter}) cannot load. Install python3-gi gir1.2-atspi-2.0 at-spi2-core for that interpreter, then retry.`
         : 'Linux Computer Use requires python3-gi and AT-SPI packages. Install python3-gi gir1.2-atspi-2.0 at-spi2-core, then retry.'
     )
   }
