@@ -11,7 +11,7 @@ import {
 import type { AppState } from '../../types'
 import type { DashboardAgentRow } from '@/components/dashboard/rows/dashboard-agent-row'
 import { readRecordChanges } from '../../keyed-record-change-reads'
-import { structuralValuesEqualIgnoringUndefined as equal } from '../../../../../shared/structural-value-equality'
+import { structuralValuesEqualIgnoringUndefined as equal } from '../../../../../shared/collections/structural-value-equality'
 import {
   type DashboardCounts,
   EMPTY_COUNTS,

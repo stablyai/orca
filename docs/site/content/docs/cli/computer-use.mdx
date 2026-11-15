@@ -71,6 +71,8 @@ orca computer get-app-state --app com.microsoft.edgemac --json
 
 App names work when unambiguous (`--app Spotify`). Use `--app pid:<number>` only when bundle ID and name both collide.
 
+On macOS, apps without a Dock icon, such as menu bar apps, are listed while they show a window, marked `accessory: true`.
+
 ## Starting an app
 
 `list-apps` shows only running apps. To start a closed one without pulling you away from what you're doing, use `launch-app`:
