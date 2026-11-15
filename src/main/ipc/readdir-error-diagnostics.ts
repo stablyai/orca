@@ -1,4 +1,4 @@
-import type { CrashReportBreadcrumbData } from '../../shared/crash-reporting'
+import type { CrashReportBreadcrumbData } from '../../shared/crash-reporting/crash-reporting'
 
 export type ReadDirThrowSite = 'ssh-provider' | 'authorize' | 'readdir'
 

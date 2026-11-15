@@ -4,31 +4,32 @@ import {
   planAgentHibernationCandidates
 } from './agent-hibernation-planner'
 import type { AgentHibernationCandidate } from './agent-hibernation-planner'
-import type { AgentHibernationPlannerSnapshot } from './agent-hibernation-planner-snapshot'
-import {
-  confirmAgentHibernationCandidates,
-  type AgentHibernationConfirmationState
-} from './agent-hibernation-confirmation'
-import type { AppState } from '@/store/types'
+import { confirmAgentHibernationCandidates } from './agent-hibernation-confirmation'
+import type { AgentHibernationConfirmationState } from './agent-hibernation-confirmation'
 import { getAllDrivers } from '../../pane-manager/mobile-driver-state'
 import {
   getForegroundTerminalTabIds,
   getForegroundTerminalTabLastSeenAtById
-} from '../../foreground-terminal-tabs'
+} from '../../../components/terminal-pane/parking/retention/foreground-terminal-tabs'
 import { getAgentHibernationOutputSignature } from './agent-hibernation-output-activity'
 import {
   getHibernationBoundaryResolvedAtByPaneKey,
   getHibernationPtyBindingFirstSeenAtByPaneKey,
   observeHibernationPtyBindings
 } from './agent-hibernation-pane-age'
-import { mergePendingTerminalInputActivity } from '../../terminal-input-activity-coalescing'
+import { mergePendingTerminalInputActivity } from '../../terminal/input/terminal-input-activity-coalescing'
 import {
   collectHostPtyEvidence,
   getRuntimeLivenessTargetWorktrees,
-  resolveAgentHibernationRuntimeOwner,
-  type HostPtyEvidence
+  resolveAgentHibernationRuntimeOwner
 } from './agent-hibernation-host-evidence'
-import { getWindowParkVisible, subscribeWindowParkVisibility } from '../../window-park-visibility'
+import type { HostPtyEvidence } from './agent-hibernation-host-evidence'
+import {
+  getWindowParkVisible,
+  subscribeWindowParkVisibility
+} from '../../window-activity/window-park-visibility'
+import type { AgentHibernationPlannerSnapshot } from './agent-hibernation-planner-snapshot'
+import type { AppState } from '@/store/types'
 
 export const AGENT_HIBERNATION_TICK_MS = 60 * 1000
 

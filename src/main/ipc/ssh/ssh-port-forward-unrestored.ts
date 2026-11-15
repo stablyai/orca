@@ -1,5 +1,8 @@
 /** Saved forwards that aren't open, why the last start failed, and when to try each again. */
-import type { SavedPortForward, UnrestoredPortForward } from '../../../shared/ssh-types'
+import type {
+  SavedPortForward,
+  UnrestoredPortForward
+} from '../../../shared/remote-runtime/ssh/ssh-types'
 import { getSshTargetRegistryStore } from '../../ssh/targets/ssh-target-registry'
 import { portForwardManager } from './ssh-ipc-context'
 

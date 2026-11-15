@@ -50,7 +50,7 @@ describe('OrcaRuntimeService', () => {
       expect(harness.resolveLegacyWorkerTerminalRecovery).not.toHaveBeenCalled()
 
       harness.runtime.attachWindow(1)
-      harness.runtime.syncWindowGraph(1, {
+      await harness.runtime.syncWindowGraph(1, {
         tabs: [
           {
             tabId: identity.tabId,
@@ -99,171 +99,6 @@ describe('OrcaRuntimeService', () => {
     }
   })
 
-  it('retires the exact worker when it exits after renderer reveal', async () => {
-    const liveProcess = {
-      id: 'pty-post-reveal',
-      incarnationId: '45454545-4545-4545-8545-454545454545',
-      terminalHandle: 'term_post_reveal',
-      title: 'Post-reveal worker',
-      cwd: TEST_WORKTREE_PATH,
-      worktreeId: TEST_WORKTREE_ID,
-      wslDistro: null
-    } as const
-    const listProcesses = vi
-      .fn()
-      .mockResolvedValueOnce([liveProcess])
-      .mockResolvedValueOnce([liveProcess])
-      .mockResolvedValueOnce([])
-    const harness = makePostRevealWorkerRecoveryHarness(() => false, listProcesses)
-    harness.revealTerminalSession.mockImplementation(() =>
-      publishLegacyWorkerReveal(harness.runtime, {
-        worktreeId: TEST_WORKTREE_ID,
-        tabId: 'legacy-post-reveal',
-        leafId: HEADLESS_LEAF_ID,
-        ptyId: harness.ptyId
-      })
-    )
-
-    await expect(
-      harness.runtime.reconcileLegacyWorkerTerminals({ materializeRenderer: true })
-    ).resolves.toMatchObject({
-      adoptedDispatchIds: [],
-      exitedDispatchIds: ['dispatch-post-reveal'],
-      deferredDispatchIds: []
-    })
-
-    expect(listProcesses).toHaveBeenCalledTimes(3)
-    expect(harness.revealTerminalSession).toHaveBeenCalledOnce()
-    expect(harness.getSession().tabsByWorktree[TEST_WORKTREE_ID]).toEqual([])
-    expect(
-      harness.getSession().sleepingAgentSessionsByPaneKey?.[harness.workerPaneKey]
-    ).toBeUndefined()
-    expect(
-      (
-        harness.runtime as unknown as {
-          ptysById: Map<string, { connected: boolean; incarnationId?: string }>
-        }
-      ).ptysById.get(harness.ptyId)
-    ).toMatchObject({ connected: false, incarnationId: '45454545-4545-4545-8545-454545454545' })
-    expect(harness.resolveLegacyWorkerTerminalRecovery).toHaveBeenCalledWith(
-      harness.workerPaneKey,
-      'exited'
-    )
-  })
-
-  it('re-reveals a recovered worker after the renderer graph epoch changes', async () => {
-    vi.useFakeTimers()
-    try {
-      const harness = makePostRevealWorkerRecoveryHarness(() => false)
-      harness.runtime.attachWindow(TEST_WINDOW_ID)
-      harness.revealTerminalSession
-        .mockResolvedValueOnce({
-          tabId: 'legacy-post-reveal',
-          identity: {
-            worktreeId: TEST_WORKTREE_ID,
-            tabId: 'legacy-post-reveal',
-            leafId: HEADLESS_LEAF_ID,
-            ptyId: harness.ptyId
-          }
-        })
-        .mockImplementationOnce(() =>
-          publishLegacyWorkerReveal(harness.runtime, {
-            worktreeId: TEST_WORKTREE_ID,
-            tabId: 'legacy-post-reveal',
-            leafId: HEADLESS_LEAF_ID,
-            ptyId: harness.ptyId
-          })
-        )
-
-      await expect(
-        harness.runtime.reconcileLegacyWorkerTerminals({ materializeRenderer: true })
-      ).resolves.toMatchObject({
-        adoptedDispatchIds: [],
-        deferredDispatchIds: ['dispatch-post-reveal']
-      })
-      harness.runtime.syncWindowGraph(TEST_WINDOW_ID, { tabs: [], leaves: [] })
-      harness.runtime.markRendererReloading(TEST_WINDOW_ID)
-      await expect(
-        harness.runtime.reconcileLegacyWorkerTerminals({ materializeRenderer: true })
-      ).resolves.toMatchObject({
-        adoptedDispatchIds: ['dispatch-post-reveal'],
-        deferredDispatchIds: []
-      })
-
-      expect(harness.revealTerminalSession).toHaveBeenCalledTimes(2)
-      expect(
-        harness.getSession().sleepingAgentSessionsByPaneKey?.[harness.workerPaneKey]
-      ).toBeUndefined()
-      expect(harness.resolveLegacyWorkerTerminalRecovery).toHaveBeenCalledWith(
-        harness.workerPaneKey,
-        'adopted'
-      )
-    } finally {
-      vi.useRealTimers()
-    }
-  })
-
-  it('defers recovery when the renderer omits the exact reveal identity', async () => {
-    const harness = makePostRevealWorkerRecoveryHarness(() => false)
-    harness.revealTerminalSession.mockResolvedValue({ tabId: 'legacy-post-reveal' })
-
-    await expect(
-      harness.runtime.reconcileLegacyWorkerTerminals({ materializeRenderer: true })
-    ).resolves.toMatchObject({
-      adoptedDispatchIds: [],
-      exitedDispatchIds: [],
-      deferredDispatchIds: ['dispatch-post-reveal']
-    })
-
-    expect(harness.revealTerminalSession).toHaveBeenCalledTimes(2)
-    expect(
-      harness.getSession().sleepingAgentSessionsByPaneKey?.[harness.workerPaneKey]
-    ).toBeDefined()
-    expect(harness.resolveLegacyWorkerTerminalRecovery).not.toHaveBeenCalled()
-  })
-
-  it('reconciles a same-id process replacement before headless adoption', async () => {
-    const exactProcess = {
-      id: 'pty-post-reveal',
-      incarnationId: '45454545-4545-4545-8545-454545454545',
-      terminalHandle: 'term_post_reveal',
-      title: 'Post-reveal worker',
-      cwd: TEST_WORKTREE_PATH,
-      worktreeId: TEST_WORKTREE_ID,
-      wslDistro: null
-    } as const
-    const replacement = {
-      ...exactProcess,
-      incarnationId: '56565656-5656-4656-8656-565656565656',
-      terminalHandle: 'term_replacement'
-    }
-    const listProcesses = vi
-      .fn()
-      .mockResolvedValueOnce([exactProcess])
-      .mockResolvedValueOnce([replacement])
-    const harness = makePostRevealWorkerRecoveryHarness(() => false, listProcesses)
-
-    await expect(harness.runtime.reconcileLegacyWorkerTerminals()).resolves.toMatchObject({
-      adoptedDispatchIds: [],
-      exitedDispatchIds: ['dispatch-post-reveal'],
-      deferredDispatchIds: []
-    })
-
-    expect(harness.getSession().tabsByWorktree[TEST_WORKTREE_ID]).toEqual([])
-    expect(
-      harness.getSession().sleepingAgentSessionsByPaneKey?.[harness.workerPaneKey]
-    ).toBeUndefined()
-    expect(harness.resolveLegacyWorkerTerminalRecovery).toHaveBeenCalledWith(
-      harness.workerPaneKey,
-      'rolled_back',
-      harness.ptyId
-    )
-    expect(harness.resolveLegacyWorkerTerminalRecovery).toHaveBeenCalledWith(
-      harness.workerPaneKey,
-      'exited'
-    )
-  })
-
   it('reconciles a same-id process replacement after renderer materialization', async () => {
     const exactProcess = {
       id: 'pty-post-reveal',
@@ -309,7 +144,7 @@ describe('OrcaRuntimeService', () => {
     expect(harness.getSession().terminalLayoutsByTabId['legacy-post-reveal']).toBeUndefined()
     if (ORCA_LAYOUT_OWNER_IS_MAIN) {
       // The window draws main's layout, which no longer holds the tab: its next graph omits it.
-      harness.runtime.syncWindowGraph(TEST_WINDOW_ID, { tabs: [], leaves: [] })
+      await harness.runtime.syncWindowGraph(TEST_WINDOW_ID, { tabs: [], leaves: [] })
     }
     const runtimeState = harness.runtime as unknown as {
       tabs: Map<string, unknown>

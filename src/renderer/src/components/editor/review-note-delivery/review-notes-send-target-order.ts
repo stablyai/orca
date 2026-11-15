@@ -1,5 +1,5 @@
-import type { DashboardAgentRow as DashboardAgentRowData } from '@/components/dashboard/useDashboardData'
-import type { NotesSendAgentTarget } from '@/lib/notes-send-agent-targets'
+import type { DashboardAgentRow as DashboardAgentRowData } from '@/components/dashboard/rows/dashboard-agent-row'
+import type { NotesSendAgentTarget } from '@/lib/agent-session/messaging/notes-send-agent-targets'
 
 export type OrderedSendTarget = {
   target: NotesSendAgentTarget

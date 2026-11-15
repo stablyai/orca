@@ -9,8 +9,8 @@ import {
   parseGitHubIssueOrPRLink,
   type GitHubIssueOrPRLink,
   type RepoSlug
-} from '../../../../../../shared/github/links'
-import { githubRepoIdentityKey } from '../../../../../../shared/github/repository-identity-key'
+} from '../../../../../../shared/github/repositories/links'
+import { githubRepoIdentityKey } from '../../../../../../shared/github/repositories/repository-identity-key'
 import { parseGitLabIssueOrMRLink } from '../../../../../../shared/new-workspace/gitlab-links'
 import {
   parseJiraIssueUrl,
@@ -20,7 +20,7 @@ import {
   parseLinearIssueUrlIntent,
   type LinearIssueUrlIntent
 } from '../../../../../../shared/linear/links'
-import type { Repo } from '../../../../../../shared/repo-types'
+import type { Repo } from '../../../../../../shared/repository/repo-types'
 import { getWorkspaceAttachments } from '../../../../../../shared/workspace-attachments/workspace-attachments'
 import type { Worktree } from '../../../../../../shared/worktree/types'
 import { normalizeLinearIdentifier } from '../../../work-items/linear/linear-issue-workspace-attachment'

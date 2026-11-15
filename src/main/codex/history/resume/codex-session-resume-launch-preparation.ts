@@ -1,5 +1,5 @@
 import type { AgentProviderSessionMetadata } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
-import type { CodexAccountSelectionTarget } from '../../../../shared/codex-selection-lane'
+import type { CodexAccountSelectionTarget } from '../../../../shared/agent-accounts/codex/codex-selection-lane'
 import {
   trustedCodexResumeHomes,
   type CodexSessionResumePreparation
@@ -9,7 +9,7 @@ import {
   prepareCodexAccountRestartResume,
   prepareLegacySharedCodexSessionResume
 } from './codex-legacy-session-resume'
-import { ManagedCodexHomeTemporarilyUnavailableError } from '../../../codex-accounts/host-codex-managed-home-ownership'
+import { ManagedCodexHomeTemporarilyUnavailableError } from '../../../codex-accounts/managed-homes/host-codex-managed-home-ownership'
 import { codexHookService } from '../../hooks/installation/hook-service'
 import { reconcileCodexHooksForLaunch } from '../../hooks/reconciliation/codex-hook-reconcile'
 import { ensureCodexDaemonSocketGuard } from '../../configuration/settings/codex-config-mirror'

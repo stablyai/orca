@@ -1,4 +1,5 @@
 import { openBrowserExtensionOptionsPage } from '../tabs-and-windows/browser-extension-options-page'
+import { placeBrowserExtensionCallerTab } from '../tabs-and-windows/browser-extension-agent-caller'
 import { z } from 'zod'
 import {
   defineBrowserExtensionMethod,
@@ -10,7 +11,11 @@ export function registerRuntimeNamespace(): void {
   registerBrowserExtensionNamespace('runtime', {
     methods: {
       openOptionsPage: defineBrowserExtensionMethod(z.tuple([]), (caller) =>
-        openBrowserExtensionOptionsPage(caller.browserProfileId, caller.extension)
+        openBrowserExtensionOptionsPage(
+          caller.browserProfileId,
+          caller.extension,
+          placeBrowserExtensionCallerTab(caller, true)
+        )
       )
     },
     events: ['onInstalled', 'onStartup']

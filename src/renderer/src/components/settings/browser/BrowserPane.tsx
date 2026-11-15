@@ -7,6 +7,8 @@ import { getBrowserLinkRoutingDescription } from './routing/browser-link-routing
 import { getBrowserUsePaneSearchEntries } from './use/browser-use-search'
 import { BrowserHomePageSetting } from './BrowserHomePageSetting'
 import { BrowserDefaultZoomSetting } from './BrowserDefaultZoomSetting'
+import { BrowserMemorySaverSetting } from './BrowserMemorySaverSetting'
+import { getBrowserMemorySaverSearchEntry } from './browser-memory-saver-search'
 import { BrowserUseSetup } from './use/BrowserUsePane'
 import { BrowserSearchEngineSetting } from './BrowserSearchEngineSetting'
 import { BrowserLinkRoutingSetting } from './routing/BrowserLinkRoutingSetting'
@@ -23,6 +25,7 @@ import { SettingsGroup } from '../section-layout/SettingsGroup'
 import { BrowserSessionCookiesSection } from './profiles/BrowserSessionCookiesSection'
 import { BrowserNewProfileDialog } from './profiles/BrowserNewProfileDialog'
 import { BrowserExtensionsSection } from './extensions/BrowserExtensionsSection'
+import { getBrowserExtensionsSearchEntry } from './extensions/browser-extensions-search'
 import { BrowserPasswordsSection } from './passwords/BrowserPasswordsSection'
 import { getBrowserPasswordsSearchEntry } from './passwords/browser-passwords-copy'
 import {
@@ -30,15 +33,17 @@ import {
   resolveBrowserHomePageDraftState
 } from './browser-home-page-draft-state'
 import { buildSidebarHostOptions } from '../../sidebar/worktree-list/controls/sidebar-host-options'
-import { getHostDisplayLabelOverrides } from '../../../../../shared/host-setting-overrides'
+import { getHostDisplayLabelOverrides } from '../../../../../shared/execution-host/host-setting-overrides'
 import {
   getSettingsFocusedExecutionHostId,
   LOCAL_EXECUTION_HOST_ID,
   type ExecutionHostId
 } from '../../../../../shared/execution-host'
-import { isMacUserAgent } from '@/lib/user-agent-platform'
-import { isWebClientLocation } from '@/lib/web-client-location'
+import { isMacUserAgent } from '@/app-shell/platform/user-agent-platform'
+import { isWebClientLocation } from '@/app-shell/platform/web-client-location'
 import { useTranslate } from '@/i18n/use-translate'
+import { translateHostDisplayLabel } from '../../sidebar/execution-host-label'
+import { translateBrowserSessionProfileLabel } from '@/lib/browser/profiles/browser-session-profile-label'
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 import { resolveAvailableBrowserSessionHostId } from './profiles/browser-session-host-selection'
 import { getDefaultBrowserProfileForHost } from '@/store/slices/browser/hosts/browser-host-state'
@@ -128,6 +133,10 @@ export function BrowserPane({
   const showProfileScope = matchesSettingsSearch(searchQuery, [browserSearchEntries[12]])
   const showLinkRoutingBackground = matchesSettingsSearch(searchQuery, [browserSearchEntries[13]])
   const showPasswords = matchesSettingsSearch(searchQuery, [getBrowserPasswordsSearchEntry(t)])
+  // Browser tabs run in this desktop app; the web client has none to free.
+  const showMemorySaver =
+    !isWebClientLocation() &&
+    matchesSettingsSearch(searchQuery, [getBrowserMemorySaverSearchEntry()])
   const showBrowserUse = matchesSettingsSearch(searchQuery, getBrowserUsePaneSearchEntries())
   const isMac = isMacUserAgent()
   const linkRoutingDescription = getBrowserLinkRoutingDescription(
@@ -153,7 +162,7 @@ export function BrowserPane({
         .filter((host) => host.kind === 'local' || host.kind === 'runtime')
         .map((host) => ({
           id: host.id,
-          label: host.label,
+          label: translateHostDisplayLabel(host, t),
           detail:
             host.kind === 'local'
               ? t('auto.components.settings.BrowserPane.86b7c83fee', 'This computer')
@@ -184,9 +193,10 @@ export function BrowserPane({
   const activeBrowserSessionProfileId =
     useAppStore((s) => getDefaultBrowserProfileForHost(s, selectedBrowserSessionHostId)) ??
     'default'
-  const activeBrowserSessionProfileLabel =
-    browserSessionProfiles.find((profile) => profile.id === activeBrowserSessionProfileId)?.label ??
+  const activeBrowserSessionProfileLabel = translateBrowserSessionProfileLabel(
+    browserSessionProfiles.find((profile) => profile.id === activeBrowserSessionProfileId)?.label,
     activeBrowserSessionProfileId
+  )
   useEffect(() => {
     const requestedHostId = browserSessionHostIdOverride ?? settingsFocusedHostId
     if (selectedBrowserSessionHostId !== requestedHostId) {
@@ -241,7 +251,7 @@ export function BrowserPane({
     !isWebClientLocation() &&
     selectedBrowserSessionHostId === LOCAL_EXECUTION_HOST_ID
   const showExtensions =
-    settings.experimentalBrowserExtensions === true &&
+    matchesSettingsSearch(searchQuery, [getBrowserExtensionsSearchEntry()]) &&
     selectedBrowserSessionHostId === LOCAL_EXECUTION_HOST_ID
 
   return (
@@ -258,6 +268,7 @@ export function BrowserPane({
       {showHomePage ||
       showSearchEngine ||
       showDefaultZoom ||
+      showMemorySaver ||
       showUserAgent ||
       showSitePermissions ||
       showLinkRouting ||
@@ -289,6 +300,10 @@ export function BrowserPane({
               value={browserDefaultZoomLevel}
               onChange={setBrowserDefaultZoomLevel}
             />
+          ) : null}
+
+          {showMemorySaver ? (
+            <BrowserMemorySaverSetting settings={settings} updateSettings={updateSettings} />
           ) : null}
 
           {showUserAgent ? <BrowserUserAgentSetting hostId={settingsFocusedHostId} /> : null}
@@ -398,6 +413,8 @@ export function BrowserPane({
             <BrowserExtensionsSection
               profileId={activeBrowserSessionProfileId}
               profileLabel={activeBrowserSessionProfileLabel}
+              settings={settings}
+              updateSettings={updateSettings}
             />
           ) : null}
         </SettingsGroup>

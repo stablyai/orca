@@ -9,7 +9,7 @@ import {
 import { join } from 'node:path'
 import { expect, it, vi } from 'vitest'
 import { supportsTsrs } from '../../config/scripts/typecheck/project-execution/tsrs-typecheck-compiler.mjs'
-import { removeTreeSync } from '../../src/shared/windows-transient-lock-removal'
+import { removeTreeSync } from '../../src/shared/file-write/windows-transient-lock-removal'
 import { collectTypecheckPass, findTsNocheckFiles } from './check-tests-typecheck-ratchet.mjs'
 import { resolveMobileTypecheckCommand } from './mobile-typecheck-compiler.mjs'
 

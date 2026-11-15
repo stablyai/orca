@@ -2,7 +2,7 @@ import { isWatcherProcessFailure } from '../../../../ipc/filesystem/watcher-proc
 import type { OrcaRuntimeService } from '../../../orca-runtime'
 import { createFileWatchEventBatcher } from './file-watch-event-batcher'
 import { dirListingPageCache } from './files-read-dir-page'
-import type { FileWatchBatchCadence } from '../../../../../shared/rpc-contract/files-target-params'
+import type { FileWatchBatchCadence } from '../../../../../shared/rpc-contract/filesystem/files-target-params'
 
 export async function runFileWatchStream(args: {
   runtime: OrcaRuntimeService

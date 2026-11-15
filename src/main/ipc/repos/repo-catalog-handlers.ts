@@ -1,6 +1,6 @@
 import { type BrowserWindow, ipcMain } from 'electron'
 import type { Store } from '../../persistence/loading-store/store'
-import type { Project, ProjectUpdateArgs } from '../../../shared/project-types'
+import type { Project, ProjectUpdateArgs } from '../../../shared/project/project-types'
 import {
   getRepoExecutionHostId,
   normalizeExecutionHostId,
@@ -16,16 +16,16 @@ import { ProjectUpdateIpcArgs, parseProjectGroupIpcArgs } from './repo-ipc-arg-s
 import {
   visibleProjectHostSetups,
   visibleRepos
-} from '../../persistence/migrating-orcad-catalog/orcad-source-visibility'
+} from '../../persistence/migrating-orcad-catalog/source/catalog/orcad-source-visibility'
 import {
   assertWslMoveProjectWritable,
   assertWslMoveReposWritable,
   isWslMoveSourceHost
-} from '../../persistence/moving-wsl-projects/wsl-move-scope-guard'
-import { listWslMovedProjects } from '../../persistence/moving-wsl-projects/wsl-moved-projects'
+} from '../../persistence/moving-wsl-projects/quiescence/wsl-move-scope-guard'
+import { listWslMovedProjects } from '../../persistence/moving-wsl-projects/desktop-state/wsl-moved-projects'
 import { listHostRepoCatalogSnapshots } from '../../host-repo-catalog-snapshot/host-repo-catalog-snapshot-recorder'
 import { listEnvironments } from '../../../shared/remote-runtime/host-store/runtime-environment-store'
-import { getRuntimeEnvironmentRegistryRoot } from '../runtime-environments/runtime-environment-registry-root'
+import { getRuntimeEnvironmentRegistryRoot } from '../runtime-environments/catalog/runtime-environment-registry-root'
 import { isGatedOffWslHost } from '../../wsl/host-lifecycle/wsl-host-gate'
 
 export function registerRepoCatalogHandlers(
@@ -49,10 +49,10 @@ export function registerRepoCatalogHandlers(
   )
 
   // Desktop-only reads (environment registry and saved state): never wakes a stopped distro.
-  ipcMain.handle('repos:listHostCatalogSnapshots', () =>
+  ipcMain.handle('repos:listHostCatalogSnapshots', async () =>
     listHostRepoCatalogSnapshots(
       store,
-      listEnvironments(getRuntimeEnvironmentRegistryRoot()).filter(
+      (await listEnvironments(getRuntimeEnvironmentRegistryRoot())).filter(
         (environment) => !isGatedOffWslHost(environment)
       )
     )

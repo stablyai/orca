@@ -4,8 +4,8 @@ import { terminalImageViewerSupported } from '../../../terminal/launch/terminal-
 
 import { callerLaunchSource } from '../../../../agent-launch/agent-started-telemetry'
 import { randomUUID } from 'node:crypto'
-import { narrowStructuredLaunchSeedOptions } from '../../../../../shared/native-chat/input/native-chat-session-option-defaults'
-import { createStructuredAgentSessionOperationId } from '../../../../../shared/agent-session/lifecycle/structured-agent-session-mutation'
+import { narrowStructuredLaunchSeedOptions } from '../../../../../shared/native-chat/input/session-options/native-chat-session-option-defaults'
+import { createStructuredAgentSessionOperationId } from '../../../../../shared/agent-session/lifecycle/operations/structured-agent-session-mutation'
 import { structuredAgentSessionTabId } from '../../../../../shared/agent-session/view/structured-agent-session-projection'
 import {
   AgentLaunchStructuredSessionRefusedError,
@@ -14,7 +14,7 @@ import {
 import { getStructuredAgentSessionHost } from '../../../../native-chat/agent-session-wire/host/structured-agent-session-registry'
 import type { StructuredAgentSessionHost } from '../../../../native-chat/agent-session-wire/host/structured-agent-session-host'
 import type { RpcContext } from '../../core'
-import { STARTUP_CWD_FALLBACK_SENTENCE } from '../../../../../shared/startup-cwd-fallback'
+import { STARTUP_CWD_FALLBACK_SENTENCE } from '../../../../../shared/shell/launch/startup-cwd-fallback'
 import { structuredCallerFor } from '../structured-sessions/creation/structured-agent-session-gate'
 import { createStructuredAgentSessionForWorktree } from '../structured-sessions/creation/structured-agent-session-create'
 import { structuredAgentRuntimeMetadata } from '../../../agent-session/installation/structured-agent-runtime-metadata'

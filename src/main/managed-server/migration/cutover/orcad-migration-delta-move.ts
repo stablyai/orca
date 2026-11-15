@@ -3,10 +3,10 @@ import {
   ORCAD_MIGRATION_SOURCE_CUTOVER_VERSION,
   type OrcadMigrationSourceCutover
 } from '../../../../shared/orcad-migration/orcad-migration-source-cutover'
-import type { OrcadDeltaMoveResult } from '../../../../shared/orcad-managed-runtime'
+import type { OrcadDeltaMoveResult } from '../../../../shared/remote-runtime/orcad-lifecycle/orcad-managed-runtime'
 import { recordManagedOrcadMigration } from '../../../../shared/remote-runtime/host-store/runtime-environment-managed-orcad-store'
 import type { KnownRuntimeEnvironment } from '../../../../shared/remote-runtime/host-catalog/runtime-environments'
-import type { SshTarget } from '../../../../shared/ssh-types'
+import type { SshTarget } from '../../../../shared/remote-runtime/ssh/ssh-types'
 import type { Store } from '../../../persistence/loading-store/store'
 import {
   abortOrcadMigrationCutover,
@@ -19,7 +19,7 @@ import {
   listOrcadMigrationCutoverChainForTarget,
   removeOrcadMigrationSourceCutover,
   writeOrcadMigrationSourceCutover
-} from '../../../persistence/migrating-orcad-catalog/orcad-migration-cutover-journal'
+} from '../../../persistence/migrating-orcad-catalog/cutover-journals/orcad-migration-cutover-journal'
 import {
   committedOrcadMigrationChain,
   orcadDeltaSourceStore,
@@ -28,7 +28,7 @@ import {
   type OrcadDeltaMovePlan
 } from './orcad-migration-delta-plan'
 import { assertOrcadMigrationRequestFits } from '../catalog/orcad-migration-request-budget'
-import { retainOrcadMigrationSource } from '../../../persistence/migrating-orcad-catalog/orcad-migration-source-retention'
+import { retainOrcadMigrationSource } from '../../../persistence/migrating-orcad-catalog/retained-source/orcad-migration-source-retention'
 import {
   assessOrcadMigrationTerminals,
   type OrcadMigrationTerminalVerdict,
@@ -40,11 +40,11 @@ import {
   orcadCatalogFingerprint,
   unmovedOrcadSourceRows,
   withKeptOrcadSourceRows
-} from '../../../persistence/migrating-orcad-catalog/orcad-retained-source'
-import { collectOrcadMigrationSourceCatalog } from '../../../persistence/migrating-orcad-catalog/orcad-source-catalog'
+} from '../../../persistence/migrating-orcad-catalog/retained-source/orcad-retained-source'
+import { collectOrcadMigrationSourceCatalog } from '../../../persistence/migrating-orcad-catalog/source/catalog/orcad-source-catalog'
 import type { SshTargetOrcadClaims } from '../../../ssh/targets/ssh-target-orcad-claims'
 import { orcadMigrationRefusalReason } from './orcad-migration-refusal-reason'
-import { errorMessage } from '../../../../shared/error-message'
+import { errorMessage } from '../../../../shared/errors/error-message'
 
 type OrcadDeltaMoveArgs = {
   userDataPath: string
@@ -150,7 +150,7 @@ async function commitDelta(
   store.updateSshTarget(target.id, { orcadFence: { environmentId: plan.environmentId } })
   await args.claims.flush()
   // Record before any new/resumed commit so rollback cannot cross the migration.
-  recordManagedOrcadMigration(userDataPath, plan.environmentId, now().toISOString())
+  await recordManagedOrcadMigration(userDataPath, plan.environmentId, now().toISOString())
   let destination: OrcadMigrationDestinationCatalog
   try {
     destination = await args.connectDestination()

@@ -2,7 +2,7 @@ import { createPortal } from 'react-dom'
 import { MobileDriverOverlay } from './MobileDriverOverlay'
 import { HeldPaneRemoteViewportChip } from './RemoteViewportHeldChip'
 import { getDriverForPty } from '../../../lib/pane-manager/mobile-driver-state'
-import { getFitOverrideForPty } from '../../../lib/pane-manager/mobile-fit-overrides'
+import { getFitOverrideForPty } from '../../../lib/pane-manager/terminal-fit/mobile-fit-overrides'
 import { shouldShowMobileDriverOverlay } from './mobile-driver-overlay-visibility'
 import { shouldChatTakeOverMobileSurface } from '../../native-chat/host-access/native-chat-send-eligibility'
 import type { TerminalPaneController } from '../controller/use-terminal-pane-controller'
@@ -69,7 +69,7 @@ export function TerminalPaneMobileDriverPortals({
             hasFitOverride={hasFitOverride}
             rootClassName="mobile-driver-banner"
             onAction={() => restorePaneTerminalFit(pane, ptyId)}
-            onAllAction={() => restoreAllTerminalFits(pane)}
+            onAllAction={() => restoreAllTerminalFits(pane, driver.kind === 'mobile')}
           />,
           pane.container,
           `mobile-driver-banner-${pane.id}`

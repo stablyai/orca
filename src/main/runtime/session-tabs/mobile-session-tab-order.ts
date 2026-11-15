@@ -1,9 +1,9 @@
 import type { OrcaRuntimeWithStoredMobileSnapshotHasStalePreservedTab as BrowserOwnership } from './mobile-session-publication-preservation'
-import type { BrowserTabInfo } from '../../../shared/runtime-browser-contracts'
+import type { BrowserTabInfo } from '../../../shared/browser/runtime/runtime-browser-contracts'
 import type {
   RuntimeMobileSessionTabGroup,
   RuntimeMobileSessionTabsSnapshot
-} from '../../../shared/runtime-session-contracts'
+} from '../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import { RuntimeHeadlessTerminalTabTitles } from './headless-terminal-tab-titles'
 export abstract class RuntimeMobileSessionTabOrder extends RuntimeHeadlessTerminalTabTitles {
   protected abstract isRendererOwnedMobileBrowserTab(

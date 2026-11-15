@@ -2,7 +2,7 @@ import { vi } from 'vitest'
 import {
   MIN_COMPATIBLE_RUNTIME_CLIENT_VERSION,
   RUNTIME_PROTOCOL_VERSION
-} from '../../../../../../shared/protocol-version'
+} from '../../../../../../shared/remote-runtime/protocol/protocol-version'
 import { preparePendingSplitClose } from './pending-split-close-test-fixture'
 import { flushPtySideEffects } from '../../pty-transport/ipc/pty-transport-test-harness'
 

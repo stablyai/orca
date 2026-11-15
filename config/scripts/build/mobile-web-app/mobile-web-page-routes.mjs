@@ -102,13 +102,14 @@ export const MOBILE_WEB_PAGE_ROUTES = [
       'native.audio.read',
       'native.audio.stop'
     ],
-    // Optional media.name falls back to the file type; terminalKeyRail falls back to the page's row; the image viewer drops its actions without native.image.act; dictation uses the computer without native.speech.act.
+    // Optional media.name falls back to the file type; terminalKeyRail falls back to the page's row; the image viewer drops its actions without native.image.act; dictation uses the computer without native.speech.act; without native.a11y.announce only the page's live region speaks.
     optionalGrants: [
       'externalNavigation',
       'native.media.name',
       'native.pdf.view',
       'native.image.act',
       'native.speech.act',
+      'native.a11y.announce',
       'terminalKeyRail',
       DEVICE_STORE_GRANT
     ]

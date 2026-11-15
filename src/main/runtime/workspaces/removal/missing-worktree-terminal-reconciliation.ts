@@ -1,8 +1,8 @@
 import { getRepoRoutingConnectionId } from '../../../../shared/execution-host'
-import type { IPtyProvider } from '../../../providers/pty-provider-contract'
-import type { Repo } from '../../../../shared/repo-types'
+import type { IPtyProvider } from '../../../providers/pty/provider-contract'
+import type { Repo } from '../../../../shared/repository/repo-types'
 import { splitWorktreeId } from '../../../../shared/worktree/id'
-import { mapWithConcurrency } from '../../../../shared/map-with-concurrency'
+import { mapWithConcurrency } from '../../../../shared/concurrency/map-with-concurrency'
 import { killAllProcessesForWorktree, type WorktreeTeardownRuntime } from './worktree-teardown'
 
 const MISSING_WORKTREE_TEARDOWN_CONCURRENCY = 4

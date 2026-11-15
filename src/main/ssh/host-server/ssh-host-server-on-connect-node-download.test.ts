@@ -1,6 +1,6 @@
 /** Carry structured Node-download failure for the mirror offer; never infer it from message text. */
 import { describe, expect, it, vi } from 'vitest'
-import type { SshTarget } from '../../../shared/ssh-types'
+import type { SshTarget } from '../../../shared/remote-runtime/ssh/ssh-types'
 import { resolveHostServerOnConnect } from './ssh-host-server-on-connect'
 import { hostServerDepsStub } from './testing/ssh-host-server-on-connect-test-deps'
 import { unservedHostServerMessage } from './ssh-host-unserved-status'

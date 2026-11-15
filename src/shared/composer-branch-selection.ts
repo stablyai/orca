@@ -1,4 +1,5 @@
 import type { GitPushTarget } from './worktree/types'
+import { branchRefLabel } from './git/refs/branch-ref-label'
 
 export type ComposerBranchSelection = {
   baseBranch: string
@@ -19,7 +20,7 @@ export function resolveComposerBranchSelection(args: {
     !trimmedCurrentName ||
     args.currentName === args.lastAutoName ||
     args.localBranchName.startsWith(trimmedCurrentName) ||
-    args.refName.startsWith(trimmedCurrentName)
+    branchRefLabel(args.refName).startsWith(trimmedCurrentName)
   if (!shouldAutoName) {
     return {
       baseBranch: args.refName,

@@ -1,4 +1,4 @@
-import type { PRCheckJob, PRCheckRunDetails } from '../../../../../shared/github/check-types'
+import type { PRCheckJob, PRCheckRunDetails } from '../../../../../shared/github/checks/check-types'
 import { createCheckLogFixture } from '../../../../../../config/scripts/performance/check-job-log/check-job-log-test-fixture.mjs'
 
 const captured = createCheckLogFixture()

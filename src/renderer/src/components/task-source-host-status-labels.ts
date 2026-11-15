@@ -1,6 +1,6 @@
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
-import type { SshConnectionStatus } from '../../../shared/ssh-types'
+import type { SshConnectionStatus } from '../../../shared/remote-runtime/ssh/ssh-types'
 import type { TaskSourceHostAvailability } from './task-source-context-summary'
 
 export function getAvailabilityStatusLabel(
@@ -55,6 +55,12 @@ export function getAvailabilityStatusLabel(
       return disconnectedStatusLabel(t)
     case 'error':
       return connectionIssueStatusLabel(t)
+    case 'provisioning':
+      return t('auto.components.taskSourceContextSummary.statusProvisioning', 'provisioning')
+    case 'suspended':
+      return t('auto.components.taskSourceContextSummary.statusSuspended', 'suspended')
+    case 'waking':
+      return t('auto.components.taskSourceContextSummary.statusWaking', 'waking')
   }
 }
 

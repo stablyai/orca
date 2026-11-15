@@ -1,4 +1,4 @@
-import type { CliInstallStatus } from '../../../../shared/cli-install-types'
+import type { CliInstallStatus } from '../../../../shared/cli/cli-install-types'
 
 export type FeatureTipCliInstallResult =
   | { kind: 'installed'; status: CliInstallStatus }

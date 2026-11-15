@@ -10,7 +10,7 @@ import { SourceControlCommitSurface } from './commit-surface'
 import { SourceControlForkPushNotice } from './fork-push-notice'
 import type { SourceControlPanelReadyProps } from './panel-props'
 import { useSourceControlScope } from './worktree-scope'
-import { openGitGraph } from '@/lib/git-graph-tab'
+import { openGitGraph } from '@/lib/source-control/graph/git-graph-tab'
 
 export function SourceControlPanelContent(props: SourceControlPanelReadyProps) {
   const { activeWorktree, currentWorktreeId, model, worktreePath } = props

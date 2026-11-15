@@ -1,6 +1,6 @@
 import type { Page } from '@stablyai/playwright-test'
 
-import { updateEnvironmentFromPairingCode } from '../../../src/shared/remote-runtime/host-store/runtime-environment-store'
+import { updateEnvironmentFromPairingCode } from '../../../src/shared/remote-runtime/host-store/runtime-environment-store-operations'
 
 export type SameIdPairingReplacement = {
   environmentId: string

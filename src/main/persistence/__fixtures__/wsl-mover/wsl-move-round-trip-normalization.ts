@@ -3,7 +3,7 @@
  * schema defaults the host's load fills in, ids it derives, and representation changes the move
  * makes on purpose. Each known gap is a real loss, named here so a fix has to remove it.
  */
-import { isRecord } from '../../moving-wsl-projects/wsl-move-canonical-form'
+import { isRecord } from '../../moving-wsl-projects/manifest-scope/wsl-move-canonical-form'
 
 /** Session fields the real pipeline does not carry yet, with why; each still differs today. */
 export const WSL_MOVE_ROUND_TRIP_KNOWN_GAPS: Readonly<Record<string, string>> = {

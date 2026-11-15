@@ -1,10 +1,10 @@
 import type {
   RuntimeMobileSessionSnapshotTab,
   RuntimeMobileSessionTerminalTab
-} from '../../../../shared/runtime-mobile-session-tab-contracts'
-import type { RuntimeMobileSessionTabGroup } from '../../../../shared/runtime-session-contracts'
+} from '../../../../shared/remote-runtime/session-graph/runtime-mobile-session-tab-contracts'
+import type { RuntimeMobileSessionTabGroup } from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import type { TabGroupLayoutNode } from '../../../../shared/tab-types'
-import { collectTabGroupLayoutGroupIds } from '../../../../shared/workspace-layout/tab-group-moves'
+import { collectTabGroupLayoutGroupIds } from '../../../../shared/workspace-layout/tab-groups/tab-group-moves'
 import { isStructuredAgentSessionHostTabId } from '../../../../shared/agent-session/view/structured-agent-session-host-tab-id'
 import {
   collectHeadlessParentTabOrder,

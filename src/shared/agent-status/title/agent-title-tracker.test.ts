@@ -1,0 +1,46 @@
+import { describe, expect, it, vi } from 'vitest'
+import { createAgentStatusTracker } from './agent-title-status'
+
+describe('createAgentStatusTracker', () => {
+  // Claude Code v2.1.86 emits task descriptions; only ✳ identifies idle in this captured sequence.
+  it('fires on Claude Code working → idle (real captured titles)', () => {
+    const onBecameIdle = vi.fn()
+    const tracker = createAgentStatusTracker(onBecameIdle)
+
+    tracker.handleTitle('✳ Claude Code')
+    expect(onBecameIdle).not.toHaveBeenCalled()
+
+    tracker.handleTitle('⠂ Claude Code')
+    expect(onBecameIdle).not.toHaveBeenCalled()
+
+    tracker.handleTitle('⠐ Claude Code')
+    expect(onBecameIdle).not.toHaveBeenCalled()
+
+    tracker.handleTitle('⠐ User acknowledgment and confirmation')
+    expect(onBecameIdle).not.toHaveBeenCalled()
+
+    tracker.handleTitle('⠂ User acknowledgment and confirmation')
+    expect(onBecameIdle).not.toHaveBeenCalled()
+
+    tracker.handleTitle('✳ User acknowledgment and confirmation')
+    expect(onBecameIdle).toHaveBeenCalledTimes(1)
+  })
+
+  // Cursor’s bare native title between synthesized frames must not trigger idle before done.
+  it('fires on Cursor working → idle across native "Cursor Agent" re-emissions', () => {
+    const onBecameIdle = vi.fn()
+    const tracker = createAgentStatusTracker(onBecameIdle)
+
+    tracker.handleTitle('⠋ Cursor Agent')
+    expect(onBecameIdle).not.toHaveBeenCalled()
+
+    tracker.handleTitle('Cursor Agent')
+    expect(onBecameIdle).not.toHaveBeenCalled()
+
+    tracker.handleTitle('Cursor Agent')
+    expect(onBecameIdle).not.toHaveBeenCalled()
+
+    tracker.handleTitle('Cursor ready')
+    expect(onBecameIdle).toHaveBeenCalledTimes(1)
+  })
+})

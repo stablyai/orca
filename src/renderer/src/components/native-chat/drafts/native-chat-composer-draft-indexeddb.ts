@@ -1,5 +1,10 @@
 // Keep persistence thin; the draft store owns merge and lifecycle policy.
 
+import {
+  committedTransaction,
+  indexedDbConnection,
+  settledRequest
+} from '@/app-shell/storage/indexeddb-connection'
 import type {
   NativeChatComposerDraftStorage,
   StoredNativeChatComposerDraft
@@ -9,55 +14,18 @@ const DATABASE_NAME = 'orca-native-chat-composer-drafts'
 const DATABASE_VERSION = 1
 const DRAFTS = 'drafts'
 
-function settled(request: IDBRequest): Promise<unknown> {
-  return new Promise((resolve, reject) => {
-    request.onsuccess = () => resolve(request.result)
-    request.onerror = () => reject(request.error)
-  })
-}
-
-/** Resolves once the transaction is on disk; rejects when it aborts (a full disk included). */
-function committed(transaction: IDBTransaction): Promise<void> {
-  return new Promise((resolve, reject) => {
-    transaction.oncomplete = () => resolve()
-    transaction.onerror = () => reject(transaction.error)
-    transaction.onabort = () => reject(transaction.error ?? new Error('draft write aborted'))
-  })
-}
-
 export function createIndexedDbNativeChatComposerDraftStorage(
   factory: IDBFactory
 ): NativeChatComposerDraftStorage {
-  let opened: Promise<IDBDatabase> | null = null
-  const database = (): Promise<IDBDatabase> => {
-    opened ??= new Promise<IDBDatabase>((resolve, reject) => {
-      const request = factory.open(DATABASE_NAME, DATABASE_VERSION)
-      request.onupgradeneeded = () => {
-        if (!request.result.objectStoreNames.contains(DRAFTS)) {
-          request.result.createObjectStore(DRAFTS)
-        }
-      }
-      request.onsuccess = () => {
-        const db = request.result
-        // Close replaced/upgraded connections so later writes reopen instead of reusing a dead database.
-        db.onversionchange = () => db.close()
-        db.onclose = () => {
-          opened = null
-        }
-        resolve(db)
-      }
-      request.onerror = () => reject(request.error)
-      request.onblocked = () => reject(new Error('draft database is blocked'))
-    }).catch((error: unknown) => {
-      opened = null
-      throw error
-    })
-    return opened
-  }
+  const database = indexedDbConnection(factory, DATABASE_NAME, DATABASE_VERSION, (db) => {
+    if (!db.objectStoreNames.contains(DRAFTS)) {
+      db.createObjectStore(DRAFTS)
+    }
+  })
 
   const change = async (apply: (drafts: IDBObjectStore) => void): Promise<void> => {
     const transaction = (await database()).transaction(DRAFTS, 'readwrite')
-    const done = committed(transaction)
+    const done = committedTransaction(transaction)
     apply(transaction.objectStore(DRAFTS))
     // Why: commit now rather than when the task ends, so a quit right after still lands it.
     transaction.commit?.()
@@ -68,8 +36,8 @@ export function createIndexedDbNativeChatComposerDraftStorage(
     loadAll: async () => {
       const drafts = (await database()).transaction(DRAFTS, 'readonly').objectStore(DRAFTS)
       const [keys, values] = await Promise.all([
-        settled(drafts.getAllKeys()),
-        settled(drafts.getAll())
+        settledRequest(drafts.getAllKeys()),
+        settledRequest(drafts.getAll())
       ])
       const loaded = new Map<string, unknown>()
       if (Array.isArray(keys) && Array.isArray(values)) {
@@ -82,7 +50,9 @@ export function createIndexedDbNativeChatComposerDraftStorage(
       return loaded
     },
     read: async (scopeKey) =>
-      settled((await database()).transaction(DRAFTS, 'readonly').objectStore(DRAFTS).get(scopeKey)),
+      settledRequest(
+        (await database()).transaction(DRAFTS, 'readonly').objectStore(DRAFTS).get(scopeKey)
+      ),
     write: (scopeKey, draft: StoredNativeChatComposerDraft) =>
       change((drafts) => drafts.put(draft, scopeKey)),
     remove: (scopeKeys) =>
@@ -93,7 +63,7 @@ export function createIndexedDbNativeChatComposerDraftStorage(
       }),
     update: async (scopeKey, apply) => {
       const transaction = (await database()).transaction(DRAFTS, 'readwrite')
-      const done = committed(transaction)
+      const done = committedTransaction(transaction)
       const drafts = transaction.objectStore(DRAFTS)
       const read = drafts.get(scopeKey)
       // Why inside the read's callback: the write must land in the same transaction as the read.

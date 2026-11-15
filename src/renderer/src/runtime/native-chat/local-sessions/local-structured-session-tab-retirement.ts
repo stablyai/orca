@@ -1,6 +1,6 @@
 import type { WorktreeRuntimeOwnerState } from '../../../lib/workspace/ownership/worktree-runtime-owner-state'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../shared/constants'
-import { folderWorkspaceKey } from '../../../../../shared/workspace-scope'
+import { folderWorkspaceKey } from '../../../../../shared/workspace/identity/workspace-scope'
 import type { WebSessionTabsSyncState } from '../../web-session-tabs-sync/state'
 
 export type StructuredSessionTabPublicationVersion = {

@@ -1,20 +1,23 @@
 import { realpathSync } from 'node:fs'
-import type { Repo } from '../../../shared/repo-types'
+import type { Repo } from '../../../shared/repository/repo-types'
 import type {
   ProjectHostSetupUpdateArgs,
   ProjectHostSetupUpdateResult
-} from '../../../shared/project-types'
+} from '../../../shared/project/project-types'
 import {
   getRepoExecutionHostId,
   LOCAL_EXECUTION_HOST_ID,
   parseExecutionHostId
 } from '../../../shared/execution-host'
 import type { Store } from '../../persistence/loading-store/store'
-import { isFolderRepo } from '../../../shared/repo-kind'
+import { isFolderRepo } from '../../../shared/repository/repo-kind'
 import { normalizeRuntimePathForComparison } from '../../../shared/cross-platform-path'
-import { getGitRepoRootAsync, isGitRepoAsync } from '../../git/repo-detection'
+import {
+  getGitRepoRootAsync,
+  isGitRepoAsync
+} from '../../git/repositories/discovery/repo-detection'
 import { findExtraFolderWorkspaceIds } from './folder-workspace-meta-presence'
-import { findProjectHostSetup } from '../../../shared/project-host-setup-target'
+import { findProjectHostSetup } from '../../../shared/project/host-setup/project-host-setup-target'
 
 export type FolderToGitConversion = {
   updates: Pick<Repo, 'folderUpgradeGitRootPath'>
