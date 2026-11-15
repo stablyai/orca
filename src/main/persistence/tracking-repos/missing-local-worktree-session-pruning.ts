@@ -65,7 +65,10 @@ export function selectLocalWorktreeSessionOwnersForRepo(
   }
   for (const field of OWNER_ROW_FIELDS) {
     for (const row of Object.values((session[field] ?? {}) as Record<string, OwnerRow>)) {
-      add(row?.worktreeId)
+      // Removal matches row owners exactly, so a host-qualified one would never be deleted.
+      if (row?.worktreeId && !isWorktreeHostIdentity(row.worktreeId)) {
+        add(row.worktreeId)
+      }
     }
   }
   session.activeWorktreeIdsOnShutdown?.forEach(add)
