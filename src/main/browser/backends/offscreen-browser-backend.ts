@@ -11,7 +11,7 @@ import { browserSessionRegistry } from '../sessions/profiles/browser-session-reg
 import { installBrowserJavaScriptDialogs } from '../guest-lifecycle/prompts/browser-javascript-dialogs'
 import {
   loadPageWhenReady,
-  startBrowserExtensionsForPage
+  whenBrowserExtensionsStartFor
 } from '../extensions/profile-sessions/browser-extension-page-start'
 import type { ServeBrowserPageState } from '../../runtime/browser/headless/serve-browser-tab-layout'
 
@@ -50,7 +50,11 @@ export class OffscreenBrowserBackend implements BrowserBackend {
       ? browserSessionRegistry.getProfile(params.profileId)
       : browserSessionRegistry.getDefaultProfile()
     const partition = profile?.partition ?? ORCA_BROWSER_PARTITION
-    const extensionsReady = profile ? startBrowserExtensionsForPage(profile.id) : null
+    if (profile) {
+      // A server page starts its profile's extensions, as a desktop tab does.
+      browserSessionRegistry.attachExtensions(profile.id)
+    }
+    const extensionsReady = profile ? whenBrowserExtensionsStartFor(profile.id) : null
 
     const win = new BrowserWindow({
       show: false,

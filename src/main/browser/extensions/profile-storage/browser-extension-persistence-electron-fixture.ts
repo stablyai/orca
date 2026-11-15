@@ -10,7 +10,7 @@ import { browserSessionRegistry } from '../../sessions/profiles/browser-session-
 import { initializeBrowserExtensionSupport } from '../browser-extension-startup'
 import { BROWSER_EXTENSION_API_CUSTOM_SCHEME } from '../api-runtime/browser-extension-api-scheme'
 import { attachBrowserExtensionsToProfileSession } from '../profile-sessions/browser-extension-session-loader'
-import { startBrowserExtensionsForWebview } from '../profile-sessions/browser-extension-page-start'
+import { holdWebviewFirstLoadForExtensions } from '../profile-sessions/browser-extension-page-start'
 import { addUnpackedBrowserExtension } from '../browser-extension-management'
 import { closeBrowserExtensionProfileDocumentStores } from './browser-extension-profile-document-store'
 import { buildBrowserExtensionPageContextMenu } from '../context-menus/browser-extension-context-menu-host'
@@ -103,9 +103,10 @@ async function openTab(url: string): Promise<Electron.WebContents> {
   })
   trackBrowserExtensionMainWindow(host)
   // What Orca's main window does when a tab attaches in a browser profile.
-  host.webContents.on('will-attach-webview', (_event, _webPreferences, params) =>
-    startBrowserExtensionsForWebview(host.webContents, 'default', params)
-  )
+  host.webContents.on('will-attach-webview', (_event, _webPreferences, params) => {
+    browserSessionRegistry.attachExtensions('default')
+    holdWebviewFirstLoadForExtensions(host.webContents, 'default', params)
+  })
   const attached = new Promise<Electron.WebContents>((resolve) => {
     host.webContents.once('did-attach-webview', (_event, guest) => {
       guest.on('console-message', (details) => capture(details.message))

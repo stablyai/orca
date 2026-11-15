@@ -94,7 +94,9 @@ function installBrowserExtensionSupport(): void {
     return
   }
   initialized = true
-  setSavedBrowserTabsSource(savedBrowserTabs)
+  setSavedBrowserTabsSource(savedBrowserTabs, (profileId) =>
+    browserSessionRegistry.resolveKnownPartition(profileId)
+  )
   registerBrowserExtensionNamespaces()
   installBrowserExtensionApiHost()
   installBrowserExtensionSessionServices()

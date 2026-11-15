@@ -1,5 +1,4 @@
 import { app } from 'electron'
-import { browserSessionRegistry } from '../../sessions/profiles/browser-session-registry'
 import { getBrowserExtensionProfileIdForSession } from '../api-runtime/browser-extension-api-host'
 import {
   isBrowserExtensionProfileLoading,
@@ -10,13 +9,12 @@ import {
 const FIRST_LOAD_WAIT_MS = 3_000
 
 /**
- * A page is opening in this profile: start the profile's extensions (a profile runs them only
- * once it has a page) and return what the page's first load must wait for, or null when nothing
- * is loading. Waiting registers content scripts before the page commits, and keeps its request
- * out of flight while a webRequest extension loads, which Electron would leave hanging.
+ * What a page opening in this profile must wait for before its first load, or null when its
+ * extensions are not loading. Waiting registers content scripts before the page commits, and
+ * keeps its request out of flight while a webRequest extension loads, which Electron would
+ * leave hanging. Callers start the profile's extensions first (registry.attachExtensions).
  */
-export function startBrowserExtensionsForPage(profileId: string): Promise<void> | null {
-  browserSessionRegistry.attachExtensions(profileId)
+export function whenBrowserExtensionsStartFor(profileId: string): Promise<void> | null {
   return whileExtensionsStart(profileId)
 }
 
@@ -81,12 +79,12 @@ export function loadPageWhenReady(
 }
 
 /** will-attach-webview for a tab in a local profile: its first load waits for the profile's extensions. */
-export function startBrowserExtensionsForWebview(
+export function holdWebviewFirstLoadForExtensions(
   embedder: Electron.WebContents,
   profileId: string,
   params: Record<string, string>
 ): void {
-  const ready = startBrowserExtensionsForPage(profileId)
+  const ready = whileExtensionsStart(profileId)
   const src = params.src
   if (!ready || !src) {
     return

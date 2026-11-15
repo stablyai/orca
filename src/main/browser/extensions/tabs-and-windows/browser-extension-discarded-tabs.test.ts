@@ -78,13 +78,6 @@ vi.mock('../actions/browser-extension-action-registry', () => ({
   forgetBrowserExtensionActionTab: vi.fn()
 }))
 vi.mock('../browser-extension-support', () => ({ isBrowserExtensionSupportEnabled: () => true }))
-// 'idle' is a profile whose extensions have not started: it has no extension session.
-vi.mock('../../sessions/profiles/browser-session-registry', () => ({
-  browserSessionRegistry: {
-    resolveKnownPartition: (id: string | null | undefined) =>
-      id && !(id in mocks.sessions) && id !== 'idle' ? null : `persist:${id ?? 'default'}`
-  }
-}))
 vi.mock('../profile-sessions/browser-extension-session-loader', () => {
   const profile = (id: string) => (id in mocks.sessions ? { id, partition: `persist:${id}` } : null)
   return {
@@ -264,16 +257,21 @@ beforeEach(() => {
       page('streamed', 'bt-ssh', { remoteBrowserPageId: 'runtime-page' })
     ])
   }
-  discardedTabs.setSavedBrowserTabsSource({
-    getWorkspaceSessionHostIds: () => ['local', 'ssh:box'],
-    getWorkspaceSession: (hostId) => (hostId === 'ssh:box' ? saved.ssh : saved.local),
-    onWorkspaceSessionWritten: (listener) => {
-      writeListener = listener
-      return () => {
-        writeListener = null
+  discardedTabs.setSavedBrowserTabsSource(
+    {
+      getWorkspaceSessionHostIds: () => ['local', 'ssh:box'],
+      getWorkspaceSession: (hostId) => (hostId === 'ssh:box' ? saved.ssh : saved.local),
+      onWorkspaceSessionWritten: (listener) => {
+        writeListener = listener
+        return () => {
+          writeListener = null
+        }
       }
-    }
-  })
+    },
+    (id) =>
+      // 'idle' is a profile whose extensions have not started: it has no extension session.
+      id && !(id in mocks.sessions) && id !== 'idle' ? null : `persist:${id ?? 'default'}`
+  )
   discardedTabs.forgetBrowserPageGuestsGone()
   // Retire ids an earlier test handed out, so each test starts with none listed.
   for (const pageId of ['live', 'cold', 'doc', 'notes', 'job', 'remote', 'streamed']) {

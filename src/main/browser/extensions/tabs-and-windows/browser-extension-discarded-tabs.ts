@@ -4,7 +4,6 @@ import type { BrowserPage, BrowserWorkspace } from '../../../../shared/browser-w
 // oxlint-disable-next-line import/no-cycle -- browser subsystem singleton hub (browserManager); breaking it needs DI and test-mock updates, left for a human
 import { browserManager } from '../../guest-lifecycle/manager/browser-manager'
 import { emitBrowserExtensionEvent } from '../api-runtime/browser-extension-api-host'
-import { browserSessionRegistry } from '../../sessions/profiles/browser-session-registry'
 import {
   getBrowserExtensionProfileForPartition,
   getBrowserExtensionSessionForProfile
@@ -39,15 +38,17 @@ export type DiscardedBrowserTab = {
 /** Far past webContents ids (they count up from 1), still a 32-bit int like Chrome's tab ids. */
 export const FIRST_DISCARDED_BROWSER_TAB_ID = 1_000_000_000
 
+type PartitionResolver = (profileId: string | null | undefined) => string | null
+
 let source: SavedBrowserTabsSource | null = null
+let resolveKnownPartition: PartitionResolver = () => null
 let stopWatchingWrites: (() => void) | null = null
 let nextTabId = FIRST_DISCARDED_BROWSER_TAB_ID
 const assignedByPageId = new Map<string, { tabId: number; session: Electron.Session }>()
 
 /** The extension session a tab's guest would load in, as the renderer picks its partition. */
 function extensionSessionFor(tab: BrowserWorkspace): Electron.Session | null {
-  const partition =
-    tab.sessionPartition || browserSessionRegistry.resolveKnownPartition(tab.sessionProfileId)
+  const partition = tab.sessionPartition || resolveKnownPartition(tab.sessionProfileId)
   const profile = partition ? getBrowserExtensionProfileForPartition(partition) : null
   return profile ? getBrowserExtensionSessionForProfile(profile.id) : null
 }
@@ -129,9 +130,14 @@ export function emitDiscardedBrowserTabRemoved(tab: {
 }
 
 /** Main's copy of the renderer's saved browser tabs; read on every listing, so never stale for long. */
-export function setSavedBrowserTabsSource(next: SavedBrowserTabsSource | null): void {
+/** `resolvePartition` is the session registry's: a saved tab's profile id to its partition. */
+export function setSavedBrowserTabsSource(
+  next: SavedBrowserTabsSource | null,
+  resolvePartition: PartitionResolver
+): void {
   stopWatchingWrites?.()
   source = next
+  resolveKnownPartition = resolvePartition
   stopWatchingWrites =
     next?.onWorkspaceSessionWritten((hostId) => {
       if (unloadedPageIds.size === 0 && assignedByPageId.size === 0) {
