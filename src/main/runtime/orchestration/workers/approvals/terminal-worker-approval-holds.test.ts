@@ -199,6 +199,53 @@ describe('terminal worker approval holds', () => {
     expect(await deny(ctx, approvalId)).toMatchObject({ ok: false, code: 'approval_not_open' })
   })
 
+  it("takes Orca's allow once the dialog leaves, though Claude records it only with a slow tool's result", async () => {
+    const ctx = setup()
+    const approvalId = await opened(
+      ctx,
+      hook('tool-1', () => {
+        ctx.screen.lines = AFTER
+      })
+    )
+    const answering = answer(ctx, approvalId, 'allow')
+    await ctx.tick(40)
+
+    expect(await answering).toMatchObject({ ok: true })
+    ctx.screen.record = record({ isError: false, text: 'built' }, 'allow')
+    ctx.holds.observe(postToolUse('tool-1'))
+    expect(ctx.closings()).toEqual([])
+  })
+
+  it("corrects an answered allow's receipt when the slow tool's result shows the person's No won", async () => {
+    const ctx = setup()
+    const approvalId = await opened(
+      ctx,
+      hook('tool-1', () => {
+        ctx.screen.lines = AFTER
+      })
+    )
+    let answered: unknown = null
+    void answer(ctx, approvalId, 'allow').then((result) => (answered = result))
+    // Only until it is answered: further ticks would fire its 10-minute fallback.
+    for (let i = 0; i < 40 && !answered; i++) {
+      await ctx.tick()
+    }
+    expect(answered).toMatchObject({ ok: true })
+
+    ctx.screen.record = record(USER_NO)
+    ctx.holds.observe({
+      paneKey: PANE,
+      connectionId: null,
+      hookEventName: 'Stop',
+      payload: { state: 'done', prompt: '', agentType: 'claude' }
+    })
+    await vi.waitFor(() =>
+      expect(ctx.closedWith()).toEqual([
+        expect.objectContaining({ by: 'worker-terminal', decision: 'deny' })
+      ])
+    )
+  })
+
   it('names a Yes whose PostToolUse arrived while the deny was in flight', async () => {
     const ctx = setup()
     const asked = hook('tool-1', () => {
