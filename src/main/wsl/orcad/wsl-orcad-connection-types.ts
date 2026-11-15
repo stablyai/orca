@@ -31,9 +31,9 @@ export type WslOrcadConnection = {
 
 export type WslOrcadConnectionDependencies = {
   holder?: WslDistroHolder
-  getPairingOffer?: (environmentId: string) => PairingOffer | null
+  getPairingOffer?: (environmentId: string) => PairingOffer | null | Promise<PairingOffer | null>
   /** The bridge port the host's record saved: rebinding it keeps the pairing across app restarts. */
-  recordedLocalPort?: (environmentId: string) => number | null
+  recordedLocalPort?: (environmentId: string) => number | null | Promise<number | null>
   deployAndLaunch?: (distro: string, options: WslOrcadDeployOptions) => Promise<WslOrcadLaunch>
   createTransport?: (target: WslOrcadHostTarget) => OrcadHostTransport
   listen?: (

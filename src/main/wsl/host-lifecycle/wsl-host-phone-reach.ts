@@ -54,7 +54,7 @@ export class WslHostPhoneGate {
   constructor(
     private readonly host: {
       statuses(): readonly GateStatus[]
-      records(): readonly GateRecord[]
+      records(): readonly GateRecord[] | Promise<readonly GateRecord[]>
       connector: Pick<WslHostConnector, 'get' | 'reachability'>
       isEnabled: () => boolean
       hasServerFiles: () => boolean
@@ -63,7 +63,9 @@ export class WslHostPhoneGate {
 
   /** A paired phone's call: serve a host that already runs, never start its distro for it. */
   async requireRunningWithoutStart(environmentId: string): Promise<void> {
-    const record = this.host.records().find((entry) => entry.environmentId === environmentId)
+    const record = (await this.host.records()).find(
+      (entry) => entry.environmentId === environmentId
+    )
     if (wslHostRunRefusal(this.host) || !record || record.pendingStop) {
       this.confirmedStops.delete(environmentId)
       throw wslHostPhoneRefusal('hidden', record?.distro ?? environmentId)
@@ -90,16 +92,17 @@ export class WslHostPhoneGate {
   }
 
   /** What a phone is told of this host; never probes or starts the distro. */
-  reach(environmentId: string): WslHostPhoneReach {
-    return this.reachAll().get(environmentId) ?? 'hidden'
+  async reach(environmentId: string): Promise<WslHostPhoneReach> {
+    return (await this.reachAll()).get(environmentId) ?? 'hidden'
   }
 
   /** Every host's reach from one records read, for a list poll. */
-  reachAll(): ReadonlyMap<string, WslHostPhoneReach> {
+  async reachAll(): Promise<ReadonlyMap<string, WslHostPhoneReach>> {
+    const records = await this.host.records()
     const mayRun = wslHostRunRefusal(this.host) === null
     const statuses = new Map(this.host.statuses().map((status) => [status.environmentId, status]))
     const reaches = new Map<string, WslHostPhoneReach>()
-    for (const record of this.host.records()) {
+    for (const record of records) {
       const status = statuses.get(record.environmentId)
       reaches.set(
         record.environmentId,

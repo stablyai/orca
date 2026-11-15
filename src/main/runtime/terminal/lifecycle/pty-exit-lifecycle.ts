@@ -46,7 +46,7 @@ export abstract class OrcaRuntimeWithOnPtyExit extends RuntimePtyExitSurfaceRead
   /** Its process ended on its own: no close, kill, sleep or restart, nor a lost host or replayed exit. */
   protected notePtyEndedOnItsOwn(_pty: RuntimePtyWorktreeRecord): void {}
 
-  onPtyExit(
+  async onPtyExit(
     ptyId: string,
     exitCode: number,
     exitIncarnationId?: PtyIncarnationId,
@@ -60,7 +60,7 @@ export abstract class OrcaRuntimeWithOnPtyExit extends RuntimePtyExitSurfaceRead
       /** Its host went away (a WSL bridge pane's distro stopped): keep the pane to cold-restore, as after a daemon crash. */
       hostLost?: boolean
     } = {}
-  ): void | Promise<void> {
+  ): Promise<void> {
     const pty = this.ptysById.get(ptyId)
     const pending = this.pendingPtyRegistrationIncarnations.get(ptyId)
     const candidateIncarnation = pending ? pending.incarnationId : pty?.incarnationId

@@ -8,7 +8,7 @@ import type {
 import { runtimeEnvironmentManualDisconnectReason } from '../connectivity/runtime-environment-manual-disconnect'
 
 export function manuallyDisconnectedResponse(
-  environment: ReturnType<typeof resolveEnvironment>
+  environment: Awaited<ReturnType<typeof resolveEnvironment>>
 ): RuntimeRpcResponse<never> {
   return {
     id: 'runtime.manualDisconnect',
@@ -22,7 +22,7 @@ export function manuallyDisconnectedResponse(
 }
 
 export function runtimeEnvironmentCallFailure(
-  environment: ReturnType<typeof resolveEnvironment>,
+  environment: Awaited<ReturnType<typeof resolveEnvironment>>,
   method: string,
   error: unknown
 ): RuntimeRpcFailure | null {

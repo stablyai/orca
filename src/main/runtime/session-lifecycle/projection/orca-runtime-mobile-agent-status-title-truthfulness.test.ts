@@ -58,13 +58,13 @@ async function createRuntime(rows: AgentStatusIpcPayload[] = []): Promise<OrcaRu
 }
 
 /** Publish the renderer's terminal/title/byte-derived status as a paired host mirrors it. */
-function publishRendererWorkingPane(
+async function publishRendererWorkingPane(
   runtime: OrcaRuntimeService,
   paneTitle: string,
   status?: AgentStatusEntry
-): void {
+): Promise<void> {
   runtime.attachWindow(1)
-  runtime.syncWindowGraph(1, {
+  await runtime.syncWindowGraph(1, {
     tabs: [
       {
         tabId: TAB_ID,
@@ -136,7 +136,7 @@ describe('mobile session tabs: live-title evidence vs published agent status', (
       runtime.onPtyData(PTY_ID, '\x1b]0;C:\\WINDOWS\\system32\\cmd.exe\x07', T0 - 1_000)
 
       vi.setSystemTime(T0)
-      publishRendererWorkingPane(runtime, 'C:\\WINDOWS\\system32\\cmd.exe')
+      await publishRendererWorkingPane(runtime, 'C:\\WINDOWS\\system32\\cmd.exe')
 
       expect(await projectAgentStatus(runtime)).toEqual(
         expect.objectContaining({
@@ -244,7 +244,7 @@ describe('mobile session tabs: a process started after its pane last reported', 
       vi.setSystemTime(T0 + 20)
       runtime.onPtyData(PTY_ID, '\x1b]0;zsh\x07', T0 + 20)
       if (route === 'published') {
-        publishRendererWorkingPane(runtime, 'zsh', {
+        await publishRendererWorkingPane(runtime, 'zsh', {
           state: 'done',
           prompt: '',
           paneKey: PANE_KEY,
@@ -356,7 +356,7 @@ describe('mobile session tabs: accepted completion identity through Sleep', () =
         vi.setSystemTime(T0 + 20)
         runtime.onPtyData(PTY_ID, '\x1b]0;Claude Code\x07', T0 + 20)
         if (route === 'published') {
-          publishRendererWorkingPane(runtime, 'Claude Code', {
+          await publishRendererWorkingPane(runtime, 'Claude Code', {
             state: 'done',
             prompt: '',
             paneKey: PANE_KEY,

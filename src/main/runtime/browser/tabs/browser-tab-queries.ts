@@ -150,7 +150,7 @@ export class RuntimeBrowserTabQueries {
       this.host
         .getRuntimeBrowserPageRegistry()
         .activatePage(clientPage.browserPageId, clientPage.placement)
-      publishSwitchedBrowserSessionTab(this.host, {
+      await publishSwitchedBrowserSessionTab(this.host, {
         placementKind: 'client',
         browserPageId: clientPage.browserPageId,
         worktreeId: clientPage.workspaceId,
@@ -170,7 +170,7 @@ export class RuntimeBrowserTabQueries {
     // Scope focus to the owning worktree; never switch the user's workspace.
     const focusWorktreeId =
       worktreeId ?? browserManager.getWorktreeIdForTab(result.browserPageId) ?? undefined
-    publishSwitchedBrowserSessionTab(this.host, {
+    await publishSwitchedBrowserSessionTab(this.host, {
       placementKind: 'bridge',
       browserPageId: result.browserPageId,
       worktreeId: focusWorktreeId,

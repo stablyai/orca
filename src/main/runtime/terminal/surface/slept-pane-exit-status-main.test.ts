@@ -53,7 +53,7 @@ it.each([
         : {})
     })
     runtime.attachWindow(1)
-    runtime.syncWindowGraph(1, mountedSurfaceGraph())
+    await runtime.syncWindowGraph(1, mountedSurfaceGraph())
     paneKeyPtyId.set(PANE_B, 'pty-b')
     ptyPaneKey.set('pty-b', PANE_B)
     ptyIncarnationById.set('pty-b', 'inc-b')

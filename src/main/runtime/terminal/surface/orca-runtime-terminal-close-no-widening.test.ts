@@ -29,11 +29,11 @@ type Condition =
   | 'nothing-published'
   | 'pane-unlisted'
 
-function syncRendererSplit(
+async function syncRendererSplit(
   harness: CloseContinuityHarness,
   ptyIdsByLeafId: Record<string, string>,
   livePtyIdsByLeafId = ptyIdsByLeafId
-): void {
+): Promise<void> {
   const parentLayout = {
     root: {
       type: 'split' as const,
@@ -58,7 +58,7 @@ function syncRendererSplit(
       terminalLayoutsByTabId: { ...session.terminalLayoutsByTabId, [TAB_ID]: parentLayout }
     }))
   }
-  harness.runtime.syncWindowGraph(1, {
+  await harness.runtime.syncWindowGraph(1, {
     tabs: [
       {
         tabId: TAB_ID,
@@ -92,17 +92,18 @@ function syncRendererSplit(
   })
 }
 
-function arrange(entry: Entry, condition: Condition): CloseContinuityHarness {
+async function arrange(entry: Entry, condition: Condition): Promise<CloseContinuityHarness> {
   const usesPtyRecord = entry !== 'cli-graph' && entry !== 'renderer' && condition !== 'no-live-pty'
-  const harness = createHarness({ publishMobileSurface: true, registerPtyBacked: usesPtyRecord })
-  if (condition === 'unbound-sibling') {
-    // Renderer split exists before PTY binding/persistence.
-    syncRendererSplit(harness, { [LEAF_ID]: PTY_ID })
-  } else {
-    harness.syncSplitFixtureGraph()
-  }
+  const harness = await createHarness({
+    publishMobileSurface: true,
+    registerPtyBacked: usesPtyRecord
+  })
+  // Renderer split exists before PTY binding/persistence.
+  await (condition === 'unbound-sibling'
+    ? syncRendererSplit(harness, { [LEAF_ID]: PTY_ID })
+    : harness.syncSplitFixtureGraph())
   if (condition === 'no-live-pty') {
-    syncRendererSplit(
+    await syncRendererSplit(
       harness,
       { [LEAF_ID]: 'pty-exited', [SIBLING_LEAF_ID]: SIBLING_PTY_ID },
       { [SIBLING_LEAF_ID]: SIBLING_PTY_ID }
@@ -110,10 +111,10 @@ function arrange(entry: Entry, condition: Condition): CloseContinuityHarness {
   }
   if (entry === 'cli-pty') {
     // Graphless leaf resolves through the PTY, matching runtime-owned panes.
-    harness.syncFixtureTabWithoutLeaf()
+    await harness.syncFixtureTabWithoutLeaf()
   }
   if (condition === 'nothing-published') {
-    harness.runtime.syncWindowGraph(1, {
+    await harness.runtime.syncWindowGraph(1, {
       tabs: [
         {
           tabId: TAB_ID,
@@ -139,7 +140,7 @@ function arrange(entry: Entry, condition: Condition): CloseContinuityHarness {
   }
   if (condition === 'pane-unlisted') {
     // Renderer lags main: sibling has no layout, closed pane has no row.
-    harness.runtime.syncWindowGraph(1, {
+    await harness.runtime.syncWindowGraph(1, {
       tabs: [
         {
           tabId: TAB_ID,
@@ -234,7 +235,7 @@ async function closePane(entry: Entry, harness: CloseContinuityHarness): Promise
   }
   if (entry === 'phone-headless') {
     harness.runtime.setNotifier(null)
-    harness.syncEmptyGraph()
+    await harness.syncEmptyGraph()
   }
   await harness.runtime.closeMobileSessionTab(`id:${WORKTREE_ID}`, `${TAB_ID}::${LEAF_ID}`, {
     reason: 'user'
@@ -283,7 +284,7 @@ async function closesOnlyThatPane(
   entry: (typeof rows)[number][0],
   condition: (typeof rows)[number][1]
 ): Promise<void> {
-  const harness = arrange(entry, condition)
+  const harness = await arrange(entry, condition)
   const siblingWasPersisted = Boolean(
     harness.getSession().terminalLayoutsByTabId[TAB_ID]?.ptyIdsByLeafId?.[SIBLING_LEAF_ID]
   )
@@ -317,9 +318,9 @@ async function closesOnlyThatPane(
 
 describe("a close of a tab's last pane still closes the tab", () => {
   it('on a host with no desktop window, closes the whole tab in main and for paired clients', async () => {
-    const harness = createHarness({ publishMobileSurface: true, registerPtyBacked: true })
+    const harness = await createHarness({ publishMobileSurface: true, registerPtyBacked: true })
     harness.runtime.setNotifier(null)
-    harness.syncEmptyGraph()
+    await harness.syncEmptyGraph()
 
     await harness.runtime.closeMobileSessionTab(`id:${WORKTREE_ID}`, `${TAB_ID}::${LEAF_ID}`, {
       reason: 'user'

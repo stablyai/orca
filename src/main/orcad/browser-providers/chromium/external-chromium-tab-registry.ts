@@ -74,7 +74,7 @@ export class ExternalChromiumTabRegistry {
     this.pagesByPublicId.set(publicPageId, page)
     this.pagesByAgentId.set(agentPageId, page)
     this.setActivePage(page)
-    host.markHeadlessBrowserSessionTabActive?.(worktreeId, publicPageId, {
+    await host.markHeadlessBrowserSessionTabActive?.(worktreeId, publicPageId, {
       ...(typeof params.targetGroupId === 'string' ? { targetGroupId: params.targetGroupId } : {}),
       // External creates have no paired-device caller; preserve host-wide focus behavior.
       focusesHost: true

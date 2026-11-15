@@ -25,7 +25,7 @@ it.each(['renderer:active-generation', 'headless:active-generation'])(
       kill: () => true,
       getForegroundProcess: async () => null
     })
-    runtime.syncWindowGraph(0, {
+    await runtime.syncWindowGraph(0, {
       tabs: [],
       leaves: [],
       mobileSessionTabs: [

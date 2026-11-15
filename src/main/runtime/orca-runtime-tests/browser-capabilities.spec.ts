@@ -37,7 +37,7 @@ describe('OrcaRuntimeService', () => {
       tabGroups: [{ id: 'group-1', activeTabId: null, tabOrder: [] }],
       tabs: []
     })
-    runtime.syncWindowGraph(1, {
+    await runtime.syncWindowGraph(1, {
       tabs: [],
       leaves: [],
       mobileSessionTabs: [rendererSnapshot(1)]
@@ -54,12 +54,12 @@ describe('OrcaRuntimeService', () => {
     })
     runtime.notifyMobileSessionTabsChanged(TEST_WORKTREE_ID)
 
-    runtime.syncWindowGraph(1, {
+    await runtime.syncWindowGraph(1, {
       tabs: [],
       leaves: [],
       mobileSessionTabs: [rendererSnapshot(2)]
     })
-    runtime.syncWindowGraph(1, {
+    await runtime.syncWindowGraph(1, {
       tabs: [],
       leaves: [],
       mobileSessionTabs: [rendererSnapshot(3)]
@@ -70,14 +70,14 @@ describe('OrcaRuntimeService', () => {
     ])
 
     expect(pages.retirePage('page-client', placement)).toBe(true)
-    runtime.syncWindowGraph(1, {
+    await runtime.syncWindowGraph(1, {
       tabs: [],
       leaves: [],
       mobileSessionTabs: [rendererSnapshot(3)]
     })
     expect((await runtime.listMobileSessionTabs(`id:${TEST_WORKTREE_ID}`)).tabs).toEqual([])
 
-    runtime.syncWindowGraph(1, {
+    await runtime.syncWindowGraph(1, {
       tabs: [],
       leaves: [],
       mobileSessionTabs: [rendererSnapshot(4)]

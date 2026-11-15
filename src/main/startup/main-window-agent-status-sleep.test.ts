@@ -80,12 +80,12 @@ afterEach(async () => {
   rmSync(home, { recursive: true, force: true })
 })
 
-function syncPaneGraph(
+async function syncPaneGraph(
   runtime: OrcaRuntimeService,
   ptyId: string,
   binding: { tabId: string; leafId: string; incarnationId: string }
-): void {
-  runtime.syncWindowGraph(1, {
+): Promise<void> {
+  await runtime.syncWindowGraph(1, {
     tabs: [
       {
         ...binding,
@@ -99,7 +99,7 @@ function syncPaneGraph(
   })
 }
 
-function setup(ptyId: string, connectionId: string | null) {
+async function setup(ptyId: string, connectionId: string | null) {
   const binding = { tabId: 'host-tab', leafId: HEADLESS_LEAF_ID, incarnationId: INCARNATION }
   const session = withBoundPane(makeWorkspaceSessionWithHeadlessTerminal(), {
     ...binding,
@@ -118,7 +118,7 @@ function setup(ptyId: string, connectionId: string | null) {
   runtime.registerPty(ptyId, TEST_WORKTREE_ID, connectionId, binding)
   ownedPtys.add(ptyId)
   runtime.attachWindow(1)
-  syncPaneGraph(runtime, ptyId, binding)
+  await syncPaneGraph(runtime, ptyId, binding)
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the placement adapter reads only the fixture's real getWorkspaceSession implementation.
   bindTerminalPaneStatusLifecycle(runtime, runtimeStore as unknown as Store)
   server.ingestTerminalStatus({
@@ -133,7 +133,7 @@ function setup(ptyId: string, connectionId: string | null) {
 
 it('forwards the saved Done marker to both windows before the sleep kill resolves', async () => {
   const id = 'local-sleeping-pty'
-  const h = setup(id, null)
+  const h = await setup(id, null)
   rememberPaneKeyForPty(id, PANE)
   ptyIncarnationById.set(id, INCARNATION)
   ptyOwnership.set(id, 'local')
@@ -178,7 +178,7 @@ it.each([false, true])(
   'settles a delayed SSH exit only while its runtime binding owns the pane; successor=%s',
   async (successor) => {
     const id = toAppSshPtyId('ssh-1', 'remote-sleep')
-    const h = setup(id, 'ssh-1')
+    const h = await setup(id, 'ssh-1')
     const settle = h.runtime.intentionalPtyStops.mark(id, 'reversible', INCARNATION)
     settle(true)
     expect(paneKeyPtyId.has(PANE)).toBe(false)
@@ -195,7 +195,7 @@ it.each([false, true])(
         getConnectionExecutionHostId('ssh-1')
       )
       h.runtime.registerPty(replacement, TEST_WORKTREE_ID, 'ssh-1', replacementBinding)
-      syncPaneGraph(h.runtime, replacement, replacementBinding)
+      await syncPaneGraph(h.runtime, replacement, replacementBinding)
       ownedPtys.add(replacement)
       expect(h.runtime.resolveTerminalPane(PANE)).toMatchObject({
         ptyId: replacement,

@@ -179,10 +179,13 @@ async function releaseWslMovesHereNow(
 }
 
 /** R39: removed here but kept running for another Orca; only re-adding the host reaches it again. */
-function wslMoveHostKeptForPeers(userDataPath: string, move: WslMoveCutover): boolean {
+async function wslMoveHostKeptForPeers(
+  userDataPath: string,
+  move: WslMoveCutover
+): Promise<boolean> {
   return (
     wasWslHostKeptForPeers(userDataPath, move.destinationEnvironmentId) &&
-    !listEnvironments(userDataPath).some((env) => env.id === move.destinationEnvironmentId)
+    !(await listEnvironments(userDataPath)).some((env) => env.id === move.destinationEnvironmentId)
   )
 }
 
@@ -199,7 +202,7 @@ async function releaseOneMoveHere(
   // A bring-back reads first and refuses before turning anything off, so nothing is toggled.
   const preflight = await ports.preflightHostCopies?.(move)
   if (preflight !== undefined && preflight !== 'stopped') {
-    if (preflight === 'unreachable' && wslMoveHostKeptForPeers(userDataPath, move)) {
+    if (preflight === 'unreachable' && (await wslMoveHostKeptForPeers(userDataPath, move))) {
       return keptForPeersRefusal()
     }
     return {
@@ -214,7 +217,10 @@ async function releaseOneMoveHere(
     applyHere: () => () => {}
   }
   if (automations.outcome !== 'stopped') {
-    if (automations.outcome === 'unreachable' && wslMoveHostKeptForPeers(userDataPath, move)) {
+    if (
+      automations.outcome === 'unreachable' &&
+      (await wslMoveHostKeptForPeers(userDataPath, move))
+    ) {
       return keptForPeersRefusal()
     }
     return {
@@ -237,7 +243,7 @@ async function releaseOneMoveHere(
   const asleep = wslMoveHostCopiesSlept(stopped) ? { hostTerminalsAsleep: true as const } : {}
   if (stop !== 'stopped') {
     await automations.restore()
-    if (stop === 'unreachable' && wslMoveHostKeptForPeers(userDataPath, move)) {
+    if (stop === 'unreachable' && (await wslMoveHostKeptForPeers(userDataPath, move))) {
       return keptForPeersRefusal()
     }
     return {
