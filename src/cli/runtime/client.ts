@@ -47,6 +47,7 @@ import {
   resolveWorkerStartReadinessTimeoutMs
 } from '../../shared/orchestration/orchestration-timing-budgets'
 import { MAX_TIMER_DELAY_MS } from '../../shared/concurrency/timer-delay'
+import { artifactMethodTimeoutMs } from './connection/artifact-method-timeout'
 import {
   buildOrchestrationRecoveryCommand,
   resolveOrchestrationCliExecutable
@@ -225,7 +226,7 @@ export class RuntimeClient {
         return Math.max(inner + LONG_POLL_CLIENT_GRACE_MS, this.requestTimeoutMs)
       }
     }
-    return this.requestTimeoutMs
+    return Math.max(artifactMethodTimeoutMs(method), this.requestTimeoutMs)
   }
 
   async getCliStatus(): Promise<RuntimeRpcSuccess<CliStatusResult>> {

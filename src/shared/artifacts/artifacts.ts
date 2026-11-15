@@ -7,6 +7,20 @@ export const ARTIFACT_CLI_MAX_RPC_BYTES = 800 * 1024
 /** Allows JSON escaping while staying below the cloud API's 11 MiB body budget. */
 export const ARTIFACT_MAX_REQUEST_BYTES = 11 * 1024 * 1024
 
+/** RPC error code for an artifact API 429; `data` carries the reset time and limit. */
+export const ARTIFACT_RATE_LIMITED_CODE = 'artifact_rate_limited'
+
+/** Per-request budget for one call to the artifact cloud API. */
+export const ARTIFACT_CLOUD_REQUEST_TIMEOUT_MS = 20_000
+
+/** A 429 asking for a longer wait fails fast; a longer hold would block the file's publish queue. */
+export const ARTIFACT_RATE_LIMIT_MAX_RETRY_DELAY_SECONDS = 60
+
+/** Covers a share's create + follow-up update, each allowed one rate-limit wait and replay. */
+export const ARTIFACT_CLI_REQUEST_TIMEOUT_MS =
+  2 * (2 * ARTIFACT_CLOUD_REQUEST_TIMEOUT_MS + ARTIFACT_RATE_LIMIT_MAX_RETRY_DELAY_SECONDS * 1000) +
+  10_000
+
 export function artifactContentByteLength(content: string): number {
   return new TextEncoder().encode(content).byteLength
 }
