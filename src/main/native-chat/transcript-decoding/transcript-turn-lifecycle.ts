@@ -1,8 +1,5 @@
 import type { AgentType } from '../../../shared/agent-status/contracts/agent-status-types'
-import type {
-  NativeChatTurnLifecycle,
-  NativeChatTurnLifecycleState
-} from '../../../shared/native-chat/native-chat-types'
+import type { NativeChatTurnLifecycle } from '../../../shared/native-chat/native-chat-types'
 import { resolveNativeChatTranscriptAgent } from '../../../shared/native-chat/native-chat-agent-support'
 import { isNoiseMessage } from '../../../shared/native-chat/transcript/messages/native-chat-noise'
 import { claudeBashInputAsTypedCommand } from '../../../shared/agent-hook-listener/providers/claude/transcripts/claude-bash-input'
@@ -34,32 +31,6 @@ export function nativeChatTurnLifecycleDecoderForAgent(
     return decodeClaudeTurnLifecycle
   }
   return null
-}
-
-/** A turn marker as proof for a read: `unproven` is an end inferred from prose, which more work
- *  can follow, so only an explicit provider end reads `completed`. */
-export type NativeChatTurnEvidence = NativeChatTurnLifecycleState | 'unproven'
-
-export function nativeChatTurnEvidenceDecoderForAgent(
-  agent: AgentType
-): ((line: string, fallbackId: string) => NativeChatTurnEvidence | null) | null {
-  const transcriptAgent = resolveNativeChatTranscriptAgent(agent)
-  if (transcriptAgent === 'codex') {
-    return decodeCodexTurnEvidence
-  }
-  return transcriptAgent === 'claude' ? decodeClaudeTurnEvidence : null
-}
-
-const decodeCodexTurnEvidence = (line: string, fallbackId: string) =>
-  decodeCodexTurnLifecycle(line, fallbackId)?.state ?? null
-
-function decodeClaudeTurnEvidence(line: string, fallbackId: string): NativeChatTurnEvidence | null {
-  const state = decodeClaudeTurnLifecycle(line, fallbackId)?.state
-  if (state !== 'completed') {
-    return state ?? null
-  }
-  const stopReason = asRecord(parseJsonObject(line)?.message)?.stop_reason
-  return isClaudeTerminalStopReason(stopReason) ? 'completed' : 'unproven'
 }
 
 export function decodeCodexTurnLifecycle(

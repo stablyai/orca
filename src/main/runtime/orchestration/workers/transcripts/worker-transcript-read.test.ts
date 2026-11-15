@@ -230,7 +230,7 @@ describe('worker transcript reads', () => {
         message: { role: 'user', content: [{ type: 'text', text: 'return FINISHED' }] }
       })
     )
-    expect(await read()).toMatchObject({ ok: true, turn: 'working' })
+    expect(await read()).toMatchObject({ ok: true, turn: { state: 'working' } })
 
     const assistant = (uuid: string, stopReason?: string) =>
       row({
@@ -244,9 +244,9 @@ describe('worker transcript reads', () => {
         }
       })
     await appendFile(claudePath, assistant('u2'))
-    expect(await read()).toMatchObject({ ok: true, turn: 'unproven' })
+    expect(await read()).not.toHaveProperty('turn')
     await appendFile(claudePath, assistant('u3', 'end_turn'))
-    expect(await read()).toMatchObject({ ok: true, turn: 'completed' })
+    expect(await read()).toMatchObject({ ok: true, turn: { state: 'completed' } })
   })
 
   it('carries whether a Codex rollout completed its task', async () => {
@@ -259,11 +259,11 @@ describe('worker transcript reads', () => {
       event({ type: 'task_started', turn_id: 't1' }) +
         event({ type: 'user_message', message: 'return FINISHED' })
     )
-    expect(await read()).toMatchObject({ ok: true, turn: 'working' })
+    expect(await read()).toMatchObject({ ok: true, turn: { state: 'working' } })
     await appendFile(
       transcriptPath,
       `${codexMessage('reply', 'FINISHED')}\n${event({ type: 'task_complete', turn_id: 't1' })}`
     )
-    expect(await read()).toMatchObject({ ok: true, turn: 'completed' })
+    expect(await read()).toMatchObject({ ok: true, turn: { state: 'completed' } })
   })
 })

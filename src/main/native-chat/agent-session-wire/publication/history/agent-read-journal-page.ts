@@ -39,7 +39,16 @@ export async function readAgentJournalPage(
   )
   const { page } = frame.result
   const shown = pageEntries(page.items, page.hasOlder, request.limit, waiting)
-  const state = journalTurnState(page.latestTurn, frame.acceptedUnopened === true, shown)
+  const state = journalTurnState(
+    page.latestTurn,
+    frame.acceptedUnopened === true,
+    shown,
+    page.items.some(
+      (item) =>
+        (item.body.kind === 'approval' || item.body.kind === 'question') &&
+        item.body.resolution.state === 'pending'
+    )
+  )
   return { entries: shown.entries, limited: shown.limited, ...(state ? { state } : {}) }
 }
 
@@ -83,10 +92,11 @@ function pageEntries(
 function journalTurnState(
   latest: AgentSessionLatestTurn | null | undefined,
   acceptedUnopened: boolean,
-  shown: ShownEntries
+  shown: ShownEntries,
+  unresolvedPrompt: boolean
 ): AgentStatusState | undefined {
-  if (shown.entries.some((entry) => 'pending' in entry && entry.pending)) {
-    return 'waiting'
+  if (unresolvedPrompt) {
+    return undefined
   }
   if (acceptedUnopened || latest?.turn.state === 'running') {
     return 'working'

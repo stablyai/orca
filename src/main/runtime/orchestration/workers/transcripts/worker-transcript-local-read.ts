@@ -6,7 +6,10 @@ import {
   type NativeChatLineDecoder
 } from '../../../../native-chat/transcript-tail-reader'
 import { TAIL_CHUNK_BYTES } from '../../../../native-chat/transcript-watching/transcript-tail-boundary'
-import type { NativeChatTurnEvidence } from '../../../../native-chat/transcript-decoding/transcript-turn-lifecycle'
+import type {
+  nativeChatTurnEvidenceObserverForAgent,
+  NativeChatTurnEvidence
+} from '../../../../native-chat/transcript-decoding/transcript-turn-evidence'
 import { transcriptFallbackId } from '../../../../native-chat/transcript-streaming/transcript-fallback-id'
 import {
   localTranscriptOffsetStartsInsideRecord,
@@ -46,7 +49,7 @@ export async function readInitialLocalWorkerTranscriptPage(
   filePath: string,
   limit: number,
   decode: NativeChatLineDecoder,
-  decodeTurn: ((line: string, fallbackId: string) => NativeChatTurnEvidence | null) | null
+  turnObserver: ReturnType<typeof nativeChatTurnEvidenceObserverForAgent>
 ): Promise<LocalTranscriptReadResult> {
   const before = await readLocalTranscriptSourceIdentity(filePath)
   if (!before) {
@@ -58,7 +61,11 @@ export async function readInitialLocalWorkerTranscriptPage(
     decode,
     false,
     undefined,
-    decodeTurn
+    null,
+    undefined,
+    undefined,
+    false,
+    turnObserver?.observe
   )
   const after = await readLocalTranscriptSourceIdentity(filePath)
   if (workerTranscriptSourceChanged(before, after, page.consumedTo)) {
@@ -72,6 +79,10 @@ export async function readInitialLocalWorkerTranscriptPage(
   if (!boundaryCheckpoint) {
     return sourceChanged()
   }
+  const turn =
+    page.malformedRecordCount || page.oversizedRecordCount
+      ? undefined
+      : turnObserver?.result(page.messageOffsets ?? [])
   return {
     ok: true,
     filePath,
@@ -82,7 +93,7 @@ export async function readInitialLocalWorkerTranscriptPage(
     limited: page.hasMore,
     clipping: [],
     warnings: recordWarnings(page.malformedRecordCount, page.oversizedRecordCount),
-    ...(page.lifecycle ? { turn: page.lifecycle } : {})
+    ...(turn ? { turn } : {})
   }
 }
 

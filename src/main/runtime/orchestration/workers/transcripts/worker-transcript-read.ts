@@ -19,9 +19,9 @@ import {
 } from './worker-transcript-local-read'
 import { readInitialWorkerTranscriptReusing } from './worker-transcript-initial-read-cache'
 import {
-  nativeChatTurnEvidenceDecoderForAgent,
+  nativeChatTurnEvidenceObserverForAgent,
   type NativeChatTurnEvidence
-} from '../../../../native-chat/transcript-decoding/transcript-turn-lifecycle'
+} from '../../../../native-chat/transcript-decoding/transcript-turn-evidence'
 
 type WorkerTranscriptReadFailure = {
   ok: false
@@ -113,7 +113,7 @@ async function readResolvedWorkerTranscript(
             filePath,
             limit,
             decode,
-            nativeChatTurnEvidenceDecoderForAgent(args.agent)
+            nativeChatTurnEvidenceObserverForAgent(args.agent)
           )
         : await readForwardLocalWorkerTranscriptPage(
             filePath,
@@ -132,6 +132,10 @@ async function readResolvedWorkerTranscript(
       return { ok: false, reason: 'source_changed', warnings: [] }
     }
     const bounded = boundWorkerTranscriptMessages(page.messages, filePath)
+    const turn =
+      page.turn?.state === 'completed' && !bounded.messages[page.turn.replyIndex ?? -1]
+        ? undefined
+        : page.turn
     return {
       ok: true,
       filePath,
@@ -145,7 +149,7 @@ async function readResolvedWorkerTranscript(
         ...(bounded.limited ? ['transcript_payload'] : [])
       ],
       warnings: [...page.warnings, ...bounded.warnings],
-      ...(page.turn ? { turn: page.turn } : {})
+      ...(turn ? { turn } : {})
     }
   } catch (error) {
     const code = (error as NodeJS.ErrnoException | null)?.code

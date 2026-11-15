@@ -1,4 +1,4 @@
-import { afterEach, expect, it } from 'vitest'
+import { afterEach, expect, it, vi } from 'vitest'
 import {
   messageFixture,
   target
@@ -56,12 +56,12 @@ function fixture() {
     },
     head: (sequence: number) =>
       f.db.prepare('UPDATE journal_chat_state SET last_sequence=?').run(sequence),
-    read: (limit = 20) =>
+    read: (limit = 20, waiting = () => true) =>
       readAgentJournalPage(
         // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the adapter uses only these real SQLite-backed reads.
         journal as SqlAgentSessionJournal,
         { sessionId: 'chat', limit },
-        () => true
+        waiting
       )
   }
 }
@@ -273,3 +273,93 @@ it('omits the state of an ended turn whose reply is outside the page', async () 
   f.head(251)
   expect(await f.read(1)).toEqual({ entries: [], limited: true })
 })
+
+it('does not keep a send folded into a completed turn working', async () => {
+  const f = fixture()
+  f.seedItem({
+    ...message(1, ''),
+    body: { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'first' }] }
+  })
+  f.seedSend()
+  f.db.prepare("UPDATE journal_submission_attempts SET dispatch_state='accepted'").run()
+  f.seedItem({
+    ...turn(8, 'completed'),
+    body: {
+      kind: 'turn',
+      turnId: 'turn-1',
+      state: 'completed',
+      outcome: 'success',
+      userItemId: 'orca:1'
+    }
+  })
+  f.seedItem(reply(9, 'BOTH ANSWERED'))
+  f.head(9)
+  expect(await f.read()).toMatchObject({
+    state: 'done',
+    entries: [
+      { role: 'user', text: 'first' },
+      { role: 'user', text: 'original' },
+      { role: 'assistant', text: 'BOTH ANSWERED' }
+    ]
+  })
+})
+
+it.each([4_000, 40_000])('bounds the accepted-send lookup behind %i turn-tail rows', async (n) => {
+  const f = fixture()
+  f.seedSend()
+  f.db.prepare("UPDATE journal_items SET sequence=0 WHERE item_id<>'turn-1'").run()
+  f.db.prepare("UPDATE journal_submission_attempts SET dispatch_state='accepted'").run()
+  f.seedItem({
+    ...turn(1, 'running'),
+    body: { kind: 'turn', turnId: 'turn-1', state: 'running', userItemId: 'orca:send' }
+  })
+  f.db.exec('BEGIN')
+  for (let sequence = 8; sequence < n + 8; sequence++) {
+    f.seedItem({ ...reply(sequence, ''), body: { kind: 'status', text: 'working' } })
+  }
+  f.db.exec('COMMIT')
+  f.head(n + 7)
+  const prepare = f.db.prepare.bind(f.db)
+  const plans: string[] = []
+  vi.spyOn(f.db, 'prepare').mockImplementation((sql) => {
+    if (sql.includes('attempt.dispatch_state') && sql.includes('JOIN journal_items item')) {
+      plans.push(
+        ...prepare(`EXPLAIN QUERY PLAN ${sql}`)
+          .all('chat', 'epoch')
+          .map((row) => String(row.detail))
+      )
+    }
+    return prepare(sql)
+  })
+  expect(await f.read()).toMatchObject({ state: 'working', entries: [], limited: true })
+  // The item side must be a primary-key probe, never a walk through the growing turn tail.
+  expect(
+    plans.some((plan) =>
+      /SEARCH item USING .*\(session_id=\? AND epoch=\? AND item_id=\?\)/.test(plan)
+    )
+  ).toBe(true)
+  expect(plans.some((plan) => /TEMP B-TREE/.test(plan))).toBe(false)
+})
+
+it.each([false, true])(
+  'omits state for an unresolved snapshot prompt with earlier actionability %s',
+  async (actionable) => {
+    const f = fixture()
+    f.seedItem(turn(1, 'running'))
+    f.seedItem({
+      ...message(2, ''),
+      body: {
+        kind: 'approval',
+        title: 'Run command?',
+        detail: null,
+        options: [{ id: 'yes', label: 'Allow' }],
+        resolution: { state: 'pending', selectedOptionId: null, resolvedBy: null, resolvedAt: null }
+      }
+    })
+    f.head(2)
+    expect(await f.read(20, () => actionable)).toEqual({
+      entries: [{ kind: 'approval', text: 'Run command?', pending: actionable }],
+      limited: false
+    })
+  }
+)

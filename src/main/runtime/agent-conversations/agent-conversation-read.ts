@@ -6,7 +6,7 @@ import {
 } from '../../../shared/agent-conversations/agent-conversation-contracts'
 import type { NativeChatMessage } from '../../../shared/native-chat/native-chat-types'
 import type { AgentStatusState } from '../../../shared/agent-status/contracts/agent-status-types'
-import type { NativeChatTurnEvidence } from '../../native-chat/transcript-decoding/transcript-turn-lifecycle'
+import type { NativeChatTurnEvidence } from '../../native-chat/transcript-decoding/transcript-turn-evidence'
 import type { RpcContext } from '../rpc/core'
 import {
   requireInstalledStructuredHost,
@@ -159,7 +159,7 @@ async function readTerminalTranscript(
     )
   }
   const entries = transcriptEntries(transcript.messages)
-  const state = transcriptTurnState(transcript.turn, entries)
+  const state = transcriptTurnState(transcript.turn, transcript.messages, entries)
   return {
     orcaSessionId,
     kind: 'terminal',
@@ -175,13 +175,19 @@ async function readTerminalTranscript(
  *  needs an explicit end whose reply is the newest entry here. Anything else is unknown. */
 function transcriptTurnState(
   turn: NativeChatTurnEvidence | undefined,
+  messages: readonly NativeChatMessage[],
   entries: readonly AgentReadEntry[]
 ): AgentStatusState | undefined {
-  if (turn === 'working') {
+  if (turn?.state === 'working') {
     return 'working'
   }
   const reply = entries.at(-1)
-  return turn === 'completed' && reply?.kind === 'message' && reply.role === 'assistant'
+  const newest = messages.findLastIndex((message) => transcriptEntries([message]).length > 0)
+  return turn?.state === 'completed' &&
+    turn.replyIndex === newest &&
+    reply?.kind === 'message' &&
+    reply.role === 'assistant' &&
+    reply.text.trim().length > 0
     ? 'done'
     : undefined
 }

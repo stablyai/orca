@@ -131,3 +131,13 @@ describe('a turn its gone agent left running', () => {
     expect(rig.adapter.acquire).toHaveBeenCalledOnce()
   })
 })
+
+it('omits crash-stale running state after failed exit settlement', async () => {
+  await exitWithUnwrittenSettlement(2, 'kill-delivered')
+  const result = await rig.host.reads.agentReadPage(SESSION, 20)
+  expect(result).toEqual({
+    entries: [{ kind: 'message', role: 'user', text: 'hello' }],
+    limited: false
+  })
+  expect(rig.adapter.acquire).toHaveBeenCalledOnce()
+})

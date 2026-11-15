@@ -281,3 +281,65 @@ it.skipIf(process.platform === 'win32')(
     })
   }
 )
+
+it.each(['thinking end', 'Stop continuation'])(
+  'omits terminal completion for a %s without its own reply',
+  async (shape) => {
+    const agent = await dormantAgent()
+    const path = agent.records.a.providerSession.transcriptPath
+    const row = (record: unknown) => `${JSON.stringify(record)}\n`
+    const assistant = (uuid: string, content: unknown[], stop_reason: string) =>
+      row({
+        type: 'assistant',
+        uuid,
+        message: { id: uuid, role: 'assistant', content, stop_reason }
+      })
+    const prompt = row({
+      type: 'user',
+      uuid: 'u1',
+      message: { role: 'user', content: [{ type: 'text', text: 'do task' }] }
+    })
+    const tool = assistant(
+      'a2',
+      [{ type: 'tool_use', id: 'tool1', name: 'Bash', input: { command: 'check' } }],
+      'tool_use'
+    )
+    const result = row({
+      type: 'user',
+      uuid: 'tool-result',
+      message: {
+        role: 'user',
+        content: [{ type: 'tool_result', tool_use_id: 'tool1', content: 'ok' }]
+      }
+    })
+    writeFileSync(
+      path,
+      shape === 'thinking end'
+        ? prompt +
+            tool +
+            result +
+            assistant('a3', [{ type: 'thinking', thinking: 'considering' }], 'end_turn')
+        : prompt +
+            assistant('a1', [{ type: 'text', text: 'draft answer' }], 'end_turn') +
+            row({
+              type: 'user',
+              uuid: 'feedback',
+              isMeta: true,
+              message: {
+                role: 'user',
+                content: [
+                  { type: 'text', text: 'Stop hook feedback:\nPlease run validation first.' }
+                ]
+              }
+            }) +
+            tool
+    )
+    const read = await agent.read()
+    expect(read.entries.at(-1)).toMatchObject({
+      role: 'assistant',
+      text: '',
+      tools: [{ name: 'Bash' }]
+    })
+    expect(read.state).toBeUndefined()
+  }
+)

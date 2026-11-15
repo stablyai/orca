@@ -27,7 +27,7 @@ it('reads committed history while another holder keeps the chat lane', async () 
         conversation: async () => ({ journal }),
         sessions: new Map(),
         seal() {},
-        deps: {}
+        deps: { store: { getRecord: () => null } }
       }) as never
   )
   try {

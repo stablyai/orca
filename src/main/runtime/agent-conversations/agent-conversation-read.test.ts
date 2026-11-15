@@ -1,3 +1,4 @@
+import type * as TranscriptReadModule from '../orchestration/workers/transcripts/worker-transcript-read'
 import { expect, it, vi } from 'vitest'
 import type { RpcContext } from '../rpc/core'
 import { readAgentConversation } from './agent-conversation-read'
@@ -23,6 +24,10 @@ vi.mock('../rpc/methods/structured-sessions/creation/structured-agent-session-ga
   requireStructuredAgentAudience: () => {},
   requireInstalledStructuredHost: terminal.host
 }))
+
+const actualTranscriptReader = await vi.importActual<typeof TranscriptReadModule>(
+  '../orchestration/workers/transcripts/worker-transcript-read'
+)
 
 // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the terminal read passes the context only to the mocked hook server.
 const ctx = { runtime: { readLocalSleepingAgentSessions: () => ({}) } } as unknown as RpcContext
@@ -122,3 +127,54 @@ it.each(['missing', 'unreadable', 'loop'] as const)(
     expect(terminal.host).not.toHaveBeenCalled()
   }
 )
+
+it('Codex completion cannot certify a previous turn reply after projection', async () => {
+  const { mkdtempSync, writeFileSync, rmSync } = await import('node:fs')
+  const { tmpdir } = await import('node:os')
+  const { join } = await import('node:path')
+  const dir = mkdtempSync(join(tmpdir(), 'council-codex-'))
+  try {
+    const path = join(dir, 'rollout.jsonl')
+    const event = (payload: unknown) => JSON.stringify({ type: 'event_msg', payload })
+    const rows = [
+      event({ type: 'task_started', turn_id: 't1' }),
+      event({ type: 'user_message', message: 'FIRST' }),
+      event({ type: 'agent_message', message: 'OLD ANSWER' }),
+      event({ type: 'task_complete', turn_id: 't1' }),
+      event({ type: 'task_started', turn_id: 't2' }),
+      JSON.stringify({
+        type: 'response_item',
+        payload: {
+          type: 'message',
+          role: 'user',
+          content: [{ type: 'input_image', image_url: 'https://example.test/image.png' }]
+        }
+      }),
+      event({ type: 'task_complete', turn_id: 't2', last_agent_message: 'NEW ANSWER' })
+    ]
+    writeFileSync(path, `${rows.join('\n')}\n`)
+    terminal.source.mockResolvedValue({
+      key: {
+        executionHost: 'local',
+        wslDistro: '',
+        agent: 'codex',
+        providerSessionId: 'p',
+        locator: ''
+      },
+      providerSession: { id: 'p', transcriptPath: path }
+    })
+    terminal.read.mockImplementation(actualTranscriptReader.readWorkerTranscript)
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: terminal addressing is supplied by the mocked identity seam.
+    const resolved = { kind: 'terminal', orcaSessionId: 'codex_probe' } as ResolvedAgentConversation
+    const result = await readAgentConversation(ctx, resolved, {})
+    expect(result).toMatchObject({
+      entries: [
+        { role: 'user', text: 'FIRST' },
+        { role: 'assistant', text: 'OLD ANSWER' }
+      ]
+    })
+    expect(result.state).toBeUndefined()
+  } finally {
+    rmSync(dir, { recursive: true, force: true })
+  }
+})

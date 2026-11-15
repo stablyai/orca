@@ -140,7 +140,8 @@ export function readJournalDomainHistoryFrame(
         : undefined
     const acceptedUnopened = request.acceptedUnopened
       ? readJournalDomainAcceptedSendUnopened(
-          new JournalSqlScope(db, request.sessionId, head.epoch)
+          new JournalSqlScope(db, request.sessionId, head.epoch),
+          latestTurnItem(db, head)?.sequence ?? -1
         )
       : undefined
     db.exec('COMMIT')

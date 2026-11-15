@@ -58,10 +58,17 @@ export async function readNativeChatTranscriptTailFile<L = NativeChatTurnLifecyc
   decodeLifecycle?: ((line: string, fallbackId: string) => L | null) | null,
   signal?: AbortSignal,
   onConsumedBoundary?: (boundary: Buffer) => void,
-  sourceOrder = false
+  sourceOrder = false,
+  onDecodedLine?: (
+    line: string,
+    fallbackId: string,
+    offset: number,
+    message: NativeChatMessage | null
+  ) => void
 ): Promise<{
   messages: NativeChatMessage[]
   lifecycle?: L
+  messageOffsets?: number[]
   consumedTo: number
   hasMore: boolean
   beforeOffset: number
@@ -163,6 +170,7 @@ export async function readNativeChatTranscriptTailFile<L = NativeChatTurnLifecyc
     const selected = limit > 0 ? chronological.slice(Math.max(0, chronological.length - limit)) : []
     return {
       messages: selected.map((entry) => entry.message),
+      ...(onDecodedLine ? { messageOffsets: selected.map((entry) => entry.offset) } : {}),
       ...(lifecycle ? { lifecycle } : {}),
       consumedTo,
       hasMore: limit > 0 && chronological.length > limit,
@@ -223,6 +231,7 @@ export async function readNativeChatTranscriptTailFile<L = NativeChatTurnLifecyc
     // Use provider lifecycle records from the same window; visible assistant text cannot prove completion.
     lifecycle ??= decodeLifecycle?.(line, fallbackId) ?? undefined
     const message = decode(line, fallbackId)
+    onDecodedLine?.(line, fallbackId, lineOffset, message)
     if (message) {
       messages.push({ message, offset: lineOffset })
     }
