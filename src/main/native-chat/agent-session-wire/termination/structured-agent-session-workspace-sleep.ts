@@ -125,6 +125,11 @@ export async function sleepStructuredAgentSessionWorkspace(
       stop.value &&
       host.deps.store.getConversation(sessionId)?.currentFence === stop.value.fence
     ) {
+      host.deps.logger.warn('workspace chat stop was refused; the session did not prove stopped', {
+        scope: 'workspace-chat-receipt',
+        sessionId,
+        fence: stop.value.fence
+      })
       failures.push({ sessionId, reason: 'stop-unverifiable' })
     }
   }
@@ -146,19 +151,30 @@ async function settleWorkspaceSleepChat(
     return { stopped: false, fence: current.lease.runtimeFence }
   }
   const journal = host.sessions.get(sessionId)?.journal
+  let warnedBusy = false
   const settle = async (): Promise<WorkspaceSleepVerdict> => {
     const pending = await journal?.reads.pendingSubmissions()
     // Stop queues its own end report, so judge work by state rather than lane occupancy.
     const quiet = (record: AgentSessionRecord): boolean => {
       const session = host.sessions.get(sessionId)
-      return !(
-        session?.child ||
-        host.tasks.hasPendingAttach(sessionId) ||
-        host.deliveryRunning(sessionId) ||
-        host.childWorkIncomplete(sessionId) ||
-        pending?.length ||
-        host.deps.hasOpenDispatch?.(record)
-      )
+      const busy = {
+        childOpen: Boolean(session?.child),
+        pendingAttach: host.tasks.hasPendingAttach(sessionId),
+        deliveryRunning: host.deliveryRunning(sessionId),
+        childWorkIncomplete: host.childWorkIncomplete(sessionId),
+        pendingSubmissions: pending?.length ?? 0,
+        openDispatch: Boolean(host.deps.hasOpenDispatch?.(record))
+      }
+      const isQuiet = !Object.values(busy).some(Boolean)
+      if (!isQuiet && !warnedBusy) {
+        warnedBusy = true
+        host.deps.logger.warn('workspace chat sleep refused; session is not quiet', {
+          scope: 'workspace-chat-receipt',
+          sessionId,
+          ...busy
+        })
+      }
+      return isQuiet
     }
     if (!markAsleep) {
       return quiet(current) ? { stopped: true } : null
