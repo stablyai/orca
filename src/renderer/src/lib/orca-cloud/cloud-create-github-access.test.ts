@@ -4,17 +4,17 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mocks = vi.hoisted(() => {
   type Listener = (state: { pendingWorktreeCreations: Record<string, unknown> }) => void
-  const store = {
-    state: {
-      pendingWorktreeCreations: { c1: {} } as Record<string, unknown>,
-      activePendingCreationId: 'c1' as string | null
-    },
-    listeners: new Set<Listener>()
-  }
+  const state: {
+    pendingWorktreeCreations: Record<string, unknown>
+    activePendingCreationId: string | null
+  } = { pendingWorktreeCreations: { c1: {} }, activePendingCreationId: 'c1' }
+  const store = { state, listeners: new Set<Listener>() }
+  const answers: unknown[] = []
+  const pushAccess: string = 'install'
   return {
     store,
-    answers: [] as unknown[],
-    pushAccess: 'install' as string,
+    answers,
+    pushAccess,
     install: vi.fn(async () => true),
     openUrl: vi.fn(async () => undefined),
     shown: true

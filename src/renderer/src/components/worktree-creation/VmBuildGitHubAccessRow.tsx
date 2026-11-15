@@ -29,7 +29,9 @@ function stepState(phase: CloudCreateGitHubAccess['phase']): 'running' | 'done' 
     case 'ok':
     case 'granted':
       return 'done'
-    default:
+    case 'needed':
+    case 'skipped':
+    case 'hidden':
       return 'pending'
   }
 }
@@ -54,7 +56,8 @@ function askLine(access: CloudCreateGitHubAccess, t: Translate): string {
         'An owner of {{owner}} has been asked to approve Orca’s GitHub app. This continues on its own once they do.',
         { owner: access.owner }
       )
-    default:
+    case 'install':
+    case undefined:
       return t(
         'orcaCloud.createGitHubAccess.installMeaning',
         'Install Orca’s GitHub app on {{owner}} so this workspace can push. You can pull without it.',

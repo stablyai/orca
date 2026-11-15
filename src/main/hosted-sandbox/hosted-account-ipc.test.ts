@@ -185,7 +185,7 @@ it('CREATE-GH-STEP: a public repo that can’t push asks with ids too; settings 
     { repoUrl: 'https://github.com/acme/evil' }
   )
   expect(evil).toMatchObject({ ok: true })
-  expect((evil as { value: Record<string, unknown> }).value.configureUrl).toBeUndefined()
+  expect(evil).not.toHaveProperty('value.configureUrl')
 })
 
 it('asks again with the repo and owner ids when access is missing, so GitHub preselects the repo', async () => {
