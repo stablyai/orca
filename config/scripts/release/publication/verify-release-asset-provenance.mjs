@@ -26,10 +26,14 @@ export function parseManifest(text, expected) {
   const fail = (what) => {
     throw new Error(`${expected.source} manifest ${what}`)
   }
-  if (!sameKeys(manifest, KEYS)) fail('has unexpected fields')
+  if (!sameKeys(manifest, KEYS)) {
+    fail('has unexpected fields')
+  }
   for (const key of ['schema', 'source', 'tag', 'release_sha', 'run_id']) {
     const want = key === 'schema' ? MANIFEST_SCHEMA : expected[key]
-    if (manifest[key] !== want) fail(`${key} is '${manifest[key]}', expected '${want}'`)
+    if (manifest[key] !== want) {
+      fail(`${key} is '${manifest[key]}', expected '${want}'`)
+    }
   }
   // Why: the Windows job uploads only on attempt 1 (reruns reuse those signed assets), so its manifest must be too.
   const attempt = manifest.run_attempt
@@ -37,7 +41,9 @@ export function parseManifest(text, expected) {
     fail(`run_attempt '${attempt}' is not allowed`)
   }
   const assets = Array.isArray(manifest.assets) ? manifest.assets : []
-  if (assets.length === 0 || assets.length > 50) fail('has no asset list')
+  if (assets.length === 0 || assets.length > 50) {
+    fail('has no asset list')
+  }
   for (const asset of assets) {
     const ok =
       sameKeys(asset, ['name', 'sha256', 'size']) &&
@@ -46,7 +52,9 @@ export function parseManifest(text, expected) {
       Number.isSafeInteger(asset.size) &&
       asset.size > 0 &&
       /^[0-9a-f]{64}$/.test(asset.sha256)
-    if (!ok) fail('has a malformed asset entry')
+    if (!ok) {
+      fail('has a malformed asset entry')
+    }
   }
   return manifest
 }
