@@ -1,4 +1,4 @@
-import { isPluginFontFamilyName } from './plugins/contributions/plugin-font-contribution'
+import { isPluginFontFamilyName } from '../plugins/contributions/plugin-font-contribution'
 
 export const BUNDLED_SYMBOLS_FONT_FAMILY = 'Orca Nerd Font Symbols'
 

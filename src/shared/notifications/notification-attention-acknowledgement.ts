@@ -1,13 +1,13 @@
 import {
   attentionOriginWasRead,
   type StructuredAttentionOrigin
-} from './agent-session/agent-session-attention'
-import { agentSessionScopeKey } from './agent-session/lifecycle/agent-session-record'
+} from '../agent-session/agent-session-attention'
+import { agentSessionScopeKey } from '../agent-session/lifecycle/agent-session-record'
 import type {
   NotificationAttentionAcknowledgement,
   NotificationDispatchRequest
 } from './notification-settings-types'
-import { toHostSessionPaneKey } from './workspace-layout/terminal-surface-id'
+import { toHostSessionPaneKey } from '../workspace-layout/terminal-surface-id'
 
 type Announcement = Pick<
   NotificationDispatchRequest,

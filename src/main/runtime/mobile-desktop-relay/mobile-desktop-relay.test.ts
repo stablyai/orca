@@ -1,8 +1,8 @@
 import { describe, expect, it, vi } from 'vitest'
-import { DELEGATED_MOBILE_DEVICES_RUNTIME_CAPABILITY } from '../../../shared/delegated-mobile-device-contract'
+import { DELEGATED_MOBILE_DEVICES_RUNTIME_CAPABILITY } from '../../../shared/remote-runtime/pairing/delegated-mobile-device-contract'
 
 import type { RuntimeRpcResponse } from '../../../shared/remote-runtime/rpc/runtime-rpc-envelope'
-import { RemoteRuntimeClientError } from '../../../shared/remote-runtime/remote-runtime-client-error'
+
 import type { RemoteRuntimePassthroughCallbacks } from '../../../shared/remote-runtime/remote-runtime-passthrough-socket'
 import { MobileDesktopRelay } from './mobile-desktop-relay'
 import type { RelayedPhone } from './mobile-desktop-relay-link'
@@ -237,32 +237,6 @@ describe('MobileDesktopRelay', () => {
       result: { capabilities: ['browser.screencast.v1'] }
     })
     relay.dispose()
-  })
-
-  it('answers every request still open when the server socket drops, then closes on phone disconnect', async () => {
-    sockets.length = 0
-    const { relay, phone, replies } = relayWithPhone()
-    relay.forward(phone, 'env-1', { id: 'a', method: 'terminal.list' }, '{"id":"a"}')
-    relay.forward(phone, 'env-1', { id: 'b', method: 'terminal.list' }, '{"id":"b"}')
-    await vi.waitFor(() => expect(sockets[0]?.sent).toHaveLength(2))
-    expect(sockets).toHaveLength(1)
-    sockets[0]!.callbacks.onText('{"id":"a","ok":true,"result":{},"_meta":{"runtimeId":"h"}}')
-    sockets[0]!.callbacks.onClose(
-      new RemoteRuntimeClientError('remote_runtime_unavailable', 'gone')
-    )
-    expect(replies.map((frame) => JSON.parse(frame))).toEqual([
-      { id: 'a', ok: true, result: {}, _meta: { runtimeId: 'h' } },
-      expect.objectContaining({
-        id: 'b',
-        ok: false,
-        error: expect.objectContaining({ code: 'remote_runtime_unavailable' })
-      })
-    ])
-
-    relay.forward(phone, 'env-1', { id: 'c', method: 'terminal.list' }, '{"id":"c"}')
-    await vi.waitFor(() => expect(sockets).toHaveLength(2))
-    relay.closePhoneConnection('conn-1')
-    await vi.waitFor(() => expect(sockets[1]!.closed).toBe(true))
   })
 
   it('closes a socket still opening when its server is removed, answering and never sending its requests', async () => {

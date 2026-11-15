@@ -152,7 +152,7 @@ export const VERIFY_CHECKS = [
       'mobile/web-entry/',
       'mobile/app.json',
       'mobile/locales/',
-      'src/shared/ui-locale',
+      'src/shared/i18n/ui-locale',
       'config/scripts/verify-mobile-localization',
       'config/scripts/localization/catalog-validation/verify-mobile-localization',
       'config/scripts/verify-localization-',

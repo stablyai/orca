@@ -3,12 +3,12 @@ import { translate } from '../../../i18n/mobile-i18n'
 import type {
   DiffComment,
   MobileDiffReviewState
-} from '../../../../../src/shared/diff-comment-types'
+} from '../../../../../src/shared/file-review/diff-comment-types'
 import type { ConnectionState } from '../../../transport/connection/connection-state'
 import type { RpcClient } from '../../../transport/rpc/rpc-client-contract'
 import { useClipboardWriter } from '../../../platform/clipboard/clipboard'
 import { triggerSuccess } from '../../../platform/haptics/haptics'
-import { formatDiffComments } from '../../../../../src/shared/diff-comments-format'
+import { formatDiffComments } from '../../../../../src/shared/file-review/diff-comments-format'
 import {
   clearSentMobileDiffComments,
   markMobileDiffCommentsSent

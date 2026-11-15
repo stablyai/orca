@@ -5,7 +5,7 @@ import {
   editorFormatterArgv,
   editorFormatterSchema,
   type EditorFormatResult
-} from '../../shared/editor-formatter'
+} from '../../shared/editor/formatting/editor-formatter'
 import { getRepoExecutionHostId } from '../../shared/execution-host'
 import { isPathInsideOrEqual } from '../../shared/cross-platform-path'
 import type { RuntimeStore } from '../runtime/construction/runtime-store-contract'

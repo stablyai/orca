@@ -5,7 +5,7 @@
  */
 import { normalizeRuntimePathForComparison } from '../cross-platform-path'
 import { LOCAL_EXECUTION_HOST_ID } from '../execution-host'
-import type { PythonEnvironment } from '../notebook-kernel-types'
+import type { PythonEnvironment } from '../editor/notebooks/notebook-kernel-types'
 import { wslUncDrivePathToWindows } from '../file-access/wsl-paths'
 
 /** A converted conversion's renderer half, as main lists it. */

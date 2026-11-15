@@ -3,11 +3,11 @@ import {
   parseExecutionHostId,
   toRuntimeExecutionHostId,
   type ExecutionHostId
-} from './execution-host'
+} from '../execution-host'
 import {
   isEphemeralVmRuntimeEnvironment,
   type PublicKnownRuntimeEnvironment
-} from './remote-runtime/host-catalog/runtime-environments'
+} from '../remote-runtime/host-catalog/runtime-environments'
 
 /** A client-configured notification source, not authority for executing work. */
 export type NotificationSourceId = ExecutionHostId

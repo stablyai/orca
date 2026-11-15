@@ -1,4 +1,4 @@
-import { isLoneStructuredAgentSessionConversationCommand } from './agent-session/view/structured-agent-session-composer'
+import { isLoneStructuredAgentSessionConversationCommand } from '../../../agent-session/view/structured-agent-session-composer'
 
 /** Append returned text without replacing typed drafts or duplicating an existing suffix.
  * Replace lone /compact, /clear or /new commands: they were unsent, and trailing text would read as their arguments. */

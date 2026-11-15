@@ -8,8 +8,8 @@ import i18next, {
 } from 'i18next'
 import { isPseudoLocalizationLocale, pseudoLocalizeString } from './pseudo-localization'
 import { DEFAULT_UI_LOCALE } from './ui-locale'
-import type { PluginLanguagePackRegistration } from './plugins/artifacts/plugin-language-pack-artifact'
-import { replacePluginLanguagePackResources } from './plugins/plugin-language-pack-i18n-resources'
+import type { PluginLanguagePackRegistration } from '../plugins/artifacts/plugin-language-pack-artifact'
+import { replacePluginLanguagePackResources } from '../plugins/plugin-language-pack-i18n-resources'
 
 export type OrcaI18n = {
   i18n: I18nInstance

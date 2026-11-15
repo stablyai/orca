@@ -1,5 +1,5 @@
-import { hasBinaryFileExtension } from './file-preview/binary-file-extensions'
-import { AGENT_SESSION_ATTACHMENTS_DIR_NAME } from './agent-session/agent-session-attachments'
+import { hasBinaryFileExtension } from '../../file-preview/binary-file-extensions'
+import { AGENT_SESSION_ATTACHMENTS_DIR_NAME } from '../../agent-session/agent-session-attachments'
 
 export function isCommittedChatAttachmentCandidate(path: string): boolean {
   return (

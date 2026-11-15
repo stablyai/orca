@@ -16,7 +16,7 @@ import {
 } from './helpers/paired-electron-client'
 import { pairMobileClient, type PairedMobileSocket } from './helpers/paired-mobile-client'
 import { toRuntimeExecutionHostId } from '../../src/shared/execution-host'
-import { notificationExecutionHostForOwner } from '../../src/shared/notification-source'
+import { notificationExecutionHostForOwner } from '../../src/shared/notifications/notification-source'
 import { waitForSessionReady } from './helpers/store'
 import {
   fakeWslConnects,

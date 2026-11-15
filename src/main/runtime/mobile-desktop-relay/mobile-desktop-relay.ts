@@ -5,7 +5,7 @@ import { createRelayedBrowserTab } from './relayed-browser-tab-create'
 import { GITHUB_EXACT_OPERATION_UNSUPPORTED } from '../../../shared/github/work-items/work-item-target'
 import { randomUUID } from 'node:crypto'
 import type { RpcRequest } from '../rpc/core'
-import type { DelegatedMobileDeviceSyncParams } from '../../../shared/delegated-mobile-device-contract'
+import type { DelegatedMobileDeviceSyncParams } from '../../../shared/remote-runtime/pairing/delegated-mobile-device-contract'
 import type { RemoteRuntimeClientError } from '../../../shared/remote-runtime/remote-runtime-client-error'
 import {
   failure,

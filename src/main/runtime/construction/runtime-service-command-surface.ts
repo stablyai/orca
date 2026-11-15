@@ -9,7 +9,7 @@ import type { RuntimeMobileSpeechCatalog } from '../speech/runtime-mobile-speech
 import type { RuntimeNativeChatDraftResolutions } from '../agent-session/launch/runtime-native-chat-draft-resolutions'
 import type { RuntimeSessionSearchSettingsController } from '../integrations/ai-vault/runtime-session-search-settings'
 import type { RuntimeSubscriptionRegistry } from '../client/runtime-subscription-registry'
-import type { NotificationAttentionAcknowledgement } from '../../../shared/notification-settings-types'
+import type { NotificationAttentionAcknowledgement } from '../../../shared/notifications/notification-settings-types'
 
 export type RuntimeServiceCommandSurface = {
   listAiVaultSessions: RuntimeAiVaultCommands['list']
