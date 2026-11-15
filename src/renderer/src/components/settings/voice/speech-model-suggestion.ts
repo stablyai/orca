@@ -1,6 +1,6 @@
-import { isOfferedSpeechModel } from './speech-model-retirement'
+import { isOfferedSpeechModel } from '../../../../../shared/speech/models/speech-model-retirement'
 import { speechModelQuality } from './speech-model-quality'
-import type { SpeechModelManifest } from './speech-types'
+import type { SpeechModelManifest } from '../../../../../shared/speech/speech-types'
 
 export type SpeechModelSuggestionOptions = {
   /** The user's current pick, which wins while it is still offered, even with its files gone. */

@@ -1,7 +1,7 @@
 import type {
   BrowserPage,
   BrowserWorkspace
-} from '../../../../../../shared/browser-workspace-types'
+} from '../../../../../../shared/browser/workspaces/browser-workspace-types'
 
 // Limit idle retained guest processes across hidden worktrees; four covers common revisits while older pages rebuild from persisted state.
 export const BROWSER_GUEST_HIDDEN_WORKTREE_RETENTION_LIMIT = 4

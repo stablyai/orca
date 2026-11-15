@@ -1,7 +1,7 @@
 import type { BrowserWindow } from 'electron'
 import { join } from 'node:path'
 import { ORCA_BROWSER_GUEST_WEB_PREFERENCES } from '../../../shared/browser/guest-lifecycle/browser-guest-web-preferences'
-import { normalizeBrowserNavigationUrl } from '../../../shared/browser-url'
+import { normalizeBrowserNavigationUrl } from '../../../shared/browser/navigation/browser-url'
 import { browserManager } from '../../browser/guest-lifecycle/manager/browser-manager'
 import { browserSessionRegistry } from '../../browser/sessions/profiles/browser-session-registry'
 import {

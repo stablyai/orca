@@ -1,4 +1,4 @@
-import type { VoiceSettings } from './speech-types'
+import type { VoiceSettings } from '../speech-types'
 
 /** Choices the Voice pane offers, shortest keep first: 0 unloads as soon as a dictation ends, null never unloads. */
 export const UNLOAD_MODEL_AFTER_MINUTES_CHOICES = [0, 5, 15, 60, null] as const

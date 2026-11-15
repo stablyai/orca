@@ -1,14 +1,14 @@
 import type { Dispatch, MutableRefObject, SetStateAction } from 'react'
 import { refreshBrowserGuestMetadata } from '../metadata/browser-guest-metadata-cache'
-import { redactKagiSessionToken } from '../../../../../../shared/browser-url'
+import { redactKagiSessionToken } from '../../../../../../shared/browser/navigation/browser-url'
 import {
   browserViewportPresetToOverride,
   getBrowserViewportPreset
-} from '../../../../../../shared/browser-viewport-presets'
+} from '../../../../../../shared/browser/guest-lifecycle/browser-viewport-presets'
 import type {
   BrowserLoadError,
   BrowserViewportPresetId
-} from '../../../../../../shared/browser-workspace-types'
+} from '../../../../../../shared/browser/workspaces/browser-workspace-types'
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store/index'
 import { findWorkspace } from '@/store/slices/browser/pages/browser-page-records'

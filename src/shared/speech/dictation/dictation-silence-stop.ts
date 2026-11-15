@@ -1,4 +1,4 @@
-import type { VoiceSettings } from './speech-types'
+import type { VoiceSettings } from '../speech-types'
 
 /** Choices the Voice pane offers, in seconds; null never stops for silence. */
 export const STOP_AFTER_SILENCE_SECONDS_CHOICES = [null, 30, 60, 120] as const

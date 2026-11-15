@@ -1,6 +1,6 @@
 import { mkdirSync, readFileSync, renameSync, unlinkSync, writeFileSync } from 'node:fs'
 import { basename, dirname } from 'node:path'
-import { BROWSER_SIDECAR_OWNER_ENV } from '../../shared/browser-sidecar-lifetime'
+import { BROWSER_SIDECAR_OWNER_ENV } from '../../shared/browser/runtime/browser-sidecar-lifetime'
 import { app } from 'electron'
 import { quitProcess } from '../startup/quit/process-quit-request'
 import {

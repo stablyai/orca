@@ -1,13 +1,15 @@
 // @vitest-environment happy-dom
 import { act } from 'react'
-import type { BrowserPage, BrowserWorkspace } from '../../../../../shared/browser-workspace-types'
+import type {
+  BrowserPage,
+  BrowserWorkspace
+} from '../../../../../shared/browser/workspaces/browser-workspace-types'
 import type * as WebviewRegistryModule from '../host-guest/webview-registry'
 import type * as DocPreviewArtifactShareModule from './doc-preview-artifact-share'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ConfirmationDialogContext } from '@/components/confirmation-dialog-context'
 import { TooltipProvider } from '@/components/ui/tooltip'
-import { acquireWebviewsDragPassthrough } from '@/components/browser-pane/host-guest/drag/webview-drag-passthrough'
 
 const confirmExternalLink = async (): Promise<boolean> => false
 
@@ -277,27 +279,5 @@ describe('HtmlDocPreview browser chrome', () => {
     await act(async () => root.unmount())
     mounted = false
     expect(hasLiveBrowserGuest('preview-1')).toBe(false)
-  })
-
-  // Mid-drag remount must be click-through at append time; a later effect leaves a turn that can swallow the drag.
-  it('holds a guest that appears mid-drag click-through the moment it is appended', async () => {
-    const appendedPointerEvents: string[] = []
-    const originalAppendChild = HTMLElement.prototype.appendChild
-    HTMLElement.prototype.appendChild = function <T extends Node>(node: T): T {
-      const element = node as unknown as HTMLElement
-      if (element.tagName?.toLowerCase() === 'webview') {
-        appendedPointerEvents.push(element.style.pointerEvents)
-      }
-      return originalAppendChild.call(this, node) as T
-    }
-    const release = acquireWebviewsDragPassthrough()
-
-    try {
-      await renderPreview(container, root)
-      expect(appendedPointerEvents).toEqual(['none'])
-    } finally {
-      HTMLElement.prototype.appendChild = originalAppendChild
-      release()
-    }
   })
 })

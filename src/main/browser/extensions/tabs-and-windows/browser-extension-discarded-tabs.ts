@@ -1,6 +1,9 @@
 import { webContents } from 'electron'
 import type { Store } from '../../../persistence/loading-store/store'
-import type { BrowserPage, BrowserWorkspace } from '../../../../shared/browser-workspace-types'
+import type {
+  BrowserPage,
+  BrowserWorkspace
+} from '../../../../shared/browser/workspaces/browser-workspace-types'
 // oxlint-disable-next-line import/no-cycle -- browser subsystem singleton hub (browserManager); breaking it needs DI and test-mock updates, left for a human
 import { browserManager } from '../../guest-lifecycle/manager/browser-manager'
 import { emitBrowserExtensionEvent } from '../api-runtime/browser-extension-api-host'

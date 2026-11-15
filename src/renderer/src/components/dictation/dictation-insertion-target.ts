@@ -13,7 +13,7 @@ import {
 import {
   DICTATION_TEXT_BLOCK_SELECTOR,
   dictationSeparators
-} from '../../../../shared/dictation-transcript-spacing'
+} from '../../../../shared/speech/dictation/dictation-transcript-spacing'
 import { focusedBrowserPageId } from '@/hooks/resolve-zoom-target'
 import { DICTATION_FOCUS_INPUT_EVENT } from './dictation-control-events'
 

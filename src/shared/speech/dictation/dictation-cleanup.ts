@@ -3,8 +3,8 @@ import {
   resolveSourceControlAiForOperation,
   type ResolvedSourceControlAiGenerationParams,
   type SourceControlAiSettingsInput
-} from './source-control/ai/source-control-ai-operation-resolution'
-import type { VoiceSettings } from './speech-types'
+} from '../../source-control/ai/source-control-ai-operation-resolution'
+import type { VoiceSettings } from '../speech-types'
 import type { DictationTextSettings } from './dictation-text-pipeline'
 
 export const DEFAULT_DICTATION_CORRECTION_WORD = 'scratch that'

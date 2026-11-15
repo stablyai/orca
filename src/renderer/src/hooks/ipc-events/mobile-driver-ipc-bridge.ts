@@ -7,7 +7,7 @@ import {
   applyClientHostedBrowserRows,
   hydrateClientHostedBrowserRows
 } from '@/runtime/browser/client-hosting/client-hosted-browser-row-state'
-import type { ClientHostedBrowserRowsEvent } from '../../../../shared/client-hosted-browser-rows'
+import type { ClientHostedBrowserRowsEvent } from '../../../../shared/browser/client-hosting/client-hosted-browser-rows'
 import { setDriverForPty, hydrateDrivers } from '@/lib/pane-manager/mobile-driver-state'
 import {
   setFitOverride,
