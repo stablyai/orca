@@ -26,6 +26,7 @@ import type * as HistorySeedProtocol from '../history/seed-transfer/terminal-his
 import type * as PtyOwnerQueryProtocol from './daemon-pty-owner-query-protocol'
 import type { TerminalSnapshot } from './terminal-snapshot'
 import type { SetLaunchNoteRequest } from './daemon-launch-note-protocol'
+import type { WindowsPwshNotFoundNotices } from '../../providers/shell-launch/windows/pwsh-not-found-notice'
 
 export type SessionState = 'created' | 'spawning' | 'running' | 'exiting' | 'exited'
 
@@ -53,6 +54,7 @@ export type CreateOrAttachRequest = {
     terminalWindowsWslDistro?: string | null
     /** Preserve the selected PowerShell implementation so daemon and local spawns resolve the same executable. */
     terminalWindowsPowerShellImplementation?: 'auto' | 'powershell.exe' | 'pwsh.exe'
+    terminalWindowsPwshNotFoundNotices?: WindowsPwshNotFoundNotices
     shellReadySupported?: boolean
     shellReadyTimeoutMs?: number
     /** Server-side fence that prevents a client timeout from publishing an orphan PTY. */

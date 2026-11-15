@@ -57,8 +57,7 @@ export abstract class OrcaRuntimeWithAgentTransitions extends OrcaRuntimeWithWin
     readOrchestration: (paneKey) => this.getAgentStatusOrchestrationContextForPaneKey(paneKey),
     readTerminalTitle: (paneKey) => this.getPtyRecordForPaneKey(paneKey)?.lastOscTitle ?? null,
     readHookRow: (paneKey) => this.agentTransitions.latestRow(paneKey),
-    translate: (key, fallback) =>
-      getRuntimeDesktopSurface().translateNotification?.(key, fallback) ?? fallback,
+    translate: (key, fallback) => getRuntimeDesktopSurface().translate?.(key, fallback) ?? fallback,
     dispatch: (event) => this.mobileNotifications.dispatch(event),
     setTimer: unrefTimer,
     now: Date.now

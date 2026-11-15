@@ -8,7 +8,7 @@ import { fetchWithElectronManualRedirects } from './electron-manual-redirect-fet
 import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../shared/sidebar-inputs-switch'
 
 export const electronRuntimeDesktopSurface: RuntimeDesktopSurface = {
-  translateNotification: translateMain,
+  translate: translateMain,
   isAwayForMobileNotifications: () => readDesktopAwayState(powerMonitor),
   showNotification: ({ title, body }) => {
     if (!Notification.isSupported()) {

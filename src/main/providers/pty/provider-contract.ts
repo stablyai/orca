@@ -21,6 +21,7 @@ import type { PtyProcessInfo } from './process-info'
 import type { TerminalExitCause } from '../../../shared/terminal/pty/lifecycle/terminal-exit-cause'
 import type { TerminalOwner } from '../../../shared/terminal/pty/lifecycle/terminal-owner'
 import type { WriteSettlement } from '../../../shared/terminal/pty/lifecycle/pty-write-settlement'
+import type { WindowsPwshNotFoundNotices } from '../shell-launch/windows/pwsh-not-found-notice'
 
 export type PtyProviderBufferSnapshot = {
   data: string
@@ -86,6 +87,8 @@ export type PtySpawnOptions = {
   terminalWindowsWslDistro?: string | null
   /** Persisted inbox/pwsh choice keeps local and daemon PowerShell-family launches aligned. */
   terminalWindowsPowerShellImplementation?: 'auto' | 'powershell.exe' | 'pwsh.exe'
+  /** Translated by main so a fallback shell can say PowerShell 7 was not found in the UI language. */
+  terminalWindowsPwshNotFoundNotices?: WindowsPwshNotFoundNotices
   /** Fresh-spawn-only source authority installed before any PTY output is released. */
   startupIngress?: PtyStartupIngressIntent
   /** Why the caller is starting this terminal; presence lets the host defer an automatic restore. */
