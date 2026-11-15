@@ -1909,7 +1909,7 @@
           "codexResetUnknownOutcome": "Codex のリセット結果が不明です",
           "codexSignInCheckTimeout": "Codex のサインイン状態の確認中にタイムアウトしました",
           "codexSignInStatusUnavailable": "Codex のサインイン状態を取得できません",
-          "couldNotParseUsageAnyWorkspace": "利用可能などのワークスペースからも使用量データを解析できませんでした",
+          "couldNotParseUsageAnyWorkspace": "利用可能ないずれのワークスペースからも使用量データを解析できませんでした",
           "couldNotParseUsagePage": "ページから使用量データを解析できませんでした",
           "failedToLoadUsage": "使用量データの読み込みに失敗しました",
           "failedToParseCliOutput": "CLI 出力の解析に失敗しました",
