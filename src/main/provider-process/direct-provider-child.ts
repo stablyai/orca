@@ -292,7 +292,7 @@ export class DirectProviderChild extends EventEmitter implements ProviderChild {
     }
     await this.ready.catch(() => {})
     await this.failure
-    await this.reaped
+    await this.reaped.finally(() => (this.canceled ? this.ownership?.remove() : undefined))
     if (this.settled || !this.outcome) {
       return
     }
