@@ -16,7 +16,7 @@ import type {
   ClaudeSession,
   ClaudeAcquireCallbacks
 } from '../claude-structured-session-state'
-import { claudeBuildPermissionMode } from '../permissions/claude-plan-approval-mode'
+import { claudePlanApprovalMode } from '../permissions/claude-plan-approval-mode'
 
 export function createClaudeSessionJournalTranslator(
   sink: StructuredAgentSessionEventSink | undefined,
@@ -44,7 +44,7 @@ export function createClaudeSessionJournalTranslator(
         },
         planApprovalMode: () => {
           const session = currentSession()
-          return session ? claudeBuildPermissionMode(session) : 'default'
+          return session ? claudePlanApprovalMode(session) : 'default'
         },
         fallbackIdPrefix,
         goalBackgroundWork: () =>

@@ -1,7 +1,10 @@
 import { describe, expect, it, vi } from 'vitest'
 import { claudeApprovalItem } from './claude-structured-prompt-items'
 import { buildClaudePromptReply } from './claude-structured-prompt-replies'
-import { leaveClaudePlanModeOnApproval } from '../permissions/claude-plan-approval-mode'
+import {
+  claudePlanApprovalMode,
+  leaveClaudePlanModeOnApproval
+} from '../permissions/claude-plan-approval-mode'
 import type { ClaudePendingPrompt } from '../permissions/claude-prompt-registry'
 
 function planPrompt(overrides: Partial<ClaudePendingPrompt> = {}): ClaudePendingPrompt {
@@ -121,5 +124,40 @@ describe('Claude plan approval choices and feedback', () => {
     expect(setPermissionMode).toHaveBeenCalledWith('default')
     await Promise.resolve()
     expect(appliedInputOptions.get('buildPermissionMode')).toBe('default')
+  })
+
+  it('matches the plain allow card label mode with the restored mode when launchIntent and firstRootInit differ', () => {
+    const allowReply = { behavior: 'allow' as const, updatedInput: {} }
+    const prompt = { toolName: 'ExitPlanMode' }
+
+    for (const [launchMode, initMode] of [
+      ['acceptEdits', 'default'],
+      ['default', 'acceptEdits']
+    ] as const) {
+      const setPermissionMode = vi.fn(async () => {})
+      const session = {
+        launchIntent: { permissionMode: launchMode },
+        firstRootInit: { permissionMode: initMode },
+        reportedOptions: { reportedPermissionMode: 'plan' as const },
+        orderedPermissionMode: () => 'plan' as const,
+        appliedInputOptions: new Map<string, string>(),
+        connection: { setPermissionMode }
+      }
+      const cardMode = claudePlanApprovalMode(session)
+      expect(cardMode).toBe(launchMode)
+      expect(
+        claudeApprovalItem(planPrompt(), cardMode).options.find((o) => o.id === 'allow')?.label
+      ).toBe(
+        launchMode === 'acceptEdits'
+          ? 'Approve and auto-accept edits'
+          : 'Approve and ask before edits'
+      )
+
+      leaveClaudePlanModeOnApproval(session, prompt, allowReply, {
+        kind: 'option',
+        optionId: 'allow'
+      })
+      expect(setPermissionMode).toHaveBeenCalledWith(cardMode)
+    }
   })
 })
