@@ -12,6 +12,7 @@ import {
   getRequiredReleaseAssetNames,
   githubFetch
 } from './verify-release-required-assets.mjs'
+import { workflowRunPathMatches } from '../operations/workflow-run-path.mjs'
 import { ASSET_NAME, MANIFEST_SCHEMA, SOURCES } from './write-release-asset-manifest.mjs'
 
 const API = 'https://api.github.com'
@@ -98,7 +99,7 @@ export function readRunManifests(dir, sources) {
 export function assertMacRun(run, { repo, tag, releaseRunId, macRunId, macRunAttempt }) {
   const ok =
     String(run?.id) === macRunId &&
-    run.path === '.github/workflows/release-mac-build.yml' &&
+    workflowRunPathMatches(run.path, '.github/workflows/release-mac-build.yml') &&
     run.head_branch === 'main' &&
     run.event === 'workflow_dispatch' &&
     run.repository?.full_name === repo &&
