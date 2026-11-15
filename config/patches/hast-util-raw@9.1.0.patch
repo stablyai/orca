@@ -1,0 +1,78 @@
+diff --git a/index.d.ts b/index.d.ts
+index ee873ac6e04d797f03b29237e66201e774666858..78905912f98792c8a24c9f95c9392b0a527d9dc4 100644
+--- a/index.d.ts
++++ b/index.d.ts
+@@ -6,6 +6,9 @@ export {raw} from './lib/index.js'
+  * Configuration.
+  */
+ export interface Options {
++  /** Opt-in native-chat image source provenance; requires tagfilter=false. */
++  onRawImage?: (node: {type: 'raw'; value: string}, offset: number) => string | null
++
+   /**
+    * Corresponding virtual file representing the input document (optional).
+    */
+diff --git a/lib/index.js b/lib/index.js
+index 6d3c9f042dd44c1f351a00bed02193eb13458bc5..2f95307a6a035b95dbe4d56152be2ab03b779dd7 100644
+--- a/lib/index.js
++++ b/lib/index.js
+@@ -86,6 +86,10 @@ export function raw(tree, options) {
+     options: options || {}
+   }
+ 
++  if (state.options.onRawImage) {
++    if (state.options.tagfilter) throw new Error('Raw image provenance requires unmodified parser input')
++    observeRawImages(state)
++  }
+   one(tree, state)
+   resetTokenizer(state, pointStart())
+ 
+@@ -307,6 +311,7 @@ function comment(node, state) {
+  *   Nothing.
+  */
+ function handleRaw(node, state) {
++  state.rawImageInput = node
+   // Reset preprocessor:
+   // See: <https://github.com/inikulin/parse5/blob/6f7ca60/packages/parse5/lib/tokenizer/preprocessor.ts#L18-L31>.
+   state.parser.tokenizer.preprocessor.html = ''
+@@ -362,6 +367,7 @@ function handleRaw(node, state) {
+     // @ts-expect-error: private.
+     state.parser.tokenizer._callState(cp)
+   }
++  state.rawImageInput = null
+ }
+ 
+ /**
+@@ -680,3 +686,32 @@ function cloneWithoutChildren(node) {
+     ? structuredClone({...node, children: []})
+     : structuredClone(node)
+ }
++
++// Observe the pinned tokenizer once; raw coordinates cannot identify a feed after rewrites.
++function observeRawImages(state) {
++  const tokenizer = state.parser.tokenizer
++  const origins = new WeakMap()
++  let opener = null
++  const data = tokenizer._stateData
++  tokenizer._stateData = function (code) {
++    if (code === 60) opener = state.rawImageInput ? {node: state.rawImageInput, offset: this.preprocessor.pos} : null
++    return data.call(this, code)
++  }
++  const create = tokenizer._createStartTagToken
++  tokenizer._createStartTagToken = function () {
++    create.call(this)
++    if (opener) origins.set(this.currentToken, opener)
++  }
++  const emit = state.parser.onStartTag
++  state.parser.onStartTag = function (token) {
++    if (token.tagName === 'img') {
++      const origin = origins.get(token)
++      token.attrs = token.attrs.filter(attribute => attribute.name !== 'data-orca-image-origin')
++      if (origin) {
++        const capability = state.options.onRawImage(origin.node, origin.offset)
++        if (capability) token.attrs.push({name: 'data-orca-image-origin', value: capability})
++      }
++    }
++    return emit.call(this, token)
++  }
++}

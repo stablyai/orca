@@ -20,7 +20,10 @@ import { NativeChatMarkdownRowKeyContext } from './native-chat-markdown-row-iden
 import { useNativeChatVisualMarkdownExtension } from '../media/visuals/native-chat-visual-markdown-extension'
 import { useNativeChatFileLinkExists } from '../links/actions/use-native-chat-file-link-existence'
 import { NativeChatMarkdownImageLinkContext } from '../media/images/NativeChatMarkdownImage'
-import { NativeChatDeferredMarkdownImage } from '../media/images/NativeChatDeferredMarkdownImage'
+import { NativeChatProvenancedMarkdownImage } from '../media/images/NativeChatProvenancedMarkdownImage'
+import { prepareNativeChatImageBlock } from './native-chat-markdown-block-provenance'
+import { remarkNativeChatHtmlTokenOrigins } from './native-chat-markdown-html-source-map'
+import { NATIVE_CHAT_IMAGE_ORIGIN_PROPERTY } from './native-chat-markdown-image-origins'
 import { remarkNativeChatFileDestinations } from './native-chat-markdown-file-destinations'
 import { NativeChatLinkPeek } from '../links/previews/NativeChatLinkPeek'
 import {
@@ -126,10 +129,16 @@ function createNativeChatImageExtension(
   const base = withFileDestinations(visualExtension, mentionNames, everyone, slackMentions)
   return {
     ...base,
+    prepareBlock: prepareNativeChatImageBlock,
+    remarkPlugins: [remarkNativeChatHtmlTokenOrigins, ...base.remarkPlugins],
+    sanitizeAttributes: {
+      ...base.sanitizeAttributes,
+      img: [...(base.sanitizeAttributes.img ?? []), NATIVE_CHAT_IMAGE_ORIGIN_PROPERTY]
+    },
     components: {
       ...NATIVE_CHAT_TEXT_BLOCK_COMPONENTS,
       ...base.components,
-      img: ({ src, alt }) => <NativeChatDeferredMarkdownImage src={src} alt={alt} />,
+      img: NativeChatProvenancedMarkdownImage,
       a: (props) => {
         const renderAnchor = (children: ReactNode): ReactNode => (
           <NativeChatLinkPeek href={props.href}>

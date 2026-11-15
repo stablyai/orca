@@ -44,6 +44,21 @@ import {
 
 type MarkdownPlugins = NonNullable<MarkdownOptions['rehypePlugins']>
 type RemarkPlugins = NonNullable<MarkdownOptions['remarkPlugins']>
+export type CommentMarkdownBlockPreparer = (input: {
+  content: string
+  start: number
+  growing: boolean
+  remarkPlugins: RemarkPlugins
+  rehypePlugins: MarkdownPlugins
+  remarkRehypeOptions: MarkdownOptions['remarkRehypeOptions']
+}) => {
+  props: Pick<
+    MarkdownOptions,
+    'children' | 'remarkPlugins' | 'rehypePlugins' | 'remarkRehypeOptions'
+  >
+  afterRehypePlugins?: MarkdownPlugins
+  wrap?: (element: React.ReactElement) => React.ReactNode
+}
 type UrlTransform = NonNullable<MarkdownOptions['urlTransform']>
 
 const commentMarkdownFileUriUrlTransform: UrlTransform = (value, key, node) => {
@@ -83,6 +98,7 @@ export type CommentMarkdownExtension = {
   extraFlowSyntaxMarkers?: readonly string[]
   sanitizeAttributes: Record<string, readonly string[]>
   components: Components
+  prepareBlock?: CommentMarkdownBlockPreparer
 }
 
 function extensionRehypePlugins(extension: CommentMarkdownExtension): MarkdownPlugins {
@@ -223,6 +239,9 @@ const CommentMarkdown = React.memo(
                 <CommentMarkdownBlockLineContext.Provider key={block.start} value={block.line}>
                   <MemoizedMarkdown
                     block={block.tree ? block : undefined}
+                    sourceStart={block.start}
+                    growingTail={growing && index === blocks.length - 1 && !block.literalMath}
+                    prepareBlock={extension?.prepareBlock}
                     remarkPlugins={activeRemarkPlugins}
                     rehypePlugins={activeRehypePlugins}
                     math={math}
@@ -234,7 +253,10 @@ const CommentMarkdown = React.memo(
                         : commentMarkdownUrlTransform
                     }
                   >
-                    {growing && index === blocks.length - 1 && !block.literalMath
+                    {!extension?.prepareBlock &&
+                    growing &&
+                    index === blocks.length - 1 &&
+                    !block.literalMath
                       ? remend(markdownBlockContent(block), {
                           linkMode: 'text-only',
                           ...(math ? { katex: false, inlineKatex: false } : {})

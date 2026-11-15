@@ -31,17 +31,26 @@ function imageReadPath(call: NativeChatToolCallBlock): string | null {
 export function nativeChatToolRunViewedImages(
   blocks: readonly NativeChatBlock[]
 ): NativeChatImageRefBlock[] {
+  const entries = nativeChatToolRunViewedImageEntries(blocks)
+  return entries.length ? entries.map(({ path }) => ({ type: 'image-ref', path })) : NO_IMAGES
+}
+
+export function nativeChatToolRunViewedImageEntries(
+  blocks: readonly NativeChatBlock[]
+): { path: string; call: NativeChatToolCallBlock }[] {
   // Most runs read no images, so they skip pairing.
   if (!blocks.some((block) => isToolCallBlock(block) && imageReadPath(block) !== null)) {
-    return NO_IMAGES
+    return []
   }
-  const paths = new Set<string>()
+  const paths = new Map<string, NativeChatToolCallBlock>()
   for (const { call, result } of pairToolBlocks(blocks)) {
     const path = call ? imageReadPath(call) : null
     // Only a read that finished without error showed the agent its image.
     if (call && path !== null && nativeChatToolLineLabel(call, result).verb === 'read') {
-      paths.add(path)
+      if (!paths.has(path)) {
+        paths.set(path, call)
+      }
     }
   }
-  return Array.from(paths, (path) => ({ type: 'image-ref', path }))
+  return Array.from(paths, ([path, call]) => ({ path, call }))
 }

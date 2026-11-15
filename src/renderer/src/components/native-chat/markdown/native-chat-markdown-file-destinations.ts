@@ -16,8 +16,11 @@ type MarkdownNode = {
   identifier?: string
   title?: string | null
   data?: unknown
+  position?: { start: { offset?: number } }
   children?: MarkdownNode[]
 }
+
+type PreviewRecorder = (image: MarkdownNode, link: MarkdownNode, href: string) => void
 
 const SCHEME_PREFIX_PATTERN = /^[A-Za-z][A-Za-z0-9+.-]*:/
 const NETWORK_PATH_PATTERN = /^[\\/]{2}/
@@ -66,10 +69,11 @@ function previewHref(
  */
 function linkedImagePreviews(
   paragraph: MarkdownNode,
-  definitions: Map<string, ResolvedDefinition>
+  definitions: Map<string, ResolvedDefinition>,
+  recordPreview?: PreviewRecorder
 ): MarkdownNode | null {
   const shown = new Set<string>()
-  const linked = new Set<string>()
+  const linked = new Map<string, MarkdownNode>()
   function visit(node: MarkdownNode): void {
     for (const child of node.children ?? []) {
       const definition = child.identifier
@@ -87,18 +91,24 @@ function linkedImagePreviews(
       ) {
         const href = previewHref(child, definition)
         if (href) {
-          linked.add(href)
+          if (!linked.has(href)) {
+            linked.set(href, child)
+          }
         }
       }
       visit(child)
     }
   }
   visit(paragraph)
-  const previews = [...linked].filter((href) => !shown.has(href))
+  const previews = [...linked].filter(([href]) => !shown.has(href))
   return previews.length > 0
     ? {
         type: 'paragraph',
-        children: previews.map((url) => ({ type: 'image', url, alt: '' }))
+        children: previews.map(([url, link]) => {
+          const image: MarkdownNode = { type: 'image', url, alt: '' }
+          recordPreview?.(image, link, url)
+          return image
+        })
       }
     : null
 }
@@ -121,7 +131,8 @@ function fileRewrite(url: string | undefined): FileRewrite | null {
  */
 function rewriteFileDestinations(
   node: MarkdownNode,
-  definitions: Map<string, ResolvedDefinition>
+  definitions: Map<string, ResolvedDefinition>,
+  recordPreview?: PreviewRecorder
 ): void {
   const definition =
     (node.type === 'linkReference' || node.type === 'imageReference') && node.identifier
@@ -146,8 +157,9 @@ function rewriteFileDestinations(
   // One pass builds the new child list, so many previewing paragraphs stay linear.
   let children: MarkdownNode[] | undefined
   node.children.forEach((child, index) => {
-    const previews = child.type === 'paragraph' ? linkedImagePreviews(child, definitions) : null
-    rewriteFileDestinations(child, definitions)
+    const previews =
+      child.type === 'paragraph' ? linkedImagePreviews(child, definitions, recordPreview) : null
+    rewriteFileDestinations(child, definitions, recordPreview)
     if (previews && !children) {
       children = node.children!.slice(0, index)
     }
@@ -162,7 +174,9 @@ function rewriteFileDestinations(
   }
 }
 
-export function remarkNativeChatFileDestinations(): (tree: MarkdownNode) => void {
+export function remarkNativeChatFileDestinations(options?: {
+  recordPreview?: PreviewRecorder
+}): (tree: MarkdownNode) => void {
   return (tree) => {
     const definitions = new Map<string, ResolvedDefinition>()
     function collectDefinitions(node: MarkdownNode): void {
@@ -181,6 +195,6 @@ export function remarkNativeChatFileDestinations(): (tree: MarkdownNode) => void
       }
     }
     collectDefinitions(tree)
-    rewriteFileDestinations(tree, definitions)
+    rewriteFileDestinations(tree, definitions, options?.recordPreview)
   }
 }

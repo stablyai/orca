@@ -1,7 +1,21 @@
+import type { VFile } from 'vfile'
+
 type MarkdownNode = {
   type: string
   value?: string
   children?: MarkdownNode[]
+}
+
+export type HtmlRewriteObserver = (
+  node: MarkdownNode,
+  pieces: readonly (string | readonly [number, number])[]
+) => void
+
+declare module 'vfile' {
+  // oxlint-disable-next-line typescript/consistent-type-definitions -- VFile metadata uses declaration merging.
+  interface DataMap {
+    markdownHtmlRewrite?: HtmlRewriteObserver
+  }
 }
 
 const HTML_TAG_NAME_PATTERN =
@@ -47,7 +61,11 @@ export function htmlRendersAsText(html: string, allowedTagNames: ReadonlySet<str
   return classifyHtml(html, allowedTagNames) === 'unknown-only'
 }
 
-function replaceUnknownHtml(parent: MarkdownNode, allowedTagNames: ReadonlySet<string>): void {
+function replaceUnknownHtml(
+  parent: MarkdownNode,
+  allowedTagNames: ReadonlySet<string>,
+  onRewrite?: HtmlRewriteObserver
+): void {
   const children = parent.children
   if (!children) {
     return
@@ -56,7 +74,7 @@ function replaceUnknownHtml(parent: MarkdownNode, allowedTagNames: ReadonlySet<s
   for (let index = 0; index < children.length; index++) {
     const child = children[index]
     if (child.type !== 'html' || !child.value) {
-      replaceUnknownHtml(child, allowedTagNames)
+      replaceUnknownHtml(child, allowedTagNames, onRewrite)
       continue
     }
     const kind = classifyHtml(child.value, allowedTagNames)
@@ -64,17 +82,46 @@ function replaceUnknownHtml(parent: MarkdownNode, allowedTagNames: ReadonlySet<s
       const text: MarkdownNode = { type: 'text', value: child.value }
       children[index] = isPhrasingParent ? text : { type: 'paragraph', children: [text] }
     } else if (kind === 'mixed') {
+      const pieces: (string | readonly [number, number])[] = []
+      let copied = 0
       // Escape unknown tags only so allowed HTML/comments in mixed blocks retain their rendering.
-      child.value = child.value.replace(HTML_TAG_NAME_PATTERN, (match, name?: string) =>
-        isUnknownTag(name, allowedTagNames) ? escapeHtmlText(match) : match
+      const output = child.value.replace(
+        HTML_TAG_NAME_PATTERN,
+        (match: string, name: string | undefined, offset: number) => {
+          if (!isUnknownTag(name, allowedTagNames)) {
+            return match
+          }
+          if (onRewrite) {
+            pieces.push([copied, offset])
+            let start = offset
+            for (let index = 0; index < match.length; index++) {
+              const character = match[index]!
+              if (character !== '&' && character !== '<' && character !== '>') {
+                continue
+              }
+              pieces.push([start, offset + index], escapeHtmlText(character))
+              start = offset + index + 1
+            }
+            pieces.push([start, offset + match.length])
+            copied = offset + match.length
+          }
+          return escapeHtmlText(match)
+        }
       )
+      if (onRewrite) {
+        pieces.push([copied, child.value.length])
+        onRewrite(child, pieces)
+      }
+      child.value = output
     }
   }
 }
 
 /** Render unsupported tags literally so sanitize cannot erase tag-shaped prose. */
 export function remarkUnknownHtmlAsText(
-  allowedTagNames: ReadonlySet<string>
-): () => (tree: MarkdownNode) => void {
-  return () => (tree) => replaceUnknownHtml(tree, allowedTagNames)
+  allowedTagNames: ReadonlySet<string>,
+  onRewrite?: HtmlRewriteObserver
+): () => (tree: MarkdownNode, file: VFile) => void {
+  return () => (tree, file) =>
+    replaceUnknownHtml(tree, allowedTagNames, onRewrite ?? file.data.markdownHtmlRewrite)
 }
