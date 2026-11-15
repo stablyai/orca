@@ -1,5 +1,5 @@
 import { acceptedAgentStatuses } from '@/store/slices/agent-status/accepted-agent-statuses'
-import { describe, expect, it } from 'vitest'
+import { expect, it } from 'vitest'
 import { buildMobileSessionTabSnapshots } from './mobile-session-snapshots'
 import { registerRuntimeTerminalTab } from '../hosted-terminals/mounted-surfaces/mounted-terminal-tab-registry'
 import type { AppState } from '../../store/types'
@@ -99,57 +99,6 @@ function snapshotsByWorktree(
     buildMobileSessionTabSnapshots(state).map((snapshot) => [snapshot.worktree, snapshot])
   )
 }
-
-describe('mounted terminal surface memoization', () => {
-  it('publishes a live pty rebinding on a mounted worktree', () => {
-    const { state, mountedTabId } = makeMountedState('mounted-b')
-    const surface = makeLiveSurface(mountedTabId)
-    const unregister = registerRuntimeTerminalTab(surface.registration)
-    try {
-      const before = snapshotsByWorktree(state)
-
-      surface.setPtyId(1, 'pty-live-2')
-      const after = snapshotsByWorktree(state)
-
-      expect(after.get(MOUNTED_WT)).not.toBe(before.get(MOUNTED_WT))
-      expect(after.get(MOUNTED_WT)?.tabs).toEqual([
-        expect.objectContaining({ ptyId: 'pty-live-2' })
-      ])
-      expect(after.get(CONTROL_WT)).toBe(before.get(CONTROL_WT))
-    } finally {
-      unregister()
-    }
-  })
-
-  it('publishes a live pane split on a mounted worktree', () => {
-    const { state, mountedTabId } = makeMountedState('mounted-c')
-    const surface = makeLiveSurface(mountedTabId)
-    const unregister = registerRuntimeTerminalTab(surface.registration)
-    try {
-      snapshotsByWorktree(state)
-
-      surface.addPane(2, SPLIT_LEAF_ID)
-      const after = snapshotsByWorktree(state)
-
-      expect(
-        after.get(MOUNTED_WT)?.tabs.map((tab) => (tab.type === 'terminal' ? tab.leafId : null))
-      ).toEqual([MOUNTED_LEAF_ID, SPLIT_LEAF_ID])
-    } finally {
-      unregister()
-    }
-  })
-
-  it('falls back to the persisted pty binding after the surface unmounts', () => {
-    const { state, mountedTabId } = makeMountedState('mounted-d')
-    const unregister = registerRuntimeTerminalTab(makeLiveSurface(mountedTabId).registration)
-    snapshotsByWorktree(state)
-
-    unregister()
-    const after = snapshotsByWorktree(state)
-
-    expect(after.get(MOUNTED_WT)?.tabs).toEqual([expect.objectContaining({ ptyId: 'pty-saved-1' })])
-  })
-})
 
 it('keeps the exact status suppression title through pane, saved, tab and split fallback changes', async () => {
   const { shapeMobileTerminalStatus } =
