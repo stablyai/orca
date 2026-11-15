@@ -18,7 +18,7 @@ import { splitWorktreeIdForFilesystem } from '../../../shared/worktree/id'
 import { beginWatcherInstall } from '../../workspaces/removal/watcher-removal-gate'
 import { areWorktreePathsEqual } from '../../git/worktrees/catalog/worktree-path-comparison'
 import { resolveFloatingWorkspacePath } from '../../persistence/restoring-sessions/floating-workspace-normalization'
-import { getAppEnvironment } from '../../../shared/app-environment'
+import { getAppEnvironment } from '../../../shared/app-lifecycle/app-environment'
 import { resolveLocalProjectRuntimeForRepo } from '../../workspaces/execution-host/local-project-runtime-resolution'
 import { localWorktreePathPresence } from '../../workspaces/catalog/local-worktree-path-presence'
 import {

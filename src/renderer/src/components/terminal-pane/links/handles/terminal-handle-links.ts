@@ -17,8 +17,8 @@ import {
   ORCHESTRATION_TASK_PREFIX
 } from './terminal-orchestration-task-links'
 import {
-  isTerminalLinkActionActivation,
-  isTerminalLinkDirectActivation
+  isTerminalLinkDirectActivation,
+  isTerminalOwnedLinkGesture
 } from '../gestures/terminal-link-activation'
 import {
   requestTerminalLinkAction,
@@ -197,13 +197,11 @@ export function createTerminalHandleLinkProvider(
             range,
             text: parsed.text,
             activate: (event) => {
-              const directActivation = isTerminalLinkDirectActivation(event)
-              const actionActivation = isTerminalLinkActionActivation(event)
-              if (!directActivation && !actionActivation) {
+              if (!isTerminalOwnedLinkGesture(event)) {
                 return
               }
               let handled = false
-              if (directActivation) {
+              if (isTerminalLinkDirectActivation(event)) {
                 event?.preventDefault()
                 void activateParsedLink(parsed, deps.getRuntimeEnvironmentId())
                 handled = true

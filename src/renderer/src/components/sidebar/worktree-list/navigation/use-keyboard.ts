@@ -202,6 +202,8 @@ export function useWorktreeListKeyboardNavigation(args: {
         !hasVisibleOverlay()
       ) {
         scrollRef.current?.focus()
+        // A terminal that finishes mounting after this shortcut must not take the keys back.
+        scrollRef.current?.setAttribute('data-keyboard-navigation', '')
         e.preventDefault()
         return
       }
@@ -227,10 +229,9 @@ export function useWorktreeListKeyboardNavigation(args: {
         commitPreview()
       }
     }
-    const handlePointerDown = (event: PointerEvent) => {
-      if (!(event.target instanceof Node && scrollRef.current?.contains(event.target))) {
-        endListNavigation()
-      }
+    // Why every press: a click on a row or agent row hands keys back to the workspace; modifier selection reclaims them on click.
+    const handlePointerDown = () => {
+      endListNavigation()
       resetDeleteGesture()
       dropPreview()
     }

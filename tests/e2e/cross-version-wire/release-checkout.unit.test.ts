@@ -459,7 +459,10 @@ describe('release checkout module importer', () => {
 
     // This module exists only in the working tree; resolving it would silently run current code as the old build.
     await expect(
-      importReleaseCheckoutModule(checkout, '/src/shared/protocol-version.ts')
+      importReleaseCheckoutModule(
+        checkout,
+        '/src/shared/remote-runtime/protocol/protocol-version.ts'
+      )
     ).rejects.toThrow()
   })
 })

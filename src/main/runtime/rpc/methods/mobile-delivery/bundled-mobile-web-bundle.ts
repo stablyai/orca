@@ -1,7 +1,10 @@
 import { existsSync } from 'node:fs'
 import { readFile } from 'node:fs/promises'
 import { join } from 'node:path'
-import { getAppEnvironment, hasAppEnvironment } from '../../../../../shared/app-environment'
+import {
+  getAppEnvironment,
+  hasAppEnvironment
+} from '../../../../../shared/app-lifecycle/app-environment'
 import {
   InstalledMobileWebBundleManifestSchema,
   type MobileWebBundleManifest

@@ -1,7 +1,7 @@
 import { writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { setTimeout as delay } from 'node:timers/promises'
-import { getAppEnvironment } from '../../../../shared/app-environment'
+import { getAppEnvironment } from '../../../../shared/app-lifecycle/app-environment'
 import { LOCAL_BUILD_COMPATIBILITY_CONTRACT } from '../../../../shared/remote-runtime/orcad-distribution/local-build-compatibility-contract'
 import { NODE_RUNTIME_DARWIN_MINIMUM_OS } from '../../../../shared/node-runtime/node-runtime-pin'
 import { runProcess } from '@orca/process-host'
