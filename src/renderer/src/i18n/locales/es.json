@@ -24172,5 +24172,11 @@
       "read": "No se pudo cargar el uso. Pulsa Actualizar de nuevo.",
       "retry": "Actualizar"
     }
+  },
+  "zotz": {
+    "updater": {
+      "manualUpdate": "Zotz se actualiza con git pull + build.",
+      "manualUpdateDetail": "Consulta docs/zotz/UPDATE.md. Define ZOTZ_ENABLE_UPDATER=1 para reactivar el actualizador integrado."
+    }
   }
 }
