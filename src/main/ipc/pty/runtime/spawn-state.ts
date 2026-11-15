@@ -29,7 +29,7 @@ import type {
 } from '../../../../shared/agent-session/agent-session-host-authority'
 import { localProvider } from '../provider/registry'
 import type { PaneResumeOutcome } from '../../../../shared/workspace-layout/published-layout/workspace-layout-published'
-import type { StartupCwdFallback } from '../../../../shared/startup-cwd-fallback'
+import type { StartupCwdFallback } from '../../../../shared/shell/launch/startup-cwd-fallback'
 import type { TerminalWorkspaceLaunchScope } from '../../../runtime/orchestration/terminal-authority/structured-sessions/runtime-legacy-worker-terminal-recovery-types'
 
 export type RuntimePtySpawnState = {

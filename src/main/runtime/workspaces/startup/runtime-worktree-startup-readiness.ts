@@ -4,8 +4,8 @@ import { isAgentForegroundProcess } from '../../../../shared/agent-status/proces
 import {
   createDraftPasteReadyScanner,
   resolvePasteReadySignal
-} from '../../../../shared/draft-paste-ready-scanner'
-import { resolveDraftPasteReadyTimeoutMs } from '../../../../shared/draft-paste-ready-timeout'
+} from '../../../../shared/agent-launch/startup/readiness/draft-paste-ready-scanner'
+import { resolveDraftPasteReadyTimeoutMs } from '../../../../shared/agent-launch/startup/readiness/draft-paste-ready-timeout'
 import { TUI_AGENT_CONFIG } from '../../../../shared/agent-launch/catalog/tui-agent-config'
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import type { TerminalInputKind } from '../../../../shared/terminal/input/terminal-input-kind'

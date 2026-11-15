@@ -9,7 +9,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   fishRequirementViolation,
   resolveFishBinary
-} from '../../../../../../shared/fish-binary-requirement'
+} from '../../../../../../shared/shell/testing/fish-binary-requirement'
 
 // Require fish 4’s Rust tty_handoff so absent DECSET 2031 cannot make the test pass vacuously.
 const FISH = resolveFishBinary(4)

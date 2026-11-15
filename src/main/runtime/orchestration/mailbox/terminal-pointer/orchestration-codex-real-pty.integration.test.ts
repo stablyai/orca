@@ -8,7 +8,7 @@ import { AgentHookServer } from '../../../../agent-hooks/server/agent-hook-serve
 import { getManagedScript } from '../../../../codex/hooks/definitions/codex-hook-script'
 import { getSyntheticAgentTerminalTitle } from '../../../../../shared/agent-status/title/synthetic-agent-title'
 import { extractAllOscTitles } from '../../../../../shared/agent-status/title/osc-title-extraction'
-import { extractOscTitleScanTail } from '../../../../../shared/osc-title-scan-tail'
+import { extractOscTitleScanTail } from '../../../../../shared/agent-status/title/osc-title-scan-tail'
 import { settledWriteStub } from '../../../../providers/testing/settled-pty-write-stub'
 
 vi.mock('electron', () => ({

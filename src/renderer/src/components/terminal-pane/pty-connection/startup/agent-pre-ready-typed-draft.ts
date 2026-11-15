@@ -3,7 +3,7 @@
 import { useAppStore } from '@/store/index'
 import { TUI_AGENT_CONFIG } from '../../../../../../shared/agent-launch/catalog/tui-agent-config'
 import type { TuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-agent'
-import { resolveDraftPasteReadyTimeoutMs } from '../../../../../../shared/draft-paste-ready-timeout'
+import { resolveDraftPasteReadyTimeoutMs } from '../../../../../../shared/agent-launch/startup/readiness/draft-paste-ready-timeout'
 import { waitForAgentDraftInputReady } from '@/lib/agent-session/messaging/paste/agent-draft-readiness'
 import { sendAgentDraftPasteContent } from '@/lib/agent-session/messaging/paste/agent-draft-paste-content'
 import { createPasteReadinessTimeoutNotice } from '@/lib/agent-session/launch/prompt/launch-agent-paste-timeout-notice'

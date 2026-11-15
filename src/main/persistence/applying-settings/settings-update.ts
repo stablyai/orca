@@ -21,7 +21,7 @@ import { normalizeDesktopTerminalScrollbackRows } from '../../../shared/terminal
 import { normalizeTerminalMinimumContrastRatio } from '../../../shared/terminal-themes/terminal-minimum-contrast-settings'
 import { normalizeTaskProviderSettings } from '../../../shared/work-items/task-providers'
 import { normalizeOpenInApplications } from '../../../shared/open-in-applications'
-import { normalizeTerminalShortcutPolicy } from '../../../shared/keybindings'
+import { normalizeTerminalShortcutPolicy } from '../../../shared/keybindings/effective'
 import { normalizeSourceControlGroupOrder } from '../../../shared/source-control/listing/source-control-group-order'
 import { normalizeAppIconId } from '../../../shared/app-icon'
 import { normalizeUiLanguage } from '../../../shared/ui-language'

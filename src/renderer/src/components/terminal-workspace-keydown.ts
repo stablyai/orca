@@ -1,9 +1,9 @@
 import { reopenClosedWorkspaceTab } from './reopen-closed-workspace-tab'
 import { toast } from 'sonner'
 import { dispatchWorkspaceTabCommand } from '@/lib/workspace/tabs/workspace-tab-commands'
-import { keybindingMatchesAction } from '../../../shared/keybindings'
-import type { KeybindingActionId } from '../../../shared/keybindings'
-import { matchesRecentTabSwitcherChord } from '../../../shared/window-shortcut-policy'
+import { keybindingMatchesAction } from '../../../shared/keybindings/matching'
+import type { KeybindingActionId } from '../../../shared/keybindings/types'
+import { matchesRecentTabSwitcherChord } from '../../../shared/keybindings/window-shortcut-policy'
 import { useAppStore } from '../store/index'
 import {
   handleEmptyFloatingWorkspacePanelCloseShortcut,
