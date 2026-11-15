@@ -1,10 +1,10 @@
 import type { GlobalSettings } from '../../../../../../shared/global-settings-types'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { Label } from '../../../ui/label'
 import { EphemeralVmsPane } from './EphemeralVmsPane'
 import { getExperimentalSearchEntry } from '../../advanced/experimental-search'
 import { SearchableSetting } from '../../section-layout/SearchableSetting'
-import { SettingsSwitch } from '../../form-controls/SettingsFormControls'
+import { Switch } from '@/components/ui/switch'
 
 type EphemeralVmsExperimentalSettingProps = {
   settings: GlobalSettings
@@ -15,6 +15,7 @@ export function EphemeralVmsExperimentalSetting({
   settings,
   updateSettings
 }: EphemeralVmsExperimentalSettingProps): React.JSX.Element {
+  const t = useTranslate()
   const entry = getExperimentalSearchEntry().ephemeralVms
   const enabled = settings.experimentalEphemeralVms === true
 
@@ -28,23 +29,21 @@ export function EphemeralVmsExperimentalSetting({
     >
       <div className="flex max-w-3xl items-start justify-between gap-4">
         <div className="min-w-0 shrink space-y-0.5">
-          <Label>
-            {translate('auto.components.settings.ephemeralVms.search.cloudVmTitle', 'Cloud VM')}
-          </Label>
+          <Label>{entry.title}</Label>
           <p className="text-xs text-muted-foreground">
-            {translate(
+            {t(
               'auto.components.settings.ephemeralVmsExperimentalSetting.description',
               'Shows setup controls and workspace run targets for repo-owned, on-demand environments.'
             )}
           </p>
         </div>
-        <SettingsSwitch
+        <Switch
           checked={enabled}
-          ariaLabel={translate(
+          aria-label={t(
             'auto.components.settings.ephemeralVmsExperimentalSetting.cloudVmToggleLabel',
             'Toggle Cloud VM'
           )}
-          onChange={() => updateSettings({ experimentalEphemeralVms: !enabled })}
+          onCheckedChange={() => updateSettings({ experimentalEphemeralVms: !enabled })}
         />
       </div>
       {enabled ? <EphemeralVmsPane /> : null}

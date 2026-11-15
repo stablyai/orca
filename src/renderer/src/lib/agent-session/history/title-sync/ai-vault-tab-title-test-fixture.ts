@@ -57,7 +57,7 @@ export function makeState(args: {
     agentStatusByPaneKey: args.sleeping
       ? {}
       : { 'tab-1:00000000-0000-4000-8000-000000000001': statusEntry },
-    retainedAgentsByPaneKey: {},
+
     sleepingAgentSessionsByPaneKey: args.sleeping
       ? {
           'tab-1:00000000-0000-4000-8000-000000000001': {

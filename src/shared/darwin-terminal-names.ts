@@ -1,6 +1,6 @@
 import { lstat, opendir } from 'node:fs/promises'
 import { join } from 'node:path'
-import { DirectoryListingBudget } from './directory-listing-budget'
+import { DirectoryListingBudget } from './file-listing/directory-listing-budget'
 import { ProcessTableCaptureError } from './process-table-snapshot'
 
 type DarwinTerminalNameDeps = {

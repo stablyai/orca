@@ -1,14 +1,14 @@
 import { toast } from 'sonner'
 import type { TerminalPaneSplitSource } from '../../../../../shared/feature-education-telemetry'
-import type { RuntimeRpcResponse } from '../../../../../shared/runtime-rpc-envelope'
-import type { RuntimeTerminalSplit } from '../../../../../shared/runtime-terminal-contracts'
+import type { RuntimeRpcResponse } from '../../../../../shared/remote-runtime/rpc/runtime-rpc-envelope'
+import type { RuntimeTerminalSplit } from '../../../../../shared/terminal/runtime/runtime-terminal-contracts'
 import { unwrapRuntimeRpcResult } from '../../rpc/calls/runtime-rpc-result'
 import { parseRemoteRuntimePtyId } from '../../../../../shared/remote-runtime/remote-runtime-pty-id'
 import {
   captureRuntimeEnvironmentCall,
   captureWebSessionIntentOwner,
   isWebRuntimeSessionActive
-} from '../../web-runtime-session-environment'
+} from '../../web-session-tabs-sync/identity/web-runtime-session-environment'
 import {
   beginWebRuntimeSplitFocusRequest,
   captureWebRuntimeSplitFocusTarget,

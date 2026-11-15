@@ -6,15 +6,16 @@ import {
   getMobileOverviewSearchEntry,
   getMobileSidebarShortcutSearchEntry
 } from './mobile-settings-search'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { useAppStore } from '@/store/index'
-import { MobileRelayBetaNotice } from './pairing/MobileRelayBetaNotice'
+import { MobileRelayBetaNotice } from '../../mobile/pairing/MobileRelayBetaNotice'
 import { openAppHttpLink } from '@/lib/browser/navigation/app-http-link-open'
 
 const ORCA_IOS_APP_STORE_URL = 'https://apps.apple.com/app/orca-ide/id6766130217'
-const ORCA_ANDROID_APK_URL = 'https://www.onorca.dev/download/android'
+const ORCA_ANDROID_APK_URL = 'https://orca.dev/download/android'
 
 export function MobileSettingsPane(): React.JSX.Element {
+  const t = useTranslate()
   const showMobileButton = useAppStore((s) => s.settings?.showMobileButton !== false)
   const updateSettings = useAppStore((s) => s.updateSettings)
 
@@ -22,8 +23,8 @@ export function MobileSettingsPane(): React.JSX.Element {
     <div className="space-y-8">
       <SettingsGroup>
         <SearchableSetting
-          title={translate('auto.components.settings.MobileSettingsPane.e7a3ae8c4e', 'Mobile')}
-          description={translate(
+          title={t('auto.components.settings.MobileSettingsPane.e7a3ae8c4e', 'Mobile')}
+          description={t(
             'auto.components.settings.MobileSettingsPane.174f4a3c6d',
             'Control terminals and agents from your phone.'
           )}
@@ -32,7 +33,7 @@ export function MobileSettingsPane(): React.JSX.Element {
         >
           <div className="space-y-2 text-xs text-muted-foreground">
             <p>
-              {translate(
+              {t(
                 'auto.components.settings.MobileSettingsPane.installIntro',
                 'Install Orca Mobile from the'
               )}{' '}
@@ -41,7 +42,7 @@ export function MobileSettingsPane(): React.JSX.Element {
                 onClick={(event) => openAppHttpLink(ORCA_IOS_APP_STORE_URL, { event })}
                 className="cursor-pointer underline underline-offset-2 hover:text-foreground"
               >
-                {translate('auto.components.settings.MobileSettingsPane.b5a2ed83ff', 'App Store')}
+                {t('auto.components.settings.MobileSettingsPane.b5a2ed83ff', 'App Store')}
               </button>
               {' · '}
               <button
@@ -50,26 +51,20 @@ export function MobileSettingsPane(): React.JSX.Element {
                 onClick={(event) => openAppHttpLink(ORCA_ANDROID_APK_URL, { event })}
                 className="cursor-pointer underline underline-offset-2 hover:text-foreground"
               >
-                {translate(
-                  'auto.components.settings.MobileSettingsPane.androidApkLabel',
-                  'Android APK'
-                )}
+                {t('auto.components.settings.MobileSettingsPane.androidApkLabel', 'Android APK')}
               </button>
-              {translate(
-                'auto.components.settings.MobileSettingsPane.installOutro',
-                ', then pair below.'
-              )}
+              {t('auto.components.settings.MobileSettingsPane.installOutro', ', then pair below.')}
             </p>
             <MobileRelayBetaNotice />
           </div>
         </SearchableSetting>
 
         <SearchableSetting
-          title={translate(
-            'auto.components.settings.MobileSettingsPane.1de96ec8a6',
-            'Show Orca Mobile Button'
+          title={t(
+            'auto.components.settings.MobileSettingsPane.49089c92b3',
+            'Show Orca Mobile button'
           )}
-          description={translate(
+          description={t(
             'auto.components.settings.MobileSettingsPane.682293cadf',
             'Show the Orca Mobile button at the top of the left sidebar.'
           )}
@@ -77,11 +72,11 @@ export function MobileSettingsPane(): React.JSX.Element {
         >
           {/* Why: the in-page removal toast points users to Settings > Mobile. */}
           <SettingsSwitchRow
-            label={translate(
-              'auto.components.settings.MobileSettingsPane.1de96ec8a6',
-              'Show Orca Mobile Button'
+            label={t(
+              'auto.components.settings.MobileSettingsPane.49089c92b3',
+              'Show Orca Mobile button'
             )}
-            description={translate(
+            description={t(
               'auto.components.settings.MobileSettingsPane.d4f2b65f30',
               'Show the Orca Mobile shortcut in the sidebar.'
             )}

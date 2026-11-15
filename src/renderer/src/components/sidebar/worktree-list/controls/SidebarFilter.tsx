@@ -10,7 +10,7 @@ import {
   Server,
   SquareTerminal
 } from 'lucide-react'
-import { useAppStore } from '@/store'
+import { useAppStore } from '@/store/index'
 import { Button } from '@/components/ui/button'
 import {
   Command,
@@ -29,11 +29,13 @@ import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip
 import RepoBadgeLabel from '@/components/repo/RepoBadgeLabel'
 import { FilterToggleRow } from './FilterToggleRow'
 import { useShortcutLabel } from '@/hooks/useShortcutLabel'
-import { searchRepos } from '@/lib/repo-search'
+import { isUnassignedShortcutLabel } from '@/i18n/unassigned-label'
+import { searchRepos } from '@/lib/workspace/catalog/repo-search'
 import { clearSidebarFilters, selectSidebarFilterState } from './sidebar-filter-actions'
 import { useWorkspaceOptionsFilterBadge } from './workspace-options-menu-items'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
+import { withoutHiddenRepos } from '../../../../../../shared/hidden-projects'
 
 type SidebarFilterProps = {
   preserveWorkspaceBoardOpen?: boolean
@@ -48,6 +50,7 @@ const SidebarFilter = React.memo(function SidebarFilter({
   contentSide = 'right',
   onMenuOpenChange
 }: SidebarFilterProps) {
+  const t = useTranslate()
   useUiLanguageRevision()
   const showSleepingWorkspaces = useAppStore((s) => s.showSleepingWorkspaces)
   const setShowSleepingWorkspaces = useAppStore((s) => s.setShowSleepingWorkspaces)
@@ -69,7 +72,8 @@ const SidebarFilter = React.memo(function SidebarFilter({
   )
   const filterRepoIds = useAppStore((s) => s.filterRepoIds)
   const setFilterRepoIds = useAppStore((s) => s.setFilterRepoIds)
-  const repos = useAppStore((s) => s.repos)
+  const allRepos = useAppStore((s) => s.repos)
+  const repos = useMemo(() => withoutHiddenRepos(allRepos), [allRepos])
   const addRepo = useAppStore((s) => s.addRepo)
 
   const [open, setOpen] = useState(false)
@@ -143,15 +147,12 @@ const SidebarFilter = React.memo(function SidebarFilter({
               type="button"
               aria-label={
                 hasAnyFilter
-                  ? translate(
+                  ? t(
                       'auto.components.sidebar.SidebarFilter.75405270ed',
                       'Edit filters ({{value0}} active)',
                       { value0: activeFilterCount }
                     )
-                  : translate(
-                      'auto.components.sidebar.SidebarFilter.f506a1262a',
-                      'Filter workspaces'
-                    )
+                  : t('auto.components.sidebar.SidebarFilter.f506a1262a', 'Filter workspaces')
               }
               className="relative text-muted-foreground"
               data-workspace-board-preserve-open={preserveWorkspaceBoardOpen ? '' : undefined}
@@ -171,8 +172,8 @@ const SidebarFilter = React.memo(function SidebarFilter({
         </TooltipTrigger>
         <TooltipContent side={tooltipSide} sideOffset={6}>
           {hasAnyFilter
-            ? translate('auto.components.sidebar.SidebarFilter.ee240a39eb', 'Edit filters')
-            : translate('auto.components.sidebar.SidebarFilter.f506a1262a', 'Filter workspaces')}
+            ? t('auto.components.sidebar.SidebarFilter.ee240a39eb', 'Edit filters')
+            : t('auto.components.sidebar.SidebarFilter.f506a1262a', 'Filter workspaces')}
         </TooltipContent>
       </Tooltip>
       <DropdownMenuContent
@@ -184,21 +185,21 @@ const SidebarFilter = React.memo(function SidebarFilter({
       >
         <FilterToggleRow
           icon={<Moon className="size-3.5" />}
-          label={translate('auto.components.sidebar.SidebarFilter.638a2d221d', 'Hide sleeping')}
+          label={t('auto.components.sidebar.SidebarFilter.638a2d221d', 'Hide sleeping')}
           checked={!showSleepingWorkspaces}
           onChange={(hideSleeping) => setShowSleepingWorkspaces(!hideSleeping)}
-          shortcutLabel={sleepingShortcut === 'Unassigned' ? undefined : sleepingShortcut}
+          shortcutLabel={isUnassignedShortcutLabel(sleepingShortcut) ? undefined : sleepingShortcut}
         />
         {/* Show the exemption only while its parent sleeping-workspace filter can use it. */}
         {!showSleepingWorkspaces && (
           <FilterToggleRow
             indented
             icon={<GitBranch className="size-3.5" />}
-            label={translate(
+            label={t(
               'auto.components.sidebar.SidebarFilter.keepDefaultBranch',
               'Except default branch'
             )}
-            ariaLabel={translate(
+            ariaLabel={t(
               'auto.components.sidebar.SidebarFilter.keepDefaultBranchAria',
               'Keep the default branch visible while hiding sleeping workspaces'
             )}
@@ -208,16 +209,13 @@ const SidebarFilter = React.memo(function SidebarFilter({
         )}
         <FilterToggleRow
           icon={<GitBranch className="size-3.5" />}
-          label={translate(
-            'auto.components.sidebar.SidebarFilter.e5cb32a898',
-            'Hide default branch'
-          )}
+          label={t('auto.components.sidebar.SidebarFilter.e5cb32a898', 'Hide default branch')}
           checked={hideDefaultBranchWorkspace}
           onChange={setHideDefaultBranchWorkspace}
         />
         <FilterToggleRow
           icon={<CalendarClock className="size-3.5" />}
-          label={translate(
+          label={t(
             'auto.components.sidebar.SidebarFilter.automationCreated',
             'Hide automation-created'
           )}
@@ -226,16 +224,13 @@ const SidebarFilter = React.memo(function SidebarFilter({
         />
         <FilterToggleRow
           icon={<SquareTerminal className="size-3.5" />}
-          label={translate('auto.components.sidebar.SidebarFilter.cliCreated', 'Hide CLI-created')}
+          label={t('auto.components.sidebar.SidebarFilter.cliCreated', 'Hide CLI-created')}
           checked={hideCliCreatedWorkspaces}
           onChange={setHideCliCreatedWorkspaces}
         />
         <FilterToggleRow
           icon={<GitCommitHorizontal className="size-3.5" />}
-          label={translate(
-            'auto.components.sidebar.SidebarFilter.detachedHead',
-            'Hide detached HEAD'
-          )}
+          label={t('auto.components.sidebar.SidebarFilter.detachedHead', 'Hide detached HEAD')}
           checked={hideDetachedHeadWorkspaces}
           onChange={setHideDetachedHeadWorkspaces}
         />
@@ -245,7 +240,7 @@ const SidebarFilter = React.memo(function SidebarFilter({
             <DropdownMenuSeparator />
             <div className="flex items-center justify-between px-2 py-1">
               <span className="text-[11px] font-semibold tracking-wide uppercase text-muted-foreground">
-                {translate('auto.components.sidebar.SidebarFilter.5f7085a077', 'Projects')}
+                {t('auto.components.sidebar.SidebarFilter.5f7085a077', 'Projects')}
                 {hasRepoFilter && (
                   <span className="ml-1.5 normal-case tracking-normal font-medium text-foreground">
                     · {selectedCount}
@@ -259,7 +254,7 @@ const SidebarFilter = React.memo(function SidebarFilter({
                   className="rounded-full px-2 py-0.5 text-[11px] text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:opacity-40 disabled:hover:bg-transparent"
                   disabled={allSelected}
                 >
-                  {translate('auto.components.sidebar.SidebarFilter.139877b384', 'Select all')}
+                  {t('auto.components.sidebar.SidebarFilter.139877b384', 'Select all')}
                 </button>
                 <button
                   type="button"
@@ -267,7 +262,7 @@ const SidebarFilter = React.memo(function SidebarFilter({
                   className="rounded-full px-2 py-0.5 text-[11px] text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:opacity-40 disabled:hover:bg-transparent"
                   disabled={!hasRepoFilter}
                 >
-                  {translate('auto.components.sidebar.SidebarFilter.779b7ba05d', 'Clear')}
+                  {t('auto.components.sidebar.SidebarFilter.779b7ba05d', 'Clear')}
                 </button>
               </div>
             </div>
@@ -280,7 +275,7 @@ const SidebarFilter = React.memo(function SidebarFilter({
             >
               <CommandInput
                 autoFocus
-                placeholder={translate(
+                placeholder={t(
                   'auto.components.sidebar.SidebarFilter.489d1c8c9f',
                   'Search projects...'
                 )}
@@ -297,10 +292,7 @@ const SidebarFilter = React.memo(function SidebarFilter({
               />
               <CommandList className="max-h-64 py-1">
                 <CommandEmpty className="py-4 text-[11px]">
-                  {translate(
-                    'auto.components.sidebar.SidebarFilter.b9e8802e73',
-                    'No projects match'
-                  )}
+                  {t('auto.components.sidebar.SidebarFilter.b9e8802e73', 'No projects match')}
                 </CommandEmpty>
                 {filteredRepos.map((r) => {
                   const checked = selectedRepoIdSet.has(r.id)
@@ -320,7 +312,7 @@ const SidebarFilter = React.memo(function SidebarFilter({
                         {r.connectionId && (
                           <span className="shrink-0 inline-flex items-center gap-0.5 rounded bg-muted px-1 py-0.5 text-[9px] font-medium leading-none text-muted-foreground">
                             <Server className="size-2.5" />
-                            {translate('auto.components.sidebar.SidebarFilter.81ded53722', 'SSH')}
+                            {t('auto.components.sidebar.SidebarFilter.81ded53722', 'SSH')}
                           </span>
                         )}
                       </span>
@@ -344,7 +336,7 @@ const SidebarFilter = React.memo(function SidebarFilter({
               onClick={clearAll}
               className="rounded-[5px] px-2 py-1 text-[11px] text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
             >
-              {translate('auto.components.sidebar.SidebarFilter.92a23e6d07', 'Reset filters')}
+              {t('auto.components.sidebar.SidebarFilter.92a23e6d07', 'Reset filters')}
             </button>
           ) : (
             <span />
@@ -355,7 +347,7 @@ const SidebarFilter = React.memo(function SidebarFilter({
             className="inline-flex items-center gap-1.5 rounded-[5px] px-2 py-1 text-[11px] text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
           >
             <FolderPlus className="size-3.5" />
-            {translate('auto.components.sidebar.SidebarFilter.e3b3898218', 'Add project')}
+            {t('auto.components.sidebar.SidebarFilter.e3b3898218', 'Add project')}
           </button>
         </div>
       </DropdownMenuContent>

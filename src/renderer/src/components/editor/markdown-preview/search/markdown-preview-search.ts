@@ -6,7 +6,7 @@ import {
   findDomTextSearchRanges,
   type DomTextSearchInstance,
   type DomTextSearchScope
-} from '../../../../lib/dom-text-search-highlights'
+} from '../../../../lib/text-search/dom-text-search-highlights'
 
 export function isMarkdownPreviewFindShortcut(
   event: Pick<KeyboardEvent, 'key' | 'code' | 'metaKey' | 'ctrlKey' | 'altKey' | 'shiftKey'>,

@@ -3,7 +3,7 @@ import {
   isWindowsProcessTableAvailable,
   readWindowsProcessIdentityTableFresh
 } from '../../windows/windows-process-table'
-import type { HostPressureLevel } from '../../../shared/host-spawn-admission'
+import type { HostPressureLevel } from '../../../shared/terminal/pty/admission/spawn-admission-contract'
 import {
   countDescendantsByRoot,
   createProcessGrowthState,

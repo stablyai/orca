@@ -21,12 +21,12 @@ vi.mock('@/runtime/rpc/compatibility/runtime-capability-proof', async (importOri
   ...(await importOriginal<typeof RuntimeCapabilityProofModule>()),
   runtimeEnvironmentSupportsCapability: mocks.supportsCapability
 }))
-vi.mock('@/runtime/structured-agent-session-client', () => ({
+vi.mock('../../../../runtime/native-chat/requests/structured-agent-session-subscriptions', () => ({
   subscribeStructuredAgentSessionStatus: mocks.subscribeStatus
 }))
 import { useAppStore } from '@/store'
 import { StructuredAgentSessionStatusBridge } from './StructuredAgentSessionStatusBridge'
-import { resetStructuredAgentSessionStatusFeedsForTests } from '@/runtime/structured-agent-session-status-feed'
+import { resetStructuredAgentSessionStatusFeedsForTests } from '@/runtime/native-chat/status/structured-agent-session-status-feed'
 function emit(event: AgentSessionStatusEvent, index = 0): void {
   act(() => mocks.subscribeStatus.mock.calls[index][1](event))
 }

@@ -97,12 +97,16 @@ type NamedPluginEntry = Omit<PluginNameCandidate, 'key'> & {
 }
 
 /** Installed and listed plugins sharing a name: the non-official ones show their publisher. */
-export function withDisambiguatedPluginNames<Entry extends NamedPluginEntry>(lists: {
-  installed: Entry[]
-  available: Entry[]
-}): { installed: Entry[]; available: Entry[] } {
+export function withDisambiguatedPluginNames<Entry extends NamedPluginEntry>(
+  lists: {
+    installed: Entry[]
+    available: Entry[]
+  },
+  t?: Translate
+): { installed: Entry[]; available: Entry[] } {
   const names = disambiguatedPluginNames(
-    [...lists.installed, ...lists.available].map((entry) => ({ ...entry, key: entry.pluginKey }))
+    [...lists.installed, ...lists.available].map((entry) => ({ ...entry, key: entry.pluginKey })),
+    t
   )
   const rename = (entry: Entry): Entry => {
     const name = names.get(entry.pluginKey) ?? entry.name

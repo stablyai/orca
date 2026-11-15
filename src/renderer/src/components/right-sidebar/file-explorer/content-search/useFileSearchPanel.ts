@@ -7,7 +7,7 @@ import type {
   SearchFileResult,
   SearchMatch,
   SearchResult
-} from '../../../../../../shared/code-search-types'
+} from '../../../../../../shared/file-search/code-search-types'
 import { buildSearchRows } from './search-rows'
 import { cancelRevealFrame, openMatchResult } from './search-match-open'
 import type { SearchQueryRowProps } from './SearchQueryRow'

@@ -29,6 +29,12 @@ export function parseWorkspaceKey(value: string): WorkspaceScope | null {
   return null
 }
 
+/** The folder workspace id a `folder:<id>` or `id:folder:<id>` selector names. */
+export function folderIdOfSelector(selector: string): string | undefined {
+  const parsed = parseWorkspaceKey(selector.startsWith('id:') ? selector.slice(3) : selector)
+  return parsed?.type === 'folder' ? parsed.folderWorkspaceId : undefined
+}
+
 /** Strip WorkspaceKey or host-qualified visit-recency scope (ssh:target|repo::path); retain already-bare workspace IDs. */
 export function normalizeWorkspaceSessionKeyToWorkspaceId(value: string): string {
   if (isWorktreeHostIdentity(value)) {

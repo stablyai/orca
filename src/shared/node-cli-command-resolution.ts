@@ -1,6 +1,9 @@
 import { homedir } from 'node:os'
 import { delimiter, dirname, isAbsolute, join, resolve } from 'node:path'
-import { firstWindowsPathEnvKey, isNativeExecutable } from './cli-runtime-pairing-inputs'
+import {
+  firstWindowsPathEnvKey,
+  isNativeExecutable
+} from './shell/launch/cli-runtime-pairing-inputs'
 import { getFnmDefaultAliasDirectories } from './fnm-default-alias-dirs'
 import { getNvmVersionDirectories, nvmVersionDirectories } from './nvm-version-directories'
 import { isRunnableCommand, runCliFsReadsSync, type CliFsReads } from './cli-fs-reads'

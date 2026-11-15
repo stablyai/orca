@@ -1,5 +1,5 @@
 import type { PreloadApi } from '../../../../preload/api-types'
-import { toRuntimeWorktreeSelector } from '../../runtime/runtime-worktree-selector'
+import { toRuntimeWorktreeSelector } from '../../runtime/rpc/targets/runtime-worktree-selector'
 import { resolveRuntimeWorktreeByPath } from './web-runtime-worktree-catalog'
 import { callRuntimeResult } from './web-runtime-calls'
 

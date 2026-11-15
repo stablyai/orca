@@ -44,8 +44,12 @@ let narrowRelativeCache: { locale: string; formatter: Intl.RelativeTimeFormat } 
 const narrowDurationCache = new Map<string, Intl.NumberFormat>()
 
 // Compact relative time ("in 5m", "8h ago") in the UI language.
-export function formatUiNarrowRelativeTime(value: number, unit: NarrowTimeUnit): string {
-  const locale = getIntlLocale()
+export function formatUiNarrowRelativeTime(
+  value: number,
+  unit: NarrowTimeUnit,
+  intlLocale: string = getIntlLocale()
+): string {
+  const locale = intlLocale
   if (!narrowRelativeCache || narrowRelativeCache.locale !== locale) {
     narrowRelativeCache = {
       locale,
@@ -56,8 +60,12 @@ export function formatUiNarrowRelativeTime(value: number, unit: NarrowTimeUnit):
 }
 
 // Compact duration ("5m", "3h") in the UI language.
-export function formatUiNarrowDuration(value: number, unit: NarrowTimeUnit): string {
-  const locale = getIntlLocale()
+export function formatUiNarrowDuration(
+  value: number,
+  unit: NarrowTimeUnit,
+  intlLocale: string = getIntlLocale()
+): string {
+  const locale = intlLocale
   const key = `${locale}\0${unit}`
   let formatter = narrowDurationCache.get(key)
   if (!formatter) {

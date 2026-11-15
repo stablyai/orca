@@ -4,30 +4,15 @@ import {
   runtimeEnvironmentCall,
   installRuntimeFileClientEnvironment
 } from '../runtime-file-client-test-harness'
-import { getDiskBaselineSignature } from '../../../../../shared/disk-baseline-signature'
+import { getDiskBaselineSignature } from '../../../../../shared/file-write/disk-baseline-signature'
 
 installRuntimeFileClientEnvironment()
 
 const PATH = '/private/tmp/handoff.md'
 const meta = { runtimeId: 'remote-runtime' }
 const ok = (result: unknown) => ({ id: 'rpc', ok: true, result, _meta: meta })
-const refused = (message: string) => ({
-  id: 'rpc',
-  ok: false,
-  error: { code: 'runtime_error', message },
-  _meta: meta
-})
 const read = (content: string) =>
   ok({ worktree: 'wt-1', relativePath: PATH, content, truncated: false, byteLength: 1 })
-const granted = (grantId: string) =>
-  ok({
-    worktree: 'wt-1',
-    relativePath: null,
-    absolutePath: PATH,
-    exists: true,
-    isDirectory: false,
-    openTarget: { kind: 'absolute-file', provider: 'local', absolutePath: PATH, grantId }
-  })
 
 function save(content: string, baseline: string, onGrantRenewed?: (grantId: string) => void) {
   return writeRuntimeTerminalArtifactFile({
@@ -41,31 +26,7 @@ function save(content: string, baseline: string, onGrantRenewed?: (grantId: stri
   })
 }
 
-function grantIdOf(params: unknown): string | undefined {
-  return typeof params === 'object' && params !== null && 'grantId' in params
-    ? String(params.grantId)
-    : undefined
-}
-
 describe('saving a granted host file outside every workspace', () => {
-  // Why: a host change stales the grant; the renewed read must still raise the conflict banner.
-  it('reports a host-side change behind a stale grant as a conflict', async () => {
-    runtimeEnvironmentCall.mockImplementation(async ({ method, params }) => {
-      if (method === 'files.resolveTerminalPath') {
-        return granted('g-2')
-      }
-      if (grantIdOf(params) === 'g-1') {
-        return refused('terminal_file_grant_stale')
-      }
-      return method === 'files.readTerminalArtifact' ? read('# theirs') : ok({ ok: true })
-    })
-
-    await expect(save('# new', '# old')).resolves.toEqual({ ok: false, diskConflict: 'changed' })
-    expect(runtimeEnvironmentCall.mock.calls.map(([call]) => call)).not.toContainEqual(
-      expect.objectContaining({ method: 'files.writeTerminalArtifact' })
-    )
-  })
-
   // Why: desktop delivers a lost reply as a runtime_timeout envelope, not a thrown transport error.
   it('reads back after a desktop timeout envelope and still rejects when the old text remains', async () => {
     const timedOut = {

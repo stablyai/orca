@@ -1,5 +1,6 @@
 import type { TerminalAttachmentLaunchResult } from '../../../../../shared/terminal/pty/lifecycle/terminal-attachment-launch-result'
 import type { TerminalStreamEndVerdict } from '../../../../../shared/terminal/stream/terminal-stream-end-verdict'
+import type { TerminalOutputCadence } from '../../../../../shared/terminal/stream/terminal-multiplex-flow-control'
 import type { TerminalInputAckKind } from '../../../../../shared/terminal/stream/terminal-stream-protocol'
 import type {
   RemoteRuntimeSnapshotImage,
@@ -67,6 +68,7 @@ export type RemoteRuntimeMultiplexedTerminal = {
   resize: (cols: number, rows: number) => boolean
   claimViewport: (cols: number, rows: number) => boolean
   setOutputPaused: (paused: boolean) => boolean
+  setOutputCadence: (cadence: TerminalOutputCadence) => void
   // Why: only then does a pause with no drop notice prove nothing was lost.
   reportsPausedOutputDrops?: () => boolean
   serializeBuffer: (

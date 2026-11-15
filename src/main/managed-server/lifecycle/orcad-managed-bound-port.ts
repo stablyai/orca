@@ -3,7 +3,7 @@ import {
   getRuntimeSshAccess,
   type KnownRuntimeEnvironment
 } from '../../../shared/remote-runtime/host-catalog/runtime-environments'
-import type { SshTarget } from '../../../shared/ssh-types'
+import type { SshTarget } from '../../../shared/remote-runtime/ssh/ssh-types'
 import type { ServeReadiness } from '../../server/serve-readiness'
 import { managedOrcadInstallDir } from './orcad-managed-runtime-context'
 import { resolveOrcadRemoteContext } from '../install/orcad-remote-context'
@@ -15,7 +15,7 @@ import {
   execOrcadRemote,
   type OrcadRemoteExecTarget
 } from '../install/orcad-remote-runtime-control'
-import type { OrcadHostTarget, OrcadHostTransport } from '../../ssh/orcad-host-transport'
+import type { OrcadHostTarget, OrcadHostTransport } from '../install/orcad-host-transport'
 import { parsePairingCode } from '../../../shared/remote-runtime/pairing/pairing'
 
 export type OrcadTunnelPortInput = {

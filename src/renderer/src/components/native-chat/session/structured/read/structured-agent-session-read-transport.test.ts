@@ -4,17 +4,34 @@ import {
   reduceStructuredAgentSession
 } from '../../../../../../../shared/agent-session/structured-agent-session-reducer'
 import type { AgentJournalCursor } from '../../../../../../../shared/agent-session/journal/agent-session-journal-identity'
+import type { AgentJournalRenderItem } from '../../../../../../../shared/agent-session/journal/agent-session-journal-types'
+import type { AgentSessionTextAppendItem } from '../../../../../../../shared/agent-session/agent-session-text-append'
 import type { AgentSessionCurrentRequestsMarker } from '../../../../../../../shared/agent-session/requests/agent-session-current-requests-wire'
 import type {
   AgentSessionHistoryPage,
   AgentSessionSubscribeEvent
 } from '../../../../../../../shared/agent-session/agent-session-wire'
 
-const mocks = vi.hoisted(() => ({ call: vi.fn(), subscribe: vi.fn(), watchHostContact: vi.fn() }))
+const mocks = vi.hoisted(() => ({
+  call: vi.fn(),
+  subscribe: vi.fn(),
+  watchHostContact: vi.fn(),
+  supports: vi.fn()
+}))
 
-vi.mock('@/runtime/structured-agent-session-client', () => ({
-  callStructuredAgentSession: mocks.call,
-  subscribeStructuredAgentSession: mocks.subscribe
+vi.mock('../../../../../runtime/native-chat/requests/structured-agent-session-call', () => ({
+  callStructuredAgentSession: mocks.call
+}))
+
+vi.mock(
+  '../../../../../runtime/native-chat/requests/structured-agent-session-subscriptions',
+  () => ({
+    subscribeStructuredAgentSession: mocks.subscribe
+  })
+)
+
+vi.mock('@/runtime/rpc/compatibility/runtime-capability-proof', () => ({
+  runtimeEnvironmentSupportsCapabilities: mocks.supports
 }))
 
 vi.mock('@/runtime/hosts/connections/runtime-host-contact-regained', () => ({
@@ -101,6 +118,52 @@ describe('structured agent-session read transport generations', () => {
       target
     })
   }
+
+  it('asks a remote host for every append it advertises and rebuilds appended replies', async () => {
+    mocks.supports.mockResolvedValue([true, true])
+    const applied: AgentSessionSubscribeEvent[] = []
+    const transport = startStructuredAgentSessionReadTransport({
+      subscribeRetryNow: () => () => {},
+      applyEvent: (event) => applied.push(event),
+      applyError: vi.fn(),
+      getCursor: () => null,
+      onContactLost: vi.fn(),
+      onHistoryReadInvalidated: () => undefined,
+      sessionId: 'session-a',
+      target: { kind: 'environment', environmentId: 'env-a' }
+    })
+    await vi.waitFor(() => expect(attempts).toHaveLength(1))
+    expect(mocks.subscribe.mock.calls[0]?.[1]).toEqual({
+      sessionId: 'session-a',
+      capabilities: { textAppend: 1, toolOutputAppend: 1 }
+    })
+    const reply = (text: string, revision: number): AgentJournalRenderItem => ({
+      itemId: 'reply-a',
+      revision,
+      sequence: 101,
+      observedAt: 1,
+      body: { kind: 'message', role: 'assistant', blocks: [{ type: 'text', text }] }
+    })
+    const batch = (sequence: number, item: AgentJournalRenderItem): AgentSessionSubscribeEvent => ({
+      type: 'batch',
+      sessionId: 'session-a',
+      batch: {
+        cursor: { epoch: 'epoch-a', sequence },
+        items: [item],
+        removedItemIds: [],
+        submissions: []
+      }
+    })
+    attempts[0].onEvent(snapshot(100))
+    attempts[0].onEvent(batch(101, reply('Hel', 1)))
+    const appended: AgentSessionTextAppendItem = {
+      ...reply('', 2),
+      textAppend: { from: 3, text: 'lo' }
+    }
+    attempts[0].onEvent(batch(102, appended))
+    await vi.waitFor(() => expect(applied.at(-1)).toEqual(batch(102, reply('Hello', 2))))
+    transport.dispose()
+  })
 
   it('flushes queued rows before reading the applied cursor for reconnect', async () => {
     vi.useFakeTimers()
@@ -201,6 +264,7 @@ describe('structured agent-session read transport unattached refusals', () => {
   beforeEach(() => {
     attempts.length = 0
     vi.clearAllMocks()
+    mocks.supports.mockResolvedValue([false, false])
     mocks.subscribe.mockImplementation((_target, _params, onEvent, onError, onClose) => {
       const attempt: SubscribeAttempt = {
         closed: Promise.withResolvers<{ unsubscribe: () => void }>(),
@@ -329,7 +393,7 @@ describe('structured agent-session read transport unattached refusals', () => {
         subscribeRetryNow: (retry) => mocks.watchHostContact('env-a', retry)
       })
       expect(mocks.watchHostContact).toHaveBeenCalledWith('env-a', expect.any(Function))
-      await flushPromises()
+      await vi.advanceTimersByTimeAsync(0)
       const refuseLatest = async (): Promise<void> => {
         const attempt = attempts.at(-1)!
         attempt.closed.resolve({ unsubscribe: attempt.unsubscribe })

@@ -1,5 +1,6 @@
 import { useRendererPtyVisibilityClaims } from '../../pty-transport/delivery/use-renderer-pty-visibility-claims'
 import { useActiveRendererPty } from '../../pty-transport/delivery/use-active-renderer-pty'
+import { syncPaneOutputCadences } from '../../pty-transport/renderer-active-pty'
 import { useTerminalPaneExpandEvent } from '../../layout/expand/use-terminal-pane-expand-event'
 import { useTerminalPaneFocusEvent } from '../../input/focus/use-terminal-pane-focus-event'
 import { useTerminalProgrammaticPasteEvent } from '../../input/paste/use-terminal-programmatic-paste-event'
@@ -30,6 +31,7 @@ type UseTerminalPaneGlobalEffectsArgs = {
   /** Keep WebGL attached in a laid-out hidden host so a likely reveal skips context and atlas setup. */
   warmRendererWhileHidden?: boolean
   paneCount: number
+  terminalManager: PaneManager | null
   managerRef: React.RefObject<PaneManager | null>
   containerRef: React.RefObject<HTMLDivElement | null>
   paneTransportsRef: React.RefObject<Map<number, PtyTransport>>
@@ -49,6 +51,7 @@ export function useTerminalPaneGlobalEffects({
   warmRendererWhileHidden = false,
   paneCount,
   managerRef,
+  terminalManager,
   containerRef,
   paneTransportsRef,
   panePtyBindingsRef,
@@ -57,6 +60,7 @@ export function useTerminalPaneGlobalEffects({
   toggleExpandPane
 }: UseTerminalPaneGlobalEffectsArgs): void {
   // Start true so initially hidden panes suspend the WebGL context openTerminal creates instead of exhausting Chromium’s context budget.
+  const previousManagerRef = useRef<PaneManager | null>(null)
   const wasVisibleRef = useRef(true)
   const wasWorktreeActiveRef = useRef(isWorktreeActive)
   const hasCompletedVisibleResumeRef = useRef(false)
@@ -76,6 +80,7 @@ export function useTerminalPaneGlobalEffects({
     applyPendingFollowOutputRequests,
     scheduleFollowOutputIfNeeded
   } = useTerminalScrollVisibilityMemory({
+    terminalManager,
     managerRef,
     isVisibleRef,
     visibleResumeCompleteRef: wasVisibleRef,
@@ -96,12 +101,21 @@ export function useTerminalPaneGlobalEffects({
     panePtyBindingsRef
   })
 
-  useRendererPtyVisibilityClaims({ paneTransportsRef, rendererVisible })
+  useRendererPtyVisibilityClaims({ terminalManager, paneTransportsRef, rendererVisible })
 
   useEffect(() => {
     const manager = managerRef.current
-    if (!manager) {
+    if (!terminalManager || manager !== terminalManager) {
       return
+    }
+    if (previousManagerRef.current !== manager) {
+      previousManagerRef.current = manager
+      wasVisibleRef.current = true
+      wasWorktreeActiveRef.current = isWorktreeActive
+      hasCompletedVisibleResumeRef.current = false
+      renderingSuspendedByVisibilityRef.current = false
+      hiddenReasonRef.current = null
+      warmedWhileHiddenRef.current = false
     }
     manager.setAtlasRecoveryVisible?.(rendererVisible)
     // Why: hidden-worktree panes keep their WebGL backing; tab-hidden ones may release it (pane-webgl-renderer).
@@ -182,8 +196,15 @@ export function useTerminalPaneGlobalEffects({
     isActiveRef,
     isVisibleRef,
     managerRef,
+    terminalManager,
     withSuppressedScrollTracking
   ])
+
+  useEffect(() => {
+    if (terminalManager && managerRef.current === terminalManager && panePtyBindingsRef) {
+      syncPaneOutputCadences(panePtyBindingsRef.current)
+    }
+  }, [terminalManager, managerRef, isActive, panePtyBindingsRef])
 
   useActiveRendererPty({ isActive, isVisible, isWorktreeActive, activeLeafPtyId })
 

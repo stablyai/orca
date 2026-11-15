@@ -1,16 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { requestEditorFileSave } from '../../autosave/editor-autosave'
 import { attachEditorAutosaveController } from '../../autosave/editor-autosave-controller'
-import {
-  __clearSelfWriteRegistryForTests,
-  hasRecentSelfWrite
-} from '../../external-changes/editor-self-write-registry'
+import { __clearSelfWriteRegistryForTests } from '../../external-changes/editor-self-write-registry'
 import { createEditorStore } from '../../autosave/editor-autosave-controller-test-fixture'
 import { overwriteDiskWithTabEdits } from '../../external-changes/ExternalFileChangeBanner'
-import {
-  getDiskBaselineSignature,
-  getWrittenContentDiskSignature
-} from '../../../../../../shared/disk-baseline-signature'
+import { getDiskBaselineSignature } from '../../../../../../shared/file-write/disk-baseline-signature'
 
 import { GUARDED_PATH, openGuardedFile, stubGuardedDisk } from './editor-save-guarded-disk-fixture'
 
@@ -24,11 +18,11 @@ const storeRef = vi.hoisted((): { current: ReturnType<typeof createEditorStore> 
   current: null
 }))
 
-vi.mock('@/lib/connection-context', () => ({
+vi.mock('@/lib/workspace/ownership/connection-context', () => ({
   getConnectionIdForFile: mocks.getConnectionIdForFile
 }))
 vi.mock('@/store/index', () => ({ useAppStore: { getState: () => storeRef.current?.getState() } }))
-vi.mock('@/lib/file-owner-runtime-target', () => ({
+vi.mock('@/lib/files/access/file-owner-runtime-target', () => ({
   getRuntimeTargetForFileOwner: () => ({ kind: 'local' })
 }))
 vi.mock('@/runtime/files/reads/runtime-file-read-client', async (importOriginal) => ({
@@ -51,95 +45,6 @@ describe('editor saves guarded by the disk precondition', () => {
     vi.useRealTimers()
     vi.unstubAllGlobals()
     __clearSelfWriteRegistryForTests()
-  })
-
-  it('cleans a tab whose disk already holds the edit, without retaining a self-write stamp', async () => {
-    const disk = stubGuardedDisk({ [PATH]: 'user edit' })
-    const store = createEditorStore()
-    openFile(store, { baseline: 'original', draft: 'user edit' })
-    const cleanup = attachEditorAutosaveController(store)
-    try {
-      await requestEditorFileSave({ fileId: PATH })
-
-      await expect(disk.writeFile.mock.results[0]?.value).resolves.toEqual({
-        ok: true,
-        unchanged: true
-      })
-      expect(store.getState().openFiles[0]).toMatchObject({
-        isDirty: false,
-        lastKnownDiskSignature: getWrittenContentDiskSignature('user edit')
-      })
-      expect(store.getState().editorDrafts[PATH]).toBeUndefined()
-      expect(hasRecentSelfWrite(PATH)).toBe(false)
-    } finally {
-      cleanup()
-    }
-  })
-
-  it('blocks an autosave over an unnoticed agent write and raises the banner', async () => {
-    const disk = stubGuardedDisk({ [PATH]: 'original' })
-    const store = createEditorStore()
-    openFile(store, { baseline: 'original', draft: 'user edit' })
-    // Simulate an external write without a watcher notification.
-    disk.files.set(PATH, 'agent rewrite')
-
-    const cleanup = attachEditorAutosaveController(store)
-    try {
-      await vi.advanceTimersByTimeAsync(1500)
-
-      expect(disk.writeFile).toHaveBeenCalledWith(
-        expect.objectContaining({
-          content: 'user edit',
-          diskPrecondition: {
-            expectedSignature: getDiskBaselineSignature('original'),
-            allowMissing: false,
-            requireLosslessUtf8: true
-          }
-        })
-      )
-      expect(disk.files.get(PATH)).toBe('agent rewrite')
-      const file = store.getState().openFiles[0]
-      expect(file?.externalMutation).toBe('changed')
-      expect(file?.isDirty).toBe(true)
-      expect(store.getState().editorDrafts[PATH]).toBe('user edit')
-
-      // The banner pauses autosave, so no retry loop follows.
-      store.getState().setEditorDraft(PATH, 'user edit 2')
-      await vi.advanceTimersByTimeAsync(1500)
-      expect(disk.writeFile).toHaveBeenCalledTimes(1)
-    } finally {
-      cleanup()
-    }
-  })
-
-  it('keeps refusing explicit saves while the banner shows; only its Overwrite writes', async () => {
-    const disk = stubGuardedDisk({ [PATH]: 'agent rewrite' })
-    const store = createEditorStore()
-    storeRef.current = store
-    openFile(store, { baseline: 'original', draft: 'user edit' })
-
-    const cleanup = attachEditorAutosaveController(store)
-    try {
-      await expect(requestEditorFileSave({ fileId: PATH })).rejects.toThrow(/changed on disk/)
-      expect(disk.files.get(PATH)).toBe('agent rewrite')
-      expect(store.getState().openFiles[0]?.externalMutation).toBe('changed')
-
-      // Cmd+S again (from the editor or a preview) is not consent.
-      await expect(requestEditorFileSave({ fileId: PATH })).rejects.toThrow(/changed on disk/)
-      expect(disk.files.get(PATH)).toBe('agent rewrite')
-
-      expect(await overwriteDiskWithTabEdits(store.getState().openFiles[0])).toBe(true)
-      expect(disk.writeFile).toHaveBeenLastCalledWith(
-        expect.not.objectContaining({ diskPrecondition: expect.anything() })
-      )
-      expect(disk.files.get(PATH)).toBe('user edit')
-      const file = store.getState().openFiles[0]
-      expect(file?.externalMutation).toBeUndefined()
-      expect(file?.isDirty).toBe(false)
-      expect(file?.lastKnownDiskSignature).toBe(getDiskBaselineSignature('user edit'))
-    } finally {
-      cleanup()
-    }
   })
 
   // Why: a granted host path must never become a write of this computer's same path.

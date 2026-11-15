@@ -1,10 +1,10 @@
-import { parseWslUncPath } from '../../../../shared/wsl-paths'
+import { parseWslUncPath } from '../../../../shared/file-access/wsl-paths'
 import { toRuntimeExecutionHostId, type ExecutionHostId } from '../../../../shared/execution-host'
 import type { AppState } from '@/store/types'
 import {
   listWslHostWindowsPathAccess,
   type WslHostWindowsPathAccess
-} from '@/lib/windows-path-access'
+} from '@/lib/files/os-open/windows-path-access'
 import { wslHostsAvailable } from './use-wsl-hosts-enabled'
 import { routeSidebarProjectDrop } from './project-admission/drop/sidebar-project-drop'
 

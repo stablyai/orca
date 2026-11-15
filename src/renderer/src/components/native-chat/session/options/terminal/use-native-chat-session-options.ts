@@ -1,15 +1,15 @@
 import { useEffect, useMemo, useRef, useSyncExternalStore } from 'react'
 import type { AgentType } from '../../../../../../../shared/agent-status/contracts/agent-status-types'
 import { getAgentSessionOptionCatalog } from '../../../../../../../shared/agent-session/options/agent-session-option-catalog'
-import { matchNativeChatCatalogModelId } from '../../../../../../../shared/native-chat/input/native-chat-session-option-state'
+import { matchNativeChatCatalogModelId } from '../../../../../../../shared/native-chat/input/session-options/native-chat-session-option-state'
 import type { SessionOptionDescriptor } from '../../../../../../../shared/native-chat/input/native-chat-session-options'
 import { useAppStore } from '../../../../../store/index'
 import { sayNativeChatSessionOptionTranslated } from '../controls/native-chat-session-option-labels-text'
 import {
   createNativeChatPtySessionOptions,
   type NativeChatPtySessionOptionsSurface
-} from '../../../../../../../shared/native-chat/input/native-chat-pty-session-options'
-import type { NativeChatSessionOptionDispatchCommand } from '../../../../../../../shared/native-chat/input/native-chat-session-option-dispatch'
+} from '../../../../../../../shared/native-chat/input/session-options/native-chat-pty-session-options'
+import type { NativeChatSessionOptionDispatchCommand } from '../../../../../../../shared/native-chat/input/session-options/native-chat-session-option-dispatch'
 import {
   ensureNativeChatModelEnrichment,
   readNativeChatEnrichedModels,

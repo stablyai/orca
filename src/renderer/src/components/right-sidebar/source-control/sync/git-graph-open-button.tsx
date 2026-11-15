@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'react'
-import { GitGraph } from 'lucide-react'
-import { Button } from '@/components/ui/button'
+import { SquareArrowOutUpRight } from 'lucide-react'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { useSourceControlState } from '../panel/worktree-scope'
 import {
@@ -9,10 +8,19 @@ import {
   gitGraphUpdateMessage,
   openGitGraph,
   probeGitGraphSupport
-} from '@/lib/git-graph-tab'
-import { translate } from '@/i18n/i18n'
+} from '@/lib/source-control/graph/git-graph-tab'
+import { toSourceControlRowOpenEvent, type SourceControlRowOpenEvent } from '../listing/split-open'
+import { useTranslate } from '@/i18n/use-translate'
+import { CommitsHeaderIconButton } from './commits-header-icon-button'
 
-export function GitGraphOpenButton({ worktreeId }: { worktreeId: string }) {
+export function GitGraphOpenButton({
+  worktreeId,
+  onOpen
+}: {
+  worktreeId: string
+  onOpen?: (event: SourceControlRowOpenEvent) => void
+}) {
+  const t = useTranslate()
   // Hidden section bodies stop these subscriptions; a primitive key keeps unrelated writes from rendering.
   const owner = useSourceControlState((state) =>
     JSON.stringify([worktreeId, gitGraphScope(worktreeId, state)?.route])
@@ -41,20 +49,25 @@ export function GitGraphOpenButton({ worktreeId }: { worktreeId: string }) {
     <Tooltip>
       <TooltipTrigger asChild>
         <span className="inline-flex">
-          <Button
-            variant="ghost"
-            size="icon-xs"
+          <CommitsHeaderIconButton
             disabled={support !== true}
-            aria-label={translate('gitGraph.title', 'Git Graph')}
-            onClick={() => void openGitGraph(worktreeId)}
+            aria-label={t('gitGraph.title', 'Git Graph')}
+            onClick={(event) => {
+              event.stopPropagation()
+              if (onOpen) {
+                onOpen(toSourceControlRowOpenEvent(event))
+                return
+              }
+              void openGitGraph(worktreeId)
+            }}
           >
-            <GitGraph className="size-3.5" />
-          </Button>
+            <SquareArrowOutUpRight className="size-3.5" />
+          </CommitsHeaderIconButton>
         </span>
       </TooltipTrigger>
       {support !== null && (
         <TooltipContent>
-          {support ? translate('gitGraph.title', 'Git Graph') : gitGraphUpdateMessage(worktreeId)}
+          {support ? t('gitGraph.title', 'Git Graph') : gitGraphUpdateMessage(worktreeId, t)}
         </TooltipContent>
       )}
     </Tooltip>

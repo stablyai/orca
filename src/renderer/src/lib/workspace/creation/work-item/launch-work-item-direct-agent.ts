@@ -4,8 +4,8 @@ import type {
   FreshWorkspaceAgentLaunch
 } from '@/lib/workspace/creation/worktree-startup-payload'
 import { toast } from 'sonner'
-import { track } from '@/lib/telemetry'
-import { tuiAgentToAgentKind } from '../../../../../../shared/agent-kind'
+import { track } from '@/diagnostics/telemetry/telemetry'
+import { tuiAgentToAgentKind } from '../../../../../../shared/agent-status/identity/agent-kind'
 import {
   buildAgentDraftLaunchPlan,
   buildAgentStartupPlan,

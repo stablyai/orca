@@ -1,4 +1,4 @@
-import { mkdirSync } from 'node:fs'
+import { mkdirSync, rmSync } from 'node:fs'
 import { dirname } from 'node:path'
 import SyncDatabase from './sync-database'
 import { removeTreeSync } from '../../shared/windows-transient-lock-removal'
@@ -14,7 +14,14 @@ export type VersionedCacheDatabaseSchema = {
   directoryMode?: number
   // Applies only to a new file; rows near half a default page waste the other half.
   pageSize?: number
+  // Main-thread callers pass a short wait so a locked file fails fast instead of freezing.
+  busyTimeoutMs?: number
+  // Main-thread callers pass 'fail-fast' so a rebuild blocked by a held file throws at once
+  // (callers retry later) instead of sleeping through Windows unlock retries.
+  removal?: CacheDatabaseRemoval
 }
+
+export type CacheDatabaseRemoval = 'retry' | 'fail-fast'
 
 /** Rebuild unreadable/stale cache schemas: source files remain authoritative, so replacement costs only a rescan instead of stranding the feature. */
 export function openVersionedCacheDatabase(
@@ -32,21 +39,21 @@ export function openVersionedCacheDatabase(
       throw error
     }
     // One retry only: a second failure on a file we just created is not corruption.
-    removeVersionedCacheDatabase(path)
+    removeVersionedCacheDatabase(path, schema.removal)
     return openExisting(path, schema)
   }
 }
 
 function openExisting(path: string, schema: VersionedCacheDatabaseSchema): SyncDatabase {
   // Null closed handles so cleanup cannot mask the real failure with ERR_INVALID_STATE.
-  let db: SyncDatabase | null = openWithPragmas(path, schema.pageSize)
+  let db: SyncDatabase | null = openWithPragmas(path, schema)
   try {
     if (isStaleSchema(db, schema.version)) {
       // Unlink stale caches; dropping multi-GB tables can exceed scanner readiness deadlines.
       db.close()
       db = null
-      removeVersionedCacheDatabase(path)
-      db = openWithPragmas(path, schema.pageSize)
+      removeVersionedCacheDatabase(path, schema.removal)
+      db = openWithPragmas(path, schema)
     }
     db.exec(schema.sql)
     schema.afterSchema?.(db)
@@ -65,7 +72,7 @@ function openExisting(path: string, schema: VersionedCacheDatabaseSchema): SyncD
 const UNUSABLE_DATABASE =
   /SQLITE_CORRUPT|SQLITE_NOTADB|file is not a database|database disk image is malformed/i
 
-function isUnusableDatabaseError(error: unknown): boolean {
+export function isUnusableDatabaseError(error: unknown): boolean {
   if (!(error instanceof Error)) {
     return false
   }
@@ -76,11 +83,17 @@ function isUnusableDatabaseError(error: unknown): boolean {
   )
 }
 
-function openWithPragmas(path: string, pageSize: number | undefined): SyncDatabase {
+function openWithPragmas(
+  path: string,
+  {
+    pageSize,
+    busyTimeoutMs = 5000
+  }: Pick<VersionedCacheDatabaseSchema, 'pageSize' | 'busyTimeoutMs'>
+): SyncDatabase {
   const db = new SyncDatabase(path)
   try {
     // Set busy timeout before WAL pragmas so another process's lock can clear.
-    db.pragma('busy_timeout = 5000')
+    db.pragma(`busy_timeout = ${Math.max(0, Math.trunc(busyTimeoutMs))}`)
     if (pageSize !== undefined) {
       db.pragma(`page_size = ${pageSize}`)
     }
@@ -97,12 +110,19 @@ function openWithPragmas(path: string, pageSize: number | undefined): SyncDataba
   }
 }
 
-export function removeVersionedCacheDatabase(path: string): void {
+export function removeVersionedCacheDatabase(
+  path: string,
+  removal: CacheDatabaseRemoval = 'retry'
+): void {
   if (path === ':memory:') {
     return
   }
   for (const suffix of ['', '-wal', '-shm', '-journal']) {
-    removeTreeSync(`${path}${suffix}`)
+    if (removal === 'fail-fast') {
+      rmSync(`${path}${suffix}`, { recursive: true, force: true })
+    } else {
+      removeTreeSync(`${path}${suffix}`)
+    }
   }
 }
 

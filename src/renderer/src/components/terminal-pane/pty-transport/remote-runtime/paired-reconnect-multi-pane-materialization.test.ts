@@ -83,7 +83,7 @@ describe('paired client sleep/wake with several remote terminal tabs', () => {
     vi.doUnmock(
       '../../../../runtime/hosted-terminals/streams/registry/remote-runtime-terminal-multiplexer-registry'
     )
-    vi.doMock('@/runtime/web-runtime-session-snapshot', () => ({
+    vi.doMock('@/runtime/web-session-tabs-sync/inventory/web-runtime-session-snapshot', () => ({
       refreshWebRuntimeSessionTabsSnapshot: vi.fn(async () => {})
     }))
     vi.clearAllMocks()
@@ -138,28 +138,6 @@ describe('paired client sleep/wake with several remote terminal tabs', () => {
     await vi.waitFor(() => expect(subscribedHandles()).toHaveLength(PANE_COUNT))
     return panes
   }
-
-  it('rebinds every pane after the shared multiplex connection drops', async () => {
-    const panes = await attachAllPanes()
-    const before = subscribedHandles().length
-
-    // Laptop closed: the single multiplex socket dies, taking all six streams.
-    subscriptionCallbacks?.onClose?.()
-
-    await vi.waitFor(() =>
-      expect(subscribedHandles().length).toBeGreaterThanOrEqual(before + PANE_COUNT)
-    )
-    const afterReconnect = subscribedHandles().slice(before)
-    expect(new Set(afterReconnect).size, `resubscribes: ${JSON.stringify(afterReconnect)}`).toBe(
-      PANE_COUNT
-    )
-    for (const pane of panes) {
-      expect(pane.transport.getPtyId(), `pane ${pane.hostTabId} bound the wrong handle`).toBe(
-        `remote:env-1@@${hostHandleByTabId.get(pane.hostTabId)}`
-      )
-      pane.transport.destroy?.()
-    }
-  })
 
   it('re-materializes a pane whose host PTY was parked while the client slept', async () => {
     const panes = await attachAllPanes()

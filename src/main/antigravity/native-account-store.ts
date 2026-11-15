@@ -5,7 +5,7 @@ import { writeCredentialFileAtomic } from '../credentials/integration-credential
 import type { AntigravityAccountSummary } from '../../shared/antigravity-account-types'
 import type { ProviderRateLimits, RateLimitRuntimeTarget } from '../../shared/rate-limit-types'
 import { parseAntigravityNativeCredential } from './native-credential-codec'
-import { readPrivateWindowsFile } from '../../shared/secure-path-windows-acl'
+import { readPrivateWindowsFile } from '../../shared/secure-storage/secure-path-windows-acl'
 
 export type StoredAntigravityUsage = {
   target: RateLimitRuntimeTarget

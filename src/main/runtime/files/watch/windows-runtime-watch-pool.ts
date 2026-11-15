@@ -1,4 +1,4 @@
-import type { FsChangeEvent } from '../../../../shared/filesystem-entry-types'
+import type { FsChangeEvent } from '../../../../shared/file-watch/filesystem-change-event'
 import {
   throwIfSignalAborted,
   waitForPromiseWithSignal

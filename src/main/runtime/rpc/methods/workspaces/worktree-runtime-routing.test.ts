@@ -1,12 +1,11 @@
 import '../../../../../shared/native-chat/every-agent-chat.test-fixture'
-import '../../unused-default-rpc-methods.test-fixture'
 import { describe, expect, it, vi } from 'vitest'
 import { RpcDispatcher } from '../../dispatcher'
 import type { RpcRequest } from '../../core'
 import type { OrcaRuntimeService } from '../../../orca-runtime'
 import { WORKTREE_METHODS } from './worktree'
 import '../../../../../shared/protocol-version'
-import '../../../../../shared/worktree-runtime-capabilities'
+import '../../../../../shared/remote-runtime/protocol/worktree-runtime-capabilities'
 
 import '../../../../../shared/electron-remote-runtime-client-capabilities'
 

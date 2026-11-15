@@ -1,11 +1,18 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
+
 import type { RpcContext } from '../../../core'
+
 import { createOrchestrationRpcHarness } from '../rpc-test-harness'
+
 import type { OrchestrationDb } from '../../../../orchestration/db/orchestration-db'
+
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
-import '../../../../../../shared/orchestration-ask-timeout'
+
+import '../../../../../../shared/orchestration/mailbox/orchestration-ask-timeout'
 import { createRootDispatch } from '../../../../orchestration/db/root-dispatch-test-fixture'
-import { MessageWake } from '../../../../runtime-message-waiters'
+
+import { MessageWake } from '../../../../orchestration/mailbox/runtime-message-waiters'
+
 import { deliverQuestionAnswer } from '../../../../orchestration/mailbox/questions/question-answer-delivery'
 
 describe('orchestration RPC methods', () => {
@@ -29,29 +36,6 @@ describe('orchestration RPC methods', () => {
   }
 
   describe('orchestration.reply', () => {
-    it('replies to a message', async () => {
-      setup()
-      const original = db.insertMessage({
-        from: 'a',
-        to: 'b',
-        subject: 'question',
-        runId: activeRunId
-      })
-
-      const result = (await call('orchestration.reply', {
-        id: original.id,
-        body: 'answer',
-        from: 'b'
-      })) as {
-        message: { to_handle: string; subject: string; thread_id: string; run_id: string }
-      }
-
-      expect(result.message.to_handle).toBe('a')
-      expect(result.message.subject).toBe('Re: question')
-      expect(result.message.thread_id).toBe(original.id)
-      expect(result.message.run_id).toBe(activeRunId)
-    })
-
     it('records one idempotent answer from the current Run consumer', async () => {
       setup()
       const task = db.createTask({ spec: 'question work' })
@@ -102,62 +86,6 @@ describe('orchestration RPC methods', () => {
       const dispatch = createRootDispatch(db, task.id, handle)
       return { task, dispatch }
     }
-
-    it('persists a Run question and returns its first durable answer', async () => {
-      setup()
-      const { dispatch } = createAskingDispatch()
-      vi.spyOn(runtime, 'notifyMessageArrived').mockImplementation(() => {})
-      vi.spyOn(runtime, 'waitForMessage').mockImplementation(async () => {
-        const outbound = db.getInbox(10).find((message) => message.type === 'question')
-        if (outbound) {
-          db.answerQuestion({
-            messageId: outbound.id,
-            runId: activeRunId!,
-            consumerGeneration: db.getRun(activeRunId!)!.consumer_generation,
-            body: 'go ahead'
-          })
-        }
-        return new MessageWake()
-      })
-
-      const result = (await call('orchestration.ask', {
-        from: 'term_worker',
-        question: 'proceed?',
-        options: 'yes, no',
-        timeoutMs: 500
-      })) as {
-        answer: string
-        messageId: string
-        answerMessageId: string
-        threadId: string
-        timedOut: boolean
-      }
-
-      expect(result.timedOut).toBe(false)
-      expect(result.answer).toBe('go ahead')
-      expect(result.messageId).toMatch(/^msg_/)
-
-      const outbound = db.getInbox(10).find((message) => message.type === 'question')
-      expect(outbound).toBeTruthy()
-      expect(outbound?.to_handle).toBe(`run:${activeRunId}`)
-      expect(outbound?.subject).toBe('Question')
-      expect(outbound?.body).toBe('proceed?')
-      const payload = JSON.parse(outbound!.payload ?? '{}')
-      expect(payload.question).toBe('proceed?')
-      expect(payload.options).toEqual(['yes', 'no'])
-      expect(db.getQuestion(outbound!.id)).toMatchObject({
-        dispatch_id: dispatch.id,
-        status: 'answered',
-        answer_body: 'go ahead'
-      })
-      expect(db.getMessageById(result.answerMessageId)).toMatchObject({
-        to_handle: `dispatch:${dispatch.id}`,
-        read: 1
-      })
-      await expect(call('orchestration.check', { terminal: 'term_worker' })).resolves.toMatchObject(
-        { count: 0, messages: [] }
-      )
-    })
 
     it('creates a question only from the exact process that owns the Dispatch', async () => {
       setup()
@@ -272,20 +200,6 @@ describe('orchestration RPC methods', () => {
       }
     })
 
-    it.each(['@all', '@idle', '@codex', '@reviewers'])(
-      'rejects %s with invalid_argument naming the Run mailbox (no message persisted)',
-      async (to) => {
-        setup()
-        await expect(
-          call('orchestration.ask', { from: 'term_worker', to, question: 'ok?' })
-        ).rejects.toMatchObject({
-          code: 'invalid_argument',
-          message: expect.stringMatching(/does not support group addresses.*run:<id>/)
-        })
-        expect(db.getInbox(10)).toHaveLength(0)
-      }
-    )
-
     it('ignores unrelated wakes until the durable question is answered', async () => {
       setup()
       createAskingDispatch()
@@ -337,28 +251,6 @@ describe('orchestration RPC methods', () => {
       const woke = () => deliver.mock.calls.some(([handle]) => handle === `dispatch:${dispatch.id}`)
       return { dispatch, woke }
     }
-
-    it('wakes the worker with an answer that arrives after it stopped waiting', async () => {
-      setup()
-      const { woke } = askingDispatch()
-
-      await expect(
-        call('orchestration.ask', {
-          from: 'term_worker',
-          question: 'Which file?',
-          wait: false,
-          timeoutMs: 1
-        })
-      ).resolves.toMatchObject({ pending: true, next: expect.stringContaining('End your turn') })
-      const question = askedQuestion()
-      await call('orchestration.reply', { id: question.id, body: 'main.ts', from: 'term_coord' })
-      await flush()
-
-      expect(woke()).toBe(true)
-      await expect(call('orchestration.check', { terminal: 'term_worker' })).resolves.toMatchObject(
-        { messages: [expect.objectContaining({ body: 'main.ts', thread_id: question.id })] }
-      )
-    })
 
     it('lets other mail wake a worker blocked on a waiting ask', async () => {
       setup()

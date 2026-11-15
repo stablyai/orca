@@ -5,7 +5,7 @@ import {
   TERMINAL_MULTIPLEX_MAX_PENDING_PTY_WAITS_PER_CONNECTION,
   TERMINAL_MULTIPLEX_MAX_QUEUED_PTY_WAITS_PER_CONNECTION
 } from '../../../../../shared/terminal/stream/terminal-multiplex-flow-control'
-import { TerminalMultiplex } from '../../../../../shared/rpc-contract/terminal-stream-params'
+import { TerminalMultiplex } from '../../../../../shared/rpc-contract/terminal/terminal-stream-params'
 import type { TerminalMultiplexConnection } from './terminal-multiplex-connection'
 import type { TerminalMultiplexStream } from './terminal-stream-types'
 import { installMultiplexFrameDelivery } from './terminal-multiplex-frame-delivery'
@@ -14,6 +14,7 @@ import { installMultiplexCleanup } from './terminal-multiplex-cleanup'
 import { installMultiplexSlotFrames } from './terminal-multiplex-slot-frames'
 import { installMultiplexSubscribeFrame } from './terminal-multiplex-subscribe-frame'
 import { createMultiplexPtyWaitAdmission } from './terminal-multiplex-pty-wait-admission'
+import { TerminalMultiplexLinkEstimate } from './terminal-multiplex-link-estimate'
 
 export const TERMINAL_MULTIPLEX_METHODS = [
   defineStreamingMethod({
@@ -52,6 +53,8 @@ export const TERMINAL_MULTIPLEX_METHODS = [
         ),
         ackTotalInFlightBytes: 0,
         ackTotalWindowBytes: TERMINAL_MULTIPLEX_ACK_TOTAL_INITIAL_WINDOW_BYTES,
+        linkEstimate: new TerminalMultiplexLinkEstimate(),
+        ackTotalHoldbackBytes: 0,
         ackFlushCursorStreamId: null,
         resolveMultiplex,
         multiplexClosed,

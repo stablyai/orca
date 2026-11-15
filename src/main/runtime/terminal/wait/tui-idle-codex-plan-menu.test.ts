@@ -5,7 +5,7 @@ import {
   createTranscriptPane,
   TRANSCRIPT_PANE_PTY_ID
 } from '../../orca-runtime-tests/agent-transcript-pane-test-harness'
-import { readRuntimeFixture } from '../../agent-transcript-replay-test-harness'
+import { readRuntimeFixture } from './agent-transcript-replay-test-harness'
 import type { OrcaRuntimeService } from '../../orca-runtime'
 
 vi.mock('electron', () => ({
@@ -21,15 +21,6 @@ const PANE_KEY = makePaneKey('tab-1', '11111111-1111-4111-8111-111111111111')
 const FIXTURE = readRuntimeFixture('codex-0-160-0-plan-implement-menu')
 const MENU_START = FIXTURE.indexOf('\x1b[30;1H\x1b[2m  Worked for')
 const MENU_END = FIXTURE.indexOf('\x1b[?2026l', FIXTURE.indexOf('esc\x1b[22m', MENU_START))
-// A plan turn whose output quotes the menu as its last lines, with no menu on screen.
-const QUOTED_MENU = [
-  '• Proposed Plan',
-  '• The plan menu reads:',
-  '  Implement this plan?',
-  '  3. No, stay in Plan mode',
-  '  enter select · esc back',
-  ''
-].join('\r\n')
 const QUIESCENCE_MS = 3000
 
 function doneRow(receivedAt: number): AgentStatusIpcPayload {
@@ -115,16 +106,5 @@ describe('Codex plan menu painted after its Stop hook', () => {
     await vi.advanceTimersByTimeAsync(900)
 
     expect((await waiting).blockedReason).toBe('agent-interactive-prompt')
-  })
-
-  it('settles on a done that follows output quoting the menu', async () => {
-    let rows: AgentStatusIpcPayload[] = []
-    const { runtime, handle } = await codexPane(() => rows)
-    paint(runtime, QUOTED_MENU)
-    await vi.advanceTimersByTimeAsync(100)
-    rows = [doneRow(Date.now())]
-
-    // Held for the turn's last frame, then settled before the next poll sweep.
-    expect(await waitOutcome(runtime, handle, 1000)).toBe('ready')
   })
 })

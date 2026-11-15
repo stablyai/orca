@@ -1,7 +1,7 @@
 import React from 'react'
 import { ExternalLink, Settings } from 'lucide-react'
-import { cn } from '@/lib/utils'
-import { translate } from '@/i18n/i18n'
+import { cn } from '@/lib/class-names'
+import { useTranslate } from '@/i18n/use-translate'
 import { openAppHttpLink } from '@/lib/browser/navigation/app-http-link-open'
 
 export function GitHubLabelsSettingsLink({
@@ -13,6 +13,7 @@ export function GitHubLabelsSettingsLink({
   separated?: boolean
   onOpen?: () => void
 }): React.JSX.Element | null {
+  const t = useTranslate()
   if (!url) {
     return null
   }
@@ -29,7 +30,7 @@ export function GitHubLabelsSettingsLink({
       >
         <Settings className="size-3.5 shrink-0" />
         <span className="min-w-0 flex-1 text-left">
-          {translate('auto.components.GitHubItemDialog.2aa9acdf34', 'Edit labels on GitHub')}
+          {t('auto.components.GitHubItemDialog.2aa9acdf34', 'Edit labels on GitHub')}
         </span>
         <ExternalLink className="size-3 shrink-0 opacity-70" />
       </button>

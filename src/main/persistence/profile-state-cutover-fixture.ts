@@ -1,5 +1,6 @@
 import { getDefaultPersistedState, getDefaultWorkspaceSession } from '../../shared/constants'
-import type { Automation, AutomationRun } from '../../shared/automations-types'
+import type { Automation } from '../../shared/automations/automation-definition'
+import type { AutomationRun } from '../../shared/automations/history/automation-run'
 import type { PersistedState } from '../../shared/persisted-state-types'
 import type { Project, ProjectHostSetup } from '../../shared/project-types'
 import type { Repo } from '../../shared/repo-types'

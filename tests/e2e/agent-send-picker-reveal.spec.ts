@@ -60,16 +60,30 @@ for (const host of ['local', 'ssh'] as const) {
             if (hiddenBy === 'parent') {
               await state.assignWorktreeParent(target, { parentWorktreeId: parent })
             }
-            const targetRepoId = Object.values(store.getState().worktreesByRepo)
+            const targetWorktree = Object.values(store.getState().worktreesByRepo)
               .flat()
-              .find((worktree) => worktree.id === target)!.repoId
+              .find((worktree) => worktree.id === target)!
+            const targetRepoId = targetWorktree.repoId
             const collapsedGroups = [
               hiddenBy === 'host' ? `host:${hostId}` : `lineage:${hostId}|${parent}`
             ]
             const tabId = 'picker-agent-tab'
             const leafId = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
             const paneKey = `${tabId}:${leafId}`
-            const ptyId = 'picker-agent-pty'
+            // Why live locally: the mounted pane reattaches and drops an unknown local PTY; the unreachable SSH host cannot.
+            const ptyId =
+              host === 'local'
+                ? (
+                    await window.api.pty.spawn({
+                      cols: 80,
+                      rows: 24,
+                      cwd: targetWorktree.path,
+                      worktreeId: target,
+                      tabId,
+                      leafId
+                    })
+                  ).id
+                : 'picker-agent-pty'
             await window.api.ui.set({ groupBy: 'none', collapsedGroups })
             state.setSidebarOpen(true)
             state.setShowSleepingWorkspaces(true)

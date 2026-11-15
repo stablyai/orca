@@ -6,8 +6,8 @@ import { Label } from '../../../ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../../ui/select'
 import { getAgentCacheTimerSearchEntries } from './agent-cache-timer-search'
 import { SearchableSetting } from '../../section-layout/SearchableSetting'
-import { SettingsSwitch } from '../../form-controls/SettingsFormControls'
-import { translate } from '@/i18n/i18n'
+import { Switch } from '@/components/ui/switch'
+import { useTranslate } from '@/i18n/use-translate'
 import { SettingsGroup } from '../../section-layout/SettingsGroup'
 
 type AgentCacheTimerSectionProps = {
@@ -19,23 +19,18 @@ export function AgentCacheTimerSection({
   settings,
   updateSettings
 }: AgentCacheTimerSectionProps): React.JSX.Element {
+  const t = useTranslate()
   return (
     <SettingsGroup
-      title={translate(
-        'auto.components.settings.AgentCacheTimerSection.a137f8854d',
-        'Prompt Cache Timer'
-      )}
-      description={translate(
+      title={t('auto.components.settings.AgentCacheTimerSection.915265188a', 'Prompt cache timer')}
+      description={t(
         'auto.components.settings.AgentCacheTimerSection.fe590653c1',
         'Claude caches your conversation to reduce costs. When idle too long the cache expires and the next message resends full context at higher cost. This shows a countdown so you know when to resume.'
       )}
     >
       <SearchableSetting
-        title={translate(
-          'auto.components.settings.AgentCacheTimerSection.b4e7302944',
-          'Cache Timer'
-        )}
-        description={translate(
+        title={t('auto.components.settings.AgentCacheTimerSection.988e060497', 'Cache timer')}
+        description={t(
           'auto.components.settings.AgentCacheTimerSection.9c20253679',
           'Show a countdown after a Claude agent becomes idle.'
         )}
@@ -50,26 +45,23 @@ export function AgentCacheTimerSection({
           <div className="flex items-center gap-2">
             <Timer className="size-4 text-muted-foreground" />
             <Label>
-              {translate(
-                'auto.components.settings.AgentCacheTimerSection.b4e7302944',
-                'Cache Timer'
-              )}
+              {t('auto.components.settings.AgentCacheTimerSection.988e060497', 'Cache timer')}
             </Label>
           </div>
           <p className="text-xs text-muted-foreground">
-            {translate(
+            {t(
               'auto.components.settings.AgentCacheTimerSection.487b176240',
               'Show a countdown in the sidebar after a Claude agent becomes idle.'
             )}
           </p>
         </div>
-        <SettingsSwitch
-          ariaLabel={translate(
-            'auto.components.settings.AgentCacheTimerSection.b4e7302944',
-            'Cache Timer'
+        <Switch
+          aria-label={t(
+            'auto.components.settings.AgentCacheTimerSection.988e060497',
+            'Cache timer'
           )}
           checked={settings.promptCacheTimerEnabled}
-          onChange={() => {
+          onCheckedChange={() => {
             const enabling = !settings.promptCacheTimerEnabled
             updateSettings({ promptCacheTimerEnabled: enabling })
             if (enabling) {
@@ -81,11 +73,8 @@ export function AgentCacheTimerSection({
 
       {settings.promptCacheTimerEnabled && (
         <SearchableSetting
-          title={translate(
-            'auto.components.settings.AgentCacheTimerSection.a2a8962138',
-            'Timer Duration'
-          )}
-          description={translate(
+          title={t('auto.components.settings.AgentCacheTimerSection.eec81ddfee', 'Timer duration')}
+          description={t(
             'auto.components.settings.AgentCacheTimerSection.80c454e8a6',
             "Match this to your provider's cache TTL."
           )}
@@ -94,13 +83,10 @@ export function AgentCacheTimerSection({
         >
           <div className="min-w-0 flex-1 space-y-0.5">
             <Label>
-              {translate(
-                'auto.components.settings.AgentCacheTimerSection.a2a8962138',
-                'Timer Duration'
-              )}
+              {t('auto.components.settings.AgentCacheTimerSection.eec81ddfee', 'Timer duration')}
             </Label>
             <p className="text-xs text-muted-foreground">
-              {translate(
+              {t(
                 'auto.components.settings.AgentCacheTimerSection.8b9e202e0a',
                 "Match this to your provider's cache TTL. The default is 5 minutes."
               )}
@@ -115,13 +101,10 @@ export function AgentCacheTimerSection({
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="300000">
-                {translate(
-                  'auto.components.settings.AgentCacheTimerSection.54395ecd7c',
-                  '5 minutes'
-                )}
+                {t('auto.components.settings.AgentCacheTimerSection.54395ecd7c', '5 minutes')}
               </SelectItem>
               <SelectItem value="3600000">
-                {translate('auto.components.settings.AgentCacheTimerSection.05de84a104', '1 hour')}
+                {t('auto.components.settings.AgentCacheTimerSection.05de84a104', '1 hour')}
               </SelectItem>
             </SelectContent>
           </Select>

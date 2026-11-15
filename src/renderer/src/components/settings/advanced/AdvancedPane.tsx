@@ -7,9 +7,9 @@ import { Label } from '../../ui/label'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../../ui/tooltip'
 import { AdvancedNetworkSettingsSection } from './network/AdvancedNetworkSettingsSection'
 import { SearchableSetting } from '../section-layout/SearchableSetting'
-import { SettingsSwitch } from '../form-controls/SettingsFormControls'
+import { Switch } from '@/components/ui/switch'
 import { getAdvancedSearchEntry } from './advanced-search'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { SettingsGroup } from '../section-layout/SettingsGroup'
 
 type AdvancedPaneProps = {
@@ -18,6 +18,7 @@ type AdvancedPaneProps = {
 }
 
 export function AdvancedPane({ settings, updateSettings }: AdvancedPaneProps): React.JSX.Element {
+  const t = useTranslate()
   const mountedRef = useMountedRef()
   const http1CompatibilityInitialRef = useRef(Boolean(settings.electronHttp1CompatibilityMode))
   const [http1CompatibilityRelaunching, setHttp1CompatibilityRelaunching] = useState(false)
@@ -42,8 +43,8 @@ export function AdvancedPane({ settings, updateSettings }: AdvancedPaneProps): R
   return (
     <div className="space-y-8">
       <SettingsGroup
-        title={translate('auto.components.settings.AdvancedPane.8d8d8ac599', 'Compatibility')}
-        description={translate(
+        title={t('auto.components.settings.AdvancedPane.8d8d8ac599', 'Compatibility')}
+        description={t(
           'auto.components.settings.AdvancedPane.8b7a8df299',
           'Low-level workarounds for support troubleshooting.'
         )}
@@ -59,17 +60,14 @@ export function AdvancedPane({ settings, updateSettings }: AdvancedPaneProps): R
             <div className="min-w-0 shrink">
               <div className="flex items-center gap-1.5">
                 <Label id="advanced-http1-compatibility-label">
-                  {translate(
-                    'auto.components.settings.AdvancedPane.e9506d3377',
-                    'HTTP/1.1 Compatibility'
-                  )}
+                  {t('auto.components.settings.AdvancedPane.e9506d3377', 'HTTP/1.1 Compatibility')}
                 </Label>
-                <TooltipProvider delayDuration={250}>
+                <TooltipProvider>
                   <Tooltip>
                     <TooltipTrigger asChild>
                       <button
                         type="button"
-                        aria-label={translate(
+                        aria-label={t(
                           'auto.components.settings.AdvancedPane.6627e75c92',
                           'Explain HTTP/1.1 compatibility'
                         )}
@@ -83,7 +81,7 @@ export function AdvancedPane({ settings, updateSettings }: AdvancedPaneProps): R
                       sideOffset={6}
                       className="max-w-[280px] leading-relaxed"
                     >
-                      {translate(
+                      {t(
                         'auto.components.settings.AdvancedPane.b3ad629640',
                         'Use only when a corporate VPN or proxy breaks update downloads with HTTP/2 protocol errors. It affects all Electron networking after restart.'
                       )}
@@ -92,10 +90,10 @@ export function AdvancedPane({ settings, updateSettings }: AdvancedPaneProps): R
                 </TooltipProvider>
               </div>
             </div>
-            <SettingsSwitch
+            <Switch
               checked={http1CompatibilityEnabled}
-              onChange={toggleHttp1CompatibilityMode}
-              ariaLabelledBy="advanced-http1-compatibility-label"
+              onCheckedChange={toggleHttp1CompatibilityMode}
+              aria-labelledby="advanced-http1-compatibility-label"
             />
           </div>
 
@@ -103,13 +101,10 @@ export function AdvancedPane({ settings, updateSettings }: AdvancedPaneProps): R
             <div className="flex items-center justify-between gap-3 rounded-md border border-border/50 bg-muted/30 px-3 py-2">
               <div className="min-w-0">
                 <p className="text-xs font-medium">
-                  {translate(
-                    'auto.components.settings.AdvancedPane.89958d7edf',
-                    'Restart required'
-                  )}
+                  {t('auto.components.settings.AdvancedPane.89958d7edf', 'Restart required')}
                 </p>
                 <p className="text-xs text-muted-foreground">
-                  {translate(
+                  {t(
                     'auto.components.settings.AdvancedPane.87a2cb2ac8',
                     'Orca applies this networking mode at startup.'
                   )}
@@ -127,7 +122,7 @@ export function AdvancedPane({ settings, updateSettings }: AdvancedPaneProps): R
                 ) : (
                   <RotateCw className="size-3.5" />
                 )}
-                {translate('auto.components.settings.AdvancedPane.40b29e0bf3', 'Restart')}
+                {t('auto.components.settings.AdvancedPane.40b29e0bf3', 'Restart')}
               </Button>
             </div>
           ) : null}
@@ -135,8 +130,8 @@ export function AdvancedPane({ settings, updateSettings }: AdvancedPaneProps): R
       </SettingsGroup>
 
       <SettingsGroup
-        title={translate('auto.components.settings.AdvancedPane.network', 'Network')}
-        description={translate(
+        title={t('auto.components.settings.AdvancedPane.network', 'Network')}
+        description={t(
           'auto.components.settings.AdvancedPane.networkDescription',
           'App-level network routing for proxies and corporate environments.'
         )}

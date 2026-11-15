@@ -1,5 +1,5 @@
 import { clearGoogleCookiesForRuntimeProfile } from '../../../browser/cookies/browser-google-cookie-clear'
-import { browserCookieImportFailure } from '../../../../shared/browser-cookie-import-failure-copy'
+import { browserCookieImportFailure } from '../../../../shared/browser/cookies/browser-cookie-import-failure-copy'
 import { createBrowserTabInRenderer } from '../tabs/browser-tab-renderer-create'
 import type {
   BrowserDetectProfilesResult,
@@ -11,25 +11,25 @@ import type {
   BrowserTabSetProfileResult,
   BrowserProfileClearDefaultCookiesResult,
   BrowserProfileImportFromBrowserResult
-} from '../../../../shared/runtime-browser-contracts'
+} from '../../../../shared/browser/runtime/runtime-browser-contracts'
 import { BrowserError } from '../../../browser/browser-error'
-import { browserSessionRegistry } from '../../../browser/sessions/browser-session-registry'
-import { browserManager } from '../../../browser/browser-manager'
+import { browserSessionRegistry } from '../../../browser/sessions/profiles/browser-session-registry'
+import { browserManager } from '../../../browser/guest-lifecycle/manager/browser-manager'
 import { randomUUID } from 'node:crypto'
 import { ipcMain } from 'electron'
 import { waitForTabRegistration } from '../../../ipc/browser/browser-tab-registration-wait'
 import {
   detectInstalledBrowsers,
-  importCookiesFromBrowser,
   selectBrowserProfile
-} from '../../../browser/cookies/browser-cookie-import'
+} from '../../../browser/cookies/sources/browser-cookie-detection'
+import { importCookiesFromBrowser } from '../../../browser/cookies/browser-cookie-import'
 import type {
   BrowserCommandTargetParams,
   RuntimeBrowserCommandHost
 } from './browser-command-contracts'
 import type { RuntimeBrowserCommandTargets } from './browser-command-targets'
 import type { RuntimeBrowserTabCatalog } from '../tabs/browser-tab-catalog'
-import type { RuntimeBrowserClientPlacement } from '../../../../shared/runtime-browser-placement'
+import type { RuntimeBrowserClientPlacement } from '../../../../shared/browser/client-hosting/runtime-browser-placement'
 
 export class RuntimeBrowserProfiles {
   constructor(

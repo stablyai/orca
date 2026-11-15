@@ -3,10 +3,10 @@ import { useTranslation } from 'react-i18next'
 import { MessageSquare, Undo2 } from 'lucide-react'
 import { useShallow } from 'zustand/react/shallow'
 import { useAppStore } from '@/store'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { selectWslMovedChatWorkspaces } from '@/store/repos/wsl-moved-projects'
-import { activateWslMovedWorkspace } from '@/lib/wsl-moved-chat-activation'
-import { bringWslMovedProjectBack } from '@/lib/wsl-moved-project-use-here'
+import { activateWslMovedWorkspace } from '@/lib/workspace/activation/wsl-moved-chat-activation'
+import { bringWslMovedProjectBack } from '@/lib/workspace/ownership/wsl-moved-project-use-here'
 import { useConfirmationDialog } from '@/components/confirmation-dialog-context'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
@@ -26,6 +26,7 @@ function chatLabel(tab: Tab): string {
  * it, so every moved project lists); everything else belongs to the host.
  */
 const WslMovedProjectsSection = React.memo(function WslMovedProjectsSection() {
+  const t = useTranslate()
   // Own language subscription: this memo boundary would otherwise keep the boot language.
   useTranslation()
   const confirm = useConfirmationDialog()
@@ -75,19 +76,19 @@ const WslMovedProjectsSection = React.memo(function WslMovedProjectsSection() {
                   variant="ghost"
                   size="icon-xs"
                   data-testid="wsl-moved-use-here"
-                  aria-label={translate('sidebar.wslMoved.useHere', 'Use on this computer again')}
+                  aria-label={t('sidebar.wslMoved.useHere', 'Use on this computer again')}
                   onClick={() => void bringWslMovedProjectBack(project, confirm)}
                 >
                   <Undo2 />
                 </Button>
               </TooltipTrigger>
               <TooltipContent side="top" sideOffset={4}>
-                {translate('sidebar.wslMoved.useHere', 'Use on this computer again')}
+                {t('sidebar.wslMoved.useHere', 'Use on this computer again')}
               </TooltipContent>
             </Tooltip>
           </div>
           <div className="truncate px-1 pb-1 text-2xs text-muted-foreground">
-            {translate('sidebar.wslMoved.movedToHost', 'Moved to {{distro}} host', {
+            {t('sidebar.wslMoved.movedToHost', 'Moved to {{distro}} host', {
               distro: project.distro
             })}
           </div>

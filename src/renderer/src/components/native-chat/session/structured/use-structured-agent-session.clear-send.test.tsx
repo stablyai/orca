@@ -8,11 +8,20 @@ import type { AgentJournalRenderItem } from '../../../../../../shared/agent-sess
 
 const mocks = vi.hoisted(() => ({ call: vi.fn() }))
 
-vi.mock('@/runtime/structured-agent-session-client', () => ({
-  subscribeStructuredAgentSessionStatus: vi.fn(async () => ({ unsubscribe: vi.fn() })),
-  callStructuredAgentSession: mocks.call,
-  supportsStructuredAgentSessionPromptCancel: vi.fn(async () => false)
+vi.mock('../../../../runtime/native-chat/requests/structured-agent-session-subscriptions', () => ({
+  subscribeStructuredAgentSessionStatus: vi.fn(async () => ({ unsubscribe: vi.fn() }))
 }))
+
+vi.mock('../../../../runtime/native-chat/requests/structured-agent-session-call', () => ({
+  callStructuredAgentSession: mocks.call
+}))
+
+vi.mock(
+  '../../../../runtime/native-chat/host-capabilities/structured-agent-session-host-support',
+  () => ({
+    supportsStructuredAgentSessionPromptCancel: vi.fn(async () => false)
+  })
+)
 
 // Turn-scoped rows: a host that runs a /compact as a turn, so only a /clear holds sends back.
 const ANSWER: AgentJournalRenderItem = {

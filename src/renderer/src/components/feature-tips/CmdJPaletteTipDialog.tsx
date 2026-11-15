@@ -10,7 +10,7 @@ import {
   FeatureTipEyebrow,
   FeatureTipSettingsLine
 } from './FeatureTipDialogFrame'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 
 export function CmdJPaletteTipDialog({
   open,
@@ -29,6 +29,7 @@ export function CmdJPaletteTipDialog({
   onSkip: () => void
   onRebindClick: () => void
 }): JSX.Element {
+  const t = useTranslate()
   // Use the live binding for rebindings and platform-specific shortcuts.
   const worktreePaletteShortcutLabel = useShortcutLabel('worktree.palette')
   const displayShortcutLabel =
@@ -69,7 +70,7 @@ export function CmdJPaletteTipDialog({
           <DialogDescription className="mt-3 max-w-2xl space-y-3 text-sm leading-relaxed">
             <span className="block">{copy.description}</span>
             <FeatureTipSettingsLine
-              text={translate(
+              text={t(
                 'auto.components.feature.tips.CmdJPaletteTipDialog.rebindInSettings',
                 'Rebind the shortcut anytime in <link>Settings → Shortcuts</link>.'
               )}

@@ -9,7 +9,7 @@ import { NestedRepoChecklist } from '@/components/repo/NestedRepoChecklist'
 import type { NestedRepoScanResult } from '../../../../../../shared/project-group-types'
 import { NestedRepoScanLimitNotice } from '../../../repo/NestedRepoScanLimitNotice'
 import { getRuntimePathBasename } from '../../../../../../shared/cross-platform-path'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 
 type AddRepoNestedImportStepProps = {
   scan: NestedRepoScanResult
@@ -36,6 +36,7 @@ export function AddRepoNestedImportStep({
   onOpenAsFolder,
   onStopScan
 }: AddRepoNestedImportStepProps): React.JSX.Element {
+  const t = useTranslate()
   const folderName = getRuntimePathBasename(scan.selectedPath) || scan.selectedPath
   const groupNameInputId = useId()
   const [pendingImportMode, setPendingImportMode] = useState<
@@ -62,7 +63,7 @@ export function AddRepoNestedImportStep({
     setPendingImportMode('folder')
     onOpenAsFolder()
   }
-  const foundSentence = translate(
+  const foundSentence = t(
     'auto.components.sidebar.AddRepoNestedImportStep.foundRepositories',
     'Found {{count}} repositories in {{path}}.',
     {
@@ -76,7 +77,7 @@ export function AddRepoNestedImportStep({
     <>
       <DialogHeader>
         <DialogTitle>
-          {translate(
+          {t(
             'auto.components.sidebar.AddRepoNestedImportStep.8db50afe1a',
             'Import repositories from folder'
           )}
@@ -85,7 +86,7 @@ export function AddRepoNestedImportStep({
           {scanInProgress ? <AddRepoNestedImportStopButton onStopScan={onStopScan} /> : null}
           <DialogDescription className="min-w-0 truncate">
             {scanInProgress
-              ? translate(
+              ? t(
                   'auto.components.sidebar.AddRepoNestedImportStep.24eda6c8b2',
                   'Scanning... {{value0}}',
                   { value0: foundSentence }
@@ -108,13 +109,13 @@ export function AddRepoNestedImportStep({
         ) : null}
         <div className="min-w-0 shrink-0 space-y-1">
           <p className="text-sm font-medium text-foreground">
-            {translate(
+            {t(
               'auto.components.sidebar.AddRepoNestedImportStep.fb33359f69',
               'Group these repositories?'
             )}
           </p>
           <p className="text-xs text-muted-foreground">
-            {translate(
+            {t(
               'auto.components.sidebar.AddRepoNestedImportStep.d75170194e',
               'Choose this if these projects belong together — a monorepo, or just a set of related repos. Orca will group them and let you work from the parent folder.'
             )}
@@ -123,15 +124,12 @@ export function AddRepoNestedImportStep({
         <div className="min-w-0 shrink-0 space-y-1">
           <div className="flex shrink-0 items-center gap-1">
             <Label htmlFor={groupNameInputId} className="text-[11px] text-muted-foreground">
-              {translate(
-                'auto.components.sidebar.AddRepoNestedImportStep.39d51212cc',
-                'Group name'
-              )}
+              {t('auto.components.sidebar.AddRepoNestedImportStep.39d51212cc', 'Group name')}
             </Label>
           </div>
           <Input
             id={groupNameInputId}
-            aria-label={translate(
+            aria-label={t(
               'auto.components.sidebar.AddRepoNestedImportStep.39d51212cc',
               'Group name'
             )}
@@ -144,7 +142,7 @@ export function AddRepoNestedImportStep({
         </div>
         {noRepositoriesSelected ? (
           <p className="shrink-0 text-xs text-muted-foreground">
-            {translate(
+            {t(
               'auto.components.sidebar.AddRepoNestedImportStep.6149d5203f',
               'No repositories are selected. Open the parent folder instead to use editor, terminal, and search without Git features.'
             )}
@@ -158,10 +156,7 @@ export function AddRepoNestedImportStep({
               variant="secondary"
             >
               {showOpenAsFolderSpinner ? <Loader2 className="size-3.5 animate-spin" /> : null}
-              {translate(
-                'auto.components.sidebar.AddRepoNestedImportStep.e52454b7f6',
-                'Open as Folder'
-              )}
+              {t('auto.components.sidebar.AddRepoNestedImportStep.e52454b7f6', 'Open as Folder')}
             </Button>
           ) : null}
           <Button
@@ -170,7 +165,7 @@ export function AddRepoNestedImportStep({
             variant="outline"
           >
             {showSeparateSpinner ? <Loader2 className="size-3.5 animate-spin" /> : null}
-            {translate(
+            {t(
               'auto.components.sidebar.AddRepoNestedImportStep.aa0247680d',
               'No, import separately'
             )}
@@ -180,7 +175,7 @@ export function AddRepoNestedImportStep({
             disabled={isAdding || scanInProgress || noRepositoriesSelected}
           >
             {showGroupSpinner ? <Loader2 className="size-3.5 animate-spin" /> : null}
-            {translate(
+            {t(
               'auto.components.sidebar.AddRepoNestedImportStep.a0bc4d1f8e',
               'Yes, import as group'
             )}
@@ -196,6 +191,7 @@ function AddRepoNestedImportStopButton({
 }: {
   onStopScan: () => void
 }): React.JSX.Element {
+  const t = useTranslate()
   return (
     <Tooltip>
       <TooltipTrigger asChild>
@@ -204,14 +200,8 @@ function AddRepoNestedImportStopButton({
           variant="ghost"
           size="icon-xs"
           className="group text-muted-foreground hover:bg-destructive/10 hover:text-destructive focus-visible:bg-destructive/10 focus-visible:text-destructive focus-visible:ring-destructive/40"
-          aria-label={translate(
-            'auto.components.sidebar.AddRepoNestedImportStep.2f8298f3c3',
-            'Stop scan'
-          )}
-          title={translate(
-            'auto.components.sidebar.AddRepoNestedImportStep.a32bef9516',
-            'Stop scanning'
-          )}
+          aria-label={t('auto.components.sidebar.AddRepoNestedImportStep.2f8298f3c3', 'Stop scan')}
+          title={t('auto.components.sidebar.AddRepoNestedImportStep.a32bef9516', 'Stop scanning')}
           onClick={onStopScan}
         >
           <Loader2 className="size-3.5 animate-spin text-annotation-highlight group-hover:hidden group-focus-visible:hidden" />
@@ -219,7 +209,7 @@ function AddRepoNestedImportStopButton({
         </Button>
       </TooltipTrigger>
       <TooltipContent side="top" sideOffset={4}>
-        {translate(
+        {t(
           'auto.components.sidebar.AddRepoNestedImportStep.496f68cf8c',
           'Scanning repositories. Click to stop.'
         )}

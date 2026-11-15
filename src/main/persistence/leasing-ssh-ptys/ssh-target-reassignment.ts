@@ -15,7 +15,7 @@ import {
 import {
   migrateAutomationHostFilterSshTargetId,
   migrateAutomationsForSshReadoption
-} from '../../automations/automation-ssh-readoption-migration'
+} from '../../automations/ownership/automation-ssh-readoption-migration'
 import { automationIdsPinnedToSshTarget } from '../scheduling-automations/automation-owner-projection'
 import { reassignCanonicalWorktreeMetadataHost } from './canonical-worktree-host-reassignment'
 

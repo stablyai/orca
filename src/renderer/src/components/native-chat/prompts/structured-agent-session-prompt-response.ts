@@ -1,7 +1,7 @@
 import {
   supportsStructuredAgentSessionQuestionAnswers,
   supportsStructuredAgentSessionPromptCancel
-} from '@/runtime/structured-agent-session-client'
+} from '@/runtime/native-chat/host-capabilities/structured-agent-session-host-support'
 import {
   legacyAgentSessionSelectedOptionId,
   type AgentSessionPromptResponse

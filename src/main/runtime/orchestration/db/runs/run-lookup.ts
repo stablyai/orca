@@ -5,7 +5,7 @@ import {
   runCoordinatorKey,
   type OrchestrationCoordinatorKey
 } from '../../addressing/orchestration-caller-identity'
-import { ORCHESTRATION_RUN_PAGE_LIMIT } from '../../../../../shared/orchestration-run-pagination'
+import { ORCHESTRATION_RUN_PAGE_LIMIT } from '../../../../../shared/orchestration/orchestration-run-pagination'
 import {
   isEquivalentPaneKey,
   RUN_PANE_KEY_MATCH_SUFFIX_SQL,

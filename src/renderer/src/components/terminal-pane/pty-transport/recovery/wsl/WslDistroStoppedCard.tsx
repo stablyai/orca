@@ -1,4 +1,4 @@
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { RemoteRuntimeRecoveryCard } from '../../remote-runtime/recovery/RemoteRuntimeRecoveryCard'
 
 /** A pane whose WSL distro is stopped: nothing restarts it on its own (E9); Start is the user's act. */
@@ -14,23 +14,24 @@ export function WslDistroStoppedCard({
   onStart: () => void
   data: Record<`data-${string}`, string>
 }): React.JSX.Element {
+  const t = useTranslate()
   return (
     <RemoteRuntimeRecoveryCard
       icon="stopped"
       data={data}
       title={
         unverifiable
-          ? translate(
+          ? t(
               'components.native-chat.hostOutage.unverifiable',
               "Orca couldn't check whether {{distro}} is running",
               { distro }
             )
-          : translate('components.native-chat.hostOutage.stopped', '{{distro}} is stopped', {
+          : t('components.native-chat.hostOutage.stopped', '{{distro}} is stopped', {
               distro
             })
       }
       action={{
-        label: translate('components.native-chat.hostOutage.start', 'Start'),
+        label: t('components.native-chat.hostOutage.start', 'Start'),
         onClick: onStart
       }}
     />

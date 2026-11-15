@@ -2,7 +2,7 @@
 import { useMemo } from 'react'
 import DOMPurify from 'dompurify'
 import { useTranslation } from 'react-i18next'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { useDocumentDarkTheme } from '@/hooks/use-document-dark-theme'
 
 // Keep untrusted markup inert with an opaque-origin, script-free frame and no-network CSP; sandboxing blocks link popups.
@@ -21,6 +21,7 @@ const OUTPUT_DOCUMENT_HEAD = `<!doctype html><meta charset="utf-8">
 </style>`
 
 export function IpynbHtmlOutput({ html }: { html: string }): React.JSX.Element {
+  const t = useTranslate()
   // Why: memoized cell outputs skip parent re-renders, so subscribe to language changes here.
   useTranslation()
   const colorScheme = useDocumentDarkTheme() ? 'dark' : 'light'
@@ -36,7 +37,7 @@ export function IpynbHtmlOutput({ html }: { html: string }): React.JSX.Element {
   )
   return (
     <iframe
-      title={translate('auto.components.editor.IpynbViewer.66a3f7d330', 'Notebook HTML output')}
+      title={t('auto.components.editor.IpynbViewer.66a3f7d330', 'Notebook HTML output')}
       // SECURITY: never add allow-same-origin or allow-scripts; notebook HTML is untrusted.
       sandbox=""
       referrerPolicy="no-referrer"

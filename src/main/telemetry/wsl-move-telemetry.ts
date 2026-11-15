@@ -3,14 +3,14 @@
  * waiting for its host, with the phase it reached, a reason code and duration and size buckets.
  * Every raw code is narrowed onto the schema's enums here; nothing a user or host named leaves.
  */
-import type { EventProps } from '../../shared/telemetry-events'
+import type { EventProps } from '../../shared/telemetry-event-classification'
 import {
   WSL_MOVE_REFUSAL_VALUES,
   WSL_MOVE_RESET_REASON_VALUES
 } from '../../shared/telemetry-wsl-move-event-schemas'
 import type { WslMoveRefusalCode, WslMoveResult } from '../../shared/wsl-move/wsl-move-driver-types'
 import type { WslMoveCutoverPhase } from '../../shared/wsl-move/wsl-move-cutover'
-import type { WslMoveDriverDeps } from '../persistence/moving-wsl-projects/wsl-move-driver-ports'
+import type { WslMoveDriverDeps } from '../persistence/moving-wsl-projects/execution/wsl-move-driver-ports'
 import { track } from './client'
 
 type Props = EventProps<'wsl_move'>

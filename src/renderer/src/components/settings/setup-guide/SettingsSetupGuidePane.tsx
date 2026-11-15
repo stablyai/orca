@@ -4,14 +4,14 @@ import {
   getFirstIncompleteFeatureWallSetupStepId
 } from '../../../../../shared/feature-wall-setup-steps'
 import type { FeatureWallSetupStepId } from '../../../../../shared/feature-wall-setup-steps'
-import { FeatureWallSetupChecklist } from '../../feature-wall/FeatureWallSetupChecklist'
-import { useSettingsSetupGuideFullProgress } from './settings-setup-guide-progress'
+import { FeatureWallSetupChecklist } from '../../feature-wall/setup/FeatureWallSetupChecklist'
+import { useSetupGuideProgress } from '../../setup-guide/use-setup-guide-progress'
 
 export function SettingsSetupGuidePane(): React.JSX.Element {
   const setupSteps = useMemo(() => getFeatureWallSetupSteps(), [])
   const [orchestrationSkillInstalled, setOrchestrationSkillInstalled] = useState(false)
   const [browserUseSkillInstalled, setBrowserUseSkillInstalled] = useState(false)
-  const progress = useSettingsSetupGuideFullProgress(
+  const progress = useSetupGuideProgress(
     true,
     orchestrationSkillInstalled,
     browserUseSkillInstalled

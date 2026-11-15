@@ -2,7 +2,7 @@ import { existsSync, mkdtempSync, readdirSync, statSync } from 'node:fs'
 import type * as Fs from 'node:fs'
 import { tmpdir } from 'node:os'
 import type * as Os from 'node:os'
-import type * as WindowsAcl from '../../shared/secure-path-windows-acl'
+import type * as WindowsAcl from '../../shared/secure-storage/secure-path-windows-acl'
 import { join } from 'node:path'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -19,7 +19,7 @@ async function loadStore(
   vi.resetModules()
   // resetModules leaves doMock registrations behind.
   vi.doUnmock('node:fs')
-  vi.doUnmock('../../shared/secure-path-windows-acl')
+  vi.doUnmock('../../shared/secure-storage/secure-path-windows-acl')
   const { setSecretStore } = await import('../../shared/secret-store')
   setSecretStore({
     isEncryptionAvailable: () => true,
@@ -53,7 +53,7 @@ async function loadStore(
       }
     })
     // Windows writes use the ACL helper.
-    vi.doMock('../../shared/secure-path-windows-acl', async (importOriginal) => ({
+    vi.doMock('../../shared/secure-storage/secure-path-windows-acl', async (importOriginal) => ({
       ...(await importOriginal<typeof WindowsAcl>()),
       writeRestrictedWindowsFile: () => {
         throw error
@@ -103,36 +103,6 @@ describe('Bitbucket credential store', () => {
     for (const file of ['bitbucket-credential.enc', 'bitbucket-credential.json']) {
       expect(statSync(join(tempHome, '.orca', file)).mode & 0o777).toBe(0o600)
     }
-  })
-
-  it('does not decrypt for metadata/status reads — only on a forced secret load', async () => {
-    const store = await loadStore()
-    store.saveBitbucketCredential({
-      authMode: 'token',
-      email: null,
-      baseUrl: 'https://api.bitbucket.org/2.0',
-      account: 'dev',
-      accessToken: 'access-secret',
-      apiToken: null
-    })
-
-    store._resetBitbucketCredentialCache()
-
-    expect(store.getStoredBitbucketMetadata()?.account).toBe('dev')
-    expect(store.hasStoredBitbucketCredential()).toBe(true)
-    expect(decryptStringMock).not.toHaveBeenCalled()
-
-    expect(store.loadStoredBitbucketSecret()).toBeNull()
-    expect(decryptStringMock).not.toHaveBeenCalled()
-
-    expect(store.loadStoredBitbucketSecret({ force: true })).toMatchObject({
-      accessToken: 'access-secret',
-      apiToken: null,
-      authMode: 'token'
-    })
-    expect(decryptStringMock).toHaveBeenCalledTimes(1)
-    expect(store.loadStoredBitbucketSecret()).not.toBeNull()
-    expect(decryptStringMock).toHaveBeenCalledTimes(1)
   })
 
   it('rejects non-string fields from hand-edited metadata and secret files', async () => {

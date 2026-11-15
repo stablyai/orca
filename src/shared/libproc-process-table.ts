@@ -157,6 +157,7 @@ export async function runPsInProcess(
   try {
     const read = await readFreshNativeTable(addon, nativeQuery, registeredSequence, deadline)
     if (read === 'stalled') {
+      // oxlint-disable-next-line typescript/return-await -- the catch falls back to ps; a failing fallback must not run ps again
       return fallback()
     }
     if (read === DEADLINE_PASSED) {
@@ -171,6 +172,7 @@ export async function runPsInProcess(
       if (devices.size > 0) {
         const named = await nameTerminals(devices, deadline)
         if (named === 'stalled') {
+          // oxlint-disable-next-line typescript/return-await -- the catch falls back to ps; a failing fallback must not run ps again
           return fallback()
         }
         if (named === DEADLINE_PASSED) {

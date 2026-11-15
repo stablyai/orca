@@ -1,7 +1,7 @@
 import { toast } from 'sonner'
 import { useAppStore } from '@/store/index'
 import type { AppState } from '@/store/types'
-import { detectLanguage } from '@/lib/language-detect'
+import { detectLanguage } from '../../../../../../shared/editor-language/editor-language-detect'
 import { findFirstIndexedWorktree } from '@/lib/workspace/ownership/worktree-runtime-owner-index'
 import { translate } from '@/i18n/i18n'
 import { folderWorkspaceKey } from '../../../../../../shared/workspace-scope'

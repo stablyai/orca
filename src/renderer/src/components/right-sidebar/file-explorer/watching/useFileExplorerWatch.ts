@@ -2,8 +2,8 @@ import { useEffect, useRef, type Dispatch, type SetStateAction } from 'react'
 import type {
   FsChangedPayload,
   FsChangeEvent
-} from '../../../../../../shared/filesystem-entry-types'
-import { FileWatchEventBuffer } from '../../../../../../shared/filesystem-watch-event-buffer'
+} from '../../../../../../shared/file-watch/filesystem-change-event'
+import { FileWatchEventBuffer } from '../../../../../../shared/file-watch/filesystem-watch-event-buffer'
 import type {
   DirCache,
   FileExplorerOperationOwner,

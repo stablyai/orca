@@ -12,8 +12,6 @@ vi.mock('../../../workspace-hooks/worktree-runner-script', () => ({
   createSetupRunnerScript: runner.createSetupRunnerScript,
   resolveSetupRunnerShell: () => undefined
 }))
-
-const PRIMARY_YAML = 'scripts:\n  setup: pnpm install\n'
 const PRIMARY_TRUST_CONTENT = 'pnpm install'
 const sha256 = (text: string): string => createHash('sha256').update(text).digest('hex')
 
@@ -23,8 +21,6 @@ const repo: Repo = { id: 'repo', path: '/primary', displayName: 'r', badgeColor:
 function prepare(approvedSetupHash?: string, approvedSetupHashes?: string[]) {
   return prepareRuntimeLocalWorktreeSetup({
     request: {
-      repoSelector: 'id:repo',
-      name: 'w',
       setupDecision: 'run',
       ...(approvedSetupHash !== undefined ? { approvedSetupHash } : {}),
       ...(approvedSetupHashes ? { approvedSetupHashes } : {})
@@ -50,14 +46,6 @@ afterEach(() => {
 })
 
 describe('created worktree setup trust', () => {
-  it('runs setup when the created branch matches the approved content', async () => {
-    writeFileSync(join(worktreePath, 'orca.yaml'), PRIMARY_YAML)
-    const result = await prepare(sha256(PRIMARY_TRUST_CONTENT))
-    expect(runner.createSetupRunnerScript).toHaveBeenCalledOnce()
-    expect(result.setup).toBeDefined()
-    expect(result.setupTrustMismatch).toBeUndefined()
-  })
-
   it('skips setup and default tab commands and reports the branch content when it differs', async () => {
     writeFileSync(
       join(worktreePath, 'orca.yaml'),
@@ -86,17 +74,48 @@ describe('created worktree setup trust', () => {
     expect(result.setupTrustMismatch).toBeUndefined()
   })
 
-  it('skips setup a branch adds when the primary checkout had none', async () => {
-    writeFileSync(join(worktreePath, 'orca.yaml'), PRIMARY_YAML)
-    const result = await prepare(sha256(''))
-    expect(runner.createSetupRunnerScript).not.toHaveBeenCalled()
-    expect(result.setupTrustMismatch?.scriptContent).toBe(PRIMARY_TRUST_CONTENT)
-  })
-
   it('runs the created branch setup as before when an older client sends no approval', async () => {
     writeFileSync(join(worktreePath, 'orca.yaml'), 'scripts:\n  setup: make bootstrap\n')
     const result = await prepare()
     expect(runner.createSetupRunnerScript).toHaveBeenCalledOnce()
     expect(result.setupTrustMismatch).toBeUndefined()
+  })
+
+  describe('folder projects', () => {
+    const folderRepo: Repo = { ...repo, kind: 'folder' }
+    const identity = { worktreeId: 'repo::/acme::workspace:1', displayName: 'Fix login' }
+    const prepareFolder = (setupDecision: 'run' | 'inherit', approvedSetupHash?: string) =>
+      prepareRuntimeLocalWorktreeSetup({
+        request: {
+          setupDecision,
+          ...(approvedSetupHash !== undefined ? { approvedSetupHash } : {})
+        },
+        repo: folderRepo,
+        worktreePath,
+        settings: getDefaultSettings(tmpdir()),
+        runtimeTarget: undefined,
+        shouldUseSetupRunner: true,
+        identity
+      })
+
+    it('skips shared setup from an older client that sent no approval', async () => {
+      writeFileSync(join(worktreePath, 'orca.yaml'), 'scripts:\n  setup: make bootstrap\n')
+      const result = await prepareFolder('inherit')
+      expect(runner.createSetupRunnerScript).not.toHaveBeenCalled()
+      expect(result.setup).toBeUndefined()
+      expect(result.warning).toContain('pass --setup run')
+    })
+
+    it('runs approved shared setup for the workspace, without default tabs', async () => {
+      writeFileSync(
+        join(worktreePath, 'orca.yaml'),
+        'scripts:\n  setup: make bootstrap\ndefaultTabs:\n  - title: dev\n    command: pnpm dev\n'
+      )
+      const result = await prepareFolder('run', sha256('make bootstrap'))
+      expect(runner.createSetupRunnerScript).toHaveBeenCalledOnce()
+      expect(runner.createSetupRunnerScript.mock.calls[0][6]).toEqual(identity)
+      expect(result.defaultTabs).toBeUndefined()
+      expect(result.setupTrustMismatch).toBeUndefined()
+    })
   })
 })

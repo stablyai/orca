@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button'
 import { SettingsSwitchRow } from '../form-controls/SettingsFormControls'
 import { SettingsGroup } from '../section-layout/SettingsGroup'
 import { useAppStore } from '@/store/index'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 
 export function AutomationsSettingsPane({
   settings,
@@ -13,17 +13,15 @@ export function AutomationsSettingsPane({
   settings: GlobalSettings
   updateSettings: (updates: Partial<GlobalSettings>) => Promise<void>
 }): React.JSX.Element {
+  const t = useTranslate()
   const openAutomationsPage = useAppStore((state) => state.openAutomationsPage)
 
   return (
     <div className="space-y-8">
       <SettingsGroup>
         <SettingsSwitchRow
-          label={translate(
-            'auto.components.settings.automations.showButton',
-            'Show Automations Button'
-          )}
-          description={translate(
+          label={t('auto.components.settings.automations.d92f253d2d', 'Show automations button')}
+          description={t(
             'auto.components.settings.automations.showButtonDescription',
             'Show the Automations shortcut in the sidebar.'
           )}
@@ -36,11 +34,8 @@ export function AutomationsSettingsPane({
         />
       </SettingsGroup>
       <SettingsGroup
-        title={translate(
-          'auto.components.settings.automations.howItWorksTitle',
-          'How Automations work'
-        )}
-        description={translate(
+        title={t('auto.components.settings.automations.howItWorksTitle', 'How Automations work')}
+        description={t(
           'auto.components.settings.automations.howItWorksDescription',
           'Schedule agent work once, then let Orca create each run and keep its results together.'
         )}
@@ -54,13 +49,10 @@ export function AutomationsSettingsPane({
               </span>
               <div className="min-w-0 flex-1 space-y-0.5">
                 <p className="text-sm font-medium">
-                  {translate(
-                    'auto.components.settings.automations.defineStepTitle',
-                    'Describe the work'
-                  )}
+                  {t('auto.components.settings.automations.defineStepTitle', 'Describe the work')}
                 </p>
                 <p className="text-xs leading-relaxed text-muted-foreground">
-                  {translate(
+                  {t(
                     'auto.components.settings.automations.defineStepDescription',
                     'Choose a project, agent, prompt, and schedule.'
                   )}
@@ -73,13 +65,10 @@ export function AutomationsSettingsPane({
               </span>
               <div className="min-w-0 flex-1 space-y-0.5">
                 <p className="text-sm font-medium">
-                  {translate(
-                    'auto.components.settings.automations.runStepTitle',
-                    'Orca starts each run'
-                  )}
+                  {t('auto.components.settings.automations.runStepTitle', 'Orca starts each run')}
                 </p>
                 <p className="text-xs leading-relaxed text-muted-foreground">
-                  {translate(
+                  {t(
                     'auto.components.settings.automations.runStepDescription',
                     'The selected agent gets a fresh workspace when the schedule is due.'
                   )}
@@ -92,13 +81,10 @@ export function AutomationsSettingsPane({
               </span>
               <div className="min-w-0 flex-1 space-y-0.5">
                 <p className="text-sm font-medium">
-                  {translate(
-                    'auto.components.settings.automations.reviewStepTitle',
-                    'Review the results'
-                  )}
+                  {t('auto.components.settings.automations.reviewStepTitle', 'Review the results')}
                 </p>
                 <p className="text-xs leading-relaxed text-muted-foreground">
-                  {translate(
+                  {t(
                     'auto.components.settings.automations.reviewStepDescription',
                     'Inspect recent runs and continue the work whenever you need to.'
                   )}
@@ -118,13 +104,10 @@ export function AutomationsSettingsPane({
             </span>
             <span className="min-w-0 flex-1 space-y-0.5">
               <span className="block text-sm font-medium text-foreground">
-                {translate(
-                  'auto.components.settings.automations.openAutomations',
-                  'Open Automations'
-                )}
+                {t('auto.components.settings.automations.9cb6e73d53', 'Open automations')}
               </span>
               <span className="block text-xs font-normal text-muted-foreground">
-                {translate(
+                {t(
                   'auto.components.settings.automations.openAutomationsDescription',
                   'Create schedules and inspect recent runs.'
                 )}

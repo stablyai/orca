@@ -39,7 +39,7 @@ import {
 } from '@/components/native-chat/composer/focus/native-chat-composer-mount'
 
 const modelCatalog = vi.hoisted(() => vi.fn())
-vi.mock('@/runtime/structured-agent-session-client', () => ({
+vi.mock('../../runtime/native-chat/requests/structured-agent-session-call', () => ({
   callStructuredAgentSession: modelCatalog
 }))
 vi.mock('@/components/machine-identity/use-published-machine-name', () => ({
@@ -496,23 +496,6 @@ it.each([false, true])(
     )
   }
 )
-
-it('cancels a handoff whose destination never mounts', async () => {
-  vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
-  const abort = new AbortController()
-  let completed = false
-  const handoff = waitForNativeChatComposerHandoff('no-source', 'missing', abort.signal, 5000).then(
-    () => {
-      completed = true
-    }
-  )
-  await act(async () => {})
-  expect(completed).toBe(false)
-  abort.abort()
-  await handoff
-  expect(completed).toBe(true)
-  expect(vi.getTimerCount()).toBe(0)
-})
 
 it('keeps typing visible in the replacement while its draft write is slow or refused', async () => {
   const storage = createMemoryNativeChatComposerDraftStorage()

@@ -17,7 +17,7 @@ import {
   isFolderWorkspaceIdForRepo,
   mergeFolderWorkspace
 } from '../../ipc/worktrees/folder-workspace-model'
-import type { RuntimeStore } from '../../runtime/runtime-store-contract'
+import type { RuntimeStore } from '../../runtime/construction/runtime-store-contract'
 import { withInlineFolderLineage } from './inline-folder-lineage'
 
 type HostPeerStore = Pick<

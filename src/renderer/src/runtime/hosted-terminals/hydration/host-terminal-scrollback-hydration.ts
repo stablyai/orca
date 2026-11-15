@@ -1,302 +1,159 @@
-import type { TerminalLayoutSnapshot } from '../../../../../shared/workspace-layout/terminal-tab-types'
-import type { SessionReadTerminalScrollbackResult } from '../../../../../shared/rpc-contract/session-terminal-scrollback-params'
-import { SESSION_TERMINAL_SCROLLBACK_READ_RUNTIME_CAPABILITY } from '../../../../../shared/session-tabs-runtime-capabilities'
-import { useAppStore } from '@/store/index'
 import {
-  runtimeEnvironmentIdForWorkspaceOwner,
-  type RuntimeEnvironmentOwnerMatch
-} from '@/lib/resolve-owner'
-import type { OrcadDeploymentLink } from '../../../../../shared/remote-runtime/host-catalog/runtime-environments'
-import { callRuntimeRpc } from '../../rpc/calls/runtime-rpc-call'
-import { runtimeEnvironmentSupportsCapability } from '../../rpc/compatibility/runtime-capability-proof'
-import { peekRuntimeEnvironmentCapability } from '../../rpc/compatibility/runtime-compatibility-cache'
-import { hasRuntimeRpcErrorCode } from '../../../../../shared/runtime-rpc-error-code'
-import { toRuntimeWorktreeSelector } from '../../runtime-worktree-selector'
-import { hasRegisteredRuntimeTerminalTab } from '../mounted-surfaces/mounted-terminal-tab-registry'
+  defaultDeps,
+  planHostScrollbackHydration,
+  fetchHostScrollback,
+  HOST_TERMINAL_SCROLLBACK_HOLD_MS,
+  resetHostTerminalScrollbackReadsForTests,
+  type HostTerminalScrollbackHydrationDeps,
+  type LocalScrollbackSnapshots
+} from './host-terminal-scrollback-reads'
 
-// Why bounded: a slow or unreachable host must never keep a terminal from mounting.
-export const HOST_TERMINAL_SCROLLBACK_HOLD_MS = 3_000
+export {
+  HOST_TERMINAL_SCROLLBACK_HOLD_MS,
+  hostScrollbackEnvironmentId
+} from './host-terminal-scrollback-reads'
+export type {
+  HostTerminalScrollbackHydrationDeps,
+  HostTerminalScrollbackTabState,
+  LocalScrollbackSnapshots
+} from './host-terminal-scrollback-reads'
 
-// Answers that will not change on retry; anything else (transport, timeout, abort) may.
-const DEFINITE_READ_FAILURE_CODES = [
-  'terminal_scrollback_not_found',
-  'terminal_scrollback_too_large'
-]
-
-export type HostTerminalScrollbackTabState = {
-  layout: TerminalLayoutSnapshot | undefined
-  localOnly: Record<string, string> | undefined
+export type TerminalScrollbackHydrationAttempt = {
+  local: Promise<boolean>
+  ready: Promise<LocalScrollbackSnapshots>
+  retire: () => void
 }
 
-export type HostTerminalScrollbackHydrationDeps = {
-  getTabState: (tabId: string) => HostTerminalScrollbackTabState
-  /** Null for a pane this machine runs; such panes never ask a host. */
-  resolveEnvironmentId: (worktreeId: string) => string | null
-  /** Stat-only check of this client's own snapshot store; web clients have none. */
-  hasLocalSnapshot: (ref: string) => boolean
-  /** Cached verdict only; undefined when this client has no fresh status for the host. */
-  peekHostSupportsRead: (environmentId: string) => boolean | undefined
-  /** Fetches the host's status so a later peek answers. */
-  warmHostSupportsRead: (environmentId: string) => Promise<unknown>
-  readHostSnapshot: (
-    environmentId: string,
-    worktreeId: string,
-    ref: string,
-    signal: AbortSignal
-  ) => Promise<string>
-  isTabMounted: (tabId: string) => boolean
-  storeLocalOnly: (tabId: string, buffersByLeafId: Record<string, string>) => void
-}
+const localReads = new Map<string, Promise<string | null>>()
 
-type HostScrollbackLeaf = { leafId: string; ref: string }
-type HostScrollbackPlan = {
-  environmentId: string
-  leaves: HostScrollbackLeaf[]
-  /** Undefined until this client has a fresh status for the host; the read waits for one. */
-  supported: boolean | undefined
-}
-type FetchedHostScrollbackLeaf = HostScrollbackLeaf & { buffer: string | null }
-
-const defaultDeps: HostTerminalScrollbackHydrationDeps = {
-  getTabState: (tabId) => {
-    const state = useAppStore.getState()
-    return {
-      layout: state.terminalLayoutsByTabId[tabId],
-      localOnly: state.localOnlyScrollbackByTabId[tabId]
-    }
-  },
-  resolveEnvironmentId: (worktreeId) => {
-    const state = useAppStore.getState()
-    return hostScrollbackEnvironmentId(
-      runtimeEnvironmentIdForWorkspaceOwner(state, { workspaceId: worktreeId }),
-      state.runtimeEnvironments
-    )
-  },
-  hasLocalSnapshot: (ref) => {
-    try {
-      return window.api.session.hasTerminalScrollback({ ref })
-    } catch {
-      return false
-    }
-  },
-  peekHostSupportsRead: (environmentId) =>
-    peekRuntimeEnvironmentCapability(
-      environmentId,
-      SESSION_TERMINAL_SCROLLBACK_READ_RUNTIME_CAPABILITY
-    ),
-  warmHostSupportsRead: (environmentId) =>
-    runtimeEnvironmentSupportsCapability(
-      environmentId,
-      SESSION_TERMINAL_SCROLLBACK_READ_RUNTIME_CAPABILITY
-    ),
-  readHostSnapshot: async (environmentId, worktreeId, ref, signal) =>
-    (
-      await callRuntimeRpc<SessionReadTerminalScrollbackResult>(
-        { kind: 'environment', environmentId },
-        'session.readTerminalScrollback',
-        { worktree: toRuntimeWorktreeSelector(worktreeId), ref },
-        { timeoutMs: HOST_TERMINAL_SCROLLBACK_HOLD_MS, signal }
-      )
-    ).buffer,
-  isTabMounted: (tabId) => hasRegisteredRuntimeTerminalTab(tabId),
-  storeLocalOnly: (tabId, buffersByLeafId) =>
-    useAppStore.getState().setTabLocalOnlyScrollback(tabId, buffersByLeafId)
-}
-
-// Why: a pane snapshot with a definite answer is never asked for again, so it never holds a mount twice.
-const settledKeys = new Set<string>()
-// Why: a known local copy needs no further stat IPC on remount.
-const localSnapshotRefs = new Set<string>()
-const inFlightByTabId = new Map<string, Promise<void>>()
-const warmingByEnvironmentId = new Map<string, Promise<void>>()
-
-function attemptKey(environmentId: string, tabId: string, ref: string): string {
-  return `${environmentId}\0${tabId}\0${ref}`
-}
-
-function hasLocalSnapshotCached(ref: string, deps: HostTerminalScrollbackHydrationDeps): boolean {
-  if (localSnapshotRefs.has(ref)) {
-    return true
-  }
-  if (!deps.hasLocalSnapshot(ref)) {
-    return false
-  }
-  localSnapshotRefs.add(ref)
-  return true
-}
-
-function warmCapability(
-  environmentId: string,
+function readLocal(
+  key: string,
+  ref: string,
   deps: HostTerminalScrollbackHydrationDeps
-): Promise<void> {
-  const warming = warmingByEnvironmentId.get(environmentId)
-  if (warming) {
-    return warming
+): Promise<string | null> {
+  const pending = localReads.get(key)
+  if (pending) {
+    return pending
   }
-  const pending = Promise.resolve()
-    .then(() => deps.warmHostSupportsRead(environmentId))
-    .then(
-      () => {},
-      () => {}
-    )
-    .finally(() => warmingByEnvironmentId.delete(environmentId))
-  warmingByEnvironmentId.set(environmentId, pending)
-  return pending
-}
-
-function planHostScrollbackHydration(
-  tabId: string,
-  worktreeId: string,
-  deps: HostTerminalScrollbackHydrationDeps
-): HostScrollbackPlan | null {
-  const { layout, localOnly } = deps.getTabState(tabId)
-  const refs = Object.entries(layout?.scrollbackRefsByLeafId ?? {}).filter(
-    ([leafId]) =>
-      // Why: a live PTY repaints its own screen, which replaces restored history anyway.
-      layout?.ptyIdsByLeafId?.[leafId] === undefined &&
-      layout?.buffersByLeafId?.[leafId] === undefined &&
-      localOnly?.[leafId] === undefined
-  )
-  if (refs.length === 0) {
-    return null
-  }
-  const environmentId = deps.resolveEnvironmentId(worktreeId)
-  if (!environmentId) {
-    return null
-  }
-  const leaves = refs
-    .filter(
-      ([, ref]) =>
-        !settledKeys.has(attemptKey(environmentId, tabId, ref)) &&
-        !hasLocalSnapshotCached(ref, deps)
-    )
-    .map(([leafId, ref]) => ({ leafId, ref }))
-  if (leaves.length === 0) {
-    return null
-  }
-  // Why hold on an unknown host too: mount is the only replay, so a pane that mounts before the
-  // status answers (a moved tab opened a minute after the last probe) opens empty for good.
-  // Only a pane with a ref and no local copy gets here, and a definite answer settles it.
-  const supported = deps.peekHostSupportsRead(environmentId)
-  return supported === false ? null : { environmentId, leaves, supported }
-}
-
-async function readLeaf(
-  tabId: string,
-  worktreeId: string,
-  environmentId: string,
-  leaf: HostScrollbackLeaf,
-  signal: AbortSignal,
-  deps: HostTerminalScrollbackHydrationDeps
-): Promise<FetchedHostScrollbackLeaf> {
-  try {
-    const buffer = await deps.readHostSnapshot(environmentId, worktreeId, leaf.ref, signal)
-    return { ...leaf, buffer }
-  } catch (error) {
-    if (DEFINITE_READ_FAILURE_CODES.some((code) => hasRuntimeRpcErrorCode(error, code))) {
-      settledKeys.add(attemptKey(environmentId, tabId, leaf.ref))
-    }
-    return { ...leaf, buffer: null }
-  }
-}
-
-async function fetchHostScrollback(
-  tabId: string,
-  worktreeId: string,
-  plan: HostScrollbackPlan,
-  deps: HostTerminalScrollbackHydrationDeps
-): Promise<void> {
-  const controller = new AbortController()
-  // Why: the hold releases at this bound; bytes after it would land behind a mounted pane.
-  const deadline = setTimeout(() => controller.abort(), HOST_TERMINAL_SCROLLBACK_HOLD_MS)
-  let fetched: FetchedHostScrollbackLeaf[]
-  try {
-    if (plan.supported === undefined) {
-      await warmCapability(plan.environmentId, deps)
-      if (controller.signal.aborted || deps.peekHostSupportsRead(plan.environmentId) !== true) {
-        return
+  const read = Promise.resolve()
+    .then(() => deps.readLocalSnapshot(ref))
+    .catch(() => null)
+    .finally(() => {
+      if (localReads.get(key) === read) {
+        localReads.delete(key)
       }
-    }
-    fetched = await Promise.all(
-      plan.leaves.map((leaf) =>
-        readLeaf(tabId, worktreeId, plan.environmentId, leaf, controller.signal, deps)
-      )
-    )
-  } finally {
-    clearTimeout(deadline)
-  }
-  // Why: a mounted pane's xterm already owns its bytes; its next park captures them instead.
-  if (controller.signal.aborted || deps.isTabMounted(tabId)) {
-    return
-  }
-  const { layout, localOnly } = deps.getTabState(tabId)
-  const next = { ...localOnly }
-  const stored: HostScrollbackLeaf[] = []
-  for (const { leafId, ref, buffer } of fetched) {
-    if (
-      buffer &&
-      layout?.scrollbackRefsByLeafId?.[leafId] === ref &&
-      layout.buffersByLeafId?.[leafId] === undefined &&
-      next[leafId] === undefined
-    ) {
-      next[leafId] = buffer
-      stored.push({ leafId, ref })
-    }
-  }
-  if (stored.length > 0) {
-    deps.storeLocalOnly(tabId, next)
-    for (const { ref } of stored) {
-      settledKeys.add(attemptKey(plan.environmentId, tabId, ref))
-    }
-  }
+    })
+  localReads.set(key, read)
+  return read
 }
 
-/**
- * The host to read a pane's stored scrollback from: only a WSL host, whose moved panes keep their
- * history as host snapshots. SSH and paired-server panes paint as before, with no hold or read.
- * Null for a twin too: no single host owns the stored scrollback, so the pane paints locally.
- */
-export function hostScrollbackEnvironmentId(
-  owner: RuntimeEnvironmentOwnerMatch,
-  environments: readonly { id: string; orcadDeployment?: OrcadDeploymentLink | null }[] | undefined
-): string | null {
-  if (owner.kind !== 'resolved' || owner.environmentId === null) {
-    return null
-  }
-  const environmentId = owner.environmentId
-  const environment = environments?.find((candidate) => candidate.id === environmentId)
-  return environment?.orcadDeployment?.kind === 'wsl' ? environmentId : null
-}
-
-/**
- * Starts reading a host-run tab's stored scrollback from its host when this client has no copy,
- * so the pane paints its history after a move deleted (or a web client never had) the local one.
- * Decides synchronously and holds unless the host is known not to serve the read; returns null
- * when there is nothing to fetch. The promise never rejects and settles by the hold bound.
- */
+/** Each manager mount acquires current bytes; retiring a consumer never drains another's result. */
 export function startHostTerminalScrollbackHydration(
   tabId: string,
   worktreeId: string,
-  deps: HostTerminalScrollbackHydrationDeps = defaultDeps
-): Promise<void> | null {
-  const inFlight = inFlightByTabId.get(tabId)
-  if (inFlight) {
-    return inFlight
+  deps: HostTerminalScrollbackHydrationDeps = defaultDeps,
+  isCurrent: () => boolean = () => true,
+  commit?: (snapshots: LocalScrollbackSnapshots) => void
+): TerminalScrollbackHydrationAttempt | null {
+  const missingLeaves = () => {
+    const { layout, localOnly } = deps.getTabState(tabId)
+    return Object.entries(layout?.scrollbackRefsByLeafId ?? {}).filter(
+      ([leafId]) =>
+        layout?.buffersByLeafId?.[leafId] === undefined && localOnly?.[leafId] === undefined
+    )
   }
-  const plan = planHostScrollbackHydration(tabId, worktreeId, deps)
-  if (!plan) {
+  if (missingLeaves().length === 0) {
     return null
   }
-  const pending = fetchHostScrollback(tabId, worktreeId, plan, deps)
-    .catch(() => {})
-    .finally(() => inFlightByTabId.delete(tabId))
-  inFlightByTabId.set(tabId, pending)
-  return pending
+  const retirement = new AbortController()
+  const current = (): boolean => !retirement.signal.aborted && isCurrent()
+  let snapshots: LocalScrollbackSnapshots = {}
+  const attempted = new Map<string, string>()
+  let hostDeadline: number | undefined
+  const unattemptedLeaves = () =>
+    missingLeaves().filter(([leafId, ref]) => attempted.get(leafId) !== ref)
+  const readCurrentLocal = async (): Promise<void> => {
+    while (current()) {
+      const leaves = unattemptedLeaves()
+      if (leaves.length === 0) {
+        return
+      }
+      for (const [leafId, ref] of leaves) {
+        if (!current()) {
+          return
+        }
+        const state = deps.getTabState(tabId)
+        if (
+          state.layout?.scrollbackRefsByLeafId?.[leafId] !== ref ||
+          state.layout.buffersByLeafId?.[leafId] !== undefined ||
+          state.localOnly?.[leafId] !== undefined
+        ) {
+          continue
+        }
+        const buffer = await readLocal(`${worktreeId}\0${tabId}\0${ref}`, ref, deps)
+        if (!current()) {
+          return
+        }
+        attempted.set(leafId, ref)
+        if (buffer) {
+          snapshots[leafId] = { ref, buffer }
+        }
+      }
+    }
+  }
+  const local = Promise.resolve().then(async () => {
+    await readCurrentLocal()
+    return current() && planHostScrollbackHydration(tabId, worktreeId, deps, snapshots) !== null
+  })
+  const ready = local.then(async () => {
+    while (current()) {
+      await readCurrentLocal()
+      if (!current()) {
+        break
+      }
+      const plan = planHostScrollbackHydration(tabId, worktreeId, deps, snapshots)
+      if (plan) {
+        hostDeadline ??= Date.now() + HOST_TERMINAL_SCROLLBACK_HOLD_MS
+        const remaining = hostDeadline - Date.now()
+        if (remaining > 0) {
+          await fetchHostScrollback(
+            tabId,
+            worktreeId,
+            plan,
+            deps,
+            current,
+            retirement.signal,
+            remaining
+          )
+        }
+      }
+      if (!current()) {
+        break
+      }
+      if (unattemptedLeaves().length > 0) {
+        continue
+      }
+      // No promise gap between the final ref validation and synchronous mount preparation.
+      if (commit) {
+        commit(snapshots)
+        snapshots = {}
+      }
+      return snapshots
+    }
+    snapshots = {}
+    return {}
+  })
+  return {
+    local,
+    ready,
+    retire: () => {
+      retirement.abort()
+      snapshots = {}
+    }
+  }
 }
 
 export function resetHostTerminalScrollbackHydrationForTests(): void {
-  settledKeys.clear()
-  localSnapshotRefs.clear()
-  inFlightByTabId.clear()
-  warmingByEnvironmentId.clear()
+  localReads.clear()
+  resetHostTerminalScrollbackReadsForTests()
 }

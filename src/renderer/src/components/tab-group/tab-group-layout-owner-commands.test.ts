@@ -1,11 +1,15 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { sendLayoutCommandToOwner } from '@/runtime/layout-owner-command'
+import type { sendLayoutCommandToOwner } from '@/runtime/workspace-layout/commands/layout-owner-command'
 import { createTabsSliceMockApi } from '@/store/slices/tabs/tabs-slice-test-harness'
-import { beginLayoutFramePositions, endLayoutFramePositions } from '@/runtime/layout-frame-position'
+import {
+  beginLayoutFramePositions,
+  endLayoutFramePositions
+} from '@/runtime/workspace-layout/frames/layout-frame-position'
 import { createTestStore, seedStore } from '@/store/testing/app-store-test-fixture'
 import { makeWorktree } from '@/store/slices/worktrees/worktree.test-fixture'
 import { dropTabThroughLayoutOwner } from './tab-group-layout-owner-commands'
-import { LOCAL_LAYOUT_APPLY_ORIGIN } from '@/runtime/server-layout-apply-routes'
+import { LOCAL_LAYOUT_APPLY_ORIGIN } from '@/runtime/workspace-layout/server/server-layout-apply-routes'
+import { pendingMovedTabSelections } from '@/runtime/workspace-layout/intents/layout-owner-pane-intents'
 
 const mocks = vi.hoisted(
   (): {
@@ -16,7 +20,9 @@ const mocks = vi.hoisted(
 
 // The store's split takes main's group id only in a layout-owner build.
 vi.mock('../../../../shared/layout-owner-switch', () => ({ ORCA_LAYOUT_OWNER_IS_MAIN: true }))
-vi.mock('@/runtime/layout-owner-command', () => ({ sendLayoutCommandToOwner: mocks.send }))
+vi.mock('@/runtime/workspace-layout/commands/layout-owner-command', () => ({
+  sendLayoutCommandToOwner: mocks.send
+}))
 vi.mock('@/store', () => ({
   get useAppStore() {
     return mocks.store
@@ -79,6 +85,33 @@ describe('dropTabThroughLayoutOwner', () => {
 
     expect(orderOf(right)).toEqual(['c', 'a'])
     expect(store().getState().activeGroupIdByWorktree[WT]).toBe(left)
+  })
+
+  describe('with a caller that selects the moved tab itself', () => {
+    it('registers no selection of its own and reports refusal', () => {
+      const { right } = seeded()
+      const completion = { refused: vi.fn(), moveHere: vi.fn() }
+      const intents = [...pendingMovedTabSelections()]
+
+      dropTabThroughLayoutOwner(WT, { kind: 'move', tabId: 'a', groupId: right }, completion)
+      expect(pendingMovedTabSelections().filter((intent) => !intents.includes(intent))).toEqual([])
+      lastHandlers().refused?.('group_not_found')
+
+      expect(completion.refused).toHaveBeenCalledTimes(1)
+      expect(groupOf('a')).not.toBe(right)
+    })
+
+    it('asks before moving a tab main hands back', () => {
+      const { right } = seeded()
+      const completion = { refused: vi.fn(), moveHere: vi.fn() }
+      dropTabThroughLayoutOwner(WT, { kind: 'move', tabId: 'a', groupId: right }, completion)
+
+      lastHandlers().asToday()
+      expect(groupOf('a')).not.toBe(right)
+      completion.moveHere.mock.calls[0]![0]()
+
+      expect(groupOf('a')).toBe(right)
+    })
   })
 
   it('moves as today when main cannot act, and not at all when main refuses', () => {

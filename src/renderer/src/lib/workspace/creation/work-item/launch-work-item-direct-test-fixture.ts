@@ -5,7 +5,7 @@ import type * as TuiAgentSelectionModule from '../../../../../../shared/agent-la
 import type * as TuiAgentStartupModule from '../../../../../../shared/agent-launch/startup/tui-agent-startup'
 import type * as DirectAgentRoutingModule from '@/lib/workspace/creation/work-item/launch-work-item-direct-agent-routing'
 import type * as RuntimeRpcSubscribeModule from '@/runtime/rpc/subscriptions/runtime-rpc-subscribe'
-import type * as LaunchAgentKindModule from '../../../../../../shared/agent-kind'
+import type * as LaunchAgentKindModule from '../../../../../../shared/agent-status/identity/agent-kind'
 import type * as WorkspaceNameModule from '../../../../../../shared/workspace-name'
 import type * as WorkspaceSourceModule from '../../../../../../shared/new-workspace/workspace-source'
 
@@ -78,7 +78,7 @@ vi.mock('sonner', () => ({
   toast: { error: mocks.toastError, message: vi.fn(), success: vi.fn() }
 }))
 
-vi.mock('@/lib/agent-paste-draft', () => ({
+vi.mock('@/lib/agent-session/messaging/paste/agent-paste-draft', () => ({
   pasteDraftWhenAgentReady: mocks.pasteDraftWhenAgentReady
 }))
 
@@ -86,12 +86,12 @@ vi.mock('@/lib/workspace/activation/worktree-activation', () => ({
   activateAndRevealWorktree: mocks.activateAndRevealWorktree
 }))
 
-vi.mock('@/lib/ensure-hooks-confirmed', () => ({
+vi.mock('@/runtime/repo-hooks/ensure-hooks-confirmed', () => ({
   ensureHooksConfirmed: vi.fn().mockResolvedValue('run'),
   ensureHooksApproved: vi.fn().mockResolvedValue({ decision: 'run' })
 }))
 
-vi.mock('@/lib/connection-context', () => ({
+vi.mock('@/lib/workspace/ownership/connection-context', () => ({
   getConnectionId: mocks.getConnectionId
 }))
 
@@ -121,7 +121,7 @@ vi.mock('@/runtime/rpc/subscriptions/runtime-rpc-subscribe', () => ({
   subscribeRuntimeRpc: hostMocks.subscribe
 }))
 
-vi.mock('@/lib/new-workspace', () => ({
+vi.mock('@/lib/workspace/creation/new-workspace', () => ({
   CLIENT_PLATFORM: 'win32',
   getWorkspaceSeedName: ({ explicitName }: { explicitName?: string }) => explicitName ?? ''
 }))
@@ -148,12 +148,9 @@ vi.mock('../../../../../../shared/new-workspace/workspace-source', async (import
   isGitLabIssueUrl: vi.fn(() => false)
 }))
 
-vi.mock('@/lib/telemetry', () => ({
-  track: vi.fn(),
-  tuiAgentToAgentKind: mockLaunchAgentKind
-}))
+vi.mock('@/diagnostics/telemetry/telemetry', () => ({ track: vi.fn() }))
 const mockLaunchAgentKind = vi.hoisted(() => (agent: string) => agent)
-vi.mock('../../../../../../shared/agent-kind', async (importOriginal) => ({
+vi.mock('../../../../../../shared/agent-status/identity/agent-kind', async (importOriginal) => ({
   ...(await importOriginal<typeof LaunchAgentKindModule>()),
   tuiAgentToAgentKind: mockLaunchAgentKind
 }))
@@ -233,6 +230,7 @@ beforeEach(() => {
   )
   mocks.pasteDraftWhenAgentReady.mockResolvedValue(true)
   mocks.store = {
+    projectGroups: [],
     repos: [
       {
         id: 'repo-1',

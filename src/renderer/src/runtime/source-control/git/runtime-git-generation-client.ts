@@ -1,6 +1,6 @@
 import { getRepoIdFromWorktreeId } from '../../../../../shared/worktree/id'
 import { TEXT_GENERATION_CLIENT_TIMEOUT_MS } from '../../../../../shared/text-generation-client-timeout'
-import { localizeTextGenerationResult } from '@/lib/text-generation-error-copy'
+import { localizeTextGenerationResult } from '@/lib/text-generation/text-generation-error-copy'
 import { antigravityGenerationCompatibilityError } from './antigravity-generation-compatibility'
 import {
   getRuntimeCommitMessageSettings,
@@ -14,7 +14,7 @@ import {
   type RuntimePullRequestGenerationInput
 } from './runtime-git-client-context'
 import { callRuntimeRpc } from '../../rpc/calls/runtime-rpc-call'
-import { toRuntimeWorktreeSelector } from '../../runtime-worktree-selector'
+import { toRuntimeWorktreeSelector } from '../../rpc/targets/runtime-worktree-selector'
 
 export async function generateRuntimeCommitMessage(
   context: RuntimeGitContext,

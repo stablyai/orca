@@ -1,10 +1,15 @@
 // @vitest-environment happy-dom
-import { act } from 'react'
+import { act, type ReactElement, type ReactNode } from 'react'
 import { fireEvent, getByRole } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { TooltipProvider } from '@/components/ui/tooltip'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuTrigger
+} from '@/components/ui/dropdown-menu'
 import { retireAgentPickerDrafts } from './agent-launch-picker-drafts'
 import { AgentLaunchSetupButton } from './AgentLaunchSetupButton'
 import { agentLaunchPromptScopeKey } from './AgentLaunchPromptComposer'
@@ -54,26 +59,57 @@ afterEach(() => {
   clearNativeChatComposerDraftsForTests()
 })
 
+const anchor = (trigger: ReactElement) => <div>{trigger}</div>
+
+function InMenu({ children }: { children: ReactNode }) {
+  return (
+    <TooltipProvider>
+      <DropdownMenu defaultOpen modal={false}>
+        <DropdownMenuTrigger>New tab</DropdownMenuTrigger>
+        <DropdownMenuContent>{children}</DropdownMenuContent>
+      </DropdownMenu>
+    </TooltipProvider>
+  )
+}
+
 describe('setup records exist only for authored setups', () => {
   it('keeps typed prompt and options through close, reopen and a rename', () => {
-    const entry = {
+    const entry: AgentPickerEntry = {
       ...row(0, 'codex'),
       worktreeId: 'repo::/old',
-      arguments: '--add-dir docs'
+      arguments: '--add-dir docs',
+      catalog: {
+        origin: 'probe',
+        fetchedAt: 1,
+        models: [
+          {
+            id: 'gpt',
+            label: 'gpt',
+            isDefault: true,
+            efforts: [
+              { value: 'low', label: 'Low' },
+              { value: 'high', label: 'High' }
+            ]
+          }
+        ]
+      }
     }
     const show = (value: AgentPickerEntry) =>
       act(() =>
         root.render(
-          <TooltipProvider>
-            <AgentLaunchSetupButton entry={value} onUse={vi.fn()} />
-          </TooltipProvider>
+          <InMenu>
+            <AgentLaunchSetupButton entry={value} onUse={vi.fn()} renderAnchor={anchor} />
+          </InMenu>
         )
       )
     const configure = () =>
       document.querySelector<HTMLButtonElement>('button[aria-label="Configure codex"]')!
     const prompt = () =>
       document.querySelector<HTMLElement>('[contenteditable][aria-multiline="true"]')!
-    const close = () => fireEvent.keyDown(document.querySelector('textarea')!, { key: 'Escape' })
+    const effort = (label: string) =>
+      getByRole(document.body, 'radio', { name: label }).getAttribute('data-state')
+    const close = () =>
+      fireEvent.keyDown(document.querySelector('[cmdk-input]')!, { key: 'Escape' })
     show(entry)
     fireEvent.click(configure())
     close()
@@ -81,15 +117,17 @@ describe('setup records exist only for authored setups', () => {
 
     // The open panel's first write is an option change; it shows at once and retains the setup.
     fireEvent.click(configure())
-    fireEvent.change(document.querySelector('textarea')!, { target: { value: '--add-dir src' } })
-    expect(document.querySelector<HTMLTextAreaElement>('textarea')?.value).toBe('--add-dir src')
+    // Arguments are agent settings, so the launch panel offers no editor for them.
+    expect(document.querySelector('textarea[aria-label="Arguments"]')).toBeNull()
+    fireEvent.click(getByRole(document.body, 'radio', { name: 'Low' }))
+    expect(effort('Low')).toBe('on')
     expect(sourceCount()).toBe(1)
     changePrompt(prompt(), 'fix the flaky test')
     close()
-    expect(document.querySelector('textarea')).toBeNull()
+    expect(document.querySelector('[cmdk-input]')).toBeNull()
     fireEvent.click(configure())
     expect(prompt().textContent).toBe('fix the flaky test')
-    expect(document.querySelector<HTMLTextAreaElement>('textarea')?.value).toBe('--add-dir src')
+    expect(effort('Low')).toBe('on')
     close()
 
     act(() =>
@@ -102,7 +140,7 @@ describe('setup records exist only for authored setups', () => {
     show({ ...entry, worktreeId: 'repo::/new' })
     fireEvent.click(configure())
     expect(prompt().textContent).toBe('fix the flaky test')
-    expect(document.querySelector<HTMLTextAreaElement>('textarea')?.value).toBe('--add-dir src')
+    expect(effort('Low')).toBe('on')
   })
 
   it('keeps a search preset in its own options slot, saving only real changes, with one shared prompt', async () => {
@@ -131,10 +169,15 @@ describe('setup records exist only for authored setups', () => {
     }
     act(() =>
       root.render(
-        <TooltipProvider>
-          <AgentLaunchSetupButton entry={entry} onUse={vi.fn()} />
-          <AgentLaunchSetupButton entry={entry} initial={preset} onUse={vi.fn()} />
-        </TooltipProvider>
+        <InMenu>
+          <AgentLaunchSetupButton entry={entry} onUse={vi.fn()} renderAnchor={anchor} />
+          <AgentLaunchSetupButton
+            entry={entry}
+            initial={preset}
+            onUse={vi.fn()}
+            renderAnchor={anchor}
+          />
+        </InMenu>
       )
     )
     const user = userEvent.setup()
@@ -146,7 +189,8 @@ describe('setup records exist only for authored setups', () => {
     const effort = (label: string) =>
       getByRole(document.body, 'radio', { name: label }).getAttribute('data-state')
     const model = () => document.querySelector('[cmdk-item][data-current="true"]')?.textContent
-    const close = () => fireEvent.keyDown(document.querySelector('textarea')!, { key: 'Escape' })
+    const close = () =>
+      fireEvent.keyDown(document.querySelector('[cmdk-input]')!, { key: 'Escape' })
 
     // Opening a preset saves nothing, and the plain row still shows defaults.
     fireEvent.click(searched)

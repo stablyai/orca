@@ -1,9 +1,9 @@
 import type { NodeRuntimeTarget } from '../../../shared/node-runtime-pin'
-import { resolveOrcadDeploymentTargetFacts } from '../../ssh/orcad-deployment-target'
-import { OrcadHostUnsupportedError } from '../../orcad/orcad-host-unavailable'
-import type { OrcadHostTransport } from '../../ssh/orcad-host-transport'
-import { pinnedRuntimeTargetForHost } from '../../ssh/pinned-runtime-host-target'
-import type { RemoteHostPlatform } from '../../ssh/ssh-remote-platform'
+import { resolveOrcadDeploymentTargetFacts } from '../install/orcad-deployment-target'
+import { OrcadHostUnsupportedError } from '../../orcad/diagnostics/orcad-host-unavailable'
+import type { OrcadHostTransport } from '../install/orcad-host-transport'
+import { pinnedRuntimeTargetForHost } from '../install/pinned-runtime-host-target'
+import type { RemoteHostPlatform } from '../../ssh/remote-host/ssh-remote-platform'
 
 /** Lets a caller that knows the host kind add its own fix; the message is the one SSH shows. */
 export class OrcadHostGlibcUnsupportedError extends OrcadHostUnsupportedError {

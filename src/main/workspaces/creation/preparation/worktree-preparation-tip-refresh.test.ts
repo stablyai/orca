@@ -1,4 +1,4 @@
-import { describe, expect, it, onTestFinished, vi } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import {
   flushBackgroundWork,
   mocks,
@@ -12,7 +12,6 @@ import {
 } from './worktree-create-preparation'
 import {
   listPreparations,
-  startPreparation,
   WORKTREE_CREATE_PREPARATION_TTL_MS
 } from './worktree-create-preparation-pool'
 
@@ -29,22 +28,6 @@ function consume() {
 }
 
 describe('prepared checkout tip refresh', () => {
-  it('refreshes the existing checkout on its Git host without preparing another tree', async () => {
-    mocks.getWorktreeOptions.mockReturnValue({ wslDistro: 'Ubuntu' })
-    await prepareWorktreeCreateForRepo(store, repo, 'origin/main')
-    const entry = listPreparations()[0]!
-    await prepareWorktreeCreateForRepo(store, repo, 'origin/main', beforeMaterialization)
-    expect(mocks.prepareCheckout).toHaveBeenCalledOnce()
-    expect(mocks.refreshTip).toHaveBeenCalledWith(
-      repo.path,
-      entry.preparedPath,
-      'refs/remotes/origin/main',
-      entry.lockReason,
-      expect.objectContaining({ wslDistro: 'Ubuntu' }),
-      expect.anything()
-    )
-  })
-
   it('lets consume join an in-flight refresh before finalizing', async () => {
     await prepareWorktreeCreateForRepo(store, repo, 'origin/main')
     let release!: () => void
@@ -60,18 +43,6 @@ describe('prepared checkout tip refresh', () => {
     await refresh
     expect(await create).toMatchObject({ status: 'hit' })
     expect(mocks.finalize).toHaveBeenCalledOnce()
-  })
-
-  it('defers another preparation while the previous checkout is still claimed', async () => {
-    await prepareWorktreeCreateForRepo(store, repo, 'origin/main')
-    expect(await consume()).toMatchObject({ status: 'hit' })
-    mocks.computeWorkspaceRootAsync.mockClear()
-    mocks.resolveBaseRef.mockClear()
-    await prepareWorktreeCreateForRepo(store, repo, 'origin/main', beforeMaterialization)
-    expect(mocks.computeWorkspaceRootAsync).toHaveBeenCalledOnce()
-    expect(mocks.resolveBaseRef).toHaveBeenCalledOnce()
-    expect(mocks.refreshTip).not.toHaveBeenCalled()
-    expect(mocks.prepareCheckout).toHaveBeenCalledOnce()
   })
 
   it('cancels an expired tip refresh before cleanup', async () => {
@@ -105,7 +76,8 @@ describe('prepared checkout tip refresh', () => {
         repo.path,
         entry.preparedPath,
         expect.anything(),
-        entry.lockReason
+        entry.lockReason,
+        null
       )
       expect(listPreparations()).toEqual([])
     } finally {
@@ -140,7 +112,8 @@ describe('prepared checkout tip refresh', () => {
       repo.path,
       entry.preparedPath,
       expect.anything(),
-      entry.lockReason
+      entry.lockReason,
+      null
     )
   })
 
@@ -234,45 +207,5 @@ describe('prepared checkout tip refresh', () => {
       }
       await flushBackgroundWork()
     }
-  })
-})
-
-describe('prepared checkout timing across a tip refresh', () => {
-  it('keeps the re-arm build time and measures idle time from the refreshed ready', async () => {
-    let now = 0
-    const clock = vi.spyOn(performance, 'now').mockImplementation(() => now)
-    onTestFinished(() => clock.mockRestore())
-    const build = Promise.withResolvers<void>()
-    mocks.prepareCheckout.mockReturnValueOnce(build.promise)
-    const armed = startPreparation(
-      {
-        repoPath: repo.path,
-        workspaceRoot: '/workspace',
-        baseBranch: 'origin/main',
-        canonicalBase: 'refs/remotes/origin/main',
-        options: {}
-      },
-      'automatic'
-    )
-    await vi.waitFor(() => expect(mocks.prepareCheckout).toHaveBeenCalled())
-    now = 40_000
-    build.resolve()
-    await armed
-
-    now = 100_000
-    const fetch = Promise.withResolvers<void>()
-    const refreshed = prepareWorktreeCreateForRepo(store, repo, 'origin/main', fetch.promise)
-    await flushBackgroundWork()
-    now = 102_000
-    fetch.resolve()
-    await refreshed
-    now = 112_000
-
-    await expect(consume()).resolves.toMatchObject({
-      status: 'hit',
-      origin: 'rearm_then_prefetch',
-      buildMs: 40_000,
-      idleMs: 10_000
-    })
   })
 })

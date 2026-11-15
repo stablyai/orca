@@ -20,6 +20,8 @@ export type LaunchAgentInNewTabArgs = LaunchAgentInNewTabRequest & {
   groupId?: string
   /** Optional initial prompt; delivery depends on `promptDelivery` and the agent's prompt mode. */
   prompt?: string
+  /** A surface the user already sees for this launch presents a preparation refusal, not a toast. */
+  presentsRefusal?: true
   /** Optional CLI arguments appended to the selected agent command; a chat has no command line. */
   agentArgs?: string | null
   /** Raw action Arguments replace configured Arguments while inheriting host permission. */

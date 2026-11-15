@@ -1,5 +1,5 @@
 import { isAgentStatusFresh } from '../../../../shared/agent-status/contracts/agent-status-freshness'
-import type { RuntimeWorktreePsSummary } from '../../../../shared/runtime-worktree-contracts'
+import type { RuntimeWorktreePsSummary } from '../../../../shared/worktree/catalog/runtime-worktree-contracts'
 import {
   applyAgentPaneActivityFlags,
   createAgentPaneActivityFlags,

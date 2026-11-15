@@ -3,7 +3,8 @@ import type { FeatureTip } from '../../../../shared/feature-tips'
 import { ShortcutKeyCombo } from '@/components/ShortcutKeyCombo'
 import { DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { useShortcutKeyDetails } from '@/hooks/useShortcutLabel'
-import { i18n, translate } from '@/i18n/i18n'
+import { i18n } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { Trans } from 'react-i18next'
 import { FeatureTipActions } from './FeatureTipActions'
 import { getLocalizedFeatureTipCopy } from './feature-tip-localized-copy'
@@ -31,6 +32,7 @@ export function VoiceDictationTipDialog({
   onSkip: () => void
   onVoiceSettingsClick: () => void
 }): JSX.Element {
+  const t = useTranslate()
   const shortcut = useShortcutKeyDetails('voice.dictation')
   const primaryButtonRef = useRef<HTMLButtonElement>(null)
   const copy = getLocalizedFeatureTipCopy(tip)
@@ -56,7 +58,7 @@ export function VoiceDictationTipDialog({
               <span className="block">
                 <Trans
                   i18n={i18n}
-                  defaults={translate(
+                  defaults={t(
                     'featureTips.voice.shortcutInstruction',
                     'Focus a terminal, editor, or agent prompt, then press <shortcut/> to start voice dictation. Press <shortcut/> again to stop.'
                   )}
@@ -74,14 +76,14 @@ export function VoiceDictationTipDialog({
               </span>
             ) : (
               <span className="block">
-                {translate(
+                {t(
                   'featureTips.voice.unassignedInstruction',
                   'Assign a dictation shortcut before starting voice dictation in a focused pane.'
                 )}
               </span>
             )}
             <FeatureTipSettingsLine
-              text={translate(
+              text={t(
                 'featureTips.voice.changeInSettings',
                 'Change the model, dictation mode, or shortcut anytime in <link>Settings → Voice</link>.'
               )}

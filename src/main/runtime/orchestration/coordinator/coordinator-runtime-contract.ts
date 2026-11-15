@@ -1,4 +1,4 @@
-import type { WorkerTerminalHostScope } from '../../../../shared/worker-terminal-host-scope'
+import type { WorkerTerminalHostScope } from '../../../../shared/orchestration/workers/worker-terminal-host-scope'
 import type { DispatchPreambleSendOptions } from '../workers/launch/worker-dispatch-preamble'
 
 export type WorktreeDrift = {

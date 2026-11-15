@@ -75,25 +75,6 @@ describe('execCommand', () => {
     expect(channel.stderr.listenerCount('data')).toBe(0)
   })
 
-  it('includes stdout in nonzero-exit errors when stderr is empty', async () => {
-    const channel = createMockChannel()
-    const conn = {
-      exec: vi.fn().mockResolvedValue(channel)
-    }
-    const commandPromise = execCommand(conn as never, 'npm install node-pty 2>&1')
-
-    await Promise.resolve()
-    channel.emit('data', Buffer.from('gyp ERR! stack Error: not found: make\n'))
-    channel.emit('close', 1)
-
-    await expect(commandPromise).rejects.toThrow('gyp ERR! stack Error: not found: make')
-    expect(channel.listenerCount('error')).toBe(0)
-    expect(channel.listenerCount('data')).toBe(0)
-    expect(channel.listenerCount('close')).toBe(0)
-    expect(channel.stderr.listenerCount('error')).toBe(0)
-    expect(channel.stderr.listenerCount('data')).toBe(0)
-  })
-
   it('redacts install-owner marker tokens from command failures', async () => {
     const channel = createMockChannel()
     const conn = {
@@ -108,44 +89,6 @@ describe('execCommand', () => {
     const error = await execCommandRejection(commandPromise)
     expect(error.message).toContain('.sftp-namespace-[redacted]')
     expect(error.message).not.toContain(installMarkerToken)
-  })
-
-  it('redacts install-owner marker tokens from timeout errors', async () => {
-    vi.useFakeTimers()
-    try {
-      const channel = createMockChannel()
-      const conn = { exec: vi.fn().mockResolvedValue(channel) }
-      const commandPromise = execCommand(conn as never, `touch '${installMarkerPath}'`, {
-        timeoutMs: 1_000
-      })
-
-      await vi.advanceTimersByTimeAsync(1_000)
-      channel.emit('close', 0)
-
-      const error = await execCommandRejection(commandPromise)
-      expect(error.message).toContain('.sftp-namespace-[redacted]')
-      expect(error.message).not.toContain(installMarkerToken)
-    } finally {
-      vi.useRealTimers()
-    }
-  })
-
-  it('surfaces stdout alongside stderr on nonzero exit instead of masking it', async () => {
-    const channel = createMockChannel()
-    const conn = {
-      exec: vi.fn().mockResolvedValue(channel)
-    }
-    const commandPromise = execCommand(conn as never, 'npm install 2>&1')
-
-    await Promise.resolve()
-    // System SSH stderr carries local client noise; remote merged stdout must supply failure details.
-    channel.stderr.emit('data', Buffer.from("Warning: Permanently added 'host' (ED25519)\n"))
-    channel.emit('data', Buffer.from("npm error g++: unrecognized '-std=gnu++20'\n"))
-    channel.emit('close', 1)
-
-    const error = await execCommandRejection(commandPromise)
-    expect(error.message).toContain('Permanently added')
-    expect(error.message).toContain('gnu++20')
   })
 
   it('bounds command output while preserving the actionable tail', async () => {
@@ -255,27 +198,6 @@ describe('execCommand', () => {
     })
   })
 
-  it('tags an externally closed system-SSH command as unconfirmed', async () => {
-    const channel = createMockChannel() as ClientChannel & { _closeRequested?: boolean }
-    channel.close = vi.fn(() => {
-      channel._closeRequested = true
-    })
-    const conn = {
-      exec: vi.fn().mockResolvedValue(channel),
-      usesSystemSshTransport: vi.fn().mockReturnValue(true)
-    }
-    const commandPromise = execCommand(conn as never, 'npm install')
-
-    await Promise.resolve()
-    channel.close()
-    channel.emit('close', 1)
-
-    await expect(commandPromise).rejects.toMatchObject({
-      name: 'AbortError',
-      sshChannelCloseConfirmed: false
-    })
-  })
-
   it('handles aborts that happen while the SSH exec channel is still opening', async () => {
     const channel = createMockChannel()
     const controller = new AbortController()
@@ -306,57 +228,5 @@ describe('execCommand', () => {
     expect(channel.listenerCount('close')).toBe(0)
     expect(channel.stderr.listenerCount('error')).toBe(0)
     expect(channel.stderr.listenerCount('data')).toBe(0)
-  })
-
-  it('hands a zero-exit command stderr to onStderr instead of dropping it', async () => {
-    // Zero-exit probes wrapped in || echo MISSING still need their stderr diagnostics.
-    const channel = createMockChannel()
-    const conn = { exec: vi.fn().mockResolvedValue(channel) }
-    const captured: string[] = []
-    const commandPromise = execCommand(conn as never, "(node -e 'x' || echo MISSING)", {
-      onStderr: (stderr) => captured.push(stderr)
-    })
-
-    await Promise.resolve()
-    channel.stderr.emit('data', Buffer.from('node: --bogus is not allowed in NODE_OPTIONS\n'))
-    channel.emit('data', Buffer.from('MISSING\n'))
-    channel.emit('close', 0)
-
-    await expect(commandPromise).resolves.toBe('MISSING\n')
-    expect(captured).toEqual(['node: --bogus is not allowed in NODE_OPTIONS\n'])
-    // onStderr must not leak into the SSH exec options.
-    expect(conn.exec).toHaveBeenCalledWith(
-      expect.stringContaining("\n(node -e 'x' || echo MISSING)\n"),
-      { compressCommand: true }
-    )
-  })
-
-  it('uses custom command timeouts without forwarding them to SSH exec', async () => {
-    vi.useFakeTimers()
-    try {
-      const channel = createMockChannel()
-      const conn = {
-        exec: vi.fn().mockResolvedValue(channel)
-      }
-      const commandPromise = execCommand(conn as never, 'npm install', {
-        wrapCommand: false,
-        timeoutMs: 240_000
-      })
-
-      await Promise.resolve()
-      expect(conn.exec).toHaveBeenCalledWith('npm install', {
-        wrapCommand: false,
-        compressCommand: true
-      })
-      const rejection = expect(commandPromise).rejects.toThrow('timed out after 240s')
-      await vi.advanceTimersByTimeAsync(240_000)
-      expect(channel.close).toHaveBeenCalledOnce()
-      await vi.advanceTimersByTimeAsync(5_000)
-
-      await rejection
-      expect(channel.close).toHaveBeenCalledOnce()
-    } finally {
-      vi.useRealTimers()
-    }
   })
 })

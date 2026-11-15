@@ -1,7 +1,7 @@
 import {
   slowTaskRequiredIdleMs,
   type SlowTaskBackoffOptions
-} from '../../../../lib/repository-refresh/coalesced-poll-runner'
+} from '../../../../lib/source-control/refresh/coalesced-poll-runner'
 
 export type GitStatusRefreshReason = 'activity' | 'safety'
 
@@ -34,6 +34,8 @@ export type GitStatusRefreshScheduler = {
   suspendSafety: () => void
   signal: () => void
   refreshNow: () => void
+  // Re-derive pending timers from the current cadence; may only advance them (e.g. on window focus).
+  retime: () => void
   dispose: () => void
 }
 
@@ -51,15 +53,20 @@ export function createGitStatusRefreshScheduler(
     activityMinGapMs: number
     slowTaskBackoff: SlowTaskBackoffOptions
     pacing?: GitStatusRefreshPacing
+    // Multiplies the activity floor and safety interval at schedule time (e.g. while unfocused).
+    cadenceScale?: () => number
+    activityCadenceScale?: () => number
   }
 ): GitStatusRefreshScheduler {
   let disposed = false
+  let paused = false
   let safetyEnabled = false
   let inFlight = false
   let pendingActivity = false
   let activityTimer: ReturnType<typeof setTimeout> | null = null
   let activityTimerFiresAt = Infinity
   let safetyTimer: ReturnType<typeof setTimeout> | null = null
+  let safetyTimerFiresAt = Infinity
   let activeController: AbortController | null = null
   const pacing = options.pacing ?? createGitStatusRefreshPacing()
 
@@ -74,21 +81,24 @@ export function createGitStatusRefreshScheduler(
     if (safetyTimer !== null) {
       clearTimeout(safetyTimer)
       safetyTimer = null
+      safetyTimerFiresAt = Infinity
     }
   }
+
+  const cadenceScale = (): number => options.cadenceScale?.() ?? 1
 
   const requiredActivityIdleMs = (): number =>
     slowTaskRequiredIdleMs(
       pacing.lastRunDurationMs,
       options.slowTaskBackoff.changeSignalMultiplier,
-      options.activityMinGapMs,
+      options.activityMinGapMs * (options.activityCadenceScale?.() ?? cadenceScale()),
       options.slowTaskBackoff.maxIntervalMs
     )
 
-  const scheduleSafetyRun = (): void => {
-    // Scale safety idle time after slow scans to prevent effectively continuous Git polling.
-    const delay = Math.max(
-      options.safetyIntervalMs,
+  // Scale safety idle time after slow scans to prevent effectively continuous Git polling.
+  const safetyDelayMs = (): number =>
+    Math.max(
+      options.safetyIntervalMs * cadenceScale(),
       slowTaskRequiredIdleMs(
         pacing.lastRunDurationMs,
         options.slowTaskBackoff.idleMultiplier,
@@ -96,14 +106,22 @@ export function createGitStatusRefreshScheduler(
         options.slowTaskBackoff.maxIntervalMs
       )
     )
-    safetyTimer = setTimeout(() => {
-      safetyTimer = null
-      startRun('safety')
-    }, delay)
+
+  const scheduleSafetyRunAt = (firesAt: number): void => {
+    clearSafetyTimer()
+    safetyTimerFiresAt = firesAt
+    safetyTimer = setTimeout(
+      () => {
+        safetyTimer = null
+        safetyTimerFiresAt = Infinity
+        startRun('safety')
+      },
+      Math.max(0, firesAt - Date.now())
+    )
   }
 
   const scheduleActivityRun = (minDelayMs: number): void => {
-    if (disposed) {
+    if (disposed || paused) {
       return
     }
     if (inFlight) {
@@ -134,7 +152,7 @@ export function createGitStatusRefreshScheduler(
   }
 
   const startRun = (reason: GitStatusRefreshReason): void => {
-    if (disposed || inFlight) {
+    if (disposed || paused || inFlight) {
       return
     }
     clearActivityTimer()
@@ -167,7 +185,7 @@ export function createGitStatusRefreshScheduler(
           activeController = null
         }
         inFlight = false
-        if (disposed) {
+        if (disposed || paused) {
           return
         }
         if (pendingActivity) {
@@ -176,7 +194,7 @@ export function createGitStatusRefreshScheduler(
           return
         }
         if (safetyEnabled) {
-          scheduleSafetyRun()
+          scheduleSafetyRunAt(Date.now() + safetyDelayMs())
         }
       })
   }
@@ -186,6 +204,7 @@ export function createGitStatusRefreshScheduler(
       if (disposed) {
         return
       }
+      paused = false
       const wasEnabled = safetyEnabled
       safetyEnabled = true
       if (wasEnabled) {
@@ -200,6 +219,7 @@ export function createGitStatusRefreshScheduler(
       scheduleActivityRun(0)
     },
     pause: () => {
+      paused = true
       safetyEnabled = false
       pendingActivity = false
       clearActivityTimer()
@@ -207,22 +227,37 @@ export function createGitStatusRefreshScheduler(
       activeController?.abort()
     },
     suspendSafety: () => {
+      paused = false
       safetyEnabled = false
       clearSafetyTimer()
     },
     signal: () => {
-      if (disposed) {
+      if (disposed || paused) {
         return
       }
       clearSafetyTimer()
       scheduleActivityRun(options.activityDebounceMs)
     },
     refreshNow: () => {
-      if (disposed) {
+      if (disposed || paused) {
         return
       }
       clearSafetyTimer()
       scheduleActivityRun(0)
+    },
+    retime: () => {
+      if (disposed || paused || inFlight) {
+        return
+      }
+      if (activityTimer !== null) {
+        // Keep the debounce: focus also fires when leaving a webview in an already-focused window.
+        scheduleActivityRun(options.activityDebounceMs)
+        return
+      }
+      const safetyFiresAt = pacing.lastRunEndedAt + safetyDelayMs()
+      if (safetyTimer !== null && safetyFiresAt < safetyTimerFiresAt) {
+        scheduleSafetyRunAt(safetyFiresAt)
+      }
     },
     dispose: () => {
       disposed = true

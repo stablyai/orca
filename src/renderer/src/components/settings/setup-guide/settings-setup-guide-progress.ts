@@ -4,7 +4,6 @@ import {
   getFirstIncompleteFeatureWallSetupStepId,
   type FeatureWallSetupStepId
 } from '../../../../../shared/feature-wall-setup-steps'
-import type { FeatureWallSetupProgress } from '../../feature-wall/feature-wall-setup-progress'
 import { useSetupGuideProgress } from '../../setup-guide/use-setup-guide-progress'
 
 export type SettingsSetupGuideProgress = {
@@ -35,19 +34,7 @@ export function getSettingsSetupGuideProgress(progress: {
 export function useSettingsSetupGuideProgress(
   shouldRefreshCoreState: boolean
 ): SettingsSetupGuideProgress {
-  const fullProgress = useSettingsSetupGuideFullProgress(shouldRefreshCoreState, false, false)
+  const fullProgress = useSetupGuideProgress(shouldRefreshCoreState, false, false)
 
   return useMemo(() => getSettingsSetupGuideProgress(fullProgress), [fullProgress])
-}
-
-export function useSettingsSetupGuideFullProgress(
-  shouldRefreshCoreState: boolean,
-  orchestrationSkillInstalled: boolean,
-  browserUseSkillInstalled: boolean
-): FeatureWallSetupProgress {
-  return useSetupGuideProgress(
-    shouldRefreshCoreState,
-    orchestrationSkillInstalled,
-    browserUseSkillInstalled
-  )
 }

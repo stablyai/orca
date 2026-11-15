@@ -4,7 +4,7 @@ import { ExternalLink, GitPullRequestArrow, LoaderCircle, Unlink } from 'lucide-
 import type { BitbucketConnectionStatus } from '../../../../../shared/bitbucket-credentials'
 import { Button } from '@/components/ui/button'
 import { useMountedRef } from '@/hooks/useMountedRef'
-import { readIpcErrorMessage } from '@/lib/ipc-error'
+import { readIpcErrorMessage } from '@/runtime/errors/ipc-error'
 import {
   IntegrationCardDetails,
   IntegrationCardShell
@@ -14,12 +14,13 @@ import type { BitbucketStatus } from './integrations-pane-status'
 import { usePreflightCardStatuses } from './source-control-preflight-card-status'
 import { tokenProviderStatusLabel } from './token-source-control-status'
 import { BitbucketCredentialsDialog } from './bitbucket-credentials-dialog'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 
 const API_TOKEN_DOCS_URL = 'https://support.atlassian.com/bitbucket-cloud/docs/using-api-tokens/'
 const DEFAULT_API_BASE_URL = 'https://api.bitbucket.org/2.0'
 
 export function BitbucketIntegrationCard(): React.JSX.Element {
+  const t = useTranslate()
   const { statuses, unavailable, refresh } = usePreflightCardStatuses('bitbucket')
   const status = unavailable ? 'unavailable' : statuses.bitbucketStatus
   const connected = status === 'connected'
@@ -65,14 +66,8 @@ export function BitbucketIntegrationCard(): React.JSX.Element {
       : null
   const authModeLabel = currentConnection?.authMode
     ? currentConnection.authMode === 'token'
-      ? translate(
-          'auto.components.settings.bitbucket.integration.card.authModeToken',
-          'Access token'
-        )
-      : translate(
-          'auto.components.settings.bitbucket.integration.card.authModeBasic',
-          'Email & API token'
-        )
+      ? t('auto.components.settings.bitbucket.integration.card.authModeToken', 'Access token')
+      : t('auto.components.settings.bitbucket.integration.card.authModeBasic', 'Email & API token')
     : null
   const credentialSummary = [authModeLabel, baseUrlOverride].filter(Boolean).join(' · ')
 
@@ -91,7 +86,7 @@ export function BitbucketIntegrationCard(): React.JSX.Element {
       if (mountedRef.current) {
         setDisconnectError(
           readIpcErrorMessage(error) ??
-            translate(
+            t(
               'auto.components.settings.bitbucket.integration.card.disconnectFailed',
               'Could not remove the saved Bitbucket credential.'
             )
@@ -112,23 +107,23 @@ export function BitbucketIntegrationCard(): React.JSX.Element {
       description={
         connected
           ? account
-            ? translate(
+            ? t(
                 'auto.components.settings.token.source.control.integration.cards.ea204f5e03',
                 '{{value0}} · Pull requests and build statuses',
                 { value0: account }
               )
-            : translate(
+            : t(
                 'auto.components.settings.token.source.control.integration.cards.0fa5629dad',
                 'Pull requests and build statuses'
               )
-          : translate(
+          : t(
               'auto.components.settings.bitbucket.integration.card.description',
               'Pull requests and build statuses for Bitbucket Cloud.'
             )
       }
       checking={status === 'checking'}
       statusTone={connected ? 'connected' : 'attention'}
-      statusLabel={tokenProviderStatusLabel({ configured: connected, status })}
+      statusLabel={tokenProviderStatusLabel({ configured: connected, status }, t)}
       actions={
         status !== 'checking' && !envManaged && (credentialStatusKnown || connectionLoadFailed) ? (
           <Button
@@ -137,19 +132,13 @@ export function BitbucketIntegrationCard(): React.JSX.Element {
             onClick={() => setDialogOpen(true)}
           >
             {connectionLoadFailed
-              ? translate(
+              ? t(
                   'auto.components.settings.bitbucket.integration.card.replaceCredentials',
                   'Add or replace credentials'
                 )
               : storedCredential
-                ? translate(
-                    'auto.components.settings.bitbucket.integration.card.edit',
-                    'Edit credentials'
-                  )
-                : translate(
-                    'auto.components.settings.bitbucket.integration.card.connect',
-                    'Connect'
-                  )}
+                ? t('auto.components.settings.bitbucket.integration.card.edit', 'Edit credentials')
+                : t('auto.components.settings.bitbucket.integration.card.connect', 'Connect')}
           </Button>
         ) : null
       }
@@ -158,7 +147,7 @@ export function BitbucketIntegrationCard(): React.JSX.Element {
         <IntegrationCardDetails>
           <UnsealedCredentialNotice
             protection={connection?.credentialProtection ?? null}
-            credentialName={translate(
+            credentialName={t(
               'auto.components.settings.bitbucket.integration.card.credentialName',
               'Your Bitbucket credential'
             )}
@@ -168,7 +157,7 @@ export function BitbucketIntegrationCard(): React.JSX.Element {
               <div className="min-w-0 flex-1">
                 <p className="truncate text-sm font-medium text-foreground">
                   {account ??
-                    translate(
+                    t(
                       'auto.components.settings.bitbucket.integration.card.accountUnknown',
                       'Bitbucket Cloud'
                     )}
@@ -181,7 +170,7 @@ export function BitbucketIntegrationCard(): React.JSX.Element {
                 <button
                   onClick={() => void handleDisconnect()}
                   disabled={disconnecting}
-                  aria-label={translate(
+                  aria-label={t(
                     'auto.components.settings.bitbucket.integration.card.disconnect',
                     'Disconnect Bitbucket'
                   )}
@@ -199,7 +188,7 @@ export function BitbucketIntegrationCard(): React.JSX.Element {
           {disconnectError ? <p className="text-xs text-destructive">{disconnectError}</p> : null}
           {connectionLoadFailed ? (
             <p role="alert" className="text-xs text-destructive">
-              {translate(
+              {t(
                 'auto.components.settings.bitbucket.integration.card.statusLoadFailed',
                 'Could not check for a saved Bitbucket credential.'
               )}
@@ -220,14 +209,14 @@ export function BitbucketIntegrationCard(): React.JSX.Element {
                 onClick={() => window.api.shell.openUrl(API_TOKEN_DOCS_URL)}
               >
                 <ExternalLink className="size-3.5 mr-1.5" />
-                {translate(
+                {t(
                   'auto.components.settings.token.source.control.integration.cards.1a9475dace',
                   'Learn more'
                 )}
               </Button>
             ) : null}
             <Button variant="ghost" size="sm" onClick={reloadCardState}>
-              {translate(
+              {t(
                 'auto.components.settings.token.source.control.integration.cards.793a06e899',
                 'Re-check'
               )}
@@ -254,10 +243,11 @@ function BitbucketCardNote(props: {
   status: BitbucketStatus | 'unavailable'
   storedCredential: boolean
 }): React.JSX.Element {
+  const t = useTranslate()
   if (props.status === 'unavailable') {
     return (
       <p className="text-xs text-muted-foreground">
-        {translate(
+        {t(
           'auto.components.settings.token.source.control.integration.cards.24ac1c69dc',
           'Bitbucket status is not available in this runtime yet.'
         )}
@@ -267,7 +257,7 @@ function BitbucketCardNote(props: {
   if (props.envManaged) {
     return (
       <p className="text-xs text-muted-foreground">
-        {translate(
+        {t(
           'auto.components.settings.bitbucket.integration.card.envManaged',
           'Configured via environment variables. Unset the ORCA_BITBUCKET_* variables to manage this credential in Orca.'
         )}
@@ -278,11 +268,11 @@ function BitbucketCardNote(props: {
     return (
       <p className="text-xs text-muted-foreground">
         {props.storedCredential
-          ? translate(
+          ? t(
               'auto.components.settings.bitbucket.integration.card.storedAuthFailed',
               'The saved Bitbucket credential could not authenticate. Edit it, or check that the token still has pull request access.'
             )
-          : translate(
+          : t(
               'auto.components.settings.token.source.control.integration.cards.6154b02093',
               'Bitbucket credentials are configured but could not authenticate. Check the token and repository permissions, then restart Orca if environment variables changed.'
             )}
@@ -292,7 +282,7 @@ function BitbucketCardNote(props: {
   if (props.storedCredential) {
     return (
       <p className="text-xs text-muted-foreground">
-        {translate(
+        {t(
           'auto.components.settings.bitbucket.integration.card.storedCredential',
           'Saved in Orca on this machine. ORCA_BITBUCKET_* environment variables take precedence when set.'
         )}
@@ -301,7 +291,7 @@ function BitbucketCardNote(props: {
   }
   return (
     <p className="text-xs text-muted-foreground">
-      {translate(
+      {t(
         'auto.components.settings.bitbucket.integration.card.notConfigured',
         'Connect a Bitbucket Cloud account with an Atlassian API token or an access token. ORCA_BITBUCKET_* environment variables work too and take precedence.'
       )}

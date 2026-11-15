@@ -9,7 +9,7 @@ import {
   __resetTrustPromptChainForTests,
   confirmCreatedWorktreeSetupContent,
   ensureHooksConfirmed
-} from '@/lib/ensure-hooks-confirmed'
+} from '@/runtime/repo-hooks/ensure-hooks-confirmed'
 import type { Repo } from '../../../../shared/repo-types'
 
 const hooksCheck = vi.fn()

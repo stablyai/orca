@@ -14,7 +14,8 @@ import {
 } from './open-tab-search'
 import { usePaletteSearchEvaluationContext } from '@/hooks/use-palette-search-evaluation-context'
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
-import { useWorktreeStructuredChatTabNames } from '@/runtime/structured-chat-name-observation'
+import { useWorktreeStructuredChatTabNames } from '@/runtime/native-chat/naming/structured-chat-name-observation'
+import { useTranslate } from '@/i18n/use-translate'
 
 const EMPTY_RESULTS: OpenTabSearchResult[] = []
 
@@ -40,6 +41,7 @@ export function useOpenTabSearch({
   worktreeId,
   retainedResultId
 }: UseOpenTabSearchOptions): OpenTabSearchSnapshot {
+  const t = useTranslate()
   const languageRevision = useUiLanguageRevision()
   // Why null while disabled: a closed menu stays stable across store churn.
   const state = useAppStore(
@@ -76,14 +78,17 @@ export function useOpenTabSearch({
   const candidates = useMemo(
     () =>
       entries
-        ? searchOpenTabCandidates({
-            ...entries,
-            query: deferredQuery,
-            context
-          })
+        ? searchOpenTabCandidates(
+            {
+              ...entries,
+              query: deferredQuery,
+              context
+            },
+            t
+          )
         : EMPTY_RESULTS,
     // oxlint-disable-next-line react-hooks/exhaustive-deps -- simulator titles translate the default label.
-    [context, deferredQuery, entries, languageRevision]
+    [context, deferredQuery, entries, languageRevision, t]
   )
 
   return useMemo(

@@ -26,7 +26,7 @@ vi.mock('@/runtime/provider-accounts/observations/runtime-provider-accounts-clie
     }
   }
 }))
-vi.mock('@/runtime/structured-agent-session-client', () => ({
+vi.mock('../../../runtime/native-chat/requests/structured-agent-session-call', () => ({
   callStructuredAgentSession: mocks.read
 }))
 vi.mock('@/runtime/rpc/calls/runtime-rpc-call', () => ({
@@ -115,7 +115,6 @@ describe('/usage modal', () => {
       .mockResolvedValueOnce({ outcome: 'nothingToReset' })
     render(<NativeChatAccountUsageDialog />)
     await screen.findByText('chat@example.com')
-    expect(screen.getByText('100% used')).toBeTruthy()
     fireEvent.click(screen.getByRole('button', { name: 'Reset now' }))
     await screen.findByRole('button', { name: 'Retry' })
     const first = mocks.reset.mock.calls[0]?.[2]

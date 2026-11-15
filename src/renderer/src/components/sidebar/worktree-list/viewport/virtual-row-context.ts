@@ -2,6 +2,7 @@ import type React from 'react'
 import type { AppState } from '@/store/types'
 import type { ProjectGroup } from '../../../../../../shared/project-group-types'
 import type { Worktree } from '../../../../../../shared/worktree/types'
+import type { LineageRowProjection } from '../listing/lineage-row-projection'
 import type { RenderRow } from '../listing/render-row'
 import type { LineageToggleHandler } from '../../workspace-card/identity/worktree-lineage-toggle-handler-cache'
 import type { SidebarRevealHighlight } from '../navigation/use-reveal-highlight'
@@ -22,6 +23,10 @@ import type { ProjectHeaderHostContext } from '../rows/project-header-host-conte
 type BuildArgs = {
   props: VirtualizedWorktreeViewportProps
   projectGroups: readonly ProjectGroup[]
+  dragUnitsByRow: ReadonlyMap<number, { identity: string }>
+  hiddenDragRanges: readonly { start: number; end: number }[]
+  projection: LineageRowProjection
+  activeFamilyRoots: ReadonlySet<number>
   renderRows: RenderRow[]
   firstHeaderIndex: number
   virtualization: WorktreeListVirtualizer
@@ -51,6 +56,10 @@ type BuildArgs = {
 export function buildWorktreeVirtualRowContext(args: BuildArgs): WorktreeVirtualRowContext {
   const { props, runtime, session, statusDrag, headerDrag, primaryActive, reveal } = args
   return {
+    dragUnitsByRow: args.dragUnitsByRow,
+    hiddenDragRanges: args.hiddenDragRanges,
+    projection: args.projection,
+    activeFamilyRoots: args.activeFamilyRoots,
     renderRows: args.renderRows,
     firstHeaderIndex: args.firstHeaderIndex,
     activeStickyHeaderIndexRef: args.virtualization.activeStickyHeaderIndexRef,

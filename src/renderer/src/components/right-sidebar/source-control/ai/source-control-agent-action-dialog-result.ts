@@ -6,7 +6,7 @@ import type {
   CurrentActionSelection,
   SelectedSourceControlActionRecipe
 } from '../../../../../../shared/source-control/ai/recipes/source-control-action-selection'
-import type { getAgentCatalog } from '@/lib/agent-catalog'
+import type { getAgentCatalog } from '@/lib/agent-catalog/agent-catalog'
 import type { useAppStore } from '@/store/index'
 import type { useRepoById } from '@/store/repos/use-repository-catalog'
 import type { TuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-agent'

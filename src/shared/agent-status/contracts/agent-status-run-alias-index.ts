@@ -8,7 +8,7 @@ import {
   parseAgentStatusExecutionScope,
   type AgentStatusExecutionScope
 } from './agent-status-subject'
-import { assertJsonTextStructureWithinLimits } from '../../json-text-structure-limit'
+import { assertJsonTextStructureWithinLimits } from '../../json-stream/json-text-structure-limit'
 import { measureUtf8ByteLength } from '../../utf8-byte-limits'
 
 const PROVIDER_ALIAS_KEY_PREFIX = 'agent-status-provider-alias-v1:'

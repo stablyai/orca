@@ -8,9 +8,10 @@ import {
   type LucideIcon
 } from 'lucide-react'
 import { Trans } from 'react-i18next'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
-import { i18n, translate } from '@/i18n/i18n'
+import { i18n } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { nativeChatToolRowVerb } from '@/components/native-chat/tools/lines/native-chat-tool-line-label'
 import { DiffLineCounts } from '@/components/right-sidebar/source-control/listing/diff-line-counts'
 import type { AgentSurface } from './use-onboarding-flow-types'
@@ -27,6 +28,7 @@ export function AgentSurfaceStep({
   onSelect,
   noChatAgentDetected = false
 }: AgentSurfaceStepProps) {
+  const t = useTranslate()
   return (
     <div className="space-y-6">
       <RadioGroup
@@ -41,18 +43,18 @@ export function AgentSurfaceStep({
         <SurfaceOption
           value="chat"
           icon={MessagesSquare}
-          label={translate('components.onboarding.agentSurface.chat.label', 'Chat UI')}
-          description={translate(
+          label={t('components.onboarding.agentSurface.chat.label', 'Chat UI')}
+          description={t(
             'components.onboarding.agentSurface.chat.description',
             'Agents reply in a chat, with rendered messages and diffs.'
           )}
-          note={translate(
+          note={t(
             'components.onboarding.agentSurface.chat.terminalFallback',
-            'Agents without chat support, and SSH or WSL projects, still open in a terminal.'
+            'Agents without chat support and folders opened through SSH or WSL on this computer still open in a terminal.'
           )}
           warning={
             noChatAgentDetected
-              ? translate(
+              ? t(
                   'components.onboarding.agentSurface.chat.noneDetected',
                   'None of your detected agents work in Chat UI.'
                 )
@@ -64,8 +66,8 @@ export function AgentSurfaceStep({
         <SurfaceOption
           value="terminal"
           icon={SquareTerminal}
-          label={translate('components.onboarding.agentSurface.terminal.label', 'Terminal')}
-          description={translate(
+          label={t('components.onboarding.agentSurface.terminal.label', 'Terminal')}
+          description={t(
             'components.onboarding.agentSurface.terminal.description',
             "Each agent's own CLI, exactly as it ships. Works with every CLI agent."
           )}
@@ -78,7 +80,7 @@ export function AgentSurfaceStep({
         <span>
           <Trans
             i18n={i18n}
-            defaults={translate(
+            defaults={t(
               'components.onboarding.agentSurface.switchNote',
               'Not a permanent choice. Switch any time in <em>Settings → Chat UI</em>.'
             )}
@@ -166,19 +168,17 @@ const CHAT_DIFF_LINES = [
 
 // Mirrors the real native chat: bordered user bubble, edit row with a rendered diff, plain reply.
 function ChatPreview() {
+  const t = useTranslate()
   return (
     <div className="native-chat-appearance flex size-full flex-col bg-chat-canvas text-[10.5px] leading-[15px] text-chat-foreground">
       <div className="flex min-h-0 flex-1 flex-col gap-2 overflow-hidden px-3.5 pt-2.5">
         <div className="ml-auto max-w-[80%] truncate rounded-[10px] border border-chat-user-border bg-chat-user-surface px-2.5 py-1 text-chat-foreground-strong">
-          {translate(
-            'components.onboarding.agentSurface.preview.userMessage',
-            'Add retry to fetchUser'
-          )}
+          {t('components.onboarding.agentSurface.preview.userMessage', 'Add retry to fetchUser')}
         </div>
         <div>
           <div className="flex items-center gap-1.5 whitespace-nowrap">
             <FilePen className="size-3 shrink-0 text-chat-foreground-faint" />
-            <span className="text-chat-foreground-faint">{nativeChatToolRowVerb('edited')}</span>
+            <span className="text-chat-foreground-faint">{nativeChatToolRowVerb('edited', t)}</span>
             <span className="text-chat-foreground-strong">{PREVIEW_FILE}</span>
             <DiffLineCounts added={1} removed={1} />
           </div>
@@ -210,7 +210,7 @@ function ChatPreview() {
           </div>
         </div>
         <p className="truncate text-chat-foreground-strong">
-          {translate(
+          {t(
             'components.onboarding.agentSurface.preview.agentMessage',
             'Failed requests now retry up to 3 times.'
           )}
@@ -219,7 +219,7 @@ function ChatPreview() {
       <div className="shrink-0 px-3 pt-1.5 pb-2.5">
         <div className="flex items-center gap-2 rounded-[10px] border border-chat-composer-border bg-chat-composer-surface py-1 pr-1 pl-2.5 shadow-xs">
           <span className="truncate text-chat-foreground-faint">
-            {translate(
+            {t(
               'components.onboarding.agentSurface.preview.composerPlaceholder',
               'Ask a follow-up…'
             )}

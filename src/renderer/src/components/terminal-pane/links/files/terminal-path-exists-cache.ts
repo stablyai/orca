@@ -1,7 +1,7 @@
 import {
   readRecentPathAnswer,
   writeRecentPathAnswer
-} from '../../../../../../shared/recent-path-answers'
+} from '../../../../../../shared/file-links/recent-path-answers'
 
 const NEGATIVE_PATH_EXISTS_TTL_MS = 10_000
 

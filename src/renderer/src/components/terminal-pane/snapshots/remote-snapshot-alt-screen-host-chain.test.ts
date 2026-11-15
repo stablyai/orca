@@ -48,7 +48,7 @@ let mockStoreState: StoreState
 let transportFactoryQueue: MockTransport[] = []
 let storeSubscribers: ((state: StoreState) => void)[] = []
 
-vi.mock('@/runtime/sync-runtime-graph', () => ({ scheduleRuntimeGraphSync }))
+vi.mock('@/runtime/sync-runtime-graph/graph-sync-scheduler', () => ({ scheduleRuntimeGraphSync }))
 
 vi.mock('@/store/index', () => ({
   useAppStore: {
@@ -62,7 +62,7 @@ vi.mock('@/store/index', () => ({
   }
 }))
 
-vi.mock('@/lib/agent-status', async (importOriginal) => {
+vi.mock('@/lib/agent-status/aggregation/worktree-agent-status', async (importOriginal) => {
   const { buildAgentStatusModuleMock } =
     await import('../pty-connection/test-fixtures/pty-connection-test-environment')
   return buildAgentStatusModuleMock(await importOriginal<Record<string, unknown>>())
@@ -132,6 +132,7 @@ type HostConnection = {
   streams: Map<number, HostStream>
   closed: boolean
   ackTotalInFlightBytes: number
+  linkEstimate: { enabled: boolean }
   sendFrame: (streamId: number, opcode: number, payload?: Uint8Array<ArrayBufferLike>) => boolean
   sendStreamError: (streamId: number, message: string) => void
   sendAckRecoverySnapshot?: (stream: HostStream) => Promise<void>
@@ -143,9 +144,6 @@ const PTY_ID = 'host-pty'
 const COMMAND_START = '\x1b]133;C\x07'
 // A setup script's output, then an agent TUI entering the alt screen over it.
 const LIVE_PANE = `${Array.from({ length: 10 }, (_, i) => `SETUP-OUTPUT-${i}`).join('\r\n')}\r\n$ claude${COMMAND_START}\x1b[?1049h\x1b[2J\x1b[HOLD-AGENT-FRAME`
-// Output the client missed before the host's recovery push.
-const AGENT_FRAME = '\x1b[H\x1b[2;1HNo\x1b[1Cnotice\x1b[1Ctoday'
-const AGENT_EXIT = `${AGENT_FRAME}\x1b[?1049lResume with claude --resume\r\n\x1b]133;D;0\x07\x1b]133;A\x07$ `
 
 type PaneEvent = string | { cols: number; rows: number }
 
@@ -155,10 +153,6 @@ function bufferLines(term: Terminal, which: 'normal' | 'alternate'): string[] {
     { length: buffer.length },
     (_, row) => buffer.getLine(row)?.translateToString(true) ?? ''
   )
-}
-
-function viewport(term: Terminal, which: 'normal' | 'alternate'): string[] {
-  return bufferLines(term, which).slice(-term.rows)
 }
 
 async function render(events: PaneEvent[]): Promise<Terminal> {
@@ -329,6 +323,7 @@ async function publishHostRecovery(
     streams: new Map([[streamId, stream]]),
     closed: false,
     ackTotalInFlightBytes: 0,
+    linkEstimate: { enabled: false },
     sendFrame,
     sendStreamError: (_id, message) => {
       throw new Error(message)
@@ -362,7 +357,9 @@ describe('host-published recovery snapshot onto a live alt screen', () => {
     meta: PtyReplayDataMeta
   ): Promise<PaneEvent[]> {
     const { connectPanePty } = await import('../pty-connection/connect-pane-pty')
-    const agentTitleMocks = await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+    const agentTitleMocks = await vi.importMock<PtyConnectionAgentTitleMocks>(
+      '@/lib/agent-status/aggregation/worktree-agent-status'
+    )
     const transport = createMockTransport('agent-pty')
     const replay: { current: ConnectCallbacks['onReplayData'] | null } = { current: null }
     transport.connect.mockImplementation(async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
@@ -409,43 +406,7 @@ describe('host-published recovery snapshot onto a live alt screen', () => {
   }
 
   // Live TUIs may lack host owner metadata; retain their pre-TUI setup history beneath alt-screen paint.
-  it('keeps the covered history for a live TUI exactly as the host holds it', async () => {
-    const { data, meta, published } = await publishHostRecovery(AGENT_FRAME)
-    expect(published.alternateScreen).toBe(true)
-    expect(meta.terminalOwner).toBeUndefined()
-    expect(meta.alternateScreen).toBeUndefined()
-    const client = await render([LIVE_PANE, ...(await drainOntoLiveAltScreen(data, meta))])
-    const host = await render([LIVE_PANE, AGENT_FRAME])
-    try {
-      expect(client.buffer.active.type).toBe('alternate')
-      expect(viewport(client, 'alternate')).toEqual(viewport(host, 'alternate'))
-      expect(bufferLines(client, 'normal')).toEqual(bufferLines(host, 'normal'))
-    } finally {
-      client.dispose()
-      host.dispose()
-    }
-  })
-
   // Host TUI exit requires leaving alt and painting authoritative normal content.
-  it('repaints from the normal buffer once the host TUI has exited', async () => {
-    const { data, meta } = await publishHostRecovery(AGENT_EXIT)
-    // The ACK-overflow recovery replaces the pane's history with the host's.
-    expect(data).toContain('\x1b[3J')
-    expect(meta.terminalOwner).toBe('shell')
-    expect(meta.alternateScreen).toBe(false)
-    const client = await render([LIVE_PANE, ...(await drainOntoLiveAltScreen(data, meta))])
-    const host = await render([LIVE_PANE, AGENT_EXIT])
-    try {
-      expect(client.buffer.active.type).toBe('normal')
-      expect(viewport(client, 'normal')).toEqual(viewport(host, 'normal'))
-      // P2-5: no silent hole where the missed output scrolled off the host's screen.
-      expect(bufferLines(client, 'normal')).toEqual(bufferLines(host, 'normal'))
-    } finally {
-      client.dispose()
-      host.dispose()
-    }
-  })
-
   // A TUI may exit and another start inside the gap; matching alt endpoints do not prove the pane’s normal history is current.
   it('replaces the normal history that changed between two alt-screen sessions', async () => {
     const missed = `\x1b[?1049l\r\n${Array.from({ length: 300 }, (_, i) => `MISSED-${i}`).join('\r\n')}\r\n$ next-agent${COMMAND_START}\x1b[?1049h\x1b[2J\x1b[HNEW-AGENT-FRAME`

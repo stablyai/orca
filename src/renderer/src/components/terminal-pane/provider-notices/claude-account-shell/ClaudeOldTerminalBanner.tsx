@@ -1,6 +1,11 @@
+import {
+  getTerminalNoticeLifetime,
+  isTerminalNoticeLifetimeCurrent,
+  type TerminalNoticeLifetime
+} from '../terminal-notice-lifetime'
 import { useEffect, useState } from 'react'
 import { Button } from '@/components/ui/button'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { useAppStore } from '@/store/index'
 import type { AppState } from '@/store/types'
 import { makePaneKey } from '../../../../../../shared/workspace-layout/stable-pane-id'
@@ -12,9 +17,6 @@ import {
   PaneBannerLearnMore,
   PaneTopWarningBanner
 } from '../../appearance/pane-top-banner/PaneTopWarningBanner'
-
-// Why module scope: a pane remounts on tab switches, and Dismiss must hold for the app session.
-const dismissedPtyIds = new Set<string>()
 
 // System default already matches new terminals; key explicit selections so account switches recheck old shells.
 function selectedClaudeAccountKey(state: AppState): string | null {
@@ -31,13 +33,17 @@ function selectedClaudeAccountKey(state: AppState): string | null {
 function useOpenedBeforeClaudeAccounts(
   ptyId: string,
   tabId: string,
-  selectionKey: string | null
+  selectionKey: string | null,
+  lifetime: TerminalNoticeLifetime | undefined
 ): boolean {
-  const [openedBefore, setOpenedBefore] = useState(false)
+  const [answer, setAnswer] = useState<{
+    lifetime: TerminalNoticeLifetime
+    openedBefore: boolean
+  }>()
   useEffect(() => {
     const target = selectionKey ? paneClaudeTarget(tabId) : null
     // Why hidden without a target: only the pane's own runtime says which account it runs.
-    if (!target) {
+    if (!target || !lifetime) {
       return
     }
     let cancelled = false
@@ -45,16 +51,16 @@ function useOpenedBeforeClaudeAccounts(
       .openedBeforeClaudeAccounts(ptyId, target)
       .catch(() => false)
       .then((answer) => {
-        if (!cancelled) {
-          setOpenedBefore(answer)
+        if (!cancelled && isTerminalNoticeLifetimeCurrent(lifetime)) {
+          setAnswer({ lifetime, openedBefore: answer })
         }
       })
     return () => {
       cancelled = true
-      setOpenedBefore(false)
+      setAnswer(undefined)
     }
-  }, [selectionKey, ptyId, tabId])
-  return openedBefore
+  }, [selectionKey, ptyId, tabId, lifetime])
+  return answer?.lifetime === lifetime && answer?.openedBefore === true
 }
 
 /** For Claude in a terminal whose shell predates per-account folders: its `claude` ignores the selection. */
@@ -67,8 +73,13 @@ export function ClaudeOldTerminalBanner({
   tabId: string
   leafId: string
 }): React.JSX.Element | null {
+  const t = useTranslate()
   const paneKey = makePaneKey(tabId, leafId)
-  const [dismissed, setDismissed] = useState(() => dismissedPtyIds.has(ptyId))
+  const lifetime = getTerminalNoticeLifetime(ptyId)
+  const [dismissedLifetime, setDismissedLifetime] = useState<TerminalNoticeLifetime>()
+  const dismissed =
+    lifetime !== undefined &&
+    (dismissedLifetime === lifetime || lifetime.dismissed.has('claude-old-terminal'))
   const selectionKey = useAppStore(selectedClaudeAccountKey)
   // Why either signal: a typed claude is seen by the process read, or by its hooks.
   const claudeInPane = useAppStore(
@@ -79,7 +90,8 @@ export function ClaudeOldTerminalBanner({
   const openedBefore = useOpenedBeforeClaudeAccounts(
     ptyId,
     tabId,
-    claudeInPane && !dismissed ? selectionKey : null
+    claudeInPane && !dismissed ? selectionKey : null,
+    lifetime
   )
   const [dialogOpen, setDialogOpen] = useState(false)
   // Why: the dialog has no Radix trigger, so closing it would leave focus on document.body.
@@ -91,7 +103,7 @@ export function ClaudeOldTerminalBanner({
     <>
       {openedBefore ? (
         <PaneTopWarningBanner
-          title={translate(
+          title={t(
             'terminal.claudeOldTerminalBanner.title',
             "This terminal was opened before Orca's Claude account update, so claude here uses System default's login."
           )}
@@ -110,26 +122,28 @@ export function ClaudeOldTerminalBanner({
               size="xs"
               onClick={() => openTerminalBesideTab(tabId)}
             >
-              {translate('terminal.paneTopBanner.openNewTerminal', 'Open new terminal')}
+              {t('terminal.paneTopBanner.openNewTerminal', 'Open new terminal')}
             </Button>
           }
           onDismiss={() => {
-            dismissedPtyIds.add(ptyId)
-            setDismissed(true)
+            if (lifetime && isTerminalNoticeLifetimeCurrent(lifetime)) {
+              lifetime.dismissed.add('claude-old-terminal')
+            }
+            setDismissedLifetime(lifetime)
           }}
         />
       ) : null}
       <OldTerminalDialog
         open={dialogOpen}
-        title={translate(
+        title={t(
           'terminal.claudeOldTerminalBanner.dialogTitle',
           "Why claude here doesn't use the selected account"
         )}
-        description={translate(
+        description={t(
           'terminal.claudeOldTerminalBanner.dialogDescription',
           'Orca now keeps each Claude account in its own folder, and claude in a new terminal follows the account you select.'
         )}
-        cause={translate(
+        cause={t(
           'terminal.claudeOldTerminalBanner.dialogCause',
           "Terminals opened before this update don't, so claude here signs in with System default's login. Open a new terminal to use the selected account."
         )}

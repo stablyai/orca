@@ -4,16 +4,20 @@ import {
   getCheckDetailsPromptKey
 } from '../../../../../../shared/source-control/checks/pr-checks-fix-prompt'
 import { hostedReviewInfoFromGitHubPRInfo as gitHubPRToChecksPanelReview } from '../../../../../../shared/source-control/hosted-review/hosted-review-github'
-import { getWorktreeGitIdentityDisplay } from '../../../../../../shared/worktree/git-identity-display'
+import { getWorktreeGitIdentityDisplay } from '../../../../../../shared/worktree/row-display/git-identity-display'
 import { useAppStore } from '@/store/index'
-import { getGitHubPRCacheKey } from '../../../../../../shared/github/github-cache-key'
+import { getGitHubPRCacheKey } from '../../../../../../shared/github/cache/github-cache-key'
 import { getHostedReviewCacheKey } from '@/store/slices/hosted-review/hosted-review-cache-identity'
 import { findFirstIndexedWorktree } from '@/lib/workspace/ownership/worktree-runtime-owner-index'
 import type { HostedReviewInfo } from '../../../../../../shared/source-control/hosted-review/hosted-review-contracts'
-import type { PRCheckDetail, PRCheckRunDetails } from '../../../../../../shared/github/check-types'
+import type {
+  PRCheckDetail,
+  PRCheckRunDetails
+} from '../../../../../../shared/github/checks/check-types'
 import type { Repo } from '../../../../../../shared/repo-types'
 import { translate } from '@/i18n/i18n'
-import { isGitHubPRSuppressed } from '../../../../../../shared/worktree/github-pr-suppression'
+import type { Translate } from '@/i18n/use-translate'
+import { isGitHubPRSuppressed } from '../../../../../../shared/worktree/hosted-review/github-pr-suppression'
 import { selectWorktreesByRepo } from '@/store/workspaces/catalog/workspace-record-fields'
 
 export function resolveCheckRunDetailsFixCheck(
@@ -114,9 +118,12 @@ export function buildCheckRunDetailsFixBasePrompt(args: {
   })
 }
 
-export function getCheckRunDetailsFixDisabledReason(worktreeId: string | null): string | undefined {
+export function getCheckRunDetailsFixDisabledReason(
+  worktreeId: string | null,
+  t: Translate = translate
+): string | undefined {
   if (!worktreeId) {
-    return translate(
+    return t(
       'auto.components.editor.check.run.details.fix.with.ai.1a8c4e2b90',
       'Select a workspace before launching an AI action.'
     )
@@ -124,20 +131,20 @@ export function getCheckRunDetailsFixDisabledReason(worktreeId: string | null): 
   const store = useAppStore.getState()
   const worktree = findFirstIndexedWorktree(selectWorktreesByRepo(store), worktreeId)
   if (!worktree) {
-    return translate(
+    return t(
       'auto.components.editor.check.run.details.fix.with.ai.1a8c4e2b90',
       'Select a workspace before launching an AI action.'
     )
   }
   const repo = store.repos.find((candidate) => candidate.id === worktree.repoId) ?? null
   if (!repo) {
-    return translate(
+    return t(
       'auto.components.editor.check.run.details.fix.with.ai.4f2d9a8c17',
       'Select a repository before launching an AI action.'
     )
   }
   if (!resolveHostedReviewForCheckRunDetailsFix(worktreeId)) {
-    return translate(
+    return t(
       'auto.components.editor.check.run.details.fix.with.ai.7c3e1b5d42',
       'Open a PR or MR before launching an AI fix.'
     )

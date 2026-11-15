@@ -36,11 +36,14 @@ export function useWorkspaceReferenceDetails(
       })),
     [workspace, repo, runtimeVersion, review?.state, review?.provider]
   )
-  useAppStore(
-    useShallow((state) =>
-      requests.map((request) => getWorkspaceReferenceLookup(request, state)?.rawEntry)
-    )
+  const cacheReads = useMemo(
+    () =>
+      requests.map(
+        (request) => getWorkspaceReferenceLookup(request, useAppStore.getState())?.getRawEntry
+      ),
+    [requests]
   )
+  useAppStore(useShallow((state) => cacheReads.map((read) => read?.(state))))
   useEffect(() => {
     if (!hoverOpen || hostOff) {
       return
@@ -58,7 +61,7 @@ export function useWorkspaceReferenceDetails(
   )
   return Object.fromEntries(
     requests.map((request) => {
-      const entry = getWorkspaceReferenceLookup(request, useAppStore.getState())?.entry
+      const entry = getWorkspaceReferenceLookup(request, useAppStore.getState())?.getEntry()
       const primary =
         review?.url && review.state && matching.length === 1 && matching[0] === request
           ? { title: review.title, url: review.url, review, stale: true }

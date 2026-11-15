@@ -4,8 +4,8 @@ import { Button } from '@/components/ui/button'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { useTeamsLabels, useTeamsMembers, useTeamsStates } from '@/hooks/useIssueMetadata'
-import type { RowLessSource as RuntimeLinearSettings } from '@/lib/default-creation-host'
-import { translate } from '@/i18n/i18n'
+import type { RowLessSource as RuntimeLinearSettings } from '@/runtime/hosts/selection/default-creation-host'
+import { useTranslate } from '@/i18n/use-translate'
 import {
   LINEAR_ISSUE_ATTRIBUTE_FILTER_MAX_LABEL_IDS,
   LINEAR_ISSUE_ATTRIBUTE_FILTER_MAX_STATE_IDS,
@@ -59,6 +59,7 @@ function ActivePill({
   partial: boolean
   onClear: () => void
 }): React.JSX.Element {
+  const t = useTranslate()
   return (
     <span className="inline-flex h-6 items-center gap-1 rounded-full border border-border/60 bg-muted/50 pl-2 pr-1 text-[11px] text-foreground">
       <span className="text-muted-foreground">{label}:</span>
@@ -71,14 +72,14 @@ function ActivePill({
               type="button"
               className="rounded-sm text-muted-foreground underline decoration-dotted underline-offset-2 outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
             >
-              {translate(
+              {t(
                 'auto.components.linear-issue-attribute-filter-dropdowns.partialCoverage',
                 'partial'
               )}
             </button>
           </TooltipTrigger>
           <TooltipContent side="top" sideOffset={4}>
-            {translate(
+            {t(
               'auto.components.linear-issue-attribute-filter-dropdowns.partialCoverageTitle',
               'Some teams may be left out of this filter. Open Filters for details.'
             )}
@@ -87,7 +88,7 @@ function ActivePill({
       ) : null}
       <button
         type="button"
-        aria-label={translate(
+        aria-label={t(
           'auto.components.linear-issue-attribute-filter-dropdowns.removeFilter',
           'Remove {{value0}} filter',
           { value0: label }
@@ -111,6 +112,7 @@ export default function LinearIssueAttributeFilterDropdowns({
   teamsSettled,
   settings
 }: Props): React.JSX.Element {
+  const t = useTranslate()
   const [popoverOpen, setPopoverOpen] = useState(false)
   const [openSection, setOpenSection] = useState<LinearIssueFilterSectionKey | null>(null)
   // Tie truncation records to the surviving ids so pruning, clearing or workspace changes retire stale warnings.
@@ -244,16 +246,19 @@ export default function LinearIssueAttributeFilterDropdowns({
     [members.data]
   )
 
-  const pills = linearIssueAttributeFilterPillLabels({
-    value,
-    stateNamesById,
-    memberNamesById,
-    labelNamesById,
-    statusOptions,
-    labelOptions,
-    statusTruncated,
-    labelsTruncated
-  })
+  const pills = linearIssueAttributeFilterPillLabels(
+    {
+      value,
+      stateNamesById,
+      memberNamesById,
+      labelNamesById,
+      statusOptions,
+      labelOptions,
+      statusTruncated,
+      labelsTruncated
+    },
+    t
+  )
 
   // Cap expanded ids before IPC rejects them; spread slots across rows so lexical order cannot erase a picked row.
   const applyPickedFilter = (next: LinearIssueAttributeFilter): void => {
@@ -287,7 +292,7 @@ export default function LinearIssueAttributeFilterDropdowns({
   }
 
   const teamRequiredMessage = !primaryTeam
-    ? translate(
+    ? t(
         'auto.components.linear-issue-attribute-filter-dropdowns.teamRequired',
         'Select a team to load status, assignees, and labels for this workspace.'
       )
@@ -310,16 +315,13 @@ export default function LinearIssueAttributeFilterDropdowns({
             variant="outline"
             size="sm"
             className="h-7 gap-1.5 px-2 text-xs"
-            aria-label={translate(
+            aria-label={t(
               'auto.components.linear-issue-attribute-filter-dropdowns.filters',
               'Filters'
             )}
           >
             <ListFilter className="size-3.5" />
-            {translate(
-              'auto.components.linear-issue-attribute-filter-dropdowns.filters',
-              'Filters'
-            )}
+            {t('auto.components.linear-issue-attribute-filter-dropdowns.filters', 'Filters')}
             {activeCount > 0 ? (
               <span className="rounded-full bg-muted px-1.5 text-[10px] font-medium text-muted-foreground">
                 {activeCount}
@@ -331,13 +333,13 @@ export default function LinearIssueAttributeFilterDropdowns({
           {!scopedWorkspaceId ? (
             <div className="space-y-2 p-3 text-xs">
               <p className="font-medium text-foreground">
-                {translate(
+                {t(
                   'auto.components.linear-issue-attribute-filter-dropdowns.allWorkspacesTitle',
                   'Select one workspace'
                 )}
               </p>
               <p className="text-muted-foreground">
-                {translate(
+                {t(
                   'auto.components.linear-issue-attribute-filter-dropdowns.allWorkspacesBody',
                   'Status, assignee, and label filters use ids from a single Linear workspace. Choose one workspace to filter by those attributes.'
                 )}
@@ -381,7 +383,7 @@ export default function LinearIssueAttributeFilterDropdowns({
                     className="w-full rounded-md px-2 py-1.5 text-left text-xs text-muted-foreground transition hover:bg-muted/50 hover:text-foreground"
                     onClick={() => onChange(emptyLinearIssueAttributeFilter())}
                   >
-                    {translate(
+                    {t(
                       'auto.components.linear-issue-attribute-filter-dropdowns.clearAll',
                       'Clear all filters'
                     )}

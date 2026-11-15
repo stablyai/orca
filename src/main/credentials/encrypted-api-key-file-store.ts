@@ -6,7 +6,7 @@ import {
   hardenExistingSecureFile,
   isUnreadableError,
   writeSecureFile
-} from '../../shared/secure-file'
+} from '../../shared/secure-storage/secure-file'
 import type { SecretAtRestProtection } from '../../shared/secret-at-rest-protection'
 import { ApiKeyFileUnreadableError } from './api-key-file-unreadable-error'
 

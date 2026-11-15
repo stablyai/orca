@@ -1,4 +1,7 @@
-import type { GitHubCommentResult, PRComment } from '../../../../../shared/github/comment-types'
+import type {
+  GitHubCommentResult,
+  PRComment
+} from '../../../../../shared/github/comments/comment-types'
 
 function commentTimestamp(comment: PRComment): number {
   const timestamp = new Date(comment.createdAt).getTime()
@@ -17,6 +20,7 @@ export function mergePRCommentIntoList(
   byId.set(incoming.id, {
     ...previous,
     ...incoming,
+    bodyImageUrls: incoming.bodyImageUrls,
     threadId: incoming.threadId ?? previous?.threadId,
     path: incoming.path ?? previous?.path,
     line: incoming.line ?? previous?.line,

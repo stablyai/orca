@@ -1,5 +1,5 @@
 import { isRemoteRuntimePtyId } from '../../../../../../shared/remote-runtime/remote-runtime-pty-id'
-import { scheduleRuntimeGraphSync } from '@/runtime/sync-runtime-graph'
+import { scheduleRuntimeGraphSync } from '@/runtime/sync-runtime-graph/graph-sync-scheduler'
 import { useAppStore } from '@/store'
 import { notifyCodexPaneBoundForStaleSweep } from '@/lib/agent-session/accounts/codex/codex-stale-pane-sweep'
 import { createTerminalGitHubPRLinkDetector } from '../../../../../../shared/terminal/links/terminal-github-pr-link-detector'

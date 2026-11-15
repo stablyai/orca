@@ -39,14 +39,17 @@ vi.mock('@/lib/workspace/ownership/worktree-runtime-owner', () => ({
     state.testRuntimeOwner ? `runtime:${state.testRuntimeOwner}` : 'local'
 }))
 
-vi.mock('@/runtime/structured-agent-session-client', () => ({
-  callStructuredAgentSession: vi.fn(),
+vi.mock('../../../../runtime/native-chat/requests/structured-agent-session-call', () => ({
+  callStructuredAgentSession: vi.fn()
+}))
+
+vi.mock('../../../../runtime/native-chat/requests/structured-agent-session-subscriptions', () => ({
   subscribeStructuredAgentSession: vi.fn(),
   subscribeStructuredAgentSessionStatus: mocks.subscribeStatus
 }))
 
 import { StructuredAgentSessionStatusBridge } from './StructuredAgentSessionStatusBridge'
-import { resetStructuredAgentSessionStatusFeedsForTests } from '@/runtime/structured-agent-session-status-feed'
+import { resetStructuredAgentSessionStatusFeedsForTests } from '@/runtime/native-chat/status/structured-agent-session-status-feed'
 
 const structuredTab = {
   id: 'structured-tab-1',

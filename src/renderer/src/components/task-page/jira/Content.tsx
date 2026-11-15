@@ -3,30 +3,31 @@ import { activateAndRevealWorktree } from '@/lib/workspace/activation/worktree-a
 import type { TaskPageComposerActionsModel } from '../use-task-page-composer-actions'
 import { LoaderCircle } from 'lucide-react'
 import { JiraIcon } from '@/components/icons/JiraIcon'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { Button } from '@/components/ui/button'
 import { jiraListGridStyle } from '../../jira-list-columns'
 import { JiraListColumnsMenu } from '../../jira-list-columns-menu'
-import { TaskPageJiraSortControls } from './task-page-jira-sort-controls'
-import { TaskPageJiraErrorBanner } from '../linear/task-page-linear-jira-list-model'
-import { TaskPageJiraTextFallbackNotice } from './task-page-jira-text-fallback-notice'
-import { TaskPageJiraIssueList } from '@/components/task-page/jira/task-page-jira-issue-list'
-import { TaskPageJiraBoardView } from '@/components/task-page/jira/task-page-jira-board-view'
+import { TaskPageJiraSortControls } from './listing/task-page-jira-sort-controls'
+import { TaskPageJiraErrorBanner } from './listing/task-page-jira-error-banner'
+import { TaskPageJiraTextFallbackNotice } from './listing/task-page-jira-text-fallback-notice'
+import { TaskPageJiraIssueList } from '@/components/task-page/jira/listing/task-page-jira-issue-list'
+import { TaskPageJiraBoardView } from '@/components/task-page/jira/boards/task-page-jira-board-view'
 import { TaskPageJiraViewControls } from '@/components/task-page/jira/task-page-jira-view-controls'
 import { formatRelativeTime } from '../task-page-source-context'
-import { getJiraStatusTone } from '@/components/task-page/jira/task-page-jira-status-tone'
+import { getJiraStatusTone } from '@/components/task-page/jira/listing/task-page-jira-status-tone'
 import JiraIssueWorkspace from '@/components/JiraIssueWorkspace'
 import { TaskPageLinearContent } from '../linear/Content'
 import {
   ipcOrRuntimeTargetForHostId,
   runtimeTargetEnvironmentId
 } from '@/runtime/rpc/targets/runtime-client-target'
-import { getEnvironmentRuntimeContextKey } from '@/lib/provider-runtime-context'
+import { getEnvironmentRuntimeContextKey } from '@/runtime/hosts/observations/provider-runtime-context'
 export function TaskPageJiraContent({
   model
 }: {
   model: TaskPageComposerActionsModel
 }): React.JSX.Element | null {
+  const t = useTranslate()
   const {
     jiraStatus,
     jiraHasWorkspace,
@@ -83,20 +84,20 @@ export function TaskPageJiraContent({
       <div className="mt-4 flex flex-col items-center justify-center rounded-md border border-border/50 bg-muted/50 px-6 py-14 text-center shadow-sm">
         <JiraIcon className="mb-4 size-8 text-muted-foreground/60" />
         <p className="text-base font-medium text-foreground">
-          {translate('auto.components.TaskPage.a150c59da7', 'Connect your Jira site')}
+          {t('auto.components.TaskPage.a150c59da7', 'Connect your Jira site')}
         </p>
         <p className="mt-2 max-w-sm text-sm text-muted-foreground">
-          {translate(
+          {t(
             'auto.components.TaskPage.b518ae6307',
             'Browse, edit, create, and start work from Jira issues directly from here.'
           )}
         </p>
         <div className="mt-5 flex flex-wrap items-center justify-center gap-2">
           <Button onClick={() => setJiraConnectOpen(true)}>
-            {translate('auto.components.TaskPage.83bce6be5c', 'Connect Jira')}
+            {t('auto.components.TaskPage.83bce6be5c', 'Connect Jira')}
           </Button>
           <Button variant="outline" onClick={() => hideTaskSource('jira', 'Jira')}>
-            {translate('auto.components.TaskPage.e7115334aa', 'Hide Jira')}
+            {t('auto.components.TaskPage.e7115334aa', 'Hide Jira')}
           </Button>
         </div>
       </div>
@@ -107,7 +108,7 @@ export function TaskPageJiraContent({
       >
         <div className="flex min-h-10 flex-none flex-wrap items-center justify-between gap-3 border-b border-border/50 bg-muted/35 px-3 py-1">
           <div className="min-w-0 text-[11px] font-medium uppercase tracking-[0.12em] text-muted-foreground">
-            {translate('auto.components.TaskPage.63b2abd3aa', 'Jira issues')}
+            {t('auto.components.TaskPage.63b2abd3aa', 'Jira issues')}
           </div>
           <TaskPageJiraViewControls
             mode={jiraViewMode}
@@ -118,7 +119,7 @@ export function TaskPageJiraContent({
           />
           <div className="flex shrink-0 items-center gap-2 text-2xs text-muted-foreground">
             <span>
-              {translate('auto.components.TaskPage.shownCount', '{{count}} shown', {
+              {t('auto.components.TaskPage.shownCount', '{{count}} shown', {
                 count: displayedJiraIssues.length,
                 defaultValue_one: '{{count}} shown'
               })}
@@ -179,20 +180,17 @@ export function TaskPageJiraContent({
           !jiraStatus.credentialError ? (
             <div className="px-4 py-10 text-center">
               <p className="text-sm font-medium text-foreground">
-                {translate('auto.components.TaskPage.eba87f2edb', 'No Jira issues found')}
+                {t('auto.components.TaskPage.eba87f2edb', 'No Jira issues found')}
               </p>
               <p className="mt-2 text-sm text-muted-foreground">
                 {jiraHasWorkspace
-                  ? translate(
+                  ? t(
                       'jira.workspace.empty',
                       'Link a Jira issue to a workspace, or choose another view.'
                     )
                   : jiraSearchInput
-                    ? translate(
-                        'auto.components.TaskPage.f51e254d35',
-                        'Try different search terms or JQL.'
-                      )
-                    : translate(
+                    ? t('auto.components.TaskPage.f51e254d35', 'Try different search terms or JQL.')
+                    : t(
                         'auto.components.TaskPage.94d900518d',
                         'No issues match the selected preset.'
                       )}
@@ -224,7 +222,7 @@ export function TaskPageJiraContent({
                   false
                 ) {
                   toast.error(
-                    translate(
+                    t(
                       'jira.workspace.openFailed',
                       'Unable to open the workspace linked to this Jira issue.'
                     )

@@ -1,5 +1,5 @@
 import type { SessionTabsPublicationEpochHistory } from '../web-session-tabs-sync/state'
-import type { StructuredSessionTabPublicationVersion } from '../local-structured-session-tab-retirement'
+import type { StructuredSessionTabPublicationVersion } from '../native-chat/local-sessions/local-structured-session-tab-retirement'
 
 // Track publisher generation, accepted per-worktree publications and one-shot restore. Every async entry rechecks its starting generation so reset fences in-flight responses.
 let syncGeneration = 0

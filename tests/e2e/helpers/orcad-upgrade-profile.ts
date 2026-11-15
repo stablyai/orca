@@ -3,10 +3,13 @@
 import type { FolderWorkspace } from '../../../src/shared/folder-workspaces/folder-workspace-types'
 import type { ProjectGroup } from '../../../src/shared/project-group-types'
 import type { Repo } from '../../../src/shared/repo-types'
-import type { SshTarget, SshTargetCreateInput } from '../../../src/shared/ssh-types'
+import type {
+  SshTarget,
+  SshTargetCreateInput
+} from '../../../src/shared/remote-runtime/ssh/ssh-types'
 import { getDefaultWorkspaceSession } from '../../../src/shared/constants'
 import { toSshExecutionHostId } from '../../../src/shared/execution-host'
-import { toAppSshPtyId } from '../../../src/shared/ssh-pty-id'
+import { toAppSshPtyId } from '../../../src/shared/remote-runtime/ssh/ssh-pty-id'
 import { normalizeSshTarget } from '../../../src/main/persistence/leasing-ssh-ptys/ssh-normalization'
 import { mutateStoppedProfileState } from './persisted-profile-state'
 

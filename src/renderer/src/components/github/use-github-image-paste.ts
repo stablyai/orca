@@ -3,7 +3,7 @@ import { Node as TiptapNode } from '@tiptap/core'
 import type { Editor } from '@tiptap/react'
 import { toast } from 'sonner'
 import { createNonSecureContextUuid as createBrowserUuid } from '../../../../shared/non-secure-context-uuid'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import type { GitHubImageUploadAddress } from './github-image-upload'
 import { useGitHubImageEvents, useGitHubImageUploads } from './use-github-image-uploads'
 
@@ -14,6 +14,7 @@ export function useGitHubImagePaste(
   onPending: ((pending: boolean) => void) | undefined,
   enabled: boolean
 ) {
+  const t = useTranslate()
   const options = useRef({ address, onPending, enabled })
   const uploads = useGitHubImageUploads({ address, onPending, enabled })
   const live = useRef(new Set<string>())
@@ -134,9 +135,7 @@ export function useGitHubImagePaste(
         }
       }
       if (removed) {
-        toast.error(
-          translate('github.pasteImageFile', 'Paste the image as a file to attach it to GitHub.')
-        )
+        toast.error(t('github.pasteImageFile', 'Paste the image as a file to attach it to GitHub.'))
       }
       return removed ? document.body.innerHTML : html
     }

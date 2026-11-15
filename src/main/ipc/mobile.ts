@@ -1,18 +1,18 @@
 import { usesLegacyE2EE } from '../runtime/rpc/server/pairing/device-sighting'
 import { app, ipcMain, shell, type IpcMainInvokeEvent } from 'electron'
-import type { RuntimeAccessGrant } from '../../shared/runtime-access-grants'
+import type { RuntimeAccessGrant } from '../../shared/remote-runtime/host-catalog/runtime-access-grants'
 import type { MobilePairingConnectionMode } from '../../shared/remote-runtime/pairing/mobile-pairing-connection-mode'
-import type { RuntimePairingReach } from '../../shared/runtime-pairing-reach'
+import type { RuntimePairingReach } from '../../shared/remote-runtime/pairing/runtime-pairing-reach'
 import type { DeviceEntry } from '../runtime/rpc/server/pairing/device-entry'
 import {
   requestMobilePairingOffer,
   requestRuntimePairingOffer
-} from '../runtime/pairing-offer-requests'
+} from '../runtime/rpc/server/pairing/pairing-offer-requests'
 import {
   getPairingNetworkInterfaces,
   type DefaultRouteInterfaceLookup,
   type NetworkInterface
-} from '../runtime/pairing-network-interfaces'
+} from '../runtime/rpc/server/pairing/network/pairing-network-interfaces'
 import type { OrcaRuntimeRpcServer } from '../runtime/rpc/server/runtime-rpc'
 import type { MobileRelayStatusDetail } from '../../shared/remote-runtime/relay/mobile-relay-status'
 import {
@@ -24,13 +24,13 @@ import {
   MOBILE_PAIRING_OFFER_TTL_MS,
   RUNTIME_PAIRING_OFFER_TTL_MS
 } from '../runtime/rpc/server/pairing/pairing-offer-expiry'
-import { getWindowsDefaultRouteInterfaceNames } from '../runtime/windows-default-route-interfaces'
+import { getWindowsDefaultRouteInterfaceNames } from '../runtime/rpc/server/pairing/network/windows-default-route-interfaces'
 import {
   getWebSocketPort,
   inspectWindowsMobileFirewall,
   repairWindowsMobileFirewall,
   type WindowsMobileFirewallEnvironment
-} from '../runtime/windows-mobile-firewall'
+} from '../runtime/rpc/server/pairing/network/windows-mobile-firewall'
 
 function toRuntimeAccessGrant(
   device: DeviceEntry,

@@ -8,7 +8,7 @@ import { useShallow } from 'zustand/react/shallow'
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 import { useAppStore } from '@/store/index'
 import { getIndexedReposById } from '@/store/repos/repository-catalog-index'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import {
   getRepoExecutionHostId,
   parseRoutableExecutionHostId
@@ -35,7 +35,10 @@ import { registeredRepoTextModelHostKeys } from './source-control-text-action-mo
 
 import { useTextActionModelDiscovery } from './use-text-action-model-discovery'
 import { textActionPickerEntryView } from './source-control-text-action-picker-entries'
-import { AI_TEXT_ACTION_IDS } from '../../../../../../shared/source-control/ai/recipes/source-control-ai-actions'
+import {
+  AI_TEXT_ACTION_IDS,
+  isGlobalAiTextAction
+} from '../../../../../../shared/source-control/ai/recipes/source-control-ai-actions'
 import type { SourceControlAiSettingsPatch } from '../../../../../../shared/source-control/ai/settings/source-control-ai-settings-types'
 import {
   agentPickerDraft,
@@ -43,7 +46,7 @@ import {
   type AgentPickerEntry,
   type AgentPickerDraft
 } from '../../../../../../shared/agent-launch/picker/agent-launch-picker'
-import { SourceControlActionAgentPicker } from '../SourceControlActionAgentPicker'
+import { AgentLaunchPicker } from '@/components/agent/AgentLaunchPicker'
 import { getAgentCatalogForAction } from '../source-control-action-recipe-options'
 import { DropdownMenuItem } from '../../../ui/dropdown-menu'
 
@@ -74,6 +77,7 @@ export function SourceControlTextActionAgentPicker(props: TextActionPickerProps)
 
 const TextActionPicker = memo(
   function TextActionPicker(props: TextActionPickerProps) {
+    const t = useTranslate()
     useUiLanguageRevision()
     const settings = useAppStore(
       useShallow(
@@ -123,7 +127,7 @@ const TextActionPicker = memo(
       }
       const inheritedSource = { ...source, modelOverridesByOperation: inheritedChoices }
       const repoChoices = { ...repoAi?.modelOverridesByOperation }
-      if (operation !== 'conversationName') {
+      if (!isGlobalAiTextAction(operation)) {
         delete repoChoices[operation]
       }
       const inheritedRepo = { ...repoAi, modelOverridesByOperation: repoChoices }
@@ -164,18 +168,17 @@ const TextActionPicker = memo(
             [operation]: { ...source.actions?.[operation], agentId: agent.id }
           }
         }
-        const forcedRepo =
-          operation !== 'conversationName'
-            ? {
-                sourceControlAi: {
-                  ...(ownRepo ?? repoAi),
-                  actionOverrides: {
-                    ...repoAi?.actionOverrides,
-                    [operation]: { ...repoAi?.actionOverrides?.[operation], agentId: agent.id }
-                  }
+        const forcedRepo = !isGlobalAiTextAction(operation)
+          ? {
+              sourceControlAi: {
+                ...(ownRepo ?? repoAi),
+                actionOverrides: {
+                  ...repoAi?.actionOverrides,
+                  [operation]: { ...repoAi?.actionOverrides?.[operation], agentId: agent.id }
                 }
               }
-            : null
+            }
+          : null
         const inherited = resolveSourceControlAiActionModelDefault(
           {
             settings: {
@@ -253,7 +256,7 @@ const TextActionPicker = memo(
     const agentArgs = props.draft.agentArgs ?? ''
     const ownerKey = JSON.stringify([operation, hostKey, agentArgs])
     const entries = catalogEntries.map((entry) =>
-      textActionPickerEntryView(entry, ownerKey, agentArgs, discovery.listing === entry.agent)
+      textActionPickerEntryView(entry, ownerKey, agentArgs, discovery.listing === entry.agent, t)
     )
     const draftForEntry = (entry: AgentPickerEntry): AgentPickerDraft => {
       const saved = readSourceControlAiModelChoiceForHost(choice, hostKey, entry.agent)
@@ -285,7 +288,7 @@ const TextActionPicker = memo(
         : undefined
     const setByArguments =
       active?.textGeneration?.modelInArguments || active?.textGeneration?.effortInArguments
-    const customLabel = translate(
+    const customLabel = t(
       'auto.components.settings.SourceControlAiActionRecipeDefaults.0740d30915',
       'Custom command'
     )
@@ -296,7 +299,7 @@ const TextActionPicker = memo(
           ? props.defaultAgentLabel
           : [
               setByArguments
-                ? translate('agentPicker.setByArguments', 'Set by your Arguments')
+                ? t('agentPicker.setByArguments', 'Set by your Arguments')
                 : model?.label,
               active?.label,
               !setByArguments
@@ -307,8 +310,8 @@ const TextActionPicker = memo(
               .filter(Boolean)
               .join(' · ')
     return (
-      <SourceControlActionAgentPicker
-        text={{
+      <AgentLaunchPicker
+        {...{
           draftScope: props.draftScope,
           agent: activeAgent,
           disabled: props.disabled || !settings || Boolean(props.repoId && (!repo || !host)),
@@ -316,7 +319,7 @@ const TextActionPicker = memo(
           draftForEntry,
           triggerLabel:
             triggerLabel ||
-            translate(
+            t(
               'auto.components.settings.SourceControlAiActionRecipeDefaults.ee0e5c2a48',
               'Use default agent'
             ),
@@ -362,7 +365,7 @@ const TextActionPicker = memo(
             <>
               <DropdownMenuItem onSelect={() => props.onAgentChange('__default_agent__')}>
                 {props.defaultAgentLabel ??
-                  translate(
+                  t(
                     'auto.components.settings.SourceControlAiActionRecipeDefaults.ee0e5c2a48',
                     'Use default agent'
                   )}

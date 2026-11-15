@@ -13,7 +13,7 @@ import {
   type ExecutionHostScope
 } from '../../../shared/execution-host'
 import { worktreeIdsEqual } from '../../../shared/worktree/id'
-import { isLocalHookConnectionId } from '../../../shared/wsl-hook-relay-contract'
+import { isLocalHookConnectionId } from '../../../shared/agent-hook-listener/transport/wsl-hook-relay-contract'
 import type { EnrichedAgentHookEventPayload } from './server-types'
 import { AgentHookServerAuthorityFences } from './server-authority-fences'
 import { recordAgentExit } from './agent-exit-evidence'
@@ -265,6 +265,7 @@ export abstract class AgentHookServerCleanup extends AgentHookServerAuthorityFen
           // A replacement remote process may reuse the pane; discard the lost owner's children.
           this.state.codexSubagentRosterByPaneKey.delete(paneKey)
           this.state.codexLeadStateByPaneKey.delete(paneKey)
+          this.state.codexAsyncQuestionsByPaneKey.delete(paneKey)
         } else if (deleted.payload.agentType === 'claude') {
           this.state.claudeSubagentRosterByPaneKey.delete(paneKey)
           this.state.claudeLeadStateByPaneKey.delete(paneKey)

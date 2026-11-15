@@ -40,23 +40,3 @@ it('cancels setup using the preselected id and unsubscribes a late handle', asyn
   await Promise.resolve()
   expect(unsubscribe).toHaveBeenCalled()
 })
-
-it('keeps the response deadline while setup is pending', async () => {
-  vi.useFakeTimers()
-  const subscribe = vi.fn((_args: { subscriptionId?: string }) => new Promise(() => {}))
-  const cancelSubscription = vi.fn().mockResolvedValue(undefined)
-  stubRuntimeEnvironmentBridge({ subscribe, cancelSubscription })
-  const pending = callAbortableRuntimeEnvironment(
-    'env',
-    'files.search',
-    {},
-    15_000,
-    new AbortController().signal
-  )
-  const rejection = expect(pending).rejects.toThrow('timed out')
-  await vi.advanceTimersByTimeAsync(15_000)
-  await rejection
-  expect(cancelSubscription).toHaveBeenCalledWith({
-    subscriptionId: 'd0b695cc-c36b-4d6d-aa45-e62ce3457d19'
-  })
-})

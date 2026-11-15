@@ -10,15 +10,15 @@ import {
   localAccess
 } from '../runtime-file-routing'
 import { callRuntimeFileMutation } from './runtime-file-mutation-rpc'
-import { toRuntimeWorktreeSelector } from '../../runtime-worktree-selector'
-import type { LocalFileAccess } from '../../../../../shared/local-file-access'
+import { toRuntimeWorktreeSelector } from '../../rpc/targets/runtime-worktree-selector'
+import type { LocalFileAccess } from '../../../../../shared/file-access/local-file-access'
 import { REMOTE_RUNTIME_MAX_FILE_WRITE_CONTENT_BYTES } from '../../../../../shared/remote-runtime/remote-runtime-memory-limits'
 import {
   FILE_WRITE_OK,
   parseFileWriteResult,
   type FileWriteDiskPrecondition,
   type FileWriteResult
-} from '../../../../../shared/file-write-disk-precondition'
+} from '../../../../../shared/file-write/file-write-disk-precondition'
 import { writeRemoteFileIfUnchanged } from './runtime-file-write-disk-precondition'
 import { writeRemoteFileStaged } from './runtime-staged-file-save'
 

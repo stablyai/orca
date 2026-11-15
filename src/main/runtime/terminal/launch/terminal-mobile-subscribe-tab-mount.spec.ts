@@ -30,8 +30,8 @@ export function registerTerminalMobileSubscribeTabMountTests(): void {
   describe('mobile terminal subscribe tab mount', () => {
     it('keeps a waiting real-tab handle usable when the mount binds its first PTY', async () => {
       const runtime = new OrcaRuntimeService()
-      const syncGraph = (ptyId: string | null): void => {
-        runtime.syncWindowGraph(1, {
+      const syncGraph = async (ptyId: string | null): Promise<void> => {
+        await runtime.syncWindowGraph(1, {
           tabs: [
             {
               tabId: 'tab-1',
@@ -54,7 +54,7 @@ export function registerTerminalMobileSubscribeTabMountTests(): void {
       }
 
       runtime.attachWindow(1)
-      syncGraph(null)
+      await syncGraph(null)
       const internals = runtime as unknown as RuntimeInternals
       const leaf = internals.leaves.values().next().value
       if (!leaf) {
@@ -63,7 +63,7 @@ export function registerTerminalMobileSubscribeTabMountTests(): void {
       const handle = internals.issueHandle(leaf)
       const ptyWait = runtime.waitForLeafPtyId(handle)
 
-      syncGraph('pty-1')
+      await syncGraph('pty-1')
 
       await expect(ptyWait).resolves.toBe('pty-1')
       expect(runtime.resolveLiveLeafForHandle(handle)).toEqual({ ptyId: 'pty-1' })

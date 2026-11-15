@@ -1,5 +1,5 @@
 import type { GlobalSettings } from './global-settings-types'
-import { normalizeGlobalWindowsRuntimeDefault } from './project-execution-runtime'
+import { normalizeGlobalWindowsRuntimeDefault } from './execution-host/project-runtime-preference'
 
 export type LocalAccountRuntimeTarget = {
   runtime: 'host' | 'wsl'

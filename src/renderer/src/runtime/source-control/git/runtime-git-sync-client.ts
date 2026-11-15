@@ -9,7 +9,7 @@ import { resolveLocalWorktreePath, type RuntimeGitContext } from './runtime-git-
 import { translate } from '@/i18n/i18n'
 import { callRuntimeRpc } from '../../rpc/calls/runtime-rpc-call'
 import { RuntimeRpcCallError } from '../../rpc/calls/runtime-rpc-result'
-import { toRuntimeWorktreeSelector } from '../../runtime-worktree-selector'
+import { toRuntimeWorktreeSelector } from '../../rpc/targets/runtime-worktree-selector'
 
 export async function abortRuntimeGitMerge(context: RuntimeGitContext): Promise<void> {
   const target = context.target

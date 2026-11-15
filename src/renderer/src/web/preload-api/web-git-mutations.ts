@@ -1,4 +1,4 @@
-import { toRuntimeWorktreeSelector } from '../../runtime/runtime-worktree-selector'
+import { toRuntimeWorktreeSelector } from '../../runtime/rpc/targets/runtime-worktree-selector'
 import type { ConflictResolution } from '../../../../shared/source-control/listing/source-control-entry-actions'
 import { callRuntimeResult } from './web-runtime-calls'
 import {

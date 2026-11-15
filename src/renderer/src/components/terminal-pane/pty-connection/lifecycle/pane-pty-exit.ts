@@ -1,4 +1,8 @@
-import { scheduleRuntimeGraphSync } from '@/runtime/sync-runtime-graph'
+import {
+  getTerminalNoticeLifetime,
+  retireTerminalNoticeLifetime
+} from '../../provider-notices/terminal-notice-lifetime'
+import { scheduleRuntimeGraphSync } from '@/runtime/sync-runtime-graph/graph-sync-scheduler'
 import { useAppStore } from '@/store'
 import {
   consumeCommittedPtyShutdownExit,
@@ -110,12 +114,17 @@ export function bindPanePtyExit(session: ConnectPanePtySession): void {
     }
     const isSuppressedExit =
       session.deps.consumeSuppressedPtyExit(ptyId) || preserveRendererBinding || replacedByRestart
+    const endedNotice =
+      !isSuppressedExit && !isUnverifiedExit ? getTerminalNoticeLifetime(ptyId) : undefined
     if (!isSuppressedExit && !isUnverifiedExit) {
       session.clearExitedPanePtyLayoutBinding(ptyId)
     }
     session.deps.clearRuntimePaneTitle(session.deps.tabId, session.pane.id)
     if (!preserveRendererBinding && !isUnverifiedExit) {
       session.deps.clearTabPtyId(session.deps.tabId, ptyId)
+    }
+    if (endedNotice) {
+      retireTerminalNoticeLifetime(endedNotice)
     }
     // Abrupt exits may omit title reset; always clear the cache countdown.
     session.deps.setCacheTimerStartedAt(session.cacheKey, null)

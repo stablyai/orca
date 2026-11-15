@@ -15,7 +15,7 @@ import {
   DialogHeader,
   DialogTitle
 } from '@/components/ui/dialog'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 
 const MACOS_UPDATE_GUIDE_URL = 'https://support.apple.com/en-us/108382'
 const VENTURA_COMPATIBILITY_URL = 'https://support.apple.com/en-us/102861'
@@ -35,6 +35,7 @@ export function MacosUpdateRequirementDialog({
   support: MacosUpgradeSupport | undefined
   onOpenUrl: (url: string, event: MouseEvent<HTMLButtonElement>) => void
 }): JSX.Element {
+  const t = useTranslate()
   const primaryButtonRef = useRef<HTMLButtonElement>(null)
   const macos = requirement.minimumMacosVersion
   const checking = support === undefined
@@ -61,12 +62,12 @@ export function MacosUpdateRequirementDialog({
       >
         <DialogHeader>
           <DialogTitle size="display" className="mr-6">
-            {translate('macosUpdateRequirement.title', 'Orca updates now need macOS {{macos}}', {
+            {t('macosUpdateRequirement.title', 'Orca updates now need macOS {{macos}}', {
               macos
             })}
           </DialogTitle>
           <DialogDescription>
-            {translate(
+            {t(
               'macosUpdateRequirement.description',
               'Orca {{version}} requires macOS {{macos}} or later. This version keeps working, but it won’t get new updates on this Mac.',
               { version: requirement.version, macos }
@@ -77,22 +78,19 @@ export function MacosUpdateRequirementDialog({
         <div className="space-y-2" aria-live="polite" aria-busy={checking}>
           <p className="text-sm leading-relaxed">
             {checking
-              ? translate(
-                  'macosUpdateRequirement.checking',
-                  'Checking whether this Mac can upgrade…'
-                )
+              ? t('macosUpdateRequirement.checking', 'Checking whether this Mac can upgrade…')
               : canUpgrade
-                ? translate(
+                ? t(
                     'macosUpdateRequirement.upgradeDescription',
                     'Your Mac can upgrade. Update macOS to get the latest Orca.'
                   )
                 : cannotUpgrade
-                  ? translate(
+                  ? t(
                       'macosUpdateRequirement.unsupportedDescription',
                       'Apple doesn’t support macOS {{macos}} on this Mac.',
                       { macos }
                     )
-                  : translate(
+                  : t(
                       'macosUpdateRequirement.unknownDescription',
                       'We couldn’t confirm an upgrade for this Mac. Apple’s compatibility guide can help.'
                     )}
@@ -101,7 +99,7 @@ export function MacosUpdateRequirementDialog({
 
         <Collapsible>
           <CollapsibleTrigger variant="row">
-            {translate('macosUpdateRequirement.whyTitle', 'Why is this changing?')}
+            {t('macosUpdateRequirement.whyTitle', 'Why is this changing?')}
             <ChevronDown
               className="size-4 shrink-0 text-muted-foreground group-data-[state=open]:rotate-180"
               aria-hidden
@@ -110,33 +108,33 @@ export function MacosUpdateRequirementDialog({
           <CollapsibleContent>
             <div className="space-y-3 pt-2 text-sm leading-relaxed">
               <p>
-                {translate(
+                {t(
                   'macosUpdateRequirement.whyIntro',
                   'We updated parts of Orca’s foundation, like Electron and the on-device speech engine, to bring:'
                 )}
               </p>
               <ul className="list-disc space-y-2 pl-4">
                 <li>
-                  {translate(
+                  {t(
                     'macosUpdateRequirement.whySecurity',
                     'Ongoing security fixes from Electron and Chromium.'
                   )}
                 </li>
                 <li>
-                  {translate(
+                  {t(
                     'macosUpdateRequirement.whyPerformance',
                     'Faster startup and more efficient native API calls.'
                   )}
                 </li>
                 <li>
-                  {translate(
+                  {t(
                     'macosUpdateRequirement.whySystemApis',
                     'Support for current macOS notification APIs and secure Keychain storage.'
                   )}
                 </li>
               </ul>
               <p>
-                {translate(
+                {t(
                   'macosUpdateRequirement.whyRequirement',
                   'That newer foundation requires macOS {{macos}} or later.',
                   { macos }
@@ -148,7 +146,7 @@ export function MacosUpdateRequirementDialog({
 
         <DialogFooter>
           <Button variant="ghost" onClick={() => onOpenChange(false)}>
-            {translate('macosUpdateRequirement.dismiss', 'Got it')}
+            {t('macosUpdateRequirement.dismiss', 'Got it')}
           </Button>
           <Button
             ref={primaryButtonRef}
@@ -156,12 +154,12 @@ export function MacosUpdateRequirementDialog({
             onClick={(event) => onOpenUrl(primaryUrl, event)}
           >
             {checking
-              ? translate('macosUpdateRequirement.checkingAction', 'Checking your Mac…')
+              ? t('macosUpdateRequirement.checkingAction', 'Checking your Mac…')
               : canUpgrade
-                ? translate('macosUpdateRequirement.updateAction', 'How to update macOS')
+                ? t('macosUpdateRequirement.updateAction', 'How to update macOS')
                 : cannotUpgrade
-                  ? translate('macosUpdateRequirement.discussionAction', 'Join the discussion')
-                  : translate('macosUpdateRequirement.checkAction', 'Check compatibility')}
+                  ? t('macosUpdateRequirement.discussionAction', 'Join the discussion')
+                  : t('macosUpdateRequirement.checkAction', 'Check compatibility')}
             {!checking ? <ArrowUpRight className="size-4" aria-hidden /> : null}
           </Button>
         </DialogFooter>

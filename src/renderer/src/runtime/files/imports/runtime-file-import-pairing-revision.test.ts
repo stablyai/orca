@@ -10,7 +10,7 @@ import {
   setRuntimeEnvironmentConnectionGenerationForTests
 } from '@/store/slices/runtime-status/runtime-status-connection-generation'
 
-import { FILE_MUTATION_OWNERSHIP_RUNTIME_CAPABILITY } from '../../../../../shared/files-runtime-capabilities'
+import { FILE_MUTATION_OWNERSHIP_RUNTIME_CAPABILITY } from '../../../../../shared/file-access/files-runtime-capabilities'
 import {
   MIN_COMPATIBLE_RUNTIME_CLIENT_VERSION,
   RUNTIME_PROTOCOL_VERSION

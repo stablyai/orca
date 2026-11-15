@@ -44,7 +44,7 @@ const PR_REFRESH_EXPORTS = [
   'enqueuePRRefresh',
   'refreshPRNow',
   'reportVisiblePRRefreshCandidates',
-  'setPRRefreshOutcomeObserver',
+  'addPRRefreshOutcomeObserver',
   'setPRRefreshRegistrationCheck'
 ] as const
 

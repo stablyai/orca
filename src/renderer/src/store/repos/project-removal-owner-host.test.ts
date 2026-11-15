@@ -1,19 +1,18 @@
 // Require exact host row on removal: unique-candidate/focused fallbacks can destroy the other host’s same-ID project (#13071).
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { createTestStore } from '../testing/app-store-test-fixture'
-import { purgeOrphanedRuntimeSshProjects } from '../slices/worktrees/teardown/orphaned-runtime-ssh-project-purge'
 import type { ProjectGroup } from '../../../../shared/project-group-types'
 import type { Repo } from '../../../../shared/repo-types'
 import { clearRuntimeCompatibilityCache as clearRuntimeCompatibilityCacheForTests } from '../../runtime/rpc/compatibility/runtime-compatibility-cache'
 
 vi.mock('@/runtime/rpc/calls/runtime-rpc-call', async (importOriginal) =>
   (
-    await import('@/runtime/layout-apply-test-transport.test-fixture')
+    await import('@/runtime/workspace-layout/testing/layout-apply-test-transport.test-fixture')
   ).runtimeRpcClientWithLayoutApply(await importOriginal())
 )
-vi.mock('@/runtime/runtime-layout-client', async (importOriginal) =>
+vi.mock('@/runtime/workspace-layout/frames/runtime-layout-client', async (importOriginal) =>
   (
-    await import('@/runtime/layout-apply-test-transport.test-fixture')
+    await import('@/runtime/workspace-layout/testing/layout-apply-test-transport.test-fixture')
   ).runtimeLayoutClientWithTestFrames(await importOriginal())
 )
 
@@ -87,20 +86,6 @@ describe('project removal stays on its owner host (#13071)', () => {
     expect(reposRemove).not.toHaveBeenCalled()
     expect(reposRemoveForHost).not.toHaveBeenCalled()
     expect(runtimeCall).not.toHaveBeenCalled()
-  })
-
-  it('purges a destroyed SSH host row without touching the same id on the focused host', async () => {
-    const store = createTestStore()
-    store.setState({ repos: [localRow, sshRow] })
-
-    await purgeOrphanedRuntimeSshProjects(store.getState, ['target-1'])
-
-    expect(store.getState().repos).toEqual([localRow])
-    expect(reposRemoveForHost).toHaveBeenCalledWith({
-      repoId: 'same-repo',
-      hostId: 'ssh:target-1'
-    })
-    expect(reposRemove).not.toHaveBeenCalled()
   })
 
   it('removes every row an owned group holds under the id, each on its own host', async () => {

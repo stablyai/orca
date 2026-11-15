@@ -8,7 +8,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import type {
   SourceControlActionRecipe,
   SourceControlLaunchActionId
@@ -16,7 +16,7 @@ import type {
 import type { TuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-agent'
 import type { LaunchSource } from '../../../../../../shared/telemetry-events'
 import type { SourceControlAiWriteTarget } from '../../../../../../shared/source-control/ai/settings/source-control-ai-recipe-save'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { SourceControlAgentActionDialog } from '../ai/SourceControlAgentActionDialog'
 
 export type SourceControlFixSplitButtonProps = {
@@ -88,6 +88,7 @@ export function SourceControlFixSplitButton({
   onFixWithDefaultAgent,
   onPromptDelivered
 }: SourceControlFixSplitButtonProps): React.JSX.Element {
+  const t = useTranslate()
   const scope = useSourceControlScope()
   const owner = useSourceControlScopeOwner()
   const [composerOpen, setComposerOpen] = useState(false)
@@ -136,10 +137,7 @@ export function SourceControlFixSplitButton({
               className="gap-2 rounded-[7px] px-2 py-1.5 text-[12px] leading-5 font-medium"
             >
               <SlidersHorizontal className="size-4 text-muted-foreground" />
-              {translate(
-                'auto.components.right.sidebar.SourceControl.f0a2dc9e46',
-                'Customize launch...'
-              )}
+              {t('auto.components.right.sidebar.SourceControl.f0a2dc9e46', 'Customize launch...')}
             </DropdownMenuItem>
           ) : (
             <DropdownMenuItem disabled>{contextUnavailableLabel}</DropdownMenuItem>

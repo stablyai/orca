@@ -1,4 +1,5 @@
 import { getIntlLocale, translate } from '@/i18n/i18n'
+import type { Translate } from '@/i18n/use-translate'
 import type { VisiblePtyRecoveryState } from './terminal-remote-runtime-recovery-ui-state'
 
 /** Why recovery is happening, as far as this client has evidence for it. */
@@ -31,19 +32,20 @@ export function paneRecoveryCause(
 
 export function remoteRuntimeRecoveryCopy(
   cause: RemoteRuntimeRecoveryCause,
-  serverName: string
+  serverName: string,
+  t: Translate = translate
 ): RemoteRuntimeRecoveryCopy {
   const server = { server: serverName }
   switch (cause) {
     case 'connection-lost':
       return {
         retrying: true,
-        title: translate(
+        title: t(
           'auto.components.terminal.pane.TerminalRemoteRuntimeReconnectBanner.connectionLostTitle',
           'Reconnecting to {{server}}',
           server
         ),
-        body: translate(
+        body: t(
           'auto.components.terminal.pane.TerminalRemoteRuntimeReconnectBanner.connectionLostBody',
           'The connection to the server dropped. Orca is retrying automatically, and terminals resume when it returns.'
         )
@@ -51,12 +53,12 @@ export function remoteRuntimeRecoveryCopy(
     case 'server-restarting':
       return {
         retrying: true,
-        title: translate(
+        title: t(
           'auto.components.terminal.pane.TerminalRemoteRuntimeReconnectBanner.serverRestartingTitle',
           '{{server}} is restarting',
           server
         ),
-        body: translate(
+        body: t(
           'auto.components.terminal.pane.TerminalRemoteRuntimeReconnectBanner.serverRestartingBody',
           'Orca reconnects when the server is back, and terminals resume then.'
         )
@@ -64,11 +66,11 @@ export function remoteRuntimeRecoveryCopy(
     case 'stream-stalled':
       return {
         retrying: true,
-        title: translate(
+        title: t(
           'auto.components.terminal.pane.TerminalRemoteRuntimeReconnectBanner.streamStalledTitle',
           'Terminal stopped responding'
         ),
-        body: translate(
+        body: t(
           'auto.components.terminal.pane.TerminalRemoteRuntimeReconnectBanner.streamStalledBody',
           "{{server}} stopped sending this terminal's output. Orca is reattaching it automatically.",
           server
@@ -77,11 +79,11 @@ export function remoteRuntimeRecoveryCopy(
     case 'session-ended':
       return {
         retrying: true,
-        title: translate(
+        title: t(
           'auto.components.terminal.pane.TerminalRemoteRuntimeReconnectBanner.sessionEndedTitle',
           'Reattaching terminal'
         ),
-        body: translate(
+        body: t(
           'auto.components.terminal.pane.TerminalRemoteRuntimeReconnectBanner.sessionEndedBody',
           "{{server}} closed this terminal's stream. Orca is reattaching it automatically.",
           server
@@ -90,11 +92,11 @@ export function remoteRuntimeRecoveryCopy(
     case 'reattaching':
       return {
         retrying: true,
-        title: translate(
+        title: t(
           'auto.components.terminal.pane.TerminalRemoteRuntimeReconnectBanner.sessionEndedTitle',
           'Reattaching terminal'
         ),
-        body: translate(
+        body: t(
           'auto.components.terminal.pane.TerminalRemoteRuntimeReconnectBanner.reattachingBody',
           'Orca is reattaching this terminal to {{server}} automatically.',
           server
@@ -103,12 +105,12 @@ export function remoteRuntimeRecoveryCopy(
     case 'waiting-for-server':
       return {
         retrying: false,
-        title: translate(
+        title: t(
           'auto.components.terminal.pane.TerminalRemoteRuntimeReconnectBanner.waitingTitle',
           'Waiting for {{server}}',
           server
         ),
-        body: translate(
+        body: t(
           'auto.components.terminal.pane.TerminalRemoteRuntimeReconnectBanner.waitingBody',
           'Orca reattaches this terminal when the server offers it again or the connection changes. Reconnect to try now.'
         )
@@ -116,23 +118,27 @@ export function remoteRuntimeRecoveryCopy(
   }
 }
 
-export function remoteRuntimeDownForLabel(downForMs: number): string {
+export function remoteRuntimeDownForLabel(
+  downForMs: number,
+  t: Translate = translate,
+  intlLocale: string = getIntlLocale()
+): string {
   const seconds = Math.max(0, Math.floor(downForMs / 1000))
   const [value, unit] = seconds < 60 ? [seconds, 'second'] : [Math.floor(seconds / 60), 'minute']
-  const duration = new Intl.NumberFormat(getIntlLocale(), {
+  const duration = new Intl.NumberFormat(intlLocale, {
     style: 'unit',
     unit,
     unitDisplay: 'short'
   }).format(value)
-  return translate(
+  return t(
     'auto.components.terminal.pane.TerminalRemoteRuntimeReconnectBanner.downFor',
     'Down for {{duration}}',
     { duration }
   )
 }
 
-export function remoteRuntimeTailscaleHintLabel(): string {
-  return translate(
+export function remoteRuntimeTailscaleHintLabel(t: Translate = translate): string {
+  return t(
     'auto.components.terminal.pane.TerminalRemoteRuntimeReconnectBanner.tailscaleHint',
     'Check the Tailscale path:'
   )

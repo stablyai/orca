@@ -2,12 +2,12 @@ import { useCallback, type Dispatch, type RefObject, type SetStateAction } from 
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
 import { useAppStore } from '@/store/index'
-import type { SlashCommandSuggestion } from '../../../../../../shared/native-chat/input/native-chat-slash-commands'
+import type { SlashCommandSuggestion } from '../../../../../../shared/native-chat/input/commands/native-chat-slash-commands'
 import type { AgentType } from '../../../../../../shared/agent-status/contracts/agent-status-types'
 import { isAiVaultAgent } from '../../../../../../shared/ai-vault/contracts/ai-vault-types'
 import { selectAiVaultPanelWorkspace } from '@/components/right-sidebar/ai-vault/scope/ai-vault-panel-workspace'
 import { openAgentSessionHistoryModal } from '@/components/right-sidebar/ai-vault/panel/agent-session-history-modal'
-import type { NativeChatPickerItem } from '../../../../../../shared/native-chat/input/native-chat-picker-items'
+import type { NativeChatPickerItem } from '../../../../../../shared/native-chat/input/composer/native-chat-picker-items'
 import type { NativeChatPickerState } from '@/components/native-chat/composer/pickers/use-native-chat-picker-state'
 import { findNativeChatTabOwnerWorktreeId } from '@/components/native-chat/pane/ownership/native-chat-tab-owner'
 import {
@@ -252,7 +252,9 @@ export function useNativeChatResumeCommand(args: {
             return
           }
           if (item.name === 'fork') {
-            runFork('/fork')
+            // The picked token may be partial (`/fo`) with text already typed past it.
+            const rest = (textareaRef.current?.value ?? '').replace(/^\/\S*/, '')
+            runFork(`/fork${rest}`)
             return
           }
           // The caret can sit right after `/resume` with a search already typed past it.

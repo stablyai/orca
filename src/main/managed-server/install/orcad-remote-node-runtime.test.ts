@@ -12,7 +12,7 @@ import { join, resolve } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { runProcessSync } from '@orca/process-host'
 import { NODE_RUNTIME_ASSETS, type ServerTarget } from '../../../shared/node-runtime-pin'
-import { ORCAD_NODE_RUNTIME_MARKER_FILENAME } from '../../../shared/orcad-artifacts'
+import { ORCAD_NODE_RUNTIME_MARKER_FILENAME } from '../../../shared/remote-runtime/orcad-distribution/orcad-artifacts'
 import {
   installNodeRuntimeFromHostArchiveCommand,
   nodeRuntimeStoreDir,
@@ -23,9 +23,9 @@ import {
 import {
   REMOTE_NODE_RUNTIME_MISSING,
   REMOTE_NODE_RUNTIME_READY
-} from '../../ssh/orcad-remote-node-runtime-report'
+} from './orcad-remote-node-runtime-report'
 import { orcadNodeSlotRuntimeCommand } from './orcad-remote-runtime'
-import { getRemoteHostPlatform } from '../../ssh/ssh-remote-platform'
+import { getRemoteHostPlatform } from '../../ssh/remote-host/ssh-remote-platform'
 
 const directories: string[] = []
 afterEach(() => {

@@ -4,14 +4,16 @@ import type { OrcaRuntimeWithStoredMobileSnapshotHasStalePreservedTab as Browser
 import type { OrcaRuntimeWithPruneMobileSessionTabGroupLayout as PruneMobileSessionTabGroupLayoutMethods } from '../session-lifecycle/projection/prune-mobile-session-tab-group-layout'
 import type { RuntimeHeadlessTabGroups as HeadlessTabGroupsMethods } from './headless-tab-group-moves'
 import { OrcaRuntimeWithStructuredSessionTabProjection } from './restored-chat-tab-changes'
+import type { BrowserTabInfo } from '../../../shared/browser/runtime/runtime-browser-contracts'
 import type {
-  BrowserTabInfo,
   RuntimeMobileSessionAgentTab,
   RuntimeMobileSessionBrowserTab,
-  RuntimeMobileSessionRetiredTerminalSurface,
-  RuntimeMobileSessionTabsSnapshot,
   RuntimeMobileSessionTerminalTab
-} from '../../../shared/runtime-types'
+} from '../../../shared/remote-runtime/session-graph/runtime-mobile-session-tab-contracts'
+import type {
+  RuntimeMobileSessionRetiredTerminalSurface,
+  RuntimeMobileSessionTabsSnapshot
+} from '../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import type { RuntimePtyWorktreeRecord } from '../terminal/records/runtime-terminal-state-records'
 import type { BrowserSessionTabSelectionOptions } from '../browser/tabs/browser-tab-create-publication'
 import { getRuntimeBrowserPageRegistry } from '../browser/client-pages/runtime-browser-page-registry'
@@ -23,7 +25,7 @@ import {
   withChatTabChanges,
   type ChatTabChange
 } from '../agent-session/agent-session-tab-layout'
-import { createChatTabLayoutQueue } from '../agent-session-tab-layout-queue'
+import { createChatTabLayoutQueue } from '../agent-session/agent-session-tab-layout-queue'
 import type * as LayoutCommands from '../terminal/layout/runtime-layout-apply'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
 import type { LayoutApplyReply } from '../../../shared/workspace-layout/workspace-layout-command-types'
@@ -182,11 +184,11 @@ export abstract class OrcaRuntimeWithCloseStructuredAgentSessionTab extends Orca
     return true
   }
 
-  protected markHeadlessBrowserSessionTabActive(
+  protected async markHeadlessBrowserSessionTabActive(
     worktreeId: string | undefined,
     browserPageId: string,
     options: BrowserSessionTabSelectionOptions
-  ): void {
+  ): Promise<void> {
     if (!worktreeId) {
       return
     }
@@ -227,7 +229,9 @@ export abstract class OrcaRuntimeWithCloseStructuredAgentSessionTab extends Orca
     if (options.caller) {
       // Keep shared selection; only the originating client selects its newly created tab. Local creates lack a caller.
       this.applyMobileSessionTabNavigation(
-        this.getMobileSessionTabsForWorktree(worktreeId, undefined, { includeAgentSenders: false }),
+        await this.getMobileSessionTabsForWorktree(worktreeId, undefined, {
+          includeAgentSenders: false
+        }),
         tab.id,
         options.caller.navigation,
         options.caller.clientNavigationId,

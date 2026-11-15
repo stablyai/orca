@@ -3,12 +3,17 @@ import type { Repo } from '../../../../shared/repo-types'
 import {
   getRepoExecutionHostId,
   getSettingsFocusedExecutionHostId,
+  LOCAL_EXECUTION_HOST_ID,
   normalizeHostPart,
   type ExecutionHostId
 } from '../../../../shared/execution-host'
 import { getRepoHostIdentity } from '../../../../shared/repo-host-identity'
 
 type RepoIdentityParts = Pick<Repo, 'id' | 'connectionId' | 'executionHostId'>
+
+export function worktreeBelongsToHost(worktree: { hostId?: string }, hostId: string): boolean {
+  return (worktree.hostId ?? LOCAL_EXECUTION_HOST_ID) === hostId
+}
 
 export function getRepoRowIdentity(repo: RepoIdentityParts): string {
   return JSON.stringify([getRepoHostIdentity(repo), normalizeHostPart(repo.connectionId)])

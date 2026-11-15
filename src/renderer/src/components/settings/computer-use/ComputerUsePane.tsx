@@ -11,7 +11,9 @@ import { Button } from '../../ui/button'
 import { Badge } from '../../ui/badge'
 import { ComputerUseSkillSetupPanel } from './ComputerUseSkillSetupPanel'
 import { SettingsGroup } from '../section-layout/SettingsGroup'
+import { COMPUTER_USE_SETTINGS_TARGET_ID } from './computer-use-search'
 import { translate } from '@/i18n/i18n'
+import { useTranslate, type Translate } from '@/i18n/use-translate'
 
 type PermissionDefinition = {
   id: ComputerUsePermissionId
@@ -41,15 +43,18 @@ const PERMISSIONS: PermissionDefinition[] = [
   }
 ]
 
-function statusLabel(status: ComputerUsePermissionStatus | undefined): string {
+function statusLabel(
+  status: ComputerUsePermissionStatus | undefined,
+  t: Translate = translate
+): string {
   switch (status) {
     case 'granted':
-      return translate('auto.components.settings.ComputerUsePane.statusGranted', 'Granted')
+      return t('auto.components.settings.ComputerUsePane.statusGranted', 'Granted')
     case 'unsupported':
-      return translate('auto.components.settings.ComputerUsePane.statusUnsupported', 'macOS only')
+      return t('auto.components.settings.ComputerUsePane.statusUnsupported', 'macOS only')
     case 'not-granted':
     case undefined:
-      return translate('auto.components.settings.ComputerUsePane.statusNotEnabled', 'Not enabled')
+      return t('auto.components.settings.ComputerUsePane.statusNotEnabled', 'Not enabled')
   }
 }
 
@@ -61,6 +66,7 @@ function statusClass(status: ComputerUsePermissionStatus | undefined): string {
 }
 
 export function ComputerUsePane(): React.JSX.Element {
+  const t = useTranslate()
   const [platform, setPlatform] = useState<NodeJS.Platform | null>(null)
   const [states, setStates] = useState<ComputerUsePermissionState[]>([])
   const [loading, setLoading] = useState(true)
@@ -85,42 +91,39 @@ export function ComputerUsePane(): React.JSX.Element {
   const resetAccessDisabled =
     resetting || loading || states.length === 0 || pendingId !== null || setupUnavailable
   const summaryTitle = checking
-    ? translate(
+    ? t(
         'auto.components.settings.computerUseSummary.checkingTitle',
         'Checking Computer Use access.'
       )
     : setupUnavailable
-      ? translate(
+      ? t(
           'auto.components.settings.computerUseSummary.unavailableTitle',
           'Computer Use is unavailable.'
         )
       : allGranted
-        ? translate(
-            'auto.components.settings.computerUseSummary.readyTitle',
-            'Computer Use is ready.'
-          )
-        : translate(
+        ? t('auto.components.settings.computerUseSummary.readyTitle', 'Computer Use is ready.')
+        : t(
             'auto.components.settings.computerUseSummary.permissionsTitle',
             'Finish setup to use local apps.'
           )
   const missingCount = PERMISSIONS.length - grantedCount
   const summaryDescription = checking
-    ? translate(
+    ? t(
         'auto.components.settings.computerUseSummary.checkingDescription',
         'Orca is checking macOS privacy permissions for the Computer Use helper.'
       )
     : setupUnavailable
-      ? translate(
+      ? t(
           'auto.components.settings.computerUseSummary.unavailableDescription',
           'Computer Use permissions are unavailable because {{value0}}.',
           { value0: helperUnavailableReason }
         )
       : allGranted
-        ? translate(
+        ? t(
             'auto.components.settings.computerUseSummary.readyDescription',
             'Agents can inspect and operate app windows when you ask.'
           )
-        : translate(
+        : t(
             'auto.components.settings.computerUseSummary.permissionsRequired',
             '{{value0}} permissions required before agents can operate app windows.',
             {
@@ -199,14 +202,14 @@ export function ComputerUsePane(): React.JSX.Element {
       }
       if (result.launchQueued) {
         toast.message(
-          translate(
+          t(
             'auto.components.settings.ComputerUsePane.794807aa21',
             'Queued macOS Privacy & Security; a newer request or a reset may replace it'
           )
         )
       } else if (result.launchedHelper) {
         toast.message(
-          translate(
+          t(
             'auto.components.settings.ComputerUsePane.697005758f',
             'Opened macOS Privacy & Security'
           )
@@ -214,11 +217,11 @@ export function ComputerUsePane(): React.JSX.Element {
       } else {
         toast.message(
           result.platform === 'darwin'
-            ? translate(
+            ? t(
                 'auto.components.settings.ComputerUsePane.740766c291',
                 'Computer Use setup is already complete'
               )
-            : translate(
+            : t(
                 'auto.components.settings.ComputerUsePane.7801ac08ec',
                 'Computer Use permissions are only required on macOS'
               )
@@ -229,7 +232,7 @@ export function ComputerUsePane(): React.JSX.Element {
         toast.error(
           error instanceof Error
             ? error.message
-            : translate(
+            : t(
                 'auto.components.settings.ComputerUsePane.5c45349665',
                 'Could not open Computer Use permissions'
               )
@@ -262,10 +265,7 @@ export function ComputerUsePane(): React.JSX.Element {
       setStates(result.permissions)
       setHelperUnavailableReason(result.helperUnavailableReason)
       toast.message(
-        translate(
-          'auto.components.settings.ComputerUsePane.f189f448a3',
-          'Reset Computer Use access'
-        )
+        t('auto.components.settings.ComputerUsePane.f189f448a3', 'Reset Computer Use access')
       )
     } catch (error) {
       if (operationId !== permissionOperationSequence.current || !mountedRef.current) {
@@ -274,7 +274,7 @@ export function ComputerUsePane(): React.JSX.Element {
       toast.error(
         error instanceof Error
           ? error.message
-          : translate(
+          : t(
               'auto.components.settings.ComputerUsePane.3383ea1aab',
               'Could not reset Computer Use permissions'
             )
@@ -293,7 +293,7 @@ export function ComputerUsePane(): React.JSX.Element {
   return (
     <div className="space-y-8">
       {isMac ? (
-        <SettingsGroup>
+        <SettingsGroup id={COMPUTER_USE_SETTINGS_TARGET_ID}>
           <div className="flex flex-wrap items-start justify-between gap-4 py-4">
             <div className="space-y-1">
               <div className="flex items-center gap-2 text-sm font-medium">
@@ -304,7 +304,7 @@ export function ComputerUsePane(): React.JSX.Element {
                     variant="outline"
                     className="border-emerald-500/30 text-emerald-700 dark:text-emerald-300"
                   >
-                    {translate('auto.components.settings.ComputerUsePane.0c29da5805', 'Ready')}
+                    {t('auto.components.settings.ComputerUsePane.0c29da5805', 'Ready')}
                   </Badge>
                 ) : null}
               </div>
@@ -318,7 +318,7 @@ export function ComputerUsePane(): React.JSX.Element {
               onClick={() => void refresh()}
             >
               <RefreshCw className={`size-3.5 ${loading ? 'animate-spin' : ''}`} />
-              {translate('auto.components.settings.ComputerUsePane.d95d1cfab8', 'Refresh')}
+              {t('auto.components.settings.ComputerUsePane.d95d1cfab8', 'Refresh')}
             </Button>
           </div>
 
@@ -337,18 +337,18 @@ export function ComputerUsePane(): React.JSX.Element {
                   <div className="min-w-0 space-y-1">
                     <div className="flex flex-wrap items-center gap-2">
                       <span className="text-sm font-medium">
-                        {translate(permission.labelKey, permission.labelDefault)}
+                        {t(permission.labelKey, permission.labelDefault)}
                       </span>
                       <span
                         className={`rounded-full border px-2 py-0.5 text-[10px] font-medium uppercase tracking-wider ${statusClass(
                           status
                         )}`}
                       >
-                        {statusLabel(status)}
+                        {statusLabel(status, t)}
                       </span>
                     </div>
                     <p className="text-xs text-muted-foreground">
-                      {translate(permission.descriptionKey, permission.descriptionDefault)}
+                      {t(permission.descriptionKey, permission.descriptionDefault)}
                     </p>
                   </div>
                 </div>
@@ -366,7 +366,7 @@ export function ComputerUsePane(): React.JSX.Element {
                     className="gap-1.5"
                   >
                     <ExternalLink className="size-3.5" />
-                    {translate('auto.components.settings.ComputerUsePane.45f8e22c2e', 'Open')}
+                    {t('auto.components.settings.ComputerUsePane.45f8e22c2e', 'Open')}
                   </Button>
                 </div>
               </div>
@@ -379,17 +379,15 @@ export function ComputerUsePane(): React.JSX.Element {
             className="mb-3 ml-auto block w-28 text-right text-xs text-muted-foreground underline underline-offset-2 hover:text-foreground disabled:pointer-events-none disabled:opacity-50"
           >
             {resetting
-              ? translate(
-                  'auto.components.settings.ComputerUsePane.506f2acf7a',
-                  'Resetting access...'
-                )
-              : translate('auto.components.settings.ComputerUsePane.6b17602073', 'Reset access')}
+              ? t('auto.components.settings.ComputerUsePane.506f2acf7a', 'Resetting access...')
+              : t('auto.components.settings.ComputerUsePane.6b17602073', 'Reset access')}
           </button>
         </SettingsGroup>
       ) : null}
 
-      <SettingsGroup>
-        <div className="py-4">
+      <SettingsGroup id={isMac ? undefined : COMPUTER_USE_SETTINGS_TARGET_ID}>
+        {/* The inline panel adds pt-1.5 of its own; this evens the top inset with the bottom. */}
+        <div className="pb-4 pt-2.5">
           <ComputerUseSkillSetupPanel />
         </div>
       </SettingsGroup>

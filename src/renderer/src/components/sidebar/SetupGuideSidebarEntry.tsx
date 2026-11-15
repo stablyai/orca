@@ -1,7 +1,7 @@
 import React from 'react'
 import { EyeOff } from 'lucide-react'
-import { cn } from '@/lib/utils'
-import { useAppStore } from '@/store'
+import { cn } from '@/lib/class-names'
+import { useAppStore } from '@/store/index'
 import { Button } from '@/components/ui/button'
 import {
   ContextMenu,
@@ -13,10 +13,10 @@ import {
   getFirstIncompleteFeatureWallSetupStepId,
   type FeatureWallSetupStepId
 } from '../../../../shared/feature-wall-setup-steps'
-import type { FeatureWallSetupProgress } from '../feature-wall/feature-wall-setup-progress'
+import type { FeatureWallSetupProgress } from '../feature-wall/setup/feature-wall-setup-progress'
 import { SetupGuideProgressRing } from '../setup-guide/SetupGuideProgressRing'
 import { useSetupGuideProgress } from '../setup-guide/use-setup-guide-progress'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 
 export type SetupGuideEntryVisibilityInput = {
   ready: boolean
@@ -40,6 +40,7 @@ function isSetupGuideSidebarComplete(progress: FeatureWallSetupProgress): boolea
 }
 
 export function SetupGuideSidebarEntry(): React.JSX.Element | null {
+  const t = useTranslate()
   const openModal = useAppStore((s) => s.openModal)
   const activeModal = useAppStore((s) => s.activeModal)
   const persistedUIReady = useAppStore((s) => s.persistedUIReady)
@@ -115,7 +116,7 @@ export function SetupGuideSidebarEntry(): React.JSX.Element | null {
               sizeClassName="size-4"
             />
             <span className="min-w-0 flex-1 truncate">
-              {translate(
+              {t(
                 'auto.components.sidebar.SetupGuideSidebarEntry.88d402b71d',
                 'Onboarding checklist'
               )}
@@ -127,22 +128,19 @@ export function SetupGuideSidebarEntry(): React.JSX.Element | null {
             size="xs"
             className="mr-1"
             onClick={handleHideSetupGuide}
-            aria-label={translate(
+            aria-label={t(
               'auto.components.sidebar.SetupGuideSidebarEntry.b0a7bfc34c',
               'Hide from sidebar'
             )}
           >
-            {translate('auto.components.sidebar.WorktreeVisibilitySourceList.hide', 'Hide')}
+            {t('auto.components.sidebar.WorktreeVisibilitySourceList.hide', 'Hide')}
           </Button>
         </div>
       </ContextMenuTrigger>
       <ContextMenuContent>
         <ContextMenuItem onSelect={handleHideSetupGuide}>
           <EyeOff className="size-3.5" />
-          {translate(
-            'auto.components.sidebar.SetupGuideSidebarEntry.b0a7bfc34c',
-            'Hide from sidebar'
-          )}
+          {t('auto.components.sidebar.SetupGuideSidebarEntry.b0a7bfc34c', 'Hide from sidebar')}
         </ContextMenuItem>
       </ContextMenuContent>
     </ContextMenu>

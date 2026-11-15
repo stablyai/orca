@@ -1,20 +1,20 @@
 import { translate } from '../i18n/mobile-i18n'
-import { triggerError } from '../platform/haptics'
+import { triggerError } from '../platform/haptics/haptics'
 import { TUI_AGENT_DISPLAY_NAMES } from '../../../src/shared/agent-launch/catalog/tui-agent-display-names'
-import type { AgentSessionHandleProvider } from '../../../src/shared/agent-session/lifecycle/agent-session-provider-handle'
+import type { TuiAgent } from '../../../src/shared/agent-launch/catalog/tui-agent'
 import type {
   StructuredAgentSessionCreateParams,
   StructuredAgentSessionForkSource
 } from '../../../src/shared/agent-session/structured-agent-session-create'
 import { AGENT_SESSION_CREATE_TAB_PLACEMENT_RUNTIME_CAPABILITY } from '../../../src/shared/agent-session/agent-session-create-capabilities'
-import { createMobileStructuredAgentSession } from './mobile-structured-agent-session-launch'
+import { createMobileStructuredAgentSession } from './native-chat/agent-session/mobile-structured-agent-session-launch'
 import {
   launchedSelection,
   withLaunchReply,
   withoutUnansweredLaunch
-} from './pending-session-selection'
-import { releaseTerminalCreateLock } from './terminal-create-lock'
-import type { MobileSessionAttachmentsModel } from './use-mobile-session-attachments'
+} from './tabs/pending-session-selection'
+import { releaseTerminalCreateLock } from '../terminal/session/creation/terminal-create-lock'
+import type { MobileSessionAttachmentsModel } from '../files/attachments/use-mobile-session-attachments'
 
 type ForkScope = Pick<
   MobileSessionAttachmentsModel,
@@ -48,7 +48,7 @@ export function mobileChatForkTabPlacement(
  *  Resolves once the outcome is known, so the caller's action stays disabled until then. */
 export async function forkMobileStructuredChat(
   scope: ForkScope,
-  agent: AgentSessionHandleProvider,
+  agent: TuiAgent,
   forkFrom: StructuredAgentSessionForkSource
 ): Promise<void> {
   const agentName = TUI_AGENT_DISPLAY_NAMES[agent]

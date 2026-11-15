@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { DnrRequestAction } from '../ruleset-matcher'
+import type { DnrRequestAction } from '../matching/ruleset-matcher'
 import { DnrMatchedRules } from './browser-extension-dnr-matched-rules'
 
 const EXT = 'e'.repeat(32)

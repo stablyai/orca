@@ -1,8 +1,10 @@
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
-import { copyImageToClipboard } from '@/lib/clipboard-image-copy'
-import { isWebClientLocation } from '@/lib/web-client-location'
-import { CLIPBOARD_IMAGE_TOO_LARGE_ERROR } from '../../../../../../shared/clipboard-image'
+import {
+  clipboardImageCopyErrorDescription,
+  copyImageToClipboard
+} from '@/lib/clipboard/images/clipboard-image-copy'
+import { isWebClientLocation } from '@/app-shell/platform/web-client-location'
 
 /** The chat context menu offers "Copy image" for elements carrying this attribute. */
 const COPY_IMAGE_SRC_SELECTOR = '[data-native-chat-copy-image-src]'
@@ -64,15 +66,7 @@ export async function copyNativeChatImage(image: NativeChatCopyImage): Promise<v
   } catch (error) {
     toast.error(
       translate('components.native-chat.composer.copyImageFailed', "Couldn't copy image"),
-      {
-        description:
-          error instanceof Error && error.message === CLIPBOARD_IMAGE_TOO_LARGE_ERROR
-            ? translate(
-                'components.native-chat.composer.copyImageTooLarge',
-                'The image is too large to copy.'
-              )
-            : undefined
-      }
+      { description: clipboardImageCopyErrorDescription(error) }
     )
   }
 }

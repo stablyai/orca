@@ -50,11 +50,10 @@ if (ROUNDS % 2 !== 0) {
 }
 
 const CHUNK_SOURCE = readFileSync(
-  new URL('../../../../src/main/runtime/rpc/terminal-output-frame-chunks.ts', import.meta.url),
-  'utf8'
-)
-const CLIPBOARD_SOURCE = readFileSync(
-  new URL('../../../../src/shared/clipboard-text.ts', import.meta.url),
+  new URL(
+    '../../../../src/main/runtime/rpc/terminal/terminal-output-frame-chunks.ts',
+    import.meta.url
+  ),
   'utf8'
 )
 
@@ -78,8 +77,7 @@ for (const [source, label, marker] of [
   ],
   [CHUNK_SOURCE, 'terminal-output-frame-chunks.ts', 'const text = data.slice(chunkStart, end)'],
   [CHUNK_SOURCE, 'terminal-output-frame-chunks.ts', 'data.charCodeAt(index + 1)'],
-  [CLIPBOARD_SOURCE, 'clipboard-text.ts', 'export function measureClipboardTextByteLength('],
-  [CLIPBOARD_SOURCE, 'clipboard-text.ts', 'return measureUtf8ByteLength(text, options)'],
+  [UTF8_SOURCE, 'utf8-byte-limits.ts', 'export function measureUtf8ByteLength('],
   [UTF8_SOURCE, 'utf8-byte-limits.ts', 'const codePoint = readUtf8CodePointAt(text, index)']
 ]) {
   if (!source.includes(marker)) {
@@ -98,15 +96,18 @@ const { TERMINAL_STREAM_CHUNK_BYTES } = await import(
     import.meta.url
   ).href
 )
-const { measureClipboardTextByteLength } = await import(
-  new URL('../../../../src/shared/clipboard-text.ts', import.meta.url).href
+const { measureUtf8ByteLength } = await import(
+  new URL('../../../../src/shared/utf8-byte-limits.ts', import.meta.url).href
 )
 const { TerminalStreamOpcode, encodeTerminalStreamJson, encodeTerminalStreamText } = await import(
   new URL('../../../../src/shared/terminal/stream/terminal-stream-protocol.ts', import.meta.url)
     .href
 )
 const { exceedsTerminalStreamChunkBytes, iterateTerminalOutputFrameChunks } = await import(
-  new URL('../../../../src/main/runtime/rpc/terminal-output-frame-chunks.ts', import.meta.url).href
+  new URL(
+    '../../../../src/main/runtime/rpc/terminal/terminal-output-frame-chunks.ts',
+    import.meta.url
+  ).href
 )
 
 function previousGate(data) {
@@ -127,10 +128,7 @@ function* iterateBefore(data, meta) {
     }
     return
   }
-  if (
-    !measureClipboardTextByteLength(data, { stopAfterBytes: TERMINAL_STREAM_CHUNK_BYTES })
-      .exceededLimit
-  ) {
+  if (!measureUtf8ByteLength(data, { stopAfterBytes: TERMINAL_STREAM_CHUNK_BYTES }).exceededLimit) {
     yield { bytes: encodeTerminalStreamText(data), seq: meta?.seq }
     return
   }
@@ -156,7 +154,7 @@ function* iterateBefore(data, meta) {
   }
 
   for (const part of data) {
-    const partBytes = measureClipboardTextByteLength(part).byteLength
+    const partBytes = measureUtf8ByteLength(part).byteLength
     if (chunkBytes > 0 && chunkBytes + partBytes > TERMINAL_STREAM_CHUNK_BYTES) {
       const nextChunk = takeChunk()
       if (nextChunk) {

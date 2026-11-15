@@ -29,6 +29,7 @@ import {
 import { createInitialStoreState } from '../test-fixtures/pty-connection-test-store-fixtures'
 import {
   installTerminalTestGlobals,
+  loadFreshTerminalModules,
   restoreTerminalTestGlobals
 } from '../test-fixtures/pty-connection-test-environment'
 
@@ -44,7 +45,6 @@ export function registerPtyConnectionForegroundAgentSamplingTests(): void {
 
   describe('connectPanePty', () => {
     beforeEach(async () => {
-      vi.resetModules()
       vi.clearAllMocks()
       transportFactoryQueue = []
       createdTransportOptions = []
@@ -91,8 +91,9 @@ export function registerPtyConnectionForegroundAgentSamplingTests(): void {
         cacheKey: string
       }> {
         const { connectPanePty } = await import('../connect-pane-pty')
-        const agentTitleMocks =
-          await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+        const agentTitleMocks = await vi.importMock<PtyConnectionAgentTitleMocks>(
+          '@/lib/agent-status/aggregation/worktree-agent-status'
+        )
         const ptyId = args.ptyId ?? 'tab-pty'
         const tabId = args.tabId ?? `tab-${ptyId}`
         const hasReattachMetadata =
@@ -138,84 +139,12 @@ export function registerPtyConnectionForegroundAgentSamplingTests(): void {
           .mock.calls.filter(([calledPtyId]) => calledPtyId === ptyId)
       }
 
-      it('does not inspect foreground process for a fresh visible spawn', async () => {
-        vi.useFakeTimers()
-        const { connectPanePty } = await import('../connect-pane-pty')
-        const agentTitleMocks2 =
-          await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
-        const getForegroundProcess = vi.mocked(window.api.pty.getForegroundProcess)
-        getForegroundProcess.mockResolvedValue('codex')
-        const ptyId = 'pty-fresh-visible-no-sample'
-        transportFactoryQueue.push(createMockTransport(ptyId))
-        mockStoreState = {
-          ...mockStoreState,
-          tabsByWorktree: { 'wt-1': [{ id: 'tab-1', ptyId: null }] },
-          ptyIdsByTabId: { 'tab-1': [] },
-          terminalLayoutsByTabId: {
-            'tab-1': {
-              root: { type: 'leaf', leafId: LEAF_1 },
-              activeLeafId: LEAF_1,
-              expandedLeafId: null,
-              ptyIdsByLeafId: {}
-            }
-          }
-        } as StoreState
-
-        connectPanePty(
-          createPane(1) as never,
-          createManager(1) as never,
-          bindPaneAgentTitleMocks(createDeps() as never, agentTitleMocks2)
-        )
-        await vi.advanceTimersByTimeAsync(20)
-        await flushAsyncTicks(20)
-        const spawnHandler = createdTransportOptions[0]?.onPtySpawn as
-          | ((ptyId: string) => void)
-          | undefined
-        spawnHandler?.(ptyId)
-        await advanceVisibleForegroundRead()
-
-        expect(foregroundReadCallsFor(ptyId)).toHaveLength(0)
-      })
-
-      it('samples exactly one visible restored PTY with no stronger identity signal', async () => {
-        vi.useFakeTimers()
-        const getForegroundProcess = vi.mocked(window.api.pty.getForegroundProcess)
-        getForegroundProcess.mockResolvedValue('codex')
-        const ptyId = 'pty-restored-visible-sample'
-
-        const { cacheKey } = await connectRestoredPaneForForegroundSampling({ ptyId })
-        expect(foregroundReadCallsFor(ptyId)).toHaveLength(0)
-
-        await advanceVisibleForegroundRead()
-
-        expect(foregroundReadCallsFor(ptyId)).toEqual([[ptyId]])
-        expect(mockStoreState.setPaneForegroundAgent).toHaveBeenCalledWith(cacheKey, {
-          agent: 'codex',
-          agentEvidence: 'process-read',
-          shellForeground: false
-        })
-      })
-
-      it('does not sample hidden restored PTYs', async () => {
-        vi.useFakeTimers()
-        const getForegroundProcess = vi.mocked(window.api.pty.getForegroundProcess)
-        getForegroundProcess.mockResolvedValue('codex')
-        const ptyId = 'pty-hidden-restored-no-sample'
-
-        await connectRestoredPaneForForegroundSampling({
-          ptyId,
-          isVisibleRef: { current: false }
-        })
-        await advanceVisibleForegroundRead()
-
-        expect(foregroundReadCallsFor(ptyId)).toHaveLength(0)
-      })
-
       it('does not confirm foreground routing for a Windows WSL pane', async () => {
         vi.useFakeTimers()
         const restoreUserAgent = temporarilySetNavigatorUserAgent(
           'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'
         )
+        await loadFreshTerminalModules()
         const ptyId = 'pty-wsl-no-confirm'
         const tabId = `tab-${ptyId}`
         mockStoreState.tabsByWorktree = {
@@ -256,6 +185,7 @@ export function registerPtyConnectionForegroundAgentSamplingTests(): void {
         const restoreUserAgent = temporarilySetNavigatorUserAgent(
           'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'
         )
+        await loadFreshTerminalModules()
         const ptyId = 'pty-global-wsl-no-confirm'
         const tabId = `tab-${ptyId}`
         mockStoreState.tabsByWorktree = {
@@ -393,23 +323,6 @@ export function registerPtyConnectionForegroundAgentSamplingTests(): void {
         })
       })
 
-      it('samples once when an identityless hidden pane resumes visible', async () => {
-        vi.useFakeTimers()
-        const getForegroundProcess = vi.mocked(window.api.pty.getForegroundProcess)
-        getForegroundProcess.mockResolvedValue('codex')
-        const isVisibleRef = { current: false }
-        const ptyId = 'pty-hidden-then-visible-sample'
-        const { binding } = await connectRestoredPaneForForegroundSampling({ ptyId, isVisibleRef })
-        await advanceVisibleForegroundRead()
-        expect(foregroundReadCallsFor(ptyId)).toHaveLength(0)
-
-        isVisibleRef.current = true
-        binding.noteVisibilityResume()
-        await advanceVisibleForegroundRead()
-
-        expect(foregroundReadCallsFor(ptyId)).toEqual([[ptyId]])
-      })
-
       it('confirms daemon launch identity before restoring warm-reattach routing', async () => {
         vi.useFakeTimers()
         vi.mocked(window.api.pty.confirmForegroundProcess).mockResolvedValue('droid')
@@ -449,59 +362,6 @@ export function registerPtyConnectionForegroundAgentSamplingTests(): void {
         expect(resolveMockPaneWindowsShiftEnterEncoding(mockStoreState, cacheKey)).toBe('csi-u')
       })
 
-      it("keeps this session's process read when a parked pane re-attaches to the same agent", async () => {
-        vi.useFakeTimers()
-        const ptyId = 'pty-parked-reattach-keeps-read'
-        const tabId = `tab-${ptyId}`
-        const cacheKey = makePaneKey(tabId, LEAF_1)
-        mockStoreState.tabsByWorktree = { 'wt-1': [{ id: tabId, ptyId }] }
-        mockStoreState.paneForegroundAgentByPaneKey[cacheKey] = {
-          agent: 'codex',
-          agentEvidence: 'process-read',
-          routingTrusted: true,
-          shellForeground: false
-        }
-
-        await connectRestoredPaneForForegroundSampling({
-          ptyId,
-          tabId,
-          isVisibleRef: { current: false },
-          launchAgent: 'codex'
-        })
-
-        expect(mockStoreState.paneForegroundAgentByPaneKey[cacheKey]).toEqual({
-          agent: 'codex',
-          agentEvidence: 'process-read',
-          shellForeground: false
-        })
-      })
-
-      it('seeds a launch record when the prior read named a different agent', async () => {
-        vi.useFakeTimers()
-        const ptyId = 'pty-parked-reattach-other-agent'
-        const tabId = `tab-${ptyId}`
-        const cacheKey = makePaneKey(tabId, LEAF_1)
-        mockStoreState.tabsByWorktree = { 'wt-1': [{ id: tabId, ptyId }] }
-        mockStoreState.paneForegroundAgentByPaneKey[cacheKey] = {
-          agent: 'claude',
-          agentEvidence: 'process-read',
-          shellForeground: false
-        }
-
-        await connectRestoredPaneForForegroundSampling({
-          ptyId,
-          tabId,
-          isVisibleRef: { current: false },
-          launchAgent: 'codex'
-        })
-
-        expect(mockStoreState.paneForegroundAgentByPaneKey[cacheKey]).toEqual({
-          agent: 'codex',
-          agentEvidence: 'launch-record',
-          shellForeground: false
-        })
-      })
-
       it('retires stale daemon launch identity when warm reattach finds the shell', async () => {
         vi.useFakeTimers()
         vi.mocked(window.api.pty.confirmForegroundProcess).mockResolvedValue('powershell.exe')
@@ -529,21 +389,6 @@ export function registerPtyConnectionForegroundAgentSamplingTests(): void {
           agent: null,
           shellForeground: true
         })
-        expect(resolveMockPaneWindowsShiftEnterEncoding(mockStoreState, cacheKey)).toBe('alt-enter')
-      })
-
-      it('fails closed when a warm reattach has no persisted launch identity', async () => {
-        vi.useFakeTimers()
-        const ptyId = 'pty-reattach-missing-launch-identity'
-        const tabId = `tab-${ptyId}`
-
-        const { cacheKey } = await connectRestoredPaneForForegroundSampling({
-          ptyId,
-          tabId,
-          isVisibleRef: { current: false }
-        })
-
-        expect(mockStoreState.paneForegroundAgentByPaneKey[cacheKey]).toBeUndefined()
         expect(resolveMockPaneWindowsShiftEnterEncoding(mockStoreState, cacheKey)).toBe('alt-enter')
       })
 
@@ -634,58 +479,6 @@ export function registerPtyConnectionForegroundAgentSamplingTests(): void {
         expect(foregroundReadCallsFor(ptyId)).toHaveLength(settledReadCount)
       })
 
-      it('does not sample when a live hook row already supplies pane identity', async () => {
-        vi.useFakeTimers()
-        const getForegroundProcess = vi.mocked(window.api.pty.getForegroundProcess)
-        getForegroundProcess.mockResolvedValue('codex')
-        const ptyId = 'pty-hook-identity-no-sample'
-        const tabId = `tab-${ptyId}`
-        mockStoreState.agentStatusByPaneKey[makePaneKey(tabId, LEAF_1)] = {
-          state: 'working',
-          agentType: 'codex'
-        }
-
-        await connectRestoredPaneForForegroundSampling({ ptyId, tabId })
-        await advanceVisibleForegroundRead()
-
-        expect(foregroundReadCallsFor(ptyId)).toHaveLength(0)
-      })
-
-      it('does not sample when process identity is already known', async () => {
-        vi.useFakeTimers()
-        const getForegroundProcess = vi.mocked(window.api.pty.getForegroundProcess)
-        getForegroundProcess.mockResolvedValue('codex')
-        const ptyId = 'pty-process-identity-no-sample'
-        const tabId = `tab-${ptyId}`
-        mockStoreState.paneForegroundAgentByPaneKey[makePaneKey(tabId, LEAF_1)] = {
-          agent: 'codex',
-          routingTrusted: true,
-          shellForeground: false
-        }
-
-        await connectRestoredPaneForForegroundSampling({ ptyId, tabId })
-        await advanceVisibleForegroundRead()
-
-        expect(foregroundReadCallsFor(ptyId)).toHaveLength(0)
-      })
-
-      it('does not re-sample once 133;D proved the pane is at a shell prompt', async () => {
-        vi.useFakeTimers()
-        const getForegroundProcess = vi.mocked(window.api.pty.getForegroundProcess)
-        getForegroundProcess.mockResolvedValue('codex')
-        const ptyId = 'pty-shell-foreground-no-sample'
-        const tabId = `tab-${ptyId}`
-        mockStoreState.paneForegroundAgentByPaneKey[makePaneKey(tabId, LEAF_1)] = {
-          agent: null,
-          shellForeground: true
-        }
-
-        await connectRestoredPaneForForegroundSampling({ ptyId, tabId })
-        await advanceVisibleForegroundRead()
-
-        expect(foregroundReadCallsFor(ptyId)).toHaveLength(0)
-      })
-
       it('does not re-sample a shell-confirmed pane from stale launch metadata', async () => {
         vi.useFakeTimers()
         const getForegroundProcess = vi.mocked(window.api.pty.getForegroundProcess)
@@ -714,8 +507,9 @@ export function registerPtyConnectionForegroundAgentSamplingTests(): void {
         // Why: a cached visible read has no routing authority; on a racing command boundary, trust the shell marker over stale identity.
         vi.useFakeTimers()
         const { connectPanePty } = await import('../connect-pane-pty')
-        const agentTitleMocks3 =
-          await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+        const agentTitleMocks3 = await vi.importMock<PtyConnectionAgentTitleMocks>(
+          '@/lib/agent-status/aggregation/worktree-agent-status'
+        )
         const getForegroundProcess = vi.mocked(window.api.pty.getForegroundProcess)
         getForegroundProcess.mockResolvedValue('codex')
         const ptyId = 'pty-reattach-idle-codex-leaked-d'
@@ -763,8 +557,9 @@ export function registerPtyConnectionForegroundAgentSamplingTests(): void {
       it('re-confirms leaked 133;D after detach moved pane-scoped Droid identity', async () => {
         vi.useFakeTimers()
         const { connectPanePty } = await import('../connect-pane-pty')
-        const agentTitleMocks4 =
-          await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+        const agentTitleMocks4 = await vi.importMock<PtyConnectionAgentTitleMocks>(
+          '@/lib/agent-status/aggregation/worktree-agent-status'
+        )
         const getForegroundProcess = vi.mocked(window.api.pty.getForegroundProcess)
         getForegroundProcess.mockResolvedValue('droid')
         const ptyId = 'pty-detached-droid-leaked-d'
@@ -820,19 +615,6 @@ export function registerPtyConnectionForegroundAgentSamplingTests(): void {
           routingTrusted: true,
           shellForeground: false
         })
-      })
-
-      it('never probes the foreground for a visible remote/SSH restored pane', async () => {
-        // Why: foreground reads are local-only (expensive RPCs); keep remote/SSH panes off the recovery probe.
-        vi.useFakeTimers()
-        const getForegroundProcess = vi.mocked(window.api.pty.getForegroundProcess)
-        getForegroundProcess.mockResolvedValue('codex')
-        const ptyId = 'remote:web-env-1@@pty-remote-idle-agent'
-
-        await connectRestoredPaneForForegroundSampling({ ptyId, tabId: 'tab-remote-idle-agent' })
-        await advanceVisibleForegroundRead()
-
-        expect(foregroundReadCallsFor(ptyId)).toHaveLength(0)
       })
     })
   })

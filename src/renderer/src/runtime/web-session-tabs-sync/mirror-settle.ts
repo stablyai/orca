@@ -1,10 +1,10 @@
-import type { RuntimeMobileSessionTabsResult } from '../../../../shared/runtime-types'
+import type { RuntimeMobileSessionTabsResult } from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import { getRuntimeEnvironmentConnectionGeneration } from '@/store/slices/runtime-status/runtime-status-connection-generation'
 import { probeHostLiveTerminals } from '../hosted-terminals/inventory/host-live-terminal-probe'
 import {
   markHostSessionMirrorHydrated,
   markHostSessionMirrorWorktreeHydrated
-} from '../host-session-mirror-hydration'
+} from './hydration/host-session-mirror-hydration'
 import { getRuntimeEnvironmentRevision } from '../rpc/environment-revisions/runtime-environment-revision'
 import { getWebSessionTabsTrackingGeneration } from './tracking-lifecycle'
 import type { WebSessionTabsSnapshotDecision } from './tracking-decisions'

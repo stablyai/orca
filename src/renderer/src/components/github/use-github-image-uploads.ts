@@ -1,7 +1,7 @@
 import { useOsFileDropOwner } from '@/hooks/use-os-file-drop-owner'
 import { useCallback, useLayoutEffect, useRef, useState, type RefObject } from 'react'
 import { toast } from 'sonner'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { captureGitHubImageUpload, type GitHubImageUploadAddress } from './github-image-upload'
 
 export type GitHubImageIntake = {
@@ -11,22 +11,28 @@ export type GitHubImageIntake = {
 }
 
 export function useGitHubImageUploads(options: GitHubImageIntake) {
+  const t = useTranslate()
   const latest = useRef(options)
   const pending = useRef(0)
   const tail = useRef(Promise.resolve())
-  const mounted = useRef(true)
+  const lifetime = useRef<AbortController | null>(null)
   useLayoutEffect(() => {
     latest.current = options
   })
   useLayoutEffect(() => {
-    mounted.current = true
+    const controller = new AbortController()
+    lifetime.current = controller
     return () => {
-      mounted.current = false
+      controller.abort()
       latest.current.onPending?.(false)
     }
   }, [])
 
   const receive = (files: File[], insert: (file: File) => (url?: string) => void): boolean => {
+    const signal = lifetime.current?.signal
+    if (!signal || signal.aborted) {
+      return false
+    }
     const images = files.filter((file) => file.type.startsWith('image/'))
     if (!images.length || latest.current.enabled === false) {
       return false
@@ -44,18 +50,18 @@ export function useGitHubImageUploads(options: GitHubImageIntake) {
         tail.current = tail.current
           .then(async () => {
             try {
-              if (!mounted.current) {
+              if (signal.aborted) {
                 return
               }
-              const url = await upload(file)
-              if (mounted.current) {
+              const url = await upload(file, signal)
+              if (!signal.aborted) {
                 replace(url)
               }
             } catch (error) {
-              if (mounted.current) {
+              if (!signal.aborted) {
                 replace()
                 toast.error(
-                  translate('github.imageUploadFailed', 'Could not attach image: {{message}}', {
+                  t('github.imageUploadFailed', 'Could not attach image: {{message}}', {
                     message:
                       error instanceof Error ? error.message : 'Paste the image again to retry.'
                   })
@@ -63,7 +69,7 @@ export function useGitHubImageUploads(options: GitHubImageIntake) {
               }
             } finally {
               pending.current--
-              if (mounted.current) {
+              if (!signal.aborted) {
                 latest.current.onPending?.(pending.current > 0)
               }
             }
@@ -74,7 +80,7 @@ export function useGitHubImageUploads(options: GitHubImageIntake) {
       toast.error(
         error instanceof Error
           ? error.message
-          : translate('github.imageUploadError', 'GitHub could not upload this image.')
+          : t('github.imageUploadError', 'GitHub could not upload this image.')
       )
     }
     return true

@@ -4,11 +4,14 @@ import { toWebTerminalSurfaceTabId } from '../../../../shared/workspace-layout/t
 import {
   isWebSessionBrowserPlacementGroupReserved,
   peekWebSessionBrowserPlacementGroup
-} from '../web-session-browser-placement'
+} from '../browser/placement/web-session-browser-placement'
 import { peekWebSessionTerminalPlacementGroup } from '../hosted-terminals/placement/web-session-terminal-placement'
-import { reconcileClientOwnedTabPlacement } from '../web-session-client-owned-tab-placement'
+import { reconcileClientOwnedTabPlacement } from './placement/web-session-client-owned-tab-placement'
 import { buildMirroredHostGroups, retainClientPlacedMirroredTabs } from './layout-groups'
 import { sanitizeRecentTabIds, pushRecentTabId } from './state-equality-core'
+import { pruneTabGroupLayout } from './tab-group-layout-tree'
+import type { WebSessionTabsSyncState } from './state'
+import { isSplitLandingGroup } from '../../store/slices/tabs/split-landing-groups'
 
 export function prepareWebSessionTabsSnapshotGroups(
   base: ReturnType<typeof prepareWebSessionTabsSnapshotUnified>
@@ -45,6 +48,9 @@ export function prepareWebSessionTabsSnapshotGroups(
   )
   // Existing client groups own placement: append unseen tabs, drop vanished tabs and honor explicit focus. Only first adoption takes host order/actives/layout.
   const clientOwnedPlacement = (() => {
+    if (!nextUnifiedTabs) {
+      return keepSplitLandingPlacement(state, worktreeId, currentGroups)
+    }
     // preserveLocalLayout owns first adoption too; repair rendered leaves/groups or new tabs can land in invisible groups.
     if (!nextUnifiedTabs || (currentGroups.length === 0 && !options?.preserveLocalLayout)) {
       return null
@@ -241,5 +247,28 @@ export function prepareWebSessionTabsSnapshotGroups(
     clientOwnedPlacement,
     nextGroups,
     nextTabBarOrder
+  }
+}
+
+/** The host lists no tabs: a waiting split chooser is window content it never knew, so it alone fills the workspace. */
+function keepSplitLandingPlacement(
+  state: WebSessionTabsSyncState,
+  worktreeId: string,
+  currentGroups: TabGroup[]
+) {
+  const marks = {
+    groupsByWorktree: state.groupsByWorktree,
+    splitLandingGroupIds: state.splitLandingGroupIds ?? {}
+  }
+  const groups = currentGroups.filter((group) => isSplitLandingGroup(marks, worktreeId, group))
+  if (groups.length === 0) {
+    return null
+  }
+  const keptIds = new Set(groups.map((group) => group.id))
+  const focused = state.activeGroupIdByWorktree[worktreeId]
+  return {
+    groups,
+    activeGroupId: focused && keptIds.has(focused) ? focused : groups[0].id,
+    layout: pruneTabGroupLayout(state.layoutByWorktree[worktreeId], keptIds)
   }
 }

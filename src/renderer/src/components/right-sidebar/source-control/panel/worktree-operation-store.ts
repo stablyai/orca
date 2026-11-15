@@ -186,6 +186,13 @@ export function writeWorktreeCommitDraft(
   }
 }
 
+/** A landed switch clears the last action error, which belonged to the previous branch. */
+export function clearLandedBranchSwitchError(store: WorktreeOperationStore): void {
+  if (store.getState().remoteActionError) {
+    store.setState({ remoteActionError: null })
+  }
+}
+
 export function setCreatePrIntentNotice(
   store: WorktreeOperationStore,
   notice: CreatePrIntentNotice | null

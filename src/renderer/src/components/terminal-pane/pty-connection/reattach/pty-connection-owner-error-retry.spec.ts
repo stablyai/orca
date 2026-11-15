@@ -53,7 +53,6 @@ export function registerPtyConnectionOwnerErrorRetryTests(): void {
   }
   describe('connectPanePty', () => {
     beforeEach(async () => {
-      vi.resetModules()
       vi.clearAllMocks()
       transportFactoryQueue = []
       createdTransportOptions = []
@@ -77,8 +76,9 @@ export function registerPtyConnectionOwnerErrorRetryTests(): void {
 
     it('preserves an owner-unverified restored pane after an empty reattach result', async () => {
       const { connectPanePty } = await import('../connect-pane-pty')
-      const agentTitleMocks13 =
-        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+      const agentTitleMocks13 = await vi.importMock<PtyConnectionAgentTitleMocks>(
+        '@/lib/agent-status/aggregation/worktree-agent-status'
+      )
       const transport = createMockTransport()
       transport.connect.mockImplementation(async (opts: { callbacks?: ConnectCallbacks }) => {
         opts.callbacks?.onError?.('terminal_pane_owner_unverified')
@@ -110,8 +110,9 @@ export function registerPtyConnectionOwnerErrorRetryTests(): void {
 
     it('preserves an owner-unverified restored pane after a rejected reattach', async () => {
       const { connectPanePty } = await import('../connect-pane-pty')
-      const agentTitleMocks14 =
-        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+      const agentTitleMocks14 = await vi.importMock<PtyConnectionAgentTitleMocks>(
+        '@/lib/agent-status/aggregation/worktree-agent-status'
+      )
       const transport = createMockTransport()
       transport.connect.mockRejectedValueOnce(new Error('terminal_pane_owner_unverified'))
       transportFactoryQueue.push(transport)
@@ -140,8 +141,9 @@ export function registerPtyConnectionOwnerErrorRetryTests(): void {
       'preserves an exhausted pane until explicit Retry and clears only the current owner error (fresh: %s)',
       async (fresh) => {
         const { connectPanePty } = await import('../connect-pane-pty')
-        const agentTitleMocks15 =
-          await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+        const agentTitleMocks15 = await vi.importMock<PtyConnectionAgentTitleMocks>(
+          '@/lib/agent-status/aggregation/worktree-agent-status'
+        )
         const transport = createMockTransport()
         transport.connect.mockImplementation(async (opts: { callbacks?: ConnectCallbacks }) => {
           opts.callbacks?.onError?.('terminal_pane_owner_changed')

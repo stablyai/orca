@@ -1,8 +1,8 @@
 import type { OrcaRuntimeService } from '../../orca-runtime'
 import type { RpcAnyMethodDeclaration } from '../core'
 import type { DeviceRegistry } from './pairing/device-registry'
-import type { E2EEKeypair } from '../../e2ee-keypair'
-import type { MobileSocketTransportMetadata } from '../mobile-socket-wiring'
+import type { E2EEKeypair } from './pairing/e2ee-keypair'
+import type { MobileSocketTransportMetadata } from '../mobile/mobile-socket-wiring'
 import type { ServeNetworkSourceOptions } from './serve-network-source-policy'
 import type { PairingRelay } from '../../../../shared/remote-runtime/pairing/mobile-relay-pairing-offer'
 import type { MobilePairingConnectionMode } from '../../../../shared/remote-runtime/pairing/mobile-pairing-connection-mode'
@@ -16,7 +16,7 @@ import type {
 import type {
   RelayDeviceBinding,
   RelayRevokeOutboxItem
-} from '../../mobile-cloud-relay/relay-revoke-outbox'
+} from '../../mobile-cloud-relay/pairing/relay-revoke-outbox'
 
 export const DEFAULT_WS_PORT = 6768
 

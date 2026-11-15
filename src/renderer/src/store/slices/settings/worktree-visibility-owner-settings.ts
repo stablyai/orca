@@ -1,6 +1,6 @@
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import { runtimeEnvironmentSupportsCapability } from '@/runtime/rpc/compatibility/runtime-capability-proof'
-import { defaultScopeHost } from '@/lib/default-creation-host'
+import { defaultScopeHost } from '@/runtime/hosts/selection/default-creation-host'
 import {
   LOCAL_EXECUTION_HOST_ID,
   toRuntimeExecutionHostId,
@@ -9,7 +9,7 @@ import {
 import type { GlobalSettings } from '../../../../../shared/global-settings-types'
 import type { WorktreeVisibilityDefaults } from '../../../../../shared/repo-types'
 import { normalizeWorktreeVisibilityDefaults } from '../../../../../shared/external-worktree-visibility'
-import { WORKTREE_VISIBILITY_SOURCE_DEFAULTS_RUNTIME_CAPABILITY } from '../../../../../shared/worktree-runtime-capabilities'
+import { WORKTREE_VISIBILITY_SOURCE_DEFAULTS_RUNTIME_CAPABILITY } from '../../../../../shared/remote-runtime/protocol/worktree-runtime-capabilities'
 
 export type WorktreeVisibilityDefaultsByHost = Partial<
   Record<ExecutionHostId, WorktreeVisibilityDefaults | null>

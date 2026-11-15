@@ -2,24 +2,26 @@ import type { AutomationDefinitionOperations } from './automation-definition-ope
 
 import type {
   Automation,
-  AutomationPrecheckResult,
-  AutomationRun,
-  AutomationRunOutputSnapshot,
   AutomationSchedulerOwner,
   AutomationUpdateInput
-} from '../../../shared/automations-types'
+} from '../../../shared/automations/automation-definition'
+import type {
+  AutomationPrecheckResult,
+  AutomationRun,
+  AutomationRunOutputSnapshot
+} from '../../../shared/automations/history/automation-run'
 import type { PersistedState } from '../../../shared/persisted-state-types'
 import type { ProjectHostSetup } from '../../../shared/project-types'
 import type { Repo } from '../../../shared/repo-types'
-import { normalizeAutomationPrecheck } from '../../../shared/automation-precheck'
+import { normalizeAutomationPrecheck } from '../../../shared/automations/launch/automation-precheck'
 import { hasExtraAgentArgs } from '../../../shared/agent-launch/startup/automation-extra-agent-args'
-import { getAutomationLegacyRepoId } from '../../../shared/automation-run-identity'
+import { getAutomationLegacyRepoId } from '../../../shared/automations/history/automation-run-identity'
 import { projectHostSetupProjectionFromRepos } from '../../../shared/project-host-setup-projection'
 import {
   type WorkspaceRunContext,
   buildTaskSourceContextFromRepo,
   buildWorkspaceRunContext
-} from '../../../shared/task-source-context'
+} from '../../../shared/work-items/task-source-context'
 import { getRepoExecutionHostId, parseExecutionHostId } from '../../../shared/execution-host'
 import { parsePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
 

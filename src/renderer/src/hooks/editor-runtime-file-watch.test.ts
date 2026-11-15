@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { FsChangedPayload } from '../../../shared/filesystem-entry-types'
+import type { FsChangedPayload } from '../../../shared/file-watch/filesystem-change-event'
 import { subscribeEditorRuntimeFileWatch } from './editor-runtime-file-watch'
 
 const runtime = vi.hoisted(() => ({
@@ -33,10 +33,6 @@ const target = {
   connectionId: undefined,
   runtimeEnvironmentId: 'host-a'
 }
-const change: FsChangedPayload = {
-  worktreePath: '/repo',
-  events: [{ kind: 'update', absolutePath: '/repo/README.md' }]
-}
 function pendingSubscription(): {
   promise: Promise<() => void>
   resolve: (stop: () => void) => void
@@ -61,15 +57,40 @@ beforeEach(() => {
   runtime.subscribe.mockReset()
 })
 
+// The explorer's view of the host directory: whatever the last catch-up re-read saw.
+function hostDirectory(): {
+  host: Set<string>
+  shown: Set<string>
+  onCatchUp: () => void
+} {
+  const host = new Set<string>()
+  const shown = new Set<string>()
+  return {
+    host,
+    shown,
+    onCatchUp: () => {
+      shown.clear()
+      host.forEach((name) => shown.add(name))
+    }
+  }
+}
+function streamCallback(call: number, index: 2 | 3): (error?: Error) => void {
+  const callback: unknown = runtime.subscribe.mock.calls[call]?.[index]
+  if (typeof callback !== 'function') {
+    throw new Error(`stream ${call} registered no ${index === 2 ? 'error' : 'ready'} callback`)
+  }
+  return (error) => callback(error)
+}
+
 describe('editor runtime file watch recovery', () => {
   it('disposes late old stream handles without replacing the current handle', async () => {
     const old = pendingSubscription()
     const fresh = pendingSubscription()
     const stopOld = vi.fn()
     const stopFresh = vi.fn()
-    const onPayload = vi.fn()
+    const onCatchUp = vi.fn()
     runtime.subscribe.mockReturnValueOnce(old.promise).mockReturnValueOnce(fresh.promise)
-    const stop = subscribeEditorRuntimeFileWatch(target, onPayload, vi.fn())
+    const stop = subscribeEditorRuntimeFileWatch(target, vi.fn(), vi.fn(), onCatchUp)
     runtime.contact.get('host-a')?.()
     fresh.resolve(stopFresh)
     await settle()
@@ -77,60 +98,41 @@ describe('editor runtime file watch recovery', () => {
     await settle()
     expect(stopOld).toHaveBeenCalledOnce()
     expect(stopFresh).not.toHaveBeenCalled()
-    expect(onPayload).toHaveBeenCalledOnce()
-    expect(onPayload).toHaveBeenCalledWith({
-      worktreePath: '/repo',
-      events: [{ kind: 'overflow', absolutePath: '/repo' }],
-      resync: true
-    })
+    expect(onCatchUp).toHaveBeenCalledOnce()
     stop()
     expect(stopFresh).toHaveBeenCalledOnce()
   })
 
-  it('drops payloads and errors from replaced attempts and unrelated host contact', async () => {
-    const onPayload = vi.fn()
-    const onError = vi.fn()
-    runtime.subscribe.mockImplementation((_context, payload, error) => {
-      runtime.payloads.push(payload)
-      runtime.errors.push(error)
-      return Promise.resolve(vi.fn())
-    })
-    const stop = subscribeEditorRuntimeFileWatch(target, onPayload, onError)
+  it('shows files written before the host watcher was installed', async () => {
+    const dir = hostDirectory()
+    runtime.subscribe.mockResolvedValue(vi.fn())
+    subscribeEditorRuntimeFileWatch(target, vi.fn(), vi.fn(), dir.onCatchUp)
     await settle()
-    runtime.contact.get('host-b')?.()
-    expect(runtime.subscribe).toHaveBeenCalledOnce()
+    dir.host.add('BEFORE_FIRST_READY.txt')
+    streamCallback(0, 3)()
+    expect([...dir.shown]).toEqual(['BEFORE_FIRST_READY.txt'])
+
     runtime.contact.get('host-a')?.()
+    dir.host.add('DURING_OUTAGE.txt')
     await settle()
-    onPayload.mockClear()
-    runtime.payloads[0](change)
-    runtime.errors[0](new Error('old transport'))
-    expect(onPayload).not.toHaveBeenCalled()
-    expect(onError).not.toHaveBeenCalled()
-    runtime.payloads[1](change)
-    expect(onPayload).toHaveBeenCalledOnce()
-    stop()
-    runtime.payloads[1](change)
-    runtime.contact.get('host-a')?.()
-    expect(onPayload).toHaveBeenCalledOnce()
-    expect(runtime.subscribe).toHaveBeenCalledTimes(2)
+    // Install can stay pending on the restarted host, so outage changes must not wait for it.
+    expect(dir.shown.has('DURING_OUTAGE.txt')).toBe(true)
+    dir.host.add('BEFORE_RECOVERED_READY.txt')
+    streamCallback(1, 3)()
+    expect(dir.shown.has('BEFORE_RECOVERED_READY.txt')).toBe(true)
   })
 
-  it('stops on owner retirement so a same-ID replacement cannot revive old work', async () => {
-    const stopStream = vi.fn()
-    runtime.subscribe.mockResolvedValue(stopStream)
-    const stop = subscribeEditorRuntimeFileWatch(target, vi.fn(), vi.fn())
-    await settle()
-    for (const retire of runtime.retire) {
-      retire(['host-b'])
-    }
-    expect(stopStream).not.toHaveBeenCalled()
-    for (const retire of runtime.retire) {
-      retire(['host-a'])
-    }
-    expect(stopStream).toHaveBeenCalledOnce()
+  it('re-reads once more when the recovered host watcher fails to install', async () => {
+    const dir = hostDirectory()
+    const onError = vi.fn()
+    runtime.subscribe.mockResolvedValue(vi.fn())
+    subscribeEditorRuntimeFileWatch(target, vi.fn(), onError, dir.onCatchUp)
     runtime.contact.get('host-a')?.()
-    expect(runtime.subscribe).toHaveBeenCalledOnce()
-    stop()
-    expect(stopStream).toHaveBeenCalledOnce()
+    await settle()
+    dir.host.add('BEFORE_INSTALL_FAILED.txt')
+    const failure = new Error('watcher capacity')
+    streamCallback(1, 2)(failure)
+    expect([...dir.shown]).toEqual(['BEFORE_INSTALL_FAILED.txt'])
+    expect(onError).toHaveBeenCalledWith(failure)
   })
 })

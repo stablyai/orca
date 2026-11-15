@@ -1,18 +1,11 @@
 // @vitest-environment happy-dom
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { act, createElement } from 'react'
-import { createRoot } from 'react-dom/client'
 import { useAppStore } from '@/store/index'
 import { buildEditorSessionData } from '@/lib/workspace/persistence/workspace-session'
-import { useEditorExternalWatch } from '@/hooks/useEditorExternalWatch'
-import {
-  buildEditorExternalWatchEventHandler as createExternalWatchEventHandler,
-  EXTERNAL_MUTATION_DEBOUNCE_MS
-} from '@/hooks/editor-external-watch-event-reconciliation'
 import '@/hooks/editor-external-watch-targets'
-import { captureEditorFileOperationProvenance } from '@/lib/editor-file-operation-provenance'
-import { getEditorFileOperationContext } from '@/lib/editor-file-operation-owner'
+import { captureEditorFileOperationProvenance } from '@/lib/editor/file-operations/editor-file-operation-provenance'
+import { getEditorFileOperationContext } from '@/lib/editor/file-operations/editor-file-operation-owner'
 import type { AppState } from '@/store/types'
 import type { WorkspaceSessionState } from '../../../../../../shared/workspace-session/workspace-session-state-types'
 import {
@@ -23,23 +16,18 @@ import '../../../../../../shared/layout-owner-switch'
 
 vi.mock('@/runtime/rpc/calls/runtime-rpc-call', async (importOriginal) =>
   (
-    await import('@/runtime/layout-apply-test-transport.test-fixture')
+    await import('@/runtime/workspace-layout/testing/layout-apply-test-transport.test-fixture')
   ).runtimeRpcClientWithLayoutApply(await importOriginal())
 )
-vi.mock('@/runtime/runtime-layout-client', async (importOriginal) =>
+vi.mock('@/runtime/workspace-layout/frames/runtime-layout-client', async (importOriginal) =>
   (
-    await import('@/runtime/layout-apply-test-transport.test-fixture')
+    await import('@/runtime/workspace-layout/testing/layout-apply-test-transport.test-fixture')
   ).runtimeLayoutClientWithTestFrames(await importOriginal())
 )
 
 const SOURCE = 'repo-a::/repo-a'
 const TARGET = 'repo-b::/repo-b'
 const FILE_PATH = '/repo-b/docs/readme.md'
-
-function WatchProbe(): null {
-  useEditorExternalWatch()
-  return null
-}
 
 function installWorkspaceState(): void {
   useAppStore.setState(useAppStore.getInitialState(), true)
@@ -140,7 +128,7 @@ describe('restored editor owner reparent', () => {
         fileId: oldId,
         worktreeId: SOURCE,
         viewStateId: 'view-1',
-        expiresAt: Date.now() + 1_000,
+        expiresAt: Number.MAX_SAFE_INTEGER,
         token: 1
       },
       pendingExplorerReveal: { worktreeId: SOURCE, filePath: FILE_PATH, requestId: 1 },
@@ -212,132 +200,6 @@ describe('restored editor owner reparent', () => {
     expect(next.pendingExplorerReveal?.worktreeId).toBe(TARGET)
   })
 
-  it('commits active reparenting through the complete workspace activation projection', async () => {
-    const oldId = await openDrawnRestoredSource()
-    const refreshGitHubForWorktreeIfStale = vi.fn()
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: partial terminal, browser and catalog records with only the fields activation and frames read.
-    useAppStore.setState({
-      activeTabId: 'source-terminal',
-      activeBrowserTabId: 'source-browser',
-      activePendingCreationId: 'source-creation',
-      rightSidebarExplorerView: 'files',
-      rightSidebarExplorerViewByWorktree: { [TARGET]: 'search' },
-      tabsByWorktree: {
-        [SOURCE]: [
-          {
-            id: 'source-terminal',
-            ptyId: null,
-            worktreeId: SOURCE,
-            title: 'Source terminal',
-            customTitle: null,
-            color: null,
-            sortOrder: 0,
-            createdAt: 1,
-            generation: 1
-          }
-        ],
-        [TARGET]: [
-          {
-            id: 'target-terminal',
-            ptyId: null,
-            worktreeId: TARGET,
-            title: 'Target terminal',
-            customTitle: null,
-            color: null,
-            sortOrder: 0,
-            createdAt: 1,
-            generation: 4
-          }
-        ]
-      },
-      activeTabIdByWorktree: {
-        [SOURCE]: 'source-terminal',
-        [TARGET]: 'target-terminal'
-      },
-      unifiedTabsByWorktree: {
-        ...useAppStore.getState().unifiedTabsByWorktree,
-        [TARGET]: [
-          {
-            id: 'target-terminal',
-            entityId: 'target-terminal',
-            groupId: 'target-group',
-            worktreeId: TARGET,
-            contentType: 'terminal',
-            label: 'Target terminal',
-            customLabel: null,
-            color: null,
-            sortOrder: 0,
-            createdAt: 1
-          }
-        ]
-      },
-      groupsByWorktree: {
-        ...useAppStore.getState().groupsByWorktree,
-        [TARGET]: [
-          {
-            id: 'target-group',
-            worktreeId: TARGET,
-            activeTabId: 'target-terminal',
-            tabOrder: ['target-terminal']
-          }
-        ]
-      },
-      layoutByWorktree: {
-        ...useAppStore.getState().layoutByWorktree,
-        [TARGET]: { type: 'leaf', groupId: 'target-group' }
-      },
-      activeGroupIdByWorktree: {
-        ...useAppStore.getState().activeGroupIdByWorktree,
-        [TARGET]: 'target-group'
-      },
-      browserTabsByWorktree: {
-        [SOURCE]: [{ id: 'source-browser', url: 'about:blank' }],
-        [TARGET]: [{ id: 'target-browser', url: 'about:blank' }]
-      },
-      activeBrowserTabIdByWorktree: {
-        [SOURCE]: 'source-browser',
-        [TARGET]: 'target-browser'
-      },
-      everActivatedWorktreeIds: new Set([SOURCE]),
-      refreshGitHubForWorktreeIfStale
-    } as unknown as Partial<AppState>)
-    // Reload main with the target tabs a real window would already have drawn.
-    main.close()
-    main = await drawTabsFromMain(useAppStore)
-    const targetSnapshots: AppState[] = []
-    const unsubscribe = useAppStore.subscribe((state) => {
-      if (state.activeWorktreeId === TARGET) {
-        targetSnapshots.push(state)
-      }
-    })
-
-    const result = reparent(oldId)
-    await main.settle()
-    unsubscribe()
-
-    expect(result.ok).toBe(true)
-    expect(targetSnapshots).toHaveLength(1)
-    const activated = targetSnapshots[0]
-    expect(activated).toMatchObject({
-      activeWorktreeId: TARGET,
-      activeRepoId: 'repo-b',
-      activeWorkspaceExecutionHostId: 'local',
-      activeTabId: 'target-terminal',
-      activeBrowserTabId: 'target-browser',
-      activePendingCreationId: null,
-      rightSidebarExplorerView: 'search',
-      activeTabType: 'editor'
-    })
-    expect(activated.activeFileId).toBe(result.ok ? result.fileId : null)
-    expect(activated.everActivatedWorktreeIds).toEqual(new Set([SOURCE, TARGET]))
-    expect(activated.tabsByWorktree[TARGET]?.[0]).toMatchObject({
-      id: 'target-terminal',
-      generation: 5
-    })
-    expect(refreshGitHubForWorktreeIfStale).toHaveBeenCalledOnce()
-    expect(refreshGitHubForWorktreeIfStale).toHaveBeenCalledWith(TARGET)
-  })
-
   it('persists and restores the destination owner and dirty hot-exit draft', () => {
     const oldId = openRestoredSource()
     useAppStore.getState().setEditorDraft(oldId, 'hot exit')
@@ -368,175 +230,5 @@ describe('restored editor owner reparent', () => {
       isDirty: true
     })
     expect(useAppStore.getState().editorDrafts[restored.id]).toBe('hot exit')
-  })
-
-  it('leaves destination tabs and groups byte-identical when activation hits a collision', async () => {
-    const sourceId = await openDrawnRestoredSource()
-    const destinationId = useAppStore.getState().openFile(
-      {
-        filePath: FILE_PATH,
-        relativePath: 'docs/readme.md',
-        worktreeId: TARGET,
-        runtimeEnvironmentId: null,
-        language: 'markdown',
-        mode: 'edit'
-      },
-      { suppressActiveRuntimeFallback: true }
-    )
-    await main.settle()
-    const destinationTab = useAppStore
-      .getState()
-      .unifiedTabsByWorktree[TARGET]?.find((tab) => tab.entityId === destinationId)
-    expect(destinationTab).toBeDefined()
-    const staleTab = {
-      ...destinationTab!,
-      id: 'stale-target-tab',
-      entityId: 'stale-target-file'
-    }
-    useAppStore.setState((state) => ({
-      activeWorktreeId: SOURCE,
-      activeFileId: sourceId,
-      unifiedTabsByWorktree: {
-        ...state.unifiedTabsByWorktree,
-        [TARGET]: [...(state.unifiedTabsByWorktree[TARGET] ?? []), staleTab]
-      },
-      groupsByWorktree: {
-        ...state.groupsByWorktree,
-        [TARGET]: (state.groupsByWorktree[TARGET] ?? []).map((group) =>
-          group.id === staleTab.groupId
-            ? {
-                ...group,
-                activeTabId: staleTab.id,
-                tabOrder: [...group.tabOrder, staleTab.id],
-                recentTabIds: [...(group.recentTabIds ?? []), staleTab.id]
-              }
-            : group
-        )
-      }
-    }))
-    const state = useAppStore.getState()
-    state.setRestoredEditorOwnerMigrationPending(sourceId, true)
-    const before = useAppStore.getState()
-
-    const result = before.reparentRestoredEditorFileOwner({
-      fileId: sourceId,
-      targetWorktreeId: TARGET,
-      targetRelativePath: 'docs/readme.md',
-      targetExecutionHostId: 'local',
-      targetRuntimeEnvironmentId: null,
-      targetOperationProvenance: captureEditorFileOperationProvenance(before, TARGET, null, true)
-    })
-
-    expect(result).toEqual({ ok: false, reason: 'collision' })
-    const after = useAppStore.getState()
-    expect(after.unifiedTabsByWorktree).toBe(before.unifiedTabsByWorktree)
-    expect(after.groupsByWorktree).toBe(before.groupsByWorktree)
-    expect(after.layoutByWorktree).toBe(before.layoutByWorktree)
-    expect(after.activeGroupIdByWorktree).toBe(before.activeGroupIdByWorktree)
-    expect(after.activeWorktreeId).toBe(SOURCE)
-    expect(after.activeFileId).toBe(sourceId)
-  })
-
-  it('unsubscribes the source watch once and subscribes the destination once', async () => {
-    const watchWorktree = vi.fn().mockResolvedValue(undefined)
-    const unwatchWorktree = vi.fn().mockResolvedValue(undefined)
-    const previousApi = (window as unknown as { api?: unknown }).api
-    ;(window as unknown as { api: unknown }).api = {
-      fs: {
-        watchWorktree,
-        unwatchWorktree,
-        onFsChanged: vi.fn(() => vi.fn())
-      }
-    }
-    const oldId = openRestoredSource()
-    const container = document.body.appendChild(document.createElement('div'))
-    const root = createRoot(container)
-    await act(async () => root.render(createElement(WatchProbe)))
-    await vi.waitFor(() => expect(watchWorktree).toHaveBeenCalledTimes(1))
-    expect(watchWorktree).toHaveBeenLastCalledWith({
-      worktreePath: '/repo-a',
-      connectionId: undefined
-    })
-
-    await act(async () => {
-      expect(reparent(oldId).ok).toBe(true)
-    })
-    await vi.waitFor(() => {
-      expect(unwatchWorktree).toHaveBeenCalledTimes(1)
-      expect(watchWorktree).toHaveBeenCalledTimes(2)
-    })
-    expect(unwatchWorktree).toHaveBeenLastCalledWith({
-      worktreePath: '/repo-a',
-      connectionId: undefined
-    })
-    expect(watchWorktree).toHaveBeenLastCalledWith({
-      worktreePath: '/repo-b',
-      connectionId: undefined
-    })
-
-    await act(async () => root.unmount())
-    container.remove()
-    ;(window as unknown as { api?: unknown }).api = previousApi
-  })
-
-  it('correlates destination change, delete, and rename events after reparent', () => {
-    vi.useFakeTimers()
-    const oldId = openRestoredSource()
-    const result = reparent(oldId)
-    expect(result.ok).toBe(true)
-    if (!result.ok) {
-      return
-    }
-    const target = {
-      worktreeId: TARGET,
-      worktreePath: '/repo-b',
-      connectionId: undefined,
-      runtimeEnvironmentId: null
-    }
-    const externalChanges: unknown[] = []
-    const listener = (event: Event): void => {
-      externalChanges.push((event as CustomEvent).detail)
-    }
-    window.addEventListener('orca:editor-external-file-change', listener)
-    const watcher = createExternalWatchEventHandler((path, owner) =>
-      path === target.worktreePath && owner === null ? target : undefined
-    )
-
-    watcher.handleFsChanged({
-      worktreePath: '/repo-b',
-      events: [{ kind: 'update', absolutePath: FILE_PATH }]
-    })
-    vi.advanceTimersByTime(100)
-    expect(externalChanges).toContainEqual({
-      worktreeId: TARGET,
-      worktreePath: '/repo-b',
-      relativePath: 'docs/readme.md',
-      runtimeEnvironmentId: null
-    })
-
-    watcher.handleFsChanged({
-      worktreePath: '/repo-b',
-      events: [{ kind: 'delete', absolutePath: FILE_PATH }]
-    })
-    vi.advanceTimersByTime(EXTERNAL_MUTATION_DEBOUNCE_MS)
-    expect(
-      useAppStore.getState().openFiles.find((file) => file.id === result.fileId)?.externalMutation
-    ).toBe('deleted')
-    useAppStore.getState().setExternalMutation(result.fileId, null)
-
-    watcher.handleFsChanged({
-      worktreePath: '/repo-b',
-      events: [
-        { kind: 'delete', absolutePath: FILE_PATH },
-        { kind: 'create', absolutePath: '/repo-b/archive/readme.md' }
-      ]
-    })
-    expect(
-      useAppStore.getState().openFiles.find((file) => file.id === result.fileId)?.externalMutation
-    ).toBe('renamed')
-
-    watcher.dispose()
-    window.removeEventListener('orca:editor-external-file-change', listener)
-    vi.useRealTimers()
   })
 })

@@ -1,8 +1,10 @@
 import { translate } from '@/i18n/i18n'
+import type { Translate } from '@/i18n/use-translate'
 import type { AgentLaunchPaneOutcome } from '../../../../../shared/agent-launch/contracts/agent-launch-pane-verdict'
 import { stripClientEnvironmentFooter } from '../../../../../shared/client-environment-info'
 import type { TerminalTab } from '../../../../../shared/workspace-layout/terminal-tab-types'
 import { tuiAgentDisplayName } from '../../../../../shared/agent-launch/catalog/tui-agent-display-names'
+import { joinSentences } from '../../../../../shared/sentence-joining'
 
 /** What the pane shows, if its tab keeps a final launch outcome for this leaf. */
 export function agentLaunchPaneOutcomeForLeaf(
@@ -14,23 +16,23 @@ export function agentLaunchPaneOutcomeForLeaf(
 }
 
 /** The recorded reason in words a user can act on; null when it names nothing they can fix. */
-function notStartedReason(code: string, agent: string): string | null {
+function notStartedReason(code: string, agent: string, t: Translate = translate): string | null {
   if (code.includes('ENOENT')) {
-    return translate(
+    return t(
       'auto.components.terminal.pane.AgentLaunchPaneNotice.commandNotFound',
       "{{agent}} couldn't start because its command wasn't found on this machine.",
       { agent }
     )
   }
   if (code === 'agent_session_exited_during_start') {
-    return translate(
+    return t(
       'auto.components.terminal.pane.AgentLaunchPaneNotice.exitedDuringStart',
       '{{agent}} exited while starting.',
       { agent }
     )
   }
   if (code === 'worktree_not_found') {
-    return translate(
+    return t(
       'auto.components.terminal.pane.AgentLaunchPaneNotice.workspaceGone',
       "{{agent}} couldn't start because its workspace is no longer available.",
       { agent }
@@ -41,50 +43,54 @@ function notStartedReason(code: string, agent: string): string | null {
 
 export function agentLaunchPaneNoticeText(
   refusal: AgentLaunchPaneOutcome,
-  agentId?: string | null
+  agentId?: string | null,
+  t: Translate = translate
 ): string {
   const agent =
     tuiAgentDisplayName(agentId ?? '') ??
-    translate('auto.components.terminal.pane.AgentLaunchPaneNotice.agent', 'The agent')
+    t('auto.components.terminal.pane.AgentLaunchPaneNotice.agent', 'The agent')
   if (refusal.initialOutputDiagnostic === 'git-bash-console-capacity') {
-    const explanation = translate(
+    const explanation = t(
       'auto.components.terminal.pane.AgentLaunchPaneNotice.gitBashConsoleCapacity',
       'Git Bash reported its limit of 128 open terminals on this PC while starting {{agent}}. Close some Git Bash terminals and try again.',
       { agent }
     )
     return refusal.kind === 'unconfirmed'
-      ? `${translate(
-          'auto.components.terminal.pane.AgentLaunchPaneNotice.unconfirmed',
-          "Couldn't confirm {{agent}} started. Check its terminal before trying again.",
-          { agent }
-        )} ${explanation}`
+      ? joinSentences([
+          t(
+            'auto.components.terminal.pane.AgentLaunchPaneNotice.unconfirmed',
+            "Couldn't confirm {{agent}} started. Check its terminal before trying again.",
+            { agent }
+          ),
+          explanation
+        ])
       : explanation
   }
   if (refusal.kind === 'unconfirmed') {
-    return translate(
+    return t(
       'auto.components.terminal.pane.AgentLaunchPaneNotice.unconfirmed',
       "Couldn't confirm {{agent}} started. Check its terminal before trying again.",
       { agent }
     )
   }
   const reason =
-    notStartedReason(refusal.code, agent) ??
-    translate(
+    notStartedReason(refusal.code, agent, t) ??
+    t(
       'auto.components.terminal.pane.AgentLaunchPaneNotice.notStarted',
       "{{agent}} couldn't start.",
       { agent }
     )
   const action =
     refusal.code === 'worktree_not_found'
-      ? translate(
+      ? t(
           'auto.components.terminal.pane.AgentLaunchPaneNotice.restoreWorkspace',
           'Restore the workspace folder or open an available workspace, then try again.'
         )
-      : translate(
+      : t(
           'auto.components.terminal.pane.AgentLaunchPaneNotice.tryInTerminal',
           'Run it in a terminal in this folder to see why, then try again.'
         )
-  return `${reason} ${action}`
+  return joinSentences([reason, action])
 }
 
 function startupCode(line: string): string | undefined {
@@ -99,7 +105,11 @@ export function isAgentLaunchOnlyError(error: string): boolean {
 }
 
 /** Older hosts send startup reasons as strings, sometimes wrapped in an IPC error. */
-export function agentLaunchErrorText(error: string, agentId?: string | null): string | null {
+export function agentLaunchErrorText(
+  error: string,
+  agentId?: string | null,
+  t?: Translate
+): string | null {
   let found = false
   const text = error
     .split('\n')
@@ -114,7 +124,7 @@ export function agentLaunchErrorText(error: string, agentId?: string | null): st
         code === 'agent_session_exited_during_start' || code === 'worktree_not_found'
           ? { kind: 'not-started', code }
           : { kind: 'unconfirmed' }
-      return agentLaunchPaneNoticeText(outcome, agentId)
+      return agentLaunchPaneNoticeText(outcome, agentId, t)
     })
     .join('\n')
   return found ? text : null

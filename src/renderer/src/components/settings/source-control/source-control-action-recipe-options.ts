@@ -11,7 +11,7 @@ import {
   isCustomAgentId,
   listCommitMessageAgentCapabilities
 } from '../../../../../shared/source-control/ai/generation/commit-message-agent-spec'
-import { getAgentCatalog, type AgentCatalogEntry } from '@/lib/agent-catalog'
+import { getAgentCatalog, type AgentCatalogEntry } from '@/lib/agent-catalog/agent-catalog'
 import { createLocalizedCatalog } from '@/i18n/localized-catalog'
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
@@ -26,6 +26,10 @@ export const getActionDescriptions = createLocalizedCatalog((): Record<AiActionI
   conversationName: translate(
     'settings.chat.names.recipeDescription',
     'Generate a short name from the first message in a new chat.'
+  ),
+  dictationCleanup: translate(
+    'settings.voice.cleanup.recipeDescription',
+    'Clean up dictated text before it lands.'
   ),
   commitMessage: translate(
     'auto.components.settings.source.control.action.recipe.options.commitMessage',
@@ -60,6 +64,9 @@ export const getActionDescriptions = createLocalizedCatalog((): Record<AiActionI
     'Start an agent from selected unresolved PR or MR comments.'
   )
 }))
+
+// Their CLIs can't take the read-only tool policy, so they run only naming tasks (source-control-read-only-policy.ts).
+const NAMING_ONLY_TEXT_AGENT_IDS = new Set<string>(['amp', 'muse'])
 
 const FALLBACK_AGENT_ARGS_PLACEHOLDER = '--model sonnet'
 
@@ -108,7 +115,10 @@ export function getAgentCatalogForAction(
     return getAgentCatalog()
   }
   return getAgentCatalog().filter(
-    (agent) => TEXT_GENERATION_AGENT_ID_SET.has(agent.id) || agent.id === selectedAgent
+    (agent) =>
+      (TEXT_GENERATION_AGENT_ID_SET.has(agent.id) &&
+        !(actionId === 'dictationCleanup' && NAMING_ONLY_TEXT_AGENT_IDS.has(agent.id))) ||
+      agent.id === selectedAgent
   )
 }
 

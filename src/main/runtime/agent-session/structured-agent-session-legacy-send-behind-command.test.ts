@@ -1,15 +1,16 @@
+import { readTestHostJournal } from '../../native-chat/agent-session-journal/journal-observation.test-support'
 // Clients without accepted-send support wait for handover; sends queued behind compact must answer when queued to avoid the phone timeout.
 
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import type { AgentSessionSendResult } from '../../../shared/agent-session/agent-session-wire'
-import { ensureStructuredAgentSessionHost } from './structured-agent-session-runtime'
+import { ensureTestStructuredAgentSessionHost as ensureStructuredAgentSessionHost } from './records/agent-session-record-store-test-harness'
 import {
   openStructuredCodexRpcHarness,
   SESSION,
   THREAD,
   type FakeCodexConnection,
   type StructuredCodexRpcHarness
-} from '../structured-codex-session-rpc-test-harness'
+} from '../rpc/methods/structured-sessions/structured-codex-session-rpc-test-harness'
 
 const COMPACTION_TURN = 'compaction-turn'
 // Far under the phone's 15 s send timeout, and far over a handover that is already due.
@@ -83,9 +84,10 @@ it('answers a send queued behind /compact at once, and delivers it once after th
   })
 
   await vi.waitFor(() => expect(calls('turn/start')).toHaveLength(1))
-  const journal = await (
-    await ensureStructuredAgentSessionHost(harness.hostConfig())
-  ).journalSnapshot(SESSION)
+  const journal = await readTestHostJournal(
+    await ensureStructuredAgentSessionHost(harness.hostConfig()),
+    SESSION
+  )
   expect(
     journal.submissions.filter((entry) => entry.queuedMessageId === answer.queued.messageId)
   ).toEqual([expect.objectContaining({ handedOverAt: expect.any(Number) })])

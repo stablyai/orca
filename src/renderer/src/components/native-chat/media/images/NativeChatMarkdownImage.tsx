@@ -18,7 +18,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
-import { chatImageAccess } from '@/lib/local-file-access'
+import { chatImageAccess } from '@/lib/files/access/local-file-access'
 import { runtimeTargetEnvironmentId } from '@/runtime/rpc/targets/runtime-client-target'
 import { basename } from '@/lib/path'
 import { useTranslate } from '@/i18n/use-translate'

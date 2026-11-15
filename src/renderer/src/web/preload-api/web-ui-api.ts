@@ -7,8 +7,8 @@ import { assertClipboardTextWithinLimitWithYield } from '../../../../shared/clip
 import type { ReadClipboardTextOptions } from '../../../../shared/clipboard-text'
 import { normalizeFeatureInteractions } from '../../../../shared/feature-interactions'
 import type { FeatureInteractionId } from '../../../../shared/feature-interactions'
-import { omitPairingLocalUiFields } from '../../../../shared/pairing-local-ui-fields'
-import type { PairedUiState } from '../../../../shared/pairing-local-ui-fields'
+import { omitPairingLocalUiFields } from '../../../../shared/remote-runtime/pairing/pairing-local-ui-fields'
+import type { PairedUiState } from '../../../../shared/remote-runtime/pairing/pairing-local-ui-fields'
 import {
   clipboardHasImage,
   readClipboardImageThumbnail,
@@ -147,6 +147,8 @@ export function createWebUiApi(): NonNullable<Partial<PreloadApi>['ui']> {
         await (navigator.clipboard?.readText?.() ?? ''),
         options
       ),
+    // Browser paste events carry their own HTML; a programmatic read would prompt.
+    readClipboardLinkHtml: async () => '',
     readSelectionClipboardText: () =>
       Promise.reject(new Error('Selection clipboard is unavailable in the web client')),
     saveClipboardImageAsTempFile: saveWebClipboardImageAsTempFile,
@@ -206,7 +208,6 @@ export function createWebUiApi(): NonNullable<Partial<PreloadApi>['ui']> {
     onToggleQuickCommandsMenu: () => noopUnsubscribe,
     onOpenTasks: () => noopUnsubscribe,
     onOpenNewWorkspace: () => noopUnsubscribe,
-    onDeleteCurrentWorkspace: () => noopUnsubscribe,
     onOpenWorkspaceBoard: () => noopUnsubscribe,
     onToggleAgentDashboard: () => noopUnsubscribe,
     onJumpToWorktreeIndex: () => noopUnsubscribe,
@@ -250,6 +251,8 @@ export function createWebUiApi(): NonNullable<Partial<PreloadApi>['ui']> {
     replyAgentLaunchTabPublish: () => {},
     onRevealTerminalPane: () => noopUnsubscribe,
     replyTerminalPaneReveal: () => {},
+    onApplyAgentPaneActivity: () => noopUnsubscribe,
+    replyAgentPaneActivity: () => {},
     onSplitTerminal: () => noopUnsubscribe,
     onRenameTerminal: () => noopUnsubscribe,
     onSetPaneTitle: () => noopUnsubscribe,
@@ -288,6 +291,7 @@ export function createWebUiApi(): NonNullable<Partial<PreloadApi>['ui']> {
     popupMenu: () => {},
     onWindowCloseRequested: () => noopUnsubscribe,
     confirmWindowClose: () => {},
+    cancelWindowClose: () => {},
     notifyWindowRevealed: () => {}
   }
 }

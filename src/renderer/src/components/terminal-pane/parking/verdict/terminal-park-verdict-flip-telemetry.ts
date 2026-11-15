@@ -1,5 +1,5 @@
 /** Damp rendered park oscillation by retaining panes: bursts threaten React #185, sustained flips repeatedly remount/replay. This bounds churn without fixing its unknown driver; apply pins to all rendered tabs, including non-cold-park drivers. Retention force-park bypasses sustained pins, never burst protection. */
-import { recordRendererCrashBreadcrumb } from '@/lib/crash-breadcrumb-recorder'
+import { recordRendererCrashBreadcrumb } from '@/diagnostics/crash-reporting/crash-breadcrumb-recorder'
 import { REACT_NESTED_UPDATE_LIMIT } from '../../../../../../shared/react-update-depth-attribution'
 
 export const TERMINAL_TAB_PARK_FLIP_WINDOW_MS = 60_000

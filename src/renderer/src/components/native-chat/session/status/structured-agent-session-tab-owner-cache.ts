@@ -1,9 +1,9 @@
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
 import type { AppState } from '@/store/types'
 import type { WorktreeRuntimeOwnerState } from '@/lib/workspace/ownership/worktree-runtime-owner-state'
-import { worktreeOwnerRowsTokenOf } from '@/lib/worktree-owner-rows-token'
+import { worktreeOwnerRowsTokenOf } from '@/lib/workspace/ownership/worktree-owner-rows-token'
 import { selectWorktreesByRepo } from '@/store/workspaces/catalog/workspace-record-fields'
-import { structuredAgentSessionOwnerForTab } from '@/runtime/structured-agent-session-owner'
+import { structuredAgentSessionOwnerForTab } from '@/runtime/native-chat/session-ownership/structured-agent-session-owner'
 import type { StructuredTab } from './structured-agent-session-tabs'
 
 export const ownerInputs: readonly (keyof WorktreeRuntimeOwnerState)[] = [

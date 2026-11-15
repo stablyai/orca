@@ -35,6 +35,7 @@ import { SourceControlActionRepoOverrideNote } from './SourceControlActionRepoOv
 import { retireActionLaunchPreferences } from './source-control-ai-action-recipe-draft'
 import { useSourceControlActionRecipeDraftState } from './source-control-action-recipe-draft-state'
 import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { useSourceControlActionAgentInventory } from './use-source-control-action-agent'
 
 type SourceControlAiActionRecipeDefaultsProps = {
@@ -102,6 +103,7 @@ export function SourceControlAiActionRecipeDefaults({
   searchQuery,
   writeConfig
 }: SourceControlAiActionRecipeDefaultsProps): React.JSX.Element | null {
+  const t = useTranslate()
   useSourceControlActionAgentInventory(
     config.enabled && matchesSettingsSearch(searchQuery, ACTION_RECIPES_SEARCH_ENTRY)
   )
@@ -149,7 +151,7 @@ export function SourceControlAiActionRecipeDefaults({
     } catch (error) {
       console.error('Failed to save Source Control AI action agent default', error)
       toast.error(
-        translate(
+        t(
           'auto.components.settings.SourceControlAiActionRecipeDefaults.b5f46664d3',
           'Failed to save Source Control AI action default: {{value0}}',
           { value0: error instanceof Error ? error.message : 'Unknown error' }
@@ -216,7 +218,7 @@ export function SourceControlAiActionRecipeDefaults({
       <div className="space-y-0.5">
         <Label>{ACTION_RECIPES_SEARCH_ENTRY.title}</Label>
         <p className="text-xs text-muted-foreground">
-          {translate(
+          {t(
             'auto.components.settings.SourceControlAiActionRecipeDefaults.bf84dea6af',
             'Use variables only when you want Orca to inject context. Leave the agent as default to follow your normal agent preference.'
           )}

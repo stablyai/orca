@@ -1,13 +1,13 @@
 import type { RefObject } from 'react'
-import '@/lib/new-workspace'
-import type { LinkedWorkItemSummary } from '@/lib/new-workspace'
-import type { GitHubWorkItem } from '../../../shared/github/work-item-types'
+import '@/lib/workspace/creation/new-workspace'
+import type { LinkedWorkItemSummary } from '@/lib/workspace/creation/new-workspace'
+import type { GitHubWorkItem } from '../../../shared/github/work-items/work-item-types'
 import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
 import type { QuickSubmitOptions } from './composer-state/quick-creation-request'
-import type { TaskSourceContext } from '../../../shared/task-source-context'
+import type { TaskSourceContext } from '../../../shared/work-items/task-source-context'
 import type { WorkspaceSource as WorkspaceCreateTelemetrySource } from '../../../shared/workspace-source'
 import type { WorkspaceStatus } from '../../../shared/worktree/types'
-import type { WorkspaceCreationTargetHint } from '@/lib/project-host-workspace-target'
+import type { WorkspaceCreationTargetHint } from '@/lib/workspace/creation/project-host-workspace-target'
 import { buildComposerCardProps } from './composer-state/composer-card-props'
 import {
   canResolveFolderSmartGitHubSubmit,

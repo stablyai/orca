@@ -1,4 +1,3 @@
-import '../../unused-default-rpc-methods.test-fixture'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import '../../../../../shared/ai-vault/contracts/ai-vault-types'
 import { RpcDispatcher } from '../../dispatcher'

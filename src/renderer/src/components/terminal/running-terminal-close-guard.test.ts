@@ -16,7 +16,6 @@ vi.mock('@/runtime/hosted-terminals/inspection/runtime-terminal-process-inspecti
 import { useRunningTerminalCloseConfirmStore } from '@/store/slices/tabs/closing/running-terminal-close-confirm'
 import {
   guardRunningTerminalClose,
-  shouldConfirmRunningTerminalClose,
   RUNNING_CLOSE_PROBE_TIMEOUT_MS
 } from './running-terminal-close-guard'
 
@@ -36,7 +35,6 @@ function setState(overrides: Record<string, unknown> = {}): void {
 function guard(onClose = vi.fn(), onCancel?: () => void): void {
   guardRunningTerminalClose({
     terminalTabId: 'tab-1',
-    tabLabel: 'npm run dev',
     onClose,
     ...(onCancel ? { onCancel } : {})
   })
@@ -52,27 +50,6 @@ async function settleProbe(): Promise<void> {
     await Promise.resolve()
   }
 }
-
-describe('shouldConfirmRunningTerminalClose', () => {
-  it('confirms a plain interactive close', () => {
-    expect(shouldConfirmRunningTerminalClose(undefined)).toBe(true)
-    expect(shouldConfirmRunningTerminalClose({})).toBe(true)
-    expect(shouldConfirmRunningTerminalClose({ reason: 'user' })).toBe(true)
-    expect(shouldConfirmRunningTerminalClose({ hostCloseReason: 'user' })).toBe(true)
-  })
-
-  it.each([
-    ['post-confirmation re-entry', { force: true }],
-    ['non-interactive CLI reject', { rejectPinned: true }],
-    ['bulk/CLI opt-out', { skipRunningProcessConfirm: true }],
-    ['pty lifecycle echo', { reason: 'pty-exit' as const }],
-    ['cleanup teardown', { reason: 'cleanup' as const }],
-    ['host-only pty lifecycle echo', { hostCloseReason: 'pty-exit' as const }],
-    ['pty-scoped lifecycle close', { lifecyclePtyId: 'pty-a' }]
-  ])('never prompts for a %s', (_label, options) => {
-    expect(shouldConfirmRunningTerminalClose(options)).toBe(false)
-  })
-})
 
 describe('guardRunningTerminalClose', () => {
   beforeEach(() => {
@@ -91,16 +68,6 @@ describe('guardRunningTerminalClose', () => {
     }
   })
 
-  it('closes synchronously and never probes when the tab has no live pty', () => {
-    setState({ ptyIdsByTabId: {}, terminalLayoutsByTabId: {} })
-    const onClose = vi.fn()
-
-    guard(onClose)
-
-    expect(onClose).toHaveBeenCalledTimes(1)
-    expect(inspectRuntimeTerminalProcessMock).not.toHaveBeenCalled()
-  })
-
   // Layout bindings precede ptyIdsByTabId during mount; probe both to avoid unprompted closes.
   it('prompts for a pane the layout has bound but the liveness map has not', async () => {
     setState({ ptyIdsByTabId: { 'tab-1': [] } })
@@ -116,37 +83,7 @@ describe('guardRunningTerminalClose', () => {
     expect(visibleRequest()).toMatchObject({ terminalTabId: 'tab-1' })
   })
 
-  it('closes without probing when the user turned the prompt off', () => {
-    setState({
-      settings: {
-        activeRuntimeEnvironmentId: null,
-        skipCloseTerminalWithRunningProcessConfirm: true
-      }
-    })
-    const onClose = vi.fn()
-
-    guard(onClose)
-
-    expect(onClose).toHaveBeenCalledTimes(1)
-    expect(inspectRuntimeTerminalProcessMock).not.toHaveBeenCalled()
-    expect(visibleRequest()).toBeNull()
-  })
-
-  it('closes an idle terminal without a prompt', async () => {
-    inspectRuntimeTerminalProcessMock.mockResolvedValue({
-      foregroundProcess: 'zsh',
-      hasChildProcesses: false
-    })
-    const onClose = vi.fn()
-
-    guard(onClose)
-    await settleProbe()
-
-    expect(onClose).toHaveBeenCalledTimes(1)
-    expect(visibleRequest()).toBeNull()
-  })
-
-  it('defers a busy terminal behind a confirmation that carries the tab label', async () => {
+  it('defers a busy terminal behind a confirmation until approved', async () => {
     const onClose = vi.fn()
 
     guard(onClose)
@@ -156,7 +93,6 @@ describe('guardRunningTerminalClose', () => {
     expect(onClose).not.toHaveBeenCalled()
     expect(visibleRequest()).toMatchObject({
       terminalTabId: 'tab-1',
-      tabLabel: 'npm run dev',
       copyKind: 'command'
     })
 
@@ -214,77 +150,6 @@ describe('guardRunningTerminalClose', () => {
     expect(onClose).not.toHaveBeenCalled()
   })
 
-  it('does not use an idle sibling pane to pick the agent copy', async () => {
-    setState({
-      ptyIdsByTabId: { 'tab-1': ['pty-a', 'pty-b'] },
-      terminalLayoutsByTabId: {
-        'tab-1': { ptyIdsByLeafId: { [LEAF_A]: 'pty-a', [LEAF_B]: 'pty-b' } }
-      },
-      agentStatusByPaneKey: { [`tab-1:${LEAF_B}`]: { agentType: 'claude' } }
-    })
-    inspectRuntimeTerminalProcessMock.mockImplementation(async (ptyId: string) => ({
-      foregroundProcess: ptyId === 'pty-a' ? 'npm' : 'zsh',
-      hasChildProcesses: ptyId === 'pty-a'
-    }))
-
-    guard()
-    await settleProbe()
-
-    expect(visibleRequest()?.copyKind).toBe('command')
-  })
-
-  it('prefers the agent copy regardless of pty spawn order when both panes are busy', async () => {
-    setState({
-      ptyIdsByTabId: { 'tab-1': ['pty-a', 'pty-b'] },
-      terminalLayoutsByTabId: {
-        'tab-1': { ptyIdsByLeafId: { [LEAF_A]: 'pty-a', [LEAF_B]: 'pty-b' } }
-      },
-      agentStatusByPaneKey: { [`tab-1:${LEAF_B}`]: { agentType: 'codex' } }
-    })
-
-    guard()
-    await settleProbe()
-
-    expect(visibleRequest()?.copyKind).toBe('agent')
-  })
-
-  it('ignores a pane whose agent status is unknown', async () => {
-    setState({ agentStatusByPaneKey: { [`tab-1:${LEAF_A}`]: { agentType: 'unknown' } } })
-
-    guard()
-    await settleProbe()
-
-    expect(visibleRequest()?.copyKind).toBe('command')
-  })
-
-  it('survives legacy layout leaf ids that are not stable pane uuids', async () => {
-    setState({ terminalLayoutsByTabId: { 'tab-1': { ptyIdsByLeafId: { leaf: 'pty-a' } } } })
-    const onClose = vi.fn()
-
-    guard(onClose)
-    await settleProbe()
-
-    expect(visibleRequest()).toMatchObject({ copyKind: 'command' })
-    expect(onClose).not.toHaveBeenCalled()
-  })
-
-  // Legacy IDs can make makePaneKey throw; confirmation must not break closing.
-  it('closes rather than wedging when the copy-kind lookup throws', async () => {
-    getStateMock.mockReturnValue({
-      settings: { activeRuntimeEnvironmentId: null },
-      ptyIdsByTabId: { 'tab:1': ['pty-a'] },
-      terminalLayoutsByTabId: { 'tab:1': { ptyIdsByLeafId: { [LEAF_A]: 'pty-a' } } },
-      agentStatusByPaneKey: {}
-    })
-    const onClose = vi.fn()
-
-    guardRunningTerminalClose({ terminalTabId: 'tab:1', tabLabel: 'weird', onClose })
-    await settleProbe()
-
-    expect(visibleRequest()).toMatchObject({ terminalTabId: 'tab:1', copyKind: 'command' })
-    expect(onClose).not.toHaveBeenCalled()
-  })
-
   it('closes rather than wedging when raising the confirmation throws', async () => {
     const requestSpy = vi
       .spyOn(useRunningTerminalCloseConfirmStore.getState(), 'requestRunningTerminalCloseConfirm')
@@ -314,47 +179,9 @@ describe('guardRunningTerminalClose', () => {
     await settleProbe()
 
     expect(onClose).not.toHaveBeenCalled()
-    expect(visibleRequest()).toMatchObject({ terminalTabId: 'tab-1', tabLabel: 'npm run dev' })
+    expect(visibleRequest()).toMatchObject({ terminalTabId: 'tab-1' })
 
     useRunningTerminalCloseConfirmStore.getState().confirmRunningTerminalClose()
-    expect(onClose).toHaveBeenCalledTimes(1)
-  })
-
-  it('treats every pane as a candidate when picking the copy for a timed-out probe', async () => {
-    setState({
-      ptyIdsByTabId: { 'tab-1': ['pty-a', 'pty-b'] },
-      terminalLayoutsByTabId: {
-        'tab-1': { ptyIdsByLeafId: { [LEAF_A]: 'pty-a', [LEAF_B]: 'pty-b' } }
-      },
-      agentStatusByPaneKey: { [`tab-1:${LEAF_B}`]: { agentType: 'claude' } }
-    })
-    vi.useFakeTimers()
-    inspectRuntimeTerminalProcessMock.mockReturnValue(new Promise(() => {}))
-
-    guard()
-    vi.advanceTimersByTime(RUNNING_CLOSE_PROBE_TIMEOUT_MS)
-    vi.useRealTimers()
-    await settleProbe()
-
-    expect(visibleRequest()?.copyKind).toBe('agent')
-  })
-
-  it('closes rather than wedging when the timed-out prompt throws', async () => {
-    const requestSpy = vi
-      .spyOn(useRunningTerminalCloseConfirmStore.getState(), 'requestRunningTerminalCloseConfirm')
-      .mockImplementation(() => {
-        throw new Error('subscriber blew up')
-      })
-    vi.useFakeTimers()
-    inspectRuntimeTerminalProcessMock.mockReturnValue(new Promise(() => {}))
-    const onClose = vi.fn()
-
-    guard(onClose)
-    vi.advanceTimersByTime(RUNNING_CLOSE_PROBE_TIMEOUT_MS)
-    vi.useRealTimers()
-    await settleProbe()
-    requestSpy.mockRestore()
-
     expect(onClose).toHaveBeenCalledTimes(1)
   })
 

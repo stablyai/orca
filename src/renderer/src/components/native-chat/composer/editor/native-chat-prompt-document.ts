@@ -1,7 +1,7 @@
 import { NativeChatFileReferencePill } from './NativeChatFileReferencePill'
 import { NativeChatSkillPill, skillLabel } from './NativeChatSkillPill'
 import { NativeChatImageReferencePill } from './NativeChatImageReferencePill'
-import { formatNativeChatFileReference } from '../../../../../../shared/agent-image-paste'
+import { formatNativeChatFileReference } from '../../../../../../shared/native-chat/input/composer/agent-image-paste'
 import { imageReferenceToken } from '../../../../../../shared/native-chat/native-chat-image-reference'
 import {
   FILE_REFERENCE_NODE,
@@ -11,7 +11,7 @@ import {
 import { ReactNodeViewRenderer, Node, type JSONContent } from '@tiptap/react'
 import type { Node as ProseMirrorNode } from '@tiptap/pm/model'
 import type { AgentJournalSkillRef } from '../../../../../../shared/agent-session/journal/agent-session-journal-types'
-import { agentSessionInteractionCommand } from '../../../../../../shared/agent-session/options/agent-session-interaction-mode'
+import { agentSessionInteractionCommand } from '../../../../../../shared/agent-session/options/permissions/agent-session-interaction-mode'
 
 export const NativeChatSkill = Node.create({
   name: 'nativeChatSkill',
@@ -79,6 +79,16 @@ export function promptSkillRefs(document: JSONContent | undefined): AgentJournal
       ? [{ name: token.slice(1), path }]
       : []
   return [...own, ...(document.content ?? []).flatMap((child) => promptSkillRefs(child))]
+}
+
+/** Files or images attached inline as pills. */
+export function promptHasAttachmentReferences(document: JSONContent | undefined): boolean {
+  return (
+    document !== undefined &&
+    (document.type === NativeChatFileReference.name ||
+      document.type === NativeChatImageReference.name ||
+      (document.content ?? []).some(promptHasAttachmentReferences))
+  )
 }
 
 export function promptHasInteractionModeSkill(

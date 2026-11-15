@@ -7,7 +7,7 @@ import '../contract-constants'
 import '../messages/mailbox-routing-page'
 import '../dispatch-row-writer'
 import '../attempt-outcome-projection'
-import { ORCHESTRATION_LEGACY_RUN_ID as LEGACY_RUN_ID } from '../../../../../shared/orchestration-rpc-contract'
+import { ORCHESTRATION_LEGACY_RUN_ID as LEGACY_RUN_ID } from '../../../../../shared/orchestration/orchestration-rpc-contract'
 import { dropDerivedDeliverySchema } from '../schema/derived-delivery-test-fixture'
 import { createRootDispatch } from '../root-dispatch-test-fixture'
 

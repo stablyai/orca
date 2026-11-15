@@ -9,7 +9,7 @@ import {
   type RepoRefMaintenanceOptions,
   type RepoRefMaintenanceTarget
 } from '../../../../shared/repo-ref-maintenance-policy'
-import { isWslUncPath, toWindowsWslPath } from '../../../../shared/wsl-paths'
+import { isWslUncPath, toWindowsWslPath } from '../../../../shared/file-access/wsl-paths'
 import { withSpan } from '../../../observability/tracer'
 import { PackRefsLockOwnership } from './pack-refs-lock-ownership'
 import {
@@ -154,7 +154,7 @@ export type LocalRepoRefMaintenanceTargetArgs = {
   readonly wslDistro?: string
 }
 
-/** Restart the quiet period after a write; check the kill switch before arming timers. */
+/** Retain an idle opportunity after a write; check the kill switch before arming timers. */
 export function armLocalRepoRefMaintenance(args: LocalRepoRefMaintenanceTargetArgs): void {
   if (isDisabled()) {
     return

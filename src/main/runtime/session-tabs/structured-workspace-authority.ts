@@ -30,7 +30,7 @@ import {
   getRuntimeFolderWorkspaceRootId
 } from '../workspaces/catalog/runtime-folder-workspace'
 import { scanRuntimeWorktreesUntilNotOvertaken } from '../workspaces/catalog/runtime-witnessed-worktree-scan'
-import type { RuntimeStore } from '../runtime-store-contract'
+import type { RuntimeStore } from '../construction/runtime-store-contract'
 import type { RuntimeWorktreeScanResult } from '../workspaces/catalog/repo-worktree-resolution-scan'
 
 export class StructuredWorkspaceUnavailable extends Error {

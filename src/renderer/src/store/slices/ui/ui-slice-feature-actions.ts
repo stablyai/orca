@@ -6,6 +6,7 @@ import {
 import { getContextualTourProgressionForFeatureInteraction } from './ui-slice-contextual-tour-progression'
 import { getContextualTourStepIndex } from '../../../../../shared/contextual-tours'
 import type { FeatureInteractionState } from '../../../../../shared/feature-interactions'
+import { getFeatureTipSeenId } from '../../../../../shared/feature-tips'
 
 export function createUiFeatureActions(set: UISliceSet, get: UISliceGet): Partial<UISlice> {
   return {
@@ -18,9 +19,11 @@ export function createUiFeatureActions(set: UISliceSet, get: UISliceGet): Partia
         const current = new Set(s.featureTipsSeenIds)
         let changed = false
         for (const id of ids) {
-          if (!current.has(id)) {
-            current.add(id)
-            changed = true
+          for (const seenId of [id, getFeatureTipSeenId(id, s.settings?.telemetry)]) {
+            if (!current.has(seenId)) {
+              current.add(seenId)
+              changed = true
+            }
           }
         }
         if (!changed) {

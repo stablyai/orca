@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { create } from 'zustand'
 import { toast } from 'sonner'
-import type { RuntimeStatus } from '../../../../../shared/runtime-session-contracts'
+import type { RuntimeStatus } from '../../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import type { PublicKnownRuntimeEnvironment } from '../../../../../shared/remote-runtime/host-catalog/runtime-environments'
 import { createCompatibleRuntimeStatusResponse } from '../../../runtime/rpc/testing/runtime-compatibility-test-fixture'
 import { callRuntimeRpc } from '../../../runtime/rpc/calls/runtime-rpc-call'
@@ -9,7 +9,7 @@ import { clearRuntimeCompatibilityCache as clearRuntimeCompatibilityCacheForTest
 import { clearRuntimeEnvironmentConnectionGenerations as clearRuntimeEnvironmentConnectionGenerationsForTests } from './runtime-status-connection-generation'
 import { createRuntimeStatusSlice } from './create-runtime-status-slice'
 import type { RuntimeStatusSlice } from './runtime-status-types'
-import '@/lib/provider-runtime-context'
+import '@/runtime/hosts/observations/provider-runtime-context'
 import '../../../../../shared/workspace-creator-visibility'
 import { stubRuntimeEnvironmentBridge } from '../../../runtime/rpc/testing/runtime-environment-bridge-fixture'
 

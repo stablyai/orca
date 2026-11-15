@@ -2,8 +2,8 @@ import { legacyEditorTabs } from './legacy-editor-tab-hydration'
 import { structuredLaunchSlotIds } from '@/lib/agent-session/launch/structured-agent-session-launch-persistence'
 import type { Tab, TabGroup, TabGroupLayoutNode } from '../../../../../shared/tab-types'
 import type { WorkspaceSessionState } from '../../../../../shared/workspace-session/workspace-session-state-types'
-import { isValidTerminalTabId } from '../../../../../shared/workspace-layout/terminal-tab-id'
-import { resolveTabGroupOwners } from '../../../../../shared/workspace-layout/tab-group-owners'
+import { isValidTerminalTabId } from '../../../../../shared/workspace-layout/terminal-surfaces/terminal-tab-id'
+import { resolveTabGroupOwners } from '../../../../../shared/workspace-layout/tab-groups/tab-group-owners'
 import {
   adoptGrouplessTabs,
   appendOwnedTabIdsToGroups,
@@ -15,8 +15,8 @@ import {
   selectHydratedActiveGroupId
 } from './tab-hydration-records'
 import { sanitizeRecentTabIds } from './tab-selection-history'
-import { dedupeTabOrder } from '../../../../../shared/workspace-layout/tab-order'
-import { restoresSavedContentTab } from '../../../../../shared/workspace-layout/saved-editor-tab-restore'
+import { dedupeTabOrder } from '../../../../../shared/workspace-layout/tab-groups/tab-order'
+import { restoresSavedContentTab } from '../../../../../shared/workspace-layout/editor-tabs/saved-editor-tab-restore'
 
 type HydratedTabState = {
   unifiedTabsByWorktree: Record<string, Tab[]>
@@ -106,22 +106,20 @@ export function buildHydratedTabState(
         .filter((tab) => tab.aiVaultTitle)
         .map((tab) => [tab.id, tab.aiVaultTitle!])
     )
-    const hydratedTabs = [...tabs]
-      .map((tab) => ({
-        ...tab,
-        entityId: tab.entityId ?? tab.id
-      }))
+    const hydratedTabs = tabs
       .map((tab) => {
+        const entityId = tab.entityId ?? tab.id
         if (tab.contentType !== 'terminal') {
-          return tab
+          return { ...tab, entityId }
         }
         const quickCommandLabel = tab.quickCommandLabel?.trim()
           ? tab.quickCommandLabel.trim()
-          : quickCommandLabelByTerminalId.get(tab.entityId)
-        const generatedLabel = generatedTitleByTerminalId.get(tab.entityId)
-        const aiVaultTitle = tab.aiVaultTitle ?? aiVaultTitleByTerminalId.get(tab.entityId)
+          : quickCommandLabelByTerminalId.get(entityId)
+        const generatedLabel = generatedTitleByTerminalId.get(entityId)
+        const aiVaultTitle = tab.aiVaultTitle ?? aiVaultTitleByTerminalId.get(entityId)
         return {
           ...tab,
+          entityId,
           ...(quickCommandLabel ? { quickCommandLabel } : {}),
           ...(aiVaultTitle ? { aiVaultTitle } : {}),
           ...(!tab.generatedLabel?.trim() && generatedLabel ? { generatedLabel } : {})

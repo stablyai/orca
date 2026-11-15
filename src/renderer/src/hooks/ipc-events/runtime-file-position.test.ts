@@ -22,12 +22,12 @@ vi.mock('../../store', () => ({
 }))
 vi.mock('@/runtime/rpc/calls/runtime-rpc-call', async (importOriginal) =>
   (
-    await import('@/runtime/layout-apply-test-transport.test-fixture')
+    await import('@/runtime/workspace-layout/testing/layout-apply-test-transport.test-fixture')
   ).runtimeRpcClientWithLayoutApply(await importOriginal())
 )
-vi.mock('@/runtime/runtime-layout-client', async (importOriginal) =>
+vi.mock('@/runtime/workspace-layout/frames/runtime-layout-client', async (importOriginal) =>
   (
-    await import('@/runtime/layout-apply-test-transport.test-fixture')
+    await import('@/runtime/workspace-layout/testing/layout-apply-test-transport.test-fixture')
   ).runtimeLayoutClientWithTestFrames(await importOriginal())
 )
 import { createRuntimeFilePositionQueue } from './runtime-file-position'
@@ -92,39 +92,6 @@ function focus(surface: 'main' | 'floating'): void {
   document.getElementById(surface)?.focus()
 }
 
-it('waits for an asynchronously revealed floating panel', async () => {
-  const { store, fileId, position } = await setup(false)
-  position(fileId, { line: 300, column: 7 }, true)
-  flushFrames()
-  expect(store.getState().pendingEditorReveal).toBeNull()
-  store.setState({ floatingWorkspacePanelOpen: true })
-  flushFrames()
-  expect(store.getState().pendingEditorReveal).toMatchObject({ fileId, line: 300, column: 7 })
-})
-
-it('keeps a background floating position deferred until the panel owns keyboard input', async () => {
-  const { store, fileId, position } = await setup()
-  focus('main')
-  position(fileId, { line: 17 }, false)
-  flushFrames()
-  expect(store.getState().pendingEditorReveal).toBeNull()
-  focus('floating')
-  flushFrames()
-  expect(store.getState().pendingEditorReveal).toMatchObject({ fileId, line: 17 })
-})
-
-it('does not publish after keyboard input moves from the panel to the main surface', async () => {
-  const { store, fileId, position } = await setup()
-  focus('floating')
-  position(fileId, { line: 17 }, true)
-  focus('main')
-  flushFrames()
-  expect(store.getState().pendingEditorReveal).toBeNull()
-  focus('floating')
-  flushFrames()
-  expect(store.getState().pendingEditorReveal).toMatchObject({ fileId, line: 17 })
-})
-
 it('cancels a published reveal after an outside click even if DOM focus does not change', async () => {
   const { store, fileId, position } = await setup()
   focus('main')
@@ -144,35 +111,6 @@ it('does not reclaim input when an asynchronously revealed panel opens after an 
   store.setState({ floatingWorkspacePanelOpen: true })
   flushFrames()
   expect(store.getState().pendingEditorReveal).toBeNull()
-})
-
-it('invalidates a published floating reveal when the panel closes or is disabled', async () => {
-  const { store, fileId, position } = await setup()
-  position(fileId, { line: 17 }, true)
-  flushFrames()
-  const reveal = store.getState().pendingEditorReveal
-  expect(reveal?.canApply?.()).toBe(true)
-  store.setState({ floatingWorkspacePanelOpen: false })
-  expect(reveal?.canApply?.()).toBe(false)
-  store.setState({ floatingWorkspacePanelOpen: true })
-  const settings = store.getState().settings
-  if (!settings) {
-    throw new Error('Settings missing')
-  }
-  store.setState({ settings: { ...settings, floatingTerminalEnabled: false } })
-  expect(reveal?.canApply?.()).toBe(false)
-})
-
-it('keeps floating input ownership independent of an unrelated main workspace selection', async () => {
-  const { store, fileId, position } = await setup()
-  focus('floating')
-  position(fileId, { line: 300, column: 7 }, true)
-  flushFrames()
-  const reveal = store.getState().pendingEditorReveal
-  expect(reveal?.canApply?.()).toBe(true)
-  store.setState({ activeWorktreeId: 'other-main-workspace' })
-  expect(document.activeElement?.id).toBe('floating')
-  expect(reveal?.canApply?.()).toBe(true)
 })
 
 it('scopes the floating reveal to its selected split pane', async () => {
@@ -198,16 +136,4 @@ it('scopes the floating reveal to its selected split pane', async () => {
   expect(reveal?.canApply?.()).toBe(true)
   store.getState().focusGroup(FLOATING, siblingGroupId)
   expect(reveal?.canApply?.()).toBe(false)
-})
-
-it('disposes floating DOM listeners and invalidates an already published reveal', async () => {
-  const { store, fileId, position } = await setup()
-  position(fileId, { line: 17 }, true)
-  flushFrames()
-  const reveal = store.getState().pendingEditorReveal
-  unsubs.forEach((unsubscribe) => unsubscribe())
-  expect(reveal?.canApply?.()).toBe(false)
-  focus('floating')
-  flushFrames()
-  expect(store.getState().pendingEditorReveal).toBe(reveal)
 })

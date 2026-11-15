@@ -6,14 +6,14 @@ import {
   type FeatureWallSetupStepId
 } from '../../../../shared/feature-wall-setup-steps'
 import type { SetupGuideSource } from '../../../../shared/feature-education-telemetry'
-import type { FeatureWallSetupProgress } from '../feature-wall/feature-wall-setup-progress'
+import type { FeatureWallSetupProgress } from '../feature-wall/setup/feature-wall-setup-progress'
 import {
   persistEmittedSetupGuideStepId,
   readEmittedSetupGuideStepIds,
   trackSetupGuideClosed,
   trackSetupGuideOpened,
   trackSetupGuideStepCompleted
-} from '@/lib/feature-education-telemetry'
+} from '@/diagnostics/telemetry/feature-education-telemetry'
 
 type SetupGuideTelemetrySession = {
   source: SetupGuideSource

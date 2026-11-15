@@ -1,11 +1,20 @@
 import type { OrcaRuntimeWithRemoveManagedWorktree } from './workspace-removal'
-import type { RuntimeStore } from '../../runtime-store-contract'
+import type { RuntimeStore } from '../../construction/runtime-store-contract'
 import type { RuntimeWorktreeRemovalTarget } from '../catalog/runtime-worktree-selection'
 import type { Repo } from '../../../../shared/repo-types'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 import type { WorktreeTeardownRuntime } from './worktree-teardown'
 import { splitWorktreeId, splitWorktreeIdForFilesystem } from '../../../../shared/worktree/id'
-import { parseExecutionHostId } from '../../../../shared/execution-host'
+import { isRepoOnCatalogHost, parseExecutionHostId } from '../../../../shared/execution-host'
+import type { RemoveWorktreeResult } from '../../../../shared/worktree/create-types'
+import { readWorktreeMetaForRepo } from '../../../persistence/host-qualified-worktree-meta'
+import { getEffectiveHooks } from '../../../workspace-hooks/hooks'
+import { blockedWslDistroForPath } from '../../../wsl/filesystem/wsl-unc-access-gate'
+import { getLocalProjectWorktreeGitOptions } from '../../../workspaces/execution-host/project-runtime-git-options'
+import {
+  gateFolderWorkspaceRemovalOnArchiveHook,
+  removeFolderWorkspaceRunnerFiles
+} from '../../../workspaces/removal/folder-workspace-archive-hook'
 import { invalidateAuthorizedRootsCache } from '../../../ipc/worktrees/removal/registered-worktree-roots-cache'
 import { isFolderRepo } from '../../../../shared/repo-kind'
 import { getRuntimeFolderWorkspaceRootId } from '../catalog/runtime-folder-workspace'
@@ -33,7 +42,8 @@ export async function removeOrphanOrFolderWorktree({
   removalTarget,
   cleanupHostId,
   removalHostId,
-  repo
+  repo,
+  archive
 }: {
   runtime: WorkspaceRegistrationRemovalRuntime
   store: RuntimeStore
@@ -41,7 +51,9 @@ export async function removeOrphanOrFolderWorktree({
   cleanupHostId?: ExecutionHostId
   removalHostId?: ExecutionHostId
   repo?: Repo
-}): Promise<{ warning?: string } | undefined> {
+  /** Same opt-in as worktree removal: archive runs only when the caller asked for hooks. */
+  archive: { runHooks: boolean; allowFailedArchiveHook: boolean }
+}): Promise<(RemoveWorktreeResult & { warning?: string }) | undefined> {
   if (!repo) {
     const orphanHost = parseExecutionHostId(store.getWorktreeMeta(removalTarget.id)?.hostId)
     if (cleanupHostId && orphanHost?.id !== cleanupHostId) {
@@ -106,6 +118,25 @@ export async function removeOrphanOrFolderWorktree({
   if (removalTarget.id === getRuntimeFolderWorkspaceRootId(repo)) {
     throw new Error('Cannot delete the project root workspace. Remove the folder project instead.')
   }
+  // Archive failure must refuse before watcher, PTY or metadata teardown (#19334).
+  const archiveHookOverride = await gateFolderWorkspaceRemovalOnArchiveHook({
+    repo,
+    worktreeId: removalTarget.id,
+    displayName:
+      (
+        readWorktreeMetaForRepo(store, removalTarget.id, repo) ??
+        store.getWorktreeMeta(removalTarget.id)
+      )?.displayName ?? repo.displayName,
+    runArchive: archive.runHooks,
+    allowFailure: archive.allowFailedArchiveHook,
+    runtimeTarget: () => getLocalProjectWorktreeGitOptions(store, repo)
+  })
+  // Without --run-hooks, look at the folder only to warn, and never start its stopped WSL distro for that.
+  const archiveSkipped =
+    !archive.runHooks &&
+    isRepoOnCatalogHost(repo) &&
+    !(await blockedWslDistroForPath(repo.path)) &&
+    Boolean(getEffectiveHooks(repo)?.scripts.archive)
   // Use the resolved SSH owner, including executionHostId-only rows; runtime-nested targets belong to that environment's namespace.
   const folderHost = parseExecutionHostId(removalHostId)
   const folderConnectionId = folderHost?.kind === 'ssh' ? folderHost.targetId : null
@@ -121,10 +152,19 @@ export async function removeOrphanOrFolderWorktree({
       folderConnectionId
     )
     await runtime.removeWorktreeMetadataAndHistory(store, removalTarget.id, removalHostId)
+    removeFolderWorkspaceRunnerFiles(repo, removalTarget.id)
     runtime.preservedBranchCleanup.delete(removalTarget.id, cleanupHostId)
     runtime.invalidateResolvedWorktreeCache()
     runtime.notifyWorktreesChanged(repo.id)
-    return {}
+    return {
+      ...(archiveHookOverride ? { archiveHookOverride } : {}),
+      ...(archiveSkipped
+        ? {
+            warning:
+              'orca.yaml archive hook skipped for this folder workspace; pass --run-hooks to run it.'
+          }
+        : {})
+    }
   } finally {
     await gate.finish(false)
   }

@@ -1,9 +1,9 @@
 import type { StoreApi } from 'zustand'
 import type { AppState } from '../../types'
-import type { GitHubWorkItem } from '../../../../../shared/github/work-item-types'
-import type { GitHubAssignableUser } from '../../../../../shared/github/pull-request-types'
-import type { TaskSourceContext } from '../../../../../shared/task-source-context'
-import { parseGitHubIssueOrPRLink } from '../../../../../shared/github/links'
+import type { GitHubWorkItem } from '../../../../../shared/github/work-items/work-item-types'
+import type { GitHubAssignableUser } from '../../../../../shared/github/pull-requests/pull-request-types'
+import type { TaskSourceContext } from '../../../../../shared/work-items/task-source-context'
+import { parseGitHubIssueOrPRLink } from '../../../../../shared/github/repositories/links'
 
 /** One edit's own semantic change: set title or state, add or remove named members (logins lower-cased). */
 export type TaskChange = {

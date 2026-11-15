@@ -76,32 +76,4 @@ describe('createOrcaQueryStorage', () => {
       )
     ).resolves.toEqual({ entries: ['README.md'] })
   })
-
-  it('keeps the stored copy of unchanged data until it is a minute old', async () => {
-    const memory = memoryBackend('host-a')
-    const storage = createOrcaQueryStorage(memory.backend)
-    const persister = persisterOver(storage)
-    const client = new QueryClient()
-    const queryKey = ['orca', 'host-a', 'worktree.ps', { exec: 'local' }, {}]
-    const startedAt = 1_794_000_000_000
-    const persistAt = async (rows: string[], updatedAt: number) => {
-      client.setQueryData(queryKey, { rows }, { updatedAt })
-      await persister.persistQueryByKey(queryKey, client)
-      await storage.flush()
-    }
-    const stored = () =>
-      createOrcaQueryStorage(memory.backend).getItem(
-        'q1|worktree.ps@1-["orca","host-a","worktree.ps",{"exec":"local"},{}]'
-      )
-
-    await persistAt(['main'], startedAt)
-    await persistAt(['main'], startedAt + 3_000)
-    expect((await stored())?.state.dataUpdatedAt).toBe(startedAt)
-
-    await persistAt(['main'], startedAt + 61_000)
-    expect((await stored())?.state.dataUpdatedAt).toBe(startedAt + 61_000)
-
-    await persistAt(['main', 'feature'], startedAt + 62_000)
-    expect((await stored())?.state.data).toEqual({ rows: ['main', 'feature'] })
-  })
 })

@@ -1,9 +1,9 @@
-import type { RuntimeRpcResponse } from '../../../../shared/runtime-rpc-envelope'
-import type { RuntimeMobileSessionTabsResult } from '../../../../shared/runtime-types'
-import { isRuntimeSubscriptionReplayResponse } from '../../../../shared/runtime-subscription-replay'
+import type { RuntimeRpcResponse } from '../../../../shared/remote-runtime/rpc/runtime-rpc-envelope'
+import type { RuntimeMobileSessionTabsResult } from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
+import { isRuntimeSubscriptionReplayResponse } from '../../../../shared/remote-runtime/rpc/runtime-subscription-replay'
 import { useAppStore } from '../../store'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
-import { isFrameDrawnServerWorkspace } from './frame-drawn-server-workspaces'
+import { isFrameDrawnServerWorkspace } from './frame-drawn-server-workspace-set'
 import { mirroredRuntimeEnvironmentIdForWorkspace } from './mirrored-workspace-owner'
 import { getRuntimeEnvironmentRevision } from '../rpc/environment-revisions/runtime-environment-revision'
 import { recoverMirroredTerminalOrphansBeforeApply } from './mirror-terminal-orphan-recovery'
@@ -19,8 +19,10 @@ import {
 } from './tracking-decisions'
 import {
   acceptReplayedWebSessionTabsSnapshot,
-  getWebSessionTabsTrackingGeneration
-} from './tracking-lifecycle'
+  isSessionTabsStreamEnd,
+  type SessionTabsStreamEvent
+} from './state'
+import { getWebSessionTabsTrackingGeneration } from './tracking-lifecycle'
 import {
   acceptSessionTabsRuntimeId,
   getSessionTabsRuntimeIdFromResponse
@@ -40,9 +42,9 @@ import {
 import { createWebRuntimeSessionTerminal } from '../hosted-terminals/creation/web-runtime-terminal-creation'
 import { releaseWebRuntimeInitialTerminalBootstrapOnMirrorFrame } from './initial-terminal/web-runtime-initial-terminal-bootstrap'
 import { createInitialTerminalSeeder } from './initial-terminal-seeder'
-import { toRuntimeWorktreeSelector } from '../runtime-worktree-selector'
-import { hostSnapshotAffirmsWorktreeContents } from '../host-session-snapshot-authority'
-import { isSessionTabsStreamEnd, type SessionTabsStreamEvent } from './state'
+import { toRuntimeWorktreeSelector } from '../rpc/targets/runtime-worktree-selector'
+import { hostSnapshotAffirmsWorktreeContents } from './hydration/host-session-snapshot-authority'
+
 import type { SessionTabsSnapshotHandler } from './visibility-resume-types'
 import { subscribeRuntimeEnvironment } from '../rpc/environment-revisions/runtime-environment-pairing-refresh'
 

@@ -9,10 +9,10 @@ const fixture = vi.hoisted(() => ({ userData: '', guestOverlay: '' }))
 vi.mock('../../../../shared/app-environment', () => ({
   getAppEnvironment: () => ({ getPath: () => fixture.userData, onWillQuit: vi.fn() })
 }))
-vi.mock('../../../agent-hooks/server', () => ({
+vi.mock('../../../agent-hooks/server/agent-hook-server', () => ({
   agentHookServer: { buildPtyEnv: () => ({ ORCA_AGENT_HOOK_PORT: '12345' }) }
 }))
-vi.mock('../../../agent-hooks/wsl-hook-relay-manager', () => ({
+vi.mock('../../../agent-hooks/wsl-relay/wsl-hook-relay-manager', () => ({
   wslHookRelayManager: {
     ensureForDistro: vi.fn(),
     getGuestEndpointFilePath: () => '/guest/endpoint.json',
@@ -21,11 +21,13 @@ vi.mock('../../../agent-hooks/wsl-hook-relay-manager', () => ({
     getGuestAgentPath: () => null
   }
 }))
-vi.mock('../../../pi/titlebar-extension-service', () => ({
+vi.mock('../../../pi/managed-extensions/titlebar-extension-service', () => ({
   piTitlebarExtensionService: { buildPtyEnv: () => ({}), buildFreshOmpEnv: () => ({}) }
 }))
-vi.mock('../../../cli/orca-cli-child-path', () => ({ prependOrcaCliDirToChildPath: () => {} }))
-vi.mock('../../../cli/wsl-managed-cli', () => ({
+vi.mock('../../../cli/launchers/orca-cli-child-path', () => ({
+  prependOrcaCliDirToChildPath: () => {}
+}))
+vi.mock('../../../cli/wsl/wsl-managed-cli', () => ({
   getManagedWslCliDir: () => undefined,
   getWslCliCommandName: () => 'orca-ide'
 }))

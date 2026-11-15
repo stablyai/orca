@@ -2,7 +2,7 @@ import type { AgentLaunchTabPublishRequest } from '../../../../shared/agent-laun
 import { publishAgentLaunchTab } from '@/lib/agent-session/launch/pane/agent-launch-tab-publication'
 import { applyAgentLaunchPaneVerdict } from '@/lib/agent-session/launch/pane/agent-launch-pane-verdict-application'
 import { keepAgentLaunchTabMainWrote } from '@/lib/agent-session/launch/pane/agent-launch-tab-main-written'
-import { afterLayoutFrame } from '@/runtime/layout-frame-position'
+import { afterLayoutFrame } from '@/runtime/workspace-layout/frames/layout-frame-position'
 
 function replyToPublish(request: AgentLaunchTabPublishRequest): void {
   try {

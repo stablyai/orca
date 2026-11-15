@@ -1,16 +1,21 @@
 import { realpathSync } from 'node:fs'
-import { describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import './runtime-test-module-registration.spec'
 import { OrcaRuntimeService } from '../orca-runtime'
 import { execFileSync } from 'node:child_process'
-import { getRepoUpstreamMock } from '../orca-runtime-test-mocks/setup.spec'
+import * as forkMetadata from '../../github/client/fetch/repo-slug-upstream'
 import { join } from 'node:path'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { projectHostSetupProjectionFromRepos } from '../../../shared/project-host-setup-projection'
 import { tmpdir } from 'node:os'
 import { store } from './orca-runtime-test-fixtures.spec'
 import type { Repo } from '../../../shared/repo-types'
-import type { RuntimeStore } from '../runtime-store-contract'
+import type { RuntimeStore } from '../construction/runtime-store-contract'
+
+const parentProbe = vi.spyOn(forkMetadata, 'probeRepoUpstream')
+beforeEach(() => {
+  parentProbe.mockReset().mockResolvedValue({ upstream: undefined, origin: null })
+})
 
 function createRuntime(repos: Repo[]): OrcaRuntimeService {
   const runtimeStore: RuntimeStore = {
@@ -61,7 +66,6 @@ const repoA = { provider: 'github' as const, owner: 'acme', repo: 'repo-a' }
 describe('OrcaRuntimeService project setup of an existing folder (#30663)', () => {
   it('refuses to relabel a folder whose own GitHub remote names another repository', async () => {
     const repos: Repo[] = []
-    getRepoUpstreamMock.mockResolvedValueOnce(null)
     const runtime = createRuntime(repos)
 
     await withGitFolder({ origin: 'https://github.com/acme/repo-b.git' }, async (path) => {
@@ -118,3 +122,244 @@ describe('OrcaRuntimeService project setup of an existing folder (#30663)', () =
     )
   })
 })
+
+it('completes parent-selected setup while unrelated background metadata remains pending', async () => {
+  await withGitFolder({ origin: 'https://github.com/me/repo-a.git' }, async (path) => {
+    const repos: Repo[] = [
+      {
+        id: 'blocker',
+        path: '/blocked',
+        displayName: 'blocker',
+        badgeColor: 'blue',
+        addedAt: 1,
+        kind: 'git'
+      }
+    ]
+    const runtime = createRuntime(repos)
+    const gate = Promise.withResolvers<forkMetadata.RepoUpstreamProbe>()
+    parentProbe
+      .mockImplementationOnce(() => gate.promise)
+      .mockResolvedValue({
+        upstream: { owner: 'acme', repo: 'repo-a' },
+        origin: { owner: 'me', repo: 'repo-a' }
+      })
+    const background = runtime.repositoryForkBackfill.enqueue(repos)
+    try {
+      const result = await runtime.setupProjectExistingFolder({
+        projectId: 'github:acme/repo-a',
+        projectProviderIdentity: repoA,
+        hostId: 'runtime:env-1',
+        path,
+        kind: 'git'
+      })
+      expect(result.project.id).toBe('github:acme/repo-a')
+      expect(repos[0].upstream).toBeUndefined()
+      expect(parentProbe).toHaveBeenCalledTimes(2)
+    } finally {
+      gate.resolve({ upstream: null, origin: null })
+      await background
+    }
+  })
+})
+
+it.each([false, true])(
+  'refuses changed current origin after an unavailable lookup (pre-existing=%s)',
+  async (existing) => {
+    await withGitFolder({ origin: 'https://github.com/me/repo-a.git' }, async (path) => {
+      const repos: Repo[] = []
+      if (existing) {
+        repos.push({
+          id: 'selected',
+          path: realpathSync(path),
+          displayName: 'repo-a',
+          badgeColor: 'blue',
+          addedAt: 1,
+          kind: 'git',
+          executionHostId: 'runtime:env-1',
+          gitRemoteIdentity: {
+            canonicalKey: 'github.com/me/repo-a',
+            remoteName: 'origin',
+            remoteUrl: 'https://github.com/me/repo-a.git'
+          }
+        })
+      }
+      const runtime = createRuntime(repos)
+      const gate = Promise.withResolvers<forkMetadata.RepoUpstreamProbe>()
+      const started = Promise.withResolvers<void>()
+      parentProbe.mockImplementationOnce(() => {
+        started.resolve()
+        return gate.promise
+      })
+      const setup = runtime.setupProjectExistingFolder({
+        projectId: 'github:me/repo-a',
+        projectProviderIdentity: { provider: 'github', owner: 'me', repo: 'repo-a' },
+        hostId: 'runtime:env-1',
+        path,
+        kind: 'git'
+      })
+      const rejection = expect(setup).rejects.toThrow(/points at other\/repo-a, not me\/repo-a/)
+      await started.promise
+      execFileSync('git', ['remote', 'set-url', 'origin', 'https://github.com/other/repo-a.git'], {
+        cwd: path,
+        stdio: 'ignore'
+      })
+      gate.resolve({ upstream: undefined, origin: { owner: 'me', repo: 'repo-a' } })
+      await rejection
+      expect(repos).toHaveLength(existing ? 1 : 0)
+      expect(parentProbe).toHaveBeenCalledTimes(1)
+    })
+  }
+)
+
+it('retains matching null authority when a nonfork result settles during setup', async () => {
+  await withGitFolder({ origin: 'https://github.com/me/repo-a.git' }, async (path) => {
+    const repos: Repo[] = []
+    const runtime = createRuntime(repos)
+    const gate = Promise.withResolvers<forkMetadata.RepoUpstreamProbe>()
+    const started = Promise.withResolvers<void>()
+    parentProbe.mockImplementationOnce(() => {
+      started.resolve()
+      return gate.promise
+    })
+    const setup = runtime.setupProjectExistingFolder({
+      projectId: 'github:me/repo-a',
+      projectProviderIdentity: { provider: 'github', owner: 'me', repo: 'repo-a' },
+      hostId: 'runtime:env-1',
+      path,
+      kind: 'git'
+    })
+    await started.promise
+    execFileSync('git', ['remote', 'set-url', 'origin', 'https://github.com/other/repo-a.git'], {
+      cwd: path,
+      stdio: 'ignore'
+    })
+    gate.resolve({ upstream: null, origin: { owner: 'me', repo: 'repo-a' } })
+    const result = await setup
+    expect(result.project.id).toBe('github:me/repo-a')
+    expect(result.repo.upstream).toBeNull()
+    expect(
+      projectHostSetupProjectionFromRepos(JSON.parse(JSON.stringify(repos))).setups[0].projectId
+    ).toBe('github:me/repo-a')
+  })
+})
+
+it('publishes metadata retained on a pre-existing row after explicit setup fails', async () => {
+  await withGitFolder({ origin: 'https://github.com/me/repo-a.git' }, async (path) => {
+    const repos: Repo[] = [
+      {
+        id: 'selected',
+        path: realpathSync(path),
+        displayName: 'repo-a',
+        badgeColor: 'blue',
+        addedAt: 1,
+        kind: 'git',
+        executionHostId: 'runtime:env-1'
+      }
+    ]
+    const runtime = createRuntime(repos)
+    parentProbe.mockResolvedValue({
+      upstream: { owner: 'acme', repo: 'repo-a' },
+      origin: { owner: 'me', repo: 'repo-a' }
+    })
+    const notifications: string[] = []
+    const unsubscribe = runtime.onClientEvent((event) => {
+      if (event.type === 'reposChanged') {
+        notifications.push(event.type)
+      }
+    })
+    try {
+      await expect(
+        runtime.setupProjectExistingFolder({
+          projectId: 'github:elsewhere/repo-a',
+          projectProviderIdentity: { provider: 'github', owner: 'elsewhere', repo: 'repo-a' },
+          hostId: 'runtime:env-1',
+          path,
+          kind: 'git'
+        })
+      ).rejects.toThrow(/points at me\/repo-a, not elsewhere\/repo-a/)
+      expect(repos).toHaveLength(1)
+      expect(repos[0].upstream).toEqual({ owner: 'acme', repo: 'repo-a' })
+      expect(notifications).toEqual(['reposChanged'])
+      expect(parentProbe).toHaveBeenCalledTimes(1)
+    } finally {
+      unsubscribe()
+    }
+  })
+})
+
+it.each(['recovered parent', 'unavailable'] as const)(
+  'settles an explicit origin after ordinary alias enrichment: %s',
+  async (evidence) => {
+    await withGitFolder({ origin: 'git@gh-personal:me/repo-a.git' }, async (path) => {
+      const repos: Repo[] = []
+      const runtime = createRuntime(repos)
+      const origin = { owner: 'me', repo: 'repo-a' }
+      const ordinary = Promise.withResolvers<forkMetadata.RepoUpstreamProbe>()
+      const ordinaryStarted = Promise.withResolvers<void>()
+      const ordinaryFinished = Promise.withResolvers<void>()
+      const required = Promise.withResolvers<forkMetadata.RepoUpstreamProbe>()
+      const requiredStarted = Promise.withResolvers<void>()
+      parentProbe
+        .mockImplementationOnce(() => {
+          ordinaryStarted.resolve()
+          return ordinary.promise
+        })
+        .mockImplementationOnce(() => {
+          requiredStarted.resolve()
+          return required.promise
+        })
+      const unsubscribe = runtime.onClientEvent((event) => {
+        if (event.type === 'reposChanged' && repos[0]?.repoIcon?.type === 'image') {
+          ordinaryFinished.resolve()
+        }
+      })
+      try {
+        const added = await runtime.addRepo(path, 'git', 'runtime:env-1')
+        await ordinaryStarted.promise
+        ordinary.resolve({ upstream: undefined, origin })
+        await ordinaryFinished.promise
+        expect(added.id).toBe(repos[0].id)
+        expect(repos[0].gitRemoteIdentity).toEqual({
+          canonicalKey: 'gh-personal/me/repo-a',
+          remoteName: 'origin',
+          remoteUrl: 'git@gh-personal:me/repo-a.git'
+        })
+        expect(repos[0].repoIcon).toEqual({
+          type: 'image',
+          source: 'github',
+          src: 'https://github.com/me.png?size=64',
+          label: 'me/repo-a'
+        })
+        expect(repos[0].upstream).toBeUndefined()
+
+        const setup = runtime.setupProjectExistingFolder({
+          projectId: 'github:me/repo-a',
+          projectProviderIdentity: { provider: 'github', ...origin },
+          hostId: 'runtime:env-1',
+          path,
+          kind: 'git'
+        })
+        await requiredStarted.promise
+        const completion = runtime.repositoryForkBackfill.resolve(repos[0])
+        required.resolve({
+          upstream: evidence === 'recovered parent' ? { owner: 'acme', repo: 'repo-a' } : undefined,
+          origin
+        })
+        const result = await setup
+        await completion
+        expect(result.project.id).toBe('github:me/repo-a')
+        expect(result.repo.upstream).toEqual(evidence === 'recovered parent' ? origin : null)
+        parentProbe.mockResolvedValue({ upstream: { owner: 'acme', repo: 'repo-a' }, origin })
+        await runtime.repositoryForkBackfill.run()
+        expect(repos[0].upstream).toEqual(evidence === 'recovered parent' ? origin : null)
+        expect(
+          projectHostSetupProjectionFromRepos(JSON.parse(JSON.stringify(repos))).setups[0].projectId
+        ).toBe('github:me/repo-a')
+      } finally {
+        ordinary.resolve({ upstream: undefined, origin })
+        required.resolve({ upstream: undefined, origin })
+        unsubscribe()
+      }
+    })
+  }
+)

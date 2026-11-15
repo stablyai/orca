@@ -1,21 +1,19 @@
-import { withGitHubRepoExecution } from '../../github-repository-identity'
-import type { IssueSourcePreference } from '../../../../shared/repo-types'
-import type { GitPushTarget } from '../../../../shared/worktree/types'
 import {
-  ghExecFileAsync,
-  acquire,
-  release,
+  withGitHubRepoExecution,
   ghRepoExecOptions,
   githubRepoContext,
   getRemoteUrlForRepo,
   type LocalGitExecOptions
-} from '../../gh-utils'
-import {
-  getGitHubApiRepositoryForRemote,
-  githubHostExecOptions,
-  type GitHubApiRepository
-} from '../../github-api-repository'
-import { githubRepoIdentityKey } from '../../../../shared/github/repository-identity-key'
+} from '../../repositories/github-repository-identity'
+import type { IssueSourcePreference } from '../../../../shared/repo-types'
+import type { GitPushTarget } from '../../../../shared/worktree/types'
+import { ghExecFileAsync } from '../../../git/command-runner/hosted-cli/gh-exec-file'
+import { acquire, release } from '../../execution/github-operation-slots'
+
+import { getGitHubApiRepositoryForRemote } from '../../repositories/github-api-repository-remote-probe'
+import { githubHostExecOptions } from '../../repositories/github-repository-host'
+import type { GitHubRepositoryIdentity as GitHubApiRepository } from '../../../../shared/github/repositories/repository-identity'
+import { githubRepoIdentityKey } from '../../../../shared/github/repositories/repository-identity-key'
 import { isNotFoundGhError } from './../gh-error-predicates'
 import { resolvePullRequestLookupCandidates } from './../pull-request-lookup-candidates'
 export function pickPushRemoteUrl(args: {

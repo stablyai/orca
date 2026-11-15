@@ -19,6 +19,7 @@ import type {
 } from '../../../../../shared/developer-permissions-types'
 import { Button } from '../../ui/button'
 import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { DeveloperPermissionActions } from './DeveloperPermissionActions'
 import { LocalNetworkConnectionTest } from './LocalNetworkConnectionTest'
 import {
@@ -27,11 +28,12 @@ import {
 } from './developer-permission-status'
 import { showDeveloperPermissionRequestNotice } from './developer-permission-request-notice'
 import { TerminalTccAttributionNotice } from './TerminalTccAttributionNotice'
-import { SettingsGroup } from '../section-layout/SettingsGroup'
-
-type DeveloperPermissionsPaneProps = {
-  highlightedSettingId?: string | null
-}
+import { SETTINGS_GROUP_ROW_BLEED_CLASS, SettingsGroup } from '../section-layout/SettingsGroup'
+import { cn } from '@/lib/class-names'
+import {
+  DEVELOPER_PERMISSIONS_OVERVIEW_ID,
+  getDeveloperPermissionSettingId
+} from './developer-permissions-search'
 
 type PermissionDefinition = {
   id: DeveloperPermissionId
@@ -78,8 +80,8 @@ const PERMISSIONS: PermissionDefinition[] = [
     id: 'screen',
     get label() {
       return translate(
-        'auto.components.settings.DeveloperPermissionsPane.f24f31a884',
-        'Screen Recording'
+        'auto.components.settings.DeveloperPermissionsPane.515baa0f5c',
+        'Screen recording'
       )
     },
     get description() {
@@ -90,8 +92,8 @@ const PERMISSIONS: PermissionDefinition[] = [
     },
     get actionLabel() {
       return translate(
-        'auto.components.settings.DeveloperPermissionsPane.actionOpenSettings',
-        'Open Settings'
+        'auto.components.settings.DeveloperPermissionsPane.b8cd05701d',
+        'Open settings'
       )
     },
     icon: <MonitorUp className="size-4" />
@@ -131,8 +133,8 @@ const PERMISSIONS: PermissionDefinition[] = [
     },
     get actionLabel() {
       return translate(
-        'auto.components.settings.DeveloperPermissionsPane.actionOpenSettings',
-        'Open Settings'
+        'auto.components.settings.DeveloperPermissionsPane.b8cd05701d',
+        'Open settings'
       )
     },
     icon: <HardDrive className="size-4" />
@@ -150,8 +152,8 @@ const PERMISSIONS: PermissionDefinition[] = [
     },
     get actionLabel() {
       return translate(
-        'auto.components.settings.DeveloperPermissionsPane.actionTriggerPrompt',
-        'Trigger Prompt'
+        'auto.components.settings.DeveloperPermissionsPane.28350e590b',
+        'Trigger prompt'
       )
     },
     icon: <Workflow className="size-4" />
@@ -160,8 +162,8 @@ const PERMISSIONS: PermissionDefinition[] = [
     id: 'local-network',
     get label() {
       return translate(
-        'auto.components.settings.DeveloperPermissionsPane.e7bb06007c',
-        'Local Network'
+        'auto.components.settings.DeveloperPermissionsPane.78b1e0b9d4',
+        'Local network'
       )
     },
     get description() {
@@ -172,8 +174,8 @@ const PERMISSIONS: PermissionDefinition[] = [
     },
     get actionLabel() {
       return translate(
-        'auto.components.settings.DeveloperPermissionsPane.actionRequestAccess',
-        'Request Access'
+        'auto.components.settings.DeveloperPermissionsPane.e2596159f6',
+        'Request access'
       )
     },
     icon: <Network className="size-4" />
@@ -182,8 +184,8 @@ const PERMISSIONS: PermissionDefinition[] = [
     id: 'usb',
     get label() {
       return translate(
-        'auto.components.settings.DeveloperPermissionsPane.bf51e4a542',
-        'USB Devices'
+        'auto.components.settings.DeveloperPermissionsPane.91f887e323',
+        'USB devices'
       )
     },
     get description() {
@@ -194,8 +196,8 @@ const PERMISSIONS: PermissionDefinition[] = [
     },
     get actionLabel() {
       return translate(
-        'auto.components.settings.DeveloperPermissionsPane.actionOpenSettings',
-        'Open Settings'
+        'auto.components.settings.DeveloperPermissionsPane.b8cd05701d',
+        'Open settings'
       )
     },
     icon: <Usb className="size-4" />
@@ -213,17 +215,16 @@ const PERMISSIONS: PermissionDefinition[] = [
     },
     get actionLabel() {
       return translate(
-        'auto.components.settings.DeveloperPermissionsPane.actionOpenSettings',
-        'Open Settings'
+        'auto.components.settings.DeveloperPermissionsPane.b8cd05701d',
+        'Open settings'
       )
     },
     icon: <Bluetooth className="size-4" />
   }
 ]
 
-export function DeveloperPermissionsPane({
-  highlightedSettingId = null
-}: DeveloperPermissionsPaneProps): React.JSX.Element {
+export function DeveloperPermissionsPane(): React.JSX.Element {
+  const t = useTranslate()
   const [states, setStates] = useState<DeveloperPermissionState[]>([])
   const [loading, setLoading] = useState(true)
   const [pendingId, setPendingId] = useState<DeveloperPermissionId | null>(null)
@@ -298,7 +299,7 @@ export function DeveloperPermissionsPane({
     } catch {
       if (mountedRef.current) {
         toast.error(
-          translate(
+          t(
             'auto.components.settings.DeveloperPermissionsPane.bfa3402305',
             'Could not request permission'
           )
@@ -315,23 +316,24 @@ export function DeveloperPermissionsPane({
     <div className="space-y-8">
       <TerminalTccAttributionNotice />
       <SettingsGroup
+        id={DEVELOPER_PERMISSIONS_OVERVIEW_ID}
         title={
           <span className="flex items-center gap-2">
             <ShieldCheck className="size-4" />
-            {translate(
+            {t(
               'auto.components.settings.DeveloperPermissionsPane.6f011b9bf6',
               "Terminal tools inherit Orca's macOS privacy envelope."
             )}
           </span>
         }
-        description={translate(
+        description={t(
           'auto.components.settings.DeveloperPermissionsPane.6326a4c5cc',
           'Use these controls when a CLI, local app, or automation tool needs macOS privacy access. Orca does not ask at startup.'
         )}
         action={
           <Button variant="outline" size="sm" className="gap-1.5" onClick={() => void refresh()}>
             <RefreshCw className={`size-3.5 ${loading ? 'animate-spin' : ''}`} />
-            {translate('auto.components.settings.DeveloperPermissionsPane.4c17304beb', 'Refresh')}
+            {t('auto.components.settings.DeveloperPermissionsPane.4c17304beb', 'Refresh')}
           </Button>
         }
       >
@@ -339,14 +341,16 @@ export function DeveloperPermissionsPane({
           const state = stateById.get(permission.id)
           const status = state?.status
           const pending = pendingId === permission.id
-          const settingId = `developer-permissions-${permission.id}`
+          const settingId = getDeveloperPermissionSettingId(permission.id)
 
           return (
             <div key={permission.id} data-settings-row="">
               <div
                 data-settings-section={settingId}
-                data-highlighted={highlightedSettingId === settingId ? 'true' : undefined}
-                className="-mx-5 flex items-center justify-between gap-4 px-5 py-3 transition-[background-color,box-shadow] duration-500 data-[highlighted=true]:bg-accent data-[highlighted=true]:ring-2 data-[highlighted=true]:ring-inset data-[highlighted=true]:ring-ring/50 motion-reduce:transition-none"
+                className={cn(
+                  SETTINGS_GROUP_ROW_BLEED_CLASS,
+                  'flex items-center justify-between gap-4 py-3'
+                )}
               >
                 <div className="flex min-w-0 items-start gap-3">
                   <div className="mt-0.5 text-muted-foreground">{permission.icon}</div>
@@ -359,25 +363,22 @@ export function DeveloperPermissionsPane({
                         )}`}
                       >
                         {permission.id === 'full-disk-access' &&
-                          translate(
-                            'auto.components.settings.DeveloperPermissionsPane.appStatus',
-                            'App: '
-                          )}
-                        {developerPermissionStatusLabel(permission.id, status)}
+                          t('auto.components.settings.DeveloperPermissionsPane.appStatus', 'App: ')}
+                        {developerPermissionStatusLabel(permission.id, status, t)}
                       </span>
                     </div>
                     <p className="text-xs text-muted-foreground">{permission.description}</p>
                     {permission.id === 'full-disk-access' && state?.terminalHostStatus && (
                       <p className="text-xs text-muted-foreground">
-                        {translate(
+                        {t(
                           'auto.components.settings.DeveloperPermissionsPane.terminalHostStatus',
                           'Terminal hosts: '
                         )}
-                        {developerPermissionStatusLabel(permission.id, state.terminalHostStatus)}
+                        {developerPermissionStatusLabel(permission.id, state.terminalHostStatus, t)}
                         {state.terminalHostStatus !== 'granted' && (
                           <>
                             {' '}
-                            {translate(
+                            {t(
                               'auto.components.settings.DeveloperPermissionsPane.terminalHostRecovery',
                               'If a terminal cannot read protected files, save its work and close it in Terminal → Manage Sessions. Restart the daemon if new terminals are also affected; restarting closes its current terminals.'
                             )}

@@ -3,7 +3,7 @@ import {
   isRuntimePaneTitleOrphan,
   resolveRuntimePaneTitleLeafId,
   resolveRuntimePaneTitleLeafIdFromSparseSlots
-} from '../../../../shared/runtime-pane-title-leaf-id'
+} from '../../../../shared/workspace-layout/terminal-topology/runtime-pane-title-leaf-id'
 import { FIRST_PANE_ID } from '../../../../shared/pane-key'
 import { isTerminalLeafId, makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import { normalizeCompatibleAgentTitleForOwner } from '../../../../shared/agent-status/title/agent-title-owner'
@@ -13,16 +13,16 @@ import { clientAgentStatusFencesHost } from './agent-status-primitives'
 import { writableWebSessionTabsRecord } from './state-equality-core'
 import type {
   MirroredTerminalTab,
-  TerminalSurface,
   WebSessionTabsBatchContext,
   WebSessionTabsSyncState
 } from './state'
+import type { RuntimeMobileSessionTerminalClientTab } from '../../../../shared/remote-runtime/session-graph/runtime-mobile-session-tab-contracts'
 
 /** Reconcile saved pane titles with the accepted host inventory, including inactive tabs. */
 export function buildMirroredRuntimePaneTitlePatch(
   state: WebSessionTabsSyncState,
   tabs: readonly MirroredTerminalTab[],
-  surfaces: readonly TerminalSurface[],
+  surfaces: readonly RuntimeMobileSessionTerminalClientTab[],
   now: number,
   batchContext?: WebSessionTabsBatchContext
 ): Partial<WebSessionTabsSyncState> | null {
@@ -37,9 +37,11 @@ export function buildMirroredRuntimePaneTitlePatch(
   if (titledTabs.length === 0) {
     return null
   }
-  const surfacesByTab = new Map<string, Map<string, TerminalSurface>>()
+  const surfacesByTab = new Map<string, Map<string, RuntimeMobileSessionTerminalClientTab>>()
   for (const surface of surfaces) {
-    const byLeaf = surfacesByTab.get(surface.parentTabId) ?? new Map<string, TerminalSurface>()
+    const byLeaf =
+      surfacesByTab.get(surface.parentTabId) ??
+      new Map<string, RuntimeMobileSessionTerminalClientTab>()
     byLeaf.set(surface.leafId, surface)
     surfacesByTab.set(surface.parentTabId, byLeaf)
   }

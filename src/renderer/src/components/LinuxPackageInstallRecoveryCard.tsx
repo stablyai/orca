@@ -6,7 +6,8 @@ import type {
 } from '../../../shared/update-status-types'
 import { UpdateErrorCardContent } from './UpdateErrorCardContent'
 import { translate } from '@/i18n/i18n'
-import { linuxPackageCommandUnavailableText } from '@/lib/updater-message-copy'
+import { useTranslate } from '@/i18n/use-translate'
+import { linuxPackageCommandUnavailableText } from '@/app-shell/updates/updater-message-copy'
 import { useMountedRef } from '@/hooks/useMountedRef'
 
 function copiedNote(packageFileName: string): string {
@@ -36,28 +37,29 @@ export function LinuxPackageInstallRecoveryCard({
   releaseUrl?: string
   onClose: () => void
 }) {
+  const t = useTranslate()
   // Translate on render so persisted-language hydration cannot leave the card frozen in English.
-  const TITLE = translate(
+  const TITLE = t(
     'auto.components.LinuxPackageInstallRecoveryCard.53e1559f99',
     'Manual Install Required'
   )
-  const SUMMARY = translate(
+  const SUMMARY = t(
     'auto.components.LinuxPackageInstallRecoveryCard.a7ac6ec78b',
     'Orca downloaded the system package. Quit Orca before finishing the update from a terminal.'
   )
-  const EXPLAINER = translate(
+  const EXPLAINER = t(
     'auto.components.LinuxPackageInstallRecoveryCard.82c6dbea00',
     'Copy the command, quit Orca, and run it in a system terminal on the computer where Orca is installed. Reopen Orca after it finishes.'
   )
-  const AGENT_NOTE = translate(
+  const AGENT_NOTE = t(
     'auto.components.LinuxPackageInstallRecoveryCard.53c4b8e148',
     'No usable authentication agent answered the privileged install request.'
   )
-  const TRUST_NOTE = translate(
+  const TRUST_NOTE = t(
     'auto.components.LinuxPackageInstallRecoveryCard.b7e7c5bc95',
     'Orca checks the downloaded file against the release metadata at the moment it builds this command. The system package itself is not signature-checked, and Orca cannot vouch for the file after that point.'
   )
-  const CHECKING_LABEL = translate(
+  const CHECKING_LABEL = t(
     'auto.components.LinuxPackageInstallRecoveryCard.c732bcbf8f',
     'Checking package...'
   )
@@ -139,17 +141,14 @@ export function LinuxPackageInstallRecoveryCard({
 
   // Keep the action label stable; toast confirms the copy.
   const copyAction = {
-    label: translate(
-      'auto.components.LinuxPackageInstallRecoveryCard.55c86654b7',
-      'Copy Install Command'
-    ),
+    label: t('auto.components.LinuxPackageInstallRecoveryCard.55c86654b7', 'Copy Install Command'),
     pendingLabel: CHECKING_LABEL,
     isPending: pendingAction === 'copy',
     disabled: pendingAction !== null,
     onClick: handleCopyCommand
   }
   const showAction = {
-    label: translate('auto.components.LinuxPackageInstallRecoveryCard.e3de29c86a', 'Show Package'),
+    label: t('auto.components.LinuxPackageInstallRecoveryCard.e3de29c86a', 'Show Package'),
     pendingLabel: CHECKING_LABEL,
     isPending: pendingAction === 'show',
     disabled: pendingAction !== null,
@@ -157,7 +156,7 @@ export function LinuxPackageInstallRecoveryCard({
   }
   const officialReleaseAction = releaseUrl
     ? {
-        label: translate('auto.components.UpdateCard.47126bcf57', 'Download Manually'),
+        label: t('auto.components.UpdateCard.47126bcf57', 'Download Manually'),
         onClick: () => {
           setActionError(null)
           void window.api.shell.openUrl(releaseUrl).catch((error: unknown) => {

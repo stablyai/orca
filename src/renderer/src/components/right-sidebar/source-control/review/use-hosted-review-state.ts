@@ -1,7 +1,7 @@
 import { useMemo, useRef, useState } from 'react'
 import { localizedHostedReviewCopy } from '@/i18n/hosted-review-localized-copy'
 import type { HostedReviewInfo } from '../../../../../../shared/source-control/hosted-review/hosted-review-contracts'
-import { isGitHubPRSuppressed } from '../../../../../../shared/worktree/github-pr-suppression'
+import { isGitHubPRSuppressed } from '../../../../../../shared/worktree/hosted-review/github-pr-suppression'
 import { resolveHostedReviewCreationProvider } from '../../../../../../shared/source-control/hosted-review/hosted-review-creation-providers'
 import { isStaleMergedGitHubReviewForHead } from '@/store/slices/hosted-review/hosted-review-cache-state'
 import type { SourceControlWorktreeContext } from '../listing/use-worktree-context'
@@ -10,6 +10,7 @@ import type {
   HostedReviewCreationRequestState,
   HostedReviewCreationState
 } from './hosted-review-creation-state'
+import { useTranslate } from '@/i18n/use-translate'
 
 /** Scope both cached reviews and eligibility so previous-target responses are ignored. */
 export function useSourceControlHostedReviewState({
@@ -33,6 +34,7 @@ export function useSourceControlHostedReviewState({
   linkedPR: number | null
   suppressedGitHubPR: number | null
 }) {
+  const t = useTranslate()
   const [hostedReviewCreationState, setHostedReviewCreationState] =
     useState<HostedReviewCreationState | null>(null)
   const [hostedReviewCreationRequestState, setHostedReviewCreationRequestState] =
@@ -90,7 +92,7 @@ export function useSourceControlHostedReviewState({
   const hostedReviewCreateProvider = resolveHostedReviewCreationProvider(
     hostedReviewCreation?.provider
   )
-  const hostedReviewCreateCopy = localizedHostedReviewCopy(hostedReviewCreateProvider)
+  const hostedReviewCreateCopy = localizedHostedReviewCopy(hostedReviewCreateProvider, t)
 
   return {
     currentPrFromQueue,

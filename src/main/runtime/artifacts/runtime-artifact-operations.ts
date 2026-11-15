@@ -8,7 +8,7 @@ import type {
   ArtifactPublishResult,
   ArtifactPublishedLink,
   ArtifactWriteRequest
-} from '../../../shared/artifacts'
+} from '../../../shared/artifacts/artifacts'
 import { LegacyWorkerTerminalSurface } from '../orchestration/terminal-authority/legacy-worker-terminal-surface'
 
 export abstract class RuntimeArtifactOperations extends LegacyWorkerTerminalSurface {

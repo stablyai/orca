@@ -2,7 +2,7 @@ import type { BrowserSlice, BrowserSliceGet, BrowserSliceSet } from '../browser-
 import {
   clearClientHostedBrowserCloseIntents,
   recordClientHostedBrowserCloseIntents
-} from '@/runtime/client-hosted-browser-close-intents'
+} from '@/runtime/browser/closing/client-hosted-browser-close-intents'
 import { getBrowserSettingsHostId, updateDefaultBrowserProfileForHost } from './browser-host-state'
 import { parseExecutionHostId } from '../../../../../../shared/execution-host'
 

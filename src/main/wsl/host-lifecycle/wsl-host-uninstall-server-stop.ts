@@ -3,7 +3,7 @@
 import { z } from 'zod'
 import { errorMessage } from '../../../shared/error-message'
 import { quotePosixShell } from '../../../shared/shell/launch/shell-argument-quoting'
-import type { WslHostServerStop } from '../../../shared/wsl-host-types'
+import type { WslHostServerStop } from '../../../shared/remote-runtime/wsl-hosts/wsl-host-types'
 import { execCommand } from '../../ssh/remote-exec/remote-exec-command'
 import { listRunningWslDistrosAsync } from '../discovery/distro-catalog'
 import { readWslHostRecordsQuietly } from './wsl-host-connection-record'
@@ -141,7 +141,7 @@ export async function stopWslHostServerFromGuest(
 }
 
 export type WslHostUninstallStopDependencies = {
-  distros: () => string[]
+  distros: () => string[] | Promise<string[]>
   /** Confirmed running list; null when it can't be read. Must never start a distro. */
   listRunning: () => Promise<string[] | null>
   stop: (distro: string, signal: AbortSignal) => Promise<WslHostServerStop>
@@ -152,7 +152,8 @@ export function wslHostUninstallStopDependencies(
   userDataPath: string
 ): WslHostUninstallStopDependencies {
   return {
-    distros: () => readWslHostRecordsQuietly(userDataPath).map((record) => record.distro),
+    distros: async () =>
+      (await readWslHostRecordsQuietly(userDataPath)).map((record) => record.distro),
     listRunning: () => listRunningWslDistrosAsync({ requireConfirmed: true }).catch(() => null),
     stop: stopWslHostServerFromGuest
   }
@@ -193,7 +194,7 @@ async function stopWithin(
 export async function stopWslHostServersForUninstall(
   deps: WslHostUninstallStopDependencies
 ): Promise<void> {
-  const distros = [...new Map(deps.distros().map((d) => [d.toLowerCase(), d])).values()]
+  const distros = [...new Map((await deps.distros()).map((d) => [d.toLowerCase(), d])).values()]
   if (distros.length === 0) {
     return
   }

@@ -1,14 +1,13 @@
-import '../../unused-default-rpc-methods.test-fixture'
 import { describe, expect, it, vi } from 'vitest'
 import type { OrcaRuntimeService } from '../../../orca-runtime'
 import { RpcDispatcher } from '../../dispatcher'
 import { WORKTREE_METHODS } from './worktree'
 import '../../../../../shared/protocol-version'
-import '../../../../../shared/worktree-runtime-capabilities'
+import '../../../../../shared/remote-runtime/protocol/worktree-runtime-capabilities'
 import type {
   RuntimeWorktreePsResult,
   RuntimeWorktreePsSummary
-} from '../../../../../shared/runtime-worktree-contracts'
+} from '../../../../../shared/worktree/catalog/runtime-worktree-contracts'
 
 function runtimeReturning(...results: RuntimeWorktreePsResult[]) {
   const getWorktreePs = vi.fn().mockResolvedValue({

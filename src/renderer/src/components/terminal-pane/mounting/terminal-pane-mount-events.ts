@@ -7,7 +7,7 @@ import {
 } from '@/constants/terminal'
 import { resolveLeafIdForManager } from '@/lib/pane-manager/pane-key-resolution'
 import { consumePendingWebRuntimeSplitMirrorTelemetry } from '@/runtime/hosted-terminals/actions/web-runtime-terminal-split'
-import { scheduleRuntimeGraphSync } from '@/runtime/sync-runtime-graph'
+import { scheduleRuntimeGraphSync } from '@/runtime/sync-runtime-graph/graph-sync-scheduler'
 import { closeTerminalTab } from '../../terminal/terminal-tab-actions'
 import { useAppStore } from '@/store/index'
 import { makePaneKey } from '../../../../../shared/workspace-layout/stable-pane-id'
@@ -76,7 +76,8 @@ export function installTerminalPaneMountEvents(args: {
       }
       const splitOptions = {
         ...(detail.newLeafId ? { leafId: detail.newLeafId } : {}),
-        ...(detail.ptyId ? { ptyId: detail.ptyId } : {})
+        ...(detail.ptyId ? { ptyId: detail.ptyId } : {}),
+        ...(detail.activate === false ? { activate: false } : {})
       }
       if (detail.command) {
         const createdPane = splitPaneWithOneShotStartup(ptyDeps, { command: detail.command }, () =>

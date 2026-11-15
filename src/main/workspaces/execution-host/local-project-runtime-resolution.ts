@@ -10,11 +10,11 @@ import {
 } from '../../../shared/folder-workspaces/folder-workspace-execution-host'
 import { parseWorkspaceKey } from '../../../shared/workspace-scope'
 import type { TerminalWorkspaceLaunchScope } from '../../runtime/orchestration/terminal-authority/structured-sessions/runtime-legacy-worker-terminal-recovery-types'
+import { getWorkspaceRuntimePreference } from '../../../shared/execution-host/project-runtime-preference'
 import {
-  getWorkspaceRuntimePreference,
   resolveProjectExecutionRuntime,
   type ProjectExecutionRuntimeResolution
-} from '../../../shared/project-execution-runtime'
+} from '../../../shared/execution-host/project-execution-runtime'
 import {
   getCachedWslAvailability,
   hasCachedWslAvailability
@@ -22,7 +22,7 @@ import {
 import { getCachedWslDistros, hasCachedWslDistros } from '../../wsl/discovery/distro-catalog'
 import { getRepoIdFromWorktreeId } from '../../../shared/worktree/id'
 import { projectMatchesRepo } from '../../../shared/project-repo-match'
-import type { LocalWindowsTerminalRuntimeOptions } from '../../../shared/local-windows-terminal-runtime'
+import type { LocalWindowsTerminalRuntimeOptions } from '../../../shared/shell/launch/local-windows-terminal-runtime'
 import { resolveLocalPtyOptions, type LocalPtySettings } from './local-project-runtime-pty-options'
 
 import {

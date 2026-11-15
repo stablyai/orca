@@ -141,6 +141,7 @@ export const commonPropsSchema = z
       ])
       .optional(),
     chat_ui_launch_tip_button_emphasis_v1: z.enum(['normal', 'swapped']).optional(),
+    chat_ui_launch_tip_rollout_v1: z.enum(['control', 'treatment']).optional(),
     chat_ui_launch_tip_targeting_v1: z
       .enum(['all', 'eligible-harnesses', 'not-switched'])
       .optional()

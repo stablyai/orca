@@ -15,7 +15,7 @@ import {
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import RepoBadgeLabel from '@/components/repo/RepoBadgeLabel'
 import { QUICK_COMMAND_TOGGLE_ITEM_CLASS } from './terminal-quick-command-toggle-style'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 
 type TerminalQuickCommandScopeFieldProps = {
   disabled: boolean
@@ -49,10 +49,11 @@ export function TerminalQuickCommandScopeField({
   rememberRepoScopeId,
   setDraft
 }: TerminalQuickCommandScopeFieldProps): React.JSX.Element {
+  const t = useTranslate()
   return (
     <div className="space-y-2">
       <Label>
-        {translate(
+        {t(
           'auto.components.terminal.quick.commands.TerminalQuickCommandScopeField.c25cf350ef',
           'Scope'
         )}
@@ -83,7 +84,7 @@ export function TerminalQuickCommandScopeField({
           variant="outline"
         >
           <ToggleGroupItem value="global" className={QUICK_COMMAND_TOGGLE_ITEM_CLASS}>
-            {translate(
+            {t(
               'auto.components.terminal.quick.commands.TerminalQuickCommandScopeField.b83efc79e2',
               'Global'
             )}
@@ -93,7 +94,7 @@ export function TerminalQuickCommandScopeField({
             disabled={repos.length === 0}
             className={QUICK_COMMAND_TOGGLE_ITEM_CLASS}
           >
-            {translate(
+            {t(
               'auto.components.terminal.quick.commands.TerminalQuickCommandScopeField.3834d24243',
               'Project'
             )}
@@ -113,11 +114,11 @@ export function TerminalQuickCommandScopeField({
                 <SelectValue
                   placeholder={
                     selectedRepoMissing
-                      ? translate(
+                      ? t(
                           'auto.components.terminal.quick.commands.TerminalQuickCommandScopeField.2264edd5d3',
                           'Project not in list'
                         )
-                      : translate(
+                      : t(
                           'auto.components.terminal.quick.commands.TerminalQuickCommandScopeField.2496523a6f',
                           'Choose project'
                         )
@@ -138,7 +139,7 @@ export function TerminalQuickCommandScopeField({
             </Select>
             {selectedRepoMissing ? (
               <p className="max-w-48 text-xs text-muted-foreground">
-                {translate(
+                {t(
                   'auto.components.terminal.quick.commands.TerminalQuickCommandScopeField.2db6edede7',
                   'Saving keeps the existing project scope unless you choose another.'
                 )}

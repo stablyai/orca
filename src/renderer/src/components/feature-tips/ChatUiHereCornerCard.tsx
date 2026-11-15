@@ -4,7 +4,7 @@ import { FEATURE_TIPS } from '../../../../shared/feature-tips'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { useMountedRef } from '@/hooks/useMountedRef'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { useAppStore } from '@/store'
 import { ChatSurfacePreview } from '../agent/launch-settings/AgentDefaultSurfacePreviews'
 import { getChatUiHereVariantCopy } from './chat-ui-here-copy'
@@ -23,6 +23,7 @@ type CornerCardState =
 
 /** The nonblocking launch card for terminal-default profiles, sharing the tip's copy and a compact chat preview. */
 export function ChatUiHereCornerCard({ onClose }: { onClose: () => void }): JSX.Element | null {
+  const t = useTranslate()
   const mountedRef = useMountedRef()
   const settings = useAppStore((s) => s.settings)
   const [state, setState] = useState<CornerCardState>({ stage: 'prompt' })
@@ -51,7 +52,7 @@ export function ChatUiHereCornerCard({ onClose }: { onClose: () => void }): JSX.
   if (state.stage === 'switched') {
     return <ChatUiSwitchedCornerNote onClose={onClose} focusSettings={state.focusSettings} />
   }
-  const { paragraphs, secondaryLabel, primaryLabel } = getChatUiHereVariantCopy('chat-ui-off')
+  const { paragraphs, secondaryLabel, primaryLabel } = getChatUiHereVariantCopy('chat-ui-off', t)
   const [intro = ''] = paragraphs
 
   const handleUseChatUi = async (event: MouseEvent<HTMLButtonElement>): Promise<void> => {
@@ -95,13 +96,13 @@ export function ChatUiHereCornerCard({ onClose }: { onClose: () => void }): JSX.
       <CardHeader>
         <div className="flex items-center justify-between gap-2">
           <CardTitle id="chat-ui-here-corner-heading">
-            {translate('featureTips.chatUiHere.title', 'Chat UI is here')}
+            {t('featureTips.chatUiHere.title', 'Chat UI is here')}
           </CardTitle>
           <Button
             variant="ghost"
             size="icon-xs"
             onClick={handleDismiss}
-            aria-label={translate('featureTips.chatUiHere.dismiss', 'Dismiss')}
+            aria-label={t('featureTips.chatUiHere.dismiss', 'Dismiss')}
           >
             <X className="size-3.5" />
           </Button>
@@ -121,7 +122,7 @@ export function ChatUiHereCornerCard({ onClose }: { onClose: () => void }): JSX.
             <span className="block space-y-2">
               <span className="block">{intro}</span>
               <FeatureTipSettingsLine
-                text={translate(
+                text={t(
                   'featureTips.chatUiHere.changeInSettings',
                   'Change anytime in <link>Settings → Chat UI</link>.'
                 )}

@@ -1,6 +1,6 @@
 import type { AgentStatusStoreSnapshot } from './agent-status-store-contract'
 import { parseAgentStatusStoreSnapshot } from './agent-status-store-codec'
-import { assertJsonTextStructureWithinLimits } from '../../json-text-structure-limit'
+import { assertJsonTextStructureWithinLimits } from '../../json-stream/json-text-structure-limit'
 
 const SNAPSHOT_NESTING_DEPTH = 32
 

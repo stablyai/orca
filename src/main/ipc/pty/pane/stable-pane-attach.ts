@@ -5,7 +5,7 @@ import {
   TerminalHostGoneError,
   TerminalSessionOwnerUnverifiedError
 } from '../../../daemon/protocol/daemon-errors'
-import type { PtySpawnResult } from '../../../providers/pty-provider-contract'
+import type { PtySpawnResult } from '../../../providers/pty/spawn-result'
 import { keepAbsentPaneBindingForSwap, releaseAbsentPaneOwner } from './absent-pane-owner'
 import { excludeReplacedPaneOwner } from './replaced-pane-owner'
 import { PANE_NOT_LIVE_ERROR } from '../../../../shared/pane-attach-only-view'

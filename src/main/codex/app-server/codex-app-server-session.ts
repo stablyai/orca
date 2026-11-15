@@ -1,6 +1,7 @@
 import type { ChildProcessWithoutNullStreams } from 'node:child_process'
 import { spawnManagedProviderProcess } from '../../provider-process/managed-provider-process'
 import { resolveProviderChildEnv } from '../../provider-process/provider-process-launch'
+import { processEnvWithoutAgentSession } from '../../../shared/agent-launch/startup/parent-agent-session-env'
 import { stderrIndicatesMissingAppServer } from './codex-app-server-capability-signal'
 import { withCliRuntimeOnPath } from '../../../shared/node-cli-command-resolution'
 import {
@@ -24,7 +25,7 @@ export type CodexAppServerInvocation = {
   env?: Record<string, string>
   /** Keys stripped after the overlay, e.g. CODEX_HOME when targeting the real ~/.codex. */
   envToDelete?: readonly string[]
-  timeoutMs: number
+  timeoutMs: number | null
   signal?: AbortSignal
   experimentalApi?: boolean
   /** Kill unsupervised plugin trees before stdin EOF; root exit leaves children behind and blocks tree killing. */
@@ -91,7 +92,7 @@ export async function runCodexAppServerSession<T>(
 ): Promise<T> {
   invocation.signal?.throwIfAborted()
   // Strip CODEX_HOME after the overlay so default-home grants target the real ~/.codex.
-  const childEnv = resolveProviderChildEnv(invocation, process.env)
+  const childEnv = resolveProviderChildEnv(invocation, processEnvWithoutAgentSession())
   const pairedEnv = invocation.cliPath
     ? withCliRuntimeOnPath(invocation.cliPath, childEnv)
     : childEnv
@@ -185,15 +186,18 @@ export async function runCodexAppServerSession<T>(
     failPending(error)
     rejectDeadline(error)
   }
-  const deadline = setTimeout(
-    () =>
-      endSession(
-        new CodexAppServerTimeoutError(
-          `codex app-server session exceeded ${invocation.timeoutMs}ms (${invocation.command})`
+  const deadline =
+    invocation.timeoutMs === null
+      ? undefined
+      : setTimeout(
+          () =>
+            endSession(
+              new CodexAppServerTimeoutError(
+                `codex app-server session exceeded ${invocation.timeoutMs}ms (${invocation.command})`
+              )
+            ),
+          invocation.timeoutMs
         )
-      ),
-    invocation.timeoutMs
-  )
   const onAbort = (): void => endSession(new Error('codex app-server session stopped'))
   if (invocation.signal?.aborted) {
     onAbort()

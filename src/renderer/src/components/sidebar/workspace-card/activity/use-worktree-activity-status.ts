@@ -1,9 +1,10 @@
 import { useMemo } from 'react'
 import { useShallow } from 'zustand/react/shallow'
-import { useAppStore } from '@/store'
+import { useAppStore } from '@/store/index'
 import type { AppState } from '@/store/types'
 import { hasAwakeStructuredChat } from '@/store/slices/agent-status/structured-chat-slept-at'
-import { resolveWorktreeStatus, type WorktreeStatus } from '@/lib/worktree-status'
+import { resolveWorktreeStatus } from '@/lib/workspace/activity/worktree-status'
+import type { WorktreeStatus } from '../../../../../../shared/worktree-status-rollup'
 import { EMPTY_BROWSER_TABS, EMPTY_TABS } from './worktree-card-empty-inputs'
 import {
   selectLivePtyIdsForWorktree,
@@ -11,7 +12,7 @@ import {
   selectRuntimePaneTitlesForWorktree
 } from './worktree-card-status-inputs'
 import { selectWorktreeAgentActivitySummary } from './worktree-agent-activity-summary'
-import { selectStoppedWslDistro } from '@/lib/wsl-host-stopped-status'
+import { selectStoppedWslDistro } from '@/runtime/hosts/wsl/wsl-host-stopped-status'
 import { selectWorkspaceRuntimeEnvironmentId } from '../../../../lib/workspace/ownership/workspace-runtime-environment'
 import { parseRemoteRuntimePtyId } from '../../../../../../shared/remote-runtime/remote-runtime-pty-id'
 
@@ -83,8 +84,6 @@ export function useWorktreeActivityStatus(worktreeId: string): WorktreeStatus {
     hasInterrupted,
     hasUnconfirmed,
     hasLiveDone,
-    hasRetainedDone,
-    hasRetainedFailed,
     agentStatusPaneIdsByTabId,
     stalePaneIdsByTabId
   } = useAppStore(useShallow((s) => selectWorktreeAgentActivitySummary(s, worktreeId)))
@@ -107,9 +106,7 @@ export function useWorktreeActivityStatus(worktreeId: string): WorktreeStatus {
         hasFailed,
         hasInterrupted,
         hasUnconfirmed,
-        hasLiveDone,
-        hasRetainedDone,
-        hasRetainedFailed
+        hasLiveDone
       }),
     [
       tabs,
@@ -126,9 +123,7 @@ export function useWorktreeActivityStatus(worktreeId: string): WorktreeStatus {
       hasFailed,
       hasInterrupted,
       hasUnconfirmed,
-      hasLiveDone,
-      hasRetainedDone,
-      hasRetainedFailed
+      hasLiveDone
     ]
   )
 }

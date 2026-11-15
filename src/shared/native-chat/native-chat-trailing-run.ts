@@ -1,7 +1,7 @@
 // A tool run remains live until a later row from the same agent speaks or acts beyond it.
 
 import { isToolCallBlock, type NativeChatMessage } from './native-chat-types'
-import { deriveNativeChatRowContent } from './transcript/native-chat-row-content'
+import { deriveNativeChatRowContent } from './transcript/row-content/native-chat-row-content'
 import type { NativeChatResolvedPrompt } from './native-chat-resolution-receipt'
 
 /** Whether a row moves its agent past the run above it. An approval's receipt

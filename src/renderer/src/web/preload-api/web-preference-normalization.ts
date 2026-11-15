@@ -10,11 +10,8 @@ import {
   carriedChatUiLaunchSettings
 } from '../../../../shared/native-chat/native-chat-providers'
 import { normalizeAutoRenameBranchFromWorkDefaultOn } from '../../../../shared/auto-rename-branch-from-work-settings'
-import {
-  getDefaultSettings,
-  normalizeAgentActivityDisplayMode,
-  normalizeWorktreeCardProperties
-} from '../../../../shared/constants'
+import { getDefaultSettings, normalizeAgentActivityDisplayMode } from '../../../../shared/constants'
+import { normalizeWorktreeCardProperties } from '../../../../shared/worktree/row-display/card-properties'
 import {
   normalizeContextualTourIds,
   type ContextualTourId
@@ -27,9 +24,13 @@ import {
 } from '../../../../shared/feature-interactions'
 
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
-import type { PairedUiState, PairingLocalUiField } from '../../../../shared/pairing-local-ui-fields'
+import type {
+  PairedUiState,
+  PairingLocalUiField
+} from '../../../../shared/remote-runtime/pairing/pairing-local-ui-fields'
 import type { PersistedUIState } from '../../../../shared/persisted-ui-state-types'
 import { normalizeStatusBarUsageMode } from '../../../../shared/status-bar-usage-mode'
+import { normalizeStatusBarUsageFormat } from '../../../../shared/status-bar-usage-format'
 import { normalizeTerminalCustomThemes } from '../../../../shared/terminal-themes/terminal-custom-themes'
 import { splitLegacyTerminalColorOverrides } from '../../../../shared/terminal-themes/terminal-color-overrides'
 import {
@@ -77,6 +78,9 @@ export function mergeWebUIState(
     ),
     statusBarUsageMode: normalizeStatusBarUsageMode(
       safeUpdates.statusBarUsageMode ?? base.statusBarUsageMode
+    ),
+    statusBarUsageFormat: normalizeStatusBarUsageFormat(
+      safeUpdates.statusBarUsageFormat ?? base.statusBarUsageFormat
     )
   }
 }
@@ -92,6 +96,7 @@ export function mergeHostWebUIState(
     manualRepoOrder: local.manualRepoOrder,
     workspaceHostOrder: local.workspaceHostOrder,
     sidebarOpen: local.sidebarOpen,
+    activityBarPosition: local.activityBarPosition,
     showAgentModels: local.showAgentModels !== false,
     agentsVisibleHostIds: local.agentsVisibleHostIds,
     agentsFilterRepoIds: local.agentsFilterRepoIds,

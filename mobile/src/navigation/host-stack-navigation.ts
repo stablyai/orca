@@ -1,9 +1,10 @@
-import { BRIDGE_MAX_ROUTE_PARAM_CHARS } from '../mobile-web-shell/bridge/bridge-caps'
-import { BRIDGE_OPEN_ROUTE_PARAM } from '../mobile-web-shell/bridge/bridge-route-update'
+import { BRIDGE_MAX_ROUTE_PARAM_CHARS } from '../mobile-web-shell/bridge/protocol/bridge-caps'
+import { BRIDGE_OPEN_ROUTE_PARAM } from '../mobile-web-shell/bridge/page-lifecycle/bridge-route-update'
+import { focusedIndex } from '../mobile-web-shell/routing/native-stack-return'
 
 export type HostStackNavigationState = Readonly<{
   key?: string
-  index: number
+  index?: number
   routes: readonly HostStackNavigationRoute[]
 }>
 
@@ -63,7 +64,7 @@ export type HostStackRouter = {
 export type HostStackNavigationController = Readonly<{
   cancel: () => void
   isActive: () => boolean
-  retarget: (target: HostStackRouteTarget) => void
+  retarget: (target: HostStackRouteTarget, openInHostDocument: boolean) => void
 }>
 
 export type PendingHostStackNavigation = Readonly<{
@@ -74,9 +75,24 @@ export type PendingHostStackNavigation = Readonly<{
 export const HOST_SESSION_ROUTE = '[hostId]/session/[worktreeId]'
 const HOST_INDEX_ROUTE = '[hostId]/index'
 
-// A session keeps its host's list beneath it so Back lands there; other targets take the list's place.
-function opensOverHostList(target: HostStackRouteTarget): boolean {
+// A session opened in its host list's place (Home's agent rows), so Back leaves the host instead of showing the list.
+export const STANDALONE_SESSION_PARAM = 'standalone'
+
+export function isStandaloneSessionHref(href: string): boolean {
+  const [path = '', query = ''] = (href.split('#')[0] ?? '').split('?')
+  return (
+    /^\/h\/[^/]+\/session\//.test(path) &&
+    query.split('&').includes(`${STANDALONE_SESSION_PARAM}=1`)
+  )
+}
+
+function isSessionRoute(target: HostStackRouteTarget): boolean {
   return target.name === HOST_SESSION_ROUTE
+}
+
+// A session keeps its host's list beneath it so Back lands there, unless it is standalone; other targets take the list's place.
+function opensOverHostList(target: HostStackRouteTarget): boolean {
+  return isSessionRoute(target) && target.params[STANDALONE_SESSION_PARAM] !== '1'
 }
 
 const SETTLED_NAVIGATION: HostStackNavigationController = {
@@ -103,8 +119,12 @@ function sessionOpenHref(target: HostStackRouteTarget): string | null {
   return href.length <= BRIDGE_MAX_ROUTE_PARAM_CHARS ? href : null
 }
 
+function focusedRouteOf(state: HostStackNavigationState): HostStackNavigationRoute | undefined {
+  return state.routes[focusedIndex(state)]
+}
+
 // Match decoded and encoded ids so slash/hash/percent host ids recognize their own push.
-function hostParamMatches(param: unknown, expectedHostId: string): boolean {
+export function hostParamMatches(param: unknown, expectedHostId: string): boolean {
   if (typeof param !== 'string') {
     return false
   }
@@ -122,7 +142,7 @@ function hostParamMatches(param: unknown, expectedHostId: string): boolean {
 function focusedHostRoute(state: HostStackNavigationState): HostStackNavigationRoute | null {
   let current: HostStackNavigationState | undefined = state
   while (current) {
-    const route: HostStackNavigationRoute | undefined = current.routes[current.index]
+    const route = focusedRouteOf(current)
     if (!route) {
       return null
     }
@@ -139,7 +159,7 @@ function mountedHostStack(
   expectedHostId: string
 ): { key: string; routeKey: string } | null {
   const hostState = hostContainer.state
-  const hostRoute = hostState?.routes[hostState.index]
+  const hostRoute = hostState && focusedRouteOf(hostState)
   if (
     !hostState?.key ||
     hostRoute?.name !== HOST_INDEX_ROUTE ||
@@ -149,25 +169,6 @@ function mountedHostStack(
     return null
   }
   return { key: hostState.key, routeKey: hostRoute.key }
-}
-
-// Pending until the pushed host route commits, so a second tap for this host folds into the first instead of pushing another document.
-function pendingUntilHostRoute(navigation: HostStackRootNavigation): HostStackNavigationController {
-  let active = true
-  let unsubscribe = () => {}
-  const stop = () => {
-    if (active) {
-      active = false
-      unsubscribe()
-    }
-  }
-  unsubscribe = navigation.addListener('state', () => {
-    const state = navigation.getState()
-    if (state && focusedHostRoute(state)) {
-      stop()
-    }
-  })
-  return { cancel: stop, isActive: () => active, retarget: () => {} }
 }
 
 // Mount the host first, then open the target after its stack commits; a cold nested push otherwise resolves to a blank index without hostId.
@@ -180,7 +181,7 @@ export function navigateToHostStackRoute(
 ): HostStackNavigationController {
   const state = navigation.getState()
   const hostState = state && focusedHostRoute(state)?.state
-  const focused = hostState?.routes[hostState.index]
+  const focused = hostState && focusedRouteOf(hostState)
   if (
     hostState?.key &&
     focused?.key &&
@@ -196,8 +197,8 @@ export function navigateToHostStackRoute(
     })
     return SETTLED_NAVIGATION
   }
-  // The host screen opens the session inside its document when its cached page can, else pushes it as before.
-  const href = openInHostDocument && opensOverHostList(target) ? sessionOpenHref(target) : null
+  // The host screen opens the session inside its document when the page it activates can, else pushes it as before.
+  const href = openInHostDocument && isSessionRoute(target) ? sessionOpenHref(target) : null
   // useLocalSearchParams decodes every value once more, which would undo the target's own escapes.
   const open = href === null ? null : encodeURIComponent(href)
   const inThisHost = hostState?.key && hostParamMatches(focused?.params?.hostId, hostId)
@@ -211,72 +212,94 @@ export function navigateToHostStackRoute(
     return SETTLED_NAVIGATION
   }
   // Already inside this host: pushing the host route again would stack a second list.
-  if (opensOverHostList(target) && inThisHost) {
-    navigation.dispatch({ type: 'PUSH', target: hostState.key, payload: target })
+  if (isSessionRoute(target) && inThisHost) {
+    if (!opensOverHostList(target) && focused?.key && focused.name === HOST_INDEX_ROUTE) {
+      navigation.dispatch({
+        type: 'REPLACE',
+        target: hostState.key,
+        source: focused.key,
+        payload: target
+      })
+    } else {
+      navigation.dispatch({ type: 'PUSH', target: hostState.key, payload: target })
+    }
     return SETTLED_NAVIGATION
   }
-  if (open !== null) {
-    router.push({ pathname: '/h/[hostId]', params: { hostId, [BRIDGE_OPEN_ROUTE_PARAM]: open } })
-    return pendingUntilHostRoute(navigation)
-  }
+  return open === null
+    ? openWhenHostStackCommits(
+        navigation,
+        router,
+        hostId,
+        () => router.push(hostStackHostRoute(hostId)),
+        [target, openInHostDocument]
+      )
+    : openWhenHostStackCommits(navigation, router, hostId, () =>
+        router.push({
+          pathname: '/h/[hostId]',
+          params: { hostId, [BRIDGE_OPEN_ROUTE_PARAM]: open }
+        })
+      )
+}
 
+// Push the host, then open the latest target on its stack once it commits; another tap for this host retargets instead of pushing a second document.
+function openWhenHostStackCommits(
+  navigation: HostStackRootNavigation,
+  router: HostStackRouter,
+  hostId: string,
+  pushHost: () => void,
+  first: [HostStackRouteTarget, boolean] | null = null
+): HostStackNavigationController {
   let active = true
   let hostRouteSeen = false
-  let selectedTarget = target
-  let unsubscribeState = () => {}
+  let latest = first
+  let unsubscribe = () => {}
   const dispose = () => {
-    if (!active) {
-      return
+    if (active) {
+      active = false
+      unsubscribe()
     }
-    active = false
-    unsubscribeState()
   }
-
   const onState = () => {
-    if (!active) {
-      return
-    }
-    const state = navigation.getState()
+    const state = active ? navigation.getState() : undefined
     if (!state) {
       return
     }
     const hostContainer = focusedHostRoute(state)
-    if (hostContainer) {
-      hostRouteSeen = true
-    } else if (hostRouteSeen) {
-      dispose()
+    if (!hostContainer) {
+      if (hostRouteSeen) {
+        dispose()
+      }
       return
     }
-    const overHostList = opensOverHostList(selectedTarget)
-    const hostStack = hostContainer && mountedHostStack(hostContainer, hostId)
+    hostRouteSeen = true
+    const hostStack = mountedHostStack(hostContainer, hostId)
     if (!hostStack) {
-      if (hostContainer && hostParamMatches(hostContainer.params?.hostId, hostId)) {
+      // Root state that omits the mounted child stack: let Expo Router resolve the target instead.
+      if (hostParamMatches(hostContainer.params?.hostId, hostId)) {
         dispose()
-        const href = hostStackRouteHref(selectedTarget)
-        if (overHostList) {
-          router.push(href)
-        } else {
-          router.replace(href)
+        if (latest) {
+          const href = hostStackRouteHref(latest[0])
+          return void (opensOverHostList(latest[0]) ? router.push(href) : router.replace(href))
         }
       }
       return
     }
     dispose()
-    navigation.dispatch(
-      overHostList
-        ? { type: 'PUSH', target: hostStack.key, payload: selectedTarget }
-        : {
-            type: 'REPLACE',
-            target: hostStack.key,
-            source: hostStack.routeKey,
-            payload: selectedTarget
-          }
-    )
+    if (latest && isSessionRoute(latest[0])) {
+      navigateToHostStackRoute(navigation, router, hostId, ...latest)
+    } else if (latest) {
+      navigation.dispatch({
+        type: 'REPLACE',
+        target: hostStack.key,
+        source: hostStack.routeKey,
+        payload: latest[0]
+      })
+    }
   }
 
   try {
-    unsubscribeState = navigation.addListener('state', onState)
-    router.push(hostStackHostRoute(hostId))
+    unsubscribe = navigation.addListener('state', onState)
+    pushHost()
   } catch (error) {
     dispose()
     throw error
@@ -284,9 +307,9 @@ export function navigateToHostStackRoute(
   return {
     cancel: dispose,
     isActive: () => active,
-    retarget: (nextTarget) => {
+    retarget: (target, openInHostDocument) => {
       if (active) {
-        selectedTarget = nextTarget
+        latest = [target, openInHostDocument]
       }
     }
   }
@@ -301,7 +324,7 @@ export function coordinateHostStackNavigation(
   openInHostDocument = false
 ): PendingHostStackNavigation {
   if (current?.hostId === hostId && current.controller.isActive()) {
-    current.controller.retarget(target)
+    current.controller.retarget(target, openInHostDocument)
     return current
   }
   current?.controller.cancel()

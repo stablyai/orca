@@ -1,6 +1,6 @@
 import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
-import { hashPluginTree } from '../../../src/main/plugins/plugin-content-hash'
+import { hashPluginTree } from '../../../src/main/plugins/artifacts/plugin-content-hash'
 import { pluginManifestSchema } from '../../../src/shared/plugins/manifest/plugin-manifest'
 import { pluginContributionSummary } from '../../../src/shared/plugins/contributions/plugin-contribution-summary'
 import { pluginCatalogTypes } from '../../../src/shared/plugins/catalog/plugin-catalog-release'

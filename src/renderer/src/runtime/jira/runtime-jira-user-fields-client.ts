@@ -1,4 +1,4 @@
-import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import type {
   JiraCreateIssueArgs,
   JiraCreateIssueResult,
@@ -13,9 +13,9 @@ import {
   runtimeEnvironmentSupportsCapability
 } from '../rpc/compatibility/runtime-capability-proof'
 import { callRuntimeRpc } from '../rpc/calls/runtime-rpc-call'
-import { isRuntimeProviderSearchQueryWithinLimit } from '../runtime-provider-search-bounds'
-import { rowLessSourceTarget } from '../../lib/default-creation-host'
-import type { RowLessSource as RuntimeJiraSettings } from '../../lib/default-creation-host'
+import { isRuntimeProviderSearchQueryWithinLimit } from '../issue-search/runtime-provider-search-bounds'
+import { rowLessSourceTarget } from '../hosts/selection/default-creation-host'
+import type { RowLessSource as RuntimeJiraSettings } from '../hosts/selection/default-creation-host'
 
 export async function jiraCreateIssue(
   settings: RuntimeJiraSettings,

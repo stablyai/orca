@@ -1,9 +1,9 @@
 import { useState } from 'react'
 import { flushSync } from 'react-dom'
 import { toast } from 'sonner'
-import { translate } from '@/i18n/i18n'
-import { executePluginCommand } from '@/lib/plugin-command-execution'
-import { useAppStore } from '@/store'
+import { useTranslate } from '@/i18n/use-translate'
+import { executePluginCommand } from '@/lib/plugins/commands/plugin-command-execution'
+import { useAppStore } from '@/store/index'
 import type { ActivePluginCommand } from '@/store/plugins/catalog/plugin-contribution-catalog'
 import { Button } from '../../ui/button'
 
@@ -39,6 +39,7 @@ export function PluginContributionActionCommand({
   /** Set when the command can't run right now; the button stays visible but off. */
   unavailableReason: string | null
 }): React.JSX.Element {
+  const t = useTranslate()
   const [running, setRunning] = useState(false)
   const run = async (): Promise<void> => {
     setRunning(true)
@@ -51,18 +52,14 @@ export function PluginContributionActionCommand({
       const result = await executePluginCommand(command, 'plugin-palette')
       const preview = resultPreview(result)
       toast.success(
-        translate(
-          'auto.components.settings.PluginContributionActionCommand.ran',
-          'Ran {{value0}}',
-          {
-            value0: command.title
-          }
-        ),
+        t('auto.components.settings.PluginContributionActionCommand.ran', 'Ran {{value0}}', {
+          value0: command.title
+        }),
         {
           description:
             preview ??
             (command.handler.type === 'worker'
-              ? translate(
+              ? t(
                   'auto.components.settings.PluginContributionActionCommand.seeLogs',
                   'See Logs below'
                 )
@@ -71,11 +68,9 @@ export function PluginContributionActionCommand({
       )
     } catch (cause: unknown) {
       toast.error(
-        translate(
-          'auto.components.settings.PluginContributionActionCommand.failed',
-          '{{value0}} failed',
-          { value0: command.title }
-        ),
+        t('auto.components.settings.PluginContributionActionCommand.failed', '{{value0}} failed', {
+          value0: command.title
+        }),
         { description: cause instanceof Error ? cause.message : String(cause) }
       )
     } finally {
@@ -88,14 +83,14 @@ export function PluginContributionActionCommand({
       size="xs"
       disabled={running || unavailableReason !== null}
       title={unavailableReason ?? undefined}
-      aria-label={translate(
+      aria-label={t(
         'auto.components.settings.PluginContributionActionCommand.runName',
         'Run {{value0}}',
         { value0: command.title }
       )}
       onClick={() => void run()}
     >
-      {translate('auto.components.settings.PluginContributionActionCommand.run', 'Run')}
+      {t('auto.components.settings.PluginContributionActionCommand.run', 'Run')}
     </Button>
   )
 }

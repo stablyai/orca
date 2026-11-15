@@ -1,5 +1,5 @@
 import { useCallback, useRef, useState, type Dispatch, type SetStateAction } from 'react'
-import { track } from '@/lib/telemetry'
+import { track } from '@/diagnostics/telemetry/telemetry'
 import { isGitRepoKind } from '../../../../../../shared/repo-kind'
 import {
   buildNestedRepoScanTelemetry,
@@ -19,8 +19,8 @@ import {
 import {
   wslHostWindowsDriveRefusalForLinuxPath,
   type WslHostWindowsDriveRefusal
-} from '../../../../../../shared/wsl-host-windows-drive-refusal'
-import { getWindowsPathAccess } from '@/lib/windows-path-access'
+} from '../../../../../../shared/remote-runtime/wsl-hosts/wsl-host-windows-drive-refusal'
+import { getWindowsPathAccess } from '@/lib/files/os-open/windows-path-access'
 import type { AddRepoPathOptions } from '@/store/repos/repo-state'
 import { addRepoBusyLabels } from './add-repo-busy-labels'
 

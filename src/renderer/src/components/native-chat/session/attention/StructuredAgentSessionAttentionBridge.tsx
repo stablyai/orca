@@ -10,14 +10,14 @@ import {
 import { findStructuredAgentSessionReadOwner } from '../structured/read/structured-agent-session-read-owner-registry'
 import { structuredAttentionReadObservation } from './structured-attention-read-observation'
 import { useAppStore } from '@/store'
-import type { RuntimeClientTarget } from '../../../../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import {
   structuredAgentSessionOwnerForTab,
   structuredAgentSessionTargetForHost
-} from '@/runtime/structured-agent-session-owner'
-import { getStructuredAgentSessionTurnCompletionFeed } from '@/runtime/structured-agent-session-turn-completion-feed'
-import { getStructuredAgentSessionStatusFeed } from '@/runtime/structured-agent-session-status-feed'
-import { acknowledgeStructuredAgentSessionAttention } from '@/runtime/structured-agent-session-client'
+} from '@/runtime/native-chat/session-ownership/structured-agent-session-owner'
+import { getStructuredAgentSessionTurnCompletionFeed } from '@/runtime/native-chat/status/structured-agent-session-turn-completion-feed'
+import { getStructuredAgentSessionStatusFeed } from '@/runtime/native-chat/status/structured-agent-session-status-feed'
+import { acknowledgeStructuredAgentSessionAttention } from '@/runtime/native-chat/attention/structured-agent-session-attention-acknowledgment'
 import type { AgentJournalCursor } from '../../../../../../shared/agent-session/journal/agent-session-journal-identity'
 import type { AgentSessionExecutionLocation } from '../../../../../../shared/agent-session/lifecycle/agent-session-record'
 import type { AgentSessionStatusSummary } from '../../../../../../shared/agent-session/agent-session-wire'

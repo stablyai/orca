@@ -1,7 +1,7 @@
 import { existsSync, lstatSync, mkdirSync, readFileSync, statSync } from 'node:fs'
 import { dirname } from 'node:path'
 import { writeCredentialFileAtomic } from '../credentials/integration-credential-file'
-import { readPrivateWindowsFile } from '../../shared/secure-path-windows-acl'
+import { readPrivateWindowsFile } from '../../shared/secure-storage/secure-path-windows-acl'
 import { parseAntigravityNativeCredential } from './native-credential-codec'
 import type { AntigravityCredentialBackend } from './native-account-service'
 

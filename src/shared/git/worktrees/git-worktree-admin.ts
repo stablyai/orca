@@ -10,7 +10,7 @@ import {
 } from '../metadata/git-common-directory'
 import { resolveGitMetadataPath, resolveWorktreeHostPath } from '../metadata/git-metadata-path'
 import { mapWithConcurrency } from '../../map-with-concurrency'
-import { foldWslUncPathCaseInsensitiveParts } from '../../wsl-paths'
+import { foldWslUncPathCaseInsensitiveParts } from '../../file-access/wsl-paths'
 import type { GitWorktreeInfo } from '../../worktree/types'
 
 const ADMIN_READ_CONCURRENCY = 8

@@ -1,6 +1,6 @@
 import { Button } from '@/components/ui/button'
 import { LoadingSpinner } from '@/components/LoadingSpinner'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { makePaneKey } from '../../../../../../shared/workspace-layout/stable-pane-id'
 import { PaneTopWarningBanner } from '../../appearance/pane-top-banner/PaneTopWarningBanner'
 import {
@@ -17,6 +17,7 @@ export function NewerDaemonHoldBanner({
   tabId: string
   leafId: string
 }): React.JSX.Element | null {
+  const t = useTranslate()
   const paneKey = makePaneKey(tabId, leafId)
   const hold = useNewerDaemonHold(paneKey)
   if (!hold) {
@@ -28,15 +29,15 @@ export function NewerDaemonHoldBanner({
     <PaneTopWarningBanner
       title={
         failed
-          ? translate('terminal.newerDaemonBanner.failedTitle', "Couldn't reopen this terminal")
-          : translate(
+          ? t('terminal.newerDaemonBanner.failedTitle', "Couldn't reopen this terminal")
+          : t(
               'terminal.newerDaemonBanner.title',
               'This terminal was opened in a newer version of Orca'
             )
       }
       body={
         !failed && hold.resumable
-          ? translate(
+          ? t(
               'terminal.newerDaemonBanner.resumableBody',
               'Reopen it here to keep working. Your agent session will resume.'
             )
@@ -52,17 +53,13 @@ export function NewerDaemonHoldBanner({
         >
           {reopening ? <LoadingSpinner className="size-3" /> : null}
           {reopening
-            ? translate('terminal.newerDaemonBanner.reopening', 'Reopening…')
+            ? t('terminal.newerDaemonBanner.reopening', 'Reopening…')
             : failed
-              ? translate('terminal.newerDaemonBanner.tryAgain', 'Try again')
-              : translate(
-                  'terminal.newerDaemonBanner.reopenTerminal',
-                  'Reopen {{count}} terminals',
-                  {
-                    count: hold.heldCount,
-                    defaultValue_one: 'Reopen terminal'
-                  }
-                )}
+              ? t('terminal.newerDaemonBanner.tryAgain', 'Try again')
+              : t('terminal.newerDaemonBanner.reopenTerminal', 'Reopen {{count}} terminals', {
+                  count: hold.heldCount,
+                  defaultValue_one: 'Reopen terminal'
+                })}
         </Button>
       }
       onDismiss={reopening ? undefined : () => dismissHeldPaneBanner(paneKey)}

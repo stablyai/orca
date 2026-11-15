@@ -9,7 +9,7 @@ import { usePluginViewCaptureStore } from '@/store/plugins/capture/plugin-view-c
 import {
   clampRightSidebarPanelWidth,
   RIGHT_SIDEBAR_SIDE_ACTIVITY_BAR_WIDTH
-} from '../../right-sidebar/right-sidebar-width'
+} from '../../right-sidebar/layout/right-sidebar-width'
 import { nextPaintedFrames, waitForColorScheme } from './plugin-view-panel-settle'
 
 let replays = 0

@@ -3,7 +3,7 @@ import type {
   AutomaticWorkResumeResult,
   AutomaticWorkStatus,
   HostPressureLevel
-} from '../../../shared/host-spawn-admission'
+} from '../../../shared/terminal/pty/admission/spawn-admission-contract'
 import type { ProcessGrowthTrip } from '../../../shared/process-growth-breaker'
 import { AutomaticWorkRunMarker } from './automatic-work-run-marker-store'
 import type { AutomaticWorkRequestType } from './daemon-automatic-work-protocol'

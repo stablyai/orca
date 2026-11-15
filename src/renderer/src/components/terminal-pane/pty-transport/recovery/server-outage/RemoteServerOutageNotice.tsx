@@ -7,6 +7,7 @@ import {
   selectRuntimeServerName,
   selectRuntimeServerTailscaleHost
 } from './remote-server-outage'
+import { useTranslate } from '@/i18n/use-translate'
 
 /** Show one shared server-outage notice; its reveal state keeps pane recovery banners quiet. */
 export function RemoteServerOutageNotice({
@@ -16,6 +17,7 @@ export function RemoteServerOutageNotice({
   environmentId: string
   reveal: CalmStatusView
 }): React.JSX.Element | null {
+  const t = useTranslate()
   const serverName = useAppStore((state) => selectRuntimeServerName(state, environmentId))
   const cause = useAppStore((state) => selectRemoteServerOutageCause(state, environmentId))
   const tailscaleHost = useAppStore((state) =>
@@ -24,7 +26,7 @@ export function RemoteServerOutageNotice({
   if (!reveal.visible) {
     return null
   }
-  const copy = remoteRuntimeRecoveryCopy(cause, serverName)
+  const copy = remoteRuntimeRecoveryCopy(cause, serverName, t)
   return (
     <RemoteRuntimeRecoveryCard
       icon="retrying"

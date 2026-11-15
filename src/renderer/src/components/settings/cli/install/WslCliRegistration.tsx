@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { RefreshCw } from 'lucide-react'
 import { toast } from 'sonner'
 import type { CliInstallStatus } from '../../../../../../shared/cli-install-types'
-import { useWindowsTerminalCapabilities } from '@/lib/windows-terminal-capabilities'
+import { useWindowsTerminalCapabilities } from '@/runtime/hosts/capabilities/windows-terminal-capabilities'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { Button } from '../../../ui/button'
 import {
@@ -17,6 +17,8 @@ import { Label } from '../../../ui/label'
 import { Switch } from '../../../ui/switch'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../../../ui/tooltip'
 import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
+import { formatCliUserFacingDetail } from '@/lib/cli/cli-user-facing-detail'
 
 type WslCliRegistrationProps = {
   currentPlatform: string
@@ -25,6 +27,7 @@ type WslCliRegistrationProps = {
 export function WslCliRegistration({
   currentPlatform
 }: WslCliRegistrationProps): React.JSX.Element | null {
+  const t = useTranslate()
   const [status, setStatus] = useState<CliInstallStatus | null>(null)
   const [loading, setLoading] = useState(false)
   const [dialogOpen, setDialogOpen] = useState(false)
@@ -48,7 +51,7 @@ export function WslCliRegistration({
         if (mountedRef.current) {
           toast.error(
             error instanceof Error
-              ? error.message
+              ? formatCliUserFacingDetail(error.message)
               : translate(
                   'auto.components.settings.WslCliRegistration.26b4b3b00f',
                   'Failed to load WSL CLI status.'
@@ -88,7 +91,7 @@ export function WslCliRegistration({
       setStatus(next)
       setDialogOpen(false)
       toast.success(
-        translate(
+        t(
           'auto.components.settings.WslCliRegistration.951536dda5',
           'Registered `{{value0}}` in WSL.',
           { value0: next.commandName }
@@ -98,8 +101,8 @@ export function WslCliRegistration({
       if (mountedRef.current) {
         toast.error(
           error instanceof Error
-            ? error.message
-            : translate(
+            ? formatCliUserFacingDetail(error.message)
+            : t(
                 'auto.components.settings.WslCliRegistration.6f91ad1333',
                 'Failed to register `{{value0}}` in WSL.',
                 { value0: commandName }
@@ -123,7 +126,7 @@ export function WslCliRegistration({
       setStatus(next)
       setDialogOpen(false)
       toast.success(
-        translate(
+        t(
           'auto.components.settings.WslCliRegistration.89c7414cf5',
           'Removed `{{value0}}` from WSL.',
           { value0: next.commandName }
@@ -133,8 +136,8 @@ export function WslCliRegistration({
       if (mountedRef.current) {
         toast.error(
           error instanceof Error
-            ? error.message
-            : translate(
+            ? formatCliUserFacingDetail(error.message)
+            : t(
                 'auto.components.settings.WslCliRegistration.52d990420e',
                 'Failed to remove `{{value0}}` from WSL.',
                 { value0: commandName }
@@ -148,7 +151,7 @@ export function WslCliRegistration({
     }
   }
 
-  const wslShellCommandLabel = translate(
+  const wslShellCommandLabel = t(
     'auto.components.settings.WslCliRegistration.d9c6880dbd',
     'WSL shell command'
   )
@@ -161,19 +164,19 @@ export function WslCliRegistration({
             <Label>{wslShellCommandLabel}</Label>
             <p className="text-xs text-muted-foreground">
               {loading
-                ? translate(
+                ? t(
                     'auto.components.settings.WslCliRegistration.0307677bb9',
                     'Checking WSL CLI registration...'
                   )
-                : (status?.detail ??
-                  translate(
+                : formatCliUserFacingDetail(status?.detail) ||
+                  t(
                     'auto.components.settings.WslCliRegistration.7aa456a460',
                     'Register `orca-ide` in ~/.local/bin inside WSL.'
-                  ))}
+                  )}
             </p>
           </div>
           <div className="flex items-center gap-2">
-            <TooltipProvider delayDuration={250}>
+            <TooltipProvider>
               <Tooltip>
                 <TooltipTrigger asChild>
                   <Button
@@ -181,7 +184,7 @@ export function WslCliRegistration({
                     size="icon-xs"
                     onClick={() => void refreshStatus(true)}
                     disabled={loading || busyAction !== null}
-                    aria-label={translate(
+                    aria-label={t(
                       'auto.components.settings.WslCliRegistration.ab6b022a5c',
                       'Refresh WSL CLI status'
                     )}
@@ -190,12 +193,12 @@ export function WslCliRegistration({
                   </Button>
                 </TooltipTrigger>
                 <TooltipContent side="bottom" sideOffset={6}>
-                  {translate('auto.components.settings.WslCliRegistration.9b6627522c', 'Refresh')}
+                  {t('auto.components.settings.WslCliRegistration.9b6627522c', 'Refresh')}
                 </TooltipContent>
               </Tooltip>
             </TooltipProvider>
             <Switch
-              aria-label={translate(
+              aria-label={t(
                 'auto.components.settings.WslCliRegistration.d9c6880dbd',
                 'WSL shell command'
               )}
@@ -209,14 +212,14 @@ export function WslCliRegistration({
 
         {status?.commandPath ? (
           <p className="text-xs text-muted-foreground">
-            {translate('auto.components.settings.WslCliRegistration.554305956d', 'Command path:')}{' '}
+            {t('auto.components.settings.WslCliRegistration.554305956d', 'Command path:')}{' '}
             <code className="rounded bg-muted px-1 py-0.5 text-[11px]">{status.commandPath}</code>
           </p>
         ) : null}
 
         {status?.state === 'stale' && status.currentTarget ? (
           <p className="text-xs text-amber-600 dark:text-amber-400">
-            {translate(
+            {t(
               'auto.components.settings.WslCliRegistration.1dbb0377d9',
               'Existing launcher target:'
             )}{' '}
@@ -230,12 +233,12 @@ export function WslCliRegistration({
           <DialogHeader>
             <DialogTitle>
               {isEnabled
-                ? translate(
+                ? t(
                     'auto.components.settings.WslCliRegistration.61ac55278e',
                     'Remove `{{value0}}` from WSL?',
                     { value0: commandName }
                   )
-                : translate(
+                : t(
                     'auto.components.settings.WslCliRegistration.e49688f67f',
                     'Register `{{value0}}` in WSL?',
                     { value0: commandName }
@@ -243,11 +246,11 @@ export function WslCliRegistration({
             </DialogTitle>
             <DialogDescription>
               {isEnabled
-                ? translate(
+                ? t(
                     'auto.components.settings.WslCliRegistration.d8216eb22e',
                     'This removes the WSL shell command. Orca itself remains installed on Windows.'
                   )
-                : translate(
+                : t(
                     'auto.components.settings.WslCliRegistration.7ee4e52b99',
                     'Orca will register {{value0}} so the command works from WSL terminals.',
                     { value0: status?.commandPath ?? commandName }
@@ -256,7 +259,7 @@ export function WslCliRegistration({
           </DialogHeader>
           {status?.commandPath ? (
             <p className="text-xs text-muted-foreground">
-              {translate('auto.components.settings.WslCliRegistration.119fef6cd2', 'Target path:')}{' '}
+              {t('auto.components.settings.WslCliRegistration.119fef6cd2', 'Target path:')}{' '}
               <code className="rounded bg-muted px-1 py-0.5 text-[11px]">{status.commandPath}</code>
             </p>
           ) : null}
@@ -266,25 +269,19 @@ export function WslCliRegistration({
               onClick={() => setDialogOpen(false)}
               disabled={busyAction !== null}
             >
-              {translate('auto.components.settings.WslCliRegistration.c6f6f89d7c', 'Cancel')}
+              {t('auto.components.settings.WslCliRegistration.c6f6f89d7c', 'Cancel')}
             </Button>
             <Button
               onClick={() => void (isEnabled ? handleRemove() : handleInstall())}
               disabled={busyAction !== null || !isSupported}
             >
               {busyAction === 'remove'
-                ? translate('auto.components.settings.WslCliRegistration.4598b18464', 'Removing...')
+                ? t('auto.components.settings.WslCliRegistration.4598b18464', 'Removing...')
                 : busyAction === 'install'
-                  ? translate(
-                      'auto.components.settings.WslCliRegistration.4c4a9178a3',
-                      'Registering...'
-                    )
+                  ? t('auto.components.settings.WslCliRegistration.4c4a9178a3', 'Registering...')
                   : isEnabled
-                    ? translate('auto.components.settings.WslCliRegistration.f951f85196', 'Remove')
-                    : translate(
-                        'auto.components.settings.WslCliRegistration.290bfff3ab',
-                        'Register'
-                      )}
+                    ? t('auto.components.settings.WslCliRegistration.f951f85196', 'Remove')
+                    : t('auto.components.settings.WslCliRegistration.290bfff3ab', 'Register')}
             </Button>
           </DialogFooter>
         </DialogContent>

@@ -1,6 +1,6 @@
 import { CircleDashed, ExternalLink, LoaderCircle } from 'lucide-react'
 import { TabsContent } from '@/components/ui/tabs'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import type { GitLabWorkItem } from '../../../../shared/gitlab-types'
 import { PipelineJobRow } from '../gitlab-item-dialog-parts'
 import type { GitLabItemDialogState } from './use-gitlab-item-dialog-state'
@@ -20,6 +20,7 @@ type Props = {
 }
 
 export function GitLabPipelineTab({ item, state, pipelineActions }: Props) {
+  const t = useTranslate()
   if (item.type !== 'mr') {
     return null
   }
@@ -27,7 +28,7 @@ export function GitLabPipelineTab({ item, state, pipelineActions }: Props) {
   const pipelineCheck = details?.pipeline
     ? gitLabPipelineToPRCheck(
         details.pipeline,
-        translate('auto.components.GitLabItemDialog.02cbe2de44', 'Pipeline')
+        t('auto.components.GitLabItemDialog.02cbe2de44', 'Pipeline')
       )
     : null
   const PipelineIcon = CHECK_ICON[pipelineCheck?.conclusion ?? 'neutral'] ?? CircleDashed
@@ -56,7 +57,7 @@ export function GitLabPipelineTab({ item, state, pipelineActions }: Props) {
               ) : (
                 <span>{pipelineCheck.name}</span>
               )}
-              <span className="text-muted-foreground">{getCheckStatusLabel(pipelineCheck)}</span>
+              <span className="text-muted-foreground">{getCheckStatusLabel(pipelineCheck, t)}</span>
             </div>
           )}
           {details?.pipelineJobs?.length ? (
@@ -75,10 +76,7 @@ export function GitLabPipelineTab({ item, state, pipelineActions }: Props) {
             </div>
           ) : !pipelineCheck && !(error && !details) ? (
             <p className="text-sm text-muted-foreground">
-              {translate(
-                'auto.components.GitLabItemDialog.f11e3e7675',
-                'No pipeline runs for this MR.'
-              )}
+              {t('auto.components.GitLabItemDialog.f11e3e7675', 'No pipeline runs for this MR.')}
             </p>
           ) : null}
         </div>

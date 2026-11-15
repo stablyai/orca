@@ -10,8 +10,8 @@ import {
   GITLAB_WEB_RPC_METHODS,
   type WebGitLabRuntimeMethod
 } from '@/web/preload-api/web-gitlab-routes'
-import { mapRepoPathArg } from '../runtime-repo-selector-params'
-import { hasRuntimeRpcErrorCode } from '../../../../shared/runtime-rpc-error-code'
+import { mapRepoPathArg } from '../source-control/forge/runtime-repo-selector-params'
+import { hasRuntimeRpcErrorCode } from '../../../../shared/remote-runtime/rpc/runtime-rpc-error-code'
 
 export type GitLabApi = NonNullable<PreloadApi['gl']>
 

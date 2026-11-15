@@ -1,6 +1,6 @@
 import { RefreshCw } from 'lucide-react'
 import { SwitchIndicator } from '../ui/switch'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 
 type ClaudeUsageLoadingStateProps = {
   title?: string
@@ -13,16 +13,14 @@ export function ClaudeUsageLoadingState({
   summaryCardCount = 8,
   summaryGridClassName = 'md:grid-cols-2 xl:grid-cols-4'
 }: ClaudeUsageLoadingStateProps): React.JSX.Element {
+  const t = useTranslate()
   return (
     <div className="space-y-4 rounded-lg border border-border/60 bg-card/30 p-4">
       <div className="flex items-start justify-between gap-4">
         <div className="min-w-0 flex-1">
           <h3 className="text-sm font-semibold text-foreground">
             {title ??
-              translate(
-                'auto.components.stats.ClaudeUsagePane.6afacbee37',
-                'Claude Usage Tracking'
-              )}
+              t('auto.components.stats.ClaudeUsagePane.6afacbee37', 'Claude Usage Tracking')}
           </h3>
           <div className="mt-2 h-3 w-40 animate-pulse rounded bg-muted/70" />
         </div>

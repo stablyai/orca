@@ -2,7 +2,7 @@ import type { Tab } from '../../../../../../shared/tab-types'
 import type { AppState } from '../../../types'
 import type { OpenFile } from '../types/open-file'
 import { isEditorTabContentType } from './editor-tab-content-type'
-import { hasPendingEntityTab } from '@/runtime/layout-owner-pending-tabs'
+import { hasPendingEntityTab } from '@/runtime/workspace-layout/intents/layout-owner-pending-tabs'
 
 const indexes = new WeakMap<readonly OpenFile[], Map<string, OpenFile>>()
 export function openFileIndex(files: readonly OpenFile[]): ReadonlyMap<string, OpenFile> {

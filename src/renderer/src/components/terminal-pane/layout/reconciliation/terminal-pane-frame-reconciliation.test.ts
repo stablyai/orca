@@ -1,3 +1,4 @@
+import { _resetLayoutOwnerPaneTreeHoldsForTests } from '@/runtime/workspace-layout/intents/layout-owner-pane-tree-holds'
 // @vitest-environment happy-dom
 import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest'
 import type { PaneManagerOptions } from '@/lib/pane-manager/pane-manager-types'
@@ -6,7 +7,7 @@ import {
   _resetLayoutOwnerPaneIntentsForTests,
   expectPaneToClose,
   expectPaneToMountUnfocused
-} from '@/runtime/layout-owner-pane-intents'
+} from '@/runtime/workspace-layout/intents/layout-owner-pane-intents'
 import { serializePaneTree } from '../terminal-layout-dom-serialization'
 
 // Why: happy-dom has no canvas, so xterm cannot open; the reconciler never touches the terminal.
@@ -62,6 +63,7 @@ describe('reconcileMountedPanesToLayout', () => {
 
   beforeEach(() => {
     _resetLayoutOwnerPaneIntentsForTests()
+    _resetLayoutOwnerPaneTreeHoldsForTests()
     closePane.mockReset()
     vi.stubGlobal('requestAnimationFrame', () => 1)
     vi.stubGlobal('cancelAnimationFrame', () => {})

@@ -1,4 +1,4 @@
-import type { SshConnectionStore } from '../connection/ssh-connection-store'
+import type { SshConnectionStore } from './ssh-connection-store'
 import type { SshConnectionManager } from '../connection/ssh-connection-manager'
 import type {
   SshConnectionState,
@@ -6,7 +6,7 @@ import type {
   SshTargetAddResult,
   SshTargetCreateInput,
   SshTargetUpdateInput
-} from '../../../shared/ssh-types'
+} from '../../../shared/remote-runtime/ssh/ssh-types'
 
 /** Keep runtime SSH access free of Electron imports from ipc/ssh.ts. Resolve callbacks on each call because handler registration may replace the manager. */
 
