@@ -213,9 +213,13 @@ export async function readGitReviewBranchSources(
       ) {
         pushBranchName = null
       }
+      const urls =
+        !localTracking && !remotes.has(selectedRemote) && remoteIdentities.has(selectedRemote)
+          ? [rewritePushUrl(config, selectedRemote)]
+          : urlsFor(remote)
       sources.set(branch, {
         remoteName: remote,
-        urls: urlsFor(remote),
+        urls,
         branchName,
         ...(pushBranchName !== branchName ? { pushBranchName } : {}),
         ...(trackedBranchName
