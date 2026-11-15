@@ -46,6 +46,7 @@ export function editorTabsRetirement(
       const counts = new Map<string, number>()
       for (const { tab, file, position } of closed) {
         if (
+          file.projectDraftProjectId ||
           file.mode === 'markdown-preview' ||
           (file.isUntitled && !file.isDirty && !before.editorDrafts[file.id])
         ) {

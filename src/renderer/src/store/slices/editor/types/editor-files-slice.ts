@@ -87,6 +87,8 @@ export type EditorFilesSlice = {
     intent: EditorOpenLinkIntent | null,
     onShown?: (result: EditorOpenResult | null) => void
   ) => EditorOpenResult | null
+  openNewProjectTextDraft: (groupId?: string) => void
+  restoreProjectTextDraftTabs: (worktreeId: string) => void
   openNewMarkdownInActiveWorkspace: (groupId: string) => Promise<void>
   acquireEditorFileOperationProvenance: (
     file: OpenFile,

@@ -235,6 +235,7 @@ export function createCloseFileAction(
           // Exclude deleted empty placeholders, ephemeral previews and chat visuals from undo; they have no useful reopen target.
           if (
             closedFile &&
+            !closedFile.projectDraftProjectId &&
             wtRecent &&
             opts?.captureRecentlyClosed !== false &&
             !shouldDeleteFromDisk &&

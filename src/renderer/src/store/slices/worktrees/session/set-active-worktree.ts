@@ -32,6 +32,7 @@ export function createSetActiveWorktree(
   get: WorktreeSliceGet
 ): WorktreeSlice['setActiveWorktree'] {
   return (worktreeId, executionHostId, options) => {
+    const previousWorktreeId = get().activeWorktreeId
     const stateTransition = options?.stateTransition?.(get())
     const createdTabIds = new Set(options?.createdTabIds)
     // A tab its caller just created is not asleep: its first bind is new work, not a wake.
@@ -171,6 +172,9 @@ export function createSetActiveWorktree(
 
     // Activation explicitly wakes (null only clears selection for sleep); clear intent after remount-generation update so waiting panes connect once.
     clearWorktreeSleepIntent(worktreeId)
+    if (worktreeId && previousWorktreeId !== worktreeId) {
+      get().restoreProjectTextDraftTabs?.(worktreeId)
+    }
 
     if (worktreeId && shouldPrepareTerminalTabs) {
       const prepareTerminalTabs = (): void => {

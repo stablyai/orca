@@ -109,6 +109,7 @@ export const fsApi = {
   }): Promise<{ canceled: true } | { canceled: false; destinationPath: string }> =>
     ipcRenderer.invoke('fs:downloadFolder', args),
   saveDownloadedFile: (args: {
+    defaultDirectory?: string
     suggestedName: string
     content: string
     encoding: 'utf8' | 'base64'

@@ -8,6 +8,7 @@ import { createExplorerDirState } from './explorer/explorer-dir-state'
 import { createOpenFileState } from './opening/open-file-state'
 import { createOpenFileAction } from './opening/open-file-action'
 import { createMarkdownPreviewActions } from './markdown/markdown-preview-actions'
+import { createProjectTextDraftActions } from './opening/project-text-draft-actions'
 import { createPluginNewFileActions } from './opening/untitled-file-creation'
 import { createCloseFileAction } from './closing/close-file-action'
 import { createRecentlyClosedEditorTabs } from './closing/recently-closed-editor-tabs'
@@ -41,6 +42,7 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
   ...createOpenFileAction(set, get),
   ...createMarkdownPreviewActions(set, get),
   ...createPluginNewFileActions(set, get),
+  ...createProjectTextDraftActions(get),
   ...createCloseFileAction(set, get),
   ...createRecentlyClosedEditorTabs(set, get),
   ...createOpenFileMutations(set, get),

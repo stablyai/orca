@@ -68,6 +68,8 @@ export type OpenFile = {
   conflictReview?: ConflictReviewState
   isPreview?: boolean
   isUntitled?: boolean
+  /** Client-local text buffer shared by the sidebar project, with no filesystem path. */
+  projectDraftProjectId?: string
   deleteUntouchedOnClose?: boolean
   // Why: external delete/rename of an open file keeps the tab (strikethrough label); 'changed' = rewritten on disk under unsaved edits → changed-on-disk banner (#7265).
   externalMutation?: 'deleted' | 'renamed' | 'changed'

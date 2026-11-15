@@ -48,6 +48,7 @@ export function shouldDeleteUntouchedUntitledFile(
 ): boolean {
   return (
     file?.isUntitled === true &&
+    !file.projectDraftProjectId &&
     !file.isDirty &&
     !hasDraft &&
     file.deleteUntouchedOnClose !== false &&

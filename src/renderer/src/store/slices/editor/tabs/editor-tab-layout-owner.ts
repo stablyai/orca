@@ -29,6 +29,7 @@ export function restorableEditorFile(file: OpenFile): LayoutEditorFile {
     filePath: file.filePath,
     relativePath: file.relativePath,
     language: file.language,
+    ...(file.projectDraftProjectId ? { projectDraftProjectId: file.projectDraftProjectId } : {}),
     ...(file.runtimeEnvironmentId !== undefined
       ? { runtimeEnvironmentId: file.runtimeEnvironmentId }
       : {}),
