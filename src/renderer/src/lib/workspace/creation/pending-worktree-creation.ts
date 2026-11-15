@@ -9,7 +9,7 @@ import type {
   WorkspaceStatus
 } from '../../../../../shared/worktree/types'
 import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent'
-import type { WorkspaceSource as WorkspaceCreateTelemetrySource } from '../../../../../shared/workspace-source'
+import type { WorkspaceSource as WorkspaceCreateTelemetrySource } from '../../../../../shared/workspace/creation/workspace-source'
 import type {
   CreateSparseCheckoutRequest,
   CreateWorktreeArgs,

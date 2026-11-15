@@ -11,7 +11,7 @@ import {
   findIndexedReviewRepository,
   hasIndexedRepository
 } from '../../workspace/ownership/repository-owner-index'
-import type { Repo } from '../../../../../shared/repo-types'
+import type { Repo } from '../../../../../shared/repository/repo-types'
 import type { Worktree } from '../../../../../shared/worktree/types'
 
 type ReviewWorkspaceOwner = Pick<Worktree, 'repoId' | 'hostId' | 'runtimeOwnerEnvironmentId'>

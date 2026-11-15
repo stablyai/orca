@@ -1,7 +1,7 @@
 import {
   PROJECT_GROUP_UPDATE_MANY_RUNTIME_CAPABILITY,
   PROJECT_ROOT_ORDER_RUNTIME_CAPABILITY
-} from './project-group-order-capability'
+} from './project/groups/project-group-order-capability'
 import { EMULATOR_RUNTIME_CAPABILITIES } from './remote-runtime/protocol/emulator-runtime-capabilities'
 import { ACCOUNT_RUNTIME_CAPABILITIES } from './remote-runtime/protocol/account-runtime-capabilities'
 import * as agentLaunchCapabilities from './agent-launch/contracts/agent-launch-runtime-capability'

@@ -1,5 +1,5 @@
 import type { GitHubPrStartPoint } from '../../../../shared/worktree/types'
-import type { Repo } from '../../../../shared/repo-types'
+import type { Repo } from '../../../../shared/repository/repo-types'
 import {
   fetchPrHeadTrackingRef,
   fetchGitHubPullRequestHeadRef
@@ -12,7 +12,7 @@ import {
   getLocalProjectGitExecOptions,
   getLocalProjectGhExecOptions
 } from '../../../workspaces/execution-host/project-runtime-git-options'
-import { isFolderRepo } from '../../../../shared/repo-kind'
+import { isFolderRepo } from '../../../../shared/repository/repo-kind'
 import { requireRepoLocalGitRoute } from '../../../workspaces/execution-host/repo-execution-host'
 import type { ProjectRuntimeResolutionStore } from '../../../workspaces/execution-host/local-project-runtime-resolution'
 import { reviewStartPointFailure } from '../../../../shared/review-start-point-failure-copy'

@@ -5,15 +5,15 @@ import {
   type ExecutionHostId,
   type ExecutionHostScope
 } from '../../execution-host'
-import type { ProjectGroup } from '../../project-group-types'
-import { getLogicalRepoOrderRankById } from '../../project-section-order'
-import type { ProjectSectionModel } from '../../project-section-grouping'
-import type { Repo } from '../../repo-types'
+import type { ProjectGroup } from '../../project/groups/project-group-types'
+import { getLogicalRepoOrderRankById } from '../sections/project-section-order'
+import type { ProjectSectionModel } from '../sections/project-section-grouping'
+import type { Repo } from '../../repository/repo-types'
 import type { ProjectOrderBy } from '../../ui-chrome-types'
 import {
   filterFolderWorkspacesFromOtherDevices,
   isWorkspaceOwnedBySomeoneElse
-} from '../../workspace-creator-visibility'
+} from '../../workspace-view/workspace-creator-visibility'
 import type { WorkspaceRowFilters } from '../../workspace-view/workspace-row-filters'
 import { getWorktreeHostIdentity } from '../../worktree/host-qualified-identity'
 import { hiddenProjectRowFacts, indexHiddenProjects } from '../../hidden-projects'

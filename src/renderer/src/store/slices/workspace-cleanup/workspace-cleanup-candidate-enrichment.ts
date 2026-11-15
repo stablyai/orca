@@ -11,7 +11,7 @@ import {
 } from '../../../../../shared/workspace-cleanup/workspace-cleanup-host-identity'
 import { mapWithConcurrency } from '../../../../../shared/map-with-concurrency'
 import { getWorktreeVisitTimestamp } from '@/lib/workspace/activation/worktree-visit-recency'
-import { withCleanupVisitEvidence } from '../../../../../shared/workspace-last-active'
+import { withCleanupVisitEvidence } from '../../../../../shared/workspace-cleanup/workspace-last-active'
 import {
   probeTerminalLiveness,
   shouldPreserveCleanupInspection

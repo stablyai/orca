@@ -39,7 +39,7 @@ import {
 import { isRpcDeliveryUnknown } from '../../../transport/rpc/rpc-delivery-ambiguity'
 import type { OrcaHookTrustPrompt } from '../../../components/hook-trust/OrcaHookTrustDrawer'
 import type { NewWorktreeDrawerView } from '../modal/use-new-worktree-drawer-navigation'
-import { suggestCreatureNameForPaths as getSuggestedCreatureName } from '../../../../../src/shared/worktree-name-suggestion'
+import { suggestCreatureNameForPaths as getSuggestedCreatureName } from '../../../../../src/shared/worktree/naming/worktree-name-suggestion'
 
 type CreateOptions = {
   setupOverride?: Exclude<WorkspaceCreateSetupDecision, 'inherit'>

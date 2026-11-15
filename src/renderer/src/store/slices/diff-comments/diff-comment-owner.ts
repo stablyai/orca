@@ -9,7 +9,7 @@ import {
   getExecutionHostIdForFolderWorkspace,
   getRuntimeEnvironmentIdForFolderWorkspace
 } from '@/lib/workspace/ownership/folder-workspace-runtime-owner'
-import { parseWorkspaceKey } from '../../../../../shared/workspace-scope'
+import { parseWorkspaceKey } from '../../../../../shared/workspace/identity/workspace-scope'
 import {
   DIFF_COMMENT_OWNER_INPUTS,
   EMPTY_DIFF_COMMENTS,

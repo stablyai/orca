@@ -5,7 +5,7 @@ import {
   type FolderWorkspacePathStatusRequest
 } from '../../../../shared/folder-workspaces/folder-workspace-path-status'
 
-import { getProjectGroupSubtreeIds } from '../../../../shared/project-groups'
+import { getProjectGroupSubtreeIds } from '../../../../shared/project/groups/project-groups'
 import { isPathInsideOrEqual } from '../../../../shared/cross-platform-path'
 import { getRepoExecutionHostId, type ExecutionHostId } from '../../../../shared/execution-host'
 import type {

@@ -1,5 +1,5 @@
 import { beforeEach, type Mock, vi } from 'vitest'
-import type { Project } from '../../../../../../shared/project-types'
+import type { Project } from '../../../../../../shared/project/project-types'
 import type { createWebRuntimeSessionTerminal } from '@/runtime/hosted-terminals/creation/web-runtime-terminal-creation'
 import { setLocalRuntimeCapabilitiesForTests } from '@/runtime/hosts/capabilities/local-runtime-capabilities'
 import type * as LaunchAgentKindModule from '../../../../../../shared/agent-status/identity/agent-kind'

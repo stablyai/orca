@@ -5,7 +5,7 @@ import {
   folderWorkspaceKey,
   isWorkspaceKey,
   worktreeWorkspaceKey
-} from '../../../../../shared/workspace-scope'
+} from '../../../../../shared/workspace/identity/workspace-scope'
 import { buildByIdIndex } from '../../../../../shared/first-row-by-id-index'
 import { addAdditionalValidWorkspaceKeys } from '@/lib/workspace/persistence/workspace-session-hydration-keys'
 import {

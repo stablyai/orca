@@ -2,7 +2,7 @@ import {
   projectWslSkillDiscovery,
   type WslSkillDiscoveryObservation
 } from './skill-discovery-wsl-observation'
-import type { Repo } from '../../../shared/repo-types'
+import type { Repo } from '../../../shared/repository/repo-types'
 import type {
   SkillDiscoveryResult,
   SkillDiscoveryTarget

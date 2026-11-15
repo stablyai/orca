@@ -1,13 +1,13 @@
 import path from 'node:path'
 import type { Store } from '../persistence/loading-store/store'
 import { splitWorktreeId, splitWorktreeIdForFilesystem } from '../../shared/worktree/id'
-import { isFolderRepo } from '../../shared/repo-kind'
+import { isFolderRepo } from '../../shared/repository/repo-kind'
 import type {
   WorkspacePortKillRequest,
   WorkspacePortKillResult,
   WorkspacePortProbe,
   WorkspacePortScanResult
-} from '../../shared/workspace-ports'
+} from '../../shared/workspace/ports/workspace-ports'
 import { scanWorkspacePorts } from './local-workspace-port-scanner'
 import type { WorkspacePortScanOptions } from './local-workspace-port-scan-state'
 

@@ -1,6 +1,6 @@
 import type { Worktree } from '../../../../shared/worktree/types'
-import type { Repo } from '../../../../shared/repo-types'
-import { getRepoHostIdentityForParts } from '../../../../shared/repo-host-identity'
+import type { Repo } from '../../../../shared/repository/repo-types'
+import { getRepoHostIdentityForParts } from '../../../../shared/repository/repo-host-identity'
 import { getRepoExecutionHostId } from '../../../../shared/execution-host'
 import {
   createWorktreeVisibilitySourceMatcher,

@@ -9,7 +9,7 @@ import { DEFAULT_STATUS_BAR_ITEMS } from './status-bar-defaults'
 import type { VoiceSettings } from './speech/speech-types'
 import { DICTATION_LANGUAGE_AUTO } from './speech/models/dictation-language'
 import { DEFAULT_UNLOAD_MODEL_AFTER_MINUTES } from './speech/models/voice-model-unload'
-import { cloneDefaultWorkspaceStatuses } from './workspace-statuses'
+import { cloneDefaultWorkspaceStatuses } from './workspace/status/workspace-statuses'
 import { DEFAULT_WORKTREE_CARD_PROPERTIES } from './worktree/row-display/card-properties'
 import { DEFAULT_AGENTS_GROUP_BY, DEFAULT_AGENTS_READ_FILTER } from './agents-view-thread-filters'
 import { DEFAULT_USAGE_PERCENTAGE_DISPLAY } from './usage-percentage-display'
@@ -56,7 +56,7 @@ export const ORPHAN_WORKTREE_ID = '__orphan__'
 // Why: synthetic local workspace; persistence pruning must classify it without the repo catalog.
 export const FLOATING_TERMINAL_WORKTREE_ID = 'global-floating-terminal'
 
-export { DEFAULT_REPO_BADGE_COLOR, REPO_COLORS } from './repo-badge-color'
+export { DEFAULT_REPO_BADGE_COLOR, REPO_COLORS } from './repository/appearance/repo-badge-color'
 
 /** Expose the stock root so callers can distinguish an untouched default from a user-selected directory. */
 export function getDefaultWorkspaceDir(homeDir: string): string {

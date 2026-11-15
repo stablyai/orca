@@ -1,7 +1,7 @@
 // Index project owner/repo slugs to path-backed Repo rows lazily via owner-routed gh.repoSlug. Exclude unresolved repos and retain unknown-repo fallback; rebuild on catalog changes, with cached main-process remote resolution.
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useAppStore } from '@/store/index'
-import type { Repo } from '../../../../../shared/repo-types'
+import type { Repo } from '../../../../../shared/repository/repo-types'
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import {
   deleteRepoSlugCacheKey,

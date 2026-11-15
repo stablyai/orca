@@ -3,7 +3,7 @@ import {
   normalizeExecutionHostId,
   type ExecutionHostId
 } from './execution-host'
-import type { Repo } from './repo-types'
+import type { Repo } from './repository/repo-types'
 
 type HiddenRepoRow = Pick<Repo, 'id' | 'hiddenAt' | 'connectionId' | 'executionHostId'>
 

@@ -1,7 +1,7 @@
 import type { RuntimeClientTarget } from '../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import type { RefObject } from 'react'
 import type { ExecutionHostId, ParsedExecutionHost } from '../../../../shared/execution-host'
-import type { Repo } from '../../../../shared/repo-types'
+import type { Repo } from '../../../../shared/repository/repo-types'
 import type {
   SshConnectionState,
   SshConnectionStatus

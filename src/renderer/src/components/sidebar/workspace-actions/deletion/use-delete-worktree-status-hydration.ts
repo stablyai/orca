@@ -6,7 +6,7 @@ import { ipcOrRuntimeTargetForHostId } from '@/runtime/rpc/targets/runtime-clien
 import { getRuntimeGitStatus } from '@/runtime/source-control/git/runtime-git-status-client'
 import type { RuntimeGitContext } from '@/runtime/source-control/git/runtime-git-client-context'
 import { findRepoForHost } from '@/store/repos/repo-host-identity'
-import type { Repo } from '../../../../../../shared/repo-types'
+import type { Repo } from '../../../../../../shared/repository/repo-types'
 import type { Worktree } from '../../../../../../shared/worktree/types'
 import type { GitStatusResult } from '../../../../../../shared/git/status/git-status-types'
 import { getWorktreeHostIdentity } from '../../../../../../shared/worktree/host-qualified-identity'

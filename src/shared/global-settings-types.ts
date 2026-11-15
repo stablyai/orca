@@ -42,9 +42,9 @@ import type {
   SourceControlViewMode,
   TaskViewPresetId
 } from './ui-chrome-types'
-import type { WorktreeVisibilityDefaults } from './repo-types'
+import type { WorktreeVisibilityDefaults } from './repository/repo-types'
 
-export type { WorktreeVisibilityDefaults } from './repo-types'
+export type { WorktreeVisibilityDefaults } from './repository/repo-types'
 
 /** MiniMax account region used to select the quota endpoint. */
 export type MiniMaxEndpoint = 'overseas' | 'cn'

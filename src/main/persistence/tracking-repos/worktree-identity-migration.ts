@@ -4,7 +4,10 @@ import type {
 } from '../../../shared/browser/workspaces/browser-workspace-types'
 import { remapBrowserPageDocLocation } from '../../../shared/browser/workspaces/browser-page-doc-location'
 import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
-import { type WorkspaceKey, worktreeWorkspaceKey } from '../../../shared/workspace-scope'
+import {
+  type WorkspaceKey,
+  worktreeWorkspaceKey
+} from '../../../shared/workspace/identity/workspace-scope'
 import type { PersistedState } from '../../../shared/persisted-state-types'
 import {
   getWorktreeIdFromHostIdentity,

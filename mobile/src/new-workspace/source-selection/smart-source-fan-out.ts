@@ -2,7 +2,7 @@ import { linearIssueReadFailureMessage } from '../../../../src/shared/integratio
 import type { GitHubWorkItem } from '../../../../src/shared/github/work-items/work-item-types'
 import type { GitLabWorkItem } from '../../../../src/shared/gitlab-types'
 import type { LinearIssue } from '../../../../src/shared/linear/issue-types'
-import type { BaseRefSearchResult } from '../../../../src/shared/repo-types'
+import type { BaseRefSearchResult } from '../../../../src/shared/repository/repo-types'
 import {
   isSmartWorkspaceSourceQueryWithinLimit,
   type SmartNameMode

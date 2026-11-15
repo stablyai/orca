@@ -2,7 +2,7 @@ import { waitForPromiseWithSignal } from '../../../shared/abort-signal-reason'
 import { realpath, stat } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { basename, dirname, relative, sep } from 'node:path'
-import type { Repo } from '../../../shared/repo-types'
+import type { Repo } from '../../../shared/repository/repo-types'
 import type {
   DiscoveredSkill,
   SkillDiscoveryResult,

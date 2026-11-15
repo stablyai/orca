@@ -2,9 +2,9 @@ import { migrateActionPermissionArgs } from '../../../../shared/source-control/a
 import { homedir } from 'node:os'
 import type { PersistedState } from '../../../../shared/persisted-state-types'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
-import type { WorktreeVisibilityDefaults, Repo } from '../../../../shared/repo-types'
+import type { WorktreeVisibilityDefaults, Repo } from '../../../../shared/repository/repo-types'
 import { getDefaultPersistedState } from '../../../../shared/constants'
-import { migrateExternalWorktreeVisibilityDefaults } from '../../../../shared/external-worktree-visibility'
+import { migrateExternalWorktreeVisibilityDefaults } from '../../../../shared/worktree/visibility/external-worktree-visibility'
 import { mergeLegacyCommitMessageAiIntoSourceControlAi } from '../../../../shared/source-control/ai/settings/source-control-ai-legacy-reconciliation'
 import { sourceControlAiSettingsFromLegacy } from '../../../../shared/source-control/ai/settings/source-control-ai-settings'
 import {

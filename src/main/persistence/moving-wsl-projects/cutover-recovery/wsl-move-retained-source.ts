@@ -6,7 +6,7 @@
  */
 import type { FolderWorkspace } from '../../../../shared/folder-workspaces/folder-workspace-types'
 import type { OrcadRetainedMarker } from '../../../../shared/remote-runtime/orcad-lifecycle/orcad-retained-marker'
-import type { Repo } from '../../../../shared/repo-types'
+import type { Repo } from '../../../../shared/repository/repo-types'
 import {
   WSL_MOVE_CUTOVER_PHASES,
   type WslMoveCutover

@@ -1,9 +1,9 @@
 // Runs on plain Node, as orcad does: the catalog comes from main's own store, no window publishes it.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import type { ProjectGroup } from '../../../../shared/project-group-types'
+import type { ProjectGroup } from '../../../../shared/project/groups/project-group-types'
 
-import type { Repo } from '../../../../shared/repo-types'
+import type { Repo } from '../../../../shared/repository/repo-types'
 
 import type { RuntimeClientEvent } from '../../../../shared/remote-runtime/session-graph/runtime-client-events'
 
