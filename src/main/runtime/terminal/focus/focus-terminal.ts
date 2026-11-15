@@ -19,7 +19,15 @@ export abstract class OrcaRuntimeWithFocusTerminal extends OrcaRuntimeWithWaitFo
       this.authoritativeWindowId !== HEADLESS_RUNTIME_WINDOW_ID,
     getSelection: () => this.store?.getWorkspaceSession?.(),
     getWorkspaceSession: (worktreeId) => this.getWorkspaceSessionForWorktree(worktreeId),
-    getHandleForPaneKey: (paneKey) => this.getTerminalHandleForPaneKey(paneKey)
+    getHandleForPaneKey: (paneKey) => this.getTerminalHandleForPaneKey(paneKey),
+    onSelectionWritten: (listener) =>
+      this.store?.onWorkspaceSessionWritten?.(listener) ?? (() => {}),
+    onGraphChanged: (listener) =>
+      this.crewChanges.subscribe((facets) => {
+        if (facets.has('topology')) {
+          listener()
+        }
+      })
   })
 
   protected abstract getPtyManualTitle(

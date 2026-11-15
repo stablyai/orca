@@ -50,6 +50,11 @@ export type RuntimeTerminalSummary = {
   focused?: boolean
 }
 
+/** `terminal.watchFocus`: the focused pane's handle; null while the window shows no terminal or is closed. */
+export type RuntimeTerminalWatchFocus = {
+  handle: string | null
+}
+
 /** Use of a PTY that its host's own window can't see: a remote client showing it, or input from anywhere. */
 export type RuntimeTerminalAttention = {
   /** A paired client or phone is displaying it. Clients too old to report hidden panes never count. */

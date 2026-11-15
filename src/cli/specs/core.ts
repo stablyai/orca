@@ -124,7 +124,8 @@ export const CORE_COMMAND_SPECS: CommandSpec[] = [
       'orca terminal list [--worktree <selector>] [--limit <n>] [--include-visual-layouts] [--json]',
     allowedFlags: [...GLOBAL_FLAGS, 'worktree', 'limit', 'include-visual-layouts'],
     notes: [
-      'JSON omits visualLayouts by default; pass --include-visual-layouts when machine-readable tab and pane topology is required.'
+      'JSON omits visualLayouts by default; pass --include-visual-layouts when machine-readable tab and pane topology is required.',
+      'focused is true for at most one terminal: the pane the desktop window has focused. To follow it as it changes, use terminal watch-focus.'
     ]
   },
   {
@@ -209,6 +210,17 @@ export const CORE_COMMAND_SPECS: CommandSpec[] = [
       "With --environment, the desktop app on this machine switches to that server's terminal; a server has no window of its own."
     ],
     examples: ['orca terminal switch --terminal term_abc123']
+  },
+  {
+    path: ['terminal', 'watch-focus'],
+    summary: 'Print the focused terminal, then each change, until Ctrl-C',
+    usage: 'orca terminal watch-focus [--json]',
+    allowedFlags: [...GLOBAL_FLAGS],
+    notes: [
+      'Prints the handle of the pane the desktop window has focused, then one line each time the window focuses another pane. Orca pushes each change; nothing polls.',
+      'With --json each line is one JSON object, {"handle": "<handle>"}. handle is null while the window shows an editor or another non-terminal tab, and while no window is open (a server has no window).'
+    ],
+    examples: ['orca terminal watch-focus --json']
   },
   TERMINAL_CLOSE_COMMAND_SPEC,
   {

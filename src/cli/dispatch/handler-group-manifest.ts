@@ -111,6 +111,7 @@ export const HANDLER_GROUPS: readonly HandlerGroup[] = [
       'terminal set-pane-title',
       'terminal create',
       'terminal switch',
+      'terminal watch-focus',
       'terminal close',
       'terminal split'
     ],

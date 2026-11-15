@@ -1,3 +1,4 @@
+import type { RuntimeTerminalWatchFocus } from '../../../../shared/runtime-terminal-contracts'
 import type { WorkspaceSessionState } from '../../../../shared/workspace-session/workspace-session-state-types'
 import { isTerminalLeafId, makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import { activeSessionWorkspaceId } from '../wait/active-worktree-context-fallback'
@@ -10,6 +11,9 @@ type RuntimeFocusedTerminalDependencies = {
   /** The partition holding a workspace's own rows, which may be its host's. */
   getWorkspaceSession(worktreeId: string): WorkspaceSessionState | null | undefined
   getHandleForPaneKey(paneKey: string): string | null
+  /** Push sources a watch re-reads on: window selection writes and terminal graph changes. */
+  onSelectionWritten(listener: () => void): () => void
+  onGraphChanged(listener: () => void): () => void
 }
 
 /** The pane the desktop window has focused, read from the selection the window saves. */
@@ -20,6 +24,54 @@ export class RuntimeFocusedTerminal {
   handle(): string | null {
     const paneKey = this.deps.hasWindowGraph() ? this.paneKey() : null
     return paneKey ? this.deps.getHandleForPaneKey(paneKey) : null
+  }
+
+  /** Answers once the focused handle differs from `after` (at once without one), else at the deadline or abort. */
+  waitForChange(
+    after: string | null | undefined,
+    options: { timeoutMs: number; signal?: AbortSignal }
+  ): Promise<RuntimeTerminalWatchFocus> {
+    const { signal, timeoutMs } = options
+    const current = this.handle()
+    if (current !== after || signal?.aborted) {
+      return Promise.resolve({ handle: current })
+    }
+    return new Promise((resolve) => {
+      let settled = false
+      let checkQueued = false
+      const stops: (() => void)[] = []
+      const finish = (): void => {
+        if (settled) {
+          return
+        }
+        settled = true
+        for (const stop of stops) {
+          stop()
+        }
+        resolve({ handle: this.handle() })
+      }
+      // A microtask later: graph listeners fire mid-sync, before the graph is marked ready.
+      const check = (): void => {
+        if (checkQueued || settled) {
+          return
+        }
+        checkQueued = true
+        queueMicrotask(() => {
+          checkQueued = false
+          if (this.handle() !== after) {
+            finish()
+          }
+        })
+      }
+      const timer = setTimeout(finish, timeoutMs)
+      signal?.addEventListener('abort', finish, { once: true })
+      stops.push(
+        this.deps.onSelectionWritten(check),
+        this.deps.onGraphChanged(check),
+        () => clearTimeout(timer),
+        () => signal?.removeEventListener('abort', finish)
+      )
+    })
   }
 
   private paneKey(): string | null {
