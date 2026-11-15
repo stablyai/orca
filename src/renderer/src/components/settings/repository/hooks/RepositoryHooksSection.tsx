@@ -7,11 +7,11 @@ import type {
   SetupAgentStartupPolicy,
   SetupRunPolicy
 } from '../../../../../../shared/orca-yaml-hook-types'
-import type { WorkspaceHookOwner } from '../../../../../../shared/workspace-hook-owner'
+import type { WorkspaceHookOwner } from '../../../../../../shared/workspace-setup/hooks/workspace-hook-owner'
 import { Button } from '@/components/ui/button'
-import type { Repo } from '../../../../../../shared/repo-types'
+import type { Repo } from '../../../../../../shared/repository/repo-types'
 import { getRepoExecutionHostId } from '../../../../../../shared/execution-host'
-import { isFolderRepo } from '../../../../../../shared/repo-kind'
+import { isFolderRepo } from '../../../../../../shared/repository/repo-kind'
 import { resolveHookCommandSourcePolicy } from '../../../../../../shared/hook-command-source-policy'
 import { useAppStore } from '@/store/index'
 import { useTranslate } from '@/i18n/use-translate'

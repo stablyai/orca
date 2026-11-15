@@ -1,7 +1,7 @@
 /** Exercise runtime persistence wiring with a fake session store.
  * Real Store writes are covered by store-runtime-authored-session-writes.test.ts. */
 import { describe, expect, it } from 'vitest'
-import type { RuntimeBrowserClientPlacement } from '../../../../shared/runtime-browser-placement'
+import type { RuntimeBrowserClientPlacement } from '../../../../shared/browser/client-hosting/runtime-browser-placement'
 import { createProfile } from './client-hosted-browser-persistence-test-harness'
 import { getBrowserHostLeaseRegistry } from '../../browser-host/leases/browser-host-lease-registry-instance'
 import { isRestoredClientHostedBrowserPlacement } from './client-hosted-browser-page-persistence'

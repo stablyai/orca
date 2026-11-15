@@ -1,4 +1,4 @@
-import type { RuntimeMobileSessionTabsResult } from '../../../shared/runtime-session-contracts'
+import type { RuntimeMobileSessionTabsResult } from '../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import { describe, expect, it, vi } from 'vitest'
 import './runtime-test-module-registration.spec'
 import { OrcaRuntimeService } from '../orca-runtime'
@@ -59,7 +59,7 @@ describe('OrcaRuntimeService', () => {
         { id: ptyId, cwd: TEST_WORKTREE_PATH, title: 'Recovered SSH Terminal' }
       ]
     })
-    runtime.syncWindowGraph(1, {
+    await runtime.syncWindowGraph(1, {
       tabs: [],
       leaves: [],
       mobileSessionTabs: [
@@ -152,8 +152,8 @@ describe('OrcaRuntimeService', () => {
         isDestroyed: () => false,
         webContents: { send: vi.fn() }
       })
-      const publishEmpty = (snapshotVersion: number): void => {
-        runtime.syncWindowGraph(1, {
+      const publishEmpty = async (snapshotVersion: number): Promise<void> => {
+        await runtime.syncWindowGraph(1, {
           tabs: [],
           leaves: [],
           mobileSessionTabs: [
@@ -170,7 +170,7 @@ describe('OrcaRuntimeService', () => {
         })
       }
 
-      publishEmpty(1)
+      await publishEmpty(1)
       expect((await runtime.listMobileSessionTabs(`id:${TEST_WORKTREE_ID}`)).tabs).toEqual([
         expect.objectContaining({ parentTabId: 'host-tab', status: 'pending-handle' })
       ])
@@ -180,14 +180,14 @@ describe('OrcaRuntimeService', () => {
         ? [expect.objectContaining({ parentTabId: 'host-tab', status: 'pending-handle' })]
         : []
       vi.advanceTimersByTime(30_001)
-      publishEmpty(2)
+      await publishEmpty(2)
       expect((await runtime.listMobileSessionTabs(`id:${TEST_WORKTREE_ID}`)).tabs).toEqual(
         afterLease
       )
 
       leaseState = 'terminated'
       leaseUpdatedAt = Date.now()
-      publishEmpty(3)
+      await publishEmpty(3)
       expect((await runtime.listMobileSessionTabs(`id:${TEST_WORKTREE_ID}`)).tabs).toEqual(
         afterLease
       )

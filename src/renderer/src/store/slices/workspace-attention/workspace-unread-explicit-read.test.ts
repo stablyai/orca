@@ -11,7 +11,7 @@ import {
   type PaneTarget
 } from './workspace-unread-characterization-fixture'
 import { completeAgentTurn } from './workspace-unread-characterization-driver'
-import { folderWorkspaceKey } from '../../../../../shared/workspace-scope'
+import { folderWorkspaceKey } from '../../../../../shared/workspace/identity/workspace-scope'
 import { makeFolderWorkspace } from '../../folder-workspaces/folder-workspace.test-fixture'
 import { isWorkspaceFlagSet } from './workspace-unread-flag-reads'
 import { selectAgentRowsUnread } from '@/components/sidebar/workspace-card/activity/worktree-card-agent-ack-inputs'
@@ -314,38 +314,28 @@ describe('explicit workspace and agent reads', () => {
     expect(store.getState().workspaceUnreadRaisedByMarkers).toEqual({})
   })
 
-  it('reads only the selected host, including retained agents and agents awaiting tab hydration', () => {
+  it('reads only the selected host, including agents awaiting tab hydration', () => {
     const { store } = createAttentionStore({ windowOnScreen: false })
     const local = finishedAgentOffScreen(store)
     const entry = store.getState().agentStatusByPaneKey[local.paneKey]!
     const sshKey = `ssh-agent:11111111-1111-4111-8111-111111111111`
     const runtimeKey = `runtime-agent:11111111-1111-4111-8111-111111111111`
-    const retainedKey = `retained-agent:11111111-1111-4111-8111-111111111111`
     store.setState({
       agentStatusByPaneKey: {
         [local.paneKey]: entry,
         [sshKey]: { ...entry, paneKey: sshKey, connectionId: 'server' },
         [runtimeKey]: { ...entry, paneKey: runtimeKey, terminalHandle: 'remote:box@@live' }
-      },
-      retainedAgentsByPaneKey: {
-        [retainedKey]: {
-          entry: { ...entry, paneKey: retainedKey },
-          worktreeId: WS_A,
-          tab: makeTab({ id: 'retained-agent', worktreeId: WS_A, ptyId: 'remote:box@@retained' }),
-          agentType: 'claude',
-          startedAt: 900
-        }
       }
     })
-    const panes = [local, { paneKey: sshKey }, { paneKey: runtimeKey }, { paneKey: retainedKey }]
-    expect(selectAgentRowsUnread(store.getState(), panes)).toEqual([true, true, true, true])
+    const panes = [local, { paneKey: sshKey }, { paneKey: runtimeKey }]
+    expect(selectAgentRowsUnread(store.getState(), panes)).toEqual([true, true, true])
 
     store.getState().setWorkspaceUnreadByUser(WS_A, false, 'local')
-    expect(selectAgentRowsUnread(store.getState(), panes)).toEqual([false, true, true, true])
+    expect(selectAgentRowsUnread(store.getState(), panes)).toEqual([false, true, true])
     store.getState().setWorkspaceUnreadByUser(WS_A, false, 'ssh:server')
-    expect(selectAgentRowsUnread(store.getState(), panes)).toEqual([false, false, true, true])
+    expect(selectAgentRowsUnread(store.getState(), panes)).toEqual([false, false, true])
     store.getState().setWorkspaceUnreadByUser(WS_A, false, 'runtime:box')
-    expect(selectAgentRowsUnread(store.getState(), panes)).toEqual([false, false, false, false])
+    expect(selectAgentRowsUnread(store.getState(), panes)).toEqual([false, false, false])
   })
 
   it('reads marker-free terminal and structured agents through tab ownership despite missing or stale workspace stamps', () => {

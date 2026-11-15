@@ -6,7 +6,7 @@ import { assertWorkspaceAttachmentWriteCapability } from '../../runtime/workspac
 import {
   FOLDER_WORKSPACE_PROMPT_AFTER_READY_RUNTIME_CAPABILITY,
   WORKTREE_LINKED_WORK_ITEM_CONTEXT_RUNTIME_CAPABILITY
-} from '../../../../shared/worktree-runtime-capabilities'
+} from '../../../../shared/remote-runtime/protocol/worktree-runtime-capabilities'
 import { assertRuntimeEnvironmentCapability } from '../../runtime/rpc/compatibility/runtime-capability-proof'
 import { callRuntimeRpc } from '../../runtime/rpc/calls/runtime-rpc-call'
 import { runtimeTargetForOwnerEnvironment } from '../../runtime/rpc/targets/runtime-client-target'

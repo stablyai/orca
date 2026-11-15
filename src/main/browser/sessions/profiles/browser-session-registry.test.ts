@@ -225,7 +225,7 @@ describe('BrowserSessionRegistry', () => {
     expect(isValidPersistedBrowserSessionProfile(first, DEFAULT_LOCAL_ORCA_PROFILE_ID)).toBe(true)
 
     expect(await deleteManagedBrowserProfile(owner)).toBe(true)
-    expect(browserSessionRegistry.isAllowedPartition(first.partition)).toBe(false)
+    expect(browserSessionRegistry.profileIdForPartition(first.partition)).toBeNull()
     expect(browserSessionRegistry.getProfile(repoProfile.id)).not.toBeNull()
     // A workspace recreated at the same path must not land on the deleted, retired session.
     const recreated = await ensureManagedBrowserProfile(owner, 'Workspace: feature')

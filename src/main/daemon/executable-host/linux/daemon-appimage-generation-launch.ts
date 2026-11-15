@@ -2,7 +2,7 @@
 import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { relativePathInsideRoot } from '../../../../shared/cross-platform-path'
-import { APPIMAGE_NODE_RUNTIME_SEGMENTS } from '../../../../shared/appimage-node-runtime'
+import { APPIMAGE_NODE_RUNTIME_SEGMENTS } from '../../../../shared/desktop-distribution/appimage/appimage-node-runtime'
 import { resolveAppImageRuntimeIdentity } from '../../../updater/linux-package/appimage-runtime-identity'
 import {
   isAppImageExtractionComplete,

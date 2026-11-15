@@ -10,7 +10,7 @@ import { isInterruptedStatusMessage, type NativeChatMessage } from '../native-ch
 import {
   CODEX_ASYNC_QUESTION_TOOL,
   parseCodexAsyncQuestionsInput
-} from '../../codex-async-question-input'
+} from './questions/codex-async-question-input'
 import {
   isDeliveredNativeChatUserMessage,
   isPendingNativeChatUserMessage,

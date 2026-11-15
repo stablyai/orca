@@ -3,7 +3,7 @@ import {
   getWorktreeExecutionHostId,
   type ExecutionHostId
 } from '../../../../../../shared/execution-host'
-import type { Repo } from '../../../../../../shared/repo-types'
+import type { Repo } from '../../../../../../shared/repository/repo-types'
 import type { TerminalTab } from '../../../../../../shared/workspace-layout/terminal-tab-types'
 import type { WorkspaceRowFactReader } from '../../../../../../shared/workspace-view/workspace-row-filters'
 import {
@@ -12,8 +12,8 @@ import {
   isDefaultBranchWorkspace,
   isDetachedHeadWorkspace
 } from '../../../../../../shared/worktree/visibility/workspace-kinds'
-import { isWorkspaceOwnedBySomeoneElse } from '../../../../../../shared/workspace-creator-visibility'
-import { parseWorkspaceKey } from '../../../../../../shared/workspace-scope'
+import { isWorkspaceOwnedBySomeoneElse } from '../../../../../../shared/workspace-view/workspace-creator-visibility'
+import { parseWorkspaceKey } from '../../../../../../shared/workspace/identity/workspace-scope'
 import type { Worktree } from '../../../../../../shared/worktree/types'
 import {
   hiddenProjectRowFacts,

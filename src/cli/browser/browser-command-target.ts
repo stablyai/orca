@@ -1,5 +1,5 @@
 import { BROWSER_EXPECT_URL_RUNTIME_CAPABILITY } from '../../shared/browser/runtime/browser-runtime-capabilities'
-import type { RuntimeStatus } from '../../shared/runtime-types'
+import type { RuntimeStatus } from '../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import { getOptionalStringFlag, getPresentStringFlag } from '../arguments/flags'
 import type { RuntimeClient } from '../runtime/client'
 import { RuntimeClientError } from '../runtime/connection/types'

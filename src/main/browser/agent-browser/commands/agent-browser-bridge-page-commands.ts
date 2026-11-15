@@ -1,7 +1,7 @@
 import { mkdir } from 'node:fs/promises'
 import path from 'node:path'
 import { BrowserError } from '../../browser-error'
-import { assertClipboardTextWriteWithinLimitWithYield } from '../../../../shared/clipboard-text'
+import { assertClipboardTextWriteWithinLimitWithYield } from '../../../../shared/clipboard/clipboard-text'
 import { withTimeout } from '../../../../shared/promise-timeout-fallback'
 import { AGENT_BROWSER_CLIPBOARD_WRITE_MAX_BYTES } from '../protocol/agent-browser-text-argument-budget'
 import type {
@@ -17,7 +17,7 @@ import {
   cancelBrowserPasskeyRequests,
   getBrowserPasskeyRequest
 } from '../../webauthn/browser-passkey-requests'
-import { formatBrowserPasskeyRequest } from '../../../../shared/browser-passkey-request'
+import { formatBrowserPasskeyRequest } from '../../../../shared/browser/prompts/browser-passkey-request'
 import { browserGuestHasNothingToReload } from '../../../../shared/browser/guest-lifecycle/browser-guest-reloadability'
 import { cancelBrowserWebAuthnAccountRequests } from '../../webauthn/browser-webauthn-account-picker'
 import { captureRemoteCliBrowserRevocation } from '../../../runtime/desktop-browser-bridge/remote-cli-browser-scope'

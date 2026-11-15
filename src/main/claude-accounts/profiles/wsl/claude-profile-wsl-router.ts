@@ -7,8 +7,8 @@ import {
   CLAUDE_PROFILE_POINTER_ENV,
   CLAUDE_PROFILE_SETUP_FAILED_MESSAGE
 } from '../../../../shared/claude-profile-routing'
-import { WSL_CLAUDE_PROFILE_HELPER_FILENAME } from '../../../../shared/remote-bundle-artifacts'
-import { parseWslUncPath, toWindowsWslPath } from '../../../../shared/wsl-paths'
+import { WSL_CLAUDE_PROFILE_HELPER_FILENAME } from '../../../../shared/remote-runtime/orcad-distribution/remote-bundle-artifacts'
+import { parseWslUncPath, toWindowsWslPath } from '../../../../shared/file-access/wsl-paths'
 import { getWslHomeAsync, listRunningWslDistrosAsync } from '../../../wsl/discovery/distro-catalog'
 import { ensureWslPinnedRuntime } from '../../../wsl/execution/wsl-pinned-runtime'
 import { relayBundleCandidates } from '../../../wsl/execution/relay-bundle-paths'

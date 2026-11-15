@@ -1,4 +1,4 @@
-import { registerWebviewDragPassthroughSurface } from './host-guest/webview-drag-passthrough'
+import { registerWebviewDragPassthroughSurface } from './host-guest/drag/webview-drag-passthrough'
 import { registerBrowserClientPagePositionSync } from './browser-client-page-position-driver'
 import { syncBrowserClientPagePaintRetention } from './browser-client-page-paint-retention'
 import type { BrowserClientPageRendererIdentity as RendererPageIdentity } from '../../../../shared/browser/client-hosting/browser-client-page-renderer-protocol'

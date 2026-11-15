@@ -1,4 +1,4 @@
-import type { RuntimeBrowserClientPlacement } from '../../../../shared/runtime-browser-placement'
+import type { RuntimeBrowserClientPlacement } from '../../../../shared/browser/client-hosting/runtime-browser-placement'
 import { e2eSuppressesBrowserClientPageMetadataPublish } from './browser-client-page-metadata-publish-e2e-fault'
 import {
   createBrowserClientPageMetadataPublisher,

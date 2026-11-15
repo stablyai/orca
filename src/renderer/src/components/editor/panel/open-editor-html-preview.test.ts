@@ -15,7 +15,7 @@ import { beginLinkOpenRequest } from '@/lib/links/link-open-request'
 import { registerEditorFrameFlush } from '../save/flush/editor-pending-flush'
 import { openEditorHtmlPreview } from './open-editor-html-preview'
 
-vi.mock('@/components/browser-pane/host-guest/browser-focus', () => ({
+vi.mock('@/components/browser-pane/host-guest/input/browser-focus', () => ({
   requestBrowserFocus: vi.fn()
 }))
 

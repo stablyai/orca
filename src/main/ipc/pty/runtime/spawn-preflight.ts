@@ -23,7 +23,7 @@ import { getConnectionExecutionHostId } from '../../../../shared/execution-host'
 import {
   ensureJcodeRuntimeDir,
   JCODE_RUNTIME_DIR_ENV_KEY
-} from '../../../../shared/jcode-runtime-dir'
+} from '../../../../shared/agent-launch/startup/jcode-runtime-dir'
 
 export async function prepareRuntimePtySpawn(
   ctx: RuntimePtySpawnState

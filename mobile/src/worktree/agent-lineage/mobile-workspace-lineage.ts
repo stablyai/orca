@@ -2,7 +2,7 @@ import {
   buildWorktreeOccurrencePlan,
   getExpandedWorktreeOccurrences,
   type WorktreeOccurrencePlan
-} from '../../../../src/shared/worktree-occurrence-plan'
+} from '../../../../src/shared/sidebar-list/lineage/worktree-occurrence-plan'
 import type { WorkspaceListItem, Worktree } from '../workspace-list/workspace-list-types'
 import {
   LOCAL_EXECUTION_HOST_ID,

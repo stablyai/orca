@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Text, View } from 'react-native'
-import type { MobileWebShellUpdateFailure } from '../mobile-web-shell/mobile-web-shell-update-failure'
+import type { MobileWebShellUpdateFailure } from '../mobile-web-shell/update-recovery/mobile-web-shell-update-failure'
 import { processGenerationStore } from '../mobile-web-shell/generations/process-generation-store'
 import { loadHosts } from '../host-catalog/host-store'
 import { formatUpdateFailure } from './mobile-web-shell-update-failure-copy'

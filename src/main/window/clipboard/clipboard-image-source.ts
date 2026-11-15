@@ -1,4 +1,4 @@
-import { clipboardFormatsIncludeImage } from '../../../shared/clipboard-image'
+import { clipboardFormatsIncludeImage } from '../../../shared/clipboard/clipboard-image'
 import {
   readWindowsCopiedImageFilePath,
   type WindowsClipboardFileFormats

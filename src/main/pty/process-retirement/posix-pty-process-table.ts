@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs'
 import { readFile } from 'node:fs/promises'
-import { hasControllingTty } from '../../../shared/posix-controlling-terminal'
+import { hasControllingTty } from '../../../shared/terminal/pty/native-process/posix-controlling-terminal'
 import { waitForPromiseWithSignal } from '../../../shared/abort-signal-reason'
 import { runProcess, runProcessSync } from '@orca/process-host'
 import type { ProcessResult } from '@orca/process-host/process-spec'

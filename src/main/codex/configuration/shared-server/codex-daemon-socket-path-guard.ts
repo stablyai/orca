@@ -3,7 +3,7 @@ import {
   observeResolvedFilePath,
   observeResolvedFilePathError
 } from '../../../filesystem/file-content-observation'
-import { parseWslUncPath } from '../../../../shared/wsl-paths'
+import { parseWslUncPath } from '../../../../shared/file-access/wsl-paths'
 import { unixSocketPathFits } from '../../../../shared/unix-socket-path-limit'
 import { upsertTableSettingsInContent } from '../settings/codex-config-settings-upsert'
 import {

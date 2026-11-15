@@ -22,7 +22,7 @@ import type { CodexBackgroundTaskTracker } from '../background-work/codex-backgr
 import type { CodexSkillReport } from '../catalog/codex-structured-skill-report'
 import type { CodexJournalTranslator } from '../journal/codex-structured-journal-contracts'
 import type { StructuredAgentSessionLifecycleEvent } from '../../../native-chat/agent-session-wire/providers/structured-agent-session-adapter'
-import type { CodexStructuredPermissionPolicy } from '../../../../shared/codex-permission-policy'
+import type { CodexStructuredPermissionPolicy } from '../../../../shared/agent-launch/permissions/codex-permission-policy'
 import type { StructuredLaunchRequest } from '../../../runtime/agent-session/launch/structured-agent-launch-composition'
 import type { AgentModelCatalogStore } from '../../../native-chat/agent-model-catalog/agent-model-catalog-store'
 import type { AgentModelCatalogSessionAccess } from '../../../native-chat/agent-model-catalog/agent-model-catalog-lister'

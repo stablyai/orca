@@ -5,7 +5,7 @@ import type { NativeChatMessage } from '../../../../../../src/shared/native-chat
 import { encodeNativeChatTranscriptIdentity } from '../../../../../../src/shared/native-chat/transcript/messages/native-chat-transcript-retention'
 import type { StructuredAgentSessionState } from '../../../../../../src/shared/agent-session/structured-agent-session-reducer'
 import { decodeDeviceStoreValue } from '../../../../device-store/device-store-value-codec'
-import { readPageDeviceStore } from '../../../../mobile-web-shell/bridge/page-device-store'
+import { readPageDeviceStore } from '../../../../mobile-web-shell/bridge/page-storage/page-device-store'
 import {
   resolveMobileNativeChat,
   type MobileNativeChatTab

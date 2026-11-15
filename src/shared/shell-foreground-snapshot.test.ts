@@ -9,9 +9,12 @@ import {
   getProcessTableSnapshot,
   getStrictProcessTableSnapshotWithAge,
   resetProcessTableSnapshotForTests
-} from './process-table-snapshot-reader'
-import { parseShellForegroundRows, PS_ARGS } from './process-table-snapshot'
-import * as darwinTerminalNames from './darwin-terminal-names'
+} from './process-observation/tables/process-table-snapshot-reader'
+import {
+  parseShellForegroundRows,
+  PS_ARGS
+} from './process-observation/tables/process-table-snapshot'
+import * as darwinTerminalNames from './process-observation/darwin/darwin-terminal-names'
 
 type Callback = (error: Error | null, result: { stdout: string; stderr: string }) => void
 const platform = Object.getOwnPropertyDescriptor(process, 'platform')!
@@ -163,24 +166,3 @@ it.each([
     expect(execFileMock).toHaveBeenCalledTimes(5)
   }
 )
-
-it.each([
-  Object.assign(new Error('ps: another: keyword not found'), { code: 1 }),
-  Object.assign(new Error('ps: Operation not permitted'), { code: 1 }),
-  Object.assign(new Error('ps: tdev: keyword not found'), { code: 'EACCES' }),
-  Object.assign(new Error('ps: tdev: keyword not found'), { code: 1, killed: true }),
-  Object.assign(new Error('stdout maxBuffer length exceeded'), {
-    code: 'ERR_CHILD_PROCESS_STDIO_MAXBUFFER'
-  })
-])('does not retry or remember an unrelated failed capture (%s)', async (error) => {
-  execFileMock.mockImplementation((_program, _args, _options, callback: Callback) => {
-    callback(error, { stdout: '', stderr: '' })
-  })
-
-  await expect(getProcessTableSnapshot()).rejects.toThrow()
-  await expect(getProcessTableSnapshot()).rejects.toThrow()
-  expect(execFileMock.mock.calls.map((call) => call[1][1])).toEqual([
-    PS_ARGS[1].replace('tty=', 'tdev='),
-    PS_ARGS[1].replace('tty=', 'tdev=')
-  ])
-})

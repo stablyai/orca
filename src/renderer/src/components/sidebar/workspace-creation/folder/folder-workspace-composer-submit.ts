@@ -4,7 +4,7 @@ import {
   buildFolderWorkspaceHostStartupPayload
 } from './folder-workspace-startup-payload'
 import { reviewSetupTrustMismatch } from '@/store/slices/worktrees/create/created-worktree-setup-trust'
-import { projectGroupHookTrustKey } from '../../../../../../shared/workspace-hook-owner'
+import { projectGroupHookTrustKey } from '../../../../../../shared/workspace-setup/hooks/workspace-hook-owner'
 import { folderWorkspaceToWorktree } from '../../../../../../shared/folder-workspaces/folder-workspace-worktree'
 import { ensureAgentLaunchPreferences } from '@/runtime/agent-launch-settings/use-host-agent-launch-preferences'
 import { ensureAgentStartupInTerminal } from '@/lib/workspace/creation/new-workspace'
@@ -13,7 +13,7 @@ import { createNonSecureContextUuid as createBrowserUuid } from '../../../../../
 import type { AgentStartupPlan } from '../../../../../../shared/agent-launch/startup/tui-agent-startup'
 import type { NativeChatLaunchPromptDelivery } from '@/lib/agent-session/launch/prompt/native-chat-launch-prompt-delivery'
 import { activateAndRevealFolderWorkspace } from '@/lib/workspace/activation/worktree-activation'
-import { folderWorkspaceKey } from '../../../../../../shared/workspace-scope'
+import { folderWorkspaceKey } from '../../../../../../shared/workspace/identity/workspace-scope'
 import './folder-workspace-source-repos'
 import {
   resolveFolderWorkspaceName,

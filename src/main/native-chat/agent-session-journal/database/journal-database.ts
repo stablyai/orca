@@ -71,16 +71,7 @@ export function openJournalDatabase(dbPath: string): OpenJournalDatabase {
     }
     configureJournalPragmas(probe, stored)
     migrateJournalSchema(probe, stored)
-    // Additive tables must exist on every writable open, even when version migration returns early.
-    ensureQueuedMessagesTable(probe)
-    ensureCommandReceiptsTable(probe)
-    ensureJournalOutcomeTables(probe)
-    // Sender identity follows clear predecessors without scanning saved conversations.
-    probe.exec(`CREATE INDEX IF NOT EXISTS idx_agent_session_clear_successor
-      ON agent_session_records (CASE WHEN json_valid(record_json)
-        THEN json_extract(record_json, '$.conversationCommand.replacementSessionId') END)`)
-    ensureAgentSessionAttachmentClaimTables(probe)
-    ensurePRWatchTables(probe)
+    ensureJournalAdditiveTables(probe)
     hardenSqliteDatabaseFiles(dbPath)
     transferred = true
     return { db: probe, readOnly: false }
@@ -89,6 +80,19 @@ export function openJournalDatabase(dbPath: string): OpenJournalDatabase {
       probe.close()
     }
   }
+}
+
+/** Additive tables must exist on every writable open, even when version migration returns early. */
+export function ensureJournalAdditiveTables(db: Database.Database): void {
+  ensureQueuedMessagesTable(db)
+  ensureCommandReceiptsTable(db)
+  ensureJournalOutcomeTables(db)
+  // Sender identity follows clear predecessors without scanning saved conversations.
+  db.exec(`CREATE INDEX IF NOT EXISTS idx_agent_session_clear_successor
+    ON agent_session_records (CASE WHEN json_valid(record_json)
+      THEN json_extract(record_json, '$.conversationCommand.replacementSessionId') END)`)
+  ensureAgentSessionAttachmentClaimTables(db)
+  ensurePRWatchTables(db)
 }
 
 function configureJournalPragmas(db: Database.Database, stored: number): void {

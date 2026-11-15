@@ -1,11 +1,14 @@
 import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, expect, it } from 'vitest'
-import { createFakeRpcClient, rpcSuccess } from '../../../mobile-web-shell/bridge-host-test-fakes'
+import {
+  createFakeRpcClient,
+  rpcSuccess
+} from '../../../mobile-web-shell/test-support/bridge-host-test-fakes'
 import {
   documentQueryClient,
   settleQueryNotifications
-} from '../../../test-support/rpc-recording/hook-mount'
+} from '../../../test-support/rpc-recording/react-mounting/hook-mount'
 import type { RpcResponse } from '../../../transport/rpc/rpc-wire-types'
 import type { MobileDiffReviewQueueItem } from '../diff-state/mobile-diff-review-queue'
 import type {

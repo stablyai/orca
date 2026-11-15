@@ -1,4 +1,4 @@
-import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import type { BrowserPageLoadingOwner } from '@/lib/browser/browser-page-loading-ownership'
 import type { BrowserPageStateWriter } from '../describe-page/browser-page-types'
 import '../../../../../shared/constants'

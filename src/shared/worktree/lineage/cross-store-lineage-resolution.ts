@@ -4,7 +4,7 @@ import {
   lastVerifiedRuntimeStatus,
   type RuntimeEnvironmentStatus
 } from '../../remote-runtime/host-status/runtime-host-status'
-import type { WorkspaceKey } from '../../workspace-scope'
+import type { WorkspaceKey } from '../../workspace/identity/workspace-scope'
 import { isCrossStoreWorkspaceLineage, validCrossStoreLineage } from './cross-store-lineage-records'
 import { lineageInstanceIdOfRow, workspaceKeyOfRow } from './lineage-row-identity'
 import type { Worktree } from '../types'

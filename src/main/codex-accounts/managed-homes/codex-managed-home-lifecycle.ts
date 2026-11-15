@@ -4,9 +4,9 @@ import { isDefinitiveAbsence } from '../../../shared/definitive-filesystem-absen
 import {
   WINDOWS_RM_MAX_RETRIES,
   WINDOWS_RM_RETRY_DELAY_MS
-} from '../../../shared/windows-transient-lock-removal'
+} from '../../../shared/file-write/windows-transient-lock-removal'
 import { quotePosixShell } from '../../../shared/shell/launch/shell-argument-quoting'
-import { parseWslUncPath, toWindowsWslPath } from '../../../shared/wsl-paths'
+import { parseWslUncPath, toWindowsWslPath } from '../../../shared/file-access/wsl-paths'
 import { runWslProcess } from '../../wsl/execution/wsl-runner'
 import type {
   CodexAccountAddTarget,

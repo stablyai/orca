@@ -10,7 +10,7 @@ import {
   type AiVaultPrepareSessionResumeRequest,
   type AiVaultPrepareSessionResumeResult
 } from '../../../../../../shared/ai-vault/resume/ai-vault-resume-preparation'
-import type { RuntimeStatus } from '../../../../../../shared/runtime-session-contracts'
+import type { RuntimeStatus } from '../../../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import { parseExecutionHostId } from '../../../../../../shared/execution-host'
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import { prepareAiVaultSessionForFork } from '../history/ai-vault-session-resume-preparation'

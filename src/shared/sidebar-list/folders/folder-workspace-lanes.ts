@@ -1,9 +1,12 @@
 import type { FolderWorkspace } from '../../folder-workspaces/folder-workspace-types'
-import type { ProjectGroup } from '../../project-group-types'
+import type { ProjectGroup } from '../../project/groups/project-group-types'
 import { LOCAL_EXECUTION_HOST_ID } from '../../execution-host'
 import { getFolderWorkspaceHostId } from '../../folder-workspaces/folder-workspace-host-id'
 import type { WorkspaceStatusDefinition } from '../../worktree/types'
-import { getWorkspaceStatus, getWorkspaceStatusGroupKey } from '../../workspace-statuses'
+import {
+  getWorkspaceStatus,
+  getWorkspaceStatusGroupKey
+} from '../../workspace/status/workspace-statuses'
 import { ALL_GROUP_KEY } from '../sections/group-keys'
 import { getPRLaneKey } from '../../workspace-view/workspace-pr-groups'
 import { compareCodePoints, compareSidebarText } from '../sorting/text-order'

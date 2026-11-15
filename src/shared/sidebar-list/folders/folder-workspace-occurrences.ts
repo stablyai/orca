@@ -1,7 +1,7 @@
 import { getFolderWorkspaceWorktree } from '../../folder-workspaces/folder-workspace-worktree'
 import { getWorktreeHostIdentity } from '../../worktree/host-qualified-identity'
 import type { Worktree } from '../../worktree/types'
-import type { OccurrenceSectionPath } from '../../worktree-occurrence-plan'
+import type { OccurrenceSectionPath } from '../lineage/worktree-occurrence-plan'
 import {
   compareFolderWorkspacesForDisplay,
   type RenderableFolderWorkspace

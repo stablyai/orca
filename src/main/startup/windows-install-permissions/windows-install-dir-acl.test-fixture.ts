@@ -1,8 +1,8 @@
-import { setWindowsSecurityForTests } from '../../../shared/windows-security-addon'
+import { setWindowsSecurityForTests } from '../../../shared/secure-storage/windows-security-addon'
 import {
   createFakeWindowsSecurity,
   daclFromSddl
-} from '../../../shared/windows-security-addon.test-fixture'
+} from '../../../shared/secure-storage/windows-security-addon.test-fixture'
 import type {
   InstallDirPackageGrantOutcome,
   InstallDirPackageGrants

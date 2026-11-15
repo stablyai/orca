@@ -8,7 +8,7 @@ import '../../src/main/persistence/profile-state/database/profile-state-database
 import { profileStateDatabaseFile } from '../../src/shared/profile-state-storage-paths'
 import { ProfileStateSqliteAuthority } from '../../src/main/persistence/profile-state/profile-state-sqlite-authority'
 import { DEFAULT_LOCAL_ORCA_PROFILE_ID } from '../../src/shared/orca-profiles'
-import type { RuntimeMobileSessionTabsResult } from '../../src/shared/runtime-types'
+import type { RuntimeMobileSessionTabsResult } from '../../src/shared/remote-runtime/session-graph/runtime-session-contracts'
 import { toRemoteRuntimePtyId } from '../../src/shared/remote-runtime/remote-runtime-pty-id'
 import { toWebTerminalSurfaceTabId } from '../../src/shared/workspace-layout/terminal-surface-id'
 import { expect, test } from './helpers/orca-app'

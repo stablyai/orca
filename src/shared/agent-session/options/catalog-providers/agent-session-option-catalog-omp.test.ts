@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { parseOmpModelList } from '../../../omp-model-list-probe'
+import { parseOmpModelList } from '../model-catalog/omp-model-list-probe'
 
 const LISTING = JSON.stringify({
   models: [

@@ -4,7 +4,7 @@ import { getRepoExecutionHostId } from '../../../../src/shared/execution-host'
 import {
   PROJECT_SECTION_PARITY_ROWS,
   PROJECT_SECTION_PARITY_SERVED
-} from '../../../../src/shared/project-section-parity.test-fixture'
+} from '../../../../src/shared/sidebar-list/sections/project-section-parity.test-fixture'
 import { buildProjectSectionCatalog } from '../project-sections/project-section-catalog'
 import { readServedProjectSections } from '../project-sections/project-sections-operations'
 import { buildSections } from './workspace-list-sections'

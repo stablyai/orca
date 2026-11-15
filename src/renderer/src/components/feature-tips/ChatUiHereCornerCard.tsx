@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type JSX, type MouseEvent } from 'react'
 import { X } from 'lucide-react'
-import { FEATURE_TIPS } from '../../../../shared/feature-tips'
+import { FEATURE_TIPS } from '../../../../shared/feature-education/feature-tips'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { useMountedRef } from '@/hooks/useMountedRef'

@@ -1,4 +1,4 @@
-import type { RuntimeNavigationTarget } from '../runtime-navigation'
+import type { RuntimeNavigationTarget } from '../remote-runtime/session-graph/runtime-navigation'
 
 export type RuntimeFileOpenResult = {
   worktree: string

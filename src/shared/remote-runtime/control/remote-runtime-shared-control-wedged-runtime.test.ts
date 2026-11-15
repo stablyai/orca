@@ -25,27 +25,33 @@ const heartbeat = { intervalMs: 1_000, timeoutMs: 5_000 }
 it('retires a ready socket whose runtime still answers pings but not requests, and reconnects (#39785)', async () => {
   // Wedged host: ws pongs keep the transport "alive" while status.get is never answered.
   const server = await createServer({ silentMethods: ['status.get'] })
-  const closes: SharedControlSocketCloseRecord[] = []
+  let onClosed!: (record: SharedControlSocketCloseRecord) => void
+  const closed = new Promise<SharedControlSocketCloseRecord>((resolve) => {
+    onClosed = resolve
+  })
+  let onReady = (): void => {}
   const published: RemoteRuntimeSharedConnectionDiagnostics[] = []
   const connection = new RemoteRuntimeSharedControlConnection(server.pairing, {
     appHeartbeat: { ...heartbeat, timeoutMs: 100 },
-    onSocketClosed: (record) => closes.push(record),
+    onSocketClosed: onClosed,
+    onReady: () => onReady(),
     onDiagnosticsChanged: (diagnostics) => published.push(diagnostics)
   })
   try {
     await connection.request('worktree.ps', undefined, 1000)
-    // One idle interval sends the probe; its real deadline and the real reconnect then follow.
-    vi.advanceTimersByTime(heartbeat.intervalMs)
-    vi.useRealTimers()
-
-    await vi.waitFor(() => expect(server.connectionCount()).toBeGreaterThanOrEqual(2), {
-      timeout: 10_000
+    const reconnected = new Promise<void>((resolve) => {
+      onReady = resolve
     })
-    expect(closes[0]).toMatchObject({ cause: 'runtime_unresponsive', state: 'ready' })
+    // Await probe preparation before its real deadline; keep the clock in the same time domain.
+    await vi.advanceTimersByTimeAsync(heartbeat.intervalMs)
+
+    expect(await closed).toMatchObject({ cause: 'runtime_unresponsive', state: 'ready' })
     expect(server.requests.some((r) => r.method === 'status.get')).toBe(true)
     expect(published.some((d) => typeof d.unresponsiveSince === 'number')).toBe(true)
     // Host health keeps the mark across the reconnect until the runtime answers again.
-    await vi.waitFor(() => expect(connection.isReady()).toBe(true), { timeout: 10_000 })
+    await reconnected
+    expect(server.connectionCount()).toBeGreaterThanOrEqual(2)
+    expect(connection.isReady()).toBe(true)
     expect(connection.getDiagnostics().unresponsiveSince).toEqual(expect.any(Number))
   } finally {
     connection.close()
@@ -62,7 +68,7 @@ it('keeps a socket whose runtime answers the heartbeat', async () => {
   try {
     await connection.request('worktree.ps', undefined, 1000)
     for (let round = 0; round < 2; round += 1) {
-      vi.advanceTimersByTime(heartbeat.intervalMs)
+      await vi.advanceTimersByTimeAsync(heartbeat.intervalMs)
       // Replies arrive in order, so the probe has been answered once this one is.
       await connection.request('worktree.ps', undefined, 1000)
     }
@@ -82,14 +88,14 @@ it('never probes an asleep host or a connection that did not opt in', async () =
   let sleeping = false
   const asleep = new RemoteRuntimeSharedControlConnection(server.pairing, {
     appHeartbeat: heartbeat,
-    isAsleep: () => sleeping
+    prepareSleepCheck: () => () => sleeping
   })
   const legacy = new RemoteRuntimeSharedControlConnection(server.pairing)
   await asleep.request('worktree.ps', undefined, 1000)
   await legacy.request('worktree.ps', undefined, 1000)
 
   sleeping = true
-  vi.advanceTimersByTime(heartbeat.intervalMs * 5)
+  await vi.advanceTimersByTimeAsync(heartbeat.intervalMs * 5)
   sleeping = false
   // The socket delivers in order, so a probe sent while idle would reach the host before these.
   await asleep.request('worktree.ps', undefined, 1000)

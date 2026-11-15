@@ -29,7 +29,6 @@ export type VisibleOrchestrationState = WorktreeRuntimeOwnerState &
       AppState,
       | 'unifiedTabsByWorktree'
       | 'agentStatusByPaneKey'
-      | 'retainedAgentsByPaneKey'
       | 'runtimeAgentOrchestrationByPaneKey'
       | 'ptyIdsByTabId'
     >
@@ -101,12 +100,7 @@ let terminalCache:
   | { inputs: unknown[]; hosts: Map<string, string | null>; ptys: Map<string, string | null> }
   | undefined
 function terminalProvenance(state: VisibleOrchestrationState) {
-  const inputs = [
-    state.unifiedTabsByWorktree,
-    state.tabsByWorktree,
-    state.ptyIdsByTabId,
-    state.retainedAgentsByPaneKey
-  ]
+  const inputs = [state.unifiedTabsByWorktree, state.tabsByWorktree, state.ptyIdsByTabId]
   if (terminalCache && inputs.every((value, index) => value === terminalCache?.inputs[index])) {
     return terminalCache
   }
@@ -152,13 +146,6 @@ function terminalProvenance(state: VisibleOrchestrationState) {
       }
     }
   }
-  for (const retained of Object.values(state.retainedAgentsByPaneKey ?? EMPTY)) {
-    visits++
-    const host = ptyHost(retained.tab.ptyId)
-    if (host !== undefined) {
-      merge(hosts, aliasKey(retained.worktreeId, retained.tab.id), host)
-    }
-  }
   terminalCache = { inputs, hosts, ptys }
   return terminalCache
 }
@@ -169,7 +156,6 @@ function projection(state: VisibleOrchestrationState): NonNullable<typeof cache>
   const inputs = [
     state.runtimeAgentOrchestrationByPaneKey,
     state.agentStatusByPaneKey,
-    state.retainedAgentsByPaneKey,
     terminals,
     rows
   ]
@@ -246,9 +232,6 @@ function projection(state: VisibleOrchestrationState): NonNullable<typeof cache>
   }
   for (const entry of Object.values(state.agentStatusByPaneKey ?? EMPTY)) {
     embedded(entry)
-  }
-  for (const retained of Object.values(state.retainedAgentsByPaneKey ?? EMPTY)) {
-    embedded(retained.entry, retained.worktreeId)
   }
   const previous = cache?.contexts
   const equal =

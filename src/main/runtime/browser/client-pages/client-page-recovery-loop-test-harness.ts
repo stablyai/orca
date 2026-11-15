@@ -3,7 +3,7 @@ import {
   type RecoveryRuntimeObservation
 } from './client-page-recovery-workspace-test-harness'
 import { BROWSER_CLIENT_AUTOMATION_HOST_CAPABILITY } from '../../../../shared/browser/client-hosting/browser-client-automation-protocol'
-import type { RuntimeMobileSessionTabsResult } from '../../../../shared/runtime-session-contracts'
+import type { RuntimeMobileSessionTabsResult } from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import { createProfile } from './client-hosted-browser-persistence-test-harness'
 import { RpcDispatcher } from '../../rpc/dispatcher'
 import { BROWSER_CLIENT_HOST_METHODS } from '../../rpc/methods/browser/browser-client-host'
@@ -74,15 +74,15 @@ export function createRecoveryLoop(
         includeAgentSenders: false
       })
     }
-    snapshotForClient(worktree: string, clientId: string) {
-      const result = this.getMobileSessionTabsForWorktree(worktree, clientId, {
+    async snapshotForClient(worktree: string, clientId: string) {
+      const result = await this.getMobileSessionTabsForWorktree(worktree, clientId, {
         includeAgentSenders: false
       })
       this.observeClientHostedPageSnapshots([result], clientId)
       return result
     }
-    override markClientHostedPagesReconciled(id: string): void {
-      super.markClientHostedPagesReconciled(id)
+    override async markClientHostedPagesReconciled(id: string): Promise<void> {
+      await super.markClientHostedPagesReconciled(id)
       reconciled = true
       notify()
     }

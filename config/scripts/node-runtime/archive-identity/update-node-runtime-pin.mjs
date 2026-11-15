@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Regenerates the pinned asset table in src/shared/node-runtime-pin.ts. Needs network; CI never runs it.
+// Regenerates the pinned asset table in src/shared/node-runtime/node-runtime-pin.ts. Needs network; CI never runs it.
 // Usage: node config/scripts/node-runtime/archive-identity/update-node-runtime-pin.mjs --version 24.21.0 [--work-dir DIR] [--keyring FILE]
 
 import { createHash } from 'node:crypto'
@@ -23,7 +23,7 @@ import {
   SERVER_TARGETS,
   nodeRuntimeExecutablePath,
   nodeRuntimeReleaseUrl
-} from '../../../../src/shared/node-runtime-pin.ts'
+} from '../../../../src/shared/node-runtime/node-runtime-pin.ts'
 import { currentTarget } from '../../orcad-distribution/prebuilds/server-build-target.mjs'
 import { nodeDistArchiveName, windowsImportLibFile } from './node-dist-archive-name.mjs'
 import { runProcessSync } from '@orca/process-host'
@@ -33,7 +33,7 @@ import {
 } from '../../../../src/shared/zip-extractor-command.ts'
 
 const root = resolve(import.meta.dirname, '../../../..')
-const PIN_FILE = join(root, 'src/shared/node-runtime-pin.ts')
+const PIN_FILE = join(root, 'src/shared/node-runtime/node-runtime-pin.ts')
 const GENERATED_BEGIN =
   '// @generated-begin by config/scripts/node-runtime/archive-identity/update-node-runtime-pin.mjs'
 const GENERATED_END = '// @generated-end'

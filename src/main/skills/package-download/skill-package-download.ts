@@ -4,7 +4,7 @@ import { join } from 'node:path'
 import {
   SKILL_PACKAGE_CONTENT_TYPE,
   SKILL_PACKAGE_MAX_COMPRESSED_BYTES
-} from '../../../shared/skill-package-manifest'
+} from '../../../shared/skills/packages/skill-package-manifest'
 import {
   createSkillDownloadAvailabilitySignal,
   isSkillDownloadGrantExpiredAbort,

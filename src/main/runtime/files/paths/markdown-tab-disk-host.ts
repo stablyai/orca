@@ -45,7 +45,9 @@ export type MarkdownTabDiskRuntime = RuntimeLocalFileHost &
     resolveRuntimeFileTarget(selector: string): Promise<ResolvedRuntimeFileTarget>
     callEnvironment: EnvironmentCall
     /** Pin every save call to the pairing captured by its initial probe. */
-    environmentPairingRevision(environmentId: string): number | undefined
+    environmentPairingRevision(
+      environmentId: string
+    ): number | undefined | Promise<number | undefined>
   }
 
 type MarkdownFileRoute =
@@ -121,19 +123,19 @@ export function createMarkdownTabDiskHost(runtime: MarkdownTabDiskRuntime): Mark
       // A host move mid-save must not redirect the pinned write.
       const route: MarkdownFileRoute =
         found.environmentId !== null
-          ? { ...found, pairingRevision: pairingRevisionOf(runtime, found.environmentId) }
+          ? { ...found, pairingRevision: await pairingRevisionOf(runtime, found.environmentId) }
           : found
       return fileIo(async () => route)
     }
   }
 }
 
-function pairingRevisionOf(
+async function pairingRevisionOf(
   runtime: Pick<MarkdownTabDiskRuntime, 'environmentPairingRevision'>,
   environmentId: string
-): number | undefined {
+): Promise<number | undefined> {
   try {
-    return runtime.environmentPairingRevision(environmentId)
+    return await runtime.environmentPairingRevision(environmentId)
   } catch (error) {
     throw new RemoteRuntimeClientError(
       'remote_runtime_unavailable',

@@ -3,7 +3,7 @@ import { encodeAgentSessionQuestionAnswers } from '../../../../../../src/shared/
 import {
   structuredQuestionAnswers,
   structuredQuestionCard
-} from '../../../../../../src/shared/structured-agent-question-card'
+} from '../../../../../../src/shared/native-chat/input/questions/structured-agent-question-card'
 import { MobileNativeChatAsk } from './MobileNativeChatAsk'
 
 /** Grouped structured prompts use the terminal ask card, as on desktop. */

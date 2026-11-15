@@ -53,7 +53,7 @@ async function startSplitHost() {
     getForegroundProcess: async () => null,
     listProcesses: async () => []
   })
-  runtime.syncWindowGraph(0, { tabs: [], leaves: [] })
+  await runtime.syncWindowGraph(0, { tabs: [], leaves: [] })
   const activate = (leafId: string, intent: 'user' | 'automatic') =>
     runtime.activateMobileSessionTab(`id:${TEST_WORKTREE_ID}`, 'host-tab', leafId, {
       notifyClients: false,
@@ -80,7 +80,7 @@ describe('OrcaRuntimeService', () => {
     const disk = makeDeferred()
     Object.assign(runtimeStore, { flushPendingOrThrowAsync: () => disk.promise })
     const published = vi.fn()
-    runtime.onMobileSessionTabsChanged(published)
+    runtime.onMobileSessionTabsChanged(published, undefined, 'mobile')
     // Model immediate paired-client reactivation on stream end.
     let reactivation: Promise<unknown> | undefined
     let observedAtStreamEnd: { binding?: string; publications: number } | undefined

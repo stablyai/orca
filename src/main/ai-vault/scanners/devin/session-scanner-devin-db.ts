@@ -1,4 +1,4 @@
-import { parseWslUncPath } from '../../../../shared/wsl-paths'
+import { parseWslUncPath } from '../../../../shared/file-access/wsl-paths'
 import { wasWslDistroLastSeenRunningSettled } from '../../../wsl/discovery/wsl-background-distro-gate'
 import { WSL_TRANSCRIPT_RUNNING_LEASE_MS } from '../../../native-chat/transcript-filesystem/wsl-transcript-running-admission'
 import { AsyncLocalStorage } from 'node:async_hooks'

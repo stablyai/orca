@@ -41,7 +41,7 @@
     "test:changed": "node config/scripts/workspace-package-build/build-workspace-packages.mjs && node config/scripts/native-build/node-addons/ensure-native-runtime.mjs --runtime=node && node config/scripts/test-runtime/execution-policy/run-vitest.mjs run --config config/vitest.config.ts --changed=HEAD",
     "test:node": "pnpm run build:packages && node config/scripts/native-build/node-addons/ensure-native-runtime.mjs --runtime=node && vitest run --config config/vitest.config.ts",
     "test:node-server": "node config/scripts/ci/unit-selection/run-node-server-tests.mjs",
-    "test:skill-sharing:release": "vitest run --config config/vitest.config.ts src/main/skills src/shared/skill-package-manifest.test.ts",
+    "test:skill-sharing:release": "vitest run --config config/vitest.config.ts src/main/skills src/shared/skills/packages/skill-package-manifest.test.ts",
     "test:repro:remote-agent-session": "pnpm run build:cli && pnpm run build:electron-vite && node config/scripts/diagnostics/remote-agent-authority/remote-agent-session-authority-repro.mjs",
     "capture:agent-transcript": "node config/scripts/native-build/node-addons/ensure-native-runtime.mjs --runtime=node && node config/scripts/diagnostics/terminal-transcripts/capture-agent-pty-transcript.mjs",
     "check:reliability-gates": "node config/scripts/static-analysis/reliability-policy/check-reliability-gates.mjs",
@@ -335,6 +335,7 @@
     "hast-util-from-html-isomorphic": "2.0.0",
     "hast-util-to-jsx-runtime": "2.3.7",
     "hast-util-to-text": "4.0.3",
+    "highlight.js": "11.11.1",
     "html-to-image": "^1.11.13",
     "husky": "^9.1.7",
     "i18next-cli": "1.74.2",
@@ -393,6 +394,7 @@
     "zustand": "^5.1.0"
   },
   "optionalDependencies": {
+    "@orca/windows-notifications": "workspace:*",
     "@orca/windows-registry": "workspace:*",
     "@orca/windows-security": "workspace:*",
     "@transcribe-cpp/darwin-arm64-metal": "0.4.1",

@@ -3,9 +3,9 @@ import type { OpenFile } from '@/store/slices/editor/types/open-file'
 import { useWorktreeHostConnection } from '@/lib/workspace/ownership/worktree-host-connection-phase'
 import { selectWorkspaceRuntimeEnvironmentId } from '@/lib/workspace/ownership/workspace-runtime-environment'
 import { useAppStateValue } from '@/store/retained-views/app-state-view'
-import type { WslHostConnectionState } from '../../../../../shared/wsl-host-types'
+import type { WslHostConnectionState } from '../../../../../shared/remote-runtime/wsl-hosts/wsl-host-types'
 import { displayIpcErrorMessage } from '@/runtime/errors/ipc-error'
-import { hasRuntimeRpcErrorCode } from '../../../../../shared/runtime-rpc-error-code'
+import { hasRuntimeRpcErrorCode } from '../../../../../shared/remote-runtime/rpc/runtime-rpc-error-code'
 import { isFileTooLargeMessage } from '../../../../../shared/file-write/file-write-disk-precondition'
 import {
   WORKTREE_HOST_SELECTOR_NOT_FOUND_CODE,

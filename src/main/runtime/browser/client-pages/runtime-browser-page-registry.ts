@@ -1,7 +1,7 @@
 import {
   sameRuntimeBrowserPlacement,
   type RuntimeBrowserClientPlacement
-} from '../../../../shared/runtime-browser-placement'
+} from '../../../../shared/browser/client-hosting/runtime-browser-placement'
 
 const DEFAULT_MAX_RUNTIME_BROWSER_PAGES = 256
 const MAX_IDENTITY_LENGTH = 256

@@ -1,5 +1,5 @@
 import type { AppStarSource } from '../../shared/gh-star-source'
-import type { StarNagPromptSource } from '../../shared/star-nag-telemetry'
+import type { StarNagPromptSource } from '../../shared/telemetry/star-nag-telemetry'
 
 export function getStarNagAppStarSource(source: StarNagPromptSource): AppStarSource {
   if (source === 'agent_value_moment' || source === 'onboarding_completed') {

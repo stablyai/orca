@@ -8,7 +8,7 @@ import type {
   RemoteServerUpdateInstallResult,
   RemoteServerUpdaterSnapshot,
   RemoteServerUpdateSupport
-} from '../../shared/remote-server-update'
+} from '../../shared/remote-runtime/host-catalog/remote-server-update'
 import type { ReleaseBuild, ReleaseChannel } from '../../shared/release-channel'
 import type { ReleaseBuildListOptions } from './releases/updater-release-build-cache'
 import { UpdaterSetup, type UpdaterSetupOptions } from './lifecycle/updater-setup'

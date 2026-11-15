@@ -3,11 +3,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   BROWSER_PASSWORDS_GUEST_CHANNELS,
   BROWSER_PASSWORDS_TO_GUEST_CHANNELS
-} from '../../../shared/browser-passwords-types'
+} from '../../../shared/browser/passwords/browser-passwords-types'
 import type {
   BrowserPasswordFillRequest,
   BrowserPasswordGuestEnable
-} from '../../../shared/browser-passwords-types'
+} from '../../../shared/browser/passwords/browser-passwords-types'
 import { installBrowserPasswordDetector } from './browser-password-detector'
 
 const CHANNEL = BROWSER_PASSWORDS_GUEST_CHANNELS

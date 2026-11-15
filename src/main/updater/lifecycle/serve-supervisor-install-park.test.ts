@@ -13,7 +13,7 @@ import {
   parseServeParkRecord,
   supervisorsDir,
   type ServeParkRecord
-} from '../../../shared/serve-bundle-coordination'
+} from '../../../shared/remote-runtime/serve-supervisor/serve-bundle-coordination'
 
 import {
   commitServeSupervisorPark,

@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef } from 'react'
 import { useAppStore } from '@/store/index'
 import { getIndexedAllWorktrees } from '@/store/slices/worktrees/listing/worktree-catalog-index'
 import { persistWorktreeSortOrderByHost } from '@/lib/workspace/persistence/worktree-sort-order-persistence'
-import type { Repo } from '../../../../../../shared/repo-types'
+import type { Repo } from '../../../../../../shared/repository/repo-types'
 import {
   NO_LIVE_SMART_SORT_SOURCES,
   rankWorktreesForSort

@@ -104,6 +104,12 @@ def ensure_desktop_bus():
     missing = [name for name in ("XDG_RUNTIME_DIR", "DBUS_SESSION_BUS_ADDRESS") if not os.environ.get(name)]
     if missing:
         raise RuntimeError("Linux computer use requires an active desktop session; missing " + ", ".join(missing))
+    # Why init explicitly: without a bus, libatspi's first call g_error()s and aborts past Python's handlers.
+    if Atspi.init() > 1:
+        raise RuntimeError(
+            "unsupported_capability: Linux computer use can't reach the AT-SPI accessibility bus, so nothing was "
+            "sent. Install at-spi2-core, or restart its bus with `systemctl --user restart at-spi-dbus-bus.service`, "
+            "then retry.")
 
 
 def desktop_root():

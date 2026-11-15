@@ -1,4 +1,4 @@
-import { windowsLongPathGitArgs } from '../../../../shared/windows-long-path-git-args'
+import { windowsLongPathGitArgs } from '../../../../shared/git/compatibility/windows-long-path-git-args'
 import { checkoutWorkersGitArgs } from './checkout-workers-git-args'
 import { gitExecFileAsync } from '../../command-runner/git-exec-file'
 import { addWorktree, unsetWorktreeCreationBase } from './worktree-add'

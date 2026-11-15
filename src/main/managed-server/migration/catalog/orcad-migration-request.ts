@@ -2,9 +2,9 @@ import { AUTOMATION_EXTRA_AGENT_ARGS_RUNTIME_CAPABILITY } from '../../../../shar
 import { pairedRuntimeConnectionFromOffer } from '../../../../shared/remote-runtime/pairing/paired-runtime-connection'
 import type { parsePairingCode } from '../../../../shared/remote-runtime/pairing/pairing'
 import { ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES } from '../../../../shared/electron-remote-runtime-client-capabilities'
-import { ORCAD_MIGRATION_CATALOG_RUNTIME_CAPABILITY } from '../../../../shared/orcad-runtime-capabilities'
+import { ORCAD_MIGRATION_CATALOG_RUNTIME_CAPABILITY } from '../../../../shared/remote-runtime/protocol/orcad-runtime-capabilities'
 import { sendRemoteRuntimeRequestOnSocket } from '../../../../shared/remote-runtime/requests/remote-runtime-request-socket'
-import type { RuntimeRpcResponse } from '../../../../shared/runtime-rpc-envelope'
+import type { RuntimeRpcResponse } from '../../../../shared/remote-runtime/rpc/runtime-rpc-envelope'
 
 /** Missing capability/method is definite refusal; other failures require catalog re-read because a lost reply may hide staged state. */
 export const ORCAD_MIGRATION_DESTINATION_UNSUPPORTED = 'orcad_migration_destination_unsupported'
