@@ -1,11 +1,11 @@
-import type { AgentJournalMessageItem } from './agent-session-journal-types'
-import type { AgentSessionExecutionOptions } from './agent-session-execution-options'
+import type { AgentJournalMessageItem } from './agent-session/journal/agent-session-journal-types'
+import type { AgentSessionExecutionOptions } from './agent-session/options/protocol/agent-session-execution-options'
+import type { AgentSessionQueuedMessage } from './agent-session/requests/agent-session-queued-message-wire'
 import type {
-  AgentSessionQueuedMessage,
   AgentSessionSlashCommand,
   AgentSessionCommandsResult,
   AgentSessionSubscribeEvent
-} from './agent-session-wire'
+} from './agent-session/agent-session-wire'
 
 type StoredQueuedMessage = {
   messageId: string
@@ -18,15 +18,18 @@ export type MobileQueuedEditHostFixture = {
   sessionId: string
   start: () => Promise<string>
   insert: (input: Omit<StoredQueuedMessage, 'position'>) => Promise<StoredQueuedMessage>
-  read: (messageId: string) => StoredQueuedMessage | null
+  read: (messageId: string) => Promise<StoredQueuedMessage | null>
   published: (messageId: string) => Promise<AgentSessionQueuedMessage>
   request: (method: string, params: unknown) => Promise<unknown>
   restart: () => Promise<void>
   dispose: () => Promise<void>
 }
 
+export type MobileQueuedEditHostClockFixtureModule = {
+  HOST_TEST_NOW: number
+}
+
 export type MobileQueuedEditHostFixtureModule = {
-  now: number
   createMobileQueuedEditHostFixture: () => Promise<MobileQueuedEditHostFixture>
 }
 

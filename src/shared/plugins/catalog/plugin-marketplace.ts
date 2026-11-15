@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { safePluginDisplayText } from '../manifest/plugin-display-text'
 import { isAllowedPluginGitUrl } from '../installation/plugin-install-lockfile'
 import { isQualifiedPluginKey } from '../manifest/plugin-manifest'
 import { pluginCatalogReleaseSchema } from './plugin-catalog-release'
@@ -105,7 +106,7 @@ export const catalogV2GitSourceSchema = z
 const QUALIFIED_PLUGIN_KEY_RE = /^[a-z0-9]+(?:-[a-z0-9]+)*\.[a-z0-9]+(?:-[a-z0-9]+)*$/
 
 export const marketplaceEntryFields = {
-  /** Canonical `<publisher>.<id>` identity expected in the source manifest. */
+  /** Canonical `<publisher>.<id>` install identity; the manifest must carry the same `id`. */
   id: z
     .string()
     .regex(QUALIFIED_PLUGIN_KEY_RE, 'invalid qualified plugin key')
@@ -115,16 +116,13 @@ export const marketplaceEntryFields = {
     )
     .meta(
       pluginFieldDoc(
-        "`<publisher>.<id>`, matching the plugin's manifest. Each half is at most 64 characters, and the reserved names `constructor` and `prototype` are refused.",
+        "`<publisher>.<id>`: the publisher is the repository owner, lowercased (Orca installs under this key, whatever the manifest's deprecated `publisher` says), and the id is the manifest's `id`. Each half is at most 64 characters, and the reserved names `constructor` and `prototype` are refused.",
         NEXT,
         ['acme.gleam-syntax']
       )
     ),
   source: pluginMarketplaceGitSourceSchema,
-  description: z
-    .string()
-    .min(1)
-    .max(4_096)
+  description: safePluginDisplayText(z.string().min(1).max(4_096))
     .optional()
     .meta(pluginFieldDoc('Listing text shown in the marketplace.', NEXT)),
   categories: z
@@ -187,11 +185,9 @@ const pluginMarketplaceListingEntrySchema = z
   .superRefine(rejectDuplicateCategories)
 
 export const marketplaceHeaderFields = {
-  name: z
-    .string()
-    .min(1)
-    .max(256)
-    .meta(pluginFieldDoc('Catalog display name.', NEXT, ['Orca Plugins'])),
+  name: safePluginDisplayText(z.string().min(1).max(256)).meta(
+    pluginFieldDoc('Catalog display name.', NEXT, ['Orca Plugins'])
+  ),
   owner: marketplaceOwnerSchema.meta(
     pluginFieldDoc('Account that publishes the catalog.', NEXT, ['stablyai'])
   )

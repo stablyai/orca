@@ -1,4 +1,4 @@
-import type { NativeChatBlock } from '../../native-chat-types'
+import type { NativeChatBlock } from '../native-chat-types'
 import { summarizeToolInput } from './native-chat-tool-summary'
 
 /** How much of an anonymous result's output identifies it, so a long log is never hashed whole. */

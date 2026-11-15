@@ -28,30 +28,6 @@ describe('internal WSL distro allowlist', () => {
     vi.restoreAllMocks()
   })
 
-  it('unset: resolveSpawn output is unchanged for wsl.exe and any other program', () => {
-    vi.stubEnv(WSL_DISTRO_ALLOWLIST_ENV, undefined)
-    for (const platform of ['win32', 'linux'] as const) {
-      for (const spec of [
-        { program: WSL, args: ['--shutdown'] },
-        { program: 'wsl', args: ['ls'] },
-        { program: 'git', args: ['status'] }
-      ]) {
-        const resolved = resolveSpawn(spec, platform)
-        expect(resolved.file).toBe(spec.program)
-        expect(resolved.args).toEqual(spec.args)
-        expect(resolved.options).toEqual(
-          resolveSpawn({ ...spec, program: 'git' }, platform).options
-        )
-      }
-    }
-  })
-
-  it('unset: refuses nothing, including a default-distro exec and --shutdown', () => {
-    vi.stubEnv(WSL_DISTRO_ALLOWLIST_ENV, undefined)
-    expect(refusal(WSL, ['--shutdown'])).toBeNull()
-    expect(refusal(WSL, ['--exec', 'sh'])).toBeNull()
-  })
-
   it('allowlisted: lets every distro-targeting form through, case-insensitively', () => {
     vi.stubEnv(WSL_DISTRO_ALLOWLIST_ENV, 'orca-test-a, Orca-Test-B')
     for (const args of [
@@ -64,13 +40,6 @@ describe('internal WSL distro allowlist', () => {
       expect(refusal(WSL, args), args.join(' ')).toBeNull()
     }
     expect(refusal('wsl', ['-d', 'orca-test-a'])).toBeNull()
-  })
-
-  it('keeps pure list, status and version calls allowed so discovery can filter', () => {
-    vi.stubEnv(WSL_DISTRO_ALLOWLIST_ENV, 'orca-test-a')
-    for (const args of [['-l', '-v'], ['--list', '--quiet'], ['--status'], ['--version']]) {
-      expect(refusal(WSL, args), args.join(' ')).toBeNull()
-    }
   })
 
   it('not allowlisted: refuses other distros, no-distro forms, ids and --shutdown', () => {

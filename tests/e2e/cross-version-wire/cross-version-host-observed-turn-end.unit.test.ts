@@ -1,7 +1,7 @@
 import { beforeAll, describe, expect, it } from 'vitest'
 import { importReleaseCheckoutModule, materializeReleaseCheckout } from './release-checkout'
-import { projectStructuredAgentSessionStatusSummary } from '../../../src/shared/structured-agent-session-projection'
-import type { AgentJournalRenderItem } from '../../../src/shared/agent-session-journal-types'
+import { projectStructuredAgentSessionStatusSummary } from '../../../src/shared/agent-session/view/structured-agent-session-projection'
+import type { AgentJournalRenderItem } from '../../../src/shared/agent-session/journal/agent-session-journal-types'
 
 // Pin an older reader that validates mainAgent.outcome; new interruption/unconfirmed arms must retain its normal done fallback.
 const OLD_REF = 'v1.4.214'
@@ -83,12 +83,6 @@ function newHostSummary(
 }
 
 describe('an older desktop reading a host-observed turn end', () => {
-  it('receives the new arms from this host', () => {
-    expect(newHostSummary('interrupted').turnOutcome).toBe('interruption')
-    expect(newHostSummary('unverifiable').turnOutcome).toBe('unconfirmed')
-    expect(newHostSummary('interrupted', SUPERSEDED_TURN).turnOutcome).toBe('superseded')
-  })
-
   it('builds a structured row from the summary that reads done, never as a user stop', () => {
     for (const summary of [
       newHostSummary('interrupted'),

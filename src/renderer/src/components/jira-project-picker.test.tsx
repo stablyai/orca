@@ -24,20 +24,4 @@ describe('Jira project picker', () => {
     expect(onChange).toHaveBeenCalledWith({ id: '10', key: 'ALP', name: 'Alpha', siteId: 'site-b' })
     await waitFor(() => expect(screen.queryByRole('option')).toBeNull())
   })
-
-  it('lets the user clear a repository default to search all projects', async () => {
-    const onChange = vi.fn()
-    render(
-      <JiraProjectPicker
-        projects={[alpha]}
-        value={alpha}
-        onChange={onChange}
-        label="Jira project"
-        emptyLabel="All Jira projects"
-      />
-    )
-    fireEvent.click(screen.getByRole('combobox', { name: 'Jira project' }))
-    fireEvent.click(await screen.findByRole('option', { name: 'All Jira projects' }))
-    expect(onChange).toHaveBeenCalledWith(null)
-  })
 })

@@ -1,20 +1,24 @@
 import type { GlobalSettings } from './global-settings-types'
 import type { NotificationSettings } from './notification-settings-types'
-import type { VoiceSettings } from './speech-types'
-import { DEFAULT_TERMINAL_FONT_WEIGHT, DEFAULT_TERMINAL_FONT_WEIGHT_BOLD } from './terminal-fonts'
-import { getDefaultTerminalQuickCommands } from './terminal-quick-commands'
-import { TASK_PROVIDERS } from './task-providers'
-import { getDefaultSourceControlAiSettings } from './source-control-ai-settings'
+import type { VoiceSettings } from './speech/speech-types'
+import { DEFAULT_TERMINAL_FONT_WEIGHT_BOLD } from './terminal/appearance/terminal-fonts'
+import { getDefaultTerminalQuickCommands } from './terminal/quick-commands/terminal-quick-commands'
+import { TASK_PROVIDERS } from './work-items/task-providers'
+import { getDefaultSourceControlAiSettings } from './source-control/ai/settings/source-control-ai-settings'
 import { DEFAULT_APP_ICON_ID } from './app-icon'
 import { DEFAULT_OPEN_IN_APPLICATIONS } from './open-in-applications'
-import { DEFAULT_DISABLED_TUI_AGENTS } from './tui-agent-selection'
+import { DEFAULT_NATIVE_CHAT_IDLE_STOP_MINUTES } from './native-chat/native-chat-idle-stop'
+import { DEFAULT_BROWSER_MEMORY_SAVER_HOURS } from './browser/guest-lifecycle/browser-memory-saver'
+import { DEFAULT_DISABLED_TUI_AGENTS } from './agent-launch/catalog/tui-agent-selection'
 import { UI_LANGUAGE_SYSTEM } from './ui-language'
 import {
   DEFAULT_LEFT_SIDEBAR_TINT_COLOR,
   DEFAULT_LEFT_SIDEBAR_TINT_OPACITY
 } from './left-sidebar-appearance'
-import { DEFAULT_SOURCE_CONTROL_GROUP_ORDER } from './source-control-group-order'
-import { DESKTOP_TERMINAL_SCROLLBACK_ROWS_DEFAULT } from './terminal-scrollback-policy'
+import { DEFAULT_SOURCE_CONTROL_GROUP_ORDER } from './source-control/listing/source-control-group-order'
+import { DESKTOP_TERMINAL_SCROLLBACK_ROWS_DEFAULT } from './terminal/replay/terminal-scrollback-policy'
+import { NESTED_WORKER_MAX_DEPTH_DEFAULT } from './orchestration/workers/nested-worker-depth'
+import { getDefaultWorkspaceCleanupRules } from './workspace-cleanup/workspace-cleanup-policy'
 
 export function buildDefaultSettings(args: {
   workspaceDir: string
@@ -23,6 +27,8 @@ export function buildDefaultSettings(args: {
   primarySelectionMiddleClickPaste: boolean
   primarySelectionDefaultedForLinux: boolean
   terminalFontFamily: string
+  terminalFontWeight: number
+  terminalFontWeightWindowsRegular?: GlobalSettings['terminalFontWeightWindowsRegular']
   terminalInactivePaneOpacity: number
   terminalRightClickToPaste: boolean
   notifications: NotificationSettings
@@ -31,6 +37,7 @@ export function buildDefaultSettings(args: {
   return {
     workspaceDir: args.workspaceDir,
     worktreeVisibilityDefaults: { external: 'hide' },
+    workspaceCleanupPolicy: getDefaultWorkspaceCleanupRules(),
     nestWorkspaces: true,
     workspaceDirHistory: [],
     refreshLocalBaseRefOnWorktreeCreate: false,
@@ -44,6 +51,8 @@ export function buildDefaultSettings(args: {
     pluginAppTheme: null,
     pluginAppThemeLight: null,
     pluginAppThemeDark: null,
+    editorThemeLight: null,
+    editorThemeDark: null,
     pluginIconTheme: null,
     leftSidebarAppearanceMode: 'default',
     leftSidebarTintColor: DEFAULT_LEFT_SIDEBAR_TINT_COLOR,
@@ -53,12 +62,15 @@ export function buildDefaultSettings(args: {
     appIcon: DEFAULT_APP_ICON_ID,
     appFontFamily: args.appFontFamily,
     editorAutoSave: false,
+    editorFormatOnSave: false,
+    editorInsertFinalNewline: false,
     editorAutoSaveDelayMs: args.editorAutoSaveDelayMs,
     editorMinimapEnabled: false,
     // Why empty: the editor keeps following the terminal font unless the user opts in.
     editorFontFamily: '',
     editorWordWrap: true,
     richMarkdownSpellcheckEnabled: true,
+    markdownDefaultViewMode: 'rich',
     markdownReviewToolsEnabled: true,
     primarySelectionMiddleClickPaste: args.primarySelectionMiddleClickPaste,
     primarySelectionMiddleClickPasteDefaultedForLinux: args.primarySelectionDefaultedForLinux,
@@ -66,7 +78,8 @@ export function buildDefaultSettings(args: {
       args.primarySelectionMiddleClickPaste,
     terminalFontSize: 14,
     terminalFontFamily: args.terminalFontFamily,
-    terminalFontWeight: DEFAULT_TERMINAL_FONT_WEIGHT,
+    terminalFontWeight: args.terminalFontWeight,
+    terminalFontWeightWindowsRegular: args.terminalFontWeightWindowsRegular,
     terminalFontWeightBold: DEFAULT_TERMINAL_FONT_WEIGHT_BOLD,
     terminalLineHeight: 1,
     terminalScrollSensitivity: 1.15,
@@ -85,7 +98,9 @@ export function buildDefaultSettings(args: {
     terminalThemeDark: 'Ghostty Default Style Dark',
     terminalDividerColorDark: '#3f3f46',
     terminalUseSeparateLightTheme: true,
+    terminalColorOverridesSplit: true,
     terminalThemeLight: 'Builtin Tango Light',
+    claudeCodeThemeSync: false,
     terminalCustomThemes: [],
     terminalDividerColorLight: '#d4d4d8',
     terminalInactivePaneOpacity: args.terminalInactivePaneOpacity,
@@ -108,7 +123,10 @@ export function buildDefaultSettings(args: {
     terminalQuickCommands: getDefaultTerminalQuickCommands(),
     // Why: opt-in only, matching Ghostty's default (upgrades never enable it unexpectedly).
     terminalFocusFollowsMouse: false,
+    // Why: xterm's default; turning it off keeps a scrolled-up reading position while typing.
+    terminalScrollOnUserInput: true,
     windowBackgroundBlur: false,
+    reduceVisualEffects: false,
     minimizeToTrayOnClose: false,
     // Why: default-on everywhere so it round-trips across platforms; only darwin acts on it.
     showMenuBarIcon: true,
@@ -132,12 +150,17 @@ export function buildDefaultSettings(args: {
     terminalLinkActionPopoverEnabled: true,
     terminalLinkClickBehavior: 'actions',
     terminalUrlMiddleClickBehavior: 'open',
-    experimentalNativeChat: false,
-    experimentalBrowserExtensions: false,
-    nativeChatResumeWorkOnRestart: false,
+    browserExtensionsEnabled: true,
+    agentDefaultSurface: 'terminal',
+    nativeChatResumeWorkOnRestart: true,
     nativeChatQueueFollowUps: true,
+    nativeChatAutoContinueAfterUsageLimit: false,
+    nativeChatIdleStopMinutes: DEFAULT_NATIVE_CHAT_IDLE_STOP_MINUTES,
     nativeChatInlineVisuals: true,
     nativeChatLinkPreviews: true,
+    nativeChatOpenedPullRequests: true,
+    nativeChatScrollToLatestOnSend: true,
+    nativeChatTurnDiffSummary: true,
     nativeChatInheritShellEnvironment: true,
     nativeChatShellEnvironmentVariables: [],
     nativeChatSessionOptions: {},
@@ -150,16 +173,18 @@ export function buildDefaultSettings(args: {
     sourceControlViewMode: 'list',
     sourceControlGroupOrder: DEFAULT_SOURCE_CONTROL_GROUP_ORDER,
     sourceControlCompareAgainstUpstream: false,
+    prAutoRefresh: 'default',
     showTitlebarAppName: true,
     showTasksButton: true,
     showAutomationsButton: true,
     artifactsEnabled: true,
-    artifactSharingEnabled: false,
+    // New profiles only; stored profiles without the key load as false (normalizeLoadedGlobalSettings).
+    artifactSharingEnabled: true,
     agentSkillSharingEnabled: false,
-    nestedWorkerMaxDepth: 1,
-    orchestrationChatErrorEscalationEnabled: true,
-    orchestrationHeartbeatsEnabled: true,
-    orchestrationHeartbeatIntervalMinutes: 5,
+    nestedWorkerMaxDepth: NESTED_WORKER_MAX_DEPTH_DEFAULT,
+    nestedWorkerMaxDepthDefaultedToFour: true,
+    orchestrationWorkerAutoReleaseEnabled: true,
+    orchestrationCoordinatorApprovalsEnabled: false,
     showArtifactsButton: false,
     showSkillsButton: false,
     showMobileButton: true,
@@ -194,6 +219,7 @@ export function buildDefaultSettings(args: {
     terminalSshViewParking: true,
     terminalHiddenWorktreeRetentionBudget: true,
     browserGuestWorktreeRetentionBudget: true,
+    browserMemorySaverHours: DEFAULT_BROWSER_MEMORY_SAVER_HOURS,
     terminalMainSideEffectAuthority: true,
     terminalHiddenDeliveryGate: true,
     terminalModelQueryAuthority: true,
@@ -226,9 +252,11 @@ export function buildDefaultSettings(args: {
     minimaxEndpoint: 'overseas',
     zcodePlanSite: 'zai',
     geminiCliOAuthEnabled: false,
+    claudeOAuthUsageEnabled: true,
     agentCmdOverrides: {},
     // Arguments hold only the user's own text; the permission flag comes from the choice below.
     agentDefaultArgs: {},
+    agentLaunchChoices: {},
     agentDefaultEnv: {},
     agentYoloDefaultsMigrated: true,
     agentPermissionDefault: 'full-access',
@@ -236,6 +264,7 @@ export function buildDefaultSettings(args: {
     agentStatusHooksEnabled: true,
     claudeSubagentNavigationEnabled: true,
     agentWorkspaceTrustEnabled: true,
+    agentWorkspaceTrustExistingReposMigrated: true,
     codexTerminalServerIsolation: true,
     codexSharedServerWarning: true,
     tabAutoGenerateTitle: false,
@@ -268,16 +297,12 @@ export function buildDefaultSettings(args: {
     experimentalEphemeralVms: false,
     experimentalConnectors: false,
     experimentalWslHosts: false,
+    experimentalOrchestrationPanel: false,
     compactWorktreeCards: false,
     // Why: local desktop stays the default until the user picks a saved runtime environment.
     activeRuntimeEnvironmentId: null,
     // Why: hydrate a stable empty shape so renderer optional-chained reads never hit undefined.
-    githubProjects: {
-      pinned: [],
-      recent: [],
-      lastViewByProject: {},
-      activeProject: null
-    },
+    githubProjects: { pinned: [], recent: [], lastViewByProject: {}, activeProject: null },
     // Why: keep agent/model maps empty so first use follows the default agent's model, not a frozen stale choice.
     commitMessageAi: {
       enabled: true,
@@ -291,6 +316,7 @@ export function buildDefaultSettings(args: {
       customAgentCommand: ''
     },
     sourceControlAi: getDefaultSourceControlAiSettings(),
-    voice: args.voice
+    voice: args.voice,
+    voiceDictationModeDefaultedToAuto: true
   }
 }

@@ -7,19 +7,22 @@ import {
   resolveDesktopAuthorizedPath,
   resolveLocalRenamePaths,
   resolveLocalRequestPath
-} from '../local-file-access-resolution'
-import type { LocalFileAccess } from '../../../shared/local-file-access'
+} from './access/local-file-access-resolution'
+import type { LocalFileAccess } from '../../../shared/file-access/local-file-access'
 import { SshHostNotServedError } from '../../providers/ssh-host-not-served-error'
 import { resolveLocalDroppedPathsForAgent } from '../dropped-path-resolution'
-import type { SshMutationExpectation } from '../../../shared/ssh-types'
-import { assertSshMutationExpectation } from '../../ssh/connection/ssh-connection-generation'
-import { renameLocalPathSerializedByDestination } from '../../destination-serialized-local-rename'
+import type { SshMutationExpectation } from '../../../shared/remote-runtime/ssh/ssh-types'
+import { assertSshMutationExpectation } from '../../ssh/connection/authority/ssh-connection-generation'
+import { renameLocalPathSerializedByDestination } from '../../filesystem/destination-serialized-local-rename'
 import { assertNotExists, rethrowWithUserMessage } from './filesystem-create-path-guards'
 import type {
   ImportItemResult,
-  ResolveDroppedPathsResult,
-  StagedExternalImportSource
-} from '../../../shared/filesystem-import-result-types'
+  ResolveDroppedPathsResult
+} from '../../../shared/file-import/filesystem-import-result'
+import type {
+  StagedRuntimeUploadSource as StagedExternalImportSource,
+  RuntimeUploadFileStreamRequest
+} from '../../../shared/file-import/runtime-upload-staging-contract'
 import { importOneSource } from './filesystem-import-local'
 import {
   stagedRuntimeUploadByteLength,
@@ -28,9 +31,8 @@ import {
 import { streamExternalFileToRuntime } from '../runtime-upload-file-stream'
 import { abortWhenRendererGone } from '../renderer-lifetime-abort'
 import { sweepAbandonedRuntimeUploadTempPath } from '../runtime-upload-temp-sweep'
-import type { RuntimeUploadFileStreamRequest } from '../../../shared/runtime-upload-staging-contract'
-import { resolveEnvironment } from '../../../shared/runtime-environment-store'
-import { windowsFsPath } from '../../wsl/wsl-unc-drive-fs-path'
+import { resolveEnvironment } from '../../../shared/remote-runtime/host-store/runtime-environment-store'
+import { windowsFsPath } from '../../wsl/filesystem/wsl-unc-drive-fs-path'
 
 export function registerFilesystemMutationHandlers(store: Store): void {
   ipcMain.handle(
@@ -217,21 +219,21 @@ export function registerFilesystemMutationHandlers(store: Store): void {
     'fs:uploadExternalFileToRuntime',
     async (event, args: RuntimeUploadFileStreamRequest): Promise<{ byteLength: number }> => {
       const userDataPath = app.getPath('userData')
-      // Resolve selectors to the environment ID used by manual-disconnect checks.
-      const request = {
-        ...args,
-        environmentId: resolveEnvironment(userDataPath, args.environmentId).id
-      }
-      // Main-owned uploads must abort when the requesting renderer reloads or closes.
       const lifetime = abortWhenRendererGone(event.sender)
+      let request: RuntimeUploadFileStreamRequest | undefined
       try {
+        request = {
+          ...args,
+          environmentId: (await resolveEnvironment(userDataPath, args.environmentId)).id
+        }
+        lifetime.signal.throwIfAborted()
         return await streamExternalFileToRuntime({
           ...request,
           userDataPath,
           signal: lifetime.signal
         })
       } catch (error) {
-        if (lifetime.signal.aborted) {
+        if (lifetime.signal.aborted && request) {
           // The renderer cannot clean up its temp path after it disappears.
           await sweepAbandonedRuntimeUploadTempPath(userDataPath, request)
         }

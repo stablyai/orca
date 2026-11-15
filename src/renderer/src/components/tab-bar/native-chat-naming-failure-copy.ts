@@ -3,7 +3,7 @@ import {
   CHAT_NAMING_FAILURE_COPY as EN,
   type ChatNamingFailureCode
 } from '../../../../shared/chat-naming-failure-copy'
-import type { AgentSessionNamingError } from '../../../../shared/agent-session-wire'
+import type { AgentSessionNamingError } from '../../../../shared/agent-session/agent-session-wire'
 
 const COPY: Record<ChatNamingFailureCode, () => string> = {
   noName: () => translate('tabHoverCard.namingFailure.errors.noName', EN.noName),

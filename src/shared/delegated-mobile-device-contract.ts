@@ -1,4 +1,4 @@
-import { z } from 'zod'
+import * as z from 'zod'
 
 // Why: a paired desktop relays each of its phones to this host as an ordinary phone device it owns.
 export const DELEGATED_MOBILE_DEVICE_SYNC_METHOD = 'pairing.delegatedMobileDevice.sync'

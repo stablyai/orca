@@ -15,6 +15,7 @@ export type MobilePushApnsEnvironment = (typeof MOBILE_PUSH_APNS_ENVIRONMENTS)[n
 
 export type MobilePushFilter = {
   onlyWhenDesktopAway?: boolean
+  onlyWhenAgentNeedsInput?: boolean
   sound?: boolean
 }
 
@@ -53,6 +54,8 @@ function parseFilter(value: unknown): MobilePushFilter | null {
   const filter = value as Partial<MobilePushFilter>
   if (
     (filter.onlyWhenDesktopAway !== undefined && typeof filter.onlyWhenDesktopAway !== 'boolean') ||
+    (filter.onlyWhenAgentNeedsInput !== undefined &&
+      typeof filter.onlyWhenAgentNeedsInput !== 'boolean') ||
     (filter.sound !== undefined && typeof filter.sound !== 'boolean')
   ) {
     return null
@@ -60,6 +63,9 @@ function parseFilter(value: unknown): MobilePushFilter | null {
   return {
     ...(typeof filter.onlyWhenDesktopAway === 'boolean'
       ? { onlyWhenDesktopAway: filter.onlyWhenDesktopAway }
+      : {}),
+    ...(typeof filter.onlyWhenAgentNeedsInput === 'boolean'
+      ? { onlyWhenAgentNeedsInput: filter.onlyWhenAgentNeedsInput }
       : {}),
     ...(typeof filter.sound === 'boolean' ? { sound: filter.sound } : {})
   }

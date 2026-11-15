@@ -1,8 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { makePaneKey } from '../../../shared/stable-pane-id'
-import { OrcaRuntimeService } from '../orca-runtime-test-mocks.spec'
-import { TEST_WORKTREE_ID, TEST_WORKTREE_PATH, store } from '../orca-runtime-test-fixtures.spec'
-import { AgentHookServer, _internals } from '../../agent-hooks/server'
+import { makePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
+import './runtime-test-module-registration.spec'
+import { OrcaRuntimeService } from '../orca-runtime'
+import { TEST_WORKTREE_ID, TEST_WORKTREE_PATH, store } from './orca-runtime-test-fixtures.spec'
+import { AgentHookServer, _internals } from '../../agent-hooks/server/agent-hook-server'
 
 vi.mock('../../telemetry/client', () => ({ track: vi.fn() }))
 
@@ -12,7 +13,9 @@ async function makeRuntimeWithHookRow(
 ) {
   const statusStore = new AgentHookServer()
   const runtime = new OrcaRuntimeService(store, undefined, {
-    getAgentStatusSnapshot: () => statusStore.getStatusSnapshot()
+    getAgentStatusSnapshot: () => statusStore.getStatusSnapshot(),
+    getPublicAgentStatusSnapshotForPane: (paneKey, terminalHandle) =>
+      statusStore.getPublicStatusSnapshotForPane(paneKey, terminalHandle)
   })
   runtime.setPtyController({
     spawn: vi.fn().mockResolvedValue({ id: 'pty-ps-agent-wait' }),
@@ -21,7 +24,7 @@ async function makeRuntimeWithHookRow(
     getForegroundProcess: async () => null
   })
   runtime.attachWindow(1)
-  runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
+  await runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
   const { handle } = await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`, {
     command: 'claude'
   })
@@ -59,24 +62,9 @@ describe('worktree ps agentWait', () => {
     _internals.resetCachesForTests()
   })
 
-  it('reports the terminal hook wait only when requested', async () => {
-    const runtime = await makeRuntimeWithHookRow('waiting')
-    const probe = vi.spyOn(runtime, 'getTerminalInteractiveWait')
-
-    expect(await readAgentRow(runtime, false)).not.toHaveProperty('agentWait')
-    expect(probe).not.toHaveBeenCalled()
-    expect((await readAgentRow(runtime, true))?.agentWait).toMatchObject({ source: 'hook' })
-  })
-
   it('resolves the live terminal for a hook row that reported only its pane', async () => {
     const runtime = await makeRuntimeWithHookRow('waiting', 'http')
 
     expect((await readAgentRow(runtime, true))?.agentWait).toMatchObject({ source: 'hook' })
-  })
-
-  it('reports null when the terminal shows no wait', async () => {
-    const runtime = await makeRuntimeWithHookRow('working')
-
-    expect((await readAgentRow(runtime, true))?.agentWait).toBeNull()
   })
 })

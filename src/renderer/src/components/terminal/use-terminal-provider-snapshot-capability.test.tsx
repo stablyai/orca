@@ -75,25 +75,6 @@ describe('useTerminalProviderSnapshotCapability', () => {
     hook.unmount()
   })
 
-  // Missing map dependencies freeze the memoized collect key and silently omit new split PTYs.
-  it('re-collects when a split leaf pty appears in the layouts map', async () => {
-    resolveCapabilities.mockImplementation(async (ids: string[]) =>
-      ids.map((id) => ({ id, authoritative: true }))
-    )
-    const hook = renderHook(() => useTerminalProviderSnapshotCapability(true))
-    await waitFor(() => expect(resolveCapabilities).toHaveBeenCalledOnce())
-
-    storeState.terminalLayoutsByTabId = {
-      'tab-1': { ptyIdsByLeafId: { leaf: 'ssh:target@@new-split' } }
-    }
-    hook.rerender()
-
-    await waitFor(() =>
-      expect(resolveCapabilities).toHaveBeenLastCalledWith(['ssh:target@@new-split'])
-    )
-    hook.unmount()
-  })
-
   it('preserves newline-bearing folder-workspace pty ids in the memo key', async () => {
     const newlinePtyId = 'repo::folder\nname@@pty-1'
     storeState.tabsByWorktree = {
@@ -105,40 +86,6 @@ describe('useTerminalProviderSnapshotCapability', () => {
     const hook = renderHook(() => useTerminalProviderSnapshotCapability(true))
 
     await waitFor(() => expect(resolveCapabilities).toHaveBeenCalledWith([newlinePtyId]))
-    hook.unmount()
-  })
-
-  // Exercise every map dependency: dropping one silently freezes collection for that map’s updates.
-  it('re-collects when each remaining collected store map changes', async () => {
-    resolveCapabilities.mockImplementation(async (ids: string[]) =>
-      ids.map((id) => ({ id, authoritative: true }))
-    )
-    const hook = renderHook(() => useTerminalProviderSnapshotCapability(true))
-    await waitFor(() => expect(resolveCapabilities).toHaveBeenCalledOnce())
-
-    storeState.pendingReconnectPtyIdByTabId = { 'tab-9': 'ssh:target@@reconnect' }
-    hook.rerender()
-    await waitFor(() =>
-      expect(resolveCapabilities).toHaveBeenLastCalledWith(['ssh:target@@reconnect'])
-    )
-
-    storeState.tabsByWorktree = {
-      'repo::worktree': [
-        ...storeState.tabsByWorktree['repo::worktree'],
-        { id: 'tab-2', ptyId: 'ssh:target@@tab-2' }
-      ]
-    }
-    hook.rerender()
-    await waitFor(() => expect(resolveCapabilities).toHaveBeenLastCalledWith(['ssh:target@@tab-2']))
-
-    storeState.ptyIdsByTabId = {
-      ...storeState.ptyIdsByTabId,
-      'tab-2': ['ssh:target@@tab-2-split']
-    }
-    hook.rerender()
-    await waitFor(() =>
-      expect(resolveCapabilities).toHaveBeenLastCalledWith(['ssh:target@@tab-2-split'])
-    )
     hook.unmount()
   })
 

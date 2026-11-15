@@ -4,18 +4,18 @@ import { LoaderCircle, Pencil } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { useAppStore } from '@/store'
-import { useRepoAssignees } from '@/hooks/useIssueMetadata'
+import { useRepoAssignees } from '@/hooks/useGitHubRepoMetadata'
 import { useRepoAssigneesBySlug } from '@/hooks/useGitHubSlugMetadata'
-import { getGitHubPRReviewerRows } from '../../../../../shared/github/pr-reviewer-display'
+import { getGitHubPRReviewerRows } from '../../../../../shared/github/pull-requests/pr-reviewer-display'
 import {
   filterGitHubPRReviewerCandidates,
   getGitHubPRReviewerQueryState
 } from '@/components/github/github-pr-reviewer-candidate-filter'
-import type { GitHubAssignableUser } from '../../../../../shared/github/pull-request-types'
-import type { GitHubWorkItem } from '../../../../../shared/github/work-item-types'
-import type { TaskSourceContext } from '../../../../../shared/task-source-context'
-import { translate } from '@/i18n/i18n'
-import { getGitHubRepoRoutingTarget } from '@/lib/github-source-runtime-context'
+import type { GitHubAssignableUser } from '../../../../../shared/github/pull-requests/pull-request-types'
+import type { GitHubWorkItem } from '../../../../../shared/github/work-items/work-item-types'
+import type { TaskSourceContext } from '../../../../../shared/work-items/task-source-context'
+import { useTranslate } from '@/i18n/use-translate'
+import { getGitHubRepoRoutingTarget } from '@/lib/work-items/github/github-source-runtime-context'
 import { resolvePullRequestRepo } from '@/components/github/github-work-item-identity'
 import { mergeReviewerSuggestions } from '@/components/github/work-item-state-presentation'
 import type { GitHubItemDialogProjectOrigin } from '../load-item-details/github-item-dialog-types'
@@ -29,7 +29,8 @@ export function PRReviewersPanel({
   repoPath,
   sourceContext,
   projectOrigin,
-  onReviewersRequested
+  onReviewersRequested,
+  onMutated
 }: {
   item: GitHubWorkItem
   loading: boolean
@@ -37,7 +38,9 @@ export function PRReviewersPanel({
   sourceContext?: TaskSourceContext | null
   projectOrigin?: GitHubItemDialogProjectOrigin
   onReviewersRequested: (reviewRequests: GitHubAssignableUser[]) => void
+  onMutated: () => void
 }): React.JSX.Element {
+  const t = useTranslate()
   const [open, setOpen] = useState(false)
   const [reviewerInput, setReviewerInput] = useState('')
   const [activeReviewerCursor, setActiveReviewerCursor] = useState({
@@ -139,7 +142,7 @@ export function PRReviewersPanel({
   const reviewerMetadataByPath = useRepoAssignees(
     open && !reviewRepo ? repoPath : null,
     open && !reviewRepo ? item.repoId : null,
-    { target: ownerTarget }
+    { target: ownerTarget, ownerRepo: reviewRepo }
   )
   const reviewerMetadata = reviewRepo ? reviewerMetadataBySlug : reviewerMetadataByPath
   const displayItem = { ...item, reviewRequests: localReviewRequests }
@@ -246,7 +249,8 @@ export function PRReviewersPanel({
     setLocalReviewRequests,
     setReviewerInput,
     patchWorkItem,
-    onReviewersRequested
+    onReviewersRequested,
+    onMutated
   }
 
   const handleRequestReview = async (requestedLogins?: string[]): Promise<void> => {
@@ -276,13 +280,13 @@ export function PRReviewersPanel({
   return (
     <section>
       <div className="mb-2 flex items-center justify-between text-[11px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">
-        <span>{translate('auto.components.GitHubItemDialog.dc8a092c57', 'Reviewers')}</span>
+        <span>{t('auto.components.GitHubItemDialog.dc8a092c57', 'Reviewers')}</span>
         <Popover open={open} onOpenChange={handleReviewerPickerOpenChange}>
           <PopoverTrigger asChild>
             <button
               type="button"
               disabled={submitting || !canRequestReview}
-              aria-label={translate('auto.components.GitHubItemDialog.934add88b6', 'Reviewer')}
+              aria-label={t('auto.components.GitHubItemDialog.934add88b6', 'Reviewer')}
               className="rounded p-0.5 text-muted-foreground transition hover:bg-accent hover:text-foreground disabled:opacity-50"
             >
               {submitting ? (
@@ -307,11 +311,11 @@ export function PRReviewersPanel({
                 value={reviewerInput}
                 onChange={(event) => setReviewerInput(event.target.value)}
                 disabled={submitting || !canRequestReview}
-                placeholder={translate(
+                placeholder={t(
                   'auto.components.GitHubItemDialog.bb42774171',
                   'Type or choose a user'
                 )}
-                aria-label={translate('auto.components.GitHubItemDialog.934add88b6', 'Reviewer')}
+                aria-label={t('auto.components.GitHubItemDialog.934add88b6', 'Reviewer')}
                 aria-expanded={open}
                 aria-haspopup="listbox"
                 className="h-8 min-w-0 cursor-text rounded-md border-border/50 bg-background text-xs"

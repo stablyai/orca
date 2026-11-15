@@ -1,5 +1,5 @@
 import { Plus } from 'lucide-react'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import type { TerminalQuickCommandHost } from '@/hooks/use-terminal-quick-command-hosts'
 
 export function TabBarQuickCommandAddActions({
@@ -9,6 +9,7 @@ export function TabBarQuickCommandAddActions({
   hosts: readonly TerminalQuickCommandHost[]
   onAdd: (hostId: TerminalQuickCommandHost['hostId']) => void
 }): React.JSX.Element {
+  const t = useTranslate()
   return (
     <div className="border-t border-border/50 p-1">
       {hosts.map((host) => (
@@ -20,11 +21,8 @@ export function TabBarQuickCommandAddActions({
         >
           <Plus className="size-3.5" />
           {hosts.length === 1
-            ? translate(
-                'auto.components.tab.bar.TabBarQuickCommandAddActions.45a2f36d51',
-                'Command'
-              )
-            : translate(
+            ? t('auto.components.tab.bar.TabBarQuickCommandAddActions.45a2f36d51', 'Command')
+            : t(
                 'auto.components.tab.bar.TabBarQuickCommandAddActions.b856c833ae',
                 'Command on {{value0}}',
                 { value0: host.label }

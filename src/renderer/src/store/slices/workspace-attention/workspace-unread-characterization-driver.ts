@@ -1,6 +1,5 @@
-import type { Worktree } from '../../../../../shared/worktree/types'
 import { applyAgentAttention, resolveAgentAttention } from '@/attention/agent-attention-policy'
-import { createTerminalAttentionSurface } from '@/components/terminal-pane/terminal-attention-surface'
+import { createTerminalAttentionSurface } from '@/components/terminal-pane/notifications/terminal-attention-surface'
 import { acknowledgeViewedAutoAckTarget } from '@/hooks/agent-auto-ack-surfaces'
 import {
   screenOf,
@@ -10,7 +9,7 @@ import {
 
 // Replay production events here so call-site rewiring changes only the driver, preserving scenario expectations.
 
-/** pane-pty-visibility-bind.ts onBell and parked-terminal-byte-watcher.ts onBell. */
+/** terminal-bell-completion-arbitration.ts onBell and parked-terminal-byte-watcher.ts onBell. */
 export function ringBell(store: AttentionStore, target: PaneTarget): void {
   store.getState().markTerminalBell(target)
 }
@@ -52,14 +51,6 @@ export function pointerDownInTab(
 /** Orca's window gains or loses visibility+focus. */
 export function setWindowOnScreen(store: AttentionStore, onScreen: boolean): void {
   screenOf(store).setWindowOnScreen(onScreen)
-}
-
-/** Sidebar quick action and context menu "Mark as read/unread". */
-export function toggleUnreadByUser(
-  store: AttentionStore,
-  row: Pick<Worktree, 'id' | 'hostId' | 'isUnread'>
-): void {
-  store.getState().setWorkspaceUnreadByUser(row.id, !row.isUnread, row.hostId ?? 'local')
 }
 
 /** on-screen-attention-scan: the viewed terminal tab's agent is acknowledged (markers are the scan's). */

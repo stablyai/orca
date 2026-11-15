@@ -1,21 +1,13 @@
-import type { AgentJournalMessageItem } from './agent-session-journal-types'
+import type { AgentJournalMessageItem } from './agent-session/journal/agent-session-journal-types'
 import type {
   AgentSessionQueuedMessage,
   AgentSessionQueuedMessageEditHoldResult,
   AgentSessionQueuedMessageUpdateResult
-} from './agent-session-wire'
+} from './agent-session/requests/agent-session-queued-message-wire'
 import type { QueuedMessageEdit } from './queued-message-edit'
 
 type LeaseKey = { callerKey: string; editId: string }
 type Update = QueuedMessageEdit & { messageId: string; expectedBodyFingerprint: string }
-type DecisionRow = Pick<AgentSessionQueuedMessage, 'messageId' | 'position' | 'body' | 'state'> & {
-  fingerprint: string
-  holdReason: null
-  returnedReason: null
-  returnedRejection: null
-  consumedAs: null
-  queuedAt: null
-}
 
 export type QueuedEditHostFixtureModule = {
   queuedEditHost: (
@@ -34,17 +26,4 @@ export type QueuedEditHostFixtureModule = {
       dispose: () => void
     }
   }
-  queuedMessageUpdateDecision: (
-    row: DecisionRow | null,
-    sessionId: string,
-    input: Update,
-    readsImageCards?: boolean
-  ) =>
-    | AgentSessionQueuedMessageUpdateResult
-    | {
-        status: 'ready'
-        body: AgentJournalMessageItem
-        previous: AgentJournalMessageItem
-        fingerprint: string
-      }
 }

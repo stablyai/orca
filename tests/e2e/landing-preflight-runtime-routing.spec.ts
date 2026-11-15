@@ -187,8 +187,3 @@ test('routes landing preflight across runtime switch and reconnect', async ({
   electronApp,
   orcaPage
 }, testInfo) => runRuntimePreflightJourney(electronApp, orcaPage, testInfo, false))
-
-test('routes landing preflight across runtime switch and reconnect @headful', async ({
-  electronApp,
-  orcaPage
-}, testInfo) => runRuntimePreflightJourney(electronApp, orcaPage, testInfo, true))

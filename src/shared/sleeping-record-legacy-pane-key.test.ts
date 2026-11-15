@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { SleepingAgentSessionRecord } from './agent-session-resume'
+import type { SleepingAgentSessionRecord } from './agent-session/lifecycle/agent-session-resume'
 import { findLegacyNumericSleepingRecord } from './sleeping-record-legacy-pane-key'
 import { worktreeIdsEqual } from './worktree/id'
 

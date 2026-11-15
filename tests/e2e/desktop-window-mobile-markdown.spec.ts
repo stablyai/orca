@@ -1,6 +1,6 @@
 // Phone reads/saves use disk even when desktop has unsaved text; preserve the desktop edit and show its changed-on-disk banner.
 import { existsSync, readFileSync, rmSync } from 'node:fs'
-import type { RuntimeMobileSessionTabsResult } from '../../src/shared/runtime-session-contracts'
+import type { RuntimeMobileSessionTabsResult } from '../../src/shared/remote-runtime/session-graph/runtime-session-contracts'
 import type {
   RuntimeMarkdownReadTabResult,
   RuntimeMarkdownSaveTabResult

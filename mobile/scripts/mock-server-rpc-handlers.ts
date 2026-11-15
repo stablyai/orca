@@ -6,9 +6,10 @@ import {
 import {
   applyTerminalQuickCommandMutation,
   type TerminalQuickCommandMutation
-} from '../../src/shared/terminal-quick-commands'
-import type { TerminalQuickCommand } from '../../src/shared/terminal-quick-command-types'
+} from '../../src/shared/terminal/quick-commands/terminal-quick-commands'
+import type { TerminalQuickCommand } from '../../src/shared/terminal/quick-commands/terminal-quick-command-types'
 import { handleMockFilePreviewRequest } from './mock-server-file-preview-data'
+import { handleMockForkedChatsRequest } from './mock-server-forked-chats-scenario'
 import { handleMockGitRequest } from './mock-server-git-state'
 import { handleMockAccountRequest } from './mock-server-account-rpc'
 import { handleMockNativeChatRequest } from './mock-server-native-chat-scenario'
@@ -124,6 +125,7 @@ export function handleRequest(
 
   // Each returns false for methods it does not own; first owner wins.
   if (
+    handleMockForkedChatsRequest(request, respond, success) ||
     handleMockGitRequest(request, respond, success) ||
     handleMockFilePreviewRequest(request, respond, success, error) ||
     handleMockAccountRequest(request, respond, success, error) ||

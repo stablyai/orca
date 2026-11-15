@@ -1,5 +1,5 @@
 import { type Mock, vi } from 'vitest'
-import type { describeCreatedWorktree } from '../git/worktree'
+import type { describeCreatedWorktree } from '../git/worktrees/catalog/worktree-listing'
 import type { computeWorktreePath } from './worktree-logic'
 import type { HandlerMap } from './worktrees-test-ipc-surface'
 
@@ -53,9 +53,9 @@ export const forceDeleteLocalBranchMock: ModuleMock = vi.fn()
 export const resolveLocalGitUsernameMock: ModuleMock = vi.fn()
 export const getBaseRefDefaultMock: ModuleMock = vi.fn()
 export const resolveDefaultBaseRefWithLocalGitMock: ModuleMock = vi.fn()
-export const resolveDefaultBaseRefViaExecMock: ModuleMock = vi.fn()
 export const getDefaultRemoteMock: ModuleMock = vi.fn()
 export const getBranchConflictKindMock: RepoBranchMock = vi.fn()
+export const getBranchConflictKindStrictMock: RepoBranchMock = vi.fn()
 export const getPRForBranchMock: RepoBranchMock = vi.fn()
 export const getHostedReviewForBranchMock: ModuleMock = vi.fn()
 export const getWorkItemMock: ModuleMock = vi.fn()
@@ -120,11 +120,7 @@ export const gitRunnerModuleMock = (): {
   gitExecFileSync: vi.fn()
 })
 
-export const gitRepoModuleMock = () => ({
-  getBaseRefDefault: getBaseRefDefaultMock,
-  resolveDefaultBaseRefWithLocalGit: resolveDefaultBaseRefWithLocalGitMock,
-  resolveDefaultBaseRefViaExec: resolveDefaultBaseRefViaExecMock,
-  getDefaultRemote: getDefaultRemoteMock,
+export const gitBranchConflictModuleMock = () => ({
   getBranchConflictKind: async (
     repoPath: string,
     branch: string,
@@ -137,7 +133,8 @@ export const gitRepoModuleMock = () => ({
       return null
     }
     return getBranchConflictKindMock(repoPath, branch, base, options)
-  }
+  },
+  getBranchConflictKindStrict: getBranchConflictKindStrictMock
 })
 
 export const githubClientModuleMock = () => ({

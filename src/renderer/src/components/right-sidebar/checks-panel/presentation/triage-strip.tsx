@@ -1,0 +1,306 @@
+import { isCompletePRCheckOwner } from '../../../../../../shared/github/checks/complete-pr-check-owner'
+import React from 'react'
+import {
+  AlertTriangle,
+  CircleCheck,
+  CircleDashed,
+  CircleX,
+  LoaderCircle,
+  RefreshCw,
+  Sparkles
+} from 'lucide-react'
+import { Button } from '@/components/ui/button'
+import type { PRCheckDetail } from '../../../../../../shared/github/checks/check-types'
+import type { ConflictReview } from './conflict-summary'
+import {
+  summarizeProviderChecks,
+  getProviderChecksOutcome
+} from '../../../../../../shared/source-control/checks/provider-check-summary'
+import { useTranslate } from '@/i18n/use-translate'
+import { cn } from '@/lib/class-names'
+import { CHECK_COLOR } from './check-presentation'
+import {
+  getBrokenChecks,
+  isBrokenCheck
+} from '../../../../../../shared/source-control/checks/pr-checks-fix-prompt'
+
+export function PRTriageStrip({
+  review,
+  pr,
+  reviewKind = 'PR',
+  checks,
+  pipelineCheck,
+  isResolvingConflictsWithAI,
+  onResolveConflictsWithAI,
+  resolveConflictsDisabled,
+  resolveConflictsDisabledReason,
+  isFixingChecksWithAI,
+  onFixChecksWithAI,
+  fixChecksDisabled,
+  fixChecksDisabledReason
+}: {
+  review?: ConflictReview
+  pr?: ConflictReview
+  reviewKind?: 'PR' | 'MR'
+  checks: PRCheckDetail[]
+  /** A GitLab parent pipeline; its own failure leads even when its returned jobs pass. */
+  pipelineCheck?: PRCheckDetail | null
+  isResolvingConflictsWithAI: boolean
+  onResolveConflictsWithAI: () => void
+  resolveConflictsDisabled?: boolean
+  resolveConflictsDisabledReason?: string
+  isFixingChecksWithAI: boolean
+  onFixChecksWithAI: () => void
+  fixChecksDisabled?: boolean
+  fixChecksDisabledReason?: string
+}): React.JSX.Element | null {
+  const t = useTranslate()
+  const resolvedReview = review ?? pr
+  // Share the pill's classifier so completed checks without conclusions remain unresolved rather than spinning.
+  const complete = reviewKind === 'PR' && resolvedReview && isCompletePRCheckOwner(resolvedReview)
+  const summary = complete ? resolvedReview.checksSummary : summarizeProviderChecks(checks)
+  const brokenCheckCount = getBrokenChecks(checks).length
+  if (!summary && brokenCheckCount === 0) {
+    return resolvedReview?.mergeable === 'CONFLICTING' ? (
+      <ConflictTriageStrip
+        reviewKind={reviewKind}
+        isResolvingConflictsWithAI={isResolvingConflictsWithAI}
+        onResolveConflictsWithAI={onResolveConflictsWithAI}
+        resolveConflictsDisabled={resolveConflictsDisabled}
+        resolveConflictsDisabledReason={resolveConflictsDisabledReason}
+      />
+    ) : null
+  }
+  const rowSummary = summarizeProviderChecks(checks)
+  const displaySummary = summary ?? rowSummary
+  const failingCount = displaySummary.failed - (displaySummary.cancelled ?? 0)
+  const outcome = getProviderChecksOutcome(displaySummary)
+  const pendingCount = displaySummary.pending
+  const pipelineFailed = pipelineCheck ? isBrokenCheck(pipelineCheck) : false
+
+  const conflictStrip =
+    resolvedReview?.mergeable === 'CONFLICTING' ? (
+      <ConflictTriageStrip
+        reviewKind={reviewKind}
+        isResolvingConflictsWithAI={isResolvingConflictsWithAI}
+        onResolveConflictsWithAI={onResolveConflictsWithAI}
+        resolveConflictsDisabled={resolveConflictsDisabled}
+        resolveConflictsDisabledReason={resolveConflictsDisabledReason}
+      />
+    ) : null
+
+  if (
+    ((!complete || !summary) && brokenCheckCount > 0) ||
+    (complete && (summary?.failed ?? 0) > 0) ||
+    pipelineFailed
+  ) {
+    return (
+      <>
+        {conflictStrip}
+        <div className="border-b border-border px-3 py-2">
+          <div className="flex min-w-0 items-center gap-2">
+            <CircleX
+              className={cn(
+                'size-3.5 shrink-0',
+                pipelineFailed || outcome === 'failure'
+                  ? CHECK_COLOR.failure
+                  : outcome === 'pending'
+                    ? CHECK_COLOR.pending
+                    : CHECK_COLOR.cancelled
+              )}
+            />
+            <div className="min-w-0 flex-1">
+              <div className="truncate text-[11px] font-medium text-foreground">
+                {!summary
+                  ? t('auto.components.right.sidebar.ChecksPanel.976cefd02f', 'Checks unavailable')
+                  : pipelineCheck && pipelineFailed
+                    ? t(
+                        'auto.components.right.sidebar.checks.panel.content.pipelineFailed',
+                        '{{name}} failed',
+                        { name: pipelineCheck.name }
+                      )
+                    : outcome === 'cancelled'
+                      ? t('auto.components.editor.CheckRunDetailsPanel.91a4c7e2b0', 'Cancelled')
+                      : outcome === 'pending'
+                        ? t(
+                            'auto.components.right.sidebar.checks.panel.content.pendingChecks',
+                            '{{count}} checks pending',
+                            { count: pendingCount, defaultValue_one: '{{count}} check pending' }
+                          )
+                        : t(
+                            'auto.components.right.sidebar.checks.panel.content.failingChecks',
+                            '{{count}} failing checks',
+                            { count: failingCount, defaultValue_one: '{{count}} failing check' }
+                          )}
+              </div>
+              <div className="truncate text-[10px] text-muted-foreground">
+                {t(
+                  'auto.components.right.sidebar.checks.panel.content.5d4ebf9391',
+                  'Inspect details or start an AI fix pass.'
+                )}
+              </div>
+            </div>
+            <Button
+              type="button"
+              variant="outline"
+              size="xs"
+              disabled={
+                isFixingChecksWithAI ||
+                fixChecksDisabled ||
+                (brokenCheckCount === 0 && !pipelineFailed)
+              }
+              title={fixChecksDisabled ? fixChecksDisabledReason : undefined}
+              onClick={onFixChecksWithAI}
+            >
+              {isFixingChecksWithAI ? (
+                <RefreshCw className="size-3 animate-spin" />
+              ) : (
+                <Sparkles className="size-3" />
+              )}
+              {t('auto.components.right.sidebar.checks.panel.content.b45db92d0e', 'Fix')}
+            </Button>
+          </div>
+        </div>
+      </>
+    )
+  }
+
+  if (conflictStrip) {
+    return conflictStrip
+  }
+
+  if (pendingCount > 0) {
+    return (
+      <div className="border-b border-border px-3 py-2">
+        <div className="flex min-w-0 items-center gap-2">
+          <LoaderCircle
+            className={cn(
+              'size-3.5 shrink-0 animate-spin motion-reduce:animate-none',
+              CHECK_COLOR.pending
+            )}
+          />
+          <div className="min-w-0 flex-1">
+            <div className="truncate text-[11px] font-medium text-foreground">
+              {t(
+                'auto.components.right.sidebar.checks.panel.content.pendingChecks',
+                '{{count}} checks pending',
+                { count: pendingCount, defaultValue_one: '{{count}} check pending' }
+              )}
+            </div>
+            <div className="truncate text-[10px] text-muted-foreground">
+              {t(
+                'auto.components.right.sidebar.checks.panel.content.5856874b59',
+                'Orca will refresh checks while this panel stays open.'
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  // An all-unresolved list must match the grey pill, not show a green tick.
+  if (displaySummary.state === 'neutral') {
+    return (
+      <div className="border-b border-border px-3 py-2">
+        <div className="flex min-w-0 items-center gap-2">
+          <CircleDashed className="size-3.5 shrink-0 text-muted-foreground" />
+          <div className="min-w-0 flex-1">
+            <div className="truncate text-[11px] font-medium text-foreground">
+              {t(
+                'auto.components.right.sidebar.checks.panel.content.unresolvedChecks',
+                '{{count}} checks unresolved',
+                { count: displaySummary.neutral, defaultValue_one: '{{count}} check unresolved' }
+              )}
+            </div>
+            <div className="truncate text-[10px] text-muted-foreground">
+              {t(
+                'auto.components.right.sidebar.checks.panel.content.checksUnresolvedStripHint',
+                'These checks finished without a pass or fail verdict.'
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="border-b border-border px-3 py-2">
+      <div className="flex min-w-0 items-center gap-2">
+        <CircleCheck className="size-3.5 shrink-0 text-emerald-500" />
+        <div className="min-w-0 flex-1">
+          <div className="truncate text-[11px] font-medium text-foreground">
+            {t(
+              'auto.components.right.sidebar.checks.panel.content.9d0e7bcefc',
+              'No blocking PR action'
+            )}
+          </div>
+          <div className="truncate text-[10px] text-muted-foreground">
+            {t(
+              'auto.components.right.sidebar.checks.panel.content.c16762ac8c',
+              'Checks and comments below show the current fetched context.'
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+export function ConflictTriageStrip({
+  reviewKind,
+  isResolvingConflictsWithAI,
+  onResolveConflictsWithAI,
+  resolveConflictsDisabled,
+  resolveConflictsDisabledReason
+}: {
+  reviewKind: 'PR' | 'MR'
+  isResolvingConflictsWithAI: boolean
+  onResolveConflictsWithAI: () => void
+  resolveConflictsDisabled?: boolean
+  resolveConflictsDisabledReason?: string
+}): React.JSX.Element {
+  const t = useTranslate()
+  return (
+    <div className="border-b border-border px-3 py-2">
+      <div className="flex min-w-0 items-center gap-2">
+        <AlertTriangle className="size-3.5 shrink-0 text-amber-500" />
+        <div className="min-w-0 flex-1">
+          <div className="truncate text-[11px] font-medium text-foreground">
+            {reviewKind === 'MR'
+              ? t(
+                  'auto.components.right.sidebar.checks.panel.content.conflictsBlockThisMr',
+                  'Conflicts block this MR'
+                )
+              : t(
+                  'auto.components.right.sidebar.checks.panel.content.conflictsBlockThisPr',
+                  'Conflicts block this PR'
+                )}
+          </div>
+          <div className="truncate text-[10px] text-muted-foreground">
+            {t(
+              'auto.components.right.sidebar.checks.panel.content.3a71a6ed0b',
+              'Resolve conflicts before checks and merge can complete.'
+            )}
+          </div>
+        </div>
+        <Button
+          type="button"
+          variant="default"
+          size="xs"
+          disabled={isResolvingConflictsWithAI || resolveConflictsDisabled}
+          title={resolveConflictsDisabled ? resolveConflictsDisabledReason : undefined}
+          onClick={onResolveConflictsWithAI}
+        >
+          {isResolvingConflictsWithAI ? (
+            <RefreshCw className="size-3 animate-spin" />
+          ) : (
+            <Sparkles className="size-3" />
+          )}
+          {t('auto.components.right.sidebar.checks.panel.content.0c96cd25e5', 'Resolve')}
+        </Button>
+      </div>
+    </div>
+  )
+}

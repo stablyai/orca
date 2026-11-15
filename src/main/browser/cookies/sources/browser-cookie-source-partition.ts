@@ -1,4 +1,4 @@
-import type { CookieClearPartitionKey } from '../browser-cookie-import-clear'
+import type { CookieClearPartitionKey } from '../storage/cookie-store-contracts'
 
 // Skip unreadable partition identities; an unpartitioned fallback would lose the site’s session.
 export type SourcePartitionRead =

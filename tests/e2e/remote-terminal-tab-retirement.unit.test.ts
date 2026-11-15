@@ -1,16 +1,15 @@
+import { acceptedAgentStatuses } from '@/store/slices/agent-status/accepted-agent-statuses'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { getDefaultWorkspaceSession } from '../../src/shared/constants'
-import type { RuntimeMobileSessionTabsSnapshot } from '../../src/shared/runtime-types'
-import type { WorkspaceSessionState } from '../../src/shared/workspace-session-state-types'
-import {
-  acceptReplayedWebSessionTabsSnapshot,
-  resetWebSessionTabsSnapshotFreshnessForTests
-} from '../../src/renderer/src/runtime/web-session-tabs-sync/tracking-lifecycle'
+import type { RuntimeMobileSessionTabsSnapshot } from '../../src/shared/remote-runtime/session-graph/runtime-session-contracts'
+import type { WorkspaceSessionState } from '../../src/shared/workspace-session/workspace-session-state-types'
+import { acceptReplayedWebSessionTabsSnapshot } from '../../src/renderer/src/runtime/web-session-tabs-sync/state'
+import { resetWebSessionTabsSnapshotFreshnessForTests } from '../../src/renderer/src/runtime/web-session-tabs-sync/tracking-lifecycle'
 import { applyWebSessionTabsSnapshot } from '../../src/renderer/src/runtime/web-session-tabs-sync/snapshot-api'
 import { shouldApplyWebSessionTabsSnapshot } from '../../src/renderer/src/runtime/web-session-tabs-sync/tracking-decisions'
 import type { WebSessionTabsSyncState } from '../../src/renderer/src/runtime/web-session-tabs-sync/state'
 import { OrcaRuntimeService } from '../../src/main/runtime/orca-runtime'
-import { withDurableRuntimeStore } from '../../src/main/runtime/runtime-durable-store-fixture'
+import { withDurableRuntimeStore } from '../../src/main/runtime/orca-runtime-tests/runtime-durable-store-fixture'
 
 vi.mock('../../src/renderer/src/store', () => ({
   useAppStore: { setState: vi.fn() }
@@ -35,7 +34,7 @@ function makeViewerState(): WebSessionTabsSyncState {
     activeTabType: 'terminal',
     activeTabTypeByWorktree: {},
     activeWorktreeId: WORKTREE_ID,
-    agentStatusByPaneKey: {},
+    agentStatusByPaneKey: acceptedAgentStatuses(Object.entries({})),
     agentStatusEpoch: 0,
     browserCertificateFailuresByPageId: {},
     browserPagesByWorkspace: {},
@@ -144,7 +143,7 @@ describe('remote terminal tab retirement publication', () => {
     )
     runtime.attachWindow(1)
     const staleLiveSnapshot = makeHostSnapshot()
-    runtime.syncWindowGraph(1, {
+    await runtime.syncWindowGraph(1, {
       tabs: [
         {
           tabId: TAB_ID,

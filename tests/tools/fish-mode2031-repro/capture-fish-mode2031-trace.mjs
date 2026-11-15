@@ -5,7 +5,7 @@
  *
  * Simulates Orca's terminal pipeline around a REAL fish shell:
  *   node-pty  ->  scanMode2031ReplyDecision() (the real scanner from
- *                 src/shared/terminal-color-scheme-protocol.ts)
+ *                 src/shared/terminal/protocol/queries/terminal-color-scheme-protocol.ts)
  *             ->  reply `CSI ?997;1n` written back to the PTY, optionally after
  *                 a delay that models the renderer IPC round-trip.
  *
@@ -41,7 +41,9 @@ const REPO_ROOT = path.resolve(import.meta.dirname, '../../..')
 const pty = require(path.join(REPO_ROOT, 'node_modules/node-pty'))
 const { INITIAL_MODE_2031_REPLY_SCAN_STATE, mode2031SequenceFor, scanMode2031ReplyDecision } =
   await import(
-    pathToFileURL(path.join(REPO_ROOT, 'src/shared/terminal-color-scheme-protocol.ts')).href
+    pathToFileURL(
+      path.join(REPO_ROOT, 'src/shared/terminal/protocol/queries/terminal-color-scheme-protocol.ts')
+    ).href
   )
 
 const argv = process.argv.slice(2)

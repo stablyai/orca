@@ -1,12 +1,12 @@
-import { AgentSessionRecordPublication } from '../agent-session-record-publication'
-import { isAgentSessionSurfaceTabId } from '../../../shared/agent-session-surface-tab-id'
+import { AgentSessionRecordPublication } from './records/agent-session-record-publication'
+import { isAgentSessionSurfaceTabId } from '../../../shared/agent-session/view/agent-session-surface-tab-id'
 import type { AgentSessionReserveRequest } from './ownership/agent-session-reservation-admission'
-import { agentSessionRefusalError } from '../../../shared/agent-session-wire-refusals'
-import { structuredAgentSessionTabId } from '../../../shared/structured-agent-session-projection'
+import { agentSessionRefusalError } from '../../../shared/agent-session/failures/agent-session-wire-refusals'
+import { structuredAgentSessionTabId } from '../../../shared/agent-session/view/structured-agent-session-projection'
 import {
   hasAgentSessionConversation,
   type AgentSessionStoreState
-} from '../agent-session-store-state'
+} from './records/agent-session-store-state'
 
 /** Tab membership defines visibility; tab and session ids form a one-to-one mapping. */
 export class AgentSessionTabTable {
@@ -204,9 +204,10 @@ export abstract class AgentSessionRecordTabs extends AgentSessionRecordPublicati
     this.transactions.state.sessionTabs !== null && !this.isSessionTabVisible(id)
 
   initializeSessionTabs(): Promise<void> {
-    return this.transact((draft) =>
-      initializeAgentSessionTabs(draft, this.transactions.legacySessionTabIds)
-    )
+    return this.commitStoreCommand({
+      kind: 'tabs-initialize',
+      legacyTabIds: this.transactions.legacySessionTabIds
+    })
   }
 
   getVisibleSessionTabIndex = (): { present: boolean; sessionIds: string[] } =>
@@ -220,50 +221,29 @@ export abstract class AgentSessionRecordTabs extends AgentSessionRecordPublicati
     sessionId: string,
     visible: boolean,
     tabId?: string,
-    check?: () => void
+    check?: () => void,
+    capture?: (tabId: string | null) => void
   ): Promise<void> {
-    return this.transact((draft) => {
-      check?.()
-      return setAgentSessionTabVisibility(
-        draft,
+    return this.commitStoreCommand(
+      {
+        kind: 'tab-visibility',
         sessionId,
         visible,
         tabId,
-        this.transactions.legacySessionTabIds
-      )
-    })
-  }
-
-  setSwitchedSessionTabVisibility(
-    sessionId: string,
-    tabId: string,
-    visible: boolean,
-    admit: () => boolean
-  ): Promise<boolean> {
-    return this.transact((draft) => {
-      if (
-        (visible
-          ? draft.sessionTabs?.tabIdFor(sessionId) !== undefined
-          : draft.sessionTabs?.tabIdFor(sessionId) !== tabId) ||
-        !admit()
-      ) {
-        return false
-      }
-      setAgentSessionTabVisibility(
-        draft,
-        sessionId,
-        visible,
-        tabId,
-        this.transactions.legacySessionTabIds
-      )
-      return true
+        legacyTabIds: this.transactions.legacySessionTabIds
+      },
+      check
+    ).then((tab) => {
+      capture?.(tab)
     })
   }
 
   /** Publish the complete tab index in one write; a partial index would drop remaining chats on restart. */
   showSessionTabs(sessionIds: readonly string[]): Promise<void> {
-    return this.transact((draft) =>
-      showAgentSessionTabs(draft, sessionIds, this.transactions.legacySessionTabIds)
-    )
+    return this.commitStoreCommand({
+      kind: 'tabs-show',
+      sessionIds,
+      legacyTabIds: this.transactions.legacySessionTabIds
+    })
   }
 }

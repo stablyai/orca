@@ -1,11 +1,9 @@
 // Use the released relay’s bridge transport without build-tool imports so Playwright can load it.
 // COMPAT(legacy-relay-bridge): revisit 2027-01-15, with src/main/ssh/legacy-relay/.
 import { spawn } from 'node:child_process'
-import {
-  SshChannelMultiplexer,
-  type MultiplexerTransport
-} from '../../../src/main/ssh/ssh-channel-multiplexer'
-import { RELAY_SENTINEL } from '../../../src/main/ssh/remote-exec/remote-frame-protocol'
+import { SshChannelMultiplexer } from '../../../src/main/ssh/protocol/ssh-channel-multiplexer'
+import type { MultiplexerTransport } from '../../../src/main/ssh/protocol/ssh-multiplexer-transport-writer'
+import { RELAY_SENTINEL } from '../../../src/main/ssh/protocol/relay-handshake'
 
 const SENTINEL = Buffer.from(RELAY_SENTINEL, 'utf-8')
 const OWNER_HELD_DISCONNECTED = -32045

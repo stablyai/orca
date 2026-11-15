@@ -1,0 +1,61 @@
+{
+  "manifestVersion": 2,
+  "execution": "trusted-worker",
+  "id": "hello-worker-panel",
+  "name": "Hello Worker Panel",
+  "version": "1.0.0",
+  "description": "A build-less TSX panel and its own worker: requests and posts between them, a storage-backed atom, declared settings and agent events, typed by one src/protocol.ts.",
+  "engines": {
+    "orca": ">=1.4.246"
+  },
+  "pluginApi": 1,
+  "main": "worker/main.mjs",
+  "contributes": {
+    "panels": [
+      {
+        "id": "tasks",
+        "title": "Hello Worker Panel",
+        "icon": "blocks",
+        "entry": "src/panel.tsx",
+        "ui": "components"
+      }
+    ],
+    "settings": [
+      {
+        "key": "celebrate",
+        "title": "Celebrate finished lists",
+        "description": "The worker tells the panel when every task is done.",
+        "type": "boolean",
+        "default": true
+      },
+      {
+        "key": "suggestions",
+        "title": "Task ideas",
+        "description": "One per line; Suggest picks the next one.",
+        "type": "string",
+        "multiline": true,
+        "default": "Write a test\nReview a pull request\nTake a break"
+      },
+      {
+        "key": "suggestionOrder",
+        "title": "Suggestion order",
+        "description": "Which end of Task ideas Suggest starts from.",
+        "type": "string",
+        "enum": ["listed", "reversed"],
+        "enumLabels": ["As listed", "Last first"],
+        "default": "listed"
+      }
+    ]
+  },
+  "capabilities": [
+    {
+      "kind": "storage:own"
+    },
+    {
+      "kind": "settings:own"
+    },
+    {
+      "kind": "agent:read"
+    }
+  ]
+}

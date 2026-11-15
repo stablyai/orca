@@ -6,9 +6,13 @@ export const PROFILE_STATE_RECOVERY_RESULT_PREFIX = '[profile-state-recovery] '
 export const PROFILE_STATE_DESKTOP_RECOVERY_FLAG = '--profile-state-desktop-recovery'
 
 const positiveInteger = z.number().int().positive().max(Number.MAX_SAFE_INTEGER)
-const repairSectionSchema = z
+const backupRepairSectionSchema = z
   .object({ domain: z.string(), backupId: z.string().min(1).nullable() })
   .strict()
+const currentRepairSectionSchema = z
+  .object({ domain: z.literal('automationRuns'), source: z.literal('current') })
+  .strict()
+const repairSectionSchema = z.union([backupRepairSectionSchema, currentRepairSectionSchema])
 const selectorSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('json'), revision: positiveInteger }).strict(),
   z.object({ kind: z.literal('current-json') }).strict(),
@@ -50,7 +54,12 @@ const rollbackSchema = exportsSchema.extend({
   restoredPath: z.string(),
   backupId: z.string().optional(),
   repairedSections: z
-    .array(repairSectionSchema.extend({ backupCreatedAtMs: positiveInteger.optional() }))
+    .array(
+      z.union([
+        backupRepairSectionSchema.extend({ backupCreatedAtMs: positiveInteger.optional() }),
+        currentRepairSectionSchema
+      ])
+    )
     .readonly()
     .optional()
 })
@@ -70,6 +79,14 @@ export type ProfileStateRecoveryRequest = z.infer<typeof profileStateRecoveryReq
 export type ProfileStateRecoveryResponse = z.infer<typeof profileStateRecoveryResponseSchema>
 export type ProfileStateExportsResult = z.infer<typeof exportsSchema>
 export type ProfileStateRollbackResult = z.infer<typeof rollbackSchema>
+
+export function profileStateRepairSectionApproval(
+  section: ProfileStateRecoveryRepairSection
+): ProfileStateRecoveryRepairSection {
+  return 'source' in section
+    ? { domain: section.domain, source: section.source }
+    : { domain: section.domain, backupId: section.backupId }
+}
 
 export class ProfileStateRecoveryCommandError extends Error {
   constructor(

@@ -1,5 +1,5 @@
 import type { Page } from '@stablyai/playwright-test'
-import type { AgentType } from '../../../src/shared/agent-status-types'
+import type { AgentType } from '../../../src/shared/agent-status/contracts/agent-status-types'
 import { waitForActivePaneHookDescriptor } from './terminal'
 
 export async function showActivePaneAsNativeChat(
@@ -10,7 +10,9 @@ export async function showActivePaneAsNativeChat(
   const descriptor = await waitForActivePaneHookDescriptor(page)
   await page.evaluate(
     async ({ paneKey, worktreeId, agentType, title }) => {
-      const settings = await window.api.settings.set({ experimentalNativeChat: true })
+      const settings = await window.api.settings.set({
+        nativeChatProviders: { claude: true, codex: true }
+      })
       const store = window.__store
       if (!store) {
         throw new Error('Store unavailable')

@@ -2,12 +2,12 @@ import React from 'react'
 import { ChevronDown, MessageSquare, Minus, Plus, Trash, Undo2 } from 'lucide-react'
 import { FileTypeIcon } from '@/components/FileTypeIcon'
 import { basename, dirname, joinPath } from '@/lib/path'
-import { cn } from '@/lib/utils'
-import { WORKSPACE_FILE_PATH_MIME } from '@/lib/workspace-file-drag'
-import { writeWorkspaceFileDragSourceForWorkspace } from '@/lib/workspace-file-drag-source'
-import { translate } from '@/i18n/i18n'
+import { cn } from '@/lib/class-names'
+import { WORKSPACE_FILE_PATH_MIME } from '@/lib/files/drop/workspace-file-drag'
+import { writeWorkspaceFileDragSourceForWorkspace } from '@/lib/files/drop/workspace-file-drag-source'
+import { useTranslate } from '@/i18n/use-translate'
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
-import type { GitStatusEntry } from '../../../../../../shared/git-status-types'
+import type { GitStatusEntry } from '../../../../../../shared/git/status/git-status-types'
 import { ActionButton } from './action-button'
 import { ConflictBadge } from './conflict-badge'
 import {
@@ -24,17 +24,19 @@ import {
   canUnstageStatusEntry,
   getConflictResolutions,
   type ConflictResolution
-} from '../../../../../../shared/source-control-entry-actions'
-import { isSubmoduleWorktreeOnlyChange } from '../../../../../../shared/source-control-discard-all-sequence'
+} from '../../../../../../shared/source-control/listing/source-control-entry-actions'
+import { isSubmoduleWorktreeOnlyChange } from '../../../../../../shared/source-control/listing/source-control-discard-all-sequence'
 import { toPermanentSourceControlRowOpenEvent, type SourceControlRowOpenEvent } from './split-open'
 import {
+  getSourceControlRowHighlightClass,
   SOURCE_CONTROL_ROW_ACTION_OVERLAY_CLASS,
   SOURCE_CONTROL_TREE_FILE_PADDING_PX,
   SOURCE_CONTROL_TREE_INDENT_PX,
   getSubmoduleWorktreeOnlyLabel,
   getSubmoduleWorktreeOnlyTooltip
 } from './row-layout'
-import { STATUS_COLORS, STATUS_LABELS } from '../../status-display'
+import { STATUS_COLORS } from '../../../../lib/source-control/paths/git-path-decoration'
+import { STATUS_LABELS } from '../../../../../../shared/git/status/git-status-labels'
 
 export const UncommittedEntryRow = React.memo(function UncommittedEntryRow({
   entryKey,
@@ -78,6 +80,7 @@ export const UncommittedEntryRow = React.memo(function UncommittedEntryRow({
   // When set, the row is a dirty submodule: clicking toggles lazy expansion instead of opening an uninformative gitlink diff.
   submoduleExpansion?: { isExpanded: boolean; onToggle: () => void }
 }): React.JSX.Element {
+  const t = useTranslate()
   useUiLanguageRevision()
   const fileName = basename(entry.path)
   const parentDir = dirname(entry.path)
@@ -85,7 +88,7 @@ export const UncommittedEntryRow = React.memo(function UncommittedEntryRow({
   const isUnresolvedConflict = entry.conflictStatus === 'unresolved'
   const isSubmoduleWorktreeOnly = isSubmoduleWorktreeOnlyChange(entry)
   const conflictLabel = entry.conflictKind
-    ? getLocalizedConflictKindLabel(entry.conflictKind)
+    ? getLocalizedConflictKindLabel(entry.conflictKind, t)
     : null
   // Stage clears unresolved u records; discard can recreate conflicts or lose local resolutions, so gate both.
   const canDiscard = canDiscardStatusEntry(entry)
@@ -119,7 +122,7 @@ export const UncommittedEntryRow = React.memo(function UncommittedEntryRow({
         data-current={isOpenFile ? 'true' : undefined}
         className={cn(
           'group relative flex cursor-pointer items-center gap-1 pr-3 py-1 transition-colors',
-          isOpenFile ? 'bg-accent hover:bg-accent' : 'hover:bg-accent/40',
+          getSourceControlRowHighlightClass(isOpenFile),
           !isOpenFile && selected && 'bg-accent/60'
         )}
         style={{
@@ -185,16 +188,16 @@ export const UncommittedEntryRow = React.memo(function UncommittedEntryRow({
             // Parent Git stages gitlinks, not nested dirtiness; make that boundary visible.
             <div
               className="truncate text-[11px] text-muted-foreground"
-              title={getSubmoduleWorktreeOnlyTooltip()}
+              title={getSubmoduleWorktreeOnlyTooltip(t)}
             >
-              {getSubmoduleWorktreeOnlyLabel()}
+              {getSubmoduleWorktreeOnlyLabel(t)}
             </div>
           )}
         </div>
         {commentCount > 0 && (
           <span
             className="flex shrink-0 items-center gap-0.5 text-[10px] text-muted-foreground"
-            title={reviewNoteCountTitle(commentCount)}
+            title={reviewNoteCountTitle(commentCount, t)}
           >
             <MessageSquare className="size-3" />
             <span className="tabular-nums">{commentCount}</span>
@@ -218,7 +221,7 @@ export const UncommittedEntryRow = React.memo(function UncommittedEntryRow({
             <ActionButton
               key={resolution}
               icon={CONFLICT_RESOLUTION_ICONS[resolution]}
-              title={getLocalizedConflictResolutionLabel(resolution)}
+              title={getLocalizedConflictResolutionLabel(resolution, t)}
               onClick={(event) => {
                 event.stopPropagation()
                 void onResolveConflict(entry, resolution)
@@ -230,19 +233,13 @@ export const UncommittedEntryRow = React.memo(function UncommittedEntryRow({
               icon={entry.area === 'untracked' ? Trash : Undo2}
               title={
                 entry.area === 'untracked'
-                  ? translate(
+                  ? t(
                       'auto.components.right.sidebar.SourceControl.11463f7a98',
                       'Delete untracked file'
                     )
                   : entry.status === 'deleted'
-                    ? translate(
-                        'auto.components.right.sidebar.SourceControl.989f3d5e34',
-                        'Restore file'
-                      )
-                    : translate(
-                        'auto.components.right.sidebar.SourceControl.d54dd48b0b',
-                        'Discard changes'
-                      )
+                    ? t('auto.components.right.sidebar.SourceControl.989f3d5e34', 'Restore file')
+                    : t('auto.components.right.sidebar.SourceControl.d54dd48b0b', 'Discard changes')
               }
               onClick={(event) => {
                 event.stopPropagation()
@@ -253,7 +250,7 @@ export const UncommittedEntryRow = React.memo(function UncommittedEntryRow({
           {canStage && (
             <ActionButton
               icon={Plus}
-              title={translate('auto.components.right.sidebar.SourceControl.8cde1a2fb0', 'Stage')}
+              title={t('auto.components.right.sidebar.SourceControl.8cde1a2fb0', 'Stage')}
               onClick={(event) => {
                 event.stopPropagation()
                 void onStage(entry.path)
@@ -263,7 +260,7 @@ export const UncommittedEntryRow = React.memo(function UncommittedEntryRow({
           {canUnstage && (
             <ActionButton
               icon={Minus}
-              title={translate('auto.components.right.sidebar.SourceControl.df5040e3c3', 'Unstage')}
+              title={t('auto.components.right.sidebar.SourceControl.df5040e3c3', 'Unstage')}
               onClick={(event) => {
                 event.stopPropagation()
                 void onUnstage(entry.path, entry.status === 'renamed' ? entry.oldPath : undefined)

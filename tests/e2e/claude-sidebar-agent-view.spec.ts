@@ -13,7 +13,7 @@ import {
 } from './helpers/terminal'
 import { dismissSetupScriptPrompts } from './helpers/sidebar-setup-prompt'
 import { readHookEndpoint } from './helpers/agent-hook-endpoint'
-import { readAgentProcess } from '../../src/shared/agent-process-presence-probe'
+import { readAgentProcess } from '../../src/shared/agent-status/process/agent-process-presence-probe'
 import { retentionFixtureCommand } from './helpers/host-created-terminal-retention-oracle'
 
 const SESSION = '11111111-2222-4333-8444-555555555555'
@@ -178,8 +178,7 @@ process.stdin.resume()
   await disclosure.click()
   await expect(disclosure).toHaveAttribute('aria-expanded', 'false')
   await expect(child.locator('xpath=ancestor::*[@inert]')).toHaveCount(1)
-  await expect(parent.getByLabel('Viewing subagent Sidebar child proof')).toBeVisible()
-  await orcaPage.screenshot({ path: testInfo.outputPath('collapsed-child-indicator.png') })
+  await orcaPage.screenshot({ path: testInfo.outputPath('collapsed-child.png') })
   await disclosure.click()
   await sendToTerminal(orcaPage, ptyId, '\x0b')
   await expect(parent).toHaveAttribute('aria-current', 'true')

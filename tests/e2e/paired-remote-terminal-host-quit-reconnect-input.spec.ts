@@ -4,11 +4,11 @@ import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'no
 import os from 'node:os'
 import path from 'node:path'
 import type { ElectronApplication, Page } from '@stablyai/playwright-test'
-import { PROTOCOL_VERSION } from '../../src/main/daemon/types'
+import { PROTOCOL_VERSION } from '../../src/main/daemon/protocol/daemon-protocol-version'
 import {
   HOST_TERMINAL_SURFACE_SEPARATOR,
   toWebTerminalSurfaceTabId
-} from '../../src/shared/terminal-surface-id'
+} from '../../src/shared/workspace-layout/terminal-surface-id'
 import { expect, test } from './helpers/orca-app'
 import { TEST_REPO_PATH_FILE } from './global-setup'
 import {
@@ -21,7 +21,7 @@ import {
   holdWindowGraphPublication,
   releaseWindowGraphPublication
 } from './helpers/hold-window-graph-publication'
-import { quotePosixShell } from '../../src/shared/shell-argument-quoting'
+import { quotePosixShell } from '../../src/shared/shell/launch/shell-argument-quoting'
 
 const scratch = mkdtempSync(path.join(os.tmpdir(), 'orca-paired-host-quit-input-'))
 const fixturePath = path.join(scratch, 'paired-host-quit-terminal.mjs')

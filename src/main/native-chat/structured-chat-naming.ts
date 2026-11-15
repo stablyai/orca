@@ -1,55 +1,30 @@
+import type {
+  StructuredChatNameGeneration,
+  StructuredChatNamingDeps
+} from './conversation-naming/structured-chat-naming-types'
 import { chatNamingFailure } from '../../shared/chat-naming-failure-copy'
-import { createStructuredChatNamingWork, type NamingRequest } from './structured-chat-naming-work'
-import type { StructuredAgentSessionStatusObserverOptions } from './agent-session-wire/structured-agent-session-status-observation'
-import type { AgentSessionRecord } from '../../shared/agent-session-record'
-import type { AgentSessionStatusSummary } from '../../shared/agent-session-wire'
+import {
+  createStructuredChatNamingWork,
+  type NamingRequest
+} from './conversation-naming/structured-chat-naming-work'
+import type { StructuredAgentSessionStatusObserverOptions } from './agent-session-wire/observations/structured-agent-session-status-observation'
+import type { AgentSessionRecord } from '../../shared/agent-session/lifecycle/agent-session-record'
+import type { AgentSessionStatusSummary } from '../../shared/agent-session/agent-session-wire'
 import {
   clampConversationNameFirstPrompt,
   conversationNameSeed
-} from '../../shared/conversation-name-generation'
-import { hasStructuredChatPromptText } from '../../shared/structured-agent-session-first-prompt'
-import { sliceAtCodeUnitLimit } from '../../shared/surrogate-safe-text-slice'
-import type { GlobalSettings } from '../../shared/global-settings-types'
-import type { AgentSessionRecordStore } from '../runtime/agent-session-record-store'
+} from '../../shared/source-control/ai/generation/conversation-name-generation'
+import { hasStructuredChatPromptText } from '../../shared/agent-session/requests/structured-agent-session-first-prompt'
+import { sliceAtCodeUnitLimit } from '../../shared/text/surrogate-safe-text-slice'
 import {
   formatAgentGenerationFailureOutputForDisplay,
   type AgentGenerationFailureOutput
-} from '../text-generation/agent-failure-output'
+} from '../text-generation/failures/agent-failure-output'
 import type {
   StructuredAgentSessionConversationNaming,
   StructuredChatNamingFailure
-} from './agent-session-wire/structured-agent-session-host-types'
-import {
-  neverThrowingStructuredAgentSessionLogger,
-  type StructuredAgentSessionLogger
-} from './agent-session-wire/structured-agent-session-logger'
-
-/** null means unavailable/canceled: no failure to display or retry. */
-export type StructuredChatNameGeneration =
-  | { name: string }
-  | { error: string; errorCode?: string; failureOutput?: AgentGenerationFailureOutput }
-  | null
-
-export type StructuredChatNamingDeps = {
-  getStore: () => Pick<
-    AgentSessionRecordStore,
-    'getRecord' | 'compareAndSetConversationName' | 'setUserConversationName'
-  > | null
-  getSettings: () => Pick<GlobalSettings, 'nativeChatAutoName'>
-  readFirstPrompt: (sessionId: string, hostStartedAt: number) => Promise<string>
-  /** The current context's first prompt, for a name the user asked for again. */
-  readJournalFirstPrompt: (sessionId: string) => Promise<string>
-  now?: () => number
-  workerTaskTitle: (record: AgentSessionRecord) => { title: string } | null
-  generate: (
-    record: AgentSessionRecord,
-    firstPrompt: string,
-    shouldExecute?: () => boolean
-  ) => Promise<StructuredChatNameGeneration>
-  onNamed: (workspaceId: string, sessionId: string) => void
-  logger: StructuredAgentSessionLogger
-  wait?: (ms: number) => Promise<void>
-}
+} from './agent-session-wire/host/structured-agent-session-host-types'
+import { neverThrowingStructuredAgentSessionLogger } from './agent-session-wire/host/structured-agent-session-logger'
 
 const GENERATION_RETRY_DELAYS_MS = [2000, 4000]
 const NAMING_ERROR_LIMIT = 1024
@@ -190,11 +165,10 @@ export function createStructuredChatNamingHandler(deps: StructuredChatNamingDeps
   }
 
   async function setName(store: NamingStore, record: AgentSessionRecord, name: string) {
-    const expected = record.conversationName ?? null
     const named = await store.compareAndSetConversationName(
       record.sessionId,
       name,
-      expected,
+      record.conversationName ?? null,
       contextId(record)
     )
     if (named) {
@@ -300,7 +274,7 @@ export function createStructuredChatNamingHandler(deps: StructuredChatNamingDeps
     },
     // Not a job: a pending generation must not swallow the user's rename. The record's 'user'
     // source is what makes that generation's later write refuse.
-    setUserName: async (sessionId, name, write) => {
+    setUserName: async (sessionId, name, write, onApplied) => {
       const store = deps.getStore()
       if (!store?.getRecord(sessionId)) {
         return null
@@ -310,6 +284,9 @@ export function createStructuredChatNamingHandler(deps: StructuredChatNamingDeps
         forget(sessionId)
       }
       refresh(record.location.workspaceId, sessionId)
+      if (applied) {
+        onApplied?.(record)
+      }
       return { name: record.conversationName ?? null, applied }
     }
   }

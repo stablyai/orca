@@ -3,7 +3,7 @@ import type { PreloadApi } from '../../../../preload/api-types'
 import type {
   ClaudeRateLimitAccountsState,
   CodexRateLimitAccountsState
-} from '../../../../shared/managed-account-types'
+} from '../../../../shared/agent-accounts/managed-account-types'
 import { callRuntimeResult } from './web-runtime-calls'
 import { fetchAccountsSnapshot } from './web-rate-limits-api'
 
@@ -133,7 +133,8 @@ export function createClaudeAccountsApi(): PreloadApi['claudeAccounts'] {
       }
       return callRuntimeResult<ClaudeRateLimitAccountsState>(
         'accounts.selectClaude',
-        { accountId },
+        // This window's switcher moves running sessions itself; the host window must not too.
+        { accountId, movesRunningSessions: true },
         ACCOUNT_MUTATION_TIMEOUT_MS
       )
     }

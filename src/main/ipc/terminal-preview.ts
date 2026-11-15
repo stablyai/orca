@@ -2,7 +2,7 @@ import { ipcMain, type WebContents } from 'electron'
 import type {
   TerminalPreviewConnectResult,
   TerminalPreviewSnapshot
-} from '../../shared/terminal-preview'
+} from '../../shared/terminal/replay/terminal-preview'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import { isDashboardPopoutRenderer } from '../window/dashboard-popout-window'
 import { isTrustedUIRenderer } from './ui'

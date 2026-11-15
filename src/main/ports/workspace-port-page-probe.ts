@@ -1,6 +1,6 @@
 import http from 'node:http'
 import https from 'node:https'
-import { extractHtmlTitle, findIconHref } from '../html-head-tags'
+import { extractHtmlTitle, findIconHref } from '../network/page-metadata/html-head-tags'
 import {
   LOOPBACK_LOCALHOST_HOSTS,
   connectableLoopbackHost,
@@ -9,7 +9,7 @@ import {
 import type {
   WorkspacePortPageProbeRequest,
   WorkspacePortPageProbeResult
-} from '../../shared/workspace-ports'
+} from '../../shared/workspace/ports/workspace-ports'
 
 const PROBE_TIMEOUT_MS = 1500
 const MAX_PAGE_BYTES = 256 * 1024

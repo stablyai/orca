@@ -1,4 +1,4 @@
-import { formatAgentTypeLabel } from '../../shared/agent-type-label'
+import { formatAgentTypeLabel } from '../../shared/agent-status/presentation/agent-type-label'
 import type { NotificationDispatchRequest } from '../../shared/notification-settings-types'
 
 type NotificationTranslator = (key: string, fallback: string) => string

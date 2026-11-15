@@ -4,3 +4,4 @@ allowBuilds: {}
 
 patchedDependencies:
   braces@3.0.3: ../patches/braces@3.0.3.patch
+  minimatch@10.2.6: ../patches/minimatch@10.2.6.patch

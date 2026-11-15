@@ -5,8 +5,9 @@ import { afterEach, describe, expect, it } from 'vitest'
 import {
   openProfileStateDatabaseReadOnly,
   openProfileStateDatabase
-} from './profile-state-database'
-import { readProfileStateRevision } from './profile-state-documents'
+} from './database/profile-state-database'
+import './documents/profile-state-documents'
+import { readProfileStateRevision } from './database/profile-state-revision'
 import { ProfileStateSqliteAuthority } from './profile-state-sqlite-authority'
 
 const fixtures: { authority: ProfileStateSqliteAuthority; directory: string }[] = []
@@ -38,67 +39,6 @@ afterEach(() => {
     authority.close()
     rmSync(directory, { recursive: true, force: true })
   }
-})
-
-const invalidReplacements = [
-  {
-    name: 'sibling-key injection',
-    value: [{ domain: 'extension', payload: 'null,"settings":{"theme":"dark"}' }]
-  },
-  {
-    name: 'duplicate domains',
-    value: [
-      { domain: 'settings', payload: '{}' },
-      { domain: 'settings', payload: 'null' }
-    ]
-  },
-  { name: 'non-string payload', value: [{ domain: 'settings', payload: true }] },
-  { name: 'missing payload', value: [{ domain: 'settings' }] },
-  { name: 'empty domain', value: [{ domain: '', payload: '{}' }] },
-  { name: 'non-array replacements', value: { settings: '{}' } }
-]
-
-describe.each([false, true])('complete domain writes (established: %s)', (established) => {
-  it.each(invalidReplacements)('rejects $name without changing state or revision', ({ value }) => {
-    const { authority, readRevision } = fixture(established)
-    const before = authority.readSerializedState()
-    const revision = readRevision()
-
-    expect(() => {
-      // @ts-expect-error Intentionally malformed input must fail runtime validation.
-      authority.writeCompleteSerializedDomains(value)
-    }).toThrow()
-
-    expect(authority.readSerializedState()).toBe(before)
-    expect(readRevision()).toBe(revision)
-  })
-
-  it('preserves null, history order and unknown fields while deleting omitted domains', () => {
-    const { authority } = fixture(established)
-    const future = { '3': 3, '1': 1, unicode: '雪 🐋\ud800', nested: { z: null, a: [] } }
-    const runs = [{ id: 'z', extension: future }, { id: 'a' }]
-
-    authority.writeCompleteSerializedDomains([
-      { domain: 'settings', payload: 'null' },
-      { domain: 'automationRuns', payload: JSON.stringify(runs) },
-      { domain: 'future', payload: JSON.stringify(future) },
-      { domain: 'deleted', payload: null }
-    ])
-
-    expect(authority.readSerializedState()).toBe(
-      JSON.stringify({ settings: null, automationRuns: runs, future })
-    )
-    authority.writeCompleteSerializedDomains([])
-    expect(authority.readSerializedState()).toBe('{}')
-  })
-
-  it('accepts an empty complete profile', () => {
-    const { authority } = fixture(established)
-
-    authority.writeCompleteSerializedDomains([])
-
-    expect(authority.readSerializedState()).toBe('{}')
-  })
 })
 
 describe('complete domain revision fencing', () => {

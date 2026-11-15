@@ -28,7 +28,7 @@ import {
 test.describe('native chat on a WSL host', () => {
   test.skip(!SUPPORTED, 'the Claude stub wrapper is POSIX-only')
 
-  test('admits, streams, offers Start for a stopped distro, and continues after Start or a focus boot', async ({
+  test('admits, streams, offers Start for a stopped distro, continues after Start, and never boots it on a project switch', async ({
     orcaPage: hub,
     claudeStub
   }, testInfo) => {
@@ -38,7 +38,7 @@ test.describe('native chat on a WSL host', () => {
     // The HUB is the distro's orcad: its settings are the host's, so the chat runs its stub.
     await hub.evaluate(async (command) => {
       await window.__store?.getState().updateSettings({
-        experimentalNativeChat: true,
+        nativeChatProviders: { claude: true, codex: true },
         agentCmdOverrides: { claude: command }
       })
     }, buildFakeAgentCommandOverride(claudeStub.command))
@@ -58,7 +58,7 @@ test.describe('native chat on a WSL host', () => {
         const settings = await window.api.settings.set({ experimentalWslHosts: true })
         window.__store?.setState({ settings })
         await window.__store?.getState().updateSettings({
-          experimentalNativeChat: true,
+          nativeChatProviders: { claude: true, codex: true },
           defaultTuiAgent: 'claude'
         })
       })
@@ -124,7 +124,7 @@ test.describe('native chat on a WSL host', () => {
               ),
             { timeout: 30_000 }
           )
-          .toContain('Ubuntu was stopped')
+          .toContain('Ubuntu is stopped')
         return connects
       }
       const stoppedNotice = chat.getByText('Ubuntu is stopped', { exact: true })
@@ -148,16 +148,21 @@ test.describe('native chat on a WSL host', () => {
       const connectsBeforeStop = await stopDistro()
       await expect(stoppedNotice).toBeVisible({ timeout: 30_000 })
 
-      // Switching away and back is the user acting on the host: that boots it and the chat goes on.
+      // Switching away and back is navigation, not a start: the distro stays stopped (#36688).
       await page.evaluate(() => window.__store?.getState().setActiveWorktree(null))
-      // The whole stopped window, up to the focus, booted nothing.
+      await expect.poll(() => focusProject(page, projectPath), { timeout: 30_000 }).toBeTruthy()
+      await expect(chat).toBeVisible({ timeout: 60_000 })
+      await expect(stoppedNotice).toBeVisible({ timeout: 30_000 })
+      // ast-grep-ignore: test-no-real-time-wait -- the claim is that the switch boots nothing over time
+      await page.waitForTimeout(5_000)
       expect(fakeWslConnects(connectLogFile)).toHaveLength(connectsBeforeStop)
       expect(readDistroState(distrosFile)).toBe('stopped')
-      await expect.poll(() => focusProject(page, projectPath), { timeout: 30_000 }).toBeTruthy()
+      // Start is what boots it, once, and the chat goes on.
+      await start.click()
       await expect
         .poll(() => fakeWslConnects(connectLogFile).length, { timeout: 60_000 })
-        .toBeGreaterThan(connectsBeforeStop)
-      await expect(chat).toBeVisible({ timeout: 60_000 })
+        .toBe(connectsBeforeStop + 1)
+      await expect(stoppedNotice).toBeHidden({ timeout: 60_000 })
       await send('after the distro restarted')
       await expectReplyAfter('after the distro restarted')
       await page.screenshot({ path: testInfo.outputPath('wsl-host-chat-after-boot.png') })
@@ -177,7 +182,7 @@ test.describe('native chat on a WSL host', () => {
     await waitForSessionReady(hub)
     await hub.evaluate(async (command) => {
       await window.__store?.getState().updateSettings({
-        experimentalNativeChat: true,
+        nativeChatProviders: { claude: true, codex: true },
         agentCmdOverrides: { claude: command }
       })
     }, buildFakeAgentCommandOverride(claudeStub.command))
@@ -196,7 +201,7 @@ test.describe('native chat on a WSL host', () => {
         const settings = await window.api.settings.set({ experimentalWslHosts: true })
         window.__store?.setState({ settings })
         await window.__store?.getState().updateSettings({
-          experimentalNativeChat: true,
+          nativeChatProviders: { claude: true, codex: true },
           defaultTuiAgent: 'claude'
         })
       })
@@ -243,13 +248,53 @@ test.describe('native chat on a WSL host', () => {
             .find((tab) => tab.agentSessionAgent === 'claude')?.entityId ?? null
       )
       expect(sessionId).toBeTruthy()
-      await callEnvironment(page, WSL_ENVIRONMENT_ID, 'agentSession.close', { sessionId })
+      const workspaceId = await hub.evaluate((projectPath) => {
+        const workspace = window.__store
+          ?.getState()
+          .allWorktrees()
+          .find((entry) => entry.path === projectPath)
+        if (!workspace) {
+          throw new Error('Host workspace for the existing chat is missing')
+        }
+        return workspace.id
+      }, projectPath)
+      const originalTab = await page.evaluate(
+        (sessionId) =>
+          Object.values(window.__store?.getState().unifiedTabsByWorktree ?? {})
+            .flat()
+            .find((tab) => tab.entityId === sessionId)?.id,
+        sessionId
+      )
+      expect(originalTab).toBeTruthy()
+      // Workspace sleep stops the provider without user-close's intentional tab removal.
+      const stopped = await callEnvironment(
+        page,
+        WSL_ENVIRONMENT_ID,
+        'agentSession.sleepWorkspace',
+        { workspaceId }
+      )
+      expect(stopped).toMatchObject({ stoppedSessionIds: [sessionId] })
+      await expect(
+        page.locator(`[data-testid="sortable-tab"][data-tab-id="${originalTab}"]`)
+      ).toBeVisible()
+      expect(
+        await page.evaluate(
+          (sessionId) =>
+            Object.values(window.__store?.getState().unifiedTabsByWorktree ?? {})
+              .flat()
+              .find((tab) => tab.entityId === sessionId)?.id,
+          sessionId
+        )
+      ).toBe(originalTab)
       await send('again')
       // Says where it's missing, not "the computer running this chat".
       await expect(
         chat.getByText(/Claude isn't installed in the WSL distro Ubuntu\./).first()
       ).toBeVisible({ timeout: 120_000 })
       await expect(chat.getByText(/the computer running this chat/)).toHaveCount(0)
+      await expect(
+        page.locator(`[data-testid="sortable-tab"][data-tab-id="${originalTab}"]`)
+      ).toBeVisible()
       await page.screenshot({ path: testInfo.outputPath('wsl-host-chat-cli-missing.png') })
     } finally {
       await desktop.dispose()
@@ -267,7 +312,7 @@ test.describe('native chat on a WSL host', () => {
     await waitForSessionReady(hub)
     await hub.evaluate(async (command) => {
       await window.__store?.getState().updateSettings({
-        experimentalNativeChat: true,
+        nativeChatProviders: { claude: true, codex: true },
         agentCmdOverrides: { claude: command }
       })
     }, buildFakeAgentCommandOverride(claudeStub.command))
@@ -294,7 +339,7 @@ test.describe('native chat on a WSL host', () => {
         const settings = await window.api.settings.set({ experimentalWslHosts: true })
         window.__store?.setState({ settings })
         await window.__store?.getState().updateSettings({
-          experimentalNativeChat: true,
+          nativeChatProviders: { claude: true, codex: true },
           defaultTuiAgent: 'claude'
         })
       })
@@ -342,7 +387,7 @@ test.describe('native chat on a WSL host', () => {
             ),
           { timeout: 30_000 }
         )
-        .toContain('Ubuntu was stopped')
+        .toContain('Ubuntu is stopped')
       const stoppedNotice = chat.getByText('Ubuntu is stopped', { exact: true })
       await expect(stoppedNotice).toBeVisible({ timeout: 30_000 })
       // Send waits for Start rather than failing against a stopped distro; while held, the button is

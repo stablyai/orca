@@ -1,26 +1,27 @@
 import { z } from 'zod'
-import { getChromeExtensionOrigin } from '../../../../shared/browser-extension-url'
-import { iconFromImageData } from '../browser-extension-action-icon'
+import { getChromeExtensionOrigin } from '../../../../shared/browser/extensions/browser-extension-url'
+import { iconFromImageData } from '../actions/browser-extension-action-icon'
 import {
   getBrowserExtensionActionState,
   notifyBrowserExtensionActionsChanged
-} from '../browser-extension-action-registry'
+} from '../actions/browser-extension-action-registry'
 import {
   iconFromPathSpec,
   parseBrowserExtensionColor,
   type BrowserExtensionActionDetails,
   type BrowserExtensionColor
-} from '../browser-extension-action-state'
+} from '../actions/browser-extension-action-state'
 import {
   BrowserExtensionApiError,
   defineBrowserExtensionMethod,
   registerBrowserExtensionNamespace,
   type BrowserExtensionCaller,
   type BrowserExtensionNamespace
-} from '../browser-extension-namespace-registry'
-import { requireCallerTab } from '../browser-extension-tab-model'
-import { getPinnedBrowserExtensionIds } from '../browser-extension-toolbar-pins'
-import { requestBrowserExtensionPopup } from '../browser-extension-toolbar'
+} from '../api-runtime/browser-extension-namespace-registry'
+import { requireCallerTab } from '../tabs-and-windows/browser-extension-tab-model'
+import { getPinnedBrowserExtensionIds } from '../actions/browser-extension-toolbar-pins'
+import { requestBrowserExtensionPopup } from '../actions/browser-extension-toolbar'
+import { findBrowserExtensionCallerAgentPage } from '../tabs-and-windows/browser-extension-agent-caller'
 
 const tabIdSchema = z.number().int().nonnegative()
 const tabDetailsSchema = z.object({ tabId: tabIdSchema.optional() }).loose()
@@ -200,7 +201,15 @@ function createActionNamespace(): BrowserExtensionNamespace {
       })),
       openPopup: defineBrowserExtensionMethod(
         z.tuple([z.object({ windowId: z.number().int() }).loose().optional()]),
-        (caller) => requestBrowserExtensionPopup(caller.session, caller.extension.id)
+        (caller) => {
+          // Why: the popup opens focused on the user's own tab, and an agent's call never takes it over.
+          if (findBrowserExtensionCallerAgentPage(caller)) {
+            throw new BrowserExtensionApiError(
+              'An agent is using this browser profile, so the popup was not opened'
+            )
+          }
+          return requestBrowserExtensionPopup(caller.session, caller.extension.id)
+        }
       )
     },
     events: ['onClicked', 'onUserSettingsChanged']

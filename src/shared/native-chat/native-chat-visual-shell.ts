@@ -1,4 +1,4 @@
-import { PANEL_DESIGN_TOKEN_ALLOWLIST } from '../plugins/frames/plugin-panel-shell'
+import { PANEL_DESIGN_TOKEN_ALLOWLIST } from '../plugins/frames/plugin-panel-design-tokens'
 
 /** Shared Electron-free sandbox document. Parse CSP before visual markup so later HTML cannot loosen it.
  * Allow pinned-CDN scripts/styles/fonts/images only; block fetch/sockets/frames/forms. Allowed-CDN requests can still carry data: disclosed accepted risk, not a no-egress guarantee. */
@@ -73,6 +73,12 @@ export type NativeChatVisualTheme = {
   tokens: Readonly<Record<string, string>>
 }
 
+export const NATIVE_CHAT_VISUAL_GUEST_THEME_PUBLISH = 'nativeChat:publishVisualGuestTheme'
+export const NATIVE_CHAT_VISUAL_GUEST_THEME_READ = 'nativeChat:readVisualGuestTheme'
+export const NATIVE_CHAT_VISUAL_GUEST_THEME_UPDATE = 'nativeChat:visualGuestThemeChanged'
+
+export type NativeChatVisualGuestTheme = { css: string; colorScheme: 'light' | 'dark' }
+
 const TOKEN_NAME_PATTERN = /^--[a-z0-9-]+$/
 
 /** Token values land inside a <style> block, so structural characters are stripped. */
@@ -92,10 +98,22 @@ export function nativeChatVisualThemeCss(theme: NativeChatVisualTheme): string {
 }
 
 // Grow frames to fit, hide their scrollbar and inherit the thread background; later visual CSS may override defaults.
-const BASE_CSS =
-  'html{background:var(--background);color:var(--foreground);font-family:var(--font-sans);' +
-  'font-size:14px;line-height:1.5;scrollbar-width:none}html::-webkit-scrollbar{display:none}' +
-  'body{margin:0}code,pre,kbd,samp{font-family:var(--font-mono)}'
+function visualBaseCss(fitFrame: boolean): string {
+  const scrollbars = fitFrame ? ';scrollbar-width:none}html::-webkit-scrollbar{display:none}' : '}'
+  return `html{background:var(--background);color:var(--foreground);font-family:var(--font-sans);font-size:14px;line-height:1.5${scrollbars}body{margin:0}code,pre,kbd,samp{font-family:var(--font-mono)}`
+}
+
+const BASE_CSS = visualBaseCss(true)
+
+/** Ordinary file guests share appearance, while retaining their scrolling and navigation. */
+export function nativeChatVisualGuestTheme(
+  theme: NativeChatVisualTheme
+): NativeChatVisualGuestTheme {
+  return {
+    css: nativeChatVisualThemeCss(theme) + visualBaseCss(false),
+    colorScheme: theme.colorScheme
+  }
+}
 
 function bootstrapScript(channel: string): string {
   const constants = JSON.stringify({

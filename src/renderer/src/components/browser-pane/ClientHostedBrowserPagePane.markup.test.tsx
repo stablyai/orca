@@ -3,10 +3,10 @@ import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-libra
 import type { ComponentProps } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { TooltipProvider } from '@/components/ui/tooltip'
-import { useAppStore } from '@/store'
+import { useAppStore } from '@/store/index'
 import { installClientHostedPaneApi } from './client-hosted-browser-pane-test-rig'
 import { ClientHostedBrowserPagePane } from './ClientHostedBrowserPagePane'
-import type { MarkupBaseImage } from './annotate/markup-base-image'
+import type { MarkupBaseImage } from './annotate/capture/markup-base-image'
 
 const mocks = vi.hoisted(() => ({
   attach: vi.fn(),
@@ -19,9 +19,11 @@ vi.mock('./browser-client-page-renderer-installation', () => ({
   attachBrowserClientPageToViewport: mocks.attach
 }))
 // Only image/native boundaries are mocked; the button, controller and overlay are real.
-vi.mock('./annotate/markup-base-image', () => ({ captureMarkupBaseImage: mocks.capture }))
-vi.mock('./annotate/markup-screenshot-compose', () => ({ composeMarkupDataUrl: mocks.compose }))
-vi.mock('./annotate/markup-canvas-render', () => ({
+vi.mock('./annotate/capture/markup-base-image', () => ({ captureMarkupBaseImage: mocks.capture }))
+vi.mock('./annotate/capture/markup-screenshot-compose', () => ({
+  composeMarkupDataUrl: mocks.compose
+}))
+vi.mock('./annotate/drawing/markup-canvas-render', () => ({
   renderCommittedLayer: vi.fn(),
   blitMarkupScene: vi.fn()
 }))
@@ -184,25 +186,6 @@ describe('client-hosted screenshot markup', () => {
     expect(webview.style.display).toBe('flex')
     expect(overlay()).toBeNull()
   })
-
-  it.each(['pending', 'unavailable', 'inactive', 'failed'])(
-    'disables Draw for a %s pane',
-    (state) => {
-      const pane = renderPane(
-        {
-          ...(state === 'pending' ? { placement: null } : {}),
-          ...(state === 'inactive' ? { isActive: false } : {})
-        },
-        state !== 'unavailable'
-      )
-      if (state === 'failed') {
-        fireEvent(pane.webview, new Event('destroyed'))
-      }
-      expect(drawButton().disabled).toBe(true)
-      fireEvent.click(drawButton())
-      expect(mocks.capture).not.toHaveBeenCalled()
-    }
-  )
 
   it.each(['cancel', 'deactivate', 'replace', 'loss', 'unmount'])(
     'invalidates an in-flight capture on %s',

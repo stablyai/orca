@@ -1,19 +1,22 @@
-import { isTerminalInputPaused } from '../../../runtime/terminal-input-admission'
+import { isTerminalInputPaused } from '../../../runtime/terminal/input/terminal-input-admission'
 import type { IpcMainEvent, IpcMainInvokeEvent } from 'electron'
 import type { PtyRendererDelivery } from '../session'
 import type { OrcaRuntimeService } from '../../../runtime/orca-runtime'
-import type { IPtyProvider } from '../../../providers/pty-provider-contract'
-import { isPtyWriteUnavailableError } from '../../../providers/pty-write-unavailable-error'
+import type { IPtyProvider } from '../../../providers/pty/provider-contract'
+import { isPtyWriteUnavailableError } from '../../../providers/pty/write-unavailable-error'
 import {
   isTerminalInputTooLargeWithDeferredMeasurement,
   iterateTerminalInputChunks
-} from '../../../../shared/terminal-input'
+} from '../../../../shared/terminal/input/terminal-input'
 import { ptyOwnership } from '../provider/ownership-state'
 import { tryGetProviderForPty } from '../provider/registry'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
-import type { TerminalInputKind } from '../../../../shared/terminal-input-kind'
+import type { TerminalInputKind } from '../../../../shared/terminal/input/terminal-input-kind'
 import { interactiveOutputCharsByPty, lastInputAtByPty } from '../delivery/visibility-state'
-import { isSettledWrite, type WriteSettlement } from '../../../../shared/pty-write-settlement'
+import {
+  isSettledWrite,
+  type WriteSettlement
+} from '../../../../shared/terminal/pty/lifecycle/pty-write-settlement'
 
 export function isMainWindowPtyIpcEvent(
   event: IpcMainEvent | IpcMainInvokeEvent,
@@ -34,6 +37,8 @@ export type PtyWritePayload = {
   data: string
   inputKind: TerminalInputKind
   requireWriteSettlement?: true
+  /** The startup-dialog card this choice was clicked on; refused unless the screen still reads as it. */
+  requireStartupDialog?: string
 }
 export type PtyViewportClaimPayload = { id: string; cols: number; rows: number }
 
@@ -74,6 +79,12 @@ export function createPtyWriteInput(deps: {
   ): boolean | Promise<boolean> => {
     const { id, data } = args
     if (runtime && isTerminalInputPaused(runtime, id, 'desktop')) {
+      return false
+    }
+    if (
+      args.requireStartupDialog !== undefined &&
+      !runtime?.claimStartupDialogChoice(id, args.requireStartupDialog)
+    ) {
       return false
     }
     noteRendererPtyInput(args)
@@ -190,7 +201,10 @@ export function createPtyWriteInput(deps: {
     value !== null &&
     typeof (value as { id?: unknown }).id === 'string' &&
     (value as { id: string }).id.length > 0 &&
-    typeof (value as { data?: unknown }).data === 'string'
+    typeof (value as { data?: unknown }).data === 'string' &&
+    (!('requireStartupDialog' in value) ||
+      value.requireStartupDialog === undefined ||
+      typeof value.requireStartupDialog === 'string')
 
   const isPtyViewportClaimPayload = (value: unknown): value is PtyViewportClaimPayload =>
     typeof value === 'object' &&

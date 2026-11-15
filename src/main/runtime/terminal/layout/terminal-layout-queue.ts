@@ -1,5 +1,5 @@
 import { OrcaRuntimeWithReclaimTerminalForDesktop } from './terminal-desktop-reclaim'
-import type { ApplyLayoutResult, PtyLayoutState, PtyLayoutTarget } from '../../orca-runtime-core'
+import type { ApplyLayoutResult, PtyLayoutState, PtyLayoutTarget } from './terminal-layout-state'
 
 export abstract class OrcaRuntimeWithPickMostRecentActor extends OrcaRuntimeWithReclaimTerminalForDesktop {
   protected abstract applyLayout(ptyId: string, target: PtyLayoutTarget): Promise<ApplyLayoutResult>
@@ -114,6 +114,17 @@ export abstract class OrcaRuntimeWithPickMostRecentActor extends OrcaRuntimeWith
       }
       queue.pending.push({ target, waiters: [resolve] })
     })
+  }
+
+  /** Settles queued layout work as pty-exited; the running slot settles its own waiters. */
+  protected dropLayoutQueue(ptyId: string): void {
+    const queue = this.layoutQueues.get(ptyId)
+    this.layoutQueues.delete(ptyId)
+    for (const { waiters } of queue?.pending ?? []) {
+      for (const waiter of waiters) {
+        waiter({ ok: false, reason: 'pty-exited' })
+      }
+    }
   }
 
   protected async runLayoutSlot(

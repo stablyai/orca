@@ -1,9 +1,9 @@
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../types'
-import type { Repo } from '../../../../shared/repo-types'
+import type { Repo } from '../../../../shared/repository/repo-types'
 import { getManualRepoOrder } from '../../../../shared/manual-repo-order'
-import { splitRepoReorderByHost } from '../slices/repo-reorder-host-split'
-import { callRuntimeRpc } from '../../runtime/runtime-rpc-client'
+import { splitRepoReorderByHost } from './repo-reorder-host-split'
+import { callRuntimeRpc } from '../../runtime/rpc/calls/runtime-rpc-call'
 import { parseExecutionHostId } from '../../../../shared/execution-host'
 import type { RepoSlice } from './repo-state'
 

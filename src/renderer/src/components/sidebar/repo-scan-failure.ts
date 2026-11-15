@@ -1,4 +1,4 @@
-import type { Repo } from '../../../../shared/repo-types'
+import type { Repo } from '../../../../shared/repository/repo-types'
 import type { DetectedWorktreeListResult } from '../../../../shared/worktree/types'
 import {
   getRepoExecutionHostId,
@@ -8,7 +8,7 @@ import {
 import {
   classifyWorktreeScanFailure,
   type WorktreeScanFailureKind
-} from '../../../../shared/worktree-scan-failure'
+} from '../../../../shared/worktree/catalog/worktree-scan-failure'
 
 export type RepoScanFailure = {
   kind: WorktreeScanFailureKind

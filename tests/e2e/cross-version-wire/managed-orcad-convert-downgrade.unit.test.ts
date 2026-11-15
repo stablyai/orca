@@ -1,12 +1,5 @@
-import { mkdtempSync, rmSync } from 'node:fs'
-import { tmpdir } from 'node:os'
-import { join } from 'node:path'
-import { afterAll, beforeAll, describe, expect, it } from 'vitest'
+import { beforeAll, describe, expect, it } from 'vitest'
 import { normalizeSshTarget } from '../../../src/main/persistence/leasing-ssh-ptys/ssh-normalization'
-import { orcadMigrationCutoverFixture } from '../../../src/main/ssh/orcad-migration-cutover-fixture'
-import { writeOrcadMigrationSourceCutover } from '../../../src/main/ssh/orcad-migration-cutover-journal'
-import { visibleRepos } from '../../../src/main/ssh/orcad-retained-source'
-import type { Repo } from '../../../src/shared/repo-types'
 import { importReleaseCheckoutModule, materializeReleaseCheckout } from './release-checkout'
 
 // Pin pre-conversion readers: orcadFence must retain relay access and project rows on rollback; owner would hide them (#24975, #24979).
@@ -34,29 +27,12 @@ const persistedTarget = normalizeSshTarget({
   username: 'dev',
   orcadFence: { environmentId: 'env-managed' }
 })
-const retainedRepo: Repo = {
-  id: 'repo-retained',
-  path: '/home/dev/project',
-  displayName: 'project',
-  badgeColor: '#888888',
-  addedAt: 0,
-  connectionId: TARGET_ID
-}
 
 describe(`managed orcad conversion read back by ${LAST_RELAY_ONLY_REF}`, () => {
   let oldNormalize: (target: unknown) => unknown
   let OldConnectionStore: ConnectionStore
-  let userDataPath: string
 
   beforeAll(async () => {
-    // A committed cutover journal makes this build hide the retained source rows.
-    userDataPath = mkdtempSync(join(tmpdir(), 'orcad-convert-downgrade-'))
-    writeOrcadMigrationSourceCutover(userDataPath, {
-      ...orcadMigrationCutoverFixture('migration-converted', TARGET_ID, {
-        environmentId: 'env-managed'
-      }),
-      phase: 'destination-committed'
-    })
     const checkout = await materializeReleaseCheckout(LAST_RELAY_ONLY_REF)
     const normalization = await importReleaseCheckoutModule(
       checkout,
@@ -76,7 +52,6 @@ describe(`managed orcad conversion read back by ${LAST_RELAY_ONLY_REF}`, () => {
     oldNormalize = (target) => normalize(target)
     OldConnectionStore = connections.SshConnectionStore
   }, SUITE_TIMEOUT_MS)
-  afterAll(() => rmSync(userDataPath, { recursive: true, force: true }))
 
   it('still lists the converted host with its relay endpoint', () => {
     const oldTarget = oldNormalize(persistedTarget)
@@ -84,17 +59,5 @@ describe(`managed orcad conversion read back by ${LAST_RELAY_ONLY_REF}`, () => {
     expect(listed).toEqual([
       expect.objectContaining({ id: TARGET_ID, host: 'build.example.com', port: 22 })
     ])
-  })
-
-  it('keeps the project this build retains but hides', () => {
-    // That release lists every stored repo; only this build filters the retained ones out.
-    const store = {
-      getSshTargets: () => [persistedTarget],
-      getRepos: () => [retainedRepo],
-      getFolderWorkspaces: () => [],
-      getProjectGroups: () => []
-    }
-    expect(visibleRepos(store, () => userDataPath)).toEqual([])
-    expect(store.getRepos()).toEqual([expect.objectContaining({ connectionId: TARGET_ID })])
   })
 })

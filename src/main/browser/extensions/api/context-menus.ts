@@ -4,18 +4,18 @@ import {
   defineBrowserExtensionMethod,
   registerBrowserExtensionNamespace,
   type BrowserExtensionCaller
-} from '../browser-extension-namespace-registry'
+} from '../api-runtime/browser-extension-namespace-registry'
 import {
   ContextMenuError,
   type ContextMenuUpdateProperties,
   createContextMenuItem,
   removeContextMenuItem,
   updateContextMenuItem
-} from '../browser-extension-context-menu-model'
+} from '../context-menus/browser-extension-context-menu-model'
 import {
   getBrowserExtensionProfileStateStore,
   type StoredContextMenuItem
-} from '../browser-extension-profile-state-store'
+} from '../profile-storage/browser-extension-profile-state-store'
 
 const idSchema = z.union([z.string(), z.number().int()])
 const menuItemPropertyFields = {

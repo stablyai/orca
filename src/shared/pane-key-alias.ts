@@ -1,5 +1,5 @@
 import { MAX_PANE_KEY_LEN } from './agent-hook-listener/listener-limits'
-import { parseLegacyNumericPaneKey, parsePaneKey } from './stable-pane-id'
+import { parseLegacyNumericPaneKey, parsePaneKey } from './workspace-layout/stable-pane-id'
 
 // Only exact opaque remint tokens ($$<base32>:L$$) may alias physical pane keys; hook ingress expects tabId:leafUuid.
 const OPAQUE_REMINTED_PANE_KEY_RE = /^\$\$[A-Za-z2-7]{8,64}:L\$\$$/

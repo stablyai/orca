@@ -1,15 +1,27 @@
-import type { StructuredAttentionRead, StructuredAttentionOrigin } from './agent-session-attention'
-import type { AgentStatusState, AgentType } from './agent-status-types'
-import type { AgentTurnOutcome } from './agent-turn-outcome'
+import {
+  type StructuredAttentionRead,
+  type StructuredAttentionOrigin,
+  isStructuredAttentionRead
+} from './agent-session/agent-session-attention'
+import {
+  isAgentSessionExecutionLocation,
+  type AgentSessionExecutionLocation
+} from './agent-session/lifecycle/agent-session-record'
+import type { AgentStatusState, AgentType } from './agent-status/contracts/agent-status-types'
+import type { AgentTurnOutcome } from './agent-status/lifecycle/agent-turn-outcome'
+import type { ExecutionHostId } from './execution-host'
 import type { NotificationSourceId } from './notification-source'
 
 export type NotificationSettings = {
   enabled: boolean
+  /** An agent finished its turn; permission and question prompts use agentNeedsInput. */
   agentTaskComplete: boolean
+  agentNeedsInput: boolean
   terminalBell: boolean
   suppressWhenFocused: boolean
   customSoundId:
     | 'system'
+    | 'none'
     | 'two-tone'
     | 'bong'
     | 'thump'
@@ -28,10 +40,37 @@ export type NotificationSettings = {
   notifyHiddenWorkspaces: boolean
 }
 
+export function usesCustomNotificationSound(soundId: string | null | undefined): boolean {
+  return !!soundId && soundId !== 'system' && soundId !== 'none'
+}
+
 export type NotificationEventSource = 'agent-task-complete' | 'terminal-bell' | 'test'
 
 export type StructuredNotificationRead = StructuredAttentionRead & {
   paneKey: string
+  executionHost?: NotificationDispatchRequest['executionHost']
+}
+
+export type NotificationAttentionAcknowledgement = {
+  worktree?: AgentSessionExecutionLocation
+  reads: (StructuredAttentionRead & { paneKey?: string })[]
+}
+
+export function isNotificationAttentionAcknowledgement(
+  value: unknown
+): value is NotificationAttentionAcknowledgement {
+  return (
+    !!value &&
+    typeof value === 'object' &&
+    'reads' in value &&
+    Array.isArray(value.reads) &&
+    value.reads.every(
+      (read) =>
+        isStructuredAttentionRead(read) &&
+        (!('paneKey' in read) || typeof read.paneKey === 'string')
+    ) &&
+    (!('worktree' in value) || isAgentSessionExecutionLocation(value.worktree))
+  )
 }
 
 export type NotificationDispatchRequest = {
@@ -40,6 +79,8 @@ export type NotificationDispatchRequest = {
   /** Why: useful for fast native failures, but macOS can still drop notifications after 'show'. */
   requireDisplayConfirmation?: boolean
   worktreeId?: string
+  /** Null means routing did not establish the physical workspace host. */
+  workspaceExecutionHostId?: ExecutionHostId | null
   /** Configured notification source; independent of physical execution location. */
   notificationSourceId?: NotificationSourceId
   /** The server the workspace runs on, so a paired phone opens it there; absent for this desktop's own work. */
@@ -82,6 +123,7 @@ export type NotificationDispatchResult = {
     | 'not-displayed'
     | 'blocked-by-system'
     | 'invalid-request'
+    | 'already-read'
 }
 
 export type NotificationDismissResult = {
@@ -98,6 +140,7 @@ export type NotificationSoundResult = {
     | 'read-failed'
     | 'playback-failed'
     | 'deduped'
+    | 'focus-active'
 }
 
 export type NotificationSoundDataResult =
@@ -109,12 +152,15 @@ export type NotificationSoundDataResult =
     }
   | {
       ok: false
-      reason: Exclude<NotificationSoundResult['reason'], 'playback-failed'>
+      reason: Exclude<NotificationSoundResult['reason'], 'playback-failed' | 'focus-active'>
     }
 
 export type NotificationSoundPathResult =
   | { ok: true; path: string }
-  | { ok: false; reason: 'missing-path' | 'invalid-path' | 'unsupported-type' }
+  | {
+      ok: false
+      reason: 'missing-path' | 'invalid-path' | 'unsupported-type' | 'focus-active'
+    }
 
 export type NotificationPermissionStatusResult = {
   supported: boolean

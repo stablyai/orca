@@ -1,5 +1,5 @@
 import { BrowserWindow, type Session } from 'electron'
-import { acquireElectronDebugger } from '../electron-debugger-lease'
+import { acquireElectronDebugger } from '../cdp/debugger/electron-debugger-lease'
 
 export type CookieClearDebugger = {
   sendCommand: (method: string, params?: Record<string, unknown>) => Promise<unknown>

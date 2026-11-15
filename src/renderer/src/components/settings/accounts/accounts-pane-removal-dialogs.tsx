@@ -1,0 +1,115 @@
+import { translate } from '@/i18n/i18n'
+import type { Translate } from '@/i18n/use-translate'
+import {
+  removeClaudeProviderAccount,
+  removeCodexProviderAccount
+} from '@/runtime/provider-accounts/observations/runtime-provider-accounts-client'
+import { Button } from '../../ui/button'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle
+} from '../../ui/dialog'
+import type { AccountsPaneSectionModel, RemoveAccountTarget } from './accounts-pane-types'
+
+export function renderAccountsRemovalDialogs(
+  model: AccountsPaneSectionModel,
+  removeCodexTarget: RemoveAccountTarget | null,
+  removeClaudeTarget: RemoveAccountTarget | null,
+  t: Translate = translate
+): React.JSX.Element {
+  const {
+    runClaudeAccountAction,
+    runCodexAccountAction,
+    setRemoveClaudeTarget,
+    setRemoveCodexTarget,
+    accountOwner
+  } = model
+  return (
+    <>
+      <Dialog
+        open={removeCodexTarget !== null}
+        onOpenChange={(open) => !open && setRemoveCodexTarget(null)}
+      >
+        <DialogContent showCloseButton={false}>
+          <DialogHeader>
+            <DialogTitle>
+              {t('auto.components.settings.AccountsPane.0d47394635', 'Remove Codex Account?')}
+            </DialogTitle>
+            <DialogDescription>
+              {t(
+                'auto.components.settings.AccountsPane.380a7736cc',
+                'Removing this account permanently deletes its managed Codex home, including all Codex session history and MCP logins stored inside. This cannot be undone. If the account is currently active, Orca falls back to the system default Codex login.'
+              )}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setRemoveCodexTarget(null)}>
+              {t('auto.components.settings.AccountsPane.dbb9626ed1', 'Cancel')}
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={() => {
+                const target = removeCodexTarget
+                if (!target) {
+                  return
+                }
+                setRemoveCodexTarget(null)
+                void runCodexAccountAction(
+                  `remove:${target.id}`,
+                  () => removeCodexProviderAccount(accountOwner, target.id),
+                  target.runtime
+                )
+              }}
+            >
+              {t('auto.components.settings.AccountsPane.699680a328', 'Remove account')}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      <Dialog
+        open={removeClaudeTarget !== null}
+        onOpenChange={(open) => !open && setRemoveClaudeTarget(null)}
+      >
+        <DialogContent showCloseButton={false}>
+          <DialogHeader>
+            <DialogTitle>
+              {t('auto.components.settings.AccountsPane.63843e37e2', 'Remove Claude Account?')}
+            </DialogTitle>
+            <DialogDescription>
+              {t(
+                'settings.accounts.claudeRemoveFolder',
+                "Orca deletes this account's Claude folder and its sign-in from this computer. Chat history shared with System default stays. If it is selected, the next Claude you start uses System default."
+              )}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setRemoveClaudeTarget(null)}>
+              {t('auto.components.settings.AccountsPane.dbb9626ed1', 'Cancel')}
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={() => {
+                const target = removeClaudeTarget
+                if (!target) {
+                  return
+                }
+                setRemoveClaudeTarget(null)
+                void runClaudeAccountAction(
+                  `remove:${target.id}`,
+                  () => removeClaudeProviderAccount(accountOwner, target.id),
+                  target.runtime
+                )
+              }}
+            >
+              {t('auto.components.settings.AccountsPane.699680a328', 'Remove account')}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
+  )
+}

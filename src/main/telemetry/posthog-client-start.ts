@@ -1,5 +1,5 @@
 import type { PostHog } from 'posthog-node'
-import type { Store } from '../persistence'
+import type { Store } from '../persistence/loading-store/store'
 import { resolveConsent } from './consent'
 import { POSTHOG_FLUSH_AT, POSTHOG_FLUSH_INTERVAL_MS } from './posthog-transport'
 

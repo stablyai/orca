@@ -1,4 +1,3 @@
-// Shared knobs, delivery counters and report writer for the typing benches (see terminal-typing-benchmark.md).
 import type { Page, TestInfo } from '@stablyai/playwright-test'
 import { type ChildProcess, spawn } from 'node:child_process'
 import { createHash } from 'node:crypto'

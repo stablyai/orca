@@ -1,4 +1,4 @@
-/** Prove Update defers on a running process and Update anyway preserves that process, its output, and keyboard input across restart. */
+/** Prove Update defers on a running process, Update anyway preserves it across restart, and repeated deferrals keep one staged build (#34149). */
 import { cpSync, mkdtempSync, rmSync } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
@@ -114,6 +114,81 @@ test('Update anyway moves a managed host to the new build and keeps its running 
         await page.keyboard.press('Control+C')
         await expectTerminalAnswers(page, tab)
         expect(fixture.host.exec!(`kill -0 ${pid} 2>/dev/null || echo gone`)).toContain('gone')
+      },
+      templateDir
+    )
+  } finally {
+    rmSync(scratch, { recursive: true, force: true })
+  }
+})
+
+function slotVersions(exec: (command: string) => string): string[] {
+  return exec('cd /root/.orca-remote && ls -d orcad-0* 2>/dev/null || true')
+    .split('\n')
+    .map((line) => line.trim().replace(/^orcad-/, ''))
+    .filter(Boolean)
+    .sort()
+}
+
+function deferredCandidate(page: Page, environmentId: string): Promise<string | null> {
+  return page.evaluate(
+    async (selector) =>
+      (await window.api.runtimeEnvironments.managedOrcad?.getStatus({ selector }))?.deferredUpdate
+        ?.candidateVersion ?? null,
+    environmentId
+  )
+}
+
+test('a release deferred over running terminals replaces the build the last one staged', async (// oxlint-disable-next-line no-empty-pattern -- Owns its app launch through a restart session.
+{}, testInfo) => {
+  // Deploys a server, then relaunches through two app updates that each stage a build.
+  test.setTimeout(20 * 60_000)
+  const scratch = mkdtempSync(path.join(os.tmpdir(), 'orca-deferred-slots-'))
+  const templateDir = path.join(scratch, 'template')
+  cpSync(ORCAD_TEMPLATE!, templateDir, { recursive: true })
+  try {
+    await withManagedHost(
+      testInfo,
+      async (fixture) => {
+        const exec = fixture.host.exec!
+        const workspace = await launchManagedWorkspace(fixture)
+        const { environmentId } = workspace
+        const tab = await openTerminalTab(workspace.page, workspace.seeded.worktreeId)
+        await typeInTerminal(workspace.page, tab, `bash -c 'while :; do echo TICK; sleep 1; done'`)
+        await expectPaneText(workspace.page, tab, 'TICK')
+        const deployed = readHostOrcadActivation(exec).active!
+
+        makeOrcadTemplateVariant(templateDir, 'B')
+        let page = await relaunchManagedApp(fixture)
+        await expect
+          .poll(() => deferredCandidate(page, environmentId), { timeout: 4 * 60_000 })
+          .not.toBeNull()
+        const staged = (await deferredCandidate(page, environmentId))!
+        expect(slotVersions(exec)).toEqual([deployed, staged].sort())
+
+        // Releases come days apart; a build staged this recently could still be another desktop's.
+        exec(`touch -d '5 days ago' /root/.orca-remote/orcad-${staged}/.install-complete`)
+        makeOrcadTemplateVariant(templateDir, 'C')
+        page = await relaunchManagedApp(fixture)
+        let next: string | null = null
+        await expect
+          .poll(
+            async () => {
+              const candidate = await deferredCandidate(page, environmentId)
+              next = candidate !== staged ? candidate : null
+              return next
+            },
+            { timeout: 4 * 60_000 }
+          )
+          .not.toBeNull()
+        expect(readHostOrcadActivation(exec).active).toBe(deployed)
+        await expect
+          .poll(() => slotVersions(exec), { timeout: 60_000 })
+          .toEqual([deployed, next!].sort())
+        // The prune must not touch the running terminal the deferral protected.
+        expect(
+          exec("pgrep -f '[w]hile :; do echo TICK' >/dev/null && echo alive || true")
+        ).toContain('alive')
       },
       templateDir
     )

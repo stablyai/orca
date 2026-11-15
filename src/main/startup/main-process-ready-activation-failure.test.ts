@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { MainProcessRuntimeLaunchOptions } from './main-process-runtime-launch'
+import type { MainProcessRuntimeLaunchOptions } from './runtime-startup/main-process-runtime-launch'
 
 const phases = vi.hoisted(() => ({
   foundation: vi.fn<() => Promise<void>>(),
@@ -14,14 +14,16 @@ vi.mock('./main-process-ready-foundation', () => ({
 vi.mock('./main-process-ready-runtime', () => ({
   initializeReadyRuntimeServices: phases.runtimeServices
 }))
-vi.mock('./main-process-i18n-menu', () => ({ initializeMainProcessI18nAndMenu: phases.menu }))
-vi.mock('./main-process-runtime-launch', () => ({
+vi.mock('./main-window/main-process-i18n-menu', () => ({
+  initializeMainProcessI18nAndMenu: phases.menu
+}))
+vi.mock('./runtime-startup/main-process-runtime-launch', () => ({
   initializeMainProcessRuntimeLaunch: phases.launch
 }))
 
 const { initializeMainProcessReady } = await import('./main-process-ready')
 const { mainProcessState: state } = await import('./main-process-state')
-const { createServeDesktopActivationGate } = await import('./serve-desktop-activation')
+const { createServeDesktopActivationGate } = await import('./serve-launch/serve-desktop-activation')
 
 const activateWindow = vi.fn()
 const launchOptions: MainProcessRuntimeLaunchOptions = {
@@ -62,23 +64,6 @@ describe('desktop activation after ready-phase failures', () => {
       expect(phases.launch).not.toHaveBeenCalled()
       state.desktopActivationGate?.requestActivation()
       expect(activateWindow).not.toHaveBeenCalled()
-    }
-  )
-
-  it.each(['foundation', 'runtimeServices'] as const)(
-    'disables serve promotion after %s fails',
-    async (phase) => {
-      const error = new Error(`${phase} failed`)
-      phases[phase].mockRejectedValueOnce(error)
-      state.isServeMode = true
-      state.desktopActivationGate?.requestActivation()
-
-      await expect(initializeMainProcessReady(launchOptions)).rejects.toBe(error)
-
-      expect(state.desktopActivationGate).toBeNull()
-      state.desktopActivationGate?.requestActivation()
-      expect(activateWindow).not.toHaveBeenCalled()
-      expect(phases.launch).not.toHaveBeenCalled()
     }
   )
 

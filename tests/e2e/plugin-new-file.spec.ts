@@ -11,9 +11,12 @@ import { deflateSync } from 'node:zlib'
 import { PLUGIN_MANIFEST_V2_SINCE } from '../../src/shared/plugins/manifest/plugin-schema-field-docs'
 import { expect, test } from './helpers/orca-app'
 import { disablePluginSystem, enableDevPlugins } from './helpers/plugin-smoke'
+import { pluginGuest, readInGuest, ISOLATED_FRAMES_E2E } from './helpers/plugin-frame-guest'
+
+// Isolated frames are off by default; these journeys exercise the guest path.
+test.use(ISOLATED_FRAMES_E2E)
 
 const TEMPLATE = '{"type":"sketch","elements":[]}\n'
-const FRAME = 'iframe[title="Sketch Pad"]'
 
 const EDITOR_HTML = `<textarea id="doc" style="width:100%;height:90vh"></textarea>
 <script>
@@ -117,9 +120,13 @@ test('a plugin new file is created from the + menu and opens in its editor', asy
     await item.click()
 
     await expect.poll(() => readFile(filePath, 'utf8').catch(() => null)).toBe(TEMPLATE)
-    await expect(orcaPage.frameLocator(FRAME).locator('#doc')).toHaveValue(TEMPLATE, {
-      timeout: 15_000
-    })
+    const guest = pluginGuest(orcaPage, 'Sketch Pad')
+    await expect(guest).toBeVisible({ timeout: 15_000 })
+    await expect
+      .poll(() => readInGuest<string>(guest, `document.getElementById('doc').value`), {
+        timeout: 15_000
+      })
+      .toBe(TEMPLATE)
 
     const tab = orcaPage.locator('[data-tab-id]').filter({ hasText: 'untitled.sketch' }).first()
     const icon = tab.locator('img[src*="/editor-0"]')

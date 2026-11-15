@@ -1,32 +1,44 @@
 import {
   isWslShellName,
   type LocalWindowsTerminalRuntimeOptions
-} from '../../../shared/local-windows-terminal-runtime'
-import type { ProjectExecutionRuntimeResolution } from '../../../shared/project-execution-runtime'
-import type { StartupCwdFallback } from '../../../shared/startup-cwd-fallback'
-import type { TerminalStartupCwdMissingDirFallback } from '../../../shared/terminal-startup-cwd'
-import { isWslUncPath, toWindowsWslPath } from '../../../shared/wsl-paths'
-import type { CodexAccountSelectionTarget } from '../../codex-accounts/runtime-selection'
-import { resolveWslSessionContext } from '../../daemon/wsl-session-context'
+} from '../../../shared/shell/launch/local-windows-terminal-runtime'
+import type { ProjectExecutionRuntimeResolution } from '../../../shared/execution-host/project-execution-runtime'
+import type { StartupCwdFallback } from '../../../shared/shell/launch/startup-cwd-fallback'
 import {
-  resolveLocalProjectRuntimeForWorktreeId,
-  resolveLocalPtyOptions,
-  type ProjectRuntimeResolutionStore
-} from '../../local-project-runtime-resolution'
-import type { PtySpawnOptions, PtySpawnResult } from '../../providers/pty-provider-contract'
+  resolveTerminalStartupCwd,
+  type TerminalStartupCwdMissingDirFallback
+} from '../../../shared/shell/launch/terminal-startup-cwd'
+import type { TerminalWorkspaceLaunchScope } from '../../runtime/orchestration/terminal-authority/structured-sessions/runtime-legacy-worker-terminal-recovery-types'
+import { isWslUncPath, toWindowsWslPath } from '../../../shared/file-access/wsl-paths'
+import type { CodexAccountSelectionTarget } from '../../../shared/agent-accounts/codex/codex-selection-lane'
+import { resolveWslSessionContext } from '../../daemon/pty-subprocess/wsl-session-context'
+import {
+  resolvePlainTerminalWorkspace,
+  resolvePlainTerminalProjectRuntime,
+  type LaunchScopeRuntimeStore
+} from '../../workspaces/execution-host/local-project-runtime-resolution'
+import { resolveLocalPtyOptions } from '../../workspaces/execution-host/local-project-runtime-pty-options'
+import type { PtySpawnOptions } from '../../providers/pty/provider-contract'
+import type { PtySpawnResult } from '../../providers/pty/spawn-result'
 import {
   holdPassiveRestoreOfStoppedWslDistro,
   wslHoldReadAnchor as wslHoldReadAnchorNow
-} from '../../daemon/daemon-wsl-passive-restore-hold'
-import { normalizeWindowsTerminalCwd } from '../../providers/windows-shell-args'
-import { wslUncDirectoryExistsAsync } from '../../wsl'
+} from '../../daemon/providers/wsl/daemon-wsl-passive-restore-hold'
+import { msysDrivePathToWindows } from '../../../shared/cross-platform-path'
+import { wslUncDirectoryExistsAsync } from '../../wsl/filesystem/unc-path-access'
 import { getCodexSelectionTargetForPty } from './host-env/codex-home'
 import { probeLocalStartupCwdDirectory } from './host-env/startup-cwd-directory-exists'
 
 // Window runtime comes from the renderer; host runtime comes from persistence.
 export type PtySpawnProjectRuntimeSource =
   | { kind: 'sent'; projectRuntime: ProjectExecutionRuntimeResolution | undefined }
-  | { kind: 'store'; store: ProjectRuntimeResolutionStore | undefined }
+  | {
+      kind: 'store'
+      store: LaunchScopeRuntimeStore | undefined
+      workspace?: TerminalWorkspaceLaunchScope
+      connectionId?: string | null
+      tabId?: string
+    }
 
 export type PtySpawnStartupTarget = {
   cwd: string | undefined
@@ -71,13 +83,43 @@ export async function resolvePtySpawnStartupTarget(
   args: PtySpawnStartupArgs
 ): Promise<PtySpawnStartupTarget> {
   const source = args.projectRuntimeSource
+  // A live pane and a quoted launch already own their runtime; only a fresh plain start derives it.
+  const workspace =
+    source.kind === 'store'
+      ? args.preAdopted || args.plannedPty
+        ? source.workspace
+        : resolvePlainTerminalWorkspace(
+            source.store,
+            args.worktreeId,
+            source.connectionId,
+            source.workspace
+          )
+      : undefined
+  const startupArgs = workspace
+    ? {
+        ...args,
+        resolveStartupCwd: (
+          _id: string | undefined,
+          cwd: string | undefined,
+          fallback?: TerminalStartupCwdMissingDirFallback
+        ) => resolveTerminalStartupCwd(workspace.path, cwd, fallback)
+      }
+    : args
   const terminalRuntimeOptions =
     args.plannedPty ??
     resolveLocalPtyOptions(
       args.getSettings?.(),
-      source.kind === 'sent'
-        ? source.projectRuntime
-        : resolveLocalProjectRuntimeForWorktreeId(source.store, args.worktreeId),
+      args.preAdopted
+        ? undefined
+        : source.kind === 'sent'
+          ? source.projectRuntime
+          : resolvePlainTerminalProjectRuntime(
+              source.store,
+              args.worktreeId,
+              workspace,
+              source.tabId,
+              source.connectionId
+            ),
       args.shellOverride,
       process.env.COMSPEC || 'powershell.exe'
     )
@@ -101,11 +143,11 @@ export async function resolvePtySpawnStartupTarget(
   }
   const startup = args.preAdopted
     ? {
-        cwd: args.resolveStartupCwd(args.worktreeId, args.cwd),
+        cwd: args.cwd,
         startupCwdFallback: undefined,
         correctStartupCwd: undefined
       }
-    : await resolveStartupCwdWithFallback(args, terminalRuntimeOptions)
+    : await resolveStartupCwdWithFallback(startupArgs, terminalRuntimeOptions)
   const expectedWslDistro =
     resolveWslSessionContext({
       cwd: startup.cwd,
@@ -116,7 +158,7 @@ export async function resolvePtySpawnStartupTarget(
   return {
     ...startup,
     requestedCwd: startup.startupCwdFallback
-      ? args.resolveStartupCwd(args.worktreeId, args.cwd)
+      ? startupArgs.resolveStartupCwd(args.worktreeId, args.cwd)
       : startup.cwd,
     terminalRuntimeOptions,
     expectedWslDistro,
@@ -199,7 +241,7 @@ async function resolveStartupCwdWithFallback(
     onFallbackToWorkspaceRoot?: () => void
   ): TerminalStartupCwdMissingDirFallback => ({
     directoryExists: (path) => {
-      const probePath = process.platform === 'win32' ? normalizeWindowsTerminalCwd(path) : path
+      const probePath = process.platform === 'win32' ? msysDrivePathToWindows(path) : path
       const verdict =
         startupWslContext && path === initiallyResolvedStartupCwd
           ? wslStartupCwdExists

@@ -32,6 +32,9 @@ export type CustomEditorDocument = {
   content: CustomEditorContent
   /** Bytes documents: the manifest suffix that matched, e.g. `xlsx`; never a path or file name. */
   fileType?: string
+  /** Sent only to a session that merges: the file changed on disk while the tab held unsaved
+   *  edits. `content` is the new disk text and `ancestor` the disk text those edits started from. */
+  ancestor?: CustomEditorContent
 }
 
 const customEditorEditSchema = z.strictObject({

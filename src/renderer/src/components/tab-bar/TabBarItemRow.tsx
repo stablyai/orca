@@ -1,9 +1,8 @@
 import { memo } from 'react'
-import { useAppStore } from '@/store'
 import { useTranslation } from 'react-i18next'
 import { shallow } from 'zustand/shallow'
-import type { GitFileStatus } from '../../../../shared/git-status-types'
-import type { OpenFile } from '../../store/slices/editor'
+import type { GitFileStatus } from '../../../../shared/git/status/git-status-types'
+import type { OpenFile } from '../../store/slices/editor/types/open-file'
 import SortableTab from './SortableTab'
 import TerminalSortableTab from './TerminalSortableTab'
 import EditorFileTab from './EditorFileTab'
@@ -13,11 +12,20 @@ import type { TabDragItemData } from '../tab-group/useTabDragSplit'
 import { getTabDragLabel, resolveTerminalItemTab, type TabBarItem } from './tab-bar-item-model'
 import type { TabBarItemActions } from './use-tab-bar-item-actions'
 import {
-  useStructuredChatTabConversationName,
+  useStructuredChatTabNaming,
   useStructuredChatTabNamingFailure
-} from '@/runtime/structured-conversation-name'
-import { agentTypeToIconAgent } from '@/lib/agent-status'
-import { formatSimulatorTabLabel } from '@/lib/simulator-tab-label'
+} from '@/runtime/native-chat/naming/structured-conversation-name'
+import { readStructuredChatSessionNamingOnTabHost } from '@/runtime/native-chat/naming/structured-chat-tab-name'
+import {
+  forkMarkedNameText,
+  forkSourceTooltipText
+} from '../native-chat/fork/fork-marked-name-text'
+import { stripLeadingAgentTitleDecoration } from '../../../../shared/agent-status/title/agent-title-decoration'
+import { defaultAgentChatLabel } from '../../../../shared/agent-session/agent-session-chat-label'
+import { useAppStore } from '../../store/index'
+import { agentTypeToIconAgent } from '../../../../shared/agent-status/presentation/agent-type-icon-agent'
+import { formatSimulatorTabLabel } from '@/lib/simulator/tabs/simulator-tab-label'
+import { useTranslate } from '@/i18n/use-translate'
 
 // Why only values and `actions`: anything a tab draws must be a compared prop, or a skipped render shows it stale.
 type TabBarItemRowProps = {
@@ -63,11 +71,13 @@ function TabBarItemRow({
   canCloseSplitPane,
   gitStatus
 }: TabBarItemRowProps): React.JSX.Element {
+  const t = useTranslate()
   // Why: the tabs' labels come from `translate()`, which a skipped render would leave in the old language.
   useTranslation()
-  const conversationName = useStructuredChatTabConversationName(
+  const chatNaming = useStructuredChatTabNaming(
     item.type === 'agent-session' ? item.data : undefined
   )
+  const conversationName = chatNaming.name
   const namingFailure = useStructuredChatTabNamingFailure(
     item.type === 'agent-session' ? item.data : undefined
   )
@@ -78,7 +88,7 @@ function TabBarItemRow({
     unifiedTabId: item.unifiedTabId,
     visibleTabId: item.id,
     tabType: item.type,
-    label: getTabDragLabel(item, generatedTabTitlesEnabled, useAppStore.getState()),
+    label: getTabDragLabel(item, generatedTabTitlesEnabled, conversationName, t),
     iconPath: item.type === 'editor' ? item.data.filePath : undefined,
     color: item.type === 'terminal' ? (item.data.color ?? null) : null
   }
@@ -121,6 +131,27 @@ function TabBarItemRow({
   }
   if (item.type === 'agent-session') {
     const nativeChat = { sessionId: item.data.entityId, agent: item.data.agentSessionAgent }
+    const chatTab = item.data
+    const forkSourceId = chatNaming.forkSourceId
+    const fork = forkSourceId
+      ? {
+          markedTitle: forkMarkedNameText(
+            t,
+            chatTab.customLabel ??
+              stripLeadingAgentTitleDecoration(conversationName ?? chatTab.label)
+          ),
+          describeSource: () =>
+            forkSourceTooltipText(
+              t,
+              readStructuredChatSessionNamingOnTabHost(
+                chatTab,
+                forkSourceId,
+                useAppStore.getState()
+              ),
+              defaultAgentChatLabel(chatTab.agentSessionAgent)
+            )
+        }
+      : undefined
     return (
       <SortableTab
         {...sortableTabProps}
@@ -140,6 +171,7 @@ function TabBarItemRow({
         nativeChat={nativeChat}
         // A tab the user named does not show the generated name, so neither does its failure.
         namingFailure={item.data.customLabel ? null : namingFailure}
+        fork={fork}
       />
     )
   }
@@ -171,7 +203,7 @@ function TabBarItemRow({
     onCloseAll: actions.closeAllFiles
   }
   if (item.type === 'simulator') {
-    const simulatorLabel = formatSimulatorTabLabel(item.data.label)
+    const simulatorLabel = formatSimulatorTabLabel(item.data.label, t)
     const simulatorFile: OpenFile & { tabId: string } = {
       id: item.id,
       tabId: item.id,

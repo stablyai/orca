@@ -10,7 +10,7 @@ import type {
   PluginMarketplace,
   PluginMarketplaceEntry
 } from '../../../shared/plugins/catalog/plugin-marketplace'
-import { sha256Hex } from '../plugin-image-cache'
+import { sha256Hex } from '../media/plugin-image-cache'
 
 // Why a catalog-wide cap: a large catalog must not turn one refresh into an unbounded download.
 const CATALOG_IMAGES_MAX_BYTES = 64 * 1024 * 1024

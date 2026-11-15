@@ -1,4 +1,4 @@
-import { isWslUncPath, parseWslUncPath, toWindowsWslPath } from './wsl-paths'
+import { isWslUncPath, parseWslUncPath, toWindowsWslPath } from './file-access/wsl-paths'
 
 const SLASH_CHAR_CODE = '/'.charCodeAt(0)
 
@@ -6,9 +6,32 @@ export function isWindowsAbsolutePathLike(value: string): boolean {
   return /^[A-Za-z]:[\\/]/.test(value) || value.startsWith('\\\\') || value.startsWith('//')
 }
 
+/** Git Bash/MSYS `/c/...` drive spelling as a native Windows path; other paths stay unchanged. */
+export function msysDrivePathToWindows(path: string): string {
+  const match = path.match(/^\/([A-Za-z])(?:\/(.*))?$/)
+  if (!match) {
+    return path
+  }
+
+  const driveLetter = match[1].toUpperCase()
+  const rest = match[2]?.replace(/\//g, '\\') ?? ''
+  return rest ? `${driveLetter}:\\${rest}` : `${driveLetter}:\\`
+}
+
 /** Use path syntax, never client OS: Windows drive/UNC roots fold case; WSL UNC and POSIX/macOS stay case-sensitive to avoid merging distinct SSH/WSL files. */
 export function isCaseInsensitiveRuntimeRoot(rootPath: string): boolean {
   return isWindowsAbsolutePathLike(rootPath) && !isWslUncPath(rootPath)
+}
+
+export function normalizeRelativePath(path: string, rootPath?: string | null): string {
+  if (rootPath && !isWindowsAbsolutePathLike(rootPath)) {
+    return path.replace(/^\/+/, '').replace(/\/+/g, '/')
+  }
+  return path.replace(/^[\\/]+/, '').replace(/[\\/]+/g, '/')
+}
+
+export function splitPathSegments(path: string, rootPath?: string | null): string[] {
+  return normalizeRelativePath(path, rootPath).split('/').filter(Boolean)
 }
 
 export function normalizeRuntimePathSeparators(value: string): string {

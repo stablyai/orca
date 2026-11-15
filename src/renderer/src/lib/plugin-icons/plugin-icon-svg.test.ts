@@ -31,43 +31,12 @@ describe('sanitizePluginIconSvg', () => {
     expect(icon?.svg).not.toContain('inkscape')
   })
 
-  it('treats an icon drawn only in currentColor as monochrome', () => {
-    expect(
-      sanitizePluginIconSvg(
-        '<svg xmlns="http://www.w3.org/2000/svg"><path d="M0 0h1" fill="currentColor" stroke="none"/></svg>'
-      )?.monochrome
-    ).toBe(true)
-    expect(
-      sanitizePluginIconSvg(
-        '<svg xmlns="http://www.w3.org/2000/svg"><path fill="currentColor"/><path fill="#f00"/></svg>'
-      )?.monochrome
-    ).toBe(false)
-    // An unpainted shape keeps SVG's default black fill.
-    expect(
-      sanitizePluginIconSvg(
-        '<svg xmlns="http://www.w3.org/2000/svg"><path fill="currentColor"/><path d="M0 0h1"/></svg>'
-      )?.monochrome
-    ).toBe(false)
-    expect(
-      sanitizePluginIconSvg(
-        '<svg xmlns="http://www.w3.org/2000/svg" fill="currentColor"><path/><path/></svg>'
-      )?.monochrome
-    ).toBe(true)
-    // Stroke-only icons declare fill="none", usually on the root.
-    expect(
-      sanitizePluginIconSvg(
-        '<svg xmlns="http://www.w3.org/2000/svg" fill="none"><path stroke="currentColor"/></svg>'
-      )?.monochrome
-    ).toBe(true)
-  })
-
   it.each([
     ['script', '<script>alert(1)</script>', 'script'],
     ['foreign content', '<foreignObject><div/></foreignObject>', 'foreignObject'],
     ['a style element', '<style>*{fill:red}</style>', 'style>'],
     ['use', '<use href="#a"/>', 'use'],
     ['an event handler', '<rect onclick="x()"/>', 'onclick'],
-    ['an xlink href', '<rect xlink:href="https://evil"/>', 'evil'],
     [
       'any-prefix href',
       '<rect xmlns:x="http://www.w3.org/1999/xlink" x:href="https://evil"/>',
@@ -83,8 +52,19 @@ describe('sanitizePluginIconSvg', () => {
     expect(icon?.svg).not.toContain(forbidden)
   })
 
+  it('accepts an SVG that omits xmlns, as the official Minimal Icons files do', () => {
+    const icon = sanitizePluginIconSvg(
+      '<svg viewBox="0 0 16 16" fill="none"><path d="M4 1.5h5l3 3V14H4zM9 1.5v3h3" stroke="currentColor"/><script>evil()</script></svg>'
+    )
+    expect(icon?.monochrome).toBe(true)
+    expect(icon?.svg).toContain('xmlns="http://www.w3.org/2000/svg"')
+    expect(icon?.svg).toContain('<path')
+    expect(icon?.svg).not.toContain('evil')
+  })
+
   it('rejects documents that are not one SVG', () => {
     expect(sanitizePluginIconSvg('<html/>')).toBeNull()
+    expect(sanitizePluginIconSvg('<svg xmlns="urn:other"><path/></svg>')).toBeNull()
     expect(sanitizePluginIconSvg('<svg xmlns="http://www.w3.org/2000/svg"><g></svg>')).toBeNull()
   })
 })

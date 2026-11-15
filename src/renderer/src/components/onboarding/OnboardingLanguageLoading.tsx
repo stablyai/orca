@@ -1,10 +1,11 @@
 import { useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { useAppStore } from '@/store'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { LoadingSpinner } from '@/components/LoadingSpinner'
 
 export function OnboardingLanguageLoading(): React.JSX.Element {
+  const t = useTranslate()
   const settings = useAppStore((state) => state.settings)
   const fetchSettings = useAppStore((state) => state.fetchSettings)
   const [retrying, setRetrying] = useState(false)
@@ -16,7 +17,7 @@ export function OnboardingLanguageLoading(): React.JSX.Element {
       {settings === null && !retrying ? (
         <div className="space-y-3 text-center">
           <p className="text-sm">
-            {translate('onboarding.language.settingsError', 'Could not load your settings.')}
+            {t('onboarding.language.settingsError', 'Could not load your settings.')}
           </p>
           <Button
             disabled={retrying}
@@ -27,15 +28,15 @@ export function OnboardingLanguageLoading(): React.JSX.Element {
               )
             }}
           >
-            {translate('onboarding.language.retry', 'Retry')}
+            {t('onboarding.language.retry', 'Retry')}
           </Button>
         </div>
       ) : (
         <div role="status" className="flex items-center gap-2 text-sm text-muted-foreground">
           <LoadingSpinner className="size-4" />
           {settings === null
-            ? translate('onboarding.language.loadingSettings', 'Loading settings…')
-            : translate('onboarding.language.loading', 'Loading language…')}
+            ? t('onboarding.language.loadingSettings', 'Loading settings…')
+            : t('onboarding.language.loading', 'Loading language…')}
         </div>
       )}
     </div>

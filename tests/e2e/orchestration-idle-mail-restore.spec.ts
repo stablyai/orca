@@ -11,8 +11,8 @@ import {
   waitForActivePaneHookDescriptor,
   waitForActivePanePtyId
 } from './helpers/terminal'
-import { RuntimeClient } from '../../src/cli/runtime-client'
-import type { RuntimeTerminalListResult } from '../../src/shared/runtime-types'
+import { RuntimeClient } from '../../src/cli/runtime/client'
+import type { RuntimeTerminalListResult } from '../../src/shared/terminal/runtime/runtime-terminal-contracts'
 import {
   CODEX_IDLE_TITLE,
   CODEX_WORKING_TITLE,

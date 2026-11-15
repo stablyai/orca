@@ -2,8 +2,8 @@ import {
   collectCountedCombinedDiffPasses,
   getCombinedDiffCountingPassKey,
   shouldLoadCombinedDiffOnDemand
-} from '../../combined-diff-on-demand-load'
-import type { DiffSection } from '../../diff-section-types'
+} from '../load-sections/combined-diff-on-demand-load'
+import type { DiffSection } from '../../diff/sections/diff-section-types'
 import type { CombinedDiffEntrySet } from '../resolve-changes/use-combined-diff-entry-set'
 import { getCombinedDiffFileTreeSectionKey } from '../resolve-changes/combined-diff-section-identity'
 import { combinedDiffSectionMatchesEntryMetadata } from '../resolve-changes/combined-diff-section-cache-match'

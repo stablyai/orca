@@ -1,13 +1,14 @@
 import { posix, win32 } from 'node:path'
-import { normalizeGitHubPRMergeMethodSettings } from '../../../../shared/github/pull-request-merge-methods'
+import { normalizeGitHubPRMergeMethodSettings } from '../../../../shared/github/pull-requests/merge/pull-request-merge-methods'
 import { mergeCommandEnvironment } from '../../../../shared/command-environment'
-import { ghExecFileAsync } from '../../gh-utils'
-import { githubHostExecOptions, type GitHubApiRepository } from '../../github-api-repository'
-import { githubRepoIdentityKey } from '../../../../shared/github/repository-identity-key'
-import { noteRepositoryRateLimitSpend, repositoryRateLimitGuard } from '../../rate-limit'
-import { githubReadExecutionScope } from '../../github-read-execution-scope'
-import { runCoalescedProbe } from '../../../git/coalesced-probe'
-import { parseWslUncPath } from '../../../../shared/wsl-paths'
+import { ghExecFileAsync } from '../../../git/command-runner/hosted-cli/gh-exec-file'
+import { githubHostExecOptions } from '../../repositories/github-repository-host'
+import type { GitHubRepositoryIdentity as GitHubApiRepository } from '../../../../shared/github/repositories/repository-identity'
+import { githubRepoIdentityKey } from '../../../../shared/github/repositories/repository-identity-key'
+import { noteRepositoryRateLimitSpend, repositoryRateLimitGuard } from '../../api/rate-limit'
+import { codeHostReadExecutionScope as githubReadExecutionScope } from '../../../source-control/code-host-read-execution-scope'
+import { runCoalescedProbe } from '../../../git/remotes/coalesced-probe'
+import { parseWslUncPath } from '../../../../shared/file-access/wsl-paths'
 import type { GhExecOptions } from './../github-exec-scope'
 import {
   MERGE_QUEUE_CACHE_TTL_MS,
@@ -154,10 +155,7 @@ async function readRepositoryMergeMetadata(
       args.push('-f', `branch=${branchName}`)
       args.push('-f', `qualified=refs/heads/${branchName}`)
     }
-    const { stdout } = await ghExecFileAsync(args, {
-      ...ghOptions,
-      ...githubHostExecOptions(ownerRepo)
-    })
+    const { stdout } = await ghExecFileAsync(args, ghOptions)
     const parsed = JSON.parse(stdout) as {
       data?: {
         repository?: {

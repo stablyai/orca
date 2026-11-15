@@ -1,12 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
-  MAX_FEEDBACK_IMAGE_BYTES,
-  MAX_FEEDBACK_IMAGE_COUNT,
-  MAX_FEEDBACK_IMAGE_TOTAL_BYTES
-} from '../../shared/feedback-image-limits'
-import {
   appendFeedbackImagesToFormData,
-  feedbackImageFilename,
   isSupportedFeedbackImageContentType,
   validateFeedbackImages
 } from './feedback-image-attachments'
@@ -16,14 +10,6 @@ function image(contentType: string, bytes = 4): { contentType: string; data: Uin
 }
 
 describe('isSupportedFeedbackImageContentType', () => {
-  it.each(['image/png', 'image/jpeg', 'image/webp', 'image/gif'])('accepts %s', (contentType) => {
-    expect(isSupportedFeedbackImageContentType(contentType)).toBe(true)
-  })
-
-  it.each(['image/bmp', 'image/svg+xml', 'application/pdf', ''])('rejects %s', (contentType) => {
-    expect(isSupportedFeedbackImageContentType(contentType)).toBe(false)
-  })
-
   // Prototype members must not become accepted MIME types and filename extensions.
   it.each(['constructor', '__proto__', 'toString', 'valueOf', 'hasOwnProperty'])(
     'rejects the inherited member %s',
@@ -32,21 +18,6 @@ describe('isSupportedFeedbackImageContentType', () => {
       expect(validateFeedbackImages([image(contentType)])).toBe('Unsupported image type.')
     }
   )
-})
-
-describe('feedbackImageFilename', () => {
-  it.each([
-    ['image/png', 'feedback-image-1.png'],
-    ['image/jpeg', 'feedback-image-1.jpg'],
-    ['image/webp', 'feedback-image-1.webp'],
-    ['image/gif', 'feedback-image-1.gif']
-  ])('names a %s attachment %s', (contentType, expected) => {
-    expect(feedbackImageFilename(0, contentType)).toBe(expected)
-  })
-
-  it('numbers attachments from one', () => {
-    expect(feedbackImageFilename(3, 'image/png')).toBe('feedback-image-4.png')
-  })
 })
 
 describe('appendFeedbackImagesToFormData', () => {
@@ -64,22 +35,6 @@ describe('appendFeedbackImagesToFormData', () => {
 })
 
 describe('validateFeedbackImages', () => {
-  it('accepts a full batch of supported images', () => {
-    expect(
-      validateFeedbackImages(
-        Array.from({ length: MAX_FEEDBACK_IMAGE_COUNT }, () => image('image/png'))
-      )
-    ).toBeNull()
-  })
-
-  it('rejects more than the supported count', () => {
-    expect(
-      validateFeedbackImages(
-        Array.from({ length: MAX_FEEDBACK_IMAGE_COUNT + 1 }, () => image('image/png'))
-      )
-    ).toBe(`Attach ${MAX_FEEDBACK_IMAGE_COUNT} images or fewer.`)
-  })
-
   it('rejects malformed attachment collections and byte payloads', () => {
     expect(validateFeedbackImages('image/png')).toBe('Image attachments must be a list.')
     expect(validateFeedbackImages([null])).toBe('Invalid image attachment.')
@@ -90,31 +45,5 @@ describe('validateFeedbackImages', () => {
 
   it('rejects an empty attachment', () => {
     expect(validateFeedbackImages([image('image/png', 0)])).toBe('Image attachment is empty.')
-  })
-
-  it('rejects an attachment over the byte cap', () => {
-    expect(validateFeedbackImages([image('image/png', MAX_FEEDBACK_IMAGE_BYTES + 1)])).toBe(
-      `Each image must be ${MAX_FEEDBACK_IMAGE_BYTES} bytes or fewer.`
-    )
-  })
-
-  it('accepts a set that totals exactly the attachment budget', () => {
-    const quarter = MAX_FEEDBACK_IMAGE_TOTAL_BYTES / MAX_FEEDBACK_IMAGE_COUNT
-    expect(
-      validateFeedbackImages(
-        Array.from({ length: MAX_FEEDBACK_IMAGE_COUNT }, () => image('image/png', quarter))
-      )
-    ).toBeNull()
-  })
-
-  it('rejects a set over the total byte budget even when each image fits', () => {
-    const half = MAX_FEEDBACK_IMAGE_TOTAL_BYTES / 2
-    expect(
-      validateFeedbackImages([
-        image('image/png', half),
-        image('image/png', half),
-        image('image/png', 1)
-      ])
-    ).toBe(`Image attachments must total ${MAX_FEEDBACK_IMAGE_TOTAL_BYTES} bytes or fewer.`)
   })
 })

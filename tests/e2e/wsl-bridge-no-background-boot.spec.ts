@@ -19,7 +19,7 @@ import { expect, test } from './helpers/orca-app'
 import { ensureTerminalVisible, waitForActiveWorktree, waitForSessionReady } from './helpers/store'
 import { waitForActivePanePtyId } from './helpers/terminal'
 import { visitSettingsPanes } from './helpers/settings-pane-visits'
-import { quotePosixShell } from '../../src/shared/shell-argument-quoting'
+import { quotePosixShell } from '../../src/shared/shell/launch/shell-argument-quoting'
 import {
   readDiagnosticLog,
   recordMainProcessWslDiagnostics
@@ -114,7 +114,13 @@ async function expectNothingStartsTheStoppedDistro(
   await wsl(['--terminate', DISTRO], 30_000)
   timeline('terminated')
   // WSL1 instances can live only seconds, so watch the running list from the terminate on.
-  const watcher = watchDistroRunning(DISTRO, SPAWN_LOG)
+  const watcher = watchDistroRunning(DISTRO, SPAWN_LOG, {
+    spawnsBefore,
+    retryTerminate: async () => {
+      await wsl(['--terminate', DISTRO], 30_000)
+      timeline('terminated (retry)')
+    }
+  })
   let watched: { seenRunning: boolean; reads: number } | undefined
   try {
     // The window starts only once a read has seen it stopped, within the grace.

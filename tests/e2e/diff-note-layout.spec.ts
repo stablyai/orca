@@ -81,14 +81,22 @@ test.describe('Diff note layout', () => {
 
     const added = await orcaPage.evaluate(
       ({ wId, filePath, lineNumber, body }) =>
-        window.__store?.getState().addDiffComment({
-          worktreeId: wId,
-          filePath,
-          source: 'diff',
-          lineNumber,
-          body,
-          side: 'modified'
-        }),
+        // The seeded worktree is this app's own (local) copy.
+        window.__store?.getState().addDiffComment(
+          {
+            kind: 'worktree',
+            worktreeId: wId,
+            authority: { endpoint: { kind: 'self' }, at: 'local' }
+          },
+          {
+            worktreeId: wId,
+            filePath,
+            source: 'diff',
+            lineNumber,
+            body,
+            side: 'modified'
+          }
+        ),
       { wId: worktreeId, filePath: relativePath, lineNumber: NOTE_LINE, body: NOTE_BODY }
     )
     expect(added, 'addDiffComment returned null').not.toBeNull()

@@ -7,13 +7,11 @@ import {
   PINNED_RECURSIVE_WATCH_WORKSPACE_COUNT,
   WARM_RECURSIVE_WATCH_WORKSPACE_COUNT
 } from './editor-external-watch-scope'
-import { getWorktreeVisitKey } from '@/lib/worktree-visit-recency'
+import { getWorktreeVisitKey } from '@/lib/workspace/activation/worktree-visit-recency'
 import { getDefaultSettings } from '../../../shared/constants'
-import {
-  makeFolderWorkspace,
-  makeWorktree,
-  TEST_REPO
-} from '@/store/slices/worktrees-slice-test-fixtures'
+import { makeFolderWorkspace } from '@/store/folder-workspaces/folder-workspace.test-fixture'
+import { makeWorktree } from '@/store/slices/worktrees/worktree.test-fixture'
+import { TEST_REPO } from '@/store/repos/repo.test-fixture'
 
 vi.mock('@/store', () => ({ useAppStore: { getState: vi.fn() } }))
 
@@ -199,7 +197,12 @@ describe('background workspace watch trim', () => {
       tab('wt-wsl')
     ]
     const state = makeState({
-      worktrees: [...worktrees, sshWorktree, wslWorktree],
+      worktrees: [
+        ...worktrees.filter((row) => row.id !== 'wt1'),
+        makeWorktree({ id: 'wt1', repoId: 'r', path: '/r/wt1', hostId: 'runtime:env-1' }),
+        sshWorktree,
+        wslWorktree
+      ],
       repos: [repo('r'), sshRepo],
       openFiles,
       activeWorktreeId: 'wt0'

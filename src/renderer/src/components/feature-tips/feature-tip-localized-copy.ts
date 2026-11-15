@@ -1,12 +1,12 @@
-import type { FeatureTip, FeatureTipId } from '../../../../shared/feature-tips'
+import type { FeatureTip, FeatureTipId } from '../../../../shared/feature-education/feature-tips'
 import { translate } from '@/i18n/i18n'
 import { createLocalizedCatalog } from '@/i18n/localized-catalog'
 
 type FeatureTipCopy = Pick<FeatureTip, 'eyebrow' | 'title' | 'description' | 'ctaLabel'>
 
-// The native chat upgrade dialog renders its own translated copy.
 const getFeatureTipCopyById = createLocalizedCatalog(
   (): Partial<Record<FeatureTipId, FeatureTipCopy>> => ({
+    // The Chat UI tip's dialog renders its own translated copy for each variant.
     'agent-session-search': {
       eyebrow: translate('featureTips.eyebrowNew', 'New'),
       title: translate('featureTips.sessionSearch.title', 'Search every agent session'),

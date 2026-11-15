@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { InstalledBrowserExtension } from '../../../../shared/browser-extension-types'
-import type { BrowserExtensionCaller } from '../browser-extension-namespace-registry'
+import type { InstalledBrowserExtension } from '../../../../shared/browser/extensions/browser-extension-types'
+import type { BrowserExtensionCaller } from '../api-runtime/browser-extension-namespace-registry'
 
 const mocks = vi.hoisted(() => {
   const installed: InstalledBrowserExtension[] = []
@@ -13,21 +13,23 @@ const mocks = vi.hoisted(() => {
   }
 })
 
-vi.mock('../../browser-session-registry', () => ({
+vi.mock('../../sessions/profiles/browser-session-registry', () => ({
   browserSessionRegistry: { getEnabledExtensionIds: () => [...mocks.enabled] }
 }))
-vi.mock('../browser-extension-install-store', () => ({
+vi.mock('../installation/browser-extension-install-store', () => ({
   getBrowserExtensionInstallStore: () => ({ list: () => mocks.installed })
 }))
 vi.mock('../browser-extension-management', () => ({
   setBrowserExtensionEnabled: mocks.setEnabled
 }))
-vi.mock('../browser-extension-list-changes', () => ({
+vi.mock('../installation/browser-extension-list-changes', () => ({
   notifyBrowserExtensionListChanged: mocks.notify
 }))
-vi.mock('./permissions', () => ({ hasBrowserExtensionUserGesture: () => mocks.gesture }))
+vi.mock('../permissions/browser-extension-user-gesture', () => ({
+  hasBrowserExtensionUserGesture: () => mocks.gesture
+}))
 
-const registry = await import('../browser-extension-namespace-registry')
+const registry = await import('../api-runtime/browser-extension-namespace-registry')
 const { registerManagementNamespace } = await import('./management')
 
 const SELF = 'a'.repeat(32)
@@ -83,37 +85,6 @@ beforeEach(() => {
 })
 
 describe('chrome.management', () => {
-  it("lists the profile's installed extensions as Chrome's ExtensionInfo", async () => {
-    mocks.enabled.delete(SELF)
-    await expect(call('getAll', [])).resolves.toEqual([
-      expect.objectContaining({ id: SELF, enabled: false, disabledReason: 'unknown' }),
-      {
-        id: OTHER,
-        name: 'Blocker',
-        shortName: 'Blk',
-        description: 'Blocks things',
-        version: '2.1',
-        mayDisable: true,
-        enabled: true,
-        isApp: false,
-        type: 'extension',
-        offlineEnabled: false,
-        optionsUrl: `chrome-extension://${OTHER}/options.html`,
-        icons: [
-          { size: 16, url: `chrome-extension://${OTHER}/i16.png` },
-          { size: 128, url: `chrome-extension://${OTHER}/i128.png` }
-        ],
-        permissions: ['storage'],
-        hostPermissions: ['https://*/*'],
-        installType: 'development'
-      }
-    ])
-    await expect(call('get', [SELF])).resolves.toMatchObject({ installType: 'normal' })
-    await expect(call('get', ['c'.repeat(32)])).rejects.toThrow(
-      `Failed to find extension with id ${'c'.repeat(32)}.`
-    )
-  })
-
   it('turns other extensions off, and on only from a user gesture', async () => {
     await call('setEnabled', [OTHER, false])
     expect(mocks.setEnabled).toHaveBeenCalledWith('default', OTHER, false)

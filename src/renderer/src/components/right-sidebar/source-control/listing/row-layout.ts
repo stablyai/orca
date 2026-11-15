@@ -1,4 +1,5 @@
 import { translate } from '@/i18n/i18n'
+import type { Translate } from '@/i18n/use-translate'
 
 // Keep overlays measurable so Radix tooltips cannot transiently jump to the top-left on hover.
 export const SOURCE_CONTROL_ROW_ACTION_OVERLAY_CLASS =
@@ -6,21 +7,24 @@ export const SOURCE_CONTROL_ROW_ACTION_OVERLAY_CLASS =
 export const SOURCE_CONTROL_TREE_INDENT_PX = 12
 export const SOURCE_CONTROL_TREE_DIRECTORY_PADDING_PX = 8
 export const SOURCE_CONTROL_TREE_FILE_PADDING_PX = 20
-export function getSubmoduleWorktreeOnlyLabel(): string {
-  return translate('sourceControl.submodule.worktreeOnlyLabel', 'Stage inside submodule')
+export function getSourceControlRowHighlightClass(isOpenFile: boolean): string {
+  return isOpenFile ? 'bg-accent hover:bg-accent' : 'hover:bg-accent/40'
 }
-export function getSubmoduleWorktreeOnlyTooltip(): string {
-  return translate(
+export function getSubmoduleWorktreeOnlyLabel(t: Translate = translate): string {
+  return t('sourceControl.submodule.worktreeOnlyLabel', 'Stage inside submodule')
+}
+export function getSubmoduleWorktreeOnlyTooltip(t: Translate = translate): string {
+  return t(
     'sourceControl.submodule.worktreeOnlyTooltip',
     'The parent repo (including Stage All) cannot stage file changes inside a submodule'
   )
 }
-export function getSubmoduleLoadingLabel(): string {
-  return translate('sourceControl.submodule.loading', 'Loading submodule changes…')
+export function getSubmoduleLoadingLabel(t: Translate = translate): string {
+  return t('sourceControl.submodule.loading', 'Loading submodule changes…')
 }
-export function getSubmoduleEmptyLabel(): string {
-  return translate('sourceControl.submodule.empty', 'No changes in submodule')
+export function getSubmoduleEmptyLabel(t: Translate = translate): string {
+  return t('sourceControl.submodule.empty', 'No changes in submodule')
 }
-export function getSubmoduleErrorLabel(): string {
-  return translate('sourceControl.submodule.loadFailed', 'Failed to load submodule changes')
+export function getSubmoduleErrorLabel(t: Translate = translate): string {
+  return t('sourceControl.submodule.loadFailed', 'Failed to load submodule changes')
 }

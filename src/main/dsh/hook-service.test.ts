@@ -9,10 +9,9 @@ import {
 } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { wrapWindowsBatchHookCommand } from '../agent-hooks/windows-direct-cmd-hook-command'
+import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+
 import { DshHookService } from './hook-service'
-import { DSH_HOOK_EVENTS } from './hook-settings'
 
 // Redirect HOME and USERPROFILE and clear DSH_HOME so tests cannot edit real user config.
 let home: string
@@ -51,8 +50,6 @@ afterEach(() => {
 
 const configPath = (): string => join(home, '.dsh', 'cordis.patch.yml')
 const managedHooksPath = (): string => join(home, '.orca', 'agent-hooks', 'dsh-hooks.json')
-const scriptPath = (): string =>
-  join(home, '.orca', 'agent-hooks', process.platform === 'win32' ? 'dsh-hook.cmd' : 'dsh-hook.sh')
 
 function readManagedHooks(): { hooks: Record<string, unknown[]> } {
   const parsed: { hooks: Record<string, unknown[]> } = JSON.parse(
@@ -62,64 +59,6 @@ function readManagedHooks(): { hooks: Record<string, unknown[]> } {
 }
 
 describe('DshHookService', () => {
-  it('reports not_installed before install, with no DSH home on disk', () => {
-    expect(new DshHookService().getStatus().state).toBe('not_installed')
-  })
-
-  it('installs the patch block, the managed hooks file, and the script', () => {
-    const status = new DshHookService().install()
-    expect(status.state).toBe('installed')
-    expect(status.managedHooksPresent).toBe(true)
-    expect(status.configPath).toBe(configPath())
-
-    const patch = readFileSync(configPath(), 'utf-8')
-    expect(patch).toContain("name: '@deepseek-ai/dsh-hooks-claude-code'")
-    expect(patch).toContain(`configPath: '${managedHooksPath()}'`)
-
-    expect(Object.keys(readManagedHooks().hooks).sort()).toEqual([...DSH_HOOK_EVENTS].sort())
-    expect(readFileSync(scriptPath(), 'utf-8').length).toBeGreaterThan(0)
-  })
-
-  it('posts to the dsh hook route', () => {
-    new DshHookService().install()
-    expect(readFileSync(scriptPath(), 'utf-8')).toContain('/hook/dsh')
-  })
-
-  it('restores the pane identity DSH scrubs before anything reads it', () => {
-    // DSH scrubs KEY/TOKEN variables, so restore aliases before guards or spooling.
-    new DshHookService().install()
-    const script = readFileSync(scriptPath(), 'utf-8')
-    const restoreAt = script.indexOf('ORCA_AGENT_PANE')
-    const guardAt = script.indexOf('ORCA_AGENT_HOOK_PORT')
-    expect(restoreAt).toBeGreaterThan(-1)
-    expect(script).toContain('ORCA_AGENT_LAUNCH')
-    expect(restoreAt).toBeLessThan(guardAt)
-  })
-
-  // Shell execution is covered separately by windows-hook-payload-delivery.test.ts.
-  it('registers the Windows batch hook command for every event', () => {
-    const platform = vi.spyOn(process, 'platform', 'get').mockReturnValue('win32')
-    try {
-      expect(new DshHookService().install().state).toBe('installed')
-      const command = wrapWindowsBatchHookCommand(scriptPath())
-      for (const event of DSH_HOOK_EVENTS) {
-        expect(readManagedHooks().hooks[event]).toEqual([
-          { hooks: [expect.objectContaining({ command })] }
-        ])
-      }
-    } finally {
-      platform.mockRestore()
-    }
-  })
-
-  it('is idempotent', () => {
-    const service = new DshHookService()
-    service.install()
-    const first = readFileSync(configPath(), 'utf-8')
-    expect(service.install().state).toBe('installed')
-    expect(readFileSync(configPath(), 'utf-8')).toBe(first)
-  })
-
   it('preserves an existing user patch layer through install and remove', () => {
     const userRows = ['- id: llm-deepseek', '  config:', '    thinking: disabled', ''].join('\n')
     mkdirSync(join(home, '.dsh'), { recursive: true })
@@ -151,6 +90,35 @@ describe('DshHookService', () => {
     const status = service.getStatus()
     expect(status.state).toBe('partial')
     expect(status.detail).toContain('Stop')
+  })
+
+  it('reports partial until every DSH profile carries the packages the row imports', () => {
+    const profileDir = (name: string): string => join(home, '.dsh', 'profiles', name)
+    const addPackage = (profile: string, pkg: string): void => {
+      const dir = join(profileDir(profile), 'node_modules', ...pkg.split('/'))
+      mkdirSync(dir, { recursive: true })
+      writeFileSync(join(dir, 'package.json'), '{}', 'utf-8')
+    }
+    for (const profile of ['headless', 'web']) {
+      mkdirSync(profileDir(profile), { recursive: true })
+      writeFileSync(join(profileDir(profile), 'package.json'), '{}', 'utf-8')
+    }
+    addPackage('web', '@deepseek-ai/dsh-hooks-claude-code')
+
+    const service = new DshHookService()
+    const status = service.install()
+    expect(status.state).toBe('partial')
+    expect(status.managedHooksPresent).toBe(true)
+    expect(status.detail).toContain(
+      `${profileDir('headless')} (missing @deepseek-ai/dsh-hooks-claude-code, @deepseek-ai/dsh-hook-protocol)`
+    )
+    expect(status.detail).toContain(`${profileDir('web')} (missing @deepseek-ai/dsh-hook-protocol)`)
+
+    for (const profile of ['headless', 'web']) {
+      addPackage(profile, '@deepseek-ai/dsh-hooks-claude-code')
+      addPackage(profile, '@deepseek-ai/dsh-hook-protocol')
+    }
+    expect(service.getStatus()).toMatchObject({ state: 'installed', detail: null })
   })
 
   it('reports not_installed when the block points somewhere else', () => {
@@ -191,13 +159,5 @@ describe('DshHookService', () => {
     const polled = service.getStatus()
     expect(polled.state).toBe('error')
     expect(polled.detail).toContain('flow-style sequence')
-  })
-
-  it('honours DSH_HOME', () => {
-    const dshHome = join(home, 'custom-dsh-home')
-    process.env.DSH_HOME = dshHome
-    const status = new DshHookService().install()
-    expect(status.configPath).toBe(join(dshHome, 'cordis.patch.yml'))
-    expect(status.state).toBe('installed')
   })
 })

@@ -1,20 +1,23 @@
 import type { ExecutionHostId } from '../../shared/execution-host'
 import { hostedReviewSshConnectionId } from '../source-control/hosted-review-execution-host'
 import { Buffer } from 'node:buffer'
-import type { CreateHostedReviewInput, CreateHostedReviewResult } from '../../shared/hosted-review'
+import type {
+  CreateHostedReviewInput,
+  CreateHostedReviewResult
+} from '../../shared/source-control/hosted-review/hosted-review-contracts'
 import {
   normalizeHostedReviewBaseRef,
   normalizeHostedReviewHeadRef
-} from '../../shared/hosted-review-refs'
+} from '../../shared/source-control/hosted-review/hosted-review-refs'
 import {
   HostedReviewApiRequestError,
   requestHostedReviewJson
 } from '../source-control/hosted-review-api-request'
 import { readHostedPullRequestTemplate } from '../source-control/pull-request-template'
 import {
+  AZURE_DEVOPS_MAX_REQUEST_ATTEMPTS,
   azureDevOpsApiVersionForOrigin,
-  isAzureDevOpsPreviewVersionRejection,
-  markAzureDevOpsPreviewApiVersionOrigin,
+  recordAzureDevOpsApiVersionRejection,
   resolveAzureDevOpsGitApiBaseUrl
 } from './azure-devops-api-request'
 import { getAzureDevOpsPullRequestForBranch } from './client'
@@ -65,33 +68,29 @@ function apiUrl(repo: AzureDevOpsRepoRef, path: string): URL {
   return url
 }
 
-// A preview-version rejection precedes PR creation, so retrying once is safe.
+// Version rejections precede PR creation, so retrying them is safe.
 async function requestCreatePullRequest(
   repo: AzureDevOpsRepoRef,
   path: string,
   init: Omit<RequestInit, 'signal'>
 ): Promise<RawAzureDevOpsPullRequest> {
-  const url = apiUrl(repo, path)
-  try {
-    return await requestHostedReviewJson<RawAzureDevOpsPullRequest>(
-      url,
-      init,
-      CREATE_REQUEST_TIMEOUT_MS
-    )
-  } catch (error) {
-    if (
-      url.searchParams.get('api-version')?.endsWith('-preview') ||
-      !(error instanceof HostedReviewApiRequestError) ||
-      !isAzureDevOpsPreviewVersionRejection(error.status, error.message)
-    ) {
-      throw error
+  for (let attempt = 1; ; attempt++) {
+    const url = apiUrl(repo, path)
+    try {
+      return await requestHostedReviewJson<RawAzureDevOpsPullRequest>(
+        url,
+        init,
+        CREATE_REQUEST_TIMEOUT_MS
+      )
+    } catch (error) {
+      if (
+        attempt >= AZURE_DEVOPS_MAX_REQUEST_ATTEMPTS ||
+        !(error instanceof HostedReviewApiRequestError) ||
+        !recordAzureDevOpsApiVersionRejection(url, error.status, error.message)
+      ) {
+        throw error
+      }
     }
-    markAzureDevOpsPreviewApiVersionOrigin(url.origin)
-    return requestHostedReviewJson<RawAzureDevOpsPullRequest>(
-      apiUrl(repo, path),
-      init,
-      CREATE_REQUEST_TIMEOUT_MS
-    )
   }
 }
 

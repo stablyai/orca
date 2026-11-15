@@ -1,282 +1,180 @@
 // @vitest-environment happy-dom
-
-import { act, Profiler } from 'react'
-import { createRoot, type Root } from 'react-dom/client'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
+import { act } from 'react'
+import { createRoot } from 'react-dom/client'
+import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
+import {
+  acceptedAgentStatuses,
+  AcceptedAgentStatuses
+} from '@/store/slices/agent-status/accepted-agent-statuses'
 import { StarNagAgentValueMomentObserver } from './StarNagAgentValueMomentObserver'
+import type { AgentStatusEntry } from '../../../../shared/agent-status/contracts/agent-status-types'
 
-globalThis.IS_REACT_ACT_ENVIRONMENT = true
+Reflect.set(globalThis, 'IS_REACT_ACT_ENVIRONMENT', true)
+const original = useAppStore.getState()
+const originalApi = window.api
+const KEY = 'nag-tab:11111111-1111-4111-8111-111111111111'
+let root: ReturnType<typeof createRoot>
 
-type StarNagApi = {
-  agentValueMoment: ReturnType<typeof vi.fn>
-  showAgentValueMoment: ReturnType<typeof vi.fn>
-}
-
-function setStarNagApi(api: StarNagApi): void {
-  ;(window as unknown as { api: { starNag: StarNagApi } }).api = { starNag: api }
-}
-
-function entry(overrides: Partial<AgentStatusEntry>): AgentStatusEntry {
+function entry(
+  state: AgentStatusEntry['state'],
+  extra: Partial<AgentStatusEntry> = {}
+): AgentStatusEntry {
   return {
-    state: 'working',
-    prompt: 'Review this change',
-    updatedAt: 1,
-    stateStartedAt: 1,
-    paneKey: 'tab-1:leaf-1',
+    paneKey: KEY,
+    state,
+    agentType: 'claude',
+    prompt: 'Complete the task',
+    updatedAt: 1_000,
+    stateStartedAt: 1_000,
     stateHistory: [],
-    ...overrides
+    ...extra
   }
 }
-
-function renderObserver(): { root: Root; container: HTMLDivElement } {
-  const container = document.createElement('div')
-  document.body.appendChild(container)
-  const root = createRoot(container)
-  act(() => {
-    root.render(<StarNagAgentValueMomentObserver />)
-  })
-  return { root, container }
+function replace(row: AgentStatusEntry) {
+  useAppStore.setState({ agentStatusByPaneKey: acceptedAgentStatuses([[KEY, row]]) })
 }
+const prepare = vi.fn()
+const show = vi.fn()
 
-function renderObserverWithProfiler(): {
-  root: Root
-  container: HTMLDivElement
-  getRenderCount: () => number
-} {
-  const container = document.createElement('div')
-  document.body.appendChild(container)
-  const root = createRoot(container)
-  let renderCount = 0
-  act(() => {
-    root.render(
-      <Profiler id="star-nag-observer" onRender={() => (renderCount += 1)}>
-        <StarNagAgentValueMomentObserver />
-      </Profiler>
-    )
+beforeEach(() => {
+  vi.useFakeTimers()
+  vi.setSystemTime(2_000)
+  prepare.mockReset().mockResolvedValue({ status: 'ready' })
+  show.mockReset().mockResolvedValue(undefined)
+  Reflect.set(window, 'api', {
+    ...originalApi,
+    starNag: { agentValueMoment: prepare, showAgentValueMoment: show }
   })
-  return { root, container, getRenderCount: () => renderCount }
-}
-
-function setAgentEntries(entries: Record<string, AgentStatusEntry>): void {
-  act(() => {
-    useAppStore.setState((state) => ({
-      agentStatusByPaneKey: entries,
-      agentStatusEpoch: state.agentStatusEpoch + 1
-    }))
-  })
-}
-
-function createDeferred<T>(): {
-  promise: Promise<T>
-  resolve: (value: T) => void
-} {
-  let resolve!: (value: T) => void
-  const promise = new Promise<T>((innerResolve) => {
-    resolve = innerResolve
-  })
-  return { promise, resolve }
-}
-
-describe('StarNagAgentValueMomentObserver', () => {
-  let root: Root | null = null
-  let container: HTMLDivElement | null = null
-  let agentValueMoment: ReturnType<typeof vi.fn>
-  let showAgentValueMoment: ReturnType<typeof vi.fn>
-
-  beforeEach(() => {
-    vi.useFakeTimers()
-    useAppStore.setState(useAppStore.getInitialState(), true)
-    useAppStore.setState({ agentStatusByPaneKey: {}, agentStatusEpoch: 0 })
-    agentValueMoment = vi.fn().mockResolvedValue({ status: 'ready', mode: 'gh' })
-    showAgentValueMoment = vi.fn().mockResolvedValue(undefined)
-    setStarNagApi({ agentValueMoment, showAgentValueMoment })
-  })
-
-  afterEach(() => {
-    if (root) {
-      act(() => root?.unmount())
-    }
-    container?.remove()
-    root = null
-    container = null
-    useAppStore.setState(useAppStore.getInitialState(), true)
-    vi.useRealTimers()
-  })
-
-  it('asks main after a prompted non-interrupted done transition and idle window', async () => {
-    ;({ root, container } = renderObserver())
-
-    setAgentEntries({ pane: entry({ state: 'working' }) })
-    setAgentEntries({ pane: entry({ state: 'done' }) })
-    await act(async () => {
-      vi.advanceTimersByTime(1200)
-    })
-
-    expect(agentValueMoment).toHaveBeenCalledTimes(1)
-    expect(showAgentValueMoment).toHaveBeenCalledTimes(1)
-  })
-
-  it('does not scan 500 agent statuses on 50 same-state working pings', () => {
-    const entries = Object.fromEntries(
-      Array.from({ length: 500 }, (_unused, index) => [
-        `pane-${index}`,
-        entry({ paneKey: `tab-${index}:leaf-1` })
-      ])
-    )
-    useAppStore.setState({ agentStatusByPaneKey: entries, agentStatusEpoch: 1 })
-    const rendered = renderObserverWithProfiler()
-    root = rendered.root
-    container = rendered.container
-    const initialRenders = rendered.getRenderCount()
-
-    // Separate acts model individual same-state pings so render/scan amplification remains observable.
-    for (let ping = 0; ping < 50; ping += 1) {
-      act(() => {
-        useAppStore.setState((state) => ({
-          agentStatusByPaneKey: {
-            ...state.agentStatusByPaneKey,
-            'pane-0': entry({ paneKey: 'tab-0:leaf-1', updatedAt: ping + 2 })
-          }
-        }))
-      })
-    }
-    expect(rendered.getRenderCount()).toBe(initialRenders)
-
-    // A real transition bumps the epoch and must re-render.
-    setAgentEntries({ pane: entry({ state: 'done', updatedAt: 100 }) })
-    expect(rendered.getRenderCount()).toBeGreaterThan(initialRenders)
-  })
-
-  it('does not treat a removed and reused pane key as one completion transition', () => {
-    ;({ root, container } = renderObserver())
-
-    setAgentEntries({ pane: entry({ state: 'working' }) })
-    setAgentEntries({})
-    setAgentEntries({ pane: entry({ state: 'done', updatedAt: 2 }) })
-    act(() => {
-      vi.advanceTimersByTime(2400)
-    })
-
-    expect(agentValueMoment).not.toHaveBeenCalled()
-    expect(showAgentValueMoment).not.toHaveBeenCalled()
-  })
-
-  it('ignores interrupted or empty-prompt completions', () => {
-    ;({ root, container } = renderObserver())
-
-    setAgentEntries({ pane: entry({ state: 'working', prompt: '' }) })
-    setAgentEntries({ pane: entry({ state: 'done', prompt: '', interrupted: true }) })
-    act(() => {
-      vi.advanceTimersByTime(2400)
-    })
-
-    expect(agentValueMoment).not.toHaveBeenCalled()
-    expect(showAgentValueMoment).not.toHaveBeenCalled()
-  })
-
-  it('ignores a prompted done whose turn failed', async () => {
-    ;({ root, container } = renderObserver())
-
-    setAgentEntries({ pane: entry({ state: 'working' }) })
-    setAgentEntries({
-      pane: entry({
-        state: 'done',
-        mainAgent: { state: 'done', outcome: 'failure', stateStartedAt: 1 }
-      })
-    })
-    await act(async () => {
-      vi.advanceTimersByTime(2400)
-    })
-
-    expect(agentValueMoment).not.toHaveBeenCalled()
-  })
-
-  it('ignores a return to a done dated before the work it ended', async () => {
-    ;({ root, container } = renderObserver())
-
-    setAgentEntries({ pane: entry({ state: 'done', stateStartedAt: 1 }) })
-    setAgentEntries({ pane: entry({ state: 'working', stateStartedAt: 5 }) })
-    setAgentEntries({ pane: entry({ state: 'done', stateStartedAt: 1 }) })
-    await act(async () => {
-      vi.advanceTimersByTime(2400)
-    })
-
-    expect(agentValueMoment).not.toHaveBeenCalled()
-  })
-
-  it('waits for other live agents and recent typing to quiet', async () => {
-    ;({ root, container } = renderObserver())
-
-    setAgentEntries({
-      done: entry({ state: 'working', paneKey: 'tab-1:leaf-1' }),
-      active: entry({ state: 'working', paneKey: 'tab-2:leaf-1', prompt: 'Keep working' })
-    })
-    setAgentEntries({
-      done: entry({ state: 'done', paneKey: 'tab-1:leaf-1' }),
-      active: entry({ state: 'working', paneKey: 'tab-2:leaf-1', prompt: 'Keep working' })
-    })
-    await act(async () => {
-      vi.advanceTimersByTime(1200)
-    })
-    expect(agentValueMoment).not.toHaveBeenCalled()
-    expect(showAgentValueMoment).not.toHaveBeenCalled()
-
-    setAgentEntries({
-      done: entry({ state: 'done', paneKey: 'tab-1:leaf-1' }),
-      active: entry({ state: 'done', paneKey: 'tab-2:leaf-1', prompt: 'Keep working' })
-    })
-    await act(async () => {
-      vi.advanceTimersByTime(600)
-      window.dispatchEvent(new KeyboardEvent('keydown', { key: 'a', ctrlKey: true }))
-      vi.advanceTimersByTime(600)
-    })
-    expect(agentValueMoment).not.toHaveBeenCalled()
-    expect(showAgentValueMoment).not.toHaveBeenCalled()
-
-    await act(async () => {
-      vi.advanceTimersByTime(1200)
-    })
-
-    expect(agentValueMoment).toHaveBeenCalledTimes(1)
-    expect(showAgentValueMoment).toHaveBeenCalledTimes(1)
-  })
-
-  it('rechecks idle after main prepares the prompt', async () => {
-    const preparation = createDeferred<{ status: 'ready'; mode: 'gh' }>()
-    agentValueMoment.mockReturnValueOnce(preparation.promise)
-    ;({ root, container } = renderObserver())
-
-    setAgentEntries({ pane: entry({ state: 'working' }) })
-    setAgentEntries({ pane: entry({ state: 'done' }) })
-
-    await act(async () => {
-      vi.advanceTimersByTime(1200)
-    })
-    expect(agentValueMoment).toHaveBeenCalledTimes(1)
-
-    setAgentEntries({
-      pane: entry({ state: 'done', paneKey: 'tab-1:leaf-1' }),
-      active: entry({ state: 'working', paneKey: 'tab-2:leaf-1' })
-    })
-    await act(async () => {
-      preparation.resolve({ status: 'ready', mode: 'gh' })
-    })
-    await act(async () => {
-      vi.advanceTimersByTime(1200)
-    })
-    expect(showAgentValueMoment).not.toHaveBeenCalled()
-
-    setAgentEntries({
-      pane: entry({ state: 'done', paneKey: 'tab-1:leaf-1' }),
-      active: entry({ state: 'done', paneKey: 'tab-2:leaf-1' })
-    })
-    await act(async () => {
-      vi.advanceTimersByTime(1200)
-    })
-
-    expect(agentValueMoment).toHaveBeenCalledTimes(1)
-    expect(showAgentValueMoment).toHaveBeenCalledTimes(1)
-  })
+  useAppStore.setState({ agentStatusByPaneKey: acceptedAgentStatuses() })
+  root = createRoot(document.createElement('div'))
 })
+afterEach(() => {
+  act(() => root.unmount())
+  vi.restoreAllMocks()
+  Reflect.set(window, 'api', originalApi)
+  useAppStore.setState(original, true)
+  vi.useRealTimers()
+})
+
+it('observes committed completion, including a bulk replacement, without replaying initial Done', async () => {
+  replace(entry('done'))
+  act(() => root.render(<StarNagAgentValueMomentObserver />))
+  await act(async () => vi.runOnlyPendingTimersAsync())
+  expect(prepare).not.toHaveBeenCalled()
+  act(() => replace(entry('working')))
+  act(() => replace(entry('done', { stateStartedAt: 2_000 })))
+  await act(async () => vi.runOnlyPendingTimersAsync())
+  expect(prepare).toHaveBeenCalledOnce()
+  expect(show).toHaveBeenCalledOnce()
+})
+
+it('keeps completion batches ordered under reentry and publishes neither views nor transitions on abort', () => {
+  replace(entry('working'))
+  const owner = () => useAppStore.getState().agentStatusByPaneKey
+  const projection = owner().projection
+  const transitions: string[] = []
+  const stop = projection.subscribeTransitions((changes) => {
+    for (const change of changes) {
+      if (change.paneKey !== KEY) {
+        continue
+      }
+      transitions.push(`${change.previous?.state}->${change.current?.state}`)
+      if (change.current?.state === 'done') {
+        replace(entry('working', { stateStartedAt: 3_000 }))
+      }
+    }
+  })
+  try {
+    expect(() =>
+      useAppStore.getState().transactAgentStatuses((transaction) => {
+        transaction.apply({
+          paneKey: KEY,
+          payload: { state: 'done', agentType: 'codex', prompt: 'Aborted' }
+        })
+        throw new Error('abort')
+      })
+    ).toThrow('abort')
+    expect(transitions).toEqual([])
+    expect(projection.hasActiveAgents()).toBe(true)
+    expect(projection.terminalLeafAgentTypes('nag-tab')).toEqual({
+      '11111111-1111-4111-8111-111111111111': 'claude'
+    })
+    replace(entry('done', { stateStartedAt: 2_000 }))
+    expect(transitions).toEqual(['working->done', 'done->working'])
+    expect(projection.hasActiveAgents()).toBe(true)
+  } finally {
+    stop()
+  }
+})
+
+it.each([
+  { sessionBoundary: true },
+  { interrupted: true },
+  { stateStartedAt: 500 },
+  { prompt: '', stateHistory: [] }
+])('does not announce an ineligible Done transition %j', async (extra) => {
+  replace(entry('working'))
+  act(() => root.render(<StarNagAgentValueMomentObserver />))
+  act(() => replace(entry('done', extra)))
+  await act(async () => vi.runOnlyPendingTimersAsync())
+  expect(prepare).not.toHaveBeenCalled()
+  expect(show).not.toHaveBeenCalled()
+})
+
+it.each([100, 1000])(
+  'checks exact active state without fleet reads at %i rows, including during preparation',
+  async (count) => {
+    const activeKey = 'unplaced:active'
+    useAppStore.setState({
+      agentStatusByPaneKey: acceptedAgentStatuses([
+        [KEY, entry('working')],
+        [
+          activeKey,
+          {
+            ...entry('working', { paneSleep: { ptyId: 'sleeping-unfinished' } }),
+            paneKey: activeKey
+          }
+        ],
+        ...Array.from({ length: count }, (_, i): readonly [string, AgentStatusEntry] => [
+          `other-${i}:leaf`,
+          { ...entry('done'), paneKey: `other-${i}:leaf` }
+        ])
+      ])
+    })
+    act(() => root.render(<StarNagAgentValueMomentObserver />))
+    useAppStore.getState().scheduleAgentStatusFreshness()
+    const entries = vi.spyOn(AcceptedAgentStatuses.prototype, 'entries')
+    const values = vi.spyOn(AcceptedAgentStatuses.prototype, 'values')
+    const capture = vi.spyOn(AcceptedAgentStatuses.prototype, 'capture')
+    const status = (key: string, state: AgentStatusEntry['state']) =>
+      useAppStore.getState().setAgentStatus(key, { state, prompt: 'Task' }, undefined, {
+        updatedAt: 3_000,
+        stateStartedAt: 3_000
+      })
+    act(() => status(KEY, 'done'))
+    await act(async () => vi.runOnlyPendingTimersAsync())
+    expect(prepare).not.toHaveBeenCalled()
+    let finish: (value: { status: 'ready' }) => void = () => {}
+    prepare.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          finish = resolve
+        })
+    )
+    act(() => useAppStore.getState().dropAgentStatus(activeKey))
+    await act(async () => vi.runOnlyPendingTimersAsync())
+    expect(prepare).toHaveBeenCalledOnce()
+    act(() => status(activeKey, 'blocked'))
+    await act(async () => {
+      finish({ status: 'ready' })
+    })
+    expect(show).not.toHaveBeenCalled()
+    act(() => useAppStore.getState().dropAgentStatus(activeKey))
+    await act(async () => vi.runOnlyPendingTimersAsync())
+    expect(show).toHaveBeenCalledOnce()
+    expect(entries).not.toHaveBeenCalled()
+    expect(values).not.toHaveBeenCalled()
+    expect(capture).not.toHaveBeenCalled()
+  }
+)

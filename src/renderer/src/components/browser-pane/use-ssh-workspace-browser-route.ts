@@ -1,9 +1,13 @@
 import { useEffect, useState } from 'react'
 import { useAppStore } from '@/store'
-import { getExecutionHostIdForWorktree } from '@/lib/worktree-runtime-owner'
-import { useWorktreeHostConnection } from '@/lib/worktree-host-connection-phase'
-import { resolveSshWorkspaceBrowserRouteEligibility } from '@/lib/ssh-workspace-browser-route-eligibility'
-import type { BrowserLoadFailureRoute } from '../../../../shared/browser-load-failure'
+import { getExecutionHostIdForWorktree } from '@/lib/workspace/ownership/worktree-runtime-owner'
+import { useWorktreeHostConnection } from '@/lib/workspace/ownership/worktree-host-connection-phase'
+import { resolveSshWorkspaceBrowserRouteEligibility } from '@/lib/browser/workspace/ssh-workspace-browser-route-eligibility'
+import type { BrowserLoadFailureRoute } from '../../../../shared/browser/navigation/browser-load-failure'
+import {
+  sshWorkspaceBrowserRouteKey,
+  verifiedPartitionByRoute
+} from './ssh-workspace-browser-verified-routes'
 
 export type SshWorkspaceBrowserRouteErrorKind = 'forwarding-blocked' | 'ssh-unavailable' | 'unknown'
 
@@ -26,6 +30,28 @@ export function classifySshWorkspaceBrowserRouteError(
     return 'ssh-unavailable'
   }
   return 'unknown'
+}
+
+function readyRouteState(
+  partition: string,
+  targetId: string,
+  expectedSshTargetGeneration: number | undefined
+): SshWorkspaceBrowserRouteState {
+  return {
+    kind: 'ready',
+    partition,
+    targetId,
+    ...(expectedSshTargetGeneration !== undefined ? { expectedSshTargetGeneration } : {})
+  }
+}
+
+function verifiedRouteState(
+  routeKey: string,
+  targetId: string,
+  expectedSshTargetGeneration: number | undefined
+): SshWorkspaceBrowserRouteState | null {
+  const partition = verifiedPartitionByRoute.get(routeKey)
+  return partition ? readyRouteState(partition, targetId, expectedSshTargetGeneration) : null
 }
 
 /** Mount only a proxy-verified partition; preparing/failed routes must never fall back to local egress. Unrouted access requires an explicit opt-out. */
@@ -59,8 +85,20 @@ export function useSshWorkspaceBrowserRoute(
     count: 0,
     skipProbe: false
   })
-  const [state, setState] = useState<SshWorkspaceBrowserRouteState>(
-    targetId ? { kind: 'preparing' } : { kind: 'unrouted' }
+  // Persist “Try anyway”: forwarding may work while the loopback probe is forbidden; do not re-prompt every launch.
+  const skipProbe = attempt.skipProbe || probeSkippedTargetIds?.includes(targetId ?? '') === true
+  const routeKey = sshWorkspaceBrowserRouteKey(
+    targetId,
+    browserProfileId,
+    expectedSshTargetGeneration,
+    skipProbe
+  )
+  const [state, setState] = useState<SshWorkspaceBrowserRouteState>(() =>
+    targetId
+      ? (verifiedRouteState(routeKey, targetId, expectedSshTargetGeneration) ?? {
+          kind: 'preparing'
+        })
+      : { kind: 'unrouted' }
   )
   const hostConnection = useWorktreeHostConnection(worktreeId, targetId)
   const routeHost =
@@ -69,7 +107,8 @@ export function useSshWorkspaceBrowserRoute(
   const routeReady =
     state.kind === 'ready' &&
     state.targetId === targetId &&
-    state.expectedSshTargetGeneration === expectedSshTargetGeneration
+    state.expectedSshTargetGeneration === expectedSshTargetGeneration &&
+    state.partition === verifiedPartitionByRoute.get(routeKey)
   const awaitingHost = routeHost?.phase === 'connecting' && state.kind !== 'error' && !routeReady
   const connectedHostEpoch = routeHost?.connectedEpoch ?? null
   const [seenConnectedHostEpoch, setSeenConnectedHostEpoch] = useState(connectedHostEpoch)
@@ -81,16 +120,16 @@ export function useSshWorkspaceBrowserRoute(
     }
   }
 
-  // Persist “Try anyway”: forwarding may work while the loopback probe is forbidden; do not re-prompt every launch.
-  const skipProbe = attempt.skipProbe || probeSkippedTargetIds?.includes(targetId ?? '') === true
   useEffect(() => {
     if (!targetId) {
       setState({ kind: 'unrouted' })
       return
     }
-    setState({ kind: 'preparing' })
+    // A verified route stays mounted while main re-confirms; a retired target or profile still reaches the error card.
+    const verified = verifiedRouteState(routeKey, targetId, expectedSshTargetGeneration)
+    setState(verified ?? { kind: 'preparing' })
     // Preparing during dial can only fail ssh-unavailable; wait for the connected transition.
-    if (awaitingHost) {
+    if (!verified && awaitingHost) {
       return
     }
     let cancelled = false
@@ -103,15 +142,12 @@ export function useSshWorkspaceBrowserRoute(
       })
       .then((result) => {
         if (!cancelled) {
-          setState({
-            kind: 'ready',
-            partition: result.partition,
-            targetId,
-            ...(expectedSshTargetGeneration !== undefined ? { expectedSshTargetGeneration } : {})
-          })
+          verifiedPartitionByRoute.set(routeKey, result.partition)
+          setState(readyRouteState(result.partition, targetId, expectedSshTargetGeneration))
         }
       })
       .catch((error: unknown) => {
+        verifiedPartitionByRoute.delete(routeKey)
         if (!cancelled) {
           const message = error instanceof Error ? error.message : String(error)
           setState({
@@ -124,18 +160,33 @@ export function useSshWorkspaceBrowserRoute(
     return () => {
       cancelled = true
     }
-  }, [targetId, expectedSshTargetGeneration, browserProfileId, attempt, skipProbe, awaitingHost])
+  }, [
+    targetId,
+    expectedSshTargetGeneration,
+    browserProfileId,
+    skipProbe,
+    routeKey,
+    attempt,
+    awaitingHost
+  ])
 
   // Derive target changes synchronously; stale unrouted/other-target state could mount a local-egress guest before the effect corrects it.
   const effectiveState: SshWorkspaceBrowserRouteState = !targetId
     ? { kind: 'unrouted' }
-    : awaitingHost || state.kind === 'unrouted' || (state.kind === 'ready' && !routeReady)
-      ? { kind: 'preparing' }
-      : state
+    : state.kind === 'ready' && !routeReady
+      ? (verifiedRouteState(routeKey, targetId, expectedSshTargetGeneration) ?? {
+          kind: 'preparing'
+        })
+      : awaitingHost || state.kind === 'unrouted'
+        ? { kind: 'preparing' }
+        : state
   const rederive = (nextSkipProbe: boolean): void => {
     // Set preparing with the attempt so the effect can wait for dialing without cancelling its own prepare.
     setState({ kind: 'preparing' })
-    setAttempt((current) => ({ count: current.count + 1, skipProbe: nextSkipProbe }))
+    setAttempt((current) => ({
+      count: current.count + 1,
+      skipProbe: nextSkipProbe
+    }))
   }
   return {
     state: effectiveState,
