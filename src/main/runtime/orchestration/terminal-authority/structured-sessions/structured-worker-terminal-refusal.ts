@@ -23,7 +23,7 @@ export function structuredWorkerTerminalRefusal(
   if (parseOrcaSessionAddress(handle)) {
     return agentSessionRefusal(
       `${handle} is a chat session, not a terminal, so terminal commands cannot address it. ` +
-        `Message it with \`orca orchestration send --to ${handle}\`.`
+        `Message it with \`orca orchestration send --to ${handle} --subject "<topic>" --body "<message>"\`.`
     )
   }
   return new Error(TERMINAL_HANDLE_STALE)
