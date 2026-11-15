@@ -1123,7 +1123,11 @@
     "native-chat": {
       "composer": {
         "planMode": "Plan",
-        "exitPlanMode": "Plan modundan çık"
+        "exitPlanMode": "Plan modundan çık",
+        "permissionAsk": "Onay iste",
+        "permissionAcceptEdits": "Düzenlemeleri kabul et",
+        "permissionAuto": "Benim yerime onayla",
+        "permissionFullAccess": "Tam erişim"
       }
     }
   },

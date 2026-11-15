@@ -1162,7 +1162,11 @@
     "native-chat": {
       "composer": {
         "planMode": "Planifier",
-        "exitPlanMode": "Quitter le mode plan"
+        "exitPlanMode": "Quitter le mode plan",
+        "permissionAsk": "Demander l’approbation",
+        "permissionAcceptEdits": "Accepter les modifications",
+        "permissionAuto": "Approuver pour moi",
+        "permissionFullAccess": "Accès complet"
       }
     }
   },

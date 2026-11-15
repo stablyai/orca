@@ -1123,7 +1123,11 @@
     "native-chat": {
       "composer": {
         "planMode": "Planen",
-        "exitPlanMode": "Planungsmodus verlassen"
+        "exitPlanMode": "Planungsmodus verlassen",
+        "permissionAsk": "Genehmigung anfordern",
+        "permissionAcceptEdits": "Änderungen akzeptieren",
+        "permissionAuto": "Genehmigen lassen",
+        "permissionFullAccess": "Vollzugriff"
       }
     }
   },

@@ -1549,7 +1549,11 @@
       },
       "composer": {
         "planMode": "Plan",
-        "exitPlanMode": "Exit plan mode"
+        "exitPlanMode": "Exit plan mode",
+        "permissionAsk": "Ask for approval",
+        "permissionAcceptEdits": "Accept edits",
+        "permissionAuto": "Approve for me",
+        "permissionFullAccess": "Full access"
       }
     },
     "hostOfflineBanner": {

@@ -1201,7 +1201,11 @@
     "native-chat": {
       "composer": {
         "planMode": "План",
-        "exitPlanMode": "Выйти из режима планирования"
+        "exitPlanMode": "Выйти из режима планирования",
+        "permissionAsk": "Запрашивать разрешение",
+        "permissionAcceptEdits": "Разрешать правки",
+        "permissionAuto": "Одобрять за меня",
+        "permissionFullAccess": "Полный доступ"
       }
     }
   },
