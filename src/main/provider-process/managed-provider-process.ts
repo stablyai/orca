@@ -2,6 +2,7 @@ import { awaitProviderChildSpawn, directOwnerUnreaped, type ProviderChild } from
 import { DirectProviderChild } from './direct-provider-child'
 import { registerAgentProcess } from '../memory/agent-process-registry'
 import { spawnProviderProcess, type ProviderProcessSpawner } from './provider-process-spawn'
+import { resolveProviderSpawner } from './provider-worker-child-process'
 import { RetryableProcessExitProof } from '@orca/process-host/retryable-process-exit-proof'
 import type { ProviderProcessLaunch } from './provider-process-launch'
 import { processEnvWithoutAgentSession } from '../../shared/agent-launch/startup/parent-agent-session-env'
@@ -115,7 +116,11 @@ export function spawnManagedProviderProcess(
       `Supervised provider graceful exit must wait at least ${PROVIDER_SUPERVISOR_MAX_STOP_MS} ms; received ${policy.gracefulExitMs} ms`
     )
   }
-  const child = spawnProviderProcess(spec, options.spawnImpl, options.allowHost)
+  const child = spawnProviderProcess(
+    spec,
+    resolveProviderSpawner(options.spawnImpl),
+    options.allowHost
+  )
   const listeners = new Set<(exit: ProviderProcessExit) => void>()
   let observed: ProviderProcessExit | null = null
   let spawnFailed = false

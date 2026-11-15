@@ -328,7 +328,7 @@ export class WorkerThreadChildProcessHost {
   }
 }
 
-function defaultWorkerFactory(): Worker {
+export function defaultWorkerFactory(): Worker {
   const workerPath = resolveWorkerThreadEntryPath(
     currentWorkerEntryLayout(__dirname),
     WORKER_ENTRY_FILENAME
