@@ -105,6 +105,22 @@ describe('host calls in shipped code', () => {
     ])
   })
 
+  it('downgrades an unknown call in a plugin that feature-detects at all', async () => {
+    const optional = await check('>=1.4.250', {
+      'dist/main.mjs': `if (orca.host?.has?.("workspace.future")) orca.host.call("workspace.future")`
+    })
+    const constant = await check('>=1.4.250', {
+      'dist/main.mjs': `const m = 'workspace.future'\nif (orca.host.has(m)) orca.host.call('workspace.future')`
+    })
+    expect(optional.errors).toEqual([])
+    expect(constant).toEqual({
+      errors: [],
+      warnings: [
+        `${unknown('dist/main.mjs', 'workspace.future')}; the plugin calls orca.host.has, which may guard it`
+      ]
+    })
+  })
+
   it('keeps guarded unknown calls as errors where engines.orca predates orca.host.has', async () => {
     const { errors } = await check('>=1.4.200', {
       'dist/main.mjs': `if (orca.host.has('workspace.later')) orca.host.call('workspace.later')`

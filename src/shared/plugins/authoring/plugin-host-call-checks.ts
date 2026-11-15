@@ -27,7 +27,9 @@ const MAX_QUEUED = 512
 const IMPORT_SUFFIXES = ['', '.js', '.mjs', '.cjs', '.ts', '.tsx', '.mts', '.jsx', '/index.js']
 
 // Why a `host` receiver: `orca.host.call` survives bundling, and an unrelated `fn.call('a.b')` must not count.
-const HOST_CALL = /\bhost\s*\.\s*(call|has)\s*(?:\?\.\s*)?\(\s*(['"`])([A-Za-z]\w*(?:\.\w+)+)\2/g
+const HOST_CALL = /\bhost\s*\??\.\s*(call|has)\s*(?:\?\.\s*)?\(\s*(['"`])([A-Za-z]\w*(?:\.\w+)+)\2/g
+// Why any argument: `has(method)` with a variable is feature detection too.
+const ANY_HAS_CALL = /\bhost\s*\??\.\s*has\s*(?:\?\.\s*)?\(/
 const RELATIVE_IMPORT =
   /(?:\bfrom\s*|\bimport\s*\(\s*|\bimport\s+|\brequire\(\s*)['"](\.{1,2}\/[^'"\s]+)['"]/g
 const SCRIPT_SRC_ATTRIBUTE = /\ssrc\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+))/i
@@ -120,6 +122,7 @@ function entryFiles(manifest: PluginManifest): ScanTarget[] {
 async function scanHostCalls(manifest: PluginManifest, read: PluginCodeReader) {
   const calls: HostCall[] = []
   const guarded = new Set<string>()
+  let detects = false
   const notes: string[] = []
   const codes = new Map<string, string | null>()
   let files = 0
@@ -166,6 +169,7 @@ async function scanHostCalls(manifest: PluginManifest, read: PluginCodeReader) {
         continue
       }
       followed += isEntry ? 0 : 1
+      detects ||= ANY_HAS_CALL.test(code)
       for (const [, kind, , name] of code.matchAll(HOST_CALL)) {
         if (!HOST_NAMESPACES.has(name!.split('.')[0]!)) {
           continue
@@ -206,7 +210,7 @@ async function scanHostCalls(manifest: PluginManifest, read: PluginCodeReader) {
       `host calls were checked in the first ${MAX_SCANNED_FILES} files (${MAX_TOTAL_BYTES / 1024 / 1024} MiB, ${MAX_READ_ATTEMPTS} lookups) the entries load; the rest were not checked`
     )
   }
-  return { calls, guarded, notes }
+  return { calls, guarded, detects, notes }
 }
 
 function firstPer(calls: HostCall[], keyOf: (call: HostCall) => string): HostCall[] {
@@ -224,15 +228,15 @@ const thisHostApi = `Host API ${PLUGIN_HOST_API_MAJOR}.${PLUGIN_HOST_API_MINOR}`
 /**
  * Host calls this Orca or the declared `engines.orca` cannot serve. Why errors only for unknown
  * and proposed methods: those fail on every released Orca, while a floor or surface miss may sit
- * behind a guard or in code that surface never runs, which a text scan cannot see. An unknown or
- * proposed call whose name the plugin also checks with a literal `orca.host.has` is a warning.
+ * behind a guard or in code that surface never runs, which a text scan cannot see. An unknown call
+ * is a warning once the plugin calls `orca.host.has` at all; a proposed one needs a literal guard.
  * Each deprecation warning starts `deprecated host method <name>`; catalog tooling matches it.
  */
 export async function pluginHostCallFindings(
   manifest: PluginManifest,
   read: PluginCodeReader
 ): Promise<PluginHostCallFindings> {
-  const { calls, guarded, notes } = await scanHostCalls(manifest, read)
+  const { calls, guarded, detects, notes } = await scanHostCalls(manifest, read)
   const declared = manifest.engines.orca.slice(2)
   // Why: on Orca before `host.has`, the guard throws, so it protects nothing.
   const guardWorks = satisfiesOrcaEngineRange(declared, `>=${PLUGIN_HOST_HAS_SINCE}`)
@@ -248,6 +252,9 @@ export async function pluginHostCallFindings(
     }
     if (failure !== null && guardWorks && guarded.has(call.name)) {
       warnings.push(`${failure}; the orca.host.has('${call.name}') guard skips it`)
+    } else if (failure !== null && guardWorks && detects && spec === null) {
+      // Why loose: a guard's argument may be a variable, so any has() may cover this call.
+      warnings.push(`${failure}; the plugin calls orca.host.has, which may guard it`)
     } else if (failure !== null) {
       errors.push(failure)
     } else if (spec?.deprecatedSince !== undefined) {
