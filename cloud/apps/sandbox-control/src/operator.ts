@@ -104,6 +104,11 @@ export async function handleOperator(
       console.log(JSON.stringify({ event: 'provider_policy_scrub_test', sandboxId: row.id, outcome: typeof outcome === 'string' ? outcome : 'failed' }))
       return Response.json({ sandboxId: row.id, outcome })
     }
+    // resume-raw and echo-probe act on a workspace, so only on throwaway probe accounts (dev:egress-…), never a
+    // real dev user's workspace.
+    if ((policyAudit[2] === 'resume-raw' || policyAudit[2] === 'echo-probe') && !row.account_id.startsWith('dev:egress-')) {
+      return Response.json({ error: 'not_a_probe_account' }, { status: 403 })
+    }
     if (policyAudit[2] === 'resume-raw' && request.method === 'POST') {
       // Probe 2 only: resume the provider session from its stored record with NO policy write of ours, so a probe
       // can see which value the resumed session swaps. The row is left as it was (dev throwaways only).
@@ -126,13 +131,13 @@ export async function handleOperator(
       const url = body.data.host === 'httpbin.org' ? 'https://httpbin.org/headers' : 'https://postman-echo.com/headers'
       const result = await life.provider.runCommand(state.session.id, {
         command: 'bash',
-        args: ['-c', 'curl -s --max-time 20 -o /tmp/orca-echo-probe -w "%{http_code}" -H "$1: $2" "$3"; echo; grep -c -- "$4" /tmp/orca-echo-probe || true; rm -f /tmp/orca-echo-probe', 'echo-probe', body.data.header, body.data.placeholder, url, marker],
+        // Straight into grep -c: the echoed request (whatever the firewall swapped in) never touches the VM's disk.
+        args: ['-c', 'curl -s --max-time 20 -H "$1: $2" "$3" | grep -c -- "$4" || true', 'echo-probe', body.data.header, body.data.placeholder, url, marker],
         timeoutMs: 30_000
       })
-      const [status, count] = result.stdout.trim().split('\n')
-      const markerFound = Number(count ?? '0') > 0
+      const markerFound = Number(result.stdout.trim().split('\n').at(-1) ?? '0') > 0
       console.log(JSON.stringify({ event: 'provider_echo_probe', sandboxId: row.id, markerFound }))
-      return Response.json({ sandboxId: row.id, status: Number(status) || null, markerFound })
+      return Response.json({ sandboxId: row.id, markerFound })
     }
     if (policyAudit[2] === 'provider-policy-audit' && request.method === 'GET') {
       const marker = new URL(request.url).searchParams.get('marker') ?? ''
