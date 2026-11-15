@@ -8,7 +8,7 @@ import {
 } from '../native-chat-types'
 import { nativeChatToolCategory } from './native-chat-tool-icon'
 import { nativeChatFullCommand } from './native-chat-tool-input-text'
-import { nativeChatToolLineLabel } from './native-chat-tool-line-label'
+import { nativeChatToolCallPhase } from './native-chat-tool-call-phase'
 import { pairToolBlocks } from './native-chat-tool-pairs'
 import { toolFilePath } from './native-chat-tool-summary'
 
@@ -46,7 +46,11 @@ export function nativeChatToolRunViewedImageEntries(
   for (const { call, result } of pairToolBlocks(blocks)) {
     const path = call ? imageReadPath(call) : null
     // Only a read that finished without error showed the agent its image.
-    if (call && path !== null && nativeChatToolLineLabel(call, result).verb === 'read') {
+    if (call && path !== null) {
+      const phase = nativeChatToolCallPhase(call, result)
+      if (phase.running || !phase.completed) {
+        continue
+      }
       if (!paths.has(path)) {
         paths.set(path, call)
       }

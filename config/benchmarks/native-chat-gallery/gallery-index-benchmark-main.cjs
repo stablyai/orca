@@ -68,8 +68,12 @@ async function run() {
     window.webContents.debugger.attach('1.3')
     const workloads = [
       { name: '2000-cold-and-same-worker-warm', options: { count: 2000, warm: true } },
+      { name: 'single-row-update-after-ready', options: { count: 2000, warm: true, update: true } },
+      { name: 'large-unrelated-tool-input', options: { count: 1, largeTool: true, warm: true } },
       { name: '100k-image', options: { count: 1, giant: true, image: true, warm: true } },
       { name: '100k-text', options: { count: 1, giant: true, image: false, warm: true } },
+      { name: 'oversized-image-fields', options: { count: 1, largeFields: true, warm: true } },
+      { name: 'large-image-result', options: { count: 1, manyImages: true, warm: true } },
       { name: 'close-during-index', options: { count: 2000, cancel: true } },
       { name: 'rapid-stream-revisions', options: { count: 2000, stream: true } },
       { name: 'repeat-open-close', options: { count: 2000, repeat: 3 } },

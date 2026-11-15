@@ -1,119 +1,38 @@
+import { galleryBenchmarkSnapshot } from './gallery-index-benchmark-transcript'
 import { NativeChatGalleryClient } from '../../../src/renderer/src/components/native-chat/media/gallery/native-chat-gallery-client'
-import type { NativeChatGallerySnapshot } from '../../../src/renderer/src/components/native-chat/media/gallery/native-chat-gallery-client'
-import type { NativeChatMessage } from '../../../src/shared/native-chat/native-chat-types'
-import type { NativeChatTranscriptSlot } from '../../../src/renderer/src/components/native-chat/conversation/slots/native-chat-transcript-slots'
 
-function imageMessage(index: number): {
-  message: NativeChatMessage
-  workRun?: NativeChatMessage[]
-} {
-  const path = `/fixture/image-${index}.png`
-  const message: NativeChatMessage = {
-    id: `row-${index}`,
-    role: 'assistant',
-    timestamp: index,
-    source: 'transcript',
-    blocks: [
-      { type: 'text', text: 'A seeded transcript paragraph with **formatting**. '.repeat(4) }
-    ]
+type WireSamples = { count: number; bytes: number; maxBytes: number; oversized: number }
+let wire: { sent: WireSamples; received: WireSamples } | null = null
+const emptyWire = (): WireSamples => ({ count: 0, bytes: 0, maxBytes: 0, oversized: 0 })
+function recordWire(direction: 'sent' | 'received', value: unknown): void {
+  const sample = wire?.[direction]
+  if (!sample) {
+    return
   }
-  if (index % 20 !== 0) {
-    return { message }
-  }
-  switch ((index / 20) % 10) {
-    case 0:
-      message.blocks = [{ type: 'image-ref', path }]
-      break
-    case 1:
-      message.blocks = [{ type: 'text', text: `![screenshot](${path})` }]
-      break
-    case 2:
-      message.blocks = [{ type: 'text', text: `[Screenshot](${path})` }]
-      break
-    case 3:
-      message.blocks = [
-        { type: 'text', text: `<div><Unknown>seed</Unknown><img src="${path}"></div>` }
-      ]
-      break
-    case 4:
-      message.role = 'reasoning'
-      message.blocks = [{ type: 'text', text: `![thought](${path})` }]
-      break
-    case 5:
-      message.blocks = [
-        { type: 'tool-call', name: 'Read', input: { file_path: path }, state: 'completed' }
-      ]
-      break
-    case 6:
-      message.role = 'user'
-      message.from = { kind: 'agent', senders: [], orchestration: null }
-      message.blocks = [{ type: 'text', text: `![card](${path})` }]
-      break
-    case 7:
-      message.blocks = [{ type: 'text', text: `[Screenshot][screen]\n\n[screen]: ${path}` }]
-      break
-    case 8: {
-      message.blocks = [
-        {
-          type: 'tool-call',
-          name: 'Read',
-          input: { file_path: '/fixture/readme.txt' },
-          state: 'completed'
-        }
-      ]
-      const thought: NativeChatMessage = {
-        id: `thought-${index}`,
-        role: 'reasoning',
-        source: 'transcript',
-        timestamp: index,
-        blocks: [{ type: 'text', text: `![grouped thought](${path})` }]
-      }
-      return { message, workRun: [thought, message] }
-    }
-    default:
-      message.blocks = [
-        { type: 'text', text: `[![linked image](${path})](https://example.com/fixture)` }
-      ]
-  }
-  return { message }
+  const bytes = new TextEncoder().encode(JSON.stringify(value)).byteLength
+  sample.count++
+  sample.bytes += bytes
+  sample.maxBytes = Math.max(sample.maxBytes, bytes)
+  sample.oversized += bytes > 65536 ? 1 : 0
 }
-
-function snapshot(count: number, giant: boolean, image: boolean): NativeChatGallerySnapshot {
-  const slots: NativeChatTranscriptSlot[] = []
-  for (let index = 0; index < count; index++) {
-    const { message, workRun } = imageMessage(index)
-    if (giant) {
-      message.blocks = [
-        {
-          type: 'text',
-          text: 'seed '.repeat(20_000) + (image ? '\n\n![giant](/fixture/giant.png)' : '')
-        }
-      ]
-    }
-    slots.push({
-      kind: 'message',
-      message,
-      workRun,
-      turnKey: undefined,
-      receipt: undefined,
-      status: undefined,
-      folded: false,
-      drawsMessage: true,
-      turnFolds: false,
-      activeTurnIsWorking: false,
-      trailingRun: false,
-      turnDiff: undefined,
-      estimatedHeight: 80
-    })
+class MeteredWorker extends Worker {
+  constructor(url: string | URL, options?: WorkerOptions) {
+    super(url, options)
+    this.addEventListener('message', (event) => recordWire('received', event.data))
   }
-  return {
-    scopeKey: 'seeded-gallery',
-    slots,
-    waitingSlots: [],
-    stoppedLabel: 'Stopped before starting',
-    visuals: true
+  override postMessage(
+    value: unknown,
+    options?: Transferable[] | StructuredSerializeOptions
+  ): void {
+    recordWire('sent', value)
+    if (Array.isArray(options)) {
+      super.postMessage(value, options)
+    } else {
+      super.postMessage(value, options)
+    }
   }
 }
+Object.assign(window, { Worker: MeteredWorker })
 
 type GalleryBenchmarkOptions = {
   count: number
@@ -123,9 +42,45 @@ type GalleryBenchmarkOptions = {
   cancel?: boolean
   stream?: boolean
   repeat?: number
+  largeFields?: boolean
+  manyImages?: boolean
+  largeTool?: boolean
+  update?: boolean
 }
 async function runGalleryBenchmark(options: GalleryBenchmarkOptions): Promise<unknown> {
-  const data = snapshot(options.count, options.giant ?? false, options.image ?? true)
+  const data = galleryBenchmarkSnapshot(
+    options.count,
+    options.giant ?? false,
+    options.image ?? true
+  )
+  const first = data.slots[0]
+  if (first?.kind === 'message' && options.largeFields) {
+    first.message.blocks = [
+      { type: 'image-ref', path: '/fixture/large.png', alt: '😀'.repeat(500_000) }
+    ]
+  }
+  if (first?.kind === 'message' && options.manyImages) {
+    first.message.blocks = [
+      {
+        type: 'text',
+        text: Array.from(
+          { length: 4000 },
+          (_, index) => `![${index}](/fixture/many-${index}.png)`
+        ).join('\n\n')
+      }
+    ]
+  }
+  if (first?.kind === 'message' && options.largeTool) {
+    first.message.blocks = [
+      {
+        type: 'tool-call',
+        name: 'Read',
+        state: 'completed',
+        input: { file_path: '/fixture/read.png', unrelated: 'seed '.repeat(400_000) }
+      },
+      { type: 'tool-result', output: 'bytes '.repeat(400_000) }
+    ]
+  }
   const longTasks: { start: number; duration: number }[] = []
   const observer = new PerformanceObserver((list) => {
     for (const entry of list.getEntries()) {
@@ -145,6 +100,8 @@ async function runGalleryBenchmark(options: GalleryBenchmarkOptions): Promise<un
   window.addEventListener('keydown', onKey)
   try {
     for (let run = 0; run < (options.repeat ?? (options.warm ? 2 : 1)); run++) {
+      const sampleWire = { sent: emptyWire(), received: emptyWire() }
+      wire = sampleWire
       const started = performance.now()
       let inputDelay = 0
       const scheduled = performance.now() + 25
@@ -154,7 +111,24 @@ async function runGalleryBenchmark(options: GalleryBenchmarkOptions): Promise<un
           resolve()
         }, 25)
       })
-      let pending = client.index(data)
+      const frontier = data.slots.at(-1)
+      const revisionData =
+        options.update && run > 0 && frontier?.kind === 'message'
+          ? {
+              ...data,
+              slots: [
+                ...data.slots.slice(0, -1),
+                {
+                  ...frontier,
+                  message: {
+                    ...frontier.message,
+                    blocks: [{ type: 'text' as const, text: '![appended](/fixture/appended.png)' }]
+                  }
+                }
+              ]
+            }
+          : data
+      let pending = client.index(revisionData)
       const superseded = [pending]
       if (options.stream) {
         await new Promise<void>((resolve) => setTimeout(resolve, 100))
@@ -192,6 +166,7 @@ async function runGalleryBenchmark(options: GalleryBenchmarkOptions): Promise<un
       samples.push({
         run,
         totalMs,
+        wire: sampleWire,
         inputTaskDelayMs: inputDelay,
         imageCount: result?.entries.length ?? null,
         latestImage: options.stream ? (result?.entries.at(-1)?.source ?? null) : undefined,
@@ -214,6 +189,7 @@ async function runGalleryBenchmark(options: GalleryBenchmarkOptions): Promise<un
     window.removeEventListener('keydown', onKey)
     observer.disconnect()
     client.close()
+    wire = null
   }
 }
 

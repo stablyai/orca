@@ -1,18 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import type { NativeChatMessage } from '../../../../../../shared/native-chat/native-chat-types'
 import { NativeChatGalleryIndex } from './native-chat-gallery-index'
-import type { NativeChatGallerySlot } from './native-chat-gallery-surfaces'
-
-function slot(message: NativeChatMessage, workRun?: NativeChatMessage[]): NativeChatGallerySlot {
-  return {
-    message,
-    workRun,
-    drawsMessage: true,
-    receipt: false,
-    activeTurnIsWorking: false,
-    trailingRun: false
-  }
-}
+import {
+  nativeChatGallerySlotSurfaces,
+  nativeChatReasoningImageSurface
+} from './native-chat-gallery-surfaces'
+import type { NativeChatGallerySurface } from './native-chat-gallery-surfaces'
 
 const thought: NativeChatMessage = {
   id: 'thought',
@@ -37,18 +30,41 @@ const read: NativeChatMessage = {
     { type: 'tool-result', callId: 'read-1', output: 'image bytes are not needed by the index' }
   ]
 }
+function surfaces(message: NativeChatMessage, workRun?: NativeChatMessage[]) {
+  return nativeChatGallerySlotSurfaces(
+    {
+      message,
+      workRun,
+      drawsMessage: true,
+      receipt: false,
+      activeTurnIsWorking: false,
+      trailingRun: false
+    },
+    { visuals: false, stoppedLabel: '' }
+  )
+}
+async function put(
+  index: NativeChatGalleryIndex,
+  revision: number,
+  handle: number,
+  value: NativeChatGallerySurface[]
+) {
+  const result = await index.handle({
+    type: 'put',
+    id: handle,
+    revision,
+    groups: [{ handle, surfaces: value, projectionMs: 0 }]
+  })
+  if (result.type !== 'groups') {
+    throw new Error('Image group did not index')
+  }
+  return result.groups[0]!.entries
+}
 
 describe('transcript gallery index', () => {
-  it('distinguishes attachment and document actions at the same source and skips undrawn slots', async () => {
+  it('distinguishes attachment and document actions at the same source', async () => {
     const index = new NativeChatGalleryIndex()
-    await index.handle({
-      type: 'begin',
-      scopeKey: 'test-chat',
-      id: 1,
-      revision: 1,
-      visuals: false,
-      stoppedLabel: ''
-    })
+    await index.handle({ type: 'begin', scopeKey: 'test-chat', id: 1, revision: 1 })
     const message: NativeChatMessage = {
       id: 'user',
       role: 'user',
@@ -59,75 +75,34 @@ describe('transcript gallery index', () => {
         { type: 'text', text: '![document](same.png)' }
       ]
     }
-    await index.handle({ type: 'slot', id: 2, revision: 1, slot: slot(message) })
-    await index.handle({
-      type: 'slot',
-      id: 3,
-      revision: 1,
-      slot: { ...slot(thought), drawsMessage: false }
-    })
-    await index.handle({ type: 'slot', id: 4, revision: 1, slot: { ...slot(read), receipt: true } })
-    const result = await index.handle({ type: 'commit', id: 5, revision: 1 })
-    expect(result.type).toBe('ready')
-    if (result.type !== 'ready') {
-      throw new Error('Index did not commit')
-    }
+    const entries = await put(index, 1, 2, surfaces(message))
     expect(
-      result.entries.map(({ ownerId, role, kind, source }) => ({ ownerId, role, kind, source }))
+      entries.map(({ ownerId, role, kind, source }) => ({ ownerId, role, kind, source }))
     ).toEqual([
       { ownerId: 'user', role: 'row-attachment', kind: 'file', source: 'same.png' },
       { ownerId: 'user', role: 'row-document', kind: 'document', source: 'same.png' }
     ])
   })
 
-  it('keeps selected reasoning when it moves into a grouped run, after the run read previews', async () => {
+  it('keeps selected reasoning when it moves into a grouped run after the read previews', async () => {
     const index = new NativeChatGalleryIndex()
-    await index.handle({
-      type: 'begin',
-      scopeKey: 'test-chat',
-      id: 1,
-      revision: 1,
-      visuals: false,
-      stoppedLabel: ''
-    })
-    await index.handle({ type: 'reasoning', id: 2, revision: 1, message: thought, growing: false })
-    const first = await index.handle({ type: 'commit', id: 3, revision: 1 })
-    if (first.type !== 'ready') {
-      throw new Error('Initial image index did not commit')
-    }
-    const selected = first.entries[0]!.key
-    await index.handle({
-      type: 'begin',
-      scopeKey: 'test-chat',
-      id: 4,
-      revision: 2,
-      visuals: false,
-      stoppedLabel: ''
-    })
-    await index.handle({ type: 'slot', id: 5, revision: 2, slot: slot(thought, [thought, read]) })
-    const second = await index.handle({ type: 'commit', id: 6, revision: 2 })
-    if (second.type !== 'ready') {
-      throw new Error('Updated image index did not commit')
-    }
-    expect(second.entries.map(({ ownerId, source }) => ({ ownerId, source }))).toEqual([
+    await index.handle({ type: 'begin', scopeKey: 'test-chat', id: 1, revision: 1 })
+    const first = await put(index, 1, 2, [nativeChatReasoningImageSurface(thought)])
+    await index.handle({ type: 'commit', id: 3, revision: 1 })
+    const selected = first[0]!.key
+    await index.handle({ type: 'begin', scopeKey: 'test-chat', id: 4, revision: 2 })
+    const second = await put(index, 2, 5, surfaces(thought, [thought, read]))
+    expect(second.map(({ ownerId, source }) => ({ ownerId, source }))).toEqual([
       { ownerId: 'read', source: '/tmp/read.png' },
       { ownerId: 'thought', source: 'thought.png' }
     ])
-    expect(second.entries.find((entry) => entry.key === selected)?.source).toBe('thought.png')
+    expect(second.find((entry) => entry.key === selected)?.source).toBe('thought.png')
   })
 
   it('refuses a stale revision instead of publishing another transcript snapshot', async () => {
     const index = new NativeChatGalleryIndex()
-    await index.handle({
-      type: 'begin',
-      scopeKey: 'test-chat',
-      id: 1,
-      revision: 2,
-      visuals: false,
-      stoppedLabel: ''
-    })
-    const result = await index.handle({ type: 'slot', id: 2, revision: 1, slot: slot(thought) })
-    expect(result).toEqual({
+    await index.handle({ type: 'begin', scopeKey: 'test-chat', id: 1, revision: 2 })
+    expect(await index.handle({ type: 'reuse', id: 2, revision: 1, handles: [1] })).toEqual({
       id: 2,
       revision: 1,
       type: 'superseded'
@@ -136,34 +111,30 @@ describe('transcript gallery index', () => {
 
   it('cannot carry a selection into a different runtime with the same message and path', async () => {
     const index = new NativeChatGalleryIndex()
-    await index.handle({
-      type: 'begin',
-      id: 1,
-      revision: 1,
-      scopeKey: 'chat:host-a',
-      visuals: false,
-      stoppedLabel: ''
+    await index.handle({ type: 'begin', id: 1, revision: 1, scopeKey: 'chat:host-a' })
+    const original = await put(index, 1, 2, surfaces(read))
+    const selected = original[0]!.key
+    await index.handle({ type: 'commit', id: 3, revision: 1 })
+    await index.handle({ type: 'begin', id: 4, revision: 2, scopeKey: 'chat:host-b' })
+    const next = await put(index, 2, 5, surfaces(read))
+    expect(next.find((entry) => entry.key === selected)).toBeUndefined()
+    expect(next.map((entry) => entry.source)).toEqual(['/tmp/read.png'])
+  })
+
+  it('reuses an uploaded group and retires it when a committed rewind removes it', async () => {
+    const index = new NativeChatGalleryIndex()
+    await index.handle({ type: 'begin', id: 1, revision: 1, scopeKey: 'chat' })
+    await put(index, 1, 2, surfaces(read))
+    await index.handle({ type: 'commit', id: 3, revision: 1 })
+    await index.handle({ type: 'begin', id: 4, revision: 2, scopeKey: 'chat' })
+    await index.handle({ type: 'reuse', id: 5, revision: 2, handles: [2] })
+    const reused = await index.handle({ type: 'commit', id: 6, revision: 2 })
+    expect(reused).toMatchObject({ type: 'ready', order: [2] })
+    await index.handle({ type: 'begin', id: 7, revision: 3, scopeKey: 'chat' })
+    await index.handle({ type: 'commit', id: 8, revision: 3 })
+    await index.handle({ type: 'begin', id: 9, revision: 4, scopeKey: 'chat' })
+    expect(await index.handle({ type: 'reuse', id: 10, revision: 4, handles: [2] })).toMatchObject({
+      type: 'error'
     })
-    await index.handle({ type: 'slot', id: 2, revision: 1, slot: slot(read) })
-    const original = await index.handle({ type: 'commit', id: 3, revision: 1 })
-    if (original.type !== 'ready') {
-      throw new Error('Original image index did not commit')
-    }
-    const selected = original.entries[0]!.key
-    await index.handle({
-      type: 'begin',
-      id: 4,
-      revision: 2,
-      scopeKey: 'chat:host-b',
-      visuals: false,
-      stoppedLabel: ''
-    })
-    await index.handle({ type: 'slot', id: 5, revision: 2, slot: slot(read) })
-    const next = await index.handle({ type: 'commit', id: 6, revision: 2 })
-    if (next.type !== 'ready') {
-      throw new Error('New runtime image index did not commit')
-    }
-    expect(next.entries.find((entry) => entry.key === selected)).toBeUndefined()
-    expect(next.entries.map((entry) => entry.source)).toEqual(['/tmp/read.png'])
   })
 })

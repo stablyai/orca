@@ -1,8 +1,19 @@
 import type { NativeChatMessage } from '../../../../../../shared/native-chat/native-chat-types'
 import type { NativeChatTranscriptSlot } from '../../conversation/slots/native-chat-transcript-slots'
-import type { NativeChatGallerySlot } from './native-chat-gallery-surfaces'
+import { yieldToEventLoop } from '../../../../../../shared/event-loop-yield'
+import {
+  nativeChatGallerySlotSurfaces,
+  nativeChatReasoningImageSurface
+} from './native-chat-gallery-surfaces'
+import type { NativeChatGalleryEntry } from './native-chat-gallery-entries'
+import {
+  NativeChatGalleryProjectionCache,
+  type NativeChatGalleryPreparedGroup
+} from './native-chat-gallery-projection-cache'
+import { NativeChatGalleryWorkerClient } from './native-chat-gallery-worker-client'
 import type {
-  NativeChatGalleryWorkerRequest,
+  NativeChatGalleryIndexMetrics,
+  NativeChatGalleryWorkerCommand,
   NativeChatGalleryWorkerResult
 } from './native-chat-gallery-worker-protocol'
 
@@ -16,60 +27,33 @@ export type NativeChatGallerySnapshot = {
   visuals: boolean
 }
 
-type Ready = Extract<NativeChatGalleryWorkerResult, { type: 'ready' }>
+export type NativeChatGalleryReady = {
+  type: 'ready'
+  revision: number
+  entries: NativeChatGalleryEntry[]
+  metrics: NativeChatGalleryIndexMetrics
+}
 type Job = {
   revision: number
   snapshot: NativeChatGallerySnapshot
-  resolve: (result: Ready | null) => void
+  resolve: (result: NativeChatGalleryReady | null) => void
   reject: (error: Error) => void
 }
-type WorkerRequest =
-  | Omit<Extract<NativeChatGalleryWorkerRequest, { type: 'begin' }>, 'id'>
-  | Omit<Extract<NativeChatGalleryWorkerRequest, { type: 'slot' }>, 'id'>
-  | Omit<Extract<NativeChatGalleryWorkerRequest, { type: 'reasoning' }>, 'id'>
-  | Omit<Extract<NativeChatGalleryWorkerRequest, { type: 'commit' }>, 'id'>
-
-function transferMessage(message: NativeChatMessage): NativeChatMessage {
-  return {
-    ...message,
-    blocks: message.blocks.map((block) =>
-      block.type === 'tool-result' ? { ...block, output: '', editPatch: undefined } : block
-    )
-  }
-}
-
-function transferSlot(
-  slot: Extract<NativeChatTranscriptSlot, { kind: 'message' }>
-): NativeChatGallerySlot {
-  return {
-    message: transferMessage(slot.message),
-    ...(slot.workRun ? { workRun: slot.workRun.map(transferMessage) } : {}),
-    receipt: slot.receipt !== undefined,
-    drawsMessage: slot.drawsMessage,
-    activeTurnIsWorking: slot.activeTurnIsWorking,
-    trailingRun: slot.trailingRun
-  }
-}
-
 export class NativeChatGalleryClient {
-  private worker: Worker | null = null
   private revision = 0
   private scopeKey: string | null = null
-  private nextId = 0
+  private readonly cache = new NativeChatGalleryProjectionCache()
   private running = false
   private queued: Job | null = null
   private active: Job | null = null
-  private response: {
-    id: number
-    revision: number
-    resolve: (result: NativeChatGalleryWorkerResult) => void
-    reject: (error: Error) => void
-    timer: ReturnType<typeof setTimeout>
-  } | null = null
+  private readonly channel = new NativeChatGalleryWorkerClient(
+    (revision) => revision === this.revision,
+    () => this.cache.clear()
+  )
 
   constructor(private readonly onProgress?: (completedSlots: number) => void) {}
 
-  index(snapshot: NativeChatGallerySnapshot): Promise<Ready | null> {
+  index(snapshot: NativeChatGallerySnapshot): Promise<NativeChatGalleryReady | null> {
     if (this.scopeKey !== null && this.scopeKey !== snapshot.scopeKey) {
       this.close()
     }
@@ -91,72 +75,34 @@ export class NativeChatGalleryClient {
   }
 
   private release(error: Error): void {
-    if (this.response) {
-      clearTimeout(this.response.timer)
-      this.response.reject(error)
-      this.response = null
-    }
-    this.worker?.terminate()
-    this.worker = null
+    this.channel.close(error)
   }
 
-  private ensureWorker(): Worker {
-    if (this.worker) {
-      return this.worker
-    }
-    const worker = new Worker(new URL('./native-chat-gallery.worker.ts', import.meta.url), {
-      type: 'module'
-    })
-    worker.onmessage = (event: MessageEvent<NativeChatGalleryWorkerResult>) => {
-      if (this.worker !== worker) {
-        return
-      }
-      const result = event.data
-      const response = this.response
-      if (!response || response.id !== result.id || response.revision !== result.revision) {
-        return
-      }
-      clearTimeout(response.timer)
-      this.response = null
-      if (result.type === 'error' || result.type === 'superseded') {
-        response.reject(
-          new Error(
-            result.type === 'error' ? result.message : 'Gallery index revision was superseded'
-          )
-        )
-      } else {
-        response.resolve(result)
-      }
-    }
-    worker.onerror = () => {
-      if (this.worker === worker) {
-        this.release(new Error('Image navigation worker failed'))
-      }
-    }
-    this.worker = worker
-    return worker
+  private request(
+    job: Job,
+    command: NativeChatGalleryWorkerCommand
+  ): Promise<NativeChatGalleryWorkerResult | null> {
+    return this.channel.request(job.revision, command)
   }
 
-  private request(request: WorkerRequest): Promise<NativeChatGalleryWorkerResult> {
-    const worker = this.ensureWorker()
-    const id = ++this.nextId
-    return new Promise((resolve, reject) => {
-      const timer = setTimeout(() => this.release(new Error('Image navigation timed out')), 30_000)
-      this.response = { id, revision: request.revision, resolve, reject, timer }
-      const mark = `native-chat-gallery:transfer:${request.revision}:${id}`
-      performance.mark(`${mark}:start`)
-      try {
-        worker.postMessage({ ...request, id })
-      } catch (error) {
-        this.release(error instanceof Error ? error : new Error('Unable to transfer chat images'))
-      } finally {
-        performance.mark(`${mark}:end`)
-        performance.measure(mark, `${mark}:start`, `${mark}:end`)
-        performance.clearMarks(`${mark}:start`)
-        performance.clearMarks(`${mark}:end`)
-        performance.clearMeasures(mark)
-      }
+  private async sendGroups(
+    job: Job,
+    groups: readonly NativeChatGalleryPreparedGroup[]
+  ): Promise<void> {
+    if (!groups.length || job.revision !== this.revision) {
+      return
+    }
+    const result = await this.request(job, {
+      type: 'put',
+      groups: groups.map(({ handle, surfaces, projectionMs }) => ({
+        handle,
+        surfaces,
+        projectionMs
+      }))
     })
+    if (result?.type === 'groups' && job.revision === this.revision) {
+      this.cache.register(groups, result.groups)
+    }
   }
 
   private async appendSlots(
@@ -164,50 +110,90 @@ export class NativeChatGalleryClient {
     slots: readonly NativeChatTranscriptSlot[],
     completed = 0
   ): Promise<number> {
+    let reused: number[] = []
+    let prepared: NativeChatGalleryPreparedGroup[] = []
+    const flushReused = async (): Promise<void> => {
+      if (reused.length) {
+        await this.request(job, { type: 'reuse', handles: reused })
+        reused = []
+      }
+    }
+    const flushPrepared = async (): Promise<void> => {
+      await this.sendGroups(job, prepared)
+      prepared = []
+    }
     for (const slot of slots) {
       if (job.revision !== this.revision) {
         return completed
       }
       completed++
+      if (completed % 64 === 0) {
+        await flushPrepared()
+        await flushReused()
+        await yieldToEventLoop()
+      }
       if (slot.kind !== 'message' || !slot.drawsMessage || slot.receipt) {
         continue
       }
-      // Each acknowledged request resumes in a new worker-message task before the next slot.
-      const result = await this.request({
-        type: 'slot',
-        revision: job.revision,
-        slot: transferSlot(slot)
-      })
-      if (job.revision === this.revision && result.type === 'ack') {
-        this.onProgress?.(completed)
+      const input = {
+        key: `slot:${slot.message.id}`,
+        message: slot.message,
+        workRun: slot.workRun,
+        active: slot.activeTurnIsWorking,
+        trailing: slot.trailingRun
       }
+      const cached = await this.cache.cached(input, job.snapshot)
+      if (cached !== null) {
+        await flushPrepared()
+        reused.push(cached)
+      } else {
+        await flushReused()
+        prepared.push(
+          this.cache.prepare(input, job.snapshot, () =>
+            nativeChatGallerySlotSurfaces({ ...slot, receipt: false }, job.snapshot)
+          )
+        )
+        if (prepared.length === 32) {
+          await flushPrepared()
+        }
+      }
+      this.onProgress?.(completed)
     }
+    await flushPrepared()
+    await flushReused()
     return completed
   }
 
-  private async run(job: Job): Promise<Ready | null> {
+  private async run(job: Job): Promise<NativeChatGalleryReady | null> {
     const { snapshot, revision } = job
-    await this.request({
-      type: 'begin',
-      revision,
-      scopeKey: snapshot.scopeKey,
-      stoppedLabel: snapshot.stoppedLabel,
-      visuals: snapshot.visuals
-    })
+    await this.request(job, { type: 'begin', scopeKey: snapshot.scopeKey })
     const completed = await this.appendSlots(job, snapshot.slots)
     if (revision !== this.revision) {
       return null
     }
     if (snapshot.liveReasoning) {
-      await this.request({ type: 'reasoning', revision, ...snapshot.liveReasoning })
+      const { message, growing } = snapshot.liveReasoning
+      const input = { key: `reasoning:${message.id}`, message, active: growing, trailing: false }
+      const cached = await this.cache.cached(input, snapshot)
+      await (cached !== null
+        ? this.request(job, { type: 'reuse', handles: [cached] })
+        : this.sendGroups(job, [
+            this.cache.prepare(input, snapshot, () => [
+              nativeChatReasoningImageSurface(message, message.id, growing)
+            ])
+          ]))
     }
     const total = await this.appendSlots(job, snapshot.waitingSlots, completed)
     if (revision !== this.revision) {
       return null
     }
     this.onProgress?.(total)
-    const result = await this.request({ type: 'commit', revision })
-    return revision === this.revision && result.type === 'ready' ? result : null
+    const result = await this.request(job, { type: 'commit' })
+    if (result?.type !== 'ready') {
+      return null
+    }
+    const entries = await this.cache.assemble(result.order, () => revision === this.revision)
+    return entries ? { type: 'ready', revision, entries, metrics: result.metrics } : null
   }
 
   private async pump(): Promise<void> {

@@ -8,7 +8,8 @@ import { deriveNativeChatRowContent } from '../../../../../../shared/native-chat
 import { nativeChatNoticeBlock } from '../../../../../../shared/native-chat/native-chat-notice'
 import { agentMessageTranscriptText } from '../../../../../../shared/agent-session/agent-message-display-text'
 import { nativeChatWorkRunEntries } from '../../../../../../shared/native-chat/native-chat-work-run'
-import { nativeChatToolRunHeader } from '../../../../../../shared/native-chat/tools/native-chat-tool-run-header'
+import { nativeChatAskRunBlocks } from '../../../../../../shared/native-chat/input/questions/native-chat-ask-row'
+import { countToolCalls } from '../../../../../../shared/native-chat/tools/native-chat-tool-summary'
 import { nativeChatToolRunViewedImageEntries } from '../../../../../../shared/native-chat/tools/native-chat-tool-viewed-images'
 import { nativeChatToolRunAsidePositions } from '../../../../../../shared/native-chat/tools/native-chat-tool-run-aside-positions'
 
@@ -70,7 +71,15 @@ export function nativeChatGallerySlotSurfaces(
   const blocks = nativeChatMessageDisplayBlocks(message, options.stoppedLabel)
   const content = deriveNativeChatRowContent(blocks)
   const slotKey = message.id
-  if (message.from && (message.agentStart || message.role === 'user')) {
+  const agentStart = Boolean(message.agentStart && message.from)
+  if (
+    !agentStart &&
+    ((message.role === 'system' && nativeChatNoticeBlock(blocks)) ||
+      blocks.some((block) => block.type === 'text' && block.providerFrame))
+  ) {
+    return []
+  }
+  if (message.from && (agentStart || message.role === 'user')) {
     return [
       files(message.id, slotKey, 'agent-card-attachment', message.blocks),
       {
@@ -83,12 +92,6 @@ export function nativeChatGallerySlotSurfaces(
         visuals: false
       }
     ]
-  }
-  if (
-    (message.role === 'system' && nativeChatNoticeBlock(blocks)) ||
-    blocks.some((block) => block.type === 'text' && block.providerFrame)
-  ) {
-    return []
   }
   if (message.role === 'reasoning' && slot.workRun === undefined) {
     return [nativeChatReasoningImageSurface(message, slotKey)]
@@ -119,27 +122,20 @@ export function nativeChatGallerySlotSurfaces(
   if (runBlocks.length === 0) {
     return surfaces
   }
-  const header = nativeChatToolRunHeader(runBlocks, {
-    activeTurnIsWorking: slot.activeTurnIsWorking,
-    trailing: slot.trailingRun
-  })
+  const { asks, work } = nativeChatAskRunBlocks(runBlocks)
   const blockOwners = new Map<NativeChatBlock, string>()
   for (const member of slot.workRun ?? [message]) {
     for (const block of member.blocks) {
       blockOwners.set(block, member.id)
     }
   }
-  for (const { path, call } of nativeChatToolRunViewedImageEntries(header.work)) {
+  for (const { path, call } of nativeChatToolRunViewedImageEntries(work)) {
     surfaces.push(
       files(blockOwners.get(call) ?? message.id, slotKey, 'run-read', [{ type: 'image-ref', path }])
     )
   }
-  if (run && (header.asks.length === 0 || header.callCount > 0)) {
-    const positions = nativeChatToolRunAsidePositions(
-      header.work,
-      run.thoughtsBefore,
-      run.thoughtsAfter
-    )
+  if (run && (asks.length === 0 || countToolCalls(work) > 0)) {
+    const positions = nativeChatToolRunAsidePositions(work, run.thoughtsBefore, run.thoughtsAfter)
     for (const thoughts of positions.values()) {
       for (const thought of thoughts) {
         surfaces.push(nativeChatReasoningImageSurface(thought, slotKey))
