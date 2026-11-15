@@ -15,6 +15,7 @@ import {
   parseCodexTrustKey as parseTrustKey
 } from '../identity/codex-trust-identity'
 import { getCodexHookTrustSignature } from '../../hooks/definitions/codex-hook-identity'
+import { getCodexManagedHookStatusMessage } from '../../hooks/definitions/codex-hook-definition'
 import {
   readCodexTrustGrantLedgerHome,
   removeCodexTrustGrantLedgerHome,
@@ -70,7 +71,12 @@ export function readLedgerOrcaHashes(
       return []
     }
     const hashes = new Set<string>()
-    addLedgerRecognizedHashes(hashes, [ledgerHome], key, { ...parts, command, timeoutSec })
+    addLedgerRecognizedHashes(hashes, [ledgerHome], key, {
+      ...parts,
+      command,
+      timeoutSec,
+      statusMessage: getCodexManagedHookStatusMessage(command)
+    })
     return [...hashes].map((hash) => ({ [parts.eventLabel]: hash }))
   })
 }
@@ -116,7 +122,8 @@ function getCodexManagedHookTrustEntryKeys(
       groupIndex: parts.groupIndex,
       handlerIndex: parts.handlerIndex,
       command: options.command,
-      timeoutSec: options.timeoutSec
+      timeoutSec: options.timeoutSec,
+      statusMessage: getCodexManagedHookStatusMessage(options.command)
     }
     const recognizedHashes = new Set([
       computeTrustedHash(expectedEntry),
@@ -189,13 +196,15 @@ export function removeStaleWslCodexManagedHookTrustEntries(options: {
       continue
     }
     const linuxRuntimeHome = parts.sourcePath.slice(0, -'/hooks.json'.length)
+    const command = options.buildManagedCommand(linuxRuntimeHome)
     const expectedEntry: CodexTrustEntry = {
       sourcePath: parts.sourcePath,
       eventLabel: parts.eventLabel,
       groupIndex: parts.groupIndex,
       handlerIndex: parts.handlerIndex,
-      command: options.buildManagedCommand(linuxRuntimeHome),
-      timeoutSec: options.timeoutSec
+      command,
+      timeoutSec: options.timeoutSec,
+      statusMessage: getCodexManagedHookStatusMessage(command)
     }
     const recognizedHashes = new Set([
       computeTrustedHash(expectedEntry),

@@ -1,7 +1,7 @@
-import { agentSessionProviderHandleRoot } from '../../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
+import { agentSessionProviderHandleRoot } from '../../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle-encoding'
 import { agentSessionCurrentContextRows } from '../../../../shared/agent-session/agent-session-context-clear'
-import { savedRewindKeys } from '../../../../shared/agent-session/lifecycle/agent-session-rewind'
-import { readAgentJournalTurn } from '../../../../shared/agent-session/lifecycle/agent-session-turn-record'
+import { savedRewindKeys } from '../../../../shared/agent-session/lifecycle/rewind/agent-session-rewind'
+import { readAgentJournalTurn } from '../../../../shared/agent-session/lifecycle/records/agent-session-turn-record'
 import { isRootAgentJournalItem } from '../../../../shared/agent-session/journal/agent-session-journal-producer'
 import type { AgentJournalSnapshot } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-record'
@@ -50,13 +50,9 @@ export function structuredAgentSessionForkBoundary(
   const identity = keys.nativeIdentity(selected.itemId)
   const opener = turn?.userItemId ? keys.nativeIdentity(turn.userItemId) : undefined
   const head = record.providerHandleChain.at(-1)
-  const anchor = record.forkedFrom?.childBoundary
-  const anchorIndex =
-    anchor?.kind === 'item' ? items.findIndex((item) => item.itemId === anchor.itemId) : -1
   const settled = Boolean(
     next ||
     (turn && (turn.state === 'completed' || turn.state === 'interrupted')) ||
-    index <= anchorIndex ||
     record.lease.deathEvidence
   )
   const checkpoint: Checkpoint = {

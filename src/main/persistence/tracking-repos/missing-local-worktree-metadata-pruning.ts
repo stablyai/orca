@@ -1,13 +1,13 @@
 import { isWindowsAbsolutePathLike } from '../../../shared/cross-platform-path'
 import { getRepoExecutionHostId, LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host'
 import type { PersistedState } from '../../../shared/persisted-state-types'
-import { getRepoKind } from '../../../shared/repo-kind'
-import { sshRemotePtyLeaseAllowsReattach } from '../../../shared/ssh-types'
-import { worktreeWorkspaceKey } from '../../../shared/workspace-scope'
+import { getRepoKind } from '../../../shared/repository/repo-kind'
+import { sshRemotePtyLeaseAllowsReattach } from '../../../shared/remote-runtime/ssh/ssh-types'
+import { worktreeWorkspaceKey } from '../../../shared/workspace/identity/workspace-scope'
 import { FOLDER_WORKSPACE_INSTANCE_SEPARATOR, splitWorktreeId } from '../../../shared/worktree/id'
-import { isWslUncPath } from '../../../shared/wsl-paths'
+import { isWslUncPath } from '../../../shared/file-access/wsl-paths'
 import { isFinalAutomationRunStatus } from '../../../shared/automations/history/automation-run'
-import { pruneUnreferencedWorktreeIdentityMeta } from '../loading-store/worktree-identity-metadata'
+import { pruneUnreferencedWorktreeIdentityMeta } from '../loading-store/worktree-metadata/worktree-identity-metadata'
 import {
   addPersistedSessionWorktreeOwners,
   createWorktreeOwnerCandidateCollector

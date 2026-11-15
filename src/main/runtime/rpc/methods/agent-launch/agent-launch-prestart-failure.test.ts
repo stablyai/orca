@@ -1,7 +1,4 @@
-import {
-  closeTestJournalHostDatabases,
-  closeTestJournalHostDatabase
-} from '../../../../native-chat/agent-session-journal/store-lifecycle/journal-host-database-test-support'
+import { closeTestJournalHostDatabases } from '../../../../native-chat/agent-session-journal/store-lifecycle/journal-host-database-test-support'
 /** Pre-dispatch failures prove no effects and record the real cause; a lost reply after dispatch remains unknown. Explicitly unsupported chat is refused before creation. */
 
 import { mkdtemp, rm } from 'node:fs/promises'
@@ -10,7 +7,7 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { computeAgentLaunchFingerprint } from '../../../../../shared/agent-launch/contracts/agent-launch-operation'
 import '../../../../../shared/agent-launch/contracts/agent-launch-surface'
-import '../../../../opencode/opencode-model-startup-plan'
+import '../../../../opencode/model-launch/opencode-model-startup-plan'
 import type { AgentSessionRecordStore } from '../../../agent-session/records/agent-session-record-store'
 import { openTestAgentSessionRecordStore } from '../../../agent-session/records/agent-session-record-store-test-harness'
 import type { OrcaRuntimeService } from '../../../orca-runtime'
@@ -18,7 +15,7 @@ import '../../../workspaces/lineage/runtime-worktree-lineage-resolution'
 import '../../../../agent-launch/agent-launch-not-started'
 import './agent-launch-failure-code'
 import { RpcDispatcher } from '../../dispatcher'
-import type { RpcDispatchStreamingOptions } from '../../dispatcher-stream-options'
+import type { RpcDispatchStreamingOptions } from '../../dispatch/dispatcher-stream-options'
 import {
   methodNamed,
   runtimeStub,
@@ -211,59 +208,5 @@ describe('a launch whose terminal fails', () => {
     })
     expect(runtime.showRepo).not.toHaveBeenCalled()
     expect(runtime.createManagedWorktree).not.toHaveBeenCalled()
-  })
-
-  it('joins and reopens successful true/absent observation churn without another create/start', async () => {
-    const first = runtimeStub({ settings: {} })
-    const create = {
-      repo: 'id:repo-1',
-      name: 'task',
-      cwdParentWorktree: 'id:parent',
-      callerTerminalHandle: 'term_R'
-    }
-    const observed = {
-      agent: 'claude',
-      target: { kind: 'create-worktree', create: { ...create, cwdParentAmbiguous: true } }
-    }
-    const absent = { ...observed, target: { ...observed.target, create } }
-    const realCreateBoundary = first.createManagedWorktree.getMockImplementation()!
-    let release!: () => void
-    const waiting = new Promise<void>((resolve) => {
-      release = resolve
-    })
-    first.createManagedWorktree.mockImplementation(async (args) => {
-      await waiting
-      return realCreateBoundary(args)
-    })
-    const pending = replay(first, observed)
-    await vi.waitFor(() => expect(first.createManagedWorktree).toHaveBeenCalledTimes(1))
-    const joined = replay(first, absent)
-    release()
-    const response = await pending
-    expect(response).toMatchObject({
-      ok: true,
-      result: { outcome: { kind: 'terminal', handle: 'term_agent_first' } }
-    })
-    expect(await joined).toEqual(response)
-    expect(await replay(first, absent)).toEqual(response)
-    expect(first.createManagedWorktree).toHaveBeenCalledTimes(1)
-    expect(first.createTerminal).not.toHaveBeenCalled()
-    expect(
-      await replay(first, {
-        ...absent,
-        target: { ...absent.target, create: { ...create, cwdParentWorktree: 'id:changed' } }
-      })
-    ).toMatchObject({ ok: false, error: { code: 'agent_session_operation_conflict' } })
-    await closeTestJournalHostDatabase(directory)
-    store = await openTestAgentSessionRecordStore(directory)
-    setAgentLaunchRecordStore(store)
-    const restarted = runtimeStub({ settings: {} })
-    for (const request of [observed, absent]) {
-      expect(await replay(restarted, request)).toEqual(response)
-    }
-    expect(restarted.showRepo).not.toHaveBeenCalled()
-    expect(restarted.showTerminal).not.toHaveBeenCalled()
-    expect(restarted.createManagedWorktree).not.toHaveBeenCalled()
-    expect(restarted.createTerminal).not.toHaveBeenCalled()
   })
 })

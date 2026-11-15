@@ -9,7 +9,7 @@ import {
   isClaudePromptRecord,
   readClaudePromptString,
   type ClaudePendingPrompt
-} from '../../claude-prompt-registry'
+} from '../permissions/claude-prompt-registry'
 
 /** Keep `cancel` for older cards; it now means dismissal. */
 export const CLAUDE_APPROVAL_DECISIONS = ['allow', 'allowForSession', 'deny', 'cancel'] as const

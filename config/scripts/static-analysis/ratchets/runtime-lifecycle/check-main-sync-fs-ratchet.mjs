@@ -2,6 +2,7 @@ import process from 'node:process'
 import { pathToFileURL } from 'node:url'
 import { createGatedCallCollector } from '../../process-boundaries/gated-call-use-collector.mjs'
 import { readTrackedSources, runCountRatchet } from '../../ratchet-baseline/ratchet-baseline.mjs'
+import { isMainBlockingSource } from '../../process-boundaries/main-blocking-source-paths.mjs'
 import { isTestOnlySourcePath } from '../../process-boundaries/test-only-source-path.mjs'
 
 // Sync fs on Electron main stalls every window (and in the daemon/orcad, every terminal); per-spawn/RPC/focus stat and read sweeps were a recurring lag source (#39805, #35967, #38481).
@@ -10,7 +11,7 @@ const BASELINE_PATH = 'config/main-sync-fs-baseline.txt'
 // src/shared runs on main too; leaving it out would let a helper move bypass the gate.
 const SCAN_ROOTS = ['src/main', 'src/shared']
 const ADVICE =
-  'use node:fs/promises, or cache the result on a stat fingerprint outside the hot path'
+  'move CPU or SQL work to a worker, utility process or backend; async is right only for real I/O waits (node:fs/promises for filesystem waits)'
 // Every *Sync export of node:fs (descriptor and copy APIs included), listed so the baseline doesn't depend on the runtime.
 const SYNC_FS = [
   'accessSync',
@@ -69,7 +70,12 @@ const collector = createGatedCallCollector(
 )
 
 function isScannedPath(rel) {
-  return /\.[cm]?[jt]sx?$/.test(rel) && !rel.endsWith('.d.ts') && !isTestOnlySourcePath(rel)
+  return (
+    isMainBlockingSource(rel) &&
+    /\.[cm]?[jt]sx?$/.test(rel) &&
+    !rel.endsWith('.d.ts') &&
+    !isTestOnlySourcePath(rel)
+  )
 }
 
 export function countSyncFsCalls(rel, source) {

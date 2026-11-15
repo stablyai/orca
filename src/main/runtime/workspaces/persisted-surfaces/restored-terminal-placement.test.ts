@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { FolderWorkspace } from '../../../../shared/folder-workspaces/folder-workspace-types'
 import { getDefaultWorkspaceSession } from '../../../../shared/constants'
-import { folderWorkspaceKey } from '../../../../shared/workspace-scope'
+import { folderWorkspaceKey } from '../../../../shared/workspace/identity/workspace-scope'
 import { OrcaRuntimeService } from '../../orca-runtime'
 
 vi.mock('../../../../shared/layout-owner-switch', () => ({ ORCA_LAYOUT_OWNER_IS_MAIN: true }))
@@ -31,6 +31,7 @@ function runtimeWithCwdOnlyTerminal() {
     getRepos: () => [],
     getProjectGroups: () => [{ id: 'group-1', parentPath: '/fixture' }],
     getFolderWorkspaces: () => [FOLDER],
+    getFolderWorkspace: (id: string) => (id === FOLDER.id ? FOLDER : undefined),
     getSettings: () => ({}),
     getAllWorktreeMeta: () => ({}),
     getWorkspaceSessionHostIds: () => ['local'],
@@ -65,7 +66,7 @@ describe('startup placement of a cwd-filed live terminal', () => {
       placed: ['pty-agent'],
       declined: []
     })
-    runtime.syncWindowGraph(0, { tabs: [], leaves: [] })
+    await runtime.syncWindowGraph(0, { tabs: [], leaves: [] })
     await runtime.stopTerminalsForWorktree(`id:${FOLDER_KEY}`)
 
     expect(stopAndWait).toHaveBeenCalledWith('pty-agent')

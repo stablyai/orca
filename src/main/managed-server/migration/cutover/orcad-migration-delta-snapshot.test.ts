@@ -1,8 +1,9 @@
+import '../../../../shared/remote-runtime/host-store/environment-store-worker-test-fixture'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { getManagedOrcadFenceEnvironmentId } from '../../../../shared/managed-orcad-ssh-owner'
+import { getManagedOrcadFenceEnvironmentId } from '../../../../shared/remote-runtime/ssh/managed-orcad-ssh-owner'
 import { encodePairingOffer } from '../../../../shared/remote-runtime/pairing/pairing'
 import { PAIRING_OFFER_VERSION } from '../../../../shared/remote-runtime/pairing/mobile-relay-pairing-offer'
 import { addManagedOrcadEnvironment } from '../../../../shared/remote-runtime/host-store/runtime-environment-managed-orcad-store'
@@ -10,18 +11,18 @@ import {
   listEnvironments,
   resolveEnvironment
 } from '../../../../shared/remote-runtime/host-store/runtime-environment-store'
-import type { Repo } from '../../../../shared/repo-types'
-import type { SshTarget } from '../../../../shared/ssh-types'
-import { folderWorkspaceKey } from '../../../../shared/workspace-scope'
+import type { Repo } from '../../../../shared/repository/repo-types'
+import type { SshTarget } from '../../../../shared/remote-runtime/ssh/ssh-types'
+import { folderWorkspaceKey } from '../../../../shared/workspace/identity/workspace-scope'
 import {
   closeTestStores,
   createSqliteTestStore
 } from '../../../persistence/persistence-test-harness'
 import { Store } from '../../../persistence/loading-store/store'
-import { listOrcadMigrationSourceCutovers } from '../../../persistence/migrating-orcad-catalog/orcad-migration-cutover-journal'
+import { listOrcadMigrationSourceCutovers } from '../../../persistence/migrating-orcad-catalog/cutover-journals/orcad-migration-cutover-journal'
 import { fakeOrcadMigrationDestination } from './testing/orcad-migration-destination-fake'
 import { runOrcadDeltaMove } from './orcad-migration-delta-move'
-import { reconcileManagedOrcadSshTargets } from '../../../persistence/migrating-orcad-catalog/orcad-retained-source'
+import { reconcileManagedOrcadSshTargets } from '../../../persistence/migrating-orcad-catalog/retained-source/orcad-retained-source'
 import { SshConnectionStore } from '../../../ssh/targets/ssh-connection-store'
 import { runTargetLifecycle } from '../../../ipc/ssh/ssh-target-lifecycle-queue'
 
@@ -81,8 +82,8 @@ beforeEach(() => {
   mocks.ensureTunnel.mockImplementation(resolveEnvironment)
   mocks.deploy.mockImplementation(async (path: string, args: { name: string }) => {
     const id = getManagedOrcadFenceEnvironmentId(store.getSshTarget(TARGET.id))!
-    if (!listEnvironments(path).some((entry) => entry.id === id)) {
-      addManagedOrcadEnvironment(path, {
+    if (!(await listEnvironments(path)).some((entry) => entry.id === id)) {
+      await addManagedOrcadEnvironment(path, {
         id,
         name: args.name,
         pairingCode: encodePairingOffer({
@@ -149,19 +150,19 @@ async function convertedThenAdded(addOnOlderBuild: () => string): Promise<string
   ).resolves.toMatchObject({ outcome: 'converted' })
   const worktreeId = addOnOlderBuild()
   saveDraft(worktreeId, 'draft before the move')
-  reconcileManagedOrcadSshTargets(userDataPath, store, now)
+  await reconcileManagedOrcadSshTargets(userDataPath, store, now)
   expect(store.getSshTarget(TARGET.id)?.orcadFence?.sourceChangedAt).toBeDefined()
   return worktreeId
 }
 
 /** Run the user edit before answering census to model typing during preflight. */
-function deltaMoveTypingDuringTerminalCheck(whileChecking: () => void) {
+async function deltaMoveTypingDuringTerminalCheck(whileChecking: () => void) {
   return runOrcadDeltaMove({
     userDataPath,
     store,
     claims: sshStore.getOrcadRuntimeClaims(),
     target: store.getSshTarget(TARGET.id)!,
-    environment: listEnvironments(userDataPath)[0]!,
+    environment: (await listEnvironments(userDataPath))[0]!,
     connectDestination: async () => destination,
     censusHost: async () => {
       whileChecking()
@@ -225,7 +226,7 @@ describe('a draft typed while a delta move checks terminals', () => {
       outcome: 'moved'
     })
     expect(savedDraft(worktreeId)).toBe('draft before the move')
-    reconcileManagedOrcadSshTargets(userDataPath, store, now)
+    await reconcileManagedOrcadSshTargets(userDataPath, store, now)
     expect(store.getSshTarget(TARGET.id)?.orcadFence?.sourceChangedAt).toBeUndefined()
   })
 })

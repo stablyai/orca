@@ -6,7 +6,7 @@ import {
   type ResolvedTerminalFileLink
 } from '../../../../../../shared/terminal/links/terminal-links'
 import { normalizeAbsolutePath } from '../../../../../../shared/file-links/file-link-path-normalization'
-import { parseWslUncPath } from '../../../../../../shared/wsl-paths'
+import { parseWslUncPath } from '../../../../../../shared/file-access/wsl-paths'
 import { isRemoteRuntimeFileOperation } from '@/runtime/files/runtime-file-routing'
 import {
   getTerminalFileContext,

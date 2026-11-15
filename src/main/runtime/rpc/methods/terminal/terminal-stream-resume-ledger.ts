@@ -2,7 +2,7 @@ import {
   iterateTerminalOutputFrameChunks,
   type TerminalOutputFrameChunk,
   type TerminalOutputMeta
-} from '../../terminal-output-frame-chunks'
+} from '../../terminal/terminal-output-frame-chunks'
 import { TerminalStreamOpcode } from '../../../../../shared/terminal/stream/terminal-stream-protocol'
 import type {
   PublishedOutputPoint,

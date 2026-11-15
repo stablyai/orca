@@ -1,12 +1,12 @@
 // COMPAT(wsl-bridge): removed when WSL runs as an orcad host.
 import { useCallback, useMemo, useRef, type KeyboardEvent } from 'react'
-import { track } from '@/lib/telemetry'
-import { notifyInstalledAgentSkillsChanged } from '@/hooks/useInstalledAgentSkills'
-import { useActiveProjectSkillRuntime } from '@/hooks/useActiveProjectSkillRuntime'
+import { track } from '@/diagnostics/telemetry/telemetry'
+import { notifyInstalledAgentSkillsChanged } from '@/hooks/skills/discovery/installed-agent-skill-discovery'
+import { useActiveProjectSkillRuntime } from '@/hooks/skills/runtime/useActiveProjectSkillRuntime'
 import {
   buildSkillCommandForRuntime,
   buildSkillSetupTerminalCommand
-} from '../../lib/skill-runtime-command'
+} from '../../lib/skills/runtime/skill-runtime-command'
 import { OnboardingInlineCommandTerminal } from './OnboardingInlineCommandTerminal'
 import {
   getOnboardingFeatureSetupAgentRuntime,

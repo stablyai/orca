@@ -2,18 +2,18 @@ import type { ParsedFileLinkLocation } from '../../../../src/shared/file-links/f
 import type { RuntimeNativeChatFileContext } from '../../../../src/shared/native-chat/native-chat-file-context'
 import type { RuntimeTerminalPathResolution } from '../../../../src/shared/terminal/runtime-terminal-file-path'
 import { filesystemPathToFileUri } from '../../../../src/shared/file-links/file-uri-path'
-import { createMobileFilePreviewHref } from '../mobile-file-preview-route'
-import { classifyMobileArtifact } from '../mobile-artifact-kind'
+import { createMobileFilePreviewHref } from '../preview/mobile-file-preview-route'
+import { classifyMobileArtifact } from '../preview/mobile-artifact-kind'
 import { resolveMissingTerminalFileTap } from '../../session/mobile-file-tap-fallback-resolve'
 import { fileTapOpenRun } from './mobile-file-tap-operations'
-import { terminalArtifactPathResolve as fileTapPathResolve } from '../mobile-file-preview-operations'
-import { mapWithConcurrency } from '../../../../src/shared/map-with-concurrency'
+import { terminalArtifactPathResolve as fileTapPathResolve } from '../preview/mobile-file-preview-operations'
+import { mapWithConcurrency } from '../../../../src/shared/concurrency/map-with-concurrency'
 import {
   shouldActivateOpenedMobileSessionTab,
   type OpenedMobileSessionTabActivationState
 } from '../../session/tabs/opened-mobile-session-tab'
 import { isRendererUnavailableReply } from '../../transport/rpc/renderer-unavailable-reply'
-import type { RpcOperationSender } from '../../transport/rpc/rpc-operation-sender'
+import type { UnvalidatedRpcRequestPort } from '../../transport/rpc/unvalidated-rpc-request-port'
 import type { RpcResponse } from '../../transport/rpc/rpc-wire-types'
 
 // Hard-wrap guesses can number in the hundreds; stay far below the page bridge's 64 pending requests.
@@ -38,7 +38,7 @@ export type MobileFileTapFailure = {
 }
 
 export type OpenMobileFileTapOptions<T extends FileTapSessionTab> = {
-  client: RpcOperationSender
+  client: UnvalidatedRpcRequestPort
   hostId: string
   worktreeId: string
   worktreeName?: string
@@ -66,6 +66,8 @@ export type OpenMobileFileTapOptions<T extends FileTapSessionTab> = {
    *  resolve round-trip. */
   confirmResolvedOpen?: (target: MobileFileTapResolvedConfirmation, proceed: () => void) => void
   onRevealFileLine?: (relativePath: string, line: number) => void
+  // Given by surfaces where a link to another workspace's root should open that workspace.
+  openWorkspace?: (worktreeId: string) => void
 }
 
 export function openMobileFileTap<T extends FileTapSessionTab>(
@@ -99,6 +101,20 @@ function requestFileTapResolution<T extends FileTapSessionTab>(
   )
 }
 
+function linkedWorkspaceId<T extends FileTapSessionTab>(
+  options: OpenMobileFileTapOptions<T>,
+  resolved: RuntimeTerminalPathResolution
+): string | null {
+  const worktreeId = resolved.worktree?.trim()
+  return options.openWorkspace &&
+    resolved.isDirectory &&
+    resolved.relativePath === '' &&
+    worktreeId &&
+    worktreeId !== options.worktreeId
+    ? worktreeId
+    : null
+}
+
 function interpretFileTapResolution(
   response: RpcResponse | null
 ): RuntimeTerminalPathResolution | null {
@@ -108,6 +124,16 @@ function interpretFileTapResolution(
   }
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Preserve the established response shape at this boundary.
   return accepted.value as RuntimeTerminalPathResolution
+}
+
+function existingFileTapResolution<T extends FileTapSessionTab>(
+  options: OpenMobileFileTapOptions<T>,
+  response: RpcResponse | null
+): RuntimeTerminalPathResolution | null {
+  const resolved = interpretFileTapResolution(response)
+  return resolved?.exists && (!resolved.isDirectory || linkedWorkspaceId(options, resolved))
+    ? resolved
+    : null
 }
 
 function mobileFileTapReadings<T extends FileTapSessionTab>(
@@ -176,7 +202,7 @@ async function openMobileFileTapAsync<T extends FileTapSessionTab>(
         target,
         response,
         resolution,
-        resolved: resolution?.exists && !resolution.isDirectory ? resolution : null
+        resolved: existingFileTapResolution(options, response)
       }
     }
   )
@@ -225,6 +251,12 @@ async function openMobileFileTapAsync<T extends FileTapSessionTab>(
   const located = withFileTapLocation(options, target)
   // Not a failure: the user moved off the source tab mid-resolve.
   if (!shouldActivateOpenedMobileSessionTab(options.getActivationState(false))) {
+    return
+  }
+  const linkedWorkspace = linkedWorkspaceId(options, resolved)
+  if (linkedWorkspace) {
+    options.triggerOpenFeedback()
+    options.openWorkspace?.(linkedWorkspace)
     return
   }
   if (options.confirmResolvedOpen) {

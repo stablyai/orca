@@ -14,7 +14,7 @@
     "import/export": "warn",
     "import/named": "warn",
     "import/namespace": "warn",
-    "import/no-cycle": ["warn", { "maxDepth": 3 }],
+    "import/no-cycle": ["warn", { "ignoreTypes": true }],
     "import/no-duplicates": "warn",
     "import/no-empty-named-blocks": "warn",
     "import/no-self-import": "warn"

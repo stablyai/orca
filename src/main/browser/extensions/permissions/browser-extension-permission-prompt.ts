@@ -1,4 +1,4 @@
-import { browserSessionRegistry } from '../../sessions/browser-session-registry'
+import { browserSessionRegistry } from '../../sessions/profiles/browser-session-registry'
 import { requestBrowserExtensionInstallPrompt } from './browser-extension-install-prompt'
 import { getBrowserExtensionInstallStore } from '../installation/browser-extension-install-store'
 import { readBrowserExtensionIconDataUrl } from '../installation/browser-extension-manifest'

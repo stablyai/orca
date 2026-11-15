@@ -1,6 +1,9 @@
-import type { Dispatch, SetStateAction } from 'react'
 import { useCallback, useEffect, useRef, useState } from 'react'
-import type { DirCache, FileExplorerTreeRefreshOutcome } from './file-explorer-types'
+import type {
+  DirCache,
+  FileExplorerTreeRefreshOutcome,
+  UseFileExplorerTreeResult
+} from './file-explorer-types'
 import { createFileExplorerDirLoadTracker } from './file-explorer-dir-load-tracker'
 import {
   getFileExplorerOperationOwner,
@@ -25,33 +28,7 @@ import {
   markFileExplorerDirsLoading,
   withPendingFileExplorerDirCacheEntries
 } from './file-explorer-dir-load-state'
-import { statUserOpenedPath, type UserOpenedPathStat } from '@/lib/user-opened-local-path'
-
-type UseFileExplorerTreeResult = {
-  dirCache: Record<string, DirCache>
-  setDirCache: Dispatch<SetStateAction<Record<string, DirCache>>>
-  /** Workspace whose committed root listing owns the rendered cache. */
-  sourceWorkspaceId: string | null
-  /** Dirs with a read in flight — kept out of dirCache so the row projection does not rebuild. */
-  loadingDirPaths: ReadonlySet<string>
-  rootCache: DirCache | undefined
-  rootError: string | null
-  loadDir: (
-    dirPath: string,
-    depth: number,
-    options?: { force?: boolean; failOnError?: boolean; wakeWslDistro?: boolean }
-  ) => Promise<boolean>
-  statPath: (path: string) => Promise<UserOpenedPathStat>
-  markPathAsDirectory: (path: string) => void
-  refreshTree: () => Promise<FileExplorerTreeRefreshOutcome>
-  /** `wakeWslDistro` only for a user act: it may start a stopped WSL distro. */
-  refreshDir: (dirPath: string, options?: { wakeWslDistro?: boolean }) => Promise<void>
-  /** Reads the next page of a folder a remote server listed only in part. */
-  loadMoreDir: (dirPath: string) => Promise<void>
-  /** True while a dir's cached listing predates the last full refresh that skipped it. */
-  isDirStale: (dirPath: string) => boolean
-  resetAndLoad: (options?: { wakeWslDistro?: boolean }) => void
-}
+import { statUserOpenedPath } from '@/lib/files/access/user-opened-local-path'
 
 /** Owns worktree-addressed directory caches and load tokens; display scoping changes traversal rather than cache identity. */
 const FOLLOW_LINK = { followProjectFolderLink: true } as const

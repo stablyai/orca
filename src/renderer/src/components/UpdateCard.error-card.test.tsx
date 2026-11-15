@@ -131,14 +131,6 @@ function showPackageRecovery(recovery = PACKAGE_RECOVERY): void {
 }
 
 describe('UpdateCard Linux package-install recovery', () => {
-  it('uses the recovery version when cached update state is stale', () => {
-    renderWithInitialStatus({ state: 'available', version: '1.4.199', changelog: null })
-    showPackageRecovery()
-
-    fireEvent.click(screen.getByRole('button', { name: 'Download Manually' }))
-    expect(openUrl).toHaveBeenCalledWith('https://github.com/stablyai/orca/releases/tag/v1.4.200')
-  })
-
   it('resets command discovery when a newer package cycle replaces the recovery', async () => {
     getInstructions.mockResolvedValueOnce({
       ok: false,

@@ -4,7 +4,7 @@ import type { OrcaRuntimeService } from '../../../orca-runtime'
 import {
   ManagedRuntimeAgentParams,
   ManagedRuntimeCancelParams
-} from '../../../../../shared/rpc-contract/managed-runtime-install-params'
+} from '../../../../../shared/rpc-contract/host-management/managed-runtime-install-params'
 import { acpLaunchSpecFor } from '../../../../acp/launch/acp-launch-registry'
 import { resolveAcpLaunchCommand } from '../../../../acp/launch/acp-launch-command'
 import { ManagedRuntimeInstallation } from '../../../../node-runtime/managed-runtime-installation'

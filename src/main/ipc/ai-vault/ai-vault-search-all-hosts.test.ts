@@ -162,3 +162,56 @@ it('reads at most three pages from one host per merged request', async () => {
     'a-11'
   ])
 })
+
+it('replays bounded partial and terminal host pages without refetching or inheriting another query scope', async () => {
+  const a = new StubHost('local', sessions('a', 2))
+  const b = new StubHost('ssh:b', sessions('b', 2))
+  const request = { query: 'needle', limit: 2, filters: { scopePaths: ['/repo'] } }
+  const first = resultsOf(await searchAllExecutionHosts(request, [a.leg(), b.leg()]))
+  expect(first.hits.map((hit) => hit.sessionId)).toEqual(['a-0', 'b-0'])
+  // A new request would fail; the terminal tails have already been read and need no validation call.
+  const fail = (executionHostId: ExecutionHostId): SessionSearchHostLeg => ({
+    executionHostId,
+    search: () => {
+      throw new Error('must not refetch a captured page')
+    }
+  })
+  const next = resultsOf(
+    await searchAllExecutionHosts({ ...request, cursor: first.page.cursor! }, [
+      fail('local'),
+      fail('ssh:b')
+    ])
+  )
+  expect(next.hits.map((hit) => hit.sessionId)).toEqual(['a-1', 'b-1'])
+  expect(next.page).toEqual({ hasMore: false, cursor: null })
+  expect(
+    await searchAllExecutionHosts({ ...request, query: 'other', cursor: first.page.cursor! }, [
+      a.leg(),
+      b.leg()
+    ])
+  ).toEqual({ kind: 'malformed-cursor' })
+  expect(
+    await searchAllExecutionHosts(
+      { ...request, filters: { scopePaths: ['/private'] }, cursor: first.page.cursor! },
+      [a.leg(), b.leg()]
+    )
+  ).toEqual({ kind: 'malformed-cursor' })
+})
+
+it('accepts an existing merged cursor and continues using an older host opaque cursor', async () => {
+  const host = new StubHost('local', sessions('a', 4))
+  const cursor = Buffer.from(
+    JSON.stringify({ l: 2, s: 'relevance', h: { local: { c: null, e: 1, g: 1 } } })
+  ).toString('base64url')
+  const page = resultsOf(
+    await searchAllExecutionHosts({ query: 'needle', limit: 2, cursor }, [host.leg()])
+  )
+  expect(page.hits.map((hit) => hit.sessionId)).toEqual(['a-1', 'a-2'])
+  const tail = resultsOf(
+    await searchAllExecutionHosts({ query: 'needle', limit: 2, cursor: page.page.cursor! }, [
+      host.leg()
+    ])
+  )
+  expect(tail.hits.map((hit) => hit.sessionId)).toEqual(['a-3'])
+  expect(tail.page.hasMore).toBe(false)
+})

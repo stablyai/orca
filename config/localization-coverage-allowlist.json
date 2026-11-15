@@ -60,31 +60,45 @@
     "kind": "object-property:keywords",
     "text": "ghostty",
     "dynamic": false,
-    "count": 2
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/settings/terminal/configuration/terminal-config-import-search.ts",
+    "kind": "object-property:keywords",
+    "text": "ghostty",
+    "dynamic": false,
+    "count": 1
   },
   {
     "filePath": "src/renderer/src/components/settings/terminal/platform/terminal-advanced-platform-search.ts",
     "kind": "object-property:keywords",
     "text": "Ghostty",
     "dynamic": false,
-    "count": 2
+    "count": 1
   },
   {
-    "filePath": "src/renderer/src/components/settings/terminal/platform/terminal-advanced-platform-search.ts",
+    "filePath": "src/renderer/src/components/settings/terminal/configuration/terminal-config-import-search.ts",
+    "kind": "object-property:keywords",
+    "text": "Ghostty",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/settings/terminal/configuration/terminal-config-import-search.ts",
     "kind": "object-property:keywords",
     "text": "Kitty",
     "dynamic": false,
     "count": 1
   },
   {
-    "filePath": "src/renderer/src/components/settings/terminal/platform/terminal-advanced-platform-search.ts",
+    "filePath": "src/renderer/src/components/settings/terminal/configuration/terminal-config-import-search.ts",
     "kind": "object-property:keywords",
     "text": "kitty",
     "dynamic": false,
     "count": 1
   },
   {
-    "filePath": "src/renderer/src/components/settings/terminal/platform/terminal-advanced-platform-search.ts",
+    "filePath": "src/renderer/src/components/settings/terminal/configuration/terminal-config-import-search.ts",
     "kind": "object-property:keywords",
     "text": "kitty.conf",
     "dynamic": false,
@@ -231,7 +245,7 @@
     "reason": "Actual Claude CLI tool-result line in the terminal still; preserve the illustrative output and line count."
   },
   {
-    "filePath": "src/renderer/src/components/emulator-pane/use-emulator-video-stream.ts",
+    "filePath": "src/renderer/src/components/emulator-pane/streaming/use-emulator-video-stream.ts",
     "kind": "object-property:error",
     "text": "This build does not support WebCodecs H.264 decoding.",
     "dynamic": false,

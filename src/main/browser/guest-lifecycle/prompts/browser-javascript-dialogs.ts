@@ -1,7 +1,7 @@
 import type {
   BrowserJavaScriptDialog,
   BrowserJavaScriptDialogAnswer
-} from '../../../../shared/browser-javascript-dialog'
+} from '../../../../shared/browser/prompts/browser-javascript-dialog'
 import {
   browserPagePromptOrigin,
   closeBrowserPagePrompts,

@@ -5,7 +5,7 @@ import path from 'node:path'
 import {
   ORCAD_TEMPLATE_MANIFEST_FILENAME,
   ORCAD_VERSION
-} from '../../../src/shared/orcad-artifacts'
+} from '../../../src/shared/remote-runtime/orcad-distribution/orcad-artifacts'
 
 const ENTRY = 'orcad.js'
 

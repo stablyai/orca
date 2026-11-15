@@ -3,9 +3,9 @@ import type { AgentJournalSubmission } from '../../../../../../shared/agent-sess
 import { agentJournalSubmissionKey } from '../../../../../../shared/agent-session/journal/agent-session-journal-item-key'
 import { MessageRow } from './NativeChatMessageRow'
 import { useStructuredAgentSessionDeliveryNotices } from '../../session/structured/delivery/use-structured-agent-session-delivery-notices'
-import { NativeChatSignInContext } from '../../host-access/native-chat-sign-in'
+import { NativeChatHostSetupContext } from '../../host-access/native-chat-host-setup'
 
-const signInView = { signingIn: false, signIn: () => {} }
+const signInView = { signIn: { signingIn: false, signIn: () => {} }, install: null }
 
 function RecordedSteer({ state }: { state: AgentJournalSubmission['dispatchState'] }) {
   const notices = useStructuredAgentSessionDeliveryNotices({
@@ -60,7 +60,7 @@ export const rejected = defineFixture({
 export const signedOut = defineFixture({
   width: 640,
   render: () => (
-    <NativeChatSignInContext.Provider value={signInView}>
+    <NativeChatHostSetupContext.Provider value={signInView}>
       <div className="native-chat-appearance p-4">
         <MessageRow
           agentName="OpenCode"
@@ -82,14 +82,14 @@ export const signedOut = defineFixture({
           onScrollMessageToTop={() => {}}
         />
       </div>
-    </NativeChatSignInContext.Provider>
+    </NativeChatHostSetupContext.Provider>
   )
 })
 
 export const signedOutDelivery = defineFixture({
   width: 640,
   render: () => (
-    <NativeChatSignInContext.Provider value={signInView}>
+    <NativeChatHostSetupContext.Provider value={signInView}>
       <div className="native-chat-appearance p-4">
         <MessageRow
           agentName="Pi"
@@ -108,7 +108,7 @@ export const signedOutDelivery = defineFixture({
           onScrollMessageToTop={() => {}}
         />
       </div>
-    </NativeChatSignInContext.Provider>
+    </NativeChatHostSetupContext.Provider>
   )
 })
 

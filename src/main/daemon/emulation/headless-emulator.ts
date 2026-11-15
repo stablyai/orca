@@ -8,7 +8,7 @@ import {
   serializeWithAbsoluteCursor
 } from '../../../shared/terminal/replay/terminal-serialize-absolute-cursor'
 import { advancePartialEscapeTail } from '../../../shared/terminal/protocol/escape/terminal-partial-escape-tail'
-import { CONPTY_DA1_RESPONSE } from '../../../shared/conpty-device-attributes'
+import { CONPTY_DA1_RESPONSE } from '../../../shared/terminal/protocol/queries/conpty-device-attributes'
 import { resizeLikeOwnPty } from './conpty-reflow-viewport'
 import { DESKTOP_TERMINAL_SCROLLBACK_ROWS_DEFAULT } from '../../../shared/terminal/replay/terminal-scrollback-policy'
 import type { TerminalViewAttributes } from '../../../shared/terminal/protocol/queries/terminal-view-attributes'

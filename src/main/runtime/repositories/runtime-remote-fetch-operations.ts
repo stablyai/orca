@@ -1,4 +1,4 @@
-import type { LocalGitExecOptions } from '../../git/repo-default-base-ref'
+import type { LocalGitExecOptions } from '../../git/refs/resolution/repo-default-base-ref'
 import type { RemoteFetchResult, RemoteTrackingBase } from './runtime-remote-fetch-controller'
 import { RuntimeProvisionedWorkspaceAdoption } from '../workspaces/creation/runtime-provisioned-workspace-adoption'
 

@@ -1,5 +1,5 @@
 import type { AppState } from '../../../types'
-import type { ProjectHostSetup } from '../../../../../../shared/project-types'
+import type { ProjectHostSetup } from '../../../../../../shared/project/project-types'
 import type { DetectedWorktreeListResult, Worktree } from '../../../../../../shared/worktree/types'
 import { findRepoForHost } from '../../../repos/repo-host-identity'
 import { reuseEqualCatalogRows } from '../../../../lib/catalog-reconciliation/catalog-row-reconciliation'
@@ -13,7 +13,7 @@ import {
   type ExecutionHostId
 } from '../../../../../../shared/execution-host'
 import { toVisibleWorktree } from './worktree-catalog-visibility'
-import { getPairedWebClientEnvironmentId } from '@/lib/paired-web-client-host'
+import { getPairedWebClientEnvironmentId } from '@/app-shell/platform/paired-web-client-host'
 import type { WorktreeHostMatchOptions, RepoHostSummary } from './worktree-slice-types'
 import {
   selectDetectedWorktreesByRepo,

@@ -1,4 +1,7 @@
-import type { SshManagedServerUpdateNote, SshTarget } from '../../../shared/ssh-types'
+import type {
+  SshManagedServerUpdateNote,
+  SshTarget
+} from '../../../shared/remote-runtime/ssh/ssh-types'
 import type { ManagedOrcadAutoUpdateOutcome } from '../../managed-server/lifecycle/orcad-managed-auto-update'
 import type { HostServerUpdateReason } from './ssh-host-server-connect-events'
 import { ORCAD_ACTIVATION_FENCE_BUSY_CODE } from '../../managed-server/activation/orcad-activation-fence-hold'

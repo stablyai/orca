@@ -6,24 +6,26 @@ import type {
 } from '../../../../shared/automations/external/external-automation'
 import type { OrcaHooks } from '../../../../shared/orca-yaml-hook-types'
 import { useContextualTour } from '@/components/contextual-tours/use-contextual-tour'
-import type { AutomationDraft } from './AutomationEditorDialog'
-import { AUTOMATION_DEFAULT_TIME } from './automation-draft-model'
-import type { AutomationActionNotice } from './automation-row-action-dispatch'
-import type { AutomationHostCatalogEntry } from './automation-host-catalog-types'
-import type { AutomationCreateDestination } from './automation-create-destination'
-import type { AutomationListRow } from './automation-list-row-identity'
+import type { AutomationDraft } from './authoring/AutomationEditorDialog'
+import { AUTOMATION_DEFAULT_TIME } from './authoring/automation-draft-model'
+import type { AutomationActionNotice } from './hosts/automation-row-action-dispatch'
+import type { AutomationHostCatalogEntry } from './hosts/automation-host-catalog-types'
+import type { AutomationCreateDestination } from './authoring/automation-create-destination'
+import type { AutomationListRow } from './listing/automation-list-row-identity'
 import {
   EMPTY_AUTOMATION_LIST_FILTER,
   type AutomationListFilter,
   type AutomationListSort
-} from './automation-list-view'
+} from './listing/automation-list-view'
 import type {
   AutomationPaneTab,
+  AutomationRunNotFound,
+  AutomationRunNowPendingByRow,
   AutomationRunPageOrigin,
   AutomationsPageView
 } from './automation-page-state'
-import type { ExternalAutomationScope } from './external-automation-scope-client'
-import type { SelectedAutomationRunHistoryOutcome } from './use-selected-automation-run-history'
+import type { ExternalAutomationScope } from './external/external-automation-scope-client'
+import type { SelectedAutomationRunHistoryOutcome } from './runs/use-selected-automation-run-history'
 import type { AutomationsPageStoreState } from './use-automations-page-store-state'
 
 /** React-owned values for the page; host/catalog state remains in dedicated hooks. */
@@ -74,6 +76,8 @@ export function useAutomationsPageLocalState(store: AutomationsPageStoreState) {
   const [relativeNow, setRelativeNow] = useState(() => Date.now())
   const [pageView, setPageView] = useState<AutomationsPageView>('automations')
   const [runPageOrigin, setRunPageOrigin] = useState<AutomationRunPageOrigin>('runs')
+  const [runNotFound, setRunNotFound] = useState<AutomationRunNotFound | null>(null)
+  const [runNowPending, setRunNowPending] = useState<AutomationRunNowPendingByRow>({})
   const [activePaneTab, setActivePaneTab] = useState<AutomationPaneTab>('overview')
   const [selectedAutomationRunPageId, setSelectedAutomationRunPageId] = useState<string | null>(
     null
@@ -202,6 +206,10 @@ export function useAutomationsPageLocalState(store: AutomationsPageStoreState) {
     setPageView,
     runPageOrigin,
     setRunPageOrigin,
+    runNotFound,
+    setRunNotFound,
+    runNowPending,
+    setRunNowPending,
     activePaneTab,
     setActivePaneTab,
     selectedAutomationRunPageId,

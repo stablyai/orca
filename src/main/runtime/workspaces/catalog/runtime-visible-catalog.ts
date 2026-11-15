@@ -6,19 +6,19 @@ import {
   type ExecutionHostId
 } from '../../../../shared/execution-host'
 import type { FolderWorkspace } from '../../../../shared/folder-workspaces/folder-workspace-types'
-import type { ProjectGroup } from '../../../../shared/project-group-types'
-import type { Repo } from '../../../../shared/repo-types'
+import type { ProjectGroup } from '../../../../shared/project/groups/project-group-types'
+import type { Repo } from '../../../../shared/repository/repo-types'
 import {
   createRepoRowExecutionHostLookup,
   resolveWorktreeExecutionHost
 } from '../../../../shared/execution-host/worktree-execution-host-resolution'
-import type { ProjectHostSetup } from '../../../../shared/project-types'
+import type { ProjectHostSetup } from '../../../../shared/project/project-types'
 import {
   visibleFolderWorkspaces,
   visibleProjectGroups,
   visibleProjectHostSetups,
   visibleRepos
-} from '../../../persistence/migrating-orcad-catalog/orcad-source-visibility'
+} from '../../../persistence/migrating-orcad-catalog/source/catalog/orcad-source-visibility'
 import type { RuntimeStore } from '../../construction/runtime-store-contract'
 
 type CatalogSource = Pick<

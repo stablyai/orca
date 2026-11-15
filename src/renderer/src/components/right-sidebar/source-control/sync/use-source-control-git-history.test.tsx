@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 
 import { act } from 'react'
-import type { RuntimeClientTarget } from '../../../../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import type { Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -10,7 +10,9 @@ const mocks = vi.hoisted(() => ({ getRuntimeGitHistory: vi.fn() }))
 vi.mock('@/runtime/source-control/git/runtime-git-status-client', () => ({
   getRuntimeGitHistory: mocks.getRuntimeGitHistory
 }))
-vi.mock('@/lib/connection-context', () => ({ getConnectionId: () => undefined }))
+vi.mock('@/lib/workspace/ownership/connection-context', () => ({
+  getConnectionId: () => undefined
+}))
 
 import { useSourceControlGitHistory } from './use-git-history'
 import {

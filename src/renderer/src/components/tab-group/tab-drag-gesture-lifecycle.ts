@@ -1,5 +1,5 @@
 import { useCallback, useRef, type RefObject } from 'react'
-import { acquireWebviewsDragPassthrough } from '../browser-pane/host-guest/webview-registry'
+import { acquireWebviewsDragPassthrough } from '../browser-pane/host-guest/drag/webview-drag-passthrough'
 import { installTabDragMissedEndListeners } from './tab-drag-missed-end-listeners'
 
 /** Own webview passthrough and missed-end fallback for the drag; release both when the root detaches. */

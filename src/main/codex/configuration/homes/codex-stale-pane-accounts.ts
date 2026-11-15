@@ -1,5 +1,5 @@
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
-import { getSelectedCodexAccountIdForTarget } from '../../../codex-accounts/runtime-selection'
+import { getSelectedCodexAccountIdForTarget } from '../../../codex-accounts/account-management/runtime-selection'
 import {
   forgetCodexPaneAccount,
   listRecordedCodexPaneAccounts

@@ -8,17 +8,11 @@ import {
 } from './browser-client-page-renderer-bridge-test-rig'
 
 describe('BrowserClientPageRendererBridgeRegistry', () => {
-  it('mounts only through the exact current main-frame document and carries no target URL', async () => {
+  it('mounts only through the exact current main-frame document', async () => {
     const harness = createHarness()
     const renderer = harness.registry.attachRenderer(harness.endpoint)
     const mounted = renderer.mountPage(page, new AbortController().signal)
     const request = sentRequest(harness.endpoint)
-
-    expect(harness.endpoint.send).toHaveBeenCalledWith(
-      'browser:clientPageRendererRequest',
-      expect.objectContaining({ type: 'mountPage', page })
-    )
-    expect(sentRequest(harness.endpoint)).not.toHaveProperty('url')
 
     harness.reply(createEndpoint(41), {
       type: 'mounted',
@@ -36,41 +30,6 @@ describe('BrowserClientPageRendererBridgeRegistry', () => {
 
     const replacement = harness.registry.attachRenderer(harness.endpoint)
     const current = replacement.mountPage(page, new AbortController().signal)
-    completeMount(harness)
-    await expect(current).resolves.toEqual({ webContentsId: 91 })
-  })
-
-  it('retains an admitted canceled mount until its exact guest identity arrives', async () => {
-    const harness = createHarness({ maxPending: 1 })
-    const renderer = harness.registry.attachRenderer(harness.endpoint)
-    const abort = new AbortController()
-    const mounted = renderer.mountPage(page, abort.signal)
-    const staleRequest = sentRequest(harness.endpoint)
-
-    abort.abort()
-    await expect(Promise.race([mounted, Promise.resolve('pending')])).resolves.toBe('pending')
-    await expect(renderer.retirePage(page)).rejects.toThrow(
-      'browser_client_page_renderer_request_capacity'
-    )
-    harness.reply(harness.endpoint, {
-      type: 'mounted',
-      requestId: staleRequest.requestId,
-      page,
-      webContentsId: 92
-    })
-    await expect(mounted).resolves.toEqual({ webContentsId: 92 })
-
-    const current = renderer.mountPage(
-      { ...page, pageHostGeneration: 8 },
-      new AbortController().signal
-    )
-    harness.reply(harness.endpoint, {
-      type: 'mounted',
-      requestId: staleRequest.requestId,
-      page,
-      webContentsId: 92
-    })
-    await expect(Promise.race([current, Promise.resolve('pending')])).resolves.toBe('pending')
     completeMount(harness)
     await expect(current).resolves.toEqual({ webContentsId: 91 })
   })

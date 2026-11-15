@@ -1,4 +1,4 @@
-import { compactIpcErrorMessage } from '@/lib/ipc-error'
+import { compactIpcErrorMessage } from '@/runtime/errors/ipc-error'
 import type { Translate } from '@/i18n/use-translate'
 
 // Only a remote host's refusal: local spawn errors keep the wrapper their copy matches against.

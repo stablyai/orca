@@ -1,10 +1,10 @@
 import type { WorktreeMeta } from '../../shared/worktree/meta-types'
 import type { GitWorktreeInfo, Worktree } from '../../shared/worktree/types'
-import { DEFAULT_WORKSPACE_STATUS_ID } from '../../shared/workspace-statuses'
+import { DEFAULT_WORKSPACE_STATUS_ID } from '../../shared/workspace/status/workspace-statuses'
 import { getLinkedWorkItemMetadata } from './worktree-linked-work-item-metadata'
-import { normalizeWorkspaceCreatorProvenance } from '../../shared/workspace-creator-provenance'
+import { normalizeWorkspaceCreatorProvenance } from '../../shared/workspace/identity/workspace-creator-provenance'
 import { createWorktreeIdentity } from '../../shared/worktree/identity'
-import { automaticWorktreeDisplayName } from '../../shared/worktree/display-name-provenance'
+import { automaticWorktreeDisplayName } from '../../shared/worktree/metadata/display-name-provenance'
 
 export function mergeWorktree(
   repoId: string,
@@ -52,6 +52,8 @@ export function mergeWorktree(
     ...(git.isSparse === true ? { isSparse: true } : {}),
     isMainWorktree: git.isMainWorktree,
     ...(git.removalError ? { removalError: git.removalError } : {}),
+    ...(git.removing ? { removing: true } : {}),
+    ...(git.removalRecorded ? { removalRecorded: true } : {}),
     // Automatic labels follow the live branch; persisted values are only authoritative when pinned.
     displayName:
       meta?.displayNameIsPinned === false

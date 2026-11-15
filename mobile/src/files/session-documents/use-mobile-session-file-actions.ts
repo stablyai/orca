@@ -1,11 +1,11 @@
 import { useRef, useCallback, useState } from 'react'
-import { openExternalLink } from '../../platform/external-link'
+import { openExternalLink } from '../../platform/external-links/external-link'
 import { useMobileFileTapHandlers } from './use-mobile-file-tap-handlers'
 import type { MobileFileTapResolvedConfirmation } from './mobile-file-tap-open'
-import { resolveMobileNativeChatSessionId } from '../../session/native-chat/mobile-native-chat-eligibility'
+import { resolveMobileNativeChatSessionId } from '../../session/native-chat/conversation/mobile-native-chat-eligibility'
 import { useProvideSessionScreenHandlers } from '../../session/session-screen-handlers'
 import type { MobileSessionTab } from '../../session/tabs/mobile-session-tabs'
-import type { MobileSessionTerminalSendActionsModel } from '../../terminal/session/use-mobile-session-terminal-send-actions'
+import type { MobileSessionTerminalSendActionsModel } from '../../terminal/session/input-controls/use-mobile-session-terminal-send-actions'
 
 export type PendingTerminalFileTap = MobileFileTapResolvedConfirmation & {
   onOpen: () => void

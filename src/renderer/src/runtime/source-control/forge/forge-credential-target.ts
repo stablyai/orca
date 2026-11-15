@@ -1,11 +1,11 @@
 import { getRepoExecutionHostId } from '../../../../../shared/execution-host'
-import { parseHostAuthorityKey } from '../../../../../shared/host-authority'
-import { reviewRepositoryMatchesWorkspace } from '@/lib/review-owner'
-import type { Repo } from '../../../../../shared/repo-types'
+import { parseHostAuthorityKey } from '../../../../../shared/execution-host/host-authority'
+import { reviewRepositoryMatchesWorkspace } from '@/lib/source-control/review/review-owner'
+import { translate } from '@/i18n/i18n'
+import type { Repo } from '../../../../../shared/repository/repo-types'
 import type { Worktree } from '../../../../../shared/worktree/types'
 import type { TaskSourceContext } from '../../../../../shared/work-items/task-source-context'
-import { translate } from '@/i18n/i18n'
-import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 
 export type ForgeRepoSelector = {
   repoPath: string

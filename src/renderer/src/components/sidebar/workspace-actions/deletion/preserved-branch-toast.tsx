@@ -78,8 +78,8 @@ function PreservedBranchToastBody({
               'workspaceDeletion.alwaysForceDeleteBranches',
               'Always delete preserved branches'
             )}
-            alwaysForceDeleteTooltip={t(
-              'workspaceDeletion.alwaysForceDeleteBranchesTooltip',
+            alwaysForceDeleteDescription={t(
+              'workspaceDeletion.alwaysForceDeleteBranchesDescription',
               'Applies to branches kept after future workspace deletions.'
             )}
           >

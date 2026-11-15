@@ -1,5 +1,5 @@
 import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
-import type { SshRemotePtyLease } from '../../../shared/ssh-types'
+import type { SshRemotePtyLease } from '../../../shared/remote-runtime/ssh/ssh-types'
 import { toSshExecutionHostId } from '../../../shared/execution-host'
 import type { PersistedState } from '../../../shared/persisted-state-types'
 

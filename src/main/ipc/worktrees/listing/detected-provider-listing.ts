@@ -5,12 +5,12 @@ import {
 } from '../../../workspaces/removal/worktree-removal-listing'
 import { getRepoDialableSshTargetId } from '../../../../shared/execution-host'
 import type { Store } from '../../../persistence/loading-store/store'
-import type { Repo } from '../../../../shared/repo-types'
+import type { Repo } from '../../../../shared/repository/repo-types'
 import type { DetectedWorktreeListResult } from '../../../../shared/worktree/types'
-import { isFolderRepo } from '../../../../shared/repo-kind'
+import { isFolderRepo } from '../../../../shared/repository/repo-kind'
 import { projectWorktreeLineageWithHostPeers } from '../../../workspaces/catalog/worktree-lineage-host-peers'
 import type { DirectSshDetectedWorktreeRequest } from '../../../../shared/detected-worktree-provider-contract'
-import { isAdmissibleDirectSshAuthority } from '../../../../shared/ssh-retained-payload-admission'
+import { isAdmissibleDirectSshAuthority } from '../../../../shared/remote-runtime/ssh/ssh-retained-payload-admission'
 import {
   buildDetectedGitWorktrees,
   createSshWorktreeMetaIndex,
@@ -36,7 +36,7 @@ import {
   warnOnce
 } from './worktree-listing-diagnostics'
 import { readAllWorktreeMetaForRepo } from '../../../persistence/host-qualified-worktree-meta'
-import { classifyWorktreeScanFailure } from '../../../../shared/worktree-scan-failure'
+import { classifyWorktreeScanFailure } from '../../../../shared/worktree/catalog/worktree-scan-failure'
 import { scanUntilNotOvertaken } from './overtaken-scan-rerun'
 import { withoutInFlightWorktreeCreates } from '../../../workspaces/creation/worktree-create-in-flight'
 import { releaseWslStoppedWorktreeRescan } from '../../../wsl/discovery/wsl-stopped-worktree-rescan-registry'
@@ -45,6 +45,13 @@ import {
   rescanWorktreesWhenWslDistroRuns,
   wslDistroNotRunningForScanFailure
 } from './wsl-stopped-worktree-listing'
+
+// Partial stores (tests, embedders) may not publish workspace metadata; their listings carry no stamp.
+function readWorkspaceMetadataCursor(store: {
+  getWorkspaceMetadataCursor?: () => { epoch: string; seq: number }
+}): { epoch: string; seq: number } | undefined {
+  return store.getWorkspaceMetadataCursor?.()
+}
 
 export async function listDetectedWorktreesForCapturedRepo(
   store: Store,
@@ -59,6 +66,8 @@ export async function listDetectedWorktreesForCapturedRepo(
       ? ({ providerAbortStatus: providerAbort.status() } as const)
       : undefined
   const allMeta = isFolderRepo(repo) ? undefined : readAllWorktreeMetaForRepo(store, repo)
+  // Read with the metadata, so clients can tell which published metadata records this listing includes.
+  const workspaceMetadata = readWorkspaceMetadataCursor(store)
 
   try {
     // Folder rows are read synchronously, leaving no mutation window that needs a re-scan.
@@ -75,7 +84,8 @@ export async function listDetectedWorktreesForCapturedRepo(
           authoritative: false,
           source: 'metadata-fallback',
           worktrees: [],
-          catalogVersion: getLocalWorktreeCatalogVersion(repo.id)
+          catalogVersion: getLocalWorktreeCatalogVersion(repo.id),
+          ...(workspaceMetadata ? { workspaceMetadata } : {})
         }
       }
       return {
@@ -83,6 +93,7 @@ export async function listDetectedWorktreesForCapturedRepo(
         authoritative: true,
         source: 'git',
         catalogVersion: getLocalWorktreeCatalogVersion(repo.id),
+        ...(workspaceMetadata ? { workspaceMetadata } : {}),
         worktrees: projectWorktreeLineageWithHostPeers(
           store,
           repo,
@@ -108,7 +119,8 @@ export async function listDetectedWorktreesForCapturedRepo(
         authoritative: false,
         source: 'metadata-fallback',
         worktrees: buildDisconnectedDetectedWorktrees(store, repo, worktrees),
-        catalogVersion: getLocalWorktreeCatalogVersion(repo.id)
+        catalogVersion: getLocalWorktreeCatalogVersion(repo.id),
+        ...(workspaceMetadata ? { workspaceMetadata } : {})
       }
     }
     const pendingAtScan = snapshotPendingWorktreeRemovals()
@@ -140,7 +152,8 @@ export async function listDetectedWorktreesForCapturedRepo(
         authoritative: false,
         source: 'metadata-fallback',
         worktrees: [],
-        catalogVersion: localWorktreeCatalogVersionAt(scan.generation)
+        catalogVersion: localWorktreeCatalogVersionAt(scan.generation),
+        ...(workspaceMetadata ? { workspaceMetadata } : {})
       }
     }
     if (freshScan) {
@@ -158,6 +171,10 @@ export async function listDetectedWorktreesForCapturedRepo(
         return null
       }
     }
+    // The owner may have retired these rows' route during the overlay and hygiene awaits.
+    if (scan.authorityCurrent && !scan.authorityCurrent()) {
+      return abortedResult() ?? null
+    }
     loggedWorktreeListFailures.delete(`${repo.id}:${repo.path}`)
     releaseWslStoppedWorktreeRescan(repo.id)
     // Rows describe scan-start generation, which clients order against applied create/remove replies.
@@ -166,6 +183,7 @@ export async function listDetectedWorktreesForCapturedRepo(
       authoritative: true,
       source: 'git',
       catalogVersion: localWorktreeCatalogVersionAt(scan.generation),
+      ...(workspaceMetadata ? { workspaceMetadata } : {}),
       worktrees: projectPendingWorktreeRemovals(
         buildDetectedGitWorktrees(store, repo, localRows, allMeta),
         (worktree) => worktree.id,
@@ -196,7 +214,8 @@ export async function listDetectedWorktreesForCapturedRepo(
         unavailableReason,
         failureKind,
         wslDistroStopped,
-        catalogVersion: getLocalWorktreeCatalogVersion(repo.id)
+        catalogVersion: getLocalWorktreeCatalogVersion(repo.id),
+        ...(workspaceMetadata ? { workspaceMetadata } : {})
       }
     }
     warnOnce(
@@ -212,7 +231,8 @@ export async function listDetectedWorktreesForCapturedRepo(
       worktrees: [],
       unavailableReason,
       failureKind,
-      catalogVersion: getLocalWorktreeCatalogVersion(repo.id)
+      catalogVersion: getLocalWorktreeCatalogVersion(repo.id),
+      ...(workspaceMetadata ? { workspaceMetadata } : {})
     }
   }
 }

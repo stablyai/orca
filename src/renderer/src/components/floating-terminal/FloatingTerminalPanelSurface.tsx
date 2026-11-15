@@ -3,12 +3,12 @@ import { TabGroupSplitNodeTree } from '@/components/tab-group/TabGroupSplitNodeT
 import { WorkspaceTabDragLayer } from '@/components/tab-group/WorkspaceTabDragLayer'
 import { WorkspacePaneOverlayLayers } from '@/components/WorkspacePaneOverlayLayers'
 import { isTerminalImeInputContextRefreshing } from '@/components/terminal-pane/input/ime/terminal-ime-input-context-refresh'
-import { buildDuplicatedBrowserTabOptions } from '@/lib/duplicate-browser-tab-options'
+import { buildDuplicatedBrowserTabOptions } from '@/lib/browser/workspace/duplicate-browser-tab-options'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 import { FloatingTerminalEmptyState } from './FloatingTerminalEmptyState'
-import { renderFloatingTerminalOrchestrationCard } from './FloatingTerminalOrchestrationCard'
-import { FloatingTerminalOrchestrationDialog } from './FloatingTerminalOrchestrationDialog'
-import { FloatingTerminalResizeHandles } from './FloatingTerminalResizeHandles'
+import { renderFloatingTerminalOrchestrationCard } from './orchestration/FloatingTerminalOrchestrationCard'
+import { FloatingTerminalOrchestrationDialog } from './orchestration/FloatingTerminalOrchestrationDialog'
+import { FloatingTerminalResizeHandles } from './geometry/FloatingTerminalResizeHandles'
 import { FloatingTerminalWindowControls } from './FloatingTerminalWindowControls'
 import type { useFloatingTerminalPanelController } from './use-floating-terminal-panel-controller'
 import type { Translate } from '@/i18n/use-translate'
@@ -206,8 +206,11 @@ export function renderFloatingTerminalPanelSurface(
             >
               {/* Unresolvable stale tabs need the empty-state actions instead of a blank body. */}
               {surface.kind === 'workspace' && hasVisibleFloatingTabs ? (
-                // The tree needs a flex host owning its rect; block layout collapses panes to zero height.
-                <div className="absolute inset-0 flex" data-floating-workspace-surface-frame>
+                // The tree needs a flex host owning its rect; reserve a 4px east resize lane when unmaximized so xterm's scrollbar stays uncovered.
+                <div
+                  className={`absolute inset-y-0 left-0 flex ${maximized ? 'right-0' : 'right-1'}`}
+                  data-floating-workspace-surface-frame
+                >
                   <TabGroupSplitNodeTree
                     layout={surface.layout}
                     worktreeId={FLOATING_TERMINAL_WORKTREE_ID}

@@ -7,7 +7,7 @@ import {
 import type { AgentSessionWriteNoticePart } from '../../../../../../../shared/agent-session/failures/agent-session-write-notice-copy'
 import type { AgentSessionWriteFailure } from '../../../../../../../shared/agent-session/failures/agent-session-write-failure'
 import { dispatchWasWithdrawn } from '../../../../../../../shared/agent-session/requests/structured-agent-session-dispatch-rejection'
-import type { RuntimeClientTarget } from '../../../../../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import { agentSessionWriteNoticeText } from '../../../messages/notices/agent-session-write-notice-text'
 import { getStructuredAgentSessionReadOwner } from '../read/structured-agent-session-read-owner'
 import { nativeChatRewindReasonCopy } from '../../../messages/actions/native-chat-rewind-copy'

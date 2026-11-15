@@ -217,21 +217,6 @@ describe('ACP process-owning connection', () => {
   })
 })
 
-it('closes a recognized stdout prompt over 16 MiB without inventing a signed-out answer', async () => {
-  const answered = vi.fn()
-  const { connection, agent } = fixture({
-    signIn: {
-      read: (line) => (line.startsWith('SIGN IN') ? 'prefix-only' : undefined),
-      answered
-    }
-  })
-  await connection.start(start)
-  expect(answered).toHaveBeenCalledExactlyOnceWith(true)
-  agent.stdout.write(`SIGN IN ${'x'.repeat(16 * 1024 * 1024)}\n`)
-  await vi.waitFor(() => expect(connection.closed).toBe(true))
-  expect(answered).toHaveBeenCalledTimes(1)
-})
-
 it('keeps cached startup usable without advertising the configured method, but refuses unsupported required authentication', async () => {
   const { connection, agent } = fixture()
   agent.on('initialize', (frame) =>

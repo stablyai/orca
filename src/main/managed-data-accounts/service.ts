@@ -7,13 +7,13 @@ import { writeSecureFile } from '../../shared/secure-storage/secure-file'
 import type {
   ManagedDataAccountProvider,
   ManagedDataAccountsState
-} from '../../shared/managed-account-types'
+} from '../../shared/agent-accounts/managed-account-types'
 import { captureDataAccountCredentials } from './credential-capture'
 import { ManagedDataAccountProfileRemoval } from './profile-removal'
 import {
   captureManagedDataAccountOriginalEnvironment,
   restoreManagedDataAccountEnvironment
-} from '../../shared/managed-data-account-environment'
+} from '../../shared/agent-launch/environment/managed-data-account-environment'
 
 const MAX_INLINE_AUTH_BASELINES = 64
 const MAX_INLINE_AUTH_BYTES = 64 * 1024

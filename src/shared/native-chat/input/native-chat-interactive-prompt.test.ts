@@ -4,7 +4,7 @@ import {
   resolveNativeChatInteractivePromptCard
 } from './native-chat-interactive-prompt'
 import type { NativeChatMessage } from '../native-chat-types'
-import { buildOmpPlanReviewAnswer } from '../../omp-plan-review-prompt'
+import { buildOmpPlanReviewAnswer } from './questions/omp-plan-review-prompt'
 
 describe('parseApprovalFromStatus', () => {
   it('returns null for non-approval envelopes', () => {
@@ -57,5 +57,18 @@ describe('resolveNativeChatInteractivePromptCard', () => {
       })
     expect(resolve(JSON.stringify({ approval: { tool: 'Bash' } }))?.kind).toBe('approval')
     expect(resolve(null)?.kind).toBe('question')
+  })
+
+  it("keeps Codex's async question on the transcript's copy, which drops answered questions", () => {
+    const card = resolveNativeChatInteractivePromptCard({
+      interactivePrompt: JSON.stringify({
+        questions: [{ title: 'Which database?', options: ['Postgres'] }, { title: 'Table name?' }]
+      }),
+      toolName: 'request_user_input_async',
+      agent: 'codex',
+      messages: [pendingAsk],
+      transcriptSettled: true
+    })
+    expect(card?.kind === 'question' && card.prompt.questions[0]?.question).toBe('Which path?')
   })
 })

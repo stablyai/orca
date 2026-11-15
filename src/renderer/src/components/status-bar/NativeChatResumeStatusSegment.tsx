@@ -1,17 +1,20 @@
 import { AlertCircle, CheckCircle2, Loader2, RotateCcw } from 'lucide-react'
-import { useNativeChatRestartOfferEnabled } from '../native-chat-restart-offer-gate'
+import { useLocalStructuredChatsInUse } from '../../runtime/native-chat/local-sessions/local-structured-chats'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { translate } from '@/i18n/i18n'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
 import {
   localNativeChatRestartStore,
   useNativeChatRestartOffer,
-  useNativeChatRestartRun,
-  type NativeChatRestartStore
-} from '../native-chat-resume-on-restart-store'
-import { useNativeChatRestartRuntimes } from '../native-chat-restart-runtimes'
-import { resumeRunInFlight } from '../native-chat-resume-run'
-import { resumeRunFailures, resumeRunView } from '../native-chat-resume-run-view'
+  useNativeChatRestartRun
+} from '../native-chat-recovery/offers/native-chat-resume-on-restart-store'
+import type { NativeChatRestartStore } from '../native-chat-recovery/offers/native-chat-restart-runtime-store'
+import { useNativeChatRestartRuntimes } from '../native-chat-recovery/offers/native-chat-restart-runtimes'
+import { resumeRunInFlight } from '../native-chat-recovery/runs/native-chat-resume-run'
+import {
+  resumeRunFailures,
+  resumeRunView
+} from '../native-chat-recovery/runs/native-chat-resume-run-view'
 
 // Keep offers and in-flight/results visible after dialog snooze; statusBarItems must not hide the remaining resume surface.
 
@@ -139,7 +142,7 @@ export function NativeChatResumeStatusSegment({
 }: {
   iconOnly: boolean
 }): React.JSX.Element {
-  const enabled = useNativeChatRestartOfferEnabled()
+  const enabled = useLocalStructuredChatsInUse()
   const runtimes = useNativeChatRestartRuntimes()
   return (
     <>

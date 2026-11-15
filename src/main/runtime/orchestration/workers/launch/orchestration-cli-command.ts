@@ -1,8 +1,8 @@
 import type { RuntimePtyWorktreeRecord } from '../../../terminal/records/runtime-terminal-state-records'
 import { isStructuredWorkerHandle } from '../../../../../shared/orchestration/workers/structured-worker-handle'
-import { parseOrcaSessionAddress } from '../../../../../shared/orca-session-address'
+import { parseOrcaSessionAddress } from '../../../../../shared/agent-session/identity/orca-session-address'
 import type { ProjectExecutionRuntimeResolution } from '../../../../../shared/execution-host/project-execution-runtime'
-import { isWslUncPath } from '../../../../../shared/wsl-paths'
+import { isWslUncPath } from '../../../../../shared/file-access/wsl-paths'
 import { splitWorktreeIdForFilesystem } from '../../../../../shared/worktree/id'
 import { getAppEnvironment, hasAppEnvironment } from '../../../../../shared/app-environment'
 

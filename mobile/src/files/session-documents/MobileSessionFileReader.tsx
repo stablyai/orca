@@ -1,5 +1,5 @@
-import { MobileFileMediaPreview } from '../MobileFileMediaPreview'
-import type { MobileFilePreviewRpcSender } from '../mobile-file-preview-operations'
+import { MobileFileMediaPreview } from '../media/MobileFileMediaPreview'
+import type { MobileFilePreviewRpcSender } from '../preview/mobile-file-preview-operations'
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import {
   FlatList,
@@ -11,16 +11,16 @@ import {
   type ListRenderItem
 } from 'react-native'
 import { Copy, MessageSquare, Send } from 'lucide-react-native'
-import { MobileSyntaxSegments } from '../../components/MobileSyntaxSegments'
+import { MobileSyntaxSegments } from '../../components/code-presentation/MobileSyntaxSegments'
 import {
   buildPlainMobileDiffSyntaxLines,
   highlightMobileCode,
   highlightMobileDiffLines,
   resolveMobileSyntaxLanguage
 } from './mobile-file-syntax'
-import { MobileHtmlPreview } from '../../components/MobileHtmlPreview'
-import { MobilePanZoomImage } from '../../components/MobilePanZoomImage'
-import { MobileSvgPreview } from '../../components/MobileSvgPreview'
+import { MobileHtmlPreview } from '../preview/documents/MobileHtmlPreview'
+import { MobilePanZoomImage } from '../media/presentation/MobilePanZoomImage'
+import { MobileSvgPreview } from '../preview/documents/MobileSvgPreview'
 import { colors, pressedStyle } from '../../theme/mobile-theme'
 import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
@@ -30,11 +30,12 @@ import type {
   DiffCommentActions,
   DiffSyntaxState,
   RenderableDiffLine
-} from '../../source-control/review/mobile-review-comment-state'
+} from '../../source-control/review/review-notes/mobile-review-comment-state'
 import type { FileDocState, FileSyntaxState } from './session-document-state'
-import { DiffLineRow } from '../../source-control/review/MobileSessionDiffLineRow'
-import { sendableMobileDiffComments } from '../../source-control/review/mobile-diff-comments'
-import { MobileLoadErrorState, MobileStateView } from '../../components/MobileStateView'
+import { DiffLineRow } from '../../source-control/review/review-notes/MobileSessionDiffLineRow'
+import { sendableMobileDiffComments } from '../../source-control/review/review-notes/mobile-diff-comments'
+import { MobileLoadErrorState, MobileStateView } from '../../components/feedback/MobileStateView'
+import { useDurableDraftField } from '../../drafts/durable-draft-fields'
 
 export const MOBILE_SESSION_FILE_READER_LINE_HEIGHT = 22
 
@@ -52,6 +53,8 @@ type FileReaderProps = {
   initialLine?: number
   initialLineSeq?: number
   diffCommentActions?: DiffCommentActions
+  // Where an unsaved note waits through leaving the file and the app being killed.
+  noteDraftKey?: string
 }
 
 export function FileReader(props: FileReaderProps) {
@@ -68,7 +71,8 @@ function FileReaderDocument({
   language,
   initialLine,
   initialLineSeq,
-  diffCommentActions
+  diffCommentActions,
+  noteDraftKey
 }: FileReaderProps) {
   const scrollRef = useRef<ScrollView>(null)
   const contentHeightRef = useRef(0)
@@ -127,7 +131,11 @@ function FileReaderDocument({
     }
   }, [applyInitialLineScroll, doc])
   const [activeCommentLine, setActiveCommentLine] = useState<number | null>(null)
-  const [commentDraft, setCommentDraft] = useState('')
+  const [keptNote, setKeptNote] = useDurableDraftField(noteDraftKey ?? null, 'note')
+  const [localNote, setLocalNote] = useState('')
+  const [commentDraft, setCommentDraft] = noteDraftKey
+    ? [keptNote, setKeptNote]
+    : [localNote, setLocalNote]
   const plainDiffLines = useMemo(
     () =>
       doc?.status === 'ready' && doc.kind === 'diff'
@@ -163,10 +171,12 @@ function FileReaderDocument({
       if (!diffCommentActions) {
         return
       }
-      void diffCommentActions.onAdd(relativePath, lineNumber, commentDraft).then((added) => {
+      const note = commentDraft
+      void diffCommentActions.onAdd(relativePath, lineNumber, note).then((added) => {
         if (added) {
           setActiveCommentLine(null)
-          setCommentDraft('')
+          // Only the saved text; a note typed since in a reopened reader stays.
+          setCommentDraft((current) => (current === note ? '' : current))
         }
       })
     },

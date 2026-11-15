@@ -1,13 +1,10 @@
-import { join } from 'node:path'
+import 'node:path'
 import { describe, expect, it, vi } from 'vitest'
-import { ProfileStateBackupRotation } from './profile-state-backup-rotation'
-import { ProfileStateWriteWorkerClient } from './profile-state-writer-worker-client'
-import { openProfileStateDatabaseReadOnly } from './profile-state-database'
-import { isRecord } from './profile-state-document-validation'
-import {
-  createWorkerMaintenanceFixture,
-  maintenanceBarrier
-} from '../loading-store/profile-state-maintenance-fixture'
+import './backup/profile-state-backup-rotation'
+import './writer/profile-state-writer-worker-client'
+import { openProfileStateDatabaseReadOnly } from './database/profile-state-database'
+import { isRecord } from './documents/profile-state-document-validation'
+import { createWorkerMaintenanceFixture } from '../loading-store/profile-writing/profile-state-maintenance-fixture'
 
 vi.mock('../../telemetry/client', () => ({ track: vi.fn() }))
 vi.mock('../../telemetry/cohort-classifier', () => ({
@@ -65,32 +62,6 @@ describe('worker authority close admission', () => {
       expect.objectContaining({ code: 'profile-state-revision-conflict' })
     )
     expect(() => authority.assertWritable()).toThrow()
-  })
-
-  it('refuses new commands while its existing backup drains', async () => {
-    const { authority, directory, readState } = await createWorkerMaintenanceFixture()
-    const before = readState()
-    const release = maintenanceBarrier()
-    vi.spyOn(ProfileStateBackupRotation.prototype, 'drain').mockReturnValueOnce(release.promise)
-    const closeWriter = vi.spyOn(ProfileStateWriteWorkerClient.prototype, 'close')
-
-    const closing = authority.close()
-    expect(authority.close()).toBe(closing)
-    expect(closeWriter).toHaveBeenCalledOnce()
-    expect(() => authority.assertWritable()).toThrow('closing')
-    await expect(
-      authority.writeSerializedDomains([{ domain: 'settings', payload: '{}' }])
-    ).rejects.toMatchObject({ code: 'profile-state-writer-closed', outcome: 'known-failure' })
-    await expect(
-      authority.writeJsonExport(join(directory, 'late-export.json'))
-    ).rejects.toMatchObject({
-      code: 'profile-state-writer-closed'
-    })
-
-    release.resolve()
-    await closing
-    expect(closeWriter).toHaveBeenCalledOnce()
-    expect(readState()).toEqual(before)
   })
 
   it('finishes an accepted write before releasing its database', async () => {

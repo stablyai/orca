@@ -11,9 +11,10 @@ import type { UseTerminalPaneLifecycleDeps } from '../mounting/terminal-pane-lif
 import { useTerminalPaneMountLifecycle } from '../mounting/use-terminal-pane-mount-lifecycle'
 import { useTerminalPaneLifecycleRefs } from '../mounting/use-terminal-pane-lifecycle-refs'
 
-export function useTerminalPaneLifecycle(deps: UseTerminalPaneLifecycleDeps): void {
+export function useTerminalPaneLifecycle(deps: UseTerminalPaneLifecycleDeps) {
   const refs = useTerminalPaneLifecycleRefs()
-  useTerminalPaneMountLifecycle(deps, refs)
+  const mount = useTerminalPaneMountLifecycle(deps, refs)
+  const mountedDeps = { ...deps, mountedManager: mount.manager }
 
   const terminalScrollbackRows = normalizeDesktopTerminalScrollbackRows(
     deps.settings?.terminalScrollbackRows
@@ -27,15 +28,16 @@ export function useTerminalPaneLifecycle(deps: UseTerminalPaneLifecycleDeps): vo
 
   useTerminalPaneHibernationWake(deps)
 
-  useTerminalPaneProcessVisibility(deps, refs)
+  useTerminalPaneProcessVisibility(mountedDeps, refs)
 
   useTerminalForegroundAgentSampling(deps)
 
-  useMountedTerminalAppearance(deps, systemPrefersDarkRef)
+  useMountedTerminalAppearance(mountedDeps, systemPrefersDarkRef)
 
-  useTerminalGpuPreference(deps)
+  useTerminalGpuPreference(mountedDeps)
 
-  useMountedTerminalScrollback(deps, terminalScrollbackRows)
+  useMountedTerminalScrollback(mountedDeps, terminalScrollbackRows)
 
-  useTerminalMouseHidePreference(deps, refs)
+  useTerminalMouseHidePreference(mountedDeps, refs)
+  return mount
 }

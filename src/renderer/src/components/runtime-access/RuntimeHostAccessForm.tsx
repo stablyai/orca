@@ -10,8 +10,8 @@ import { useTranslate } from '@/i18n/use-translate'
 import {
   translateHostAccessLinkError,
   translateRemotePairingEndpointKind
-} from '@/lib/remote-pairing-copy'
-import { defaultServerNameForAccessLink } from '../settings/runtime-environments/catalog/runtime-server-default-name'
+} from '@/lib/remote-pairing/remote-pairing-copy'
+import { defaultServerNameForAccessLink } from '../../../../shared/remote-runtime/host-catalog/runtime-host-default-name'
 import {
   RuntimeHostAccessFailureAlert,
   type RuntimeHostAccessFailure

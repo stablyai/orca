@@ -30,7 +30,7 @@ describe('orchestration typed pointer submission', () => {
   ])('still submits a typed pointer when a check %s its mail before Enter', async (_name, ack) => {
     vi.useFakeTimers()
     const db = new OrchestrationDb(':memory:')
-    const harness = createRuntime(db)
+    const harness = await createRuntime(db)
     const run = createBoundRun(db, 'Explicit-check Run')
     const message = insertDirectRunMessage(db, run.id, 'Checked before Enter')
     const enterCount = (): number =>
