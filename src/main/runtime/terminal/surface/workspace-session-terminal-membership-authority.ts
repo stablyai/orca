@@ -221,6 +221,10 @@ export function rebaseWorkspaceSessionTerminalMembership(
       rebasedUnifiedTabs.length === 0 &&
       !Object.hasOwn(incoming.tabsByWorktree, worktreeId)
     ) {
+      // Rebasing left nothing valid, so any incoming record here is rejected too.
+      delete unifiedTabs[worktreeId]
+      delete tabGroups[worktreeId]
+      delete tabGroupLayouts[worktreeId]
       continue
     }
     if (includeUnifiedTabs || rebasedUnifiedTabs.length > 0) {

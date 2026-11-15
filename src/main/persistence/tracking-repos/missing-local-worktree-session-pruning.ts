@@ -76,16 +76,24 @@ export function selectLocalWorktreeSessionOwnersForRepo(
   return [...owners]
 }
 
-function hasUnsavedDraft(state: PersistedState, worktreeId: string): boolean {
-  const ownerKeys = [worktreeId, worktreeWorkspaceKey(worktreeId)]
-  return [state.workspaceSession, ...Object.values(state.workspaceSessionsByHostId ?? {})].some(
-    (session) =>
-      ownerKeys.some((ownerKey) =>
-        session?.openFilesByWorktree?.[ownerKey]?.some(
-          (file) => file.dirtyDraftContent !== undefined
-        )
-      )
-  )
+/** Comparison keys of workspaces holding an unsaved draft in any partition. */
+function draftOwnerComparisonKeys(state: PersistedState, platform: NodeJS.Platform): Set<string> {
+  const keys = new Set<string>()
+  for (const session of [
+    state.workspaceSession,
+    ...Object.values(state.workspaceSessionsByHostId ?? {})
+  ]) {
+    for (const [ownerKey, files] of Object.entries(session?.openFilesByWorktree ?? {})) {
+      const worktreeId = getPersistedWorktreeOwnerId(ownerKey)
+      const comparisonKey = worktreeId
+        ? worktreeRetentionIdComparisonKey(worktreeId, platform)
+        : null
+      if (comparisonKey && files.some((file) => file.dirtyDraftContent !== undefined)) {
+        keys.add(comparisonKey)
+      }
+    }
+  }
+  return keys
 }
 
 /** Comparison keys of metadata rows that still name a workspace (an archived checkout, another host). */
@@ -135,10 +143,11 @@ export function selectRemovableLocalWorktreeSessionOwners(
   collector.addOwner(state.workspaceSession.activeWorktreeId)
   collector.addOwner(state.workspaceSession.activeWorkspaceKey)
   const protectedKeys = protectedMetadataComparisonKeys(state, repoId, platform)
+  const draftKeys = draftOwnerComparisonKeys(state, platform)
   return [...candidateIds].filter(
     (worktreeId) =>
       !collector.owners.has(worktreeId) &&
-      !hasUnsavedDraft(state, worktreeId) &&
+      !draftKeys.has(worktreeRetentionIdComparisonKey(worktreeId, platform) ?? '') &&
       !protectedKeys.has(worktreeRetentionIdComparisonKey(worktreeId, platform) ?? '')
   )
 }

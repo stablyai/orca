@@ -299,12 +299,12 @@ describe('pruneMissingLocalWorktreeSessionsForRepo', () => {
       openFilesByWorktree: { [draftId]: [draft] }
     }
 
-    const removed = pruneMissingLocalWorktreeSessionsForRepo(state, capture(state), [
-      goneId,
-      draftId,
-      archivedId,
-      activeId
-    ])
+    const removed = pruneMissingLocalWorktreeSessionsForRepo(
+      state,
+      capture(state),
+      [goneId, draftId, archivedId, activeId],
+      'linux'
+    )
 
     expect(removed).toEqual([goneId])
     expect(state.workspaceSession.unifiedTabs).toEqual({
@@ -344,7 +344,35 @@ describe('pruneMissingLocalWorktreeSessionsForRepo', () => {
     }
     state.workspaceSession = session
 
-    expect(pruneMissingLocalWorktreeSessionsForRepo(state, capture(state), [goneId])).toEqual([])
+    expect(
+      pruneMissingLocalWorktreeSessionsForRepo(state, capture(state), [goneId], 'linux')
+    ).toEqual([])
     expect(state.workspaceSession).toBe(session)
+  })
+
+  it('keeps a workspace whose draft is saved under a differently cased Windows key', () => {
+    const state = makeState(makeRepo({ path: 'C:\\Work\\repo' }))
+    const draftKey = `${REPO_ID}::C:\\Work\\gone`
+    const tabsKey = `${REPO_ID}::c:\\work\\gone`
+    state.workspaceSession = {
+      ...getDefaultWorkspaceSession(),
+      unifiedTabs: { [tabsKey]: [] },
+      openFilesByWorktree: {
+        [draftKey]: [
+          {
+            filePath: 'C:\\Work\\gone\\notes.md',
+            relativePath: 'notes.md',
+            worktreeId: draftKey,
+            language: 'markdown',
+            dirtyDraftContent: 'unsaved'
+          }
+        ]
+      }
+    }
+
+    expect(
+      pruneMissingLocalWorktreeSessionsForRepo(state, capture(state), [tabsKey], 'win32')
+    ).toEqual([])
+    expect(state.workspaceSession.unifiedTabs).toEqual({ [tabsKey]: [] })
   })
 })
