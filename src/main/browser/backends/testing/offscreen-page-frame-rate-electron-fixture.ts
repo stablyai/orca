@@ -1,4 +1,4 @@
-import { app, webContents } from 'electron'
+import { app, BrowserWindow, webContents } from 'electron'
 import { createServer } from 'node:http'
 import { rendererPublicationThrottle } from '../../../window/visibility/renderer-publication-throttle'
 import type { BrowserManager } from '../../guest-lifecycle/manager/browser-manager'
@@ -16,6 +16,10 @@ async function run(): Promise<void> {
   // Serve must survive with no page open; keep Electron alive after last-window close.
   app.on('window-all-closed', () => {})
   await app.whenReady()
+  // Under Xvfb a fresh process's first offscreen window can come up without frames; spend it here.
+  const warmUp = new BrowserWindow({ show: false, webPreferences: { offscreen: true } })
+  await warmUp.loadURL('about:blank')
+  warmUp.destroy()
   const server = createServer((_request, response) => {
     response.setHeader('content-type', 'text/html')
     response.end('<h1>Offscreen page</h1>')
