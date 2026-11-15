@@ -157,6 +157,8 @@ export function renderTabBarSurface(
         >
           <div
             ref={tabStripRef}
+            // Tab drags clip drop targets to this box (tab-drag-collision.ts).
+            data-tab-strip-scroller=""
             data-active-tab-docked={activeTabDockSide ?? undefined}
             // Why: only `border-r` here — a strip-level `border-l` would render a heavier L-corner than the first tab's own `border-l`.
             className={[
