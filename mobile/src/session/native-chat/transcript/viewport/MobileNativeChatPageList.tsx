@@ -297,13 +297,13 @@ export function MobileNativeChatPageList({
           write(s, offset - (s.scrollHeight - s.clientHeight))
         }
       },
-      scrollToIndex: ({ index }) => {
+      scrollToIndex: ({ index, viewOffset }) => {
         const s = scroller()
         const row = live.current.rows[index]
         const top =
           s && row ? mobileNativeChatRowTop(s, latest.current.rowKeys.keyOf(row)) : undefined
         if (s && top !== undefined) {
-          write(s, s.scrollTop + top - s.getBoundingClientRect().top)
+          write(s, s.scrollTop + top - s.getBoundingClientRect().top - viewOffset)
           notePlace(s)
         }
       }
