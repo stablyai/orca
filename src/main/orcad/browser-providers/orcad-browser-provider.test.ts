@@ -19,14 +19,18 @@ vi.mock('@orca/process-host', () => ({
 
 const spawnProcessMock = vi.mocked(spawnProcess)
 
-describe.runIf(process.platform === 'darwin')('orcad Electron browser helper', () => {
+// Windows resolves the home directory from USERPROFILE, so the park could not be redirected there.
+describe.skipIf(process.platform === 'win32')('orcad Electron browser helper', () => {
   let root: string
   let executable: string
   let provider: OrcadBrowserProvider | null = null
   const originalHome = process.env.HOME
+  const originalPlatform = process.platform
 
   beforeEach(async () => {
     root = await mkdtemp(join(tmpdir(), 'orcad-browser-provider-'))
+    // Install parks exist only for macOS app bundles.
+    Object.defineProperty(process, 'platform', { value: 'darwin' })
     // The install park lives under the user's Library; keep it inside this test.
     process.env.HOME = root
     const bundle = join(root, 'Applications', 'Orca.app')
@@ -42,6 +46,7 @@ describe.runIf(process.platform === 'darwin')('orcad Electron browser helper', (
     provider = null
     await releaseServeSupervisorPark()
     process.env.HOME = originalHome
+    Object.defineProperty(process, 'platform', { value: originalPlatform })
     await rm(root, { recursive: true, force: true })
   })
 
