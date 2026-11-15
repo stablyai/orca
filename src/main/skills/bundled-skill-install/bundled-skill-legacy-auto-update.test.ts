@@ -1,7 +1,7 @@
 import { lstat, mkdir, readFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import { bundledSkillNudgeEntries } from '../../../shared/bundled-skill-summary'
+import { bundledSkillNudgeEntries } from '../../../shared/skills/bundled/bundled-skill-summary'
 import { BUNDLED_SKILL_SOURCES } from './bundled-skill-sources'
 import {
   autoUpdateInstalledBundledSkills,

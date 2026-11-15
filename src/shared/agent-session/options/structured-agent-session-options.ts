@@ -27,7 +27,7 @@ import type {
   AgentSessionAcceptedInputSources,
   AgentSessionOptionsResult
 } from './protocol/agent-session-options-result'
-import { labelFromModelId } from '../../model-id-label'
+import { labelFromModelId } from './model-catalog/model-id-label'
 import type { AgentSessionModelCatalogResult } from '../agent-session-wire'
 import { listingVerifiedModelIds } from './model-catalog/structured-agent-session-listing-verified-ids'
 import {

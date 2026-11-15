@@ -1,7 +1,7 @@
 import type { AntigravityChatAuthSettings } from './antigravity-chat-auth-config'
 import type { EmulatorOpeningSettings } from './emulator-opening-preferences'
 import type { BrowserExtensionGlobalSettings } from './browser/extensions/browser-extension-settings'
-import type { ClaudeAgentViewSettings } from './claude-agent-view'
+import type { ClaudeAgentViewSettings } from './agent-hook-listener/providers/claude/view/claude-agent-view'
 import type { WorktreeCardDisplaySettings } from './worktree/card-display-settings-types'
 import type { BrowserLinkOpeningSettings } from './browser-link-opening-settings'
 import type { BrowserPasswordsGlobalSettings } from './browser-passwords-types'

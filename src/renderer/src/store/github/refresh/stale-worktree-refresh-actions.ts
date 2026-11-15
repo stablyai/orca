@@ -2,6 +2,7 @@ import type { StateCreator } from 'zustand'
 import type { AppState } from '../../types'
 import type { GitHubSlice } from '../github-slice-contract'
 import type { Worktree } from '../../../../../shared/worktree/types'
+import { getWorktreeGitHubIssueRepository } from '../../../../../shared/worktree/github-issue-repository'
 import { rightSidebarShowsPullRequestData } from '@/components/right-sidebar/visibility/right-sidebar-visibility'
 import { issueCacheKey } from '../cache/cache-identity'
 import { CACHE_TTL } from '../cache/cache-policy'
@@ -45,6 +46,7 @@ export const createStaleWorktreeRefreshActions = (
     }
 
     if ((state.worktreeCardProperties ?? []).includes('issue') && worktree.linkedIssue) {
+      const ownerRepo = getWorktreeGitHubIssueRepository(worktree)
       const ownerSettings = settingsForGitHubRepoOwner(state.settings, repo)
       const issueKey = issueCacheKey(
         repo.path,
@@ -53,11 +55,12 @@ export const createStaleWorktreeRefreshActions = (
         ownerSettings,
         repo.connectionId,
         repo.executionHostId,
-        true
+        true,
+        ownerRepo
       )
       const issueEntry = state.issueCache[issueKey]
       if (!issueEntry || now - issueEntry.fetchedAt >= CACHE_TTL) {
-        void get().fetchIssue(repo.path, worktree.linkedIssue, { repoId: repo.id })
+        void get().fetchIssue(repo.path, worktree.linkedIssue, { repoId: repo.id, ownerRepo })
       }
     }
   }

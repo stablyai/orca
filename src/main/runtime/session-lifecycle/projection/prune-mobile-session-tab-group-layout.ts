@@ -30,7 +30,7 @@ import {
   retitleStructuredConversationTabs,
   titleStructuredConversationTabs
 } from '../../session-tabs/structured-conversation-tab-title'
-import { structuredChatDisplayName } from '../../../../shared/structured-chat-row-name'
+import { structuredChatDisplayName } from '../../../../shared/agent-session/view/structured-chat-row-name'
 import { agentSessionRecordShownName } from '../../agent-session/records/agent-session-record-shown-name'
 
 export abstract class OrcaRuntimeWithPruneMobileSessionTabGroupLayout extends OrcaRuntimeWithSavedConversationTitlePublication {

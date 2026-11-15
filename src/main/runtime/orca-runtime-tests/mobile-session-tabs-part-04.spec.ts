@@ -69,7 +69,7 @@ describe('OrcaRuntimeService', () => {
       getForegroundProcess: async () => null,
       listProcesses: async () => []
     })
-    runtime.syncWindowGraph(0, { tabs: [], leaves: [] })
+    await runtime.syncWindowGraph(0, { tabs: [], leaves: [] })
 
     await runtime.closeMobileSessionTab(`id:${TEST_WORKTREE_ID}`, 'ssh-host-tab')
 
@@ -129,8 +129,8 @@ describe('OrcaRuntimeService', () => {
         }
       ]
     })
-    const publishRendererOmission = (snapshotVersion: number): void => {
-      runtime.syncWindowGraph(1, {
+    const publishRendererOmission = async (snapshotVersion: number): Promise<void> => {
+      await runtime.syncWindowGraph(1, {
         tabs: [],
         leaves: [],
         mobileSessionTabs: [
@@ -147,7 +147,7 @@ describe('OrcaRuntimeService', () => {
       })
     }
     runtime.attachWindow(1)
-    publishRendererOmission(1)
+    await publishRendererOmission(1)
     electronMocks.BrowserWindow.fromId.mockReturnValue({
       isDestroyed: () => false,
       webContents: { send: vi.fn() }
@@ -160,7 +160,7 @@ describe('OrcaRuntimeService', () => {
       launchAgent: 'codex'
     })
     const split = await runtime.splitTerminal(created.handle, { direction: 'vertical' })
-    publishRendererOmission(2)
+    await publishRendererOmission(2)
 
     expect((await runtime.listMobileSessionTabs(`id:${TEST_WORKTREE_ID}`)).tabs).toEqual(
       expect.arrayContaining([
@@ -182,7 +182,7 @@ describe('OrcaRuntimeService', () => {
     expect((await runtime.listMobileSessionTabs(`id:${TEST_WORKTREE_ID}`)).tabs).toHaveLength(2)
 
     await runtime.closeMobileSessionTab(`id:${TEST_WORKTREE_ID}`, tabId, { reason: 'user' })
-    publishRendererOmission(3)
+    await publishRendererOmission(3)
 
     expect(kill).toHaveBeenCalledWith(ptyId)
     expect(kill).toHaveBeenCalledWith(splitPtyId)

@@ -2,12 +2,15 @@ import type {
   SkillDeletePlan,
   SkillDeleteRequest,
   SkillDeleteResult
-} from '../../../../../shared/skill-delete-contract'
+} from '../../../../../shared/skills/deletion/skill-delete-contract'
 import {
   SKILL_DELETE_CAPABILITY,
   SKILL_DELETE_UPDATE_REQUIRED_MESSAGE
-} from '../../../../../shared/skill-install-capability'
-import type { SkillDiscoveryResult, SkillDiscoveryTarget } from '../../../../../shared/skills'
+} from '../../../../../shared/skills/capabilities/skill-install-capability'
+import type {
+  SkillDiscoveryResult,
+  SkillDiscoveryTarget
+} from '../../../../../shared/skills/discovery/skills'
 import {
   assertRuntimeEnvironmentCapability,
   runtimeEnvironmentSupportsCapability

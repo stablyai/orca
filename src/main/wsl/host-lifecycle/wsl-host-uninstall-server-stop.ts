@@ -141,7 +141,7 @@ export async function stopWslHostServerFromGuest(
 }
 
 export type WslHostUninstallStopDependencies = {
-  distros: () => string[]
+  distros: () => string[] | Promise<string[]>
   /** Confirmed running list; null when it can't be read. Must never start a distro. */
   listRunning: () => Promise<string[] | null>
   stop: (distro: string, signal: AbortSignal) => Promise<WslHostServerStop>
@@ -152,7 +152,8 @@ export function wslHostUninstallStopDependencies(
   userDataPath: string
 ): WslHostUninstallStopDependencies {
   return {
-    distros: () => readWslHostRecordsQuietly(userDataPath).map((record) => record.distro),
+    distros: async () =>
+      (await readWslHostRecordsQuietly(userDataPath)).map((record) => record.distro),
     listRunning: () => listRunningWslDistrosAsync({ requireConfirmed: true }).catch(() => null),
     stop: stopWslHostServerFromGuest
   }
@@ -193,7 +194,7 @@ async function stopWithin(
 export async function stopWslHostServersForUninstall(
   deps: WslHostUninstallStopDependencies
 ): Promise<void> {
-  const distros = [...new Map(deps.distros().map((d) => [d.toLowerCase(), d])).values()]
+  const distros = [...new Map((await deps.distros()).map((d) => [d.toLowerCase(), d])).values()]
   if (distros.length === 0) {
     return
   }

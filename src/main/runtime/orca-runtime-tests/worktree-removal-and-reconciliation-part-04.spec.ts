@@ -91,7 +91,7 @@ describe('OrcaRuntimeService', () => {
       kill: (id) => killSpy(id),
       getForegroundProcess: async () => null
     })
-    syncSinglePty(runtime, 'pty-1')
+    await syncSinglePty(runtime, 'pty-1')
     vi.mocked(getEffectiveHooks).mockReturnValue({
       scripts: { archive: 'pnpm worktree:archive' }
     })

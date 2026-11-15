@@ -151,7 +151,7 @@ export async function resumeEphemeralVmWorkspace(
         connection
       })
       // The reconnect can move the server's tunnel and re-pair it; the waiting open expects that.
-      const reached = resolveEnvironment(userDataPath, ssh.environmentId)
+      const reached = await resolveEnvironment(userDataPath, ssh.environmentId)
       noteRecipeVmWakePairing(reached.id, reached.pairingRevision ?? reached.createdAt)
       const woken = updateEphemeralVmRuntimeStatus(userDataPath, result.runtime.id, {
         connectionMode: 'ssh',
@@ -185,10 +185,10 @@ function isPairedServerContactLost(environmentId: string): boolean {
 /** Nothing retried this server's control socket or health probe while its VM slept; reopen them.
  *  On the next turn, once this wake is no longer pending, so the reopen is not refused as waking. */
 function reestablishWokenServer(userDataPath: string, environmentId: string): void {
-  setTimeout(() => {
+  setTimeout(async () => {
     try {
       reconnectRemoteRuntimeSharedControlConnection(environmentId)
-      void getRuntimeEnvironmentStatusOwner(userDataPath, environmentId)
+      void (await getRuntimeEnvironmentStatusOwner(userDataPath, environmentId))
         .refresh({ reconnect: true })
         .catch(() => {})
     } catch (error) {

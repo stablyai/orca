@@ -1,3 +1,4 @@
+import { recordCodexMigrationPtySpawn } from '../../codex/history/backfill/desktop-codex-session-migration'
 import { app } from 'electron'
 import { parseWorkspaceKey } from '../../../shared/workspace-scope'
 import { isLocalExecutionHost } from '../../../shared/execution-host'
@@ -12,10 +13,8 @@ import { initDaemonPtyProvider } from '../../daemon/providers/lifecycle/daemon-p
 import { restartLocalTerminalsAfterElevation } from '../../windows/windows-administrator-restart'
 import { resolveTerminalSpawnAdmissionMode } from '../../daemon/admission/terminal-spawn-admission-mode'
 import {
-  getCodexPaneAccount,
   hasAnyRecordedLegacyWslCodexPane,
   hasRecordedManagedHostCodexPane,
-  isCodexPaneHomeRouteProvenAwayFromSharedHome,
   reconcileCodexPaneAccountsWithLivePtys
 } from '../../codex/configuration/homes/codex-pane-account-registry'
 import type { CodexPaneHomeRoute } from '../../codex/configuration/homes/codex-pane-account-registry-types'
@@ -78,31 +77,7 @@ export function handleCodexHomePtySpawned(args: {
   startedAt?: Date
   startedSequence?: number
 }): void {
-  // Only shared/ambiguous retained shells may still produce rollout logs needing publication.
-  if (args.reattached && args.startedSequence !== undefined) {
-    const paneAccount = getCodexPaneAccount(args.id)
-    const homeRoute =
-      args.reattachedHomeRoute !== undefined
-        ? (args.reattachedHomeRoute ?? undefined)
-        : paneAccount?.homeRoute
-    if (state.codexSessionMigration && isCodexPaneHomeRouteProvenAwayFromSharedHome(homeRoute)) {
-      state.codexSessionMigration.ignoreLaunch(args.id, args.startedSequence)
-      return
-    }
-  }
-  const fullScanRequired =
-    state.codexRuntimeHome?.beginHostSystemDefaultSessionMigrationLaunch(args.codexHomePath, {
-      reattached: args.reattached,
-      launchEnv: args.launchEnv
-    }) ?? null
-  if (fullScanRequired !== null) {
-    state.codexSessionMigration?.beginLaunch(
-      args.id,
-      args.reattached === true || fullScanRequired,
-      args.startedAt,
-      args.startedSequence
-    )
-  }
+  recordCodexMigrationPtySpawn(state.codexSessionMigration, state.codexRuntimeHome, args)
 }
 
 export function handlePtyExit(id: string, exitSequence: number): void {

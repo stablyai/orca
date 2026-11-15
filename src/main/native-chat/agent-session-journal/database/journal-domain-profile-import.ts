@@ -88,7 +88,8 @@ function copyProfileTable(
   runJournalTransaction(destination, () => {
     let after: bigint | undefined
     for (;;) {
-      const page = source.prepare(`SELECT rowid,${names} FROM ${table}
+      // An INTEGER PRIMARY KEY column would otherwise rename the rowid result column.
+      const page = source.prepare(`SELECT rowid AS rowid,${names} FROM ${table}
         ${after === undefined ? '' : 'WHERE rowid>?'} ORDER BY rowid LIMIT ?`)
       page.setReadBigInts(true)
       const rows = page.all(...(after === undefined ? [] : [after]), PAGE_ROWS)

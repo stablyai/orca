@@ -28,8 +28,8 @@ import {
   isDirectOpenCodeGenerationCommand,
   openCodeGenerationLauncherBoundary,
   mergeOpenCodeGenerationArgs
-} from '../../../opencode-generation-command'
-import { buildAntigravityGenerationInput } from '../../../antigravity-generation-stream'
+} from '../../../text-generation/launch/opencode-generation-command'
+import { buildAntigravityGenerationInput } from '../../../text-generation/output/antigravity-generation-stream'
 
 // Share pure request/prompt-to-spawn validation and argv planning between local main and SSH JSON-RPC generators.
 

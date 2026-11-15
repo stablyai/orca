@@ -1,8 +1,6 @@
 import { refreshWslHostPairing } from '../../../shared/remote-runtime/host-store/runtime-environment-wsl-host-store'
-import {
-  readWslHostDeployments,
-  type WslHostDeploymentRecord
-} from '../../../shared/remote-runtime/host-store/wsl-host-deployment-store'
+import type { WslHostDeploymentRecord } from '../../../shared/remote-runtime/host-store/wsl-host-deployment-store'
+import { readWslHostDeployments } from '../../../shared/remote-runtime/host-store/runtime-environment-registry'
 import {
   wslHostStatusDetailText,
   type WslHostCopyParams,
@@ -14,17 +12,19 @@ import type { WslOrcadConnectionStatus } from '../orcad/wsl-orcad-connection-sta
 import type { WslLivenessUnverifiableReason } from '../orcad/wsl-orcad-liveness-verdict'
 
 /** Saves an explicit re-pair or a moved bridge; true when the pairing changed. */
-export function persistWslHostConnection(
+export async function persistWslHostConnection(
   userDataPath: string,
   record: WslHostDeploymentRecord,
   connection: WslOrcadConnection
-): boolean {
+): Promise<boolean> {
   try {
-    return refreshWslHostPairing(userDataPath, record.environmentId, {
-      pairingCode: connection.pairingOffer,
-      localPort: connection.localPort,
-      remotePort: connection.remotePort
-    }).pairingChanged
+    return (
+      await refreshWslHostPairing(userDataPath, record.environmentId, {
+        pairingCode: connection.pairingOffer,
+        localPort: connection.localPort,
+        remotePort: connection.remotePort
+      })
+    ).pairingChanged
   } catch (error) {
     console.warn(`[wsl-hosts] Could not save the new pairing for ${record.distro}:`, error)
     return false
@@ -32,13 +32,17 @@ export function persistWslHostConnection(
 }
 
 /** Saves the host's live connection's pairing and ports; transports on a changed pairing retire. */
-export function saveWslHostConnection(
+export async function saveWslHostConnection(
   deps: { userDataPath: () => string; pairingChanged: (environmentId: string) => void },
   record: WslHostDeploymentRecord | null,
   connections: { get(distro: string): WslOrcadConnection | null } | null
-): void {
+): Promise<void> {
   const connection = record ? connections?.get(record.distro) : null
-  if (record && connection && persistWslHostConnection(deps.userDataPath(), record, connection)) {
+  if (
+    record &&
+    connection &&
+    (await persistWslHostConnection(deps.userDataPath(), record, connection))
+  ) {
     deps.pairingChanged(record.environmentId)
   }
 }
@@ -100,9 +104,11 @@ function wslHostStatusDetail(
 }
 
 /** The registered WSL hosts; an unreadable store reads as none rather than failing the caller. */
-export function readWslHostRecordsQuietly(userDataPath: string): WslHostDeploymentRecord[] {
+export async function readWslHostRecordsQuietly(
+  userDataPath: string
+): Promise<WslHostDeploymentRecord[]> {
   try {
-    return readWslHostDeployments(userDataPath).deployments
+    return (await readWslHostDeployments(userDataPath)).deployments
   } catch (error) {
     console.warn('[wsl-hosts] Could not read WSL host records:', error)
     return []

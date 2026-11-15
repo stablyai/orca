@@ -1,7 +1,7 @@
 import { quotePosixShellUnlessPlainNoAt } from '../../shell/launch/shell-argument-quoting'
 import { encodePowerShellCommand } from '../../powershell-command-encoding'
-import { getPosixCodexShellLaunchPreflight } from '../../codex-shell-function'
-import { getPosixClaudeShellFunction } from '../../claude-shell-function'
+import { getPosixCodexShellLaunchPreflight } from '../../shell/launch/agents/codex-shell-function'
+import { getPosixClaudeShellFunction } from '../../shell/launch/agents/claude-shell-function'
 import {
   nativeWindowsPathToPosixShellPath,
   resolveSetupRunnerCommand,

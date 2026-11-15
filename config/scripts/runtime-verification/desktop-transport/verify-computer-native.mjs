@@ -41,6 +41,12 @@ const checks = [
     enabled: process.platform === 'linux'
   },
   {
+    name: 'Linux accessibility bus tests',
+    command: 'python3',
+    args: ['native/computer-use-linux/runtime_accessibility_bus_test.py'],
+    enabled: process.platform === 'linux'
+  },
+  {
     name: 'Windows provider handshake',
     run: verifyWindowsProviderHandshake,
     enabled: process.platform === 'win32'

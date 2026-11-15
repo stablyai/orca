@@ -4667,7 +4667,8 @@
             "terminalProcessLimit": "Your system cannot start another terminal process. Close unused terminals or quit unused processes, then try again.",
             "hostTerminalCap": "The host is already running as many terminals as Orca allows. Close a terminal you no longer need, then try again.",
             "title": "Terminal issue",
-            "errorTitle": "Terminal error"
+            "errorTitle": "Terminal error",
+            "copyErrorDetails": "Copy error details"
           },
           "TerminalProcessExitOverlay": {
             "capacityTitle": "Git Bash console limit reached",
@@ -8501,8 +8502,11 @@
           "a3f8c2d1e0b4": "Imported {{value0}} cookies from {{value1}} ({{value2}}) into {{value3}}.",
           "b4e9d3f2a1c5": "Imported {{value0}} cookies from {{value1}} into {{value2}}.",
           "c5a273a809": "From {{value0}}",
+          "4054c458e1": "Clear default cookies",
           "80bffd32bf": "Import cookies",
-          "bd7d68f138": "From file…"
+          "bd7d68f138": "From file…",
+          "3b662becd5": "Clear cookies in the Default profile?",
+          "f159cf5a3e": "This may sign you out of sites in this profile."
         },
         "BrowserUseComputerUseNotice": {
           "79209b37b9": "If cookie import is not the right fit, Computer Use can control local apps and may use existing logged-in browser sessions where applicable. Install the Orca Computer Use skill; macOS also requires privacy permissions.",
@@ -14020,7 +14024,8 @@
           "catalog": "Catalog",
           "clear": "Clear filters",
           "themes": "Themes",
-          "languages": "Languages",
+          "codeLanguages": "Code languages",
+          "translations": "Translations",
           "icons": "Icons",
           "commands": "Commands & panels",
           "catalogLabel": "Filter by catalog",
@@ -17537,10 +17542,9 @@
           "725868c75d": "Browse folders",
           "5e7f0d8a80": "Folder picker unavailable for remote files",
           "30099dca46": "Folder",
-          "2d7d39dc63": ".md",
           "c8ac7868e6": "file name",
           "b6ed807cc6": "Name",
-          "e365f3c638": "Name your markdown file and pick a folder.",
+          "description": "Name your file and pick a folder.",
           "674b046582": "Save as",
           "nameEmpty": "Name cannot be empty",
           "nameHasSeparators": "Name cannot contain path separators",
@@ -24694,6 +24698,8 @@
       "tabCloseAll": "Close all editor tabs",
       "tabRename": "Rename active tab",
       "tabReopenClosed": "Reopen closed tab",
+      "tabMoveLeft": "Move active tab left",
+      "tabMoveRight": "Move active tab right",
       "tabNextSameType": "Next tab (same type)",
       "tabPreviousSameType": "Previous tab (same type)",
       "tabNextAllTypes": "Next tab (all types)",

@@ -14,7 +14,10 @@ import {
 import { isAgentStatusState } from '../../../../shared/agent-status/contracts/agent-status-types'
 import { isTuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent-config'
 import { formatAgentTypeLabel } from '../../../../shared/agent-status/presentation/agent-type-label'
-import { isOrcaSessionId, formatOrcaSessionAddress } from '../../../../shared/orca-session-address'
+import {
+  isOrcaSessionId,
+  formatOrcaSessionAddress
+} from '../../../../shared/agent-session/identity/orca-session-address'
 import type { AgentMessageSenderView } from '../../../../shared/agent-session/agent-message-presentation'
 import type { OrchestrationCrewRow } from '../../../../shared/orchestration/orchestration-crew'
 import type { RuntimeClientTarget } from '../../../../shared/remote-runtime/host-catalog/runtime-client-target'

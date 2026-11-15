@@ -1,7 +1,7 @@
 import {
   openStructuredAgentSession,
   structuredSessionOpenFailure
-} from '../../../../../shared/open-structured-agent-session'
+} from '../../../../../shared/agent-session/view/open-structured-agent-session'
 import type {
   StructuredSessionOpenSource,
   StructuredSessionOpenResult,
@@ -9,7 +9,7 @@ import type {
   StructuredSessionOpenTarget,
   StructuredSessionOpenTab,
   StructuredSessionOpenFailure
-} from '../../../../../shared/open-structured-agent-session'
+} from '../../../../../shared/agent-session/view/open-structured-agent-session'
 import {
   findStructuredAgentSessionTab,
   activateStructuredAgentSessionById

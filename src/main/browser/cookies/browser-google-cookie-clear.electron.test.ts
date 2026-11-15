@@ -159,6 +159,7 @@ it('clears Google paths/partitions and preserves other sites across a graceful E
               unused as retireFailedBrowserSessionProfile, unused as cancelBrowserWebAuthnAccountRequestsForSession,
               unused as retireDeletedBrowserSessionProfile,
               unused as attachBrowserExtensionsToProfileSession,
+              unused as getBrowserExtensionSessionForProfile, unused as isBrowserExtensionSupportEnabled,
               unused as getCanonicalUserDataPath, unused as markBrowserIdentityMigrationNoticePending,
               unused as forgetBrowserProfileOwnedStores };
           `

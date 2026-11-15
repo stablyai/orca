@@ -1,8 +1,4 @@
 import { describe, vi } from 'vitest'
-import {
-  registerPtyConnectionNonAgentLaunchRegistrationTests,
-  registerPtyConnectionUnboundAgentLaunchRegistrationTests
-} from '../startup/pty-connection-agent-startup-launch-registration.spec'
 import { registerPtyConnectionColdRestoreAgentResumeTests } from '../reattach/pty-connection-cold-restore-agent-resume.spec'
 import { registerPtyConnectionColdRestoreRepaintTests } from '../reattach/pty-connection-cold-restore-repaint.spec'
 import { registerPtyConnectionColdRestoreResumeCommandTests } from '../reattach/pty-connection-cold-restore-resume-command.spec'
@@ -18,10 +14,6 @@ vi.mock('@/runtime/rpc/calls/runtime-rpc-call', async (importOriginal) =>
   ).runtimeRpcClientWithLayoutApply(await importOriginal())
 )
 
-describe('pty-connection-agent-session-resume', () => {
-  registerPtyConnectionNonAgentLaunchRegistrationTests()
-  registerPtyConnectionUnboundAgentLaunchRegistrationTests()
-})
 describe(
   'pty-connection-cold-restore-agent-resume',
   registerPtyConnectionColdRestoreAgentResumeTests

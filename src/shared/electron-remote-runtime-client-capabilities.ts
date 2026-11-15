@@ -6,7 +6,7 @@ import { BROWSER_CLIENT_HOST_REQUEST_CAPABILITY } from './browser/client-hosting
 import {
   STRUCTURED_CHAT_START_TELEMETRY_CLIENT_CAPABILITY,
   STRUCTURED_CHAT_PROMPT_TELEMETRY_CLIENT_CAPABILITY
-} from './structured-chat-dispatch-telemetry'
+} from './agent-session/requests/structured-chat-dispatch-telemetry'
 import { NATIVE_REMOTE_RUNTIME_CLIENT_CAPABILITIES } from './protocol-version'
 import {
   AGENT_STATUS_RESTORED_UNCONFIRMED_RUNTIME_CAPABILITY,

@@ -10,7 +10,7 @@ import type * as RuntimeRpcClient from '@/runtime/rpc/compatibility/runtime-capa
 import type { AgentLaunchChoices } from '../../src/shared/agent-launch/choices/agent-launch-choices'
 import type { FolderWorkspace } from '../../src/shared/folder-workspaces/folder-workspace-types'
 import type { ProjectGroup } from '../../src/shared/project-group-types'
-import type * as LaunchAgentKindModule from '../../src/shared/agent-kind'
+import type * as LaunchAgentKindModule from '../../src/shared/agent-status/identity/agent-kind'
 
 const mocks = vi.hoisted(() => ({
   actualOperation: false,
@@ -120,7 +120,7 @@ vi.mock('@/lib/agent-session/messaging/paste/agent-paste-draft', () => ({
 }))
 vi.mock('@/diagnostics/telemetry/telemetry', () => ({ track: vi.fn() }))
 const mockLaunchAgentKind = vi.hoisted(() => (agent: string) => agent)
-vi.mock('../../src/shared/agent-kind', async (importOriginal) => ({
+vi.mock('../../src/shared/agent-status/identity/agent-kind', async (importOriginal) => ({
   ...(await importOriginal<typeof LaunchAgentKindModule>()),
   tuiAgentToAgentKind: mockLaunchAgentKind
 }))

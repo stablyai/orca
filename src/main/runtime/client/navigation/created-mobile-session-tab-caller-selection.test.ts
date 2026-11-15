@@ -14,7 +14,7 @@ await import('../../orca-runtime-tests/orca-runtime-test-scenario-builders.spec'
 
 const WT = TEST_WORKTREE_ID
 
-function pairedRuntime(clientKind?: 'mobile' | 'runtime') {
+function pairedRuntime() {
   let next = 0
   const spawn = vi.fn(async () => ({ id: `pty-${++next}` }))
   const { runtimeStore } = makeRuntimeStoreWithWorkspaceSession(getDefaultWorkspaceSession())
@@ -26,12 +26,8 @@ function pairedRuntime(clientKind?: 'mobile' | 'runtime') {
     getForegroundProcess: async () => null
   })
   const caller: RuntimeMobileSessionTabsResult[] = []
-  runtime.onMobileSessionTabsChanged(
-    (snapshot) => caller.push(snapshot),
-    'device-caller',
-    clientKind
-  )
-  runtime.onMobileSessionTabsChanged(() => {}, 'device-bystander', clientKind)
+  runtime.onMobileSessionTabsChanged((snapshot) => caller.push(snapshot), 'device-caller', 'mobile')
+  runtime.onMobileSessionTabsChanged(() => {}, 'device-bystander', 'mobile')
   return { runtime, spawn, caller }
 }
 
@@ -51,7 +47,9 @@ it('selects a launched terminal for the caller only, without spawning again', as
   expect((await runtime.listMobileSessionTabs(`id:${WT}`)).activeTabId).toBe(first.id)
   const previous = caller.at(-1)!
 
-  expect(runtime.selectCreatedMobileSessionTabForClient(WT, launched, 'device-caller')).toBe(true)
+  expect(await runtime.selectCreatedMobileSessionTabForClient(WT, launched, 'device-caller')).toBe(
+    true
+  )
 
   const selected = caller.at(-1)!
   expect(selected.activeTabId).toBe(launched.id)

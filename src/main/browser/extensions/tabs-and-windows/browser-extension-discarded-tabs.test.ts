@@ -85,7 +85,8 @@ vi.mock('../profile-sessions/browser-extension-session-loader', () => {
     getBrowserExtensionProfileForPartition: (partition: string) =>
       profile(partition.replace('persist:', '')),
     getBrowserExtensionSessionForProfile: (id: string) =>
-      id === 'default' || id === 'work' ? mocks.sessions[id] : null
+      id === 'default' || id === 'work' ? mocks.sessions[id] : null,
+    isBrowserExtensionProfileLoading: () => false
   }
 })
 vi.mock('./browser-extension-window-model', () => ({
@@ -256,16 +257,21 @@ beforeEach(() => {
       page('streamed', 'bt-ssh', { remoteBrowserPageId: 'runtime-page' })
     ])
   }
-  discardedTabs.setSavedBrowserTabsSource({
-    getWorkspaceSessionHostIds: () => ['local', 'ssh:box'],
-    getWorkspaceSession: (hostId) => (hostId === 'ssh:box' ? saved.ssh : saved.local),
-    onWorkspaceSessionWritten: (listener) => {
-      writeListener = listener
-      return () => {
-        writeListener = null
+  discardedTabs.setSavedBrowserTabsSource(
+    {
+      getWorkspaceSessionHostIds: () => ['local', 'ssh:box'],
+      getWorkspaceSession: (hostId) => (hostId === 'ssh:box' ? saved.ssh : saved.local),
+      onWorkspaceSessionWritten: (listener) => {
+        writeListener = listener
+        return () => {
+          writeListener = null
+        }
       }
-    }
-  })
+    },
+    (id) =>
+      // 'idle' is a profile whose extensions have not started: it has no extension session.
+      id && !(id in mocks.sessions) && id !== 'idle' ? null : `persist:${id ?? 'default'}`
+  )
   discardedTabs.forgetBrowserPageGuestsGone()
   // Retire ids an earlier test handed out, so each test starts with none listed.
   for (const pageId of ['live', 'cold', 'doc', 'notes', 'job', 'remote', 'streamed']) {
@@ -308,6 +314,21 @@ describe('restored browser pages without a guest are discarded tabs', () => {
     expect((await query({ discarded: true })).map((entry) => entry.url)).not.toContain(
       'https://cold.test/'
     )
+  })
+
+  it("lists no page of a profile whose extensions have not started, not even to Default's", async () => {
+    saved.local.browserTabsByWorktree = {
+      ...saved.local.browserTabsByWorktree,
+      'wt-2': [tab('bt-idle', { sessionProfileId: 'idle' })]
+    }
+    saved.local.browserPagesByWorkspace = {
+      ...saved.local.browserPagesByWorkspace,
+      'bt-idle': [page('idle', 'bt-idle')]
+    }
+    writeListener?.('local')
+    const urls = (await query({ discarded: true })).map((entry) => entry.url)
+    expect(urls).toContain('https://cold.test/')
+    expect(urls).not.toContain('https://idle.test/')
   })
 
   it('does not list a closed page until the session save drops it, nor an evicted one after', async () => {

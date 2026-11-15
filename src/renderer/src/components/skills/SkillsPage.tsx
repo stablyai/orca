@@ -9,8 +9,11 @@ import { useActiveSkillDiscoveryRuntimeTarget } from '@/hooks/skills/discovery/u
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { getRuntimeTargetHostId } from '@/runtime/rpc/targets/runtime-client-target'
 import { UNRESOLVED_OWNER_HOST_ID } from '../../../../shared/execution-host'
-import type { DiscoveredSkill, SkillDiscoveryResult } from '../../../../shared/skills'
-import { MAX_SKILL_DELETE_BATCH } from '../../../../shared/skill-delete-contract'
+import type {
+  DiscoveredSkill,
+  SkillDiscoveryResult
+} from '../../../../shared/skills/discovery/skills'
+import { MAX_SKILL_DELETE_BATCH } from '../../../../shared/skills/deletion/skill-delete-contract'
 import { SkillsList } from './catalog/SkillsList'
 import { SkillShareDialog } from './sharing/SkillShareDialog'
 import { SkillInstallDialog } from './installation/SkillInstallDialog'

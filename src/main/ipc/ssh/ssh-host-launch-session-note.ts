@@ -36,7 +36,7 @@ export async function noteEndedLaunchSshSession(
   const sameSession = prior?.generation === generation && prior.environmentId === environmentId
   if (sameSession && now() - prior.at < RECHECK_MS) {
     if (prior.ended) {
-      flag(targetId, environmentId)
+      await flag(targetId, environmentId)
     }
     return
   }
@@ -44,9 +44,9 @@ export async function noteEndedLaunchSshSession(
   checked.set(connection, pending)
   // Only a live probe disproves a proven end; unanswered or unknown keeps it.
   const provenEnded = sameSession && prior.ended
-  const markEnded = (): void => {
+  const markEnded = async (): Promise<void> => {
     checked.set(connection, { environmentId, generation, ended: true, at: now() })
-    flag(targetId, environmentId)
+    await flag(targetId, environmentId)
   }
   // Disconnect, reconnect, unlink or relaunch during probing invalidates the answer.
   const stale = (): boolean =>
@@ -68,13 +68,13 @@ export async function noteEndedLaunchSshSession(
       return
     }
     if (session === 'exited' || (session !== 'live' && provenEnded)) {
-      markEnded()
+      await markEnded()
     } else if (session === 'live' && launchSessionNoted(targetId, environmentId)) {
       clearLaunchSessionNote(targetId, environmentId)
     }
   } catch (error) {
     if (provenEnded && !stale()) {
-      markEnded()
+      await markEnded()
     }
     console.warn('[ssh] Could not check which SSH session started the managed server:', error)
   }
@@ -90,9 +90,9 @@ function launchSessionNoted(targetId: string, environmentId: string): boolean {
 }
 
 /** Restored hosts may lack status; preserve any conflicting server decision. */
-function flag(targetId: string, environmentId: string): void {
+async function flag(targetId: string, environmentId: string): Promise<void> {
   const userDataPath = getAppEnvironment().getPath('userData')
-  if (!listEnvironments(userDataPath).some((entry) => entry.id === environmentId)) {
+  if (!(await listEnvironments(userDataPath)).some((entry) => entry.id === environmentId)) {
     return
   }
   const status = getSshHostServerStatus(targetId)

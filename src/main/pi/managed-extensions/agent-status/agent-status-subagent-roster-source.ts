@@ -1,6 +1,6 @@
 // Hold Pi completion until its observed subagents finish.
 
-import type { PiAgentKind } from '../../../../shared/pi-agent-kind'
+import type { PiAgentKind } from '../../../../shared/agent-launch/catalog/pi-agent-kind'
 import { HOOK_REQUEST_MAX_BYTES } from '../../../../shared/agent-hook-listener/request-body'
 import {
   AGENT_STATUS_TOOL_INPUT_MAX_LENGTH,
