@@ -96,9 +96,9 @@ describe.skipIf(process.platform === 'win32')('real owned POSIX capture', () => 
               : { message: `${process.execPath} timed out.` }
         )
         await bounded(physical)
-        verified = true
         const state = await runProcess({ program: 'ps', args: ['-o', 'stat=', '-p', String(pid)] })
         expect(state.stdout.trim() === '' || state.stdout.trim().startsWith('Z')).toBe(true)
+        verified = true
         expect(terminated).toHaveBeenCalledOnce()
         expect(process.kill(unrelated.pid!, 0)).toBe(true)
       } finally {

@@ -175,12 +175,12 @@ describe.skipIf(process.platform !== 'darwin')('macOS worker capture cancellatio
       } finally {
         clearTimeout(timer)
       }
-      verified = true
       const state = await runProcess({
         program: 'ps',
         args: ['-o', 'stat=', '-p', String(descendant)]
       })
       expect(state.stdout.trim() === '' || state.stdout.trim().startsWith('Z')).toBe(true)
+      verified = true
     } finally {
       controller.abort()
       // Regression cleanup owns this exact descendant even if the old root-only stop leaked it.
