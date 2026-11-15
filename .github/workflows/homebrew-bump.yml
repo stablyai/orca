@@ -22,6 +22,7 @@ jobs:
     # Why: only desktop tags have the macOS DMGs this workflow downloads.
     # A mobile tag such as `mobile-v0.0.1` must never rewrite either cask.
     if: >
+      github.repository == 'stablyai/orca' &&
       inputs.tag != '' &&
       startsWith(inputs.tag, 'v')
     permissions:

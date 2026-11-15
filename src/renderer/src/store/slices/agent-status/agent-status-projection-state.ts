@@ -11,7 +11,7 @@ import type { TerminalTab } from '../../../../../shared/workspace-layout/termina
 import type { Tab } from '../../../../../shared/tab-types'
 import { KeyedDeadlines } from '../../../../../shared/keyed-deadlines'
 import type { TabAgentPane } from '@/lib/agent-session/tab-identity/tab-agent-status-index'
-import { structuralValuesEqualIgnoringUndefined as equal } from '../../../../../shared/structural-value-equality'
+import { structuralValuesEqualIgnoringUndefined as equal } from '../../../../../shared/collections/structural-value-equality'
 import {
   FLAGS,
   type Contribution,
