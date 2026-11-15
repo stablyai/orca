@@ -8501,8 +8501,11 @@
           "a3f8c2d1e0b4": "Imported {{value0}} cookies from {{value1}} ({{value2}}) into {{value3}}.",
           "b4e9d3f2a1c5": "Imported {{value0}} cookies from {{value1}} into {{value2}}.",
           "c5a273a809": "From {{value0}}",
+          "4054c458e1": "Clear default cookies",
           "80bffd32bf": "Import cookies",
-          "bd7d68f138": "From file…"
+          "bd7d68f138": "From file…",
+          "3b662becd5": "Clear cookies in the Default profile?",
+          "f159cf5a3e": "This may sign you out of sites in this profile."
         },
         "BrowserUseComputerUseNotice": {
           "79209b37b9": "If cookie import is not the right fit, Computer Use can control local apps and may use existing logged-in browser sessions where applicable. Install the Orca Computer Use skill; macOS also requires privacy permissions.",
@@ -24694,6 +24697,8 @@
       "tabCloseAll": "Close all editor tabs",
       "tabRename": "Rename active tab",
       "tabReopenClosed": "Reopen closed tab",
+      "tabMoveLeft": "Move active tab left",
+      "tabMoveRight": "Move active tab right",
       "tabNextSameType": "Next tab (same type)",
       "tabPreviousSameType": "Previous tab (same type)",
       "tabNextAllTypes": "Next tab (all types)",

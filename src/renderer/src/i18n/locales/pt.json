@@ -8047,7 +8047,10 @@
           "b4e9d3f2a1c5": "{{value0}} cookies importados de {{value1}} para {{value2}}.",
           "c5a273a809": "De {{value0}}",
           "80bffd32bf": "Importar Cookies",
-          "bd7d68f138": "De um Arquivo…"
+          "bd7d68f138": "De um Arquivo…",
+          "4054c458e1": "Limpar cookies padrão",
+          "3b662becd5": "Limpar os cookies do perfil padrão?",
+          "f159cf5a3e": "Isso pode desconectar você de sites neste perfil."
         },
         "GhosttyImportModal": {
           "f96688b6bc": "Cancelar",
@@ -23564,6 +23567,8 @@
       "tabCloseAll": "Fechar todas as abas do editor",
       "tabRename": "Renomear aba ativa",
       "tabReopenClosed": "Reabrir aba fechada",
+      "tabMoveLeft": "Mover aba ativa para a esquerda",
+      "tabMoveRight": "Mover aba ativa para a direita",
       "tabNextSameType": "Próxima aba (mesmo tipo)",
       "tabPreviousSameType": "Aba anterior (mesmo tipo)",
       "tabNextAllTypes": "Próxima aba (todos os tipos)",
