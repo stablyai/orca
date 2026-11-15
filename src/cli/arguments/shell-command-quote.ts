@@ -1,4 +1,4 @@
-import { quotePowerShellSingleQuoted } from '../../shared/powershell-native-argument'
+import { quotePowerShellLiteral } from '../../shared/powershell-native-argument'
 import { quotePosixShell } from '../../shared/shell/launch/shell-argument-quoting'
 
 export function quoteCliCommandArgument(value: string): string {
@@ -6,9 +6,11 @@ export function quoteCliCommandArgument(value: string): string {
     return value
   }
   if (process.platform === 'win32') {
-    // Why: PowerShell expands `$`, escapes with backticks and doesn't take `\"`; single quotes keep
-    // those literal in PowerShell and Git Bash, the shells agents run.
-    return /[$`"\u201C-\u201E]/.test(value) ? quotePowerShellSingleQuoted(value) : `"${value}"`
+    // Why: single quotes keep `$`, backticks and `"` literal in PowerShell and Git Bash (agents' shells),
+    // but cmd.exe would run operators outside them, so values with one keep cmd-safe double quotes.
+    return /[$`"\u201C-\u201E]/.test(value) && !/[&|<>^\r\n]/.test(value)
+      ? quotePowerShellLiteral(value)
+      : `"${value.replace(/"/g, '\\"')}"`
   }
   return quotePosixShell(value)
 }
