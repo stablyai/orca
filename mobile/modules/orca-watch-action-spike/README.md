@@ -163,3 +163,25 @@ the wrong button.
   Background `URLSession` downloads completed only at the next foreground launch (7–10 min later). So a Watch
   answer at a distance must come from a foreground action (`.foreground`, opens the app), not a background one.
   Confirmed: `Yes (open app)` from the notification, same conditions, reached the relay in 465ms.
+
+## 9. Watch app and bridge (Option B prototype)
+
+Standalone watchOS app (`watch-app/`) plus a Mac bridge (`watch-bridge/watch-bridge.mjs`). Covers terminal
+Claude Code permission prompts in Orca tabs. Verified 2026-11-15 on cellular with the phone away: push in ~2s,
+notification **Yes** opens the app and answers in ~0.75s.
+
+- **Bridge:** loopback `:6790`. Lists waiting prompts from `session.tabs.listAll`, rechecks the dialog on screen,
+  types the option key with `orca terminal send`. Bearer token in `~/.orca/watch-bridge-token`; APNs key in
+  `~/.orca/watch-apns/AuthKey_<id>.p8`; Watch push tokens in `~/.orca/watch-bridge-devices.json`.
+- **Service:** `~/Library/LaunchAgents/com.cjna.orca-watch-bridge.plist` runs a copy at
+  `~/.orca/watch-bridge/` (launchd can't read `~/Desktop`). After editing the script:
+  `cp watch-bridge/watch-bridge.mjs ~/.orca/watch-bridge/ && launchctl kickstart -k gui/$(id -u)/com.cjna.orca-watch-bridge`.
+  Log: `~/Library/Logs/orca-watch-bridge.log`. Stop: `launchctl bootout gui/$(id -u)/com.cjna.orca-watch-bridge`.
+- **Public URL:** `tailscale funnel --bg --https=8443 http://127.0.0.1:6790` (off: `tailscale funnel --https=8443 off`).
+- **Watch build:** `cd watch-app && xcodegen generate`, then build with
+  `ORCA_BRIDGE_URL=https://<host>.ts.net:8443 ORCA_BRIDGE_TOKEN="$(cat ~/.orca/watch-bridge-token)"` and install
+  with `devicectl device install app`. The Watch must be on the Mac's Wi-Fi to install.
+- **Watch UX:** the ✓ on a watchOS notification dismisses it; scroll to **Yes**/**No**, or tap the body to open the
+  prompt. "Yes, and …" options change Claude's mode and need a second tap.
+- **Not covered:** AskUserQuestion prompts, non-Claude agents, phone-based Watch enrollment (token is baked
+  into this personal build).
