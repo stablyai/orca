@@ -9,17 +9,29 @@ import {
 
 // Bounds the bitmap stitched in main; 16384 is also Chromium's largest texture edge.
 const MAX_FULL_PAGE_EDGE_PX = 16_384
-const MAX_FULL_PAGE_PIXELS = 64 * 1024 * 1024
+// Stitching and encoding run on main: 32 MP is roughly 150 ms of work and a 128 MB canvas.
+const MAX_FULL_PAGE_PIXELS = 32 * 1024 * 1024
+// Each tile is a capture of its own; keeps a long page in a small pane under the CLI's timeout.
+const MAX_FULL_PAGE_TILES = 32
 
-type Span = { start: number; length: number }
+/** CSS pixels a tile asks for, and the device pixels it fills in the stitched image. */
+type Span = { start: number; length: number; offset: number; size: number }
 
 type FullPageTilePlan = { scale: number; columns: Span[]; rows: Span[] }
 
-function spans(total: number, step: number): Span[] {
-  const size = Math.max(1, Math.floor(step))
+function spans(total: number, step: number, pixelsPerCssPixel: number): Span[] {
+  // Each tile overlaps the next by one CSS pixel, so its rounded edge never leaves a gap.
+  const advance = Math.max(1, Math.floor(step) - 1)
+  const edge = (css: number): number => Math.round(css * pixelsPerCssPixel)
   const out: Span[] = []
-  for (let start = 0; start < total; start += size) {
-    out.push({ start, length: Math.min(size, total - start) })
+  for (let start = 0; start < total; start += advance) {
+    const end = Math.min(total, start + advance)
+    out.push({
+      start,
+      length: Math.min(advance + 1, total - start),
+      offset: edge(start),
+      size: edge(end) - edge(start)
+    })
   }
   return out
 }
@@ -29,43 +41,61 @@ export function planFullPageTiles(viewport: CaptureViewport): FullPageTilePlan {
   const { contentWidth, contentHeight, surface } = viewport
   const imageWidth = contentWidth * viewport.pixelsPerCssPixel
   const imageHeight = contentHeight * viewport.pixelsPerCssPixel
-  const shrink = Math.min(
+  let shrink = Math.min(
     1,
     MAX_FULL_PAGE_EDGE_PX / imageWidth,
     MAX_FULL_PAGE_EDGE_PX / imageHeight,
     Math.sqrt(MAX_FULL_PAGE_PIXELS / (imageWidth * imageHeight))
   )
-  const pixelsPerCssPixel = viewport.pixelsPerCssPixel * shrink
-  const tileWidth = surface ? surface.width / pixelsPerCssPixel : viewport.viewport.width
-  const tileHeight = surface ? surface.height / pixelsPerCssPixel : viewport.viewport.height
-  return {
-    scale: viewport.scale * shrink,
-    columns: spans(contentWidth, tileWidth),
-    rows: spans(contentHeight, tileHeight)
+  for (;;) {
+    const pixelsPerCssPixel = viewport.pixelsPerCssPixel * shrink
+    const plan = {
+      scale: viewport.scale * shrink,
+      columns: spans(
+        contentWidth,
+        surface ? surface.width / pixelsPerCssPixel : viewport.viewport.width,
+        pixelsPerCssPixel
+      ),
+      rows: spans(
+        contentHeight,
+        surface ? surface.height / pixelsPerCssPixel : viewport.viewport.height,
+        pixelsPerCssPixel
+      )
+    }
+    const tiles = plan.columns.length * plan.rows.length
+    // Without a surface the tiles stay viewport-sized whatever the scale, so shrinking cannot help.
+    if (tiles <= MAX_FULL_PAGE_TILES || !surface) {
+      return plan
+    }
+    shrink *= Math.sqrt(MAX_FULL_PAGE_TILES / tiles) * 0.99
   }
 }
 
-/** Lays tiles out by the sizes Chromium returned so rounding never leaves a gap or seam. */
-function stitchTiles(tiles: NativeImage[][]): NativeImage {
-  const columnWidths = tiles[0].map((tile) => tile.getSize().width)
-  const rowHeights = tiles.map((row) => row[0].getSize().height)
-  const width = columnWidths.reduce((sum, value) => sum + value, 0)
-  const height = rowHeights.reduce((sum, value) => sum + value, 0)
+/** Places each tile at its planned pixel offset; a tile a pixel short repeats its edge. */
+function stitchTiles(plan: FullPageTilePlan, tiles: NativeImage[][]): NativeImage {
+  const width = plan.columns.reduce((sum, column) => sum + column.size, 0)
+  const height = plan.rows.reduce((sum, row) => sum + row.size, 0)
   const canvas = Buffer.alloc(width * height * 4)
-  let top = 0
-  tiles.forEach((row, rowIndex) => {
-    let left = 0
-    row.forEach((tile, columnIndex) => {
-      const size = tile.getSize()
+  plan.rows.forEach((row, rowIndex) => {
+    plan.columns.forEach((column, columnIndex) => {
+      const tile = tiles[rowIndex][columnIndex]
+      const { width: tileWidth, height: tileHeight } = tile.getSize()
       const bitmap = tile.toBitmap()
-      const copyWidth = Math.min(size.width, columnWidths[columnIndex]) * 4
-      for (let line = 0; line < Math.min(size.height, rowHeights[rowIndex]); line++) {
-        const source = line * size.width * 4
-        bitmap.copy(canvas, ((top + line) * width + left) * 4, source, source + copyWidth)
+      const copyWidth = Math.min(column.size, tileWidth)
+      for (let line = 0; line < row.size; line++) {
+        const source = Math.min(line, tileHeight - 1) * tileWidth * 4
+        const target = ((row.offset + line) * width + column.offset) * 4
+        bitmap.copy(canvas, target, source, source + copyWidth * 4)
+        for (let pixel = copyWidth; pixel < column.size; pixel++) {
+          bitmap.copy(
+            canvas,
+            target + pixel * 4,
+            source + (copyWidth - 1) * 4,
+            source + copyWidth * 4
+          )
+        }
       }
-      left += columnWidths[columnIndex]
     })
-    top += rowHeights[rowIndex]
   })
   return nativeImage.createFromBitmap(canvas, { width, height })
 }
@@ -120,7 +150,7 @@ export async function captureFullPageScreenshot(
       }
       tiles.push(tileRow)
     }
-    const page = stitchTiles(tiles)
+    const page = stitchTiles(plan, tiles)
     const encoded = format === 'jpeg' ? page.toJPEG(90) : page.toPNG()
     return { data: encoded.toString('base64'), format }
   } finally {

@@ -17,6 +17,7 @@ const FRAME_PROBE_OFFSETS_MS = [250, 750, 1750, 3750]
 // No clip: the probe's frame answers the pending capture too, and a clip shifts it by scrollY.
 const FRAME_PROBE_PARAMS = { format: 'jpeg', quality: 1 }
 const FALLBACK_CAPTURE_TIMEOUT_MS = 1000
+const OPTIONAL_MEASURE_TIMEOUT_MS = 1000
 export const SCREENSHOT_TIMEOUT_MESSAGE =
   'Screenshot timed out — the browser page did not draw a frame.'
 
@@ -189,31 +190,25 @@ export function captureUntilDrawn(
   })
 }
 
-const DEVICE_PIXEL_RATIO_WORLD_ID = 1_209
-
 /** Reads what a capture may ask for; layout and script answer before the page draws. */
 export async function measureCaptureViewport(
-  webContents: WebContents
+  webContents: WebContents,
+  timeoutMs = SCREENSHOT_TIMEOUT_MS
 ): Promise<CaptureViewport | null> {
-  const metrics = await withTimeout(
-    sendGuestCdpCommand(webContents, 'Page.getLayoutMetrics', {}),
-    SCREENSHOT_TIMEOUT_MS,
-    'Screenshot timed out — the browser page did not respond.'
-  )
-  // An isolated world reads the real ratio even when the page redefines window.devicePixelRatio.
-  const devicePixelRatio = await withTimeout(
-    Promise.resolve().then(() =>
-      webContents.executeJavaScriptInIsolatedWorld(DEVICE_PIXEL_RATIO_WORLD_ID, [
-        { code: 'window.devicePixelRatio' }
-      ])
-    ),
-    SCREENSHOT_TIMEOUT_MS,
-    'Screenshot timed out — the browser page did not respond.'
-  ).catch(() => null)
-  return readCaptureViewport(
-    metrics,
-    typeof devicePixelRatio === 'number' ? devicePixelRatio : null
-  )
+  const read = (method: string, params: Record<string, unknown>): Promise<unknown> =>
+    withTimeout(
+      sendGuestCdpCommand(webContents, method, params),
+      timeoutMs,
+      'Screenshot timed out — the browser page did not respond.'
+    )
+  const metrics = await read('Page.getLayoutMetrics', {})
+  // CDP, not executeJavaScript: Electron holds that until the page stops loading.
+  const evaluated = await read('Runtime.evaluate', {
+    expression: 'window.devicePixelRatio',
+    returnByValue: true
+  }).catch(() => null)
+  const ratio = isRecord(evaluated) && isRecord(evaluated.result) ? evaluated.result.value : null
+  return readCaptureViewport(metrics, typeof ratio === 'number' ? ratio : null)
 }
 
 // Prefer CDP for beyond-viewport capture; bound stalls below agent-browser’s 30-second timeout.
@@ -249,8 +244,10 @@ export async function captureScreenshot(
   const release = holdPaint()
   try {
     if (!screenshotParams.clip && !screenshotParams.captureBeyondViewport) {
-      // A page that cannot report its layout is captured as asked.
-      const viewport = await measureCaptureViewport(webContents).catch(() => null)
+      // A page too busy to report its layout is captured as asked, not held up for the full budget.
+      const viewport = await measureCaptureViewport(webContents, OPTIONAL_MEASURE_TIMEOUT_MS).catch(
+        () => null
+      )
       if (viewport?.emulatedDensity) {
         // Chromium copies an emulated ratio's full pixel count from the smaller drawn surface and tiles it.
         screenshotParams.clip = { ...viewport.viewport, scale: viewport.scale }

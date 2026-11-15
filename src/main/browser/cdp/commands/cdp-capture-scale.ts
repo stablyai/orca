@@ -56,10 +56,22 @@ export function readCaptureViewport(
       : null
   const emulatedDensity =
     ratio !== null && surfaceDensity !== null && Math.abs(ratio - surfaceDensity) > 0.01
+  const drawn =
+    surfaceDensity === null
+      ? null
+      : {
+          width: visual.clientWidth * pageScale * surfaceDensity,
+          height: visual.clientHeight * pageScale * surfaceDensity
+        }
+  // Whole pixels: a fractional edge can round a request one row past the surface.
+  const surface = drawn && { width: Math.floor(drawn.width), height: Math.floor(drawn.height) }
   // clip.scale is multiplied by the emulated ratio (zoom excluded), so divide it back out.
   const scale =
-    emulatedDensity && ratio !== null && surfaceDensity !== null
-      ? (surfaceDensity * pageScale * zoom) / ratio
+    emulatedDensity && ratio !== null && drawn && surface
+      ? ((drawn.width / visual.clientWidth) *
+          zoom *
+          Math.min(surface.width / drawn.width, surface.height / drawn.height)) /
+        ratio
       : 1
   const drawnRatio = ratio ?? surfaceDensity ?? 1
   return {
@@ -73,13 +85,7 @@ export function readCaptureViewport(
     contentHeight: Math.ceil(cssContentSize.height),
     scale,
     pixelsPerCssPixel: (scale * drawnRatio) / zoom,
-    surface:
-      surfaceDensity === null
-        ? null
-        : {
-            width: visual.clientWidth * pageScale * surfaceDensity,
-            height: visual.clientHeight * pageScale * surfaceDensity
-          },
+    surface,
     emulatedDensity
   }
 }
