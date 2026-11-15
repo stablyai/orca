@@ -301,9 +301,12 @@ export async function activateBackendRuntime(
   })
 
   await new ServeReadinessPublisher().publish(readiness, servePublishMode(options))
-  // Background chat-journal maintenance and CI-line watches start once this host is serving.
+  // Background chat-journal maintenance, CI-line watches and runtime release reclaim start once this host is serving.
   chatJournal.serving()
   runtime.startPullRequestWatches({ admit: true })
+  const { reclaimManagedRuntimeReleasesAtLaunch } =
+    await import('../runtime/rpc/methods/host-management/managed-runtime-install')
+  reclaimManagedRuntimeReleasesAtLaunch(runtime)
   reportStartupTiming()
   managedAgentHooks.readinessPublished()
 
