@@ -6,14 +6,24 @@ export function pipeDirectProviderOutput(
   raw: ChildProcess,
   stdout: PassThrough,
   stderr: PassThrough
-): void {
-  raw.stdout?.on('error', (error) => stdout.destroy(error))
-  raw.stderr?.on('error', (error) => stderr.destroy(error))
+): () => void {
+  const stdoutError = (error: Error): void => {
+    stdout.destroy(error)
+  }
+  const stderrError = (error: Error): void => {
+    stderr.destroy(error)
+  }
+  raw.stdout?.on('error', stdoutError)
+  raw.stderr?.on('error', stderrError)
   stdout.on('error', () => {})
   stderr.on('error', () => {})
   // Protocol peers see EOF after group cleanup and drain, including readers attached after exit.
   raw.stdout?.pipe(stdout, { end: false })
   raw.stderr?.pipe(stderr, { end: false })
+  return () => {
+    raw.stdout?.off('error', stdoutError)
+    raw.stderr?.off('error', stderrError)
+  }
 }
 
 export function drainDirectProviderOutput(
@@ -22,6 +32,7 @@ export function drainDirectProviderOutput(
   outputStdout: PassThrough,
   outputStderr: PassThrough
 ): Promise<void> {
+  const endingReaders: (() => void)[] = []
   for (const [source, output] of [
     [stdout, outputStdout],
     [stderr, outputStderr]
@@ -29,8 +40,15 @@ export function drainDirectProviderOutput(
     if (!source || source.readableEnded || source.destroyed) {
       output.end()
     } else {
-      source.once('end', () => output.end())
-      source.once('close', () => output.end())
+      const end = (): void => {
+        output.end()
+      }
+      source.once('end', end)
+      source.once('close', end)
+      endingReaders.push(() => {
+        source.off('end', end)
+        source.off('close', end)
+      })
     }
   }
   const sources = [stdout, stderr].filter((stream): stream is Readable => stream !== null)
@@ -56,6 +74,9 @@ export function drainDirectProviderOutput(
     // An overdue deadline still gives kernel-buffered tail bytes one poll phase to arrive.
     await new Promise<void>((resolve) => setImmediate(resolve))
     for (const cleanup of finalReaders) {
+      cleanup()
+    }
+    for (const cleanup of endingReaders) {
       cleanup()
     }
     outputStdout.end()

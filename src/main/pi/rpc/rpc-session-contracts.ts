@@ -24,7 +24,8 @@ export type PiRpcConnection = Pick<
   | 'spawnAbsence'
   | 'lastCloseResult'
   | 'onExit'
->
+> &
+  Partial<Pick<JsonlRpcAgentConnection, 'spawned'>>
 export type PiRpcSessionDeps = PiHistoryCaptureDeps & {
   openConnection?: (
     launch: ProviderProcessLaunch,

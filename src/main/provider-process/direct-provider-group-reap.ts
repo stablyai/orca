@@ -105,9 +105,8 @@ export function signalDirectProviderGroup(
     process.kill(-pid, signal)
     recordDelivery(true)
   } catch {
-    const delivered = signalDirectProviderRoot(pid, signal)
-    recordDelivery(delivered)
-    return delivered
+    // The leader's session is fixed before its pid is known, so a missing group means a missing leader.
+    return false
   }
   if (signal === 'SIGKILL') {
     recordSelfInitiatedTreeKill({

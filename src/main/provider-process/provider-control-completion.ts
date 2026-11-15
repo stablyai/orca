@@ -13,10 +13,15 @@ export function readProviderControlCompletion(
   const finish = (completion?: ProviderControlCompletion): void => {
     if (!finished) {
       finished = true
+      stream.off('data', onData)
+      stream.off('end', onEnd)
+      stream.off('close', onClose)
+      stream.off('error', onClose)
+      stream.on('error', () => {})
       completed(completion)
     }
   }
-  stream.on('data', (chunk: Buffer) => {
+  const onData = (chunk: Buffer): void => {
     if (finished) {
       return
     }
@@ -27,8 +32,8 @@ export function readProviderControlCompletion(
       return
     }
     buffer += chunk.toString('utf8')
-  })
-  stream.once('end', () => {
+  }
+  const onEnd = (): void => {
     finish(
       buffer === 'group-absent\n'
         ? 'group-absent'
@@ -36,8 +41,11 @@ export function readProviderControlCompletion(
           ? 'group-unverifiable'
           : undefined
     )
-  })
-  stream.once('close', () => finish())
-  stream.on('error', () => finish())
+  }
+  const onClose = (): void => finish()
+  stream.on('data', onData)
+  stream.once('end', onEnd)
+  stream.once('close', onClose)
+  stream.on('error', onClose)
   stream.resume()
 }

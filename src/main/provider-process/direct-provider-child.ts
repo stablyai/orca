@@ -7,7 +7,7 @@ import type { ProviderSpawnSpec } from './provider-process-supervisor'
 import { publishProviderOwnership, providerOwnershipDirectory } from './provider-ownership-journal'
 import { notifyRuntimeListeners } from '../runtime/events/runtime-listener-delivery'
 import { readBootstrapStatus, withProviderBootstrapDeadline } from './provider-bootstrap-status'
-import { observeProviderLeaderOutcome } from './provider-leader-outcome'
+import { observeProviderLeaderOutcome, type ProviderLeaderOutcome } from './provider-leader-outcome'
 import {
   readProviderControlCompletion,
   type ProviderControlCompletion
@@ -38,14 +38,16 @@ export class DirectProviderChild extends EventEmitter implements ProviderChild {
   connected = true
   groupVerdict: 'exited' | 'live' | 'unverifiable' = 'unverifiable'
   writerPid?: number
+  private launchedPid?: number
   private publication?: Promise<Ownership>
   private ownership?: Ownership
   private control?: Duplex
   private gate?: Writable
+  private readonly releaseRaw: () => void
   private readonly stop: DirectProviderStop
   private canceled = false
   private released = false
-  private outcome?: { code: number | null; signal: NodeJS.Signals | null }
+  private outcome?: ProviderLeaderOutcome | null
   private settled = false
   private failure?: Promise<Error>
   private reapTask?: Promise<void>
@@ -70,72 +72,67 @@ export class DirectProviderChild extends EventEmitter implements ProviderChild {
     this.control = control instanceof Duplex ? control : undefined
     this.gate = gate instanceof Writable ? gate : undefined
     this.stdin.on('error', () => {})
-    pipeDirectProviderOutput(raw, this.stdout, this.stderr)
+    const releaseOutput = pipeDirectProviderOutput(raw, this.stdout, this.stderr)
     if (this.control) {
       readProviderControlCompletion(this.control, (completion) => {
         this.connected = false
         this.forceReap(completion)
       })
     }
-    this.gate?.on('error', () => {
-      this.canceled = true
-      this.forceReap()
-    })
-    this.stdin.once('finish', () => this.stdinEnded())
-    raw.once('error', (error) => {
+    const gateError = (): boolean => this.cancelLaunch()
+    this.gate?.on('error', gateError)
+    const stdinFinish = (): void => this.stdinEnded()
+    this.stdin.once('finish', stdinFinish)
+    const onError = (error: Error): void => {
       this.failure ??= this.reportFailure(error)
-      this.canceled = true
-      this.gate?.destroy()
-      this.forceReap()
-    })
-    observeProviderLeaderOutcome(
-      raw,
-      (outcome) => {
-        if (this.outcome) {
-          return
-        }
-        this.outcome = outcome
+      this.cancelLaunch()
+    }
+    raw.once('error', onError)
+    this.releaseRaw = () => {
+      raw.off('error', onError)
+      raw.on('error', () => {})
+      this.gate?.off('error', gateError)
+      this.gate?.on('error', () => {})
+      this.stdin.off('finish', stdinFinish)
+      releaseOutput()
+    }
+    void observeProviderLeaderOutcome(raw).then((outcome) => {
+      this.outcome = outcome
+      if (this.leaderExited) {
         this.stop.leaderExited(this.released)
-        void this.settle(false)
-      },
-      () => this.forceReap()
-    )
-    raw.once('close', (code, signal) => {
-      if (raw.pid === undefined) {
-        this.outcome = { code, signal }
+      } else {
         this.forceReap()
-        void this.settle(true)
       }
+      void this.settle()
     })
     // Startup errors must be observable after callers have attached listeners.
     const bootstrap = status instanceof Readable ? readBootstrapStatus(status) : null
     this.ready = Promise.resolve()
       .then(() => withProviderBootstrapDeadline(() => this.start(bootstrap)))
       .catch(async (error) => {
-        this.canceled = true
-        this.gate?.destroy()
-        this.forceReap()
+        this.cancelLaunch()
         this.failure ??= this.reportFailure(error)
         throw await this.failure
       })
     void this.ready.catch(() => {})
   }
 
+  /** Names only the CLI, once it runs; the native parent is never a provider identity. */
   get pid(): number | undefined {
-    return this.writerPid ?? this.raw.pid
+    return this.launchedPid
   }
   get leaderExited(): boolean {
-    return this.outcome !== undefined && this.raw.pid !== undefined
+    return this.outcome != null && this.raw.pid !== undefined
   }
 
   private async start(bootstrap: ReturnType<typeof readBootstrapStatus> | null): Promise<void> {
-    if (this.pid === undefined) {
+    if (this.raw.pid === undefined) {
       if (this.failure) {
         throw await this.failure
       }
       await new Promise<never>((_resolve, reject) => this.raw.once('error', reject))
     }
-    if (!bootstrap || !this.gate || !this.control || !this.pid) {
+    if (!bootstrap || !this.gate || !this.control || !this.raw.pid) {
       throw new Error('Provider bootstrap control pipes are unavailable')
     }
     const { leaderPid, watcherPid, bootId } = await bootstrap.initial
@@ -170,6 +167,7 @@ export class DirectProviderChild extends EventEmitter implements ProviderChild {
     if (this.canceled) {
       throw new Error('Provider bootstrap ended before launch completed')
     }
+    this.launchedPid = leaderPid
     this.notify('spawn')
   }
 
@@ -183,9 +181,7 @@ export class DirectProviderChild extends EventEmitter implements ProviderChild {
       signal !== 'SIGSTOP' &&
       signal !== constants.signals.SIGSTOP
     ) {
-      this.canceled = true
-      this.gate?.destroy()
-      return this.forceReap()
+      return this.cancelLaunch()
     }
     if (isProviderReapSignal(signal)) {
       return this.forceReap()
@@ -195,11 +191,19 @@ export class DirectProviderChild extends EventEmitter implements ProviderChild {
     }
     // SIGSTOP pins only the held root; stopping the watcher would disable the independent backstop.
     const delivered =
-      !this.outcome && this.pid !== undefined && signalDirectProviderRoot(this.pid, signal)
+      !this.outcome &&
+      this.writerPid !== undefined &&
+      signalDirectProviderRoot(this.writerPid, signal)
     if (delivered && signal !== 0) {
       this.killed = true
     }
     return delivered
+  }
+
+  private cancelLaunch(): boolean {
+    this.canceled = true
+    this.gate?.destroy()
+    return this.forceReap()
   }
 
   private send(command: ProviderControlCommand): void {
@@ -213,9 +217,7 @@ export class DirectProviderChild extends EventEmitter implements ProviderChild {
       return
     }
     if (!this.released) {
-      this.canceled = true
-      this.gate?.destroy()
-      this.forceReap()
+      this.cancelLaunch()
       return
     }
     this.stop.stdinEnded()
@@ -231,10 +233,10 @@ export class DirectProviderChild extends EventEmitter implements ProviderChild {
   }
 
   private signalLiveGroup(signal: NodeJS.Signals): boolean {
-    if (!this.pid || this.outcome) {
+    if (!this.writerPid || this.outcome) {
       return false
     }
-    return signalDirectProviderGroup(this.pid, signal, (delivered) => {
+    return signalDirectProviderGroup(this.writerPid, signal, (delivered) => {
       this.killed ||= delivered
     })
   }
@@ -249,7 +251,6 @@ export class DirectProviderChild extends EventEmitter implements ProviderChild {
       this.canceled = true
       this.gate?.destroy()
       // A held bootstrap must run its gate-cancellation path to reap its unpublished watcher.
-      this.raw.kill('SIGCONT')
       if (this.writerPid && !this.outcome && !this.control?.destroyed) {
         signalDirectProviderRoot(this.writerPid, 'SIGCONT')
       }
@@ -264,7 +265,7 @@ export class DirectProviderChild extends EventEmitter implements ProviderChild {
     const delivered = completion || gated ? false : this.signalLiveGroup('SIGKILL')
     this.reapTask = reapDirectProviderGroup(
       delivered,
-      () => this.pid,
+      () => this.writerPid,
       () => this.publication,
       (verdict) => {
         this.groupVerdict = this.groupVerdict === 'exited' ? 'exited' : verdict
@@ -285,25 +286,25 @@ export class DirectProviderChild extends EventEmitter implements ProviderChild {
     return reportProviderLaunchFailure(error, this.spec, (failure) => this.notify('error', failure))
   }
 
-  private async settle(processless: boolean): Promise<void> {
-    if (this.settled) {
-      return
+  private async settle(): Promise<void> {
+    await this.ready.catch(() => {}).then(() => this.failure)
+    if (this.outcome === null && !this.failure && !this.canceled) {
+      this.notify(
+        'error',
+        new Error(`Orca lost the process outcome for ${this.spec.command}. Retry the agent.`)
+      )
     }
-    await this.ready.catch(() => {})
-    await this.failure
     await this.reaped
-    if (this.settled || !this.outcome) {
-      return
-    }
     this.settled = true
     await drainDirectProviderOutput(this.raw.stdout, this.raw.stderr, this.stdout, this.stderr)
+    this.releaseRaw()
     this.stdin.destroy()
     this.control?.destroy()
     this.gate?.destroy()
     this.connected = false
-    this.exitCode = this.outcome.code
-    this.signalCode = this.outcome.signal
-    if (!processless) {
+    this.exitCode = this.outcome?.code ?? null
+    this.signalCode = this.outcome?.signal ?? null
+    if (this.leaderExited) {
       this.notify('exit', this.exitCode, this.signalCode)
     }
     this.notify('close', this.exitCode, this.signalCode)

@@ -10,6 +10,7 @@ import {
   type ProviderProcessExit
 } from '../provider-process/managed-provider-process'
 import type { ProviderProcessLaunch } from '../provider-process/provider-process-launch'
+import { awaitProviderChildSpawn } from '../provider-process/provider-child'
 import {
   afterProviderOutputDrains,
   PROVIDER_EXIT_OUTPUT_DRAIN_MS
@@ -153,6 +154,10 @@ export class JsonlRpcAgentConnection {
 
   get pid(): number | undefined {
     return this.managed.child.pid
+  }
+  /** Settles once `pid` names the running agent, or its launch failed and it stays unset. */
+  get spawned(): Promise<void> {
+    return awaitProviderChildSpawn(this.managed.child)
   }
   get closed(): boolean {
     return this.peer.closed

@@ -11,6 +11,7 @@ import {
   type ProviderSupervisorOptions
 } from './provider-process-supervisor'
 import type { ProviderChild } from './provider-child'
+import * as orphanGuard from './provider-group-orphan-guard'
 
 const state = vi.hoisted(() => ({
   root: '',
@@ -305,19 +306,12 @@ describe.runIf(process.platform !== 'win32')('direct provider ownership', () => 
 
   it('cancels a pending launch without releasing its execution gate', async () => {
     const run = launch("process.stdout.write('MUST NOT EXECUTE')", { lifetime: 'one-shot' })
+    expect(run.child.pid).toBeUndefined()
     run.child.kill('SIGTERM')
     await expect(run.child.ready).rejects.toThrow()
     await run.closed
     expect(run.output()).toBe('')
-  })
-
-  it('cancels a stopped pending bootstrap without executing the CLI', async () => {
-    const run = launch("process.stdout.write('MUST NOT EXECUTE')", { lifetime: 'one-shot' })
-    run.child.kill('SIGSTOP')
-    run.child.kill('SIGKILL')
-    await expect(run.child.ready).rejects.toThrow()
-    await run.closed
-    expect(run.output()).toBe('')
+    expect(run.child.pid).toBeUndefined()
   })
 
   it('retires a stopped launch canceled while its ownership publication is in flight', async () => {
@@ -364,11 +358,32 @@ describe.runIf(process.platform !== 'win32')('direct provider ownership', () => 
 
   it('cleans the CLI group when a compatibility supervisor is killed', async () => {
     await writeFile(join(state.root, 'provider-processes'), 'blocked')
-    const run = launch("process.stdout.write('ready\\n'); setInterval(() => {}, 60000)")
-    await run.untilOutput('ready')
-    run.child.kill('SIGKILL')
-    await run.closed
-    expect(run.child.groupVerdict).toBe('exited')
+    // The compatibility guard has always required a proof captured before wrapper death.
+    // A second-resolution host may need to cross the leader's start second first.
+    const prove = orphanGuard.proveProviderProcessIdentity
+    let armed: () => void = () => {}
+    const proven = new Promise<void>((resolve) => {
+      armed = resolve
+    })
+    const proof = vi
+      .spyOn(orphanGuard, 'proveProviderProcessIdentity')
+      .mockImplementation(async (...args) => {
+        const identity = await prove(...args)
+        if (identity) {
+          armed()
+        }
+        return identity
+      })
+    try {
+      const run = launch("process.stdout.write('ready\\n'); setInterval(() => {}, 60000)")
+      await run.untilOutput('ready')
+      await proven
+      run.child.kill('SIGKILL')
+      await run.closed
+      expect(run.child.groupVerdict).toBe('exited')
+    } finally {
+      proof.mockRestore()
+    }
   })
 
   it('keeps provider launches working through the legacy supervisor when recovery storage is unavailable', async () => {

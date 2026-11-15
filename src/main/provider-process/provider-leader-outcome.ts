@@ -54,22 +54,23 @@ export function readProviderLeaderOutcome(stream: Readable): Promise<ProviderLea
 }
 
 export function observeProviderLeaderOutcome(
-  raw: ChildProcess,
-  observe: (outcome: ProviderLeaderOutcome) => void,
-  parentFailed: () => void
-): void {
+  raw: ChildProcess
+): Promise<ProviderLeaderOutcome | null> {
   const pipe = raw.stdio?.at(6)
   const result = pipe instanceof Readable ? readProviderLeaderOutcome(pipe) : Promise.resolve(null)
-  void result.then((outcome) => {
-    if (outcome) {
-      observe(outcome)
-    }
-  })
-  raw.once('exit', (code, signal) => {
+  return new Promise((resolve) => {
     void result.then((outcome) => {
-      if (!outcome) {
-        parentFailed()
-        observe({ code, signal })
+      if (outcome) {
+        resolve(outcome)
+      }
+    })
+    // A parent exit without its wait frame leaves the CLI outcome unknown.
+    raw.once('exit', () => {
+      void result.then(resolve)
+    })
+    raw.once('close', (code, signal) => {
+      if (raw.pid === undefined) {
+        resolve({ code, signal })
       }
     })
   })

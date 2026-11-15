@@ -1,5 +1,5 @@
 import { withOrcaClaudeChatEntrypoint } from '../../../shared/agent-launch/startup/claude-chat-entrypoint'
-import type { ProviderChild } from '../../provider-process/provider-child'
+import { awaitProviderChildSpawn, type ProviderChild } from '../../provider-process/provider-child'
 import type { PipedProcessSpawner } from '@orca/process-host/process-spec'
 import type { SpawnOptions as ClaudeAgentSdkSpawnOptions } from '@anthropic-ai/claude-agent-sdk'
 import { spawnProcess } from '@orca/process-host'
@@ -12,6 +12,7 @@ import { claudeChildClosePolicy, claudeChildCloseProven } from './claude-child-e
 export type ClaudeCodeProcessSpawn = {
   /** SDK spawn hook; Orca retains process ownership. */
   spawn: (options: ClaudeAgentSdkSpawnOptions) => ProviderChild
+  readonly spawned: Promise<void>
   readonly child: ProviderChild | null
   readonly managed: ManagedProviderProcess | null
   /** Provider pid on POSIX; lease ownership also requires start time and spawn token. */
@@ -82,6 +83,9 @@ export function createClaudeCodeProcessSpawn(
       }
       // The SDK drains stderr only for its own local spawn; the managed process drains it here.
       return managed.child
+    },
+    get spawned() {
+      return managed ? awaitProviderChildSpawn(managed.child) : Promise.resolve()
     },
     get child() {
       return managed?.child ?? null

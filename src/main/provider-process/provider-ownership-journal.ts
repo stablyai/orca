@@ -244,11 +244,11 @@ export async function publishProviderOwnership(
 }> {
   await recoverProviderOwnership(directory, bootId)
   ownerIdentity ??= proveProviderProcessIdentity(process.pid)
-  const [owner, leader, watcher, parent] = await Promise.all([
+  // Orphans reparent to an existing reaper, so the leader's ppid alone proves our parent is live.
+  const [owner, leader, watcher] = await Promise.all([
     ownerIdentity,
     proveProviderProcessIdentity(leaderPid),
-    proveProviderProcessIdentity(watcherPid),
-    parentPid === process.pid ? ownerIdentity : proveProviderProcessIdentity(parentPid)
+    proveProviderProcessIdentity(watcherPid)
   ])
   if (!owner) {
     ownerIdentity = undefined
@@ -257,8 +257,6 @@ export async function publishProviderOwnership(
     !owner ||
     !leader ||
     !watcher ||
-    !parent ||
-    (parentPid !== process.pid && parent.ppid !== process.pid) ||
     leader.ppid !== parentPid ||
     leader.pgid !== leaderPid ||
     watcher.ppid !== leaderPid ||

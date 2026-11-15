@@ -25,27 +25,7 @@ export type ProviderChild = Pick<
     readonly leaderExited?: boolean
   }
 
+/** Native children expose `pid` only once the CLI runs; a failed launch leaves it unset. */
 export async function awaitProviderChildSpawn(child: ProviderChild): Promise<void> {
-  if (child.ready) {
-    return child.ready
-  }
-  if (child.pid !== undefined) {
-    return
-  }
-  await new Promise<void>((resolve, reject) => {
-    const cleanup = (): void => {
-      child.off('spawn', onSpawn)
-      child.off('error', onError)
-    }
-    const onSpawn = (): void => {
-      cleanup()
-      resolve()
-    }
-    const onError = (error: Error): void => {
-      cleanup()
-      reject(error)
-    }
-    child.once('spawn', onSpawn)
-    child.once('error', onError)
-  })
+  await child.ready?.catch(() => {})
 }

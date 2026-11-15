@@ -84,6 +84,8 @@ export type ClaudeChildExitVerdict = {
 
 export type ClaudeStreamJsonConnection = ClaudeControlSurface & {
   readonly pid: number | undefined
+  /** Settles once the CLI starts or its launch fails. */
+  readonly spawned?: Promise<void>
   readonly closed: boolean
   /** What the ladder has observed so far; read after a `close()` that returned false. */
   readonly exitVerdict: ClaudeChildExitVerdict
@@ -309,6 +311,7 @@ export async function openClaudeStreamJsonConnection(
     ...controls,
     startupFailure: startup.failure,
     exited: exited.promise,
+    spawned: spawner.spawned,
     get pid() {
       return spawner.pid
     },

@@ -1,6 +1,7 @@
 import type { PipedProcessSpawner } from '@orca/process-host/process-spec'
 import { spawnProcess } from '@orca/process-host'
 import { spawnManagedProviderProcess } from '../../provider-process/managed-provider-process'
+import { awaitProviderChildSpawn } from '../../provider-process/provider-child'
 import { createClaudeChildTreeReaper } from '../../claude/child-process/claude-agent-sdk-exit-proof'
 import type { ProviderProcessLaunch } from '../../provider-process/provider-process-launch'
 import { buildCodexAppServerExitError } from './codex-app-server-exit-error'
@@ -247,6 +248,7 @@ async function connectCodexAppServer(
   let handshaking = false
   try {
     // A spawn that failed has no pid; the handshake below reports why.
+    await awaitProviderChildSpawn(child)
     if (child.pid !== undefined) {
       await handlers.onSpawned?.(child.pid)
     }
