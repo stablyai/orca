@@ -96,6 +96,54 @@ describe('Orca Cloud workspace delete', () => {
     expect(mockApi.ephemeralVm.cleanup).toHaveBeenCalledWith({ runtimeId: 'runtime-cloud' })
   })
 
+  it('ARCHIVE-HOOK: wakes an asleep sandbox for its repo’s archive hook; a failure keeps it until Delete anyway', async () => {
+    const { store, wt } = seedCloudWorkspace()
+    Object.assign(mockApi.ephemeralVm, {
+      preflightCloudDelete: vi.fn().mockResolvedValue({ ok: true, asleep: true })
+    })
+    mockApi.ephemeralVm.listRuntimes.mockImplementation(async () => [
+      { id: 'runtime-cloud', workspaceId: wt.id, cleanupStatus: 'not_started' }
+    ])
+    const runArchiveHook = vi.fn().mockResolvedValue({
+      ok: true,
+      value: {
+        state: 'failed',
+        runs: [{ path: '/w/a', exitCode: 3, timedOut: false, output: 'neon: 401' }]
+      }
+    })
+    const getArchiveHookState = vi
+      .fn()
+      .mockResolvedValue({ ok: true, value: { memo: 'pending', running: false } })
+    Object.assign(mockApi, { orcaCloudWorkspace: { runArchiveHook, getArchiveHookState } })
+    try {
+      const refused = await store
+        .getState()
+        .removeWorktree({ id: wt.id, executionHostId: null }, true)
+
+      expect(refused.ok).toBe(false)
+      expect(runArchiveHook).toHaveBeenCalledWith({
+        workspaceId: wt.id,
+        environmentId: 'cloud-env',
+        wake: true
+      })
+      expect(store.getState().deleteStateByWorktreeId[wt.id]?.canWaiveArchiveHook).toBe(true)
+      expect(mockApi.worktrees.forgetLocal).not.toHaveBeenCalled()
+      expect(mockApi.ephemeralVm.cleanup).not.toHaveBeenCalled()
+
+      const waived = await store
+        .getState()
+        .removeWorktree({ id: wt.id, executionHostId: null }, true, {
+          allowFailedArchiveHook: true
+        })
+
+      expect(waived).toEqual({ ok: true })
+      expect(runArchiveHook).toHaveBeenCalledTimes(1)
+      expect(mockApi.ephemeralVm.cleanup).toHaveBeenCalledWith({ runtimeId: 'runtime-cloud' })
+    } finally {
+      Object.assign(mockApi, { orcaCloudWorkspace: undefined })
+    }
+  })
+
   it('asks for Force delete before destroying an asleep sandbox it could not check', async () => {
     const { store, wt } = seedCloudWorkspace()
     Object.assign(mockApi.ephemeralVm, {

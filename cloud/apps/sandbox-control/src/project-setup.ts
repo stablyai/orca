@@ -59,7 +59,7 @@ const STATES = ['started', 'already', 'skipped_environment_build', 'no_orcad'] a
 export type ProjectSetupState = 'not_configured' | 'failed' | (typeof STATES)[number]
 
 /** As the desktop's setup terminal runs it: bash, stopping at the first failing line. */
-function runnerScript(script: string): string {
+export function runnerScript(script: string): string {
   return `#!/usr/bin/env bash\nset -e\n${script.replace(/\r\n/g, '\n')}\n`
 }
 

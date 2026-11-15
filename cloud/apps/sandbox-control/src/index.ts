@@ -13,6 +13,7 @@
 //   GET    /v1/sandboxes/:id/clone                                -> {clone: {state, percent?, stage?, reason?}}
 //   POST   /v1/sandboxes/:id/archive {pullRequests?, checkouts?}  -> {sandbox}
 //   GET    /v1/sandboxes/:id/archive                              -> {archive}
+//   POST   /v1/sandboxes/:id/archive-hook {wake?} | GET           -> {archiveHook} (src/archive-hook-route.ts)
 //   POST   /v1/sandboxes/:id/unarchive                            -> {sandbox, connection}
 //   DELETE /v1/sandboxes/:id                                      -> {sandbox}
 //   POST, GET /v1/sandboxes/:id/shares | DELETE /v1/sandboxes/:id/shares/:shareId | POST /v1/shares/:token/visit
@@ -182,6 +183,7 @@ import { EnvironmentError, resolveEnvironmentBoot } from './environments'
 import type { GoldenImageProviderApi } from './golden-image-provider'
 import { CreateRequestSchema, LeaseRequestSchema, parseWakeWait, readyView, sandboxView } from './wire'
 import { ArchiveRequestSchema } from './sandbox-vm-inspect'
+import { ArchiveHookRequestSchema, archiveHookView, runArchiveHookBeforeUnattendedArchive, runArchiveHookForRow } from './archive-hook-route'
 import {
   restoreArchivedToSleeping,
   archiveSandbox,
@@ -1879,7 +1881,7 @@ async function routeRequest(request: Request, env: Env, deps: Deps): Promise<Res
       return json({ repo: source?.repoDir ? 'update' : 'clone' })
     }
     const match =
-      /^\/v1\/sandboxes(?:\/([A-Za-z0-9_]+)(?:\/(suspend|resume|lease|rollover|wake|restart|status|clone|archive|unarchive|env\/refresh|git\/access|egress\/hosts|ssh-keys|desktop))?)?$/.exec(
+      /^\/v1\/sandboxes(?:\/([A-Za-z0-9_]+)(?:\/(suspend|resume|lease|rollover|wake|restart|status|clone|archive-hook|archive|unarchive|env\/refresh|git\/access|egress\/hosts|ssh-keys|desktop))?)?$/.exec(
         url.pathname
       )
     if (!match) {
@@ -2082,6 +2084,22 @@ async function routeRequest(request: Request, env: Env, deps: Deps): Promise<Res
       }
       case 'GET archive':
         return json({ archive: await readArchive(env.SANDBOX_DB, row.id) })
+      case 'GET archive-hook':
+        return json({ archiveHook: archiveHookView(row) })
+      case 'POST archive-hook': {
+        const body = ArchiveHookRequestSchema.safeParse((await readJson(request).catch(() => ({}))) ?? {})
+        if (!body.success) {
+          return fail('invalid_request', 400)
+        }
+        const result = await outlivingRequest(life, runArchiveHookForRow(life, row, body.data, workspaceConfig(env, deps)))
+        await auditSession(
+          life.db,
+          caller,
+          { action: 'workspace.archive_hook', targetType: 'workspace', targetId: row.id, detail: { state: result.state, woke: body.data.wake === true } },
+          life.now()
+        )
+        return json({ archiveHook: result })
+      }
       case 'POST unarchive': {
         const ready = await unarchiveSandbox(life, row)
         await auditSession(life.db, caller, { action: 'workspace.unarchive', targetType: 'workspace', targetId: row.id }, life.now())
@@ -2424,7 +2442,8 @@ async function workspaceRoute(request: Request, url: URL, env: Env, deps: Deps, 
             // Starting, waking or going to sleep: nothing changes; the client asks to try again.
             return fail('conflict', 409, `sandbox_${row.status}`)
           }
-          await archiveSandbox(life, row, {}, workspaceConfig(env, deps))
+          await runArchiveHookBeforeUnattendedArchive(life, row, workspaceConfig(env, deps))
+          await archiveSandbox(life, (await getSandbox(env.SANDBOX_DB, row.id)) ?? row, {}, workspaceConfig(env, deps))
           archivedNow = true
         } else if (!archived && row.status === 'archived') {
           await restoreArchivedToSleeping(life, row)

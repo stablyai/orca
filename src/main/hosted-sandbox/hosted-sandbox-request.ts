@@ -14,10 +14,11 @@ export type HostedSandboxControlPlaneClientOptions = {
   getAccessToken: (signal?: AbortSignal) => Promise<string>
   fetch?: typeof fetch
   /** Per-call ceilings; create/resume/rollover include a VM boot and orcad start. */
-  timeouts?: Partial<Record<'boot' | 'control', number>>
+  timeouts?: Partial<Record<'boot' | 'control' | 'hook', number>>
 }
 
-const DEFAULT_TIMEOUTS = { boot: 180_000, control: 60_000 }
+// `hook`: an archive hook (2 min) after a possible wake and the VM's wait for its server.
+const DEFAULT_TIMEOUTS = { boot: 180_000, control: 60_000, hook: 300_000 }
 const MAX_RESPONSE_BYTES = 256 * 1024
 
 export type HostedSandboxRequest = <T>(
@@ -26,7 +27,7 @@ export type HostedSandboxRequest = <T>(
   schema: z.ZodType<T>,
   init: {
     body?: unknown
-    kind: 'boot' | 'control'
+    kind: 'boot' | 'control' | 'hook'
     signal?: AbortSignal
     features?: readonly string[]
     headers?: Record<string, string>
@@ -47,7 +48,7 @@ export function createHostedSandboxRequest(
     schema: z.ZodType<T>,
     init: {
       body?: unknown
-      kind: 'boot' | 'control'
+      kind: 'boot' | 'control' | 'hook'
       signal?: AbortSignal
       /** Per-call opt-ins on top of the features every call sends. */
       features?: readonly string[]

@@ -2523,7 +2523,8 @@
       "orcaCloud": {
         "workspaceActions": {
           "unavailable": "Orca Cloud is unavailable.",
-          "archiveSleepFailed": "It’s still running. Your files are safe."
+          "archiveSleepFailed": "It’s still running. Your files are safe.",
+          "archiveHookKept": "Not archived: its archive hook failed. Fix it and archive again."
         },
         "pairedWake": {
           "notPaired2": "This workspace is no longer linked to this computer. Use Open cloud workspace… to link it again."
@@ -8463,7 +8464,8 @@
           "delete": "Delete workspace",
           "uncommitted_one": "{{count}} uncommitted change",
           "uncommitted_other": "{{count}} uncommitted changes",
-          "bodyNoSnapshot": "Deletes the sandbox and its disk, including chats, terminals and uncommitted changes. This can't be undone."
+          "bodyNoSnapshot": "Deletes the sandbox and its disk, including chats, terminals and uncommitted changes. This can't be undone.",
+          "archiveHookWake": "It wakes first to run its archive hook (orca.yaml scripts.archive)."
         },
         "orcaCloudHost": {
           "running": "{{count}} running",
@@ -27708,7 +27710,22 @@
     },
     "sleepOwnerOnly": "Only its owner or a team admin can put it to sleep.",
     "sleepRefusedTitle": "Couldn’t put {{name}} to sleep",
-    "sleepRefusedDescription": "Only its owner or a team admin can do that."
+    "sleepRefusedDescription": "Only its owner or a team admin can do that.",
+    "archiveHook": {
+      "wakeFailed": "The workspace didn’t wake up.",
+      "unreachable": "Orca couldn’t reach the workspace to run it.",
+      "busy": "It’s already running for this workspace.",
+      "timedOut": "It didn’t finish within 2 minutes.",
+      "exited": "It exited with code {{code}}.",
+      "waking": "Waking {{name}} to run its archive hook…",
+      "running": "Running {{name}}’s archive hook…",
+      "succeeded": "{{name}}’s archive hook finished",
+      "failedTitle": "{{name}}’s archive hook failed",
+      "archiveAnyway": "Archive anyway",
+      "keep": "Keep it",
+      "wakeFirst": "It wakes first to run its archive hook.",
+      "skip": "Skip hook"
+    }
   },
   "cloudAgentSetup": {
     "loading": "Checking what agents can use…",

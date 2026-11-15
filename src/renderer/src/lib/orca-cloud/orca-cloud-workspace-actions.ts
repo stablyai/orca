@@ -86,6 +86,8 @@ export function archiveCloudWorkspace(
   deps: {
     /** The ordinary Sleep; a result whose workspaces did not all sleep stops the archive. */
     sleep: (workspaceId: string) => Promise<readonly { completed: boolean }[] | void>
+    /** ARCHIVE-HOOK: the repo's archive hook, while the VM still runs; false keeps the workspace. */
+    beforeSleep?: () => Promise<boolean>
     pullRequests?: HostedArchivePullRequest[]
   }
 ): Promise<CloudWorkspaceResult<null>> {
@@ -94,6 +96,13 @@ export function archiveCloudWorkspace(
     return Promise.resolve(unavailable())
   }
   return withPending(workspaceId, 'archive', async () => {
+    if (deps.beforeSleep && !(await deps.beforeSleep())) {
+      const message = translate(
+        'auto.lib.orcaCloud.workspaceActions.archiveHookKept',
+        'Not archived: its archive hook failed. Fix it and archive again.'
+      )
+      return { ok: false, code: 'failed', message, userMessage: message }
+    }
     const slept = await deps.sleep(workspaceId)
     if (slept && !slept.every((result) => result.completed)) {
       // Never archive a sandbox that is still running: it would keep using hours behind an "Archived" label.

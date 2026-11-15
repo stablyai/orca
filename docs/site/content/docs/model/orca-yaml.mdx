@@ -36,7 +36,7 @@ All keys are optional. Script, title, command, and path values must be strings; 
 | Key                          | Accepted value                                                                                                                                                                                                      | When omitted                                                                  |
 | ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------- |
 | `scripts.setup`              | Nonempty script string, including a YAML block scalar (`\|`). Runs in the new worktree when setup is enabled.                                                                                                       | No project setup script.                                                      |
-| `scripts.archive`            | Nonempty script string. Runs in the worktree before archive/removal when hooks are enabled.                                                                                                                         | No project archive script.                                                    |
+| `scripts.archive`            | Nonempty script string. Runs in the worktree before archive/removal when hooks are enabled, and in an Orca Cloud workspace's VM before it is archived or deleted. See [Cloud workspaces](#archive-hooks-in-orca-cloud-workspaces). | No project archive script.                                                    |
 | `scripts.run`                | A command string (one action named `run`), or a mapping of action id to `command` plus optional `name`, `cwd`, `env`, `default`, `runMode`, and `availableIn` (`local`, `remote`). See [Run actions](#run-actions). | No Run button.                                                                |
 | `scripts.runMode`            | `concurrent` or `nonconcurrent`.                                                                                                                                                                                    | `concurrent`.                                                                 |
 | `scripts.autoRunAfterSetup`  | `true` (the default action) or an action id.                                                                                                                                                                        | Actions start only from the Run button.                                       |
@@ -105,6 +105,24 @@ The setup runner receives:
 Paths and shell syntax differ by platform. Use `$ORCA_WORKTREE_PATH` in Bash and `%ORCA_WORKTREE_PATH%` in `.cmd` scripts. `wait-for-setup` waits for successful setup before agent startup; either the YAML or local wait setting enables it. This controls startup order, not whether setup runs.
 
 Archive hooks run before local removal; the CLI requires `--run-hooks` to enable them. A failed archive hook blocks removal unless the caller explicitly accepts that failure.
+
+### Archive hooks in Orca Cloud workspaces
+
+Before Orca archives or deletes an Orca Cloud workspace, it runs `scripts.archive` on the still-running VM. Use it to tear down what the workspace started outside itself and that would keep billing, such as a preview database branch:
+
+```yaml
+scripts:
+  setup: ./scripts/create-preview-db.sh "$ORCA_WORKSPACE_NAME"
+  archive: ./scripts/delete-preview-db.sh "$ORCA_WORKSPACE_NAME"
+```
+
+- **What runs:** the script from the primary checkout's `orca.yaml`, in Bash with `set -e`, in each of the workspace's checkouts: its linked worktrees, or the primary checkout when it has none. It runs as you, with the workspace's normal environment and secrets and the same `ORCA_ROOT_PATH`, `ORCA_WORKTREE_PATH` and `ORCA_WORKSPACE_NAME` as setup. Stdin is closed.
+- **Time limit:** 2 minutes for all checkouts together. A hook still running then is stopped and counts as failed.
+- **Output and status:** a toast shows the hook running, then its last lines of output. The full output is appended to `~/.orca-sandbox/archive-hook/archive.log` in the VM.
+- **Failure never traps the workspace:** a failed or timed-out hook shows its output with **Archive anyway** and **Keep it**. A delete shows **Delete anyway**. Every outcome is logged.
+- **Asleep workspaces:** Orca learns whether the repo has a hook each time the workspace goes to sleep. If it has one that hasn't run since the workspace last woke, archive and delete wake it first to run the hook; the archive's Undo toast offers **Skip hook**. A workspace whose repo has no hook, or that has never slept since this was added, isn't woken.
+- **Archives without a desktop** (the API, a phone, the team list) run the hook on a running VM first and archive even if it fails. They never wake an asleep workspace for it.
+- **Unarchive** doesn't re-run `scripts.setup`: recreate what the archive hook removed yourself.
 
 ### Run actions
 

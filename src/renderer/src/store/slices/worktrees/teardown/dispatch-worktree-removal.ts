@@ -32,6 +32,7 @@ export async function dispatchWorktreeRemoval(args: {
   noteCloudWorkspaceDeleting(args.worktreeId)
   try {
     const options = await prepareCloudSandboxDelete({
+      worktreeId: args.worktreeId,
       force: args.force,
       options: args.options,
       target: args.target,

@@ -5,7 +5,8 @@ export type HookCommandSourcePolicy = 'shared-only' | 'local-only' | 'run-both'
 export type OrcaHooks = {
   scripts: {
     setup?: string // Runs after worktree is created
-    archive?: string // Runs before worktree is archived
+    /** Runs before a worktree is removed, and in an Orca Cloud VM before it is archived or deleted. */
+    archive?: string
     run?: OrcaRunAction[] // Named run actions (dev servers, watchers), started from the Run button
     runMode?: OrcaRunMode // Default for every action; an action's own runMode wins
     // true runs the default action once setup succeeds; a string names the action to run.

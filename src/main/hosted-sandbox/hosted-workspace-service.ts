@@ -34,6 +34,7 @@ import {
   registerCloudArchiveInfoHandler,
   restartPairedOrNotCloud
 } from './cloud-workspace-target'
+import { registerCloudArchiveHookHandlers } from './cloud-archive-hook-ipc'
 import {
   NOT_CLOUD,
   createOomTracker,
@@ -323,6 +324,7 @@ export function installHostedWorkspaceService(deps: {
   })
 
   registerCloudArchiveInfoHandler(deps.userDataPath, deps.client)
+  registerCloudArchiveHookHandlers(deps.userDataPath, deps.client, log)
 
   return service
 }

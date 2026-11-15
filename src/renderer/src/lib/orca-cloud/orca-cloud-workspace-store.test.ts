@@ -37,6 +37,8 @@ function stubApi(overrides: Partial<OrcaCloudWorkspaceApi> = {}): OrcaCloudWorks
     archive: vi.fn(async () => ok(null)),
     unarchive: vi.fn(async () => ok(null)),
     getArchive: vi.fn(async () => ok(null)),
+    runArchiveHook: vi.fn(async () => ok({ state: 'not_configured' as const })),
+    getArchiveHookState: vi.fn(async () => ok({ memo: null, running: true })),
     listCloudWorkspaceIds: vi.fn(async () => ['a', 'b']),
     getConfig: vi.fn(async () => null),
     connectGitHub: vi.fn(async () => ok(null)),
@@ -139,6 +141,15 @@ describe('orca cloud workspace store', () => {
     await archiveCloudWorkspace('a', { sleep })
     expect(order).toEqual(['sleep', 'archive'])
     expect(getCloudWorkspaceSnapshot().pending.a).toBeUndefined()
+  })
+
+  it('ARCHIVE-HOOK: a declined hook failure neither sleeps nor archives the workspace', async () => {
+    const bridge = stubApi()
+    const sleep = vi.fn(async () => [{ completed: true }])
+    const result = await archiveCloudWorkspace('a', { sleep, beforeSleep: async () => false })
+    expect(result).toMatchObject({ ok: false, code: 'failed' })
+    expect(sleep).not.toHaveBeenCalled()
+    expect(bridge.archive).not.toHaveBeenCalled()
   })
 
   it('does not archive when the sleep did not finish (the sandbox would keep running)', async () => {
