@@ -5,7 +5,7 @@ import { MOCK_GIT_WORKTREES } from '../orca-runtime-test-mocks/setup.spec'
 import { OrcaRuntimeService } from '../orca-runtime'
 import { listWorktrees } from '../../git/worktrees/catalog/worktree-scan-cache'
 import type { AgentStatusIpcPayload } from '../../../shared/agent-status/contracts/agent-status-ipc-payload'
-import type { RuntimeClientEvent } from '../../../shared/runtime-client-events'
+import type { RuntimeClientEvent } from '../../../shared/remote-runtime/session-graph/runtime-client-events'
 import '../session-lifecycle/close/mobile-session-tab-close-outcome'
 import {
   HEADLESS_LEAF_ID,

@@ -6,11 +6,11 @@ import {
 } from '../../../../shared/agent-status/title/agent-title-owner'
 import { resolvePaneAgentOwnerRecord } from '../../../../shared/agent-status/identity/pane-agent-owner'
 import type { AgentStatusIpcPayload } from '../../../../shared/agent-status/contracts/agent-status-ipc-payload'
-import type { RuntimeMobileSessionClientTab } from '../../../../shared/runtime-mobile-session-tab-contracts'
+import type { RuntimeMobileSessionClientTab } from '../../../../shared/remote-runtime/session-graph/runtime-mobile-session-tab-contracts'
 import type {
   RuntimeMobileSessionTabsResult,
   RuntimeMobileSessionTabsSnapshot
-} from '../../../../shared/runtime-session-contracts'
+} from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import { isTerminalLeafId, makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import { resolveTerminalTabTitle } from '../../../../shared/tab-title-resolution'
 import { indexAgentStatusRowsByPaneKey } from '../../../agent-hooks/runtime/agent-status-pane-index'

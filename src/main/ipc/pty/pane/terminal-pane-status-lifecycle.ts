@@ -6,7 +6,7 @@ import { parsePaneKey } from '../../../../shared/workspace-layout/stable-pane-id
 import { collectLeafIds } from '../../../../shared/workspace-layout/terminal-topology/terminal-pane-layout-tree'
 import { paneKeyPtyId } from './key-state'
 import { ptyIncarnationById } from '../provider/ownership-state'
-import { isLocalHookConnectionId } from '../../../../shared/wsl-hook-relay-contract'
+import { isLocalHookConnectionId } from '../../../../shared/agent-hook-listener/transport/wsl-hook-relay-contract'
 
 export function bindTerminalPaneStatusLifecycle(
   runtime: OrcaRuntimeService | undefined,

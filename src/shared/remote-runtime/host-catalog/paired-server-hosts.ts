@@ -5,14 +5,14 @@ import {
   pickerExecutionHosts,
   type ManagedOrcadDeploymentSummary
 } from '../../execution-host/managed-orcad-execution-host'
-import type { RuntimeCompatVerdict } from '../../protocol-compat'
+import type { RuntimeCompatVerdict } from '../protocol/protocol-compat'
 import type { RuntimeEnvironmentSource } from './runtime-environments'
 import {
   isRuntimeHostContactRevoked,
   lastVerifiedRuntimeStatus,
   type RuntimeEnvironmentStatus
 } from '../host-status/runtime-host-status'
-import type { SshConnectionState } from '../../ssh-types'
+import type { SshConnectionState } from '../ssh/ssh-types'
 import { getPairedDeviceIdsByEnvironment } from '../../workspace-creator-visibility'
 
 export type PairedServerHostInputs = {

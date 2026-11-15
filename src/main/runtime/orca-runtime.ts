@@ -27,7 +27,7 @@ import type { AgentSessionRecordStore } from './agent-session/records/agent-sess
 import { peekOpenedAgentSessionRecordStore } from './agent-session/records/agent-session-record-store-slot'
 import { createAgentLaunchRecordWarmupGate } from './construction/agent-launch-record-warmup-gate'
 import * as WorkspaceLayouts from './terminal/surface/workspace-layout-stream'
-import type { RemoteLayoutSnapshot } from '../../shared/remote-layout-snapshot'
+import type { RemoteLayoutSnapshot } from '../../shared/remote-runtime/session-graph/remote-layout-snapshot'
 import { registerDetectedWorktreeScanInvalidation } from '../ipc/worktrees/listing/register-detected-worktree-scan-invalidation'
 import { registerWorktreeCatalogRoutes } from './workspaces/catalog/worktree-catalog-live-route'
 import {
@@ -40,7 +40,7 @@ import {
   createReferenceAgentIndex,
   referenceConnectionHosts
 } from './workspaces/references/runtime-reference-agents'
-import type { RuntimeReferenceFindParams } from '../../shared/runtime-reference-contracts'
+import type { RuntimeReferenceFindParams } from '../../shared/workspace-attachments/runtime-reference-contracts'
 import { getRepoExecutionHostId } from '../../shared/execution-host'
 import type { LayoutApplyReply } from '../../shared/workspace-layout/workspace-layout-command-types'
 import { rekeyMovedPaneOwners } from './terminal/identity/moved-pane-owner-rekey'
@@ -59,8 +59,8 @@ import { CollapseWriteOrder } from './client/settings/workspace-view-collapse-wr
 import { SidebarInputsFeed } from './sidebar-inputs/feed/sidebar-inputs-feed'
 import { sidebarInputsFeedDomains } from './sidebar-inputs/sidebar-inputs-feed-domains'
 import { requireSwitchedOn } from './construction/require-sidebar-inputs-enabled'
-import { HEADLESS_RUNTIME_WINDOW_ID } from '../../shared/runtime-session-contracts'
-import { getHostDisplayLabelOverrides } from '../../shared/host-setting-overrides'
+import { HEADLESS_RUNTIME_WINDOW_ID } from '../../shared/remote-runtime/session-graph/runtime-session-contracts'
+import { getHostDisplayLabelOverrides } from '../../shared/execution-host/host-setting-overrides'
 import type { OrchestrationDb } from './orchestration/db/orchestration-db'
 import { continueRestoredWorkerMailSoon } from './rpc/methods/orchestration/messaging/settled-worker-follow-through'
 import {

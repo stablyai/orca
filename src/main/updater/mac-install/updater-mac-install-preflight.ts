@@ -1,7 +1,7 @@
 import { homedir } from 'node:os'
 import { getMacUpdateRunningInstances } from './macos-update-running-instances'
 import { setMacInstallPreflightInProgress } from './updater-mac-install'
-import { macCoordinationRoot } from '../../../shared/serve-bundle-coordination'
+import { macCoordinationRoot } from '../../../shared/remote-runtime/serve-supervisor/serve-bundle-coordination'
 import { recordUpdaterLifecycle } from '../updater-lifecycle-diagnostics'
 import {
   recoverMacBrowserSidecars,

@@ -4,7 +4,7 @@ import {
   notificationWorkspaceExecutionHostForOwner,
   notificationSourceForOwner
 } from '../../../../../../shared/notification-source'
-import type { RuntimeClientTarget } from '../../../../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import { resolveNotificationTabOwner } from '@/attention/notification-subject-owner'
 import type {
   AgentSessionPromptAttention,

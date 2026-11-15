@@ -1,7 +1,7 @@
 /** Offer one ephemeral unmanaged SSH session per blocked-migration host; no workspace persistence, agent/status or connected-host state. End on SSH exit, window close/reload or app quit. */
 import { randomUUID } from 'node:crypto'
 import type * as pty from 'node-pty'
-import type { SshTarget } from '../../../shared/ssh-types'
+import type { SshTarget } from '../../../shared/remote-runtime/ssh/ssh-types'
 import type {
   PlainSshTerminalEvent,
   PlainSshTerminalOpenResult

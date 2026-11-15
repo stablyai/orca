@@ -16,7 +16,7 @@ import { SOURCE_CONTROL_LAUNCH_ACTION_IDS } from '../../../../shared/source-cont
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import { applyNativeChatSessionOptionSettingsMutation } from '../../../../shared/native-chat/input/session-options/native-chat-session-option-defaults'
 import type { NativeChatSessionOptionSettingsMutation } from '../../../../shared/native-chat/input/native-chat-session-options'
-import { getHostDisplayLabelOverrides } from '../../../../shared/host-setting-overrides'
+import { getHostDisplayLabelOverrides } from '../../../../shared/execution-host/host-setting-overrides'
 import { getDefaultWorkspaceCleanupRules } from '../../../../shared/workspace-cleanup/workspace-cleanup-policy'
 import { nativeChatQueueFollowUps } from '../../../../shared/native-chat/input/composer/native-chat-follow-up-behavior'
 import { nativeChatShowsCiResultLines } from '../../../../shared/native-chat/native-chat-appearance-settings'

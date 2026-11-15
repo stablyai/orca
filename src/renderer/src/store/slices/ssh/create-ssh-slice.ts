@@ -6,7 +6,7 @@ import type {
   UnrestoredPortForward,
   EnrichedDetectedPort,
   SshTargetSummary
-} from '../../../../../shared/ssh-types'
+} from '../../../../../shared/remote-runtime/ssh/ssh-types'
 import { buildRemovedSshTargetCleanupPatch } from './ssh-target-cleanup'
 import {
   collectSshTargetGenerations,

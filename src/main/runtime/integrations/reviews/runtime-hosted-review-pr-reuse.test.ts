@@ -10,7 +10,7 @@ import type {
   LocalGitExecOptions
 } from '../../../github/repositories/github-repository-identity'
 import type { Repo } from '../../../../shared/repo-types'
-import type { DeviceScope } from '../../../../shared/runtime-session-contracts'
+import type { DeviceScope } from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import { makePR } from '../../../github/pull-requests/refresh/pr-refresh-coordinator-test-harness'
 
 const mocks = vi.hoisted(() => ({ resolve: vi.fn() }))

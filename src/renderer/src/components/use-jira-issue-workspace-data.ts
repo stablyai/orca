@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import type { JiraComment, JiraIssue, JiraPriority } from '../../../shared/jira/jira-types'
-import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import {
   jiraGetIssueForTarget,
   jiraListPrioritiesForTarget

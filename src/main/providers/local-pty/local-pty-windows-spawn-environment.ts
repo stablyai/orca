@@ -8,7 +8,7 @@ import {
   isHostCodexHomeForWsl,
   isWslCodexHomeForHost
 } from '../../pty/shell-startup/codex-home-wsl-env'
-import { addWslEnvKeys } from '../../../shared/wsl-env'
+import { addWslEnvKeys } from '../../../shared/shell/wsl/wsl-env'
 import { parseWslPath } from '../../wsl/filesystem/unc-path-access'
 import { isWindowsGitBashShellPath } from '../../pty/shell-startup/git-bash'
 import type { LocalPtyLaunchPlan } from './local-pty-launch-plan'

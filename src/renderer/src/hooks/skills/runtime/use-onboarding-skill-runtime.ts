@@ -8,7 +8,7 @@ import {
 import { recomputeOn } from '@/lib/recompute-on'
 import { getNativeChatAgentProfile } from '../../../../../shared/native-chat/native-chat-agent-profiles'
 import { isSkillInstallProviderId } from '../../../../../shared/skill-install-providers'
-import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import type { SkillDiscoveryTarget } from '../../../../../shared/skills'
 import {
   bundledSkillTargetKey,

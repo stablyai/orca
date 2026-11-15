@@ -21,7 +21,7 @@ import { cliConversationExitGuidance } from '@/lib/agent-session/resume/history/
 import { structuredLaunchesHoldingIdentity } from '@/lib/agent-session/launch/structured-agent-session-launch-holders'
 import { structuredLaunchIdentity } from '@/lib/agent-session/launch/structured-agent-session-launch-registry'
 import { openStructuredAgentSessionProvisionalTab } from '@/lib/agent-session/launch/structured-agent-session-launch-surface'
-import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import type { CliChatResumeSource } from './cli-chat-resume-source'
 import type { AgentSessionLaunchPlan } from '@/lib/agent-session/launch/routing/agent-session-launch-plan'

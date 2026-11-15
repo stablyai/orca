@@ -16,7 +16,7 @@ import { windowsRelayConnectCommand } from './ssh-relay-windows-launch-command'
 import { listRemoteInstallBaseDirsCommand } from '../../../managed-server/install/remote-install-gc-listing-command'
 import { joinRemotePath, type RemoteHostPlatform } from '../../remote-host/ssh-remote-platform'
 import { isNodeRuntimeTarget } from '../../../../shared/node-runtime-pin'
-import { orcadNodeRuntimeExecutable } from '../../../../shared/orcad-artifacts'
+import { orcadNodeRuntimeExecutable } from '../../../../shared/remote-runtime/orcad-distribution/orcad-artifacts'
 import {
   nodeRuntimeStoreDir,
   remoteNodeRuntimePresentCommand

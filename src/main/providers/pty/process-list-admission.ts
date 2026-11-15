@@ -7,7 +7,7 @@ import {
   isForegroundProcessEvidence
 } from '../../../shared/foreground-process-evidence'
 import type { PtyProcessInfo } from './process-info'
-import { readWslGuestRoot } from '../../../shared/wsl-guest-root-marker'
+import { readWslGuestRoot } from '../../../shared/shell/wsl/wsl-guest-root-marker'
 
 export const MAX_AGGREGATED_PTY_PROCESS_LIST_ENTRIES = 4096
 export const MAX_AGGREGATED_PTY_PROCESS_LIST_BYTES = 32 * 1024 * 1024

@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { RendererStatusSender } from '../../../renderer/src/runtime/agent-status/renderer-status-sender'
 import type { RendererStatusPublication } from '../../../shared/agent-status/renderer-status-publication'
-import type { RuntimeMobileSessionTabsResult } from '../../../shared/runtime-session-contracts'
+import type { RuntimeMobileSessionTabsResult } from '../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import { publishHeadlessRuntimeGraph } from './headless-runtime-graph'
 
 vi.mock('../../../shared/layout-owner-switch', () => ({ ORCA_LAYOUT_OWNER_IS_MAIN: false }))

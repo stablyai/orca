@@ -1,4 +1,7 @@
-import { type RuntimeRpcResponse, isKeepaliveFrame } from '../../../shared/runtime-rpc-envelope'
+import {
+  type RuntimeRpcResponse,
+  isKeepaliveFrame
+} from '../../../shared/remote-runtime/rpc/runtime-rpc-envelope'
 import type {
   PairedE2EEAuthReply,
   PairedE2EEClientHandshake

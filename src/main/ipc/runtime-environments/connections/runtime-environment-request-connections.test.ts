@@ -1,5 +1,5 @@
 import { RemoteRuntimeSharedControlConnection } from '../../../../shared/remote-runtime/control/remote-runtime-shared-control-connection'
-import type { RuntimeRpcResponse } from '../../../../shared/runtime-rpc-envelope'
+import type { RuntimeRpcResponse } from '../../../../shared/remote-runtime/rpc/runtime-rpc-envelope'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   closeSharedControlTestServers,

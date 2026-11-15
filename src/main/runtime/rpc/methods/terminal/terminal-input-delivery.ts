@@ -5,9 +5,9 @@ import {
 } from '../../../terminal/input/terminal-input-admission'
 import type { RpcCallerIdentity } from '../../callers/rpc-caller-identity'
 import { InvalidArgumentError } from '../../core'
-import type { RuntimeTerminalSend } from '../../../../../shared/runtime-terminal-send-contract'
+import type { RuntimeTerminalSend } from '../../../../../shared/terminal/runtime/runtime-terminal-send-contract'
 import type { OrcaRuntimeService } from '../../../orca-runtime'
-import type { RuntimeTerminalDriverState } from '../../../../../shared/runtime-session-contracts'
+import type { RuntimeTerminalDriverState } from '../../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import {
   TERMINAL_INPUT_MAX_BYTES,
   TERMINAL_INPUT_TOO_LARGE_ERROR,

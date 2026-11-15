@@ -1,5 +1,5 @@
 import { acceptedAgentStatuses } from '@/store/slices/agent-status/accepted-agent-statuses'
-import type { RuntimeMobileSessionTabsResult } from '../../../../../shared/runtime-session-contracts'
+import type { RuntimeMobileSessionTabsResult } from '../../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import type { TabGroupLayoutNode } from '../../../../../shared/tab-types'
 import { resetWebSessionFocusIntentForTests } from '../navigation/web-session-focus-intent'
 import { resetWebSessionCloseIntentForTests } from '../closing/web-session-close-intent'

@@ -21,7 +21,7 @@ import type {
   WebSessionTabsBatchContext,
   WebSessionTabsSyncState
 } from './state'
-import type { RuntimeMobileSessionTerminalClientTab } from '../../../../shared/runtime-mobile-session-tab-contracts'
+import type { RuntimeMobileSessionTerminalClientTab } from '../../../../shared/remote-runtime/session-graph/runtime-mobile-session-tab-contracts'
 import {
   isClientOwnedAgentStatus,
   isMirroredAgentStatusOwnedBy,

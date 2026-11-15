@@ -7,8 +7,8 @@ import {
   ANTIGRAVITY_ACCOUNTS_RUNTIME_CAPABILITY,
   ANTIGRAVITY_CHAT_AUTH_CONFIG_RUNTIME_CAPABILITY,
   ANTIGRAVITY_CHAT_SIGN_IN_RUNTIME_CAPABILITY
-} from '../../../../../shared/account-runtime-capabilities'
-import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
+} from '../../../../../shared/remote-runtime/protocol/account-runtime-capabilities'
+import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import { assertRuntimeEnvironmentCapability } from '../../rpc/compatibility/runtime-capability-proof'
 import { callRuntimeRpc } from '../../rpc/calls/runtime-rpc-call'
 import {

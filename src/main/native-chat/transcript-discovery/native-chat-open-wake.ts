@@ -2,8 +2,8 @@ import type { AgentStatusIpcPayload } from '../../../shared/agent-status/contrac
 import {
   isWslHookRelayConnectionId,
   WSL_HOOK_RELAY_CONNECTION_PREFIX
-} from '../../../shared/wsl-hook-relay-contract'
-import { toWindowsWslPath } from '../../../shared/wsl-paths'
+} from '../../../shared/agent-hook-listener/transport/wsl-hook-relay-contract'
+import { toWindowsWslPath } from '../../../shared/file-access/wsl-paths'
 import {
   blockedWslDistroForPath,
   runAsWslUserAct,

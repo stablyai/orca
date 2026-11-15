@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { RuntimeWorktreeTerminalSleepResult } from '../../../../shared/runtime-terminal-contracts'
+import type { RuntimeWorktreeTerminalSleepResult } from '../../../../shared/terminal/runtime/runtime-terminal-contracts'
 import type { WorkspaceSleepTarget } from '../../../../shared/workspace-sleep'
 import '../../../../shared/remote-runtime/remote-runtime-pty-id'
 import { WorkspaceLifecycleQueue } from '../lifecycle/workspace-lifecycle-queue'

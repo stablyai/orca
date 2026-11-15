@@ -1,5 +1,5 @@
 import type { PreloadApi } from '../../../../preload/api-types'
-import type { RuntimeSyncWindowGraph } from '../../../../shared/runtime-types'
+import type { RuntimeSyncWindowGraph } from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import { callRuntimeEnvelope, getRemoteRuntimeStatus } from './web-runtime-calls'
 import {
   getClientForEnvironment,

@@ -4,8 +4,8 @@ import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { fishRequirementViolation, resolveFishBinary } from './fish-binary-requirement'
-import { getWslFishInitCommand } from './wsl-login-shell-command'
-import { toWindowsWslPath } from './wsl-paths'
+import { getWslFishInitCommand } from './shell/wsl/wsl-login-shell-command'
+import { toWindowsWslPath } from './file-access/wsl-paths'
 import { parseFileUriPath } from '../main/daemon/emulation/osc7-file-uri'
 
 const FISH = resolveFishBinary(3)

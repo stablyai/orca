@@ -12368,6 +12368,7 @@
           "e27c8d45bf": "Diagnostics are disabled by an environment variable."
         },
         "ShortcutCommandBlock": {
+          "retryAfterError": "Press another shortcut, or Esc to cancel.",
           "eb72c52c28": "Press a shortcut, or double-tap a modifier (e.g. {{value0}}). Esc cancels.",
           "70b5d25583": "{{value0}} shortcut",
           "287e07ddde": "Modified",
@@ -20835,7 +20836,9 @@
           "medium": "Med",
           "xhigh": "XHigh"
         },
-        "imageUnavailable": "Preview unavailable"
+        "imageUnavailable": "Preview unavailable",
+        "modelAndEffortValue": "{{model}} · {{effort}}",
+        "modelAndEffort": "Model and effort"
       },
       "tool": {
         "exitCode": "exit {{value0}}",

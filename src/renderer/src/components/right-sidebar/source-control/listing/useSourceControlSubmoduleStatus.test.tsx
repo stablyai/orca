@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 
 import { act } from 'react'
-import type { RuntimeClientTarget } from '../../../../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 
 const LOCAL_TARGET: RuntimeClientTarget = { kind: 'local' }
 import { createRoot, type Root } from 'react-dom/client'

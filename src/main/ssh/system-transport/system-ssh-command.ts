@@ -1,7 +1,7 @@
 import { spawn, type ChildProcess } from 'node:child_process'
 import { Duplex } from 'node:stream'
 import type { ClientChannel } from 'ssh2'
-import type { SshTarget } from '../../../shared/ssh-types'
+import type { SshTarget } from '../../../shared/remote-runtime/ssh/ssh-types'
 import { wrapRemoteCommandForPosixShell } from '../remote-exec/ssh-posix-command-wrapper'
 import type { SshExecOptions } from '../connection/ssh-exec-options'
 import { buildSshArgs, type SystemSshBuildArgsOptions } from './system-ssh-args'

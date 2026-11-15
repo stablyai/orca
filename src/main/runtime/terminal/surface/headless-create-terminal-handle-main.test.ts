@@ -1,6 +1,6 @@
 // Main-owned headless create must bind the pane before returning its usable terminal handle.
 import { expect, it, vi } from 'vitest'
-import { HEADLESS_RUNTIME_WINDOW_ID } from '../../../../shared/runtime-session-contracts'
+import { HEADLESS_RUNTIME_WINDOW_ID } from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 
 vi.mock('../../../../shared/layout-owner-switch', () => ({ ORCA_LAYOUT_OWNER_IS_MAIN: true }))
 

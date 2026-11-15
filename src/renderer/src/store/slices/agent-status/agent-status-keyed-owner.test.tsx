@@ -12,7 +12,7 @@ import {
   applyWebSessionTabsSnapshots
 } from '@/runtime/web-session-tabs-sync/snapshot-api'
 import { toWebTerminalSurfaceTabId } from '../../../../../shared/workspace-layout/terminal-surface-id'
-import type { RuntimeMobileSessionTabsResult } from '../../../../../shared/runtime-types'
+import type { RuntimeMobileSessionTabsResult } from '../../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import { resetWebSessionTabsSyncTestState } from '@/runtime/web-session-tabs-sync/testing/web-session-tabs-sync.test-fixture'
 import { useAgentStatus } from '@/runtime/agent-status/use-agent-status'
 import { useAgentBucketCounts } from '@/components/dashboard/bucket-counts/useAgentBucketCounts'

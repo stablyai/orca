@@ -4,7 +4,7 @@ import type {
   RuntimeRequestPreparation,
   RuntimeOrchestrationEnvelope,
   RuntimeRpcResponse
-} from '../../../../shared/runtime-rpc-envelope'
+} from '../../../../shared/remote-runtime/rpc/runtime-rpc-envelope'
 
 export type OrchestrationWorkerServer = {
   environmentId: string

@@ -9,7 +9,7 @@ import { normalizeCompatibleAgentStatusEntryForOwner } from '../../../../shared/
 import { resolvePaneAgentOwnerRecord } from '../../../../shared/agent-status/identity/pane-agent-owner'
 import { toWebTerminalSurfaceTabId } from '../../../../shared/workspace-layout/terminal-surface-id'
 import type { WebSessionTabsBatchContext, WebSessionTabsSyncState } from './state'
-import type { RuntimeMobileSessionTerminalClientTab } from '../../../../shared/runtime-mobile-session-tab-contracts'
+import type { RuntimeMobileSessionTerminalClientTab } from '../../../../shared/remote-runtime/session-graph/runtime-mobile-session-tab-contracts'
 
 import {
   type RetiredTerminalTabSweepState,

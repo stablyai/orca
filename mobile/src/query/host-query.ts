@@ -11,7 +11,7 @@ import {
   type UseQueryOptions,
   type UseQueryResult
 } from '@tanstack/react-query'
-import type { RuntimeClientEventStreamMessage } from '../../../src/shared/runtime-client-events'
+import type { RuntimeClientEventStreamMessage } from '../../../src/shared/remote-runtime/session-graph/runtime-client-events'
 import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import { useHostConnectionInvalidation } from './host-connection-invalidation'
 import { useHostEventRouter } from './host-event-router'

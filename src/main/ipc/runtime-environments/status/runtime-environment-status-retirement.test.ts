@@ -9,7 +9,7 @@ import {
 } from '../../../../shared/remote-runtime/host-store/runtime-environment-managed-orcad-store'
 import { pairingCode } from '../runtime-environments-ipc-test-harness'
 import '../../../../shared/protocol-version'
-import { REMOTE_RUNTIME_SHARED_CONTROL_CAPABILITY } from '../../../../shared/host-runtime-capabilities'
+import { REMOTE_RUNTIME_SHARED_CONTROL_CAPABILITY } from '../../../../shared/remote-runtime/protocol/host-runtime-capabilities'
 import {
   advanceRuntimeEnvironmentCapabilityIncarnation,
   resetRuntimeEnvironmentCapabilityEvidence

@@ -1,7 +1,7 @@
 import { isFolderRepo } from '../../shared/repo-kind'
 import type { ProjectLaunchContext } from '../../shared/rpc-contract/preflight/preflight-params'
 import { isTuiAgent } from '../../shared/agent-launch/catalog/tui-agent-config'
-import { WORKSPACE_ON_OTHER_RUNTIME } from '../../shared/protocol-version'
+import { WORKSPACE_ON_OTHER_RUNTIME } from '../../shared/remote-runtime/protocol/preflight-runtime-capabilities'
 import { refreshAtRestCommandContext } from '../native-chat/agent-session-wire/options/at-rest-command-context'
 import { captureHostShellEnvironment } from '../runtime/agent-session/environment/structured-agent-shell-environment'
 import {

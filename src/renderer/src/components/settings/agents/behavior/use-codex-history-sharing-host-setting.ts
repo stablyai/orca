@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { toast } from 'sonner'
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import type { GlobalSettings } from '../../../../../../shared/global-settings-types'
-import type { RuntimeClientTarget } from '../../../../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import { getCodexHistorySharingUpdateFailed } from './codex-history-sharing-copy'
 
 /** `unsupported`: an older host that neither reports nor accepts the setting. */

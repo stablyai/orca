@@ -14,7 +14,7 @@ import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../shared/constants'
 import type { FloatingWorkspaceChromeModel } from './use-floating-workspace-chrome-model'
 import type { FloatingTerminalPanelLocalState } from '../state/use-floating-terminal-panel-local-state'
 import type { FloatingTerminalPanelStoreState } from '../state/use-floating-terminal-panel-store-state'
-import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 
 const LOCAL_TARGET: RuntimeClientTarget = { kind: 'local' }
 

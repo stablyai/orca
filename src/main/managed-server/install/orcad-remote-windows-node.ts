@@ -5,7 +5,7 @@ import {
   ORCAD_NODE_RUNTIME_DIR_PREFIX,
   ORCAD_NODE_RUNTIME_WINDOWS_EXECUTABLE,
   ORCAD_RUNTIMES_DIRNAME
-} from '../../../shared/orcad-artifacts'
+} from '../../../shared/remote-runtime/orcad-distribution/orcad-artifacts'
 import { pinnedNodeRuntimeAsset, type NodeRuntimeTarget } from '../../../shared/node-runtime-pin'
 import { randomUUID } from 'node:crypto'
 import type { OrcadHostTransport } from './orcad-host-transport'

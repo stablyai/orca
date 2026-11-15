@@ -11,7 +11,7 @@ import {
   type FullDiskAccessValue,
   type HelperOrigin
 } from '../../../shared/daemon-tcc-denial-capture'
-import { LOCAL_BUILD_COMPATIBILITY_CONTRACT } from '../../../shared/local-build-compatibility-contract'
+import { LOCAL_BUILD_COMPATIBILITY_CONTRACT } from '../../../shared/remote-runtime/orcad-distribution/local-build-compatibility-contract'
 import type { DeveloperPermissionStatus } from '../../../shared/developer-permissions-types'
 import type { EventProps } from '../../../shared/telemetry-events'
 import { msSinceWakeSignal } from '../../power/wake-signal-clock'

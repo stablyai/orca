@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { WslHostDeploymentRecord } from '../../../shared/remote-runtime/host-store/wsl-host-deployment-store'
-import type { WslHostServerStop } from '../../../shared/wsl-host-types'
+import type { WslHostServerStop } from '../../../shared/remote-runtime/wsl-hosts/wsl-host-types'
 
 const store = vi.hoisted(() => ({ removed: new Array<string>(), pending: new Array<string>() }))
 vi.mock('../../../shared/remote-runtime/host-store/runtime-environment-wsl-host-store', () => ({

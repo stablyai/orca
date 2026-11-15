@@ -4,7 +4,7 @@ import { getConnectionExecutionHostId, type ExecutionHostId } from '../../../sha
 import { normalizeGhAccountBinding } from '../../../shared/github/accounts/account-binding'
 import { isGitRepoKind } from '../../../shared/repo-kind'
 import { splitWorktreeIdForFilesystem } from '../../../shared/worktree/id'
-import { parseWslUncPath } from '../../../shared/wsl-paths'
+import { parseWslUncPath } from '../../../shared/file-access/wsl-paths'
 import {
   resolveLocalProjectRuntimesForRepos,
   type ProjectRuntimeResolutionStore

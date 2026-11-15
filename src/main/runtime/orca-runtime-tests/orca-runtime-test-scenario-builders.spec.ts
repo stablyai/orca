@@ -2,7 +2,7 @@ import * as gitExecFile from '../../git/command-runner/git-exec-file'
 import { CrewChanges } from '../orchestration/crew/crew-changes'
 import { withDurableRuntimeStore } from './runtime-durable-store-fixture'
 import './runtime-test-module-registration.spec'
-import { HEADLESS_RUNTIME_WINDOW_ID } from '../../../shared/runtime-session-contracts'
+import { HEADLESS_RUNTIME_WINDOW_ID } from '../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import { OrcaRuntimeService } from '../orca-runtime'
 import { electronMocks } from '../orca-runtime-test-mocks/setup.spec'
 import { getBrowserHostLeaseRegistry } from '../browser-host/leases/browser-host-lease-registry-instance'
@@ -19,7 +19,7 @@ const { TEST_WORKTREE_PATH, makeHeadlessTerminalLayout, makeRuntimeStoreWithWork
   fixtures
 const { makeWorkspaceSessionWithHeadlessTerminal, store } = fixtures
 
-import type { RuntimeBrowserClientPlacement } from '../../../shared/runtime-browser-placement'
+import type { RuntimeBrowserClientPlacement } from '../../../shared/browser/client-hosting/runtime-browser-placement'
 import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
 import type { BrowserClientHostCommandEvent } from '../../../shared/browser/client-hosting/browser-client-host-protocol'
 import type { TerminalSideEffectBatch } from '../../../shared/terminal/output/terminal-side-effect-facts'

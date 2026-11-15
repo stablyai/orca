@@ -3,7 +3,7 @@ import {
   getRuntimeSshAccess,
   type KnownRuntimeEnvironment
 } from '../../../shared/remote-runtime/host-catalog/runtime-environments'
-import type { SshTarget } from '../../../shared/ssh-types'
+import type { SshTarget } from '../../../shared/remote-runtime/ssh/ssh-types'
 import type { ServeReadiness } from '../../server/serve-readiness'
 import { managedOrcadInstallDir } from './orcad-managed-runtime-context'
 import { resolveOrcadRemoteContext } from '../install/orcad-remote-context'

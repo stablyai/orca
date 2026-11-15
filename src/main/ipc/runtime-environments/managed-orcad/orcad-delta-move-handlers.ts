@@ -3,7 +3,7 @@ import { ipcMain } from 'electron'
 import type {
   OrcadDeltaMovePreview,
   OrcadDeltaMoveResult
-} from '../../../../shared/orcad-managed-runtime'
+} from '../../../../shared/remote-runtime/orcad-lifecycle/orcad-managed-runtime'
 import { listEnvironments } from '../../../../shared/remote-runtime/host-store/runtime-environment-store'
 import { requireManagedOrcadInfrastructure } from '../../../managed-server/lifecycle/orcad-managed-runtime-context'
 import { ensureOrcadManagedTunnel } from '../../../managed-server/lifecycle/orcad-managed-tunnel'

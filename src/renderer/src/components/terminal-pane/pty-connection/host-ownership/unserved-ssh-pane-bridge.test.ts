@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { LegacyRelayBridgedPane } from '../../../../../../shared/legacy-relay-bridge-contract'
-import type { SshConnectionState } from '../../../../../../shared/ssh-types'
+import type { SshConnectionState } from '../../../../../../shared/remote-runtime/ssh/ssh-types'
 import type { ConnectPanePtySession } from '../connect-pane-pty-session'
 
 const PTY = 'ssh:ssh-box@@pty-1'

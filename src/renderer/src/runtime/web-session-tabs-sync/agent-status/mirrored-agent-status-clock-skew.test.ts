@@ -1,6 +1,6 @@
 // Age mirrored evidence by client receipt time: rendererNow minus hostStamp gains clock skew and makes remote rows immediately stale or permanently fresh. Inject separate host/client clocks. Published freshness verdicts cannot decay during silence; exact repaints must not renew receipt time.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { RuntimeMobileSessionTabsResult } from '../../../../../shared/runtime-session-contracts'
+import type { RuntimeMobileSessionTabsResult } from '../../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import {
   AGENT_STATUS_STALE_AFTER_MS,
   isAgentStatusFresh

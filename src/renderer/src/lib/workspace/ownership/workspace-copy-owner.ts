@@ -14,7 +14,7 @@ import {
   hostAuthorityFromOperationRoute,
   type HostAuthority,
   type HostAuthorityEndpoint
-} from '../../../../../shared/host-authority'
+} from '../../../../../shared/execution-host/host-authority'
 import type { ExecutionHostOwnerMatch } from '../../../../../shared/execution-host/worktree-execution-host-resolution'
 import { parseWorkspaceKey } from '../../../../../shared/workspace-scope'
 import { getRepoIdFromWorktreeId } from '../../../../../shared/worktree/id'

@@ -6,7 +6,7 @@ import {
 import { toRuntimeExecutionHostId } from '../../../../shared/execution-host'
 import type { AppState } from '../../store/types'
 import { useAppStore } from '../../store'
-import type { RuntimeMobileSessionTabsResult } from '../../../../shared/runtime-types'
+import type { RuntimeMobileSessionTabsResult } from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import {
   pickHostTurnEnd,
   pickParsedAgentStatusPayload,

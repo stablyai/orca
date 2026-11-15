@@ -1,7 +1,7 @@
 import { acceptedAgentStatuses } from '@/store/slices/agent-status/accepted-agent-statuses'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { getDefaultWorkspaceSession } from '../../src/shared/constants'
-import type { RuntimeMobileSessionTabsSnapshot } from '../../src/shared/runtime-types'
+import type { RuntimeMobileSessionTabsSnapshot } from '../../src/shared/remote-runtime/session-graph/runtime-session-contracts'
 import type { WorkspaceSessionState } from '../../src/shared/workspace-session/workspace-session-state-types'
 import { acceptReplayedWebSessionTabsSnapshot } from '../../src/renderer/src/runtime/web-session-tabs-sync/state'
 import { resetWebSessionTabsSnapshotFreshnessForTests } from '../../src/renderer/src/runtime/web-session-tabs-sync/tracking-lifecycle'

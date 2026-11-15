@@ -9,7 +9,7 @@ import {
   useRuntimeFileHostLifecycle
 } from './runtime-file-host.test-fixture'
 
-import { REMOTE_RPC_MAX_CONTENT_BYTES } from '../../../shared/remote-rpc-content-budget'
+import { REMOTE_RPC_MAX_CONTENT_BYTES } from '../../../shared/remote-runtime/rpc/remote-rpc-content-budget'
 
 vi.mock('fs', async () => (await import('./runtime-file-command-mock-registry')).fsModuleMock())
 vi.mock('fs/promises', async () =>

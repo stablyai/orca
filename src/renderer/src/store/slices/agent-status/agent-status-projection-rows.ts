@@ -17,7 +17,7 @@ import {
   makePaneKey,
   parseLegacyNumericPaneKey
 } from '../../../../../shared/workspace-layout/stable-pane-id'
-import { resolveRuntimePaneTitleLeafId } from '../../../../../shared/runtime-pane-title-leaf-id'
+import { resolveRuntimePaneTitleLeafId } from '../../../../../shared/workspace-layout/terminal-topology/runtime-pane-title-leaf-id'
 import {
   FLAGS,
   emptySummary,

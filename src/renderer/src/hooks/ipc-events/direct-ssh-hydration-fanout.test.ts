@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
-import type { SshConnectionState } from '../../../../shared/ssh-types'
+import type { SshConnectionState } from '../../../../shared/remote-runtime/ssh/ssh-types'
 import { registerDirectSshStateIpcBridge } from './direct-ssh-state-ipc-bridge'
 
 function connectingState(targetId: string): SshConnectionState {

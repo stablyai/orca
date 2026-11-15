@@ -5,7 +5,7 @@ import { createClaudeUsageSlice } from './usage-provider-slices'
 import type {
   BackendConnectionListener,
   BackendConnectionDetail
-} from '../../../../../shared/backend-service-contract'
+} from '../../../../../shared/backend/backend-service-contract'
 import type { AppState } from '../../types'
 import type { ClaudeUsageScanState } from '../../../../../shared/claude-usage-types'
 
