@@ -12,22 +12,20 @@ import {
 } from '../acp/process/acp-agent-connection'
 import { ANTIGRAVITY_LAUNCH_SPEC } from './antigravity-acp-launch-spec'
 import { acpPrivateTempConnect } from '../acp/launch/acp-private-temp'
-import { acpSessionStartMeta } from '../acp/launch/acp-session-meta'
 import type { ConnectAcpAgent } from '../acp/process/acp-structured-connection'
 import {
   resolveAcpLaunchInvocation,
   type AcpLaunchSettings
 } from '../acp/launch/acp-structured-launch-resolution'
 import { prepareAcpLaunch } from '../acp/launch/acp-structured-launch-preparation'
-import { AcpAgentError, AcpConnectionClosedError } from '../acp/transport/acp-errors'
+import { AcpConnectionClosedError } from '../acp/transport/acp-errors'
 import { captureSignInModelPublisher } from './antigravity-sign-in-models'
-import { SIGN_IN_FAILED, antigravitySignInFailure } from './antigravity-sign-in-failure'
+import { antigravitySignInFailure } from './antigravity-sign-in-failure'
 import type { structuredAgentHostLaunchSources } from '../runtime/agent-session/launch/structured-agent-launch-support'
 import {
   AntigravitySignInCloseUnprovenError,
   AntigravitySignInSentence,
-  antigravityChatSignIn,
-  closeAntigravitySignInOwner
+  antigravityChatSignIn
 } from './antigravity-chat-account'
 import {
   antigravitySignInCallback,
@@ -35,6 +33,7 @@ import {
   type AntigravitySignInPending
 } from './antigravity-sign-in-callback'
 import { removeAntigravitySignInSessionFiles } from './antigravity-sign-in-session-files'
+import { antigravitySignInServers } from './antigravity-sign-in-server'
 import { antigravitySignInUrl } from './antigravity-sign-in-url'
 
 // Match the server’s browser wait.
@@ -44,8 +43,6 @@ const SECOND_LINK = {
   error: 'Antigravity started more than one Google sign-in request.'
 } as const
 const NOT_ACTIVE = 'This sign-in is no longer active in this client.'
-const SESSION_FAILED =
-  'Antigravity authenticated, but could not initialize a session or load models.'
 
 type Phase = accountTypes.AntigravityChatSignInState['phase']
 type Flow = {
@@ -182,7 +179,12 @@ async function signIn(current: Flow, host: AntigravityChatSignInHost): Promise<v
   const connect = await acpPrivateTempConnect(deps, closed)
   const home = launch.env.GEMINI_HOME
   const cwd = await mkdtemp(join(tmpdir(), 'orca-antigravity-sign-in-'))
-  let connection: AcpAgentConnection | null = null
+  const serverLaunch = {
+    ...launch,
+    args: launch.spec.args({ fullAccess: false, pluginDir: null }),
+    cwd
+  }
+  const verifying: { server?: AcpAgentConnection } = {}
   // Wait for proven exit and session ownership before deleting files.
   const owned = { sessionId: '', exited: false, done: false, disposed: false }
   const disposeWhenGone = async (): Promise<void> => {
@@ -195,24 +197,12 @@ async function signIn(current: Flow, host: AntigravityChatSignInHost): Promise<v
       console.warn('[antigravity] sign-in session files not removed:', error)
     )
   }
+  const servers = antigravitySignInServers({ connect, home, launch: serverLaunch, signal, closed })
   try {
-    connection = connect(
-      { ...launch, args: launch.spec.args({ fullAccess: false, pluginDir: null }), cwd },
-      {
-        clientInfo: { name: 'orca', version: '1' },
-        signIn: { ...ANTIGRAVITY_LAUNCH_SPEC.signIn, link: (link) => receiveLink(current, link) }
-      }
-    )
-    const server = connection
-    server.onExit(() => {
-      owned.exited = true
-      void disposeWhenGone()
-    })
-    const stop = (): void => void server.close().catch(() => false)
-    signal.addEventListener('abort', stop, { once: true })
-    try {
+    const watch = { ...spec.signIn, link: (link: string) => receiveLink(current, link) }
+    await servers.run(watch, async (server) => {
       const method = resolveAntigravityChatAuthConfig(launch.antigravityChatAuth).method
-      const initialized = await connection.initialize()
+      const initialized = await server.initialize()
       closed()
       if (
         initialized.authMethods &&
@@ -220,27 +210,23 @@ async function signIn(current: Flow, host: AntigravityChatSignInHost): Promise<v
       ) {
         throw new AntigravitySignInSentence(spec.authMethodUnavailableMessage)
       }
-      await connection.authenticate(method)
-      publish(current, { phase: 'verifying' })
-      // Authentication alone does not prove a chat can start.
-      const started = await connection
-        .start({ cwd, mcpServers: [], ...acpSessionStartMeta(spec) })
-        .catch((error: unknown) => {
-          const plain = error instanceof AcpAgentError && error.code === -32603
-          throw plain && antigravitySignInFailure(error) === SIGN_IN_FAILED
-            ? new AntigravitySignInSentence(SESSION_FAILED)
-            : error
-        })
-      owned.sessionId = started.sessionId
+      await server.authenticate(method)
       current.pending = undefined
-      publishModels(accountHome, started, !connection.exited)
-    } finally {
-      signal.removeEventListener('abort', stop)
-      await closeAntigravitySignInOwner(home, server)
-    }
+    })
+    closed()
+    publish(current, { phase: 'verifying' })
+    const { started, live } = await servers.startOnSavedSignIn(spec, (server) => {
+      verifying.server = server
+      server.onExit(() => {
+        owned.exited = true
+        void disposeWhenGone()
+      })
+    })
+    owned.sessionId = started.sessionId
+    publishModels(accountHome, started, live)
   } finally {
     owned.done = true
-    owned.exited ||= !connection || connection.exited
+    owned.exited ||= !verifying.server || verifying.server.exited
     await disposeWhenGone()
   }
 }
