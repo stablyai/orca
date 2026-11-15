@@ -17,6 +17,10 @@ BUNDLE_ID = "com.stably.orca.mobile"
 TESTFLIGHT_GROUPS = ["peeps"].freeze
 DEFAULT_TESTFLIGHT_CHANGELOG = "Latest Orca Mobile updates and fixes.".freeze
 TESTFLIGHT_PROCESSING_TIMEOUT_SECONDS = 20 * 60
+# Google's Play app signing key for dev.orca.app. Play and GitHub installs both carry it, so each updates the other.
+PLAY_APP_SIGNING_CERT_SHA256 = "A0:A6:67:69:42:B2:DE:E1:F3:5F:B0:F6:FC:A0:AE:63:B5:65:4E:42:6C:A3:1A:DA:4C:F9:BE:09:2B:D7:DA:07".freeze
+PLAY_APK_DOWNLOAD_ATTEMPTS = 20
+PLAY_APK_DOWNLOAD_RETRY_SECONDS = 30
 
 # Only terminal App Store states close TestFlight trains; in-review/processing states still accept builds.
 # API 3.3 replaces appStoreState with appVersionState, renames ready-for-sale and drops removed states;
@@ -43,6 +47,28 @@ end
 
 def load_mobile_app_config
   JSON.parse(File.read(APP_CONFIG_PATH))
+end
+
+def android_package
+  load_mobile_app_config.fetch("expo").fetch("android").fetch("package")
+end
+
+# The V3.0 signer is the one Android checks for updates; V3.2 (minSdk 37 PQC) and the source stamp also print digests.
+def verify_play_signed_apk(apk)
+  apksigner = Dir[File.join(ENV.fetch("ANDROID_HOME"), "build-tools", "*", "apksigner")].max_by do |path|
+    Gem::Version.new(File.basename(File.dirname(path)))
+  end
+  UI.user_error!("apksigner not found under ANDROID_HOME") unless apksigner
+  output = sh(apksigner, "verify", "--print-certs", apk, log: false)
+  digests = output.scan(/^V3\.0 Signer: certificate SHA-256 digest: (\h+)$/).flatten.uniq
+  expected = PLAY_APP_SIGNING_CERT_SHA256.delete(":").downcase
+  unless digests == [expected]
+    UI.user_error!("#{apk} V3.0 signer #{digests.inspect} is not Google's Play app signing key #{expected}")
+  end
+  UI.success("#{apk} is signed with Google's Play app signing key")
+  if ENV["GITHUB_OUTPUT"]
+    File.write(ENV["GITHUB_OUTPUT"], "cert_sha256=#{PLAY_APP_SIGNING_CERT_SHA256}\n", mode: "a")
+  end
 end
 
 def write_mobile_app_config(config)
@@ -236,5 +262,47 @@ platform :ios do
       version: current_mobile_version(config),
       build_number: config.fetch("expo").fetch("ios").fetch("buildNumber"),
     )
+  end
+end
+
+platform :android do
+  desc "Upload a release-signed AAB to Google Play's internal testing track"
+  lane :upload_internal do |options|
+    upload_to_play_store(
+      package_name: android_package,
+      json_key: ENV.fetch("ORCA_PLAY_JSON_KEY_PATH"),
+      track: "internal",
+      aab: options.fetch(:aab),
+      # Checks the bundle against Play and discards the edit, so nothing is released.
+      validate_only: options[:validate_only].to_s == "true",
+      skip_upload_apk: true,
+      skip_upload_metadata: true,
+      skip_upload_changelogs: true,
+      skip_upload_images: true,
+      skip_upload_screenshots: true,
+    )
+  end
+
+  desc "Download the universal APK Google Play signed for a version code and check its signer"
+  lane :download_signed_apk do |options|
+    destination = options.fetch(:destination)
+    attempts = 0
+    begin
+      attempts += 1
+      download_universal_apk_from_google_play(
+        package_name: android_package,
+        json_key: ENV.fetch("ORCA_PLAY_JSON_KEY_PATH"),
+        version_code: Integer(options.fetch(:version_code)),
+        destination: destination,
+        certificate_sha256_hash: PLAY_APP_SIGNING_CERT_SHA256,
+      )
+    rescue StandardError => e
+      # Play generates the APK a little after the upload commits.
+      raise if attempts >= PLAY_APK_DOWNLOAD_ATTEMPTS
+      UI.important("Signed APK not ready (attempt #{attempts}/#{PLAY_APK_DOWNLOAD_ATTEMPTS}): #{e.message}")
+      sleep(PLAY_APK_DOWNLOAD_RETRY_SECONDS)
+      retry
+    end
+    verify_play_signed_apk(destination)
   end
 end

@@ -89,8 +89,12 @@
       "usesCleartextTraffic": true,
       "allowBackup": false,
       "permissions": ["RECORD_AUDIO", "MODIFY_AUDIO_SETTINGS"],
-      "blockedPermissions": ["android.permission.SYSTEM_ALERT_WINDOW"],
-      "package": "com.stably.orca.mobile",
+      "blockedPermissions": [
+        "android.permission.SYSTEM_ALERT_WINDOW",
+        "android.permission.USE_BIOMETRIC",
+        "android.permission.USE_FINGERPRINT"
+      ],
+      "package": "dev.orca.app",
       "versionCode": 28,
       "googleServicesFile": "./google-services.json"
     },
