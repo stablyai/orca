@@ -35,24 +35,45 @@ export function getComputerWindowTargetFlags(flags: Map<string, string | boolean
 
 export function getComputerObserveFlags(flags: Map<string, string | boolean>): {
   noScreenshot?: boolean
+  screenshotFormat?: 'png' | 'jpeg'
+  screenshotScale?: number
+  screenshotMaxEdge?: number
   restoreWindow?: boolean
   windowId?: number
   windowIndex?: number
 } {
   return {
     noScreenshot: flags.has('no-screenshot') ? true : undefined,
+    ...getComputerScreenshotFlags(flags),
     ...(flags.has('restore-window') ? { restoreWindow: true } : {}),
     ...getComputerWindowTargetFlags(flags)
   }
 }
 
-export function getComputerActionObserveFlags(flags: Map<string, string | boolean>): {
-  noScreenshot?: boolean
-  restoreWindow?: boolean
-  treeDiff?: boolean
-  windowId?: number
-  windowIndex?: number
+function getComputerScreenshotFlags(flags: Map<string, string | boolean>): {
+  screenshotFormat?: 'png' | 'jpeg'
+  screenshotScale?: number
+  screenshotMaxEdge?: number
 } {
+  const format = getOptionalStringFlag(flags, 'screenshot-format')
+  if (format !== undefined && format !== 'png' && format !== 'jpeg') {
+    throw new RuntimeClientError('invalid_argument', '--screenshot-format must be png or jpeg')
+  }
+  const scale = getOptionalNumberFlag(flags, 'screenshot-scale')
+  if (scale !== undefined && !(scale > 0)) {
+    throw new RuntimeClientError('invalid_argument', '--screenshot-scale must be greater than 0')
+  }
+  const maxEdge = getOptionalPositiveIntegerFlag(flags, 'screenshot-max-edge')
+  return {
+    ...(format !== undefined ? { screenshotFormat: format } : {}),
+    ...(scale !== undefined ? { screenshotScale: scale } : {}),
+    ...(maxEdge !== undefined ? { screenshotMaxEdge: maxEdge } : {})
+  }
+}
+
+export function getComputerActionObserveFlags(
+  flags: Map<string, string | boolean>
+): ReturnType<typeof getComputerObserveFlags> & { treeDiff?: boolean } {
   return {
     ...getComputerObserveFlags(flags),
     ...(flags.has('full-tree') ? {} : { treeDiff: true })
