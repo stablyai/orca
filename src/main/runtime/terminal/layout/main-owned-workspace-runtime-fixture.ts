@@ -91,7 +91,14 @@ export async function setupMainOwnedWorkspace(
         return () => written.delete(listener)
       },
       setWorkspaceSession: (next: WorkspaceSessionState) => write(next),
-      applyLayoutCommand: async (command: LayoutCommand, hostIds: readonly string[] = []) => {
+      applyLayoutCommand: async (
+        command: LayoutCommand,
+        hostIds: readonly string[] = [],
+        run?: { admit?: () => boolean }
+      ) => {
+        if (run?.admit?.() === false) {
+          return { ok: false as const, code: 'tab_not_found' as const }
+        }
         const change = applyCommandToSession(resolveHostId(hostIds[0]), current, command)
         if (change.session) {
           write(change.session)

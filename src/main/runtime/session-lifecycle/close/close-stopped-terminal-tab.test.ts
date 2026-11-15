@@ -2,6 +2,7 @@ import { RpcDispatcher } from '../../rpc/dispatcher'
 import { TERMINAL_LIFECYCLE_METHODS } from '../../rpc/methods/terminal/terminal-lifecycle-methods'
 import { describe, expect, it, vi } from 'vitest'
 import {
+  LEAF_A,
   TAB_ID,
   WORKTREE_ID,
   setupMainOwnedWorkspace
@@ -17,7 +18,7 @@ const options = {
 
 describe('close a stopped terminal tab by id', () => {
   it('removes the persisted stopped tab without a runtime handle', async () => {
-    const f = setupMainOwnedWorkspace({ stopped: true })
+    const f = await setupMainOwnedWorkspace({ stopped: true })
     const listed = await f.runtime.listTerminals(`id:${WORKTREE_ID}`)
     expect([...listed.terminals, ...(listed.tabs ?? [])].map((tab) => tab.tabId)).toContain('tab-1')
     await f.runtime.closeMobileSessionTab(`id:${WORKTREE_ID}`, TAB_ID, options)
@@ -25,12 +26,37 @@ describe('close a stopped terminal tab by id', () => {
     expect(f.stopped).toEqual([])
   })
 
+  it('refuses a PTY bound while the tab close waits to commit', async () => {
+    const f = await setupMainOwnedWorkspace({ stopped: true })
+    const apply = f.runtime.applyLayoutCommand.bind(f.runtime)
+    vi.spyOn(f.runtime, 'applyLayoutCommand').mockImplementation(async (command, run) => {
+      if (command.type === 'closeTabs') {
+        expect(() =>
+          f.runtime.ensureRestoredPaneStarted({
+            worktreeId: WORKTREE_ID,
+            tabId: TAB_ID,
+            leafId: LEAF_A
+          })
+        ).toThrow('Terminal tab is closing.')
+        f.runtime.registerPty('pty-race', WORKTREE_ID, null)
+        f.session().terminalLayoutsByTabId[TAB_ID]!.ptyIdsByLeafId = { [LEAF_A]: 'pty-race' }
+      }
+      return apply(command, run)
+    })
+    await expect(
+      f.runtime.closeMobileSessionTab(`id:${WORKTREE_ID}`, TAB_ID, options)
+    ).rejects.toMatchObject({
+      code: 'terminal_tab_live'
+    })
+    expect(f.session().tabsByWorktree[WORKTREE_ID]?.map((tab) => tab.id)).toEqual([TAB_ID])
+  })
+
   it.each([
     ['missing', 'terminal_tab_not_found'],
     ['live', 'terminal_tab_live'],
     ['unknown', 'terminal_stop_unverifiable']
   ])('preserves the %s refusal across RPC', async (state, code) => {
-    const f = setupMainOwnedWorkspace({ stopped: state !== 'live' })
+    const f = await setupMainOwnedWorkspace({ stopped: state !== 'live' })
     if (state === 'unknown') {
       f.session().remoteSessionIdsByTabId = { [TAB_ID]: 'unverified-saved-pty' }
     }

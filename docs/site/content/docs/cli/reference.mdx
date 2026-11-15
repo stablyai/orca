@@ -221,7 +221,7 @@ orca terminal close --tab-id <tabId> [--worktree <selector>] --json
 orca terminal close --worktree active --all --json
 ```
 
-`--tab-id` closes one stopped, unpinned terminal tab and defaults to the cwd workspace. Find IDs with `orca terminal list --worktree <selector>` (`terminals[].tabId` or supplemental `tabs[].tabId` in JSON). It cannot be combined with `--terminal`, `--tab`, or `--all`. Live or unverified PTYs are refused; use `--terminal <handle> --tab` to close a live tab.
+`--tab-id` closes one stopped, unpinned terminal tab and defaults to the cwd workspace. Find IDs with `orca terminal list --worktree <selector>` (`result.terminals[].tabId` or supplemental `result.tabs[].tabId` in JSON). It cannot be combined with `--terminal`, `--tab`, or `--all`. Live or unverified PTYs are refused; use `--terminal <handle> --tab` to close a live tab.
 
 Omit `--terminal` to target the active terminal in the current worktree. Read before sending when you are not sure what the terminal is waiting for.
 

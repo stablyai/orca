@@ -34,6 +34,7 @@ import { movedPaneHistorySessionId } from '../../../persistence/migrating-orcad-
 import { makePaneKey, parsePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import { agentProviderSessionsEqual } from '../../../../shared/agent-session/lifecycle/resume/agent-provider-session-equality'
 import { worktreeIdsEqual } from '../../../../shared/worktree/id'
+import { assertStoppedTerminalTabNotClosing } from '../close/stopped-terminal-tab-close-pending'
 
 export abstract class OrcaRuntimeWithRestoredPaneStart extends OrcaRuntimeWithBuildHeadlessMobileSessionBrowserTabs {
   protected abstract resolveAgentLaunchRuntime(
@@ -64,6 +65,7 @@ export abstract class OrcaRuntimeWithRestoredPaneStart extends OrcaRuntimeWithBu
     pane: RestoredPane,
     trigger: RestoredPaneTrigger = {}
   ): Promise<StartedPty | null> {
+    assertStoppedTerminalTabNotClosing(this, pane.worktreeId, pane.tabId)
     this.restoredPanes ??= new RestoredPaneStarter({
       boundPtyId: (target) => this.storedPaneBinding(target),
       isLive: (ptyId) => this.ptysById.get(ptyId)?.connected === true,
@@ -72,6 +74,7 @@ export abstract class OrcaRuntimeWithRestoredPaneStart extends OrcaRuntimeWithBu
       failed: (target, error) =>
         this.showRestoredPaneStart(`${target.tabId}:${target.leafId}`, { failed: error }),
       start: async (target, plan, startTrigger) => {
+        assertStoppedTerminalTabNotClosing(this, target.worktreeId, target.tabId)
         this.hydrateHeadlessMobileSessionTabsFromWorkspaceSession(target.worktreeId)
         // Read main's layout: relaunch clients may ask before graph sync, and projections are absent while a window is attached.
         const session = this.getWorkspaceSessionForWorktree(target.worktreeId)
@@ -88,6 +91,7 @@ export abstract class OrcaRuntimeWithRestoredPaneStart extends OrcaRuntimeWithBu
         if (!tab) {
           throw new Error('tab_not_found')
         }
+        assertStoppedTerminalTabNotClosing(this, target.worktreeId, target.tabId)
         const started = await this.materializePendingMobileSessionTerminal(target.worktreeId, tab, {
           ...startTrigger,
           sessionId: plan.sessionId
@@ -211,6 +215,7 @@ export abstract class OrcaRuntimeWithRestoredPaneStart extends OrcaRuntimeWithBu
       wslUserAct
     }: RestoredPaneTrigger & { sessionId?: string }
   ): Promise<RuntimeMobileSessionCreateTerminalResult> {
+    assertStoppedTerminalTabNotClosing(this, worktreeId, tab.parentTabId)
     // Recover undelivered startup commands (#7587) or recorded agent sessions (#27147, #27777); live-session attach skips startup commands, preventing double launches.
     const resumeStartup = await this.resolvePaneOwnedResumeStartup(worktreeId, tab)
     // After a claimed-record resume starts, mark that record live.
@@ -240,6 +245,7 @@ export abstract class OrcaRuntimeWithRestoredPaneStart extends OrcaRuntimeWithBu
     }
     let dispatched = false
     try {
+      assertStoppedTerminalTabNotClosing(this, worktreeId, tab.parentTabId)
       const startSessionId =
         sessionId ??
         (await this.claimMovedPaneHistorySession({
@@ -247,6 +253,7 @@ export abstract class OrcaRuntimeWithRestoredPaneStart extends OrcaRuntimeWithBu
           tabId: tab.parentTabId,
           leafId: tab.leafId
         }))
+      assertStoppedTerminalTabNotClosing(this, worktreeId, tab.parentTabId)
       const created = await this.createRuntimeOwnedMobileSessionTerminal(
         worktreeId,
         targetsHost,

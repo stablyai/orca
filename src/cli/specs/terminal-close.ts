@@ -9,7 +9,7 @@ export const TERMINAL_CLOSE_COMMAND_SPEC: CommandSpec = {
     'orca terminal close ([--terminal <handle>] [--tab] | --tab-id <tabId> [--worktree <selector>] | --worktree <selector> --all) [--json]',
   allowedFlags: [...GLOBAL_FLAGS, 'terminal', 'tab', 'worktree', 'all', 'tab-id'],
   notes: [
-    'Find tab ids, including stopped tabs, with terminal list --worktree <selector> (JSON: terminals[].tabId or tabs[].tabId).',
+    'Find tab ids, including stopped tabs, with terminal list --worktree <selector> (JSON: result.terminals[].tabId or result.tabs[].tabId).',
     '--tab-id closes only a stopped terminal tab; it cannot be combined with --terminal, --tab, or --all. The workspace defaults to cwd.',
     'With a terminal handle, closes one terminal pane/session; add --tab to close its whole tab.',
     'With --worktree <selector> --all, stops every terminal process owned by that workspace and durably removes its terminal tabs, layouts, and resume records.',

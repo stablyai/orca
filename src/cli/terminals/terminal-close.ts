@@ -8,7 +8,10 @@ import { formatTerminalClose } from './terminal-format'
 import { reportCliError } from '../output/cli-error'
 import { printResult } from '../output/command-result-output'
 import { RuntimeClientError } from '../runtime/connection/types'
-import { getRequiredWorktreeSelector } from '../workspace-selection/workspace-selector'
+import {
+  getRequiredWorktreeSelector,
+  resolveCurrentWorktreeSelector
+} from '../workspace-selection/workspace-selector'
 import { getRequiredStringFlag } from '../arguments/flags'
 import { getTerminalHandle } from './terminal-selector'
 import { describeUnconfirmedCloseStop } from '../../shared/terminal/pty/lifecycle/pty-liveness-verdict'
@@ -64,7 +67,9 @@ export const terminalCloseHandler: CommandHandler = async ({ flags, client, cwd,
         'terminal.closeTabById',
         {
           tabId,
-          worktree: await getRequiredWorktreeSelector(flags, 'worktree', cwd, client)
+          worktree: flags.has('worktree')
+            ? await getRequiredWorktreeSelector(flags, 'worktree', cwd, client)
+            : await resolveCurrentWorktreeSelector(cwd, client)
         }
       )
       const close = result.result

@@ -11,7 +11,10 @@ const NO_STOP: ExplicitCloseStop = { stopped: false }
 export type MainLayoutCloseHost = {
   /** Every pane of a tab main owns, in pane order. */
   panesOfTab: (tabId: string) => { leafId: string; ptyId: string | null }[]
-  applyLayoutCommand: (command: WindowLayoutCommand) => Promise<LayoutApplyReply>
+  applyLayoutCommand: (
+    command: WindowLayoutCommand,
+    run?: { admit: () => boolean }
+  ) => Promise<LayoutApplyReply>
   stop: (ptyIds: string[], addressedPtyId: string) => Promise<ExplicitCloseStop>
   /** The tab's saved remote session id, which a relay may still run with no pane bound to it. */
   remoteSessionIdOf: (tabId: string) => string | undefined
@@ -29,6 +32,7 @@ export type MainLayoutCloseTarget = {
   addressedPtyId?: string | null
   /** False when the caller stops the terminals itself, or a lifecycle echo must not stop them. */
   stopEnded: boolean
+  admit?: () => boolean
 }
 
 export type MainLayoutClose = {
@@ -71,7 +75,8 @@ export async function closeInMainLayout(
           workspace: target.worktreeId,
           tabId: target.tabId,
           leafId: target.leafId
-        }
+        },
+    target.admit ? { admit: target.admit } : undefined
   )
   if (!reply.ok) {
     if (reply.code === 'tab_not_found' || reply.code === 'pane_not_found') {

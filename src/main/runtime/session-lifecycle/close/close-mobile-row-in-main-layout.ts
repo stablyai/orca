@@ -13,9 +13,17 @@ import {
   type MainLayoutClose
 } from '../../session-tabs/main-layout-close-command'
 import type { ExplicitCloseStop } from '../../session-tabs/explicit-terminal-close-pty-stops'
+import type { WindowLayoutCommand } from '../../terminal/layout/runtime-layout-apply'
+import type { LayoutApplyReply } from '../../../../shared/workspace-layout/workspace-layout-command-types'
 import { retireTerminalSurfacesFromSnapshot } from '../../terminal/surface/mobile-session-terminal-retirement'
+import { beginStoppedTerminalTabClose } from './stopped-terminal-tab-close-pending'
 
 export abstract class OrcaRuntimeWithCloseMobileRowInMainLayout extends OrcaRuntimeWithRefuseUnattributedMobileSessionTabClose {
+  abstract override applyLayoutCommand(
+    command: WindowLayoutCommand,
+    run?: { admit: () => boolean }
+  ): Promise<LayoutApplyReply>
+
   protected abstract stopExplicitlyClosedTabPtys(
     ptyIds: readonly string[],
     addressedPtyId: string
@@ -45,32 +53,66 @@ export abstract class OrcaRuntimeWithCloseMobileRowInMainLayout extends OrcaRunt
       force?: boolean
       reason?: RuntimeSessionTabCloseReason
       localPtyTeardownOwnedExternally?: boolean
+      requireStoppedTerminalTab?: boolean
     }
   ): Promise<MainLayoutClose | null> {
     const surfaces = startedMainTerminalSurfaces(this)
     if (!surfaces?.ownsWorkspace(worktreeId)) {
       return null
     }
-    const close = await closeInMainLayout(
-      {
-        panesOfTab: (id) => surfaces.panesOfTab(id),
-        applyLayoutCommand: (command) => this.applyLayoutCommand(command),
-        stop: (ptyIds, addressed) => this.stopExplicitlyClosedTabPtys(ptyIds, addressed),
-        remoteSessionIdOf: (id) =>
-          this.getWorkspaceSessionForWorktree(worktreeId)?.remoteSessionIdsByTabId?.[id]
-      },
-      {
-        worktreeId,
-        tabId: row.parentTabId,
-        leafId: row.leafId,
-        wholeTab: row.id !== tabId,
-        force: options.force,
-        // A terminal-gone lifecycle echo does not authorize termination.
-        stopEnded:
-          options.localPtyTeardownOwnedExternally !== true &&
-          (options.reason === undefined || options.reason === 'user')
-      }
-    )
+    const releaseClose = options.requireStoppedTerminalTab
+      ? beginStoppedTerminalTabClose(this, worktreeId, row.parentTabId)
+      : () => {}
+    let close: MainLayoutClose | null
+    try {
+      close = await closeInMainLayout(
+        {
+          panesOfTab: (id) => surfaces.panesOfTab(id),
+          applyLayoutCommand: (command, run) => this.applyLayoutCommand(command, run),
+          stop: (ptyIds, addressed) => this.stopExplicitlyClosedTabPtys(ptyIds, addressed),
+          remoteSessionIdOf: (id) =>
+            this.getWorkspaceSessionForWorktree(worktreeId)?.remoteSessionIdsByTabId?.[id]
+        },
+        {
+          worktreeId,
+          tabId: row.parentTabId,
+          leafId: row.leafId,
+          wholeTab: row.id !== tabId,
+          force: options.force,
+          // A terminal-gone lifecycle echo does not authorize termination.
+          stopEnded:
+            options.localPtyTeardownOwnedExternally !== true &&
+            (options.reason === undefined || options.reason === 'user'),
+          ...(options.requireStoppedTerminalTab
+            ? {
+                admit: () => {
+                  const session = this.getWorkspaceSessionForWorktree(worktreeId)
+                  const boundPtyIds = [
+                    ...Object.values(
+                      session?.terminalLayoutsByTabId?.[row.parentTabId]?.ptyIdsByLeafId ?? {}
+                    ),
+                    session?.tabsByWorktree?.[worktreeId]?.find((tab) => tab.id === row.parentTabId)
+                      ?.ptyId,
+                    session?.remoteSessionIdsByTabId?.[row.parentTabId]
+                  ]
+                  if (
+                    boundPtyIds.some(
+                      (ptyId) => ptyId && this.getPtyLivenessVerdict(ptyId)?.status !== 'exited'
+                    )
+                  ) {
+                    throw Object.assign(new Error('Terminal tab became live while closing.'), {
+                      code: 'terminal_tab_live'
+                    })
+                  }
+                  return true
+                }
+              }
+            : {})
+        }
+      )
+    } finally {
+      releaseClose()
+    }
     if (close) {
       this.retireMainClosedRows(worktreeId, row.parentTabId, close.closesTab ? null : row.leafId)
     }
