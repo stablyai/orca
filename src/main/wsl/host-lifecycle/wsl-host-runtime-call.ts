@@ -19,6 +19,7 @@ export type WslHostRuntimeCallPort = {
   isVisible: () => boolean
   /** Bumped when Ready arrives, so an older probe cannot overtake its pending registry read. */
   readyGeneration: () => number
+  retireConnectionChange: (distro: string) => void
   /** Shown as liveness shows a stop, so the host's panes offer Start. */
   publishStopped: (record: WslHostDeploymentRecord) => void
   publishReady: (record: WslHostDeploymentRecord, connection: WslOrcadConnection) => void
@@ -70,6 +71,7 @@ export async function ensureWslHostForRuntimeCall(
 // verify-7: a keystroke met the stop before liveness did; parked silently, the pane died unexplained.
 function parkStopped(record: WslHostDeploymentRecord, port: WslHostRuntimeCallPort): void {
   const { environmentId, distro } = record
+  port.retireConnectionChange(distro)
   if (!port.parked.has(environmentId)) {
     port.parked.add(environmentId)
     port.publishStopped(record)

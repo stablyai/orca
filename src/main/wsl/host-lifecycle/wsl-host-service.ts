@@ -219,6 +219,7 @@ export class WslHostService {
       isVisible,
       readyGeneration: () =>
         (record && this.readyGenerations.get(wslDistroHolderKey(record.distro))) || 0,
+      retireConnectionChange: (distro) => this.connectionChanges.delete(wslDistroHolderKey(distro)),
       publishStopped: (record) =>
         this.setStatus(record, { state: 'distro-stopped', terminals: 'exited', recovering: false }),
       publishReady: (record, connection) =>

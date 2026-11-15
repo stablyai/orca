@@ -177,14 +177,19 @@ describe('WslHostService', () => {
   })
 
   it.each([
-    { reachability: 'available', outcome: 'connected', state: 'ready' },
-    { reachability: 'stopped', outcome: 'refused', state: 'distro-stopped' }
+    { reachability: 'available', parked: false, outcome: 'connected', state: 'ready' },
+    { reachability: 'stopped', parked: false, outcome: 'refused', state: 'distro-stopped' },
+    { reachability: 'stopped', parked: true, outcome: 'refused', state: 'distro-stopped' }
   ] as const)(
-    'a pending Ready follows the fresh probe verdict ($reachability)',
+    'a pending Ready follows the fresh probe verdict ($reachability, parked=$parked)',
     async (expected) => {
       const connector = makeConnector([UBUNTU])
       const service = makeService(connector)
       await service.add({ distro: 'Ubuntu' })
+      if (expected.parked) {
+        connector.reachability.mockResolvedValueOnce('stopped')
+        await expect(service.ensureForRuntimeCall('wsl:ubuntu')).rejects.toThrow()
+      }
       await connector.disconnect('Ubuntu')
       connector.distro.state = 'stopped'
       const probeStarted = Promise.withResolvers<void>()
