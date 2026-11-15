@@ -9,7 +9,7 @@ import type { MainWindowStateLifecycle } from './main-window-state-lifecycle'
 import { syncTrafficLightPosition } from './main-window-visual-lifecycle'
 import { consumeUserQuitWindowClose } from './user-quit-window-close'
 import {
-  isWindowCloseInFlight,
+  getWindowCloseInFlight,
   replacePendingReloadWithClose,
   setWindowCloseInFlight
 } from '../renderer-relays/native-unload-coordinator'
@@ -58,6 +58,16 @@ export function installMainWindowCloseLifecycle(args: {
     quitRendererAckTimer.unref?.()
   }
   let lastAcknowledgedRequestId = 0
+  // First request of the tracked close; any later ack proves the page received that close.
+  let trackedCloseFirstRequestId = 0
+  const trackCloseRequest = (quitting: boolean): number => {
+    const requestId = ++closeRequestSequence
+    if (!getWindowCloseInFlight(rendererWebContents)) {
+      trackedCloseFirstRequestId = requestId
+    }
+    setWindowCloseInFlight(rendererWebContents, { quitting })
+    return requestId
+  }
   const onCloseRequestReceived = (event: Electron.IpcMainEvent, requestId: unknown): void => {
     if (event.sender.id !== rendererWebContentsId) {
       return
@@ -147,8 +157,7 @@ export function installMainWindowCloseLifecycle(args: {
     e.preventDefault()
     const isQuitting = opts?.getIsQuitting?.() ?? false
     sendCloseRequestAfterPendingReload(() => {
-      const requestId = ++closeRequestSequence
-      setWindowCloseInFlight(rendererWebContents, { quitting: isQuitting || userQuitClose })
+      const requestId = trackCloseRequest(isQuitting || userQuitClose)
       // User Quit on serve closes windows without quitting the host; still bound frozen-renderer acknowledgement.
       if (isQuitting || userQuitClose) {
         armQuitRendererAckTimer(requestId)
@@ -162,12 +171,13 @@ export function installMainWindowCloseLifecycle(args: {
   })
   // A renderer that dies before confirming cannot answer; finish the close a gone renderer may bypass anyway.
   mainWindow.webContents.on('render-process-gone', () => {
-    if (!isWindowCloseInFlight(rendererWebContents) || mainWindow.isDestroyed()) {
+    const close = getWindowCloseInFlight(rendererWebContents)
+    if (!close || mainWindow.isDestroyed()) {
       return
     }
     setWindowCloseInFlight(rendererWebContents, null)
     // A page that never received an ordinary close (e.g. not yet subscribed after reload) was not closing.
-    if (lastAcknowledgedRequestId !== closeRequestSequence && quitRendererAckRequestId === null) {
+    if (!close.quitting && lastAcknowledgedRequestId < trackedCloseFirstRequestId) {
       return
     }
     clearQuitRendererAckTimer()
@@ -243,8 +253,7 @@ export function installMainWindowCloseLifecycle(args: {
       return
     }
     sendCloseRequestAfterPendingReload(() => {
-      const requestId = ++closeRequestSequence
-      setWindowCloseInFlight(rendererWebContents, { quitting: false })
+      const requestId = trackCloseRequest(false)
       mainWindow.webContents.send('window:close-requested', { isQuitting: false, requestId })
     })
   }

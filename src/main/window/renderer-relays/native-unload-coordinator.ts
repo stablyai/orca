@@ -37,8 +37,10 @@ export function setWindowCloseInFlight(
   }
 }
 
-export function isWindowCloseInFlight(contents: WebContents): boolean {
-  return closesInFlight.has(contents)
+/** Undefined when no close is tracked; otherwise whether it is part of a quit. */
+export function getWindowCloseInFlight(contents: WebContents): { quitting: boolean } | undefined {
+  const quitting = closesInFlight.get(contents)
+  return quitting === undefined ? undefined : { quitting }
 }
 
 function cancelPreparedUnload(frame: Electron.WebFrameMain, requestId: string): void {
