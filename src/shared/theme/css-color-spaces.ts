@@ -262,4 +262,4 @@ export const CSS_COLOR_SPACES = {
   { from: (c: readonly number[]) => Vec3; to: ((rgb: Vec3) => Vec3) | null; hue?: number }
 >
 
-export type CssColorSpace = keyof typeof CSS_COLOR_SPACES
+export type CssColorSpace = Extract<keyof typeof CSS_COLOR_SPACES, string>

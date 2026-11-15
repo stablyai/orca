@@ -85,7 +85,7 @@ export function pluginThemeContrastFindings(
               ...at,
               dropped: [],
               unchecked,
-              message: `not checked: ${unchecked.join(', ')} use CSS only the app can resolve`
+              message: `not checked: ${unchecked.join(', ')} ${unchecked.length === 1 ? 'uses' : 'use'} CSS only the app can resolve`
             }
           ]
         : [])
