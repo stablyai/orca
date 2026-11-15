@@ -78,9 +78,15 @@ export function installMainWindowCloseLifecycle(args: {
       return
     }
     void pendingReload.then(() => {
-      if (!mainWindow.isDestroyed()) {
-        send()
+      if (mainWindow.isDestroyed()) {
+        return
       }
+      // A renderer that died during the reload cannot answer; reenter close through the gone-renderer bypass.
+      if (focus.isRendererProcessGone() || (mainWindow.webContents.isCrashed?.() ?? false)) {
+        mainWindow.close()
+        return
+      }
+      send()
     })
   }
 
@@ -178,14 +184,14 @@ export function installMainWindowCloseLifecycle(args: {
   })
   // Renderer prompts never reach will-prevent-unload. IPC is ordered, so a cancel before the newest ack is stale.
   const onCloseCancelled = (event: Electron.IpcMainEvent): void => {
-    if (event.sender.id === rendererWebContentsId) {
-      setWindowCloseInFlight(rendererWebContents, null)
-    }
     if (
-      event.sender.id === rendererWebContentsId &&
-      lastAcknowledgedRequestId === closeRequestSequence &&
-      opts?.getIsQuitting?.() === true
+      event.sender.id !== rendererWebContentsId ||
+      lastAcknowledgedRequestId !== closeRequestSequence
     ) {
+      return
+    }
+    setWindowCloseInFlight(rendererWebContents, null)
+    if (opts?.getIsQuitting?.() === true) {
       abortQuit()
     }
   }
@@ -233,8 +239,9 @@ export function installMainWindowCloseLifecycle(args: {
       return
     }
     sendCloseRequestAfterPendingReload(() => {
+      const requestId = ++closeRequestSequence
       setWindowCloseInFlight(rendererWebContents, { quitting: false })
-      mainWindow.webContents.send('window:close-requested', { isQuitting: false })
+      mainWindow.webContents.send('window:close-requested', { isQuitting: false, requestId })
     })
   }
   // Custom titlebar menu replaces Alt reveal of the hidden Windows/Linux menu.

@@ -25,13 +25,13 @@ const coordinators = new WeakMap<WebContents, NativeUnload>()
 // Value is whether the close is part of a quit.
 const closesInFlight = new WeakMap<WebContents, boolean>()
 
-/** Main marks a close request until the renderer confirms or cancels it, or dies. */
+/** Main marks a close request until the renderer confirms or cancels it, or dies. A quit is never downgraded. */
 export function setWindowCloseInFlight(
   contents: WebContents,
   close: { quitting: boolean } | null
 ): void {
   if (close) {
-    closesInFlight.set(contents, close.quitting)
+    closesInFlight.set(contents, close.quitting || closesInFlight.get(contents) === true)
   } else {
     closesInFlight.delete(contents)
   }
@@ -121,6 +121,10 @@ export function installNativeUnloadCoordinator(
   contents.on('did-frame-navigate', (_event, _url, _code, _status, isMainFrame) => {
     if (isMainFrame) {
       settlePending?.('superseded')
+      // The new document cannot answer an ordinary close; a quit stays tracked so a crash still ends it.
+      if (closesInFlight.get(contents) === false) {
+        closesInFlight.delete(contents)
+      }
     }
   })
   // Electron's own listener here reloads directly; replace it so DevTools reload joins the same checkpoint.

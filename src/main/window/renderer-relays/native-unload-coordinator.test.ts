@@ -124,6 +124,14 @@ describe('native reload checkpoint', () => {
     expect(contents.reloadIgnoringCache).not.toHaveBeenCalled()
   })
 
+  it('keeps refusing reload when an ordinary close follows a quit close', async () => {
+    const { contents, reload, setCloseInFlight } = fixture()
+    setCloseInFlight({ quitting: true })
+    setCloseInFlight({ quitting: false })
+    await reload(true)
+    expect(contents.reloadIgnoringCache).not.toHaveBeenCalled()
+  })
+
   it('asks again after a prepare request could not be sent', async () => {
     const { contents, frame, reply, reload } = fixture()
     frame.send.mockImplementationOnce(() => {
