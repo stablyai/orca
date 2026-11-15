@@ -4,11 +4,11 @@ import {
   normalizeExecutionHostId,
   type ExecutionHostId
 } from '../../../../src/shared/execution-host'
-import { getHostContextLabel } from '../../../../src/shared/worktree/host-context-labels'
-import type { DesktopSidebarFacts } from '../../../../src/shared/sidebar-list/desktop-sidebar-facts'
-import type { SidebarFeedView } from '../../../../src/shared/sidebar-list/sidebar-feed-rows'
+import { getHostContextLabel } from '../../../../src/shared/worktree/row-display/host-context-labels'
+import type { DesktopSidebarFacts } from '../../../../src/shared/sidebar-list/feed-facts/desktop-sidebar-facts'
+import type { SidebarFeedView } from '../../../../src/shared/sidebar-list/feed/sidebar-feed-rows'
 import type { ProjectOrderBy } from '../../../../src/shared/ui-chrome-types'
-import type { MobileViewState } from '../../worktree/workspace-view-settings'
+import type { MobileViewState } from '../../worktree/workspace-list/workspace-view-settings'
 
 // Mirror desktop UI/settings into the shared sidebar builder; resolved all-host scope matches desktop legacy scope.
 export function buildHostFeedView(args: {

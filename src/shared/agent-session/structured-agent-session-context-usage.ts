@@ -8,8 +8,8 @@ import {
   type AgentSessionContextWindow
 } from './agent-session-context-usage'
 import type { AgentJournalRenderItem } from './journal/agent-session-journal-types'
-import type { AgentSessionOptionsResult } from './options/agent-session-options-result'
-import { readAgentJournalTurn } from './lifecycle/agent-session-turn-record'
+import type { AgentSessionOptionsResult } from './options/protocol/agent-session-options-result'
+import { readAgentJournalTurn } from './lifecycle/records/agent-session-turn-record'
 import {
   isAgentSessionContextClear,
   latestAgentSessionContextClearSequence

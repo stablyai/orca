@@ -24,6 +24,9 @@ const COMMAND_SCOPED_FLAG_HELP: Record<string, Record<string, string>> = {
     query:
       '--query <text>        Show only elements whose line contains this text, with their ancestors'
   },
+  'computer launch-app': {
+    activate: '--activate            Start the app in front; only when the user asked for it'
+  },
   'computer wait': {
     text: '--text <text>          Wait until an element line contains this text',
     enabled:

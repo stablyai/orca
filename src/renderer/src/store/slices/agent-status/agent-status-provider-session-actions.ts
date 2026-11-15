@@ -6,12 +6,12 @@ import type {
   AgentProviderSessionRouting,
   AgentProviderSessionTiming
 } from './agent-status-contract'
-import {
-  agentProviderSessionsEqual,
-  type ResumableTuiAgent,
-  type AgentProviderSessionMetadata,
-  type SleepingAgentSessionRecord
+import type {
+  ResumableTuiAgent,
+  AgentProviderSessionMetadata,
+  SleepingAgentSessionRecord
 } from '../../../../../shared/agent-session/lifecycle/agent-session-resume'
+import { agentProviderSessionsEqual } from '../../../../../shared/agent-session/lifecycle/resume/agent-provider-session-equality'
 import { getAgentResumeArgv } from '../../../../../shared/agent-launch/startup/agent-resume-argv'
 import { resolveAgentPaneAuthorityKey } from './agent-pane-authority'
 import {
@@ -25,7 +25,7 @@ import {
   ownerLaunchAttested,
   registryEntryMatchesStatus
 } from './agent-status-launch-config'
-import { copyLaunchConfig } from '../../../../../shared/agent-session/lifecycle/agent-resume-record-from-status'
+import { copyLaunchConfig } from '../../../../../shared/agent-session/lifecycle/resume/agent-resume-record-from-status'
 import { agentVerdictFields } from '../../../../../shared/agent-status/lifecycle/agent-main-agent-verdict'
 import { settleAttentionRemovedBy } from '../workspace-attention/attention-removal-follow-up'
 
@@ -57,8 +57,8 @@ export function createAgentStatusProviderSessionActions(
       let removedLiveStatus = false
       settleAttentionRemovedBy(set, get, () =>
         set((s, changedPaneKeys) => {
-          const existingStatus = s.agentStatusByPaneKey[paneKey]
           const existingRecord = s.sleepingAgentSessionsByPaneKey[paneKey]
+          const existingStatus = s.agentStatusByPaneKey[paneKey]
           if (
             (existingStatus && updatedAt < existingStatus.updatedAt) ||
             (existingRecord && updatedAt < existingRecord.updatedAt)
@@ -136,13 +136,6 @@ export function createAgentStatusProviderSessionActions(
             changedPaneKeys.add(paneKey)
             delete nextLive[paneKey]
           }
-          const nextRetained =
-            paneKey in s.retainedAgentsByPaneKey
-              ? { ...s.retainedAgentsByPaneKey }
-              : s.retainedAgentsByPaneKey
-          if (nextRetained !== s.retainedAgentsByPaneKey) {
-            delete nextRetained[paneKey]
-          }
           const retiredPaneKeys = new Set([paneKey])
           // Identity mismatch clears sleeping launch config; clear registry too or returning old identity reuses stale args/env.
           let nextLaunchConfigs = s.agentLaunchConfigByPaneKey
@@ -159,16 +152,22 @@ export function createAgentStatusProviderSessionActions(
             nextLaunchConfigs = { ...nextLaunchConfigs }
             delete nextLaunchConfigs[paneKey]
           }
-          const nextConversations = projectConversation(s, { ...record, agentType: agent })
+          const nextConversations = projectConversation(
+            s,
+            { ...record, agentType: agent },
+            undefined,
+            undefined,
+            { identityOnly: true, providerSession }
+          )
           return {
             agentStatusByPaneKey: nextLive,
             ...(nextConversations !== s.agentConversationsByPaneKey
               ? { agentConversationsByPaneKey: nextConversations }
               : {}),
-            retainedAgentsByPaneKey: nextRetained,
-            sleepingAgentSessionsByPaneKey: replaceRecordEntries(s.sleepingAgentSessionsByPaneKey, [
-              [paneKey, record]
-            ]),
+            sleepingAgentSessionsByPaneKey: replaceRecordEntries<SleepingAgentSessionRecord>(
+              s.sleepingAgentSessionsByPaneKey,
+              [[paneKey, record]]
+            ),
             agentLaunchConfigByPaneKey: nextLaunchConfigs,
             acknowledgedAgentsByPaneKey: removePaneKeys(
               s.acknowledgedAgentsByPaneKey,

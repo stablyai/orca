@@ -63,6 +63,14 @@ export const ComputerObserveTarget = ComputerObserveTargetBase.extend({
 
 export const ListApps = z.object({}).strict()
 
+export const LaunchApp = z
+  .object({
+    app: requiredString('Missing app'),
+    // Only with the user's OK: the app comes to the front and takes the keyboard.
+    activate: z.boolean().optional()
+  })
+  .strict()
+
 export const ListWindows = z
   .object({
     app: requiredString('Missing app')
@@ -217,7 +225,9 @@ export const Hotkey = ComputerObserveTargetBase.extend({
 })
 
 export const ComputerPermissions = z.object({
-  id: z.enum(['accessibility', 'screenshots']).optional()
+  id: z.enum(['accessibility', 'screenshots']).optional(),
+  // Older hosts drop it and open as before; Settings buttons leave it off so a click always opens.
+  skipGranted: z.boolean().optional()
 })
 
 export const PasteText = ComputerObserveTargetBase.extend({

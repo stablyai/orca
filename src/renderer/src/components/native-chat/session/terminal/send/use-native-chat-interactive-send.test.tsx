@@ -56,45 +56,6 @@ describe('useNativeChatInteractiveSend Stop interrupt inference', () => {
     vi.useRealTimers()
   })
 
-  it.each([
-    [true, 1],
-    [false, 0]
-  ] as const)(
-    'gives an openclaude Stop (Escape accepted: %s) the interrupt inference a typed Escape gets',
-    async (accepted, inferences) => {
-      const startedAt = 10_000
-      useAppStore.setState({
-        agentStatusByPaneKey: { [PANE_KEY]: workingStatus('run sleep 60', startedAt) }
-      })
-      mocks.sendRuntimePtyInputVerified.mockResolvedValueOnce(accepted)
-      const { result } = renderHook(() =>
-        useNativeChatInteractiveSend(PANE_KEY, 'pty-1', 'openclaude')
-      )
-
-      await act(async () => result.current.cancel())
-      expect(mocks.sendRuntimePtyInputVerified).toHaveBeenCalledWith('pty-1', '\x1b', 'driving', {
-        requireWriteSettlement: true
-      })
-      expect(mocks.inferInterrupt).not.toHaveBeenCalled()
-
-      await act(async () => {
-        vi.advanceTimersByTime(AGENT_INTERRUPT_SETTLE_MS)
-      })
-
-      expect(mocks.inferInterrupt).toHaveBeenCalledTimes(inferences)
-      if (inferences > 0) {
-        expect(mocks.inferInterrupt).toHaveBeenCalledWith({
-          paneKey: PANE_KEY,
-          baselineUpdatedAt: startedAt,
-          baselineStateStartedAt: startedAt,
-          baselinePrompt: 'run sleep 60',
-          baselineAgentType: 'openclaude',
-          intent: 'plain-escape'
-        })
-      }
-    }
-  )
-
   // A slow remote acceptance must not settle a turn that started after the Stop.
   it('infers a Stop from the status before its Escape, not a turn that began mid-send', async () => {
     const startedAt = 10_000

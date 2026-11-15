@@ -4,7 +4,7 @@ import {
 } from '../../ssh/targets/ssh-target-registry'
 import { getWslHostService } from '../../wsl/host-lifecycle/wsl-host-service-instance'
 import type { RuntimeClientEvent } from '../../../shared/runtime-client-events'
-import type { DesktopSidebarFacts } from '../../../shared/sidebar-list/desktop-sidebar-facts'
+import type { DesktopSidebarFacts } from '../../../shared/sidebar-list/feed-facts/desktop-sidebar-facts'
 import type { RuntimeStore } from '../construction/runtime-store-contract'
 import {
   savedWorkspaceCatalog,
@@ -24,10 +24,10 @@ import { readSidebarProjectCatalog } from './catalog/sidebar-project-catalog'
 import {
   buildPairedServerReviewFacts,
   buildWorkspaceReviewFacts
-} from '../../../shared/sidebar-list/workspace-review-facts'
-import { buildPairedServerActivityFacts } from '../../../shared/sidebar-list/paired-server-activity-facts'
+} from '../../../shared/sidebar-list/feed-facts/workspace-review-facts'
+import { buildPairedServerActivityFacts } from '../../../shared/sidebar-list/feed-facts/paired-server-activity-facts'
 import { parseExecutionHostId } from '../../../shared/execution-host'
-import { keyWorkspaceActivityByRow } from '../../../shared/sidebar-list/workspace-activity-facts'
+import { keyWorkspaceActivityByRow } from '../../../shared/sidebar-list/feed-facts/workspace-activity-facts'
 
 /** This host's store and connection registries, read the way sidebarInputs.desktopFacts reads them. */
 export function readRuntimeDesktopSidebarFacts(

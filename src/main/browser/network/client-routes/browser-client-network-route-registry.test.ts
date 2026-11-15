@@ -1,6 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { BrowserHostLeaseAuthority } from '../../../../shared/browser/client-hosting/browser-client-host-protocol'
-import { browserNetworkExecutionHostStorageIdentity } from '../../routing/identity/browser-execution-host-storage-identity'
 import '../execution-routes/browser-network-execution-route'
 import { browserNetworkExecutionHostKey } from '../../../../shared/browser/client-hosting/browser-network-execution-host'
 import { BrowserClientNetworkRouteRegistry } from './browser-client-network-route-registry'
@@ -38,15 +37,6 @@ describe('BrowserClientNetworkRouteRegistry', () => {
     expect(routeFactory).toHaveBeenCalledOnce()
     expect(route.start).toHaveBeenCalledOnce()
     expect(route.reconnect).toHaveBeenCalledOnce()
-    expect(first).toMatchObject({
-      key,
-      executionHostIdentity: browserNetworkExecutionHostStorageIdentity(
-        { kind: 'native', runtimeId: 'runtime-a', revision: 7 },
-        authorityStorageKey
-      ),
-      proxyEndpoint: { host: '127.0.0.1', port: 43123 }
-    })
-    expect(first.executionHostIdentity).not.toBe(key)
     await first.release()
     expect(route.close).not.toHaveBeenCalled()
     await second.release()

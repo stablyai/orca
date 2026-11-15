@@ -7,7 +7,7 @@ import type { Worktree } from '../../../../../../shared/worktree/types'
 import {
   hasWorktreeAtRiskLocalFiles,
   type WorktreeAtRiskLocalFiles
-} from '../../../../../../shared/worktree/at-risk-local-files'
+} from '../../../../../../shared/worktree/removal/at-risk-local-files'
 import { getWorktreeHostIdentity } from '../../../../../../shared/worktree/host-qualified-identity'
 import { isFolderWorkspaceDelete } from './delete-worktree-dialog-copy'
 import { resolveDeleteTargetGitContext } from './use-delete-worktree-status-hydration'

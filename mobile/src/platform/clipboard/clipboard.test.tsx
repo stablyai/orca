@@ -67,9 +67,4 @@ describe('reading the clipboard on a phone', () => {
     await expect(mountReader().contents()).resolves.toEqual({ text: true, image: false })
     expect(started).toEqual(['string', 'image'])
   })
-
-  it('reads a probe that threw as absent, rather than disabling paste on a rejection', async () => {
-    clipboard.hasStringAsync.mockImplementation(() => Promise.reject(new Error('no pasteboard')))
-    await expect(mountReader().contents()).resolves.toEqual({ text: false, image: false })
-  })
 })

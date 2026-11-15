@@ -75,6 +75,11 @@ export async function runAutomationLaunch(ctx: AutomationLaunchContext): Promise
       status: refusal ? 'skipped_unavailable' : 'dispatch_failed',
       workspaceId: automation.workspaceId,
       ...(error instanceof AutomationRunLaunchError ? error.target : {}),
+      // A partial start produced the agent's terminal or session before failing, so it
+      // counts as launched at the dispatch-start time.
+      ...(error instanceof AutomationRunLaunchError && openedAgent(error.target)
+        ? { launchedAt: dispatchedAt }
+        : {}),
       ...(automation.surface === 'chat' ? { dispatchedAt, precheckResult } : {}),
       ...(refusal ?? { error: describeDispatchError(error) })
     }).run
@@ -82,7 +87,11 @@ export async function runAutomationLaunch(ctx: AutomationLaunchContext): Promise
   const launchRunTarget = launchRunTargetOf(launch)
   if (launch.delivery) {
     // A startup dialog can hold delivery, so link the terminal while the run is still dispatching.
-    const linked = ctx.transition({ status: 'dispatching', ...launchRunTarget })
+    const linked = ctx.transition({
+      status: 'dispatching',
+      ...launchRunTarget,
+      launchedAt: dispatchedAt
+    })
     if (!linked.applied) {
       return linked.run
     }
@@ -91,12 +100,18 @@ export async function runAutomationLaunch(ctx: AutomationLaunchContext): Promise
     })
     const { error } = await launch.delivery
     if (error !== null) {
-      return ctx.transition({ status: 'dispatch_failed', ...launchRunTarget, error }).run
+      return ctx.transition({
+        status: 'dispatch_failed',
+        ...launchRunTarget,
+        launchedAt: dispatchedAt,
+        error
+      }).run
     }
   }
   const updated = ctx.transition({
     status: 'dispatched',
     dispatchedAt,
+    launchedAt: dispatchedAt,
     ...launchRunTarget,
     // Watched completions omit the precheck result.
     ...(precheckResult ? { precheckResult } : {}),
@@ -141,6 +156,13 @@ export async function runAutomationLaunch(ctx: AutomationLaunchContext): Promise
       .catch((error) => console.error('[automations] Failed to persist run completion:', error))
   }
   return updated.run
+}
+
+/** The launch got as far as producing the agent's terminal or chat session. */
+function openedAgent(target: AutomationLaunch | undefined): boolean {
+  return Boolean(
+    target && (target.terminalPaneKey || target.terminalSessionId || target.chatSessionId)
+  )
 }
 
 function launchRunTargetOf(launch: AutomationLaunch) {

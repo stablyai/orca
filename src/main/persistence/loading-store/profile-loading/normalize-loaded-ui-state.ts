@@ -7,7 +7,7 @@ import {
   isCurrentCompactWorktreeCardProperties,
   isDefaultedCompactWorktreeCardProperties,
   normalizeWorktreeCardProperties
-} from '../../../../shared/worktree/card-properties'
+} from '../../../../shared/worktree/row-display/card-properties'
 import { isExistingPersistedProfile } from '../../../../shared/project-order-manual-default-notice'
 import { resolveUsagePercentageDisplayChangeNoticeDismissed } from '../../../../shared/usage-percentage-display-change-notice'
 import { normalizePersistedWorkspaceStatuses } from '../../../../shared/workspace-statuses'

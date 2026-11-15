@@ -6,7 +6,7 @@ import { createCodexStructuredLaunchResolver } from '../../../runtime/agent-sess
 import { describe, expect, it, vi } from 'vitest'
 import type { AgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-record'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
-import { codexProviderHandle } from '../../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
+import { codexProviderHandle } from '../../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle-encoding'
 
 const { isWindowsProcessStartTimeAvailable } = vi.hoisted(() => ({
   isWindowsProcessStartTimeAvailable: vi.fn(() => true)

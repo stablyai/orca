@@ -7,7 +7,10 @@ import {
   type JournalLifecycleMutationInput
 } from '../../native-chat/agent-session-journal/writing/journal-lifecycle-mutation'
 import type { ProviderTimelineSink } from '../../native-chat/agent-session-timeline/provider-timeline-plan'
-import type { StructuredAgentSessionTransitionJournal } from '../../native-chat/agent-session-wire/journal-ingress/structured-agent-session-transition'
+import { resolveJournalTimelineItem } from '../../native-chat/agent-session-journal/writing/journal-timeline-resolution'
+import { journalTimelineItemsView } from '../../native-chat/agent-session-journal/writing/journal-timeline-view'
+import { resolveProviderTimelineSettlement } from '../../native-chat/agent-session-timeline/provider-timeline-writer-resolution'
+import type { JournalStepOutcome } from '../../native-chat/agent-session-journal/writing/journal-writer-step'
 
 /** Pure per-turn scratch: held durable rows never affect replay translation. */
 export type AcpHistoryItem = Extract<JournalLifecycleIdentityMutationInput, { kind: 'item' }>
@@ -20,38 +23,46 @@ export class AcpHistoryJournalOverlay {
       mutation: AcpHistoryItem
     }
   >()
-  readonly journal: StructuredAgentSessionTransitionJournal
   readonly sink: ProviderTimelineSink
 
-  constructor(epoch: string) {
+  constructor() {
     const item = (key: string) => this.staged.get(key)?.item ?? null
-    const visitItemsWithLinkage: StructuredAgentSessionTransitionJournal['visitItemsWithLinkage'] =
-      (visit) =>
-        this.staged.forEach(({ item }) => visit(item.itemId, item.sequence, item.body, item))
-    this.journal = {
-      epoch,
-      item,
-      canonicalItemId: (key) => key,
-      presentationRemoved: () => false,
-      itemBody: (key) => item(key)?.body ?? null,
-      visitItems: visitItemsWithLinkage,
-      visitItemsWithLinkage
-    }
+    const view = journalTimelineItemsView(item, () =>
+      [...this.staged.values()].map((staged) => staged.item)
+    )
     this.sink = {
-      journalItems: () => this.journal,
       tryAppendTransition: (transition) => {
+        const outcomes: JournalStepOutcome[] = []
         for (const step of transition.steps) {
           if (step.kind === 'settlement') {
-            step.resolve(this.journal).forEach((mutation) => this.write(mutation))
-          } else {
-            const resolved = step.resolve(this.journal)
-            if (resolved) {
-              this.write(
-                journalLifecycleItemMutation(step.options, resolved.identity, resolved.body)
-              )
+            if (step.resolution.kind === 'history-catch-up') {
+              throw new Error('history catch-up cannot settle a per-turn translation overlay')
             }
+            const mutations = resolveProviderTimelineSettlement(view, step.resolution)
+            mutations.forEach((mutation) => this.write(mutation))
+            outcomes.push({ kind: 'committed', wrote: mutations.length > 0 })
+          } else {
+            const result = resolveJournalTimelineItem(
+              view,
+              step.resolution,
+              step.options.turnScope,
+              step.reservedBytes
+            )
+            if (result.kind === 'dropped') {
+              outcomes.push(result)
+              continue
+            }
+            this.write(
+              journalLifecycleItemMutation(
+                { ...step.options, turnScope: result.item.turnScope ?? step.options.turnScope },
+                result.item.identity,
+                result.item.body
+              )
+            )
+            outcomes.push({ kind: 'committed', wrote: true })
           }
         }
+        transition.onResolved?.(outcomes)
         return { accepted: true }
       }
     }

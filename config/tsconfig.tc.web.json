@@ -1,6 +1,8 @@
 {
   "extends": "./tsconfig.web.json",
   "exclude": [
+    "../src/renderer/src/components/sidebar/workspace-creation/folder/folder-workspace-composer-submit-host-platform.test.ts",
+    "../src/renderer/src/components/browser-pane/ClientHostedBrowserPagePane.test.tsx",
     "../src/renderer/src/runtime/provider-accounts/observations/provider-account-observation.test-fixture.ts",
     "../src/shared/**/*.test.ts",
     "../src/shared/**/*.test.tsx",
@@ -30,7 +32,7 @@
     "../src/main/pi/rpc/options/rpc-model-schema.ts",
     "../src/main/pi/rpc/options/rpc-model-options.ts",
     "../src/shared/**/*",
-    "../mobile/src/worktree/worktree-agent-child-rows.ts",
+    "../mobile/src/worktree/agent-lineage/worktree-agent-child-rows.ts",
     "../src/packages/process-host/src/__fixtures__/**/*",
     "../src/main/gitlab/requests/gitlab-response-mapping.ts",
     "../src/main/source-control/hosted-review-branch-cache.ts",

@@ -9,6 +9,7 @@ import type {
 } from '../../../../shared/github/comments/comment-types'
 import type {
   GitHubPRRefreshEvent,
+  PRSnapshotReply,
   GitHubPRRefreshReason
 } from '../../../../shared/github/pull-requests/refresh/pull-request-refresh-types'
 import type { GitHubRepositoryIdentity as GitHubOwnerRepo } from '../../../../shared/github/repositories/repository-identity'
@@ -70,6 +71,9 @@ export type GitHubSlice = {
       fallbackPRSource?: GitHubPRFallbackSource | null
       reason?: GitHubPRRefreshReason
       userRefresh?: boolean
+      selected?: boolean
+      onReadOutcome?: (outcome: PRSnapshotReply) => void
+      signal?: AbortSignal
     }
   ) => Promise<PRInfo | null>
   fetchIssue: (
@@ -88,6 +92,8 @@ export type GitHubSlice = {
       /** Refresh or a check action: a user act that may start a stopped WSL distro. */
       wakeWslDistro?: boolean
       userRefresh?: boolean
+      /** The checks panel's own timer: a paired host may answer at its PR auto-refresh cadence. */
+      background?: boolean
     }
   ) => Promise<PRCheckDetail[]>
   fetchPRCheckDetails: (

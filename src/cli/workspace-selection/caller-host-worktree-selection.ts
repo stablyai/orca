@@ -12,7 +12,7 @@ import {
 import { readOrchestrationCompatibilityEvidence } from '../../shared/orchestration/orchestration-compatibility-evidence'
 import type { RuntimeWorktreeListResult } from '../../shared/runtime-worktree-contracts'
 import type { RuntimeClient } from '../runtime/client'
-import { RuntimeClientError } from '../runtime/types'
+import { RuntimeClientError } from '../runtime/connection/types'
 import { refuseUnresolvedOwner, type CatalogRow } from './workspace-catalog-row'
 import { createCwdContainment, isOnCallerFilesystem } from './caller-cwd-containment'
 

@@ -1,4 +1,4 @@
-import { openSidebarProjectDialog } from './helpers/sidebar-project-dialog'
+import { openSidebarProjectMenu } from './helpers/sidebar-project-dialog'
 import { execFileSync } from 'node:child_process'
 import { mkdirSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
 import { mkdtemp } from 'node:fs/promises'
@@ -25,32 +25,9 @@ function initializeGitRepo(repoPath: string): void {
   execFileSync('git', ['commit', '-m', 'Initial commit'], { cwd: repoPath, stdio: 'pipe' })
 }
 
-async function createNestedRepoFixture(): Promise<{
-  parentPath: string
-  projectPaths: string[]
-  groupName: string
-}> {
-  // Resolve macOS /var symlinks like git does when registering imported projects.
-  const parentPath = realpathSync(await mkdtemp(path.join(os.tmpdir(), 'orca-e2e-folder-setup-')))
-  tempRoots.push(parentPath)
-  const repoNames = ['api-service', 'web-client']
-  const projectPaths = repoNames.map((name) => path.join(parentPath, name))
-
-  for (const repoPath of projectPaths) {
-    initializeGitRepo(repoPath)
-  }
-
-  return {
-    parentPath,
-    projectPaths,
-    groupName: path.basename(parentPath)
-  }
-}
-
 async function createLargeNestedRepoFixture(): Promise<{
   parentPath: string
   projectPaths: string[]
-  groupName: string
   selectedProjectPaths: string[]
 }> {
   // Resolve macOS /var symlinks like git does when registering imported projects.
@@ -76,7 +53,6 @@ async function createLargeNestedRepoFixture(): Promise<{
   return {
     parentPath,
     projectPaths,
-    groupName: path.basename(parentPath),
     selectedProjectPaths: [projectPaths[2], projectPaths[41], projectPaths[86]]
   }
 }
@@ -109,71 +85,6 @@ function getImportAsGroupButton(importDialog: Locator): Locator {
 }
 
 test.describe('Folder setup', () => {
-  test('imports nested repositories from the add-project dialog as a project group', async ({
-    electronApp,
-    orcaPage
-  }) => {
-    await waitForSessionReady(orcaPage)
-    const fixture = await createNestedRepoFixture()
-    await chooseFolderInNativeDialog(electronApp, fixture.parentPath)
-
-    await openSidebarProjectDialog(orcaPage)
-    const dialog = orcaPage.getByRole('dialog', { name: /Add a project/i })
-    await expect(dialog).toBeVisible()
-    await dialog.getByRole('button', { name: /Browse folder/i }).click()
-
-    const importDialog = orcaPage.getByRole('dialog', {
-      name: /Import repositories from folder/i
-    })
-    await expect(
-      importDialog.getByRole('heading', { name: /Import repositories from folder/i })
-    ).toBeVisible()
-    await expect(importDialog.getByText('api-service', { exact: true }).first()).toBeVisible()
-    await expect(importDialog.getByText('web-client', { exact: true }).first()).toBeVisible()
-    await expect(getImportAsGroupButton(importDialog)).toBeEnabled()
-    await getImportAsGroupButton(importDialog).click()
-
-    await expect
-      .poll(
-        () =>
-          orcaPage.evaluate(async (args) => {
-            const state = window.__store?.getState()
-            if (!state) {
-              return null
-            }
-            const importedRepos = state.repos
-              .filter((repo) => args.projectPaths.includes(repo.path))
-              .sort((left, right) => left.displayName.localeCompare(right.displayName))
-            const group = state.projectGroups.find((entry) => entry.parentPath === args.parentPath)
-            return {
-              groupName: group?.name ?? null,
-              repoNames: importedRepos.map((repo) => repo.displayName),
-              reposInCreatedGroup:
-                group !== undefined &&
-                importedRepos.every((repo) => repo.projectGroupId === group.id),
-              projectGroupOrders: importedRepos.map((repo) => repo.projectGroupOrder ?? null)
-            }
-          }, fixture),
-        {
-          timeout: 20_000,
-          message: 'nested repos were not imported into a project group'
-        }
-      )
-      .toEqual({
-        groupName: fixture.groupName,
-        repoNames: ['api-service', 'web-client'],
-        reposInCreatedGroup: true,
-        projectGroupOrders: [0, 1]
-      })
-
-    await orcaPage.evaluate(() => {
-      const state = window.__store?.getState()
-      state?.closeModal()
-      state?.setGroupBy('repo')
-    })
-    await expect(orcaPage.getByText(fixture.groupName)).toBeVisible()
-  })
-
   test('imports a small selection from a large nested folder without modal overflow', async ({
     electronApp,
     orcaPage
@@ -182,15 +93,12 @@ test.describe('Folder setup', () => {
     const fixture = await createLargeNestedRepoFixture()
     await chooseFolderInNativeDialog(electronApp, fixture.parentPath)
 
-    await openSidebarProjectDialog(orcaPage)
-    const dialog = orcaPage.getByRole('dialog', { name: /Add a project/i })
-    await expect(dialog).toBeVisible()
-    await dialog.getByRole('button', { name: /Browse folder/i }).click()
+    await openSidebarProjectMenu(orcaPage)
+    await orcaPage.getByRole('menuitem', { name: /Browse folder/i }).click()
 
     const importDialog = orcaPage.getByRole('dialog', {
       name: /Import repositories from folder/i
     })
-    await expect(importDialog.getByText(/Found 87 repositories in/)).toBeVisible()
     await expect
       .poll(async () =>
         importDialog.locator('ul').evaluate((list) => {

@@ -8,6 +8,8 @@ import { SETTINGS_GROUP_NESTED_INSET_CLASS } from './SettingsGroup'
 
 type SettingsGroupDisclosureProps = {
   label?: string
+  /** A muted hint after the label naming what the disclosure holds. */
+  description?: string
   forceOpen?: boolean
   children: React.ReactNode
 }
@@ -15,6 +17,7 @@ type SettingsGroupDisclosureProps = {
 /** Collapsible rows inside a SettingsGroup card, one fixed step in from the card's rows. Search force-opens it so matches remain reachable. */
 export function SettingsGroupDisclosure({
   label,
+  description,
   forceOpen = false,
   children
 }: SettingsGroupDisclosureProps): React.JSX.Element {
@@ -40,6 +43,9 @@ export function SettingsGroupDisclosure({
           )}
         />
         {label ?? t('auto.components.settings.AppearanceAdvancedDisclosure.advanced', 'Advanced')}
+        {description ? (
+          <span className="truncate text-xs font-normal text-muted-foreground">{description}</span>
+        ) : null}
       </button>
       {/* Stays mounted while collapsed so a settings jump can find and reveal its rows. */}
       <div hidden={!expanded} className={SETTINGS_GROUP_NESTED_INSET_CLASS}>

@@ -16,7 +16,7 @@ export type PermissionStatusGate = {
 }
 
 // probe calls markSpawned when its helper actually starts; the floor counts from the later of claim and spawn.
-export function createPermissionStatusGate(
+function createPermissionStatusGate(
   probe: (markSpawned: () => void) => Promise<StatusResult>
 ): PermissionStatusGate {
   let inFlight: { promise: Promise<StatusResult>; joinable: boolean } | null = null
@@ -71,7 +71,8 @@ export function createPermissionStatusGate(
         (result) => {
           if (entry.joinable) {
             granted = isCacheable(result) ? result : null
-            lastDenied = granted ? null : result
+            // A denial read behind the lock screen says nothing about the grant, so it is never replayed.
+            lastDenied = granted || result.sessionLocked ? null : result
             cachedUntil = floorExpiresAt()
           }
         },
@@ -145,6 +146,10 @@ export function createPermissionStatusGate(
 
 // A missing helper answers without launching anything, so it is as safe to reuse as a grant.
 function isCacheable(result: StatusResult): boolean {
+  // A result read while locked must not decide setup after the lock ends.
+  if (result.sessionLocked) {
+    return false
+  }
   return (
     result.helperUnavailableReason !== null ||
     result.permissions.every((permission) => permission.status !== 'not-granted')

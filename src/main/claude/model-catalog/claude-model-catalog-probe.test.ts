@@ -1,3 +1,4 @@
+import type { AgentModelCatalogSuccess } from '../../native-chat/agent-model-catalog/agent-model-catalog-entry'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -46,4 +47,72 @@ describe('Claude catalog availability', () => {
       rmSync(folder, { recursive: true, force: true })
     }
   })
+})
+
+it('publishes models before settings and preserves a late sign-in response', async () => {
+  const settings = Promise.withResolvers<void>()
+  const signin = Promise.withResolvers<void>()
+  const inventory = Promise.withResolvers<void>()
+  const observations: {
+    success: AgentModelCatalogSuccess
+    accountKnown?: boolean
+  }[] = []
+  const response = (id: string, value: unknown) =>
+    `${JSON.stringify({
+      type: 'control_response',
+      response: { subtype: 'success', request_id: id, response: value }
+    })}\n`
+  const probe = createClaudeModelCatalogProbe({
+    ...probeDeps(),
+    resolveEnv: () => ({}),
+    runListing: async (launch, options) => {
+      expect(
+        launch.stdin
+          ?.split(String.fromCharCode(10))
+          .filter(Boolean)
+          .map((line) => JSON.parse(line).request_id)
+      ).toEqual(['orca-model-discovery', 'orca-model-settings', 'orca-signin-discovery'])
+      let stdout = response('orca-model-discovery', {
+        models: [{ value: 'opus', displayName: 'Opus', supportsEffort: false }]
+      })
+      options.onOutput?.(stdout.slice(0, 17))
+      options.onOutput?.(stdout.slice(17))
+      inventory.resolve()
+      await settings.promise
+      const settingsReply = response('orca-model-settings', {
+        applied: { model: 'opus' },
+        effective: {}
+      })
+      stdout += settingsReply
+      options.onOutput?.(settingsReply)
+      await signin.promise
+      const signinReply = response('orca-signin-discovery', {
+        account: { tokenSource: 'none', apiProvider: 'firstParty' }
+      })
+      stdout += signinReply
+      options.onOutput?.(signinReply)
+      return stdout
+    }
+  })
+  const done = probe(HOME('/homes/a'), {
+    publish: (success, accountKnown) => observations.push({ success, accountKnown })
+  })
+  await inventory.promise
+  expect(observations[0]).toMatchObject({
+    success: { models: [{ id: 'opus' }], complete: false },
+    accountKnown: false
+  })
+  settings.resolve()
+  await Promise.resolve()
+  signin.resolve()
+  expect(await done).toMatchObject({
+    models: [{ id: 'opus' }],
+    configured: { model: 'opus' },
+    unavailable: { reason: 'notSignedIn' }
+  })
+  expect(observations.at(-1)).toMatchObject({
+    accountKnown: true,
+    success: { unavailable: { reason: 'notSignedIn' } }
+  })
+  expect(observations[0].success.configured).toBeUndefined()
 })

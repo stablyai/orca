@@ -1,3 +1,4 @@
+import type { GroupHookCheckResult } from '../../../shared/project-group-hooks'
 import type { RepoCreateFailure } from '../../../shared/repo-create-failure-copy'
 import type {
   CloneTargetArgs,
@@ -81,6 +82,7 @@ export type RepositoryApi = {
       externalWorktreeDiscoverySuppressedAt?: Repo['externalWorktreeDiscoverySuppressedAt'] | null
       hiddenAt?: Repo['hiddenAt'] | null
       ghAccount?: GhAccountBinding | null
+      workspaceCleanupPolicy?: Repo['workspaceCleanupPolicy'] | null
     }
   }) => Promise<Repo>
   pickFolder: () => Promise<string | null>
@@ -127,6 +129,7 @@ export type ProjectsApi = {
 }
 
 export type ProjectGroupsApi = {
+  checkHooks: (args: { groupId: string; background?: boolean }) => Promise<GroupHookCheckResult>
   list: () => Promise<ProjectGroup[]>
   create: (args: {
     name: string

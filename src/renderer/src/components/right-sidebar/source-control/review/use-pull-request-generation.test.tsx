@@ -4,7 +4,7 @@ import { cleanup, renderHook } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type * as RuntimeGitGenerationClient from '@/runtime/source-control/git/runtime-git-generation-client'
 import type { RuntimeGeneratePullRequestFieldsResult } from '@/runtime/source-control/git/runtime-git-client-context'
-import { useAppStore } from '@/store'
+import { useAppStore } from '@/store/index'
 import { makeRepo, makeWorktree } from '../../../worktree-jump/worktree-jump-palette-test-fixtures'
 
 const runtime = vi.hoisted(() => ({

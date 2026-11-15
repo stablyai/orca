@@ -24,7 +24,7 @@ import {
   WORKTREE_CREATE_MAX_SUFFIX_ATTEMPTS
 } from '../../../workspaces/creation/worktree-create-candidates'
 import { isGeneratedWorktreeCreateName } from '../../../../shared/new-workspace/worktree-create-retry-policy'
-import { createRetiredNameLookup } from '../../../../shared/worktree/retired-name-registry'
+import { createRetiredNameLookup } from '../../../../shared/worktree/naming/retired-name-registry'
 import { getRetiredNameRegistryForRepo } from '../../../workspaces/removal/retirement/worktree-name-retirement'
 import type { RuntimeManagedWorktreeCreateArgs } from './runtime-managed-worktree-create-types'
 import {

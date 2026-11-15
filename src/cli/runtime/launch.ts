@@ -9,18 +9,19 @@ import {
   pinLaunchUserDataPath,
   pinServeUserDataPath,
   resolveLaunchUserDataPath
-} from './launch-user-data-path'
+} from './profile/launch-user-data-path'
 import { foregroundServeIsolatedProfileSwitches } from '../../shared/electron-isolated-profile-switches'
 import { headlessServeOzonePlatformSwitches } from '../../shared/headless-serve-ozone-platform'
-import { getMacAppBundlePath } from './mac-app-update-bundle'
-import { getPlatformUserDataPath } from './metadata'
+import { getMacAppBundlePath } from './serve/updates/mac-app-update-bundle'
+import { getPlatformUserDataPath } from './profile/metadata'
 import { isSameUserDataPath } from '../../shared/serve-user-data-path'
 import {
   readServeUpdateHandoffSync,
   resumeInterruptedServeUpdate,
   superviseForegroundServe
-} from './serve-update-supervisor'
-import { RuntimeClientError } from './types'
+} from './serve/updates/serve-update-supervisor'
+import { RuntimeClientError } from './connection/types'
+import { BACKGROUND_OPEN_ARG } from '../../shared/background-open-argv'
 import {
   getExecutableAppArgs,
   resolveAppRoot,
@@ -29,31 +30,31 @@ import {
 } from './orca-app-executable'
 import { SERVE_RUNTIME_ELECTRON, SERVE_RUNTIME_ENV } from '../../shared/orcad-local-serve-selection'
 import { findBundledWebClientRoot } from '../../shared/bundled-web-client-root'
-import { resolveLocalServeRuntime, serveWithOrcad } from './serve-orcad-launch'
-import { findAppSpeechRecognizerDir } from './serve-speech-recognizer'
+import { resolveLocalServeRuntime, serveWithOrcad } from './serve/startup/serve-orcad-launch'
+import { findAppSpeechRecognizerDir } from './app-launch/serve-speech-recognizer'
 import { serveOptionArgs, type ServeOrcaAppArgs } from '../../shared/orcad-serve-argv'
-import { waitForRecipeJson } from './serve-recipe-json'
+import { waitForRecipeJson } from './serve/startup/serve-recipe-json'
 import {
   preflightElectronServe,
   recordElectronServeStartupAbort,
   refuseIfProfileServed
-} from './serve-electron-preflight'
-import { MacServeStartupAbortError } from './serve-signal-exit-diagnostic'
-import { superviseServeService } from './serve-supervised-service'
-import { reexecThisServeUnderInitReaper } from './serve-pid1-init-reaper'
-import { supervisedAppImageUpdate } from './serve-appimage-update'
-import { relocateThisServeSupervisor } from './serve-supervisor-relocation'
+} from './serve/startup/serve-electron-preflight'
+import { MacServeStartupAbortError } from './serve/startup/serve-signal-exit-diagnostic'
+import { superviseServeService } from './serve/supervision/serve-supervised-service'
+import { reexecThisServeUnderInitReaper } from './serve/startup/serve-pid1-init-reaper'
+import { supervisedAppImageUpdate } from './serve/updates/serve-appimage-update'
+import { relocateThisServeSupervisor } from './serve/supervision/serve-supervisor-relocation'
 import {
   noteServeSupervisorStart,
   restartThisServeSupervisorIfReplaced
-} from './serve-replaced-app-restart'
-import { isSupervisedSpawnHeld } from './serve-supervised-stop'
+} from './serve/updates/serve-replaced-app-restart'
+import { isSupervisedSpawnHeld } from './serve/supervision/serve-supervised-stop'
 import { openServeBundlePark } from '../../shared/serve-bundle-park'
 import {
   redactingSpawn,
   shouldRedactSupervisedStdout,
   type ServeSpawnChild
-} from './serve-pairing-redaction'
+} from './serve/startup/serve-pairing-redaction'
 
 const STARTUP_ABORT_MS = 30_000
 
@@ -69,7 +70,7 @@ export function launchOrcaApp(): void {
   const overrideExecutable = process.env.ORCA_APP_EXECUTABLE
   if (typeof overrideExecutable === 'string' && overrideExecutable.trim().length > 0) {
     const pinned = pinLaunchUserDataPath(
-      getExecutableAppArgs(overrideExecutable),
+      [...getExecutableAppArgs(overrideExecutable), BACKGROUND_OPEN_ARG],
       stripElectronRunAsNode(process.env),
       userDataPath
     )
@@ -93,7 +94,7 @@ export function launchOrcaApp(): void {
     }
 
     const pinned = pinLaunchUserDataPath(
-      getExecutableAppArgs(process.execPath),
+      [...getExecutableAppArgs(process.execPath), BACKGROUND_OPEN_ARG],
       stripElectronRunAsNode(process.env),
       userDataPath
     )
@@ -107,12 +108,19 @@ export function launchOrcaApp(): void {
   )
 }
 
-/** Nondefault profiles need a new instance: open drops env and only new instances receive --args. */
+/** Nondefault profiles need a new instance: open drops env and only new instances receive --args. -g keeps the user's app in front. */
 export function getMacOpenArgs(appBundlePath: string, userDataPath: string): string[] {
   if (isSameUserDataPath(userDataPath, getPlatformUserDataPath())) {
-    return [appBundlePath]
+    return ['-g', appBundlePath, '--args', BACKGROUND_OPEN_ARG]
   }
-  return ['-n', appBundlePath, '--args', `--user-data-dir=${userDataPath}`]
+  return [
+    '-g',
+    '-n',
+    appBundlePath,
+    '--args',
+    `--user-data-dir=${userDataPath}`,
+    BACKGROUND_OPEN_ARG
+  ]
 }
 
 function spawnDetached(command: string, args: string[], options: SpawnOptions): void {

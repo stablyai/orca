@@ -7,8 +7,8 @@ import { useTranslate } from '@/i18n/use-translate'
 import { NativeChatQuestionText } from './NativeChatQuestionText'
 import { NativeChatQuestionOption } from './NativeChatQuestionOption'
 import { NativeChatQuestionConfirmButton } from './NativeChatQuestionConfirmButton'
-import type { AskAnswerSelection } from '../../../../../shared/native-chat/input/native-chat-ask-answer'
-import type { AskPrompt } from '../../../../../shared/native-chat/input/native-chat-ask-types'
+import type { AskAnswerSelection } from '../../../../../shared/native-chat/input/questions/native-chat-ask-answer'
+import type { AskPrompt } from '../../../../../shared/native-chat/input/questions/native-chat-ask-types'
 import { NativeChatPromptCollapseToggle } from './NativeChatPromptCollapse'
 import { useNativeChatPromptCardFocus } from './use-native-chat-prompt-card-focus'
 import { useNativeChatQuestionAutoAdvance } from './use-native-chat-question-auto-advance'
@@ -22,7 +22,7 @@ import {
   askConfirmLabel,
   askTypedText,
   toggleAskOption
-} from '../../../../../shared/native-chat/input/native-chat-ask-card-rules'
+} from '../../../../../shared/native-chat/input/questions/native-chat-ask-card-rules'
 
 export type NativeChatQuestionCardProps = {
   prompt: AskPrompt
@@ -132,6 +132,8 @@ export function NativeChatQuestionCard({
   }
 
   const currentAnswered = answerFor(index).length > 0 || acceptsEmpty(index)
+  const anyAnswered = prompt.questions.some((_, i) => answerFor(i).length > 0 || acceptsEmpty(i))
+  const confirmLabel = askConfirmLabel(currentAnswered, isLast, anyAnswered)
   const currentTypedAnswerChosen = typedAnswerChosen(index)
 
   const submitAll = (sel: number[][], oth: string[]): void => {
@@ -190,7 +192,6 @@ export function NativeChatQuestionCard({
 
   const confirm = (fromKeyboard = false): void => {
     autoAdvance.cancel()
-    const anyAnswered = prompt.questions.some((_, i) => answerFor(i).length > 0 || acceptsEmpty(i))
     const action = askConfirmAction({ isLast, anyAnswered, fromKeyboard })
     if (action === 'proceed') {
       advanceOrSubmit(selections, otherText)
@@ -416,9 +417,9 @@ export function NativeChatQuestionCard({
               label={
                 isSubmitting
                   ? t('components.native-chat.question.sending', 'Sending…')
-                  : CONFIRM_LABEL[askConfirmLabel(currentAnswered, isLast)]()
+                  : CONFIRM_LABEL[confirmLabel]()
               }
-              answered={currentAnswered}
+              answered={confirmLabel !== 'skip'}
               enterHint={
                 currentAnswered && !isSubmitting && !q.multiSelect && !freeTextInput?.multiline
               }

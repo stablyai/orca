@@ -24,6 +24,7 @@ export function closeAcpSessionJournal(
     return
   }
   session.events?.observeExit?.(session.turns.heldSends)
+  session.historyCatchUp?.abort()
   session.journalClosed = reason
   session.prompts.clear()
   session.turns.end(reason, cause)

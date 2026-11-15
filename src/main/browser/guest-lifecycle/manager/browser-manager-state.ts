@@ -160,6 +160,8 @@ export abstract class BrowserManagerState extends BrowserManagerViewportScrollSt
   protected readonly annotationViewportBridgeOpsByTabId = new Map<string, Promise<unknown>>()
   protected readonly worktreeIdByTabId = new Map<string, string>()
   protected readonly policyAttachedGuestIds = new Set<number>()
+  // Guests an agent command targeted since the desktop user last gave them input.
+  protected readonly agentLedGuestIds = new Set<number>()
   protected readonly offscreenGuestIds = new Set<number>()
   protected readonly devToolsDock = new BrowserGuestDevToolsDock()
   protected readonly policyCleanupByGuestId = new Map<number, () => void>()

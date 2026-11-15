@@ -13,7 +13,7 @@ import { resolveRemoteFailureExternalUrl } from '../../../../../shared/browser-u
 import type { BrowserScreencastFrameMetadata } from '../../../../../shared/browser/screencast/browser-screencast-protocol'
 import { getRemoteBrowserFrameStyle } from './remote-browser-frame-style'
 import { MarkupOverlay } from '../annotate/MarkupOverlay'
-import type { MarkupModeController } from '../annotate/useMarkupMode'
+import type { MarkupModeController } from '../annotate/capture/useMarkupMode'
 import { BrowserLoadFailureOverlay } from '../navigate/browser-load-failure-overlay'
 import { ReopenBrowserPageOnServerButton } from '../ReopenBrowserPageOnServerButton'
 import { resolveActiveBrowserLoadFailure } from '../navigate/browser-load-failure-for-url'
@@ -46,6 +46,7 @@ export function RemoteBrowserPageViewport({
   onGoto,
   onNavigateToUrl,
   onReconnect,
+  onBeforeProceedCertificate,
   handleRemotePointerDown,
   handleRemotePointerUp,
   handleRemoteContextMenu,
@@ -73,6 +74,7 @@ export function RemoteBrowserPageViewport({
   /** The address bar's submit path, which also parks a URL typed before the host page exists. */
   onNavigateToUrl: (url: string) => void
   onReconnect: () => void
+  onBeforeProceedCertificate: () => void
   handleRemotePointerDown: (event: React.PointerEvent<HTMLImageElement>) => void
   handleRemotePointerUp: (event: React.PointerEvent<HTMLImageElement>) => void
   handleRemoteContextMenu: (event: React.MouseEvent<HTMLImageElement>) => void
@@ -180,6 +182,7 @@ export function RemoteBrowserPageViewport({
             ) {
               return { ok: false, reason: 'missing' }
             }
+            onBeforeProceedCertificate()
             return callRuntimeRpc<BrowserCertificateProceedResult>(
               target,
               'browser.certificate.proceed',

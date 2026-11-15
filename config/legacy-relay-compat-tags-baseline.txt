@@ -23,7 +23,7 @@ src/renderer/src/components/terminal-pane/pty-transport/legacy-relay/legacy-rela
 src/renderer/src/components/terminal-pane/pty-connection/output/foreground-output-refresh.ts
 src/renderer/src/components/terminal-pane/pty-connection/host-ownership/unserved-ssh-pane-connect.ts
 src/renderer/src/hooks/ipc-events/ssh-managed-server-state-effects.ts
-src/renderer/src/store/terminals/legacy-relay-bridged-tab-close.ts
+src/renderer/src/store/terminals/retirement/legacy-relay-bridged-tab-close.ts
 src/shared/legacy-relay-bridge-contract.ts
 src/shared/ssh-types.ts
 src/shared/telemetry-ssh-host-server-event-schemas.ts

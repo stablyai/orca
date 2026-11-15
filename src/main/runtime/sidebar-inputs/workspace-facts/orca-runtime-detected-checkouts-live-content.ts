@@ -1,7 +1,7 @@
 import { OrcaRuntimeWithWorkspaceReviewFacts } from './orca-runtime-workspace-review-facts'
 import { isFolderRepo } from '../../../../shared/repo-kind'
 import { worktreeIdsEqual } from '../../../../shared/worktree/id'
-import type { WorkspaceLiveContent } from '../../../../shared/sidebar-list/workspace-live-content'
+import type { WorkspaceLiveContent } from '../../../../shared/sidebar-list/feed-facts/workspace-live-content'
 import { runtimeVisibleRepos } from '../../workspaces/catalog/runtime-visible-catalog'
 import { DetectedCheckoutsProducer } from '../workspace-rows/detected-checkouts-producer'
 import { WorkspaceLiveContentProducer } from './workspace-live-content-producer'

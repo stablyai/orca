@@ -1,9 +1,7 @@
 import { useState } from 'react'
-import {
-  BrowserChromeToolbar,
-  type BrowserChromeElementTools
-} from '@/components/browser-pane/assemble-chrome/browser-chrome-toolbar'
-import { BrowserReloadControl } from '@/components/browser-pane/assemble-chrome/browser-reload-control'
+import { BrowserChromeToolbar } from '@/components/browser-pane/assemble-chrome/toolbar/browser-chrome-toolbar'
+import type { BrowserChromeElementTools } from '@/components/browser-pane/assemble-chrome/toolbar/browser-annotate-split-button'
+import { BrowserReloadControl } from '@/components/browser-pane/assemble-chrome/toolbar/browser-reload-control'
 import { useTranslate } from '@/i18n/use-translate'
 import { DocPreviewAddressEdit } from './doc-preview-address-edit'
 import type { DocPreviewDocumentIdentity } from './doc-preview-document-identity'

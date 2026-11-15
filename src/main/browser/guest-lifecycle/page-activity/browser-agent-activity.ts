@@ -173,6 +173,10 @@ export class BrowserAgentActivity {
     return this.pages.has(browserPageId)
   }
 
+  activePageIds(): IterableIterator<string> {
+    return this.pages.keys()
+  }
+
   end(browserPageId: string): void {
     const page = this.pages.get(browserPageId)
     if (!page) {

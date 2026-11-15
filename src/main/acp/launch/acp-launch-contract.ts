@@ -14,7 +14,7 @@ import type {
 
 import type { AcpSignInWatch } from '../process/acp-agent-connection'
 import type { AcpLaunchGate } from './acp-launch-gate'
-import type { AgentSessionAccountHome } from '../../../shared/agent-session/lifecycle/agent-session-account-home'
+import type { AgentSessionAccountHome } from '../../../shared/agent-session/lifecycle/accounts/agent-session-account-home'
 import type { AcpModelDiscovery } from '../discovery/acp-model-discovery-policy'
 import type { InitializeResponse } from '../generated/acp-protocol.generated'
 

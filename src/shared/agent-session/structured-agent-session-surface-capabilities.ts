@@ -44,6 +44,10 @@ export const STRUCTURED_AGENT_SESSION_RESUME_WRITER_ADMISSION_RUNTIME_CAPABILITY
 export const STRUCTURED_AGENT_SESSION_AVAILABILITY_RUNTIME_CAPABILITY =
   'agent-session.structured.availability.v1' as const
 
+// Progress-aware readers renew on listingInProgress before their wait expires.
+export const AGENT_SESSION_MODEL_CATALOG_PROGRESS_CAPABILITY =
+  'agent-session.model-catalog.progress.v1' as const
+
 export const AGENT_SESSION_COHERENT_MODEL_CATALOG_CAPABILITY =
   'agent-session.coherent-model-catalog.v1' as const
 

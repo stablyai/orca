@@ -1,13 +1,13 @@
 import type { ComponentProps, ReactElement } from 'react'
 import { FlatList, Platform } from 'react-native'
 import type { LegacyComposedGesture } from 'react-native-gesture-handler'
-import { MobileNativeChatPinchZoom } from './mobile-native-chat-pinch-zoom'
-import type { MobileNativeChatRowKeys } from './mobile-native-chat-row-keys'
-import { MobileNativeChatPageList } from './MobileNativeChatPageList'
+import { MobileNativeChatPinchZoom } from './viewport/mobile-native-chat-pinch-zoom'
+import type { MobileNativeChatRowKeys } from './projection/mobile-native-chat-row-keys'
+import { MobileNativeChatPageList } from './viewport/MobileNativeChatPageList'
 import {
   mobileNativeChatRowAnchor,
   type MobileNativeChatTailFollow
-} from './use-mobile-native-chat-tail-follow'
+} from './viewport/use-mobile-native-chat-tail-follow'
 
 type PageProps = ComponentProps<typeof MobileNativeChatPageList>
 

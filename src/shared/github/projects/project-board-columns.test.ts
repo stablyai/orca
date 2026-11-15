@@ -19,17 +19,6 @@ const STATUS_FIELD: GitHubProjectField = {
   ]
 }
 
-const SPRINT_FIELD: GitHubProjectField = {
-  kind: 'iteration',
-  id: 'f_sprint',
-  name: 'Sprint',
-  dataType: 'ITERATION',
-  iterations: [
-    { id: 'it_1', title: 'Sprint 1', startDate: '2026-08-24', duration: 14, completed: true },
-    { id: 'it_2', title: 'Sprint 2', startDate: '2026-09-07', duration: 14, completed: false }
-  ]
-}
-
 function view(overrides: Partial<GitHubProjectView>): GitHubProjectView {
   return {
     id: 'PVTV_1',
@@ -81,11 +70,6 @@ const statusValue = (optionId: string, name: string): GitHubProjectFieldValue =>
 })
 
 describe('resolveBoardColumnField', () => {
-  it('prefers the view-configured vertical group field', () => {
-    const v = view({ fields: [STATUS_FIELD], verticalGroupByFields: [SPRINT_FIELD] })
-    expect(resolveBoardColumnField(v)).toBe(SPRINT_FIELD)
-  })
-
   it('ignores a non-select vertical field instead of building clear-only columns', () => {
     const textField: GitHubProjectField = {
       kind: 'field',

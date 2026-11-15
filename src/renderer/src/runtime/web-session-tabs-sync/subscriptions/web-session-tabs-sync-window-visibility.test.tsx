@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { tagRuntimeSubscriptionReplayResponse } from '../../../../../shared/runtime-subscription-replay'
 import type { RuntimeMobileSessionTabsResult } from '../../../../../shared/runtime-session-contracts'
 import { resetStaleDocumentVisibilityForTesting } from '@/components/terminal-pane/viewport/visibility/stale-document-visibility'
+import { markHydratedBrowserPageHandles } from '@/store/slices/browser/hosts/browser-initialization-presentation-ownership'
 import type * as WebRuntimeTerminalCreationModule from '../../hosted-terminals/creation/web-runtime-terminal-creation'
 
 const mocks = vi.hoisted(() => ({
@@ -175,6 +176,9 @@ function seedRemoteMirrorState(): void {
   useAppStore.setState(
     {
       ...initialState,
+      remoteBrowserPageHandlesByPageId: markHydratedBrowserPageHandles({
+        ...initialState.remoteBrowserPageHandlesByPageId
+      }),
       activeWorktreeId: WORKTREE,
       workspaceSessionReady: true,
       runtimeEnvironments,
@@ -218,7 +222,15 @@ describe('useWebSessionTabsSync window visibility', () => {
 
   afterEach(() => {
     cleanup()
-    useAppStore.setState(initialState, true)
+    useAppStore.setState(
+      {
+        ...initialState,
+        remoteBrowserPageHandlesByPageId: markHydratedBrowserPageHandles({
+          ...initialState.remoteBrowserPageHandlesByPageId
+        })
+      },
+      true
+    )
     replaceRuntimeEnvironmentRevisions([])
     resetWebSessionTabsSnapshotFreshnessForTests()
     clearRuntimeEnvironmentConnectionGenerationsForTests()

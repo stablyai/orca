@@ -15,9 +15,9 @@ import { hostWorktreeTarget } from '../../../../shared/worktree/host-qualified-i
 import { getRepoOwnedWorktreeMeta } from '../../../workspaces/catalog/worktree-metadata-ownership'
 import {
   buildKnownOrcaWorkspaceLayouts,
-  isLegacyRepoForExternalWorktreeVisibility,
   toDetectedWorktree
-} from '../../../../shared/worktree/ownership'
+} from '../../../../shared/worktree/visibility/ownership'
+import { isLegacyRepoForExternalWorktreeVisibility } from '../../../../shared/external-worktree-visibility'
 import {
   areWorktreePathsEqual,
   dedupeWorktreesByPath
@@ -25,8 +25,8 @@ import {
 import {
   createWorktreeVisibilitySourceMatcher,
   resolveCustomWorktreeVisibilitySources
-} from '../../../../shared/worktree/visibility-sources'
-import { resolveConfiguredWorktreeBasePaths } from '../../../../shared/worktree/configured-worktree-base-path'
+} from '../../../../shared/worktree/visibility/visibility-sources'
+import { resolveConfiguredWorktreeBasePaths } from '../../../../shared/worktree/paths/configured-worktree-base-path'
 import { projectWorktreeLineageWithHostPeers } from '../../../workspaces/catalog/worktree-lineage-host-peers'
 import { loggedMalformedWorktreeMetaKeys, warnOnce } from './worktree-listing-diagnostics'
 import {

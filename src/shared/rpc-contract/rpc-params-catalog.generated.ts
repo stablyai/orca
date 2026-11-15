@@ -22,6 +22,7 @@ import {
 } from '../browser/client-hosting/browser-client-host-protocol'
 import { BrowserClientHostRequestResultParams } from '../browser/client-hosting/browser-client-host-request-protocol'
 import { BrowserClientPageMetadataParams } from '../browser/client-hosting/browser-client-page-metadata-protocol'
+import { BrowserPageInitializationActionParams } from '../browser/client-hosting/browser-page-initialization-action'
 import {
   BundledSkillAutoUpdateRequestSchema,
   BundledSkillExecuteRequestSchema,
@@ -199,6 +200,7 @@ import {
   ComputerPermissions,
   Drag as DragOfComputerSchemasParams,
   Hotkey,
+  LaunchApp,
   ListApps,
   ListWindows,
   PasteText,
@@ -515,7 +517,7 @@ import {
   PluginsPanelActionParams
 } from './plugins/plugins-params'
 import {
-  PreflightAgentDetection,
+  PreflightAgentRefresh,
   PreflightCheck,
   PreflightDetectRemoteAgents,
   PreflightDetectRemoteWindowsTerminalCapabilities,
@@ -531,6 +533,7 @@ import {
 } from './projects/project-runtime-params'
 import {
   ProjectGroupCreate,
+  ProjectGroupHooksCheck,
   ProjectGroupImportNested,
   ProjectGroupMoveProject,
   ProjectGroupScanNested,
@@ -793,8 +796,8 @@ import {
   WorktreeTeardownMissingTerminalsParams
 } from './workspaces/worktree-params'
 import { WorktreeAdoptProvisionedRoot } from './workspaces/worktree-provisioned-root-params'
-import { RepoIconDataUrlsParams } from '../sidebar-list/repo-icon-data-urls-contract'
-import { SidebarInputsReadParams } from '../sidebar-list/sidebar-inputs-feed-contract'
+import { RepoIconDataUrlsParams } from '../sidebar-list/catalog/repo-icon-data-urls-contract'
+import { SidebarInputsReadParams } from '../sidebar-list/feed/sidebar-inputs-feed-contract'
 import { SkillBundleInstallRequestSchema } from '../skill-bundle-install-contract'
 import { SkillDeleteRequestSchema } from '../skill-delete-contract'
 import {
@@ -952,6 +955,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'browser.clientHost.fileChannel.write': BrowserClientFileChannelWriteParams,
   'browser.clientHost.pageMetadata': BrowserClientPageMetadataParams,
   'browser.clientHost.requestResult': BrowserClientHostRequestResultParams,
+  'browser.clientPage.initializationAction': BrowserPageInitializationActionParams,
   'browser.clipboardRead': BrowserTarget,
   'browser.clipboardWrite': ClipboardWrite,
   'browser.console': LimitParam,
@@ -1045,6 +1049,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'computer.drag': DragOfComputerSchemasParams,
   'computer.getAppState': ComputerObserveTarget,
   'computer.hotkey': Hotkey,
+  'computer.launchApp': LaunchApp,
   'computer.listApps': ListApps,
   'computer.listWindows': ListWindows,
   'computer.pasteText': PasteText,
@@ -1062,6 +1067,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'connector.send': ConnectorSend,
   'connector.start': ConnectorStart,
   'connector.watch': ConnectorWatch,
+  'desktop.openWindowInBackground': null,
   'desktopBrowserBridge.attach': DesktopBrowserBridgeAttachParams,
   'desktopBrowserBridge.result': DesktopBrowserBridgeResultParams,
   'diagnostics.memory': null,
@@ -1476,9 +1482,10 @@ export const RPC_PARAMS_BY_METHOD = {
   'preflight.detectRemoteAgents': PreflightDetectRemoteAgents,
   'preflight.detectRemoteWindowsTerminalCapabilities':
     PreflightDetectRemoteWindowsTerminalCapabilities,
-  'preflight.refreshAgents': PreflightAgentDetection,
+  'preflight.refreshAgents': PreflightAgentRefresh,
   'project.list': null,
   'project.update': ProjectUpdate,
+  'projectGroup.checkHooks': ProjectGroupHooksCheck,
   'projectGroup.create': ProjectGroupCreate,
   'projectGroup.delete': ProjectGroupSelector,
   'projectGroup.importNested': ProjectGroupImportNested,

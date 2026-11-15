@@ -1,3 +1,4 @@
+import type { AgentSessionForkedFromMark } from '../agent-session/agent-session-fork-name'
 import type { AgentSessionProviderContextBoundary } from '../agent-session/agent-session-provider-context'
 // IPC-serializable conversation contract: plain JSON only, no classes/Maps/Dates. Sources prefer transcripts, then hooks,
 // then degraded scrollback; docs/plans/2026-06-17-001-feat-native-chat-view-plan.md (KTD2).
@@ -7,7 +8,7 @@ import type {
   AgentSessionBackgroundTaskRunState
 } from '../agent-session/agent-session-background-task-wire'
 import type { AgentSessionTokenUsage } from '../agent-session/agent-session-context-usage'
-import type { AgentSessionOrcaStop } from '../agent-session/lifecycle/agent-session-orca-stop'
+import type { AgentSessionOrcaStop } from '../agent-session/lifecycle/stopping/agent-session-orca-stop'
 import type { AgentSessionFailureFact } from '../agent-session/failures/agent-session-failure'
 import type {
   AgentJournalMessageSendMode,
@@ -57,7 +58,7 @@ export type NativeChatTextBlock = {
   /** On the line about a reply Orca's own stop cut off: why, and the turn it cut. */
   orcaStop?: AgentSessionOrcaStop & { turnItemId?: string }
   /** On the "Forked from" divider: the source chat it links to. */
-  forkedFrom?: { sessionId: string }
+  forkedFrom?: AgentSessionForkedFromMark
   /** On a usage-limit line: the turn the limit ended, which its Continue picks up. */
   usageLimitTurnItemId?: string
 }
@@ -137,7 +138,18 @@ export type NativeChatSubagentEntry = {
   startedAt?: number
   /** Epoch ms the entry latched terminal. */
   settledAt?: number
+  /** The child's role (Claude's `subagent_type`), when it has one. */
+  agentType?: string
+  model?: string
+  /** Reasoning effort, in the provider's own words. */
+  effort?: string
+  /** The tool it is running now; only while it works. */
+  operation?: NativeChatSubagentOperation
+  /** The newest thing it said; once settled, its result. */
+  lastMessage?: string
 }
+
+export type NativeChatSubagentOperation = { toolName: string; input?: string }
 
 /** Provider-neutral roster revised in place by Claude/Codex activity. */
 export type NativeChatSubagentGroupBlock = {

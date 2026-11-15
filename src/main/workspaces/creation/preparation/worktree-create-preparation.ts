@@ -16,7 +16,7 @@ import type {
   PreparedCheckoutOrigin,
   PreparedCheckoutReset,
   WorktreeCreatePhase
-} from '../../../../shared/worktree/create-timing-vocabulary'
+} from '../../../../shared/worktree/creation/create-timing-vocabulary'
 import type {
   AddWorktreeOptions,
   AddWorktreeResult

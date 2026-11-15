@@ -6,7 +6,7 @@ import {
 import {
   effectiveWorktreeSourceVisibility,
   type WorktreeVisibilitySourceMatcher
-} from './worktree/visibility-sources'
+} from './worktree/visibility/visibility-sources'
 import type { GlobalSettings } from './global-settings-types'
 import type { Repo } from './repo-types'
 import type { Worktree, WorktreeOwnership } from './worktree/types'

@@ -10,7 +10,7 @@ import {
   liveAgentStatusOf,
   strongerLiveAgentStatus,
   type LiveAgentWorktreeStatus
-} from '../../../../../shared/sidebar-list/workspace-activity-facts'
+} from '../../../../../shared/sidebar-list/feed-facts/workspace-activity-facts'
 
 type TerminalLikeTab = Pick<TerminalTab, 'id'>
 type BrowserLikeTab = { id: string }

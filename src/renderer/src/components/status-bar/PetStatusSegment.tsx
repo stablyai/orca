@@ -13,7 +13,7 @@ import {
   DropdownMenuSubTrigger,
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
-import { useAppStore } from '../../store'
+import { useAppStore } from '../../store/index'
 import { BUNDLED_PET, BUNDLED_PETS, findBundledPet, isBundledPetId } from '../pet/pet-models'
 import { PET_SIZE_MAX, PET_SIZE_MIN } from '../../../../shared/pet-types'
 import { useTranslate } from '@/i18n/use-translate'

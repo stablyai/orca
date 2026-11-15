@@ -1,4 +1,4 @@
-import { isWorktreeRetiredByRemoval } from '../../../../../../shared/worktree/removal-visibility'
+import { isWorktreeRetiredByRemoval } from '../../../../../../shared/worktree/removal/removal-visibility'
 import {
   getWorktreeExecutionHostId,
   type ExecutionHostId
@@ -10,11 +10,11 @@ import { canAssignWorktreeParent } from './worktree-parent-eligibility'
 import {
   getCyclicProjectedWorktreeLineageIds,
   type SidebarLineageParentIdentities
-} from '../../../../../../shared/sidebar-list/worktree-lineage-projection'
+} from '../../../../../../shared/sidebar-list/lineage/worktree-lineage-projection'
 import {
   lineageStoreKeyOfRow,
   OWN_LINEAGE_STORE_KEY
-} from '../../../../../../shared/worktree/cross-store-lineage-resolution'
+} from '../../../../../../shared/worktree/lineage/cross-store-lineage-resolution'
 import {
   lastVerifiedRuntimeStatus,
   type RuntimeEnvironmentStatus

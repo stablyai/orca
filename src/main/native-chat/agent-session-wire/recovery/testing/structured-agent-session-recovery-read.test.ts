@@ -1,3 +1,4 @@
+import { hostUsageLimitCut } from '../structured-agent-session-usage-limit-chain'
 import { mkdir, mkdtemp, realpath, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -8,7 +9,8 @@ import type {
   AgentJournalItemBody
 } from '../../../../../shared/agent-session/journal/agent-session-journal-types'
 import { agentSessionFailureWords } from '../../../../../shared/agent-session/failures/agent-session-failure-words'
-import { agentSessionRecordFixture } from '../../../../../shared/agent-session/lifecycle/agent-session-record.test-fixture'
+import { latestNativeChatUsageLimitCut } from '../../../../../shared/native-chat/native-chat-usage-limit-cut'
+import { agentSessionRecordFixture } from '../../../../../shared/agent-session/lifecycle/records/agent-session-record.test-fixture'
 import { readStructuredSessionRecovery } from '../structured-agent-session-recovery-read'
 import * as recoveryOptions from '../../../../runtime/agent-session/lifecycle/structured-session-recovery-options'
 
@@ -21,7 +23,19 @@ it('does no discovery on ordinary reads and drops preparation superseded by a se
     items: [],
     submissions: []
   }
-  const session = { journal: { statusRead: () => snapshot, cursor: () => snapshot.cursor } }
+  const session = {
+    journal: {
+      reads: {
+        cursor: async () => snapshot.cursor,
+        usageLimitCut: async () =>
+          hostUsageLimitCut(
+            snapshot,
+            latestNativeChatUsageLimitCut(snapshot.items, snapshot.submissions),
+            () => undefined
+          )
+      }
+    }
+  }
   const deps = {
     store: { getRecord: () => record },
     journalDatabase: { stateDirectory: '/state' },
@@ -113,7 +127,19 @@ it('recovers an unpinned OMP native file using the owning host directory and flo
       })),
       submissions: []
     }
-    const session = { journal: { statusRead: () => snapshot, cursor: () => snapshot.cursor } }
+    const session = {
+      journal: {
+        reads: {
+          cursor: async () => snapshot.cursor,
+          usageLimitCut: async () =>
+            hostUsageLimitCut(
+              snapshot,
+              latestNativeChatUsageLimitCut(snapshot.items, snapshot.submissions),
+              () => undefined
+            )
+        }
+      }
+    }
     const resolveWorkspacePath = vi.fn(async () => cwd)
     const deps = {
       store: { getRecord: () => record },

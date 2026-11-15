@@ -233,7 +233,10 @@ export const REPO_METHODS = [
     permission: 'workspace',
     params: RepoHooksCheck,
     handler: async (params, { runtime }) =>
-      runtime.checkRepoHooks(params.repo, { background: repoHooksCheckIsBackground(params) })
+      runtime.checkRepoHooks(params.repo, {
+        background: repoHooksCheckIsBackground(params),
+        createSource: params.createSource
+      })
   }),
   defineMethod({
     name: 'repo.setupScriptImports',

@@ -1,5 +1,5 @@
 import { WorktreeSet } from '../../../../../shared/rpc-contract/workspaces/worktree-params'
-import { displayNameUpdatePinsLabel } from '../../../../../shared/worktree/display-name-provenance'
+import { displayNameUpdatePinsLabel } from '../../../../../shared/worktree/metadata/display-name-provenance'
 import { getWorkspaceStatusWarning } from '../../../../../shared/workspace-status-warning'
 import { defineMethod } from '../../core'
 

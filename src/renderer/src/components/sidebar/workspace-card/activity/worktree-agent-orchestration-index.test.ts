@@ -37,7 +37,15 @@ function paneKeyFor(tabId: string, index: number): string {
 }
 
 function makeEntry(paneKey: string, worktreeId: string): AgentStatusEntry {
-  return { paneKey, worktreeId, state: 'busy', startedAt: 0 } as unknown as AgentStatusEntry
+  return {
+    paneKey,
+    worktreeId,
+    state: 'working',
+    prompt: '',
+    updatedAt: 0,
+    stateStartedAt: 0,
+    stateHistory: []
+  }
 }
 
 describe('selectWorktreeAgentOrchestration', () => {
@@ -48,19 +56,18 @@ describe('selectWorktreeAgentOrchestration', () => {
   it('rebuilds when a source it reads actually changes', () => {
     const context = { taskId: 't', dispatchId: 'd' }
     const paneKey = paneKeyFor('tab-1', 0)
-    const base = {
+    const base: IndexState = {
       tabsByWorktree: { 'wt-1': [makeTab('tab-1')] },
       runtimeAgentOrchestrationByPaneKey: { [paneKey]: context },
-      agentStatusByPaneKey: {},
-      retainedAgentsByPaneKey: {}
-    } as unknown as IndexState
+      agentStatusByPaneKey: {}
+    }
     selectWorktreeAgentOrchestration(base, 'wt-1')
 
     const replacement = { taskId: 't2', dispatchId: 'd2' }
     const replaced = {
       ...base,
       runtimeAgentOrchestrationByPaneKey: { [paneKey]: replacement }
-    } as unknown as IndexState
+    }
     expect(selectWorktreeAgentOrchestration(replaced, 'wt-1')[paneKey]).toBe(replacement)
 
     // Why: moving the tab to another worktree must re-attribute, which only
@@ -68,7 +75,7 @@ describe('selectWorktreeAgentOrchestration', () => {
     const movedTab = {
       ...replaced,
       tabsByWorktree: { 'wt-2': [makeTab('tab-1')] }
-    } as unknown as IndexState
+    }
     expect(selectWorktreeAgentOrchestration(movedTab, 'wt-1')).toBe(
       EMPTY_WORKTREE_AGENT_ORCHESTRATION
     )
@@ -78,12 +85,11 @@ describe('selectWorktreeAgentOrchestration', () => {
   it('treats a __proto__ pane key as data instead of a prototype write', () => {
     // Treat __proto__ as data so the pane cannot replace the result’s prototype.
     const context = { taskId: 't', dispatchId: 'd' }
-    const state = {
+    const state: IndexState = {
       tabsByWorktree: {},
       runtimeAgentOrchestrationByPaneKey: Object.fromEntries([['__proto__', context]]),
-      agentStatusByPaneKey: Object.fromEntries([['__proto__', makeEntry('__proto__', 'wt-1')]]),
-      retainedAgentsByPaneKey: {}
-    } as unknown as IndexState
+      agentStatusByPaneKey: Object.fromEntries([['__proto__', makeEntry('__proto__', 'wt-1')]])
+    }
 
     const record = selectWorktreeAgentOrchestration(state, 'wt-1')
     expect(Object.keys(record)).toEqual(['__proto__'])

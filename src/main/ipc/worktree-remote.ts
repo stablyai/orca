@@ -171,7 +171,7 @@ import {
   getRetiredNameRegistryForRepo,
   retireGeneratedWorktreeName
 } from '../workspaces/removal/retirement/worktree-name-retirement'
-import { createRetiredNameLookup } from '../../shared/worktree/retired-name-registry'
+import { createRetiredNameLookup } from '../../shared/worktree/naming/retired-name-registry'
 import { assertNoPendingWorktreeRemovalConflict } from '../workspaces/removal/worktree-removal-table'
 import { isWorktreePathReserved } from '../workspaces/creation/reserved-worktree-path'
 import {

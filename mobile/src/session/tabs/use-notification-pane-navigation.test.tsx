@@ -2,7 +2,7 @@ import type { StructuredSessionOpenSource } from '../../../../src/shared/open-st
 import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { BridgeInitRoute } from '../../mobile-web-shell/bridge/bridge-init-route'
+import type { BridgeInitRoute } from '../../mobile-web-shell/bridge/protocol/bridge-init-route'
 import type { MobileSessionTab } from './mobile-session-tabs'
 
 vi.mock('../../navigation/workspace-execution-host', () => ({
