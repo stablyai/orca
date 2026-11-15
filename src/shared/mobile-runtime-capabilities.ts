@@ -3,10 +3,14 @@ import { MOBILE_RELAY_RUNTIME_CAPABILITIES } from './mobile-desktop-relay-contra
 
 // Hosts without this capability have no notifications.registerPush RPC.
 export const NOTIFICATIONS_REMOTE_PUSH_RUNTIME_CAPABILITY = 'notifications.remote-push.v1' as const
+// Hosts with this accept `sealedContent` in notifications.registerPush and then end-to-end encrypt that phone's pushes.
+export const NOTIFICATIONS_REMOTE_PUSH_SEALED_RUNTIME_CAPABILITY =
+  'notifications.remote-push.sealed.v1' as const
 
 export const MOBILE_RUNTIME_CAPABILITIES = [
   'mobile.tasks.v1',
   NOTIFICATIONS_REMOTE_PUSH_RUNTIME_CAPABILITY,
+  NOTIFICATIONS_REMOTE_PUSH_SEALED_RUNTIME_CAPABILITY,
   NOTIFICATIONS_DESKTOP_PRESENCE_RUNTIME_CAPABILITY,
   ...MOBILE_RELAY_RUNTIME_CAPABILITIES
 ] as const

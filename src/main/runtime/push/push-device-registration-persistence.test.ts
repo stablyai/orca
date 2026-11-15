@@ -106,4 +106,23 @@ describe('DeviceRegistry push registrations', () => {
       sound: false
     })
   })
+
+  it('keeps a known sealed-content format and degrades an unknown one to readable pushes', () => {
+    const dir = userDataDir()
+    const registry = new DeviceRegistry(dir)
+    const known = registry.addDevice('phone', 'mobile')
+    const unknown = registry.addDevice('tablet', 'mobile')
+    rewriteRegistry(dir, (devices) => {
+      for (const entry of devices) {
+        entry.pushRegistration = {
+          ...REGISTRATION,
+          sealedContent: entry.deviceId === known.deviceId ? 'e2e1' : 'e2e9'
+        }
+      }
+    })
+
+    const reloaded = new DeviceRegistry(dir)
+    expect(reloaded.getDevice(known.deviceId)?.pushRegistration?.sealedContent).toBe('e2e1')
+    expect(reloaded.getDevice(unknown.deviceId)?.pushRegistration).toEqual(REGISTRATION)
+  })
 })

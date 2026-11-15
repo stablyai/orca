@@ -12,6 +12,7 @@ import {
   type NotificationDeliveryPreferences
 } from '../delivery-policy/notification-delivery-preferences'
 import { allowsMobilePushAlertKind } from '../../../../src/shared/mobile-push-alert'
+import { readablePushData } from '../payload-identity/push-sealed-payload'
 
 const RECENT_FOREGROUND_PUSH_CAP = 512
 const recentForegroundPushes = new Set<string>()
@@ -52,7 +53,7 @@ export function resetForegroundPushClaimsForTests(): void {
 export async function foregroundNotificationBehavior(notification: {
   request: Parameters<typeof readNativeNotificationData>[0]
 }): Promise<NotificationBehavior> {
-  const data = readNativeNotificationData(notification.request)
+  const data = await readablePushData(readNativeNotificationData(notification.request))
   const payload = readOrcaPushPayload(data)
   const preferences = await loadNotificationDeliveryPreferences()
   // Preserve unknown notifications; recognized pushes fail closed when eligibility/dismissal checks cannot complete.
