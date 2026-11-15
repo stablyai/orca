@@ -17,6 +17,7 @@ import { forEachWithConcurrency } from '../../../shared/concurrency/map-with-con
 import { yieldToEventLoop } from '../../../shared/concurrency/event-loop-yield'
 import {
   isSessionFolderOfGoneWorktree,
+  isWorktreeStillGone,
   sessionFolderOwner,
   type SessionFolderGcOwners,
   type SessionFolderGcScan
@@ -191,7 +192,7 @@ async function executeHistoryGc(
     }
 
     const sessionTotals = sessionFolders
-      ? pruneGoneWorktreeSessionFolders(sessionFolders)
+      ? await pruneGoneWorktreeSessionFolders(sessionFolders)
       : { orphaned: 0, pruned: 0 }
 
     // Fish files can outlive their metadata; include recorded dirs in case XDG_DATA_HOME changed.
@@ -219,18 +220,27 @@ async function executeHistoryGc(
 }
 
 /** Saved tabs are checked once over all candidates, after every root is scanned. */
-function pruneGoneWorktreeSessionFolders(scan: SessionFolderGcScan): {
+async function pruneGoneWorktreeSessionFolders(scan: SessionFolderGcScan): Promise<{
   orphaned: number
   pruned: number
-} {
+}> {
   if (scan.candidates.length === 0) {
     return { orphaned: 0, pruned: 0 }
   }
   const referenced = scan.referencedSessionIds(scan.candidates)
+  const stillGone = new Map<string, Promise<boolean>>()
   let orphaned = 0
   let pruned = 0
-  for (const { root, entryPath, sessionId } of scan.candidates) {
+  for (const { root, entryPath, sessionId, worktreeId } of scan.candidates) {
     if (referenced.has(sessionId)) {
+      continue
+    }
+    let gone = stillGone.get(worktreeId)
+    if (!gone) {
+      gone = isWorktreeStillGone(worktreeId, scan)
+      stillGone.set(worktreeId, gone)
+    }
+    if (!(await gone)) {
       continue
     }
     orphaned++

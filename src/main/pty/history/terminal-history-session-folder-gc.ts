@@ -63,6 +63,14 @@ export async function isSessionFolderOfGoneWorktree(
   return gone
 }
 
+/** Uncached recheck just before deletion, in case a volume detached during the scan. */
+export function isWorktreeStillGone(
+  worktreeId: string,
+  scan: SessionFolderGcScan
+): Promise<boolean> {
+  return isLocalWorktreeGone(worktreeId, { ...scan, presentByParentKey: new Map() })
+}
+
 async function isLocalWorktreeGone(
   worktreeId: string,
   scan: SessionFolderGcScan
@@ -108,7 +116,8 @@ function cachedKnownSiblingPresent(
   let present = scan.presentByParentKey.get(parentKey)
   if (!present) {
     const siblings = knownPathsByParentKey(scan).get(parentKey) ?? []
-    present = Promise.all(siblings.map(isDirectory)).then((found) => found.includes(true))
+    // lstat: a symlinked sibling can point at another, still-mounted volume.
+    present = Promise.all(siblings.map(isRealDirectory)).then((found) => found.includes(true))
     scan.presentByParentKey.set(parentKey, present)
   }
   return present
@@ -140,6 +149,13 @@ function knownPathsByParentKey(scan: SessionFolderGcScan): Map<string, string[]>
     scan.knownPathsByParentKey = byParent
   }
   return scan.knownPathsByParentKey
+}
+
+function isRealDirectory(path: string): Promise<boolean> {
+  return lstat(path).then(
+    (info) => info.isDirectory(),
+    () => false
+  )
 }
 
 function isDirectory(path: string): Promise<boolean> {
