@@ -111,18 +111,25 @@ export type Env = {
   /**
    * `kms`: the KEKs are held encrypted by a Google Cloud KMS key and unwrapped once per isolate
    * (src/secrets-kms.ts). Unset (default): SECRETS_KEK / SECRETS_KEK_RETIRED above, unchanged.
-   * With `kms`, SECRETS_KEK and SECRETS_KEK_RETIRED are ignored, and a KMS failure answers 503
+   * With `kms`, SECRETS_KEK and SECRETS_KEK_RETIRED are ignored (SECRETS_KEK only feeds the
+   * migration opt-in below), and a KMS failure answers 503
    * `secrets_unavailable` (sessions do not start without their secrets).
    *   SECRETS_KMS_KEY              projects/<p>/locations/<l>/keyRings/<r>/cryptoKeys/<k>
    *   SECRETS_KMS_SERVICE_ACCOUNT  (secret) service-account JSON allowed to decrypt with that key only
    *   SECRETS_KEK_WRAPPED          base64 KMS ciphertext of the active KEK's 32 bytes, AAD `orca-secrets-kek:<id>`
    *   SECRETS_KEK_RETIRED_WRAPPED  JSON {"<id>":"<base64 KMS ciphertext>"} after a rotation
+   *   SECRETS_KEK_PLAINTEXT_RETIRED_ID  migration only: also open rows under this id with the plaintext
+   *                                SECRETS_KEK (as a retired key, never for sealing), so the rewrap sweep can
+   *                                move a store whose old KEK has no copy outside Cloudflare onto the KMS-held
+   *                                KEK. Must differ from SECRETS_KEK_ID. Remove it, and SECRETS_KEK, once
+   *                                GET /v1/internal/secrets/kek lists the id as droppable.
    */
   SECRETS_KEK_SOURCE?: string
   SECRETS_KMS_KEY?: string
   SECRETS_KMS_SERVICE_ACCOUNT?: string
   SECRETS_KEK_WRAPPED?: string
   SECRETS_KEK_RETIRED_WRAPPED?: string
+  SECRETS_KEK_PLAINTEXT_RETIRED_ID?: string
   /**
    * `v1` (default) | `v2`: the row format new secrets are sealed in (src/secrets-crypto.ts). With
    * v2 a KEK rotation re-wraps data keys only. Set it only once every Worker version that reads this

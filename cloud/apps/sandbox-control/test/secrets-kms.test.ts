@@ -305,6 +305,57 @@ describe('secret store with SECRETS_KEK_SOURCE=kms', () => {
     expect(opened).toEqual([VALUE, VALUE_2])
   })
 
+  it('migrates a plaintext KEK with no outside copy onto a new KMS-held KEK, failing closed throughout', async () => {
+    const h = await createHarness({ OPERATOR_TOKEN: OP, SECRETS_KEK: PLAIN })
+    const alice = await h.token('alice')
+    await put(h, alice, 'FIRST_VAR', VALUE)
+    await put(h, alice, 'SECOND_VAR', VALUE_2)
+    // A new KEK k2 held by KMS becomes active; the existing plaintext secret is read only as retired k1.
+    Object.assign(h.env, kmsEnv({ SECRETS_KEK_WRAPPED: kms.wrap(K2, 'k2'), SECRETS_KEK_ID: 'k2', SECRETS_KEK_PLAINTEXT_RETIRED_ID: 'k1' }))
+    expect((await h.call('GET', '/v1/internal/secrets/kek', { bearer: OP })).body).toMatchObject({ activeKekId: 'k2', retiredKekIds: ['k1'], pending: 2, retiredInUse: ['k1'], unknownKekIds: [] })
+    // Old rows still open (a session start gets them), and new rows seal under the KMS-held key.
+    expect((await h.call('POST', '/v1/sandboxes', { body: { workspaceId: 'ws-1', machineSize: 'standard' }, bearer: alice })).status).toBe(200)
+    expect(h.vercel.commands.find((c) => c.command === START_COMMAND)!.env.ORCA_SECRET_ENV).toBeDefined()
+    await put(h, alice, 'THIRD_VAR', VALUE)
+    expect(h.raw.prepare(`SELECT kek_id FROM secrets WHERE name = 'THIRD_VAR'`).get()).toEqual({ kek_id: 'k2' })
+    expect((await h.call('POST', '/v1/internal/secrets/rewrap', { bearer: OP, body: { dryRun: true } })).body).toMatchObject({ failed: 0 })
+    expect((await h.call('POST', '/v1/internal/secrets/rewrap', { bearer: OP, body: {} })).body).toMatchObject({ resealed: 2, pending: 0, done: true })
+    expect((await h.call('GET', '/v1/internal/secrets/kek', { bearer: OP })).body).toMatchObject({ pending: 0, retiredDroppable: ['k1'] })
+
+    // Drop the opt-in and the plaintext secret: everything opens with the KMS-held key alone.
+    delete h.env.SECRETS_KEK_PLAINTEXT_RETIRED_ID
+    delete h.env.SECRETS_KEK
+    expect((await h.call('GET', '/v1/internal/secrets/kek', { bearer: OP })).body).toMatchObject({ activeKekId: 'k2', retiredKekIds: [], pending: 0, unknownKekIds: [] })
+    const onlyNew = await createKeyring({ id: 'k2', key: K2 })
+    const rows = h.raw.prepare('SELECT name, kek_id, wrapped_dek, ciphertext FROM secrets ORDER BY name').all() as { name: string; kek_id: string; wrapped_dek: string; ciphertext: string }[]
+    const opened = await Promise.all(
+      rows.map((row) => onlyNew.open({ scope: 'personal', ownerId: 'user:alice', name: row.name }, { kekId: row.kek_id, wrappedDek: row.wrapped_dek, ciphertext: row.ciphertext }))
+    )
+    expect(opened).toEqual([VALUE, VALUE_2, VALUE])
+  })
+
+  it('never lets the plaintext migration key stand in for KMS', async () => {
+    const migrating = { SECRETS_KEK: PLAIN, SECRETS_KEK_WRAPPED: kms.wrap(K2, 'k2'), SECRETS_KEK_ID: 'k2', SECRETS_KEK_PLAINTEXT_RETIRED_ID: 'k1' }
+    // KMS down: 503, even though a plaintext key is configured for the migration.
+    kms.state.mode = 'down'
+    const down = await createHarness(kmsEnv(migrating))
+    expect(await put(down, await down.token('alice'), 'ANY_VAR', VALUE)).toEqual({ status: 503, body: { error: 'secrets_unavailable' } })
+    expect(down.raw.prepare('SELECT COUNT(*) AS n FROM secrets').get()).toEqual({ n: 0 })
+    kms.state.mode = 'up'
+    // A malformed opt-in is a config error: missing key, the active id, or an id a wrapped blob already covers.
+    const broken: Record<string, string>[] = [
+      { SECRETS_KEK: '' },
+      { SECRETS_KEK_PLAINTEXT_RETIRED_ID: 'k2' },
+      { SECRETS_KEK_RETIRED_WRAPPED: JSON.stringify({ k1: kms.wrap(K1, 'k1') }) }
+    ]
+    for (const extra of broken) {
+      clock += KMS_RETRY_AFTER_MS + 1
+      const h = await createHarness(kmsEnv({ ...migrating, ...extra }))
+      expect(await put(h, await h.token('alice'), 'ANY_VAR', VALUE)).toEqual({ status: 503, body: { error: 'secrets_unavailable' } })
+      expect(await h.call('GET', '/v1/internal/secrets/kek', { bearer: OP })).toEqual({ status: 503, body: { error: 'secrets_unavailable', reason: 'config' } })
+    }
+  })
+
   it('moves an existing plaintext-KEK store behind KMS without touching a row', async () => {
     const h = await createHarness({ OPERATOR_TOKEN: OP, SECRETS_KEK: K1 })
     const alice = await h.token('alice')

@@ -4,8 +4,8 @@
   //   wrangler deploy -c wrangler.dev.jsonc
   // Secrets (wrangler secret put -c wrangler.dev.jsonc, never here): VERCEL_TOKEN, SANDBOX_DEV_JWKS,
   // EGRESS_DEV_STATIC_AUTHORIZATION, CONTROL_PLANE_TOKEN (same value as on
-  // orca-billing-dev), GITHUB_APP_ID, GITHUB_APP_PRIVATE_KEY (PKCS#8), SECRETS_KEK (base64 32 bytes),
-  // OPERATOR_TOKEN (/v1/internal/*), GITHUB_STATE_SECRET; for the GitHub connect flow also
+  // orca-billing-dev), GITHUB_APP_ID, GITHUB_APP_PRIVATE_KEY (PKCS#8), SECRETS_KMS_SERVICE_ACCOUNT and
+  // SECRETS_KEK_WRAPPED (SEC-3 KMS, see the vars below; no plaintext SECRETS_KEK), OPERATOR_TOKEN (/v1/internal/*), GITHUB_STATE_SECRET; for the GitHub connect flow also
   // GITHUB_APP_CLIENT_ID + GITHUB_APP_CLIENT_SECRET (app settings → generate a client secret).
   "name": "orca-sandbox-control-dev",
   "main": "src/index.ts",
@@ -75,6 +75,14 @@
     // Auth's internal API (staging auth is the one that pushes to this Worker): the live "is this
     // person in the team" check before a workspace changes owner. Unset = hand-offs refused.
     "AUTH_INTERNAL_ORIGIN": "https://auth-staging.onorca.dev",
-    "EGRESS_PROXY_URL": "https://orca-sandbox-control-dev.lovecast.workers.dev/v1/egress/proxy"
+    "EGRESS_PROXY_URL": "https://orca-sandbox-control-dev.lovecast.workers.dev/v1/egress/proxy",
+    // SEC-3 phase 1: the secret store's KEK comes out of Cloud KMS (src/secrets-kms.ts); the Worker
+    // holds only the KMS-wrapped KEK (secret SECRETS_KEK_WRAPPED, AAD orca-secrets-kek:<SECRETS_KEK_ID>)
+    // and a service account that can only decrypt with this key (secret SECRETS_KMS_SERVICE_ACCOUNT).
+    // KMS down or denied = 503 secrets_unavailable, no fallback. Key, SA and escrow: cloud/infra/secrets-kms.
+    // SECRETS_KEK_ID and SECRETS_KEK_WRAPPED change together, in one deploy, or rows stop opening.
+    "SECRETS_KEK_SOURCE": "kms",
+    "SECRETS_KMS_KEY": "projects/onorca-cloud-staging/locations/us/keyRings/orca-secrets/cryptoKeys/secrets-kek",
+    "SECRETS_KEK_ID": "k2"
   }
 }

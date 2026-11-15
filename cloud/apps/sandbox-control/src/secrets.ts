@@ -494,11 +494,17 @@ function parseKeyMap(json: string | undefined): Record<string, string> {
 
 /**
  * SECRETS_KEK_SOURCE=kms: every KEK comes out of Cloud KMS (src/secrets-kms.ts), once per isolate.
- * SECRETS_KEK is never read on this path, so a KMS failure cannot fall back to a plaintext key.
+ * SECRETS_KEK is not read on this path, so a KMS failure cannot fall back to a plaintext key. The one
+ * exception is the migration opt-in SECRETS_KEK_PLAINTEXT_RETIRED_ID: it adds SECRETS_KEK as a
+ * *retired* key under that id, only once the active KEK has come out of KMS, so the rewrap sweep can
+ * move rows off a plaintext KEK that has no copy outside Cloudflare. It never seals and never stands
+ * in for KMS: if KMS fails, the whole keyring fails.
  */
 function kmsKeyring(env: Env, sealFormat: SealFormat, fetcher: typeof fetch | undefined): Promise<Keyring> {
   const activeId = env.SECRETS_KEK_ID ?? 'k1'
-  const source = `kms\n${activeId}\n${env.SECRETS_KMS_KEY ?? ''}\n${env.SECRETS_KEK_WRAPPED ?? ''}\n${env.SECRETS_KEK_RETIRED_WRAPPED ?? ''}\n${sealFormat}`
+  const plaintextRetiredId = env.SECRETS_KEK_PLAINTEXT_RETIRED_ID
+  const plaintextRetired = plaintextRetiredId ? `${plaintextRetiredId}\n${env.SECRETS_KEK ?? ''}` : ''
+  const source = `kms\n${activeId}\n${env.SECRETS_KMS_KEY ?? ''}\n${env.SECRETS_KEK_WRAPPED ?? ''}\n${env.SECRETS_KEK_RETIRED_WRAPPED ?? ''}\n${plaintextRetired}\n${sealFormat}`
   const cached = cachedKeyring
   if (cached?.source === source && (cached.failedAt === undefined || Date.now() - cached.failedAt < KMS_RETRY_AFTER_MS)) {
     return cached.keyring
@@ -521,6 +527,13 @@ function kmsKeyring(env: Env, sealFormat: SealFormat, fetcher: typeof fetch | un
         throw new SecretsKmsError('config')
       }
       retired[id] = await unwrap(wrapped, id)
+    }
+    if (plaintextRetiredId) {
+      // Reached only after KMS handed over the active KEK. The id must name a key no blob already covers.
+      if (!env.SECRETS_KEK || plaintextRetiredId === activeId || plaintextRetiredId in retired) {
+        throw new SecretsKmsError('config')
+      }
+      retired[plaintextRetiredId] = env.SECRETS_KEK
     }
     try {
       return await createKeyring({ id: activeId, key: active }, retired, { sealFormat })
