@@ -44,7 +44,7 @@ import {
   type RuntimeSkillCommandSurface,
   installRuntimeSkillCommandSurface
 } from '../integrations/skill/runtime-skill-command-contract'
-import { getAppEnvironment } from '../../../shared/app-environment'
+import { getAppEnvironment } from '../../../shared/app-lifecycle/app-environment'
 import { RuntimeClientSettingsController } from '../client/settings/runtime-client-settings'
 import { RuntimeSessionSearchSettingsController } from '../integrations/ai-vault/runtime-session-search-settings'
 import { RuntimeAutomationController } from '../integrations/automations/runtime-automation-controller'

@@ -3,7 +3,7 @@ import {
   type UpdaterCodedMessage,
   type UpdaterFailureCode,
   type UpdaterFailureParams
-} from '../../../shared/updater-failure-copy'
+} from '../../../shared/updater/updater-failure-copy'
 import { errorMessage } from '../../../shared/errors/error-message'
 
 /** Thrown inside main only; handlers copy its code onto the status or IPC result. */

@@ -21,7 +21,7 @@ import type {
   SelectOrcaProfileOrgArgs,
   SelectOrcaProfileOrgResult,
   SignOutCurrentOrcaProfileResult
-} from '../../../shared/orca-profiles'
+} from '../../../shared/orca-profiles/orca-profiles'
 import {
   createLocalOrcaProfile,
   getOrcaProfileListState,

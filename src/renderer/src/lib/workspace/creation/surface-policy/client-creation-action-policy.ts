@@ -1,5 +1,5 @@
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../../shared/constants'
-import '../../../../../../shared/protocol-version'
+import '../../../../../../shared/remote-runtime/protocol/protocol-version'
 import { BROWSER_SCREENCAST_RUNTIME_CAPABILITY } from '../../../../../../shared/browser/runtime/browser-runtime-capabilities'
 import { isPairedWebClientWindow } from '../../../../app-shell/chrome/desktop-window-chrome'
 import { runtimeEnvironmentIdOrLocalUnlessTwin } from '../../ownership/worktree-runtime-owner'

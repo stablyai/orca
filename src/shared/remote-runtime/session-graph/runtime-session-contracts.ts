@@ -8,7 +8,7 @@ import type { AgentStatusOrchestrationContext } from '../../agent-status/contrac
 import type { RemoteServerUpdateSupport } from '../host-catalog/remote-server-update'
 import type { RemoteRuntimeSharedConnectionDiagnostics } from '../control/remote-runtime-shared-control-types'
 import type { RuntimeHostConnectionState } from '../host-status/runtime-host-connection-state'
-import type { RuntimeCapability } from '../../protocol-version'
+import type { RuntimeCapability } from '../protocol/protocol-version'
 import type {
   RuntimeBrowserUnavailableReason,
   RuntimeDegradation

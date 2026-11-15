@@ -23,7 +23,7 @@ import {
   computerAwakeSettingsForMode,
   normalizeComputerAwakeMode,
   type ComputerAwakeStatus
-} from '../../../../shared/computer-awake-mode'
+} from '../../../../shared/app-lifecycle/computer-awake-mode'
 import { STATUS_BAR_CONTEXT_MENU_EXEMPT_PROPS } from './composition/status-bar-context-menu-policy'
 
 const INACTIVE_STATUS: ComputerAwakeStatus = {

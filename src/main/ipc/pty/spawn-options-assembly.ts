@@ -1,7 +1,7 @@
 import { withClaudeAgentViewPlugin } from '../../../shared/agent-hook-listener/providers/claude/view/claude-agent-view-launch'
 import { resolveStartupShell } from '../../../shared/agent-launch/startup/tui-agent-startup-shell'
 import { resolveLocalWindowsAgentStartupShell } from '../../../shared/shell/launch/windows-terminal-shell'
-import { getAppEnvironment } from '../../../shared/app-environment'
+import { getAppEnvironment } from '../../../shared/app-lifecycle/app-environment'
 import type { GlobalSettings } from '../../../shared/global-settings-types'
 import { isTuiAgent } from '../../../shared/agent-launch/catalog/tui-agent-config'
 import { withCodexTerminalServerIsolationEnv } from '../../../shared/agent-launch/startup/codex-terminal-server-isolation'

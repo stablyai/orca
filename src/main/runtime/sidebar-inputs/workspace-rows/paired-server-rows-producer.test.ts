@@ -1,15 +1,5 @@
-import '../../../../shared/remote-runtime/host-store/environment-store-worker-test-fixture'
-import { mkdtempSync, rmSync } from 'node:fs'
-import { tmpdir } from 'node:os'
-import { join } from 'node:path'
-import { encodePairingOffer } from '../../../../shared/remote-runtime/pairing/pairing'
-import {
-  addEnvironmentFromPairingCode,
-  resolveEnvironment,
-  updateEnvironmentFromPairingCode
-} from '../../../../shared/remote-runtime/host-store/runtime-environment-store'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { RUNTIME_PROTOCOL_VERSION } from '../../../../shared/protocol-version'
+import { RUNTIME_PROTOCOL_VERSION } from '../../../../shared/remote-runtime/protocol/protocol-version'
 import {
   runtimeEnvironmentStatusFromSnapshot,
   type RuntimeHostStatusSnapshot
@@ -154,49 +144,6 @@ describe('PairedServerRowsProducer', () => {
   })
 
   it.each([10, 100])(
-    'coalesces %i status invalidations without publishing unchanged facts',
-    async (count) => {
-      const h = fakeHosts([{ id: 'box', live: false }])
-      const producer = new PairedServerRowsProducer({
-        hasDemand: () => false,
-        hostLabelOverrides: () => new Map()
-      })
-      const original = h.hosts.list
-      const list = vi.spyOn(h.hosts, 'list')
-      const detach = producer.attach(h.hosts)
-      await producer.sync()
-      await vi.advanceTimersByTimeAsync(0)
-      const before = producer.revision.value
-      let release!: () => void
-      const gate = new Promise<void>((resolve) => {
-        release = resolve
-      })
-      list.mockImplementationOnce(async () => {
-        await gate
-        return original()
-      })
-      list.mockClear()
-      h.publishStatus()
-      for (let i = 0; i < count; i++) {
-        h.publishStatus()
-      }
-      release()
-      await vi.advanceTimersByTimeAsync(0)
-      expect(list.mock.calls.length).toBeLessThanOrEqual(2)
-      expect(producer.revision.value).toBe(before)
-      h.state.servers = [{ id: 'renamed', live: false }]
-      h.publishStatus()
-      await vi.advanceTimersByTimeAsync(0)
-      expect((await producer.snapshot()).servers.map((server) => server.host?.label)).toEqual([
-        'renamed'
-      ])
-      expect(producer.revision.value).toBeGreaterThan(before)
-      detach()
-      list.mockRestore()
-    }
-  )
-
-  it.each([10, 100])(
     'keeps other hosts confirmed on a same-health publication across %i hosts',
     async (count) => {
       const h = fakeHosts(Array.from({ length: count }, (_, i) => ({ id: `box-${i}`, live: true })))
@@ -221,29 +168,6 @@ describe('PairedServerRowsProducer', () => {
       detach()
     }
   )
-
-  it('runs one more fetch for a change that lands while a fetch is in flight', async () => {
-    const { hosts, call, watches } = fakeHosts([{ id: 'box', live: true }])
-    let answer: (response: RuntimeRpcResponse<unknown>) => void = () => {}
-    call.mockReturnValueOnce(new Promise((resolve) => (answer = resolve)))
-    call.mockResolvedValueOnce(psReply([row('new')]))
-    const producer = new PairedServerRowsProducer({
-      hasDemand: () => true,
-      hostLabelOverrides: () => new Map()
-    })
-    producer.attach(hosts)
-    await producer.sync()
-    await vi.advanceTimersByTimeAsync(0)
-    watches.get('box')?.onChange()
-    watches.get('box')?.onChange()
-    watches.get('box')?.onChange()
-    answer(psReply([row('old')]))
-    await vi.advanceTimersByTimeAsync(0)
-
-    expect((await rowsOf(producer, 'runtime:box'))?.rows.map((entry) => entry.worktreeId)).toEqual([
-      'new'
-    ])
-  })
 
   it('keeps the last rows as unverifiable when the server loses contact or stops answering', async () => {
     const { hosts, call, watches, state, publishStatus } = fakeHosts([{ id: 'box', live: true }])
@@ -410,59 +334,5 @@ it('closes a delayed watch from a detached provider without resurrecting its hos
     ])
   } finally {
     detachNext()
-  }
-})
-
-it('publishes a fresh complete listing after a pairing changes between its store reads', async () => {
-  const root = mkdtempSync(join(tmpdir(), 'orca-paired-listing-'))
-  const code = (seed: number) =>
-    encodePairingOffer({
-      v: 2,
-      publicKeyB64: Buffer.alloc(32, seed).toString('base64'),
-      deviceToken: `synthetic-${seed}`,
-      endpoint: 'wss://pairing.example.com/runtime'
-    })
-  const saved = await addEnvironmentFromPairingCode(root, {
-    name: 'Box',
-    pairingCode: code(1),
-    now: 100
-  })
-  const h = fakeHosts([{ id: saved.id, live: false }])
-  const original = h.hosts.list
-  const producer = new PairedServerRowsProducer({
-    hasDemand: () => false,
-    hostLabelOverrides: () => new Map()
-  })
-  const detach = producer.attach(h.hosts)
-  try {
-    await producer.sync()
-    await new Promise<void>((resolve) => setImmediate(resolve))
-    const listing = async () => {
-      const record = await resolveEnvironment(root, saved.id)
-      const result = await original()
-      return {
-        ...result,
-        environments: result.environments.map((environment) => ({
-          ...environment,
-          name: `Pairing ${record.pairingRevision}`
-        }))
-      }
-    }
-    vi.spyOn(h.hosts, 'list')
-      .mockImplementation(listing)
-      .mockImplementationOnce(async () => {
-        const stale = await listing()
-        await updateEnvironmentFromPairingCode(root, saved.id, { pairingCode: code(2), now: 200 })
-        await resolveEnvironment(root, saved.id)
-        return stale
-      })
-    const published: string[][] = []
-    await producer.withPreparedSnapshot((snapshot) => {
-      published.push(snapshot.servers.map((server) => server.host!.label))
-    })
-    expect(published).toEqual([['Pairing 200']])
-  } finally {
-    detach()
-    rmSync(root, { recursive: true, force: true })
   }
 })

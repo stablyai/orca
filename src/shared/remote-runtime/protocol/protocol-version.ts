@@ -1,47 +1,47 @@
 import {
   PROJECT_GROUP_UPDATE_MANY_RUNTIME_CAPABILITY,
   PROJECT_ROOT_ORDER_RUNTIME_CAPABILITY
-} from './project/groups/project-group-order-capability'
-import { EMULATOR_RUNTIME_CAPABILITIES } from './remote-runtime/protocol/emulator-runtime-capabilities'
-import { ACCOUNT_RUNTIME_CAPABILITIES } from './remote-runtime/protocol/account-runtime-capabilities'
-import * as agentLaunchCapabilities from './agent-launch/contracts/agent-launch-runtime-capability'
+} from '../../project/groups/project-group-order-capability'
+import { EMULATOR_RUNTIME_CAPABILITIES } from './emulator-runtime-capabilities'
+import { ACCOUNT_RUNTIME_CAPABILITIES } from './account-runtime-capabilities'
+import * as agentLaunchCapabilities from '../../agent-launch/contracts/agent-launch-runtime-capability'
 import {
   AGENT_SESSION_BOUNDARY_RUNTIME_CAPABILITY,
   AGENT_SESSION_RUNTIME_CAPABILITIES
-} from './agent-session/agent-session-runtime-capabilities'
-import { AI_VAULT_RUNTIME_CAPABILITIES } from './ai-vault/contracts/ai-vault-runtime-capabilities'
+} from '../../agent-session/agent-session-runtime-capabilities'
+import { AI_VAULT_RUNTIME_CAPABILITIES } from '../../ai-vault/contracts/ai-vault-runtime-capabilities'
 import {
   AUTOMATION_RUNTIME_CAPABILITIES,
   AUTOMATION_RUNTIME_CLIENT_CAPABILITIES
-} from './automations/automation-runtime-capabilities'
-import { BROWSER_RUNTIME_CAPABILITIES } from './browser/runtime/browser-runtime-capabilities'
+} from '../../automations/automation-runtime-capabilities'
+import { BROWSER_RUNTIME_CAPABILITIES } from '../../browser/runtime/browser-runtime-capabilities'
 import {
   DEVICE_KEY_RUNTIME_CAPABILITIES,
   E2EE_V2_TOKEN_CAPABILITIES_RUNTIME_CAPABILITY
-} from './remote-runtime/pairing/device-key-capability'
-import { PAIRING_TICKET_EXCHANGE_RUNTIME_CAPABILITIES } from './remote-runtime/pairing/ticket-exchange-capability'
-import { FILES_RUNTIME_CAPABILITIES } from './file-access/files-runtime-capabilities'
-import { HOST_RUNTIME_CAPABILITIES } from './remote-runtime/protocol/host-runtime-capabilities'
-import { MOBILE_RUNTIME_CAPABILITIES } from './remote-runtime/protocol/mobile-runtime-capabilities'
-import { ORCAD_RUNTIME_CAPABILITIES } from './remote-runtime/protocol/orcad-runtime-capabilities'
-import { ORCHESTRATION_RUNTIME_CAPABILITIES } from './orchestration/orchestration-runtime-capabilities'
-import { PREFLIGHT_RUNTIME_CAPABILITIES } from './remote-runtime/protocol/preflight-runtime-capabilities'
+} from '../pairing/device-key-capability'
+import { PAIRING_TICKET_EXCHANGE_RUNTIME_CAPABILITIES } from '../pairing/ticket-exchange-capability'
+import { FILES_RUNTIME_CAPABILITIES } from '../../file-access/files-runtime-capabilities'
+import { HOST_RUNTIME_CAPABILITIES } from './host-runtime-capabilities'
+import { MOBILE_RUNTIME_CAPABILITIES } from './mobile-runtime-capabilities'
+import { ORCAD_RUNTIME_CAPABILITIES } from './orcad-runtime-capabilities'
+import { ORCHESTRATION_RUNTIME_CAPABILITIES } from '../../orchestration/orchestration-runtime-capabilities'
+import { PREFLIGHT_RUNTIME_CAPABILITIES } from './preflight-runtime-capabilities'
 import {
   SESSION_TAB_CLOSE_INTENT_RUNTIME_CAPABILITY,
   SESSION_TABS_RUNTIME_CAPABILITIES
-} from './remote-runtime/protocol/session-tabs-runtime-capabilities'
-import { SKILL_RUNTIME_CAPABILITIES } from './skills/capabilities/skill-install-capability'
-import { SOURCE_CONTROL_RUNTIME_CAPABILITIES } from './source-control/runtime/source-control-runtime-capabilities'
-import { TASK_SOURCE_RUNTIME_CAPABILITIES } from './work-items/task-source-runtime-capabilities'
-import { TERMINAL_RUNTIME_CAPABILITIES } from './terminal/runtime-policy/terminal-runtime-capabilities'
-import { WORKSPACE_PORTS_RUNTIME_CAPABILITIES } from './remote-runtime/protocol/workspace-ports-runtime-capabilities'
+} from './session-tabs-runtime-capabilities'
+import { SKILL_RUNTIME_CAPABILITIES } from '../../skills/capabilities/skill-install-capability'
+import { SOURCE_CONTROL_RUNTIME_CAPABILITIES } from '../../source-control/runtime/source-control-runtime-capabilities'
+import { TASK_SOURCE_RUNTIME_CAPABILITIES } from '../../work-items/task-source-runtime-capabilities'
+import { TERMINAL_RUNTIME_CAPABILITIES } from '../../terminal/runtime-policy/terminal-runtime-capabilities'
+import { WORKSPACE_PORTS_RUNTIME_CAPABILITIES } from './workspace-ports-runtime-capabilities'
 import {
   REPO_SEARCH_QUALIFIED_REFS_RUNTIME_CAPABILITY,
   WORKTREE_GITHUB_PR_SUPPRESSION_RUNTIME_CAPABILITY,
   WORKTREE_RUNTIME_CAPABILITIES,
   WORKTREE_VISIBILITY_DEFAULTS_RUNTIME_CAPABILITY,
   WORKTREE_VISIBILITY_SOURCE_DEFAULTS_RUNTIME_CAPABILITY
-} from './remote-runtime/protocol/worktree-runtime-capabilities'
+} from './worktree-runtime-capabilities'
 
 // Runtime protocol ranges permit app-version drift across desktop/server/CLI/mobile. Bump for removed methods/required params,
 // changed field meaning (units/nullability), framing or auth; optional fields, new methods and ignorable events are additive.

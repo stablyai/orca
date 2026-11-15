@@ -7,7 +7,7 @@ import {
 import type { SshTarget } from '../../../../../../shared/remote-runtime/ssh/ssh-types'
 import type { ManagedOrcadPreloadApi } from '../../../../../../preload/api/runtime/managed-orcad-api'
 import type { RemoteServerUpdateEntry } from '@/runtime/hosts/updates/remote-server-update-coordinator'
-import type { UpdateCheckOptions } from '../../../../../../shared/update-status-types'
+import type { UpdateCheckOptions } from '../../../../../../shared/updater/update-status-types'
 import { getRuntimeServerProblemLine, getRuntimeServerRoute } from './runtime-server-row-meta'
 import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
 import { cn } from '@/lib/class-names'

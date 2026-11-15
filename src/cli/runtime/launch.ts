@@ -10,8 +10,8 @@ import {
   pinServeUserDataPath,
   resolveLaunchUserDataPath
 } from './profile/launch-user-data-path'
-import { foregroundServeIsolatedProfileSwitches } from '../../shared/electron-isolated-profile-switches'
-import { headlessServeOzonePlatformSwitches } from '../../shared/headless-serve-ozone-platform'
+import { foregroundServeIsolatedProfileSwitches } from '../../shared/app-lifecycle/launch/electron-isolated-profile-switches'
+import { headlessServeOzonePlatformSwitches } from '../../shared/app-lifecycle/launch/headless-serve-ozone-platform'
 import { getMacAppBundlePath } from './serve/updates/mac-app-update-bundle'
 import { getPlatformUserDataPath } from './profile/metadata'
 import { isSameUserDataPath } from '../../shared/remote-runtime/serve-supervisor/serve-user-data-path'
@@ -21,7 +21,7 @@ import {
   superviseForegroundServe
 } from './serve/updates/serve-update-supervisor'
 import { RuntimeClientError } from './connection/types'
-import { BACKGROUND_OPEN_ARG } from '../../shared/background-open-argv'
+import { BACKGROUND_OPEN_ARG } from '../../shared/app-lifecycle/launch/background-open-argv'
 import {
   getExecutableAppArgs,
   resolveAppRoot,
@@ -32,7 +32,7 @@ import {
   SERVE_RUNTIME_ELECTRON,
   SERVE_RUNTIME_ENV
 } from '../../shared/remote-runtime/serve-supervisor/orcad-local-serve-selection'
-import { findBundledWebClientRoot } from '../../shared/bundled-web-client-root'
+import { findBundledWebClientRoot } from '../../shared/web-client/bundled-web-client-root'
 import { resolveLocalServeRuntime, serveWithOrcad } from './serve/startup/serve-orcad-launch'
 import { findAppSpeechRecognizerDir } from './app-launch/serve-speech-recognizer'
 import {
