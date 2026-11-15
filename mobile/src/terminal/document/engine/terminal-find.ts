@@ -11,6 +11,8 @@ export function attachSearchAddon(
   scope: TerminalDocumentScope,
   term: Pick<TerminalDocumentTerminal, 'loadAddon'>
 ) {
+  // Never leave find pointed at the previous engine's addon, which the surface swap disposes.
+  scope.searchAddon = null
   try {
     const addon = scope.createSearchAddon()
     if (!addon) {
@@ -37,6 +39,8 @@ export function findInTerminal(
   direction: TerminalFindDirection,
   incremental: boolean
 ) {
+  // Kept even without an addon so the engine that init builds replays it.
+  scope.findQuery = query
   const addon = scope.searchAddon
   if (!addon) {
     return
@@ -45,7 +49,9 @@ export function findInTerminal(
     clearTerminalFind(scope)
     return
   }
-  scope.findQuery = query
+  if (direction === 'next') {
+    startFromViewport(scope.term)
+  }
   const options = buildTerminalSearchOptions({ caseSensitive: false, regex: false, incremental })
   try {
     safeFind(
@@ -56,6 +62,16 @@ export function findInTerminal(
       query,
       options
     )
+  } catch {}
+}
+
+// With no selection the addon starts at the top of the scrollback; a reader at the bottom expects the match nearest what they see.
+function startFromViewport(term: TerminalDocumentTerminal | null) {
+  if (!term || term.hasSelection?.() !== false) {
+    return
+  }
+  try {
+    term.select(0, term.buffer.active.viewportY, 1)
   } catch {}
 }
 
