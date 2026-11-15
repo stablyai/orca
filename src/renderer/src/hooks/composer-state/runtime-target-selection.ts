@@ -32,7 +32,6 @@ export function useComposerRuntimeTargetSelection(input: ComposerRuntimeTargetSe
     activeRepoId,
     eligibleRepos,
     hostOptions,
-    initialEphemeralVmRecipeId,
     pendingInitialWorkspaceTarget,
     projectGroups,
     projectHostSetups,
@@ -108,6 +107,7 @@ export function useComposerRuntimeTargetSelection(input: ComposerRuntimeTargetSe
         projects,
         projectHostSetups,
         draftRepoId: requestedRepoId,
+        activeWorkspaceHostId: input.activeWorkspaceExecutionHostId,
         projectId: pendingInitialWorkspaceTarget?.projectId,
         hostId: pendingInitialWorkspaceTarget?.hostId,
         projectHostSetupId:
@@ -121,6 +121,7 @@ export function useComposerRuntimeTargetSelection(input: ComposerRuntimeTargetSe
     [
       actionableHostIds,
       eligibleRepos,
+      input.activeWorkspaceExecutionHostId,
       pendingInitialWorkspaceTarget,
       projectHostSetups,
       projects,
@@ -267,7 +268,7 @@ export function useComposerRuntimeTargetSelection(input: ComposerRuntimeTargetSe
     repoConnectionId: selectedRecipeRepoConnectionId,
     repoExecutionHostId: selectedRepo ? getRepoExecutionHostId(selectedRepo) : null,
     projectGroupTarget: isProjectGroupTarget,
-    initialRecipeId: initialEphemeralVmRecipeId
+    initialRecipeId: input.initialEphemeralVmRecipeId
   })
 
   // Why the shared gate: a paired server's own SSH target is read from that server (#25887).

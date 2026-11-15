@@ -8,10 +8,10 @@ import {
 } from '../../../../../shared/manual-repo-order'
 import { normalizeWorkspaceCleanupBrowseState } from '../../../../../shared/workspace-cleanup/workspace-cleanup-browse-state'
 import {
-  normalizeExecutionHostScope,
   normalizeExecutionHostOrder,
   normalizeVisibleExecutionHostIds
 } from '../../../../../shared/execution-host'
+import { workspaceHostScopeForVisibleHosts } from '../../../../../shared/workspace-view/workspace-host-visibility'
 import { normalizeFeatureInteractions } from '../../../../../shared/feature-interactions'
 import { normalizeContextualTourIds } from '../../../../../shared/contextual-tours'
 import { normalizeFeatureTipIds } from '../../../../../shared/feature-tips'
@@ -101,6 +101,7 @@ export function createUiHydrationActions(set: UISliceSet, _get: UISliceGet): Par
         // Migration: one-shot old-'recent'→'smart' runs in main (_sortBySmartMigrated), not here, so a deliberate 'recent' choice survives restart.
         const sortBy = ui.sortBy
         const statusBarItemsWithGrok = hydrateStatusBarItems(ui)
+        const visibleWorkspaceHostIds = normalizeHydratedVisibleWorkspaceHostIds(ui)
         const hydrated = {
           // Why: persisted widths may be stale/corrupt/hand-edited; clamp during hydration so invalid values can't break layout.
           sidebarWidth: sanitizePersistedSidebarWidth(
@@ -135,8 +136,9 @@ export function createUiHydrationActions(set: UISliceSet, _get: UISliceGet): Par
           showActiveOnly: false,
           // Why: ignore older positive-form keys so old profiles start from the new default (sleeping workspaces visible).
           showSleepingWorkspaces: !(ui.hideSleepingWorkspaces ?? DEFAULT_HIDE_SLEEPING_WORKSPACES),
-          workspaceHostScope: normalizeExecutionHostScope(ui.workspaceHostScope),
-          visibleWorkspaceHostIds: normalizeHydratedVisibleWorkspaceHostIds(ui),
+          visibleWorkspaceHostIds,
+          // Why: old profiles can save several visible hosts with a single-host scope; derive it so none survives (#41140).
+          workspaceHostScope: workspaceHostScopeForVisibleHosts(visibleWorkspaceHostIds),
           workspaceHostOrder: normalizeExecutionHostOrder(ui.workspaceHostOrder),
           // Why: a malformed or legacy filter value must degrade to All hosts, never throw during hydration.
           automationHostFilter: parsePersistedAutomationHostFilter(ui.automationHostFilter),

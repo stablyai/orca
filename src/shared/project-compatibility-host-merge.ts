@@ -14,7 +14,6 @@ import {
   mergePreviousProjectMetadata,
   mergeProjectCompatibilityProjects,
   mergeProjectHostSetupCompatibility,
-  mergeProjectHostSetupsByOwner,
   projectCompatibilityFromRepos,
   projectWithCurrentSourceRepoIds
 } from './project-compatibility-merge'
@@ -147,10 +146,23 @@ export function mergeFetchedProjectCompatibilityForHost({
     return setup.hostId === LOCAL_EXECUTION_HOST_ID || owner?.kind === 'ssh'
   }
   const fetchedSetupsForHost = fetched.projectHostSetups.filter(setupBelongsToFetchedCatalog)
-  const preservedSetups = previous.projectHostSetups.filter(
-    (setup) => !setupBelongsToFetchedCatalog(setup)
+  // Replace the fetched host's setups in place and append only new ones, so a refresh cannot reorder other hosts (#41140).
+  const fetchedSetupByOwnerKey = new Map(
+    fetchedSetupsForHost.map((setup) => [getProjectHostSetupOwnerKey(setup), setup])
   )
-  const projectHostSetups = mergeProjectHostSetupsByOwner(preservedSetups, fetchedSetupsForHost)
+  const projectHostSetups: ProjectHostSetup[] = []
+  for (const setup of previous.projectHostSetups) {
+    if (!setupBelongsToFetchedCatalog(setup)) {
+      projectHostSetups.push(setup)
+      continue
+    }
+    const replacement = fetchedSetupByOwnerKey.get(getProjectHostSetupOwnerKey(setup))
+    if (replacement) {
+      projectHostSetups.push(replacement)
+      fetchedSetupByOwnerKey.delete(getProjectHostSetupOwnerKey(replacement))
+    }
+  }
+  projectHostSetups.push(...fetchedSetupByOwnerKey.values())
   const previousProjectById = new Map(previous.projects.map((project) => [project.id, project]))
   const reposById = getReposById(repos)
   const currentRepoIds = new Set(repos.map((repo) => repo.id))
