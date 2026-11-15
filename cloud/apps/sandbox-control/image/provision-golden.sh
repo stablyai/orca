@@ -55,8 +55,11 @@ if [ ! -s "$ORCA_HOME/runtime/orcad/orcad-server.js" ]; then
   server="$(find "$ORCA_HOME/runtime" -name orcad-server.js -type f | head -n 1)"
   [ -n "$server" ] || { log 'bundle has no orcad-server.js'; exit 1; }
   root="$(dirname "$(dirname "$server")")"
-  ln -sfn "$(dirname "$server")" "$ORCA_HOME/runtime/orcad"
-  [ -d "$ORCA_HOME/runtime/runtimes" ] || ln -sfn "$root/runtimes" "$ORCA_HOME/runtime/runtimes"
+  # Move the tree up rather than linking to it: every VM script finds node with
+  # `find .../runtime/runtimes -type f`, and find doesn't descend into a symlinked start point
+  # (a linked release bundle left the build with no node). orcad's ../runtimes still resolves.
+  for entry in "$root"/*; do mv "$entry" "$ORCA_HOME/runtime/"; done
+  rmdir "$root"
 fi
 test -s "$ORCA_HOME/runtime/orcad/orcad-server.js"
 node="$(find "$ORCA_HOME/runtime/runtimes" -type f -name node | head -n 1)"

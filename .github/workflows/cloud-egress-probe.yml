@@ -1,0 +1,81 @@
+name: Cloud Egress Probe
+
+# Release check for sandbox egress, against DEV, through Orca's own paths (dev workspaces driven
+# over the shipped `orca` CLI's pairing code). Bogus tokens only; postman-echo.com is the echo host.
+# Details and the local run: cloud/apps/sandbox-control/scripts/README.md
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cloud-egress-probe
+  cancel-in-progress: false
+
+defaults:
+  run:
+    working-directory: cloud
+
+jobs:
+  probe:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      DEV_TEST_JWK: ${{ secrets.ORCA_DEV_TEST_JWK }}
+      DEV_OPERATOR_TOKEN: ${{ secrets.ORCA_DEV_OPERATOR_TOKEN }}
+    steps:
+      - name: Check the dev credentials are configured
+        id: creds
+        working-directory: .
+        run: |
+          if [ -z "$DEV_TEST_JWK" ] || [ -z "$DEV_OPERATOR_TOKEN" ]; then
+            echo "::warning::ORCA_DEV_TEST_JWK / ORCA_DEV_OPERATOR_TOKEN are not set: the egress probe did not run"
+            echo "skip=1" >> "$GITHUB_OUTPUT"
+          fi
+
+      - if: steps.creds.outputs.skip != '1'
+        uses: actions/checkout@v4
+
+      - if: steps.creds.outputs.skip != '1'
+        uses: ./.github/actions/setup-pnpm
+        with:
+          package-json-file: cloud/package.json
+
+      - if: steps.creds.outputs.skip != '1'
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          check-latest: true
+
+      - if: steps.creds.outputs.skip != '1'
+        run: pnpm install --frozen-lockfile --filter @orca-cloud/sandbox-control...
+
+      # The shipped CLI from the latest release's Linux package: the same pairing path the desktop uses.
+      - name: Install the orca CLI
+        if: steps.creds.outputs.skip != '1'
+        working-directory: .
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release download --repo stablyai/orca --pattern 'orca-ide_*_amd64.deb' --dir "$RUNNER_TEMP/orca"
+          dpkg-deb -x "$RUNNER_TEMP"/orca/orca-ide_*_amd64.deb "$RUNNER_TEMP/orca/x"
+          cli="$(find "$RUNNER_TEMP/orca/x" -path '*/bin/orca' -type f | head -n 1)"
+          test -x "$cli"
+          echo "ORCA_PROBE_CLI=$cli" >> "$GITHUB_ENV"
+
+      - name: Probe dev egress
+        if: steps.creds.outputs.skip != '1'
+        run: |
+          umask 077
+          printf '%s' "$DEV_TEST_JWK" > "$RUNNER_TEMP/dev-jwk.json"
+          printf '%s' "$DEV_OPERATOR_TOKEN" > "$RUNNER_TEMP/dev-operator"
+          ORCA_PROBE_DEV_JWK_FILE="$RUNNER_TEMP/dev-jwk.json" ORCA_PROBE_OPERATOR_TOKEN_FILE="$RUNNER_TEMP/dev-operator" \
+            pnpm --filter @orca-cloud/sandbox-control exec tsx scripts/egress-probe.ts > "$RUNNER_TEMP/egress-probe.json"
+
+      - uses: actions/upload-artifact@v4
+        if: always() && steps.creds.outputs.skip != '1'
+        with:
+          name: cloud-egress-probe-report
+          path: ${{ runner.temp }}/egress-probe.json
+          retention-days: 14
