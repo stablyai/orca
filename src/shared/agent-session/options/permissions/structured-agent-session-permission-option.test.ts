@@ -10,6 +10,7 @@ import {
   createStructuredAgentSessionOptionState
 } from '../structured-agent-session-options'
 import '../view/structured-agent-session-option-view'
+import { projectRuntimePermission } from './structured-agent-session-permission-option'
 import { structuredAgentSessionSeedCatalog } from '../model-catalog/structured-agent-session-seed-catalog'
 
 const permission = (state: Parameters<typeof structuredAgentSessionOptionSnapshot>[0]) =>
@@ -87,6 +88,23 @@ describe('the permission mode picker', () => {
     const explicit = permission({ ...own, permissionMode: 'ask', reportedPermissionMode: 'plan' })
     expect(explicit?.kind).toMatchObject({ currentValue: 'ask' })
     expect(explicit?.kind).not.toHaveProperty('reportedValue')
+  })
+
+  it("shows a newer child's report and keeps the read report over an older one", () => {
+    const own = {
+      ...live('claude', { permissionMode: 'ask' }),
+      permissionOwnSupported: true,
+      permissionMode: 'own',
+      reportedPermissionMode: 'ask'
+    }
+    const reported = (runtimePermission: unknown, fence: number) =>
+      permission(projectRuntimePermission(own, { runtimePermission }, fence))?.kind
+    // A new chat attaches at fence 1; its first child starts at fence 2.
+    expect(reported({ fence: 2, mode: 'full-access' }, 1)).toMatchObject({
+      reportedValue: 'full-access'
+    })
+    expect(reported({ fence: 1, mode: 'full-access' }, 2)).toMatchObject({ reportedValue: 'ask' })
+    expect(reported(null, 1)).not.toHaveProperty('reportedValue')
   })
 
   it('admits supported Own delegation through the same descriptor/readiness predicate', () => {
