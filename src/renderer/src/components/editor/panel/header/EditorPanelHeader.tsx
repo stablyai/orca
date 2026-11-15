@@ -1,3 +1,4 @@
+import { useMemo } from 'react'
 import { ArrowDown, ArrowUp, Columns2, Eye, FileText, ListTree, Rows2 } from 'lucide-react'
 import { useAppStore } from '@/store/index'
 import { useVisibleWorktreeDiffComments } from '../../../diff-comments/use-visible-worktree-diff-comments'
@@ -105,6 +106,13 @@ export function EditorPanelHeader({
     activeFile
   )
   const activeGroupId = useAppStore((s) => s.activeGroupIdByWorktree[activeFile.worktreeId])
+  const hasUnsentFileNotes = useMemo(
+    () =>
+      diffComments.some(
+        (comment) => comment.filePath === activeFile.relativePath && !comment.sentAt
+      ),
+    [activeFile.relativePath, diffComments]
+  )
   const diffWordWrap = useAppStore((s) => s.settings?.diffWordWrap === true)
   const diffShowWhitespace = useAppStore((s) => s.settings?.diffShowWhitespace === true)
   const editorWordWrap = useAppStore((s) => s.settings?.editorWordWrap !== false)
@@ -146,16 +154,19 @@ export function EditorPanelHeader({
       />
       {isSingleDiff && (
         <SendNotesSlot className="ml-1">
-          <DiffNotesSendMenu
-            owner={commentOwner}
-            worktreeId={activeFile.worktreeId}
-            groupId={activeGroupId ?? activeFile.worktreeId}
-            comments={diffComments}
-            filePath={activeFile.relativePath}
-            showFileScope
-            align="start"
-            batch={{ size: 'sm' }}
-          />
+          {/* Mount the menu only for a file with unsent notes; most diff headers have none. */}
+          {hasUnsentFileNotes ? (
+            <DiffNotesSendMenu
+              owner={commentOwner}
+              worktreeId={activeFile.worktreeId}
+              groupId={activeGroupId ?? activeFile.worktreeId}
+              comments={diffComments}
+              filePath={activeFile.relativePath}
+              showFileScope
+              align="start"
+              batch={{ size: 'sm' }}
+            />
+          ) : null}
         </SendNotesSlot>
       )}
       {canOpenPreview && (

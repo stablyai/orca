@@ -124,10 +124,12 @@ export function SendNotesSlot({
       )
     }
     measure()
-    // The sizer resizes when fonts load, the language changes or the count changes.
+    // Each label is watched on its own: a font or language change can resize a narrower one alone.
     const observer = new ResizeObserver(measure)
     observer.observe(slot)
-    observer.observe(sizer)
+    for (const tierLabel of sizer.children) {
+      observer.observe(tierLabel)
+    }
     return () => observer.disconnect()
   }, [face])
 

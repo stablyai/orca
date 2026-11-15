@@ -40,8 +40,11 @@ export type NotesSendMenuScope<TNote> = {
   formatPrompt: (notes: readonly TNote[]) => string
 }
 
-type SendableNotesScope<TNote> = Omit<NotesSendMenuScope<TNote>, 'formatPrompt'> & {
-  prompt: string
+type SendableNotesScope<TNote> = NotesSendMenuScope<TNote>
+
+// Formatting is deferred to the open menu: closed menus re-render on every note change.
+function scopePrompt<TNote>(scope: SendableNotesScope<TNote>): string {
+  return scope.notes.length > 0 ? scope.formatPrompt(scope.notes) : ''
 }
 
 export type NotesSendMenuProps<TNote> = {
@@ -106,12 +109,12 @@ export function NotesSendMenu<TNote extends DiffCommentDeliverySnapshot>({
   const sendableScopes = useMemo<SendableNotesScope<TNote>[]>(
     () =>
       recomputeOn([inFlightVersion], () =>
-        scopes.map(({ formatPrompt, ...scope }) => {
-          const notes = owner
+        scopes.map((scope) => ({
+          ...scope,
+          notes: owner
             ? scope.notes.filter((note) => !isNoteInFlight(diffCommentSendKey(owner, note)))
             : []
-          return { ...scope, notes, prompt: notes.length > 0 ? formatPrompt(notes) : '' }
-        })
+        }))
       ),
     [inFlightVersion, owner, scopes]
   )
@@ -169,7 +172,7 @@ export function NotesSendMenu<TNote extends DiffCommentDeliverySnapshot>({
         id: targetModeId,
         worktreeId,
         source,
-        prompt: scope.prompt,
+        prompt: scopePrompt(scope),
         label: targetModeLabel ?? scope.label,
         launchSource: 'notes_send',
         onPromptDelivered: () => markDelivered(scope.notes),
@@ -194,6 +197,13 @@ export function NotesSendMenu<TNote extends DiffCommentDeliverySnapshot>({
   )
 
   const effectiveSendMenuOpen = sendMenuOpen && ownsTargetMode
+  const openPrompts = useMemo(
+    () =>
+      effectiveSendMenuOpen
+        ? new Map(sendableScopes.map((scope) => [scope.id, scopePrompt(scope)]))
+        : null,
+    [effectiveSendMenuOpen, sendableScopes]
+  )
   if (sendMenuOpen && !ownsTargetMode) {
     // Clear stale local open state before painting another target’s menu.
     setSendMenuOpen(false)
@@ -305,7 +315,7 @@ export function NotesSendMenu<TNote extends DiffCommentDeliverySnapshot>({
                   <ReviewNotesSendMenuContent
                     worktreeId={worktreeId}
                     groupId={groupId}
-                    prompt={scope.prompt}
+                    prompt={openPrompts?.get(scope.id) ?? ''}
                     promptDelivery="submit-after-ready"
                     launchSource="notes_send"
                     onPromptDelivered={() => markDelivered(scope.notes)}
@@ -319,7 +329,7 @@ export function NotesSendMenu<TNote extends DiffCommentDeliverySnapshot>({
           <ReviewNotesSendMenuContent
             worktreeId={worktreeId}
             groupId={groupId}
-            prompt={defaultScope?.prompt ?? ''}
+            prompt={(defaultScope && openPrompts?.get(defaultScope.id)) ?? ''}
             promptDelivery="submit-after-ready"
             launchSource="notes_send"
             onPromptDelivered={() => {

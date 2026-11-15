@@ -10,6 +10,8 @@ import {
 import { translate } from '@/i18n/i18n'
 import { createUiActivityActions } from './ui-slice-activity-actions'
 import { selectKnownWorktreeById } from '../../workspaces/selection/known-worktree-selection'
+import { combinedUncommittedDiffId } from '../editor/git/open-combined-diff'
+import { editorOpenOwner } from '../editor/git/editor-open-owner'
 
 let agentSendTargetModeInstanceCounter = 0
 
@@ -102,7 +104,17 @@ export function createUiAgentActions(
       if (!worktree) {
         return false
       }
-      get().openAllDiffs(worktreeId, worktree.path)
+      // Reuse an open Changes tab as it is: reopening would replace its entry snapshots and comparison.
+      const changesId = combinedUncommittedDiffId(worktreeId, editorOpenOwner(get(), worktreeId))
+      const changesTab = get().openFiles.some((file) => file.id === changesId)
+        ? (get().unifiedTabsByWorktree[worktreeId] ?? []).find((tab) => tab.entityId === changesId)
+        : undefined
+      if (changesTab) {
+        get().activateTab(changesTab.id, { worktreeId })
+        get().setActiveFile(changesId, worktreeId)
+      } else {
+        get().openAllDiffs(worktreeId, worktree.path)
+      }
       const nonce = (get().diffNotesSendMenuOpenRequest?.nonce ?? 0) + 1
       set({ diffNotesSendMenuOpenRequest: { worktreeId, nonce, issuedAt: Date.now() } })
       return true
