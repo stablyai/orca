@@ -14,6 +14,7 @@ import type {
   StructuredAgentSessionHostDeps,
   StructuredAgentSessionHostSession
 } from './structured-agent-session-host-types'
+import { readAgentJournalPage } from '../publication/history/agent-read-journal-page'
 import {
   queuedSendAnswer,
   structuredSendAnswer
@@ -75,6 +76,22 @@ export function createStructuredAgentSessionConversationReads(context: () => Rea
       (await journalOf(sessionId)).reads.item(itemId),
     automationRun: async (sessionId: string, messageId: string, inputIds: readonly string[]) =>
       (await journalOf(sessionId)).reads.automationRun(messageId, inputIds),
+    /** One `orca agent read` page, opened at rest; a pending prompt waits only while the held
+     *  session can still answer it, and every pending one does with no session held. */
+    agentReadPage: async (sessionId: string, limit: number) => {
+      const journal = await journalOf(sessionId)
+      const { deps, sessions } = context()
+      const work = await hostStructuredAgentSessionCurrentWork(
+        { store: deps.store, sessions },
+        sessionId
+      )
+      const actionable = work ? new Set(work.actionablePromptIds()) : null
+      return readAgentJournalPage(
+        journal,
+        { sessionId, limit },
+        (itemId) => actionable?.has(itemId) ?? true
+      )
+    },
 
     readModelCatalog,
     attentionReads: {
