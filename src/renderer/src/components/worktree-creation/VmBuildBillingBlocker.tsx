@@ -18,8 +18,9 @@ export type BillingBlockerPhase =
   | { kind: 'idle' }
   | { kind: 'saving' }
   | { kind: 'error'; message: string }
-  /** A fix in the browser (portal): re-check on return, or with Check again. */
-  | { kind: 'browser'; checking: boolean; stillBlocked: boolean }
+  /** A fix elsewhere: the plans dialog (then the console) or the payment portal. Re-check on
+   *  return, or with Check again. */
+  | { kind: 'browser'; checking: boolean; stillBlocked: boolean; via: 'plans' | 'portal' }
 
 /** Why there is no plan, in billing's words: only a plan that existed has "ended" (EP-11). */
 function planBlockBody(
@@ -175,24 +176,41 @@ export function VmBuildBillingBlockerView({
             inBrowser ? (
               <div className="space-y-2">
                 <p className="text-muted-foreground">
-                  {phase.stillBlocked
-                    ? t(
-                        'worktreeCreation.billingBlock.browserStill',
-                        'Not updated yet. Finish in your browser, then check again.'
-                      )
-                    : t('worktreeCreation.billingBlock.browser', 'Finish in your browser.')}
+                  {phase.via === 'plans'
+                    ? phase.stillBlocked
+                      ? t(
+                          'worktreeCreation.billingBlock.plansStill',
+                          'No plan yet. Choose one, then check again.'
+                        )
+                      : t(
+                          'worktreeCreation.billingBlock.plans',
+                          'Choose a plan, then check again. Orca checks again when you come back.'
+                        )
+                    : phase.stillBlocked
+                      ? t(
+                          'worktreeCreation.billingBlock.browserStill',
+                          'Not updated yet. Finish in your browser, then check again.'
+                        )
+                      : t('worktreeCreation.billingBlock.browser', 'Finish in your browser.')}
                 </p>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  aria-busy={phase.checking || undefined}
-                  aria-disabled={phase.checking || undefined}
-                  onClick={phase.checking ? undefined : onCheckAgain}
-                >
-                  {phase.checking ? <Loader2 className="animate-spin" /> : null}
-                  {t('worktreeCreation.billingBlock.checkAgain', 'Check again')}
-                </Button>
+                <div className="flex flex-wrap gap-2">
+                  {phase.via === 'plans' ? (
+                    <Button type="button" size="sm" onClick={onComparePlans}>
+                      {t('worktreeCreation.billingBlock.seePlans', 'See plans')}
+                    </Button>
+                  ) : null}
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    aria-busy={phase.checking || undefined}
+                    aria-disabled={phase.checking || undefined}
+                    onClick={phase.checking ? undefined : onCheckAgain}
+                  >
+                    {phase.checking ? <Loader2 className="animate-spin" /> : null}
+                    {t('worktreeCreation.billingBlock.checkAgain', 'Check again')}
+                  </Button>
+                </div>
               </div>
             ) : kind === 'spendCap' ? (
               <form
@@ -350,14 +368,26 @@ export function VmBuildBillingBlocker({
   }
 
   const checkBilling = React.useCallback(async (): Promise<void> => {
-    setPhase({ kind: 'browser', checking: true, stillBlocked: false })
+    const via = (current: BillingBlockerPhase): 'plans' | 'portal' =>
+      current.kind === 'browser' ? current.via : 'portal'
+    setPhase((current) => ({
+      kind: 'browser',
+      checking: true,
+      stillBlocked: false,
+      via: via(current)
+    }))
     const status = await window.api.orcaProfiles.billingStatus().catch(() => null)
     // The service's own verdict: a fixed payment makes new sandboxes startable again.
     if (status?.status === 'ok' && status.entitlement.canStartSandbox) {
       onContinue()
       return
     }
-    setPhase({ kind: 'browser', checking: false, stillBlocked: true })
+    setPhase((current) => ({
+      kind: 'browser',
+      checking: false,
+      stillBlocked: true,
+      via: via(current)
+    }))
   }, [onContinue])
 
   // Back from the browser: check once; if billing is fine the create continues on its own.
@@ -385,11 +415,11 @@ export function VmBuildBillingBlocker({
       onTurnOnOverage={() => void saveOverage(defaultCapCents)}
       onRaiseCap={(dollars) => void saveOverage(dollars * 100)}
       onComparePlans={() => {
-        setPhase({ kind: 'browser', checking: false, stillBlocked: false })
+        setPhase({ kind: 'browser', checking: false, stillBlocked: false, via: 'plans' })
         openPlansDialog()
       }}
       onUpdatePayment={() => {
-        setPhase({ kind: 'browser', checking: false, stillBlocked: false })
+        setPhase({ kind: 'browser', checking: false, stillBlocked: false, via: 'portal' })
         void window.api.orcaProfiles.billingOpenPortal().catch(() => {})
       }}
       onCheckAgain={() => void checkBilling()}

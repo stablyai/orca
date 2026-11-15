@@ -29,9 +29,9 @@ export function PlansDialogHost(): React.JSX.Element {
           catalog={catalog.result}
           canManage={canManage}
           opening={opening}
-          onContinue={() => {
+          onContinue={(hint) => {
             setOpening(true)
-            void openCloudConsole('billing').finally(() => setOpening(false))
+            void openCloudConsole('billing', hint).finally(() => setOpening(false))
           }}
           onContactSales={(url) => void window.api.shell.openUrl(url)}
           onRetry={() => {

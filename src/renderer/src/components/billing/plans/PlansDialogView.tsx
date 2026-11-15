@@ -14,6 +14,7 @@ import {
   type OrcaBillingStatusResult
 } from '../../../../../shared/orca-billing'
 import type { OrcaPlanCatalogResult } from '../../../../../shared/orca-billing-plans'
+import type { OrcaCloudConsoleBillingHint } from '../../../../../shared/orca-cloud-console'
 import { PaymentIssueNotice } from '../PaymentIssueNotice'
 import { isActivePlan } from '../plan-billing-format'
 import {
@@ -35,7 +36,8 @@ export type PlansDialogViewProps = {
   canManage: boolean
   /** The console is being opened (a ticket is minted first). */
   opening: boolean
-  onContinue: () => void
+  /** `hint`: the plan and period picked here, for the console to preselect (never to buy). */
+  onContinue: (hint?: OrcaCloudConsoleBillingHint) => void
   onContactSales: (url: string) => void
   onRetry: () => void
 }
@@ -129,7 +131,7 @@ function PlansBody(props: PlansDialogViewProps): React.JSX.Element {
         <PaymentIssueNotice
           entitlement={{ ...entitlement, canManageBilling: props.canManage }}
           busy={props.opening}
-          onUpdatePayment={props.onContinue}
+          onUpdatePayment={() => props.onContinue()}
         />
         <CurrentPlanStrip entitlement={entitlement} />
       </>
@@ -161,7 +163,7 @@ function PlansBody(props: PlansDialogViewProps): React.JSX.Element {
             <Button
               type="button"
               aria-disabled={props.opening || undefined}
-              onClick={props.opening ? undefined : props.onContinue}
+              onClick={props.opening ? undefined : () => props.onContinue()}
             >
               {t('auto.components.billing.plans.continueInBrowser', 'Continue in browser')}
               <ExternalLink />
@@ -201,7 +203,13 @@ function PlansBody(props: PlansDialogViewProps): React.JSX.Element {
           seats={subscribed && entitlement ? entitlement.seats : null}
           mode={mode}
           opening={props.opening}
-          onContinue={mode === 'member' ? null : props.onContinue}
+          onContinue={
+            mode === 'member'
+              ? null
+              : mode === 'choose'
+                ? () => props.onContinue({ plan: team.planId, interval })
+                : () => props.onContinue()
+          }
         />
         {enterprise ? (
           <EnterprisePlanCard enterprise={enterprise} onContactSales={props.onContactSales} />
