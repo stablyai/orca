@@ -252,6 +252,8 @@ export class DirectProviderChild extends EventEmitter implements ProviderChild {
     if (gated) {
       this.canceled = true
       this.gate?.destroy()
+      // A held bootstrap must run its gate-cancellation path to reap its unpublished watcher.
+      this.raw.kill('SIGCONT')
     }
     if (completion || gated) {
       this.stop.complete()

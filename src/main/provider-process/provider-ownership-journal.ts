@@ -45,16 +45,24 @@ export function providerOwnershipDirectory(): string {
 
 export async function waitForProviderGroupReap(
   pgid: number,
-  timeoutMs = PROVIDER_GROUP_REAP_TIMEOUT_MS
+  timeoutMs = PROVIDER_GROUP_REAP_TIMEOUT_MS,
+  signal?: AbortSignal
 ): Promise<boolean> {
+  if (signal?.aborted) {
+    return false
+  }
   const deadline = performance.now() + timeoutMs
   while (!providerGroupAbsent(pgid)) {
-    if (performance.now() >= deadline) {
+    if (signal?.aborted || performance.now() >= deadline) {
       return false
     }
-    await delay(25)
+    try {
+      await delay(25, undefined, { signal })
+    } catch {
+      return false
+    }
   }
-  return true
+  return !signal?.aborted
 }
 
 export async function waitForProviderOwnershipReap(
@@ -71,7 +79,10 @@ export async function waitForProviderOwnershipReap(
   const timer = setTimeout(() => proof.abort(), timeoutMs)
   const deadline = performance.now() + timeoutMs
   try {
-    if (!(await waitForProviderGroupReap(identity.pgid, timeoutMs)) || proof.signal.aborted) {
+    if (
+      !(await waitForProviderGroupReap(identity.pgid, timeoutMs, proof.signal)) ||
+      proof.signal.aborted
+    ) {
       return false
     }
     if ((await retireProviderWatcher(identity, { signal: proof.signal })) === 'refused') {
@@ -81,7 +92,8 @@ export async function waitForProviderOwnershipReap(
       !proof.signal.aborted &&
       (await waitForProviderGroupReap(
         identity.watcher.pgid,
-        Math.max(0, deadline - performance.now())
+        Math.max(0, deadline - performance.now()),
+        proof.signal
       ))
     )
   } finally {
@@ -198,7 +210,11 @@ export async function publishProviderOwnership(
   bootId: string,
   leaderPid: number,
   watcherPid: number
-): Promise<{ identity: ProviderGroupIdentity; remove: () => Promise<void> }> {
+): Promise<{
+  identity: ProviderGroupIdentity
+  remove: () => Promise<void>
+  removeAfterNativeExit: () => Promise<void>
+}> {
   await recoverProviderOwnership(directory, bootId)
   ownerIdentity ??= proveProviderProcessIdentity(process.pid)
   const [owner, leader, watcher] = await Promise.all([
@@ -259,6 +275,9 @@ export async function publishProviderOwnership(
       if (providerOwnershipAbsent(identity)) {
         await unlink(path).catch(() => {})
       }
+    },
+    removeAfterNativeExit: async () => {
+      await unlink(path).catch(() => {})
     }
   }
 }

@@ -22,14 +22,26 @@ export function reapDirectProviderGroup(
   const proof = new AbortController()
   const abort = (): void => proof.abort()
   canceled?.addEventListener('abort', abort, { once: true })
+  if (canceled?.aborted) {
+    proof.abort()
+  }
   const deadline = performance.now() + PROVIDER_GROUP_REAP_TIMEOUT_MS
   let timer: NodeJS.Timeout | undefined
   const cleanup = async (): Promise<void> => {
+    if (proof.signal.aborted) {
+      return
+    }
     if (completion === 'group-unverifiable') {
       setVerdict('unverifiable')
       return
     }
     const registered = ownership()
+    if (completion === 'group-absent') {
+      // The native frame plus EOF proves the group was absent and the session watcher exited.
+      setVerdict('exited')
+      await registered?.removeAfterNativeExit()
+      return
+    }
     if (!completion && !delivered && registered) {
       await sweepOrphanedProviderGroup(registered.identity, { signal: proof.signal })
     }
@@ -40,10 +52,10 @@ export function reapDirectProviderGroup(
     const remaining = Math.max(0, deadline - performance.now())
     const absent = registered
       ? await waitForProviderOwnershipReap(registered.identity, remaining, proof.signal)
-      : completion === 'group-absent' || !groupPid
+      : !groupPid
     if (!registered && !completion && groupPid) {
       // Before registration only the native completion can also prove the watcher exited.
-      await waitForProviderGroupReap(groupPid, remaining)
+      await waitForProviderGroupReap(groupPid, remaining, proof.signal)
     }
     if (proof.signal.aborted) {
       return

@@ -295,6 +295,15 @@ describe.runIf(process.platform !== 'win32')('direct provider ownership', () => 
     expect(run.output()).toBe('')
   })
 
+  it('cancels a stopped pending bootstrap without executing the CLI', async () => {
+    const run = launch("process.stdout.write('MUST NOT EXECUTE')", { lifetime: 'one-shot' })
+    run.child.kill('SIGSTOP')
+    run.child.kill('SIGKILL')
+    await expect(run.child.ready).rejects.toThrow()
+    await run.closed
+    expect(run.output()).toBe('')
+  })
+
   it('keeps the execution gate shut when ownership publication fails', async () => {
     await writeFile(join(state.root, 'provider-processes'), 'blocked')
     const run = launch("process.stdout.write('MUST NOT EXECUTE')", { lifetime: 'one-shot' })

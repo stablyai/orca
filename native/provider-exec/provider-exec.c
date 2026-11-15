@@ -398,7 +398,8 @@ static int start_watcher(struct watcher *w) {
     int answer = -1;
     size_t have = 0;
     while (have < sizeof answer) {
-        struct pollfd startup[] = {{.fd = report[0], .events = POLLIN}, {.fd = GATE_FD}};
+        struct pollfd startup[] = {
+            {.fd = report[0], .events = POLLIN}, {.fd = GATE_FD, .events = POLLIN}};
         int ready = poll(startup, 2, -1);
         if (ready < 0 && errno == EINTR) {
             continue;
