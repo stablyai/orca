@@ -14,7 +14,13 @@ import {
   type ThemeStudioPublishKit
 } from '../../shared/theme-studio/theme-studio-protocol'
 import { call, localPath, print, stringFlag } from './theme-command-io'
-import { assertGitIdentity, publishSteps, runPublishSteps, shellLine } from './theme-publish-steps'
+import {
+  assertGitIdentity,
+  assertNotOlderVersion,
+  publishSteps,
+  runPublishSteps,
+  shellLine
+} from './theme-publish-steps'
 
 const DEFAULT_VERSION = '1.0.0'
 // Why longer than other theme calls: the host draws three images before answering.
@@ -209,6 +215,7 @@ export async function publishTheme(ctx: HandlerContext): Promise<void> {
   const contents = kitFiles(kit, version)
   const topLevel = [...new Set(Object.keys(contents).map((path) => path.split('/')[0]))]
   assertUsableFolder(folder, kit.id, new Set(topLevel))
+  await assertNotOlderVersion(folder, version)
   const owner = repo.owner ?? (await githubUser())
   const slug = `${owner ?? '<your-github-user>'}/${repo.name ?? `${kit.id}-orca-theme`}`
   await writeKit(folder, contents)

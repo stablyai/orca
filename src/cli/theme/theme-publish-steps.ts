@@ -69,6 +69,13 @@ export function publishSteps(input: {
       skipIf: git('diff', '--cached', '--quiet')
     },
     {
+      label: 'Tag the version',
+      command: git('tag', '-a', tag, '-m', tag),
+      // Why compare trees and tag before pushing: a version already tagged with other files fails
+      // here, before anything public changes, instead of quietly reusing the old tag.
+      skipIf: git('diff', '--quiet', tag, 'HEAD', '--')
+    },
+    {
       label: 'Create the public GitHub repository and push',
       command: [
         'gh',
@@ -86,11 +93,6 @@ export function publishSteps(input: {
       ],
       skipIf: ['gh', 'repo', 'view', slug, '--json', 'name'],
       otherwise: git('push', '-u', 'origin', 'HEAD')
-    },
-    {
-      label: 'Tag the version',
-      command: git('tag', '-a', tag, '-m', tag),
-      skipIf: git('rev-parse', '-q', '--verify', `refs/tags/${tag}`)
     },
     { label: 'Push the tag', command: git('push', 'origin', tag) },
     {
@@ -126,6 +128,40 @@ export async function assertGitIdentity(folder: string): Promise<void> {
   }
 }
 
+const semver = (text: string): number[] | null => {
+  const match = /^v(\d+)\.(\d+)\.(\d+)$/.exec(text)
+  return match ? match.slice(1).map(Number) : null
+}
+
+const isOlder = (left: number[], right: number[]): boolean => {
+  const index = left.findIndex((part, at) => part !== right[at])
+  return index !== -1 && left[index] < right[index]
+}
+
+/** Refuses a version below one this folder already tagged, so main never moves back to old files. */
+export async function assertNotOlderVersion(folder: string, version: string): Promise<void> {
+  if (!existsSync(join(folder, '.git'))) {
+    return
+  }
+  const result = await runProcess({
+    program: 'git',
+    args: ['-C', folder, 'tag', '--list', 'v*'],
+    timeoutMs: STEP_TIMEOUT_MS
+  }).catch(() => null)
+  const wanted = semver(`v${version}`)
+  const newest = (result?.code === 0 ? result.stdout.split('\n') : [])
+    .map((tag) => semver(tag.trim()))
+    .filter((parts) => parts !== null)
+    .reduce<number[] | null>((top, parts) => (top && !isOlder(top, parts) ? top : parts), null)
+  if (wanted && newest && isOlder(wanted, newest)) {
+    throw new RuntimeClientError(
+      'invalid_argument',
+      `${newest.join('.')} is already published; ${version} is older.`,
+      { nextSteps: [`Publish with a version above ${newest.join('.')}.`] }
+    )
+  }
+}
+
 /** Runs the steps in order; returns what each did, or throws with what finished and what failed. */
 export async function runPublishSteps(steps: readonly PublishStep[]): Promise<string[]> {
   const done: string[] = []
@@ -139,7 +175,8 @@ export async function runPublishSteps(steps: readonly PublishStep[]): Promise<st
           done,
           failed: shellLine(command),
           nextSteps: [
-            'Fix the cause, then run the same `orca theme publish … --yes` again; finished steps are skipped.'
+            'Fix the cause, then run the same `orca theme publish … --yes` again; finished steps are skipped.',
+            'If the tag already exists, that version is published: use a higher --version.'
           ]
         })
       }

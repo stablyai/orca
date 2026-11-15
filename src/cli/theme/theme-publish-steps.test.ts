@@ -47,4 +47,13 @@ describe('publishSteps', () => {
       'HEAD'
     ])
   })
+
+  it('tags before anything is pushed, refusing a version already tagged with other files', () => {
+    const labels = steps.map((step) => step.label)
+    expect(labels.indexOf('Tag the version')).toBeLessThan(
+      labels.indexOf('Create the public GitHub repository and push')
+    )
+    const tag = steps.find((step) => step.label === 'Tag the version')
+    expect(tag?.skipIf?.slice(3)).toEqual(['diff', '--quiet', 'v1.2.0', 'HEAD', '--'])
+  })
 })
