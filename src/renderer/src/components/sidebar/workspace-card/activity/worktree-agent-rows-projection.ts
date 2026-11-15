@@ -1,3 +1,4 @@
+import { shallow } from 'zustand/shallow'
 import { resolveQualifiedWorktreeExecutionOwner } from '@/lib/workspace/ownership/qualified-worktree-execution-owner'
 import { isExecutionHostAliasForWorktree } from '@/lib/workspace/ownership/worktree-execution-host-alias'
 import { structuredAgentSessionOwnerInputs } from '@/runtime/native-chat/session-ownership/structured-agent-session-owner'
@@ -11,8 +12,25 @@ import type { ExecutionHostId } from '../../../../../../shared/execution-host'
 import { getAgentPaneExecutionHost } from '@/store/slices/agent-status/agent-pane-execution-host'
 import { recordChangeReaches } from '@/store/keyed-record-change-reads'
 import { parsePaneKey } from '../../../../../../shared/workspace-layout/stable-pane-id'
+import { reuseArrayIfEqual } from './worktree-agent-row-selectors'
 
 export const EMPTY_AGENT_ROWS: DashboardAgentRow[] = []
+
+function reuseUnchangedRows(previous: DashboardAgentRow[], next: DashboardAgentRow[]) {
+  const byPaneKey = new Map(previous.map((row) => [row.paneKey, row]))
+  return reuseArrayIfEqual(
+    previous,
+    next.map((row) => {
+      const old = byPaneKey.get(row.paneKey)
+      return old &&
+        shallow(old.tab, row.tab) &&
+        shallow(old.lineage, row.lineage) &&
+        shallow({ ...old, tab: row.tab, lineage: row.lineage }, row)
+        ? old
+        : row
+    })
+  )
+}
 
 function rowBelongsToHost(
   state: AppState,
@@ -156,7 +174,11 @@ export function createWorktreeAgentRowsSelector(worktreeId: string, hostId?: Exe
     previous = rows
     const owned = rows.filter(ownership.record(state, rows))
     // Same-ID twins on another host are rare; an unfiltered list keeps the projection's rows.
-    result = owned.length === rows.length ? rows : applyAgentRowLineage(owned)
+    result =
+      owned.length === rows.length
+        ? rows
+        : // Re-lineage clones every row, so keep unchanged ones for card memos.
+          reuseUnchangedRows(result, applyAgentRowLineage(owned))
     return result
   }
 }
