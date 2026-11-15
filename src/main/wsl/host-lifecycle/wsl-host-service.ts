@@ -69,6 +69,9 @@ export class WslHostService {
     const key = wslDistroHolderKey(distro)
     const change = {}
     this.connectionChanges.set(key, change)
+    if (status.state === 'ready') {
+      this.readyGenerations.set(key, (this.readyGenerations.get(key) ?? 0) + 1)
+    }
     const current = () => this.connectionChanges.get(key) === change
     const record = await this.recordForDistro(distro)
     if (!record || !current()) {
@@ -205,14 +208,16 @@ export class WslHostService {
     environmentId: string,
     isVisible: () => boolean = () => this.visible.has(environmentId)
   ): Promise<void> {
+    const record = await this.recordForEnvironment(environmentId)
     await ensureWslHostForRuntimeCall(environmentId, {
-      record: await this.recordForEnvironment(environmentId),
+      record,
       connector: this.connector,
       deps: this.deps,
       removing: this.removing,
       parked: this.parked,
       isVisible,
-      readyGeneration: () => this.readyGenerations.get(environmentId) ?? 0,
+      readyGeneration: () =>
+        (record && this.readyGenerations.get(wslDistroHolderKey(record.distro))) || 0,
       publishStopped: (record) =>
         this.setStatus(record, { state: 'distro-stopped', terminals: 'exited', recovering: false }),
       publishReady: (record, connection) =>
@@ -344,8 +349,8 @@ export class WslHostService {
   ): void {
     this.connectionChanges.delete(wslDistroHolderKey(record.distro))
     if (status.state === 'ready') {
-      const generation = this.readyGenerations.get(record.environmentId) ?? 0
-      this.readyGenerations.set(record.environmentId, generation + 1)
+      const key = wslDistroHolderKey(record.distro)
+      this.readyGenerations.set(key, (this.readyGenerations.get(key) ?? 0) + 1)
     }
     this.board.set(toWslHostStatus(record, status, connection))
   }

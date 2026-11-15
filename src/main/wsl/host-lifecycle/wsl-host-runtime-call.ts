@@ -17,7 +17,7 @@ export type WslHostRuntimeCallPort = {
   /** Hosts a confirmed stop parked: no runtime call reconnects them until the distro runs again. */
   parked: Set<string>
   isVisible: () => boolean
-  /** Bumped by every ready publish, so a read that a newer connect overtook is retried, not shown. */
+  /** Bumped when Ready arrives, so an older probe cannot overtake its pending registry read. */
   readyGeneration: () => number
   /** Shown as liveness shows a stop, so the host's panes offer Start. */
   publishStopped: (record: WslHostDeploymentRecord) => void

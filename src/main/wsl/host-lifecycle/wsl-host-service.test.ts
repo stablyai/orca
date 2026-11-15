@@ -10,6 +10,7 @@ import type { WslHostStatus } from '../../../shared/wsl-host-types'
 
 import { WslHostService } from './wsl-host-service'
 import type { WslHostConnector } from './wsl-host-connector-contract'
+import * as connectionRecords from './wsl-host-connection-record'
 
 import { UBUNTU, connection, makeConnector } from './__tests__/wsl-host-service-test-connector'
 
@@ -30,7 +31,8 @@ describe('WslHostService', () => {
       publish: (status) => published.push(status),
       pairingChanged,
       ready,
-      removed
+      removed,
+      deferUntilRunning: () => {}
     })
     service.attach(connector)
     return service
@@ -97,6 +99,48 @@ describe('WslHostService', () => {
     await expect(service.remove('wsl:ubuntu')).resolves.toEqual({ stopped: true })
     expect(await listEnvironments(userDataPath)).toEqual([])
     expect(removed).toHaveBeenCalledWith('wsl:ubuntu')
+  })
+
+  it('a newer Ready waiting for its registry read supersedes an older stopped probe', async () => {
+    const connector = makeConnector([UBUNTU])
+    const service = makeService(connector)
+    await service.add({ distro: 'Ubuntu' })
+    await connector.disconnect('Ubuntu')
+    connector.distro.state = 'stopped'
+    const probeStarted = Promise.withResolvers<void>()
+    const probe = Promise.withResolvers<'stopped'>()
+    connector.reachability.mockImplementationOnce(() => {
+      probeStarted.resolve()
+      return probe.promise
+    })
+    const runtimeCall = service.ensureForRuntimeCall('wsl:ubuntu').then(
+      () => 'connected',
+      () => 'refused'
+    )
+    await probeStarted.promise
+    connector.distro.state = 'running'
+    const opened = await connector.connect('Ubuntu')
+    const records = await connectionRecords.readWslHostRecordsQuietly(userDataPath)
+    const registryRead = Promise.withResolvers<typeof records>()
+    vi.spyOn(connectionRecords, 'readWslHostRecordsQuietly').mockImplementationOnce(
+      () => registryRead.promise
+    )
+    const readyChange = service.handleConnectionChange('Ubuntu', opened, {
+      state: 'ready',
+      census: null
+    })
+    let outcome: string
+    try {
+      probe.resolve('stopped')
+      outcome = await runtimeCall
+    } finally {
+      registryRead.resolve(records)
+      await readyChange
+    }
+    expect(outcome).toBe('connected')
+    expect(service.getStatuses()).toEqual([
+      expect.objectContaining({ environmentId: 'wsl:ubuntu', state: 'ready' })
+    ])
   })
 
   it('a focus re-check overtaken by a user Start never publishes stopped over the live host', async () => {
