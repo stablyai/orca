@@ -37,7 +37,8 @@ export class RendererStatusSender {
     if (this.stopped) {
       return
     }
-    if (keys === null) {
+    // Why: a pending snapshot recaptures every row, so staging would only pile up while parked.
+    if (keys === null || this.snapshot) {
       this.snapshot = true
     } else {
       for (const key of keys) {
