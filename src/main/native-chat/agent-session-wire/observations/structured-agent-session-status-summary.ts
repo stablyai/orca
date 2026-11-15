@@ -33,6 +33,7 @@ export function structuredAgentSessionStatusSummary({
   usageLimitContinue,
   childWork,
   namingFailure,
+  heldDelivery,
   now
 }: {
   sessionId: string
@@ -52,6 +53,7 @@ export function structuredAgentSessionStatusSummary({
   stopping: boolean
   childWork: Pick<AgentSessionStatusSummary, 'children' | 'backgroundTasks'>
   namingFailure: StructuredChatNamingFailure | undefined
+  heldDelivery?: AgentSessionStatusSummary['heldDelivery']
   now: () => number
 }): AgentSessionStatusSummary {
   const projected = state.summary
@@ -67,6 +69,14 @@ export function structuredAgentSessionStatusSummary({
   const launchDirectory = record ? agentSessionPinnedLaunchDirectory(record) : undefined
   return {
     sessionId,
+    heldDelivery: heldDelivery
+      ? {
+          ...heldDelivery,
+          runtimeFence: record?.currentFence,
+          provider: session.params.provider,
+          workerName: record?.conversationName
+        }
+      : null,
     ...(usageLimitContinue ? { usageLimitContinue } : {}),
     workspaceId: session.params.location.workspaceId,
     agent: session.params.provider,

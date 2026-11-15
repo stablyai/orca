@@ -1,4 +1,5 @@
 import type { AgentSessionForkNaming } from './agent-session-fork-name'
+import type { AgentSessionHeldDelivery } from './agent-session-held-delivery'
 import type { AgentSessionUnavailable } from './agent-session-availability'
 import type { AgentSessionFrameFields } from './agent-session-frame-fields'
 import type { AgentSessionUsageLimitContinue } from './agent-session-usage-limit-continue-wire'
@@ -11,6 +12,7 @@ import type { AgentSessionRewindReason } from './lifecycle/rewind/agent-session-
 import type { AgentSessionWireRefusal } from './failures/agent-session-wire-refusals'
 import type { AgentChildWorkView } from '../agent-status/child-work/agent-status-child-work-view'
 import type {
+  AgentSessionQueuedSendReceipt,
   AgentSessionQueuedMessage,
   AgentSessionQueuePause
 } from './requests/agent-session-queued-message-wire'
@@ -192,6 +194,7 @@ export type AgentSessionSubscribeEvent =
 
 /** Host-projected list status avoids client transcript replay; older hosts lack this additive method. */
 export type AgentSessionStatusSummary = {
+  heldDelivery?: AgentSessionHeldDelivery | null
   usageLimitContinue?: AgentSessionUsageLimitContinue
   rewindBlockedReason?: AgentSessionRewindReason
   sessionId: string
@@ -325,16 +328,12 @@ export type AgentSessionAttachResult = {
   tabId?: string
 }
 
-/** Waiting input answers with its row; non-waiting states can occur on same-id replays. */
-export type AgentSessionQueuedSendReceipt = {
-  messageId: string
-  position: number
-  state: 'waiting' | 'dispatched' | 'returned' | 'withdrawn'
-}
+export type { AgentSessionQueuedSendReceipt } from './requests/agent-session-queued-message-wire'
 
-export type AgentSessionSendResult =
+export type AgentSessionSendResult = (
   | { clientMessageId: string; submission: AgentJournalSubmission }
   | { clientMessageId: string; queued: AgentSessionQueuedSendReceipt }
+) & { delivery?: AgentSessionHeldDelivery }
 
 /** Undefined while the input is a waiting row rather than a handed-off submission. */
 export function agentSessionSendSubmission(

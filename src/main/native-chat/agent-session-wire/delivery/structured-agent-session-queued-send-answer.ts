@@ -5,10 +5,13 @@ import type { CommandReceiptRead } from '../../agent-session-journal/writing/com
 import { agentJournalSubmissionKey } from '../../../../shared/agent-session/journal/agent-session-journal-item-key'
 import { dispatchWasWithdrawn } from '../../../../shared/agent-session/requests/structured-agent-session-dispatch-rejection'
 import type { SqlJournalQueuedMessages } from '../../agent-session-journal/journal-sql-queued-messages'
+import type { AgentSessionHeldDelivery } from '../../../../shared/agent-session/agent-session-held-delivery'
 
 type SendAnswerJournal = {
   reads: Pick<AgentSessionJournal['reads'], 'input' | 'submission'>
-  queuedMessages: Pick<AgentSessionJournal['queuedMessages'] | SqlJournalQueuedMessages, 'get'>
+  queuedMessages: Pick<AgentSessionJournal['queuedMessages'] | SqlJournalQueuedMessages, 'get'> & {
+    heldDelivery?: () => Promise<AgentSessionHeldDelivery | null>
+  }
 }
 
 /** A card whose row is gone answers from its latest handoff, found by key, never by a history scan. */
@@ -43,7 +46,10 @@ export async function queuedSendAnswer(
       ? { clientMessageId, submission: { ...consumed } }
       : {
           clientMessageId,
-          queued: { messageId: draft.messageId, position: draft.position, state: draft.state }
+          queued: { messageId: draft.messageId, position: draft.position, state: draft.state },
+          ...(draft.state === 'waiting'
+            ? { delivery: (await journal.queuedMessages.heldDelivery?.()) ?? undefined }
+            : {})
         }
   }
   // Missing cards with rejected handoffs were deleted; replay withdrawn rather than a refused send.

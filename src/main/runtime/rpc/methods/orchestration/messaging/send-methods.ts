@@ -8,7 +8,7 @@ import {
 import { orchestrationSkillRecoveryData } from '../../../../../../shared/orchestration/orchestration-rpc-contract'
 import { SendParams } from './send-params'
 import { isDispatchMutationMessageType } from '../../../../../../shared/rpc-contract/orchestration/orchestration-params'
-import { isWorkerReportOutcome, parseRemoteWorkerPayload } from './message-payload'
+import { requireWorkerDoneOutcome } from './message-payload'
 import { resolveMessageRun } from '../routing'
 import {
   assertDispatchMailboxDeliverable,
@@ -16,7 +16,7 @@ import {
   resolveRunBoundDispatchRecipient,
   type SendRecipientWarning
 } from './recipient-routing'
-import { replayAcceptedSend } from './send-replay'
+import { replayAcceptedSendForCaller } from './send-replay'
 import { sendRemoteMessage } from '../../../../orchestration/legacy-remote/send-remote'
 import { withPeerMailSend } from './peer-mail-send'
 import { prepareSessionRecipient } from './session-recipient'
@@ -28,12 +28,9 @@ import { orchestrationCallerIdentity } from '../runs/run-scope'
 import { assertLifecycleCallerIsNotAnotherParty } from './lifecycle-caller-fence'
 import { planWorkerFollowUp, startWorkerFollowUp } from './worker-follow-up'
 import { finishedWorkerSend, refuseFinishedRemoteWorker } from './finished-worker-mail'
-import { relayedDeliveryUnknownWarning, withDeliveryHoldWarning } from './send-delivery-hold'
-import {
-  followThroughWorkerReport,
-  passHeldWorkerMail,
-  settledDispatchId
-} from './settled-worker-follow-through'
+import { relayedDeliveryUnknownWarning, finishStoredSend } from './send-delivery-hold'
+import { resumeWorkerFailure } from './resume-worker-failure'
+import { passHeldWorkerMail } from './settled-worker-follow-through'
 
 export const ORCHESTRATION_SEND_METHODS = [
   defineOrchestrationMethod({
@@ -47,8 +44,7 @@ export const ORCHESTRATION_SEND_METHODS = [
     },
     permission: 'workspace',
     params: SendParams,
-    replay: (params, { runtime, replayedMutationReceipt }) =>
-      replayAcceptedSend(runtime, params, replayedMutationReceipt),
+    replay: replayAcceptedSendForCaller,
     handler: withPeerMailSend(
       async (
         params,
@@ -78,6 +74,17 @@ export const ORCHESTRATION_SEND_METHODS = [
           paneKey: attestedCaller?.paneKey ?? runtime.getTerminalPaneKey(from)
         })
         const senderPaneKey = sender.paneKey ?? undefined
+        if (params.resume) {
+          const resumed = await resumeWorkerFailure(
+            params,
+            { runtime, orchestrationMutation },
+            orchestrationCaller || attestedCaller ? sender : undefined
+          )
+          if (resumed) {
+            recordMutationReceipt?.(resumed)
+            return resumed
+          }
+        }
         // Why: a session caller was already bound to its own identity at the dispatch entry.
         if (isDispatchMutationMessageType(params.type) && !orchestrationCaller) {
           assertLifecycleCallerIsNotAnotherParty(runtime, {
@@ -123,15 +130,7 @@ export const ORCHESTRATION_SEND_METHODS = [
           ? undefined
           : finishedWorkerSend(db, { ...sender, processIncarnation }, routing, params)
         ;({ params, routing } = finished ?? { params, routing })
-        if (
-          params.type === 'worker_done' &&
-          !isWorkerReportOutcome(parseRemoteWorkerPayload(params.payload).outcome)
-        ) {
-          throw new OrchestrationError(
-            'invalid_argument',
-            'worker_done requires outcome=succeeded|failed for a current Dispatch.'
-          )
-        }
+        requireWorkerDoneOutcome(params)
         if (params.to?.startsWith('task:')) {
           throw new OrchestrationError(
             'invalid_argument',
@@ -281,15 +280,15 @@ export const ORCHESTRATION_SEND_METHODS = [
             withSendWarnings: (sent) =>
               finished?.receipt(withSendWarnings(sent)) ?? withSendWarnings(sent)
           })
-          followThroughWorkerReport(
+          return finishStoredSend(sent, {
             runtime,
             db,
-            params.type === 'worker_done' ? settledDispatchId(sent) : undefined
-          )
-          // Read only once the mail is stored: an await before it could let the worker settle and miss it.
-          return federatedTarget || params.type === 'worker_done' || params.type === 'heartbeat'
-            ? sent
-            : withDeliveryHoldWarning(sent, runtime, db, to)
+            recipient: to,
+            type: params.type,
+            relayed: !!federatedTarget,
+            caller: orchestrationCaller || attestedCaller ? sender : undefined,
+            recordMutationReceipt
+          })
         }
         return sendGroupMessage({
           params,

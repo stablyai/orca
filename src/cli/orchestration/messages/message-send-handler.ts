@@ -11,6 +11,8 @@ import { withResolvedNextCommands } from '../recovery/orchestration-mutation-rec
 import { getOptionalStringFlag, getRequiredStringFlag } from '../../arguments/flags'
 import { RuntimeClientError } from '../../runtime/connection/types'
 import { readInjectedAgentSessionId } from '../../../shared/agent-session/lifecycle/launch/agent-session-caller-env'
+import type { AgentSessionHeldDelivery } from '../../../shared/agent-session/agent-session-held-delivery'
+import { ORCHESTRATION_FAILURE_RESUME_RUNTIME_CAPABILITY } from '../../../shared/orchestration/orchestration-runtime-capabilities'
 import { requireWorkerDoneSettlement } from '../workers/orchestration-worker-settlement'
 import { getOptionalStructuredMessagePayload } from './message-payload'
 import { callOrchestrationMutation } from '../recovery/mutation-request'
@@ -38,7 +40,22 @@ type SendRecipientWarning = {
   message: string
 }
 
-type OrchestrationSendResult = { next?: string } & (
+type OrchestrationSendResult = {
+  next?: string
+  deliveryMessage?: string
+  deliveryHint?: string | null
+  warnings?: SendRecipientWarning[]
+} & (
+  | { delivered: boolean; state: 'queued' | 'unknown' | 'delivered'; message: { id: string } }
+  | (AgentSessionHeldDelivery & { message: { id: string } })
+  | {
+      recovery: { status: string; waiting: number }
+      recoveryMessage: string
+      delivered: false
+      state: 'resuming' | 'idle'
+      target: { sessionId: string; dispatchId: string }
+      message?: { id: string }
+    }
   | {
       message: { id: string; run_id?: string }
       lifecycle?: LifecycleSendResult
@@ -80,6 +97,23 @@ export const ORCHESTRATION_SEND_HANDLER: Record<string, CommandHandler> = {
     await requirePeerMailCarrier(ctx)
     const to = getOptionalStringFlag(flags, 'to')
     const type = getOptionalStringFlag(flags, 'type')
+    const resume = flags.has('resume')
+    const expectedFailureId = getOptionalStringFlag(flags, 'failure-id')
+    if (resume) {
+      if (!expectedFailureId) {
+        throw new RuntimeClientError(
+          'invalid_argument',
+          'Missing --failure-id from the held message receipt.'
+        )
+      }
+      const status = await client.call<{ capabilities?: string[] }>('status.get')
+      if (!status.result.capabilities?.includes(ORCHESTRATION_FAILURE_RESUME_RUNTIME_CAPABILITY)) {
+        throw new RuntimeClientError(
+          'worker_resume_unsupported',
+          'The execution host cannot verify failure recovery. Nothing was resumed or sent.'
+        )
+      }
+    }
     if (to) {
       rejectLifecycleGroupRecipient(type, to)
     }
@@ -103,11 +137,15 @@ export const ORCHESTRATION_SEND_HANDLER: Record<string, CommandHandler> = {
     // Preserve the env handle across remints for older runtimes' lifecycle ownership checks.
     const from = await resolveOrchestrationTerminalHandle(flags, cwd, client, 'from')
     const sendParams = {
+      deliveryOutcome: true,
+      ...(resume ? { resume, expectedFailureId } : {}),
       from,
       to,
       run: getOptionalStringFlag(flags, 'run'),
       on: getOptionalStringFlag(flags, 'on'),
-      subject: getRequiredStringFlag(flags, 'subject'),
+      subject: resume
+        ? (getOptionalStringFlag(flags, 'subject') ?? '')
+        : getRequiredStringFlag(flags, 'subject'),
       body: getOptionalStringFlag(flags, 'body'),
       type,
       priority: getOptionalStringFlag(flags, 'priority'),
@@ -135,6 +173,21 @@ export const ORCHESTRATION_SEND_HANDLER: Record<string, CommandHandler> = {
     if ('lifecycle' in result.result && result.result.lifecycle?.action === 'rejected') {
       throw new RuntimeClientError(result.result.lifecycle.code, result.result.lifecycle.reason)
     }
+    if ('deliveryMessage' in result.result && result.result.deliveryMessage) {
+      if ('state' in result.result && ['held', 'unknown'].includes(result.result.state)) {
+        process.exitCode = 1
+      }
+      printResult(result, json, (value) =>
+        [value.deliveryMessage, value.deliveryHint].filter(Boolean).join('\n')
+      )
+      return
+    }
+    if ('recoveryMessage' in result.result) {
+      printResult(result, json, (value) =>
+        'recoveryMessage' in value ? value.recoveryMessage : ''
+      )
+      return
+    }
     if (!flags.has('full')) {
       if ('delivery' in result.result) {
         const followUp = withResolvedNextCommands(result.result)
@@ -152,6 +205,9 @@ export const ORCHESTRATION_SEND_HANDLER: Record<string, CommandHandler> = {
         ? { ...result, result: withResolvedNextCommands(result.result) }
         : result
     printResult(rendered, json, (value) => {
+      if ('recoveryMessage' in value) {
+        return value.recoveryMessage
+      }
       const warnings = 'warnings' in value ? (value.warnings ?? []) : []
       const withWarnings = (line: string): string =>
         withReceiptNext(
@@ -159,6 +215,9 @@ export const ORCHESTRATION_SEND_HANDLER: Record<string, CommandHandler> = {
           value
         )
       if ('message' in value) {
+        if (!value.message) {
+          return ''
+        }
         const lifecycle = 'lifecycle' in value ? value.lifecycle : undefined
         const autoRelease =
           lifecycle && 'autoReleaseAt' in lifecycle && lifecycle.autoReleaseAt
@@ -211,6 +270,9 @@ function sendFields(value: Exclude<OrchestrationSendResult, { delivery: string }
     autoReleaseAt: lifecycle && 'autoReleaseAt' in lifecycle ? lifecycle.autoReleaseAt : undefined,
     warnings: value.warnings?.length ? value.warnings.map((warning) => warning.message) : undefined,
     next: value.next
+  }
+  if ('recoveryMessage' in value) {
+    return common
   }
   if ('message' in value) {
     return { messageId: value.message.id, ...common }

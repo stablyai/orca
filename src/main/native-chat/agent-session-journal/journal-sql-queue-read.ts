@@ -24,6 +24,8 @@ import {
 } from './journal-domain-queue-reads'
 import { nextJournalDomainQueueCard } from './journal-domain-submission-consume'
 import type { JournalSqlScope } from './journal-sql-scope'
+import { readJournalDomainHeldDelivery } from './journal-domain-held-delivery'
+import type { AgentSessionHeldDelivery } from '../../../shared/agent-session/agent-session-held-delivery'
 
 /** Host-memory facts a queue read needs, sent as data like the writer's facts. */
 export type JournalSqlQueueFacts = {
@@ -45,6 +47,7 @@ export type JournalSqlQueueRead = { facts: JournalSqlQueueFacts } & (
   | { kind: 'cleared-through' }
   | { kind: 'next-input-card'; automatic: boolean; steer: boolean; now: number }
   | { kind: 'failure-holds' }
+  | { kind: 'held-delivery' }
   | { kind: 'pauses' }
   | { kind: 'user-stop-in-force' }
   | { kind: 'reopen-mark' }
@@ -58,6 +61,7 @@ export type JournalSqlQueueReadResult =
   | { kind: 'cleared-through'; sequence: number }
   | { kind: 'next-input-card'; card: QueuedMessageRow | null }
   | { kind: 'failure-holds'; held: boolean }
+  | { kind: 'held-delivery'; delivery: AgentSessionHeldDelivery | null }
   | { kind: 'pauses'; pauses: DerivedQueuePause[] }
   | { kind: 'user-stop-in-force'; stop: JournalLatestStop | null }
   /** Whether this handle owes a reopen mark, and where one written now would begin. */
@@ -152,6 +156,11 @@ export function readJournalSqlQueue(
         held: readJournalDomainQueuePauseContext(db, target, facts.reopenFloor, []).pauses.some(
           (pause) => pause.reason === 'failed'
         )
+      }
+    case 'held-delivery':
+      return {
+        kind: 'held-delivery',
+        delivery: readJournalDomainHeldDelivery(db, target, facts.reopenFloor)
       }
     case 'pauses':
       return {

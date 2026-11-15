@@ -5,6 +5,7 @@ import type { JournalObserverRead, JournalObserverResult } from './journal-obser
 import { readJournalSqlStatusState } from './journal-sql-status-state'
 import { readJournalSqlStatusIndicators } from './journal-sql-status-indicators'
 import { readJournalSqlUsageLimitCut, readJournalSqlOrcaStopCut } from './journal-sql-status-cuts'
+import { readJournalDomainHeldDelivery } from './journal-domain-held-delivery'
 
 /** Status, cuts and current work share one ready snapshot and one captured live authority. */
 export function readJournalSqlObserver(
@@ -14,6 +15,14 @@ export function readJournalSqlObserver(
   const { authority } = input
   const work = readJournalSqlCurrentWork(context, authority)
   return {
+    heldDelivery: readJournalDomainHeldDelivery(
+      context.scope.db,
+      {
+        sessionId: context.scope.sessionId,
+        epoch: context.scope.epoch
+      },
+      authority.reopenFloor
+    ),
     cursor: { epoch: context.epoch, sequence: context.sequence },
     physicalCursor: { epoch: context.scope.epoch, sequence: context.sequence },
     lastActivityAt: context.lastActivityAt,

@@ -11,6 +11,7 @@ export function structuredStatusSummariesEqual(
   b: AgentSessionStatusSummary
 ): boolean {
   return (
+    JSON.stringify(a.heldDelivery) === JSON.stringify(b.heldDelivery) &&
     a.workspaceId === b.workspaceId &&
     a.usageLimitContinue?.turnItemId === b.usageLimitContinue?.turnItemId &&
     a.usageLimitContinue?.resetsAt === b.usageLimitContinue?.resetsAt &&

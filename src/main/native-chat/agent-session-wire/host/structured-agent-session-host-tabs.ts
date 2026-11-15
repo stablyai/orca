@@ -58,7 +58,7 @@ type TabSessions = ReadonlyMap<
 
 export function createStructuredAgentSessionTabSurface(
   host: Parameters<typeof setStructuredAgentSessionTabVisibility>[0] & {
-    deps: Pick<StructuredAgentSessionHostDeps, 'recoveryCapsule' | 'now'> & {
+    deps: Pick<StructuredAgentSessionHostDeps, 'recoveryCapsule' | 'now' | 'journalDatabase'> & {
       store: Pick<
         AgentSessionRecordStore,
         | 'getVisibleSessionTabIndex'
@@ -78,7 +78,59 @@ export function createStructuredAgentSessionTabSurface(
   >,
   recover: (ids: readonly string[]) => Promise<void>
 ) {
+  const savedFailure = async (sessionId: string) => {
+    const record = host.deps.store.getConversation(sessionId)
+    if (!record || sessions.has(sessionId)) {
+      return null
+    }
+    try {
+      const result = await host.deps.journalDatabase.readers.point({
+        sessionId,
+        operation: {
+          kind: 'queue',
+          operation: { kind: 'held-delivery', facts: { reopenFloor: null } }
+        }
+      })
+      return result.kind === 'queue' &&
+        result.result.kind === 'held-delivery' &&
+        result.result.delivery
+        ? { record, delivery: result.result.delivery }
+        : null
+    } catch {
+      return null
+    }
+  }
+  const publishFailures = (entries: Awaited<ReturnType<typeof savedFailure>>[]) => {
+    delivery.publishSavedStatusGroup((publish) => {
+      for (const entry of entries) {
+        if (entry) {
+          publish(entry.record, undefined, entry.delivery)
+        }
+      }
+    })
+  }
+  let dispose: (() => void) | undefined
+  const watchConversions = () => {
+    if (dispose) {
+      return
+    }
+    dispose = host.deps.journalDatabase.watchConverted((sessionId) => {
+      void savedFailure(sessionId)
+        .then((entry) => publishFailures([entry]))
+        .catch((error: unknown) =>
+          host.deps.logger.warn('publishing saved worker failure failed', {
+            scope: 'saved-worker-failure',
+            sessionId,
+            error
+          })
+        )
+    })
+  }
   return {
+    dispose: () => {
+      dispose?.()
+      dispose = undefined
+    },
     listSessionTabs: (): StructuredAgentSessionTab[] =>
       host.deps.store.listVisibleSessionIds().flatMap((sessionId) => {
         const record = host.deps.store.getConversation(sessionId)
@@ -87,8 +139,17 @@ export function createStructuredAgentSessionTabSurface(
           : []
       }),
     isSessionTabVisible: (id: string) => host.deps.store.isSessionTabVisible(id),
-    seedSessionTabs: (ids?: readonly string[]): Promise<void> =>
-      seedSavedStructuredSessionTabs(
+    seedSessionTabs: async (ids?: readonly string[]): Promise<void> => {
+      watchConversions()
+      const records = host.deps.store.listConversations()
+      for (let offset = 0; offset < records.length; offset += 32) {
+        publishFailures(
+          await Promise.all(
+            records.slice(offset, offset + 32).map((record) => savedFailure(record.sessionId))
+          )
+        )
+      }
+      await seedSavedStructuredSessionTabs(
         host.deps,
         ids,
         (visit) =>
@@ -98,7 +159,8 @@ export function createStructuredAgentSessionTabSurface(
             })
           ),
         recover
-      ),
+      )
+    },
     getPersistedVisibleSessionTabIndex: () => host.deps.store.getVisibleSessionTabIndex(),
     getSessionTabId: (sessionId: string): string | null =>
       host.deps.store.getSessionTabId(sessionId),

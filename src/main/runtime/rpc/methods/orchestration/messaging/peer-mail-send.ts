@@ -114,6 +114,13 @@ export function withPeerMailSend<R>(
   send: (params: SendInput, ctx: RpcContext) => Promise<R>
 ): (params: SendInput, ctx: RpcContext) => Promise<unknown> {
   return async (params, ctx) => {
+    if (params.resume && params.on) {
+      throw new OrchestrationError(
+        'worker_resume_unsupported',
+        'This server route cannot verify a failure recovery. Nothing was resumed or sent.',
+        { effectsApplied: false }
+      )
+    }
     const on = params.on
     if (on === undefined || ctx.replayedMutationReceipt !== undefined) {
       return await send(params, ctx)

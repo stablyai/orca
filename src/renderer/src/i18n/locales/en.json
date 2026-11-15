@@ -21635,6 +21635,20 @@
         "questionNotSentDetail": "Your question is still in this chat. Send /btw again to retry.",
         "questionUnconfirmed": "{{agent}} couldn't confirm the side chat got your question",
         "questionUnconfirmedDetail": "Check the side chat before asking again. Your question is still in this chat."
+      },
+      "workerFailure": {
+        "network": "network error",
+        "provider": "{{provider}} error",
+        "signIn": "signed out",
+        "usage": "usage limit",
+        "unknown": "unknown error",
+        "again": "{{worker}} failed again: {{cause}}",
+        "stopped": "{{worker}} stopped: {{cause}}",
+        "reset": "resets {{time}}",
+        "oneWaiting": "1 message waiting",
+        "manyWaiting": "{{count}} messages waiting",
+        "openWorker": "Open worker",
+        "signInAction": "Sign in"
       }
     },
     "tab": {

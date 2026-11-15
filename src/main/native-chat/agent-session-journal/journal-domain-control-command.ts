@@ -32,9 +32,11 @@ import {
   journalDomainQueueAwaitsReopen,
   readJournalDomainQueuePauses
 } from './journal-domain-queue-reads'
-import { appendJournalSqlEvent } from './journal-sql-event-tail'
 import { restoreJournalSqlFailure } from './journal-sql-failure'
-import { invalidateJournalDomainQueue } from './journal-domain-queue-revision'
+import { writeJournalDomainControlMark as writeMark } from './journal-domain-control-mark'
+import * as failureResume from './journal-domain-failure-resume'
+import type { AgentSessionFailureResumeResult } from '../../../shared/agent-session/agent-session-held-delivery'
+import type { JournalCurrentWorkAuthority } from './journal-observer-read'
 
 type Target = { sessionId: string; epoch: string }
 
@@ -45,6 +47,7 @@ export type JournalDomainControlOperation = Extract<
       | 'stop'
       | 'stop-accept'
       | 'queue-resume'
+      | 'failure-resume'
       | 'queue-reopen'
       | 'queue-reopen-mark'
       | 'shutdown-cut'
@@ -57,6 +60,7 @@ export type JournalDomainControlValue =
   | JournalAppendResult
   | number
   | null
+  | AgentSessionFailureResumeResult
 
 /** Coordinates are physical; an empty list means the legacy no-op bound no receipt. */
 export type JournalDomainControlCommit = Omit<
@@ -75,7 +79,11 @@ export function applyJournalDomainControlCommand(
   db: Database.Database,
   target: Target,
   operation: JournalDomainControlOperation,
-  facts: { stopSettle?: JournalStopSettleFact; reopenFloor?: AgentJournalCursor | null },
+  facts: {
+    stopSettle?: JournalStopSettleFact
+    reopenFloor?: AgentJournalCursor | null
+    send?: JournalCurrentWorkAuthority
+  },
   savedAt: number
 ): JournalDomainControlCommit {
   if (!db.isTransaction) {
@@ -110,11 +118,30 @@ export function applyJournalDomainControlCommand(
     case 'stop':
     case 'stop-accept':
     case 'queue-resume':
+    case 'failure-resume':
     case 'queue-reopen':
       break
   }
   assertJournalFence(operation.fence, Number(head.highest_fence))
   switch (operation.kind) {
+    case 'failure-resume': {
+      const prepared = failureResume.prepareJournalFailureResume(
+        db,
+        target,
+        operation,
+        facts.send,
+        facts.reopenFloor ?? null
+      )
+      if (prepared.status !== 'ready') {
+        result.value = prepared
+        return result
+      }
+      writeMark(db, target, operation.fence, savedAt, result, (sequence) =>
+        failureResume.commitJournalFailureResume(db, target, operation, prepared, sequence)
+      )
+      result.value = { status: 'resumed', waiting: prepared.waiting }
+      return result
+    }
     case 'stop':
       result.value = writeMark(db, target, operation.fence, savedAt, result, (sequence) =>
         writeStop(db, target, sequence, operation.fence, { ...operation.event, at: savedAt })
@@ -178,32 +205,6 @@ function acceptStop(
   )
   result.value = { mark, withdrawn: Array.isArray(settled.value) ? settled.value : [], turnId }
   return result
-}
-
-/** One event-only head mark; the receipt binds this command's last coordinate. */
-function writeMark(
-  db: Database.Database,
-  target: Target,
-  fence: number,
-  savedAt: number,
-  result: JournalDomainControlCommit,
-  write: (sequence: number) => void
-): AgentJournalCursor {
-  const sequence = result.cursor.sequence + 1
-  write(sequence)
-  invalidateJournalDomainQueue(db, target, sequence)
-  appendJournalSqlEvent(
-    db,
-    target,
-    sequence,
-    savedAt,
-    { items: [], submissions: [], cards: [] },
-    { fence, observedAt: savedAt }
-  )
-  result.cursor = { epoch: target.epoch, sequence }
-  result.coordinates.push({ kind: 'tombstone', epoch: target.epoch, seq: sequence })
-  result.inputChanged = true
-  return result.cursor
 }
 
 /** Saved marks only; the host's unsaved settle overlay never reaches the head. */

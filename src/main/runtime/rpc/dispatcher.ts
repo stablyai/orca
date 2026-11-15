@@ -34,6 +34,7 @@ import { runWithActiveRpcCaller } from './callers/active-call'
 import { admitRpcRequest } from './dispatch/rpc-request-admission-prologue'
 import { resolveOrcadFeatureRequirement, rpcMethodFeatureWait } from './startup/orcad-readiness'
 import { routeRemoteOwnedCall } from '../orchestration/federation/remote-owned/remote-owned-route'
+import { refuseLegacyHeldDelivery } from './orchestration/mutations/orchestration-held-delivery-receipt'
 
 export type DispatcherOptions = {
   runtime: OrcaRuntimeService
@@ -302,6 +303,7 @@ export class RpcDispatcher {
       callerFingerprint,
       context.orchestrationCaller
     )
+    refuseLegacyHeldDelivery(request.method, effectiveParams, result)
     if (request.method.startsWith('orchestration.')) {
       queueMicrotask(async () => {
         try {
@@ -315,7 +317,5 @@ export class RpcDispatcher {
     return result
   }
 
-  private meta(): RpcEnvelopeMeta {
-    return { runtimeId: this.runtime.getRuntimeId() }
-  }
+  private meta = (): RpcEnvelopeMeta => ({ runtimeId: this.runtime.getRuntimeId() })
 }

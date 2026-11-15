@@ -1,3 +1,4 @@
+import type { AgentSessionHeldDelivery } from '../agent-session-held-delivery'
 // Publish queued cards, queue pause and draft mutation results together.
 
 import type { UnreadAgentSessionFailureFact } from '../failures/agent-session-failure'
@@ -9,7 +10,10 @@ export const QUEUED_MESSAGE_PAUSED_SEND_FAILED = 'send_failed' as const
 export type AgentSessionQueuedMessagePausedReason = typeof QUEUED_MESSAGE_PAUSED_SEND_FAILED
 
 /** Stop/failure pause automatic sends until Resume or a new turn starts. Send-now delivers one card; others wait for that turn. /clear/reopen holds are unpublished because nothing runs then. Unknown reasons render a plain pause. */
-export type AgentSessionQueuePause = { reason: 'stopped' | 'failed' }
+export type AgentSessionQueuePause = {
+  reason: 'stopped' | 'failed'
+  delivery?: AgentSessionHeldDelivery
+}
 
 /** What rides beside a frame's `queuedMessages`, published together with the list. */
 export type AgentSessionQueuePublicationFields = {
@@ -72,3 +76,10 @@ export type AgentSessionQueuedMessageEditHoldParams = {
 export type AgentSessionQueuedMessageEditHoldResult =
   | { status: 'held'; fingerprint: string; leaseDurationMs: number; remainingMs: number }
   | { status: 'released' | 'expired' | 'changed' | 'gone' | 'not-editable' }
+
+/** Waiting input answers with its row; non-waiting states can occur on same-id replays. */
+export type AgentSessionQueuedSendReceipt = {
+  messageId: string
+  position: number
+  state: 'waiting' | 'dispatched' | 'returned' | 'withdrawn'
+}

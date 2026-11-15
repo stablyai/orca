@@ -1,3 +1,4 @@
+import { AgentSessionTabTable } from '../../runtime/agent-session/agent-session-tab-table'
 import type Database from '../../sqlite/sync-database'
 import {
   readPRWatchStorage,
@@ -151,5 +152,12 @@ function read(
               .all(operation.after)
       return { kind: 'attachment-sweeps', uploadIds: rows.map((row) => String(row.upload_id)) }
     }
+  }
+}
+
+export function restoreJournalRecordTabs(records: JournalSqlStoredRecords): AgentSessionStoreState {
+  return {
+    ...records,
+    sessionTabs: records.sessionTabs === null ? null : new AgentSessionTabTable(records.sessionTabs)
   }
 }

@@ -169,7 +169,7 @@ export function queuedMessagesQueuePause(
   cards: readonly QueuedMessageCard[],
   queuePause: AgentSessionQueuePause | null
 ): AgentSessionQueuePause | null {
-  return cards.some((card) => card.resumeEligible) ? queuePause : null
+  return queuePause?.delivery || cards.some((card) => card.resumeEligible) ? queuePause : null
 }
 
 /** Steer moves turn-waiting cards mid-turn, even during queue pause; returned/individually held cards use Send, commands never steer. */

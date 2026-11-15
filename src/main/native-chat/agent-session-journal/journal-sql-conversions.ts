@@ -9,12 +9,21 @@ export class JournalSqlConversions {
   private readonly pending = new Map<string, Conversion>()
   private readonly ready = new Map<string, string>()
   private closed = false
+  private readonly readyListeners = new Set<(sessionId: string) => void>()
 
   constructor(
     private readonly writer: Pick<JournalSqlOwner, 'maintain'>,
     private readonly readers: Pick<JournalSqlReaderPool, 'importState' | 'prepareConversion'>,
-    private readonly waitForIdle: (promotion: AbortSignal) => Promise<void>
+    private readonly waitForIdle: (promotion: AbortSignal) => Promise<void>,
+    private readonly onReadyError?: (error: unknown, sessionId: string) => void
   ) {}
+
+  watchReady(listener: (sessionId: string) => void): () => void {
+    this.readyListeners.add(listener)
+    return () => {
+      this.readyListeners.delete(listener)
+    }
+  }
 
   async ensure(sessionId: string, foreground = true): Promise<string | null> {
     if (this.closed) {
@@ -39,6 +48,13 @@ export class JournalSqlConversions {
       .then((epoch) => {
         if (epoch !== null) {
           this.rememberReady(sessionId, epoch)
+          for (const listener of this.readyListeners) {
+            try {
+              listener(sessionId)
+            } catch (error) {
+              this.onReadyError?.(error, sessionId)
+            }
+          }
         }
         return epoch
       })

@@ -90,6 +90,19 @@ export function refreshJournalDomainQueueFailureReports(
 
 /** The tied header group is bounded by the same 200-position construction limit as history. */
 export function readJournalDomainQueueFailure(db: Database.Database, target: Target): number {
+  const source = readJournalDomainQueueFailureSource(db, target)
+  if (!source) {
+    return 0
+  }
+  const resumed = db
+    .prepare(
+      `SELECT 1 FROM journal_failure_resumes WHERE session_id=? AND epoch=? AND source_item_id=? AND failed_at=?`
+    )
+    .get(target.sessionId, target.epoch, source.itemId, source.failedAt)
+  return resumed ? 0 : source.boundary
+}
+
+export function readJournalDomainQueueFailureSource(db: Database.Database, target: Target) {
   const prefix = [target.sessionId, target.epoch] as const
   const rows = db
     .prepare(`WITH newest AS (
@@ -110,13 +123,17 @@ export function readJournalDomainQueueFailure(db: Database.Database, target: Tar
     undefined
   )
   const failedAt = Number(winner?.queue_failed_at ?? 0)
-  return failedAt === 0
-    ? 0
-    : Math.max(
+  return failedAt === 0 || !winner
+    ? null
+    : {
+        itemId: String(winner.item_id),
         failedAt,
-        Number(winner?.queue_failure_boundary ?? 0) >
-          Number(winner?.queue_failure_witnessed_through ?? 0)
-          ? Number(winner?.queue_failure_boundary)
-          : 0
-      )
+        boundary: Math.max(
+          failedAt,
+          Number(winner?.queue_failure_boundary ?? 0) >
+            Number(winner?.queue_failure_witnessed_through ?? 0)
+            ? Number(winner?.queue_failure_boundary)
+            : 0
+        )
+      }
 }

@@ -57,6 +57,15 @@ export type JournalWriterCoreOperation =
   | { kind: 'dispatch'; input: ResolveDispatchInput; onlyIfUnsettled?: true }
   | { kind: 'stop'; event: Omit<JournalStopEvent, 'at'>; fence: number }
   | { kind: 'queue-resume'; fence: number; onlyRestarted?: true }
+  | {
+      kind: 'failure-resume'
+      fence: number
+      expectedFailureId: string
+      operationId: string
+      coordinatorId: string
+      dispatchId: string
+      hasMessage?: true
+    }
   | { kind: 'queue-reopen'; fence: number; since?: number }
 
 export type JournalWriterOperation =

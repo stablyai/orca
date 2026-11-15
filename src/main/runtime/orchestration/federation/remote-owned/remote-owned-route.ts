@@ -1,3 +1,4 @@
+import { refuseUnverifiedFailureResume } from '../../../rpc/orchestration/mutations/orchestration-held-delivery-receipt'
 import { randomUUID } from 'node:crypto'
 import type { OrcaRuntimeService } from '../../../orca-runtime'
 import type { RpcContext, RpcMethod, RpcRequest } from '../../../rpc/core'
@@ -61,6 +62,9 @@ export async function routeRemoteOwnedCall(
   params: unknown,
   ctx: RpcContext
 ): Promise<Routed> {
+  if (request.method === 'orchestration.send') {
+    refuseUnverifiedFailureResume(request.method, params, runtime.getOrchestrationDb())
+  }
   const access = method.orchestrationAccess
   if (!access || access.kind === 'localOnly' || ctx.orchestrationCaller?.kind === 'peer') {
     return LOCAL

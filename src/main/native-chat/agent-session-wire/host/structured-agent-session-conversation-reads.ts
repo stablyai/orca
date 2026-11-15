@@ -19,12 +19,16 @@ import {
   structuredSendAnswer
 } from '../delivery/structured-agent-session-queued-send-answer'
 import type { JournalMailAttempt } from '../../agent-session-journal/journal-mail-observation'
+import { captureHostStructuredAgentSessionWork } from '../observations/structured-agent-session-read-work'
+import { copyJournalCurrentWorkAuthority } from '../../agent-session-journal/journal-observer-read'
+import type { AgentSessionFailureResumeResult } from '../../../../shared/agent-session/agent-session-held-delivery'
 
 type ReadContext = {
   deps: StructuredAgentSessionHostDeps
   sessions: Map<string, StructuredAgentSessionHostSession>
   serialize: <T>(id: string, task: () => Promise<T>) => Promise<T>
   seal: (id: string) => void
+  onFailureResumed: (sessionId: string) => void
   readCommands: StructuredAgentSessionClientDelivery['readCommandsSettled']
   conversation: (id: string) => Promise<StructuredAgentSessionHostSession>
 }
@@ -62,6 +66,69 @@ export function createStructuredAgentSessionConversationReads(context: () => Rea
   }))
   const journalOf = async (id: string) => (await context().conversation(id)).journal
   return {
+    heldDelivery: async (id: string) => (await journalOf(id)).queuedMessages.heldDelivery(),
+    resumeFailure: (
+      id: string,
+      request: {
+        expectedFailureId: string
+        operationId: string
+        coordinatorId: string
+        dispatchId: string
+        expectedRuntimeFence: number
+        hasMessage?: true
+      },
+      authorize: () => void
+    ): Promise<AgentSessionFailureResumeResult> =>
+      context().serialize(id, async () => {
+        authorize()
+        const journal = await journalOf(id)
+        const { expectedRuntimeFence, ...intent } = request
+        const commit = await journal.write(
+          { kind: 'failure-resume', fence: expectedRuntimeFence, ...intent },
+          () => {
+            authorize()
+            const { deps, sessions } = context()
+            return {
+              facts: {
+                send: copyJournalCurrentWorkAuthority(
+                  captureHostStructuredAgentSessionWork(
+                    { store: deps.store, sessions },
+                    id,
+                    journal
+                  )
+                )
+              }
+            }
+          }
+        )
+        const value = commit.value
+        if (
+          !value ||
+          typeof value !== 'object' ||
+          !('status' in value) ||
+          !('waiting' in value) ||
+          typeof value.waiting !== 'number'
+        ) {
+          throw new Error('Invalid failure recovery result')
+        }
+        switch (value.status) {
+          case 'resumed':
+            context().onFailureResumed(id)
+            return { status: value.status, waiting: value.waiting }
+          case 'not-failed':
+          case 'stale-failure':
+          case 'already-used':
+          case 'blocked':
+          case 'not-retryable':
+          case 'message-attached':
+            return {
+              status: value.status,
+              waiting: value.waiting
+            }
+          default:
+            throw new Error('Invalid failure recovery status')
+        }
+      }),
     currentWorkAtRest: async (sessionId: string) => {
       await context().conversation(sessionId)
       const { deps, sessions } = context()

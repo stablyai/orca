@@ -1,8 +1,7 @@
 import { z } from 'zod'
 import {
   OptionalString,
-  OptionalBoolean,
-  requiredString
+  OptionalBoolean
 } from '../../../../../../shared/rpc-contract/rpc-param-primitives'
 import { isGroupAddress } from '../../../../orchestration/addressing/groups/group-addressing'
 import { MESSAGE_TYPES } from '../../../../orchestration/db/orchestration-records'
@@ -19,7 +18,10 @@ const SEND_MESSAGE_TYPE_ERROR = [
 export const SendParams = z
   .object({
     to: OptionalString,
-    subject: requiredString('Missing --subject'),
+    subject: OptionalString.default(''),
+    deliveryOutcome: OptionalBoolean,
+    resume: OptionalBoolean,
+    expectedFailureId: OptionalString,
     from: OptionalString,
     body: OptionalString,
     type: z
@@ -39,6 +41,23 @@ export const SendParams = z
     devMode: OptionalBoolean
   })
   .superRefine((params, ctx) => {
+    if (!params.subject.trim() && (!params.resume || params.body)) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'Missing --subject', path: ['subject'] })
+    }
+    if (params.resume && !params.expectedFailureId) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'Missing --failure-id from the held message receipt.',
+        path: ['expectedFailureId']
+      })
+    }
+    if (params.expectedFailureId && !params.resume) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: '--failure-id requires --resume.',
+        path: ['resume']
+      })
+    }
     if (!isDispatchMutationMessageType(params.type) || !params.to || !isGroupAddress(params.to)) {
       return
     }

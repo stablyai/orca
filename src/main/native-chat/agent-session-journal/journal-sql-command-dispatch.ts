@@ -244,6 +244,7 @@ export async function runJournalSqlCommand(
     case 'stop':
     case 'stop-accept':
     case 'queue-resume':
+    case 'failure-resume':
     case 'queue-reopen':
     case 'queue-reopen-mark':
     case 'shutdown-cut': {

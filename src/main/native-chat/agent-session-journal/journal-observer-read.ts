@@ -10,6 +10,7 @@ import type { StructuredAgentSessionWorkEvidence } from '../agent-session-wire/o
 import type { JournalLatestStop } from './context-epochs/journal-stop-turn-end'
 import type { JournalStatusState } from './journal-status-state'
 import type { JournalStatusIndicators } from './journal-status-indicators'
+import type { AgentSessionHeldDelivery } from '../../../shared/agent-session/agent-session-held-delivery'
 
 /** Only live owners and sets cross the read boundary; no callback or history mirror does. */
 export type JournalWorkAuthority = {
@@ -41,6 +42,7 @@ export type JournalObserverRead = {
 }
 
 export type JournalObserverResult = {
+  heldDelivery?: AgentSessionHeldDelivery | null
   cursor: AgentJournalCursor
   physicalCursor: AgentJournalCursor
   lastActivityAt: number

@@ -30,7 +30,8 @@ import { isAgentChatPermissionMode } from '../../../../shared/agent-launch/permi
 
 export function savedStructuredAgentSessionStatus(
   record: AgentSessionConversationView,
-  markerAt?: number
+  markerAt?: number,
+  heldDelivery?: AgentSessionStatusSummary['heldDelivery']
 ): AgentSessionStatusSummary {
   const turn = record.lastTurn
   const at = turn?.at ?? markerAt
@@ -43,7 +44,17 @@ export function savedStructuredAgentSessionStatus(
     sessionId: record.sessionId,
     workspaceId: record.location.workspaceId,
     agent: record.provider,
-    status: turn || markerAt !== undefined ? 'idle' : null,
+    ...(heldDelivery
+      ? {
+          heldDelivery: {
+            ...heldDelivery,
+            runtimeFence: record.currentFence,
+            workerName: record.conversationName,
+            provider: record.provider
+          }
+        }
+      : {}),
+    status: turn || markerAt !== undefined || heldDelivery ? 'idle' : null,
     latestPrompt: turn?.prompt ?? '',
     runtimePermission: null,
     ...(turn?.reply ? { lastAssistantMessage: turn.reply } : {}),
@@ -139,7 +150,8 @@ export class StructuredAgentSessionSavedStatus {
 
 export type SavedStructuredStatusPublisher = (
   record: AgentSessionConversationView,
-  markerAt?: number
+  markerAt?: number,
+  heldDelivery?: AgentSessionStatusSummary['heldDelivery']
 ) => void
 export type SavedStructuredStatusGroup = (
   visit: (publish: SavedStructuredStatusPublisher) => void
@@ -159,12 +171,13 @@ export function createSavedStructuredStatusGroup(
   const publish = (
     record: AgentSessionConversationView,
     markerAt?: number,
+    heldDelivery?: AgentSessionStatusSummary['heldDelivery'],
     publisher?: StructuredAgentSessionStatusPublisher
   ): void => {
-    if (isOpen(record.sessionId) || published.has(record.sessionId)) {
+    if (isOpen(record.sessionId) || (published.has(record.sessionId) && !heldDelivery)) {
       return
     }
-    const summary = savedStructuredAgentSessionStatus(record, markerAt)
+    const summary = savedStructuredAgentSessionStatus(record, markerAt, heldDelivery)
     published.set(record.sessionId, { summary, firstInputSubmissionKey: null })
     if (summary.status !== null) {
       sink(summary, record.location, publisher)
@@ -174,7 +187,7 @@ export function createSavedStructuredStatusGroup(
   return (visit) => {
     const sink = readSink()
     const run = (publisher?: StructuredAgentSessionStatusPublisher): void =>
-      visit((record, markerAt) => publish(record, markerAt, publisher))
+      visit((record, markerAt, held) => publish(record, markerAt, held, publisher))
     if (sink?.withSavedStatusGroup) {
       sink.withSavedStatusGroup(run)
     } else {
