@@ -1,8 +1,8 @@
 // The credential store's tables as the relay creates them: read back from an in-memory relay
 // database (schema plus migrations applied), so nothing is copied by hand. The Worker cannot import
 // the relay's database module (pg, node:sqlite), so src/object-store-schema.generated.ts holds the
-// result and test/object-store-schema.test.ts fails if it drifts. Regenerate:
-//   UPDATE_OBJECT_STORE_SCHEMA=1 ./node_modules/.bin/vitest run test/object-store-schema.test.ts
+// result. Regenerate:
+//   UPDATE_OBJECT_STORE_SCHEMA=1 ./node_modules/.bin/tsx test/generate-object-store-schema.ts
 import { openInMemoryRelayDatabase } from '../../relay/src/database/database'
 
 export const OBJECT_STORE_TABLES = [

@@ -5,18 +5,15 @@ import type {
   CodexSystemDefaultIdentity
 } from '../../../../../../shared/managed-account-types'
 import { resolveLocalAccountRuntimeTarget } from '../../../../../../shared/local-account-runtime'
-import { getRendererAppPlatform } from '../../../../lib/renderer-app-platform'
+import { getRendererAppPlatform } from '../../../../app-shell/platform/renderer-app-platform'
 import { getIntlLocale, translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
-import type { LocalAccountRuntime } from '../accounts-pane-types'
+import {
+  type LocalAccountRuntime,
+  getHostRuntimeLabel
+} from '../../../../lib/provider-accounts/account-runtime-label'
 
 export const EMPTY_WSL_DISTROS: string[] = []
-
-export function getHostRuntimeLabel(t: Translate = translate): string {
-  return navigator.userAgent.includes('Windows')
-    ? 'Windows'
-    : t('auto.components.settings.AccountsPane.9baf45d071', 'This device')
-}
 
 // System default has no saved identity; show live host login or custom-provider detail, falling back when signed out.
 export function getCodexSystemDefaultSubtitle(
@@ -96,13 +93,6 @@ export function getSelectedAccountRuntime(
     }
   }
   return { runtime: 'host', label: getHostRuntimeLabel(t) }
-}
-
-// Standalone runtime labels need sentence casing when interpolated into prose.
-export function getRuntimeSentenceLabel(runtime: LocalAccountRuntime): string {
-  return runtime.runtime === 'host' && !navigator.userAgent.includes('Windows')
-    ? `${runtime.label.charAt(0).toLocaleLowerCase()}${runtime.label.slice(1)}`
-    : runtime.label
 }
 
 export function formatAccountTimestamp(

@@ -1,5 +1,5 @@
 import { useAppStore } from '@/store'
-import { resolveCommittedTitleAgentType } from '@/lib/pane-agent-evidence'
+import { resolveExplicitTerminalTitleAgentType } from '../../../shared/agent-status/title/terminal-title-agent-type'
 import { resolveCompatibleAgentTypeForOwner } from '../../../shared/agent-status/title/agent-title-owner'
 import { isAgentStatusHooksEnabledForAgent } from '../../../shared/agent-hook-listener/configuration/agent-status-hooks-setting'
 import { isTuiAgent } from '../../../shared/agent-launch/catalog/tui-agent-config'
@@ -45,6 +45,6 @@ export function hookLaneTitleTurnEndEvidence(
   title: string | null,
   foregroundAgent: TerminalAgent | null
 ): 'identified' | 'ambiguous' | null {
-  const agent = (title ? resolveCommittedTitleAgentType(title) : null) ?? foregroundAgent
+  const agent = (title ? resolveExplicitTerminalTitleAgentType(title) : null) ?? foregroundAgent
   return hookLaneTurnEndEvidence(paneKey, ptyId, agent)
 }

@@ -2,11 +2,11 @@ import { useCallback } from 'react'
 import { toast } from 'sonner'
 import { useTranslate } from '@/i18n/use-translate'
 import { useAppStore } from '../../store'
-import type { ClientHostedBrowserRow } from '../../../../shared/client-hosted-browser-rows'
+import type { ClientHostedBrowserRow } from '../../../../shared/browser/client-hosting/client-hosted-browser-rows'
 import {
   selectClientHostedBrowserRow,
   useActiveClientHostedBrowserRowId
-} from '@/lib/pane-manager/client-hosted-browser-row-state'
+} from '@/runtime/browser/client-hosting/client-hosted-browser-row-state'
 import { closeClientHostedBrowserRow } from '../../runtime/browser/closing/client-hosted-browser-row-close'
 import ClientHostedBrowserTab from './ClientHostedBrowserTab'
 

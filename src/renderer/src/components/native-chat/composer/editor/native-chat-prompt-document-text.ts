@@ -1,6 +1,6 @@
 import type { JSONContent } from '@tiptap/react'
 import type { AgentJournalSkillRef } from '../../../../../../shared/agent-session/journal/agent-session-journal-types'
-import { agentReferenceToken } from '../../../../../../shared/orchestration-agent-reference'
+import { agentReferenceToken } from '../../../../../../shared/orchestration/mailbox/orchestration-agent-reference'
 import {
   imageReferenceToken,
   splitImageReferences
@@ -48,6 +48,24 @@ export function promptTextContent(text: string): JSONContent {
           : [{ type: IMAGE_REFERENCE_NODE, attrs: { attachmentId: part.attachmentId } }]
       )
     }))
+  }
+}
+
+/** Drafts saved before Shift+Enter split paragraphs hold hard breaks; initial editor content skips the hard-break plugin, which only sees transactions. */
+export function promptParagraphLines(document: JSONContent): JSONContent {
+  return {
+    ...document,
+    content: document.content?.flatMap((block) => {
+      const lines: JSONContent[][] = [[]]
+      for (const node of block.content ?? []) {
+        if (node.type === 'hardBreak') {
+          lines.push([])
+        } else {
+          lines.at(-1)?.push(node)
+        }
+      }
+      return lines.length === 1 ? [block] : lines.map((content) => ({ ...block, content }))
+    })
   }
 }
 

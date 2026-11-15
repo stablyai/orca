@@ -9,7 +9,7 @@ import {
   getPreviousRecentTab,
   type TypeCyclableTab
 } from '@/components/terminal/tab-type-cycle'
-import { activateCycledTabOnOwner } from '@/lib/cycled-tab-owner-activation'
+import { activateCycledTabOnOwner } from '@/lib/workspace/tabs/cycled-tab-owner-activation'
 
 type AppStoreState = ReturnType<typeof useAppStore.getState>
 

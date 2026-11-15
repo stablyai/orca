@@ -25,11 +25,11 @@ export type StructuredAgentSessionEvictionStep = {
 /** Capture already-delivered output before shutdown; snapshot failures are log-only. */
 export async function snapshotBeforeStructuredAgentSessionStop(
   context: Pick<StructuredAgentSessionEvictionContext, 'sessionId' | 'eventSink' | 'logger'>,
-  snapshot: () => void
+  snapshot: () => void | Promise<void>
 ): Promise<void> {
   await withTimeout<unknown>(context.eventSink.drained(), SNAPSHOT_DRAIN_TIMEOUT_MS, null)
   try {
-    snapshot()
+    await snapshot()
   } catch {
     context.logger.warn('capturing a recovery witness before a stop failed', {
       scope: 'recovery-witness',

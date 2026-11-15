@@ -37,7 +37,7 @@ const { attachBrowserExtensionDnr, getDnrSessionRuntime } =
   await import('./browser-extension-dnr-session')
 const { observeBrowserExtensionDnrContents } = await import('./browser-extension-dnr-contents')
 await import('../../actions/browser-extension-action-registry')
-await import('../../browser-extension-web-request')
+await import('../../requests/browser-extension-web-request-observer')
 
 const BLOCKER = 'c'.repeat(32)
 const PAGE = 'https://site.example'

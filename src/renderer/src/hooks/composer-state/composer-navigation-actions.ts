@@ -15,7 +15,7 @@ type ComposerNavigationActionsInput = Pick<
 >
 
 import { useCallback } from 'react'
-import { getTaskSourceRuntimeSettings } from '../../../../shared/task-source-context'
+import { getTaskSourceRuntimeSettings } from '../../../../shared/work-items/task-source-context'
 
 export function useComposerNavigationActions(input: ComposerNavigationActionsInput) {
   const {

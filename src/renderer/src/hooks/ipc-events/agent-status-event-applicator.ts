@@ -1,12 +1,12 @@
-import { isWslHookRelayConnectionId } from '../../../../shared/wsl-hook-relay-contract'
+import { isWslHookRelayConnectionId } from '../../../../shared/agent-hook-listener/transport/wsl-hook-relay-contract'
 import { AgentHookAttributionDiagnostics } from '../../../../shared/agent-hook-listener/state/agent-hook-attribution-diagnostics'
 import { pickHostTurnEnd } from '../../../../shared/agent-status/contracts/agent-status-types'
 import type { AgentStatusIpcPayload } from '../../../../shared/agent-status/contracts/agent-status-ipc-payload'
 import { isDecorativeAgentTitleFrameChange } from '../../../../shared/agent-status/title/agent-decorative-title-signature'
 import { parsePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import { normalizeProgramStatusFacet } from '../../../../shared/program-status/facet'
-import { resolveAgentStatusTerminalTitle } from '@/lib/agent-status-terminal-title'
-import { track } from '@/lib/telemetry'
+import { resolveAgentStatusTerminalTitle } from '@/lib/agent-status/evidence/agent-status-terminal-title'
+import { track } from '@/diagnostics/telemetry/telemetry'
 import { resolveAgentPaneAuthorityKey } from '@/store/slices/agent-status/agent-pane-authority'
 import type { AgentStatusUpdate } from '@/store/slices/agent-status/agent-status-contract'
 import { observeAgentHookCompletionForNotification } from '../agent-hook-completion-notifications'
@@ -231,6 +231,7 @@ export function createAgentStatusEventApplicator(args: {
       terminalTitle,
       timing: {
         updatedAt: data.receivedAt,
+        isReplay: data.isReplay,
         ...(data.evidenceObservedAt !== undefined
           ? { evidenceObservedAt: data.evidenceObservedAt }
           : {}),

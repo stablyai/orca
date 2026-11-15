@@ -1,7 +1,8 @@
 import type { Tab, TabGroup } from '../../../../../shared/tab-types'
 import { createNonSecureContextUuid as createBrowserUuid } from '../../../../../shared/non-secure-context-uuid'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../shared/layout-owner-switch'
-import { workspaceRootGroupId } from '../../../../../shared/workspace-layout/workspace-layout-minted-ids'
+import { workspaceRootGroupId } from '../../../../../shared/workspace-layout/persistence/workspace-layout-minted-ids'
+import { replaceRecordEntries, replaceTabBuckets } from '../../keyed-record-transitions'
 
 export function findTabAndWorktree(
   tabsByWorktree: Record<string, Tab[]>,
@@ -66,20 +67,34 @@ export function ensureGroup(
   groupsByWorktree: Record<string, TabGroup[]>
   activeGroupIdByWorktree: Record<string, string>
 } {
-  const existing =
-    groupsByWorktree[worktreeId]?.find((group) => group.id === preferredGroupId) ??
-    groupsByWorktree[worktreeId]?.[0]
+  const { group, created } = ensureWorktreeGroup(
+    groupsByWorktree[worktreeId],
+    worktreeId,
+    preferredGroupId
+  )
+  if (!created) {
+    return { group, groupsByWorktree, activeGroupIdByWorktree }
+  }
+  return {
+    group,
+    groupsByWorktree: replaceRecordEntries(groupsByWorktree, [[worktreeId, [group]]]),
+    activeGroupIdByWorktree: replaceRecordEntries(activeGroupIdByWorktree, [[worktreeId, group.id]])
+  }
+}
+
+/** ensureGroup for one worktree's groups; a created group becomes the worktree's only and active group. */
+export function ensureWorktreeGroup(
+  groups: TabGroup[] | undefined,
+  worktreeId: string,
+  preferredGroupId?: string
+): { group: TabGroup; created: boolean } {
+  const existing = groups?.find((group) => group.id === preferredGroupId) ?? groups?.[0]
   if (existing) {
-    return { group: existing, groupsByWorktree, activeGroupIdByWorktree }
+    return { group: existing, created: false }
   }
   // Switch point: the root group id main and the Loader mint for a workspace with no group.
   const groupId = ORCA_LAYOUT_OWNER_IS_MAIN ? workspaceRootGroupId(worktreeId) : createBrowserUuid()
-  const group: TabGroup = { id: groupId, worktreeId, activeTabId: null, tabOrder: [] }
-  return {
-    group,
-    groupsByWorktree: { ...groupsByWorktree, [worktreeId]: [group] },
-    activeGroupIdByWorktree: { ...activeGroupIdByWorktree, [worktreeId]: groupId }
-  }
+  return { group: { id: groupId, worktreeId, activeTabId: null, tabOrder: [] }, created: true }
 }
 
 export function updateGroup(groups: TabGroup[], updated: TabGroup): TabGroup[] {
@@ -105,9 +120,8 @@ export function patchTab(
   const { worktreeId } = found
   const tabs = tabsByWorktree[worktreeId] ?? []
   return {
-    unifiedTabsByWorktree: {
-      ...tabsByWorktree,
-      [worktreeId]: tabs.map((t) => (t.id === tabId ? { ...t, ...patch } : t))
-    }
+    unifiedTabsByWorktree: replaceTabBuckets(tabsByWorktree, [
+      [worktreeId, tabs.map((t) => (t.id === tabId ? { ...t, ...patch } : t))]
+    ])
   }
 }

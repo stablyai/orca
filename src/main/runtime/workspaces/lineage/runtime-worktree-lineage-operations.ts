@@ -5,15 +5,15 @@ import type {
   WorktreeLineageResolution
 } from './runtime-worktree-lineage-resolution'
 import type { OrchestrationDb } from '../../orchestration/db/orchestration-db'
-import { resolveNestedWorkerMaxDepth } from '../../../../shared/nested-worker-depth'
+import { resolveNestedWorkerMaxDepth } from '../../../../shared/orchestration/workers/nested-worker-depth'
 import type { RuntimeWorktreeLineageController } from './runtime-worktree-lineage-controller'
 import type {
   CrossStoreWorkspaceLineage,
   WorkspaceLineage,
   WorktreeLineage
 } from '../../../../shared/worktree/lineage-types'
-import type { WorkspaceKey } from '../../../../shared/workspace-scope'
-import type { Repo } from '../../../../shared/repo-types'
+import type { WorkspaceKey } from '../../../../shared/workspace/identity/workspace-scope'
+import type { Repo } from '../../../../shared/repository/repo-types'
 export abstract class RuntimeWorktreeLineageOperations extends OrcaRuntimeWithResolveBrowserNetworkExecutionHostForWorktree {
   /** `childRepo` scopes the parent to the new worktree's execution host (#12757). */
   resolveLineageForWorktreeCreate(

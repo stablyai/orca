@@ -1,7 +1,8 @@
-import { isOptionalUsageLimitContinueCancel } from './agent-session-usage-limit-continue'
-import type { AgentSessionDeathEvidence } from './agent-session-death-evidence'
-import { isAgentSessionRewindRecord, type AgentSessionRewindRecord } from './agent-session-rewind'
-import { isAgentSessionLaunchArgs } from './agent-session-launch-args'
+import { isOptionalUsageLimitContinueCancel } from './stopping/agent-session-usage-limit-continue'
+import type { AgentSessionDeathEvidence } from './leases/agent-session-death-evidence'
+import { isAgentSessionRewindRecord } from './rewind/agent-session-rewind'
+import type { AgentSessionRewindRecord } from './rewind/agent-session-rewind'
+import { isAgentSessionLaunchArgs } from './records/agent-session-launch-args'
 import { isAgentSessionConversationName } from '../agent-session-conversation-name'
 import {
   isPersistedAgentSessionHandoffStage,
@@ -9,30 +10,30 @@ import {
   type PersistedAgentSessionObservationLease,
   type PersistedAgentSessionObservationRecord,
   type PersistedAgentSessionRecord
-} from './agent-session-legacy-handoff-lease'
+} from './leases/agent-session-legacy-handoff-lease'
 /** Identity pins location, provider and account home independently of terminal tabs; the lease separately grants one process writer authority. */
 
-import type { AgentSessionLastTurn } from './agent-session-last-turn'
+import type { AgentSessionLastTurn } from './records/agent-session-last-turn'
 import type { ExecutionHostId } from '../../execution-host'
-import {
-  isAgentSessionConversationCommandRecord,
-  type AgentSessionConversationCommandRecord
-} from '../agent-session-conversation-command'
+import { isAgentSessionConversationCommandRecord } from '../agent-session-conversation-command'
+import type { AgentSessionConversationCommandRecord } from '../agent-session-conversation-command'
 import {
   decodePersistedAgentSessionProviderHandleChain,
   type AgentSessionProviderHandleLink
-} from './agent-session-provider-handle'
+} from './provider-handles/agent-session-provider-handle'
 import {
   isAgentSessionProviderContextBoundary,
   type AgentSessionProviderContextBoundary
 } from '../agent-session-provider-context'
-import { isStructuredAgentId } from './agent-session-provider-handle-encoding'
-import { isNonNegativeSafeInteger } from '../../ssh-retained-payload-limits'
+import { isStructuredAgentId } from './provider-handles/agent-session-provider-handle-encoding'
+import { isNonNegativeSafeInteger } from '../../remote-runtime/ssh/ssh-retained-payload-limits'
 import {
   isAgentSessionAccountHome,
+  isOptionalAgentSessionLaunchedAccount,
   MAX_PATH_LENGTH,
-  type AgentSessionAccountHome
-} from './agent-session-account-home'
+  type AgentSessionAccountHome,
+  type AgentSessionLaunchedAccount
+} from './accounts/agent-session-account-home'
 
 export const AGENT_SESSION_RECORD_SCHEMA_VERSION = 2 as const
 
@@ -108,6 +109,8 @@ export type AgentSessionForkedFrom = {
   itemId: string
   /** Where the inherited history ends in this chat's own journal. */
   childBoundary: { kind: 'item'; itemId: string } | { kind: 'start' }
+  /** Saved under the source's shown name; absent on forks older builds titled "<source> fork". */
+  plainName?: true
 }
 
 export type AgentSessionRecord = {
@@ -119,6 +122,8 @@ export type AgentSessionRecord = {
   providerHandleChain: AgentSessionProviderHandleLink[]
   providerContextBoundary?: AgentSessionProviderContextBoundary
   accountHome: AgentSessionAccountHome
+  /** Where the latest proven runtime actually launched; absent before any or from older hosts. */
+  launchedAccount?: AgentSessionLaunchedAccount
   /** Optional host-written construction observation; checked independently of record readability. */
   acquiredAccount?: unknown
   /** Initial launch directory in host path syntax. Floating sessions resume here; worktree/folder IDs resolve their durable location. */
@@ -313,6 +318,7 @@ export function isPersistedAgentSessionObservationRecord(
       isAgentSessionExecutionLocation(record.location) &&
       isStructuredAgentId(record.provider) &&
       isAgentSessionAccountHome(record.accountHome) &&
+      isOptionalAgentSessionLaunchedAccount(record.launchedAccount) &&
       (record.launchDirectory === undefined ||
         isBoundedString(record.launchDirectory, MAX_PATH_LENGTH)) &&
       (record.options === undefined || isAgentSessionOptions(record.options)) &&

@@ -1,6 +1,6 @@
 import type { PreloadApi } from '../../../../preload/api-types'
 import { EMPTY_PTY_MAIN_DELIVERY_DIAGNOSTICS } from '../../../../shared/terminal/pty/diagnostics/pty-delivery-diagnostics'
-import type { SshConnectionState, SshTarget } from '../../../../shared/ssh-types'
+import type { SshConnectionState, SshTarget } from '../../../../shared/remote-runtime/ssh/ssh-types'
 import { translate } from '@/i18n/i18n'
 import { callRuntimeResult } from './web-runtime-calls'
 import { requireActiveEnvironmentOrNull } from './web-runtime-session'

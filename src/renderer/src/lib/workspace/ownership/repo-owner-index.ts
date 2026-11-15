@@ -1,9 +1,9 @@
-import type { Repo } from '../../../../../shared/repo-types'
+import type { Repo } from '../../../../../shared/repository/repo-types'
 import { getRepoExecutionHostId, type ExecutionHostId } from '../../../../../shared/execution-host'
 import {
   createRepoExecutionHostLookup,
   type ExecutionHostOwnerLookup
-} from '../../../../../shared/worktree-execution-host-resolution'
+} from '../../../../../shared/execution-host/worktree-execution-host-resolution'
 
 type RepoOwnerRecord = Pick<Repo, 'id' | 'connectionId' | 'executionHostId'>
 const EMPTY_ROWS: readonly RepoOwnerRecord[] = []

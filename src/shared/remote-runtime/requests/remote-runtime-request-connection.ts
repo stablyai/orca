@@ -21,7 +21,7 @@ import {
   remoteRuntimeUnavailableError
 } from './remote-runtime-request-frames'
 import { settleRemoteRuntimeRequestRpcFrame } from './remote-runtime-request-rpc-frame'
-import type { RuntimeRpcResponse } from '../../runtime-rpc-envelope'
+import type { RuntimeRpcResponse } from '../rpc/runtime-rpc-envelope'
 import {
   rejectRemoteRuntimeRequestReadyWaiters,
   resolveRemoteRuntimeRequestReadyWaiters,

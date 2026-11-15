@@ -1,5 +1,5 @@
 /** Only positive death proof earns exited; lazy respawn leaves a gap until the next terminal. */
-import { parseLinuxStartTicks } from '../../agent-hooks/managed-hook-owner-identity'
+import { parseLinuxStartTicks } from '../../agent-hooks/installation/locking/managed-hook-owner-identity'
 import { checkDaemonHealthWithCoverage, type DaemonHealthCheck } from './daemon-health'
 import {
   inspectProcessLiveness,

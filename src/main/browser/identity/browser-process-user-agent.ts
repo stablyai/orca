@@ -1,5 +1,5 @@
 import { app } from 'electron'
-import type { BrowserUserAgentMode } from '../../../shared/browser-user-agent-mode'
+import type { BrowserUserAgentMode } from '../../../shared/browser/identity/browser-user-agent-mode'
 
 export type BrowserProcessUserAgentIdentity = Readonly<{
   mode: BrowserUserAgentMode
@@ -46,8 +46,4 @@ export function getBrowserProcessUserAgentIdentity(): BrowserProcessUserAgentIde
     throw new Error('Browser process user agent is not initialized')
   }
   return identity
-}
-
-export function resetBrowserProcessUserAgentForTests(): void {
-  identity = null
 }

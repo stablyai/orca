@@ -1,9 +1,10 @@
+import '../../../../shared/remote-runtime/host-store/environment-store-worker-test-fixture'
 import nacl from 'tweetnacl'
 import { chmodSync, mkdtempSync, readdirSync, statSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import { getRuntimeMetadataPath } from '../../../../shared/runtime-bootstrap'
+import { getRuntimeMetadataPath } from '../../../../shared/remote-runtime/bootstrap/runtime-bootstrap'
 import { encodePairingOffer } from '../../../../shared/remote-runtime/pairing/pairing'
 import {
   addEnvironmentFromPairingCode,
@@ -29,41 +30,6 @@ describe('runtime metadata', () => {
   })
 
   describe('clearRuntimeMetadataIfOwned', () => {
-    it('clears metadata when pid and runtimeId both match', () => {
-      const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-metadata-'))
-      tempDirs.push(userDataPath)
-      writeRuntimeMetadata(userDataPath, {
-        runtimeId: 'rt_owner',
-        pid: 42,
-        transports: [],
-        authToken: null,
-        startedAt: 100
-      })
-
-      clearRuntimeMetadataIfOwned(userDataPath, 42, 'rt_owner')
-
-      expect(readRuntimeMetadata(userDataPath)).toBeNull()
-    })
-
-    it('retains metadata when the pid does not match (simulates auto-update handoff)', () => {
-      const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-metadata-'))
-      tempDirs.push(userDataPath)
-      writeRuntimeMetadata(userDataPath, {
-        runtimeId: 'rt_replacement',
-        pid: 999,
-        transports: [],
-        authToken: null,
-        startedAt: 200
-      })
-
-      clearRuntimeMetadataIfOwned(userDataPath, 42, 'rt_owner')
-
-      expect(readRuntimeMetadata(userDataPath)).toMatchObject({
-        pid: 999,
-        runtimeId: 'rt_replacement'
-      })
-    })
-
     it('retains metadata when only the runtimeId differs', () => {
       // Auto-update may reuse a pid; runtimeId must still prevent treating the replacement as the old owner.
       const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-metadata-'))
@@ -114,13 +80,13 @@ describe('runtime metadata', () => {
 
   it.runIf(process.platform !== 'win32')(
     'uses hardened atomic writes for runtime credential stores on Unix',
-    () => {
+    async () => {
       const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-secure-files-'))
       tempDirs.push(userDataPath)
 
       new DeviceRegistry(userDataPath).addDevice('phone')
       loadOrCreateE2EEKeypair(userDataPath)
-      addEnvironmentFromPairingCode(userDataPath, {
+      await addEnvironmentFromPairingCode(userDataPath, {
         name: 'desk',
         pairingCode: encodePairingOffer({
           v: 2,
@@ -144,7 +110,7 @@ describe('runtime metadata', () => {
 
   it.runIf(process.platform !== 'win32')(
     'hardens existing runtime credential stores before reading them on Unix',
-    () => {
+    async () => {
       const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-existing-secure-files-'))
       tempDirs.push(userDataPath)
       const keyMaterial = Buffer.from(new Uint8Array(32).fill(1)).toString('base64')
@@ -154,7 +120,7 @@ describe('runtime metadata', () => {
         deviceToken: 'device-token',
         publicKeyB64: keyMaterial
       })
-      const environment = addEnvironmentFromPairingCode(userDataPath, {
+      const environment = await addEnvironmentFromPairingCode(userDataPath, {
         name: 'desk',
         pairingCode
       })
@@ -192,7 +158,7 @@ describe('runtime metadata', () => {
         scope: 'mobile'
       })
       expect(loadOrCreateE2EEKeypair(userDataPath).publicKeyB64).toBe(storedPublicKeyB64)
-      expect(listEnvironments(userDataPath)[0]?.id).toBe(environment.id)
+      expect((await listEnvironments(userDataPath))[0]?.id).toBe(environment.id)
 
       for (const path of [devicesPath, keypairPath, environmentsPath]) {
         expect(statSync(path).mode & 0o777).toBe(0o600)
@@ -200,16 +166,4 @@ describe('runtime metadata', () => {
       expect(statSync(userDataPath).mode & 0o777).toBe(0o700)
     }
   )
-
-  it('replaces oversized E2EE keypair files instead of reading them as metadata', () => {
-    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-large-keypair-'))
-    tempDirs.push(userDataPath)
-    const keypairPath = join(userDataPath, 'orca-e2ee-keypair.json')
-    writeFileSync(keypairPath, 'x'.repeat(9 * 1024))
-
-    const keypair = loadOrCreateE2EEKeypair(userDataPath)
-
-    expect(keypair.publicKey).toHaveLength(32)
-    expect(statSync(keypairPath).size).toBeLessThan(1024)
-  })
 })

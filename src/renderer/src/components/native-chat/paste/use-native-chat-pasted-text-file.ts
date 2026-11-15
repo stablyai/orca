@@ -1,5 +1,5 @@
 import { createNonSecureContextUuid as createUuidV4 } from '../../../../../shared/non-secure-context-uuid'
-import { releaseBrowserAttachmentFiles } from '@/lib/browser-attachment-files'
+import { releaseBrowserAttachmentFiles } from '@/lib/files/drop/browser-attachment-files'
 import { stageNativeChatDraftFile } from '../drafts/native-chat-draft-attachment-staging'
 import {
   nativeChatPastedTextLabel,
@@ -9,11 +9,11 @@ import {
 
 import { useCallback } from 'react'
 import { translate } from '@/i18n/i18n'
-import { extractIpcErrorMessage } from '@/lib/ipc-error'
-import { isNativeChatLongPaste } from '../../../../../shared/native-chat/input/native-chat-long-paste'
-import { structuredAgentSessionBlocksTooLarge } from '../../../../../shared/rpc-contract/structured-agent-session-message-params'
+import { extractIpcErrorMessage } from '@/runtime/errors/ipc-error'
+import { isNativeChatLongPaste } from '../../../../../shared/native-chat/input/composer/native-chat-long-paste'
+import { structuredAgentSessionBlocksTooLarge } from '../../../../../shared/rpc-contract/structured-agent-session/structured-agent-session-message-params'
 import { structuredAgentSessionSendBody } from '../../../../../shared/agent-session/requests/structured-agent-session-send-mutation'
-import { imageReferencesToPromptMarkers } from '../../../../../shared/native-chat/transcript/native-chat-image-transcript-markers'
+import { imageReferencesToPromptMarkers } from '../../../../../shared/native-chat/transcript/images/native-chat-sent-image-prompt-markers'
 import {
   nativeChatAttachFailedNotice,
   nativeChatAttachmentOwnerChangedNotice

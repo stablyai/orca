@@ -1,6 +1,6 @@
 import type * as NodeFs from 'node:fs'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { getSystemCliInstallDirectories } from '../../shared/system-cli-install-dirs'
+import { getSystemCliInstallDirectories } from '../../shared/shell/command-resolution/system-cli-install-dirs'
 import { patchPackagedProcessPath } from './configure-process'
 
 const fsFixture = vi.hoisted(() => ({ macPortsInstalled: false }))

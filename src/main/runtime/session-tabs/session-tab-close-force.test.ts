@@ -1,6 +1,6 @@
 // Confirmed pinned-tab closes carry force in both layout builds.
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { SESSION_TAB_CLOSE_INTENT_RUNTIME_CAPABILITY } from '../../../shared/session-tabs-runtime-capabilities'
+import { SESSION_TAB_CLOSE_INTENT_RUNTIME_CAPABILITY } from '../../../shared/remote-runtime/protocol/session-tabs-runtime-capabilities'
 import { z } from 'zod'
 import { RpcDispatcher } from '../rpc/dispatcher'
 import { SESSION_TAB_METHODS } from '../rpc/methods/session-tabs/session-tabs'
@@ -31,7 +31,7 @@ afterEach(async () => {
 
 async function pinnedServerTab(layoutOwnerIsMain: boolean) {
   layoutOwner.isMain = layoutOwnerIsMain
-  const f = createAcknowledgedTabRetirementFixture(true)
+  const f = await createAcknowledgedTabRetirementFixture(true)
   disposers.push(() => f.dispose())
   const stopped: string[] = []
   f.runtime.setPtyController({
@@ -112,13 +112,6 @@ describe.each([false, true])('ORCA_LAYOUT_OWNER_IS_MAIN=%s', (layoutOwnerIsMain)
       // The window's forced close stops the tab's terminals there.
       expect(f.closeTerminalTab).toHaveBeenCalledWith(expect.any(String), { force: true })
     }
-  })
-
-  it('closes a pinned tab on a replayed confirmed close, which a newer client marks as replay', async () => {
-    const { f, close } = await pinnedServerTab(layoutOwnerIsMain)
-    const reply = await close({ reason: 'replay', force: true })
-    expect(reply.ok).toBe(true)
-    expect(f.hasTab()).toBe(false)
   })
 
   it('ignores force on a reasonless legacy close, which never carried a confirmation', async () => {

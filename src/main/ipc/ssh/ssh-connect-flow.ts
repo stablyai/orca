@@ -1,18 +1,19 @@
+import { awaitSshStartupReady } from './ssh-startup-ready'
 import { appendFileSync } from 'node:fs'
-import type { SshConnectionState } from '../../../shared/ssh-types'
-import { createCancelledConnectAttemptError } from '../../ssh/ssh-connect-attempt-cancellation'
+import type { SshConnectionState } from '../../../shared/remote-runtime/ssh/ssh-types'
+import { createCancelledConnectAttemptError } from '../../ssh/connection/reconnect/ssh-connect-attempt-cancellation'
 import {
   getSshProviderAuthority,
   isCurrentSshProviderAuthority,
   rotateSshProviderAuthority
-} from '../../ssh/ssh-provider-authority'
+} from '../../ssh/connection/authority/ssh-provider-authority'
 import {
   adoptSshConnection,
   runAttributedToSshOwner
 } from '../../ssh/connection/ssh-connection-attribution'
 import { getSshTargetRegistryStore } from '../../ssh/targets/ssh-target-registry'
-import { getManagedOrcadFenceEnvironmentId } from '../../../shared/managed-orcad-ssh-owner'
-import { noteRuntimeEnvironmentConnectRequested } from '../runtime-environments/runtime-environment-pairing-refusal-registry'
+import { getManagedOrcadFenceEnvironmentId } from '../../../shared/remote-runtime/ssh/managed-orcad-ssh-owner'
+import { noteRuntimeEnvironmentConnectRequested } from '../runtime-environments/pairing/runtime-environment-pairing-refusal-registry'
 import {
   decideHostServer,
   recheckWhenManagedFenceClears,
@@ -33,17 +34,17 @@ import {
 import { connectionManager } from './ssh-ipc-context'
 import { abandonDecisionTransport } from './ssh-session-teardown'
 import { awaitTargetLifecycle } from './ssh-target-lifecycle-queue'
-import { startLegacyRelayBridge } from '../../ssh/legacy-relay/legacy-relay-bridge-registry'
+import { startLegacyRelayBridge } from '../../ssh/legacy-relay/bridge/legacy-relay-bridge-registry'
 import {
   getSshHostServerStatus,
   isSshHostKeptForBridgedTerminals
-} from '../../ssh/ssh-host-server-status'
-import type { HostServerOnConnectResult } from '../../ssh/ssh-host-server-on-connect'
-import { clearSshCredentialDeclined } from '../../ssh/ssh-credential-decline'
+} from '../../ssh/host-server/ssh-host-server-status'
+import type { HostServerOnConnectResult } from '../../ssh/host-server/ssh-host-server-on-connect'
+import { clearSshCredentialDeclined } from '../../ssh/authentication/ssh-credential-decline'
 import {
   createSshUserDisconnectedError,
   isSshUserDisconnected
-} from '../../ssh/ssh-user-disconnect'
+} from '../../ssh/connection/ssh-user-disconnect'
 import {
   isManagedServerRemovalHeld,
   liftSshHostUserDisconnect,
@@ -58,6 +59,7 @@ export async function connectTarget(
   targetId: string,
   options: { automatic?: boolean; quiet?: boolean } = {}
 ): Promise<SshConnectionState> {
+  await awaitSshStartupReady()
   const e2eProbePath = process.env.ORCA_E2E_FORBID_LOCAL_SSH_CONNECT_PROBE
   if (e2eProbePath) {
     appendFileSync(e2eProbePath, `${JSON.stringify(targetId)}\n`)
@@ -79,11 +81,11 @@ export async function connectTarget(
   if (managedEnvironmentId) {
     noteRuntimeEnvironmentConnectRequested(managedEnvironmentId)
   }
-  const liftedEnvironments = liftSshHostUserDisconnect(targetId)
+  const liftedEnvironments = await liftSshHostUserDisconnect(targetId)
   try {
     return await admitConnect(targetId)
   } finally {
-    resumeRuntimeEnvironmentStatus(liftedEnvironments)
+    await resumeRuntimeEnvironmentStatus(liftedEnvironments)
   }
 }
 
@@ -182,7 +184,7 @@ async function doConnect(
     throw new Error(`SSH target "${targetId}" not found`)
   }
   // Read after the lifecycle wait: a Stop or Forget this connect queued behind wrote the hold.
-  if (automatic && isManagedServerRemovalHeld(target)) {
+  if (automatic && (await isManagedServerRemovalHeld(target))) {
     throw createSshUserDisconnectedError(target.label)
   }
 

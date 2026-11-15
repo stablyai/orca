@@ -5,12 +5,12 @@ import { setupPtyIpcSuite } from './pty/pty-ipc-test-harness'
 import { POSIX_SHELL_STARTUP_COMMAND_ENV } from '../pty/shell-startup/posix-shell-startup-command'
 import { registerPtyHandlers } from './pty/register-handlers'
 import { OrcaRuntimeService } from '../runtime/orca-runtime'
-import { agentSessionConversationView } from '../../shared/agent-session/lifecycle/agent-session-conversation-view'
+import { agentSessionConversationView } from '../../shared/agent-session/lifecycle/leases/agent-session-conversation-view'
 import { AgentSessionRecordStore } from '../runtime/agent-session/records/agent-session-record-store'
 import {
   agentSessionLeaseFixture,
   agentSessionRecordFixture
-} from '../../shared/agent-session/lifecycle/agent-session-record.test-fixture'
+} from '../../shared/agent-session/lifecycle/records/agent-session-record.test-fixture'
 
 vi.mock('electron', () => import('./pty/pty-ipc-mock-registry').then((m) => m.electronModuleMock()))
 vi.mock('fs', () => import('./pty/pty-ipc-mock-registry').then((m) => m.fsModuleMock()))
@@ -18,16 +18,16 @@ vi.mock('node-pty', () => import('./pty/pty-ipc-mock-registry').then((m) => m.no
 vi.mock('node:child_process', async (importOriginal) =>
   (await import('./pty/pty-ipc-mock-registry')).childProcessModuleMock(await importOriginal())
 )
-vi.mock('../opencode/hook-service', () =>
+vi.mock('../opencode/status-hooks/hook-service', () =>
   import('./pty/pty-ipc-mock-registry').then((m) => m.openCodeHookServiceModuleMock())
 )
 vi.mock('../mimo/hook-service', () =>
   import('./pty/pty-ipc-mock-registry').then((m) => m.mimoHookServiceModuleMock())
 )
-vi.mock('../agent-hooks/server', () =>
+vi.mock('../agent-hooks/server/agent-hook-server', () =>
   import('./pty/pty-ipc-mock-registry').then((m) => m.agentHookServerModuleMock())
 )
-vi.mock('../pi/titlebar-extension-service', () =>
+vi.mock('../pi/managed-extensions/titlebar-extension-service', () =>
   import('./pty/pty-ipc-mock-registry').then((m) => m.piTitlebarExtensionModuleMock())
 )
 vi.mock('../pty/shell-startup/pwsh', () =>
@@ -42,13 +42,13 @@ vi.mock('../telemetry/client', () =>
 vi.mock('../telemetry/classify-error', () =>
   import('./pty/pty-ipc-mock-registry').then((m) => m.classifyErrorModuleMock())
 )
-vi.mock('../cli/linux-terminal-orca-cli-shim', () =>
+vi.mock('../cli/launchers/linux-terminal-orca-cli-shim', () =>
   import('./pty/pty-ipc-mock-registry').then((m) => m.linuxCliShimModuleMock())
 )
 vi.mock('../memory/pty-registry', () =>
   import('./pty/pty-ipc-mock-registry').then((m) => m.ptyRegistryModuleMock())
 )
-vi.mock('../agent-hooks/migration-unsupported-pty-state', () =>
+vi.mock('../agent-hooks/observations/migration-unsupported-pty-state', () =>
   import('./pty/pty-ipc-mock-registry').then((m) => m.migrationUnsupportedPtyModuleMock())
 )
 vi.mock('../codex/configuration/homes/codex-pane-account-registry', () =>

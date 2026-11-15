@@ -1,12 +1,12 @@
 import { useEffect } from 'react'
-import { useAppStore } from '../store'
+import { useAppStore } from '../store/index'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
 import { createSessionWriteSubscriber } from '../lib/workspace/persistence/session-write-subscriber'
-import { buildActiveViewUnloadPatch } from '../lib/active-view-persist'
+import { buildActiveViewUnloadPatch } from './startup/active-view-persist'
 import {
   isIntentionalAppRestartInProgress,
   registerUpdaterBeforeUnloadBypass
-} from '../lib/updater-beforeunload'
+} from './updates/updater-beforeunload'
 import {
   buildWorkspaceSessionPayload,
   shouldPersistWorkspaceSession
@@ -18,9 +18,9 @@ import {
 import {
   createShutdownCheckpointBeforeUnloadHandler,
   createShutdownCheckpointGuard
-} from '../lib/shutdown-checkpoint-guard'
-import { showShutdownCheckpointFailureToast } from '../lib/shutdown-checkpoint-failure-toast'
-import { isPairedWebClientWindow } from '../lib/desktop-window-chrome'
+} from './shutdown/shutdown-checkpoint-guard'
+import { showShutdownCheckpointFailureToast } from './shutdown/shutdown-checkpoint-failure-toast'
+import { isPairedWebClientWindow } from './chrome/desktop-window-chrome'
 import { createShutdownCheckpointPersist } from './shutdown-checkpoint-persist'
 import { shutdownBufferCaptures } from '../components/terminal-pane/snapshots/shutdown-buffer-captures'
 import {
@@ -32,6 +32,7 @@ import {
   ORCA_UPDATER_QUIT_AND_INSTALL_ABORTED_EVENT
 } from '../../../shared/updater-renderer-events'
 import {
+  ORCA_NATIVE_UNLOAD_FAILED_EVENT,
   ORCA_RENDERER_SHUTDOWN_CHECKPOINT_ABORTED_EVENT,
   ORCA_RENDERER_UNLOAD_PREVENTED_EVENT
 } from '../../../shared/renderer-shutdown-events'
@@ -98,6 +99,8 @@ export function useAppSessionPersistence(): void {
       shutdownCheckpoint,
       isPairedWebClientWindow() ? undefined : () => showShutdownCheckpointFailureToast('reload')
     )
+    const reportNativeUnloadFailure = (): void => showShutdownCheckpointFailureToast('reload')
+    window.addEventListener(ORCA_NATIVE_UNLOAD_FAILED_EVENT, reportNativeUnloadFailure)
     window.addEventListener('beforeunload', persistBeforeUnload)
     window.addEventListener(
       ORCA_RENDERER_SHUTDOWN_CHECKPOINT_ABORTED_EVENT,
@@ -110,6 +113,7 @@ export function useAppSessionPersistence(): void {
     )
     window.addEventListener(ORCA_RENDERER_UNLOAD_PREVENTED_EVENT, shutdownCheckpoint.abandonAttempt)
     return () => {
+      window.removeEventListener(ORCA_NATIVE_UNLOAD_FAILED_EVENT, reportNativeUnloadFailure)
       window.removeEventListener('beforeunload', persistBeforeUnload)
       window.removeEventListener(
         ORCA_RENDERER_SHUTDOWN_CHECKPOINT_ABORTED_EVENT,

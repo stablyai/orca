@@ -1,11 +1,15 @@
 import * as fs from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { removeTempDirs } from '../../testing/remove-temp-dirs.test-support'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { encodePairingOffer } from '../pairing/pairing'
 import type * as BoundedReader from '../../file-content/node-bounded-file-reader'
 import { __resetSecureFileHardenedPathsForTests } from '../../secure-storage/secure-file'
-import { addEnvironmentFromPairingCode, listEnvironments } from './runtime-environment-store'
+import {
+  addEnvironmentFromPairingCode,
+  listEnvironments
+} from './runtime-environment-store-operations'
 import { getEnvironmentStorePath } from './runtime-environment-store-records'
 
 type ReadHook = ((path: string) => void) | undefined
@@ -51,11 +55,11 @@ beforeEach(() => {
   fs.mkdirSync(userDataPath, { mode: 0o700 })
   __resetSecureFileHardenedPathsForTests()
 })
-afterEach(() => {
+afterEach(async () => {
   hooks.failChmod = false
   hooks.beforeRead = undefined
   hooks.afterRead = undefined
-  fs.rmSync(root, { recursive: true, force: true })
+  await removeTempDirs([root])
 })
 
 function addServer(profile: string, name: string, seed: number): string {

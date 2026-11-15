@@ -2,8 +2,8 @@ import { dirname } from 'node:path'
 import {
   setMigrationUnsupportedPty,
   setMigrationUnsupportedPtyPersistenceListener
-} from '../../agent-hooks/migration-unsupported-pty-state'
-import { agentHookServer } from '../../agent-hooks/server'
+} from '../../agent-hooks/observations/migration-unsupported-pty-state'
+import { agentHookServer } from '../../agent-hooks/server/agent-hook-server'
 import { ActiveViewPreference } from '../preferences/active-view-preference'
 import { registerPersistedPaneKeyAlias } from '../restoring-sessions/pane-alias-normalization'
 import { normalizePersistedPaneIdentityState } from '../restoring-sessions/workspace-pane-normalization'
@@ -23,28 +23,31 @@ import {
   bindPersistedTabTerminalPanes,
   sweepPersistedUnattachedTerminalRows
 } from '../restoring-sessions/tab-terminal-pane-binding-repair'
-import { scheduleSave } from './write-scheduling'
+import { scheduleFullProfileSave, scheduleSave } from './profile-writing/write-scheduling'
 import {
   migrateLegacyOpenCodeGoApiKey,
   type OpenCodeGoApiKeyTarget
-} from './legacy-opencode-go-api-key-migration'
-import { enqueuePrimaryStateOperation, writeToDiskAsync } from './primary-state-writes'
-import type { ProfileStateDatabaseQuarantine } from '../profile-state/profile-state-database-quarantine'
+} from './profile-loading/legacy-opencode-go-api-key-migration'
+import {
+  enqueuePrimaryStateOperation,
+  writeToDiskAsync
+} from './profile-writing/primary-state-writes'
+import type { ProfileStateDatabaseQuarantine } from '../profile-state/recovery/profile-state-database-quarantine'
 import { writeVersionedProfileStateExport } from '../profile-state/legacy-json/profile-state-versioned-export'
-import { createInitialHomeWorkspaceState } from './initial-home-workspace'
+import { createInitialHomeWorkspaceState } from './profile-loading/initial-home-workspace'
 import {
   beginProfileStateMaintenance,
   freezeProfileStateWrites,
   freezeProfileStateWritesAsync,
   type ProfileStateMaintenanceOptions
-} from './profile-state-maintenance'
+} from './profile-writing/profile-state-maintenance'
 import type {
   AsyncProfileStateAuthority,
   ProfileStateAuthorityInitialState,
   ProfileStateStartupPaneAlias,
   ProfileStatePersistenceAuthority,
   ProfileStateMaintenance
-} from './profile-state-authority'
+} from './profile-writing/profile-state-authority'
 
 export type StoreOptions = StoreRuntimeOptions & {
   initializeHomeWorkspace?: boolean
@@ -177,7 +180,7 @@ export class Store {
         adaptedProjectGroups ||
         sweptRepoIds.length > 0
       ) {
-        scheduleSave(this.domains.scheduling)
+        scheduleFullProfileSave(this.domains.scheduling)
       }
     }
   }
@@ -185,7 +188,7 @@ export class Store {
   /** Retain the legacy settings key until migration to the main-owned store succeeds. */
   migrateLegacyOpenCodeGoApiKey(target: OpenCodeGoApiKeyTarget): void {
     if (migrateLegacyOpenCodeGoApiKey(this.runtime.protectedSecrets, target)) {
-      scheduleSave(this.domains.scheduling)
+      scheduleSave(this.domains.scheduling, ['settings'])
     }
   }
 

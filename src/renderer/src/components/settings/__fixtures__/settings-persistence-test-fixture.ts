@@ -91,12 +91,12 @@ export function settingsModel(): SettingsPersistenceModel {
     hasUnsavedBranchPromptChanges: false,
     hasUnsavedChatPromptChanges: false,
     hasUnsavedCommitPromptChanges: false,
-    highlightedSettingsTargetId: null,
+    highlightedSettingsTarget: null,
     setFontSuggestions: vi.fn(),
     setHasUnsavedBranchPromptChanges: vi.fn(),
     setHasUnsavedChatPromptChanges: vi.fn(),
     setHasUnsavedCommitPromptChanges: vi.fn(),
-    setHighlightedSettingsTargetId: vi.fn(),
+    setHighlightedSettingsTarget: vi.fn(),
     setSettingsSearchQuery: vi.fn(),
     setSourceControlAiPromptDiscardSignal: vi.fn()
   } satisfies SettingsPersistenceModel

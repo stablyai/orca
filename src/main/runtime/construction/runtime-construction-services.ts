@@ -1,7 +1,7 @@
 import type { TerminalIdentityReadContext as IdentityRead } from '../terminal/query/terminal-identity-read-context'
 import type * as Calls from './runtime-host-service-calls'
 import type { selectFreshExplicitAgentStatus } from '../workspaces/process-listing/runtime-hook-agent-row-selection'
-import type { IPtyProvider } from '../../providers/pty-provider-contract'
+import type { IPtyProvider } from '../../providers/pty/provider-contract'
 import type {
   RuntimePtyWorktreeRecord,
   RuntimeHeadlessTerminal,
@@ -26,12 +26,12 @@ import type { ResolvedWorktree } from '../workspaces/catalog/runtime-worktree-pa
 import type {
   RuntimeTerminalShow,
   RuntimeTerminalSummary
-} from '../../../shared/runtime-terminal-contracts'
-import type { RuntimeSyncedLeaf } from '../../../shared/runtime-session-contracts'
+} from '../../../shared/terminal/runtime/runtime-terminal-contracts'
+import type { RuntimeSyncedLeaf } from '../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import type { readOrchestrationFleetAgentStatusSnapshot } from '../orchestration/addressing/orchestration-fleet-agent-status-snapshot'
 import type { ExecutionHostId } from '../../../shared/execution-host'
-import type { Repo } from '../../../shared/repo-types'
-import type { ProjectExecutionRuntimeResolution } from '../../../shared/project-execution-runtime'
+import type { Repo } from '../../../shared/repository/repo-types'
+import type { ProjectExecutionRuntimeResolution } from '../../../shared/execution-host/project-execution-runtime'
 import type { RuntimeWorktreeScanResult } from '../workspaces/catalog/repo-worktree-resolution-scan'
 import type { ProcessedAgentStatusChunk } from '../../../shared/agent-status/transport/agent-status-osc'
 import type { RuntimeTerminalAgentPresenceOptions } from '../terminal/query/runtime-terminal-agent-presence'
@@ -210,7 +210,8 @@ export abstract class RuntimeConstructionServices {
   protected abstract selectReposBySelector(selector: string): Repo[]
   protected abstract listRepoWorktreesForListing(
     repo: Repo,
-    projectRuntimeByRepoId?: ReadonlyMap<string, ProjectExecutionRuntimeResolution>
+    projectRuntimeByRepoId?: ReadonlyMap<string, ProjectExecutionRuntimeResolution>,
+    options?: { claimsHygiene?: boolean }
   ): Promise<RuntimeWorktreeScanResult>
   protected abstract listKnownExecutionHostIds(
     additionalHostIds?: Iterable<ExecutionHostId>,
@@ -277,6 +278,7 @@ export abstract class RuntimeConstructionServices {
   protected abstract readonly getAgentStatusSnapshotForPaneFn:
     | ((paneKey: string) => AgentStatusIpcPayload[])
     | null
+  protected abstract readonly publicPaneStatusFn?: (paneKey: string) => AgentStatusIpcPayload[]
   abstract readonly getAgentStatusSnapshotFn: (() => AgentStatusIpcPayload[]) | null
   protected abstract getTrackedDisplayTitleForPty(ptyId: string): string | null
   protected abstract getLeavesForPty(ptyId: string): readonly RuntimeLeafRecord[]

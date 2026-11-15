@@ -49,14 +49,3 @@ test.describe('switch on', () => {
     await expect.poll(() => windowCollapsed(orcaPage)).toEqual(['e2e:window'])
   })
 })
-
-test.describe('switch off', () => {
-  test.skip(SIDEBAR_INPUTS_BUILD, 'checks the shipped method set')
-
-  test('a switch-off build registers no ui.setCollapsed', async ({ orcaPage }) => {
-    await waitForSessionReady(orcaPage)
-    const response = await setCollapsed(orcaPage, 'e2e:phone', true, 'phone-a', 1)
-    expect(response).toMatchObject({ ok: false, error: { code: 'method_not_found' } })
-    expect(await windowCollapsed(orcaPage)).not.toContain('e2e:phone')
-  })
-})

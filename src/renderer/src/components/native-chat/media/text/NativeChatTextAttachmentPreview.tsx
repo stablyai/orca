@@ -8,10 +8,10 @@ import {
   DialogTitle,
   DialogDescription
 } from '@/components/ui/dialog'
-import { isWebClientLocation } from '@/lib/web-client-location'
+import { isWebClientLocation } from '@/app-shell/platform/web-client-location'
 import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
-import type { RuntimeClientTarget } from '../../../../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import { createAttachmentTextPreviewHook } from '../../../../../../shared/attachment-text/use-attachment-text-preview'
 import { ATTACHMENT_TEXT_COPY_MAX_BYTES } from '../../../../../../shared/attachment-text/attachment-text-source'
 import { AttachmentTextScrollView } from './AttachmentTextScrollView'

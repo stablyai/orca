@@ -4,6 +4,7 @@ import type { AgentLaunchPaneOutcome } from '../../../../../shared/agent-launch/
 import { stripClientEnvironmentFooter } from '../../../../../shared/client-environment-info'
 import type { TerminalTab } from '../../../../../shared/workspace-layout/terminal-tab-types'
 import { tuiAgentDisplayName } from '../../../../../shared/agent-launch/catalog/tui-agent-display-names'
+import { joinSentences } from '../../../../../shared/sentence-joining'
 
 /** What the pane shows, if its tab keeps a final launch outcome for this leaf. */
 export function agentLaunchPaneOutcomeForLeaf(
@@ -55,11 +56,14 @@ export function agentLaunchPaneNoticeText(
       { agent }
     )
     return refusal.kind === 'unconfirmed'
-      ? `${t(
-          'auto.components.terminal.pane.AgentLaunchPaneNotice.unconfirmed',
-          "Couldn't confirm {{agent}} started. Check its terminal before trying again.",
-          { agent }
-        )} ${explanation}`
+      ? joinSentences([
+          t(
+            'auto.components.terminal.pane.AgentLaunchPaneNotice.unconfirmed',
+            "Couldn't confirm {{agent}} started. Check its terminal before trying again.",
+            { agent }
+          ),
+          explanation
+        ])
       : explanation
   }
   if (refusal.kind === 'unconfirmed') {
@@ -86,7 +90,7 @@ export function agentLaunchPaneNoticeText(
           'auto.components.terminal.pane.AgentLaunchPaneNotice.tryInTerminal',
           'Run it in a terminal in this folder to see why, then try again.'
         )
-  return `${reason} ${action}`
+  return joinSentences([reason, action])
 }
 
 function startupCode(line: string): string | undefined {

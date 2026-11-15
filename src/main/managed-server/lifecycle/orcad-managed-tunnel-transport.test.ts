@@ -1,12 +1,12 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { SshConnection } from '../../ssh/connection/ssh-connection'
-import { knownOrcadTunnelTransport } from '../../ssh/orcad-tunnel-transport-memo'
+import { knownOrcadTunnelTransport } from './orcad-tunnel-transport-memo'
 import type {
   PortForwardStartOptions,
   SshPortForwardProvider,
   StartedPortForward
 } from '../../ssh/port-forwarding/ssh-port-forward-provider'
-import type { ForwardChannelVerdict } from '../../ssh/ssh-tcp-forwarding-probe'
+import type { ForwardChannelVerdict } from '../../ssh/port-forwarding/ssh-tcp-forwarding-probe'
 import { OrcadManagedTunnelTransportProvider } from './orcad-managed-tunnel-transport'
 
 // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the transport reads only the connect generation here.

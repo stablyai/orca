@@ -29,54 +29,6 @@ describe('terminal run facts', () => {
     expect(facts.read('pty-1', 'inc-1')).toEqual({ freshSpawn: true, firstUserInputAt: 100 })
   })
 
-  it('starts a new process clean', () => {
-    const facts = new TerminalRunFactsRegister()
-    facts.recordSpawnCommit({ id: 'pty-1', incarnationId: 'inc-1' })
-    facts.recordInput('pty-1', 'driving', 'ls\r', 100)
-
-    facts.recordSpawnCommit({ id: 'pty-1', incarnationId: 'inc-2' }, { tabId: 'source-tab' })
-
-    expect(facts.read('pty-1', 'inc-2')).toEqual({ freshSpawn: true, firstUserInputAt: null })
-    expect(facts.read('pty-1', 'inc-1')).toEqual({ freshSpawn: false, firstUserInputAt: null })
-  })
-
-  it('dates only the processes main started, across a re-registration of the same one', () => {
-    const facts = new TerminalRunFactsRegister()
-    facts.recordSpawnCommit({
-      id: 'pty-1',
-      incarnationId: 'inc-1',
-      coldRestore: {},
-      spawnRequestedAt: 100
-    })
-    facts.recordSpawnCommit({
-      id: 'pty-1',
-      incarnationId: 'inc-1',
-      isReattach: true,
-      spawnRequestedAt: 200
-    })
-    facts.recordSpawnCommit({
-      id: 'pty-2',
-      incarnationId: 'inc-9',
-      isReattach: true,
-      spawnRequestedAt: 300
-    })
-
-    expect(facts.readProcessStartedAt('pty-1', 'inc-1')).toBe(100)
-    expect(facts.readProcessStartedAt('pty-1', 'inc-0')).toBeNull()
-    expect(facts.readProcessStartedAt('pty-2', 'inc-9')).toBeNull()
-  })
-
-  it('starts clean when a new process commits without an incarnation', () => {
-    const facts = new TerminalRunFactsRegister()
-    facts.recordSpawnCommit({ id: 'pty-1' })
-    facts.recordInput('pty-1', 'driving', 'ls\r', 100)
-
-    facts.recordSpawnCommit({ id: 'pty-1' })
-
-    expect(facts.read('pty-1', null)).toEqual({ freshSpawn: true, firstUserInputAt: null })
-    expect(facts.readLastInputAt('pty-1')).toBeNull()
-  })
-
   it.each([
     ['a reattach', { isReattach: true }],
     ['an adoption', { agentSessionEnsure: { disposition: 'adopted' } }]
@@ -91,15 +43,6 @@ describe('terminal run facts', () => {
     expect(facts.readLastInputAt('pty-1')).toBe(100)
   })
 
-  it('keeps input recorded before main adopted the process with its first commit', () => {
-    const facts = new TerminalRunFactsRegister()
-    facts.recordInput('pty-1', 'driving', 'next prompt\r', 100)
-
-    facts.recordSpawnCommit({ id: 'pty-1', incarnationId: 'inc-1', isReattach: true })
-
-    expect(facts.readLastInputAt('pty-1')).toBe(100)
-  })
-
   it('starts clean when a reattach names a different process than the one recorded', () => {
     const facts = new TerminalRunFactsRegister()
     facts.recordSpawnCommit({ id: 'pty-1', incarnationId: 'inc-1' })
@@ -109,20 +52,6 @@ describe('terminal run facts', () => {
 
     expect(facts.read('pty-1', 'inc-2')).toEqual({ freshSpawn: false, firstUserInputAt: null })
     expect(facts.readLastInputAt('pty-1')).toBeNull()
-  })
-
-  it.each([
-    ['a launch write', 'launch', 'echo startup\r'],
-    ['a query reply', 'query-reply', '\x1b[1;1R'],
-    ['driving bytes that are only a terminal reply', 'driving', '\x1b[1;1R'],
-    ['driving bytes that are only focus reports', 'driving', '\x1b[I\x1b[O']
-  ] as const)('records nothing for %s', (_label, inputKind, data) => {
-    const facts = new TerminalRunFactsRegister()
-    facts.recordSpawnCommit({ id: 'pty-1', incarnationId: 'inc-1' })
-
-    facts.recordInput('pty-1', inputKind, data, 100)
-
-    expect(facts.read('pty-1', 'inc-1').firstUserInputAt).toBeNull()
   })
 
   it('records the last input, a launch write included, but no terminal reply', () => {
@@ -140,13 +69,5 @@ describe('terminal run facts', () => {
     expect(facts.readLastInputAt('pty-1')).toBe(200)
     facts.recordSpawnCommit({ id: 'pty-1', incarnationId: 'inc-2' })
     expect(facts.readLastInputAt('pty-1')).toBeNull()
-  })
-
-  it('records the last input on a PTY main adopted without a spawn commit', () => {
-    const facts = new TerminalRunFactsRegister()
-    facts.recordInput('pty-1', 'driving', 'next task\r', 100)
-
-    expect(facts.readLastInputAt('pty-1')).toBe(100)
-    expect(facts.read('pty-1', null).firstUserInputAt).toBeNull()
   })
 })

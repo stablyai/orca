@@ -15,7 +15,9 @@ import {
   type FakeEditorDisk
 } from '../../autosave/editor-autosave-controller-test-fixture'
 
-vi.mock('@/lib/connection-context', () => ({ getConnectionIdForFile: () => undefined }))
+vi.mock('@/lib/workspace/ownership/connection-context', () => ({
+  getConnectionIdForFile: () => undefined
+}))
 
 const PATH = '/repo/a.ts'
 const WORKTREES = {

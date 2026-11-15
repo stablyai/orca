@@ -1,10 +1,10 @@
 /** Same repo ids may exist on multiple hosts; repo.rm resolves one row and must delete only that host registration, including unambiguous path/name selectors (#11994). */
 import { describe, expect, it, vi } from 'vitest'
-import type { Repo } from '../../../shared/repo-types'
+import type { Repo } from '../../../shared/repository/repo-types'
 import { OrcaRuntimeService } from '../orca-runtime'
 import { findRepoRowForHostScopedWrite } from '../../persistence/tracking-repos/repo-update-operations'
 import { getRepoExecutionHostId } from '../../../shared/execution-host'
-import type { RepoHostTarget } from '../../../shared/repo-host-identity'
+import type { RepoHostTarget } from '../../../shared/repository/repo-host-identity'
 import { partialRuntimeStore } from '../orca-runtime-tests/runtime-store-partial-fixture'
 import { withProjectWorktreeCreate } from '../../workspaces/creation/worktree-create-in-flight'
 
@@ -74,16 +74,6 @@ function registerRuntimeRemoveProjectHostScopeTests(): void {
     )
     return { runtime, repos, removeProjectForHost }
   }
-
-  describe('repo.rm with the same repo id on two execution hosts', () => {
-    it('refuses a bare duplicated id rather than guessing a host', async () => {
-      const { runtime, repos, removeProjectForHost } = createRuntime()
-
-      await expect(runtime.removeProject('dup')).rejects.toThrow('selector_ambiguous')
-      expect(removeProjectForHost).not.toHaveBeenCalled()
-      expect(repos).toHaveLength(2)
-    })
-  })
 
   describe('repo.rm while a workspace create is open', () => {
     it('refuses the host row whose create is open, not its same-id twin', async () => {

@@ -2,9 +2,9 @@
 // Probe proc metadata rather than traversing potentially wedged FUSE mounts.
 import { lstatSync, readFileSync, readlinkSync } from 'node:fs'
 import type { ParsedDaemonPid } from '../../endpoint/identity/daemon-pid-file-parse'
-import { parseLinuxStartTicks } from '../../../agent-hooks/managed-hook-owner-identity'
+import { parseLinuxStartTicks } from '../../../agent-hooks/installation/locking/managed-hook-owner-identity'
 import { isFuseMountPoint } from './daemon-appimage-launch'
-import { appImageEphemeralRootOf } from '../../../../shared/appimage-ephemeral-root'
+import { appImageEphemeralRootOf } from '../../../../shared/desktop-distribution/appimage/appimage-ephemeral-root'
 
 export type DaemonHostImageVerdict = 'intact' | 'severed' | 'unknown' | 'not-ephemeral'
 

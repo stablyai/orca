@@ -9,7 +9,7 @@ import type { PaneSpawnOperation } from '../../../ipc/pty/pane/pane-spawn-operat
 import { OrcaRuntimeWithTerminalCreateDeduplication } from './terminal-create-deduplication'
 import { type PaneStartArgsOf, spawnInAdmittedPane } from './runtime-pane-admission'
 import type { TerminalCreateOptions } from './terminal-create-options'
-import type { RuntimeTerminalCreate } from '../../../../shared/runtime-terminal-create-contract'
+import type { RuntimeTerminalCreate } from '../../../../shared/terminal/runtime/runtime-terminal-create-contract'
 import {
   admitPairedCreateColors,
   getTerminalViewerColors
@@ -21,7 +21,7 @@ import {
 } from '../identity/runtime-terminal-pane-identity'
 import { randomUUID } from 'node:crypto'
 import type { RuntimePtyController } from '../lifecycle/runtime-pty-controller-contract'
-import { SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV } from '../../../../shared/setup-agent-sequencing'
+import { SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV } from '../../../../shared/agent-launch/startup/setup-agent-sequencing'
 import { mergeTerminalEnvDeletionKeys } from './runtime-agent-launch-resolution'
 import { terminalSpawnOptions } from './terminal-spawn-options'
 import { createDesktopTerminal } from './orca-runtime-create-terminal-desktop'
@@ -243,8 +243,8 @@ export abstract class OrcaRuntimeWithCreateTerminal extends OrcaRuntimeWithTermi
               this.setPtyManagementTitleFromObservedTitle(pty, title, at)
             )
           }
-          this.watchLaunchComposer(
-            result.id,
+          this.watchLaunchedAgent(
+            pty,
             recordTerminalLaunchMetadata(pty, result, launch, launchOpts.command)
           )
           if (!launch.adoptedStablePane) {

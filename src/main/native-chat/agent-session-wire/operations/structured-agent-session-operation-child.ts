@@ -1,8 +1,4 @@
-import {
-  refuse,
-  refuseUnclassified,
-  type AgentSessionWireRefusal
-} from '../../../../shared/agent-session/failures/agent-session-wire-refusals'
+import type { AgentSessionWireRefusal } from '../../../../shared/agent-session/failures/agent-session-wire-refusals'
 import type { AgentSessionMutationEnvelope } from '../../../../shared/agent-session/agent-session-wire'
 import type { StructuredAgentSessionMutationContext } from './structured-agent-session-mutation-context'
 import type { StructuredAgentSessionProviderChildIdentity } from '../host/structured-agent-session-host-types'
@@ -11,6 +7,9 @@ import { openForProviderWrite } from './structured-agent-session-send-preparatio
 import { agentSessionOperationOutcomeUnknown } from './structured-agent-session-replay-outcome'
 import type { AgentSessionMutationSessionPreparation } from './structured-agent-session-mutation-admission'
 import type { StructuredAgentSessionStartReadiness } from '../startup/structured-agent-session-start-readiness'
+import { operationDidNotRun } from './structured-agent-session-operation-did-not-run'
+
+export { operationDidNotRun }
 
 export type ReadyOperationChild = StructuredAgentSessionProviderChildIdentity | null
 export type ReadyOperationSelection = {
@@ -19,25 +18,6 @@ export type ReadyOperationSelection = {
   replay?: true
   signal?: AbortSignal
   deadline?: number
-}
-
-export function operationDidNotRun(expired = false): {
-  ok: false
-  refusal: AgentSessionWireRefusal
-} {
-  return {
-    ok: false,
-    refusal: expired
-      ? refuse(
-          'agent_session_operation_expired',
-          { reason: 'operationExpired' },
-          'The operation did not run because its wait expired. Try again.'
-        )
-      : refuseUnclassified(
-          'agent_session_owner_restart_failed',
-          'The operation did not run because the agent is not ready.'
-        )
-  }
 }
 
 export function selectStructuredAgentSessionOperationChild(

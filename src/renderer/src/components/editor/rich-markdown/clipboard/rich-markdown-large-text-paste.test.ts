@@ -21,7 +21,9 @@ const boundaryMocks = vi.hoisted(() => ({
   })
 }))
 
-vi.mock('@/lib/connection-context', () => ({ getConnectionId: boundaryMocks.getConnectionId }))
+vi.mock('@/lib/workspace/ownership/connection-context', () => ({
+  getConnectionId: boundaryMocks.getConnectionId
+}))
 
 const editors: Editor[] = []
 

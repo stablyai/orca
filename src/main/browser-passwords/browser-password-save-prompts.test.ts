@@ -3,11 +3,11 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { _resetSecretStoreForTests, setSecretStore } from '../../shared/secret-store'
-import type { BrowserPasswordGuestCapture } from '../../shared/browser-passwords-types'
+import type { BrowserPasswordGuestCapture } from '../../shared/browser/passwords/browser-passwords-types'
 import { BrowserPasswordStore } from './browser-password-store'
 
 const send = vi.fn()
-vi.mock('../browser/browser-manager', () => ({
+vi.mock('../browser/guest-lifecycle/manager/browser-manager', () => ({
   browserManager: {
     getRendererContextForGuest: () => ({
       browserPageId: 'page-1',

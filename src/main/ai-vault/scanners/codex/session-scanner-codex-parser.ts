@@ -1,4 +1,9 @@
-import { openTranscriptReadStream } from '../../../native-chat/wsl-transcript-fs-access'
+import { waitForAiVaultScan } from '../../scan-lifecycle/ai-vault-scan-cancellation'
+import { openTranscriptReadStream } from '../../../native-chat/transcript-filesystem/wsl-transcript-fs-access'
+import {
+  isZstdTranscriptPath,
+  zstdTranscriptStream
+} from '../../../native-chat/transcript-streaming/transcript-zstd-decompression'
 import { createInterface } from 'node:readline'
 import type {
   AiVaultSession,
@@ -13,7 +18,7 @@ import {
   finalizeSession,
   sessionIdFromFileName,
   updateTimeline
-} from '../../session-scanner-accumulator'
+} from '../../parsing/session-scanner-accumulator'
 import {
   consumeCodexCompletedMessage,
   consumeCodexLegacyEventMessage,
@@ -31,14 +36,10 @@ import {
   addCodexUsage,
   normalizeCodexUsage,
   subtractCodexUsage
-} from '../../session-scanner-token-values'
-import { asRecord } from '../../session-scanner-record-value'
-import {
-  extractGitBranch,
-  extractModel,
-  extractString,
-  parseJsonObject
-} from '../../session-scanner-values'
+} from '../../parsing/session-scanner-token-values'
+import { asRecord, extractGitBranch, extractModel } from '../../parsing/session-record-fields'
+import { extractString } from '../../../../shared/trimmed-string'
+import { parseJsonObject } from '../../parsing/session-json-object'
 import { readCodexTimelineOnlyRecord } from './session-scanner-codex-record-fast-path'
 import { extractCodexSessionMetadataTitle } from './session-scanner-codex-session-meta'
 import {
@@ -52,19 +53,25 @@ export async function parseCodexSessionFile(
   executionHostId?: ExecutionHostId,
   messages?: TranscriptMessageSink
 ): Promise<AiVaultSession | null> {
-  const lines = createInterface({
-    input: openTranscriptReadStream(file.path, { encoding: 'utf-8' }, 'scan'),
-    crlfDelay: Infinity
-  })
-  return parseCodexSessionLines({
-    file,
-    lines,
-    platform,
-    codexHome,
-    executionHostId,
-    messages,
-    titleReader: (sessionId) => readCodexSessionIndexTitle(file.path, codexHome, sessionId)
-  })
+  // readline decodes UTF-8 across chunk boundaries, so both streams stay binary.
+  const raw = openTranscriptReadStream(file.path, {}, 'scan')
+  const input = isZstdTranscriptPath(file.path) ? zstdTranscriptStream(raw) : raw
+  const lines = createInterface({ input, crlfDelay: Infinity })
+  try {
+    return await parseCodexSessionLines({
+      file,
+      lines,
+      platform,
+      codexHome,
+      executionHostId,
+      messages,
+      titleReader: (sessionId) => readCodexSessionIndexTitle(file.path, codexHome, sessionId)
+    })
+  } finally {
+    // readline.close() leaves its input open; an abandoned zstd decoder would keep inflating.
+    lines.close()
+    input.destroy()
+  }
 }
 type CodexSessionParseState = {
   accumulator: SessionAccumulator
@@ -211,6 +218,7 @@ async function finalizeCodexParseState(
   args: {
     codexHome: string | null
     titleReader?: (sessionId: string) => Promise<string | null>
+    signal?: AbortSignal
     executionHostId?: ExecutionHostId
     executionHostPlatform?: NodeJS.Platform | null
   }
@@ -224,7 +232,10 @@ async function finalizeCodexParseState(
   let titleKind: AiVaultSessionTitleKind =
     snapshot.titleSource === 'meta' && snapshot.accumulator.title ? 'named' : 'fallback'
   if (snapshot.sawSessionMeta) {
-    const indexedTitle = await args.titleReader?.(snapshot.accumulator.sessionId)
+    const indexedTitle = await waitForAiVaultScan(
+      Promise.resolve(args.titleReader?.(snapshot.accumulator.sessionId)),
+      args.signal
+    )
     if (indexedTitle) {
       snapshot.accumulator.title = indexedTitle
       titleKind = 'named'

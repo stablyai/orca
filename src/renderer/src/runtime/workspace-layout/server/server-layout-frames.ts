@@ -6,7 +6,7 @@ import { lastVerifiedRuntimeStatus } from '../../../../../shared/remote-runtime/
 import {
   LAYOUT_INTENTS_RUNTIME_CAPABILITY,
   LAYOUT_REOPEN_HELD_PANES_CAPABILITY
-} from '../../../../../shared/workspace-layout/layout-intents-capability'
+} from '../../../../../shared/workspace-layout/published-layout/layout-intents-capability'
 import {
   isDisconnectedRuntimeHostState,
   runtimeHostConnectionStateForEntry
@@ -17,7 +17,7 @@ import {
   DESKTOP_CREATED_SERVER_TAB_HOLDS,
   forgetPublishedServerTabs,
   pruneDesktopCreatedServerTabs
-} from '@/lib/desktop-created-server-tabs'
+} from '@/store/workspace-layout/frames/desktop-created-server-tabs'
 import { serverHeldPanes, showServerLayoutHeldPanes } from './server-held-panes'
 import { createServerViewReport, onServerControlConnected } from './server-layout-view-report'
 import { openWorkspaceLayoutFrameSync } from '../frames/workspace-layout-frame-sync'

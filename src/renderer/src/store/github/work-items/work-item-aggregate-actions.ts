@@ -1,17 +1,15 @@
-import { githubTaskBinding } from '@/lib/github-task-observation'
-import { getWorkItemPageErrorTypes } from '../../../../../shared/github/work-item-page-errors'
+import { githubTaskBinding } from '@/lib/work-items/github/github-task-observation'
+import { getWorkItemPageErrorTypes } from '../../../../../shared/github/work-items/work-item-page-errors'
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../../types'
 import type { GitHubSlice } from '../github-slice-contract'
 import type { ClassifiedError } from '../../../../../shared/classified-error'
-import type { GitHubWorkItem } from '../../../../../shared/github/work-item-types'
-import {
-  isGitHubWorkItemsSshRemoteRequiredError,
-  sortWorkItemsByNumber,
-  PER_REPO_FETCH_LIMIT
-} from '../../../../../shared/work-items'
-import { getTaskSourceCacheScope } from '../../../../../shared/task-source-context'
-import { isGitHubWorkItemsQueryTooLarge } from '../../../../../shared/github/work-items-query-bounds'
+import type { GitHubWorkItem } from '../../../../../shared/github/work-items/work-item-types'
+import { isGitHubWorkItemsSshRemoteRequiredError } from '../../../../../shared/github/work-items/work-item-ssh-error'
+import { sortWorkItemsByNumber } from '../../../../../shared/work-items/work-item-order'
+import { PER_REPO_FETCH_LIMIT } from '../../../../../shared/work-items/work-item-pagination'
+import { getTaskSourceCacheScope } from '../../../../../shared/work-items/task-source-context'
+import { isGitHubWorkItemsQueryTooLarge } from '../../../../../shared/github/work-items/work-items-query-bounds'
 import { workItemsCacheKey, workItemsInflightRequestKey } from '../cache/cache-identity'
 import { isFresh, WORK_ITEMS_CACHE_TTL } from '../cache/cache-policy'
 import {

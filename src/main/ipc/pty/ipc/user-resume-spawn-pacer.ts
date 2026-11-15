@@ -1,10 +1,12 @@
 import {
-  DEFAULT_SPAWN_ADMISSION_LIMITS,
   refill,
   userResumeTokensPerMs,
-  type SpawnAdmissionLimits,
   type TokenBucket
-} from '../../../../shared/host-spawn-admission'
+} from '../../../../shared/terminal/pty/admission/host-spawn-admission'
+import {
+  DEFAULT_SPAWN_ADMISSION_LIMITS,
+  type SpawnAdmissionLimits
+} from '../../../../shared/terminal/pty/admission/spawn-admission-contract'
 import { PrioritySemaphore } from '../../../../shared/priority-semaphore'
 
 export type UserResumeSpawnPacer = {

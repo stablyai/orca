@@ -1,7 +1,7 @@
 import {
   getOpenFileExecutionHostId,
   hasOpenFileExecutionHostEvidence
-} from '@/lib/unified-tab-host-ownership'
+} from '@/lib/workspace/ownership/unified-tab-host-ownership'
 import type { AppState } from '../../../types'
 import type { OpenFile } from '../types/open-file'
 import type { Tab } from '../../../../../../shared/tab-types'

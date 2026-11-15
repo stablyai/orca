@@ -1,5 +1,5 @@
 import { isCurrentPtyExit, ptyOwnership } from './ownership-state'
-import { wslBridgePtyPresence } from '../../../agent-hooks/wsl-bridge-pty-presence'
+import { wslBridgePtyPresence } from '../../../agent-hooks/wsl-relay/wsl-bridge-pty-presence'
 import {
   localBackgroundStreamUnsub,
   localDataUnsub,

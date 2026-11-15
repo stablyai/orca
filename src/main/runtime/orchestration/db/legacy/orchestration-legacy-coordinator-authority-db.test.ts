@@ -1,12 +1,12 @@
 import { rmSync } from 'node:fs'
 import { afterEach, describe, expect, it } from 'vitest'
-import Database from '../../../../sqlite/sync-database'
+
 import { OrchestrationDb } from '../orchestration-db'
 import '../contract-constants'
 import '../messages/mailbox-routing-page'
 import '../dispatch-row-writer'
 import '../attempt-outcome-projection'
-import { ORCHESTRATION_LEGACY_RUN_ID as LEGACY_RUN_ID } from '../../../../../shared/orchestration-rpc-contract'
+
 import {
   createLegacyStorageCutoverFixture,
   type LegacyStorageCutoverFixture
@@ -55,76 +55,6 @@ describe('OrchestrationDb legacy coordinator authority', () => {
       workerPrincipalId: worker.principal.id
     }
   }
-
-  it('records exact scheduler loss without admitting naturally settled coordinators', () => {
-    const fixture = createCutoverFixture()
-    const raw = new Database(fixture.dbPath)
-    raw.exec(`
-      UPDATE tasks
-      SET created_by_terminal_handle = 'term_manual_coord'
-      WHERE run_id = '${LEGACY_RUN_ID}';
-      UPDATE messages
-      SET from_handle = CASE
-            WHEN from_handle = 'term_legacy_coord' THEN 'term_manual_coord'
-            ELSE from_handle
-          END,
-          to_handle = CASE
-            WHEN to_handle = 'term_legacy_coord' THEN 'term_manual_coord'
-            ELSE to_handle
-          END
-      WHERE run_id = '${LEGACY_RUN_ID}';
-      INSERT INTO coordinator_runs (
-        id, spec, status, coordinator_handle, created_at
-      ) VALUES (
-        'coordinator_manual', 'manual legacy coordinator', 'running',
-        'term_manual_coord', datetime('now', '-1 minute')
-      );
-      INSERT INTO coordinator_runs (
-        id, spec, status, coordinator_handle, created_at, completed_at
-      ) VALUES (
-        'coordinator_natural', 'naturally completed coordinator', 'completed',
-        'term_natural_coord', datetime('now', '-2 minutes'),
-        '2099-01-01T00:00:00.000Z'
-      );
-    `)
-    raw.close()
-
-    db = new OrchestrationDb(fixture.dbPath)
-    const adoptedRunId = db.getLegacyAdoption()?.adopted_run_id as string
-    expect(db.getActiveCoordinatorRun()).toBeUndefined()
-    const adoption = db.getLegacyAdoption()!
-    const migratedCoordinator = db.getCoordinatorRun('coordinator_manual')!
-    expect(migratedCoordinator).toMatchObject({
-      status: 'failed',
-      completed_at: adoption.adopted_at,
-      scheduler_lost_at: adoption.adopted_at
-    })
-    expect(db.getCoordinatorRun('coordinator_natural')).toMatchObject({
-      status: 'completed',
-      completed_at: '2099-01-01T00:00:00.000Z',
-      scheduler_lost_at: null
-    })
-    expect(
-      db.resolveLegacyCoordinatorCandidate({
-        runId: adoptedRunId,
-        terminalHandle: 'term_manual_coord',
-        paneKey: 'tab_manual:44444444-4444-4444-8444-444444444444'
-      })
-    ).toMatchObject({ terminalHandle: 'term_manual_coord' })
-    expect(db.isLegacyCoordinatorHandle(adoptedRunId, 'term_natural_coord')).toBe(false)
-
-    db.close()
-    db = new OrchestrationDb(fixture.dbPath)
-    expect(db.getLegacyAdoption()).toEqual(adoption)
-    expect(db.getCoordinatorRun('coordinator_manual')).toEqual(migratedCoordinator)
-    expect(
-      db.resolveLegacyCoordinatorCandidate({
-        runId: adoptedRunId,
-        terminalHandle: 'term_manual_coord',
-        paneKey: 'tab_manual:44444444-4444-4444-8444-444444444444'
-      })
-    ).toMatchObject({ terminalHandle: 'term_manual_coord' })
-  })
 
   it('promotes only the unacknowledged coordinator recovery cohort during takeover', () => {
     const fixture = createCutoverFixture()

@@ -1,6 +1,9 @@
 import '../../pty-subprocess/testing/mock-descendant-sweep'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { HostPressureLevel, SpawnIntent } from '../../../../shared/host-spawn-admission'
+import type {
+  HostPressureLevel,
+  SpawnIntent
+} from '../../../../shared/terminal/pty/admission/spawn-admission-contract'
 import { createUserResumeSpawnPacer } from '../../../ipc/pty/ipc/user-resume-spawn-pacer'
 import { createMockSubprocess } from '../../providers/adapter/testing/daemon-pty-adapter-test-harness'
 import { TerminalHost } from '../../terminal-host/terminal-host'
@@ -51,6 +54,7 @@ describe('user-resume reservations against the enforcing terminal host', () => {
               : 40
             : 0
       if (delay) {
+        // ast-grep-ignore: test-no-real-time-wait -- fake timers drive this delay
         await new Promise<void>((resolve) => setTimeout(resolve, delay))
       }
       return createMockSubprocess()
@@ -84,6 +88,7 @@ describe('user-resume reservations against the enforcing terminal host', () => {
     const pacer = createUserResumeSpawnPacer()
     const startedAt = Date.now()
     const stoppedAt: number[] = []
+    // ast-grep-ignore: test-no-real-time-wait -- fake timers drive this delay
     const preparation = new Promise<void>((resolve) => setTimeout(resolve, testCase.preparationMs))
     const restarts = Array.from({ length: 12 }, (_, i) =>
       (async () => {

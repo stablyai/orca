@@ -11,7 +11,7 @@ export function getZcodeStatusBarToggleSearchEntry(): {
 } {
   return {
     id: 'zcode',
-    title: translate('auto.components.settings.appearance.search.zcodeUsageTitle', 'ZCode Usage'),
+    title: translate('auto.components.settings.appearance.search.183e6b8ef9', 'ZCode usage'),
     description: translate(
       'auto.components.settings.appearance.search.zcodeUsageDescription',
       'Show ZCode Coding Plan quota usage in the status bar.'

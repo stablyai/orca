@@ -1,8 +1,15 @@
-import { hostStatusProbe, readProbedHostStatus } from '../transport/host-status-probe-operations'
-import type { HostStatusReply } from '../transport/host-status-reply-schema'
-import type { RpcClient, SendRequestOptions } from '../transport/rpc-client'
-import type { RpcResponse } from '../transport/types'
-import type { UnvalidatedRpcRequestPort } from '../transport/unvalidated-rpc-request-port'
+import {
+  hostStatusProbe,
+  readProbedHostStatus
+} from '../transport/connection/host-status-probe-operations'
+import type { HostStatusReply } from '../transport/hosts/host-status-reply-schema'
+import type { RpcClient } from '../transport/rpc/rpc-client-contract'
+import type {
+  SendRequestOptions,
+  UnvalidatedRpcRequestPort
+} from '../transport/rpc/unvalidated-rpc-request-port'
+import type { RpcResponse } from '../transport/rpc/rpc-wire-types'
+
 import { readViewBase } from './host-read-client'
 
 export type HostStatusClient = UnvalidatedRpcRequestPort &

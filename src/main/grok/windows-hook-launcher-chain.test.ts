@@ -17,7 +17,8 @@ vi.mock('os', async () => {
 })
 
 import { getManagedCommandForTests, GrokHookService } from './hook-service'
-import { wrapWindowsHookCommand, type HooksConfig } from '../agent-hooks/installer-utils'
+import { wrapWindowsHookCommand } from '../agent-hooks/installation/commands/windows-hook-command'
+import type { HooksConfig } from '../agent-hooks/installation/configuration/hook-config-schema'
 import { buildInstalledGrokConfig } from './grok-hook-config'
 
 const GROK_EVENT_NAMES = [

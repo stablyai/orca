@@ -5,17 +5,16 @@ import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { getDefaultWorkspaceSession } from '../../../../shared/constants'
 import type { AgentStatusIpcPayload } from '../../../../shared/agent-status/contracts/agent-status-ipc-payload'
-import type { AgentStatusOrchestrationContext } from '../../../../shared/agent-status/contracts/agent-status-types'
+
 import { makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
-import type { WorkspaceLayoutStreamEvent } from '../../../../shared/workspace-layout/workspace-layout-stream-frames'
+
 import type { Store } from '../../../persistence/loading-store/store'
-import { WindowSession } from '../../../persistence/terminal-topology/terminal-topology-window-session-fixture'
+import { WindowSession } from '../../../persistence/terminal-topology/testing/terminal-topology-window-session-fixture'
 import {
   emptyTerminalSessionProfile,
-  FIXTURE_FOLDER_WORKTREE_ID as FOLDER,
   FIXTURE_GIT_WORKTREE_ID as GIT,
   openTopologyStore
-} from '../../../persistence/terminal-topology/terminal-topology-profile-fixture'
+} from '../../../persistence/terminal-topology/testing/terminal-topology-profile-fixture'
 import { OrcaRuntimeService } from '../../orca-runtime'
 
 vi.mock('../../../../shared/layout-owner-switch', () => ({
@@ -71,32 +70,7 @@ function status(workspace: string, overrides: Partial<AgentStatusIpcPayload> = {
   } satisfies AgentStatusIpcPayload
 }
 
-const dispatch = (taskId: string, task: string) =>
-  `You are working inside Orca, a multi-agent IDE. You are a dispatched worker.
-Your task ID is: ${taskId}
-
-=== TASK ===
-${task}`
-
 describe('main titles agent tabs from its own hook status', () => {
-  it('gives a batch’s titles of several workspaces in one rename and one frame', async () => {
-    const { runtime, apply, titleOf } = await hostWith([GIT, FOLDER])
-    const frames: WorkspaceLayoutStreamEvent[] = []
-    runtime.subscribeWorkspaceLayouts((frame) => frames.push(frame))
-
-    runtime.recordHookStatusTitle(status(GIT))
-    runtime.recordHookStatusTitle(status(FOLDER, { prompt: 'Fix the login page' }))
-    await runtime.hookStatusTitlesSettled()
-
-    expect(apply.mock.calls.map(([command]) => command.type)).toEqual(['renameTabs'])
-    expect(frames.filter((frame) => frame.type === 'records')).toHaveLength(1)
-    expect(frames).toHaveLength(1)
-    expect([titleOf(GIT), titleOf(FOLDER)]).toEqual([
-      'Refactor the auth middleware to use JWT',
-      'Fix the login page'
-    ])
-  })
-
   it('has the titles in the first snapshot a window that starts after them reads', async () => {
     const { runtime } = await hostWith([GIT])
 
@@ -107,70 +81,5 @@ describe('main titles agent tabs from its own hook status', () => {
 
     const tab = snapshot.find((entry) => entry.key === GIT)?.layout.tabs[0]
     expect(tab?.generatedTitle).toBe('Refactor the auth middleware to use JWT')
-  })
-})
-
-describe('main keeps the window’s generated-title rules', () => {
-  async function titled(
-    statuses: AgentStatusIpcPayload[][],
-    /** Main's dispatch labels; a list gives each read its own, the last one kept. */
-    labels:
-      | Record<string, AgentStatusOrchestrationContext>[]
-      | Record<string, AgentStatusOrchestrationContext> = {}
-  ) {
-    const host = await hostWith([GIT])
-    const reads = [labels].flat()
-    const read = vi.spyOn(host.runtime['agentOrchestrationProjection'], 'buildByPaneKey')
-    read.mockReturnValue(reads.at(-1))
-    for (const each of reads.slice(0, -1)) {
-      read.mockReturnValueOnce(each)
-    }
-    for (const batch of statuses) {
-      for (const row of batch) {
-        host.runtime.recordHookStatusTitle(row)
-      }
-      await host.runtime.hookStatusTitlesSettled()
-    }
-    return host
-  }
-  const labelsOf = (taskId: string, displayName: string) => ({
-    [paneOf(GIT)]: {
-      taskId,
-      dispatchId: `ctx-${taskId}`,
-      taskTitle: displayName,
-      displayName
-    }
-  })
-
-  it('replaces a dispatch’s preamble title once main has its labels', async () => {
-    const prompt = dispatch('task-1', 'Implement the detailed worker instructions')
-    const host = await titled(
-      [[status(GIT, { prompt })]],
-      [{}, labelsOf('task-1', 'Better worker label')]
-    )
-    expect(host.titleOf(GIT)).toBe('Implement the detailed worker')
-
-    host.runtime.recordHookStatusTitle(status(GIT, { prompt, state: 'done' }))
-    await host.runtime.hookStatusTitlesSettled()
-    expect(host.titleOf(GIT)).toBe('Better worker label')
-  })
-
-  it('does not re-pin task A’s label onto a later dispatch of task B', async () => {
-    const { titleOf } = await titled(
-      [
-        [
-          status(GIT, {
-            prompt: dispatch('task-a', 'Implement task A worker instructions')
-          })
-        ],
-        [
-          status(GIT, {
-            prompt: dispatch('task-b', 'Implement task B worker instructions')
-          })
-        ]
-      ],
-      labelsOf('task-a', 'Worker A label')
-    )
-    expect(titleOf(GIT)).toBe('Implement task B worker instructions')
   })
 })

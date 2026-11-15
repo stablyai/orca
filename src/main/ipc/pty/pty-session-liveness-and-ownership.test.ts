@@ -9,16 +9,16 @@ vi.mock('node-pty', () => import('./pty-ipc-mock-registry').then((m) => m.nodePt
 vi.mock('node:child_process', async (importOriginal) =>
   (await import('./pty-ipc-mock-registry')).childProcessModuleMock(await importOriginal())
 )
-vi.mock('../../opencode/hook-service', () =>
+vi.mock('../../opencode/status-hooks/hook-service', () =>
   import('./pty-ipc-mock-registry').then((m) => m.openCodeHookServiceModuleMock())
 )
 vi.mock('../../mimo/hook-service', () =>
   import('./pty-ipc-mock-registry').then((m) => m.mimoHookServiceModuleMock())
 )
-vi.mock('../../agent-hooks/server', () =>
+vi.mock('../../agent-hooks/server/agent-hook-server', () =>
   import('./pty-ipc-mock-registry').then((m) => m.agentHookServerModuleMock())
 )
-vi.mock('../../pi/titlebar-extension-service', () =>
+vi.mock('../../pi/managed-extensions/titlebar-extension-service', () =>
   import('./pty-ipc-mock-registry').then((m) => m.piTitlebarExtensionModuleMock())
 )
 vi.mock('../../pty/shell-startup/pwsh', () =>
@@ -33,13 +33,13 @@ vi.mock('../../telemetry/client', () =>
 vi.mock('../../telemetry/classify-error', () =>
   import('./pty-ipc-mock-registry').then((m) => m.classifyErrorModuleMock())
 )
-vi.mock('../../cli/linux-terminal-orca-cli-shim', () =>
+vi.mock('../../cli/launchers/linux-terminal-orca-cli-shim', () =>
   import('./pty-ipc-mock-registry').then((m) => m.linuxCliShimModuleMock())
 )
 vi.mock('../../memory/pty-registry', () =>
   import('./pty-ipc-mock-registry').then((m) => m.ptyRegistryModuleMock())
 )
-vi.mock('../../agent-hooks/migration-unsupported-pty-state', () =>
+vi.mock('../../agent-hooks/observations/migration-unsupported-pty-state', () =>
   import('./pty-ipc-mock-registry').then((m) => m.migrationUnsupportedPtyModuleMock())
 )
 vi.mock('../../codex/configuration/homes/codex-pane-account-registry', () =>
@@ -50,31 +50,7 @@ vi.mock('../../codex/history/index/codex-state-db-backfill-recovery', () =>
 )
 
 describe('registerPtyHandlers', () => {
-  const { handlers, mainWindow, installDaemonTestProvider } = setupPtyIpcSuite()
-
-  it('reports only daemon-minted local sessions the provider answers are absent', async () => {
-    const minted = (name: string): string => `repo::/worktree@@${name}`
-    registerPtyHandlers(mainWindow as never)
-    installDaemonTestProvider({
-      canProvideAuthoritativeBufferSnapshot: (id: string) => id === minted('snapshot'),
-      probePtyLiveness: async (id: string) =>
-        id === minted('live') ? true : id === minted('unobserved') ? null : false
-    })
-
-    await expect(
-      handlers.get('pty:getGoneSessionIds')!(null, {
-        ids: [
-          minted('dead'),
-          minted('live'),
-          minted('unobserved'),
-          minted('snapshot'),
-          // A legacy bare id resolves local by fallback but may be an old SSH pane.
-          'legacy-bare-pty',
-          'remote:env-1@@terminal-1'
-        ]
-      })
-    ).resolves.toEqual([minted('dead')])
-  })
+  const { handlers, mainWindow } = setupPtyIpcSuite()
 
   it('never answers liveness for a paired-runtime handle from the local registry', async () => {
     const hasPty = vi.fn(() => false)

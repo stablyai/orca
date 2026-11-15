@@ -3,9 +3,9 @@ import { afterEach, describe, expect, it } from 'vitest'
 import {
   formatOrcaSessionAddress,
   parseOrcaSessionAddress
-} from '../../../../../shared/orca-session-address'
+} from '../../../../../shared/agent-session/identity/orca-session-address'
 
-import { testOrcaSessionId } from '../../../../../shared/orca-session-address-test-fixture'
+import { testOrcaSessionId } from '../../../../../shared/agent-session/identity/orca-session-address-test-fixture'
 import {
   mintStructuredWorkerHandle,
   mintStructuredWorkerPaneKey,

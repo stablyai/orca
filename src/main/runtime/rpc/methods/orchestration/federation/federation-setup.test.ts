@@ -6,7 +6,7 @@ import '../../../../orchestration/db/messages/mailbox-routing-page'
 import '../../../../orchestration/db/dispatch-row-writer'
 import '../../../../orchestration/db/attempt-outcome-projection'
 import { ORCHESTRATION_METHODS } from '../orchestration'
-import { monitorFederatedSetup } from './federation-setup'
+import { monitorFederatedSetup } from '../../../../orchestration/legacy-remote/federation-setup'
 
 describe('orchestration federated setup evidence', () => {
   const databases: OrchestrationDb[] = []
@@ -150,7 +150,7 @@ describe('orchestration federated setup evidence', () => {
       ]
     })
     db.markWorkerDispatchReady(started.dispatch.id)
-    vi.spyOn(runtime, 'resolveOrchestrationWorkerServer').mockReturnValue({
+    vi.spyOn(runtime, 'resolveOrchestrationWorkerServer').mockResolvedValue({
       environmentId: 'environment_windows',
       name: 'windows',
       peerFingerprint: 'windows_peer'

@@ -1,9 +1,12 @@
-import type { BrowserGrabPayload, BrowserGrabRect } from '../../../shared/browser-grab-types'
+import type {
+  BrowserGrabPayload,
+  BrowserGrabRect
+} from '../../../shared/browser/element-grab/browser-grab-types'
 import {
   GRAB_BUDGET,
   GRAB_SAFE_ATTRIBUTE_NAMES,
   GRAB_SECRET_PATTERNS
-} from '../../../shared/browser-grab-types'
+} from '../../../shared/browser/element-grab/browser-grab-types'
 import { isSafeDisplayCharacter } from '../../../shared/display-text-safety'
 import { resolveDocPreviewUrlFilePath } from '../document-preview/doc-preview-grant-registry'
 

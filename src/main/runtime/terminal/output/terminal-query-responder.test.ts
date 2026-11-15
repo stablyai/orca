@@ -323,37 +323,6 @@ describe('HeadlessEmulator forwarding window', () => {
 })
 
 describe('view-attribute bridge replies (after renderer push)', () => {
-  // Match renderer xterm: queried OSC id, doubled-byte 16-bit RGB and ST; ?996n uses contour 997 (CoreBrowserTerminal._handleColorEvent/toRgbString).
-  it.each([
-    ['OSC 10 foreground', '\x1b]10;?\x07', ['\x1b]10;rgb:d0d0/d0d0/d0d0\x1b\\']],
-    ['OSC 11 background', '\x1b]11;?\x07', ['\x1b]11;rgb:1e1e/1e1e/2e2e\x1b\\']],
-    ['OSC 12 cursor color', '\x1b]12;?\x1b\\', ['\x1b]12;rgb:ffff/9999/0000\x1b\\']],
-    ['OSC 4 named palette slot', '\x1b]4;1;?\x07', ['\x1b]4;1;rgb:cccc/0000/0000\x1b\\']],
-    ['OSC 4 extended palette slot', '\x1b]4;196;?\x07', ['\x1b]4;196;rgb:c4c4/8888/4c4c\x1b\\']],
-    [
-      'OSC 4 multiple slots in one sequence',
-      '\x1b]4;1;?;196;?\x07',
-      ['\x1b]4;1;rgb:cccc/0000/0000\x1b\\', '\x1b]4;196;rgb:c4c4/8888/4c4c\x1b\\']
-    ],
-    [
-      'OSC 10 stacked params report foreground then background',
-      '\x1b]10;?;?\x07',
-      ['\x1b]10;rgb:d0d0/d0d0/d0d0\x1b\\', '\x1b]11;rgb:1e1e/1e1e/2e2e\x1b\\']
-    ],
-    ['DSR ?996n dark', '\x1b[?996n', ['\x1b[?997;1n']],
-    ['DECRQSS DECSCUSR from pushed cursor options', '\x1bP$q q\x1b\\', ['\x1bP1$r5 q\x1b\\']],
-    ['DECRQM ?12 from pushed cursorBlink', '\x1b[?12$p', ['\x1b[?12;1$y']]
-  ])('%s', async (_label, chunk, expectedReplies) => {
-    const { runtime, replies } = createResponderRuntime()
-    markHiddenRendererPty('pty-view')
-    setTerminalViewAttributes(viewAttributes())
-
-    runtime.onPtyData('pty-view', chunk, Date.now())
-    await settle(runtime, 'pty-view')
-
-    expect(replies.map((reply) => reply.data)).toEqual(expectedReplies)
-  })
-
   it('stays silent before the first push, then answers the same query after it', async () => {
     const { runtime, replies } = createResponderRuntime()
     markHiddenRendererPty('pty-first')

@@ -1,4 +1,7 @@
-import { VIRTUALIZED_SCROLL_ANCHOR_RECORD_EVENT } from '@/hooks/useVirtualizedScrollAnchor'
+import {
+  requestVirtualizedScrollAnchorRecord,
+  supersedeVirtualizedScrollAnchorRestore
+} from '@/hooks/requestVirtualizedScrollAnchorRecord'
 
 function getSidebarWorktreeOptions(worktreeId: string): HTMLElement[] {
   return Array.from(document.querySelectorAll<HTMLElement>('[data-worktree-id]')).filter(
@@ -44,10 +47,10 @@ export function preserveSidebarWorktreePosition(worktreeId: string): () => void 
   if (!scroller || !row) {
     return () => {}
   }
-  scroller.dispatchEvent(new Event(VIRTUALIZED_SCROLL_ANCHOR_RECORD_EVENT))
   const previousScrollTop = scroller.scrollTop
   const previousScrollHeight = scroller.scrollHeight
   const previousTop = row.getBoundingClientRect().top
+  supersedeVirtualizedScrollAnchorRestore(scroller)
 
   return () => {
     let attempts = 0
@@ -63,12 +66,18 @@ export function preserveSidebarWorktreePosition(worktreeId: string): () => void 
       const nextRow = findSidebarWorktreeRow(worktreeId, activeRowKey)
       if (!nextRow) {
         // After remount or height changes, approximate the old viewport so the row mounts before correcting its DOM position.
-        currentScroller.scrollTop = Math.max(
+        const target = Math.max(
           0,
           previousScrollTop + currentScroller.scrollHeight - previousScrollHeight
         )
+        supersedeVirtualizedScrollAnchorRestore(currentScroller, target)
+        currentScroller.scrollTop = target
       } else {
         const delta = nextRow.getBoundingClientRect().top - previousTop
+        supersedeVirtualizedScrollAnchorRestore(
+          currentScroller,
+          Math.abs(delta) > 1 ? currentScroller.scrollTop + delta : undefined
+        )
         if (Math.abs(delta) > 1) {
           currentScroller.scrollTop += delta
         }
@@ -76,6 +85,8 @@ export function preserveSidebarWorktreePosition(worktreeId: string): () => void 
       attempts += 1
       if (attempts < 12) {
         window.requestAnimationFrame(restore)
+      } else {
+        requestVirtualizedScrollAnchorRecord(currentScroller)
       }
     }
     window.requestAnimationFrame(restore)

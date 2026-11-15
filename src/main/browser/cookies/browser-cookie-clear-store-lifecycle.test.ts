@@ -43,7 +43,7 @@ vi.mock('../cdp/debugger/electron-debugger-lease', () => ({
   acquireElectronDebugger: vi.fn(() => lease)
 }))
 
-import { withCookieMutationLock } from './browser-cookie-import-clear'
+import { withCookieMutationLock } from './mutation/cookie-mutation-lock'
 import { writeImportedCookies, type SourceCookieToWrite } from './browser-cookie-import-write'
 import { openCookieClearStore } from './browser-cookie-clear-store'
 

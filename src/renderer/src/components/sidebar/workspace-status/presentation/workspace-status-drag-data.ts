@@ -1,4 +1,4 @@
-import { measureClipboardTextByteLength } from '../../../../../../shared/clipboard-text'
+import { measureUtf8ByteLength } from '../../../../../../shared/utf8-byte-limits'
 
 export const WORKSPACE_STATUS_DRAG_TYPE = 'application/x-orca-worktree-id'
 export const WORKSPACE_STATUS_DRAG_IDS_TYPE = 'application/x-orca-worktree-ids'
@@ -82,7 +82,7 @@ function readWorkspaceStatusDragPayload(
   }
   if (
     value.length > WORKSPACE_STATUS_DRAG_PAYLOAD_MAX_BYTES ||
-    measureClipboardTextByteLength(value, {
+    measureUtf8ByteLength(value, {
       stopAfterBytes: WORKSPACE_STATUS_DRAG_PAYLOAD_MAX_BYTES
     }).exceededLimit
   ) {

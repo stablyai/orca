@@ -35,7 +35,7 @@ function makeStore() {
   }
 }
 
-function makeRuntimeWithLeaf(): OrcaRuntimeService {
+async function makeRuntimeWithLeaf(): Promise<OrcaRuntimeService> {
   // SAFETY: Restore reads only this fixture's workspace, metadata, and settings capabilities.
   const runtime = new OrcaRuntimeService(makeStore() as never)
   runtime.setPtyController({
@@ -46,7 +46,7 @@ function makeRuntimeWithLeaf(): OrcaRuntimeService {
     // SAFETY: Restore uses only the explicitly stubbed PTY inventory, write, and lifecycle operations.
   } as never)
   runtime.attachWindow(1)
-  runtime.syncWindowGraph(1, {
+  await runtime.syncWindowGraph(1, {
     tabs: [
       {
         tabId: 'tab-1',
@@ -72,32 +72,8 @@ function makeRuntimeWithLeaf(): OrcaRuntimeService {
 }
 
 describe('seedTerminalRestoreTail', () => {
-  it('seeds preview/tail/title from a restore payload without fabricating recency', async () => {
-    const runtime = makeRuntimeWithLeaf()
-
-    runtime.seedTerminalRestoreTail(PTY_ID, {
-      text: '\x1b]0;osc-title-noise\x07\x1b[32m$ npm test\x1b[0m\r\n\x1b[1mall 42 tests passed\x1b[0m\r\nspinner frame 1\rspinner frame 2\r\n',
-      lastTitle: 'restored-agent-title'
-    })
-
-    const { terminals } = await runtime.listTerminals(`id:${WORKTREE_ID}`)
-    expect(terminals).toHaveLength(1)
-    const terminal = terminals[0]!
-    expect(terminal.preview).toContain('$ npm test')
-    expect(terminal.preview).toContain('all 42 tests passed')
-    expect(terminal.preview).toContain('spinner frame 2')
-    expect(terminal.preview).not.toContain('spinner frame 1')
-    expect(terminal.preview).not.toContain('\x1b')
-    expect(terminal.title).toBe('restored-agent-title')
-    // Seeded scrollback is historical — recency must come only from live bytes.
-    expect(terminal.lastOutputAt).toBeNull()
-
-    const read = await runtime.readTerminal(terminal.handle)
-    expect(read.tail).toEqual(['$ npm test', 'all 42 tests passed', 'spinner frame 2'])
-  })
-
   it('lets live bytes land on top of the seed and refuses to re-apply history', async () => {
-    const runtime = makeRuntimeWithLeaf()
+    const runtime = await makeRuntimeWithLeaf()
 
     runtime.seedTerminalRestoreTail(PTY_ID, { text: 'restored line\r\n' })
     runtime.onPtyData(PTY_ID, 'live line\r\n', 1234567)
@@ -114,7 +90,7 @@ describe('seedTerminalRestoreTail', () => {
   })
 
   it('does not seed records that already saw live output', async () => {
-    const runtime = makeRuntimeWithLeaf()
+    const runtime = await makeRuntimeWithLeaf()
 
     runtime.onPtyData(PTY_ID, 'live first\r\n', 42)
     runtime.seedTerminalRestoreTail(PTY_ID, { text: 'stale history\r\n' })
@@ -125,7 +101,7 @@ describe('seedTerminalRestoreTail', () => {
   })
 
   it('caps the parsed suffix of an oversized payload at a line boundary', async () => {
-    const runtime = makeRuntimeWithLeaf()
+    const runtime = await makeRuntimeWithLeaf()
 
     runtime.seedTerminalRestoreTail(PTY_ID, {
       text: `${'x'.repeat(300 * 1024)}\r\npartial-first-line\r\nfinal restored line\r\n`

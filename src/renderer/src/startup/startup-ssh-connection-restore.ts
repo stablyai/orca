@@ -1,4 +1,4 @@
-import type { SshConnectionState } from '../../../shared/ssh-types'
+import type { SshConnectionState } from '../../../shared/remote-runtime/ssh/ssh-types'
 import { timeRendererStartupStep } from './startup-diagnostics'
 import { reconnectSshTargetForRendererStartup } from './ssh-startup-reconnect'
 

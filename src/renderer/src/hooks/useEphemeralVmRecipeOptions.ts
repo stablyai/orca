@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../../shared/execution-host'
 import type { OrcaVmRecipe } from '../../../shared/orca-yaml-hook-types'
-import type { EphemeralVmFailure } from '../../../shared/ephemeral-vm-failure-copy'
-import { ephemeralVmErrorText } from '@/lib/ephemeral-vm-error-copy'
+import type { EphemeralVmFailure } from '../../../shared/remote-runtime/ephemeral-vm-recipes/ephemeral-vm-failure-copy'
+import { ephemeralVmErrorText } from '@/runtime/ephemeral-vm/ephemeral-vm-error-copy'
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 
 type EphemeralVmRecipeOptionsArgs = {

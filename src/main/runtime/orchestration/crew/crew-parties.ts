@@ -5,8 +5,8 @@ import {
   isOrcaSessionId,
   type OrcaSessionId,
   parseOrcaSessionAddress
-} from '../../../../shared/orca-session-address'
-import { isPublicOrchestrationAddress } from '../../../../shared/orchestration-agent-reference'
+} from '../../../../shared/agent-session/identity/orca-session-address'
+import { isPublicOrchestrationAddress } from '../../../../shared/orchestration/mailbox/orchestration-agent-reference'
 import {
   createCanonicalSessionPaneResolver,
   clearedInto

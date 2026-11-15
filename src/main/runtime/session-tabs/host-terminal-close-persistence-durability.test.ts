@@ -39,7 +39,7 @@ function rendererWriteWithout(
 }
 
 async function makeStore() {
-  return await createStore()
+  return createStore()
 }
 
 describe('host-created terminal close durability', () => {

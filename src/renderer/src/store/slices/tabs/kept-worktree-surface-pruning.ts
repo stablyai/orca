@@ -1,6 +1,7 @@
 import type { AppState } from '../../types'
 import { toVisibleTabType, type Tab, type TabGroup } from '../../../../../shared/tab-types'
 import { sanitizeRecentTabIds } from './tab-selection-history'
+import type { RecordDraft } from '../../keyed-record-transitions'
 
 /** Surfaces leaving workspaces that stay, such as one host's tabs under an id its twin publishes. */
 export type KeptWorktreeSurfaceRemoval = {
@@ -69,6 +70,20 @@ function pruneEntries<T>(
   return next ?? map
 }
 
+/** pruneEntries as draft operations, for seam records whose entries are never undefined. */
+export function pruneKeptEntries<T>(
+  draft: RecordDraft<T>,
+  worktreeIds: ReadonlySet<string>,
+  prune: (value: T) => T
+): void {
+  for (const worktreeId of worktreeIds) {
+    const current = draft.get(worktreeId)
+    if (current !== undefined) {
+      draft.set(worktreeId, prune(current))
+    }
+  }
+}
+
 function withoutIds<T extends { id: string }>(items: T[], ids: ReadonlySet<string>): T[] {
   return items.some((item) => ids.has(item.id)) ? items.filter((item) => !ids.has(item.id)) : items
 }
@@ -99,16 +114,19 @@ export function createKeptWorktreeSurfacePruners(
       pruneEntries(map, worktreeIds, (value) =>
         typeof value === 'string' && ids.has(value) ? undefined : value
       )
+  const pruneGroups = (groups: TabGroup[]): TabGroup[] => {
+    const next = groups.map((group) => pruneGroup(group, removedIds))
+    return next.every((group, index) => group === groups[index]) ? groups : next
+  }
   return {
-    tabs: (map: AppState['tabsByWorktree']) =>
-      pruneEntries(map, worktreeIds, (tabs) => withoutIds(tabs, removed.terminalTabIds)),
+    /** Seam records prune through draft operations; see pruneKeptEntries. */
+    entries: {
+      tabs: (tabs: AppState['tabsByWorktree'][string]) => withoutIds(tabs, removed.terminalTabIds),
+      unifiedTabs: (tabs: Tab[]) => withoutIds(tabs, removedUnifiedIds),
+      groups: pruneGroups
+    },
     unifiedTabs: (map: AppState['unifiedTabsByWorktree']) =>
       pruneEntries(map, worktreeIds, (tabs) => withoutIds(tabs, removedUnifiedIds)),
-    groups: (map: AppState['groupsByWorktree']) =>
-      pruneEntries(map, worktreeIds, (groups) => {
-        const next = groups.map((group) => pruneGroup(group, removedIds))
-        return next.every((group, index) => group === groups[index]) ? groups : next
-      }),
     tabBarOrder: (map: AppState['tabBarOrderByWorktree']) =>
       pruneEntries(map, worktreeIds, (order) =>
         order.some((id) => removedIds.has(id)) ? order.filter((id) => !removedIds.has(id)) : order

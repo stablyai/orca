@@ -1,7 +1,7 @@
 import 'node:crypto'
-import '../../../shared/structured-worker-handle'
+import '../../../shared/orchestration/workers/structured-worker-handle'
 import '../../../shared/workspace-layout/stable-pane-id'
-import '../../../shared/worker-terminal-host-scope'
+import '../../../shared/orchestration/workers/worker-terminal-host-scope'
 import 'zod'
 import {
   structuredAgentSessionPaneKey,
@@ -10,7 +10,7 @@ import {
 import type { AgentSessionRecordReader } from '../orchestration/addressing/session-lineage/structured-session-lineage'
 import { createCanonicalSessionResolver } from '../orchestration/addressing/session-lineage/structured-session-lineage'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host'
-import type { AgentSenderAssociation } from '../../../shared/agent-sender-associations'
+import type { AgentSenderAssociation } from '../../../shared/orchestration/mailbox/agent-sender-associations'
 
 /** Chats with an open tab. Without a recorded tab table the store still knows the workspace's
  *  saved chat tabs, so closed history never counts as open; a reader that can't say counts all. */

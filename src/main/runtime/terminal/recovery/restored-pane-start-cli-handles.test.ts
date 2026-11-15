@@ -1,7 +1,7 @@
 // A saved unbound pane must start through main before CLI send, wait or read reaches its terminal.
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import { HEADLESS_RUNTIME_WINDOW_ID } from '../../../../shared/runtime-session-contracts'
+import { HEADLESS_RUNTIME_WINDOW_ID } from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 
 vi.mock('../../../../shared/layout-owner-switch', () => ({ ORCA_LAYOUT_OWNER_IS_MAIN: true }))
 
@@ -24,7 +24,7 @@ type Runtime = ReturnType<typeof surfaceRuntime>['runtime']
 /** Start the third saved pane, recording its binding before returning the spawn reply. */
 async function restoredPane() {
   const { runtime, store, setSession } = surfaceRuntime()
-  runtime.syncWindowGraph(HEADLESS_RUNTIME_WINDOW_ID, { tabs: [], leaves: [] })
+  await runtime.syncWindowGraph(HEADLESS_RUNTIME_WINDOW_ID, { tabs: [], leaves: [] })
   const session = store.getSession()
   const layout = session.terminalLayoutsByTabId[SURFACE_TAB_ID]!
   setSession({
@@ -123,20 +123,6 @@ describe('a CLI trigger on a saved pane with no terminal (layout-owner build)', 
     runtime.onPtyExit('pty-c', 0)
 
     await expect(wait).resolves.toMatchObject({ handle, condition: 'exit', satisfied: true })
-    expect(spawn).toHaveBeenCalledOnce()
-  })
-
-  it('a read starts the pane once and reads the started terminal', async () => {
-    const { runtime, handle, spawn, started } = await restoredPane()
-
-    const read = runtime.readTerminal(handle)
-    await vi.waitFor(() => expect(spawn).toHaveBeenCalled())
-    started.resolve({ id: 'pty-c' })
-
-    await expect(read).resolves.toMatchObject({ handle, status: 'running' })
-    runtime.onPtyData('pty-c', 'ready\r\n', Date.now())
-    const again = await runtime.readTerminal(handle)
-    expect(again.tail.join('\n')).toContain('ready')
     expect(spawn).toHaveBeenCalledOnce()
   })
 

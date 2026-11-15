@@ -1,6 +1,6 @@
 import type { TaskPageSourceAvailabilityModel } from './use-task-page-source-availability'
 import { useRef, useState, useEffect, useMemo } from 'react'
-import { resolveVisibleTaskProvider } from '../../../../shared/task-providers'
+import { resolveVisibleTaskProvider } from '../../../../shared/work-items/task-providers'
 import type {
   GitLabTaskFilter,
   GitLabIssueFilter

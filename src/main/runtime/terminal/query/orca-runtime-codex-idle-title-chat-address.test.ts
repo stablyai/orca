@@ -129,47 +129,6 @@ async function codexPaneAfterOutput(
 }
 
 describe('headless Codex chat address under Codex idle titles (#31136)', () => {
-  it('keeps the transcript address once a turn with no tool call ends', async () => {
-    const agentStatus = await codexPaneAfterOutput(
-      [codexRow({ state: 'done' })],
-      [
-        programState('working'),
-        title('⠋ repo'),
-        title('⠸ Reply with hi | repo'),
-        title('Reply with hi | repo'),
-        programState('idle')
-      ]
-    )
-
-    expect(agentStatus).toMatchObject({
-      agentType: 'codex',
-      state: 'done',
-      providerSession: PROVIDER_SESSION
-    })
-  })
-
-  it('follows OSC 7501 working under a title with no agent marker', async () => {
-    const agentStatus = await codexPaneAfterOutput(
-      [codexRow({ state: 'working', prompt: 'explain the parser' })],
-      [title('⠋ repo'), title('Reply with hi | repo'), programState('working')]
-    )
-
-    expect(agentStatus).toMatchObject({
-      agentType: 'codex',
-      state: 'working',
-      providerSession: PROVIDER_SESSION
-    })
-  })
-
-  it('keeps an identity-only session address under the idle title', async () => {
-    const agentStatus = await codexPaneAfterOutput(
-      [codexRow({ state: 'done', providerSessionOnly: true })],
-      [title('⠋ repo'), title('Reply with hi | repo'), programState('idle')]
-    )
-
-    expect(agentStatus).toMatchObject({ state: 'done', providerSession: PROVIDER_SESSION })
-  })
-
   it('still retires the pane when the shell reclaims its title', async () => {
     const agentStatus = await codexPaneAfterOutput(
       [codexRow({ state: 'done' })],

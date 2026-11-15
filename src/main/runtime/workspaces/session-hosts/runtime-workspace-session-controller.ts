@@ -6,14 +6,14 @@ import {
   type ExecutionHostId
 } from '../../../../shared/execution-host'
 import type { FolderWorkspace } from '../../../../shared/folder-workspaces/folder-workspace-types'
-import type { Repo } from '../../../../shared/repo-types'
+import type { Repo } from '../../../../shared/repository/repo-types'
 import '../../../../shared/folder-workspaces/folder-workspace-execution-host'
 import { getFolderWorkspaceHostId } from '../../../../shared/folder-workspaces/folder-workspace-host-id'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
 import type { WorkspaceSessionState } from '../../../../shared/workspace-session/workspace-session-state-types'
 import { getRepoIdFromWorktreeId, splitWorktreeId } from '../../../../shared/worktree/id'
 import { workspaceSessionPartitionHostId } from '../../../../shared/workspace-session/workspace-session-partition-owner'
-import { parseWorkspaceKey } from '../../../../shared/workspace-scope'
+import { parseWorkspaceKey } from '../../../../shared/workspace/identity/workspace-scope'
 import { workspaceSessionListsTerminalTab } from '../../../../shared/workspace-session/workspace-session-terminal-tab-close'
 import type { RuntimeStore } from '../../construction/runtime-store-contract'
 import { resolveTwinRepoSessionHostId, type CachedWorktreeHost } from './twin-repo-session-host'
@@ -40,9 +40,7 @@ export class RuntimeWorkspaceSessionController {
   private getPreferredHostId(worktreeId: string, store: RuntimeStore): ExecutionHostId | null {
     const scope = parseWorkspaceKey(worktreeId)
     if (scope?.type === 'folder') {
-      const workspace = store
-        ?.getFolderWorkspaces?.()
-        .find((entry) => entry.id === scope.folderWorkspaceId)
+      const workspace = store.getFolderWorkspace?.(scope.folderWorkspaceId)
       if (!workspace) {
         return null
       }
