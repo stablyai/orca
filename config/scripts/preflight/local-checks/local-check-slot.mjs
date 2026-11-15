@@ -1,6 +1,6 @@
 import { randomUUID, createHash } from 'node:crypto'
 import { mkdir, readdir, readFile, rename, rm, writeFile } from 'node:fs/promises'
-import { homedir, hostname, tmpdir } from 'node:os'
+import { homedir, hostname } from 'node:os'
 import { join } from 'node:path'
 import { setTimeout as delay } from 'node:timers/promises'
 import { lock } from 'proper-lockfile'
@@ -8,7 +8,7 @@ import { lock } from 'proper-lockfile'
 const LEASE_ENV = 'ORCA_LOCAL_CHECK_LEASE'
 const host = hostname()
 const hostKey = createHash('sha256').update(`${homedir()}:${host}`).digest('hex').slice(0, 16)
-const hostDirectory = join(tmpdir(), `orca-local-checks-${hostKey}`)
+const hostDirectory = join(homedir(), '.cache', 'orca', `local-checks-${hostKey}`)
 
 function isAlive(pid) {
   try {

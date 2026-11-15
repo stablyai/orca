@@ -276,21 +276,34 @@ async function runPool(tasks, concurrency, run) {
   return results
 }
 
-export async function main(root, argv) {
-  const startedAt = performance.now()
+function pendingChecks(root, argv) {
   const options = parseArgs(argv)
   const { ref, mergeBase } = resolveMergeBase(root, options.base)
   const files = collectChangedFiles(root, mergeBase)
   if (files.length === 0) {
     console.log(`check:changed: no changes against ${ref}.`)
-    return 0
+    return null
   }
   const hash = computePassHash(root, mergeBase)
   if (!options.force && readPassHash(root) === hash) {
     console.log('Nothing changed since last passing run.')
+    return null
+  }
+  return { options, ref, mergeBase, files, hash }
+}
+
+export async function main(root, argv) {
+  if (!pendingChecks(root, argv)) {
     return 0
   }
+  return withLocalCheckSlot(() => {
+    const pending = pendingChecks(root, argv)
+    return pending ? runChecks(root, pending) : 0
+  })
+}
 
+async function runChecks(root, { options, ref, mergeBase, files, hash }) {
+  const startedAt = performance.now()
   const plan = planChangedChecks(files, {
     scriptsDir: path.join(root, 'config', 'scripts'),
     listDirectory: (directory) => {
@@ -371,7 +384,7 @@ export async function main(root, argv) {
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   try {
     const root = execFileSync('git', ['rev-parse', '--show-toplevel'], { encoding: 'utf8' }).trim()
-    process.exitCode = await withLocalCheckSlot(() => main(root, process.argv.slice(2)))
+    process.exitCode = await main(root, process.argv.slice(2))
   } catch (error) {
     console.error(`check:changed: ${error.message ?? error}`)
     process.exitCode = 1
