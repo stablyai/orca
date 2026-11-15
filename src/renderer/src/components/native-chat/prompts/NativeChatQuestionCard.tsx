@@ -133,13 +133,20 @@ export function NativeChatQuestionCard({
     return [...picked, ...(other ? [other] : [])].join(', ')
   }
 
+  // By picked option, not label: a provider may offer a choice whose label is empty.
   const answeredAt = (qi: number, sel = selections, oth = otherText): boolean =>
-    answerFor(qi, sel, oth).length > 0 || acceptsEmpty(qi)
+    pickedOptions(qi, sel).length > 0 || typedAnswerChosen(qi, sel, oth)
   const currentAnswered = answeredAt(index)
   const anyAnswered = prompt.questions.some((_, i) => answeredAt(i))
   // A required question offers Next or Submit, never Skip, and waits until it is answered.
   const waitsForAnswer = q.required === true && !currentAnswered
-  const confirmLabel = askConfirmLabel(currentAnswered || waitsForAnswer, isLast, anyAnswered)
+  const unansweredRequired = askUnansweredRequired(prompt.questions, (i) => answeredAt(i))
+  const confirmLabel = askConfirmLabel(
+    currentAnswered || waitsForAnswer,
+    isLast,
+    anyAnswered,
+    unansweredRequired !== -1 && unansweredRequired !== index
+  )
   const confirmBlocked = askConfirmAction({ isLast, anyAnswered, waitsForAnswer }) === 'stay'
   const currentTypedAnswerChosen = typedAnswerChosen(index)
 
@@ -271,7 +278,7 @@ export function NativeChatQuestionCard({
           <NativeChatQuestionSteps
             questions={prompt.questions}
             index={index}
-            answered={(i) => answerFor(i).length > 0}
+            answered={(i) => pickedOptions(i).length > 0 || answerFor(i).length > 0}
             disabled={isSubmitting}
             onSelect={goTo}
           />

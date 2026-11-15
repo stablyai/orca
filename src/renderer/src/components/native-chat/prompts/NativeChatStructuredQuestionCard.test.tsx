@@ -110,9 +110,9 @@ it('offers no Skip on a required question and takes Submit back to it instead of
   })
   expect(title()).toBe('Question 2?')
 
-  // Jumping past it by its step chip: Submit returns to it rather than sending.
+  // Jumping past it by its step chip: the last step says Next and returns to it rather than sending.
   step(2)
-  act(() => button('Submit').click())
+  act(() => button('Next').click())
   expect(onAnswer).not.toHaveBeenCalled()
   expect(title()).toBe('Question 2?')
 
@@ -141,6 +141,39 @@ it('keeps Submit idle on an unanswered required last question until it is answer
     answers: [
       { questionId: 'q1', optionIds: ['q1:b'] },
       { questionId: 'q2', optionIds: ['q2:a'] }
+    ]
+  })
+})
+
+it('counts a picked choice with an empty label as an answer to a required question', () => {
+  // An ACP form enum may offer '' as a choice; answered-ness follows the pick, not its label.
+  const emptyChoice = (n: number): AgentJournalQuestion => ({
+    ...question(n, false),
+    options: [
+      { id: `q${n}:empty`, label: '' },
+      { id: `q${n}:b`, label: `${n} B` }
+    ]
+  })
+  const { onAnswer } = renderCard([question(1), emptyChoice(2), emptyChoice(3)])
+  const step = (n: number): void =>
+    act(() =>
+      container.querySelectorAll<HTMLButtonElement>('[data-native-chat-question-step]')[n]!.click()
+    )
+
+  pick(1)
+  pick(0)
+  // The non-final required step, revisited: its empty-label pick lets Next through.
+  step(1)
+  expect(button('Next').disabled).toBe(false)
+  // The final required step submits on its empty-label pick.
+  step(2)
+  pick(0)
+  expect(onAnswer).toHaveBeenCalledWith({
+    kind: 'answers',
+    answers: [
+      { questionId: 'q1', optionIds: ['q1:b'] },
+      { questionId: 'q2', optionIds: ['q2:empty'] },
+      { questionId: 'q3', optionIds: ['q3:empty'] }
     ]
   })
 })
