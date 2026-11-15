@@ -1,7 +1,10 @@
 // Builds check out the commit release-cut recorded, never the movable tag name.
-import { readFileSync } from 'node:fs'
+import { execFileSync } from 'node:child_process'
+import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { runProcessSync } from '@orca/process-host'
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it } from 'vitest'
 import { parse } from 'yaml'
 import { dispatchReleaseMacBuildWorkflow } from '../operations/run-release-mac-build-workflow.mjs'
 
@@ -63,5 +66,104 @@ describe('release builds check out the verified commit', () => {
       env: { ...process.env, RELEASE_SHA: releaseSha(head) }
     })
     expect(result.code).toBe(code)
+  })
+})
+
+describe('release workflow shell inputs', () => {
+  it('passes step, job and input values to shell only through env', () => {
+    for (const [file, wf] of [
+      ['release-cut.yml', releaseCut],
+      ['release-mac-build.yml', macBuild]
+    ]) {
+      for (const [job, { steps = [] }] of Object.entries(wf.jobs)) {
+        for (const step of steps) {
+          for (const script of [step.run, step.with?.command]) {
+            // matrix, runner and github values are workflow constants; outputs and inputs are data.
+            expect(script ?? '', `${file} ${job} ${step.name}`).not.toMatch(
+              /\$\{\{[^}]*\b(steps|needs|inputs)\./
+            )
+          }
+        }
+      }
+    }
+  })
+})
+
+describe.skipIf(process.platform === 'win32')('release commit binding', () => {
+  let dir
+  afterEach(() => dir && rmSync(dir, { recursive: true, force: true }))
+  const env = {
+    ...process.env,
+    GIT_CONFIG_GLOBAL: '/dev/null',
+    GIT_CONFIG_NOSYSTEM: '1',
+    GIT_AUTHOR_NAME: 't',
+    GIT_AUTHOR_EMAIL: 't@t',
+    GIT_COMMITTER_NAME: 't',
+    GIT_COMMITTER_EMAIL: 't@t'
+  }
+  const git = (cwd, ...args) => execFileSync('git', args, { cwd, env, encoding: 'utf8' }).trim()
+
+  // An origin whose v1.2.3 tag points at `tagged`, and a clone checked out at `checkedOut`.
+  function setup({ tagOther = false } = {}) {
+    dir = mkdtempSync(join(tmpdir(), 'release-binding-'))
+    const origin = join(dir, 'origin')
+    git(dir, 'init', '-q', origin)
+    git(origin, 'commit', '-q', '--allow-empty', '-m', 'release: v1.2.3')
+    const release = git(origin, 'rev-parse', 'HEAD')
+    git(origin, 'commit', '-q', '--allow-empty', '-m', 'other')
+    git(origin, 'tag', '-a', 'v1.2.3', '-m', 'v1.2.3', tagOther ? 'HEAD' : release)
+    git(dir, 'clone', '-q', origin, 'clone')
+    const clone = join(dir, 'clone')
+    git(clone, 'checkout', '-q', '--detach', release)
+    return { clone, release }
+  }
+  function stubGh(answer) {
+    const bin = join(dir, 'bin')
+    mkdirSync(bin)
+    writeFileSync(join(bin, 'gh'), `#!/bin/sh\necho ${answer}\n`)
+    chmodSync(join(bin, 'gh'), 0o755)
+    return `${bin}:${process.env.PATH}`
+  }
+  const macVerify = macBuild.jobs['build-mac'].steps[1].run
+
+  it.each([
+    ['the live tag and a running release-cut', {}, 'true', 0],
+    ['a tag pointing at another commit', { tagOther: true }, 'true', 1],
+    ['a run that is not a running release-cut on main', {}, 'false', 1]
+  ])('mac build accepts only %s', (_name, options, runOk, code) => {
+    const { clone, release } = setup(options)
+    const result = runProcessSync({
+      program: 'bash',
+      args: ['-c', macVerify],
+      cwd: clone,
+      env: {
+        ...env,
+        PATH: stubGh(runOk),
+        RELEASE_SHA: release,
+        TAG: 'v1.2.3',
+        RELEASE_RUN_ID: '42',
+        GITHUB_REPOSITORY: 'o/r'
+      }
+    })
+    expect(result.code, result.stdout + result.stderr).toBe(code)
+  })
+
+  it('fails loudly when the release tag cannot be recorded', () => {
+    const { clone } = setup()
+    const record = releaseCut.jobs.cut.steps.find((step) => step.id === 'release-sha').run
+    const output = join(dir, 'out')
+    writeFileSync(output, '')
+    const run = (tag) =>
+      runProcessSync({
+        program: 'bash',
+        args: ['-c', record],
+        cwd: clone,
+        env: { ...env, TAG: tag, GITHUB_OUTPUT: output }
+      })
+    expect(run('v9.9.9').code).toBe(1)
+    expect(readFileSync(output, 'utf8')).toBe('')
+    git(clone, 'fetch', '-q', 'origin', 'refs/tags/v1.2.3:refs/tags/v1.2.3')
+    expect(run('v1.2.3').code).toBe(0)
+    expect(readFileSync(output, 'utf8')).toMatch(/^sha=[0-9a-f]{40}\n$/)
   })
 })
