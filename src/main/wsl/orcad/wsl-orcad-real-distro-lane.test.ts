@@ -1,3 +1,4 @@
+import '../../../shared/remote-runtime/host-store/environment-store-worker-test-fixture'
 // C10 real WSL2/systemd-on/off contract: C4 deploy, C5 RPC bridge, C6 loss/recovery, E1 deferred/forced/idle updates, then a separate survive process proves holder adoption, git/folder chat, a mid-reply distro stop resumed by Start and Continue, and cleanup. wsl-orcad-e2e.yml imports/runs both phases.
 // Run: ORCA_RUN_WSL_ORCAD_LANE=1 ORCA_WSL_ORCAD_LANE_PHASE=launch|survive pnpm test <this file>
 import { createHash, randomBytes } from 'node:crypto'

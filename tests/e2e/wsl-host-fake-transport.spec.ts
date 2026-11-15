@@ -15,7 +15,7 @@ import { encodePairingOffer } from '../../src/shared/remote-runtime/pairing/pair
 import {
   addWslHostEnvironment,
   findWslHostDeployment
-} from '../../src/shared/remote-runtime/host-store/runtime-environment-wsl-host-store'
+} from '../../src/shared/remote-runtime/host-store/runtime-environment-wsl-host-operations'
 import type { AppState } from '../../src/renderer/src/store/types'
 import { openSidebarProjectDialog } from './helpers/sidebar-project-dialog'
 import { ensureTerminalVisible, waitForSessionReady } from './helpers/store'
