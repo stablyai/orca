@@ -3,6 +3,7 @@ import { launchAgentInNewTabWithOutcome } from '@/lib/agent-session/launch/new-t
 import { settleAgentTabLaunch } from '@/lib/agent-session/launch/new-tab/launch-agent-in-new-tab-host-agents'
 import { newAgentPromptOutcome } from '@/lib/agent-session/launch/prompt/new-agent-prompt-outcome'
 import { buildAgentSessionForkPrompt } from '../../../../../shared/agent-session/context/agent-session-fork-context'
+import { readTerminalContextText } from '@/lib/agent-session/context/terminal-context-text'
 import { activateAndRevealWorktree } from '@/lib/workspace/activation/worktree-activation'
 import { createForkWorktree, forkableWorktreeBranch } from '@/lib/workspace/creation/fork-worktree'
 import { useAppStore } from '@/store/index'
@@ -13,7 +14,7 @@ import { getLocalProjectExecutionRuntimeContext } from '@/runtime/hosts/prefligh
 import { translate } from '@/i18n/i18n'
 import { planAgentSessionLaunch } from '@/lib/agent-session/launch/routing/agent-session-launch-plan'
 
-import { createNonSecureContextUuid } from '../../../../../shared/non-secure-context-uuid'
+import { createNonSecureContextUuid } from '../../../../../shared/identifiers/non-secure-context-uuid'
 import type { ManagedPane } from '@/lib/pane-manager/pane-manager-types'
 import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent'
 
@@ -67,14 +68,14 @@ export function prepareAgentSessionForkFromPane({
 }: ForkAgentSessionFromPaneArgs): PreparedAgentSessionFork | null {
   const paneKey = makePaneKey(tabId, pane.leafId)
   const state = useAppStore.getState()
-  const sourceAgent = resolveTuiAgent(state.agentStatusByPaneKey[paneKey]?.agentType)
+  const sourceAgent = resolveTuiAgent(state.agentStatusByPaneKey.get(paneKey)?.agentType)
   const tabAgent = resolveTuiAgent(
     state.tabsByWorktree[worktreeId]?.find((tab) => tab.id === tabId)?.launchAgent
   )
   const agent = sourceAgent ?? tabAgent
   // This forks context, not the process; xterm capture works for both local and SSH panes.
   const prompt = buildAgentSessionForkPrompt({
-    capturedText: pane.serializeAddon.serialize({ scrollback: 800 }),
+    capturedText: readTerminalContextText(pane.terminal),
     sourceLabel: paneKey,
     agentLabel: agent
   })

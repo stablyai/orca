@@ -8,7 +8,7 @@ import { AgentHookServer } from '../../../../agent-hooks/server/agent-hook-serve
 import { getManagedScript } from '../../../../codex/hooks/definitions/codex-hook-script'
 import { getSyntheticAgentTerminalTitle } from '../../../../../shared/agent-status/title/synthetic-agent-title'
 import { extractAllOscTitles } from '../../../../../shared/agent-status/title/osc-title-extraction'
-import { extractOscTitleScanTail } from '../../../../../shared/osc-title-scan-tail'
+import { extractOscTitleScanTail } from '../../../../../shared/agent-status/title/osc-title-scan-tail'
 import { settledWriteStub } from '../../../../providers/testing/settled-pty-write-stub'
 
 vi.mock('electron', () => ({
@@ -96,7 +96,7 @@ it.skipIf(!binary || process.platform === 'win32').each(trials)(
     const hooks = new AgentHookServer()
     await hooks.start()
     const db = createDatabase('orca-codex-mailbox-db-')
-    const { runtime } = createRuntime(db, {
+    const { runtime } = await createRuntime(db, {
       getAgentStatusSnapshot: () => hooks.getStatusSnapshot()
     })
     const run = createBoundRun(db, 'Real Codex completion')

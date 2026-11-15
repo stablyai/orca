@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import type { BrowserPageSiteDisplay } from '../../../../../../shared/browser-site-display'
+import type { BrowserPageSiteDisplay } from '../../../../../../shared/browser/site-settings/browser-site-display'
 import { addBrowserPageSiteDisplayListener } from '../../host-guest/viewport/browser-page-zoom'
 
 /** The page's current zoom and color scheme, re-read per URL because both belong to the site. */

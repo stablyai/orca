@@ -1,5 +1,5 @@
 // Status keeps only the latest deferral; log each refusal to preserve earlier failure reasons.
-import { errorMessage } from '../../../shared/error-message'
+import { errorMessage } from '../../../shared/errors/error-message'
 
 type Unsettled = { outcome: string; code?: string; reason?: string }
 

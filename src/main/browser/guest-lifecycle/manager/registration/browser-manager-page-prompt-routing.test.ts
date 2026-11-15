@@ -72,6 +72,7 @@ describe('browserManager page prompt routing', () => {
       ...guestNavigationMethods(),
       id: 107,
       isDestroyed: vi.fn(() => false),
+      isCrashed: vi.fn(() => false),
       isCurrentlyAudible: vi.fn(() => false),
       getType: vi.fn(() => 'webview'),
       getURL: vi.fn(() => 'https://trusted.example/home'),

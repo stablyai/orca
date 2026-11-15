@@ -15,12 +15,12 @@ import {
   browserPageZoomLevelToPercent,
   nextBrowserPageZoomLevel,
   type BrowserPageZoomDirection
-} from '../../../../../../shared/browser-page-zoom'
+} from '../../../../../../shared/browser/site-settings/browser-page-zoom'
 import {
   isBrowserSiteColorScheme,
   type BrowserPageSiteDisplay,
   type BrowserSiteColorScheme
-} from '../../../../../../shared/browser-site-display'
+} from '../../../../../../shared/browser/site-settings/browser-site-display'
 
 const ZOOM_KEY_DIRECTIONS: Record<string, BrowserPageZoomDirection> = {
   '-': 'out',

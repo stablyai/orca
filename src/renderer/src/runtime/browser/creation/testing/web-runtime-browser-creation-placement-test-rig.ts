@@ -2,7 +2,7 @@ import { vi } from 'vitest'
 import type {
   BrowserPage,
   BrowserWorkspace
-} from '../../../../../../shared/browser-workspace-types'
+} from '../../../../../../shared/browser/workspaces/browser-workspace-types'
 import type { RuntimeMobileSessionTabsResult } from '../../../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import type { Tab, TabGroup } from '../../../../../../shared/tab-types'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'

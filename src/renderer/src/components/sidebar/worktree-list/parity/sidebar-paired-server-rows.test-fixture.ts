@@ -19,7 +19,7 @@ import { getWorktreeHostIdentity } from '../../../../../../shared/worktree/host-
 import type { Worktree } from '../../../../../../shared/worktree/types'
 import { lineageStoreKeyOfRow } from '../../../../../../shared/worktree/lineage/cross-store-lineage-resolution'
 import { validCrossStoreLineage } from '../../../../../../shared/worktree/lineage/cross-store-lineage-records'
-import { worktreeWorkspaceKey } from '../../../../../../shared/workspace-scope'
+import { worktreeWorkspaceKey } from '../../../../../../shared/workspace/identity/workspace-scope'
 import { folderLineageEdgeOf } from '../../../../../../shared/worktree/lineage/folder-lineage-parents'
 
 /** The paired-server rows the window fetched itself, keyed by host-qualified id, for these hosts. */

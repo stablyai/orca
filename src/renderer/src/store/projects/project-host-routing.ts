@@ -2,12 +2,12 @@ import type {
   Project,
   ProjectHostSetup,
   ProjectHostSetupExistingFolderArgs
-} from '../../../../shared/project-types'
-import type { Repo } from '../../../../shared/repo-types'
+} from '../../../../shared/project/project-types'
+import type { Repo } from '../../../../shared/repository/repo-types'
 import {
   projectHostSetupProjectionFromRepos,
   type ProjectHostSetupProjection
-} from '../../../../shared/project-host-setup-projection'
+} from '../../../../shared/project/host-setup/project-host-setup-projection'
 import {
   PROJECT_HOST_SETUP_RUNTIME_CAPABILITY,
   WORKSPACE_RUN_CONTEXT_RUNTIME_CAPABILITY
@@ -21,7 +21,7 @@ import {
   SERVER_SSH_PROJECT_ADD_UNAVAILABLE_MESSAGE,
   sshHostWithoutServerMessage,
   type ProjectHostSetupTarget
-} from '../../../../shared/project-host-setup-target'
+} from '../../../../shared/project/host-setup/project-host-setup-target'
 import { isWebClientLocation } from '@/app-shell/platform/web-client-location'
 import type { AppState } from '../types'
 import { findSoleHostCopy } from '../../../../shared/worktree/host-qualified-identity'

@@ -13,9 +13,9 @@ import {
   journalItemStatusMetadata
 } from './journal-item-status-metadata'
 import { lostLiveWorkJournalBody } from './item-lifecycle/journal-subagent-liveness'
-import { isUnverifiedEndAgentJournalToolCall } from '../../../shared/agent-journal-tool-call-lifecycle'
+import { isUnverifiedEndAgentJournalToolCall } from '../../../shared/agent-session/journal/agent-journal-tool-call-lifecycle'
 import { parseAgentJournalItemKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
-import { spelledProviderTimelineItemKey } from '../../../shared/provider-timeline-item-key'
+import { spelledProviderTimelineItemKey } from '../../../shared/agent-session/journal/provider-timeline-item-key'
 
 export function journalDomainItemLifecycleColumns(
   item: AgentJournalRenderItem

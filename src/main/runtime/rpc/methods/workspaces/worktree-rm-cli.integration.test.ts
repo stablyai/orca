@@ -12,10 +12,10 @@ import {
   storeWorktreeMeta
 } from '../../../orca-runtime-tests/runtime-store-partial-fixture'
 import type { WorktreeMeta } from '../../../../../shared/worktree/meta-types'
-import type { Repo } from '../../../../../shared/repo-types'
+import type { Repo } from '../../../../../shared/repository/repo-types'
 import type { HostWorktreeTarget } from '../../../../../shared/worktree/host-qualified-identity'
 
-import * as appEnvironment from '../../../../../shared/app-environment'
+import * as appEnvironment from '../../../../../shared/app-lifecycle/app-environment'
 import type { SshTarget } from '../../../../../shared/remote-runtime/ssh/ssh-types'
 
 import { getRuntimeMetadataPath } from '../../../../../shared/remote-runtime/bootstrap/runtime-bootstrap'
@@ -27,7 +27,7 @@ import { STATUS_METHODS } from '../host-management/status'
 import type { RpcRequest } from '../../core'
 import { WorkspaceLifecycleQueue } from '../../../workspaces/lifecycle/workspace-lifecycle-queue'
 import { installRealWorkerThreadChildProcesses } from '../../../../worker-thread-child-process/worker-thread-child-process-real.test-fixtures'
-import { removeTree } from '../../../../../shared/windows-transient-lock-removal'
+import { removeTree } from '../../../../../shared/file-write/windows-transient-lock-removal'
 import {
   _resetPendingWorktreeRemovalsForTests,
   _settlePendingWorktreeRemovalsForTests,

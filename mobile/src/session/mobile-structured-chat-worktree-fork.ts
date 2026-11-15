@@ -1,6 +1,9 @@
 import { Alert, Platform } from 'react-native'
 import { AGENT_SESSION_CREATE_MESSAGE_RUNTIME_CAPABILITY } from '../../../src/shared/agent-session/agent-session-create-capabilities'
-import { formatOrcaSessionAddress, isOrcaSessionId } from '../../../src/shared/orca-session-address'
+import {
+  formatOrcaSessionAddress,
+  isOrcaSessionId
+} from '../../../src/shared/agent-session/identity/orca-session-address'
 import { agentReferenceNote } from '../../../src/shared/orchestration/mailbox/orchestration-agent-reference'
 import { translate } from '../i18n/mobile-i18n'
 import { triggerError } from '../platform/haptics/haptics'
@@ -8,7 +11,7 @@ import { TUI_AGENT_DISPLAY_NAMES } from '../../../src/shared/agent-launch/catalo
 import type { TuiAgent } from '../../../src/shared/agent-launch/catalog/tui-agent'
 import type { StructuredAgentSessionForkSource } from '../../../src/shared/agent-session/structured-agent-session-create'
 import { getRepoIdFromWorktreeId } from '../../../src/shared/worktree/id'
-import { slugifyForWorkspaceName } from '../../../src/shared/workspace-name'
+import { slugifyForWorkspaceName } from '../../../src/shared/workspace/naming/workspace-name'
 import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import { sessionWorktreeRecordRead } from '../worktree/catalog/session-worktree-record-operations'
 import { createWorktreeWithNameRetry } from '../new-workspace/creation/worktree-create-retry'

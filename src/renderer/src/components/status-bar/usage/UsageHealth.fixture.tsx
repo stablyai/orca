@@ -6,10 +6,13 @@ import {
   DropdownMenuContent,
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
-import { CURSOR_MODELS_BUCKET_NAME } from '../../../../../shared/cursor-usage-buckets'
-import type { ProviderRateLimits, RateLimitWindow } from '../../../../../shared/rate-limit-types'
-import type { StatusBarUsageMode } from '../../../../../shared/status-bar-usage-mode'
-import type { UsagePercentageDisplay } from '../../../../../shared/usage-percentage-display'
+import { CURSOR_MODELS_BUCKET_NAME } from '../../../../../shared/agent-usage/rate-limits/cursor-usage-buckets'
+import type {
+  ProviderRateLimits,
+  RateLimitWindow
+} from '../../../../../shared/agent-usage/rate-limits/rate-limit-types'
+import type { StatusBarUsageMode } from '../../../../../shared/status-bar/status-bar-usage-mode'
+import type { UsagePercentageDisplay } from '../../../../../shared/agent-usage/display/usage-percentage-display'
 import { AccountSwitchList } from '../accounts/AccountSwitchList'
 import { AccountSwitchRowItem } from '../accounts/AccountSwitchRowItem'
 import { AccountUsageGauge, AccountUsageNotChecked } from '../accounts/AccountUsageGauge'
@@ -20,7 +23,7 @@ import { UsageRosterPanel } from './UsageRosterPanel'
 import { ProviderPanel } from './provider-usage-panel'
 import { UsageDisplayToggle } from './usage-meter'
 import { useAppStore } from '../../../store'
-import { normalizeUsagePercentageDisplay } from '../../../../../shared/usage-percentage-display'
+import { normalizeUsagePercentageDisplay } from '../../../../../shared/agent-usage/display/usage-percentage-display'
 
 const NOW = Date.now()
 const MIN = 60_000
@@ -257,6 +260,7 @@ export const rosterFullUsed = rosterFixture(PRESETS.full, 'used')
 export const rosterFullLeft = rosterFixture(PRESETS.full, 'remaining')
 export const rosterFableUsed = rosterFixture(PRESETS.fable, 'used')
 export const rosterFableLeft = rosterFixture(PRESETS.fable, 'remaining')
+export const rosterHealthyCompact = rosterFixture(PRESETS.healthy, 'used', 'compact')
 export const rosterLowCompact = rosterFixture(PRESETS.low, 'used', 'compact')
 export const rosterNarrow300 = rosterFixture(PRESETS.low, 'used', 'compact', 324)
 
@@ -285,6 +289,7 @@ function focusToggle(frame: HTMLElement): void {
 }
 
 export const rosterFableOnly = rosterFixture(PRESETS.fableOnly, 'used', 'compact')
+export const rosterFableOnlyDetailed = rosterFixture(PRESETS.fableOnly, 'used', 'verbose')
 export const rosterFableOnlyNarrow300 = rosterFixture(PRESETS.fableOnly, 'used', 'compact', 324)
 export const rosterFableNarrow300 = rosterFixture(PRESETS.fable, 'used', 'compact', 324)
 export const rosterFullNarrow300 = rosterFixture(PRESETS.full, 'used', 'compact', 324)

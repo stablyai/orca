@@ -2,7 +2,7 @@ import { createHash, randomUUID, type Hash } from 'node:crypto'
 import { createReadStream } from 'node:fs'
 import { mkdir, open, rm, stat, type FileHandle } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
-import { getAppEnvironment } from '../../../shared/app-environment'
+import { getAppEnvironment } from '../../../shared/app-lifecycle/app-environment'
 import {
   CHAT_FORK_TRANSFER_CHUNK_BYTES,
   CHAT_FORK_TRANSFER_IDLE_MS,

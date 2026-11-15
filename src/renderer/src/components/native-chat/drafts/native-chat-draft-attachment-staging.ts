@@ -2,7 +2,7 @@ import {
   hasNativeChatPendingAttachment,
   nativeChatPendingAttachmentScope
 } from '../attachments/chips/native-chat-pending-attachment-scopes'
-import { formatNativeChatFileReference } from '../../../../../shared/agent-image-paste'
+import { formatNativeChatFileReference } from '../../../../../shared/native-chat/input/composer/agent-image-paste'
 import { nativeChatTextAttachmentParts } from '../../../../../shared/native-chat-text-attachment-references'
 import type { NativeChatComposerDraft } from './native-chat-composer-draft-storage'
 import { releaseBrowserAttachmentFiles } from '@/lib/files/drop/browser-attachment-files'

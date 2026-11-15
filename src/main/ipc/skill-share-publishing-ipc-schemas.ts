@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { SkillDiscoveryTargetSchema } from '../../shared/skills'
+import { SkillDiscoveryTargetSchema } from '../../shared/skills/discovery/skills'
 
 export const skillSharePrepareIpcSchema = z
   .object({

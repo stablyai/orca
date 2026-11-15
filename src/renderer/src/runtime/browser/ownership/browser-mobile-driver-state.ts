@@ -76,6 +76,12 @@ export function isBrowserPageMobileDriven(browserPageId: string): boolean {
   return driverByBrowserPageId.get(browserPageId)?.kind === 'mobile'
 }
 
+export function getAllMobileDrivenBrowserPageIds(): string[] {
+  return [...driverByBrowserPageId]
+    .filter(([, driver]) => driver.kind === 'mobile')
+    .map(([browserPageId]) => browserPageId)
+}
+
 export function hasMobileDriverForAnyBrowserPage(
   browserPageIds: readonly (string | null | undefined)[]
 ): boolean {

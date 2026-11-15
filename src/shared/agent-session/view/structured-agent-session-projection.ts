@@ -1,3 +1,4 @@
+import { memoizeStringResult } from '../../collections/string-result-cache'
 import {
   AGENT_STATUS_MAX_FIELD_LENGTH,
   normalizeOptionalField,
@@ -13,7 +14,7 @@ import {
   type AgentJournalSubmission
 } from '../journal/agent-session-journal-types'
 import type { AgentTurnOutcome } from '../../agent-status/lifecycle/agent-turn-outcome'
-import { agentJournalToolCallLifecycle } from '../../agent-journal-tool-call-lifecycle'
+import { agentJournalToolCallLifecycle } from '../journal/agent-journal-tool-call-lifecycle'
 import { agentJournalLinkageFields } from '../journal/agent-session-journal-producer'
 import { structuredAgentSessionStatusBlock } from './structured-agent-session-status-block'
 import { agentJournalItemRowOrigin } from '../journal/agent-session-journal-position'
@@ -33,7 +34,7 @@ import {
 } from '../structured-agent-session-tool-call-block'
 
 import type { NativeChatBlock, NativeChatMessage } from '../../native-chat/native-chat-types'
-import { sha256 } from '../../sha256'
+import { sha256 } from '../../hashing/sha256'
 import { readAgentMessageSource } from '../agent-session-message-source'
 import { structuredAgentSessionStatusStartedAt } from './structured-agent-session-status-started-at'
 import { owesStructuredAgentSessionWork } from './structured-agent-session-owed-work'
@@ -81,9 +82,8 @@ function itemBlocks(item: AgentJournalRenderItem): {
   if (isStructuredAgentSessionToolAction(body)) {
     const call = structuredAgentSessionToolCallBlock(body, item.itemId)
     // Call/result share one row; use its call ID to pair them.
-    const { callId } = call
     if (body.kind === 'diff') {
-      return { role: 'assistant', blocks: [call, toolResult(item, body.patch, callId)] }
+      return { role: 'assistant', blocks: [call, toolResult(item, body.patch, call.callId)] }
     }
     return {
       role: 'assistant',
@@ -92,7 +92,7 @@ function itemBlocks(item: AgentJournalRenderItem): {
         ...(body.output
           ? [
               {
-                ...toolResult(item, body.output, callId),
+                ...toolResult(item, body.output, call.callId),
                 // Interrupted output is not an error reported by the tool.
                 isError: agentJournalToolCallLifecycle(body) === 'failed'
               }
@@ -245,6 +245,8 @@ export type StructuredAgentSessionStatusProjection = {
   /** Idle-only latest-request verdict: turn outcome, host-observed end if absent, or refused-send failure. */
   turnOutcome?: AgentTurnOutcome
   statusStartedAt?: number
+  /** An async question still waits for the person's next message; set by the host's journal reads. */
+  awaitsAnswer?: true
 }
 
 /** Share host/client previews; null status means no turn yet. Bound text because sends admit 256 KB and status frames include all sessions;
@@ -287,9 +289,7 @@ export function projectStructuredAgentSessionStatusState(
   const bodyOf = itemOf && agentSessionCurrentContextBody(itemOf, context.sequence)
   const status = projectStructuredAgentSessionStatus(items, submissions, currentFence, scope)
   const statusToolCall = status === 'working' ? statusStructuredAgentSessionToolCall(items) : null
-  const toolName = statusToolCall
-    ? normalizeOptionalField(statusToolCall.name, AGENT_STATUS_TOOL_NAME_MAX_LENGTH)
-    : undefined
+  const toolName = normalizeOptionalField(statusToolCall?.name, AGENT_STATUS_TOOL_NAME_MAX_LENGTH)
   const toolInput = statusToolCall
     ? normalizeOptionalField(
         describeToolInput(statusToolCall.input),
@@ -331,9 +331,12 @@ export function projectStructuredAgentSessionStatusState(
   }
 }
 
-export function structuredAgentSessionPaneKey(tabId: string, sessionId: string): string {
+const structuredAgentSessionPaneLeaf = memoizeStringResult((sessionId: string): string => {
   const bytes = sha256(new TextEncoder().encode(sessionId))
   const hex = Array.from(bytes.slice(0, 16), (byte) => byte.toString(16).padStart(2, '0')).join('')
-  const leaf = `${hex.slice(0, 8)}-${hex.slice(8, 12)}-4${hex.slice(13, 16)}-a${hex.slice(17, 20)}-${hex.slice(20, 32)}`
-  return `${tabId}:${leaf}`
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-4${hex.slice(13, 16)}-a${hex.slice(17, 20)}-${hex.slice(20, 32)}`
+}, 2048)
+
+export function structuredAgentSessionPaneKey(tabId: string, sessionId: string): string {
+  return `${tabId}:${structuredAgentSessionPaneLeaf(sessionId)}`
 }

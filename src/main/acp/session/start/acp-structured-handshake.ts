@@ -3,10 +3,11 @@ import { observeAcpForkSupport } from '../../capabilities/acp-fork-support'
 import { acpSessionStartMeta } from '../../launch/acp-session-meta'
 import { withAcpStartupDiagnostic } from './acp-startup-diagnostic'
 // An ACP child's handshake, run after the host has published it: initialize, reopen the chat's
-// session or start a new one, then return its protocol facts to the host. A saved session the
-// agent cannot reopen is replaced by a new one, with a warning row that any later start writes if
-// this one never did; while a reopened session replays its history, nothing it sends is written
-// except context usage, and afterwards the turns of it the chat never saw are added once.
+// session or start a new one, then return its protocol facts to the host. A saved session the agent
+// moved to another folder is reopened there; one it cannot reopen is replaced by a new one, with a
+// warning row that any later start writes if this one never did; while a reopened session replays
+// its history, nothing it sends is written except context usage, and afterwards the turns of it the
+// chat never saw are added once.
 
 import type { AgentSessionProviderHandleLink } from '../../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle'
 import type { StructuredAgentSessionAcquireInput } from '../../../native-chat/agent-session-wire/providers/structured-agent-session-adapter'
@@ -14,6 +15,7 @@ import type { StructuredAgentSessionProviderOpenResult } from '../../../native-c
 import {
   ACP_REOPEN_FAILED,
   acpReopenTakeover,
+  acpSessionOtherFolder,
   acpSessionNotRestoredRow
 } from './acp-session-reopen-failure'
 import { catchUpAcpHistory } from '../../history/acp-history-catch-up'
@@ -103,29 +105,47 @@ export async function initializeAcpStructuredSession(
     options.adoptSession(accepted.response, accepted.kind === 'new' ? 'new' : 'loaded')
   }
   if (resume) {
-    const attaching = input.lanes.create(resume.sessionId, true)
-    liveLane = attaching
-    try {
-      started = await connection.start(
-        {
-          cwd: launch.cwd,
-          mcpServers: [],
-          sessionId: resume.sessionId,
-          ...setup
-        },
+    const reopenIn = async (cwd: string, attaching: AcpStructuredLane) => {
+      const opened = await connection.start(
+        { cwd, mcpServers: [], sessionId: resume.sessionId, ...setup },
         acceptSession
       )
       assertStarting()
-      replayed = input.lanes.finishLoad()
+      const frames = input.lanes.finishLoad()
       attaching.translator.finishLoad()
-    } catch (error) {
-      withAcpStartupDiagnostic(error, connection, spec.dialect)
-      takeover = await acpReopenTakeover(error, resume, {
-        // An agent already exited, its output still draining, has no session to take over in.
-        over: connection.closed || connection.exited || input.abandoned(),
-        now: now(),
-        warn: (fields) => deps.logger?.warn(ACP_REOPEN_FAILED, { ...fields, sessionId })
-      })
+      return { opened, frames }
+    }
+    liveLane = input.lanes.create(resume.sessionId, true)
+    try {
+      ;({ opened: started, frames: replayed } = await reopenIn(launch.cwd, liveLane))
+    } catch (refused) {
+      let error: unknown = refused
+      try {
+        const movedTo = await acpSessionOtherFolder(refused, resume.sessionId, launch.cwd, {
+          dialect: spec.dialect,
+          initialized,
+          connection,
+          assertStarting
+        })
+        if (movedTo) {
+          liveLane.dispose()
+          input.lanes.clear()
+          liveLane = input.lanes.create(resume.sessionId, true)
+          ;({ opened: started, frames: replayed } = await reopenIn(movedTo, liveLane))
+        }
+      } catch (followFailed) {
+        // A failed lookup or reopen gets the same takeover policy as the first refusal.
+        error = followFailed
+      }
+      if (!started) {
+        withAcpStartupDiagnostic(error, connection, spec.dialect)
+        takeover = await acpReopenTakeover(error, resume, {
+          // An agent already exited, its output still draining, has no session to take over in.
+          over: connection.closed || connection.exited || input.abandoned(),
+          now: now(),
+          warn: (fields) => deps.logger?.warn(ACP_REOPEN_FAILED, { ...fields, sessionId })
+        })
+      }
     }
   }
   if (!started || !liveLane) {

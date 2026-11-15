@@ -1,4 +1,4 @@
-import { buildAgentSessionHandoffContext } from '../../agent-session-handoff-context'
+import { buildAgentSessionHandoffContext } from '../../native-chat/transcript/agent-session-handoff-context'
 import type { TuiAgent } from '../../agent-launch/catalog/tui-agent'
 import { isNativeChatCompactionBoundary } from '../../native-chat/native-chat-context-usage'
 import type { NativeChatMessage } from '../../native-chat/native-chat-types'

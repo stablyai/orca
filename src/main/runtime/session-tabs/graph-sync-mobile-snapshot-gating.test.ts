@@ -58,15 +58,19 @@ function createRuntime(initialSession: WorkspaceSessionState) {
     }
   })
   const events: RuntimeMobileSessionTabsResult[] = []
-  const unsubscribe = runtime.onMobileSessionTabsChanged((snapshot) => events.push(snapshot))
+  const unsubscribe = runtime.onMobileSessionTabsChanged(
+    (snapshot) => events.push(snapshot),
+    undefined,
+    'mobile'
+  )
   const setSession = (next: WorkspaceSessionState): void => {
     session = next
   }
-  const sync = (
+  const sync = async (
     mobileSessionTabs?: RuntimeMobileSessionTabsSnapshot[],
     graph: { tabs?: unknown[]; leaves?: unknown[] } = {}
-  ): void => {
-    runtime.syncWindowGraph(1, {
+  ): Promise<void> => {
+    await runtime.syncWindowGraph(1, {
       tabs: (graph.tabs ?? []) as never,
       leaves: (graph.leaves ?? []) as never,
       mobileSessionTabs
@@ -113,15 +117,15 @@ describe('graph-sync mobile snapshot gating', () => {
     vi.useRealTimers()
   })
 
-  it('drains a pending notify to existing subscribers instead of replaying it to a new one', () => {
+  it('drains a pending notify to existing subscribers instead of replaying it to a new one', async () => {
     const { runtime, events, sync } = createRuntime(makeSession())
 
-    sync([makeRendererSnapshot({ version: 1 })])
+    await sync([makeRendererSnapshot({ version: 1 })])
     vi.advanceTimersByTime(20)
     expect(events).toHaveLength(0)
 
     const lateEvents: RuntimeMobileSessionTabsResult[] = []
-    runtime.onMobileSessionTabsChanged((snapshot) => lateEvents.push(snapshot))
+    runtime.onMobileSessionTabsChanged((snapshot) => lateEvents.push(snapshot), undefined, 'mobile')
     const drainedOnSubscribe = events.length
 
     vi.advanceTimersByTime(500)
@@ -130,5 +134,25 @@ describe('graph-sync mobile snapshot gating', () => {
     // Drain rather than cancel so existing subscribers receive the pending change.
     expect(drainedOnSubscribe).toBe(1)
     expect(events).toHaveLength(1)
+  })
+
+  it('keeps a drained desktop frame with the subscribers present when it was scheduled', async () => {
+    const { runtime, events, sync } = createRuntime(makeSession())
+    const delivered = new Promise<void>((resolve) => {
+      runtime.onMobileSessionTabsChanged(() => resolve(), undefined, 'runtime')
+    })
+    await sync([makeRendererSnapshot({ version: 1 })])
+    vi.advanceTimersByTime(20)
+
+    const lateEvents: RuntimeMobileSessionTabsResult[] = []
+    runtime.onMobileSessionTabsChanged(
+      (snapshot) => lateEvents.push(snapshot),
+      undefined,
+      'runtime'
+    )
+    await delivered
+
+    expect(events).toHaveLength(1)
+    expect(lateEvents).toEqual([])
   })
 })

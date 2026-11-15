@@ -6,18 +6,18 @@ import {
   _resetSecretStoreForTests,
   getSecretStore,
   setSecretStore
-} from '../../shared/secret-store'
+} from '../../shared/secure-storage/secret-store'
 import { createEncryptedAntigravityAccountStore } from './native-account-store'
 import { AntigravityAccountService } from './native-account-service'
 import type { AntigravityCredentialIdentity } from './native-credential-codec'
 import { credential, harness, refreshedWithoutIdToken } from './native-account-test-fixtures'
 import { createAntigravityWindowsCredentialBackend } from './native-windows-credentials'
 import { parseAntigravityWindowsSnapshot } from './native-windows-token-decode'
-import { createFakeWindowsSecurity } from '../../shared/windows-security-addon.test-fixture'
+import { createFakeWindowsSecurity } from '../../shared/secure-storage/windows-security-addon.test-fixture'
 import {
   resetWindowsSecurityLoadForTests,
   setWindowsSecurityForTests
-} from '../../shared/windows-security-addon'
+} from '../../shared/secure-storage/windows-security-addon'
 
 let dir: string
 beforeEach(() => {

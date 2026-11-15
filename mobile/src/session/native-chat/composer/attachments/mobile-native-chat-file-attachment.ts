@@ -1,4 +1,4 @@
-import { formatNativeChatFileReference } from '../../../../../../src/shared/agent-image-paste'
+import { formatNativeChatFileReference } from '../../../../../../src/shared/native-chat/input/composer/agent-image-paste'
 import { chatTextAttachmentName } from '../../../../../../src/shared/native-chat-text-attachment-references'
 import {
   MobileFileTooLargeError,

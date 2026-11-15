@@ -4,9 +4,9 @@ import {
   toRuntimeExecutionHostId,
   type ExecutionHostId
 } from '../../../../../shared/execution-host'
-import { slugifyForWorkspaceName } from '../../../../../shared/workspace-name'
+import { slugifyForWorkspaceName } from '../../../../../shared/workspace/naming/workspace-name'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../shared/constants'
-import type { WorkspaceSource } from '../../../../../shared/workspace-source'
+import type { WorkspaceSource } from '../../../../../shared/workspace/creation/workspace-source'
 import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent'
 
 /** A fork's name: its source's, marked as a fork. */

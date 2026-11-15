@@ -67,7 +67,7 @@ export function nativeChatComposerSendState(
         input.agent,
         transport.optionSnapshot
       ) &&
-      !structuredAgentSessionCommandChangesConversation(input.draft))
+      !structuredAgentSessionCommandChangesConversation(input.draft, input.agent))
   const draftHeld = localHold || (hostHold && !runsWhileHostHolds)
   const hasDraft = input.draft.trim() !== '' || input.imageAttachments.length > 0
   // Like Enter, a typed draft sends while the agent works; only an empty one offers Stop.

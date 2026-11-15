@@ -1,4 +1,4 @@
-import type { Repo } from '../../../../shared/repo-types'
+import type { Repo } from '../../../../shared/repository/repo-types'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 import { parseExecutionHostId } from '../../../../shared/execution-host'
 import {

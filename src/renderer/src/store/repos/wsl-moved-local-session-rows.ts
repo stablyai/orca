@@ -6,7 +6,7 @@
  */
 import type { WorkspaceSessionState } from '../../../../shared/workspace-session/workspace-session-state-types'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
-import { normalizeWorkspaceSessionKeyToWorkspaceId } from '../../../../shared/workspace-scope'
+import { normalizeWorkspaceSessionKeyToWorkspaceId } from '../../../../shared/workspace/identity/workspace-scope'
 import {
   filterWorkspaceRows,
   workspaceIdsNamedByPartition

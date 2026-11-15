@@ -1,6 +1,6 @@
-import { splitOpenCodeSqliteCandidate } from '../../opencode-sqlite-session-path'
+import { splitOpenCodeSqliteCandidate } from '../lifecycle/provider-handles/opencode-sqlite-session-path'
 import { buildBoundedSessionTranscript } from './agent-session-fork-context'
-import type { LaunchSource } from '../../telemetry-property-schemas'
+import type { LaunchSource } from '../../telemetry/schemas/telemetry-property-schemas'
 import type { TuiAgent } from '../../agent-launch/catalog/tui-agent'
 
 export type AgentSessionContinuationContextMode = 'focused' | 'full'

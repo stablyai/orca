@@ -82,7 +82,7 @@ function remoteSnapshot(): RuntimeMobileSessionTabsSnapshot {
   }
 }
 
-function createHarness(
+async function createHarness(
   includeSource = true,
   options: {
     connectionId?: string | null
@@ -175,7 +175,7 @@ function createHarness(
     getForegroundProcess: async () => null
   })
   runtime.setNotifier({ revealTerminalSession, splitTerminal: rendererSplitTerminal } as never)
-  runtime.syncWindowGraph(1, {
+  await runtime.syncWindowGraph(1, {
     tabs:
       includeSource && options.rendererMounted
         ? [
@@ -266,7 +266,7 @@ function createHarness(
 describe('remote runtime terminal split authority', () => {
   // STA-9417: offer splits despite lagging window graph; window refusal must retain the persisted split.
   it('splits a persisted tab the window has not listed, and still offers it to the window', async () => {
-    const harness = createHarness()
+    const harness = await createHarness()
 
     const outcome = await harness.runtime
       .splitTerminal(harness.handle, { direction: 'vertical' })
@@ -310,7 +310,7 @@ describe('remote runtime terminal split authority', () => {
   ])(
     'rejects a same-ID $label source replacement when restored persistence lacks an incarnation',
     async ({ connectionId, expectedHostId }) => {
-      const harness = createHarness(true, {
+      const harness = await createHarness(true, {
         connectionId,
         deferSpawn: true,
         includePairedSnapshot: false,
@@ -346,7 +346,7 @@ describe('remote runtime terminal split authority', () => {
   )
 
   it('rejects a persisted-only source incarnation change during spawn', async () => {
-    const harness = createHarness(true, {
+    const harness = await createHarness(true, {
       deferSpawn: true,
       includePairedSnapshot: false,
       stopAndWaitResult: true,
@@ -369,7 +369,7 @@ describe('remote runtime terminal split authority', () => {
   })
 
   it('preserves the split error and takes back the pane when kill and retirement throw', async () => {
-    const harness = createHarness(true, {
+    const harness = await createHarness(true, {
       deferSpawn: true,
       includePairedSnapshot: false,
       stopAndWaitResult: false,

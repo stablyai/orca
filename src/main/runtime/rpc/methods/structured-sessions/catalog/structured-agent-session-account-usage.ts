@@ -5,9 +5,9 @@ import {
 import type { AgentSessionRecord } from '../../../../../../shared/agent-session/lifecycle/agent-session-record'
 import type { GlobalSettings } from '../../../../../../shared/global-settings-types'
 import { requireLegacyAgentSessionAccountHome } from '../../../../../../shared/agent-session/lifecycle/accounts/agent-session-account-home'
-import type { RateLimitState } from '../../../../../../shared/rate-limit-types'
+import type { RateLimitState } from '../../../../../../shared/agent-usage/rate-limits/rate-limit-types'
 import { normalizeRuntimePathForComparison } from '../../../../../../shared/cross-platform-path'
-import { buildCodexResetCreditExpectedScope } from '../../../../../../shared/codex-reset-credit-scope'
+import { buildCodexResetCreditExpectedScope } from '../../../../../../shared/agent-accounts/codex/codex-reset-credit-scope'
 import { getSystemCodexHomePath } from '../../../../../codex/configuration/homes/codex-home-paths'
 import { getSelectedCodexAccountIdForTarget } from '../../../../../codex-accounts/account-management/runtime-selection'
 import {

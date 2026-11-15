@@ -13,7 +13,7 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { build } from 'esbuild'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { ClaudeManagedAccount } from '../../../../shared/managed-account-types'
+import type { ClaudeManagedAccount } from '../../../../shared/agent-accounts/managed-account-types'
 import type { WslSpec } from '../../../wsl/execution/wsl-runner'
 import type * as WslPaths from '../../../../shared/file-access/wsl-paths'
 

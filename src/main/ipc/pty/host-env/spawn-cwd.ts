@@ -6,7 +6,7 @@ import {
 } from '../../../../shared/execution-host'
 import { stat } from 'node:fs/promises'
 import type { Store } from '../../../persistence/loading-store/store'
-import { parseWorkspaceKey } from '../../../../shared/workspace-scope'
+import { parseWorkspaceKey } from '../../../../shared/workspace/identity/workspace-scope'
 import { isWslUncPath } from '../../../../shared/file-access/wsl-paths'
 import {
   resolveTerminalStartupCwdForWorkspace,

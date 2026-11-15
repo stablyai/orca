@@ -118,10 +118,10 @@ export async function countWindowsDriveReposWithWslWorktrees(
   return total
 }
 
-function readWslHostDistros(userDataPath: string): Map<string, string> {
+async function readWslHostDistros(userDataPath: string): Promise<Map<string, string>> {
   try {
     return new Map(
-      listEnvironments(userDataPath)
+      (await listEnvironments(userDataPath))
         .filter(isWslHostRuntimeEnvironment)
         .map((environment) => [environment.id, environment.orcadDeployment.distro])
     )
@@ -157,6 +157,7 @@ export async function gatherWslUsageSnapshotInput(
       distros: await listRunningDistrosForSnapshot(registrations)
     })
   })
+  const hostDistros = gateOpen ? await readWslHostDistros(userDataPath) : new Map<string, string>()
   return {
     registeredDistroCount: registrations?.length ?? null,
     // A confirmed read never yields 'unverifiable'; the snapshot's schema keeps its two states.
@@ -169,7 +170,7 @@ export async function gatherWslUsageSnapshotInput(
     projects: collectWslProjects(
       store,
       gateOpen,
-      () => readWslHostDistros(userDataPath),
+      () => hostDistros,
       getCachedWslDistros()?.[0] ?? null
     ),
     windowsDriveReposWithWslWorktrees: await countWindowsDriveReposWithWslWorktrees(store),

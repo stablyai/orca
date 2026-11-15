@@ -1,5 +1,5 @@
 import * as z from 'zod'
-import type { Repo } from '../../repo-types'
+import type { Repo } from '../../repository/repo-types'
 import type { Worktree } from '../../worktree/types'
 import { getGitHubPRCacheKeyCandidates } from '../../github/cache/github-cache-key'
 import { isGitHubPRSuppressed } from '../../worktree/hosted-review/github-pr-suppression'

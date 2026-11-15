@@ -3,7 +3,7 @@
 import { act, render, within } from '@testing-library/react'
 import type { ReactNode } from 'react'
 import { describe, expect, it, vi } from 'vitest'
-import type { BrowserPage } from '../../../../../../shared/browser-workspace-types'
+import type { BrowserPage } from '../../../../../../shared/browser/workspaces/browser-workspace-types'
 import type { NativeChatToolCallBlock } from '../../../../../../shared/native-chat/native-chat-types'
 import { setBrowserAgentPageActive } from '../../../browser-pane/agent-cursor/browser-agent-activity-state'
 import {

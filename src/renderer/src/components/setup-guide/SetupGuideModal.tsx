@@ -3,8 +3,8 @@ import {
   FEATURE_WALL_SETUP_STEP_IDS,
   getFirstIncompleteFeatureWallSetupStepId,
   getFeatureWallSetupSteps
-} from '../../../../shared/feature-wall-setup-steps'
-import type { FeatureWallSetupStepId } from '../../../../shared/feature-wall-setup-steps'
+} from '../../../../shared/feature-education/explore/feature-wall-setup-steps'
+import type { FeatureWallSetupStepId } from '../../../../shared/feature-education/explore/feature-wall-setup-steps'
 import {
   Dialog,
   DialogContent,

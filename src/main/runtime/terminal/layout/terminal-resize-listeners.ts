@@ -4,7 +4,7 @@ import { observeStructuredWorker } from '../../orchestration/terminal-authority/
 import { OrcaRuntimeWithApplyMobileDisplayMode } from './terminal-display-mode'
 import { addListenerToMap } from './terminal-listener-map'
 import { notifyRuntimeListeners } from '../../events/runtime-listener-delivery'
-import { withTimeoutResult } from '../../../../shared/promise-timeout-fallback'
+import { withTimeoutResult } from '../../../../shared/concurrency/promise-timeout-fallback'
 
 import {
   type TerminalExitCause,

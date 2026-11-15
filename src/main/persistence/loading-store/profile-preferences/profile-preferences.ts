@@ -1,12 +1,12 @@
-import { normalizeFeatureTipIds } from '../../../../shared/feature-tips'
+import { normalizeFeatureTipIds } from '../../../../shared/feature-education/feature-tips'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import { retireAtRestCommandSettings } from '../../../native-chat/agent-session-wire/options/at-rest-command-context'
 import { createAgentModelCatalogSettingsExpiry } from '../../../native-chat/agent-model-catalog/agent-model-catalog-account-expiry'
 import { agentModelCatalogStore } from '../../../native-chat/agent-model-catalog/agent-model-catalog-store'
-import type { OnboardingChecklistState } from '../../../../shared/onboarding-state-types'
+import type { OnboardingChecklistState } from '../../../../shared/onboarding/onboarding-state-types'
 import type { PersistedState } from '../../../../shared/persisted-state-types'
-import { getDefaultOnboardingState } from '../../../../shared/onboarding-defaults'
-import type { FeatureInteractionId } from '../../../../shared/feature-interaction-catalog'
+import { getDefaultOnboardingState } from '../../../../shared/onboarding/onboarding-defaults'
+import type { FeatureInteractionId } from '../../../../shared/feature-education/interactions/feature-interaction-catalog'
 import {
   chatUiLaunchTipVariant,
   parseChatUiLaunchTipAudience,

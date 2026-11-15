@@ -1,13 +1,13 @@
 import { useMemo } from 'react'
 import type { FolderWorkspace } from '../../../../../../shared/folder-workspaces/folder-workspace-types'
-import type { ProjectGroup } from '../../../../../../shared/project-group-types'
-import type { Repo } from '../../../../../../shared/repo-types'
+import type { ProjectGroup } from '../../../../../../shared/project/groups/project-group-types'
+import type { Repo } from '../../../../../../shared/repository/repo-types'
 import {
   getRepoExecutionHostId,
   type ExecutionHostId
 } from '../../../../../../shared/execution-host'
 import type { SidebarWorktreeFilters } from './use-filters'
-import { filterFolderWorkspacesFromOtherDevices } from '../../../../../../shared/workspace-creator-visibility'
+import { filterFolderWorkspacesFromOtherDevices } from '../../../../../../shared/workspace-view/workspace-creator-visibility'
 import {
   filterFolderWorkspacesForVisibleHosts,
   filterProjectGroupsForVisibleHosts,

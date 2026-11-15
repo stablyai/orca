@@ -7,7 +7,7 @@ import { AddRepoLocalStartStep } from './AddRepoStartSteps'
 import { AddRepoServerPathStartStep } from './AddRepoServerStartStep'
 import { AddRepoNestedImportStep } from '../nested-import/AddRepoNestedImportStep'
 import type { AddRepoDialogStep } from './add-repo-dialog-types'
-import type { NestedRepoScanResult } from '../../../../../../shared/project-group-types'
+import type { NestedRepoScanResult } from '../../../../../../shared/project/groups/project-group-types'
 import type {
   SshConnectionState,
   SshTarget

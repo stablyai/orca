@@ -13,7 +13,7 @@ import {
   chatForkTransferErrorCode
 } from '../../../../../../../shared/ai-vault/fork-transfer/chat-fork-transfer-limits'
 import type { AiVaultCommitChatForkImportResult } from '../../../../../../../shared/rpc-contract/ai-vault/ai-vault-fork-transfer-params'
-import { createNonSecureContextUuid } from '../../../../../../../shared/non-secure-context-uuid'
+import { createNonSecureContextUuid } from '../../../../../../../shared/identifiers/non-secure-context-uuid'
 import type { ExecutionHostId } from '../../../../../../../shared/execution-host'
 import type { RuntimeClientTarget } from '../../../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import { resumeClaudeCopyInNewTerminalTab } from '../native-chat-terminal-fork-launch'

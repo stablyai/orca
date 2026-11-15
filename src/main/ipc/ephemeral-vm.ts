@@ -246,9 +246,9 @@ export function registerEphemeralVmHandlers(store: Store, pluginService?: Plugin
           }
         }
 
-        let environment: ReturnType<typeof addEnvironmentFromPairingCode>
+        let environment: Awaited<ReturnType<typeof addEnvironmentFromPairingCode>>
         try {
-          environment = addEnvironmentFromPairingCode(getRuntimeEnvironmentRegistryRoot(), {
+          environment = await addEnvironmentFromPairingCode(getRuntimeEnvironmentRegistryRoot(), {
             name: buildEphemeralEnvironmentName(repo.repo.displayName, result.runtime.id),
             pairingCode: connection.pairingCode,
             source: 'ephemeral-vm'

@@ -9,7 +9,7 @@ import {
   makeWorktreeInfo,
   store
 } from '../orca-runtime-tests/orca-runtime-test-fixtures.spec'
-import type { Repo } from '../../../shared/repo-types'
+import type { Repo } from '../../../shared/repository/repo-types'
 import type { RuntimeClientEvent } from '../../../shared/remote-runtime/session-graph/runtime-client-events'
 
 const externalPath = '/tmp/elsewhere/external'

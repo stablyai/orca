@@ -19,7 +19,7 @@ import {
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { useAppStore } from '@/store/index'
 import { isLinuxUserAgent, isMacUserAgent } from '@/app-shell/platform/user-agent-platform'
-import { getBrowserCookieImportSourceLabels } from '../../../../../../shared/browser-cookie-import-sources'
+import { getBrowserCookieImportSourceLabels } from '../../../../../../shared/browser/cookies/browser-cookie-import-sources'
 import { shouldShowBrowserImportHint } from './browser-import-hint-visibility'
 import { formatBrowserImportSummary } from './browser-detected-browsers-summary'
 import { translate } from '@/i18n/i18n'

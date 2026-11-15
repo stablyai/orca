@@ -13,7 +13,7 @@ import {
   type RuntimeEnvironmentStatus
 } from '../host-status/runtime-host-status'
 import type { SshConnectionState } from '../ssh/ssh-types'
-import { getPairedDeviceIdsByEnvironment } from '../../workspace-creator-visibility'
+import { getPairedDeviceIdsByEnvironment } from '../../workspace-view/workspace-creator-visibility'
 
 export type PairedServerHostInputs = {
   environments: readonly {

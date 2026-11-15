@@ -1,5 +1,5 @@
 import { useId, useState } from 'react'
-import type { Repo } from '../../../../../shared/repo-types'
+import type { Repo } from '../../../../../shared/repository/repo-types'
 import {
   DEFAULT_FORMATTER_INCLUDE,
   editorFormatterSchema

@@ -1,4 +1,4 @@
-import { compareAppVersions } from '../../../shared/app-version'
+import { compareAppVersions } from '../../../shared/app-lifecycle/identity/app-version'
 import { pluginUpdateGrowsAccess } from '../../../shared/plugins/approval/plugin-update-access-growth'
 import type {
   PluginAutoUpdateState,

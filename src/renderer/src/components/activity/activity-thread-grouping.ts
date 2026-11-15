@@ -4,7 +4,7 @@ import type { Translate } from '@/i18n/use-translate'
 import { formatAgentTypeLabel } from '../../../../shared/agent-status/presentation/agent-type-label'
 import { getAgentRowPrimaryText } from '../../../../shared/agent-status/presentation/agent-row-primary-text'
 import { getActivityThreadWorkspaceTitle } from '@/lib/workspace/activity/activity-thread-display'
-import { isClipboardTextByteLengthOverLimit } from '../../../../shared/clipboard-text'
+import { isClipboardTextByteLengthOverLimit } from '../../../../shared/clipboard/clipboard-text'
 import {
   activityThreadStatusId,
   agentMeta,

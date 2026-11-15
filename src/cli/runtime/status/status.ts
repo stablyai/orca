@@ -9,7 +9,7 @@ import {
 } from '../../../shared/remote-runtime/bootstrap/runtime-bootstrap'
 import { tryReadMetadata } from '../profile/metadata'
 import { sendRequest } from '../connection/transport'
-import { resolveDesktopWindowStatus } from '../../../shared/cli-app-status-projection'
+import { resolveDesktopWindowStatus } from '../../../shared/remote-runtime/session-graph/cli-app-status-projection'
 import { RuntimeClientError, RuntimeRpcFailureError } from '../connection/types'
 import type {
   RuntimeRpcResponse,

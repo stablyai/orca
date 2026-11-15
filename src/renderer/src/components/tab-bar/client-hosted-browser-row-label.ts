@@ -1,4 +1,4 @@
-import type { ClientHostedBrowserRow } from '../../../../shared/client-hosted-browser-rows'
+import type { ClientHostedBrowserRow } from '../../../../shared/browser/client-hosting/client-hosted-browser-rows'
 import '../../../../shared/constants'
 import { ORCA_BROWSER_BLANK_URL } from '../../../../shared/browser/browser-blank-page'
 import { translate } from '@/i18n/i18n'

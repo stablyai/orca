@@ -1,5 +1,5 @@
 import { runAgentModelCatalogSession } from '../../../native-chat/agent-model-catalog/agent-model-catalog-probe-runner'
-import { PrioritySemaphore } from '../../../../shared/priority-semaphore'
+import { PrioritySemaphore } from '../../../../shared/concurrency/priority-semaphore'
 import type { AgentModelCatalogSuccess } from '../../../native-chat/agent-model-catalog/agent-model-catalog-entry'
 import { mkdtemp, mkdir, writeFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'

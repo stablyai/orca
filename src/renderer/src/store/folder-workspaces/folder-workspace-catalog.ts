@@ -1,7 +1,7 @@
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../types'
 import type { FolderWorkspace } from '../../../../shared/folder-workspaces/folder-workspace-types'
-import type { ProjectGroup } from '../../../../shared/project-group-types'
+import type { ProjectGroup } from '../../../../shared/project/groups/project-group-types'
 import {
   LOCAL_EXECUTION_HOST_ID,
   parseExecutionHostId,
@@ -9,7 +9,10 @@ import {
   type ExecutionHostId,
   getRepoExecutionHostId
 } from '../../../../shared/execution-host'
-import { folderWorkspaceKey, parseWorkspaceKey } from '../../../../shared/workspace-scope'
+import {
+  folderWorkspaceKey,
+  parseWorkspaceKey
+} from '../../../../shared/workspace/identity/workspace-scope'
 import { hostWorktreeTarget } from '../../../../shared/worktree/host-qualified-identity'
 import '../../../../shared/folder-workspaces/folder-workspace-execution-host'
 import { getFolderWorkspaceHostId } from '../../../../shared/folder-workspaces/folder-workspace-host-id'

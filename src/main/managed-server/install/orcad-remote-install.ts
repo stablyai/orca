@@ -4,7 +4,7 @@ import {
   orcadRipgrepArtifact
 } from '../../../shared/remote-runtime/orcad-distribution/orcad-artifacts'
 import { orcadAgentBrowserNativeName } from '../../../shared/remote-runtime/orcad-distribution/orcad-agent-browser-name'
-import type { NodeRuntimeTarget } from '../../../shared/node-runtime-pin'
+import type { NodeRuntimeTarget } from '../../../shared/node-runtime/node-runtime-pin'
 import { ensureRemoteOrcadNodeRuntime } from './orcad-remote-node-runtime'
 import { recordedRemoteNodeRuntimeProbeCommand } from './orcad-remote-node-runtime-recorded-probe'
 import { cachedOrcadSlotInstalled } from './orcad-remote-install-cached-probe'

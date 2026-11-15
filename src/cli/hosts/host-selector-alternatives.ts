@@ -1,5 +1,5 @@
 import type { RuntimeClient } from '../runtime/client'
-import { normalizeTypedName } from '../../shared/typed-name-normalization'
+import { normalizeTypedName } from '../../shared/text/typed-name-normalization'
 
 export type SshTargetSummary = {
   id: string

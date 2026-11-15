@@ -1,14 +1,14 @@
 import { z } from 'zod'
 import { toRuntimeExecutionHostId } from '../../execution-host'
 import { adoptEndpointProjectCatalog, adoptEndpointRepo } from '../../endpoint-catalog-adoption'
-import { ProjectGroupSchema } from '../../project-section-catalog-schema'
-import type { ProjectGroup } from '../../project-group-types'
-import { projectHostSetupProjectionFromRepos } from '../../project-host-setup-projection'
-import type { Project, ProjectHostSetup } from '../../project-types'
-import type { Repo } from '../../repo-types'
+import { ProjectGroupSchema } from './project-section-catalog-schema'
+import type { ProjectGroup } from '../../project/groups/project-group-types'
+import { projectHostSetupProjectionFromRepos } from '../../project/host-setup/project-host-setup-projection'
+import type { Project, ProjectHostSetup } from '../../project/project-types'
+import type { Repo } from '../../repository/repo-types'
 import type { RuntimeRpcResponse } from '../../remote-runtime/rpc/runtime-rpc-envelope'
 import type { PairedServerCatalog } from './sidebar-project-catalog'
-import { salvagingArray } from '../../zod-salvage'
+import { salvagingArray } from '../../validation/zod-salvage'
 
 // The server's own rows as it sends them; the adoption and projection steps normalize the rest.
 function rowWith<T>(...keys: string[]) {

@@ -114,18 +114,20 @@ export abstract class OrcaRuntimeWithAdoptTerminalOrphansFromInventory extends O
             onlyRuntimeOwnedTerminals: true
           }),
         notifySessionChanged: (worktreeId) => this.notifyMobileSessionTabsChanged(worktreeId),
-        getSnapshot: (worktreeId) => this.getTerminalOrphanAdoptionSnapshot(worktreeId)
+        getSnapshot: async (worktreeId) => await this.getTerminalOrphanAdoptionSnapshot(worktreeId)
       }
     })
   }
 
-  protected getTerminalOrphanAdoptionSnapshot(worktreeId: string): RuntimeMobileSessionTabsResult {
+  protected async getTerminalOrphanAdoptionSnapshot(
+    worktreeId: string
+  ): Promise<RuntimeMobileSessionTabsResult> {
     this.hydrateHeadlessMobileSessionTabsFromWorkspaceSession(worktreeId, {
       allowAttachedWindow: true,
       onlyRuntimeOwnedTerminals: true
     })
     this.hydrateHeadlessMobileSessionTabsFromWorkspaceSession(worktreeId)
-    return this.getMobileSessionTabsForWorktree(worktreeId, undefined, {
+    return await this.getMobileSessionTabsForWorktree(worktreeId, undefined, {
       includeAgentSenders: false
     })
   }
@@ -141,7 +143,7 @@ export abstract class OrcaRuntimeWithAdoptTerminalOrphansFromInventory extends O
         : null
       const snapshots = targetWorktreeId
         ? [
-            this.getMobileSessionTabsForWorktree(targetWorktreeId, undefined, {
+            await this.getMobileSessionTabsForWorktree(targetWorktreeId, undefined, {
               includeAgentSenders: false
             })
           ]

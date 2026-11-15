@@ -12,7 +12,7 @@ import { parseAppSshPtyId } from '../../../../shared/remote-runtime/ssh/ssh-pty-
 import {
   windowsPtyForOwnerMachine,
   type XtermConptyOptions
-} from '../../../../shared/xterm-conpty-options'
+} from '../../../../shared/terminal/pty/native-process/xterm-conpty-options'
 import { getRegisteredSshState } from '../../../ssh/targets/ssh-target-registry'
 
 export abstract class OrcaRuntimeWithCreatePtyHeadlessTerminalState extends OrcaRuntimeWithMaybeHydrateHeadlessFromRenderer {

@@ -2,7 +2,7 @@ import type { Dirent } from 'node:fs'
 import { stat } from 'node:fs/promises'
 import { join } from 'node:path'
 import type { DirEntry } from '../../../shared/file-listing/directory-entry'
-import { mapWithConcurrency } from '../../../shared/map-with-concurrency'
+import { mapWithConcurrency } from '../../../shared/concurrency/map-with-concurrency'
 import { windowsFsPath } from '../../wsl/filesystem/wsl-unc-drive-fs-path'
 
 export function classifyFilesystemDirectoryEntries(

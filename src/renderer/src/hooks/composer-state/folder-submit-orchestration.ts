@@ -1,4 +1,4 @@
-import { projectGroupHookOwner } from '../../../../shared/workspace-hook-owner'
+import { projectGroupHookOwner } from '../../../../shared/workspace-setup/hooks/workspace-hook-owner'
 import { getRepoExecutionHostId } from '../../../../shared/execution-host'
 import { PROJECT_GROUP_FOLDER_SETUP_RUNTIME_CAPABILITY } from '../../../../shared/remote-runtime/protocol/worktree-runtime-capabilities'
 import { resolveFolderSetupSupported } from '@/lib/workspace/creation/setup/folder-setup-support'
