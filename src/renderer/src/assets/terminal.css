@@ -423,18 +423,36 @@
   stroke-width: 2.75px;
 }
 
-.pane-title-bar[data-active-pane] .pane-title-split-trigger,
-.pane-title-bar[data-active-pane] .pane-title-close,
+:where(.pane-title-overlay-layer:not([data-header-buttons='hover']))
+  .pane-title-bar[data-active-pane]
+  .pane-title-split-trigger,
+:where(.pane-title-overlay-layer:not([data-header-buttons='hover']))
+  .pane-title-bar[data-active-pane]
+  .pane-title-close,
 .pane-title-bar:hover .pane-title-split-trigger,
 .pane-title-bar:focus-within .pane-title-split-trigger {
   opacity: 1;
 }
 
 /* A shown but unavailable action (pending, or its host needs an update) reads as dimmed. */
-.pane-title-bar[data-active-pane] .pane-title-split-trigger:disabled,
+:where(.pane-title-overlay-layer:not([data-header-buttons='hover']))
+  .pane-title-bar[data-active-pane]
+  .pane-title-split-trigger:disabled,
 .pane-title-bar:hover .pane-title-split-trigger:disabled,
 .pane-title-bar:focus-within .pane-title-split-trigger:disabled {
   opacity: 0.5;
+}
+
+/* Why: without a hovering pointer, hover-only buttons would be unreachable on touch screens. */
+@media (hover: none) {
+  .pane-title-bar[data-active-pane] .pane-title-split-trigger,
+  .pane-title-bar[data-active-pane] .pane-title-close {
+    opacity: 1;
+  }
+
+  .pane-title-bar[data-active-pane] .pane-title-split-trigger:disabled {
+    opacity: 0.5;
+  }
 }
 
 .pane-title-bar:hover .pane-title-close,
