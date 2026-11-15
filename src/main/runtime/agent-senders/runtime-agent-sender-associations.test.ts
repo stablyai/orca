@@ -46,10 +46,8 @@ import {
   scaleDirectory,
   scaleRecord
 } from '../agent-session/records/agent-session-scale.test-fixture'
-import {
-  openTestAgentSessionRecordStore,
-  seedTestAgentSessionRecordStore
-} from '../agent-session/records/agent-session-record-store-test-harness'
+import { openTestAgentSessionRecordStore } from '../agent-session/records/agent-session-record-store-test-harness'
+import { seedTestAgentSessionRecordStore } from '../agent-session/records/agent-session-record-store-persistence.test-fixture'
 
 const unissued = (): never => {
   throw new Error('a sender build issued a terminal handle')
