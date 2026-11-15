@@ -131,6 +131,63 @@ it('a GitHub-only create keeps the typed name as the workspace title (NAME-DROPP
 })
 const SESSION = 'cs_abcdefghijklmnopqrstuv'
 
+it('CREATE-GH-STEP: a public repo that can’t push asks with ids too; settings pages pass, others drop', async () => {
+  const githubRepoAccess = vi.fn(async (query: { repo: string; repoId?: number }) =>
+    query.repo.endsWith('/site')
+      ? {
+          access: 'public' as const,
+          owner: 'acme',
+          repo: query.repo,
+          push: 'not_installed' as const,
+          installUrl: query.repoId
+            ? 'https://github.com/apps/x/installations/new/permissions?suggested_target_id=50&repository_ids[]=7&state=s'
+            : 'https://github.com/apps/x/installations/new?state=s'
+        }
+      : {
+          access: 'public' as const,
+          owner: 'acme',
+          repo: query.repo,
+          push: 'repo_not_selected' as const,
+          configureUrl: query.repo.endsWith('/evil')
+            ? 'https://evil.test/settings'
+            : 'https://github.com/organizations/acme/settings/installations/900'
+        }
+  )
+  const repoIds = vi.fn(async () => ({ repoId: 7, ownerId: 50 }))
+  registerHostedAccountHandlers(
+    {
+      config: async () => ({ idleSleepMinutes: 15 }),
+      connectGitHub: async () => ({ installUrl: REPO, authorizeUrl: REPO }),
+      githubRepoAccess,
+      githubRepositories: async () => ({ repositories: [], nextCursor: null }),
+      create: unusedCreate,
+      ...githubUser
+    },
+    { repoIds }
+  )
+  expect(
+    await handlers.get(CH.getRepoAccess)?.({}, { repoUrl: 'https://github.com/acme/site' })
+  ).toMatchObject({
+    ok: true,
+    value: { push: 'not_installed', installUrl: expect.stringContaining('repository_ids[]=7') }
+  })
+  repoIds.mockClear()
+  expect(
+    await handlers.get(CH.getRepoAccess)?.({}, { repoUrl: 'https://github.com/acme/web' })
+  ).toMatchObject({
+    ok: true,
+    value: { configureUrl: 'https://github.com/organizations/acme/settings/installations/900' }
+  })
+  // The installation's settings page needs no install ids.
+  expect(repoIds).not.toHaveBeenCalled()
+  const evil = await handlers.get(CH.getRepoAccess)?.(
+    {},
+    { repoUrl: 'https://github.com/acme/evil' }
+  )
+  expect(evil).toMatchObject({ ok: true })
+  expect((evil as { value: Record<string, unknown> }).value.configureUrl).toBeUndefined()
+})
+
 it('asks again with the repo and owner ids when access is missing, so GitHub preselects the repo', async () => {
   const githubRepoAccess = vi.fn(async (query: { repoId?: number }) => ({
     access: 'missing' as const,

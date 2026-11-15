@@ -20,6 +20,11 @@ import { setOrcaCloudCancelRetry, trackOrcaCloudCreateStep } from '@/lib/orca-cl
 import { CANCEL_CLEANUP_UNCONFIRMED } from '../../../../shared/hosted-sandbox/cloud-workspace-api'
 import { launchFirstCloudAgent } from './github-cloud-first-agent'
 import {
+  beginCloudCreateGitHubAccess,
+  gateCloudCreateOnGitHubAccess
+} from './cloud-create-github-access'
+import { applyCloudGitHubAccessToSandbox } from './cloud-create-github-apply'
+import {
   forgetGitHubCreateKey,
   githubCreateIdempotencyKey,
   noteGitHubCreateOutcome
@@ -199,14 +204,24 @@ async function runGitHubCloudCreate(creationId: string): Promise<boolean> {
   if (!request || !source) {
     return false
   }
+  if (!startedSandboxes.has(creationId)) {
+    // CREATE-GH-STEP: asked alongside Start sandbox, so it adds nothing when access is fine.
+    beginCloudCreateGitHubAccess(creationId, source.repoUrl)
+  }
   const sandboxId = startedSandboxes.get(creationId) ?? (await startSandbox(creationId))
   if (!sandboxId) {
     return false
   }
-  if (!current(creationId)) {
+  // Held before Open workspace while the GitHub step asks for access.
+  const github = await gateCloudCreateOnGitHubAccess(creationId)
+  if (!current(creationId) || !github.proceed) {
     // GH-CREATE-CANCEL: cancelled after the sandbox started but before it opened.
     await discardSandbox(creationId, sandboxId)
     return false
+  }
+  if (github.grantedDuringCreate) {
+    // Granted after the sandbox started: its git gets the token now, not after a restart.
+    await applyCloudGitHubAccessToSandbox({ sandboxId })
   }
   useAppStore.getState().updatePendingWorktreeCreation(creationId, { phase: 'creating' })
   const workspace = await window.api.cloudWorkspaces.get(sandboxId).catch(() => null)

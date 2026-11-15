@@ -6,6 +6,12 @@
 //      installation): true = the caller can install it on the owner (it is their own GitHub account, or
 //      they are an active admin of the owner org); false = another user's account, or a non-admin org
 //      membership; null = unknown (no connected GitHub user token, membership unreadable, GitHub down).
+//      push (CREATE-GH-STEP): can a workspace on this repo push? 'ok' = granted; 'not_installed' = the
+//      App isn't on the owner; 'repo_not_selected' = it is, but this repository isn't one it selected
+//      (configureUrl: the installation's settings page); 'not_connected' = the App reaches the repo
+//      but through an installation this Orca account isn't bound to. installUrl is present for every
+//      push reason but 'ok' and 'repo_not_selected', public repositories included.
+//      GitHub's installation lookups are cached in D1 (github-installation-cache.ts).
 //   GET /v1/github/repositories[?cursor=]  -> {repositories, nextCursor}   (start from GitHub, D4/N12)
 //   GET /v1/internal/github/install-url?accountId&userId&repo&session  (billing's setup chain,
 //        Bearer CONTROL_PLANE_TOKEN) -> {access, url}
@@ -16,6 +22,7 @@
 // its own: POST <billing>/v1/internal/cloud-setup/github {sessionId?, accountId, repo, state}.
 import type { GitHubAppMinter, GitHubListedRepo } from './github-app'
 import { parseGitHubRepo } from './github-app'
+import { cachedOwnerInstallation, cachedRepoInstallation, forgetInstallation, forgetOwner } from './github-installation-cache'
 import {
   bindApprovedRequests,
   boundAccounts,
@@ -29,6 +36,9 @@ import {
 } from './github-connect'
 
 export type RepoAccess = 'public' | 'granted' | 'missing' | 'requested'
+
+/** Whether a workspace on the repository can push, and if not, what's missing (CREATE-GH-STEP). */
+export type PushAccess = 'ok' | 'not_installed' | 'repo_not_selected' | 'not_connected'
 
 export type RepoAccessDeps = {
   db: D1Database
@@ -52,25 +62,93 @@ export async function repoAccess(
   accountId: string,
   repoUrl: string
 ): Promise<{ access: RepoAccess; owner: string; installationId: number | null }> {
+  const { access, owner, installationId } = await repoAccessWithPush(deps, accountId, repoUrl)
+  return { access, owner, installationId }
+}
+
+/** repoAccess plus whether a workspace can push, and the owner installation when that's the gap. */
+export async function repoAccessWithPush(
+  deps: RepoAccessDeps,
+  accountId: string,
+  repoUrl: string
+): Promise<{
+  access: RepoAccess
+  owner: string
+  installationId: number | null
+  push: PushAccess
+  ownerInstallation?: { id: number; type: 'User' | 'Organization' }
+}> {
   const parsed = parseGitHubRepo(repoUrl)
   if (!parsed) {
     throw new RepoAccessError('not_github')
   }
-  const installation = deps.github ? await deps.github.getRepoInstallation(repoUrl) : null
+  const installation = deps.github ? await cachedRepoInstallation(deps.db, deps.github, parsed, deps.now) : null
   if (installation && (await isInstallationBound(deps.db, installation.id, accountId))) {
-    return { access: 'granted', owner: parsed.owner, installationId: installation.id }
+    return { access: 'granted', owner: parsed.owner, installationId: installation.id, push: 'ok' }
   }
-  if (await deps.publicRepoCheck(repoUrl)) {
-    return { access: 'public', owner: parsed.owner, installationId: installation?.id ?? null }
+  const [gap, isPublic] = await Promise.all([pushGap(deps, accountId, parsed.owner, installation), deps.publicRepoCheck(repoUrl)])
+  if (isPublic) {
+    return { access: 'public', owner: parsed.owner, installationId: installation?.id ?? null, ...gap }
   }
   if (!installation && (await openInstallRequest(deps.db, accountId, parsed.owner, deps.now))) {
     // Ours, and still open on GitHub (an owner who declines leaves no webhook, only an empty list).
     const pending = await deps.github?.pendingRequestOwners?.().catch(() => null)
     if (!pending || pending.has(parsed.owner.toLowerCase())) {
-      return { access: 'requested', owner: parsed.owner, installationId: null }
+      return { access: 'requested', owner: parsed.owner, installationId: null, ...gap }
     }
   }
-  return { access: 'missing', owner: parsed.owner, installationId: installation?.id ?? null }
+  return { access: 'missing', owner: parsed.owner, installationId: installation?.id ?? null, ...gap }
+}
+
+/**
+ * Not granted: the App reaches the repo through someone else's binding, or it's on the owner without
+ * this repository, or it isn't on the owner. Only an installation bound to this account counts as
+ * "repo not selected" without asking GitHub; otherwise one cached owner lookup tells.
+ */
+async function pushGap(
+  deps: RepoAccessDeps,
+  accountId: string,
+  owner: string,
+  repoInstallation: { id: number } | null
+): Promise<{ push: PushAccess; ownerInstallation?: { id: number; type: 'User' | 'Organization' } }> {
+  if (repoInstallation) {
+    return { push: 'not_connected' }
+  }
+  const bound = (await listAccountInstallations(deps.db, accountId)).find(
+    (row) => row.github_account_login.toLowerCase() === owner.toLowerCase()
+  )
+  if (bound) {
+    return {
+      push: 'repo_not_selected',
+      ownerInstallation: { id: bound.installation_id, type: bound.github_account_type === 'User' ? 'User' : 'Organization' }
+    }
+  }
+  // Never holds the answer up: GitHub erroring or slow reads as "not installed", whose install page
+  // GitHub turns into the installation's settings when the App is already there.
+  const onOwner = deps.github
+    ? await withTimeout(cachedOwnerInstallation(deps.db, deps.github, owner, deps.now), OWNER_LOOKUP_TIMEOUT_MS).catch(() => null)
+    : null
+  if (!onOwner) {
+    return { push: 'not_installed' }
+  }
+  // On the owner, but bound to another Orca account (or none): binding it is the install round trip.
+  return (await isInstallationBound(deps.db, onOwner.id, accountId))
+    ? { push: 'repo_not_selected', ownerInstallation: { id: onOwner.id, type: onOwner.account.type } }
+    : { push: 'not_connected' }
+}
+
+const OWNER_LOOKUP_TIMEOUT_MS = 3_000
+
+function withTimeout<T>(work: Promise<T>, ms: number): Promise<T | null> {
+  let timer: ReturnType<typeof setTimeout> | undefined
+  return Promise.race([work, new Promise<null>((resolve) => (timer = setTimeout(() => resolve(null), ms)))]).finally(() => clearTimeout(timer))
+}
+
+/** GitHub's page where the installation's repository selection is changed. */
+export function installationSettingsUrl(owner: string, installation: { id: number; type: 'User' | 'Organization' }): string {
+  return installation.type === 'User'
+    ? `https://github.com/settings/installations/${installation.id}`
+    : `https://github.com/organizations/${encodeURIComponent(owner)}/settings/installations/${installation.id}`
 }
 
 export class RepoAccessError extends Error {
@@ -150,12 +228,17 @@ export async function repoAccessView(
   if (!parsed) {
     return { status: 400, body: { error: 'invalid_request', reason: 'not_github' } }
   }
-  const result = await repoAccess(deps, caller.accountId, repo)
-  const body: Record<string, unknown> = { access: result.access, owner: parsed.owner, repo: canonicalRepoUrl(parsed) }
+  const result = await repoAccessWithPush(deps, caller.accountId, repo)
+  const body: Record<string, unknown> = { access: result.access, owner: parsed.owner, repo: canonicalRepoUrl(parsed), push: result.push }
   // Only while the App isn't installed for this owner: that is when the desktop picks "Install" vs "ask an owner".
   const askCanInstall = result.access === 'missing' || (result.access === 'public' && result.installationId === null)
+  // A public repository clones anonymously but can't push: the wizard's GitHub step installs from here too.
+  const wantsInstall = result.access === 'missing' || (result.access === 'public' && (result.push === 'not_installed' || result.push === 'not_connected'))
+  if (result.push === 'repo_not_selected' && result.ownerInstallation) {
+    body.configureUrl = installationSettingsUrl(parsed.owner, result.ownerInstallation)
+  }
   const [install, canInstall] = await Promise.all([
-    result.access === 'missing' && deps.connect
+    wantsInstall && deps.connect
       ? repoInstallUrl(deps, caller, repo, {
           setupSessionId: url.searchParams.get('session') ?? undefined,
           repoId: positiveInt(url.searchParams.get('repoId')),
@@ -342,6 +425,13 @@ export async function handleInstallationEvent(
   if (!id || !Number.isSafeInteger(id)) {
     return { handled: 'ignored' }
   }
+  if (eventName === 'installation' || eventName === 'installation_repositories') {
+    // Any install, uninstall, suspend or selection change: repo-access asks GitHub on the next poll.
+    await forgetInstallation(deps.db, id)
+    if (installation?.account?.login) {
+      await forgetOwner(deps.db, installation.account.login)
+    }
+  }
   if (eventName === 'installation' && payload.action === 'deleted') {
     return { handled: 'deleted', revoked: await revokeInstallation(deps.db, id, null, deps.now) }
   }
@@ -399,6 +489,11 @@ export async function noticeAfterReturn(
   }
   const repo = `https://github.com/${state.r}`
   const base = { ...(state.s ? { sessionId: state.s } : {}), accountId: state.a, repo }
+  // Back from GitHub's install page: its webhook may not have landed yet.
+  const owner = parseGitHubRepo(repo)?.owner
+  if (owner) {
+    await forgetOwner(deps.db, owner)
+  }
   if (requested) {
     return { ...base, state: 'pending' }
   }

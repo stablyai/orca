@@ -22,6 +22,11 @@ import {
 } from '@/lib/workspace/creation/pending-creation-provisioning-log'
 import { cloudCreateIdempotencyKey } from '@/lib/orca-cloud/cloud-create-intent'
 import { ORCA_CLOUD_RECIPE_ID } from '../../../../../shared/hosted-sandbox/orca-cloud-recipe-id'
+import {
+  beginCloudCreateGitHubAccess,
+  gateCloudCreateOnGitHubAccess
+} from '@/lib/orca-cloud/cloud-create-github-access'
+import { applyCloudGitHubAccessToSandbox } from '@/lib/orca-cloud/cloud-create-github-apply'
 
 export async function prepareRequestForCreate(
   creationId: string,
@@ -53,6 +58,13 @@ async function prepareEphemeralVmRecipeRequest(
     // A retry provisions a new VM; the sheet must not act on the last one.
     vmEnvironmentId: undefined
   })
+  if (recipe.provider === 'orca-cloud') {
+    // CREATE-GH-STEP: asked alongside Start sandbox, so it adds nothing when access is fine.
+    beginCloudCreateGitHubAccess(
+      creationId,
+      orcaCloudGitHubRepoUrl(store.repos.find((repo) => repo.id === recipe.sourceRepoId))
+    )
+  }
   const unsubscribeProvisionEvents = window.api.ephemeralVm.onProvisionEvent?.((event) => {
     if (event.provisionId !== creationId || event.stream !== 'stderr') {
       return
@@ -189,6 +201,19 @@ async function prepareEphemeralVmRecipeRequest(
       retryBackgroundWorktreeCreation(creationId)
     }
     return null
+  }
+  if (recipe.provider === 'orca-cloud') {
+    // CREATE-GH-STEP: held here, before Open workspace, while the GitHub step asks for access.
+    const github = await gateCloudCreateOnGitHubAccess(creationId)
+    if (!github.proceed || !useAppStore.getState().pendingWorktreeCreations[creationId]) {
+      notePhase(creationId, 'failed')
+      await cleanupEphemeralVmRuntimeForFailedCreate(preparedRequest, creationId)
+      return null
+    }
+    if (github.grantedDuringCreate && preparedTarget.environmentId) {
+      // Granted after the sandbox started: its git gets the token now, not after a restart.
+      await applyCloudGitHubAccessToSandbox({ environmentId: preparedTarget.environmentId })
+    }
   }
   useAppStore.getState().updatePendingWorktreeCreation(creationId, {
     phase: 'fetching',
