@@ -4,6 +4,7 @@ import { spawnProcess } from '@orca/process-host'
 import { stripAnsiEscapeSequences } from '../../../shared/ansi-escape-sequences'
 import type { ShellHydrationFailureReason } from '../../../shared/shell/launch/shell-path-hydration-types'
 import { resolveWindowsShellStartupFamily } from '../../../shared/windows-terminal-shell'
+import { resolvePosixPaneShellPath } from '../../pty/shell-startup/posix-pwsh'
 import { SHELL_PATH_DELIMITER as DELIMITER, shellPathProbe } from './shell-path-probe'
 import { WindowsShellPathOwnership, createWindowsPathKey } from './windows-shell-path-ownership'
 import { bindShellProbeLifetime } from './shell-probe-lifetime'
@@ -147,7 +148,8 @@ export function runWithLaunchPath<T>(action: () => T): T {
   }
 }
 
-function spawnShellAndReadPath(shell: string): Promise<HydrationResult> {
+async function spawnShellAndReadPath(shell: string): Promise<HydrationResult> {
+  const program = await resolvePosixPaneShellPath(shell, shellProbeEnv().PATH ?? '')
   return new Promise((resolve) => {
     const probe = shellPathProbe(shell)
     let finished = false
@@ -157,7 +159,7 @@ function spawnShellAndReadPath(shell: string): Promise<HydrationResult> {
     let child: ChildProcess
     try {
       child = spawnProcess({
-        program: shell,
+        program,
         args: probe.args,
         // Preserve environment for rc setup while suppressing noisy shell stderr and ignoring stdin.
         env: shellProbeEnv(),

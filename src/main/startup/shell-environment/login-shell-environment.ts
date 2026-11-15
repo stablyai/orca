@@ -3,6 +3,11 @@ import { win32 as pathWin32 } from 'node:path'
 import { spawnProcess } from '@orca/process-host'
 import { resolveWindowsShellStartupFamily } from '../../../shared/windows-terminal-shell'
 import {
+  isPosixPwshShell,
+  POSIX_PWSH_LOGIN_ARG,
+  resolvePosixPaneShellPath
+} from '../../pty/shell-startup/posix-pwsh'
+import {
   resolveProfileLoadingFallbackShell,
   resolveProfileLoadingShell
 } from './hydrate-shell-path'
@@ -61,30 +66,60 @@ function processEnvironment(env: NodeJS.ProcessEnv = process.env): NodeJS.Proces
   )
 }
 
-const POWERSHELL_ENVIRONMENT_DUMP =
-  `$values = @{}; [Environment]::GetEnvironmentVariables().GetEnumerator() | ` +
-  `ForEach-Object { $values[[string]$_.Key] = [string]$_.Value }; ` +
-  `[Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false); ` +
-  `[Console]::Write('${START_MARKER}'); ` +
-  `[Console]::Write(($values | ConvertTo-Json -Compress)); ` +
-  `[Console]::Write('${END_MARKER}')`
+function powerShellEnvironmentDump(values: string): string {
+  return (
+    `$values = ${values}; [Environment]::GetEnvironmentVariables().GetEnumerator() | ` +
+    `ForEach-Object { $values[[string]$_.Key] = [string]$_.Value }; ` +
+    `[Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false); ` +
+    `[Console]::Write('${START_MARKER}'); ` +
+    `[Console]::Write(($values | ConvertTo-Json -Compress)); ` +
+    `[Console]::Write('${END_MARKER}')`
+  )
+}
 
-function shellProbe(shell: string): string[] | null {
+const POWERSHELL_ENVIRONMENT_DUMP = powerShellEnvironmentDump('@{}')
+// Unix env names are case-sensitive, and @{} would merge PATH and Path into one key.
+const POSIX_POWERSHELL_ENVIRONMENT_DUMP = powerShellEnvironmentDump(
+  '[System.Collections.Generic.Dictionary[string,string]]::new([StringComparer]::Ordinal)'
+)
+
+type ShellProbe = { args: string[]; output: 'posix' | 'powershell' }
+
+function shellProbe(shell: string): ShellProbe | null {
   if (process.platform !== 'win32') {
+    if (isPosixPwshShell(shell)) {
+      // pwsh rejects -ilc.
+      return {
+        args: [
+          POSIX_PWSH_LOGIN_ARG,
+          '-NoLogo',
+          '-NonInteractive',
+          '-Command',
+          POSIX_POWERSHELL_ENVIRONMENT_DUMP
+        ],
+        output: 'powershell'
+      }
+    }
     const command =
       `printf '\\0${START_MARKER}\\0'; /usr/bin/env -0; ` + `printf '\\0${END_MARKER}\\0'`
-    return ['-ilc', command]
+    return { args: ['-ilc', command], output: 'posix' }
   }
   if (resolveWindowsShellStartupFamily(shell) === 'posix') {
     // Git Bash's own env holds MSYS paths (/c/..., TEMP=/tmp); a native child sees the converted values native agents get.
     const encoded = Buffer.from(POWERSHELL_ENVIRONMENT_DUMP, 'utf16le').toString('base64')
-    return ['-ilc', `powershell.exe -NoLogo -NoProfile -NonInteractive -EncodedCommand ${encoded}`]
+    return {
+      args: [
+        '-ilc',
+        `powershell.exe -NoLogo -NoProfile -NonInteractive -EncodedCommand ${encoded}`
+      ],
+      output: 'powershell'
+    }
   }
   const basename = pathWin32.basename(shell).toLowerCase()
   if (basename !== 'powershell.exe' && basename !== 'pwsh.exe') {
     return null
   }
-  return ['-NoLogo', '-Command', POWERSHELL_ENVIRONMENT_DUMP]
+  return { args: ['-NoLogo', '-Command', POWERSHELL_ENVIRONMENT_DUMP], output: 'powershell' }
 }
 
 function parsePosixEnvironment(output: Buffer): NodeJS.ProcessEnv | null {
@@ -126,19 +161,25 @@ function parsePowerShellEnvironment(output: Buffer): NodeJS.ProcessEnv | null {
   }
 }
 
-function spawnShellAndReadEnvironment(
+async function spawnShellAndReadEnvironment(
   shell: string,
   env: NodeJS.ProcessEnv,
   timeoutMs = SPAWN_TIMEOUT_MS
 ): Promise<NodeJS.ProcessEnv | null> {
-  const args = shellProbe(shell)
-  if (!args) {
-    return Promise.resolve(null)
+  const probe = shellProbe(shell)
+  if (!probe) {
+    return null
   }
+  const program = await resolvePosixPaneShellPath(shell, env.PATH ?? '')
   return new Promise((resolve) => {
     let settled = false
     const chunks: Buffer[] = []
-    const child = spawnProcess({ program: shell, args, env, detached: shellProbeDetached() })
+    const child = spawnProcess({
+      program,
+      args: probe.args,
+      env,
+      detached: shellProbeDetached()
+    })
     const lifetime = bindShellProbeLifetime(child)
     const finish = (value: NodeJS.ProcessEnv | null): void => {
       if (settled) {
@@ -163,7 +204,7 @@ function spawnShellAndReadEnvironment(
     child.on('close', () => {
       const output = Buffer.concat(chunks)
       finish(
-        process.platform === 'win32'
+        probe.output === 'powershell'
           ? parsePowerShellEnvironment(output)
           : parsePosixEnvironment(output)
       )

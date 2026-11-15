@@ -177,6 +177,19 @@ describePosix('daemon shell-ready launch config', () => {
     expect(existsSync(rcfile)).toBe(true)
   })
 
+  it.each(['/opt/homebrew/bin/pwsh', '/usr/bin/pwsh', 'pwsh-preview'])(
+    'starts %s as a login shell before the PowerShell integration',
+    async (shell) => {
+      const { getShellReadyLaunchConfig } = await importFreshShellReady()
+
+      const config = getShellReadyLaunchConfig(shell)
+
+      // pwsh only honours -Login as its first argument.
+      expect(config.args?.slice(0, 4)).toEqual(['-Login', '-NoLogo', '-NoExit', '-EncodedCommand'])
+      expect(config.env).toEqual({})
+    }
+  )
+
   itWithFish(
     'emits the marker at the first real fish prompt and executes a post-marker command',
     async () => {
