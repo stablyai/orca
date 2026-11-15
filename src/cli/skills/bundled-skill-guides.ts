@@ -1094,7 +1094,7 @@ const ORCA_COMPUTER_USE_MARKDOWN = [
   "",
   "## App Selectors",
   "",
-  "Prefer bundle IDs from `list-apps`; names are acceptable when unambiguous. Use `pid:<number>` only when bundle ID or name matching is ambiguous.",
+  "Prefer bundle IDs from `list-apps`; names are acceptable when unambiguous. Use `pid:<number>` only when bundle ID or name matching is ambiguous. On macOS, apps without a Dock icon (`accessory: true`), such as menu bar apps, are listed only while they show a window.",
   "",
   "```text",
   "ORCA computer get-app-state --app com.microsoft.edgemac --json",
