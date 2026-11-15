@@ -131,7 +131,8 @@ export function useNativeChatAvailabilityNotice(input: {
       unavailable.reason,
       input.agent,
       unavailable.reason === 'notSignedIn' ? unavailable.account : undefined,
-      t
+      t,
+      input.setup?.host
     ),
     onDismiss: () => setDismissal({ key, dismissed: true })
   }

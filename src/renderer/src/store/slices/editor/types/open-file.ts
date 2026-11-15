@@ -94,8 +94,6 @@ export type OpenFile = {
   mode: 'edit' | 'diff' | 'conflict-review' | 'markdown-preview' | 'check-details' | 'git-graph'
 }
 
-export type ActivityBarPosition = 'top' | 'side'
-
 export type MarkdownViewMode = 'source' | 'rich' | 'preview'
 
 // Why: orthogonal to MarkdownViewMode; 'changes' renders diff-vs-HEAD in place of the editor without a separate tab. See reviews/changes-view-mode-plan.md.

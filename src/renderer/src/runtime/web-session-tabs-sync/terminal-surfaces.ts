@@ -1,15 +1,15 @@
 import { readStructuredAgentLaunchRecord } from '@/lib/agent-session/launch/structured-agent-session-launch-persistence'
-import type { RuntimeMobileSessionTabsResult } from '../../../../shared/runtime-types'
+import type { RuntimeMobileSessionTabsResult } from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import type {
   RuntimeMobileSessionAgentTab,
   RuntimeMobileSessionTerminalClientTab
-} from '../../../../shared/runtime-mobile-session-tab-contracts'
+} from '../../../../shared/remote-runtime/session-graph/runtime-mobile-session-tab-contracts'
 import type {
   TerminalLayoutSnapshot,
   TerminalTab
 } from '../../../../shared/workspace-layout/terminal-tab-types'
 import { defaultAgentChatLabel } from '../../../../shared/agent-session/agent-session-chat-label'
-import { sanitizeTerminalLayoutPaneTitlesForLabels } from '../../../../shared/workspace-layout/terminal-pane-title-sanitization'
+import { sanitizeTerminalLayoutPaneTitlesForLabels } from '../../../../shared/workspace-layout/terminal-topology/terminal-pane-title-sanitization'
 import { resolveTerminalLayoutRoot } from '../hosted-terminals/actions/remote-terminal-layout-resolution'
 import { retainLocalScrollbackInRemoteLayout } from '@/components/terminal-pane/snapshots/remote-layout-scrollback-retention'
 import { getRemoteRuntimePtyEnvironmentId } from '../hosted-terminals/identity/remote-runtime-pty-owner'

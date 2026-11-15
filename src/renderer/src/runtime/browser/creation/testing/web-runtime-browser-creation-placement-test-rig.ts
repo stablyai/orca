@@ -2,11 +2,12 @@ import { vi } from 'vitest'
 import type {
   BrowserPage,
   BrowserWorkspace
-} from '../../../../../../shared/browser-workspace-types'
-import type { RuntimeMobileSessionTabsResult } from '../../../../../../shared/runtime-session-contracts'
+} from '../../../../../../shared/browser/workspaces/browser-workspace-types'
+import type { RuntimeMobileSessionTabsResult } from '../../../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import type { Tab, TabGroup } from '../../../../../../shared/tab-types'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
 import { useAppStore } from '../../../../store/index'
+import { markHydratedBrowserPageHandles } from '../../../../store/slices/browser/hosts/browser-initialization-presentation-ownership'
 import type { AppState } from '../../../../store/types'
 import { applyWebSessionTabsSnapshot } from '../../../web-session-tabs-sync/snapshot-api'
 import {
@@ -125,8 +126,10 @@ export function seedPairedWorktree(): void {
     ]),
     browserTabsByWorktree: { [WT]: rows.map(workspace) },
     browserPagesByWorkspace: Object.fromEntries(rows.map((row) => [row.workspaceId, [page(row)]])),
-    remoteBrowserPageHandlesByPageId: Object.fromEntries(
-      rows.map((row) => [row.pageId, { environmentId: ENV, remotePageId: row.pageId }])
+    remoteBrowserPageHandlesByPageId: markHydratedBrowserPageHandles(
+      Object.fromEntries(
+        rows.map((row) => [row.pageId, { environmentId: ENV, remotePageId: row.pageId }])
+      )
     ),
     unifiedTabsByWorktree: {
       [WT]: [unifiedTab(SOURCE, G1, 0), unifiedTab(AFTER, G1, 1), unifiedTab(OTHER, G2, 0)]

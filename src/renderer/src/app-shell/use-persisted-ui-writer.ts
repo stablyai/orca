@@ -128,6 +128,7 @@ export function usePersistedUIWriter(): void {
       rightSidebarTab: s.rightSidebarTab,
       rightSidebarExplorerView: s.rightSidebarExplorerView,
       rightSidebarWidth: s.rightSidebarWidth,
+      activityBarPosition: s.activityBarPosition,
       markdownTocPanelWidth: s.markdownTocPanelWidth,
       combinedDiffFileTreeWidth: s.combinedDiffFileTreeWidth,
       groupBy: s.groupBy,
@@ -145,7 +146,7 @@ export function usePersistedUIWriter(): void {
       explorerDisplayRootByWorktree: s.explorerDisplayRootByWorktree,
       showDotfilesByWorktree: s.showDotfilesByWorktree,
       filterRepoIds: s.filterRepoIds,
-      // Persist focus/visibility acknowledgements and close/dismiss cleanup by map identity so retained rows do not return unread after restart.
+      // Persist focus/visibility acknowledgements and close/dismiss cleanup by map identity so live history keeps its read state after restart.
       acknowledgedAgentsByPaneKey: s.acknowledgedAgentsByPaneKey,
       // Retain Clear completed across restart.
       activityClearedAtByPaneKey: s.activityClearedAtByPaneKey,

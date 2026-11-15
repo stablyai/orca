@@ -121,7 +121,7 @@ export function writeDurableSecureJsonFile(
 export function writeSecureFile(
   targetPath: string,
   contents: string,
-  options: { durable?: boolean; shouldPublish?: () => boolean } = {}
+  options: { durable?: boolean; shouldPublish?: () => boolean; onPublished?: () => void } = {}
 ): boolean {
   const dir = dirname(targetPath)
   if (!existsSync(dir)) {
@@ -147,6 +147,7 @@ export function writeSecureFile(
     }
     // The rename publishes the staged inode, so its DACL or mode is already the published file's.
     renameSync(tmpFile, targetPath)
+    options.onPublished?.()
     // Cache only on confirmed success so failures retry; a success also clears the read path's backoff.
     if (restricted) {
       rememberHardenedPath(targetPath, false)

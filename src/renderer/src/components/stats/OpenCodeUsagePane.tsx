@@ -1,4 +1,5 @@
-import { useEffect } from 'react'
+import { usageFailureMessage } from './usage-failure-message'
+import { useUsageObservation } from '../../store/slices/usage/use-usage-observation'
 import { Activity, Brain, Coins, DatabaseZap, FolderKanban, Sparkles } from 'lucide-react'
 import type {
   OpenCodeUsageRange,
@@ -50,6 +51,8 @@ export function OpenCodeUsagePane(): React.JSX.Element {
   const t = useTranslate()
   const intlLocale = useIntlLocale()
   const scanState = useAppStore((state) => state.openCodeUsageScanState)
+  const failure = useAppStore((state) => state.openCodeUsageFailure)
+  const failureMessage = usageFailureMessage(failure, t)
   const summary = useAppStore((state) => state.openCodeUsageSummary)
   const daily = useAppStore((state) => state.openCodeUsageDaily)
   const modelBreakdown = useAppStore((state) => state.openCodeUsageModelBreakdown)
@@ -57,16 +60,14 @@ export function OpenCodeUsagePane(): React.JSX.Element {
   const recentSessions = useAppStore((state) => state.openCodeUsageRecentSessions)
   const scope = useAppStore((state) => state.openCodeUsageScope)
   const range = useAppStore((state) => state.openCodeUsageRange)
-  const fetchOpenCodeUsage = useAppStore((state) => state.fetchOpenCodeUsage)
+  const observeOpenCodeUsage = useAppStore((state) => state.observeOpenCodeUsage)
   const setOpenCodeUsageEnabled = useAppStore((state) => state.setOpenCodeUsageEnabled)
   const refreshOpenCodeUsage = useAppStore((state) => state.refreshOpenCodeUsage)
   const setOpenCodeUsageScope = useAppStore((state) => state.setOpenCodeUsageScope)
   const setOpenCodeUsageRange = useAppStore((state) => state.setOpenCodeUsageRange)
   const recordFeatureInteraction = useAppStore((state) => state.recordFeatureInteraction)
 
-  useEffect(() => {
-    void fetchOpenCodeUsage()
-  }, [fetchOpenCodeUsage])
+  useUsageObservation(observeOpenCodeUsage)
 
   const handleSetEnabled = (enabled: boolean): void => {
     recordFeatureInteraction('usage-tracking')
@@ -83,6 +84,9 @@ export function OpenCodeUsagePane(): React.JSX.Element {
     return (
       <UsageTrackingPaneShell
         enabled={false}
+        failure={failureMessage}
+        stateKnown={scanState !== null}
+        retry={{ label: t('usage.failure.retry', 'Refresh'), onRefresh: refreshOpenCodeUsage }}
         title={title}
         disabledDescription={t(
           'auto.components.stats.OpenCodeUsagePane.b8b3522436',
@@ -94,7 +98,11 @@ export function OpenCodeUsagePane(): React.JSX.Element {
     )
   }
 
-  if (!summary && (scanState.isScanning || scanState.lastScanCompletedAt === null)) {
+  if (
+    !failureMessage &&
+    !summary &&
+    (scanState.isScanning || scanState.lastScanCompletedAt === null)
+  ) {
     return (
       <ClaudeUsageLoadingState
         title={title}
@@ -109,6 +117,7 @@ export function OpenCodeUsagePane(): React.JSX.Element {
   return (
     <UsageTrackingPaneShell
       enabled
+      failure={failureMessage}
       title={title}
       status={
         <>

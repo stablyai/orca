@@ -1,4 +1,3 @@
-import { SettingsTargetHighlightProvider } from '../section-layout/settings-target-highlight'
 import { SettingsHeader } from '../navigation/SettingsHeader'
 import { getGeneralSubPageTitle } from '../general/general-sub-pages'
 import { ActiveSettingsSectionProvider } from '../section-layout/SettingsSection'
@@ -26,7 +25,8 @@ import {
   renderMobileSettingsSection,
   renderOrcaAccountSettingsSection,
   renderSetupGuideSettingsSection,
-  renderShareSkillsSettingsSection
+  renderShareSkillsSettingsSection,
+  renderWorkspaceCleanupSettingsSection
 } from './settings-setup-workflow-section-renderers'
 import {
   renderGitSettingsSection,
@@ -96,12 +96,13 @@ export function renderSettingsPage(
         activeSectionId={model.activeSectionId}
         generalGroups={view.generalNavGroups}
         repoSections={view.repoNavSections}
-        hasRepos={model.repos.length > 0}
+        searchCandidates={navigation.searchCandidates}
         searchInputRef={interactions.searchInputRef}
         // Deep-linked panes/modals own focus; plain entry focuses search.
         searchAutoFocus={model.settingsNavigationTarget == null}
         onBack={interactions.closeSettingsPageWithPromptGuard}
         onSelectSection={actions.scrollToSection}
+        onOpenSearchResult={(result) => void actions.openSettingsSearchResult(result)}
       />
 
       <div className="flex min-h-0 min-w-0 flex-1 flex-col">
@@ -161,46 +162,43 @@ export function renderSettingsPage(
             ) : (
               <SettingsContentScrollElementProvider value={interactions.contentScrollElement}>
                 <ActiveSettingsSectionProvider value={model.activeSectionId}>
-                  <SettingsTargetHighlightProvider
-                    value={model.highlightedSettingsTarget?.id ?? null}
-                  >
-                    {renderAgentsSettingsSection(context, t)}
-                    {renderAccountsSettingsSection(context, t)}
-                    {renderOrchestrationSettingsSection(context, t)}
-                    {renderLinearSettingsSection(context, t)}
-                    {renderDesktopCapabilitySettingsSections(context, t)}
-                    {renderOrcaAccountSettingsSection(context, t)}
-                    {renderSetupGuideSettingsSection(context, t)}
-                    {renderGeneralSettingsSection(context, t)}
-                    {renderIntegrationsSettingsSection(context, t)}
-                    {renderMobileSettingsSection(context, t)}
-                    {renderAutomationsSettingsSection(context, t)}
-                    {renderArtifactsSettingsSection(context, t)}
-                    {renderShareSkillsSettingsSection(context, t)}
-                    {renderSessionHistorySettingsSection(context, t)}
-                    {renderGitSettingsSection(context, t)}
-                    {renderTasksSettingsSection(context, t)}
-                    {renderTerminalSettingsSection(context, t)}
-                    {renderQuickCommandsSettingsSection(context, t)}
-                    {renderBrowserSettingsSection(context, t)}
-                    {renderMobileEmulatorSettingsSection(context, t)}
-                    {renderFloatingWorkspaceSettingsSection(context, t)}
-                    {renderAppearanceSettingsSection(context, t)}
-                    {renderChatSettingsSection(context)}
-                    {renderInputSettingsSection(context, t)}
-                    {renderNotificationsSettingsSection(context, t)}
-                    {renderShortcutsSettingsSection(context, t)}
-                    {renderStatsSettingsSection(context, t)}
-                    {renderServersSettingsSection(context, t)}
-                    {renderSshSettingsSection(context, t)}
-                    {renderDeveloperPermissionsSettingsSection(context, t)}
-                    {renderPrivacySettingsSection(context, t)}
-                    {renderAdvancedSettingsSection(context, t)}
-                    {renderDevSettingsSection(context, t)}
-                    {renderExperimentalSettingsSection(context, t)}
-                    {renderPluginsSettingsSection(context)}
-                    {renderProjectSettingsSections(context, t)}
-                  </SettingsTargetHighlightProvider>
+                  {renderAgentsSettingsSection(context, t)}
+                  {renderAccountsSettingsSection(context, t)}
+                  {renderOrchestrationSettingsSection(context, t)}
+                  {renderLinearSettingsSection(context, t)}
+                  {renderDesktopCapabilitySettingsSections(context, t)}
+                  {renderOrcaAccountSettingsSection(context, t)}
+                  {renderSetupGuideSettingsSection(context, t)}
+                  {renderGeneralSettingsSection(context, t)}
+                  {renderWorkspaceCleanupSettingsSection(context, t)}
+                  {renderIntegrationsSettingsSection(context, t)}
+                  {renderMobileSettingsSection(context, t)}
+                  {renderAutomationsSettingsSection(context, t)}
+                  {renderArtifactsSettingsSection(context, t)}
+                  {renderShareSkillsSettingsSection(context, t)}
+                  {renderSessionHistorySettingsSection(context, t)}
+                  {renderGitSettingsSection(context, t)}
+                  {renderTasksSettingsSection(context, t)}
+                  {renderTerminalSettingsSection(context, t)}
+                  {renderQuickCommandsSettingsSection(context, t)}
+                  {renderBrowserSettingsSection(context, t)}
+                  {renderMobileEmulatorSettingsSection(context, t)}
+                  {renderFloatingWorkspaceSettingsSection(context, t)}
+                  {renderAppearanceSettingsSection(context, t)}
+                  {renderChatSettingsSection(context)}
+                  {renderInputSettingsSection(context, t)}
+                  {renderNotificationsSettingsSection(context, t)}
+                  {renderShortcutsSettingsSection(context, t)}
+                  {renderStatsSettingsSection(context, t)}
+                  {renderServersSettingsSection(context, t)}
+                  {renderSshSettingsSection(context, t)}
+                  {renderDeveloperPermissionsSettingsSection(context, t)}
+                  {renderPrivacySettingsSection(context, t)}
+                  {renderAdvancedSettingsSection(context, t)}
+                  {renderDevSettingsSection(context, t)}
+                  {renderExperimentalSettingsSection(context, t)}
+                  {renderPluginsSettingsSection(context)}
+                  {renderProjectSettingsSections(context, t)}
                 </ActiveSettingsSectionProvider>
               </SettingsContentScrollElementProvider>
             )}

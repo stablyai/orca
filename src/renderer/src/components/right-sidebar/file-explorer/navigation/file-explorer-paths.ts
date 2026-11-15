@@ -4,31 +4,32 @@ import {
   relativePathInsideRoot,
   splitPathSegments
 } from '../../../../../../shared/cross-platform-path'
+import { shouldIncludeFileExplorerEntry } from '../tree/file-explorer-entries'
 
 export function isPathEqualOrDescendant(candidatePath: string, targetPath: string): boolean {
   return isPathInsideOrEqual(targetPath, candidatePath)
 }
 
-export function getRevealAncestorDirs(worktreePath: string, filePath: string): string[] | null {
-  const relativePath = relativePathInsideRoot(worktreePath, filePath)
+/**
+ * Paths are re-spelled on the root's separators so they match rows. The explorer never lists
+ * node_modules or .git, so a reveal below one stops at the folder holding it.
+ */
+export function getRevealTarget(
+  rootPath: string,
+  filePath: string
+): { targetPath: string; ancestorDirs: string[] } | null {
+  const relativePath = relativePathInsideRoot(rootPath, filePath)
   if (relativePath === null) {
     return null
   }
-
-  const segments = splitPathSegments(relativePath, worktreePath)
   const ancestorDirs: string[] = []
-  let currentPath = worktreePath
-
-  for (const segment of segments.slice(0, -1)) {
-    currentPath = joinPath(currentPath, segment)
-    ancestorDirs.push(currentPath)
+  for (const name of splitPathSegments(relativePath, rootPath).slice(0, -1)) {
+    if (!shouldIncludeFileExplorerEntry({ name, isDirectory: true, isSymlink: false })) {
+      // When the root holds it there is nothing to select: the root is not a row.
+      const holderPath = ancestorDirs.pop()
+      return holderPath === undefined ? null : { targetPath: holderPath, ancestorDirs }
+    }
+    ancestorDirs.push(joinPath(ancestorDirs.at(-1) ?? rootPath, name))
   }
-
-  return ancestorDirs
-}
-
-/** Rows join on the root's separators, so a reveal target spelled another way must be re-spelled to match. */
-export function getRevealTargetPath(rootPath: string, filePath: string): string {
-  const relativePath = relativePathInsideRoot(rootPath, filePath)
-  return relativePath === null ? filePath : joinPath(rootPath, relativePath)
+  return { targetPath: joinPath(rootPath, relativePath), ancestorDirs }
 }

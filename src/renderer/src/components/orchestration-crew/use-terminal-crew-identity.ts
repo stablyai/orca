@@ -4,7 +4,7 @@ import { getKnownExecutionHostIdForWorktree } from '@/lib/workspace/ownership/wo
 import { parseExecutionHostId } from '../../../../shared/execution-host'
 import { parseRemoteRuntimePtyId } from '../../../../shared/remote-runtime/remote-runtime-pty-id'
 import { parsePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
-import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import { resolveTerminalHandleForPane } from '../terminal-pane/clipboard/terminal-handle-copy'
 
 /** One boundary from the pane's actual host/binding to a public crew party. */

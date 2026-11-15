@@ -3,10 +3,10 @@ import type {
   GitHubPRRefreshAlias,
   GitHubPRRefreshCandidate,
   GitHubPRRefreshReason
-} from '../../../../../shared/github/pull-request-refresh-types'
-import type { Repo } from '../../../../../shared/repo-types'
+} from '../../../../../shared/github/pull-requests/refresh/pull-request-refresh-types'
+import type { Repo } from '../../../../../shared/repository/repo-types'
 import { runtimeTargetForOwnerEnvironment } from '../../../runtime/rpc/targets/runtime-client-target'
-import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import { hasUniqueIndexedRepositoryHost } from '@/lib/workspace/ownership/repository-owner-index'
 import { getGitHubRepoLookupIndex } from './github-repo-lookup-index'
 import {

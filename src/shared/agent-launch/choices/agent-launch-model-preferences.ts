@@ -6,7 +6,8 @@ import {
   findCatalogOption,
   getAgentSessionOptionLaunchCatalog
 } from '../../agent-session/options/agent-session-option-catalog'
-import { resolveAgentSessionOptionLaunch } from '../../agent-session/options/agent-session-option-launch'
+import { isPiModelOptionId } from '../../agent-session/options/catalog-providers/agent-session-option-catalog-pi'
+import { resolveAgentSessionOptionLaunch } from '../../agent-session/options/launch/agent-session-option-launch'
 import type { TuiAgent } from '../catalog/tui-agent'
 
 export const OPENCODE_MODEL_VERSION_REFUSAL =
@@ -57,6 +58,13 @@ export function checkAgentLaunchModelPreferences(args: {
     return refuse(
       'invalid_argument',
       `Agent ${args.agent} does not support launch-time model selection. Omit --model to run the model from its own config.`
+    )
+  }
+
+  if (args.agent === 'pi' && !isPiModelOptionId(args.model)) {
+    return refuse(
+      'invalid_argument',
+      `Agent pi needs a provider/id model, such as anthropic/claude-sonnet-4-5; got ${args.model}.`
     )
   }
 

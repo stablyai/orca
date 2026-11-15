@@ -2,7 +2,10 @@ import { capturePRCheckContract } from '@/lib/source-control/checks/pr-check-obs
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../../types'
 import type { GitHubSlice } from '../github-slice-contract'
-import type { PRCheckDetail, PRCheckRunDetails } from '../../../../../shared/github/check-types'
+import type {
+  PRCheckDetail,
+  PRCheckRunDetails
+} from '../../../../../shared/github/checks/check-types'
 import { callRuntimeRpc } from '../../../runtime/rpc/calls/runtime-rpc-call'
 import { withGitHubCheckDetailsTimeout } from '@/runtime/repository-github/github-check-details-timeout'
 import { createRuntimeRpcAbortError } from '@/runtime/rpc/calls/abortable-runtime-environment-call'
@@ -11,9 +14,9 @@ import { translate } from '@/i18n/i18n'
 import {
   GITHUB_CHECK_DETAILS_TIMEOUT_MESSAGE,
   isGitHubCheckDetailsTimeout
-} from '../../../../../shared/github/check-details-deadline'
+} from '../../../../../shared/github/checks/check-details-deadline'
 import { syncPRChecksStatus } from './github-checks'
-import { isWslDistroNotRunningRefusal } from '../../../../../shared/wsl-distro-not-running-refusal'
+import { isWslDistroNotRunningRefusal } from '../../../../../shared/remote-runtime/wsl-hosts/wsl-distro-not-running-refusal'
 import { findRepoForGitHubOwner } from '../repositories/repository-routing'
 import { hostedReviewOwnerIpcArgs } from '../../slices/hosted-review/hosted-review-cache-state'
 import {
@@ -173,7 +176,9 @@ export const createCheckActions = (
                 headSha,
                 prRepo: prRepo ?? null,
                 noCache,
-                ...(userRefresh ? { userRefresh: true } : {})
+                ...(userRefresh ? { userRefresh: true } : {}),
+                // A timer tick is budgeted background work the host paces by its own cadence.
+                ...(options?.background && !noCache ? { reason: 'swr' } : {})
               },
               { timeoutMs: 30_000 }
             )

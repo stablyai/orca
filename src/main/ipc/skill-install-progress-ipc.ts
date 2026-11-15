@@ -1,6 +1,6 @@
 import type { IpcMainInvokeEvent } from 'electron'
-import type { SkillBundleInstallProgress } from '../../shared/skill-bundle-install-contract'
-import type { SkillInstallProgress } from '../../shared/skill-sharing-contract'
+import type { SkillBundleInstallProgress } from '../../shared/skills/installation/skill-bundle-install-contract'
+import type { SkillInstallProgress } from '../../shared/skills/sharing/skill-sharing-contract'
 
 export function sendSkillInstallProgress(
   event: IpcMainInvokeEvent,

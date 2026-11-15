@@ -1,16 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { WATCHER_PROCESS_CANCEL_TIMEOUT_MS } from './parcel-watcher-cancellation-tracker'
-import {
-  terminateWatcherChild,
-  WATCHER_PROCESS_EXIT_DEADLINE_MS,
-  WATCHER_PROCESS_HARD_KILL_DELAY_MS
-} from './parcel-watcher-child-termination'
+import { RUNTIME_FILE_WATCH_CANCEL_TIMEOUT_MS as WATCHER_PROCESS_CANCEL_TIMEOUT_MS } from '../../../../shared/file-watch/runtime-file-watch-limits'
+
 import {
   acknowledgeWatcherSubscribe as ackSubscribe,
   currentWatcherChild,
   FakeWatcherChild as FakeChild,
   trackPromiseSettlement
-} from './parcel-watcher-process-test-child'
+} from './supervision/parcel-watcher-process-test-child'
 
 const { forkMock, existsSyncMock, mkdtempSyncMock, parcelSubscribeMock, rmSyncMock } = vi.hoisted(
   () => ({
@@ -56,21 +52,6 @@ describe('subscribeViaWatcherProcess', () => {
     resetRuntimeWatcherProcessForTest()
     vi.unstubAllEnvs()
     vi.clearAllMocks()
-  })
-
-  it('accepts close without exit as physical child termination', async () => {
-    vi.useFakeTimers()
-    try {
-      const child = new FakeChild()
-
-      const termination = terminateWatcherChild(child as never)
-      child.emit('close', -2, null)
-
-      await expect(termination).resolves.toBe(true)
-      expect(vi.getTimerCount()).toBe(0)
-    } finally {
-      vi.useRealTimers()
-    }
   })
 
   it('rejects and physically cancels a watcher error before subscription readiness', async () => {
@@ -192,47 +173,6 @@ describe('subscribeViaWatcherProcess', () => {
     ackSubscribe(replacement, 0)
     ackSubscribe(replacement, 1)
     await secondPromise
-  })
-
-  it('shares healthy runtime roots and recovers the shard after a crash', async () => {
-    const firstInterruption = vi.fn()
-    const secondInterruption = vi.fn()
-    const firstPromise = subscribeViaRuntimeWatcherProcess(
-      '/repo-a',
-      vi.fn(),
-      {},
-      {
-        onInterruption: firstInterruption
-      }
-    )
-    const firstChild = currentChild()
-    ackSubscribe(firstChild)
-    await firstPromise
-
-    const secondPromise = subscribeViaRuntimeWatcherProcess(
-      '/repo-b',
-      vi.fn(),
-      {},
-      {
-        onInterruption: secondInterruption
-      }
-    )
-    const secondChild = currentChild()
-    expect(secondChild).toBe(firstChild)
-    ackSubscribe(secondChild)
-    await secondPromise
-    expect(forkMock).toHaveBeenCalledTimes(1)
-
-    firstChild.connected = false
-    firstChild.emit('exit', null, 'SIGSEGV')
-
-    const replacement = currentChild()
-    expect(replacement).not.toBe(firstChild)
-    expect(replacement.sent.filter((message) => message.op === 'subscribe')).toHaveLength(2)
-    ackSubscribe(replacement, 0)
-    ackSubscribe(replacement, 1)
-    expect(firstInterruption).toHaveBeenCalledTimes(1)
-    expect(secondInterruption).toHaveBeenCalledTimes(1)
   })
 
   it('completes an in-flight subscribe across a crash-respawn', async () => {
@@ -370,48 +310,6 @@ describe('subscribeViaWatcherProcess', () => {
     ])
     ackSubscribe(replacement)
     expect(healthyInterruption).toHaveBeenCalledTimes(1)
-  })
-
-  it('keeps process count bounded when a killed child never exits', async () => {
-    vi.useFakeTimers()
-    try {
-      const healthyPromise = subscribeViaWatcherProcess('/healthy', vi.fn(), {})
-      const child = currentChild()
-      ackSubscribe(child)
-      await healthyPromise
-
-      const controller = new AbortController()
-      const pending = subscribeViaWatcherProcess(
-        '/slow',
-        vi.fn(),
-        {},
-        {
-          signal: controller.signal
-        }
-      )
-      const pendingId = child.sent.at(-1)?.id
-      child.emit('message', { op: 'subscribe-started', id: pendingId })
-      controller.abort()
-      const rejected = expect(pending).rejects.toThrow(
-        'file watcher process did not exit after termination deadline'
-      )
-      child.emit('message', { op: 'cancel-requires-restart', id: pendingId })
-
-      await vi.advanceTimersByTimeAsync(WATCHER_PROCESS_HARD_KILL_DELAY_MS)
-      expect(child.kill).toHaveBeenNthCalledWith(2, 'SIGKILL')
-      expect(forkMock).toHaveBeenCalledTimes(1)
-      await vi.advanceTimersByTimeAsync(
-        WATCHER_PROCESS_EXIT_DEADLINE_MS - WATCHER_PROCESS_HARD_KILL_DELAY_MS
-      )
-
-      await rejected
-      expect(forkMock).toHaveBeenCalledTimes(1)
-      expect(child.listenerCount('exit')).toBe(1)
-      expect(vi.getTimerCount()).toBe(0)
-      await expect(subscribeViaWatcherProcess('/later', vi.fn(), {})).rejects.toThrow('disposed')
-    } finally {
-      vi.useRealTimers()
-    }
   })
 
   it('queues subscribe and unsubscribe behind the retiring child', async () => {
@@ -633,25 +531,6 @@ describe('subscribeViaWatcherProcess', () => {
     await expect(respawnPromise).resolves.toMatchObject({ unsubscribe: expect.any(Function) })
   })
 
-  it('kills the idle child when the last pending subscribe fails', async () => {
-    const promise = subscribeViaWatcherProcess('/gone', vi.fn(), {})
-    const first = currentChild()
-    first.emit('message', {
-      op: 'subscribe-failed',
-      id: first.sent[0].id,
-      message: 'Error opening directory'
-    })
-    await expect(promise).rejects.toThrow('Error opening directory')
-    expect(first.kill).toHaveBeenCalledTimes(1)
-    first.emit('exit', 0, null)
-    await new Promise<void>((resolve) => setImmediate(resolve))
-
-    const respawnPromise = subscribeViaWatcherProcess('/repo', vi.fn(), {})
-    expect(forkMock).toHaveBeenCalledTimes(2)
-    ackSubscribe(currentChild())
-    await expect(respawnPromise).resolves.toMatchObject({ unsubscribe: expect.any(Function) })
-  })
-
   it('keeps the child alive while other subscriptions remain', async () => {
     const firstPromise = subscribeViaWatcherProcess('/a', vi.fn(), {})
     const child = currentChild()
@@ -691,72 +570,5 @@ describe('subscribeViaWatcherProcess', () => {
       subscribeViaRuntimeWatcherProcess('/runtime-root', vi.fn(), {})
     ).rejects.toMatchObject({ code: 'supervisor_disposed' })
     expect(forkMock).toHaveBeenCalledTimes(1)
-  })
-
-  it('releases a late in-process subscription after pending setup is aborted', async () => {
-    vi.stubEnv('VITEST', 'true')
-    const unsubscribe = vi.fn().mockResolvedValue(undefined)
-    let resolveSubscription!: (subscription: { unsubscribe: typeof unsubscribe }) => void
-    parcelSubscribeMock.mockReturnValue(
-      new Promise((resolve) => {
-        resolveSubscription = resolve
-      })
-    )
-    const controller = new AbortController()
-    const pending = subscribeViaWatcherProcess('/repo', vi.fn(), {}, { signal: controller.signal })
-
-    await vi.waitFor(() => expect(parcelSubscribeMock).toHaveBeenCalledTimes(1))
-    controller.abort()
-    await expect(pending).rejects.toThrow('aborted')
-    resolveSubscription({ unsubscribe })
-
-    await vi.waitFor(() => expect(unsubscribe).toHaveBeenCalledTimes(1))
-  })
-
-  it('fails closed when the isolated watcher entry is absent outside tests', async () => {
-    existsSyncMock.mockReturnValue(false)
-
-    await expect(subscribeViaWatcherProcess('/repo', vi.fn(), {})).rejects.toThrow(
-      'watcher process entry is missing'
-    )
-    expect(forkMock).not.toHaveBeenCalled()
-    expect(parcelSubscribeMock).not.toHaveBeenCalled()
-  })
-
-  it('keeps independently-created supervisors in separate crash-fuse domains', async () => {
-    const firstSupervisor = createWatcherProcessSupervisor()
-    const secondSupervisor = createWatcherProcessSupervisor()
-    const firstCallback = vi.fn()
-    const secondCallback = vi.fn()
-
-    const firstPromise = firstSupervisor.subscribe('/faulting', firstCallback, {})
-    const firstChild = currentChild()
-    ackSubscribe(firstChild)
-    await firstPromise
-
-    const secondPromise = secondSupervisor.subscribe('/healthy', secondCallback, {})
-    const secondChild = currentChild()
-    ackSubscribe(secondChild)
-    await secondPromise
-
-    let faultingChild = firstChild
-    for (let crash = 0; crash < 2; crash++) {
-      faultingChild.connected = false
-      faultingChild.emit('exit', null, 'SIGSEGV')
-      faultingChild = currentChild()
-      ackSubscribe(faultingChild)
-    }
-    faultingChild.connected = false
-    faultingChild.emit('exit', null, 'SIGSEGV')
-
-    expect(firstCallback).toHaveBeenCalledWith(
-      expect.objectContaining({ message: expect.stringContaining('crashed repeatedly') }),
-      []
-    )
-    expect(secondCallback).not.toHaveBeenCalled()
-    expect(secondChild.connected).toBe(true)
-
-    firstSupervisor.dispose()
-    secondSupervisor.dispose()
   })
 })

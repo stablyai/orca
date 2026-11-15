@@ -1,4 +1,4 @@
-import type { BundledSkillPlan } from '../../../../../shared/bundled-skill-plan'
+import type { BundledSkillPlan } from '../../../../../shared/skills/bundled/bundled-skill-plan'
 import { bundledSkillSetupAttentionMessage } from '@/components/skills/setup/bundled-skill-setup-result-copy'
 import {
   bundledSkillSetupChanges,
@@ -8,7 +8,7 @@ import { useEffect, useState } from 'react'
 import {
   bundledSkillInstallAction,
   type BundledSkillInstallAction
-} from '../../../../../shared/bundled-skill-summary'
+} from '../../../../../shared/skills/bundled/bundled-skill-summary'
 import {
   bundledSkillTargetKey,
   type BundledSkillTarget

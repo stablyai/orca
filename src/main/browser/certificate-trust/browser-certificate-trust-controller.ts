@@ -2,11 +2,11 @@ import { randomUUID } from 'node:crypto'
 import type {
   BrowserCertificateFailure,
   BrowserCertificateProceedResult
-} from '../../../shared/browser-workspace-types'
+} from '../../../shared/browser/workspaces/browser-workspace-types'
 import {
   isEligibleLocalCertificateHost,
   toSecureCertificateEndpoint
-} from '../../../shared/browser-url'
+} from '../../../shared/browser/navigation/browser-url'
 import {
   certificateChallengeIdentityMatches,
   CERTIFICATE_CHALLENGE_TTL_MS,
@@ -140,6 +140,18 @@ export class BrowserCertificateTrustController {
 
   onMainFrameNavigationCommitted(webContentsId: number, url: string): void {
     this.requestGuard.revokeForCommittedNavigation(webContentsId, url)
+  }
+
+  hasFailureForGuest(webContentsId: number): boolean {
+    const pending = this.pendingByGuestId.get(webContentsId)
+    if (!pending) {
+      return false
+    }
+    if (pending.expiresAt <= this.now()) {
+      this.clearPending(webContentsId, true)
+      return false
+    }
+    return true
   }
 
   getFailure(browserPageId: string): BrowserCertificateFailure | null {

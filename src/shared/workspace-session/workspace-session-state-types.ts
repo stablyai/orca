@@ -1,16 +1,20 @@
 import type { ExecutionHostId } from '../execution-host'
 import type { SleepingAgentSessionRecord } from '../agent-session/lifecycle/agent-session-resume'
-import type { WorkspaceKey } from '../workspace-scope'
+import type { WorkspaceKey } from '../workspace/identity/workspace-scope'
 import type { Tab, TabGroup, TabGroupLayoutNode, WorkspaceVisibleTabType } from '../tab-types'
 import type { TerminalLayoutSnapshot, TerminalTab } from '../workspace-layout/terminal-tab-types'
-import type { BrowserHistoryEntry, BrowserPage, BrowserWorkspace } from '../browser-workspace-types'
+import type {
+  BrowserHistoryEntry,
+  BrowserPage,
+  BrowserWorkspace
+} from '../browser/workspaces/browser-workspace-types'
 import type { BrowserPageAnnotation } from '../browser/element-grab/browser-grab-types'
 import type { WorkspaceDocHistoryEntry } from './workspace-doc-history'
 import type { ClientHostedBrowserCloseIntent } from './client-hosted-browser-close-intent'
-import type { PairedTerminalTabCloseIntent } from '../workspace-layout/paired-terminal-tab-close-intent'
+import type { PairedTerminalTabCloseIntent } from '../workspace-layout/terminal-surfaces/paired-terminal-tab-close-intent'
 import type { PersistedClientHostedBrowserPage } from './client-hosted-browser-page-record'
-import type { ClosedTerminalTabTombstonesByTabId } from '../workspace-layout/closed-terminal-tab-tombstones'
-import type { ClosedTerminalPanesByPaneKey } from '../workspace-layout/closed-terminal-panes'
+import type { ClosedTerminalTabTombstonesByTabId } from '../workspace-layout/terminal-surfaces/closed-terminal-tab-tombstones'
+import type { ClosedTerminalPanesByPaneKey } from '../workspace-layout/terminal-surfaces/closed-terminal-panes'
 
 /** Persist edit-mode files only; reconstruct transient diffs/conflicts from git state. */
 export type PersistedOpenFile = {

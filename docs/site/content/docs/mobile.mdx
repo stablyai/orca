@@ -5,12 +5,12 @@ description: Pair the Orca mobile app to your desktop to monitor agents and unst
 
 import { Callout } from '@/components/docs/prose'
 
-The Orca mobile companion is an iOS/Android app that pairs with your desktop Orca and gives you a read-mostly view of running agents — agent status, recent terminal scrollback, and the controls you actually want from a phone (replying to a prompt, sleeping a worktree, reviewing source control, switching agent accounts). Pairing is one-time and the desktop is always the source of truth.
+The Orca mobile companion is an iOS/Android app that pairs with your desktop Orca and lets you monitor and control running agents — agent status, recent terminal scrollback, terminal input, source control, and agent accounts. Pairing establishes persistent access to the selected host; the desktop remains the source of truth.
 
 <Callout title="Beta">
   The mobile companion is in beta. Install iOS from the [App
   Store](https://apps.apple.com/us/app/orca-ide/id6766130217), or install Android from the [current
-  APK](https://www.onorca.dev/download/android).
+  APK](https://orca.dev/download/android).
 </Callout>
 
 ## What you can do from mobile
@@ -36,12 +36,27 @@ The mobile app is intentionally not a full editor — it's a remote control for 
 
 ## Pairing
 
-1. On desktop, open Orca's pairing flow from the account / status menu. Orca shows a one-time pairing code.
+1. On desktop, open Orca's pairing flow from the account / status menu. Orca shows a pairing code. Treat it as a secret and share it only with the device you want to authorize.
 1. On mobile, open the Orca companion app and choose **Pair**, then paste the code. (You can also follow a deep link from the desktop directly into the mobile pairing screen.)
 1. Prefer **Orca Relay** for pairing when it is available — sign-in is required for Relay only. The local network address picker is optional on Relay (expand it when you want a LAN fast path); LAN pairing still needs an address.
 1. The pairing exchange establishes a device token for that phone; keep desktop reachable on the path you chose.
 
 Closing the desktop app drops a direct/LAN session until you reopen it. Relay-backed pairing follows the desktop Relay connection — reopen desktop if the host goes offline.
+
+Current desktop UI pairing offers expire after 10 minutes for mobile and one hour for runtime clients. A paired device's authorization persists beyond the offer's expiry until revoked. Headless offers and older versions can have different lifetimes; do not assume every code is single-use or expires automatically. Regenerate an unused code if it may have been exposed.
+
+### Access and trust
+
+A paired phone can read workspace files, send terminal input, and control agents on the paired host and connected remote runtimes made available through it. Pairing is not an enterprise read-only or per-repository sandbox. Use a host account with access appropriate to the phone's user, and protect the phone with its OS lock and your organization's device controls.
+
+The paired desktop can deliver mobile web UI and JavaScript independently of a mobile store update. These assets travel through the authenticated paired connection and are checked against manifest hashes. The desktop is part of the phone's trust boundary; these checks do not provide a separate publisher signature or store review for every downloaded UI bundle.
+
+### Revoke a phone or respond to a lost device
+
+1. On each paired desktop, open the Mobile settings and remove the phone from the paired-device list. Confirm the operation succeeds; removing a saved host on the phone is not a substitute for host-side revocation.
+1. Host-side revocation removes the device authorization and closes its active connections on that host. Relay credential cleanup is queued durably and requires connectivity to reach the service. Remote runtimes receive updated delegated-device grants when synchronization succeeds. If a host is offline or cleanup has not completed, restrict its network access until revocation is confirmed; there is no guaranteed immediate revocation across offline hosts.
+1. For a lost phone, use your device-management tools to lock or wipe it and review any separately granted host or provider access. Revoking Orca access does not remotely erase files, screenshots, clipboard contents, or other data already saved on the phone.
+1. If you suspect a pairing code was shared, regenerate it and review paired devices on the affected host before pairing a replacement phone.
 
 ## Chat UI
 
@@ -122,7 +137,7 @@ For a direct LAN or Tailscale connection, allow the paired desktop's listening p
 ### Common issues
 
 - **Stuck spinner on a worktree** — the phone tracks a heartbeat from the desktop agent process. If the desktop says idle but the phone shows working, force-refresh the worktree row to sync state.
-- **Pairing fails** — make sure your desktop and phone are signed into the same Orca account. Pairing codes expire after a few minutes; generate a fresh one if it's been sitting on the screen.
+- **Pairing fails** — Relay requires desktop sign-in; local-only pairing requires a reachable LAN or Tailscale endpoint. Generate a fresh code if an offer has expired, and check the connection mode and host address.
 - **Authentication failed / pairing invalid** — the desktop no longer accepts this device token (for example after desktop cleared paired devices). Try **Retry** on the banner first (transient rejections can recover without re-pairing). If it keeps failing, use **Re-pair** from desktop, or **Remove** the host and pair again.
 - **Update Orca Mobile / Update Orca on your computer** — the phone and desktop speak a versioned mobile protocol. If either side is too old, mobile blocks that host and points you at the App Store (iOS), [GitHub Releases](https://github.com/stablyai/orca/releases) (Android APK or desktop), then back to hosts. After updating, refresh the connection; if the message stays, remove the host and pair again.
 - **A chat tab says Update mobile** — the session was started in desktop Chat UI, and this phone's app is too old to show it (the tab opens to an empty pane). Update the mobile app, then reconnect to the host so it sees the new app. If the app is already up to date and the tab still says Update mobile after reconnecting, report it with your mobile app version and desktop Orca version.

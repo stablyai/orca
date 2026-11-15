@@ -48,6 +48,7 @@ vi.mock('../../../identity/browser-process-user-agent', () => ({
 
 import { browserManager } from '../browser-manager'
 import {
+  guestNavigationMethods,
   guestUaMethods,
   rendererWebContentsId,
   resetBrowserManagerMocks,
@@ -75,6 +76,7 @@ describe('browserManager', () => {
 
   it('restores a certificate failure when a retry navigation aborts before committing', () => {
     const guest = {
+      ...guestNavigationMethods(),
       id: 406,
       isDestroyed: vi.fn(() => false),
       getType: vi.fn(() => 'webview'),

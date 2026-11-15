@@ -3,7 +3,7 @@ import {
   automationRequiresHostReselection,
   findAutomationRepo
 } from '../../../shared/automations/ownership/automation-repo-target'
-import type { Repo } from '../../../shared/repo-types'
+import type { Repo } from '../../../shared/repository/repo-types'
 import type { Automation } from '../../../shared/automations/automation-definition'
 import type { AutomationRun } from '../../../shared/automations/history/automation-run'
 import type { PersistedState } from '../../../shared/persisted-state-types'
@@ -33,7 +33,7 @@ import {
   nextSshTargetGeneration,
   resolveSshTargetGenerationHighWaterMark,
   sanitizeSshTargetGeneration
-} from '../../../shared/ssh-target-generation'
+} from '../../../shared/remote-runtime/ssh/ssh-target-generation'
 import {
   resolveAutomationWorkspaceHost,
   resolveAutomationWorkspaceSshTargetId,

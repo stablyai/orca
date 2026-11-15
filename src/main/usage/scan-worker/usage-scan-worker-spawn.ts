@@ -1,4 +1,3 @@
-import { claudeProfileTranscriptDirs } from '../../claude-usage/transcript-file-discovery'
 import { existsSync } from 'node:fs'
 import type { Worker } from 'node:worker_threads'
 import { spawnWorkerThread } from '../../worker-threads/worker-thread-spawn'
@@ -49,18 +48,15 @@ function getSharedClient(): UsageScanWorkerClient {
 
 export function scanClaudeUsageFilesViaWorker(
   worktrees: UsageScanWorktreeRef[],
-  sourceCache: UsageSourceCacheRef
+  sourceCache: UsageSourceCacheRef,
+  profileDirs: string[]
 ): Promise<{
   sessions: ClaudeUsageSession[]
   dailyAggregates: ClaudeUsageDailyAggregate[]
 }> {
   return scanClaudeUsageOnWorker(
     (body) =>
-      getSharedClient().scan(
-        body.providerId === 'claude'
-          ? { ...body, profileDirs: claudeProfileTranscriptDirs() }
-          : body
-      ),
+      getSharedClient().scan(body.providerId === 'claude' ? { ...body, profileDirs } : body),
     worktrees,
     sourceCache
   )
@@ -101,4 +97,10 @@ export function splitUsageCacheFileViaWorker(
   request: UsageCacheSplitRequest
 ): Promise<UsageCacheSplitResult> {
   return getSharedClient().splitCacheFile(request)
+}
+
+export async function stopUsageScanWorker(): Promise<void> {
+  const client = sharedClient
+  sharedClient = null
+  await client?.dispose()
 }

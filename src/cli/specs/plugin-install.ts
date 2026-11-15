@@ -1,5 +1,5 @@
-import type { CommandSpec } from '../args'
-import { GLOBAL_FLAGS } from '../args'
+import type { CommandSpec } from '../discovery/command-spec'
+import { CLI_GLOBAL_FLAGS as GLOBAL_FLAGS } from '../../shared/cli-argument-boundary'
 
 const EXIT_CODES_NOTE =
   'Exit codes: 0 ok, 1 error, 3 approval is needed (approval_required or approval_stale).'

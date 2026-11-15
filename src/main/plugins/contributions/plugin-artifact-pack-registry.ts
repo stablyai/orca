@@ -1,10 +1,10 @@
-import type { PluginContentVerifier } from '../plugin-content-integrity'
+import type { PluginContentVerifier } from '../artifacts/plugin-content-integrity'
 import { mapWithConcurrency } from '../../../shared/map-with-concurrency'
 import {
   isInvalidDiscoveredPlugin,
   type DiscoveredPlugin,
   type ValidDiscoveredPlugin
-} from '../plugin-discovery'
+} from '../discovery/plugin-discovery'
 
 const ARTIFACT_PACK_LOAD_CONCURRENCY = 4
 

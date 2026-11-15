@@ -9,7 +9,7 @@ import {
 import type { AgentStatusIpcPayload } from '../../../../shared/agent-status/contracts/agent-status-ipc-payload'
 import type { AgentProviderSessionMetadata } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
 import type { ProgramStatusFacet } from '../../../../shared/program-status/facet'
-import type { RuntimeTerminalAgentStatus } from '../../../../shared/runtime-terminal-contracts'
+import type { RuntimeTerminalAgentStatus } from '../../../../shared/terminal/runtime/runtime-terminal-contracts'
 import { mapExplicitAgentStateToRuntimeTerminalStatus } from './runtime-worktree-status-projection'
 import { mainAgentState } from '../../../../shared/agent-status/lifecycle/main-agent-status'
 
@@ -26,6 +26,7 @@ export type RuntimeAgentRowSnapshot = {
   updatedAt: number
   evidenceObservedAt?: number
   providerSession?: AgentProviderSessionMetadata
+  orcaSessionId?: string | null
   programStatus?: ProgramStatusFacet
 }
 
@@ -161,6 +162,7 @@ export function selectFreshAgentRowForMobileTab(args: {
     ...pickHostTurnEnd(match),
     updatedAt: match.receivedAt,
     ...(match.providerSession ? { providerSession: match.providerSession } : {}),
+    ...(match.orcaSessionId !== undefined ? { orcaSessionId: match.orcaSessionId } : {}),
     ...(match.programStatus ? { programStatus: match.programStatus } : {}),
     ...(match.evidenceObservedAt !== undefined
       ? { evidenceObservedAt: match.evidenceObservedAt }

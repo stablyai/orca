@@ -1,11 +1,11 @@
 // Persist undelivered closes across disconnect/reload; replay once reachable or authoritative snapshots resurrect optimistically removed tabs.
 
-import type { RuntimeMobileSessionTabsResult } from '../../../../../shared/runtime-session-contracts'
+import type { RuntimeMobileSessionTabsResult } from '../../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import {
   PAIRED_TERMINAL_TAB_CLOSE_INTENT_MAX_AGE_MS,
   pairedTerminalTabCloseIntentKey,
   type PairedTerminalTabCloseIntent
-} from '../../../../../shared/workspace-layout/paired-terminal-tab-close-intent'
+} from '../../../../../shared/workspace-layout/terminal-surfaces/paired-terminal-tab-close-intent'
 import type { PairedTerminalTabCloseIntentsByEnvironment } from './paired-terminal-tab-close-intents'
 import {
   getRuntimeEnvironmentRevision,

@@ -9,19 +9,19 @@ import type {
   AgentLaunchPrompt,
   AgentLaunchResult
 } from '../../../../src/shared/agent-launch/contracts/agent-launch-intent'
-import { isStructuredAgentId } from '../../../../src/shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
+import { isStructuredAgentId } from '../../../../src/shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle-encoding'
 import { AGENT_LAUNCH_TAB_CLOSED_CODE } from '../../../../src/shared/agent-launch/contracts/agent-launch-tab-closed'
 import { makePaneKey } from '../../../../src/shared/workspace-layout/stable-pane-id'
 import { createStructuredAgentSessionId } from '../../../../src/shared/agent-session/structured-agent-session-create'
 import type { TuiAgent } from '../../../../src/shared/agent-launch/catalog/tui-agent'
 import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
-import { agentLaunchReplayRun } from '../../tasks/mobile-workspace-create-operations'
-import { agentLaunchExistingParams, readAgentLaunchSupport } from '../../tasks/agent-launch-request'
+import { agentLaunchReplayRun } from '../../new-workspace/creation/mobile-workspace-create-operations'
+import { agentLaunchExistingParams, readAgentLaunchSupport } from './agent-launch-request'
 import {
   classifyAgentLaunchReplayRefusal,
   isAgentLaunchReservationTakenRefusal
 } from '../../../../src/shared/agent-launch/contracts/agent-launch-replay-refusal'
-import { sendReplayingAmbiguousDelivery } from '../../tasks/replay-on-ambiguous-delivery'
+import { sendReplayingAmbiguousDelivery } from '../../new-workspace/creation/replay-on-ambiguous-delivery'
 import { structuredSessionOperationId } from '../native-chat/agent-session/structured-session-operation-id'
 import { randomV4Uuid } from '../../platform/random-v4-uuid'
 import { rememberMobileCreatedStructuredSession } from '../native-chat/agent-session/mobile-created-structured-sessions'

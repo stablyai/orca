@@ -3,13 +3,13 @@ import {
   selectMobileSessionTab
 } from './mobile-session-tab-selection'
 import type { OrcaRuntimeService } from '../orca-runtime'
-import type { RuntimeMobileSessionAgentTab } from '../../../shared/runtime-mobile-session-tab-contracts'
-import type { RuntimeMobileSessionTabsSnapshot } from '../../../shared/runtime-session-contracts'
+import type { RuntimeMobileSessionAgentTab } from '../../../shared/remote-runtime/session-graph/runtime-mobile-session-tab-contracts'
+import type { RuntimeMobileSessionTabsSnapshot } from '../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import { defaultAgentChatLabel } from '../../../shared/agent-session/agent-session-chat-label'
 import { getHeadlessMobileSessionGroupId } from '../terminal/surface/mobile-session-layout-projection'
 import type { StructuredSessionSurface } from '../agent-session/structured-agent-session-close'
-import type { StructuredAgentId } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle'
-import { insertTabIdIntoOrder } from '../../../shared/workspace-layout/tab-order'
+import type { StructuredAgentId } from '../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle'
+import { insertTabIdIntoOrder } from '../../../shared/workspace-layout/tab-groups/tab-order'
 import {
   chatTabId,
   resolveChatTabPlacement,

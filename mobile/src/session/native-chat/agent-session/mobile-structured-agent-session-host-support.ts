@@ -7,7 +7,7 @@ import {
   AGENT_SESSION_CONVERSATION_STOP_RUNTIME_CAPABILITY,
   AGENT_SESSION_PROMPT_CANCEL_RUNTIME_CAPABILITY,
   AGENT_SESSION_REPEATED_STOP_RUNTIME_CAPABILITY
-} from '../../../../../src/shared/agent-session/lifecycle/agent-session-stop-capabilities'
+} from '../../../../../src/shared/agent-session/lifecycle/stopping/agent-session-stop-capabilities'
 import {
   AGENT_SESSION_ITEM_DETAIL_RUNTIME_CAPABILITY,
   AGENT_SESSION_SEND_RECORDED_RUNTIME_CAPABILITY,
@@ -35,7 +35,7 @@ import {
   AGENT_SESSION_PERMISSION_MODES_RUNTIME_CAPABILITY,
   AGENT_SESSION_PERMISSION_OWN_RUNTIME_CAPABILITY
 } from '../../../../../src/shared/agent-session/agent-session-permission-modes-capability'
-import { SKILL_DISCOVER_WORKSPACE_CAPABILITY } from '../../../../../src/shared/skill-install-capability'
+import { SKILL_DISCOVER_WORKSPACE_CAPABILITY } from '../../../../../src/shared/skills/capabilities/skill-install-capability'
 import { AGENT_SESSION_PHONE_CONTINUE_INTERRUPTED_RUNTIME_CAPABILITY } from '../../../../../src/shared/agent-session/agent-session-continue-interrupted-capability'
 
 export type StructuredAgentSessionHostSupport = {

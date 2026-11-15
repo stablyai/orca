@@ -1,7 +1,11 @@
 import '@/store/slices/linear/linear-issue-read'
 import { consumeLinearIssueRead } from '@/store/slices/linear/linear-issue-read-lifecycle'
-import { useEffect } from 'react'
+import { useEffect, useMemo } from 'react'
 import { getRepoExecutionHostId } from '../../../../../../shared/execution-host'
+import {
+  getGitHubIssueUrlRepository,
+  getWorktreeGitHubIssueUrl
+} from '../../../../../../shared/worktree/github-issue-repository'
 
 import { isMacAppDataPath } from '@/app-shell/platform/passive-macos-app-data-access'
 import {
@@ -61,6 +65,13 @@ export function useWorktreeCardLifecycleEffects({
     showIssue: boolean
     showLinearIssue: boolean
   }): void {
+  const { linkedIssue } = worktree
+  // Keyed on the URL string so worktree refreshes don't restart the issue poll.
+  const issueUrl = getWorktreeGitHubIssueUrl(worktree)
+  const issueRepository = useMemo(
+    () => (linkedIssue ? getGitHubIssueUrlRepository(issueUrl, linkedIssue) : undefined),
+    [issueUrl, linkedIssue]
+  )
   const hostedReviewExactKey = !branch || branch === 'HEAD' ? hostedReviewCacheKey : undefined
   useEffect(() => {
     if (
@@ -124,10 +135,11 @@ export function useWorktreeCardLifecycleEffects({
 
     // Why: fallback poll behind activity triggers; stopped while hidden to avoid waking idle workspaces.
     return installWindowVisibilityInterval({
-      run: () => void fetchIssue(repo.path, issueNumber, { repoId: repo.id }),
+      run: () =>
+        void fetchIssue(repo.path, issueNumber, { repoId: repo.id, ownerRepo: issueRepository }),
       intervalMs: 5 * 60_000
     })
-  }, [repo, worktree.linkedIssue, fetchIssue, issueCacheKey, showIssue])
+  }, [repo, worktree.linkedIssue, issueRepository, fetchIssue, issueCacheKey, showIssue])
 
   useEffect(() => {
     if (
@@ -140,13 +152,17 @@ export function useWorktreeCardLifecycleEffects({
     ) {
       return
     }
-    void fetchIssue(repo.path, worktree.linkedIssue, { repoId: repo.id })
+    void fetchIssue(repo.path, worktree.linkedIssue, {
+      repoId: repo.id,
+      ownerRepo: issueRepository
+    })
   }, [
     newCardStyle,
     hoverDetailsOpen,
     showIssue,
     repo,
     worktree.linkedIssue,
+    issueRepository,
     fetchIssue,
     issueCacheKey
   ])
@@ -156,26 +172,15 @@ export function useWorktreeCardLifecycleEffects({
       return
     }
     const controller = new AbortController()
-    const linearIssueId = worktree.linkedLinearIssue
-    const refreshLinearIssueIfVisible = (): void => {
-      if (!isWindowVisible()) {
-        return
-      }
-      void consumeLinearIssueRead(
-        fetchLinearIssue(linearIssueId, linearWorkspaceId, { sourceContext: linearSourceContext }),
-        () => !controller.signal.aborted,
-        undefined,
-        controller.signal
-      ).catch(() => {})
-    }
-    refreshLinearIssueIfVisible()
-    window.addEventListener('focus', refreshLinearIssueIfVisible)
-    document.addEventListener('visibilitychange', refreshLinearIssueIfVisible)
-    return () => {
-      controller.abort()
-      window.removeEventListener('focus', refreshLinearIssueIfVisible)
-      document.removeEventListener('visibilitychange', refreshLinearIssueIfVisible)
-    }
+    void consumeLinearIssueRead(
+      fetchLinearIssue(worktree.linkedLinearIssue, linearWorkspaceId, {
+        sourceContext: linearSourceContext
+      }),
+      () => !controller.signal.aborted,
+      undefined,
+      controller.signal
+    ).catch(() => {})
+    return () => controller.abort()
   }, [
     worktree.linkedLinearIssue,
     fetchLinearIssue,

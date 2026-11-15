@@ -39,8 +39,8 @@ import '@/lib/workspace/creation/new-workspace'
 import {
   getLinkedWorkItemSuggestedName,
   getLinkedWorkItemWorkspaceName
-} from '../../../../shared/workspace-name'
-import type { GitHubWorkItem } from '../../../../shared/github/work-item-types'
+} from '../../../../shared/workspace/naming/workspace-name'
+import type { GitHubWorkItem } from '../../../../shared/github/work-items/work-item-types'
 import { shouldApplyWorkspaceSourceAutoName } from '../../../../shared/new-workspace/workspace-source'
 import { isLinearLinkedWorkItem } from '@/lib/work-items/linear/linear-linked-work-item'
 import { resolveComposerManualBranchNameChange } from '../composer-branch-selection'

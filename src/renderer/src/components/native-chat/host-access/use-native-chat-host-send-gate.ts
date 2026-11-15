@@ -1,7 +1,7 @@
 import { useTranslate } from '@/i18n/use-translate'
 import { structuredAgentLabel } from '@/lib/agent-session/launch/structured-agent-session-launch-label'
 import type { AgentType } from '../../../../../shared/agent-status/contracts/agent-status-types'
-import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import {
   useNativeChatHostPermissionGate,
   type NativeChatHostPermissionGate

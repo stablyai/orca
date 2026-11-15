@@ -6,7 +6,7 @@ import { committingSpawn, registerLivePty } from './bind-first-pane.test-fixture
 import './runtime-test-module-registration.spec'
 import { OrcaRuntimeService } from '../orca-runtime'
 import { electronMocks } from '../orca-runtime-test-mocks/setup.spec'
-import type { RuntimeMobileSessionTabsResult } from '../../../shared/runtime-session-contracts'
+import type { RuntimeMobileSessionTabsResult } from '../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import {
   HEADLESS_LEAF_ID,
   TEST_WORKTREE_ID,
@@ -34,7 +34,7 @@ describe('OrcaRuntimeService', () => {
     })
     runtime.onPtyData('laptop-created-pty', '\x1b]0;Claude working\x07', 123)
     runtime.attachWindow(1)
-    runtime.syncWindowGraph(1, {
+    await runtime.syncWindowGraph(1, {
       tabs: [
         {
           tabId: 'laptop-tab',
@@ -102,7 +102,7 @@ describe('OrcaRuntimeService', () => {
       getForegroundProcess: async () => null
     })
     const events: RuntimeMobileSessionTabsResult[] = []
-    runtime.onMobileSessionTabsChanged((snapshot) => events.push(snapshot))
+    runtime.onMobileSessionTabsChanged((snapshot) => events.push(snapshot), undefined, 'mobile')
 
     const laptopTerminal = await runtime.createTerminal(`id:${TEST_WORKTREE_ID}`, {
       tabId: 'laptop-tab',
@@ -139,7 +139,7 @@ describe('OrcaRuntimeService', () => {
       getForegroundProcess: async () => null,
       listProcesses: async () => []
     })
-    runtime.syncWindowGraph(1, {
+    await runtime.syncWindowGraph(1, {
       tabs: [
         {
           tabId: 'host-tab',
@@ -208,7 +208,7 @@ describe('OrcaRuntimeService', () => {
       getForegroundProcess: async () => null,
       listProcesses: async () => []
     })
-    runtime.syncWindowGraph(1, {
+    await runtime.syncWindowGraph(1, {
       tabs: [
         {
           tabId: 'host-tab',
@@ -299,7 +299,7 @@ describe('OrcaRuntimeService', () => {
       getForegroundProcess: async () => null,
       listProcesses: async () => []
     })
-    runtime.syncWindowGraph(1, {
+    await runtime.syncWindowGraph(1, {
       tabs: [
         {
           tabId: 'host-tab',
@@ -370,7 +370,7 @@ describe('OrcaRuntimeService', () => {
       tabsByWorktree: { ...session.tabsByWorktree, [TEST_WORKTREE_ID]: [] },
       terminalLayoutsByTabId: {}
     })
-    runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
+    await runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
 
     acknowledged.resolve()
     await expect(pending).resolves.toEqual({ closed: true, retirementConfirmed: true })
@@ -420,7 +420,7 @@ describe('OrcaRuntimeService', () => {
       kill,
       getForegroundProcess: async () => null
     })
-    runtime.syncWindowGraph(0, { tabs: [], leaves: [] })
+    await runtime.syncWindowGraph(0, { tabs: [], leaves: [] })
     const terminal = await runtime.createTerminal(`id:${TEST_WORKTREE_ID}`, {
       tabId: 'durable-tab',
       leafId: HEADLESS_LEAF_ID
@@ -435,4 +435,89 @@ describe('OrcaRuntimeService', () => {
     expect(getSession().terminalLayoutsByTabId['durable-tab']).toBeUndefined()
     expect(flushOrThrow).toHaveBeenCalledTimes(1)
   })
+
+  // Main-owned layouts restore a ready headless graph when the window closes.
+  it.skipIf(ORCA_LAYOUT_OWNER_IS_MAIN)(
+    'closes a paired session tab after the desktop window is gone',
+    async () => {
+      const { runtimeStore, getSession } = makeRuntimeStoreWithWorkspaceSession(
+        makeWorkspaceSessionWithHeadlessTerminal()
+      )
+      const closeTerminalTab = vi.fn(async () => undefined)
+      const kill = vi.fn(() => true)
+      const runtime = new OrcaRuntimeService(
+        withDurableRuntimeStore({ ...runtimeStore, flushOrThrow: vi.fn() })
+      )
+      runtime.setNotifier({ closeTerminal: vi.fn(), closeTerminalTab } as never)
+      runtime.setPtyController({
+        write: () => true,
+        kill,
+        getForegroundProcess: async () => null,
+        listProcesses: async () => []
+      })
+      await runtime.syncWindowGraph(1, {
+        tabs: [
+          {
+            tabId: 'host-tab',
+            worktreeId: TEST_WORKTREE_ID,
+            title: 'Durable',
+            activeLeafId: HEADLESS_LEAF_ID,
+            layout: null
+          }
+        ],
+        leaves: [
+          {
+            tabId: 'host-tab',
+            worktreeId: TEST_WORKTREE_ID,
+            leafId: HEADLESS_LEAF_ID,
+            paneRuntimeId: 1,
+            ptyId: 'persisted-pty'
+          }
+        ],
+        mobileSessionTabs: [
+          {
+            worktree: TEST_WORKTREE_ID,
+            publicationEpoch: 'renderer:paired-close',
+            snapshotVersion: 1,
+            activeGroupId: 'group-1',
+            activeTabId: `host-tab::${HEADLESS_LEAF_ID}`,
+            activeTabType: 'terminal',
+            tabs: [
+              {
+                type: 'terminal',
+                id: `host-tab::${HEADLESS_LEAF_ID}`,
+                parentTabId: 'host-tab',
+                leafId: HEADLESS_LEAF_ID,
+                ptyId: 'persisted-pty',
+                title: 'Durable',
+                isActive: true
+              }
+            ]
+          }
+        ]
+      })
+      runtime.registerPty('persisted-pty', TEST_WORKTREE_ID, null, {
+        tabId: 'host-tab',
+        leafId: HEADLESS_LEAF_ID
+      })
+
+      const closePaired = () =>
+        runtime.closeMobileSessionTab(`id:${TEST_WORKTREE_ID}`, 'host-tab', {
+          reason: 'user',
+          clientNavigationId: 'device-a'
+        })
+      runtime.markGraphUnavailable(1)
+      runtime.setNotifier(null)
+      runtime.attachWindow(2)
+
+      await expect(closePaired()).rejects.toThrow('runtime_unavailable')
+
+      runtime.markGraphUnavailable(2)
+
+      await expect(closePaired()).resolves.toEqual({ closed: true, retirementConfirmed: true })
+      expect(closeTerminalTab).not.toHaveBeenCalled()
+      expect(getSession().tabsByWorktree[TEST_WORKTREE_ID] ?? []).toEqual([])
+      expect(getSession().terminalLayoutsByTabId['host-tab']).toBeUndefined()
+    }
+  )
 })

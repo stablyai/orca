@@ -162,4 +162,38 @@ describe('startBrowserScreencast', () => {
     await session.done
     expect(answer).toHaveBeenCalledExactlyOnceWith(false, '')
   })
+
+  it('clears the phone viewport on stop without waiting for a capture the guest never draws', async () => {
+    vi.useFakeTimers()
+    const capturePage = vi.fn(() => new Promise(() => {}))
+    const webContents = { ...createMockWebContents(), capturePage }
+    const session = await startBrowserScreencast(webContents as never, {
+      format: 'jpeg',
+      quality: 70,
+      maxWidth: 780,
+      maxHeight: 1688,
+      everyNthFrame: 1,
+      minFrameIntervalMs: 0,
+      viewportWidth: 390,
+      viewportHeight: 844,
+      deviceScaleFactor: 2,
+      mobile: true,
+      holdPaint: () => () => {},
+      onFrame: vi.fn()
+    })
+    try {
+      await vi.advanceTimersByTimeAsync(0)
+      expect(capturePage).toHaveBeenCalled()
+      session.stop()
+      await vi.advanceTimersByTimeAsync(0)
+      expect(webContents.debugger.sendCommand).toHaveBeenCalledWith(
+        'Emulation.clearDeviceMetricsOverride',
+        {}
+      )
+    } finally {
+      await vi.runAllTimersAsync()
+      await session.done
+      vi.useRealTimers()
+    }
+  })
 })

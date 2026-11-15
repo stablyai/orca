@@ -24,7 +24,7 @@ import {
   gitHubPRFileToBranchEntry,
   type PRFilesCombinedDiffViewerProps
 } from '@/components/github/pr-file-diff-mapping'
-import { githubRepoIdentityKey } from '../../../../../shared/github/repository-identity-key'
+import { githubRepoIdentityKey } from '../../../../../shared/github/repositories/repository-identity-key'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../../shared/execution-host'
 import { prFilesDiffScrollTopCache, prFilesDiffViewStateCache } from '../cache/files-diff-view'
 import { PRFilesDiffToolbar } from './toolbar'

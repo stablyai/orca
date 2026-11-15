@@ -5,7 +5,7 @@ import { delimiter, join } from 'node:path'
 import { openCodexAppServerConnection } from '../../app-server/codex-app-server-connection'
 import { sealStructuredSessionChild } from '../../../runtime/agent-session/environment/structured-session-child-env'
 import { createCodexStructuredLaunchResolver } from '../../../runtime/agent-session/launch/structured-agent-launch-composition.test-support'
-import { agentSessionRecordFixture } from '../../../native-chat/agent-session-record-test-fixture'
+import { agentSessionRecordFixture } from '../../../native-chat/testing/agent-session-record-test-fixture'
 import type { AgentSessionJournalIdentity } from '../../../../shared/agent-session/journal/agent-session-journal-identity'
 
 const DEV_CLI_BIN_FIRST = /^[^:;]*[\\/]cli[\\/]bin[:;]/

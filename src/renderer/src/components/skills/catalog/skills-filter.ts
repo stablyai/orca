@@ -1,4 +1,7 @@
-import type { DiscoveredSkill, SkillSourceKind } from '../../../../../shared/skills'
+import type {
+  DiscoveredSkill,
+  SkillSourceKind
+} from '../../../../../shared/skills/discovery/skills'
 import { isClipboardTextByteLengthOverLimit } from '../../../../../shared/clipboard-text'
 import { skillMatchesAgent } from './skill-agent-filter'
 

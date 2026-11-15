@@ -1,16 +1,21 @@
-import type { ResolveProjectRefArgs } from '../../../shared/github/project-request-types'
-import { GITHUB_OWNER_NUMBER_SHORTHAND_RE } from '../../../shared/github/owner-slug'
+import type { ResolveProjectRefArgs } from '../../../shared/github/projects/project-request-types'
+import {
+  GITHUB_OWNER_NUMBER_SHORTHAND_RE,
+  isGitHubOwnerSlug as isValidOwnerSlug
+} from '../../../shared/github/repositories/owner-slug'
 import type {
   GitHubProjectViewError,
   ResolveProjectRefResult
-} from '../../../shared/github/project-result-types'
-import type { GitHubProjectOwnerType } from '../../../shared/github/project-types'
+} from '../../../shared/github/projects/project-result-types'
+import type { GitHubProjectOwnerType } from '../../../shared/github/projects/project-types'
 import {
   GITHUB_PROJECT_REF_INPUT_TOO_LARGE_ERROR,
   isGitHubProjectRefInputTooLarge
-} from '../../../shared/github/project-ref-input'
-import { githubProjectHost } from '../../../shared/github/project-identity'
-import { isValidOwnerSlug, projectGhExecOptions, runGraphql, type GraphqlVars } from './internals'
+} from '../../../shared/github/projects/project-ref-input'
+import { githubProjectHost } from '../../../shared/github/projects/project-identity'
+
+import { projectGhExecOptions } from './project-host-execution'
+import { runGraphql, type GraphqlVars } from './project-graphql'
 import { getCachedOwnerType, rememberOwnerType } from './project-view-cache'
 import { ownerQueryRoot } from './project-view-config'
 

@@ -6,7 +6,8 @@ import {
   ScrollView,
   Keyboard,
   Modal,
-  Platform
+  Platform,
+  type ScrollViewInstance
 } from 'react-native'
 import { GestureDetector, GestureHandlerRootView } from 'react-native-gesture-handler'
 import Animated, { useSharedValue, useAnimatedStyle, withTiming } from 'react-native-reanimated'
@@ -15,7 +16,7 @@ import { spacing } from '../../theme/mobile-theme'
 import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
 import { resolveBottomDrawerFillHeight } from './bottom-drawer-fill-height'
 import { resolveBottomDrawerKeyboardInset } from './bottom-drawer-keyboard-inset'
-import { AutoHeight } from '../AutoHeight'
+import { AutoHeight } from '../motion/AutoHeight'
 import {
   bottomDrawerOffset,
   bottomDrawerScrim,
@@ -29,7 +30,10 @@ import {
 import { useResponsiveLayout } from '../../layout/responsive-layout'
 import { useWindowSafeAreaInsets } from '../../layout/side-safe-area'
 import { useBackClaim } from '../../navigation/use-back-claim'
-import { currentSoftKeyboardHeight, subscribeSoftKeyboard } from '../../platform/keyboard-occlusion'
+import {
+  currentSoftKeyboardHeight,
+  subscribeSoftKeyboard
+} from '../../platform/keyboard/keyboard-occlusion'
 import { hostOs } from '../../platform/host-os'
 import { hideDrawer, showDrawer, useBottomDrawerDrag } from './use-bottom-drawer-drag'
 import { useDrawerReducedMotion } from './bottom-drawer-constants'
@@ -75,7 +79,7 @@ export function MountedBottomDrawer({
   const motion = useMemo(() => ({ progress, fade, reducedMotion }), [progress, fade, reducedMotion])
   const keyboardOffset = useSharedValue(0)
   const scrollOffsetY = useSharedValue(0)
-  const scrollRef = useRef<ScrollView>(null)
+  const scrollRef = useRef<ScrollViewInstance>(null)
   useEffect(() => {
     if (scrollResetKey !== null) {
       scrollRef.current?.scrollTo({ y: 0, animated: false })

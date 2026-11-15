@@ -1,6 +1,6 @@
 import { readFile } from 'node:fs/promises'
 import { runProcess } from '@orca/process-host'
-import { runPsInProcess } from '../../shared/libproc-process-table'
+import { runPsInProcess } from '../../shared/process-observation/darwin/libproc-process-table'
 import {
   parseProcessTable,
   type ProcessTableRow

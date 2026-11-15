@@ -27,7 +27,7 @@ import type { NativeChatVisualOwner } from './native-chat-visual-owner'
 export function NativeChatVisualUnavailable(): React.JSX.Element {
   const t = useTranslate()
   return (
-    <p className="my-2 text-xs text-chat-foreground-faint">
+    <p className="my-2 text-xs text-chat-foreground-faint last:mb-0">
       {t('components.native-chat.visualUnavailable', 'Visualization unavailable')}
     </p>
   )
@@ -117,7 +117,7 @@ export function NativeChatInlineVisual({
   const openLabel = t('components.native-chat.visualOpenInNewTab', 'Open in new tab')
 
   return (
-    <div ref={boxRef} className="group/visual my-3">
+    <div ref={boxRef} className="group/visual my-3 last:mb-0">
       {state.status === 'ready' && near ? (
         <>
           {/* Above the frame, not over it: the page owns every pixel of its box. */}

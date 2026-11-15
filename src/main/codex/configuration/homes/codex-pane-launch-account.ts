@@ -1,10 +1,10 @@
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import { normalizeRuntimePathForComparison } from '../../../../shared/cross-platform-path'
-import { parseWslUncPath } from '../../../../shared/wsl-paths'
+import { parseWslUncPath } from '../../../../shared/file-access/wsl-paths'
 import {
   getCodexSelectionTargetForAccount,
   getSelectedCodexAccountIdForTarget
-} from '../../../codex-accounts/runtime-selection'
+} from '../../../codex-accounts/account-management/runtime-selection'
 import {
   getCodexSelectionLaneKey,
   type CodexAccountSelectionTarget

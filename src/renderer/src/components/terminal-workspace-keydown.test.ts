@@ -1,10 +1,12 @@
 // @vitest-environment happy-dom
 
-import '@testing-library/react'
+import { act, cleanup, renderHook } from '@testing-library/react'
+import type * as WorktreeActivation from '@/lib/workspace/activation/worktree-activation'
+import { activateAndRevealWorkspace } from '@/lib/workspace/activation/worktree-activation'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import '../hooks/ipc-tab-switch'
-import '@/components/floating-terminal/floating-workspace-terminal-actions'
-import '@/components/floating-terminal/floating-workspace-tab-creation'
+import '@/components/floating-terminal/workspace/floating-workspace-terminal-actions'
+import '@/components/floating-terminal/workspace/floating-workspace-tab-creation'
 import '@/lib/notifications/terminal-shortcut-capture-notification'
 import '@/lib/workspace/tabs/workspace-tab-commands'
 import type { Tab } from '../../../shared/tab-types'
@@ -17,7 +19,7 @@ import {
 import '@/store/testing/app-store-test-fixture'
 import '@/store/repos/repo.test-fixture'
 import '@/store/slices/worktrees/worktree.test-fixture'
-import './use-terminal-keyboard-shortcuts'
+import { useTerminalKeyboardShortcuts } from './use-terminal-keyboard-shortcuts'
 import './tab-bar/agent-menu-shortcut-labels'
 import { handleTerminalWorkspaceKeyDown } from './terminal-workspace-keydown'
 import type { TerminalActivationController } from './use-terminal-activation-actions'
@@ -25,8 +27,10 @@ import type * as AgentTabShortcuts from './terminal-agent-tab-shortcut'
 
 import type { TerminalAgentTabShortcut } from './terminal-agent-tab-shortcut'
 import './use-terminal-bulk-close-actions'
-import '../store/slices/editor/types/open-file.test-fixture'
-import '../store/slices/tabs/tab-group.test-fixture'
+import { makeOpenFile } from '../store/slices/editor/types/open-file.test-fixture'
+import { makeTabGroup, makeUnifiedTab } from '../store/slices/tabs/tab-group.test-fixture'
+import { EMPTY_EDITOR_BUFFER_VIEW_INDEX } from '../store/slices/editor/buffers/editor-buffer-views'
+import { registerEditorFrameFlush } from './editor/save/flush/editor-pending-flush'
 
 const confirmBulkClose = vi.hoisted(() => vi.fn<() => Promise<boolean>>())
 vi.mock('./confirmation-dialog-context', () => ({
@@ -57,6 +61,11 @@ vi.mock('@/lib/agent-session/structured-agent-session-busy', async () => ({
   ).admissionFromBusy(mocks.structuredSessionBusy)
 }))
 
+vi.mock('@/lib/workspace/activation/worktree-activation', async (importOriginal) => ({
+  ...(await importOriginal<typeof WorktreeActivation>()),
+  activateAndRevealWorkspace: vi.fn()
+}))
+
 vi.mock('../store/index', () => ({ useAppStore: { getState: () => mocks.state } }))
 vi.mock('../hooks/ipc-tab-switch', () => ({
   handleSwitchRecentTab: vi.fn(),
@@ -64,13 +73,13 @@ vi.mock('../hooks/ipc-tab-switch', () => ({
   handleSwitchTabAcrossAllTypes: vi.fn(),
   handleSwitchTerminalTab: vi.fn()
 }))
-vi.mock('@/components/floating-terminal/floating-workspace-terminal-actions', () => ({
+vi.mock('@/components/floating-terminal/workspace/floating-workspace-terminal-actions', () => ({
   handleEmptyFloatingWorkspacePanelCloseShortcut: () => false,
   isEventTargetInsideFloatingWorkspacePanel: () => mocks.targetInsideFloatingPanel,
   isFloatingWorkspacePanelFocused: () => mocks.floatingFocused,
   switchFloatingWorkspaceTab: vi.fn()
 }))
-vi.mock('@/components/floating-terminal/floating-workspace-tab-creation', () => ({
+vi.mock('@/components/floating-terminal/workspace/floating-workspace-tab-creation', () => ({
   createFloatingWorkspaceBrowserTab: vi.fn(),
   createFloatingWorkspaceMarkdownTab: vi.fn(),
   createFloatingWorkspaceTerminalTab: vi.fn()
@@ -104,6 +113,7 @@ vi.mock('@/runtime/browser/closing/browser-workspace-tab-close', () => ({
 vi.mock('../store/slices/browser/cleanup/browser-webview-cleanup', () => ({
   destroyWorkspaceWebviews: vi.fn()
 }))
+vi.mock('./tab-bar/web-runtime-tab-move-mirror', () => ({ mirrorWebRuntimeTabMove: vi.fn() }))
 
 const controller = {
   activeWorktreeId: 'repo-1::/repo/worktree',
@@ -157,6 +167,108 @@ describe('handleTerminalWorkspaceKeyDown editor.save', () => {
         ? { contentType: 'editor', entityId: 'floating-file' }
         : null
     expect(pressCmdS()).toEqual([{ fileId: 'floating-file' }])
+  })
+})
+
+describe('handleTerminalWorkspaceKeyDown editor.toggleChangesView', () => {
+  const setEditorViewMode = vi.fn()
+  const boundController: TerminalActivationController = {
+    ...controller,
+    keybindings: { 'editor.toggleChangesView': ['Mod+Alt+Shift+K'] }
+  }
+
+  function pressToggle(repeat = false): KeyboardEvent {
+    const event = new KeyboardEvent('keydown', {
+      key: 'K',
+      code: 'KeyK',
+      metaKey: true,
+      altKey: true,
+      shiftKey: true,
+      repeat,
+      cancelable: true
+    })
+    Object.defineProperty(event, 'target', { value: document.body })
+    vi.spyOn(event, 'stopPropagation')
+    handleTerminalWorkspaceKeyDown(event, boundController, 'darwin')
+    return event
+  }
+
+  beforeEach(() => {
+    mocks.floatingFocused = false
+    mocks.targetInsideFloatingPanel = false
+    setEditorViewMode.mockClear()
+    mocks.state = {
+      activeView: 'terminal',
+      activeTabType: 'editor',
+      activeFileId: '/repo/worktree/src/app.ts',
+      getActiveTab: () => null,
+      openFiles: [
+        makeOpenFile({
+          id: '/repo/worktree/src/app.ts',
+          worktreeId: controller.activeWorktreeId!,
+          relativePath: 'src/app.ts'
+        })
+      ],
+      editorViewMode: {},
+      setEditorViewMode,
+      ...EMPTY_EDITOR_BUFFER_VIEW_INDEX
+    }
+  })
+
+  it('toggles the active file between edit and changes like the toolbar', () => {
+    expect(pressToggle().defaultPrevented).toBe(true)
+    expect(setEditorViewMode).toHaveBeenLastCalledWith('/repo/worktree/src/app.ts', 'changes')
+    mocks.state.editorViewMode = { '/repo/worktree/src/app.ts': 'changes' }
+    pressToggle()
+    expect(setEditorViewMode).toHaveBeenLastCalledWith('/repo/worktree/src/app.ts', 'edit')
+  })
+
+  it('flushes a custom editor frame before leaving it, like the toolbar', async () => {
+    const flush = Promise.withResolvers<boolean>()
+    const unregister = registerEditorFrameFlush('/repo/worktree/src/app.ts', () => flush.promise)
+    try {
+      expect(pressToggle().defaultPrevented).toBe(true)
+      expect(setEditorViewMode).not.toHaveBeenCalled()
+      flush.resolve(true)
+      await vi.waitFor(() =>
+        expect(setEditorViewMode).toHaveBeenCalledWith('/repo/worktree/src/app.ts', 'changes')
+      )
+    } finally {
+      unregister()
+    }
+  })
+
+  it('keeps claimed chords and held repeats away from Monaco without toggling again', () => {
+    const repeat = pressToggle(true)
+    expect(repeat.defaultPrevented).toBe(true)
+    expect(repeat.stopPropagation).toHaveBeenCalled()
+    expect(setEditorViewMode).not.toHaveBeenCalled()
+  })
+
+  it('leaves the chord unclaimed when the toolbar has no Changes toggle', () => {
+    mocks.state.openFiles = [
+      makeOpenFile({
+        id: '/repo/worktree/src/app.ts',
+        filePath: '/repo/worktree/notes.ipynb',
+        worktreeId: controller.activeWorktreeId!,
+        relativePath: 'notes.ipynb'
+      })
+    ]
+    expect(pressToggle().defaultPrevented).toBe(false)
+    expect(setEditorViewMode).not.toHaveBeenCalled()
+  })
+
+  it('leaves the chord unclaimed on image tabs, which load as binary', () => {
+    mocks.state.openFiles = [
+      makeOpenFile({
+        id: '/repo/worktree/src/app.ts',
+        filePath: '/repo/worktree/logo.png',
+        worktreeId: controller.activeWorktreeId!,
+        relativePath: 'logo.png'
+      })
+    ]
+    expect(pressToggle().defaultPrevented).toBe(false)
+    expect(setEditorViewMode).not.toHaveBeenCalled()
   })
 })
 
@@ -224,5 +336,126 @@ describe('tab.close uses the unified active tab', () => {
     handleTerminalWorkspaceKeyDown(event, controller, 'darwin')
     expect(event.defaultPrevented).toBe(false)
     expect(closeUnifiedTab).not.toHaveBeenCalled()
+  })
+})
+
+describe('reopen closed tab from the welcome screen', () => {
+  afterEach(() => {
+    cleanup()
+    vi.restoreAllMocks()
+  })
+
+  it('restores the current history workspace with no active workspace', () => {
+    vi.spyOn(navigator, 'userAgent', 'get').mockReturnValue('Windows')
+    const reopenClosedTab = vi.fn(() => true)
+    const worktreeId = 'repo-1::/repo/last-workspace'
+    mocks.state = {
+      worktreeNavHistory: ['repo-1::/repo/older', worktreeId, 'repo-1::/repo/forward'],
+      worktreeNavHistoryIndex: 1,
+      reopenClosedTab
+    }
+    renderHook(() => useTerminalKeyboardShortcuts({ ...controller, activeWorktreeId: null }))
+    const event = new KeyboardEvent('keydown', {
+      key: 'T',
+      code: 'KeyT',
+      shiftKey: true,
+      ctrlKey: true,
+      cancelable: true
+    })
+    act(() => window.dispatchEvent(event))
+    expect(reopenClosedTab).toHaveBeenCalledExactlyOnceWith(worktreeId)
+    expect(activateAndRevealWorkspace).toHaveBeenCalledExactlyOnceWith(worktreeId, {
+      navigationIntent: 'user-open'
+    })
+    expect(event.defaultPrevented).toBe(true)
+  })
+})
+
+describe('tab.moveLeft / tab.moveRight', () => {
+  const worktreeId = controller.activeWorktreeId!
+  const reorderUnifiedTabs = vi.fn()
+  const boundController = {
+    ...controller,
+    keybindings: {
+      'tab.moveLeft': ['Mod+Alt+Shift+BracketLeft'],
+      'tab.moveRight': ['Mod+Alt+Shift+BracketRight']
+    }
+  }
+
+  // Focused group g holds a,b,c; neighbor group h holds x so edges must not spill across groups.
+  function seed(activeTabId: string, groupsWorktreeId = worktreeId): void {
+    const tabs = [
+      ...['a', 'b', 'c'].map((id) =>
+        makeUnifiedTab({ id, worktreeId: groupsWorktreeId, groupId: 'g' })
+      ),
+      makeUnifiedTab({ id: 'x', worktreeId: groupsWorktreeId, groupId: 'h' })
+    ]
+    mocks.state = {
+      activeWorktreeId: worktreeId,
+      activeGroupIdByWorktree: { [groupsWorktreeId]: 'g' },
+      groupsByWorktree: {
+        [groupsWorktreeId]: [
+          makeTabGroup({
+            id: 'g',
+            worktreeId: groupsWorktreeId,
+            activeTabId,
+            tabOrder: ['a', 'b', 'c']
+          }),
+          makeTabGroup({ id: 'h', worktreeId: groupsWorktreeId, activeTabId: 'x', tabOrder: ['x'] })
+        ]
+      },
+      unifiedTabsByWorktree: { [groupsWorktreeId]: tabs },
+      tabsByWorktree: { [groupsWorktreeId]: tabs.map((tab) => ({ id: tab.entityId })) },
+      tabBarOrderByWorktree: {},
+      openFiles: [],
+      browserTabsByWorktree: {},
+      reorderUnifiedTabs
+    }
+  }
+
+  function press(direction: 'left' | 'right'): KeyboardEvent {
+    const event = new KeyboardEvent('keydown', {
+      key: direction === 'left' ? '[' : ']',
+      code: direction === 'left' ? 'BracketLeft' : 'BracketRight',
+      metaKey: true,
+      altKey: true,
+      shiftKey: true,
+      cancelable: true
+    })
+    handleTerminalWorkspaceKeyDown(event, boundController, 'darwin')
+    return event
+  }
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mocks.floatingFocused = false
+    mocks.targetInsideFloatingPanel = false
+  })
+
+  it('moves the active tab one slot within its group', () => {
+    seed('b')
+    expect(press('left').defaultPrevented).toBe(true)
+    expect(reorderUnifiedTabs).toHaveBeenLastCalledWith('g', ['b', 'a', 'c'])
+    press('right')
+    expect(reorderUnifiedTabs).toHaveBeenLastCalledWith('g', ['a', 'c', 'b'])
+  })
+
+  it('stops at the left edge of the group', () => {
+    seed('a')
+    expect(press('left').defaultPrevented).toBe(true)
+    expect(reorderUnifiedTabs).not.toHaveBeenCalled()
+  })
+
+  it('stops at the right edge of the group instead of crossing into the next group', () => {
+    seed('c')
+    expect(press('right').defaultPrevented).toBe(true)
+    expect(reorderUnifiedTabs).not.toHaveBeenCalled()
+  })
+
+  it('moves the floating panel tab when the panel owns the event', () => {
+    seed('a', FLOATING_TERMINAL_WORKTREE_ID)
+    mocks.targetInsideFloatingPanel = true
+    press('right')
+    expect(reorderUnifiedTabs).toHaveBeenLastCalledWith('g', ['b', 'a', 'c'])
   })
 })

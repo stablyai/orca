@@ -7,7 +7,7 @@ import {
   ClaudeAgentViewObservation,
   type ClaudeAgentViewSnapshot,
   type ClaudeAgentViewResult
-} from '../../../shared/claude-agent-view'
+} from '../../../shared/agent-hook-listener/providers/claude/view/claude-agent-view'
 
 const Identity = z.object({
   paneKey: z

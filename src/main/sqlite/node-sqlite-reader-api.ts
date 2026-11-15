@@ -2,7 +2,7 @@
 export const NODE_SQLITE_READER_API_SOURCE =
   "(m)=>typeof m==='object'&&m!==null&&typeof m.DatabaseSync==='function'&&typeof m.backup==='function'"
 
-/** Parity-tested in-process twin of NODE_SQLITE_READER_API_SOURCE. */
+/** In-process twin of NODE_SQLITE_READER_API_SOURCE. */
 export function hasNodeSqliteReaderApi(sqlite: unknown): boolean {
   return (
     typeof sqlite === 'object' &&

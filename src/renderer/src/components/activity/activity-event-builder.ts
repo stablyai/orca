@@ -2,7 +2,6 @@ import { getStructuredAgentSessionTabsByPaneKey } from '@/components/native-chat
 import { parseAgentStatusPaneIdentity } from '../../../../shared/agent-status/identity/agent-status-worktree-attribution'
 import { tabHasLivePty } from '../../../../shared/tab-has-live-pty'
 import { activityLiveAgentState } from './activity-event-state'
-import type { RetainedAgentEntry } from '@/store/slices/agent-status/agent-status-contract'
 import type {
   AgentStatusEntry,
   AgentStatusOrchestrationContext
@@ -10,7 +9,7 @@ import type {
 import type { MigrationUnsupportedPtyEntry } from '../../../../shared/agent-status/contracts/agent-status-ipc-payload'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 import type { StructuredChatTabNames } from '@/runtime/native-chat/naming/structured-chat-tab-name'
-import type { Repo } from '../../../../shared/repo-types'
+import type { Repo } from '../../../../shared/repository/repo-types'
 import type { Tab } from '../../../../shared/tab-types'
 import type { TerminalTab } from '../../../../shared/workspace-layout/terminal-tab-types'
 import type { Worktree } from '../../../../shared/worktree/types'
@@ -22,7 +21,7 @@ import {
   resolvePaneBuild,
   type ActivityEventBuildCache
 } from './activity-event-build-cache'
-import { appendUnsupportedAndRetainedEvents } from './activity-event-builder-sources'
+import { appendUnsupportedEvents } from './activity-event-builder-sources'
 import {
   attributedActivityTabContext,
   resolveActivityEventOwner,
@@ -35,7 +34,6 @@ export type BuildActivityEventsArgs = {
   agentStatusByPaneKey: Record<string, AgentStatusEntry>
   runtimeAgentOrchestrationByPaneKey?: Record<string, AgentStatusOrchestrationContext>
   migrationUnsupportedByPtyId?: Record<string, MigrationUnsupportedPtyEntry>
-  retainedAgentsByPaneKey: Record<string, RetainedAgentEntry>
   tabsByWorktree: Record<string, TerminalTab[]>
   ptyIdsByTabId?: Record<string, string[]>
   unifiedTabsByWorktree?: Record<string, Tab[]>
@@ -67,7 +65,7 @@ export function buildActivityEvents(
   const seenCacheKeys = cache ? new Set<string>() : null
 
   const pushPaneEvents = (paneEvents: ActivityEvent[], rowEntry: AgentStatusEntry): void => {
-    // Live/retained sources can overlap; keep globally unique event IDs with first-source precedence.
+    // Preserve globally unique event IDs with first-source precedence.
     paneEntryByPaneKey[rowEntry.paneKey] ??= rowEntry
     for (const event of paneEvents) {
       if (seenEventIds.has(event.id)) {
@@ -136,7 +134,7 @@ export function buildActivityEvents(
     pushPaneEvents(paneEvents, rowEntry)
   }
 
-  appendUnsupportedAndRetainedEvents({
+  appendUnsupportedEvents({
     args,
     cache,
     seenCacheKeys,

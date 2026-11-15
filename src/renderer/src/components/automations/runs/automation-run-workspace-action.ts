@@ -13,7 +13,7 @@ import { activateTerminalTabOnOwner } from '@/lib/workspace/tabs/terminal-tab-ow
 import { activateWebRuntimeSessionTab } from '@/runtime/web-session-tabs-sync/actions/web-runtime-session-tab-lifecycle'
 import { resolveWebSessionVisibleTabId } from '@/runtime/web-session-tabs-sync/navigation/web-session-focus-intent'
 import { parsePaneKey } from '../../../../../shared/workspace-layout/stable-pane-id'
-import { parseWorkspaceKey } from '../../../../../shared/workspace-scope'
+import { parseWorkspaceKey } from '../../../../../shared/workspace/identity/workspace-scope'
 import { buildAutomationRunOpenLayout } from './automation-run-pane-layout'
 import type { AutomationRun } from '../../../../../shared/automations/history/automation-run'
 import type { ActivateAndRevealResult } from '@/lib/workspace/activation/worktree-activation-outcome'

@@ -3,6 +3,7 @@ import {
   LOCAL_EXECUTION_HOST_ID
 } from '../../../../../../shared/execution-host'
 import { issueCacheKey as getIssueCacheKey } from '@/store/github/cache/cache-identity'
+import { getWorktreeGitHubIssueRepository } from '../../../../../../shared/worktree/github-issue-repository'
 import {
   buildPaletteDocument,
   type PaletteDocument
@@ -23,11 +24,11 @@ import {
   resolveWorktreeDisplayName
 } from '../../display/worktree-default-display-name'
 import type { HostedReviewInfo } from '../../../../../../shared/source-control/hosted-review/hosted-review-contracts'
-import type { Repo } from '../../../../../../shared/repo-types'
+import type { Repo } from '../../../../../../shared/repository/repo-types'
 import { getWorkspaceAttachments } from '../../../../../../shared/workspace-attachments/workspace-attachments'
 import { getWorkspaceAttachmentKey } from '../../../../../../shared/workspace-attachments/workspace-attachment-normalization'
 import type { Worktree } from '../../../../../../shared/worktree/types'
-import { isGitHubPRSuppressed } from '../../../../../../shared/worktree/github-pr-suppression'
+import { isGitHubPRSuppressed } from '../../../../../../shared/worktree/hosted-review/github-pr-suppression'
 import {
   getPaletteWorktreeIdentity,
   resolvePaletteRepoForWorktree
@@ -111,7 +112,9 @@ function resolveIssueTitle(
     worktree.linkedIssue,
     undefined,
     repo.connectionId,
-    repo.executionHostId
+    repo.executionHostId,
+    false,
+    getWorktreeGitHubIssueRepository(worktree)
   )
   return sources.issueCache[key]?.data?.title ?? ''
 }

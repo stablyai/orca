@@ -5,7 +5,7 @@ import {
 } from '../../shared/dashboard-snapshot'
 import { BoundedMap } from '../../shared/bounded-map'
 import { normalizeExecutionHostId } from '../../shared/execution-host'
-import { sanitizeRepoIcon } from '../../shared/repo-icon'
+import { sanitizeRepoIcon } from '../../shared/repository/appearance/repo-icon'
 import {
   AGENT_STATUS_ASSISTANT_MESSAGE_MAX_LENGTH,
   AGENT_STATUS_INTERACTIVE_PROMPT_MAX_LENGTH
