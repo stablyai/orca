@@ -140,6 +140,12 @@ export class EdgeMoveBusyError extends Error {
   }
 }
 
+// The edge refused the export because the host's desktop is connected there (a live control). For a
+// leave nobody needs now (exclusion, rollout decrease, with mode on) the ask is answered with the
+// host's edge assignment instead (EdgeAssignments.stayOnEdge), so a connected desktop never loops on
+// 503s; the host leaves at a later ask, once its control is gone.
+export class EdgeHostLiveError extends EdgeMoveBusyError {}
+
 export const EDGE_MOVE_BUSY_RETRY_AFTER_SECONDS = 2
 
 // Edge admin calls one director may have in flight while it holds assignment row locks (pushes of
@@ -741,6 +747,46 @@ export class EdgeAssignments {
     }
   }
 
+  // A leave that found the desktop live on the edge (EdgeHostLiveError) and is not needed now: answer
+  // the host's edge row, as an ask inside the cohort would (lease refreshed, epoch unchanged, so the
+  // edge accepts it). Null when that is not safe, and the caller keeps today's 503: the row is
+  // locked by another director, is no longer on the edge, or has a front-door switch pending (the
+  // edge may already hold the pending epoch, above the row's).
+  async stayOnEdge(identity: Identity): Promise<RelayAssignment | null> {
+    if (!this.seeded) { return null }
+    const now = this.now()
+    const leaseExpiresAt = now + ASSIGNMENT_LIMITS.activityLeaseMs
+    return await this.database.transaction(async (transaction) => {
+      let rows: SqlRow[]
+      try {
+        rows = await transaction.queryLocked(
+          `SELECT cell_id, assignment_epoch FROM relay_assignments WHERE user_id = ? AND relay_host_id = ?`,
+          [identity.userId, identity.relayHostId],
+          { failIfUnavailable: true }
+        )
+      } catch (error) {
+        if (error instanceof Error && error.message === 'database_lock_unavailable') { return null }
+        throw error
+      }
+      const row = rows[0]
+      if (!row || text(row, 'cell_id') !== EDGE_CELL_ID) { return null }
+      const region = (
+        await transaction.query(
+          `SELECT cell_url, pending_epoch FROM relay_edge_host_regions WHERE user_id = ? AND relay_host_id = ?`,
+          [identity.userId, identity.relayHostId]
+        )
+      )[0]
+      if (region && region.pending_epoch !== null && region.pending_epoch !== undefined) { return null }
+      await transaction.query(
+        `UPDATE relay_assignments SET lease_expires_at = ?, last_activity_at = ?
+         WHERE user_id = ? AND relay_host_id = ?`,
+        [leaseExpiresAt, now, identity.userId, identity.relayHostId]
+      )
+      const frontDoor = this.config.frontDoorUrls === undefined ? undefined : this.allowedFrontDoor(region?.cell_url)
+      return this.answer(identity, integer(row, 'assignment_epoch'), leaseExpiresAt, frontDoor)
+    })
+  }
+
   // A host on the edge is about to be placed elsewhere (cohort off, rollback): first take its
   // devices back. The edge refuses while the desktop is connected and otherwise freezes the host
   // (30 s), so nothing changes after the snapshot. Returns false when the host is not on the edge.
@@ -775,7 +821,7 @@ export class EdgeAssignments {
     }
     this.exportFailingSince = undefined
     this.exportLastFailureAt = undefined
-    if (exported.outcome === 'busy') throw new EdgeMoveBusyError()
+    if (exported.outcome === 'busy') { throw new EdgeHostLiveError() }
     // An object with no assignment never held this host's data (or was erased): keep Postgres.
     if (!exported.assignment) return true
     const devices = exported.devices.map((device) => {
