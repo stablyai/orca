@@ -63,11 +63,15 @@ export function useSidebarWorktreeSelection(args: {
   )
   const updateSelectionForGesture = useCallback(
     (event: React.MouseEvent<HTMLElement>, worktree: Worktree): boolean => {
-      const list = event.currentTarget?.closest<HTMLElement>('[data-worktree-sidebar]')
-      list?.focus({ preventScroll: true })
-      list?.setAttribute('data-keyboard-navigation', '')
       setFocusedKey(getWorktreeHostIdentity(worktree))
-      return updateSelection(event, worktree)
+      const selectionOnly = updateSelection(event, worktree)
+      // Why: a plain click opens the workspace, whose terminal or chat takes the keys; only multi-select keeps them in the list.
+      if (selectionOnly) {
+        const list = event.currentTarget?.closest<HTMLElement>('[data-worktree-sidebar]')
+        list?.focus({ preventScroll: true })
+        list?.setAttribute('data-keyboard-navigation', '')
+      }
+      return selectionOnly
     },
     [updateSelection]
   )
