@@ -10,6 +10,7 @@ import type {
 import type { GitHubPRRefreshCandidate } from '../../../shared/github/pull-requests/refresh/pull-request-refresh-types'
 import type { Store } from '../../persistence/loading-store/store'
 import { prDetailRecoveryCandidate } from '../../github/pull-requests/refresh/pr-detail-recovery-candidate'
+import { bindRepoExecutionHost } from '../../workspaces/execution-host/repo-execution-host'
 import {
   cancelPRDetailRecovery,
   cancelPRDetailRecoveryCaller,
@@ -46,7 +47,7 @@ function callerKey(event: IpcMainInvokeEvent): string {
 function resolveCandidate(
   store: Store,
   args: PRDetailRecoveryStartArgs
-): GitHubPRRefreshCandidate | 'validation' {
+): { candidate: GitHubPRRefreshCandidate; ownerDigest: string } | 'validation' {
   const candidate = prDetailRecoveryCandidate(args)
   const executionHostId = normalizeExecutionHostId(args.identity.executionHostId)
   if (!candidate || !executionHostId) {
@@ -61,9 +62,23 @@ function resolveCandidate(
       },
       store
     )
-    return (repo.kind ?? 'git') === 'git'
-      ? applyRegisteredRepoToPRRefreshCandidate(store, repo, candidate)
-      : 'validation'
+    const owner = bindRepoExecutionHost(repo, 'native')
+    if ((repo.kind ?? 'git') !== 'git' || !owner || owner.executionHostId !== executionHostId) {
+      return 'validation'
+    }
+    const boundCandidate: GitHubPRRefreshCandidate = {
+      ...applyRegisteredRepoToPRRefreshCandidate(store, repo, candidate),
+      ...owner,
+      connectionState: owner.connectionId ? 'connected' : 'unknown'
+    }
+    return {
+      candidate: boundCandidate,
+      ownerDigest: JSON.stringify([
+        prRefreshRequestDigest(boundCandidate),
+        repo.ghAccount?.host ?? null,
+        repo.ghAccount?.user ?? null
+      ])
+    }
   } catch {
     return 'validation'
   }
@@ -75,19 +90,19 @@ export function registerGitHubPRDetailRecoveryHandlers(store: Store): void {
     'gh:startPRDetailRecovery',
     (event, args: PRDetailRecoveryStartArgs): PRDetailRecoverySnapshot => {
       const key = callerKey(event)
-      const candidate = resolveCandidate(store, args)
-      const ownerDigest = candidate === 'validation' ? null : prRefreshRequestDigest(candidate)
+      const selected = resolveCandidate(store, args)
+      const ownerDigest = selected === 'validation' ? null : selected.ownerDigest
       return startPRDetailRecovery(
         {
           callerKey: key,
           windowId: event.sender.id,
           isOwnerCurrent: () => {
             const current = resolveCandidate(store, args)
-            return current !== 'validation' && prRefreshRequestDigest(current) === ownerDigest
+            return current !== 'validation' && current.ownerDigest === ownerDigest
           }
         },
         args,
-        candidate
+        selected === 'validation' ? 'validation' : selected.candidate
       )
     }
   )

@@ -102,6 +102,10 @@ function prepareTokenOf(snapshot: unknown): string {
 async function register(): Promise<(channel: string, args: unknown) => Promise<unknown>> {
   const { registerGitHubPRDetailRecoveryHandlers } =
     await import('./github-pr-detail-recovery-handlers')
+  const { setPRRefreshRegistrationCheck } =
+    await import('../../github/pull-requests/refresh/pr-refresh-coordinator')
+  const { isPRRefreshCandidateRegistered } = await import('./github-repo-routing')
+  setPRRefreshRegistrationCheck((candidate) => isPRRefreshCandidateRegistered(candidate, repos))
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: repo validation and routing read only getRepo(s), getProjects and getSettings.
   registerGitHubPRDetailRecoveryHandlers(store as never)
   const handlers = new Map<string, (event: unknown, args: unknown) => unknown>(
@@ -160,36 +164,70 @@ describe('native PR detail recovery handlers', () => {
     )
   })
 
-  it('returns the SSH result when a local same-ID/path twin is registered', async () => {
-    repos = [repo, sshRepo]
-    getPRForBranchOutcomeMock.mockImplementation((_path, _branch, _linked, connectionId) =>
-      Promise.resolve({
-        kind: 'found',
-        pr: makePR({ number: connectionId === 'remote' ? 22 : 11 }),
-        fetchedAt: START_AT
-      })
-    )
-    const invoke = await register()
-    const started = await invoke(
-      'gh:startPRDetailRecovery',
-      startArgs(repo.id, repo.path, 'ssh:remote')
-    )
-    const ticketId = ticketIdOf(started)
-    await vi.advanceTimersByTimeAsync(0)
-    const prepared = await invoke('gh:waitPRDetailRecovery', { ticketId, afterRevision: 0 })
-    await invoke('gh:commitPRDetailRecovery', {
-      ticketId,
-      prepareToken: prepareTokenOf(prepared),
-      publicationGrantId: 'grant-1'
-    })
-    await vi.waitFor(async () =>
-      expect(await invoke('gh:waitPRDetailRecovery', { ticketId, afterRevision: 0 })).toMatchObject(
-        {
-          admitted: true,
-          terminal: { kind: 'settled', outcome: { pr: { number: 22 } } }
-        }
+  it.each([
+    ['local', [sshRepo, repo], 'local', 11],
+    ['legacy SSH', [repo, sshRepo], 'ssh:remote', 22],
+    ['explicit-only SSH', [repo, { ...repo, executionHostId: 'ssh:remote' }], 'ssh:remote', 22],
+    [
+      'normalized SSH',
+      [repo, { ...repo, executionHostId: 'ssh:remote%2Ftarget', connectionId: ' remote/target ' }],
+      ' ssh:remote%2Ftarget ',
+      22
+    ]
+  ] as const)(
+    'returns the %s result beside a same-ID/path twin',
+    async (_name, owners, host, number) => {
+      repos = [...owners]
+      getPRForBranchOutcomeMock.mockImplementation((_path, _branch, _linked, connectionId) =>
+        Promise.resolve({
+          kind: 'found',
+          pr: makePR({
+            number:
+              connectionId === 'remote' || connectionId === 'remote/target'
+                ? 22
+                : connectionId
+                  ? 33
+                  : 11
+          }),
+          fetchedAt: START_AT
+        })
       )
-    )
+      const invoke = await register()
+      const started = await invoke('gh:startPRDetailRecovery', startArgs(repo.id, repo.path, host))
+      const ticketId = ticketIdOf(started)
+      await vi.advanceTimersByTimeAsync(0)
+      const prepared = await invoke('gh:waitPRDetailRecovery', { ticketId, afterRevision: 0 })
+      await invoke('gh:commitPRDetailRecovery', {
+        ticketId,
+        prepareToken: prepareTokenOf(prepared),
+        publicationGrantId: 'grant-1'
+      })
+      await vi.waitFor(async () =>
+        expect(
+          await invoke('gh:waitPRDetailRecovery', { ticketId, afterRevision: 0 })
+        ).toMatchObject({
+          admitted: true,
+          terminal: { kind: 'settled', outcome: { pr: { number } } }
+        })
+      )
+    }
+  )
+
+  it.each([
+    ['conflicting SSH', 'ssh:remote', 'stale'],
+    ['conflicting local', 'local', 'stale'],
+    ['runtime', 'runtime:env', undefined],
+    ['nested runtime SSH', 'runtime:env', 'nested'],
+    ['unresolved owner', 'runtime:unresolved-owner', undefined]
+  ] as const)('refuses an unbound %s owner', async (_name, executionHostId, connectionId) => {
+    repos = [{ ...repo, executionHostId, connectionId }]
+    const invoke = await register()
+    expect(
+      await invoke('gh:startPRDetailRecovery', startArgs(repo.id, repo.path, executionHostId))
+    ).toMatchObject({
+      admitted: false,
+      terminal: { kind: 'not-admitted', reason: 'validation' }
+    })
   })
 
   it('refuses recovery when the SSH owner disappears before main resolves it', async () => {
@@ -219,7 +257,11 @@ describe('native PR detail recovery handlers', () => {
 
   it.each([
     ['disappears', [repo]],
-    ['changes repository ID', [repo, { ...sshRepo, id: 'replacement' }]]
+    ['changes repository ID', [repo, { ...sshRepo, id: 'replacement' }]],
+    [
+      'changes account',
+      [repo, { ...sshRepo, ghAccount: { host: 'github.com', user: 'other-account' } }]
+    ]
   ] as const)(
     'refuses admission if the SSH owner %s during provider preparation',
     async (_name, changedRepos) => {

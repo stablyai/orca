@@ -56,23 +56,27 @@ const identity = {
   selectionRevision: '|||||'
 }
 
-async function methods() {
+async function methods(
+  resolveCandidate?: RpcContext['runtime']['resolvePRDetailRecoveryCandidate']
+) {
   const { GITHUB_PR_DETAIL_RECOVERY_METHODS } = await import('./github-pr-detail-recovery-methods')
   const byName = Object.fromEntries(GITHUB_PR_DETAIL_RECOVERY_METHODS.map((m) => [m.name, m]))
   const runtime = {
-    resolvePRDetailRecoveryCandidate: async () => ({
-      cacheKey: '/server/repo::feature/test',
-      repoKind: 'git' as const,
-      repoId: 'server-repo',
-      repoPath: '/server/repo',
-      branch: 'feature/test',
-      worktreeId: 'wt-1',
-      currentHeadOid: 'h2',
-      fallbackPRNumber: 7,
-      fallbackPRSource: 'hosted-review' as const,
-      connectionId: null,
-      executionHostId: null
-    })
+    resolvePRDetailRecoveryCandidate:
+      resolveCandidate ??
+      (async () => ({
+        cacheKey: '/server/repo::feature/test',
+        repoKind: 'git' as const,
+        repoId: 'server-repo',
+        repoPath: '/server/repo',
+        branch: 'feature/test',
+        worktreeId: 'wt-1',
+        currentHeadOid: 'h2',
+        fallbackPRNumber: 7,
+        fallbackPRSource: 'hosted-review' as const,
+        connectionId: null,
+        executionHostId: null
+      }))
   }
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: these handlers read only runtime.resolvePRDetailRecoveryCandidate and the caller identity.
   const context = (clientId: string) => ({ runtime, clientId }) as unknown as RpcContext
@@ -85,6 +89,26 @@ async function methods() {
   return { call }
 }
 
+async function registeredMethods(owner: Pick<Repo, 'executionHostId' | 'connectionId'>) {
+  const { RuntimeHostedReviewCommands } =
+    await import('../../../../integrations/reviews/runtime-hosted-review-commands')
+  const repo: Repo = {
+    id: 'server-repo',
+    path: '/server/repo',
+    displayName: 'repo',
+    badgeColor: '#000',
+    addedAt: 0,
+    ...owner
+  }
+  const commands = new RuntimeHostedReviewCommands({
+    resolveRepo: async () => repo,
+    resolveTarget: async () => ({ repo, repoPath: repo.path }),
+    getExecutionOptions: () => undefined,
+    recordCreated: () => {}
+  })
+  return methods((args) => commands.resolvePRDetailRecoveryCandidate(args))
+}
+
 describe('github.prDetailRecovery runtime methods', () => {
   beforeEach(() => {
     moduleMocks.resetPRRefreshCoordinatorMocks(coordinatorMocks)
@@ -93,6 +117,57 @@ describe('github.prDetailRecovery runtime methods', () => {
 
   afterEach(() => {
     vi.useRealTimers()
+  })
+
+  it('runs a runtime-stamped server repo on that server', async () => {
+    getPRForBranchOutcomeMock.mockImplementation((_path, _branch, _linked, connectionId) =>
+      Promise.resolve({
+        kind: 'found',
+        pr: makePR({ number: connectionId ? 33 : 22 }),
+        fetchedAt: START_AT
+      })
+    )
+    const { call } = await registeredMethods({ executionHostId: 'runtime:env' })
+    const started = await call('github.prDetailRecovery.start', {
+      clientEpoch: { scope: 'g1000.panel', counter: 1 },
+      identity: { ...identity, executionHostId: 'runtime:env' },
+      cacheKey: 'client-cache-key'
+    })
+    await vi.advanceTimersByTimeAsync(0)
+    const prepared = await call('github.prDetailRecovery.wait', {
+      ticketId: started.ticketId,
+      afterRevision: 0
+    })
+    await call('github.prDetailRecovery.commit', {
+      ticketId: started.ticketId,
+      prepareToken: prepared.preparation.token,
+      publicationGrantId: 'grant-1'
+    })
+    await vi.waitFor(async () =>
+      expect(
+        await call('github.prDetailRecovery.wait', { ticketId: started.ticketId, afterRevision: 0 })
+      ).toMatchObject({
+        admitted: true,
+        terminal: { kind: 'settled', outcome: { pr: { number: 22 } } }
+      })
+    )
+  })
+
+  it('refuses a runtime repo with a nested SSH target instead of executing on the server', async () => {
+    const { call } = await registeredMethods({
+      executionHostId: 'runtime:env',
+      connectionId: 'nested'
+    })
+    expect(
+      await call('github.prDetailRecovery.start', {
+        clientEpoch: { scope: 'g1000.panel', counter: 1 },
+        identity: { ...identity, executionHostId: 'runtime:env' },
+        cacheKey: 'client-cache-key'
+      })
+    ).toMatchObject({
+      admitted: false,
+      terminal: { kind: 'not-admitted', reason: 'validation' }
+    })
   })
 
   it('runs a headless ticket through the shared drainer with the server repo path', async () => {

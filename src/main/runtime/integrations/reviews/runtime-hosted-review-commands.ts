@@ -34,7 +34,10 @@ import {
 import type { GitAdmissionTier } from '../../../../shared/rpc-contract/source-control/git-admission-tier-params'
 
 import { readHostedReviewForBranch } from '../../../source-control/hosted-review'
-import { getStoredRepoExecutionHostId } from '../../../workspaces/execution-host/repo-execution-host'
+import {
+  bindRepoExecutionHost,
+  getStoredRepoExecutionHostId
+} from '../../../workspaces/execution-host/repo-execution-host'
 import { hostedReviewSshConnectionId } from '../../../source-control/hosted-review-execution-host'
 import {
   createHostedReview,
@@ -171,12 +174,10 @@ export class RuntimeHostedReviewCommands {
     } catch {
       return 'validation'
     }
-    if ((repo.kind ?? 'git') !== 'git') {
-      return 'validation'
-    }
+    const owner = bindRepoExecutionHost(repo, 'runtime-store')
     // Matches runHostedPRRead's key so this host's direct reads for the alias supersede the ticket.
     const candidate = prDetailRecoveryCandidate(args, `${repo.path}::${args.identity.branch}`)
-    if (!candidate) {
+    if ((repo.kind ?? 'git') !== 'git' || !owner || !candidate) {
       return 'validation'
     }
     const wslDistro = this.deps.getExecutionOptions(repo)?.localGitExecOptions?.wslDistro
@@ -184,8 +185,7 @@ export class RuntimeHostedReviewCommands {
       ...candidate,
       repoId: repo.id,
       repoPath: repo.path,
-      connectionId: hostedReviewSshConnectionId(getStoredRepoExecutionHostId(repo)),
-      executionHostId: getStoredRepoExecutionHostId(repo) ?? null,
+      ...owner,
       ...(wslDistro ? { localGitOptions: { wslDistro } } : {})
     }
   }
