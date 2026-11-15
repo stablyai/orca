@@ -17,6 +17,10 @@ export abstract class AgentBrowserBridgeState {
   protected routedPageId: string | null = null
   // A person's tab pick waiting for the agent's tab to go idle; the undefined key is the global target.
   protected readonly heldPersonSelections = new Map<string | undefined, string>()
+  private readonly routingReferencesByPage = new Map<
+    string,
+    { routes: Set<string>; held: Set<string | undefined> }
+  >()
   // Each page has its own ref map; a worktree's unpinned refs belong to the page that last minted refs.
   protected readonly refPageByWorktree = new Map<string | undefined, string>()
   protected readonly watchedPopupWebContentsIds = new Set<number>()
@@ -153,30 +157,81 @@ export abstract class AgentBrowserBridgeState {
     return tabs
   }
 
+  protected setRoutedPageId(key: string | undefined, pageId: string | null): void {
+    if (key === undefined) {
+      this.routedPageId = pageId
+      return
+    }
+    const previous = this.routedPagePerWorktree.get(key)
+    if (previous === pageId || (previous === undefined && pageId === null)) {
+      return
+    }
+    if (previous !== undefined) {
+      const references = this.routingReferencesByPage.get(previous)
+      references?.routes.delete(key)
+      this.pruneRoutingReferences(previous)
+    }
+    if (pageId === null) {
+      this.routedPagePerWorktree.delete(key)
+    } else {
+      this.routedPagePerWorktree.set(key, pageId)
+      this.routingReferences(pageId).routes.add(key)
+    }
+  }
+
+  protected setHeldPersonSelection(key: string | undefined, pageId: string | null): void {
+    const previous = this.heldPersonSelections.get(key)
+    if (previous === pageId || (previous === undefined && pageId === null)) {
+      return
+    }
+    if (previous !== undefined) {
+      const references = this.routingReferencesByPage.get(previous)
+      references?.held.delete(key)
+      this.pruneRoutingReferences(previous)
+    }
+    if (pageId === null) {
+      this.heldPersonSelections.delete(key)
+    } else {
+      this.heldPersonSelections.set(key, pageId)
+      this.routingReferences(pageId).held.add(key)
+    }
+  }
+
+  private routingReferences(pageId: string): {
+    routes: Set<string>
+    held: Set<string | undefined>
+  } {
+    let references = this.routingReferencesByPage.get(pageId)
+    if (!references) {
+      references = { routes: new Set(), held: new Set() }
+      this.routingReferencesByPage.set(pageId, references)
+    }
+    return references
+  }
+
+  private pruneRoutingReferences(pageId: string): void {
+    const references = this.routingReferencesByPage.get(pageId)
+    if (references && references.routes.size === 0 && references.held.size === 0) {
+      this.routingReferencesByPage.delete(pageId)
+    }
+  }
+
   /** Moves every route at one page to another; true when the agent's route moved. */
   protected retargetRouting(fromPageId: string, toPageId: string | null): boolean {
-    let moved = false
+    const references = this.routingReferencesByPage.get(fromPageId)
+    const moved = this.routedPageId === fromPageId || (references?.routes.size ?? 0) > 0
+    if (fromPageId === toPageId) {
+      return moved
+    }
     if (this.routedPageId === fromPageId) {
-      this.routedPageId = toPageId
-      moved = true
+      this.setRoutedPageId(undefined, toPageId)
     }
-    for (const [worktreeId, routedPageId] of this.routedPagePerWorktree) {
-      if (routedPageId === fromPageId) {
-        if (toPageId === null) {
-          this.routedPagePerWorktree.delete(worktreeId)
-        } else {
-          this.routedPagePerWorktree.set(worktreeId, toPageId)
-        }
-        moved = true
+    if (references) {
+      for (const key of references.routes) {
+        this.setRoutedPageId(key, toPageId)
       }
-    }
-    for (const [key, heldPageId] of this.heldPersonSelections) {
-      if (heldPageId === fromPageId) {
-        if (toPageId === null) {
-          this.heldPersonSelections.delete(key)
-        } else {
-          this.heldPersonSelections.set(key, toPageId)
-        }
+      for (const key of references.held) {
+        this.setHeldPersonSelection(key, toPageId)
       }
     }
     return moved

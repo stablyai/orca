@@ -46,10 +46,10 @@ export abstract class AgentBrowserBridgeTabs extends AgentBrowserBridgeState {
         current !== browserPageId &&
         this.browserManager.isAgentUsingPage(current)
       ) {
-        this.heldPersonSelections.set(key, browserPageId)
+        this.setHeldPersonSelection(key, browserPageId)
       } else {
         this.setRoutedPageId(key, browserPageId)
-        this.heldPersonSelections.delete(key)
+        this.setHeldPersonSelection(key, null)
       }
     }
   }
@@ -64,7 +64,7 @@ export abstract class AgentBrowserBridgeTabs extends AgentBrowserBridgeState {
       ) {
         continue
       }
-      this.heldPersonSelections.delete(key)
+      this.setHeldPersonSelection(key, null)
       this.setRoutedPageId(key, held)
     }
   }
@@ -73,23 +73,15 @@ export abstract class AgentBrowserBridgeTabs extends AgentBrowserBridgeState {
     return key === undefined ? this.routedPageId : (this.routedPagePerWorktree.get(key) ?? null)
   }
 
-  private setRoutedPageId(key: string | undefined, browserPageId: string): void {
-    if (key === undefined) {
-      this.routedPageId = browserPageId
-    } else {
-      this.routedPagePerWorktree.set(key, browserPageId)
-    }
-  }
-
   protected selectFallbackRoutedPage(worktreeId: string, excludedPageId: string): string | null {
     // A closing tab's popups close with it, so only tabs can take over.
     for (const [tabId, wcId] of this.registeredTabsWithoutPopups(worktreeId)) {
       if (tabId !== excludedPageId && this.getWebContents(wcId)) {
-        this.routedPagePerWorktree.set(worktreeId, tabId)
+        this.setRoutedPageId(worktreeId, tabId)
         return tabId
       }
     }
-    this.routedPagePerWorktree.delete(worktreeId)
+    this.setRoutedPageId(worktreeId, null)
     return null
   }
 
@@ -254,10 +246,10 @@ export abstract class AgentBrowserBridgeTabs extends AgentBrowserBridgeState {
       }
       this.browserManager.unregisterGuest(preferredPageId)
       if (this.routedPageId === preferredPageId) {
-        this.routedPageId = null
+        this.setRoutedPageId(undefined, null)
       }
       if (worktreeId && this.routedPagePerWorktree.get(worktreeId) === preferredPageId) {
-        this.routedPagePerWorktree.delete(worktreeId)
+        this.setRoutedPageId(worktreeId, null)
       }
     }
     const tabs = this.getRegisteredTabs(worktreeId)
@@ -277,9 +269,9 @@ export abstract class AgentBrowserBridgeTabs extends AgentBrowserBridgeState {
     for (const [tabId, wcId] of tabs) {
       if (this.getWebContents(wcId)) {
         if (!keepRoute) {
-          this.routedPageId = tabId
+          this.setRoutedPageId(undefined, tabId)
           if (worktreeId) {
-            this.routedPagePerWorktree.set(worktreeId, tabId)
+            this.setRoutedPageId(worktreeId, tabId)
           }
         }
         return { browserPageId: tabId, webContentsId: wcId }

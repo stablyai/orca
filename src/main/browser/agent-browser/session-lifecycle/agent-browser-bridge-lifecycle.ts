@@ -19,7 +19,7 @@ export abstract class AgentBrowserBridgeLifecycle extends AgentBrowserBridgeRawP
         nextWorktreePageId = this.selectFallbackRoutedPage(owningWorktreeId, browserPageId)
       }
       if (this.routedPageId === browserPageId) {
-        this.routedPageId = nextWorktreePageId
+        this.setRoutedPageId(undefined, nextWorktreePageId)
       }
       await this.onPageClosed(browserPageId)
     }
