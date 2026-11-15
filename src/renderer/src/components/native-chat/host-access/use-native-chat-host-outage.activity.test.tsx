@@ -8,11 +8,20 @@ import { NativeChatComposerNotices } from '../composer/controls/NativeChatCompos
 import { useNativeChatHostOutage } from './use-native-chat-host-outage'
 import { useNativeChatHostOutageNotice } from './use-native-chat-host-outage-notice'
 
-function hostStatus(state: 'closed' | 'awaiting_ready' | 'ready', hostContactEpoch = 0) {
+function hostStatus(state: 'closed' | 'awaiting_ready' | 'ready', verified = false) {
   return {
-    status: null,
+    status: verified
+      ? {
+          runtimeId: 'qa-runtime',
+          rendererGraphEpoch: 0,
+          graphStatus: 'ready' as const,
+          authoritativeWindowId: 1,
+          liveTabCount: 1,
+          liveLeafCount: 1
+        }
+      : null,
     checkedAt: 0,
-    hostContactEpoch,
+    hostContactEpoch: 0,
     remoteControl: {
       state,
       pendingRequestCount: 0,
@@ -110,14 +119,23 @@ it('starts a new outage after the host recovers while its chat is hidden', async
   try {
     expect(view.getByRole('button', { name: 'Reconnect' })).toBeTruthy()
     view.rerender(pane(false))
+    act(() => useAppStore.setState({ runtimeStatusByEnvironmentId: new Map() }))
     act(() =>
       useAppStore.setState({
-        runtimeStatusByEnvironmentId: new Map([['qa-host', hostStatus('ready', 1)]])
+        runtimeStatusByEnvironmentId: new Map([['qa-host', hostStatus('awaiting_ready')]])
+      })
+    )
+    view.rerender(pane(true))
+    expect(view.getByRole('button', { name: 'Reconnect' })).toBeTruthy()
+    view.rerender(pane(false))
+    act(() =>
+      useAppStore.setState({
+        runtimeStatusByEnvironmentId: new Map([['qa-host', hostStatus('ready', true)]])
       })
     )
     act(() =>
       useAppStore.setState({
-        runtimeStatusByEnvironmentId: new Map([['qa-host', hostStatus('awaiting_ready', 1)]])
+        runtimeStatusByEnvironmentId: new Map([['qa-host', hostStatus('awaiting_ready', true)]])
       })
     )
     view.rerender(pane(true))
@@ -125,6 +143,40 @@ it('starts a new outage after the host recovers while its chat is hidden', async
   } finally {
     view.unmount()
     await act(async () => {})
+    useAppStore.setState({
+      runtimeStatusByEnvironmentId: new Map([['qa-host', hostStatus('closed')]])
+    })
+  }
+})
+
+it('shows an outage that earned its grace while the chat was hidden', async () => {
+  vi.useFakeTimers()
+  useAppStore.setState({
+    runtimeStatusByEnvironmentId: new Map([['qa-host', hostStatus('ready', true)]])
+  })
+  const pane = (visible: boolean) => (
+    <NativeChatPaneLifetime isVisible={visible}>
+      <Activity mode={visible ? 'visible' : 'hidden'}>
+        <HostComposer />
+      </Activity>
+    </NativeChatPaneLifetime>
+  )
+  const view = render(pane(true))
+  try {
+    view.rerender(pane(false))
+    act(() => {
+      useAppStore.setState({
+        runtimeStatusByEnvironmentId: new Map([['qa-host', hostStatus('awaiting_ready', true)]])
+      })
+      vi.advanceTimersByTime(3000)
+    })
+    view.rerender(pane(true))
+    expect(view.getByRole('listitem')).toBeTruthy()
+    expect(view.queryByRole('button', { name: 'Reconnect' })).toBeNull()
+  } finally {
+    view.unmount()
+    await act(async () => {})
+    vi.useRealTimers()
     useAppStore.setState({
       runtimeStatusByEnvironmentId: new Map([['qa-host', hostStatus('closed')]])
     })
