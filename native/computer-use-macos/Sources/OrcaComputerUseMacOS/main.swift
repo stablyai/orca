@@ -728,15 +728,17 @@ final class Provider {
         }
     }
 
-    private func listApps() -> [AppDescriptor] {
+    /// Without `includingWindowlessAccessoryApps`, apps without a Dock icon are listed only while they show a window,
+    /// since they include dozens of windowless system agents; resolving still finds one whose window is minimized or hidden.
+    private func listApps(includingWindowlessAccessoryApps: Bool = false) -> [AppDescriptor] {
         var seen = Set<String>()
-        // Why: apps without a Dock icon include dozens of windowless system agents, so list one only while it shows a window.
-        let accessoryWindowOwners = WindowCapture.ownersOfAppWindows()
+        let accessoryWindowOwners = includingWindowlessAccessoryApps ? nil : WindowCapture.ownersOfStandardWindows()
         return NSWorkspace.shared.runningApplications
             .filter { app in
                 guard !app.isTerminated else { return false }
-                return app.activationPolicy == .regular ||
-                    (app.activationPolicy == .accessory && accessoryWindowOwners.contains(app.processIdentifier))
+                if app.activationPolicy == .regular { return true }
+                guard app.activationPolicy == .accessory else { return false }
+                return accessoryWindowOwners?.contains(app.processIdentifier) ?? true
             }
             .compactMap { app in
                 guard let name = app.localizedName, !name.isEmpty else { return nil }
@@ -750,7 +752,12 @@ final class Provider {
                 if lhs.app.isActive != rhs.app.isActive {
                     return lhs.app.isActive && !rhs.app.isActive
                 }
-                return lhs.name.localizedCaseInsensitiveCompare(rhs.name) == .orderedAscending
+                let order = lhs.name.localizedCaseInsensitiveCompare(rhs.name)
+                if order == .orderedSame {
+                    // Why: a name query should pick the app over a same-named helper without a Dock icon.
+                    return lhs.app.activationPolicy == .regular && rhs.app.activationPolicy != .regular
+                }
+                return order == .orderedAscending
             }
     }
 
@@ -833,7 +840,7 @@ final class Provider {
         if blockedBundleIds.contains(trimmed) {
             throw ProviderError.coded("app_blocked", "app '\(trimmed)' is blocked for safety")
         }
-        if let app = listApps().first(where: { matches($0, query: trimmed) }) {
+        if let app = listApps(includingWindowlessAccessoryApps: true).first(where: { matches($0, query: trimmed) }) {
             try rejectBlockedApp(app)
             return app
         }
@@ -3366,13 +3373,11 @@ private struct WindowCapture {
             }
     }
 
-    /// Processes with an on-screen window between the normal and status bar levels, which leaves out desktop-level and menu bar windows.
-    static func ownersOfAppWindows() -> Set<pid_t> {
-        let statusLevel = Int(CGWindowLevelForKey(.statusWindow))
-        return Set(windowInfos(includeOffScreen: false).compactMap { info in
+    /// Processes with an on-screen window at the normal level, the windows `list-windows` lists; leaves out the Dock, banners and overlays.
+    static func ownersOfStandardWindows() -> Set<pid_t> {
+        Set(windowInfos(includeOffScreen: false).compactMap { info in
             guard let owner = info[kCGWindowOwnerPID as String] as? pid_t,
-                  let window = candidate(info, includeOffScreen: false),
-                  window.layer >= 0, window.layer < statusLevel
+                  candidate(info, includeOffScreen: false)?.layer == 0
             else { return nil }
             return owner
         })
