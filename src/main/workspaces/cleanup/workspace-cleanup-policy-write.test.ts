@@ -16,7 +16,12 @@ import {
   getDefaultWorkspaceCleanupRules,
   resolveWorkspaceCleanupPolicy
 } from '../../../shared/workspace-cleanup/workspace-cleanup-policy'
-import { settleWorkspaceCleanupPolicyWrite } from './workspace-cleanup-policy-write'
+import {
+  settleWorkspaceCleanupPolicyWrite,
+  reserveWorkspaceCleanupPolicyWrite,
+  recoverWorkspaceCleanupPolicyWrites
+} from './workspace-cleanup-policy-write'
+import { readWorkspaceCleanupPolicy } from './workspace-cleanup-policy-preview'
 import { evaluateWorkspaceCleanup } from '../../../shared/workspace-cleanup/workspace-cleanup-evaluation'
 
 const { handlers } = vi.hoisted(() => ({
@@ -212,4 +217,71 @@ it('preserves the guard through local IPC and rejects a stale null clear before 
     updates: { workspaceCleanupPolicy: null, workspaceCleanupGuard: guard(repo.id) }
   })
   expect(store.getRepo(repo.id)!.workspaceCleanupPolicy).toBeUndefined()
+})
+
+it('fences a reserved write whose resolver outlives its original client', async () => {
+  const { store, repo, guard } = fixture()
+  const expected = { ...guard(repo.id), requireReservation: true as const }
+  reserveWorkspaceCleanupPolicyWrite(store, expected)
+  const entered = Promise.withResolvers<void>()
+  const release = Promise.withResolvers<void>()
+  const controller = new RuntimeRepositorySettingsController({
+    getStore: () => store,
+    resolveRepo: async () => {
+      entered.resolve()
+      await release.promise
+      return store.getRepo(repo.id)!
+    },
+    forgetTerminalTopology: () => {},
+    invalidateResolvedWorktrees: () => {},
+    invalidateWorktreeScan: () => {},
+    notifyReposChanged: () => {},
+    notifyWorktreesChanged: () => {}
+  })
+  const pending = controller.update(repo.id, {
+    workspaceCleanupPolicy: null,
+    workspaceCleanupGuard: expected
+  })
+  const rejection = expect(pending).rejects.toThrow('workspace_cleanup_policy_conflict')
+  await entered.promise
+  expect(readWorkspaceCleanupPolicy(store, repo.id).pendingWrites).toBe(true)
+  recoverWorkspaceCleanupPolicyWrites(store)
+  expect(readWorkspaceCleanupPolicy(store, repo.id).pendingWrites).toBe(false)
+  release.resolve()
+  await rejection
+  await store.runDurableMutation(() => ({ value: true, persist: 'if-dirty' }))
+  expect(
+    readPersistedState().repos.find((row) => row.id === repo.id)?.workspaceCleanupPolicy
+  ).toMatchObject({
+    mode: 'custom',
+    rules: { merged: { enabled: true }, inactive: { enabled: true } }
+  })
+})
+
+it('fences a reserved global policy write after client recovery', () => {
+  const { store, guard } = fixture()
+  const expected = { ...guard(null), requireReservation: true as const }
+  reserveWorkspaceCleanupPolicyWrite(store, expected)
+  recoverWorkspaceCleanupPolicyWrites(store)
+  expect(() =>
+    store.updateSettings({
+      workspaceCleanupPolicy: { ...getDefaultWorkspaceCleanupRules(), merged: { enabled: true } },
+      workspaceCleanupGuard: expected
+    })
+  ).toThrow('workspace_cleanup_policy_conflict')
+  expect(store.getSettings().workspaceCleanupPolicy?.merged.enabled).toBe(false)
+})
+
+it('refuses a late reserved-protocol packet without its reservation', () => {
+  const { store, repo, guard } = fixture()
+  expect(() =>
+    store.updateRepo(repo, {
+      workspaceCleanupPolicy: null,
+      workspaceCleanupGuard: { ...guard(repo.id), requireReservation: true }
+    })
+  ).toThrow('workspace_cleanup_policy_conflict')
+  expect(store.getRepo(repo.id)!.workspaceCleanupPolicy).toMatchObject({
+    mode: 'custom',
+    rules: { merged: { enabled: true } }
+  })
 })

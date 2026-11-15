@@ -1,5 +1,6 @@
 import type {
   WorkspaceCleanupPolicyRead,
+  WorkspaceCleanupPolicyState,
   WorkspaceCleanupPolicyChange,
   WorkspaceCleanupPolicyComparison
 } from '../../../shared/workspace-cleanup/workspace-cleanup-policy-change'
@@ -165,16 +166,23 @@ export class WorkspaceCleanupRunner {
     return readWorkspaceCleanupPolicy(this.deps.store, repoId)
   }
 
-  previewChange(change: WorkspaceCleanupPolicyChange): Promise<WorkspaceCleanupPolicyComparison> {
-    const read = this.readPolicy(change.scope === 'project' ? change.repoId : null)
-    const key = JSON.stringify([read.state, change])
+  previewChange(
+    change: WorkspaceCleanupPolicyChange,
+    expected: WorkspaceCleanupPolicyState
+  ): Promise<WorkspaceCleanupPolicyComparison> {
+    const proposal = structuredClone(change)
+    const read = this.readPolicy(proposal.scope === 'project' ? proposal.repoId : null)
+    if (JSON.stringify(read.state) !== JSON.stringify(expected)) {
+      throw new Error('workspace_cleanup_policy_conflict')
+    }
+    const key = JSON.stringify([read.state, proposal])
     const existing = this.changePreviews.get(key)
     if (existing) {
       return existing
     }
     const request = previewWorkspaceCleanupChange(
       this.deps,
-      change,
+      proposal,
       read,
       this.abort.signal
     ).finally(() => {

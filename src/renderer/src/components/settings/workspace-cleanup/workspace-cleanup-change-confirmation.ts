@@ -1,3 +1,4 @@
+import { readCleanupPolicy } from './workspace-cleanup-policy-client'
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import type {
@@ -36,18 +37,24 @@ type Confirmation =
 export function previewCleanupPolicyChange(
   owner: RuntimeClientTarget,
   change: WorkspaceCleanupPolicyChange,
-  disabledRead?: WorkspaceCleanupPolicyRead
+  read: WorkspaceCleanupPolicyRead,
+  allowDisabled = false
 ) {
-  if (disabledRead && !cleanupPolicyHasEnabledRules(disabledRead, change)) {
+  if (allowDisabled && !cleanupPolicyHasEnabledRules(read, change)) {
     const empty = { evaluatedAt: 0, rows: [] }
-    return Promise.resolve({ current: empty, next: empty, read: disabledRead })
+    return Promise.resolve({ current: empty, next: empty, read })
   }
   return callRuntimeRpc<WorkspaceCleanupPolicyComparison>(
     owner,
     'workspaceCleanup.previewChange',
-    change,
+    { change, expected: read.state },
     { timeoutMs: 10 * 60 * 1000 }
-  )
+  ).then((comparison) => {
+    if (JSON.stringify(comparison.read.state) !== JSON.stringify(read.state)) {
+      throw new Error('workspace_cleanup_policy_conflict')
+    }
+    return comparison
+  })
 }
 
 export async function confirmWorkspaceCleanupChange(
@@ -56,11 +63,7 @@ export async function confirmWorkspaceCleanupChange(
   repoId: string | null,
   isCurrent: () => boolean
 ): Promise<Confirmation> {
-  const latest = await callRuntimeRpc<WorkspaceCleanupPolicyRead>(
-    owner,
-    'workspaceCleanup.policyState',
-    { repoId }
-  )
+  const latest = await readCleanupPolicy(owner, repoId, undefined, isCurrent)
   return complete(owner, pending, latest, isCurrent)
 }
 
@@ -77,7 +80,8 @@ async function complete(
   const comparison = await previewCleanupPolicyChange(
     owner,
     change,
-    pending.kind === 'disable-ignored-files' && !pending.kept.size ? latest : undefined
+    latest,
+    pending.kind === 'disable-ignored-files' && !pending.kept.size
   )
   if (!isCurrent()) {
     return { kind: 'cancelled' }

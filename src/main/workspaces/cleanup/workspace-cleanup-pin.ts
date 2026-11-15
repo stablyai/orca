@@ -1,6 +1,6 @@
 import { hostWorktreeTarget } from '../../../shared/worktree/host-qualified-identity'
 import type { OrcaRuntimeService } from '../../runtime/orca-runtime'
-import { LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host'
+import { LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host/execution-host'
 import { readWorktreeMetaForHost } from '../../persistence/host-qualified-worktree-meta'
 import type { RuntimeWorktreePsSummary } from '../../../shared/worktree/catalog/runtime-worktree-contracts'
 

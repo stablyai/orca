@@ -967,6 +967,14 @@ import {
   WebhooksList
 } from './webhooks-params'
 import {
+  WorkspaceCleanupChangeParams,
+  WorkspaceCleanupGuardParam,
+  WorkspaceCleanupInspectKeptParams,
+  WorkspaceCleanupPinParams,
+  WorkspaceCleanupPolicyReadParams,
+  WorkspaceCleanupSettleParams
+} from './workspace-cleanup/workspace-cleanup-change-params'
+import {
   WorkspaceCleanupCodexHistoryDiskUsageParams,
   WorkspaceCleanupPreviewParams,
   WorkspaceCleanupReleaseCodexHistoryDiskUsageParams,
@@ -2131,11 +2139,17 @@ export const RPC_PARAMS_BY_METHOD = {
   'webhooks.sample': WebhookSample,
   'webhooks.secret': WebhookSecret,
   'workspaceCleanup.codexHistoryDiskUsage': WorkspaceCleanupCodexHistoryDiskUsageParams,
+  'workspaceCleanup.inspectKept': WorkspaceCleanupInspectKeptParams,
+  'workspaceCleanup.pin': WorkspaceCleanupPinParams,
+  'workspaceCleanup.policyState': WorkspaceCleanupPolicyReadParams,
   'workspaceCleanup.preview': WorkspaceCleanupPreviewParams,
+  'workspaceCleanup.previewChange': WorkspaceCleanupChangeParams,
+  'workspaceCleanup.recoverPolicyWrites': WorkspaceCleanupPolicyReadParams,
   'workspaceCleanup.releaseCodexHistoryDiskUsage':
     WorkspaceCleanupReleaseCodexHistoryDiskUsageParams,
   'workspaceCleanup.report': null,
   'workspaceCleanup.reportUnsavedEditors': WorkspaceCleanupReportUnsavedEditorsParams,
+  'workspaceCleanup.reservePolicyWrite': WorkspaceCleanupGuardParam,
   'workspaceCleanup.runNow': WorkspaceCleanupRunNowParams,
   'workspaceCleanup.scan': WorkspaceCleanupScanParams,
   'workspaceCleanup.settlePolicyWrite': WorkspaceCleanupSettleParams,

@@ -11,9 +11,15 @@ import {
 } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { closeTestStores, createStore, testState } from '../../persistence/persistence-test-harness'
+import {
+  closeTestStores,
+  createStore,
+  testState,
+  readPersistedState
+} from '../../persistence/persistence-test-harness'
 import { hostWorktreeTarget } from '../../../shared/worktree/host-qualified-identity'
 import { getDefaultWorkspaceCleanupRules } from '../../../shared/workspace-cleanup/workspace-cleanup-policy'
+import type { WorkspaceCleanupPolicyChange } from '../../../shared/workspace-cleanup/workspace-cleanup-policy-change'
 import { WorkspaceCleanupRunner } from './workspace-cleanup-runner'
 
 vi.mock('electron', () => ({
@@ -148,17 +154,21 @@ it('previews a project while saved Off, excludes other projects, and keeps polic
     runtime: hostRuntime,
     historyDirectory: testState.dir
   })
-  const preview = await runner.previewChange({
-    scope: 'project',
-    repoId: 'project',
-    policy: {
-      mode: 'custom',
-      rules: {
-        ...getDefaultWorkspaceCleanupRules(),
-        inactive: { enabled: true, afterDays: 30, action: 'delete' }
+  const expected = runner.readPolicy('project').state
+  const preview = await runner.previewChange(
+    {
+      scope: 'project',
+      repoId: 'project',
+      policy: {
+        mode: 'custom',
+        rules: {
+          ...getDefaultWorkspaceCleanupRules(),
+          inactive: { enabled: true, afterDays: 30, action: 'delete' }
+        }
       }
-    }
-  })
+    },
+    expected
+  )
   expect(
     preview.current.rows.map((row) => ({ id: row.worktreeId, evaluation: row.evaluation }))
   ).toEqual([{ id, evaluation: { action: 'keep', cause: 'project-off' } }])
@@ -171,3 +181,55 @@ it('previews a project while saved Off, excludes other projects, and keeps polic
     rules: { inactive: { enabled: false } }
   })
 })
+
+it.each(['project', 'global'] as const)(
+  'rejects a proposal bound to an older %s owner snapshot before previewing',
+  async (scope) => {
+    const store = createStore()
+    const repo = {
+      id: 'project',
+      path: testState.dir,
+      displayName: 'Fixture',
+      badgeColor: 'gray',
+      addedAt: 1
+    }
+    store.addRepo(repo)
+    const active = {
+      ...getDefaultWorkspaceCleanupRules(),
+      inactive: { enabled: true, afterDays: 30, action: 'delete' as const }
+    }
+    if (scope === 'global') {
+      store.updateSettings({ workspaceCleanupPolicy: active })
+    } else {
+      store.updateRepo(repo, { workspaceCleanupPolicy: { mode: 'custom', rules: active } })
+    }
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a rejected policy snapshot must never acquire workspace evidence.
+    const runtime = { getWorktreePs: async () => ({ worktrees: [], truncated: false }) } as never
+    const runner = new WorkspaceCleanupRunner({ store, runtime, historyDirectory: testState.dir })
+    const expected = runner.readPolicy(scope === 'global' ? null : repo.id).state
+    const proposed = { ...active, merged: { enabled: true } }
+    const change: WorkspaceCleanupPolicyChange =
+      scope === 'global'
+        ? { scope, rules: proposed }
+        : { scope, repoId: repo.id, policy: { mode: 'custom', rules: proposed } }
+    const newer = { ...active, inactive: { ...active.inactive, enabled: false } }
+    if (scope === 'global') {
+      store.updateSettings({ workspaceCleanupPolicy: newer })
+    } else {
+      store.updateRepo(repo, { workspaceCleanupPolicy: { mode: 'custom', rules: newer } })
+    }
+    await store.runDurableMutation(() => ({ value: true, persist: 'if-dirty' }))
+    expect(() => runner.previewChange(change, expected)).toThrow(
+      'workspace_cleanup_policy_conflict'
+    )
+    expect(
+      scope === 'global'
+        ? readPersistedState().settings.workspaceCleanupPolicy
+        : readPersistedState().repos.find((row) => row.id === 'project')?.workspaceCleanupPolicy
+    ).toMatchObject(
+      scope === 'global'
+        ? { merged: { enabled: false }, inactive: { enabled: false } }
+        : { mode: 'custom', rules: { merged: { enabled: false }, inactive: { enabled: false } } }
+    )
+  }
+)

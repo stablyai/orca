@@ -1,10 +1,11 @@
+import { createWorkspaceCleanupPolicyWrite } from './workspace-cleanup-policy-client'
 import { TooltipProvider } from '../../ui/tooltip'
 // @vitest-environment happy-dom
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
 import { I18nProvider } from '@/i18n/I18nProvider'
-import { getDefaultSettings } from '../../../../../shared/constants'
+import { getDefaultSettings } from '../../../../../shared/orca-profiles/constants'
 import { getDefaultWorkspaceCleanupRules } from '../../../../../shared/workspace-cleanup/workspace-cleanup-policy'
 import { RepositoryWorkspaceCleanupSection } from '../repository/workspace-cleanup/RepositoryWorkspaceCleanupSection'
 import type { WorkspaceCleanupPreviewRow } from '../../../../../shared/workspace-cleanup/workspace-cleanup-run'
@@ -44,7 +45,7 @@ const save = vi.fn()
 beforeEach(() => {
   vi.spyOn(Date, 'now').mockReturnValue(Date.UTC(2026, 10, 14, 12))
   read = {
-    protocol: 1,
+    protocol: 2,
     expiresAt: Date.UTC(2026, 10, 14, 12, 1),
     state: {
       repoId: 'project',
@@ -73,6 +74,16 @@ beforeEach(() => {
           next: { evaluatedAt: 1, rows: structuredClone(nextRows) }
         }
       }
+    }
+    if (method === 'workspaceCleanup.reservePolicyWrite') {
+      return { ok: true, result: { reserved: true } }
+    }
+    if (method === 'settings.update') {
+      read.state.rules = params.workspaceCleanupPolicy
+      return { ok: true, result: {} }
+    }
+    if (method === 'workspaceCleanup.settlePolicyWrite') {
+      return { ok: true, result: { outcome: 'applied' } }
     }
     if (method === 'workspaceCleanup.pin') {
       pin.push(params.worktreeId)
@@ -105,11 +116,11 @@ afterEach(() => {
   Object.defineProperty(window, 'api', { configurable: true, value: api })
   vi.restoreAllMocks()
 })
-function Harness() {
+function Harness({ global = false }: { global?: boolean }) {
   const change = useWorkspaceCleanupRuleChange({
     owner: { kind: 'local' },
-    repoId: 'project',
-    projectName: 'Example'
+    repoId: global ? null : 'project',
+    projectName: global ? undefined : 'Example'
   })
   return (
     <>
@@ -434,4 +445,266 @@ it('retains confirmed global matches and excludes durable Keep when a background
   expect(read.state.rules.merged.enabled).toBe(true)
   expect(pin).toEqual(['project::/existing'])
   expect(screen.getByText(/^Matches 1 workspace now/)).toBeTruthy()
+})
+
+it.each([
+  ['project', 'zero-delta'],
+  ['global', 'zero-delta'],
+  ['project', 'confirmation'],
+  ['global', 'confirmation']
+] as const)(
+  'preserves a concurrent edit in the %s %s preview interleaving',
+  async (scope, phase) => {
+    const active = {
+      ...rules,
+      inactive: { enabled: true, afterDays: 30, action: 'delete' as const }
+    }
+    if (scope === 'global') {
+      read.state.repoId = null
+      read.state.projects[0].policy = null
+      read.state.rules = active
+    } else {
+      read.state.projects[0].policy = { mode: 'custom', rules: active }
+    }
+    currentRows = []
+    nextRows = phase === 'zero-delta' ? [] : [row('added')]
+    const normal = runtime.getMockImplementation()!
+    let interleave = phase === 'zero-delta'
+    runtime.mockImplementation(async (request) => {
+      if (request.method === 'workspaceCleanup.previewChange' && interleave) {
+        interleave = false
+        const newer = { ...active, inactive: { ...active.inactive, enabled: false } }
+        if (scope === 'global') {
+          read.state.rules = newer
+        } else {
+          read.state.projects[0].policy = { mode: 'custom', rules: newer }
+        }
+      }
+      return normal(request)
+    })
+    renderWithProviders(<Harness global={scope === 'global'} />)
+    const trigger = screen.getByRole('button', { name: 'Enable' })
+    await waitFor(() => expect(trigger.getAttribute('aria-disabled')).toBe('false'))
+    fireEvent.click(trigger)
+    if (phase === 'confirmation') {
+      await screen.findByRole('dialog')
+      interleave = true
+      fireEvent.click(screen.getByRole('button', { name: 'Turn on' }))
+      await screen.findByRole('alert')
+    } else {
+      await waitFor(() => expect(trigger.getAttribute('aria-disabled')).toBe('false'))
+    }
+    const saved = scope === 'global' ? read.state.rules : read.state.projects[0].policy
+    expect(saved).toMatchObject(
+      scope === 'global'
+        ? { merged: { enabled: false }, inactive: { enabled: false } }
+        : { mode: 'custom', rules: { merged: { enabled: false }, inactive: { enabled: false } } }
+    )
+  }
+)
+
+it('fences a deferred send across unmount and remount before allowing another change', async () => {
+  const sent = Promise.withResolvers<void>()
+  const late = Promise.withResolvers<void>()
+  const fenced = Promise.withResolvers<void>()
+  const finished = Promise.withResolvers<void>()
+  const cancelled = new Set<string>()
+  const normal = runtime.getMockImplementation()!
+  runtime.mockImplementation(async (request) => {
+    if (request.method === 'workspaceCleanup.settlePolicyWrite') {
+      await fenced.promise
+      cancelled.add(request.params.id)
+      return { ok: true, result: { outcome: 'cancelled' } }
+    }
+    return normal(request)
+  })
+  save.mockImplementationOnce(async ({ updates }) => {
+    sent.resolve()
+    await late.promise
+    try {
+      if (cancelled.has(updates.workspaceCleanupGuard.id)) {
+        throw new Error('workspace_cleanup_policy_conflict')
+      }
+      read.state.projects[0].policy = updates.workspaceCleanupPolicy
+      return { ...repo, workspaceCleanupPolicy: updates.workspaceCleanupPolicy }
+    } finally {
+      finished.resolve()
+    }
+  })
+  await open()
+  fireEvent.click(screen.getByRole('button', { name: 'Turn on' }))
+  await sent.promise
+  cleanup()
+  renderWithProviders(<Harness />)
+  const trigger = screen.getByRole('button', { name: 'Enable' })
+  expect(trigger.getAttribute('aria-disabled')).toBe('true')
+  fireEvent.click(trigger)
+  expect(read.state.projects[0].policy).toMatchObject({
+    mode: 'custom',
+    rules: { merged: { enabled: false } }
+  })
+  await act(async () => fenced.resolve())
+  await waitFor(() => expect(trigger.getAttribute('aria-disabled')).toBe('false'))
+  await act(async () => {
+    late.resolve()
+    await finished.promise
+  })
+  expect(read.state.projects[0].policy).toMatchObject({
+    mode: 'custom',
+    rules: { merged: { enabled: false } }
+  })
+})
+
+it('keeps an applied write with a lost reply tracked while a remounted page checks its receipt', async () => {
+  const applied = Promise.withResolvers<void>()
+  const reply = Promise.withResolvers<void>()
+  const receipt = Promise.withResolvers<void>()
+  const normal = runtime.getMockImplementation()!
+  runtime.mockImplementation(async (request) => {
+    if (request.method === 'workspaceCleanup.settlePolicyWrite') {
+      await receipt.promise
+      return { ok: true, result: { outcome: 'applied' } }
+    }
+    return normal(request)
+  })
+  save.mockImplementationOnce(async ({ updates }) => {
+    read.state.projects[0].policy = updates.workspaceCleanupPolicy
+    applied.resolve()
+    await reply.promise
+    throw new Error('Reply lost')
+  })
+  await open()
+  fireEvent.click(screen.getByRole('button', { name: 'Turn on' }))
+  await applied.promise
+  cleanup()
+  renderWithProviders(
+    <RepositoryWorkspaceCleanupSection repo={repo} updateRepo={async () => true} forceVisible />
+  )
+  const control = await screen.findByRole('switch', { name: 'Delete merged workspaces' })
+  expect(control.getAttribute('aria-disabled')).toBe('true')
+  await act(async () => receipt.resolve())
+  await waitFor(() => expect(control.getAttribute('aria-disabled')).toBe('false'))
+  expect(control.getAttribute('aria-checked')).toBe('true')
+  await act(async () => reply.resolve())
+  expect(read.state.projects[0].policy).toMatchObject({
+    mode: 'custom',
+    rules: { merged: { enabled: true } }
+  })
+})
+
+it('recovers an owner reservation when a new view has no local request tracker', async () => {
+  const recovery = Promise.withResolvers<void>()
+  const entered = Promise.withResolvers<void>()
+  const normal = runtime.getMockImplementation()!
+  runtime.mockImplementation(async (request) => {
+    if (request.method === 'workspaceCleanup.policyState') {
+      return { ok: true, result: { ...structuredClone(read), pendingWrites: true } }
+    }
+    if (request.method === 'workspaceCleanup.recoverPolicyWrites') {
+      entered.resolve()
+      await recovery.promise
+      return { ok: true, result: { ...structuredClone(read), pendingWrites: false } }
+    }
+    return normal(request)
+  })
+  renderWithProviders(
+    <RepositoryWorkspaceCleanupSection repo={repo} updateRepo={async () => true} forceVisible />
+  )
+  await entered.promise
+  const control = screen.getByRole('switch', { name: 'Delete merged workspaces' })
+  expect(control.getAttribute('aria-disabled')).toBe('true')
+  fireEvent.click(control)
+  expect(read.state.projects[0].policy).toMatchObject({
+    mode: 'custom',
+    rules: { merged: { enabled: false } }
+  })
+  await act(async () => recovery.resolve())
+  await waitFor(() => expect(control.getAttribute('aria-disabled')).toBe('false'))
+  expect(control.getAttribute('aria-checked')).toBe('false')
+})
+
+it('fences a journaled reservation that has not arrived when a new view opens', async () => {
+  const released = Promise.withResolvers<void>()
+  const sent = Promise.withResolvers<void>()
+  const fenced = new Set<string>()
+  const normal = runtime.getMockImplementation()!
+  runtime.mockImplementation(async (request) => {
+    if (request.method === 'workspaceCleanup.reservePolicyWrite') {
+      sent.resolve()
+      await released.promise
+      if (fenced.has(request.params.id)) {
+        throw new Error('workspace_cleanup_policy_conflict')
+      }
+      return { ok: true, result: { reserved: true } }
+    }
+    if (request.method === 'workspaceCleanup.settlePolicyWrite') {
+      fenced.add(request.params.id)
+      return { ok: true, result: { outcome: 'cancelled' } }
+    }
+    if (request.method === 'workspaceCleanup.recoverPolicyWrites') {
+      return { ok: true, result: { ...structuredClone(read), pendingWrites: false } }
+    }
+    return normal(request)
+  })
+  const previousClient = createWorkspaceCleanupPolicyWrite(
+    { kind: 'local' },
+    {
+      scope: 'project',
+      repoId: 'project',
+      policy: { mode: 'custom', rules: { ...rules, merged: { enabled: true } } }
+    },
+    structuredClone(read)
+  )
+  const late = previousClient.send()
+  const rejected = expect(late).rejects.toThrow('workspace_cleanup_policy_conflict')
+  await sent.promise
+  renderWithProviders(<Harness />)
+  const trigger = screen.getByRole('button', { name: 'Enable' })
+  await waitFor(() => expect(trigger.getAttribute('aria-disabled')).toBe('false'))
+  await act(async () => released.resolve())
+  await rejected
+  expect(read.state.projects[0].policy).toMatchObject({
+    mode: 'custom',
+    rules: { merged: { enabled: false } }
+  })
+})
+
+it('releases the owner barrier after a fenced request target is removed', async () => {
+  const sent = Promise.withResolvers<void>()
+  const late = Promise.withResolvers<void>()
+  const fenced = Promise.withResolvers<void>()
+  const normal = runtime.getMockImplementation()!
+  runtime.mockImplementation(async (request) => {
+    if (request.method === 'workspaceCleanup.settlePolicyWrite') {
+      await fenced.promise
+      return { ok: true, result: { outcome: 'cancelled' } }
+    }
+    if (request.method === 'workspaceCleanup.policyState' && !read.state.projects.length) {
+      if (request.params.repoId) {
+        throw new Error('workspace_cleanup_project_unavailable')
+      }
+      return {
+        ok: true,
+        result: { ...structuredClone(read), state: { ...read.state, repoId: null } }
+      }
+    }
+    return normal(request)
+  })
+  save.mockImplementationOnce(async () => {
+    sent.resolve()
+    await late.promise
+    throw new Error('workspace_cleanup_project_unavailable')
+  })
+  await open()
+  fireEvent.click(screen.getByRole('button', { name: 'Turn on' }))
+  await sent.promise
+  cleanup()
+  read.state.projects = []
+  renderWithProviders(<Harness global />)
+  const trigger = screen.getByRole('button', { name: 'Enable' })
+  expect(trigger.getAttribute('aria-disabled')).toBe('true')
+  await act(async () => fenced.resolve())
+  await waitFor(() => expect(trigger.getAttribute('aria-disabled')).toBe('false'))
+  expect(read.state.rules.merged.enabled).toBe(false)
+  await act(async () => late.resolve())
 })

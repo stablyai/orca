@@ -154,3 +154,24 @@ describe('worktree ps rows that share an id on different hosts', () => {
     ])
   })
 })
+
+it('scopes the projection to every row in the selected project across hosts', () => {
+  const other = { ...row('local', 'inst-other'), id: 'repo-b::/other', repoId: 'repo-b' }
+  const summaries = buildRuntimeWorktreePsSummaries({
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this fixture supplies the row and metadata readers used by the projection.
+    store: {
+      ...store,
+      getRepos: () => [
+        ...store.getRepos(),
+        { id: 'repo-b', path: '/other', displayName: 'other', badgeColor: '#000', addedAt: 1 }
+      ]
+    } as never,
+    resolvedWorktrees: [row('local', 'inst-local'), other, row('ssh:server', 'inst-ssh')],
+    platformByRepoId: new Map(),
+    repoId: 'repo-a'
+  })
+  expect([...summaries.values()].map((summary) => [summary.repoId, summary.hostId])).toEqual([
+    ['repo-a', 'local'],
+    ['repo-a', 'ssh:server']
+  ])
+})

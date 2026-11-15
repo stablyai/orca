@@ -25,13 +25,14 @@ export const WorkspaceCleanupGuardParam = z
   .object({
     id: z.string().uuid(),
     expiresAt: z.number().finite(),
-    expected: WorkspaceCleanupPolicyStateParam
+    expected: WorkspaceCleanupPolicyStateParam,
+    requireReservation: z.literal(true).optional()
   })
   .strict()
 export const WorkspaceCleanupPolicyReadParams = z
   .object({ repoId: z.string().min(1).nullable() })
   .strict()
-export const WorkspaceCleanupChangeParams = z.discriminatedUnion('scope', [
+const WorkspaceCleanupProposalParam = z.discriminatedUnion('scope', [
   z.object({ scope: z.literal('global'), rules: WorkspaceCleanupRulesParam }).strict(),
   z
     .object({
@@ -41,6 +42,12 @@ export const WorkspaceCleanupChangeParams = z.discriminatedUnion('scope', [
     })
     .strict()
 ])
+export const WorkspaceCleanupChangeParams = z
+  .object({
+    change: WorkspaceCleanupProposalParam,
+    expected: WorkspaceCleanupPolicyStateParam
+  })
+  .strict()
 export const WorkspaceCleanupSettleParams = z
   .object({ id: z.string().uuid(), expiresAt: z.number().finite() })
   .strict()

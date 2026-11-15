@@ -62,11 +62,13 @@ export async function readWorkspaceCleanupMergeEvidence(
   prCache: PRCacheView<PRInfo>,
   repoRefs: WorkspaceCleanupRepoRefs,
   signal?: AbortSignal,
-  coordinatorBranch?: string | null
+  coordinatorBranch?: string | null,
+  statusHead?: string
 ): Promise<WorkspaceCleanupMergeEvidence | undefined> {
   try {
     return await withWorkspaceCleanupTimeout(
-      (signal) => readMergeEvidence(worktree, repoRefs, repo, prCache, signal, coordinatorBranch),
+      (signal) =>
+        readMergeEvidence(worktree, repoRefs, repo, prCache, signal, coordinatorBranch, statusHead),
       WORKSPACE_CLEANUP_GIT_READ_TIMEOUT_MS,
       'Timed out reading merge evidence.',
       signal
@@ -85,19 +87,18 @@ async function readMergeEvidence(
   repo: Repo,
   prCache: PRCacheView<PRInfo>,
   signal: AbortSignal,
-  coordinatorBranch: string | null | undefined
+  coordinatorBranch: string | null | undefined,
+  statusHead: string | undefined
 ): Promise<WorkspaceCleanupMergeEvidence | undefined> {
   const git = cleanupGit(worktree.path, signal)
   const baseOid = await resolveWorkspaceCleanupBaseOid(worktree, repo, repoRefs)
-  // Read HEAD now: the listing's head can predate an agent's newest commit.
-  const headOid = await resolveCommitOid(git, 'HEAD')
+  // Porcelain reads HEAD with status; the inventory can predate a commit.
+  const headOid =
+    statusHead && isFullGitObjectId(statusHead) ? statusHead : await resolveCommitOid(git, 'HEAD')
   if (!baseOid || !headOid) {
     return undefined
   }
-  const aheadOfDefault = Number.parseInt(
-    (await git(['rev-list', '--count', `${baseOid}..${headOid}`])).stdout.trim(),
-    10
-  )
+  const aheadOfDefault = await countAhead(git, baseOid, headOid)
   if (!Number.isFinite(aheadOfDefault)) {
     return undefined
   }
@@ -138,8 +139,8 @@ async function readMergeEvidence(
   const headInCoordinatorBranch =
     coordinatorOid === null
       ? undefined
-      : (await git(['rev-list', '--count', `${coordinatorOid}..${headOid}`])).stdout.trim() ===
-          '0' || (await headLandedIn(coordinatorOid))
+      : (await countAhead(git, coordinatorOid, headOid)) === 0 ||
+        (await headLandedIn(coordinatorOid))
   return {
     headInDefaultBranch,
     aheadOfDefault,
@@ -198,4 +199,13 @@ async function resolveCommitOid(git: CleanupGit, ref: string): Promise<string | 
   } catch {
     return null
   }
+}
+
+async function countAhead(git: CleanupGit, baseOid: string, headOid: string): Promise<number> {
+  return baseOid === headOid
+    ? 0
+    : Number.parseInt(
+        (await git(['rev-list', '--count', `${baseOid}..${headOid}`])).stdout.trim(),
+        10
+      )
 }

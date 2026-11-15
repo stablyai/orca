@@ -20743,7 +20743,6 @@
       "repositoryHooks": {
         "availableEnvVars": "Verfügbare Umgebungsvariablen"
       },
-<<<<<<< HEAD
       "bitbucket": {
         "credentials": {
           "dialog": {
@@ -20766,8 +20765,7 @@
         "confirmCheckHomeFolder": "Kein anderer Rechner, der diesen Home-Ordner teilt, führt Orca aus",
         "details": "Details",
         "clearing": "Wird aufgehoben…"
-||||||| parent of d944a48fc7f (Require confirmation before project workspace cleanup changes)
-=======
+      },
       "workspaceCleanup": {
         "enable": {
           "summary_one": "1 wird gelöscht",
@@ -20812,7 +20810,6 @@
           "inactive": "Inaktive Arbeitsbereiche löschen"
         },
         "retry": "Erneut versuchen"
->>>>>>> d944a48fc7f (Require confirmation before project workspace cleanup changes)
       }
     },
     "agentChildRow": {

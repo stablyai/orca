@@ -22,7 +22,7 @@ export function proposedCleanupPolicy(
   read: WorkspaceCleanupPolicyRead,
   intent: CleanupChangeIntent
 ): WorkspaceCleanupPolicyChange {
-  const { state } = read
+  const { state } = structuredClone(read)
   if (!state.repoId) {
     return { scope: 'global', rules: intent.changeRules!(state.rules) }
   }

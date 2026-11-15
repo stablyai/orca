@@ -6,7 +6,10 @@ import {
   type WorkspaceCleanupPolicyComparison
 } from '../../../shared/workspace-cleanup/workspace-cleanup-policy-change'
 import type { RuntimeStore } from '../../runtime/construction/runtime-store-contract'
-import { WORKSPACE_CLEANUP_WRITE_LEASE_MS } from './workspace-cleanup-policy-write'
+import {
+  hasPendingWorkspaceCleanupWrites,
+  WORKSPACE_CLEANUP_WRITE_LEASE_MS
+} from './workspace-cleanup-policy-write'
 import { readWorkspaceSpaceAnalysisSnapshot } from '../space-analysis/workspace-space-analysis-snapshot'
 import { collectWorkspaceCleanupWorkspaces } from './workspace-cleanup-run-evidence'
 import { mapWorkspaceCleanupWithConcurrency } from '../../ipc/workspace-cleanup/workspace-cleanup-scan-primitives'
@@ -18,13 +21,14 @@ import { decideWorkspaceCleanup } from './workspace-cleanup-removal-step'
 import { workspaceCleanupRowDetails } from './workspace-cleanup-run-summary'
 
 export function readWorkspaceCleanupPolicy(
-  store: Pick<RuntimeStore, 'getSettings' | 'getRepos'>,
+  store: Pick<RuntimeStore, 'getSettings' | 'getRepos' | 'getProfileStorageDirectory'>,
   repoId: string | null
 ): WorkspaceCleanupPolicyRead {
   return {
     state: captureWorkspaceCleanupPolicyState(store.getSettings(), store.getRepos(), repoId),
     expiresAt: Date.now() + WORKSPACE_CLEANUP_WRITE_LEASE_MS,
-    protocol: 1
+    protocol: 2,
+    pendingWrites: hasPendingWorkspaceCleanupWrites(store)
   }
 }
 export async function readWorkspaceCleanupSizes(directory: string): Promise<Map<string, number>> {

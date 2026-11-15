@@ -217,7 +217,8 @@ export async function collectWorkspaceCleanupWorkspaces(args: {
     WORKTREE_PS_LIMIT,
     true,
     false,
-    args.withFolderSiblings ? undefined : worktreeId
+    args.withFolderSiblings ? undefined : worktreeId,
+    args.comparison?.state.repoId ?? undefined
   )
   if (ps.truncated) {
     throw new Error('Could not list every workspace on this host.')

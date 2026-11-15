@@ -34,6 +34,7 @@ export function buildRuntimeWorktreePsSummaries(args: {
   platformByRepoId: ReadonlyMap<string, NodeJS.Platform>
   /** Only this workspace's rows (every host's copy); PTY liveness still reads every worktree. */
   worktreeId?: string
+  repoId?: string
 }): Map<string, RuntimeWorktreePsSummary> {
   const summaries = new Map<string, RuntimeWorktreePsSummary>()
   const botOf = botOwnerLookup(args.store, args.resolvedWorktrees)
@@ -57,9 +58,13 @@ export function buildRuntimeWorktreePsSummaries(args: {
   const crossStoreLineage = args.store?.getAllCrossStoreWorkspaceLineage?.() ?? {}
   const workspaceLineage = args.store?.getAllWorkspaceLineage?.()
   const resolvedWorktrees =
-    args.worktreeId === undefined
+    args.worktreeId === undefined && args.repoId === undefined
       ? args.resolvedWorktrees
-      : args.resolvedWorktrees.filter((worktree) => worktree.id === args.worktreeId)
+      : args.resolvedWorktrees.filter(
+          (worktree) =>
+            (args.worktreeId === undefined || worktree.id === args.worktreeId) &&
+            (args.repoId === undefined || worktree.repoId === args.repoId)
+        )
   for (const { worktree, repo } of withOwnerRepos(
     resolvedWorktrees,
     args.store?.getRepos() ?? []
@@ -169,6 +174,12 @@ export function buildRuntimeWorktreePsSummaries(args: {
       continue
     }
     const worktree = folderWorkspaceToWorktree(folderWorkspace)
+    if (args.repoId !== undefined && worktree.repoId !== args.repoId) {
+      continue
+    }
+    if (args.worktreeId !== undefined && worktree.id !== args.worktreeId) {
+      continue
+    }
     setPsSummary(summaries, {
       workspaceKind: 'folder-workspace',
       worktreeId: worktree.id,

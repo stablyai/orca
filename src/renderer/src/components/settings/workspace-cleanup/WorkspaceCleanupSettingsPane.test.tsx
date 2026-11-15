@@ -7,7 +7,7 @@ import {
   getDefaultWorkspaceCleanupRules,
   type WorkspaceCleanupRules
 } from '../../../../../shared/workspace-cleanup/workspace-cleanup-policy'
-import type { WorkspaceCleanupPolicyChange } from '../../../../../shared/workspace-cleanup/workspace-cleanup-policy-change'
+import type { WorkspaceCleanupPolicyPreviewRequest } from '../../../../../shared/workspace-cleanup/workspace-cleanup-policy-change'
 import type { WorkspaceCleanupPreviewRow } from '../../../../../shared/workspace-cleanup/workspace-cleanup-run'
 import { useAppStore } from '@/store'
 import { makeWorktree } from '@/store/slices/worktrees/worktree.test-fixture'
@@ -97,13 +97,13 @@ beforeEach(() => {
           params
         }: {
           method: string
-          params?: WorkspaceCleanupPolicyChange & {
+          params?: WorkspaceCleanupPolicyPreviewRequest & {
             workspaceCleanupPolicy?: WorkspaceCleanupRules
             worktreeId?: string
           }
         }) => {
           const policyRead = () => ({
-            protocol: 1,
+            protocol: 2,
             expiresAt: Date.UTC(2026, 10, 15, 12, 10),
             state: {
               repoId: null,
@@ -125,12 +125,14 @@ beforeEach(() => {
                 evaluatedAt: 1,
                 rows:
                   includeCandidate &&
-                  params?.scope === 'global' &&
-                  params.rules.keepWhen === 'uncommitted'
+                  params?.change?.scope === 'global' &&
+                  params.change.rules.keepWhen === 'uncommitted'
                     ? [row]
                     : []
               }
             }
+          } else if (method === 'workspaceCleanup.reservePolicyWrite') {
+            result = { reserved: true }
           } else if (method === 'workspaceCleanup.pin') {
             pinned.push(params!.worktreeId!)
             result = { pinned: true }

@@ -4,7 +4,7 @@ import {
   confirmWorkspaceCleanupChange,
   previewCleanupPolicyChange
 } from './workspace-cleanup-change-confirmation'
-import { createWorkspaceCleanupPolicyWrite } from './workspace-cleanup-policy-client'
+import { useWorkspaceCleanupPolicyWrite } from './use-workspace-cleanup-policy-write'
 // @protected-copy scope=file
 import { useWorkspaceCleanupPolicyOwner } from './use-workspace-cleanup-policy-owner'
 import {
@@ -41,14 +41,16 @@ export function useWorkspaceCleanupRuleChange({
   onSavedPreview?: (rules: WorkspaceCleanupRules, preview: WorkspaceCleanupPreview) => void
 }) {
   const t = useTranslate()
-  const { read, capability, adopt, readLatest, generation, scopeKey, reload } =
+  const { read, recovering, capability, adopt, readLatest, generation, scopeKey, reload } =
     useWorkspaceCleanupPolicyOwner(owner, repoId)
   const [pending, setPending] = useState<
     (WorkspaceCleanupRuleChangeRequest & { intent: CleanupChangeIntent }) | null
   >(null)
   const [checking, setChecking] = useState<CleanupChangeIntent['setting'] | null>(null)
   const [saving, setSaving] = useState(false)
-  const [settling, setSettling] = useState(false)
+  const ownerWrite = useWorkspaceCleanupPolicyWrite(owner, scopeKey)
+  const settling =
+    ownerWrite.phase === 'checking' || recovering || (ownerWrite.phase === 'sending' && !saving)
   const [error, setError] = useState<string | null>(null)
   const [errorSetting, setErrorSetting] = useState<CleanupChangeIntent['setting'] | null>(null)
   const lastIntent = useRef<CleanupChangeIntent | null>(null)
@@ -56,11 +58,9 @@ export function useWorkspaceCleanupRuleChange({
   const busy = useRef(false)
   const confirming = useRef(false)
   const focus = useWorkspaceCleanupChangeFocus(scopeKey)
-  const unresolved = useRef<(() => Promise<void>) | null>(null)
   useLayoutEffect(() => {
     busy.current = false
     confirming.current = false
-    unresolved.current = null
     lastIntent.current = null
   }, [scopeKey])
   const [stateScope, setStateScope] = useState(scopeKey)
@@ -71,7 +71,6 @@ export function useWorkspaceCleanupRuleChange({
     setError(null)
     setChecking(null)
     setSaving(false)
-    setSettling(false)
   }
   const active = (token: number) => generation.current === token
   const finish = (token: number, reset = false) => {
@@ -101,7 +100,6 @@ export function useWorkspaceCleanupRuleChange({
       return
     }
     setSaving(true)
-    const write = createWorkspaceCleanupPolicyWrite(owner, change, latest)
     const adoptSavedPreview = (saved: WorkspaceCleanupPolicyRead) => {
       if (
         preview &&
@@ -111,56 +109,25 @@ export function useWorkspaceCleanupRuleChange({
         onSavedPreview?.(change.rules, preview)
       }
     }
-    const settle = async () => {
-      const result = await write.settle()
-      const saved = result.read
-      if (!active(token)) {
-        return
-      }
-      if (result.outcome === 'saved') {
-        adoptSavedPreview(saved)
-        setPending(null)
-        setError(null)
-      } else if (result.outcome === 'failed') {
-        setError(workspaceCleanupChangeMessage('save', t))
-      } else {
-        setError(workspaceCleanupChangeMessage('conflict', t))
-      }
-      adopt(saved)
-      unresolved.current = null
-      setSettling(false)
-      finish(token, true)
+    const result = await ownerWrite.send(change, latest)
+    if (!result || !active(token)) {
+      return
     }
-    try {
-      await write.send()
-      if (!active(token)) {
-        return
-      }
-      const refreshed = await readLatest()
-      if (!active(token)) {
-        return
-      }
-      adoptSavedPreview(refreshed)
-      adopt(refreshed)
+    if (result.outcome === 'saved' && result.read) {
+      adoptSavedPreview(result.read)
       setPending(null)
       setError(null)
-      finish(token)
-    } catch {
-      if (!active(token)) {
-        return
-      }
-      setError(workspaceCleanupChangeMessage('checking', t))
-      setSettling(true)
-      unresolved.current = settle
-      try {
-        await settle()
-      } catch {
-        setSaving(false)
-      }
+    } else {
+      setError(workspaceCleanupChangeMessage(result.outcome === 'failed' ? 'save' : 'conflict', t))
     }
+    if (result.read) {
+      adopt(result.read)
+    }
+    finish(token, result.outcome !== 'saved')
   }
+
   const requestChange = async (intent: CleanupChangeIntent) => {
-    if (busy.current || unresolved.current) {
+    if (busy.current || ownerWrite.phase !== 'idle') {
       return
     }
     focus.capture()
@@ -203,7 +170,8 @@ export function useWorkspaceCleanupRuleChange({
       const comparison = await previewCleanupPolicyChange(
         owner,
         next,
-        intent.kind === 'disable-ignored-files' ? latest : undefined
+        latest,
+        intent.kind === 'disable-ignored-files'
       )
       if (!active(token)) {
         return
@@ -227,7 +195,7 @@ export function useWorkspaceCleanupRuleChange({
     finish(generation.current, true)
   }
   const confirm = async () => {
-    if (!pending || confirming.current || unresolved.current) {
+    if (!pending || confirming.current || ownerWrite.phase !== 'idle') {
       return
     }
     confirming.current = true
@@ -276,16 +244,23 @@ export function useWorkspaceCleanupRuleChange({
     saving,
     settling,
     errorSetting,
-    error: error ?? (capability === 'error' ? workspaceCleanupChangeMessage('preview', t) : null),
+    error: settling
+      ? workspaceCleanupChangeMessage('checking', t)
+      : (error ?? (capability === 'error' ? workspaceCleanupChangeMessage('preview', t) : null)),
     unsavedChanges,
-    guarded: capability !== 'ready' || checking !== null || pending !== null || saving || settling,
+    guarded:
+      capability !== 'ready' ||
+      checking !== null ||
+      pending !== null ||
+      saving ||
+      ownerWrite.phase !== 'idle',
     rememberControl: focus.remember,
     requestChange: (intent: CleanupChangeIntent) => void requestChange(intent),
     cancel,
     confirm,
     retry: () => {
-      if (unresolved.current) {
-        void unresolved.current().catch(() => setSaving(false))
+      if (ownerWrite.phase !== 'idle') {
+        ownerWrite.retry()
       } else if (pending) {
         void confirm()
       } else if (lastIntent.current) {

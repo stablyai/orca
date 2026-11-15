@@ -21710,9 +21710,6 @@
       "workspaceCleanup": {
         "title": "工作区清理",
         "description": "移除你已不再需要的工作区。在移除任何内容之前，Orca 会再次检查是否有未保存的工作",
-        "unsupportedHost": "此主机上的 Orca 版本不支持自动清理，请更新该主机上的 Orca 以使用这些设置",
-        "previewFailed": "无法检查此更改会匹配哪些工作区",
-        "pinFailed": "无法保留 {{name}}",
         "rules": {
           "branchNote": "已合并的分支会随工作区一起删除，未合并的分支会保留",
           "recommended": "推荐",
@@ -21847,7 +21844,6 @@
         },
         "change": {
           "title": "更改“{{rule}}”？",
-          "description_other": "此更改会让当前多出 {{count}} 个匹配的工作区，应用后几秒内会将其删除",
           "apply": "应用"
         },
         "rulesLoadFailed": "无法加载此主机的清理规则：{{error}}",
@@ -21864,7 +21860,6 @@
         "disableIgnoredFiles": {
           "title": "关闭被忽略文件保护？",
           "description": "对于使用这些清理规则的项目，被忽略的文件将不再阻止自动清理。.env 和本地配置这类文件可能会被删除，且无法恢复",
-          "matches_other": "如果不固定，关闭保护几秒后将额外删除 {{count}} 个工作区",
           "noMatches": "当前没有额外匹配的工作区，此设置会影响使用这些规则的项目今后的清理",
           "turnOff": "关闭保护"
         },

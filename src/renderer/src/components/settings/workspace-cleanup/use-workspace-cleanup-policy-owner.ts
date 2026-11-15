@@ -1,17 +1,33 @@
+import { cleanupPolicyOwnerKey } from './workspace-cleanup-write-journal'
+import { readCleanupPolicy } from './workspace-cleanup-policy-client'
+import { waitForCleanupWrite } from './workspace-cleanup-pending-write'
 import { useLayoutEffect, useEffectEvent, useRef, useState } from 'react'
 import { useAppStore } from '@/store'
-import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import { hasRuntimeRpcErrorCode } from '../../../../../shared/remote-runtime/rpc/runtime-rpc-error-code'
 import type { WorkspaceCleanupPolicyRead } from '../../../../../shared/workspace-cleanup/workspace-cleanup-policy-change'
 
 export function useWorkspaceCleanupPolicyOwner(owner: RuntimeClientTarget, repoId: string | null) {
-  const scopeKey = `${owner.kind === 'environment' ? owner.environmentId : 'local'}:${repoId ?? 'global'}`
+  const scopeKey = `${cleanupPolicyOwnerKey(owner)}:${repoId ?? 'global'}`
   const generation = useRef(0)
+  const [recovering, setRecovering] = useState(false)
   const [read, setRead] = useState<WorkspaceCleanupPolicyRead | null>(null)
   const [capability, setCapability] = useState<'loading' | 'ready' | 'old' | 'error'>('loading')
-  const readLatest = () =>
-    callRuntimeRpc<WorkspaceCleanupPolicyRead>(owner, 'workspaceCleanup.policyState', { repoId })
+  const readLatest = async () => {
+    const token = generation.current
+    await waitForCleanupWrite(owner)
+    return readCleanupPolicy(
+      owner,
+      repoId,
+      (value) => {
+        if (token === generation.current) {
+          setRecovering(value)
+        }
+      },
+      () => token === generation.current
+    )
+  }
+
   const adopt = (value: WorkspaceCleanupPolicyRead) => {
     setRead(value)
     if (owner.kind !== 'local') {
@@ -36,7 +52,7 @@ export function useWorkspaceCleanupPolicyOwner(owner: RuntimeClientTarget, repoI
         return
       }
       adopt(value)
-      setCapability(value.protocol === 1 ? 'ready' : 'old')
+      setCapability(value.protocol === 2 ? 'ready' : 'old')
     } catch (failure) {
       if (token === generation.current) {
         setCapability(hasRuntimeRpcErrorCode(failure, 'method_not_found') ? 'old' : 'error')
@@ -48,11 +64,12 @@ export function useWorkspaceCleanupPolicyOwner(owner: RuntimeClientTarget, repoI
     const token = generation.current + 1
     generation.current = token
     setRead(null)
+    setRecovering(false)
     setCapability('loading')
     void reloadEffect()
     return () => {
       generation.current = token + 1
     }
   }, [scopeKey])
-  return { read, capability, adopt, readLatest, generation, scopeKey, reload }
+  return { read, recovering, capability, adopt, readLatest, generation, scopeKey, reload }
 }

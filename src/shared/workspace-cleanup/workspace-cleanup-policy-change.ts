@@ -1,5 +1,5 @@
 import type { Repo } from '../repository/repo-types'
-import { getRepoExecutionHostId, isRepoOnCatalogHost } from '../execution-host'
+import { getRepoExecutionHostId, isRepoOnCatalogHost } from '../execution-host/execution-host'
 import { isFolderRepo } from '../repository/repo-kind'
 import {
   normalizeWorkspaceCleanupRules,
@@ -18,6 +18,7 @@ export type WorkspaceCleanupPolicyGuard = {
   id: string
   expiresAt: number
   expected: WorkspaceCleanupPolicyState
+  requireReservation?: true
 }
 export type WorkspaceCleanupGuardedUpdate = {
   workspaceCleanupGuard?: WorkspaceCleanupPolicyGuard
@@ -25,10 +26,15 @@ export type WorkspaceCleanupGuardedUpdate = {
 export type WorkspaceCleanupPolicyChange =
   | { scope: 'global'; rules: WorkspaceCleanupRules }
   | { scope: 'project'; repoId: string; policy: RepoWorkspaceCleanupPolicy | null }
+export type WorkspaceCleanupPolicyPreviewRequest = {
+  change: WorkspaceCleanupPolicyChange
+  expected: WorkspaceCleanupPolicyState
+}
 export type WorkspaceCleanupPolicyRead = {
   state: WorkspaceCleanupPolicyState
   expiresAt: number
-  protocol: 1
+  protocol: 2
+  pendingWrites?: boolean
 }
 export type WorkspaceCleanupPolicyComparison = {
   current: WorkspaceCleanupPreview

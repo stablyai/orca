@@ -1,13 +1,18 @@
 import { readWorktreeMetaForHost } from '../../../../persistence/host-qualified-worktree-meta'
-import { LOCAL_EXECUTION_HOST_ID } from '../../../../../shared/execution-host'
+import { LOCAL_EXECUTION_HOST_ID } from '../../../../../shared/execution-host/execution-host'
 import {
   WorkspaceCleanupPolicyReadParams,
+  WorkspaceCleanupGuardParam,
   WorkspaceCleanupChangeParams,
   WorkspaceCleanupSettleParams,
   WorkspaceCleanupInspectKeptParams,
   WorkspaceCleanupPinParams
 } from '../../../../../shared/rpc-contract/workspace-cleanup/workspace-cleanup-change-params'
-import { settleWorkspaceCleanupPolicyWrite } from '../../../../workspaces/cleanup/workspace-cleanup-policy-write'
+import {
+  settleWorkspaceCleanupPolicyWrite,
+  reserveWorkspaceCleanupPolicyWrite,
+  recoverWorkspaceCleanupPolicyWrites
+} from '../../../../workspaces/cleanup/workspace-cleanup-policy-write'
 import { pinWorkspaceForCleanup } from '../../../../workspaces/cleanup/workspace-cleanup-pin'
 import {
   WorkspaceCleanupCodexHistoryDiskUsageParams,
@@ -74,10 +79,29 @@ export const WORKSPACE_CLEANUP_RUNNER_METHODS = [
       requireWorkspaceCleanupRunner(runtime).readPolicy(params.repoId)
   }),
   defineMethod({
+    name: 'workspaceCleanup.reservePolicyWrite',
+    permission: 'workspace',
+    params: WorkspaceCleanupGuardParam,
+    handler: (params, { runtime }) => {
+      reserveWorkspaceCleanupPolicyWrite(runtime.requireStore(), params)
+      return { reserved: true }
+    }
+  }),
+  defineMethod({
+    name: 'workspaceCleanup.recoverPolicyWrites',
+    permission: 'workspace',
+    params: WorkspaceCleanupPolicyReadParams,
+    handler: (params, { runtime }) => {
+      recoverWorkspaceCleanupPolicyWrites(runtime.requireStore())
+      return requireWorkspaceCleanupRunner(runtime).readPolicy(params.repoId)
+    }
+  }),
+  defineMethod({
     name: 'workspaceCleanup.previewChange',
     permission: 'workspace',
     params: WorkspaceCleanupChangeParams,
-    handler: (params, { runtime }) => requireWorkspaceCleanupRunner(runtime).previewChange(params)
+    handler: (params, { runtime }) =>
+      requireWorkspaceCleanupRunner(runtime).previewChange(params.change, params.expected)
   }),
   defineMethod({
     name: 'workspaceCleanup.settlePolicyWrite',

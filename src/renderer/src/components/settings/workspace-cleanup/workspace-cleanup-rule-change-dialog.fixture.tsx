@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import type { Repo } from '../../../../../shared/repository/repo-types'
 import { defineFixture } from '../../../component-fixtures/component-fixture'
-import { getDefaultSettings } from '../../../../../shared/constants'
+import { getDefaultSettings } from '../../../../../shared/orca-profiles/constants'
 import { getDefaultWorkspaceCleanupRules } from '../../../../../shared/workspace-cleanup/workspace-cleanup-policy'
 import type { WorkspaceCleanupPreviewRow } from '../../../../../shared/workspace-cleanup/workspace-cleanup-run'
 import {
@@ -205,7 +205,7 @@ function previewHost(fail: boolean) {
         ok: true,
         _meta: { runtimeId: 'fixture' },
         result: {
-          protocol: 1,
+          protocol: 2,
           expiresAt: Date.now() + 60_000,
           state: {
             repoId: 'example',

@@ -123,7 +123,8 @@ export async function readWorkspaceCleanupGitEvidence(
     prCache,
     repoRefs,
     signal,
-    coordinatorBranch
+    coordinatorBranch,
+    status.head
   )
   // Commits already in the base, a merged review or the coordinator's branch are not at risk, even after a squash rewrote them.
   const headLanded = isWorkspaceCleanupHeadLanded(merge)
