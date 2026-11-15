@@ -22602,6 +22602,8 @@
       "tabCloseAll": "Tüm düzenleyici sekmelerini kapat",
       "tabRename": "Etkin sekmeyi yeniden adlandır",
       "tabReopenClosed": "Kapatılan sekmeyi yeniden aç",
+      "tabMoveLeft": "Etkin sekmeyi sola taşı",
+      "tabMoveRight": "Etkin sekmeyi sağa taşı",
       "tabNextSameType": "Sonraki sekme (aynı tür)",
       "tabPreviousSameType": "Önceki sekme (aynı tür)",
       "tabNextAllTypes": "Sonraki sekme (tüm türler)",

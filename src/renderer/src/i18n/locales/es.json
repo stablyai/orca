@@ -22997,6 +22997,8 @@
       "tabCloseAll": "Cerrar todas las pestañas del editor",
       "tabRename": "Renombrar pestaña activa",
       "tabReopenClosed": "Reabrir pestaña cerrada",
+      "tabMoveLeft": "Mover pestaña activa a la izquierda",
+      "tabMoveRight": "Mover pestaña activa a la derecha",
       "tabNextSameType": "Pestaña siguiente (mismo tipo)",
       "tabPreviousSameType": "Pestaña anterior (mismo tipo)",
       "tabNextAllTypes": "Pestaña siguiente (todos los tipos)",

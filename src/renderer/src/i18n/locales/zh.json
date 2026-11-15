@@ -22742,6 +22742,8 @@
       "tabCloseAll": "关闭所有编辑器标签页",
       "tabRename": "重命名当前标签页",
       "tabReopenClosed": "重新打开已关闭的标签页",
+      "tabMoveLeft": "将活动标签页左移",
+      "tabMoveRight": "将活动标签页右移",
       "tabNextSameType": "下一个标签页（同类型）",
       "tabPreviousSameType": "上一个标签页（同类型）",
       "tabNextAllTypes": "下一个标签页（所有类型）",

@@ -22324,6 +22324,8 @@
       "tabCloseAll": "모든 편집기 탭 닫기",
       "tabRename": "활성 탭 이름 바꾸기",
       "tabReopenClosed": "닫은 탭 다시 열기",
+      "tabMoveLeft": "활성 탭을 왼쪽으로 이동",
+      "tabMoveRight": "활성 탭을 오른쪽으로 이동",
       "tabNextSameType": "다음 탭(같은 유형)",
       "tabPreviousSameType": "이전 탭(같은 유형)",
       "tabNextAllTypes": "다음 탭(모든 유형)",

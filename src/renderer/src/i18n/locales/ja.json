@@ -22332,6 +22332,8 @@
       "tabCloseAll": "すべてのエディタータブを閉じる",
       "tabRename": "アクティブなタブの名前を変更",
       "tabReopenClosed": "閉じたタブを再度開く",
+      "tabMoveLeft": "アクティブなタブを左に移動",
+      "tabMoveRight": "アクティブなタブを右に移動",
       "tabNextSameType": "次のタブ（同じ種類）",
       "tabPreviousSameType": "前のタブ（同じ種類）",
       "tabNextAllTypes": "次のタブ（すべての種類）",
