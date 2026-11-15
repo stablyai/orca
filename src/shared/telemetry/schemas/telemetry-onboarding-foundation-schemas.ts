@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import type { OnboardingChecklistState } from './onboarding-state-types'
+import type { OnboardingChecklistState } from '../../onboarding/onboarding-state-types'
 
 // Activation telemetry excludes raw paths, repo names, URLs and errors; retain legacy seven-step payload compatibility.
 export const ONBOARDING_TELEMETRY_LEGACY_MAX_STEP = 7

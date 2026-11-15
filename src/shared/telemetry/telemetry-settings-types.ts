@@ -1,6 +1,6 @@
-import type { BrowserExtensionsBannerAssignment } from './browser/extensions/browser-extensions-banner'
-import type { AgentDashboardSurface } from './telemetry-agent-dashboard-event-schemas'
-import type { MilestoneInstallCohort } from './telemetry-protected-milestone-schemas'
+import type { BrowserExtensionsBannerAssignment } from '../browser/extensions/browser-extensions-banner'
+import type { AgentDashboardSurface } from './schemas/telemetry-agent-dashboard-event-schemas'
+import type { MilestoneInstallCohort } from './schemas/telemetry-protected-milestone-schemas'
 
 export type ChatUiLaunchTipTargeting =
   | { mode: 'all' }

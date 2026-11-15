@@ -41,7 +41,7 @@ import type {
   WorktreeSetupLaunch,
   WorktreeStartupLaunch
 } from '../../../shared/worktree/creation/launch-types'
-import type { FeatureInteractionId } from '../../../shared/feature-interaction-catalog'
+import type { FeatureInteractionId } from '../../../shared/feature-education/interactions/feature-interaction-catalog'
 import type { KeybindingActionId } from '../../../shared/keybindings/types'
 import type { BrowserFindSource } from '../../../shared/browser/guest-lifecycle/browser-find-source'
 import type {
@@ -54,7 +54,7 @@ import type {
   AgentProviderSessionMetadata,
   SleepingAgentLaunchConfig
 } from '../../../shared/agent-session/lifecycle/agent-session-resume'
-import type { TerminalPaneSplitSource } from '../../../shared/feature-education-telemetry'
+import type { TerminalPaneSplitSource } from '../../../shared/feature-education/feature-education-telemetry'
 import type { RuntimeMobileSessionTabMove } from '../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import type {
   RuntimeTerminalCreateRequestPayload,

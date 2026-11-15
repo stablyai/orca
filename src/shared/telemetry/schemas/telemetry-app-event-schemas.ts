@@ -1,17 +1,17 @@
 import { z } from 'zod'
-import { appStarSourceSchema } from './gh-star-source'
+import { appStarSourceSchema } from '../../gh-star-source'
 import {
   FEATURE_INTERACTION_CATEGORIES,
-  FEATURE_INTERACTION_IDS,
-  FEATURE_INTERACTION_USAGE_BUCKETS,
   getFeatureInteractionCategory
-} from './feature-interactions'
+} from '../../feature-education/interactions/feature-interaction-categories'
+import { FEATURE_INTERACTION_IDS } from '../../feature-education/interactions/feature-interaction-catalog'
+import { FEATURE_INTERACTION_USAGE_BUCKETS } from '../../feature-education/interactions/feature-interaction-usage-buckets'
 import {
   starNagAgentBucketSchema,
   starNagOutcomeSchema,
   starNagPromptModeSchema,
   starNagPromptSourceSchema
-} from './star-nag-telemetry'
+} from '../star-nag-telemetry'
 import {
   agentKindSchema,
   errorClassSchema,

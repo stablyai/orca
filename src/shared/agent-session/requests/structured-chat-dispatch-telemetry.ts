@@ -1,4 +1,4 @@
-import type { AgentKind } from '../../telemetry-property-schemas'
+import type { AgentKind } from '../../telemetry/schemas/telemetry-property-schemas'
 
 export const STRUCTURED_CHAT_START_TELEMETRY_CLIENT_CAPABILITY =
   'structured-chat-start-telemetry-v1'

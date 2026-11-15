@@ -1,6 +1,6 @@
 // Share exhaustive launch-to-telemetry mapping between renderer and main so new agents retain distinct attribution.
 
-import type { AgentKind } from '../../telemetry-property-schemas'
+import type { AgentKind } from '../../telemetry/schemas/telemetry-property-schemas'
 import type { TuiAgent } from '../../agent-launch/catalog/tui-agent'
 
 type ConcreteAgentKind = Exclude<AgentKind, 'other'>

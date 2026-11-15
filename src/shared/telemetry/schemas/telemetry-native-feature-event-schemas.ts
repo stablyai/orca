@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { FEATURE_WALL_MAX_DWELL_MS } from './feature-wall-telemetry'
+import { FEATURE_WALL_MAX_DWELL_MS } from '../../feature-education/explore/feature-wall-telemetry'
 import { nthRepoAddedSchema } from './telemetry-app-event-schemas'
 import {
   agentKindSchema,

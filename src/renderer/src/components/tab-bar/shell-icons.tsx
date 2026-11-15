@@ -1,5 +1,5 @@
 import React from 'react'
-import { WINDOWS_GIT_BASH_SHELL } from '../../../../shared/windows-terminal-shell'
+import { WINDOWS_GIT_BASH_SHELL } from '../../../../shared/shell/launch/windows-terminal-shell'
 import { useTranslate } from '@/i18n/use-translate'
 import gitForWindowsLogoUrl from '../../../../../resources/gwindows_logo.svg?url'
 

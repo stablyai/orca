@@ -6,8 +6,8 @@ import {
   SETUP_GUIDE_CLOSE_OUTCOMES,
   SETUP_GUIDE_SOURCES,
   TERMINAL_PANE_SPLIT_SOURCES
-} from './feature-education-telemetry'
-import { FEATURE_WALL_SETUP_STEP_IDS } from './feature-wall-setup-steps'
+} from '../../feature-education/feature-education-telemetry'
+import { FEATURE_WALL_SETUP_STEP_IDS } from '../../feature-education/explore/feature-wall-setup-steps'
 
 export const featureEducationSourceSchema = z.enum(FEATURE_EDUCATION_SOURCES)
 export const featureEducationContextualTourIdSchema = z.enum(FEATURE_EDUCATION_CONTEXTUAL_TOUR_IDS)

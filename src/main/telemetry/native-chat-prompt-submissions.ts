@@ -1,6 +1,6 @@
 import { tuiAgentToAgentKind } from '../../shared/agent-status/identity/agent-kind'
 import { isTuiAgent } from '../../shared/agent-launch/catalog/tui-agent-config'
-import type { EventProps } from '../../shared/telemetry-events'
+import type { EventProps } from '../../shared/telemetry/telemetry-event-classification'
 import type { JournalWriterCommit } from '../native-chat/agent-session-journal/journal-writer-changes'
 import type { AgentSessionJournal } from '../native-chat/agent-session-journal/journal-store'
 import { recordStructuredChatPromptAccepted } from './structured-chat-dispatch'

@@ -19,7 +19,7 @@ import { isShellProcess } from '../../../shared/agent-status/process/shell-proce
 import {
   selectForegroundProcessCandidate,
   type SelectedForegroundProcess
-} from '../../../shared/foreground-process-selection'
+} from '../../../shared/agent-status/process/foreground-process-selection'
 import { isWindowsShellAloneInJob } from './windows/shell-alone-in-job'
 import {
   readWindowsProcessIdentityTableFresh,

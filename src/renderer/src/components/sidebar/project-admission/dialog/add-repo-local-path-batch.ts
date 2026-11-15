@@ -1,7 +1,7 @@
 import { useEffect, type RefObject } from 'react'
 import { toast } from 'sonner'
 import { isGitRepoKind } from '../../../../../../shared/repo-kind'
-import type { AddRepoExistingWorkspaceSource } from '../../../../../../shared/telemetry-events'
+import type { AddRepoExistingWorkspaceSource } from '../../../../../../shared/telemetry/schemas/telemetry-property-schemas'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
 import type { Repo } from '../../../../../../shared/repo-types'
 import { showSkippedBatchFoldersToast } from '../completion/add-repo-skipped-folders-toast'

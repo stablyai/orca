@@ -4,7 +4,7 @@ import { getInspectableTerminalHostSession } from './terminal-host-session-acces
 import { isShellProcess } from '../../../shared/agent-status/process/shell-process-detection'
 import { recognizeAgentProcess } from '../../../shared/agent-status/process/agent-process-recognition'
 import type { PtyChildProcessVerdict } from '../../../shared/terminal/pty/lifecycle/terminal-process-inspection'
-import type { RemoteForegroundEvidence } from '../../../shared/foreground-process-evidence'
+import type { RemoteForegroundEvidence } from '../../../shared/terminal/pty/foreground/foreground-process-evidence'
 import { getCheapProcessTableSnapshot } from '../../../shared/cheap-process-table-snapshot-reader'
 import { getStrictProcessTableSnapshotWithAge } from '../../../shared/process-table-snapshot-reader'
 import { resolveRemoteForegroundEvidence } from '../../providers/foreground/agent-process-batch'

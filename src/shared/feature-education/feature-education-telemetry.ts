@@ -1,4 +1,4 @@
-import type { ContextualTourId } from './contextual-tours'
+import type { ContextualTourId } from './contextual-tours/contextual-tours'
 
 export const FEATURE_EDUCATION_CONTEXTUAL_TOUR_IDS = [
   'workspace-board',

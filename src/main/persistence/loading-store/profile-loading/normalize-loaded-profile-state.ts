@@ -1,6 +1,6 @@
 import { normalizePersistedMobileClientTabSelections } from '../../../runtime/client/navigation/client-session-tab-selection-persistence'
 import type { SshRemotePtyLease } from '../../../../shared/remote-runtime/ssh/ssh-types'
-import { normalizeFeatureInteractionTelemetryBuckets } from '../../../../shared/feature-interactions'
+import { normalizeFeatureInteractionTelemetryBuckets } from '../../../../shared/feature-education/interactions/feature-interactions'
 import { normalizeFolderWorkspaceDiffComments } from '../../../workspaces/catalog/folder-workspace-diff-comments'
 import { normalizeFolderWorkspaces } from '../../../../shared/folder-workspaces/folder-workspaces'
 import { normalizeOrcadMigrationEvictedReceipts } from '../../../../shared/orcad-migration/orcad-migration-evicted-receipts'
