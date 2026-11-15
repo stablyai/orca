@@ -54,13 +54,14 @@ export type QuickCreationRequestInput = {
   startupPlan: AgentStartupPlan | null
   quickPrompt: string
   launchDraftPrompt: string | null | undefined
-  promptDelivery: 'draft' | 'auto-submit'
+  promptDelivery: NonNullable<WorktreeCreationRequest['promptDelivery']>
   quickTelemetry: AgentStartedTelemetry | null
   suppressTerminalFocusOnCompletion: boolean
   setupOnly: boolean
 }
 
 export type QuickSubmitOptions = {
+  initialPrompt?: string
   onLegacyPreparationFailure?: (error: unknown) => void
   setupOnly?: boolean
   launchChoice?: AgentLaunchChoice

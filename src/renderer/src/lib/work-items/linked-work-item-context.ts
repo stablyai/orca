@@ -183,8 +183,12 @@ export function resolveQuickCreateLinkedWorkItemPrompt(
       > & { linkedContext?: LinkedWorkItemContext })
     | null
     | undefined,
-  note: string
+  note: string,
+  initialPrompt?: string
 ): { prompt: string; draftPrompt: string | null } {
+  if (initialPrompt?.trim()) {
+    return { prompt: initialPrompt, draftPrompt: null }
+  }
   const trimmedNote = note.trim()
   const linearBlock = isLinearWorkItemReference(linkedWorkItem)
     ? buildLinearLaunchContextBlock({

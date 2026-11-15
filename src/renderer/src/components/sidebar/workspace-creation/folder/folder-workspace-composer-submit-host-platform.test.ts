@@ -198,7 +198,8 @@ describe('submitFolderWorkspaceCreate on an Orca server', () => {
 it.each([
   { agent: 'codex', delivery: 'draft' },
   { agent: 'claude', delivery: null },
-  { agent: 'autohand', delivery: 'auto-submit' }
+  { agent: 'autohand', delivery: 'auto-submit' },
+  { agent: 'codex', delivery: 'submit-after-ready' }
 ] as const)(
   'preserves the actual paired $agent delivery through schemas and the host starter ($delivery)',
   async ({ agent, delivery }) => {
@@ -257,6 +258,9 @@ it.each([
         if (delivery === 'auto-submit') {
           expect(parsed.startupPrompt).toBe('Inspect regular task')
           expect(parsed.startupDraft).toBeUndefined()
+        } else if (delivery === 'submit-after-ready') {
+          expect(parsed.startupPrompt).toBe('Inspect the app.\nAdd a test.')
+          expect(parsed.startupPromptAfterReady).toBe(true)
         } else {
           expect(parsed.startupDraft).toContain('https://linear.app/team/issue/STA-1')
           expect(parsed.startupPrompt).toBeUndefined()
@@ -299,7 +303,7 @@ it.each([
       name: 'Linked task',
       lastAutoName: '',
       linkedWorkItem:
-        delivery === 'auto-submit'
+        delivery === 'auto-submit' || delivery === 'submit-after-ready'
           ? null
           : {
               provider: 'linear',
@@ -309,6 +313,8 @@ it.each([
               url: 'https://linear.app/team/issue/STA-1'
             },
       note: delivery === 'auto-submit' ? 'Inspect regular task' : '',
+      initialPrompt:
+        delivery === 'submit-after-ready' ? 'Inspect the app.\nAdd a test.' : undefined,
       autoRenameBranchFromWork: false,
       quickAgent: agent,
       agentCmdOverrides: { [agent]: `custom-${agent} --color never` },
@@ -328,11 +334,21 @@ it.each([
         { agent: 'autohand', prompt: 'Inspect regular task' },
         expect.objectContaining({ tabId: 'returned-agent-tab' })
       )
+    } else if (delivery === 'submit-after-ready') {
+      expect(pasteDraft).not.toHaveBeenCalled()
+      expect(sendFollowup).toHaveBeenCalledExactlyOnceWith(
+        'agent',
+        { agent: 'codex', prompt: 'Inspect the app.\nAdd a test.' },
+        expect.objectContaining({ tabId: 'returned-agent-tab' })
+      )
+      expect(createTerminal.mock.calls[0]?.[1]).toMatchObject({
+        command: expect.not.stringContaining('Inspect the app.')
+      })
     } else {
       expect(pasteDraft).not.toHaveBeenCalled()
       expect(sendFollowup).not.toHaveBeenCalled()
     }
-    if (delivery !== 'auto-submit') {
+    if (delivery === 'draft' || delivery === null) {
       expect(mocks.seedDraft).toHaveBeenCalledExactlyOnceWith({
         tabId: 'returned-agent-tab',
         agent,

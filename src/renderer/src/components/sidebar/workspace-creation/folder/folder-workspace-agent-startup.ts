@@ -1,3 +1,4 @@
+import { planLaunchAgentStartupPrompt } from '@/lib/agent-session/launch/prompt/launch-agent-startup-prompt-plan'
 import {
   resolveAgentStartupPlanInputs,
   type AgentStartupSettings
@@ -99,6 +100,24 @@ export function buildFolderWorkspaceLinkedStartupPlan(args: {
   })
   if (startupPlan && linkedDraftPrompt) {
     startupPlan.draftPrompt = linkedDraftPrompt
+  }
+  return startupPlan
+}
+
+export function buildFolderWorkspaceStartupPlan(
+  inputs: Parameters<typeof resolveAgentStartupPlanInputs>[0],
+  agentEnv: Record<string, string> | undefined,
+  prompt: string,
+  submitAfterReady: boolean
+): AgentStartupPlan | null {
+  const { startupPlan, pasteDraftAfterLaunch, submitPastedPrompt } = planLaunchAgentStartupPrompt({
+    base: { ...resolveAgentStartupPlanInputs(inputs), ...(agentEnv ? { agentEnv } : {}) },
+    prompt,
+    promptDelivery: submitAfterReady ? 'submit-after-ready' : 'auto-submit',
+    isFollowupPath: false
+  })
+  if (startupPlan && submitPastedPrompt) {
+    startupPlan.followupPrompt = pasteDraftAfterLaunch
   }
   return startupPlan
 }

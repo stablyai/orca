@@ -26,6 +26,7 @@ export type SubmitFolderWorkspaceCreateParams = {
   linkedTaskSourceContext?: TaskSourceContext | null
   note: string
   quickAgent: TuiAgent | null
+  initialPrompt?: string
   launchChoice?: AgentLaunchChoice
   legacyLaunchInputs?: AgentLaunchInputViews
   launchInputs?: AgentLaunchInputViews

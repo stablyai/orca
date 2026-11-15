@@ -23,6 +23,7 @@ export type ComposerModalData = {
   }
   directSetup?: DirectWorkItemSetupRequest
   prefilledName?: string
+  initialAgentPrompt?: string
   initialRepoId?: string
   initialEphemeralVmRecipeId?: string
   initialProjectGroupId?: string
