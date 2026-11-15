@@ -290,9 +290,7 @@ export function projectStructuredAgentSessionStatusState(
   const bodyOf = itemOf && agentSessionCurrentContextBody(itemOf, context.sequence)
   const status = projectStructuredAgentSessionStatus(items, submissions, currentFence, scope)
   const statusToolCall = status === 'working' ? statusStructuredAgentSessionToolCall(items) : null
-  const toolName = statusToolCall
-    ? normalizeOptionalField(statusToolCall.name, AGENT_STATUS_TOOL_NAME_MAX_LENGTH)
-    : undefined
+  const toolName = normalizeOptionalField(statusToolCall?.name, AGENT_STATUS_TOOL_NAME_MAX_LENGTH)
   const toolInput = statusToolCall
     ? normalizeOptionalField(
         describeToolInput(statusToolCall.input),
