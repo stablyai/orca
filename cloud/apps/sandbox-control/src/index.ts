@@ -85,6 +85,7 @@ import {
   resumeSandbox,
   rolloverSandbox,
   suspendSandbox,
+  applyLiveGitAccess,
   type LifecycleDeps,
   type Ready,
   CREATE_CANCELLED
@@ -1831,7 +1832,7 @@ async function routeRequest(request: Request, env: Env, deps: Deps): Promise<Res
       return json({ repo: source?.repoDir ? 'update' : 'clone' })
     }
     const match =
-      /^\/v1\/sandboxes(?:\/([A-Za-z0-9_]+)(?:\/(suspend|resume|lease|rollover|wake|restart|status|clone|archive|unarchive|env\/refresh|egress\/hosts|ssh-keys|desktop))?)?$/.exec(
+      /^\/v1\/sandboxes(?:\/([A-Za-z0-9_]+)(?:\/(suspend|resume|lease|rollover|wake|restart|status|clone|archive|unarchive|env\/refresh|git\/access|egress\/hosts|ssh-keys|desktop))?)?$/.exec(
         url.pathname
       )
     if (!match) {
@@ -2041,6 +2042,9 @@ async function routeRequest(request: Request, env: Env, deps: Deps): Promise<Res
       }
       case 'POST env/refresh':
         return json({ applied: await refreshSandboxEnv(life, row) })
+      case 'POST git/access':
+        // LIVE-GIT-ACCESS: a GitHub App install after boot reaches the running VM without a restart.
+        return json(await applyLiveGitAccess(life, row))
       case 'GET egress/hosts':
         return json({ hosts: egressUserHosts(row) })
       case 'PUT egress/hosts': {

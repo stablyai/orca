@@ -13,7 +13,10 @@ import {
   visibleCloudSetupNotices,
   type CloudSetupNoticesRecord
 } from '@/lib/orca-cloud/cloud-setup-notices-store'
-import { runCloudSetupScript } from '@/lib/orca-cloud/cloud-setup-notice-actions'
+import {
+  applyLiveGitAccess,
+  runCloudSetupScript
+} from '@/lib/orca-cloud/cloud-setup-notice-actions'
 import { recheckCloudFetch } from '@/lib/orca-cloud/cloud-fetch-notice'
 import { runVmEnvironmentCheck } from '@/runtime/ephemeral-vm/ephemeral-vm-environment-check'
 import { hideCloudToast, showCloudToast, type CloudToastView } from './cloud-toast-stack'
@@ -51,7 +54,10 @@ export function cloudSetupNoticeLine(
 ): CloudSetupNoticeLine {
   switch (notice.kind) {
     case 'push':
-      return cloudPushNoticeLine(record.repoUrl, t, handlers.push)
+      return cloudPushNoticeLine(record.repoUrl, t, {
+        ...handlers.push,
+        ...(handlers.restart ? { restart: handlers.restart } : {})
+      })
     case 'fetch':
       // ENV-ORIGIN-TOAST: shown only after a confirming check also failed. GH-FETCH-REASON: the
       // words and the action follow why (no app access, needs a restart, or the network).
@@ -61,6 +67,7 @@ export function cloudSetupNoticeLine(
         installing: handlers.push.installing,
         copyRequest: handlers.push.copyRequest,
         ...(handlers.push.copied ? { copied: true } : {}),
+        ...(handlers.push.needsRestart ? { needsRestart: true } : {}),
         ...(handlers.restart ? { restart: handlers.restart } : {}),
         ...(handlers.recheckFetch ? { recheck: handlers.recheckFetch } : {}),
         ...(handlers.checkingFetch ? { checking: true } : {})
@@ -138,7 +145,10 @@ export function cloudSetupNoticeLine(
 }
 
 /** Check again on the "can't reach GitHub" line: one doctor run at a time. */
-function useFetchRecheck(environmentId: string | undefined): {
+function useFetchRecheck(
+  environmentId: string | undefined,
+  workspaceId: string
+): {
   checking: boolean
   recheck: () => void
 } {
@@ -152,10 +162,13 @@ function useFetchRecheck(environmentId: string | undefined): {
       }
       busy.current = true
       setChecking(true)
-      void recheckCloudFetch(environmentId, runVmEnvironmentCheck).finally(() => {
-        busy.current = false
-        setChecking(false)
-      })
+      // LIVE-GIT-ACCESS: an install since the start reaches this workspace first (a no-op otherwise).
+      void applyLiveGitAccess(workspaceId)
+        .then(() => recheckCloudFetch(environmentId, runVmEnvironmentCheck))
+        .finally(() => {
+          busy.current = false
+          setChecking(false)
+        })
     }
   }
 }
@@ -223,9 +236,10 @@ export function CloudSetupNoticesDock({ workspaceId }: { workspaceId: string }):
   const push = useCloudPushNotice(
     environmentId,
     record?.repoUrl ?? null,
-    notices.some((notice) => notice.kind === 'push' || notice.kind === 'fetch')
+    notices.some((notice) => notice.kind === 'push' || notice.kind === 'fetch'),
+    workspaceId
   )
-  const fetch = useFetchRecheck(environmentId)
+  const fetch = useFetchRecheck(environmentId, workspaceId)
   const restart = useConfirmedRestart(workspaceId)
   const toastId = environmentId ? cloudSetupToastId(environmentId) : null
   const shown = Boolean(record) && notices.length > 0

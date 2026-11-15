@@ -1,9 +1,10 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-const { repoAccess, runCheck, toastSuccess } = vi.hoisted(() => ({
+const { repoAccess, runCheck, toastSuccess, refreshGitAccess } = vi.hoisted(() => ({
   repoAccess: vi.fn(),
   runCheck: vi.fn(),
-  toastSuccess: vi.fn()
+  toastSuccess: vi.fn(),
+  refreshGitAccess: vi.fn(async () => ({ ok: true, value: { applied: true } }))
 }))
 vi.mock('./use-orca-cloud-repo-access', () => ({
   fetchOrcaCloudRepoAccess: repoAccess,
@@ -14,7 +15,7 @@ vi.mock('@/runtime/ephemeral-vm/ephemeral-vm-environment-check', () => ({
 }))
 vi.mock('@/runtime/repo-hooks/runtime-hooks-client', () => ({ checkRuntimeHooks: vi.fn() }))
 vi.mock('@/store', () => ({ useAppStore: { getState: () => ({}) } }))
-vi.mock('./orca-cloud-workspace-store', () => ({ cloudWorkspaceApi: () => null }))
+vi.mock('./orca-cloud-workspace-store', () => ({ cloudWorkspaceApi: () => ({ refreshGitAccess }) }))
 vi.mock('sonner', () => ({ toast: { success: toastSuccess, error: vi.fn() } }))
 
 import { recheckCloudPushAccess } from './cloud-setup-notice-actions'
@@ -69,5 +70,29 @@ describe('recheckCloudPushAccess covers the can’t-reach line too (GH-FETCH-REA
     runCheck.mockResolvedValue({ checks: [FETCH.check] })
     expect(await recheckCloudPushAccess('env-1')).toBe('refused')
     expect(getCloudSetupNoticesRecord('env-1')?.notices).toHaveLength(1)
+  })
+})
+
+describe('LIVE-GIT-ACCESS: Check again applies the new access to the running workspace first', () => {
+  it('asks for the live refresh, then re-runs the check', async () => {
+    seed()
+    repoAccess.mockResolvedValue({ access: 'granted' })
+    const order: string[] = []
+    refreshGitAccess.mockImplementationOnce(
+      async () => (order.push('refresh'), { ok: true, value: { applied: true } })
+    )
+    runCheck.mockImplementationOnce(
+      async () => (order.push('check'), { checks: [{ ...FETCH.check, status: 'pass' }] })
+    )
+    expect(await recheckCloudPushAccess('env-1', { workspaceId: 'w1' })).toBe('granted')
+    expect(refreshGitAccess).toHaveBeenCalledWith({ workspaceId: 'w1' })
+    expect(order).toEqual(['refresh', 'check'])
+  })
+
+  it('never asks while GitHub has not confirmed the install', async () => {
+    seed()
+    repoAccess.mockResolvedValue({ access: 'missing' })
+    await recheckCloudPushAccess('env-1', { workspaceId: 'w1' })
+    expect(refreshGitAccess).not.toHaveBeenCalled()
   })
 })

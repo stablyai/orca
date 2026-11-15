@@ -34,7 +34,7 @@ import {
   setHostedWorkspaceService
 } from './hosted-workspace-service'
 import { createHostedSessionRegistry, type HostedSessionRegistry } from './hosted-session-registry'
-import { registerCloudShareHandlers } from './hosted-sandbox-share-ipc'
+import { registerCloudWorkspaceRequestHandlers } from './hosted-git-access-ipc'
 import { setHostedSessionSync } from './hosted-session-sync'
 import { orcaCloudAccountId } from '../../shared/hosted-sandbox/orca-cloud-account'
 import { setOrcaCloudActiveAccountResolver } from './orca-cloud-active-account'
@@ -106,7 +106,7 @@ export function installHostedSandbox(
     withCloudBuildDefaults(process.env),
     app.isPackaged
   )
-  registerCloudShareHandlers(userDataPath, config)
+  registerCloudWorkspaceRequestHandlers(userDataPath, config)
   if (!config) {
     return
   }

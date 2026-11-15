@@ -11,6 +11,14 @@ const { pushAccess, copyRequest } = vi.hoisted(() => ({
   pushAccess: vi.fn(async (): Promise<string> => 'install'),
   copyRequest: vi.fn(async () => true)
 }))
+const { recheckPush } = vi.hoisted(() => ({
+  recheckPush: vi.fn(async (): Promise<string> => 'refused')
+}))
+vi.mock('@/lib/orca-cloud/cloud-setup-notice-actions', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  recheckCloudPushAccess: recheckPush,
+  applyLiveGitAccess: vi.fn(async () => false)
+}))
 vi.mock('@/lib/orca-cloud/cloud-push-access', () => ({
   fetchCloudPushAccess: pushAccess
 }))
@@ -80,7 +88,7 @@ describe('CloudSetupNoticesDock (DS-o, DS-q)', () => {
     vi.useRealTimers()
   })
 
-  it("can't reach GitHub: says which repository and offers Check again, never a bare line (ENV-ORIGIN-TOAST)", () => {
+  it("can't reach GitHub: says which repository and offers Check again, never a bare line (ENV-ORIGIN-TOAST)", async () => {
     setCloudSetupNotices({
       environmentId: 'env-1',
       path: '/w',
@@ -107,7 +115,8 @@ describe('CloudSetupNoticesDock (DS-o, DS-q)', () => {
     )
     expect(shown.lines[0].description).toBe('Pulls and pushes won’t work until it can.')
     expect(shown.lines[0].action).toMatchObject({ label: 'Check again' })
-    shown.lines[0].action.onClick()
+    // The live access refresh goes first (LIVE-GIT-ACCESS), then the check.
+    await act(async () => shown.lines[0].action.onClick())
     expect(recheck).toHaveBeenCalledWith('env-1', expect.any(Function))
   })
 
@@ -202,6 +211,37 @@ describe('the can’t-reach line says why (GH-FETCH-REASON)', () => {
   it('an older doctor (no reason) with the app granted keeps Check again', async () => {
     const line = await show('granted')
     expect(line.action).toMatchObject({ label: 'Check again' })
+  })
+})
+
+describe('LIVE-GIT-ACCESS: never an endless Check again', () => {
+  it('the App reaches the repo, Check again refreshed it live and the push still fails: Restart', async () => {
+    pushAccess.mockResolvedValue('granted')
+    setCloudSetupNotices({
+      environmentId: 'env-1',
+      path: '/w',
+      repoId: 'r',
+      hostId: null,
+      repoUrl: 'https://github.com/stablyai/orca',
+      notices: [PUSH]
+    })
+    render(<CloudSetupNoticesDock workspaceId="w1" />)
+    await act(async () => {})
+    let [, shown] = stack.show.mock.calls.at(-1) ?? []
+    expect(shown.lines[0].action).toMatchObject({ label: 'Check again' })
+    await act(async () => shown.lines[0].action.onClick())
+    expect(recheckPush).toHaveBeenCalledWith('env-1', { workspaceId: 'w1' })
+    ;[, shown] = stack.show.mock.calls.at(-1) ?? []
+    expect(shown.lines[0].text).toBe(
+      'Orca Cloud can push to stablyai/orca now, but this workspace can’t use the new access yet.'
+    )
+    expect(shown.lines[0].description).toBe(
+      'Restart the workspace to use the new access. Your files are kept.'
+    )
+    expect(shown.lines[0].action).toMatchObject({ label: 'Restart' })
+    shown.lines[0].action.onClick()
+    expect(restart).toHaveBeenCalled()
+    pushAccess.mockReset()
   })
 })
 

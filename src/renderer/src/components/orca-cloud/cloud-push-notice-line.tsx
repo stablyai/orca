@@ -1,7 +1,7 @@
 // The "can't push" line (ENV-NOTICE-ACTIONS): Install only where installing can work, a request to
 // copy for an owner once one was asked, Check again where the App already reaches the repository,
 // and, where only an owner can install, a request to copy for them with no Install button.
-import { Check, Copy, GitPullRequestArrow, Loader2, RefreshCw } from 'lucide-react'
+import { Check, Copy, GitPullRequestArrow, Loader2, RefreshCw, RotateCw } from 'lucide-react'
 import type { Translate } from '@/i18n/use-translate'
 import { repoOwner, repoSlug } from '@/lib/orca-cloud/cloud-setup-notice-actions'
 import type { CloudPushAccess } from '@/lib/orca-cloud/cloud-push-access'
@@ -16,6 +16,9 @@ export type CloudPushLineHandlers = {
   copied?: boolean
   recheck: () => void
   rechecking?: boolean
+  /** LIVE-GIT-ACCESS: the live refresh ran and it still can't push: Restart, not another Check again. */
+  needsRestart?: boolean
+  restart?: () => void
 }
 
 /** Copy a request for an owner (owner-request.ts), reading "Copied" for a moment after. */
@@ -86,6 +89,24 @@ export function cloudPushNoticeLine(
         action: copyRequestAction(h, t)
       }
     case 'granted':
+      if (h.needsRestart && h.restart) {
+        return {
+          text: t(
+            'orcaCloud.setupNotices.pushNeedsRestart',
+            'Orca Cloud can push to {{repo}} now, but this workspace can’t use the new access yet.',
+            { repo }
+          ),
+          description: t(
+            'orcaCloud.setupNotices.newAccessNeedsRestart',
+            'Restart the workspace to use the new access. Your files are kept.'
+          ),
+          action: {
+            label: t('orcaCloudWorkspace.restart', 'Restart'),
+            icon: <RotateCw />,
+            run: h.restart
+          }
+        }
+      }
       return {
         text: t('orcaCloud.setupNotices.pushNotYet', 'Orca Cloud can’t push to {{repo}} yet.', {
           repo
