@@ -8,6 +8,7 @@ import { worktreeWorkspaceKey } from '../../../shared/workspace-scope'
 import type { WorktreeMeta } from '../../../shared/worktree/meta-types'
 import {
   captureNativeLocalWorktreeMetadataScanExpectation,
+  pruneMissingLocalWorktreeSessionsForRepo,
   pruneSessionlessMissingLocalWorktreeMetadataForRepo
 } from './missing-local-worktree-metadata-pruning'
 
@@ -263,5 +264,55 @@ describe('pruneSessionlessMissingLocalWorktreeMetadataForRepo', () => {
     expect(state.settings.localWindowsRuntimeDefault).toEqual(originalDefault)
     expect(pruneCaptured(state, scan, [worktreeId])).toEqual([])
     expect(state.worktreeMeta[worktreeId]).toBeDefined()
+  })
+})
+
+describe('pruneMissingLocalWorktreeSessionsForRepo', () => {
+  it('drops saved tabs of deleted worktrees but keeps unsaved drafts, archived and active workspaces', () => {
+    const state = makeState()
+    const goneId = `${REPO_ID}::/workspace/gone`
+    const draftId = `${REPO_ID}::/workspace/draft`
+    const archivedId = `${REPO_ID}::/workspace/archived`
+    const activeId = `${REPO_ID}::/workspace/active`
+    state.worktreeMeta[archivedId] = {
+      ...makeMeta(archivedId),
+      isArchived: true,
+      archivedCheckout: { branch: 'feature/archived', archivedAt: 1 }
+    }
+    const draft = {
+      filePath: '/workspace/draft/notes.md',
+      relativePath: 'notes.md',
+      worktreeId: draftId,
+      language: 'markdown',
+      dirtyDraftContent: 'unsaved'
+    }
+    state.workspaceSession = {
+      ...getDefaultWorkspaceSession(),
+      activeWorktreeId: activeId,
+      unifiedTabs: {
+        [goneId]: [],
+        [draftId]: [],
+        [archivedId]: [],
+        [activeId]: []
+      },
+      activeTabIdByWorktree: { [goneId]: null },
+      openFilesByWorktree: { [draftId]: [draft] }
+    }
+
+    const removed = pruneMissingLocalWorktreeSessionsForRepo(state, capture(state), [
+      goneId,
+      draftId,
+      archivedId,
+      activeId
+    ])
+
+    expect(removed).toEqual([goneId])
+    expect(state.workspaceSession.unifiedTabs).toEqual({
+      [draftId]: [],
+      [archivedId]: [],
+      [activeId]: []
+    })
+    expect(state.workspaceSession.activeTabIdByWorktree).toEqual({})
+    expect(state.workspaceSession.openFilesByWorktree).toEqual({ [draftId]: [draft] })
   })
 })

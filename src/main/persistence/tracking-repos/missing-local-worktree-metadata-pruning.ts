@@ -1,17 +1,29 @@
 import { isWindowsAbsolutePathLike } from '../../../shared/cross-platform-path'
 import { getRepoExecutionHostId, LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host'
 import type { PersistedState } from '../../../shared/persisted-state-types'
+import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
 import { getRepoKind } from '../../../shared/repo-kind'
 import { sshRemotePtyLeaseAllowsReattach } from '../../../shared/ssh-types'
 import { worktreeWorkspaceKey } from '../../../shared/workspace-scope'
-import { FOLDER_WORKSPACE_INSTANCE_SEPARATOR, splitWorktreeId } from '../../../shared/worktree/id'
+import {
+  FOLDER_WORKSPACE_INSTANCE_SEPARATOR,
+  getRepoIdFromWorktreeId,
+  splitWorktreeId
+} from '../../../shared/worktree/id'
 import { isWslUncPath } from '../../../shared/wsl-paths'
 import { isFinalAutomationRunStatus } from '../../../shared/automations/history/automation-run'
 import { pruneUnreferencedWorktreeIdentityMeta } from '../loading-store/worktree-metadata/worktree-identity-metadata'
 import {
   addPersistedSessionWorktreeOwners,
-  createWorktreeOwnerCandidateCollector
+  addWorkspaceSessionWorktreeOwners,
+  createWorktreeOwnerCandidateCollector,
+  getPersistedWorktreeOwnerId,
+  type WorktreeOwnerCandidateCollector
 } from '../restoring-sessions/session-worktree-ownership'
+import {
+  removeWorkspaceSessionOwners,
+  withoutWslMoveFrozenOwners
+} from '../restoring-sessions/session-owner-removal'
 import {
   indexMetadataAliasesForWorktreeIds,
   isLocallyRemovableWorktreeMetadataRow,
@@ -33,6 +45,15 @@ function collectPersistedWorkspaceOwners(
 ): Set<string> {
   const collector = createWorktreeOwnerCandidateCollector(candidateIds, platform)
   addPersistedSessionWorktreeOwners(state, collector)
+  addNonSessionWorkspaceOwners(state, collector)
+  return collector.owners
+}
+
+/** Owners outside saved session layout: a live lease, automation or phone selection still uses the workspace. */
+function addNonSessionWorkspaceOwners(
+  state: PersistedState,
+  collector: WorktreeOwnerCandidateCollector
+): void {
   const add = collector.addOwner
   add(state.ui.lastActiveWorktreeId)
   for (const selections of Object.values(state.mobileClientTabSelectionsByDeviceId ?? {})) {
@@ -60,7 +81,6 @@ function collectPersistedWorkspaceOwners(
       add(run.workspaceId)
     }
   }
-  return collector.owners
 }
 
 function repoStillMatches(
@@ -181,4 +201,87 @@ export function pruneSessionlessMissingLocalWorktreeMetadataForRepo(
     pruneUnreferencedWorktreeIdentityMeta(state, removedIdentityKeys)
   }
   return removedIds
+}
+
+/** Worktree IDs of this repo that only the local saved session still names. */
+export function selectLocalWorktreeSessionOwnersForRepo(
+  session: WorkspaceSessionState,
+  repoId: string,
+  platform = process.platform
+): string[] {
+  const owners = new Set<string>()
+  addWorkspaceSessionWorktreeOwners(session, {
+    owners,
+    addOwner: (ownerKey) => {
+      const worktreeId = getPersistedWorktreeOwnerId(ownerKey)
+      if (
+        worktreeId &&
+        getRepoIdFromWorktreeId(worktreeId) === repoId &&
+        isValidCandidateId(repoId, worktreeId, platform)
+      ) {
+        owners.add(worktreeId)
+      }
+    }
+  })
+  return [...owners]
+}
+
+function hasUnsavedDraft(state: PersistedState, worktreeId: string): boolean {
+  const ownerKeys = [worktreeId, worktreeWorkspaceKey(worktreeId)]
+  return [state.workspaceSession, ...Object.values(state.workspaceSessionsByHostId ?? {})].some(
+    (session) =>
+      ownerKeys.some((ownerKey) =>
+        session?.openFilesByWorktree?.[ownerKey]?.some(
+          (file) => file.dirtyDraftContent !== undefined
+        )
+      )
+  )
+}
+
+/** Drop local saved session state for worktrees an authoritative scan no longer lists and whose
+ *  folders are gone. Unsaved drafts, the active workspace and non-session owners keep theirs. */
+export function pruneMissingLocalWorktreeSessionsForRepo(
+  state: PersistedState,
+  scan: NativeLocalWorktreeMetadataScanExpectation,
+  missingWorktreeIds: readonly string[],
+  platform = process.platform
+): string[] {
+  if (
+    missingWorktreeIds.length === 0 ||
+    !repoStillMatches(state, scan.repo) ||
+    !routingStillMatches(state, scan)
+  ) {
+    return []
+  }
+  const candidateIds = new Set(
+    missingWorktreeIds.filter((worktreeId) =>
+      isValidCandidateId(scan.repo.id, worktreeId, platform)
+    )
+  )
+  const collector = createWorktreeOwnerCandidateCollector(candidateIds, platform)
+  addNonSessionWorkspaceOwners(state, collector)
+  const session = state.workspaceSession
+  collector.addOwner(session.activeWorktreeId)
+  collector.addOwner(session.activeWorkspaceKey)
+  const aliasesByWorktreeId = indexMetadataAliasesForWorktreeIds(state, candidateIds)
+  // A metadata row that may not be pruned (an archived checkout, another host) still names a workspace.
+  const isKnownWorkspace = (worktreeId: string): boolean => {
+    const aliases = aliasesByWorktreeId.get(worktreeId) ?? []
+    const hasMetadata = Boolean(state.worktreeMeta[worktreeId]) || aliases.length > 0
+    return hasMetadata && !isLocallyRemovableWorktreeMetadataRow(state, worktreeId, aliases)
+  }
+  const removedIds = [...candidateIds].filter(
+    (worktreeId) =>
+      !collector.owners.has(worktreeId) &&
+      !hasUnsavedDraft(state, worktreeId) &&
+      !isKnownWorkspace(worktreeId)
+  )
+  const ownerKeys = withoutWslMoveFrozenOwners(
+    new Set(removedIds.flatMap((worktreeId) => [worktreeId, worktreeWorkspaceKey(worktreeId)]))
+  )
+  if (ownerKeys.size === 0) {
+    return []
+  }
+  state.workspaceSession = removeWorkspaceSessionOwners(session, ownerKeys)!
+  return removedIds.filter((worktreeId) => ownerKeys.has(worktreeId))
 }

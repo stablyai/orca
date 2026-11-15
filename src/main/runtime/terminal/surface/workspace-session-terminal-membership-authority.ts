@@ -215,6 +215,14 @@ export function rebaseWorkspaceSessionTerminalMembership(
       prior.unifiedTabs?.[worktreeId] ?? [],
       terminalTabIds
     )
+    // Why: writing empty rows for a workspace the window dropped kept removed workspaces on disk forever.
+    if (
+      tabs.length === 0 &&
+      rebasedUnifiedTabs.length === 0 &&
+      !Object.hasOwn(incoming.tabsByWorktree, worktreeId)
+    ) {
+      continue
+    }
     if (includeUnifiedTabs || rebasedUnifiedTabs.length > 0) {
       unifiedTabs[worktreeId] = rebasedUnifiedTabs
       includeUnifiedTabs = true

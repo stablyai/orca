@@ -2,7 +2,11 @@ import { getDefaultWorkspaceSession } from '../../../shared/constants'
 import type { ExecutionHostId } from '../../../shared/execution-host'
 import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
 import { parseWorkspaceKey } from '../../../shared/workspace-scope'
-import { SESSION_FIELDS_PRUNED_BY_OWNER_KEY } from './profile-project-session-field-disposition'
+import {
+  SESSION_FIELDS_PRUNED_BY_OWNER_KEY,
+  sessionFieldsRemovedWithWorkspace
+} from './profile-project-session-field-disposition'
+import { removeWorkspaceSessionOwners } from '../../persistence/restoring-sessions/session-owner-removal'
 import { markdownFileIdCandidates } from './profile-session-markdown-transfer'
 import {
   isRepoWorktreeId,
@@ -148,7 +152,22 @@ export function removeRepoFromWorkspaceSession(
   session: WorkspaceSessionState | undefined,
   repoId: string
 ): WorkspaceSessionState {
-  const next = structuredClone(session ?? getDefaultWorkspaceSession())
+  const base = session ?? getDefaultWorkspaceSession()
+  // Workspace removal owns the per-workspace field census; the rules below cover repo-only keys.
+  const ownerKeys = new Set<string>()
+  for (const field of [
+    'tabsByWorktree',
+    'browserTabsByWorktree',
+    ...sessionFieldsRemovedWithWorkspace('ownerKey')
+  ] as const) {
+    for (const ownerKey of Object.keys((base[field] ?? {}) as Record<string, unknown>)) {
+      if (ownerKeyBelongsToRepo(ownerKey, repoId)) {
+        ownerKeys.add(ownerKey)
+      }
+    }
+  }
+  const next =
+    ownerKeys.size > 0 ? removeWorkspaceSessionOwners(base, ownerKeys)! : structuredClone(base)
   const removedTerminalTabIds = new Set<string>()
   const removedMarkdownFileIds = new Set<string>()
   for (const [ownerKey, files] of Object.entries(next.openFilesByWorktree ?? {})) {

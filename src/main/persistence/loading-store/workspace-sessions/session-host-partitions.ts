@@ -28,6 +28,10 @@ import {
 } from '../../restoring-sessions/session-owner-removal'
 
 import type { StoreRuntimeState } from '../store-runtime-state'
+import {
+  pruneMissingLocalWorktreeSessionsForRepo as pruneMissingLocalWorktreeSessions,
+  type NativeLocalWorktreeMetadataScanExpectation
+} from '../../tracking-repos/missing-local-worktree-metadata-pruning'
 
 import { type WriteSchedulingOperations, scheduleSave } from '../profile-writing/write-scheduling'
 import {
@@ -137,6 +141,25 @@ export class SessionHostPartitionOperations {
     for (const resolved of workspaceSessionPartitionIdsForHost(target.hostId)) {
       removeWorkspaceSessionOwnerInPartition(this, target.id, resolved, options)
     }
+  }
+
+  /** Drops local saved session state of worktrees a scan no longer lists and whose folders are gone. */
+  pruneMissingLocalWorktreeSessionsForRepo(
+    scan: NativeLocalWorktreeMetadataScanExpectation,
+    missingWorktreeIds: readonly string[]
+  ): string[] {
+    const context = this[sessionHostPartitionOperationsContext]
+    const removed = pruneMissingLocalWorktreeSessions(
+      context.runtime.state,
+      scan,
+      missingWorktreeIds
+    )
+    if (removed.length > 0) {
+      // Releasing session ownership unblocks metadata pruning for the same worktrees.
+      invalidateLocalWorktreeMetadataPruneInputs()
+      scheduleSave(context.scheduling, ['workspaceSession'], LOCAL_EXECUTION_HOST_ID)
+    }
+    return removed
   }
 }
 
