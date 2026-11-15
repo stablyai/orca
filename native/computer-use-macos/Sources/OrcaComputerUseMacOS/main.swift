@@ -730,8 +730,14 @@ final class Provider {
 
     private func listApps() -> [AppDescriptor] {
         var seen = Set<String>()
+        // Why: apps without a Dock icon include dozens of windowless system agents, so list one only while it shows a window.
+        let accessoryWindowOwners = WindowCapture.ownersOfAppWindows()
         return NSWorkspace.shared.runningApplications
-            .filter { !$0.isTerminated && $0.activationPolicy == .regular }
+            .filter { app in
+                guard !app.isTerminated else { return false }
+                return app.activationPolicy == .regular ||
+                    (app.activationPolicy == .accessory && accessoryWindowOwners.contains(app.processIdentifier))
+            }
             .compactMap { app in
                 guard let name = app.localizedName, !name.isEmpty else { return nil }
                 let pid = app.processIdentifier
@@ -753,6 +759,7 @@ final class Provider {
             "name": app.name,
             "bundleId": jsonNullable(app.bundleId),
             "pid": Int(app.pid),
+            "accessory": app.app.activationPolicy == .accessory,
             "isRunning": true,
             "lastUsedAt": NSNull(),
             "useCount": NSNull(),
@@ -854,7 +861,7 @@ final class Provider {
             if blockedBundleIds.contains(bundleId) {
                 throw ProviderError.coded("app_blocked", "app '\(bundleId)' is blocked for safety")
             }
-            // Why: a path or display-name query misses the running check above, and menu bar apps aren't listed.
+            // Why: a path or display-name query misses the running check above, and windowless menu bar apps aren't listed.
             if let running = NSRunningApplication.runningApplications(withBundleIdentifier: bundleId)
                 .first(where: { !$0.isTerminated }),
                 let app = appByPid(running.processIdentifier) {
@@ -3349,40 +3356,58 @@ private struct WindowCapture {
 
     /// Off-screen windows include minimized, hidden and other-Space ones, but also closed windows apps keep; see `windowInventory`.
     static func candidates(pid: pid_t, includeOffScreen: Bool = false) -> [WindowCandidate] {
-        let options: CGWindowListOption = includeOffScreen ? [.optionAll, .excludeDesktopElements] : [.optionOnScreenOnly]
-        guard let infos = CGWindowListCopyWindowInfo(options, kCGNullWindowID) as? [[String: Any]] else {
-            return []
-        }
-        return infos.compactMap { info in
-            guard let ownerPid = info[kCGWindowOwnerPID as String] as? pid_t, ownerPid == pid,
-                  let number = info[kCGWindowNumber as String] as? NSNumber,
-                  let layer = info[kCGWindowLayer as String] as? Int,
-                  let boundsDictionary = info[kCGWindowBounds as String] as? NSDictionary,
-                  let bounds = CGRect(dictionaryRepresentation: boundsDictionary),
-                  bounds.width >= 48,
-                  bounds.height >= 48
-            else {
-                return nil
+        windowInfos(includeOffScreen: includeOffScreen)
+            .compactMap { info in
+                guard info[kCGWindowOwnerPID as String] as? pid_t == pid else { return nil }
+                return candidate(info, includeOffScreen: includeOffScreen)
             }
-            let alpha = info[kCGWindowAlpha as String] as? CGFloat ?? 1
-            guard alpha > 0.01 else { return nil }
-            let sharing = (info[kCGWindowSharingState as String] as? NSNumber).map { $0.intValue }
-            if sharing == 0 { return nil }
-            // Why: CoreGraphics omits the key for off-screen windows, and every window of an on-screen-only list is on screen.
-            let isOnScreen = (info[kCGWindowIsOnscreen as String] as? Bool) ?? !includeOffScreen
-            return WindowCandidate(
-                windowId: CGWindowID(number.uint32Value),
-                layer: layer,
-                bounds: bounds,
-                title: info[kCGWindowName as String] as? String,
-                alpha: alpha,
-                isOnScreen: isOnScreen,
-                sharingState: sharing
-            )
+            .sorted { lhs, rhs in
+                lhs.score > rhs.score
+            }
+    }
+
+    /// Processes with an on-screen window between the normal and status bar levels, which leaves out desktop-level and menu bar windows.
+    static func ownersOfAppWindows() -> Set<pid_t> {
+        let statusLevel = Int(CGWindowLevelForKey(.statusWindow))
+        return Set(windowInfos(includeOffScreen: false).compactMap { info in
+            guard let owner = info[kCGWindowOwnerPID as String] as? pid_t,
+                  let window = candidate(info, includeOffScreen: false),
+                  window.layer >= 0, window.layer < statusLevel
+            else { return nil }
+            return owner
+        })
+    }
+
+    private static func windowInfos(includeOffScreen: Bool) -> [[String: Any]] {
+        let options: CGWindowListOption = includeOffScreen ? [.optionAll, .excludeDesktopElements] : [.optionOnScreenOnly]
+        return CGWindowListCopyWindowInfo(options, kCGNullWindowID) as? [[String: Any]] ?? []
+    }
+
+    private static func candidate(_ info: [String: Any], includeOffScreen: Bool) -> WindowCandidate? {
+        guard let number = info[kCGWindowNumber as String] as? NSNumber,
+              let layer = info[kCGWindowLayer as String] as? Int,
+              let boundsDictionary = info[kCGWindowBounds as String] as? NSDictionary,
+              let bounds = CGRect(dictionaryRepresentation: boundsDictionary),
+              bounds.width >= 48,
+              bounds.height >= 48
+        else {
+            return nil
         }
-        .sorted { lhs, rhs in
-            lhs.score > rhs.score
-        }
+        let alpha = info[kCGWindowAlpha as String] as? CGFloat ?? 1
+        guard alpha > 0.01 else { return nil }
+        let sharing = (info[kCGWindowSharingState as String] as? NSNumber).map { $0.intValue }
+        if sharing == 0 { return nil }
+        // Why: CoreGraphics omits the key for off-screen windows, and every window of an on-screen-only list is on screen.
+        let isOnScreen = (info[kCGWindowIsOnscreen as String] as? Bool) ?? !includeOffScreen
+        return WindowCandidate(
+            windowId: CGWindowID(number.uint32Value),
+            layer: layer,
+            bounds: bounds,
+            title: info[kCGWindowName as String] as? String,
+            alpha: alpha,
+            isOnScreen: isOnScreen,
+            sharingState: sharing
+        )
     }
 
     func screenshotPayload() -> ScreenshotPayload? {
