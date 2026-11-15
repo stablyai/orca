@@ -1,3 +1,4 @@
+import { redactKagiSessionToken } from '../../../../shared/browser/navigation/browser-url'
 import { randomUUID } from 'node:crypto'
 import type {
   BrowserExtensionContextMenuClick,
@@ -133,7 +134,11 @@ export function buildBrowserExtensionPageContextMenu(
     return null
   }
   const frame = params.frame && !params.frame.isDestroyed() ? params.frame : null
-  const target = contextMenuTargetFromParams(params, guest.getURL(), Boolean(frame?.parent))
+  const target = contextMenuTargetFromParams(
+    params,
+    redactKagiSessionToken(guest.getURL()),
+    Boolean(frame?.parent)
+  )
   const groups = groupsFor(session, profileId, target)
   if (groups.length === 0) {
     return null
@@ -228,7 +233,10 @@ export function runBrowserExtensionContextMenuClick(
 
 function actionTarget(tabId: number | null): ContextMenuTarget {
   const contents = tabId === null ? null : resolveBrowserExtensionTab(tabId)?.contents
-  return { contexts: new Set(ACTION_MENU_CONTEXTS), pageUrl: contents?.getURL() ?? '' }
+  return {
+    contexts: new Set(ACTION_MENU_CONTEXTS),
+    pageUrl: redactKagiSessionToken(contents?.getURL() ?? '')
+  }
 }
 
 /**

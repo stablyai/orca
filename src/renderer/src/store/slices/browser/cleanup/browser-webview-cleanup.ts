@@ -1,3 +1,4 @@
+import { discardKagiPrivateInitialNavigation } from '@/lib/kagi-private-initial-navigation'
 import type {
   BrowserPage,
   BrowserWorkspace
@@ -7,6 +8,7 @@ import { releaseBrowserPageMount } from '../../../../components/browser-pane/hos
 
 // Release admission with guest destruction on close, purge, conversion or eviction.
 export function destroyRemovedBrowserWebview(browserPageId: string): void {
+  discardKagiPrivateInitialNavigation(browserPageId)
   releaseBrowserPageMount(browserPageId)
   void closePersistentBrowserPage(browserPageId)
 }

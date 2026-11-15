@@ -1,3 +1,4 @@
+import { redactBrowserMetadata } from '../../../../shared/browser/browser-metadata-redaction'
 import type { AppState } from '@/store/types'
 import type { RuntimeMobileSessionBrowserTab } from '../../../../shared/remote-runtime/session-graph/runtime-mobile-session-tab-contracts'
 import type { Tab } from '../../../../shared/workspace-layout/tab-groups/tab-types'
@@ -16,7 +17,7 @@ export function buildMobileBrowserTab(
   const title =
     activePage?.title || workspace.title || activePage?.url || workspace.url || 'Browser'
   const unifiedTabId = unifiedTab?.id
-  return {
+  return redactBrowserMetadata({
     type: 'browser',
     id: unifiedTabId ?? workspace.id,
     title,
@@ -50,5 +51,5 @@ export function buildMobileBrowserTab(
       : inputs.activeBrowserWorkspaceId === workspace.id,
     // A page on a paired server is that server's; served back to it, it takes over its own tab (#36386).
     ...editorRowHost({ runtimeEnvironmentId: activePage?.browserRuntimeEnvironmentId })
-  }
+  })
 }

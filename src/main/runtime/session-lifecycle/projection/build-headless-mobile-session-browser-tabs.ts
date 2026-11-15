@@ -1,3 +1,4 @@
+import { redactBrowserMetadata } from '../../../../shared/browser/browser-metadata-redaction'
 import { buildRuntimeClientBrowserTabs } from './build-runtime-client-browser-tabs'
 import { getBrowserHostLeaseRegistry } from '../../browser-host/leases/browser-host-lease-registry-instance'
 import type { OrcaRuntimeWithStoredMobileSnapshotHasStalePreservedTab as BrowserOwnership } from '../../session-tabs/restoration/mobile-session-publication-preservation'
@@ -93,7 +94,7 @@ export abstract class OrcaRuntimeWithBuildHeadlessMobileSessionBrowserTabs exten
       getRuntimeBrowserPageRegistry(this).listPages(worktreeId),
       getBrowserHostLeaseRegistry(this)
     )
-    return [...publishedServerTabs, ...publishedClientTabs]
+    return [...publishedServerTabs, ...publishedClientTabs].map(redactBrowserMetadata)
   }
 
   protected getPersistedUnifiedSessionTabProps(

@@ -1,3 +1,4 @@
+import { redactBrowserMetadata } from '../browser/browser-metadata-redaction'
 import { z } from 'zod'
 import type { BrowserWorkspace } from '../browser/workspaces/browser-workspace-types'
 import { normalizeBrowserHistoryEntries } from './workspace-session-browser-history'
@@ -30,25 +31,27 @@ const browserViewportPresetIdSchema = z.enum([
 ])
 
 // z.object strips unlisted fields regardless of the static BrowserWorkspace annotation; declare additive fields here for restore.
-export const browserWorkspaceSchema: z.ZodType<BrowserWorkspace> = z.object({
-  id: z.string(),
-  worktreeId: z.string(),
-  label: z.string().optional(),
-  sessionProfileId: z.string().nullable().optional(),
-  // Preserve isolated storage across restarts even if the profile mirror is stale; tolerate pre-field sessions (#6923).
-  sessionPartition: z.string().nullable().optional(),
-  activePageId: z.string().nullable().optional(),
-  pageIds: z.array(z.string()).optional(),
-  url: z.string(),
-  title: z.string(),
-  loading: z.boolean(),
-  faviconUrl: z.string().nullable(),
-  canGoBack: z.boolean(),
-  canGoForward: z.boolean(),
-  loadError: browserLoadErrorSchema.nullable(),
-  createdAt: z.number(),
-  docLocation: browserPageDocLocationSchema.nullable().optional()
-})
+export const browserWorkspaceSchema: z.ZodType<BrowserWorkspace> = z
+  .object({
+    id: z.string(),
+    worktreeId: z.string(),
+    label: z.string().optional(),
+    sessionProfileId: z.string().nullable().optional(),
+    // Preserve isolated storage across restarts even if the profile mirror is stale; tolerate pre-field sessions (#6923).
+    sessionPartition: z.string().nullable().optional(),
+    activePageId: z.string().nullable().optional(),
+    pageIds: z.array(z.string()).optional(),
+    url: z.string(),
+    title: z.string(),
+    loading: z.boolean(),
+    faviconUrl: z.string().nullable(),
+    canGoBack: z.boolean(),
+    canGoForward: z.boolean(),
+    loadError: browserLoadErrorSchema.nullable(),
+    createdAt: z.number(),
+    docLocation: browserPageDocLocationSchema.nullable().optional()
+  })
+  .transform(redactBrowserMetadata)
 
 const browserPageConversionOriginSchema = z
   .union([
@@ -65,35 +68,37 @@ const browserPageConversionOriginSchema = z
     origin && origin.kind === 'url' && isDocPreviewUrl(origin.url) ? null : origin
   )
 
-export const browserPageSchema = z.object({
-  id: z.string(),
-  workspaceId: z.string(),
-  worktreeId: z.string(),
-  url: z.string(),
-  title: z.string(),
-  loading: z.boolean(),
-  faviconUrl: z.string().nullable(),
-  canGoBack: z.boolean(),
-  canGoForward: z.boolean(),
-  loadError: browserLoadErrorSchema.nullable(),
-  createdAt: z.number(),
-  // Why: explicit null marks a browser page as client-local even when its
-  // worktree is remote-owned; older sessions omit it and keep inferred runtime.
-  browserRuntimeEnvironmentId: z.string().nullable().optional(),
-  // Both remote page identity fields must survive restore to reclaim a client-hosted page; older sessions may omit them.
-  remoteBrowserPageId: z.string().nullable().optional(),
-  remoteBrowserPageClientHosted: z.boolean().optional(),
-  remoteBrowserPagePlacedHere: z.boolean().optional(),
-  // Preserve the viewport preset across restart while accepting older sessions.
-  viewportPresetId: browserViewportPresetIdSchema.nullable().optional(),
-  // Without docLocation, a workspace document’s blank URL restores as New Tab.
-  docLocation: browserPageDocLocationSchema.nullable().optional(),
-  // Persist one-level conversion history; reject preview-scheme URLs at this read boundary as at every URL sink.
-  convertedFrom: browserPageConversionOriginSchema,
-  convertedTo: browserPageConversionOriginSchema,
-  // Unsent notes ride with their page so a reload or restart keeps them (#39856).
-  annotations: salvagingArray(browserPageAnnotationSchema).optional()
-})
+export const browserPageSchema = z
+  .object({
+    id: z.string(),
+    workspaceId: z.string(),
+    worktreeId: z.string(),
+    url: z.string(),
+    title: z.string(),
+    loading: z.boolean(),
+    faviconUrl: z.string().nullable(),
+    canGoBack: z.boolean(),
+    canGoForward: z.boolean(),
+    loadError: browserLoadErrorSchema.nullable(),
+    createdAt: z.number(),
+    // Why: explicit null marks a browser page as client-local even when its
+    // worktree is remote-owned; older sessions omit it and keep inferred runtime.
+    browserRuntimeEnvironmentId: z.string().nullable().optional(),
+    // Both remote page identity fields must survive restore to reclaim a client-hosted page; older sessions may omit them.
+    remoteBrowserPageId: z.string().nullable().optional(),
+    remoteBrowserPageClientHosted: z.boolean().optional(),
+    remoteBrowserPagePlacedHere: z.boolean().optional(),
+    // Preserve the viewport preset across restart while accepting older sessions.
+    viewportPresetId: browserViewportPresetIdSchema.nullable().optional(),
+    // Without docLocation, a workspace document’s blank URL restores as New Tab.
+    docLocation: browserPageDocLocationSchema.nullable().optional(),
+    // Persist one-level conversion history; reject preview-scheme URLs at this read boundary as at every URL sink.
+    convertedFrom: browserPageConversionOriginSchema,
+    convertedTo: browserPageConversionOriginSchema,
+    // Unsent notes ride with their page so a reload or restart keeps them (#39856).
+    annotations: salvagingArray(browserPageAnnotationSchema).optional()
+  })
+  .transform(redactBrowserMetadata)
 
 const browserHistoryEntrySchema = z.object({
   url: z.string(),

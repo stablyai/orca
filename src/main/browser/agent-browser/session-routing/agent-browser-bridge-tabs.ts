@@ -1,3 +1,4 @@
+import { redactBrowserMetadata } from '../../../../shared/browser/browser-metadata-redaction'
 import type {
   BrowserTabInfo,
   BrowserTabListResult
@@ -115,11 +116,11 @@ export abstract class AgentBrowserBridgeTabs extends AgentBrowserBridgeState {
       if (!wc) {
         return null
       }
-      return {
+      return redactBrowserMetadata({
         browserPageId: target.browserPageId,
         url: wc.getURL() ?? '',
         title: wc.getTitle() ?? ''
-      }
+      })
     } catch {
       return null
     }
@@ -193,18 +194,20 @@ export abstract class AgentBrowserBridgeTabs extends AgentBrowserBridgeState {
       const openerBrowserPageId = popupOpeners.get(tabId)
       const loadError = this.browserManager.getBrowserPageLoadError(tabId)
       const certificateFailure = this.browserManager.getBrowserPageCertificateFailure(tabId)
-      result.push({
-        browserPageId: tabId,
-        profileId: this.browserManager.getSessionProfileIdForTab(tabId) ?? 'default',
-        index: index++,
-        // Failed pages report chrome-error:// instead of the requested URL.
-        url: loadError?.validatedUrl ?? wc.getURL() ?? '',
-        title: wc.getTitle() ?? '',
-        active: tabId === routedPageId,
-        loadError,
-        certificateFailure,
-        ...(openerBrowserPageId ? { openerBrowserPageId } : {})
-      })
+      result.push(
+        redactBrowserMetadata({
+          browserPageId: tabId,
+          profileId: this.browserManager.getSessionProfileIdForTab(tabId) ?? 'default',
+          index: index++,
+          // Failed pages report chrome-error:// instead of the requested URL.
+          url: loadError?.validatedUrl ?? wc.getURL() ?? '',
+          title: wc.getTitle() ?? '',
+          active: tabId === routedPageId,
+          loadError,
+          certificateFailure,
+          ...(openerBrowserPageId ? { openerBrowserPageId } : {})
+        })
+      )
     }
     // Infer an active tab for display without changing command routing.
     if (routedPageId === null && firstLiveWcId !== null && result.length > 0) {

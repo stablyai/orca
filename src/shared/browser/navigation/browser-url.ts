@@ -175,13 +175,15 @@ export function normalizeKagiSessionLink(rawLink: string): string | null {
 }
 
 export function redactKagiSessionToken(rawUrl: string): string {
+  if (!rawUrl.includes('?')) {
+    return rawUrl
+  }
   try {
-    const parsed = new URL(rawUrl)
+    const parsed = new URL(normalizeBrowserNavigationUrl(rawUrl) ?? rawUrl)
     const hostname = parsed.hostname.toLowerCase()
     if (
       parsed.protocol === 'https:' &&
       (hostname === 'kagi.com' || hostname === 'www.kagi.com') &&
-      (parsed.pathname === '/search' || parsed.pathname === '/search/') &&
       parsed.searchParams.has('token')
     ) {
       // Strip Kagi bearer tokens before display, history or persisted tab state.

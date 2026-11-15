@@ -1,3 +1,4 @@
+import { redactBrowserMetadata } from '../browser/browser-metadata-redaction'
 import { z } from 'zod'
 
 /** Runtime owns durable page identity; a restarted client has no guests to adopt. Persist identity, committed metadata/profile and device only. New epochs mint live authority; executionHostKey includes process/boot fencing and must be re-resolved or placement fails browser_client_network_route_authority_mismatch. */
@@ -41,8 +42,8 @@ export const CLIENT_HOSTED_BROWSER_PAGE_REFRESH_MS = 24 * 60 * 60 * 1000
 
 const identity = z.string().min(1).max(256)
 
-export const persistedClientHostedBrowserPageSchema: z.ZodType<PersistedClientHostedBrowserPage> =
-  z.object({
+export const persistedClientHostedBrowserPageSchema: z.ZodType<PersistedClientHostedBrowserPage> = z
+  .object({
     // Reject unknown row versions entirely; salvagingArray preserves valid siblings without partially trusting newer semantics.
     v: z.literal(CLIENT_HOSTED_BROWSER_PAGE_RECORD_VERSION),
     browserPageId: identity,
@@ -53,3 +54,4 @@ export const persistedClientHostedBrowserPageSchema: z.ZodType<PersistedClientHo
     pairedDeviceId: identity,
     savedAt: z.number().int().nonnegative()
   })
+  .transform(redactBrowserMetadata)

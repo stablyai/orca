@@ -10,5 +10,5 @@ export function getBrowserDisplayTitle(title: string | null | undefined, url: st
   ) {
     return 'New Tab'
   }
-  return title || redactKagiSessionToken(url) || 'New Tab'
+  return redactKagiSessionToken(title || url) || 'New Tab'
 }

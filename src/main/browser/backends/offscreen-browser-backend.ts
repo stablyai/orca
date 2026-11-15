@@ -1,5 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import { join } from 'node:path'
+import { redactBrowserHistorySnapshot } from '../../../shared/browser/navigation/browser-history-redaction'
+import { redactBrowserMetadata } from '../../../shared/browser/browser-metadata-redaction'
 import { BrowserWindow } from 'electron'
 import '../../../shared/orca-profiles/constants'
 import { ORCA_BROWSER_GUEST_WEB_PREFERENCES } from '../../../shared/browser/guest-lifecycle/browser-guest-web-preferences'
@@ -146,12 +148,14 @@ export class OffscreenBrowserBackend implements BrowserBackend {
         if (this.windowsByPageId.get(browserPageId) !== win) {
           return
         }
-        onPageNavigated({
-          worktreeId,
-          pageId: browserPageId,
-          url: win.webContents.getURL(),
-          title: win.webContents.getTitle()
-        })
+        onPageNavigated(
+          redactBrowserMetadata({
+            worktreeId,
+            pageId: browserPageId,
+            url: win.webContents.getURL(),
+            title: win.webContents.getTitle()
+          })
+        )
       }
       // Persist at navigation milestones, avoiding writes for every dynamic title update.
       win.webContents.on('did-navigate-in-page', report)
@@ -269,7 +273,7 @@ export class OffscreenBrowserBackend implements BrowserBackend {
     const history = win.webContents.navigationHistory
     this.freedPages.set(browserPageId, {
       worktreeId,
-      entries: history.getAllEntries(),
+      entries: redactBrowserHistorySnapshot(history.getAllEntries()),
       index: history.getActiveIndex()
     })
     // Downloads outlive the page, as they do when its renderer dies.

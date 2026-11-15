@@ -1,3 +1,4 @@
+import { redactKagiSessionToken } from '../../../../shared/browser/navigation/browser-url'
 import { createBrowserTabInRenderer } from './browser-tab-renderer-create'
 import type { RuntimeNavigationTarget } from '../../../../shared/remote-runtime/session-graph/runtime-navigation'
 import type { BrowserPageCreationPlacement } from '../../../../shared/browser/client-hosting/browser-client-host-placement'
@@ -134,7 +135,7 @@ export class RuntimeBrowserTabCreation {
     }
     const { browserPageId } = await createBrowserTabInRenderer(
       this.host,
-      url,
+      redactKagiSessionToken(url),
       worktreeId,
       params.profileId,
       params.profileId ? sessionPartition : undefined,

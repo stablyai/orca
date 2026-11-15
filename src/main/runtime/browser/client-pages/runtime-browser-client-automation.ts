@@ -1,3 +1,4 @@
+import { redactBrowserMetadata } from '../../../../shared/browser/browser-metadata-redaction'
 import { actOnRuntimeBrowserInitialization } from './runtime-browser-page-initialization-action'
 import { isSameBrowserUrl } from '../../../../shared/browser/client-hosting/browser-expected-url'
 import type { BrowserExecutionHostKeyResolution } from './runtime-browser-client-page-adoption'
@@ -95,7 +96,7 @@ async function runOnClientPage(
     if (!current || !url) {
       throw new Error('browser_page_placement_stale')
     }
-    return { handled: true, result: { url, title: current.title } }
+    return { handled: true, result: redactBrowserMetadata({ url, title: current.title }) }
   }
   if (method === 'browser.download') {
     const result = await downloadClientPageToPath(requestParams, page.browserPageId, (params) =>

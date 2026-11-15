@@ -1,3 +1,4 @@
+import { redactKagiSessionToken } from '../../../../shared/browser/navigation/browser-url'
 import type {
   BrowserEvalResult,
   BrowserGotoResult,
@@ -47,8 +48,8 @@ export class CdpPageCommands {
         browserPageId: tabId,
         snapshot: result.snapshot,
         refs: result.refs,
-        url: guest.getURL(),
-        title: guest.getTitle()
+        url: redactKagiSessionToken(guest.getURL()),
+        title: redactKagiSessionToken(guest.getTitle())
       }
     })
   }
@@ -70,7 +71,10 @@ export class CdpPageCommands {
       await this.navigation.waitForLoad(sender, guest)
       this.bridgeState.invalidateRefMap(guest.id)
 
-      return { url: guest.getURL(), title: guest.getTitle() }
+      return {
+        url: redactKagiSessionToken(guest.getURL()),
+        title: redactKagiSessionToken(guest.getTitle())
+      }
     })
   }
 
@@ -157,7 +161,10 @@ export class CdpPageCommands {
       await this.navigation.waitForLoad(sender, guest)
       this.bridgeState.invalidateRefMap(guest.id)
 
-      return { url: guest.getURL(), title: guest.getTitle() }
+      return {
+        url: redactKagiSessionToken(guest.getURL()),
+        title: redactKagiSessionToken(guest.getTitle())
+      }
     })
   }
 
@@ -171,7 +178,10 @@ export class CdpPageCommands {
       await this.navigation.waitForLoad(sender, guest)
       this.bridgeState.invalidateRefMap(guest.id)
 
-      return { url: guest.getURL(), title: guest.getTitle() }
+      return {
+        url: redactKagiSessionToken(guest.getURL()),
+        title: redactKagiSessionToken(guest.getTitle())
+      }
     })
   }
 

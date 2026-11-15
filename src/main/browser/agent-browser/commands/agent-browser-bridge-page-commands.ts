@@ -1,3 +1,4 @@
+import { redactBrowserMetadata } from '../../../../shared/browser/browser-metadata-redaction'
 import { mkdir } from 'node:fs/promises'
 import path from 'node:path'
 import { BrowserError } from '../../browser-error'
@@ -221,13 +222,17 @@ export abstract class AgentBrowserBridgeUtilityCommands extends AgentBrowserBrid
 
   async back(worktreeId?: string, browserPageId?: string): Promise<BrowserBackResult> {
     return this.enqueueInertAction(worktreeId, browserPageId, async (sessionName) => {
-      return (await this.execAgentBrowser(sessionName, ['back'])) as BrowserBackResult
+      return redactBrowserMetadata(
+        (await this.execAgentBrowser(sessionName, ['back'])) as BrowserBackResult
+      )
     })
   }
 
   async forward(worktreeId?: string, browserPageId?: string): Promise<BrowserBackResult> {
     return this.enqueueInertAction(worktreeId, browserPageId, async (sessionName) => {
-      return (await this.execAgentBrowser(sessionName, ['forward'])) as BrowserBackResult
+      return redactBrowserMetadata(
+        (await this.execAgentBrowser(sessionName, ['forward'])) as BrowserBackResult
+      )
     })
   }
 
@@ -303,7 +308,7 @@ export abstract class AgentBrowserBridgeUtilityCommands extends AgentBrowserBrid
           `Reload failed: ${loadError.description} (${loadError.code})`
         )
       }
-      return { url: wc.getURL(), title: wc.getTitle() }
+      return redactBrowserMetadata({ url: wc.getURL(), title: wc.getTitle() })
     })
   }
 }

@@ -1,5 +1,6 @@
 import {
   normalizeBrowserNavigationUrl,
+  redactKagiSessionToken,
   toSecureCertificateEndpoint
 } from '../../../../../shared/browser/navigation/browser-url'
 import { isChromiumInternalErrorUrl } from './browser-main-frame-navigation'
@@ -178,7 +179,7 @@ export abstract class BrowserManagerGuestNavigationPolicy extends BrowserManager
       if (browserNavigationLeavesFaviconOrigin(publishedUrl, url)) {
         this.remoteTabFaviconUrlByGuestId.delete(guest.id)
       }
-      publishedUrl = guest.getURL()
+      publishedUrl = redactKagiSessionToken(guest.getURL())
       publishedHistory = readHistory()
       this.pendingNavigationByGuestId.delete(guest.id)
       this.settleUserAgentDemand(guest)
@@ -197,7 +198,7 @@ export abstract class BrowserManagerGuestNavigationPolicy extends BrowserManager
       if (!isMainFrame) {
         return
       }
-      const address = guest.getURL()
+      const address = redactKagiSessionToken(guest.getURL())
       const history = readHistory()
       // replaceState reports here even when the address stays the same.
       if (address !== publishedUrl || history !== publishedHistory) {

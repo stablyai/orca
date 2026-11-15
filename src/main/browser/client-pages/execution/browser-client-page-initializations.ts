@@ -1,5 +1,8 @@
 import type { BrowserClientInitializationOwner } from '../../client-hosts/commands/browser-client-host-command-state'
-import { normalizeBrowserNavigationUrl } from '../../../../shared/browser/navigation/browser-url'
+import {
+  normalizeBrowserNavigationUrl,
+  redactKagiSessionToken
+} from '../../../../shared/browser/navigation/browser-url'
 import type {
   BrowserClientHostedPageInventory,
   BrowserClientHostCommandEvent
@@ -198,7 +201,7 @@ export class BrowserClientPageInitializations {
         state: 'active'
       })
       this.operations.delete(event.browserPageId)
-      return url
+      return redactKagiSessionToken(url)
     } catch (error) {
       initializer.controller?.abort()
       await this.cleanupInitializer(initializer)

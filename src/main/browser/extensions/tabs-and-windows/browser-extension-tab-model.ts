@@ -1,4 +1,5 @@
 /// <reference types="chrome" />
+import { redactKagiSessionToken } from '../../../../shared/browser/navigation/browser-url'
 import { webContents } from 'electron'
 // oxlint-disable-next-line import/no-cycle -- browser subsystem singleton hub (browserManager); breaking it needs DI and test-mock updates, left for a human
 import { browserManager } from '../../guest-lifecycle/manager/browser-manager'
@@ -241,7 +242,10 @@ export function describeBrowserExtensionTab(
   return {
     ...orcaTabFields(entry),
     ...(canExtensionSeeTabUrl(extension, entry.contents.session, url, entry.contents.id)
-      ? { url, title: entry.contents.getTitle() }
+      ? {
+          url: redactKagiSessionToken(url),
+          title: redactKagiSessionToken(entry.contents.getTitle())
+        }
       : {})
   }
 }
@@ -261,7 +265,13 @@ export function mergeNativeTab(
     'mutedInfo'
   ] as const) {
     if (nativeTab[key] !== undefined) {
-      Object.assign(native, { [key]: nativeTab[key] })
+      const value = nativeTab[key]
+      Object.assign(native, {
+        [key]:
+          ['url', 'title', 'favIconUrl'].includes(key) && typeof value === 'string'
+            ? redactKagiSessionToken(value)
+            : value
+      })
     }
   }
   return { ...orcaTabFields(entry), ...native }

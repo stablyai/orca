@@ -1,3 +1,6 @@
+import { readBrowserGuestId } from './browser-guest-id'
+export { readBrowserGuestId } from './browser-guest-id'
+import { redactBrowserMetadata } from '../../../../../../shared/browser/browser-metadata-redaction'
 import type { BrowserGuestMetadata } from '../../../../../../shared/browser/guest-lifecycle/browser-guest-metadata'
 import {
   normalizeBrowserNavigationUrl,
@@ -84,7 +87,8 @@ function refreshGuest(id: number, browserPageId: string): void {
   }
   const request = Promise.resolve()
     .then(() => window.api.browser.getGuestMetadata({ browserPageId, webContentsId: id }))
-    .then((state) => {
+    .then((received) => {
+      const state = received ? redactBrowserMetadata(received) : received
       if (initialReads.get(id) !== request) {
         return
       }
@@ -143,6 +147,7 @@ export function refreshBrowserGuestMetadata(
 }
 
 export function acceptBrowserGuestMetadata(state: BrowserGuestMetadata): void {
+  state = redactBrowserMetadata(state)
   const id = state.webContentsId
   const entry = guests.get(id) ?? { browserPageId: state.browserPageId, applicable: true }
   if (entry.state && entry.state.revision >= state.revision) {
@@ -226,14 +231,6 @@ export function clearBrowserGuestMetadata(): void {
     retireGuest(id)
   }
   initialReads.clear()
-}
-
-export function readBrowserGuestId(webview: Electron.WebviewTag): number | null {
-  try {
-    return webview.getWebContentsId()
-  } catch {
-    return null
-  }
 }
 
 export function cachedBrowserGuestMetadata(
