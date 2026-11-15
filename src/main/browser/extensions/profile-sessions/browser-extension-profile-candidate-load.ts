@@ -93,7 +93,9 @@ export async function loadBrowserExtensionCandidateIntoProfile(
         // Why first: the saved copy loads under its own precedence, not the rejected candidate's.
         reservation.release()
         const saved = getBrowserExtensionInstallStore().get(candidate.id)
-        if (!restores || !saved || !restoring.current) {
+        // A loaded copy here is the candidate whose commit failed, not a predecessor to restore.
+        const loaded = state.session.extensions.getExtension(candidate.id)
+        if (!restores || !saved || loaded || !restoring.current) {
           throw error
         }
         // A failed restore records its own load error for Settings.

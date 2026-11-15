@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { FolderOpen, Puzzle, RotateCw, Settings2, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
 import type { GlobalSettings } from '../../../../../../shared/global-settings-types'
@@ -154,6 +154,8 @@ export function BrowserExtensionsSection({
   } | null>(null)
   const [revision, setRevision] = useState(0)
   const [busyId, setBusyId] = useState<string | null>(null)
+  // Why a ref: a stale toast's Retry must not start or end work while another action runs.
+  const running = useRef(false)
 
   // Why: the store page, the toolbar, updates and failed loads change the list outside Settings.
   useEffect(
@@ -181,16 +183,40 @@ export function BrowserExtensionsSection({
     action: () => Promise<BrowserExtensionActionResult>,
     retry?: () => void
   ): Promise<void> => {
+    if (running.current) {
+      return
+    }
+    running.current = true
     setBusyId(busyKey)
+    const toastId = `browser-extension-${busyKey}`
     try {
       const outcome = await action()
-      if (!outcome.ok) {
+      if (outcome.ok) {
+        if (retry) {
+          toast.dismiss(toastId)
+        }
+      } else {
         toast.error(
           outcome.error,
-          retry ? { action: { label: t('common.retry', 'Retry'), onClick: retry } } : undefined
+          retry
+            ? {
+                // One slot per Settings action, and time to fix the folder before Retry goes away.
+                id: toastId,
+                duration: 10000,
+                action: {
+                  label: t('common.retry', 'Retry'),
+                  onClick: (event) => {
+                    // Why: Sonner's delayed removal would erase a fast retry failure in this slot.
+                    event.preventDefault()
+                    retry()
+                  }
+                }
+              }
+            : undefined
         )
       }
     } finally {
+      running.current = false
       setBusyId(null)
       setRevision((value) => value + 1)
     }

@@ -172,12 +172,15 @@ function suspendProfile(state: ProfileSessionState): Promise<void> {
 
 /** Unloads a profile session's extensions and Orca's wiring; its saved extension data stays. */
 async function unloadProfileSession(state: ProfileSessionState): Promise<void> {
-  forgetBrowserExtensionLoadFailures({ profileId: state.profile.id })
   await suspendProfile(state)
   await Promise.all(
     [...new Set([...state.started, ...state.enabled()])].map((id) => resetExtension(state, id))
   )
   await state.loads.close()
+  // Why after close: a cancelled load records its failure as it stops. A re-attached session keeps its own.
+  if (!stateByProfileId.has(state.profile.id)) {
+    forgetBrowserExtensionLoadFailures({ profileId: state.profile.id })
+  }
   for (const extension of state.session.extensions.getAllExtensions()) {
     removeBrowserExtensionFromSession(state.session, extension.id)
   }
