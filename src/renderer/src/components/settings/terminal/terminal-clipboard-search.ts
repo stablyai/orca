@@ -5,8 +5,8 @@ import { createLocalizedCatalog } from '@/i18n/localized-catalog'
 export const getTerminalClipboardSearchEntries = createLocalizedCatalog(() => [
   {
     title: translate(
-      'auto.components.settings.terminal.clipboard.search.3bdc84f059',
-      'Copy on Select'
+      'auto.components.settings.terminal.clipboard.search.5639f17c59',
+      'Copy on select'
     ),
     description: translate(
       'components.settings.terminal.clipboard.search.copyOnSelectDescription',
@@ -62,8 +62,8 @@ export const getTerminalClipboardSearchEntries = createLocalizedCatalog(() => [
   },
   {
     title: translate(
-      'auto.components.settings.terminal.clipboard.search.74db8721e4',
-      'Allow TUI Clipboard Writes (OSC 52)'
+      'auto.components.settings.terminal.clipboard.search.eacb392fe3',
+      'Allow TUI clipboard writes (OSC 52)'
     ),
     description: translate(
       'auto.components.settings.terminal.clipboard.search.459fea094a',
@@ -126,10 +126,7 @@ export const getTerminalClipboardSearchEntries = createLocalizedCatalog(() => [
     ]
   },
   {
-    title: translate(
-      'components.settings.TerminalInteraction.copyTrimsGutter',
-      'Trim Gutter on Copy'
-    ),
+    title: translate('components.settings.TerminalInteraction.4ed43d5060', 'Trim gutter on copy'),
     description: translate(
       'components.settings.TerminalInteraction.copyTrimsGutterDescription',
       'Drop the left gutter agent output is painted behind, so copied text is not indented. Only the indent every selected line shares is removed.'

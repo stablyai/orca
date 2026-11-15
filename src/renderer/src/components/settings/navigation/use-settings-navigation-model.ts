@@ -1,13 +1,16 @@
 import { useCallback, useMemo } from 'react'
-import { applyDocumentTheme } from '@/lib/document-theme'
-import { resolvePaintedTheme } from '@/lib/terminal-app-theme'
+import { applyDocumentTheme } from '@/app-shell/appearance/document-theme'
+import { resolvePaintedTheme } from '@/app-shell/appearance/terminal-app-theme'
 import { useSettingsNavigationMetadata } from '@/hooks/useSettingsNavigationMetadata'
-import type { SettingsNavInstallStatus } from '@/lib/settings-navigation-types'
-import { COMPUTER_USE_SKILL_NAME, ORCHESTRATION_SKILL_NAME } from '@/lib/agent-feature-skill-names'
+import type { SettingsNavInstallStatus } from '@/components/settings/navigation/settings-navigation-types'
+import {
+  COMPUTER_USE_SKILL_NAME,
+  ORCHESTRATION_SKILL_NAME
+} from '@/lib/skills/installation/agent-feature-skill-names'
 import {
   getAgentSkillNavInstallStatus,
   getLinearAgentSkillNavInstallStatus
-} from '@/lib/agent-skill-nav-install-status'
+} from '@/components/settings/navigation/agent-skill-nav-install-status'
 import { getProjectHostSetupProjectionFromState } from '../../../store/projects/project-host-setup-selector'
 import { getSettingsSectionSearchEntries, rankSettingsSearchItems } from '../search/settings-search'
 import { deriveNeededSectionIds } from '../page/settings-load-performance'
@@ -15,6 +18,12 @@ import { DESKTOP_TERMINAL_SCROLLBACK_ROW_PRESETS as SCROLLBACK_PRESETS_ROWS } fr
 import type { SettingsStoreModel } from '../page/use-settings-store-model'
 import type { SettingsInteractionController } from '../page/use-settings-interaction-controller'
 import { hasReadyVoiceModel } from './settings-navigation-foundations'
+import { buildSettingsSearchResults } from './settings-search-results'
+import { getGeneralWorkspaceSearchDescriptors } from '../general/general-search'
+import { getGeneralEditorSearchDescriptors } from '../editor/general-editor-search'
+import { GENERAL_SUB_PAGE_ENTRY_ANCHORS } from '../general/general-setting-anchors'
+import { getGeneralSubPageTitle } from '../general/general-sub-pages'
+import { translate } from '@/i18n/i18n'
 
 export function useSettingsNavigationModel(
   model: SettingsStoreModel,
@@ -126,6 +135,20 @@ export function useSettingsNavigationModel(
     () => new Map(navSections.map((section) => [section.id, section] as const)),
     [navSections]
   )
+  const searchCandidates = useMemo(() => {
+    // General sub-page rows carry anchors in descriptors, not in their search entries.
+    const generalAnchorByTitle = new Map<string, string>([
+      ...[...getGeneralWorkspaceSearchDescriptors(), ...getGeneralEditorSearchDescriptors()].map(
+        (descriptor) => [descriptor.entry.title, descriptor.sectionId] as const
+      ),
+      ...GENERAL_SUB_PAGE_ENTRY_ANCHORS.map(
+        ([page, anchor]) => [getGeneralSubPageTitle(page, translate), anchor] as const
+      )
+    ])
+    return buildSettingsSearchResults(navSections, (section, entry) =>
+      section.id === 'general' ? generalAnchorByTitle.get(entry.title) : undefined
+    )
+  }, [navSections])
   const getSectionSearchEntries = (sectionId: string) => {
     const section = navSectionById.get(sectionId)
     return section ? getSettingsSectionSearchEntries(section) : []
@@ -201,6 +224,7 @@ export function useSettingsNavigationModel(
     displayedGitUsername,
     navSections,
     getSectionSearchEntries,
+    searchCandidates,
     visibleNavSections,
     visibleSectionIds,
     projectByRepoId,

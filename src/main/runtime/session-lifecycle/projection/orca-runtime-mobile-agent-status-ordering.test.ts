@@ -28,7 +28,8 @@ const PLAIN_TITLE_AT = STOP_AT + 4_800
 async function createRuntime(rows: AgentStatusIpcPayload[]): Promise<OrcaRuntimeService> {
   const { runtimeStore } = makeRuntimeStoreWithWorkspaceSession(getDefaultWorkspaceSession())
   const runtime = new OrcaRuntimeService(runtimeStore, undefined, {
-    getAgentStatusSnapshot: () => rows
+    getAgentStatusSnapshot: () => rows,
+    getPublicAgentStatusSnapshotForPane: (paneKey) => rows.filter((row) => row.paneKey === paneKey)
   })
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: resolveTerminalWorkspaceLaunchScope is a member of OrcaRuntimeService; the cast only exposes it to the spy.
   const internals = runtime as unknown as {

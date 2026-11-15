@@ -1,8 +1,8 @@
 import type { ExecutionHostId } from '../../../../../shared/execution-host'
 import type { FolderWorkspace } from '../../../../../shared/folder-workspaces/folder-workspace-types'
 import type { GlobalSettings } from '../../../../../shared/global-settings-types'
-import type { ProjectGroup } from '../../../../../shared/project-group-types'
-import type { Repo } from '../../../../../shared/repo-types'
+import type { ProjectGroup } from '../../../../../shared/project/groups/project-group-types'
+import type { Repo } from '../../../../../shared/repository/repo-types'
 import type { Worktree } from '../../../../../shared/worktree/types'
 
 export type WorktreeRuntimeOwnerState = {

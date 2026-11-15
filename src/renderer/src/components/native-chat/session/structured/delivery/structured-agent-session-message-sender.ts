@@ -9,7 +9,7 @@ import {
   structuredAgentSessionReadCoversSend,
   structuredAgentSessionSettledSends
 } from '../../../../../../../shared/agent-session/requests/structured-agent-session-send-settlement'
-import type { RuntimeClientTarget } from '../../../../../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import { dispatchStructuredAgentSessionSend } from './structured-agent-session-send-dispatch'
 import { resetStructuredAgentSessionReadOwnersForTests } from '../read/structured-agent-session-read-owner-registry'
 import {

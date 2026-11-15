@@ -1,4 +1,4 @@
-import { normalizeExternalBrowserUrl } from '../../../shared/browser-url'
+import { normalizeExternalBrowserUrl } from '../../../shared/browser/navigation/browser-url'
 
 export function safeOrigin(rawUrl: string): string {
   const external = normalizeExternalBrowserUrl(rawUrl)

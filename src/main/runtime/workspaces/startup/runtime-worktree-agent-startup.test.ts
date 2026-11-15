@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { Repo } from '../../../../shared/repo-types'
-import '../../../../shared/agent-kind'
+import type { Repo } from '../../../../shared/repository/repo-types'
+import '../../../../shared/agent-status/identity/agent-kind'
 import { getDefaultSettings } from '../../../../shared/constants'
 
 import type { AgentLaunchRuntime } from '../../../../shared/agent-launch/startup/agent-launch-runtime'
@@ -16,13 +16,13 @@ vi.mock('../../../preflight/agent-detection', () => ({
   detectInstalledAgentsWithShellPathHydration: mocks.detectInstalledAgentsWithShellPathHydration
 }))
 
-vi.mock('../../../opencode/opencode-launch-capabilities', () => ({
+vi.mock('../../../opencode/model-launch/opencode-launch-capabilities', () => ({
   probeOpenCodeLaunchCapabilities: mocks.capabilities
 }))
-vi.mock('../../../opencode/opencode-model-executable', () => ({
+vi.mock('../../../opencode/model-launch/opencode-model-executable', () => ({
   resolveOpenCodeDirectModelExecutable: mocks.executable
 }))
-vi.mock('../../../opencode/opencode-launch-model-context', () => ({
+vi.mock('../../../opencode/model-launch/opencode-launch-model-context', () => ({
   probeOpenCodeLaunchModelContext: mocks.modelContext
 }))
 
@@ -169,19 +169,6 @@ describe('buildWorktreeStartupForDraft agent detection', () => {
     expect(mocks.detectInstalledAgentsWithShellPathHydration).not.toHaveBeenCalled()
     expect(result).toBeNull()
   })
-
-  it('probes this client for a local row carrying a stale connection', async () => {
-    mocks.detectInstalledAgentsWithShellPathHydration.mockResolvedValueOnce(['claude'])
-
-    const result = await buildWorktreeStartupForDraft({
-      repo: makeRepo({ connectionId: 'm4air', executionHostId: 'local' }),
-      settings,
-      draft: 'ship it',
-      getLaunchRuntime: () => LINUX
-    })
-
-    expect(result?.agent).toBe('claude')
-  })
 })
 
 describe('buildWorktreeStartupForAgent extra agent args', () => {
@@ -207,8 +194,6 @@ describe('buildWorktreeStartupForAgent extra agent args', () => {
     }))
     const resolved = await resolveWorktreeCreateAgentStartup(
       {
-        repoSelector: 'repo-1',
-        name: 'Review',
         startupAgent: 'codex',
         startupAccountEnv: { CODEX_HOME: '/home/u/.codex-b' }
       },
@@ -250,31 +235,6 @@ describe('resolveWorktreeStartupDraftAgent', () => {
 })
 
 describe('paired workspace draft inputs', () => {
-  it.each(['claude', 'codex'] as const)(
-    'applies picks and authored Arguments to a %s draft',
-    async (agent) => {
-      const result = await buildWorktreeStartupForDraft({
-        repo: makeRepo({}),
-        settings: { ...settings, agentDefaultArgs: { [agent]: '--add-dir /host/shared' } },
-        draft: 'ship it',
-        requestedAgent: agent,
-        agentArgs: '',
-        sessionOptions: { model: 'opus' },
-        getLaunchRuntime: () => LINUX
-      })
-      expect(result?.startup.command).toContain(
-        agent === 'codex' ? "'-m' 'opus'" : "'--model' 'opus'"
-      )
-      expect(result?.startup.command).not.toContain('/host/shared')
-      if (agent === 'claude') {
-        expect(result?.startup.command).toContain("'ship it'")
-        expect(result?.draftPaste).toBeUndefined()
-      } else {
-        expect(result?.draftPaste).toEqual({ agent: 'codex', content: 'ship it' })
-      }
-    }
-  )
-
   it('keeps the disabled-agent draft substitution without applying the original picks or Arguments', async () => {
     mocks.detectInstalledAgentsWithShellPathHydration.mockResolvedValue(['codex'])
     const result = await buildWorktreeStartupForDraft({

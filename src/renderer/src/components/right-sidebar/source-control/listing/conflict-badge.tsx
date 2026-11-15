@@ -3,7 +3,7 @@ import { CircleCheck, TriangleAlert } from 'lucide-react'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { translate } from '@/i18n/i18n'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import type { GitStatusEntry } from '../../../../../../shared/git/status/git-status-types'
 import { getLocalizedConflictKindLabel } from './conflict-label'
 
@@ -68,7 +68,7 @@ export function ConflictBadge({ entry }: { entry: GitStatusEntry }): React.JSX.E
   }
 
   return (
-    <TooltipProvider delayDuration={300}>
+    <TooltipProvider>
       <Tooltip>
         <TooltipTrigger asChild>{badge}</TooltipTrigger>
         <TooltipContent side="left" sideOffset={6}>

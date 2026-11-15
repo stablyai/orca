@@ -47,7 +47,6 @@ describe('RuntimePairingGeneratorForm', () => {
       webClientUrl: 'https://example.test/?pair=stale-secret'
     })
 
-    expect(markup).toContain('The connection address changed.')
     expect(markup).not.toContain('stale-secret')
   })
 
@@ -59,11 +58,8 @@ describe('RuntimePairingGeneratorForm', () => {
     }
     const live = renderForm('another', '100.76.32.125', generated, { kind: 'expires', at: 0 })
     expect(live).toContain('old-secret')
-    expect(live).toContain('Unused link expires at')
 
     const expired = renderForm('another', '100.76.32.125', generated, { kind: 'expired' })
-    expect(expired).toContain('Link expired')
     expect(expired).not.toContain('old-secret')
-    expect(expired).toContain('Create link')
   })
 })

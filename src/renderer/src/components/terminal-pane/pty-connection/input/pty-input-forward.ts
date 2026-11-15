@@ -1,7 +1,7 @@
 import { subscribeToTerminalInputData } from '../../input/terminal-user-input-signal'
 import { isPassiveTerminalInputReport } from '../../input/terminal-passive-input-report'
 import { installTerminalImeCompositionRoute } from '../../input/ime/terminal-ime-composition-route'
-import { useAppStore } from '@/store'
+import { useAppStore } from '@/store/index'
 import { isTerminalQueryReply } from '../../../../../../shared/terminal/protocol/queries/terminal-query-reply'
 import { isPtyLocked } from '@/lib/pane-manager/mobile-driver-state'
 import { isPaneReplaying } from '../../snapshots/replay-guard'
@@ -17,7 +17,7 @@ import {
 import { isCodexPaneStale } from './codex-pane-stale'
 import { installTerminalSelectionFitGuard } from '../../viewport/terminal-selection-fit-guard'
 import type { ConnectPanePtySession } from '../connect-pane-pty-session'
-import { recordAdmittedTerminalUserInput } from '@/lib/telemetry'
+import { recordAdmittedTerminalUserInput } from '@/diagnostics/telemetry/telemetry'
 
 export function installPtyInputForward(session: ConnectPanePtySession): void {
   session.forwardPtyInput = (data: string, wasUserInput = false): void => {
@@ -80,7 +80,7 @@ export function installPtyInputForward(session: ConnectPanePtySession): void {
     const acknowledgedIntent = intent ?? session.inferIntentFromExactTerminalInput(data)
     if (acknowledgedIntent && session.transport.sendInputAccepted) {
       const interruptStatusBaseline =
-        useAppStore.getState().agentStatusByPaneKey[session.cacheKey] ?? null
+        useAppStore.getState().agentStatusByPaneKey.get(session.cacheKey) ?? null
       // Why: equal snapshots retain double-Escape semantics while older snapshots lose ack races.
       if (session.sequencedInterruptStatusBaseline !== interruptStatusBaseline) {
         session.sequencedInterruptStatusBaseline = interruptStatusBaseline

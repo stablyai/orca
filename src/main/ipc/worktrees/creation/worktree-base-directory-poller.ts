@@ -1,7 +1,7 @@
 import {
   isMainWindowVisible,
   onMainWindowBecameVisible
-} from '../../../window/main-window-visibility'
+} from '../../../window/visibility/main-window-visibility'
 import type {
   WorktreeBaseRepoWatchConfig,
   WorktreeBaseWatchTarget

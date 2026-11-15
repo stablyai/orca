@@ -8,13 +8,13 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import type {
   SourceControlActionRecipe,
   SourceControlLaunchActionId
 } from '../../../../../../shared/source-control/ai/recipes/source-control-ai-actions'
 import type { TuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-agent'
-import type { LaunchSource } from '../../../../../../shared/telemetry-events'
+import type { LaunchSource } from '../../../../../../shared/telemetry/schemas/telemetry-property-schemas'
 import type { SourceControlAiWriteTarget } from '../../../../../../shared/source-control/ai/settings/source-control-ai-recipe-save'
 import { useTranslate } from '@/i18n/use-translate'
 import { SourceControlAgentActionDialog } from '../ai/SourceControlAgentActionDialog'

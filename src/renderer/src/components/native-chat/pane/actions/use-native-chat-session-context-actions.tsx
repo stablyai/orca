@@ -2,7 +2,7 @@ import { useCallback, useLayoutEffect, useRef, useState } from 'react'
 import { executionHostIdForStructuredTarget } from '@/runtime/native-chat/session-ownership/structured-agent-session-owner'
 import { useTranslate } from '@/i18n/use-translate'
 import type { AgentType } from '../../../../../../shared/agent-status/contracts/agent-status-types'
-import { copyAgentSessionContext } from '@/lib/copy-agent-session-context'
+import { copyAgentSessionContext } from '@/lib/agent-session/context/copy-agent-session-context'
 import {
   resolveNativeChatSessionContext,
   type NativeChatSessionContextSource

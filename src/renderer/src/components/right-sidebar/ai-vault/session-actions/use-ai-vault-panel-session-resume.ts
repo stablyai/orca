@@ -1,10 +1,10 @@
 import { useCallback } from 'react'
 import type { AiVaultSession } from '../../../../../../shared/ai-vault/contracts/ai-vault-types'
-import type { Repo } from '../../../../../../shared/repo-types'
+import type { Repo } from '../../../../../../shared/repository/repo-types'
 import type { Worktree } from '../../../../../../shared/worktree/types'
 import { useAppStore } from '@/store/index'
 import { selectAgentLaunchRouteView } from '@/lib/agent-session/launch/routing/agent-launch-route-input'
-import { useChatProgramFactsVersion } from '@/lib/host-chat-program-acquisition'
+import { useChatProgramFactsVersion } from '@/lib/agent-session/launch/inventory/host-chat-program-acquisition'
 import { recomputeOn } from '@/lib/recompute-on'
 import {
   resolveAiVaultHistorySessionResumeState,

@@ -1,5 +1,6 @@
 import { vi } from 'vitest'
 import type { BrowserManagerMocks } from '../browser-manager-test-harness'
+import { guestNavigationMethods } from '../browser-manager-test-harness'
 
 export const GUEST_ELECTRON_UA =
   'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) orca/1.0.0 Chrome/134.0.0.0 Electron/30.0.0 Safari/537.36'
@@ -50,7 +51,9 @@ export function createViewportGuestFactory(
   return function makeGuest(id: number, url = 'https://example.com/'): ViewportGuestHandle {
     const debuggerSendCommand = vi.fn(rejectInvalidTouchPoints)
     const debuggerIsAttached = vi.fn(() => true)
-    const debuggerAttach = vi.fn()
+    const debuggerAttach = vi.fn(() => {
+      debuggerIsAttached.mockReturnValue(true)
+    })
     let currentUa = mocks.processUserAgent ?? GUEST_ELECTRON_UA
     let rendererCrashed = false
     // getURL() changes on commit, not did-start-navigation.
@@ -76,6 +79,7 @@ export function createViewportGuestFactory(
       return result
     }
     const guest = {
+      ...guestNavigationMethods(),
       id,
       isDestroyed: vi.fn(() => false),
       isCrashed: vi.fn(() => rendererCrashed),

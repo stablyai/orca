@@ -6,11 +6,11 @@ import {
   toWindowsWslDrivePath,
   toWindowsWslUncPath,
   wslDistroForCommand
-} from '../../../../shared/wsl-paths'
+} from '../../../../shared/file-access/wsl-paths'
 import type { GitExecOptions } from '../../command-runner/git-exec-options'
 import { gitExecFileAsync } from '../../command-runner/git-exec-file'
-import { pendingWslDriveCheckoutGitRouting } from '../../wsl-drive-checkout-git-routing'
-import { usesHostGitForWslLinkedWorktree } from '../../command-runner/wsl-linked-worktree-git-routing'
+import { pendingWslDriveCheckoutGitRouting } from '../../command-runner/host-routing/wsl-drive-checkout-git-routing'
+import { usesHostGitForWslLinkedWorktree } from '../../command-runner/host-routing/wsl-linked-worktree-git-routing'
 
 /** Marks only the locks this module writes, so it never removes a user's own lock. */
 export const PRUNE_GUARD_LOCK_REASON =

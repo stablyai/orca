@@ -1,17 +1,17 @@
-import { useShellStorage } from '../platform/shell-storage'
+import { useShellStorage } from '../platform/shell-storage/shell-storage'
 import { settleSessionPreferenceRead } from './session-preference-read'
 import { useCallback, useState } from 'react'
 import { useFocusEffect } from 'expo-router'
-import { loadTerminalLinkOpenMode, loadTerminalTextScale } from '../storage/preferences'
-import type { MobileSessionKeyboardStateModel } from '../terminal/session/use-mobile-session-keyboard-state'
+import { loadLinkOpenMode, loadTerminalTextScale } from '../storage/preferences'
+import type { MobileSessionKeyboardStateModel } from '../terminal/session/input-controls/use-mobile-session-keyboard-state'
 
 export function useMobileSessionPreferenceFocus(
   scope: Pick<
     MobileSessionKeyboardStateModel,
-    'setTerminalTextScale' | 'terminalTextScaleRevisionRef' | 'setTerminalLinkOpenMode'
+    'setTerminalTextScale' | 'terminalTextScaleRevisionRef' | 'setLinkOpenMode'
   >
 ) {
-  const { setTerminalTextScale, terminalTextScaleRevisionRef, setTerminalLinkOpenMode } = scope
+  const { setTerminalTextScale, terminalTextScaleRevisionRef, setLinkOpenMode } = scope
   const shellStorage = useShellStorage()
   const [terminalPreferencesReady, setTerminalPreferencesReady] = useState(false)
   // Reload on Settings return without dropping readiness or remounting terminal panes.
@@ -20,7 +20,7 @@ export function useMobileSessionPreferenceFocus(
       let active = true
       const scaleRevision = terminalTextScaleRevisionRef.current
       void settleSessionPreferenceRead(
-        Promise.all([loadTerminalTextScale(), loadTerminalLinkOpenMode()])
+        Promise.all([loadTerminalTextScale(), loadLinkOpenMode()])
       ).then((preferences) => {
         if (active) {
           if (preferences) {
@@ -28,7 +28,7 @@ export function useMobileSessionPreferenceFocus(
             if (terminalTextScaleRevisionRef.current === scaleRevision) {
               setTerminalTextScale(scale)
             }
-            setTerminalLinkOpenMode(linkMode)
+            setLinkOpenMode(linkMode)
           }
           setTerminalPreferencesReady(true)
         }

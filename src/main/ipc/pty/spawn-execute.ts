@@ -1,4 +1,4 @@
-import type { PtySpawnResult } from '../../providers/pty-provider-contract'
+import type { PtySpawnResult } from '../../providers/pty/spawn-result'
 import { ptyIncarnationById } from './provider/ownership-state'
 import { ensureWslHookRelayForReattach } from '../../agent-hooks/wsl-relay/wsl-hook-relay-reattach'
 import {

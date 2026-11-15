@@ -59,9 +59,18 @@ export function restoreTerminalPaneLayout(args: {
   ) {
     const layoutWithoutRestoredBuffers = { ...initialLayoutRef.current }
     delete layoutWithoutRestoredBuffers.buffersByLeafId
-    if (hasScrollbackRefs) {
-      initialLayoutRef.current = layoutWithoutRestoredBuffers
-    }
+    const retainedInline = Object.fromEntries(
+      Object.entries(restoredBuffers).filter(
+        ([leafId]) =>
+          restoredPaneByLeafId.has(leafId) &&
+          initialLayoutRef.current.scrollbackRefsByLeafId?.[leafId] === undefined &&
+          !deps.clearedScrollbackLeafIdsRef?.current.has(leafId)
+      )
+    )
+    initialLayoutRef.current =
+      Object.keys(retainedInline).length > 0
+        ? { ...layoutWithoutRestoredBuffers, buffersByLeafId: retainedInline }
+        : layoutWithoutRestoredBuffers
     if (initialLayoutHadBuffers) {
       useAppStore.getState().setTabLayout(tabId, layoutWithoutRestoredBuffers)
     }

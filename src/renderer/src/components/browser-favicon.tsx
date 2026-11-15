@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Globe, Loader2 } from 'lucide-react'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import { displayableFaviconUrl } from '../../../shared/browser/browser-favicon-url'
 
 export function BrowserFavicon({

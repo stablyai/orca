@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest'
 import { withDurableRuntimeStore } from '../../orca-runtime-tests/runtime-durable-store-fixture'
 import { getDefaultWorkspaceSession } from '../../../../shared/constants'
 import { OrcaRuntimeService } from '../../orca-runtime'
-import type { Repo } from '../../../../shared/repo-types'
+import type { Repo } from '../../../../shared/repository/repo-types'
 import type { FolderWorkspace } from '../../../../shared/folder-workspaces/folder-workspace-types'
 
 function folder(
@@ -55,6 +55,7 @@ function createRuntime(folders: FolderWorkspace[], repos: Repo[] = [], groups = 
     getRepo: (id: string) => repos.find((repo) => repo.id === id),
     getProjectGroups: () => groups,
     getFolderWorkspaces: () => folders,
+    getFolderWorkspace: (id: string) => folders.find((folder) => folder.id === id),
     getAllWorktreeMeta: () => ({}),
     getWorktreeMeta: () => undefined,
     setWorktreeMeta: () => ({}),

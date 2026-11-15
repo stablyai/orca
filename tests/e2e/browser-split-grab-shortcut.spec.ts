@@ -218,8 +218,13 @@ test.describe('browser split grab shortcut', () => {
     await waitForGuestUrl(orcaPage, fixture.firstBrowserTabId, server.pageUrl('a', 1))
     await waitForGuestUrl(orcaPage, fixture.secondBrowserTabId, server.pageUrl('b', 1, 'localhost'))
 
-    await reloadButton(orcaPage, fixture.firstBrowserTabId).focus()
-    await waitForFocusedGroup(orcaPage, fixture.firstBrowserGroupId)
+    // Why: the active terminal refits a frame after the splits mount and can take focus back.
+    const firstReloadButton = reloadButton(orcaPage, fixture.firstBrowserTabId)
+    await expect(async () => {
+      await firstReloadButton.focus()
+      await waitForFocusedGroup(orcaPage, fixture.firstBrowserGroupId)
+      await expect(firstReloadButton).toBeFocused({ timeout: 1_000 })
+    }).toPass({ timeout: 30_000 })
     await orcaPage.keyboard.press(copyChord)
 
     await expect(grabBanner(orcaPage, fixture.firstBrowserTabId)).toBeVisible()

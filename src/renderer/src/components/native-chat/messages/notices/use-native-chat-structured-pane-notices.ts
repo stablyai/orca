@@ -1,4 +1,5 @@
-import { useNativeChatSignIn } from '../../host-access/native-chat-sign-in'
+import { useCallback } from 'react'
+import { useNativeChatHostSetup } from '../../host-access/native-chat-host-setup'
 import { useNativeChatAvailabilityNotice } from './use-native-chat-availability-notice'
 import { structuredSessionNotices } from './native-chat-structured-session-notices'
 import type { NativeChatStructuredViewProps } from '../../native-chat-view-types'
@@ -49,15 +50,34 @@ export function useNativeChatStructuredPaneNotices({
 }) {
   const t = useTranslate()
   const launch = { ...provisionalLaunch, retry: submits.retryLaunch }
-  const signIn = useNativeChatSignIn({
+  const details = provisionalLaunch.failure?.details
+  const { demandModelCatalog } = controller.optionSurface
+  const launchFailed = provisionalLaunch.lifecycle === 'failed'
+  const { retryLaunch } = submits
+  // Stable so the setup context only changes with its own state, not every streamed token.
+  const onRechecked = useCallback(() => {
+    demandModelCatalog?.()
+    if (launchFailed) {
+      retryLaunch()
+    }
+  }, [demandModelCatalog, launchFailed, retryLaunch])
+  const setup = useNativeChatHostSetup({
     ...props,
     worktreeId: ownerWorktreeId,
+    // The host names which account is signed out; a managed-account sign-in can't fix the system one.
+    account:
+      controller.unavailable?.reason === 'notSignedIn'
+        ? controller.unavailable.account
+        : details && 'account' in details
+          ? details.account
+          : undefined,
     failure: provisionalLaunch.failure,
-    startFailures
+    startFailures,
+    onRechecked
   })
   const availability = useNativeChatAvailabilityNotice({
     unavailable: controller.unavailable,
-    signIn: props.agent === 'claude' ? null : signIn,
+    setup,
     agent: props.agent,
     wslDistro: continuation.view.wslDistro,
     launchFailure: provisionalLaunch.lifecycle === 'failed' ? provisionalLaunch.failure : null,
@@ -75,7 +95,7 @@ export function useNativeChatStructuredPaneNotices({
         viewState.kind === 'error' || !readFailure ? controller.error : readFailure.text,
       readRefusal: viewState.kind !== 'error' && readFailure ? controller.readRefusal : undefined,
       composerError: composerError ?? continuation.continueError,
-      signIn,
+      setup,
       availability,
       hostPermission: hostSendGate.notice
     },
@@ -84,5 +104,5 @@ export function useNativeChatStructuredPaneNotices({
   if (hostNotice) {
     notices.push(hostNotice)
   }
-  return { signIn, notices }
+  return { setup, notices }
 }

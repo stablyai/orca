@@ -17,7 +17,8 @@ import {
   readOrcadWindowsEncodedAnswer
 } from '../install/orcad-remote-windows-node'
 import { ORCAD_WINDOWS_RUNTIME_MARKER } from '../host-state/orcad-windows-host-script'
-import { ORCAD_LOCK_FILE_NAME, parseOrcadInstanceLockRecord } from '../../orcad/orcad-instance-lock'
+import { ORCAD_LOCK_FILE_NAME } from '../../orcad/instance-lock/orcad-instance-lock'
+import { parseOrcadInstanceLockRecord } from '../../orcad/instance-lock/orcad-instance-lock-record'
 import {
   ORCAD_CANCEL_MANAGED_STOP_FLAG,
   ORCAD_COMPLETE_MANAGED_STOP_FLAG,
@@ -29,7 +30,7 @@ import {
   type OrcadManagedStopCompletion,
   type OrcadManagedStopContext,
   type OrcadManagedStopRequest
-} from '../../../shared/orcad-stop-request'
+} from '../../../shared/remote-runtime/orcad-lifecycle/orcad-stop-request'
 
 const LOCK_RECORD_MAX_BYTES = 64 * 1024
 

@@ -13,7 +13,7 @@ import {
   openFileIndex
 } from '@/store/slices/editor/tabs/workspace-editor-files'
 import { editorViewTab } from '@/store/slices/editor/tabs/editor-view-placement'
-import { selectWorkspaceSurface } from '@/lib/workspace-surface-reveal'
+import { selectWorkspaceSurface } from '@/lib/workspace/activation/workspace-surface-reveal'
 import type { TerminalEditorCloseFoundation } from './use-terminal-editor-close-foundation'
 
 export function useTerminalEditorCloseQueue(controller: TerminalEditorCloseFoundation) {

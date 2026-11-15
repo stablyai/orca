@@ -1,3 +1,5 @@
+import type { BrowserHostLease, BrowserHostLeaseState } from './browser-host-lease-records'
+
 export const BROWSER_HOST_WEBVIEW_CAPABILITY = 'webview'
 
 type BrowserHostCapabilityLease = Readonly<{
@@ -46,4 +48,16 @@ function hasCapabilities(
   requiredCapabilities: readonly string[]
 ): boolean {
   return requiredCapabilities.every((capability) => lease.hostCapabilities.includes(capability))
+}
+
+export function selectActiveBrowserHostLease(
+  leasesByClientId: ReadonlyMap<string, BrowserHostLeaseState>,
+  browserHostClientId?: string,
+  requiredCapabilities: readonly string[] = []
+): BrowserHostLease {
+  return selectBrowserHostLease(
+    new Map([...leasesByClientId].filter(([, state]) => state.status === 'active')),
+    browserHostClientId,
+    requiredCapabilities
+  )
 }

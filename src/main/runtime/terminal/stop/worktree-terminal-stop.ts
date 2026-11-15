@@ -2,11 +2,11 @@ import { OrcaRuntimeWithResolveTerminalSplitSourceAuthority } from '../launch/te
 import type { ResolvedWorktree } from '../../workspaces/catalog/runtime-worktree-path-identity'
 import { worktreeIdentityKey } from '../../../../shared/worktree/id'
 import { teardownRpcDeadline } from '../../workspaces/removal/worktree-teardown-deadline'
-import { WORKTREE_TERMINALS_SLEEPING_ERROR } from '../../../../shared/workspace-sleep'
+import { WORKTREE_TERMINALS_SLEEPING_ERROR } from '../../../../shared/workspace/lifecycle/workspace-sleep'
 import type {
   RuntimeWorktreeTerminalCloseResult,
   RuntimeWorktreeTerminalSleepResult
-} from '../../../../shared/runtime-terminal-contracts'
+} from '../../../../shared/terminal/runtime/runtime-terminal-contracts'
 import type { WorktreeTerminalStopOptions } from './worktree-terminal-stop-options'
 import type { HostWorktreeTarget } from '../../../../shared/worktree/host-qualified-identity'
 import type { WorktreeTerminalMutationKind } from '../../workspaces/lifecycle/worktree-terminal-mutation-lock'

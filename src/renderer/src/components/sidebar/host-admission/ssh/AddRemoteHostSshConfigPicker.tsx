@@ -7,8 +7,8 @@ import { useTranslate } from '@/i18n/use-translate'
 import {
   SSH_CONFIG_HOST_RESULT_LIMIT,
   type SshConfigHostSummary
-} from '../../../../../../shared/ssh-types'
-import { cn } from '@/lib/utils'
+} from '../../../../../../shared/remote-runtime/ssh/ssh-types'
+import { cn } from '@/lib/class-names'
 
 const EMPTY_CONFIG_HOSTS: SshConfigHostSummary[] = []
 

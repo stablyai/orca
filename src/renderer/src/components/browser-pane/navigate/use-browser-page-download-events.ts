@@ -2,7 +2,7 @@ import { useEffect, useState, type Dispatch, type SetStateAction } from 'react'
 import type {
   BrowserDownloadFinishedEvent,
   BrowserDownloadProgressEvent
-} from '../../../../../shared/browser-guest-events'
+} from '../../../../../shared/browser/guest-lifecycle/browser-guest-events'
 import type { BrowserDownloadState } from './browser-download-progress'
 import { emitBrowserRemoteDownloadToast } from '../browser-download-destination-toast'
 

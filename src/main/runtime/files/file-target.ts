@@ -13,7 +13,7 @@ import type {
   createLocalFilesystemProvider,
   LocalFilesystemProvider,
   LocalFilesystemProviderOptions
-} from '../../providers/local-filesystem-provider'
+} from '../../providers/filesystem/local-provider'
 import { SshHostNotServedError } from '../../providers/ssh-host-not-served-error'
 
 export type ResolvedRuntimeFileWorktree = Worktree & { git: GitWorktreeInfo }

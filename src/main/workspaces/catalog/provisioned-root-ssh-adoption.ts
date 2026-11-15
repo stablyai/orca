@@ -1,5 +1,5 @@
 import type { Store } from '../../persistence/loading-store/store'
-import type { Repo } from '../../../shared/repo-types'
+import type { Repo } from '../../../shared/repository/repo-types'
 import type {
   AdoptProvisionedRootArgs,
   CreateWorktreeResult
@@ -9,12 +9,12 @@ import { isRuntimeOwnedSshTargetId, toSshExecutionHostId } from '../../../shared
 import {
   getEphemeralVmRecipeResultCheckoutMode,
   getEphemeralVmRecipeResultProjectRoot
-} from '../../../shared/ephemeral-vm-recipes'
-import { listEphemeralVmRuntimes } from '../../../shared/ephemeral-vm-runtime-store'
+} from '../../../shared/remote-runtime/ephemeral-vm-recipes/ephemeral-vm-recipes'
+import { listEphemeralVmRuntimes } from '../../../shared/remote-runtime/ephemeral-vm-store/ephemeral-vm-runtime-store'
 import {
   hasEphemeralVmRecipeResult,
   type EphemeralVmProvisionedRuntimeRecord
-} from '../../../shared/ephemeral-vm-runtimes'
+} from '../../../shared/remote-runtime/ephemeral-vm-store/ephemeral-vm-runtimes'
 import { provisionedRootPathsEqual } from './provisioned-root-checkout'
 
 type AdoptionArgs = AdoptProvisionedRootArgs & {

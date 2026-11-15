@@ -1,4 +1,4 @@
-import { stripAnsiEscapeSequences } from '../../../ansi-escape-sequences'
+import { stripAnsiEscapeSequences } from '../../../terminal/protocol/escape/ansi-escape-sequences'
 import { sliceCheckLogTail } from '../logs/check-job-log-tail-slice'
 import type { GitLabJobTraceResult } from '../../../gitlab-types'
 

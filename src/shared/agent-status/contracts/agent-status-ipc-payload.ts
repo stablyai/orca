@@ -2,7 +2,10 @@
 
 import type { StructuredHostStatus } from '../../agent-hook-listener/listener-event'
 import type { ProgramStatusFacet } from '../../program-status/facet'
-import type { AgentProviderSessionMetadata } from '../../agent-session/lifecycle/agent-session-resume'
+import type {
+  AgentProviderSessionMetadata,
+  SleepingAgentLaunchConfig
+} from '../../agent-session/lifecycle/agent-session-resume'
 import type { WithAgentStatusObservation } from './agent-status-observation'
 import type {
   AgentStatusExecutionId,
@@ -15,6 +18,27 @@ import type {
   ParsedAgentStatusPayload,
   TurnEndDisposition
 } from './agent-status-types'
+
+export function readPaneSleep(value: unknown): AgentStatusIpcPayload['paneSleep'] {
+  if (
+    !value ||
+    typeof value !== 'object' ||
+    !('ptyId' in value) ||
+    typeof value.ptyId !== 'string' ||
+    value.ptyId.length === 0 ||
+    value.ptyId.length > 1024
+  ) {
+    return undefined
+  }
+  const incarnationId = 'incarnationId' in value ? value.incarnationId : undefined
+  if (
+    incarnationId !== undefined &&
+    (typeof incarnationId !== 'string' || incarnationId.length === 0 || incarnationId.length > 1024)
+  ) {
+    return undefined
+  }
+  return { ptyId: value.ptyId, ...(incarnationId ? { incarnationId } : {}) }
+}
 
 /** A PTY the pane-key migration could not move, reported for operator triage. */
 export type MigrationUnsupportedPtyEntry = {
@@ -30,6 +54,8 @@ export type MigrationUnsupportedPtyEntry = {
 }
 
 export type AgentStatusIpcPayload = ParsedAgentStatusPayload & {
+  /** The host proved this exact process stopped for sleep; the placed pane owns its Done. */
+  paneSleep?: { ptyId: string; incarnationId?: string }
   /** Optional run-aware identity; absent on legacy hosts and compatibility projections. */
   runId?: AgentStatusRunId
   /** Host-owned process-incarnation attachment for the run-aware row. */
@@ -40,6 +66,8 @@ export type AgentStatusIpcPayload = ParsedAgentStatusPayload & {
   /** Live host acknowledgement of this renderer’s exact pane retirement. */
   authorityRestartId?: string
   launchToken?: string
+  /** The host's statement on the Orca launch in this pane: its note, or null for none; absent says nothing. */
+  launchConfig?: SleepingAgentLaunchConfig | null
   terminalHandle?: string
   tabId?: string
   worktreeId?: string
@@ -67,6 +95,9 @@ export type AgentStatusIpcPayload = ParsedAgentStatusPayload & {
   programStatus?: ProgramStatusFacet
   /** Only `programStatus` changed: readers patch the facet and treat nothing else as news. */
   programStatusOnly?: true
+  /** The terminal agent's Orca id on its execution host; null when that host can name this
+   *  conversation but has not yet (Copy retries); absent from older hosts and unnameable rows. */
+  orcaSessionId?: string | null
   /** See AgentStatusEntry.restoredUnconfirmed — hydrated nonterminal provenance. */
   restoredUnconfirmed?: boolean
   /** The pane's owning agent session on its execution host; absent from older hosts. */

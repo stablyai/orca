@@ -3,7 +3,7 @@ import type { RpcClient } from '../rpc/rpc-client-contract'
 import type { RelayHostReachability } from '../relay/relay-host-reachability'
 import type { MobileConnectionPath } from './stable-logical-rpc-client'
 import type { ConnectionState } from './connection-state'
-import type { HostProfile } from '../hosts/host-profile'
+import type { HostProfile } from '../../host-catalog/host-profile'
 
 /** Re-dials one host. `null` where this document cannot dial: the page's shell owns the connection. */
 export type ForceReconnect = ((hostId: string) => Promise<void>) | null

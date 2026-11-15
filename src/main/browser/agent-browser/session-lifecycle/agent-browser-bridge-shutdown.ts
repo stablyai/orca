@@ -1,10 +1,11 @@
-import { mapSettledWithConcurrency } from '../../../../shared/map-with-concurrency'
+import { mapSettledWithConcurrency } from '../../../../shared/concurrency/map-with-concurrency'
 import { sweepOrphanedAgentBrowserSessions } from './agent-browser-orphan-sweep'
 import { AgentBrowserBridgeLifecycle } from './agent-browser-bridge-lifecycle'
 import type { AgentBrowserCleanupOptions } from './agent-browser-cleanup-options'
 
 export abstract class AgentBrowserBridgeShutdown extends AgentBrowserBridgeLifecycle {
   async sweepOrphanedSessions(): Promise<string[]> {
+    await this.agentBrowserConfigReady
     return sweepOrphanedAgentBrowserSessions({
       binaryPath: this.agentBrowserBin,
       env: this.agentBrowserEnv,

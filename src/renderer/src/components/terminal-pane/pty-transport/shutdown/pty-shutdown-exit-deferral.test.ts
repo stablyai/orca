@@ -1,10 +1,28 @@
 import { expect, it, vi } from 'vitest'
+import { useAppStore } from '@/store'
+import { makeTab } from '@/store/terminals/testing/terminal-tab.test-fixture'
+import { commitTerminalShutdownState } from '@/store/terminals/sleep/terminal-shutdown-state'
+import {
+  bindPanePtyExit,
+  initializePanePtyExit
+} from '../../pty-connection/lifecycle/pane-pty-exit'
+import type { ConnectPanePtySession } from '../../pty-connection/connect-pane-pty-session'
+import {
+  LEAF_1,
+  LEAF_2,
+  createPane,
+  createManager,
+  createMockTransport
+} from '../../pty-connection/test-fixtures/pty-connection-test-pane-fixtures'
+import { buildPaneConnectionDeps } from '../../pty-connection/test-fixtures/pty-connection-test-deps'
+import { mockPanePtyArgs } from '../../pty-connection/test-fixtures/pty-connection-test-connect-mock-pane'
+import {
+  installTerminalTestGlobals,
+  restoreTerminalTestGlobals
+} from '../../pty-connection/test-fixtures/pty-connection-test-environment'
 import {
   applyHostWorktreeTerminalSleepState,
-  consumeCommittedPtyShutdownExit,
   deferPtyShutdownExit,
-  isHostPtySleepPending,
-  markCommittedPtyShutdowns,
   settleDeferredPtyShutdownExits
 } from './pty-shutdown-exit-deferral'
 import { toRemoteRuntimePtyId } from '../../../../../../shared/remote-runtime/remote-runtime-pty-id'
@@ -17,123 +35,199 @@ import {
   ptyShutdownLifecycleHandlers
 } from './pty-shutdown-data-suspension'
 
-it('settles every deferred exit even when one cleanup throws', () => {
-  const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
-  const second = vi.fn()
-  deferPtyShutdownExit('pty-callback-isolation', () => {
-    throw new Error('disposed pane')
+vi.mock('@/store', async () => {
+  const { createTestStore } = await import('@/store/testing/app-store-test-fixture')
+  return { useAppStore: createTestStore() }
+})
+vi.mock('@/runtime/sync-runtime-graph/graph-sync-scheduler', () => ({
+  scheduleRuntimeGraphSync: () => {}
+}))
+
+const NOW = 1_800_000_000_000
+const PANE = `tab-1:${LEAF_1}`
+const SIBLING = `tab-1:${LEAF_2}`
+
+async function placedExitSession() {
+  await installTerminalTestGlobals()
+  useAppStore.setState(useAppStore.getInitialState(), true)
+  const tab = makeTab({ id: 'tab-1', worktreeId: 'wt-1' })
+  useAppStore.setState({
+    workspaceSessionReady: true,
+    tabsByWorktree: { 'wt-1': [tab] },
+    terminalLayoutsByTabId: {
+      'tab-1': {
+        root: {
+          type: 'split',
+          direction: 'horizontal',
+          ratio: 0.5,
+          first: { type: 'leaf', leafId: LEAF_1 },
+          second: { type: 'leaf', leafId: LEAF_2 }
+        },
+        activeLeafId: LEAF_1,
+        expandedLeafId: null,
+        ptyIdsByLeafId: { [LEAF_1]: 'pty-1', [LEAF_2]: 'pty-2' }
+      }
+    },
+    ptyIdsByTabId: { 'tab-1': ['pty-1', 'pty-2'] }
   })
-  deferPtyShutdownExit('pty-callback-isolation', second)
+  const transport = createMockTransport('pty-1')
+  const [pane, manager, deps] = mockPanePtyArgs(
+    createPane(1),
+    createManager(1),
+    buildPaneConnectionDeps(useAppStore.getState, {
+      isPtyShutdownPending: (id: string) => !!useAppStore.getState().pendingPtyShutdownIds[id],
+      consumeSuppressedPtyExit: useAppStore.getState().consumeSuppressedPtyExit,
+      setCacheTimerStartedAt: useAppStore.getState().setCacheTimerStartedAt,
+      paneTransportsRef: { current: new Map([[1, transport]]) }
+    })
+  )
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the installer uses connectPanePty's partial session initialization.
+  const session = { pane, manager, deps } as ConnectPanePtySession
+  Object.assign(session, {
+    transport,
+    cacheKey: PANE,
+    runtimeEnvironmentId: null,
+    processExitStateByPtyId: new Map(),
+    resetRendererOrderedSeqForPtyExit: () => {},
+    agentCompletionCoordinator: { dispose: () => {} },
+    dropSideEffectFactConsumer: () => {},
+    releaseHiddenRendererPtyDelivery: () => {},
+    clearPanePtyFitBinding: () => {},
+    clearExitedPanePtyLayoutBinding: () => {},
+    getSleepingRecordForPane: () => null,
+    hibernatedWakeTarget: null,
+    hiddenAgentResumeHeldTarget: null,
+    pendingHibernatedWakeTarget: null,
+    lastTerminalInputAt: NOW
+  })
+  initializePanePtyExit(session)
+  bindPanePtyExit(session)
+  return { session, tab, transport }
+}
 
-  expect(() =>
-    settleDeferredPtyShutdownExits(['pty-callback-isolation'], 'committed')
-  ).not.toThrow()
-  expect(second).toHaveBeenCalledWith('committed')
-  expect(consoleError).toHaveBeenCalled()
-  consoleError.mockRestore()
-})
-
-it('consumes a committed late-exit guard only once', () => {
-  markCommittedPtyShutdowns(['pty-late-commit'])
-
-  expect(consumeCommittedPtyShutdownExit('pty-late-commit')).toBe(true)
-  expect(consumeCommittedPtyShutdownExit('pty-late-commit')).toBe(false)
-})
-
-it('clears a committed guard when its deferred exit is replayed', () => {
-  const callback = vi.fn()
-  deferPtyShutdownExit('pty-deferred-commit', callback)
-  markCommittedPtyShutdowns(['pty-deferred-commit'])
-
-  settleDeferredPtyShutdownExits(['pty-deferred-commit'], 'committed')
-
-  expect(callback).toHaveBeenCalledWith('committed')
-  expect(consumeCommittedPtyShutdownExit('pty-deferred-commit')).toBe(false)
-})
-
-it('preserves another client binding through host sleep until the host reports wake', () => {
-  const callback = vi.fn()
-  const remotePtyId = toRemoteRuntimePtyId('terminal-handle-observer', 'env-a')
-  const started = {
-    type: 'worktreeTerminalSleepState' as const,
-    worktreeId: 'repo::C:\\worktree',
-    generation: 7,
-    phase: 'started' as const,
-    ptyIds: ['pty-observer'],
-    terminalHandles: ['terminal-handle-observer']
-  }
-  applyHostWorktreeTerminalSleepState('env-a', started)
-  expect(isHostPtySleepPending(remotePtyId, 'env-a')).toBe(true)
-  expect(isHostPtySleepPending(remotePtyId, 'env-b')).toBe(false)
-  deferPtyShutdownExit(remotePtyId, callback)
-
-  applyHostWorktreeTerminalSleepState('env-a', { ...started, phase: 'committed' })
-  expect(callback).toHaveBeenCalledWith('committed')
-  expect(consumeCommittedPtyShutdownExit(remotePtyId, 'env-a')).toBe(true)
-  expect(consumeCommittedPtyShutdownExit(remotePtyId, 'env-b')).toBe(false)
-
-  applyHostWorktreeTerminalSleepState('env-a', { ...started, phase: 'woken' })
-  expect(consumeCommittedPtyShutdownExit(remotePtyId, 'env-a')).toBe(false)
-})
-
-it('accepts an ordered local host reversible-stop exit before pane cleanup', () => {
-  markCommittedPtyShutdowns(['pty-host-renderer'])
-
-  expect(consumeCommittedPtyShutdownExit('pty-host-renderer')).toBe(true)
-})
-
-it('suspends passive-client output until the host sleep disposition settles', () => {
-  const remotePtyId = toRemoteRuntimePtyId('terminal-passive', 'env-passive')
-  const dataHandler = vi.fn()
-  const replayHandler = vi.fn()
-  const lifecycle = { pause: vi.fn(), rollback: vi.fn(), commit: vi.fn() }
-  ptyDataHandlers.set(remotePtyId, dataHandler)
-  ptyReplayHandlers.set(remotePtyId, replayHandler)
-  ptyShutdownLifecycleHandlers.set(remotePtyId, lifecycle)
-  const event = {
-    type: 'worktreeTerminalSleepState' as const,
-    worktreeId: 'repo::worktree',
-    generation: 31,
-    phase: 'started' as const,
-    ptyIds: ['pty-passive'],
-    terminalHandles: ['terminal-passive']
-  }
-
-  applyHostWorktreeTerminalSleepState('env-passive', event)
-  expect(lifecycle.pause).toHaveBeenCalledOnce()
-  expect(isPtyDataHandlerShutdownPending(remotePtyId)).toBe(true)
-  expect(bufferPtyShutdownData(remotePtyId, 'teardown flush')).toBe(true)
-  expect(dataHandler).not.toHaveBeenCalled()
-
-  applyHostWorktreeTerminalSleepState('env-passive', { ...event, phase: 'cancelled' })
-  expect(lifecycle.rollback).toHaveBeenCalledOnce()
-  expect(dataHandler).toHaveBeenCalledWith('teardown flush', undefined)
-  ptyDataHandlers.delete(remotePtyId)
-  ptyReplayHandlers.delete(remotePtyId)
-  ptyShutdownLifecycleHandlers.delete(remotePtyId)
-})
-
-it('expires a committed host disposition when a disconnected client misses wake', () => {
+it('keeps providerless Done through the committed deferred process exit until exact close', async () => {
+  const { session, tab } = await placedExitSession()
   vi.useFakeTimers()
+  vi.setSystemTime(NOW)
   try {
-    vi.setSystemTime(new Date('2026-07-21T00:00:00Z'))
-    const remotePtyId = toRemoteRuntimePtyId('terminal-reused', 'env-expiry')
-    const event = {
-      type: 'worktreeTerminalSleepState' as const,
-      worktreeId: 'repo::worktree',
-      generation: 41,
-      phase: 'committed' as const,
-      ptyIds: ['pty-reused'],
-      terminalHandles: ['terminal-reused']
-    }
-    applyHostWorktreeTerminalSleepState('env-expiry', event)
-    expect(consumeCommittedPtyShutdownExit(remotePtyId, 'env-expiry')).toBe(true)
-
-    applyHostWorktreeTerminalSleepState('env-expiry', event)
-    vi.advanceTimersByTime(30_001)
-    expect(consumeCommittedPtyShutdownExit(remotePtyId, 'env-expiry')).toBe(false)
+    useAppStore
+      .getState()
+      .setAgentStatus(PANE, { state: 'done', agentType: 'claude', prompt: 'Finished' }, undefined, {
+        stateStartedAt: NOW - 100
+      })
+    useAppStore
+      .getState()
+      .setAgentStatus(SIBLING, { state: 'working', agentType: 'codex', prompt: '' })
+    useAppStore.setState({
+      pendingPtyShutdownIds: { 'pty-1': 1, 'pty-2': 1 },
+      acknowledgedAgentsByPaneKey: { [PANE]: NOW },
+      activityClearedAtByPaneKey: { [PANE]: NOW - 50 },
+      manuallyUnreadTurnsByPaneKey: { [PANE]: NOW - 75 },
+      agentLaunchConfigByPaneKey: {
+        [PANE]: {
+          registeredAt: NOW,
+          launchConfig: { agentArgs: '', agentEnv: {} },
+          identity: { agentType: 'claude' }
+        }
+      },
+      cacheTimerByKey: { [PANE]: NOW }
+    })
+    useAppStore.getState().setPaneForegroundAgent(PANE, { agent: 'claude', shellForeground: false })
+    session.onExit('pty-1', 0)
+    useAppStore
+      .getState()
+      .setAgentStatus(
+        PANE,
+        { state: 'done', agentType: 'claude', prompt: 'Finished', paneSleep: { ptyId: 'pty-1' } },
+        undefined,
+        { stateStartedAt: NOW - 100 }
+      )
+    commitTerminalShutdownState({
+      exitGuardPtyIds: ['pty-1', 'pty-2'],
+      get: useAppStore.getState,
+      set: useAppStore.setState,
+      keepIdentifiers: true,
+      shutdownReason: 'manual-sleep',
+      sleepingAgentSessionRecords: {},
+      sleepingPaneKeys: [PANE, SIBLING],
+      tabs: [tab],
+      worktreeId: 'wt-1'
+    })
+    expect(useAppStore.getState().agentStatusByPaneKey.projection.list('wt-1')).toMatchObject([
+      { paneKey: PANE, state: 'done' }
+    ])
+    const state = useAppStore.getState()
+    expect(state.agentStatusByPaneKey.get(PANE)).toMatchObject({
+      stateStartedAt: NOW - 100,
+      paneSleep: { ptyId: 'pty-1' }
+    })
+    expect(state.acknowledgedAgentsByPaneKey[PANE]).toBe(NOW)
+    expect(state.activityClearedAtByPaneKey[PANE]).toBe(NOW - 50)
+    expect(state.manuallyUnreadTurnsByPaneKey[PANE]).toBe(NOW - 75)
+    expect(state.agentLaunchConfigByPaneKey[PANE]).toBeUndefined()
+    expect(state.paneForegroundAgentByPaneKey[PANE]).toBeUndefined()
+    expect(state.cacheTimerByKey[PANE]).toBeNull()
+    expect(state.sleepingAgentSessionsByPaneKey[PANE]).toBeUndefined()
+    state.dropAgentStatus(PANE, { paneRemoved: true })
+    expect(useAppStore.getState().agentStatusByPaneKey.projection.list('wt-1')).toEqual([])
   } finally {
-    vi.useRealTimers()
+    await restoreTerminalTestGlobals()
+  }
+})
+
+it('still removes ordinary unmarked Done on process exit', async () => {
+  const { session } = await placedExitSession()
+  try {
+    useAppStore
+      .getState()
+      .setAgentStatus(PANE, { state: 'done', agentType: 'claude', prompt: 'Finished' })
+    session.onExit('pty-1', 0)
+    expect(useAppStore.getState().agentStatusByPaneKey.projection.list('wt-1')).toEqual([])
+  } finally {
+    await restoreTerminalTestGlobals()
+  }
+})
+
+it('does not let a deferred old exit clear a rebound process on the same transport', async () => {
+  const { session, transport } = await placedExitSession()
+  try {
+    useAppStore.setState({ pendingPtyShutdownIds: { 'pty-1': 1 } })
+    session.onExit('pty-1', 0)
+    transport.getPtyId.mockReturnValue('pty-new')
+    useAppStore
+      .getState()
+      .setAgentStatus(PANE, { state: 'working', agentType: 'codex', prompt: 'New turn' })
+    useAppStore.getState().setPaneForegroundAgent(PANE, { agent: 'codex', shellForeground: false })
+    useAppStore.setState({ pendingPtyShutdownIds: {}, cacheTimerByKey: { [PANE]: NOW } })
+    settleDeferredPtyShutdownExits(['pty-1'], 'committed')
+    expect(useAppStore.getState().agentStatusByPaneKey.get(PANE)?.state).toBe('working')
+    expect(useAppStore.getState().paneForegroundAgentByPaneKey[PANE]?.agent).toBe('codex')
+    expect(useAppStore.getState().cacheTimerByKey[PANE]).toBe(NOW)
+  } finally {
+    await restoreTerminalTestGlobals()
+  }
+})
+
+it('keeps an accepted paired Done whose physical PTY differs from the renderer handle', async () => {
+  const { session, transport } = await placedExitSession()
+  try {
+    const remotePtyId = toRemoteRuntimePtyId('terminal-1', 'env-1')
+    transport.getPtyId.mockReturnValue(remotePtyId)
+    session.runtimeEnvironmentId = 'env-1'
+    useAppStore.getState().setAgentStatus(PANE, {
+      state: 'done',
+      agentType: 'claude',
+      prompt: 'Finished',
+      paneSleep: { ptyId: 'host-physical-pty' }
+    })
+    session.onExit(remotePtyId, 0, { preserveRendererBinding: true })
+    expect(useAppStore.getState().agentStatusByPaneKey.projection.list('wt-1')).toMatchObject([
+      { paneKey: PANE, state: 'done' }
+    ])
+    useAppStore.getState().removeAgentStatus(PANE)
+    expect(useAppStore.getState().agentStatusByPaneKey.projection.list('wt-1')).toEqual([])
+  } finally {
+    await restoreTerminalTestGlobals()
   }
 })
 
@@ -174,177 +268,5 @@ it('autonomously rolls back a pending host sleep when its outcome is missed', ()
     ptyReplayHandlers.delete(remotePtyId)
     ptyShutdownLifecycleHandlers.delete(remotePtyId)
     vi.useRealTimers()
-  }
-})
-
-it('rearms pending expiry for a duplicate host started event', () => {
-  vi.useFakeTimers()
-  try {
-    vi.setSystemTime(new Date('2026-07-21T00:00:00Z'))
-    const remotePtyId = toRemoteRuntimePtyId('terminal-duplicate', 'env-duplicate')
-    const event = {
-      type: 'worktreeTerminalSleepState' as const,
-      worktreeId: 'repo::worktree',
-      generation: 61,
-      phase: 'started' as const,
-      ptyIds: ['pty-duplicate'],
-      terminalHandles: ['terminal-duplicate']
-    }
-    applyHostWorktreeTerminalSleepState('env-duplicate', event)
-    vi.advanceTimersByTime(20_000)
-    applyHostWorktreeTerminalSleepState('env-duplicate', event)
-
-    vi.advanceTimersByTime(10_001)
-    expect(isHostPtySleepPending(remotePtyId, 'env-duplicate')).toBe(true)
-    vi.advanceTimersByTime(20_000)
-    expect(isHostPtySleepPending(remotePtyId, 'env-duplicate')).toBe(false)
-  } finally {
-    vi.useRealTimers()
-  }
-})
-
-it('ignores an older commit after a newer sleep generation starts', () => {
-  const remotePtyId = toRemoteRuntimePtyId('terminal-generation', 'env-generation')
-  const event = {
-    type: 'worktreeTerminalSleepState' as const,
-    worktreeId: 'repo::worktree',
-    phase: 'started' as const,
-    ptyIds: ['pty-generation'],
-    terminalHandles: ['terminal-generation']
-  }
-  applyHostWorktreeTerminalSleepState('env-generation', { ...event, generation: 72 })
-
-  applyHostWorktreeTerminalSleepState('env-generation', {
-    ...event,
-    generation: 71,
-    phase: 'committed'
-  })
-
-  expect(isHostPtySleepPending(remotePtyId, 'env-generation')).toBe(true)
-  expect(consumeCommittedPtyShutdownExit(remotePtyId, 'env-generation')).toBe(false)
-  applyHostWorktreeTerminalSleepState('env-generation', {
-    ...event,
-    generation: 72,
-    phase: 'cancelled'
-  })
-})
-
-it('retains a cancelled generation barrier against an older commit', () => {
-  const remotePtyId = toRemoteRuntimePtyId('terminal-cancelled-order', 'env-order')
-  const event = {
-    type: 'worktreeTerminalSleepState' as const,
-    worktreeId: 'repo::worktree',
-    ptyIds: ['pty-cancelled-order'],
-    terminalHandles: ['terminal-cancelled-order']
-  }
-  applyHostWorktreeTerminalSleepState('env-order', {
-    ...event,
-    generation: 82,
-    phase: 'started'
-  })
-  applyHostWorktreeTerminalSleepState('env-order', {
-    ...event,
-    generation: 82,
-    phase: 'cancelled'
-  })
-
-  applyHostWorktreeTerminalSleepState('env-order', {
-    ...event,
-    generation: 81,
-    phase: 'committed'
-  })
-
-  expect(consumeCommittedPtyShutdownExit(remotePtyId, 'env-order')).toBe(false)
-})
-
-it('retains a woken generation barrier against an older start', () => {
-  const remotePtyId = toRemoteRuntimePtyId('terminal-woken-order', 'env-order')
-  const event = {
-    type: 'worktreeTerminalSleepState' as const,
-    worktreeId: 'repo::worktree',
-    ptyIds: ['pty-woken-order'],
-    terminalHandles: ['terminal-woken-order']
-  }
-  applyHostWorktreeTerminalSleepState('env-order', {
-    ...event,
-    generation: 92,
-    phase: 'committed'
-  })
-  applyHostWorktreeTerminalSleepState('env-order', {
-    ...event,
-    generation: 92,
-    phase: 'woken'
-  })
-
-  applyHostWorktreeTerminalSleepState('env-order', {
-    ...event,
-    generation: 91,
-    phase: 'started'
-  })
-
-  expect(isHostPtySleepPending(remotePtyId, 'env-order')).toBe(false)
-  expect(consumeCommittedPtyShutdownExit(remotePtyId, 'env-order')).toBe(false)
-})
-
-it('does not regress a committed generation back to started', () => {
-  const remotePtyId = toRemoteRuntimePtyId('terminal-committed-order', 'env-order')
-  const event = {
-    type: 'worktreeTerminalSleepState' as const,
-    worktreeId: 'repo::worktree',
-    generation: 102,
-    ptyIds: ['pty-committed-order'],
-    terminalHandles: ['terminal-committed-order']
-  }
-  applyHostWorktreeTerminalSleepState('env-order', { ...event, phase: 'committed' })
-
-  applyHostWorktreeTerminalSleepState('env-order', { ...event, phase: 'started' })
-
-  expect(isHostPtySleepPending(remotePtyId, 'env-order')).toBe(false)
-  expect(consumeCommittedPtyShutdownExit(remotePtyId, 'env-order')).toBe(true)
-  expect(consumeCommittedPtyShutdownExit(remotePtyId, 'env-order')).toBe(false)
-})
-
-it('commits a pending exit when wake proves the sleep completed', () => {
-  const remotePtyId = toRemoteRuntimePtyId('terminal-missed-commit', 'env-missed-commit')
-  const lifecycle = { pause: vi.fn(), rollback: vi.fn(), commit: vi.fn() }
-  const exitHandler = vi.fn()
-  ptyShutdownLifecycleHandlers.set(remotePtyId, lifecycle)
-  const event = {
-    type: 'worktreeTerminalSleepState' as const,
-    worktreeId: 'repo::worktree',
-    generation: 111,
-    ptyIds: ['pty-missed-commit'],
-    terminalHandles: ['terminal-missed-commit']
-  }
-  applyHostWorktreeTerminalSleepState('env-missed-commit', { ...event, phase: 'started' })
-  deferPtyShutdownExit(remotePtyId, exitHandler)
-
-  applyHostWorktreeTerminalSleepState('env-missed-commit', { ...event, phase: 'woken' })
-
-  expect(lifecycle.commit).toHaveBeenCalledOnce()
-  expect(lifecycle.rollback).not.toHaveBeenCalled()
-  expect(exitHandler).toHaveBeenCalledWith('committed')
-  expect(isHostPtySleepPending(remotePtyId, 'env-missed-commit')).toBe(false)
-  ptyShutdownLifecycleHandlers.delete(remotePtyId)
-})
-
-it('retains every active host guard above the former count cap', () => {
-  const ptyIds: string[] = []
-  for (let index = 0; index < 513; index += 1) {
-    const handle = `terminal-large-${index}`
-    const remotePtyId = toRemoteRuntimePtyId(handle, 'env-large')
-    ptyIds.push(remotePtyId)
-    applyHostWorktreeTerminalSleepState('env-large', {
-      type: 'worktreeTerminalSleepState',
-      worktreeId: 'repo::large-worktree',
-      generation: 121,
-      phase: 'committed',
-      ptyIds: [`pty-large-${index}`],
-      terminalHandles: [handle]
-    })
-  }
-
-  for (const ptyId of ptyIds) {
-    expect(consumeCommittedPtyShutdownExit(ptyId, 'env-large')).toBe(true)
   }
 })

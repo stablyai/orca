@@ -1,4 +1,4 @@
-import type { SshTarget } from '../../../../../../shared/ssh-types'
+import type { SshTarget } from '../../../../../../shared/remote-runtime/ssh/ssh-types'
 import { useAppStore } from '@/store/index'
 import { useTranslate } from '@/i18n/use-translate'
 import { Button } from '../../../ui/button'
@@ -38,8 +38,8 @@ export function SshManagedHostRemoveDialog({
         <DialogHeader>
           <DialogTitle>
             {t(
-              'auto.components.settings.SshTargetDestructiveActions.4808966c41',
-              'Remove SSH Target'
+              'auto.components.settings.SshTargetDestructiveActions.916f480036',
+              'Remove SSH target'
             )}
           </DialogTitle>
           <DialogDescription>
@@ -56,8 +56,8 @@ export function SshManagedHostRemoveDialog({
           </Button>
           <Button onClick={openManagedServers}>
             {t(
-              'auto.components.settings.sshManagedHostRemove.openServers',
-              'Open Remote Orca Servers'
+              'auto.components.settings.sshManagedHostRemove.2ca95e9fd7',
+              'Open remote Orca servers'
             )}
           </Button>
         </DialogFooter>

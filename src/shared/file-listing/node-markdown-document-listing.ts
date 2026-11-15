@@ -1,11 +1,11 @@
-import type { ChildProcessHandle } from '@orca/process-host/process-spec'
+import type { ChildProcess } from 'node:child_process'
 import type { MarkdownDocument } from './file-document'
 import { RipgrepFilenameDecoder } from '../ripgrep/ripgrep-filename-decoder'
 import {
   isRipgrepMissingCwdExit,
   ripgrepMissingCwdError
 } from '../ripgrep/ripgrep-process-availability'
-import { abortSignalReason } from '../abort-signal-reason'
+import { abortSignalReason } from '../concurrency/abort-signal-reason'
 import { markdownDocumentFromRelativePath, isMarkdownDocumentName } from './markdown-document-paths'
 import { joinSearchRoot } from '../file-search/text-search-paths'
 import {
@@ -38,7 +38,7 @@ export const MARKDOWN_DOCUMENT_LISTING_ARGS = [
 ]
 
 export function collectMarkdownDocuments(
-  child: ChildProcessHandle,
+  child: ChildProcess,
   rootPath: string,
   windowsOutput = false,
   signal?: AbortSignal,

@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { create } from 'zustand'
 import type { AppState } from '../../types'
-import type { Repo } from '../../../../../shared/repo-types'
+import type { Repo } from '../../../../../shared/repository/repo-types'
 import { FLOATING_TERMINAL_WORKTREE_ID, getDefaultSettings } from '../../../../../shared/constants'
 import { readNativeDetectedAgents } from './local-detected-agent-store-state'
 import { createDetectedAgentsSlice } from './create-detected-agents-slice'
@@ -60,6 +60,24 @@ describe('local detected agent context lifecycle', () => {
       pathSource: 'process_env',
       pathFailureReason: 'none'
     })
+  })
+
+  it('sends explicit catalog intent even while an automatic refresh is pending', async () => {
+    const store = createTestStore([])
+    const automaticReply = Promise.withResolvers<{ agents: string[] }>()
+    refreshAgents.mockImplementation((args) =>
+      args?.userInitiated ? Promise.resolve({ agents: ['grok'] }) : automaticReply.promise
+    )
+    const automatic = store.getState().refreshDetectedAgents()
+    const explicit = store.getState().refreshDetectedAgents(undefined, { userInitiated: true })
+    expect(store.getState().refreshDetectedAgents(undefined, { userInitiated: true })).toBe(
+      explicit
+    )
+    expect(await explicit).toEqual(['grok'])
+    automaticReply.resolve({ agents: ['claude'] })
+    await automatic
+    expect(store.getState().detectedAgentIds).toEqual(['grok'])
+    expect(refreshAgents).toHaveBeenCalledWith(expect.objectContaining({ userInitiated: true }))
   })
 
   it('keeps complete Settings inventory separate from automatic probes in either completion order', async () => {

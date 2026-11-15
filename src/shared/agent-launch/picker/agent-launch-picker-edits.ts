@@ -4,11 +4,8 @@ import { projectAgentLaunchProfile } from '../choices/agent-launch-profile'
 import { agentPickerPanelArguments } from './agent-launch-picker-arguments'
 import { TEXT_ACTION_DEFAULT_MODEL } from './agent-launch-picker-text-action'
 import { agentPickerArgumentsText } from './agent-launch-picker-authority'
-import {
-  agentPickerEffectiveChoices,
-  type AgentPickerDraft,
-  type AgentPickerEntry
-} from './agent-launch-picker'
+import { agentPickerEffectiveChoices } from './agent-launch-picker-effective-choices'
+import type { AgentPickerDraft, AgentPickerEntry } from './agent-launch-picker'
 import type { AgentChoicePatch } from '../choices/agent-launch-choices'
 import type { AgentPermissionChoice } from '../permissions/tui-agent-permission-choice'
 import { patchKeys, publishAccepted } from './agent-launch-picker-receipt'

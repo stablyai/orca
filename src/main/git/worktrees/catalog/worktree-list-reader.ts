@@ -1,17 +1,17 @@
 import {
   throwIfSignalAborted,
   waitForPromiseWithSignal
-} from '../../../../shared/abort-signal-reason'
+} from '../../../../shared/concurrency/abort-signal-reason'
 import { annotateWorktreeLocksFromAdmin } from '../../../../shared/git/worktrees/git-worktree-admin'
 import { stat } from 'node:fs/promises'
 import type { GitWorktreeInfo } from '../../../../shared/worktree/types'
-import { toWslExecutionSpace } from '../../../../shared/wsl-paths'
+import { toWslExecutionSpace } from '../../../../shared/file-access/wsl-paths'
 import {
   hasUnsupportedRevParsePathFormatEcho,
   isUnsupportedRevParsePathFormatError,
   isUnsupportedWorktreeListZError
 } from '../../../../shared/git/worktrees/git-worktree-command-capabilities'
-import { withLocalGitCapabilityCacheForExecution } from '../../command-runner/git-capability-state'
+import { withLocalGitCapabilityCacheForExecution } from '../../command-runner/host-routing/git-capability-state'
 import { parseWorktreeList } from '../../../../shared/git/worktrees/git-worktree-porcelain-parser'
 import type { GitWorktreeExecOptions } from '../worktree-operation-options'
 import {

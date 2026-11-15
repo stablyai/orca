@@ -7,7 +7,6 @@ export type CachedCombinedDiffViewState = {
   sections: DiffSection[]
   sectionHeights: Record<number, number>
   loadedIndices: number[]
-  sideBySide: boolean
 }
 
 type CombinedDiffViewMemory = {

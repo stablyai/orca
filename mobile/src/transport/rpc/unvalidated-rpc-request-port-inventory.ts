@@ -1,4 +1,4 @@
-// Fence raw sendRequest access/selectors, sendSingleFlightRequest calls and raw-port imports per file.
+// Fence raw sendRequest access/selectors and raw-port imports per file.
 // Counts are ceilings that only shrink; the boundary test rejects new, missing or increased entries.
 // Owners implement or route the port; migrate pending callers only after recording their existing behavior.
 export type UnvalidatedRpcRequestPortEntry = {
@@ -9,11 +9,11 @@ export type UnvalidatedRpcRequestPortEntry = {
 /** Modules whose job is the port. These do not shrink to zero. */
 export const UNVALIDATED_RPC_REQUEST_PORT_OWNERS: readonly UnvalidatedRpcRequestPortEntry[] = [
   // Forward raw page requests without choosing a method or decoding replies.
-  { file: 'src/mobile-web-shell/bridge-host-requests.ts', references: 3 },
+  { file: 'src/mobile-web-shell/host-bridge/bridge-host-requests.ts', references: 3 },
   // Expose the port to the page without interpreting its requests or replies.
   { file: 'src/mobile-web-shell/bridge/bridge-rpc-client.ts', references: 1 },
   // Fakes the port for the bridge host suites; a non-test file only because tsconfig excludes tests.
-  { file: 'src/mobile-web-shell/bridge-host-test-fakes.ts', references: 1 },
+  { file: 'src/mobile-web-shell/test-support/bridge-host-test-fakes.ts', references: 1 },
   // Implements the port over the device-to-host websocket.
   { file: 'src/transport/rpc/direct-rpc-client.ts', references: 3 },
   // Fakes the port for the supervisor suites; a non-test file only because tsconfig excludes tests.
@@ -23,21 +23,23 @@ export const UNVALIDATED_RPC_REQUEST_PORT_OWNERS: readonly UnvalidatedRpcRequest
   // Supplies the port for one relay session.
   { file: 'src/transport/mobile-relay-rpc-session.ts', references: 1 },
   // A second raw sender: string method in, unread envelope out. Its callers are fenced too.
-  { file: 'src/transport/rpc/request-single-flight.ts', references: 3 },
   // Owns connect-wait, timeout and replay bookkeeping for every raw request.
   { file: 'src/transport/rpc/rpc-client-request-tracker.ts', references: 1 },
   // Composes the port into RpcClient, which is why every holder of a client still carries it.
   { file: 'src/transport/rpc/rpc-client-contract.ts', references: 2 },
   // The typed boundary itself — the one module that turns a reply into a declared type.
-  { file: 'src/transport/rpc/rpc-operation.ts', references: 5 },
+  { file: 'src/transport/rpc/rpc-operation.ts', references: 3 },
   // Forwards the port with the workspace's execution host stamped on; picks no method.
   { file: 'src/transport/execution-host-scoped-rpc-client.ts', references: 2 },
   // Forwards the port across a physical-client cutover.
   { file: 'src/transport/connection/stable-logical-rpc-client.ts', references: 2 },
   // Names the port as the recording oracle's sender contract; a non-test file for the same reason.
-  { file: 'src/test-support/rpc-recording/recording-scenario.ts', references: 1 },
+  { file: 'src/test-support/rpc-recording/scenarios/recording-scenario.ts', references: 1 },
   // Record names once per logical call above physical replay and below asynchronous wrappers.
-  { file: 'src/test-support/rpc-recording/scripted-rpc-transport.ts', references: 7 }
+  {
+    file: 'src/test-support/rpc-recording/scripted-transport/scripted-rpc-transport.ts',
+    references: 7
+  }
 ]
 
 /** Call sites awaiting migration to a typed operation. Grouped by the feature area that owns them. */
@@ -46,7 +48,10 @@ export const UNVALIDATED_RPC_REQUEST_PORT_PENDING: readonly UnvalidatedRpcReques
   { file: 'src/accounts/MobileAccountsScreen.tsx', references: 2 },
 
   // callAgentSession accepts dynamic methods and generic results; typed operations require restructuring its callers.
-  { file: 'src/session/mobile-structured-agent-session-rpc.ts', references: 1 },
+  {
+    file: 'src/session/native-chat/agent-session/mobile-structured-agent-session-rpc.ts',
+    references: 1
+  },
   // The recorded create-terminal prompt uses a unique empty-refusal fallback absent from existing terminal.send operations.
   { file: 'src/session/use-mobile-session-terminal-create-actions.ts', references: 1 },
 
@@ -54,7 +59,6 @@ export const UNVALIDATED_RPC_REQUEST_PORT_PENDING: readonly UnvalidatedRpcReques
   { file: 'src/source-control/use-mobile-git-requests.ts', references: 1 },
 
   // Scanner references the literal sendRequest without sending requests.
-  { file: 'src/tasks/mobile-tasks-source-family.test-support.ts', references: 1 },
 
   // Wraps a PairingCandidateClient as its raw port; the one chosen method already uses hostStatusProbe.
   { file: 'src/transport/pairing-relay-candidate.ts', references: 4 },

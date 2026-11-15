@@ -89,7 +89,7 @@ it('keeps continuous trigger typing in the search inside a dialog', async () => 
   show()
   const trigger = getByRole(document.body, 'button', { name: 'Select agent' })
   const search = () =>
-    document.querySelector<HTMLInputElement>('input[placeholder="Search agents and setups…"]')
+    document.querySelector<HTMLInputElement>('input[placeholder="Search, e.g. Opus 5.5…"]')
   fireEvent.keyDown(trigger, { key: 'c', metaKey: true })
   expect(search()).toBeNull()
   const user = userEvent.setup()

@@ -6,7 +6,7 @@ import {
   readRuntimeDirectoryPage,
   runtimeDirectoryPagesSupported
 } from '@/runtime/files/reads/runtime-directory-page-client'
-import { readUserOpenedDirectory } from '@/lib/user-opened-local-path'
+import { readUserOpenedDirectory } from '@/lib/files/access/user-opened-local-path'
 import {
   FILE_READ_DIR_MAX_PAGE_ENTRIES,
   isDirListingTooLargeForRemoteError,

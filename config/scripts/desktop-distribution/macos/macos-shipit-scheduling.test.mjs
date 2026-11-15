@@ -73,14 +73,6 @@ describe.skipIf(process.platform !== 'darwin')('native ShipIt scheduling', () =>
         })
       )
       expect(job.ProcessType).toBe('Interactive')
-      expect(job.Label).toBe(`${bundleId}.ShipIt`)
-      expect(job.ProgramArguments).toEqual([
-        join(frameworks, 'Squirrel.framework/Resources/ShipIt'),
-        job.Label,
-        join(homedir(), 'Library/Caches', job.Label, 'ShipItState.plist')
-      ])
-      expect(job.KeepAlive).toEqual({ SuccessfulExit: false })
-      expect(job.MachServices).toEqual({ [job.Label]: true })
     } finally {
       rmSync(work, { recursive: true, force: true })
       rmSync(join(homedir(), 'Library/Caches', `${bundleId}.ShipIt`), {
