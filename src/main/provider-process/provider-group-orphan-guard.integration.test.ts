@@ -310,6 +310,7 @@ describe.runIf(process.platform !== 'win32')('provider orphan ownership', () => 
     expect(await outputLine(child.stdout, () => true)).toBe('ESRCH')
     await Promise.all([closed, gated.closed])
     expect(providerGroupAbsent(gated.leader.pid)).toBe(true)
+    expect(child.groupVerdict).toBe('exited')
     expect(await readdir(directory)).toEqual([])
   })
 

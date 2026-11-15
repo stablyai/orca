@@ -43,13 +43,13 @@ export class DirectProviderStop {
     if (this.reaping) {
       return
     }
-    if (!released || this.spec.lifetime === 'one-shot') {
+    if (!released) {
       this.forceReap()
       return
     }
     // The watcher knows whether TERM actually started, even if this event loop was delayed.
     this.send('leader-exit')
-    this.backupAfter(this.spec.sigtermGraceMs)
+    this.backupAfter(this.spec.lifetime === 'one-shot' ? 0 : this.spec.sigtermGraceMs)
   }
 
   reap(): void {
