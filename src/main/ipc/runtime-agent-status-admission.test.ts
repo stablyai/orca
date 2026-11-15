@@ -25,6 +25,7 @@ beforeEach(() => {
 
 it('admits status only from the current main frame without establishing graph authority', () => {
   const runtime = { syncRendererAgentStatus: vi.fn().mockReturnValue({ accepted: true }) }
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the status channel calls only syncRendererAgentStatus on this runtime.
   registerRuntimeHandlers(runtime as never)
   const handler = handleMock.mock.calls.find(
     ([channel]) => channel === 'runtime:syncAgentStatus'
