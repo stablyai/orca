@@ -47,7 +47,7 @@ export function extractManifestAssetNames(manifestText) {
   return [...names]
 }
 
-async function githubFetch(url, token, accept = 'application/vnd.github+json') {
+export async function githubFetch(url, token, accept = 'application/vnd.github+json') {
   const res = await fetch(url, {
     headers: {
       Accept: accept,
@@ -62,7 +62,7 @@ async function githubFetch(url, token, accept = 'application/vnd.github+json') {
   return res
 }
 
-async function fetchRelease(repo, tag, token) {
+export async function fetchRelease(repo, tag, token) {
   // The publish gate runs while the release is still draft.
   const res = await githubFetch(`https://api.github.com/repos/${repo}/releases?per_page=100`, token)
   const releases = await res.json()

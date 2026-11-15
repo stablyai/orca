@@ -1,5 +1,6 @@
 import { appendFileSync } from 'node:fs'
 import { pathToFileURL } from 'node:url'
+import { workflowRunPathMatches } from './workflow-run-path.mjs'
 
 const DEFAULT_API_VERSION = '2026-03-10'
 const DEFAULT_TIMEOUT_MINUTES = 90
@@ -12,6 +13,7 @@ export function readReleaseMacBuildWorkflowOptions(env = process.env) {
     pollSeconds: readPositiveInteger(env.RELEASE_MAC_BUILD_POLL_SECONDS, DEFAULT_POLL_SECONDS),
     ref: requiredEnv(env.RELEASE_MAC_BUILD_REF, 'RELEASE_MAC_BUILD_REF'),
     javascriptSourceSha: env.RELEASE_MAC_BUILD_JAVASCRIPT_SOURCE_SHA || undefined,
+    releaseSha: env.RELEASE_MAC_BUILD_RELEASE_SHA || undefined,
     releaseRunId: requiredEnv(
       env.RELEASE_MAC_BUILD_RELEASE_RUN_ID ?? env.GITHUB_RUN_ID,
       'RELEASE_MAC_BUILD_RELEASE_RUN_ID'
@@ -65,7 +67,7 @@ export function assertReleaseMacBuildRunIdentity(run, options, expected) {
   if (
     String(run.id) !== String(expected.id) ||
     run.event !== 'workflow_dispatch' ||
-    run.path !== `.github/workflows/${options.workflow}` ||
+    !workflowRunPathMatches(run.path, `.github/workflows/${options.workflow}`) ||
     run.display_title !== expectedReleaseMacBuildRunTitle(options) ||
     run.head_branch !== options.ref ||
     !/^[a-f0-9]{40}$/.test(run.head_sha ?? '') ||
@@ -117,6 +119,7 @@ export async function dispatchReleaseMacBuildWorkflow(api, options) {
     inputs: {
       release_run_id: options.releaseRunId,
       tag: options.tag,
+      ...(options.releaseSha ? { release_sha: options.releaseSha } : {}),
       ...(options.javascriptSourceSha ? { javascript_source_sha: options.javascriptSourceSha } : {})
     },
     ref: options.ref

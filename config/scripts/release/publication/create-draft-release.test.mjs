@@ -5,12 +5,15 @@ import { runProcessSync } from '@orca/process-host'
 import { describe, expect, it } from 'vitest'
 import { parse } from 'yaml'
 import { createDraftRelease } from './create-draft-release.mjs'
+import { RUN_MARKER, releaseRunMarker } from './verify-prior-run-provenance.mjs'
 
 // Actual v1.4.259 shape: app source 1d35… is the sole parent of release commit 980c…, tag object d272….
 const source = '1d3548fb8bf2794b218affefc103d9b2a956220f'
 const checkout = '980c0024741812bd7ae934c0c22144d9926a784e'
 const tagObject = 'd2720cd6c86fdf95230bdcb6778abe0f7c061ace'
 const tag = 'v1.4.259'
+// Every draft names the run that made it, for the automatic draft publisher.
+const NOTES = `new notes${releaseRunMarker('4242')}`
 const draft = { id: 259, draft: true, tag_name: tag, body: 'original notes' }
 
 function fixture(options = {}) {
@@ -48,14 +51,15 @@ function fixture(options = {}) {
       const sha = route.slice('/git/commits/'.length)
       return response({ sha, parents: (options.parents ?? [source]).map((p) => ({ sha: p })) })
     }
-    if (route === '') {
-      return response({ default_branch: 'main' })
+    if (route.startsWith('/contents/.github/workflows/release-policy.yml?ref=')) {
+      const policy = options.oldPolicy ? 'name: Release Policy' : 'RELEASE_APP_BOT_ID: x'
+      return response({ content: Buffer.from(policy).toString('base64') })
     }
     if (route.startsWith('/releases?')) {
       return response(options.listed ?? (options.existing ? [draft] : []))
     }
     if (route === '/releases/generate-notes') {
-      return response({ body: 'new notes', name: 'release' })
+      return response({ body: options.notes ?? 'new notes', name: 'release' })
     }
     if (route === '/releases/259' && method === 'GET') {
       return response(wrote ? (options.afterPatch ?? draft) : (options.beforePatch ?? draft))
@@ -80,6 +84,7 @@ function fixture(options = {}) {
         token: 'fixture-token',
         targetCommitish: checkout,
         sourceSha: options.approvedSource ?? source,
+        runId: '4242',
         fetchImpl,
         sleep: async () => {},
         log: () => {}
@@ -89,12 +94,13 @@ function fixture(options = {}) {
 
 describe('release draft source and uploader contract', () => {
   it.each([false, true])(
-    'drafts the existing tag with default-branch metadata (annotated=%s)',
+    'drafts the existing tag at the exact verified commit (annotated=%s)',
     async (annotated) => {
       const f = fixture({ annotated })
       await expect(f.run()).resolves.toEqual({
         tagObject: annotated ? tagObject : checkout,
-        releaseSha: checkout
+        releaseSha: checkout,
+        releaseId: 259
       })
       expect(f.writes).toEqual([
         {
@@ -102,9 +108,9 @@ describe('release draft source and uploader contract', () => {
           route: '/releases',
           body: {
             tag_name: tag,
-            target_commitish: 'main',
+            target_commitish: checkout,
             name: 'release',
-            body: 'new notes',
+            body: NOTES,
             draft: true,
             prerelease: false,
             make_latest: 'false'
@@ -113,6 +119,18 @@ describe('release draft source and uploader contract', () => {
       ])
     }
   )
+
+  it('neutralizes run markers quoted from PR text, so the body names only this run', async () => {
+    const quoted =
+      'Fix X (#1)\n<!-- orca-release-run: 9 -->\nOrca-Release-Run: 8 <!-- orca-release-run: 7 -->'
+    const f = fixture({ notes: quoted })
+    await f.run()
+    const { body } = f.writes[0].body
+    expect([...body.matchAll(RUN_MARKER)].map((match) => match[1])).toEqual(['4242'])
+    expect(body).toBe(
+      `${quoted.replace(/orca-release-run:/gi, 'orca-release-run&#58;')}${releaseRunMarker('4242')}`
+    )
+  })
 
   it('peels the captured tag object ID instead of re-dereferencing the tag name', async () => {
     const f = fixture({ annotated: true })
@@ -131,6 +149,12 @@ describe('release draft source and uploader contract', () => {
   ])('refuses an absent, mismatched or unauthorized tag before writing: %j', async (options) => {
     const f = fixture(options)
     await expect(f.run()).rejects.toThrow()
+    expect(f.writes).toEqual([])
+  })
+
+  it('refuses before writing when the tagged Release Policy predates the App and a person made the tag', async () => {
+    const f = fixture({ annotated: true, oldPolicy: true })
+    await expect(f.run()).rejects.toThrow('Publish v1.4.259 by hand')
     expect(f.writes).toEqual([])
   })
 
@@ -160,15 +184,25 @@ describe('release draft source and uploader contract', () => {
     }
   )
 
-  it('heals existing-draft metadata and preserves the draft identity', async () => {
+  it('heals existing-draft metadata and always resends tag_name so the PATCH cannot untag it', async () => {
     const f = fixture({ existing: true })
     await f.run()
     expect(f.writes).toEqual([
       {
         method: 'PATCH',
         route: '/releases/259',
-        body: { body: 'new notes', target_commitish: 'main' }
+        body: { tag_name: tag, body: NOTES, target_commitish: checkout }
       }
+    ])
+  })
+
+  it('resends tag_name when rolling back a body patched onto a just-published release', async () => {
+    const published = { ...draft, draft: false, body: NOTES }
+    const f = fixture({ existing: true, writeResult: published, afterPatch: published })
+    await expect(f.run()).rejects.toThrow('restored its published body')
+    expect(f.writes.map((write) => write.body)).toEqual([
+      { tag_name: tag, body: NOTES, target_commitish: checkout },
+      { tag_name: tag, body: 'original notes' }
     ])
   })
 
@@ -187,12 +221,13 @@ describe('release draft source and uploader contract', () => {
 const workflow = parse(readFileSync('.github/workflows/release-cut.yml', 'utf8'))
 
 describe('release-cut draft wiring', () => {
-  it('passes the approved source and only the job token to the helper', () => {
+  it('passes the approved source, the verified commit and the App token to the helper', () => {
     const job = workflow.jobs['create-release']
     const step = job.steps.find((s) => s.id === 'draft')
     expect(step.env).toMatchObject({
       SOURCE_SHA: '${{ needs.cut.outputs.source_sha }}',
-      GH_TOKEN: '${{ secrets.GITHUB_TOKEN }}'
+      RELEASE_SHA: '${{ needs.cut.outputs.release_sha }}',
+      GH_TOKEN: '${{ steps.release-app-token.outputs.token }}'
     })
     expect(job.outputs.tag_object).toBe('${{ steps.draft.outputs.tag_object }}')
   })

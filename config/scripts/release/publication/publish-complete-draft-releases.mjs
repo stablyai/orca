@@ -2,17 +2,25 @@
 
 import { execFileSync } from 'node:child_process'
 import { appendFileSync } from 'node:fs'
-import { pathToFileURL } from 'node:url'
+import { fileURLToPath, pathToFileURL } from 'node:url'
+import { isReleaseAppBot } from '../workflow-contracts/release-policy.mjs'
+import { assertPolicyKeepsAppRelease } from './release-app-publish-guard.mjs'
+import { verifyPriorRunProvenance } from './verify-prior-run-provenance.mjs'
 import { verifyRequiredReleaseAssets } from './verify-release-required-assets.mjs'
 
 const API_VERSION = '2022-11-28'
-const RELEASE_CUT_AUTHOR = 'github-actions[bot]'
 const DESKTOP_RC_TAG_PATTERN = /^v[0-9]+\.[0-9]+\.[0-9]+-rc\.[0-9]+$/
+const FULL_SHA = /^[a-f0-9]{40}$/
+const VERIFY_RELEASE_TAG = fileURLToPath(
+  new URL('../operations/verify-release-tag.sh', import.meta.url)
+)
 
+// Why App only: any workflow with a write token can author a github-actions[bot] draft, so those are not trusted
+// here; older github-actions[bot] drafts must be published by hand.
 export function isReleaseCutDraft(release) {
   return (
     release?.draft === true &&
-    release?.author?.login === RELEASE_CUT_AUTHOR &&
+    isReleaseAppBot(release?.author) &&
     typeof release?.tag_name === 'string' &&
     DESKTOP_RC_TAG_PATTERN.test(release.tag_name)
   )
@@ -73,12 +81,104 @@ async function fetchReleases(repo, token, fetchImpl) {
   return releases
 }
 
+// Why: a draft's tag_name and target_commitish can be changed by anyone with contents write, so a leftover App
+// draft can be re-pointed at a hand-pushed tag on a crafted commit. Before the App publishes it, the tag must pass
+// the checks a recovered tag passes in cut (verify-release-tag.sh: annotated, pointing straight at the commit,
+// exact message and tagger, a release commit that is the only child of its parent and changes only package.json's
+// version, byte for byte), and that parent must be on main. Tagger and message are forgeable metadata; the content
+// rule and main's history are what bind the published commit to reviewed code. Runs in the release source checkout
+// (fetch-depth 0, so the remote tags and origin/main are local); executes only git, bash, sed, cmp and jq.
+export function verifyDraftReleaseTag({
+  tag,
+  tagObjectSha,
+  commitSha,
+  cwd = process.cwd(),
+  mainRef = 'refs/remotes/origin/main'
+}) {
+  const run = (program, args) =>
+    execFileSync(program, args, { cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }).trim()
+  const attempt = (reason, program, args) => {
+    try {
+      return run(program, args)
+    } catch {
+      throw new Error(reason)
+    }
+  }
+  if (!FULL_SHA.test(tagObjectSha ?? '')) {
+    throw new Error('remote tag is not an annotated tag')
+  }
+  const local = attempt('remote tag is not in the release checkout', 'git', [
+    'rev-parse',
+    '--verify',
+    '--quiet',
+    `refs/tags/${tag}`
+  ])
+  if (local !== tagObjectSha) {
+    throw new Error('release checkout has a different tag object than the remote')
+  }
+  const parents = attempt('draft commit is not in the release checkout', 'git', [
+    'rev-list',
+    '--parents',
+    '-n',
+    '1',
+    commitSha
+  ]).split(' ')
+  if (parents.length !== 2 || parents[0] !== commitSha) {
+    throw new Error('draft commit does not have exactly one parent')
+  }
+  const verified = attempt('tag is not one release-cut creates', 'bash', [
+    VERIFY_RELEASE_TAG,
+    `refs/tags/${tag}`,
+    tag.slice(1),
+    parents[1]
+  ])
+  if (verified !== commitSha) {
+    throw new Error('tag is not one release-cut creates')
+  }
+  attempt('tag source is not on main', 'git', ['merge-base', '--is-ancestor', parents[1], mainRef])
+}
+
+// Why: the draft's target_commitish is the expected commit. create-draft-release sets it to the exact commit it
+// verified the tag against, and every build checked out that commit. Drafts without a full-SHA target (older
+// default-branch targets) cannot be verified and stay drafts.
+async function assertDraftTagMatchesTarget(fetchImpl, repo, token, release, verifyDraftTag) {
+  const tag = release.tag_name
+  const expected = release.target_commitish
+  if (!FULL_SHA.test(expected ?? '')) {
+    throw new Error('draft does not record the commit it was built from')
+  }
+  const base = `https://api.github.com/repos/${repo}`
+  const ref = await githubJson(fetchImpl, `${base}/git/ref/tags/${encodeURIComponent(tag)}`, token)
+  let commit = ref?.ref === `refs/tags/${tag}` ? ref.object?.sha : undefined
+  let tagObjectSha
+  if (ref?.object?.type === 'tag') {
+    // Peel the captured object ID, never the tag name again.
+    const annotated = await githubJson(fetchImpl, `${base}/git/tags/${ref.object.sha}`, token)
+    commit =
+      annotated?.sha === ref.object.sha && annotated.object?.type === 'commit'
+        ? annotated.object.sha
+        : undefined
+    tagObjectSha = commit ? ref.object.sha : undefined
+  } else if (ref?.object?.type !== 'commit') {
+    commit = undefined
+  }
+  if (commit !== expected) {
+    throw new Error(`remote tag no longer resolves to draft commit ${expected}`)
+  }
+  await verifyDraftTag({ tag, tagObjectSha, commitSha: expected })
+  await assertPolicyKeepsAppRelease({ repo, tag, commitSha: expected, token, fetchImpl })
+}
+
 export async function publishCompleteDraftReleases({
   repo,
   token,
   fetchImpl = fetch,
   verifyReleaseAssets = verifyRequiredReleaseAssets,
+  // Why: anyone with contents write can swap a draft asset; publish only what that draft's run built.
+  verifyAssetProvenance = verifyPriorRunProvenance,
+  actionsToken,
   isDraftBuiltFromCurrentRef = ({ tag }) => isTagBuiltFromCurrentRef(tag),
+  verifyDraftTag = verifyDraftReleaseTag,
   log = console.log
 }) {
   if (!repo) {
@@ -114,6 +214,31 @@ export async function publishCompleteDraftReleases({
       continue
     }
 
+    try {
+      // Why a fresh snapshot: the list above can be minutes old. Every check below reads this one snapshot, the
+      // asset provenance check (the slowest) runs last, and the undraft follows it directly, so the window in which
+      // a swapped asset or a re-pointed draft could slip through is as short as this job can make it.
+      const snapshot = await githubJson(
+        fetchImpl,
+        `https://api.github.com/repos/${repo}/releases/${release.id}`,
+        token
+      )
+      if (
+        snapshot?.id !== release.id ||
+        snapshot.tag_name !== tag ||
+        !isReleaseCutDraft(snapshot)
+      ) {
+        throw new Error('draft changed while it was being checked')
+      }
+      await assertDraftTagMatchesTarget(fetchImpl, repo, token, snapshot, verifyDraftTag)
+      await verifyAssetProvenance({ repo, token, actionsToken, release: snapshot })
+    } catch (error) {
+      const reason = error instanceof Error ? error.message.split('\n')[0] : String(error)
+      skipped.push({ tag, reason })
+      log(`Skipping unverifiable RC draft release ${tag}: ${reason}`)
+      continue
+    }
+
     // Resume only release-cut RC drafts with complete assets; incomplete drafts stay private for normal rebuild.
     await githubJson(
       fetchImpl,
@@ -121,7 +246,9 @@ export async function publishCompleteDraftReleases({
       token,
       {
         method: 'PATCH',
+        // tag_name on every PATCH: one without it reset the v1.4.259 draft to an untagged-… release.
         body: JSON.stringify({
+          tag_name: tag,
           draft: false,
           prerelease: isRcTag(tag)
         })
@@ -157,7 +284,8 @@ export function writeGithubOutputs({ published, skipped }, outputPath = process.
 async function main() {
   const token = process.env.GH_TOKEN || process.env.GITHUB_TOKEN
   const repo = process.env.GITHUB_REPOSITORY || 'stablyai/orca'
-  const result = await publishCompleteDraftReleases({ repo, token })
+  const actionsToken = process.env.ACTIONS_TOKEN
+  const result = await publishCompleteDraftReleases({ repo, token, actionsToken })
   writeGithubOutputs(result)
 }
 
