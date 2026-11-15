@@ -235,9 +235,12 @@ export async function tokenRequest(config: GitHubConnectConfig, body: Record<str
     body: JSON.stringify({ client_id: config.clientId, client_secret: config.clientSecret, ...body }),
     redirect: 'manual'
   })
-  const parsed = TokenResponse.safeParse(await response.json().catch(() => null))
+  const reply: unknown = await response.json().catch(() => null)
+  const parsed = TokenResponse.safeParse(reply)
   if (!response.ok || !parsed.success) {
-    throw new GitHubConnectError('oauth_exchange_failed')
+    // GitHub answers a dead refresh token or code with 200 {"error": "bad_refresh_token"}: keep the code (never the body).
+    const raw = reply && typeof reply === 'object' && 'error' in reply ? (reply as { error: unknown }).error : null
+    throw new GitHubConnectError('oauth_exchange_failed', typeof raw === 'string' && /^[a-z_]{1,64}$/.test(raw) ? raw : undefined)
   }
   return {
     access: parsed.data.access_token,
@@ -318,7 +321,11 @@ export async function verifiedInstallations(
 }
 
 export class GitHubConnectError extends Error {
-  constructor(readonly code: string) {
+  /** GitHub's own error code when it gave one (e.g. bad_refresh_token). */
+  constructor(
+    readonly code: string,
+    readonly reason?: string
+  ) {
     super(code)
     this.name = 'GitHubConnectError'
   }

@@ -54,7 +54,7 @@ async function audit(
  */
 async function checkCredential(
   ctx: CheckContext,
-  trigger: { kind: 'egress_401'; sandboxId: string; path: string } | { kind: 'verify' }
+  trigger: { kind: 'egress_401'; sandboxId: string; path: string } | { kind: 'verify' } | { kind: 'scheduled'; suspectAt: number | null }
 ): Promise<CheckOutcome> {
   const { db, provider, userId, now } = ctx
   const agent = provider.agent
@@ -87,20 +87,68 @@ async function checkCredential(
   }
   if (verdict !== 'invalid') {
     // A pass on a pre-launch verify is routine; a 401 that didn't hold up, or any inconclusive check, is audited.
-    if (trigger.kind === 'egress_401' || verdict === 'unknown') {
+    if (trigger.kind === 'egress_401' || verdict === 'unknown' || (trigger.kind === 'scheduled' && trigger.suspectAt !== null)) {
       const reason = verdict === 'valid' ? 'check_passed' : 'check_inconclusive'
-      await audit(db, { ...base, action: 'kept', reason: trigger.kind === 'verify' ? `verify_${reason}` : reason })
+      await audit(db, { ...base, action: 'kept', reason: trigger.kind === 'egress_401' ? reason : `${trigger.kind}_${reason}` })
     }
     return 'kept'
+  }
+  if (trigger.kind === 'scheduled' && trigger.suspectAt !== null) {
+    // Still failing: stays "needs check" (Renew strip). A scheduled check never revokes (decision 2026-11-15:
+    // the probe is unproven against real setup-tokens); only the person or a confirmed real 401 does.
+    return 'suspect'
   }
   // RS-2: the check's auth failure alone never revokes: the sign-in needs a real request to confirm it.
   await markAgentCredentialSuspect(db, userId, agent, now)
   await audit(db, {
     ...base,
     action: 'suspect',
-    reason: trigger.kind === 'verify' ? 'verify_check_auth_failure' : 'provider_401_check_auth_failure'
+    reason: trigger.kind === 'egress_401' ? 'provider_401_check_auth_failure' : `${trigger.kind}_check_auth_failure`
   })
   return 'suspect'
+}
+
+/** EGRESS-REFRESH: a sign-in in use is checked this often (one free auth call each). */
+export const SCHEDULED_CHECK_EVERY_MS = 6 * 60 * 60_000
+/** A sign-in in question is checked again this soon (a pass clears it). */
+export const SUSPECT_RECHECK_MS = 15 * 60_000
+const SCHEDULED_BATCH = 10
+
+export type ScheduledCheckSummary = { due: number; kept: number; suspect: number; revoked: number; skipped: number }
+
+/**
+ * EGRESS-REFRESH revocation checks, replacing the egress proxy's 401 hook: every sign-in a running workspace
+ * of its owner can be using is checked every SCHEDULED_CHECK_EVERY_MS (sooner while in question). The first
+ * definite auth failure puts it in question (RS-2: it stays usable, the desktop shows Renew); it is rechecked
+ * every SUSPECT_RECHECK_MS and a pass clears it. A scheduled check NEVER revokes: the probe is unproven against
+ * real setup-tokens, so a revoke takes the person's action or a confirmed real-request 401 (proxy mode).
+ */
+export async function runScheduledAccountChecks(
+  ctx: Omit<CheckContext, 'userId'>
+): Promise<ScheduledCheckSummary> {
+  const { db, provider, now } = ctx
+  if (!provider.verify) {
+    return { due: 0, kept: 0, suspect: 0, revoked: 0, skipped: 0 }
+  }
+  const { results } = await db
+    .prepare(
+      `SELECT c.user_id, c.suspect_at FROM agent_credentials c
+       WHERE c.agent = ? AND c.state = 'active' AND (c.expires_at IS NULL OR c.expires_at > ?)
+         AND ((c.suspect_at IS NULL AND (c.checked_at IS NULL OR c.checked_at <= ?))
+           OR (c.suspect_at IS NOT NULL AND (c.checked_at IS NULL OR c.checked_at <= ?)))
+         AND EXISTS (SELECT 1 FROM sandboxes s WHERE s.user_id = c.user_id AND s.status = 'running')
+       ORDER BY c.checked_at LIMIT ?`
+    )
+    .bind(provider.agent, now, now - SCHEDULED_CHECK_EVERY_MS, now - SUSPECT_RECHECK_MS, SCHEDULED_BATCH)
+    .all<{ user_id: string; suspect_at: number | null }>()
+  const summary: ScheduledCheckSummary = { due: results.length, kept: 0, suspect: 0, revoked: 0, skipped: 0 }
+  for (const row of results) {
+    const outcome = await checkCredential({ ...ctx, userId: row.user_id }, { kind: 'scheduled', suspectAt: row.suspect_at }).catch(
+      () => 'skipped' as const
+    )
+    summary[outcome]++
+  }
+  return summary
 }
 
 /**

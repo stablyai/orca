@@ -131,6 +131,9 @@ export async function reconcile(deps: LifecycleDeps): Promise<ReconcileSummary> 
   return summary
 }
 
+/** Rotate a running sandbox's GitHub App token when it has less than this left (reconcile runs every 5 min). */
+export const GITHUB_TOKEN_ROTATE_AHEAD_MS = 20 * 60_000
+
 async function reconcileRunning(deps: LifecycleDeps, row: SandboxRow, summary: ReconcileSummary): Promise<void> {
   const now = deps.now()
   if (row.session_deadline_at !== null && now >= row.session_deadline_at + FORCED_STOP_GRACE_MS) {
@@ -160,7 +163,9 @@ async function reconcileRunning(deps: LifecycleDeps, row: SandboxRow, summary: R
       return
     }
   }
-  if (row.github_token_expires_at !== null && row.session_id && row.github_token_expires_at - now < 15 * 60_000) {
+  if (row.github_token_expires_at !== null && row.session_id && row.github_token_expires_at - now < GITHUB_TOKEN_ROTATE_AHEAD_MS) {
+    // EGRESS-REFRESH: the installation token (1 h) rotates in the running policy well before it expires. A new
+    // token never revokes the old one, so requests in flight on the old one finish undisturbed.
     // A malformed ORCA_PLATFORM_HOST_SUFFIXES leaves the live policy as it is; usage still settles below.
     const git = await refreshGitCredentials(deps, row, row.session_id).catch((error: unknown) => {
       if (error instanceof PlatformHostSuffixesConfigError) {
@@ -169,6 +174,8 @@ async function reconcileRunning(deps: LifecycleDeps, row: SandboxRow, summary: R
       throw error
     })
     if (git !== 'skipped') {
+      // Ids and minutes only: how close to expiry the old token got, and how long the new one has.
+      console.log(JSON.stringify({ event: 'github_token_rotated', sandboxId: row.id, oldLeftMin: Math.round((row.github_token_expires_at - now) / 60_000), newLeftMin: git ? Math.round((git.expiresAt - now) / 60_000) : null }))
       const refreshed = await transition(deps.db, row, { github_token_expires_at: git?.expiresAt ?? null }, now)
       row = refreshed ?? row
     }
