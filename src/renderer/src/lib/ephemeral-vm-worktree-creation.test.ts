@@ -22,6 +22,11 @@ const { state, gate, cleanup, retry } = vi.hoisted(() => {
   }
 })
 
+// CREATE-GH-STEP has its own tests; here it never holds the create.
+vi.mock('@/lib/orca-cloud/cloud-create-github-access', () => ({
+  beginCloudCreateGitHubAccess: () => undefined,
+  gateCloudCreateOnGitHubAccess: async () => ({ proceed: true, grantedDuringCreate: false })
+}))
 vi.mock('@/store', () => ({
   useAppStore: {
     getState: () => ({
@@ -41,7 +46,9 @@ vi.mock('@/store', () => ({
   }
 }))
 vi.mock('sonner', () => ({ toast: { error: vi.fn(), warning: vi.fn() } }))
-vi.mock('@/runtime/ephemeral-vm/ephemeral-vm-environment-check', () => ({ gateVmCreateOnEnvironmentCheck: gate }))
+vi.mock('@/runtime/ephemeral-vm/ephemeral-vm-environment-check', () => ({
+  gateVmCreateOnEnvironmentCheck: gate
+}))
 vi.mock('@/runtime/ephemeral-vm/ephemeral-vm-failed-create-cleanup', () => ({
   cleanupFailedEphemeralVmWorkspace: cleanup
 }))

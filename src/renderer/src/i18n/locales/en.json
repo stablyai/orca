@@ -28184,6 +28184,24 @@
       "copyFailed": "Couldn’t copy it.",
       "copied": "Copied",
       "copy": "Copy request for an owner"
+    },
+    "createGitHubAccess": {
+      "label": "GitHub access",
+      "checking": "Checking…",
+      "needed": "Let Orca push to {{repo}}",
+      "installMeaning": "Install Orca’s GitHub app on {{owner}} so this workspace can push. You can pull without it.",
+      "configureMeaning": "Orca’s GitHub app is on {{owner}}, but not for this repository. You can pull without it; pushes need it.",
+      "requestMeaning": "Only an owner of {{owner}} can install Orca’s GitHub app. You can pull without it; pushes need it.",
+      "requestedMeaning": "An owner of {{owner}} has been asked to approve Orca’s GitHub app. This continues on its own once they do.",
+      "install": "Install GitHub App",
+      "configure": "Add repository on GitHub",
+      "skip": "Skip for now",
+      "skippedMeaning": "You can pull; pushes need access later.",
+      "setUp": "Set up",
+      "granted": "Orca can push to {{repo}} now.",
+      "waiting": "Waiting for GitHub… This continues on its own once access is granted.",
+      "holding": "Your sandbox is ready. It opens as soon as you grant access or skip.",
+      "openNow": "Open now, set up later"
     }
   },
   "runActions": {

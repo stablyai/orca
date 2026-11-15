@@ -3,6 +3,7 @@
 import { ipcMain, shell } from 'electron'
 import { ORCA_CLOUD_WORKSPACE_CHANNELS as CH } from '../../shared/hosted-sandbox/cloud-workspace-api'
 import type { HostedSandboxConfigResponse } from '../../shared/hosted-sandbox/hosted-sandbox-wire'
+import type { HostedGithubRepoAccessResponse } from '../../shared/hosted-sandbox/hosted-github-wire'
 import type { HostedSandboxControlPlaneClient } from './hosted-sandbox-control-plane-client'
 import { failure } from './hosted-workspace-runtime'
 import {
@@ -51,6 +52,18 @@ function repoTarget(args: RepoArgs): { repo: string; setupSessionId?: string } |
       ? args.setupSessionId
       : undefined
   return { repo: `https://github.com/${slug}`, ...(session ? { setupSessionId: session } : {}) }
+}
+
+/** Links the window opens must be GitHub's own pages. */
+function githubPagesOnly(value: HostedGithubRepoAccessResponse): HostedGithubRepoAccessResponse {
+  const onGitHub = (url: string | undefined): boolean =>
+    url !== undefined && new URL(url).origin === 'https://github.com'
+  const { installUrl, configureUrl, ...rest } = value
+  return {
+    ...rest,
+    ...(onGitHub(installUrl) ? { installUrl } : {}),
+    ...(onGitHub(configureUrl) ? { configureUrl } : {})
+  }
 }
 
 export function registerHostedAccountHandlers(
@@ -127,16 +140,15 @@ export function registerHostedAccountHandlers(
     }
     try {
       const answer = await client.githubRepoAccess(target)
-      if (answer.access !== 'missing') {
-        return { ok: true, value: answer }
-      }
+      // A public repository that can't push gets an install page too (CREATE-GH-STEP).
+      const installs =
+        answer.access === 'missing' ||
+        (answer.access === 'public' &&
+          (answer.push === 'not_installed' || answer.push === 'not_connected'))
       // Missing: ask again with the ids GitHub's install page needs to preselect only this repo.
-      const ids = await repoIds(target.repo)
+      const ids = installs ? await repoIds(target.repo) : null
       const value = ids ? await client.githubRepoAccess({ ...target, ...ids }) : answer
-      if (value.installUrl && new URL(value.installUrl).origin !== 'https://github.com') {
-        return { ok: true, value: { ...value, installUrl: undefined } }
-      }
-      return { ok: true, value }
+      return { ok: true, value: githubPagesOnly(value) }
     } catch (error) {
       return failure(error)
     }
