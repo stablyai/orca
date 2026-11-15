@@ -11,6 +11,8 @@ import { pasteTextIntoTerminalPane } from '../paste/terminal-pane-paste-dispatch
 import { formatTerminalPasteExecutionError } from '../paste/terminal-paste-errors'
 import { recordTerminalUserInputForLeaf } from '../terminal-input-activity'
 import type { TerminalPaneContextController } from '../../controller/use-terminal-pane-context-actions'
+import { isTerminalMiddleClickActivation } from '../../links/gestures/terminal-link-activation'
+import { isTerminalLinkAtMouseEvent } from '../../links/http/terminal-url-link-hit-testing'
 
 function terminalForcesSelectionForClick(event: React.MouseEvent): boolean {
   return navigator.userAgent.includes('Mac') ? event.altKey : event.shiftKey
@@ -20,10 +22,11 @@ export function useTerminalPrimarySelectionActions({
   managerRef,
   paneTransportsRef,
   setTerminalError,
+  settingsRef,
   tabId
 }: Pick<
   TerminalPaneContextController,
-  'managerRef' | 'paneTransportsRef' | 'setTerminalError' | 'tabId'
+  'managerRef' | 'paneTransportsRef' | 'setTerminalError' | 'settingsRef' | 'tabId'
 >) {
   const terminalShouldHandleMiddleClick = useCallback(
     (target: EventTarget | null): target is Node => {
@@ -72,6 +75,15 @@ export function useTerminalPrimarySelectionActions({
       event.preventDefault()
       armPrimarySelectionNativePasteSuppression()
       if (
+        settingsRef.current?.terminalUrlMiddleClickBehavior !== 'none' &&
+        isTerminalMiddleClickActivation(event.nativeEvent) &&
+        !targetPane.terminal.hasSelection() &&
+        isTerminalLinkAtMouseEvent(targetPane.terminal, event.nativeEvent)
+      ) {
+        // Why: the link opens on mouseup, so this press must not also paste.
+        return
+      }
+      if (
         targetPane.terminal.modes.mouseTrackingMode !== 'none' &&
         !terminalForcesSelectionForClick(event)
       ) {
@@ -117,7 +129,14 @@ export function useTerminalPrimarySelectionActions({
         recordTerminalUserInputForLeaf(tabId, clickedPane.leafId)
       })
     },
-    [findTerminalPaneForMiddleClick, tabId, managerRef, paneTransportsRef, setTerminalError]
+    [
+      findTerminalPaneForMiddleClick,
+      settingsRef,
+      tabId,
+      managerRef,
+      paneTransportsRef,
+      setTerminalError
+    ]
   )
   const handlePrimarySelectionAuxClick = useCallback(
     (event: React.MouseEvent<HTMLDivElement>): void => {

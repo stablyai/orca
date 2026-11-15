@@ -25,7 +25,13 @@ export function useTerminalPaneMobileActions(controller: TerminalPaneContextCont
     terminalShouldHandleMiddleClick,
     handlePrimarySelectionMiddleMouseDown,
     handlePrimarySelectionAuxClick
-  } = useTerminalPrimarySelectionActions({ managerRef, paneTransportsRef, setTerminalError, tabId })
+  } = useTerminalPrimarySelectionActions({
+    managerRef,
+    paneTransportsRef,
+    setTerminalError,
+    settingsRef,
+    tabId
+  })
   const { activatePaneTitleInteraction, splitTerminalPaneFromHeader, beginPaneDragFromHeader } =
     useTerminalPaneHeaderActions({
       managerRef,
