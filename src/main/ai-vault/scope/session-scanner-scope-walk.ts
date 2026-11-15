@@ -115,6 +115,7 @@ export async function scanInScopeSessions(args: ScopeScanArgs): Promise<AiVaultS
     issues: args.issues,
     parseStats: args.parseStats,
     signal: args.options.signal,
+    includeTextTaskRequests: args.options.includeTextTaskRequests,
     settled: (candidate, parsed) => workload?.settle(candidate, 'bucket', parsed),
     // Unverified bucket files are placed by their parsed cwd.
     admitSession: inScope ? (session) => aiVaultSessionInScope(inScope, session) : undefined
@@ -141,6 +142,7 @@ async function walkInScopeSessions(
     antigravityWorkspaceResolver: args.antigravityWorkspaceResolver,
     signal,
     listed: false,
+    includeTextTaskRequests: args.options.includeTextTaskRequests,
     settled: (candidate, parsed) => aiVaultScanWorkload(signal)?.settle(candidate, 'walk', parsed),
     selectCandidate: (candidate) => mayBeInScope(candidate, inScope, args.platform, signal),
     admitSession: (session) => inScope(session.cwd, session.filePath)

@@ -61,6 +61,8 @@ export type AiVaultScanOptions = {
   scopePaths?: readonly string[]
   // Return only scopePaths sessions, skipping the global recency pass (Workspace and Project).
   scopeOnly?: boolean
+  /** Also return Orca's one-shot text-task runs (chat naming) that Session History hides. */
+  includeTextTaskRequests?: boolean
   platform?: NodeJS.Platform
   executionHostId?: ExecutionHostId
   signal?: AbortSignal

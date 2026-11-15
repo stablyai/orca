@@ -22506,12 +22506,12 @@
           "remoteNote": "Only this computer is checked; workspaces on SSH hosts and servers keep their history.",
           "delete": "Delete…",
           "confirmTitle": "Delete history from deleted workspaces?",
-          "confirmBody": "Deletes {{sessions}} agent sessions ({{size}}) and {{chats}} Orca chats from this computer. Anything in use is skipped. This can't be undone.",
+          "confirmBody": "Deletes from this computer: agent sessions, {{sessions}} ({{size}}); Orca chats, {{chats}}. Anything in use is skipped. This can't be undone.",
           "cancel": "Cancel",
           "confirm": "Delete",
           "deleting": "Deleting…",
-          "deleted": "Deleted {{sessions}} agent sessions and {{chats}} Orca chats.",
-          "skipped": "Kept {{count}} that were in use or could not be removed.",
+          "deleted": "Agent sessions deleted: {{sessions}}. Orca chats deleted: {{chats}}.",
+          "skipped": "Kept because in use or not removable: {{count}}.",
           "deleteFailed": "Couldn't delete history from deleted workspaces.",
           "retry": "Try again"
         }

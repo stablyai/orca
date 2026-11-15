@@ -48,6 +48,8 @@ export async function parseSessionCandidates(args: {
   selectCandidate?: (candidate: SessionFileCandidate) => Promise<boolean>
   admitSession?: (session: AiVaultSession) => boolean
   listed?: boolean
+  /** Keep Orca's one-shot text tasks (chat naming), which lists hide; history deletion owns them too. */
+  includeTextTaskRequests?: boolean
   settled?: (candidate: SessionFileCandidate, parsed: boolean) => void
 }): Promise<AiVaultSession[]> {
   const sessions = new ScannedSessionCollection()
@@ -115,7 +117,10 @@ export async function parseSessionCandidates(args: {
           if (!result.session && result.issue) {
             break
           }
-          if (!result.session || isTextTaskRequestSession(result.session)) {
+          if (
+            !result.session ||
+            (!args.includeTextTaskRequests && isTextTaskRequestSession(result.session))
+          ) {
             provisional = undefined
             break
           }

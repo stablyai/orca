@@ -99,6 +99,7 @@ async function scanAiVaultSessionStores(options: AiVaultScanOptions): Promise<Ai
           parseStats,
           signal: options.signal,
           antigravityWorkspaceResolver,
+          includeTextTaskRequests: options.includeTextTaskRequests,
           settled: (candidate, parsed) => workload?.settle(candidate, 'global', parsed)
         })
 

@@ -48,6 +48,8 @@ export async function runWorkspaceHistory(
   const scan = await scanAiVaultSessions({
     ...request.options,
     unlimited: true,
+    // Chat-naming runs hold the user's first prompt, so they go with the workspace too.
+    includeTextTaskRequests: true,
     // A just-deleted workspace needs only its own sessions; the full list is for already-deleted ones.
     ...(scope.kind === 'removed' ? { scopePaths: scope.paths, scopeOnly: true } : {}),
     signal

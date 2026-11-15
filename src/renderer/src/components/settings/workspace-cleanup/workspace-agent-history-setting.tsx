@@ -137,14 +137,14 @@ function DeletedWorkspacesHistoryRow(): React.JSX.Element {
       toast.success(
         t(
           'components.settings.workspaceCleanup.agentHistory.deleted',
-          'Deleted {{sessions}} agent sessions and {{chats}} Orca chats.',
+          'Agent sessions deleted: {{sessions}}. Orca chats deleted: {{chats}}.',
           { sessions: result.transcripts.deleted, chats: result.chats.deleted }
         ),
         skipped > 0
           ? {
               description: t(
                 'components.settings.workspaceCleanup.agentHistory.skipped',
-                'Kept {{count}} that were in use or could not be removed.',
+                'Kept because in use or not removable: {{count}}.',
                 { count: skipped }
               )
             }
@@ -243,7 +243,7 @@ function DeletedWorkspacesHistoryRow(): React.JSX.Element {
             <DialogDescription className="text-xs">
               {t(
                 'components.settings.workspaceCleanup.agentHistory.confirmBody',
-                "Deletes {{sessions}} agent sessions ({{size}}) and {{chats}} Orca chats from this computer. Anything in use is skipped. This can't be undone.",
+                "Deletes from this computer: agent sessions, {{sessions}} ({{size}}); Orca chats, {{chats}}. Anything in use is skipped. This can't be undone.",
                 {
                   sessions: tally
                     ? (tally.transcripts.matched - tally.transcripts.inUse).toLocaleString()
