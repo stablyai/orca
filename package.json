@@ -335,6 +335,7 @@
     "hast-util-from-html-isomorphic": "2.0.0",
     "hast-util-to-jsx-runtime": "2.3.7",
     "hast-util-to-text": "4.0.3",
+    "highlight.js": "11.11.1",
     "html-to-image": "^1.11.13",
     "husky": "^9.1.7",
     "i18next-cli": "1.74.2",
