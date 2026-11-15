@@ -154,6 +154,28 @@ describe('status panel', () => {
     expect(status.metrics).toMatchObject({ oomKills: 1, lastOomVictim: 'node' })
   })
 
+  it('reports memory pressure and guard kills beside the metrics, which keep their strict shape', async () => {
+    const { h, id } = await running()
+    const guard = { level: 'high', kills: 2, lastKillName: 'tsc', lastKillAt: 1_800_000_000_000, swapBytes: 2 ** 31 }
+    h.vercel.onScript = (script) => (script === METRICS_SCRIPT ? { exitCode: 0, stdout: `${metricsLine({ guard })}\n`, stderr: '' } : undefined)
+    const body = (await h.call('GET', `/v1/sandboxes/${id}/status`)).body
+    expect(body.status.metrics).not.toHaveProperty('guard')
+    const { status } = HostedWorkspaceStatusResponseSchema.parse(body)
+    expect(status.state).toBe('ready')
+    expect(status.memory).toEqual({ pressure: 'high', guardKills: 2, lastGuardVictim: 'tsc', lastGuardKillAt: 1_800_000_000_000, guarded: true })
+  })
+
+  it('derives pressure from MemAvailable when the VM runs no guard (an older image)', async () => {
+    const { h, id } = await running()
+    h.vercel.onScript = (script) =>
+      script === METRICS_SCRIPT ? { exitCode: 0, stdout: `${metricsLine({ memUsedBytes: 7.5e9, guard: null })}\n`, stderr: '' } : undefined
+    const { status } = HostedWorkspaceStatusResponseSchema.parse((await h.call('GET', `/v1/sandboxes/${id}/status`)).body)
+    expect(status.memory).toEqual({ pressure: 'critical', guardKills: 0, lastGuardVictim: null, lastGuardKillAt: null, guarded: false })
+    h.vercel.onScript = (script) => (script === METRICS_SCRIPT ? { exitCode: 0, stdout: `${metricsLine()}\n`, stderr: '' } : undefined)
+    const again = HostedWorkspaceStatusResponseSchema.parse((await h.call('GET', `/v1/sandboxes/${id}/status`)).body)
+    expect(again.status.memory?.pressure).toBe('ok')
+  })
+
   it('counts settled sessions in the cost and does not probe a sleeping VM', async () => {
     const { h, id } = await running()
     h.advance(60 * 60_000)

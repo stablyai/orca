@@ -1,0 +1,308 @@
+#!/usr/bin/env bash
+# Memory guard for the workspace VM (runs as root: `sudo -n orca-memguard start`). A build or test
+# that eats the VM's memory must cost that process, never the workspace: without this the kernel
+# thrashes for minutes before its OOM killer picks something, and the VM looks dead meanwhile.
+#   start        start the guard for this boot unless it already runs (returns at once)
+#   run          the guard loop itself (start runs it detached)
+#   release-swap turn off and delete on-demand swap (before a stop, so the snapshot stays small)
+#   sweep        apply OOM-killer priorities once and exit (tests, diagnostics)
+#   victim       print "<pid> <rss KiB> <name>" of the process the guard would stop now (no kill)
+# Every few seconds it ranks processes for the kernel's OOM killer (oom_score_adj):
+#   -900  Orca's own runtime: orcad, its terminal daemon, the share proxy (Orca's bundled Node)
+#   -500  terminal shells (children of the terminal daemon) and agent CLIs
+#    500  everything else (builds, tests, dev servers, browsers); never lowered
+# When MemAvailable falls under KILL_PCT (8%) of RAM it kills the largest process ranked 0 or more,
+# records it in $RUN/kills and $RUN/state, and waits for memory to return. The kernel's OOM killer
+# stays the backstop for allocations faster than the guard's 200 ms look, with the same ranks.
+# Swap is added on demand (2 GiB files up to 1.5x RAM) when memory runs low, if the kernel takes it,
+# and dropped after 10 quiet minutes. It also sizes /dev/shm to half of RAM (the provider mounts
+# 64 MB, which crashes Chrome and Electron renderers).
+# $RUN/state (key=value, world-readable) is what the control plane's status probe reads.
+set -uo pipefail
+RUN=/run/orca-memguard
+# Tests point it at a fake process table.
+PROC="${ORCA_MEMGUARD_PROC:-/proc}"
+SWAP_DIR=/var/lib/orca-memguard
+ORCA_HOME=/opt/orca
+KILL_PCT="${ORCA_MEMGUARD_KILL_PCT:-8}"
+HIGH_PCT=15
+SWAP_ADD_PCT=20
+QUIET_PCT=50
+QUIET_SECONDS=600
+TICK=1
+FAST_TICK=0.2
+SWEEP_EVERY=3
+STATE_EVERY=15
+SWAP_CHUNK_KIB=$((2 * 1024 * 1024))
+
+boot_id() { local id; read -r id </proc/sys/kernel/random/boot_id && printf '%s' "$id"; }
+now_ms() { local t="${EPOCHREALTIME//[.,]/}"; printf '%s' "${t:0:13}"; }
+log() { printf '%s %s\n' "$(date -u +%FT%TZ)" "$*" >>"$RUN/memguard.log"; }
+
+# Name of a process for people: the script a node/python/... runs, else its command name.
+proc_name() {
+  local pid="$1" comm arg name='' skip=0 module=0 args=()
+  read -r comm 2>/dev/null <"$PROC/$pid/comm" || comm=''
+  mapfile -d '' -t args 2>/dev/null <"$PROC/$pid/cmdline" || true
+  case "${args[0]##*/}" in
+    node | nodejs | bun | deno | python* | ruby | perl | java | sh | bash | dash | zsh)
+      for arg in "${args[@]:1}"; do
+        if [ "$skip" -eq 1 ]; then skip=0; continue; fi
+        if [ "$module" -eq 1 ]; then name="${arg##*/}"; break; fi
+        case "$arg" in
+          # Inline code is no name (and may hold anything): the interpreter's name it is.
+          -e | -p | -c | --eval | --print) break ;;
+          -m | -jar) module=1 ;; # python -m pytest, java -jar gradle.jar: the module or jar
+          -r | --require | --import | --loader | -X | -W | -cp | -classpath) skip=1 ;;
+          -*) ;;
+          *) name="${arg##*/}"; break ;;
+        esac
+      done ;;
+  esac
+  [ -n "$name" ] || name="${args[0]##*/}"
+  [ -n "$name" ] || name="$comm"
+  name="${name%.js}"
+  name="${name%.mjs}"
+  name="${name%.cjs}"
+  name="${name%.jar}"
+  name="${name//[^A-Za-z0-9._+-]/}"
+  printf '%s' "${name:0:40}"
+}
+
+# The terminal daemon's pid(s): Orca-runtime node processes running the daemon entry.
+daemon_pids=' '
+# Sets RANK to the oom_score_adj a process should have; returns 1 for a kernel thread or a gone pid.
+RANK=500
+rank() {
+  local pid="$1" args=() stat ppid
+  mapfile -d '' -t -n 3 args 2>/dev/null <"$PROC/$pid/cmdline" || return 1
+  [ "${#args[@]}" -gt 0 ] || return 1
+  RANK=-900
+  case "${args[0]}" in "$ORCA_HOME"/runtime/runtimes/*) return 0 ;; esac
+  RANK=-500
+  read -r stat 2>/dev/null <"$PROC/$pid/stat" || return 1
+  stat="${stat##*) }"
+  ppid="${stat#* }"
+  ppid="${ppid%% *}"
+  case "$daemon_pids" in *" $ppid "*) return 0 ;; esac
+  case "${args[0]}/${args[1]:-}/${args[2]:-}" in "$ORCA_HOME"/tools/* | */"$ORCA_HOME"/tools/*) return 0 ;; esac
+  case "${args[0]##*/}" in claude | codex | opencode | gemini | cursor-agent | copilot | amp | droid) return 0 ;; esac
+  RANK=500
+}
+
+sweep() {
+  local p pid want adj args=()
+  daemon_pids=' '
+  for p in "$PROC"/[0-9]*; do
+    pid="${p#"$PROC"/}"
+    mapfile -d '' -t -n 3 args 2>/dev/null <"$p/cmdline" || continue
+    [ "${#args[@]}" -ge 2 ] || continue
+    case "${args[0]}" in "$ORCA_HOME"/runtime/runtimes/*) ;; *) continue ;; esac
+    case "${args[*]:1}" in *"$ORCA_HOME"/runtime/orcad/daemon*) daemon_pids+="$pid " ;; esac
+  done
+  for p in "$PROC"/[0-9]*; do
+    pid="${p#"$PROC"/}"
+    [ "$pid" -gt 1 ] && [ "$pid" != "$$" ] || continue
+    read -r adj 2>/dev/null <"$p/oom_score_adj" || continue
+    # -1000 is a process that asked for it as root (sshd): leave it alone.
+    [ "$adj" -gt -1000 ] || continue
+    rank "$pid" || continue
+    want="$RANK"
+    # Never lower what a process raised for itself (Chrome ranks its renderers above its browser).
+    if [ "$want" -eq 500 ]; then
+      [ "$adj" -lt 500 ] || continue
+    fi
+    [ "$adj" -ne "$want" ] || continue
+    printf '%s\n' "$want" 2>/dev/null >"$p/oom_score_adj" || true
+  done
+}
+
+mem_total=0 mem_avail=0 swap_total=0 swap_free=0
+read_mem() {
+  local key value _
+  while read -r key value _; do
+    case "$key" in
+      MemTotal:) mem_total="$value" ;;
+      MemAvailable:) mem_avail="$value" ;;
+      SwapTotal:) swap_total="$value" ;;
+      SwapFree:) swap_free="$value" ;;
+    esac
+  done <"$PROC/meminfo"
+}
+
+# PSI percentages (avg10, integer part); 0 when the kernel doesn't report them.
+psi_some=0 psi_full=0
+read_psi() {
+  local kind avg _
+  psi_some=0 psi_full=0
+  [ -r "$PROC/pressure/memory" ] || return 0
+  while read -r kind avg _; do
+    avg="${avg#avg10=}"
+    avg="${avg%%.*}"
+    case "$kind" in some) psi_some="$avg" ;; full) psi_full="$avg" ;; esac
+  done 2>/dev/null <"$PROC/pressure/memory" || true
+}
+
+kills=0 last_kill_name='' last_kill_at=0 swap_mode=on-demand level=ok
+write_state() {
+  local pct="$1"
+  {
+    printf 'bootId=%s\nat=%s\npid=%s\nlevel=%s\navailPct=%s\nmemTotalKiB=%s\nmemAvailKiB=%s\n' \
+      "$BOOT" "$(now_ms)" "$$" "$level" "$pct" "$mem_total" "$mem_avail"
+    printf 'swapTotalKiB=%s\nswapFreeKiB=%s\nswap=%s\npsiSome10=%s\npsiFull10=%s\n' \
+      "$swap_total" "$swap_free" "$swap_mode" "$psi_some" "$psi_full"
+    printf 'kills=%s\nlastKillName=%s\nlastKillAt=%s\n' "$kills" "$last_kill_name" "$last_kill_at"
+  } >"$RUN/state.tmp" && mv -f "$RUN/state.tmp" "$RUN/state"
+}
+
+# Sets VICTIM/VICTIM_RSS (pages) to the largest process ranked 0 or more; returns 1 when there is none.
+VICTIM=0 VICTIM_RSS=0
+choose_victim() {
+  local p pid adj rss _ best=0 best_rss=0 args=()
+  sweep
+  for p in "$PROC"/[0-9]*; do
+    pid="${p#"$PROC"/}"
+    [ "$pid" -gt 1 ] && [ "$pid" != "$$" ] || continue
+    read -r adj 2>/dev/null <"$p/oom_score_adj" || continue
+    [ "$adj" -ge 0 ] || continue
+    read -r _ rss _ 2>/dev/null <"$p/statm" || continue
+    # Kernel threads have no command line (and /proc sizes read 0, so `-s` can't tell).
+    mapfile -d '' -t -n 1 args 2>/dev/null <"$p/cmdline" || continue
+    [ "${#args[@]}" -gt 0 ] || continue
+    if [ "$rss" -gt "$best_rss" ]; then
+      best="$pid" best_rss="$rss"
+    fi
+  done
+  # Nothing big enough to matter (64 MiB): what fills memory is protected, so leave it to the kernel.
+  [ "$best" -gt 1 ] && [ "$best_rss" -ge 16384 ] || return 1
+  VICTIM="$best" VICTIM_RSS="$best_rss"
+}
+
+# Kills the largest process ranked 0 or more ($1: MemAvailable %). Returns 1 when there is none.
+kill_largest() {
+  choose_victim || return 1
+  local best="$VICTIM" best_rss="$VICTIM_RSS" name at
+  name="$(proc_name "$best")"
+  kill -KILL "$best" 2>/dev/null || return 1
+  at="$(now_ms)"
+  kills=$((kills + 1)) last_kill_name="${name:-process}" last_kill_at="$at"
+  printf '%s %s %s %s %s\n' "$at" "$best" "$((best_rss * 4))" "$1" "$last_kill_name" >>"$RUN/kills"
+  tail -n 50 "$RUN/kills" >"$RUN/kills.tmp" && mv -f "$RUN/kills.tmp" "$RUN/kills"
+  log "killed pid=$best name=$last_kill_name rssKiB=$((best_rss * 4)) availPct=$1"
+  # Shells hear it like a kernel OOM kill (exit 137); this says why where someone may look.
+  logger -t orca-memguard "stopped $last_kill_name (pid $best, $((best_rss * 4)) KiB) at $1% memory available" 2>/dev/null || true
+  return 0
+}
+
+swap_files() { compgen -G "$SWAP_DIR/swap-*" || true; }
+add_swap() {
+  [ "$swap_mode" = on-demand ] || return 1
+  [ $((swap_total + SWAP_CHUNK_KIB)) -le $((mem_total * 3 / 2)) ] || return 1
+  local free_kib file
+  free_kib="$(df -k --output=avail "$SWAP_DIR" 2>/dev/null | tail -n 1 | tr -d ' ')"
+  # Keep 4 GiB of the disk for the workspace itself.
+  [ "${free_kib:-0}" -gt $((SWAP_CHUNK_KIB + 4 * 1024 * 1024)) ] || return 1
+  file="$SWAP_DIR/swap-$(now_ms)"
+  if fallocate -l "$((SWAP_CHUNK_KIB))K" "$file" 2>/dev/null && chmod 600 "$file" \
+    && mkswap -q "$file" >/dev/null 2>&1 && swapon "$file" 2>/dev/null; then
+    log "swap on $file"
+    return 0
+  fi
+  rm -f "$file"
+  # One refusal means this kernel or disk won't swap: don't retry every tick.
+  swap_mode=unsupported
+  log 'swap unavailable; guard kills only'
+  return 1
+}
+release_swap() {
+  local file
+  for file in $(swap_files | sort -r); do
+    swapoff "$file" 2>/dev/null && rm -f "$file" && log "swap off $file"
+  done
+}
+
+run() {
+  BOOT="$(boot_id)"
+  mkdir -p "$RUN" "$SWAP_DIR"
+  chmod 0755 "$RUN"
+  chmod 0700 "$SWAP_DIR"
+  # A resumed disk carries the last session's files: its kills and swap belong to that boot.
+  rm -f "$RUN/kills" "$RUN/state" "$RUN"/*.tmp
+  for file in $(swap_files); do
+    grep -q "^$file " /proc/swaps 2>/dev/null || rm -f "$file"
+  done
+  printf '%s %s\n' "$BOOT" "$$" >"$RUN/pid"
+  echo -1000 >/proc/self/oom_score_adj
+  read_mem
+  # Half of RAM for /dev/shm (tmpfs only takes pages that are written).
+  mount -o remount,size=50% /dev/shm 2>/dev/null && log "/dev/shm $(df -h --output=size /dev/shm | tail -n 1 | tr -d ' ')"
+  log "start mem=${mem_total}KiB"
+  local tick=0 pct quiet_since=0 prev='' now
+  while :; do
+    read_mem
+    read_psi
+    pct=$((mem_total > 0 ? mem_avail * 100 / mem_total : 100))
+    if [ $((tick % SWEEP_EVERY)) -eq 0 ]; then
+      sweep
+    fi
+    if [ "$pct" -lt "$SWAP_ADD_PCT" ] && { [ "$swap_total" -eq 0 ] || [ $((swap_free * 4)) -lt "$swap_total" ]; }; then
+      add_swap && read_mem
+    fi
+    # Swap only raises MemAvailable by paging idle memory out: a fast allocator outruns it (the
+    # kernel OOM-killed a 300 MB/s hog with 1.7 GB of swap free), so the threshold ignores swap.
+    if [ "$pct" -lt "$KILL_PCT" ]; then
+      level=critical
+      if kill_largest "$pct"; then
+        write_state "$pct"
+        prev="$level:$kills"
+        sleep 1 # let the kernel reclaim the victim's memory before judging again
+        tick=$((tick + 1))
+        continue
+      fi
+    elif [ "$psi_full" -ge 10 ]; then
+      level=critical
+    elif [ "$pct" -lt "$HIGH_PCT" ] || [ "$psi_some" -ge 20 ]; then
+      level=high
+    else
+      level=ok
+    fi
+    now="${EPOCHSECONDS}"
+    if [ "$pct" -ge "$QUIET_PCT" ] && [ "$swap_total" -gt 0 ]; then
+      [ "$quiet_since" -gt 0 ] || quiet_since="$now"
+      if [ $((now - quiet_since)) -ge "$QUIET_SECONDS" ] && [ $(((swap_total - swap_free) * 2)) -lt "$mem_avail" ]; then
+        release_swap
+        quiet_since=0
+      fi
+    else
+      quiet_since=0
+    fi
+    if [ "$level:$kills" != "$prev" ] || [ $((tick % STATE_EVERY)) -eq 0 ]; then
+      write_state "$pct"
+      prev="$level:$kills"
+    fi
+    tick=$((tick + 1))
+    # Memory can go from 15% to nothing in two seconds: look five times as often when it is low.
+    if [ "$level" = ok ]; then sleep "$TICK"; else sleep "$FAST_TICK"; fi
+  done
+}
+
+running() {
+  local boot pid
+  read -r boot pid <"$RUN/pid" 2>/dev/null || return 1
+  [ "$boot" = "$(boot_id)" ] && [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null \
+    && grep -qa orca-memguard "/proc/$pid/cmdline" 2>/dev/null
+}
+
+case "${1:-}" in
+  start)
+    [ "$(id -u)" -eq 0 ] || { echo 'orca-memguard: needs root' >&2; exit 1; }
+    running && exit 0
+    mkdir -p "$RUN"
+    setsid nohup "$0" run </dev/null >/dev/null 2>>"$RUN/memguard.log" &
+    exit 0 ;;
+  run) run ;;
+  sweep) sweep ;;
+  victim) choose_victim && printf '%s %s %s\n' "$VICTIM" "$((VICTIM_RSS * 4))" "$(proc_name "$VICTIM")" ;;
+  release-swap) release_swap ;;
+  *) echo 'usage: orca-memguard start|run|sweep|victim|release-swap' >&2; exit 2 ;;
+esac

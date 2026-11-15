@@ -57,6 +57,30 @@ describe('OOM tracker', () => {
     expect(events).toHaveLength(3)
   })
 
+  it('announces guard kills as the guard stopping a named process, counted with kernel kills', () => {
+    const events: CloudOomEvent[] = []
+    const tracker = createOomTracker((event) => events.push(event))
+    const guarded = (checkedAt: number, uptime: number, kernel: number, guardKills: number) => ({
+      ...status(checkedAt, uptime, kernel),
+      memory: {
+        pressure: 'high' as const,
+        guardKills,
+        lastGuardVictim: guardKills ? 'tsc' : null,
+        lastGuardKillAt: guardKills ? checkedAt : null,
+        guarded: true
+      }
+    })
+    const t0 = 1_000_000_000
+    tracker.observe('ws', 'sbx', guarded(t0, 100, 0, 0))
+    tracker.observe('ws', 'sbx', guarded(t0 + 60_000, 160, 0, 1))
+    tracker.observe('ws', 'sbx', guarded(t0 + 120_000, 220, 0, 1))
+    tracker.observe('ws', 'sbx', guarded(t0 + 180_000, 280, 1, 1))
+    expect(events).toEqual([
+      { workspaceId: 'ws', oomKills: 1, victim: 'tsc', stoppedBy: 'guard', at: expect.any(Number) },
+      { workspaceId: 'ws', oomKills: 2, victim: 'node', at: expect.any(Number) }
+    ])
+  })
+
   it('ignores a status without metrics', () => {
     const events: CloudOomEvent[] = []
     createOomTracker((event) => events.push(event)).observe('ws', 'sbx', {

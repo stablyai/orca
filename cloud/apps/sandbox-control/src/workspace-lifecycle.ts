@@ -22,6 +22,7 @@ import {
   ArchiveMetadataSchema,
   captureArchiveMetadata,
   readVmMetrics,
+  type WorkspaceMemory,
   type ArchiveMetadata,
   type VmMetrics
 } from './sandbox-vm-inspect'
@@ -359,6 +360,8 @@ export async function expiredArchives(db: D1Database, now: number): Promise<Sand
 export type WorkspaceStatus = {
   state: WorkspaceState
   metrics: VmMetrics | null
+  /** MEMGUARD: memory pressure and the guard's kills; null when the VM was not probed. */
+  memory: WorkspaceMemory | null
   /** Since orcad last became ready (this session). */
   uptimeMs: number | null
   usage: { totalMs: number; centsPerHour: number; costCents: number }
@@ -393,13 +396,15 @@ export async function workspaceStatus(deps: LifecycleDeps, input: SandboxRow, co
   // A lapsed lease: the provider may have stopped it, which is "sleeping", not "unresponsive".
   const row = input.status === 'running' ? await confirmRunning(deps, input) : input
   const probed = row.status === 'running' && row.session_id !== null
-  const metrics = probed ? await readVmMetrics(deps.provider, row.session_id!) : null
+  const probe = probed ? await readVmMetrics(deps.provider, row.session_id!) : null
+  const metrics = probe?.metrics ?? null
   const now = deps.now()
   const totalMs = await sandboxUsageMs(deps.db, row, now)
   const centsPerHour = config.centsPerHour?.[row.machine_size] ?? DEFAULT_CENTS_PER_HOUR[row.machine_size]
   return {
     state: stateOf(row, metrics, probed),
     metrics,
+    memory: probe?.memory ?? null,
     uptimeMs: row.status === 'running' && row.ready_at !== null ? Math.max(0, now - row.ready_at) : null,
     usage: { totalMs, centsPerHour, costCents: Math.round((totalMs / 3_600_000) * centsPerHour) },
     archive: row.archived_at !== null ? { archivedAt: row.archived_at, expiresAt: row.archive_expires_at } : null,

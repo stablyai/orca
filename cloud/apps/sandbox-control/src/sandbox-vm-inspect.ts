@@ -6,6 +6,8 @@ import { z } from 'zod'
 import { ProviderError, type SandboxProviderApi } from './sandbox-provider'
 
 const PROJECT = '/vercel/sandbox/project'
+/** Written by the VM's memory guard (image/vm/orca-memguard). */
+const GUARD_STATE = '/run/orca-memguard/state'
 
 /**
  * CPU from two /proc/stat samples 250 ms apart, memory from /proc/meminfo, disk for the project
@@ -28,9 +30,22 @@ victim=$(sudo -n dmesg 2>/dev/null | grep -oE 'Killed process [0-9]+ \([^)]{1,64
 [ "$victim" = MainThread ] && victim=node
 orcad=false; pid=$(cat "$HOME/.orca-sandbox/orcad.pid" 2>/dev/null || echo 0); [ "$pid" -gt 1 ] 2>/dev/null && kill -0 "$pid" 2>/dev/null && orcad=true
 load=$(awk '{print $1}' /proc/loadavg)
-printf '{"cpuPercent":%d,"cpus":%d,"load1":%s,"memTotalBytes":%d,"memUsedBytes":%d,"diskTotalBytes":%d,"diskUsedBytes":%d,"uptimeSeconds":%d,"oomKills":%d,"lastOomVictim":%s,"orcadAlive":%s}\n' \
+# MEMGUARD: the memory guard's state (orca-memguard), when it runs this boot and wrote in the last minute.
+guard=null
+if [ -r ${GUARD_STATE} ]; then
+  g() { sed -n "s/^$1=//p" ${GUARD_STATE} | head -n 1; }
+  g_at=$(g at); g_level=$(g level); g_kills=$(g kills); g_name=$(g lastKillName | tr -cd 'A-Za-z0-9._+-' | head -c 40); g_kill_at=$(g lastKillAt)
+  g_swap=$(g swapTotalKiB); [[ "$g_swap" =~ ^[0-9]+$ ]] && g_swap=$((g_swap * 1024)) || g_swap=0
+  now_ms=$(( $(date +%s%3N) ))
+  if [ "$(g bootId)" = "$(cat /proc/sys/kernel/random/boot_id)" ] && [[ "$g_at" =~ ^[0-9]+$ ]] && [ $((now_ms - g_at)) -lt 60000 ] \
+    && [[ "$g_level" =~ ^(ok|high|critical)$ ]] && [[ "$g_kills" =~ ^[0-9]+$ ]] && [[ "$g_kill_at" =~ ^[0-9]+$ ]]; then
+    guard=$(printf '{"level":"%s","kills":%d,"lastKillName":%s,"lastKillAt":%s,"swapBytes":%d}' "$g_level" "$g_kills" \
+      "$( [ -n "$g_name" ] && printf '"%s"' "$g_name" || printf null )" "$( [ "$g_kill_at" -gt 0 ] && printf '%s' "$g_kill_at" || printf null )" "$g_swap")
+  fi
+fi
+printf '{"cpuPercent":%d,"cpus":%d,"load1":%s,"memTotalBytes":%d,"memUsedBytes":%d,"diskTotalBytes":%d,"diskUsedBytes":%d,"uptimeSeconds":%d,"oomKills":%d,"lastOomVictim":%s,"orcadAlive":%s,"guard":%s}\n' \
   "$cpu_pct" "$(nproc)" "$load" "$mem_total" "$((mem_total-mem_avail))" "\${disk_total:-0}" "\${disk_used:-0}" "$uptime_s" "$oom" \
-  "$( [ -n "$victim" ] && printf '"%s"' "$victim" || printf null )" "$orcad"
+  "$( [ -n "$victim" ] && printf '"%s"' "$victim" || printf null )" "$orcad" "$guard"
 `.replaceAll('\\${', '${')
 
 export const VmMetricsSchema = z
@@ -50,6 +65,41 @@ export const VmMetricsSchema = z
   .strict()
 
 export type VmMetrics = z.infer<typeof VmMetricsSchema>
+
+/** The memory guard's last word: its pressure level, the processes it stopped this boot, its swap. */
+export const VmGuardSchema = z
+  .object({
+    level: z.enum(['ok', 'high', 'critical']),
+    kills: z.number().int().min(0),
+    lastKillName: z.string().max(40).nullable(),
+    lastKillAt: z.number().int().positive().nullable(),
+    swapBytes: z.number().int().min(0)
+  })
+  .strict()
+export type VmGuard = z.infer<typeof VmGuardSchema>
+
+// The probe's line: the metrics plus the guard (null when no guard ran this boot: an older image).
+const VmProbeSchema = VmMetricsSchema.extend({ guard: VmGuardSchema.nullable().optional() }).strict()
+
+/** Memory pressure for the status read: the guard's level, else one from MemAvailable alone. */
+export type WorkspaceMemory = {
+  pressure: 'ok' | 'high' | 'critical'
+  /** Processes the guard stopped this boot (the kernel's own OOM kills are `metrics.oomKills`). */
+  guardKills: number
+  lastGuardVictim: string | null
+  lastGuardKillAt: number | null
+  /** False when the VM runs no guard: pressure is then MemAvailable's, and nothing is stopped early. */
+  guarded: boolean
+}
+
+export function workspaceMemory(metrics: VmMetrics, guard: VmGuard | null): WorkspaceMemory {
+  if (guard) {
+    return { pressure: guard.level, guardKills: guard.kills, lastGuardVictim: guard.lastKillName, lastGuardKillAt: guard.lastKillAt, guarded: true }
+  }
+  const availPct = metrics.memTotalBytes > 0 ? ((metrics.memTotalBytes - metrics.memUsedBytes) * 100) / metrics.memTotalBytes : 100
+  const pressure = availPct < 8 ? 'critical' : availPct < 15 ? 'high' : 'ok'
+  return { pressure, guardKills: 0, lastGuardVictim: null, lastGuardKillAt: null, guarded: false }
+}
 
 const MAX_TREE = 2000
 const MAX_CHANGED = 300
@@ -164,8 +214,17 @@ async function runJson<T>(
 }
 
 /** Null when the VM did not answer in time (the status panel shows "Unresponsive"). */
-export function readVmMetrics(provider: SandboxProviderApi, sessionId: string): Promise<VmMetrics | null> {
-  return runJson(provider, sessionId, METRICS_SCRIPT, VmMetricsSchema, 8_000)
+export async function readVmMetrics(
+  provider: SandboxProviderApi,
+  sessionId: string
+): Promise<{ metrics: VmMetrics; memory: WorkspaceMemory } | null> {
+  const probe = await runJson(provider, sessionId, METRICS_SCRIPT, VmProbeSchema, 8_000)
+  if (!probe) {
+    return null
+  }
+  // `metrics` keeps its exact shape: desktops parse it strictly.
+  const { guard, ...metrics } = probe
+  return { metrics, memory: workspaceMemory(metrics, guard ?? null) }
 }
 
 export function captureArchiveMetadata(provider: SandboxProviderApi, sessionId: string): Promise<ArchiveMetadata | null> {

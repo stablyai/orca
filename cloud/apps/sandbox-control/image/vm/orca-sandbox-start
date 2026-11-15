@@ -110,6 +110,10 @@ case "${ORCA_DOCKER:-}" in
 esac
 start_share_proxy
 unset ORCA_SHARE_PROXY_KEY
+# MEMGUARD: OOM-killer ranks that spare orcad and terminals, a guard that stops the largest build or
+# test before the VM stalls, on-demand swap and a /dev/shm sized for browsers. Before the
+# already-started exit so a repair start brings a dead guard back; it returns at once.
+sudo -n "$ORCA_HOME/bin/orca-memguard" start </dev/null >/dev/null 2>&1 9>&- || true
 if [ "$(cat "$STATE/boot-id" 2>/dev/null || true)" = "$boot_id" ] && [ -s "$STATE/ready.json" ] \
   && kill -0 "$(cat "$STATE/orcad.pid" 2>/dev/null || echo 0)" 2>/dev/null; then
   print_ready
