@@ -108,6 +108,17 @@ async function completeWorkerTerminalReleaseOnce(
         archive: archiveSummary(exited)
       }
     }
+    // A keep-open that landed during the proof wins; report it rather than an unresolved release.
+    const current = db.getWorkerTerminalResource(resource.id)
+    if (current?.release_state === 'retained') {
+      return {
+        dispatchId,
+        state: 'retained',
+        reason: retainedReason(current),
+        processAction: 'none',
+        archive: archiveSummary(current)
+      }
+    }
     if (args.mode === 'recovery') {
       // Incomplete startup/reconnect inventory proves no death; defer.
       return {

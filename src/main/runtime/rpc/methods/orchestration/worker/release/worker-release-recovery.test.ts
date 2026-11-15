@@ -294,7 +294,7 @@ describe('orchestration worker release recovery', () => {
     await call('orchestration.workerRetain', { dispatch: dispatchId })
     listing.resolve({ processes: [], inProcessOwner: false })
 
-    await expect(release).resolves.not.toMatchObject({ state: 'released' })
+    await expect(release).resolves.toMatchObject({ state: 'retained', processAction: 'none' })
     expect(db.getWorkerTerminalResourceByOwner(dispatchId)).toMatchObject({
       ownership_state: 'owned',
       release_state: 'retained'
@@ -371,6 +371,42 @@ describe('orchestration worker release recovery', () => {
     await expect(
       runtime.inspectTerminalProcessIncarnationLiveness(workerIncarnation, scope)
     ).resolves.toBe('exited')
+  })
+
+  it('pays one bounded startup wait per hung startup, not one per backlog row', async () => {
+    setup()
+    const startup = new Promise<void>(() => {})
+    loseWorkerTerminal(() =>
+      listLocalProcessesForExitProofFromRuntimeController(
+        { getLocalPtyProviderStartupPromise: () => startup },
+        () => ({ listProcesses: async () => [] })
+      )
+    )
+    const { dispatchId } = await startSettledWorker()
+    expect(db.requestWorkerTerminalRelease(dispatchId).disposition).toBe('requested')
+    goneAfterSettle()
+    const resource = db.getWorkerTerminalResourceByOwner(dispatchId)!
+    const backlogRows = 20
+    vi.spyOn(db, 'listWorkerTerminalReleaseBacklog').mockReturnValue(
+      Array.from({ length: backlogRows }, () => resource)
+    )
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+    try {
+      let settled = false
+      const pass = reconcileRequestedWorkerTerminalReleases(runtime).finally(() => {
+        settled = true
+      })
+      let waitedMs = 0
+      while (!settled && waitedMs <= backlogRows * PTY_CONTROLLER_LIST_TIMEOUT_MS) {
+        await vi.advanceTimersByTimeAsync(100)
+        waitedMs += 100
+      }
+      await expect(pass).resolves.toMatchObject({ attempted: backlogRows, pending: backlogRows })
+      expect(waitedMs).toBeLessThanOrEqual(PTY_CONTROLLER_LIST_TIMEOUT_MS + 100)
+    } finally {
+      vi.useRealTimers()
+    }
+    expect(db.getWorkerTerminalResourceByOwner(dispatchId)?.release_state).toBe('requested')
   })
 
   it('does not let an in-process fallback speak for a worker it never ran', async () => {
