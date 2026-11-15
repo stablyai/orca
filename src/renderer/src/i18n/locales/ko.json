@@ -3059,6 +3059,7 @@
           "bd162b7d5a": "병합됨",
           "draft": "초안",
           "labelCount_other": "라벨 {{count}}개",
+          "authorCount_other": "작성자 {{count}}명",
           "allStates": "모두",
           "filterPullRequests": "PR 필터링",
           "filterIssues": "이슈 필터링",

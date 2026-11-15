@@ -3594,6 +3594,8 @@
           "draft": "Taslak",
           "labelCount_other": "{{count}} etiket",
           "labelCount_one": "{{count}} etiket",
+          "authorCount_other": "{{count}} yazar",
+          "authorCount_one": "{{count}} yazar",
           "allStates": "Tümü",
           "filterPullRequests": "Pull request'leri filtrele",
           "filterIssues": "Sorunları filtrele",
