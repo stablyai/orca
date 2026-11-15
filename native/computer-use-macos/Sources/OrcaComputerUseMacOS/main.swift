@@ -278,6 +278,171 @@ private struct WindowInventory {
     let windowIds: Set<CGWindowID>
 }
 
+/// Counts the accessibility notifications each target app posts, so the settle after an action can read the app
+/// right after it changes instead of on a fixed beat. Observers live on one dedicated run-loop thread, since
+/// requests run on short-lived connection threads.
+private final class AccessibilityNotificationWatcher: @unchecked Sendable {
+    private struct Entry {
+        let observer: AXObserver
+        var generation: UInt64 = 0
+        var lastEventAt: Date?
+        var lastUsed: Date
+        var trust = AccessibilityNotificationTrust()
+        let launchDate: Date?
+    }
+
+    static let notifications: [String] = [
+        kAXValueChangedNotification as String,
+        kAXUIElementDestroyedNotification as String,
+        kAXCreatedNotification as String,
+        kAXFocusedUIElementChangedNotification as String,
+        kAXFocusedWindowChangedNotification as String,
+        kAXWindowCreatedNotification as String,
+        kAXWindowMovedNotification as String,
+        kAXWindowResizedNotification as String,
+        kAXWindowMiniaturizedNotification as String,
+        kAXTitleChangedNotification as String,
+        kAXSelectedChildrenChangedNotification as String,
+        kAXSelectedRowsChangedNotification as String,
+        kAXLayoutChangedNotification as String,
+        "AXElementBusyChanged",
+    ]
+    private static let maxApps = 8
+
+    private let condition = NSCondition()
+    private var entries: [pid_t: Entry] = [:]
+    /// Apps that refused every notification; they keep the plain polling settle.
+    private var unsupported: [pid_t: Date?] = [:]
+    private var runLoop: CFRunLoop?
+
+    /// Starts watching `app` if needed and returns its notification count so far, or nil when it can't be watched.
+    func watch(pid: pid_t, launchDate: Date?) -> UInt64? {
+        condition.lock()
+        defer { condition.unlock() }
+        if let entry = entries[pid], entry.launchDate == launchDate {
+            entries[pid]?.lastUsed = Date()
+            return entry.generation
+        }
+        if let refusedLaunch = unsupported[pid], refusedLaunch == launchDate {
+            return nil
+        }
+        if let stale = entries.removeValue(forKey: pid) {
+            detach(stale.observer)
+        }
+        guard let runLoop = startedRunLoop() else { return nil }
+        var created: AXObserver?
+        guard AXObserverCreate(pid, { observer, _, _, _ in notificationWatcher.record(observer) }, &created) == .success,
+              let observer = created
+        else {
+            return nil
+        }
+        let appElement = AXUIElementCreateApplication(pid)
+        var registered = 0
+        for notification in Self.notifications {
+            let result = AXObserverAddNotification(observer, appElement, notification as CFString, nil)
+            if result == .success || result == .notificationAlreadyRegistered {
+                registered += 1
+            } else if result == .cannotComplete {
+                // Why: the app stopped answering; don't wait out the messaging timeout once per notification.
+                break
+            }
+        }
+        guard registered > 0 else {
+            unsupported[pid] = launchDate
+            return nil
+        }
+        evictIfNeeded()
+        CFRunLoopAddSource(runLoop, AXObserverGetRunLoopSource(observer), .defaultMode)
+        CFRunLoopWakeUp(runLoop)
+        entries[pid] = Entry(observer: observer, lastUsed: Date(), launchDate: launchDate)
+        return 0
+    }
+
+    func generation(pid: pid_t) -> UInt64? {
+        condition.lock()
+        defer { condition.unlock() }
+        return entries[pid]?.generation
+    }
+
+    func postsNotifications(pid: pid_t) -> Bool {
+        condition.lock()
+        defer { condition.unlock() }
+        return entries[pid]?.trust.postsNotifications ?? false
+    }
+
+    func observedChange(pid: pid_t, announced: Bool) {
+        condition.lock()
+        defer { condition.unlock() }
+        // Why: until the first notification arrives the observer may not be live yet, so a silent change proves nothing.
+        guard let entry = entries[pid], announced || entry.generation > 0 else { return }
+        entries[pid]?.trust.observedChange(announced: announced)
+    }
+
+    /// Waits until the app posts a notification after `generation` or until `deadline`; returns the new count and
+    /// when the latest notification arrived, or nil on timeout.
+    func wait(pid: pid_t, after generation: UInt64, until deadline: Date) -> (generation: UInt64, at: Date)? {
+        condition.lock()
+        defer { condition.unlock() }
+        while true {
+            if let entry = entries[pid], entry.generation != generation {
+                return (entry.generation, entry.lastEventAt ?? Date())
+            }
+            if !condition.wait(until: deadline) {
+                return nil
+            }
+        }
+    }
+
+    private func record(_ observer: AXObserver) {
+        condition.lock()
+        defer { condition.unlock() }
+        guard let pid = entries.first(where: { CFEqual($0.value.observer, observer) })?.key else { return }
+        entries[pid]?.generation &+= 1
+        entries[pid]?.lastEventAt = Date()
+        condition.broadcast()
+    }
+
+    private func evictIfNeeded() {
+        for (pid, entry) in entries where !pidIsLive(pid) {
+            detach(entry.observer)
+            entries.removeValue(forKey: pid)
+        }
+        unsupported = unsupported.filter { pidIsLive($0.key) }
+        while entries.count >= Self.maxApps, let oldest = entries.min(by: { $0.value.lastUsed < $1.value.lastUsed }) {
+            detach(oldest.value.observer)
+            entries.removeValue(forKey: oldest.key)
+        }
+    }
+
+    private func detach(_ observer: AXObserver) {
+        guard let runLoop else { return }
+        CFRunLoopRemoveSource(runLoop, AXObserverGetRunLoopSource(observer), .defaultMode)
+    }
+
+    /// Called with the lock held.
+    private func startedRunLoop() -> CFRunLoop? {
+        if let runLoop { return runLoop }
+        let ready = DispatchSemaphore(value: 0)
+        let box = AsyncBox<CFRunLoop>()
+        let thread = Thread {
+            box.result = .success(CFRunLoopGetCurrent())
+            // Why: a run loop with no sources returns at once; this port keeps it alive until observers attach.
+            RunLoop.current.add(Port(), forMode: .default)
+            ready.signal()
+            while true {
+                RunLoop.current.run(mode: .default, before: .distantFuture)
+            }
+        }
+        thread.name = "orca-ax-notifications"
+        thread.start()
+        guard ready.wait(timeout: .now() + 2) == .success, case let .success(started)? = box.result else { return nil }
+        runLoop = started
+        return started
+    }
+}
+
+private let notificationWatcher = AccessibilityNotificationWatcher()
+
 final class Provider {
     private var snapshots: [String: Snapshot] = [:]
     private var snapshotEntries: [CachedSnapshotEntry] = []
@@ -337,6 +502,8 @@ final class Provider {
         )
         // Why: raise once, before the action's reads, so the pre and post observations never raise again.
         let params = isForegroundRequest(requestParams) ? try recoverRequestedWindow(params: requestParams) : requestParams
+        // Why: watch from before the action, so a notification it causes during the first read is not missed.
+        let eventsBeforeAction = notificationWatcher.watch(pid: app.pid, launchDate: app.app.launchDate)
         var action = try runAction(params)
         // Why: the action's currentSnapshot just cached this target's tree from before the action;
         // a subtree read can't be compared with the whole-window read that follows.
@@ -347,7 +514,7 @@ final class Provider {
         do {
             let after = try observe(params: params)
             if let before, after.showsSameState(as: before) {
-                if let changed = try observeLateChange(before: before, params: params) {
+                if let changed = try observeLateChange(before: before, params: params, pid: app.pid, eventsBeforeAction: eventsBeforeAction) {
                     snapshot = changed
                 } else {
                     // Why: an AX call can succeed and do nothing, as AXPress does on many web controls (#31758).
@@ -355,6 +522,9 @@ final class Provider {
                     snapshot = after
                 }
             } else {
+                if before != nil, let eventsBeforeAction, let now = notificationWatcher.generation(pid: app.pid) {
+                    notificationWatcher.observedChange(pid: app.pid, announced: now != eventsBeforeAction)
+                }
                 snapshot = after
             }
         } catch let error as ProviderError where (error.code == "window_not_found" || error.code == "window_stale") && hasRequestedWindowSelector(params) {
@@ -378,20 +548,48 @@ final class Provider {
         return renderActionResult(action: action, snapshot: snapshot)
     }
 
-    /// Re-reads the target for about a second, since apps often apply an action on a later run-loop turn.
-    /// Returns the observation to report once something changed, or nil if nothing did.
-    private func observeLateChange(before: Snapshot, params: [String: JSONValue]) throws -> Snapshot? {
+    /// Re-reads the target for up to a second, since apps often apply an action on a later run-loop turn.
+    /// Reads follow the app's accessibility notifications when it posts them (AccessibilitySettlePlan), and fall back
+    /// to a read every 200 ms otherwise. Returns the observation to report once something changed, or nil if nothing did.
+    private func observeLateChange(
+        before: Snapshot,
+        params: [String: JSONValue],
+        pid: pid_t,
+        eventsBeforeAction: UInt64?
+    ) throws -> Snapshot? {
         let quietParams = params.merging(["noScreenshot": .bool(true)]) { _, replacement in replacement }
-        let deadline = Date().addingTimeInterval(1)
-        while Date() < deadline {
-            Thread.sleep(forTimeInterval: 0.2)
-            let polled = try observe(params: quietParams)
-            if !polled.showsSameState(as: before) {
-                if params["noScreenshot"]?.bool == true { return polled }
-                return try observe(params: params)
+        var seen = eventsBeforeAction.flatMap { _ in notificationWatcher.generation(pid: pid) }
+        var plan = AccessibilitySettlePlan(
+            start: Date(),
+            appPostsNotifications: seen != nil && notificationWatcher.postsNotifications(pid: pid),
+            eventsBeforeStart: seen != nil && seen != eventsBeforeAction
+        )
+        while true {
+            switch plan.next(now: Date()) {
+            case .finish:
+                return nil
+            case let .wait(until):
+                if let seenGeneration = seen {
+                    if let event = notificationWatcher.wait(pid: pid, after: seenGeneration, until: until) {
+                        seen = event.generation
+                        plan.eventArrived(at: event.at)
+                    }
+                } else {
+                    Thread.sleep(until: until)
+                }
+            case .read:
+                let announced = plan.hasUnreadEvent
+                plan.didRead(at: Date())
+                let polled = try observe(params: quietParams)
+                if !polled.showsSameState(as: before) {
+                    if seen != nil {
+                        notificationWatcher.observedChange(pid: pid, announced: announced)
+                    }
+                    if params["noScreenshot"]?.bool == true { return polled }
+                    return try observe(params: params)
+                }
             }
         }
-        return nil
     }
 
     /// Brings the requested window forward for --restore-window, once per request, and returns the params pinned
