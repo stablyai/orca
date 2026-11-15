@@ -29,7 +29,7 @@ const entry = `
 import { createRoot } from 'react-dom/client'
 import { SafeAreaProvider } from 'react-native-safe-area-context'
 import { RpcClientProvider } from './src/transport/connection/client-context'
-import { createShellPageClient, bootstrapShellPage } from './src/mobile-web-shell/bridge/page-bootstrap'
+import { createShellPageClient, bootstrapShellPage } from './src/mobile-web-shell/bridge/page-lifecycle/page-bootstrap'
 import { MobileNativeChatVisual } from './src/session/native-chat/visual/MobileNativeChatVisual'
 const client=createShellPageClient()
 bootstrapShellPage({target:document.documentElement,client,replaceUrl:()=>{},refuseUnroutedShell:()=>{},mount(client){
