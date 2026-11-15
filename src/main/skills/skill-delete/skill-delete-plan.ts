@@ -6,11 +6,11 @@ import type {
   SkillDeletePlanEntry,
   SkillDeleteRequest,
   SkillDeleteTargetSkill
-} from '../../../shared/skill-delete-contract'
+} from '../../../shared/skills/deletion/skill-delete-contract'
 import {
   normalizedSkillPath,
   type SkillPathSemantics
-} from '../../../shared/skill-path-containment'
+} from '../../../shared/skills/paths/skill-path-containment'
 import {
   enumerateSkillPlacementCandidates,
   requireEnumerableFilesystem,

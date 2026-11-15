@@ -5,7 +5,7 @@ import type {
   SkillDeleteBlockReason,
   SkillDeletePlan,
   SkillDeleteResultEntry
-} from '../../../../../shared/skill-delete-contract'
+} from '../../../../../shared/skills/deletion/skill-delete-contract'
 
 export function skillDeleteBlockReasonLabel(
   reason: SkillDeleteBlockReason,

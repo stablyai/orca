@@ -6,7 +6,7 @@ import { filterAiVaultSessions } from '../../../../shared/ai-vault/session-displ
 import { AI_VAULT_AGENTS } from '../../../../shared/ai-vault/contracts/ai-vault-types'
 import { scanAiVaultSessions } from '../../session-scanner'
 import { antigravityChatBrainDir } from '../../../antigravity/antigravity-chat-home'
-import { isAntigravityReferenceSession } from '../../../../shared/antigravity-session-origin'
+import { isAntigravityReferenceSession } from '../../../../shared/agent-session/lifecycle/provider-handles/antigravity-session-origin'
 import {
   isolatedScanRoots,
   writeAntigravityHistory,

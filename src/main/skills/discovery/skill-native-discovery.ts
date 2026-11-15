@@ -8,7 +8,7 @@ import type {
   SkillDiscoveryResult,
   SkillDiscoverySource,
   SkillSourceKind
-} from '../../../shared/skills'
+} from '../../../shared/skills/discovery/skills'
 import { buildSkillDiscoverySources, type SkillScanRoot } from './skill-discovery-sources'
 import {
   sortDiscoveredSkills,
@@ -37,10 +37,13 @@ import {
   type SkillScanOutcome
 } from './skill-scan-coalescer'
 import type { SkillProviderRootOverrides } from '../providers/skill-provider-destinations'
-import { skillDirectoryMaxDepth } from '../../../shared/skill-discovery-depth'
+import { skillDirectoryMaxDepth } from '../../../shared/skills/discovery/skill-discovery-depth'
 import { withoutBundledSkillCompatibilityCopies } from './bundled-skill-discovery-name'
 import { readSkillSummary } from './skill-discovery-summary'
-import { bundledSkillNames, requestedBundledSkillName } from '../../../shared/bundled-skill-names'
+import {
+  bundledSkillNames,
+  requestedBundledSkillName
+} from '../../../shared/skills/bundled/bundled-skill-names'
 
 // Share fixed home-root scans across workspace panes to bound repeated filesystem walks.
 export const SKILL_ROOT_SCAN_TTL_MS = 10_000

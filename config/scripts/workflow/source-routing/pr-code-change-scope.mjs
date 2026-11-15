@@ -109,7 +109,7 @@ const CODEX_INDEX_HEAL_CONTRACT_PREFIXES = [
   'src/main/codex/trust/toml/config-toml-trust',
   'src/main/pty/shell-startup/codex-no-daemon-binary-contract',
   'src/main/pty/shell-startup/codex-shell-launch-preflight',
-  'src/shared/codex-shell-function',
+  'src/shared/shell/launch/agents/codex-shell-function',
   'src/main/codex/history/index/codex-index-heal-binary-contract',
   'src/main/codex/history/index/codex-session-index-heal',
   'src/main/codex/app-server/codex-app-server-session',
@@ -291,7 +291,7 @@ const CROSS_VERSION_WIRE_PREFIXES = [
   'src/shared/agent-session/view/structured-agent-session-projection',
   'src/shared/workspace-session/workspace-session-sleeping-agents',
   // A current desktop's launch route against a released server's capabilities (cross-version-paired-structured-launch).
-  'src/shared/structured-native-chat-launch-route.ts',
+  'src/shared/agent-launch/choices/structured-native-chat-launch-route.ts',
   'src/renderer/src/lib/agent-session/launch/routing/agent-launch-routing.ts',
   'src/renderer/src/runtime/rpc/targets/paired-host-client-capabilities.ts',
   'src/shared/electron-remote-runtime-client-capabilities.ts',

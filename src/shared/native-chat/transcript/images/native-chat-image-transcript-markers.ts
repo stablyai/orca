@@ -1,4 +1,4 @@
-import { unwrapClaudePastedContent } from '../../../claude-pasted-content'
+import { unwrapClaudePastedContent } from '../../../agent-hook-listener/providers/claude/transcripts/claude-pasted-content'
 import {
   stripAnsiEscapeSequences,
   TERMINAL_CONTROL_CHARACTER_PATTERN

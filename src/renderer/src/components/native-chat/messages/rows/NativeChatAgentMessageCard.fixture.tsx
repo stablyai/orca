@@ -5,7 +5,7 @@ import { makeTab } from '@/store/terminals/testing/terminal-tab.test-fixture'
 import type { AgentMessageSource } from '../../../../../../shared/agent-session/agent-session-message-source'
 import { NativeChatAgentMessageCard } from './NativeChatAgentMessageCard'
 import { MessageRow } from './NativeChatMessageRow'
-import { projectStructuredAgentStartItem } from '../../../../../../shared/structured-agent-start-projection'
+import { projectStructuredAgentStartItem } from '../../../../../../shared/native-chat/transcript/messages/structured-agent-start-projection'
 import { NativeChatUserMessageRow } from './NativeChatUserMessageRow'
 import { orchestrationMailFixture } from '../../../../../../shared/agent-session/orchestration-mail.test-fixture'
 

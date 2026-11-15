@@ -24,7 +24,7 @@ import {
 } from '../source-control/review/terminal-delivery/mobile-review-terminal-operations'
 import type { MobileReviewTerminalTab } from '../source-control/review/terminal-delivery/review-terminal-reply-schema'
 import type { AiVaultResumeTargetStatus } from '../../../src/shared/ai-vault/resume/ai-vault-resume-target'
-import { QODER_OWNED_TERMINAL_CREATE_CAPABILITY } from '../../../src/shared/qoder-terminal-create-capability'
+import { QODER_OWNED_TERMINAL_CREATE_CAPABILITY } from '../../../src/shared/agent-launch/startup/qoder-terminal-create-capability'
 import { agentHistoryHostStatusSchema } from './agent-history-reply-schema'
 import { readMobileRuntimeHostPlatform } from '../transport/connection/mobile-runtime-host-platform'
 import { translate } from '../i18n/mobile-i18n'

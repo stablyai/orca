@@ -2,7 +2,7 @@ import type { AgentType } from '../../../shared/agent-status/contracts/agent-sta
 import type { NativeChatTurnLifecycle } from '../../../shared/native-chat/native-chat-types'
 import { resolveNativeChatTranscriptAgent } from '../../../shared/native-chat/native-chat-agent-support'
 import { isNoiseMessage } from '../../../shared/native-chat/native-chat-noise'
-import { claudeBashInputAsTypedCommand } from '../../../shared/claude-bash-input'
+import { claudeBashInputAsTypedCommand } from '../../../shared/agent-hook-listener/providers/claude/transcripts/claude-bash-input'
 import { asRecord } from '../../ai-vault/parsing/session-record-fields'
 import { extractString } from '../../../shared/trimmed-string'
 import { parseJsonObject } from '../../ai-vault/parsing/session-json-object'

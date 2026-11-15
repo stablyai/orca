@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import type { DiscoveredSkill } from '../../../shared/skills'
+import type { DiscoveredSkill } from '../../../shared/skills/discovery/skills'
 import {
   AGENT_SKILL_SELECTOR_AMBIGUOUS_CODE,
   AgentSkillSharingError
-} from '../../../shared/agent-skill-sharing-contract'
+} from '../../../shared/skills/sharing/agent-skill-sharing-contract'
 import { selectDiscoveredSkills } from './agent-skill-selection'
 
 function skill(id: string, name: string): DiscoveredSkill {

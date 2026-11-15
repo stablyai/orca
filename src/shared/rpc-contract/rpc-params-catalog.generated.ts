@@ -2,7 +2,7 @@
 // run `pnpm run generate:rpc-params-catalog`.
 import type { z } from 'zod'
 import { HostAccountLaunchEnvParams } from '../agent-launch/startup/host-account-launch-env'
-import { AgentSkillShareRequestSchema } from '../agent-skill-sharing-contract'
+import { AgentSkillShareRequestSchema } from '../skills/sharing/agent-skill-sharing-contract'
 import {
   AiVaultSearchRequestSchema,
   AiVaultSearchStatusRequestSchema,
@@ -27,7 +27,7 @@ import {
   BundledSkillAutoUpdateRequestSchema,
   BundledSkillExecuteRequestSchema,
   BundledSkillPlanRequestSchema
-} from '../bundled-skill-plan'
+} from '../skills/bundled/bundled-skill-plan'
 import { DelegatedMobileDeviceSyncParamsSchema } from '../delegated-mobile-device-contract'
 import {
   DesktopBrowserBridgeAttachParams,
@@ -798,18 +798,18 @@ import {
 import { WorktreeAdoptProvisionedRoot } from './workspaces/worktree-provisioned-root-params'
 import { RepoIconDataUrlsParams } from '../sidebar-list/catalog/repo-icon-data-urls-contract'
 import { SidebarInputsReadParams } from '../sidebar-list/feed/sidebar-inputs-feed-contract'
-import { SkillBundleInstallRequestSchema } from '../skill-bundle-install-contract'
-import { SkillDeleteRequestSchema } from '../skill-delete-contract'
+import { SkillBundleInstallRequestSchema } from '../skills/installation/skill-bundle-install-contract'
+import { SkillDeleteRequestSchema } from '../skills/deletion/skill-delete-contract'
 import {
   SkillInstallPreviewRequestSchema,
   SkillInstallRequestSchema,
   SkillRemoveRequestSchema
-} from '../skill-install-contract'
+} from '../skills/installation/skill-install-contract'
 import {
   SkillUploadBeginRequestSchema,
   SkillUploadChunkRequestSchema,
   SkillUploadCommitRequestSchema
-} from '../skill-upload-session-contract'
+} from '../skills/sharing/skill-upload-session-contract'
 
 // Why: the host parses params with these schemas, so a client that matches this map
 // matches the dispatcher. Clients must import it for types only — parsing a params

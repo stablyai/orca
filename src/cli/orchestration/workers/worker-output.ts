@@ -1,6 +1,6 @@
 import type { RuntimeTerminalRead } from '../../../shared/terminal/runtime/runtime-terminal-contracts'
 import type { OrchestrationWorkerReadResult } from '../../../shared/orchestration/workers/orchestration-worker-output'
-import { formatWorkerTranscriptMessage } from '../../../shared/worker-transcript-text'
+import { formatWorkerTranscriptMessage } from '../../../shared/native-chat/transcript/worker-transcript-text'
 
 export type LegacyWorkerReadResult = {
   dispatchId: string

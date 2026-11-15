@@ -5,7 +5,7 @@
 // structuredChildWorkLegacySubagents is in-app, not wire; retain it until AgentStatusEntry.subagents readers use children.
 
 import type { StructuredAgentId } from './lifecycle/provider-handles/agent-session-provider-handle'
-import { codexChildCommandDescription } from '../codex-child-command-description'
+import { codexChildCommandDescription } from '../agent-hook-listener/providers/codex/codex-child-command-description'
 import {
   projectAgentChildWorkLegacyBackgroundTasks,
   projectAgentChildWorkLegacySubagents,

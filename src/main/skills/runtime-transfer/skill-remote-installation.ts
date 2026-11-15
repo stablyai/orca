@@ -6,21 +6,21 @@ import {
   type SkillBundleInstallProgress,
   type SkillBundleInstallRequest,
   type SkillBundleInstallResult
-} from '../../../shared/skill-bundle-install-contract'
+} from '../../../shared/skills/installation/skill-bundle-install-contract'
 import {
   SkillInstallResultSchema,
   type SkillInstallRequest,
   type SkillInstallResult
-} from '../../../shared/skill-install-contract'
+} from '../../../shared/skills/installation/skill-install-contract'
 import {
   SKILL_BUNDLE_INSTALL_CAPABILITY,
   SKILL_INSTALL_PROGRESS_CAPABILITY,
   SKILL_INSTALL_PROVIDERS_CAPABILITY,
   SKILL_UPLOAD_CAPABILITY
-} from '../../../shared/skill-install-capability'
+} from '../../../shared/skills/capabilities/skill-install-capability'
 import { callRuntimeEnvironment } from '../../ipc/runtime-environments/requests/runtime-environment-transport-routing'
 import { transferSkillPackageToRuntime } from './skill-client-mediated-transfer'
-import { SkillInstallFailureSchema } from '../../../shared/skill-install-failure'
+import { SkillInstallFailureSchema } from '../../../shared/skills/installation/skill-install-failure'
 import { SkillInstallOperationError } from '../install/skill-install-operation-error'
 import { recordSkillCapabilityAbsence } from '../observability/skill-operation-observability'
 import { startSkillInstallProgressPolling } from './skill-install-progress-polling'

@@ -1,5 +1,5 @@
 import { recognizeAgentProcessFromCommandLine } from '../../../shared/agent-status/process/agent-process-recognition'
-import { resolveOuterWrapperForegroundProcess } from '../../../shared/foreground-wrapper-agent'
+import { resolveOuterWrapperForegroundProcess } from '../../../shared/agent-status/process/foreground-wrapper-agent'
 import { unreadableArgvName, type ProcessTableRow } from '../../../shared/process-table-snapshot'
 import {
   getFreshProcessTableSnapshot,

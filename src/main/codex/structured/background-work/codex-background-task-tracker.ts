@@ -19,7 +19,7 @@ import { CodexChildWorkEvidence } from './codex-child-work-evidence'
 import type { CodexAbandonedCommand } from '../prompts/codex-prompt-registry'
 import type { CodexStructuredSessionAdapterDeps } from '../session-lifecycle/codex-structured-session-state'
 import { boundSubagentLabel } from '../../../native-chat/agent-session-journal/item-lifecycle/journal-subagent-item'
-import { codexChildCommandDescription } from '../../../../shared/codex-child-command-description'
+import { codexChildCommandDescription } from '../../../../shared/agent-hook-listener/providers/codex/codex-child-command-description'
 
 export type CodexChildWorkSink = {
   deliver: (evidence: AgentChildWorkEvidence[]) => void
