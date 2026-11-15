@@ -1,5 +1,5 @@
 import { Split } from 'lucide-react-native'
-import type { StyleProp, ViewStyle } from 'react-native'
+import { View, type StyleProp, type ViewStyle } from 'react-native'
 
 const ROTATED = { transform: [{ rotate: '90deg' }] }
 
@@ -13,5 +13,10 @@ export function MobileForkIcon({
   color: string
   style?: StyleProp<ViewStyle>
 }): React.JSX.Element {
-  return <Split size={size} color={color} style={[ROTATED, style]} />
+  // Lucide copies a style onto every path, where react-native-svg rotates it about (0,0) out of the viewBox.
+  return (
+    <View style={[ROTATED, style]}>
+      <Split size={size} color={color} />
+    </View>
+  )
 }
