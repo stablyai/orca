@@ -289,7 +289,6 @@ const CROSS_VERSION_WIRE_PREFIXES = [
   'src/shared/agent-session-turn-record',
   'src/shared/agent-session/view/structured-agent-session-agent-status',
   'src/shared/agent-session/view/structured-agent-session-projection',
-  'src/shared/agent-session/requests/structured-agent-session-projection-sender.spec.ts',
   'src/shared/workspace-session/workspace-session-sleeping-agents',
   // A current desktop's launch route against a released server's capabilities (cross-version-paired-structured-launch).
   'src/shared/structured-native-chat-launch-route.ts',
