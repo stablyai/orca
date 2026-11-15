@@ -23023,6 +23023,8 @@
       "tabCloseAll": "Fermer tous les onglets de l'éditeur",
       "tabRename": "Renommer l'onglet actif",
       "tabReopenClosed": "Rouvrir l'onglet fermé",
+      "tabMoveLeft": "Déplacer l'onglet actif vers la gauche",
+      "tabMoveRight": "Déplacer l'onglet actif vers la droite",
       "tabNextSameType": "Onglet suivant (même type)",
       "tabPreviousSameType": "Onglet précédent (même type)",
       "tabNextAllTypes": "Onglet suivant (tous types)",
