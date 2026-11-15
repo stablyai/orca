@@ -150,8 +150,7 @@ describe('MobileNativeChatSessionOptionPickers', () => {
 
   it('names both the saved and running permission on the model pill and in the drill-in', () => {
     mount([MODEL_DESCRIPTOR, DEFERRED_PERMISSION_DESCRIPTOR], false, 'permissionMode')
-    const name = pill('Model').props.accessibilityLabel as string
-    expect(name).toMatch(/Full access.*Ask for approval$/)
+    expect(pill('Model').props.accessibilityLabel).toMatch(/Full access.*Ask for approval$/)
     const texts = findAllByHostType(findByHostType(renderer!.root, 'BottomDrawer'), 'Text').map(
       (node) => node.props.children
     )
