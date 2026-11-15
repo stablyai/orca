@@ -167,6 +167,16 @@ const answer = (
 ) => ctx.holds.answer({ dispatchId: ctx.dispatch.id, approvalId, decision, message: REASON })
 const deny = (ctx: ReturnType<typeof setup>, approvalId: string) => answer(ctx, approvalId)
 
+/** Allows, ticking only until answered: further ticks would fire its 10-minute evidence fallback. */
+async function answeredAllow(ctx: ReturnType<typeof setup>, approvalId: string) {
+  let answered: unknown = null
+  void answer(ctx, approvalId, 'allow').then((result) => (answered = result))
+  for (let i = 0; i < 40 && !answered; i++) {
+    await ctx.tick()
+  }
+  return answered
+}
+
 /** The dialog leaves without Orca's answer, then the lead's turn ends with `result` written. */
 async function closedInTerminal(ctx: ReturnType<typeof setup>, result: ClaudeToolResult) {
   const approvalId = await opened(ctx, hook('tool-1'))
@@ -207,10 +217,7 @@ describe('terminal worker approval holds', () => {
         ctx.screen.lines = AFTER
       })
     )
-    const answering = answer(ctx, approvalId, 'allow')
-    await ctx.tick(40)
-
-    expect(await answering).toMatchObject({ ok: true })
+    expect(await answeredAllow(ctx, approvalId)).toMatchObject({ ok: true })
     ctx.screen.record = record({ isError: false, text: 'built' }, 'allow')
     ctx.holds.observe(postToolUse('tool-1'))
     expect(ctx.closings()).toEqual([])
@@ -224,13 +231,7 @@ describe('terminal worker approval holds', () => {
         ctx.screen.lines = AFTER
       })
     )
-    let answered: unknown = null
-    void answer(ctx, approvalId, 'allow').then((result) => (answered = result))
-    // Only until it is answered: further ticks would fire its 10-minute fallback.
-    for (let i = 0; i < 40 && !answered; i++) {
-      await ctx.tick()
-    }
-    expect(answered).toMatchObject({ ok: true })
+    expect(await answeredAllow(ctx, approvalId)).toMatchObject({ ok: true })
 
     ctx.screen.record = record(USER_NO)
     ctx.holds.observe({
