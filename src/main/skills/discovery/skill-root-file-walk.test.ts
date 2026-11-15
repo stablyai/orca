@@ -48,3 +48,20 @@ describe('findSkillFiles', () => {
     expect(isSkillRootUnavailableError(await walk.catch((error: unknown) => error))).toBe(true)
   })
 })
+
+describe('findSkillFiles walk options', () => {
+  it('forwards skipHiddenDirectories and stopAtSkillDirectories to the walk', async () => {
+    const root = join(await makeTree(), 'skills')
+    const visible = join(root, 'b', 'SKILL.md')
+    await writeFileAt(join(root, '.hidden', 'a', 'SKILL.md'))
+    await writeFileAt(visible)
+    await writeFileAt(join(root, 'b', 'refs', 'c', 'SKILL.md'))
+
+    await expect(
+      findSkillFiles(root, 4, undefined, {
+        skipHiddenDirectories: true,
+        stopAtSkillDirectories: true
+      })
+    ).resolves.toEqual([visible])
+  })
+})
