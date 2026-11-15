@@ -40,8 +40,14 @@ const ANTIGRAVITY_DESCRIPTIONS: Partial<Record<AgentChatPermissionMode, string>>
   'accept-edits': 'Approves file edits; asks for the rest'
 }
 
+const DEVIN_DESCRIPTIONS: Partial<Record<AgentChatPermissionMode, string>> = {
+  // Orca's Ask runs Devin's accept-edits, its strictest mode over ACP.
+  ask: 'Approves file edits; asks for the rest'
+}
+
 const AGENT_DESCRIPTIONS = new Map<string, Partial<Record<AgentChatPermissionMode, string>>>([
   ['codex', CODEX_DESCRIPTIONS],
+  ['devin', DEVIN_DESCRIPTIONS],
   ['claude', {}],
   ['antigravity', ANTIGRAVITY_DESCRIPTIONS]
 ])

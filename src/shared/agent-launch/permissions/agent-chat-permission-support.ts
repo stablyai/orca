@@ -27,6 +27,11 @@ const EDIT_ACCEPTING_CHAT_PERMISSION_MODES: AgentChatPermissionModeSupport = {
   modes: ['ask', 'accept-edits', 'full-access']
 }
 
+// Devin's Smart mode reviews approval requests itself; its Ask runs accept-edits over ACP.
+const DEVIN_CHAT_PERMISSION_MODES: AgentChatPermissionModeSupport = {
+  modes: ['ask', 'auto', 'full-access']
+}
+
 const AGENT_CHAT_PERMISSION_MODES_BY_AGENT = new Map<string, AgentChatPermissionModeSupport>([
   ['claude', CLAUDE_CHAT_PERMISSION_MODES],
   ['codex', CODEX_CHAT_PERMISSION_MODES],
@@ -34,6 +39,7 @@ const AGENT_CHAT_PERMISSION_MODES_BY_AGENT = new Map<string, AgentChatPermission
   ['opencode', ACP_CHAT_PERMISSION_MODES],
   ['opencode2', ACP_CHAT_PERMISSION_MODES],
   ['omp', ACP_CHAT_PERMISSION_MODES],
+  ['devin', DEVIN_CHAT_PERMISSION_MODES],
   ['copilot', ACP_CHAT_PERMISSION_MODES],
   ['cursor', ACP_CHAT_PERMISSION_MODES],
   ['kimi', KIMI_CHAT_PERMISSION_MODES],

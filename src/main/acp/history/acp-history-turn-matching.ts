@@ -19,7 +19,14 @@ export type AcpHistoryCandidate = { source: AcpIdentifiedHistoryTurn; items: Acp
 export type AcpHistoryReadJournal = {
   items: ReadonlyMap<string, AgentJournalRenderItem>
 }
-type NativeTurn = { itemId: string; sequence: number; text: string | null; output: boolean }
+type NativeTurn = {
+  itemId: string
+  sequence: number
+  text: string | null
+  output: boolean
+  /** The provider's own turn name, when its prompt end reported one. */
+  providerTurnId?: string
+}
 
 export function acpHistoryHasOutput(body: AgentJournalItemBody): boolean {
   return (
@@ -52,7 +59,8 @@ export function acpNativeTurns(
         itemId: item.itemId,
         sequence: item.sequence,
         output: false,
-        text: user?.kind === 'message' && !user.command ? promptText(user.blocks) : null
+        text: user?.kind === 'message' && !user.command ? promptText(user.blocks) : null,
+        ...(turn.providerTurnId ? { providerTurnId: turn.providerTurnId } : {})
       })
     }
   }
@@ -78,6 +86,13 @@ export function matchAcpHistoryTurns(
 ) {
   const natives = acpNativeTurns(scope, journal)
   const nativeIndex = new Map(natives.map((native, index) => [native.itemId, index]))
+  // A provider-named live turn claims the replayed turn that reports the same id.
+  const claimedTurns = new Map<string, number>()
+  for (const [index, native] of natives.entries()) {
+    if (native.providerTurnId) {
+      claimedTurns.set(native.providerTurnId, index)
+    }
+  }
   const adopted = new Map<string, number>()
   for (const item of journal.items.values()) {
     const identity = parseAgentJournalItemKey(item.itemId)
@@ -121,6 +136,10 @@ export function matchAcpHistoryTurns(
         }
       }
     }
+    const claimed = claimedTurns.get(source.turn)
+    if (claimed !== undefined) {
+      owners.add(claimed)
+    }
     const native = [...owners][0]
     const historical =
       heldTurn && isHistoricalProviderTimelineItem(heldTurn, read) ? heldTurn : undefined
@@ -154,7 +173,7 @@ export function matchAcpHistoryTurns(
           source.startedAt <= importedAt)
       ) {
         kind.set(source.turn, 'adopted')
-        if (scope.identity === 'user-message-id') {
+        if (scope.identity !== 'prompt-id') {
           let sequence = -Infinity
           for (const value of adoptedSequence) {
             check()
@@ -165,7 +184,7 @@ export function matchAcpHistoryTurns(
       }
     }
   }
-  if (scope.identity === 'user-message-id') {
+  if (scope.identity !== 'prompt-id') {
     const used = new Set(matched.values())
     for (const [id, sequence] of boundaries) {
       let low = 0

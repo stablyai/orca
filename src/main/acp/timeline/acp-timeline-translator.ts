@@ -97,7 +97,13 @@ export class AcpTimelineTranslator {
     at: number
   ): ProviderTimelineEvent[] {
     const hookBlock = this.dialect.hookBlock?.(result._meta)
-    return this.finishPrompt(clientMessageId, { stopReason: result.stopReason, at, hookBlock })
+    const providerTurnId = this.dialect.promptTurnId?.(result._meta)
+    return this.finishPrompt(clientMessageId, {
+      stopReason: result.stopReason,
+      at,
+      ...(providerTurnId === undefined ? {} : { providerTurnId }),
+      hookBlock
+    })
   }
 
   /** Only agent-authored failures supply diagnostic text; connection loss is handled separately. */

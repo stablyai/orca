@@ -46,6 +46,13 @@ export function nativeChatPermissionModeDescription(
 ): string {
   switch (mode) {
     case 'ask':
+      // Orca's Ask runs Devin's accept-edits, its strictest mode over ACP.
+      if (agent === 'devin') {
+        return t(
+          'components.native-chat.composer.permissionAcceptEditsAntigravityDescription',
+          'Approves file edits; asks for the rest'
+        )
+      }
       if (agent !== 'claude') {
         return t(
           'components.native-chat.composer.permissionAskSharedDescription',

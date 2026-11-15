@@ -39,7 +39,15 @@ export class AcpLoadHistory {
 }
 
 /** Where a replayed turn's id comes from. */
-export type AcpHistoryTurnIdentity = 'prompt-id' | 'user-message-id'
+export type AcpHistoryTurnIdentity = 'prompt-id' | 'user-message-id' | 'client-message-id'
+
+/** Devin names each turn's root message in `update._meta` under its Cognition namespace. */
+const CLIENT_MESSAGE_ID_META_KEY = 'cognition.ai/clientMessageId'
+
+function clientMessageId(meta: Record<string, unknown> | undefined): string | undefined {
+  const value = meta?.[CLIENT_MESSAGE_ID_META_KEY]
+  return typeof value === 'string' && value ? value : undefined
+}
 
 type AcpHistoryUser = {
   blocks: NativeChatBlock[]
@@ -157,16 +165,21 @@ export function acpHistoryTurns(
     }
     const { update, _meta: meta } = parsed.data
     if (update.sessionUpdate === 'user_message_chunk') {
-      const key = identity === 'user-message-id' ? update.messageId : update._meta?.promptIndex
+      const key =
+        identity === 'user-message-id'
+          ? update.messageId
+          : identity === 'client-message-id'
+            ? clientMessageId(update._meta)
+            : update._meta?.promptIndex
       marked ||= update._meta?.promptIndex !== undefined
       // After marked roots appear, unmarked users stay inside their execution.
       const root =
-        identity === 'user-message-id'
+        identity !== 'prompt-id'
           ? !inUser || userKey !== key
           : update._meta?.interjection !== true &&
             (!marked || key !== undefined) &&
             (!inUser || userKey !== key)
-      if (update._meta?.hostTurn === true || (identity === 'user-message-id' && !key)) {
+      if (update._meta?.hostTurn === true || (identity !== 'prompt-id' && !key)) {
         throw new Error('unattributed-history-user')
       }
       if (root) {
@@ -182,8 +195,8 @@ export function acpHistoryTurns(
         turns.push(current)
         lastUser = current.user
         ended = false
-        if (identity === 'user-message-id') {
-          nameTurn(current, update.messageId)
+        if (identity !== 'prompt-id') {
+          nameTurn(current, typeof key === 'string' ? key : undefined)
         }
       } else if (!current || ended) {
         throw new Error('unattributed-history-user')

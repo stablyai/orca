@@ -2,6 +2,13 @@ import { join } from 'node:path'
 import { GROK_ACP_DIALECT } from '../acp-dialects/grok-dialect'
 import { OMP_ACP_DIALECT } from '../acp-dialects/omp-dialect'
 import { OPENCODE_ACP_DIALECT } from '../acp-dialects/opencode-dialect'
+import { DEVIN_ACP_DIALECT } from '../acp-dialects/devin-dialect'
+import {
+  devinAcpAccountBinding,
+  scrubDevinAcpEnvironment
+} from '../../devin/devin-acp-account-binding'
+import { DEVIN_SESSION_HISTORY } from '../../devin/devin-session-history'
+import { devinTranscriptImport } from '../../devin/devin-transcript-import'
 import { directoryAccountBinding } from './acp-account-binding'
 import { openCodeAcpAccountBinding } from '../../opencode/accounts/opencode-structured-account-home'
 import { scrubOpenCodeAcpEnvironment } from '../../opencode/acp/opencode-acp-environment'
@@ -153,11 +160,40 @@ const OMP_LAUNCH_SPEC: AcpLaunchSpec = {
   sessionHistory: OMP_SESSION_HISTORY
 }
 
+const DEVIN_LAUNCH_SPEC: AcpLaunchSpec = {
+  agent: 'devin',
+  command: 'devin',
+  args: () => ['acp'],
+  env: {},
+  scrubEnvironment: scrubDevinAcpEnvironment,
+  dialect: DEVIN_ACP_DIALECT,
+  loginCommand: agentSessionSetupFor('devin')?.loginCommand ?? [],
+  // No authMethod: Devin's only sign-in opens a browser.
+  account: devinAcpAccountBinding(),
+  installDirectories: ({ env, homePath }) => [
+    join(homePath, '.local', 'bin'),
+    ...(env.LOCALAPPDATA ? [join(env.LOCALAPPDATA, 'devin', 'cli', 'bin')] : [])
+  ],
+  // First release verified to serve the ACP surface this adapter uses.
+  minimumVersions: ['3000.10.31'],
+  // Devin's `ask` and `plan` change what it does, not what it may do unasked.
+  permissionModeConfig: {
+    values: { ask: 'accept-edits', auto: 'smart', 'full-access': 'bypass' }
+  },
+  // A listing session leaves nothing: Devin saves only on the first prompt.
+  modelDiscovery: { kind: 'session', listingNamesConfiguredModel: false },
+  // Replayed turns name their root user message, not the host's prompt id.
+  historyCatchUp: 'client-message-id',
+  transcriptImport: devinTranscriptImport(),
+  sessionHistory: DEVIN_SESSION_HISTORY
+}
+
 export const ACP_LAUNCH_SPECS: readonly AcpLaunchSpec[] = [
   GROK_LAUNCH_SPEC,
   OPENCODE_LAUNCH_SPEC,
   OPENCODE2_LAUNCH_SPEC,
   OMP_LAUNCH_SPEC,
+  DEVIN_LAUNCH_SPEC,
   ANTIGRAVITY_LAUNCH_SPEC,
   COPILOT_LAUNCH_SPEC,
   KIMI_LAUNCH_SPEC,

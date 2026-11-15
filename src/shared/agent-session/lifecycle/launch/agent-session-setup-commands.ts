@@ -33,6 +33,13 @@ export const AGENT_SESSION_SETUP_COMMANDS = [
   { agent: 'pi', loginCommand: ['pi'], slashCommand: '/login' },
   { agent: 'omp', loginCommand: ['omp'], slashCommand: '/login' },
   {
+    agent: 'devin',
+    loginCommand: ['devin', 'auth', 'login'],
+    // A browser login cannot complete its localhost redirect from another device.
+    remoteLoginCommand: ['devin', 'auth', 'login', '--force-manual-token-flow'],
+    installCommand: 'curl -fsSL https://cli.devin.ai/install.sh | bash'
+  },
+  {
     agent: 'copilot',
     loginCommand: ['copilot', 'login'],
     remoteLoginCommand: ['copilot', 'login', '--device-code'],

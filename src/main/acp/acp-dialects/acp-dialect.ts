@@ -116,6 +116,8 @@ export type AcpTurnEnding = {
   stopReason: string
   at: number
   durationMs?: number
+  /** The provider's own name for the turn, reported when it ends. */
+  providerTurnId?: string
   failureDetail?: string
   notSignedIn?: boolean
   /** The agent had no model for the prompt; why (selection or sign-in) is unknown. */
@@ -202,7 +204,11 @@ export type AcpDialect = {
   sessionInOtherFolder?(error: AcpAgentError, sessionId: string, cwd: string): boolean
   /** Reopening moves a session into the folder it is reopened from, so reopen it where it is listed. */
   reopenMovesSession?: true
+  /** Another process holds this session; reopening must fail, never replace it. */
+  sessionInUse?(error: AcpAgentError, sessionId: string): boolean
   hookBlock?(meta: unknown): AcpHookBlock | undefined
+  /** The agent's own id for the turn a prompt opened, if its result reports one. */
+  promptTurnId?(meta: unknown): string | undefined
   failedTurnText?(stopReason: string): string
   compactionReply?(text: string): AcpCompactionReply | undefined
   /** The agent's own command for /compact. */

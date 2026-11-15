@@ -11,6 +11,7 @@ import type { AgentSessionAttachParams, AttachedJournal } from './structured-age
 import type { JournalReplacementItem } from '../../agent-session-journal/context-epochs/journal-epoch-replacement'
 import { prepareLegacyTranscriptImport } from '../../agent-session-journal/history-import/journal-legacy-import'
 import { throwIfSignalAborted } from '../../../../shared/concurrency/abort-signal-reason'
+import { resolveNativeChatTranscriptAgent } from '../../../../shared/native-chat/native-chat-agent-support'
 import type { StructuredAgentSessionAttachContext } from './structured-agent-session-attach-context'
 
 export async function prepareCreateTranscript(
@@ -57,13 +58,18 @@ export async function prepareAdoptedTranscript(
   }
 }
 
+// Agents without a transcript decoder replay adopted history through their provider session.
+function adoptedTranscriptReplayed(agent: string): boolean {
+  return agent !== 'pi' && !resolveNativeChatTranscriptAgent(agent)
+}
+
 // Validate before a new record can claim the provider conversation.
 async function readAdoptedTranscript(
   params: AgentSessionAttachParams,
   signal?: AbortSignal
 ): Promise<JournalReplacementItem[] | null> {
   const adopt = params.adopt
-  if (!adopt) {
+  if (!adopt || adoptedTranscriptReplayed(params.agent)) {
     return null
   }
   if (!adopt.transcriptPath) {
@@ -168,6 +174,9 @@ async function applyAdoptedTranscript(
       },
       undefined
     )
+    return
+  }
+  if (adoptedTranscriptReplayed(params.agent)) {
     return
   }
   if (!adopt.transcriptPath) {

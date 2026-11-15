@@ -25,6 +25,7 @@ import {
   NAMESPACE,
   providerItemId
 } from '../../native-chat/agent-session-timeline/provider-timeline-assembler-test-support'
+import { DEVIN_ACP_DIALECT } from '../acp-dialects/devin-dialect'
 import { GROK_ACP_DIALECT } from '../acp-dialects/grok-dialect'
 import { OPENCODE_ACP_DIALECT } from '../acp-dialects/opencode-dialect'
 import {
@@ -131,6 +132,89 @@ describe('ACP history catch-up', () => {
       'Reply with exactly the word ONE.',
       expect.stringContaining('TWO-TOOL')
     ])
+  })
+
+  it('names a Devin replayed turn by its client message id and adds it once', async () => {
+    const { fixture, catchUp } = await setup(DEVIN_ACP_DIALECT, 'client-message-id')
+    const frames = [
+      replayUpdate('user_message_chunk', {
+        content: { type: 'text', text: 'Reply with exactly: PONG' },
+        _meta: { 'cognition.ai/clientMessageId': 'cm-1', 'cognition.ai/eventId': '1' }
+      }),
+      replayUpdate('agent_thought_chunk', {
+        content: { type: 'text', text: 'thinking' },
+        _meta: { 'cognition.ai/eventId': '2' }
+      }),
+      replayUpdate('agent_message_chunk', {
+        content: { type: 'text', text: 'PONG' },
+        _meta: { 'cognition.ai/eventId': '2' }
+      })
+    ]
+    await catchUp(frames)
+    const rows = await fixture.rig.rows()
+    expect(userTexts(rows)).toEqual(['Reply with exactly: PONG'])
+    expect(rows.some((row) => row.body.kind === 'message' && row.body.role === 'assistant')).toBe(
+      true
+    )
+
+    await catchUp(frames)
+    expect(await fixture.rig.rows()).toEqual(rows)
+  })
+
+  it('leaves a Devin turn the chat ran alone, named by its prompt result', async () => {
+    const { fixture, catchUp } = await setup(DEVIN_ACP_DIALECT, 'client-message-id')
+    await chatSend(fixture, 'A:1', 'Reply with exactly: PONG')
+    await fixture.feed([
+      {
+        direction: 'out',
+        process: 'A',
+        message: {
+          id: 1,
+          method: 'session/prompt',
+          params: { sessionId: NAMESPACE, prompt: [] }
+        }
+      },
+      {
+        direction: 'in',
+        process: 'A',
+        message: {
+          method: 'session/update',
+          params: {
+            sessionId: NAMESPACE,
+            update: {
+              sessionUpdate: 'agent_message_chunk',
+              content: { type: 'text', text: 'PONG' },
+              _meta: { 'cognition.ai/eventId': '2' }
+            }
+          }
+        }
+      },
+      {
+        direction: 'in',
+        process: 'A',
+        message: {
+          id: 1,
+          result: {
+            stopReason: 'end_turn',
+            _meta: { 'cognition.ai/userMessageId': 'cm-1' }
+          }
+        }
+      }
+    ])
+    const before = await fixture.rig.rows()
+    await fixture.restart()
+
+    await catchUp([
+      replayUpdate('user_message_chunk', {
+        content: { type: 'text', text: 'Reply with exactly: PONG' },
+        _meta: { 'cognition.ai/clientMessageId': 'cm-1', 'cognition.ai/eventId': '1' }
+      }),
+      replayUpdate('agent_message_chunk', {
+        content: { type: 'text', text: 'PONG' },
+        _meta: { 'cognition.ai/eventId': '2' }
+      })
+    ])
+    expect(await fixture.rig.rows()).toEqual(before)
   })
 
   it('adds a Grok turn made outside the chat under its own id, never the turn Orca sent', async () => {

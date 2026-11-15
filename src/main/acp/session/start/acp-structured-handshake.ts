@@ -161,12 +161,17 @@ export async function initializeAcpStructuredSession(
       }
       if (!started) {
         withAcpStartupDiagnostic(error, connection, spec.dialect)
-        takeover = await acpReopenTakeover(error, resume, {
-          // An agent already exited, its output still draining, has no session to take over in.
-          over: connection.closed || connection.exited || input.abandoned(),
-          now: now(),
-          warn: (fields) => deps.logger?.warn(ACP_REOPEN_FAILED, { ...fields, sessionId })
-        })
+        takeover = await acpReopenTakeover(
+          error,
+          resume,
+          {
+            // An agent already exited, its output still draining, has no session to take over in.
+            over: connection.closed || connection.exited || input.abandoned(),
+            now: now(),
+            warn: (fields) => deps.logger?.warn(ACP_REOPEN_FAILED, { ...fields, sessionId })
+          },
+          spec.dialect
+        )
       }
     }
   }

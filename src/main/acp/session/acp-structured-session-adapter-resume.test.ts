@@ -11,13 +11,14 @@ import {
 import { tick } from '../process/testing/acp-scripted-agent.test-support'
 import type { AcpScriptedAgent } from '../process/testing/acp-scripted-agent.test-support'
 import { acpLaunchSpecFor } from '../launch/acp-launch-registry'
+import { DEVIN_ACP_DIALECT } from '../acp-dialects/devin-dialect'
 import {
+  GROK,
   GROK_CONFIG_OPTIONS,
   openAcpAdapterRig,
   PROVIDER_SESSION,
   replyChunk,
   sendHello,
-  GROK,
   type AcpAdapterRig
 } from './testing/acp-structured-adapter.test-support'
 
@@ -223,6 +224,63 @@ describe('reattaching a Grok chat the journal holds', () => {
       expect(await notRestoredRows(rig)).toHaveLength(1)
     }
   )
+
+  it('starts a new session in place of a Devin chat that never sent its first prompt', async () => {
+    const rig = await openAcpAdapterRig({
+      spec: { ...GROK, dialect: DEVIN_ACP_DIALECT },
+      launch: {
+        resume: {
+          sessionId: 'never-saved',
+          key: 'acp:devin:never-saved',
+          mayBeUnsaved: async () => true,
+          lossKeys: []
+        }
+      },
+      initialize: RESUMES,
+      // Recorded from Devin 3000.10.31, which saves a session only on its first prompt.
+      script: (agent) =>
+        agent.on('session/load', (frame) =>
+          agent.fail(frame, -32016, 'Session not found', {
+            'cognition.ai/errorKind': 'session_not_found',
+            'cognition.ai/retryable': false
+          })
+        )
+    })
+    await rig.acquire()
+    expect(rig.started().link).toMatchObject({ supersedesKey: 'acp:devin:never-saved' })
+    expect(await notRestoredRows(rig)).toEqual([])
+  })
+
+  it('fails a reopen while another Devin process holds the session rather than replacing it', async () => {
+    const rig = await openAcpAdapterRig({
+      spec: { ...GROK, dialect: DEVIN_ACP_DIALECT },
+      launch: {
+        resume: {
+          sessionId: 'saved-1',
+          key: 'acp-key-saved-1',
+          mayBeUnsaved: async () => false,
+          lossKeys: []
+        }
+      },
+      initialize: RESUMES,
+      script: (agent) =>
+        agent.on('session/load', (frame) =>
+          agent.fail(
+            frame,
+            -32015,
+            "Session 'saved-1' is already open in another process (PID 79007). Close the other instance before opening it here.",
+            {
+              'cognition.ai/errorKind': 'session_locked',
+              'cognition.ai/retryable': true,
+              'cognition.ai/lockHolderPid': 79007
+            }
+          )
+        )
+    })
+    await rig.acquire()
+    expect(rig.openFailure()).toBeDefined()
+    expect(rig.sent('session/new')).toEqual([])
+  })
 })
 
 describe('reopening an OpenCode chat whose conversation the agent moved to another folder', () => {
