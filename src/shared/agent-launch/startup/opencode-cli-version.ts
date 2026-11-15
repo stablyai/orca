@@ -1,4 +1,4 @@
-import { compareAppVersions, isValidAppVersion } from '../../app-version'
+import { compareAppVersions, isValidAppVersion } from '../../app-lifecycle/identity/app-version'
 
 // These releases drop a bare --prompt (submitted before agent/model load); 2.0.19 fixed it upstream.
 export const OPENCODE_NATIVE_PROMPT_VERSIONS = [

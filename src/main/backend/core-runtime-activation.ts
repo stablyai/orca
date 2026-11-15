@@ -4,7 +4,7 @@ import type { BackendCoreProfileShutdown } from './core-profile-shutdown'
 import { prepareBackendDaemon } from './core-daemon-startup'
 import { prepareWorktreeRemovalsForStore } from '../workspaces/removal/worktree-removal-records-load'
 import { worktreeRemovalLifetime } from '../workspaces/removal/worktree-removal-lifetime'
-import { getAppEnvironment } from '../../shared/app-environment'
+import { getAppEnvironment } from '../../shared/app-lifecycle/app-environment'
 import {
   describeOrcadBindExposure,
   resolveOrcadBindHost
@@ -301,9 +301,12 @@ export async function activateBackendRuntime(
   })
 
   await new ServeReadinessPublisher().publish(readiness, servePublishMode(options))
-  // Background chat-journal maintenance and CI-line watches start once this host is serving.
+  // Background chat-journal maintenance, CI-line watches and runtime release reclaim start once this host is serving.
   chatJournal.serving()
   runtime.startPullRequestWatches({ admit: true })
+  const { reclaimManagedRuntimeReleasesAtLaunch } =
+    await import('../runtime/rpc/methods/host-management/managed-runtime-install')
+  reclaimManagedRuntimeReleasesAtLaunch(runtime)
   reportStartupTiming()
   managedAgentHooks.readinessPublished()
 

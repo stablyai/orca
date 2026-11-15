@@ -7,7 +7,7 @@ import type { RuntimeClient } from '../runtime/client'
 import type { RuntimeRpcSuccess } from '../../shared/remote-runtime/rpc/runtime-rpc-envelope'
 import { getDefaultUserDataPath } from '../runtime/profile/metadata'
 import type { AgentHookInstallStatus } from '../../shared/agent-hook-listener/configuration/agent-hook-types'
-import { DEFAULT_LOCAL_ORCA_PROFILE_ID } from '../../shared/orca-profiles'
+import { DEFAULT_LOCAL_ORCA_PROFILE_ID } from '../../shared/orca-profiles/orca-profiles'
 import type { GlobalSettings } from '../../shared/global-settings-types'
 import type { ProfileStateOfflineLocation } from '../../main/persistence/profile-state/offline-access/profile-state-offline-settings'
 
