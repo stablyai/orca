@@ -6,13 +6,11 @@ import { agentTypeToIconAgent } from '../../../../../shared/agent-status/present
 import {
   firstTabAgentExcludingLeaf,
   selectCompletedTabAgentPanes,
-  selectLiveTabAgentPanes,
-  selectRetainedTabAgentPanes
+  selectLiveTabAgentPanes
 } from './tab-agent-status-index'
 import type { AgentStatusEntry } from '../../../../../shared/agent-status/contracts/agent-status-types'
 import type { TerminalLayoutSnapshot } from '../../../../../shared/workspace-layout/terminal-tab-types'
 import type { TerminalAgent } from '../../../../../shared/agent-status/identity/terminal-agent'
-import type { RetainedAgentEntry } from '@/store/slices/agent-status/agent-status-contract'
 
 /** Hook status is primary tab-icon identity, matching sidebar rows and OSC 133 exit cleanup. Resolve focused leaf first, then sibling split panes. */
 export function resolveFocusedTabAgent(
@@ -100,44 +98,4 @@ function completedAgentFromStatusEntry(entry: AgentStatusEntry | undefined): Ter
     return null
   }
   return agentTypeToIconAgent(entry.agentType)
-}
-
-export function resolveFocusedRetainedTabAgent(
-  retainedAgentsByPaneKey: Record<string, RetainedAgentEntry>,
-  layout: TerminalLayoutSnapshot | undefined,
-  tabId: string
-): TerminalAgent | null {
-  const activeLeafId = layout?.activeLeafId
-  if (activeLeafId && isTerminalLeafId(activeLeafId)) {
-    return agentFromRetainedEntry(retainedAgentsByPaneKey[makePaneKey(tabId, activeLeafId)])
-  }
-  return resolveAnyRetainedTabAgent(retainedAgentsByPaneKey, tabId)
-}
-
-export function resolveSiblingRetainedTabAgent(
-  retainedAgentsByPaneKey: Record<string, RetainedAgentEntry>,
-  layout: TerminalLayoutSnapshot | undefined,
-  tabId: string
-): TerminalAgent | null {
-  const activeLeafId =
-    layout?.activeLeafId && isTerminalLeafId(layout.activeLeafId) ? layout.activeLeafId : null
-  if (!activeLeafId) {
-    return null
-  }
-  return resolveAnyRetainedTabAgent(retainedAgentsByPaneKey, tabId, activeLeafId)
-}
-
-function resolveAnyRetainedTabAgent(
-  retainedAgentsByPaneKey: Record<string, RetainedAgentEntry>,
-  tabId: string,
-  excludedLeafId?: string
-): TerminalAgent | null {
-  return firstTabAgentExcludingLeaf(
-    selectRetainedTabAgentPanes(retainedAgentsByPaneKey, tabId),
-    excludedLeafId
-  )
-}
-
-function agentFromRetainedEntry(entry: RetainedAgentEntry | undefined): TerminalAgent | null {
-  return agentTypeToIconAgent(entry?.agentType)
 }

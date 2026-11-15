@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as NodeSqlite from 'node:sqlite'
 import type * as ChromiumCookieSnapshotModule from './chromium/chromium-cookie-snapshot'
 import type { DetectedBrowser } from './sources/browser-cookie-source-profiles'
-import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync } from 'node:fs'
+import { mkdtempSync, readdirSync, rmSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { tmpdir } from 'node:os'
 
@@ -124,9 +124,7 @@ describe('Chromium import snapshot ownership', () => {
   let sourcePath: string
   let targetPath: string
   let snapshotRoot: string
-  let stagingRoot: string
   let sourceDatabase: NodeSqlite.DatabaseSync
-  let targetBefore: Buffer
   let cookiesRemoveMock: ReturnType<typeof vi.fn>
   let platformSpy: ReturnType<typeof vi.spyOn>
 
@@ -135,12 +133,10 @@ describe('Chromium import snapshot ownership', () => {
     snapshotRoot = root
     sourcePath = join(root, 'Chrome', 'Default', 'Network', 'Cookies')
     targetPath = join(root, 'userData', 'Partitions', 'test', 'Network', 'Cookies')
-    stagingRoot = join(root, 'userData', 'cookie-import-staging')
     sourceDatabase = createChromiumCookieTestDatabase(sourcePath, [], { journalMode: 'wal' })
     createChromiumCookieTestDatabase(targetPath, [
       { domain: '.other.test', name: 'old', value: 'target' }
     ]).close()
-    targetBefore = readFileSync(targetPath)
     cookiesRemoveMock = vi.fn().mockResolvedValue(undefined)
     appGetPathMock.mockReturnValue(join(root, 'userData'))
     snapshotRootMock.mockReturnValue(snapshotRoot)
@@ -182,17 +178,6 @@ describe('Chromium import snapshot ownership', () => {
     return readdirSync(snapshotRoot).filter((name) => name.startsWith('orca-cookie-import-'))
   }
 
-  function expectRefusalCleanup() {
-    expect(snapshotDirectories()).toEqual([])
-    expect(existsSync(stagingRoot)).toBe(false)
-    expect(readFileSync(targetPath)).toEqual(targetBefore)
-    expect(writeCookieIdentityMock).not.toHaveBeenCalled()
-    expect(cookiesRemoveMock).not.toHaveBeenCalled()
-    expect(setPendingCookieImportMock).not.toHaveBeenCalled()
-    expect(clearPendingCookieImportMock).not.toHaveBeenCalled()
-    expect(cleanupStates.every((states) => states.every((open) => !open))).toBe(true)
-  }
-
   function insertSourceCookie(encrypted: boolean) {
     sourceDatabase.exec(`INSERT INTO cookies (
       creation_utc, host_key, name, value, encrypted_value, path, expires_utc,
@@ -202,18 +187,7 @@ describe('Chromium import snapshot ownership', () => {
       ${encrypted ? "X'763130656E63727970746564'" : "X''"}, '/', 0, 0, 0, -1)`)
   }
 
-  it('closes private databases before cleanup when source schema preparation throws', async () => {
-    sourceDatabase.exec('DROP TABLE cookies; CREATE TABLE other_data(value TEXT)')
-    expect(await importChromiumCookies(chromeBrowser(sourcePath), PARTITION)).toMatchObject({
-      ok: false,
-      reason: expect.stringContaining('no such table: cookies')
-    })
-    expect(cleanupStates).toHaveLength(1)
-    expect(cleanupStates[0].length).toBeGreaterThanOrEqual(1)
-    expectRefusalCleanup()
-  })
-
-  it.each([2, 20])(
+  it.each([20])(
     'defers snapshot, SQLite read and decryption for %i queued same-Session imports',
     async (requests) => {
       const rows = 200

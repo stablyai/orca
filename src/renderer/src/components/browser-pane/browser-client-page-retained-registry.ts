@@ -12,7 +12,7 @@ import {
   readBrowserClientPageAttachedGuestId
 } from './browser-client-page-retained-elements'
 import { browserClientPageRetainedKey } from './browser-client-page-retained-key'
-import { retireBrowserGuestMetadata } from './host-guest/browser-guest-metadata-cache'
+import { retireBrowserGuestMetadata } from './host-guest/metadata/browser-guest-metadata-cache'
 import {
   retainBrowserClientPagePaint,
   createBrowserClientPageLoadCommitHandler

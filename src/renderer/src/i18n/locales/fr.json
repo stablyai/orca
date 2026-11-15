@@ -437,6 +437,7 @@
         "fontFamily": "Police",
         "fontFamilyDescription": "Police des messages, de l’activité et de la zone de saisie.",
         "inheritFont": "Même police que l’IDE",
+        "systemFont": "Police système",
         "fontPreviewLabel": "Aperçu de la police du chat",
         "fontPreview": "Le vif renard brun saute par-dessus le chien paresseux.",
         "title": "Interface de chat",
@@ -3537,6 +3538,7 @@
             "1e4b81d892": "Thump",
             "86af8d938c": "Bong",
             "80f7cc95b3": "Two Tone",
+            "silent": "Silencieux",
             "017abebfa6": "Son système par défaut"
           }
         }
@@ -3733,8 +3735,7 @@
             "stop_command_description": "Fermer ce terminal interrompra la commande qui s'y exécute.",
             "dont_ask_again": "Ne plus demander pour les terminaux en cours d'exécution",
             "stop_agent_confirm": "Arrêter l'agent",
-            "stop_command_confirm": "Arrêter et fermer",
-            "automatic_resume_warning": "Ce terminal ne reprendra pas automatiquement. Annulez et mettez l'espace de travail en veille pour le reprendre plus tard."
+            "stop_command_confirm": "Arrêter et fermer"
           },
           "MobileDriverOverlay": {
             "c6460cf584": "Reprendre",
@@ -4409,7 +4410,6 @@
             "c8857b40f7": "Actualiser les données d'utilisation",
             "75ded02687": "Gérer les comptes…",
             "ff0fbe9311": "Actif",
-            "7657e3db9c": "Compte Codex",
             "38b5647724": "Runtime d'utilisation Codex",
             "ba55303942": "Ouvrir les détails Codex et le sélecteur de compte",
             "c35af53b73": "Se connecter",
@@ -4417,7 +4417,6 @@
             "5c938d39ac": "sem.",
             "54e8d6bb2d": "Fable",
             "a79c64f87e": "Fable",
-            "d450654fa2": "Compte Claude",
             "11e2354daf": "Runtime d'utilisation Claude",
             "3dd7ddfae1": "Ouvrir les détails Claude et le sélecteur de compte",
             "59c6e7b4e0": "Les sessions visibles redémarrent maintenant. Les autres redémarrent quand leur worktree devient actif.",
@@ -4701,7 +4700,8 @@
             "compact": "Compact",
             "detailedTooltip": "Utilisation complète avec barres, libellés et pourcentages",
             "compactTooltip": "Utilisation condensée : un résumé par fournisseur",
-            "footerDetailAria": "Détail du pied de page d'utilisation"
+            "footerDetailAria": "Détail du pied de page d'utilisation",
+            "notChecked": "Non vérifié"
           },
           "RemoteServerUpdateStatusSegment": {
             "updating": "Mise à jour de {{value0}}/{{value1}}",
@@ -4847,13 +4847,6 @@
             "activeAgents_one": "{{count}} agent actif",
             "activeAgents_other": "{{count}} agents actifs",
             "activeAgents_many": "{{count}} agents actifs",
-            "completedAgents_one": "{{count}} agent terminé",
-            "completedAgents_other": "{{count}} agents terminés",
-            "completedAgents_many": "{{count}} agents terminés",
-            "activeAndCompletedAgents": "{{active}}, {{completed}}",
-            "completedAgentsRetained_one": "{{count}} agent terminé conservé",
-            "completedAgentsRetained_other": "{{count}} agents terminés conservés",
-            "completedAgentsRetained_many": "{{count}} agents terminés conservés",
             "noTrackedAgents": "Aucun agent suivi en cours d’exécution",
             "noTerminalTabs": "Aucun onglet de terminal",
             "liveTerminalTabs_one": "{{live}} en cours d’exécution sur {{count}} onglet de terminal",
@@ -4913,12 +4906,17 @@
           "AccountSwitchList": {
             "used": "Utilisé",
             "left": "Restant",
-            "reset": "Réinitialisation"
+            "reset": "Réinitialisation",
+            "accounts": "Comptes"
           },
           "InlineUsageBars": {
             "now": "maintenant",
             "resetsNow": "réinitialisation maintenant",
             "resetsIn": "réinitialisation dans {{duration}}"
+          },
+          "UsageDisplayToggle": {
+            "showRemaining": "Afficher l’utilisation restante",
+            "showUsed": "Afficher l’utilisation consommée"
           }
         }
       },
@@ -19810,7 +19808,8 @@
         "safetyReviewApproved": "{{agent}} a approuvé cette action. Voir les détails.",
         "safetyReview": "{{agent}} a signalé un avertissement de sécurité. Voir les détails.",
         "truncatedResponse": "Réponse du fournisseur tronquée (taille d’origine : {{bytes}} octets).",
-        "forkedFrom": "Branche créée à partir de"
+        "forkedFrom": "Branche créée à partir de",
+        "forkedFromUnknown": "Branche créée à partir d’une autre conversation"
       },
       "providerFrame": {
         "byteCount_one": "{{count}} octet",
@@ -20295,7 +20294,12 @@
         "failed": "{{agent}} n’a pas pu créer de branche de cette conversation",
         "hostUnsupported": "Cet hôte utilise une ancienne version d’Orca. Mettez Orca à jour sur l’hôte, puis réessayez.",
         "failedDetail": "Votre conversation est inchangée. Réessayez.",
-        "commandWorking": "Impossible de créer une branche pendant que {{agent}} répond. Relancez /fork quand la réponse est terminée."
+        "commandWorking": "Impossible de créer une branche pendant que {{agent}} répond. Relancez /fork quand la réponse est terminée.",
+        "mark": "Branche ·",
+        "markedName": "{{mark}} {{name}}",
+        "accessibleName": "Branche : {{name}}",
+        "sourceTooltip": "Branche de {{name}}",
+        "unknownSourceTooltip": "Branche d’une autre conversation"
       },
       "cardKindHidden": {
         "description": "Vous pouvez modifier cela à tout moment dans",
@@ -20412,7 +20416,7 @@
           "pinned": "Épinglés",
           "unread": "Non lus",
           "comment": "A un commentaire",
-          "retainedDoneAgents": "Transcriptions d'agents terminés",
+          "finishedAgents": "Agents terminés",
           "contextPresence": "Onglets, terminaux, commentaires ouverts",
           "completelyEmpty": "Plus rien à perdre",
           "noWorkspaces": "Aucun espace de travail trouvé.",
@@ -20530,7 +20534,7 @@
               "comment": "Commentaire",
               "prunable": "Nettoyable",
               "locked": "Verrouillé",
-              "retainedAgents": "Agents terminés"
+              "finishedAgents": "Agents terminés"
             }
           },
           "forceDeleteRisk_one": "{{count}} espace de travail présente actuellement un risque et peut nécessiter une suppression forcée",

@@ -91,7 +91,7 @@ describe('real host queue publication', () => {
       sink.publish({ lifecycle: true })
       expect(await sink.written?.()).toEqual({ ok: true })
       await rig.host.flushStreamedEvents(HOST_TEST_SESSION)
-      const sent = await rig.handoffId(q)
+      const sent = await vi.waitFor(() => rig.handoffId(q), { timeout: 10_000 })
       expect(sent).not.toBe(q)
       await eventually(async () =>
         expect((await journal.reads.submission(sent))?.handedOverAt).toBeDefined()

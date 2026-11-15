@@ -1,5 +1,5 @@
-import type { PickerOption } from '../../components/PickerModal'
-import { TaskProviderLogo } from '../../components/TaskProviderLogo'
+import type { PickerOption } from '../../components/sheets/PickerModal'
+import { TaskProviderLogo } from '../../components/icons/TaskProviderLogo'
 import { colors } from '../../theme/mobile-theme'
 import { getLinkedWorkItemSuggestedName } from '../../new-workspace/creation/mobile-workspace-name'
 import type { GitHubProjectSettings } from '../project-board/github-project-reference'

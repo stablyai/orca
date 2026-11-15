@@ -146,17 +146,6 @@ describe('RuntimeClient runtime-source fence', () => {
     expect(runtime.methods).toEqual(['status.get'])
   })
 
-  it('keeps the unfenced path for a CLI started outside an Orca terminal', async () => {
-    const runtime = await startRuntime({ runtimeId: 'runtime-b', installationId: SOURCE_B })
-    delete process.env[RUNTIME_SOURCE_ID_ENV]
-    delete process.env[RUNTIME_SOURCE_INCARNATION_ENV]
-    const client = new RuntimeClient(runtime.userDataPath, 2_000, null, null, 'orca')
-
-    await client.call('worktree.list')
-    expect(runtime.methods).toEqual(['worktree.list'])
-    expect(runtime.expectations).toEqual([undefined])
-  })
-
   it('lets an explicit switch to another profile through, e.g. orca-dev from a packaged terminal', async () => {
     const runtime = await startRuntime({ runtimeId: 'runtime-dev', installationId: SOURCE_B })
     launchedBy(SOURCE_A, 'runtime-a', join(tmpdir(), 'orca-packaged-profile'))

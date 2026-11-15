@@ -1360,6 +1360,7 @@
         "fontFamily": "Fonte",
         "fontFamilyDescription": "Fonte usada nas mensagens, na atividade e na caixa de mensagem.",
         "inheritFont": "Mesma fonte do IDE",
+        "systemFont": "Fonte do sistema",
         "fontPreviewLabel": "Prévia da fonte do chat",
         "fontPreview": "A rápida raposa marrom salta sobre o cão preguiçoso.",
         "title": "Interface de chat",
@@ -3378,7 +3379,6 @@
             "c8857b40f7": "Atualizar dados de uso",
             "75ded02687": "Gerenciar Contas…",
             "ff0fbe9311": "Ativo",
-            "7657e3db9c": "Conta do Codex",
             "38b5647724": "Runtime de uso do Codex",
             "ba55303942": "Abrir detalhes do Codex e alternador de conta",
             "c35af53b73": "Entrar",
@@ -3386,7 +3386,6 @@
             "5c938d39ac": "sem",
             "54e8d6bb2d": "Fable",
             "a79c64f87e": "Fable",
-            "d450654fa2": "Conta do Claude",
             "11e2354daf": "Runtime de uso do Claude",
             "3dd7ddfae1": "Abrir detalhes do Claude e alternador de conta",
             "59c6e7b4e0": "As sessões visíveis reiniciam agora. As outras reiniciam quando sua worktree se tornar ativa.",
@@ -3674,7 +3673,8 @@
             "compact": "Compacto",
             "detailedTooltip": "Uso completo com barras, rótulos e porcentagens",
             "compactTooltip": "Uso condensado: somente a janela mais restrita",
-            "footerDetailAria": "Detalhe do rodapé de uso"
+            "footerDetailAria": "Detalhe do rodapé de uso",
+            "notChecked": "Não verificado"
           },
           "RemoteServerUpdateStatusSegment": {
             "updating": "Atualizando {{value0}}/{{value1}}",
@@ -3829,13 +3829,6 @@
             "activeAgents_one": "{{count}} agente ativo",
             "activeAgents_other": "{{count}} agentes ativos",
             "activeAgents_many": "{{count}} agentes ativos",
-            "completedAgents_one": "{{count}} agente concluído",
-            "completedAgents_other": "{{count}} agentes concluídos",
-            "completedAgents_many": "{{count}} agentes concluídos",
-            "activeAndCompletedAgents": "{{active}}, {{completed}}",
-            "completedAgentsRetained_one": "{{count}} agente concluído mantido",
-            "completedAgentsRetained_other": "{{count}} agentes concluídos mantidos",
-            "completedAgentsRetained_many": "{{count}} agentes concluídos mantidos",
             "noTrackedAgents": "Nenhum agente monitorado em execução",
             "noTerminalTabs": "Nenhuma aba de terminal",
             "liveTerminalTabs_one": "{{live}} em execução de {{count}} aba de terminal",
@@ -3895,12 +3888,17 @@
           "AccountSwitchList": {
             "used": "Usado",
             "left": "Restante",
-            "reset": "Redefinição"
+            "reset": "Redefinição",
+            "accounts": "Contas"
           },
           "InlineUsageBars": {
             "now": "agora",
             "resetsNow": "redefinição agora",
             "resetsIn": "redefinição em {{duration}}"
+          },
+          "UsageDisplayToggle": {
+            "showRemaining": "Mostrar uso restante",
+            "showUsed": "Mostrar uso consumido"
           }
         }
       },
@@ -16804,7 +16802,6 @@
             "hostTerminalCap": "O host já está executando o máximo de terminais permitido pelo Orca. Feche um terminal de que não precisa mais e tente novamente."
           },
           "CloseTerminalDialog": {
-            "automatic_resume_warning": "Este terminal não vai retomar automaticamente. Cancele e coloque o espaço de trabalho em suspensão para retomá-lo depois.",
             "1d1a7a9c1f": "Cancelar",
             "stop_agent_title": "Parar este agente?",
             "stop_command_title": "Parar o comando em execução?",
@@ -19784,6 +19781,7 @@
             "1e4b81d892": "Thump",
             "86af8d938c": "Bong",
             "80f7cc95b3": "Dois Tons",
+            "silent": "Silencioso",
             "017abebfa6": "Padrão do Sistema"
           }
         }
@@ -20661,7 +20659,8 @@
         "safetyReview": "{{agent}} relatou um aviso de revisão de segurança. Ver detalhes.",
         "truncatedResponse": "Resposta do provedor truncada (tamanho original: {{bytes}} bytes).",
         "forkedFrom": "Ramificado de",
-        "modelFallback": "Claude mudou de modelo: {{from}} → {{to}}."
+        "modelFallback": "Claude mudou de modelo: {{from}} → {{to}}.",
+        "forkedFromUnknown": "Ramificado de outro chat"
       },
       "composer": {
         "planMode": "Planejar",
@@ -21677,7 +21676,12 @@
         "unconfirmedDetail": "Ela pode ter sido aberta. Confira o histórico de sessões antes de tentar novamente.",
         "failed": "{{agent}} não conseguiu ramificar este chat",
         "failedDetail": "Seu chat não foi alterado. Tente novamente.",
-        "commandWorking": "Não é possível criar uma ramificação enquanto {{agent}} responde. Execute /fork novamente quando terminar."
+        "commandWorking": "Não é possível criar uma ramificação enquanto {{agent}} responde. Execute /fork novamente quando terminar.",
+        "mark": "Fork ·",
+        "markedName": "{{mark}} {{name}}",
+        "accessibleName": "Fork: {{name}}",
+        "sourceTooltip": "Ramificação de {{name}}",
+        "unknownSourceTooltip": "Ramificação de outro chat"
       },
       "cardKindHidden": {
         "description": "Você pode alterar isso a qualquer momento em",
@@ -21840,7 +21844,7 @@
           "pinned": "Fixado",
           "unread": "Não lido",
           "comment": "Tem comentário",
-          "retainedDoneAgents": "Transcrições de agentes concluídos",
+          "finishedAgents": "Agentes concluídos",
           "contextPresence": "Abas abertas, terminais, comentários",
           "completelyEmpty": "Nada a perder",
           "noWorkspaces": "Nenhum espaço de trabalho encontrado.",
@@ -21958,7 +21962,7 @@
               "comment": "Comentário",
               "prunable": "Removível",
               "locked": "Bloqueado",
-              "retainedAgents": "Agentes concluídos"
+              "finishedAgents": "Agentes concluídos"
             }
           },
           "forceDeleteRisk_one": "{{count}} espaço de trabalho apresenta riscos no momento e pode exigir uma exclusão forçada",

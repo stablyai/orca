@@ -18,7 +18,7 @@ import {
   isBrowserPasswordFillClickAllowed,
   useBrowserPasswordPageState
 } from './browser-password-page-store'
-import { useGuestEscape } from '../host-guest/use-guest-escape'
+import { useGuestEscape } from '../host-guest/input/use-guest-escape'
 
 function hostOf(origin: string): string {
   try {

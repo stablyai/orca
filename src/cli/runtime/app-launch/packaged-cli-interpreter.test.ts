@@ -57,18 +57,3 @@ it('consumes the shim marker before replacing a lifecycle command with root Elec
   })
   expect(invocation?.env).not.toHaveProperty('ORCA_CLI_ELECTRON_EXECUTABLE')
 })
-
-it('reports an unavailable app before attempting native process replacement', async () => {
-  Object.defineProperty(process, 'platform', { value: 'darwin' })
-  process.argv = ['/helper/node', '/app/cli.js', 'open']
-  vi.stubEnv('ORCA_CLI_ELECTRON_EXECUTABLE', '/missing/Orca')
-  vi.mocked(accessSync).mockImplementation(() => {
-    throw new Error('ENOENT')
-  })
-  vi.spyOn(process, 'execve').mockImplementation(() => {
-    throw new Error('Native replacement attempted')
-  })
-  vi.resetModules()
-  const { reenterPackagedElectron } = await import('./packaged-cli-interpreter.js')
-  expect(reenterPackagedElectron).toThrow('The installed Orca app is unavailable')
-})

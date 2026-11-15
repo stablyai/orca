@@ -5,11 +5,17 @@ import type { ExecutionHostHealth } from '../../../src/shared/execution-host/exe
 import { storedHostDescriptor, type HostStoredDescriptor } from './identity/host-stored-identity'
 import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import type { HostProfile } from '../host-catalog/host-profile'
-import { INITIAL_MOBILE_VIEW, type MobileViewState } from '../worktree/workspace-view-settings'
+import {
+  INITIAL_MOBILE_VIEW,
+  type MobileViewState
+} from '../worktree/workspace-list/workspace-view-settings'
 
 import type { ServedProjectSections } from '../../../src/shared/project-section-catalog-schema'
-import type { SectionRepo, Worktree } from '../worktree/workspace-list-types'
-import { NO_SERVER_WORKSPACES, type ServerWorkspaces } from '../worktree/server-workspaces'
+import type { SectionRepo, Worktree } from '../worktree/workspace-list/workspace-list-types'
+import {
+  NO_SERVER_WORKSPACES,
+  type ServerWorkspaces
+} from '../worktree/execution-hosts/server-workspaces'
 import type { ProjectGroup } from '../../../src/shared/project-group-types'
 import { cachedHostWorktrees } from './catalog/host-list-queries'
 import { cachedHostView, useHostViewMemory } from './view-settings/host-view-memory'
