@@ -32,6 +32,15 @@ test('Take back all on a terminal also takes back the browser tab the phone driv
   await ensureTerminalVisible(orcaPage)
   await waitForActiveTerminalManager(orcaPage)
   const ptyId = await waitForActivePanePtyId(orcaPage)
+  // CI's 1280px xvfb screen leaves the split guest narrower than the phone unless sidebars close.
+  await electronApp.evaluate(({ BrowserWindow }) => {
+    BrowserWindow.getAllWindows()[0]?.setContentSize(1280, 900)
+  })
+  await orcaPage.evaluate(() => {
+    const state = window.__store?.getState()
+    state?.setSidebarOpen(false)
+    state?.setRightSidebarOpen(false)
+  })
 
   // A drawing http page: Orca shows data: and blank URLs as its New Tab view.
   const server = createServer((_request, response) => {
