@@ -123,23 +123,18 @@ function hasExternalAppHandler(url: string): boolean {
   }
 }
 
-const silentLaunchAt = new WeakMap<Electron.WebContents, number>()
+// Input up to `clicksSpentUntil` already paid for the launch at `at`.
+const lastLaunch = new WeakMap<Electron.WebContents, { at: number; clicksSpentUntil: number }>()
 
-// Only the desktop user's own fresh click may open an app unasked, and only input that came
-// after the last silent launch's gesture window: a held click's release must not pay twice.
-function hasUnspentDesktopUserClick(
-  guest: Electron.WebContents,
-  now: number,
-  lastLaunchAt: number | undefined
-): boolean {
+/** When the desktop user last clicked this page, if just now; agents' and other pages' input don't count. */
+function desktopUserClickAt(guest: Electron.WebContents, now: number): number | null {
   const input = getLastBrowserGuestInputInSession(guest.session)
-  return (
-    input !== null &&
+  return input &&
     !input.byAgent &&
     input.guestWebContentsId === guest.id &&
-    isRecentBrowserGuestInput(input.at, now) &&
-    (lastLaunchAt === undefined || input.at > lastLaunchAt + BROWSER_GUEST_INPUT_GESTURE_WINDOW_MS)
-  )
+    isRecentBrowserGuestInput(input.at, now)
+    ? input.at
+    : null
 }
 
 /** Require a local window prompt so remote pages cannot launch apps on the server. */
@@ -183,23 +178,28 @@ export function requestBrowserExternalAppLaunch(args: {
         if (answer === 'always' && rememberSite) {
           memory?.set(rememberSite, [permission], 'allow')
         }
+        // The click that raised this prompt is spent; clicks after the answer are new.
+        const answeredAt = Date.now()
+        lastLaunch.set(requester, { at: answeredAt, clicksSpentUntil: answeredAt })
         return launchExternalApp(url.href)
       }
     })
   const now = Date.now()
-  if (rememberSite && memory?.get(rememberSite, permission) === 'allow') {
-    // As in Chrome, one click opens one app: a click's press and release both count as input,
-    // so the page's other attempts within the gesture window are dropped.
-    const lastLaunchAt = silentLaunchAt.get(requester)
-    if (lastLaunchAt !== undefined && isRecentBrowserGuestInput(lastLaunchAt, now)) {
+  const clickAt = desktopUserClickAt(requester, now)
+  if (clickAt !== null && rememberSite && memory?.get(rememberSite, permission) === 'allow') {
+    // As in Chrome, one click opens one app; the page's other attempts from it are dropped.
+    const previous = lastLaunch.get(requester)
+    const spent = previous !== undefined && clickAt <= previous.clicksSpentUntil
+    if (spent && isRecentBrowserGuestInput(previous.at, now)) {
       return true
     }
-    // Check the click before the OS handler lookup, which blocks the main thread.
-    if (
-      hasUnspentDesktopUserClick(requester, now, lastLaunchAt) &&
-      hasExternalAppHandler(url.href)
-    ) {
-      silentLaunchAt.set(requester, now)
+    // The OS handler lookup blocks the main thread, so it runs only for an unspent click.
+    if (!spent && hasExternalAppHandler(url.href)) {
+      // A click's release comes after its press launched the app, so it is spent too.
+      lastLaunch.set(requester, {
+        at: now,
+        clicksSpentUntil: now + BROWSER_GUEST_INPUT_GESTURE_WINDOW_MS
+      })
       // A failed launch asks instead, so Open can report why nothing opened.
       void launchExternalApp(url.href).then((result) => {
         if (result === 'failed') {

@@ -93,6 +93,7 @@ describe('requestBrowserExternalAppLaunch', () => {
   it('opens the app unasked after Always, only once per click by the desktop user', async () => {
     const tab = mockTab('https://review.example.com/guide')
 
+    tab.click()
     tab.openLink()
     // The app name is platform-dependent (Linux names none), so it is left out.
     expect(tab.prompts().at(-1)?.details).toMatchObject({
@@ -103,6 +104,12 @@ describe('requestBrowserExternalAppLaunch', () => {
     await tab.answerLatest('always')
     expect(openExternalMock).toHaveBeenCalledTimes(1)
 
+    // The click that raised the prompt was spent there.
+    tab.openLink()
+    expect(openExternalMock).toHaveBeenCalledTimes(1)
+    expect(tab.prompts()).toHaveLength(1)
+
+    vi.advanceTimersByTime(200)
     tab.click()
     tab.openLink()
     expect(openExternalMock).toHaveBeenCalledTimes(2)
@@ -114,7 +121,7 @@ describe('requestBrowserExternalAppLaunch', () => {
     expect(openExternalMock).toHaveBeenCalledTimes(2)
     expect(tab.prompts()).toHaveLength(1)
 
-    vi.advanceTimersByTime(1_500)
+    // An agent's click still asks, even right after the user's own launch.
     tab.click({ byAgent: true })
     tab.openLink()
     expect(openExternalMock).toHaveBeenCalledTimes(2)
