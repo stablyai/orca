@@ -1,5 +1,5 @@
 import { runLifecycleWriteTransaction } from '../db/lifecycle-write-transaction-runner'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { OrchestrationDb } from '../db/orchestration-db'
 import { acknowledgeWorkerDock, readWorkerDock, readWorkerDockResult } from './worker-dock-read'
 import { refreshWorkerDockActivity } from './worker-dock-activity'
@@ -15,7 +15,10 @@ let db: OrchestrationDb
 beforeEach(() => {
   db = new OrchestrationDb(':memory:')
 })
-afterEach(() => db.close())
+afterEach(() => {
+  db.close()
+  vi.useRealTimers()
+})
 
 function worker() {
   const task = db.createTask({ runId: 'run_legacy_local', spec: 'Verify journal writes' })
@@ -60,6 +63,7 @@ function report(dispatchId: string, outcome: 'succeeded' | 'failed') {
 
 describe('worker dock lifecycle projection', () => {
   it('preserves a normalized status episode through replay and retains unverifiable membership', () => {
+    vi.useFakeTimers({ now: 1794657600000 })
     const id = worker()
     db.db.prepare("UPDATE worker_dispatches SET state = 'ready' WHERE dispatch_id = ?").run(id)
     db.db
@@ -73,7 +77,7 @@ describe('worker dock lifecycle projection', () => {
         state: 'done',
         prompt: '',
         connectionId: null,
-        receivedAt: Date.now(),
+        receivedAt: 1794657600000,
         stateStartedAt: 100
       }
     ]
@@ -91,7 +95,7 @@ describe('worker dock lifecycle projection', () => {
     refreshWorkerDockActivity(db, party, runtime)
     expect(read().rows[0].state).toBe('idle')
     const at = read().rows[0].changedAt
-    statuses = [{ ...statuses[0], receivedAt: Date.now() + 10_000, isReplay: true }]
+    statuses = [{ ...statuses[0], receivedAt: 1794657610000, isReplay: true }]
     refreshWorkerDockActivity(db, party, runtime)
     expect(read().rows[0].changedAt).toBe(at)
     statuses = []

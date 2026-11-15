@@ -3,11 +3,9 @@ import { runLifecycleWriteTransaction } from '../db/lifecycle-write-transaction-
 import { workerLaunchModel } from '../workers/launch/worker-launch-observation'
 import { z } from 'zod'
 import type { OrchestrationDb } from '../db/orchestration-db'
-import type {
-  WorkerDockRead,
-  WorkerDockAcknowledge
-} from '../../../../shared/orchestration/dock/worker-dock'
 import {
+  type WorkerDockRead,
+  type WorkerDockAcknowledge,
   WorkerDockEntry,
   WorkerDockResultRef,
   WorkerDockResult,
@@ -214,7 +212,8 @@ export function readWorkerDockResult(
   }
   return WorkerDockResult.parse({
     id:
-      row.report_id ?? (row.receipt ? `owner_stop:${dispatchId}` : `settlement:${row.settlement}`),
+      row.report_id ??
+      (row.receipt ? `owner_stop:${dispatchId}` : `settlement:${String(row.settlement)}`),
     dispatchId,
     name:
       row.display_name ??
@@ -225,7 +224,7 @@ export function readWorkerDockResult(
     outcome,
     body: row.body ?? (row.receipt ? 'Stopped by you.' : failureReason),
     at: epoch(row.changed_at),
-    settlement: row.settlement ?? `worker_report:${row.report_id}`,
+    settlement: row.settlement ?? `worker_report:${String(row.report_id)}`,
     acknowledged: row.acknowledged === 1,
     ownerActionsAvailable: row.owner_actions_available === 1
   })
