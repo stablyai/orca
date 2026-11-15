@@ -27604,7 +27604,6 @@
     "sandboxHoursValue": "{{value}} sandbox hours",
     "idleSleptNoTime": "{{name}} went to sleep while idle",
     "idleSleptDetail": "Files and chats are saved. It uses no sandbox hours until you open it.",
-    "typedWhileWaking": "What you typed is on the prompt. Press Enter to run it.",
     "typingNotSent": "Your typing wasn’t sent.",
     "idleSleptMinutes_one": "{{name}} slept after {{count}} minute idle",
     "idleSleptMinutes_other": "{{name}} slept after {{count}} minutes idle",

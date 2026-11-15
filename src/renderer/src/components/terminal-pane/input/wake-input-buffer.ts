@@ -1,10 +1,8 @@
 // Typing for a workspace whose server is being woken. Keys typed while the server boots are
-// accepted at once, then inserted, in order and exactly once, into the shell the pane is attached
-// to after the wake. They are never submitted: Enter is not replayed, so the person reviews what
-// landed and presses Enter themselves. The woken terminal is a fresh process (whatever ran before
-// the sleep is gone), so replaying a submitted line could run it somewhere it was not meant for.
-// Only plain text is kept: Backspace edits the held text, Ctrl-C clears it, and escape sequences
-// and other control keys are dropped. Held typing is dropped when the wake fails, a while after it
+// accepted at once, then sent, in order and exactly once, to the shell the pane is attached to
+// after the wake, like terminal type-ahead: an Enter typed while waking runs the line once the
+// shell is up. Only plain text, Tab and Enter are kept: Backspace and Ctrl-C edit the line not yet
+// entered, and escape sequences and other control keys are dropped. Held typing is dropped when the wake fails, a while after it
 // settles without a terminal to take it, and when the workspace wakes again.
 
 import { installWindowVisibilityInterval } from '@/lib/window-activity/window-visibility-interval'
@@ -24,11 +22,8 @@ export const WAKE_INPUT_MAX_HOLD_MS = 90_000
 export const WAKE_INPUT_SETTLED_GRACE_MS = 15_000
 
 type PaneBuffer = {
+  /** Held keys in order; Enter is kept as `\r`. */
   text: string
-  /** Enter was pressed: the person meant to submit; shown as "press Enter to run" after insertion. */
-  submitted: boolean
-  /** Text followed an Enter (a multi-line paste): joining the lines would change the command. */
-  multiline: boolean
   deliver: (data: string) => void
   isReady: () => boolean
   /** The pane's transport was seen not ready during the wake, so "ready" means re-attached. */
@@ -42,8 +37,8 @@ type WorkspaceWake = {
   panes: Map<string, PaneBuffer>
 }
 
-export type WakeInputDelivery = { workspaceId: string; paneId: string; submitted: boolean }
-/** Held typing that was not sent (wake failed, never re-attached, multi-line). */
+export type WakeInputDelivery = { workspaceId: string; paneId: string }
+/** Held typing that was not sent (wake failed, never re-attached). */
 export type WakeInputDropped = { workspaceId: string }
 
 const wakes = new Map<string, WorkspaceWake>()
@@ -148,21 +143,15 @@ function pump(now = Date.now()): void {
       if (!pane.sawUnready && wake.outcome !== 'ready') {
         continue
       }
-      const { text, submitted, multiline } = pane
+      const { text } = pane
+      // Removed before sending: a pane is delivered to once, never twice.
       wake.panes.delete(paneId)
       didChange = true
-      if (multiline) {
-        // Several lines held: inserting them joined would change the command; send nothing.
-        for (const listener of droppedListeners) {
-          listener({ workspaceId })
-        }
-        continue
-      }
       try {
         pane.deliver(text)
         noteUserInputForPane(paneId, now, workspaceId)
         for (const listener of deliveryListeners) {
-          listener({ workspaceId, paneId, submitted })
+          listener({ workspaceId, paneId })
         }
       } catch {
         // The pane went away mid-delivery; nothing to insert into.
@@ -236,18 +225,13 @@ export function captureWakeInput(
   }
   const pane: PaneBuffer = existing ?? {
     text: '',
-    submitted: false,
-    multiline: false,
     deliver,
     isReady,
     sawUnready: false
   }
   pane.deliver = deliver
   pane.isReady = isReady
-  const next = applyWakeInput(pane, data)
-  pane.text = next.text
-  pane.submitted = next.submitted
-  pane.multiline = next.multiline
+  pane.text = applyWakeInput(pane.text, data)
   wake.panes.set(paneId, pane)
   ensureTimer()
   changed()

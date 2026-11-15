@@ -1,21 +1,21 @@
-// What typing held for a waking terminal keeps: plain text and Tab; Backspace edits, Ctrl-C clears,
-// Enter is noted (never replayed), text after an Enter marks a second line; escape sequences and
-// other control keys are dropped.
+// What typing held for a waking terminal keeps, as type-ahead: plain text, Tab and Enter, in order.
+// Backspace and Ctrl-C edit only the line not yet entered (an Enter can't be taken back); escape
+// sequences and other control keys are dropped.
 
 export const WAKE_INPUT_CAP = 4096
 
+/** Where the line not yet entered starts: after the last held Enter. */
+function currentLineStart(text: string): number {
+  return text.lastIndexOf('\r') + 1
+}
+
 /**
- * Applies typed `data` to held `text`: printable characters append, Backspace removes one, Ctrl-C
- * clears, Enter/Tab are noted (Enter) or kept (Tab), everything else (escape sequences, other
- * controls) is dropped.
+ * Applies typed `data` to held `text`: printable characters, Tab and Enter (as `\r`) append;
+ * Backspace removes one character of the current line, Ctrl-C clears the current line; everything
+ * else (escape sequences, other controls) is dropped.
  */
-export function applyWakeInput(
-  held: { text: string; submitted: boolean; multiline?: boolean },
-  data: string
-): { text: string; submitted: boolean; multiline: boolean } {
-  let text = held.text
-  let submitted = held.submitted
-  let multiline = held.multiline ?? false
+export function applyWakeInput(held: string, data: string): string {
+  let text = held
   for (let i = 0; i < data.length; i++) {
     const ch = data[i]!
     const code = ch.charCodeAt(0)
@@ -47,18 +47,17 @@ export function applyWakeInput(
       continue
     }
     if (code === 0x03) {
-      text = ''
-      submitted = false
-      multiline = false
+      text = text.slice(0, currentLineStart(text))
       continue
     }
     if (code === 0x7f || code === 0x08) {
-      text = Array.from(text).slice(0, -1).join('')
+      const start = currentLineStart(text)
+      text = text.slice(0, start) + Array.from(text.slice(start)).slice(0, -1).join('')
       continue
     }
     if (code === 0x0d || code === 0x0a) {
-      // Never replayed: the person submits after reviewing what landed.
-      submitted = text.length > 0
+      // Type-ahead: the woken shell gets the Enter in order, so the command runs.
+      text += '\r'
       continue
     }
     if (code === 0x09) {
@@ -68,11 +67,7 @@ export function applyWakeInput(
     if (code < 0x20 || (code >= 0x80 && code < 0xa0)) {
       continue
     }
-    if (submitted) {
-      // Text after an Enter: a second line. It is never joined onto the first.
-      multiline = true
-    }
     text += ch
   }
-  return { text: text.slice(0, WAKE_INPUT_CAP), submitted, multiline }
+  return text.slice(0, WAKE_INPUT_CAP)
 }
