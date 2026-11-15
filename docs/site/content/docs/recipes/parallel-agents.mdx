@@ -14,6 +14,22 @@ Running the same task across multiple agents in parallel is Orca's killer move. 
 1. Commit, push, open PR from the winning worktree.
 1. Delete the two losers — one click removes the worktree and branch.
 
+## From the CLI
+
+The [Orca CLI](/docs/cli/reference) does the setup and the first review pass for you:
+
+```bash
+orca worktree create --name fix-bug --agents claude,codex,cursor --prompt "Fix the bug in ..."
+```
+
+This creates `fix-bug-claude`, `fix-bug-codex` and `fix-bug-cursor` from the same base and starts each agent with the same prompt. When they finish, have an agent read all three and recommend one:
+
+```bash
+orca worktree compare --worktree name:fix-bug-claude --worktree name:fix-bug-codex --worktree name:fix-bug-cursor --agent claude --task "Fix the bug in ..."
+```
+
+The comparing agent only reads the worktrees. You still pick the winner, open the PR and delete the losers.
+
 ## Why it works
 
 Different agents make different mistakes. Running the same task in parallel is cheaper than sequential retries and surfaces disagreement as a signal. Where three agents agree, the answer is probably right. Where they split, you've found the hard part.

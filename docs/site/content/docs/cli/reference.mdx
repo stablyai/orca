@@ -137,6 +137,17 @@ orca worktree create --name hidden-setup --setup inherit --json
 
 `--agent` launches the selected agent in the first terminal. `--prompt` sends initial work to that agent. `--setup run|skip|inherit` controls repo setup hooks; `inherit` follows the repo policy.
 
+Run one task on several agents and have another agent pick the best result:
+
+```bash
+orca worktree create --name fix-login --agents claude,codex --prompt "Fix the flaky login test" --json
+orca worktree compare --worktree name:fix-login-claude --worktree name:fix-login-codex --agent claude --task "Fix the flaky login test" --json
+```
+
+`--agents` takes 2 to 6 agents instead of `--agent` and creates one worktree per agent from the same base, named `<name>-<agent>` (an agent listed twice gets `-1`, `-2`), each started with the same `--prompt`. The other create flags apply to every attempt. Attempts start one at a time; if one fails, the error names the attempts already started and no later ones start. The text output ends with the matching `worktree compare` command.
+
+`worktree compare` starts one agent in the current workspace (or `--judge-worktree <selector>`) with a read-only prompt that lists each candidate's checkout path, branch and base. The agent reads every change and replies with a ranking, a score and reason per candidate, and a recommended winner. It does not change the candidates; keep the winner and remove the others with `worktree rm`.
+
 Link issues and reviews using the existing workspace metadata:
 
 ```bash
