@@ -14,10 +14,12 @@ import {
   closeTestAgentSessionRecordStores,
   closeTestAgentSessionDatabase,
   openTestAgentSessionDatabase,
-  openTestAgentSessionRecordStore,
+  openTestAgentSessionRecordStore
+} from './agent-session-record-store-test-harness'
+import {
   readPersistedTestAgentSessionStore,
   withTestAgentSessionDatabase
-} from './agent-session-record-store-test-harness'
+} from './agent-session-record-store-persistence.test-fixture'
 import type { AgentSessionReserveRequest } from '../ownership/agent-session-reservation-admission'
 import {
   claudeProviderHandle,
