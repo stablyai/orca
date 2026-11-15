@@ -76,7 +76,10 @@ export class RuntimeBrowserCommandTargets {
         }
         return await execute(params, admitAnswer)
       }
-      let browserPageId = params.page ?? bridge?.getActivePageId(worktreeId)
+      let browserPageId =
+        params.page ??
+        (bridge && this.coldRoutedPageId(bridge, worktreeId)) ??
+        bridge?.getActivePageId(worktreeId)
       if (!browserPageId && bridge) {
         await this.resolveBrowserWorktreeId(params.worktree)
         browserPageId = bridge.getActivePageId(worktreeId) ?? undefined
@@ -134,6 +137,19 @@ export class RuntimeBrowserCommandTargets {
     }
     const guest = webContents.fromId(webContentsId)
     return Boolean(guest && !guest.isDestroyed())
+  }
+
+  // A freed routed page is still the target, so restore it rather than act on a live sibling.
+  private coldRoutedPageId(
+    bridge: AgentBrowserBridge,
+    worktreeId: string | undefined
+  ): string | undefined {
+    const routedPageId = bridge.getRoutedPageId(worktreeId)
+    const cold =
+      routedPageId !== null &&
+      bridge.getRegisteredPageWebContentsId(routedPageId) === undefined &&
+      this.host.readBrowserTabBar?.(worktreeId).some((page) => page.browserPageId === routedPageId)
+    return cold ? routedPageId : undefined
   }
 
   // Resolve CLI selectors to the repoId::path keys the bridge uses.

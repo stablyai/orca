@@ -9,22 +9,6 @@ export type BrowserGuestActivity = {
 }
 
 export const browserGuestActivity = new Map<string, BrowserGuestActivity>()
-export const retiredBrowserGuestResources = new Set<number>()
-export function setBrowserGuestResourceRetired(
-  pageId: string,
-  guestId: number,
-  retired: boolean
-): void {
-  if (retired) {
-    retiredBrowserGuestResources.add(guestId)
-  } else {
-    retiredBrowserGuestResources.delete(guestId)
-  }
-  for (const listener of listeners) {
-    listener(pageId)
-  }
-}
-
 const listeners = new Set<(pageId: string) => void>()
 let visibilityGeneration = 0
 

@@ -4,7 +4,6 @@ import { retireBrowserGuestMetadata } from './metadata/browser-guest-metadata-ca
 import {
   registerBrowserGuestActivity,
   unregisterBrowserGuestActivity,
-  setBrowserGuestResourceRetired,
   invalidateBrowserGuestActivity
 } from './browser-guest-activity'
 import {
@@ -270,7 +269,6 @@ export function discardPersistentWebview(
   ) {
     return false
   }
-  setBrowserGuestResourceRetired(browserTabId, webContentsId, true)
   try {
     retireBrowserGuestMetadata(webview, webContentsId)
   } catch {
@@ -284,11 +282,6 @@ export function discardPersistentWebview(
   }
   void window.api.browser
     .acknowledgeGuestRemoval({ browserPageId: browserTabId, webContentsId })
-    .then((destroyed) => {
-      if (destroyed) {
-        setBrowserGuestResourceRetired(browserTabId, webContentsId, false)
-      }
-    })
     .catch(() => {})
   return true
 }

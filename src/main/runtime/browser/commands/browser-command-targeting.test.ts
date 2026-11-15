@@ -11,15 +11,23 @@ import {
   overrideBridgeWebContentsLookup
 } from '../../../browser/agent-browser/testing/agent-browser-bridge-test-harness'
 import { closeBrowserMemoryPage } from '../../../browser/guest-lifecycle/browser-page-memory'
+import { RuntimeBrowserPageRegistry } from '../client-pages/runtime-browser-page-registry'
 
-const { native, waitRegistration, waitWorktreeRegistration } = vi.hoisted(() => ({
-  native: new Map<number, ReturnType<typeof mockWebContents>>(),
-  waitRegistration: vi.fn(async () => {}),
-  waitWorktreeRegistration: vi.fn(async () => {})
-}))
+const { native, waitRegistration, waitWorktreeRegistration, ipcListeners, managerWorktree } =
+  vi.hoisted(() => ({
+    native: new Map<number, ReturnType<typeof mockWebContents>>(),
+    waitRegistration: vi.fn(async () => {}),
+    waitWorktreeRegistration: vi.fn(async () => {}),
+    ipcListeners: new Map<string, (...args: unknown[]) => void>(),
+    managerWorktree: vi.fn<(pageId: string) => string | undefined>()
+  }))
 vi.mock('electron', () => ({
   app: { getPath: () => '/command-test', getAppPath: () => '/command-test', isPackaged: false },
-  ipcMain: { on: vi.fn(), removeListener: vi.fn() },
+  ipcMain: {
+    on: (channel: string, listener: (...args: unknown[]) => void) =>
+      ipcListeners.set(channel, listener),
+    removeListener: (channel: string) => ipcListeners.delete(channel)
+  },
   webContents: { fromId: (id: number) => native.get(id) }
 }))
 vi.mock('../../../browser/agent-browser/helper-process/agent-browser-process-environment', () => ({
@@ -46,8 +54,18 @@ vi.mock('../../../browser/guest-lifecycle/browser-main-window-readiness', () => 
   whenBrowserMainWindowReady: async () => null
 }))
 vi.mock('../../../browser/guest-lifecycle/manager/browser-manager', () => ({
-  browserManager: {},
+  browserManager: {
+    getSessionProfileIdForTab: () => 'default',
+    getWorktreeIdForTab: managerWorktree,
+    closePopupPage: async () => false
+  },
   browserCertificateTrustController: {}
+}))
+vi.mock('../../../browser/sessions/profiles/browser-session-registry', () => ({
+  browserSessionRegistry: {
+    getProfile: () => ({ id: 'default', label: 'Default' }),
+    getDefaultProfile: () => ({ id: 'default', label: 'Default' })
+  }
 }))
 
 // Only the external helper transport is replaced; routing, queue admission and ref minting are real.
@@ -105,14 +123,19 @@ function fixture(pages: [string, string][], tabs = new CountedTabs()) {
     mockBrowserManager(tabs, worktrees, { getPopupPages: () => popups })
   )
   const catalog: BrowserTabBarEntry[] = []
+  const clientPages = new RuntimeBrowserPageRegistry()
   const send = vi.fn()
+  managerWorktree.mockImplementation((pageId) => worktrees.get(pageId))
+  const win = { webContents: { send } }
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the command seam uses only these host surfaces.
   const host = {
     getAgentBrowserBridge: () => bridge,
     resolveWorkspaceSelector: async (id: string) => ({ id }),
-    getRuntimeBrowserPageRegistry: () => ({ getPage: () => undefined }),
+    resolveBrowserWorkspace: async (id: string) => ({ id }),
+    getRuntimeBrowserPageRegistry: () => clientPages,
     readBrowserTabBar: () => catalog,
-    getAuthoritativeWindow: () => ({ webContents: { send } })
+    getAuthoritativeWindow: () => win,
+    getAvailableAuthoritativeWindow: () => win
   } as unknown as RuntimeBrowserCommandHost
   return {
     commands: new RuntimeBrowserCommands(host),
@@ -133,6 +156,7 @@ afterEach(() => {
   native.clear()
   waitRegistration.mockReset()
   waitWorktreeRegistration.mockReset()
+  ipcListeners.clear()
 })
 
 it('rejects omitted-scope text mutations before delivery, while explicit and single-worktree targets work', async () => {
@@ -200,6 +224,66 @@ it('wakes the selected cold Y, without pinning the first saved X or changing com
     browserPageId: 'Y'
   })
   expect(f.tabs.has('X')).toBe(false)
+})
+
+it('lists and closes the selected cold Y while leaving live sibling X alone', async () => {
+  const f = fixture([
+    ['X', 'W'],
+    ['Y', 'W']
+  ])
+  f.bridge.setActiveTab(101, 'W')
+  f.tabs.delete('Y')
+  native.delete(101)
+  f.catalog.push(
+    ...['X', 'Y'].map((browserPageId) => ({
+      browserPageId,
+      worktreeId: 'W',
+      title: browserPageId,
+      url: 'https://example.com',
+      loadError: null,
+      certificateFailure: null
+    }))
+  )
+  const listed = await f.commands.browserTabList({ worktree: 'W' })
+  expect(listed.tabs.filter((tab) => tab.active).map((tab) => tab.browserPageId)).toEqual(['Y'])
+  f.send.mockImplementation((channel, payload) => {
+    expect(channel).toBe('browser:requestTabClose')
+    expect(payload.tabId).toBe('Y')
+    ipcListeners.get('browser:tabCloseReply')?.({}, { requestId: payload.requestId })
+  })
+  await expect(f.commands.browserTabClose({ worktree: 'W' })).resolves.toEqual({ closed: true })
+  expect(f.tabs.has('X')).toBe(true)
+  expect(f.tabs.has('Y')).toBe(false)
+  expect(waitRegistration).not.toHaveBeenCalled()
+})
+
+it('restores the selected Y freed while hidden instead of acting on its live sibling X', async () => {
+  const f = fixture([
+    ['X', 'W'],
+    ['Y', 'W']
+  ])
+  f.catalog.push(
+    ...['X', 'Y'].map((browserPageId) => ({
+      browserPageId,
+      worktreeId: 'W',
+      title: browserPageId,
+      url: 'https://example.com',
+      loadError: null,
+      certificateFailure: null
+    }))
+  )
+  f.bridge.setActiveTab(101, 'W')
+  // Freeing unregisters the guest without the bridge's close notice.
+  f.tabs.delete('Y')
+  native.set(101, { ...mockWebContents(101), isDestroyed: () => true })
+  f.send.mockImplementation((_channel, payload) => {
+    expect(payload).toEqual({ worktreeId: 'W', browserPageId: 'Y' })
+    f.register('Y', 'W')
+  })
+  await expect(f.commands.browserSnapshot({ worktree: 'W' })).resolves.toMatchObject({
+    browserPageId: 'Y'
+  })
+  expect(f.bridge.delivered.map((item) => item.session)).toEqual(['orca-tab-Y'])
 })
 
 it.each(['popup-999', 'closed-page'])(

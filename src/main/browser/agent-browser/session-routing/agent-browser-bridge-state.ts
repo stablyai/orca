@@ -12,11 +12,11 @@ import type { QueuedCommand } from '../command-queue/agent-browser-queued-comman
 import type { SessionState } from '../session-lifecycle/agent-browser-session-state'
 
 export abstract class AgentBrowserBridgeState {
-  // Isolate each worktree's tab selection.
-  protected readonly activeWebContentsPerWorktree = new Map<string, number>()
-  protected activeWebContentsId: number | null = null
+  // Routes hold page IDs, so a page freed while hidden stays the target and restores on use.
+  protected readonly routedPagePerWorktree = new Map<string, string>()
+  protected routedPageId: string | null = null
   // A person's tab pick waiting for the agent's tab to go idle; the undefined key is the global target.
-  protected readonly heldPersonSelections = new Map<string | undefined, number>()
+  protected readonly heldPersonSelections = new Map<string | undefined, string>()
   // Each page has its own ref map; a worktree's unpinned refs belong to the page that last minted refs.
   protected readonly refPageByWorktree = new Map<string | undefined, string>()
   protected readonly watchedPopupWebContentsIds = new Set<number>()
@@ -153,22 +153,30 @@ export abstract class AgentBrowserBridgeState {
     return tabs
   }
 
-  /** Moves every route at one webContents to another; true when the agent's route moved. */
-  protected retargetRouting(fromWebContentsId: number, toWebContentsId: number): boolean {
+  /** Moves every route at one page to another; true when the agent's route moved. */
+  protected retargetRouting(fromPageId: string, toPageId: string | null): boolean {
     let moved = false
-    if (this.activeWebContentsId === fromWebContentsId) {
-      this.activeWebContentsId = toWebContentsId
+    if (this.routedPageId === fromPageId) {
+      this.routedPageId = toPageId
       moved = true
     }
-    for (const [worktreeId, routedWebContentsId] of this.activeWebContentsPerWorktree) {
-      if (routedWebContentsId === fromWebContentsId) {
-        this.activeWebContentsPerWorktree.set(worktreeId, toWebContentsId)
+    for (const [worktreeId, routedPageId] of this.routedPagePerWorktree) {
+      if (routedPageId === fromPageId) {
+        if (toPageId === null) {
+          this.routedPagePerWorktree.delete(worktreeId)
+        } else {
+          this.routedPagePerWorktree.set(worktreeId, toPageId)
+        }
         moved = true
       }
     }
-    for (const [key, heldWebContentsId] of this.heldPersonSelections) {
-      if (heldWebContentsId === fromWebContentsId) {
-        this.heldPersonSelections.set(key, toWebContentsId)
+    for (const [key, heldPageId] of this.heldPersonSelections) {
+      if (heldPageId === fromPageId) {
+        if (toPageId === null) {
+          this.heldPersonSelections.delete(key)
+        } else {
+          this.heldPersonSelections.set(key, toPageId)
+        }
       }
     }
     return moved

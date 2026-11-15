@@ -96,9 +96,9 @@ it('keeps an accepted pending creation held when a real snapshot fails before re
   test.reply()
   await created
   test.registration.mockRejectedValueOnce(new Error('Browser page registration failed'))
-  await expect(test.commands.browserSnapshot({ page: 'pending-snapshot' })).rejects.toThrow(
-    'Browser page registration failed'
-  )
+  await expect(test.commands.browserSnapshot({ page: 'pending-snapshot' })).rejects.toMatchObject({
+    code: 'browser_tab_not_found'
+  })
   expect(reserveBrowserPageDiscard('pending-snapshot', await attach('pending-snapshot'))).toBe(
     false
   )
@@ -118,7 +118,7 @@ it('does not let an old failed operation remove a replacement pending creation h
     })
   })
   const old = test.commands.browserSnapshot({ page: 'replaced-pending' })
-  const failed = expect(old).rejects.toThrow('Old registration failed')
+  const failed = expect(old).rejects.toMatchObject({ code: 'browser_tab_not_found' })
   await began
   closeBrowserMemoryPage('replaced-pending')
   const replacement = test.create('replaced-pending', 'about:blank')

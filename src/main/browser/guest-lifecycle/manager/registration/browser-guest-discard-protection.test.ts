@@ -196,7 +196,7 @@ it('protects active page features from the private observer and at idle admissio
   )
   markInitialBrowserGuest(guest)
   const stop = installBrowserGuestDiscardProtection(guest, vi.fn())
-  const report = (fields: object): void => {
+  const report = (fields: { pictureInPicture?: boolean; contentType?: string }): void => {
     guest.emit(
       'ipc-message',
       { sender: guest, senderFrame: mainFrame },

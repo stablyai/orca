@@ -61,7 +61,11 @@ export class RuntimeBrowserTabCatalog {
             : null
         }))
       : []
-    return mergeBrowserTabListing({ tabBar, liveTabs, clientTabs })
+    const routedPageId =
+      !clientPageActive && bridge && typeof bridge.getRoutedPageId === 'function'
+        ? bridge.getRoutedPageId(worktreeId)
+        : null
+    return mergeBrowserTabListing({ tabBar, liveTabs, clientTabs, routedPageId })
   }
 
   async assertClientPageWorkspace(

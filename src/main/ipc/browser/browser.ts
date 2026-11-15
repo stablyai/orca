@@ -221,7 +221,13 @@ export function registerBrowserHandlers(store: BrowserPasswordsSettingsSource): 
       // Destroy bridge sessions before unregistering clears the guest mapping.
       const wcId = browserManager.getGuestWebContentsId(args.browserPageId)
       if (wcId !== null && agentBrowserBridgeRef) {
-        agentBrowserBridgeRef.onTabClosed(wcId)
+        if (args.replacement) {
+          void agentBrowserBridgeRef.onProcessSwap(args.browserPageId, wcId).catch(() => {})
+        } else {
+          agentBrowserBridgeRef.onTabClosed(wcId)
+        }
+      } else if (!args.replacement && agentBrowserBridgeRef) {
+        void agentBrowserBridgeRef.onPageClosed(args.browserPageId).catch(() => {})
       }
       cancelBrowserWebAuthnAccountRequests(args.browserPageId)
       browserManager.unregisterGuest(

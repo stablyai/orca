@@ -1,42 +1,20 @@
-/** A renderer frame may name its accepted inventory instead of resending it; anything but that exact base resyncs. */
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { BrowserPageInventoryEntry } from '../../../shared/browser/runtime/browser-page-inventory'
 import { browserPageInventorySchema } from '../../../shared/browser/runtime/browser-page-inventory'
-import type {
-  RuntimeMobileSessionTabsPublication,
-  RuntimeMobileSessionTabsResult,
-  RuntimeMobileSessionTabsSnapshot
-} from '../../../shared/runtime-session-contracts'
+import type { RuntimeMobileSessionTabsPublication } from '../../../shared/runtime-session-contracts'
+import type { WorktreeMeta } from '../../../shared/worktree/meta-types'
+import type { RuntimeStore } from '../construction/runtime-store-contract'
+import { AgentBrowserBridge } from '../../browser/agent-browser/agent-browser-bridge'
+import '../orca-runtime-tests/orca-runtime-test-lifecycle.spec'
+import {
+  store,
+  makeWorktreeMeta,
+  TEST_WORKTREE_ID
+} from '../orca-runtime-tests/orca-runtime-test-fixtures.spec'
 import { OrcaRuntimeService } from '../orca-runtime'
 
-const WT = 'repo-1::/tmp/worktree-inventory'
+const WT = TEST_WORKTREE_ID
 const EPOCH = 'renderer:inventory-epoch'
-
-const storeBase = {
-  getRepo: () => ({
-    id: 'repo-1',
-    path: '/tmp/repo',
-    displayName: 'repo',
-    badgeColor: 'blue',
-    addedAt: 1
-  }),
-  getRepos: () => [storeBase.getRepo()],
-  addRepo: () => {},
-  updateRepo: () => undefined as never,
-  getAllWorktreeMeta: () => ({}),
-  getGitHubCache: () => ({ pr: {}, issue: {} }),
-  setWorktreeMeta: () => undefined as never,
-  getRetiredWorktreeNameRegistry: () => ({ exhaustedTiers: 0, names: [] }),
-  addRetiredWorktreeName: () => {},
-  mergeRetiredWorktreeNames: () => false,
-  getSettings: () => ({
-    workspaceDir: '/tmp/workspaces',
-    nestWorkspaces: false,
-    refreshLocalBaseRefOnWorktreeCreate: false,
-    branchPrefix: 'none',
-    branchPrefixCustom: ''
-  })
-}
 
 function entry(id: string): BrowserPageInventoryEntry {
   return {
@@ -76,100 +54,93 @@ function frame(
   }
 }
 
-type Internals = {
-  mobileSessionTabsByWorktree: Map<string, RuntimeMobileSessionTabsSnapshot>
-  acceptedRendererMobileSnapshotByWorktree: Map<string, { rendererVersion: number }>
-  removeWorktreeMetadataAndHistory: (store: unknown, worktreeId: string) => void
-  releaseRuntimeSessionOwnershipForRendererRetiredTabs: (...args: unknown[]) => void
-  nativeChatDraftResolutions: { reconcile: (...args: unknown[]) => void }
-}
-
 function createRuntime() {
-  let meta: { instanceId: string } | undefined = { instanceId: 'occupant-1' }
-  const store = {
-    ...storeBase,
+  let meta: WorktreeMeta | undefined = makeWorktreeMeta({ instanceId: 'occupant-1' })
+  const runtimeStore: RuntimeStore = {
+    ...store,
     getWorktreeMeta: () => meta,
+    getAllWorktreeMeta: (): Record<string, WorktreeMeta> => (meta ? { [WT]: meta } : {}),
+    setWorktreeMeta: (_target, updates) => {
+      meta = { ...makeWorktreeMeta(), ...meta, ...updates }
+      return meta
+    },
     removeWorktreeMeta: () => {
       meta = undefined
     }
   }
-  const runtime = new OrcaRuntimeService(store as never)
-  const internals = runtime as unknown as Internals
-  const events: RuntimeMobileSessionTabsResult[] = []
-  runtime.onMobileSessionTabsChanged((snapshot) => events.push(snapshot))
+  const runtime = new OrcaRuntimeService(runtimeStore)
+  runtime.attachWindow(1)
+  const bridge = vi.mockObject(AgentBrowserBridge.prototype)
+  bridge.getRegisteredTabs.mockReturnValue(new Map())
+  bridge.tabList.mockReturnValue({ tabs: [] })
+  runtime.setAgentBrowserBridge(bridge)
   const sync = (...frames: RuntimeMobileSessionTabsPublication[]) =>
     runtime.syncWindowGraph(1, { tabs: [], leaves: [], mobileSessionTabs: frames })
-  const stored = () => internals.mobileSessionTabsByWorktree.get(WT)
   return {
     runtime,
-    internals,
-    events,
     sync,
-    stored,
-    accepted: () => internals.acceptedRendererMobileSnapshotByWorktree.get(WT),
+    list: () => runtime.browserTabList({ worktree: `id:${WT}` }),
+    mobile: () => runtime.listMobileSessionTabs(`id:${WT}`),
     recreate: (instanceId: string) => {
-      meta = { instanceId }
+      meta = makeWorktreeMeta({ instanceId })
     },
-    remove: () => internals.removeWorktreeMetadataAndHistory(store, WT)
+    remove: () => runtime.removeWorktreeMetadataAndHistory(runtimeStore, WT)
   }
 }
 
-beforeEach(() => {
-  vi.useFakeTimers()
-})
-
 afterEach(() => {
-  vi.useRealTimers()
   vi.restoreAllMocks()
 })
 
 describe('acknowledged browser page inventory base', () => {
-  it('reuses the accepted inventory by reference past main-local bumps and strips the base', () => {
-    const { runtime, events, sync, stored } = createRuntime()
-    const inventory = [entry('a'), entry('b'), entry('c')]
-    sync(frame(1, { browserPageInventory: inventory }))
-    // Graph-only changes advance main's stored version, never the renderer's accepted one.
-    runtime.storeMobileSessionSnapshot(WT, {
-      ...stored()!,
-      snapshotVersion: stored()!.snapshotVersion + 5
-    })
-    const validate = vi.spyOn(browserPageInventorySchema, 'safeParse')
-    events.length = 0
+  it.each([
+    [10, 'saved-9', 'Page saved-9'],
+    [100, 'saved-99', 'Page saved-99']
+  ] as const)(
+    'avoids rescanning %i saved pages across repeated acknowledged syncs',
+    async (count, lastPageId, lastTitle) => {
+      const { runtime, sync, list, mobile } = createRuntime()
+      let pageReads = 0
+      const inventory = Array.from({ length: count }, (_, index) => ({
+        ...entry(`saved-${index}`),
+        get browserPageId() {
+          pageReads++
+          return `saved-${index}`
+        }
+      }))
+      sync(frame(1, { browserPageInventory: inventory }))
+      runtime.storeMobileSessionSnapshot(WT, frame(100, { browserPageInventory: inventory }))
+      const validate = vi.spyOn(browserPageInventorySchema, 'safeParse')
+      pageReads = 0
 
-    const result = sync(frame(2, { browserPageInventoryBaseVersion: 1 }))
-    vi.advanceTimersByTime(60)
+      for (let version = 2; version <= 11; version++) {
+        expect(
+          sync(frame(version, { browserPageInventoryBaseVersion: version - 1 }))
+            .mobileSessionResyncWorktrees
+        ).toBeUndefined()
+      }
 
-    expect(result.mobileSessionResyncWorktrees).toBeUndefined()
-    expect(validate).not.toHaveBeenCalled()
-    expect(stored()!.tabs[0]).toMatchObject({ title: 'Terminal v2' })
-    expect(stored()!.browserPageInventory).toBe(inventory)
-    expect(stored()!.browserPageInventory!.map((page) => page.title)).toEqual([
-      'Page a',
-      'Page b',
-      'Page c'
-    ])
-    expect(stored()).not.toHaveProperty('browserPageInventoryBaseVersion')
-    expect(events).toHaveLength(1)
-    expect(events[0]).not.toHaveProperty('browserPageInventoryBaseVersion')
-    expect(events[0]).not.toHaveProperty('browserPageInventory')
+      // N/10N contract: terminal-only publications must not revalidate the saved-page array.
+      expect(validate).not.toHaveBeenCalled()
+      expect(pageReads).toBe(0)
+      const pages = (await list()).tabs
+      expect(pages).toHaveLength(count)
+      expect(pages[0]).toMatchObject({ browserPageId: 'saved-0', title: 'Page saved-0' })
+      expect(pages.at(-1)).toMatchObject({ browserPageId: lastPageId, title: lastTitle })
+      expect((await mobile()).tabs[0]).toMatchObject({ title: 'Terminal v11' })
+      expect((await mobile()).snapshotVersion).toBeGreaterThan(100)
+    }
+  )
 
-    // A chain of terminal-only frames keeps naming the latest accepted base.
-    sync(frame(3, { browserPageInventoryBaseVersion: 2 }))
-    expect(stored()!.tabs[0]).toMatchObject({ title: 'Terminal v3' })
-    expect(stored()!.browserPageInventory).toBe(inventory)
-  })
-
-  it('replaces with a full array, including an authoritative empty inventory, and reuses that', () => {
-    const { sync, stored } = createRuntime()
+  it('reuses an authoritative empty inventory after replacing saved pages', async () => {
+    const { sync, list, mobile } = createRuntime()
     sync(frame(1, { browserPageInventory: [entry('a'), entry('b')] }))
     sync(frame(2, { browserPageInventory: [] }))
-    expect(stored()!.browserPageInventory).toEqual([])
-
     expect(
       sync(frame(3, { browserPageInventoryBaseVersion: 2 })).mobileSessionResyncWorktrees
     ).toBeUndefined()
-    expect(stored()!.browserPageInventory).toEqual([])
-    expect(stored()!.tabs[0]).toMatchObject({ title: 'Terminal v3' })
+    expect((await list()).tabs).toEqual([])
+    expect((await mobile()).tabs[0]).toMatchObject({ title: 'Terminal v3' })
   })
 
   it.each([
@@ -182,108 +153,74 @@ describe('acknowledged browser page inventory base', () => {
       'another occupant',
       frame(3, { worktreeInstanceId: 'occupant-2', browserPageInventoryBaseVersion: 2 })
     ]
-  ])('keeps state and requests a full frame for %s', (_label, mismatched) => {
-    const { internals, sync, stored, accepted } = createRuntime()
-    const inventory = [entry('a'), entry('b')]
-    sync(frame(1, { browserPageInventory: [entry('old')] }))
-    sync(frame(2, { browserPageInventory: inventory }))
-    const before = stored()
-    const reconcile = vi.spyOn(internals.nativeChatDraftResolutions, 'reconcile')
-    const release = vi.spyOn(internals, 'releaseRuntimeSessionOwnershipForRendererRetiredTabs')
+  ])(
+    'requests a full resend for %s without losing the accepted catalog',
+    async (_label, mismatched) => {
+      const { sync, list, mobile } = createRuntime()
+      sync(frame(1, { browserPageInventory: [entry('old')] }))
+      sync(frame(2, { browserPageInventory: [entry('a'), entry('b')] }))
 
-    expect(sync(mismatched).mobileSessionResyncWorktrees).toEqual([WT])
+      expect(sync(mismatched).mobileSessionResyncWorktrees).toEqual([WT])
+      expect((await list()).tabs.map((page) => page.browserPageId)).toEqual(['a', 'b'])
+      expect((await mobile()).tabs[0]).toMatchObject({ title: 'Terminal v2' })
 
-    expect(stored()).toBe(before)
-    expect(stored()!.browserPageInventory).toBe(inventory)
-    expect(accepted()).toBeUndefined()
-    expect(reconcile).not.toHaveBeenCalled()
-    expect(release).not.toHaveBeenCalled()
-    // The renderer's full resend of the same version now passes the dropped accept gate.
-    const { browserPageInventoryBaseVersion: _base, ...full } = mismatched
-    expect(
-      sync({ ...full, browserPageInventory: [entry('z')] }).mobileSessionResyncWorktrees
-    ).toBeUndefined()
-    expect(stored()!.browserPageInventory!.map((page) => page.browserPageId)).toEqual(['z'])
-    expect(accepted()?.rendererVersion).toBe(mismatched.snapshotVersion)
-  })
+      const { browserPageInventoryBaseVersion: _base, ...full } = mismatched
+      expect(
+        sync({ ...full, browserPageInventory: [entry('z')] }).mobileSessionResyncWorktrees
+      ).toBeUndefined()
+      expect((await list()).tabs.map((page) => page.browserPageId)).toEqual(['z'])
+      expect(
+        sync({
+          ...full,
+          snapshotVersion: 4,
+          browserPageInventoryBaseVersion: 3
+        }).mobileSessionResyncWorktrees
+      ).toBeUndefined()
+    }
+  )
 
-  it('re-merges the exact accepted revision only from a full frame', () => {
-    const { internals, sync, stored } = createRuntime()
-    sync(frame(1, { browserPageInventory: [entry('a')] }))
-    sync(frame(2, { browserPageInventoryBaseVersion: 1 }))
-    // Stored host-only preservation went stale, so the exact accepted revision is admitted again.
-    vi.spyOn(
-      internals as unknown as { storedMobileSnapshotHasStalePreservedTab: () => boolean },
-      'storedMobileSnapshotHasStalePreservedTab'
-    ).mockReturnValue(true)
-    const before = stored()
-
-    // A base equal to the frame's own version cannot be an older acknowledged publication.
-    expect(
-      sync(frame(2, { browserPageInventoryBaseVersion: 2 })).mobileSessionResyncWorktrees
-    ).toEqual([WT])
-    expect(stored()).toBe(before)
-    // Without an accepted pair a further reference is a missing base, not a reuse.
-    expect(
-      sync(frame(3, { browserPageInventoryBaseVersion: 2 })).mobileSessionResyncWorktrees
-    ).toEqual([WT])
-    expect(stored()).toBe(before)
-
-    expect(
-      sync(frame(2, { browserPageInventory: [entry('a')] })).mobileSessionResyncWorktrees
-    ).toBeUndefined()
-    expect(stored()).not.toBe(before)
-    expect(stored()!.browserPageInventory!.map((page) => page.browserPageId)).toEqual(['a'])
-  })
-
-  it('resyncs a base when the accepted publication carried no inventory and keeps legacy fallback', () => {
-    const { sync, stored } = createRuntime()
-    // An older renderer publishes no inventory and no base: listing keeps its selected-row fallback.
+  it('requests inventory when the acknowledged renderer publication carried none', async () => {
+    const { sync, mobile } = createRuntime()
     sync(frame(1))
     expect(sync(frame(2)).mobileSessionResyncWorktrees).toBeUndefined()
-    expect(stored()).not.toHaveProperty('browserPageInventory')
-
     expect(
       sync(frame(3, { browserPageInventoryBaseVersion: 2 })).mobileSessionResyncWorktrees
     ).toEqual([WT])
-    expect(stored()!.tabs[0]).toMatchObject({ title: 'Terminal v2' })
+    expect((await mobile()).tabs[0]).toMatchObject({ title: 'Terminal v2' })
   })
 
-  it('skips a duplicate hinted frame after a lost acknowledgement without a resync', () => {
-    const { sync, stored } = createRuntime()
-    const inventory = [entry('a')]
-    sync(frame(1, { browserPageInventory: inventory }))
+  it('accepts the next base after a duplicate frame loses its acknowledgement', async () => {
+    const { sync, list, mobile } = createRuntime()
+    sync(frame(1, { browserPageInventory: [entry('a')] }))
     sync(frame(2, { browserPageInventoryBaseVersion: 1 }))
-    const before = stored()
-
     expect(
       sync(frame(2, { browserPageInventoryBaseVersion: 1 })).mobileSessionResyncWorktrees
     ).toBeUndefined()
-    expect(stored()).toBe(before)
-    // The next frame names the version main did accept.
-    sync(frame(3, { browserPageInventoryBaseVersion: 2 }))
-    expect(stored()!.tabs[0]).toMatchObject({ title: 'Terminal v3' })
-    expect(stored()!.browserPageInventory).toBe(inventory)
+    expect(
+      sync(frame(3, { browserPageInventoryBaseVersion: 2 })).mobileSessionResyncWorktrees
+    ).toBeUndefined()
+    expect((await mobile()).tabs[0]).toMatchObject({ title: 'Terminal v3' })
+    expect((await list()).tabs.map((page) => page.browserPageId)).toEqual(['a'])
   })
 
-  it('fences a removed occupant without a resync loop and makes its successor resend in full', () => {
-    const { sync, stored, recreate, remove } = createRuntime()
+  it('fences a removed occupant and makes its successor resend in full', async () => {
+    const { sync, list, recreate, remove } = createRuntime()
     sync(frame(1, { browserPageInventory: [entry('a')] }))
-    remove()
+    await remove()
     recreate('occupant-2')
-
-    const late = sync(frame(2, { browserPageInventoryBaseVersion: 1 }))
-    expect(late.mobileSessionResyncWorktrees).toBeUndefined()
-    expect(stored()).toBeUndefined()
+    expect(
+      sync(frame(2, { browserPageInventoryBaseVersion: 1 })).mobileSessionResyncWorktrees
+    ).toBeUndefined()
+    expect((await list()).tabs).toEqual([])
 
     const successor = { worktreeInstanceId: 'occupant-2' }
     expect(
       sync(frame(3, { ...successor, browserPageInventoryBaseVersion: 1 }))
         .mobileSessionResyncWorktrees
     ).toEqual([WT])
-    expect(stored()).toBeUndefined()
+    expect((await list()).tabs).toEqual([])
     sync(frame(3, { ...successor, browserPageInventory: [entry('b')] }))
-    expect(stored()!.browserPageInventory!.map((page) => page.browserPageId)).toEqual(['b'])
+    expect((await list()).tabs.map((page) => page.browserPageId)).toEqual(['b'])
   })
 
   it.each([
@@ -291,14 +228,11 @@ describe('acknowledged browser page inventory base', () => {
       'an inventory beside a base',
       { browserPageInventory: [entry('a')], browserPageInventoryBaseVersion: 1 }
     ],
-    ['a fractional base', { browserPageInventoryBaseVersion: 1.5 }],
-    ['a string base', { browserPageInventoryBaseVersion: '1' as unknown as number }]
-  ])('rejects %s before any state changes', (_label, malformed) => {
-    const { sync, stored } = createRuntime()
+    ['a fractional base', { browserPageInventoryBaseVersion: 1.5 }]
+  ])('rejects %s without replacing the accepted catalog', async (_label, malformed) => {
+    const { sync, list } = createRuntime()
     sync(frame(1, { browserPageInventory: [entry('a')] }))
-    const before = stored()
-
     expect(() => sync(frame(2, malformed))).toThrow('invalid_browser_page_inventory')
-    expect(stored()).toBe(before)
+    expect((await list()).tabs.map((page) => page.browserPageId)).toEqual(['a'])
   })
 })

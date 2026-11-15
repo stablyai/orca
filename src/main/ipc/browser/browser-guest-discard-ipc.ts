@@ -17,6 +17,7 @@ import {
 } from '../../browser/guest-lifecycle/browser-page-memory'
 import { browserManager } from '../../browser/guest-lifecycle/manager/browser-manager'
 import { isTrustedBrowserRenderer } from './browser-renderer-trust'
+import { isWorkspaceDocPageId } from '../../browser/document-preview/doc-preview-guest-policy'
 
 export function registerBrowserGuestDiscardHandlers(): void {
   const scheduler = getBrowserPageIdleDiscard()
@@ -25,6 +26,7 @@ export function registerBrowserGuestDiscardHandlers(): void {
     if (
       !isTrustedBrowserRenderer(event.sender) ||
       typeof report?.browserPageId !== 'string' ||
+      isWorkspaceDocPageId(report.browserPageId) ||
       typeof report.webContentsId !== 'number' ||
       !Number.isSafeInteger(report.generation) ||
       (report.visible !== null && typeof report.visible !== 'boolean')

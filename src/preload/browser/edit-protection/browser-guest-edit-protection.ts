@@ -39,11 +39,13 @@ export function installBrowserGuestEditProtection(port: {
   const pictureInPictureChanged = (): void => report()
   window.addEventListener('enterpictureinpicture', pictureInPictureChanged, true)
   window.addEventListener('leavepictureinpicture', pictureInPictureChanged, true)
-  const documentPictureInPicture: unknown = Reflect.get(window, 'documentPictureInPicture')
+  const documentPictureInPicture =
+    'documentPictureInPicture' in window ? window.documentPictureInPicture : undefined
   if (documentPictureInPicture instanceof EventTarget) {
     documentPictureInPicture.addEventListener('enter', () => {
       report()
-      const pictureInPictureWindow: unknown = Reflect.get(documentPictureInPicture, 'window')
+      const pictureInPictureWindow =
+        'window' in documentPictureInPicture ? documentPictureInPicture.window : undefined
       if (pictureInPictureWindow instanceof EventTarget) {
         pictureInPictureWindow.addEventListener('pagehide', pictureInPictureChanged)
       }
@@ -68,8 +70,12 @@ function isPictureInPicture(): boolean {
   if (document.pictureInPictureElement) {
     return true
   }
-  const documentPictureInPicture: unknown = Reflect.get(window, 'documentPictureInPicture')
+  const documentPictureInPicture =
+    'documentPictureInPicture' in window ? window.documentPictureInPicture : undefined
   return Boolean(
-    documentPictureInPicture && Reflect.get(Object(documentPictureInPicture), 'window')
+    documentPictureInPicture &&
+    typeof documentPictureInPicture === 'object' &&
+    'window' in documentPictureInPicture &&
+    documentPictureInPicture.window
   )
 }

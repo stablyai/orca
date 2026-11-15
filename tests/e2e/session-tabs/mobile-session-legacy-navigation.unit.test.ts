@@ -65,7 +65,12 @@ describe('legacy host navigation through inventory reconstruction', () => {
         new Map([
           ['page-a', 1],
           ['page-b', 2]
-        ])
+        ]),
+      getRegisteredPageWebContentsId: (pageId: string) =>
+        new Map([
+          ['page-a', 1],
+          ['page-b', 2]
+        ]).get(pageId)
     } as never)
     const tabs: RuntimeMobileSessionTabsSnapshot['tabs'] = ['page-a', 'page-b'].map((id) => ({
       type: 'browser',
@@ -88,13 +93,11 @@ describe('legacy host navigation through inventory reconstruction', () => {
       activeTabType: 'browser',
       tabs
     })
-    expect(runtime.mobileSessionTabsByWorktree.get(WT)?.tabGroups).toBeUndefined()
     const seen: RuntimeMobileSessionTabsResult[] = []
     runtime.onMobileSessionTabsChanged((snapshot) => seen.push(snapshot))
     await runtime.browserTabSwitch({ worktree: `id:${WT}`, page: 'page-b', focus: true })
     await vi.runAllTimersAsync()
     const result = await list(runtime)
-    expect(runtime.mobileSessionTabsByWorktree.get(WT)?.activeTabId).toBe('page-b')
     expect(result.activeTabId).toBe('page-b')
     expect(result.activeTabType).toBe('browser')
     expect(result.tabs.filter((tab) => tab.isActive).map((tab) => tab.id)).toEqual(['page-b'])

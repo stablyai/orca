@@ -82,6 +82,7 @@ export function mergeBrowserTabListing(input: {
   tabBar: readonly BrowserTabBarEntry[]
   liveTabs: readonly BrowserTabInfo[]
   clientTabs: readonly BrowserTabInfo[]
+  routedPageId?: string | null
 }): BrowserTabInfo[] {
   const liveById = new Map(input.liveTabs.map((tab) => [tab.browserPageId, tab]))
   const clientIds = new Set(input.clientTabs.map((tab) => tab.browserPageId))
@@ -101,8 +102,8 @@ export function mergeBrowserTabListing(input: {
             index: 0,
             url: entry.url,
             title: entry.title,
-            // Why: commands without --page act on the live active page, so a tab with none is never it.
-            active: false,
+            // Why: commands without --page restore and act on the routed page even when it is freed.
+            active: entry.browserPageId === input.routedPageId,
             loadError: entry.loadError,
             certificateFailure: entry.certificateFailure,
             worktreeId: entry.worktreeId,
