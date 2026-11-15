@@ -22,7 +22,12 @@ export function NativeChatBackgroundTaskRun({
     <div className="min-w-0 py-0.5 font-sans text-sm leading-relaxed text-chat-foreground-faint">
       <div className="flex min-h-6 min-w-0 items-center gap-1.5">
         <Icon aria-hidden="true" className="size-3.5 shrink-0 text-chat-foreground-faint" />
-        <AgentStateDot state={row.state} size="sm" title={null} />
+        {/* Run vocabulary records a settled failure as `blocked`; draw the failure dot, not the needs-you glyph. */}
+        <AgentStateDot
+          state={row.state === 'blocked' ? 'failed' : row.state}
+          size="sm"
+          title={null}
+        />
         <span className="min-w-0 truncate text-chat-foreground" title={row.label}>
           {row.label}
         </span>
