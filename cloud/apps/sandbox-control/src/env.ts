@@ -90,6 +90,10 @@ export type Env = {
   RUNTIME_REFRESH?: string
   /** Public URL of this Worker's /v1/egress/proxy; Vercel forwardURL rules point here. */
   EGRESS_PROXY_URL?: string
+  /** CODEX-RELAY (src/chatgpt-relay.ts): the Cloud Run relay chatgpt.com egress goes through. Unset: direct. */
+  CHATGPT_RELAY_URL?: string
+  /** (secret) service-account JSON holding run.invoker on CHATGPT_RELAY_URL's service only. */
+  CHATGPT_RELAY_SERVICE_ACCOUNT?: string
   /** Shortened session deadline (ms) for staging rollover rehearsals; refused when SANDBOX_ENV=prod. */
   SESSION_DEADLINE_MS?: string
   /** Dev-only: Authorization the egress proxy injects for api.github.com until the GitHub App minter exists. */

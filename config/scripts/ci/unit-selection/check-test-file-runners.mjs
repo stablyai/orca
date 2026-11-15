@@ -50,6 +50,12 @@ const NON_UNIT_TEST_RUNNERS = [
     mirrors: ["include: ['src/**/*.test.ts']"]
   })),
   {
+    name: 'cloud chatgpt-relay',
+    include: ['cloud/apps/chatgpt-relay/test/**/*.test.ts'],
+    sources: ['cloud/apps/chatgpt-relay/vitest.config.ts'],
+    mirrors: ["include: ['test/**/*.test.ts']"]
+  },
+  {
     name: 'cloud relay-edge',
     include: ['cloud/apps/relay-edge/test/**/*.test.ts'],
     sources: ['cloud/apps/relay-edge/vitest.config.ts'],
