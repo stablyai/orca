@@ -85,6 +85,8 @@ export class WslHostService {
       this.parked.add(record.environmentId)
     } else if (status.state === 'ready') {
       this.parked.delete(record.environmentId)
+    } else if (this.parked.has(record.environmentId)) {
+      return
     }
     this.setStatus(record, status, connection)
     if (status.state === 'ready' && connection) {
@@ -166,6 +168,7 @@ export class WslHostService {
     }
     this.visible.delete(environmentId)
     this.parked.delete(environmentId)
+    this.connectionChanges.delete(wslDistroHolderKey(record.distro))
     this.board.delete(environmentId)
     await this.deps.removed(environmentId)
     return removal.serverStop
@@ -347,7 +350,6 @@ export class WslHostService {
     status: WslOrcadConnectionStatus,
     connection: WslOrcadConnection | null = null
   ): void {
-    this.connectionChanges.delete(wslDistroHolderKey(record.distro))
     if (status.state === 'ready') {
       const key = wslDistroHolderKey(record.distro)
       this.readyGenerations.set(key, (this.readyGenerations.get(key) ?? 0) + 1)

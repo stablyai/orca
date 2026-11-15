@@ -23,7 +23,10 @@ describe('WslHostService', () => {
   const ready = vi.fn()
   const removed = vi.fn()
 
-  function makeService(connector: WslHostConnector): WslHostService {
+  function makeService(
+    connector: WslHostConnector,
+    onRunning: (task: () => unknown) => void = () => {}
+  ): WslHostService {
     const service = new WslHostService({
       userDataPath: () => userDataPath,
       isEnabled: () => enabled,
@@ -32,7 +35,7 @@ describe('WslHostService', () => {
       pairingChanged,
       ready,
       removed,
-      deferUntilRunning: () => {}
+      deferUntilRunning: (_distro, _key, task) => onRunning(task)
     })
     service.attach(connector)
     return service
@@ -79,6 +82,78 @@ describe('WslHostService', () => {
       expect.objectContaining({ environmentId: 'wsl:ubuntu', state: 'closed' })
     ])
     expect(ready).not.toHaveBeenCalled()
+  })
+
+  it('a confirmed runtime stop remains visible after an older connection notice finishes', async () => {
+    const connector = makeConnector([UBUNTU])
+    const service = makeService(connector)
+    await service.add({ distro: 'Ubuntu' })
+    const records = await connectionRecords.readWslHostRecordsQuietly(userDataPath)
+    const registryRead = Promise.withResolvers<typeof records>()
+    let closed: Promise<void> = Promise.resolve()
+    connector.reachability.mockImplementationOnce(async () => {
+      vi.spyOn(connectionRecords, 'readWslHostRecordsQuietly').mockImplementationOnce(
+        () => registryRead.promise
+      )
+      closed = service.handleConnectionChange('Ubuntu', null, { state: 'closed' })
+      return 'stopped'
+    })
+    try {
+      await expect(service.ensureForRuntimeCall('wsl:ubuntu')).rejects.toThrow()
+    } finally {
+      registryRead.resolve(records)
+      await closed
+    }
+    expect(service.getStatuses()).toEqual([
+      expect.objectContaining({ environmentId: 'wsl:ubuntu', state: 'distro-stopped' })
+    ])
+  })
+
+  it('deferred recovery preserves the replacement connection pairing and Ready notification', async () => {
+    const connector = makeConnector([UBUNTU])
+    let resume: () => unknown = () => {}
+    const service = makeService(connector, (task) => (resume = task))
+    await service.add({ distro: 'Ubuntu' })
+    connector.reachability.mockResolvedValueOnce('stopped')
+    await expect(service.ensureForRuntimeCall('wsl:ubuntu')).rejects.toThrow()
+    ready.mockClear()
+    const started = Promise.withResolvers<void>()
+    const reachability = Promise.withResolvers<'available'>()
+    connector.reachability.mockImplementationOnce(() => {
+      started.resolve()
+      return reachability.promise
+    })
+    resume()
+    await started.promise
+    const records = await connectionRecords.readWslHostRecordsQuietly(userDataPath)
+    const registryRead = Promise.withResolvers<typeof records>()
+    vi.spyOn(connectionRecords, 'readWslHostRecordsQuietly').mockImplementationOnce(
+      () => registryRead.promise
+    )
+    const replacement = connection('Ubuntu', 42001, 'replacement')
+    connector.get.mockReturnValue(replacement)
+    const changed = service.handleConnectionChange('Ubuntu', replacement, {
+      state: 'ready',
+      census: null
+    })
+    const recoveryPublished = Promise.withResolvers<void>()
+    const unsubscribe = service.onStatusesChanged(() => {
+      if (service.getStatuses().some((status) => status.state === 'ready')) {
+        recoveryPublished.resolve()
+      }
+    })
+    try {
+      reachability.resolve('available')
+      await recoveryPublished.promise
+    } finally {
+      unsubscribe()
+      registryRead.resolve(records)
+      await changed
+    }
+    expect(ready).toHaveBeenCalledWith('wsl:ubuntu', 'Ubuntu')
+    expect((await connectionRecords.readWslHostRecordsQuietly(userDataPath))[0]?.localPort).toBe(
+      42001
+    )
   })
 
   it('keeps a host whose removal failed usable and removable again', async () => {
