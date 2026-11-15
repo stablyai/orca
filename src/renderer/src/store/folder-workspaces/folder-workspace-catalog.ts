@@ -16,7 +16,7 @@ import { getFolderWorkspaceHostId } from '../../../../shared/folder-workspaces/f
 import { catalogOwnsHost } from '../project-groups/project-group-owner-routing'
 import type { FolderWorkspaceUpdateTicket } from './folder-workspace-update-coordinator'
 import { callRuntimeRpc } from '../../runtime/rpc/calls/runtime-rpc-call'
-import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import type {
   FolderWorkspaceUpdateCoordinatorInstance,
   FolderWorkspaceUpdateField
@@ -124,6 +124,17 @@ function mergeFetchedFolderWorkspacesForHost({
     mergeByIdentity(preserved, fetched, (workspace) =>
       getFolderWorkspaceHostIdentity(workspace, resolveHostId)
     )
+  )
+}
+
+export function mergeCreatedFolderWorkspace(
+  created: FolderWorkspace,
+  current: readonly FolderWorkspace[],
+  projectGroups: readonly ProjectGroup[]
+): readonly FolderWorkspace[] {
+  const resolveHostId = createFolderWorkspaceHostResolver(projectGroups)
+  return mergeByIdentity([created], current, (workspace) =>
+    getFolderWorkspaceHostIdentity(workspace, resolveHostId)
   )
 }
 

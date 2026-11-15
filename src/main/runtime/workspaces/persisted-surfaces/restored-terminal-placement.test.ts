@@ -31,6 +31,7 @@ function runtimeWithCwdOnlyTerminal() {
     getRepos: () => [],
     getProjectGroups: () => [{ id: 'group-1', parentPath: '/fixture' }],
     getFolderWorkspaces: () => [FOLDER],
+    getFolderWorkspace: (id: string) => (id === FOLDER.id ? FOLDER : undefined),
     getSettings: () => ({}),
     getAllWorktreeMeta: () => ({}),
     getWorkspaceSessionHostIds: () => ['local'],
@@ -65,7 +66,7 @@ describe('startup placement of a cwd-filed live terminal', () => {
       placed: ['pty-agent'],
       declined: []
     })
-    runtime.syncWindowGraph(0, { tabs: [], leaves: [] })
+    await runtime.syncWindowGraph(0, { tabs: [], leaves: [] })
     await runtime.stopTerminalsForWorktree(`id:${FOLDER_KEY}`)
 
     expect(stopAndWait).toHaveBeenCalledWith('pty-agent')

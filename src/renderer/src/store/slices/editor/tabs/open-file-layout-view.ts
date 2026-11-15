@@ -1,8 +1,8 @@
 // Encode/decode nonedit OpenFile views so frames can rebuild diff/conflict/preview/check-detail tabs absent from this window.
 
 import type { EditorTabView } from '../../../../../../shared/editor-tab-view-types'
-import type { LayoutEditorView } from '../../../../../../shared/workspace-layout/layout-editor-view'
-import { pickStoredFields } from '../../../../../../shared/workspace-layout/stored-record-fields'
+import type { LayoutEditorView } from '../../../../../../shared/workspace-layout/editor-tabs/layout-editor-view'
+import { pickStoredFields } from '../../../../../../shared/workspace-layout/persistence/stored-record-fields'
 import type { OpenFile } from '../types/open-file'
 
 const DIFF_VIEW_FIELDS = [

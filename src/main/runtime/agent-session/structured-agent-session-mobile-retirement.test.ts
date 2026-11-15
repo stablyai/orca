@@ -114,7 +114,7 @@ describe('host prompt delivery and retirement', () => {
               }
             ]
           ]),
-          readStatusState: () => projectStructuredAgentSessionStatusState(items),
+          readStatusState: async () => projectStructuredAgentSessionStatusState(items),
           readChildWork: () => undefined,
           now: () => 42
         })
@@ -129,16 +129,16 @@ describe('host prompt delivery and retirement', () => {
           },
           onState: delivery.reconcile
         })
-        feed.observe('session-1')
+        await feed.observe('session-1')
         if (announcedEarlier) {
           items = [USER, turn(), approval(false)]
           sequence += 1
-          feed.observe('session-1')
+          await feed.observe('session-1')
         }
         items = [USER, turn(outcome), approval(false)]
         sequence += 1
-        feed.observe('session-1')
-        feed.observe('session-1')
+        await feed.observe('session-1')
+        await feed.observe('session-1')
         const key = agentSessionPromptAttentionKey(SCOPE, 'session-1', 'approval-1')
         const promptAnnounced = outcome === 'success' || announcedEarlier
         expect(legacy).toEqual([
@@ -161,8 +161,8 @@ describe('host prompt delivery and retirement', () => {
         }
         items = [USER, turn(outcome), approval(true)]
         sequence += 1
-        feed.observe('session-1')
-        feed.observe('session-1')
+        await feed.observe('session-1')
+        await feed.observe('session-1')
         expect(
           events.filter((event) => event.type === 'dismiss').map((event) => event.notificationId)
         ).toEqual(promptAnnounced ? [key] : [])

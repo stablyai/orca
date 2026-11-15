@@ -6,7 +6,7 @@ import { runtimeEnvironmentIdOrLocalUnlessTwin } from '../../ownership/worktree-
 import { expectsBrowserClientHosting } from '../../../../../../shared/browser/client-hosting/browser-client-hosting-eligibility'
 import { getOrcadSshDeployment } from '../../../../../../shared/remote-runtime/host-catalog/runtime-environments'
 import type { PublicKnownRuntimeEnvironment } from '../../../../../../shared/remote-runtime/host-catalog/runtime-environments'
-import type { RuntimeStatus } from '../../../../../../shared/runtime-session-contracts'
+import type { RuntimeStatus } from '../../../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import type { AppState } from '@/store/types'
 import type { GlobalSettings } from '../../../../../../shared/global-settings-types'
 

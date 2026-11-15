@@ -12,7 +12,7 @@ import { liveFederatedHomeAutoReleaseAt } from '../terminal-authority/release/wo
 import type { OrchestrationDb } from '../db/orchestration-db'
 import { OrchestrationError } from '../orchestration-error'
 import type { OrcaRuntimeService } from '../../orca-runtime'
-import { resolvePinnedFederatedServer } from '../../rpc/methods/orchestration/worker/pinned-federated-server'
+import { resolvePinnedFederatedServer } from './pinned-federated-server'
 import { applyConfirmedFederatedReleaseHomeProjection } from './federated-worker-release'
 
 const FLEET_HOST_CONCURRENCY = 4
@@ -65,7 +65,7 @@ export async function readFederatedFleetSnapshots(args: {
     const cache = getOrchestrationPeerCapabilityCache(args.runtime)
     let observedCapabilityEpoch: string | null = null
     try {
-      const server = resolvePinnedFederatedServer(args.runtime, first)
+      const server = await resolvePinnedFederatedServer(args.runtime, first)
       // Shipped hosts serve this method without advertising it.
       const known = cache.knownSupport(
         first.peer_fingerprint,

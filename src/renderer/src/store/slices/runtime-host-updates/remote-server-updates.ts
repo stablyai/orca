@@ -1,9 +1,9 @@
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../../types'
-import type { RemoteServerUpdaterSnapshot } from '../../../../../shared/remote-server-update'
+import type { RemoteServerUpdaterSnapshot } from '../../../../../shared/remote-runtime/host-catalog/remote-server-update'
 import { isListedRemoteServer } from '../../../../../shared/remote-runtime/host-catalog/runtime-environments'
-import type { RuntimeRpcResponse } from '../../../../../shared/runtime-rpc-envelope'
-import type { RuntimeStatus } from '../../../../../shared/runtime-session-contracts'
+import type { RuntimeRpcResponse } from '../../../../../shared/remote-runtime/rpc/runtime-rpc-envelope'
+import type { RuntimeStatus } from '../../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import type { UpdateCheckOptions } from '../../../../../shared/update-status-types'
 import { unwrapRuntimeRpcResult } from '@/runtime/rpc/calls/runtime-rpc-result'
 import {

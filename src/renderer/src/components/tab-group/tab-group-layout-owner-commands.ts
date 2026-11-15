@@ -4,7 +4,7 @@ import { useAppStore } from '@/store/index'
 import type { TabSplitDirection } from '@/store/slices/tabs/tabs-slice-contract'
 import { sendLayoutCommandToOwner } from '@/runtime/workspace-layout/commands/layout-owner-command'
 import type { WindowLayoutCommand } from '@/runtime/workspace-layout/commands/layout-apply-send'
-import { isPaneColumnSplitDropNoOp } from '../../../../shared/workspace-layout/pane-column-split-drop-no-op'
+import { isPaneColumnSplitDropNoOp } from '../../../../shared/workspace-layout/tab-groups/pane-column-split-drop-no-op'
 import { mirrorWebRuntimeTabMove } from '../tab-bar/web-runtime-tab-move-mirror'
 import {
   expectMovedTabSelection,
@@ -12,9 +12,10 @@ import {
 } from '@/runtime/workspace-layout/intents/layout-owner-pane-intents'
 import { tabSelectionKey } from '@/store/slices/tabs/moved-tab-selection'
 import { layoutFramesFlowing } from '@/runtime/workspace-layout/frames/layout-frame-position'
-import { splitRatioIntentAt } from '../../../../shared/workspace-layout/split-ratio-intents'
+import { splitRatioIntentAt } from '../../../../shared/workspace-layout/tab-groups/split-ratio-intents'
 import { serverTabCount } from '@/store/workspace-layout/frames/frame-drawn-desktop-created-tabs'
-import { tabOrderAnchor } from '../../../../shared/workspace-layout/tab-order'
+import { tabOrderAnchor } from '../../../../shared/workspace-layout/tab-groups/tab-order'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
 
 export type TabDrop =
   | { kind: 'reorder'; tabId: string; groupId: string; tabOrder: string[] }
@@ -26,6 +27,24 @@ export type TabDrop =
 export type TabDropCompletion = {
   refused: () => void
   moveHere: (move: () => void) => void
+}
+
+type TabReorder = Extract<TabDrop, { kind: 'reorder' }>
+
+/** Reorder within one group via main when it owns layout, else locally with the web-runtime mirror; true means main took it. */
+export function reorderTabInGroup(worktreeId: string, reorder: TabReorder): boolean {
+  if (ORCA_LAYOUT_OWNER_IS_MAIN && dropTabThroughLayoutOwner(worktreeId, reorder)) {
+    return true
+  }
+  useAppStore.getState().reorderUnifiedTabs(reorder.groupId, reorder.tabOrder)
+  mirrorWebRuntimeTabMove({
+    kind: 'reorder',
+    worktreeId,
+    tabId: reorder.tabId,
+    targetGroupId: reorder.groupId,
+    tabOrder: reorder.tabOrder
+  })
+  return false
 }
 
 /** Send drops to main; refusal leaves tabs in place, while false delegates skipped or paired-server drops to the caller. */

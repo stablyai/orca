@@ -1,6 +1,6 @@
 import { useCallback } from 'react'
 
-import type { ChecksPanelControllerState } from '../use-checks-panel-controller-state'
+import type { ChecksPanelControllerState } from '../panel/use-checks-panel-controller-state'
 
 type ChecksPanelBranchActionsInput = Pick<
   ChecksPanelControllerState,

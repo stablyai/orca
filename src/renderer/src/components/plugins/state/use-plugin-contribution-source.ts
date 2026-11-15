@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import type { PluginHostListEntry } from '../../../../../preload/api-types'
+import type { PluginHostListEntry } from '../../../../../shared/plugins/plugin-list-entry'
 import type { PluginManifest } from '../../../../../shared/plugins/manifest/plugin-manifest'
 import { usePluginIconThemes } from '@/store/plugins/appearance/plugin-icon-themes'
 import {

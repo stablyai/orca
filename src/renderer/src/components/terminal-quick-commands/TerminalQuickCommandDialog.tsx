@@ -235,73 +235,76 @@ export function TerminalQuickCommandDialog({
           </DialogDescription>
         </DialogHeader>
 
-        <fieldset
-          disabled={saving}
-          className="scrollbar-sleek flex min-h-0 min-w-0 flex-1 flex-col gap-4 overflow-y-auto px-6 py-5"
-          onKeyDown={(event) => {
-            if (
-              event.defaultPrevented ||
-              !(event.target instanceof Node) ||
-              !event.currentTarget.contains(event.target)
-            ) {
-              return
-            }
-            if (
-              isSelectAllShortcut(event) &&
-              (event.target instanceof HTMLInputElement ||
-                event.target instanceof HTMLTextAreaElement)
-            ) {
-              event.preventDefault()
-              event.stopPropagation()
-              event.target.select()
-              return
-            }
-            if (isScreenSubmitShortcut(event) && canSave) {
-              event.preventDefault()
-              void saveDraft()
-            }
-          }}
-        >
-          <div className="grid grid-cols-1 items-end gap-3 sm:grid-cols-[minmax(0,1fr)_auto]">
-            <TerminalQuickCommandLabelField label={draft.label} setDraft={setDraft} />
-            <div className="space-y-2">
-              <Label>
-                {t(
-                  'auto.components.terminal.quick.commands.TerminalQuickCommandDialog.ec8f081919',
-                  'Action'
-                )}
-              </Label>
-              <TerminalQuickCommandActionToggle
-                selectedAction={selectedAction}
-                onActionChange={setAction}
-              />
+        {/* Why: Chromium won't wheel-scroll an overflowing fieldset, so a plain div owns the overflow. */}
+        <div className="scrollbar-sleek min-h-0 flex-1 overflow-y-auto">
+          <fieldset
+            disabled={saving}
+            className="flex min-w-0 flex-col gap-4 px-6 py-5"
+            onKeyDown={(event) => {
+              if (
+                event.defaultPrevented ||
+                !(event.target instanceof Node) ||
+                !event.currentTarget.contains(event.target)
+              ) {
+                return
+              }
+              if (
+                isSelectAllShortcut(event) &&
+                (event.target instanceof HTMLInputElement ||
+                  event.target instanceof HTMLTextAreaElement)
+              ) {
+                event.preventDefault()
+                event.stopPropagation()
+                event.target.select()
+                return
+              }
+              if (isScreenSubmitShortcut(event) && canSave) {
+                event.preventDefault()
+                void saveDraft()
+              }
+            }}
+          >
+            <div className="grid grid-cols-1 items-end gap-3 sm:grid-cols-[minmax(0,1fr)_auto]">
+              <TerminalQuickCommandLabelField label={draft.label} setDraft={setDraft} />
+              <div className="space-y-2">
+                <Label>
+                  {t(
+                    'auto.components.terminal.quick.commands.TerminalQuickCommandDialog.ec8f081919',
+                    'Action'
+                  )}
+                </Label>
+                <TerminalQuickCommandActionToggle
+                  selectedAction={selectedAction}
+                  onActionChange={setAction}
+                />
+              </div>
             </div>
-          </div>
 
-          <TerminalQuickCommandContentSection
-            disabled={saving}
-            draft={draft}
-            isAgentAction={isAgentAction}
-            selectedAgent={selectedAgent}
-            bodySize={bodySize}
-            draftMemoryRef={draftMemoryRef}
-            setDraft={setDraft}
-            toggleAppendEnter={toggleAppendEnter}
-          />
+            <TerminalQuickCommandContentSection
+              disabled={saving}
+              draft={draft}
+              isAgentAction={isAgentAction}
+              selectedAgent={selectedAgent}
+              bodySize={bodySize}
+              draftMemoryRef={draftMemoryRef}
+              setDraft={setDraft}
+              toggleAppendEnter={toggleAppendEnter}
+            />
 
-          <TerminalQuickCommandAdvancedSection
-            disabled={saving}
-            repos={repos}
-            advancedOpen={advancedOpen}
-            selectedScope={selectedScope}
-            selectedRepo={selectedRepo}
-            selectedRepoId={selectedRepoId}
-            selectedRepoMissing={selectedRepoMissing}
-            lastRepoScopeIdRef={lastRepoScopeIdRef}
-            setAdvancedOpen={setAdvancedOpen}
-            setDraft={setDraft}
-          />
-        </fieldset>
+            <TerminalQuickCommandAdvancedSection
+              disabled={saving}
+              repos={repos}
+              advancedOpen={advancedOpen}
+              selectedScope={selectedScope}
+              selectedRepo={selectedRepo}
+              selectedRepoId={selectedRepoId}
+              selectedRepoMissing={selectedRepoMissing}
+              lastRepoScopeIdRef={lastRepoScopeIdRef}
+              setAdvancedOpen={setAdvancedOpen}
+              setDraft={setDraft}
+            />
+          </fieldset>
+        </div>
 
         <TerminalQuickCommandDialogFooter
           canSave={canSave}

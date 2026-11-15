@@ -14,13 +14,13 @@ import { isWindowsAbsolutePathLike } from '../../../../shared/cross-platform-pat
 import {
   WORKTREE_CREATE_PREPARATION_DIRECTORY,
   createWorktreePreparationLockReason
-} from '../../../../shared/worktree/create-preparation'
+} from '../../../../shared/worktree/creation/create-preparation'
 import type { AddWorktreeOptions } from '../../../git/worktrees/worktree-operation-options'
 import { prepareWorktreeCreateCheckout } from '../../../git/worktrees/creation/worktree-create-preparation'
 import { queuePreparedWorktreeTipRefresh } from './worktree-preparation-refresh-queue'
 import { toHostFilesystemPath } from '../../../filesystem/host-tree-removal'
 import { createPreparationActivity } from './worktree-create-preparation-activity'
-import { profileStateAccessMachineIdentity } from '../../../persistence/profile-state/profile-state-access-identity'
+import { profileStateAccessMachineIdentity } from '../../../persistence/profile-state/access/profile-state-access-identity'
 import type { PreparationActivity } from './worktree-create-preparation-activity'
 import {
   deferPreparationForClaim,

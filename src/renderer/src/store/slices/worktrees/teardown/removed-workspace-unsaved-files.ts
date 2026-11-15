@@ -160,7 +160,7 @@ function showPendingNotice(): void {
     filePaths: closed.map((file) => file.filePath)
   })
   // Why lazy: keeps toast and editor-open code out of the store's import graph.
-  void import('@/components/editor/closed-unsaved-files-toast')
+  void import('@/components/editor/model-lifetime/retention/closed-unsaved-files-toast')
     .then((module) => module.showClosedUnsavedFilesToast(closed, label, token))
     .catch((error) => {
       console.error('[editor] showing the unsaved edits notice failed', error)

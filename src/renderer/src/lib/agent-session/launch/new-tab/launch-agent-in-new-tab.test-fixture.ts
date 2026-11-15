@@ -2,7 +2,7 @@ import { beforeEach, type Mock, vi } from 'vitest'
 import type { Project } from '../../../../../../shared/project-types'
 import type { createWebRuntimeSessionTerminal } from '@/runtime/hosted-terminals/creation/web-runtime-terminal-creation'
 import { setLocalRuntimeCapabilitiesForTests } from '@/runtime/hosts/capabilities/local-runtime-capabilities'
-import type * as LaunchAgentKindModule from '../../../../../../shared/agent-kind'
+import type * as LaunchAgentKindModule from '../../../../../../shared/agent-status/identity/agent-kind'
 
 const mockCreateTab: Mock = vi.fn()
 function queuedStartups() {
@@ -134,7 +134,7 @@ vi.mock('@/lib/agent-session/messaging/paste/agent-ready-wait', () => ({
 
 vi.mock('@/diagnostics/telemetry/telemetry', () => ({ track: mockTrack }))
 const mockLaunchAgentKind = vi.hoisted(() => (agent: string) => agent)
-vi.mock('../../../../../../shared/agent-kind', async (importOriginal) => ({
+vi.mock('../../../../../../shared/agent-status/identity/agent-kind', async (importOriginal) => ({
   ...(await importOriginal<typeof LaunchAgentKindModule>()),
   tuiAgentToAgentKind: mockLaunchAgentKind
 }))

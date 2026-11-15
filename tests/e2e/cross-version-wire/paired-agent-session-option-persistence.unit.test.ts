@@ -13,34 +13,34 @@ import { agentModelCatalogFingerprintForRecord } from '../../../src/main/native-
 import { CLIENT_UI_METHODS } from '../../../src/main/runtime/rpc/methods/client-state/client-ui'
 import { STATUS_METHODS } from '../../../src/main/runtime/rpc/methods/host-management/status'
 import { STRUCTURED_AGENT_SESSION_METHODS } from '../../../src/main/runtime/rpc/methods/structured-sessions/structured-agent-session'
-import { createRestTestRig } from '../../../src/main/native-chat/agent-session-wire/host/testing/structured-agent-session-rest-test-rig'
+import { createRestTestRig } from '../../../src/main/native-chat/agent-session-wire/host/testing/structured-agent-session-rest-test-rig.test-fixture'
 
 import {
   HOST_TEST_SESSION as REST_TEST_SESSION,
   hostTestAttachParams,
   hostTestOperationId
-} from '../../../src/main/native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-data'
+} from '../../../src/main/native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-data.test-fixture'
 
 import { setStructuredAgentSessionHost } from '../../../src/main/native-chat/agent-session-wire/host/structured-agent-session-registry'
-import { computeAgentSessionPayloadFingerprint } from '../../../src/shared/agent-session/lifecycle/agent-session-mutation-envelope'
+import { computeAgentSessionPayloadFingerprint } from '../../../src/shared/agent-session/lifecycle/operations/agent-session-mutation-envelope'
 import type { GlobalSettings } from '../../../src/shared/global-settings-types'
 import { getDefaultSettings } from '../../../src/shared/constants'
 import type {
   AgentSessionMutationResult,
   AgentSessionOptionResult
 } from '../../../src/shared/agent-session/agent-session-wire'
-import type { AgentSessionOptionsResult } from '../../../src/shared/agent-session/options/agent-session-options-result'
-import { CODEX_SESSION_OPTION_CATALOG } from '../../../src/shared/agent-session/options/agent-session-option-catalog-claude-codex'
+import type { AgentSessionOptionsResult } from '../../../src/shared/agent-session/options/protocol/agent-session-options-result'
+import { CODEX_SESSION_OPTION_CATALOG } from '../../../src/shared/agent-session/options/catalog-providers/agent-session-option-catalog-claude-codex'
 import {
   applyStructuredAgentSessionOptions,
   createStructuredAgentSessionOptionState,
   structuredAgentSessionOptionPicks
 } from '../../../src/shared/agent-session/options/structured-agent-session-options'
-import { structuredAgentSessionOptionSnapshot } from '../../../src/shared/agent-session/options/structured-agent-session-option-snapshot'
+import { structuredAgentSessionOptionSnapshot } from '../../../src/shared/agent-session/options/view/structured-agent-session-option-snapshot'
 import {
   structuredAgentSessionOptionView,
   structuredAgentSessionSendSelection
-} from '../../../src/shared/agent-session/options/structured-agent-session-option-view'
+} from '../../../src/shared/agent-session/options/view/structured-agent-session-option-view'
 import { runtimeStub } from './structured-agent-session-surface-execution'
 import { enqueueSessionOptionSettingsWrite } from '../../../src/renderer/src/components/native-chat/session/options/native-chat-session-option-settings-write'
 import { clearRuntimeCompatibilityCache as clearRuntimeCompatibilityCacheForTests } from '../../../src/renderer/src/runtime/rpc/compatibility/runtime-compatibility-cache'

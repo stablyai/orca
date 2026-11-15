@@ -1,6 +1,6 @@
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
-import type { DashboardAgentRow } from '@/components/dashboard/useDashboardData'
+import type { DashboardAgentRow } from '@/components/dashboard/rows/dashboard-agent-row'
 import { useAppStore } from '@/store/index'
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import { hostRouteForAuthority } from '@/runtime/rpc/targets/runtime-client-target'
@@ -8,8 +8,9 @@ import { getRuntimeEnvironmentRevision } from '@/runtime/rpc/environment-revisio
 import { resolveOwnerOrLocal } from '../../workspace/ownership/worktree-runtime-owner'
 import { findActiveRuntimeTerminal } from '../messaging/terminal/active-agent-note-target'
 import { parsePaneKey } from '../../../../../shared/workspace-layout/stable-pane-id'
-import { authorityKey } from '../../../../../shared/host-authority'
-import type { ClaudeAgentViewResult } from '../../../../../shared/claude-agent-view'
+import { authorityKey } from '../../../../../shared/execution-host/host-authority'
+import type { ClaudeAgentViewResult } from '../../../../../shared/agent-hook-listener/providers/claude/view/claude-agent-view'
+import { openNativeChatSubagent } from '@/components/native-chat/subagents/native-chat-open-subagent'
 
 const pendingViews = new Map<string, AbortController>()
 
@@ -35,10 +36,16 @@ export async function viewClaudeAgentFromRow(agent: DashboardAgentRow): Promise<
   const state = useAppStore.getState()
   const paneKey = agent.activationPaneKey ?? agent.paneKey
   const parent = state.agentStatusByPaneKey[paneKey] ?? agent.entry
-  if (parent.agentType !== 'claude' || parent.structuredHostOwned) {
+  const child = agent.rowSource === 'subagent'
+  if (parent.structuredHostOwned) {
+    // A chat pane opens the child in its own view, for any agent; the parent row shows the main agent.
+    const agentId = child ? agent.childRow?.providerId : undefined
+    openNativeChatSubagent(paneKey, agentId ?? null)
     return
   }
-  const child = agent.rowSource === 'subagent'
+  if (parent.agentType !== 'claude') {
+    return
+  }
   let parentDestination = !child || opensClaudeParentConversation(agent)
   // A newer click owns this pane even while terminal resolution or a local RPC is still pending.
   pendingViews.get(paneKey)?.abort()

@@ -1,7 +1,7 @@
 import type { RuntimeStore } from '../../construction/runtime-store-contract'
 import type { GitWorktreeInfo } from '../../../../shared/worktree/types'
 import type { RemoveWorktreeResult } from '../../../../shared/worktree/create-types'
-import type { NestedWorktreeRemovalApproval } from '../../../../shared/worktree/nested-removal'
+import type { NestedWorktreeRemovalApproval } from '../../../../shared/worktree/removal/nested-removal'
 import {
   getRepoExecutionHostId,
   parseExecutionHostId,

@@ -5,8 +5,8 @@ import { selectFloatingWorkspacePanelVisible } from '@/store/workspaces/floating
 import {
   isEventTargetInsideFloatingWorkspacePanel,
   isFloatingWorkspacePanelFocused
-} from '@/components/floating-terminal/floating-workspace-terminal-actions'
-import { useAppStore } from '../../store'
+} from '@/components/floating-terminal/workspace/floating-workspace-terminal-actions'
+import { useAppStore } from '../../store/index'
 import type { AppState } from '../../store/types'
 
 function selectedEditorTab(state: AppState, worktreeId = state.activeWorktreeId) {

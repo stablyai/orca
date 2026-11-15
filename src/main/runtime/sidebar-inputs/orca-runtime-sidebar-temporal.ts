@@ -1,6 +1,6 @@
 import { getRepoRegistrationHostIds } from '../../../shared/repo-host-identity'
 import { isRemoteRuntimePtyId } from '../../../shared/remote-runtime/remote-runtime-pty-id'
-import { OrcaRuntimeWithDetectedCheckoutsAndLiveContent } from './orca-runtime-detected-checkouts-live-content'
+import { OrcaRuntimeWithDetectedCheckoutsAndLiveContent } from './workspace-facts/orca-runtime-detected-checkouts-live-content'
 import type { OrcaRuntimeWithAgentTransitions } from '../construction/orca-runtime-agent-transitions'
 import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../shared/sidebar-inputs-switch'
 import { DEFAULT_HIDE_SLEEPING_WORKSPACES } from '../../../shared/constants'
@@ -11,16 +11,19 @@ import {
   parseExecutionHostId,
   type ExecutionHostId
 } from '../../../shared/execution-host'
-import type { SidebarTemporalSnapshot } from '../../../shared/sidebar-list/sidebar-temporal-snapshot'
-import type { WorkspaceRowsProducer } from './workspace-rows-producer'
-import { SidebarRetentionOwner, type SidebarRetentionCandidates } from './sidebar-retention-owner'
-import type { AgentStatusStoreView } from './workspace-activity-facts-producer'
-import { SortStampsProducer } from './sort-stamps-producer'
-import { writeUnreadFlag } from './sort-stamp-records'
-import { WorkspaceViewers } from './workspace-viewers'
+import type { SidebarTemporalSnapshot } from '../../../shared/sidebar-list/feed/sidebar-temporal-snapshot'
+import type { WorkspaceRowsProducer } from './workspace-rows/workspace-rows-producer'
+import {
+  SidebarRetentionOwner,
+  type SidebarRetentionCandidates
+} from './temporal/sidebar-retention-owner'
+import type { AgentStatusStoreView } from './workspace-facts/workspace-activity-facts-producer'
+import { SortStampsProducer } from './temporal/sort-stamps-producer'
+import { writeUnreadFlag } from '../workspaces/metadata/workspace-activity-records'
+import { WorkspaceViewers } from './temporal/workspace-viewers'
 import { clientRaisesUnreadFlagItself } from '../../../shared/workspace-unread-raise-capability'
 import type { RuntimeCapability } from '../../../shared/protocol-version'
-import { TerminalUseProducer } from './terminal-use-producer'
+import { TerminalUseProducer } from './temporal/terminal-use-producer'
 import { parseWorkspaceKey } from '../../../shared/workspace-scope'
 import { getRepoIdFromWorktreeId, worktreeIdentityKey } from '../../../shared/worktree/id'
 import {
@@ -33,7 +36,7 @@ import { WORKSPACE_RECORD_DOMAINS } from '../../persistence/profile-save-domains
 import {
   isWslMoveProjectBlocked,
   wslMoveProjectRefForWorkspace
-} from '../../persistence/moving-wsl-projects/wsl-move-scope-guard'
+} from '../../persistence/moving-wsl-projects/quiescence/wsl-move-scope-guard'
 
 /**
  * Feeds main's sleeping retention, and owns the host's sort stamps: clients sort by those, so main

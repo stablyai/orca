@@ -10,6 +10,14 @@ import {
   waitForActiveTerminalManager
 } from './helpers/terminal'
 
+// Search lists results; the page moves on an explicit pick.
+async function openSettingsSearchResult(page: Page, query: string): Promise<void> {
+  const searchInput = page.getByPlaceholder('Search settings')
+  await searchInput.fill(query)
+  await searchInput.press('ArrowDown')
+  await searchInput.press('Enter')
+}
+
 const enabled = process.env.ORCA_REAL_CLAUDE_THEME_TEST === '1'
 // Claude Code's own light theme paints its prompt border this gray.
 const CLAUDE_LIGHT_BORDER = 0x8a8a8a
@@ -236,7 +244,7 @@ test('an existing user accepts the offer, then Claude Code follows the Orca them
 
   // Turning it off through the real switch restores the user's theme, live too.
   await orcaPage.evaluate(() => window.__store!.getState().openSettingsPage())
-  await orcaPage.getByPlaceholder('Search settings').fill('Match Claude Code')
+  await openSettingsSearchResult(orcaPage, 'Match Claude Code')
   const toggle = orcaPage.getByRole('switch', { name: 'Match Claude Code to Terminal Theme' })
   await expect(toggle).toBeChecked()
   await windowShot('settings-on-light')
@@ -251,7 +259,7 @@ test('an existing user accepts the offer, then Claude Code follows the Orca them
   // The same switch in dark mode, off then on.
   await updateSettings({ theme: 'dark' })
   await orcaPage.evaluate(() => window.__store!.getState().openSettingsPage())
-  await orcaPage.getByPlaceholder('Search settings').fill('Match Claude Code')
+  await openSettingsSearchResult(orcaPage, 'Match Claude Code')
   await expect(toggle).not.toBeChecked()
   await windowShot('settings-off-dark')
   await toggle.click()

@@ -1,24 +1,31 @@
+import type {
+  BridgeRpcClient,
+  BridgeRpcClientOptions
+} from './client-state/bridge-rpc-client-contract'
 import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
-import { emitPageAppInactive } from './bridge-app-inactive'
+import { emitPageAppInactive } from './page-lifecycle/bridge-app-inactive'
 import type { SendRequestOptions } from '../../transport/rpc/unvalidated-rpc-request-port'
 import type { ConnectionState } from '../../transport/connection/connection-state'
-import type { RpcResponse, RpcSuccess } from '../../transport/rpc/rpc-wire-types'
+import type { RpcResponse } from '../../transport/rpc/rpc-wire-types'
 import {
   BRIDGE_MAX_SUBSCRIPTIONS,
   bridgePendingRequestCap,
   isBridgeFrameWithinCap,
   utf8ByteLength
-} from './bridge-caps'
-import { BridgeConnectionCache, type BridgeSnapshotOutcome } from './bridge-client-connection-cache'
-import type { BridgeConnectionPathSource } from './bridge-connection-snapshot'
-import type { BridgeRpcClientDiagnostic } from './bridge-client-diagnostics'
+} from './protocol/bridge-caps'
+import {
+  BridgeConnectionCache,
+  type BridgeSnapshotOutcome
+} from './client-state/bridge-client-connection-cache'
+import type { BridgeRpcClientDiagnostic } from './client-state/bridge-client-diagnostics'
 import {
   createBridgeClientShellSession,
-  shellSessionListeners,
-  type BridgeShellSessionListeners
-} from './bridge-client-shell-session'
-import type { BridgeShellSession } from './bridge-client-session'
-import { createBridgeInitHandshake, createPageReadyFrame } from './bridge-client-init-handshake'
+  shellSessionListeners
+} from './client-state/bridge-client-shell-session'
+import {
+  createBridgeInitHandshake,
+  createPageReadyFrame
+} from './client-state/bridge-client-init-handshake'
 import {
   BridgeClientCapExceededError,
   BridgeClientClosedError,
@@ -28,81 +35,23 @@ import {
   BridgeSendFailedError,
   BridgeShellReplacedError,
   throwIfBridgeSignalAborted
-} from './bridge-client-errors'
-import type { BridgeHapticsKind } from './bridge-haptics-notify'
-import { createBridgeInboundFrameReader } from './bridge-client-inbound-frames'
-import { createBridgeClientNotifications } from './bridge-client-notifications'
-import { createBridgeClientTerminalKeys } from './bridge-client-terminal-keys'
-import { createPageBackConsumers, type PageBackConsumer } from './page-back-consumers'
-import { BridgeClientRequests } from './bridge-client-requests'
-import { readBridgeRequestFrameOptions, readBridgeRpcEnvelope } from './bridge-client-rpc-envelope'
-import { BridgeClientSubscriptions } from './bridge-client-subscriptions'
-import { isBridgeNativeMethod, type BridgeNativeVerb } from './bridge-native-verbs'
-import { routeParamClearFrame, type BridgeClearableRouteParam } from './bridge-route-update'
+} from './client-state/bridge-client-errors'
+import { createBridgeInboundFrameReader } from './client-state/bridge-client-inbound-frames'
+import { createBridgeClientNotifications } from './client-state/bridge-client-notifications'
+import { createBridgeClientTerminalKeys } from './client-state/bridge-client-terminal-keys'
+import { createPageBackConsumers } from './page-lifecycle/page-back-consumers'
+import { BridgeClientRequests } from './client-state/bridge-client-requests'
 import {
-  BRIDGE_PROTOCOL_VERSION,
-  BRIDGE_RPC_ENVELOPE_GRANT,
-  type BridgeClientMessage
-} from './bridge-envelope'
-
-export type { BridgeShellSession } from './bridge-client-session'
-
-export {
-  BridgeClientCapExceededError,
-  BridgeClientClosedError,
-  BridgeClientNotReadyError,
-  BridgeReplyRefusedError,
-  BridgeRequestOversizedError,
-  BridgeRpcEnvelopeInvalidError,
-  BridgeRpcEnvelopeUngrantedError,
-  BridgeSendFailedError,
-  BridgeShellReplacedError
-} from './bridge-client-errors'
+  readBridgeRequestFrameOptions,
+  readBridgeRpcEnvelope
+} from './client-state/bridge-client-rpc-envelope'
+import { BridgeClientSubscriptions } from './client-state/bridge-client-subscriptions'
+import { isBridgeNativeMethod } from './native-capabilities/bridge-native-verbs'
+import { routeParamClearFrame } from './page-lifecycle/bridge-route-update'
+import { BRIDGE_PROTOCOL_VERSION, BRIDGE_RPC_ENVELOPE_GRANT } from './protocol/bridge-frame-fields'
+import type { BridgeClientMessage } from './protocol/bridge-envelope'
 
 const BRIDGE_ID_CHARS = 22
-
-export type { BridgeRpcClientDiagnostic } from './bridge-client-diagnostics'
-
-export type BridgeRpcClientOptions = {
-  send: (json: string) => void
-  onMessage: (handler: (json: string) => void) => () => void
-  onDiagnostic?: (diagnostic: BridgeRpcClientDiagnostic) => void
-}
-
-export type BridgeRpcClient = RpcClient &
-  BridgeConnectionPathSource &
-  Required<Pick<RpcClient, 'getShellHostStatus'>> &
-  BridgeShellSessionListeners & {
-    /**
-     * Asks the shell to draw its key rail, while a terminal and its key row are on screen, until the
-     * dispose is called; `listener` takes each press. Nothing is sent to a shell without the grant.
-     */
-    claimTerminalKeyRail: ReturnType<typeof createBridgeClientTerminalKeys>['claim']
-    getShellSession: () => BridgeShellSession | null
-    // False without navigate lets tap handlers fall back safely instead of throwing into uncaught UI callbacks.
-    notifyNavigate: (href: string, replace?: boolean) => boolean
-    // The page owns no native history; ask the shell to pop. Missing grant returns false; older shells may also drop the new notify, so callers retain their router fallback.
-    notifyNavigateBack: () => boolean
-    // False means missing externalLink grant or refused URL; callers must offer another outcome for the tap.
-    notifyExternalLink: (url: string) => boolean
-    // Use the existing request/id/cap lane but keep native methods inside the bridge’s typed surface; they are device verbs, not catalogued desktop RPCs.
-    callNativeVerb: (verb: BridgeNativeVerb, params: unknown) => Promise<RpcSuccess>
-    // How many more native calls the page-side cap admits now; a caller that must keep call order checks it
-    // before posting, since a refusal arrives only as a rejected promise.
-    nativeRequestRoom: () => number
-    // Only the page can report a painted tree; WebView commit and ready happen before that proof exists.
-    notifyPagePainted: () => void
-    // Where the page has navigated inside its document, so the shell knows which session it shows.
-    notifyPageLocation: (href: string) => void
-    // Claim Back until disposal; invoke consumers newest-first with false fallthrough. Return unhandled presses to the shell so a race with sheet closure cannot swallow navigation.
-    claimBack: (consumer: PageBackConsumer) => () => void
-    notifyStorageWrite: (key: string, value: string | null) => boolean
-    notifyHaptics: (kind: BridgeHapticsKind) => boolean
-    // Never throw from error-boundary reporting. False means no frame left; shell load recovery covers reports that cannot be sent, without retrying this fault.
-    notifyPageFault: (error: unknown) => boolean
-    // After applying a one-shot param, ask its holder to clear that value (ruling 34). A failed clear is repaired when init delivers the still-held request again.
-    clearRouteParam: (param: BridgeClearableRouteParam, value: string) => boolean
-  }
 
 // Expose synchronous RpcClient getters from init-primed state so first renders match native clients. Page close settles its own work, never the native client shared by other screens.
 // Ungated calls before init throw for mount-order bugs; after close, teardown calls are inert and getters retain a disconnected snapshot. Stream failures notify listeners.

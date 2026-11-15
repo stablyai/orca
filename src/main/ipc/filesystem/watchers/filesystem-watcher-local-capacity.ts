@@ -1,5 +1,5 @@
 import type { WebContents } from 'electron'
-import { onWatcherChildCapacityAvailable } from '../watcher-process/parcel-watcher-child-registry'
+import { onWatcherChildCapacityAvailable } from '../watcher-process/child-lifecycle/parcel-watcher-child-registry'
 
 import {
   type LocalWatcherCapacityRetry,

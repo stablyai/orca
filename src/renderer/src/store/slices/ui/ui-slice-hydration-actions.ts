@@ -12,14 +12,14 @@ import {
   normalizeExecutionHostOrder,
   normalizeVisibleExecutionHostIds
 } from '../../../../../shared/execution-host'
-import { normalizeFeatureInteractions } from '../../../../../shared/feature-interactions'
-import { normalizeContextualTourIds } from '../../../../../shared/contextual-tours'
-import { normalizeFeatureTipIds } from '../../../../../shared/feature-tips'
+import { normalizeFeatureInteractions } from '../../../../../shared/feature-education/interactions/feature-interactions'
+import { normalizeContextualTourIds } from '../../../../../shared/feature-education/contextual-tours/contextual-tours'
+import { normalizeFeatureTipIds } from '../../../../../shared/feature-education/feature-tips'
 import {
   DEFAULT_HIDE_SLEEPING_WORKSPACES,
   normalizeAgentActivityDisplayMode
 } from '../../../../../shared/constants'
-import { normalizeWorktreeCardProperties } from '../../../../../shared/worktree/card-properties'
+import { normalizeWorktreeCardProperties } from '../../../../../shared/worktree/row-display/card-properties'
 import {
   normalizeActivityGroupBy,
   normalizeThreadReadFilter
@@ -36,8 +36,8 @@ import { clampCombinedDiffFileTreeWidth } from '../../../../../shared/combined-d
 import { parsePersistedAutomationHostFilter } from '../../../../../shared/automations/ownership/automation-host-filter'
 import { normalizeUsagePercentageDisplay } from '../../../../../shared/usage-percentage-display'
 import { normalizeStatusBarUsageMode } from '../../../../../shared/status-bar-usage-mode'
-import { normalizeBrowserPageZoomLevel } from '../../../../../shared/browser-page-zoom'
-import { normalizeKagiSessionLink } from '../../../../../shared/browser-url'
+import { normalizeBrowserPageZoomLevel } from '../../../../../shared/browser/site-settings/browser-page-zoom'
+import { normalizeKagiSessionLink } from '../../../../../shared/browser/navigation/browser-url'
 import { isReleaseChannel } from '../../../../../shared/release-channel'
 import {
   filterSetupScriptPromptDismissalsToValidRepos,
@@ -65,6 +65,7 @@ import {
   sanitizeExplorerPreferences,
   sanitizeWorkspaceCleanupDismissals,
   sanitizePersistedSidebarWidth,
+  sanitizeActivityBarPosition,
   hydratedUIPartialMatchesState,
   clampPetSize
 } from './ui-slice-hydration-sanitizers'
@@ -125,6 +126,7 @@ export function createUiHydrationActions(set: UISliceSet, _get: UISliceGet): Par
           sidebarOpen: typeof ui.sidebarOpen === 'boolean' ? ui.sidebarOpen : true,
           rightSidebarOpen: typeof ui.rightSidebarOpen === 'boolean' ? ui.rightSidebarOpen : true,
           ...normalizeRightSidebarRoute(ui.rightSidebarTab, ui.rightSidebarExplorerView),
+          activityBarPosition: sanitizeActivityBarPosition(ui.activityBarPosition),
           groupBy: (ui.groupBy as UISlice['groupBy'] | 'parent') === 'parent' ? 'repo' : ui.groupBy,
           sortBy,
           // Why: main-process getUI() already normalized this (defaulting to 'manual'); read it through without migrating.
@@ -266,6 +268,7 @@ export function createUiHydrationActions(set: UISliceSet, _get: UISliceGet): Par
           codexTerminalServerIsolationNoticeSeen:
             ui.codexTerminalServerIsolationNoticeSeen === true,
           codexSharedSettingsNoticeSeen: ui.codexSharedSettingsNoticeSeen === true,
+          worktreeCardsUpdateNoticeSeen: ui.worktreeCardsUpdateNoticeSeen === true,
           claudeDiffPanelNoticeSeen: ui.claudeDiffPanelNoticeSeen === true,
           ...hydrateAgentReadState(ui),
           workspaceCleanupDismissals: sanitizeWorkspaceCleanupDismissals(

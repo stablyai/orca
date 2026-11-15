@@ -40,9 +40,7 @@ export class RuntimeWorkspaceSessionController {
   private getPreferredHostId(worktreeId: string, store: RuntimeStore): ExecutionHostId | null {
     const scope = parseWorkspaceKey(worktreeId)
     if (scope?.type === 'folder') {
-      const workspace = store
-        ?.getFolderWorkspaces?.()
-        .find((entry) => entry.id === scope.folderWorkspaceId)
+      const workspace = store.getFolderWorkspace?.(scope.folderWorkspaceId)
       if (!workspace) {
         return null
       }

@@ -4,9 +4,9 @@ import { FolderGit2, GitBranch, Plus } from 'lucide-react-native'
 import type { Repo } from '../../../../src/shared/repo-types'
 import { projectGroupIdFromRepoId } from '../../../../src/shared/folder-workspaces/folder-workspace-worktree'
 import { getRepoExecutionHostId } from '../../../../src/shared/execution-host'
-import { WORKTREE_CREATE_EXACT_NAME_RUNTIME_CAPABILITY } from '../../../../src/shared/worktree-runtime-capabilities'
+import { WORKTREE_CREATE_EXACT_NAME_RUNTIME_CAPABILITY } from '../../../../src/shared/remote-runtime/protocol/worktree-runtime-capabilities'
 import { ListGroup, ListRow, SectionHeader } from '../../components/list/ListGroup'
-import { MobileStateView } from '../../components/MobileStateView'
+import { MobileStateView } from '../../components/feedback/MobileStateView'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import { useHostQuery } from '../../query/host-query'
 import { colors, spacing } from '../../theme/mobile-theme'
@@ -16,7 +16,7 @@ import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
 import {
   scopeRpcClientToExecutionHost,
   workspaceRouteExecutionHost
-} from '../../worktree/execution-host-scoped-rpc-client'
+} from '../../worktree/execution-hosts/execution-host-scoped-rpc-client'
 import type { FolderListRow } from './mobile-folder-attached-worktrees'
 import {
   isFolderRepoCreateBusy,

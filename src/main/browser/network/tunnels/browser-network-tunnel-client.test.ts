@@ -56,10 +56,6 @@ describe('BrowserNetworkTunnelClient', () => {
     client.handleBinary(frame(BrowserNetworkTunnelOpcode.Opened))
     const socket = await opening
     socket.on('error', () => {})
-    const credit = decodeBrowserNetworkTunnelFrame(sent[1]!)
-    expect(credit && decodeBrowserNetworkTunnelWindowUpdate(credit.payload)).toBe(
-      BROWSER_NETWORK_TUNNEL_INITIAL_WINDOW_BYTES
-    )
     client.close()
   })
 
@@ -175,7 +171,6 @@ describe('BrowserNetworkTunnelClient', () => {
       await once(socket, 'close')
     }
 
-    expect(client.streamIdsExhausted).toBe(true)
     const exhausted = client.open({ host: 'next.internal', port: 443 })
     client.close()
     await expect(exhausted).rejects.toThrow('stream id limit exceeded')

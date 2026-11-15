@@ -13,7 +13,10 @@ import {
   structuredAgentSessionPaneKey,
   structuredAgentSessionTabId
 } from '../../../../shared/agent-session/view/structured-agent-session-projection'
-import { formatOrcaSessionAddress, isOrcaSessionId } from '../../../../shared/orca-session-address'
+import {
+  formatOrcaSessionAddress,
+  isOrcaSessionId
+} from '../../../../shared/agent-session/identity/orca-session-address'
 import { peekOpenedAgentSessionRecordStore } from '../../agent-session/records/agent-session-record-store-slot'
 import type { OrchestrationDb } from '../../orchestration/db/orchestration-db'
 import { structuredSessionMailReach } from '../../orchestration/mailbox/routing/structured-session-mail-address'

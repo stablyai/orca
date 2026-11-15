@@ -47,10 +47,10 @@ function createDb(): OrchestrationDb {
   return new OrchestrationDb(join(directory, 'orchestration.db'))
 }
 
-function createRuntime(
+async function createRuntime(
   db: OrchestrationDb,
   incarnationId: string | null = 'audit-incarnation'
-): ExitProvenanceRuntime {
+): Promise<ExitProvenanceRuntime> {
   const runtime = new ExitProvenanceRuntime(null)
   runtime.setOrchestrationDb(db)
   runtime.setPtyController({
@@ -65,7 +65,7 @@ function createRuntime(
   })
   runtime.registerPreAllocatedHandleForPty(PTY_ID, HANDLE)
   runtime.attachWindow(1)
-  runtime.syncWindowGraph(1, {
+  await runtime.syncWindowGraph(1, {
     tabs: [
       {
         tabId: TAB_ID,
@@ -112,13 +112,13 @@ function observe(db: OrchestrationDb, ctxId: string) {
 }
 
 describe('STA-4603/STA-4536 exit provenance', () => {
-  it('settles the dispatch when the whole tab is closed before the exit lands', () => {
+  it('settles the dispatch when the whole tab is closed before the exit lands', async () => {
     const db = createDb()
-    const runtime = createRuntime(db)
+    const runtime = await createRuntime(db)
     const ctx = dispatchOnHandle(db, 'whole-tab operator close')
     runtime.markPtyStopRequested(PTY_ID)
     // Renderer teardown removes the leaf first; exit must still settle the dispatch.
-    runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
+    await runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
     runtime.onPtyExit(PTY_ID, 0)
     expect(observe(db, ctx.id)).toEqual({
       status: 'failed',
@@ -127,26 +127,36 @@ describe('STA-4603/STA-4536 exit provenance', () => {
     })
   })
 
-  it('does not escalate a deliberate close, but still escalates a crash', () => {
-    const closedDb = createDb()
-    const closed = createRuntime(closedDb)
-    const closedCtx = dispatchOnHandle(closedDb, 'no escalation on close')
-    closed.markPtyStopRequested(PTY_ID)
-    closed.onPtyExit(PTY_ID, 0)
-    // Prove settlement before absence checks so an inert dispatch cannot pass.
-    expect(observe(closedDb, closedCtx.id).termination_reason).toBe('operator_close')
-    expect(escalations(closedDb, closedCtx.runId)).toHaveLength(0)
-
-    const crashDb = createDb()
-    const crashed = createRuntime(crashDb)
-    const crashCtx = dispatchOnHandle(crashDb, 'escalate on crash')
-    crashed.onPtyExit(PTY_ID, 0, undefined, { cause: { kind: 'signaled', signal: 9 } })
-    expect(escalations(crashDb, crashCtx.runId)).toHaveLength(1)
+  it('reports a person closing a running worker once as lost, with its last output', async () => {
+    const db = createDb()
+    const runtime = await createRuntime(db)
+    const ctx = dispatchOnHandle(db, 'closed by a person')
+    runtime.onPtyData(PTY_ID, 'Waiting for CI on the pull request\r\n', 1)
+    runtime.markPtyStopRequested(PTY_ID)
+    runtime.onPtyExit(PTY_ID, 0)
+    // A repeated exit report must not repeat the alert.
+    runtime.onPtyExit(PTY_ID, 0)
+    expect(observe(db, ctx.id).termination_reason).toBe('operator_close')
+    const mail = escalations(db, ctx.runId)
+    expect(mail.map((message) => message.subject)).toEqual(['Worker lost without reporting'])
+    expect(mail[0]?.body).toContain('is gone (it was closed in Orca)')
+    expect(mail[0]?.body).toContain('Waiting for CI on the pull request')
+    expect(mail[0]?.body).not.toContain('still open')
   })
 
-  it('does not carry an unconsumed stop intent across a same-id respawn', () => {
+  it('reports a crash once as an exit', async () => {
     const db = createDb()
-    const runtime = createRuntime(db)
+    const runtime = await createRuntime(db)
+    const ctx = dispatchOnHandle(db, 'escalate on crash')
+    runtime.onPtyExit(PTY_ID, 0, undefined, { cause: { kind: 'signaled', signal: 9 } })
+    const mail = escalations(db, ctx.runId)
+    expect(mail.map((message) => message.subject)).toEqual(['Worker exited without reporting'])
+    expect(mail[0]?.body).toContain('exited (Agent process killed by signal 9)')
+  })
+
+  it('does not carry an unconsumed stop intent across a same-id respawn', async () => {
+    const db = createDb()
+    const runtime = await createRuntime(db)
     // An unobserved stop outlives its request; respawn reuses the session id.
     runtime.markPtyStopRequested(PTY_ID)
     runtime.synchronizePtyOutputSequenceFromProvider(PTY_ID, { value: 0, generation: 'reset' })
@@ -161,9 +171,9 @@ describe('STA-4603/STA-4536 exit provenance', () => {
     })
   })
 
-  it('does not file an unconfirmed stop as a completed operator close', () => {
+  it('does not file an unconfirmed stop as a completed operator close', async () => {
     const db = createDb()
-    const runtime = createRuntime(db)
+    const runtime = await createRuntime(db)
     const ctx = dispatchOnHandle(db, 'stop requested but never confirmed')
     runtime.markPtyStopRequested(PTY_ID)
     // -1 reports an unverified stop, so the process may still own a revoked dispatch.
@@ -176,9 +186,9 @@ describe('STA-4603/STA-4536 exit provenance', () => {
     expect(escalations(db, ctx.runId)).toHaveLength(1)
   })
 
-  it('treats a reported completion as authoritative and makes the later exit a no-op', () => {
+  it('treats a reported completion as authoritative and makes the later exit a no-op', async () => {
     const db = createDb()
-    const runtime = createRuntime(db)
+    const runtime = await createRuntime(db)
     const ctx = dispatchOnHandle(db, 'worker_done then exit')
     const settlement = db.settleWorkerReport({
       taskId: ctx.task_id,
@@ -212,7 +222,7 @@ describe('STA-4603/STA-4536 exit provenance', () => {
     })
     runtime.registerPreAllocatedHandleForPty(PTY_ID, HANDLE)
     runtime.attachWindow(1)
-    runtime.syncWindowGraph(1, {
+    await runtime.syncWindowGraph(1, {
       tabs: [
         {
           tabId: TAB_ID,
@@ -251,14 +261,14 @@ describe('STA-4603/STA-4536 exit provenance', () => {
     }
 
     it('retires an operator close and ignores a late predecessor exit', async () => {
-      const runtime = createRuntime(createDb())
+      const runtime = await createRuntime(createDb())
       runtime.markPtyStopRequested(PTY_ID)
       await runtime.onPtyExit(PTY_ID, 0, 'audit-incarnation')
       expect((await runtime.showTerminal(HANDLE)).exitCause).toEqual({ kind: 'operator_close' })
 
       announce(runtime, 'replacement-incarnation')
       runtime.registerPreAllocatedHandleForPty(PTY_ID, 'term_replacement')
-      runtime.syncWindowGraph(1, {
+      await runtime.syncWindowGraph(1, {
         tabs: [
           {
             tabId: TAB_ID,

@@ -3,19 +3,20 @@ import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import type {
   RuntimeRendererSyncWindowGraph,
   RuntimeStatus,
-  RuntimeSyncWindowGraphResult
-} from '../../shared/runtime-types'
-import type { RuntimeTerminalDriverState } from '../../shared/runtime-session-contracts'
-import type { RuntimeRpcResponse } from '../../shared/runtime-rpc-envelope'
-import type { ClientHostedBrowserRowsEvent } from '../../shared/client-hosted-browser-rows'
+  RuntimeSyncWindowGraphResult,
+  RuntimeTerminalDriverState
+} from '../../shared/remote-runtime/session-graph/runtime-session-contracts'
+import type { RuntimeRpcResponse } from '../../shared/remote-runtime/rpc/runtime-rpc-envelope'
+import type { ClientHostedBrowserRowsEvent } from '../../shared/browser/client-hosting/client-hosted-browser-rows'
 import { TERMINAL_FIT_RESTORE_DEADLINE_MS } from '../../shared/terminal/viewport/terminal-fit-restore-deadline'
 import { DESKTOP_RENDERER_RUNTIME_CLIENT_CAPABILITIES } from './desktop-renderer-runtime-capabilities'
 import { RpcDispatcher } from '../runtime/rpc/dispatcher'
-import { DESKTOP_RPC_CALLER } from '../runtime/rpc/rpc-caller-identity'
+import { DESKTOP_RPC_CALLER } from '../runtime/rpc/callers/rpc-caller-identity'
+import { ORCHESTRATION_CONTRACT_VERSION } from '../../shared/orchestration/orchestration-runtime-capabilities'
 import { ALL_RPC_METHODS } from '../runtime/rpc/methods/rpc-method-registry'
 import { DesktopRuntimeSenderLifecycle } from './desktop-runtime-sender-lifecycle'
 import { toWorkspaceLifecycleResult } from '../ephemeral-vm/workspace-lifecycle-result'
-import { publishMobileProjectSections } from '../runtime/sidebar-inputs/mobile-project-sections-snapshot'
+import { publishMobileProjectSections } from '../runtime/sidebar-inputs/catalog/mobile-project-sections-snapshot'
 
 function boundTerminalFitRestore(pending: Promise<boolean>): Promise<boolean> {
   let timer: ReturnType<typeof setTimeout> | undefined
@@ -51,7 +52,7 @@ export function registerRuntimeHandlers(runtime: OrcaRuntimeService): void {
 
   ipcMain.handle(
     'runtime:syncWindowGraph',
-    (event, graph: RuntimeRendererSyncWindowGraph): RuntimeSyncWindowGraphResult => {
+    async (event, graph: RuntimeRendererSyncWindowGraph): Promise<RuntimeSyncWindowGraphResult> => {
       const window = BrowserWindow.fromWebContents(event.sender)
       if (!window) {
         throw new Error('Runtime graph sync must originate from a BrowserWindow')
@@ -63,7 +64,11 @@ export function registerRuntimeHandlers(runtime: OrcaRuntimeService): void {
       if (typeof graph.rendererGeneration !== 'string' || graph.rendererGeneration.length === 0) {
         throw new Error('Runtime graph sync requires a renderer generation')
       }
-      const result = runtime.syncWindowGraph(window.id, graph)
+      const frame = event.senderFrame
+      const result = await runtime.syncWindowGraph(window.id, graph)
+      if (window.isDestroyed() || frame !== event.sender.mainFrame) {
+        throw new Error('Runtime graph sender changed during publication')
+      }
       // Only the authoritative window's accepted graph may publish its project catalog.
       if (
         graph.projectSectionCatalog &&
@@ -95,6 +100,8 @@ export function registerRuntimeHandlers(runtime: OrcaRuntimeService): void {
         {
           id: 'desktop-ipc',
           authToken: 'desktop-ipc',
+          // The renderer ships with this main process, so it always speaks the current contract.
+          orchestrationContractVersion: ORCHESTRATION_CONTRACT_VERSION,
           method: args.method,
           params: args.params
         },

@@ -1,5 +1,5 @@
 import type { Page } from '@stablyai/playwright-test'
-import type { RuntimeTerminalFocus } from '../../../src/shared/runtime-types'
+import type { RuntimeTerminalFocus } from '../../../src/shared/terminal/runtime/runtime-terminal-contracts'
 import { expect } from './orca-app'
 import { createRemoteSessionBulkOpenFixture } from './remote-session-bulk-open-fixture'
 import { closeStreamingTerminals } from './streaming-terminal-cleanup'

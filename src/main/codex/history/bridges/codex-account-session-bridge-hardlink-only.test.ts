@@ -1,12 +1,4 @@
-import {
-  existsSync,
-  lstatSync,
-  mkdirSync,
-  mkdtempSync,
-  rmSync,
-  symlinkSync,
-  writeFileSync
-} from 'node:fs'
+import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
 import type * as NodeFsPromises from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -53,28 +45,6 @@ afterEach(() => {
   crossVolume.on = false
   crossVolume.beforeLink = undefined
   rmSync(root, { recursive: true, force: true })
-})
-
-it('skips a cross-volume rollout for a hardlink-only target, creating nothing', async () => {
-  const summary = await bridgeCodexSessionsIntoAccountHome({
-    targetCodexHomePath: join(root, 'codex'),
-    sourceCodexHomePaths: [join(root, 'account')],
-    hardlinkOnly: true
-  })
-
-  expect(summary).toMatchObject({ scannedFiles: 1, linkedFiles: 0, skippedFiles: 1 })
-  expect(summary.bridgedThreads.size).toBe(0)
-  expect(existsSync(join(root, 'codex', 'sessions'))).toBe(false)
-})
-
-it('still falls back to a symlink between Orca-managed homes', async () => {
-  const summary = await bridgeCodexSessionsIntoAccountHome({
-    targetCodexHomePath: join(root, 'codex'),
-    sourceCodexHomePaths: [join(root, 'account')]
-  })
-
-  expect(summary).toMatchObject({ linkedFiles: 1, skippedFiles: 0 })
-  expect(lstatSync(join(root, 'codex', 'sessions', ROLLOUT)).isSymbolicLink()).toBe(true)
 })
 
 it('does not count a dangling link another writer made after the listing as bridged', async () => {

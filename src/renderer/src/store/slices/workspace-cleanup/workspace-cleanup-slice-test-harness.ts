@@ -1,10 +1,7 @@
 import { create } from 'zustand'
 import { vi } from 'vitest'
 import type { AppState } from '../../types'
-import {
-  applyWorkspaceCleanupPolicy,
-  type WorkspaceCleanupCandidate
-} from '../../../../../shared/workspace-cleanup/workspace-cleanup'
+import type { WorkspaceCleanupCandidate } from '../../../../../shared/workspace-cleanup/workspace-cleanup'
 import { createWorkspaceCleanupSlice } from './create-workspace-cleanup-slice'
 
 export const WORKTREE_ID = 'repo1::/tmp/old-workspace'
@@ -13,7 +10,7 @@ export const NOW = 1_700_000_000_000
 export function makeCandidate(
   overrides: Partial<WorkspaceCleanupCandidate> = {}
 ): WorkspaceCleanupCandidate {
-  return applyWorkspaceCleanupPolicy({
+  return {
     worktreeId: WORKTREE_ID,
     repoId: 'repo1',
     repoName: 'Repo 1',
@@ -23,7 +20,7 @@ export function makeCandidate(
     displayName: 'old-workspace',
     branch: 'old-workspace',
     path: '/tmp/old-workspace',
-    reasons: ['idle-clean'],
+    reasons: ['inactive'],
     blockers: [],
     lastActivityAt: NOW - 30 * 24 * 60 * 60 * 1000,
     localContext: {
@@ -32,7 +29,7 @@ export function makeCandidate(
       browserTabCount: 0,
       diffCommentCount: 0,
       newestDiffCommentAt: null,
-      retainedDoneAgentCount: 0
+      finishedAgentCount: 0
     },
     git: {
       clean: true,
@@ -42,23 +39,26 @@ export function makeCandidate(
     },
     fingerprint: 'fingerprint-1',
     ...overrides
-  })
+  }
 }
 
 export function makeState(overrides: Partial<AppState> = {}): AppState {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: fixture supplies only the slices cleanup reads
   return {
     tabsByWorktree: {},
     ptyIdsByTabId: {},
     openFiles: [],
     editorDrafts: {},
     browserTabsByWorktree: {},
-    retainedAgentsByPaneKey: {},
+
     activeWorktreeId: null,
     agentStatusByPaneKey: {},
     runtimePaneTitlesByTabId: {},
     lastVisitedAtByWorktreeId: {},
     workspaceCleanupDismissals: {},
     workspaceCleanupViewedCandidates: {},
+    repos: [],
+    runtimeEnvironments: [],
     ...overrides
   } as AppState
 }
@@ -66,17 +66,20 @@ export function makeState(overrides: Partial<AppState> = {}): AppState {
 export function createCleanupTestStore(removeWorktree: ReturnType<typeof vi.fn> = vi.fn()) {
   return create<AppState>()(
     (...a) =>
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: fixture supplies only the slices cleanup reads
       ({
         tabsByWorktree: {},
         ptyIdsByTabId: {},
         openFiles: [],
         editorDrafts: {},
         browserTabsByWorktree: {},
-        retainedAgentsByPaneKey: {},
+
         activeWorktreeId: null,
         agentStatusByPaneKey: {},
         runtimePaneTitlesByTabId: {},
         lastVisitedAtByWorktreeId: {},
+        repos: [],
+        runtimeEnvironments: [],
         removeWorktree,
         ...createWorkspaceCleanupSlice(...a)
       }) as unknown as AppState
@@ -91,6 +94,7 @@ export function installWorkspaceCleanupApi(
     api: {
       workspaceCleanup: {
         scan,
+        cancelScan: vi.fn().mockResolvedValue(true),
         getCachedScan,
         dismiss: vi.fn().mockResolvedValue(undefined),
         clearDismissals: vi.fn().mockResolvedValue(undefined)

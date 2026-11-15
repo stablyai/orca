@@ -236,7 +236,7 @@ describe.each(['git', 'folder'] as const)('foreground %s implicit Chat decline',
             createFolderWorkspace: async () => {
               const workspace = makeFolderWorkspace()
               useAppStore.setState({ folderWorkspaces: [workspace] })
-              return workspace
+              return { folderWorkspace: workspace }
             },
             onOpenChange: vi.fn()
           })

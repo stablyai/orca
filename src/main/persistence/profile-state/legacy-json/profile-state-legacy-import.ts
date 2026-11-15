@@ -1,7 +1,7 @@
 import { existsSync, readFileSync } from 'node:fs'
 import { Store } from '../../loading-store/store'
-import type { ProfileStateStartupPaneAlias } from '../../loading-store/profile-state-authority'
-import { ProfileStateAuthorityBootstrapError } from '../profile-state-recovery-required'
+import type { ProfileStateStartupPaneAlias } from '../../loading-store/profile-writing/profile-state-authority'
+import { ProfileStateAuthorityBootstrapError } from '../recovery/profile-state-recovery-required'
 import {
   PROFILE_STATE_LEGACY_BACKUP_COUNT,
   profileStateLegacyBackupPath

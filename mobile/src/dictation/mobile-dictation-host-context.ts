@@ -3,8 +3,8 @@ import type { UseMobileDictationResult } from '../hooks/mobile-dictation-session
 import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import type { MobileDictationAwayTarget } from './mobile-dictation-away-insert'
 import type { MobileDictationLiveText } from './use-mobile-dictation-announcements'
-import type { DictationTerm } from '../../../src/shared/dictation-dictionary'
-import type { StopAfterSilenceSeconds } from '../../../src/shared/dictation-silence-stop'
+import type { DictationTerm } from '../../../src/shared/speech/dictation/dictation-dictionary'
+import type { StopAfterSilenceSeconds } from '../../../src/shared/speech/dictation/dictation-silence-stop'
 
 export type MobileDictationHostToast = { message: string; open?: () => void }
 

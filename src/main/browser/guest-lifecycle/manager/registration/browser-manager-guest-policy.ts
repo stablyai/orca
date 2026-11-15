@@ -1,3 +1,4 @@
+import { installBrowserGuestMetadata } from '../../navigation/browser-guest-metadata'
 import { BROWSING_GUEST_POLICY } from './browser-guest-policy-profile'
 import type { BrowserGuestPolicy } from './browser-guest-policy-profile'
 import type { PopupOwnerContext } from '../../popups/browser-popup-ownership'
@@ -33,6 +34,31 @@ export abstract class BrowserManagerGuestPolicy extends BrowserManagerGuestClean
     const disposeDetachTracking = this.trackDebuggerDetachForCdpOverrides(guest)
     const disposePopupPolicy = this.installGuestPopupPolicy(guest)
     const disposeNavigationPolicy = this.installGuestNavigationPolicy(guest)
+    const disposeMetadata = this.offscreenGuestIds.has(guest.id)
+      ? () => {}
+      : installBrowserGuestMetadata({
+          guest,
+          resolveOwner: () => this.tabIdByWebContentsId.get(guest.id),
+          readLoadError: () => this.loadErrorsByGuestId.get(guest.id) ?? null,
+          hasCertificateFailure: () =>
+            this.certificateTrustController?.hasFailureForGuest(guest.id) ?? false,
+          reportErrorPage: () => {
+            const attemptedUrl =
+              this.pendingNavigationByGuestId.get(guest.id)?.currentUrl ?? 'about:blank'
+            const loadError = this.buildLoadError(
+              -1,
+              'This site could not be reached.',
+              attemptedUrl
+            )
+            this.loadErrorsByGuestId.set(guest.id, loadError)
+            this.forwardOrQueueGuestLoadFailure(guest.id, loadError)
+          },
+          send: (state) =>
+            this.resolveRendererForBrowserTab(state.browserPageId)?.send(
+              'browser:guest-metadata',
+              state
+            )
+        })
     const forwardAudioState = (
       event: Electron.Event<Electron.WebContentsAudioStateChangedEventParams>
     ): void => {
@@ -61,6 +87,7 @@ export abstract class BrowserManagerGuestPolicy extends BrowserManagerGuestClean
       disposeDetachTracking()
       disposePopupPolicy()
       disposeNavigationPolicy()
+      disposeMetadata()
       disposeDevToolsCloseShortcut()
       disposeEscapeForwarding()
       if (!guest.isDestroyed()) {

@@ -1,3 +1,4 @@
+import { compareDisplayName } from '../workspace/display/worktree-display-name-order'
 import type { WorkspacePort, WorkspacePortScanResult } from '../../../../shared/workspace-ports'
 
 export type WorkspacePortGroup = {
@@ -69,7 +70,7 @@ export function getWorkspacePortGroups(
       groupsByWorktreeId.set(port.owner.worktreeId, {
         worktreeId: port.owner.worktreeId,
         repoId: port.owner.repoId,
-        displayName: port.owner.displayName,
+        displayName: port.owner.displayName ?? '',
         ports: [port]
       })
     }
@@ -78,7 +79,7 @@ export function getWorkspacePortGroups(
     .map((group) => ({ ...group, ports: [...group.ports].sort(comparePorts) }))
     .sort(
       (a, b) =>
-        a.displayName.localeCompare(b.displayName) ||
+        compareDisplayName(a.displayName, b.displayName) ||
         (a.ports[0]?.port ?? 0) - (b.ports[0]?.port ?? 0)
     )
   workspaceGroupsCache.set(scan, groups)

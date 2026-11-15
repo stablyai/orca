@@ -3,7 +3,7 @@ import {
   BROWSER_COOKIE_IMPORT_FAILURE_COPY as EN,
   type BrowserCookieImportFailure,
   type BrowserCookieImportFailureCode
-} from '../../../../../shared/browser-cookie-import-failure-copy'
+} from '../../../../../shared/browser/cookies/browser-cookie-import-failure-copy'
 
 type Values = {
   text: (name: string) => string | null

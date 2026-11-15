@@ -6,7 +6,7 @@ export class LazyWorkerThreadHost<TResponse> {
   private idleTimer: NodeJS.Timeout | null = null
   private cleanupListeners: (() => void) | null = null
   private reportedUnavailable = false
-  private retiring: Promise<void> | null = null
+  private retiring: { completion: Promise<void>; failure?: unknown } | null = null
 
   constructor(
     private readonly options: {
@@ -21,6 +21,8 @@ export class LazyWorkerThreadHost<TResponse> {
       onUnavailable: (error: unknown) => void
       /** Native calls can delay termination; wait for exit before spawning another worker (#24572). */
       awaitRetirement?: boolean
+      /** Usage ownership fences require exact exit proof after termination fails. */
+      strictRetirement?: boolean
     }
   ) {}
 
@@ -76,17 +78,42 @@ export class LazyWorkerThreadHost<TResponse> {
     this.cleanupListeners?.()
     this.cleanupListeners = null
     worker.removeAllListeners()
-    // A rejected terminate still ends retirement, so it cannot latch spawning off.
-    const exited = worker.terminate().catch(() => undefined)
-    if (this.options.awaitRetirement) {
-      this.retiring = exited.then(() => {
-        this.retiring = null
-      })
+    if (!this.options.awaitRetirement) {
+      void worker.terminate().catch(() => {})
+      return
     }
+    const retirement: { completion: Promise<void>; failure?: unknown } = {
+      completion: Promise.resolve()
+    }
+    this.retiring = retirement
+    let proveExit!: () => void
+    const exitProof = new Promise<void>((resolve) => {
+      proveExit = resolve
+    })
+    const onExit = (): void => {
+      worker.off('exit', onExit)
+      if (this.retiring === retirement) {
+        this.retiring = null
+      }
+      proveExit()
+    }
+    worker.on('exit', onExit)
+    const terminated = worker.terminate().then(onExit, (error: unknown) => {
+      if (this.options.strictRetirement) {
+        retirement.failure = error
+      } else {
+        onExit()
+      }
+    })
+    retirement.completion = Promise.race([exitProof, terminated])
   }
 
-  retired(): Promise<void> {
-    return this.retiring ?? Promise.resolve()
+  async retired(): Promise<void> {
+    const retirement = this.retiring
+    await retirement?.completion
+    if (this.retiring === retirement && retirement?.failure !== undefined) {
+      throw retirement.failure
+    }
   }
 
   scheduleIdleTeardown(): void {

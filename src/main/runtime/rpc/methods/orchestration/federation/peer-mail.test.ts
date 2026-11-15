@@ -6,7 +6,7 @@ import {
   ORCHESTRATION_CONTRACT_VERSION,
   ORCHESTRATION_PEER_MAIL_RUNTIME_CAPABILITY
 } from '../../../../../../shared/orchestration/orchestration-runtime-capabilities'
-import type { RuntimeRpcResponse } from '../../../../../../shared/runtime-rpc-envelope'
+import type { RuntimeRpcResponse } from '../../../../../../shared/remote-runtime/rpc/runtime-rpc-envelope'
 import { OrcaRuntimeService } from '../../../../orca-runtime'
 import { OrchestrationDb } from '../../../../orchestration/db/orchestration-db'
 import type { OrchestrationEnvironmentTransport } from '../../../../orchestration/federation/environment-transport'
@@ -236,8 +236,7 @@ describe('agent mail between paired Orca servers', () => {
 
     a.runtime.ensureOrchestrationFederationRelay()
     await vi.waitFor(() => expect(mailFor(a, 'term_a')).toHaveLength(1))
-    const [conversationId] = b.db.listPeerConversationIds('fingerprint_a')
-    expect(b.db.listPendingFederationRelay(conversationId!, 'to_home')).toEqual([])
+    expect(b.db.listPeerConversationIdsWithPendingReplies('fingerprint_a')).toEqual([])
   })
 
   it('refuses an older server before sending anything', async () => {
@@ -351,9 +350,8 @@ describe('agent mail between paired Orca servers', () => {
     await mutation(b, 'orchestration.reply', { id: onB!.id, body: 'Answer.', from: 'term_b' })
     a.runtime.ensureOrchestrationFederationRelay()
     await vi.waitFor(() => expect(mailFor(a, 'term_a')).toHaveLength(1))
-    const [conversationId] = b.db.listPeerConversationIds('fingerprint_a')
     await vi.waitFor(() =>
-      expect(b.db.listPendingFederationRelay(conversationId!, 'to_home')).toEqual([])
+      expect(b.db.listPeerConversationIdsWithPendingReplies('fingerprint_a')).toEqual([])
     )
 
     a.db.resetMessages()
@@ -362,7 +360,7 @@ describe('agent mail between paired Orca servers', () => {
     notifyPeerMailQueued(b.db.db)
 
     await vi.waitFor(() =>
-      expect(b.db.listPendingFederationRelay(conversationId!, 'to_home')).toEqual([])
+      expect(b.db.listPeerConversationIdsWithPendingReplies('fingerprint_a')).toEqual([])
     )
     expect(mailFor(a, 'term_a')).toEqual([])
   })

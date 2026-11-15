@@ -1,5 +1,5 @@
-import { sleepingAgentRecordIndex } from '@/store/terminals/sleeping-agent-record-index'
-import { getFirstTerminalTabOwnerWorktreeId } from '@/store/terminals/terminal-tab-owner-index'
+import { sleepingAgentRecordIndex } from '@/store/terminals/sleep/sleeping-agent-record-index'
+import { getFirstTerminalTabOwnerWorktreeId } from '@/store/terminals/ownership/terminal-tab-owner-index'
 import type { useAppStore } from '@/store/index'
 import type { SleepingAgentSessionRecord } from '../../../../../shared/agent-session/lifecycle/agent-session-resume'
 import { agentTurnEndedUncleanly } from '../../../../../shared/agent-status/lifecycle/agent-main-agent-verdict'
@@ -8,7 +8,7 @@ import type {
   TerminalPaneLayoutNode,
   TerminalTab
 } from '../../../../../shared/workspace-layout/terminal-tab-types'
-import { parseAppSshPtyId } from '../../../../../shared/ssh-pty-id'
+import { parseAppSshPtyId } from '../../../../../shared/remote-runtime/ssh/ssh-pty-id'
 import {
   parseLegacyNumericPaneKey,
   parsePaneKey

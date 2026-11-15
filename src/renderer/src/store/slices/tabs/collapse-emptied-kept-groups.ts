@@ -1,6 +1,6 @@
 import type { AppState } from '../../types'
 import type { RecordDraft } from '../../keyed-record-transitions'
-import { collapseWorktreeGroupLayout } from '../../../../../shared/workspace-layout/tab-group-layout-tree'
+import { collapseWorktreeGroupLayout } from '../../../../../shared/workspace-layout/tab-groups/tab-group-layout-tree'
 
 export type GroupLayoutDrafts = {
   groups: RecordDraft<AppState['groupsByWorktree'][string]>

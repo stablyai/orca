@@ -6,7 +6,7 @@ import {
 import {
   EMPTY_RETIRED_NAME_REGISTRY,
   type RetiredNameRegistry
-} from '../../../../../../shared/worktree/retired-name-registry'
+} from '../../../../../../shared/worktree/naming/retired-name-registry'
 
 type WorktreePathLike = {
   path: string

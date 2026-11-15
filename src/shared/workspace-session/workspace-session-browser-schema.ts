@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import type { BrowserWorkspace } from '../browser-workspace-types'
+import type { BrowserWorkspace } from '../browser/workspaces/browser-workspace-types'
 import { normalizeBrowserHistoryEntries } from './workspace-session-browser-history'
 import { normalizeWorkspaceDocHistoryEntries } from './workspace-doc-history'
 import { isDocPreviewUrl } from '../document-preview/doc-preview-scheme'

@@ -1,13 +1,13 @@
-import type { PRCheckDetail } from '../../../../../../shared/github/check-types'
+import type { PRCheckDetail } from '../../../../../../shared/github/checks/check-types'
 import type { Repo } from '../../../../../../shared/repo-types'
 import type { Worktree } from '../../../../../../shared/worktree/types'
 import type { HostedReviewInfo } from '../../../../../../shared/source-control/hosted-review/hosted-review-contracts'
 import { hostedReviewInfoFromGitHubPRInfo } from '../../../../../../shared/source-control/hosted-review/hosted-review-github'
 import { isFolderRepo } from '../../../../../../shared/repo-kind'
-import { isGitHubPRSuppressed } from '../../../../../../shared/worktree/github-pr-suppression'
+import { isGitHubPRSuppressed } from '../../../../../../shared/worktree/hosted-review/github-pr-suppression'
 import { getWorktreeCardPrDisplay } from '@/components/sidebar/workspace-card/review/worktree-card-pr-display'
-import { getWorktreeGitIdentityDisplay } from '../../../../../../shared/worktree/git-identity-display'
-import { getGitHubRepoCacheKey } from '../../../../../../shared/github/github-cache-key'
+import { getWorktreeGitIdentityDisplay } from '../../../../../../shared/worktree/row-display/git-identity-display'
+import { getGitHubRepoCacheKey } from '../../../../../../shared/github/cache/github-cache-key'
 import {
   getHostedReviewCacheKey,
   linkedReviewHintKey

@@ -10,7 +10,7 @@ import {
   toSshExecutionHostId,
   type ExecutionHostId
 } from '../execution-host'
-import type { SshConnectionState } from '../ssh-types'
+import type { SshConnectionState } from '../remote-runtime/ssh/ssh-types'
 import type { RuntimeEnvironmentSource } from '../remote-runtime/host-catalog/runtime-environments'
 import type { GlobalSettings } from '../global-settings-types'
 import type { Repo } from '../repo-types'

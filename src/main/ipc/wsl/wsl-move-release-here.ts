@@ -9,26 +9,26 @@ import {
   type WslMoveCutover
 } from '../../../shared/wsl-move/wsl-move-cutover'
 import type { WslMoveUseLocallyResult } from '../../../shared/wsl-move/wsl-moved-project'
-import { listWslMoveCutoverChain } from '../../persistence/moving-wsl-projects/wsl-move-cutover-journal'
-import type { WslMoveProjectRef } from '../../persistence/moving-wsl-projects/wsl-move-scope-guard'
-import { fenceHostSpawnsForWslMoveUndo } from '../../persistence/moving-wsl-projects/wsl-move-undo-spawn-fence'
+import { listWslMoveCutoverChain } from '../../persistence/moving-wsl-projects/cutover-recovery/wsl-move-cutover-journal'
+import type { WslMoveProjectRef } from '../../persistence/moving-wsl-projects/quiescence/wsl-move-scope-guard'
+import { fenceHostSpawnsForWslMoveUndo } from '../../persistence/moving-wsl-projects/cutover-recovery/wsl-move-undo-spawn-fence'
 import {
   findWslMovedProjectMove,
   releaseWslMove,
   wslMoveReleaseRefusal,
   wslMoveWorkspacesInScope
-} from '../../persistence/moving-wsl-projects/wsl-move-use-locally'
+} from '../../persistence/moving-wsl-projects/cutover-recovery/wsl-move-use-locally'
 import {
   holdWslMoveWindowWrites,
   reloadWslMoveWindowWithWritesHeld
-} from '../../persistence/moving-wsl-projects/wsl-move-window-write-hold'
+} from '../../persistence/moving-wsl-projects/quiescence/wsl-move-window-write-hold'
 import type { WslMoveUndoPorts } from './wsl-move-undo-wiring'
 import {
   wslMoveHostCopiesSlept,
   wslMoveHostCopyOutcome
-} from '../../persistence/moving-wsl-projects/wsl-move-host-copy-stop'
-import { beginWslMoveUndoRun } from '../../persistence/moving-wsl-projects/wsl-move-running-moves'
-import { runWslMoveHostAutomationsExclusive } from '../../persistence/moving-wsl-projects/wsl-move-undo-host-automations'
+} from '../../persistence/moving-wsl-projects/quiescence/wsl-move-host-copy-stop'
+import { beginWslMoveUndoRun } from '../../persistence/moving-wsl-projects/orchestration/wsl-move-running-moves'
+import { runWslMoveHostAutomationsExclusive } from '../../persistence/moving-wsl-projects/cutover-recovery/wsl-move-undo-host-automations'
 import { listEnvironments } from '../../../shared/remote-runtime/host-store/runtime-environment-store'
 import { wasWslHostKeptForPeers } from '../../wsl/host-lifecycle/wsl-host-kept-for-peers'
 
@@ -179,10 +179,13 @@ async function releaseWslMovesHereNow(
 }
 
 /** R39: removed here but kept running for another Orca; only re-adding the host reaches it again. */
-function wslMoveHostKeptForPeers(userDataPath: string, move: WslMoveCutover): boolean {
+async function wslMoveHostKeptForPeers(
+  userDataPath: string,
+  move: WslMoveCutover
+): Promise<boolean> {
   return (
     wasWslHostKeptForPeers(userDataPath, move.destinationEnvironmentId) &&
-    !listEnvironments(userDataPath).some((env) => env.id === move.destinationEnvironmentId)
+    !(await listEnvironments(userDataPath)).some((env) => env.id === move.destinationEnvironmentId)
   )
 }
 
@@ -199,7 +202,7 @@ async function releaseOneMoveHere(
   // A bring-back reads first and refuses before turning anything off, so nothing is toggled.
   const preflight = await ports.preflightHostCopies?.(move)
   if (preflight !== undefined && preflight !== 'stopped') {
-    if (preflight === 'unreachable' && wslMoveHostKeptForPeers(userDataPath, move)) {
+    if (preflight === 'unreachable' && (await wslMoveHostKeptForPeers(userDataPath, move))) {
       return keptForPeersRefusal()
     }
     return {
@@ -214,7 +217,10 @@ async function releaseOneMoveHere(
     applyHere: () => () => {}
   }
   if (automations.outcome !== 'stopped') {
-    if (automations.outcome === 'unreachable' && wslMoveHostKeptForPeers(userDataPath, move)) {
+    if (
+      automations.outcome === 'unreachable' &&
+      (await wslMoveHostKeptForPeers(userDataPath, move))
+    ) {
       return keptForPeersRefusal()
     }
     return {
@@ -237,7 +243,7 @@ async function releaseOneMoveHere(
   const asleep = wslMoveHostCopiesSlept(stopped) ? { hostTerminalsAsleep: true as const } : {}
   if (stop !== 'stopped') {
     await automations.restore()
-    if (stop === 'unreachable' && wslMoveHostKeptForPeers(userDataPath, move)) {
+    if (stop === 'unreachable' && (await wslMoveHostKeptForPeers(userDataPath, move))) {
       return keptForPeersRefusal()
     }
     return {

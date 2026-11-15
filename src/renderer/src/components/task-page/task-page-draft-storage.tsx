@@ -1,5 +1,5 @@
 import type { TaskPageRepoSourceState } from '@/components/task-page/task-page-cache-selectors'
-import type { GitHubOwnerRepo } from '../../../../shared/github/pull-request-types'
+import type { GitHubRepositoryIdentity as GitHubOwnerRepo } from '../../../../shared/github/repositories/repository-identity'
 import { sameGitHubOwnerRepo } from '@/components/github/IssueSourceIndicator'
 import {
   type NewLinearProjectDraft,

@@ -6,7 +6,7 @@ import {
   OPENCODE_SESSION_CURSOR_START,
   runOpenCodeBinderRound,
   type BinderPaneSnapshot
-} from '../../opencode/opencode-session-binder'
+} from '../../opencode/session-correlation/opencode-session-binder'
 import type {
   BinderSessionRow,
   OpenCodeSessionCursor
@@ -15,7 +15,7 @@ import { readOpenCodeBinderSessions } from '../../foreign-sqlite-readers/foreign
 import {
   sweepProcessIdentities,
   type ProcessIdentityRow
-} from '../../opencode/opencode-client-sweep'
+} from '../../opencode/session-correlation/opencode-client-sweep'
 import { lookupOpenCodeSessionPane } from '../../../shared/agent-hook-listener/opencode-session-registry'
 import { AgentHookServerPersistence } from './server-persistence'
 

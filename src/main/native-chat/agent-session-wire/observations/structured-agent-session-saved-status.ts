@@ -1,13 +1,13 @@
-import { isAgentSessionInteractionMode } from '../../../../shared/agent-session/options/agent-session-interaction-mode'
+import { isAgentSessionInteractionMode } from '../../../../shared/agent-session/options/permissions/agent-session-interaction-mode'
 import type {
   StructuredAgentSessionStatusPublisher,
   StructuredAgentSessionStatusSink
 } from './structured-agent-session-status-ownership'
-import type { AgentSessionConversationView } from '../../../../shared/agent-session/lifecycle/agent-session-conversation-view'
+import type { AgentSessionConversationView } from '../../../../shared/agent-session/lifecycle/leases/agent-session-conversation-view'
 import {
   AGENT_SESSION_TURN_PREVIEW_CHARS,
   type AgentSessionLastTurn
-} from '../../../../shared/agent-session/lifecycle/agent-session-last-turn'
+} from '../../../../shared/agent-session/lifecycle/records/agent-session-last-turn'
 import type { AgentSessionRecordStore } from '../../../runtime/agent-session/records/agent-session-record-store'
 import type { StatusPublication } from './structured-agent-session-status-feed-deps'
 import type { AgentSessionExecutionLocation } from '../../../../shared/agent-session/lifecycle/agent-session-record'
@@ -109,10 +109,7 @@ export class StructuredAgentSessionSavedStatus {
     const entry = { edge }
     this.queued.set(sessionId, entry)
     const write = this.deps()
-      .store.transitionHandoff(sessionId, (record) => {
-        const { lastTurn: _previous, ...rest } = record
-        return lastTurn ? { ...rest, lastTurn } : _previous ? rest : record
-      })
+      .store.updateRecord(sessionId, { kind: 'last-turn', lastTurn })
       .then(
         () => {},
         (error: unknown) => {
@@ -169,7 +166,9 @@ export function createSavedStructuredStatusGroup(
     }
     const summary = savedStructuredAgentSessionStatus(record, markerAt)
     published.set(record.sessionId, { summary, firstInputSubmissionKey: null })
-    sink(summary, record.location, publisher)
+    if (summary.status !== null) {
+      sink(summary, record.location, publisher)
+    }
     broadcast({ type: 'status', session: summary })
   }
   return (visit) => {

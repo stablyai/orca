@@ -17,11 +17,11 @@ import {
   buildDiffEditorWordWrapOptions,
   syncDiffEditorOriginalWordWrap
 } from '../monaco-view/diff-editor-word-wrap-options'
-import { monacoFindOptions } from '../../monaco-find-options'
-import { buildEditorUnicodeHighlightOptions } from '../../editor-unicode-highlight-options'
-import { installDiffEditorShiftWheelScroll } from '../monaco-view/diff-editor-shift-wheel-scroll'
+import { monacoFindOptions } from '../../monaco/monaco-find-options'
+import { buildEditorUnicodeHighlightOptions } from '../../monaco/editor-unicode-highlight-options'
+import { installDiffEditorHorizontalWheelScroll } from '../monaco-view/diff-editor-horizontal-wheel-scroll'
 import { installCombinedDiffCursorReveal } from '../../combined-diff/scroll-viewport/combined-diff-cursor-reveal'
-import { usePluginSyntaxLanguage } from '../../use-plugin-syntax-language'
+import { usePluginSyntaxLanguage } from '../../monaco/use-plugin-syntax-language'
 import {
   PLUGIN_SYNTAX_EDITOR_OPTIONS,
   applyModelLanguage
@@ -115,10 +115,10 @@ export function DiffSectionBody({
   const handleEditorMount: DiffOnMount = (diffEditor, monaco) => {
     diffEditorRef.current = diffEditor
     applyModelLanguage([diffEditor.getModel()?.original, diffEditor.getModel()?.modified], language)
-    const cleanupShiftWheelScroll = installDiffEditorShiftWheelScroll(diffEditor)
+    const cleanupHorizontalWheelScroll = installDiffEditorHorizontalWheelScroll(diffEditor)
     const cleanupCursorReveal = installCombinedDiffCursorReveal(diffEditor)
     diffEditor.getModifiedEditor().onDidDispose(() => {
-      cleanupShiftWheelScroll()
+      cleanupHorizontalWheelScroll()
       cleanupCursorReveal()
       if (diffEditorRef.current !== diffEditor) {
         return

@@ -11,6 +11,7 @@ export function shouldPreserveEditableFocus(element: Element | null): boolean {
   }
   // Deferred layout maintenance must not steal focus from rename or settings edits.
   return (
+    element.matches('[data-worktree-sidebar][data-keyboard-navigation]') ||
     element.isContentEditable ||
     element.tagName === 'INPUT' ||
     element.tagName === 'TEXTAREA' ||

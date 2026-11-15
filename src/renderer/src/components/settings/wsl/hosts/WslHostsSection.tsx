@@ -4,7 +4,7 @@ import {
   ORCAD_HOST_NEWER_DEFERRAL_CODE,
   type WslHostConnectIntent,
   type WslHostStatus
-} from '../../../../../../shared/wsl-host-types'
+} from '../../../../../../shared/remote-runtime/wsl-hosts/wsl-host-types'
 import { toast } from 'sonner'
 import {
   isWslHostRuntimeEnvironment,

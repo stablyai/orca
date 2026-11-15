@@ -11,7 +11,7 @@ vi.mock('@orca/process-host', () => ({
 }))
 
 import { createWslWatcher } from './filesystem-watcher-wsl'
-import { resetWatcherChildRegistryForTest } from '../watcher-process/parcel-watcher-child-registry'
+import { resetWatcherChildRegistryForTest } from '../watcher-process/child-lifecycle/parcel-watcher-child-registry'
 import type { WatchedRoot, WslWatcherDeps } from './filesystem-watcher-wsl'
 
 const SNAPSHOT_START = '\0\x1e\0'

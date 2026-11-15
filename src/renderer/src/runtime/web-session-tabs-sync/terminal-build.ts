@@ -1,16 +1,16 @@
-import type { RuntimeMobileSessionTabsResult } from '../../../../shared/runtime-types'
+import type { RuntimeMobileSessionTabsResult } from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import type {
   TerminalLayoutSnapshot,
   TerminalTab
 } from '../../../../shared/workspace-layout/terminal-tab-types'
-import { normalizeTerminalLayoutPtyOwnership } from '../../../../shared/workspace-layout/terminal-layout-pty-ownership'
+import { normalizeTerminalLayoutPtyOwnership } from '../../../../shared/workspace-layout/terminal-topology/terminal-layout-pty-ownership'
 import { resolvePaneAgentOwnerRecord } from '../../../../shared/agent-status/identity/pane-agent-owner'
 import { normalizeCompatibleAgentTitleForOwner } from '../../../../shared/agent-status/title/agent-title-owner'
 import { getRemoteRuntimePtyEnvironmentId } from '../hosted-terminals/identity/remote-runtime-pty-owner'
 import { toRemoteRuntimePtyId } from '../../../../shared/remote-runtime/remote-runtime-pty-id'
 import { toWebTerminalSurfaceTabId } from '../../../../shared/workspace-layout/terminal-surface-id'
 import type { MirroredTerminalTab, ReadyTerminalSurface } from './state'
-import type { RuntimeMobileSessionTerminalClientTab } from '../../../../shared/runtime-mobile-session-tab-contracts'
+import type { RuntimeMobileSessionTerminalClientTab } from '../../../../shared/remote-runtime/session-graph/runtime-mobile-session-tab-contracts'
 import { chooseRemoteTerminalLayout, isTerminalSurfaceTab } from './terminal-surfaces'
 
 function pendingBindingBelongsToEnvironment(

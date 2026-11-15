@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo } from 'react'
 import { useAppStore } from '../store'
-import { hasFeatureInteraction } from '../../../shared/feature-interactions'
+import { hasFeatureInteraction } from '../../../shared/feature-education/interactions/feature-interactions'
 import { setForegroundTerminalTabIds } from '@/components/terminal-pane/parking/retention/foreground-terminal-tabs'
 import { useClientHostedBrowserRows } from '@/runtime/browser/client-hosting/client-hosted-browser-row-state'
 import { useTerminalProviderSnapshotCapability } from './terminal/use-terminal-provider-snapshot-capability'

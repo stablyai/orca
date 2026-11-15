@@ -9,7 +9,7 @@ import {
 } from '../../../../../shared/notification-source'
 import { useAppStore } from '../../../store/index'
 import { resolveExplicitTerminalTitleAgentType as resolveCommittedTitleAgentType } from '../../../../../shared/agent-status/title/terminal-title-agent-type'
-import { buildAgentNotificationId } from '../../../../../shared/agent-notification-id'
+import { buildAgentNotificationId } from '../../../../../shared/agent-status/presentation/agent-notification-id'
 import { agentMainAgentVerdict } from '../../../../../shared/agent-status/lifecycle/agent-main-agent-verdict'
 import { shareCompatibleTitleIdentityGroup } from '../../../../../shared/agent-status/title/agent-title-owner'
 import { isFreshNonDoneAgentStatus } from '../../../../../shared/agent-status/contracts/agent-status-freshness'

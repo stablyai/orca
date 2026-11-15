@@ -1,4 +1,5 @@
 import type { Repo } from '../../../../shared/repo-types'
+import { createRepoRowExecutionHostLookup } from '../../../../shared/execution-host/worktree-execution-host-resolution'
 import { isFolderRepo } from '../../../../shared/repo-kind'
 import { getRepoExecutionHostId } from '../../../../shared/execution-host'
 import type { ProjectExecutionRuntimeResolution } from '../../../../shared/execution-host/project-execution-runtime'
@@ -59,20 +60,27 @@ export function platformsByRepoId(
 export async function scanResolvedWorktreeRepos(
   store: RuntimeStore | null,
   rowDeps: () => RepoWorktreeRowDeps,
-  scanCacheEntry: (scanScopeKey: string) => object | undefined
+  scanCacheEntry: (repo: Repo) => object | undefined
 ): Promise<ResolvedWorktreeRepoScans> {
   const scans: ResolvedWorktreeRepoScans = new Map()
   if (!store) {
     return scans
   }
-  const repos = store.getRepos().filter((repo) => !isFolderRepo(repo))
+  const registered = store.getRepos()
+  const repoOwners = createRepoRowExecutionHostLookup(registered)
+  const repos = registered.filter((repo) => !isFolderRepo(repo))
   const projectRuntimeByRepoId = resolveLocalProjectRuntimesForRepos(store, repos)
   const deps = rowDeps()
   await Promise.all(
     repos.map(async (repo) => {
-      const scan = await scanRepoWorktreeRows(deps, repo, projectRuntimeByRepoId)
-      // The key listRepoWorktreesForResolution caches under.
-      const gitRun = scanCacheEntry(`${repo.id}\0${getRepoExecutionHostId(repo)}`) ?? null
+      const scan = await scanRepoWorktreeRows(
+        deps,
+        repo,
+        projectRuntimeByRepoId,
+        repoOwners.rowsFor(repo.id).length
+      )
+      // The owner observation the scan answered from; verification never mints a new one.
+      const gitRun = scanCacheEntry(repo) ?? null
       scans.set(resolvedWorktreeRepoScanKey(repo), { ...scan, gitRun })
     })
   )
@@ -89,13 +97,14 @@ export function joinResolvedWorktreeScans(
   const platformByRepoId = store
     ? platformsByRepoId(repos, resolveLocalProjectRuntimesForRepos(store, repos))
     : new Map<string, NodeJS.Platform>()
-  return { ...joinRows(store, rowDeps, scans), platformByRepoId }
+  return { ...joinRows(store, rowDeps, scans, repos), platformByRepoId }
 }
 
 function joinRows(
   store: RuntimeStore | null,
   rowDeps: () => RepoWorktreeRowDeps,
-  scans: ResolvedWorktreeRepoScans
+  scans: ResolvedWorktreeRepoScans,
+  repos: readonly Repo[]
 ): ResolvedWorktreeRowsJoin {
   if (!store) {
     return {
@@ -106,17 +115,24 @@ function joinRows(
     }
   }
   const metaById = store.getAllWorktreeMeta() ?? {}
+  const repoOwners = createRepoRowExecutionHostLookup(repos)
   const deps = rowDeps()
   const unscannedRepoKeys = new Set<HostScopedRepoKey>()
   const gitRunById = new Map<HostScopedWorktreeKey, object | null>()
   const scannedRepoKeys = new Set<HostScopedRepoKey>()
-  const perRepoWorktrees = store.getRepos().map((repo) => {
+  const perRepoWorktrees = repos.map((repo) => {
     const key = resolvedWorktreeRepoScanKey(repo)
     const scan = scans.get(key) ?? null
     if (!scan && !isFolderRepo(repo)) {
       unscannedRepoKeys.add(key)
     }
-    const rows = joinRepoWorktreeRows(deps, repo, scan, metaById)
+    const rows = joinRepoWorktreeRows(
+      deps,
+      repo,
+      scan,
+      metaById,
+      repoOwners.rowsFor(repo.id).length
+    )
     if (scan?.ok) {
       scannedRepoKeys.add(key)
       for (const row of rows) {

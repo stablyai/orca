@@ -12,7 +12,7 @@ import {
   subscribeAntigravityChatSignIns,
   type AntigravityChatSignInView
 } from '../../runtime/provider-accounts/sign-in/antigravity-chat-sign-in-status'
-import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import type {
   AntigravityChatAuth,
   AntigravityChatSignInState
@@ -23,7 +23,7 @@ const otherClients = (flow: AntigravityChatSignInState | null): boolean =>
   running(flow) && flow.flowId === null
 
 /** Progress of a sign-in flow; signed-in or signed-out state shows in the status badge instead. */
-function chatSignInLine(
+export function chatSignInLine(
   flow: AntigravityChatSignInState | null,
   auth: AntigravityChatAuth,
   openFailed: boolean,

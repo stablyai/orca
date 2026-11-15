@@ -77,11 +77,18 @@ export abstract class AgentHookServerIngestStructured extends AgentHookServerIng
     ) {
       throw new Error('Structured status does not match its trusted owner subject')
     }
+    const previous = this.canonicalStatusStore.getParent(parsed)
     if (!summary.status) {
-      this.dropStructuredStatus(parsed, notify)
+      if (!previous || previous.status) {
+        this.canonicalStatusStore.applyMutation({
+          parent: { subject: parsed, firstObservedAt: previous?.firstObservedAt ?? Date.now() }
+        })
+        if (previous?.status) {
+          this.dropStructuredStatusRow(parsed, previous.status, notify)
+        }
+      }
       return
     }
-    const previous = this.canonicalStatusStore.getParent(parsed)
     const priorStatus = previous?.status
     // Read canonical children; the summary's task list loses information.
     const agentStatus = structuredAgentSessionAgentStatus({
@@ -188,17 +195,25 @@ export abstract class AgentHookServerIngestStructured extends AgentHookServerIng
     if (!publication) {
       return
     }
-    const key = serializeAgentStatusSubject(parsed)
-    this.canonicalListingOrder.delete(key)
     if (previous.status) {
-      const subjects = this.canonicalSubjectsByPane.get(previous.status.paneKey)
-      subjects?.delete(key)
-      if (subjects?.size === 0) {
-        this.canonicalSubjectsByPane.delete(previous.status.paneKey)
-      }
-      this.commitStatusRowMutation(structuredStatusLegacyEvent(previous.status), undefined)
-      notify()
-      this.emitStatusDropped(previous.status.paneKey)
+      this.dropStructuredStatusRow(parsed, previous.status, notify)
     }
+  }
+
+  private dropStructuredStatusRow(
+    subject: AgentStatusStructuredSessionSubject,
+    previous: AgentStatusIpcPayload,
+    notify: () => void
+  ): void {
+    const key = serializeAgentStatusSubject(subject)
+    this.canonicalListingOrder.delete(key)
+    const subjects = this.canonicalSubjectsByPane.get(previous.paneKey)
+    subjects?.delete(key)
+    if (subjects?.size === 0) {
+      this.canonicalSubjectsByPane.delete(previous.paneKey)
+    }
+    this.commitStatusRowMutation(structuredStatusLegacyEvent(previous), undefined)
+    notify()
+    this.emitStatusDropped(previous.paneKey)
   }
 }

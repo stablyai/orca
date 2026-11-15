@@ -10,7 +10,7 @@ import type { DetectedWorktreeListResult } from '../../../../shared/worktree/typ
 import { isFolderRepo } from '../../../../shared/repo-kind'
 import { projectWorktreeLineageWithHostPeers } from '../../../workspaces/catalog/worktree-lineage-host-peers'
 import type { DirectSshDetectedWorktreeRequest } from '../../../../shared/detected-worktree-provider-contract'
-import { isAdmissibleDirectSshAuthority } from '../../../../shared/ssh-retained-payload-admission'
+import { isAdmissibleDirectSshAuthority } from '../../../../shared/remote-runtime/ssh/ssh-retained-payload-admission'
 import {
   buildDetectedGitWorktrees,
   createSshWorktreeMetaIndex,
@@ -170,6 +170,10 @@ export async function listDetectedWorktreesForCapturedRepo(
       if (!isCurrent()) {
         return null
       }
+    }
+    // The owner may have retired these rows' route during the overlay and hygiene awaits.
+    if (scan.authorityCurrent && !scan.authorityCurrent()) {
+      return abortedResult() ?? null
     }
     loggedWorktreeListFailures.delete(`${repo.id}:${repo.path}`)
     releaseWslStoppedWorktreeRescan(repo.id)

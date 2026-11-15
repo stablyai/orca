@@ -1,8 +1,8 @@
 import { randomUUID } from 'node:crypto'
 import { ipcMain } from 'electron'
 import type { RuntimeBrowserCommandHost } from '../commands/browser-command-contracts'
-import type { BrowserTabSplitDirection } from '../../../../shared/browser-tab-split-direction'
-import type { BrowserTabCreateRequest } from '../../../../shared/browser-tab-create-request'
+import type { BrowserTabSplitDirection } from '../../../../shared/browser/workspaces/browser-tab-split-direction'
+import type { BrowserTabCreateRequest } from '../../../../shared/browser/workspaces/browser-tab-create-request'
 
 export async function createBrowserTabInRenderer(
   host: Pick<RuntimeBrowserCommandHost, 'getAuthoritativeWindow'>,
