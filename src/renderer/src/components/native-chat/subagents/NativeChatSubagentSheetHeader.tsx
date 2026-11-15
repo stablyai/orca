@@ -134,7 +134,7 @@ export function NativeChatSubagentSheetHeader({
               </DropdownMenuContent>
             </DropdownMenu>
             {role ? (
-              <span className="hidden min-w-0 shrink truncate rounded-full border border-border px-1.5 font-sans text-3xs text-chat-foreground-faint @min-[421px]/subagent-sheet:inline">
+              <span className="min-w-0 shrink truncate rounded-full border border-border px-1.5 font-sans text-3xs text-chat-foreground-faint @max-[421px]/subagent-sheet:hidden">
                 {role}
               </span>
             ) : null}
@@ -154,7 +154,7 @@ export function NativeChatSubagentSheetHeader({
               // Ticking digits stay out of live announcements.
               <span
                 aria-hidden={counting || undefined}
-                className="hidden @xs/subagent-sheet:inline"
+                className="@max-[20rem]/subagent-sheet:hidden"
               >
                 {' · '}
                 <SubagentElapsed
@@ -167,7 +167,7 @@ export function NativeChatSubagentSheetHeader({
             {typeof entry?.tokens === 'number' ? (
               <span
                 aria-hidden={counting || undefined}
-                className="hidden @sm/subagent-sheet:inline"
+                className="@max-[24rem]/subagent-sheet:hidden"
               >
                 {` · ${say('tokens', { value0: formatSubagentTokens(entry.tokens) })}`}
               </span>

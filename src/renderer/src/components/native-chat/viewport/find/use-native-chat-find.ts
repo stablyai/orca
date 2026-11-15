@@ -1,3 +1,4 @@
+import { NATIVE_CHAT_SUBAGENT_SHEET_ATTRIBUTE } from '../../subagents/native-chat-open-subagent'
 import {
   useCallback,
   useEffect,
@@ -116,7 +117,8 @@ export function useNativeChatFind(
       }
       e.preventDefault()
       e.stopPropagation()
-      if (!e.repeat) {
+      // A subagent sheet covers the conversation this would search.
+      if (!e.repeat && !root.querySelector(`[${NATIVE_CHAT_SUBAGENT_SHEET_ATTRIBUTE}]`)) {
         open()
       }
     }
