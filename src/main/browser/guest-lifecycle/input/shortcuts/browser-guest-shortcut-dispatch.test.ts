@@ -154,4 +154,14 @@ describe('Right sidebar panel shortcuts from a plugin frame', () => {
     )
     expect(send).toHaveBeenCalledOnce()
   })
+
+  it('leaves the chord with an IME composition', () => {
+    const { context, event, send } = fixture()
+    context.getKeybindings = () => ({})
+    context.browserPage = false
+    expect(forwardGuestShortcutInput(context, event, { ...explorer, isComposing: true })).toBe(
+      false
+    )
+    expect(send).not.toHaveBeenCalled()
+  })
 })

@@ -92,6 +92,7 @@ export function forwardGuestShortcutInput(
   // Why: a guest without browser chrome has no panels of its own, so these chords open Orca's.
   const matchesRightSidebarPanel =
     !page &&
+    !textInputOwnsComposition(input) &&
     RIGHT_SIDEBAR_PANEL_ACTIONS.some((id) =>
       keybindingMatchesAction(id, input, process.platform, keybindings)
     )
