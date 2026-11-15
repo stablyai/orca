@@ -5,7 +5,7 @@ import {
   ManagedRuntimeAgentParams,
   ManagedRuntimeCancelParams
 } from '../../../../../shared/rpc-contract/host-management/managed-runtime-install-params'
-import { acpLaunchSpecFor } from '../../../../acp/launch/acp-launch-registry'
+import { ACP_LAUNCH_SPECS, acpLaunchSpecFor } from '../../../../acp/launch/acp-launch-registry'
 import { resolveAcpLaunchCommand } from '../../../../acp/launch/acp-launch-command'
 import { ManagedRuntimeInstallation } from '../../../../node-runtime/managed-runtime-installation'
 import '../../../../native-chat/agent-session-wire/providers/structured-agent-session-adapter'
@@ -64,6 +64,15 @@ function installationFor(agent: string, runtime: OrcaRuntimeService): ManagedRun
     })
   installations.set(agent, installation)
   return installation
+}
+
+/** Each installation reclaims stale releases when created, so create them every launch, not only when a client asks. */
+export function reclaimManagedRuntimeReleasesAtLaunch(runtime: OrcaRuntimeService): void {
+  for (const spec of ACP_LAUNCH_SPECS) {
+    if (spec.managedRuntime) {
+      installationFor(spec.agent, runtime)
+    }
+  }
 }
 
 export const MANAGED_RUNTIME_INSTALL_METHODS = [
