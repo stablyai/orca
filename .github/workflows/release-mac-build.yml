@@ -18,6 +18,11 @@ on:
         required: false
         default: false
         type: boolean
+      release_sha:
+        description: Verified release commit to build; required unless qualification_only
+        required: false
+        default: ''
+        type: string
       javascript_source_sha:
         description: Commit of the shared JavaScript artifact; empty keeps the legacy build
         required: false
@@ -61,7 +66,59 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
         with:
-          ref: ${{ inputs.qualification_only && github.sha || format('refs/tags/{0}', inputs.tag) }}
+          ref: ${{ inputs.qualification_only && github.sha || inputs.release_sha }}
+
+      # Why: anyone with write access can dispatch this workflow, and its signed output replaces the draft's mac
+      # assets (and re-drafts the release if it was published). Build only when:
+      # - release_sha is what the live tag points at;
+      # - release_run_id is a running release-cut on main that dispatched this exact run for this exact tag (its
+      #   mac-build-binding job is named from cut's tag and build-mac's dispatched run ID; nobody else sets it);
+      # - the release for the tag exists and is still a draft, so a published release is never re-drafted.
+      - name: Verify checkout is the release commit
+        if: ${{ !inputs.qualification_only }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_SHA: ${{ inputs.release_sha }}
+          TAG: ${{ inputs.tag }}
+          RELEASE_RUN_ID: ${{ inputs.release_run_id }}
+          BINDING_ATTEMPTS: '60'
+          BINDING_POLL_SECONDS: '10'
+        run: |
+          set -euo pipefail
+          fail() {
+            echo "::error::$1"
+            exit 1
+          }
+          [[ "$RELEASE_SHA" =~ ^[0-9a-f]{40}$ ]] || fail "release_sha '$RELEASE_SHA' is not a full commit SHA."
+          [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-rc\.[0-9]+(\.[0-9A-Za-z]+)?)?$ ]] || fail "tag '$TAG' is not a desktop release tag."
+          [[ "$RELEASE_RUN_ID" =~ ^[1-9][0-9]*$ ]] || fail "release_run_id '$RELEASE_RUN_ID' is not a run ID."
+          head="$(git rev-parse HEAD)"
+          [[ "$head" == "$RELEASE_SHA" ]] || fail "Checkout $head is not the verified release commit $RELEASE_SHA."
+          git fetch --no-tags --quiet origin "+refs/tags/$TAG:refs/release-tag-check/$TAG"
+          remote="$(git rev-parse --verify --quiet "refs/release-tag-check/$TAG^{commit}" || true)"
+          [[ "$remote" == "$RELEASE_SHA" ]] || fail "Remote tag $TAG resolves to '$remote', not $RELEASE_SHA."
+          # shellcheck disable=SC2016 # $p is jq, not shell.
+          # path may be ref-qualified (".github/workflows/release-cut.yml@main"); only main's ref is accepted.
+          run_ok="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$RELEASE_RUN_ID" --jq \
+            '(.path | split("@")) as $p | $p[0] == ".github/workflows/release-cut.yml" and ($p | length) <= 2 and (($p | length) == 1 or $p[1] == "main" or $p[1] == "refs/heads/main") and .head_branch == "main" and .status != "completed"')"
+          [[ "$run_ok" == "true" ]] || fail "Run $RELEASE_RUN_ID is not a running release-cut.yml run on main."
+          # The parent names a job after the tag it cut and the mac run it dispatched; it may still be queued.
+          export BINDING_JOB="mac release build $GITHUB_RUN_ID for $TAG"
+          bound=''
+          for ((attempt = 1; attempt <= BINDING_ATTEMPTS; attempt++)); do
+            # shellcheck disable=SC2016 # $ENV is jq, not shell.
+            bound="$(gh api --paginate "repos/$GITHUB_REPOSITORY/actions/runs/$RELEASE_RUN_ID/jobs?filter=latest&per_page=100" \
+              --jq '.jobs[] | select(.name == $ENV.BINDING_JOB) | .name' || true)"
+            [[ -z "$bound" ]] || break
+            sleep "$BINDING_POLL_SECONDS"
+          done
+          [[ "$bound" == "$BINDING_JOB" ]] || fail "Run $RELEASE_RUN_ID did not dispatch this build for $TAG (no job named '$BINDING_JOB')."
+          # Same matching as assert-github-release-is-draft.mjs, which re-drafts any published match after upload.
+          export VERSION="${TAG#v}"
+          # shellcheck disable=SC2016 # $ENV is jq, not shell.
+          releases="$(gh api --paginate "repos/$GITHUB_REPOSITORY/releases?per_page=100" --jq \
+            '.[] | select(.tag_name == $ENV.TAG or .tag_name == $ENV.VERSION or .name == $ENV.TAG or .name == $ENV.VERSION) | "\(.draft) \(.tag_name)"')"
+          [[ "$releases" == "true $TAG" ]] || fail "Release $TAG must exist exactly once and still be a draft; found: '${releases:-none}'."
 
       # Why: a relay-era ref (before #27215) needs the Windows relay addon this build no longer compiles.
       - name: Refuse a ref that still ships the SSH relay
@@ -263,7 +320,7 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAG: ${{ inputs.tag }}
-        run: node config/scripts/release/publication/assert-github-release-is-draft.mjs "${{ inputs.tag }}"
+        run: node config/scripts/release/publication/assert-github-release-is-draft.mjs "$TAG"
 
       # Check after publish because builder’s single pack/upload invocation has no cheap interposition point.
       - name: Verify telemetry constants present in app.asar
