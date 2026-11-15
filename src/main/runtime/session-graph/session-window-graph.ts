@@ -1,28 +1,16 @@
 import { OrcaRuntimeWithAdmitWindowPublisher } from './session-window-publisher'
 import type {
   RuntimeRendererSyncWindowGraph,
-  RuntimeSyncedTab,
   RuntimeSyncWindowGraph,
   RuntimeSyncWindowGraphResult
 } from '../../../shared/remote-runtime/session-graph/runtime-session-contracts'
-import { isTerminalLeafId, makePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
+import { assertUniqueRuntimeGraphTabIds } from './runtime-graph-tab-ids'
 import { HEADLESS_RUNTIME_WINDOW_ID } from '../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import type { RuntimeLeafRecord } from '../terminal/records/runtime-terminal-state-records'
 
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
 
 type Graph = RuntimeSyncWindowGraph
-
-/** The runtime indexes graph tabs by bare id, so duplicate ids cannot be routed safely. */
-function assertUniqueRuntimeGraphTabIds(tabs: readonly RuntimeSyncedTab[]): void {
-  const seen = new Set<string>()
-  for (const tab of tabs) {
-    if (seen.has(tab.tabId)) {
-      throw new Error('duplicate_runtime_tab_id')
-    }
-    seen.add(tab.tabId)
-  }
-}
 
 export abstract class OrcaRuntimeWithSyncWindowGraph extends OrcaRuntimeWithAdmitWindowPublisher {
   /** Layout-owner builds: main's panes in place of the window's (session-tabs-inventory.ts). */
@@ -113,13 +101,8 @@ export abstract class OrcaRuntimeWithSyncWindowGraph extends OrcaRuntimeWithAdmi
       }
       const leafKey = this.getLeafKey(leaf.tabId, leaf.leafId)
       const existing = this.leaves.get(leafKey)
-      // Why: status rows are keyed by UUID leaf ids; older or mirrored leaves can't carry one.
-      if (
-        graph === rendererGraph &&
-        isTerminalLeafId(leaf.leafId) &&
-        (changedMobileWorktrees.has(leaf.worktreeId) || existing?.ptyId !== leaf.ptyId)
-      ) {
-        rendererBindings.set(makePaneKey(leaf.tabId, leaf.leafId), leaf.ptyId)
+      if (graph === rendererGraph) {
+        this.noteStatusBinding(rendererBindings, leaf, existing?.ptyId, changedMobileWorktrees)
       }
       const ptyId =
         leaf.ptyId === null &&

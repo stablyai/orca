@@ -41,15 +41,25 @@ export abstract class OrcaRuntimeWithAdmitWindowPublisher extends OrcaRuntimeWit
   ): Map<string, string | null> {
     const bindings = new Map<string, string | null>()
     for (const leaf of graph.leaves) {
-      if (
-        isTerminalLeafId(leaf.leafId) &&
-        (worktrees.has(leaf.worktreeId) ||
-          this.leaves.get(this.getLeafKey(leaf.tabId, leaf.leafId))?.ptyId !== leaf.ptyId)
-      ) {
-        bindings.set(makePaneKey(leaf.tabId, leaf.leafId), leaf.ptyId)
-      }
+      const priorPtyId = this.leaves.get(this.getLeafKey(leaf.tabId, leaf.leafId))?.ptyId
+      this.noteStatusBinding(bindings, leaf, priorPtyId, worktrees)
     }
     return bindings
+  }
+
+  protected noteStatusBinding(
+    bindings: Map<string, string | null>,
+    leaf: RuntimeSyncWindowGraph['leaves'][number],
+    priorPtyId: string | null | undefined,
+    worktrees: ReadonlySet<string>
+  ): void {
+    // Why: status rows are keyed by UUID leaf ids; older or mirrored leaves can't carry one.
+    if (
+      isTerminalLeafId(leaf.leafId) &&
+      (worktrees.has(leaf.worktreeId) || priorPtyId !== leaf.ptyId)
+    ) {
+      bindings.set(makePaneKey(leaf.tabId, leaf.leafId), leaf.ptyId)
+    }
   }
 
   protected reconcileRendererStatusMembership(
