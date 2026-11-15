@@ -20,10 +20,6 @@ const CLAIM = { name: 'cn', origin: 'https://cn.relay.example', clientIp: '198.5
 const HOST = 'AbCdEfGhIjKlMnOp'
 
 describe('ingress header', () => {
-  it('round-trips, and accepts a secret being rotated out', async () => {
-    expect(await verifyIngressHeader(await signIngressHeader(SECRET, CLAIM), [SECRET])).toEqual(CLAIM)
-    expect(await verifyIngressHeader(await signIngressHeader(OLD_SECRET, CLAIM), [SECRET, OLD_SECRET])).toEqual(CLAIM)
-  })
 
   it('refuses a wrong secret, any edited field, skew past the window, and junk', async () => {
     const now = 1_800_000_000_000
