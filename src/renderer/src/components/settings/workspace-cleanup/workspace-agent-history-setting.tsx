@@ -67,7 +67,7 @@ export function WorkspaceAgentHistorySetting({
 }
 
 // Revisiting Settings reuses a recent measurement instead of rescanning every transcript.
-const MEASUREMENT_REUSE_MS = 10 * 60_000
+const MEASUREMENT_REUSE_MS = 60_000
 let lastMeasurement: { tally: WorkspaceAgentHistoryTally; at: number } | null = null
 
 function freshMeasurement(): WorkspaceAgentHistoryTally | null {
@@ -101,7 +101,9 @@ function DeletedWorkspacesHistoryRow(): React.JSX.Element {
     const cached = freshMeasurement()
     return cached ? { state: 'ready', tally: cached } : { state: 'measuring' }
   })
+  // The dialog keeps the counts it opened with, even while the row re-measures behind it.
   const [confirming, setConfirming] = useState(false)
+  const [confirmTally, setConfirmTally] = useState<WorkspaceAgentHistoryTally | null>(null)
   const [deleting, setDeleting] = useState(false)
 
   const [generation, setGeneration] = useState(0)
@@ -222,7 +224,10 @@ function DeletedWorkspacesHistoryRow(): React.JSX.Element {
               variant="outline"
               size="sm"
               disabled={deletable === 0 || deleting}
-              onClick={() => setConfirming(true)}
+              onClick={() => {
+                setConfirmTally(tally)
+                setConfirming(true)
+              }}
             >
               {t('components.settings.workspaceCleanup.agentHistory.delete', 'Delete…')}
             </Button>
@@ -250,11 +255,13 @@ function DeletedWorkspacesHistoryRow(): React.JSX.Element {
                 'components.settings.workspaceCleanup.agentHistory.confirmBody',
                 "Deletes from this computer: agent sessions, {{sessions}} ({{size}}); Orca chats, {{chats}}. Anything in use is skipped. This can't be undone.",
                 {
-                  sessions: tally
-                    ? formatCount(tally.transcripts.matched - tally.transcripts.inUse)
+                  sessions: confirmTally
+                    ? formatCount(confirmTally.transcripts.matched - confirmTally.transcripts.inUse)
                     : '0',
-                  size: formatBytes(tally?.transcripts.bytes ?? 0),
-                  chats: tally ? formatCount(tally.chats.matched - tally.chats.inUse) : '0'
+                  size: formatBytes(confirmTally?.transcripts.bytes ?? 0),
+                  chats: confirmTally
+                    ? formatCount(confirmTally.chats.matched - confirmTally.chats.inUse)
+                    : '0'
                 }
               )}
             </DialogDescription>
