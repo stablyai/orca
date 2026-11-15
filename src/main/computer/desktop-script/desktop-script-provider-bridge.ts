@@ -1,6 +1,6 @@
 import { execFile } from 'node:child_process'
-import { access, constants } from 'node:fs/promises'
 import { windowsPowerShellPath } from '@orca/process-host/windows-system-binary'
+import { isExecutableFile } from '../../cli/command-paths/cli-install-path-format'
 import { reportComputerDiagnostic } from '../sidecar-transport/computer-sidecar-diagnostics'
 import { RuntimeClientError } from '../runtime-client-error'
 import type { DesktopScriptPlatform } from './desktop-script-provider-paths'
@@ -72,7 +72,7 @@ async function execLinuxBridge(
     if (
       command === SYSTEM_PYTHON ||
       interpreter === SYSTEM_PYTHON ||
-      !(await isExecutable(SYSTEM_PYTHON))
+      !(await isExecutableFile(SYSTEM_PYTHON))
     ) {
       throw error.mapped
     }
@@ -105,15 +105,6 @@ function missingPyGObjectInterpreter(error: BridgeProcessFailure): string | null
     return null
   }
   return MISSING_PYGOBJECT.exec(error.stderr)?.[1]?.trim() || null
-}
-
-async function isExecutable(path: string): Promise<boolean> {
-  try {
-    await access(path, constants.X_OK)
-    return true
-  } catch {
-    return false
-  }
 }
 
 async function mapped(
