@@ -1,12 +1,19 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { renewRuntimeMobileAgentStatusFromPtyTitle } from './runtime-mobile-agent-status-projection'
 import { makeTuiIdlePty } from '../../terminal/wait/tui-idle-wait-test-harness'
 
 const approval = JSON.stringify({ approval: { tool: 'Bash', summary: 'kubectl get nodes' } })
 
+const NOW = 1_800_000_000_000
+
+afterEach(() => {
+  vi.useRealTimers()
+})
+
 describe('a permission title after the PermissionRequest hook', () => {
   it('keeps the approval prompt the hook published', () => {
-    const hookAt = Date.now() - 2_000
+    vi.useFakeTimers({ now: NOW })
+    const hookAt = NOW - 2_000
     const titleAt = hookAt + 500
     const out = renewRuntimeMobileAgentStatusFromPtyTitle(
       {
