@@ -1,7 +1,7 @@
 import type { BrowserClientPageExecutionHostGrant } from './browser-host-client-page-creation'
 import type { BrowserHostLease } from '../leases/browser-host-lease-records'
 import type { BrowserHostPagePlacementRegistry } from '../reconciliation/browser-host-page-placement'
-import type { RuntimeBrowserPlacement } from '../../../../shared/runtime-browser-placement'
+import type { RuntimeBrowserPlacement } from '../../../../shared/browser/client-hosting/runtime-browser-placement'
 import { BROWSER_HOST_WEBVIEW_CAPABILITY } from '../leases/browser-host-capability-selection'
 
 export function placeBrowserHostClientPage(options: {

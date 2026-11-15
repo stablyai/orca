@@ -1,5 +1,6 @@
 import { toast } from 'sonner'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
+import { usesCustomNotificationSound } from '../../../../shared/notification-settings-types'
 import { translate } from '@/i18n/i18n'
 
 type SystemNotificationSettingsCopy = {
@@ -67,14 +68,13 @@ export async function sendNotificationSettingsTestNotification(
     requireDisplayConfirmation: true
   })
   if (result.delivered) {
-    const soundResult =
-      notificationSettings.customSoundId !== 'system'
-        ? await window.api.notifications.playSound({
-            force: true,
-            volume: volumeDraft
-          })
-        : null
-    if (notificationSettings.customSoundId !== 'system' && soundResult && !soundResult.played) {
+    const soundResult = usesCustomNotificationSound(notificationSettings.customSoundId)
+      ? await window.api.notifications.playSound({
+          force: true,
+          volume: volumeDraft
+        })
+      : null
+    if (soundResult && !soundResult.played) {
       toast.error(
         translate(
           'auto.components.settings.NotificationsPane.98d70fb261',

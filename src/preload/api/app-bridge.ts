@@ -1,8 +1,8 @@
 import { ipcRenderer } from 'electron'
 import type { AppIdentity } from '../../shared/app-identity'
-import type { MacosUpgradeSupport } from '../../shared/macos-upgrade-support'
+import type { MacosUpgradeSupport } from '../../shared/updater/requirements/macos-upgrade-support'
 import type { FloatingTerminalCwdRequest } from '../../shared/ui-chrome-types'
-import type { MacCapturedDigitRowChord } from '../../shared/macos-symbolic-hotkeys'
+import type { MacCapturedDigitRowChord } from '../../shared/keybindings/macos-symbolic-hotkeys'
 import type { MarkdownDocument } from '../../shared/file-listing/file-document'
 import type { WriteTerminalRenderDesyncEvidenceArgs } from '../../shared/terminal/diagnostics/terminal-render-desync-evidence'
 import {
@@ -12,6 +12,7 @@ import {
 import { prepareAndInvokeAppRestart } from '../renderer/restart/renderer-restart-wiring'
 import {
   awaitBeforeUnloadCheckpoint,
+  invokeRendererRequestedReload,
   startupDiagnosticsEnabled
 } from '../renderer/renderer-runtime'
 import type { PreloadApi } from '../api-types'
@@ -54,12 +55,7 @@ export const appApi = {
       () => ipcRenderer.invoke('app:restart'),
       awaitBeforeUnloadCheckpoint
     ),
-  reload: (): Promise<void> =>
-    prepareAndInvokeAppRestart(
-      window,
-      () => ipcRenderer.invoke('app:reload'),
-      awaitBeforeUnloadCheckpoint
-    ),
+  reload: (): Promise<void> => invokeRendererRequestedReload(),
   stageBeforeUnloadSync: (args: Parameters<PreloadApi['app']['stageBeforeUnloadSync']>[0]) => {
     const result: { ok?: unknown; error?: unknown } | null | undefined = ipcRenderer.sendSync(
       'app:stage-before-unload-sync',

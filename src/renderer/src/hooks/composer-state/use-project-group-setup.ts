@@ -5,7 +5,7 @@ import type { SetupAgentStartupPolicy } from '../../../../shared/orca-yaml-hook-
 import { getSetupConfig } from '../../../../shared/orca-hook-setup-config'
 import { getRepoExecutionHostId } from '../../../../shared/execution-host'
 import { projectGroupHookOwner } from '../../../../shared/workspace-hook-owner'
-import { PROJECT_GROUP_FOLDER_SETUP_RUNTIME_CAPABILITY } from '../../../../shared/worktree-runtime-capabilities'
+import { PROJECT_GROUP_FOLDER_SETUP_RUNTIME_CAPABILITY } from '../../../../shared/remote-runtime/protocol/worktree-runtime-capabilities'
 import { useFolderSetupSupport } from '@/lib/workspace/creation/setup/folder-setup-support'
 import { deriveWorkspaceSetupState } from '@/lib/workspace/creation/setup/workspace-setup-preparation'
 import { checkRuntimeGroupHooks } from '@/runtime/repo-hooks/runtime-hooks-client'

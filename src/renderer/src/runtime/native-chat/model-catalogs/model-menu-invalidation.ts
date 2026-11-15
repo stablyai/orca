@@ -6,7 +6,7 @@ import {
   toRuntimeExecutionHostId
 } from '../../../../../shared/execution-host'
 import { lastVerifiedRuntimeStatus } from '../../../../../shared/remote-runtime/host-status/runtime-host-status'
-import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import { subscribeRuntimeHostContactRegained } from '../../hosts/connections/runtime-host-contact-regained'
 import {
   readLocalRuntimeCapabilitiesOrUnknown,

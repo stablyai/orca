@@ -112,35 +112,35 @@
     "count": 1
   },
   {
-    "filePath": "mobile/src/components/CustomKeyModal.tsx",
+    "filePath": "mobile/src/terminal/shortcuts/settings/CustomKeyModal.tsx",
     "kind": "object-property:label",
     "text": "Alt",
     "dynamic": false,
     "count": 1
   },
   {
-    "filePath": "mobile/src/components/CustomKeyModal.tsx",
+    "filePath": "mobile/src/terminal/shortcuts/settings/CustomKeyModal.tsx",
     "kind": "object-property:label",
     "text": "Ctrl",
     "dynamic": false,
     "count": 1
   },
   {
-    "filePath": "mobile/src/components/CustomKeyModal.tsx",
+    "filePath": "mobile/src/terminal/shortcuts/settings/CustomKeyModal.tsx",
     "kind": "object-property:label",
     "text": "Shift",
     "dynamic": false,
     "count": 1
   },
   {
-    "filePath": "mobile/src/components/mobile-markdown-blocks.tsx",
+    "filePath": "mobile/src/components/markdown/blocks/mobile-markdown-blocks.tsx",
     "kind": "jsx-expression",
     "text": "[x]",
     "dynamic": false,
     "count": 1
   },
   {
-    "filePath": "mobile/src/components/MobileRichMarkdownEditor.tsx",
+    "filePath": "mobile/src/components/rich-markdown/MobileRichMarkdownEditor.tsx",
     "kind": "jsx-attribute:placeholder",
     "text": "https://",
     "dynamic": false,
@@ -189,14 +189,14 @@
     "count": 1
   },
   {
-    "filePath": "mobile/src/mobile-web-shell/shell-bridge-log-lines.ts",
+    "filePath": "mobile/src/mobile-web-shell/diagnostics/shell-bridge-log-lines.ts",
     "kind": "object-property:message",
     "text": "Web shell bridge:",
     "dynamic": true,
     "count": 1
   },
   {
-    "filePath": "mobile/src/mobile-web-shell/shell-bridge-log-lines.ts",
+    "filePath": "mobile/src/mobile-web-shell/diagnostics/shell-bridge-log-lines.ts",
     "kind": "object-property:message",
     "text": "Web shell: page frame with no bridge host",
     "dynamic": false,

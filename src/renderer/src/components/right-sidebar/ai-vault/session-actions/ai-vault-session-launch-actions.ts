@@ -30,7 +30,7 @@ import {
 } from './ai-vault-session-continuation'
 import { isAiVaultDatabaseAgent } from '../../../../../../shared/ai-vault/contracts/ai-vault-session-handoff'
 import { activateAiVaultStructuredSession } from '@/lib/agent-session/open/activate-ai-vault-structured-session'
-import { adoptsCliConversations } from '../../../../../../shared/structured-agent-cli-conversation-adoption'
+import { adoptsCliConversations } from '../../../../../../shared/agent-session/view/structured-agent-cli-conversation-adoption'
 
 import { createNonSecureContextUuid } from '../../../../../../shared/non-secure-context-uuid'
 import { describeAiVaultResumeFailure } from '@/lib/agent-session/resume/history/ai-vault-resume-refusal'

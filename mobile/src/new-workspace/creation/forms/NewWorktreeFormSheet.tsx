@@ -6,8 +6,8 @@ import type { WorkspaceSshGate } from '../workspace-ssh-gate'
 import type { useMobileComposerSource } from '../../source-selection/use-mobile-composer-source'
 import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
 import { BottomDrawer } from '../../../components/bottom-drawer/BottomDrawer'
-import { MobileLoadErrorState, MobileStateView } from '../../../components/MobileStateView'
-import { MobileAgentIcon } from '../../../components/MobileAgentIcon'
+import { MobileLoadErrorState, MobileStateView } from '../../../components/feedback/MobileStateView'
+import { MobileAgentIcon } from '../../../components/icons/MobileAgentIcon'
 import {
   LIST_LEADING_INSET,
   ListGroup,
@@ -21,7 +21,7 @@ import type { SetupRunPolicy } from './new-worktree-modal-types'
 import { NewWorktreeFormOptions } from './NewWorktreeFormOptions'
 import { NewWorktreeProjectTargetFields } from './NewWorktreeProjectTargetFields'
 import { NewWorkspaceSshConnectionField } from './NewWorkspaceSshConnectionField'
-import { SheetPrimaryButton } from '../../../components/SheetPrimaryButton'
+import { SheetPrimaryButton } from '../../../components/sheets/SheetPrimaryButton'
 import { SmartWorkspaceSourceField } from '../../source-selection/presentation/SmartWorkspaceSourceField'
 
 type Composer = ReturnType<typeof useMobileComposerSource>

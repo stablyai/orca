@@ -1,4 +1,4 @@
-import type { AgentOutputFailureCode } from '../../../../src/shared/agent-output-failure-copy'
+import type { AgentOutputFailureCode } from '../../../../src/shared/text-generation/output/agent-output-failure-copy'
 import { translate } from '../../i18n/mobile-i18n'
 
 export const AGENT_OUTPUT_FAILURE_COPY: Record<

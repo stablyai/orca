@@ -1,5 +1,5 @@
 import type { HostProfile } from '../../host-catalog/host-profile'
-import type { HostMachine } from '../../../../src/shared/host-machine-line'
+import type { HostMachine } from '../../../../src/shared/execution-host/host-machine-line'
 
 export type HostStoredDescriptor = {
   personalName?: string

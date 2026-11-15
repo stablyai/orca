@@ -1,11 +1,11 @@
-import { issueBrowserGuestNavigation } from '../host-guest/browser-guest-metadata-cache'
-import type { BrowserPage as BrowserPageState } from '../../../../../shared/browser-workspace-types'
+import { issueBrowserGuestNavigation } from '../host-guest/metadata/browser-guest-metadata-cache'
+import type { BrowserPage as BrowserPageState } from '../../../../../shared/browser/workspaces/browser-workspace-types'
 import '../../../../../shared/constants'
 import {
   normalizeBrowserNavigationUrl,
   normalizeExternalBrowserUrl,
   redactKagiSessionToken
-} from '../../../../../shared/browser-url'
+} from '../../../../../shared/browser/navigation/browser-url'
 import { isBlankBrowserUrl } from '@/lib/browser/palette/browser-palette-search'
 import { browserFileUrlToAbsolutePath } from './browser-artifact-upload'
 import type { BrowserTabPageState } from './browser-page-types'

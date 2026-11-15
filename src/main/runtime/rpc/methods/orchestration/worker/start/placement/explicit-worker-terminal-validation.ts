@@ -7,8 +7,8 @@ import type {
   OrchestrationPartyIdentity as OrchestrationParty
 } from '../../../../../../../../shared/orchestration/mailbox/orchestration-party-identity'
 import type { OrchestrationDb } from '../../../../../../orchestration/db/orchestration-db'
-import type { OrcaSessionId } from '../../../../../../../../shared/orca-session-address'
-import { formatOrcaSessionAddress } from '../../../../../../../../shared/orca-session-address'
+import type { OrcaSessionId } from '../../../../../../../../shared/agent-session/identity/orca-session-address'
+import { formatOrcaSessionAddress } from '../../../../../../../../shared/agent-session/identity/orca-session-address'
 import {
   admitChatAssignee,
   chatAssigneeOf,

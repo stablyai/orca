@@ -15,7 +15,7 @@ import type {
   TerminalPointerInput,
   TerminalWebViewHandle
 } from '../../webview/terminal-webview-contract'
-import type { RuntimeMobileTerminalTheme } from '../../../../../src/shared/runtime-mobile-session-tab-contracts'
+import type { RuntimeMobileTerminalTheme } from '../../../../../src/shared/remote-runtime/session-graph/runtime-mobile-session-tab-contracts'
 
 type TerminalPaneViewProps = {
   handle: string

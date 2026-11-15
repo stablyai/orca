@@ -7,7 +7,7 @@ import {
   useQueryClient,
   type QueryObserverResult
 } from '@tanstack/react-query'
-import { warmUpWebShell } from '../../modules/orca-mobile-web-shell/src'
+import { warmUpWebShell } from '../../modules/orca-mobile-web-shell/src/index'
 import {
   countAgentsNeedingYouByHost,
   selectActiveAgents,

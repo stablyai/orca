@@ -3,20 +3,23 @@ import {
   isExpectedAgentProcess
 } from '../../../shared/agent-status/process/agent-process-recognition'
 import { getFirstCommandToken } from '../../../shared/command-token-scanner'
-import { resolveOuterWrapperForegroundProcess } from '../../../shared/foreground-wrapper-agent'
-import { selectForegroundProcessCandidate } from '../../../shared/foreground-process-selection'
+import { resolveOuterWrapperForegroundProcess } from '../../../shared/agent-status/process/foreground-wrapper-agent'
+import { selectForegroundProcessCandidate } from '../../../shared/agent-status/process/foreground-process-selection'
 import type {
   ForegroundProcessEvidence,
   RemoteForegroundEvidence
-} from '../../../shared/foreground-process-evidence'
+} from '../../../shared/terminal/pty/foreground/foreground-process-evidence'
 import {
   buildProcessTableIndex,
   lookupProcessTableIndex,
   type ProcessTableIndex,
   type ProcessTableIndexStats
-} from '../../../shared/process-table-index'
-import { unreadableArgvName, type ProcessTableRow } from '../../../shared/process-table-snapshot'
-import { getStrictProcessTableSnapshot } from '../../../shared/process-table-snapshot-reader'
+} from '../../../shared/process-observation/tables/process-table-index'
+import {
+  unreadableArgvName,
+  type ProcessTableRow
+} from '../../../shared/process-observation/tables/process-table-snapshot'
+import { getStrictProcessTableSnapshot } from '../../../shared/process-observation/tables/process-table-snapshot-reader'
 import { resolveRemoteForegroundEvidenceFromRows } from './remote-evidence'
 
 export type BatchedForegroundProcessRequest = {

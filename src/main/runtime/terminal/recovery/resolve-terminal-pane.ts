@@ -6,8 +6,8 @@ import type {
   RuntimeTerminalResolvePane,
   RuntimeTerminalShow,
   RuntimeTerminalSummary
-} from '../../../../shared/runtime-terminal-contracts'
-import type { RuntimeTerminalCreate } from '../../../../shared/runtime-terminal-create-contract'
+} from '../../../../shared/terminal/runtime/runtime-terminal-contracts'
+import type { RuntimeTerminalCreate } from '../../../../shared/terminal/runtime/runtime-terminal-create-contract'
 import type { RuntimeProviderSnapshotReadOptions } from '../output/provider-snapshot-read-options'
 import type { TerminalHandleRecord } from '../identity/terminal-handle-records'
 import type {

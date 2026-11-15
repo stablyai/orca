@@ -20,14 +20,14 @@ import {
   orcadNodePtySlotFiles,
   orcadTemplateCommonFilenames,
   orcadTemplateTargetFilenames
-} from '../../../../src/shared/orcad-artifacts.ts'
-import { orcadAgentBrowserNativeName } from '../../../../src/shared/orcad-agent-browser-name.ts'
+} from '../../../../src/shared/remote-runtime/orcad-distribution/orcad-artifacts.ts'
+import { orcadAgentBrowserNativeName } from '../../../../src/shared/remote-runtime/orcad-distribution/orcad-agent-browser-name.ts'
 import {
   COMPAT_SERVER_TARGET_BASES,
   COMPAT_SERVER_TARGETS,
   ORCAD_TEMPLATE_TARGETS,
   pinnedNodeRuntimeAsset
-} from '../../../../src/shared/node-runtime-pin.ts'
+} from '../../../../src/shared/node-runtime/node-runtime-pin.ts'
 import { ORCAD_PREBUILDS_DIR } from '../prebuilds/build-orcad-prebuilds.mjs'
 import {
   COMPAT_SLOT_ADDONS,

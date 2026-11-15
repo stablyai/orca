@@ -14,8 +14,8 @@ import { statusColor } from '../../changes/mobile-git-status'
 import { colors, pressedStyle, radii, spacing, typography } from '../../../theme/mobile-theme'
 import { themedStyleSheet } from '../../../theme/themed-styles'
 import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
-import { DisclosureChevron } from '../../../components/DisclosureChevron'
-import { MobileSearchField } from '../../../components/MobileSearchField'
+import { DisclosureChevron } from '../../../components/list/DisclosureChevron'
+import { MobileSearchField } from '../../../components/controls/MobileSearchField'
 import { SheetHeader } from '../../../components/nav-bar/SheetHeader'
 import {
   canMarkMobileDiffReviewItemViewed,

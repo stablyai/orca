@@ -8,7 +8,7 @@ import {
 } from '../../../../../../src/shared/native-chat/native-chat-resolution-receipt'
 import { nativeChatReceiptCopy } from './native-chat-receipt-copy'
 import { useMobileTranslation } from '../../../../i18n/use-mobile-translation'
-import { INLINE_TEXT_SELECTION } from '../../../../components/inline-text-selection'
+import { INLINE_TEXT_SELECTION } from '../../../../platform/text-selection/inline-text-selection'
 import { colors, spacing, typography } from '../../../../theme/mobile-theme'
 import { MobileNativeChatAwaitingInputRow } from './MobileNativeChatAwaitingInputRow'
 import { MobileNativeChatQuestionText } from '../message-content/MobileNativeChatQuestionText'

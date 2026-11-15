@@ -1,4 +1,4 @@
-import { wslDistroForCommand } from '../../../../shared/wsl-paths'
+import { wslDistroForCommand } from '../../../../shared/file-access/wsl-paths'
 
 import { waitForPromiseWithSignal } from '../../../../shared/abort-signal-reason'
 import { withTimeout } from '../../../../shared/promise-timeout-fallback'

@@ -5,7 +5,7 @@ import {
 } from './native-chat-composer-autocomplete'
 import type { SlashCommandSuggestion } from '../commands/native-chat-slash-commands'
 
-import type { DiscoveredSkill } from '../../../skills'
+import type { DiscoveredSkill } from '../../../skills/discovery/skills'
 import { getNativeChatAgentProfile } from '../../native-chat-agent-profiles'
 
 const COMMANDS: SlashCommandSuggestion[] = [
@@ -44,5 +44,29 @@ describe('deriveComposerAutocomplete — one grammar for every agent', () => {
     expect(deriveComposerAutocomplete(draft, draft.length, COMMANDS, skills, codex).mode).toBe(
       'none'
     )
+  })
+
+  // Before Claude's init classifies its catalog, a plugin skill arrives as an unclassified `fwx:discuss`.
+  it('picks a scanned Claude plugin skill under its plugin namespace', () => {
+    const draft = '/fwx:di'
+    const pluginSkill = skill({
+      name: 'Discuss',
+      providers: ['claude'],
+      sourceKind: 'plugin',
+      pluginName: 'fwx',
+      directoryPath: '/cache/fwx/1.0.0/skills/discuss',
+      skillFilePath: '/cache/fwx/1.0.0/skills/discuss/SKILL.md'
+    })
+    const result = deriveComposerAutocomplete(
+      draft,
+      draft.length,
+      [{ name: 'fwx:discuss', kindUnspecified: true }],
+      [pluginSkill],
+      getNativeChatAgentProfile('claude')
+    )
+
+    expect(result.mode === 'slash' && result.items).toEqual([
+      expect.objectContaining({ kind: 'skill', name: 'fwx:discuss', token: '/fwx:discuss' })
+    ])
   })
 })

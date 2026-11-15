@@ -1,7 +1,7 @@
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 import { describeClipboardWriteFailure } from '@/lib/clipboard/clipboard-write-failure'
-import { appendDictationText } from '../../../../shared/dictation-transcript-spacing'
+import { appendDictationText } from '../../../../shared/speech/dictation/dictation-transcript-spacing'
 import { insertText, type DictationInsertionTarget } from './dictation-insertion-target'
 
 export type DictationTranscriptDelivery = ((

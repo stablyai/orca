@@ -6,7 +6,7 @@ import { captureDictationContext } from '@/components/dictation/dictation-contex
 import {
   isDictationCleanupOn,
   type DictationCleanupResult
-} from '../../../../../shared/dictation-cleanup'
+} from '../../../../../shared/speech/dictation/dictation-cleanup'
 import { createNonSecureContextUuid } from '../../../../../shared/non-secure-context-uuid'
 import { Button } from '../../ui/button'
 

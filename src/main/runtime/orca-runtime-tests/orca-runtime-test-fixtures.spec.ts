@@ -18,7 +18,7 @@ import { makePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
 import type { LayoutCommand } from '../../../shared/workspace-layout/workspace-layout-command-types'
 import { applyCommandToSession } from '../../persistence/terminal-topology/pane-admission/terminal-pane-admission'
 import { resolveHostId } from '../../persistence/loading-store/workspace-sessions/session-host-partitions'
-import { toComparableRelaySshPtyId } from '../../../shared/ssh-pty-id'
+import { toComparableRelaySshPtyId } from '../../../shared/remote-runtime/ssh/ssh-pty-id'
 import '../terminal/launch/spawned-pty-env-fixtures'
 import './runtime-test-module-registration.spec'
 import {
@@ -42,13 +42,13 @@ import type { HostWorktreeTarget } from '../../../shared/worktree/host-qualified
 type RuntimeService = InstanceType<typeof OrcaRuntimeService>
 type HeadlessTerminal = InstanceType<typeof HeadlessEmulator>
 
-function syncSinglePty(
+async function syncSinglePty(
   runtime: RuntimeService,
   ptyId: string | null = 'pty-1',
   options: { tabTitle?: string | null; paneTitle?: string | null } = {}
-): void {
+): Promise<void> {
   runtime.attachWindow(1)
-  runtime.syncWindowGraph(1, {
+  await runtime.syncWindowGraph(1, {
     tabs: [
       {
         tabId: 'tab-1',
@@ -438,8 +438,8 @@ async function createExplicitAgentStatusHarness(options: {
     confirmForegroundProcess: options.confirmForegroundProcess
   })
   runtime.attachWindow(1)
-  const syncPty = (ptyId: string | null): void => {
-    runtime.syncWindowGraph(1, {
+  const syncPty = async (ptyId: string | null): Promise<void> => {
+    await runtime.syncWindowGraph(1, {
       tabs: [
         {
           tabId: 'tab-1',
@@ -460,7 +460,7 @@ async function createExplicitAgentStatusHarness(options: {
       ]
     })
   }
-  syncPty('pty-1')
+  await syncPty('pty-1')
   const [terminal] = (await runtime.listTerminals()).terminals
   return { runtime, handle: terminal.handle, syncPty }
 }

@@ -5,7 +5,7 @@ import { isDefinitiveAbsence } from '../../../shared/definitive-filesystem-absen
 import {
   WINDOWS_RM_MAX_RETRIES,
   WINDOWS_RM_RETRY_DELAY_MS
-} from '../../../shared/windows-transient-lock-removal'
+} from '../../../shared/file-write/windows-transient-lock-removal'
 import type {
   CodexManagedAccount,
   CodexRateLimitAccountsState

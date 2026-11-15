@@ -16,7 +16,7 @@ import {
   PUSH_UNDER_SHIFT
 } from '../../navigation/push-motion'
 import { useDrawerReducedMotion } from './bottom-drawer-constants'
-import { REDUCED_MOTION_FADE_MS } from '../sheet-motion-values'
+import { REDUCED_MOTION_FADE_MS } from '../motion/sheet-motion-values'
 import { colors } from '../../theme/mobile-theme'
 import { themedStyleSheet } from '../../theme/themed-styles'
 import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'

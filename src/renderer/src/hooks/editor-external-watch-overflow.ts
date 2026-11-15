@@ -30,10 +30,6 @@ function claimProbeGeneration(fileId: string): number {
   return probeGenerationSeq
 }
 
-export function getPendingOverflowProbeCountForTest(): number {
-  return probeGenerationByFileId.size
-}
-
 /** Drops pending existence answers for tabs this watch batch touched. */
 export function supersedeOverflowProbesForBatch(
   batchPaths: EditorExternalWatchBatchPathIndex,

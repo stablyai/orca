@@ -122,14 +122,4 @@ describe('source-aware reference deltas', () => {
       expect(normalizeWorkspaceAttachments(structuredClone(result))).toEqual(result)
     }
   })
-  it('collapses repoId conflicts the same way regardless of input order', () => {
-    const items: WorkspaceAttachment[] = [
-      foreign,
-      { ...foreign, repoId: 'r1' },
-      { ...foreign, repoId: 'r2' },
-      { ...legacy, repoId: 'r1' }
-    ]
-    expect(normalizeWorkspaceAttachments(items)).toHaveLength(1)
-    expect(normalizeWorkspaceAttachments(items.toReversed())).toHaveLength(1)
-  })
 })

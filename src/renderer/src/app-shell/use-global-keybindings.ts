@@ -11,7 +11,7 @@ import {
   findPluginCommandForKeybinding,
   globalShortcutTargetYields
 } from '@/lib/plugins/commands/plugin-command-keybindings'
-import { shouldMinimizeFloatingWorkspacePanelOnCloseShortcut } from '@/components/floating-terminal/floating-workspace-terminal-actions'
+import { shouldMinimizeFloatingWorkspacePanelOnCloseShortcut } from '@/components/floating-terminal/workspace/floating-workspace-terminal-actions'
 import { showTerminalShortcutCaptureNotification } from '@/lib/notifications/terminal-shortcut-capture-notification'
 import {
   folderRelativePathToIncludeGlob,

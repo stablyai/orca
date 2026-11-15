@@ -14,7 +14,7 @@ import type {
   RuntimeHostStatusResponse
 } from '../../../shared/remote-runtime/host-status/runtime-host-status'
 import { RUNTIME_CONNECTION_CHANGED_MESSAGE } from './web-runtime-request-registry'
-import type { RuntimeRpcResponse } from '../../../shared/runtime-rpc-envelope'
+import type { RuntimeRpcResponse } from '../../../shared/remote-runtime/rpc/runtime-rpc-envelope'
 import { WebRuntimeConnectionTransport } from './web-runtime-connection-transport'
 import type { WebRuntimeCredentialSource } from './web-runtime-credential-source'
 import { subscribeWebRuntimeFileWatch } from './web-runtime-file-watch-subscription'

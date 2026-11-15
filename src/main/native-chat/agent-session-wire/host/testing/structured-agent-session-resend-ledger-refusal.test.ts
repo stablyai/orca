@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest'
 
-import { withTestAgentSessionDatabase } from '../../../../runtime/agent-session/records/agent-session-record-store-test-harness'
+import { withTestAgentSessionDatabase } from '../../../../runtime/agent-session/records/agent-session-record-store-persistence.test-fixture'
 import type { StructuredAgentSessionAdapter } from '../../providers/structured-agent-session-adapter'
 import type { StructuredAgentSessionHost } from '../structured-agent-session-host'
 import {

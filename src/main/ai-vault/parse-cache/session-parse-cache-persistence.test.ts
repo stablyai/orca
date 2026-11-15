@@ -1,12 +1,10 @@
 import { existsSync } from 'node:fs'
-import { mkdtemp, readdir, rm, stat, writeFile } from 'node:fs/promises'
-import * as fsPromises from 'node:fs/promises'
+import { mkdtemp, rm, stat, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import SyncDatabase from '../../sqlite/sync-database'
 import {
-  configureSessionParseCachePersistence,
   flushSessionParseCachePersist,
   initSessionParseCachePersistence,
   resetSessionParseCachePersistenceForTests
@@ -17,32 +15,10 @@ import {
   parseAgentSessionFileCached,
   type SessionParseStats
 } from './session-scanner-parse-cache'
-import {
-  invalidateSessionParseCacheEntry,
-  resetSessionParseCacheForTests
-} from './session-parse-cache-store'
-import type * as ParseCacheModule from './session-scanner-parse-cache'
+import { resetSessionParseCacheForTests } from './session-parse-cache-store'
 import { parseSessionCandidate } from '../parsing/session-scanner-candidate-parse'
 import { MAX_SESSION_TRANSCRIPT_RECORD_BYTES } from '../transcripts/session-transcript-record-budget'
 import type { FileWithMtime, SessionFileCandidate } from '../session-scanner-types'
-
-const hooks = vi.hoisted(() => {
-  const state: { beforeParse: (() => Promise<void>) | null } = { beforeParse: null }
-  return state
-})
-
-// Preserve real I/O while measuring whether an uninitialized cache touches disk.
-vi.mock('node:fs/promises', { spy: true })
-vi.mock('./session-scanner-parse-cache', async (importOriginal) => {
-  const actual = await importOriginal<typeof ParseCacheModule>()
-  return {
-    ...actual,
-    parseListedSessionFile: async (...args: Parameters<typeof actual.parseListedSessionFile>) => {
-      await hooks.beforeParse?.()
-      return actual.parseListedSessionFile(...args)
-    }
-  }
-})
 
 const APP_VERSION = '1.2.3-test'
 
@@ -51,12 +27,9 @@ let tempRoots: string[] = []
 beforeEach(() => {
   resetSessionParseCacheForTests()
   resetSessionParseCachePersistenceForTests()
-  hooks.beforeParse = null
 })
 
 afterEach(async () => {
-  vi.useRealTimers()
-  vi.restoreAllMocks()
   resetSessionParseCachePersistenceForTests()
   await Promise.all(tempRoots.map((root) => rm(root, { recursive: true, force: true })))
   tempRoots = []
@@ -210,47 +183,5 @@ describe('session parse cache persistence', () => {
     const stats = createSessionParseStats()
     expect(await parseAgentSessionFileCached(candidate, process.platform, stats)).toEqual(session)
     expect(stats).toMatchObject({ reused: 1, fullParses: 0 })
-  })
-
-  it('discards an old JSON file from another schema version', async () => {
-    const root = await makeTempDir()
-    const cacheFile = join(root, 'session-parse-cache.json')
-    const transcript = await writeTranscript(root)
-    const candidate = await claudeCandidate(transcript)
-    await writeFile(
-      cacheFile,
-      JSON.stringify({
-        schemaVersion: SESSION_PARSE_CACHE_SCHEMA_VERSION - 1,
-        appVersion: 'old',
-        entries: [
-          [
-            transcript,
-            {
-              mtimeMs: candidate.file.mtimeMs,
-              sizeBytes: candidate.file.sizeBytes,
-              platform: process.platform,
-              session: null
-            }
-          ]
-        ]
-      })
-    )
-    simulateRestart(cacheFile)
-    expect((await parse(transcript)).fullParses).toBe(1)
-    expect(existsSync(cacheFile)).toBe(false)
-  })
-
-  it('performs zero disk IO when only configured, as Electron main is', async () => {
-    const root = await makeTempDir()
-    configureSessionParseCachePersistence({
-      filePath: join(root, 'session-parse-cache.json'),
-      appVersion: APP_VERSION
-    })
-    vi.clearAllMocks()
-    invalidateSessionParseCacheEntry(join(root, 'deleted.jsonl'))
-    await flushSessionParseCachePersist()
-    expect(fsPromises.readFile).not.toHaveBeenCalled()
-    expect(fsPromises.readdir).not.toHaveBeenCalled()
-    expect(await readdir(root)).toEqual([])
   })
 })

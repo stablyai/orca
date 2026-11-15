@@ -15,7 +15,7 @@ import type { PRInfo } from '../../../../../shared/github/pull-requests/pull-req
 import { getRepoExecutionHostId } from '../../../../../shared/execution-host'
 import { ipcOrRuntimeTargetForHostId } from '@/runtime/rpc/targets/runtime-client-target'
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
-import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 
 export type HostedReviewCacheEntry<T> = {
   data: T | null

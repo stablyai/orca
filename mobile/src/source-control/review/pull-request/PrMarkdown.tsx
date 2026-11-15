@@ -1,7 +1,7 @@
 import { useMemo } from 'react'
-import { MobileMarkdown } from '../../../components/MobileMarkdown'
-import { MobileMarkdownLinksContext } from '../../../components/mobile-markdown-links-context'
-import { MOBILE_MARKDOWN_DOCUMENT_SCALE } from '../../../components/mobile-markdown-styles'
+import { MobileMarkdown } from '../../../components/markdown/MobileMarkdown'
+import { MobileMarkdownLinksContext } from '../../../components/markdown/links/mobile-markdown-links-context'
+import { MOBILE_MARKDOWN_DOCUMENT_SCALE } from '../../../components/markdown/mobile-markdown-styles'
 
 const GITHUB_PAGE = /^https:\/\/github\.com\/([^/]+)\/([^/]+)\//i
 

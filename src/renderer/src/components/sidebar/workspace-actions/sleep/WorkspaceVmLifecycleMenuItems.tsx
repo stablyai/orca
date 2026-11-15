@@ -10,7 +10,7 @@ import {
   resumeEphemeralVmWorkspace,
   suspendEphemeralVmWorkspace
 } from '@/lib/workspace/activation/sidebar-worktree-activation'
-import type { EphemeralVmRuntimeStatus } from '../../../../../../shared/ephemeral-vm-runtimes'
+import type { EphemeralVmRuntimeStatus } from '../../../../../../shared/remote-runtime/ephemeral-vm-store/ephemeral-vm-runtimes'
 
 export type WorkspaceVmLifecycleAction = 'suspend' | 'resume' | 'waking' | null
 

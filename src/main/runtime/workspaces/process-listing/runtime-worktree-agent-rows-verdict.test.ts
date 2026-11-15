@@ -13,7 +13,7 @@ import type {
   AgentSessionStatusEvent,
   AgentSessionStatusSummary
 } from '../../../../shared/agent-session/agent-session-wire'
-import type { RuntimeWorktreePsSummary } from '../../../../shared/runtime-worktree-contracts'
+import type { RuntimeWorktreePsSummary } from '../../../../shared/worktree/catalog/runtime-worktree-contracts'
 import { AgentHookServer, _internals } from '../../../agent-hooks/server/agent-hook-server'
 import { createTrackedJournalOpener } from '../../../native-chat/agent-session-journal/store-lifecycle/journal-host-database-test-support'
 import type { AgentSessionJournal } from '../../../native-chat/agent-session-journal/journal-store'

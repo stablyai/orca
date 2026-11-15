@@ -6,7 +6,7 @@ import {
   EphemeralVmRecipeResultSchema,
   type EphemeralVmRecipeResult,
   type JsonValue
-} from '../../shared/ephemeral-vm-recipes'
+} from '../../shared/remote-runtime/ephemeral-vm-recipes/ephemeral-vm-recipes'
 import {
   runEphemeralVmRecipeCleanup,
   runEphemeralVmRecipeResume,
@@ -16,8 +16,8 @@ import {
   type EphemeralVmRecipeContext,
   type EphemeralVmRecipeLifecycleArgs,
   type EphemeralVmRecipeStartArgs
-} from '../../shared/ephemeral-vm-recipe-runner'
-import { EPHEMERAL_VM_FAILURE_COPY } from '../../shared/ephemeral-vm-failure-copy'
+} from '../../shared/remote-runtime/ephemeral-vm-recipes/ephemeral-vm-recipe-runner'
+import { EPHEMERAL_VM_FAILURE_COPY } from '../../shared/remote-runtime/ephemeral-vm-recipes/ephemeral-vm-failure-copy'
 import { getProvisionedRootResumeIntegrityError } from '../ephemeral-vm/resume-integrity'
 import {
   EnvironmentProviderError,

@@ -257,8 +257,8 @@ async function connectWslMoveHost(
   if (!service || !(await connectWslMoveHostService(service, userDataPath, distro, mode))) {
     return null
   }
-  const { environment, notCarried } = ensureWslMoveDestinationBrowserLogins({
-    resolveEnvironment: () => resolveEnvironment(userDataPath, environmentId),
+  const { environment, notCarried } = await ensureWslMoveDestinationBrowserLogins({
+    resolveEnvironment: async () => await resolveEnvironment(userDataPath, environmentId),
     resaveConnection: () => service.resaveConnection(environmentId),
     orcaProfileId: activeBrowserRoutePartitionOrcaProfileId,
     resolveHostStorage: wslHostBrowserRouteStorage
@@ -269,7 +269,8 @@ async function connectWslMoveHost(
   }
   const pairingCode = encodePairingOffer(getPreferredPairingOffer(environment))
   const options = environment.runtimeId ? { expectedRuntimeId: environment.runtimeId } : {}
-  const distroGuid = findWslHostDeployment(userDataPath, environmentId)?.distroId ?? undefined
+  const distroGuid =
+    (await findWslHostDeployment(userDataPath, environmentId))?.distroId ?? undefined
   return {
     environmentId,
     name: environment.name,

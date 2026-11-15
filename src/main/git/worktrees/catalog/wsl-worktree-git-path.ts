@@ -1,5 +1,5 @@
 import { win32 } from 'node:path'
-import { parseWslUncPath, toWindowsWslUncPath } from '../../../../shared/wsl-paths'
+import { parseWslUncPath, toWindowsWslUncPath } from '../../../../shared/file-access/wsl-paths'
 import {
   knownWslAutomountRoots,
   wslDrivePathUnderRoots

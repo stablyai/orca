@@ -2,7 +2,7 @@
 
 import { ClaudeTaskInvocations } from '../background-tasks/claude-task-invocations'
 import type { AgentChildWorkEvidence } from '../../../shared/agent-status/child-work/agent-status-child-work-evidence'
-import { classifyClaudeBackgroundTaskKind } from '../../../shared/claude-background-task-kind'
+import { classifyClaudeBackgroundTaskKind } from '../../../shared/agent-hook-listener/providers/claude/background-tasks/claude-background-task-kind'
 import {
   liveClaudeTaskRunState,
   record,

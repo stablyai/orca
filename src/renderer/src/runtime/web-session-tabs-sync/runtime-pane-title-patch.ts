@@ -3,7 +3,7 @@ import {
   isRuntimePaneTitleOrphan,
   resolveRuntimePaneTitleLeafId,
   resolveRuntimePaneTitleLeafIdFromSparseSlots
-} from '../../../../shared/runtime-pane-title-leaf-id'
+} from '../../../../shared/workspace-layout/terminal-topology/runtime-pane-title-leaf-id'
 import { FIRST_PANE_ID } from '../../../../shared/pane-key'
 import { isTerminalLeafId, makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import { normalizeCompatibleAgentTitleForOwner } from '../../../../shared/agent-status/title/agent-title-owner'
@@ -16,7 +16,7 @@ import type {
   WebSessionTabsBatchContext,
   WebSessionTabsSyncState
 } from './state'
-import type { RuntimeMobileSessionTerminalClientTab } from '../../../../shared/runtime-mobile-session-tab-contracts'
+import type { RuntimeMobileSessionTerminalClientTab } from '../../../../shared/remote-runtime/session-graph/runtime-mobile-session-tab-contracts'
 
 /** Reconcile saved pane titles with the accepted host inventory, including inactive tabs. */
 export function buildMirroredRuntimePaneTitlePatch(

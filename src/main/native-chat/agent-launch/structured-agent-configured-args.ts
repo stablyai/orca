@@ -6,7 +6,7 @@ import {
   type AgentLaunchProfileSettings
 } from '../../../shared/agent-launch/choices/tui-agent-launch-defaults'
 import { tokenizeStartupCommand } from '../../../shared/agent-launch/startup/tui-agent-startup-shell'
-import { resolveLocalWindowsAgentStartupShell } from '../../../shared/windows-terminal-shell'
+import { resolveLocalWindowsAgentStartupShell } from '../../../shared/shell/launch/windows-terminal-shell'
 
 /** Match terminal argument grouping before filtering provider-owned flags. */
 export function structuredAgentConfiguredArgs(

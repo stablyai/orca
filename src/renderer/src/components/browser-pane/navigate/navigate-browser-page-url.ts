@@ -1,20 +1,20 @@
-import { issueBrowserGuestNavigation } from '../host-guest/browser-guest-metadata-cache'
+import { issueBrowserGuestNavigation } from '../host-guest/metadata/browser-guest-metadata-cache'
 import { detectLanguage } from '../../../../../shared/editor-language/editor-language-detect'
 import { getConnectionId } from '@/lib/workspace/ownership/connection-context'
 import {
   isPathInsideWorktree,
   toWorktreeRelativePath
 } from '../../../../../shared/terminal/links/terminal-links'
-import { useAppStore } from '@/store'
+import { useAppStore } from '@/store/index'
 import type { RuntimeFileOperationArgs } from '@/runtime/files/runtime-file-client-types'
 import {
   normalizeBrowserNavigationUrl,
   redactKagiSessionToken
-} from '../../../../../shared/browser-url'
-import type { BrowserLoadError } from '../../../../../shared/browser-workspace-types'
+} from '../../../../../shared/browser/navigation/browser-url'
+import type { BrowserLoadError } from '../../../../../shared/browser/workspaces/browser-workspace-types'
 import '../../../../../shared/constants'
 import { ORCA_BROWSER_BLANK_URL } from '../../../../../shared/browser/browser-blank-page'
-import { BROWSER_GUEST_RECOVERY_ERROR_CODE } from '../host-guest/browser-page-guest-recovery'
+import { BROWSER_GUEST_RECOVERY_ERROR_CODE } from '../host-guest/recovery/browser-page-guest-recovery'
 import {
   getBrowserDisplayTitle,
   getNotebookPathFromBrowserUrl,

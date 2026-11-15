@@ -13,14 +13,14 @@ import {
   type ManagedRuntimeCallPreparation
 } from '../managed-orcad/runtime-environment-managed-tunnel'
 import { recordRuntimeEnvironmentUsage } from '../../../../shared/remote-runtime/host-store/runtime-environment-usage-record'
-import type * as Rpc from '../../../../shared/runtime-rpc-envelope'
+import type * as Rpc from '../../../../shared/remote-runtime/rpc/runtime-rpc-envelope'
 import { subscribeRemoteRuntimeTransport } from '../../../../shared/remote-runtime/requests/remote-runtime-subscription-transport'
 import type { RemoteRuntimeTransportSubscription } from '../../../../shared/remote-runtime/requests/remote-runtime-subscription-contract'
 import { withRuntimeUnreachableHint } from './runtime-environment-unreachable-hint'
 import { decodeRuntimeEnvironmentSubscriptionEvents } from '../subscriptions/runtime-environment-subscription-events'
 import { runtimeCallQueuePool } from './runtime-environment-call-queue'
-import { isTimedPRRead } from '../../../../shared/runtime-rpc-call-queue'
-import { enqueueRuntimeSubscription } from '../../../../shared/runtime-rpc-subscription-queue'
+import { isTimedPRRead } from '../../../../shared/remote-runtime/rpc/runtime-rpc-call-queue'
+import { enqueueRuntimeSubscription } from '../../../../shared/remote-runtime/rpc/runtime-rpc-subscription-queue'
 import {
   shouldRouteSubscriptionBySupport,
   subscribeSupportRoutedRuntimeEnvironment
@@ -48,7 +48,7 @@ export async function subscribeRuntimeEnvironment(
   signal?: AbortSignal,
   preparation?: ManagedRuntimeCallPreparation,
   crewAttempt?: {
-    assertCurrent: () => void
+    assertCurrent: () => Promise<void>
     observeFailure: (failure: RuntimeEnvironmentSetupFailure) => void
   }
 ): Promise<RemoteRuntimeTransportSubscription> {
@@ -69,11 +69,12 @@ export async function subscribeRuntimeEnvironment(
       rawCallbacks.onClose()
     }
   }
-  crewAttempt?.assertCurrent()
+  await crewAttempt?.assertCurrent()
   const environment = crewAttempt
-    ? resolveEnvironment(userDataPath, selector)
+    ? await resolveEnvironment(userDataPath, selector)
     : await resolveManagedRuntimeEnvironment(userDataPath, selector, preparation, method, signal)
-  crewAttempt?.assertCurrent()
+  await crewAttempt?.assertCurrent()
+  throwIfSignalAborted(signal)
   if (crewAttempt) {
     assertCrewSourceCurrent(environment)
   }
@@ -143,7 +144,8 @@ export async function subscribeRuntimeEnvironment(
       if (crewAttempt) {
         try {
           throwIfSignalAborted(signal)
-          crewAttempt.assertCurrent()
+          await crewAttempt.assertCurrent()
+          throwIfSignalAborted(signal)
           assertCrewSourceCurrent(environment)
         } catch (error) {
           subscription.close()

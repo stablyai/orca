@@ -5,7 +5,7 @@ import { colors, pressedStyle, spacing } from '../../../theme/mobile-theme'
 import { themedStyleSheet } from '../../../theme/themed-styles'
 import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
 import type { AgentListStatus as AgentDotState } from '../../../../../src/shared/agent-status/presentation/agent-list-status'
-import { AgentStateDot } from '../../../components/AgentStateDot'
+import { AgentStateDot } from '../../../agents/presentation/AgentStateDot'
 import { AGENT_ROW_INDENT_PER_DEPTH } from './WorktreeAgentRow'
 
 // Grow the 14 pt controls toward 44 pt downward only: later siblings win hit tests, so top slop would steal taps from the row above.

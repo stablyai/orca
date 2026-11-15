@@ -3,7 +3,7 @@ import { getGitHubRuntimeRepoId } from '@/lib/work-items/github/github-source-ru
 import { callGitHubTargetOperation } from '@/lib/work-items/github/github-work-item-target-request'
 import { useGitHubOperationOwner } from './useGitHubOperationScope'
 import { useGitHubWorkItemTarget } from '@/components/github-item-dialog/load-item-details/github-work-item-target-context'
-import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import type { GitHubAssignableUser } from '../../../shared/github/pull-requests/pull-request-types'
 import type { GitHubRepositoryIdentity as GitHubOwnerRepo } from '../../../shared/github/repositories/repository-identity'
 import { githubRepoIdentityKey } from '../../../shared/github/repositories/repository-identity-key'

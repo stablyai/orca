@@ -4,9 +4,9 @@ import type { BrowserDevToolsDockLayout } from './browser/devtools/browser-devto
 import type { JiraSavedFilterState } from './jira/jira-saved-filters'
 import type { ReleaseChannel } from './release-channel'
 import type { WorkspaceCleanupUIState } from './workspace-cleanup/workspace-cleanup'
-import type { FeatureTipSeenId } from './feature-tips'
-import type { ContextualTourId } from './contextual-tours'
-import type { FeatureInteractionState } from './feature-interactions'
+import type { FeatureTipSeenId } from './feature-education/feature-tips'
+import type { ContextualTourId } from './feature-education/contextual-tours/contextual-tours'
+import type { FeatureInteractionState } from './feature-education/interactions/feature-interactions'
 import type { UsagePercentageDisplay } from './usage-percentage-display'
 import type { StatusBarUsageMode } from './status-bar-usage-mode'
 import type { StatusBarUsageFormat } from './status-bar-usage-format'
@@ -31,7 +31,7 @@ import type {
 } from './ui-chrome-types'
 import type { WorkspaceStatusDefinition } from './worktree/types'
 import type { PersistedAutomationHostFilter } from './automations/ownership/automation-host-filter'
-import type { PendingRuntimeRepoRemoval } from './pending-runtime-repo-removal'
+import type { PendingRuntimeRepoRemoval } from './remote-runtime/host-catalog/pending-runtime-repo-removal'
 
 export type PersistedUIState = {
   gitGraphFiltersByWorktree?: Record<string, GitHistoryRefs>

@@ -1,5 +1,5 @@
 import type { ExecutionHostId } from '../../../../src/shared/execution-host'
-import { PAGE_STORAGE_MAX_VALUE_CHARS } from '../../mobile-web-shell/page-storage-keys'
+import { PAGE_STORAGE_MAX_VALUE_CHARS } from '../../mobile-web-shell/page-storage/page-storage-keys'
 import { persistMirrored, readMirroredKeyOrStore } from '../../storage/mirrored-storage-keys'
 import {
   LAST_VISITED_WORKTREE_STORAGE_KEY,

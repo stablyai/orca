@@ -14,7 +14,7 @@ import { ProviderAcquisitionStarts } from '../provider-process/provider-acquisit
 import { RevisionedState } from '../runtime/events/revisioned-state'
 import { antigravityBrowserHelperWorks } from './antigravity-browser-helper'
 import { AcpLaunchGate } from '../acp/launch/acp-launch-gate'
-import { ANTIGRAVITY_ACP_HOME } from '../../shared/antigravity-session-origin'
+import { ANTIGRAVITY_ACP_HOME } from '../../shared/agent-session/lifecycle/provider-handles/antigravity-session-origin'
 import { ANTIGRAVITY_CHAT_HOME_FOLDER } from './antigravity-chat-home'
 import { antigravityUserHome, linkAntigravityUserSkills } from './antigravity-chat-user-skills'
 

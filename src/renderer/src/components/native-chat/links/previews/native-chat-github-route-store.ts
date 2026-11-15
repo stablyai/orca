@@ -1,5 +1,5 @@
 import type { Repo } from '../../../../../../shared/repo-types'
-import type { HostAuthorityKey } from '../../../../../../shared/host-authority'
+import type { HostAuthorityKey } from '../../../../../../shared/execution-host/host-authority'
 import type { GitHubIssueOrPRLink } from '../../../../../../shared/github/repositories/links'
 import {
   githubHostFromIdentityKey,

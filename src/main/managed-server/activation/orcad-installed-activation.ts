@@ -17,7 +17,7 @@ import { planOrcadUpdate } from './orcad-update-plan'
 import {
   type OrcadTerminalCensus,
   UNVERIFIABLE_ORCAD_TERMINAL_CENSUS
-} from '../../../shared/orcad-terminal-census'
+} from '../../../shared/remote-runtime/orcad-lifecycle/orcad-terminal-census'
 import { runFencedStop } from './orcad-fenced-stop'
 import {
   censusNeedsHostDaemonProtocols,
