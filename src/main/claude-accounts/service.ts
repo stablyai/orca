@@ -1,5 +1,6 @@
 import type {
   ClaudeAccountSignIn,
+  ClaudeApiEndpointAccountRequest,
   ClaudeRateLimitAccountsState,
   ClaudeSignInRequest
 } from '../../shared/managed-account-types'
@@ -98,6 +99,14 @@ export class ClaudeAccountService {
   /** Preserve saved accounts when cancelling sign-in. */
   cancelSignIn(signIn: Omit<ClaudeAccountSignIn, 'configDir'>): Promise<void> {
     return this.serializeMutation(() => this.registration.cancel(signIn))
+  }
+
+  saveApiEndpointAccount(
+    request: ClaudeApiEndpointAccountRequest,
+    accountId?: string
+  ): Promise<ClaudeRateLimitAccountsState> {
+    this.supersedePendingLogin()
+    return this.serializeMutation(() => this.registration.saveApiEndpoint(request, accountId))
   }
 
   removeAccount(accountId: string): Promise<ClaudeRateLimitAccountsState> {

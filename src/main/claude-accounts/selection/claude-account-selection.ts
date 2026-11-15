@@ -111,6 +111,10 @@ export class ClaudeAccountSelection {
       return savedWslClaudeAccountHome(account) ? summary : { ...summary, needsSignIn: true }
     }
     const home = this.runtimeAuth.router.accountHome(account.id)
+    // Its token sits in its folder, so there is no login to read.
+    if (account.authMethod === 'api-endpoint') {
+      return { ...summary, home }
+    }
     const login = readClaudeFolderLogin(claudeStateFile(home))
     if (login) {
       return {
@@ -134,6 +138,7 @@ export class ClaudeAccountSelection {
       managedAuthRuntime: account.managedAuthRuntime ?? 'host',
       wslDistro: account.wslDistro ?? null,
       authMethod: account.authMethod ?? 'unknown',
+      ...(account.apiEndpoint ? { apiEndpoint: account.apiEndpoint } : {}),
       organizationUuid: account.organizationUuid ?? null,
       organizationName: account.organizationName ?? null,
       createdAt: account.createdAt,
@@ -198,9 +203,13 @@ export class ClaudeAccountSelection {
       // CLI and paired clients bypass the renderer's sign-in check. An identity file alone can't
       // start Claude, and chats follow the selection on their next start.
       const summary = this.summarize(account)
+      // An endpoint account starts Claude with its own token, not a Claude login.
       if (
         summary.needsSignIn ||
-        (summary.home && !summary.runsOnSystemDefault && (await accountHoldsNoLogin(summary.home)))
+        (account.authMethod !== 'api-endpoint' &&
+          summary.home &&
+          !summary.runsOnSystemDefault &&
+          (await accountHoldsNoLogin(summary.home)))
       ) {
         throw new Error(CLAUDE_ACCOUNT_NEEDS_SIGN_IN_MESSAGE)
       }
