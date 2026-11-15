@@ -6,7 +6,7 @@
 // Everything is lowercase hex so a token also fits a DNS label (the per-link subdomain mode).
 
 const encoder = new TextEncoder()
-const keyCache = new Map<string, Promise<CryptoKey>>()
+const keyCache = new Map<string, Promise<CryptoKey>>() // xreq-ok: WebCrypto importKey, no request I/O
 
 /** Ticket = 16 random bytes (id) + 10 bytes of HMAC tag: 52 hex chars, under the 63-char DNS label cap. */
 const ID_BYTES = 16

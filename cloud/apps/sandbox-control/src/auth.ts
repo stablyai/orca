@@ -2,11 +2,11 @@
 // purpose=sandbox), verified against the auth JWKS — the billing Worker's pattern.
 import {
   createLocalJWKSet,
-  createRemoteJWKSet,
   jwtVerify,
   type JSONWebKeySet,
   type JWTVerifyGetKey
 } from 'jose'
+import { settledRemoteJWKSet } from './settled-jwks'
 import { z } from 'zod'
 import { authenticateDeviceToken, isDeviceToken } from './device-sessions'
 import { tokenPredatesRemoval } from './member-changes'
@@ -59,7 +59,7 @@ function keysFor(env: Env): JWTVerifyGetKey {
   let keys = keySets.get(source)
   if (!keys) {
     keys = env.SANDBOX_JWKS_URL
-      ? createRemoteJWKSet(new URL(env.SANDBOX_JWKS_URL))
+      ? settledRemoteJWKSet(new URL(env.SANDBOX_JWKS_URL))
       : createLocalJWKSet(JSON.parse(env.SANDBOX_JWKS ?? '{"keys":[]}') as JSONWebKeySet)
     keySets.set(source, keys)
   }
@@ -121,7 +121,7 @@ function stagingKeysFor(env: Env): { keys: JWTVerifyGetKey; issuer: string[] | u
     stagingKeys = {
       source,
       keys: env.SANDBOX_STAGING_JWKS_URL
-        ? createRemoteJWKSet(new URL(env.SANDBOX_STAGING_JWKS_URL))
+        ? settledRemoteJWKSet(new URL(env.SANDBOX_STAGING_JWKS_URL))
         : createLocalJWKSet(JSON.parse(env.SANDBOX_STAGING_JWKS ?? '{"keys":[]}') as JSONWebKeySet)
     }
   }
