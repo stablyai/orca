@@ -69,7 +69,7 @@ function PlansSkeleton(): React.JSX.Element {
       role="status"
       aria-label={t('auto.components.billing.plans.loading', 'Loading plans…')}
     >
-      <Skeleton className="h-[5.5rem] w-full rounded-xl" />
+      <Skeleton className="h-[5.5rem] w-full" />
       <div className="grid items-stretch gap-4 md:grid-cols-2">
         <SkeletonCard />
         <SkeletonCard />

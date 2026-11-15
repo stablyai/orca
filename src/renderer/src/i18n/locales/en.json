@@ -1504,7 +1504,6 @@
     "cloudConsole": {
       "manageInBrowser": "Manage in browser",
       "billing": {
-        "description": "Change your plan, see sandbox hours and invoices, and update payment.",
         "descriptionPlans": "See your plan and compare plans, then change it, see invoices and update payment in your browser.",
         "viewPlans": "View plans"
       },
@@ -21177,7 +21176,6 @@
           "continueInBrowser": "Continue in browser",
           "askAdmin": "Ask a team admin to upgrade.",
           "manageHint2": "Change seats or billing period, see invoices, or update payment.",
-          "continueHint": "Sign in on the web to choose seats and pay. One seat per team member.",
           "currentPlan": "Current plan",
           "entPriced2": "Priced for your team",
           "contactSales": "Contact sales",
@@ -21198,7 +21196,9 @@
           "retry": "Try again",
           "savedCopy": "Offline: plans as of {{date}}. Your browser shows current prices.",
           "eyebrow": "Orca Cloud",
-          "subtitleSubscribed2": "Your plan, its sandbox hours, and what Enterprise adds."
+          "subtitleSubscribed2": "Your plan, its sandbox hours, and what Enterprise adds.",
+          "adminsManage": "Your team’s owners and admins manage this plan.",
+          "continueHint2": "Sign in on the web to choose seats and pay."
         },
         "sandboxHoursUsedLabel": "Sandbox hours used",
         "sandboxHoursUsedMonth": "{{value0}} of {{value1}} sandbox hours used this month",

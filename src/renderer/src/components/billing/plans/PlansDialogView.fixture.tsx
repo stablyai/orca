@@ -99,12 +99,14 @@ const catalog: OrcaPlanCatalog = {
   ]
 }
 
-const live: OrcaPlanCatalogResult = {
+const live = {
   status: 'ok',
   catalog,
   source: 'live',
   fetchedAt: Date.UTC(2026, 10, 14)
-}
+} satisfies OrcaPlanCatalogResult
+
+const saved: OrcaPlanCatalogResult = { ...live, source: 'cache' }
 
 const noPlan: OrcaBillingEntitlement = {
   ...sampleTeam,
@@ -192,9 +194,7 @@ export const member = defineFixture({
 /** Offline, from main's saved copy of the catalog. */
 export const offlineSaved = defineFixture({
   width: 1280,
-  render: () => (
-    <Frame billing={ok(noPlan)} plans={{ ...live, source: 'cache' } as OrcaPlanCatalogResult} />
-  )
+  render: () => <Frame billing={ok(noPlan)} plans={saved} />
 })
 
 /** The catalog can't be read: billing's entitlement offers stand in (prices only, no bullets). */

@@ -2671,11 +2671,6 @@
       "permissionOverridesKept_one": "{{count}} agent still uses their own permission setting:",
       "permissionOverridesKept_other": "{{count}} agents still use their own permission setting:"
     },
-    "cloudConsole": {
-      "billing": {
-        "description": "Change your plan, see sandbox hours and invoices, and update payment."
-      }
-    },
     "diagnostics": {
       "errors": {
         "creatingDisabled": "creating review files is disabled",
