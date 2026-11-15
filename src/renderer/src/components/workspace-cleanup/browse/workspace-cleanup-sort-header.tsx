@@ -55,12 +55,16 @@ export function WorkspaceCleanupSortHeader({
       defaultValue_one: 'Select {{count}} safety-checked workspace'
     }
   )
+  // The control clears when anything displayed is checked, so it must announce that, and never "Select all 0".
+  const clearLabel = t('components.workspace.cleanup.browse.clearSelection', 'Clear selection')
+  const emptyLabel = t('components.workspace.cleanup.browse.noWorkspaces', 'No workspaces found.')
+  const controlLabel = anyChecked ? clearLabel : selectableCount > 0 ? selectAllLabel : emptyLabel
   return (
     <div className="flex h-13 items-center gap-2 border-b border-border bg-muted/25 px-4">
       <Checkbox
         checked={someSelected ? 'indeterminate' : allSelected}
         disabled={selectableCount === 0 && !anyChecked}
-        aria-label={selectAllLabel}
+        aria-label={controlLabel}
         // A checked or mixed header clears every displayed check; an empty one selects all.
         onCheckedChange={() => onToggleSelectAll(!anyChecked)}
       />
@@ -88,7 +92,7 @@ export function WorkspaceCleanupSortHeader({
         </div>
       ) : (
         <span className="min-w-0 flex-1 truncate text-xs text-muted-foreground">
-          {selectAllLabel}
+          {selectableCount > 0 ? selectAllLabel : emptyLabel}
         </span>
       )}
       <DropdownMenu modal={false}>

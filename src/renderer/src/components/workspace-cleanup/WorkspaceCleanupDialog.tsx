@@ -140,21 +140,34 @@ function WorkspaceCleanupDialogContent({
     listInteractedRef.current = true
   }, [])
   useEffect(() => {
-    // Wheel/scrollbar scrolling counts: the user is reading the list at its current positions.
-    rowsScrollElement?.addEventListener('scroll', markListInteracted, { passive: true })
-    return () => rowsScrollElement?.removeEventListener('scroll', markListInteracted)
+    // Only the user's own input counts: wheel, touch, scrollbar drag, keys, focus, pointerdown.
+    // Programmatic scrolls (virtualizer restore, scrollIntoView) must not suppress the settle sort.
+    const target = rowsScrollElement?.parentElement ?? rowsScrollElement
+    if (!target) {
+      return
+    }
+    const events = ['wheel', 'touchmove', 'pointerdown', 'keydown', 'focusin'] as const
+    for (const name of events) {
+      target.addEventListener(name, markListInteracted, { passive: true, capture: true })
+    }
+    return () => {
+      for (const name of events) {
+        target.removeEventListener(name, markListInteracted, { capture: true })
+      }
+    }
   }, [markListInteracted, rowsScrollElement])
   const liveRowByIdentity = useMemo(
     () => new Map(facetRows.allRows.map((row) => [row.identity, row])),
     [facetRows.allRows]
   )
   const orderResetKey = `${browse.sort.field}:${browse.sort.direction}:${JSON.stringify(browse.filters)}`
-  const { rows, resetOrder } = useWorkspaceCleanupHeldRows({
+  const { rows, releaseRows } = useWorkspaceCleanupHeldRows({
     liveRows: facetRows.rows,
     liveRowByIdentity,
     resetKey: orderResetKey,
     open,
     loading,
+    gitChecking: gitEvidence.pendingWorktreeIds.size > 0,
     // Re-sorting at settle is safe only while the user has not started working in the list.
     shouldResortAtSettle: () => selectedIdsRef.current.size === 0 && !listInteractedRef.current
   })
@@ -204,6 +217,9 @@ function WorkspaceCleanupDialogContent({
   const selectedCount = selectedCandidates.length
 
   const pruneSelectionToVisibleRows = useEffectEvent(() => {
+    if (!open || removal.confirming) {
+      return
+    }
     const next = new Set(
       [...selectedIds].filter(
         (identity) =>
@@ -218,28 +234,34 @@ function WorkspaceCleanupDialogContent({
   })
 
   useEffect(() => {
-    if (!open || removal.confirming) {
-      return
-    }
-    // Prune destructive selections only when user filters change; streaming reclassification must not silently deselect rows.
+    // Prune destructive selections only when user filters change. Streaming reclassification and
+    // returning from confirmation must not silently deselect rows the list still displays.
     pruneSelectionToVisibleRows()
-  }, [browse.filters, open, removal.confirming])
+  }, [browse.filters, open])
 
-  const ignoreHook = useWorkspaceCleanupIgnore(setSelectedIds)
-  // Ignore/Restore is an explicit action on a row, so the list re-derives its order and filter.
+  const { ignoreCandidate: recordIgnore, restoreCandidate: recordRestore } =
+    useWorkspaceCleanupIgnore(setSelectedIds)
+  // Ignore/Restore touches only that row: once the change is committed it leaves or re-enters
+  // the list (at the end), and nothing else moves.
   const ignoreCandidate = useCallback(
     (candidate: WorkspaceCleanupCandidate) => {
-      ignoreHook.ignoreCandidate(candidate)
-      resetOrder()
+      void recordIgnore(candidate).then((done) => {
+        if (done) {
+          releaseRows([getWorkspaceCleanupCandidateIdentity(candidate)])
+        }
+      })
     },
-    [ignoreHook, resetOrder]
+    [recordIgnore, releaseRows]
   )
   const restoreCandidate = useCallback(
     (candidate: WorkspaceCleanupCandidate) => {
-      ignoreHook.restoreCandidate(candidate)
-      resetOrder()
+      void recordRestore(candidate).then((done) => {
+        if (done) {
+          releaseRows([getWorkspaceCleanupCandidateIdentity(candidate)])
+        }
+      })
     },
-    [ignoreHook, resetOrder]
+    [recordRestore, releaseRows]
   )
 
   const toggleExpandedRow = useCallback((identity: string) => {
@@ -349,11 +371,7 @@ function WorkspaceCleanupDialogContent({
             />
 
             <ScrollArea className="min-h-0 flex-1" viewportRef={setRowsScrollElement}>
-              <div
-                onPointerOver={markListInteracted}
-                onFocusCapture={markListInteracted}
-                onKeyDown={markListInteracted}
-              >
+              <div>
                 {initialLoading ? <WorkspaceCleanupSkeletonRows /> : null}
                 <WorkspaceCleanupRowList
                   rows={rows}

@@ -59,7 +59,7 @@ function render(overrides: { gitEvidencePending: boolean; dirty: boolean }): HTM
 // jsdom has no layout, so assert the reservation itself: one fixed-height, fixed-width,
 // non-wrapping slot holds every git state, so evidence swaps contents without resizing the row.
 function gitSlotClass(container: HTMLElement): string | undefined {
-  return container.querySelector('span.h-5.w-60')?.className
+  return container.querySelector('[data-workspace-cleanup-git-slot]')?.className
 }
 
 describe('CandidateRow git status slot', () => {
@@ -69,10 +69,12 @@ describe('CandidateRow git status slot', () => {
     const clean = gitSlotClass(render({ gitEvidencePending: false, dirty: false }))
     act(() => root?.unmount())
     const dirty = gitSlotClass(render({ gitEvidencePending: false, dirty: true }))
+    // A stray JS comment inside JSX would render as visible text.
+    expect(document.body.textContent).not.toContain('//')
     expect(checking).toBeDefined()
     expect(clean).toBe(checking)
     expect(dirty).toBe(checking)
     expect(checking).toContain('overflow-hidden')
-    expect(checking).toContain('shrink-0')
+    expect(checking).toContain('h-5')
   })
 })
