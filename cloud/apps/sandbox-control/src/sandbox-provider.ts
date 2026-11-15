@@ -106,6 +106,13 @@ export type SandboxProviderApi = {
   updateNetworkPolicy(sessionId: string, policy: NetworkPolicy): Promise<void>
   /** Sets the full exposed-port list on the sandbox (live on a running session); returns its routes. */
   updatePorts(name: string, ports: number[]): Promise<ProviderRoute[]>
+  /**
+   * The persistent record's network policy (A4, probe 2: the last session policy otherwise survives a stop
+   * or timeout and is re-applied on resume). Allowed while stopped, unlike updateNetworkPolicy.
+   */
+  updateRecordNetworkPolicy?(name: string, policy: NetworkPolicy): Promise<void>
+  /** Dev audit only (provider-policy-audit): the raw record and session bodies. Never returned or logged. */
+  readRawForAudit?(name: string): Promise<{ record: string; session: string | null; state: string | null; sessionStatus: string | null }>
   runCommand(sessionId: string, params: RunCommandParams): Promise<CommandResult>
   /** Provider-side snapshot expiry after last use (archive TTL backstop). */
   updateSnapshotExpiration(name: string, expirationMs: number): Promise<void>

@@ -819,14 +819,46 @@ export async function rewriteLivePolicy(deps: LifecycleDeps, row: SandboxRow, se
  */
 export async function compileSandboxPolicy(
   deps: LifecycleDeps,
-  row: SandboxRow
+  row: SandboxRow,
+  options: { tokenFree?: boolean } = {}
 ): Promise<{ policy: ReturnType<typeof egressPolicy>; gitExpiresAt: number | null }> {
+  if (options.tokenFree) {
+    // A4: what a stopped sandbox's record keeps. The same routes, but nothing the firewall itself would swap:
+    // every firewall value answered by the firewall (respond), no App token. Proxy routes hold no values anyway.
+    const [members, firewall] = await Promise.all([memberPlaceholdersFor(deps, row), firewallInputsFor(deps, row)])
+    const scrubbed: FirewallInputs | null = firewall
+      ? {
+          ...firewall,
+          classes: new Set([...firewall.classes].filter((name) => name !== 'github_app')),
+          accounts: firewall.accounts.map((account) => ({ ...account, authorization: null, accountId: null })),
+          secrets: new Map([...firewall.secrets.keys()].map((name) => [name, null]))
+        }
+      : null
+    return { policy: egressPolicy(deps, row, undefined, members, scrubbed), gitExpiresAt: null }
+  }
   const [members, firewall, minted] = await Promise.all([
     memberPlaceholdersFor(deps, row),
     firewallInputsFor(deps, row),
     deps.github && row.repo_url ? deps.github.tokenForRepo(row.repo_url, row.account_id) : Promise.resolve(null)
   ])
   return { policy: egressPolicy(deps, row, minted?.token, members, firewall), gitExpiresAt: minted?.expiresAt ?? null }
+}
+
+/**
+ * A4 primitive (probe 2: the last session policy survives a stop and is re-applied on resume): write the
+ * token-free compile to the stopped sandbox's persistent record. Returns the provider's outcome.
+ */
+export async function scrubRecordPolicy(deps: LifecycleDeps, row: SandboxRow): Promise<'scrubbed' | 'unsupported' | { failed: string }> {
+  if (!deps.provider.updateRecordNetworkPolicy) {
+    return 'unsupported'
+  }
+  try {
+    const { policy } = await compileSandboxPolicy(deps, row, { tokenFree: true })
+    await deps.provider.updateRecordNetworkPolicy(row.provider_name, policy)
+    return 'scrubbed'
+  } catch (error) {
+    return { failed: error instanceof ProviderError ? (error.code ?? `status_${error.status}`) : error instanceof Error ? error.name : 'unknown' }
+  }
 }
 
 /**
