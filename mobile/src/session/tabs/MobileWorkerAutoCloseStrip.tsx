@@ -1,5 +1,5 @@
-import { Presence } from '../../components/AutoHeight'
-import { HostRouteNoticeBanner } from '../../components/HostRouteNoticeBanner'
+import { Presence } from '../../components/motion/AutoHeight'
+import { HostRouteNoticeBanner } from '../../components/host-connection/HostRouteNoticeBanner'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import { formatWorkerAutoCloseCountdown } from '../../../../src/shared/orchestration/workers/worker-auto-close'
 import { useMobileWorkerAutoClose, workerSubjectOf } from './mobile-worker-auto-close'

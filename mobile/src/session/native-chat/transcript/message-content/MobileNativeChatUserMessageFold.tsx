@@ -4,7 +4,7 @@ import {
   NATIVE_CHAT_USER_MESSAGE_MAX_UNFOLDED_LINES,
   nativeChatUserMessageFolds
 } from '../../../../../../src/shared/native-chat/transcript/folding/native-chat-user-message-fold'
-import { styles as markdownStyles } from '../../../../components/mobile-markdown-styles'
+import { styles as markdownStyles } from '../../../../components/markdown/mobile-markdown-styles'
 import { colors, spacing, typography, pressedStyle } from '../../../../theme/mobile-theme'
 import { themedStyleSheet } from '../../../../theme/themed-styles'
 import { useMobileColorScheme } from '../../../../theme/use-mobile-color-scheme'

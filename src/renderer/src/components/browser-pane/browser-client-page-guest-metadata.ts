@@ -1,7 +1,7 @@
 import type { BrowserLoadError } from '../../../../shared/browser-workspace-types'
 import type { BrowserPageFailLoadEvent } from './describe-page/browser-page-types'
 import { resolveBrowserWebviewLoadFailure } from './navigate/browser-webview-load-failure'
-import { cachedBrowserGuestMetadata } from './host-guest/browser-guest-metadata-cache'
+import { cachedBrowserGuestMetadata } from './host-guest/metadata/browser-guest-metadata-cache'
 
 export function createBrowserClientPageLoadFailureHandler(
   webview: Electron.WebviewTag,

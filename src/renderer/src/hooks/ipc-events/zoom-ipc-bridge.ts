@@ -10,7 +10,7 @@ import { dispatchZoomLevelChanged } from '@/app-shell/chrome/zoom-events'
 
 import { useAppStore } from '../../store/index'
 import { focusedBrowserPageId, resolveZoomTarget } from '../resolve-zoom-target'
-import { dispatchBrowserPageZoom } from '@/components/browser-pane/host-guest/browser-page-zoom'
+import { dispatchBrowserPageZoom } from '@/components/browser-pane/host-guest/viewport/browser-page-zoom'
 import {
   requestFrontDialogViewerZoom,
   requestViewerZoom

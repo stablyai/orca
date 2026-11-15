@@ -1,8 +1,8 @@
 // @vitest-environment happy-dom
-import type * as BrowserFocusModule from '@/components/browser-pane/host-guest/browser-focus'
+import type * as BrowserFocusModule from '@/components/browser-pane/host-guest/input/browser-focus'
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
-import { useAppStore } from '@/store'
+import { useAppStore } from '@/store/index'
 import { NativeChatInlineVisual } from './NativeChatInlineVisual'
 import { NativeChatVisualOwnerProvider, useNativeChatVisualOwner } from './native-chat-visual-owner'
 import { TooltipProvider } from '@/components/ui/tooltip'
@@ -24,7 +24,7 @@ vi.mock('../images/native-chat-image-visibility', () => ({
     return () => {}
   }
 }))
-vi.mock('@/components/browser-pane/host-guest/browser-focus', async (importOriginal) => ({
+vi.mock('@/components/browser-pane/host-guest/input/browser-focus', async (importOriginal) => ({
   ...(await importOriginal<typeof BrowserFocusModule>()),
   requestBrowserFocus: vi.fn()
 }))

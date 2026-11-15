@@ -1,3 +1,4 @@
+import type { AgentSessionForkedFromMark } from '../agent-session-fork-name'
 import type {
   AgentJournalApprovalMatchedAskRule,
   AgentJournalApprovalSubject
@@ -296,7 +297,7 @@ type AgentJournalStatusItemFields = {
    *  host may name one this build does not know), so read it with `readAgentSessionOrcaStop`. */
   orcaStop?: { cause: string }
   /** On the derived "Forked from" row: the chat this one was forked from. */
-  forkedFrom?: { sessionId: string }
+  forkedFrom?: AgentSessionForkedFromMark
 }
 
 /** A status row that reports no failure; its text is its writer's own. */

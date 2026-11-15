@@ -651,6 +651,7 @@
         "fontKeywordTypeface": "yazı tipi",
         "fontKeywordTypography": "tipografi",
         "inheritFont": "IDE yazı tipiyle aynı",
+        "systemFont": "Sistem yazı tipi",
         "fontPreviewLabel": "Sohbet yazı tipi önizlemesi",
         "fontPreview": "Pijamalı hasta yağız şoföre çabucak güvendi.",
         "title": "Sohbet arayüzü",
@@ -3745,6 +3746,7 @@
             "1e4b81d892": "Thump",
             "86af8d938c": "Bong",
             "80f7cc95b3": "Çift Ton",
+            "silent": "Sessiz",
             "017abebfa6": "Sistem Varsayılanı"
           }
         }
@@ -3933,7 +3935,6 @@
         },
         "pane": {
           "CloseTerminalDialog": {
-            "automatic_resume_warning": "Bu terminal otomatik olarak devam etmeyecek. Daha sonra devam ettirmek için iptal edin ve çalışma alanını uyku moduna alın.",
             "1d1a7a9c1f": "İptal",
             "stop_agent_title": "Bu ajan durdurulsun mu?",
             "stop_command_title": "Çalışan komut durdurulsun mu?",
@@ -4604,7 +4605,6 @@
             "c8857b40f7": "Kullanım verilerini yenile",
             "75ded02687": "Hesapları Yönet…",
             "ff0fbe9311": "Etkin",
-            "7657e3db9c": "Codex Hesabı",
             "38b5647724": "Codex kullanım çalışma zamanı",
             "ba55303942": "Codex ayrıntılarını ve hesap değiştiriciyi aç",
             "c35af53b73": "Oturum aç",
@@ -4612,7 +4612,6 @@
             "5c938d39ac": "hf",
             "54e8d6bb2d": "Fable",
             "a79c64f87e": "Fable",
-            "d450654fa2": "Claude Hesabı",
             "11e2354daf": "Claude kullanım çalışma zamanı",
             "3dd7ddfae1": "Claude ayrıntılarını ve hesap değiştiriciyi aç",
             "59c6e7b4e0": "Görünür oturumlar şimdi yeniden başlar. Diğerleri, worktree'leri etkin hale geldiğinde yeniden başlar.",
@@ -4901,7 +4900,8 @@
             "compact": "Kompakt",
             "detailedTooltip": "Çubuklar, etiketler ve yüzdelerle tam kullanım",
             "compactTooltip": "Özet kullanım: sağlayıcı başına tek özet",
-            "footerDetailAria": "Kullanım altbilgi ayrıntısı"
+            "footerDetailAria": "Kullanım altbilgi ayrıntısı",
+            "notChecked": "Kontrol edilmedi"
           },
           "RemoteServerUpdateStatusSegment": {
             "updating": "{{value0}}/{{value1}} güncelleniyor",
@@ -5034,11 +5034,6 @@
             "behind": "{{behind}} geride",
             "activeAgents_other": "{{count}} etkin ajan",
             "activeAgents_one": "{{count}} etkin ajan",
-            "completedAgents_other": "{{count}} tamamlanmış ajan",
-            "completedAgents_one": "{{count}} tamamlanmış ajan",
-            "activeAndCompletedAgents": "{{active}}, {{completed}}",
-            "completedAgentsRetained_other": "{{count}} tamamlanmış ajan tutuluyor",
-            "completedAgentsRetained_one": "{{count}} tamamlanmış ajan tutuluyor",
             "noTrackedAgents": "Çalışan izlenen ajan yok",
             "noTerminalTabs": "Terminal sekmesi yok",
             "liveTerminalTabs_other": "{{count}} terminal sekmesinden {{live}} tanesi etkin",
@@ -5091,12 +5086,17 @@
           "AccountSwitchList": {
             "used": "Kullanılan",
             "left": "Kalan",
-            "reset": "Sıfırlanma"
+            "reset": "Sıfırlanma",
+            "accounts": "Hesaplar"
           },
           "InlineUsageBars": {
             "now": "şimdi",
             "resetsNow": "şimdi sıfırlanır",
             "resetsIn": "{{duration}} içinde sıfırlanır"
+          },
+          "UsageDisplayToggle": {
+            "showRemaining": "Kalan kullanımı göster",
+            "showUsed": "Kullanılan miktarı göster"
           }
         }
       },
@@ -19449,7 +19449,8 @@
         "safetyReviewApproved": "{{agent}} bu işleme onay verdi. Ayrıntıları görüntüleyin.",
         "safetyReview": "{{agent}} bir güvenlik incelemesi uyarısı bildirdi. Ayrıntıları görüntüleyin.",
         "truncatedResponse": "Sağlayıcı yanıtı kısaltıldı (özgün boyut: {{bytes}} bayt).",
-        "forkedFrom": "Çatallandığı kaynak"
+        "forkedFrom": "Çatallandığı kaynak",
+        "forkedFromUnknown": "Başka bir sohbetten çatallandı"
       },
       "composer": {
         "planMode": "Planla",
@@ -20200,7 +20201,12 @@
         "unconfirmedDetail": "Yine de açılmış olabilir. Yeniden çatallamadan önce Oturum Geçmişini kontrol edin.",
         "failed": "{{agent}} bu sohbeti çatallayamadı",
         "failedDetail": "Sohbetiniz değişmedi. Tekrar deneyin.",
-        "commandWorking": "{{agent}} yanıt verirken çatallanamaz. Yanıt bittiğinde /fork komutunu yeniden çalıştırın."
+        "commandWorking": "{{agent}} yanıt verirken çatallanamaz. Yanıt bittiğinde /fork komutunu yeniden çalıştırın.",
+        "mark": "Çatal ·",
+        "markedName": "{{mark}} {{name}}",
+        "accessibleName": "Çatal: {{name}}",
+        "sourceTooltip": "{{name}} sohbetinin çatalı",
+        "unknownSourceTooltip": "Başka bir sohbetin çatalı"
       },
       "cardKindHidden": {
         "description": "Bunu istediğiniz zaman şuradan değiştirebilirsiniz:",
@@ -20316,7 +20322,7 @@
           "pinned": "Sabitlendi",
           "unread": "Okunmadı",
           "comment": "Yorumu var",
-          "retainedDoneAgents": "Tamamlanmış ajan dökümleri",
+          "finishedAgents": "Tamamlanmış ajanlar",
           "contextPresence": "Açık sekmeler, terminaller, yorumlar",
           "completelyEmpty": "Kaybedecek bir şey yok",
           "noWorkspaces": "Çalışma alanı bulunamadı.",
@@ -20434,7 +20440,7 @@
               "comment": "Yorum",
               "prunable": "Budanabilir",
               "locked": "Kilitli",
-              "retainedAgents": "Tamamlanmış ajanlar"
+              "finishedAgents": "Tamamlanmış ajanlar"
             }
           },
           "forceDeleteRisk_other": "Şu anda {{count}} çalışma alanında risk var ve bunların zorla silinmesi gerekebilir",

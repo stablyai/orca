@@ -1,4 +1,4 @@
-import { useAppStore } from '@/store'
+import { useAppStore } from '@/store/index'
 import type { AppState } from '@/store/types'
 import {
   closeTerminalTab,
@@ -10,7 +10,7 @@ import {
   type TerminalTabRetirementState
 } from '@/store/terminals/retirement/terminal-tab-retirement'
 import { reserveTerminalRetirementTeardowns } from '@/store/terminals/retirement/terminal-retirement-teardown-reservation'
-import { notifyDaemonSessionInventoryInvalidated } from '../status-bar/daemon-session-inventory-invalidation'
+import { notifyDaemonSessionInventoryInvalidated } from '../status-bar/resources/inventory/daemon-session-inventory-invalidation'
 
 const CLOSE_BATCH_SIZE = 2
 

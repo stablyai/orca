@@ -705,6 +705,7 @@
         "fontKeywordTypeface": "гарнитура",
         "fontKeywordTypography": "типографика",
         "inheritFont": "Как в IDE",
+        "systemFont": "Системный шрифт",
         "fontPreviewLabel": "Предпросмотр шрифта чата",
         "fontPreview": "Съешь же ещё этих мягких французских булок, да выпей чаю.",
         "title": "Интерфейс чата",
@@ -3867,6 +3868,7 @@
             "1e4b81d892": "Удар",
             "86af8d938c": "Гонг",
             "80f7cc95b3": "Два тона",
+            "silent": "Без звука",
             "017abebfa6": "Системный звук"
           }
         }
@@ -4055,7 +4057,6 @@
         },
         "pane": {
           "CloseTerminalDialog": {
-            "automatic_resume_warning": "Этот терминал не восстановится автоматически. Отмените закрытие и переведите рабочее пространство в сон, чтобы продолжить позже.",
             "1d1a7a9c1f": "Отмена",
             "stop_agent_title": "Остановить этого агента?",
             "stop_command_title": "Остановить выполняемую команду?",
@@ -4752,7 +4753,6 @@
             "c8857b40f7": "Обновить данные использования",
             "75ded02687": "Управление учётными записями…",
             "ff0fbe9311": "Активен",
-            "7657e3db9c": "Учётная запись Codex",
             "38b5647724": "Среда выполнения для учёта использования Codex",
             "ba55303942": "Открыть подробности Codex и выбор учётной записи",
             "c35af53b73": "Войти",
@@ -4760,7 +4760,6 @@
             "5c938d39ac": "нед.",
             "54e8d6bb2d": "Fable",
             "a79c64f87e": "Fable",
-            "d450654fa2": "Учётная запись Claude",
             "11e2354daf": "Среда выполнения для учёта использования Claude",
             "3dd7ddfae1": "Открыть подробности Claude и выбор учётной записи",
             "59c6e7b4e0": "Видимые сессии перезапустятся сейчас. Остальные — при открытии их рабочего дерева.",
@@ -5063,7 +5062,8 @@
             "compact": "Компактно",
             "detailedTooltip": "Полные данные с полосами, подписями и процентами",
             "compactTooltip": "Сжатый вид: одна сводка на провайдера",
-            "footerDetailAria": "Сведения об использовании в нижней части панели"
+            "footerDetailAria": "Сведения об использовании в нижней части панели",
+            "notChecked": "Не проверено"
           },
           "RemoteServerUpdateStatusSegment": {
             "updating": "Обновление {{value0}}/{{value1}}",
@@ -5220,15 +5220,6 @@
             "activeAgents_few": "{{count}} активных агента",
             "activeAgents_many": "{{count}} активных агентов",
             "activeAgents_other": "{{count}} активного агента",
-            "completedAgents_one": "{{count}} завершённый агент",
-            "completedAgents_few": "{{count}} завершённых агента",
-            "completedAgents_many": "{{count}} завершённых агентов",
-            "completedAgents_other": "{{count}} завершённого агента",
-            "activeAndCompletedAgents": "{{active}}, {{completed}}",
-            "completedAgentsRetained_one": "Сохранён {{count}} завершённый агент",
-            "completedAgentsRetained_few": "Сохранены {{count}} завершённых агента",
-            "completedAgentsRetained_many": "Сохранено {{count}} завершённых агентов",
-            "completedAgentsRetained_other": "Сохранено {{count}} завершённого агента",
             "noTrackedAgents": "Нет запущенных отслеживаемых агентов",
             "noTerminalTabs": "Нет вкладок терминала",
             "liveTerminalTabs_one": "Активных вкладок терминала: {{live}} из {{count}}",
@@ -5295,12 +5286,17 @@
           "AccountSwitchList": {
             "used": "Использовано",
             "left": "Осталось",
-            "reset": "Сброс"
+            "reset": "Сброс",
+            "accounts": "Аккаунты"
           },
           "InlineUsageBars": {
             "now": "сейчас",
             "resetsNow": "сброс сейчас",
             "resetsIn": "сброс через {{duration}}"
+          },
+          "UsageDisplayToggle": {
+            "showRemaining": "Показать оставшийся лимит",
+            "showUsed": "Показать использованный лимит"
           }
         }
       },
@@ -20038,7 +20034,8 @@
         "safetyReview": "{{agent}} сообщил о предупреждении проверки безопасности. Подробнее.",
         "truncatedResponse": "Ответ поставщика обрезан (исходный размер: {{bytes}} байт).",
         "modelFallback": "Claude переключил модель: {{from}} → {{to}}.",
-        "forkedFrom": "Ответвление от"
+        "forkedFrom": "Ответвление от",
+        "forkedFromUnknown": "Ответвление от другого чата"
       },
       "composer": {
         "planMode": "Планирование",
@@ -20881,7 +20878,12 @@
         "unconfirmedDetail": "Возможно, оно всё же открылось. Проверьте историю сеансов, прежде чем повторить попытку.",
         "failed": "{{agent}} не удалось создать ответвление этого чата",
         "failedDetail": "Ваш чат не изменился. Попробуйте ещё раз.",
-        "commandWorking": "Нельзя создать ответвление, пока {{agent}} отвечает. Запустите /fork снова, когда ответ завершится."
+        "commandWorking": "Нельзя создать ответвление, пока {{agent}} отвечает. Запустите /fork снова, когда ответ завершится.",
+        "mark": "Форк ·",
+        "markedName": "{{mark}} {{name}}",
+        "accessibleName": "Форк: {{name}}",
+        "sourceTooltip": "Ответвление от {{name}}",
+        "unknownSourceTooltip": "Ответвление от другого чата"
       },
       "cardKindHidden": {
         "description": "Вы можете изменить это в любое время в разделе",
@@ -20999,7 +21001,7 @@
           "pinned": "Закреплено",
           "unread": "Непрочитанные",
           "comment": "Есть комментарий",
-          "retainedDoneAgents": "Истории завершённых агентов",
+          "finishedAgents": "Завершённые агенты",
           "contextPresence": "Открытые вкладки, терминалы, комментарии",
           "completelyEmpty": "Нечего терять",
           "noWorkspaces": "Рабочие пространства не найдены.",
@@ -21117,7 +21119,7 @@
               "comment": "Комментарий",
               "prunable": "Можно очистить",
               "locked": "Заблокировано",
-              "retainedAgents": "Завершённые агенты"
+              "finishedAgents": "Завершённые агенты"
             }
           },
           "forceDeleteRisk_one": "Для {{count}} рабочего пространства сейчас выявлены риски; может потребоваться принудительное удаление",

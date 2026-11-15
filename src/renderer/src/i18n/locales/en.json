@@ -755,6 +755,7 @@
         "fontKeywordTypeface": "typeface",
         "fontKeywordTypography": "typography",
         "inheritFont": "Same as IDE font",
+        "systemFont": "System font",
         "fontPreviewLabel": "Chat font preview",
         "fontPreview": "The quick brown fox jumps over the lazy dog.",
         "title": "Chat UI",
@@ -4371,6 +4372,7 @@
             "1e4b81d892": "Thump",
             "86af8d938c": "Bong",
             "80f7cc95b3": "Two Tone",
+            "silent": "Silent",
             "017abebfa6": "System Default"
           }
         }
@@ -4589,7 +4591,6 @@
         },
         "pane": {
           "CloseTerminalDialog": {
-            "automatic_resume_warning": "This terminal will not resume automatically. Cancel and put the workspace to sleep to resume it later.",
             "1d1a7a9c1f": "Cancel",
             "stop_agent_title": "Stop this agent?",
             "stop_command_title": "Stop running command?",
@@ -5269,7 +5270,6 @@
             "c8857b40f7": "Refresh usage data",
             "75ded02687": "Manage Accounts…",
             "ff0fbe9311": "Active",
-            "7657e3db9c": "Codex Account",
             "38b5647724": "Codex usage runtime",
             "ba55303942": "Open Codex details and account switcher",
             "c35af53b73": "Sign in",
@@ -5277,7 +5277,6 @@
             "5c938d39ac": "wk",
             "54e8d6bb2d": "Fable",
             "a79c64f87e": "Fable",
-            "d450654fa2": "Claude Account",
             "11e2354daf": "Claude usage runtime",
             "3dd7ddfae1": "Open Claude details and account switcher",
             "59c6e7b4e0": "Visible sessions restart now. Others restart when their worktree becomes active.",
@@ -5570,7 +5569,8 @@
             "compact": "Compact",
             "detailedTooltip": "Full usage with bars, labels, and percentages",
             "compactTooltip": "Condensed usage: one summary per provider",
-            "footerDetailAria": "Usage footer detail"
+            "footerDetailAria": "Usage footer detail",
+            "notChecked": "Not checked"
           },
           "RemoteServerUpdateStatusSegment": {
             "updating": "Updating {{value0}}/{{value1}}",
@@ -5703,11 +5703,6 @@
             "behind": "{{behind}} behind",
             "activeAgents_one": "{{count}} active agent",
             "activeAgents_other": "{{count}} active agents",
-            "completedAgents_one": "{{count}} completed agent",
-            "completedAgents_other": "{{count}} completed agents",
-            "activeAndCompletedAgents": "{{active}}, {{completed}}",
-            "completedAgentsRetained_one": "{{count}} completed agent retained",
-            "completedAgentsRetained_other": "{{count}} completed agents retained",
             "noTrackedAgents": "No tracked agents running",
             "noTerminalTabs": "No terminal tabs",
             "liveTerminalTabs_one": "{{live}} live of {{count}} terminal tab",
@@ -5760,12 +5755,17 @@
           "AccountSwitchList": {
             "used": "Used",
             "left": "Left",
-            "reset": "Reset"
+            "reset": "Reset",
+            "accounts": "Accounts"
           },
           "InlineUsageBars": {
             "now": "now",
             "resetsNow": "resets now",
             "resetsIn": "resets in {{duration}}"
+          },
+          "UsageDisplayToggle": {
+            "showRemaining": "Show remaining usage",
+            "showUsed": "Show used usage"
           }
         }
       },
@@ -8974,7 +8974,19 @@
           "f2765fbbf6": "GitLab API budget",
           "8cdbaf4b03": "Jira key casing",
           "fdbcd676b0": "GitHub API budget",
-          "074f7aa0d6": "Default compare base"
+          "074f7aa0d6": "Default compare base",
+          "prAutoRefreshUpdateFailed": "Could not update PR auto-refresh on this host.",
+          "prAutoRefreshDefault": "Automatic",
+          "prAutoRefreshReduced": "Less often",
+          "prAutoRefreshOff": "Manual",
+          "prAutoRefreshAbout": "About PR Updates",
+          "prAutoRefreshHintAutomatic": "Keeps pull requests and checks up to date.",
+          "prAutoRefreshHintLessOften": "Checks GitHub less often. Useful if you hit GitHub rate limits.",
+          "prAutoRefreshTitle": "PR Updates",
+          "prAutoRefreshDescription": "How often Orca checks GitHub for pull request and CI changes.",
+          "prAutoRefreshHintOff": "Updates when you push or click Refresh.",
+          "prAutoRefreshUnsupportedHost": "Update Orca on {{host}} to change this",
+          "prAutoRefreshUnknownHost": "the selected server"
         },
         "HiddenExperimentalGroup": {
           "7c4e18d2f6": "Arms the bold-glitch capture gestures on this machine: {{samplingShortcut}} starts a sampling burst; {{captureShortcut}} captures pane evidence to disk.",
@@ -20699,7 +20711,8 @@
         "safetyReview": "{{agent}} reported a safety review warning. View details.",
         "truncatedResponse": "Provider response truncated (original size: {{bytes}} bytes).",
         "modelFallback": "Claude switched models: {{from}} → {{to}}.",
-        "forkedFrom": "Forked from"
+        "forkedFrom": "Forked from",
+        "forkedFromUnknown": "Forked from another chat"
       },
       "composer": {
         "send": "Send",
@@ -21542,7 +21555,12 @@
         "commandDescription": "Fork this chat from its latest response",
         "commandWorking": "Can’t fork while {{agent}} is replying. Run /fork again when it finishes.",
         "commandNothing": "There’s no response to fork yet.",
-        "commandTakesNoText": "Send /fork on its own, then write in the new chat."
+        "commandTakesNoText": "Send /fork on its own, then write in the new chat.",
+        "mark": "Fork ·",
+        "markedName": "{{mark}} {{name}}",
+        "accessibleName": "Fork: {{name}}",
+        "sourceTooltip": "Fork of {{name}}",
+        "unknownSourceTooltip": "Fork of another chat"
       },
       "usage": {
         "description": "Show usage for this chat’s Codex account",
@@ -21697,7 +21715,7 @@
           "pinned": "Pinned",
           "unread": "Unread",
           "comment": "Has comment",
-          "retainedDoneAgents": "Finished agent transcripts",
+          "finishedAgents": "Finished agents",
           "contextPresence": "Open tabs, terminals, comments",
           "completelyEmpty": "Nothing left to lose",
           "noWorkspaces": "No workspaces found.",
@@ -21815,7 +21833,7 @@
               "comment": "Comment",
               "prunable": "Prunable",
               "locked": "Locked",
-              "retainedAgents": "Finished agents"
+              "finishedAgents": "Finished agents"
             }
           },
           "forceDeleteRisk_one": "{{count}} workspace currently shows risk and may need a force delete",

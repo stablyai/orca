@@ -16,7 +16,6 @@ import {
 } from '../../../../../../shared/agent-status/identity/agent-status-worktree-attribution'
 
 import type { AgentStatusOrchestrationContext } from '../../../../../../shared/agent-status/contracts/agent-status-types'
-import { agentVerdictDisplayMark } from '../../../../../../shared/agent-status/lifecycle/agent-main-agent-verdict'
 import { applyAgentPaneActivityFlags } from '../../../../../../shared/worktree-status-rollup'
 import { getTabIdToWorktreeId } from '@/lib/workspace/tabs/tab-worktree-index'
 
@@ -31,9 +30,6 @@ export type WorktreeAgentActivitySummary = {
   /** A fresh end Orca cannot prove, likewise never a clean done. */
   hasUnconfirmed: boolean
   hasLiveDone: boolean
-  hasRetainedDone: boolean
-  /** A departed agent's failure; unlike `hasFailed` it yields to live work. */
-  hasRetainedFailed: boolean
   agentStatusPaneIdsByTabId: Record<string, ReadonlySet<string>>
   /** Stale rows suppress generated permission labels while preserving native title fallback. */
   stalePaneIdsByTabId: Record<string, ReadonlySet<string>>
@@ -49,8 +45,6 @@ const EMPTY_SUMMARY: WorktreeAgentActivitySummary = {
   hasInterrupted: false,
   hasUnconfirmed: false,
   hasLiveDone: false,
-  hasRetainedDone: false,
-  hasRetainedFailed: false,
   agentStatusPaneIdsByTabId: EMPTY_AGENT_STATUS_PANE_IDS_BY_TAB_ID,
   stalePaneIdsByTabId: EMPTY_AGENT_STATUS_PANE_IDS_BY_TAB_ID
 }
@@ -59,10 +53,7 @@ type AgentActivityTabsByWorktree = Record<string, readonly { id: string }[]>
 
 export type AgentActivityInput = Pick<
   AppState,
-  | 'agentStatusEpoch'
-  | 'agentStatusByPaneKey'
-  | 'migrationUnsupportedByPtyId'
-  | 'retainedAgentsByPaneKey'
+  'agentStatusEpoch' | 'agentStatusByPaneKey' | 'migrationUnsupportedByPtyId'
 > &
   VisibleOrchestrationState & {
     tabsByWorktree: AgentActivityTabsByWorktree
@@ -75,7 +66,6 @@ type AgentActivityCache = {
   agentStatusByPaneKey: AgentActivityInput['agentStatusByPaneKey']
   agentStatusEpoch: number
   migrationUnsupportedByPtyId: AppState['migrationUnsupportedByPtyId']
-  retainedAgentsByPaneKey: AppState['retainedAgentsByPaneKey']
   runtimeAgentOrchestrationByPaneKey: AppState['runtimeAgentOrchestrationByPaneKey'] | undefined
   summaries: Map<string, WorktreeAgentActivitySummary>
 }
@@ -100,7 +90,6 @@ function getWorktreeAgentActivitySummaries(
     agentActivityCache.agentStatusByPaneKey === state.agentStatusByPaneKey &&
     agentActivityCache.agentStatusEpoch === state.agentStatusEpoch &&
     agentActivityCache.migrationUnsupportedByPtyId === state.migrationUnsupportedByPtyId &&
-    agentActivityCache.retainedAgentsByPaneKey === state.retainedAgentsByPaneKey &&
     agentActivityCache.runtimeAgentOrchestrationByPaneKey === runtimeAgentOrchestrationByPaneKey
   ) {
     return agentActivityCache.summaries
@@ -162,25 +151,6 @@ function getWorktreeAgentActivitySummaries(
     }
   }
 
-  for (const retained of Object.values(state.retainedAgentsByPaneKey ?? {})) {
-    const summary = summaryForWorktree(retained.worktreeId)
-    // Retained failures must remain failures rather than become clean completions.
-    if (agentVerdictDisplayMark(retained.entry) === 'failed') {
-      summary.hasRetainedFailed = true
-    } else {
-      summary.hasRetainedDone = true
-    }
-    const paneIdentity = parseAgentStatusPaneIdentity(retained.entry?.paneKey)
-    if (paneIdentity) {
-      addAgentStatusPaneId(summary, paneIdentity.tabId, paneIdentity.paneId)
-    }
-    const orchestration = mergeAgentStatusOrchestration(
-      retained.entry,
-      runtimeAgentOrchestrationByPaneKey?.[retained.entry.paneKey]
-    )
-    addParentPaneId(summary, orchestration, retained.worktreeId, tabIdToWorktreeId)
-  }
-
   // Reuse equal summaries across freshness epochs so unrelated cards do not rerender.
   const previousSummaries = agentActivityCache?.summaries
   if (previousSummaries) {
@@ -198,7 +168,6 @@ function getWorktreeAgentActivitySummaries(
     agentStatusByPaneKey: state.agentStatusByPaneKey,
     agentStatusEpoch: state.agentStatusEpoch,
     migrationUnsupportedByPtyId: state.migrationUnsupportedByPtyId,
-    retainedAgentsByPaneKey: state.retainedAgentsByPaneKey,
     runtimeAgentOrchestrationByPaneKey,
     summaries
   }
@@ -217,8 +186,6 @@ function summariesEqual(
     previous.hasInterrupted === next.hasInterrupted &&
     previous.hasUnconfirmed === next.hasUnconfirmed &&
     previous.hasLiveDone === next.hasLiveDone &&
-    previous.hasRetainedDone === next.hasRetainedDone &&
-    previous.hasRetainedFailed === next.hasRetainedFailed &&
     agentStatusPaneIdsByTabIdEqual(
       previous.agentStatusPaneIdsByTabId,
       next.agentStatusPaneIdsByTabId
