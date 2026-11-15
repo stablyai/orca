@@ -11,11 +11,11 @@ import { getKnownExecutionHostIdForWorktree } from '@/lib/workspace/ownership/wo
 import type { AppState } from '@/store/types'
 import type { WorktreeRuntimeOwnerState } from '@/lib/workspace/ownership/worktree-runtime-owner-state'
 import { FILE_LINK_CONTEXT_INPUT_KEYS } from '../actions/native-chat-file-link-context'
+import { resolveOwner } from '@/lib/workspace/ownership/resolve-owner'
+import { authorityKey } from '../../../../../../shared/host-authority'
+import { githubPreviewRepoAuthorityKey } from './native-chat-github-route-repo'
 import type { Repo } from '../../../../../../shared/repo-types'
-import {
-  getRepoExecutionHostId,
-  isUnresolvedOwnerHostId
-} from '../../../../../../shared/execution-host'
+import { isUnresolvedOwnerHostId } from '../../../../../../shared/execution-host'
 import {
   githubHostFromIdentityKey,
   githubRepoIdentityKey,
@@ -63,8 +63,14 @@ function resolveNativeChatRepo(
   if (!worktree) {
     return null
   }
+  const owner = resolveOwner(state, { workspaceId: worktreeId })
+  if (owner.kind !== 'resolved') {
+    return null
+  }
   const owners = state.repos.filter(
-    (candidate) => candidate.id === worktree.repoId && getRepoExecutionHostId(candidate) === hostId
+    (candidate) =>
+      candidate.id === worktree.repoId &&
+      githubPreviewRepoAuthorityKey(candidate) === authorityKey(owner.owner)
   )
   const found = owners.length === 1 ? owners[0] : null
   return found && (!found.kind || found.kind === 'git') ? found : null

@@ -16,12 +16,14 @@ import { installOrcadShutdownSignals, startOrcadWithHost } from './orcad-lifecyc
 import { ORCAD_LOCK_HEARTBEAT_MS } from '../instance-lock/orcad-lock-clone-machine'
 import { orcadRunFailed } from './orcad-unexpected-exit'
 import { SINGLE_INSTANCE_ALREADY_RUNNING_EXIT_CODE } from '../../../shared/single-instance-exit-code'
+import { _resetPendingWorktreeRemovalsForTests } from '../../workspaces/removal/worktree-background-removal'
 
 const roots: string[] = []
 afterEach(() => {
   // Drops the shutdown deadline timer so it cannot call the real process.exit later.
   vi.useRealTimers()
   vi.restoreAllMocks()
+  _resetPendingWorktreeRemovalsForTests()
   for (const root of roots.splice(0)) {
     rmSync(root, { recursive: true, force: true })
   }

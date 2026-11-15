@@ -19,7 +19,7 @@ import type {
   RuntimeGitCheckoutResult,
   RuntimeGitLocalBranches
 } from '../../../../shared/runtime-worktree-contracts'
-import type { GitProviderStatusOptions } from '../../../providers/git-provider-status-options'
+import type { GitProviderStatusOptions } from '../../../providers/git/status-options'
 import {
   localGitOptionsForTarget,
   requireLocalRuntimeGitRoute,
@@ -28,7 +28,7 @@ import {
   type RuntimeGitTarget
 } from './runtime-git-command-target'
 import { assertRuntimeReadWslDistroRunning } from './runtime-wsl-background-read-gate'
-import type { WorktreeAtRiskLocalFiles } from '../../../../shared/worktree/at-risk-local-files'
+import type { WorktreeAtRiskLocalFiles } from '../../../../shared/worktree/removal/at-risk-local-files'
 import { readWorktreeAtRiskLocalFiles } from '../../../git/worktrees/removal/worktree-at-risk-local-files'
 
 // Followers nobody is looking at: a stopped distro must stay stopped for them (E9).

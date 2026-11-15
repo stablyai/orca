@@ -1,5 +1,5 @@
 import type { AgentSessionCloseObserver } from '../providers/structured-agent-session-adapter-stop'
-import type { StructuredAgentSessionCurrentWork } from '../observations/structured-agent-session-current-work'
+import type { StructuredAgentSessionObservedWork } from '../observations/structured-agent-session-observed-work'
 import { heldStructuredAgentSessionCurrentWork } from '../observations/structured-agent-session-host-current-work'
 import { withTimeout } from '../../../../shared/promise-timeout-fallback'
 import type { StructuredAgentSessionStopCause } from './structured-agent-session-stop-cause'
@@ -8,7 +8,7 @@ import type { StructuredAgentSessionHostSession } from '../host/structured-agent
 import { structuredAgentSessionConversationFence } from '../host/structured-agent-session-provider-child'
 import type { JournalStopSettle } from '../../agent-session-journal/queued-messages/queued-message-pause-marks'
 import { sentSinceStop } from '../delivery/structured-agent-session-queued-stop'
-import type { AgentSessionResumeTrigger } from '../../../../shared/agent-session/lifecycle/agent-session-resume-marker'
+import type { AgentSessionResumeTrigger } from '../../../../shared/agent-session/lifecycle/resume/agent-session-resume-marker'
 import type { SubmissionRejectionFact } from '../../../../shared/agent-session/failures/agent-session-failure'
 
 /** Personal Stop already records its event; other host stops record cause, while quit uses cut-turn rows. */
@@ -51,51 +51,52 @@ export async function stopEndsWork(
     STOP_EVENT_DRAIN_TIMEOUT_MS,
     'slow' as const
   )
-  const work = heldStructuredAgentSessionCurrentWork(
+  const work = await heldStructuredAgentSessionCurrentWork(
     context.deps.store,
     sessionId,
     journal,
     session
   )
   const working =
-    (drain === 'slow' && journal.stopMarks.latestAcceptedSendUnopened()) || work.working()
-  return working && (ending.cause === 'user-close' || !defersToPersonsStop(session, work))
+    (drain === 'slow' && (await journal.stopMarks.latestAcceptedSendUnopened())) || work.working()
+  return working && (ending.cause === 'user-close' || !(await defersToPersonsStop(session, work)))
 }
 
 /** Host Stops must not overwrite personal cancellation or lift its still-active queue pause. */
-function defersToPersonsStop(
+async function defersToPersonsStop(
   session: StructuredAgentSessionHostSession,
-  work: StructuredAgentSessionCurrentWork
-): boolean {
+  work: StructuredAgentSessionObservedWork
+): Promise<boolean> {
   const { journal } = session
   const live = work.activeTurnId()
   if (live !== null) {
     return journal.stopMarks.personStopDecides(live)
   }
-  const inForce = journal.queuedMessages.userStopInForce()
+  const inForce = await journal.queuedMessages.userStopInForce()
   return (
-    (inForce !== null && !sentSinceStop(journal, inForce)) ||
-    journal.stopMarks.personStopDecides(null)
+    (inForce !== null && !(await sentSinceStop(journal, inForce))) ||
+    (await journal.stopMarks.personStopDecides(null))
   )
 }
 
 /** Issue before kill without awaiting persistence; unnamed user-close binds until the caller settles it. */
-export function recordStopEvent(
+export async function recordStopEvent(
   context: StructuredAgentSessionLifetimeContext,
   sessionId: string,
   session: StructuredAgentSessionHostSession,
   ending: StructuredAgentSessionStopEnding
 ): Promise<JournalStopSettle | null> {
   if ('recorded' in ending) {
-    return Promise.resolve(null)
+    return null
   }
   const fence = structuredAgentSessionConversationFence(context.deps.store, sessionId)
-  const turnId = heldStructuredAgentSessionCurrentWork(
+  const work = await heldStructuredAgentSessionCurrentWork(
     context.deps.store,
     sessionId,
     session.journal,
     session
-  ).activeTurnId()
+  )
+  const turnId = work.activeTurnId()
   return session.journal
     .appendStopEvent({ reason: ending.cause, ...(turnId !== null ? { turnId } : {}) }, fence)
     .then(

@@ -1,6 +1,6 @@
 import { z } from 'zod'
 import type { OrcaRuntimeService } from '../../../orca-runtime'
-import { PeerMailRelayPayload } from '../../../../../shared/rpc-contract/orchestration-peer-mail-params'
+import { PeerMailRelayPayload } from '../../../../../shared/rpc-contract/orchestration/orchestration-peer-mail-params'
 import { resolveBareOrchestrationRecipient } from '../../../rpc/methods/orchestration/messaging/recipient-routing'
 import type { OrchestrationDb } from '../../db/orchestration-db'
 import type { MessageRow } from '../../db/orchestration-records'
@@ -302,6 +302,7 @@ export class PeerMailRelay {
       return undefined
     }
     const handle = peerMailLocalRecipient(this.runtime, conversation)
+    // Peer-mail replies come home to this Orca's own sender handle, never a terminal agent's id.
     const recipient = resolveBareOrchestrationRecipient({ runtime: this.runtime, db, handle })
     const presented = presentImportedPeerItem({
       kind: 'peer_mail',

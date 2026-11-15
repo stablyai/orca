@@ -13,7 +13,7 @@ import { ensureCodexStateDbBackfillRecoveryStarted } from '../../codex/history/i
 import type { CodexSessionResumePreparation } from '../../codex/history/resume/codex-session-resume-home'
 import type { CodexAccountSelectionTarget } from '../../../shared/codex-selection-lane'
 import { isSafePtySessionId } from '../../daemon/sessions/pty-session-id'
-import type { IPtyProvider } from '../../providers/pty-provider-contract'
+import type { IPtyProvider } from '../../providers/pty/provider-contract'
 import { stampWslOrchestrationCompatibilityHost } from '../../pty/shell-startup/wsl-orca-env'
 import { getRuntimeSourceStamp } from '../../runtime/hosts/platform-probe/host-descriptor'
 import type { OrcaRuntimeService } from '../../runtime/orca-runtime'

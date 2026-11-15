@@ -3,7 +3,7 @@ import { OrcaRuntimeService } from '../../orca-runtime'
 import type { RpcRequest } from '../core'
 import { RpcDispatcher } from '../dispatcher'
 import { TERMINAL_METHODS } from '../methods/terminal/terminal'
-import '../../../../shared/rpc-contract/terminal-viewport-schemas-params'
+import '../../../../shared/rpc-contract/terminal/terminal-viewport-schemas-params'
 
 const PTY_ID = 'pty-1'
 const SUBSCRIPTION_ID = 'terminal-1:phone-1'

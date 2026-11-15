@@ -18,6 +18,7 @@ import {
   type DaemonChildSpawnOptions
 } from '../../launch/daemon-launched-child-spawn'
 import { macDaemonJobLabel } from './macos-daemon-job-label'
+import { setLastMacDaemonForkReason } from './macos-daemon-fork-reason'
 import type { DaemonProcessHandle } from '../../launch/daemon-spawner'
 import { DAEMON_SHUTDOWN_TIMEOUT_MS } from '../../launch/daemon-shutdown-deadline'
 import {
@@ -98,6 +99,7 @@ function fallBackToFork(
   if (Date.now() > deadlineMs) {
     throw error
   }
+  setLastMacDaemonForkReason(reason)
   console.warn(
     `[daemon] macOS terminal host fallback reason=${reason}; forking from the app`,
     error
@@ -124,17 +126,20 @@ export async function launchMacDaemonFromStableBundle(
   options: MacDaemonLaunchOptions,
   deadlineMs: number
 ): Promise<DaemonProcessHandle | null> {
+  setLastMacDaemonForkReason(null)
   // GUI login-session watching excludes serve mode.
   if (
     process.platform !== 'darwin' ||
     !options.macosLoginSessionWatch ||
     !getAppEnvironment().isPackaged()
   ) {
+    setLastMacDaemonForkReason('not-eligible')
     return null
   }
   // Older Macs need the fork path because the helper’s Node cannot load there.
   const systemVersion = process.getSystemVersion?.()
   if (!systemVersion || compareDottedVersions(systemVersion, NODE_RUNTIME_DARWIN_MINIMUM_OS) < 0) {
+    setLastMacDaemonForkReason('os-too-old')
     return null
   }
   const label = macDaemonJobLabel(options.userDataPath)

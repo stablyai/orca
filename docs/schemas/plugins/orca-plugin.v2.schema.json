@@ -1601,10 +1601,10 @@
             "secrets:own": "1.4.245",
             "settings:own": "1.4.160",
             "appearance:write": "1.4.249",
-            "workspace:create": "1.4.258",
-            "automation:read": "1.4.258",
-            "automation:write": "1.4.258",
-            "history:read": "1.4.258"
+            "workspace:create": "1.4.259",
+            "automation:read": "1.4.259",
+            "automation:write": "1.4.259",
+            "history:read": "1.4.259"
           }
         }
       },

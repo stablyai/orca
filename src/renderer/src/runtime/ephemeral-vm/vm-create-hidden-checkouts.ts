@@ -1,4 +1,4 @@
-import type { SidebarFeedDomains } from '../../../../shared/sidebar-list/sidebar-feed-domains'
+import type { SidebarFeedDomains } from '../../../../shared/sidebar-list/feed/sidebar-feed-domains'
 import {
   indexPendingVmCheckouts,
   isPendingVmCheckout,

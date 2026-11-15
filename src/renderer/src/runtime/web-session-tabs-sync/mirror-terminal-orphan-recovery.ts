@@ -1,3 +1,4 @@
+import { carryBrowserInitializationReceipt } from './browser-initialization-presentation'
 import type { RuntimeMobileSessionTabsResult } from '../../../../shared/runtime-types'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
 import { recoverWebSessionTerminalOrphansBeforeApply } from '../hosted-terminals/recovery/web-session-terminal-orphan-recovery'
@@ -12,5 +13,10 @@ export function recoverMirroredTerminalOrphansBeforeApply(
   if (ORCA_LAYOUT_OWNER_IS_MAIN && isFrameDrawnServerWorkspace(environmentId, frame.worktree)) {
     return Promise.resolve(frame)
   }
-  return recoverWebSessionTerminalOrphansBeforeApply(...args)
+  return recoverWebSessionTerminalOrphansBeforeApply(...args).then((recovered) => {
+    if (recovered) {
+      carryBrowserInitializationReceipt(frame, recovered)
+    }
+    return recovered
+  })
 }

@@ -1,5 +1,5 @@
 import { defineOrchestrationMethod } from '../access/orchestration-method-access'
-import { ApprovalAnswerParams } from '../../../../../../shared/rpc-contract/orchestration-approval-answer-params'
+import { ApprovalAnswerParams } from '../../../../../../shared/rpc-contract/orchestration/orchestration-approval-answer-params'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
 import { structuredMailboxCustody } from '../../../../orchestration/mailbox/routing/structured-session-mail-target'
 import {
@@ -19,7 +19,7 @@ import {
 } from '../../../../orchestration/workers/turn-stops/worker-turn-stop-report'
 import type { z } from 'zod'
 import type { RpcContext } from '../../../core'
-import { workerApprovalAccess, type WorkerApprovalAccess } from './worker-approval-access'
+import { workerApprovalAccess, type WorkerApprovalAccess } from '../access/worker-approval-access'
 import { formatOrcaSessionAddress } from '../../../../../../shared/orca-session-address'
 
 export type WorkerApprovalAnswerReceipt = {

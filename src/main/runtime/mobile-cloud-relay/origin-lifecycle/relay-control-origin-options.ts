@@ -19,6 +19,8 @@ export type RelayControlOriginOptions = {
   onConnectionOwned: (connectionId: string, origin: RelayControlOrigin) => void
   onConnectionReleased: (connectionId: string, origin: RelayControlOrigin) => void
   onDrain: (origin: RelayControlOrigin, message: RelayDrainMessage) => void
+  /** Repeated failures to open data dials: the control may be live while phones cannot attach. */
+  onDataPathUnhealthy: (origin: RelayControlOrigin) => void
   onClose: (origin: RelayControlOrigin, code: number) => void
   onPendingChanged?: (origin: RelayControlOrigin) => void
 }

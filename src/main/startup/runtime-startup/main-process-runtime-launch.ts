@@ -9,7 +9,7 @@ import { OrcaRuntimeRpcServer } from '../../runtime/rpc/server/runtime-rpc'
 import { resolveServePinnedBindHost } from '../serve-launch/serve-pinned-bind-host'
 import { isOrcadSidecarLaunch } from '../../window/activation/foreground-activation-policy'
 import { registerMobileHandlers } from '../../ipc/mobile'
-import { createRuntimeEnvironmentMobileRelayHosts } from '../../ipc/runtime-environments/runtime-environment-mobile-relay-hosts'
+import { createRuntimeEnvironmentMobileRelayHosts } from '../../ipc/runtime-environments/mobile-relay/runtime-environment-mobile-relay-hosts'
 import { getLocalPtyProvider } from '../../ipc/pty/provider/registry'
 import { registerHeadlessPtyRuntime } from '../../ipc/pty/register-headless-runtime'
 import { LocalPtyProvider } from '../../providers/local-pty/local-pty-provider'
@@ -55,6 +55,8 @@ import { resolveUpdateInstallMode } from '../../updater/updater-service'
 import { scheduleAgentLaunchRecordWarmup } from '../agent-accounts/agent-launch-record-warmup'
 import { emitServeBrowserIdentityActionLine } from '../../server/serve-stdout-boundary'
 import { getBrowserIdentityModeStatus } from '../../browser/identity/mode/browser-identity-mode-store'
+import { beginChatJournalStartup, chatJournalHostServing } from './chat-journal-startup'
+import { e2eHeadlessServeWithoutBrowser } from '../serve-launch/e2e-headless-serve-without-browser'
 
 type RuntimeService = NonNullable<typeof state.runtime>
 
@@ -71,15 +73,6 @@ function settleDesktopActivation(): void {
   settleServeDesktopActivation(gate, {
     hasPersistentPtyProvider: !(getLocalPtyProvider() instanceof LocalPtyProvider)
   })
-}
-
-/** E2E only: a serve host with no browser of its own, as the WSL distro's server is. Never packaged. */
-function e2eHeadlessServeWithoutBrowser(): boolean {
-  return (
-    !app.isPackaged &&
-    process.env.ORCA_E2E_HEADLESS === '1' &&
-    process.env.ORCA_E2E_HEADLESS_SERVE_WITHOUT_BROWSER === '1'
-  )
 }
 
 /** Construct the runtime RPC server with serve-specific bind and port exposure settings. */
@@ -220,6 +213,7 @@ async function launchServeMode(
   void scheduleAllPendingHistoryTreeRemovals()
   emitServeBrowserIdentityActionLine(getBrowserIdentityModeStatus())
   await printServeReady(serveOptions)
+  chatJournalHostServing()
   const store = state.store!
   setupHeadlessServeAutoUpdater(store, {
     onBeforeUpdateQuit: () =>
@@ -253,6 +247,7 @@ async function launchDesktopMode(
       )
   ])
   scheduleAgentLaunchRecordWarmup(win)
+  chatJournalHostServing()
   if (!runtimeRpcStartResult.ok) {
     // Await i18n only for the failure dialog; parallel launch must not show English fallback to non-English users.
     void state.mainProcessI18nReady.then(() =>
@@ -330,6 +325,7 @@ export async function initializeMainProcessRuntimeLaunch(
     await shellPathReady
     bindTerminalRuntimeStartupServices(Promise.resolve(startTerminalRuntimeStartupServices()))
   }
+  beginChatJournalStartup(runtime, serveOptions !== null)
   app.on('activate', options.handleMacAppActivation)
   if (serveOptions) {
     await launchServeMode(runtime, runtimeRpc, serveOptions)

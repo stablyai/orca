@@ -156,7 +156,7 @@ export function SkillSharedLinkRow({
               {busy || deleting ? <Loader2 className="animate-spin" /> : null}
               {confirming === 'revoke'
                 ? t('auto.components.settings.shareSkills.confirmUnshare', 'Confirm unshare')
-                : t('auto.components.skills.SkillSharedLinkRow.confirmDelete', 'Confirm delete')}
+                : t('common.delete', 'Delete')}
             </Button>
           ) : (
             <>

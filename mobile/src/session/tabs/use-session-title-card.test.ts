@@ -1,12 +1,15 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { HostInstance } from 'react-native'
-import { hookMount, performHookAction } from '../../test-support/rpc-recording/hook-mount'
-import { mountFixture } from '../../test-support/rpc-recording/recorder-fixture-shape'
+import {
+  hookMount,
+  performHookAction
+} from '../../test-support/rpc-recording/react-mounting/hook-mount'
+import { mountFixture } from '../../test-support/rpc-recording/react-mounting/recorder-fixture-shape'
 import { useSessionTitleCard } from './use-session-title-card'
 import {
   useAnchoredDetailCard,
   type DetailCardMeasure
-} from '../../components/use-anchored-detail-card'
+} from '../../components/detail-cards/use-anchored-detail-card'
 
 vi.mock('react-native', () => ({
   useWindowDimensions: () => ({ width: 400, height: 800 })

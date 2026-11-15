@@ -9,6 +9,7 @@ import { useIntlLocale, useTranslate, type Translate } from '@/i18n/use-translat
 import { languageDisplayName, uiCollator } from '@/i18n/ui-intl-formatters'
 import { SettingsRow } from '../form-controls/SettingsFormControls'
 import { SettingsSearchableSelect } from '../form-controls/SettingsSearchableSelect'
+import { VOICE_SETTING_ANCHORS } from './voice-pane-search'
 
 // Intl formatter caches key on option identity, so this must be a module constant.
 const NAME_COLLATOR: Intl.CollatorOptions = { sensitivity: 'base' }
@@ -81,6 +82,7 @@ export function VoiceDictationLanguageSetting({
 
   return (
     <SettingsRow
+      id={VOICE_SETTING_ANCHORS.language}
       className={className}
       label={label}
       description={describeLanguageSetting(

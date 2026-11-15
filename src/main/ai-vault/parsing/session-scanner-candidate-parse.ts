@@ -1,3 +1,10 @@
+import { isTranscriptSourceFailure } from './session-scanner-jsonl-reader'
+import {
+  physicalSessionCandidates,
+  type SessionFileCandidate,
+  type SessionFileChoice,
+  type SessionParseResult
+} from '../session-scanner-types'
 import { yieldToEventLoop } from '../../../shared/event-loop-yield'
 import { isTextTaskRequestSession } from './text-task-request-sessions'
 import { candidateFileTime } from '../scanners/antigravity/antigravity-transcript-candidates'
@@ -24,14 +31,13 @@ import {
   sessionParseCacheKey
 } from '../parse-cache/session-parse-cache-store'
 import { canStopParsingSessions } from './session-scan-cutoff'
-import type { SessionFileCandidate, SessionParseResult } from '../session-scanner-types'
 import { throwIfAiVaultScanCancelled } from '../scan-lifecycle/ai-vault-scan-cancellation'
 import { noteAiVaultScanWorkChanged } from '../scan-lifecycle/ai-vault-scan-progress'
 
 const SESSION_PARSE_CONCURRENCY = 8
 
 export async function parseSessionCandidates(args: {
-  candidates: SessionFileCandidate[]
+  candidates: SessionFileChoice[]
   limit: number
   platform: NodeJS.Platform
   executionHostId: ExecutionHostId
@@ -79,44 +85,72 @@ export async function parseSessionCandidates(args: {
     )
     const batch = args.candidates.slice(index, index + batchSize)
     index += batchSize
-    const verdicts = args.selectCandidate
-      ? await Promise.all(batch.map(args.selectCandidate))
-      : batch.map(() => true)
-    throwIfAiVaultScanCancelled(args.signal)
-    const selected = batch.filter((_, batchIndex) => verdicts[batchIndex])
     const results = await Promise.all(
-      selected.map((candidate) =>
-        parseSessionCandidate(candidate, {
-          platform: args.platform,
-          executionHostId: args.executionHostId,
-          parseStats: args.parseStats,
-          antigravityWorkspaceResolver: args.antigravityWorkspaceResolver,
-          listed: args.listed ?? true,
-          signal: args.signal
-        })
-      )
+      batch.map(async (choice) => {
+        const issues: AiVaultScanIssue[] = []
+        let selected = false
+        let provisional: { candidate: SessionFileCandidate; session: AiVaultSession } | undefined
+        let accepted: typeof provisional
+        for (const candidate of physicalSessionCandidates(choice)) {
+          throwIfAiVaultScanCancelled(args.signal)
+          if (args.selectCandidate && !(await args.selectCandidate(candidate))) {
+            continue
+          }
+          selected = true
+          const result = await parseSessionCandidate(candidate, {
+            platform: args.platform,
+            executionHostId: args.executionHostId,
+            parseStats: args.parseStats,
+            antigravityWorkspaceResolver: args.antigravityWorkspaceResolver,
+            listed: args.listed ?? true,
+            signal: args.signal
+          })
+          throwIfAiVaultScanCancelled(args.signal)
+          if (result.issue) {
+            issues.push(result.issue)
+          }
+          if (result.sourceFailed) {
+            continue
+          }
+          if (!result.session && result.issue) {
+            break
+          }
+          if (!result.session || isTextTaskRequestSession(result.session)) {
+            provisional = undefined
+            break
+          }
+          if (args.admitSession && !args.admitSession(result.session)) {
+            continue
+          }
+          const parsed = { candidate, session: result.session }
+          if (
+            isAiVaultSessionResumableContent(result.session) ||
+            isAiVaultSessionRecoverableEmpty(result.session)
+          ) {
+            accepted = parsed
+            break
+          }
+          provisional ??= parsed
+        }
+        throwIfAiVaultScanCancelled(args.signal)
+        return { winner: accepted ?? provisional, selected, issues }
+      })
     )
-    // Cancellation during a batch must propagate before partial results become issues or listed sessions.
     throwIfAiVaultScanCancelled(args.signal)
-    batch.forEach((candidate, index) => args.settled?.(candidate, verdicts[index]))
-    noteAiVaultScanWorkChanged(args.signal)
-
-    results.forEach((result, resultIndex) => {
-      if (result.issue) {
-        recordSessionScanIssue(args.issues, result.issue)
+    results.forEach(({ winner, selected, issues }, index) => {
+      for (const issue of issues) {
+        recordSessionScanIssue(args.issues, issue)
       }
-      if (
-        result.session &&
-        !isTextTaskRequestSession(result.session) &&
-        (!args.admitSession || args.admitSession(result.session))
-      ) {
+      if (winner) {
         if (args.listed === false) {
-          const { agent, file } = selected[resultIndex]
+          const { agent, file } = winner.candidate
           noteSessionParseCacheListed(sessionParseCacheKey(agent, file.path))
         }
-        sessions.add(result.session)
+        sessions.add(winner.session)
       }
+      args.settled?.(batch[index], selected)
     })
+    noteAiVaultScanWorkChanged(args.signal)
   }
 
   for (; index < args.candidates.length; index++) {
@@ -157,6 +191,7 @@ export async function parseSessionCandidate(
   } catch (err) {
     return {
       session: null,
+      sourceFailed: isTranscriptSourceFailure(err),
       issue: {
         executionHostId,
         agent: candidate.agent,

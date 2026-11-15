@@ -5,6 +5,9 @@ const {
   MACOS_FOLDER_USAGE_DESCRIPTIONS,
   applyMacHelperFolderUsageDescriptions
 } = require('./scripts/desktop-distribution/macos/macos-folder-usage-descriptions.cjs')
+const {
+  giveMacExecutableUniqueUuid
+} = require('./scripts/desktop-distribution/macos/macos-executable-uuid.cjs')
 const electronBuilderNativeRebuild = require('./scripts/desktop-distribution/runtime-verification/electron-builder-native-rebuild.cjs')
 const {
   assertPackagedDaemonEntryExists,
@@ -348,9 +351,9 @@ module.exports = {
     'out/main/filesystem/macos-tree-clone.js',
     'out/main/orca-profiles/profile-index-store.js',
     'out/main/persistence/profile-state/**',
-    'out/main/plugins/plugin-artifact-validation.js',
-    'out/main/plugins/plugin-content-hash.js',
-    'out/main/plugins/plugin-catalog-release-entry.js',
+    'out/main/plugins/artifacts/plugin-artifact-validation.js',
+    'out/main/plugins/artifacts/plugin-content-hash.js',
+    'out/main/plugins/catalog/plugin-catalog-release-entry.js',
     'out/main/environment-doctor/environment-doctor.js',
     'out/main/environment-doctor/environment-doctor-host.js',
     // `orca plugin test` and `orca plugin check` load the runtime, kit and hooks in Node.
@@ -362,7 +365,10 @@ module.exports = {
     'out/main/session-scanner-service-entry.js',
     'out/main/wsl-transcript-fs-process-entry.js',
     'out/main/foreign-sqlite-reader-entry.js',
+    'out/main/agent-identity-worker-entry.js',
     'out/main/session-search-worker-entry.js',
+    'out/main/journal-sql-worker-entry.js',
+    'out/main/journal-sql-reader-entry.js',
     'out/main/plugin-host-entry.js',
     'out/main/browser-extension-native-host-supervisor-entry.js',
     'out/main/computer-sidecar.js',
@@ -424,6 +430,17 @@ module.exports = {
       applyMacHelperFolderUsageDescriptions(
         join(context.appOutDir, `${context.packager.appInfo.productFilename}.app`),
         context.packager.appInfo.productFilename
+      )
+      // Before signing, so the signature seals the rewritten executable.
+      giveMacExecutableUniqueUuid(
+        join(
+          context.appOutDir,
+          `${context.packager.appInfo.productFilename}.app`,
+          'Contents',
+          'MacOS',
+          context.packager.appInfo.productFilename
+        ),
+        context.packager.appInfo.id
       )
       const architecture = macSliceArch(context.arch, 'local-build compatibility')
       const schedulingAddon = buildMacShipItScheduling(resourcesDir, architecture)

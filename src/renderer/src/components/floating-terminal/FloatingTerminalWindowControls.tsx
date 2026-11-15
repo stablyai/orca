@@ -8,7 +8,7 @@ import { focusTerminalTabSurface } from '@/components/terminal-pane/input/focus/
 import { launchAgentInNewTabWithOutcome } from '@/lib/agent-session/launch/new-tab/launch-agent-in-new-tab'
 
 import { createNonSecureContextUuid } from '../../../../shared/non-secure-context-uuid'
-import { useAppStore } from '@/store'
+import { useAppStore } from '@/store/index'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 import {
   DEFAULT_DISABLED_TUI_AGENTS,

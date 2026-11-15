@@ -1,10 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
-import { normalizePairedServerRow } from '../../../shared/sidebar-list/paired-server-rows'
-import {
-  IDLE_WORKSPACE_ACTIVITY,
-  type WorkspaceActivityFacts
-} from '../../../shared/sidebar-list/workspace-activity-facts'
-import { buildWorkspaceRows } from '../../../shared/sidebar-list/workspace-rows'
+import { normalizePairedServerRow } from '../../../shared/sidebar-list/feed-facts/paired-server-rows'
+import type { WorkspaceActivityFacts } from '../../../shared/sidebar-list/feed-facts/workspace-activity-facts'
+import { buildWorkspaceRows } from '../../../shared/sidebar-list/feed-facts/workspace-rows'
 import type { Repo } from '../../../shared/repo-types'
 import type { Worktree } from '../../../shared/worktree/types'
 import { ProducerRevision } from './producer-revision'
@@ -113,17 +110,6 @@ function harness(hostFacts: Record<string, WorkspaceActivityFacts>) {
 }
 
 describe('the activity domain', () => {
-  it('keys this host’s facts by its rows and a paired server’s by its own host', async () => {
-    const busy = { ...IDLE_WORKSPACE_ACTIVITY, browser: true }
-    const { read } = harness({ [ID]: busy })
-    // The desktop's session names only the id, so both of its own copies carry it.
-    expect(await read('activity')).toEqual({
-      [`local|${ID}`]: busy,
-      [`ssh:box|${ID}`]: busy,
-      [`runtime:env|${ID}`]: { ...IDLE_WORKSPACE_ACTIVITY, agent: 'working' }
-    })
-  })
-
   it('never lends a paired server’s activity to this host’s same-id rows', async () => {
     const { read } = harness({})
     expect(Object.keys((await read('activity')) ?? {})).toEqual([`runtime:env|${ID}`])

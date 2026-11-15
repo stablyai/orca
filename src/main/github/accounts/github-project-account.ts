@@ -87,3 +87,16 @@ export function resolveGitHubProjectAccount(context: GitHubRepoContext) {
     ? { ghAccount: normalizeGhAccountBinding(matches[0].ghAccount) ?? undefined }
     : null
 }
+
+/** Policy observes project ownership changes without resolving every workspace's account. */
+export function githubPRPolicyProjects(): { source: object | null; selection: string } {
+  return {
+    source,
+    selection: JSON.stringify(
+      source?.store
+        .getRepos()
+        .map((repo) => [repo.id, repo.path, getStoredRepoExecutionHostId(repo), repo.ghAccount]) ??
+        []
+    )
+  }
+}

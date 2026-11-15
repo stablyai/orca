@@ -3,6 +3,9 @@ import type { BrowserClientHostCommandEvent } from '../../../../shared/browser/c
 import type { BrowserClientAutomationResult as BrowserClientHostCommandResult } from '../../../../shared/browser/client-hosting/browser-client-automation-protocol'
 import {
   createPageState,
+  failedCommandResult,
+  resolveCommandRecord,
+  createCommandRecord,
   type CommandRecord,
   type PageState
 } from './browser-client-host-command-state'
@@ -109,7 +112,8 @@ function commandsMatch(
   if (first.command.type === 'createPage' && second.command.type === 'createPage') {
     return (
       first.command.browserProfileId === second.command.browserProfileId &&
-      first.command.executionHostKey === second.command.executionHostKey
+      first.command.executionHostKey === second.command.executionHostKey &&
+      first.command.initialUrl === second.command.initialUrl
     )
   }
   if (first.command.type === 'restorePage' && second.command.type === 'restorePage') {
@@ -168,7 +172,9 @@ export function assertNewPageCommand(
       )
     }
   }
-  if (page.createFailed) {
+  const initializationCleanup =
+    command.command.type === 'closePage' && page.initialization !== undefined
+  if (page.createFailed && !initializationCleanup) {
     throw new Error('browser_host_command_dependency_failed')
   }
 }
@@ -221,6 +227,71 @@ export function removeScheduledCommandPage(
   for (let index = readyPages.length - 1; index >= 0; index -= 1) {
     if (readyPages[index] === page) {
       readyPages.splice(index, 1)
+    }
+  }
+}
+
+export function enqueueBrowserClientPageCommand(
+  page: PageState,
+  acceptedCommand: BrowserClientHostCommandEvent
+): CommandRecord {
+  const record = createCommandRecord(acceptedCommand)
+  page.records.set(acceptedCommand.commandSequence, record)
+  page.sequencesByCommandId.set(acceptedCommand.commandId, acceptedCommand.commandSequence)
+  page.queue.push(record)
+  page.nextSequence += 1
+  if (acceptedCommand.command.type === 'closePage') {
+    if (page.initialization?.cancel(acceptedCommand)) {
+      record.closeInitialization = page.initialization.close
+      record.initializationCleanup = true
+      for (const pending of page.queue) {
+        if (pending !== record) {
+          pending.controller?.abort()
+        }
+      }
+    }
+  }
+  return record
+}
+
+export function releaseBrowserClientPageInitialization(page: PageState): void {
+  page.initialization?.release()
+  page.initialization = undefined
+}
+
+export function settleBrowserClientPageInitialization(
+  page: PageState,
+  record: CommandRecord,
+  result: { status: string }
+): void {
+  record.closeInitialization = undefined
+  if (
+    (record.event.command.type === 'navigate' || record.event.command.type === 'closePage') &&
+    result.status === 'completed'
+  ) {
+    releaseBrowserClientPageInitialization(page)
+  }
+}
+
+export function cancelBrowserClientPageCommands(
+  page: PageState,
+  errorCode: string,
+  preserveInitializationCleanup: boolean,
+  removeActive: (record: CommandRecord) => void
+): void {
+  for (const record of page.queue.slice()) {
+    if (preserveInitializationCleanup && record.initializationCleanup) {
+      continue
+    }
+    if (record.status === 'running') {
+      record.status = 'cancelling'
+      record.controller?.abort()
+      resolveCommandRecord(record, failedCommandResult(errorCode))
+    } else if (record.status === 'queued') {
+      record.status = 'settled'
+      record.closeInitialization = undefined
+      resolveCommandRecord(record, failedCommandResult(errorCode))
+      removeActive(record)
     }
   }
 }

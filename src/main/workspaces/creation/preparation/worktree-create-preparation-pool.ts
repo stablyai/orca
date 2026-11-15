@@ -14,7 +14,7 @@ import { isWindowsAbsolutePathLike } from '../../../../shared/cross-platform-pat
 import {
   WORKTREE_CREATE_PREPARATION_DIRECTORY,
   createWorktreePreparationLockReason
-} from '../../../../shared/worktree/create-preparation'
+} from '../../../../shared/worktree/creation/create-preparation'
 import type { AddWorktreeOptions } from '../../../git/worktrees/worktree-operation-options'
 import { prepareWorktreeCreateCheckout } from '../../../git/worktrees/creation/worktree-create-preparation'
 import { queuePreparedWorktreeTipRefresh } from './worktree-preparation-refresh-queue'

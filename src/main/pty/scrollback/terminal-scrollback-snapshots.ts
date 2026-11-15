@@ -1,23 +1,10 @@
 import { createHash } from 'node:crypto'
-import {
-  closeSync,
-  mkdirSync,
-  openSync,
-  readFileSync,
-  readSync,
-  renameSync,
-  rmSync,
-  statSync,
-  writeFileSync
-} from 'node:fs'
+import { mkdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { mkdir, rename, rm, writeFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import { getAppEnvironment } from '../../../shared/app-environment'
 import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
-import {
-  TERMINAL_SCROLLBACK_REPLAY_BYTE_LIMIT,
-  TERMINAL_SCROLLBACK_STORE_BYTE_LIMIT
-} from '../../../shared/terminal/replay/terminal-scrollback-limits'
+import { TERMINAL_SCROLLBACK_STORE_BYTE_LIMIT } from '../../../shared/terminal/replay/terminal-scrollback-limits'
 import { errorMessage } from '../../../shared/error-message'
 
 const SNAPSHOT_DIR_NAME = 'terminal-scrollback'
@@ -122,22 +109,6 @@ function trailingUtf8Bytes(value: string, maxBytes: number): Buffer {
   return bytes.subarray(start)
 }
 
-function readTrailingUtf8(path: string, maxBytes: number): string {
-  const size = statSync(path).size
-  const length = Math.min(size, maxBytes)
-  if (length <= 0) {
-    return ''
-  }
-  const bytes = Buffer.allocUnsafe(length)
-  const fd = openSync(path, 'r')
-  try {
-    readSync(fd, bytes, 0, length, size - length)
-  } finally {
-    closeSync(fd)
-  }
-  return decodeFromFirstUtf8Boundary(bytes)
-}
-
 /** Decodes a tail slice, skipping continuation bytes of a character the slice cut in half. */
 export function decodeFromFirstUtf8Boundary(bytes: Buffer): string {
   let start = 0
@@ -215,20 +186,6 @@ export async function writeTerminalScrollbackSnapshot(args: {
       await rm(tmpPath, { force: true }).catch(() => {})
     }
   }
-}
-
-export function readTerminalScrollbackSnapshotSync(
-  ref: string,
-  storage?: TerminalScrollbackSnapshotStorage
-): string | null {
-  for (const path of snapshotReadPaths(ref, storage)) {
-    try {
-      return readTrailingUtf8(path, TERMINAL_SCROLLBACK_REPLAY_BYTE_LIMIT)
-    } catch {
-      // Try the next snapshot root when this read fails.
-    }
-  }
-  return null
 }
 
 export function deleteTerminalScrollbackSnapshotSync(

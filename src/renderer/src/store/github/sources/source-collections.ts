@@ -9,7 +9,7 @@ import { nextProviderRequestId } from '../requests/request-coordination'
 import { withBoundedCacheEntry, evictStaleEntries } from '../cache/cache-policy'
 import { foldReportedCandidates } from './source-candidate-evidence'
 import { workItemsCacheKey } from '../cache/cache-identity'
-import { taskPageGitHubResumeCache } from '@/components/task-page/github/task-page-github-resume-cache'
+import { taskPageGitHubResumeCache } from '@/components/task-page/github/cache/task-page-github-resume-cache'
 import {
   GitHubSourceOwnership,
   githubCollectionScope,

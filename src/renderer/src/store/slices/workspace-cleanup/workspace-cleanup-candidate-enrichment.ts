@@ -17,7 +17,6 @@ import {
   shouldPreserveCleanupInspection
 } from './workspace-cleanup-local-evidence'
 import { getWorkspaceCleanupAgentEvidence } from './workspace-cleanup-agent-evidence'
-import { selectRetainedAgentEntriesForWorktree } from '@/components/sidebar/workspace-card/activity/worktree-agent-row-selectors'
 
 export type WorkspaceCleanupEnrichOptions = {
   applyDismissals?: boolean
@@ -32,7 +31,6 @@ export type WorkspaceCleanupEnrichmentCacheEntry = {
 
 type WorkspaceCleanupEnrichmentProjection = {
   openFilesByWorktreeId: Map<string, AppState['openFiles']>
-  retainedDoneAgentPaneKeysByWorktreeId: Map<string, string[]>
   agentEvidence: ReturnType<typeof getWorkspaceCleanupAgentEvidence>
 }
 
@@ -106,19 +104,8 @@ function buildWorkspaceCleanupEnrichmentProjection(
     openFilesByWorktreeId.set(file.worktreeId, files)
   }
 
-  const retainedDoneAgentPaneKeysByWorktreeId = new Map<string, string[]>()
-  for (const worktreeId of worktreeIds) {
-    retainedDoneAgentPaneKeysByWorktreeId.set(
-      worktreeId,
-      selectRetainedAgentEntriesForWorktree(state, worktreeId)
-        .filter((retained) => retained.entry.state === 'done')
-        .map((retained) => retained.entry.paneKey)
-    )
-  }
-
   return {
     openFilesByWorktreeId,
-    retainedDoneAgentPaneKeysByWorktreeId,
     agentEvidence: getWorkspaceCleanupAgentEvidence(state, candidates)
   }
 }
@@ -150,9 +137,6 @@ function getWorkspaceCleanupLocalStateSignature(
     isDirty: file.isDirty,
     hasDraft: state.editorDrafts[file.id] !== undefined
   }))
-  const retainedDoneAgentPaneKeys = [
-    ...(projection.retainedDoneAgentPaneKeysByWorktreeId.get(worktreeId) ?? [])
-  ].sort()
   const ptyIdsByTabId = Object.fromEntries(
     tabIds.map((tabId) => [tabId, state.ptyIdsByTabId[tabId] ?? []])
   )
@@ -175,7 +159,6 @@ function getWorkspaceCleanupLocalStateSignature(
     terminalLayoutsByTabId,
     openFiles,
     browserTabCount: (state.browserTabsByWorktree[worktreeId] ?? []).length,
-    retainedDoneAgentPaneKeys,
     // Attributed like the sidebar, so a structured chat with no tab here still re-keys the row.
     agentEvidence: projection.agentEvidence.get(getWorkspaceCleanupCandidateIdentity(candidate)),
     lastVisitedAt:
@@ -201,8 +184,9 @@ async function enrichWorkspaceCleanupCandidate(
   )
   const cleanEditorTabCount = openFiles.length - dirtyEditorBuffers.length
   const browserTabCount = (state.browserTabsByWorktree[candidate.worktreeId] ?? []).length
-  const retainedDoneAgentCount =
-    projection.retainedDoneAgentPaneKeysByWorktreeId.get(candidate.worktreeId)?.length ?? 0
+  const finishedAgentCount =
+    projection.agentEvidence.get(getWorkspaceCleanupCandidateIdentity(candidate))
+      ?.finishedAgentCount ?? null
   const blockers: WorkspaceCleanupBlocker[] = candidate.blockers.filter(
     (blocker) => blocker !== 'dismissed' && blocker !== 'live-agent'
   )
@@ -214,7 +198,9 @@ async function enrichWorkspaceCleanupCandidate(
   if (dirtyEditorBuffers.length > 0) {
     blockers.push('dirty-editor-buffer')
   }
-  if (projection.agentEvidence.get(getWorkspaceCleanupCandidateIdentity(candidate)) === 'live') {
+  if (
+    projection.agentEvidence.get(getWorkspaceCleanupCandidateIdentity(candidate))?.status === 'live'
+  ) {
     blockers.push('live-agent')
   }
 
@@ -249,7 +235,7 @@ async function enrichWorkspaceCleanupCandidate(
       terminalTabCount: tabs.length,
       cleanEditorTabCount,
       browserTabCount,
-      retainedDoneAgentCount
+      finishedAgentCount
     }
   }
 

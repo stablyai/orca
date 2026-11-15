@@ -223,7 +223,7 @@ export function NativeChatOpenedPullRequestCard({
     <div
       className={`${NATIVE_CHAT_HIDEABLE_CARD_CLASS} rounded-lg border border-chat-code-border p-2 text-sm`}
     >
-      <div className="flex min-w-0 items-center gap-1.5 px-1 pb-1 text-xs text-chat-foreground-faint">
+      <div className="flex min-w-0 items-center gap-1.5 px-1 pb-1 text-sm text-chat-foreground-faint">
         <span className="min-w-0 truncate">
           {pullRequests.length === 1 && first
             ? t('components.native-chat.openedPullRequests.one', 'Opened {{name}}', {

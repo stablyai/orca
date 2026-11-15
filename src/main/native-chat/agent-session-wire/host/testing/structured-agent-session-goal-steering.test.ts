@@ -3,8 +3,8 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../../../shared/agent-session/journal/agent-session-journal-types'
 import type { CodexAppServerConnection } from '../../../../codex/app-server/codex-app-server-connection-types'
 import {
-  readCodexAppliedInputOptions,
-  resolvedCodexMessageOptions
+  resolvedCodexMessageOptions,
+  readCodexMessageSteeringInputs
 } from '../../../../codex/structured/turns/codex-structured-message-options'
 import { optionSession } from '../../../../codex/structured/catalog/codex-structured-option-session.test-fixture'
 import { dispatchCodexTurn } from '../../../../codex/structured/turns/codex-structured-turn-start'
@@ -17,7 +17,7 @@ import {
   HOST_TEST_SESSION as SESSION,
   HOST_TEST_THREAD as THREAD,
   hostTestOperationId
-} from './structured-agent-session-host-test-data'
+} from './structured-agent-session-host-test-data.test-fixture'
 
 let rig: QueuedMessageTestRig
 let native: ReturnType<typeof optionSession>
@@ -39,8 +39,10 @@ async function createGoalRig(): Promise<QueuedMessageTestRig> {
     reportsModel: 'gpt-ran',
     reportsEffort: 'high'
   })
-  created.host.deps.adapter.readAppliedInputOptions = (input) =>
-    input.sessionId === SESSION ? readCodexAppliedInputOptions(native, input) : null
+  created.host.deps.adapter.captureMessageSteeringInputs = (input) =>
+    input.sessionId === SESSION
+      ? readCodexMessageSteeringInputs(native, input)
+      : { kind: 'codex-unavailable' }
   created.host.deps.adapter.holdsLiveProviderProcess = (sessionId, generation) =>
     sessionId === SESSION &&
     generation === native.acquisitionGeneration &&
@@ -123,7 +125,10 @@ it('keeps an incompatible Send-now card intact until a new turn can use its choi
   }
   expect(await rig.handoff(queued.id)).toBeUndefined()
   expect(
-    rig.host.collaboratorsForTests().sessions.get(SESSION)?.journal.queuedMessages.get(queued.id)
+    await rig.host
+      .collaboratorsForTests()
+      .sessions.get(SESSION)
+      ?.journal.queuedMessages.get(queued.id)
   ).toMatchObject({
     state: 'waiting',
     body: { blocks: [{ type: 'text', text: 'Keep my selected speed' }] },

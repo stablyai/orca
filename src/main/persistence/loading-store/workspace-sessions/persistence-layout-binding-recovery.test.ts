@@ -133,7 +133,7 @@ describe('Store', () => {
       [TEST_LEAF_1]: expect.stringMatching(/^v1-[0-9a-f]{32}$/)
     })
     const ref = layout.scrollbackRefsByLeafId?.[TEST_LEAF_1]
-    expect(ref ? store.readTerminalScrollbackSnapshot(ref) : null).toBe('Current buffer')
+    expect(ref ? await store.readTerminalScrollbackSnapshotAsync(ref) : null).toBe('Current buffer')
     expect(layout.titlesByLeafId).toEqual({ [TEST_LEAF_1]: 'Current' })
     expect(session.tabsByWorktree.wt1[0].ptyId).toBe('daemon-pty')
   })

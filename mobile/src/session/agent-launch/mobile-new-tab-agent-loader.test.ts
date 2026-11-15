@@ -35,6 +35,4 @@ describe('mobile new-tab agent loading', () => {
       false
     )
   })
-
-  // Put another host’s colliding repo id first so its SSH connection cannot accidentally address this host.
 })

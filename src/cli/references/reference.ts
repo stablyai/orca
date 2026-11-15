@@ -22,7 +22,7 @@ import {
   parseReferenceUrls,
   resolveReferenceInputs
 } from './reference-input'
-import { RuntimeClientError } from '../runtime/types'
+import { RuntimeClientError } from '../runtime/connection/types'
 import type { RuntimeRpcSuccess } from '../../shared/runtime-rpc-envelope'
 
 // Older hosts may advertise linked-item deltas without supporting reference.*.

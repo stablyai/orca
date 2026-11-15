@@ -8,7 +8,7 @@ import {
   ORCAD_PROFILE_PREFLIGHT_FLAG,
   ORCAD_STARTUP_PREFLIGHT_FLAG
 } from '../../shared/orcad-profile-preflight'
-import { onNodePtyLoadFailure } from '../providers/node-pty-load-failure'
+import { onNodePtyLoadFailure } from '../providers/pty/node-pty-load-failure'
 import {
   confirmBundledOrcadStartupQualified,
   discardBundledOrcadStartupQualification,

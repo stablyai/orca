@@ -12,7 +12,7 @@ import {
   LOCAL_EXECUTION_HOST_ID,
   getRepoExecutionHostId
 } from '../../../shared/execution-host'
-import type { IPtyProvider } from '../../providers/pty-provider-contract'
+import type { IPtyProvider } from '../../providers/pty/provider-contract'
 import { killAllProcessesForWorktree } from '../workspaces/removal/worktree-teardown'
 import type { MemorySnapshot, StatsSummary } from '../../../shared/process-stats-types'
 import { collectMemorySnapshot } from '../../memory/collector'

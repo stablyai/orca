@@ -4,7 +4,7 @@ import { Loader2, Plus } from 'lucide-react'
 import { toast } from 'sonner'
 import { useAppStore } from '@/store/index'
 import { Button } from '@/components/ui/button'
-import { ClaudeIcon, OpenAIIcon } from '@/components/status-bar/icons'
+import { ClaudeIcon, OpenAIIcon } from '@/components/status-bar/accounts/provider-icons'
 import { cn } from '@/lib/class-names'
 import { readIpcErrorMessage } from '@/runtime/errors/ipc-error'
 import { useMountedRef } from '@/hooks/useMountedRef'
@@ -12,7 +12,7 @@ import type {
   ClaudeRateLimitAccountsState,
   CodexRateLimitAccountsState
 } from '../../../../../shared/managed-account-types'
-import { getFeatureWallUsageProviderConnection } from '../feature-wall-usage-tracking'
+import { getFeatureWallUsageProviderConnection } from '../completion/feature-wall-usage-tracking'
 import { useTranslate } from '@/i18n/use-translate'
 
 type ConnectAction = 'idle' | 'adding'

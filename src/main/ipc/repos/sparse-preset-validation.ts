@@ -1,4 +1,4 @@
-import { SparsePresetValidationError } from '../../../shared/worktree/sparse-preset-failure'
+import { SparsePresetValidationError } from '../../../shared/worktree/creation/sparse-preset-failure'
 import {
   InvalidSparseDirectoryError,
   normalizeSparseDirectories

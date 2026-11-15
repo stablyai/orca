@@ -1,6 +1,6 @@
 import { getActiveProfileStateLocation as resolveActiveProfileStateLocation } from '../../main/persistence/profile-state/offline-access/profile-state-active-location'
-import { RuntimeClientError } from '../runtime/types'
-import { getDefaultUserDataPath } from '../runtime/metadata'
+import { RuntimeClientError } from '../runtime/connection/types'
+import { getDefaultUserDataPath } from '../runtime/profile/metadata'
 
 export function getActiveProfileStateLocation(userDataPath = getDefaultUserDataPath()) {
   try {

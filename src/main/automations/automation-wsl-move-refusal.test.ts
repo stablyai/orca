@@ -25,10 +25,10 @@ import '../runtime/orchestration/db/messages/mailbox-routing-page'
 import '../runtime/orchestration/db/dispatch-row-writer'
 import '../runtime/orchestration/db/attempt-outcome-projection'
 import Database from '../sqlite/sync-database'
-import { AutomationService } from './service'
-import { tickAt } from './automation-service-tick.test-fixture'
+import { AutomationService } from './automation-service'
+import { tickAt } from './testing/automation-service-tick.test-fixture'
 
-import type * as PrecheckRunner from './precheck-runner'
+import type * as PrecheckRunner from './dispatch/precheck-runner'
 
 const runAutomationPrecheckMock = vi.hoisted(() => vi.fn())
 
@@ -43,7 +43,7 @@ vi.mock('electron', () => ({
   }
 }))
 
-vi.mock('./precheck-runner', async (importOriginal) => ({
+vi.mock('./dispatch/precheck-runner', async (importOriginal) => ({
   ...(await importOriginal<typeof PrecheckRunner>()),
   runAutomationPrecheck: runAutomationPrecheckMock
 }))

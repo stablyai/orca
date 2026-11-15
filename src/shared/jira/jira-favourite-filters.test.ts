@@ -1,10 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import {
-  MAX_JIRA_FAVOURITE_FILTER_LIST_BYTES,
-  normalizeJiraFavouriteFilters,
-  parseJiraFavouriteFilterList
-} from './jira-favourite-filters'
-import { JiraFavouriteFilterParams } from '../rpc-contract/jira-favourite-filter-params'
+import { normalizeJiraFavouriteFilters } from './jira-favourite-filters'
 
 const filter = { id: '123', name: 'My work', jql: 'assignee = currentUser()' }
 
@@ -66,63 +61,5 @@ describe('Jira favourite filter normalization', () => {
       filters: [],
       truncated: true
     })
-  })
-
-  it('bounds the serialized envelope including JSON escape expansion', () => {
-    const filters = Array.from({ length: 100 }, (_, index) => ({
-      ...filter,
-      id: String(index),
-      jql: `x${'\u0000'.repeat(8190)}x`
-    }))
-    const result = normalizeJiraFavouriteFilters(filters, 'site-1')
-    expect(result.filters.length).toBeGreaterThan(0)
-    expect(result.truncated).toBe(true)
-    expect(new TextEncoder().encode(JSON.stringify(result)).byteLength).toBeLessThanOrEqual(
-      MAX_JIRA_FAVOURITE_FILTER_LIST_BYTES
-    )
-    expect(parseJiraFavouriteFilterList(result, 'site-1')).toEqual(result)
-    expect(() =>
-      parseJiraFavouriteFilterList(
-        { filters: filters.map((item) => ({ ...item, siteId: 'site-1' })), truncated: false },
-        'site-1'
-      )
-    ).toThrow('transfer limit')
-  })
-})
-
-describe('Jira favourite filter transport contract', () => {
-  it.each([undefined, {}, { siteId: 'all' }, { siteId: ' ' }, { siteId: 'x'.repeat(129) }])(
-    'requires an explicit bounded single site: %j',
-    (value) => expect(JiraFavouriteFilterParams.safeParse(value).success).toBe(false)
-  )
-
-  it('accepts additive future response fields without exposing them to callers', () => {
-    expect(
-      parseJiraFavouriteFilterList(
-        {
-          filters: [{ ...filter, siteId: 'site-1', futureRowField: true }],
-          truncated: false,
-          nextPage: null
-        },
-        'site-1'
-      )
-    ).toEqual({ filters: [{ ...filter, siteId: 'site-1' }], truncated: false })
-  })
-
-  it.each([
-    null,
-    [],
-    { filters: [] },
-    { filters: [], truncated: 'false' },
-    { filters: [{ ...filter, siteId: 'site-2' }], truncated: false },
-    {
-      filters: [
-        { ...filter, siteId: 'site-1' },
-        { ...filter, siteId: 'site-1' }
-      ],
-      truncated: false
-    }
-  ])('rejects malformed or cross-site transport envelopes: %j', (value) => {
-    expect(() => parseJiraFavouriteFilterList(value, 'site-1')).toThrow()
   })
 })

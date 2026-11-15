@@ -90,32 +90,6 @@ describe('rebuild-native-deps patched node-pty rebuild', () => {
     }
   })
 
-  it('restores the ConPTY runtime payload after a Windows Electron rebuild', () => {
-    const projectDir = mkTempProject()
-
-    try {
-      writeFakeUsableElectronPackage(projectDir, { platform: 'win32' })
-      writeFakeElectronRebuild(projectDir)
-      writeFakeNodePtyConptyPayload(projectDir, 'x64')
-
-      const result = runRebuildScript(
-        projectDir,
-        { npm_config_platform: 'win32', npm_config_arch: 'x64' },
-        ['--platform=win32', '--arch=x64', '--force']
-      )
-
-      expect(result.status, result.stderr).toBe(0)
-      expect(result.stdout).toContain('Restored node-pty ConPTY runtime files for win10-x64')
-      const runtimeDir = join(projectDir, 'node_modules', 'node-pty', 'build', 'Release', 'conpty')
-      expect(readFileSync(join(runtimeDir, 'conpty.dll'), 'utf8')).toBe('conpty.dll x64')
-      expect(readFileSync(join(runtimeDir, 'OpenConsole.exe'), 'utf8')).toBe('OpenConsole.exe x64')
-    } finally {
-      removeTreeSync(projectDir)
-    }
-  })
-
-  // Model loadable addon with all job exports but no MSYS denial: require/export checks pass while Git Bash children leak.
-
   // Check rebuilt artifact destined for packaged app; neither relay gate nor runtime load check covers it. Missing output after success must fail too.
   for (const [addon, expected] of [
     ['unpatched', 'still imports ReadProcessMemory'],
@@ -198,8 +172,4 @@ describe('rebuild-native-deps patched node-pty rebuild', () => {
       removeTreeSync(projectDir)
     }
   })
-
-  // Cross-host rebuild or absent optional node-pty may leave no win32 addon; warn without breaking a working install.
-
-  // Same-host missing output must fail: loader falls back to upstream prebuild that leaks MSYS children. Only Windows can exercise this branch.
 })

@@ -16,9 +16,9 @@ import {
   useInstalledAgentSkill
 } from '@/hooks/skills/discovery/useInstalledAgentSkills'
 import { useOnboardingSkillRuntime } from '@/hooks/skills/runtime/use-onboarding-skill-runtime'
-import { getSetupGuideProgressSnapshot } from '../feature-wall/feature-wall-setup-progress'
-import type { FeatureWallSetupProgress } from '../feature-wall/feature-wall-setup-progress'
-import { deriveIntegrationConnectionStatus } from '../feature-wall/use-integration-connection-status'
+import { getSetupGuideProgressSnapshot } from '../feature-wall/setup/feature-wall-setup-progress'
+import type { FeatureWallSetupProgress } from '../feature-wall/setup/feature-wall-setup-progress'
+import { deriveIntegrationConnectionStatus } from '../feature-wall/setup/integrations/use-integration-connection-status'
 import { useSetupGuideBrowserMilestoneProgress } from './setup-guide-browser-milestone-progress'
 import {
   getComputerUsePermissionSetupState,

@@ -26,13 +26,14 @@ import { acpAgentName } from '../session/acp-structured-agent-definitions'
 import type { AcpStructuredConnection } from '../process/acp-structured-connection'
 import { acpSessionAcceptsImages } from '../protocol/acp-image-capability'
 import type { ContentBlock } from '../generated/acp-protocol.generated'
+import { acpFileMentionLinks } from './acp-file-mention-links'
 
 // Reserve space for the JSON-RPC envelope around the prompt blocks.
 const ACP_PROMPT_LINE_BUDGET = ACP_MAX_LINE_BYTES - 64 * 1024
 // Budget raw images for base64's 4:3 expansion and leave room for text.
 const ACP_PROMPT_TOTAL_IMAGE_MAX_BYTES = Math.floor((ACP_PROMPT_LINE_BUDGET * 3) / 4) - 1024 * 1024
-// OpenCode 2 fails the turn for any attachment over 20 MiB.
-const ACP_PROMPT_PER_IMAGE_MAX_BYTES = 20 * 1024 * 1024
+// OpenCode 2 fails the turn for any image or linked file over 20 MiB.
+const ACP_PROMPT_PER_ATTACHMENT_MAX_BYTES = 20 * 1024 * 1024
 const MAX_IMAGE_COUNT = 20
 const READ_TIMEOUT_MS = 15_000
 
@@ -74,8 +75,8 @@ async function imageBlock(
     if (bytes === 0) {
       throw attachmentProblem({ reason: 'empty' })
     }
-    if (bytes > ACP_PROMPT_PER_IMAGE_MAX_BYTES) {
-      throw attachmentProblem({ reason: 'tooLarge', limit: ACP_PROMPT_PER_IMAGE_MAX_BYTES })
+    if (bytes > ACP_PROMPT_PER_ATTACHMENT_MAX_BYTES) {
+      throw attachmentProblem({ reason: 'tooLarge', limit: ACP_PROMPT_PER_ATTACHMENT_MAX_BYTES })
     }
     if (bytes > remainingBytes) {
       throw attachmentProblem({ reason: 'totalTooLarge', limit: ACP_PROMPT_TOTAL_IMAGE_MAX_BYTES })
@@ -91,7 +92,7 @@ async function imageBlock(
     block: { type: 'text' as const, text: formatNativeChatFileReference(path) },
     bytes: 0
   }
-  const maxBytes = Math.min(remainingBytes, ACP_PROMPT_PER_IMAGE_MAX_BYTES)
+  const maxBytes = Math.min(remainingBytes, ACP_PROMPT_PER_ATTACHMENT_MAX_BYTES)
   if (!mimeType || maxBytes <= 0) {
     return fallback
   }
@@ -119,9 +120,11 @@ async function imageBlock(
   return { block: { type: 'image', mimeType, data: data.toString('base64') }, bytes: data.length }
 }
 
+/** `mentionRoot` links each `@path` there, for agents that read only linked files. */
 export async function acpPromptBlocks(
   body: AgentJournalMessageItem,
-  acceptsImages: boolean
+  acceptsImages: boolean,
+  mentionRoot?: string
 ): Promise<ContentBlock[]> {
   // Reserve later text and file references before allocating image capacity.
   const blocks: ContentBlock[] = body.blocks.map((block) => {
@@ -131,6 +134,12 @@ export async function acpPromptBlocks(
     const path = block.type === 'image-ref' ? hostImagePath(block) : null
     return { type: 'text', text: path ? formatNativeChatFileReference(path) : '' }
   })
+  if (mentionRoot !== undefined) {
+    const texts = body.blocks.flatMap((block) => (block.type === 'text' ? [block.text] : []))
+    blocks.push(
+      ...(await acpFileMentionLinks(texts, mentionRoot, ACP_PROMPT_PER_ATTACHMENT_MAX_BYTES))
+    )
+  }
   const blockBytes = (block: ContentBlock): number => Buffer.byteLength(JSON.stringify(block))
   let encodedBytes =
     2 + Math.max(0, blocks.length - 1) + blocks.reduce((n, b) => n + blockBytes(b), 0)
@@ -194,6 +203,7 @@ export async function acpDispatchPrompt(
   session: {
     spec: Pick<AcpLaunchSpec, 'agent' | 'dialect'>
     connection: Pick<AcpStructuredConnection, 'initialize'>
+    cwd: string
   }
 ): Promise<ContentBlock[] | AgentJournalDispatchRejection> {
   if (isWithheldCommand(body, session.spec.dialect.withheldCommands ?? [])) {
@@ -203,7 +213,11 @@ export async function acpDispatchPrompt(
     })
   }
   try {
-    return await acpPromptBlocks(body, await acpSessionAcceptsImages(session))
+    return await acpPromptBlocks(
+      body,
+      await acpSessionAcceptsImages(session),
+      session.spec.dialect.linksFileMentions ? session.cwd : undefined
+    )
   } catch (error) {
     if (error instanceof AcpPromptContentError) {
       return agentSessionFailureWords(error.failure, {

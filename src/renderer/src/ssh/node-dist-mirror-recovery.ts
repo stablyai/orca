@@ -7,6 +7,7 @@ import type { SshManagedServerStatus } from '../../../shared/ssh-types'
 import { translate } from '@/i18n/i18n'
 import { isPairedWebClientWindow } from '@/app-shell/chrome/desktop-window-chrome'
 import { useAppStore } from '@/store/index'
+import { NODE_DIST_MIRROR_SETTINGS_TARGET_ID } from '@/components/settings/navigation/settings-navigation-types'
 import {
   isSshConnectInFlight,
   subscribeSshConnectInFlight,
@@ -56,14 +57,15 @@ export function readNodeDistMirrorDialogTarget(data: Record<string, unknown>): s
   return typeof data.targetId === 'string' && data.targetId ? data.targetId : null
 }
 
-// Search opens collapsed fields too when only the environment variable supplied a mirror.
+// The jump reveals the collapsed proxy fields even when only the environment supplied a mirror.
 function openNodeDistMirrorSettings(): void {
-  const { openSettingsPage, openSettingsTarget, setSettingsSearchQuery } = useAppStore.getState()
+  const { openSettingsPage, openSettingsTarget } = useAppStore.getState()
   openSettingsPage()
-  openSettingsTarget({ pane: 'advanced', repoId: null })
-  setSettingsSearchQuery(
-    translate('auto.components.settings.general.search.nodeDistMirror', 'mirror')
-  )
+  openSettingsTarget({
+    pane: 'advanced',
+    repoId: null,
+    sectionId: NODE_DIST_MIRROR_SETTINGS_TARGET_ID
+  })
 }
 
 export type SaveNodeDistMirrorResult =

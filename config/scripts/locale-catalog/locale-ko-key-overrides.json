@@ -1742,12 +1742,6 @@
   "auto.components.settings.ExperimentalPane.agentHibernation.toggleLabel": {
     "ko": "에이전트 최대 절전 전환"
   },
-  "auto.components.settings.ExperimentalPane.newWorktreeCardStyle.copy": {
-    "ko": "업데이트된 워크트리 카드 레이아웃, 메타데이터 배치, 카드 표시 메뉴 옵션 및 상태 표시를 미리 봅니다."
-  },
-  "auto.components.settings.ExperimentalPane.newWorktreeCardStyle.description": {
-    "ko": "업데이트된 워크트리 카드 레이아웃, 메타데이터 배치, 카드 표시 메뉴 옵션 및 상태 표시를 미리 봅니다."
-  },
   "auto.components.settings.EphemeralVmsPane.recipes": {
     "ko": "레시피"
   },
@@ -1894,9 +1888,6 @@
   },
   "auto.components.settings.RepositoryHooksSection.a3fc966677": {
     "ko": "# 예: pnpm install cp \"$ORCA_ROOT_PATH/.env\" \"$ORCA_WORKTREE_PATH/.env\""
-  },
-  "auto.components.settings.RepositoryHooksSection.b20c5df6ca": {
-    "ko": "이 repo의 공유 설정, 아카이브 또는 이슈 자동화 기본값을 사용하려면 `orca.yaml` 파일을 추가하세요. 예제 템플릿:"
   },
   "auto.components.settings.RepositoryHooksSection.c5a55a2d2e": {
     "ko": "고급"
@@ -2587,9 +2578,6 @@
   },
   "auto.components.settings.experimental.search.agentHibernation.title": {
     "ko": "에이전트 최대 절전"
-  },
-  "auto.components.settings.experimental.search.newWorktreeCardStyle.description": {
-    "ko": "업데이트된 워크트리 카드 레이아웃, 메타데이터 배치, 카드 표시 메뉴 옵션 및 상태 표시를 미리 봅니다."
   },
   "auto.components.settings.general.search.12ecc640a8": {
     "ko": "mru"

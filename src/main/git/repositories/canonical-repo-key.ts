@@ -1,6 +1,6 @@
 import type { LocalGitExecOptions } from '../refs/resolution/repo-default-base-ref'
 import type { GitExecOptions } from '../command-runner/git-exec-options'
-import { toWslExecutionSpace } from '../../../shared/wsl-paths'
+import { parseWslUncPath, toWslExecutionSpace } from '../../../shared/wsl-paths'
 import { gitExecFileAsync } from '../command-runner/git-exec-file'
 import { resolveRevParsePath } from '../worktrees/catalog/worktree-path-comparison'
 
@@ -10,7 +10,8 @@ export type CanonicalRepoKeyOptions = LocalGitExecOptions &
   Pick<GitExecOptions, 'signal' | 'canStart'>
 
 const CACHE_MAX = 512
-const cache = new Map<string, string>()
+type CachedRepoKey = { key: string; commonDir?: string }
+const cache = new Map<string, CachedRepoKey>()
 
 /** Git < 2.31 echoes unsupported --path-format=absolute; resolve its relative answer to prevent key collisions. */
 export function readGitCommonDir(stdout: string, repoPath: string): string | undefined {
@@ -21,7 +22,7 @@ export function readGitCommonDir(stdout: string, repoPath: string): string | und
   return commonDir ? resolveRevParsePath(toWslExecutionSpace(repoPath), commonDir) : undefined
 }
 
-function remember(cacheKey: string, value: string): string {
+function remember(cacheKey: string, value: CachedRepoKey): string {
   cache.delete(cacheKey)
   cache.set(cacheKey, value)
   while (cache.size > CACHE_MAX) {
@@ -31,7 +32,16 @@ function remember(cacheKey: string, value: string): string {
     }
     cache.delete(oldest.value)
   }
-  return value
+  return value.key
+}
+
+/** A missing answer or caller-path fallback is not a verified shared repository identity. */
+export function peekGitCommonDir(
+  repoPath: string,
+  options: Pick<CanonicalRepoKeyOptions, 'wslDistro'> = {}
+): string | undefined {
+  const runtimeKey = options.wslDistro ? `wsl:${options.wslDistro}` : 'local'
+  return cache.get(`${runtimeKey}::${repoPath}`)?.commonDir
 }
 
 /** `${runtimeKey}::${gitCommonDir}`, falling back to the caller's path. */
@@ -52,7 +62,11 @@ export async function getCanonicalRepoKey(
     )
     const commonDir = readGitCommonDir(stdout, repoPath)
     if (commonDir) {
-      return remember(cacheKey, `${runtimeKey}::${commonDir}`)
+      return remember(cacheKey, {
+        key: `${runtimeKey}::${commonDir}`,
+        // Drive-path routing may change Git hosts; only unambiguous namespaces prove provenance.
+        ...(process.platform !== 'win32' || parseWslUncPath(repoPath) ? { commonDir } : {})
+      })
     }
   } catch (error) {
     // Cancellation is unavailable identity, not a caller-path identity to cache.
@@ -61,7 +75,7 @@ export async function getCanonicalRepoKey(
     }
     // The caller path remains a safe serialization key when canonicalization fails.
   }
-  return remember(cacheKey, cacheKey)
+  return remember(cacheKey, { key: cacheKey })
 }
 
 export function _resetCanonicalRepoKeyCacheForTests(): void {

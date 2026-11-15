@@ -1,3 +1,4 @@
+import '../../memory-agent-identity-store.test-fixture'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { appendFileSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'

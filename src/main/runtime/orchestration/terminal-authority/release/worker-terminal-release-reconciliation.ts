@@ -1,7 +1,7 @@
 import type { WorkerTerminalReleaseRuntime } from './worker-terminal-release-runtime'
 import { inspectRemoteAttachment } from '../../legacy-remote/federation-attachment-observation'
 import { releaseRemoteAttachment } from '../../legacy-remote/federated-worker-release-host'
-import { completeWorkerTerminalRelease } from '../../../rpc/methods/orchestration/worker/worker-release-completion'
+import { completeWorkerTerminalRelease } from '../../../rpc/methods/orchestration/worker/release/worker-release-completion'
 
 export type WorkerTerminalReleaseReconciliationResult = {
   attempted: number

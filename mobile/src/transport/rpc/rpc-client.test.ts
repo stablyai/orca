@@ -91,8 +91,6 @@ describe('mobile rpc-client connection timeout', () => {
     globalThis.WebSocket = originalWebSocket
   })
 
-  // Foreground recovery must heal Android sessions left half-open after suspension (#5049).
-
   // Transient auth rejection must not force re-pairing while the desktop still has valid credentials (#5200).
   describe('auth rejection retry (issue #5200)', () => {
     it('retries the handshake on a transient e2ee_error instead of latching auth-failed', async () => {

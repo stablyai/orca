@@ -1,3 +1,5 @@
+import { queuedCardTexts } from './structured-chat-coordinator-journal.test-fixture'
+import { readTestHostJournal } from '../../../../native-chat/agent-session-journal/journal-observation.test-support'
 // A finished structured worker takes follow-up work in its own chat through worker-start --terminal <handle>, or a send to its Dispatch.
 
 import { beforeEach, describe, expect, it, vi } from 'vitest'
@@ -15,7 +17,6 @@ import {
   host,
   isWholeMail,
   openChat,
-  queuedCardTexts,
   request,
   runtime,
   sendUserMessage,
@@ -25,7 +26,7 @@ import {
 import { getFollowUpDispatch } from '../../db/dispatch-context/worker-follow-up-lineage'
 import { structuredWorkerIdentities } from './structured-worker-identity'
 import { createStructuredWorkerSession } from '../../../rpc/methods/orchestration/structured-workers/orchestration-structured-worker-session'
-import type { placeWorkerAgent } from '../../../rpc/methods/orchestration/worker/worker-start-agent-placement'
+import type { placeWorkerAgent } from '../../../rpc/methods/orchestration/worker/start/placement/worker-start-agent-placement'
 
 // The worker's chat is created in the rig's real session host, as the production create would.
 vi.mock(
@@ -286,7 +287,7 @@ describe('a send to a finished structured worker', () => {
     expect(host.isSessionTabVisible(identity.sessionId)).toBe(true)
     // The coordinator's chat shows the reopen, never a newly started worker.
     await vi.waitFor(async () => {
-      const cards = (await host.journalSnapshot(COORDINATOR)).items.flatMap(({ body }) =>
+      const cards = (await readTestHostJournal(host, COORDINATOR)).items.flatMap(({ body }) =>
         body?.kind === 'agent-start' ? [body] : []
       )
       expect(cards).toEqual([

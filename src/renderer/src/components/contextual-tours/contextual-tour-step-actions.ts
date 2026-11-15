@@ -1,5 +1,6 @@
 import type { ContextualTourStepAction } from '../../../../shared/contextual-tours'
 import type { RequestActiveTerminalPaneSplitDetail } from '@/constants/terminal'
+import { trackBrowserExtensionsWebStoreOpened } from '@/diagnostics/telemetry/browser-extensions-telemetry'
 
 export function performContextualTourStepAction(args: {
   action: ContextualTourStepAction
@@ -74,6 +75,8 @@ export function performContextualTourStepAction(args: {
     case 'open-chrome-web-store':
       void args.openChromeWebStore().then((opened) => {
         if (opened) {
+          // Only the extensions banner offers this action.
+          trackBrowserExtensionsWebStoreOpened('banner')
           args.finishTour()
         } else {
           args.reportChromeWebStoreOpenFailure()

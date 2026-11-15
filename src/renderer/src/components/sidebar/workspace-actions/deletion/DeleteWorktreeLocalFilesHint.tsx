@@ -2,7 +2,7 @@ import type { JSX } from 'react'
 import { AlertTriangle } from 'lucide-react'
 import { useTranslate } from '@/i18n/use-translate'
 import { formatAtRiskLocalFileNames } from '@/lib/workspace/display/at-risk-local-files-label'
-import type { WorktreeAtRiskLocalFiles } from '../../../../../../shared/worktree/at-risk-local-files'
+import type { WorktreeAtRiskLocalFiles } from '../../../../../../shared/worktree/removal/at-risk-local-files'
 
 export function DeleteWorktreeLocalFilesHint({
   files

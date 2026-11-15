@@ -2,7 +2,7 @@ import { getStoredRepoExecutionHostId } from '../../../workspaces/execution-host
 import type { BranchPrefixStrategy } from '../../../../shared/ui-chrome-types'
 import type { Repo } from '../../../../shared/repo-types'
 import { getPRForBranch } from '../../../github/client/lookup/get-pr-for-branch'
-import type { GitAdmissionTier } from '../../../../shared/rpc-contract/git-admission-tier-params'
+import type { GitAdmissionTier } from '../../../../shared/rpc-contract/source-control/git-admission-tier-params'
 import { gitExecFileAsync } from '../../../git/command-runner/git-exec-file'
 import { foldGitRefNameCase } from '../../../git/refs/resolution/repo-branch-conflict'
 import { listWorktrees } from '../../../git/worktrees/catalog/worktree-scan-cache'

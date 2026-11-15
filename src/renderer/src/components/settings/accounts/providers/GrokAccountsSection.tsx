@@ -10,6 +10,7 @@ import type { GrokAccountStatus } from '../../../../../../shared/rate-limit-type
 import { SearchableSetting } from '../../section-layout/SearchableSetting'
 import { openAppHttpLinkFromAnchor } from '@/lib/browser/navigation/app-http-link-open'
 import { SettingsGroup } from '../../section-layout/SettingsGroup'
+import { ACCOUNTS_SECTION_IDS } from '../accounts-search'
 const GROK_CLI_DOCS_URL = 'https://docs.x.ai/build/overview'
 
 export function GrokAccountsSection(): React.JSX.Element {
@@ -65,7 +66,7 @@ export function GrokAccountsSection(): React.JSX.Element {
       : null
 
   return (
-    <div id="accounts-grok" className="scroll-mt-6">
+    <div id={ACCOUNTS_SECTION_IDS.grok} className="scroll-mt-6">
       <SettingsGroup
         title={
           <span className="flex items-center gap-2">

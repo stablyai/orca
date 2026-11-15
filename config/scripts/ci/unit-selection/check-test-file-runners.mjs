@@ -79,19 +79,6 @@ const NON_UNIT_TEST_RUNNERS = [
       'dev/scripts/run-relay-tests.test.mjs',
       '../.github/actions/cloud-sql-rollout-lease/*.test.mjs'
     ]
-  },
-  {
-    // `orca plugin test` runs every example's own tests in Node; the unit test drives it.
-    name: 'example plugin tests (orca plugin test)',
-    include: ['examples/plugins/*/src/**/*.test.ts', 'examples/plugins/*/src/**/*.test.tsx'],
-    sources: ['src/cli/plugins/authoring/plugin-test-runner.test.ts'],
-    mirrors: ['readdirSync(EXAMPLES)']
-  },
-  {
-    name: 'docs site',
-    include: ['docs/site/tests/*.test.mjs'],
-    sources: ['docs/site/package.json'],
-    mirrors: ['node --test tests/*.test.mjs']
   }
 ]
 

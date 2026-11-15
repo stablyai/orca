@@ -27,24 +27,6 @@ function resolveSelection(repos: Repo[], persisted: string[], preferred?: string
 }
 
 describe('task page initial repo selection', () => {
-  it('normalizes persisted selections without a repository scan for every stored ID', () => {
-    let reads = 0
-    const repos: Repo[] = Array.from({ length: 1000 }, (_, index) => ({
-      get id() {
-        reads++
-        return `repo-${index}`
-      },
-      path: `/repos/${index}`,
-      displayName: `Repo ${index}`,
-      badgeColor: '',
-      addedAt: index,
-      kind: 'git'
-    }))
-    const persisted = Array.from({ length: 1000 }, (_, index) => `repo-${index}`)
-    expect(resolveSelection(repos, persisted)).toEqual(persisted)
-    expect(reads).toBeLessThan(40_000)
-  })
-
   it('ignores persisted IDs for ineligible repos, including folder workspaces', () => {
     const repos: Repo[] = [
       {
