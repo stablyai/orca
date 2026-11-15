@@ -1,3 +1,4 @@
+import type { TerminalSelectionGeometry } from '../../../../src/shared/terminal/output/terminal-selection-gutter'
 import type { ParsedFileLinkLocation } from '../../../../src/shared/file-links/file-link-location'
 import type { RuntimeMobileTerminalTheme } from '../../../../src/shared/runtime-mobile-session-tab-contracts'
 import type { TerminalOscLinkRange } from '../../../../src/shared/terminal/links/terminal-osc-link-ranges'
@@ -65,9 +66,12 @@ export type TerminalPointerInput = {
   readonly click: boolean
 }
 
+/** What the WebView knows about a selection; the host adds whether the pane runs an agent. */
+export type TerminalSelectionCells = Pick<TerminalSelectionGeometry, 'startCol' | 'cols'>
+
 export type TerminalSelectionEvents = {
   onSelectionMode?: (active: boolean) => void
-  onSelectionCopy?: (text: string) => void
+  onSelectionCopy?: (text: string, cells?: TerminalSelectionCells) => void
   onSelectionEvicted?: () => void
   onClipboardWrite?: (text: string) => void
   onModesChanged?: (modes: TerminalModes) => void
