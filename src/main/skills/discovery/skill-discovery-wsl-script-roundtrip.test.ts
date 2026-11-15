@@ -64,6 +64,7 @@ describe.skipIf(process.platform === 'win32')('WSL skill discovery script round-
       '---\ndescription: Apply an OpenSpec change\n---\n'
     )
     await writeFile(join(projectCommands, 'standalone.md'), '# Standalone\n\nRun it.\n')
+    await writeFile(join(projectCommands, 'deploy.MD'), '# Deploy\n')
     await writeFile(join(projectCommands, 'notes.txt'), 'not a command')
     const commandRoots = [
       { path: projectCommands, scope: 'project' as const },
@@ -77,8 +78,8 @@ describe.skipIf(process.platform === 'win32')('WSL skill discovery script round-
     )
     const commands = parseWslCustomSlashCommandOutput(stdout, commandRoots)
 
-    expect(commands.map((command) => command.name)).toEqual(['opsx:apply', 'standalone'])
-    expect(commands[0].description).toBe('Apply an OpenSpec change')
-    expect(commands[0].scope).toBe('project')
+    expect(commands.map((command) => command.name)).toEqual(['deploy', 'opsx:apply', 'standalone'])
+    expect(commands[1].description).toBe('Apply an OpenSpec change')
+    expect(commands[1].scope).toBe('project')
   })
 })

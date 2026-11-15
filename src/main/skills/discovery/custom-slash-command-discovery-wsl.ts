@@ -34,7 +34,7 @@ export function buildWslCustomSlashCommandDiscoveryCommand(
     `    printf '%s\\0%s\\0' "$root_index" "$command_file"`,
     `    printf '%s' "$encoded_markdown"`,
     `    printf '\\0'`,
-    `  done < <(find -L "$root_path" -mindepth 1 -maxdepth ${SKILL_FILE_MAX_DEPTH} -type f -name '*.md' -print0 2>/dev/null)`,
+    `  done < <(find -L "$root_path" -mindepth 1 -maxdepth ${SKILL_FILE_MAX_DEPTH} -type f -iname '*.md' -print0 2>/dev/null)`,
     '}'
   ]
   roots.forEach((root, index) => {
