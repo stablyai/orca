@@ -3,6 +3,7 @@
 import '@testing-library/jest-dom/vitest'
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { setLocalRuntimeCapabilitiesForTests } from '@/runtime/hosts/capabilities/local-runtime-capabilities'
 import type * as StructuredAgentSessionHostSupport from '@/runtime/native-chat/host-capabilities/structured-agent-session-host-support'
 import type { ChatApproval } from '../../../../../shared/native-chat/input/native-chat-interactive-prompt'
 import { AGENT_SESSION_APPROVAL_FEEDBACK_RUNTIME_CAPABILITY } from '../../../../../shared/agent-session/agent-session-runtime-capabilities'
@@ -10,6 +11,7 @@ import { TooltipProvider } from '@/components/ui/tooltip'
 import type { StructuredAgentSessionAction } from '../session/structured/writes/use-structured-agent-session-mutate'
 import { NativeChatApprovalCard } from './NativeChatApprovalCard'
 import { NativeChatResolutionReceipt } from './NativeChatResolutionReceipt'
+import { NativeChatStructuredPromptCard } from './NativeChatStructuredPromptCard'
 import { respondToStructuredAgentSessionPrompt } from './structured-agent-session-prompt-response'
 
 const hostSupport = vi.hoisted(() => ({
@@ -30,6 +32,7 @@ vi.mock(
 afterEach(() => {
   cleanup()
   hostSupport.supportsFeedback.mockReset().mockResolvedValue(true)
+  setLocalRuntimeCapabilitiesForTests(null)
 })
 
 function planApproval(overrides: Partial<ChatApproval> = {}): ChatApproval {
@@ -202,5 +205,77 @@ describe('NativeChatApprovalCard plan review', () => {
       </TooltipProvider>
     )
     expect(screen.getByText('Keep planning · Make step 2 atomic')).toBeInTheDocument()
+  })
+
+  it('hides the inline feedback field and Submit action on hosts without approval-feedback capability', () => {
+    const respond = vi.fn(async () => null)
+    const prompt = {
+      itemId: 'item-1',
+      sequence: 1,
+      revision: 2,
+      observedAt: 1,
+      body: {
+        kind: 'approval' as const,
+        title: 'Review proposed plan',
+        detail: null,
+        subject: { kind: 'plan' as const, text: '1. Update schema' },
+        options: [
+          {
+            id: 'allowAcceptEdits',
+            label: 'Approve and auto-accept edits',
+            intent: 'allow_always' as const
+          },
+          { id: 'allow', label: 'Approve and ask before edits', intent: 'allow_once' as const },
+          { id: 'deny', label: 'Keep planning', intent: 'reject_once' as const }
+        ],
+        freeTextInput: { multiline: true },
+        resolution: {
+          state: 'pending' as const,
+          selectedOptionId: null,
+          resolvedBy: null,
+          resolvedAt: null
+        }
+      }
+    }
+    const promptResponse = { respond, holds: () => false }
+    const answerInputRef = { current: null }
+
+    setLocalRuntimeCapabilitiesForTests([])
+    render(
+      <NativeChatStructuredPromptCard
+        target={{ kind: 'local' }}
+        prompt={prompt}
+        promptResponse={promptResponse}
+        onCancel={vi.fn()}
+        shouldFocus={false}
+        answerInputRef={answerInputRef}
+      />
+    )
+    expect(screen.queryByRole('textbox')).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Submit' })).toBeNull()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Keep planning' }))
+    expect(respond).toHaveBeenCalledWith(prompt, { kind: 'option', optionId: 'deny' })
+
+    cleanup()
+    setLocalRuntimeCapabilitiesForTests([AGENT_SESSION_APPROVAL_FEEDBACK_RUNTIME_CAPABILITY])
+    render(
+      <NativeChatStructuredPromptCard
+        target={{ kind: 'local' }}
+        prompt={prompt}
+        promptResponse={promptResponse}
+        onCancel={vi.fn()}
+        shouldFocus={false}
+        answerInputRef={answerInputRef}
+      />
+    )
+    const field = screen.getByRole('textbox')
+    fireEvent.change(field, { target: { value: 'Split step 1' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Submit' }))
+    expect(respond).toHaveBeenLastCalledWith(prompt, {
+      kind: 'option',
+      optionId: 'deny',
+      feedback: 'Split step 1'
+    })
   })
 })

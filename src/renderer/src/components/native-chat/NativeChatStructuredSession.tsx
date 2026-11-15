@@ -376,6 +376,7 @@ export function NativeChatStructuredSession(props: Omit<NativeChatStructuredView
           {composerShown || subagentOpen ? null : <NativeChatPromptSlotNotices notices={notices} />}
           <NativeChatStructuredPromptCard
             key={prompt ? `${prompt.itemId}:${prompt.revision}` : undefined}
+            target={props.target}
             prompt={prompt}
             promptResponse={promptResponse}
             onCancel={cancelPrompt}
