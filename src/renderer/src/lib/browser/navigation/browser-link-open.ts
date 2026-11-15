@@ -20,8 +20,13 @@ import {
   hasPendingEntityTab
 } from '@/runtime/workspace-layout/intents/layout-owner-pending-tabs'
 import { captureBrowserLinkReveal } from './browser-link-reveal'
+import { resolveHiddenDestinationMove } from '../../links/placement/adjacent-link-open-group'
 import type { AppState } from '@/store/types'
 import type { CreateBrowserTabOptions } from '@/store/slices/browser/browser-slice-contract'
+import {
+  moveTabToGroup,
+  moveTabToNewPaneColumn
+} from '@/components/tab-bar/tab-move-to-pane-column'
 
 export class BrowserLinkPlacementRefused extends Error {}
 
@@ -111,6 +116,44 @@ export async function openLocalBrowserLink(params: {
       )
       if (!workspace || !page || !browserLinkPageMatches(state, destination, workspace, page)) {
         return { status: 'refused' }
+      }
+      const intent = context.linkIntent
+      // Why: activating a page behind its source would cover the source; move it beside instead.
+      const moveMatch = resolveHiddenDestinationMove({
+        layout: state.layoutByWorktree[destination.worktreeId],
+        groups: state.groupsByWorktree[destination.worktreeId] ?? [],
+        groupId: match.groupId,
+        sourceTabId:
+          intent?.workspaceId === destination.worktreeId && !intent.targetGroupId
+            ? intent.sourceTabId
+            : undefined,
+        destinationTabId: match.unifiedTabId
+      })
+      const moved =
+        moveMatch &&
+        ('split' in moveMatch
+          ? moveTabToNewPaneColumn({
+              worktreeId: destination.worktreeId,
+              unifiedTabId: match.unifiedTabId,
+              groupId: match.groupId,
+              direction: moveMatch.split.splitDirection
+            })
+          : moveTabToGroup({
+              worktreeId: destination.worktreeId,
+              unifiedTabId: match.unifiedTabId,
+              groupId: moveMatch.groupId
+            }))
+      if (moved === 'owner') {
+        // Main draws the move and selects the moved tab.
+        return { status: 'opened', result: match }
+      }
+      if (moved === 'moved') {
+        result = browserOpenResultForPage(
+          useAppStore.getState(),
+          destination,
+          match.browserWorkspaceId,
+          match.browserPageId
+        )
       }
     } else {
       const created = state.createBrowserTab(destination.worktreeId, params.url, {

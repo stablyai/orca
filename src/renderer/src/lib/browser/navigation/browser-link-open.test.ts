@@ -213,4 +213,55 @@ describe('existing open routes with link intent', () => {
     })
     expect(store.getState().activeWorktreeId).toBe(WORKSPACE)
   })
+
+  it('moves a matching page hidden behind its source chat into a split beside it', async () => {
+    const fileUrl = 'file:///repo/outline.html'
+    store.setState({
+      groupsByWorktree: {
+        [WORKSPACE]: [
+          makeTabGroup({
+            id: 'a',
+            worktreeId: WORKSPACE,
+            activeTabId: 'source',
+            tabOrder: ['source']
+          })
+        ]
+      },
+      unifiedTabsByWorktree: {
+        [WORKSPACE]: store
+          .getState()
+          .unifiedTabsByWorktree[WORKSPACE]!.filter((tab) => tab.id === 'source')
+      },
+      activeGroupIdByWorktree: { [WORKSPACE]: 'a' },
+      layoutByWorktree: { [WORKSPACE]: { type: 'leaf', groupId: 'a' } }
+    })
+    const background = browser('a', fileUrl)
+    const pageId = background.activePageId!
+
+    const outcome = await openLocalBrowserLink({
+      destination: browserLinkTestDestination({ resource: { kind: 'local-file', url: fileUrl } }),
+      context: context(),
+      url: fileUrl,
+      ownsRoute: () => true
+    })
+
+    const state = store.getState()
+    const groups = state.groupsByWorktree[WORKSPACE]!
+    const browserGroup = groups.find((group) => group.id !== 'a')
+    expect(outcome).toMatchObject({
+      status: 'opened',
+      result: { browserPageId: pageId, groupId: browserGroup?.id }
+    })
+    expect(groups.find((group) => group.id === 'a')).toMatchObject({
+      activeTabId: 'source',
+      tabOrder: ['source']
+    })
+    expect(state.layoutByWorktree[WORKSPACE]).toMatchObject({
+      type: 'split',
+      direction: 'horizontal',
+      first: { type: 'leaf', groupId: 'a' },
+      second: { type: 'leaf', groupId: browserGroup?.id }
+    })
+    expect(state.browserPagesByWorkspace[background.id]?.map((page) => page.id)).toEqual([pageId])
+  })
 })

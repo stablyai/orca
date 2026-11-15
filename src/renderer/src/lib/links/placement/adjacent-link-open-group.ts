@@ -156,3 +156,24 @@ export function resolveLinkOpenSidePlacement(input: {
   }
   return { split: { sourceGroupId, splitDirection: 'right', activate: false } }
 }
+
+/** Where a reused destination hidden behind its link's source tab moves, so the source stays visible. */
+export function resolveHiddenDestinationMove(input: {
+  layout?: TabGroupLayoutNode
+  groups: readonly Pick<TabGroup, 'id' | 'activeTabId'>[]
+  groupId: string
+  sourceTabId: string | undefined
+  destinationTabId: string
+}): { groupId: string } | { split: TabSplitTarget } | null {
+  const { layout, groups, groupId, sourceTabId } = input
+  const group = groups.find((item) => item.id === groupId)
+  if (
+    !sourceTabId ||
+    group?.activeTabId !== sourceTabId ||
+    input.destinationTabId === sourceTabId
+  ) {
+    return null
+  }
+  const placement = resolveLinkOpenSidePlacement({ layout, groups, sourceGroupId: groupId })
+  return placement && !('groupId' in placement && placement.groupId === groupId) ? placement : null
+}
