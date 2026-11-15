@@ -46,15 +46,21 @@ export async function openOrcaGitHubAppInstall(repoUrl: string): Promise<boolean
 
 /**
  * Once the App's installation covers the repository (the install webhook bound it), runs the
- * sandbox's push check again and drops the notice when the push is now authorized. Returns
- * 'granted' when the push works, 'waiting' while GitHub hasn't confirmed yet, 'refused' when the
- * installation landed but the sandbox still can't push.
+ * sandbox's check again and drops the push line, and the can't-reach line (GH-FETCH-REASON), that
+ * pass now. Returns 'granted' when nothing is left failing, 'waiting' while GitHub hasn't confirmed
+ * yet, 'refused' when the installation landed but the sandbox still can't push or reach origin
+ * (a workspace started before the install needs a restart to use it).
  */
 export async function recheckCloudPushAccess(
   environmentId: string
 ): Promise<'granted' | 'waiting' | 'refused'> {
   const record = getCloudSetupNoticesRecord(environmentId)
-  if (!record?.repoUrl || !record.notices.some((notice) => notice.kind === 'push')) {
+  const watched = new Set(
+    (record?.notices ?? [])
+      .filter((notice) => notice.kind === 'push' || notice.kind === 'fetch')
+      .map((notice) => notice.kind)
+  )
+  if (!record?.repoUrl || watched.size === 0) {
     return 'granted'
   }
   invalidateOrcaCloudRepoAccess(record.repoUrl)
@@ -63,21 +69,36 @@ export async function recheckCloudPushAccess(
     return 'waiting'
   }
   const result = await runVmEnvironmentCheck(null, environmentId, record.path)
-  const push = result.checks.find((check) => check.id === 'git.push')
-  const current = getCloudSetupNoticesRecord(environmentId)
-  if (!push || push.status === 'fail') {
-    return 'refused'
+  const passed = (id: string): boolean => {
+    const check = result.checks.find((candidate) => candidate.id === id)
+    return Boolean(check) && check!.status !== 'fail'
   }
-  if (current) {
+  const cleared = new Set<string>()
+  if (watched.has('fetch') && passed('git.fetch')) {
+    cleared.add('fetch')
+  }
+  // A push is only checked once origin answers: a fetch failure stops the doctor before it.
+  if (watched.has('push') && passed('git.push')) {
+    cleared.add('push')
+  }
+  const current = getCloudSetupNoticesRecord(environmentId)
+  if (current && cleared.size > 0) {
     setCloudSetupNotices({
       ...current,
-      notices: current.notices.filter((notice) => notice.kind !== 'push')
+      notices: current.notices.filter((notice) => !cleared.has(notice.kind))
     })
   }
+  if (cleared.size < watched.size) {
+    return 'refused'
+  }
   toast.success(
-    translate('orcaCloud.setupNotices.pushReady', 'Orca Cloud can push to {{repo}} now.', {
-      repo: repoSlug(record.repoUrl)
-    })
+    watched.has('push')
+      ? translate('orcaCloud.setupNotices.pushReady', 'Orca Cloud can push to {{repo}} now.', {
+          repo: repoSlug(record.repoUrl)
+        })
+      : translate('orcaCloud.setupNotices.fetchReady', 'This workspace can reach {{repo}} now.', {
+          repo: repoSlug(record.repoUrl)
+        })
   )
   return 'granted'
 }

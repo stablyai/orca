@@ -18,6 +18,8 @@ vi.mock('@/lib/orca-cloud/cloud-push-access', () => ({
 vi.mock('@/lib/orca-cloud/use-orca-cloud-repo-access', () => ({
   fetchOrcaCloudRepoAccess: async () => null
 }))
+const { restart } = vi.hoisted(() => ({ restart: vi.fn() }))
+vi.mock('./use-cloud-panel-actions', () => ({ useConfirmedRestart: () => restart }))
 vi.mock('@/store', () => ({
   useAppStore: (select: (state: unknown) => unknown) =>
     select({ ephemeralVmRuntimesByWorkspaceId: { w1: { runtimeEnvironmentId: 'env-1' } } })
@@ -134,6 +136,72 @@ describe('CloudSetupNoticesDock (DS-o, DS-q)', () => {
     expect(copyRequest).toHaveBeenCalledWith(expect.stringContaining('acme/web'))
     const [, copied] = stack.show.mock.calls.at(-1) ?? []
     expect(copied.lines[0].action).toMatchObject({ label: 'Copied' })
+  })
+})
+
+describe('the can’t-reach line says why (GH-FETCH-REASON)', () => {
+  const fetchNotice = (code?: string): CloudSetupNotice => ({
+    id: 'git.fetch',
+    kind: 'fetch',
+    check: {
+      id: 'git.fetch',
+      category: 'git',
+      status: 'fail',
+      message: 'Cannot reach remote "origin".',
+      ...(code ? { code } : {})
+    }
+  })
+  const show = async (access: string, code?: string) => {
+    pushAccess.mockResolvedValue(access)
+    setCloudSetupNotices({
+      environmentId: 'env-1',
+      path: '/w',
+      repoId: 'r',
+      hostId: null,
+      repoUrl: 'https://github.com/stablyai/orca-plugins',
+      notices: [fetchNotice(code)]
+    })
+    render(<CloudSetupNoticesDock workspaceId="w1" />)
+    await act(async () => {})
+    const [, shown] = stack.show.mock.calls.at(-1) ?? []
+    return shown.lines[0]
+  }
+  afterEach(() => pushAccess.mockReset())
+
+  it('the app can’t see the repo and this person can install: says so, with Grant access', async () => {
+    const line = await show('install', 'remoteDenied')
+    expect(line.text).toBe('Orca’s GitHub app doesn’t have access to stablyai/orca-plugins.')
+    expect(line.description).toBe('Pulls and pushes won’t work until it does.')
+    expect(line.action).toMatchObject({ label: 'Grant access' })
+    expect(line.text).not.toContain('right now')
+  })
+
+  it('only an owner can grant it: a request to copy, no Grant access', async () => {
+    const line = await show('cantInstall')
+    expect(line.text).toBe('Orca’s GitHub app doesn’t have access to stablyai/orca-plugins.')
+    expect(line.description).toBe(
+      'Only an owner of stablyai can grant it. Pulls and pushes won’t work until they do.'
+    )
+    expect(line.action).toMatchObject({ label: 'Copy request for an owner' })
+  })
+
+  it('the app can see it but GitHub refused this workspace: Restart', async () => {
+    const line = await show('granted', 'remoteDenied')
+    expect(line.text).toBe('This workspace can’t use Orca’s access to stablyai/orca-plugins yet.')
+    expect(line.action).toMatchObject({ label: 'Restart' })
+    line.action.onClick()
+    expect(restart).toHaveBeenCalled()
+  })
+
+  it('the network: still “right now” with Check again, whatever the app can see', async () => {
+    const line = await show('install', 'remoteUnreachable')
+    expect(line.text).toBe('This workspace can’t reach stablyai/orca-plugins on GitHub right now.')
+    expect(line.action).toMatchObject({ label: 'Check again' })
+  })
+
+  it('an older doctor (no reason) with the app granted keeps Check again', async () => {
+    const line = await show('granted')
+    expect(line.action).toMatchObject({ label: 'Check again' })
   })
 })
 

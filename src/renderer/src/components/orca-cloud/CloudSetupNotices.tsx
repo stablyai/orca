@@ -1,6 +1,6 @@
 import { runEnvironmentSetup } from '@/lib/orca-cloud/cloud-environment-held'
 import React, { useEffect, useRef, useState } from 'react'
-import { Loader2, Play, RefreshCw } from 'lucide-react'
+import { Play } from 'lucide-react'
 import { useAppStore } from '@/store'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
 import {
@@ -13,11 +13,13 @@ import {
   visibleCloudSetupNotices,
   type CloudSetupNoticesRecord
 } from '@/lib/orca-cloud/cloud-setup-notices-store'
-import { repoSlug, runCloudSetupScript } from '@/lib/orca-cloud/cloud-setup-notice-actions'
+import { runCloudSetupScript } from '@/lib/orca-cloud/cloud-setup-notice-actions'
 import { recheckCloudFetch } from '@/lib/orca-cloud/cloud-fetch-notice'
 import { runVmEnvironmentCheck } from '@/runtime/ephemeral-vm/ephemeral-vm-environment-check'
 import { hideCloudToast, showCloudToast, type CloudToastView } from './cloud-toast-stack'
 import { cloudPushNoticeLine, type CloudPushLineHandlers } from './cloud-push-notice-line'
+import { cloudFetchNoticeLine } from './cloud-fetch-notice-line'
+import { useConfirmedRestart } from './use-cloud-panel-actions'
 import { useCloudPushNotice } from './use-cloud-push-notice'
 
 export type CloudSetupNoticeLine = {
@@ -37,6 +39,8 @@ export type CloudSetupNoticeHandlers = {
   runSetup: () => void
   recheckFetch?: () => void
   checkingFetch?: boolean
+  /** Restart the workspace (asks first while agents work): the fetch line's fix after an install. */
+  restart?: () => void
 }
 
 export function cloudSetupNoticeLine(
@@ -49,33 +53,18 @@ export function cloudSetupNoticeLine(
     case 'push':
       return cloudPushNoticeLine(record.repoUrl, t, handlers.push)
     case 'fetch':
-      // ENV-ORIGIN-TOAST: shown only after a confirming check also failed; Check again re-runs it.
-      return {
-        text: record.repoUrl
-          ? t(
-              'orcaCloud.setupNotices.fetchFailed',
-              'This workspace can’t reach {{repo}} on GitHub right now.',
-              { repo: repoSlug(record.repoUrl) }
-            )
-          : t(
-              'orcaCloud.setupNotices.fetchFailedNoRepo',
-              'This workspace can’t reach its Git remote right now.'
-            ),
-        description: t(
-          'orcaCloud.setupNotices.fetchFailedMeaning',
-          'Pulls and pushes won’t work until it can.'
-        ),
-        action: handlers.recheckFetch
-          ? {
-              label: handlers.checkingFetch
-                ? t('orcaCloud.setupNotices.checking', 'Checking…')
-                : t('orcaCloud.setupNotices.checkAgain', 'Check again'),
-              icon: handlers.checkingFetch ? <Loader2 className="animate-spin" /> : <RefreshCw />,
-              run: handlers.recheckFetch,
-              ...(handlers.checkingFetch ? { pending: true } : {})
-            }
-          : null
-      }
+      // ENV-ORIGIN-TOAST: shown only after a confirming check also failed. GH-FETCH-REASON: the
+      // words and the action follow why (no app access, needs a restart, or the network).
+      return cloudFetchNoticeLine(notice.check, record.repoUrl, t, {
+        access: handlers.push.access,
+        install: handlers.push.install,
+        installing: handlers.push.installing,
+        copyRequest: handlers.push.copyRequest,
+        ...(handlers.push.copied ? { copied: true } : {}),
+        ...(handlers.restart ? { restart: handlers.restart } : {}),
+        ...(handlers.recheckFetch ? { recheck: handlers.recheckFetch } : {}),
+        ...(handlers.checkingFetch ? { checking: true } : {})
+      })
     case 'environmentHeld':
       // ENV-BUILD-CHURN (d): started without the environment's setup while it updates for a security fix.
       return {
@@ -182,6 +171,7 @@ export function cloudSetupNoticesView(
     dismiss: (noticeId: string) => void
     recheckFetch?: () => void
     checkingFetch?: boolean
+    restart?: () => void
   }
 ): CloudToastView {
   return {
@@ -192,7 +182,8 @@ export function cloudSetupNoticesView(
         push: handlers.push,
         runSetup: () => handlers.runSetup(notice.id),
         ...(handlers.recheckFetch ? { recheckFetch: handlers.recheckFetch } : {}),
-        ...(handlers.checkingFetch ? { checkingFetch: true } : {})
+        ...(handlers.checkingFetch ? { checkingFetch: true } : {}),
+        ...(handlers.restart ? { restart: handlers.restart } : {})
       })
       return {
         key: notice.id,
@@ -228,12 +219,14 @@ export function CloudSetupNoticesDock({ workspaceId }: { workspaceId: string }):
   const snapshot = useCloudSetupNoticesSnapshot()
   const record = environmentId ? snapshot.records[environmentId] : undefined
   const notices = visibleCloudSetupNotices(snapshot, environmentId)
+  // The fetch line asks the same question (GH-FETCH-REASON): can Orca's GitHub app see the repo?
   const push = useCloudPushNotice(
     environmentId,
     record?.repoUrl ?? null,
-    notices.some((notice) => notice.kind === 'push')
+    notices.some((notice) => notice.kind === 'push' || notice.kind === 'fetch')
   )
   const fetch = useFetchRecheck(environmentId)
+  const restart = useConfirmedRestart(workspaceId)
   const toastId = environmentId ? cloudSetupToastId(environmentId) : null
   const shown = Boolean(record) && notices.length > 0
   // Showing the same id again updates the toast in place (installing state, a dismissed line).
@@ -256,7 +249,8 @@ export function CloudSetupNoticesDock({ workspaceId }: { workspaceId: string }):
             : runCloudSetupScript(workspaceId, record, noticeId)),
         dismiss: (noticeId) => dismissCloudSetupNotice(record.environmentId, noticeId),
         recheckFetch: fetch.recheck,
-        checkingFetch: fetch.checking
+        checkingFetch: fetch.checking,
+        restart
       }),
       // N-03: only over its own workspace; never over Settings or another workspace.
       { scope: { workspaceId } }

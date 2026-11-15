@@ -68,6 +68,10 @@ const TOOL_MISSING: CloudSetupNotice = {
   }
 }
 
+function fetchWith(code: string): CloudSetupNotice {
+  return { ...FETCH, check: { ...FETCH.check, code } }
+}
+
 function notices(
   list: readonly CloudSetupNotice[],
   options: {
@@ -92,7 +96,8 @@ function notices(
       runSetup: noop,
       dismiss: noop,
       recheckFetch: noop,
-      checkingFetch: options.checkingFetch ?? false
+      checkingFetch: options.checkingFetch ?? false,
+      restart: noop
     }
   )
 }
@@ -142,7 +147,30 @@ export const setupOnly = cards([notices([SETUP])])
 /** One family (DS-q): the action-required prompt and the warning, same chrome. */
 export const agentAndPush = cards([AGENT, notices([PUSH, SETUP])])
 /** ENV-ORIGIN-TOAST: origin still unreachable after two confirming checks; Check again re-runs it. */
-export const fetchFailed = cards([notices([FETCH])])
-export const fetchChecking = cards([notices([FETCH], { checkingFetch: true })])
+export const fetchFailed = cards([notices([fetchWith('remoteUnreachable')], { access: 'granted' })])
+export const fetchChecking = cards([
+  notices([fetchWith('remoteUnreachable')], { access: 'granted', checkingFetch: true })
+])
+/** GH-FETCH-REASON: Orca's GitHub app can't see the repository; this person can install it. */
+export const fetchNoAccess = cards([
+  notices([fetchWith('remoteDenied')], {
+    access: 'install',
+    repoUrl: 'https://github.com/stablyai/orca-plugins'
+  })
+])
+/** Only an owner can grant it: a request to copy. */
+export const fetchNoAccessOwnerOnly = cards([
+  notices([fetchWith('remoteNotFound')], {
+    access: 'cantInstall',
+    repoUrl: 'https://github.com/octocat/Hello-World'
+  })
+])
+/** The app was installed after this workspace started: Restart picks it up. */
+export const fetchNeedsRestart = cards([
+  notices([fetchWith('remoteDenied')], {
+    access: 'granted',
+    repoUrl: 'https://github.com/stablyai/orca-plugins'
+  })
+])
 /** ENV-BUILD-CHURN: started without the environment's setup while it updates for a security fix. */
 export const environmentHeld = cards([notices([HELD])])
