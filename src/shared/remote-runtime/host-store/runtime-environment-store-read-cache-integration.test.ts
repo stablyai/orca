@@ -6,7 +6,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { encodePairingOffer } from '../pairing/pairing'
 import type * as BoundedReader from '../../file-content/node-bounded-file-reader'
 import { __resetSecureFileHardenedPathsForTests } from '../../secure-storage/secure-file'
-import { addEnvironmentFromPairingCode, listEnvironments } from './runtime-environment-store'
+import {
+  addEnvironmentFromPairingCode,
+  listEnvironments,
+  resolveEnvironment
+} from './runtime-environment-store'
 import { getEnvironmentStorePath } from './runtime-environment-store-records'
 
 type ReadHook = ((path: string) => void) | undefined
@@ -53,6 +57,7 @@ beforeEach(() => {
   __resetSecureFileHardenedPathsForTests()
 })
 afterEach(async () => {
+  vi.useRealTimers()
   hooks.failChmod = false
   hooks.beforeRead = undefined
   hooks.afterRead = undefined
@@ -73,6 +78,22 @@ function addServer(profile: string, name: string, seed: number): string {
 }
 
 const names = (): string[] => listEnvironments(userDataPath).map((entry) => entry.name)
+
+function countStoreReads(): () => number {
+  const storePath = getEnvironmentStorePath(userDataPath)
+  let reads = 0
+  hooks.beforeRead = (path) => {
+    if (path === storePath) {
+      reads++
+    }
+  }
+  return () => reads
+}
+
+function settleRegistryTimestamps(): void {
+  vi.useFakeTimers({ toFake: ['Date', 'performance'] })
+  vi.setSystemTime(Date.now() + 10_000)
+}
 
 describe('saved-server registry read reuse', () => {
   it('sees a registry rewritten by another writer between reads', () => {
@@ -135,5 +156,68 @@ describe('saved-server registry read reuse', () => {
     hooks.failChmod = false
     names()
     expect(fs.statSync(path).mode & 0o7777).toBe(0o600)
+  })
+})
+
+describe.skipIf(process.platform === 'win32')('saved-server registry reuse from metadata', () => {
+  it('resolves a settled registry from file metadata alone', () => {
+    const id = addServer(userDataPath, 'Alpha', 1)
+    settleRegistryTimestamps()
+    resolveEnvironment(userDataPath, id)
+    const storeReads = countStoreReads()
+
+    for (let lookup = 0; lookup < 50; lookup++) {
+      expect(resolveEnvironment(userDataPath, id).name).toBe('Alpha')
+    }
+    expect(names()).toEqual(['Alpha'])
+
+    expect(storeReads()).toBe(0)
+  })
+
+  it('sees a settled registry replaced by another writer', () => {
+    const id = addServer(userDataPath, 'Alpha', 1)
+    settleRegistryTimestamps()
+    expect(resolveEnvironment(userDataPath, id).name).toBe('Alpha')
+
+    const path = getEnvironmentStorePath(userDataPath)
+    const store = JSON.parse(fs.readFileSync(path, 'utf8'))
+    store.environments[0].name = 'Bravo'
+    fs.writeFileSync(`${path}.tmp`, JSON.stringify(store), { mode: 0o600 })
+    fs.renameSync(`${path}.tmp`, path)
+
+    expect(resolveEnvironment(userDataPath, id).name).toBe('Bravo')
+    expect(names()).toEqual(['Bravo'])
+  })
+
+  it('compares bytes again while the registry changed too recently to trust its timestamps', () => {
+    const id = addServer(userDataPath, 'Alpha', 1)
+    resolveEnvironment(userDataPath, id)
+    const storeReads = countStoreReads()
+
+    resolveEnvironment(userDataPath, id)
+
+    expect(storeReads()).toBe(1)
+  })
+
+  it('compares bytes again after the wall clock steps back', () => {
+    const id = addServer(userDataPath, 'Alpha', 1)
+    settleRegistryTimestamps()
+    resolveEnvironment(userDataPath, id)
+    const storeReads = countStoreReads()
+
+    vi.setSystemTime(Date.now() - 5_000)
+    resolveEnvironment(userDataPath, id)
+
+    expect(storeReads()).toBe(1)
+  })
+
+  it('keeps a caller mutating its result out of later lookups', () => {
+    const id = addServer(userDataPath, 'Alpha', 1)
+    settleRegistryTimestamps()
+    resolveEnvironment(userDataPath, id).name = 'Mutated'
+    listEnvironments(userDataPath)[0]!.name = 'Mutated'
+
+    expect(resolveEnvironment(userDataPath, id).name).toBe('Alpha')
+    expect(names()).toEqual(['Alpha'])
   })
 })
