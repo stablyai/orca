@@ -1865,6 +1865,8 @@ async function routeRequest(request: Request, env: Env, deps: Deps): Promise<Res
             try {
               // Nothing pinned: start in the served region nearest the caller (an environment's own region still wins).
               const nearRegions = body.data.region ? undefined : nearestRegions(request, servedRegions(life.config), nearestRegionEnabled(env))
+              // Region order only (never the caller's location): which region a create preferred, and why.
+              console.log(JSON.stringify({ event: 'create_region_order', explicit: body.data.region ?? null, order: nearRegions ?? null }))
               ready = await createSandbox(life, caller, {
                 ...body.data,
                 ...(nearRegions ? { nearRegions } : {}),
