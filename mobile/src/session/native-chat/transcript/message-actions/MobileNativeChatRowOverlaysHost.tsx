@@ -5,7 +5,9 @@ import { triggerMediumImpact } from '../../../../platform/haptics/haptics'
 import { MobileImageViewer } from '../../../../files/media/presentation/MobileImageViewer'
 import { MobileImageViewerActions } from '../../visual/MobileImageViewerActions'
 import { MobileNativeChatMessageActionsSheet } from './MobileNativeChatMessageActionsSheet'
-import { MobileLinkActionSheet } from './MobileLinkActionSheet'
+import { MobileLinkActionSheet } from '../../../../browser/link-open/MobileLinkActionSheet'
+import { openMobileWebLink } from '../../../../browser/link-open/mobile-web-link-open'
+import type { MobileLinkOpenMode } from '../../../../storage/preferences'
 import { MarkdownLinkHandlerContext } from '../../../../components/markdown/links/markdown-link-handler'
 import {
   MobileNativeChatRowOverlaysContext,
@@ -24,6 +26,7 @@ export function MobileNativeChatRowOverlaysHost({
   conversation,
   imageSource,
   onOpenUrlInOrca,
+  linkOpenMode,
   rewind,
   children
 }: {
@@ -31,6 +34,7 @@ export function MobileNativeChatRowOverlaysHost({
   imageSource?: MobileNativeChatImageSource
   /** Absent where the host can't open a browser tab for this chat. */
   onOpenUrlInOrca?: (url: string) => void
+  linkOpenMode: MobileLinkOpenMode
   /** The chat's "Rewind to here"; absent where it can't rewind. */
   rewind?: AgentSessionRewindSurface
   children?: React.ReactNode
@@ -54,7 +58,11 @@ export function MobileNativeChatRowOverlaysHost({
     }),
     [setShown, openRewind, imageSource]
   )
-  const openLink = useCallback((link: string) => setShown({ link }), [setShown])
+  const openLink = useCallback(
+    (url: string) =>
+      openMobileWebLink(url, linkOpenMode, onOpenUrlInOrca, (link) => setShown({ link })),
+    [linkOpenMode, onOpenUrlInOrca, setShown]
+  )
   // Memoize overlay callbacks so streamed words cannot rebuild them.
   const opened = useMemo(() => {
     const close = () => setShown(null)

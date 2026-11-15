@@ -1,15 +1,12 @@
 import { useState } from 'react'
 import { Copy, ExternalLink, Globe } from 'lucide-react-native'
-import {
-  ActionSheetModal,
-  type ActionSheetAction
-} from '../../../../components/sheets/ActionSheetModal'
-import { openExternalLink } from '../../../../platform/external-links/external-link'
-import { useClipboardWriter } from '../../../../platform/clipboard/clipboard'
-import { triggerError, triggerSuccess } from '../../../../platform/haptics/haptics'
-import { useMobileTranslation } from '../../../../i18n/use-mobile-translation'
+import { ActionSheetModal, type ActionSheetAction } from '../../components/sheets/ActionSheetModal'
+import { openExternalLink } from '../../platform/external-links/external-link'
+import { useClipboardWriter } from '../../platform/clipboard/clipboard'
+import { triggerError, triggerSuccess } from '../../platform/haptics/haptics'
+import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 
-// Choices for a tapped chat link: Orca's browser on the host, the phone's browser, or the clipboard.
+// Choices for a tapped web link: Orca's browser on the host, the phone's browser, or the clipboard.
 export function MobileLinkActionSheet(props: {
   url: string
   // Called once the sheet has slid away; the URL stays on screen until then.
