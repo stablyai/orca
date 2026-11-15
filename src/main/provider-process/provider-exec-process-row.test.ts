@@ -20,6 +20,7 @@ afterEach(() => {
   setLibprocAddonForTests(undefined)
   resetNativeReadsForTests()
   vi.resetAllMocks()
+  vi.useRealTimers()
 })
 
 it('recovers exact recorded births while the addon rejects without rounding within a second', async () => {
@@ -63,5 +64,22 @@ it('distinguishes proven absence from incomplete or mismatched helper observatio
   ]) {
     vi.mocked(runProcess).mockResolvedValueOnce({ ...result, ...override })
     await expect(readPosixProcessRow(4242, 'microsecond', 'darwin')).resolves.toBe('unverifiable')
+  }
+})
+
+it('refuses an overdue observation while the stopped helper is still being retired', async () => {
+  setLibprocAddonForTests(null)
+  vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'performance'] })
+  const retiring = Promise.withResolvers<typeof result>()
+  vi.mocked(runProcess).mockReturnValueOnce(retiring.promise)
+  const observation = readPosixProcessRow(4242, 'microsecond', 'darwin')
+  try {
+    await vi.runAllTimersAsync()
+    await expect(Promise.race([observation, Promise.resolve('still waiting')])).resolves.toBe(
+      'unverifiable'
+    )
+  } finally {
+    retiring.resolve(result)
+    await observation
   }
 })

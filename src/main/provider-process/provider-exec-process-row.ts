@@ -1,5 +1,9 @@
 import { runProcess } from '@orca/process-host'
-import { monotonicNow } from '../../shared/concurrency/deadline-settle-notifier'
+import {
+  beforeDeadline,
+  DEADLINE_PASSED,
+  monotonicNow
+} from '../../shared/concurrency/deadline-settle-notifier'
 import { resolveProviderExecPath } from './provider-process-supervisor'
 import type { ProcessRowRead } from './provider-process-row-read'
 
@@ -13,13 +17,22 @@ export async function readProviderExecProcessRow(
     return 'unverifiable'
   }
   try {
-    const result = await runProcess({
-      program: resolveProviderExecPath('darwin'),
-      args: ['--process-row', String(pid)],
-      timeoutMs,
-      maxOutputBytes: 128
-    })
-    if (result.code !== 0 || result.signal !== null || result.timedOut || result.outputTruncated) {
+    const result = await beforeDeadline(
+      runProcess({
+        program: resolveProviderExecPath('darwin'),
+        args: ['--process-row', String(pid)],
+        timeoutMs,
+        maxOutputBytes: 128
+      }),
+      deadline
+    )
+    if (
+      result === DEADLINE_PASSED ||
+      result.code !== 0 ||
+      result.signal !== null ||
+      result.timedOut ||
+      result.outputTruncated
+    ) {
       return 'unverifiable'
     }
     if (result.stdout === 'absent\n') {

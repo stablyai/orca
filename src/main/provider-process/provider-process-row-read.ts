@@ -94,7 +94,7 @@ async function readDarwinProcessRow(pid: number, preciseOnly: boolean): Promise<
       )
       if (rows !== DEADLINE_PASSED && rows !== 'stalled' && rows !== null) {
         const row = rows.find((entry) => entry.pid === pid)
-        if (!row && !preciseOnly) {
+        if (!row && (!preciseOnly || providerOwnerPidAbsent(pid))) {
           return null
         }
         if (row?.startUsec !== undefined) {

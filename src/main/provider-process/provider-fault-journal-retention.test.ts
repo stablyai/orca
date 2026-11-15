@@ -71,5 +71,22 @@ it.each<ProviderControlCompletion | undefined>(['group-absent', undefined])(
     const fresh = await import('./provider-ownership-journal')
     await fresh.recoverProviderOwnership(directory, 'test-boot')
     expect(await readdir(directory)).toHaveLength(1)
+
+    for (const leader of [
+      { ...healthy(900001), pgid: 900003 },
+      { ...healthy(900001), startedAt: '5678', startResolution: 'second' as const }
+    ]) {
+      vi.resetModules()
+      state.read = (pid) => (pid === process.pid ? { ...healthy(pid), startedAt: '5678' } : leader)
+      const retry = await import('./provider-ownership-journal')
+      await retry.recoverProviderOwnership(directory, 'test-boot')
+      expect(await readdir(directory)).toHaveLength(1)
+    }
+
+    vi.resetModules()
+    state.read = (pid) => (pid === process.pid ? { ...healthy(pid), startedAt: '5678' } : null)
+    const exhausted = await import('./provider-ownership-journal')
+    await exhausted.recoverProviderOwnership(directory, 'test-boot')
+    expect(await readdir(directory)).toEqual([])
   }
 )

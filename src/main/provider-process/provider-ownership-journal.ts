@@ -131,7 +131,6 @@ export async function waitForProviderOwnershipReap(
   }
 }
 
-/** One shared recovery scan per runtime state directory; a failed scan remains retryable. */
 export function recoverProviderOwnership(directory: string, bootId: string): Promise<void> {
   const path = resolve(directory)
   let startup = startups.get(path)
@@ -197,13 +196,22 @@ async function scanOwnership(directory: string, bootId: string): Promise<void> {
     ) {
       continue
     }
-    // Without a captured tree the record stays unresolved; it cannot name reparented tools.
-    const descendants = await terminateProviderFaultDescendants(record)
+    const leader = await readPosixProcessRow(record.leader.pid, record.leader.startResolution)
+    const originalLeaderGone =
+      leader === null
+        ? providerOwnerPidAbsent(record.leader.pid)
+        : leader !== 'unverifiable' &&
+          leader.startResolution === record.leader.startResolution &&
+          leader.startedAt !== record.leader.startedAt
+    // A gone anchor cannot recover detached ancestry; this is not a descendant-exit verdict.
+    const descendants = originalLeaderGone
+      ? undefined
+      : await terminateProviderFaultDescendants(record)
     const swept = await sweepOrphanedProviderGroup(record)
     if (
-      descendants === 'exited' &&
       (swept === 'absent' || swept === 'killed') &&
-      (await waitForProviderOwnershipReap(record))
+      (await waitForProviderOwnershipReap(record)) &&
+      (originalLeaderGone || descendants === 'exited')
     ) {
       await unlink(path).catch(() => {})
     }
@@ -228,10 +236,7 @@ async function readRecord(path: string): Promise<z.infer<typeof recordSchema> | 
       if (bytesRead > info.size) {
         return null
       }
-      const parsed = recordSchema.safeParse(
-        JSON.parse(buffer.subarray(0, bytesRead).toString('utf8'))
-      )
-      return parsed.success ? parsed.data : null
+      return recordSchema.parse(JSON.parse(buffer.toString('utf8', 0, bytesRead)))
     } finally {
       await file.close()
     }
@@ -246,11 +251,7 @@ export async function publishProviderOwnership(
   leaderPid: number,
   watcherPid: number,
   parentPid = process.pid
-): Promise<{
-  identity: ProviderGroupIdentity
-  remove: () => Promise<void>
-  removeAfterNativeExit: () => Promise<void>
-}> {
+) {
   await recoverProviderOwnership(directory, bootId)
   ownerIdentity ??= proveProviderProcessIdentity(process.pid)
   // Orphans reparent to an existing reaper, so the leader's ppid alone proves our parent is live.
@@ -306,8 +307,6 @@ export async function publishProviderOwnership(
         await unlink(path).catch(() => {})
       }
     },
-    removeAfterNativeExit: async () => {
-      await unlink(path).catch(() => {})
-    }
+    removeAfterNativeExit: () => unlink(path).catch(() => {})
   }
 }

@@ -350,6 +350,7 @@ describe.runIf(process.platform !== 'win32')('provider orphan ownership', () => 
       await expect.poll(() => readPosixProcessRow(tool.pid)).toBeNull()
       await Promise.all([closed, gated.closed])
       expect(providerGroupAbsent(gated.leader.pid)).toBe(true)
+      await expect.poll(() => readPosixProcessRow(gated.watcher.pid)).toBeNull()
       expect(child.groupVerdict).toBe('exited')
       expect(await readdir(directory)).toEqual([])
     }
