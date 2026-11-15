@@ -1,6 +1,6 @@
 import { useId } from 'react'
 import { AlertTriangle, Check, Loader2, ShieldAlert } from 'lucide-react'
-import type { PluginHostListEntry } from '../../../../../preload/api-types'
+import type { PluginHostListEntry } from '../../../../../shared/plugins/plugin-list-entry'
 import { getIntlLocale } from '@/i18n/i18n'
 import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
 import { getShortcutPlatform } from '@/lib/keyboard/shortcut-platform'

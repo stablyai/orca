@@ -33,8 +33,8 @@ import type {
 } from '../scheduling-automations/automation-owner-projection'
 import type { ProfileStatePersistenceAuthority } from './profile-writing/profile-state-authority'
 import type { AutomationRun } from '../../../shared/automations/history/automation-run'
-import { resolveNewPaneShellPath } from '../migrating-orcad-catalog/orcad-shell-history-installer'
-import { OrcadTerminalRestoreHintStore } from '../migrating-orcad-catalog/orcad-terminal-restore-hint-store'
+import { resolveNewPaneShellPath } from '../migrating-orcad-catalog/terminal-history/orcad-shell-history-installer'
+import { OrcadTerminalRestoreHintStore } from '../migrating-orcad-catalog/terminal-history/orcad-terminal-restore-hint-store'
 
 export type DurableProfileStateMutation<T> = {
   value: T

@@ -8,15 +8,29 @@ import { getAppEnvironment, hasAppEnvironment } from '../../../../shared/app-env
 import {
   ORCA_AGENT_SESSION_ID_ENV,
   ORCA_AGENT_SESSION_SPAWN_TOKEN_ENV
-} from '../../../../shared/agent-session/lifecycle/agent-session-caller-env'
+} from '../../../../shared/agent-session/lifecycle/launch/agent-session-caller-env'
+import {
+  ORCA_SCRUB_SAFE_LAUNCH_ENV,
+  ORCA_SCRUB_SAFE_PANE_ENV
+} from '../../../../shared/agent-hook-listener/transport/agent-hook-scrub-safe-env'
 import { ORCA_STRUCTURED_SESSION_ENV } from '../../../../shared/structured-session-marker'
 import { withCliRuntimeOnPath } from '../../../../shared/node-cli-command-resolution'
-import { prependOrcaCliDirToChildPath } from '../../../cli/orca-cli-child-path'
-import { AGENT_PANE_HOOK_ENV_KEYS } from '../../../ipc/pty/host-env/spawn-env-keys'
+import { prependOrcaCliDirToChildPath } from '../../../cli/launchers/orca-cli-child-path'
+import { AGENT_HOOK_RUNTIME_ENV_KEYS } from '../../../ipc/pty/host-env/spawn-env-keys'
 import { resolveStructuredWorkerIdentityForSession } from '../../orchestration/terminal-authority/structured-sessions/structured-worker-authority'
 
-/** Remove inherited pane identity so hook status cannot compete with the structured-session producer. */
-export const STRUCTURED_CHILD_ENV_TO_DELETE: readonly string[] = AGENT_PANE_HOOK_ENV_KEYS
+/** Remove inherited pane identity so hooks and the CLI cannot attribute the chat to the host's launching pane; the seal keeps a worker's own handle. */
+export const STRUCTURED_CHILD_ENV_TO_DELETE: readonly string[] = [
+  'ORCA_PANE_KEY',
+  'ORCA_TAB_ID',
+  'ORCA_WORKTREE_ID',
+  'ORCA_WORKSPACE_ID',
+  'ORCA_TERMINAL_HANDLE',
+  'ORCA_AGENT_LAUNCH_TOKEN',
+  ORCA_SCRUB_SAFE_PANE_ENV,
+  ORCA_SCRUB_SAFE_LAUNCH_ENV,
+  ...AGENT_HOOK_RUNTIME_ENV_KEYS
+]
 
 export type SealedStructuredSessionChild = {
   env: Record<string, string>
@@ -26,7 +40,7 @@ export type SealedStructuredSessionChild = {
   commandEnv: Record<string, string>
 }
 
-/** Every agent declares inherited keys to strip; sealed identity keys survive. Put cliRuntimeCommand's directory behind this app's CLI so the Node launcher finds its runtime. */
+/** Strip the inherited keys composition names; sealed identity keys survive. Put cliRuntimeCommand's directory behind this app's CLI so the Node launcher finds its runtime. */
 export function sealStructuredSessionChild(input: {
   sessionId: string
   spawnToken: string

@@ -4,18 +4,18 @@
 import { randomUUID } from 'node:crypto'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
-import type { LoadedWorkspaceLayout } from '../../../../shared/workspace-layout/workspace-layout-load-types'
-import type { PublishedWorkspaceLayout } from '../../../../shared/workspace-layout/workspace-layout-published'
+import type { LoadedWorkspaceLayout } from '../../../../shared/workspace-layout/persistence/workspace-layout-load-types'
+import type { PublishedWorkspaceLayout } from '../../../../shared/workspace-layout/published-layout/workspace-layout-published'
 import {
   diffPublishedLayouts,
   indexPublishedLayout,
   type IndexedLayoutRecords,
   type WorkspaceLayoutRecordChange
-} from '../../../../shared/workspace-layout/workspace-layout-records'
+} from '../../../../shared/workspace-layout/published-layout/workspace-layout-records'
 import type {
   WorkspaceLayoutEvent,
   WorkspaceLayoutStreamEvent
-} from '../../../../shared/workspace-layout/workspace-layout-stream-frames'
+} from '../../../../shared/workspace-layout/published-layout/workspace-layout-stream-frames'
 import type { RuntimeStore } from '../../construction/runtime-store-contract'
 import { withLiveTitles } from './published-pane-live-titles'
 import { paneStartFactsOf, withPaneStartFacts } from './pane-start-statuses'

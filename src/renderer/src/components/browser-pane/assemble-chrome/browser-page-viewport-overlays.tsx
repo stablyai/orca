@@ -8,29 +8,29 @@ import {
 import {
   BrowserPageFeedbackBadge,
   type BrowserPageFeedbackBadgeHandle
-} from './browser-page-feedback-badge'
-import { BrowserLinkStatusBubble } from './browser-link-status-bubble'
+} from './feedback/browser-page-feedback-badge'
+import { BrowserLinkStatusBubble } from './feedback/browser-link-status-bubble'
 import { useBrowserAgentCursor } from '../agent-cursor/use-browser-agent-cursor'
 import type {
   BrowserCertificateFailure,
   BrowserLoadError,
   BrowserPage as BrowserPageState
 } from '../../../../../shared/browser-workspace-types'
-import { BROWSER_GUEST_RECOVERY_ERROR_CODE } from '../host-guest/browser-page-guest-recovery'
+import { BROWSER_GUEST_RECOVERY_ERROR_CODE } from '../host-guest/recovery/browser-page-guest-recovery'
 import { BrowserLoadFailureOverlay } from '../navigate/browser-load-failure-overlay'
 import { useSshWorkspaceBrowserLoadFailureRoute } from '../use-ssh-workspace-browser-route'
 import type { BrowserLoadFailureAutoRetry } from '../navigate/browser-load-failure-auto-retry'
-import BrowserFind from './BrowserFind'
+import BrowserFind from './find/BrowserFind'
 import { BrowserNewTabPage } from '../new-tab/BrowserNewTabPage'
 import { BrowserGuestAnnotateOverlays } from '../annotate/browser-guest-annotate-overlays'
 import { BrowserPasswordFillDropdown } from '../passwords/BrowserPasswordFillDropdown'
-import type { MarkupModeController } from '../annotate/useMarkupMode'
-import type { GrabModeHook } from '../annotate/useGrabMode'
+import type { MarkupModeController } from '../annotate/capture/useMarkupMode'
+import type { GrabModeHook } from '../annotate/grab/useGrabMode'
 import type { BrowserOverlayViewport } from '../describe-page/browser-annotation-geometry'
 import { retryBrowserTabLoad } from '../describe-page/browser-page-url-display'
 import type { BrowserTabPageState } from '../describe-page/browser-page-types'
-import type { useBrowserPageAnnotationSend } from '../annotate/use-browser-page-annotation-send'
-import type { useBrowserPageGrabAnnotations } from '../annotate/use-browser-page-grab-annotations'
+import type { useBrowserPageAnnotationSend } from '../annotate/delivery/use-browser-page-annotation-send'
+import type { useBrowserPageGrabAnnotations } from '../annotate/grab/use-browser-page-grab-annotations'
 
 export function BrowserPageViewportOverlays({
   markup,

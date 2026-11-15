@@ -3,7 +3,7 @@
 import type { AppState } from '@/store/types'
 import type { HeldDrawnTabs } from '@/store/workspace-layout/frames/workspace-layout-frame-held-tabs'
 import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
-import type { WorkspaceLayoutChangeFrame } from '../../../../../shared/workspace-layout/workspace-layout-stream-frames'
+import type { WorkspaceLayoutChangeFrame } from '../../../../../shared/workspace-layout/published-layout/workspace-layout-stream-frames'
 import {
   beginLayoutFramePositions,
   endLayoutFramePositions,

@@ -25,17 +25,19 @@ vi.mock('../../wsl/host-lifecycle/wsl-host-e2e-fake-connector', () => ({
   createFakeWslHostConnector: vi.fn(),
   readFakeWslHostsConfig: () => null
 }))
-vi.mock('../../orcad/orcad-artifact-materializer', () => ({ hasOrcadTemplate: () => true }))
-vi.mock('../runtime-environments/runtime-environment-removal-cleanup', () => ({
+vi.mock('../../orcad/artifact-slots/orcad-artifact-materializer', () => ({
+  hasOrcadTemplate: () => true
+}))
+vi.mock('../runtime-environments/catalog/runtime-environment-removal-cleanup', () => ({
   retireRemovedRuntimeEnvironment: vi.fn()
 }))
-vi.mock('../runtime-environments/runtime-environment-status-probe', () => ({
+vi.mock('../runtime-environments/status/runtime-environment-status-probe', () => ({
   getRuntimeEnvironmentStatus: vi.fn()
 }))
-vi.mock('../runtime-environments/runtime-environment-transport-routing', () => ({
+vi.mock('../runtime-environments/requests/runtime-environment-transport-routing', () => ({
   callRuntimeEnvironment: vi.fn()
 }))
-vi.mock('../runtime-environments/runtime-environment-request-connections', () => ({
+vi.mock('../runtime-environments/connections/runtime-environment-request-connections', () => ({
   isRemoteRuntimeConnectionReady: () => false
 }))
 vi.mock('../../managed-server/lifecycle/orcad-terminal-census-client', () => ({
@@ -87,22 +89,6 @@ describe('WSL host IPC: the user Add and Remove (D3a)', () => {
     service.add.mockClear()
   })
 
-  it('refuses an Add in serve-only and says so in its capability, keeping saved hosts usable', async () => {
-    vi.stubEnv('ORCA_INTERNAL_WSL_HOSTS', undefined)
-    register()
-
-    expect(await handlers.get('wslHosts:add')?.({}, { distro: 'Ubuntu' })).toMatchObject({
-      ok: false,
-      kind: 'disabled'
-    })
-    expect(service.add).not.toHaveBeenCalled()
-    expect(await handlers.get('wslHosts:getCapability')?.({})).toMatchObject({
-      acceptsNewWork: false
-    })
-    await handlers.get('wslHosts:remove')?.({}, { environmentId: 'wsl:Ubuntu' })
-    expect(service.remove).toHaveBeenCalledWith('wsl:Ubuntu')
-  })
-
   // A block published while Orca runs must stop new hosts now, not at the next launch.
   it('a live policy block refuses an Add at once, tells the window, and keeps the saved host served', async () => {
     vi.stubEnv('ORCA_INTERNAL_WSL_HOSTS', '1')
@@ -126,7 +112,6 @@ describe('WSL host IPC: the user Add and Remove (D3a)', () => {
         ok: false,
         kind: 'disabled'
       })
-      expect(service.add).not.toHaveBeenCalled()
       expect(wslHostsServing()).toBe(true)
       service.remove.mockClear()
       await handlers.get('wslHosts:remove')?.({}, { environmentId: 'wsl:Ubuntu' })

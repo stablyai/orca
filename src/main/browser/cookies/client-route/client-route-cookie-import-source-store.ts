@@ -85,7 +85,3 @@ export function clientRouteCookieImportSources(
   }
   return result
 }
-
-export function resetClientRouteCookieImportSourcesForTests(): void {
-  cached = null
-}

@@ -27,6 +27,7 @@ import {
   shouldRemoveProjectFromContextMenu
 } from './worktree-context-menu-policy'
 import { useWorktreeContextMenuCommands } from './use-worktree-context-menu-commands'
+import { selectWorkspaceShowsUnread } from '../../worktree-card-slot-rollup'
 import {
   useWorktreeParentPickerTransition,
   type PendingParentPicker
@@ -111,6 +112,10 @@ export function useWorktreeContextMenuModel({
   )
   const unifiedTabsByWorktree = useAppStore((s) =>
     selectMenuScopedMap(menuOpen, s.unifiedTabsByWorktree, EMPTY_UNIFIED_TABS_BY_WORKTREE)
+  )
+  // The menu offers what the card shows: unread when any agent result or the flag is unread.
+  const showsUnread = useAppStore((s) =>
+    menuOpen ? selectWorkspaceShowsUnread(s, worktree) : worktree.isUnread
   )
   const agentStatusByPaneKey = useAppStore((s) =>
     selectMenuScopedMap(menuOpen, s.agentStatusByPaneKey, EMPTY_AGENT_STATUS_BY_PANE_KEY)
@@ -288,6 +293,7 @@ export function useWorktreeContextMenuModel({
     setMenuOpenState,
     setWorkspaceUnreadByUser,
     setWorktreesPinnedAndReveal,
+    showsUnread,
     sleepableWorktrees,
     subtreeSleepableWorktrees,
     statusesForWorktree,
@@ -331,6 +337,7 @@ export function useWorktreeContextMenuModel({
 
   return {
     ...commands,
+    showsUnread,
     activeContextWorktrees,
     batchDeleteWorktrees,
     browserTabsByWorktree,

@@ -28,7 +28,7 @@ vi.mock('@/store/index', () => ({
     { getState: () => shortcutState }
   )
 }))
-vi.mock('@/components/editor/monaco-content-sync', () => ({
+vi.mock('@/components/editor/model-lifetime/buffer-text/monaco-content-sync', () => ({
   syncContentOnMount: () => false,
   syncContentUpdate: vi.fn()
 }))

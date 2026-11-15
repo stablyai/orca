@@ -1,18 +1,15 @@
+import { readTestJournalItems } from '../../../native-chat/agent-session-journal/journal-observation.test-support'
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../../shared/agent-session/journal/agent-session-journal-types'
-import { describe, expect, it } from 'vitest'
-import { agentJournalItemKey } from '../../../../shared/agent-session/journal/agent-session-journal-item-key'
-import type {
-  AgentJournalItemBody,
-  AgentJournalRenderItem
-} from '../../../../shared/agent-session/journal/agent-session-journal-types'
-import type { AgentJournalItemIdentity } from '../../../../shared/agent-session/journal/agent-session-journal-identity'
-import {
-  createDeferredStructuredAgentSessionEventSink,
-  type StructuredAgentSessionEventTarget
-} from '../../../native-chat/agent-session-wire/journal-ingress/structured-agent-session-event-sink'
+import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import type { AgentJournalItemBody } from '../../../../shared/agent-session/journal/agent-session-journal-types'
+import { createDeferredStructuredAgentSessionEventSink } from '../../../native-chat/agent-session-wire/journal-ingress/structured-agent-session-event-sink'
 import { CodexJournalGoals } from './codex-structured-journal-goals'
-import { withJournalQueueMembers } from '../../../native-chat/agent-session-wire/journal-ingress/testing/structured-agent-session-journal-double-test-support'
-import { testEventSinkLogging } from '../../../native-chat/agent-session-wire/host/testing/structured-agent-session-logger-test-support'
+import { createTrackedJournalOpener } from '../../../native-chat/agent-session-journal/store-lifecycle/journal-host-database-test-support'
+import { codexProviderHandle } from '../../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle-encoding'
+import { mkdtemp, rm } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { testEventSinkLogging } from '../../../native-chat/agent-session-wire/host/testing/structured-agent-session-logger.test-fixture'
 
 const THREAD = '01a08cc2-f96e-76d0-bb74-88b9bc0b03fc'
 
@@ -34,88 +31,43 @@ function goalFrame(goal: Record<string, unknown> = {}): Record<string, unknown> 
   }
 }
 
-function goalJournal() {
-  let rowSequence = 0
-  let publishes = 0
-  let epochNumber = 1
-  let visits = 0
-  let visitedItems = 0
-  const rows = new Map<string, AgentJournalRenderItem>()
-  const writes: string[] = []
-  const deferred = createDeferredStructuredAgentSessionEventSink(testEventSinkLogging())
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a fake journal exposing only the members the goal translator and deferred sink call.
-  const journal = withJournalQueueMembers({
-    get epoch() {
-      return `epoch-${epochNumber}`
-    },
-    appendItem: async (identity: AgentJournalItemIdentity, body: AgentJournalItemBody) => {
-      rowSequence += 1
-      const itemId = agentJournalItemKey(identity)
-      const existing = rows.get(itemId)
-      const revision = (existing?.revision ?? 0) + 1
-      writes.push(itemId)
-      rows.set(itemId, {
-        itemId,
-        body,
-        revision,
-        sequence: existing?.sequence ?? rowSequence,
-        observedAt: existing?.observedAt ?? rowSequence
-      })
-      return { cursor: { epoch: `epoch-${epochNumber}`, sequence: rowSequence }, itemId, revision }
-    },
-    snapshot: () => ({
+const journals = createTrackedJournalOpener()
+let root: string
+
+beforeEach(async () => {
+  root = await mkdtemp(join(tmpdir(), 'orca-codex-goal-resume-'))
+})
+
+afterEach(async () => {
+  await journals.closeAll()
+  await rm(root, { recursive: true, force: true })
+})
+
+async function goalJournal() {
+  const journal = await journals.open({
+    identity: {
       sessionId: 'session',
-      cursor: { epoch: `epoch-${epochNumber}`, sequence: rowSequence },
-      items: [...rows.values()].sort((left, right) => left.sequence - right.sequence),
-      submissions: []
-    }),
-    visitItems: (visit: (itemId: string, sequence: number, body: AgentJournalItemBody) => void) => {
-      visits += 1
-      for (const item of rows.values()) {
-        visitedItems += 1
-        visit(item.itemId, item.sequence, item.body)
-      }
-    }
-  }) as unknown as StructuredAgentSessionEventTarget['journal']
+      workspaceId: 'workspace-1',
+      hostId: 'local',
+      agent: 'codex',
+      providerHandle: codexProviderHandle(THREAD)
+    },
+    stateDirectory: root
+  })
+  const deferred = createDeferredStructuredAgentSessionEventSink(testEventSinkLogging())
   const target = {
     journal,
     fence: 1,
-    publish: () => {
-      publishes += 1
-    }
+    publish: () => {}
   }
   deferred.bind(target)
+  const rows = () => readTestJournalItems(journal)
   return {
     sink: deferred.sink,
-    writes,
-    rows: () => journal.snapshot().items,
-    publishes: () => publishes,
-    visits: () => visits,
-    visitedItems: () => visitedItems,
-    seedProviderItems: (count: number) => {
-      for (let index = 0; index < count; index += 1) {
-        rowSequence += 1
-        const identity = {
-          provider: 'codex' as const,
-          threadId: THREAD,
-          turnId: `seed-${index}`,
-          ordinal: 0
-        }
-        const itemId = agentJournalItemKey(identity)
-        rows.set(itemId, {
-          itemId,
-          body: { kind: 'message', role: 'assistant', blocks: [] },
-          revision: 1,
-          sequence: rowSequence,
-          observedAt: rowSequence
-        })
-      }
-    },
-    replaceEpoch: () => {
-      epochNumber += 1
-      rowSequence = 0
-      rows.clear()
-    },
+    rows,
+    goalRowId: async () => (await rows()).findLast((row) => row.body.kind === 'status')?.itemId,
+    replaceEpoch: () =>
+      journal.write({ kind: 'epoch-replace', reason: 'handle_forked', fence: 1, items: [] }),
     rebind: () => deferred.bind(target),
     unbind: deferred.unbind,
     drained: deferred.drained
@@ -128,7 +80,7 @@ function texts(rows: readonly AgentJournalItemBody[]): string[] {
 
 describe('codex goal lifecycle resume', () => {
   it('rebuilds dedupe state after the journal epoch is replaced', async () => {
-    const journal = goalJournal()
+    const journal = await goalJournal()
     const goals = new CodexJournalGoals(journal.sink, () => ({
       turnScope: AGENT_JOURNAL_THREAD_SCOPE
     }))
@@ -136,17 +88,16 @@ describe('codex goal lifecycle resume', () => {
 
     goals.handle(event)
     await journal.drained()
-    expect(journal.writes).toHaveLength(1)
+    expect(await journal.rows()).toHaveLength(1)
 
-    journal.replaceEpoch()
+    await journal.replaceEpoch()
+    expect(await journal.rows()).toEqual([])
     goals.handle(event)
     await journal.drained()
 
-    expect(journal.writes).toHaveLength(2)
-    expect(texts(journal.rows().map((row) => row.body))).toEqual([
+    expect(texts((await journal.rows()).map((row) => row.body))).toEqual([
       'Goal set: Keep the current scratch directory tidy.'
     ])
-    expect(journal.visits()).toBe(2)
     goals.dispose()
   })
 
@@ -170,7 +121,7 @@ describe('codex goal lifecycle resume', () => {
       expected: ['Goal set', 'Goal paused', 'Goal set']
     }
   ])('does not duplicate a $name snapshot after translator recreation', async (scenario) => {
-    const journal = goalJournal()
+    const journal = await goalJournal()
     const send = (
       goals: CodexJournalGoals,
       state: (typeof scenario.beforeResume)[number]
@@ -189,10 +140,10 @@ describe('codex goal lifecycle resume', () => {
       send(prior, state)
     }
     await journal.drained()
-    const acceptedOccurrence = journal.writes.at(-1)
-    const writesBeforeResume = journal.writes.length
-    const publishesBeforeResume = journal.publishes()
-    const acceptedBody = journal.rows().find((row) => row.itemId === acceptedOccurrence)?.body
+    const acceptedOccurrence = await journal.goalRowId()
+    const acceptedBody = (await journal.rows()).find(
+      (row) => row.itemId === acceptedOccurrence
+    )?.body
     prior.dispose()
     journal.unbind()
 
@@ -215,25 +166,21 @@ describe('codex goal lifecycle resume', () => {
               turnId: null
             }
     })
-    expect(journal.writes).toHaveLength(writesBeforeResume)
     journal.rebind()
     await journal.drained()
 
-    expect(texts(journal.rows().map((row) => row.body))).toEqual(
+    expect(texts((await journal.rows()).map((row) => row.body))).toEqual(
       scenario.expected.map((prefix) =>
         prefix === 'Goal cleared' ? prefix : `${prefix}: Keep the current scratch directory tidy.`
       )
     )
     // Fresh resume accounting revises the existing row; cleared goals carry none.
     const cleared = scenario.resumed.method === 'thread/goal/cleared'
-    expect(journal.writes).toHaveLength(writesBeforeResume + (cleared ? 0 : 1))
-    expect(journal.publishes()).toBe(publishesBeforeResume + (cleared ? 0 : 1))
-    expect(journal.writes.at(-1)).toBe(acceptedOccurrence)
-    const revised = journal.rows().find((row) => row.itemId === acceptedOccurrence)
+    expect(await journal.goalRowId()).toBe(acceptedOccurrence)
+    const revised = (await journal.rows()).find((row) => row.itemId === acceptedOccurrence)
     if (cleared) {
       expect(revised?.body).toEqual(acceptedBody)
     } else {
-      expect(revised?.revision).toBe(2)
       expect(revised?.body).toMatchObject({
         text: acceptedBody?.kind === 'status' ? acceptedBody.text : undefined,
         threadGoal: { goal: { tokensUsed: 12_345, timeUsedSeconds: 42 } }

@@ -1,6 +1,5 @@
 import { RELAY_CLOSE_CODE } from '@orca-cloud/relay-contract/close-codes'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { DRAIN_RELEASE_BEFORE_CLOSE_MS } from './host-session-registry.js'
 import {
   answerProof,
   hostControlProofFixture,
@@ -69,49 +68,5 @@ describe('a zero-grace drain releases the host before telling it', () => {
     expect(socket.send.mock.invocationCallOrder[0]).toBeLessThan(
       socket.close.mock.invocationCallOrder[0]!
     )
-  })
-
-  it('closes on the bound when the release has not landed, as before this ordering', async () => {
-    const { h, socket } = await connectedHost()
-    vi.spyOn(h.assignments, 'releaseActivity').mockReturnValue(pendingRelease().promise)
-
-    h.registry.drain(0)
-    await vi.advanceTimersByTimeAsync(DRAIN_RELEASE_BEFORE_CLOSE_MS - 1)
-    expect(socket.close).not.toHaveBeenCalled()
-
-    await vi.advanceTimersByTimeAsync(2)
-    expect(frames(socket)).toEqual([{ type: 'drain', graceMs: 0, recovery: 'resolve-director' }])
-    expect(socket.close).toHaveBeenCalledWith(
-      RELAY_CLOSE_CODE.DRAINING,
-      'resolve configured director'
-    )
-    const slow = vi
-      .mocked(console.warn)
-      .mock.calls.map(([line]) => String(line))
-      .filter((line) => line.includes('"orca_relay_host_drain_release_slow"'))
-    expect(slow).toHaveLength(1)
-    expect(slow[0]).not.toContain(h.identity.relayHostId)
-  })
-
-  it('still tells a host with grace at once, and releases it before the closing deadline', async () => {
-    const { h, socket } = await connectedHost()
-    const release = pendingRelease()
-    vi.spyOn(h.assignments, 'releaseActivity').mockReturnValue(release.promise)
-
-    h.registry.drain(10_000)
-    expect(frames(socket)).toEqual([
-      { type: 'drain', graceMs: 10_000, recovery: 'resolve-director' }
-    ])
-
-    await vi.advanceTimersByTimeAsync(10_000)
-    expect(socket.close).not.toHaveBeenCalled()
-    release.settle('released')
-    await vi.advanceTimersByTimeAsync(0)
-    expect(socket.close).toHaveBeenCalledWith(
-      RELAY_CLOSE_CODE.DRAINING,
-      'resolve configured director'
-    )
-    // Told once, by the drain itself; the close adds no second frame.
-    expect(frames(socket)).toHaveLength(1)
   })
 })

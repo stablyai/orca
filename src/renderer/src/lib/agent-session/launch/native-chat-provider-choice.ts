@@ -100,17 +100,20 @@ export function buildAgentOpensAs({
   cliDetected,
   chatProgramHere,
   settings,
-  updateSettings
+  updateSettings,
+  includeDisabled = false
 }: {
   agent: TuiAgent
   cliDetected: boolean | null
   chatProgramHere: boolean
   settings: GlobalSettings
   updateSettings: (updates: Partial<GlobalSettings>) => void | Promise<void>
+  /** Keep the choice for a turned-off agent so its row can show it grayed out. */
+  includeDisabled?: boolean
 }): AgentOpensAs | undefined {
   const offered =
     chatProviderAgents(LOCAL_EXECUTION_HOST_ID, undefined).includes(agent) &&
-    isTuiAgentEnabled(agent, settings.disabledTuiAgents)
+    (includeDisabled || isTuiAgentEnabled(agent, settings.disabledTuiAgents))
   if (!offered) {
     return undefined
   }

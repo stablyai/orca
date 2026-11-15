@@ -14,23 +14,23 @@ import {
   type WslMoveOrchestratorUserAction
 } from '../../../shared/wsl-move/wsl-move-orchestrator-types'
 import type { Store } from '../../persistence/loading-store/store'
-import { listWslMoveCutoverChain } from '../../persistence/moving-wsl-projects/wsl-move-cutover-journal'
+import { listWslMoveCutoverChain } from '../../persistence/moving-wsl-projects/cutover-recovery/wsl-move-cutover-journal'
 import { moveProjectsToWslHost } from '../../persistence/moving-wsl-projects/wsl-move-driver'
-import { previewWslMove } from '../../persistence/moving-wsl-projects/wsl-move-driver-preview'
-import { wslMovedDistroVerdict } from '../../persistence/moving-wsl-projects/wsl-move-moved-distro-check'
+import { previewWslMove } from '../../persistence/moving-wsl-projects/execution/wsl-move-driver-preview'
+import { wslMovedDistroVerdict } from '../../persistence/moving-wsl-projects/quiescence/wsl-move-moved-distro-check'
 import { WslMoveOrchestrator } from '../../persistence/moving-wsl-projects/wsl-move-orchestrator'
 import type {
   WslMoveFinishedMove,
   WslMoveHostReadiness
-} from '../../persistence/moving-wsl-projects/wsl-move-orchestrator-ports'
-import { prepareWslMoveHost } from '../../persistence/moving-wsl-projects/wsl-move-host-readiness'
+} from '../../persistence/moving-wsl-projects/orchestration/wsl-move-orchestrator-ports'
+import { prepareWslMoveHost } from '../../persistence/moving-wsl-projects/quiescence/wsl-move-host-readiness'
 import { readConfirmedRunningWslDistros } from '../../wsl/discovery/wsl-background-distro-gate'
 import { defaultWslOrcadEnvironmentId } from '../../wsl/orcad/wsl-orcad-deploy'
 import {
   readWslMoveOrchestratorRecords,
   writeWslMoveOrchestratorRecords
-} from '../../persistence/moving-wsl-projects/wsl-move-orchestrator-store'
-import type { WslMoveDriverDeps } from '../../persistence/moving-wsl-projects/wsl-move-driver-ports'
+} from '../../persistence/moving-wsl-projects/orchestration/wsl-move-orchestrator-store'
+import type { WslMoveDriverDeps } from '../../persistence/moving-wsl-projects/execution/wsl-move-driver-ports'
 import {
   trackWslMoveOrchestrator,
   wslMoveOrchestratorEventProps
@@ -49,7 +49,7 @@ import { onWslHostUserAction } from '../../wsl/host-lifecycle/wsl-host-user-acti
 import { getTrustedUIRendererWebContents, getTrustedUIRendererWindow } from '../ui'
 import { onWslMoveReleasedByUser, releaseWslMoveChainHere } from './wsl-move-release-here'
 import { createWslMoveUndoPorts } from './wsl-move-undo-wiring'
-import { isDistroInUse } from '../../persistence/moving-wsl-projects/wsl-move-distro-in-use'
+import { isDistroInUse } from '../../persistence/moving-wsl-projects/quiescence/wsl-move-distro-in-use'
 import { answerWslMoveSleptPanes, requestSleptPanes } from './wsl-move-orchestrator-slept-panes'
 import { wslHostRemovalPending } from './wsl-move-host-connect'
 import { wslMoveAutoMovesBridgeProjects } from '../../../shared/wsl-move/wsl-move-rollout-stage'

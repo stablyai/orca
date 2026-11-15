@@ -14,15 +14,15 @@ import {
   wslMoveRigRetentionStore,
   type WslMoveRig
 } from '../../persistence/__fixtures__/wsl-mover/wsl-move-kill-rig'
-import { resetWslMoveDesktopRewriteStoresForTests } from '../../persistence/moving-wsl-projects/wsl-move-desktop-rewrite-stores'
+import { resetWslMoveDesktopRewriteStoresForTests } from '../../persistence/moving-wsl-projects/desktop-state/wsl-move-desktop-rewrite-stores'
 import { moveProjectsToWslHost } from '../../persistence/moving-wsl-projects/wsl-move-driver'
-import { previewWslMove } from '../../persistence/moving-wsl-projects/wsl-move-driver-preview'
-import { runWslMoveRetentionPass } from '../../persistence/moving-wsl-projects/wsl-move-retention'
+import { previewWslMove } from '../../persistence/moving-wsl-projects/execution/wsl-move-driver-preview'
+import { runWslMoveRetentionPass } from '../../persistence/moving-wsl-projects/cutover-recovery/wsl-move-retention'
 import {
   claimWslMoveRun,
   releaseWslMoveRun,
   type RunningWslMove
-} from '../../persistence/moving-wsl-projects/wsl-move-running-moves'
+} from '../../persistence/moving-wsl-projects/orchestration/wsl-move-running-moves'
 import { releaseWslMovedProjectHere } from './wsl-move-release-here'
 
 vi.mock('electron', () => ({

@@ -8,7 +8,7 @@ import type { ServeReadiness } from '../../server/serve-readiness'
 
 import { recoverInterruptedOrcadActivation } from '../../managed-server/activation/orcad-activation-recovery'
 import { readOrcadActivationRecord } from '../../managed-server/activation/orcad-activation-record-store'
-import { materializeOrcadArtifact } from '../../orcad/orcad-artifact-materializer'
+import { materializeOrcadArtifact } from '../../orcad/artifact-slots/orcad-artifact-materializer'
 import type { OrcadHostTransport } from '../../managed-server/install/orcad-host-transport'
 import { ORCAD_ACTIVATION_POLICY_REFUSED_CODE } from '../../managed-server/activation/orcad-installed-activation'
 import { orcadBoundPort } from '../../managed-server/lifecycle/orcad-managed-bound-port'
@@ -31,7 +31,7 @@ import {
   deployOrcad,
   type OrcadDeployOptions
 } from '../../managed-server/install/orcad-remote-deploy'
-import { isWslMoveUnderwayOnHost } from '../../persistence/moving-wsl-projects/wsl-move-running-moves'
+import { isWslMoveUnderwayOnHost } from '../../persistence/moving-wsl-projects/orchestration/wsl-move-running-moves'
 import { readLocalFullVersion } from '../../managed-server/install/remote-versioned-install'
 import { createWslDistroHolder } from '../discovery/wsl-distro-holder'
 

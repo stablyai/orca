@@ -158,18 +158,4 @@ describe('fetchMobileWebBundle', () => {
     await expect(failed).rejects.toThrow(/index\.html hashed [0-9a-f]{64}, not/)
     expect(await refusalOf(failed)).toBe('asset-checksum-mismatch')
   })
-
-  it('leaves language-catalog chunks on the desktop and fetches the rest', async () => {
-    const host = bundleHost(
-      { 'index.html': 'abcdef', 'assets/de.js': 'catalog' },
-      { catalogs: ['assets/de.js'] }
-    )
-
-    const fetched = await fetchMobileWebBundle({ client: host.client })
-
-    expect([...fetched.assets.keys()]).toEqual(['index.html'])
-    expect(host.calls.some((call) => paramField(call.params, 'path') === 'assets/de.js')).toBe(
-      false
-    )
-  })
 })

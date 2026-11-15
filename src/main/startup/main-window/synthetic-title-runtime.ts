@@ -1,0 +1,259 @@
+import { registerPaneKeyTeardownListener, getPtyIdForPaneKey } from '../../ipc/pty/pane/key-state'
+import { agentHookServer } from '../../agent-hooks/server/agent-hook-server'
+import type { AgentStatusState } from '../../../shared/agent-status/contracts/agent-status-types'
+import { normalizeTerminalTitle } from '../../../shared/agent-status/title/agent-title-status'
+import {
+  getSyntheticAgentTitleProfile,
+  shouldDriveSyntheticAgentTitleFromHook,
+  type SyntheticAgentTitleProfile
+} from '../../../shared/agent-status/title/synthetic-agent-title'
+import {
+  advanceSyntheticTitleSpinnerEntries,
+  getSyntheticTitleSpinnerPaneKeyToStop,
+  type SyntheticTitleSpinnerEntry
+} from '../../runtime/terminal/title/synthetic-title-spinner'
+import { shouldSendSyntheticTitleFrame } from '../../runtime/terminal/title/synthetic-title-visibility'
+import { shouldCopySyntheticTitleFrameToPtyData } from '../../runtime/terminal/title/synthetic-title-frame-routing'
+import { mainProcessState as state } from '../main-process-state'
+import { CODEX_ASYNC_QUESTION_TOOL } from '../../../shared/codex-async-question-input'
+
+// Agent redraws can overwrite one-shot OSC titles; reassert at Pi's 80ms cadence.
+const SPINNER_FRAMES = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏']
+const SPINNER_INTERVAL_MS = 80
+const syntheticTitleSpinnerByPaneKey = new Map<
+  string,
+  SyntheticTitleSpinnerEntry<SyntheticAgentTitleProfile>
+>()
+let syntheticTitleSpinnerTimer: ReturnType<typeof setInterval> | null = null
+/** What one pane's current needs-input stretch has already rung for. */
+type NeedsInputBellState = {
+  /** The prompt the last needs-input frame showed; restating it is not a new request. */
+  lastPromptKey: string
+  /** Async questions stay open across the turn, so one that resurfaces after an approval stays rung. */
+  rungAsyncQuestionKeys: Set<string>
+}
+// Why: hooks restate a held wait on every event (Codex re-sends one per tool call while an async
+// question stays open), so ringing on each restatement becomes an OS notification every few seconds.
+const needsInputBellByPaneKey = new Map<string, NeedsInputBellState>()
+
+function isSyntheticTitleWindowVisible(): boolean {
+  const window = state.mainWindow
+  return window !== null && !window.isDestroyed() && window.isVisible() && !window.isMinimized()
+}
+
+function sendSyntheticTitle(
+  ptyId: string,
+  data: string,
+  options: { force?: boolean; semantic?: boolean } = {}
+): void {
+  // Throttle decorative frames; force final/permission frames because they drive BEL.
+  const deliverToWindow = shouldSendSyntheticTitleFrame({
+    force: options.force === true,
+    windowVisible: isSyntheticTitleWindowVisible()
+  })
+  // Semantic updates must reach unseen/headless trackers or readiness retains stale ready titles.
+  if (!deliverToWindow && options.semantic !== true) {
+    return
+  }
+  // Feed the tracker before checking for windows; fabricated bytes must never enter emulator/tails/transcripts/stats.
+  state.runtime?.ingestSyntheticTitleFrame(ptyId, data)
+  const window = state.mainWindow
+  if (!deliverToWindow || !window || window.isDestroyed()) {
+    return
+  }
+  // Only legacy renderer authority parses these bytes; main authority would mint phantom ACKs (synthetic-title-frame-routing.ts).
+  if (shouldCopySyntheticTitleFrameToPtyData(state.store?.getSettings())) {
+    window.webContents.send('pty:data', { id: ptyId, data })
+  }
+}
+
+function canSendDecorativeSyntheticTitle(): boolean {
+  return shouldSendSyntheticTitleFrame({
+    force: false,
+    windowVisible: isSyntheticTitleWindowVisible()
+  })
+}
+
+export function stopSyntheticTitleSpinner(paneKey: string): void {
+  needsInputBellByPaneKey.delete(paneKey)
+  if (syntheticTitleSpinnerByPaneKey.delete(paneKey)) {
+    stopSyntheticTitleSpinnerTimerIfIdle()
+  }
+}
+
+export function stopSyntheticTitleSpinnerTimer(): void {
+  if (syntheticTitleSpinnerTimer) {
+    clearInterval(syntheticTitleSpinnerTimer)
+    syntheticTitleSpinnerTimer = null
+  }
+}
+
+function stopSyntheticTitleSpinnerTimerIfIdle(): void {
+  if (syntheticTitleSpinnerByPaneKey.size === 0) {
+    stopSyntheticTitleSpinnerTimer()
+  }
+}
+
+function tickSyntheticTitleSpinners(): void {
+  if (!canSendDecorativeSyntheticTitle()) {
+    stopSyntheticTitleSpinnerTimer()
+    return
+  }
+  const ticks = advanceSyntheticTitleSpinnerEntries({
+    entries: syntheticTitleSpinnerByPaneKey,
+    frameCount: SPINNER_FRAMES.length,
+    getPtyIdForPaneKey
+  })
+  for (const tick of ticks) {
+    sendSyntheticTitle(
+      tick.ptyId,
+      `\x1b]0;${SPINNER_FRAMES[tick.frame]} ${tick.profile.workingLabel}\x07`
+    )
+  }
+  stopSyntheticTitleSpinnerTimerIfIdle()
+}
+
+function ensureSyntheticTitleSpinnerTimer(): void {
+  if (
+    syntheticTitleSpinnerTimer ||
+    syntheticTitleSpinnerByPaneKey.size === 0 ||
+    !canSendDecorativeSyntheticTitle()
+  ) {
+    return
+  }
+  // Share one timer to avoid multiplying idle wakeups per working pane.
+  syntheticTitleSpinnerTimer = setInterval(tickSyntheticTitleSpinners, SPINNER_INTERVAL_MS)
+}
+
+export function resumeSyntheticTitleSpinnerTimer(): void {
+  ensureSyntheticTitleSpinnerTimer()
+}
+
+function isNeedsInputState(agentState: AgentStatusState): boolean {
+  return agentState === 'blocked' || agentState === 'waiting'
+}
+
+export function driveSyntheticTitleFromHook(
+  paneKey: string,
+  agentState: AgentStatusState,
+  profile: SyntheticAgentTitleProfile,
+  /** Identifies what the agent is waiting on; a new prompt in the same wait rings again. */
+  needsInput: { promptKey: string; asyncQuestion: boolean } = {
+    promptKey: '',
+    asyncQuestion: false
+  }
+): void {
+  const ptyId = getPtyIdForPaneKey(paneKey)
+  if (!ptyId) {
+    return
+  }
+  const needsUserInput = isNeedsInputState(agentState)
+  if (!needsUserInput) {
+    needsInputBellByPaneKey.delete(paneKey)
+  }
+  if (agentState === 'working') {
+    // Emit immediately so visible startup does not wait for the next 80ms tick.
+    const existing = syntheticTitleSpinnerByPaneKey.get(paneKey)
+    const frame = existing ? existing.frame : 0
+    sendSyntheticTitle(ptyId, `\x1b]0;${SPINNER_FRAMES[frame]} ${profile.workingLabel}\x07`, {
+      semantic: true
+    })
+    if (existing) {
+      // Refresh profile after mid-pane agent changes so final idle/permission labels stay correct.
+      existing.profile = profile
+      return
+    }
+    syntheticTitleSpinnerByPaneKey.set(paneKey, { frame, profile })
+    ensureSyntheticTitleSpinnerTimer()
+    return
+  }
+  // Stop before the next tick can restore working; only permission frames ring BEL, completion owns its own notifications.
+  const bell = needsInputBellByPaneKey.get(paneKey)
+  stopSyntheticTitleSpinner(paneKey)
+  const label = needsUserInput ? profile.permissionLabel : profile.idleLabel
+  let ringsBell = false
+  if (needsUserInput) {
+    const next = bell ?? { lastPromptKey: '', rungAsyncQuestionKeys: new Set<string>() }
+    // Approvals carry no request id (Codex PermissionRequest), so a repeat after another prompt is new.
+    ringsBell = bell === undefined || next.lastPromptKey !== needsInput.promptKey
+    if (needsInput.asyncQuestion) {
+      ringsBell &&= !next.rungAsyncQuestionKeys.has(needsInput.promptKey)
+      next.rungAsyncQuestionKeys.add(needsInput.promptKey)
+    }
+    next.lastPromptKey = needsInput.promptKey
+    needsInputBellByPaneKey.set(paneKey, next)
+  }
+  sendSyntheticTitle(ptyId, `\x1b]0;${label}\x07${ringsBell ? '\x07' : ''}`, { force: true })
+}
+
+// Why: a profile that leaves working titles to the agent never overwrites the rest label Orca
+// wrote, so an agent that paints no working title (Codex with its activity title off) would read
+// as at rest for the whole next turn, to tui-idle, mailbox delivery and the tab alike.
+function retractSyntheticRestTitle(paneKey: string, profile: SyntheticAgentTitleProfile): void {
+  const ptyId = getPtyIdForPaneKey(paneKey)
+  const title = ptyId ? state.runtime?.getTrackedPtyTitle(ptyId) : null
+  if (
+    !ptyId ||
+    !title ||
+    ![profile.idleLabel, profile.permissionLabel].some(
+      (label) => normalizeTerminalTitle(label) === title
+    )
+  ) {
+    return
+  }
+  // One frame and no spinner timer, so the agent's own titles still win whenever it paints them.
+  sendSyntheticTitle(ptyId, `\x1b]0;${SPINNER_FRAMES[0]} ${profile.workingLabel}\x07`, {
+    semantic: true
+  })
+}
+
+export function initializeSyntheticTitleRuntime(): void {
+  // Drop torn-down PTYs explicitly or the shared timer loops forever on no-op sends.
+  registerPaneKeyTeardownListener((paneKey) => stopSyntheticTitleSpinner(paneKey))
+  // Retire spinners on both pane-status clear and user dismissal; either can otherwise leave finished agents looking active (#13890).
+  agentHookServer.subscribePaneStatusClear((clear) => {
+    const paneKey = getSyntheticTitleSpinnerPaneKeyToStop(clear)
+    if (paneKey) {
+      stopSyntheticTitleSpinner(paneKey)
+    }
+  })
+  agentHookServer.subscribeStatusDrop(stopSyntheticTitleSpinner)
+  // Process-scope subscription covers headless readiness without any window listener.
+  agentHookServer.subscribeEnrichedStatus(driveSyntheticTitleFromHookStatus)
+}
+
+export function driveSyntheticTitleFromHookStatus(event: {
+  paneKey: string
+  payload: {
+    state: AgentStatusState
+    agentType?: string
+    toolName?: string
+    toolInput?: string
+    interactivePrompt?: string
+  }
+  providerSessionOnly?: boolean
+  structuredHost?: unknown
+}): void {
+  // Identity refreshes have no turn state; structured rows have no PTY title.
+  if (event.providerSessionOnly || event.structuredHost) {
+    return
+  }
+  // Inject hook-derived idle/permission frames that native OSC titles can omit.
+  const profile = getSyntheticAgentTitleProfile(event.payload.agentType)
+  if (!profile) {
+    return
+  }
+  // Profiles that leave working titles to the agent never reach the drive below on working.
+  if (!isNeedsInputState(event.payload.state)) {
+    needsInputBellByPaneKey.delete(event.paneKey)
+  }
+  if (shouldDriveSyntheticAgentTitleFromHook(event.payload.agentType, event.payload.state)) {
+    const { toolName, toolInput, interactivePrompt } = event.payload
+    driveSyntheticTitleFromHook(event.paneKey, event.payload.state, profile, {
+      promptKey: JSON.stringify([toolName ?? null, interactivePrompt ?? toolInput ?? null]),
+      asyncQuestion: toolName === CODEX_ASYNC_QUESTION_TOOL
+    })
+  } else if (event.payload.state === 'working' && profile.synthesizeTerminalTitle !== false) {
+    retractSyntheticRestTitle(event.paneKey, profile)
+  }
+}

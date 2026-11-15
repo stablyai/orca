@@ -108,8 +108,9 @@ type RichMarkdownEditorSurfaceProps = {
     handleLinkSave: (href: string) => void
     handleLinkRemove: () => void
     handleLinkEditCancel: () => void
-    handleLinkOpen: () => void
     handleLinkCopy: () => void
+    onBubblePointerEnter: React.PointerEventHandler<HTMLDivElement>
+    onBubblePointerLeave: React.PointerEventHandler<HTMLDivElement>
     setIsEditingLink: (editing: boolean) => void
   }
   onToggleLink: () => void
@@ -288,8 +289,9 @@ export function RichMarkdownEditorSurface({
             onRemove={linkBubbleActions.handleLinkRemove}
             onEditStart={() => linkBubbleActions.setIsEditingLink(true)}
             onEditCancel={linkBubbleActions.handleLinkEditCancel}
-            onOpen={linkBubbleActions.handleLinkOpen}
             onCopy={linkBubbleActions.handleLinkCopy}
+            onPointerEnter={linkBubbleActions.onBubblePointerEnter}
+            onPointerLeave={linkBubbleActions.onBubblePointerLeave}
             ownerId={linkBubbleOwnerId}
           />
         ) : null}

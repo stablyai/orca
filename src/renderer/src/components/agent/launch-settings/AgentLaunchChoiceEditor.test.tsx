@@ -49,13 +49,13 @@ const LISTED = {
 
 const HOST = { kind: 'environment', environmentId: 'env-1' } as const
 
-function renderEditor(model?: string): void {
+function renderEditor(): void {
   render(
     <TooltipProvider>
       <AgentLaunchChoiceEditor
         agent="codex"
-        label="Codex"
-        choices={model ? { model } : undefined}
+        label="codex"
+        choices={undefined}
         userArgs=""
         permission={undefined}
         catalogTarget={HOST}
@@ -76,6 +76,26 @@ describe('AgentLaunchChoiceEditor model list', () => {
   afterEach(() => {
     cleanup()
     useAppStore.setState({ settings: initialSettings })
+  })
+
+  it('shows later catalog updates while Settings stays open after initial progress', async () => {
+    const inventory = Promise.withResolvers<unknown>()
+    const enriched = Promise.withResolvers<unknown>()
+    call
+      .mockResolvedValueOnce({ origin: 'unknown', listingInProgress: true })
+      .mockReturnValueOnce(inventory.promise)
+      .mockReturnValueOnce(enriched.promise)
+    useAppStore.setState({ settings: getDefaultSettings('') })
+    renderEditor()
+    await act(async () => inventory.resolve({ ...LISTED, listingInProgress: true }))
+    await waitFor(() => expect(menus.get('Model')).toContain('gpt-6-astra'))
+    await act(async () =>
+      enriched.resolve({
+        ...LISTED,
+        models: [{ id: 'late-model', label: 'Late model', efforts: [] }]
+      })
+    )
+    await waitFor(() => expect(menus.get('Model')).toEqual(['__agent_default__', 'late-model']))
   })
 
   it('shows the refreshed model after the agent command changes and ignores the older answer', async () => {

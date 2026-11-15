@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react'
 
 import { DEFAULT_AGENT_ACTIVITY_DISPLAY_MODE } from '../../../../../../shared/constants'
-import { getWorktreeCardDetails } from '../../../../../../shared/worktree/card-properties'
+import { getWorktreeCardDetails } from '../../../../../../shared/worktree/row-display/card-properties'
 import {
   isRuntimeOwnedSshTargetId,
   parseExecutionHostId,

@@ -42,7 +42,12 @@ export async function retireDeletedBrowserSessionProfile(
 }
 
 async function clearDeletedBrowserSessionProfile(profile: BrowserSessionProfile): Promise<void> {
-  await detachBrowserExtensionsFromProfileSession(profile)
+  try {
+    await detachBrowserExtensionsFromProfileSession(profile)
+  } catch (error) {
+    // Why: the profile is already deleted, so a teardown throw must not skip the storage wipe.
+    console.warn('[browser-session] Failed to unload extensions for deleted profile', error)
+  }
   // Why: clear the partition's storage so deleting a profile doesn't leave orphaned cookies/cache behind.
   try {
     const sess = session.fromPartition(profile.partition)

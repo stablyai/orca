@@ -89,6 +89,10 @@ export type AgentStatusLegacyAdapter = {
 export type AgentStatusLegacyAdapterOptions = {
   nextListingOrder?: () => number
   isCanonicalPaneKey?: (paneKey: string) => boolean
+  /** Owner-derived runtime fields, stamped on a row before it is frozen. */
+  prepareRow?: (entry: AgentHookEventPayload, previous: AgentHookEventPayload | undefined) => void
+  /** Every row entering or leaving a key, so owners can keep derived indexes exact. */
+  rowChanged?: (key: string, entry: AgentHookEventPayload | undefined) => void
 }
 
 function freezeRecursively(value: unknown, seen: WeakSet<object>): void {
@@ -166,20 +170,32 @@ export function createAgentStatusLegacyAdapter(
         }
         listingOrderByPaneKey.set(entry.paneKey, order)
       }
+      if (!Object.isFrozen(entry)) {
+        options.prepareRow?.(entry, entries.get(entry.paneKey))
+      }
       freezeStatusEntry(entry)
       if (admitOptions.moveToEnd) {
         entries.delete(entry.paneKey)
       }
       entries.set(entry.paneKey, entry)
+      options.rowChanged?.(entry.paneKey, entry)
       return true
     },
     delete: (paneKey) => {
       listingOrderByPaneKey.delete(paneKey)
-      return entries.delete(paneKey)
+      const deleted = entries.delete(paneKey)
+      if (deleted) {
+        options.rowChanged?.(paneKey, undefined)
+      }
+      return deleted
     },
     clear: () => {
+      const keys = [...entries.keys()]
       entries.clear()
       listingOrderByPaneKey.clear()
+      for (const key of keys) {
+        options.rowChanged?.(key, undefined)
+      }
     },
     move: (fromPaneKey, toPaneKey) => {
       if (fromPaneKey === toPaneKey) {
@@ -193,10 +209,12 @@ export function createAgentStatusLegacyAdapter(
         const priorTargetOrder = listingOrderByPaneKey.get(movedKey)
         entries.delete(key)
         listingOrderByPaneKey.delete(key)
+        options.rowChanged?.(key, undefined)
         if (isCanonicalPaneKey(movedKey)) {
           continue
         }
         entries.set(movedKey, value)
+        options.rowChanged?.(movedKey, value)
         if (priorTargetOrder !== undefined) {
           listingOrderByPaneKey.set(movedKey, priorTargetOrder)
         } else {

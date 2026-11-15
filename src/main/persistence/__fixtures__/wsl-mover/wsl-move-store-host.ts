@@ -14,7 +14,7 @@ import {
   ORCAD_MIGRATION_LOCAL_WSL_SOURCE_RUNTIME_CAPABILITY
 } from '../../../../shared/orcad-runtime-capabilities'
 import type { Store } from '../../loading-store/store'
-import type { WslMoveHost } from '../../moving-wsl-projects/wsl-move-driver-ports'
+import type { WslMoveHost } from '../../moving-wsl-projects/execution/wsl-move-driver-ports'
 
 export class WslMoveKilled extends Error {}
 

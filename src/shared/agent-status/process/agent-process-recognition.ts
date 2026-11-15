@@ -89,6 +89,10 @@ function agentForNormalizedProcess(normalized: string): TerminalAgent | undefine
   if (normalized.startsWith('grok-')) {
     return PROCESS_TO_AGENT.get('grok')
   }
+  // Jcode's Linux release wraps `jcode` around jcode-linux-<arch>.bin; raw release binaries keep the platform name.
+  if (/^jcode-(?:linux|macos|freebsd|windows)-(?:x86_64|aarch64)(?:\.bin)?$/.test(normalized)) {
+    return PROCESS_TO_AGENT.get('jcode')
+  }
   // Muse execs a versioned muse-bin binary; this prefix also covers truncated comm without matching unrelated muse-* tools.
   if (normalized.startsWith('muse-bin-')) {
     return PROCESS_TO_AGENT.get('muse')
@@ -189,7 +193,8 @@ export function isExpectedAgentProcess(
       /^(?:qoderclicn|qodercn)(?:-\d.*)?$/.test(normalizedProcess)) ||
     (['qoder', 'qodercli'].includes(normalizedExpected) &&
       /^(?:qoder|qodercli(?:-\d.*)?)$/.test(normalizedProcess)) ||
-    (normalizedExpected === 'muse' && normalizedProcess.startsWith('muse-bin-'))
+    (normalizedExpected === 'muse' && normalizedProcess.startsWith('muse-bin-')) ||
+    (normalizedExpected === 'jcode' && agentForNormalizedProcess(normalizedProcess) === 'jcode')
   )
 }
 

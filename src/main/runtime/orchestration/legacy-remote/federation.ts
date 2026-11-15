@@ -6,26 +6,27 @@ import { sendAgentTurn } from '../turn-delivery/send-agent-turn'
 import { createWorkerBriefWriteGuard } from '../../terminal/wait/launched-agent-write-guard'
 import { OrchestrationError } from '../orchestration-error'
 import { defineOrchestrationMethod } from '../../rpc/methods/orchestration/access/orchestration-method-access'
-import { assertOrchestrationWorktreeCreationSupported } from '../../rpc/methods/orchestration/worker/folder-worktree-placement'
+import { assertOrchestrationWorktreeCreationSupported } from '../../rpc/methods/orchestration/worker/start/placement/folder-worktree-placement'
 import type { FederationEffect } from './federation-effects'
 import { launchFederatedWorkerAgent } from './federated-worker-agent-launch'
-import type { WorkerSetupReceipt } from '../../rpc/methods/orchestration/worker/worker-topology'
+import type { WorkerSetupReceipt } from '../../rpc/methods/orchestration/worker/start/placement/worker-placement-topology'
 import {
   monitorFederatedSetup,
   persistFederatedReadinessStage,
   persistFederatedSetupSpawnFailure,
   persistFederatedSetupWaitOutcome
 } from './federation-setup'
-import { FederationAttachStartParams } from '../../../../shared/rpc-contract/orchestration-federation-start-params'
+import { FederationAttachStartParams } from '../../../../shared/rpc-contract/orchestration/orchestration-federation-start-params'
 import { failFederatedAttachmentWithReceipt } from './federation-start-receipt'
-import { prepareFederationWorkerLaunchOnHost } from '../../rpc/methods/orchestration/worker/worker-opencode-model-preflight'
+import { prepareFederationWorkerLaunchOnHost } from '../../rpc/methods/orchestration/worker/start/launch/worker-opencode-model-preflight'
+import { reusedWorkerLaunchReceipt } from '../../rpc/methods/orchestration/worker/start/launch/worker-launch-preferences'
 import {
   isWorkerStartTimeoutWithinTimerLimit,
   resolveWorkerStartReadinessTimeoutMs
 } from '../../../../shared/orchestration/orchestration-timing-budgets'
-import { assertWorkerStartTaskSpecWithinPromptBudget } from '../../rpc/methods/orchestration/worker/worker-start-prompt-budget'
+import { assertWorkerStartTaskSpecWithinPromptBudget } from '../../rpc/methods/orchestration/worker/start/admission/worker-start-prompt-budget'
 import { prepareFederatedAttachmentAuthority } from './federation-attachment-authority'
-import { resolveRpcWorkspaceCreatorProvenance } from '../../rpc/workspace-creator-context'
+import { resolveRpcWorkspaceCreatorProvenance } from '../../rpc/callers/workspace-creator-context'
 import { claimTerminalForRemoteAttach } from '../db/worker-dispatch/worker-terminal-claim'
 
 export const ORCHESTRATION_FEDERATION_ATTACH_METHODS = [
@@ -158,6 +159,11 @@ export const ORCHESTRATION_FEDERATION_ATTACH_METHODS = [
                 `Terminal ${terminalHandle} is not running a recognized agent.`
               )
             }
+            launch.receipt = reusedWorkerLaunchReceipt(runtime, launch.receipt, {
+              address: terminalHandle,
+              terminalHandle,
+              orcaSessionId: null
+            })
             effects.push({
               kind: 'terminal',
               role: 'agent',

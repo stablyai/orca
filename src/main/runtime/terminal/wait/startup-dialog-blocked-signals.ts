@@ -10,7 +10,9 @@ const CODEX_MODEL_MIGRATION_KEY_ROW_RE = /enter\/esc\s*(?:continue|confirm)\s*\u
 // Claude 2.1.316 menus shown before its first prompt; mid-session pickers share the key row, not these headings.
 const CLAUDE_STARTUP_MENU_HEADING_RE =
   /new\s*mcp\s*servers?\s*found|detected\s*a\s*custom\s*api\s*key|running\s*in\s*bypass\s*permissions\s*mode|allow\s*external\s*claude\.md\s*file\s*imports/g
-const CLAUDE_STARTUP_MENU_KEY_ROW_RE = /enter\s*to\s*confirm\s*\u00B7\s*esc\s*to\s*cancel/
+// The multi-server .mcp.json select has its own key row.
+const CLAUDE_STARTUP_MENU_KEY_ROW_RE =
+  /enter\s*to\s*confirm\s*\u00B7\s*esc\s*to\s*cancel|space\s*to\s*select\s*\u00B7\s*esc\s*to\s*reject\s*all/
 
 function lastMatchIndex(text: string, row: RegExp): number {
   let index = -1

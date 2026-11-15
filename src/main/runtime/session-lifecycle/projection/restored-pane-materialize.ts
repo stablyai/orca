@@ -29,10 +29,10 @@ import type { NewerDaemonReopenResult } from '../../../../shared/newer-daemon-ho
 import type { WorkspaceLayoutStream } from '../../terminal/surface/workspace-layout-stream'
 import { getDaemonHistoryDir } from '../../../daemon/launch/daemon-launch-paths'
 import { HistoryReader } from '../../../daemon/history/restoration/history-reader'
-import { servesWslMovedPaneHistory } from '../../../orcad/orcad-migration-wsl-destination'
-import { movedPaneHistorySessionId } from '../../../persistence/migrating-orcad-catalog/orcad-terminal-history-installer'
+import { servesWslMovedPaneHistory } from '../../../orcad/migration/orcad-migration-wsl-destination'
+import { movedPaneHistorySessionId } from '../../../persistence/migrating-orcad-catalog/terminal-history/orcad-terminal-history-installer'
 import { makePaneKey, parsePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
-import { agentProviderSessionsEqual } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
+import { agentProviderSessionsEqual } from '../../../../shared/agent-session/lifecycle/resume/agent-provider-session-equality'
 import { worktreeIdsEqual } from '../../../../shared/worktree/id'
 
 export abstract class OrcaRuntimeWithRestoredPaneStart extends OrcaRuntimeWithBuildHeadlessMobileSessionBrowserTabs {

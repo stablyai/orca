@@ -4,7 +4,7 @@ import {
   getFirstIncompleteFeatureWallSetupStepId
 } from '../../../../../shared/feature-wall-setup-steps'
 import type { FeatureWallSetupStepId } from '../../../../../shared/feature-wall-setup-steps'
-import { FeatureWallSetupChecklist } from '../../feature-wall/FeatureWallSetupChecklist'
+import { FeatureWallSetupChecklist } from '../../feature-wall/setup/FeatureWallSetupChecklist'
 import { useSetupGuideProgress } from '../../setup-guide/use-setup-guide-progress'
 
 export function SettingsSetupGuidePane(): React.JSX.Element {

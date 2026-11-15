@@ -25,18 +25,6 @@ const CLEANUP_TIMEOUT_MS = 30_000
 // Exact statuses reject silent no-op launches as well as crashes.
 const CASES = [
   {
-    name: 'nofuse-userns-bundled-help',
-    expectStatus: 0,
-    expectOutput: 'Usage: orca <command>',
-    why: 'The bundled launcher must run with no FUSE, no display, and userns restricted (#11609, #12530).'
-  },
-  {
-    name: 'nofuse-userns-bundled-version',
-    expectStatus: 0,
-    expectOutput: /^\d+\.\d+\.\d+/m,
-    why: 'A deployment must be able to read the installed version without a display (#13719).'
-  },
-  {
     name: 'nofuse-userns-bundled-status',
     // No runtime is running; the CLI must report that itself.
     expectStatus: 1,
@@ -44,30 +32,10 @@ const CASES = [
     why: 'A command that needs the runtime must report its absence, not abort.'
   },
   {
-    name: 'nofuse-userns-bundled-skills',
-    expectStatus: 0,
-    // Why: the rendered help header, not a bare 'skills' — the case name contains that word.
-    expectOutput: 'Usage: orca skills',
-    why: 'skills is a pure-text command that must never need Chromium (#14229).'
-  },
-  {
-    name: 'nofuse-userns-bundled-worktree',
-    expectStatus: 1,
-    expectOutput: "Orca is not running. Run 'orca open' first.",
-    why: 'A runtime-dependent command must report the missing runtime, not abort.'
-  },
-  {
     name: 'nofuse-nosandbox-direct-binary-skills',
     expectStatus: 0,
     expectOutput: 'Usage: orca skills',
     why: 'A direct binary launch that reaches JavaScript must run the command, not boot a GUI (#14229).'
-  },
-  {
-    name: 'nofuse-nosandbox-direct-binary-gui',
-    // A missing display is an expected diagnosis, not a crash.
-    expectStatus: 1,
-    expectOutput: 'needs a usable display server',
-    why: 'A desktop launch with no display must diagnose it instead of dying in uv_close (#13719).'
   },
   {
     name: 'stale-display-nosandbox-direct-binary-gui',

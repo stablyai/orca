@@ -1,7 +1,7 @@
 import type { RefObject } from 'react'
 import '@/lib/workspace/creation/new-workspace'
 import type { LinkedWorkItemSummary } from '@/lib/workspace/creation/new-workspace'
-import type { GitHubWorkItem } from '../../../shared/github/work-item-types'
+import type { GitHubWorkItem } from '../../../shared/github/work-items/work-item-types'
 import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
 import type { QuickSubmitOptions } from './composer-state/quick-creation-request'
 import type { TaskSourceContext } from '../../../shared/work-items/task-source-context'

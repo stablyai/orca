@@ -3,7 +3,7 @@ import { formatAgentToolPreviewLine } from '../../../src/shared/agent-status/pre
 import { formatAgentTypeLabel } from '../../../src/shared/agent-status/presentation/agent-type-label'
 import { withoutNativeChatVisualDirectiveLines } from '../../../src/shared/native-chat/native-chat-visual-directive'
 import type { RuntimeWorktreeAgentRow } from '../../../src/shared/runtime-types'
-import type { HomeAgentEntry } from '../worktree/home-worktree-info'
+import type { HomeAgentEntry } from '../worktree/catalog/home-worktree-info'
 import type { AgentStatusGroup } from './agent-list-rows'
 
 /** The row's name: what the conversation is called, else its task, else what it was asked. */
@@ -21,7 +21,14 @@ function oneLine(text: string | null | undefined): string {
   return text?.replace(/\s+/g, ' ').trim() ?? ''
 }
 
-function lastMessage(agent: RuntimeWorktreeAgentRow): string {
+// A worktree agent row or a session tab's AgentStatusEntry, which leaves these optional.
+type AgentPreviewSource = Pick<RuntimeWorktreeAgentRow, 'prompt'> & {
+  lastAssistantMessage?: string | null
+  toolName?: string | null
+  toolInput?: string | null
+}
+
+function lastMessage(agent: AgentPreviewSource): string {
   const message = agent.lastAssistantMessage
   return message ? oneLine(withoutNativeChatVisualDirectiveLines(message)) : ''
 }
@@ -31,7 +38,7 @@ function lastMessage(agent: RuntimeWorktreeAgentRow): string {
  * (`group` null) shows no tool, since the tool call is long over.
  */
 export function agentListPreview(
-  agent: RuntimeWorktreeAgentRow,
+  agent: AgentPreviewSource,
   group: AgentStatusGroup | null,
   title: string
 ): string {

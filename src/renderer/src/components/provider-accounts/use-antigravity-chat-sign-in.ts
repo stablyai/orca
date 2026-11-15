@@ -23,7 +23,7 @@ const otherClients = (flow: AntigravityChatSignInState | null): boolean =>
   running(flow) && flow.flowId === null
 
 /** Progress of a sign-in flow; signed-in or signed-out state shows in the status badge instead. */
-function chatSignInLine(
+export function chatSignInLine(
   flow: AntigravityChatSignInState | null,
   auth: AntigravityChatAuth,
   openFailed: boolean,

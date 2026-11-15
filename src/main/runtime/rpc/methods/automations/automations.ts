@@ -10,7 +10,7 @@ import {
   AutomationList,
   AutomationRuns,
   AutomationUpdate
-} from '../../../../../shared/rpc-contract/automation-params'
+} from '../../../../../shared/rpc-contract/automations/automation-params'
 
 function mutationOwner(
   id: string,
@@ -51,8 +51,16 @@ export const AUTOMATION_METHODS = [
     name: 'automation.create',
     permission: 'workspace',
     params: AutomationCreate,
-    handler: async (params, { runtime }) => ({
-      automation: await runtime.createAutomation(params)
+    handler: async (params, { runtime, plugin }) => ({
+      automation: await runtime.createAutomation(
+        // Provenance comes from the in-process caller only; params cannot claim it.
+        plugin
+          ? { ...params, createdBy: { kind: 'plugin', pluginKey: plugin.key, name: plugin.name } }
+          : params,
+        undefined,
+        // A plugin disabled while the target resolved must not leave an automation it owns.
+        plugin?.assertActive
+      )
     })
   }),
   defineMethod({

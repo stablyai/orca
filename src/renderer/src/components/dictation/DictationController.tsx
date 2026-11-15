@@ -8,13 +8,13 @@ import { dictationPillAnchorFor, type DictationPillAnchor } from './dictation-pi
 import {
   canRetryDictation,
   createDictationKeptRecording,
-  transcribeKeptRecording,
   type DictationKeptRecording
 } from './dictation-kept-recording'
+import { useDictationRetry } from './use-dictation-retry'
 import { useDictationControls } from './use-dictation-controls'
 import { useDictationQueuedSend } from './use-dictation-queued-send'
 import { createDictationTranscriptDelivery } from './dictation-transcript-delivery'
-import { recordStoppedSession, waitForStoppedSession } from './dictation-stopped-sessions'
+import { createDictationStoppedSessions } from './dictation-stopped-sessions'
 import {
   showDictationDisabledToast,
   showDictationNoModelToast,
@@ -33,6 +33,7 @@ import { useDictationSilenceStop } from './use-dictation-silence-stop'
 import { stopAfterSilenceSeconds } from '../../../../shared/dictation-silence-stop'
 import { useDictationSpeechEvents } from './use-dictation-speech-events'
 import { useDictationSpeechModelSetup } from './use-dictation-speech-model-setup'
+import { shouldHoldForCleanup, useDictationCleanup } from './use-dictation-cleanup'
 import { NO_DICTATION_LIVE_TEXT } from '@/store/slices/dictation/dictation'
 import {
   canStartDictation,
@@ -63,8 +64,7 @@ export function DictationController() {
   const sessionRef = useRef<DictationSession>(initialDictationSession)
   // Inserts the current session's finals where dictation started.
   const deliverRef = useRef<((text: string) => void) | null>(null)
-  const stoppedSessionIdsRef = useRef(new Set<string>())
-  const stoppedResolversRef = useRef(new Map<string, () => void>())
+  const [stoppedSessions] = useState(createDictationStoppedSessions)
   // Push-to-talk restarts per utterance; report a missing preferred microphone once per preference.
   const micFallbackNotifiedForRef = useRef<string | null>(null)
   const [captureLive, setCaptureLive] = useState(false)
@@ -80,6 +80,8 @@ export function DictationController() {
     useDictationSpeechModelSetup(settings?.voice, isIdle, setPillAnchor)
   const queuedSend = useDictationQueuedSend(sessionRef, keptRef)
   const { clear: clearQueuedSend, release: releaseQueuedSend } = queuedSend
+  const cleanup = useDictationCleanup(keptRef)
+  const { land: landCleanup, interrupt: interruptCleanup } = cleanup
 
   const dispatch = useCallback(
     (event: DictationSessionEvent): DictationSession => {
@@ -110,10 +112,6 @@ export function DictationController() {
     [setDictationState, setLiveText, clearQueuedSend]
   )
 
-  const drainStoppedSession = useCallback((sessionId: string) => {
-    void waitForStoppedSession(sessionId, stoppedSessionIdsRef, stoppedResolversRef)
-  }, [])
-
   const finishDictationSession = useCallback(
     async ({ run, sessionId }: DictationSession, beforeEnd?: () => void) => {
       if (sessionId === null) {
@@ -130,7 +128,7 @@ export function DictationController() {
         // Swallow stop errors — the worker may already be torn down.
       }
       // Main stop completion can precede renderer final-text IPC; wait for this session’s stopped event before accepting the next run.
-      await waitForStoppedSession(sessionId, stoppedSessionIdsRef, stoppedResolversRef)
+      await stoppedSessions.wait(sessionId)
       if (sessionRef.current.run !== run) {
         return
       }
@@ -138,17 +136,26 @@ export function DictationController() {
         showNoSpeechDetectedToast()
       }
       beforeEnd?.()
+      await landCleanup()
       await releaseQueuedSend(run)
       if (sessionRef.current.run === run) {
         dispatch({ type: 'ended' })
       }
     },
-    [dispatch, finishCapture, getCapturedChunkCount, releaseQueuedSend]
+    [
+      dispatch,
+      finishCapture,
+      getCapturedChunkCount,
+      stoppedSessions,
+      releaseQueuedSend,
+      landCleanup
+    ]
   )
 
   /** The error pill when the recording can be retried; otherwise the toast, as nothing is left to retry. */
   const showFailure = useCallback(
     (kind: DictationFailureKind | null, showToast: () => void) => {
+      interruptCleanup()
       dispatch({ type: 'fail' })
       if (kind && canRetryDictation(keptRef.current)) {
         setFailure(kind)
@@ -157,11 +164,15 @@ export function DictationController() {
       showToast()
       dispatch({ type: 'ended' })
     },
-    [dispatch]
+    [dispatch, interruptCleanup]
   )
 
   // Words that already landed stay; the engine drops the rest instead of transcribing it.
   const cancelDictation = useCallback(() => {
+    // ✕ while cleaning up skips cleanup; the words then land as heard.
+    if (interruptCleanup()) {
+      return
+    }
     invalidatePendingStart()
     if (sessionRef.current.phase === 'error') {
       dispatch({ type: 'ended' })
@@ -173,8 +184,8 @@ export function DictationController() {
     }
     stopCapture()
     void window.api.speech.cancelDictation(previous.sessionId).catch(() => undefined)
-    drainStoppedSession(previous.sessionId)
-  }, [dispatch, stopCapture, drainStoppedSession, invalidatePendingStart])
+    void stoppedSessions.wait(previous.sessionId)
+  }, [dispatch, stopCapture, stoppedSessions, invalidatePendingStart, interruptCleanup])
 
   const stopDictation = useCallback(async () => {
     invalidatePendingStart()
@@ -217,7 +228,7 @@ export function DictationController() {
     }
     const isCurrent = (): boolean => sessionRef.current.run === run
     const insertionTarget = captureInsertionTarget()
-    const deliver = createDictationTranscriptDelivery()
+    const deliver = createDictationTranscriptDelivery(shouldHoldForCleanup())
     deliverRef.current = (text) => deliver(text, insertionTarget)
     const context = captureDictationContext()
     const kept = createDictationKeptRecording(insertionTarget, deliver, context)
@@ -235,7 +246,7 @@ export function DictationController() {
       }
       if (engineStarted) {
         await window.api.speech.cancelDictation(sessionId).catch(() => undefined)
-        drainStoppedSession(sessionId)
+        void stoppedSessions.wait(sessionId)
       }
     }
 
@@ -323,38 +334,21 @@ export function DictationController() {
     stopCapture,
     stopDictation,
     finishDictationSession,
-    drainStoppedSession,
+    stoppedSessions,
     recordFeatureInteraction,
     showFailure,
     readyToRecord
   ])
 
-  // Sends the failed session's recording through the speech host again, into the same place.
-  const retryDictation = useCallback(async () => {
-    const kept = keptRef.current
-    const modelId = settings?.voice?.sttModel
-    if (sessionRef.current.phase !== 'error' || !modelId || !kept || !canRetryDictation(kept)) {
-      return
-    }
-    const { run, sessionId } = dispatch({ type: 'retry' })
-    if (sessionId === null) {
-      return
-    }
-    await transcribeKeptRecording({
-      recording: kept,
-      modelId,
-      sessionId,
-      isCurrent: () => sessionRef.current.run === run,
-      routeFinals: (sink) => {
-        deliverRef.current = sink
-      },
-      finish: (beforeEnd) => finishDictationSession(sessionRef.current, beforeEnd),
-      fail: (message) =>
-        showFailure(dictationStartFailureKind(message) ?? 'transcribe', () =>
-          showDictationStartErrorToast(message)
-        )
-    })
-  }, [settings, dispatch, finishDictationSession, showFailure])
+  const retryDictation = useDictationRetry({
+    modelId: settings?.voice?.sttModel,
+    sessionRef,
+    keptRef,
+    deliverRef,
+    dispatch,
+    finish: finishDictationSession,
+    showFailure
+  })
 
   const toggleDictation = useCallback(() => {
     // A second press while the model check runs takes the first one back.
@@ -377,10 +371,7 @@ export function DictationController() {
     retry: () => void retryDictation(),
     enterQueues: (event) => queuedSend.queueTerminalEnter(event.target),
     // The error pill leaves Esc to Settings and dialogs; only its ✕ discards the recording.
-    escCancels: () =>
-      hasPendingStart() ||
-      isDictationUnderway(sessionRef.current.phase) ||
-      sessionRef.current.phase === 'stopping'
+    escCancels: () => hasPendingStart() || !canStartDictation(sessionRef.current.phase)
   })
 
   const { isHolding } = useHoldDictationGesture({
@@ -408,15 +399,14 @@ export function DictationController() {
       dispatch({ type: 'final-text' })
       deliverRef.current?.(text)
     },
-    onStopped: (sessionId) =>
-      recordStoppedSession(sessionId, stoppedSessionIdsRef, stoppedResolversRef),
+    onStopped: (sessionId) => stoppedSessions.record(sessionId),
     onError: (sessionId, error) => {
       const { run } = dispatch({ type: 'abandon' })
       stopCapture()
       discardBufferedAudio()
       void (async () => {
         await window.api.speech.stopDictation(sessionId).catch(() => undefined)
-        await waitForStoppedSession(sessionId, stoppedSessionIdsRef, stoppedResolversRef)
+        await stoppedSessions.wait(sessionId)
         if (sessionRef.current.run !== run) {
           return
         }
@@ -432,6 +422,7 @@ export function DictationController() {
       anchor={pillAnchor}
       failure={failure}
       queued={queuedSend.queuedKind}
+      cleanup={cleanup}
       setup={setupTarget}
       onSetupClose={closeSetup}
     />

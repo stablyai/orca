@@ -1,12 +1,13 @@
 import type { IssueSourcePreference } from '../../../../shared/repo-types'
+import { ghExecFileAsync } from '../../../git/command-runner/hosted-cli/gh-exec-file'
+import { classifyGhError } from '../../api/gh-error-classification'
 import {
-  ghExecFileAsync,
-  classifyGhError,
   ghRepoExecOptions,
   githubRepoContext,
   type LocalGitExecOptions
-} from '../../gh-utils'
-import { githubHostExecOptions, type GitHubApiRepository } from '../../github-api-repository'
+} from '../../repositories/github-repository-identity'
+import { githubHostExecOptions } from '../../repositories/github-repository-host'
+import type { GitHubRepositoryIdentity as GitHubApiRepository } from '../../../../shared/github/repositories/repository-identity'
 import { githubPRStackExecutionScope, type GhExecOptions } from './../github-exec-scope'
 import { resolvePullRequestLookupCandidates } from './../pull-request-lookup-candidates'
 import { detectRepositoryMergeMetadata } from './../detect/repository-merge-metadata'

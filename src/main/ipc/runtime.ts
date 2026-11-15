@@ -11,12 +11,12 @@ import type { ClientHostedBrowserRowsEvent } from '../../shared/client-hosted-br
 import { TERMINAL_FIT_RESTORE_DEADLINE_MS } from '../../shared/terminal/viewport/terminal-fit-restore-deadline'
 import { DESKTOP_RENDERER_RUNTIME_CLIENT_CAPABILITIES } from './desktop-renderer-runtime-capabilities'
 import { RpcDispatcher } from '../runtime/rpc/dispatcher'
-import { DESKTOP_RPC_CALLER } from '../runtime/rpc/rpc-caller-identity'
+import { DESKTOP_RPC_CALLER } from '../runtime/rpc/callers/rpc-caller-identity'
 import { ORCHESTRATION_CONTRACT_VERSION } from '../../shared/orchestration/orchestration-runtime-capabilities'
 import { ALL_RPC_METHODS } from '../runtime/rpc/methods/rpc-method-registry'
 import { DesktopRuntimeSenderLifecycle } from './desktop-runtime-sender-lifecycle'
 import { toWorkspaceLifecycleResult } from '../ephemeral-vm/workspace-lifecycle-result'
-import { publishMobileProjectSections } from '../runtime/sidebar-inputs/mobile-project-sections-snapshot'
+import { publishMobileProjectSections } from '../runtime/sidebar-inputs/catalog/mobile-project-sections-snapshot'
 
 function boundTerminalFitRestore(pending: Promise<boolean>): Promise<boolean> {
   let timer: ReturnType<typeof setTimeout> | undefined

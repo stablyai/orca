@@ -1,5 +1,5 @@
 import { getAgentSessionOptionCatalog } from '../../../../../../../shared/agent-session/options/agent-session-option-catalog'
-import type { CatalogModel } from '../../../../../../../shared/agent-session/options/agent-session-option-catalog-types'
+import type { CatalogModel } from '../../../../../../../shared/agent-session/options/catalog-providers/agent-session-option-catalog-types'
 import type { SessionOptionValue } from '../../../../../../../shared/native-chat/input/native-chat-session-options'
 import { stripScrollbackAnsi } from '../../terminal/assembly/native-chat-scrape-fallback'
 
@@ -121,8 +121,18 @@ function parseClaudeModelName(cell: string): string | null {
   return name || null
 }
 
+// Keep a dotted version whole: `Opus 5` must not claim a banner reading `Opus 5.5`.
 function modelNameTokens(value: string): string[] {
-  return value.toLowerCase().match(/[a-z]+|\d+[a-z]*/g) ?? []
+  return (
+    withoutClaudeVendor(value)
+      .toLowerCase()
+      .match(/[a-z]+|\d+(?:\.\d+)*[a-z]*/g) ?? []
+  )
+}
+
+// Listed labels may carry the vendor (`Claude Opus 5.5`) that the banner omits (`Opus 5.5`).
+function withoutClaudeVendor(value: string): string {
+  return value.replace(/^claude\s+/i, '')
 }
 
 /** Match a whole leading family and ordered variant tokens, allowing inserted versions without claiming vendor slugs or other context sizes. */
@@ -132,11 +142,11 @@ function labelNamesReportedModel(reportedModel: string, label: string): boolean 
   if (!family) {
     return false
   }
-  const name = reportedModel.toLowerCase()
+  const name = withoutClaudeVendor(reportedModel).toLowerCase()
   if (name !== family && !name.startsWith(`${family} `)) {
     return false
   }
-  const nameTokens = modelNameTokens(name)
+  const nameTokens = modelNameTokens(reportedModel)
   let cursor = 1
   for (const token of labelTokens.slice(1)) {
     const found = nameTokens.indexOf(token, cursor)

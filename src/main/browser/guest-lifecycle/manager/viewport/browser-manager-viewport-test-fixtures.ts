@@ -1,5 +1,6 @@
 import { vi } from 'vitest'
 import type { BrowserManagerMocks } from '../browser-manager-test-harness'
+import { guestNavigationMethods } from '../browser-manager-test-harness'
 
 export const GUEST_ELECTRON_UA =
   'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) orca/1.0.0 Chrome/134.0.0.0 Electron/30.0.0 Safari/537.36'
@@ -76,6 +77,7 @@ export function createViewportGuestFactory(
       return result
     }
     const guest = {
+      ...guestNavigationMethods(),
       id,
       isDestroyed: vi.fn(() => false),
       isCrashed: vi.fn(() => rendererCrashed),

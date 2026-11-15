@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useState, type RefObject } from 'react'
-import { useMeasuredWidth } from '../../../right-sidebar/right-sidebar-measured-width'
+import { useMeasuredWidth } from '../../../right-sidebar/layout/right-sidebar-measured-width'
 import { nativeChatColumnWidthBucket } from '../../appearance/native-chat-appearance-style'
 import { useNativeChatStoreAppearanceStyle } from '../../appearance/use-native-chat-store-appearance-style'
 

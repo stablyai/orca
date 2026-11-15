@@ -1,5 +1,5 @@
 // Literal stale refspecs can fail the entire fetch; wildcard zero-match tolerance does not cover them.
-import { extractExecError } from '../../exec-error'
+import { extractExecError } from '../../command-runner/process-capture/exec-error'
 import { removeStaleForkFetchRefspec, type GitExecFn } from './fork-remote-refspec'
 
 const MISSING_REMOTE_REF_PATTERN = /couldn't find remote ref (refs\/heads\/\S+)/

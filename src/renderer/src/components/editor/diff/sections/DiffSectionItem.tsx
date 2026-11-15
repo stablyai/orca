@@ -14,8 +14,8 @@ import {
   installEditorSaveShortcut,
   installMonacoDiffChangeNavigationShortcut,
   installMonacoEditorFindShortcut
-} from '../../editor-shortcuts'
-import { installMonacoDiffCommandPaletteShortcuts } from '../../monaco-diff-command-palette-shortcuts'
+} from '../../commands/editor-shortcuts'
+import { installMonacoDiffCommandPaletteShortcuts } from '../../commands/monaco-diff-command-palette-shortcuts'
 import { DiffSectionBody } from './DiffSectionBody'
 import { useDiffSectionLayoutMetrics } from './useDiffSectionLayoutMetrics'
 import { getLiveDiffSectionRenderLimit } from './diff-section-live-render-limit'

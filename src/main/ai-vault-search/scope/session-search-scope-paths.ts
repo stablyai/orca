@@ -6,8 +6,8 @@ import {
   resolveRuntimePath
 } from '../../../shared/cross-platform-path'
 import { isFolderRepo } from '../../../shared/repo-kind'
-import { resolveConfiguredWorktreeBasePaths } from '../../../shared/worktree/configured-worktree-base-path'
-import { buildKnownOrcaWorkspaceLayouts } from '../../../shared/worktree/ownership'
+import { resolveConfiguredWorktreeBasePaths } from '../../../shared/worktree/paths/configured-worktree-base-path'
+import { buildKnownOrcaWorkspaceLayouts } from '../../../shared/worktree/visibility/ownership'
 import type { SessionSearchScopeCatalog } from './session-search-scope-catalog'
 
 type ScopeRepo = SessionSearchScopeCatalog['repos'][number]

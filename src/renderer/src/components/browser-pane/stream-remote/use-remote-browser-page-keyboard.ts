@@ -9,12 +9,15 @@ import {
 } from '@/components/terminal-pane/clipboard/terminal-clipboard-event-paste'
 import { iterateBrowserTextInsertionChunks } from '../../../../../shared/browser-text-insertion-chunks'
 import { assertClipboardTextWithinLimitWithYield } from '../../../../../shared/clipboard-text'
-import { isEditableKeyboardTarget } from '../host-guest/browser-keyboard'
+import { isEditableKeyboardTarget } from '../host-guest/input/browser-keyboard'
 import {
   getRemoteBrowserKeyboardShortcut,
   getRemoteBrowserKeypressKey
 } from './remote-browser-keyboard'
-import { isRemoteBrowserPageMissingError } from './remote-browser-stream-errors'
+import {
+  isRemoteBrowserInputOpenedDialogError,
+  isRemoteBrowserPageMissingError
+} from './remote-browser-stream-errors'
 import type { RemoteBrowserStreamLifecycle } from './remote-browser-stream-lifecycle'
 import type { RemoteBrowserOperationToken } from './remote-browser-stream-tokens'
 import {
@@ -176,6 +179,9 @@ export function useRemoteBrowserPageKeyboard({
         if (isCurrentRemoteOperationToken(operationToken)) {
           if (isRemoteBrowserPageMissingError(error)) {
             closeMissingRemotePage(pageId)
+            return
+          }
+          if (isRemoteBrowserInputOpenedDialogError(error)) {
             return
           }
           setPaneNotice({

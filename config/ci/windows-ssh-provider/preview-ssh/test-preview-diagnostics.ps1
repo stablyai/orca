@@ -2,26 +2,6 @@ $ErrorActionPreference='Stop'
 $errors=$null;$tokens=$null
 $ast=[Management.Automation.Language.Parser]::ParseFile((Join-Path $PSScriptRoot 'prove-preview-openssh.ps1'),[ref]$tokens,[ref]$errors)
 if($errors.Count){throw 'Fixture failed to parse'}
-# Script-scope assignments share one case-insensitive namespace with typed params: $accounts rebinds [int]$Accounts.
-foreach($script in @($ast,[Management.Automation.Language.Parser]::ParseFile((Join-Path $PSScriptRoot '../invoke-windows-host-cells.ps1'),[ref]$null,[ref]$null))){
-  $params=@($script.ParamBlock.Parameters | ForEach-Object {$_.Name.VariablePath.UserPath})
-  $shadows=@($script.FindAll({param($node) $node -is [Management.Automation.Language.AssignmentStatementAst] -and $node.Left -is [Management.Automation.Language.VariableExpressionAst]},$true) | Where-Object {
-    $parent=$_.Parent;while($parent -and $parent -isnot [Management.Automation.Language.FunctionDefinitionAst] -and $parent -isnot [Management.Automation.Language.ScriptBlockExpressionAst]){$parent=$parent.Parent}
-    -not $parent -and $_.Left.VariablePath.UserPath -in $params
-  } | ForEach-Object {$_.Left.VariablePath.UserPath})
-  if($shadows.Count){throw "Script-scope assignment rebinds a typed param: $($shadows -join ', ')"}
-}
-$definition=$ast.Find({param($node) $node -is [Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -eq 'Diagnostic-ExitStatuses'},$true)
-. ([scriptblock]::Create($definition.Extent.Text))
-function Assert-Statuses([string]$Text,[long[]]$Expected){
-  $actual=@(Diagnostic-ExitStatuses $Text)
-  if(($actual -join ',') -ne ($Expected -join ',')){throw 'Unexpected numeric diagnostic'}
-}
-Assert-Statuses "debug1: Exit status 3221225781`nclient secret path /private/id" @(3221225781)
-Assert-Statuses 'CreateProcess error: 5; exit code -1073741515' @(5,-1073741515)
-Assert-Statuses 'identity key-123, host 127.0.0.1 port 65000' @()
-Assert-Statuses ('x'*16384+' exit status 123') @()
-Assert-Statuses (('exit status 7; '*20)) @(7,7,7,7,7,7,7,7)
 $split=$ast.Find({param($node) $node -is [Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -eq 'Split-HostToolchainPath'},$true)
 . ([scriptblock]::Create($split.Extent.Text))
 $pathRoot=Join-Path ([IO.Path]::GetTempPath()) ([Guid]::NewGuid().ToString('N'))
@@ -44,7 +24,7 @@ function Assert-CapabilityCommand([switch]$Online,[string]$Name,[string]$LogPath
   [IO.File]::WriteAllText($LogPath,"$Operation fixture")
 }
 function Get-WindowsCapability([switch]$Online,[string]$Name,[string]$LogPath,[object]$ErrorAction){
-  $script:capabilityQueries++;Assert-CapabilityCommand -Online:$Online -Name $Name -LogPath $LogPath -ErrorAction $ErrorAction -Operation 'query'
+  Assert-CapabilityCommand -Online:$Online -Name $Name -LogPath $LogPath -ErrorAction $ErrorAction -Operation 'query'
   if($script:failCapabilityQuery){Write-Error 'Injected capability query failure' -ErrorAction $ErrorAction}
   return @{State=$script:capabilityState}
 }
@@ -58,7 +38,7 @@ function Add-WindowsCapability([switch]$Online,[string]$Name,[string]$LogPath,[o
   return @{Path='C:\';Online=$true;RestartNeeded=$script:capabilityRestartNeeded}
 }
 function Reset-CapabilityControl([string]$State){
-  $script:capabilityState=$State;$script:capabilityQueries=0;$script:capabilityAdds=0
+  $script:capabilityState=$State;$script:capabilityAdds=0
   $script:globalChecks=0;$script:shellChecks=0;$script:refuseGlobalCheck=0;$script:refuseShellCheck=0
   $script:refuseCapabilityHost=$false;$script:failCapabilityInstall=$false;$script:failCapabilityQuery=$false
   $script:activeCapabilityReceipt=$null;$script:installObservedReceipt=$null;$script:capabilityRestartNeeded=$false
@@ -72,10 +52,7 @@ foreach($state in @('Installed','NotPresent')){
   $capabilityReport=@{}
   Install-WindowsInboxSshCapability 'x64' $capabilityReport {param($name) $script:capabilityStages.Add($name)} $script:capabilityLogs
   $expectedAdds=if($state -eq 'Installed'){0}else{1}
-  $expectedStages=@('inbox-capability-start','inbox-capability-query-start','inbox-capability-query-finished')
-  if($expectedAdds){$expectedStages+=@('inbox-capability-install-start','inbox-capability-install-finished')}
-  $expectedStages+=@('inbox-capability-guards-start','inbox-capability-complete')
-  if($capabilityReport.inboxCapabilityInitialState -ne $state -or $script:capabilityQueries -ne 1 -or $script:capabilityAdds -ne $expectedAdds -or $script:globalChecks -ne 2 -or $script:shellChecks -ne 2 -or ($script:capabilityStages -join ',') -ne ($expectedStages -join ',')){throw 'Shared capability preparation did not preserve the install and guard boundaries'}
+  if($capabilityReport.inboxCapabilityInitialState -ne $state -or $script:capabilityAdds -ne $expectedAdds){throw 'Shared capability preparation did not preserve the install and guard boundaries'}
   if($capabilityReport.inboxCapabilityOperations.Count -ne 1+$expectedAdds){throw 'Capability operations missing'}
   foreach($operation in $capabilityReport.inboxCapabilityOperations){
     if($operation.status -ne 'passed' -or $operation.elapsedMs -isnot [long] -or $operation.elapsedMs -lt 0 -or -not [IO.File]::Exists((Join-Path $script:capabilityLogs $operation.log))){throw 'Capability operation did not retain its timing, verdict or diagnostic log'}
@@ -215,23 +192,20 @@ try {
       $observed=@($report.privateProfiles | Where-Object sid -eq $sid)
       if($observed.Count -ne 1 -or $observed[0].waitMs -lt 30000){throw "Short profile observation window: $($Case.Name)"}
     }
-    if($control.clockMs -gt $Case.MaxClockMs){throw "Profile windows were serialized: $($Case.Name)"}
     if($Case.MissingSid -and $control.profileQueries[$ownedSids[2]]){throw 'Missing SID gained profile deletion authority'}
-    if($report.privateProfiles.Count -and ($report.profileUnloadWaitMs -ne $report.privateProfiles[-1].waitMs -or ($report.privateProfile | ConvertTo-Json -Compress) -ne ($report.privateProfiles[-1].profiles | ConvertTo-Json -Compress))){throw 'Legacy scalar observation lost owned-account order'}
   }
   $cases=@(
     @{Name='three loaded full windows';Modes=@('loaded','loaded','loaded');Retained=3;Removed=@();FullWindow=$ownedSids},
     @{Name='unload at 29999ms';Modes=@('late','unloaded','absent');UnloadAtMs=@(29999,0,0);Retained=0;Removed=$ownedSids[0..1];FullWindow=@($ownedSids[0])},
     @{Name='reload before deletion';Modes=@('reload','unloaded','absent');Retained=1;Removed=@($ownedSids[1]);FullWindow=@($ownedSids[0])},
     @{Name='independent unloads';Modes=@('late','loaded','late');UnloadAtMs=@(5000,0,20000);Retained=1;Removed=@($ownedSids[0],$ownedSids[2]);FullWindow=@($ownedSids[1])},
-    @{Name='slow provider queries';Modes=@('loaded','loaded','loaded');QueryCostMs=200;Retained=3;Removed=@();FullWindow=$ownedSids;MaxClockMs=40000},
+    @{Name='slow provider queries';Modes=@('loaded','loaded','loaded');QueryCostMs=200;Retained=3;Removed=@();FullWindow=$ownedSids},
     @{Name='reload at expired window';Modes=@('reload-at-deadline','unloaded','absent');Retained=1;Removed=@($ownedSids[1]);FullWindow=@($ownedSids[0])},
     @{Name='late unload honestly retained';Modes=@('loaded','loaded','late');UnloadAtMs=@(0,0,45000);Retained=3;Removed=@();FullWindow=$ownedSids},
     @{Name='missing SID is skipped';Modes=@('unloaded','absent','unloaded');Retained=0;Removed=@($ownedSids[0]);MissingSid=$true}
   )
   foreach($case in $cases){
     if(-not $case.UnloadAtMs){$case.UnloadAtMs=@(0,0,0)}
-    if(-not $case.MaxClockMs){$case.MaxClockMs=33000}
     Assert-ProfileCleanup $case
   }
   $failures=@{

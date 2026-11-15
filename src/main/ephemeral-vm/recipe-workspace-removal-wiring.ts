@@ -1,8 +1,8 @@
 import type { Store } from '../persistence/loading-store/store'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import { RECIPE_REMOVAL_REQUEST_TIMEOUT_MS } from '../../shared/recipe-host-removal'
-import { callRuntimeEnvironment } from '../ipc/runtime-environments/runtime-environment-transport-routing'
-import { getRuntimeEnvironmentRegistryRoot } from '../ipc/runtime-environments/runtime-environment-registry-root'
+import { callRuntimeEnvironment } from '../ipc/runtime-environments/requests/runtime-environment-transport-routing'
+import { getRuntimeEnvironmentRegistryRoot } from '../ipc/runtime-environments/catalog/runtime-environment-registry-root'
 import { cleanupOwnedEphemeralVmRuntime } from './owned-runtime-cleanup'
 import {
   describeRecipeWorkspaceEnvironments,

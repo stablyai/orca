@@ -3,7 +3,7 @@ import type {
   TerminalLayoutSnapshot,
   TerminalTab
 } from '../../../../shared/workspace-layout/terminal-tab-types'
-import { normalizeTerminalLayoutPtyOwnership } from '../../../../shared/workspace-layout/terminal-layout-pty-ownership'
+import { normalizeTerminalLayoutPtyOwnership } from '../../../../shared/workspace-layout/terminal-topology/terminal-layout-pty-ownership'
 import { resolvePaneAgentOwnerRecord } from '../../../../shared/agent-status/identity/pane-agent-owner'
 import { normalizeCompatibleAgentTitleForOwner } from '../../../../shared/agent-status/title/agent-title-owner'
 import { getRemoteRuntimePtyEnvironmentId } from '../hosted-terminals/identity/remote-runtime-pty-owner'

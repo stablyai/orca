@@ -12,6 +12,8 @@ export type ComputerUsePermissionStatusResult = {
   helperAppPath: string | null
   helperUnavailableReason: string | null
   permissions: ComputerUsePermissionState[]
+  // macOS reports Accessibility as untrusted behind the lock screen, so a denial read while locked says nothing.
+  sessionLocked?: boolean
 }
 
 export type ComputerUsePermissionSetupResult = {

@@ -4,7 +4,7 @@ import type { IssueSourcePreference } from '../../../shared/repo-types'
 import { mapGitLabIssueInfo } from '../requests/gitlab-response-mapping'
 // prettier-ignore
 import { glabApiWithHeaders, acquire, release } from '../requests/glab-request-admission'
-import { glabExecFileAsync } from '../../git/command-runner/glab-exec-file'
+import { glabExecFileAsync } from '../../git/command-runner/hosted-cli/glab-exec-file'
 import { getIssueProjectRef, resolveIssueSource } from './gitlab-issue-source-resolution'
 import { classifyGlabError, classifyListFetchError } from '../requests/glab-error-classification'
 import { getGlabKnownHosts, type LocalGitExecOptions } from '../projects/gitlab-known-host-probe'
@@ -12,7 +12,7 @@ import { glabRepoExecOptions, glabHostnameArgs } from '../projects/gitlab-projec
 import { parseGlabJsonList, parseGlabPaginationHeader } from '../requests/glab-api-response'
 import type { ProjectRef } from '../projects/project-ref-parser'
 import { encodedProject } from '../projects/project-path-encoding'
-import { isTaskRepositoryIneligible } from '../../git/task-repository-eligibility'
+import { isTaskRepositoryIneligible } from '../../git/remotes/task-repository-eligibility'
 import { codeHostFailure, classifiedFailure } from '../../../shared/code-host-failure-copy'
 
 // Distinguish a confirmed empty list from fetch failure.

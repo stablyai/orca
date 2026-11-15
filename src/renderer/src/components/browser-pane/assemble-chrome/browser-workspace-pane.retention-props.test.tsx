@@ -20,7 +20,7 @@ const mocks = vi.hoisted(() => ({
   }[]
 }))
 
-vi.mock('@/store', () => ({
+vi.mock('@/store/index', () => ({
   useAppStore: (selector: (state: MockAppState) => unknown) => {
     if (!mocks.state) {
       throw new Error('mock app state not initialized')
@@ -41,7 +41,7 @@ vi.mock('../host-guest/webview-registry', () => ({
   destroyPersistentWebview: () => {}
 }))
 
-vi.mock('./ssh-routed-browser-page-gate', () => ({
+vi.mock('./profile-routing/ssh-routed-browser-page-gate', () => ({
   SshRoutedBrowserPageGate: ({
     children
   }: {
@@ -49,7 +49,7 @@ vi.mock('./ssh-routed-browser-page-gate', () => ({
   }) => <>{children(null)}</>
 }))
 
-vi.mock('./BrowserMobileDriverOverlay', () => ({
+vi.mock('./feedback/BrowserMobileDriverOverlay', () => ({
   BrowserMobileDriverOverlay: () => null
 }))
 

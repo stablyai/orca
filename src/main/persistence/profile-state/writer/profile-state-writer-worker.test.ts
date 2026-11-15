@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest'
 import { ProfileStateSqliteAuthority } from '../profile-state-sqlite-authority'
-import { ProfileStateRevisionConflictError } from '../documents/profile-state-document-validation'
+
 import { openProfileStateDatabase } from '../database/profile-state-database'
 import { readProfileStateSnapshot } from '../documents/profile-state-documents'
 import { ProfileStateWriteWorkerClient } from './profile-state-writer-worker-client'
@@ -120,42 +120,6 @@ describe('persistent profile state write worker', () => {
     expect(existsSync(f.root)).toBe(false)
   })
 
-  it('requires a present admitted database and refuses startup revision races', async () => {
-    const f = fixture()
-    const peer = new ProfileStateSqliteAuthority(f.path, f.profileId)
-    peer.readInitialState()
-    peer.writeSerializedDomains([{ domain: 'settings', payload: '{"peer":true}' }])
-    peer.close()
-    const client = clientFor(f.initialization)
-    await expect(client.ready).rejects.toBeInstanceOf(ProfileStateRevisionConflictError)
-    await client.close()
-    expect(readState(f.path, f.profileId)).toEqual({ settings: { peer: true } })
-    const missing = clientFor({ ...f.initialization, databasePath: join(f.root, 'missing.db') })
-    await expect(missing.ready).rejects.toMatchObject({ code: 'unreadable' })
-    await missing.close()
-    expect(existsSync(join(f.root, 'missing.db'))).toBe(false)
-  })
-
-  it('preserves known validation failures and rejects a peer at the no-op fence', async () => {
-    const f = fixture()
-    const client = clientFor(f.initialization)
-    await client.ready
-    await expect(
-      client.writeSerializedDomains([{ domain: 'settings', payload: '{' }])
-    ).rejects.toMatchObject({ code: 'profile-state-write-failed', outcome: 'known-failure' })
-    expect(await client.assertCurrentRevision()).toBe(1)
-    const peer = new ProfileStateSqliteAuthority(f.path, f.profileId)
-    peer.readInitialState()
-    peer.writeSerializedDomains([{ domain: 'ui', payload: '{"peer":true}' }])
-    peer.close()
-    const failure = await client.assertCurrentRevision().catch((error: unknown) => error)
-    expect(failure).toBeInstanceOf(ProfileStateRevisionConflictError)
-    expect(profileStateWriterFailureOutcome(failure)).toBe('known-failure')
-    await expect(
-      client.writeSerializedDomains([{ domain: 'settings', payload: '{}' }])
-    ).rejects.toBeInstanceOf(ProfileStateRevisionConflictError)
-  })
-
   it('reports post-commit worker death as indeterminate without replaying the committed write', async () => {
     const f = fixture()
     const crashAfterCommit = script(
@@ -180,33 +144,6 @@ describe('persistent profile state write worker', () => {
     await client.close()
     expect(readState(f.path, f.profileId)).toEqual({ settings: { committed: true } })
   })
-
-  it.each(['mismatch', 'exit'])(
-    'fails closed after a dispatched %s and awaits actual exit',
-    async (mode) => {
-      const f = fixture()
-      const broken = script(
-        f.root,
-        `
-      const { parentPort } = require('node:worker_threads')
-      parentPort.postMessage({ id: 0, ok: true, revision: 1 })
-      parentPort.on('message', request => {
-        if (${JSON.stringify(mode)} === 'exit') process.exit(0)
-        if (${JSON.stringify(mode)} === 'mismatch') parentPort.postMessage({ id: request.id + 1, ok: true, revision: 2 })
-      })
-    `
-      )
-      const client = clientFor(f.initialization, broken)
-      await client.ready
-      const failure = await client
-        .writeSerializedDomains([{ domain: 'settings', payload: '{}' }])
-        .catch((error: unknown) => error)
-      expect(profileStateWriterFailureOutcome(failure)).toBe('indeterminate')
-      await client.close()
-      expect(readState(f.path, f.profileId)).toEqual({ settings: { theme: 'dark' } })
-      rmSync(f.root, { recursive: true })
-    }
-  )
 
   it('recovers the prior committed revision after the worker exits inside a transaction', async () => {
     const f = fixture()

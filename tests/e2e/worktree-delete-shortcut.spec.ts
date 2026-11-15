@@ -71,7 +71,7 @@ test.describe('Worktree Delete Shortcut', () => {
 
     const dialog = orcaPage.getByRole('dialog')
     await expect(dialog).toBeVisible()
-    await dialog.getByRole('button', { name: 'Delete Workspace', exact: true }).click()
+    await dialog.getByRole('button', { name: 'Delete', exact: true }).click()
 
     await expect
       .poll(async () => getAllWorktreeIds(orcaPage), {

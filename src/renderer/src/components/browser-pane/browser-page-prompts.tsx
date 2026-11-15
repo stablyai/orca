@@ -52,7 +52,7 @@ async function answerPrompt<K extends BrowserPagePromptKind>(
   }
 }
 
-export function subscribeBrowserPagePrompts(confirm: ConfirmationDialogContextValue): () => void {
+function subscribeBrowserPagePrompts(confirm: ConfirmationDialogContextValue): () => void {
   if (typeof window.api.browser?.onPagePromptRequest !== 'function') {
     return () => {}
   }

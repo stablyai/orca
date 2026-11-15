@@ -4,7 +4,7 @@ import {
   SKILL_INSTALL_CAPABILITY,
   SKILL_MANAGEMENT_CAPABILITY
 } from '../../../shared/skill-install-capability'
-import { getRuntimeEnvironmentStatus } from '../../ipc/runtime-environments/runtime-environment-status-probe'
+import { getRuntimeEnvironmentStatus } from '../../ipc/runtime-environments/status/runtime-environment-status-probe'
 
 export async function supportsSkillRuntimeManagement(
   userDataPath: string,

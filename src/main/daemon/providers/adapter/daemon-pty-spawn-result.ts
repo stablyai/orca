@@ -8,7 +8,7 @@ import { takeHistoryRecoveryFreeze } from '../checkpointing/daemon-history-recov
 import { getRecoveredHistorySeedSegments } from '../../history/seed-transfer/terminal-history-seed-segments'
 import { SessionNotFoundError } from '../../protocol/daemon-errors'
 import type { DaemonCreateOrAttachResult as CreateOrAttachResult } from '../../protocol/daemon-create-or-attach-result'
-import type { PtySpawnResult } from '../../../providers/pty-provider-contract'
+import type { PtySpawnResult } from '../../../providers/pty/spawn-result'
 
 export abstract class DaemonPtySpawnResult extends DaemonPtySpawnRequest {
   protected async finishSpawn(

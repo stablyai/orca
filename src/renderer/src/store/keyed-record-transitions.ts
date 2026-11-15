@@ -171,6 +171,8 @@ export type RecordDraft<V> = {
   get: (key: string) => V | undefined
   set: (key: string, value: V) => void
   delete: (key: string) => void
+  /** Transaction-private view; finish before publication, and never retain it across writes. */
+  view: () => Record<string, V>
   /** The built record linked to `previous`, or `previous` itself when no operation changed it. */
   finish: () => Record<string, V>
 }
@@ -184,6 +186,10 @@ function createDraft<V>(
   const removed = new Set<string>()
   let reordered = false
   const current = (): KeyedRecord<V> => next ?? previous
+  const view = (): Record<string, V> => {
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: private views are read-only until finish; writes go through the draft.
+    return current() as Record<string, V>
+  }
   const writable = (): Record<string, V> => (next ??= { ...previous })
   return {
     has: (key) => Object.hasOwn(current(), key),
@@ -204,10 +210,10 @@ function createDraft<V>(
       removed.add(key)
       keys.add(key)
     },
+    view,
     finish: () => {
       if (!next) {
-        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: unchanged; callers publish the same object they read.
-        return previous as Record<string, V>
+        return view()
       }
       if (reordered) {
         links.set(next, { reason: 'reordered' })
@@ -248,6 +254,19 @@ export function replaceTabBuckets<T extends TabRow>(
 /** A draft for a tab-bucket map; tab IDs come from diffing only the buckets it replaced. */
 export function tabBucketDraft<T extends TabRow>(previous: KeyedRecord<T[]>): RecordDraft<T[]> {
   return createDraft(previous, (next, keys) => linkTabBuckets(previous, next, keys))
+}
+
+/**
+ * For a hot writer that built `next` from `previous` itself: `keys` must name every key it added,
+ * deleted or replaced, and surviving keys must keep their order (a spread plus deletes does).
+ */
+export function linkRecordWrite<R extends KeyedSnapshot>(
+  next: R,
+  previous: KeyedSnapshot,
+  keys: Iterable<string>
+): R {
+  link(next, previous, keys)
+  return next
 }
 
 /** Named cold path: the whole record was rebuilt from a snapshot. */

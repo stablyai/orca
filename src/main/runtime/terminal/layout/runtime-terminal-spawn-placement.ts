@@ -1,4 +1,4 @@
-import type { TerminalPanePlacement } from '../../../../shared/workspace-layout/terminal-pane-placement'
+import type { TerminalPanePlacement } from '../../../../shared/workspace-layout/terminal-topology/terminal-pane-placement'
 import type { TerminalPaneSplitDirection } from '../../../../shared/workspace-layout/terminal-tab-types'
 import type { RuntimeTerminalPresentation } from '../../../../shared/runtime-terminal-contracts'
 

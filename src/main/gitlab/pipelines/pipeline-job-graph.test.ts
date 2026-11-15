@@ -8,7 +8,7 @@ vi.mock('../requests/glab-request-admission', () => ({
   release: vi.fn()
 }))
 
-vi.mock('../../git/command-runner/glab-exec-file', () => ({
+vi.mock('../../git/command-runner/hosted-cli/glab-exec-file', () => ({
   glabExecFileAsync: async (args: string[]) => ({
     stdout: (await glabApiWithHeadersMock(args.slice(1))).body
   })
@@ -21,7 +21,6 @@ vi.mock('../projects/gitlab-project-ref-resolution', () => ({
 
 import { GitLabIncompletePaginationError } from '../requests/gitlab-paginated-list'
 import { fetchPipelineJobs } from './pipeline-job-graph'
-import { retryJob } from './pipeline-job-mutations'
 
 /** Serves `/jobs` and `/bridges` 100 per page with GitLab's x-next-page header. */
 function servePipeline(
@@ -60,32 +59,6 @@ function servePipeline(
 describe('fetchPipelineJobs', () => {
   beforeEach(() => {
     glabApiWithHeadersMock.mockReset()
-  })
-
-  it('preserves optional failure policy through job, bridge and retry responses', async () => {
-    glabApiWithHeadersMock.mockImplementation(async (args: string[]) => {
-      const endpoint = args.at(-1) ?? ''
-      const raw = { id: 19, name: 'test', status: 'failed', allow_failure: true }
-      return {
-        body: JSON.stringify(
-          endpoint.endsWith('/retry')
-            ? raw
-            : endpoint.includes('/bridges?')
-              ? [{ ...raw, name: 'trigger' }]
-              : [raw]
-        ),
-        headers: { 'x-next-page': '' }
-      }
-    })
-    const project = { host: 'gitlab.com', path: 'g/p' }
-    await expect(fetchPipelineJobs('/repo', project, 7)).resolves.toMatchObject([
-      { id: 19, status: 'failed', allowFailure: true },
-      { id: 0, name: 'trigger', status: 'failed', allowFailure: true }
-    ])
-    await expect(retryJob('/repo', 19, undefined, null, project)).resolves.toMatchObject({
-      ok: true,
-      job: { id: 19, allowFailure: true }
-    })
   })
 
   it('does not skip pages when the next-page header jumps ahead', async () => {

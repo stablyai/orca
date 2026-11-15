@@ -1,5 +1,5 @@
 import { defineMethod } from '../../core'
-import { resolveWorktreeCatalogSnapshot } from '../../worktree-catalog-snapshot'
+import { resolveWorktreeCatalogSnapshot } from '../../workspace-client-views/worktree-catalog-snapshot'
 import {
   MOBILE_RELAY_HOST_WORKTREES_METHOD,
   MOBILE_RELAY_HOSTS_LIST_METHOD,

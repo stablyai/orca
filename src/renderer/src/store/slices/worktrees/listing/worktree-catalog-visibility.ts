@@ -1,3 +1,4 @@
+import { resolveWorktreeDisplayName } from '@/lib/workspace/display/worktree-default-display-name'
 import { structuralValuesEqualIgnoringUndefined } from '../../../../../../shared/structural-value-equality'
 import { catalogRowsEqual } from '../../../../lib/catalog-reconciliation/catalog-row-reconciliation'
 import type { DetectedWorktreeListResult, Worktree } from '../../../../../../shared/worktree/types'
@@ -49,5 +50,5 @@ export function toVisibleWorktree(
     visible: _visible,
     ...base
   } = worktree
-  return base
+  return { ...base, displayName: base.displayName || resolveWorktreeDisplayName(base) }
 }

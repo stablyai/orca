@@ -9,7 +9,7 @@ import {
   storeOf
 } from '../terminal/layout/profile-session-store.test-fixture'
 import { reusedTerminalIdUnbinding } from '../../persistence/loading-store/terminal-bindings/reused-terminal-id-unbind'
-import { layoutContainsLeafId } from '../../../shared/workspace-layout/terminal-pane-tree'
+import { layoutContainsLeafId } from '../../../shared/workspace-layout/terminal-topology/terminal-pane-tree'
 import type { OrcaRuntimeService } from '../orca-runtime'
 
 export type BoundPane = {

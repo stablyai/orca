@@ -1,9 +1,9 @@
 import { defineMethod } from '../../core'
 import { MOBILE_PROJECT_SECTIONS_METHOD } from '../../../../../shared/mobile-project-sections-contract'
 import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../../../shared/sidebar-inputs-switch'
-import { readMobileProjectSections } from '../../../sidebar-inputs/mobile-project-sections-snapshot'
-import { requireSwitchedOn } from '../../../sidebar-inputs/require-switched-on'
-import { readSidebarProjectCatalog } from '../../../sidebar-inputs/sidebar-project-catalog'
+import { readMobileProjectSections } from '../../../sidebar-inputs/catalog/mobile-project-sections-snapshot'
+import { requireSwitchedOn } from '../../../construction/require-sidebar-inputs-enabled'
+import { readSidebarProjectCatalog } from '../../../sidebar-inputs/catalog/sidebar-project-catalog'
 
 export const MOBILE_PROJECT_SECTIONS_METHODS = [
   defineMethod({

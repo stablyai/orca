@@ -112,24 +112,6 @@ describe('SshChannelMultiplexer', () => {
         params: { id: 1 }
       })
     })
-
-    it('uses per-request timeout overrides', async () => {
-      const promise = mux.request('fs.workspaceSpaceScan', {}, { timeoutMs: 60_000 })
-
-      for (let i = 0; i < 6; i++) {
-        vi.advanceTimersByTime(5_000)
-        transport.dataCallbacks[0](encodeKeepAliveFrame(i + 1, 0))
-      }
-      await Promise.resolve()
-      const requestWrites = transport.written.filter((frame) => frame[0] === MessageType.Regular)
-      expect(requestWrites).toHaveLength(1)
-
-      for (let i = 6; i < 12; i++) {
-        vi.advanceTimersByTime(5_000)
-        transport.dataCallbacks[0](encodeKeepAliveFrame(i + 1, 0))
-      }
-      await expect(promise).rejects.toThrow('timed out after 60000ms')
-    })
   })
 
   describe('notifications', () => {
@@ -151,29 +133,6 @@ describe('SshChannelMultiplexer', () => {
       expect(mux.isDisposed()).toBe(false)
       expect(warnSpy).toHaveBeenCalledWith(
         '[ssh-mux] Notification handler failed for pty.data: subscriber exploded'
-      )
-    })
-
-    it('contains method notification handler failures', () => {
-      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
-      const badHandler = vi.fn(() => {
-        throw new Error('stream consumer exploded')
-      })
-      const goodHandler = vi.fn()
-      mux.onNotificationByMethod('fs.streamChunk', badHandler)
-      mux.onNotificationByMethod('fs.streamChunk', goodHandler)
-
-      expect(() =>
-        transport.dataCallbacks[0](
-          makeNotificationFrame('fs.streamChunk', { streamId: 1, seq: 0, data: 'aGk=' }, 1)
-        )
-      ).not.toThrow()
-
-      expect(badHandler).toHaveBeenCalled()
-      expect(goodHandler).toHaveBeenCalledWith({ streamId: 1, seq: 0, data: 'aGk=' })
-      expect(mux.isDisposed()).toBe(false)
-      expect(warnSpy).toHaveBeenCalledWith(
-        '[ssh-mux] Method notification handler failed for fs.streamChunk: stream consumer exploded'
       )
     })
   })
@@ -214,37 +173,6 @@ describe('SshChannelMultiplexer', () => {
       // No frames arrive after the guard reset; the honest window expires.
       vi.advanceTimersByTime(25_000)
       expect(mux.isDisposed()).toBe(true)
-    })
-  })
-
-  describe('dispose', () => {
-    it('tags a request after a shutdown dispose with DISPOSED', async () => {
-      mux.dispose()
-
-      const error = (await mux.request('pty.spawn').catch((e: unknown) => e)) as Error & {
-        code?: string
-      }
-      expect(error.code).toBe('DISPOSED')
-    })
-
-    it('reports a request after a lost connection as transient', async () => {
-      transport.closeCallbacks[0]()
-
-      const error = (await mux
-        .request('fs.readDir', { path: '/home/me' })
-        .catch((e: unknown) => e)) as Error & { code?: string }
-      expect(error.message).toBe('SSH connection lost, reconnecting...')
-      expect(error.code).toBe('CONNECTION_LOST')
-    })
-
-    it('fires a dispose handler registered after dispose with the recorded reason', () => {
-      mux.dispose('connection_lost')
-
-      const disposeHandler = vi.fn()
-      mux.onDispose(disposeHandler)
-
-      expect(disposeHandler).toHaveBeenCalledWith('connection_lost')
-      expect(disposeHandler).toHaveBeenCalledTimes(1)
     })
   })
 

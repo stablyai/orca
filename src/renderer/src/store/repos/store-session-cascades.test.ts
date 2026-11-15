@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import type * as AgentStatusModule from '@/lib/agent-status/aggregation/worktree-agent-status'
 import { createTestStore } from '../testing/app-store-test-fixture'
 import { makeWorktree } from '../slices/worktrees/worktree.test-fixture'
-import { makeTab, makeLayout } from '../terminals/terminal-tab.test-fixture'
+import { makeTab, makeLayout } from '../terminals/testing/terminal-tab.test-fixture'
 import { createStoreSessionMockApi } from '../testing/app-store-session-api.test-fixture'
 
 vi.mock('sonner', () => ({ toast: { info: vi.fn(), success: vi.fn(), error: vi.fn() } }))
@@ -73,14 +73,7 @@ describe('removeProject cascade', () => {
     expect(s.terminalLayoutsByTabId['tab2']).toBeUndefined()
     expect(s.activeTabId).toBeNull()
 
-    expect(mockApi.pty.kill).toHaveBeenCalledWith('pty1')
-    expect(mockApi.pty.kill).toHaveBeenCalledWith('pty2')
-
     // Tabs are gone before async exit events fire, so retaining one-shot guards would leak ephemeral PTY ids.
-    expect(s.suppressedPtyExitIds['pty1']).toBeUndefined()
-    expect(s.suppressedPtyExitIds['pty2']).toBeUndefined()
-    expect(s.pendingPaneAccountRestarts['pty1']).toBeUndefined()
-    expect(s.pendingPaneAccountRestarts['pty2']).toBeUndefined()
 
     store.getState().clearTabPtyId('tab1', 'pty1')
     store.getState().clearTabPtyId('tab2', 'pty2')

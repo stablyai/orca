@@ -11,13 +11,13 @@ import type { AgentSessionJournalIdentity } from '../../../src/shared/agent-sess
 import {
   claudeProviderHandle,
   codexProviderHandle
-} from '../../../src/shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
+} from '../../../src/shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle-encoding'
 import type { agentSessionFailureFact } from '../../../src/shared/agent-session/failures/agent-session-failure'
 import type { agentSessionFailureWords } from '../../../src/shared/agent-session/failures/agent-session-failure-words'
 import type { createClaudeJournalTranslator } from '../../../src/main/claude/structured/journal/claude-structured-journal-translation'
 import type { createCodexJournalTranslator } from '../../../src/main/codex/structured/journal/codex-structured-journal-translation'
 import type { createDeferredStructuredAgentSessionEventSink } from '../../../src/main/native-chat/agent-session-wire/journal-ingress/structured-agent-session-event-sink'
-import type { createTrackedJournalOpener } from '../../../src/main/native-chat/agent-session-journal/store-lifecycle/journal-host-database-test-support'
+import type { ReleasedCard, ReleasedJournal, ReleasedOpener } from './released-chat-journal'
 import {
   importReleaseCheckoutModule,
   materializeReleaseCheckout,
@@ -33,8 +33,10 @@ const JOURNAL = 'src/main/native-chat/agent-session-journal'
 const FENCE = 1
 
 export type Agent = 'claude' | 'codex'
-type Opener = ReturnType<typeof createTrackedJournalOpener>
-type Journal = Awaited<ReturnType<Opener['open']>>
+type DeferredSink = ReturnType<typeof createDeferredStructuredAgentSessionEventSink>
+type ReleasedSink = Pick<DeferredSink, 'sink' | 'drained' | 'close'> & {
+  bind: (target: { journal: ReleasedJournal; fence: number; publish: () => void }) => void
+}
 type Released = Awaited<ReturnType<typeof released>>
 
 export const identityOf = (agent: Agent): AgentSessionJournalIdentity => ({
@@ -60,7 +62,7 @@ async function released(ref: string) {
   )
   return {
     root: checkout.root,
-    opener: await load<typeof createTrackedJournalOpener>(
+    opener: await load<() => ReleasedOpener>(
       `${JOURNAL}/journal-host-database-test-support.ts`,
       'createTrackedJournalOpener'
     ),
@@ -72,7 +74,7 @@ async function released(ref: string) {
       'src/main/codex/structured/journal/codex-structured-journal-translation.ts',
       'createCodexJournalTranslator'
     ),
-    sink: await load<typeof createDeferredStructuredAgentSessionEventSink>(
+    sink: await load<(options: Record<string, unknown>) => ReleasedSink>(
       'src/main/native-chat/agent-session-wire/structured-agent-session-event-sink.ts',
       'createDeferredStructuredAgentSessionEventSink'
     ),
@@ -89,7 +91,7 @@ const message = (text: string): AgentJournalMessageItem => ({
 })
 
 /** Sends, their dispatch results and queue edits, as the host's send and queue paths write them. */
-async function sendsAndQueue(journal: Journal, release: Released): Promise<void> {
+async function sendsAndQueue(journal: ReleasedJournal, release: Released): Promise<void> {
   await journal.appendSubmission({
     clientMessageId: 'sent',
     payloadFingerprint: 'fp-sent',
@@ -146,7 +148,7 @@ function capture(release: Released, path: string): unknown[] {
 async function stream(
   release: Released,
   agent: Agent,
-  journal: Journal,
+  journal: ReleasedJournal,
   clock: { at: number }
 ): Promise<void> {
   const sessionId = identityOf(agent).sessionId
@@ -226,7 +228,7 @@ async function stream(
 
 /** A Stop with its settlement, a Resume, and an item later removed. */
 async function stopAndRemove(
-  journal: Journal,
+  journal: ReleasedJournal,
   release: Released,
   clock: { at: number }
 ): Promise<void> {
@@ -268,7 +270,7 @@ export async function writeReleasedChat(
   ref: string,
   agent: Agent,
   stateDirectory: string
-): Promise<{ snapshot: AgentJournalSnapshot; cards: unknown[]; now: () => number }> {
+): Promise<{ snapshot: AgentJournalSnapshot; cards: ReleasedCard[]; now: () => number }> {
   const release = await released(ref)
   const clock = { at: 1_000 }
   const journals = release.opener()
@@ -296,6 +298,6 @@ export async function writeReleasedChat(
 }
 
 /** The release's own journal opener, to carry a chat on as that release would. */
-export async function releasedJournalOpener(ref: string): Promise<Opener> {
+export async function releasedJournalOpener(ref: string): Promise<ReleasedOpener> {
   return (await released(ref)).opener()
 }

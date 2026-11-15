@@ -17,7 +17,7 @@ import {
 } from '../../source-control/hosted-review-git-options'
 import { getProjectSlug } from './merge-request-lookup'
 import { acquire, release } from '../requests/glab-request-admission'
-import { glabExecFileAsync } from '../../git/command-runner/glab-exec-file'
+import { glabExecFileAsync } from '../../git/command-runner/hosted-cli/glab-exec-file'
 import { glabHostEnvOptions, glabRepoExecOptions } from '../projects/gitlab-project-ref-resolution'
 import { findOpenMRByHeadBase, parseMergeRequestPayload } from './merge-request-creation-lookup'
 

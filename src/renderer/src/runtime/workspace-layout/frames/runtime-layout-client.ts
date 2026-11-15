@@ -7,7 +7,7 @@ import {
   readWorkspaceLayoutStreamFrame,
   type WorkspaceLayoutChangeFrame,
   type WorkspaceLayoutStreamFrame
-} from '../../../../../shared/workspace-layout/workspace-layout-stream-frames'
+} from '../../../../../shared/workspace-layout/published-layout/workspace-layout-stream-frames'
 import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
 import { subscribeRuntimeRpc } from '../../rpc/subscriptions/runtime-rpc-subscribe'
 import { exposeLocalLayoutStreamE2EEnd } from '../testing/local-layout-stream-e2e-end'

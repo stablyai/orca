@@ -32,12 +32,12 @@ import {
   removeWorkspaceLineageForRemovedFolder
 } from '../workspace-lineage/metadata-lineage-operations'
 import { bumpLocalWorktreeScanGeneration } from '../../../workspaces/catalog/local-worktree-scan-generation'
-import { dropOrcadTerminalRestoreHintsForWorktrees } from '../../migrating-orcad-catalog/orcad-terminal-restore-hint-store'
+import { dropOrcadTerminalRestoreHintsForWorktrees } from '../../migrating-orcad-catalog/terminal-history/orcad-terminal-restore-hint-store'
 import { folderWorkspaceKey } from '../../../../shared/workspace-scope'
 import {
   applyWslMoveRetainedMarks,
   type WslMoveRetainedMark
-} from '../../moving-wsl-projects/wsl-move-retained-marks'
+} from '../../moving-wsl-projects/cutover-recovery/wsl-move-retained-marks'
 
 type ProjectCollectionOperationsRuntime = Pick<
   StoreRuntimeState,

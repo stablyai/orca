@@ -166,10 +166,7 @@ export class RuntimeBrowserTabQueries {
           ? (await this.host.resolveBrowserWorkspace(params.worktree)).id
           : undefined
     const result = await bridge.tabSwitch(undefined, worktreeId, selected.browserPageId)
-    this.host.getRuntimeBrowserPageRegistry().deactivateGlobal()
-    if (worktreeId) {
-      this.host.getRuntimeBrowserPageRegistry().deactivateWorkspace(worktreeId)
-    }
+    this.host.getRuntimeBrowserPageRegistry().yieldSelection(worktreeId)
     // Scope focus to the owning worktree; never switch the user's workspace.
     const focusWorktreeId =
       worktreeId ?? browserManager.getWorktreeIdForTab(result.browserPageId) ?? undefined

@@ -2,7 +2,10 @@ import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-t
 import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent'
 import { useTranslate } from '@/i18n/use-translate'
 import { antigravityChatSignInRunning } from '@/runtime/provider-accounts/sign-in/antigravity-chat-sign-in-status'
-import { useManagedRuntimeInstall } from '@/runtime/hosts/installation/use-managed-runtime-install'
+import {
+  useManagedRuntimeInstall,
+  type ManagedRuntimeInstallObservation
+} from '@/runtime/hosts/installation/use-managed-runtime-install'
 import { ManagedRuntimeInstallRow } from '../../managed-runtime/ManagedRuntimeInstallRow'
 import { useAntigravityChatSignIn } from '../../provider-accounts/use-antigravity-chat-sign-in'
 import { AntigravityProviderSignInArea } from '../../provider-accounts/AntigravityProviderSignInArea'
@@ -21,10 +24,12 @@ const CHAT_HOST: RuntimeClientTarget = { kind: 'local' }
 
 export function AgentOpensAsControl({
   label,
-  opensAs
+  opensAs,
+  disabled = false
 }: {
   label: string
   opensAs: AgentOpensAs
+  disabled?: boolean
 }): React.JSX.Element {
   const t = useTranslate()
   return (
@@ -36,11 +41,11 @@ export function AgentOpensAsControl({
       })}
       size="sm"
       options={[
-        { value: 'chat', label: t('settings.agents.defaultOpensAsChat', 'Chat') },
+        { value: 'chat', label: t('settings.agents.defaultOpensAsChat', 'Chat'), disabled },
         {
           value: 'cli',
           label: t('settings.agents.defaultOpensAsCli', 'CLI'),
-          disabled: opensAs.cliMissing,
+          disabled: disabled || opensAs.cliMissing,
           tooltip: opensAs.cliMissing
             ? t(
                 'settings.agents.installCliForTerminal',
@@ -73,6 +78,19 @@ export function ChatUnavailableOnWindowsNote({ label }: { label: string }): Reac
   )
 }
 
+/** This computer's install of the program Orca downloads for an agent's chats. */
+export function useAgentChatRuntimeInstall(agent: TuiAgent): {
+  runtime: ManagedRuntimeInstallObservation
+  signInRunning: boolean
+} {
+  const runtime = useManagedRuntimeInstall(CHAT_HOST, agent, true)
+  // Install and Remove wait for a running sign-in, which runs the installed server.
+  const signIn = useAntigravityChatSignIn(
+    agent === 'antigravity' && runtime.kind === 'active' ? CHAT_HOST : null
+  )
+  return { runtime, signInRunning: antigravityChatSignInRunning(signIn.flow) }
+}
+
 /** The program Orca downloads for an agent's chats, apart from its CLI; mounted only while its row is open. */
 export function AgentChatRuntimeArea({
   agent,
@@ -82,11 +100,7 @@ export function AgentChatRuntimeArea({
   label: string
 }): React.JSX.Element | null {
   const t = useTranslate()
-  const runtime = useManagedRuntimeInstall(CHAT_HOST, agent, true)
-  // Install and Remove wait for a running sign-in, which runs the installed server.
-  const signIn = useAntigravityChatSignIn(
-    agent === 'antigravity' && runtime.kind === 'active' ? CHAT_HOST : null
-  )
+  const { runtime, signInRunning } = useAgentChatRuntimeInstall(agent)
   if (chatUnavailableOnThisDesktop(agent)) {
     return <ChatUnavailableOnWindowsNote label={label} />
   }
@@ -98,7 +112,7 @@ export function AgentChatRuntimeArea({
       <ManagedRuntimeInstallRow
         observation={runtime}
         agentLabel={label}
-        signInRunning={antigravityChatSignInRunning(signIn.flow)}
+        signInRunning={signInRunning}
       >
         {(line, actions) => (
           <div className="flex items-center gap-3">

@@ -4,14 +4,11 @@ import {
 } from '../../../../../shared/workspace-layout/stable-pane-id'
 import {
   resolveFocusedCompletedTabAgent,
-  resolveFocusedRetainedTabAgent,
   resolveFocusedTabAgent,
   resolveSiblingCompletedTabAgent,
-  resolveSiblingRetainedTabAgent,
   resolveSiblingTabAgent
 } from './tab-agent'
 import { resolveTabAgentFromSignalSnapshot } from '../../../../../shared/tab-agent-from-signals'
-import type { RetainedAgentEntry } from '@/store/slices/agent-status/agent-status-contract'
 import type { PaneForegroundAgentEntry } from '@/store/slices/agent-status/pane-foreground-agent'
 import type { SleepingAgentSessionRecord } from '../../../../../shared/agent-session/lifecycle/agent-session-resume'
 import type { AgentStatusEntry } from '../../../../../shared/agent-status/contracts/agent-status-types'
@@ -27,7 +24,6 @@ export type OpenTabOccupantAgentInput = {
   launchAgent?: TuiAgent
   layout?: TerminalLayoutSnapshot
   agentStatusByPaneKey: Record<string, AgentStatusEntry>
-  retainedAgentsByPaneKey: Record<string, RetainedAgentEntry>
   sleepingAgentSessionsByPaneKey: Record<string, SleepingAgentSessionRecord>
   paneForegroundAgentByPaneKey?: Record<string, PaneForegroundAgentEntry>
 }
@@ -40,18 +36,21 @@ export function resolveOpenTabOccupantAgent({
   launchAgent,
   layout,
   agentStatusByPaneKey,
-  retainedAgentsByPaneKey,
   sleepingAgentSessionsByPaneKey,
   paneForegroundAgentByPaneKey
 }: OpenTabOccupantAgentInput): TerminalAgent | null {
   const hookAgent = resolveFocusedTabAgent(agentStatusByPaneKey, layout, tabId)
   const siblingHookAgent = resolveSiblingTabAgent(agentStatusByPaneKey, layout, tabId)
-  const focusedCompletedHookAgent =
-    resolveFocusedCompletedTabAgent(agentStatusByPaneKey, layout, tabId) ??
-    resolveFocusedRetainedTabAgent(retainedAgentsByPaneKey, layout, tabId)
-  const siblingCompletedHookAgent =
-    resolveSiblingCompletedTabAgent(agentStatusByPaneKey, layout, tabId) ??
-    resolveSiblingRetainedTabAgent(retainedAgentsByPaneKey, layout, tabId)
+  const focusedCompletedHookAgent = resolveFocusedCompletedTabAgent(
+    agentStatusByPaneKey,
+    layout,
+    tabId
+  )
+  const siblingCompletedHookAgent = resolveSiblingCompletedTabAgent(
+    agentStatusByPaneKey,
+    layout,
+    tabId
+  )
   const focusedPaneKey = focusedPaneKeyFor(tabId, layout)
   const processAgent = focusedPaneKey
     ? (paneForegroundAgentByPaneKey?.[focusedPaneKey]?.agent ?? null)

@@ -4,7 +4,7 @@ import {
   WORKTREE_CREATE_PHASES,
   type WorkspaceCreateEntryPoint,
   type WorktreeCreatePhase
-} from '../../../shared/worktree/create-timing-vocabulary'
+} from '../../../shared/worktree/creation/create-timing-vocabulary'
 import type {
   REPO_FILE_COUNT_BUCKETS,
   WORKTREE_COUNT_BUCKETS,

@@ -1,11 +1,11 @@
 import { useEffect, useRef, type Dispatch, type SetStateAction } from 'react'
 import { getShortcutPlatform } from '@/hooks/useShortcutLabel'
 import { translate } from '@/i18n/i18n'
-import { useAppStore } from '@/store'
+import { useAppStore } from '@/store/index'
 import { keybindingMatchesAction } from '../../../../../shared/keybindings'
 import { browserChromeShortcutOwnsEvent } from '../describe-page/browser-overlay-shortcut-target'
 import type { BrowserChromeShortcutScope } from '../describe-page/browser-page-types'
-import { isEditableKeyboardTarget } from '../host-guest/browser-keyboard'
+import { isEditableKeyboardTarget } from '../host-guest/input/browser-keyboard'
 import {
   REMOTE_BROWSER_FIND_UNAVAILABLE_NOTICE_ID,
   type RemoteBrowserPaneNotice

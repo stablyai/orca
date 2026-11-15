@@ -4,8 +4,11 @@ import {
   summarizeProviderChecks,
   type CheckOutcomeInput
 } from './provider-check-summary'
-import type { PRCheckDetail } from '../../github/check-types'
-import type { CheckStatus, ProviderCheckSummary } from '../../github/pull-request-types'
+import type { PRCheckDetail } from '../../github/checks/check-types'
+import type {
+  CheckStatus,
+  ProviderCheckSummary
+} from '../../github/pull-requests/pull-request-types'
 
 export function derivePRCheckStatus(checks: readonly PRCheckDetail[]): CheckStatus {
   const { state } = summarizeProviderChecks(checks)
