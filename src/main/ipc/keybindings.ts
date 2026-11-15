@@ -1,5 +1,6 @@
 import { BrowserWindow, ipcMain, shell } from 'electron'
 import type { KeybindingActionId, KeybindingFileSnapshot } from '../../shared/keybindings'
+import { parseSearchShortcutChoice } from '../../shared/keybindings/search-shortcut-opt-in'
 import type { KeybindingService } from '../keybindings/keybinding-service'
 import { rebuildAppMenu } from '../menu/register-app-menu'
 
@@ -34,6 +35,17 @@ export function registerKeybindingHandlers(
       return snapshot
     }
   )
+
+  ipcMain.handle('keybindings:setSearchShortcutChoice', async (_event, value: unknown) => {
+    const choice = parseSearchShortcutChoice(value)
+    if (!choice) {
+      throw new Error('Invalid Search shortcut choice.')
+    }
+    const result = await service.setSearchShortcutChoice(choice)
+    broadcastKeybindingsChanged(result.snapshot)
+    onChanged?.()
+    return result
+  })
 
   ipcMain.handle('keybindings:reload', () => {
     const snapshot = service.reload()

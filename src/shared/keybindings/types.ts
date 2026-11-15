@@ -153,6 +153,23 @@ export type KeybindingFileSnapshot = {
   commonOverrides: KeybindingOverrides
   platformOverrides: Partial<Record<KeybindingPlatform, KeybindingOverrides>>
   diagnostics: KeybindingFileDiagnostic[]
+  /** Present only for legacy search-cohort profiles, which may opt in to Mod+K for Search. */
+  searchShortcut?: {
+    choice: SearchShortcutChoice | null
+    /** Unreadable file or failed legacy import: explicit choices aren't authoritative, so preflight can't run. */
+    fileError?: true
+  }
+}
+
+export type SearchShortcutChoice = 'accepted' | 'dismissed'
+
+export type SearchShortcutChoiceResult = {
+  snapshot: KeybindingFileSnapshot
+  /**
+   * `unconfirmed`: the save failed after possibly committing; live shortcuts follow the stored in-memory choice.
+   * `superseded`: saved, but an edit that landed during the save took Mod+K, and that later edit is kept.
+   */
+  outcome: 'applied' | 'superseded' | 'unchanged' | 'unconfirmed' | 'refused'
 }
 
 export type PlatformBindings = {

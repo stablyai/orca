@@ -1,4 +1,9 @@
-import type { KeybindingActionId, KeybindingFileSnapshot } from '../../../shared/keybindings/types'
+import type {
+  KeybindingActionId,
+  KeybindingFileSnapshot,
+  SearchShortcutChoice,
+  SearchShortcutChoiceResult
+} from '../../../shared/keybindings/types'
 import type {
   WarpThemeImportPreview,
   WarpThemeImportSource
@@ -37,5 +42,7 @@ export type KeybindingsApi = {
   reload: () => Promise<KeybindingFileSnapshot>
   openFile: () => Promise<KeybindingFileSnapshot>
   revealFile: () => Promise<KeybindingFileSnapshot>
+  /** Desktop only; legacy search-cohort profiles switch their Search/clear defaults. */
+  setSearchShortcutChoice?: (choice: SearchShortcutChoice) => Promise<SearchShortcutChoiceResult>
   onChanged: (callback: (snapshot: KeybindingFileSnapshot) => void) => () => void
 }

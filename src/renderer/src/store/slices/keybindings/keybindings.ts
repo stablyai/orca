@@ -3,7 +3,9 @@ import type { AppState } from '../../types'
 import type {
   KeybindingActionId,
   KeybindingFileSnapshot,
-  KeybindingOverrides
+  KeybindingOverrides,
+  SearchShortcutChoice,
+  SearchShortcutChoiceResult
 } from '../../../../../shared/keybindings/types'
 
 const EMPTY_KEYBINDINGS: KeybindingOverrides = {}
@@ -20,6 +22,9 @@ export type KeybindingsSlice = {
   reloadKeybindings: () => Promise<void>
   openKeybindingsFile: () => Promise<void>
   revealKeybindingsFile: () => Promise<void>
+  setSearchShortcutChoice: (
+    choice: SearchShortcutChoice
+  ) => Promise<SearchShortcutChoiceResult['outcome']>
 }
 
 function applySnapshot(
@@ -127,5 +132,15 @@ export const createKeybindingsSlice: StateCreator<AppState, [], [], KeybindingsS
     } catch (error) {
       console.error('Failed to reveal keybindings file:', error)
     }
+  },
+
+  setSearchShortcutChoice: async (choice) => {
+    const setChoice = window.api.keybindings?.setSearchShortcutChoice
+    if (!setChoice) {
+      throw new Error('Search shortcut choice is unavailable.')
+    }
+    const result = await setChoice(choice)
+    set(applySnapshot(result.snapshot))
+    return result.outcome
   }
 })

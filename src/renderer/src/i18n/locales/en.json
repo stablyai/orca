@@ -25781,5 +25781,37 @@
       "title": "Report a freeze",
       "uncheckAttachments": "Uncheck \"Attach saved freeze report and diagnostic logs\" and try again, or copy the details."
     }
+  },
+  "searchShortcutOptIn": {
+    "acceptedCustom": "Search uses a custom shortcut. Undo returns this profile to its previous Search and clear defaults.",
+    "acceptedDetail": "Search opens with {{key}}, and {{key}} no longer clears terminals.",
+    "acceptedTaken": "{{key}} is also assigned to {{actions}}. Change that shortcut to use {{key}} for Search, or undo.",
+    "acceptedTitle": "Search uses {{key}}",
+    "acceptedToast": "{{key}} now opens Search",
+    "conflict": "{{key}} is assigned to {{actions}}. Change that shortcut first.",
+    "customSearch": "Search uses a custom shortcut. Change it in the Switch worktree row below.",
+    "detailMac": "Open Search with {{key}}, like new profiles. {{key}} in terminals will stop clearing. {{legacyKey}} keeps working. Only this profile changes; your custom shortcuts are kept.",
+    "detailOther": "Open Search with {{key}}, like new profiles. In terminals {{key}} will open Search instead of clearing, and the shell no longer gets {{key}} (delete to end of line) unless Shortcuts in terminal is Terminal first. {{legacyKey}} keeps working. Only this profile changes.",
+    "failed": "Couldn't switch. Your shortcuts are unchanged.",
+    "fileError": "Your keybindings file couldn't be read. Fix it or restart Orca, then try again.",
+    "footerDetail": "{{key}} in terminals will stop clearing. {{legacyKey}} keeps working.",
+    "footerQuestion": "Use {{key}} for Search?",
+    "groupLabel": "Search shortcut",
+    "keywordClear": "clear",
+    "keywordPalette": "palette",
+    "keywordSearch": "search",
+    "notNow": "Not now",
+    "searchDescription": "Open Search with Cmd+K or Ctrl+K instead of clearing the terminal.",
+    "searchTitle": "Search shortcut",
+    "supersededDetail": "Your later change was kept. See Settings › Shortcuts.",
+    "supersededToast": "{{key}} was just assigned to another shortcut",
+    "title": "Use {{key}} for Search",
+    "unconfirmedDetail": "Settings › Shortcuts shows which Search shortcut is active.",
+    "unconfirmedInSettings": "Couldn't confirm the change was saved. This row shows what's active now.",
+    "unconfirmedToast": "Couldn't confirm the change",
+    "undo": "Undo",
+    "undoFailed": "Couldn't undo. Try again in Settings › Shortcuts.",
+    "undoneToast": "Undone. Settings › Shortcuts shows the active Search shortcut.",
+    "use": "Use {{key}}"
   }
 }

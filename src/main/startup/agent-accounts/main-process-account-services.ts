@@ -2,6 +2,8 @@ import { installProviderAccountCatalogWarmup } from '../../providers/accounts/pr
 import { createDesktopCodexSessionMigration } from '../../codex/history/backfill/desktop-codex-session-migration'
 import { app } from 'electron'
 import { KeybindingService } from '../../keybindings/keybinding-service'
+import { parseSearchShortcutChoice } from '../../../shared/keybindings/search-shortcut-opt-in'
+import { toSearchShortcutPluginOwners } from '../../../shared/keybindings/search-shortcut-plugin-owners'
 import { createProviderAccountServices } from '../../providers/accounts/provider-account-services'
 import { startCodexStateDbBackfillRecoveryInBackground } from '../../codex/history/index/codex-state-db-backfill-recovery'
 import { getOrcaManagedCodexHomePath } from '../../codex/configuration/homes/codex-home-paths'
@@ -49,7 +51,14 @@ export function initializeMainProcessAccountServices(): void {
     legacySearchDefaults:
       (process.platform === 'darwin'
         ? store.getSettings().searchKeybindingSeed
-        : store.getSettings().nonMacSearchKeybindingSeed) === 'legacy'
+        : store.getSettings().nonMacSearchKeybindingSeed) === 'legacy',
+    readSearchShortcutChoice: () =>
+      parseSearchShortcutChoice(store.getSettings().searchShortcutOptIn),
+    persistSearchShortcutChoice: async (choice) => {
+      await store.updateSettingsAndFlush({ searchShortcutOptIn: choice })
+    },
+    getSearchShortcutPluginOwners: () =>
+      toSearchShortcutPluginOwners(state.pluginService?.contentPacks.commands.list() ?? [])
   })
   browserManager.setSettingsResolver(() => ({ keybindings: state.keybindings?.getOverrides() }))
 }

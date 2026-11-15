@@ -25,9 +25,7 @@ import {
 import { ShortcutFilterRail } from './ShortcutFilterRail'
 import type { ShortcutFilter } from './ShortcutFilterRail'
 import { ShortcutRowsList } from './ShortcutRowsList'
-import { ShortcutTerminalPolicyControl } from './ShortcutTerminalPolicyControl'
-import { getTerminalShortcutPolicySearchEntry } from './shortcuts-search'
-import { matchesSettingsSearch } from '../search/settings-search'
+import { ShortcutPreferencesGroup } from './ShortcutPreferencesGroup'
 import { clearRecordingActionForShortcutMutation } from './shortcut-recording-state'
 import {
   adjustRecordingIndexAfterRemove,
@@ -44,7 +42,6 @@ import { buildShortcutRowVisibility } from './shortcut-row-visibility'
 import { useMacCapturedDigitChords } from './use-mac-captured-digit-chords'
 import { keybindingValidationErrorText } from './keybinding-diagnostic-text'
 import { KeybindingFileDiagnostics } from './KeybindingFileDiagnostics'
-import { SettingsGroup } from '../section-layout/SettingsGroup'
 import type {
   KeybindingActionId,
   KeybindingDefinition,
@@ -65,7 +62,6 @@ export function ShortcutsPane(): React.JSX.Element {
   const terminalShortcutPolicy = useAppStore(
     (state) => state.settings?.terminalShortcutPolicy ?? 'orca-first'
   )
-  const updateSettings = useAppStore((state) => state.updateSettings)
   const keybindings = useAppStore((state) => state.keybindings)
   const keybindingSnapshot = useAppStore((state) => state.keybindingSnapshot)
   const disabledTuiAgents = useAppStore(
@@ -311,20 +307,10 @@ export function ShortcutsPane(): React.JSX.Element {
     setRecordingActionId((current) => clearRecordingActionForShortcutMutation(current, actionId))
   }
 
-  const showPolicy = matchesSettingsSearch(searchQuery, getTerminalShortcutPolicySearchEntry())
-
   return (
     <div className="flex h-full min-h-0 flex-col gap-6 overflow-hidden">
       <section className="flex min-h-0 flex-1 flex-col space-y-3">
-        {showPolicy ? (
-          <SettingsGroup>
-            <ShortcutTerminalPolicyControl
-              terminalShortcutPolicy={terminalShortcutPolicy}
-              keywords={getTerminalShortcutPolicySearchEntry().keywords}
-              updateSettings={updateSettings}
-            />
-          </SettingsGroup>
-        ) : null}
+        <ShortcutPreferencesGroup searchQuery={searchQuery} />
 
         <SettingsSubsectionHeader
           title={t('auto.components.settings.ShortcutsPane.9a3a3ca03d', 'Keyboard shortcuts')}
