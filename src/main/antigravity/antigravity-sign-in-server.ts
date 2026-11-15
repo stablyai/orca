@@ -5,7 +5,7 @@ import { acpSessionStartMeta } from '../acp/launch/acp-session-meta'
 import type { AcpAgentConnection, AcpSignInWatch } from '../acp/process/acp-agent-connection'
 import type { ConnectAcpAgent } from '../acp/process/acp-structured-connection'
 import { AcpAgentError, AcpSignInPromptError } from '../acp/transport/acp-errors'
-import { ANTIGRAVITY_ACP_HOME } from '../../shared/antigravity-session-origin'
+import { ANTIGRAVITY_ACP_HOME } from '../../shared/agent-session/lifecycle/provider-handles/antigravity-session-origin'
 import { AntigravitySignInSentence, closeAntigravitySignInOwner } from './antigravity-chat-account'
 import { SIGN_IN_FAILED, antigravitySignInFailure } from './antigravity-sign-in-failure'
 
