@@ -26,6 +26,7 @@ function makeState(prefix: string, worktreeCount: number, titles: string[] = [])
       expandedLeafId: null
     }
   }
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the graph publisher reads only these slices of AppState.
   return {
     tabsByWorktree,
     terminalLayoutsByTabId,
@@ -46,6 +47,7 @@ function makeState(prefix: string, worktreeCount: number, titles: string[] = [])
 }
 
 function graphOf(call: unknown[] | undefined): RuntimeSyncWindowGraph {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the first syncWindowGraph argument is the published graph.
   return call?.[0] as RuntimeSyncWindowGraph
 }
 
