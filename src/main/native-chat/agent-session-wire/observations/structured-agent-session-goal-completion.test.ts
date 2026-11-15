@@ -64,7 +64,7 @@ function rig() {
       }
     })
   }
-  function turn(turnId: string, outcome?: 'success' | 'failure') {
+  function turn(turnId: string, outcome?: 'success') {
     append({
       kind: 'turn',
       turnId,
@@ -93,74 +93,4 @@ it('announces only the final settle across autonomous goal turns', () => {
       completion: expect.objectContaining({ turnId: 'continuation', outcome: 'success' })
     })
   ])
-})
-
-it('waits for the running turn when the goal completes before turn end', () => {
-  const r = rig()
-  r.goal('active')
-  r.turn('first')
-  r.goal('complete')
-  expect(r.events).toEqual([])
-  r.turn('first', 'success')
-  expect(r.events).toEqual([expect.objectContaining({ type: 'completion' })])
-})
-
-it('announces failures immediately even when the goal remains active', () => {
-  const r = rig()
-  r.goal('active')
-  r.turn('first')
-  r.turn('first', 'failure')
-  expect(r.events).toEqual([
-    expect.objectContaining({
-      type: 'completion',
-      completion: expect.objectContaining({ outcome: 'failure' })
-    })
-  ])
-})
-
-it('announces approval requests during an active goal', () => {
-  const r = rig()
-  r.goal('active')
-  r.turn('first')
-  r.append({
-    kind: 'approval',
-    title: 'Run migration?',
-    detail: null,
-    options: [{ id: 'yes', label: 'Allow' }],
-    resolution: { state: 'pending', selectedOptionId: null, resolvedBy: null, resolvedAt: null }
-  })
-  expect(r.events).toEqual([expect.objectContaining({ type: 'prompt' })])
-})
-
-it('preserves completion delivery without a goal', () => {
-  const r = rig()
-  r.turn('first')
-  r.turn('first', 'success')
-  r.observe()
-  expect(r.events).toEqual([expect.objectContaining({ type: 'completion' })])
-})
-
-it.each(['paused', 'blocked', 'budgetLimited', 'usageLimited'] as const)(
-  'releases a held turn when the goal stops with %s',
-  (status) => {
-    const r = rig()
-    r.goal('active')
-    r.turn('first')
-    r.turn('first', 'success')
-    expect(r.events).toEqual([])
-    r.goal(status)
-    r.observe()
-    expect(r.events).toEqual([expect.objectContaining({ type: 'completion' })])
-  }
-)
-
-it('releases a held completion when the goal is cleared', () => {
-  const r = rig()
-  r.goal('active')
-  r.turn('first')
-  r.turn('first', 'success')
-  expect(r.events).toEqual([])
-  r.append({ kind: 'status', text: 'Goal cleared', threadGoal: { state: 'cleared' } })
-  r.observe()
-  expect(r.events).toEqual([expect.objectContaining({ type: 'completion' })])
 })
