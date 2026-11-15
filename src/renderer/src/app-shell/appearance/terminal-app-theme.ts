@@ -120,6 +120,7 @@ export function synthesizeTerminalAppTheme(
   }
   const light = base === 'light'
   const { background, foreground, color: ansi, accent: accentColor } = palette
+  const selection = palette.color('selectionBackground')
   const surfacesToward = (tint: Rgba) => ({
     popover: mix(tint, background, 5),
     muted: mix(tint, background, 7),
@@ -171,6 +172,9 @@ export function synthesizeTerminalAppTheme(
     // Why the sidebar equals the terminal: that is what "Match Terminal" looked like before.
     '--sidebar': rgbaToHex(background),
     ...(accentColor ? { '--ring': rgbaToHex(accentColor) } : {}),
+    // Why: code selected in the editor matches text selected in the terminal; the contrast gate
+    // drops it (back to the ring) when the terminal's text would not read on it.
+    ...(selection ? { '--editor-selection': rgbaToHex(selection) } : {}),
     ...(accentColor && primaryText
       ? { '--primary': rgbaToHex(accentColor), '--primary-foreground': rgbaToHex(primaryText) }
       : {}),
