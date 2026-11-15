@@ -1,5 +1,5 @@
 import { NativeChatQueuedMessageRows } from './NativeChatQueuedMessageRows'
-import { useEffect, useId, useInsertionEffect, useLayoutEffect, useRef, useState } from 'react'
+import { useEffect, useId, useLayoutEffect, useRef, useState } from 'react'
 import { useTranslate } from '@/i18n/use-translate'
 import { cn } from '@/lib/class-names'
 import {
@@ -129,13 +129,11 @@ export function NativeChatQueuedMessageList({
   })
   const moreRef = useRef<HTMLButtonElement>(null)
   // "+N more" goes away when the pane grows or the question closes; focus on it moves into the queue
-  // rather than falling to the page. Read before this commit's DOM changes, moved after them.
+  // rather than falling to the page. A blur with nowhere to go (its removal) keeps the claim.
   const moreHadFocus = useRef(false)
-  useInsertionEffect(() => {
-    moreHadFocus.current = moreRef.current !== null && moreRef.current === document.activeElement
-  })
   useLayoutEffect(() => {
-    if (!moreHadFocus.current || moreRef.current) {
+    const active = document.activeElement
+    if (!moreHadFocus.current || moreRef.current || (active && active !== document.body)) {
       return
     }
     moreHadFocus.current = false
@@ -275,8 +273,16 @@ export function NativeChatQueuedMessageList({
                 aria-controls={listId}
                 aria-expanded={showAll}
                 // Part of the list for focus: expanding must not let the dock fold it away under the toggle.
-                onFocus={() => setListFocused(true)}
-                onBlur={leaveList}
+                onFocus={() => {
+                  moreHadFocus.current = true
+                  setListFocused(true)
+                }}
+                onBlur={(event) => {
+                  if (event.relatedTarget) {
+                    moreHadFocus.current = false
+                  }
+                  leaveList(event)
+                }}
                 onClick={() => setShowAll(!showAll)}
                 className="mx-1 shrink-0 rounded-md px-1.5 py-1 text-left text-xs font-medium text-muted-foreground hover:bg-foreground/5 hover:text-foreground focus-visible:outline-[1.5px] focus-visible:outline-foreground/45 [[data-native-chat-dock-fit~=queue]_[data-native-chat-queue]:not([data-user-open],[data-editing],[data-list-focus])_&]:hidden"
               >

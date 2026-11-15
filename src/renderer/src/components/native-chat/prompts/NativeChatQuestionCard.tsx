@@ -339,6 +339,8 @@ export function NativeChatQuestionCard({
             className="native-chat-question-card-body scrollbar-sleek flex min-h-0 shrink flex-col [[data-native-chat-dock-fit~=card]_&]:min-h-[calc(var(--spacing)*26)] [[data-native-chat-dock-fit~=card]_&]:overflow-y-auto"
           >
             <div
+              // The fit keeps two lines of the question (or all of a shorter one) in view.
+              data-native-chat-dock-floor-lines={2}
               className={cn(
                 // The card's heading, one step above its body text and scaling with it.
                 'min-h-[1lh] shrink overflow-y-auto px-3.5 text-[length:calc(var(--text-sm)*15/13)] leading-snug font-semibold text-foreground scrollbar-sleek',
@@ -359,6 +361,8 @@ export function NativeChatQuestionCard({
             {q.options.length > 0 ? (
               // Padded so each tile's outside focus outline clears the scroll clip.
               <div
+                // The fit keeps option 1 whole before it lets the options shrink further.
+                data-native-chat-dock-floor-first-item
                 className={cn(
                   'native-chat-question-card-options min-h-[calc(var(--spacing)*12)] shrink-[100] overflow-y-auto px-3.5 pt-2.5 pb-1 scrollbar-sleek',
                   '[[data-native-chat-dock-fit~=card]_&]:min-h-0 [[data-native-chat-dock-fit~=card]_&]:shrink-0 [[data-native-chat-dock-fit~=card]_&]:overflow-visible'

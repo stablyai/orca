@@ -167,7 +167,7 @@
 [data-native-chat-dock-fit~='dock'] [data-native-chat-dock] {
   mask-image: linear-gradient(
     to bottom,
-    black calc(100% - var(--native-chat-scroll-fade)),
+    black calc(100% - min(var(--native-chat-scroll-fade), 35%)),
     transparent
   );
   animation: native-chat-scroll-fade linear both;

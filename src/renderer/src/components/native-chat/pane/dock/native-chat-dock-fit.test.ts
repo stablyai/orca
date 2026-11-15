@@ -107,3 +107,22 @@ it('steps up when a floored scroller shows fewer lines than it must', () => {
   height.client = 40
   expect(runNativeChatDockFit(root, dock)).toBe(0)
 })
+
+it('steps up when a list scroller cannot show its first item whole', () => {
+  const { root, dock } = dockOf(() => 700)
+  const options = document.createElement('div')
+  options.setAttribute('data-native-chat-dock-floor-first-item', '')
+  options.innerHTML = '<div data-native-chat-dock-content><div id="first"></div><div></div></div>'
+  dock.querySelector('#card')!.append(options)
+  const height = { client: 20 }
+  vi.spyOn(options, 'scrollHeight', 'get').mockReturnValue(120)
+  vi.spyOn(options, 'clientHeight', 'get').mockImplementation(() => height.client)
+  // A 48px first tile at the list's top.
+  vi.spyOn(options, 'getBoundingClientRect').mockReturnValue(new DOMRect(0, 100, 100, 20))
+  vi.spyOn(options.querySelector<HTMLElement>('#first')!, 'getBoundingClientRect').mockReturnValue(
+    new DOMRect(0, 100, 100, 48)
+  )
+  expect(runNativeChatDockFit(root, dock)).toBe(5)
+  height.client = 48
+  expect(runNativeChatDockFit(root, dock)).toBe(0)
+})

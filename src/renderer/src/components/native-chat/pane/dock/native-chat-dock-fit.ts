@@ -16,6 +16,7 @@ const CLIP_SELECTOR = '[data-native-chat-dock-clip]'
 const ANIMATING_SELECTOR = '[data-native-chat-dock-animating]'
 const UNSQUEEZED_SELECTOR = '[data-native-chat-dock-unsqueezed]'
 const FLOOR_SELECTOR = '[data-native-chat-dock-floor-lines]'
+const FIRST_ITEM_SELECTOR = '[data-native-chat-dock-floor-first-item]'
 export const NATIVE_CHAT_DOCK_OBSERVED_SELECTOR =
   '[data-native-chat-dock-pinned], [data-native-chat-dock-content]'
 export const NATIVE_CHAT_DOCK_INVALIDATE_EVENT = 'native-chat-dock-invalidate'
@@ -78,9 +79,25 @@ export function nativeChatDockFits(dock: HTMLElement): boolean {
       continue
     }
     const lines = Number(scroller.dataset.nativeChatDockFloorLines)
-    const lineHeight = Number.parseFloat(getComputedStyle(scroller).lineHeight)
-    const floor = Math.min(scroller.scrollHeight, lines * lineHeight)
+    const style = getComputedStyle(scroller)
+    const padding = Number.parseFloat(style.paddingTop) + Number.parseFloat(style.paddingBottom)
+    const floor = Math.min(
+      scroller.scrollHeight,
+      lines * Number.parseFloat(style.lineHeight) + (padding || 0)
+    )
     if (Number.isFinite(floor) && scroller.clientHeight + SLACK < floor) {
+      return false
+    }
+  }
+  // A list scroller keeps its first item whole (or all of a shorter list).
+  for (const scroller of Array.from(dock.querySelectorAll<HTMLElement>(FIRST_ITEM_SELECTOR))) {
+    const first = scroller.querySelector('[data-native-chat-dock-content] > *')
+    if (!isRendered(scroller) || !first) {
+      continue
+    }
+    const box = scroller.getBoundingClientRect()
+    const floor = first.getBoundingClientRect().bottom - box.top + scroller.scrollTop
+    if (scroller.clientHeight + SLACK < Math.min(scroller.scrollHeight, floor)) {
       return false
     }
   }
