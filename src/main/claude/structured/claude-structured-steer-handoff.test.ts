@@ -129,6 +129,21 @@ describe('a Claude steer during foreground work', () => {
     })
   })
 
+  it("keeps a real result's own ending after the hand-off", async () => {
+    const { emit, turns } = await steeredDuringSubagent()
+    emit({
+      ...root,
+      type: 'result',
+      subtype: 'error_during_execution',
+      uuid: 'result-2',
+      is_error: true,
+      num_turns: 1,
+      terminal_reason: 'api_error'
+    })
+
+    expect(turns().at(-1)).toMatchObject({ turnId: 'turn-1', outcome: 'failure' })
+  })
+
   it('ends the turn as interrupted when it goes idle before the steer runs', async () => {
     const { emit, turns } = await steeredDuringSubagent()
     // A Stop can withdraw the queued steer, so Claude goes idle without another result.

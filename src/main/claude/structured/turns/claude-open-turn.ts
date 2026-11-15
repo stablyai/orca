@@ -164,6 +164,7 @@ export class ClaudeOpenTurn {
 
   /** The host already wrote the command row; only publish its eventual end. */
   beginCommand(turn: ClaudeCurrentTurn): void {
+    this.steerHandoffEnd = null
     this.usageLimitEvidence = null
     this.deps.onOpen?.()
     if (this.current) {
@@ -209,7 +210,11 @@ export class ClaudeOpenTurn {
     contextUsage?: AgentSessionContextUsage,
     stopped?: ClaudeStoppedTurnEnd
   ): void {
-    const end = this.steerHandoffEnd ?? settled
+    // Only a verdictless end (idle) takes the held ending; a real result keeps its own.
+    const end =
+      settled.outcome === undefined && settled.state === 'completed'
+        ? (this.steerHandoffEnd ?? settled)
+        : settled
     this.steerHandoffEnd = null
     const quotaEnd = (ending: ClaudeTurnEnd) =>
       this.current !== null &&
