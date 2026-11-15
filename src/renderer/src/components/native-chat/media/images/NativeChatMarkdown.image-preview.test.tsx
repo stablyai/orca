@@ -231,6 +231,76 @@ describe('native chat Markdown image preview', () => {
     }
   })
 
+  it('shows an image a reply links to under its paragraph and keeps the link', async () => {
+    render(
+      <Transcript
+        content={
+          'Done. [Download the edited image](out/edited.png) and the [notes](out/notes.md).\n\n[remote](//example.com/r.png) [web](https://example.com/w.png)'
+        }
+      />
+    )
+    const trigger = await screen.findByRole('button', { name: 'View image: edited.png' })
+    const image = await within(trigger).findByRole('img')
+    expect(image).toHaveAttribute('src', 'blob:image-1')
+    // The linked file is read on the chat's host, by its worktree path.
+    expect(mocks.readRuntimeFilePreview).toHaveBeenCalledWith(
+      expect.anything(),
+      '/repo/worktree/out/edited.png',
+      { kind: 'chat-image' }
+    )
+    expect(screen.getByText('Download the edited image').closest('a')).not.toBeNull()
+    expect(screen.getByText('notes').closest('a')).not.toBeNull()
+    // Web and protocol-relative links stay links; nothing is fetched from them.
+    expect(screen.getAllByRole('img')).toHaveLength(1)
+    expect(screen.getAllByRole('button', { name: /^View image/ })).toHaveLength(1)
+  })
+
+  it('mounts a preview only once it nears the viewport, then keeps it', async () => {
+    const observed = new Map<Element, (entries: IntersectionObserverEntry[]) => void>()
+    vi.stubGlobal(
+      'IntersectionObserver',
+      class {
+        constructor(private readonly report: (entries: IntersectionObserverEntry[]) => void) {}
+        observe(element: Element): void {
+          observed.set(element, this.report)
+        }
+        unobserve(element: Element): void {
+          observed.delete(element)
+        }
+        disconnect(): void {}
+      }
+    )
+    const scrolledTo = (isIntersecting: boolean): void => {
+      act(() => {
+        for (const [target, report] of observed) {
+          // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: transcript visibility reads only target and isIntersecting.
+          report([{ target, isIntersecting } as IntersectionObserverEntry])
+        }
+      })
+    }
+    render(<Transcript content="[far](shots/far.png)" />)
+    expect(screen.queryByRole('button', { name: /^View image/ })).toBeNull()
+    expect(screen.getByRole('img', { name: 'far.png' })).toBeInTheDocument()
+    expect(mocks.readRuntimeFilePreview).not.toHaveBeenCalled()
+
+    scrolledTo(true)
+    expect(screen.getByRole('button', { name: 'View image: far.png' })).toBeInTheDocument()
+    scrolledTo(true)
+    expect(await screen.findByRole('img')).toHaveAttribute('src', 'blob:image-1')
+    scrolledTo(false)
+    expect(screen.getByRole('button', { name: 'View image: far.png' })).toBeInTheDocument()
+  })
+
+  it('keeps each linked image in its own list item', async () => {
+    render(<Transcript content={'- [first](shots/a.png)\n- [second](shots/b.png)'} />)
+    const items = screen.getAllByRole('listitem')
+    expect(
+      await within(items[0]!).findByRole('button', { name: 'View image: a.png' })
+    ).toBeInTheDocument()
+    expect(within(items[1]!).getByRole('button', { name: 'View image: b.png' })).toBeInTheDocument()
+    expect(within(items[0]!).getByText('first').closest('a')).not.toBeNull()
+  })
+
   it('closes the preview when the owning chat becomes hidden', () => {
     const { rerender } = render(<Transcript />)
     fireEvent.click(screen.getByRole('button', { name: 'View image: Chart' }))
