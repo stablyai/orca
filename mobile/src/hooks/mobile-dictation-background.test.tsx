@@ -6,7 +6,7 @@ import {
   createFakeRpcClient,
   rpcSuccess,
   type FakeRpcClient
-} from '../mobile-web-shell/bridge-host-test-fakes'
+} from '../mobile-web-shell/test-support/bridge-host-test-fakes'
 import type { DictationCapture } from '../platform/audio-capture/dictation-capture-contract'
 
 const appState = vi.hoisted(() => ({ handlers: new Set<(state: string) => void>() }))

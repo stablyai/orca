@@ -1,8 +1,8 @@
-import { parseWslUncPath } from '../../../shared/wsl-paths'
+import { parseWslUncPath } from '../../../shared/file-access/wsl-paths'
 import {
   wslDistroStoppedMessage,
   wslDistroUnverifiableMessage
-} from '../../../shared/wsl-distro-not-running-refusal'
+} from '../../../shared/remote-runtime/wsl-hosts/wsl-distro-not-running-refusal'
 import {
   isWslUserActFor,
   runAsWslUserAct as runScopedWslUserAct

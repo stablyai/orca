@@ -12,7 +12,7 @@ import {
   subscribeAntigravityChatSignIns,
   type AntigravityChatSignInView
 } from '../../runtime/provider-accounts/sign-in/antigravity-chat-sign-in-status'
-import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import type {
   AntigravityChatAuth,
   AntigravityChatSignInState

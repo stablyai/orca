@@ -1,5 +1,5 @@
 import type { PairingOffer } from '../../../shared/remote-runtime/pairing/mobile-relay-pairing-offer'
-import type { WslHostDeferredUpdate } from '../../../shared/wsl-host-types'
+import type { WslHostDeferredUpdate } from '../../../shared/remote-runtime/wsl-hosts/wsl-host-types'
 import type { ServeReadiness } from '../../server/serve-readiness'
 import type { OrcadHostTransport } from '../../managed-server/install/orcad-host-transport'
 import type { OrcadUpdateIntent } from '../../managed-server/lifecycle/orcad-managed-update-decision'

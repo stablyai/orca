@@ -15,7 +15,7 @@ import {
   type WindowsBreakawayLaunchContract,
   type WindowsBreakawayLaunchReport
 } from './windows-breakaway-launch'
-import { ORCAD_WINDOWS_PROCESS_TREE_FILENAME } from './orcad-artifacts'
+import { ORCAD_WINDOWS_PROCESS_TREE_FILENAME } from './remote-runtime/orcad-distribution/orcad-artifacts'
 
 /** Both bundles stage the addon under this name beside their entry script. */
 const WINDOWS_PROCESS_TREE_ADDON = `./${ORCAD_WINDOWS_PROCESS_TREE_FILENAME}`

@@ -10,7 +10,7 @@ import {
 } from '../../worktree/visibility/visibility-sources'
 import { OptionalFiniteNumber, OptionalString } from '../rpc-param-primitives'
 import { editorFormatterSchema } from '../../editor-formatter'
-import { normalizeDictationTerms } from '../../dictation-dictionary'
+import { normalizeDictationTerms } from '../../speech/dictation/dictation-dictionary'
 import { RepoWorkspaceCleanupPolicyParam } from '../workspace-cleanup/workspace-cleanup-policy-params'
 
 export const RepoSourceControlAiOverrides = z

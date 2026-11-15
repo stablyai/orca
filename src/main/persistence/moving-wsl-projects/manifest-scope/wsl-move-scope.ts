@@ -9,7 +9,7 @@ import {
   isDrvfsLinuxPath,
   resolveWslRepoWorktreeBasePath,
   wslUncPathToLinux
-} from '../../../../shared/wsl-paths'
+} from '../../../../shared/file-access/wsl-paths'
 
 export type WslMoveScopeRefusal =
   /** Distro access does not make Windows-drive projects Linux-owned. */

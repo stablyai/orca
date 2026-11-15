@@ -1,8 +1,9 @@
+import '../../../shared/remote-runtime/host-store/environment-store-worker-test-fixture'
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import '../../../shared/wsl-hosts-policy'
+import '../../../shared/remote-runtime/wsl-hosts/wsl-hosts-policy'
 import {
   readCachedWslHostsPolicy,
   WslHostsPolicyLiveUpdater,

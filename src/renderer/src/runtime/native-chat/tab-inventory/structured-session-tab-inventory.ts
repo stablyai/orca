@@ -1,6 +1,6 @@
-import type { RuntimeMobileSessionTabsResult } from '../../../../../shared/runtime-session-contracts'
+import type { RuntimeMobileSessionTabsResult } from '../../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import { refreshLocalStructuredSessionTabs } from '../../local-structured-session-tabs-sync/inventory-refresh'
-import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import { callRuntimeRpc } from '../../rpc/calls/runtime-rpc-call'
 import { isSessionTabsListAllResult } from '../../web-session-tabs-sync/tracking'
 

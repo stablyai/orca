@@ -3,7 +3,11 @@ import type { SleepingAgentSessionRecord } from '../agent-session/lifecycle/agen
 import type { WorkspaceKey } from '../workspace-scope'
 import type { Tab, TabGroup, TabGroupLayoutNode, WorkspaceVisibleTabType } from '../tab-types'
 import type { TerminalLayoutSnapshot, TerminalTab } from '../workspace-layout/terminal-tab-types'
-import type { BrowserHistoryEntry, BrowserPage, BrowserWorkspace } from '../browser-workspace-types'
+import type {
+  BrowserHistoryEntry,
+  BrowserPage,
+  BrowserWorkspace
+} from '../browser/workspaces/browser-workspace-types'
 import type { BrowserPageAnnotation } from '../browser/element-grab/browser-grab-types'
 import type { WorkspaceDocHistoryEntry } from './workspace-doc-history'
 import type { ClientHostedBrowserCloseIntent } from './client-hosted-browser-close-intent'

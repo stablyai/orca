@@ -10,7 +10,7 @@ import { mobileDiffLineNumber, mobileDiffLinePrefix } from '../diff-state/mobile
 import { colors, typography } from '../../../theme/mobile-theme'
 import { themedStyleSheet } from '../../../theme/themed-styles'
 import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
-import { MobileSyntaxSegments } from '../../../components/MobileSyntaxSegments'
+import { MobileSyntaxSegments } from '../../../components/code-presentation/MobileSyntaxSegments'
 
 // Each pickable line row carries this id, so a drag finds the row under the finger in the page itself.
 export const DIFF_LINE_ID_PREFIX = 'orca-review-diff-line-'

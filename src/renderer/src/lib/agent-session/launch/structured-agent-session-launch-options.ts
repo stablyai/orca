@@ -32,7 +32,7 @@ import type {
   AgentSessionOptionResult
 } from '../../../../../shared/agent-session/agent-session-wire'
 import type { StructuredAgentLaunchReceipt } from './structured-agent-session-launch-recovery'
-import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import type { StructuredAgentSessionLaunchIntent } from './structured-agent-session-launch-intent'
 
 /** The options a launch starts with, replaced whole so readers can compare by identity. */

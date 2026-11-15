@@ -2,11 +2,11 @@ import { randomUUID } from 'node:crypto'
 import type {
   BrowserCertificateFailure,
   BrowserCertificateProceedResult
-} from '../../../shared/browser-workspace-types'
+} from '../../../shared/browser/workspaces/browser-workspace-types'
 import {
   isEligibleLocalCertificateHost,
   toSecureCertificateEndpoint
-} from '../../../shared/browser-url'
+} from '../../../shared/browser/navigation/browser-url'
 import {
   certificateChallengeIdentityMatches,
   CERTIFICATE_CHALLENGE_TTL_MS,

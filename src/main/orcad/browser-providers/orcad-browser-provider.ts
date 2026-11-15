@@ -11,7 +11,9 @@ import { ExternalChromiumBrowserProcess } from './chromium/external-chromium-bro
 import type { ExternalChromiumLaunch } from './chromium/external-chromium-browser-session'
 import { resolveOrcadAgentBrowserBinary } from './orcad-agent-browser-binary'
 import { ElectronServeBrowserProcess } from './electron/electron-serve-browser-process'
-import { openOrcadBrowserInstallPark } from './orcad-browser-install-park'
+import { watchOrcadBrowserInstallPark } from './orcad-browser-install-park'
+import { openServeBundlePark } from '../../../shared/remote-runtime/serve-supervisor/serve-bundle-park'
+import { ORCAD_BROWSER_PARK_LABEL } from '../../../shared/remote-runtime/serve-supervisor/serve-bundle-coordination'
 import { errorMessage } from '../../../shared/error-message'
 
 export type OrcadBrowserProvider = {
@@ -149,15 +151,21 @@ async function startElectronServeProvider(
   signal?: AbortSignal
 ): Promise<OrcadBrowserProvider> {
   const processHandle = new ElectronServeBrowserProcess(executablePath, userDataPath)
-  try {
-    await processHandle.start(signal)
-  } catch (error) {
-    return cleanupFailedProvider(processHandle, error)
+  // Only helpers launched from macOS app bundles register.
+  const park = openServeBundlePark({ executable: executablePath, label: ORCAD_BROWSER_PARK_LABEL })
+  // Launching the bundle ShipIt is replacing aborts the install; the watcher starts it once the hold ends.
+  const parked = park?.holds() ?? false
+  if (!parked) {
+    try {
+      await processHandle.start(signal)
+    } catch (error) {
+      return cleanupFailedProvider(processHandle, error)
+    }
   }
-  const installPark = openOrcadBrowserInstallPark(executablePath, {
+  const helper = {
     pid: () => processHandle.pid(),
     stop: () => processHandle.stop(),
-    start: async (restartSignal) => {
+    start: async (restartSignal: AbortSignal) => {
       try {
         await processHandle.start(restartSignal)
       } catch (error) {
@@ -165,7 +173,8 @@ async function startElectronServeProvider(
         throw error
       }
     }
-  })
+  }
+  const installPark = park ? watchOrcadBrowserInstallPark(helper, { park, parked }) : null
   return {
     kind: 'electron',
     supportsGoogleCookieClear: () => processHandle.supportsGoogleCookieClear(),

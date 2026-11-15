@@ -11,7 +11,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { runProcess } from '@orca/process-host'
-import { getPowerShellAgentWrappers } from './powershell-agent-wrappers'
+import { getPowerShellAgentWrappers } from './shell/launch/agents/powershell-agent-wrappers'
 import {
   getPowerShellEscapeNativeArgsFunction,
   quotePowerShellLiteral

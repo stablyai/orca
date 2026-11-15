@@ -1,6 +1,6 @@
 import { readdirSync, type Dirent } from 'node:fs'
 import { join } from 'node:path'
-import { sanitizeCrashReportString } from '../../../shared/crash-report-redaction'
+import { sanitizeCrashReportString } from '../../../shared/crash-reporting/crash-report-redaction'
 import {
   loadWindowsSecurity,
   WINDOWS_FILE_READ_EXECUTE,

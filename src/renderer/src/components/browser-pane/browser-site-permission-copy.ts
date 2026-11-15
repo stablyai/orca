@@ -2,7 +2,7 @@
 import {
   BROWSER_SITE_PERMISSION_LOCAL_FILES_ORIGIN,
   type BrowserSitePermission
-} from '../../../../shared/browser-site-permission'
+} from '../../../../shared/browser/site-settings/browser-site-permission'
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
 

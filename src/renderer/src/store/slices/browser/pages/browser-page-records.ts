@@ -2,12 +2,12 @@ import type {
   BrowserPage,
   BrowserPageDocLocation,
   BrowserWorkspace
-} from '../../../../../../shared/browser-workspace-types'
-import { browserPageDocLocationsEqual } from '../../../../../../shared/browser-page-doc-location'
+} from '../../../../../../shared/browser/workspaces/browser-workspace-types'
+import { browserPageDocLocationsEqual } from '../../../../../../shared/browser/workspaces/browser-page-doc-location'
 import '../../../../../../shared/constants'
 import { ORCA_BROWSER_BLANK_URL } from '../../../../../../shared/browser/browser-blank-page'
 import { getBrowserDisplayTitle } from '../../../../../../shared/browser/browser-display-title'
-import { redactKagiSessionToken } from '../../../../../../shared/browser-url'
+import { redactKagiSessionToken } from '../../../../../../shared/browser/navigation/browser-url'
 import { isDocPreviewUrl } from '../../../../../../shared/document-preview/doc-preview-scheme'
 import { basename } from '@/lib/path'
 import { createNonSecureContextUuid as createBrowserUuid } from '../../../../../../shared/non-secure-context-uuid'

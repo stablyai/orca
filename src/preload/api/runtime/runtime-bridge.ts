@@ -1,13 +1,13 @@
 import { ipcRenderer } from 'electron'
-import type { ClientHostedBrowserRowsEvent } from '../../../shared/client-hosted-browser-rows'
+import type { ClientHostedBrowserRowsEvent } from '../../../shared/browser/client-hosting/client-hosted-browser-rows'
 import type { SidebarInputsChangedEvent } from '../../../shared/sidebar-list/feed/sidebar-inputs-feed-contract'
 import type {
   RuntimeRendererSyncWindowGraph,
   RuntimeStatus,
   RuntimeSyncWindowGraphResult,
   RuntimeTerminalDriverState
-} from '../../../shared/runtime-session-contracts'
-import type { RuntimeRpcResponse } from '../../../shared/runtime-rpc-envelope'
+} from '../../../shared/remote-runtime/session-graph/runtime-session-contracts'
+import type { RuntimeRpcResponse } from '../../../shared/remote-runtime/rpc/runtime-rpc-envelope'
 import type { RuntimeEnvironmentSubscriptionHandle } from '../../runtime/runtime-environment-subscriptions'
 import type { PreloadApi } from '../../api-types'
 

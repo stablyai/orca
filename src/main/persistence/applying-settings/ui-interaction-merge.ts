@@ -1,8 +1,8 @@
 import type { PersistedState } from '../../../shared/persisted-state-types'
 import type { WorkspaceLineage } from '../../../shared/worktree/lineage-types'
-import { normalizeFeatureInteractions } from '../../../shared/feature-interactions'
-import { normalizeContextualTourIds } from '../../../shared/contextual-tours'
-import { normalizeFeatureTipIds } from '../../../shared/feature-tips'
+import { normalizeFeatureInteractions } from '../../../shared/feature-education/interactions/feature-interactions'
+import { normalizeContextualTourIds } from '../../../shared/feature-education/contextual-tours/contextual-tours'
+import { normalizeFeatureTipIds } from '../../../shared/feature-education/feature-tips'
 import { type WorkspaceKey, isWorkspaceKey } from '../../../shared/workspace-scope'
 
 export function mergeFeatureInteractions(

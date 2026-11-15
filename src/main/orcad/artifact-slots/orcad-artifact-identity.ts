@@ -9,9 +9,9 @@ import {
   ORCAD_VERSION,
   orcadArtifactFilenames,
   orcadMobileWebAssetFilenames
-} from '../../../shared/orcad-artifacts'
+} from '../../../shared/remote-runtime/orcad-distribution/orcad-artifacts'
 import { COMPAT_SERVER_TARGETS, SERVER_TARGETS } from '../../../shared/node-runtime-pin'
-import { orcadAgentBrowserNativeName } from '../../../shared/orcad-agent-browser-name'
+import { orcadAgentBrowserNativeName } from '../../../shared/remote-runtime/orcad-distribution/orcad-agent-browser-name'
 
 /** Hash installed bytes in the build's order; a version marker is not proof of delivery. */
 export async function readOrcadArtifactIdentity(directory: string): Promise<string> {

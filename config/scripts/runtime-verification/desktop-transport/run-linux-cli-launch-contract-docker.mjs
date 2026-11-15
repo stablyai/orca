@@ -34,7 +34,7 @@ const CASES = [
   {
     name: 'nofuse-nosandbox-direct-binary-skills',
     expectStatus: 0,
-    expectOutput: 'Usage: orca skills',
+    expectOutput: 'Usage: orca-ide skills',
     why: 'A direct binary launch that reaches JavaScript must run the command, not boot a GUI (#14229).'
   },
   {

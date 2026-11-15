@@ -18,7 +18,7 @@ import {
 } from '../../../ai-vault/scanners/opencode/reader-transport/session-scanner-opencode-sqlite-worker-spawn'
 import { discoverOpenCodeTranscriptDatabase } from './transcript-opencode-database'
 import { DESKTOP_READ_WINDOW } from '../../transcript-watching/transcript-watch-contract'
-import { openCodeTranscriptPageLimit } from '../../../../shared/opencode-transcript-page-limit'
+import { openCodeTranscriptPageLimit } from '../../../../shared/agent-session/lifecycle/provider-handles/opencode-transcript-page-limit'
 
 export type OpenCodeTranscriptDeps = {
   resolveDbPath?: (

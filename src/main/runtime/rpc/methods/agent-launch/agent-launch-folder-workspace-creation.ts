@@ -1,4 +1,4 @@
-import type { RuntimeTerminalCreate } from '../../../../../shared/runtime-terminal-create-contract'
+import type { RuntimeTerminalCreate } from '../../../../../shared/terminal/runtime/runtime-terminal-create-contract'
 import { folderWorkspaceKey } from '../../../../../shared/workspace-scope'
 import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent'
 import type { AgentLaunchWorkspaceFactory } from '../../../../agent-launch/agent-launch-surface-factories'

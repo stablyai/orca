@@ -14,7 +14,7 @@ import {
   journalSqlWorkerPath
 } from '../../../native-chat/agent-session-journal/journal-sql-worker-bundle.test-fixture'
 import { agentSessionRecordFixture } from '../../../native-chat/testing/agent-session-record-test-fixture'
-import { storedTestAgentSessionRecord } from './agent-session-record-store-test-harness'
+import { storedTestAgentSessionRecord } from './agent-session-record-store-persistence.test-fixture'
 import {
   closeAgentSessionRecordStoreDatabase,
   openAgentSessionRecordStoreOnce,

@@ -2,7 +2,7 @@
 
 import type { runProcess } from '@orca/process-host'
 import { z } from 'zod'
-import type { MacTccFolderClass } from '../../../shared/daemon-adoption-telemetry'
+import type { MacTccFolderClass } from '../../../shared/telemetry/daemon-adoption-telemetry'
 import type {
   TccAsked,
   TccAuthReason,

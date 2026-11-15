@@ -9,7 +9,7 @@ import { isTerminalWorkspaceEmptiedOnPurpose } from '../../../../../../shared/wo
 import { shouldSeedWorktreePrimaryTerminal } from '../../../../../../shared/worktree-first-surface'
 import { createSequencedSetupAgentCommands } from '../../../../../../shared/agent-launch/startup/setup-agent-sequencing'
 import { getSetupRunnerCommandPlatformForPath } from '../../../../../../shared/agent-launch/startup/setup-runner-command'
-import { agentKindToTuiAgent } from '../../../../../../shared/agent-kind'
+import { agentKindToTuiAgent } from '../../../../../../shared/agent-status/identity/agent-kind'
 import { useAppStore } from '@/store/index'
 import { queueHookCommandsForFirstWorktreeTab } from '@/lib/workspace/creation/setup/hook-command-delayed-delivery'
 import { resolveWorkspaceTerminalHostAuthority } from '@/lib/workspace/ownership/workspace-terminal-host-authority'

@@ -6,7 +6,7 @@ import type {
 } from '../../../../../shared/remote-runtime/pairing/pairing-create-offer-contract'
 import { classifyRemotePairingHostname } from '../../../../../shared/remote-runtime/pairing/remote-pairing-address'
 import { canPreservePairingBind, PROTECTED_PROXY_PAIRING_GUIDANCE } from './protected-proxy-pairing'
-import type { RuntimePairingReach } from '../../../../../shared/runtime-pairing-reach'
+import type { RuntimePairingReach } from '../../../../../shared/remote-runtime/pairing/runtime-pairing-reach'
 import { renderServePairingQr } from '../../../../server/serve-pairing-output'
 import { NETWORK_EXPOSURE_FAILED_GUIDANCE } from './network/network-exposure-guidance'
 import { resolveAdvertisedPairingHostname } from './network/pairing-endpoint'

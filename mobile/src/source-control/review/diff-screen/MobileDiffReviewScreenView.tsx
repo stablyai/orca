@@ -12,7 +12,7 @@ import { MobileDiffReviewFooter } from './MobileDiffReviewFooter'
 import { MobileDiffReviewHeader } from './MobileDiffReviewHeader'
 import { useMobileDiffReviewOverflowActions } from './use-mobile-diff-review-overflow-actions'
 import { MobilePRSidebar } from '../pull-request/MobilePRSidebar'
-import { RightDrawer } from '../../../components/RightDrawer'
+import { RightDrawer } from '../../../components/right-drawer/RightDrawer'
 import {
   mobilePrSidebarStyles,
   PR_SIDEBAR_DOCK_WIDTH

@@ -56,7 +56,6 @@ export type DashboardSnapshotState = Pick<
   | 'worktreesByRepo'
   | 'tabsByWorktree'
   | 'agentStatusByPaneKey'
-  | 'retainedAgentsByPaneKey'
   | 'migrationUnsupportedByPtyId'
   | 'runtimeAgentOrchestrationByPaneKey'
   | 'terminalLayoutsByTabId'

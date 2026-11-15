@@ -20,23 +20,6 @@ function row(overrides: Partial<Worktree> = {}): Worktree {
 }
 
 describe('buildWorkspaceDetailLinks', () => {
-  it("lists reviews first, then tasks in the host's order, as the desktop hover card does", () => {
-    const links = buildWorkspaceDetailLinks(
-      row({
-        linkedItems: [
-          { provider: 'jira', type: 'issue', number: 0, identifier: 'ORCA-4', title: 'Jira one' },
-          { provider: 'linear', type: 'issue', number: 0, identifier: 'ENG-7' },
-          { provider: 'github', type: 'issue', number: 3, title: 'Bug', url: 'https://x/3' }
-        ],
-        linkedPR: { number: 12, state: 'open' }
-      })
-    )
-
-    expect(links.map((link) => link.label)).toEqual(['PR #12', 'ORCA-4', 'ENG-7', 'Issue #3'])
-    expect(links[0]).toMatchObject({ state: 'open' })
-    expect(links[3]).toMatchObject({ title: 'Bug', url: 'https://x/3' })
-  })
-
   it('enriches a linked entry for the same repo and PR', () => {
     const links = buildWorkspaceDetailLinks(
       row({

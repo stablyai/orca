@@ -54,10 +54,10 @@ const aiVaultPrepareSessionResumeResultSchema = z.object({
     .optional()
 })
 
-export function getSavedRuntimeAiVaultHostInfos(
+export async function getSavedRuntimeAiVaultHostInfos(
   userDataPath: string
-): readonly RuntimeAiVaultHostInfo[] {
-  return listEnvironments(userDataPath)
+): Promise<readonly RuntimeAiVaultHostInfo[]> {
+  return (await listEnvironments(userDataPath))
     .filter((environment) => !isGatedOffWslHost(environment))
     .map((environment) => ({
       environmentId: environment.id,
@@ -76,7 +76,7 @@ export async function scanRuntimeAiVaultSessions(
 ): Promise<AiVaultListResult> {
   const executionHostId = toRuntimeExecutionHostId(environmentId)
   // Captured before the call: a re-pair mid-scan leaves rows fenced to the older pairing, never the newer.
-  const pairingRevision = savedPairingRevision(userDataPath, environmentId)
+  const pairingRevision = await savedPairingRevision(userDataPath, environmentId)
   const response = await callRuntimeEnvironment(
     userDataPath,
     environmentId,
@@ -206,9 +206,12 @@ export async function deleteRuntimeAiVaultSession(
   return readRuntimeAiVaultDeleteSessionResponse(response, args.agent)
 }
 
-function savedPairingRevision(userDataPath: string, environmentId: string): number | undefined {
+async function savedPairingRevision(
+  userDataPath: string,
+  environmentId: string
+): Promise<number | undefined> {
   try {
-    const environment = resolveEnvironment(userDataPath, environmentId)
+    const environment = await resolveEnvironment(userDataPath, environmentId)
     return environment.pairingRevision ?? environment.createdAt
   } catch {
     return undefined

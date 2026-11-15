@@ -1,5 +1,5 @@
 import { recognizeAgentProcessFromCommandLine } from '../../../shared/agent-status/process/agent-process-recognition'
-import { resolveOuterWrapperForegroundProcess } from '../../../shared/foreground-wrapper-agent'
+import { resolveOuterWrapperForegroundProcess } from '../../../shared/agent-status/process/foreground-wrapper-agent'
 import { unreadableArgvName, type ProcessTableRow } from '../../../shared/process-table-snapshot'
 import {
   getFreshProcessTableSnapshot,
@@ -19,7 +19,7 @@ import { isShellProcess } from '../../../shared/agent-status/process/shell-proce
 import {
   selectForegroundProcessCandidate,
   type SelectedForegroundProcess
-} from '../../../shared/foreground-process-selection'
+} from '../../../shared/agent-status/process/foreground-process-selection'
 import { isWindowsShellAloneInJob } from './windows/shell-alone-in-job'
 import {
   readWindowsProcessIdentityTableFresh,

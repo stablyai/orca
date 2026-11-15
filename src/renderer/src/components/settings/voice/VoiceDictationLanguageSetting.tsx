@@ -1,9 +1,9 @@
-import type { SpeechModelManifest, VoiceSettings } from '../../../../../shared/speech-types'
+import type { SpeechModelManifest, VoiceSettings } from '../../../../../shared/speech/speech-types'
 import {
   DICTATION_LANGUAGE_AUTO,
   DICTATION_LANGUAGES,
   engineDictationLanguage
-} from '../../../../../shared/dictation-language'
+} from '../../../../../shared/speech/models/dictation-language'
 import { translate } from '@/i18n/i18n'
 import { useIntlLocale, useTranslate, type Translate } from '@/i18n/use-translate'
 import { languageDisplayName, uiCollator } from '@/i18n/ui-intl-formatters'

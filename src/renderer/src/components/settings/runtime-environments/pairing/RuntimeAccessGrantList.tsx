@@ -1,5 +1,5 @@
 import { Loader2 } from 'lucide-react'
-import type { RuntimeAccessGrant } from '../../../../../../shared/runtime-access-grants'
+import type { RuntimeAccessGrant } from '../../../../../../shared/remote-runtime/host-catalog/runtime-access-grants'
 import { Button } from '../../../ui/button'
 import { getIntlLocale, translate } from '@/i18n/i18n'
 import { useIntlLocale, useTranslate, type Translate } from '@/i18n/use-translate'

@@ -11,7 +11,10 @@ import { setMainUiLanguage } from '../i18n/main-i18n'
 import { rebuildAppMenu } from '../menu/register-app-menu'
 import { rebuildSystemTrayMenu } from '../tray/system-tray'
 import { track } from '../telemetry/client'
-import { SETTINGS_CHANGED_WHITELIST, type SettingsChangedKey } from '../../shared/telemetry-events'
+import {
+  SETTINGS_CHANGED_WHITELIST,
+  type SettingsChangedKey
+} from '../../shared/telemetry/schemas/telemetry-property-schemas'
 import type { AgentAwakeService } from '../power/agent-awake-service'
 import { sanitizeFloatingWorkspaceDirectorySetting } from './floating-workspace-directory'
 import { applyAgentStatusHooksEnabled } from '../agent-hooks/installation/managed-agent-hook-controls'
@@ -85,8 +88,9 @@ export function registerSettingsHandlers(
     }
   })
 
-  ipcMain.handle('settings:get', () =>
-    readSettingsWithRuntimeEnvironmentPreference(store, registryRoot())
+  ipcMain.handle(
+    'settings:get',
+    async () => await readSettingsWithRuntimeEnvironmentPreference(store, registryRoot())
   )
 
   ipcMain.handle(
@@ -103,8 +107,8 @@ export function registerSettingsHandlers(
   )
 
   // PTYs can bind before hydration; transport authority selection needs persisted settings synchronously.
-  ipcMain.on('settings:get-sync', (event) => {
-    event.returnValue = readSettingsWithRuntimeEnvironmentPreference(store, registryRoot())
+  ipcMain.on('settings:get-sync', async (event) => {
+    event.returnValue = await readSettingsWithRuntimeEnvironmentPreference(store, registryRoot())
   })
 
   ipcMain.handle('settings:set', async (event, args: Partial<GlobalSettings>) => {
@@ -288,14 +292,14 @@ export function registerSettingsHandlers(
 
   ipcMain.handle(
     'settings:set-active-runtime-environment-preference',
-    (event, args: { environmentId?: unknown }): GlobalSettings => {
+    async (event, args: { environmentId?: unknown }): Promise<GlobalSettings> => {
       const requestedEnvironmentId = args?.environmentId
       if (requestedEnvironmentId !== null && typeof requestedEnvironmentId !== 'string') {
         throw new Error('Invalid default host for new projects')
       }
       const requestedId = requestedEnvironmentId?.trim() || null
       const environmentId =
-        requestedId === null ? null : resolveEnvironment(registryRoot(), requestedId).id
+        requestedId === null ? null : (await resolveEnvironment(registryRoot(), requestedId)).id
       return store.updateSettings(
         { activeRuntimeEnvironmentId: environmentId },
         { notifyListeners: true, originWebContentsId: event.sender.id }

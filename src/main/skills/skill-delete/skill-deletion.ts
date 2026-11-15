@@ -7,8 +7,8 @@ import type {
   SkillDeleteRequest,
   SkillDeleteResult,
   SkillDeleteResultEntry
-} from '../../../shared/skill-delete-contract'
-import { nativeSkillPathSemantics } from '../../../shared/skill-path-containment'
+} from '../../../shared/skills/deletion/skill-delete-contract'
+import { nativeSkillPathSemantics } from '../../../shared/skills/paths/skill-path-containment'
 import { buildSkillDeletePlan, type ResolvedSkillDeletePlan } from './skill-delete-plan'
 import {
   recoverSkillDeleteTransaction,

@@ -9,7 +9,7 @@ import type {
   FolderHostCatalog,
   FolderHostRepo
 } from '../../../src/shared/folder-workspaces/folder-workspace-execution-host'
-import { parseWslUncPath } from '../../../src/shared/wsl-paths'
+import { parseWslUncPath } from '../../../src/shared/file-access/wsl-paths'
 import { normalizeExecutionHostId } from '../../../src/shared/execution-host'
 import { getFolderWorkspaceWorktreeHostId } from '../../../src/shared/folder-workspaces/folder-workspace-worktree'
 import { parseWorkspaceKey } from '../../../src/shared/workspace-scope'

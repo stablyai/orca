@@ -1,4 +1,4 @@
-import type { BrowserSessionProfile } from '../../../../shared/browser-workspace-types'
+import type { BrowserSessionProfile } from '../../../../shared/browser/workspaces/browser-workspace-types'
 import {
   isManagedBrowserProfileOf,
   managedBrowserProfileOwnerKey,

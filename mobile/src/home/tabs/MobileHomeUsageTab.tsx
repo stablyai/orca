@@ -14,7 +14,7 @@ import {
   type ProviderKey
 } from '../../accounts/usage/usage-selectors'
 import type { AccountsSnapshot } from '../../accounts/accounts-snapshot'
-import { ClaudeIcon, OpenAIIcon } from '../../components/AgentIcons'
+import { ClaudeIcon, OpenAIIcon } from '../../components/icons/AgentIcons'
 import { useNow } from '../../hooks/use-now'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import { useResponsiveLayout } from '../../layout/responsive-layout'

@@ -1,10 +1,8 @@
 import { readTestHostJournal } from '../../../agent-session-journal/journal-observation.test-support'
 import { journalSqlReads } from '../../../agent-session-journal/journal-sql-reads'
 import type { StructuredAgentSessionAdapter } from '../../providers/structured-agent-session-adapter'
-import {
-  openTestAgentSessionRecordStore,
-  withTestAgentSessionDatabase
-} from '../../../../runtime/agent-session/records/agent-session-record-store-test-harness'
+import { openTestAgentSessionRecordStore } from '../../../../runtime/agent-session/records/agent-session-record-store-test-harness'
+import { withTestAgentSessionDatabase } from '../../../../runtime/agent-session/records/agent-session-record-store-persistence.test-fixture'
 import { expect, vi } from 'vitest'
 import { structuredAgentSessionMessageSendMutation } from '../../../../../shared/agent-session/requests/structured-agent-session-send-mutation'
 import {

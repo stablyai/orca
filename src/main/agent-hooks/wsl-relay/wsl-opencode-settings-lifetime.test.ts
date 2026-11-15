@@ -15,7 +15,7 @@ import {
   AGENT_HOOK_INSTALL_PLUGINS_METHOD,
   AGENT_HOOK_REQUEST_REPLAY_METHOD
 } from '../../../shared/agent-hook-listener/transport/agent-hook-relay'
-import { WSL_HOOK_FS_METHODS } from '../../../shared/wsl-hook-relay-contract'
+import { WSL_HOOK_FS_METHODS } from '../../../shared/agent-hook-listener/transport/wsl-hook-relay-contract'
 
 function gate() {
   const reached = Promise.withResolvers<void>()

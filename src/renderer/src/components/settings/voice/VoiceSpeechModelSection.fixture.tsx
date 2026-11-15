@@ -3,12 +3,12 @@ import { getDefaultVoiceSettings } from '../../../../../shared/constants'
 import {
   NEMOTRON_DICTATION_LANGUAGES,
   PARAKEET_V3_LANGUAGES
-} from '../../../../../shared/dictation-language'
+} from '../../../../../shared/speech/models/dictation-language'
 import type {
   SpeechModelErrorRate,
   SpeechModelManifest,
   SpeechModelState
-} from '../../../../../shared/speech-types'
+} from '../../../../../shared/speech/speech-types'
 import { VoiceSpeechModelSection } from './VoiceSpeechModelSection'
 
 const rates = (entries: Record<string, number>): SpeechModelErrorRate[] =>

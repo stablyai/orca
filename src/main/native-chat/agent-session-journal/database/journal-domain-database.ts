@@ -15,6 +15,7 @@ import {
   migrateJournalDomainSchema
 } from './journal-domain-migrations'
 import { importJournalDomainProfile } from './journal-domain-profile-import'
+import { openJournalLegacySource } from './journal-legacy-source'
 import {
   captureJournalLegacySourceReceipt,
   JOURNAL_LEGACY_SOURCE_RECEIPT
@@ -44,7 +45,7 @@ export async function initializeJournalDomainDatabase(stateDirectory: string): P
     const sourceReceipt = captureJournalLegacySourceReceipt(sourcePath)
     try {
       if (existsSync(sourcePath)) {
-        const source = new Database(sourcePath, { readonly: true, fileMustExist: true })
+        const source = openJournalLegacySource(sourcePath)
         try {
           importJournalDomainProfile(source, db)
         } finally {

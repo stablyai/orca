@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef } from 'react'
 import { requireGitOwnerTarget } from './worktree-git-owner-target'
-import type { RuntimeClientTarget } from '../../../../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import { toast } from 'sonner'
 import { useAppStore } from '@/store'
 import { getRuntimeGitCommitCompare } from '@/runtime/source-control/git/runtime-git-diff-client'

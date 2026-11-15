@@ -4,7 +4,7 @@ import type { PtyModelRestoreNeededEvent } from '../../../shared/terminal/replay
 import type { TerminalSideEffectBatch } from '../../../shared/terminal/output/terminal-side-effect-facts'
 import type { PreloadApi } from '../../api-types'
 import type { TerminalProcessInspection } from '../../../shared/terminal/pty/lifecycle/terminal-process-inspection'
-import type { CodexSharedServerStatus } from '../../../shared/codex-shared-server-command'
+import type { CodexSharedServerStatus } from '../../../shared/agent-launch/startup/codex-shared-server-command'
 import type {
   NewerDaemonHeldScreen,
   NewerDaemonReopenResult

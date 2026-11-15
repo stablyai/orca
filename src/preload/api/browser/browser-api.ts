@@ -14,13 +14,13 @@ import type {
 import type {
   BrowserPageSiteDisplay,
   BrowserSiteColorScheme
-} from '../../../shared/browser-site-display'
-import type { BrowserPageZoomDirection } from '../../../shared/browser-page-zoom'
+} from '../../../shared/browser/site-settings/browser-site-display'
+import type { BrowserPageZoomDirection } from '../../../shared/browser/site-settings/browser-page-zoom'
 import type {
   BrowserIdentityModeSetResult,
   BrowserIdentityModeStatus,
   BrowserUserAgentMode
-} from '../../../shared/browser-user-agent-mode'
+} from '../../../shared/browser/identity/browser-user-agent-mode'
 import type {
   BrowserClientPageMetadataParams,
   BrowserClientPageMetadataPublishOutcome
@@ -28,7 +28,7 @@ import type {
 import type {
   BrowserWebAuthnAccountRequest,
   BrowserWebAuthnAccountResponse
-} from '../../../shared/browser-webauthn-account'
+} from '../../../shared/browser/prompts/browser-webauthn-account'
 import type {
   BrowserPagePromptRequest,
   BrowserPagePromptResponse,
@@ -38,7 +38,7 @@ import type {
   BrowserSitePermission,
   BrowserSitePermissionDecision,
   BrowserSitePermissionEntry
-} from '../../../shared/browser-site-permission'
+} from '../../../shared/browser/site-settings/browser-site-permission'
 import type {
   BrowserSetGrabModeArgs,
   BrowserSetGrabModeResult,
@@ -71,7 +71,7 @@ import type {
   BrowserSessionProfileSource,
   BrowserViewportOverride,
   BrowserViewportScrollState
-} from '../../../shared/browser-workspace-types'
+} from '../../../shared/browser/workspaces/browser-workspace-types'
 import type {
   BrowserClientPageRendererOutcome,
   BrowserClientPageRendererRequest

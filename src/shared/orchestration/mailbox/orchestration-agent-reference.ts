@@ -1,4 +1,4 @@
-import { parseOrcaSessionAddress } from '../../orca-session-address'
+import { parseOrcaSessionAddress } from '../../agent-session/identity/orca-session-address'
 
 export type OrchestrationAgentReference = { label: string; address: string; hostKey: string }
 

@@ -1,6 +1,6 @@
 import { isFolderRepo } from '../../repo-kind'
 import type { Repo } from '../../repo-types'
-import type { RuntimeWorktreePsSummary } from '../../runtime-worktree-contracts'
+import type { RuntimeWorktreePsSummary } from '../catalog/runtime-worktree-contracts'
 import { getWorktreeGitIdentityDisplay } from '../row-display/git-identity-display'
 import type { Worktree } from '../types'
 

@@ -3,8 +3,11 @@ import { getDefaultVoiceSettings } from '../../../../../shared/constants'
 import {
   DICTATION_LANGUAGES,
   SENSE_VOICE_DICTATION_LANGUAGES
-} from '../../../../../shared/dictation-language'
-import type { SpeechModelManifest, SpeechModelType } from '../../../../../shared/speech-types'
+} from '../../../../../shared/speech/models/dictation-language'
+import type {
+  SpeechModelManifest,
+  SpeechModelType
+} from '../../../../../shared/speech/speech-types'
 import { VoiceDictationLanguageSetting } from './VoiceDictationLanguageSetting'
 
 function model(

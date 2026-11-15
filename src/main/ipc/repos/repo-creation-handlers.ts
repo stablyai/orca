@@ -9,7 +9,7 @@ import type { RepositoryMetadataOwner } from '../../workspaces/catalog/imported-
 import { DEFAULT_REPO_BADGE_COLOR, getDefaultWorkspaceDir } from '../../../shared/constants'
 import { normalizeRuntimePathForComparison } from '../../../shared/cross-platform-path'
 import { getRepoExecutionHostId, LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host'
-import { getEffectiveHostSetting } from '../../../shared/host-setting-overrides'
+import { getEffectiveHostSetting } from '../../../shared/execution-host/host-setting-overrides'
 import { probeGitAvailability } from '../../git/command-runner/host-routing/git-availability'
 import { gitExecFileAsync } from '../../git/command-runner/git-exec-file'
 import { inspectGitRepoForRegistrationAsync } from '../../git/repositories/discovery/repo-detection'

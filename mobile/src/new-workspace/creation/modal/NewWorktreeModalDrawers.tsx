@@ -4,8 +4,8 @@ import { useMobileTranslation } from '../../../i18n/use-mobile-translation'
 import type { SmartModeAvailabilityInput } from '../../source-selection/mobile-smart-source-modes'
 import type { PasteRepoCandidate } from '../../source-selection/smart-source-paste-intent'
 import type { useMobileComposerSource } from '../../source-selection/use-mobile-composer-source'
-import { HostKindIcon } from '../../../components/HostKindIcon'
-import { MobileAgentIcon } from '../../../components/MobileAgentIcon'
+import { HostKindIcon } from '../../../components/icons/HostKindIcon'
+import { MobileAgentIcon } from '../../../components/icons/MobileAgentIcon'
 import type { NewWorktreeAgentOption } from '../runtime/new-worktree-agent-selection'
 import { newWorktreeFormStyles as styles } from '../forms/new-worktree-form-styles'
 import type { MobileWorkspaceRepo } from '../forms/new-worktree-modal-types'
@@ -14,7 +14,7 @@ import type {
   NewWorkspaceRunTargetOption
 } from '../../source-selection/presentation/new-workspace-project-targets'
 import { getMobileWorkspaceRepoBadgeColor } from '../forms/new-worktree-modal-types'
-import { PickerListDrawer } from '../../../components/PickerListDrawer'
+import { PickerListDrawer } from '../../../components/sheets/PickerListDrawer'
 import {
   OrcaHookTrustDrawer,
   type OrcaHookTrustPrompt

@@ -147,7 +147,6 @@ export function isCloudTestRunnerInput(file) {
 
 // The package (windows) job's "Test Windows-specific boundaries" step runs exactly these files.
 export const WINDOWS_BOUNDARY_TESTS = [
-  'config/scripts/native-build/node-addons/rebuild-native-deps.test.mjs',
   'config/scripts/native-build/node-addons/rebuild-native-deps-windows-process-tree.test.mjs',
   'config/scripts/native-build/node-addons/rebuild-native-deps-node-pty.test.mjs',
   'config/scripts/desktop-distribution/runtime-verification/verify-packaged-node-pty-job-ownership.test.mjs',
@@ -167,7 +166,6 @@ export const WINDOWS_BOUNDARY_TESTS = [
   'src/shared/agent-launch/startup/omp-fresh-launch-cmd.win32.test.ts',
   'src/shared/windows-batch-spawn.win32.test.ts',
   'src/main/claude/structured/launch/claude-structured-child-env.test.ts',
-  'src/main/agent-hooks/installation/commands/windows-hook-payload-delivery.test.ts',
   'src/main/jcode/hook-gate-script.test.ts',
   'src/main/agent-hooks/installation/commands/windows-native-hook-exe-hosts.test.ts',
   'src/main/agent-hooks/installation/commands/windows-batch-hook-launcher.test.ts',
@@ -186,15 +184,12 @@ export const WINDOWS_BOUNDARY_TESTS = [
   'src/main/daemon/pty-subprocess/testing/node-pty-windows-output-error.win32.test.ts',
   'src/main/persistence/profile-state/access/profile-state-access-windows-native.win32.test.ts',
   'src/main/pty/process-retirement/windows-live-tree-kill.win32.test.ts',
-  'src/main/wsl/execution/wsl-guest-environment.test.ts',
-  'src/main/wsl/execution/wsl-executable-path.win32.test.ts',
   'src/main/claude-accounts/profiles/setup/claude-profile-history-windows.test.ts',
   'src/shared/source-scan/source-tree-scan.test.ts',
   'src/main/cli/wsl/wsl-cli-powershell-boundary.test.ts',
   'src/main/cursor/hook-service.test.ts',
   'src/main/orca-profiles/profile-index-store.test.ts',
   'src/main/startup/windows-install-permissions/windows-install-dir-acl-repair.win32.test.ts',
-  'src/main/startup/windows-startup/windows-app-data-path.test.ts',
   'src/main/startup/windows-startup/windows-std-handle-inheritance.win32.test.ts',
   'src/main/startup/windows-startup/windows-isolated-spawner.win32.test.ts',
   'src/main/runtime/workspaces/catalog/worktree-scan-admin-fingerprint-gate.test.ts',

@@ -3,12 +3,12 @@ import {
   isExpectedAgentProcess
 } from '../../../shared/agent-status/process/agent-process-recognition'
 import { getFirstCommandToken } from '../../../shared/command-token-scanner'
-import { resolveOuterWrapperForegroundProcess } from '../../../shared/foreground-wrapper-agent'
-import { selectForegroundProcessCandidate } from '../../../shared/foreground-process-selection'
+import { resolveOuterWrapperForegroundProcess } from '../../../shared/agent-status/process/foreground-wrapper-agent'
+import { selectForegroundProcessCandidate } from '../../../shared/agent-status/process/foreground-process-selection'
 import type {
   ForegroundProcessEvidence,
   RemoteForegroundEvidence
-} from '../../../shared/foreground-process-evidence'
+} from '../../../shared/terminal/pty/foreground/foreground-process-evidence'
 import {
   buildProcessTableIndex,
   lookupProcessTableIndex,
