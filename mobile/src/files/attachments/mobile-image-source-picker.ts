@@ -18,6 +18,7 @@ import type {
   MobileImageSource,
   PickedMobileImage
 } from '../../platform/media-picking/media-picker-contract'
+import type { RecentPhotoDevice } from '../../platform/media-picking/native-recent-photos'
 
 const MOBILE_IMAGE_READ_CHUNK_BYTES = 256 * 1024
 
@@ -173,6 +174,18 @@ async function* pickFromFiles(
         : asset.name.trim() || 'attachment'
       yield { base64, uri: asset.uri, fileName }
     }
+  }
+}
+
+// Rendered JPEG copies keep the same byte ceiling as library picks; the copy doubles as the chip preview.
+export async function* pickRecentPhotos(
+  ids: readonly string[],
+  device: Pick<RecentPhotoDevice, 'render'>,
+  createFile: MobileImageFileFactory = defaultMobileImageFileFactory
+): AsyncGenerator<PickedMobileImage> {
+  for (const id of ids) {
+    const photo = await device.render(id)
+    yield { base64: await readUriAsBase64(photo.uri, null, createFile), uri: photo.uri }
   }
 }
 

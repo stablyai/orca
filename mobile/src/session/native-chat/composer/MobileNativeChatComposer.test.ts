@@ -23,6 +23,13 @@ function MobileNativeChatComposer({
 }
 
 vi.mock('../../../components/controls/MobileSwitch', () => ({ MobileSwitch: 'Switch' }))
+// The sheet's photo library is native; these tests never open it.
+vi.mock('./attachments/MobileNativeChatAddContextSheet', () => ({
+  MobileNativeChatAddContextSheet: () => null
+}))
+vi.mock('../../../platform/media-picking/media-picker', () => ({
+  useMediaPicker: () => ({ recentPhotos: null, openAddContext: null })
+}))
 vi.mock('./commands/MobileNativeChatContextUsageRing', () => ({
   useMobileNativeChatContextRing: () => ({ barProps: {}, ring: null })
 }))

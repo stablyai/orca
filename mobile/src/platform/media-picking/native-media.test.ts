@@ -218,3 +218,41 @@ describe('a provider uri the Android picker can answer', () => {
     expect(probe.discarded).toEqual([`${CACHE}/copy-0.bin`])
   })
 })
+
+describe('Add context', () => {
+  const options = { images: true, files: true, structured: true, skillCount: 0 }
+
+  it('stages only the recent photos tapped in the shell sheet, as JPEG media handles', async () => {
+    const rendered: string[] = []
+    const answers: { choice: 'recent' | 'photos'; ids: string[] }[] = [
+      { choice: 'photos', ids: [] },
+      { choice: 'recent', ids: ['ph://tapped'] }
+    ]
+    const probe = harness({
+      recentPhotos: {
+        list: () => Promise.resolve({ access: 'all', ids: ['ph://tapped', 'ph://other'] }),
+        manage: () => Promise.resolve(false),
+        render: (id) => {
+          rendered.push(id)
+          return Promise.resolve({ uri: `${CACHE}/rendered.jpg`, width: 4, height: 3 })
+        },
+        discard: () => {}
+      },
+      presentAddContext: () => Promise.resolve(answers.shift() ?? { choice: 'photos', ids: [] })
+    })
+    probe.files.set(`${CACHE}/rendered.jpg`, bytesOf(6))
+
+    await expect(probe.serve('native.context.open', options)).resolves.toEqual({
+      choice: 'photos',
+      items: []
+    })
+    expect(rendered).toEqual([])
+
+    const answered = await probe.serve('native.context.open', options)
+    expect(rendered).toEqual(['ph://tapped'])
+    expect(answered).toEqual({
+      choice: 'recent',
+      items: [expect.objectContaining({ mime: 'image/jpeg', byteLength: 6, width: 4, height: 3 })]
+    })
+  })
+})

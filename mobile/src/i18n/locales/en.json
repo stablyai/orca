@@ -2401,14 +2401,12 @@
       "viewedOfCount": "{{viewedCount}} of {{count}} viewed"
     },
     "nativeChatAttachActions": {
-      "photos": "Photos",
-      "files": "Files",
       "fileTypes": "PDF, text, code…",
       "workspaceFile": "Workspace file",
       "skills": "Skills",
       "availableSkills": "{{count}} available",
       "commands": "Commands",
-      "takePhoto": "Take photo"
+      "addFiles": "Add files"
     },
     "nativeChatCliFork": {
       "resumeInNewCli": "Resume in New CLI"
@@ -2979,12 +2977,19 @@
       "next": "Next tab",
       "previous": "Previous tab",
       "hint": "Shows all tabs"
+    },
+    "nativeChatAddContext": {
+      "title": "Add context",
+      "photos": "Photos",
+      "attachSelected": "Attach ({{count}})",
+      "camera": "Camera",
+      "choosePhotos": "Choose photos",
+      "recentPhoto": "Recent photo"
     }
   },
   "chat": {
     "composer": {
       "addToMessage": "Add to message",
-      "attachImage": "Attach image",
       "placeholder": "Ask anything, @ to mention files, / for commands",
       "cancelEditing": "Cancel editing",
       "saveEditedMessage": "Save edited message",
@@ -2993,8 +2998,7 @@
       "sendSteer": "Steer",
       "sendSteerQueued": "Steer queued",
       "sendQueueHint": "Runs after the current turn",
-      "sendSteerHint": "Goes into what the agent is doing now",
-      "takePhoto": "Take photo"
+      "sendSteerHint": "Goes into what the agent is doing now"
     },
     "contextUsage": {
       "label": "Context {{used}} of {{window}} tokens, {{percent}}% used",

@@ -6,6 +6,7 @@ import { agentReadableLibraryImageOptions } from '../../files/attachments/mobile
 import type { MediaHandleRegistry } from '../../mobile-web-shell/native-capabilities/media-handle-registry'
 import { BridgeNativeVerbRefusedError } from '../../mobile-web-shell/host-bridge/bridge-host-errors'
 import type { NativeMediaDeps } from './native-media'
+import { nativeRecentPhotoDevice } from './native-recent-photos-device'
 
 // Isolate native imports so handlers can be tested with injected device calls.
 // Android may return an uncopied content: URI; copy it into cache before minting a handle whose release deletes the file.
@@ -101,6 +102,7 @@ export function nativeMediaDeviceDeps(registry: MediaHandleRegistry): NativeMedi
     openFile: (uri) => new FsFile(uri),
     ownsStagedUri: ownsStagedMediaUri,
     copyIntoCache: copyPickedMediaIntoCache,
-    discard: discardStagedMedia
+    discard: discardStagedMedia,
+    recentPhotos: nativeRecentPhotoDevice
   }
 }

@@ -20,6 +20,7 @@ import { useMobileWebShellBridge } from './page-document/use-mobile-web-shell-br
 import type { MobileWebShellRuntime } from './session/mobile-web-shell-runtime'
 import { useKeyboardOcclusion } from '../platform/keyboard/keyboard-occlusion'
 import { useNativeDeviceVerbs } from '../platform/use-native-device-verbs'
+import { useNativeAddContextSheet } from './native-capabilities/use-native-add-context-sheet'
 import { useNativePdfViewer } from '../platform/pdf-viewing/native-pdf-view'
 import { useNativeImageActions } from '../platform/image-actions/native-image-actions'
 import { processDeviceStore } from '../device-store/device-store'
@@ -150,7 +151,8 @@ export function MobileWebShellScreen({
     readWorkspaceKey
   } = usePageHostSnapshot(hostId, route.pathname, ownsHostArea)
   // Create the media registry before the bridge; staged files belong to this page session.
-  const serveDeviceVerb = useNativeDeviceVerbs(readySessionId)
+  const addContext = useNativeAddContextSheet(readySessionId)
+  const serveDeviceVerb = useNativeDeviceVerbs(readySessionId, addContext.present)
   const servePdfView = useNativePdfViewer(hostId, readySessionId)
   const serveImageAction = useNativeImageActions(readySessionId)
   // Read the shell's storage for this host.
@@ -408,6 +410,7 @@ export function MobileWebShellScreen({
         <ShellPageCover label={SHELL_OPENING_LABEL} visible={pageFrame === 'unpainted'} />
       )}
       <ShellDevFacts state={state} droppedBinaryFrames={droppedBinaryFrames} />
+      {addContext.sheet}
     </View>
   )
 }

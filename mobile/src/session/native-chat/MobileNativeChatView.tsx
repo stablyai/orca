@@ -1,4 +1,5 @@
 import type { NativeChatSkillDiscoverySnapshot } from '../../../../src/shared/native-chat/input/composer/native-chat-picker-items'
+import type { MobileComposerImagePick } from '../../platform/media-picking/media-picker-contract'
 import { MobileStateView } from '../../components/feedback/MobileStateView'
 import { useCallback, useMemo, type ComponentProps } from 'react'
 import { nativeChatTaskListPredecessors } from '../../../../src/shared/native-chat/input/task-lists/native-chat-task-list-history'
@@ -110,8 +111,8 @@ type ChatViewProps = MobileNativeChatSendProps &
     composerScopeKey?: string | null
     draftKey: string | null
     onComposerTextChange: (text: string) => void
-    onAttachImage?: () => void
-    onTakePhoto?: () => void
+    /** Photos, Camera and recent photos from the Add context sheet. */
+    onAttachImages?: (pick: MobileComposerImagePick) => void
     onPasteImages?: (paste: MobilePastedImages) => void
     attachments?: PendingNativeChatImage[]
     onRemoveAttachment?: (id: string) => void
@@ -171,8 +172,7 @@ export function MobileNativeChatView({
   draftKey,
   composerScopeKey,
   onComposerTextChange,
-  onAttachImage,
-  onTakePhoto,
+  onAttachImages,
   onPasteImages,
   attachments,
   onRemoveAttachment,
@@ -372,7 +372,7 @@ export function MobileNativeChatView({
             steerHead
           }}
           {...{ agent, sessionOptions, contextUsage }}
-          {...{ onAttachImage, onTakePhoto, onPasteImages, attachments, onRemoveAttachment }}
+          {...{ onAttachImages, onPasteImages, attachments, onRemoveAttachment }}
           {...{ isAttaching, onMicPress, micActive, micStarting, micProcessing }}
           {...{ dictationMode, onMicPressIn, onMicPressOut }}
           {...offlineQueue.composerLock}

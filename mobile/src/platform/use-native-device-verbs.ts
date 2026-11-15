@@ -13,6 +13,7 @@ import { serveNativeClipboardVerb } from './clipboard/native-clipboard'
 import { serveNativeAnnounceVerb } from './accessibility/native-accessibility-announce'
 import { createNativeMediaVerbServer } from './media-picking/native-media'
 import { discardStagedMedia, nativeMediaDeviceDeps } from './media-picking/native-media-device'
+import type { AddContextPresenter } from './media-picking/native-recent-photos'
 
 export type NativeDeviceVerb = Exclude<
   BridgeNativeVerb,
@@ -21,12 +22,13 @@ export type NativeDeviceVerb = Exclude<
 
 // Tie stateful audio/media handlers to the page session so replacement documents cannot inherit abandoned microphones or staged handles.
 export function useNativeDeviceVerbs(
-  sessionId: string | null
+  sessionId: string | null,
+  presentAddContext?: AddContextPresenter
 ): (verb: NativeDeviceVerb, params: unknown) => Promise<unknown> {
   const registry = useMediaHandleRegistry({ sessionId, discard: discardStagedMedia })
   const serveMedia = useMemo(
-    () => createNativeMediaVerbServer(nativeMediaDeviceDeps(registry)),
-    [registry]
+    () => createNativeMediaVerbServer({ ...nativeMediaDeviceDeps(registry), presentAddContext }),
+    [registry, presentAddContext]
   )
   // A new session is a new document; close any mic its predecessor left open.
   const audio = useMemo(() => createNativeAudioCapture(nativeAudioDeviceEngine), [sessionId])

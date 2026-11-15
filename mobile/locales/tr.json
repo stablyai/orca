@@ -4,6 +4,6 @@
     "NSLocalNetworkUsageDescription": "Orca, yerel ağınızdaki masaüstü uygulamasına bağlanır.",
     "NSMicrophoneUsageDescription": "Orca’nın sesli dikte için mikrofonunuzu kullanmasına izin verin; konuşma bu telefonda veya eşlenmiş bilgisayarınızda yazıya dökülür.",
     "NSPhotoLibraryAddUsageDescription": "Orca'nın oturumlarınızdaki görselleri Fotoğraflar'a kaydetmesine izin verin.",
-    "NSPhotoLibraryUsageDescription": "Orca'nın arşivinizdeki fotoğrafları eşleştirdiğiniz masaüstü bilgisayardaki bir terminal oturumuna eklemesine izin verin."
+    "NSPhotoLibraryUsageDescription": "Orca'nın son fotoğraflarınızı göstermesine ve bunları eşleştirdiğiniz masaüstü bilgisayardaki bir sohbete veya terminal oturumuna eklemesine izin verin."
   }
 }

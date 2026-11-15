@@ -48,6 +48,8 @@ vi.mock('expo-keep-awake', () => ({
     return Promise.resolve()
   }
 }))
+vi.mock('expo-image-manipulator', () => ({}))
+vi.mock('expo-media-library', () => ({}))
 vi.mock('expo-image-picker', () => ({
   UIImagePickerPreferredAssetRepresentationMode: { Compatible: 'compatible' },
   launchImageLibraryAsync: device.picker.launchImageLibraryAsync

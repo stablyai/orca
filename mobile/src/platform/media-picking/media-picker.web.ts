@@ -115,6 +115,25 @@ async function* readPickedFiles(
   }
 }
 
+function addContextOpener(verbs: NativeVerbs): MediaPicker['openAddContext'] {
+  if (!verbs.canPickMedia || !verbs.canOpenAddContext) {
+    return null
+  }
+  return async (options) => {
+    const { choice, items } = await verbs.openAddContext(options)
+    if (choice !== 'recent') {
+      await releaseAllStagedMedia(verbs, items)
+      return { choice }
+    }
+    return {
+      choice,
+      images: {
+        [Symbol.asyncIterator]: () => readPicked(verbs, items, 'library')
+      }
+    }
+  }
+}
+
 export function useMediaPicker(): MediaPicker {
   const verbs = useNativeVerbs()
 
@@ -139,7 +158,9 @@ export function useMediaPicker(): MediaPicker {
         [Symbol.asyncIterator]: async function* () {
           yield* readPickedFiles(verbs, await pickFileItems(verbs))
         }
-      })
+      }),
+      recentPhotos: null,
+      openAddContext: addContextOpener(verbs)
     }),
     [verbs]
   )

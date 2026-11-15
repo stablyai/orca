@@ -12,7 +12,8 @@ import { useMediaPicker } from '../../../../platform/media-picking/media-picker'
 import {
   CameraPermissionError,
   ImageLibraryPermissionError,
-  type MobileImageSource
+  type MobileImageSource,
+  type MobileRecentPhotoPick
 } from '../../../../platform/media-picking/media-picker-contract'
 import {
   uploadMobileNativeChatImages,
@@ -26,6 +27,10 @@ import { useClipboardReader } from '../../../../platform/clipboard/clipboard'
 import { fitMobileAgentImage } from '../../../../files/attachments/mobile-agent-image-fit'
 
 type CurrentRef<T> = { readonly current: T }
+export type MobileComposerImageSource =
+  | MobileImageSource
+  | MobilePastedImages
+  | MobileRecentPhotoPick
 type UploadedNativeChatImage = Omit<PendingNativeChatImage, 'id'>
 type ShowToast = (message: string, durationMs?: number) => void
 
@@ -44,7 +49,7 @@ export function useMobileNativeChatImageUpload(args: {
   onAttachSuccess?: () => void
   onError?: () => void
 }): {
-  attachImage: (source: MobileImageSource | MobilePastedImages) => Promise<void>
+  attachImage: (source: MobileComposerImageSource) => Promise<void>
   isAttaching: boolean
 } {
   const {
@@ -69,7 +74,7 @@ export function useMobileNativeChatImageUpload(args: {
   }, [connState])
 
   const attachImage = useCallback(
-    async (source: MobileImageSource | MobilePastedImages): Promise<void> => {
+    async (source: MobileComposerImageSource): Promise<void> => {
       const scope = scopeKey
       if (
         !client ||
@@ -92,10 +97,15 @@ export function useMobileNativeChatImageUpload(args: {
           canContinue: () => destination.active,
           client,
           getConnectionId: getActiveWorktreeConnectionId,
-          pickImages: (from) =>
-            typeof from === 'string'
-              ? picker.pickImages(from)
-              : readMobilePastedImages(from, clipboard),
+          pickImages: (from) => {
+            if (typeof from === 'string') {
+              return picker.pickImages(from)
+            }
+            if ('recentPhotos' in from) {
+              return from.recentPhotos
+            }
+            return readMobilePastedImages(from, clipboard)
+          },
           onImageUploaded: (image) => uploadedImages.push(image),
           onUploadStart: () => {
             started = true

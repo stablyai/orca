@@ -49,9 +49,52 @@ export class ImageLibraryPermissionError extends Error {
   }
 }
 
+// Recent photos the Add context sheet chose, already resolved to images.
+export type MobileRecentPhotoPick = { readonly recentPhotos: AsyncIterable<PickedMobileImage> }
+
+// What the composer's Add context sheet asks to attach.
+export type MobileComposerImagePick = 'library' | 'camera' | MobileRecentPhotoPick
+
+export type RecentPhotoAccess = 'all' | 'limited' | 'denied'
+
+export type RecentPhotos = { readonly access: RecentPhotoAccess; readonly ids: readonly string[] }
+
+// In-process only: thumbnails are image URIs the app draws itself; pick yields JPEG copies, even for HEIC originals.
+export type RecentPhotoLibrary = {
+  list: (limit: number) => Promise<RecentPhotos>
+  thumbnailUri: (id: string) => string
+  manage: () => Promise<void>
+  pick: (ids: readonly string[]) => AsyncIterable<PickedMobileImage>
+}
+
+export type AddContextOptions = {
+  readonly images: boolean
+  readonly files: boolean
+  readonly structured: boolean
+  readonly skillCount: number
+}
+
+export type AddContextChoice =
+  | { readonly choice: Exclude<AddContextChoiceName, 'recent'> }
+  | { readonly choice: 'recent'; readonly images: AsyncIterable<PickedMobileImage> }
+
+export type AddContextChoiceName =
+  | 'dismissed'
+  | 'recent'
+  | 'camera'
+  | 'photos'
+  | 'files'
+  | 'workspaceFile'
+  | 'skills'
+  | 'commands'
+
 // A hook supplies the page’s bridge context. Cancellation returns null/empty; refusal rejects so callers can show failure.
 export type MediaPicker = {
   pickImage: (source: MobileImageSource) => Promise<PickedMobileImage | null>
   pickImages: (source: MobileImageSource) => AsyncIterable<PickedMobileImage>
   pickFiles: () => AsyncIterable<PickedMobileFile>
+  // The app's own screens read recent photos in-process; null on the served page, which never sees the library.
+  recentPhotos: RecentPhotoLibrary | null
+  // The served page asks the shell to draw Add context, so only photos tapped there leave the shell; null elsewhere.
+  openAddContext: ((options: AddContextOptions) => Promise<AddContextChoice>) | null
 }
