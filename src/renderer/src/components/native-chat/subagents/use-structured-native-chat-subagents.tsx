@@ -1,3 +1,4 @@
+import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import type { AgentSessionCancelResult } from '../../../../../shared/agent-session/agent-session-wire'
 import type { StructuredAgentSubagentRoster } from '../../../../../shared/agent-session/view/structured-agent-session-subagent-roster'
 import type { StructuredSessionBackgroundTasksView } from '../../../../../shared/agent-session/view/structured-session-background-tasks-view'
@@ -14,11 +15,13 @@ import { NativeChatStructuredSubagentStatusBar } from './NativeChatSubagentStatu
 /** A structured chat's agents strip and open subagent's bar, which share the strip's one Stop. */
 export function useStructuredNativeChatSubagents({
   sessionId,
+  target,
   paneKey,
   isVisible,
   controller
 }: {
   sessionId: string
+  target: RuntimeClientTarget
   paneKey: string
   isVisible: boolean
   controller: {
@@ -39,6 +42,7 @@ export function useStructuredNativeChatSubagents({
     strip: (
       <NativeChatStructuredSessionStatus
         sessionId={sessionId}
+        target={target}
         paneKey={paneKey}
         isVisible={isVisible}
         backgroundTasks={controller.backgroundTasks}

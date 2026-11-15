@@ -20,6 +20,7 @@ import { NativeChatEmptyState } from '@/components/native-chat/host-access/Nativ
 import { NativeChatEmptyPane } from '@/components/native-chat/host-access/NativeChatEmptyPane'
 import { NativeChatLoadingCue } from '@/components/native-chat/host-access/NativeChatLoadingCue'
 import { NativeChatSubagentTranscripts } from '@/components/native-chat/subagents/NativeChatSubagentTranscripts'
+import { NativeChatWorkerResultTimeline } from './tools/tasks/dock/NativeChatWorkerResultTimeline'
 import { useStructuredNativeChatSubagents } from '@/components/native-chat/subagents/use-structured-native-chat-subagents'
 import { NativeChatContextClearFade } from '@/components/native-chat/conversation/projection/NativeChatContextClearFade'
 import { useStructuredNativeChatSubmitReveal } from '@/components/native-chat/pane/actions/use-structured-native-chat-submit-reveal'
@@ -270,7 +271,7 @@ export function NativeChatStructuredSession(props: Omit<NativeChatStructuredView
       onContextMenuCapture={paneCommands.onContextMenuCapture}
       className={cn(
         NATIVE_CHAT_APPEARANCE_ROOT_CLASS,
-        'flex h-full min-h-0 w-full flex-col focus:outline-none'
+        'flex h-full min-h-0 w-full flex-col focus:outline-none [container-type:size]'
       )}
       style={appearanceStyle}
       data-native-chat-scheme={appearanceStyle.colorScheme}
@@ -306,34 +307,45 @@ export function NativeChatStructuredSession(props: Omit<NativeChatStructuredView
                 view={continuation.view}
               >
                 <NativeChatHostSetupContext.Provider value={setup}>
-                  <NativeChatWorkerApprovalTimeline party={workerApprovalParty}>
-                    {(timedRows) => (
-                      <NativeChatSubagentTranscripts
-                        find={find}
-                        // A rewind or a /clear replaces the conversation; nothing the old one held carries over.
-                        key={`${controller.epoch}:${controller.contextClear.clears}`}
-                        paneKey={paneKey}
-                        ref={submits.messageListRef}
-                        session={session}
-                        journalItems={controller.journalItems}
-                        journalSubmissions={controller.submissions}
-                        journalLatestTurn={controller.latestTurn}
-                        journalHostWork={controller.hostWork}
-                        subagentRoster={controller.subagentRoster}
-                        railOutline={controller.railOutline}
+                  <NativeChatWorkerApprovalTimeline
+                    party={workerApprovalParty}
+                    isVisible={props.isVisible}
+                  >
+                    {(approvalRows) => (
+                      <NativeChatWorkerResultTimeline
+                        target={props.target}
+                        sessionId={props.sessionId}
                         isVisible={props.isVisible}
-                        isWorking={controller.isWorking}
-                        expandSignal={false}
-                        workingStartedAt={controller.workingStartedAt}
-                        settledTurns={controller.settledTurns}
-                        awaitingInput={prompt === null ? null : 'shown'}
-                        turnActivity={controller.turnActivity}
-                        stopping={stopControls.stopping}
-                        structuredAttachments
-                        runtimeContext={imageRuntimeContext}
-                        deliveryNotices={deliveryNotices}
-                        timedRows={timedRows}
-                      />
+                      >
+                        {(workerRows) => (
+                          <NativeChatSubagentTranscripts
+                            find={find}
+                            // A rewind or a /clear replaces the conversation; nothing the old one held carries over.
+                            key={`${controller.epoch}:${controller.contextClear.clears}`}
+                            paneKey={paneKey}
+                            ref={submits.messageListRef}
+                            session={session}
+                            journalItems={controller.journalItems}
+                            journalSubmissions={controller.submissions}
+                            journalLatestTurn={controller.latestTurn}
+                            journalHostWork={controller.hostWork}
+                            subagentRoster={controller.subagentRoster}
+                            railOutline={controller.railOutline}
+                            isVisible={props.isVisible}
+                            isWorking={controller.isWorking}
+                            expandSignal={false}
+                            workingStartedAt={controller.workingStartedAt}
+                            settledTurns={controller.settledTurns}
+                            awaitingInput={prompt === null ? null : 'shown'}
+                            turnActivity={controller.turnActivity}
+                            stopping={stopControls.stopping}
+                            structuredAttachments
+                            runtimeContext={imageRuntimeContext}
+                            deliveryNotices={deliveryNotices}
+                            timedRows={[...approvalRows, ...workerRows]}
+                          />
+                        )}
+                      </NativeChatWorkerResultTimeline>
                     )}
                   </NativeChatWorkerApprovalTimeline>
                 </NativeChatHostSetupContext.Provider>
@@ -354,13 +366,15 @@ export function NativeChatStructuredSession(props: Omit<NativeChatStructuredView
             focusComposer={focusComposer}
             editAttachTo={{ terminalTabId: props.tabId, agent: props.agent, transport }}
           />
-          {subagents.strip}
+          {composerShown ? null : subagents.strip}
           {/* Workers' open prompts stay pinned here, above this chat's own prompt. */}
-          <NativeChatPartyWorkerApprovalStack
-            party={workerApprovalParty}
-            target={props.target}
-            isVisible={props.isVisible}
-          />
+          {composerShown ? null : (
+            <NativeChatPartyWorkerApprovalStack
+              party={workerApprovalParty}
+              target={props.target}
+              isVisible={props.isVisible}
+            />
+          )}
           {prompt || subagentOpen ? null : (
             <NativeChatStructuredComposerTabStrips
               tabId={props.tabId}
@@ -390,6 +404,16 @@ export function NativeChatStructuredSession(props: Omit<NativeChatStructuredView
           {composerShown ? (
             <NativeChatComposer
               ref={composerRef}
+              dock={
+                <>
+                  {subagents.strip}
+                  <NativeChatPartyWorkerApprovalStack
+                    party={workerApprovalParty}
+                    target={props.target}
+                    isVisible={props.isVisible}
+                  />
+                </>
+              }
               terminalTabId={props.tabId}
               paneKey={paneKey}
               draftScopeKey={structuredAgentSessionDraftScopeKey(props.sessionId)}

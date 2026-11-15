@@ -34,6 +34,7 @@ type ComposerHandle = C.NativeChatComposerHandle
 export const NativeChatComposerPane = forwardRef<ComposerHandle, C.NativeChatComposerProps>(
   function NativeChatComposerPane(
     {
+      dock,
       terminalTabId,
       editSession,
       paneKey,
@@ -358,6 +359,7 @@ export const NativeChatComposerPane = forwardRef<ComposerHandle, C.NativeChatCom
     return (
       <div ref={root} data-native-chat-composer-scope={draftScopeKey}>
         <NativeChatComposerField
+          dock={dock}
           draftScopeKey={draftScopeKey}
           positionTarget={editSession ? undefined : terminalTabId}
           textareaRef={textareaRef}

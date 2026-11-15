@@ -1,0 +1,133 @@
+import { expect, type Page } from '@playwright/test'
+
+/** Chromium focus and hit testing only; native OS focus, IME and screen readers need isolation. */
+export async function measureStickyLayout(page: Page, askCount: number) {
+  await page.evaluate(
+    () =>
+      new Promise<void>((resolve) =>
+        requestAnimationFrame(() => requestAnimationFrame(() => resolve()))
+      )
+  )
+  const layout = await page.evaluate(() => {
+    const frame = document.querySelector<HTMLElement>('[data-native-chat-worker-dock]')
+    const pane = document.querySelector<HTMLElement>('[data-native-chat-root]')
+    const queue = document.querySelector<HTMLElement>('[aria-label="Queued worker questions"]')
+    const rect = (element: Element | null | undefined) => element?.getBoundingClientRect().toJSON()
+    const frameRect = frame?.getBoundingClientRect()
+    const rows = [
+      ...document.querySelectorAll<HTMLElement>('[data-native-chat-worker-question-summary]')
+    ].map((row) => {
+      const button = row.querySelector('button')!
+      const bounds = button.getBoundingClientRect()
+      return {
+        id: row.dataset.nativeChatWorkerQuestionSummary,
+        button: rect(button),
+        intersectsFrame:
+          !!frameRect && bounds.top < frameRect.bottom && bounds.bottom > frameRect.top,
+        completeInFrame:
+          !!frameRect && bounds.top >= frameRect.top && bounds.bottom <= frameRect.bottom
+      }
+    })
+    const reasons = [...document.querySelectorAll<HTMLElement>('[data-worker-dock-reason]')].map(
+      (reason) => {
+        const state = reason.previousElementSibling!.getBoundingClientRect()
+        const bounds = reason.getBoundingClientRect()
+        const text = reason.firstChild!
+        const range = document.createRange()
+        range.setStart(text, Math.max(0, (text.textContent?.length ?? 0) - 2))
+        range.setEnd(text, text.textContent?.length ?? 0)
+        return {
+          gap: bounds.top - state.bottom,
+          bounds: bounds.toJSON(),
+          ending: range.getBoundingClientRect().toJSON()
+        }
+      }
+    )
+    return {
+      reasons,
+      viewport: [innerWidth, innerHeight],
+      frame: rect(frame),
+      pane: rect(pane),
+      queue: rect(queue),
+      rows,
+      composer: rect(document.querySelector('[data-composer-field]'))
+    }
+  })
+  if (layout.viewport[0] === 320) {
+    for (const reason of layout.reasons) {
+      expect(reason.gap).toBeLessThanOrEqual(1)
+      expect(reason.ending.bottom).toBeLessThanOrEqual(reason.bounds.bottom + 1)
+      expect(reason.ending.right).toBeLessThanOrEqual(reason.bounds.right + 1)
+    }
+  }
+  if (layout.frame && layout.pane) {
+    expect(layout.frame.height).toBeLessThanOrEqual(layout.pane.height * 0.4 + 1)
+  }
+  if (askCount) {
+    await expect(page.getByRole('button', { name: /^Show .* question$/ })).toHaveCount(askCount)
+    // The viewport's settled boundary must not cut a target in half.
+    expect(
+      layout.rows.filter((row) => row.intersectsFrame && !row.completeInFrame),
+      JSON.stringify(layout)
+    ).toEqual([])
+  }
+  const stop = page.locator('[data-worker-dock-action][aria-label^="Stop "]').first()
+  if (await stop.count()) {
+    await stop.focus()
+    const size = await stop.boundingBox()
+    expect(size?.width).toBeGreaterThanOrEqual(page.viewportSize()!.width < 700 ? 44 : 26)
+    expect(size?.height).toBeGreaterThanOrEqual(page.viewportSize()!.width < 700 ? 44 : 26)
+  }
+  return layout
+}
+
+export async function verifyQuestionKeyboardReachability(page: Page, count: number) {
+  const buttons = page.getByRole('button', { name: /^Show .* question$/ })
+  await buttons.first().focus()
+  const reached: unknown[] = []
+  for (let index = 0; index < count; index++) {
+    const button = buttons.nth(index)
+    await page.evaluate(
+      () =>
+        new Promise<void>((resolve) =>
+          requestAnimationFrame(() => requestAnimationFrame(() => resolve()))
+        )
+    )
+    await expect(button).toBeFocused()
+    const geometry = await button.evaluate((element) => {
+      const target = element.getBoundingClientRect()
+      const frame = element.closest('[data-native-chat-worker-dock]')!.getBoundingClientRect()
+      const queue = element
+        .closest('[aria-label="Queued worker questions"]')!
+        .getBoundingClientRect()
+      const points = [
+        [target.left + target.width / 2, target.top + 1],
+        [target.left + target.width / 2, target.bottom - 1],
+        [target.left + 1, target.top + target.height / 2],
+        [target.right - 1, target.top + target.height / 2]
+      ]
+      const hit = points.every(([x, y]) => element.contains(document.elementFromPoint(x, y)))
+      return {
+        label: element.getAttribute('aria-label'),
+        target: target.toJSON(),
+        frame: frame.toJSON(),
+        queue: queue.toJSON(),
+        hit
+      }
+    })
+    expect(geometry.target.width).toBeGreaterThanOrEqual(44)
+    expect(geometry.target.height).toBeGreaterThanOrEqual(44)
+    expect(geometry.target.top).toBeGreaterThanOrEqual(
+      Math.max(geometry.frame.top, geometry.queue.top) - 1
+    )
+    expect(geometry.target.bottom).toBeLessThanOrEqual(
+      Math.min(geometry.frame.bottom, geometry.queue.bottom) + 1
+    )
+    expect(geometry.hit, JSON.stringify(geometry)).toBe(true)
+    reached.push(geometry)
+    if (index + 1 < count) {
+      await page.keyboard.press('Tab')
+    }
+  }
+  return reached
+}

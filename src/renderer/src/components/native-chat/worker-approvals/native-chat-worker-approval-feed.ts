@@ -1,3 +1,4 @@
+import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from 'react'
 import { subscribeRuntimeRpc } from '@/runtime/rpc/subscriptions/runtime-rpc-subscribe'
 import {
@@ -79,10 +80,14 @@ function publish(feed: Feed): void {
   feed.listeners.forEach((notify) => notify())
 }
 
-/** One stream per chat party, shared by its transcript rows and its strip; local hosts only (v1).
- *  Not parked while hidden: a hidden coordinator tab still needs its workers' prompts. */
-function observeWorkerApprovals(party: string, listener: () => void): () => void {
-  let feed = feeds.get(party)
+/** One stream per visible host/party, shared by its transcript rows and dock. */
+function observeWorkerApprovals(
+  party: string,
+  target: RuntimeClientTarget,
+  listener: () => void
+): () => void {
+  const key = approvalFeedKey(party, target)
+  let feed = feeds.get(key)
   if (!feed) {
     const held: Feed = {
       received: EMPTY,
@@ -93,13 +98,13 @@ function observeWorkerApprovals(party: string, listener: () => void): () => void
       dispose: () => {}
     }
     feed = held
-    feeds.set(party, held)
+    feeds.set(key, held)
     let close: (() => void) | undefined
     let retry: ReturnType<typeof setTimeout> | undefined
     let generation = 0
     const open = (): void => {
       const attempt = ++generation
-      const live = () => feeds.get(party) === held && generation === attempt
+      const live = () => feeds.get(key) === held && generation === attempt
       let pending: NativeChatWorkerApproval[] | undefined
       // Keeps the cards it has: the next stream sends the current list as soon as it opens.
       const lose = (error?: unknown): void => {
@@ -116,7 +121,7 @@ function observeWorkerApprovals(party: string, listener: () => void): () => void
         }
       }
       void subscribeRuntimeRpc(
-        { kind: 'local' },
+        target,
         'orchestration.workerApprovalsSubscribe',
         { party },
         {
@@ -163,8 +168,8 @@ function observeWorkerApprovals(party: string, listener: () => void): () => void
     held.listeners.delete(listener)
     // A remount in the same task keeps the stream.
     queueMicrotask(() => {
-      if (held.listeners.size === 0 && feeds.get(party) === held) {
-        feeds.delete(party)
+      if (held.listeners.size === 0 && feeds.get(key) === held) {
+        feeds.delete(key)
         held.dispose()
       }
     })
@@ -174,9 +179,11 @@ function observeWorkerApprovals(party: string, listener: () => void): () => void
 /** A chat coordinator's workers' approvals for the pinned area, oldest first; an open one leaves
  *  once its countdown lapses with no closing report. None for no party. */
 export function useNativeChatPinnedWorkerApprovals(
-  party: string | null
+  party: string | null,
+  isVisible = true,
+  target: RuntimeClientTarget = LOCAL
 ): readonly NativeChatWorkerApproval[] {
-  const pinned = useFeedPart(party, 'pinned')
+  const pinned = useFeedPart(party, 'pinned', isVisible, target)
   const [now, setNow] = useState(Date.now)
   const nextLapse = Math.min(
     ...pinned.map(({ approval }) => workerApprovalLapsesAt(approval)).filter((at) => at > now)
@@ -196,20 +203,29 @@ export function useNativeChatPinnedWorkerApprovals(
 
 /** A chat coordinator's closed worker approvals for its transcript; the same array until one changes. */
 export function useNativeChatWorkerApprovalReceipts(
-  party: string | null
+  party: string | null,
+  isVisible = true
 ): readonly NativeChatWorkerApproval[] {
-  return useFeedPart(party, 'receipts')
+  return useFeedPart(party, 'receipts', isVisible, LOCAL)
 }
 
 function useFeedPart(
   party: string | null,
-  part: 'pinned' | 'receipts'
+  part: 'pinned' | 'receipts',
+  isVisible: boolean,
+  target: RuntimeClientTarget
 ): readonly NativeChatWorkerApproval[] {
   const subscribe = useCallback(
-    (listener: () => void) => (party ? observeWorkerApprovals(party, listener) : () => {}),
-    [party]
+    (listener: () => void) =>
+      party && isVisible ? observeWorkerApprovals(party, target, listener) : () => {},
+    [party, isVisible, target]
   )
   return useSyncExternalStore(subscribe, () =>
-    party ? (feeds.get(party)?.[part] ?? EMPTY) : EMPTY
+    party ? (feeds.get(approvalFeedKey(party, target))?.[part] ?? EMPTY) : EMPTY
   )
+}
+
+const LOCAL: RuntimeClientTarget = { kind: 'local' }
+function approvalFeedKey(party: string, target: RuntimeClientTarget): string {
+  return `${target.kind === 'local' ? 'local' : target.environmentId}\0${party}`
 }
