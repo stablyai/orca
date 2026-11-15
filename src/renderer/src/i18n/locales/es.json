@@ -23013,6 +23013,7 @@
       "tabOpenQuickCommandsMenu": "Alternar menú de comandos rápidos",
       "editorFind": "Buscar en el editor",
       "editorReplace": "Reemplazar en el editor",
+      "editorToggleChangesView": "Alternar vista de cambios",
       "fileExplorerUndo": "Deshacer operación de archivo",
       "fileExplorerRedo": "Rehacer operación de archivo",
       "fileExplorerCopyPath": "Copiar ruta del archivo",

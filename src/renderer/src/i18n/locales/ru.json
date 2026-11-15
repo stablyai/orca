@@ -23338,6 +23338,7 @@
       "chatFind": "Найти в чате",
       "editorFind": "Найти в редакторе",
       "editorReplace": "Заменить в редакторе",
+      "editorToggleChangesView": "Включить или выключить просмотр изменений",
       "fileExplorerCopyPath": "Скопировать путь к файлу",
       "fileExplorerCopyRelativePath": "Скопировать относительный путь к файлу",
       "fileExplorerDelete": "Удалить файл",

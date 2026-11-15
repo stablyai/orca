@@ -22758,6 +22758,7 @@
       "tabOpenQuickCommandsMenu": "切换快捷命令菜单",
       "editorFind": "在编辑器中查找",
       "editorReplace": "在编辑器中替换",
+      "editorToggleChangesView": "切换更改视图",
       "fileExplorerUndo": "撤销文件操作",
       "fileExplorerRedo": "重做文件操作",
       "fileExplorerCopyPath": "复制文件路径",

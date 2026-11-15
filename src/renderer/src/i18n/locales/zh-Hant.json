@@ -22315,6 +22315,7 @@
       "tabOpenQuickCommandsMenu": "顯示或隱藏快速指令選單",
       "editorFind": "在編輯器中尋找",
       "editorReplace": "在編輯器中取代",
+      "editorToggleChangesView": "切換變更檢視",
       "fileExplorerUndo": "復原檔案操作",
       "fileExplorerRedo": "重做檔案操作",
       "fileExplorerCopyPath": "複製檔案路徑",

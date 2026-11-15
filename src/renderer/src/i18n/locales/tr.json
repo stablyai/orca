@@ -22618,6 +22618,7 @@
       "tabOpenQuickCommandsMenu": "Hızlı komutlar menüsünü aç/kapat",
       "editorFind": "Düzenleyicide bul",
       "editorReplace": "Düzenleyicide değiştir",
+      "editorToggleChangesView": "Değişiklikler görünümünü aç/kapat",
       "fileExplorerUndo": "Dosya işlemini geri al",
       "fileExplorerRedo": "Dosya işlemini yinele",
       "fileExplorerCopyPath": "Dosya yolunu kopyala",

@@ -24710,6 +24710,7 @@
       "tabOpenQuickCommandsMenu": "Toggle Quick Commands menu",
       "editorFind": "Find in editor",
       "editorReplace": "Replace in editor",
+      "editorToggleChangesView": "Toggle changes view",
       "fileExplorerUndo": "Undo file operation",
       "fileExplorerRedo": "Redo file operation",
       "fileExplorerCopyPath": "Copy file path",
