@@ -1,12 +1,13 @@
 import { execFileSync } from 'node:child_process'
-import { mkdtempSync, rmSync } from 'node:fs'
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   isReleaseCutDraft,
   isTagBuiltFromCurrentRef,
-  publishCompleteDraftReleases
+  publishCompleteDraftReleases,
+  verifyDraftReleaseTag
 } from './publish-complete-draft-releases.mjs'
 import { getRequiredReleaseAssetNames } from './verify-release-required-assets.mjs'
 
@@ -129,6 +130,7 @@ describe('publishCompleteDraftReleases', () => {
           token: 'token',
           fetchImpl,
           isDraftBuiltFromCurrentRef: ({ tag }) => isTagBuiltFromCurrentRef(tag, { cwd: repo }),
+          verifyDraftTag: () => {},
           log: vi.fn()
         })
         expect(result).toEqual({
@@ -209,7 +211,11 @@ describe('RC draft tag verification', () => {
   }
   const ref = (object) => ({ ref: 'refs/tags/v1.4.3-rc.1', object })
 
-  async function run(release, tagRef, { oldPolicy = false, pipelineTag = false } = {}) {
+  async function run(
+    release,
+    tagRef,
+    { oldPolicy = false, pipelineTag = false, verifyDraftTag = () => {} } = {}
+  ) {
     const patches = []
     const fetchImpl = vi.fn(async (url, options = {}) => {
       if (url.endsWith('/releases?per_page=100')) {
@@ -248,6 +254,7 @@ describe('RC draft tag verification', () => {
       fetchImpl,
       verifyReleaseAssets: async () => {},
       isDraftBuiltFromCurrentRef: () => true,
+      verifyDraftTag,
       log: vi.fn()
     })
     return { result, patches }
@@ -287,6 +294,23 @@ describe('RC draft tag verification', () => {
     expect(patches).toEqual([])
   })
 
+  it('checks the tag object and commit it peeled before publishing, and refuses when the check fails', async () => {
+    const seen = []
+    const tagRef = ref({ type: 'tag', sha: tagObject })
+    const accepted = await run(draft, tagRef, { verifyDraftTag: (args) => seen.push(args) })
+    expect(seen).toEqual([{ tag: 'v1.4.3-rc.1', tagObjectSha: tagObject, commitSha: releaseSha }])
+    expect(accepted.patches).toHaveLength(1)
+    const refused = await run(draft, tagRef, {
+      verifyDraftTag: () => {
+        throw new Error('tag source is not on main')
+      }
+    })
+    expect(refused.result.skipped).toEqual([
+      { tag: 'v1.4.3-rc.1', reason: 'tag source is not on main' }
+    ])
+    expect(refused.patches).toEqual([])
+  })
+
   it('recognizes only the App by its user ID', () => {
     expect(isReleaseCutDraft(draft)).toBe(true)
     // A github-actions[bot] draft can be made by any workflow with a write token.
@@ -299,5 +323,105 @@ describe('RC draft tag verification', () => {
     expect(isReleaseCutDraft({ ...draft, author: { ...draft.author, id: 1 } })).toBe(false)
     vi.stubEnv('RELEASE_APP_BOT_ID', '')
     expect(isReleaseCutDraft(draft)).toBe(false)
+  })
+})
+
+// A re-pointed draft must name a tag release-cut would make, on a version bump of a main commit.
+describe.skipIf(process.platform === 'win32')('verifyDraftReleaseTag', () => {
+  const BOT = 'github-actions[bot]'
+  const BOT_EMAIL = '41898282+github-actions[bot]@users.noreply.github.com'
+  const env = {
+    ...process.env,
+    GIT_AUTHOR_NAME: BOT,
+    GIT_AUTHOR_EMAIL: BOT_EMAIL,
+    GIT_COMMITTER_NAME: BOT,
+    GIT_COMMITTER_EMAIL: BOT_EMAIL,
+    GIT_CONFIG_GLOBAL: '/dev/null',
+    GIT_CONFIG_NOSYSTEM: '1'
+  }
+  let dir
+  afterEach(() => dir && rmSync(dir, { recursive: true, force: true }))
+  const run = (args, extraEnv = {}) =>
+    execFileSync('git', args, { cwd: dir, env: { ...env, ...extraEnv }, encoding: 'utf8' }).trim()
+  const writePackage = (version) =>
+    writeFileSync(
+      join(dir, 'package.json'),
+      `${JSON.stringify({ name: 'orca', version }, null, 2)}\n`
+    )
+
+  // main: source; release commit is source's package.json-only child, tagged as release-cut tags it.
+  function setup({ offMain = false, extraFile = false, tagger = {}, lightweight = false } = {}) {
+    dir = mkdtempSync(join(tmpdir(), 'orca-draft-tag-'))
+    run(['init', '-q', '--initial-branch=main'])
+    writePackage('1.4.2')
+    run(['add', '.'])
+    run(['commit', '-qm', 'base'])
+    run(['update-ref', 'refs/remotes/origin/main', 'HEAD'])
+    if (offMain) {
+      run(['commit', '-q', '--allow-empty', '-m', 'unreviewed'])
+    }
+    writePackage('1.4.3-rc.1')
+    if (extraFile) {
+      writeFileSync(join(dir, 'payload.sh'), 'echo hi\n')
+    }
+    run(['add', '.'])
+    run(['commit', '-qm', 'release: v1.4.3-rc.1 [rc-slot:2026-11-14-03]'])
+    const commitSha = run(['rev-parse', 'HEAD'])
+    run(
+      lightweight ? ['tag', 'v1.4.3-rc.1'] : ['tag', '-a', 'v1.4.3-rc.1', '-m', 'v1.4.3-rc.1'],
+      tagger
+    )
+    const tagObjectSha = run(['rev-parse', 'refs/tags/v1.4.3-rc.1'])
+    return { tag: 'v1.4.3-rc.1', tagObjectSha, commitSha, cwd: dir }
+  }
+
+  it('accepts the tag release-cut makes on a version bump of a main commit', () => {
+    expect(() => verifyDraftReleaseTag(setup())).not.toThrow()
+  })
+
+  it.each([
+    ['a source that is not on main', { offMain: true }, {}, 'tag source is not on main'],
+    [
+      'a commit that changes more than the version',
+      { extraFile: true },
+      {},
+      'tag is not one release-cut creates'
+    ],
+    [
+      'another tagger',
+      { tagger: { GIT_COMMITTER_NAME: 'mallory' } },
+      {},
+      'tag is not one release-cut creates'
+    ],
+    ['a lightweight tag', { lightweight: true }, {}, 'tag is not one release-cut creates'],
+    [
+      'a tag object other than the remote one',
+      {},
+      { tagObjectSha: 'f'.repeat(40) },
+      'release checkout has a different tag object than the remote'
+    ],
+    [
+      'no annotated tag object from the API',
+      {},
+      { tagObjectSha: undefined },
+      'remote tag is not an annotated tag'
+    ]
+  ])('refuses %s', (_name, options, override, reason) => {
+    const args = { ...setup(options), ...override }
+    expect(() => verifyDraftReleaseTag(args)).toThrow(reason)
+  })
+
+  it('refuses a release commit with two parents', () => {
+    const args = setup()
+    run(['checkout', '-q', '-b', 'side', 'HEAD~1'])
+    run(['commit', '-q', '--allow-empty', '-m', 'side'])
+    run(['checkout', '-q', 'main'])
+    run(['merge', '-q', '--no-ff', '-m', 'release: v1.4.3-rc.1', 'side'])
+    run(['tag', '-f', '-a', 'v1.4.3-rc.1', '-m', 'v1.4.3-rc.1'])
+    const merge = run(['rev-parse', 'HEAD'])
+    const tagObjectSha = run(['rev-parse', 'refs/tags/v1.4.3-rc.1'])
+    expect(() => verifyDraftReleaseTag({ ...args, tagObjectSha, commitSha: merge })).toThrow(
+      'draft commit does not have exactly one parent'
+    )
   })
 })
