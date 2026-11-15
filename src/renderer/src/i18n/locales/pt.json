@@ -23580,6 +23580,7 @@
       "tabOpenQuickCommandsMenu": "Alternar menu de Comandos Rápidos",
       "editorFind": "Localizar no editor",
       "editorReplace": "Substituir no editor",
+      "editorToggleChangesView": "Alternar Visualização de Alterações",
       "fileExplorerUndo": "Desfazer operação de arquivo",
       "fileExplorerRedo": "Refazer operação de arquivo",
       "fileExplorerCopyPath": "Copiar caminho do arquivo",

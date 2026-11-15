@@ -99,6 +99,7 @@ export type KeybindingActionId =
   | 'editor.save'
   | 'editor.markdownPreview'
   | 'editor.toggleWordWrap'
+  | 'editor.toggleChangesView'
   | 'editor.copyContext'
   | 'editor.previousChange'
   | 'editor.nextChange'

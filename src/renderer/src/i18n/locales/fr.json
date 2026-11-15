@@ -23036,6 +23036,7 @@
       "tabOpenQuickCommandsMenu": "Afficher/masquer le menu des commandes rapides",
       "editorFind": "Rechercher dans l'éditeur",
       "editorReplace": "Remplacer dans l'éditeur",
+      "editorToggleChangesView": "Activer/désactiver la vue des modifications",
       "fileExplorerUndo": "Annuler l'opération sur le fichier",
       "fileExplorerRedo": "Rétablir l'opération sur le fichier",
       "fileExplorerCopyPath": "Copier le chemin du fichier",

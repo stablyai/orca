@@ -22348,6 +22348,7 @@
       "tabOpenQuickCommandsMenu": "クイックコマンドメニューの切り替え",
       "editorFind": "エディター内を検索",
       "editorReplace": "エディター内で置換",
+      "editorToggleChangesView": "変更点ビューの切り替え",
       "fileExplorerUndo": "ファイル操作を元に戻す",
       "fileExplorerRedo": "ファイル操作をやり直す",
       "fileExplorerCopyPath": "ファイルパスをコピー",
