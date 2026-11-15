@@ -223,6 +223,24 @@ echo $! >"$STATE/orcad.pid"
 # sshd for `orca ssh` (loopback only). Best effort: a workspace without it still serves orcad.
 "$ORCA_HOME/bin/orca-sshd" >/dev/null 2>"$STATE/sshd-start.err" || true
 
+# The agent CLIs are large and a fresh VM pages them in lazily from the snapshot, so the first agent
+# launch paid for it (OpenCode 11 s cold vs 3.75 s warm, n71). Read them into the page cache in the
+# background at idle IO priority, after orcad is starting. Best effort; detached so it outlives this
+# script, and never on the ready path.
+prefetch_dirs=()
+for dir in @anthropic-ai @openai opencode-ai; do
+  if [ -d "$ORCA_HOME/tools/lib/node_modules/$dir" ]; then
+    prefetch_dirs+=("$ORCA_HOME/tools/lib/node_modules/$dir")
+  fi
+done
+if [ "${#prefetch_dirs[@]}" -gt 0 ]; then
+  # shellcheck disable=SC2016 # expanded by the inner shell
+  setsid nohup nice -n 19 bash -c '
+    command -v ionice >/dev/null && ionice -c 3 -p $$ 2>/dev/null
+    find "$@" -type f -size +256k -print0 2>/dev/null | xargs -0 -r cat >/dev/null 2>&1
+  ' agent-prefetch "${prefetch_dirs[@]}" </dev/null >/dev/null 2>&1 9>&- &
+fi
+
 # Polled every 10 ms (at least 60 s in all): ready is on the wake path, so detect it promptly.
 for _ in $(seq 1 6000); do
   if grep -q '"pairingCode"' "$STATE/ready.json" 2>/dev/null; then
