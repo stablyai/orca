@@ -151,6 +151,20 @@ async function mintTicket(
   }
 }
 
+/** What the renderer hears after the page opened: signed in, or why a signed-in desktop wasn't. */
+export function openedResult(
+  minted: Pick<MintedTicket, 'url' | 'attempted'>,
+  ticketUrl: string | null
+): OrcaCloudConsoleOpenResult {
+  return {
+    status: 'opened',
+    signedIn: ticketUrl !== null,
+    ...(minted.attempted && ticketUrl === null
+      ? { ticketError: minted.url === null ? 'failed' : 'rejected' }
+      : {})
+  }
+}
+
 export async function openOrcaCloudConsole(
   userDataPath: string,
   section: OrcaCloudConsoleSection,
@@ -175,13 +189,7 @@ export async function openOrcaCloudConsole(
   const ticketUrl = acceptedTicketUrl(minted.url, allowed)
   try {
     await openExternal(ticketUrl ?? cloudConsoleFallbackUrl(minted.consoleOrigin ?? configured))
-    return {
-      status: 'opened',
-      signedIn: ticketUrl !== null,
-      ...(minted.attempted && ticketUrl === null
-        ? { ticketError: minted.url === null ? 'failed' : 'rejected' }
-        : {})
-    }
+    return openedResult(minted, ticketUrl)
   } catch (error) {
     return { status: 'failed', error: error instanceof Error ? error.message : String(error) }
   }

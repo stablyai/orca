@@ -6,6 +6,7 @@ import { CLOUD_CONSOLE_TICKET_PATH, cloudConsoleOrigin } from './cloud-console-c
 import {
   acceptedTicketUrl,
   advertisedConsoleOrigin,
+  openedResult,
   cloudConsoleTicketBody,
   requestCloudConsoleTicket
 } from './cloud-console-link'
@@ -131,6 +132,29 @@ describe('console ticket', () => {
     ]) {
       expect(advertisedConsoleOrigin(bad)).toBeNull()
     }
+  })
+
+  it('tells a signed-in desktop why the console opened without a ticket', () => {
+    const allowed = ['https://console-staging.orca.dev']
+    const offSite = 'https://evil.example/console/redeem?t=abc'
+    expect(
+      openedResult({ url: offSite, attempted: true }, acceptedTicketUrl(offSite, allowed))
+    ).toEqual({ status: 'opened', signedIn: false, ticketError: 'rejected' })
+    expect(openedResult({ url: null, attempted: true }, null)).toEqual({
+      status: 'opened',
+      signedIn: false,
+      ticketError: 'failed'
+    })
+    // Signed out (or dev auth): no ticket was asked for, so nothing went wrong.
+    expect(openedResult({ url: null, attempted: false }, null)).toEqual({
+      status: 'opened',
+      signedIn: false
+    })
+    const ticket = 'https://console-staging.orca.dev/console/redeem?t=abc'
+    expect(openedResult({ url: ticket, attempted: true }, ticket)).toEqual({
+      status: 'opened',
+      signedIn: true
+    })
   })
 
   it('opens only a ticket URL on the console or auth origin', () => {
