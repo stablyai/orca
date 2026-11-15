@@ -98,6 +98,16 @@ if [ -x "$opencode_pkg/bin/opencode.exe" ]; then
     [ "$(stat -c %i "$variant/bin/opencode" 2>/dev/null)" = "$picked" ] || rm -rf "$variant"
   done
   "$opencode_pkg/bin/opencode.exe" --version >/dev/null
+  # OpenCode installs @opencode-ai/plugin (its own version) into ~/.config/opencode on every start
+  # until that dir has node_modules and a lock listing it, and draws nothing until that install ends
+  # once a plugin is configured (Orca's is): with a slow or unreachable registry the first launch
+  # sat blank ~85 s (n73). Install it here once; orca-sandbox-start copies it into a fresh home.
+  oc_seed="$ORCA_HOME/opencode-config-seed"
+  mkdir -p "$oc_seed"
+  printf '{\n  "dependencies": {\n    "@opencode-ai/plugin": "%s"\n  }\n}\n' \
+    "$("$opencode_pkg/bin/opencode.exe" --version)" >"$oc_seed/package.json"
+  (cd "$oc_seed" && npm install --no-fund --no-audit --ignore-scripts >/dev/null)
+  test -s "$oc_seed/package-lock.json" && test -d "$oc_seed/node_modules/@opencode-ai/plugin"
 fi
 
 # Copilot CLI prefers GH_TOKEN/GITHUB_TOKEN over the user's own /login. In Orca Cloud those hold the
