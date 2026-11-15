@@ -201,11 +201,7 @@ async function terminateOnce(
   if (child.groupVerdict === 'exited') {
     return null
   }
-  if (child.numericIdentityRetired) {
-    const delivered = child.kill('SIGKILL')
-    return delivered ? { tree: null, killDelivered: true } : null
-  }
-  if (child.leaderExited) {
+  if (child.numericIdentityRetired || child.leaderExited) {
     const delivered = child.kill('SIGKILL')
     return delivered ? { tree: null, killDelivered: true } : null
   }

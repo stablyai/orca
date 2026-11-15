@@ -295,7 +295,7 @@ export class DirectProviderChild extends EventEmitter implements ProviderChild {
       notifyProviderChild(this, 'error', new Error('The agent stopped unexpectedly. Try again.'))
     }
     await joinCurrentProviderReap(() => this.reapTask)
-    if (this.groupVerdict !== 'exited' && this.connected) {
+    if (this.raw.pid !== undefined && this.groupVerdict !== 'exited' && this.connected) {
       await withTimeout(this.watcherEnded, this.stop.maxStopMs, undefined)
     }
     await joinCurrentProviderReap(() => this.reapTask)

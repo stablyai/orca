@@ -113,6 +113,7 @@ require('node:fs').writeFileSync(${JSON.stringify(pidFile)}, String(process.pid)
 it('cancels a supervised generation before its public CLI PID is available', async () => {
   const child = Object.assign(new EventEmitter(), {
     pid: undefined,
+    ready: new Promise<void>(() => {}),
     supervised: true,
     stdin: new PassThrough(),
     stdout: new PassThrough(),

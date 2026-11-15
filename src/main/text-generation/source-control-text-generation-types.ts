@@ -104,7 +104,7 @@ export type SpawnedSourceControlAgentProcess = Pick<
   'pid' | 'kill' | 'stdin' | 'stdout' | 'stderr' | 'exitCode' | 'signalCode'
 > &
   EventEmitter &
-  Pick<ProviderChild, 'leaderExited'> & {
+  Pick<ProviderChild, 'leaderExited' | 'ready'> & {
     /** True when the POSIX lifecycle adapter owns the agent group. */
     readonly supervised?: boolean
   }

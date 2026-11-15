@@ -8,6 +8,9 @@ export async function killSourceControlAgentProcess(
   child: SpawnedSourceControlAgentProcess
 ): Promise<void> {
   if (child.supervised) {
+    if (!child.pid && !child.ready) {
+      return
+    }
     await stopSupervisedChildProcess(child, { site: SOURCE_CONTROL_KILL_SITE })
     return
   }
