@@ -1,16 +1,25 @@
 import type { AgentReadEntry } from '../../../../../shared/agent-conversations/agent-conversation-contracts'
 import { agentChatEntryOf } from '../../../../../shared/agent-conversations/agent-chat-entries'
-import { AGENT_SESSION_HISTORY_MAX_LIMIT } from '../../../../../shared/agent-session/agent-session-wire'
+import {
+  AGENT_SESSION_HISTORY_MAX_LIMIT,
+  type AgentSessionLatestTurn
+} from '../../../../../shared/agent-session/agent-session-wire'
 import { isAgentSessionContextClear } from '../../../../../shared/agent-session/agent-session-context-clear'
 import type { AgentJournalRenderItem } from '../../../../../shared/agent-session/journal/agent-session-journal-types'
+import type { AgentStatusState } from '../../../../../shared/agent-status/contracts/agent-status-types'
+import { readAgentJournalTurnOutcome } from '../../../../../shared/agent-session/lifecycle/records/agent-session-turn-record'
 import type { SqlAgentSessionJournal } from '../../../agent-session-journal/journal-sql-store'
-import { readAgentSessionHistory } from './agent-session-history-page'
+import { readAgentSessionHistoryFrame } from './agent-session-history-page'
 import {
   HISTORY_PAGE_CONTENT_BUDGET_BYTES,
   oversizedHistoryItem
 } from './agent-session-history-page-bounds'
 
-export type AgentReadJournalPage = { entries: AgentReadEntry[]; limited: boolean }
+export type AgentReadJournalPage = {
+  entries: AgentReadEntry[]
+  limited: boolean
+  state?: AgentStatusState
+}
 
 /** One bounded root-only history window, from one snapshot. Stop at its latest `/clear`
  *  divider; sparse non-entry rows spend the window too, so they cannot cause an unbounded walk. */
@@ -19,32 +28,79 @@ export async function readAgentJournalPage(
   request: { sessionId: string; limit: number },
   waiting: (itemId: string) => boolean
 ): Promise<AgentReadJournalPage> {
-  const page = new PageBudget(request.limit)
-  const read = await readAgentSessionHistory(
+  const frame = await readAgentSessionHistoryFrame(
     journal,
     {
       sessionId: request.sessionId,
       direction: 'tail',
       limit: AGENT_SESSION_HISTORY_MAX_LIMIT
     },
-    { scope: 'own-agent' }
+    { scope: 'own-agent', acceptedUnopened: true }
   )
+  const { page } = frame.result
+  const shown = pageEntries(page.items, page.hasOlder, request.limit, waiting)
+  const state = journalTurnState(page.latestTurn, frame.acceptedUnopened === true, shown)
+  return { entries: shown.entries, limited: shown.limited, ...(state ? { state } : {}) }
+}
+
+type ShownEntries = { entries: AgentReadEntry[]; limited: boolean; newest?: AgentJournalRenderItem }
+
+function pageEntries(
+  items: readonly AgentJournalRenderItem[],
+  hasOlder: boolean,
+  limit: number,
+  waiting: (itemId: string) => boolean
+): ShownEntries {
+  const page = new PageBudget(limit)
   const newestFirst: AgentReadEntry[] = []
+  let newest: AgentJournalRenderItem | undefined
   let omitted = false
-  for (const item of read.page.items.toReversed()) {
+  const shown = (limited: boolean): ShownEntries => ({
+    entries: newestFirst.toReversed(),
+    limited,
+    ...(newest ? { newest } : {})
+  })
+  for (const item of items.toReversed()) {
     const entry = entryOf(item, waiting)
     if (entry) {
       if (!page.admit(entry)) {
-        return { entries: newestFirst.toReversed(), limited: true }
+        return shown(true)
       }
       newestFirst.push(entry)
+      newest ??= item
       omitted ||= entry.shortened === true
     }
     if (isAgentSessionContextClear(item.body)) {
-      return { entries: newestFirst.toReversed(), limited: omitted }
+      return shown(omitted)
     }
   }
-  return { entries: newestFirst.toReversed(), limited: omitted || read.page.hasOlder }
+  return shown(omitted || hasOlder)
+}
+
+/** The latest turn as this snapshot records it. `done` only for an explicitly successful turn
+ *  whose own reply is the newest entry shown, so a newer prompt never inherits it; unknown
+ *  otherwise (failed, interrupted, legacy, or its reply outside this page). */
+function journalTurnState(
+  latest: AgentSessionLatestTurn | null | undefined,
+  acceptedUnopened: boolean,
+  shown: ShownEntries
+): AgentStatusState | undefined {
+  if (shown.entries.some((entry) => 'pending' in entry && entry.pending)) {
+    return 'waiting'
+  }
+  if (acceptedUnopened || latest?.turn.state === 'running') {
+    return 'working'
+  }
+  const reply = shown.entries.at(-1)
+  const scope = shown.newest?.turnScope
+  return latest?.turn.state === 'completed' &&
+    readAgentJournalTurnOutcome(latest.turn) === 'success' &&
+    reply?.kind === 'message' &&
+    reply.role === 'assistant' &&
+    scope?.kind === 'turn' &&
+    scope.turnItemId === latest.itemId
+    ? 'done'
+    : undefined
 }
 
 /** The entry a history item reads as. One no page could carry reads as the history's own

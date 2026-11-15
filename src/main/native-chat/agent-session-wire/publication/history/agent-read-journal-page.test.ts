@@ -3,7 +3,7 @@ import {
   messageFixture,
   target
 } from '../../../agent-session-journal/journal-sql-message.test-fixture'
-import { readJournalDomainHistoryPage } from '../../../agent-session-journal/journal-domain-history-page'
+import { readJournalDomainHistoryFrame } from '../../../agent-session-journal/journal-domain-history-page'
 import { readJournalDomainItems } from '../../../agent-session-journal/journal-sql-item-reads'
 import type { SqlAgentSessionJournal } from '../../../agent-session-journal/journal-sql-store'
 import type { AgentJournalRenderItem } from '../../../../../shared/agent-session/journal/agent-session-journal-types'
@@ -34,9 +34,10 @@ function fixture() {
     history: async (request) => {
       beforeHistory()
       counts.pages++
-      const result = readJournalDomainHistoryPage(
+      return readJournalDomainHistoryFrame(
         f.db,
         { ...request, sessionId: target.sessionId },
+        undefined,
         {
           ...CLIENT_HISTORY_READER,
           form: (item) => {
@@ -45,7 +46,6 @@ function fixture() {
           }
         }
       )
-      return { result }
     }
   }
   return {
@@ -202,4 +202,74 @@ it('bounds a root-only tail that produces no entries', async () => {
   f.head(1_000)
   expect(await f.read(1)).toEqual({ entries: [], limited: true })
   expect(f.counts).toEqual({ pages: 1, bodies: 200 })
+})
+
+function turn(sequence: number, state: 'running' | 'completed'): AgentJournalRenderItem {
+  return {
+    ...message(sequence, ''),
+    itemId: 'turn-1',
+    body: {
+      kind: 'turn',
+      turnId: 'turn-1',
+      state,
+      ...(state === 'completed' ? { outcome: 'success' } : {})
+    }
+  }
+}
+
+function reply(sequence: number, text: string): AgentJournalRenderItem {
+  return { ...message(sequence, text), turnScope: { kind: 'turn', turnItemId: 'turn-1' } }
+}
+
+it('reads an open turn as working and its ended turn as done with its reply', async () => {
+  const f = fixture()
+  f.seedItem({
+    ...message(1, ''),
+    body: { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'return FINISHED' }] }
+  })
+  f.seedItem(turn(2, 'running'))
+  f.head(2)
+  expect(await f.read()).toEqual({
+    entries: [{ kind: 'message', role: 'user', text: 'return FINISHED' }],
+    limited: false,
+    state: 'working'
+  })
+  f.seedItem(reply(3, 'FINISHED'))
+  f.db.prepare(`DELETE FROM journal_items WHERE item_id='turn-1'`).run()
+  f.seedItem(turn(4, 'completed'))
+  f.head(4)
+  expect(await f.read()).toEqual({
+    entries: [
+      { kind: 'message', role: 'user', text: 'return FINISHED' },
+      { kind: 'message', role: 'assistant', text: 'FINISHED' }
+    ],
+    limited: false,
+    state: 'done'
+  })
+})
+
+it('never gives a new prompt the previous turn its done', async () => {
+  const f = fixture()
+  f.seedItem(reply(3, 'FINISHED'))
+  f.seedItem(turn(4, 'completed'))
+  f.seedSend()
+  f.head(7)
+  const entries = [
+    { kind: 'message', role: 'assistant', text: 'FINISHED' },
+    { kind: 'message', role: 'user', text: 'original' }
+  ]
+  expect(await f.read()).toEqual({ entries, limited: false })
+  f.db.prepare(`UPDATE journal_submission_attempts SET dispatch_state='accepted'`).run()
+  expect(await f.read()).toEqual({ entries, limited: false, state: 'working' })
+})
+
+it('omits the state of an ended turn whose reply is outside the page', async () => {
+  const f = fixture()
+  f.seedItem(reply(1, 'FINISHED'))
+  for (let sequence = 2; sequence <= 250; sequence++) {
+    f.seedItem({ ...message(sequence, ''), body: { kind: 'status', text: 'working' } })
+  }
+  f.seedItem(turn(251, 'completed'))
+  f.head(251)
+  expect(await f.read(1)).toEqual({ entries: [], limited: true })
 })

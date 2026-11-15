@@ -14,10 +14,7 @@ import { decodeOmpTranscriptLine } from './transcript-decoding/transcript-line-d
 import { transcriptFallbackId } from './transcript-streaming/transcript-fallback-id'
 import { inTranscriptFileOrder } from './transcript-streaming/transcript-file-order'
 import { extendTranscriptBoundary } from './transcript-watching/transcript-file-version'
-import {
-  nativeChatTurnLifecycleDecoderForAgent,
-  type NativeChatTurnLifecycleDecoder
-} from './transcript-decoding/transcript-turn-lifecycle'
+import { nativeChatTurnLifecycleDecoderForAgent } from './transcript-decoding/transcript-turn-lifecycle'
 import {
   findLastCompleteLineEnd,
   readTranscriptByteAt,
@@ -52,19 +49,19 @@ export function nativeChatLineDecoderForAgent(agent: AgentType): NativeChatLineD
   return null
 }
 
-export async function readNativeChatTranscriptTailFile(
+export async function readNativeChatTranscriptTailFile<L = NativeChatTurnLifecycle>(
   filePath: string,
   limit: number,
   decode: NativeChatLineDecoder,
   includeTrailingLine = false,
   endOffset?: number,
-  decodeLifecycle?: NativeChatTurnLifecycleDecoder | null,
+  decodeLifecycle?: ((line: string, fallbackId: string) => L | null) | null,
   signal?: AbortSignal,
   onConsumedBoundary?: (boundary: Buffer) => void,
   sourceOrder = false
 ): Promise<{
   messages: NativeChatMessage[]
-  lifecycle?: NativeChatTurnLifecycle
+  lifecycle?: L
   consumedTo: number
   hasMore: boolean
   beforeOffset: number
@@ -85,7 +82,7 @@ export async function readNativeChatTranscriptTailFile(
   const lineParts: Buffer[] = []
   let lineBytes = 0
   let lineOversized = false
-  let lifecycle: NativeChatTurnLifecycle | undefined
+  let lifecycle: L | undefined
   let malformedRecordCount = 0
   let oversizedRecordCount = 0
   let ignoreNextMalformedRecord = false

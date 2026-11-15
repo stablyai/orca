@@ -5,6 +5,8 @@ import {
   type AgentReadResult
 } from '../../../shared/agent-conversations/agent-conversation-contracts'
 import type { NativeChatMessage } from '../../../shared/native-chat/native-chat-types'
+import type { AgentStatusState } from '../../../shared/agent-status/contracts/agent-status-types'
+import type { NativeChatTurnEvidence } from '../../native-chat/transcript-decoding/transcript-turn-lifecycle'
 import type { RpcContext } from '../rpc/core'
 import {
   requireInstalledStructuredHost,
@@ -26,7 +28,6 @@ import {
 } from '../../agent-hooks/identity/agent-identity-worker-protocol'
 import type { ResolvedAgentConversation } from './agent-conversation-address'
 import { AgentConversationRefusal } from './agent-conversation-refusal'
-import { agentConversationState } from './agent-conversation-list'
 
 type ReadRequest = { limit?: number }
 
@@ -43,12 +44,9 @@ export async function readAgentConversation(
   request: ReadRequest
 ): Promise<AgentReadResult> {
   const limit = request.limit ?? AGENT_READ_DEFAULT_LIMIT
-  // Sample first so a turn ending during history I/O cannot label an older page done.
-  const state = await agentConversationState(resolved)
-  const page = await (resolved.kind === 'chat'
+  return resolved.kind === 'chat'
     ? readChat(ctx, resolved, limit)
-    : readTerminalTranscript(ctx, resolved.orcaSessionId, limit))
-  return state ? { ...page, state } : page
+    : readTerminalTranscript(ctx, resolved.orcaSessionId, limit)
 }
 
 async function readChat(
@@ -81,7 +79,8 @@ async function readChat(
     agent: record.provider,
     source: 'chat',
     entries: page.entries,
-    limited: page.limited
+    limited: page.limited,
+    ...(page.state ? { state: page.state } : {})
   }
 }
 
@@ -159,14 +158,32 @@ async function readTerminalTranscript(
       `Agent ${orcaSessionId}'s transcript changed while Orca was reading it. Read it again.`
     )
   }
+  const entries = transcriptEntries(transcript.messages)
+  const state = transcriptTurnState(transcript.turn, entries)
   return {
     orcaSessionId,
     kind: 'terminal',
     agent: key.agent,
     source: 'transcript',
-    entries: transcriptEntries(transcript.messages),
-    limited: transcript.limited
+    entries,
+    limited: transcript.limited,
+    ...(state ? { state } : {})
   }
+}
+
+/** The newest turn marker in the bytes read: a prompt with no end after it is `working`; `done`
+ *  needs an explicit end whose reply is the newest entry here. Anything else is unknown. */
+function transcriptTurnState(
+  turn: NativeChatTurnEvidence | undefined,
+  entries: readonly AgentReadEntry[]
+): AgentStatusState | undefined {
+  if (turn === 'working') {
+    return 'working'
+  }
+  const reply = entries.at(-1)
+  return turn === 'completed' && reply?.kind === 'message' && reply.role === 'assistant'
+    ? 'done'
+    : undefined
 }
 
 /** One entry per transcript message, its tool calls folded in, so `limit` messages are at most

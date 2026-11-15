@@ -6,14 +6,12 @@ import type { ResolvedAgentConversation } from './agent-conversation-address'
 const terminal = vi.hoisted(() => ({
   source: vi.fn(),
   read: vi.fn(),
-  host: vi.fn(),
-  statuses: vi.fn((_paneKey: string): unknown[] => [])
+  host: vi.fn()
 }))
 vi.mock('../../agent-hooks/server/agent-hook-server', () => ({
   agentHookServer: {
     terminalAgentTranscriptSource: terminal.source,
-    terminalAgentPlaces: async () => [],
-    getPublicStatusSnapshotForPane: terminal.statuses
+    terminalAgentPlaces: async () => []
   }
 }))
 vi.mock('../orchestration/workers/transcripts/worker-transcript-read', () => ({
@@ -124,81 +122,3 @@ it.each(['missing', 'unreadable', 'loop'] as const)(
     expect(terminal.host).not.toHaveBeenCalled()
   }
 )
-
-it('says a chat whose turn is still running is working, as agent list does', async () => {
-  const record = {
-    sessionId: 'chat-1',
-    provider: 'claude',
-    location: { executionHostId: 'local' }
-  }
-  terminal.host.mockResolvedValue({
-    reads: {
-      agentReadPage: async () => ({
-        entries: [{ kind: 'message', role: 'user', text: 'fix the build' }],
-        limited: false
-      })
-    }
-  })
-  terminal.statuses.mockImplementation((paneKey: string) => [
-    { paneKey, worktreeId: 'wt', structuredHost: {}, state: 'working', receivedAt: 1 }
-  ])
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a chat read uses only the record, its store lookup and the mocked host.
-  const resolved = {
-    kind: 'chat',
-    orcaSessionId: 'claude_chat-1',
-    record,
-    store: { getRecord: () => record }
-  } as unknown as ResolvedAgentConversation
-
-  await expect(readAgentConversation(ctx, resolved, {})).resolves.toMatchObject({
-    state: 'working',
-    entries: [{ kind: 'message', role: 'user', text: 'fix the build' }]
-  })
-})
-
-it('keeps a prompt-only page working when the turn completes during its read', async () => {
-  const record = {
-    sessionId: 'chat-race',
-    provider: 'claude',
-    location: { executionHostId: 'local' }
-  }
-  let state = 'working'
-  let captured = () => {}
-  let release = () => {}
-  const didCapture = new Promise<void>((resolve) => (captured = resolve))
-  const mayReturn = new Promise<void>((resolve) => (release = resolve))
-  terminal.host.mockResolvedValue({
-    reads: {
-      agentReadPage: async () => {
-        const page = {
-          entries: [{ kind: 'message', role: 'user', text: 'return FINISHED' }],
-          limited: false
-        }
-        captured()
-        await mayReturn
-        return page
-      }
-    }
-  })
-  terminal.statuses.mockImplementation((paneKey: string) => [
-    { paneKey, worktreeId: 'wt', structuredHost: {}, state, receivedAt: 2 }
-  ])
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the read uses only this record, its lookup and the mocked host.
-  const resolved = {
-    kind: 'chat',
-    orcaSessionId: 'claude_chat-race',
-    record,
-    store: { getRecord: () => record }
-  } as unknown as ResolvedAgentConversation
-
-  const pending = readAgentConversation(ctx, resolved, {})
-  await didCapture
-  // The reply commits and Done publishes after the reader captured its prompt-only snapshot.
-  state = 'done'
-  release()
-  await expect(pending).resolves.toMatchObject({
-    state: 'working',
-    entries: [{ kind: 'message', role: 'user', text: 'return FINISHED' }],
-    limited: false
-  })
-})

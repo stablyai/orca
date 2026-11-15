@@ -166,17 +166,3 @@ async function agentConversationStatuses(resolved: ResolvedAgentConversation) {
     })
   )
 }
-
-/** The state `agent list` and `agent show` report for the conversation, from the same status rows:
- *  its most recently updated place's, or undefined when it isn't open. */
-export async function agentConversationState(
-  resolved: ResolvedAgentConversation
-): Promise<AgentStatusState | undefined> {
-  const latest = (await agentConversationStatuses(resolved)).reduce<
-    { state: AgentStatusState; at: number } | undefined
-  >((best, status) => {
-    const at = status.evidenceObservedAt ?? status.receivedAt
-    return !best || at > best.at ? { state: status.state, at } : best
-  }, undefined)
-  return latest?.state
-}

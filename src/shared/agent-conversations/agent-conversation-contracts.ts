@@ -55,8 +55,9 @@ export type AgentReadResult = {
   agent: string | null
   /** `chat`: the chat's own history; `transcript`: the terminal agent's transcript file. */
   source: 'chat' | 'transcript'
-  /** What `agent list`/`show` report for it now (`working` while a turn runs); absent when it
-   *  isn't open. */
+  /** The latest turn as this read's own history records it: `working`, an unfinished turn;
+   *  `done`, an ended turn whose reply is in `entries`. Absent means unknown, never done. Live
+   *  `agent list`/`show` may differ. */
   state?: AgentStatusState
   entries: AgentReadEntry[]
   /** Conversation content was omitted or an entry was shortened. */

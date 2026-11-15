@@ -208,3 +208,76 @@ it.skipIf(process.platform === 'win32').each([
     message: `Agent ${agent.orcaSessionId}'s transcript changed while Orca was reading it. Read it again.`
   })
 })
+
+it.skipIf(process.platform === 'win32')(
+  'reads a turn Stop ended before its reply reached the transcript as working',
+  async () => {
+    const server = new IdentityTestServer()
+    cleanups.unshift(() => server.stop())
+    await server.start({ env: 'production', userDataPath: directory() })
+    io.server = server
+    const path = join(directory(), 'session-a.jsonl')
+    const row = (record: Record<string, unknown>) =>
+      `${JSON.stringify({ sessionId: 'session-a', timestamp: '2026-11-15T12:00:00.000Z', ...record })}\n`
+    const prompt = row({
+      type: 'user',
+      uuid: 'u1',
+      message: { role: 'user', content: [{ type: 'text', text: 'return FINISHED' }] }
+    })
+    writeFileSync(path, prompt)
+    const listener = createHookListenerState()
+    const hook = async (payload: Record<string, unknown>) => {
+      const event = normalizeHookPayload(
+        listener,
+        'claude',
+        buildBody(
+          { session_id: 'session-a', transcript_path: path, ...payload },
+          { paneKey: PANE, tabId: 'tab-0' }
+        ),
+        'production'
+      )
+      server.ingestRemote(event!, null)
+      await new Promise((resolve) => setImmediate(resolve))
+    }
+    await hook({ hook_event_name: 'UserPromptSubmit', prompt: 'return FINISHED' })
+    await hook({
+      hook_event_name: 'Stop',
+      last_assistant_message: 'FINISHED',
+      background_tasks: [],
+      session_crons: []
+    })
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a terminal read uses only the runtime's sleeping records.
+    const ctx = { runtime: { readLocalSleepingAgentSessions: () => ({}) } } as unknown as RpcContext
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a terminal read uses only the kind and the id.
+    const resolved = {
+      kind: 'terminal',
+      orcaSessionId: server.getStatusSnapshot()[0]!.orcaSessionId!
+    } as ResolvedAgentConversation
+    expect(await readAgentConversation(ctx, resolved, {})).toMatchObject({
+      entries: [{ kind: 'message', role: 'user', text: 'return FINISHED' }],
+      state: 'working'
+    })
+
+    writeFileSync(
+      path,
+      prompt +
+        row({
+          type: 'assistant',
+          uuid: 'u2',
+          message: {
+            id: 'm2',
+            role: 'assistant',
+            content: [{ type: 'text', text: 'FINISHED' }],
+            stop_reason: 'end_turn'
+          }
+        })
+    )
+    expect(await readAgentConversation(ctx, resolved, {})).toMatchObject({
+      entries: [
+        { kind: 'message', role: 'user', text: 'return FINISHED' },
+        { kind: 'message', role: 'assistant', text: 'FINISHED' }
+      ],
+      state: 'done'
+    })
+  }
+)
