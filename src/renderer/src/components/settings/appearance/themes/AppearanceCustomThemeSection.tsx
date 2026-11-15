@@ -13,6 +13,7 @@ import {
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
 import { useTranslate } from '@/i18n/use-translate'
+import { getIntlLocale } from '@/i18n/i18n'
 import { usePluginThemes } from '@/store/plugins/appearance/plugin-themes'
 import { useThemeStudioPreviewStore } from '@/store/appearance/theme-studio-preview-store'
 import { sendThemeStudioUserAction } from '@/app-shell/appearance/theme-studio-bridge'
@@ -47,7 +48,7 @@ async function runAction(
 }
 
 function madeByLine(theme: ThemeStudioSavedTheme, modes: string, t: Translate): string {
-  const when = new Intl.DateTimeFormat(undefined, {
+  const when = new Intl.DateTimeFormat(getIntlLocale(), {
     dateStyle: 'medium',
     timeStyle: 'short'
   }).format(theme.savedAt)
