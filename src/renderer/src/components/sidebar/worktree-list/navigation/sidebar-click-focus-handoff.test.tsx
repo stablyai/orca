@@ -14,9 +14,11 @@ const mocks = vi.hoisted(() => ({
     worktreeNavHistory: [],
     worktreeNavHistoryIndex: -1,
     activeWorktreeId: 'a',
+    activeWorkspaceExecutionHostId: 'local',
     revealWorktreeInSidebar: () => {}
   },
-  resolveDeleteIntent: vi.fn(() => null)
+  resolveDeleteIntent: vi.fn(() => null),
+  focusActiveSurface: vi.fn()
 }))
 vi.mock('@/store', () => ({
   useAppStore: Object.assign(
@@ -26,6 +28,9 @@ vi.mock('@/store', () => ({
 }))
 vi.mock('@/lib/workspace/activation/sidebar-worktree-activation', () => ({
   activateWorktreeFromSidebar: vi.fn(async () => {})
+}))
+vi.mock('./focus-workspace-surface', () => ({
+  focusActiveWorkspaceSurfaceFromSidebar: mocks.focusActiveSurface
 }))
 vi.mock('./use-neighbor-prewarm', () => ({ useWorkspaceNeighborPrewarm: () => {} }))
 vi.mock('@/lib/keyboard/shortcut-platform', () => ({ getShortcutPlatform: () => 'linux' }))
@@ -109,6 +114,7 @@ function listOwnsKeys(): boolean {
 
 beforeEach(() => {
   mocks.resolveDeleteIntent.mockClear()
+  mocks.focusActiveSurface.mockClear()
 })
 afterEach(cleanup)
 
@@ -116,6 +122,14 @@ it('lets a plain row click hand keys to the opened workspace', () => {
   const view = render(<Sidebar />)
   press(view.getByTestId('row-b'))
   expect(listOwnsKeys()).toBe(false)
+})
+
+it('hands keys to the open workspace when its own row is clicked again', () => {
+  const view = render(<Sidebar />)
+  press(view.getByTestId('row-b'))
+  expect(mocks.focusActiveSurface).not.toHaveBeenCalled()
+  press(view.getByTestId('row-a'))
+  expect(mocks.focusActiveSurface).toHaveBeenCalledWith(list())
 })
 
 it('keeps keys in the list for a modifier click', () => {

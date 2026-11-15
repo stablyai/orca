@@ -81,6 +81,9 @@ test.describe('Sidebar click terminal focus', () => {
     await worktreeRowSurface(orcaPage, target).click()
     await expectActive(orcaPage, target)
     await expectTypingReachesTerminal(orcaPage, testInfo, 'plain-click')
+    // Re-clicking the open workspace activates nothing; the click alone must hand the keys back.
+    await worktreeRowSurface(orcaPage, target).click()
+    await expectTypingReachesTerminal(orcaPage, testInfo, 'active-row-click')
   })
 
   test('a plain click after a modifier click puts typing in the terminal', async ({
