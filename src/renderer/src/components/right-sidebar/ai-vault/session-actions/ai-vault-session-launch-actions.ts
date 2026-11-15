@@ -32,6 +32,7 @@ import { isAiVaultDatabaseAgent } from '../../../../../../shared/ai-vault/contra
 import { activateAiVaultStructuredSession } from '@/lib/agent-session/open/activate-ai-vault-structured-session'
 import { adoptsCliConversations } from '../../../../../../shared/agent-session/view/structured-agent-cli-conversation-adoption'
 import { nativeChatPreferenceFor } from '../../../../../../shared/agent-launch/choices/structured-native-chat-launch-route'
+import { parseRoutableExecutionHostId } from '../../../../../../shared/execution-host'
 
 import { createNonSecureContextUuid } from '../../../../../../shared/identifiers/non-secure-context-uuid'
 import { describeAiVaultResumeFailure } from '@/lib/agent-session/resume/history/ai-vault-resume-refusal'
@@ -172,9 +173,11 @@ export function useAiVaultSessionLaunchActions({
         void activateAiVaultStructuredSession(session)
         return
       }
-      // When the user configured Chat mode for this agent, resume in native chat.
+      const recordingHost = parseRoutableExecutionHostId(session.executionHostId)
+      // When the user configured Chat mode for this agent and the recording host supports native chat, resume in chat.
       if (
         adoptsCliConversations(session.agent) &&
+        recordingHost?.kind !== 'ssh' &&
         nativeChatPreferenceFor(useAppStore.getState().settings, session.agent)
       ) {
         handleResumeInNewChat(session, targetWorktreeId)

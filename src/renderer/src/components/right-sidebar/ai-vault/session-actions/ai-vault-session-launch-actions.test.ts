@@ -2,7 +2,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { renderHook, waitFor } from '@testing-library/react'
 import type { AiVaultSession } from '../../../../../../shared/ai-vault/contracts/ai-vault-types'
-import type { Worktree } from '../../../../../../shared/worktree/types'
+import { makeWorktree } from '../../../worktree-jump/worktree-jump-palette-test-fixtures'
 
 const mocks = vi.hoisted(() => ({
   activateStructuredSession: vi.fn(),
@@ -66,12 +66,7 @@ function makeSession(overrides: Partial<AiVaultSession> = {}): AiVaultSession {
   } as unknown as AiVaultSession
 }
 
-const mockWorktree: Worktree = {
-  id: 'worktree-1',
-  path: '/workspaces/test',
-  repoPath: '/workspaces/test',
-  name: 'test'
-}
+const mockWorktree = makeWorktree('worktree-1', 'test', { path: '/workspaces/test' })
 
 describe('useAiVaultSessionLaunchActions session restoration routing', () => {
   beforeEach(() => {
@@ -179,5 +174,26 @@ describe('useAiVaultSessionLaunchActions session restoration routing', () => {
     expect(mocks.activateStructuredSession).toHaveBeenCalledWith(session)
     expect(mocks.resumeInNewChat).not.toHaveBeenCalled()
     expect(mocks.launchAndReveal).not.toHaveBeenCalled()
+  })
+
+  it('routes to terminal for SSH-recorded session even when chat mode is enabled', async () => {
+    const { result } = renderHook(() =>
+      useAiVaultSessionLaunchActions({
+        activeWorktree: mockWorktree,
+        activeWorktreeId: 'worktree-1',
+        targetState: { folderWorkspaces: [], projectGroups: [], repos: [], worktreesByRepo: {} }
+      })
+    )
+
+    const session = makeSession({
+      agent: 'opencode2',
+      executionHostId: 'ssh:remote-server'
+    })
+    result.current.handleResume(session, 'worktree-1')
+
+    expect(mocks.resumeInNewChat).not.toHaveBeenCalled()
+    await waitFor(() => {
+      expect(mocks.launchAndReveal).toHaveBeenCalled()
+    })
   })
 })
