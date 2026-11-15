@@ -85,7 +85,7 @@ async function decideArchiveHookRun(
 export function useHostWorktreeDelete(args: {
   client: RpcClient | null
   clientForRow: (item: Worktree) => RpcClient | null
-  fetchWorktrees: () => Promise<void>
+  fetchWorktrees: () => Promise<Worktree[] | undefined>
   state: HostScreenState
 }) {
   const { client, clientForRow, fetchWorktrees, state } = args

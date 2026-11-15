@@ -48,7 +48,9 @@ export function HostBottomBar({
       primary={{
         icon: Plus,
         accessibilityLabel: t('hostScreen.hostBottomBar.newWorkspace', 'New workspace'),
-        onPress: actions.openNewWorktreeModal,
+        // The + opens the two-choice sheet (New workspace / Add project) when the host
+        // can add projects; older hosts fall straight through to the create form.
+        onPress: actions.openPlusActionSheet,
         disabled: connState !== 'connected'
       }}
       onCoveredHeightChange={onCoveredHeightChange}

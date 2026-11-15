@@ -103,6 +103,7 @@ function NewWorktreeModalContent(props: NewWorktreeModalProps) {
     'note'
   )
   const [error, setError] = useState('')
+
   const runtime = useNewWorkspaceRuntimeContext(client, visible, hostId, repoServer)
   const repoRuntime = useNewWorktreeRuntimeCapabilities(client, visible)
   const {
