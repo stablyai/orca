@@ -1,0 +1,15 @@
+diff --git a/out/targets/appimage/appImageUtil.js b/out/targets/appimage/appImageUtil.js
+index 9718c8a..b572a43 100644
+--- a/out/targets/appimage/appImageUtil.js
++++ b/out/targets/appimage/appImageUtil.js
+@@ -157,6 +157,10 @@ async function writeAppLauncherAndRelatedFiles(opts) {
+             IsHtmlEula: ext === ".html",
+         };
+     }
++    // copyDir(appDir, stageDir) supplies the custom launcher, including in hard-link builds.
++    if (await fs.pathExists(path.join(opts.appDir, AppImageTarget_1.APP_RUN_ENTRYPOINT))) {
++        return;
++    }
+     const appRunContent = generateAppRunScript(finalConfig);
+     await fs.writeFile(path.join(stageDir, AppImageTarget_1.APP_RUN_ENTRYPOINT), appRunContent, { mode: 0o755 });
+ }
