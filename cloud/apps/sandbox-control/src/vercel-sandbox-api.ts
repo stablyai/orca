@@ -64,7 +64,7 @@ const OutputLine = z.looseObject({ stream: z.enum(['stdout', 'stderr']), data: z
 const FailureLine = z.looseObject({ stream: z.literal('error'), data: z.looseObject({ code: z.string() }) })
 
 /** A provider call with no answer by then has stalled (lookups and updates answer in well under a second). */
-export const PROVIDER_REQUEST_DEADLINE_MS = 30_000
+export const PROVIDER_REQUEST_DEADLINE_MS = 20_000
 /** Booting a VM from a snapshot answers in a few seconds; past this it is stuck, and create falls back. */
 const CREATE_DEADLINE_MS = 60_000
 /** Snapshotting a sleeping VM's disk can legitimately take minutes. */
@@ -72,6 +72,15 @@ const SNAPSHOT_DEADLINE_MS = 5 * 60_000
 const COMMAND_DEADLINE_MARGIN_MS = 20_000
 /** A caller waiting on a long command (an environment build) has its own bound; this only stops a dead socket. */
 const UNBOUNDED_WAIT_DEADLINE_MS = 3 * 60 * 60_000
+
+function isDeadline(error: unknown): boolean {
+  return error instanceof DOMException ? error.name === 'TimeoutError' : (error as { name?: string } | null)?.name === 'TimeoutError'
+}
+
+/** The call's shape without ids, for the stall log. */
+function stallPath(path: string): string {
+  return path.replace(/\/(sandboxes|sessions|cmd|snapshots)\/[^/]+/g, '/$1/:id')
+}
 
 /** Aborts after `ms`; a stalled provider call becomes an error instead of an open-ended wait. */
 function deadline(ms: number): AbortSignal {
@@ -98,18 +107,34 @@ export function createVercelSandboxApi(
         url.searchParams.set(key, value)
       }
     }
-    const response = await doFetch(url, {
-      method,
-      headers: {
-        authorization: `Bearer ${config.token}`,
-        'content-type': 'application/json'
-      },
-      body: options.body === undefined ? undefined : JSON.stringify(options.body),
-      redirect: 'manual',
-      // Every call has a deadline: a stalled provider connection otherwise held the Worker until
-      // the desktop gave up (2 min on create and on opening a workspace), with nothing logged.
-      signal: options.signal ?? deadline(options.deadlineMs ?? PROVIDER_REQUEST_DEADLINE_MS)
-    })
+    const send = (): Promise<Response> =>
+      doFetch(url, {
+        method,
+        headers: {
+          authorization: `Bearer ${config.token}`,
+          'content-type': 'application/json'
+        },
+        body: options.body === undefined ? undefined : JSON.stringify(options.body),
+        redirect: 'manual',
+        // Every call has a deadline: a stalled provider connection otherwise held the Worker until
+        // the desktop gave up (2 min on create and on opening a workspace), with nothing logged.
+        signal: options.signal ?? deadline(options.deadlineMs ?? PROVIDER_REQUEST_DEADLINE_MS)
+      })
+    let response: Response
+    try {
+      response = await send()
+    } catch (error) {
+      if (!isDeadline(error) || options.signal) {
+        throw error
+      }
+      // The stall is the evidence: which call, and that it hit our deadline (not the caller's).
+      console.log(JSON.stringify({ event: 'provider_stall', method, path: stallPath(path) }))
+      // A read is safe to ask again once; a write might have landed, so it fails instead.
+      if (method !== 'GET') {
+        throw error
+      }
+      response = await send()
+    }
     if (!response.ok) {
       const parsed = ErrorBody.safeParse(await response.json().catch(() => null))
       throw new ProviderError(response.status, parsed.success ? (parsed.data.error?.code ?? null) : null)
