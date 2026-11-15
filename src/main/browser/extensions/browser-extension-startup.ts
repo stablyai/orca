@@ -116,11 +116,11 @@ function installBrowserExtensionSupport(): void {
 
 const observedContents = new WeakSet<Electron.WebContents>()
 
-/** Tabs (webview guests) and extension popouts in a session that runs extensions. */
+/** Tabs (webview guests and serve's offscreen pages) and extension popouts in a session that runs extensions. */
 function observeExtensionContents(contents: Electron.WebContents): void {
   const type = contents.getType()
   if (
-    (type !== 'webview' && type !== 'window') ||
+    (type !== 'webview' && type !== 'window' && type !== 'offscreen') ||
     isBrowserExtensionNativePage(contents) ||
     observedContents.has(contents) ||
     !getBrowserExtensionProfileIdForSession(contents.session)

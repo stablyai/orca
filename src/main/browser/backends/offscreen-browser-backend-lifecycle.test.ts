@@ -39,6 +39,8 @@ class MockWebContents extends EventEmitter {
     return this.title
   }
 
+  stopPainting(): void {}
+
   loadURL(): Promise<void> {
     if (mocks.finishLoads) {
       queueMicrotask(() => this.emit('did-finish-load'))
