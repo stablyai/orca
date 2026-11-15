@@ -224,6 +224,30 @@ jq -r "$filter" "${dir}/$fixture.json"
     ['a release-cut on another branch', {}, { run: { ...runningCut, head_branch: 'x' } }, 1],
     ['another workflow', {}, { run: { ...runningCut, path: '.github/workflows/x.yml' } }, 1],
     [
+      'a release-cut path qualified with main',
+      {},
+      { run: { ...runningCut, path: '.github/workflows/release-cut.yml@main' } },
+      0
+    ],
+    [
+      'a release-cut path qualified with refs/heads/main',
+      {},
+      { run: { ...runningCut, path: '.github/workflows/release-cut.yml@refs/heads/main' } },
+      0
+    ],
+    [
+      'a release-cut path qualified with another ref',
+      {},
+      { run: { ...runningCut, path: '.github/workflows/release-cut.yml@feature' } },
+      1
+    ],
+    [
+      'a release-cut path with two refs',
+      {},
+      { run: { ...runningCut, path: '.github/workflows/release-cut.yml@main@x' } },
+      1
+    ],
+    [
       'a parent that dispatched another mac run',
       {},
       { jobs: [{ name: 'mac release build 778 for v1.2.3' }] },
@@ -244,7 +268,7 @@ jq -r "$filter" "${dir}/$fixture.json"
     ],
     ['no release', {}, { releases: [{ ...draft, tag_name: 'v1.2.4', name: 'v1.2.4' }] }, 1],
     ['two drafts for the tag', {}, { releases: [draft, draft] }, 1]
-  ])('mac build accepts only %s', (_name, options, answers, code) => {
+  ])('mac build verification: %s', (_name, options, answers, code) => {
     const { clone, release } = setup(options)
     const result = runProcessSync({
       program: 'bash',
