@@ -35,7 +35,7 @@ export function formatTerminalList(
   const body = result.terminals
     .map(
       (terminal) =>
-        `${terminal.handle}  ${terminal.paneTitle ?? terminal.title ?? '(untitled)'}  ${terminal.connected ? 'connected' : 'disconnected'}${terminal.orphaned ? '  orphaned' : ''}  host=${terminal.executionHostId ?? 'unverifiable'}  ${terminal.worktreePath}\n${terminal.preview ? `preview: ${terminal.preview}` : 'preview: <empty>'}`
+        `${terminal.handle}  ${terminal.paneTitle ?? terminal.title ?? '(untitled)'}  ${terminal.connected ? 'connected' : 'disconnected'}${terminal.orphaned ? '  orphaned' : ''}${terminal.focused ? '  focused' : ''}  host=${terminal.executionHostId ?? 'unverifiable'}  ${terminal.worktreePath}\n${terminal.preview ? `preview: ${terminal.preview}` : 'preview: <empty>'}`
     )
     .join('\n\n')
   const visualLayout = formatTerminalVisualLayouts(result.visualLayouts)

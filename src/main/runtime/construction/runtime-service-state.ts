@@ -21,6 +21,7 @@ import { RuntimeResolvedWorktreeCache } from '../workspaces/catalog/runtime-reso
 import { RuntimeWorktreeLineageController } from '../workspaces/lineage/runtime-worktree-lineage-controller'
 import { createRuntimeAgentProjections } from './runtime-agent-projections'
 import { RuntimeTerminalList } from '../terminal/query/runtime-terminal-list'
+import type { RuntimeFocusedTerminal } from '../terminal/focus/runtime-focused-terminal'
 import { RuntimeManagedWorktreeQueries } from '../workspaces/catalog/runtime-managed-worktree-queries'
 import { RuntimePtyForegroundAgent } from '../terminal/lifecycle/runtime-pty-foreground-agent'
 import { OpenCodeRunLifetimeStatus } from '../terminal/output/opencode-run-lifetime-status'
@@ -139,8 +140,11 @@ export abstract class OrcaRuntimeWithStopRequestedPtyIds extends OrcaRuntimeWith
     getTopologyRevision: (worktreeId) => this.getTerminalTopologyRevision(worktreeId),
     buildHostScope: (targetWorktreeId, terminals, worktrees, queriedHostIds) =>
       this.buildTerminalListHostScope(targetWorktreeId, terminals, worktrees, queriedHostIds),
+    getFocusedHandle: () => this.focusedTerminal.handle(),
     ...(ORCA_LAYOUT_OWNER_IS_MAIN ? { listsEveryPane: (id) => mainListsEveryPane(this, id) } : {})
   })
+
+  abstract readonly focusedTerminal: RuntimeFocusedTerminal
 
   protected readonly managedWorktreeQueries = new RuntimeManagedWorktreeQueries({
     getStore: () => this.store,

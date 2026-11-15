@@ -8,8 +8,20 @@ import { parsePaneKey } from '../../../../shared/workspace-layout/stable-pane-id
 import { getLatestPtyTitle } from '../../workspaces/process-listing/runtime-worktree-status-projection'
 import { copySleepingAgentLaunchConfig } from '../launch/runtime-agent-launch-resolution'
 import type { OrcaRuntimeWithBuildPtyTerminalSummary as PtyTerminalSummaryMethods } from '../query/pty-terminal-summary'
+import { HEADLESS_RUNTIME_WINDOW_ID } from '../../../../shared/runtime-session-contracts'
+import { RuntimeFocusedTerminal } from './runtime-focused-terminal'
 
 export abstract class OrcaRuntimeWithFocusTerminal extends OrcaRuntimeWithWaitForLeafPtyId {
+  readonly focusedTerminal = new RuntimeFocusedTerminal({
+    hasWindowGraph: () =>
+      this.graphStatus === 'ready' &&
+      this.authoritativeWindowId !== null &&
+      this.authoritativeWindowId !== HEADLESS_RUNTIME_WINDOW_ID,
+    getSelection: () => this.store?.getWorkspaceSession?.(),
+    getWorkspaceSession: (worktreeId) => this.getWorkspaceSessionForWorktree(worktreeId),
+    getHandleForPaneKey: (paneKey) => this.getTerminalHandleForPaneKey(paneKey)
+  })
+
   protected abstract getPtyManualTitle(
     ...args: Parameters<PtyTerminalSummaryMethods['getPtyManualTitle']>
   ): ReturnType<PtyTerminalSummaryMethods['getPtyManualTitle']>
