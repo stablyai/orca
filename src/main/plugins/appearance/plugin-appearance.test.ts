@@ -28,7 +28,7 @@ async function harness(options: { capability?: boolean; desktop?: boolean } = {}
     id: 'appearance',
     name: 'Appearance',
     version: '1.0.0',
-    engines: { orca: '>=1.4.249' },
+    engines: { orca: '>=1.4.251' },
     main: 'worker.mjs',
     capabilities: options.capability === false ? [] : [{ kind: 'appearance:write' }]
   })
@@ -58,7 +58,7 @@ async function harness(options: { capability?: boolean; desktop?: boolean } = {}
     )
     service = new PluginService({
       userDataPath: root,
-      hostVersion: '1.4.249',
+      hostVersion: '1.4.251',
       isPluginSystemEnabled: () => true,
       getDisabledPlugins: () => (disabled ? ['local.appearance'] : []),
       getPluginConsents: () => ({ 'local.appearance': consent }),

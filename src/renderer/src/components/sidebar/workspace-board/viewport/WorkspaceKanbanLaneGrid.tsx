@@ -8,7 +8,7 @@ import React, {
   useState
 } from 'react'
 import { useVirtualizer, type Range } from '@tanstack/react-virtual'
-import type { Repo } from '../../../../../../shared/repo-types'
+import type { Repo } from '../../../../../../shared/repository/repo-types'
 import type {
   WorkspaceStatus,
   WorkspaceStatusDefinition,

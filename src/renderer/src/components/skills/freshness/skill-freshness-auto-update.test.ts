@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { BundledSkillPlan } from '../../../../../shared/bundled-skill-plan'
+import type { BundledSkillPlan } from '../../../../../shared/skills/bundled/bundled-skill-plan'
 import type { BundledSkillTarget } from '@/lib/skills/runtime/bundled-skill-target'
 
 const autoUpdate = vi.hoisted(() => vi.fn())

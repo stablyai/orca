@@ -10,7 +10,7 @@ import {
   OPENCODE_CAPTURE_TEXT_LIMIT
 } from '../../../ai-vault/scanners/opencode/sqlite/opencode-transcript-capture-limits'
 import type { NativeChatMessage } from '../../../../shared/native-chat/native-chat-types'
-import { errorMessage } from '../../../../shared/error-message'
+import { errorMessage } from '../../../../shared/errors/error-message'
 import type { ReadTranscriptResult } from '../../transcript-reader'
 import {
   readOpenCodeTranscriptPageViaWorker,
@@ -18,7 +18,7 @@ import {
 } from '../../../ai-vault/scanners/opencode/reader-transport/session-scanner-opencode-sqlite-worker-spawn'
 import { discoverOpenCodeTranscriptDatabase } from './transcript-opencode-database'
 import { DESKTOP_READ_WINDOW } from '../../transcript-watching/transcript-watch-contract'
-import { openCodeTranscriptPageLimit } from '../../../../shared/opencode-transcript-page-limit'
+import { openCodeTranscriptPageLimit } from '../../../../shared/agent-session/lifecycle/provider-handles/opencode-transcript-page-limit'
 
 export type OpenCodeTranscriptDeps = {
   resolveDbPath?: (

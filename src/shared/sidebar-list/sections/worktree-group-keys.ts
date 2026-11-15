@@ -1,18 +1,15 @@
-import type { ProjectGroup } from '../../project-group-types'
-import type { Repo } from '../../repo-types'
+import type { ProjectGroup } from '../../project/groups/project-group-types'
+import type { Repo } from '../../repository/repo-types'
 import type { WorkspaceStatusDefinition, Worktree } from '../../worktree/types'
 import {
   cloneDefaultWorkspaceStatuses,
   getWorkspaceStatus,
   getWorkspaceStatusGroupKey
-} from '../../workspace-statuses'
+} from '../../workspace/status/workspace-statuses'
 import { ALL_GROUP_KEY, getProjectGroupHeaderKey } from './group-keys'
 import { getPRLaneKey } from '../../workspace-view/workspace-pr-groups'
-import {
-  buildProjectGroupingIndex,
-  getProjectGroupingForRepo
-} from '../../project-section-grouping'
-import type { ProjectSectionModel } from '../../project-section-grouping'
+import { buildProjectGroupingIndex, getProjectGroupingForRepo } from './project-section-grouping'
+import type { ProjectSectionModel } from './project-section-grouping'
 import type { SidebarPRGroupReader, WorktreeGroupBy } from '../row-types'
 
 export function getGroupKeyForWorktree(

@@ -20,7 +20,7 @@ import type { toast } from 'sonner'
 import type * as WebEnvironment from '@/runtime/web-session-tabs-sync/identity/web-runtime-session-environment'
 import type * as TerminalSurface from '../../../../../../shared/workspace-layout/terminal-surface-id'
 import type * as LaunchErrors from '@/lib/agent-session/launch/structured-agent-session-launch-errors'
-import type * as LaunchAgentKindModule from '../../../../../../shared/agent-kind'
+import type * as LaunchAgentKindModule from '../../../../../../shared/agent-status/identity/agent-kind'
 
 const mockCreateTab = vi.hoisted(() => vi.fn<AppState['createTab']>())
 const mockWaitForAgentReady = vi.hoisted(() => vi.fn<typeof waitForAgentReady>())
@@ -103,7 +103,7 @@ vi.mock('@/lib/agent-session/messaging/paste/agent-ready-wait', () => ({
 }))
 vi.mock('@/diagnostics/telemetry/telemetry', () => ({ track: vi.fn() }))
 const mockLaunchAgentKind = vi.hoisted(() => (agent: string) => agent)
-vi.mock('../../../../../../shared/agent-kind', async (importOriginal) => ({
+vi.mock('../../../../../../shared/agent-status/identity/agent-kind', async (importOriginal) => ({
   ...(await importOriginal<typeof LaunchAgentKindModule>()),
   tuiAgentToAgentKind: mockLaunchAgentKind
 }))

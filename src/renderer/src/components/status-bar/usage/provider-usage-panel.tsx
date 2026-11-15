@@ -1,5 +1,8 @@
-import type { ProviderRateLimits, RateLimitWindow } from '../../../../../shared/rate-limit-types'
-import { formatResetDuration } from '../../../../../shared/rate-limit-reset-format'
+import type {
+  ProviderRateLimits,
+  RateLimitWindow
+} from '../../../../../shared/agent-usage/rate-limits/rate-limit-types'
+import { formatResetDuration } from '../../../../../shared/agent-usage/rate-limits/rate-limit-reset-format'
 import { AgentIcon } from '@/components/agent/icons/AgentIcon'
 import {
   ClaudeIcon,
@@ -15,9 +18,9 @@ import {
   getProviderDisplayName,
   getUsageWindowSections,
   type UsageWindowSection
-} from '../../../../../shared/usage-provider-windows'
+} from '../../../../../shared/agent-usage/display/usage-provider-windows'
 import { getProviderUsageErrorMessage, getProviderUsageStatusLabel } from './usage-error-copy'
-import type { UsagePercentageDisplay } from '../../../../../shared/usage-percentage-display'
+import type { UsagePercentageDisplay } from '../../../../../shared/agent-usage/display/usage-percentage-display'
 import { useResetCountdownClock } from '@/hooks/useResetCountdownClock'
 import { recomputeOn } from '@/lib/recompute-on'
 import { ProviderExtraUsageSection } from './provider-extra-usage-section'

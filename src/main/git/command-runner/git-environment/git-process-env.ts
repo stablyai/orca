@@ -1,4 +1,4 @@
-import { addWslEnvKeys } from '../../../../shared/wsl-env'
+import { addWslEnvKeys } from '../../../../shared/shell/wsl/wsl-env'
 import { gitCredentialPromptGuardEnv } from '../../../../shared/git/commands/git-credential-prompt-env'
 import { UNTRANSLATED_GIT_OUTPUT_ENV } from '../../../../shared/git/commands/git-output-locale'
 

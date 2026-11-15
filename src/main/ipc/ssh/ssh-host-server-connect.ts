@@ -6,7 +6,7 @@ import type {
   SshManagedServerServingNote,
   SshManagedServerUpdateNote,
   SshTarget
-} from '../../../shared/ssh-types'
+} from '../../../shared/remote-runtime/ssh/ssh-types'
 import type { HostServerOnConnectResult } from '../../ssh/host-server/ssh-host-server-on-connect'
 import {
   unservedHostServerMessage,

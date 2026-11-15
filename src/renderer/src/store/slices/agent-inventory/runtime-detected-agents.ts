@@ -10,7 +10,7 @@ export {
 import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent'
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import { RuntimeRpcCallError } from '@/runtime/rpc/calls/runtime-rpc-result'
-import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import { getConnectionIdFromState } from '@/lib/workspace/ownership/connection-owner-resolution'
 import { captureRuntimeEnvironmentRequestRevision } from '@/runtime/rpc/environment-revisions/runtime-environment-revision'
 import {

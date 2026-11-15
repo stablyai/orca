@@ -1,4 +1,4 @@
-import type { IssueSourcePreference } from '../../../shared/repo-types'
+import type { IssueSourcePreference } from '../../../shared/repository/repo-types'
 import { getGlabKnownHosts, type LocalGitExecOptions } from '../projects/gitlab-known-host-probe'
 import { resolveIssueSource } from '../issues/gitlab-issue-source-resolution'
 import type { ProjectRef } from '../projects/project-ref-parser'

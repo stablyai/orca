@@ -2,7 +2,7 @@ import { getOptionalStringFlag, getPresentStringFlag } from '../../arguments/fla
 import type { RuntimeClient } from '../../runtime/client'
 import { RuntimeClientError } from '../../runtime/connection/types'
 import { getTerminalHandle } from '../../terminals/terminal-selector'
-import { hasStructuredSessionMarker } from '../../../shared/structured-session-marker'
+import { hasStructuredSessionMarker } from '../../../shared/agent-launch/environment/structured-session-marker'
 import {
   injectedSessionAddress,
   readInjectedAgentSessionId

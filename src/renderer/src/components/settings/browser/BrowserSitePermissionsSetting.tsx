@@ -1,12 +1,12 @@
 // @protected-copy: saved site permission choices.
 import { useEffect, useState } from 'react'
-import type { BrowserSessionProfile } from '../../../../../shared/browser-workspace-types'
+import type { BrowserSessionProfile } from '../../../../../shared/browser/workspaces/browser-workspace-types'
 import {
   BROWSER_SITE_PERMISSIONS,
   isBrowserSitePermissionDecision,
   type BrowserSitePermission,
   type BrowserSitePermissionEntry
-} from '../../../../../shared/browser-site-permission'
+} from '../../../../../shared/browser/site-settings/browser-site-permission'
 import { Label } from '../../ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../ui/select'
 import {

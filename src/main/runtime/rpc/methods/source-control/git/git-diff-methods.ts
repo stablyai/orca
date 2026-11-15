@@ -1,5 +1,5 @@
 import { defineMethod } from '../../../core'
-import { remoteRpcContentBudget } from '../../../../../../shared/remote-rpc-content-budget'
+import { remoteRpcContentBudget } from '../../../../../../shared/remote-runtime/rpc/remote-rpc-content-budget'
 import {
   GitBranchDiff,
   GitCommitDiff,

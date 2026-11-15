@@ -3,7 +3,7 @@ import { act, createElement } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import type { GlobalSettings } from '../../src/shared/global-settings-types'
-import type { RuntimeClientEvent } from '../../src/shared/runtime-client-events'
+import type { RuntimeClientEvent } from '../../src/shared/remote-runtime/session-graph/runtime-client-events'
 import { TooltipProvider } from '@/components/ui/tooltip'
 
 // The host is the real settings controller over an in-memory profile store, publishing its real

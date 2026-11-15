@@ -7,11 +7,11 @@ import type {
   RuntimeMobileSessionBrowserTab,
   RuntimeMobileSessionSnapshotTab,
   RuntimeMobileSessionTerminalTab
-} from '../../runtime-mobile-session-tab-contracts'
+} from '../../remote-runtime/session-graph/runtime-mobile-session-tab-contracts'
 import type {
   RuntimeMobileSessionTabGroup,
   RuntimeMobileSessionTabsSnapshot
-} from '../../runtime-session-contracts'
+} from '../../remote-runtime/session-graph/runtime-session-contracts'
 import type { TerminalLayoutSnapshot } from '../terminal-tab-types'
 import { pruneGroupLayout } from '../../workspace-session/workspace-session-terminal-tab-close'
 import { diffTabRow, editorTabRow } from './old-client-session-editor-rows'

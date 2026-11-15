@@ -1,5 +1,5 @@
 import { ipcRenderer } from 'electron'
-import { BackendPortRpc, type BackendPort } from '../../shared/backend-port-rpc'
+import { BackendPortRpc, type BackendPort } from '../../shared/backend/backend-port-rpc'
 import {
   BACKEND_CONNECTION_CHANGED,
   BACKEND_PORT_DELIVERY,
@@ -7,7 +7,7 @@ import {
   type BackendConnectionPurpose,
   type BackendConnectionStatus,
   type BackendConnectionListener
-} from '../../shared/backend-service-contract'
+} from '../../shared/backend/backend-service-contract'
 
 let connection: BackendPortRpc | undefined
 let connecting: Promise<BackendPortRpc> | undefined

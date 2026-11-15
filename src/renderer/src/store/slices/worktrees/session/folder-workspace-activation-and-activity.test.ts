@@ -2,8 +2,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import '../../workspace-attention/workspace-unread-characterization-fixture'
 import type { AppState } from '../../../types'
 import type { FolderWorkspace } from '../../../../../../shared/folder-workspaces/folder-workspace-types'
-import type { ProjectGroup } from '../../../../../../shared/project-group-types'
-import { folderWorkspaceKey } from '../../../../../../shared/workspace-scope'
+import type { ProjectGroup } from '../../../../../../shared/project/groups/project-group-types'
+import { folderWorkspaceKey } from '../../../../../../shared/workspace/identity/workspace-scope'
 import {
   createCompatibleRuntimeStatusResponseIfNeeded,
   type RuntimeEnvironmentCallRequest

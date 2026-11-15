@@ -8,6 +8,7 @@ import {
   bundleInfoPlistPath,
   formatBundleIdentity,
   isLiveRegistration,
+  macAppBundleOf,
   isProcessAlive,
   parkRecordPath,
   parseServeParkRecord,
@@ -18,7 +19,7 @@ import {
   SERVE_PARK_DEADLINE_MS,
   type ServeParkRecord,
   type ServeSupervisorRegistration
-} from '../../../shared/serve-bundle-coordination'
+} from '../../../shared/remote-runtime/serve-supervisor/serve-bundle-coordination'
 
 export type ServeInstallParkResult =
   | { kind: 'parked' }
@@ -97,9 +98,16 @@ export async function parkServeSupervisorsForInstall(
 ): Promise<ServeInstallParkResult> {
   const now = deps.now ?? Date.now
   const sleep = deps.sleep ?? ((ms: number) => new Promise((r) => setTimeout(r, ms)))
+  const appBundle = macAppBundleOf(executable)
+  if (!appBundle) {
+    // Supervisors never register outside an .app, so there is nothing to park.
+    return blockers.length > 0
+      ? { kind: 'refused', reason: 'unregistered', pids: blockers }
+      : { kind: 'parked' }
+  }
   let bundle: string
   try {
-    bundle = await realpath(dirname(dirname(dirname(executable))))
+    bundle = await realpath(appBundle)
   } catch {
     return { kind: 'refused', reason: 'unregistered', pids: blockers }
   }
@@ -199,10 +207,60 @@ export async function commitServeSupervisorPark(
   activePark = { ...activePark, record }
 }
 
+/** One install-on-quit commit per process; repeated will-quit passes share it. */
+let quitCommit: Promise<void> | null = null
+
+/** Install-on-quit has no park handshake: commit so running supervisors stop and new ones wait for the new bundle. */
+export function commitServeSupervisorParkOnQuit(
+  executable: string,
+  macUserDataRoot: string,
+  now: () => number = Date.now
+): Promise<void> {
+  quitCommit ??= writeQuitCommit(executable, macUserDataRoot, now)
+  return quitCommit
+}
+
+/** Quit teardown waits on this so the process cannot exit before the record lands. */
+export function pendingServeSupervisorQuitCommit(): Promise<void> {
+  return quitCommit ?? Promise.resolve()
+}
+
+async function writeQuitCommit(
+  executable: string,
+  macUserDataRoot: string,
+  now: () => number
+): Promise<void> {
+  const appBundle = macAppBundleOf(executable)
+  if (activePark?.record.phase === 'commit' || !appBundle) {
+    return
+  }
+  try {
+    const bundle = await realpath(appBundle)
+    const createdAt = now()
+    const record: ServeParkRecord = {
+      schemaVersion: 1,
+      attemptId: randomUUID(),
+      installerPid: process.pid,
+      phase: 'commit',
+      createdAt,
+      parkDeadlineAt: createdAt,
+      commitDeadlineAt: createdAt + SERVE_COMMIT_DEADLINE_MS,
+      bundleBefore: await readBundleIdentity(bundle),
+      supervisorPids: []
+    }
+    const dir = bundleCoordinationDir(bundle, macUserDataRoot)
+    await writeRecordDurably(dir, record)
+    activePark = { dir, record }
+  } catch {
+    // Without a record ShipIt only fails if a helper runs, as before.
+  }
+}
+
 /** Any aborted install: parked supervisors resume the old bundle right away. */
 export async function releaseServeSupervisorPark(): Promise<void> {
   const park = activePark
   activePark = null
+  quitCommit = null
   if (!park) {
     return
   }

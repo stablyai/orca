@@ -3,7 +3,7 @@ import type {
   CodexRateLimitResetResult,
   RateLimitRuntimeTarget,
   RateLimitState
-} from '../../../shared/rate-limit-types'
+} from '../../../shared/agent-usage/rate-limits/rate-limit-types'
 import type { PreloadApi } from '../../api-types'
 
 export const rateLimitsApi = {

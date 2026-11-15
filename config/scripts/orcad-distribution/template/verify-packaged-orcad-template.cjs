@@ -11,12 +11,12 @@ const {
   orcadTemplateCommonFilenames,
   orcadTemplatePackagedRipgrep,
   orcadTemplateTargetFilenames
-} = require('../../../../src/shared/orcad-artifacts.ts')
+} = require('../../../../src/shared/remote-runtime/orcad-distribution/orcad-artifacts.ts')
 const {
   COMPAT_SERVER_TARGETS,
   ORCAD_TEMPLATE_TARGETS,
   pinnedNodeRuntimeAsset
-} = require('../../../../src/shared/node-runtime-pin.ts')
+} = require('../../../../src/shared/node-runtime/node-runtime-pin.ts')
 
 const SHA256_PATTERN = /^[a-f0-9]{64}$/
 const BROWSER_NAME_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._-]*$/

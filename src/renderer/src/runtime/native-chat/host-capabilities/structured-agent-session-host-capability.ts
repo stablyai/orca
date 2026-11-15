@@ -17,7 +17,7 @@ import {
   AGENT_SESSION_REWIND_RECOVERY_CAPABILITY
 } from '../../../../../shared/agent-session/agent-session-runtime-capabilities'
 import type { RuntimeCapability } from '../../../../../shared/protocol-version'
-import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import {
   ensureLocalRuntimeCapabilities,
   readLocalRuntimeCapabilitiesOrUnknown,

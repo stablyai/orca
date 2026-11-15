@@ -10,7 +10,7 @@ import type {
   WorkspaceCleanupEvaluation,
   WorkspaceCleanupRuleReason
 } from '../../../shared/workspace-cleanup/workspace-cleanup-evaluation'
-import { errorMessage } from '../../../shared/error-message'
+import { errorMessage } from '../../../shared/errors/error-message'
 import type {
   WorkspaceCleanupPreview,
   WorkspaceCleanupReport,

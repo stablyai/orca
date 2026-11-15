@@ -1,6 +1,6 @@
 import { type BrowserWindow, ipcMain } from 'electron'
 import type { Store } from '../../persistence/loading-store/store'
-import type { Project, ProjectUpdateArgs } from '../../../shared/project-types'
+import type { Project, ProjectUpdateArgs } from '../../../shared/project/project-types'
 import {
   getRepoExecutionHostId,
   normalizeExecutionHostId,
@@ -49,10 +49,10 @@ export function registerRepoCatalogHandlers(
   )
 
   // Desktop-only reads (environment registry and saved state): never wakes a stopped distro.
-  ipcMain.handle('repos:listHostCatalogSnapshots', () =>
+  ipcMain.handle('repos:listHostCatalogSnapshots', async () =>
     listHostRepoCatalogSnapshots(
       store,
-      listEnvironments(getRuntimeEnvironmentRegistryRoot()).filter(
+      (await listEnvironments(getRuntimeEnvironmentRegistryRoot())).filter(
         (environment) => !isGatedOffWslHost(environment)
       )
     )

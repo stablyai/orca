@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto'
 import { realpathSync } from 'node:fs'
 import { basename, dirname, join, posix as pathPosix, win32 as pathWin32 } from 'node:path'
-import { foldWslUncPathCaseInsensitiveParts } from '../../../../shared/wsl-paths'
+import { foldWslUncPathCaseInsensitiveParts } from '../../../../shared/file-access/wsl-paths'
 import type { CodexEventLabel, CodexTrustEntry } from '../toml/config-toml-trust'
 import { observeResolvedFilePath } from '../../../filesystem/file-content-observation'
 

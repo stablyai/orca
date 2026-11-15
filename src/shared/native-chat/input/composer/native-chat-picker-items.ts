@@ -1,7 +1,7 @@
-import type { DiscoveredSkill, SkillSourceKind } from '../../../skills'
+import type { DiscoveredSkill, SkillSourceKind } from '../../../skills/discovery/skills'
 import * as reportedSkills from '../../native-chat-reported-skill'
 import type * as Commands from '../commands/native-chat-slash-commands'
-import { stripUnsafeDisplayCharacters } from '../../../display-text-safety'
+import { stripUnsafeDisplayCharacters } from '../../../text/display-text-safety'
 import { compareBaseSensitivityLocaleText } from '../../../locale-text-collators'
 
 export type NativeChatPickerItem =

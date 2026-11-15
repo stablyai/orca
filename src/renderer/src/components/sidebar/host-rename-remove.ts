@@ -3,9 +3,9 @@ import {
   clearHostSettingOverride,
   getHostSettingOverride,
   setHostSettingOverride
-} from '../../../../shared/host-setting-overrides'
+} from '../../../../shared/execution-host/host-setting-overrides'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
-import type { HostSettingOverrides } from '../../../../shared/host-setting-overrides'
+import type { HostSettingOverrides } from '../../../../shared/execution-host/host-setting-overrides'
 
 type OverridesSlice = Pick<GlobalSettings, 'hostSettingOverrides'>
 type OverridesMap = Partial<Record<ExecutionHostId, HostSettingOverrides>>

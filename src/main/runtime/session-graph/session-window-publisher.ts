@@ -2,8 +2,8 @@ import { OrcaRuntimeWithAttachWindow } from './session-graph-promotion'
 import type {
   RuntimeRendererSyncWindowGraph,
   RuntimeSyncWindowGraph
-} from '../../../shared/runtime-session-contracts'
-import { HEADLESS_RUNTIME_WINDOW_ID } from '../../../shared/runtime-session-contracts'
+} from '../../../shared/remote-runtime/session-graph/runtime-session-contracts'
+import { HEADLESS_RUNTIME_WINDOW_ID } from '../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 
 export abstract class OrcaRuntimeWithAdmitWindowPublisher extends OrcaRuntimeWithAttachWindow {
   protected admitWindowPublisher(

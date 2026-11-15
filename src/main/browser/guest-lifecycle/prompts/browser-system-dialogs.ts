@@ -4,7 +4,7 @@ import {
   BROWSER_AGENT_LEAD_QUERY_CHANNEL,
   BROWSER_PRINT_REFUSED_CHANNEL,
   BROWSER_SYSTEM_DIALOGS_PRELOAD_FILE
-} from '../../../../shared/browser-system-dialogs'
+} from '../../../../shared/browser/guest-lifecycle/browser-system-dialogs'
 import {
   registerBrowserSessionFramePreload,
   unregisterBrowserSessionFramePreload

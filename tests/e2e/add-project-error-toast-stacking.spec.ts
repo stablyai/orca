@@ -1,6 +1,6 @@
 import path from 'node:path'
 import type { ElectronApplication, Locator, Page, TestInfo } from '@stablyai/playwright-test'
-import { eventSchemas } from '../../src/shared/telemetry-events'
+import { eventSchemas } from '../../src/shared/telemetry/telemetry-event-registry'
 import { test, expect } from './helpers/orca-app'
 import {
   createRuntimeDesktopPairingOffer,

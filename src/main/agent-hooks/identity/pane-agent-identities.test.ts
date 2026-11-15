@@ -5,7 +5,7 @@ import { join } from 'node:path'
 import { Worker } from 'node:worker_threads'
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 
-import { isOrcaSessionId } from '../../../shared/orca-session-address'
+import { isOrcaSessionId } from '../../../shared/agent-session/identity/orca-session-address'
 import SyncDatabase from '../../sqlite/sync-database'
 import { spawnWorkerThread } from '../../worker-threads/worker-thread-spawn'
 import { AgentIdentityWorkerClient } from './agent-identity-worker-client'

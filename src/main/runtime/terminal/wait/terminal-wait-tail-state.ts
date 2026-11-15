@@ -1,4 +1,4 @@
-import type { RuntimeTerminalWaitBlockedReason } from '../../../../shared/runtime-terminal-contracts'
+import type { RuntimeTerminalWaitBlockedReason } from '../../../../shared/terminal/runtime/runtime-terminal-contracts'
 import { buildTailLines } from '../output/tail/terminal-tail-state'
 import { tailMayContainBlockedSignal } from '../output/tail/terminal-tail-sentinel-index'
 import { findActionableTerminalWaitBlockedSignal } from './terminal-wait-detection'

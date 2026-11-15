@@ -4,7 +4,7 @@ import {
   BROWSER_CLIENT_HOST_RUNTIME_CAPABILITY,
   BROWSER_CLIENT_PAGE_METADATA_RUNTIME_CAPABILITY
 } from '../../../../../shared/browser/runtime/browser-runtime-capabilities'
-import type { RuntimeBrowserClientPlacement } from '../../../../../shared/runtime-browser-placement'
+import type { RuntimeBrowserClientPlacement } from '../../../../../shared/browser/client-hosting/runtime-browser-placement'
 import { getBrowserHostLeaseRegistry } from '../../../browser-host/leases/browser-host-lease-registry-instance'
 import type { OrcaRuntimeService } from '../../../orca-runtime'
 import { getRuntimeBrowserPageRegistry } from '../../../browser/client-pages/runtime-browser-page-registry'

@@ -28,6 +28,8 @@ export type ClaudeStreamedBlockRegistry = {
     parentToolUseId: string | null
     messageId: string | null
   }) => StreamedBlock | null
+  /** Forget one stream's blocks; other streams keep theirs. */
+  clearScope: (sessionId: string, parentToolUseId: string | null) => void
   clear: () => void
 }
 
@@ -122,6 +124,9 @@ export function createClaudeStreamedBlockRegistry(
         return null
       }
       return streamed.awaitingFinal.shift() ?? null
+    },
+    clearScope: (sessionId, parentToolUseId) => {
+      messages.delete(scopeKey(sessionId, parentToolUseId))
     },
     clear: () => messages.clear()
   }

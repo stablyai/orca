@@ -1,4 +1,4 @@
-import { isCachedJcodeHelperSession } from '../../../jcode-helper-sessions'
+import { isCachedJcodeHelperSession } from './jcode-helper-sessions'
 import type { ParsedHookEnvelope } from '../../hook-envelope'
 import type { AgentHookEventPayload } from '../../listener-event'
 import type { HookListenerState } from '../../listener-state'

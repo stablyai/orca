@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { Repo } from '../../../../shared/repo-types'
+import type { Repo } from '../../../../shared/repository/repo-types'
 import { createTestStore } from '../testing/app-store-test-fixture'
 import {
   createCompatibleRuntimeStatusResponseIfNeeded,

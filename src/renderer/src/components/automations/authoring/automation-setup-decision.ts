@@ -2,8 +2,8 @@ import { getAutomationSetupDefaultDecision } from '../../../../../shared/automat
 
 import type { AutomationWorkspaceMode } from '../../../../../shared/automations/automation-definition'
 import type { OrcaHooks, SetupRunPolicy } from '../../../../../shared/orca-yaml-hook-types'
-import type { ProjectHostSetup } from '../../../../../shared/project-types'
-import type { Repo } from '../../../../../shared/repo-types'
+import type { ProjectHostSetup } from '../../../../../shared/project/project-types'
+import type { Repo } from '../../../../../shared/repository/repo-types'
 import type { SetupDecision } from '../../../../../shared/worktree/create-types'
 import { findAutomationRepo } from '../../../../../shared/automations/ownership/automation-repo-target'
 import { getRepoExecutionHostId } from '../../../../../shared/execution-host'

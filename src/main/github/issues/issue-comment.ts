@@ -1,6 +1,6 @@
 import { githubBodyImageUrls, githubBodyMediaHeaders } from '../attachments/body-image-urls'
 import type { GitHubCommentResult, PRComment } from '../../../shared/github/comments/comment-types'
-import type { IssueSourcePreference } from '../../../shared/repo-types'
+import type { IssueSourcePreference } from '../../../shared/repository/repo-types'
 import type { LocalGitExecOptions } from '../repositories/github-repository-identity'
 import type { GitHubRepositoryIdentity as OwnerRepo } from '../../../shared/github/repositories/repository-identity'
 import {

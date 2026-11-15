@@ -2,7 +2,7 @@ import type { AppState } from '@/store/types'
 import { selectWorktreeHostConnectionPhase } from '@/lib/workspace/ownership/worktree-host-connection-phase'
 import { runtimeHostConnectionStateForEntry } from '@/runtime/hosts/connections/runtime-host-connection-state'
 import { isConnectedRuntimeHostState } from '../../../../../../shared/remote-runtime/host-status/runtime-host-connection-state'
-import type { RuntimeClientTarget } from '../../../../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 
 /**
  * Whether a fork's "Forked from" divider can open its source now. A fork and its source share a

@@ -3,7 +3,7 @@ import {
   type LocalGitExecOptions
 } from '../../repositories/github-repository-identity'
 import type { ListWorkItemsResult } from '../../../../shared/github/work-items/work-item-types'
-import type { IssueSourcePreference } from '../../../../shared/repo-types'
+import type { IssueSourcePreference } from '../../../../shared/repository/repo-types'
 import { isGitHubWorkItemsQueryTooLarge } from '../../../../shared/github/work-items/work-items-query-bounds'
 import { parseTaskQuery } from '../../../../shared/work-items/task-query'
 import { acquire, release } from '../../execution/github-operation-slots'

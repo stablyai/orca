@@ -1,4 +1,4 @@
-import { clampUsedPercent } from '../../../../../shared/usage-percentage-display'
+import { clampUsedPercent } from '../../../../../shared/agent-usage/display/usage-percentage-display'
 
 /** Used % at which usage turns yellow (20% or less left). */
 export const USAGE_WARNING_PERCENT = 80

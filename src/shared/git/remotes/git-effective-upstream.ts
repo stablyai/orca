@@ -6,7 +6,7 @@ import {
 } from './git-configured-branch-target'
 import { splitRemoteBranchName } from './git-remote-branch-name'
 import { parseGitRevListAheadBehindCounts } from '../refs/git-rev-list-output'
-import { iterateProcessOutputLines } from '../../process-output-field-scanner'
+import { iterateProcessOutputLines } from '../../process-observation/process-output-field-scanner'
 import { createGitConfigSnapshotRunner } from '../commands/git-config-snapshot-runner'
 import { getGitCurrentBranchName } from '../refs/git-current-branch'
 

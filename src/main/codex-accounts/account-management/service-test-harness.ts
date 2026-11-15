@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type { GlobalSettings } from '../../../shared/global-settings-types'
 import { createCodexAccountSettings } from './codex-account-settings-fixture'
-import type { CodexResetCreditAttemptLedger } from '../../../shared/codex-reset-credit-attempt-ledger'
+import type { CodexResetCreditAttemptLedger } from '../../../shared/agent-accounts/codex/codex-reset-credit-attempt-ledger'
 import type { CodexRateLimitHomeResolution } from '../runtime-home/runtime-home-service-types'
 
 export const testState = {

@@ -225,6 +225,8 @@ export type ComputerLaunchAppResult = {
 
 export type ComputerListAppsResult = {
   apps: (ComputerAppInfo & {
+    // macOS: the app has no Dock icon; it is listed only while it shows a window.
+    accessory?: boolean
     isRunning: boolean
     lastUsedAt: string | null
     useCount: number | null

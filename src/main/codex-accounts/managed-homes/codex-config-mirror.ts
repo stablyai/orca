@@ -3,7 +3,7 @@ import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { isDefinitiveAbsence } from '../../../shared/definitive-filesystem-absence'
 import { createIntegrationStateFileCache } from '../../credentials/integration-state-file-cache'
-import { parseWslUncPath, toWindowsWslPath } from '../../../shared/wsl-paths'
+import { parseWslUncPath, toWindowsWslPath } from '../../../shared/file-access/wsl-paths'
 import {
   ensureCodexDaemonSocketGuard,
   syncSystemConfigIntoManagedCodexHome

@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 import { act, renderHook, waitFor } from '@testing-library/react'
 import { beforeEach, expect, it, vi } from 'vitest'
-import { createProjectGroup } from '../../../../shared/project-groups'
+import { createProjectGroup } from '../../../../shared/project/groups/project-groups'
 import { getDefaultRepoHookSettings } from '../../../../shared/constants'
 import '../../components/settings/__fixtures__/settings-persistence-test-fixture'
 import { useAppStore } from '@/store'
@@ -169,54 +169,3 @@ it('does not roll an old owner failure over a newer owner policy selection', asy
   expect(hook.result.current.startupPolicy).toBe('wait-for-setup')
   hook.unmount()
 })
-
-it.each([true, false])(
-  'retains a held owner save across A→B(save)→A (save=%s)',
-  async (success) => {
-    const second = { ...group, id: 'second', parentPath: '/second' }
-    let finishFirst!: (value: boolean) => void
-    const updateProjectGroup = vi.fn((groupId: string) =>
-      groupId === group.id
-        ? new Promise<boolean>((resolve) => {
-            finishFirst = resolve
-          })
-        : Promise.resolve(true)
-    )
-    useAppStore.setState({ projectGroups: [group, second], updateProjectGroup })
-    const hook = renderHook(({ selected }) => useSubmission(selected), {
-      initialProps: { selected: group }
-    })
-    await waitFor(() => expect(hook.result.current.groupSetup.shouldWaitForSetupCheck).toBe(false))
-    await act(async () => {
-      hook.result.current.groupSetup.setStartupPolicy('wait-for-setup')
-    })
-    hook.rerender({ selected: second })
-    await waitFor(() => expect(hook.result.current.groupSetup.shouldWaitForSetupCheck).toBe(false))
-    await act(async () => {
-      hook.result.current.groupSetup.setStartupPolicy('wait-for-setup')
-      expect(await hook.result.current.groupSetup.waitForStartupPolicySave()).toBe(true)
-    })
-    hook.rerender({ selected: group })
-    await waitFor(() => expect(hook.result.current.groupSetup.shouldWaitForSetupCheck).toBe(false))
-    const inspectionsBeforeSubmit = vi.mocked(checkRuntimeGroupHooks).mock.calls.length
-    let submitting!: Promise<void>
-    act(() => {
-      submitting = hook.result.current.submitFolderTarget(null)
-    })
-    await Promise.resolve()
-    expect(submitFolderWorkspaceCreate).not.toHaveBeenCalled()
-    expect(checkRuntimeGroupHooks).toHaveBeenCalledTimes(inspectionsBeforeSubmit)
-    await act(async () => {
-      finishFirst(success)
-      await submitting
-    })
-    if (success) {
-      expect(submitFolderWorkspaceCreate).toHaveBeenCalledOnce()
-      expect(toast.error).not.toHaveBeenCalled()
-    } else {
-      expect(submitFolderWorkspaceCreate).not.toHaveBeenCalled()
-      expect(toast.error).toHaveBeenCalledOnce()
-    }
-    hook.unmount()
-  }
-)

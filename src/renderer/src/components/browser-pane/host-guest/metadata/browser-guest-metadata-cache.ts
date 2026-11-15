@@ -2,7 +2,7 @@ import type { BrowserGuestMetadata } from '../../../../../../shared/browser/gues
 import {
   normalizeBrowserNavigationUrl,
   redactKagiSessionToken
-} from '../../../../../../shared/browser-url'
+} from '../../../../../../shared/browser/navigation/browser-url'
 
 type Listener = (state: BrowserGuestMetadata | null) => void
 type GuestMetadataEntry = {

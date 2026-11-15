@@ -8,12 +8,12 @@ import {
   fetchDictationSetup
 } from '../dictation/mobile-dictation-setup'
 import type { MobileSessionFeedbackCapabilitiesModel } from './use-mobile-session-feedback-capabilities'
-import type { DictationTerm } from '../../../src/shared/dictation-dictionary'
+import type { DictationTerm } from '../../../src/shared/speech/dictation/dictation-dictionary'
 import {
   DEFAULT_STOP_AFTER_SILENCE_SECONDS,
   stopAfterSilenceSeconds,
   type StopAfterSilenceSeconds
-} from '../../../src/shared/dictation-silence-stop'
+} from '../../../src/shared/speech/dictation/dictation-silence-stop'
 
 // The computer's dictation settings as this session reads them: mic shown, mode, filler switch, and whether setup is needed first.
 export function useMobileSessionDictationSetup(scope: MobileSessionFeedbackCapabilitiesModel) {

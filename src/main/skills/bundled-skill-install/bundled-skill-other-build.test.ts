@@ -7,7 +7,7 @@ import {
   bundledSkillNudgeEntries,
   bundledSkillNudgeKey,
   bundledSkillPlanState
-} from '../../../shared/bundled-skill-summary'
+} from '../../../shared/skills/bundled/bundled-skill-summary'
 import type { BundledSkillSource } from './bundled-skill-sources'
 import {
   autoUpdateInstalledBundledSkills,

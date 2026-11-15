@@ -3,7 +3,7 @@
 
 import { randomUUID } from 'node:crypto'
 import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent'
-import type { RuntimeTerminalWait } from '../../../../../shared/runtime-terminal-contracts'
+import type { RuntimeTerminalWait } from '../../../../../shared/terminal/runtime/runtime-terminal-contracts'
 import { isAgentPromptStalledError } from '../../../terminal/input/agent-prompt-submission-verification'
 import {
   waitForLaunchedAgentComposer,

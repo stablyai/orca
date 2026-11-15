@@ -2,7 +2,7 @@ import { randomBytes, randomUUID } from 'node:crypto'
 import {
   CLAUDE_AGENT_TEAMS_TMUX_DIR,
   splitTmuxCommand
-} from '../../../../shared/claude-agent-teams-tmux-compat'
+} from '../../../../shared/agent-launch/startup/claude-agent-teams-tmux-compat'
 import { ClaudeAgentTeamsTmuxDispatcher } from './claude-agent-teams-tmux-dispatcher'
 import { resolvePathEnvKey } from '../../../pty/environment/windows-path-segment-merge'
 import type {

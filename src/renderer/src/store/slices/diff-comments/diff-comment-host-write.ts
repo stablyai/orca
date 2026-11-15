@@ -5,7 +5,7 @@ import type { DiffCommentOwner } from './diff-comment-owner'
 import { toRuntimeWorktreeSelector } from '../../../runtime/rpc/targets/runtime-worktree-selector'
 import { callHostRoute } from '@/runtime/rpc/calls/host-route-call'
 import { hostRouteForAuthority } from '@/runtime/rpc/targets/runtime-client-target'
-import { parseWorkspaceKey } from '../../../../../shared/workspace-scope'
+import { parseWorkspaceKey } from '../../../../../shared/workspace/identity/workspace-scope'
 
 /** Writes a workspace's whole review-note list to the host that owns it. */
 export async function writeDiffCommentsToHost(

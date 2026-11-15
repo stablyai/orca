@@ -1,6 +1,6 @@
 import { stat } from 'node:fs/promises'
 import { isDefinitiveAbsence } from '../../../../shared/definitive-filesystem-absence'
-import { waitForPromiseWithSignal } from '../../../../shared/abort-signal-reason'
+import { waitForPromiseWithSignal } from '../../../../shared/concurrency/abort-signal-reason'
 import { isMissingCommandBinaryError } from '../process-capture/exec-error'
 
 const MAX_KNOWN_MISSING_CWDS = 256

@@ -3,7 +3,7 @@ import { getAppEnvironment } from '../../shared/app-environment'
 import {
   hasSpeechEnginePackage,
   SPEECH_RECOGNIZER_DIR_ENV
-} from '../../shared/speech-recognizer-package'
+} from '../../shared/speech/native-recognizer/speech-recognizer-package'
 import {
   currentWorkerEntryLayout,
   resolveWorkerThreadEntryPath

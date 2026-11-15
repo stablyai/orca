@@ -7,7 +7,7 @@ import {
   type ExecutionHostId
 } from '../../../shared/execution-host'
 import { resolveQualifiedWorktreeExecutionOwner } from '@/lib/workspace/ownership/qualified-worktree-execution-owner'
-import { parseWorkspaceKey } from '../../../shared/workspace-scope'
+import { parseWorkspaceKey } from '../../../shared/workspace/identity/workspace-scope'
 import { resolveQualifiedIndexedFolderWorkspace } from '@/store/folder-workspaces/folder-workspace-record-index'
 import { selectWorktreesByRepo } from '@/store/workspaces/catalog/workspace-record-fields'
 

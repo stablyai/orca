@@ -13,7 +13,7 @@ import {
   getScreenSubmitShortcutLabel,
   isScreenSubmitShortcut
 } from '@/lib/keyboard/screen-submit-shortcut'
-import { createNonSecureContextUuid as createBrowserUuid } from '../../../shared/non-secure-context-uuid'
+import { createNonSecureContextUuid as createBrowserUuid } from '../../../shared/identifiers/non-secure-context-uuid'
 import { useAppStore } from '@/store/index'
 import { linearAddIssueComment } from '@/runtime/linear/runtime-linear-issue-client'
 import { translate } from '@/i18n/i18n'

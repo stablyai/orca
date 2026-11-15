@@ -1,5 +1,5 @@
-import type { BuiltInWindowsTerminalShell } from '../../../../shared/windows-terminal-shell'
-import { WINDOWS_GIT_BASH_SHELL } from '../../../../shared/windows-terminal-shell'
+import type { BuiltInWindowsTerminalShell } from '../../../../shared/shell/launch/windows-terminal-shell'
+import { WINDOWS_GIT_BASH_SHELL } from '../../../../shared/shell/launch/windows-terminal-shell'
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
 import type { getProjectRuntimeShellMenuMode } from './use-tab-bar-runtime-model'

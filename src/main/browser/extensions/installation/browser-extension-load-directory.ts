@@ -260,11 +260,12 @@ export async function prepareBrowserExtensionDirectory(
   options: { refresh?: boolean } = {}
 ): Promise<PreparedBrowserExtensionDirectory> {
   const key = resolve(extension.path)
+  let running = pending.get(key)
   const copied = copiedThisRun.get(key)
-  if (copied && !options.refresh) {
+  // Why not while a copy runs: a profile starting mid-Reload must load the finished copy.
+  if (copied && !options.refresh && !running) {
     return copied
   }
-  let running = pending.get(key)
   if (!running) {
     running = prepare(extension)
     pending.set(key, running)

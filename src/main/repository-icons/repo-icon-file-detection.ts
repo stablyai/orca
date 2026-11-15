@@ -1,6 +1,9 @@
 import { readFile, stat } from 'node:fs/promises'
 import { buildImageDataUri } from '../../shared/file-preview/image-data-uri'
-import { MAX_REPO_ICON_UPLOAD_BYTES, type RepoIcon } from '../../shared/repo-icon'
+import {
+  MAX_REPO_ICON_UPLOAD_BYTES,
+  type RepoIcon
+} from '../../shared/repository/appearance/repo-icon'
 import type { ExecutionHostFilesystemRoute } from '../providers/execution-host-provider-dispatch'
 import { detectImageFileSignature } from '../../shared/image-file-signature'
 import { extractIconHref } from './repo-icon-source-href'
