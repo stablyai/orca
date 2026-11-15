@@ -67,12 +67,16 @@ export function cancelPRWatchRead(job: PRWatchJob): void {
  *  its request; its caller still gets its own outcome. */
 export async function runHostedPRRead(
   candidate: GitHubPRRefreshCandidate,
-  read: (() => Promise<PRRefreshOutcome>) | PreparedPRBranchRead,
+  preparingRead:
+    | (() => Promise<PRRefreshOutcome>)
+    | PreparedPRBranchRead
+    | Promise<PreparedPRBranchRead>,
   didRead: () => boolean = () => true,
   release: () => void = () => {}
 ): Promise<PRRefreshOutcome> {
   const finishRequest = registerPRRefreshRequest(candidate, 'h', true)
   try {
+    const read = await preparingRead
     if (typeof read !== 'function') {
       const owners = { queue, retry, observe: events.observe.bind(events) }
       const settle = hostedPRReadSettlement(owners, candidate, read, false)

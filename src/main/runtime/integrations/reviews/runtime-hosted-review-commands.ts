@@ -141,7 +141,7 @@ export class RuntimeHostedReviewCommands {
       localGitOptions: lookupOptions.localGitExecOptions,
       isSelected: reason === 'swr' && userRefresh !== true && selected
     }
-    const prepared = await preparePRBranchRead(
+    const prepared = preparePRBranchRead(
       repo.path,
       branch,
       linkedPRNumber ?? null,
@@ -150,7 +150,13 @@ export class RuntimeHostedReviewCommands {
       lookupOptions
     )
     if (reason === 'swr' && userRefresh !== true) {
-      return runHostedPRSnapshot(candidate, prepared, deadline, signal, acceptRevalidationOnly)
+      return runHostedPRSnapshot(
+        candidate,
+        await prepared,
+        deadline,
+        signal,
+        acceptRevalidationOnly
+      )
     }
     return runHostedPRRead(candidate, prepared)
   }

@@ -1,17 +1,31 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-const { coordinatorMocks, moduleMocks } = await vi.hoisted(async () => {
+const { coordinatorMocks, moduleMocks, preparation } = await vi.hoisted(async () => {
   const moduleMocks =
     await import('../../../../../github/pull-requests/refresh/pr-refresh-coordinator-test-mocks')
-  return { coordinatorMocks: moduleMocks.createPRRefreshCoordinatorMocks(), moduleMocks }
+  const preparation: { held: Promise<void> | null } = { held: null }
+  return {
+    coordinatorMocks: moduleMocks.createPRRefreshCoordinatorMocks(),
+    moduleMocks,
+    preparation
+  }
 })
 
 vi.mock('../../../../../github/pull-requests/refresh/pr-refresh-renderer-port', () =>
   moduleMocks.rendererPortModuleMock(coordinatorMocks)
 )
-vi.mock('../../../../../github/client/lookup/pr-for-branch-outcome', () =>
-  moduleMocks.clientModuleMock(coordinatorMocks)
-)
+vi.mock('../../../../../github/client/lookup/pr-for-branch-outcome', () => {
+  const client = moduleMocks.clientModuleMock(coordinatorMocks)
+  return {
+    ...client,
+    preparePRBranchRead: async (...args: Parameters<typeof client.preparePRBranchRead>) => {
+      if (preparation.held) {
+        await preparation.held
+      }
+      return client.preparePRBranchRead(...args)
+    }
+  }
+})
 vi.mock('../../../../../github/repositories/github-api-repository-remote-probe', () =>
   moduleMocks.githubApiRepositoryModuleMock(coordinatorMocks)
 )
@@ -74,6 +88,7 @@ async function methods() {
 describe('github.prDetailRecovery runtime methods', () => {
   beforeEach(() => {
     moduleMocks.resetPRRefreshCoordinatorMocks(coordinatorMocks)
+    preparation.held = null
   })
 
   afterEach(() => {
@@ -205,11 +220,17 @@ describe('github.prDetailRecovery runtime methods', () => {
         getPRForBranchOutcomeMock.mockReturnValue(new Promise(() => {}))
         const { startRecovery, hostedRead } = await compose(hosted, recovery)
         const snapshot = await startRecovery()
-        hostedRead()
-        const { waitPRDetailRecovery } =
-          await import('../../../../../github/pull-requests/refresh/pr-detail-recovery-coordinator')
-        const after = await waitPRDetailRecovery('rpc:desktop-1', snapshot.ticketId, -1)
-        expect(after?.terminal).toEqual(terminal)
+        const held = Promise.withResolvers<void>()
+        preparation.held = held.promise
+        try {
+          hostedRead()
+          const { waitPRDetailRecovery } =
+            await import('../../../../../github/pull-requests/refresh/pr-detail-recovery-coordinator')
+          const after = await waitPRDetailRecovery('rpc:desktop-1', snapshot.ticketId, -1)
+          expect(after?.terminal).toEqual(terminal)
+        } finally {
+          held.resolve()
+        }
       }
     )
   })

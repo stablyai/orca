@@ -49,6 +49,7 @@ export function queuedRequestId(entry: PRRefreshQueueEntry): string {
 /** Outstanding provider reads, so a recovery ticket awaits real settlement instead of a key-wide status. */
 export class PRRefreshRequestRegistry {
   private readonly reads = new Map<string, PRRefreshOutstandingRead>()
+  private readonly readsBySlot = new Map<string, Map<string, PRRefreshOutstandingRead>>()
   private settleListener: (() => void) | null = null
   private registrationListener: ((registration: PRRefreshRegistration) => void) | null = null
 
@@ -65,12 +66,30 @@ export class PRRefreshRequestRegistry {
   }
 
   start(read: PRRefreshOutstandingRead): void {
+    const previous = this.reads.get(read.requestId)
+    if (previous && previous.slotKey !== read.slotKey) {
+      this.removeFromSlot(previous)
+    }
     this.reads.set(read.requestId, read)
+    const slot = this.readsBySlot.get(read.slotKey) ?? new Map<string, PRRefreshOutstandingRead>()
+    slot.set(read.requestId, read)
+    this.readsBySlot.set(read.slotKey, slot)
   }
 
   settle(requestId: string): void {
-    if (this.reads.delete(requestId)) {
+    const read = this.reads.get(requestId)
+    if (read) {
+      this.reads.delete(requestId)
+      this.removeFromSlot(read)
       this.settleListener?.()
+    }
+  }
+
+  private removeFromSlot(read: PRRefreshOutstandingRead): void {
+    const slot = this.readsBySlot.get(read.slotKey)
+    slot?.delete(read.requestId)
+    if (slot?.size === 0) {
+      this.readsBySlot.delete(read.slotKey)
     }
   }
 
@@ -79,6 +98,6 @@ export class PRRefreshRequestRegistry {
   }
 
   readsFor(slotKey: string): PRRefreshOutstandingRead[] {
-    return Array.from(this.reads.values()).filter((read) => read.slotKey === slotKey)
+    return Array.from(this.readsBySlot.get(slotKey)?.values() ?? [])
   }
 }
