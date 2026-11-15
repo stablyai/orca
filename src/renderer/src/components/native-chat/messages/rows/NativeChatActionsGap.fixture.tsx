@@ -8,7 +8,7 @@ import {
   nativeChatAppearanceStyle
 } from '../../appearance/native-chat-appearance-style'
 
-// An answer's actions sit the same gap below it, whatever the answer ends with.
+// Every answer keeps at least the same gap above its actions, whatever it ends with.
 const owner = {
   target: { kind: 'local' as const },
   sessionId: 'actions-gap',

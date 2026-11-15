@@ -21,8 +21,8 @@ export function NativeChatAgentControls({
 }): React.JSX.Element {
   const t = useTranslate()
   return (
-    // Row chrome, not transcript: find skips it. The gap above is the row's own, the same whatever the
-    // answer ends with: it collapses with the last block's margin, so it must be at least the largest.
+    // Row chrome, not transcript: find skips it. The row owns a minimum gap above it, so every answer
+    // gets at least this much: it collapses with the last block's bottom margin, and a larger one wins.
     <div data-native-chat-find-skip className={cn('mt-3 flex items-center gap-1', className)}>
       {/* A visual line means nothing pasted outside Orca, so the copy leaves it out. An image-only
           response has nothing to copy, so it has no Copy. */}
