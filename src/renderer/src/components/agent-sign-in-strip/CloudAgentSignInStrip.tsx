@@ -255,6 +255,11 @@ export function CloudAgentSignInStrip({
           </TooltipTrigger>
           {model.description ? <TooltipContent>{model.description}</TooltipContent> : null}
         </Tooltip>
+        {model.hint ? (
+          <span className={cn(lineFit, 'mt-0.5 text-xs leading-4 text-muted-foreground')}>
+            {model.hint}
+          </span>
+        ) : null}
       </div>
       {width === 'wide' && !secretPaste ? (
         prompt ? (

@@ -11,7 +11,7 @@ import type {
 } from '../../../../../shared/orca-cloud-agents/orca-cloud-agents-wire'
 import { SecretValueInput } from '../cloud-secrets/SecretValueInput'
 import { ElapsedSuffix, RowShell } from './orca-cloud-account-row-shell'
-import { setupFailureCopy } from './orca-cloud-accounts-copy'
+import { deviceCodeOffHint, setupFailureCopy } from './orca-cloud-accounts-copy'
 import { CloudStripPasteForm } from '@/components/agent-sign-in-strip/CloudStripPasteForm'
 import { setupCodePaste } from '@/components/agent-sign-in-strip/cloud-agent-setup-strip-model'
 import type { OrcaCloudAccountsActions } from './orca-cloud-accounts-types'
@@ -240,10 +240,15 @@ export function SetupRow({
               <ElapsedSuffix startedAt={setup.startedAt} now={now} />
             </>
           }
-          detail={t(
-            'orcaCloudAccounts.deviceGuard',
-            'Only continue if you started this sign-in in Orca.'
-          )}
+          detail={
+            <>
+              {t(
+                'orcaCloudAccounts.deviceGuard',
+                'Only continue if you started this sign-in in Orca.'
+              )}
+              <span className="mt-0.5 block">{deviceCodeOffHint(t)}</span>
+            </>
+          }
           actions={
             <>
               <OpenExternalSplitButton

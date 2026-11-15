@@ -35,6 +35,8 @@ export type CloudStripModel = {
   primary: { label: string; narrowLabel?: string; action: CloudStripPrimary; busy?: boolean } | null
   /** Device code shown inline (Copy beside it). */
   code: string | null
+  /** A quiet third line under the detail (the device-code step's "if it's off" pointer). */
+  hint?: string
   /** The paste input replaces the primary. */
   paste: {
     submitting: boolean

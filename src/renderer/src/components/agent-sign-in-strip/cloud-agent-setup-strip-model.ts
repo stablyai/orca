@@ -10,6 +10,7 @@ import type { OrcaCloudAgentSetup } from '../../../../shared/orca-cloud-agents/o
 import type { HostAgentSignInAgent } from '../../../../shared/host-agent-sign-in-status'
 import { HOST_AGENT_SIGN_IN_AGENT_NAME } from '../../../../shared/host-agent-sign-in-status'
 import type { CloudStripModel } from './cloud-agent-strip-model'
+import { deviceCodeOffHint } from '@/components/settings/agent-accounts/orca-cloud-accounts-copy'
 
 function base(agent: string, t: Translate): CloudStripModel {
   const title = t('agentSignInStrip.notSetUp', '{{agent}} isn’t set up for Orca Cloud', { agent })
@@ -170,6 +171,8 @@ export function cloudAgentSetupStripModel(args: {
           action: { kind: 'copyAndOpen', url: setup.verificationUrl, code: setup.userCode }
         },
         code: setup.userCode,
+        // Said up front: OpenAI's page refuses the code when the account has device code sign-in off.
+        hint: deviceCodeOffHint(t),
         announcement: t('agentSignInStrip.deviceAnnounce', 'Enter the code on auth.openai.com.')
       }
     case 'paste': {
