@@ -28,7 +28,8 @@ const spec: ProviderSpawnSpec = {
 
 function launch(index: number) {
   const raw = new ChildProcess()
-  Object.defineProperty(raw, 'pid', { value: 7_000_000 + index * 3 })
+  const parentPid = 7_000_000 + index * 3
+  Object.defineProperty(raw, 'pid', { value: parentPid })
   raw.stdin = new PassThrough()
   const stdout = new PassThrough()
   const stderr = new PassThrough()
@@ -51,7 +52,7 @@ function launch(index: number) {
   })
   Object.assign(raw, { stdio: [raw.stdin, raw.stdout, raw.stderr, control, gate, status, outcome] })
   status.write(
-    `${JSON.stringify({ leaderPid: raw.pid + 1, watcherPid: raw.pid + 2, bootId: 'test-boot' })}\n`
+    `${JSON.stringify({ leaderPid: parentPid + 1, watcherPid: parentPid + 2, bootId: 'test-boot' })}\n`
   )
   gate.once('finish', () => status.end())
   const child = new DirectProviderChild(raw, spec)

@@ -1,4 +1,4 @@
-import { setTimeout, clearTimeout } from 'node:timers'
+import { withTimeout } from '../../shared/promise-timeout-fallback'
 import type { ChildProcess } from 'node:child_process'
 import { EventEmitter } from 'node:events'
 import {
@@ -136,7 +136,7 @@ export class LegacyProviderChild extends EventEmitter implements ProviderChild {
   private async settle(code: number | null, signal: NodeJS.Signals | null): Promise<void> {
     if (code === 127) {
       // The report is the supervisor's last stderr line, which can trail its exit.
-      await settledWithin(streamEnded(this.stderrFilter), PROVIDER_OUTPUT_DRAIN_TIMEOUT_MS)
+      await withTimeout(streamEnded(this.stderrFilter), PROVIDER_OUTPUT_DRAIN_TIMEOUT_MS, undefined)
     }
     const spawnFailure = legacyProviderSpawnFailure(code, this.stderrFilter.finalReport ?? '')
     if (spawnFailure) {
@@ -287,18 +287,4 @@ function streamEnded(stream: Readable): Promise<void> {
 
 function aborted(signal: AbortSignal): Promise<void> {
   return new Promise((resolve) => signal.addEventListener('abort', () => resolve(), { once: true }))
-}
-
-async function settledWithin<T>(promise: Promise<T>, timeoutMs: number): Promise<T | undefined> {
-  let timer: NodeJS.Timeout | undefined
-  try {
-    return await Promise.race([
-      promise,
-      new Promise<undefined>((resolve) => {
-        timer = setTimeout(resolve, timeoutMs)
-      })
-    ])
-  } finally {
-    clearTimeout(timer)
-  }
 }
