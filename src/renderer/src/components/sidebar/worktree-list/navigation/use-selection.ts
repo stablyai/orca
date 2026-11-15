@@ -63,11 +63,18 @@ export function useSidebarWorktreeSelection(args: {
   )
   const updateSelectionForGesture = useCallback(
     (event: React.MouseEvent<HTMLElement>, worktree: Worktree): boolean => {
-      const list = event.currentTarget?.closest<HTMLElement>('[data-worktree-sidebar]')
-      list?.focus({ preventScroll: true })
-      list?.setAttribute('data-keyboard-navigation', '')
       setFocusedKey(getWorktreeHostIdentity(worktree))
-      return updateSelection(event, worktree)
+      const selectionOnly = updateSelection(event, worktree)
+      if (selectionOnly) {
+        // Modifier gestures (multi-select) keep the sidebar list focused so the delete
+        // shortcut stays scoped to selection. A plain navigation click returns false
+        // and the activation that follows hands focus to the terminal surface as it
+        // did before #41457.
+        const list = event.currentTarget?.closest<HTMLElement>('[data-worktree-sidebar]')
+        list?.focus({ preventScroll: true })
+        list?.setAttribute('data-keyboard-navigation', '')
+      }
+      return selectionOnly
     },
     [updateSelection]
   )
