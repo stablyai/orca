@@ -2616,6 +2616,8 @@ jobs:
           TAG: ${{ needs.cut.outputs.tag }}
           RELEASE_SHA: ${{ needs.create-release.outputs.release_sha }}
           MAC_RUN_ID: ${{ needs.build-mac.outputs.run_id }}
+          # The attempt verify-mac-build qualified; the mac run and its manifest must still be at it.
+          MAC_RUN_ATTEMPT: ${{ needs.build-mac.outputs.run_attempt }}
           ORCA_SERVER: ${{ needs.upload-orca-server-artifact.result == 'success' }}
         run: >-
           node config/scripts/release/publication/verify-release-asset-provenance.mjs

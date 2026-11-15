@@ -117,6 +117,7 @@ describe('publish-release asset provenance', () => {
     )
     expect(verify.env).toMatchObject({
       MAC_RUN_ID: '${{ needs.build-mac.outputs.run_id }}',
+      MAC_RUN_ATTEMPT: '${{ needs.build-mac.outputs.run_attempt }}',
       ORCA_SERVER: "${{ needs.upload-orca-server-artifact.result == 'success' }}"
     })
     const downloads = job.steps.filter((step) => step.uses?.startsWith('actions/download-artifact'))

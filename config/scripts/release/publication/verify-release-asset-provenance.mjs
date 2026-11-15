@@ -2,7 +2,8 @@
 // Anyone with contents write can replace a draft asset, so the draft must equal, by GitHub's sha256 digest, the
 // manifests this release's builds wrote. Manifests are untrusted data, read strictly from expected locations only.
 // Usage: node verify-release-asset-provenance.mjs <this-run-manifests-dir> <mac-manifest-dir>
-//   env: GH_TOKEN, GITHUB_REPOSITORY, GITHUB_RUN_ID, TAG, RELEASE_SHA, MAC_RUN_ID, ORCA_SERVER ('true' when uploaded)
+//   env: GH_TOKEN, GITHUB_REPOSITORY, GITHUB_RUN_ID, TAG, RELEASE_SHA, MAC_RUN_ID, MAC_RUN_ATTEMPT,
+//        ORCA_SERVER ('true' when uploaded)
 import { createHash } from 'node:crypto'
 import { lstatSync, readdirSync, readFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
@@ -37,7 +38,12 @@ export function parseManifest(text, expected) {
   }
   // Why: the Windows job uploads only on attempt 1 (reruns reuse those signed assets), so its manifest must be too.
   const attempt = manifest.run_attempt
-  if (!RUN_ID.test(attempt) || (expected.firstAttempt && attempt !== '1')) {
+  // The mac manifest must come from the exact attempt that was qualified (expected.runAttempt).
+  if (
+    !RUN_ID.test(attempt) ||
+    (expected.firstAttempt && attempt !== '1') ||
+    (expected.runAttempt !== undefined && attempt !== expected.runAttempt)
+  ) {
     fail(`run_attempt '${attempt}' is not allowed`)
   }
   const assets = Array.isArray(manifest.assets) ? manifest.assets : []
@@ -88,8 +94,8 @@ export function readRunManifests(dir, sources) {
 }
 
 // The mac assets come from a separate run; trust its manifest only from the release-mac-build.yml run on main
-// that this release run dispatched for this tag.
-export function assertMacRun(run, { repo, tag, releaseRunId, macRunId }) {
+// that this release run dispatched for this tag, still at the attempt that was qualified.
+export function assertMacRun(run, { repo, tag, releaseRunId, macRunId, macRunAttempt }) {
   const ok =
     String(run?.id) === macRunId &&
     run.path === '.github/workflows/release-mac-build.yml' &&
@@ -99,10 +105,12 @@ export function assertMacRun(run, { repo, tag, releaseRunId, macRunId }) {
     run.head_repository?.full_name === repo &&
     run.status === 'completed' &&
     run.conclusion === 'success' &&
-    run.display_title === `Mac release build ${tag} (${releaseRunId})`
+    run.display_title === `Mac release build ${tag} (${releaseRunId})` &&
+    RUN_ID.test(`${macRunAttempt}`) &&
+    String(run.run_attempt) === macRunAttempt
   if (!ok) {
     throw new Error(
-      `Run ${macRunId} is not the successful release-mac-build.yml run on main for ${tag}`
+      `Run ${macRunId} is not the successful release-mac-build.yml run on main for ${tag} at attempt ${macRunAttempt}`
     )
   }
 }
@@ -172,13 +180,21 @@ export function hashReleaseAsset(repo, token) {
 async function main([runDir, macDir]) {
   const { GH_TOKEN: token, GITHUB_REPOSITORY: repo, GITHUB_RUN_ID: runId, TAG: tag } = process.env
   const { RELEASE_SHA: releaseSha, MAC_RUN_ID: macRunId, ORCA_SERVER: orcaServer } = process.env
-  if (!token || !repo || !RUN_ID.test(`${runId}`) || !RUN_ID.test(`${macRunId}`) || !macDir) {
+  const { MAC_RUN_ATTEMPT: macRunAttempt } = process.env
+  if (
+    !token ||
+    !repo ||
+    !RUN_ID.test(`${runId}`) ||
+    !RUN_ID.test(`${macRunId}`) ||
+    !RUN_ID.test(`${macRunAttempt}`) ||
+    !macDir
+  ) {
     throw new Error('Usage: verify-release-asset-provenance.mjs <run-dir> <mac-dir> (see header)')
   }
   const run = await (
     await githubFetch(`${API}/repos/${repo}/actions/runs/${macRunId}`, token)
   ).json()
-  assertMacRun(run, { repo, tag, releaseRunId: runId, macRunId })
+  assertMacRun(run, { repo, tag, releaseRunId: runId, macRunId, macRunAttempt })
   const sources = SOURCES.filter(
     (s) => s !== 'mac' && (s !== 'orca-server' || orcaServer === 'true')
   )
@@ -187,7 +203,12 @@ async function main([runDir, macDir]) {
     parseManifest(text, { ...common, source, run_id: runId, firstAttempt: source === 'win' })
   )
   manifests.push(
-    parseManifest(readManifestDir(macDir), { ...common, source: 'mac', run_id: macRunId })
+    parseManifest(readManifestDir(macDir), {
+      ...common,
+      source: 'mac',
+      run_id: macRunId,
+      runAttempt: macRunAttempt
+    })
   )
   const release = await fetchRelease(repo, tag, token)
   if (release.draft !== true) {

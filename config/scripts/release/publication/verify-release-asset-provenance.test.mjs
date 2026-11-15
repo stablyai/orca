@@ -133,6 +133,15 @@ describe('parseManifest', () => {
     expect(() => parse(manifest('win', ['latest.yml'], overrides))).toThrow()
   })
 
+  it('requires the mac manifest to come from the qualified attempt', () => {
+    const mac = { ...expected, source: 'mac', firstAttempt: false, runAttempt: '2' }
+    const at = (attempt) =>
+      JSON.stringify(manifest('mac', ['latest-mac.yml'], { source: 'mac', run_attempt: attempt }))
+    expect(() => parseManifest(at('2'), mac)).not.toThrow()
+    expect(() => parseManifest(at('3'), mac)).toThrow(/run_attempt '3'/)
+    expect(() => parseManifest(at('1'), mac)).toThrow(/run_attempt '1'/)
+  })
+
   it('accepts a later attempt for jobs that rerun their uploads', () => {
     const value = manifest('linux-x64', ['latest-linux.yml'], { run_attempt: '2' })
     expect(() =>
@@ -201,10 +210,14 @@ describe('assertMacRun', () => {
     head_repository: { full_name: repo },
     status: 'completed',
     conclusion: 'success',
-    display_title: `Mac release build ${TAG} (100)`
+    display_title: `Mac release build ${TAG} (100)`,
+    run_attempt: 2
   }
-  const check = (overrides) =>
-    assertMacRun({ ...run, ...overrides }, { repo, tag: TAG, releaseRunId: '100', macRunId: '200' })
+  const check = (overrides, macRunAttempt = '2') =>
+    assertMacRun(
+      { ...run, ...overrides },
+      { repo, tag: TAG, releaseRunId: '100', macRunId: '200', macRunAttempt }
+    )
 
   it('accepts the release-mac-build run this release dispatched', () => {
     expect(() => check({})).not.toThrow()
@@ -217,8 +230,15 @@ describe('assertMacRun', () => {
     ['another tag', { display_title: 'Mac release build v1.2.4 (100)' }],
     ['a failed run', { conclusion: 'failure' }],
     ['a fork', { head_repository: { full_name: 'mallory/orca' } }],
-    ['another run id', { id: 201 }]
+    ['another run id', { id: 201 }],
+    ['a later attempt than the qualified one', { run_attempt: 3 }],
+    ['an earlier attempt than the qualified one', { run_attempt: 1 }]
   ])('refuses %s', (_name, overrides) => {
     expect(() => check(overrides)).toThrow(/not the successful release-mac-build.yml run/)
+  })
+
+  it('refuses without a qualified attempt', () => {
+    expect(() => check({}, null)).toThrow(/not the successful release-mac-build.yml run/)
+    expect(() => check({}, '')).toThrow(/not the successful release-mac-build.yml run/)
   })
 })
