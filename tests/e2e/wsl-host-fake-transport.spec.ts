@@ -100,7 +100,7 @@ async function checkWindowsFolderPicker(
   await expect(manual.locator('#server-project-path')).toHaveValue(projectPath, { timeout: 30_000 })
   await settleAnimations(page)
   await page.screenshot({ path: testInfo.outputPath('wsl-windows-folder-picker-filled.png') })
-  await page.keyboard.press('Escape')
+  await manual.getByRole('button', { name: 'Close', exact: true }).click()
   await expect(manual).toBeHidden()
 
   // E8: a drive folder, picked directly, through the distro's /mnt, or typed, is refused inline in
