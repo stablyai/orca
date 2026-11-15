@@ -9,6 +9,10 @@ import type { BrowserManager } from '../guest-lifecycle/manager/browser-manager'
 import type { AgentBrowserBridge } from '../agent-browser/agent-browser-bridge'
 import { browserSessionRegistry } from '../sessions/profiles/browser-session-registry'
 import { installBrowserJavaScriptDialogs } from '../guest-lifecycle/prompts/browser-javascript-dialogs'
+import {
+  loadPageWhenReady,
+  whenBrowserExtensionsStartFor
+} from '../extensions/profile-sessions/browser-extension-page-start'
 import type { ServeBrowserPageState } from '../../runtime/browser/headless/serve-browser-tab-layout'
 
 // orca serve has no renderer for webviews; hidden offscreen BrowserWindows host its pages.
@@ -46,6 +50,11 @@ export class OffscreenBrowserBackend implements BrowserBackend {
       ? browserSessionRegistry.getProfile(params.profileId)
       : browserSessionRegistry.getDefaultProfile()
     const partition = profile?.partition ?? ORCA_BROWSER_PARTITION
+    if (profile) {
+      // A server page starts its profile's extensions, as a desktop tab does.
+      browserSessionRegistry.attachExtensions(profile.id)
+    }
+    const extensionsReady = profile ? whenBrowserExtensionsStartFor(profile.id) : null
 
     const win = new BrowserWindow({
       show: false,
@@ -112,7 +121,10 @@ export class OffscreenBrowserBackend implements BrowserBackend {
     }
 
     const url = params.url || 'about:blank'
-    void this.loadUrl(win, url).catch((error) => {
+    const loaded = extensionsReady
+      ? loadPageWhenReady(win.webContents, extensionsReady, () => this.loadUrl(win, url))
+      : this.loadUrl(win, url)
+    void loaded.catch((error) => {
       console.warn(
         '[offscreen-browser] page load failed:',
         error instanceof Error ? error.message : String(error)
