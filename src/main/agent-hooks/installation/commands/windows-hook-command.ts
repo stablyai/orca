@@ -1,4 +1,4 @@
-import { quotePowerShellLiteral } from '../../../../shared/powershell-native-argument'
+import { quotePowerShellLiteral } from '../../../../shared/shell/launch/powershell-native-argument'
 import { WINDOWS_POWERSHELL_HOOK_ENVIRONMENT_GUARD } from '../scripts/hook-stdin-contract'
 import {
   wrapWindowsPowerShellEncodedCommand,

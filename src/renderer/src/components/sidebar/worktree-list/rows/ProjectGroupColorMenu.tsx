@@ -9,9 +9,12 @@ import {
   DropdownMenuSubContent,
   DropdownMenuSubTrigger
 } from '@/components/ui/dropdown-menu'
-import type { ProjectGroup } from '../../../../../../shared/project-group-types'
+import type { ProjectGroup } from '../../../../../../shared/project/groups/project-group-types'
 import { getRepoExecutionHostId } from '../../../../../../shared/execution-host'
-import { normalizeRepoBadgeColor, REPO_COLORS } from '../../../../../../shared/repo-badge-color'
+import {
+  normalizeRepoBadgeColor,
+  REPO_COLORS
+} from '../../../../../../shared/repository/appearance/repo-badge-color'
 
 export function ProjectGroupColorMenu({ group }: { group: ProjectGroup }): React.JSX.Element {
   const t = useTranslate()

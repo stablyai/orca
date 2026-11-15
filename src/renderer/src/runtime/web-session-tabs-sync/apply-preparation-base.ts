@@ -1,7 +1,7 @@
 import { carryBrowserInitializationReceipt } from './browser-initialization-presentation'
 import { collectUnhydratedMirroredTabRetractions } from './mirrored-status-tab-retractions'
 import { isWebSessionTabsWorktreeRemovalFrame } from './session-tabs-inventory-absence'
-import type { RuntimeMobileSessionTabsResult } from '../../../../shared/runtime-types'
+import type { RuntimeMobileSessionTabsResult } from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import type {
   WebSessionTabsBatchContext,
   WebSessionTabsSnapshotApplyOptions,

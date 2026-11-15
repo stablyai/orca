@@ -1,7 +1,7 @@
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
 import { normalizeMatchQuery, scoreQueryTokens } from './query-token-match'
-import type { BuiltInWindowsTerminalShell } from '../../../../shared/windows-terminal-shell'
+import type { BuiltInWindowsTerminalShell } from '../../../../shared/shell/launch/windows-terminal-shell'
 import { isClipboardTextByteLengthOverLimit } from '../../../../shared/clipboard-text'
 
 export type TabCreateMenuOptionKind =

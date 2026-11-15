@@ -75,6 +75,8 @@ enum ProviderError: Error {
             return message
         }
     }
+
+    static let screenLocked = ProviderError.coded("screen_locked", SessionLockProbe.lockedMessage)
 }
 
 struct AppDescriptor {
@@ -85,7 +87,16 @@ struct AppDescriptor {
 
     var needsManualAccessibilityMode: Bool {
         // Chromium/Electron apps often need this private AX mode, but applying it
-        // broadly can corrupt native Cocoa app trees into app-root-only nodes.
+        // broadly can corrupt native Cocoa app trees into app-root-only nodes. Not every
+        // Electron app either: it turns on screen-reader mode, which VS Code and its forks react to.
+        if let bundleId, TrustedOrcaApplication.isTrusted(bundleId: bundleId) {
+            return true
+        }
+        // Why: Gecko ships its engine as Contents/MacOS/XUL, which covers Firefox, its forks, Thunderbird and Zotero.
+        if let bundleURL = app.bundleURL,
+           FileManager.default.fileExists(atPath: bundleURL.appendingPathComponent("Contents/MacOS/XUL").path) {
+            return true
+        }
         guard let bundleId = bundleId?.lowercased() else {
             return false
         }
@@ -273,6 +284,8 @@ final class Provider {
     /// Per app, window elements already read (valid while the window lives) for when a window moves to another Space,
     /// and when a remote-token lookup last missed, since a window becomes findable only once some client reads it.
     private var otherSpaceLookups: [pid_t: OtherSpaceLookups] = [:]
+    /// When this provider last asked each app process for its full accessibility tree.
+    private var manualAccessibilityRequests: [pid_t: (launched: Date?, at: Date)] = [:]
 
     init() {
         // Why: the system-wide element sets the wait for every AX call in this process, so a hung app costs one bounded timeout whatever the macOS default.
@@ -409,6 +422,25 @@ final class Provider {
     }
 
     /// On-screen windows, plus minimized, hidden and other-Space windows that accessibility can still read.
+    private func requestManualAccessibility(_ appElement: AXUIElement, app: AppDescriptor) {
+        manualAccessibilityRequests = manualAccessibilityRequests.filter { pidIsLive($0.key) }
+        let launched = app.app.launchDate
+        let last = manualAccessibilityRequests[app.pid].flatMap { $0.launched == launched ? $0.at : nil }
+        // Why: Chromium turns its full tree on 2 s after the last request and each request restarts that wait, so not on
+        // every snapshot. Ask again now and then, since VoiceOver turning off drops the mode and it never reads back as on.
+        if let last, Date().timeIntervalSince(last) < 30 {
+            return
+        }
+        guard enableManualAccessibility(appElement) else {
+            return
+        }
+        manualAccessibilityRequests[app.pid] = (launched, Date())
+        if last == nil {
+            // Why: until the full tree is on, AXPress on web content does nothing (measured on Electron 43).
+            Thread.sleep(forTimeInterval: 2.5)
+        }
+    }
+
     private func windowInventory(app: AppDescriptor, appElement: AXUIElement) -> WindowInventory {
         let all = WindowCapture.candidates(pid: app.pid, includeOffScreen: true)
         let offScreen = all.filter { !$0.isOnScreen && $0.layer == 0 }
@@ -920,6 +952,10 @@ final class Provider {
         previousSnapshot: (CGWindowID) -> Snapshot?
     ) throws -> Snapshot {
         guard accessibilityTrustedSettled() else {
+            // Why: the lock can start mid-request, and macOS reports Accessibility as untrusted behind it.
+            if SessionLockProbe.isLocked() {
+                throw ProviderError.screenLocked
+            }
             // Why: agents retry failed observations. Only the explicit setup flow
             // should open macOS privacy prompts/settings; runtime calls stay quiet.
             throw ProviderError.coded(
@@ -934,7 +970,9 @@ final class Provider {
         if AccessibilityMessaging.timedOut(AXUIElementCopyAttributeValue(appElement, kAXRoleAttribute as CFString, &role), since: probeStart) {
             throw AccessibilityMessaging.appNotResponding(app.name)
         }
-        enableManualAccessibilityIfNeeded(appElement, app: app)
+        if app.needsManualAccessibilityMode {
+            requestManualAccessibility(appElement, app: app)
+        }
         let inventory = windowInventory(app: app, appElement: appElement)
         let observable = inventory.windows
         let focused = try focusedWindow(appElement: appElement, app: app, inventory: inventory)
@@ -1608,18 +1646,18 @@ private func openSystemSettings(_ value: String) {
     NSWorkspace.shared.open(url)
 }
 
-private func enableManualAccessibilityIfNeeded(_ appElement: AXUIElement, app: AppDescriptor) {
-    guard app.needsManualAccessibilityMode else {
-        return
-    }
+/// Returns whether it turned a mode on.
+private func enableManualAccessibility(_ appElement: AXUIElement) -> Bool {
     if isSettable(appElement, "AXManualAccessibility") {
-        _ = AXUIElementSetAttributeValue(appElement, "AXManualAccessibility" as CFString, kCFBooleanTrue)
-        return
+        return AXUIElementSetAttributeValue(appElement, "AXManualAccessibility" as CFString, kCFBooleanTrue) == .success
     }
     // Why: the older, broader switch, so only for apps that lack AXManualAccessibility and only when it is off.
-    if boolAttribute(appElement, "AXEnhancedUserInterface") != true {
-        _ = AXUIElementSetAttributeValue(appElement, "AXEnhancedUserInterface" as CFString, kCFBooleanTrue)
+    guard boolAttribute(appElement, "AXEnhancedUserInterface") != true else {
+        return false
     }
+    // Why: Chromium applies it but answers kAXErrorNotImplemented, so the result says nothing.
+    _ = AXUIElementSetAttributeValue(appElement, "AXEnhancedUserInterface" as CFString, kCFBooleanTrue)
+    return true
 }
 
 private func focusedWindow(appElement: AXUIElement, app: AppDescriptor, inventory: WindowInventory) throws -> AXUIElement {
@@ -1640,6 +1678,9 @@ private func focusedWindow(appElement: AXUIElement, app: AppDescriptor, inventor
         }
         if let window = settledWindow, outcome.settled {
             return window
+        }
+        if SessionLockProbe.isLocked() {
+            throw ProviderError.screenLocked
         }
         var windows: CFTypeRef?
         if AXUIElementCopyAttributeValue(appElement, kAXWindowsAttribute as CFString, &windows) == .apiDisabled {
@@ -3469,7 +3510,7 @@ private enum Input {
         }
         let flags = eventFlags(modifiers)
         let target = syntheticClickRecipient(pid: targetWindow.app.pid, windowId: targetWindow.windowId)
-        try withRecipientErrors {
+        try hidGesture { post in
             try SyntheticMouseClickDelivery.deliver(
                 clickCount: count,
                 target: target,
@@ -3501,9 +3542,30 @@ private enum Input {
                     }
                     return event
                 },
-                post: { $0.post(tap: .cghidEventTap) },
+                post: post,
                 pause: { _ = usleep($0) }
             )
+        }
+    }
+
+    /// Posts a pointer gesture through the HID tap, then puts the user's pointer back unless they moved it meanwhile.
+    private static func hidGesture(_ body: (_ post: (CGEvent) -> Void) throws -> Void) throws {
+        var restore = SyntheticMouseClickDelivery.PointerRestore()
+        defer {
+            if restore.mayRestore, let saved = restore.saved {
+                usleep(SyntheticMouseClickDelivery.PointerRestore.settleMicroseconds)
+                if let current = CGEvent(source: nil)?.location, restore.shouldRestore(current: current) {
+                    CGWarpMouseCursorPosition(saved)
+                    // Why: without re-associating, a warp freezes the user's mouse for about a quarter second.
+                    CGAssociateMouseAndMouseCursorPosition(1)
+                }
+            }
+        }
+        try withRecipientErrors {
+            try body { event in
+                restore.willPost(at: event.location, current: CGEvent(source: nil)?.location)
+                event.post(tap: .cghidEventTap)
+            }
         }
     }
 
@@ -3533,12 +3595,12 @@ private enum Input {
             throw ProviderError.coded("accessibility_error", "failed to create scroll event")
         }
         wheel.location = point
-        try withRecipientErrors {
+        try hidGesture { post in
             try SyntheticMouseClickDelivery.deliverScroll(
                 move: move, wheel: wheel,
                 target: syntheticClickRecipient(pid: targetWindow.app.pid, windowId: targetWindow.windowId),
                 currentObservation: { currentSyntheticClickRecipient(snapshot: targetWindow, point: point) },
-                post: { $0.post(tap: .cghidEventTap) },
+                post: post,
                 pause: { _ = usleep($0) }
             )
         }
@@ -3552,12 +3614,12 @@ private enum Input {
             let progress = CGFloat(step) / 10
             return try mouseEvent(.leftMouseDragged, at: CGPoint(x: start.x + (end.x - start.x) * progress, y: start.y + (end.y - start.y) * progress))
         }
-        try withRecipientErrors {
+        try hidGesture { post in
             try SyntheticMouseClickDelivery.deliverDrag(
                 move: move, down: down, dragged: dragged, up: up,
                 target: syntheticClickRecipient(pid: targetWindow.app.pid, windowId: targetWindow.windowId),
                 currentObservation: { currentSyntheticClickRecipient(snapshot: targetWindow, point: start) },
-                post: { $0.post(tap: .cghidEventTap) },
+                post: post,
                 pause: { _ = usleep($0) }
             )
         }
@@ -4114,6 +4176,10 @@ private enum PermissionKind: CaseIterable {
     }
 
     func requestAndOpenSettings() {
+        // Why: the screen can lock after the setup helper started.
+        guard !SessionLockProbe.isLocked() else {
+            return
+        }
         switch self {
         case .accessibility:
             openAccessibilitySettings()
@@ -5132,6 +5198,11 @@ private func runPermissionCheck(
     initialPermission: PermissionKind? = nil,
     copy: PermissionWindowCopy
 ) {
+    // Why: a queued or cached-denial launch can start after the screen locks; Settings would open for nothing.
+    if SessionLockProbe.isLocked() {
+        fputs("\(SessionLockProbe.lockedMessage)\n", stderr)
+        exit(0)
+    }
     let app = NSApplication.shared
     let delegate = PermissionRuntime(initialPermission: initialPermission, copy: copy)
     app.delegate = delegate
@@ -5140,18 +5211,23 @@ private func runPermissionCheck(
     app.run()
 }
 
-private func printPermissionStatus() {
+private func permissionStatusJSON() -> String {
+    // Why: behind the lock screen macOS reports Accessibility as untrusted even when it is granted, so a lock at
+    // either end of the probes marks the whole answer as read while locked.
+    let lockedBefore = SessionLockProbe.isLocked()
     let snapshot = permissionStatusSnapshotSettled()
     let accessibility = snapshot.accessibilityGranted ? "granted" : "not-granted"
     let screenshots = snapshot.screenshotsGranted ? "granted" : "not-granted"
-    print(#"{"accessibility":"\#(accessibility)","screenshots":"\#(screenshots)"}"#)
+    let sessionLocked = lockedBefore || SessionLockProbe.isLocked()
+    return #"{"accessibility":"\#(accessibility)","screenshots":"\#(screenshots)","sessionLocked":\#(sessionLocked)}"#
+}
+
+private func printPermissionStatus() {
+    print(permissionStatusJSON())
 }
 
 private func writePermissionStatus(to path: String) {
-    let snapshot = permissionStatusSnapshotSettled()
-    let accessibility = snapshot.accessibilityGranted ? "granted" : "not-granted"
-    let screenshots = snapshot.screenshotsGranted ? "granted" : "not-granted"
-    let text = #"{"accessibility":"\#(accessibility)","screenshots":"\#(screenshots)"}"#
+    let text = permissionStatusJSON()
     do {
         try text.write(toFile: path, atomically: true, encoding: .utf8)
     } catch {
@@ -5188,6 +5264,10 @@ private func handleRequest(
     do {
         lock.lock()
         defer { lock.unlock() }
+        // Checked after waiting for the lock, since the screen can lock while another request runs.
+        if request.method != "handshake" && request.method != "listApps" && SessionLockProbe.isLocked() {
+            throw ProviderError.screenLocked
+        }
         let result = try provider.handle(method: request.method, params: request.params ?? [:])
         return ["id": request.id, "ok": true, "result": result]
     } catch let error as ProviderError {

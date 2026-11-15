@@ -1,4 +1,4 @@
-import type { Repo } from '../../../../shared/repo-types'
+import type { Repo } from '../../../../shared/repository/repo-types'
 import type { GitPushTarget } from '../../../../shared/worktree/types'
 import type { WorktreeRemovalRecord } from '../../../workspaces/removal/worktree-removal-records'
 import { installRealWorkerThreadChildProcesses } from '../../../worker-thread-child-process/worker-thread-child-process-real.test-fixtures'
@@ -11,9 +11,9 @@ import { promisify } from 'node:util'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { getDefaultSettings } from '../../../../shared/constants'
-import { getProjectHostSetupWorktreeMeta } from '../../../../shared/project-host-setup-lookup'
+import { getProjectHostSetupWorktreeMeta } from '../../../../shared/project/host-setup/project-host-setup-lookup'
 
-import { removeTree } from '../../../../shared/windows-transient-lock-removal'
+import { removeTree } from '../../../../shared/file-write/windows-transient-lock-removal'
 import type { RemoveWorktreeResult } from '../../../../shared/worktree/create-types'
 import type { Store } from '../../../persistence/loading-store/store'
 import type * as HostTreeRemoval from '../../../filesystem/host-tree-removal'

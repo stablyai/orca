@@ -12,7 +12,7 @@ import '../db/messages/mailbox-routing-page'
 import '../db/dispatch-row-writer'
 import '../db/attempt-outcome-projection'
 import { createRootDispatch } from '../db/root-dispatch-test-fixture'
-import type { RuntimeMobileSessionTabsResult } from '../../../../shared/runtime-session-contracts'
+import type { RuntimeMobileSessionTabsResult } from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import { AgentHookServer } from '../../../agent-hooks/server/agent-hook-server'
 import { OrcaRuntimeService } from '../../orca-runtime'
 import { makeStore } from '../../rpc/server/runtime-rpc-worktree-store-fixtures'
@@ -189,8 +189,7 @@ describe('OpenCode finished-session launch authority (STA-4557)', () => {
       })
     ).not.toBeNull()
 
-    pane.runtime.onPtyData(pane.ptyId, '\x1b]133;D;0\x07', 100)
-    await settle()
+    pane.runtime.onPtyData(pane.ptyId, '\x1b]133;D;0\x07\x1b]133;C\x07', 100)
 
     // Every later shell child inherits the launch token; finished sessions must stop attesting it.
     expect(

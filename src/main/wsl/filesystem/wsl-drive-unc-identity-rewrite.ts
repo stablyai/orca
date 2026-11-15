@@ -11,7 +11,7 @@ import {
   PTY_SESSION_ID_SEPARATOR,
   WORKTREE_ID_SEPARATOR
 } from '../../../shared/terminal/pty/lifecycle/pty-session-id-format'
-import { parseWorkspaceKey } from '../../../shared/workspace-scope'
+import { parseWorkspaceKey } from '../../../shared/workspace/identity/workspace-scope'
 import { getRepoIdFromWorktreeId } from '../../../shared/worktree/id'
 import {
   parseEditorFileId,
@@ -21,7 +21,7 @@ import {
   rewriteOrcadMigrationPathValue,
   type OrcadMigrationPathRewriter
 } from '../../persistence/migrating-orcad-catalog/path-rewrite/orcad-migration-path-rewrite'
-import { wslUncDrivePathToWindows } from '../../../shared/wsl-paths'
+import { wslUncDrivePathToWindows } from '../../../shared/file-access/wsl-paths'
 
 export type WslDriveUncRewriteScope = {
   distro: string

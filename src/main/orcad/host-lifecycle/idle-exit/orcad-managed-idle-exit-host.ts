@@ -22,7 +22,7 @@ import {
   requestOrcadWslHolderRelease,
   withdrawOrcadWslHolderRelease
 } from '../../instance-lock/orcad-wsl-holder-release'
-import type { OrcadIdleStopRecord } from '../../../../shared/orcad-idle-exit'
+import type { OrcadIdleStopRecord } from '../../../../shared/remote-runtime/orcad-lifecycle/orcad-idle-exit'
 import { getStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/host/structured-agent-session-registry'
 
 let requestIdleShutdown: OrcadShutdownTrigger | null = null

@@ -6,7 +6,7 @@ import { createIncrementalNdjsonFramer } from '../../../shared/main-process-ndjs
 import { createCodexAppServerRecordDispatcher } from '../../codex/app-server/codex-app-server-record-dispatch'
 import { isProviderRecord } from '../../provider-process/provider-json-record'
 import { listCodexModelPages } from '../../codex/structured/catalog/codex-structured-model-catalog'
-import type { AgentModelProbeSpec } from '../../../shared/agent-model-probe-spec'
+import type { AgentModelProbeSpec } from '../../../shared/agent-session/options/model-catalog/agent-model-probe-spec'
 import { discoveredModelsResult } from './commit-message-model-discovery-policy'
 import type {
   DiscoverCommitMessageModelsResult,

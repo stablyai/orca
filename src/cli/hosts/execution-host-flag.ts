@@ -19,7 +19,7 @@ import {
 } from './host-selector-alternatives'
 import { normalizeTypedName, stripWrappingQuotes } from '../../shared/typed-name-normalization'
 import type { RuntimeClient } from '../runtime/client'
-import { RuntimeClientError } from '../runtime/types'
+import { RuntimeClientError } from '../runtime/connection/types'
 import { isLocalEnvironmentSelector } from './local-environment-selector'
 
 export type HostFlagRoutingSelection = {
@@ -75,12 +75,12 @@ export async function resolveHostFlagEnvironmentId(
   }
   const [{ resolveEnvironment }, { getDefaultUserDataPath }, { listEnvironments }] =
     await Promise.all([
-      import('../runtime/environments.js'),
-      import('../runtime/metadata.js'),
+      import('../runtime/pairing/environments.js'),
+      import('../runtime/profile/metadata.js'),
       import('../../shared/remote-runtime/host-store/runtime-environment-store.js')
     ])
   const userDataPath = getDefaultUserDataPath()
-  const environments = listEnvironments(userDataPath).map((candidate) => ({
+  const environments = (await listEnvironments(userDataPath)).map((candidate) => ({
     id: candidate.id,
     name: candidate.name
   }))
@@ -139,7 +139,8 @@ export async function resolveHostFlagEnvironmentId(
     const { value } = selection.environmentSelector
     const selected = isLocalEnvironmentSelector(value)
       ? null
-      : (findEnvironmentByName(environments, value) ?? resolveEnvironment(userDataPath, value))
+      : (findEnvironmentByName(environments, value) ??
+        (await resolveEnvironment(userDataPath, value)))
     if (selected?.id !== environment.id) {
       throw new RuntimeClientError(
         'invalid_argument',
@@ -217,11 +218,11 @@ export async function resolveHostFlagTarget(
     return host
   }
   const [, { getDefaultUserDataPath }, { listEnvironments }] = await Promise.all([
-    import('../runtime/environments.js'),
-    import('../runtime/metadata.js'),
+    import('../runtime/pairing/environments.js'),
+    import('../runtime/profile/metadata.js'),
     import('../../shared/remote-runtime/host-store/runtime-environment-store.js')
   ])
-  const environments = listEnvironments(getDefaultUserDataPath()).map((candidate) => ({
+  const environments = (await listEnvironments(getDefaultUserDataPath())).map((candidate) => ({
     id: candidate.id,
     name: candidate.name
   }))
@@ -295,11 +296,11 @@ export async function resolveEnvironmentSelectorForStore(
   listSshTargetsForSuggestion: () => Promise<SshTargetSummary[]>
 ): Promise<string> {
   const [, { getDefaultUserDataPath }, { listEnvironments }] = await Promise.all([
-    import('../runtime/environments.js'),
-    import('../runtime/metadata.js'),
+    import('../runtime/pairing/environments.js'),
+    import('../runtime/profile/metadata.js'),
     import('../../shared/remote-runtime/host-store/runtime-environment-store.js')
   ])
-  const environments = listEnvironments(getDefaultUserDataPath()).map((candidate) => ({
+  const environments = (await listEnvironments(getDefaultUserDataPath())).map((candidate) => ({
     id: candidate.id,
     name: candidate.name
   }))

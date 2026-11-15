@@ -12,7 +12,7 @@ import {
   waitForActiveWorktree,
   waitForSessionReady
 } from './helpers/store'
-import { BROWSER_ADDRESS_BAR_MIN_INLINE_WIDTH } from '../../src/renderer/src/components/browser-pane/assemble-chrome/browser-address-bar-expansion'
+import { BROWSER_ADDRESS_BAR_MIN_INLINE_WIDTH } from '../../src/renderer/src/components/browser-pane/assemble-chrome/address-bar/browser-address-bar-expansion'
 
 // Target the middle of the toolbar’s collapse band because sidebar chrome varies between runs.
 const TARGET_TOOLBAR_WIDTH = 260

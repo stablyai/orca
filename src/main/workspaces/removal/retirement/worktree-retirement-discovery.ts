@@ -1,7 +1,7 @@
 import { claudeProfileHistoryDirs } from '../../../claude-accounts/profiles/routing/claude-profile-installed-router'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
-import { isWslUncPath, parseWslUncPath } from '../../../../shared/wsl-paths'
+import { isWslUncPath, parseWslUncPath } from '../../../../shared/file-access/wsl-paths'
 import { relativePathInsideRoot } from '../../../../shared/cross-platform-path'
 import {
   claudeProjectBucketNameBelowScope,

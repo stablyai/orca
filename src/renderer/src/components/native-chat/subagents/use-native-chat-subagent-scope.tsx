@@ -11,7 +11,7 @@ import type {
   NativeChatMessage,
   NativeChatSubagentEntry
 } from '../../../../../shared/native-chat/native-chat-types'
-import { normalizeSubagentState } from '../../../../../shared/native-chat/transcript/native-chat-subagent-summary'
+import { normalizeSubagentState } from '../../../../../shared/native-chat/transcript/subagents/native-chat-subagent-summary'
 import type { NativeChatSubagentRow } from '../../../../../shared/native-chat/transcript/native-chat-transcript-projection'
 import {
   useNativeChatTurnMembership,

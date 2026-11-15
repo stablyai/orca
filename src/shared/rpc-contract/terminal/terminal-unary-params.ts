@@ -7,8 +7,8 @@ import {
   canonicalizeWindowsShellOverride,
   isSupportedWindowsShellOverride,
   listSupportedWindowsShellOverrides
-} from '../../windows-terminal-shell'
-import { TERMINAL_PANE_SPLIT_SOURCES } from '../../feature-education-telemetry'
+} from '../../shell/launch/windows-terminal-shell'
+import { TERMINAL_PANE_SPLIT_SOURCES } from '../../feature-education/feature-education-telemetry'
 import { OptionalExecutionHostId } from '../workspaces/worktree-params'
 import { AGENT_STATUS_INTERACTIVE_PROMPT_MAX_LENGTH } from '../../agent-status/contracts/agent-status-types'
 

@@ -3,7 +3,7 @@ import { selectDiffCommentView, type DiffCommentOwner } from './diff-comment-own
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import type { DiffComment } from '../../../../../shared/diff-comment-types'
 import type { Worktree } from '../../../../../shared/worktree/types'
-import { SELF_LOCAL_AUTHORITY } from '../../../../../shared/host-authority'
+import { SELF_LOCAL_AUTHORITY } from '../../../../../shared/execution-host/host-authority'
 import {
   createCompatibleRuntimeStatusResponseIfNeeded,
   type RuntimeEnvironmentCallRequest

@@ -13,7 +13,7 @@ import {
   resolveHostCodexSessionSourceHome,
   resolveWslCodexSessionSourceHome
 } from '../../../codex/history/rollouts/codex-session-source-home'
-import { parseWslUncPath } from '../../../../shared/wsl-paths'
+import { parseWslUncPath } from '../../../../shared/file-access/wsl-paths'
 import { normalizeRuntimePathForComparison } from '../../../../shared/cross-platform-path'
 import { normalizeCodexRuntimeSelection } from '../../account-management/runtime-selection'
 import {
@@ -99,7 +99,8 @@ export abstract class CodexRuntimeHomeManagedHome extends CodexRuntimeHomeSync {
 
   protected prepareSelfContainedManagedHomeForLaunch(
     account: CodexManagedAccount,
-    unavailableManagedHomePath?: string
+    unavailableManagedHomePath?: string,
+    deferConfigSync?: (syncConfig: () => boolean) => void
   ): string | null {
     const resolved = this.resolveSelfContainedManagedHome(account)
     if (resolved.kind === 'indeterminate') {
@@ -129,10 +130,16 @@ export abstract class CodexRuntimeHomeManagedHome extends CodexRuntimeHomeSync {
     this.sharedAuthRefreshBlockedByManagedTransition = true
     this.markSharedRuntimeAuthManaged(account.id)
     syncSystemCodexResourcesIntoManagedHome(perAccountHome)
-    syncSystemConfigIntoManagedCodexHome({
-      runtimeHomePath: perAccountHome,
-      systemHomePath: getSystemCodexHomePath()
-    })
+    const syncConfig = (): boolean =>
+      syncSystemConfigIntoManagedCodexHome({
+        runtimeHomePath: perAccountHome,
+        systemHomePath: getSystemCodexHomePath()
+      })
+    if (deferConfigSync) {
+      deferConfigSync(syncConfig)
+    } else {
+      syncConfig()
+    }
     this.startSelfContainedSessionBridgeForLaunch(perAccountHome)
     return perAccountHome
   }

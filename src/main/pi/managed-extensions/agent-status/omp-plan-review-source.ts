@@ -1,7 +1,7 @@
 import {
   OMP_PLAN_REVIEW_ANSWER_PREFIX,
   OMP_PLAN_REVIEW_DISMISS
-} from '../../../../shared/omp-plan-review-prompt'
+} from '../../../../shared/native-chat/input/questions/omp-plan-review-prompt'
 
 /** OMP 18.12+ reports its plan review overlay; older builds never fire these events. */
 export function getOmpPlanReviewHandlerSourceLines(): string[] {

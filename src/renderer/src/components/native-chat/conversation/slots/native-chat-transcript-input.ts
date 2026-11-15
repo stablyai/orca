@@ -1,5 +1,5 @@
 import type { NativeChatMessage } from '../../../../../../shared/native-chat/native-chat-types'
-import type { NativeChatTurnStatus } from '../../../../../../shared/native-chat/transcript/native-chat-turn-status'
+import type { NativeChatTurnStatus } from '../../../../../../shared/native-chat/transcript/turns/native-chat-turn-status'
 import type { NativeChatResolvedPrompt } from '../../../../../../shared/native-chat/native-chat-resolution-receipt'
 import type { NativeChatTurnDiff } from '../../../../../../shared/native-chat/tools/native-chat-turn-diffs'
 import type { NativeChatOpenedPullRequest } from '../../../../../../shared/native-chat/tools/native-chat-opened-pull-requests'
@@ -7,7 +7,7 @@ import type { NativeChatRowTypography } from '../../viewport/virtualization/nati
 import type { NativeChatSideChatForkOffer } from '../../messages/actions/native-chat-side-chat-fork-point'
 import type { NativeChatSubagentHead } from '../../subagents/native-chat-subagent-scope'
 
-import type { NativeChatMarkdownImageSources } from '../../../../../../shared/native-chat/transcript/native-chat-generated-image-answers'
+import type { NativeChatMarkdownImageSources } from '../../../../../../shared/native-chat/transcript/images/native-chat-generated-image-answers'
 
 export type NativeChatTranscriptSlotsInput = {
   imageSources?: NativeChatMarkdownImageSources

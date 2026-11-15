@@ -1,4 +1,4 @@
-import type { BaseRefSearchResult } from './repo-types'
+import type { BaseRefSearchResult } from './repository/repo-types'
 
 const LEGACY_REMOTE_REF_PREFIXES = ['origin/', 'upstream/']
 

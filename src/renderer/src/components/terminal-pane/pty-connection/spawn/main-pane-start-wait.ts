@@ -9,7 +9,7 @@ import { resolveTerminalTabId } from '../terminal-tab-id'
 import {
   findWslDistroHoldInText,
   wslDistroHoldUserMessage
-} from '../../../../../../shared/wsl-distro-stopped-hold'
+} from '../../../../../../shared/remote-runtime/wsl-hosts/wsl-distro-stopped-hold'
 import { holdPaneForStoppedWslDistro } from '../../session-restore/wsl-distro/wsl-distro-stopped-hold-state'
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 

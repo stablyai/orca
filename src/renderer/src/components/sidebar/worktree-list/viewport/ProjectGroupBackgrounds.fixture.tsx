@@ -4,8 +4,8 @@ import { ConfirmationDialogProvider } from '@/components/confirmation-dialog'
 import { Toaster } from '@/components/ui/sonner'
 import type { VirtualizedScrollAnchor } from '@/hooks/useVirtualizedScrollAnchor'
 import { defineFixture } from '../../../../component-fixtures/component-fixture'
-import type { ProjectGroup } from '../../../../../../shared/project-group-types'
-import type { Repo } from '../../../../../../shared/repo-types'
+import type { ProjectGroup } from '../../../../../../shared/project/groups/project-group-types'
+import type { Repo } from '../../../../../../shared/repository/repo-types'
 import { getProjectGroupHeaderKey } from '../../../../../../shared/sidebar-list/sections/group-keys'
 import {
   makeWorktree,

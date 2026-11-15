@@ -1,5 +1,5 @@
 import { getRepoRoutingConnectionId } from '../../../../shared/execution-host'
-import type { Repo } from '../../../../shared/repo-types'
+import type { Repo } from '../../../../shared/repository/repo-types'
 import { normalizeRuntimePathForComparison } from '../../../../shared/cross-platform-path'
 import { composeWorktreeId } from '../../../../shared/worktree/id'
 import type { PullRequestChange } from '../../../github/pull-requests/refresh/pull-request-changed-events'

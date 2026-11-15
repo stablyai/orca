@@ -1,6 +1,6 @@
 import { buildLinearWorkspaceSource } from '../../../../shared/new-workspace/workspace-source'
 import type { LinkedWorkItemSummary } from '@/lib/workspace/creation/new-workspace'
-import { getLinearIssueWorkspaceName } from '../../../../shared/workspace-name'
+import { getLinearIssueWorkspaceName } from '../../../../shared/workspace/naming/workspace-name'
 import type { AppState } from '../../store/types'
 
 type NewWorkspaceShortcutModalData = {

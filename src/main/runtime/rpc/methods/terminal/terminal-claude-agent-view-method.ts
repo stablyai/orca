@@ -11,7 +11,7 @@ import {
   assertTerminalSendExactPtyBinding,
   terminalInputSourceForClient
 } from './terminal-input-delivery'
-import type { ClaudeAgentViewResult } from '../../../../../shared/claude-agent-view'
+import type { ClaudeAgentViewResult } from '../../../../../shared/agent-hook-listener/providers/claude/view/claude-agent-view'
 
 export const TERMINAL_CLAUDE_AGENT_VIEW_METHODS = [
   defineStreamingMethod({

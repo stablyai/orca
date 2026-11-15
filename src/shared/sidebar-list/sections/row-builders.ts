@@ -1,4 +1,4 @@
-import type { Repo } from '../../repo-types'
+import type { Repo } from '../../repository/repo-types'
 import type { Worktree } from '../../worktree/types'
 import { getWorktreeHostIdentity } from '../../worktree/host-qualified-identity'
 import { getFolderWorkspaceHostIdentity } from '../../folder-workspaces/folder-workspace-worktree'
@@ -8,7 +8,7 @@ import {
   getExpandedWorktreeOccurrences,
   type WorktreeOccurrence,
   type WorktreeOccurrencePlan
-} from '../../worktree-occurrence-plan'
+} from '../lineage/worktree-occurrence-plan'
 import type { NoticeHostContext } from '../hosts/host-labels'
 import type { RenderableFolderWorkspace } from '../folders/folder-workspace-lanes'
 import type {

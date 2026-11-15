@@ -1,4 +1,4 @@
-import type { Repo } from '../../../../../shared/repo-types'
+import type { Repo } from '../../../../../shared/repository/repo-types'
 import type { ListWorkItemsResult } from '../../../../../shared/github/work-items/work-item-types'
 import type { WorkItemsCacheSources } from '../cache/cache-model'
 import { githubTaskBinding } from '@/lib/work-items/github/github-task-observation'

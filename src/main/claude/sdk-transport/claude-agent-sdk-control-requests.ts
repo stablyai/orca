@@ -3,6 +3,10 @@ import type {
   Query,
   SDKControlInterruptResponse
 } from '@anthropic-ai/claude-agent-sdk'
+import {
+  providerDiagnostic,
+  withProviderDiagnostic
+} from '../../../shared/agent-session/failures/agent-session-failure'
 
 export class ClaudeControlRequestError extends Error {
   constructor(
@@ -77,7 +81,13 @@ export function runClaudeControl<T>(
       if (error instanceof ClaudeControlRequestError || message === QUERY_CLOSED_MESSAGE) {
         throw error
       }
-      throw new ClaudeControlRequestError(subtype, message, { cause: error })
+      // SDK tags only its own transport failures; untagged errors carry Claude's answer for Details.
+      const answered =
+        error instanceof Error && !('errorClass' in error && typeof error.errorClass === 'string')
+      throw withProviderDiagnostic(
+        new ClaudeControlRequestError(subtype, message, { cause: error }),
+        answered ? providerDiagnostic(message, 'log') : undefined
+      )
     })
   if (timeoutMs === null) {
     return request
@@ -114,7 +124,6 @@ export type ClaudeControlSurface = {
   getContextUsage: (options?: ClaudeControlOptions) => Promise<unknown>
   /** Names `sessionId` as the user's rename; refused once the CLI has moved to another session. */
   renameSession: (title: string, sessionId: string, options?: ClaudeControlOptions) => Promise<void>
-  generateSessionTitle?: (description: string) => Promise<unknown>
 }
 
 type InterruptingQuery = {
@@ -124,16 +133,7 @@ type InterruptingQuery = {
 }
 
 export function createClaudeControlSurface(query: Query): ClaudeControlSurface {
-  const title = 'generateSessionTitle' in query ? query.generateSessionTitle : null
   return {
-    ...(typeof title === 'function'
-      ? {
-          generateSessionTitle: (description: string) =>
-            runClaudeControl('generate_session_title', () =>
-              Promise.resolve(title.call(query, description, { persist: true }))
-            )
-        }
-      : {}),
     interrupt: (options) =>
       runClaudeControl(
         'interrupt',

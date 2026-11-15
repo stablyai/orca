@@ -12,7 +12,7 @@ import {
   parseOpenCode2SqliteSessionViaWorker,
   parseZcodeSqliteSessionViaWorker
 } from '../scanners/opencode/reader-transport/session-scanner-opencode-sqlite-worker-spawn'
-import { splitOpenCodeSqliteCandidate } from '../../../shared/opencode-sqlite-session-path'
+import { splitOpenCodeSqliteCandidate } from '../../../shared/agent-session/lifecycle/provider-handles/opencode-sqlite-session-path'
 import type { FileWithMtime } from '../session-scanner-types'
 import type { OpenCodeWslRuntime } from '../scanners/opencode/reader-transport/session-scanner-opencode-wsl-runtime'
 import { configureOpenCodeWslReaders } from '../scanners/opencode/reader-transport/session-scanner-opencode-wsl-client'

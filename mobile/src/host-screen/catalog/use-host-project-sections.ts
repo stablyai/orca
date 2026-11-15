@@ -1,10 +1,10 @@
 import { useEffect } from 'react'
 import * as z from 'zod'
-import type { ProjectGroup } from '../../../../src/shared/project-group-types'
+import type { ProjectGroup } from '../../../../src/shared/project/groups/project-group-types'
 import {
   ProjectSectionCatalogSchema,
   type ServedProjectSections
-} from '../../../../src/shared/project-section-catalog-schema'
+} from '../../../../src/shared/sidebar-list/catalog/project-section-catalog-schema'
 import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../../src/shared/sidebar-inputs-switch'
 import { defineHostQuery, useHostQuery } from '../../query/host-query'
 import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
@@ -12,7 +12,7 @@ import {
   hostProjectGroupsRead,
   projectSectionsRead,
   readServedProjectSections
-} from '../../worktree/project-sections-operations'
+} from '../../worktree/project-sections/project-sections-operations'
 import { readHostMethodReply } from '../sidebar-feed/host-sidebar-feed-operations'
 import { HOST_LIST_TARGET, NO_HOST_LIST_INPUT } from './host-list-queries'
 import type { HostScreenState } from '../use-host-screen-state'

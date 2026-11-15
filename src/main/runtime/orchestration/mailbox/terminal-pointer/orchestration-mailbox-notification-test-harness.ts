@@ -109,7 +109,7 @@ function mailboxLayoutStore(): RuntimeStore {
   }
 }
 
-export function createRuntime(
+export async function createRuntime(
   db: OrchestrationDb,
   options: {
     connectionId?: string
@@ -120,7 +120,7 @@ export function createRuntime(
     checkHookAgentPresence?: (paneKey: string) => Promise<'live' | 'unverifiable' | 'exited' | null>
     launchAgent?: TuiAgent | null
   } = {}
-): MailboxNotificationHarness {
+): Promise<MailboxNotificationHarness> {
   const runtime = new MailboxRuntime(
     ORCA_LAYOUT_OWNER_IS_MAIN ? mailboxLayoutStore() : null,
     undefined,
@@ -167,7 +167,7 @@ export function createRuntime(
     return { runtime, write }
   }
   runtime.attachWindow(1)
-  runtime.syncWindowGraph(1, {
+  await runtime.syncWindowGraph(1, {
     tabs: [
       {
         tabId: TAB_ID,
@@ -190,11 +190,11 @@ export function createRuntime(
   return { runtime, write }
 }
 
-export function registerSecondPane(
+export async function registerSecondPane(
   runtime: OrcaRuntimeService,
   leafId = SECOND_LEAF_ID,
   includeFirstPane = true
-): void {
+): Promise<void> {
   registerBoundPty(runtime, SECOND_PTY_ID, WORKTREE_ID, null, {
     tabId: SECOND_TAB_ID,
     leafId,
@@ -202,7 +202,7 @@ export function registerSecondPane(
     agentLaunchAuthority: { launchToken: SECOND_LAUNCH_TOKEN, launchAgent: 'codex' }
   })
   runtime.registerPreAllocatedHandleForPty(SECOND_PTY_ID, SECOND_TERMINAL_HANDLE)
-  runtime.syncWindowGraph(1, {
+  await runtime.syncWindowGraph(1, {
     tabs: [
       ...(includeFirstPane
         ? [

@@ -11,7 +11,7 @@ import {
 import {
   setWindowsSecurityForTests,
   resetWindowsSecurityLoadForTests
-} from '../windows-security-addon'
+} from './windows-security-addon'
 
 const chmodFailure = vi.hoisted((): { code: string | null } => ({ code: null }))
 

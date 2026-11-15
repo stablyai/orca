@@ -1,6 +1,9 @@
 import type { Mock } from 'vitest'
 import type { ExecutionHostId } from '../../../../../shared/execution-host'
-import type { RuntimeClientError, RuntimeRpcFailureError } from '../../../../../cli/runtime/types'
+import type {
+  RuntimeClientError,
+  RuntimeRpcFailureError
+} from '../../../../../cli/runtime/connection/types'
 
 type CliOkFixture = {
   id: string

@@ -10,10 +10,7 @@ import { freshActivityLiveAgentState, isHistoricalActivityState } from './activi
 
 type ActivityUnreadCountSource = Pick<
   AppState,
-  | 'acknowledgedAgentsByPaneKey'
-  | 'agentStatusByPaneKey'
-  | 'migrationUnsupportedByPtyId'
-  | 'retainedAgentsByPaneKey'
+  'acknowledgedAgentsByPaneKey' | 'agentStatusByPaneKey' | 'migrationUnsupportedByPtyId'
 > & {
   /** Per-pane "Clear completed" cutoffs; hidden events must not count as unread. */
   activityClearedAtByPaneKey?: Record<string, number>
@@ -50,14 +47,6 @@ export function countActivityUnread(source: ActivityUnreadCountSource, now = Dat
     seenPaneKeys.add(paneKey)
     countEntry(entry, source.acknowledgedAgentsByPaneKey[paneKey] ?? 0, true)
   }
-  for (const [paneKey, retained] of Object.entries(source.retainedAgentsByPaneKey)) {
-    // Live status is the primary source; retained is a handoff cache and may briefly overlap it.
-    if (seenPaneKeys.has(paneKey)) {
-      continue
-    }
-    seenPaneKeys.add(paneKey)
-    countEntry(retained.entry, source.acknowledgedAgentsByPaneKey[paneKey] ?? 0)
-  }
   for (const unsupported of Object.values(source.migrationUnsupportedByPtyId)) {
     const entry = migrationUnsupportedToAgentStatusEntry(unsupported)
     if (entry && !seenPaneKeys.has(entry.paneKey)) {
@@ -75,14 +64,12 @@ const createActivityUnreadCountSelector = () =>
     (
       state: AppState,
       migrationUnsupportedByPtyId: AppState['migrationUnsupportedByPtyId'],
-      retainedAgentsByPaneKey: AppState['retainedAgentsByPaneKey'],
       acknowledgedAgentsByPaneKey: AppState['acknowledgedAgentsByPaneKey'],
       activityClearedAtByPaneKey: AppState['activityClearedAtByPaneKey']
     ) =>
       countActivityUnread({
         agentStatusByPaneKey: state.agentStatusByPaneKey,
         migrationUnsupportedByPtyId,
-        retainedAgentsByPaneKey,
         acknowledgedAgentsByPaneKey,
         activityClearedAtByPaneKey
       })
@@ -94,7 +81,6 @@ export function useActivityUnreadCount(): number {
     selectActivityUnreadCount(
       state,
       state.migrationUnsupportedByPtyId,
-      state.retainedAgentsByPaneKey,
       state.acknowledgedAgentsByPaneKey,
       state.activityClearedAtByPaneKey
     )

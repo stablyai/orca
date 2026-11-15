@@ -1,17 +1,17 @@
 import type { AgentLaunchChoices } from './agent-launch/choices/agent-launch-choices'
-import type { TelemetrySettings } from './telemetry-settings-types'
+import type { TelemetrySettings } from './telemetry/telemetry-settings-types'
 import type { BrowserProfileScope } from './browser/profiles/browser-profile-scope'
 import type { GlobalSettingsBase } from './global-settings-base'
 import type { ExecutionHostId } from './execution-host'
 import type { OrcaWorkspaceLayout } from './orca-workspace-layout'
 import type { GitHubProjectSettings } from './github/projects/project-types'
-import type { VoiceSettings } from './speech-types'
+import type { VoiceSettings } from './speech/speech-types'
 import type { AiVaultSearchSettings } from './ai-vault/search/ai-vault-search-settings'
 import type { GitLabProjectSettings } from './gitlab-types'
 import type { TaskProvider } from './work-items/task-providers'
 import type { AppIconId } from './app-icon'
 import type { SourceControlAiSettings } from './source-control/ai/settings/source-control-ai-settings-types'
-import type { ClaudeAgentTeamsMode } from './claude-agent-teams-tmux-compat'
+import type { ClaudeAgentTeamsMode } from './agent-launch/startup/claude-agent-teams-tmux-compat'
 import type { TerminalCustomTheme } from './terminal-themes/terminal-custom-themes'
 import type { UiLanguage } from './ui-language'
 import type { GlobalWindowsRuntimeDefault } from './execution-host/project-runtime-preference'
@@ -19,7 +19,7 @@ import type { PersistedNativeChatSessionOptions } from './native-chat/input/nati
 import type { AgentChatPermissionMode } from './agent-launch/permissions/agent-chat-permission-mode'
 import type { ComputerAwakeMode } from './computer-awake-mode'
 import type { CommitMessageAiSettings } from './source-control/ai/generation/commit-message-ai-types'
-import type { HostSettingOverrides } from './host-setting-overrides'
+import type { HostSettingOverrides } from './execution-host/host-setting-overrides'
 import type {
   ClaudeManagedAccount,
   ClaudeManagedAccountRuntimeSelection,
@@ -42,9 +42,9 @@ import type {
   SourceControlViewMode,
   TaskViewPresetId
 } from './ui-chrome-types'
-import type { WorktreeVisibilityDefaults } from './repo-types'
+import type { WorktreeVisibilityDefaults } from './repository/repo-types'
 
-export type { WorktreeVisibilityDefaults } from './repo-types'
+export type { WorktreeVisibilityDefaults } from './repository/repo-types'
 
 /** MiniMax account region used to select the quota endpoint. */
 export type MiniMaxEndpoint = 'overseas' | 'cn'

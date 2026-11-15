@@ -31,71 +31,73 @@ describe('OrcaRuntimeService', () => {
       terminalDriverChanged: vi.fn()
     })
     const webContents = { send: vi.fn() }
-    const send = vi.fn((_channel: string, payload: { requestId: string; activate?: boolean }) => {
-      ipcMain.emit(
-        'terminal:tabCreateReply',
-        { sender: { send: vi.fn() } },
-        { requestId: payload.requestId, error: 'spoofed renderer reply' }
-      )
-      bindPaneFirst(runtime, {
-        worktreeId: TEST_WORKTREE_ID,
-        tabId: 'tab-renderer',
-        leafId: HEADLESS_LEAF_ID,
-        ptyId: 'pty-renderer',
-        viewMode: 'chat'
-      })
-      registerBoundPty(runtime, 'pty-renderer', TEST_WORKTREE_ID, null, {
-        tabId: 'tab-renderer',
-        leafId: HEADLESS_LEAF_ID
-      })
-      runtime.syncWindowGraph(1, {
-        tabs: [],
-        leaves: [
-          {
-            tabId: 'tab-renderer',
-            worktreeId: TEST_WORKTREE_ID,
-            leafId: HEADLESS_LEAF_ID,
-            paneRuntimeId: 1,
-            ptyId: 'pty-renderer',
-            paneTitle: null
-          }
-        ],
-        mobileSessionTabs: [
-          {
-            worktree: TEST_WORKTREE_ID,
-            publicationEpoch: 'epoch-1',
-            snapshotVersion: 1,
-            activeGroupId: 'group-1',
-            activeTabId: null,
-            activeTabType: null,
-            tabs: [
-              {
-                type: 'terminal',
-                id: `tab-renderer::${HEADLESS_LEAF_ID}`,
-                parentTabId: 'tab-renderer',
-                leafId: HEADLESS_LEAF_ID,
-                ptyId: 'pty-renderer',
-                title: 'Terminal',
-                viewMode: 'chat',
-                isActive: false
-              }
-            ]
-          }
-        ]
-      })
-      ipcMain.emit(
-        'terminal:tabCreateReply',
-        { sender: webContents },
-        {
-          requestId: payload.requestId,
+    const send = vi.fn(
+      async (_channel: string, payload: { requestId: string; activate?: boolean }) => {
+        ipcMain.emit(
+          'terminal:tabCreateReply',
+          { sender: { send: vi.fn() } },
+          { requestId: payload.requestId, error: 'spoofed renderer reply' }
+        )
+        bindPaneFirst(runtime, {
+          worktreeId: TEST_WORKTREE_ID,
           tabId: 'tab-renderer',
-          title: 'Terminal'
-        }
-      )
-    })
+          leafId: HEADLESS_LEAF_ID,
+          ptyId: 'pty-renderer',
+          viewMode: 'chat'
+        })
+        registerBoundPty(runtime, 'pty-renderer', TEST_WORKTREE_ID, null, {
+          tabId: 'tab-renderer',
+          leafId: HEADLESS_LEAF_ID
+        })
+        await runtime.syncWindowGraph(1, {
+          tabs: [],
+          leaves: [
+            {
+              tabId: 'tab-renderer',
+              worktreeId: TEST_WORKTREE_ID,
+              leafId: HEADLESS_LEAF_ID,
+              paneRuntimeId: 1,
+              ptyId: 'pty-renderer',
+              paneTitle: null
+            }
+          ],
+          mobileSessionTabs: [
+            {
+              worktree: TEST_WORKTREE_ID,
+              publicationEpoch: 'epoch-1',
+              snapshotVersion: 1,
+              activeGroupId: 'group-1',
+              activeTabId: null,
+              activeTabType: null,
+              tabs: [
+                {
+                  type: 'terminal',
+                  id: `tab-renderer::${HEADLESS_LEAF_ID}`,
+                  parentTabId: 'tab-renderer',
+                  leafId: HEADLESS_LEAF_ID,
+                  ptyId: 'pty-renderer',
+                  title: 'Terminal',
+                  viewMode: 'chat',
+                  isActive: false
+                }
+              ]
+            }
+          ]
+        })
+        ipcMain.emit(
+          'terminal:tabCreateReply',
+          { sender: webContents },
+          {
+            requestId: payload.requestId,
+            tabId: 'tab-renderer',
+            title: 'Terminal'
+          }
+        )
+      }
+    )
     webContents.send = send
     runtime.attachWindow(1)
-    runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
+    await runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
     electronMocks.BrowserWindow.fromId.mockReturnValue({
       isDestroyed: () => false,
       webContents
@@ -118,7 +120,7 @@ describe('OrcaRuntimeService', () => {
     expect(focusTerminal).not.toHaveBeenCalled()
     expect(result.tab).toMatchObject({ parentTabId: 'tab-renderer', isActive: false })
 
-    runtime.syncWindowGraph(1, {
+    await runtime.syncWindowGraph(1, {
       tabs: [],
       leaves: [
         {
@@ -147,7 +149,7 @@ describe('OrcaRuntimeService', () => {
       expect.objectContaining({ parentTabId: 'tab-renderer', ptyId: 'pty-renderer' })
     ])
 
-    runtime.syncWindowGraph(1, {
+    await runtime.syncWindowGraph(1, {
       tabs: [],
       leaves: [
         {
@@ -171,7 +173,7 @@ describe('OrcaRuntimeService', () => {
         }
       ]
     })
-    runtime.syncWindowGraph(1, {
+    await runtime.syncWindowGraph(1, {
       tabs: [],
       leaves: [
         {
@@ -221,8 +223,8 @@ describe('OrcaRuntimeService', () => {
       terminalDriverChanged: vi.fn()
     })
     const webContents = { send: vi.fn() }
-    const send = vi.fn((_channel: string, payload: { requestId: string }) => {
-      runtime.syncWindowGraph(1, {
+    const send = vi.fn(async (_channel: string, payload: { requestId: string }) => {
+      await runtime.syncWindowGraph(1, {
         tabs: [],
         leaves: [
           {
@@ -263,7 +265,7 @@ describe('OrcaRuntimeService', () => {
     })
     webContents.send = send
     runtime.attachWindow(1)
-    runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
+    await runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
     electronMocks.BrowserWindow.fromId.mockReturnValue({
       isDestroyed: () => false,
       webContents
@@ -305,8 +307,8 @@ describe('OrcaRuntimeService', () => {
       terminalDriverChanged: vi.fn()
     })
     const webContents = { send: vi.fn() }
-    const send = vi.fn((_channel: string, payload: { requestId: string }) => {
-      runtime.syncWindowGraph(1, {
+    const send = vi.fn(async (_channel: string, payload: { requestId: string }) => {
+      await runtime.syncWindowGraph(1, {
         tabs: [],
         leaves: [
           {
@@ -347,7 +349,7 @@ describe('OrcaRuntimeService', () => {
     })
     webContents.send = send
     runtime.attachWindow(1)
-    runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
+    await runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
     electronMocks.BrowserWindow.fromId.mockReturnValue({
       isDestroyed: () => false,
       webContents

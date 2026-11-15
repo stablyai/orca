@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { createDraftPasteReadyScanner } from './draft-paste-ready-scanner'
-import { OPENCODE_AGENT_ROW_GRACE_MS } from './opencode-agent-row-scanner'
+import { OPENCODE_AGENT_ROW_GRACE_MS } from './agent-launch/startup/readiness/opencode-agent-row-scanner'
 
 const DECSET_BRACKETED_PASTE = '\x1b[?2004h'
 const DECRST_BRACKETED_PASTE = '\x1b[?2004l'

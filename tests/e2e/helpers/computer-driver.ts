@@ -10,7 +10,7 @@ import {
   stopOrcaRuntime,
   type CliResult
 } from './computer-cli-driver'
-import { quotePowerShellLiteral } from '../../../src/shared/powershell-native-argument'
+import { quotePowerShellLiteral } from '../../../src/shared/shell/launch/powershell-native-argument'
 
 const execFileAsync = promisify(execFile)
 let textEditTempDir: string | null = null

@@ -1,6 +1,6 @@
 import * as z from 'zod'
 import type { PersistedUIState } from '../../../src/shared/persisted-ui-state-types'
-import type { RepoIcon } from '../../../src/shared/repo-icon'
+import type { RepoIcon } from '../../../src/shared/repository/appearance/repo-icon'
 import { hostUnionArms, salvagedOptional, salvagingArray } from '../../../src/shared/zod-salvage'
 import { NODE_PLATFORM_NAMES } from '../transport/connection/mobile-runtime-host-platform'
 

@@ -3,7 +3,7 @@ import type {
   FolderWorkspaceUpdates
 } from './runtime-project-group-contract'
 export type { RuntimeProjectGroupDependencies } from './runtime-project-group-contract'
-import { projectGroupHookOwner } from '../../../shared/workspace-hook-owner'
+import { projectGroupHookOwner } from '../../../shared/workspace-setup/hooks/workspace-hook-owner'
 import { RuntimeRepositoryHooksCommands } from './runtime-repository-hooks-commands'
 import { getEffectiveSetupRunPolicy } from '../../workspace-hooks/effective-hook-config'
 import { getSetupConfig } from '../../../shared/orca-hook-setup-config'
@@ -15,8 +15,8 @@ import type {
   ProjectGroup,
   ProjectGroupMutation,
   ProjectGroupUpdate
-} from '../../../shared/project-group-types'
-import type { Repo } from '../../../shared/repo-types'
+} from '../../../shared/project/groups/project-group-types'
+import type { Repo } from '../../../shared/repository/repo-types'
 import type {
   FolderWorkspacePathStatus,
   FolderWorkspacePathStatusRequest
@@ -36,7 +36,10 @@ import {
   assertUniqueIdWhenRequired,
   type FolderWorkspaceMutationOptions
 } from './folder-workspace-unique-id-mutation'
-import { deleteFolderWorkspaceRow } from './folder-workspace-deletion'
+import {
+  deleteFolderWorkspaceRow,
+  type FolderWorkspaceDeleteOptions
+} from './folder-workspace-deletion'
 import { createFolderWorkspaceWithPluginHooks } from '../../plugins/hooks/workspace-create-plugin-hook'
 import {
   assertWslMoveRepoWritable,
@@ -275,8 +278,8 @@ export class RuntimeProjectGroupController {
 
   async deleteFolderWorkspace(
     folderWorkspaceId: string,
-    options: FolderWorkspaceMutationOptions = {}
-  ): Promise<{ deleted: boolean }> {
+    options: FolderWorkspaceDeleteOptions = {}
+  ): ReturnType<typeof deleteFolderWorkspaceRow> {
     return deleteFolderWorkspaceRow(this.deps, folderWorkspaceId, options)
   }
 }

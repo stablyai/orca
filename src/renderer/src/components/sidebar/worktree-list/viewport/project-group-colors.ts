@@ -1,6 +1,6 @@
 import type { WorktreeGroupBy } from '../../../../../../shared/sidebar-list/row-types'
 import type { RenderRow } from '../listing/render-row'
-import { normalizeRepoBadgeColor } from '../../../../../../shared/repo-badge-color'
+import { normalizeRepoBadgeColor } from '../../../../../../shared/repository/appearance/repo-badge-color'
 import { getProjectGroupHeaderPaddingLeft } from '../rows/indentation'
 import type { LineageRowFrame } from '../listing/lineage-row-projection'
 

@@ -17,11 +17,11 @@ import {
   buildDiffEditorWordWrapOptions,
   syncDiffEditorOriginalWordWrap
 } from '../monaco-view/diff-editor-word-wrap-options'
-import { monacoFindOptions } from '../../monaco-find-options'
-import { buildEditorUnicodeHighlightOptions } from '../../editor-unicode-highlight-options'
+import { monacoFindOptions } from '../../monaco/monaco-find-options'
+import { buildEditorUnicodeHighlightOptions } from '../../monaco/editor-unicode-highlight-options'
 import { installDiffEditorHorizontalWheelScroll } from '../monaco-view/diff-editor-horizontal-wheel-scroll'
 import { installCombinedDiffCursorReveal } from '../../combined-diff/scroll-viewport/combined-diff-cursor-reveal'
-import { usePluginSyntaxLanguage } from '../../use-plugin-syntax-language'
+import { usePluginSyntaxLanguage } from '../../monaco/use-plugin-syntax-language'
 import {
   PLUGIN_SYNTAX_EDITOR_OPTIONS,
   applyModelLanguage

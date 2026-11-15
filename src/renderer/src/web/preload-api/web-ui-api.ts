@@ -5,10 +5,10 @@ import { createWebJiraFilterStateApi } from './web-jira-filter-state-api'
 import type { PreloadApi } from '../../../../preload/api-types'
 import { assertClipboardTextWithinLimitWithYield } from '../../../../shared/clipboard-text'
 import type { ReadClipboardTextOptions } from '../../../../shared/clipboard-text'
-import { normalizeFeatureInteractions } from '../../../../shared/feature-interactions'
-import type { FeatureInteractionId } from '../../../../shared/feature-interactions'
-import { omitPairingLocalUiFields } from '../../../../shared/pairing-local-ui-fields'
-import type { PairedUiState } from '../../../../shared/pairing-local-ui-fields'
+import { normalizeFeatureInteractions } from '../../../../shared/feature-education/interactions/feature-interactions'
+import type { FeatureInteractionId } from '../../../../shared/feature-education/interactions/feature-interaction-catalog'
+import { omitPairingLocalUiFields } from '../../../../shared/remote-runtime/pairing/pairing-local-ui-fields'
+import type { PairedUiState } from '../../../../shared/remote-runtime/pairing/pairing-local-ui-fields'
 import {
   clipboardHasImage,
   readClipboardImageThumbnail,

@@ -2,7 +2,7 @@ import { useCallback, useMemo, useRef, useState } from 'react'
 import type {
   CustomWorktreeVisibilitySource,
   WorktreeVisibilityDefaults
-} from '../../../../../shared/repo-types'
+} from '../../../../../shared/repository/repo-types'
 import type { GlobalSettings } from '../../../../../shared/global-settings-types'
 
 import {

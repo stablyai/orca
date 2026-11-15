@@ -7,7 +7,7 @@ import {
   selectFolderWorkspaces,
   selectWorktreesByRepo
 } from '../../../workspaces/catalog/workspace-record-fields'
-import { parseWorkspaceKey } from '../../../../../../shared/workspace-scope'
+import { parseWorkspaceKey } from '../../../../../../shared/workspace/identity/workspace-scope'
 import { parseExecutionHostId, type ExecutionHostId } from '../../../../../../shared/execution-host'
 import {
   getManagedBrowserProfileOwner,

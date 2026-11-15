@@ -4,16 +4,16 @@ import type {
 } from '../../../../../../shared/global-settings-types'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
 import { getRepoOwnerWorktreeVisibilityDefaults } from '../../../../store/slices/worktrees/listing/worktree-visibility-defaults-by-host'
-import type { Repo } from '../../../../../../shared/repo-types'
+import type { Repo } from '../../../../../../shared/repository/repo-types'
 import type { DetectedWorktreeListResult, Worktree } from '../../../../../../shared/worktree/types'
-import { getHiddenExternalWorktrees as getHiddenImportedWorktrees } from '../../../../../../shared/external-worktree-inbox'
-import { isGitRepoKind } from '../../../../../../shared/repo-kind'
+import { getHiddenExternalWorktrees as getHiddenImportedWorktrees } from '../../../../../../shared/worktree/visibility/external-worktree-inbox'
+import { isGitRepoKind } from '../../../../../../shared/repository/repo-kind'
 import { isRepoHidden } from '../../../../../../shared/hidden-projects'
 import '../../../../../../shared/worktree/visibility/ownership'
 import {
   effectiveExternalWorktreeVisibility,
   isLegacyRepoForExternalWorktreeVisibility
-} from '../../../../../../shared/external-worktree-visibility'
+} from '../../../../../../shared/worktree/visibility/external-worktree-visibility'
 import type { ImportedWorktreesCardCandidate } from '../../../../../../shared/sidebar-list/row-types'
 
 export function buildImportedWorktreesCardCandidates(args: {

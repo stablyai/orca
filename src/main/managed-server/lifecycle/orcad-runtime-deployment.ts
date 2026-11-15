@@ -12,8 +12,8 @@ import {
   ORCAD_MANAGED_REMOTE_PORT,
   type OrcadManagedDeferral,
   type OrcadManagedDeployResult
-} from '../../../shared/orcad-managed-runtime'
-import { getManagedOrcadFenceEnvironmentId } from '../../../shared/managed-orcad-ssh-owner'
+} from '../../../shared/remote-runtime/orcad-lifecycle/orcad-managed-runtime'
+import { getManagedOrcadFenceEnvironmentId } from '../../../shared/remote-runtime/ssh/managed-orcad-ssh-owner'
 import { runTargetLifecycle } from '../../ipc/ssh/ssh-target-lifecycle-queue'
 import { materializeOrcadArtifact } from '../../orcad/artifact-slots/orcad-artifact-materializer'
 import {
@@ -36,7 +36,7 @@ import { ORCAD_ACTIVATION_POLICY_REFUSED_CODE } from '../activation/orcad-instal
 import { pruneManagedOrcadVersions } from './orcad-managed-version-gc'
 import { tunneledOrcadPairingCode } from './orcad-tunneled-pairing'
 import { resolveOrcadMigrationFence } from '../../ssh/migration-source/orcad-migration-source-fence'
-import type { SshTarget } from '../../../shared/ssh-types'
+import type { SshTarget } from '../../../shared/remote-runtime/ssh/ssh-types'
 import { findCollidingEnvironmentName } from '../../../shared/remote-runtime/host-catalog/runtime-environment-name-collision'
 import { deployedOrcadTunnelChecks } from './orcad-managed-tunnel-identity'
 import {
@@ -62,7 +62,7 @@ export async function createManagedOrcadEnvironment(
     const environmentId =
       getManagedOrcadFenceEnvironmentId(targetStore.getTarget(args.sshTargetId)) ?? randomUUID()
     // Duplicate/name checks before an add: a crash-zeroed list (#18766) must read as empty here.
-    const environments = listEnvironments(userDataPath, { recoverBlankStore: true })
+    const environments = await listEnvironments(userDataPath, { recoverBlankStore: true })
     const registered = environments.find((entry) => entry.id === environmentId)
     if (registered) {
       assertRuntimeEnvironmentNotReconciling(registered)
@@ -147,7 +147,7 @@ export async function createManagedOrcadEnvironment(
         tunnel.remotePort,
         { ...tunnel, preferredPort: ORCAD_MANAGED_REMOTE_PORT }
       )
-      const environment = addManagedOrcadEnvironment(userDataPath, {
+      const environment = await addManagedOrcadEnvironment(userDataPath, {
         id: environmentId,
         name: args.name,
         pairingCode: tunneledOrcadPairingCode(tunnel.readiness(), localPort),

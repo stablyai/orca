@@ -3,7 +3,7 @@ import type {
   RuntimeReferenceAgent,
   RuntimeReferenceFindParams,
   RuntimeReferenceFindResult
-} from '../../../../shared/runtime-reference-contracts'
+} from '../../../../shared/workspace-attachments/runtime-reference-contracts'
 import {
   getWorkspaceReferenceIdentity,
   matchesWorkspaceReferenceQuery,

@@ -2,7 +2,7 @@ import type {
   GitHubCreateIssueFields,
   GitHubCreateIssueResult
 } from '../../../shared/issue-mutation-types'
-import type { IssueSourcePreference } from '../../../shared/repo-types'
+import type { IssueSourcePreference } from '../../../shared/repository/repo-types'
 import type { LocalGitExecOptions } from '../repositories/github-repository-identity'
 import {
   resolveGitHubRepoExecution,

@@ -1,5 +1,5 @@
-import { ConfirmModal } from '../../components/ConfirmModal'
-import { PickerModal } from '../../components/PickerModal'
+import { ConfirmModal } from '../../components/sheets/ConfirmModal'
+import { PickerModal } from '../../components/sheets/PickerModal'
 import { openExternalLink as openMobilePrUrl } from '../../platform/external-links/external-link'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import type { MobileSourceControlState } from '../use-mobile-source-control-state'

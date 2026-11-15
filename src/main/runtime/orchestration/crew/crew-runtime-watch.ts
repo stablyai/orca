@@ -13,7 +13,7 @@ import { conversationRecordReader } from '../addressing/session-lineage/structur
 import { peekOpenedAgentSessionRecordStore } from '../../agent-session/records/agent-session-record-store-slot'
 import { isDeepStrictEqual } from 'node:util'
 import type { RuntimeStore } from '../../construction/runtime-store-contract'
-import type { RuntimeClientEvent } from '../../../../shared/runtime-client-events'
+import type { RuntimeClientEvent } from '../../../../shared/remote-runtime/session-graph/runtime-client-events'
 import { crewWorkspaceNames } from './crew-workspace-names'
 import { sessionCrewChanges, type CrewInvalidation } from './crew-changes'
 

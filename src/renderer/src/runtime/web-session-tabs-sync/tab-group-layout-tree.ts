@@ -1,7 +1,7 @@
 import type {
   RuntimeMobileSessionTabGroup,
   RuntimeMobileSessionTabsResult
-} from '../../../../shared/runtime-types'
+} from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import type { TabGroupLayoutNode } from '../../../../shared/tab-types'
 import { WEB_SESSION_GROUP_PREFIX, type WebSessionTabsSyncState } from './state'
 import { sanitizeRecentTabIds } from './state-equality-core'
