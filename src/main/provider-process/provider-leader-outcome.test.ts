@@ -39,16 +39,24 @@ describe('provider leader wait evidence', () => {
     await expect(outcome).resolves.toEqual({ code: null, signal: 'SIGTERM' })
   })
 
-  it.each(['{"code":0,"signal":null}', 'invalid\n'])(
-    'does not treat invalid wait evidence %j as a CLI exit',
+  it.each(['', '{"code":0,"signal":null}', 'invalid\n'])(
+    'settles lost evidence %j while the native parent remains live',
     async (frame) => {
       const { raw, pipe } = parent()
       const outcome = observeProviderLeaderOutcome(raw)
       pipe.end(frame)
-      raw.emit('exit', 0, null)
       await expect(outcome).resolves.toBeNull()
+      expect(raw.exitCode).toBeNull()
     }
   )
+
+  it('settles a broken outcome pipe while the native parent remains live', async () => {
+    const { raw, pipe } = parent()
+    const outcome = observeProviderLeaderOutcome(raw)
+    pipe.destroy(new Error('broken outcome pipe'))
+    await expect(outcome).resolves.toBeNull()
+    expect(raw.exitCode).toBeNull()
+  })
 
   it('preserves processless spawn failure close status', async () => {
     const { raw, pipe } = parent()

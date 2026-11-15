@@ -9,7 +9,10 @@ import {
 import type { ProviderCloseRequest } from './provider-process-supervisor'
 import { terminateProviderProcessTree } from './provider-process-teardown'
 
-type SupervisedChild = Pick<ProviderChild, 'pid' | 'kill' | 'exitCode' | 'signalCode'> &
+type SupervisedChild = Pick<
+  ProviderChild,
+  'pid' | 'kill' | 'exitCode' | 'signalCode' | 'groupVerdict'
+> &
   Pick<EventEmitter, 'once'> & { stdin?: Writable | null }
 
 /** Allow the supervisor its full stop before forcing tree teardown for this root-only child. */
@@ -20,13 +23,23 @@ export async function stopSupervisedChildProcess(
     closeRequest = 'stdin-end-and-sigterm'
   }: { site: string; closeRequest?: ProviderCloseRequest }
 ): Promise<ProviderProcessCloseResult> {
-  const exited = (): boolean => child.exitCode !== null || child.signalCode !== null
+  let rootExited = false
+  const exited = (): boolean =>
+    rootExited ||
+    child.groupVerdict === 'exited' ||
+    child.exitCode !== null ||
+    child.signalCode !== null
   if (exited()) {
     return { root: 'exited', tree: null }
   }
   return closeProviderProcess({
     child,
-    exitPromise: new Promise<void>((resolve) => child.once('exit', () => resolve())),
+    exitPromise: new Promise<void>((resolve) =>
+      child.once('exit', () => {
+        rootExited = true
+        resolve()
+      })
+    ),
     rootVerdict: () => (exited() ? 'exited' : 'live'),
     supervised: true,
     policy: {

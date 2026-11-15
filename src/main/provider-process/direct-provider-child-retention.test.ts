@@ -55,10 +55,13 @@ function launch(index: number) {
   )
   gate.once('finish', () => status.end())
   const child = new DirectProviderChild(raw, spec)
+  // Connections install callbacks that retain their writer and pending requests.
+  const connection = { child, failures: [] as Error[] }
+  child.stdin.on('error', (error) => connection.failures.push(error))
   const errors: Error[] = []
   child.on('error', (error) => errors.push(error))
   const closed = new Promise<void>((resolve) => child.once('close', () => resolve()))
-  return { raw, child, gate, control, outcome, stdout, stderr, errors, closed }
+  return { raw, child, connection, gate, control, outcome, stdout, stderr, errors, closed }
 }
 
 describe('finished CLI retention while native parents keep reaping', () => {
@@ -67,24 +70,36 @@ describe('finished CLI retention while native parents keep reaping', () => {
     async (count) => {
       const runs = Array.from({ length: count }, (_, index) => launch(index))
       await Promise.all(runs.map(({ child }) => child.ready))
-      for (const { stdout, stderr, outcome } of runs) {
+      for (const [index, { stdout, stderr, outcome }] of runs.entries()) {
         stdout.end('final answer')
         stderr.end('final error')
+        if (index % 2 === 0) {
+          stdout.destroy()
+          stderr.destroy()
+        }
         outcome.end('{"code":0,"signal":null}\n')
       }
       await Promise.all(runs.map(({ closed }) => closed))
-      for (const { raw, child, gate, control, errors } of runs) {
+      for (const { raw, child, connection, gate, control, errors } of runs) {
         expect(raw.exitCode).toBeNull() // H deliberately has not emitted exit.
         expect(child.exitCode).toBe(0)
         expect(raw.stdout!.listenerCount('error')).toBe(0)
         expect(raw.stderr!.listenerCount('error')).toBe(0)
         expect(raw.stdin!.listenerCount('finish')).toBe(0)
+        expect(raw.stdin).not.toBe(child.stdin)
+        expect(raw.stdin!.listenerCount('error')).toBe(1) // Only the raw transport's sink.
+        expect(raw.stdin!.listenerCount('close')).toBe(0)
+        expect(raw.stdin!.listenerCount('unpipe')).toBe(0)
+        expect(raw.stdout!.listenerCount('data')).toBe(0)
+        expect(raw.stderr!.listenerCount('data')).toBe(0)
         expect(control.listenerCount('data')).toBe(0)
         expect(control.listenerCount('end')).toBe(0)
         // Late native-parent transport failures must not reach the retired chat.
         raw.emit('error', new Error('late parent error'))
         gate.emit('error', new Error('late gate error'))
+        raw.stdin!.emit('error', new Error('late stdin error'))
         expect(errors).toEqual([])
+        expect(connection.failures).toEqual([])
         raw.stdout!.destroy()
         raw.stderr!.destroy()
       }

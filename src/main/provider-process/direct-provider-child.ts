@@ -14,6 +14,7 @@ import {
 } from './provider-control-completion'
 import { DirectProviderStop, type ProviderControlCommand } from './direct-provider-stop'
 import { drainDirectProviderOutput, pipeDirectProviderOutput } from './direct-provider-output-drain'
+import { pipeDirectProviderInput } from './direct-provider-input'
 import { providerExecFailure, reportProviderLaunchFailure } from './provider-launch-failure'
 import {
   isProviderReapSignal,
@@ -29,7 +30,7 @@ type Ownership = Awaited<ReturnType<typeof publishProviderOwnership>>
 export class DirectProviderChild extends EventEmitter implements ProviderChild {
   readonly ready: Promise<void>
   readonly spawnAbsenceKnown = true
-  readonly stdin: Writable
+  readonly stdin = new PassThrough()
   readonly stdout = new PassThrough()
   readonly stderr = new PassThrough()
   exitCode: number | null = null
@@ -62,7 +63,6 @@ export class DirectProviderChild extends EventEmitter implements ProviderChild {
   ) {
     super()
     this.stop = new DirectProviderStop(spec, this.send.bind(this), () => this.forceReap())
-    this.stdin = raw.stdin ?? new PassThrough()
     this.reaped = new Promise((resolve) => {
       this.finishReap = resolve
     })
@@ -71,7 +71,7 @@ export class DirectProviderChild extends EventEmitter implements ProviderChild {
     const status = raw.stdio?.at(5)
     this.control = control instanceof Duplex ? control : undefined
     this.gate = gate instanceof Writable ? gate : undefined
-    this.stdin.on('error', () => {})
+    const releaseInput = pipeDirectProviderInput(raw, this.stdin, () => this.stdinEnded())
     const releaseOutput = pipeDirectProviderOutput(raw, this.stdout, this.stderr)
     if (this.control) {
       readProviderControlCompletion(this.control, (completion) => {
@@ -81,8 +81,6 @@ export class DirectProviderChild extends EventEmitter implements ProviderChild {
     }
     const gateError = (): boolean => this.cancelLaunch()
     this.gate?.on('error', gateError)
-    const stdinFinish = (): void => this.stdinEnded()
-    this.stdin.once('finish', stdinFinish)
     const onError = (error: Error): void => {
       this.failure ??= this.reportFailure(error)
       this.cancelLaunch()
@@ -93,7 +91,7 @@ export class DirectProviderChild extends EventEmitter implements ProviderChild {
       raw.on('error', () => {})
       this.gate?.off('error', gateError)
       this.gate?.on('error', () => {})
-      this.stdin.off('finish', stdinFinish)
+      releaseInput()
       releaseOutput()
     }
     void observeProviderLeaderOutcome(raw).then((outcome) => {
@@ -122,7 +120,10 @@ export class DirectProviderChild extends EventEmitter implements ProviderChild {
     return this.launchedPid
   }
   get leaderExited(): boolean {
-    return this.outcome != null && this.raw.pid !== undefined
+    return (
+      this.raw.pid !== undefined &&
+      (this.outcome != null || (this.writerPid !== undefined && this.groupVerdict === 'exited'))
+    )
   }
 
   private async start(bootstrap: ReturnType<typeof readBootstrapStatus> | null): Promise<void> {

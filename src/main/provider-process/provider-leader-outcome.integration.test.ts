@@ -28,7 +28,7 @@ afterEach(async () => {
 })
 
 describe.runIf(process.platform !== 'win32')('native parent outcome loss', () => {
-  it('cleans a running CLI group after raw parent SIGUSR1 without claiming a CLI exit', async () => {
+  it('retires a cleaned CLI group after parent SIGUSR1 with unknown CLI outcome', async () => {
     let parent: ChildProcess | undefined
     const managed = spawnManagedProviderProcess(
       {
@@ -93,14 +93,16 @@ describe.runIf(process.platform !== 'win32')('native parent outcome loss', () =>
     expect(errors).toHaveLength(1)
     expect(errors[0]).toBeInstanceOf(Error)
     expect(errors[0]).not.toHaveProperty('providerLaunchFailed')
-    expect(exits).toEqual([])
-    expect(managedExits).toEqual([])
+    expect(exits).toEqual([[null, null]])
+    expect(managedExits).toEqual([{ code: null, signal: null, processless: false }])
     expect(managed.child.exitCode).toBeNull()
     expect(managed.child.signalCode).toBeNull()
-    expect(managed.child.leaderExited).toBe(false)
-    expect(managed.exitStatus).toBeNull()
-    expect(managed.rootExitObserved).toBe(false)
-    expect(managed.rootVerdict).not.toBe('exited')
+    expect(managed.child.leaderExited).toBe(true)
+    expect(managed.exitStatus).toEqual({ code: null, signal: null, processless: false })
+    expect(managed.rootExitObserved).toBe(true)
+    expect(managed.rootVerdict).toBe('exited')
+    await expect(managed.close()).resolves.toMatchObject({ root: 'exited' })
+    await expect(managed.close()).resolves.toMatchObject({ root: 'exited' })
     expect(managed.processless).toBe(false)
     expect(managed.child.killed).toBe(true)
     expect(managed.stderrTail()).toBe('retained stderr\n')

@@ -21,6 +21,8 @@ export function pipeDirectProviderOutput(
   raw.stdout?.pipe(stdout, { end: false })
   raw.stderr?.pipe(stderr, { end: false })
   return () => {
+    raw.stdout?.unpipe(stdout)
+    raw.stderr?.unpipe(stderr)
     raw.stdout?.off('error', stdoutError)
     raw.stderr?.off('error', stderrError)
   }
@@ -58,8 +60,8 @@ export function drainDirectProviderOutput(
       [stdout, outputStdout],
       [stderr, outputStderr]
     ] as const) {
+      source?.unpipe(output)
       if (source && !source.destroyed) {
-        source.unpipe(output)
         const forward = (chunk: Buffer): void => {
           output.write(chunk)
         }

@@ -173,7 +173,7 @@ async function stopSupervisedPreflight(
   child: ProviderChild,
   closed: Promise<boolean>
 ): Promise<boolean> {
-  if (!child.pid) {
+  if (!child.pid && !child.ready) {
     return true
   }
   const { root } = await stopSupervisedChildProcess(child, {

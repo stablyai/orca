@@ -58,20 +58,14 @@ export function observeProviderLeaderOutcome(
 ): Promise<ProviderLeaderOutcome | null> {
   const pipe = raw.stdio?.at(6)
   const result = pipe instanceof Readable ? readProviderLeaderOutcome(pipe) : Promise.resolve(null)
+  // EOF/error is itself lost-outcome evidence, even while H reaps detached descendants.
+  if (raw.pid !== undefined) {
+    return result
+  }
   return new Promise((resolve) => {
-    void result.then((outcome) => {
-      if (outcome) {
-        resolve(outcome)
-      }
-    })
-    // A parent exit without its wait frame leaves the CLI outcome unknown.
-    raw.once('exit', () => {
-      void result.then(resolve)
-    })
+    // A processless spawn has no CLI frame; preserve its actual spawn-failure close status.
     raw.once('close', (code, signal) => {
-      if (raw.pid === undefined) {
-        resolve({ code, signal })
-      }
+      resolve({ code, signal })
     })
   })
 }

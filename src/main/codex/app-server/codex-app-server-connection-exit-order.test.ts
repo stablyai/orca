@@ -7,6 +7,10 @@ import { CodexAppServerRequestError } from './codex-app-server-request-error'
 import { codexStartFailure } from './codex-startup-outcome'
 import canonicalRefusal from './fixtures/start-resume-canonical-filename-refusal.json'
 
+vi.mock('../../provider-process/provider-process-spawn', () => ({
+  spawnProviderProcess: (_spec: unknown, spawnImpl: () => unknown) => spawnImpl()
+}))
+
 function stubChild() {
   const child = Object.assign(new EventEmitter(), {
     // Outside any real process table so teardown never mistakes an unrelated process for it.
