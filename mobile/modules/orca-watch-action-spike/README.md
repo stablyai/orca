@@ -108,6 +108,9 @@ The Troubleshoot section has two lists. Tap **Refresh results** after each test.
   `keychain ready|temporarily-unavailable|missing`, `host-answer lan|tailscale|relay`
 - the last connection-log lines when the host step fails
 
+`protected-data false` with `keychain ready` means the token came from the in-memory cache in
+`host-store.ts`, not the keychain. Only a cold launch (test 7) proves a locked keychain read.
+
 **Native timeline** (written by Swift, even when JS never ran):
 
 - `launch background|active`: iOS launched the app
@@ -135,3 +138,28 @@ the wrong button.
 - **All pass:** real build order: push `category` and prompt identity in
   `cloud/packages/push-contract/src/send-messages.ts` and `cloud/apps/push/src/apns-client.ts` →
   `agentSession.respondToApproval` for native chat → a host-checked terminal approval.
+
+## 8. Later research
+
+- **Watch away from the phone (2026-11-15):** iPhone Bluetooth off, Watch on cellular. The prompt reached
+  the Watch, but the tapped Yes was queued on the Watch and reached the phone only after Bluetooth came back
+  (~2 min later). The JS `stale` guard did not fire, because it measures from iOS delivery to the phone, not
+  from the tap. Mirrored actions therefore can't answer prompts at a distance; that needs a standalone watchOS
+  app over an HTTPS relay endpoint (watchOS blocks WebSockets for non-audio apps, Apple TN3135). The host must
+  also refuse late answers by ticket expiry and prompt revision.
+
+- **Cloud relay path (test 6):** failed on 2026-11-14 (cold launch, locked, cellular only, keychain
+  ready). The client opened a direct WebSocket, hit `CONNECT_TIMEOUT_MS` (12s,
+  `src/transport/rpc/rpc-client-socket-session.ts`), retried direct, and timed out at 20s without trying the
+  relay. A Watch tap only gets ~30s of background time, so the relay must be tried first or in parallel when
+  no direct route exists. Caveat: the normal app couldn't reach this host without Tailscale either, so the
+  host had no working relay route. Rerun once the relay works for this host.
+
+- **Standalone watchOS app, background action (2026-11-15, `watch-spike/`):** iPhone Bluetooth off, Watch on
+  cellular, Watch-only app answering its own notification. A background action (`Yes`) got ≥25s of runtime
+  (expiring activity never expired) but **no network**: the path stayed `unsatisfied` with a cellular interface
+  listed, and every request timed out (`-1001`) even with `waitsForConnectivity`. Without it, it failed in 116ms
+  ("offline"). The same request from the open app woke cellular and reached `relay.onorca.dev/health` in 694ms.
+  Background `URLSession` downloads completed only at the next foreground launch (7–10 min later). So a Watch
+  answer at a distance must come from a foreground action (`.foreground`, opens the app), not a background one.
+  Confirmed: `Yes (open app)` from the notification, same conditions, reached the relay in 465ms.

@@ -1,0 +1,23 @@
+name: OrcaWatchSpike
+options:
+  deploymentTarget:
+    watchOS: '26.0'
+settings:
+  base:
+    DEVELOPMENT_TEAM: 28HX49S37H
+    CODE_SIGN_STYLE: Automatic
+    SWIFT_VERSION: '5.9'
+targets:
+  OrcaWatchSpike:
+    type: application
+    platform: watchOS
+    sources: [Sources]
+    info:
+      path: Generated/Info.plist
+      properties:
+        CFBundleDisplayName: Orca Watch Spike
+        WKApplication: true
+        WKWatchOnly: true
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.cjna.orca.watchspike.watch

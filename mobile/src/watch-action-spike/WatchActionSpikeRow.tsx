@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { Pressable, Text, View } from 'react-native'
 import { Watch } from 'lucide-react-native'
 import AsyncStorage from '@react-native-async-storage/async-storage'
+import * as Notifications from 'expo-notifications'
 import {
   OrcaWatchActionSpike,
   type WatchActionSpikeNativeEvent
@@ -11,6 +12,7 @@ import { troubleshootScreenStyles as styles } from '../diagnostics/troubleshoot-
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { colors } from '../theme/mobile-theme'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
+import { ensureNotificationPermissions } from '../notifications/notification-permissions'
 import { loadHosts } from '../transport/hosts/host-store'
 import type { HostProfile } from '../transport/hosts/host-profile'
 import { armWatchActionSpike } from './watch-action-spike-notifications'
@@ -69,16 +71,45 @@ export function WatchActionSpikeRow() {
 
   const arm = async (seconds: number) => {
     if (!host) {
+      setStatus(t('watchActionSpike.noHost', 'No paired host'))
       return
     }
-    await armWatchActionSpike(host.id, seconds)
-    setStatus(
-      t(
-        'watchActionSpike.armed',
-        'Armed. Lock the phone now; the test arrives on your Watch in {{seconds}}s.',
-        { seconds }
+    try {
+      const granted = await ensureNotificationPermissions()
+      const permission = await Notifications.getPermissionsAsync()
+      const permissionLine = t(
+        'watchActionSpike.permission',
+        'Permission {{status}} · iOS {{iosStatus}} · alert {{alert}} · lock screen {{lockScreen}} · style {{style}}',
+        {
+          status: permission.status,
+          iosStatus: String(permission.ios?.status ?? '?'),
+          alert: String(permission.ios?.allowsAlert ?? '?'),
+          lockScreen: String(permission.ios?.allowsDisplayOnLockScreen ?? '?'),
+          style: String(permission.ios?.alertStyle ?? '?')
+        }
       )
-    )
+      if (!granted) {
+        setStatus(
+          `${t('watchActionSpike.notificationsOff', 'Notifications are off for this build. Allow them in iOS Settings → Notifications.')}\n${permissionLine}`
+        )
+        return
+      }
+      await armWatchActionSpike(host.id, seconds)
+      const pending = (await Notifications.getAllScheduledNotificationsAsync()).length
+      setStatus(
+        `${t(
+          'watchActionSpike.armed',
+          'Armed. Lock the phone now; the test arrives on your Watch in {{seconds}}s.',
+          { seconds }
+        )}\n${permissionLine}\n${t('watchActionSpike.pending', '{{count}} scheduled', { count: pending })}`
+      )
+    } catch (error) {
+      setStatus(
+        t('watchActionSpike.armFailed', 'Arm failed: {{message}}', {
+          message: error instanceof Error ? error.message : String(error)
+        })
+      )
+    }
   }
 
   const toggleKeychain = async () => {
