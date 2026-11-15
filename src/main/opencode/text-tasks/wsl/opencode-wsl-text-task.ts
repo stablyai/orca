@@ -1,7 +1,7 @@
 import { randomBytes } from 'node:crypto'
 import { existsSync } from 'node:fs'
 import { join } from 'node:path'
-import { getAppEnvironment } from '../../../../shared/app-environment'
+import { getAppEnvironment } from '../../../../shared/app-lifecycle/app-environment'
 import { waitForPromiseWithSignal } from '../../../../shared/concurrency/abort-signal-reason'
 import { OPENCODE_WSL_TEXT_TASK_FILENAME } from '../../../../shared/remote-runtime/orcad-distribution/remote-bundle-artifacts'
 import { SearchSubprocessLineAccumulator } from '../../../../shared/search-subprocess-lines'

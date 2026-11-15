@@ -14,13 +14,13 @@ import { useIntlLocale, useTranslate, type Translate } from '@/i18n/use-translat
 import { formatUiRelativeTime } from '@/i18n/relative-time-format'
 import { uiNumberFormat } from '@/i18n/ui-intl-formatters'
 import { openAppHttpLinkFromAnchor } from '@/lib/browser/navigation/app-http-link-open'
-import type { DelayedUpdate, UpdateStatus } from '../../../../../shared/update-status-types'
-import { getReleaseNotesUrlForVersion } from '../../../../../shared/release-channel'
+import type { DelayedUpdate, UpdateStatus } from '../../../../../shared/updater/update-status-types'
+import { getReleaseNotesUrlForVersion } from '../../../../../shared/updater/release-channel'
 import {
   isDelayedUpdatePending,
   normalizeUpdateDelayDays,
   UPDATE_DELAY_DAY_OPTIONS
-} from '../../../../../shared/update-delay'
+} from '../../../../../shared/updater/update-delay'
 import {
   formatUpdateDelayDate,
   getUpdateDelayDescription,

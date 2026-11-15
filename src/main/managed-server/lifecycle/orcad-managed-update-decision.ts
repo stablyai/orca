@@ -1,4 +1,7 @@
-import { compareAppVersions, isValidAppVersion } from '../../../shared/app-version'
+import {
+  compareAppVersions,
+  isValidAppVersion
+} from '../../../shared/app-lifecycle/identity/app-version'
 import type { OrcadActivationRecord } from '../activation/orcad-activation-record'
 import {
   refuseOrcadHostDowngrade,

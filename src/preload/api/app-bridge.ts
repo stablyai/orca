@@ -1,5 +1,5 @@
 import { ipcRenderer } from 'electron'
-import type { AppIdentity } from '../../shared/app-identity'
+import type { AppIdentity } from '../../shared/app-lifecycle/identity/app-identity'
 import type { MacosUpgradeSupport } from '../../shared/updater/requirements/macos-upgrade-support'
 import type { FloatingTerminalCwdRequest } from '../../shared/ui-chrome-types'
 import type { MacCapturedDigitRowChord } from '../../shared/keybindings/macos-symbolic-hotkeys'

@@ -6,7 +6,7 @@ import {
 import {
   MIN_COMPATIBLE_RUNTIME_SERVER_VERSION,
   RUNTIME_PROTOCOL_VERSION
-} from '../../../shared/protocol-version'
+} from '../../../shared/remote-runtime/protocol/protocol-version'
 import type {
   RuntimeRequestSelection,
   RuntimeOrchestrationEnvelope,
