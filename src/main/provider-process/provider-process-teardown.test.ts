@@ -1,6 +1,7 @@
 import type { ChildProcess } from 'node:child_process'
 import { expect, it, vi } from 'vitest'
 import type { DescendantTreeVerdict } from '../pty/process-retirement/pty-descendant-exit-verification'
+import { collectDescendantRows } from '../pty/process-retirement/pty-descendant-termination'
 import { terminateProviderProcessTree as terminateWithEvidence } from './provider-process-teardown'
 
 function child() {
@@ -10,6 +11,25 @@ function child() {
 function supervisedChild(groupVerdict: DescendantTreeVerdict) {
   return { ...child(), leaderExited: false, groupVerdict }
 }
+
+it('stops surviving group members while an exited unreaped root still reserves its group', async () => {
+  let groupRunning = true
+  await terminateWithEvidence(child(), {
+    site: 'unreaped-root',
+    platform: 'darwin',
+    captureDescendants: async () =>
+      collectDescendantRows(1234, [
+        { pid: 1234, ppid: 1, pgid: 1234, startedAt: 'Mon Jul 13 12:54:47 2026', zombie: true },
+        { pid: 2000, ppid: 1, pgid: 1234, startedAt: 'Mon Jul 13 12:54:47 2026' }
+      ]),
+    signalProcessGroup: (pgid, signal) => {
+      if (pgid === 1234 && signal === 'SIGKILL') {
+        groupRunning = false
+      }
+    }
+  })
+  expect(groupRunning).toBe(false)
+})
 
 it('never reads or signals a retired group PID when the CLI wait outcome is unknown', async () => {
   const target = { ...child(), leaderExited: false, groupVerdict: 'exited' as const }

@@ -33,7 +33,7 @@ function admissibleTree(
   if (!captured || exited) {
     return null
   }
-  return captured.rootPgid === null ? null : captured
+  return captured.rootPgid === null || !captured.root ? null : captured
 }
 
 export type ClaudeChildTreeReaperDeps = {
