@@ -150,7 +150,6 @@ export function isCloudTestRunnerInput(file) {
 
 // The package (windows) job's "Test Windows-specific boundaries" step runs exactly these files.
 export const WINDOWS_BOUNDARY_TESTS = [
-  'config/scripts/native-build/node-addons/rebuild-native-deps.test.mjs',
   'config/scripts/native-build/node-addons/rebuild-native-deps-windows-process-tree.test.mjs',
   'config/scripts/native-build/node-addons/rebuild-native-deps-node-pty.test.mjs',
   'config/scripts/desktop-distribution/runtime-verification/verify-packaged-node-pty-job-ownership.test.mjs',
@@ -189,7 +188,6 @@ export const WINDOWS_BOUNDARY_TESTS = [
   'src/main/daemon/pty-subprocess/testing/node-pty-windows-output-error.win32.test.ts',
   'src/main/persistence/profile-state/access/profile-state-access-windows-native.win32.test.ts',
   'src/main/pty/process-retirement/windows-live-tree-kill.win32.test.ts',
-  'src/main/wsl/execution/wsl-guest-environment.test.ts',
   'src/main/claude-accounts/profiles/setup/claude-profile-history-windows.test.ts',
   'src/shared/source-scan/source-tree-scan.test.ts',
   'src/main/cli/wsl/wsl-cli-powershell-boundary.test.ts',

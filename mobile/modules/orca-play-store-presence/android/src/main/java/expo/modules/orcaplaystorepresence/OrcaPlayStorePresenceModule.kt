@@ -1,6 +1,7 @@
 package expo.modules.orcaplaystorepresence
 
 import android.content.pm.PackageManager
+import android.os.Build
 import expo.modules.kotlin.modules.Module
 import expo.modules.kotlin.modules.ModuleDefinition
 
@@ -16,6 +17,24 @@ class OrcaPlayStorePresenceModule : Module() {
       try {
         @Suppress("DEPRECATION")
         packageManager.getApplicationInfo(PLAY_STORE_PACKAGE, 0).enabled
+      } catch (_: PackageManager.NameNotFoundException) {
+        false
+      }
+    }
+
+    // Play updates the installs it made; anything else was sideloaded from GitHub Releases.
+    Function("isInstalledByPlayStore") {
+      val context = appContext.reactContext ?: return@Function false
+      val packageManager = context.packageManager
+      try {
+        val installer =
+          if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            packageManager.getInstallSourceInfo(context.packageName).installingPackageName
+          } else {
+            @Suppress("DEPRECATION")
+            packageManager.getInstallerPackageName(context.packageName)
+          }
+        installer == PLAY_STORE_PACKAGE
       } catch (_: PackageManager.NameNotFoundException) {
         false
       }
