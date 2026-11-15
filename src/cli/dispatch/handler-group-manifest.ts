@@ -197,7 +197,8 @@ export const HANDLER_GROUPS: readonly HandlerGroup[] = [
       'computer press-key',
       'computer hotkey',
       'computer paste-text',
-      'computer set-value'
+      'computer set-value',
+      'computer batch'
     ],
     load: async () => (await import('../computer/computer.js')).COMPUTER_HANDLERS
   },

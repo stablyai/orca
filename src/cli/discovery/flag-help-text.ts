@@ -131,6 +131,10 @@ export const FLAG_HELP_TEXT: Record<string, string> = {
   'workspace-mode': '--workspace-mode <mode> existing or new-per-run',
   'missed-run-grace-minutes': '--missed-run-grace-minutes <n> Missed-run grace window',
   'value-stdin': '--value-stdin          Read value payload from stdin',
+  steps: '--steps <json>         JSON array of batch steps',
+  'steps-stdin': '--steps-stdin          Read the JSON array of batch steps from stdin',
+  'stop-on':
+    '--stop-on <level>      Stop the batch on error, suspect (default) or any unverified result',
   'window-id': '--window-id <id>      Target a window id from list-windows',
   'window-index': '--window-index <n>   Target a window index from list-windows',
   element: '--element <ref>        Element ref from snapshot (e.g. e3)',

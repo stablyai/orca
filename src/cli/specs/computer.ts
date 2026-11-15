@@ -159,5 +159,23 @@ export const COMPUTER_COMMAND_SPECS: CommandSpec[] = [
     usage:
       'orca computer set-value --app <app> --element-index <n> (--value <text> | --value-stdin) [--window-id <id> | --window-index <n>] [--restore-window] [--no-screenshot] [--full-tree] [--json]',
     allowedFlags: [...COMPUTER_ACTION_FLAGS, 'element-index', 'value', 'value-stdin']
+  },
+  {
+    path: ['computer', 'batch'],
+    summary: 'Run several actions on one window in one call',
+    usage:
+      'orca computer batch --app <app> (--steps <json> | --steps-stdin) [--stop-on <error|suspect|unverified>] [--window-id <id> | --window-index <n>] [--restore-window] [--screenshot] [--full-tree] [--json]',
+    allowedFlags: [
+      ...COMPUTER_ACTION_FLAGS.filter((flag) => flag !== 'no-screenshot'),
+      'steps',
+      'steps-stdin',
+      'stop-on',
+      'screenshot'
+    ],
+    notes: [
+      'Steps are a JSON array run in order on the same app and window, e.g. [{"command":"set-value","elementIndex":4,"value":"42"},{"command":"press-key","key":"Return"}]. Each step names a command (click, perform-secondary-action, scroll, drag, type-text, press-key, hotkey, paste-text, set-value) and that command\'s flags in camelCase; {"command":"wait","ms":500} pauses.',
+      'Every step is checked before the first one runs. The batch stops at the first error and, with the default --stop-on suspect, at a suspected noop, text mismatch or window change; --stop-on unverified also stops on any result that is not verified. It exits 1 when it stops early.',
+      'Prints one line per step and one read of the window after the last step, as changes since the state before the batch. No screenshot unless --screenshot.'
+    ]
   }
 ]

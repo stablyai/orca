@@ -184,6 +184,7 @@ import {
   SaveImageAsTempFile,
   StartImageUpload
 } from './clipboard/clipboard-params'
+import { ComputerBatch } from './computer/computer-batch-params'
 import {
   ComputerCapabilitiesParams,
   ComputerPermissionsStatusParams
@@ -1046,6 +1047,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'clipboard.commitImageUpload': CommitImageUpload,
   'clipboard.saveImageAsTempFile': SaveImageAsTempFile,
   'clipboard.startImageUpload': StartImageUpload,
+  'computer.batch': ComputerBatch,
   'computer.capabilities': ComputerCapabilitiesParams,
   'computer.click': Click,
   'computer.drag': DragOfComputerSchemasParams,

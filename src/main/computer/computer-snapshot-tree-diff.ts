@@ -110,6 +110,10 @@ export class ComputerTreeBaselines {
   private readonly entries = new Map<string, Baseline>()
 
   apply<T extends ComputerSnapshotResult>(params: Record<string, unknown>, result: T): T {
+    // Batch steps pass this so the read after the batch diffs against the tree from before it.
+    if (params.keepTreeBaseline === true) {
+      return result
+    }
     const { snapshot } = result
     const key = baselineKey(params, snapshot.app.pid)
     const windowKey = snapshotWindowKey(snapshot.window)

@@ -213,6 +213,9 @@ function formatCommandFlagHelp(flag: string, commandPath: string[]): string {
   if (command === 'chat rename' && flag === 'name') {
     return '--name <text>         New name for the chat'
   }
+  if (flag === 'screenshot' && command === 'computer batch') {
+    return '--screenshot           Capture a screenshot of the state after the batch'
+  }
   if (flag === 'key' && command === 'computer hotkey') {
     return '--key <key-combo>      Modifier chord with one key, e.g. CmdOrCtrl+A'
   }

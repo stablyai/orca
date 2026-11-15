@@ -67,6 +67,7 @@ export const CLI_BOOLEAN_FLAGS = new Set([
   'run-setup',
   'show-profile',
   'staged',
+  'steps-stdin',
   'supervise',
   'tab',
   'takeover-legacy',
