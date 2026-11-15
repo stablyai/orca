@@ -3478,7 +3478,7 @@ private enum Input {
         }
         let flags = eventFlags(modifiers)
         let target = syntheticClickRecipient(pid: targetWindow.app.pid, windowId: targetWindow.windowId)
-        try withRecipientErrors {
+        try hidGesture { post in
             try SyntheticMouseClickDelivery.deliver(
                 clickCount: count,
                 target: target,
@@ -3510,9 +3510,30 @@ private enum Input {
                     }
                     return event
                 },
-                post: { $0.post(tap: .cghidEventTap) },
+                post: post,
                 pause: { _ = usleep($0) }
             )
+        }
+    }
+
+    /// Posts a pointer gesture through the HID tap, then puts the user's pointer back unless they moved it meanwhile.
+    private static func hidGesture(_ body: (_ post: (CGEvent) -> Void) throws -> Void) throws {
+        var restore = SyntheticMouseClickDelivery.PointerRestore()
+        defer {
+            if restore.mayRestore, let saved = restore.saved {
+                usleep(SyntheticMouseClickDelivery.PointerRestore.settleMicroseconds)
+                if let current = CGEvent(source: nil)?.location, restore.shouldRestore(current: current) {
+                    CGWarpMouseCursorPosition(saved)
+                    // Why: without re-associating, a warp freezes the user's mouse for about a quarter second.
+                    CGAssociateMouseAndMouseCursorPosition(1)
+                }
+            }
+        }
+        try withRecipientErrors {
+            try body { event in
+                restore.willPost(at: event.location, current: CGEvent(source: nil)?.location)
+                event.post(tap: .cghidEventTap)
+            }
         }
     }
 
@@ -3542,12 +3563,12 @@ private enum Input {
             throw ProviderError.coded("accessibility_error", "failed to create scroll event")
         }
         wheel.location = point
-        try withRecipientErrors {
+        try hidGesture { post in
             try SyntheticMouseClickDelivery.deliverScroll(
                 move: move, wheel: wheel,
                 target: syntheticClickRecipient(pid: targetWindow.app.pid, windowId: targetWindow.windowId),
                 currentObservation: { currentSyntheticClickRecipient(snapshot: targetWindow, point: point) },
-                post: { $0.post(tap: .cghidEventTap) },
+                post: post,
                 pause: { _ = usleep($0) }
             )
         }
@@ -3561,12 +3582,12 @@ private enum Input {
             let progress = CGFloat(step) / 10
             return try mouseEvent(.leftMouseDragged, at: CGPoint(x: start.x + (end.x - start.x) * progress, y: start.y + (end.y - start.y) * progress))
         }
-        try withRecipientErrors {
+        try hidGesture { post in
             try SyntheticMouseClickDelivery.deliverDrag(
                 move: move, down: down, dragged: dragged, up: up,
                 target: syntheticClickRecipient(pid: targetWindow.app.pid, windowId: targetWindow.windowId),
                 currentObservation: { currentSyntheticClickRecipient(snapshot: targetWindow, point: start) },
-                post: { $0.post(tap: .cghidEventTap) },
+                post: post,
                 pause: { _ = usleep($0) }
             )
         }
