@@ -23,7 +23,7 @@ import {
   type OpenInAppPreset
 } from '@/lib/files/os-open/open-in-app-catalog'
 import { useTranslate } from '@/i18n/use-translate'
-import { createNonSecureContextUuid as createBrowserUuid } from '../../../../../shared/non-secure-context-uuid'
+import { createNonSecureContextUuid as createBrowserUuid } from '../../../../../shared/identifiers/non-secure-context-uuid'
 
 type OpenInMenuSettingProps = {
   applications: OpenInApplication[] | undefined

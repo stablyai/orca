@@ -1,4 +1,4 @@
-import type { ExtraUsageBalance } from '../../../../shared/rate-limit-types'
+import type { ExtraUsageBalance } from '../../../../shared/agent-usage/rate-limits/rate-limit-types'
 import type { CodexRateLimitWindowsSnapshot } from './codex-rate-limit-window-classification'
 
 type RpcCredits = NonNullable<CodexRateLimitWindowsSnapshot['credits']>

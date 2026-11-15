@@ -15,7 +15,7 @@ import {
   type BrowserPageZoomDirection
 } from '../../../../shared/browser/site-settings/browser-page-zoom'
 import type { PersistedUIState } from '../../../../shared/persisted-ui-state-types'
-import { errorMessage } from '../../../../shared/error-message'
+import { errorMessage } from '../../../../shared/errors/error-message'
 
 type TrackedGuest = {
   guest: Electron.WebContents

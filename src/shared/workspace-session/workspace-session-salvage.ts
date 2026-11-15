@@ -4,7 +4,7 @@ import {
   safeParseWorkspaceSession,
   WORKSPACE_SESSION_UNVALIDATABLE
 } from './workspace-session-schema'
-import { collectSalvageDrops } from '../zod-salvage'
+import { collectSalvageDrops } from '../validation/zod-salvage'
 
 export type SalvagedWorkspaceSession =
   | { ok: true; value: WorkspaceSessionState; droppedPaths: string[]; droppedCount: number }

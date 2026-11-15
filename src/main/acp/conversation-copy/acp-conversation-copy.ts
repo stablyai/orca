@@ -9,7 +9,7 @@ import {
   agentSessionAccountHomesEqual,
   type AgentSessionAccountHome
 } from '../../../shared/agent-session/lifecycle/accounts/agent-session-account-home'
-import { waitForPromiseWithSignal } from '../../../shared/abort-signal-reason'
+import { waitForPromiseWithSignal } from '../../../shared/concurrency/abort-signal-reason'
 import type { AiVaultConversationCopy } from '../../../shared/ai-vault/resume/ai-vault-resume-preparation'
 import { resolveSessionFilePath } from '../../native-chat/session-file-resolver'
 import { resolveOmpSessionsDir } from '../../ai-vault/scanners/omp/omp-session-root'

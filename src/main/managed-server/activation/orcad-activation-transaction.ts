@@ -16,7 +16,7 @@ import {
   type OrcadDecommissionRecoveryPlan,
   type OrcadDecommissionTransaction
 } from '../lifecycle/orcad-decommission-transaction'
-import { errorMessage } from '../../../shared/error-message'
+import { errorMessage } from '../../../shared/errors/error-message'
 import { RELAY_INSTALL_LOCK_NAME } from '../../../shared/remote-runtime/relay/relay-install-lock-name'
 import { RELAY_REMOTE_DIR } from '../install/remote-install-root'
 import { joinRemotePath, type RemoteHostPlatform } from '../../ssh/remote-host/ssh-remote-platform'

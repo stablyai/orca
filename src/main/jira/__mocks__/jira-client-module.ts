@@ -37,7 +37,7 @@ export async function loadJiraClientModule(
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: These are the only session methods the proxy fixture exercises.
     proxySession: () => ({ resolveProxy: resolveProxyMock, setProxy: setProxyMock }) as never
   })
-  const { setSecretStore } = await import('../../../shared/secret-store')
+  const { setSecretStore } = await import('../../../shared/secure-storage/secret-store')
   setSecretStore({
     isEncryptionAvailable: () => options.encryptionAvailable ?? false,
     encryptString: (value) => Buffer.from(value),

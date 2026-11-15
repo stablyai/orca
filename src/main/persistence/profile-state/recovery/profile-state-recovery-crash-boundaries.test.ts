@@ -11,7 +11,7 @@ import {
 import { tmpdir } from 'node:os'
 import { basename, dirname, join, relative } from 'node:path'
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
-import { setSecretStore } from '../../../../shared/secret-store'
+import { setSecretStore } from '../../../../shared/secure-storage/secret-store'
 import { profileStateStorage } from '../../../orca-profiles/project-transfer/profile-project-state-file'
 import { acquireProfileStateRuntimeAdmission } from '../access/profile-state-access'
 import {

@@ -11,8 +11,8 @@ import type {
   PendingScreencastFrame
 } from './browser-screencast-stream-types'
 import { positiveInteger, scaleSnapshotToFit } from './browser-screencast-viewport-fit'
-import { withTimeout } from '../../../../shared/promise-timeout-fallback'
-import { waitForPromiseWithSignal } from '../../../../shared/abort-signal-reason'
+import { withTimeout } from '../../../../shared/concurrency/promise-timeout-fallback'
+import { waitForPromiseWithSignal } from '../../../../shared/concurrency/abort-signal-reason'
 
 // Bound capture time so queued viewport updates and stop can proceed.
 const SNAPSHOT_CAPTURE_TIMEOUT_MS = 10_000

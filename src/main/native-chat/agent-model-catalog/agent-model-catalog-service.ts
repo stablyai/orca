@@ -25,7 +25,7 @@ import {
   agentModelCatalogMemoryBinding,
   type AgentModelCatalogBinding
 } from './agent-model-catalog-snapshot'
-import { PrioritySemaphore } from '../../../shared/priority-semaphore'
+import { PrioritySemaphore } from '../../../shared/concurrency/priority-semaphore'
 import {
   AGENT_MODEL_CATALOG_PICKER_WAIT_MS,
   waitForAgentModelCatalogRead,

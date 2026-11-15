@@ -1,4 +1,4 @@
-import { BoundedMap } from '../../../../../src/shared/bounded-map'
+import { BoundedMap } from '../../../../../src/shared/collections/bounded-map'
 import { MARKDOWN_MATH_KATEX_SETTINGS } from '../../../../../src/shared/markdown-math-rules'
 import { copyMarkdownMathSelection } from '../../../../../src/shared/markdown-math-selection'
 import { KATEX_PAGE_STYLE } from './katex-page-style.generated'

@@ -1,4 +1,4 @@
-import { normalizeTypedName } from '../../shared/typed-name-normalization'
+import { normalizeTypedName } from '../../shared/text/typed-name-normalization'
 import type { RuntimeClient } from '../runtime/client'
 import { RuntimeClientError } from '../runtime/connection/types'
 import { quoteCliCommandArgument } from '../arguments/shell-command-quote'

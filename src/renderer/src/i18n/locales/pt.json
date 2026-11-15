@@ -21426,7 +21426,7 @@
       "queuedMessages": {
         "steer": "Orientar",
         "send": "Enviar",
-        "steerHint": "Enviar sem interromper o modelo",
+        "steerHint": "Enviar agora, enquanto o agente continua trabalhando",
         "sendHint": "Enviar esta mensagem agora",
         "delete": "Excluir",
         "moreActions": "Mais ações",

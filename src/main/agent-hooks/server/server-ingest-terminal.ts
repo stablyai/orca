@@ -199,6 +199,9 @@ export abstract class AgentHookServerIngestTerminal extends AgentHookServerInges
         ? this.programStatusFacets.noteState(paneKey, payload, now)
         : undefined
     if (event.removesProgramStatusRow === true) {
+      if (this.preservesStoppingDone(paneKey)) {
+        return
+      }
       this.hookSilenceRechecks.cancel(paneKey)
       if (previous?.observation?.origin === 'osc') {
         // The program row ended; the pane, aliases and caches remain live.

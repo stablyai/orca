@@ -5,6 +5,7 @@ import {
   setRuntimeGraphSyncEnabled
 } from './graph-sync-scheduler'
 import type { AppState } from '../../store/types'
+import { acceptedAgentStatuses } from '../../store/slices/agent-status/accepted-agent-statuses'
 import type { RuntimeSyncWindowGraph } from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 
 function leafIdFor(index: number): string {
@@ -41,7 +42,7 @@ function makeState(prefix: string, worktreeCount: number, titles: string[] = [])
     openFiles: [],
     editorDrafts: {},
     activeTabId: null,
-    agentStatusByPaneKey: {},
+    agentStatusByPaneKey: acceptedAgentStatuses(),
     browserTabsByWorktree: {}
   } as unknown as AppState
 }

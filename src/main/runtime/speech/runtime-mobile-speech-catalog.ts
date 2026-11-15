@@ -26,7 +26,7 @@ import {
   hasOpenAiSpeechApiKey
 } from '../../speech/openai-api-key-store'
 import { saveVerifiedOpenAiSpeechApiKey } from '../../speech/openai-api-key-verification'
-import type { SecretAtRestProtection } from '../../../shared/secret-at-rest-protection'
+import type { SecretAtRestProtection } from '../../../shared/secure-storage/secret-at-rest-protection'
 
 export type OpenAiSpeechKeyStatus = {
   configured: boolean

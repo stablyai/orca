@@ -1,4 +1,4 @@
-import { createNonSecureContextUuid as createBrowserUuid } from '../../../../../../shared/non-secure-context-uuid'
+import { createNonSecureContextUuid as createBrowserUuid } from '../../../../../../shared/identifiers/non-secure-context-uuid'
 
 import {
   type AiVaultAgent,
@@ -20,7 +20,7 @@ import {
   type TabSessionHistorySubject
 } from '@/components/tab-bar/tab-session-history-switch'
 import type { AiVaultResumeCommandSession } from '../../../../../../shared/ai-vault/resume/ai-vault-resume-startup'
-import { waitForPromiseWithSignal } from '../../../../../../shared/abort-signal-reason'
+import { waitForPromiseWithSignal } from '../../../../../../shared/concurrency/abort-signal-reason'
 import { translate } from '@/i18n/i18n'
 
 export type NativeChatCliForkSubject = Extract<TabSessionHistorySubject, { kind: 'chat' }>

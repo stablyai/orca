@@ -1,10 +1,10 @@
-import { yieldToEventLoop } from '../event-loop-yield'
+import { yieldToEventLoop } from '../concurrency/event-loop-yield'
 import {
   getUtf8ByteLengthForCodePoint,
   measureUtf8ByteLength,
   readUtf8CodePointAt,
   type Utf8ByteLengthMeasurement
-} from '../utf8-byte-limits'
+} from '../text/utf8-byte-limits'
 
 export const CLIPBOARD_TEXT_READ_MAX_BYTES = 16 * 1024 * 1024
 export const CLIPBOARD_TEXT_WRITE_MAX_BYTES = 16 * 1024 * 1024

@@ -1,8 +1,8 @@
 import type {
   CodexRateLimitResetOutcome,
   ProviderRateLimits
-} from '../../../../shared/rate-limit-types'
-import { isCodexAuthError } from '../../../../shared/codex-auth-errors'
+} from '../../../../shared/agent-usage/rate-limits/rate-limit-types'
+import { isCodexAuthError } from '../../../../shared/agent-accounts/codex/codex-auth-errors'
 import {
   buildWslExecArgs,
   buildWslLoginShellCommand

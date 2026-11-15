@@ -2,9 +2,12 @@ import type {
   CodexManagedAccount,
   CodexRateLimitAccountsState,
   CodexManagedAccountSummary
-} from '../../../shared/managed-account-types'
-import type { CodexResetCreditExpectedScope } from '../../../shared/codex-reset-credit-scope'
-import type { CodexRateLimitResetOutcome, RateLimitState } from '../../../shared/rate-limit-types'
+} from '../../../shared/agent-accounts/managed-account-types'
+import type { CodexResetCreditExpectedScope } from '../../../shared/agent-accounts/codex/codex-reset-credit-scope'
+import type {
+  CodexRateLimitResetOutcome,
+  RateLimitState
+} from '../../../shared/agent-usage/rate-limits/rate-limit-types'
 
 export type CodexAccountAddTarget = {
   runtime?: 'host' | 'wsl'

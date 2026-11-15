@@ -1,9 +1,9 @@
 import React from 'react'
 import { Card } from '@/components/ui/card'
-import type { ProviderRateLimits } from '../../../../../shared/rate-limit-types'
-import type { UsagePercentageDisplay } from '../../../../../shared/usage-percentage-display'
+import type { ProviderRateLimits } from '../../../../../shared/agent-usage/rate-limits/rate-limit-types'
+import type { UsagePercentageDisplay } from '../../../../../shared/agent-usage/display/usage-percentage-display'
 import { useTranslate } from '@/i18n/use-translate'
-import { getProviderDisplayName } from '../../../../../shared/usage-provider-windows'
+import { getProviderDisplayName } from '../../../../../shared/agent-usage/display/usage-provider-windows'
 import { formatTimeAgo, ProviderIcon, ProviderPanel } from '../usage/provider-usage-panel'
 import { UsageDisplayToggle } from '../usage/usage-meter'
 

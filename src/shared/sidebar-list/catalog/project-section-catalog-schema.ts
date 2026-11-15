@@ -7,7 +7,7 @@ import type {
 } from '../../project/groups/project-group-types'
 import type { RepoKind } from '../../repository/repo-types'
 import type { ProjectOrderBy } from '../../ui-chrome-types'
-import { hostUnionArms, salvagedOptional, salvagingArray } from '../../zod-salvage'
+import { hostUnionArms, salvagedOptional, salvagingArray } from '../../validation/zod-salvage'
 
 // Read sidebar-feed/mobileRelay.projectSections catalogs; MobileProjectSectionCatalog is the sender shape.
 

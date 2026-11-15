@@ -1,6 +1,6 @@
 import type { GlobalSettings } from '../../../../../shared/global-settings-types'
-import type { RateLimitRuntimeTarget } from '../../../../../shared/rate-limit-types'
-import { resolveLocalAccountRuntimeTarget } from '../../../../../shared/local-account-runtime'
+import type { RateLimitRuntimeTarget } from '../../../../../shared/agent-usage/rate-limits/rate-limit-types'
+import { resolveLocalAccountRuntimeTarget } from '../../../../../shared/agent-accounts/local-account-runtime'
 import { getRendererAppPlatform } from '../../../app-shell/platform/renderer-app-platform'
 import { translate } from '@/i18n/i18n'
 import { getHostRuntimeLabel } from '../../../lib/provider-accounts/account-runtime-label'

@@ -3,7 +3,7 @@ import type {
   ProjectGroupImportMode,
   ProjectGroupImportResult
 } from '../project/groups/project-group-types'
-import { createNonSecureContextUuid } from '../non-secure-context-uuid'
+import { createNonSecureContextUuid } from '../identifiers/non-secure-context-uuid'
 
 export const NESTED_REPO_TELEMETRY_MAX_REPO_COUNT = 500
 

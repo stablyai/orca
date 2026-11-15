@@ -1,3 +1,4 @@
+import { acceptedAgentStatuses } from '@/store/slices/agent-status/accepted-agent-statuses'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store/index'
 import { makePaneKey } from '../../../../../../shared/workspace-layout/stable-pane-id'
@@ -12,7 +13,7 @@ import {
 } from './claude-session-account-move'
 import type { AgentStatusEntry } from '../../../../../../shared/agent-status/contracts/agent-status-types'
 import type { TerminalTab } from '../../../../../../shared/workspace-layout/terminal-tab-types'
-import type { ClaudeManagedAccount } from '../../../../../../shared/managed-account-types'
+import type { ClaudeManagedAccount } from '../../../../../../shared/agent-accounts/managed-account-types'
 import type { ProjectExecutionRuntimeResolution } from '../../../../../../shared/execution-host/project-execution-runtime'
 import type * as localPreflightContext from '@/runtime/hosts/preflight/local-preflight-context'
 import type * as paneSelectionLane from '../codex-pane-selection-lane'
@@ -131,7 +132,7 @@ function seedPanes(panes: SeededPane[]): void {
         }
       ])
     ),
-    agentStatusByPaneKey: statuses,
+    agentStatusByPaneKey: acceptedAgentStatuses(Object.entries(statuses)),
     paneForegroundAgentByPaneKey: {},
     agentLaunchConfigByPaneKey: {},
     sleepingAgentSessionsByPaneKey: {},

@@ -7,7 +7,7 @@ import { writeSecureFile } from '../../shared/secure-storage/secure-file'
 import type {
   ManagedDataAccountProvider,
   ManagedDataAccountsState
-} from '../../shared/managed-account-types'
+} from '../../shared/agent-accounts/managed-account-types'
 import { captureDataAccountCredentials } from './credential-capture'
 import { ManagedDataAccountProfileRemoval } from './profile-removal'
 import {

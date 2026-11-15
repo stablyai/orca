@@ -1,6 +1,6 @@
 import { stopAgentSessionProviderRoot } from '../../native-chat/agent-session-wire/termination/structured-agent-session-provider-exit-proof'
 import { randomUUID } from 'node:crypto'
-import { waitForPromiseWithSignal } from '../../../shared/abort-signal-reason'
+import { waitForPromiseWithSignal } from '../../../shared/concurrency/abort-signal-reason'
 import '../../native-chat/agent-session-wire/providers/structured-agent-session-adapter'
 import * as provider from '../../native-chat/agent-session-wire/providers/structured-agent-session-adapter-errors'
 import * as acquisition from '../../native-chat/agent-session-wire/acquisition/structured-agent-session-acquisition-errors'

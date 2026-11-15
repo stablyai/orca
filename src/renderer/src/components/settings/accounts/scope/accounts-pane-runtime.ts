@@ -3,8 +3,8 @@ import type {
   ClaudeRateLimitAccountsState,
   CodexRateLimitAccountsState,
   CodexSystemDefaultIdentity
-} from '../../../../../../shared/managed-account-types'
-import { resolveLocalAccountRuntimeTarget } from '../../../../../../shared/local-account-runtime'
+} from '../../../../../../shared/agent-accounts/managed-account-types'
+import { resolveLocalAccountRuntimeTarget } from '../../../../../../shared/agent-accounts/local-account-runtime'
 import { getRendererAppPlatform } from '../../../../app-shell/platform/renderer-app-platform'
 import { getIntlLocale, translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'

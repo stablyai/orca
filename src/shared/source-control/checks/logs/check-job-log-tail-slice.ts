@@ -3,7 +3,7 @@ import {
   clampUtf8TextTail,
   getUtf8ByteLength,
   isUtf8ByteLengthWithinLimit
-} from '../../../utf8-byte-limits'
+} from '../../../text/utf8-byte-limits'
 import {
   stripAnsiEscapeSequences,
   TERMINAL_CONTROL_CHARACTER_PATTERN

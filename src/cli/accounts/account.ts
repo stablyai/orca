@@ -29,7 +29,7 @@ import type {
   ClaudeRateLimitAccountsState,
   CodexRateLimitAccountsState,
   ManagedDataAccountsState
-} from '../../shared/managed-account-types'
+} from '../../shared/agent-accounts/managed-account-types'
 import {
   type InteractiveLoginSession,
   withInteractiveLoginCleanup
@@ -52,7 +52,7 @@ import {
   removeAgentAccount,
   selectAgentAccount
 } from './account-selection'
-import type { AntigravityAccountState } from '../../shared/antigravity-account-types'
+import type { AntigravityAccountState } from '../../shared/agent-accounts/antigravity/antigravity-account-types'
 
 type AccountsListSnapshot = {
   opencode?: ManagedDataAccountsState
