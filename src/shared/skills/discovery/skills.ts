@@ -15,6 +15,8 @@ export type DiscoveredSkill = {
   providers: SkillProvider[]
   sourceKind: SkillSourceKind
   sourceLabel: string
+  /** Claude plugin namespace: Claude invokes the skill as `/<pluginName>:<folder>`. */
+  pluginName?: string
   rootPath: string
   /** Retain co-owning roots during canonical-path dedup or symlinked skills lose agents. */
   rootPaths?: string[]
@@ -29,6 +31,8 @@ export type SkillDiscoverySource = {
   label: string
   path: string
   sourceKind: SkillSourceKind
+  /** Claude plugin namespace for the skills under this root. */
+  pluginName?: string
   providers: SkillProvider[]
   /** Agent that owns this root; null is the explicit shared-skills scope. */
   owner: AgentType | null
