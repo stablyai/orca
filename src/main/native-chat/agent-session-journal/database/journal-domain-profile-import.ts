@@ -27,8 +27,8 @@ export function importJournalDomainProfile(
     )
   }
   copyChatCatalog(source, destination)
-  for (const { name, columns, requiredFrom } of JOURNAL_DOMAIN_PROFILE_TABLES) {
-    copyProfileTable(source, destination, name, columns, version < (requiredFrom ?? Infinity))
+  for (const { name, columns } of JOURNAL_DOMAIN_PROFILE_TABLES) {
+    copyProfileTable(source, destination, name, columns)
   }
   if (source.prepare("SELECT 1 FROM sqlite_schema WHERE name='sqlite_sequence'").get()) {
     const highWater = source
@@ -72,15 +72,8 @@ function copyProfileTable(
   source: Database.Database,
   destination: Database.Database,
   table: string,
-  columns: readonly string[],
-  optional = false
+  columns: readonly string[]
 ): void {
-  if (
-    optional &&
-    !source.prepare("SELECT 1 FROM sqlite_schema WHERE type='table' AND name=?").get(table)
-  ) {
-    return
-  }
   const names = columns.join(',')
   const insert = destination.prepare(
     `INSERT INTO ${table}(rowid,${names}) VALUES(${columns.map(() => '?').join(',')},?)`
