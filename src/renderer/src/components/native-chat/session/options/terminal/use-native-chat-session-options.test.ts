@@ -46,6 +46,22 @@ const DISCOVERED: CatalogModel[] = [
   { id: 'haiku', label: 'Haiku', options: [] }
 ]
 
+const EFFORT = {
+  id: 'effort',
+  label: 'Effort',
+  kind: {
+    type: 'select' as const,
+    defaultValue: 'high',
+    choices: ['low', 'high'].map((value) => ({ value, label: value }))
+  },
+  apply: {}
+}
+
+const RESPONSE_MODELS: CatalogModel[] = [
+  { id: 'claude-opus-5-5', label: 'Claude Opus 5.5', options: [EFFORT] },
+  { id: 'claude-sonnet-5-5', label: 'Claude Sonnet 5.5', options: [EFFORT] }
+]
+
 function modelDescriptor(snapshot: { id: string; kind: unknown }[]): {
   currentValue?: string
   choices: { value: string }[]
@@ -101,6 +117,61 @@ describe('useNativeChatSessionOptions model reporting', () => {
       'opus[1m]',
       'haiku'
     ])
+  })
+
+  it('names the model from the newest response once the frame is gone, without overriding a pick', async () => {
+    discoverModels.mockResolvedValue(RESPONSE_MODELS)
+    const dispatchCommand = vi.fn()
+    const readTerminalScreen = (): string | null => null
+    const options = (claudeResponse: { model: string; effort?: string }) => ({
+      agent: 'claude' as const,
+      terminalTabId: 'tab-response',
+      targetPtyId: 'pty-response',
+      dispatchCommand,
+      readTerminalScreen,
+      claudeResponse
+    })
+
+    const { result, rerender } = renderHook(
+      ({ response }) => useNativeChatSessionOptions(options(response)),
+      { initialProps: { response: { model: 'claude-opus-5-5', effort: 'high' } } }
+    )
+    await waitFor(() =>
+      expect(modelDescriptor(result.current.snapshot).currentValue).toBe('claude-opus-5-5')
+    )
+
+    result.current.surface!.recordOutgoingCommand('/model claude-sonnet-5-5')
+    rerender({ response: { model: 'claude-opus-5-5', effort: 'low' } })
+    await Promise.resolve()
+    expect(modelDescriptor(result.current.snapshot).currentValue).toBe('claude-sonnet-5-5')
+  })
+
+  it('names a response model by the listed alias that discovery reports later', async () => {
+    let resolveDiscovery: (models: CatalogModel[]) => void = () => {}
+    discoverModels.mockReturnValue(
+      new Promise<readonly CatalogModel[]>((resolve) => {
+        resolveDiscovery = resolve
+      })
+    )
+    const { result } = renderHook(() =>
+      useNativeChatSessionOptions({
+        agent: 'claude',
+        terminalTabId: 'tab-alias',
+        targetPtyId: 'pty-alias',
+        dispatchCommand: vi.fn(),
+        readTerminalScreen: () => null,
+        claudeResponse: { model: 'claude-opus-5-5', effort: 'low' }
+      })
+    )
+
+    resolveDiscovery([
+      { id: 'opus', label: 'Opus', resolvedModel: 'claude-opus-5-5', options: [EFFORT] },
+      { id: 'haiku', label: 'Haiku', options: [] }
+    ])
+
+    await waitFor(() => expect(modelDescriptor(result.current.snapshot).currentValue).toBe('opus'))
+    const effort = result.current.snapshot.find((descriptor) => descriptor.id === 'effort')
+    expect(effort?.kind).toMatchObject({ currentValue: 'low' })
   })
 
   it('does not re-resolve a late snapshot from the previous pty', async () => {

@@ -1,5 +1,7 @@
+import { useMemo } from 'react'
 import { useNativeChatSessionOptionCommand } from '../../session/options/terminal/use-native-chat-session-option-command'
 import { useNativeChatSessionOptions } from '../../session/options/terminal/use-native-chat-session-options'
+import { newestClaudeResponse } from '../../session/options/terminal/claude-terminal-session-options'
 import type { NativeChatComposerProps } from '../native-chat-composer-types'
 import type {
   SessionOptionDescriptor,
@@ -16,6 +18,7 @@ type ComposerSessionOptionsArgs = Pick<
   | 'onSubmitted'
   | 'onSwitchToTerminal'
   | 'readTerminalScreen'
+  | 'recallSource'
   | 'structuredTransport'
 > &
   Pick<Parameters<typeof useNativeChatSessionOptionCommand>[0], 'disabled' | 'resolveTarget'>
@@ -30,6 +33,7 @@ export function useNativeChatComposerSessionOptions({
   targetPtyId,
   onSwitchToTerminal,
   readTerminalScreen,
+  recallSource,
   paneKey,
   structuredTransport
 }: ComposerSessionOptionsArgs): {
@@ -45,6 +49,11 @@ export function useNativeChatComposerSessionOptions({
     onSubmitted,
     resolveTarget
   })
+  const conversation = recallSource?.messages
+  const claudeResponse = useMemo(
+    () => (agent === 'claude' && conversation ? newestClaudeResponse(conversation) : null),
+    [agent, conversation]
+  )
   const pty = useNativeChatSessionOptions({
     agent,
     terminalTabId,
@@ -52,7 +61,8 @@ export function useNativeChatComposerSessionOptions({
     dispatchCommand: dispatch,
     onAgentPicker: onSwitchToTerminal,
     readTerminalScreen,
-    paneKey
+    paneKey,
+    claudeResponse
   })
   return {
     isDispatching,

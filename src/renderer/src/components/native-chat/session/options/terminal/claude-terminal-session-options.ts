@@ -1,6 +1,7 @@
 import { getAgentSessionOptionCatalog } from '../../../../../../../shared/agent-session/options/agent-session-option-catalog'
 import type { CatalogModel } from '../../../../../../../shared/agent-session/options/catalog-providers/agent-session-option-catalog-types'
 import type { SessionOptionValue } from '../../../../../../../shared/native-chat/input/native-chat-session-options'
+import type { NativeChatMessage } from '../../../../../../../shared/native-chat/native-chat-types'
 import { stripScrollbackAnsi } from '../../terminal/assembly/native-chat-scrape-fallback'
 
 const EFFORT_ID_BY_LABEL: Record<string, string> = {
@@ -206,4 +207,36 @@ export function readClaudeSessionOptionsFromTerminalScreen(
     result.effort = effort
   }
   return result
+}
+
+export type ClaudeResponseEvidence = { model: string; effort?: string }
+
+/** The newest response that names its model; the startup frame scrolls away, the transcript does not. */
+export function newestClaudeResponse(
+  messages: readonly NativeChatMessage[]
+): ClaudeResponseEvidence | null {
+  for (let index = messages.length - 1; index >= 0; index -= 1) {
+    const { role, model, effort } = messages[index]!
+    if (role === 'assistant' && model) {
+      return { model, ...(effort ? { effort } : {}) }
+    }
+  }
+  return null
+}
+
+/** Pass the host catalog to return listed picker ids; an unlisted model keeps its recorded effort. */
+export function readClaudeSessionOptionsFromResponse(
+  response: ClaudeResponseEvidence,
+  models?: readonly CatalogModel[]
+): Record<string, SessionOptionValue> {
+  const candidates = models ?? getAgentSessionOptionCatalog('claude')?.models ?? []
+  const model =
+    candidates.find(({ id }) => id === response.model) ??
+    candidates.find(({ resolvedModel }) => resolvedModel === response.model)
+  const effort = response.effort
+  const effortKind = model?.options.find((option) => option.id === 'effort')?.kind
+  const effortFits =
+    !model ||
+    (effortKind?.type === 'select' && effortKind.choices.some((choice) => choice.value === effort))
+  return { model: model?.id ?? response.model, ...(effort && effortFits ? { effort } : {}) }
 }

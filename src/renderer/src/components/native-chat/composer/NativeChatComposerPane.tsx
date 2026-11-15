@@ -32,8 +32,8 @@ type ComposerHandle = C.NativeChatComposerHandle
 
 /** Send through the chat’s structured transport or verified PTY route, with agent-aware autocomplete and image handling. */
 export const NativeChatComposerPane = forwardRef<ComposerHandle, C.NativeChatComposerProps>(
-  function NativeChatComposerPane(
-    {
+  function NativeChatComposerPane(props, ref): React.JSX.Element {
+    const {
       terminalTabId,
       editSession,
       paneKey,
@@ -52,8 +52,6 @@ export const NativeChatComposerPane = forwardRef<ComposerHandle, C.NativeChatCom
       onSlashCommand,
       onSubmitted,
       answerCommandLocally,
-      onSwitchToTerminal,
-      readTerminalScreen,
       launchSeed,
       structuredTransport,
       steerHead,
@@ -62,9 +60,7 @@ export const NativeChatComposerPane = forwardRef<ComposerHandle, C.NativeChatCom
       notices: chatNotices,
       workspacePending: pending = false,
       launchPrompt
-    },
-    ref
-  ): React.JSX.Element {
+    } = props
     // Own drafts and attachments by pane/conversation so reconnect PTY replacement and UI mode changes cannot discard unsent input.
     const imeEnterGesture = useImeEnterGestureOwnership()
     const draftState = useNativeChatDraft(draftScopeKey, imeEnterGesture.isComposing)
@@ -205,17 +201,9 @@ export const NativeChatComposerPane = forwardRef<ComposerHandle, C.NativeChatCom
 
     const dictation = useNativeChatDictation(textareaRef, disabled)
     const sessionOptions = useNativeChatComposerSessionOptions({
-      agent,
+      ...props,
       disabled,
-      onSlashCommand,
-      onSubmitted,
-      resolveTarget,
-      terminalTabId,
-      targetPtyId,
-      onSwitchToTerminal,
-      readTerminalScreen,
-      paneKey,
-      structuredTransport
+      resolveTarget
     })
     const contextUsageSummary = useNativeChatContextUsageSummary(structuredTransport)
 
