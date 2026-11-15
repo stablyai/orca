@@ -174,13 +174,10 @@ export const WorkerDockRow = memo(function WorkerDockRow({
             <TooltipTrigger asChild>
               <Button
                 type="button"
-                variant="ghost"
+                variant="ghost-inset"
                 size="icon-xs"
                 data-worker-dock-action={row.id}
-                className={cn(
-                  'transition-colors aria-disabled:opacity-50 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring [&_svg]:pointer-events-none',
-                  narrow ? (action === 'clear' ? 'h-6 w-11' : 'size-11') : 'size-6.5'
-                )}
+                className={cn(narrow ? (action === 'clear' ? 'h-6 w-11' : 'size-11') : 'size-6.5')}
                 aria-label={
                   action === 'clear'
                     ? t('components.native-chat.workerDock.clearName', 'Clear {{name}}', {

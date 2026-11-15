@@ -269,9 +269,9 @@ export function NativeChatWorkerApprovalStack({
                   {entry.worker.label} · {entry.approval.summary.title}
                 </span>
                 <Button
-                  variant="ghost"
+                  variant="ghost-inset"
                   size="sm"
-                  className="h-11 min-w-11 shrink-0 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+                  className="h-11 min-w-11 shrink-0"
                   aria-label={t(
                     'components.native-chat.workerDock.showQuestion',
                     'Show {{name}} question',
