@@ -9,6 +9,23 @@ import { Label } from '@/components/ui/label'
 import { useTranslate } from '@/i18n/use-translate'
 import { useAppStore } from '@/store'
 
+async function saveDeletionPreference(
+  save: () => Promise<void>,
+  onSavingChange: (saving: boolean) => void,
+  onError: (error: unknown) => void
+): Promise<boolean> {
+  onSavingChange(true)
+  try {
+    await save()
+    return true
+  } catch (error) {
+    onError(error)
+    return false
+  } finally {
+    onSavingChange(false)
+  }
+}
+
 export function DeleteWorktreeDialogFooter({
   isMainWorktree,
   isDeleting,
@@ -58,19 +75,21 @@ export function DeleteWorktreeDialogFooter({
   const confirm = async (): Promise<void> => {
     const run = canForceDelete ? onForceDelete : onDelete
     if (remember && saveRemembered) {
-      setSaving(true)
-      onSavingChange(true)
-      try {
-        await saveRemembered()
-      } catch (error) {
-        toast.error(
-          t('workspaceDeletion.preferenceSaveFailed', 'Could not save deletion preference'),
-          { description: error instanceof Error ? error.message : String(error) }
-        )
+      const saved = await saveDeletionPreference(
+        saveRemembered,
+        (value) => {
+          setSaving(value)
+          onSavingChange(value)
+        },
+        (error) => {
+          toast.error(
+            t('workspaceDeletion.preferenceSaveFailed', 'Could not save deletion preference'),
+            { description: error instanceof Error ? error.message : String(error) }
+          )
+        }
+      )
+      if (!saved) {
         return
-      } finally {
-        setSaving(false)
-        onSavingChange(false)
       }
     }
     run()
