@@ -9,7 +9,7 @@ import {
   type ManagedOrcadEnvironmentSummary
 } from '../../../../../shared/execution-host/managed-orcad-execution-host'
 import type { ProjectExecutionRuntimeResolution } from '../../../../../shared/execution-host/project-execution-runtime'
-import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 
 /** The host whose Orca skills the Update dialog, badge and nudge plan and update. */
 export type BundledSkillTarget =

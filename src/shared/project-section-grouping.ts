@@ -5,7 +5,7 @@ import type { ProjectOrderBy } from './ui-chrome-types'
 import { toSshExecutionHostId } from './execution-host'
 import type { Project, ProjectHostSetup } from './project-types'
 import type { Repo } from './repo-types'
-import { parseWslUncPath } from './wsl-paths'
+import { parseWslUncPath } from './file-access/wsl-paths'
 import { isWindowsAbsolutePathLike, normalizeRuntimePathForComparison } from './cross-platform-path'
 
 /** The project fields grouping reads. */

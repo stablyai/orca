@@ -60,7 +60,7 @@ vi.mock('./navigate/browser-page-initialization-action', () => ({
   routeBrowserPageInitializationAction: mocks.initializationAction
 }))
 
-vi.mock('./assemble-chrome/BrowserAddressBar', () => ({
+vi.mock('./assemble-chrome/address-bar/BrowserAddressBar', () => ({
   // Keep the shared bar’s own behavior out of this suite; preserve the ref targeted by pane focus rules.
   default: (props: {
     value: string
@@ -73,9 +73,9 @@ vi.mock('./assemble-chrome/BrowserAddressBar', () => ({
 }))
 
 import { connectedRuntimeStatus } from '@/runtime/rpc/testing/paired-runtime-environment-test-fixture'
-import { useAppStore } from '@/store'
+import { useAppStore } from '@/store/index'
 import { normalizeBrowserNavigationUrl } from '../../../../shared/browser-url'
-import { requestBrowserFocus } from './host-guest/browser-focus'
+import { requestBrowserFocus } from './host-guest/input/browser-focus'
 import {
   installClientHostedPaneApi,
   paneChannel,
@@ -94,7 +94,7 @@ import { recoverUnavailableRuntimeBrowserClientPages } from '../../../../main/ru
 import { buildRuntimeClientBrowserTabs } from '../../../../main/runtime/session-lifecycle/projection/build-runtime-client-browser-tabs'
 import { RESTORED_CLIENT_HOSTED_BROWSER_PLACEMENT } from '../../../../main/runtime/browser/client-pages/client-hosted-browser-page-persistence'
 import { BROWSER_CLIENT_PAGE_INITIALIZATION_CAPABILITY } from '../../../../shared/browser/client-hosting/browser-client-host-protocol'
-import type { RuntimeMobileSessionTabsResult } from '../../../../shared/runtime-types'
+import type { RuntimeMobileSessionTabsResult } from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import type { RemoteRuntimeSharedConnectionDiagnostics } from '../../../../shared/remote-runtime/control/remote-runtime-shared-control-types'
 import { ClientHostedBrowserPagePane } from './ClientHostedBrowserPagePane'
 

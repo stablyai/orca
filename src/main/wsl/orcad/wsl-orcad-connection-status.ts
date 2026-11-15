@@ -1,6 +1,9 @@
-import type { OrcadTerminalCensus } from '../../../shared/orcad-terminal-census'
-import type { WslHostConnectIntent, WslHostDeferredUpdate } from '../../../shared/wsl-host-types'
-import type { WslHostCopyParams } from '../../../shared/wsl-host-failure-copy'
+import type { OrcadTerminalCensus } from '../../../shared/remote-runtime/orcad-lifecycle/orcad-terminal-census'
+import type {
+  WslHostConnectIntent,
+  WslHostDeferredUpdate
+} from '../../../shared/remote-runtime/wsl-hosts/wsl-host-types'
+import type { WslHostCopyParams } from '../../../shared/remote-runtime/wsl-hosts/wsl-host-failure-copy'
 import type { WslLivenessUnverifiableReason } from './wsl-orcad-liveness-verdict'
 
 /** C7 publishes terminal verdicts proven by the distro; null leaves ownership to orcad, whose reconnect census reports surviving daemon sessions. */

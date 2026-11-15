@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { getDefaultWorkspaceSession } from '../../../../shared/constants'
 import '../../../../shared/workspace-layout/terminal-topology/terminal-pane-layout-tree'
 import type { WorkspaceSessionState } from '../../../../shared/workspace-session/workspace-session-state-types'
-import type { RuntimeMobileSessionTabsSnapshot } from '../../../../shared/runtime-session-contracts'
+import type { RuntimeMobileSessionTabsSnapshot } from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import { OrcaRuntimeService } from '../../orca-runtime'
 import { partialRuntimeStore } from '../../orca-runtime-tests/runtime-store-partial-fixture'
 

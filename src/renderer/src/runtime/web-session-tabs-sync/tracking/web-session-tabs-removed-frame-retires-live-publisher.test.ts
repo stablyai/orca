@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { RuntimeMobileSessionTabsResult } from '../../../../../shared/runtime-session-contracts'
+import type { RuntimeMobileSessionTabsResult } from '../../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import { decideWebSessionTabsSnapshot } from '../tracking-decisions'
 import {
   recordReceivedWebSessionTabsRemoval,
@@ -11,7 +11,7 @@ import {
   nextReceivedSessionTabsFrame,
   VISIBILITY_INVENTORY_REMOVAL_EPOCH
 } from '../state'
-import '../../../../../shared/runtime-types'
+
 import { resetWebSessionTabsSyncTestState } from '../testing/web-session-tabs-sync.test-fixture'
 
 // getState: snapshot receipt reads the held paired-tab closes; none here.

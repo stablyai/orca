@@ -10,7 +10,7 @@ import {
   settleStructuredAgentSessionBuiltinCatalog,
   type StructuredAgentSessionOptionState
 } from '../../../../../../../shared/agent-session/options/structured-agent-session-options'
-import type { RuntimeClientTarget } from '../../../../../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import { callStructuredAgentSession } from '@/runtime/native-chat/requests/structured-agent-session-call'
 import { recordHostModelCatalogSnapshot } from '@/runtime/native-chat/model-catalogs/host-model-catalog-snapshots'
 import {

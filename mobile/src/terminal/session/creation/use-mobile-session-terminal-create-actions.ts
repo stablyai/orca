@@ -37,7 +37,7 @@ import {
 import { releaseTerminalCreateLock } from './terminal-create-lock'
 import { placeCreatedSessionTab } from '../../../../../src/shared/session-tab-placement'
 import '../../../../../src/shared/protocol-version'
-import { SESSION_TABS_SPLIT_GROUP_PLACEMENT_RUNTIME_CAPABILITY } from '../../../../../src/shared/session-tabs-runtime-capabilities'
+import { SESSION_TABS_SPLIT_GROUP_PLACEMENT_RUNTIME_CAPABILITY } from '../../../../../src/shared/remote-runtime/protocol/session-tabs-runtime-capabilities'
 
 export function useMobileSessionTerminalCreateActions(scope: MobileSessionAttachmentsModel) {
   const {

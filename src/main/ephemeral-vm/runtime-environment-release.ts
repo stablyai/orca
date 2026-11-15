@@ -1,4 +1,4 @@
-import type { EphemeralVmRuntimeRecord } from '../../shared/ephemeral-vm-runtimes'
+import type { EphemeralVmRuntimeRecord } from '../../shared/remote-runtime/ephemeral-vm-store/ephemeral-vm-runtimes'
 import { removeManagedOrcadEnvironment } from '../../shared/remote-runtime/host-store/runtime-environment-managed-orcad-store'
 import {
   listEnvironments,

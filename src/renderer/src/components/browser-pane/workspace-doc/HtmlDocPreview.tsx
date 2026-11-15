@@ -20,7 +20,7 @@ import {
 import { selectWorktreeHostDisplayLabel } from '@/runtime/hosts/display/execution-host-display-label'
 import { translate } from '@/i18n/i18n'
 import { useTranslate } from '@/i18n/use-translate'
-import { useAppStore } from '@/store'
+import { useAppStore } from '@/store/index'
 import { openDocPreviewExternally, openDocPreviewSource } from './doc-preview-document-actions'
 import {
   DocPreviewDirectoryAccessBanner,

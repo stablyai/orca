@@ -30,7 +30,7 @@ vi.mock('../../command-runner/git-exec-file', async (importOriginal) => ({
   gitExecFileAsync: git.mock
 }))
 const wslDistroForCommandMock = vi.hoisted(() => vi.fn((): string | null => null))
-vi.mock('../../../../shared/wsl-paths', async (importOriginal) => ({
+vi.mock('../../../../shared/file-access/wsl-paths', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   wslDistroForCommand: wslDistroForCommandMock
 }))

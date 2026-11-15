@@ -6,7 +6,7 @@ import {
   requestIdleDaemonRetirement
 } from '../../daemon/providers/lifecycle/daemon-provider-state'
 import type { DaemonIdleRetirementResult } from '../../daemon/providers/adapter/daemon-pty-runtime-state'
-import type { OrcadDaemonRetirementVerdict } from '../../../shared/orcad-stop-request'
+import type { OrcadDaemonRetirementVerdict } from '../../../shared/remote-runtime/orcad-lifecycle/orcad-stop-request'
 import { withTimeout } from '../../../shared/promise-timeout-fallback'
 import { ORCAD_DAEMON_RETIREMENT_TIMEOUT_MS } from '../host-lifecycle/managed-stop/orcad-stop-deadlines'
 

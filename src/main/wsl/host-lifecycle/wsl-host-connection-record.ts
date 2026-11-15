@@ -7,8 +7,8 @@ import {
   wslHostStatusDetailText,
   type WslHostCopyParams,
   type WslHostStatusDetailCode
-} from '../../../shared/wsl-host-failure-copy'
-import type { WslHostStatus } from '../../../shared/wsl-host-types'
+} from '../../../shared/remote-runtime/wsl-hosts/wsl-host-failure-copy'
+import type { WslHostStatus } from '../../../shared/remote-runtime/wsl-hosts/wsl-host-types'
 import type { WslOrcadConnection } from '../orcad/wsl-orcad-connection-types'
 import type { WslOrcadConnectionStatus } from '../orcad/wsl-orcad-connection-status'
 import type { WslLivenessUnverifiableReason } from '../orcad/wsl-orcad-liveness-verdict'

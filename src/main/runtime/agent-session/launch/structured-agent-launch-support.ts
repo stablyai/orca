@@ -1,7 +1,7 @@
 import type { AgentSessionExecutionLocation } from '../../../../shared/agent-session/lifecycle/agent-session-record'
 import type { StructuredAgentId } from '../../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
-import { overlayEnvironmentVariables } from '../../../../shared/environment-overlay'
+import { overlayEnvironmentVariables } from '../../../../shared/shell/launch/environment-overlay'
 import { isTuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent-config'
 import {
   resolveTuiAgentLaunchEnv,

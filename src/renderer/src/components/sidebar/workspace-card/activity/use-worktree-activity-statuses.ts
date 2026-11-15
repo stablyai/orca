@@ -27,8 +27,6 @@ export function selectWorktreeActivityStatuses(
       hasInterrupted,
       hasUnconfirmed,
       hasLiveDone,
-      hasRetainedDone,
-      hasRetainedFailed,
       agentStatusPaneIdsByTabId,
       stalePaneIdsByTabId
     } = selectWorktreeAgentActivitySummary(statusInputs, worktreeId)
@@ -52,9 +50,7 @@ export function selectWorktreeActivityStatuses(
         hasFailed,
         hasInterrupted,
         hasUnconfirmed,
-        hasLiveDone,
-        hasRetainedDone,
-        hasRetainedFailed
+        hasLiveDone
       })
     )
   }

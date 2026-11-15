@@ -4,11 +4,8 @@ import {
 } from './structured-agent-session-fork-source'
 import { agentSessionJournalProviderHandle } from '../../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle-encoding'
 import { defaultAgentChatLabel } from '../../../../shared/agent-session/agent-session-chat-label'
-import {
-  normalizeAgentSessionConversationName,
-  AGENT_SESSION_CONVERSATION_NAME_MAX_LENGTH
-} from '../../../../shared/agent-session/agent-session-conversation-name'
-import { sliceAtCodeUnitLimit } from '../../../../shared/surrogate-safe-text-slice'
+import { normalizeAgentSessionConversationName } from '../../../../shared/agent-session/agent-session-conversation-name'
+import { agentSessionRecordShownName } from '../../../runtime/agent-session/records/agent-session-record-shown-name'
 import { AgentConversationCopyError } from '../../conversation-adoption/agent-conversation-copy-error'
 import { acpAgentName } from '../../../acp/session/acp-structured-agent-definitions'
 import { AGENT_CHAT_PERMISSION_MODE_OPTION_ID } from '../../../../shared/agent-launch/permissions/agent-chat-permission-mode'
@@ -33,8 +30,9 @@ export async function prepareStructuredAgentSessionFork(
     fail,
     throughItemId
   } = await admitStructuredAgentSessionFork(input)
+  // The fork mark comes from the record's forkedFrom, so the name stays the source's own.
   const title = normalizeAgentSessionConversationName(
-    `${sliceAtCodeUnitLimit(record.conversationName?.trim() || defaultAgentChatLabel(input.agent), AGENT_SESSION_CONVERSATION_NAME_MAX_LENGTH - 5)} fork`
+    agentSessionRecordShownName(host.deps.store, record) || defaultAgentChatLabel(input.agent)
   )!
   const copy = await host.deps.adapter.copyConversation!({
     record,

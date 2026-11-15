@@ -8,7 +8,10 @@ import { AddRepoServerPathStartStep } from './AddRepoServerStartStep'
 import { AddRepoNestedImportStep } from '../nested-import/AddRepoNestedImportStep'
 import type { AddRepoDialogStep } from './add-repo-dialog-types'
 import type { NestedRepoScanResult } from '../../../../../../shared/project-group-types'
-import type { SshConnectionState, SshTarget } from '../../../../../../shared/ssh-types'
+import type {
+  SshConnectionState,
+  SshTarget
+} from '../../../../../../shared/remote-runtime/ssh/ssh-types'
 import type { GitAvailability } from '../create/create-project-defaults'
 import type { CloneFolderOverride } from '../clone-folder/use-clone-folder-override'
 

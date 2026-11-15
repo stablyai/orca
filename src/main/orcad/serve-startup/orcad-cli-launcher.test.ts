@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { runProcess } from '@orca/process-host'
-import { ORCAD_CLI_ENTRY_FILENAME } from '../../../shared/orcad-artifacts'
+import { ORCAD_CLI_ENTRY_FILENAME } from '../../../shared/remote-runtime/orcad-distribution/orcad-artifacts'
 import { getOrcadCliLauncherPath, prepareOrcadCliLauncher } from './orcad-cli-launcher'
 
 const roots = vi.hoisted(() => ({ install: '', profile: '' }))

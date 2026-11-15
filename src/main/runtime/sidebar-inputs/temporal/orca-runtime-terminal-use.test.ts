@@ -1,6 +1,6 @@
 // Runs on plain Node, as orcad does: the host that owns a workspace records its terminal use.
 import { describe, expect, it, vi } from 'vitest'
-import { HEADLESS_RUNTIME_WINDOW_ID } from '../../../../shared/runtime-session-contracts'
+import { HEADLESS_RUNTIME_WINDOW_ID } from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import type { WorktreeMeta } from '../../../../shared/worktree/meta-types'
 import {
   WORKSPACE_CLEANUP_IDLE_MS,

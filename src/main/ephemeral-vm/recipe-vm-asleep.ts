@@ -1,9 +1,9 @@
 import {
   findEnvironmentEphemeralVmRuntime,
   isEphemeralVmSuspended
-} from '../../shared/ephemeral-vm-environment-sleep'
-import { listEphemeralVmRuntimes } from '../../shared/ephemeral-vm-runtime-store'
-import type { EphemeralVmRuntimeRecord } from '../../shared/ephemeral-vm-runtimes'
+} from '../../shared/remote-runtime/ephemeral-vm-store/ephemeral-vm-environment-sleep'
+import { listEphemeralVmRuntimes } from '../../shared/remote-runtime/ephemeral-vm-store/ephemeral-vm-runtime-store'
+import type { EphemeralVmRuntimeRecord } from '../../shared/remote-runtime/ephemeral-vm-store/ephemeral-vm-runtimes'
 import { isRuntimeOwnedSshTargetId } from '../../shared/execution-host'
 import { resolveEnvironment } from '../../shared/remote-runtime/host-store/runtime-environment-store'
 import { getRecipeVmWaker } from '../runtime/workspaces/sleep/recipe-vm-waker-registry'

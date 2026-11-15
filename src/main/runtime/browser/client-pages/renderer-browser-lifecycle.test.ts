@@ -10,8 +10,8 @@ import { TEST_WORKTREE_ID, store } from '../../orca-runtime-tests/orca-runtime-t
 import '../../../../shared/constants'
 
 import type { BrowserTabInfo } from '../../../../shared/browser/runtime/runtime-browser-contracts'
-import type { RuntimeMobileSessionBrowserTab } from '../../../../shared/runtime-mobile-session-tab-contracts'
-import type { RuntimeMobileSessionTabsSnapshot } from '../../../../shared/runtime-session-contracts'
+import type { RuntimeMobileSessionBrowserTab } from '../../../../shared/remote-runtime/session-graph/runtime-mobile-session-tab-contracts'
+import type { RuntimeMobileSessionTabsSnapshot } from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 
 import { getRuntimeBrowserPageRegistry } from './runtime-browser-page-registry'
 

@@ -5,7 +5,8 @@ const session = vi.hoisted(() => ({
   client: { connectionEpoch: 1, runtimeId: 'runtime', call: vi.fn(), subscribe: vi.fn() }
 }))
 vi.mock('./web-runtime-session', async () => {
-  const { RuntimeRpcCallQueuePool } = await import('../../../../shared/runtime-rpc-call-queue')
+  const { RuntimeRpcCallQueuePool } =
+    await import('../../../../shared/remote-runtime/rpc/runtime-rpc-call-queue')
   return {
     closeActiveRuntimeClients: vi.fn(),
     subscribeWebRuntimeStatus: vi.fn(),

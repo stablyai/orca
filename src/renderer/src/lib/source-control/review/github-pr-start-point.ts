@@ -1,5 +1,5 @@
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
-import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import type { GitHubPrStartPoint } from '../../../../../shared/worktree/types'
 import type { ReviewStartPointFailure } from '../../../../../shared/review-start-point-failure-copy'
 import { reviewStartPointErrorText } from '@/lib/source-control/remote/code-host-error-copy'

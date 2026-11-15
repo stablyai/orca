@@ -23,8 +23,8 @@ import { CaffeinateStatusSegment } from './CaffeinateStatusSegment'
 import { PluginsStatusSegment } from './plugins/PluginsStatusSegment'
 import { PluginStatusBarItems } from './plugins/PluginStatusBarItems'
 import { RemoteServerUpdateStatusSegment } from './updates/RemoteServerUpdateStatusSegment'
-import { TOGGLE_FLOATING_TERMINAL_EVENT } from '@/components/floating-terminal/floating-terminal'
-import { FloatingTerminalIconContextMenu } from '@/components/floating-terminal/FloatingTerminalIconContextMenu'
+import { TOGGLE_FLOATING_TERMINAL_EVENT } from '@/components/floating-terminal/workspace/floating-workspace-open-intent'
+import { FloatingTerminalIconContextMenu } from '@/components/floating-terminal/trigger/FloatingTerminalIconContextMenu'
 import { ClaudeSwitcherMenu } from './accounts/ClaudeSwitcherMenu'
 import { CodexSwitcherMenu } from './accounts/CodexSwitcherMenu'
 import { ProviderDetailsMenu } from './usage/ProviderDetailsMenu'
@@ -207,7 +207,8 @@ export function StatusBarSurface({
                   sideOffset={8}
                   // Reserve footer height so the popover and drill-in submenus stay above the status bar.
                   collisionPadding={{ top: 8, bottom: 32, left: 8, right: 8 }}
-                  className="w-[360px] p-0"
+                  variant="picker"
+                  className="w-[440px] max-w-[calc(100vw-1rem)]"
                   onPointerDownOutside={usageMenuFocusHandoff.onPointerDownOutside}
                   onCloseAutoFocus={usageMenuFocusHandoff.onCloseAutoFocus}
                 >

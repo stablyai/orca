@@ -10,7 +10,7 @@ import {
 } from './helpers/client-hosted-browser-observer'
 import { expect, test } from './helpers/orca-app'
 import type { BrowserTabListResult } from '../../src/shared/browser/runtime/runtime-browser-contracts'
-import type { RuntimeMobileSessionTabsResult } from '../../src/shared/runtime-session-contracts'
+import type { RuntimeMobileSessionTabsResult } from '../../src/shared/remote-runtime/session-graph/runtime-session-contracts'
 import {
   createRuntimeDesktopPairingOffer,
   launchPairedElectronClient,

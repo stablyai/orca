@@ -1,6 +1,6 @@
 import { expect, it, vi } from 'vitest'
 import { createReconciliationDeliveryRuntime } from './client-page-reconciliation-delivery-test-harness'
-import type { RuntimeMobileSessionTabsResult } from '../../../../shared/runtime-session-contracts'
+import type { RuntimeMobileSessionTabsResult } from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 
 vi.mock('../../../../shared/sidebar-inputs-switch', () => ({ ORCA_SIDEBAR_INPUTS_IS_MAIN: true }))
 

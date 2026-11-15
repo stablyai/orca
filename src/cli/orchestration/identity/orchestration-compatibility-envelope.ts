@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import { readInjectedAgentSessionId } from '../../../shared/agent-session/lifecycle/launch/agent-session-caller-env'
 import { readOrchestrationCompatibilityEvidence } from '../../../shared/orchestration/orchestration-compatibility-evidence'
-import type { RuntimeOrchestrationEnvelope } from '../../../shared/runtime-rpc-envelope'
+import type { RuntimeOrchestrationEnvelope } from '../../../shared/remote-runtime/rpc/runtime-rpc-envelope'
 
 export function createOrchestrationCompatibilityEnvelope(
   env: NodeJS.ProcessEnv

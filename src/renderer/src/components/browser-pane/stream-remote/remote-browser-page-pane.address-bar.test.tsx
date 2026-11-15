@@ -2,9 +2,9 @@
 import { act, cleanup, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { TooltipProvider } from '@/components/ui/tooltip'
-import { useAppStore } from '@/store'
+import { useAppStore } from '@/store/index'
 import type { BrowserPage } from '../../../../../shared/browser-workspace-types'
-import { requestBrowserFocus } from '../host-guest/browser-focus'
+import { requestBrowserFocus } from '../host-guest/input/browser-focus'
 import { REMOTE_BROWSER_STREAM_LIVE } from './remote-browser-stream-status'
 
 // Keep runtime effects inert to isolate chrome focus and URL editing.
@@ -24,11 +24,11 @@ vi.mock('@/lib/browser/workspace/workspace-browser-tab-open', () => ({
   openWorkspaceBrowserTab: vi.fn(async () => {})
 }))
 
-vi.mock('../annotate/markup-clipboard-delivery', () => ({
+vi.mock('../annotate/capture/markup-clipboard-delivery', () => ({
   deliverMarkupToClipboard: vi.fn(async () => {})
 }))
 
-vi.mock('../annotate/useMarkupMode', () => ({
+vi.mock('../annotate/capture/useMarkupMode', () => ({
   useMarkupMode: () => ({
     isActive: false,
     baseImage: null,

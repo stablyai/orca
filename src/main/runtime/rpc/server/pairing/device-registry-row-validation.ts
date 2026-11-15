@@ -1,4 +1,4 @@
-import type { DeviceScope } from '../../../../../shared/runtime-session-contracts'
+import type { DeviceScope } from '../../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import type { RelayDeviceBinding } from '../../../mobile-cloud-relay/pairing/relay-revoke-outbox'
 import type { DeviceEntry } from './device-entry'
 import { parseMobilePushRegistration } from '../../../../../shared/mobile-push-contract'

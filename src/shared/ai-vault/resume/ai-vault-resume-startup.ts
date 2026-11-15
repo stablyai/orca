@@ -34,7 +34,7 @@ import { findOptionOccurrence } from '../../command-option-occurrence'
 import { assertOpenCodeCopyUsesLocalStore } from '../../opencode-launch-command'
 import { CLI_CONVERSATION_ADOPTING_AGENTS } from '../../structured-agent-cli-conversation-adoption'
 import type { GlobalSettings } from '../../global-settings-types'
-import { parseWslUncPath } from '../../wsl-paths'
+import { parseWslUncPath } from '../../file-access/wsl-paths'
 import { managedDataAccountResumeEnv } from '../../managed-data-account-resume'
 
 export type AiVaultResumeCommandSession = Pick<

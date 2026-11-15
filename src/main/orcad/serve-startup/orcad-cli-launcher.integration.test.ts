@@ -6,7 +6,7 @@ import { installFakeAppEnvironment } from '../../../../config/scripts/test-runti
 import { runProcess, spawnProcess } from '@orca/process-host'
 import { sealedChildEnv } from '../../runtime/agent-session/environment/structured-session-child-env.test-support'
 import { resolveBundledOrcadRuntime } from '../runtime-launch/orcad-bundled-runtime'
-import { ORCAD_NODE_RUNTIME_MARKER_FILENAME } from '../../../shared/orcad-artifacts'
+import { ORCAD_NODE_RUNTIME_MARKER_FILENAME } from '../../../shared/remote-runtime/orcad-distribution/orcad-artifacts'
 import { skipForMissingInputs } from '../testing/native-slots/orcad-node-slot-fixture'
 import {
   killChildAndWait,

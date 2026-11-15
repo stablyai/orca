@@ -36,7 +36,7 @@ import { changedActiveGroups } from './active-group-publication'
 import type {
   RuntimeMobileSessionTabsSnapshot,
   RuntimeRendererSyncWindowGraph
-} from '../../../../shared/runtime-session-contracts'
+} from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import type { TerminalTab } from '../../../../shared/workspace-layout/terminal-tab-types'
 
 export async function syncRuntimeGraph(): Promise<void> {

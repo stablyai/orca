@@ -14,7 +14,7 @@ import { tmpdir } from 'node:os'
 import type { FolderWorkspace } from '../../../shared/folder-workspaces/folder-workspace-types'
 import type { ProjectGroup } from '../../../shared/project-group-types'
 import type { Repo } from '../../../shared/repo-types'
-import type { SshTarget } from '../../../shared/ssh-types'
+import type { SshTarget } from '../../../shared/remote-runtime/ssh/ssh-types'
 
 import { getDefaultPersistedState } from '../../../shared/constants'
 import { folderWorkspaceKey } from '../../../shared/workspace-scope'

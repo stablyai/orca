@@ -3,7 +3,7 @@ import { chmodSync, mkdtempSync, readdirSync, statSync, writeFileSync } from 'no
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import { getRuntimeMetadataPath } from '../../../../shared/runtime-bootstrap'
+import { getRuntimeMetadataPath } from '../../../../shared/remote-runtime/bootstrap/runtime-bootstrap'
 import { encodePairingOffer } from '../../../../shared/remote-runtime/pairing/pairing'
 import {
   addEnvironmentFromPairingCode,

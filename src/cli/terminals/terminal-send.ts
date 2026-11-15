@@ -1,4 +1,4 @@
-import type { RuntimeTerminalSend } from '../../shared/runtime-terminal-send-contract'
+import type { RuntimeTerminalSend } from '../../shared/terminal/runtime/runtime-terminal-send-contract'
 import '../../shared/protocol-version'
 import { TERMINAL_PROMPT_DELIVERY_RUNTIME_CAPABILITY } from '../../shared/terminal/runtime-policy/terminal-runtime-capabilities'
 import type { CommandHandler } from '../dispatch/dispatch'

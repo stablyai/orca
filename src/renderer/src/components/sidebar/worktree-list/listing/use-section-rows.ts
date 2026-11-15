@@ -12,7 +12,7 @@ import {
   getLocalExecutionHostLabel,
   type ExecutionHostId
 } from '../../../../../../shared/execution-host'
-import { getHostDisplayLabelOverrides } from '../../../../../../shared/host-setting-overrides'
+import { getHostDisplayLabelOverrides } from '../../../../../../shared/execution-host/host-setting-overrides'
 import { planSidebarRows } from '../../../../../../shared/sidebar-list/sidebar-row-plan'
 import { createHostScopedRepoOf } from '../../../../../../shared/sidebar-list/feed/sidebar-feed-index'
 import { createSidebarPRGroupReader } from '../grouping/pr-group-key'

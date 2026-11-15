@@ -10,7 +10,7 @@ import {
   wslGatedStat
 } from '../../../native-chat/transcript-filesystem/wsl-transcript-fs-access'
 import { readNodeFileWithinLimit } from '../../../../shared/file-content/node-bounded-file-reader'
-import { isWslUncPath } from '../../../../shared/wsl-paths'
+import { isWslUncPath } from '../../../../shared/file-access/wsl-paths'
 import { throwIfAiVaultScanCancelled } from '../../scan-lifecycle/ai-vault-scan-cancellation'
 import { WslTranscriptFsError } from '../../../native-chat/transcript-filesystem/wsl-transcript-fs-error'
 import { parseJsonObject } from '../../parsing/session-json-object'

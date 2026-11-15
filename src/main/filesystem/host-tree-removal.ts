@@ -5,7 +5,7 @@ import { unregisteredFolderRefusal } from '../../shared/worktree/removal/removal
 import { join, win32 } from 'node:path'
 import { lstat, readdir, rm, rmdir, unlink } from './asar-transparent-fs'
 import { isWindowsAbsolutePathLike } from '../../shared/cross-platform-path'
-import { isWslUncPath } from '../../shared/wsl-paths'
+import { isWslUncPath } from '../../shared/file-access/wsl-paths'
 import { stripWin32LongPathPrefix } from '../../shared/windows-path-access'
 import { removeTree } from '../../shared/windows-transient-lock-removal'
 

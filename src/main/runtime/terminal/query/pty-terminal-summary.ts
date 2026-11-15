@@ -12,7 +12,7 @@ import { worktreeIdentityKey } from '../../../../shared/worktree/id'
 import type {
   RuntimeTerminalRead,
   RuntimeTerminalSummary
-} from '../../../../shared/runtime-terminal-contracts'
+} from '../../../../shared/terminal/runtime/runtime-terminal-contracts'
 import { getLatestPtyTitle } from '../../workspaces/process-listing/runtime-worktree-status-projection'
 import {
   isTerminalLeafId,

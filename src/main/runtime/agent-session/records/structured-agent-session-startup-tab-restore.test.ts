@@ -32,9 +32,9 @@ import type * as AgentSessionRecordRows from './agent-session-record-rows'
 import {
   ensureTestStructuredAgentSessionHost as ensureStructuredAgentSessionHost,
   openTestAgentSessionDatabase,
-  seedTestAgentSessionRecordStore,
   seedTestAgentSessionStoreFromNewerBuild
 } from './agent-session-record-store-test-harness'
+import { seedTestAgentSessionRecordStore } from './agent-session-record-store-persistence.test-fixture'
 import { OrcaRuntimeService } from '../../orca-runtime'
 import { stopStructuredAgentSessionRuntime } from '../structured-agent-session-runtime'
 import { recordingStructuredAgentSessionLogger } from '../../../native-chat/agent-session-wire/host/testing/structured-agent-session-logger.test-fixture'

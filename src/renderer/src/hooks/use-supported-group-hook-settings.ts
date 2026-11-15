@@ -7,7 +7,7 @@ import { getRepoExecutionHostId, parseExecutionHostId } from '../../../shared/ex
 import {
   PROJECT_GROUP_FOLDER_SETUP_RUNTIME_CAPABILITY,
   PROJECT_GROUP_FOLDER_ARCHIVE_RUNTIME_CAPABILITY
-} from '../../../shared/worktree-runtime-capabilities'
+} from '../../../shared/remote-runtime/protocol/worktree-runtime-capabilities'
 import { runtimeEnvironmentSupportsCapabilities } from '@/runtime/rpc/compatibility/runtime-capability-proof'
 import { useAppStore } from '@/store'
 import { subscribeRuntimeHostContactRegained } from '@/runtime/hosts/connections/runtime-host-contact-regained'

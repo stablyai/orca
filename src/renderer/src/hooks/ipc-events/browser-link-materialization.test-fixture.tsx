@@ -1,10 +1,10 @@
 import { buildDefaultSettings } from '../../../../shared/default-global-settings'
 import { createRoot } from 'react-dom/client'
-import { useAppStore } from '@/store'
+import { useAppStore } from '@/store/index'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { ConfirmationDialogProvider } from '@/components/confirmation-dialog'
 import { BrowserPagePane } from '@/components/browser-pane/assemble-chrome/browser-page-pane'
-import { registerBrowserOverlaySlotViewport } from '@/components/browser-pane/host-guest/browser-page-viewport'
+import { registerBrowserOverlaySlotViewport } from '@/components/browser-pane/host-guest/viewport/browser-page-viewport'
 import { registerBrowserStateIpcBridge } from './browser-state-ipc-bridge'
 
 const worktreeId = 'link-probe-folder'

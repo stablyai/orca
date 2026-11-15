@@ -1,4 +1,4 @@
-import type { RuntimeTerminalAttention } from '../../../shared/runtime-terminal-contracts'
+import type { RuntimeTerminalAttention } from '../../../shared/terminal/runtime/runtime-terminal-contracts'
 import type { PaintedRestorePane } from '../../../shared/painted-restore-ack'
 import type {
   PtyFencedTerminationRequest,

@@ -1,5 +1,5 @@
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../shared/constants'
-import { parseWslUncPath } from '../../../../../shared/wsl-paths'
+import { parseWslUncPath } from '../../../../../shared/file-access/wsl-paths'
 import { deriveGlobalWindowsRuntimeDefaultFromLegacySettings } from '../../../../../shared/execution-host/project-runtime-legacy-migration'
 import { getWorkspaceRuntimePreference } from '../../../../../shared/execution-host/project-runtime-preference'
 import { resolveProjectExecutionRuntime } from '../../../../../shared/execution-host/project-execution-runtime'

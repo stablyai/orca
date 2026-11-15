@@ -13,7 +13,7 @@ import {
 import { parseGitHubIssueOrPRLink } from '../../../../../shared/github/repositories/links'
 import { githubRepoIdentityKey } from '../../../../../shared/github/repositories/repository-identity-key'
 import { getRepoExecutionHostId } from '../../../../../shared/execution-host'
-import { parseHostAuthorityKey } from '../../../../../shared/host-authority'
+import { parseHostAuthorityKey } from '../../../../../shared/execution-host/host-authority'
 import type { AppState } from '@/store/types'
 import { getWorkItemRepo } from '../work-item-repo-row'
 import { hostRouteForAuthority } from '@/runtime/rpc/targets/runtime-client-target'

@@ -33,7 +33,7 @@ import {
   nextSshTargetGeneration,
   resolveSshTargetGenerationHighWaterMark,
   sanitizeSshTargetGeneration
-} from '../../../shared/ssh-target-generation'
+} from '../../../shared/remote-runtime/ssh/ssh-target-generation'
 import {
   resolveAutomationWorkspaceHost,
   resolveAutomationWorkspaceSshTargetId,

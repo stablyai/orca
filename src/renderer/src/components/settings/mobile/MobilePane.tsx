@@ -8,7 +8,7 @@ import {
 } from '../../mobile/paired-mobile-devices'
 import { useMobilePairingDevicePolling } from '../../mobile/pairing/mobile-pairing-device-polling'
 import { useMobilePairedDeviceRevocation } from './pairing/use-mobile-paired-device-revocation'
-import type { PairingNetworkInterface } from '../../../../../shared/pairing-address-auto-selection'
+import type { PairingNetworkInterface } from '../../../../../shared/remote-runtime/pairing/pairing-address-auto-selection'
 import { MachineNameField } from '../../machine-identity/MachineNameField'
 import { MobilePairingQrSection } from './pairing/MobilePairingQrSection'
 import { MobilePairedDevicesSection } from './pairing/MobilePairedDevicesSection'

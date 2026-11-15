@@ -42,6 +42,7 @@ export type RuntimeClientSettings = Pick<
   | 'nativeChatCiResultLines'
   | 'sourceControlGroupOrder'
   | 'sourceControlCompareAgainstUpstream'
+  | 'prAutoRefresh'
   | 'diffShowWhitespace'
 > & {
   /** Always set; older hosts omit it, so clients must not write it to them (settings.update is strict). */
@@ -88,4 +89,5 @@ export type RuntimeClientSettingsUpdate = Pick<
   | 'nativeChatPermissionMode'
   | 'nativeChatAutoContinueAfterUsageLimit'
   | 'workspaceCleanupPolicy'
+  | 'prAutoRefresh'
 >

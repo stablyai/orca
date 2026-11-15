@@ -18,7 +18,11 @@ import type {
   SFTPWrapper,
   ShellOptions
 } from 'ssh2'
-import type { SshTarget, SshConnectionState, SshConnectionStatus } from '../../../shared/ssh-types'
+import type {
+  SshTarget,
+  SshConnectionState,
+  SshConnectionStatus
+} from '../../../shared/remote-runtime/ssh/ssh-types'
 import {
   getOrcaControlSocketPath,
   isOpenSshConfigBackedTarget,

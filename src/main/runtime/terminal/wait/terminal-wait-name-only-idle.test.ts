@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { makeTuiIdleRuntime } from './tui-idle-wait-test-harness'
-import type { RuntimeSyncWindowGraph } from '../../../../shared/runtime-session-contracts'
+import type { RuntimeSyncWindowGraph } from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 

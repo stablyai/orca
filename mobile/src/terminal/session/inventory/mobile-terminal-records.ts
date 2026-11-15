@@ -1,7 +1,7 @@
 import type {
   RuntimeMobileSessionTerminalTab,
   RuntimeMobileTerminalTheme
-} from '../../../../../src/shared/runtime-mobile-session-tab-contracts'
+} from '../../../../../src/shared/remote-runtime/session-graph/runtime-mobile-session-tab-contracts'
 import type { AgentStatusEntry } from '../../../../../src/shared/agent-status/contracts/agent-status-types'
 import type { BrowserLoadError } from '../../../../../src/shared/browser-workspace-types'
 import { browserLoadErrorsEqual } from '../../../../../src/shared/browser-load-failure'
@@ -85,6 +85,7 @@ type MobileSessionTabLike =
       title?: string
       sessionId?: string
       agent?: string
+      forked?: true
       chatStatus?: unknown
       isActive?: boolean
     }
@@ -204,6 +205,7 @@ function mobileSessionTabEqual(
         b.type === 'agent-session' &&
         a.sessionId === b.sessionId &&
         a.agent === b.agent &&
+        a.forked === b.forked &&
         JSON.stringify(a.chatStatus ?? null) === JSON.stringify(b.chatStatus ?? null)
       )
   }

@@ -18,7 +18,7 @@ import type { JournalWriterEffect } from '../journal-writer-effects'
 import {
   withTestAgentSessionDatabase,
   storedTestAgentSessionRecord
-} from '../../../runtime/agent-session/records/agent-session-record-store-test-harness'
+} from '../../../runtime/agent-session/records/agent-session-record-store-persistence.test-fixture'
 import { CommandReceiptExistsError } from '../writing/command-receipt-transaction'
 import { agentSessionRecordFixture } from '../../../../shared/agent-session/lifecycle/records/agent-session-record.test-fixture'
 

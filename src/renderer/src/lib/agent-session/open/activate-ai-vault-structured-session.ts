@@ -12,7 +12,7 @@ import type {
   StructuredSessionOpenResult,
   StructuredSessionOpenDeps
 } from '../../../../../shared/open-structured-agent-session'
-import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 
 type StructuredSessionActivationDeps = StructuredSessionOpenAdapterDeps & {
   unavailable: (agent?: string) => void

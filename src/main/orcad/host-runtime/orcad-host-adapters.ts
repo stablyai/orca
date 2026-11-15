@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import process from 'node:process'
-import { ORCAD_CLI_PACKAGE_FILENAME } from '../../../shared/orcad-artifacts'
+import { ORCAD_CLI_PACKAGE_FILENAME } from '../../../shared/remote-runtime/orcad-distribution/orcad-artifacts'
 import { setAppEnvironment, type AppEnvironment } from '../../../shared/app-environment'
 import { createNodeServiceEnvironment } from '../../backend/node-service-environment'
 import { setSecretStore } from '../../../shared/secret-store'

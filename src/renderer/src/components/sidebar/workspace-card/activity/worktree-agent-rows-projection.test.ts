@@ -66,69 +66,6 @@ it('attributes PTY-less live rows to their terminal stamp and reacts to stamp ch
   ])
 })
 
-it.each([null, 'hostless-pty'])(
-  'keeps remote completion ownership after terminal removal (%s)',
-  (ptyId) => {
-    const { store, tab, entry } = setup(ptyId)
-    store.getState().retainAgents([
-      {
-        entry,
-        tab,
-        worktreeId: 'workspace',
-        agentType: 'claude',
-        startedAt: entry.stateStartedAt
-      }
-    ])
-    store.setState({
-      tabsByWorktree: {},
-      unifiedTabsByWorktree: {},
-      agentStatusByPaneKey: {},
-      worktreesByRepo: {}
-    })
-    expect(
-      createWorktreeAgentRowsSelector(
-        'workspace',
-        'ssh:remote'
-      )(store.getState()).map((row) => row.paneKey)
-    ).toEqual(['tab:11111111-1111-4111-8111-111111111111'])
-    expect(createWorktreeAgentRowsSelector('workspace', 'local')(store.getState())).toEqual([])
-  }
-)
-
-it('does not infer remote ownership without workspace attribution', () => {
-  const { store, tab, entry } = setup()
-  store.setState({ unifiedTabsByWorktree: {}, worktreesByRepo: {} })
-  store
-    .getState()
-    .retainAgents([
-      { entry, tab, worktreeId: 'workspace', agentType: 'claude', startedAt: entry.stateStartedAt }
-    ])
-  store.setState({ tabsByWorktree: {}, agentStatusByPaneKey: {} })
-  expect(createWorktreeAgentRowsSelector('workspace', 'ssh:remote')(store.getState())).toEqual([])
-})
-
-it('keeps an unstamped local completion local while the same workspace is active remotely', () => {
-  const { store, tab, entry } = setup()
-  store.setState({
-    unifiedTabsByWorktree: {},
-    activeWorktreeId: 'workspace',
-    activeWorkspaceExecutionHostId: 'ssh:remote'
-  })
-  store
-    .getState()
-    .retainAgents([
-      { entry, tab, worktreeId: 'workspace', agentType: 'claude', startedAt: TIMESTAMP }
-    ])
-  store.setState({ tabsByWorktree: {}, agentStatusByPaneKey: {} })
-  expect(createWorktreeAgentRowsSelector('workspace', 'ssh:remote')(store.getState())).toEqual([])
-  expect(
-    createWorktreeAgentRowsSelector(
-      'workspace',
-      'local'
-    )(store.getState()).map((row) => row.paneKey)
-  ).toEqual(['tab:11111111-1111-4111-8111-111111111111'])
-})
-
 it('updates pre-hydration row ownership when global PTY and layout bindings arrive', () => {
   const { store } = setup()
   const state = {
@@ -170,4 +107,33 @@ it('updates pre-hydration row ownership when global PTY and layout bindings arri
   expect(local(withLayout).map((row) => row.paneKey)).toEqual([
     'tab:11111111-1111-4111-8111-111111111111'
   ])
+})
+
+it('keeps an unchanged sibling row while another chat changes its preview', () => {
+  const { store, tab, entry } = setup()
+  const siblingKey = 'sibling:22222222-2222-4222-8222-222222222222'
+  store.setState({
+    tabsByWorktree: {
+      workspace: [tab, makeTab({ id: 'sibling', worktreeId: 'workspace', ptyId: null })]
+    },
+    agentStatusByPaneKey: {
+      [entry.paneKey]: entry,
+      [siblingKey]: { ...entry, paneKey: siblingKey, prompt: 'Another chat' }
+    }
+  })
+  const select = createWorktreeAgentRowsSelector('workspace')
+  const before = select(store.getState())
+  const sibling = before.find((row) => row.paneKey === siblingKey)
+  expect(sibling?.entry.prompt).toBe('Another chat')
+  store.setState({
+    agentStatusByPaneKey: {
+      ...store.getState().agentStatusByPaneKey,
+      [entry.paneKey]: { ...entry, lastAssistantMessage: 'New answer' }
+    }
+  })
+  const after = select(store.getState())
+  expect(after.find((row) => row.paneKey === entry.paneKey)?.entry.lastAssistantMessage).toBe(
+    'New answer'
+  )
+  expect(after.find((row) => row.paneKey === siblingKey)).toBe(sibling)
 })

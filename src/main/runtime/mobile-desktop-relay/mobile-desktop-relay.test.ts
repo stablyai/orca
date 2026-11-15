@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { DELEGATED_MOBILE_DEVICES_RUNTIME_CAPABILITY } from '../../../shared/delegated-mobile-device-contract'
 
-import type { RuntimeRpcResponse } from '../../../shared/runtime-rpc-envelope'
+import type { RuntimeRpcResponse } from '../../../shared/remote-runtime/rpc/runtime-rpc-envelope'
 import { RemoteRuntimeClientError } from '../../../shared/remote-runtime/remote-runtime-client-error'
 import type { RemoteRuntimePassthroughCallbacks } from '../../../shared/remote-runtime/remote-runtime-passthrough-socket'
 import { MobileDesktopRelay } from './mobile-desktop-relay'

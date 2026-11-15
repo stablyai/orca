@@ -32,6 +32,7 @@ import type { AgentDotState } from '@/components/AgentStateDot'
 import type { AiVaultSearchHit } from '../../../../../../shared/ai-vault/search/ai-vault-search-types'
 import { AiVaultSearchEvidence } from '../search/AiVaultSearchEvidence'
 import { useAiVaultSessionDisplayTitle } from './use-ai-vault-session-display-title'
+import { ForkMarkedName } from '@/components/native-chat/fork/ForkMarkedName'
 import type { AiVaultOriginalPaneTarget } from '../session-actions/ai-vault-original-pane'
 
 export function VaultSessionRow({
@@ -112,7 +113,7 @@ export function VaultSessionRow({
     ? t('aiVault.continueInCli', 'Continue in CLI')
     : defaultResumeLabel
   const updatedAt = session.updatedAt ?? session.modifiedAt
-  const title = useAiVaultSessionDisplayTitle(session, originalPaneTarget)
+  const { title, forked } = useAiVaultSessionDisplayTitle(session, originalPaneTarget)
   const detailsId = getSessionDetailsId(session.id)
   const latestTurn = latestSessionConversationTurn(session)
   const deleteHost = useAiVaultSessionDeleteHost(session)
@@ -201,7 +202,7 @@ export function VaultSessionRow({
             window.dispatchEvent(new Event(AI_VAULT_SESSION_DRAG_END_EVENT))
           }}
         >
-          {title}
+          {forked ? <ForkMarkedName name={title} /> : title}
         </div>
         <SessionRowTrailingActions
           session={session}

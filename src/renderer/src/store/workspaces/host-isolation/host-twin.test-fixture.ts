@@ -1,6 +1,6 @@
 /** Seed same-ID repo/folder twins on two hosts with live/dormant shells, dirty drafts and sleeping agents. Raw-ID buckets are shared; host-twin-state-projection.test-fixture.ts attributes survivors. */
 import { toRemoteRuntimePtyId } from '../../../../../shared/remote-runtime/remote-runtime-pty-id'
-import { toAppSshPtyId } from '../../../../../shared/ssh-pty-id'
+import { toAppSshPtyId } from '../../../../../shared/remote-runtime/ssh/ssh-pty-id'
 import { folderWorkspaceKey } from '../../../../../shared/workspace-scope'
 import { createTestStore } from '../../testing/app-store-test-fixture'
 import { makeOpenFile } from '../../slices/editor/types/open-file.test-fixture'
