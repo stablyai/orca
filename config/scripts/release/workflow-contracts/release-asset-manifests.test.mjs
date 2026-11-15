@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { parse } from 'yaml'
+import { PUBLISH_GATES } from '../publication/verify-prior-run-provenance.mjs'
 import { buildManifest, MANIFEST_SCHEMA } from '../publication/write-release-asset-manifest.mjs'
 
 const releaseCutText = readFileSync('.github/workflows/release-cut.yml', 'utf8')
@@ -195,4 +196,60 @@ describe('write-release-asset-manifest', () => {
       buildManifest({ ...base, source: 'evil', files: [file('a.yml', 'a')] })
     ).rejects.toThrow(/Unknown manifest source/)
   })
+})
+
+// A leftover draft must pass exactly the gates publish-release demands, never fewer.
+describe('prior-run auto-publish gates', () => {
+  const publish = releaseCut.jobs['publish-release']
+  const condition = publish.if.replace(/\s+/g, ' ')
+  // The job names a gate job appears under in the jobs API, and the legs it may fail on.
+  function derive(id) {
+    const job = releaseCut.jobs[id]
+    const legs = job.strategy?.matrix?.include
+    if (!legs) {
+      expect(job['continue-on-error'], id).toBeUndefined()
+      return { names: [job.name ?? id], tolerated: [] }
+    }
+    if (job.name === undefined) {
+      expect(job['continue-on-error'], id).toBeUndefined()
+      return { unnamedLegs: legs.length }
+    }
+    const tolerated = String(job['continue-on-error'] ?? '').match(
+      /^\$\{\{ matrix\.platform == '([\w-]+)' \}\}$/
+    )?.[1]
+    if (job['continue-on-error'] !== undefined) {
+      expect(tolerated, `${id} continue-on-error`).toBeDefined()
+    }
+    const suffix = ' ${{ matrix.platform }}'
+    expect(job.name.endsWith(suffix), id).toBe(true)
+    const name = (leg) => `${job.name.slice(0, -suffix.length)} ${leg.platform}`
+    return {
+      names: legs.filter((leg) => leg.platform !== tolerated).map(name),
+      tolerated: legs.filter((leg) => leg.platform === tolerated).map(name)
+    }
+  }
+
+  it('covers every job publish-release needs, as its if: requires them', () => {
+    const gated = PUBLISH_GATES.map((gate) => gate.job)
+    expect([...gated, 'upload-orca-server-artifact'].sort()).toEqual([...publish.needs].sort())
+    for (const job of gated) {
+      expect(condition).toContain(`needs.${job}.result == 'success'`)
+    }
+    expect(condition).toContain(
+      "(needs.upload-orca-server-artifact.result == 'success' || needs.upload-orca-server-artifact.result == 'skipped')"
+    )
+  })
+
+  it.each(PUBLISH_GATES.map((gate) => [gate.job, gate]))(
+    'requires %s under the names and tolerated failures the workflow defines',
+    (id, gate) => {
+      const derived = derive(id)
+      if (derived.unnamedLegs !== undefined) {
+        expect(gate).toEqual({ job: id, prefix: `${id} (`, count: derived.unnamedLegs })
+        return
+      }
+      expect(gate.names).toEqual(derived.names)
+      expect(gate.tolerated ?? []).toEqual(derived.tolerated)
+    }
+  )
 })

@@ -145,7 +145,13 @@ const desktopJobs = [
   success('build (ubuntu-24.04-arm, linux-arm64)'),
   success('build-mac'),
   success(`mac release build 600 for ${TAG}`),
-  success('verify-mac-build')
+  success('verify-mac-build'),
+  success('skill sharing release gate linux-glibc-2.31'),
+  success('skill sharing release gate mac'),
+  { name: 'skill sharing release gate windows', conclusion: 'failure' },
+  success('golden e2e linux'),
+  success('golden e2e mac'),
+  success('golden e2e windows')
 ]
 const jobsWith = (conclusion) => [...desktopJobs, serverJob(conclusion)]
 const SERVER_ASSETS = [
@@ -338,16 +344,28 @@ describe('desktop jobs and the macOS run of the prior run', () => {
     [
       'a failed Windows build (signing and final checks run there)',
       failing('build (windows-2022, win)'),
-      /desktop build job/
+      /every build job/
     ],
     [
       'a cancelled Linux build',
       jobsWith('skipped').map((job) =>
         job.name.includes('linux-x64') ? { ...job, conclusion: 'cancelled' } : job
       ),
-      /desktop build job/
+      /every build job/
     ],
-    ['a missing build job', without('build (ubuntu-24.04-arm, linux-arm64)'), /desktop build job/],
+    ['a missing build job', without('build (ubuntu-24.04-arm, linux-arm64)'), /every build job/],
+    ['a failed Windows golden e2e', failing('golden e2e windows'), /golden e2e windows job/],
+    [
+      'a failed Linux floor skill gate',
+      failing('skill sharing release gate linux-glibc-2.31'),
+      /linux-glibc-2.31 job/
+    ],
+    ['a failed mac skill gate', failing('skill sharing release gate mac'), /release gate mac job/],
+    [
+      'a missing tolerated Windows skill gate',
+      without('skill sharing release gate windows'),
+      /release gate windows job/
+    ],
     ['a failed macOS qualification', failing('verify-mac-build'), /verify-mac-build job/],
     ['a failed macOS dispatch', failing('build-mac'), /build-mac job/],
     [

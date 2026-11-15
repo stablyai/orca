@@ -113,30 +113,63 @@ async function readAllPages(get, path, key) {
   throw new Error(`${path} has more than ${MAX_PAGES} pages`)
 }
 
+// Every gate publish-release needs (its `needs` and `if:`), with the job names they appear under in the jobs API.
+// One source of truth: release-asset-manifests.test.mjs derives this list from release-cut.yml's publish-release job
+// and each needed job's name, matrix and continue-on-error, and fails if they differ.
+// - names: each must appear exactly once and have concluded success.
+// - prefix: an unnamed matrix job; at least `count` jobs start with it, and all concluded success.
+// - tolerated: legs whose failure publish-release tolerates (job-level continue-on-error); each must appear once.
+// upload-orca-server-artifact is checked on its own: success or skipped, as publish-release allows.
+export const PUBLISH_GATES = [
+  { job: 'cut', names: ['cut'] },
+  { job: 'create-release', names: ['create-release'] },
+  { job: 'build', prefix: 'build (', count: 3 },
+  { job: 'build-mac', names: ['build-mac'] },
+  { job: 'verify-mac-build', names: ['verify-mac-build'] },
+  {
+    job: 'skill-sharing-linux-floor-release-gate',
+    names: ['skill sharing release gate linux-glibc-2.31']
+  },
+  {
+    job: 'skill-sharing-release-gate',
+    names: ['skill sharing release gate mac'],
+    tolerated: ['skill sharing release gate windows']
+  },
+  {
+    job: 'terminal-rendering-golden',
+    names: ['golden e2e linux', 'golden e2e mac', 'golden e2e windows']
+  }
+]
+
 // Why the jobs, not the artifacts: anyone with write access can delete a run's artifacts (and a draft's assets), but
-// nobody can change which jobs a finished run ran or how they ended. So the run's desktop build jobs (the build
-// matrix, which also signs Windows and runs the final draft and telemetry checks), its macOS dispatch, binding and
-// qualification must all have succeeded on their latest attempt, and the orca-server manifest is required exactly
-// when that run's upload job succeeded and must be absent when it was skipped. Anything else refuses the draft.
+// nobody can change which jobs a finished run ran or how they ended. So a leftover draft must have passed, on the
+// latest attempt, every gate publish-release would demand (the build matrix also signs Windows and runs the final
+// draft and telemetry checks), plus the binding job naming the mac run found for it. The orca-server manifest is
+// required exactly when that run's upload job succeeded and must be absent when it was skipped. Anything else refuses.
 export function assertRunJobs(jobs, { runId, tag, macRunId }) {
   const named = (name) => jobs.filter((job) => job?.name === name)
-  const required = [
-    'cut',
-    'create-release',
-    'build-mac',
-    `mac release build ${macRunId} for ${tag}`,
-    'verify-mac-build'
-  ]
-  for (const name of required) {
+  const requireOne = (name, ok) => {
     const found = named(name)
-    if (found.length !== 1 || found[0].conclusion !== 'success') {
+    if (found.length !== 1 || !ok(found[0].conclusion)) {
       throw new Error(`run ${runId} has no single successful ${name} job`)
     }
   }
-  const builds = jobs.filter((job) => String(job?.name).startsWith('build ('))
-  if (builds.length < 3 || builds.some((job) => job.conclusion !== 'success')) {
-    throw new Error(`run ${runId} did not finish every desktop build job successfully`)
+  const succeeded = (conclusion) => conclusion === 'success'
+  for (const gate of PUBLISH_GATES) {
+    for (const name of gate.names ?? []) {
+      requireOne(name, succeeded)
+    }
+    for (const name of gate.tolerated ?? []) {
+      requireOne(name, () => true)
+    }
+    if (gate.prefix) {
+      const legs = jobs.filter((job) => String(job?.name).startsWith(gate.prefix))
+      if (legs.length < gate.count || legs.some((job) => !succeeded(job.conclusion))) {
+        throw new Error(`run ${runId} did not finish every ${gate.job} job successfully`)
+      }
+    }
   }
+  requireOne(`mac release build ${macRunId} for ${tag}`, succeeded)
   const server = named('upload-orca-server-artifact')
   const conclusion = server.length === 1 ? server[0].conclusion : undefined
   if (conclusion !== 'success' && conclusion !== 'skipped') {
