@@ -1,6 +1,6 @@
 import { useAppStore } from '@/store/index'
 import { HOST_MODEL_CATALOG_ACCOUNT_SETTINGS } from '../../../../../shared/agent-session/options/model-catalog/host-model-catalog-snapshot-rules'
-import { structuralValuesEqual } from '../../../../../shared/structural-value-equality'
+import { structuralValuesEqual } from '../../../../../shared/collections/structural-value-equality'
 import {
   LOCAL_EXECUTION_HOST_ID,
   toRuntimeExecutionHostId

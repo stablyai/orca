@@ -16,7 +16,7 @@ import {
 } from '../../../shared/remote-runtime/rpc/runtime-rpc-envelope'
 import { RuntimeClientError, RuntimeRpcFailureError } from './types'
 
-import { MAX_TIMER_DELAY_MS, isSafeTimerDelayMs } from '../../../shared/timer-delay'
+import { MAX_TIMER_DELAY_MS, isSafeTimerDelayMs } from '../../../shared/concurrency/timer-delay'
 import { runtimeAccessDeniedError } from './runtime-access-denied'
 import { MAX_LOCAL_RUNTIME_RPC_MESSAGE_BYTES } from '../../../shared/remote-runtime/rpc/local-runtime-rpc-limits'
 import { daemonSocketDirIsTrusted } from '../../../main/daemon/endpoint/publication/daemon-socket-endpoint-path'

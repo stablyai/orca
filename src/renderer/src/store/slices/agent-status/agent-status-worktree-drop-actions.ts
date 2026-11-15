@@ -8,6 +8,7 @@ import {
   paneKeyMatchesAnyTabPrefix
 } from './agent-status-pane-key-tab-binding'
 import { removePaneKeys } from './agent-status-pane-keyed-records'
+import { isSleepingAgentStatus } from './agent-status-process-retirement'
 
 export function createAgentStatusWorktreeDropActions(
   runtime: AgentStatusRuntime
@@ -23,8 +24,13 @@ export function createAgentStatusWorktreeDropActions(
         const ownedByWorktree = (paneKey: string, entryWorktreeId: string | undefined): boolean =>
           !chatTabIds.has(getTabIdFromPaneKey(paneKey) ?? '') &&
           (entryWorktreeId === worktreeId || paneKeyMatchesAnyTabPrefix(paneKey, tabPrefixes))
-        const liveEntries = Object.entries(s.agentStatusByPaneKey).filter(([paneKey, entry]) =>
-          ownedByWorktree(paneKey, entry.worktreeId)
+        const paneSurvives =
+          opts?.shutdownReason === 'manual-sleep' ||
+          opts?.shutdownReason === 'auto-hibernate-completed-agent'
+        const liveEntries = Array.from(s.agentStatusByPaneKey.entries()).filter(
+          ([paneKey, entry]) =>
+            ownedByWorktree(paneKey, entry.worktreeId) &&
+            !(paneSurvives && isSleepingAgentStatus(entry))
         )
         const liveKeys = liveEntries.map(([paneKey]) => paneKey)
         const liveKeySet = new Set(liveKeys)
@@ -37,9 +43,6 @@ export function createAgentStatusWorktreeDropActions(
             entry.worktreeId === worktreeId ||
             (entry.paneKey ? paneKeyMatchesAnyTabPrefix(entry.paneKey, tabPrefixes) : false)
         )
-        const paneSurvives =
-          opts?.shutdownReason === 'manual-sleep' ||
-          opts?.shutdownReason === 'auto-hibernate-completed-agent'
         // Read/clear state belongs to the pane, including while it sleeps.
         const activityStateKeys = new Set(
           [
@@ -73,11 +76,9 @@ export function createAgentStatusWorktreeDropActions(
           return Object.keys(cleanupPatch).length > 0 ? cleanupPatch : s
         }
         hadLive = liveKeys.length > 0
-        const nextLive =
-          liveKeys.length > 0 ? { ...s.agentStatusByPaneKey } : s.agentStatusByPaneKey
+        const nextLive = removePaneKeys(s.agentStatusByPaneKey, liveKeySet)
         for (const key of liveKeys) {
           changedPaneKeys.add(key)
-          delete nextLive[key]
         }
         const nextLaunchConfigs =
           launchConfigKeys.length > 0

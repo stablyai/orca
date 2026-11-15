@@ -6,7 +6,7 @@ import {
   gitLabApiFor,
   type GitLabCapabilityChecks
 } from '@/runtime/repository-gitlab/gitlab-owner-api'
-import { mapSettledWithConcurrency } from '../../../../../shared/map-with-concurrency'
+import { mapSettledWithConcurrency } from '../../../../../shared/concurrency/map-with-concurrency'
 import type { Repo } from '../../../../../shared/repository/repo-types'
 import { getRepoExecutionHostId } from '../../../../../shared/execution-host'
 import type { GitLabDialogRepoSelector } from '../../gitlab-item-dialog/gitlab-item-dialog-types'

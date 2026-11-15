@@ -104,7 +104,8 @@ export function formatListApps(result: ComputerListAppsResult): string {
   return result.apps
     .map((app) => {
       const bundle = app.bundleId ? `  ${app.bundleId}` : ''
-      return `${app.name}  pid:${app.pid}${bundle}`
+      const accessory = app.accessory ? '  (no Dock icon)' : ''
+      return `${app.name}  pid:${app.pid}${bundle}${accessory}`
     })
     .join('\n')
 }

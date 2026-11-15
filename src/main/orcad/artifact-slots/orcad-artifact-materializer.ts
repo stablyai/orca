@@ -2,8 +2,8 @@ import { randomUUID } from 'node:crypto'
 import { existsSync } from 'node:fs'
 import { chmod, copyFile, mkdir, readFile, rename, rm, utimes, writeFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
-import { getAppEnvironment } from '../../../shared/app-environment'
-import { waitForPromiseWithSignal } from '../../../shared/abort-signal-reason'
+import { getAppEnvironment } from '../../../shared/app-lifecycle/app-environment'
+import { waitForPromiseWithSignal } from '../../../shared/concurrency/abort-signal-reason'
 import {
   ORCAD_MOBILE_WEB_DIR,
   ORCAD_MOBILE_WEB_MANIFEST,

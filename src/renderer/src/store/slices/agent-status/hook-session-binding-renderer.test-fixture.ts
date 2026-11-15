@@ -29,7 +29,7 @@ export const expectReturnedRenderer: HookSessionBindingRendererFixture['expectRe
       }
     )
   expect(
-    isInheritedFromActivePane(store.getState().agentStatusByPaneKey[paneKey], data, agent, {
+    isInheritedFromActivePane(store.getState().agentStatusByPaneKey.get(paneKey)!, data, agent, {
       connectionId: data.connectionId,
       worktreeId: data.worktreeId
     })
@@ -44,7 +44,7 @@ export const expectReturnedRenderer: HookSessionBindingRendererFixture['expectRe
       { connectionId: data.connectionId, worktreeId: data.worktreeId },
       { providerSession: data.providerSession, paneOwner: data.paneOwner }
     )
-  const entry = store.getState().agentStatusByPaneKey[paneKey]
+  const entry = store.getState().agentStatusByPaneKey.get(paneKey)!
   expect(entry).toMatchObject({ agentType: agent, providerSession: { id } })
   const record = resumeRecordFromStatus({
     entry,

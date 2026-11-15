@@ -5,7 +5,7 @@ import {
   type SessionFileChoice,
   type SessionParseResult
 } from '../session-scanner-types'
-import { yieldToEventLoop } from '../../../shared/event-loop-yield'
+import { yieldToEventLoop } from '../../../shared/concurrency/event-loop-yield'
 import { isTextTaskRequestSession } from './text-task-request-sessions'
 import { candidateFileTime } from '../scanners/antigravity/antigravity-transcript-candidates'
 import {

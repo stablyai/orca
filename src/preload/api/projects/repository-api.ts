@@ -87,6 +87,7 @@ export type RepositoryApi = {
       hiddenAt?: Repo['hiddenAt'] | null
       ghAccount?: GhAccountBinding | null
       workspaceCleanupPolicy?: Repo['workspaceCleanupPolicy'] | null
+      browserProfileId?: string | null
     }
   }) => Promise<Repo>
   pickFolder: () => Promise<string | null>

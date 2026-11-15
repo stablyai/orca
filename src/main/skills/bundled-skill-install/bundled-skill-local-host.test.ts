@@ -9,7 +9,7 @@ vi.mock('../../preflight/installed-agent-detection', () => ({
 import {
   CLAUDE_INJECTED_CONFIG_DIR_ENV,
   CLAUDE_USER_CONFIG_DIR_ENV
-} from '../../../shared/claude-profile-routing'
+} from '../../../shared/agent-accounts/claude/claude-profile-routing'
 import { localBundledSkillInput } from './bundled-skill-local-host'
 
 const HOME = resolve('/', 'home', 'u')

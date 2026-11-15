@@ -8,6 +8,7 @@ vi.mock('@/store', async () => {
 })
 
 import { useAppStore } from '@/store'
+import { acceptedAgentStatuses } from '@/store/slices/agent-status/accepted-agent-statuses'
 import { useStructuredSessionChildRowContext } from './use-structured-session-child-row-context'
 
 afterEach(cleanup)
@@ -24,16 +25,18 @@ it('reads current child evidence when a hidden strip becomes visible', () => {
     stateStartedAt: 1000,
     stateHistory: []
   }
-  useAppStore.setState({ agentStatusByPaneKey: { [paneKey]: parent } })
+  useAppStore.setState({ agentStatusByPaneKey: acceptedAgentStatuses([[paneKey, parent]]) })
   const view = renderHook(({ active }) => useStructuredSessionChildRowContext(paneKey, active), {
     initialProps: { active: false }
   })
   expect(view.result.current).toBeUndefined()
   act(() => {
     useAppStore.setState({
-      agentStatusByPaneKey: {
-        [paneKey]: { ...parent, updatedAt: 2000, subagentObservation: 'unverifiable' }
-      }
+      agentStatusByPaneKey: useAppStore
+        .getState()
+        .agentStatusByPaneKey.replace([
+          [paneKey, { ...parent, updatedAt: 2000, subagentObservation: 'unverifiable' }]
+        ])
     })
   })
   view.rerender({ active: true })

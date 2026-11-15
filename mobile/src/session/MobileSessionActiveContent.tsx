@@ -24,6 +24,7 @@ import { renderAnimatedToast } from '../components/feedback/TransientToast'
 import type { MobileSessionController } from './use-mobile-session-controller'
 import { useMobileSessionContentKeyboardLift } from '../terminal/session/input-controls/use-mobile-session-keyboard-lift'
 import { useOpenUrlInOrca } from '../browser/tab-navigation/use-open-url-in-orca'
+import { useMobileTerminalLinkOpen } from '../terminal/session/links/use-mobile-terminal-link-open'
 import { useWorkspaceExecutionHost } from '../navigation/workspace-execution-host'
 import { useOpenHostAccounts } from '../accounts/use-open-mobile-accounts'
 import { useHostProfile } from '../host-catalog/use-host-profile'
@@ -95,7 +96,6 @@ export function MobileSessionActiveContent({
     notifyTerminalCellBoxChange,
     handleFileTap,
     handleNativeChatFileTap,
-    handleTerminalOpenUrl,
     handleTerminalInput,
     handleTerminalQueryReply,
     handleSelectionMode,
@@ -120,6 +120,7 @@ export function MobileSessionActiveContent({
   const { keyboardLift, activeTerminalKeyboardLift, toastAnimatedStyle } =
     useMobileSessionContentKeyboardLift(controller)
   const openUrlInOrca = useOpenUrlInOrca(controller)
+  const terminalLinks = useMobileTerminalLinkOpen(controller, openUrlInOrca)
   const hostProfile = useHostProfile(hostId)
   const hostTitle = useHostDisplay(hostProfile).title
   const nativeChatHostOutage = mobileSessionNativeChatHostOutage(controller, hostTitle, t)
@@ -329,7 +330,7 @@ export function MobileSessionActiveContent({
               onTerminalInteraction={handleTerminalInteraction}
               onTerminalTap={handleTerminalTap}
               onFileTap={handleFileTap}
-              onOpenUrl={handleTerminalOpenUrl}
+              onOpenUrl={terminalLinks.handleTerminalOpenUrl}
             />
           )}
         </MountedTerminalPanes>
@@ -368,6 +369,7 @@ export function MobileSessionActiveContent({
                 // A workspace routed to another server stops with that server, whose name the phone lacks.
                 hostName={executionHost === undefined && hostProfile ? hostTitle : null}
                 onOpenUrlInOrca={openUrlInOrca}
+                linkOpenMode={controller.linkOpenMode}
                 hostOutage={nativeChatHostOutage}
                 onRunInTerminal={(command) =>
                   void controller.handleCreateTerminal(undefined, {
@@ -382,6 +384,7 @@ export function MobileSessionActiveContent({
             </MobileNativeChatForkProvider>
           </MobileAgentMessageProvider>
         </MobileNativeChatDictationPreviewContext.Provider>
+        {terminalLinks.terminalLinkSheet}
         {toast}
       </View>
     )

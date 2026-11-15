@@ -249,6 +249,7 @@
     "message": {
       "copyMessage": "メッセージをコピーする",
       "forkFromResponse": "この応答から分岐",
+      "scrollMessageToTop": "このメッセージを一番上までスクロールします",
       "forkFromResponseHint": "このターンの終わりまでの応答全体を含む新しいチャット"
     },
     "messageActionsSheet": {
@@ -2824,12 +2825,14 @@
       "title": "外観"
     },
     "browserSettingsScreen": {
+      "askEachTime": "毎回確認する",
+      "askEachTimeDescription": "Orca ブラウザ、スマートフォンのブラウザ、リンクのコピーから毎回選びます。",
       "desktopBrowser": "デスクトップの Orca ブラウザ",
       "desktopBrowserDescription": "ペアリング済みのデスクトップからストリーミングされるブラウザで開きます。",
-      "linksDescription": "ターミナル出力でタップした HTTP(S) リンクを開く場所を選択してください。",
+      "terminalAndChatLinksDescription": "ターミナル出力とチャットでタップした Web リンクを開く場所を選択してください。",
       "linksHeading": "リンク",
       "loadFailed": "ブラウザ設定を読み込めませんでした。再試行してください。",
-      "openTerminalLinks": "ターミナルのリンクを開く",
+      "openLinks": "リンクを開く",
       "phoneBrowser": "スマートフォンのブラウザ",
       "phoneBrowserDescription": "このスマートフォンの Safari、Chrome などのブラウザで開きます。",
       "saveFailed": "ブラウザ設定を保存できませんでした。再試行してください。",

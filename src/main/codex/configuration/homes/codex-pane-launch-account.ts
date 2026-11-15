@@ -8,7 +8,7 @@ import {
 import {
   getCodexSelectionLaneKey,
   type CodexAccountSelectionTarget
-} from '../../../../shared/codex-selection-lane'
+} from '../../../../shared/agent-accounts/codex/codex-selection-lane'
 import type {
   CodexPaneAccountRecord,
   CodexPaneHomeRoute

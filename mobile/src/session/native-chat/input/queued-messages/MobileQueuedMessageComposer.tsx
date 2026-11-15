@@ -14,7 +14,7 @@ import type { AgentMessageSource } from '../../../../../../src/shared/agent-sess
 import { MobileAgentMessageSenders } from '../../transcript/agent-messages/MobileAgentMessageSenders'
 import { queuedMessageStyles as styles } from './mobile-native-chat-queued-message-styles'
 import { useMobileColorScheme } from '../../../../theme/use-mobile-color-scheme'
-import { createNonSecureContextUuid as createUuidV4 } from '../../../../../../src/shared/non-secure-context-uuid'
+import { createNonSecureContextUuid as createUuidV4 } from '../../../../../../src/shared/identifiers/non-secure-context-uuid'
 import { useMobileTranslation } from '../../../../i18n/use-mobile-translation'
 
 export function MobileQueuedMessageComposer({
