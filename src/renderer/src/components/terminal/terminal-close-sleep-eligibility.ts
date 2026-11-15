@@ -39,7 +39,7 @@ export function canSleepInsteadOfClosingTab(
     if (!isTerminalLeafId(leafId) || args.terminalTabId.includes(':')) {
       return false
     }
-    const entry = state.agentStatusByPaneKey?.[makePaneKey(args.terminalTabId, leafId)]
+    const entry = state.agentStatusByPaneKey.get(makePaneKey(args.terminalTabId, leafId))
     return (
       isResumableTuiAgent(entry?.agentType) &&
       normalizeAgentProviderSession(entry?.providerSession) !== null

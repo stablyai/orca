@@ -16,7 +16,7 @@ const SESSION = { key: 'session_id', id: 'claude-session-1' } as const
 function stateWith(entry: Record<string, unknown>, vmWorkspace = false): AppState {
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the eligibility check reads only these three slices; a renamed slice fails the test.
   return {
-    agentStatusByPaneKey: { [PANE_KEY]: entry },
+    agentStatusByPaneKey: new Map([[PANE_KEY, entry]]),
     terminalLayoutsByTabId: { 'tab-1': { ptyIdsByLeafId: { [LEAF]: 'pty-1' } } },
     ephemeralVmRuntimesByWorkspaceId: vmWorkspace ? { 'wt-1': { id: 'vm-1' } } : {}
   } as unknown as AppState
