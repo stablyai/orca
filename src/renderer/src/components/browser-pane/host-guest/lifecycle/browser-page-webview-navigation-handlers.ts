@@ -3,8 +3,8 @@ import type { Dispatch, MutableRefObject, RefObject, SetStateAction } from 'reac
 import {
   normalizeBrowserNavigationUrl,
   redactKagiSessionToken
-} from '../../../../../../shared/browser-url'
-import type { BrowserLoadError } from '../../../../../../shared/browser-workspace-types'
+} from '../../../../../../shared/browser/navigation/browser-url'
+import type { BrowserLoadError } from '../../../../../../shared/browser/workspaces/browser-workspace-types'
 import { BROWSER_GUEST_RECOVERY_ERROR_CODE } from '../recovery/browser-page-guest-recovery'
 import { rememberLiveBrowserUrl } from '../../describe-page/live-browser-url-registry'
 import type { BrowserOverlayViewport } from '../../describe-page/browser-annotation-geometry'

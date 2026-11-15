@@ -6,9 +6,9 @@ import {
 import {
   collectDescendantsFromIndex,
   getProcessTableIndex
-} from '../../../shared/process-table-index'
-import { hasControllingTty } from '../../../shared/posix-controlling-terminal'
-import type { ProcessTableRow } from '../../../shared/process-table-snapshot'
+} from '../../../shared/process-observation/tables/process-table-index'
+import { hasControllingTty } from '../../../shared/terminal/pty/native-process/posix-controlling-terminal'
+import type { ProcessTableRow } from '../../../shared/process-observation/tables/process-table-snapshot'
 import type { PtyChildProcessVerdict } from '../../../shared/terminal/pty/lifecycle/terminal-process-inspection'
 import { readWindowsPtyJobProcessIds } from '../../providers/foreground/windows/pty-job-membership'
 import { readWindowsConsoleAttachedProcessIds } from '../../providers/foreground/windows/console-attached-processes'

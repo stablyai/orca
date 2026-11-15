@@ -6,7 +6,7 @@ import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
 import {
   resolveCliCommand,
   resolveExecutableCommand
-} from '../../../shared/node-cli-command-resolution'
+} from '../../../shared/shell/command-resolution/node-cli-command-resolution'
 import {
   hasExplicitTuiLaunchCommand,
   structuredAgentCommandPlan

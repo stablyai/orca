@@ -2,7 +2,7 @@
 
 import { track } from '../../../diagnostics/telemetry/telemetry'
 import { tuiAgentToAgentKind } from '../../../../../shared/agent-status/identity/agent-kind'
-import type { NativeChatRuntime } from '../../../../../shared/telemetry-native-feature-event-schemas'
+import type { NativeChatRuntime } from '../../../../../shared/telemetry/schemas/telemetry-native-feature-event-schemas'
 import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent'
 
 /** Accept broad chat identities and narrow unknowns to telemetry other; callers need no unsafe TuiAgent cast. */

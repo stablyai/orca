@@ -1,10 +1,10 @@
 import type { PtyChildProcessVerdict } from '../../../shared/terminal/pty/lifecycle/terminal-process-inspection'
 import { recognizeAgentProcessFromCommandLine } from '../../../shared/agent-status/process/agent-process-recognition'
-import { getCheapProcessTableSnapshot } from '../../../shared/cheap-process-table-snapshot-reader'
+import { getCheapProcessTableSnapshot } from '../../../shared/process-observation/tables/cheap-process-table-snapshot-reader'
 import {
   getProcessTableSnapshot,
   getStrictProcessTableSnapshotWithAge
-} from '../../../shared/process-table-snapshot-reader'
+} from '../../../shared/process-observation/tables/process-table-snapshot-reader'
 import { confirmShellForegroundProcess } from '../foreground/agent-process'
 import { confirmFreshPtyForeground } from '../foreground/pty-confirmation'
 import {

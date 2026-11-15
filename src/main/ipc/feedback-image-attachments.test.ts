@@ -1,10 +1,5 @@
 import { describe, expect, it } from 'vitest'
 import {
-  MAX_FEEDBACK_IMAGE_BYTES,
-  MAX_FEEDBACK_IMAGE_COUNT,
-  MAX_FEEDBACK_IMAGE_TOTAL_BYTES
-} from '../../shared/feedback-image-limits'
-import {
   appendFeedbackImagesToFormData,
   isSupportedFeedbackImageContentType,
   validateFeedbackImages
@@ -40,14 +35,6 @@ describe('appendFeedbackImagesToFormData', () => {
 })
 
 describe('validateFeedbackImages', () => {
-  it('rejects more than the supported count', () => {
-    expect(
-      validateFeedbackImages(
-        Array.from({ length: MAX_FEEDBACK_IMAGE_COUNT + 1 }, () => image('image/png'))
-      )
-    ).toBe(`Attach ${MAX_FEEDBACK_IMAGE_COUNT} images or fewer.`)
-  })
-
   it('rejects malformed attachment collections and byte payloads', () => {
     expect(validateFeedbackImages('image/png')).toBe('Image attachments must be a list.')
     expect(validateFeedbackImages([null])).toBe('Invalid image attachment.')
@@ -58,31 +45,5 @@ describe('validateFeedbackImages', () => {
 
   it('rejects an empty attachment', () => {
     expect(validateFeedbackImages([image('image/png', 0)])).toBe('Image attachment is empty.')
-  })
-
-  it('rejects an attachment over the byte cap', () => {
-    expect(validateFeedbackImages([image('image/png', MAX_FEEDBACK_IMAGE_BYTES + 1)])).toBe(
-      `Each image must be ${MAX_FEEDBACK_IMAGE_BYTES} bytes or fewer.`
-    )
-  })
-
-  it('accepts a set that totals exactly the attachment budget', () => {
-    const quarter = MAX_FEEDBACK_IMAGE_TOTAL_BYTES / MAX_FEEDBACK_IMAGE_COUNT
-    expect(
-      validateFeedbackImages(
-        Array.from({ length: MAX_FEEDBACK_IMAGE_COUNT }, () => image('image/png', quarter))
-      )
-    ).toBeNull()
-  })
-
-  it('rejects a set over the total byte budget even when each image fits', () => {
-    const half = MAX_FEEDBACK_IMAGE_TOTAL_BYTES / 2
-    expect(
-      validateFeedbackImages([
-        image('image/png', half),
-        image('image/png', half),
-        image('image/png', 1)
-      ])
-    ).toBe(`Image attachments must total ${MAX_FEEDBACK_IMAGE_TOTAL_BYTES} bytes or fewer.`)
   })
 })

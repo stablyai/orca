@@ -7,7 +7,7 @@ import type {
   RuntimeTerminalDriverState
 } from '../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import type { RuntimeRpcResponse } from '../../shared/remote-runtime/rpc/runtime-rpc-envelope'
-import type { ClientHostedBrowserRowsEvent } from '../../shared/client-hosted-browser-rows'
+import type { ClientHostedBrowserRowsEvent } from '../../shared/browser/client-hosting/client-hosted-browser-rows'
 import { TERMINAL_FIT_RESTORE_DEADLINE_MS } from '../../shared/terminal/viewport/terminal-fit-restore-deadline'
 import { DESKTOP_RENDERER_RUNTIME_CLIENT_CAPABILITIES } from './desktop-renderer-runtime-capabilities'
 import { RpcDispatcher } from '../runtime/rpc/dispatcher'

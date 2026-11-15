@@ -1,5 +1,6 @@
 import type { DiscoveredSkill } from '../../../skills/discovery/skills'
 import { formatNativeChatFileReference } from './agent-image-paste'
+import { skillDirectoryName } from '../../native-chat-reported-skill'
 import type { NativeChatAgentProfile } from '../../native-chat-agent-profiles'
 import type {
   NativeChatSessionSkill,
@@ -169,10 +170,17 @@ export function nativeChatPickerScannedSkills(
   if (!profile) {
     return []
   }
-  const namePrefix = profile.skillNamePrefix
-  return namePrefix
-    ? skills.map((skill) => ({ ...skill, name: `${namePrefix}${skill.name}` }))
-    : skills
+  const namePrefix = profile.skillNamePrefix ?? ''
+  return skills.map((skill) => {
+    const name = `${namePrefix}${pluginSkillName(skill) ?? skill.name}`
+    return name === skill.name ? skill : { ...skill, name }
+  })
+}
+
+// Claude names a plugin skill by its folder, not its frontmatter, under the plugin's namespace.
+function pluginSkillName(skill: DiscoveredSkill): string | null {
+  const folder = skillDirectoryName(skill)
+  return skill.pluginName && folder ? `${skill.pluginName}:${folder}` : null
 }
 
 /** Replacing across an entire dismissed token starts a new occurrence; typing/deleting within it does not. */

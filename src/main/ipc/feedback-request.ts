@@ -3,7 +3,7 @@ import { appendFeedbackImagesToFormData } from './feedback-image-attachments'
 import type {
   FeedbackImageAttachment,
   FeedbackRequestFailure
-} from '../../shared/feedback-submit-contract'
+} from '../../shared/feedback/feedback-submit-contract'
 
 // Main-process HTTP avoids CORS preflights rejected by feedback when packaged renderers use file origins.
 export const FEEDBACK_API_URL = 'https://orca.dev/v1/feedback'

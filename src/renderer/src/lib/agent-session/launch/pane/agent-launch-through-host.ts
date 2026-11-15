@@ -8,7 +8,7 @@ import { rememberAgentLaunchPanePrompt } from '@/lib/agent-session/launch/pane/a
 import { awaitAgentLaunchPaneStart } from '@/lib/agent-session/launch/pane/agent-launch-pane-start'
 import { seedNativeChatAppliedSessionOptions } from '../../../../../../shared/native-chat/input/session-options/native-chat-session-option-cache'
 import type { TuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-agent'
-import type { LaunchSource } from '../../../../../../shared/telemetry-property-schemas'
+import type { LaunchSource } from '../../../../../../shared/telemetry/schemas/telemetry-property-schemas'
 import type { Tab } from '../../../../../../shared/tab-types'
 import type { SessionOptionValue } from '../../../../../../shared/native-chat/input/native-chat-session-options'
 

@@ -1,5 +1,5 @@
 import { existsSync, readFileSync } from 'node:fs'
-import { removeTreeSync } from '../../../../src/shared/windows-transient-lock-removal.ts'
+import { removeTreeSync } from '../../../../src/shared/file-write/windows-transient-lock-removal.ts'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import {

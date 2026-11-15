@@ -110,6 +110,8 @@ const STATIC_TITLE_COPY = {
   'editor.markdownPreview': () =>
     translate('keybindings.title.e25a3e5f9a', 'Show Markdown preview'),
   'editor.toggleWordWrap': () => translate('keybindings.title.2f207aa199', 'Toggle word wrap'),
+  'editor.toggleChangesView': () =>
+    translate('keybindings.title.editorToggleChangesView', 'Toggle changes view'),
   'editor.copyContext': () => translate('keybindings.title.258e7f75ec', 'Copy context'),
   'editor.previousChange': () => translate('keybindings.title.324e886c0f', 'Go to previous change'),
   'editor.nextChange': () => translate('keybindings.title.7055c70bdb', 'Go to next change'),
@@ -146,6 +148,8 @@ const STATIC_TITLE_COPY = {
   'sidebar.childWorkspaces.toggle': () =>
     translate('keybindings.title.8788e3be3a', 'Toggle child workspaces'),
   'terminal.clearPaneTitle': () => translate('keybindings.title.d286d1ab85', 'Clear pane title'),
+  'terminal.copySessionId': () =>
+    translate('keybindings.title.terminalCopySessionId', 'Copy Session ID'),
   'terminal.closePane': () => translate('keybindings.title.terminalClosePane', 'Close active pane'),
   'terminal.splitRight': () =>
     translate('keybindings.title.terminalSplitRight', 'Split terminal right'),

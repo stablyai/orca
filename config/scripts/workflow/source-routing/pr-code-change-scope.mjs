@@ -125,8 +125,8 @@ const CODEX_INDEX_HEAL_CONTRACT_PREFIXES = [
   'src/main/windows/windows-command-paths',
   'src/main/windows/windows-directory-acl',
   'src/main/filesystem/permission-errors',
-  'src/shared/node-cli-command-resolution',
-  'src/shared/windows-batch-spawn'
+  'src/shared/shell/command-resolution/node-cli-command-resolution',
+  'src/shared/shell/launch/windows-batch-spawn'
 ]
 
 const ORCAD_BROWSER_PREFIXES = [

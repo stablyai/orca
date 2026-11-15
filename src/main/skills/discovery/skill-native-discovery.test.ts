@@ -261,6 +261,11 @@ describe('skill discovery', () => {
       join(projectInstall, 'skills', 'ce-plan', 'SKILL.md'),
       '---\nname: ce-plan\ndescription: Create structured plans.\n---\n'
     )
+    await mkdir(join(projectInstall, '.claude-plugin'), { recursive: true })
+    await writeFile(
+      join(projectInstall, '.claude-plugin', 'plugin.json'),
+      JSON.stringify({ name: 'compound' })
+    )
     await writeFile(
       join(home, '.claude', 'plugins', 'installed_plugins.json'),
       JSON.stringify({
@@ -279,7 +284,9 @@ describe('skill discovery', () => {
 
     const result = await discoverSkills({ homeDir: home, cwd, repos: [] })
 
-    expect(result.skills.map((skill) => skill.name)).toContain('ce-plan')
+    expect(result.skills.find((skill) => skill.name === 'ce-plan')).toMatchObject({
+      pluginName: 'compound'
+    })
     expect(result.skills.map((skill) => skill.name)).not.toContain('old-plan')
     const pluginSource = result.sources.find(
       (source) => source.path === join(projectInstall, 'skills')

@@ -14,7 +14,7 @@ import {
   COMPAT_SERVER_TARGETS,
   ORCAD_TEMPLATE_TARGETS,
   pinnedNodeRuntimeAsset
-} from '../../../../src/shared/node-runtime-pin.ts'
+} from '../../../../src/shared/node-runtime/node-runtime-pin.ts'
 
 async function write(path, contents) {
   await mkdir(dirname(path), { recursive: true })

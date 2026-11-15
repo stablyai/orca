@@ -20575,7 +20575,8 @@
       "TerminalContextMenu": {
         "copySessionId": "Oturum Kimliğini Kopyala",
         "copySessionIdSuccess": "Oturum Kimliği kopyalandı",
-        "copySessionIdError": "Oturum kimliği kopyalanamadı"
+        "copySessionIdError": "Oturum kimliği kopyalanamadı",
+        "copySessionIdUnavailable": "Kopyalanacak oturum kimliği yok"
       },
       "hostFile": {
         "updateHostForOutsideFiles": "Çalışma alanları dışındaki dosyaları açmak için {{value0}} üzerindeki Orca'yı güncelleyin"
@@ -22618,6 +22619,7 @@
       "tabOpenQuickCommandsMenu": "Hızlı komutlar menüsünü aç/kapat",
       "editorFind": "Düzenleyicide bul",
       "editorReplace": "Düzenleyicide değiştir",
+      "editorToggleChangesView": "Değişiklikler görünümünü aç/kapat",
       "fileExplorerUndo": "Dosya işlemini geri al",
       "fileExplorerRedo": "Dosya işlemini yinele",
       "fileExplorerCopyPath": "Dosya yolunu kopyala",
@@ -22635,6 +22637,7 @@
       "chatFind": "Sohbette bul",
       "terminalToggleNativeChat": "Sohbet arayüzü ile terminal arasında geçiş yap",
       "terminalClosePane": "Etkin bölmeyi kapat",
+      "terminalCopySessionId": "Oturum Kimliğini Kopyala",
       "terminalSplitRight": "Terminali sağa böl",
       "terminalSplitDown": "Terminali aşağı böl",
       "terminalSwitchInputSource": "Giriş kaynağını / dilini değiştir (yerel)",

@@ -1,13 +1,13 @@
 import { readFile } from 'node:fs/promises'
 import { runProcess } from '@orca/process-host'
-import { loadLibprocAddon } from '../../shared/libproc-addon'
+import { loadLibprocAddon } from '../../shared/process-observation/darwin/libproc-addon'
 import {
   readFreshNativeTable,
   registerNativeRequest,
   isNativeReaderHealthy
-} from '../../shared/libproc-native-reads'
+} from '../../shared/process-observation/darwin/libproc-native-reads'
 import { monotonicNow, DEADLINE_PASSED } from '../../shared/deadline-settle-notifier'
-import { runPsInProcess } from '../../shared/libproc-process-table'
+import { runPsInProcess } from '../../shared/process-observation/darwin/libproc-process-table'
 import {
   parseProcessTable,
   type ProcessTableRow
