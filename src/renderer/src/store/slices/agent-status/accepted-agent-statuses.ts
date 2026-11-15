@@ -1,4 +1,4 @@
-import { structuralValuesEqualIgnoringUndefined as equal } from '../../../../../shared/structural-value-equality'
+import { structuralValuesEqualIgnoringUndefined as equal } from '../../../../../shared/collections/structural-value-equality'
 import { isAiVaultTitleAgent } from '../../../../../shared/ai-vault/contracts/ai-vault-session-title'
 import { AgentStatusProjection } from './agent-status-projection'
 import type { AgentStatusChange } from './agent-status-contract'

@@ -3,7 +3,7 @@ import { parseAgentStatusPaneIdentity } from '../../../../../shared/agent-status
 import { compareWorktreeAgentRows } from '@/components/sidebar/workspace-card/activity/worktree-agent-row-order'
 import { AGENT_STATUS_STALE_AFTER_MS } from '../../../../../shared/agent-status/contracts/agent-status-freshness'
 import { agentTypeToIconAgent } from '../../../../../shared/agent-status/presentation/agent-type-icon-agent'
-import { structuralValuesEqualIgnoringUndefined as equal } from '../../../../../shared/structural-value-equality'
+import { structuralValuesEqualIgnoringUndefined as equal } from '../../../../../shared/collections/structural-value-equality'
 import { parsePaneKey } from '../../../../../shared/workspace-layout/stable-pane-id'
 import { EMPTY_KEYS } from './agent-status-projection-types'
 import type { AgentStatusProjectionState } from './agent-status-projection-state'
