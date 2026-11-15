@@ -102,7 +102,21 @@ function draftedCandidateKeys(
   return drafted
 }
 
-/** Comparison keys of metadata rows that still name a workspace (an archived checkout, another host). */
+// Session cleanup also keeps a workspace hidden with isArchived and no archived checkout.
+function isArchivedMetadataRow(
+  state: PersistedState,
+  worktreeId: string,
+  aliases: readonly (readonly [alias: string, identityKeys: string[]])[]
+): boolean {
+  return (
+    state.worktreeMeta[worktreeId]?.isArchived === true ||
+    aliases.some(([, identityKeys]) =>
+      identityKeys.some((key) => state.worktreeMetaByIdentity?.[key]?.isArchived === true)
+    )
+  )
+}
+
+/** Comparison keys of metadata rows that still name a workspace (archived, another host). */
 function protectedMetadataComparisonKeys(
   state: PersistedState,
   repoId: string,
@@ -123,7 +137,11 @@ function protectedMetadataComparisonKeys(
   for (const worktreeId of ids) {
     const aliases = aliasesByWorktreeId.get(worktreeId) ?? []
     const comparisonKey = worktreeRetentionIdComparisonKey(worktreeId, platform)
-    if (comparisonKey && !isLocallyRemovableWorktreeMetadataRow(state, worktreeId, aliases)) {
+    if (
+      comparisonKey &&
+      (isArchivedMetadataRow(state, worktreeId, aliases) ||
+        !isLocallyRemovableWorktreeMetadataRow(state, worktreeId, aliases))
+    ) {
       keys.add(comparisonKey)
     }
   }

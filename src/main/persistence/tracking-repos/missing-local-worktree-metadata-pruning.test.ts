@@ -332,6 +332,18 @@ describe('pruneMissingLocalWorktreeSessionsForRepo', () => {
     expect(state.workspaceSession.unifiedTabs).toEqual({ [savedKey]: [] })
   })
 
+  it('keeps a workspace marked archived without an archived checkout', () => {
+    const state = makeState()
+    const archivedId = `${REPO_ID}::/workspace/hidden`
+    state.worktreeMeta[archivedId] = { ...makeMeta(archivedId), isArchived: true }
+    state.workspaceSession = { ...getDefaultWorkspaceSession(), unifiedTabs: { [archivedId]: [] } }
+
+    expect(
+      pruneMissingLocalWorktreeSessionsForRepo(state, capture(state), [archivedId], 'linux')
+    ).toEqual([])
+    expect(state.workspaceSession.unifiedTabs).toEqual({ [archivedId]: [] })
+  })
+
   // A reference removal never deletes must not count as pruned, or every scan re-arms cleanup.
   it('reports nothing and keeps the session when only a kept close intent names the worktree', () => {
     const state = makeState()
