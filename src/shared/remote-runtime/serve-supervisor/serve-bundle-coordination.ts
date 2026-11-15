@@ -1,6 +1,7 @@
 /** Keep bundle-keyed coordination outside the macOS app being replaced so desktop installs can park supervised serve processes. */
 import { createHash } from 'node:crypto'
 import { dirname, join } from 'node:path'
+import { ZOTZ_USER_DATA_DIR_NAME } from '../../zotz/zotz-app-identity'
 
 /** launchd label prefix `orca serve service install` writes; only those supervisors register. */
 export const SERVE_LAUNCHD_LABEL_PREFIX = 'com.stablyai.orca.serve'
@@ -46,7 +47,7 @@ export function macAppBundleOf(executable: string): string | null {
 
 /** Electron's default macOS userData base, shared by every profile of one user. */
 export function macCoordinationRoot(homeDir: string): string {
-  return join(homeDir, 'Library', 'Application Support', 'orca')
+  return join(homeDir, 'Library', 'Application Support', ZOTZ_USER_DATA_DIR_NAME)
 }
 
 export function bundleCoordinationDir(realBundlePath: string, macUserDataRoot: string): string {

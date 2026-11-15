@@ -44,7 +44,7 @@ it('names the Linux dev launcher orca-dev in help', () => {
   expect(renderHelp([])).toContain('Usage: orca-dev <command> [options]')
 })
 
-it('keeps orca for the Orca terminal shim and Node CLIs on SSH hosts', () => {
+it('keeps the terminal shim name and defaults Node CLIs on SSH hosts to zotz', () => {
   Object.defineProperty(process, 'platform', { value: 'linux' })
   vi.stubEnv('ELECTRON_RUN_AS_NODE', '1')
   vi.stubEnv('ORCA_CLI_COMMAND', '/home/me/.config/Orca/linux-orca-cli-shim/orca')
@@ -54,7 +54,7 @@ it('keeps orca for the Orca terminal shim and Node CLIs on SSH hosts', () => {
   vi.stubEnv('ORCA_CLI_COMMAND', '')
   vi.stubEnv('ORCA_DEV_CLI_INVOCATION', '')
   vi.stubEnv('ORCA_USER_DATA_PATH', '/home/me/.local/share/orca-server')
-  expect(renderHelp([])).toContain('Usage: orca <command> [options]')
+  expect(renderHelp([])).toContain('Usage: zotz <command> [options]')
 })
 
 function invalidCommandError(commandPath: string[]): RuntimeClientError {
@@ -87,18 +87,18 @@ it('names orca-ide in Linux typo suggestions and missing-subcommand hints', () =
   expect(invalidCommandError(['orca']).message).toBe('Unknown command: orca')
 })
 
-it('keeps orca in macOS help, suggestions and hints', () => {
+it('names zotz in macOS help, suggestions and hints', () => {
   Object.defineProperty(process, 'platform', { value: 'darwin' })
   vi.stubEnv('ELECTRON_RUN_AS_NODE', '1')
   vi.stubEnv('ORCA_CLI_COMMAND', 'orca-ide')
 
-  expect(renderHelp([])).toContain('Usage: orca <command> [options]')
+  expect(renderHelp([])).toContain('Usage: zotz <command> [options]')
   expect(renderHelp(['wroktree'])).toMatch(
-    /^Unknown command: wroktree\nNext step: Did you mean: orca worktree\n/
+    /^Unknown command: wroktree\nNext step: Did you mean: zotz worktree\n/
   )
   const missing = invalidCommandError(['terminal'])
-  expect(missing.message).toBe('Missing subcommand for: orca terminal')
+  expect(missing.message).toBe('Missing subcommand for: zotz terminal')
   expect(missing.data).toMatchObject({
-    nextSteps: ['Run `orca terminal --help` to list its commands.']
+    nextSteps: ['Run `zotz terminal --help` to list its commands.']
   })
 })

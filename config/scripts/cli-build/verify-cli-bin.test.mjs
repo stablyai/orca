@@ -20,7 +20,7 @@ function makeProjectWithCli(content) {
   mkdirSync(path.dirname(cliPath), { recursive: true })
   writeFileSync(
     path.join(projectDir, 'package.json'),
-    JSON.stringify({ bin: { orca: './out/cli/index.js' }, type: 'module' }),
+    JSON.stringify({ bin: { zotz: './out/cli/index.js' }, type: 'module' }),
     'utf8'
   )
   writeFileSync(cliPath, content, 'utf8')

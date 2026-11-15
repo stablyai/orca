@@ -123,7 +123,8 @@ const devChannelRepo = isHourlyChannel
     : isAdhocChannel
       ? 'orca-adhoc'
       : null
-const appId = 'com.stablyai.orca'
+// Keep in sync with ZOTZ_APP_ID in src/shared/zotz/zotz-app-identity.ts.
+const appId = 'dev.hugorodriguez.zotz'
 const featureWallResources = {
   from: 'resources/onboarding/feature-wall',
   to: 'onboarding/feature-wall'
@@ -251,8 +252,8 @@ const ORCA_MAC_TEAM_ID = '6CX3WHS9HZ'
 /** @type {import('electron-builder').Configuration} */
 module.exports = {
   appId,
-  productName: 'Orca',
-  protocols: [{ name: 'Orca', schemes: ['orca'] }],
+  productName: 'Zotz',
+  protocols: [{ name: 'Zotz', schemes: ['zotz'] }],
   toolsets: { appimage: '1.0.3' },
   ...(devChannelBuildVersion
     ? { extraMetadata: { version: devChannelBuildVersion } }
@@ -559,13 +560,11 @@ module.exports = {
     }
   },
   win: {
-    executableName: 'Orca',
-    // SignPath signs Windows installers after packaging, so set release publisherName explicitly.
-    // Unsigned dev channels omit it or updater signature checks reject dev updates and return to stable.
+    executableName: 'Zotz',
+    // Zotz ships unsigned: no publisherName, so updater signature checks are skipped.
     // Sign hook signs nothing: it relays transient NSIS uninstaller files to CI SignPath; unset relay env leaves local/dev builds inert.
     signtoolOptions: {
-      sign: signWindowsUninstallerViaSignPath,
-      ...(isWinDevChannel ? {} : { publisherName: 'SignPath Foundation' })
+      sign: signWindowsUninstallerViaSignPath
     },
     ...(isWinDevChannel ? { verifyUpdateCodeSignature: false } : {}),
     extraResources: [
@@ -701,15 +700,14 @@ module.exports = {
     // shared-mime-info already maps md/markdown: advertise handler only, leaving mimeapps.list defaults intact.
     // Omit mdx because Ubuntu 24.04 maps it to application/x-genesis-32x-rom; claiming it would need a glob override.
     mimeTypes: ['text/markdown', 'text/csv', 'text/tab-separated-values'],
-    // Avoid GNOME Orca’s orca package and /usr/bin/orca names.
-    executableName: 'orca-ide',
+    executableName: 'zotz',
     // Use icns to generate hicolor sizes; some Linux docks ignore a lone 1024px PNG.
     icon: 'resources/build/icon.icns',
     desktop: {
       entry: {
-        // Why: Electron reports WM_CLASS=orca for the visible Linux window;
-        // GNOME docks need an exact match to group it with orca-ide.desktop.
-        StartupWMClass: 'orca'
+        // Why: Electron reports WM_CLASS=<package.json name> for the visible Linux window;
+        // GNOME docks need an exact match to group it with the .desktop entry.
+        StartupWMClass: 'zotz'
       }
     },
     extraResources: [
@@ -786,8 +784,8 @@ module.exports = {
   npmRebuild: true,
   publish: {
     provider: 'github',
-    owner: 'stablyai',
-    repo: devChannelRepo ?? 'orca',
+    owner: 'HugoRodriguezDEV',
+    repo: devChannelRepo ?? 'zotz',
     // Keep main-repo releases draft until release-cut verifies all assets; early --publish always would expose missing Windows installers.
     releaseType: devChannelRepo ? 'prerelease' : 'draft'
   }

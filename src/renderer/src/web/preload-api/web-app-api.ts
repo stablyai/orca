@@ -17,7 +17,7 @@ export function createWebAppApi(): Partial<PreloadApi> {
         Promise.reject(new Error('Administrator restart requires the Windows desktop app.')),
       getIdentity: () =>
         Promise.resolve({
-          name: 'Orca',
+          name: 'Zotz',
           isDev: false,
           devLabel: null,
           devBranch: null,

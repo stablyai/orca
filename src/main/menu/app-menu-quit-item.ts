@@ -36,7 +36,7 @@ export function quitAndStopAllSessionsMenuText(): Pick<
     label: translateMain('menu.quitAndStopAllSessions', 'Quit Completely...'),
     toolTip: translateMain(
       'menu.quitAndStopAllSessionsTooltip',
-      'Also stops every terminal session, including running agents. Plain Quit keeps them running so Orca reattaches on next launch.'
+      'Also stops every terminal session, including running agents. Plain Quit keeps them running so Zotz reattaches on next launch.'
     )
   }
 }

@@ -1,6 +1,7 @@
 import { shell } from 'electron'
+import { ZOTZ_APP_ID } from '../../shared/zotz/zotz-app-identity'
 
-const MACOS_PACKAGED_BUNDLE_ID = 'com.stablyai.orca'
+const MACOS_PACKAGED_BUNDLE_ID = ZOTZ_APP_ID
 const MACOS_NOTIFICATION_SETTINGS_URL =
   'x-apple.systempreferences:com.apple.Notifications-Settings.extension'
 

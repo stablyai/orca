@@ -12,12 +12,12 @@ import {
   type PressAndHoldHost
 } from './macos-press-and-hold-default'
 
-// Verify real defaults distinguishes absence from false using disposable Orca-prefixed domains.
+// Verify real defaults distinguishes absence from false using disposable app-prefixed domains.
 
 const domains: string[] = []
 
 function throwawayDomain(): string {
-  const domain = `com.stablyai.orca.defaults-domain-test.${randomUUID()}`
+  const domain = `dev.hugorodriguez.zotz.defaults-domain-test.${randomUUID()}`
   domains.push(domain)
   return domain
 }
