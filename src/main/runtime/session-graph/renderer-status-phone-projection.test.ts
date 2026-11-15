@@ -78,7 +78,7 @@ it('publishes only the affected phone frame with increasing versions and exclude
     }
   }
   try {
-    publish(1, 'Claude')
+    await publish(1, 'Claude')
     await vi.advanceTimersByTimeAsync(100)
     expect(frames).toEqual([])
     expect(
@@ -105,15 +105,15 @@ it('publishes only the affected phone frame with increasing versions and exclude
     })
     expect(frames[0].tabs[0]).not.toHaveProperty('statusSuppressionTitle')
     const statusVersion = frames[0].snapshotVersion
-    publish(2, 'claude agents')
+    await publish(2, 'claude agents')
     await vi.advanceTimersByTimeAsync(100)
     expect(frames.at(-1)!.tabs[0]).not.toHaveProperty('agentStatus')
     expect(frames.at(-1)!.snapshotVersion).toBeGreaterThan(statusVersion)
-    publish(3, 'Claude')
+    await publish(3, 'Claude')
     await vi.advanceTimersByTimeAsync(100)
     expect(frames.at(-1)!.tabs[0]).toMatchObject({ agentStatus: { prompt: 'Approve the change' } })
     frames.length = 0
-    publish(1, 'Claude', 'replacement')
+    await publish(1, 'Claude', 'replacement')
     await vi.advanceTimersByTimeAsync(100)
     expect(frames).toEqual([])
     runtime.syncRendererAgentStatus(1, {
@@ -190,7 +190,7 @@ it.each([true, false])(
       'mobile'
     )
     try {
-      runtime.syncWindowGraph(1, {
+      await runtime.syncWindowGraph(1, {
         rendererGeneration: 'renderer',
         tabs: [],
         leaves: [],
