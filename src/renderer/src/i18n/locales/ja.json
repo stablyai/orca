@@ -19236,7 +19236,7 @@
         "listLabel": "キュー内のメッセージ",
         "steer": "今すぐ送信",
         "send": "送信",
-        "steerHint": "モデルを中断せずに送信します",
+        "steerHint": "Agent の作業中に今すぐ送信します",
         "sendHint": "このメッセージを今すぐ送信します",
         "delete": "削除",
         "moreActions": "その他の操作",

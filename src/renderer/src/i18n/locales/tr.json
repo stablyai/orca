@@ -19957,7 +19957,7 @@
       "queuedMessages": {
         "steer": "Yönlendir",
         "send": "Gönder",
-        "steerHint": "Modeli kesintiye uğratmadan gönder",
+        "steerHint": "Ajan çalışmaya devam ederken şimdi gönder",
         "sendHint": "Bu mesajı şimdi gönder",
         "delete": "Sil",
         "moreActions": "Diğer işlemler",

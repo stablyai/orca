@@ -21306,7 +21306,7 @@
       "queuedMessages": {
         "steer": "Steer",
         "send": "Send",
-        "steerHint": "Submit without interrupting the model",
+        "steerHint": "Send now, while the agent keeps working",
         "sendHint": "Send this message now",
         "delete": "Delete",
         "moreActions": "More actions",
