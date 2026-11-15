@@ -92,7 +92,6 @@ export function useTabDragSplit({
   sensors: ReturnType<typeof useSensors>
   setDragRootNode: (node: HTMLDivElement | null) => void
 } {
-  const reorderUnifiedTabs = useAppStore((state) => state.reorderUnifiedTabs)
   const dropUnifiedTab = useAppStore((state) => state.dropUnifiedTab)
   const [activeDrag, setActiveDrag] = useState<TabDragItemData | null>(null)
   const preDragActivationSnapshotRef = useRef<TabDragActivationSnapshot | null>(null)
@@ -225,11 +224,10 @@ export function useTabDragSplit({
         worktreeId,
         dragGeometryRef,
         dropUnifiedTab,
-        reorderUnifiedTabs,
         finishDrag
       })
     },
-    [dragGeometryRef, dropUnifiedTab, finishDrag, reorderUnifiedTabs, worktreeId]
+    [dragGeometryRef, dropUnifiedTab, finishDrag, worktreeId]
   )
 
   // Escape/aborted drags arrive here without onDragEnd; clear previews and restore the snapshot.

@@ -289,4 +289,17 @@ export function handleTerminalWorkspaceKeyDown(
       floatingPanelOwned: floatingWorkspaceFocused
     })
   }
+  const moveTabDirection = matchShortcut('tab.moveRight')
+    ? 1
+    : matchShortcut('tab.moveLeft')
+      ? -1
+      : null
+  if (moveTabDirection !== null && claimTabSwitch()) {
+    notifyTerminalCapture(moveTabDirection === 1 ? 'tab.moveRight' : 'tab.moveLeft')
+    dispatchWorkspaceTabCommand({
+      type: 'move',
+      direction: moveTabDirection,
+      floatingPanelOwned: floatingWorkspaceFocused
+    })
+  }
 }

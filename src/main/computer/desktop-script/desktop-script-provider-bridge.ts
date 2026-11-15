@@ -223,7 +223,9 @@ function runBridgeProcess(
 export function mapBridgeError(message: string): RuntimeClientError {
   const text = message.trim() || 'desktop provider failed'
   // Why: refusals that name their code must keep it even when the explanation matches a looser rule below.
-  const coded = /^(background_unavailable|element_not_enabled):/.exec(text)?.[1]
+  const coded = /^(background_unavailable|element_not_enabled|unsupported_capability):/.exec(
+    text
+  )?.[1]
   if (coded) {
     return new RuntimeClientError(coded, text)
   }
