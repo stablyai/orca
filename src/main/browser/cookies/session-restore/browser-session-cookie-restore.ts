@@ -41,6 +41,8 @@ type SessionCookieTracker = {
   saved: Map<string, CdpCookie[]>
   /** The file may hold cookies `saved` lacks (it could not be read), so the next save must rewrite it. */
   savedStale: boolean
+  /** Set until the file has been read: a save before then would compare against nothing. */
+  reading: boolean
   /** Scopes whose cookies changed since `saved` was read. */
   changedScopes: Map<string, ScopeChange>
   /** Set while a save reads: scopes that changed meanwhile, which the read may have missed. */
@@ -76,10 +78,15 @@ export async function restoreBrowserSessionCookies(
       const target = session.fromPartition(profile.partition)
       // Why before the read: a restored tab's cookie change during a slow read must still be seen.
       const tracker = track(filePath, target)
+      tracker.reading = true
       const snapshot = await readSessionCookieSnapshot(filePath)
       const saved = snapshot ?? []
       tracker.saved = groupByScope(saved, cdpCookieScopeKey)
       tracker.savedStale = snapshot === null
+      tracker.reading = false
+      if (tracker.changedScopes.size > 0) {
+        scheduleSave(tracker)
+      }
       return { profile, target, saved, tracker }
     })
   )
@@ -143,6 +150,7 @@ function track(filePath: string, target: Session): SessionCookieTracker {
     filePath,
     saved: new Map(),
     savedStale: false,
+    reading: false,
     changedScopes: new Map(),
     changedDuringSave: null,
     timer: null,
@@ -180,7 +188,7 @@ function track(filePath: string, target: Session): SessionCookieTracker {
 }
 
 function scheduleSave(tracker: SessionCookieTracker): void {
-  if (!tracker.timer && !tracker.changedDuringSave) {
+  if (!tracker.timer && !tracker.changedDuringSave && !tracker.reading) {
     tracker.timer = setTimeout(() => void saveSessionCookies(tracker), SAVE_DELAY_MS)
   }
 }
@@ -264,7 +272,8 @@ export async function flushBrowserSessionCookiesOnQuit(): Promise<void> {
   await Promise.all(
     [...trackers.values()].map(async (tracker) => {
       cancelPendingSave(tracker)
-      if (tracker.changedScopes.size === 0) {
+      // A file still being read is left as it is, not replaced with what this launch saw.
+      if (tracker.changedScopes.size === 0 || tracker.reading) {
         return
       }
       try {
