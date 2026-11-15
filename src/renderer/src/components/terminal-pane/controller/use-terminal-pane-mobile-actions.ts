@@ -15,12 +15,11 @@ export function useTerminalPaneMobileActions(controller: TerminalPaneContextCont
     tabId,
     worktreeId
   } = controller
-  const {
-    getMobileOwnedTerminalPtyIds,
-    scheduleRestoredTerminalRefit,
-    restorePaneTerminalFit,
-    restoreAllTerminalFits
-  } = useMobileTerminalFitActions({ paneTransportsRef, refreshMobileOverlays, settingsRef })
+  const { restorePaneTerminalFit, restoreAllTerminalFits } = useMobileTerminalFitActions({
+    paneTransportsRef,
+    refreshMobileOverlays,
+    settingsRef
+  })
   const {
     terminalShouldHandleMiddleClick,
     handlePrimarySelectionMiddleMouseDown,
@@ -43,8 +42,6 @@ export function useTerminalPaneMobileActions(controller: TerminalPaneContextCont
     })
 
   return {
-    getMobileOwnedTerminalPtyIds,
-    scheduleRestoredTerminalRefit,
     restorePaneTerminalFit,
     restoreAllTerminalFits,
     terminalShouldHandleMiddleClick,
