@@ -40,6 +40,7 @@ afterEach(() => {
 function rootOnly(platform: NodeJS.Platform) {
   const child = Object.assign(createFakePipedChild(), {
     pid: 4242,
+    writerPid: 4242,
     stdin: new PassThrough(),
     stdout: new PassThrough(),
     stderr: new PassThrough(),

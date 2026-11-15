@@ -16,6 +16,10 @@ export class DirectProviderStop {
     private readonly forceReap: () => boolean
   ) {}
 
+  get maxStopMs(): number {
+    return this.spec.stdinEndGraceMs + this.spec.sigtermGraceMs + PROVIDER_GROUP_REAP_TIMEOUT_MS
+  }
+
   get reaping(): boolean {
     return this.phase === 'reap'
   }

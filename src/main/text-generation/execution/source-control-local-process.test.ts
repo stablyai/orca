@@ -1,6 +1,9 @@
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { EventEmitter } from 'node:events'
+import { PassThrough } from 'node:stream'
+import { killSourceControlAgentProcess } from './source-control-agent-termination'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { cancelGenerateCommitMessageLocal } from '../commit-message-text-generation'
@@ -106,3 +109,21 @@ require('node:fs').writeFileSync(${JSON.stringify(pidFile)}, String(process.pid)
     })
   }
 )
+
+it('cancels a supervised generation before its public CLI PID is available', async () => {
+  const child = Object.assign(new EventEmitter(), {
+    pid: undefined,
+    supervised: true,
+    stdin: new PassThrough(),
+    stdout: new PassThrough(),
+    stderr: new PassThrough(),
+    exitCode: null,
+    signalCode: null,
+    kill: vi.fn((_signal?: NodeJS.Signals | number): boolean => {
+      child.emit('exit', null, null)
+      return false
+    })
+  })
+  await killSourceControlAgentProcess(child)
+  expect(child.kill).toHaveBeenCalledWith('SIGTERM')
+})

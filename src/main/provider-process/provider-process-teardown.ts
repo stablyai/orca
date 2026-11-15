@@ -9,6 +9,7 @@ import {
 } from '../pty/process-retirement/pty-descendant-exit-verification'
 import { terminateWindowsProcessTree } from '../pty/process-retirement/windows-process-tree-kill'
 import { recordSelfInitiatedTreeKill } from '../crash-reporting/process-exits/self-initiated-tree-kill-log'
+import { sendDescendantSignal } from '../pty/process-retirement/pty-descendant-termination'
 import { hasErrorCode } from '../daemon/endpoint/identity/daemon-process-inspection'
 
 /** What the teardown observed of the descendants; null when it signalled but observed nothing. */
@@ -21,7 +22,7 @@ const activeTeardowns = new WeakMap<object, Promise<ProviderProcessTeardownVerdi
 
 type TeardownChild = Pick<
   ProviderChild,
-  'pid' | 'kill' | 'leaderExited' | 'writerPid' | 'groupVerdict'
+  'pid' | 'kill' | 'leaderExited' | 'writerPid' | 'groupVerdict' | 'numericIdentityRetired'
 >
 
 export type ProviderProcessTeardownDeps = {
@@ -89,10 +90,16 @@ async function terminatePosixTree(
   rootPid: number,
   deps: ProviderProcessTeardownDeps
 ): Promise<ProviderProcessTeardownVerdict> {
-  child.kill('SIGSTOP')
+  const retired = (): boolean =>
+    child.numericIdentityRetired === true ||
+    child.leaderExited === true ||
+    child.groupVerdict === 'exited'
+  if (!child.kill('SIGSTOP')) {
+    return child.kill('SIGKILL') ? { tree: null, killDelivered: true } : null
+  }
   const capture = deps.captureDescendants ?? captureDescendantSnapshot
   const snapshot = await capture(rootPid).catch(() => null)
-  if (child.leaderExited || child.groupVerdict === 'exited') {
+  if (retired()) {
     return null
   }
   if (!snapshot) {
@@ -105,14 +112,23 @@ async function terminatePosixTree(
   }
   const terminate =
     deps.terminateDescendants ??
-    ((captured: DescendantSnapshot) => terminateDescendantSnapshotWithVerdict(captured))
+    ((captured: DescendantSnapshot) =>
+      terminateDescendantSnapshotWithVerdict(captured, {
+        sendSignal: (pid, signal) => {
+          if (retired()) {
+            throw new Error('Provider process identity retired during teardown')
+          }
+          return sendDescendantSignal(pid, signal)
+        }
+      }))
   let verdict: DescendantTreeVerdict = 'unverifiable'
   let killDelivered = false
   try {
     verdict = await terminate(snapshot)
   } catch {
     // Descendant observation cannot undo a delivered writer kill.
-  } finally {
+  }
+  if (!retired()) {
     const signal = deps.signalProcess ?? process.kill
     const signalGroup =
       deps.signalProcessGroup ??
@@ -184,6 +200,10 @@ async function terminateOnce(
   // Group absence retires the numeric writer even if its actual wait status was lost.
   if (child.groupVerdict === 'exited') {
     return null
+  }
+  if (child.numericIdentityRetired) {
+    const delivered = child.kill('SIGKILL')
+    return delivered ? { tree: null, killDelivered: true } : null
   }
   if (child.leaderExited) {
     const delivered = child.kill('SIGKILL')

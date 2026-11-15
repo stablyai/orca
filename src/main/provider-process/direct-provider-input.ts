@@ -10,13 +10,21 @@ export function pipeDirectProviderInput(
   const onError = (error: Error): void => {
     input.destroy(error)
   }
+  const onClose = (): void => {
+    input.destroy()
+  }
   input.on('error', () => {})
+  raw.stdin?.once('close', onClose)
+  if (raw.stdin?.destroyed) {
+    onClose()
+  }
   raw.stdin?.on('error', onError)
   raw.stdin?.once('finish', onFinish)
   if (raw.stdin) {
     input.pipe(raw.stdin)
   }
   return () => {
+    raw.stdin?.off('close', onClose)
     raw.stdin?.off('finish', onFinish)
     raw.stdin?.off('error', onError)
     raw.stdin?.on('error', () => {})

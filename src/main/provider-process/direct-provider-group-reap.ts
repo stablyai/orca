@@ -14,7 +14,6 @@ export function reapDirectProviderGroup(
   pid: () => number | undefined,
   ownership: () => Promise<Awaited<ReturnType<typeof publishProviderOwnership>>> | undefined,
   setVerdict: (verdict: 'exited' | 'unverifiable') => void,
-  onFinished: () => void,
   completion?: ProviderControlCompletion,
   canceled?: AbortSignal
 ): Promise<void> {
@@ -30,18 +29,14 @@ export function reapDirectProviderGroup(
     if (proof.signal.aborted) {
       return
     }
-    if (completion === 'group-unverifiable') {
-      setVerdict('unverifiable')
-      return
-    }
-    const registered = await ownership()
     if (completion === 'group-absent') {
       // The native frame plus EOF proves the group was absent and the session watcher exited.
       setVerdict('exited')
-      await registered?.removeAfterNativeExit()
+      await (await ownership())?.removeAfterNativeExit()
       return
     }
-    if (!completion && !delivered && registered) {
+    const registered = await ownership()
+    if (!delivered && registered) {
       await sweepOrphanedProviderGroup(registered.identity, { signal: proof.signal })
     }
     if (proof.signal.aborted) {
@@ -49,19 +44,23 @@ export function reapDirectProviderGroup(
     }
     const groupPid = pid()
     const remaining = Math.max(0, deadline - performance.now())
-    const absent = registered
-      ? await waitForProviderOwnershipReap(registered.identity, remaining, proof.signal)
-      : !groupPid
-    if (!registered && !completion && groupPid) {
-      // Before registration only the native completion can also prove the watcher exited.
-      await waitForProviderGroupReap(groupPid, remaining, proof.signal)
-    }
+    const absent = groupPid
+      ? await waitForProviderGroupReap(groupPid, remaining, proof.signal)
+      : false
     if (proof.signal.aborted) {
       return
     }
     setVerdict(absent ? 'exited' : 'unverifiable')
-    if (absent) {
-      await registered?.remove()
+    if (
+      absent &&
+      registered &&
+      (await waitForProviderOwnershipReap(
+        registered.identity,
+        Math.max(0, deadline - performance.now()),
+        proof.signal
+      ))
+    ) {
+      await registered.remove()
     }
   }
   return Promise.race([
@@ -81,9 +80,6 @@ export function reapDirectProviderGroup(
     .finally(() => {
       clearTimeout(timer)
       canceled?.removeEventListener('abort', abort)
-      if (!canceled?.aborted) {
-        onFinished()
-      }
     })
 }
 
@@ -136,4 +132,14 @@ export function isProviderReapSignal(signal: NodeJS.Signals | number): boolean {
     signal === 'SIGKILL' ||
     signal === constants.signals.SIGKILL
   )
+}
+
+export async function joinCurrentProviderReap(
+  current: () => Promise<void> | undefined
+): Promise<void> {
+  let attempt: Promise<void> | undefined
+  do {
+    attempt = current()
+    await attempt
+  } while (attempt !== current())
 }

@@ -2,10 +2,10 @@ import type { ChildProcess } from 'node:child_process'
 import { EventEmitter } from 'node:events'
 import { Duplex, PassThrough, Readable, Writable } from 'node:stream'
 import { constants } from 'node:os'
-import type { ProviderChild } from './provider-child'
+import { withTimeout } from '../../shared/promise-timeout-fallback'
+import { notifyProviderChild, type ProviderChild } from './provider-child'
 import type { ProviderSpawnSpec } from './provider-process-supervisor'
 import { publishProviderOwnership, providerOwnershipDirectory } from './provider-ownership-journal'
-import { notifyRuntimeListeners } from '../runtime/events/runtime-listener-delivery'
 import { readBootstrapStatus, withProviderBootstrapDeadline } from './provider-bootstrap-status'
 import { observeProviderLeaderOutcome, type ProviderLeaderOutcome } from './provider-leader-outcome'
 import {
@@ -17,6 +17,7 @@ import { drainDirectProviderOutput, pipeDirectProviderOutput } from './direct-pr
 import { pipeDirectProviderInput } from './direct-provider-input'
 import { providerExecFailure, reportProviderLaunchFailure } from './provider-launch-failure'
 import {
+  joinCurrentProviderReap,
   isProviderReapSignal,
   isProviderTermSignal,
   reapDirectProviderGroup,
@@ -26,7 +27,6 @@ import {
 
 type Ownership = Awaited<ReturnType<typeof publishProviderOwnership>>
 
-/** Holds the actual CLI streams/outcome while group cleanup and drain settle independently. */
 export class DirectProviderChild extends EventEmitter implements ProviderChild {
   readonly ready: Promise<void>
   readonly spawnAbsenceKnown = true
@@ -54,8 +54,7 @@ export class DirectProviderChild extends EventEmitter implements ProviderChild {
   private reapTask?: Promise<void>
   private reapAbort?: AbortController
   private nativeCompletion?: ProviderControlCompletion
-  private readonly reaped: Promise<void>
-  private finishReap: () => void = () => {}
+  private readonly watcherEnded: Promise<void>
 
   constructor(
     private readonly raw: ChildProcess,
@@ -63,8 +62,9 @@ export class DirectProviderChild extends EventEmitter implements ProviderChild {
   ) {
     super()
     this.stop = new DirectProviderStop(spec, this.send.bind(this), () => this.forceReap())
-    this.reaped = new Promise((resolve) => {
-      this.finishReap = resolve
+    let watcherEnded = (): void => {}
+    this.watcherEnded = new Promise((resolve) => {
+      watcherEnded = resolve
     })
     const control = raw.stdio?.at(3)
     const gate = raw.stdio?.at(4)
@@ -77,7 +77,10 @@ export class DirectProviderChild extends EventEmitter implements ProviderChild {
       readProviderControlCompletion(this.control, (completion) => {
         this.connected = false
         this.forceReap(completion)
+        watcherEnded()
       })
+    } else {
+      watcherEnded()
     }
     const gateError = (): boolean => this.cancelLaunch()
     this.gate?.on('error', gateError)
@@ -103,7 +106,6 @@ export class DirectProviderChild extends EventEmitter implements ProviderChild {
       }
       void this.settle()
     })
-    // Startup errors must be observable after callers have attached listeners.
     const bootstrap = status instanceof Readable ? readBootstrapStatus(status) : null
     this.ready = Promise.resolve()
       .then(() => withProviderBootstrapDeadline(() => this.start(bootstrap)))
@@ -115,7 +117,6 @@ export class DirectProviderChild extends EventEmitter implements ProviderChild {
     void this.ready.catch(() => {})
   }
 
-  /** Names only the CLI, once it runs; the native parent is never a provider identity. */
   get pid(): number | undefined {
     return this.launchedPid
   }
@@ -124,6 +125,10 @@ export class DirectProviderChild extends EventEmitter implements ProviderChild {
       this.raw.pid !== undefined &&
       (this.outcome != null || (this.writerPid !== undefined && this.groupVerdict === 'exited'))
     )
+  }
+
+  get numericIdentityRetired(): boolean {
+    return this.settled || this.outcome !== undefined || this.groupVerdict === 'exited'
   }
 
   private async start(bootstrap: ReturnType<typeof readBootstrapStatus> | null): Promise<void> {
@@ -138,7 +143,7 @@ export class DirectProviderChild extends EventEmitter implements ProviderChild {
     }
     const { leaderPid, watcherPid, bootId } = await bootstrap.initial
     this.writerPid = leaderPid
-    if (this.canceled || this.outcome) {
+    if (this.canceled || this.outcome !== undefined) {
       throw new Error('Provider launch canceled before registration')
     }
     this.publication = publishProviderOwnership(
@@ -155,7 +160,7 @@ export class DirectProviderChild extends EventEmitter implements ProviderChild {
       return ownership
     })
     this.ownership = await this.publication
-    if (this.canceled || this.outcome) {
+    if (this.canceled || this.outcome !== undefined) {
       throw new Error('Provider launch canceled before execution')
     }
     bootstrap.checkGated()
@@ -169,7 +174,7 @@ export class DirectProviderChild extends EventEmitter implements ProviderChild {
       throw new Error('Provider bootstrap ended before launch completed')
     }
     this.launchedPid = leaderPid
-    this.notify('spawn')
+    notifyProviderChild(this, 'spawn')
   }
 
   kill(signal: NodeJS.Signals | number = 'SIGTERM'): boolean {
@@ -192,7 +197,7 @@ export class DirectProviderChild extends EventEmitter implements ProviderChild {
     }
     // SIGSTOP pins only the held root; stopping the watcher would disable the independent backstop.
     const delivered =
-      !this.outcome &&
+      this.outcome === undefined &&
       this.writerPid !== undefined &&
       signalDirectProviderRoot(this.writerPid, signal)
     if (delivered && signal !== 0) {
@@ -234,7 +239,7 @@ export class DirectProviderChild extends EventEmitter implements ProviderChild {
   }
 
   private signalLiveGroup(signal: NodeJS.Signals): boolean {
-    if (!this.writerPid || this.outcome) {
+    if (!this.writerPid || this.numericIdentityRetired) {
       return false
     }
     return signalDirectProviderGroup(this.writerPid, signal, (delivered) => {
@@ -252,7 +257,7 @@ export class DirectProviderChild extends EventEmitter implements ProviderChild {
       this.canceled = true
       this.gate?.destroy()
       // A held bootstrap must run its gate-cancellation path to reap its unpublished watcher.
-      if (this.writerPid && !this.outcome && !this.control?.destroyed) {
+      if (this.writerPid && this.outcome === undefined && !this.control?.destroyed) {
         signalDirectProviderRoot(this.writerPid, 'SIGCONT')
       }
     }
@@ -271,12 +276,6 @@ export class DirectProviderChild extends EventEmitter implements ProviderChild {
       (verdict) => {
         this.groupVerdict = this.groupVerdict === 'exited' ? 'exited' : verdict
       },
-      () => {
-        this.finishReap()
-        if (this.groupVerdict !== 'exited' && !this.settled) {
-          this.reapTask = undefined
-        }
-      },
       completion,
       this.reapAbort.signal
     )
@@ -284,20 +283,24 @@ export class DirectProviderChild extends EventEmitter implements ProviderChild {
   }
 
   private reportFailure(error: unknown): Promise<Error> {
-    return reportProviderLaunchFailure(error, this.spec, (failure) => this.notify('error', failure))
+    return reportProviderLaunchFailure(error, this.spec, (failure) =>
+      notifyProviderChild(this, 'error', failure)
+    )
   }
 
   private async settle(): Promise<void> {
     await this.ready.catch(() => {}).then(() => this.failure)
     if (this.outcome === null && !this.failure && !this.canceled) {
-      this.notify(
-        'error',
-        new Error(`Orca lost the process outcome for ${this.spec.command}. Retry the agent.`)
-      )
+      notifyProviderChild(this, 'error', new Error('The agent stopped unexpectedly. Try again.'))
     }
-    await this.reaped
-    this.settled = true
+    await joinCurrentProviderReap(() => this.reapTask)
+    if (this.groupVerdict !== 'exited' && this.connected) {
+      await withTimeout(this.watcherEnded, this.stop.maxStopMs, undefined)
+    }
+    await joinCurrentProviderReap(() => this.reapTask)
     await drainDirectProviderOutput(this.raw.stdout, this.raw.stderr, this.stdout, this.stderr)
+    await joinCurrentProviderReap(() => this.reapTask)
+    this.settled = true
     this.releaseRaw()
     this.stdin.destroy()
     this.control?.destroy()
@@ -306,16 +309,8 @@ export class DirectProviderChild extends EventEmitter implements ProviderChild {
     this.exitCode = this.outcome?.code ?? null
     this.signalCode = this.outcome?.signal ?? null
     if (this.leaderExited) {
-      this.notify('exit', this.exitCode, this.signalCode)
+      notifyProviderChild(this, 'exit', this.exitCode, this.signalCode)
     }
-    this.notify('close', this.exitCode, this.signalCode)
-  }
-
-  private notify(event: string, ...args: unknown[]): void {
-    notifyRuntimeListeners(
-      this.rawListeners(event),
-      (listener) => listener.apply(this, args),
-      `provider ${event}`
-    )
+    notifyProviderChild(this, 'close', this.exitCode, this.signalCode)
   }
 }

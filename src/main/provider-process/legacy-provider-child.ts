@@ -8,7 +8,7 @@ import {
   type Writable
 } from 'node:stream'
 import { StringDecoder } from 'node:string_decoder'
-import type { ProviderChild } from './provider-child'
+import { notifyProviderChild, type ProviderChild } from './provider-child'
 import {
   PROVIDER_GROUP_REAP_TIMEOUT_MS,
   PROVIDER_OUTPUT_DRAIN_TIMEOUT_MS,
@@ -19,7 +19,6 @@ import {
   legacyProviderSpawnFailure,
   legacyProviderStderrForDisplay
 } from './legacy-provider-supervisor'
-import { notifyRuntimeListeners } from '../runtime/events/runtime-listener-delivery'
 import { drainDirectProviderOutput } from './direct-provider-output-drain'
 import { reportProviderLaunchFailure } from './provider-launch-failure'
 import {
@@ -70,17 +69,17 @@ export class LegacyProviderChild extends EventEmitter implements ProviderChild {
       ? new Promise((resolve) => raw.once('disconnect', resolve))
       : Promise.resolve()
     raw.once('message', (message: unknown) => this.observeReport(message))
-    raw.once('spawn', () => this.notify('spawn'))
+    raw.once('spawn', () => notifyProviderChild(this, 'spawn'))
     raw.on('error', (error) => {
       if (raw.pid !== undefined) {
-        this.notify('error', error)
+        notifyProviderChild(this, 'error', error)
         return
       }
       // No path equals '', so the helper's own launch error never blames the CLI executable.
       this.failure ??= reportProviderLaunchFailure(
         error,
         { cwd: spec.cwd, command: '' },
-        (failure) => this.notify('error', failure)
+        (failure) => notifyProviderChild(this, 'error', failure)
       )
     })
     raw.once('exit', (code, signal) => {
@@ -143,7 +142,7 @@ export class LegacyProviderChild extends EventEmitter implements ProviderChild {
       this.failure ??= reportProviderLaunchFailure(
         Object.assign(spawnFailure.error, { path: this.spec.command }),
         this.spec,
-        (failure) => this.notify('error', failure)
+        (failure) => notifyProviderChild(this, 'error', failure)
       )
     }
     await this.failure
@@ -215,17 +214,9 @@ export class LegacyProviderChild extends EventEmitter implements ProviderChild {
     this.exitCode = code
     this.signalCode = signal
     if (exited) {
-      this.notify('exit', code, signal)
+      notifyProviderChild(this, 'exit', code, signal)
     }
-    this.notify('close', code, signal)
-  }
-
-  private notify(event: string, ...args: unknown[]): void {
-    notifyRuntimeListeners(
-      this.rawListeners(event),
-      (listener) => listener.apply(this, args),
-      `provider ${event}`
-    )
+    notifyProviderChild(this, 'close', code, signal)
   }
 }
 

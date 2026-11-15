@@ -178,3 +178,61 @@ it('discards an in-flight tree read after native group absence retires its PID',
   expect(terminateDescendants).not.toHaveBeenCalled()
   expect(signalProcessGroup).not.toHaveBeenCalled()
 })
+
+it.each(['resolve', 'reject'] as const)(
+  'discards snapshot signals after retirement during descendant %s',
+  async (result) => {
+    const target = {
+      ...child(),
+      leaderExited: false,
+      groupVerdict: 'live' as DescendantTreeVerdict
+    }
+    const release = Promise.withResolvers<DescendantTreeVerdict>()
+    const started = Promise.withResolvers<void>()
+    const signalProcess = vi.fn()
+    const signalProcessGroup = vi.fn()
+    const teardown = terminateWithEvidence(target, {
+      site: 'retired-during-descendants',
+      platform: 'darwin',
+      supervised: true,
+      captureDescendants: async () => ({
+        rootPgid: 1234,
+        capturedAtMs: 1,
+        descendants: [{ pid: 2000, ppid: 1234, pgid: 2000, startedAt: 'then' }]
+      }),
+      terminateDescendants: () => {
+        started.resolve()
+        return release.promise
+      },
+      signalProcess,
+      signalProcessGroup
+    })
+    await started.promise
+    target.groupVerdict = 'exited'
+    if (result === 'resolve') {
+      release.resolve('exited')
+    } else {
+      release.reject(new Error('read failed'))
+    }
+    await teardown
+    expect(target.kill.mock.calls).toEqual([['SIGSTOP']])
+    expect(signalProcess).not.toHaveBeenCalled()
+    expect(signalProcessGroup).not.toHaveBeenCalled()
+  }
+)
+
+it('does not read or signal snapshot identities when root pinning fails', async () => {
+  const target = child()
+  target.kill.mockReturnValue(false)
+  const captureDescendants = vi.fn()
+  await expect(
+    terminateWithEvidence(target, {
+      site: 'failed-pin',
+      platform: 'darwin',
+      supervised: true,
+      captureDescendants
+    })
+  ).resolves.toBeNull()
+  expect(captureDescendants).not.toHaveBeenCalled()
+  expect(target.kill.mock.calls).toEqual([['SIGSTOP'], ['SIGKILL']])
+})

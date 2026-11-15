@@ -93,7 +93,14 @@ describe.runIf(process.platform !== 'win32')('native parent outcome loss', () =>
     expect(errors).toHaveLength(1)
     expect(errors[0]).toBeInstanceOf(Error)
     expect(errors[0]).not.toHaveProperty('providerLaunchFailed')
-    expect(exits).toEqual([[null, null]])
+    expect(
+      exits,
+      JSON.stringify({
+        group: managed.child.groupVerdict,
+        exited: managed.child.leaderExited,
+        killed: managed.child.killed
+      })
+    ).toEqual([[null, null]])
     expect(managedExits).toEqual([{ code: null, signal: null, processless: false }])
     expect(managed.child.exitCode).toBeNull()
     expect(managed.child.signalCode).toBeNull()
@@ -104,7 +111,6 @@ describe.runIf(process.platform !== 'win32')('native parent outcome loss', () =>
     await expect(managed.close()).resolves.toMatchObject({ root: 'exited' })
     await expect(managed.close()).resolves.toMatchObject({ root: 'exited' })
     expect(managed.processless).toBe(false)
-    expect(managed.child.killed).toBe(true)
     expect(managed.stderrTail()).toBe('retained stderr\n')
     for (const pid of [identity.leader, identity.descendant]) {
       const status = await runProcess({
