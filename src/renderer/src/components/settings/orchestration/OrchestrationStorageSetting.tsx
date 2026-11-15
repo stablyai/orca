@@ -116,13 +116,7 @@ export function OrchestrationStorageSetting(): React.JSX.Element | null {
         description={storage ? describeStorage(storage, t) : ' '}
         control={
           !storage || storage.shrinksItself ? null : (
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={busy}
-              onClick={() => void reclaim()}
-              className="gap-1.5"
-            >
+            <Button variant="outline" size="sm" disabled={busy} onClick={() => void reclaim()}>
               {busy ? (
                 <Loader2 className="size-3.5 animate-spin" />
               ) : (

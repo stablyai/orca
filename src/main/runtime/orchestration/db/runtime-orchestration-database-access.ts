@@ -28,7 +28,7 @@ export abstract class RuntimeOrchestrationDatabaseAccess extends OrcaRuntimeWith
       const path = this.orchestrationDbPath()
       this._orchestrationDb = new OrchestrationDb(path)
       const db = this._orchestrationDb
-      this.orchestrationDbMaintenance = new OrchestrationDbMaintenance(db.db, path, (dispatchId) =>
+      this.orchestrationDbMaintenance = new OrchestrationDbMaintenance(db, path, (dispatchId) =>
         isReleasedChatReadable(db, dispatchId)
       )
       this.orchestrationDbMaintenance.start()

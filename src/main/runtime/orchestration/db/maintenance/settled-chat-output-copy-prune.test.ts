@@ -61,7 +61,7 @@ describe('pruning settled chat output copies', () => {
     worker('unreadable', 'run_settled')
 
     expect(
-      pruneSettledChatOutputCopies(db.db, '', (dispatchId) => dispatchId !== 'unreadable')
+      pruneSettledChatOutputCopies(db, '', (dispatchId) => dispatchId !== 'unreadable')
     ).toEqual({ pruned: 1, next: null })
 
     expect(content('settled')).toMatch(

@@ -666,6 +666,9 @@
         "OrchestrationPane": {
           "coordinatorApprovalsKeywordApprove": "approve",
           "coordinatorApprovalsKeywordPermission": "permission",
+          "storageKeywordDatabase": "database",
+          "storageKeywordDisk": "disk space",
+          "storageKeywordReclaim": "reclaim",
           "workerAutoReleaseKeywordClose": "close",
           "workerAutoReleaseKeywordRelease": "release"
         },

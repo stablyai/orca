@@ -1,4 +1,4 @@
-import type Database from '../../../../sqlite/sync-database'
+import type { OrchestrationDb } from '../orchestration-db'
 import type { AgentType } from '../../../../../shared/agent-status/contracts/agent-status-types'
 import { releaseCommitFieldsForCapturedArchive } from '../../workers/archives/worker-output-archive'
 
@@ -13,7 +13,7 @@ const REWRITES_PER_PAGE = 4
  * this host cannot read stays: it is the only output left. Terminal workers' copies stay too.
  */
 export function pruneSettledChatOutputCopies(
-  db: Database.Database,
+  { db }: OrchestrationDb,
   after: string,
   chatIsReadable: (dispatchId: string) => boolean,
   // Shared across a pass's pages, so a large settled Run is checked once per pass.
@@ -22,6 +22,7 @@ export function pruneSettledChatOutputCopies(
   db.exec('BEGIN IMMEDIATE')
   try {
     // octet_length() reads only the record header, never the saved copy.
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the projection names exactly these three columns; the adapter exposes unknown.
     const rows = db
       .prepare(
         `SELECT a.dispatch_id, d.run_id,
@@ -70,14 +71,15 @@ export function pruneSettledChatOutputCopies(
       ) {
         continue
       }
-      const copy = locator.get(row.dispatch_id) as { agent: unknown; process_incarnation: unknown }
+      const copy = locator.get(row.dispatch_id)
       const { content } = releaseCommitFieldsForCapturedArchive({
         kind: 'structured_journal',
         status: 'captured',
         content: {
           version: 3,
-          ...(typeof copy.agent === 'string' ? { agent: copy.agent as AgentType } : {}),
-          ...(typeof copy.process_incarnation === 'string'
+          // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the copy's release wrote this field from an AgentType.
+          ...(typeof copy?.agent === 'string' ? { agent: copy.agent as AgentType } : {}),
+          ...(typeof copy?.process_incarnation === 'string'
             ? { processIncarnation: copy.process_incarnation }
             : {})
         }

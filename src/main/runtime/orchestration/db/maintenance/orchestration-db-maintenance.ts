@@ -2,7 +2,7 @@ import { access, constants, stat, statfs } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { dirname } from 'node:path'
 import { setImmediate, setTimeout as delay } from 'node:timers/promises'
-import type Database from '../../../../sqlite/sync-database'
+import type { OrchestrationDb } from '../orchestration-db'
 import type {
   OrchestrationDbReclaimRequest,
   OrchestrationDbStorage
@@ -15,7 +15,7 @@ const PRUNE_INTERVAL_MS = 6 * 60 * MINUTE
 const RECLAIM_PAGES_PER_PASS = 1024
 const RECLAIM_PAGES_PER_STEP = 16
 
-export function readOrchestrationDbStorage(db: Database.Database): OrchestrationDbStorage {
+export function readOrchestrationDbStorage({ db }: OrchestrationDb): OrchestrationDbStorage {
   const pageSize = Number(db.pragma('page_size', { simple: true }))
   return {
     databaseBytes: Number(db.pragma('page_count', { simple: true })) * pageSize,
@@ -31,7 +31,7 @@ export class OrchestrationDbMaintenance {
   private work = 0
 
   constructor(
-    private readonly db: Database.Database,
+    private readonly orchestrationDb: OrchestrationDb,
     private readonly filename: string,
     private readonly chatIsReadable: (dispatchId: string) => boolean
   ) {}
@@ -47,11 +47,11 @@ export class OrchestrationDbMaintenance {
   }
 
   storage(): OrchestrationDbStorage {
-    const row = this.db
+    const row = this.orchestrationDb.db
       .prepare('SELECT reclaim_failed FROM orchestration_maintenance WHERE id = 1')
       .get()
     return {
-      ...readOrchestrationDbStorage(this.db),
+      ...readOrchestrationDbStorage(this.orchestrationDb),
       lastReclaimFailed: Boolean(row?.reclaim_failed)
     }
   }
@@ -83,15 +83,15 @@ export class OrchestrationDbMaintenance {
     this.stop()
     try {
       for (let after: string | null = ''; after !== null;) {
-        after = pruneSettledChatOutputCopies(this.db, after, this.chatIsReadable).next
+        after = pruneSettledChatOutputCopies(this.orchestrationDb, after, this.chatIsReadable).next
       }
       this.recordPrune()
       // The copy VACUUM builds is the size of the live data; keep it on disk, not in memory.
-      this.db.pragma('temp_store = FILE')
+      this.orchestrationDb.db.pragma('temp_store = FILE')
       // Only VACUUM switches an existing file to incremental auto_vacuum.
-      this.db.pragma('auto_vacuum = INCREMENTAL')
-      this.db.exec('VACUUM')
-      this.db.pragma('wal_checkpoint(TRUNCATE)')
+      this.orchestrationDb.db.pragma('auto_vacuum = INCREMENTAL')
+      this.orchestrationDb.db.exec('VACUUM')
+      this.orchestrationDb.db.pragma('wal_checkpoint(TRUNCATE)')
       this.recordReclaim(false)
     } catch (error) {
       // VACUUM rolls back whole; Settings says so after the restart.
@@ -125,7 +125,7 @@ export class OrchestrationDbMaintenance {
     if (this.pruneIsDue()) {
       for (let after: string | null = ''; after !== null;) {
         const page = await this.slice(() =>
-          pruneSettledChatOutputCopies(this.db, after!, this.chatIsReadable)
+          pruneSettledChatOutputCopies(this.orchestrationDb, after!, this.chatIsReadable)
         )
         if (!page) {
           return
@@ -145,14 +145,14 @@ export class OrchestrationDbMaintenance {
   }
 
   private pruneIsDue(): boolean {
-    const row = this.db
+    const row = this.orchestrationDb.db
       .prepare('SELECT pruned_at FROM orchestration_maintenance WHERE id = 1')
       .get()
     return !row || Date.now() - Number(row.pruned_at) >= PRUNE_INTERVAL_MS
   }
 
   private recordPrune(): void {
-    this.db
+    this.orchestrationDb.db
       .prepare(
         `INSERT INTO orchestration_maintenance (id, pruned_at) VALUES (1, ?)
          ON CONFLICT(id) DO UPDATE SET pruned_at = excluded.pruned_at`
@@ -161,7 +161,7 @@ export class OrchestrationDbMaintenance {
   }
 
   private recordReclaim(failed: boolean): void {
-    this.db
+    this.orchestrationDb.db
       .prepare(
         `INSERT INTO orchestration_maintenance (id, reclaim_failed) VALUES (1, ?)
          ON CONFLICT(id) DO UPDATE SET reclaim_failed = excluded.reclaim_failed`
@@ -171,9 +171,9 @@ export class OrchestrationDbMaintenance {
 
   /** True while free pages remain. */
   private reclaimFreePages(): boolean {
-    const free = Number(this.db.pragma('freelist_count', { simple: true }))
+    const free = Number(this.orchestrationDb.db.pragma('freelist_count', { simple: true }))
     if (free > 0) {
-      this.db.exec(`PRAGMA incremental_vacuum(${RECLAIM_PAGES_PER_STEP})`)
+      this.orchestrationDb.db.exec(`PRAGMA incremental_vacuum(${RECLAIM_PAGES_PER_STEP})`)
     }
     return free > RECLAIM_PAGES_PER_STEP
   }
