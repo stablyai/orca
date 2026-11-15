@@ -67,8 +67,8 @@ const dependencies: Record<string, Record<string, unknown>> = {
   '../../codex/history/index/codex-state-db-backfill-recovery': {
     stopCodexStateDbBackfillRecoveries: settled()
   },
-  '../../codex/history/bridges/codex-account-session-bridge': {
-    stopCodexAccountSessionBridges: idle()
+  '../../codex/history/shared-store/codex-account-history-index': {
+    stopCodexAccountHistoryWork: idle()
   },
   '../../git/refs/maintenance/local-repo-ref-maintenance': {
     awaitPackedRefsLockRelease: settled()

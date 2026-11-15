@@ -63,8 +63,6 @@ export abstract class CodexRuntimeHomeState {
     account: CodexManagedAccount,
     unavailableManagedHomePath?: string
   ): string | null
-  protected abstract startSelfContainedSessionBridgeForLaunch(perAccountHome: string): void
-  protected abstract getSelfContainedSessionBridgeSourceHomes(): string[]
   protected abstract syncSelfContainedManagedSelection(account: CodexManagedAccount): void
   protected abstract resolveSelfContainedManagedHome(
     account: CodexManagedAccount

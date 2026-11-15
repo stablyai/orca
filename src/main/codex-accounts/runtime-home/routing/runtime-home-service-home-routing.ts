@@ -11,6 +11,7 @@ import {
   syncSystemCodexResourcesIntoManagedHome
 } from '../../../codex/configuration/homes/codex-home-paths'
 import { syncSystemConfigIntoManagedCodexHome } from '../../../codex/configuration/settings/codex-config-mirror'
+import { isCodexHistorySharedAcrossAccounts } from './codex-history-sharing'
 import { normalizeCodexRuntimeSelection } from '../../account-management/runtime-selection'
 import {
   getWslSelectionKey,
@@ -241,7 +242,10 @@ export abstract class CodexRuntimeHomeRouting extends CodexRuntimeHomeManagedHom
     syncSystemConfigIntoManagedCodexHome({
       runtimeHomePath,
       systemHomePath,
-      systemConfigDir: toLinuxPath(systemHomePath)
+      systemConfigDir: toLinuxPath(systemHomePath),
+      sqliteHome: isCodexHistorySharedAcrossAccounts(this.store.getSettings())
+        ? toLinuxPath(systemHomePath)
+        : null
     })
   }
 

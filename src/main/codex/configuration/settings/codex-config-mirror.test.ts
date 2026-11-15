@@ -77,6 +77,47 @@ afterEach(() => {
 })
 
 describe('syncSystemConfigIntoManagedCodexHome', () => {
+  it('points a shared account home at the store databases without touching ~/.codex/config.toml', () => {
+    const accountHome = join(userDataDir, 'codex-accounts', 'a', 'home')
+    mkdirSync(accountHome, { recursive: true })
+    const systemConfig = ['model = "gpt"', '', '[features]', 'hooks = true', ''].join('\n')
+    writeFileSync(getSystemConfigPath(), systemConfig, 'utf-8')
+    const homes = {
+      runtimeHomePath: accountHome,
+      systemHomePath: getSystemCodexHomePath(),
+      sqliteHome: '/store/.codex'
+    }
+
+    syncSystemConfigIntoManagedCodexHome(homes)
+    syncSystemConfigIntoManagedCodexHome(homes)
+
+    const accountConfig = readFileSync(join(accountHome, 'config.toml'), 'utf-8')
+    expect(accountConfig.split('\n')[0]).toBe(
+      'sqlite_home = "/store/.codex" # orca: Codex history shared across accounts'
+    )
+    expect(accountConfig.match(/sqlite_home/g)).toHaveLength(1)
+    expect(readFileSync(getSystemConfigPath(), 'utf-8')).toBe(systemConfig)
+
+    syncSystemConfigIntoManagedCodexHome({ ...homes, sqliteHome: null })
+
+    expect(readFileSync(join(accountHome, 'config.toml'), 'utf-8')).not.toContain('sqlite_home')
+    expect(readFileSync(getSystemConfigPath(), 'utf-8')).toBe(systemConfig)
+  })
+
+  it("keeps the user's own sqlite_home instead of adding a second one", () => {
+    const accountHome = join(userDataDir, 'codex-accounts', 'a', 'home')
+    mkdirSync(accountHome, { recursive: true })
+    writeFileSync(getSystemConfigPath(), 'sqlite_home = "/mine"\n', 'utf-8')
+
+    syncSystemConfigIntoManagedCodexHome({
+      runtimeHomePath: accountHome,
+      systemHomePath: getSystemCodexHomePath(),
+      sqliteHome: '/store/.codex'
+    })
+
+    expect(readFileSync(join(accountHome, 'config.toml'), 'utf-8')).toBe('sqlite_home = "/mine"\n')
+  })
+
   it('preserves an existing runtime config when the system config is blank', () => {
     // A zero-byte cloud-synced config may be half-written or unhydrated.
     mkdirSync(join(userDataDir, 'codex-runtime-home', 'home'), { recursive: true })

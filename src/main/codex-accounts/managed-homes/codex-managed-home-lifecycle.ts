@@ -1,5 +1,6 @@
-import { mkdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
-import { dirname, join, resolve, sep } from 'node:path'
+import { mkdirSync, readFileSync, realpathSync, rmSync, writeFileSync, type Dirent } from 'node:fs'
+import { readdir, rm } from 'node:fs/promises'
+import { join, resolve, sep } from 'node:path'
 import { isDefinitiveAbsence } from '../../../shared/definitive-filesystem-absence'
 import {
   WINDOWS_RM_MAX_RETRIES,
@@ -13,10 +14,65 @@ import type {
   ManagedCodexHomeLocation
 } from '../account-management/codex-account-service-types'
 import { writeFileAtomically } from '../../filesystem/atomic-file-publication'
+import { MERGE_PENDING_SUFFIX, removeDirectoryLink } from '../../filesystem/merged-directory-link'
 import { ManagedCodexHomeTemporarilyUnavailableError } from './host-codex-managed-home-ownership'
 import type { CodexManagedHomePath } from './codex-managed-home-path'
 
 const WSL_MANAGED_HOME_TIMEOUT_MS = 5_000
+
+// Codex recorded the account's conversations under its own path in the shared index, and a
+// merge keeps its conflicting copies beside the links; both outlive the login.
+const KEPT_HISTORY_LINKS = ['sessions', 'archived_sessions']
+const KEEP_ON_REMOVAL_SCRIPT = [
+  'set -u',
+  'home=$1',
+  'kept() {',
+  '  case "${1##*/}" in',
+  '    *.orca-profile-merge) return 0 ;;',
+  '    sessions | archived_sessions) [ -L "$1" ] ;;',
+  '    *) return 1 ;;',
+  '  esac',
+  '}',
+  'any_kept=0',
+  'for entry in "$home"/* "$home"/.[!.]* "$home"/..?*; do',
+  '  if kept "$entry"; then any_kept=1; fi',
+  'done',
+  'if [ "$any_kept" = 0 ]; then',
+  '  rm -rf -- "$home"',
+  '  rmdir -- "${home%/*}" 2>/dev/null || true',
+  '  exit 0',
+  'fi',
+  // GNU rm removes a link itself, never what it points to.
+  'for entry in "$home"/* "$home"/.[!.]* "$home"/..?*; do',
+  '  if [ -e "$entry" ] || [ -L "$entry" ]; then kept "$entry" || rm -rf -- "$entry"; fi',
+  'done'
+].join('\n')
+
+/** Deletes the login and private state but keeps shared history; true when anything was kept. */
+async function removeManagedHomeKeepingSharedHistory(home: string): Promise<boolean> {
+  const entries = await readdir(home, { withFileTypes: true })
+  const kept = (entry: Dirent): boolean =>
+    (entry.isSymbolicLink() && KEPT_HISTORY_LINKS.includes(entry.name)) ||
+    entry.name.endsWith(MERGE_PENDING_SUFFIX)
+  if (!entries.some(kept)) {
+    return false
+  }
+  for (const entry of entries.filter((candidate) => !kept(candidate))) {
+    const path = join(home, entry.name)
+    if (entry.isSymbolicLink()) {
+      // Never recurse through a link (a Windows junction included).
+      await removeDirectoryLink(path)
+      continue
+    }
+    await rm(path, {
+      recursive: true,
+      force: true,
+      maxRetries: WINDOWS_RM_MAX_RETRIES,
+      retryDelay: WINDOWS_RM_RETRY_DELAY_MS
+    })
+  }
+  return true
+}
 
 function removeManagedHomeTreeSync(targetPath: string): void {
   // Retry transient Windows locks held by login descendants to avoid orphaning the home.
@@ -99,20 +155,35 @@ export class CodexManagedHomeLifecycle {
       return
     }
 
+    const wslHome = parseWslUncPath(managedHomePath)
+    if (wslHome) {
+      // Never walk a guest tree from Windows: a Linux link must not be followed over 9P.
+      try {
+        const result = await runWslProcess({
+          distro: wslHome.distro,
+          loginPath: 'none',
+          script: KEEP_ON_REMOVAL_SCRIPT,
+          args: [wslHome.linuxPath],
+          shell: 'bash',
+          timeoutMs: WSL_MANAGED_HOME_TIMEOUT_MS
+        })
+        if (result.code !== 0 || result.timedOut) {
+          throw new Error(`WSL cleanup exited with ${result.timedOut ? 'a timeout' : result.code}`)
+        }
+      } catch (error) {
+        console.warn('[codex-accounts] Failed to remove managed home:', error)
+      }
+      return
+    }
+
     try {
+      if (await removeManagedHomeKeepingSharedHistory(managedHomePath)) {
+        return
+      }
       removeManagedHomeTreeSync(managedHomePath)
     } catch (error) {
       // Cleanup failures must not mask the original error.
       console.warn('[codex-accounts] Failed to remove managed home:', error)
-      return
-    }
-
-    if (parseWslUncPath(managedHomePath)) {
-      try {
-        removeManagedHomeTreeSync(dirname(managedHomePath))
-      } catch {
-        // Best-effort cleanup
-      }
       return
     }
 

@@ -1,0 +1,185 @@
+import { lstat, mkdir, readdir, realpath, rmdir, stat, symlink, unlink } from 'node:fs/promises'
+import type { BigIntStats } from 'node:fs'
+import { join } from 'node:path'
+import { isDefinitiveAbsence } from '../../shared/definitive-filesystem-absence'
+import { renameFileWithWindowsRetryAsync } from '../../shared/windows-retry-file-operations'
+
+/** Where a folder waits while its entries move into the shared one; conflicts stay here. */
+export const MERGE_PENDING_SUFFIX = '.orca-profile-merge'
+
+export type MergedDirectoryLinkOutcome = 'linked' | 'unchanged' | 'user-owned'
+
+export type DirectoryLinkErrorCode = 'cross-filesystem' | 'retained-conflict' | 'link-failed'
+
+export class DirectoryLinkError extends Error {
+  readonly code: DirectoryLinkErrorCode
+
+  constructor(code: DirectoryLinkErrorCode, message: string) {
+    super(message)
+    this.code = code
+  }
+}
+
+export type MergedDirectoryLinkArgs = {
+  /** The private folder that becomes a link. */
+  source: string
+  /** The shared folder it links to; created when missing. */
+  destination: string
+  platform: NodeJS.Platform
+  /** Problems that leave the link published, such as retained conflicts. */
+  onWarning: (error: unknown) => void
+  /** Each entry moved into `destination`, by its new path (a folder moves whole). */
+  onMoved?: (movedPath: string) => void | Promise<void>
+}
+
+export async function lstatIfPresent(file: string): Promise<BigIntStats | undefined> {
+  try {
+    return await lstat(file, { bigint: true })
+  } catch (error) {
+    if (!isDefinitiveAbsence(error)) {
+      throw error
+    }
+    return undefined
+  }
+}
+
+type MoveResult = { retained: number; failed: unknown[] }
+
+// One locked entry must not prevent merging the rest.
+async function moveTree(
+  source: string,
+  destination: string,
+  result: MoveResult,
+  onMoved: MergedDirectoryLinkArgs['onMoved']
+): Promise<void> {
+  for (const name of await readdir(source)) {
+    const from = join(source, name)
+    const to = join(destination, name)
+    try {
+      const [item, existing] = await Promise.all([
+        lstat(from, { bigint: true }),
+        lstatIfPresent(to)
+      ])
+      if (!existing) {
+        await renameFileWithWindowsRetryAsync(from, to)
+        await onMoved?.(to)
+      } else if (item.isDirectory() && existing.isDirectory()) {
+        await moveTree(from, to, result, onMoved)
+      } else if (item.isFile() && item.dev === existing.dev && item.ino === existing.ino) {
+        // A hard link to the shared file: dropping this name loses no bytes.
+        await unlink(from)
+      } else {
+        result.retained += 1
+      }
+    } catch (error) {
+      result.failed.push(error)
+    }
+  }
+  if ((await readdir(source)).length === 0) {
+    await rmdir(source)
+  }
+}
+
+async function drain(
+  pending: string,
+  destination: string,
+  args: MergedDirectoryLinkArgs
+): Promise<void> {
+  const result: MoveResult = { retained: 0, failed: [] }
+  await moveTree(pending, destination, result, args.onMoved)
+  if (result.failed.length > 0) {
+    args.onWarning(result.failed[0])
+  }
+  if (result.retained > 0) {
+    const detail = `${result.retained} conflicting entries kept in ${pending}`
+    args.onWarning(new DirectoryLinkError('retained-conflict', detail))
+  }
+}
+
+function crossFilesystem(): DirectoryLinkError {
+  return new DirectoryLinkError('cross-filesystem', 'History stays private across filesystems')
+}
+
+/** Link `destination` in place of `source`, moving its entries there; existing names stay shared. */
+export async function mergeDirectoryIntoLink(
+  args: MergedDirectoryLinkArgs
+): Promise<MergedDirectoryLinkOutcome> {
+  const { source, destination } = args
+  const pending = `${source}${MERGE_PENDING_SUFFIX}`
+  await mkdir(destination, { recursive: true })
+  const destinationDevice = (await stat(destination, { bigint: true })).dev
+  const sameDevice = async (file: string): Promise<boolean> =>
+    (await stat(file, { bigint: true })).dev === destinationDevice
+  if ((await lstatIfPresent(pending))?.isDirectory()) {
+    if (!(await sameDevice(pending))) {
+      if (!(await lstatIfPresent(source))) {
+        await renameFileWithWindowsRetryAsync(pending, source)
+      }
+      throw crossFilesystem()
+    }
+    try {
+      await drain(pending, destination, args)
+    } catch (error) {
+      // Preserve unreadable leftovers without preventing link publication.
+      args.onWarning(error)
+    }
+  }
+  const current = await lstatIfPresent(source)
+  if (current?.isSymbolicLink()) {
+    return (await realpath(source)) === (await realpath(destination)) ? 'unchanged' : 'user-owned'
+  }
+  if (current && !current.isDirectory()) {
+    return 'user-owned'
+  }
+  if (current) {
+    if (!(await sameDevice(source))) {
+      throw crossFilesystem()
+    }
+    if (await lstatIfPresent(pending)) {
+      throw new DirectoryLinkError('retained-conflict', `Earlier conflicts kept in ${pending}`)
+    }
+    await renameFileWithWindowsRetryAsync(source, pending)
+  }
+  try {
+    // Junctions avoid Windows symlink privilege requirements.
+    await symlink(destination, source, args.platform === 'win32' ? 'junction' : 'dir')
+  } catch (error) {
+    if (current) {
+      // Something recreated the folder mid-swap (such as a starting CLI); put its entries back.
+      if (!(await lstatIfPresent(source))) {
+        await renameFileWithWindowsRetryAsync(pending, source)
+      } else if ((await lstatIfPresent(source))?.isDirectory()) {
+        await moveTree(pending, source, { retained: 0, failed: [] }, undefined)
+      }
+    }
+    throw new DirectoryLinkError('link-failed', String(error))
+  }
+  if (current) {
+    await drain(pending, destination, args)
+  }
+  return 'linked'
+}
+
+/** Whether `source` is a link (or junction) that resolves to `destination`. */
+export async function isLinkedDirectory(source: string, destination: string): Promise<boolean> {
+  if (!(await lstatIfPresent(source))?.isSymbolicLink()) {
+    return false
+  }
+  try {
+    return (await realpath(source)) === (await realpath(destination))
+  } catch (error) {
+    if (isDefinitiveAbsence(error)) {
+      return false
+    }
+    throw error
+  }
+}
+
+/** Remove a link without following it; a Windows junction is removed as a directory. */
+export async function removeDirectoryLink(path: string): Promise<void> {
+  try {
+    await unlink(path)
+  } catch {
+    await rmdir(path)
+  }
+}

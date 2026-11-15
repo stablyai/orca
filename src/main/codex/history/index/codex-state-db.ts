@@ -70,34 +70,6 @@ export function readCodexStateDbBackfillStatus(codexHomePath: string): CodexStat
   }
 }
 
-/** Null means the database is absent or unreadable. */
-export function readIndexedCodexThreadIds(codexHomePath: string): Set<string> | null {
-  const stateDbPath = findNewestCodexStateDbPath(codexHomePath)
-  if (!stateDbPath) {
-    return null
-  }
-  let db: SyncDatabase | null = null
-  try {
-    db = new SyncDatabase(stateDbPath, { readonly: true, fileMustExist: true })
-    const ids = new Set<string>()
-    for (const row of db.prepare('SELECT id FROM threads').all()) {
-      if (typeof row.id === 'string') {
-        ids.add(row.id.toLowerCase())
-      }
-    }
-    return ids
-  } catch (error) {
-    console.warn('[codex-state-db] Failed to read indexed Codex threads:', error)
-    return null
-  } finally {
-    try {
-      db?.close()
-    } catch {
-      // A close failure cannot change the read-only result already collected.
-    }
-  }
-}
-
 export function countCodexSessionFilesUpTo(sessionsRoot: string, limit: number): number {
   let count = 0
   const pendingDirectories = [sessionsRoot]

@@ -1,9 +1,7 @@
 import { resolveHostCodexSessionSourceHome } from '../../../codex/history/rollouts/codex-session-source-home'
 import { startSystemCodexSessionBridgeInBackground } from '../../../codex/history/bridges/codex-session-bridge'
-import { startCodexAccountSessionBridgeInBackground } from '../../../codex/history/bridges/codex-account-session-bridge'
 import { isCodexHistorySharedAcrossAccounts } from './codex-history-sharing'
 import {
-  getSystemCodexHomePath,
   resolveOrcaManagedCodexHomePath,
   syncSystemCodexResourcesIntoManagedHome
 } from '../../../codex/configuration/homes/codex-home-paths'
@@ -63,7 +61,6 @@ export abstract class CodexRuntimeHomeLaunch extends CodexRuntimeHomeRouting {
       // Null leaves CODEX_HOME uninjected; refresh the retired mirror only for retained panes.
       this.copyMirrorLoginIntoEmptySystemHome()
       this.reconcileLegacySharedHomeForRetainedPanes()
-      this.startSystemDefaultSessionBridgeForLaunch()
       return null
     }
     this.invalidateBackfillAfterManagedSystemDefaultLaunch(launchEnv)
@@ -85,27 +82,6 @@ export abstract class CodexRuntimeHomeLaunch extends CodexRuntimeHomeRouting {
       )
     }
     return this.getRuntimeHomePath()
-  }
-
-  // Real-home launches see managed-account history too, or switching back to system default hides it (#25000).
-  private startSystemDefaultSessionBridgeForLaunch(): void {
-    const settings = this.store.getSettings()
-    const sourceCodexHomePaths = this.getManagedHostAccountHomesForSessionDiscovery()
-    const targetCodexHomePath =
-      resolveHostCodexSessionSourceHome(settings) ?? getSystemCodexHomePath()
-    if (
-      sourceCodexHomePaths.length === 0 ||
-      !isCodexHistorySharedAcrossAccounts(settings) ||
-      this.isHostHistorySourceInWsl()
-    ) {
-      return
-    }
-    // The user's own ~/.codex gets hardlinks or nothing: a symlink there dangles once an account goes.
-    void startCodexAccountSessionBridgeInBackground({
-      targetCodexHomePath,
-      sourceCodexHomePaths,
-      hardlinkOnly: true
-    })
   }
 
   /** Resolve the launch home without side effects for catalog reads; null means real ~/.codex. */
@@ -137,6 +113,13 @@ export abstract class CodexRuntimeHomeLaunch extends CodexRuntimeHomeRouting {
     options?: CodexHomeLaunchOptions
   ): Promise<string | null> {
     if (target?.runtime !== 'wsl') {
+      const account = this.getSelfContainedManagedHostAccount()
+      const accountHome = account ? this.getTrustedSelfContainedManagedHomePath(account) : null
+      if (accountHome) {
+        // Codex must start on linked history, so this home's pass finishes first.
+        await this.prepareAccountHistory(accountHome)
+      }
+      this.prepareAllAccountHistoryInBackground()
       return this.prepareForCodexLaunch(target, launchEnv, options)
     }
     const wslTarget = this.resolveWslDefaultTarget(target)

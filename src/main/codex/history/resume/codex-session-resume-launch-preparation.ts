@@ -50,6 +50,7 @@ export function createCodexSessionResumeLaunchPreparation(deps: {
     if (!isSystemHome) {
       // Hook repair may skip or fail before its config mirror applies the guard.
       ensureCodexDaemonSocketGuard(home)
+      await deps.getRuntimeHome()?.prepareAccountHistoryForPinnedHome(home)
     }
   }
 
