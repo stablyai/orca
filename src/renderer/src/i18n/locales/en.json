@@ -5596,7 +5596,8 @@
             "detailedTooltip": "Full usage with bars, labels, and percentages",
             "compactTooltip": "Condensed usage: one summary per provider",
             "footerDetailAria": "Usage footer detail",
-            "notChecked": "Not checked"
+            "notChecked": "Not checked",
+            "modelWeeklyLimit": "{{model}} weekly limit: {{usage}}"
           },
           "RemoteServerUpdateStatusSegment": {
             "updating": "Updating {{value0}}/{{value1}}",

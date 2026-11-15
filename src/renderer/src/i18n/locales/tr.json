@@ -5041,7 +5041,8 @@
             "detailedTooltip": "Çubuklar, etiketler ve yüzdelerle tam kullanım",
             "compactTooltip": "Özet kullanım: sağlayıcı başına tek özet",
             "footerDetailAria": "Kullanım altbilgi ayrıntısı",
-            "notChecked": "Kontrol edilmedi"
+            "notChecked": "Kontrol edilmedi",
+            "modelWeeklyLimit": "{{model}} haftalık sınırı: {{usage}}"
           },
           "RemoteServerUpdateStatusSegment": {
             "updating": "{{value0}}/{{value1}} güncelleniyor",

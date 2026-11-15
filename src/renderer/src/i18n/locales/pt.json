@@ -3687,7 +3687,8 @@
             "detailedTooltip": "Uso completo com barras, rótulos e porcentagens",
             "compactTooltip": "Uso condensado: somente a janela mais restrita",
             "footerDetailAria": "Detalhe do rodapé de uso",
-            "notChecked": "Não verificado"
+            "notChecked": "Não verificado",
+            "modelWeeklyLimit": "Limite semanal do {{model}}: {{usage}}"
           },
           "RemoteServerUpdateStatusSegment": {
             "updating": "Atualizando {{value0}}/{{value1}}",

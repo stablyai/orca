@@ -4442,7 +4442,8 @@
             "footerDetailAria": "Usage footer detail",
             "detailedTooltip": "Uso completo con barras, etiquetas y porcentajes",
             "compactTooltip": "Uso condensado: un resumen por proveedor",
-            "notChecked": "Sin comprobar"
+            "notChecked": "Sin comprobar",
+            "modelWeeklyLimit": "Límite semanal de {{model}}: {{usage}}"
           },
           "RemoteServerUpdateStatusSegment": {
             "updating": "Updating {{value0}}/{{value1}}",
