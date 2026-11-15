@@ -9,6 +9,7 @@ export type AgentSessionHeldDelivery = {
   failureId: string
   target: { sessionId: string; dispatchId?: string }
   waiting: number
+  individuallyHeld?: number
   resetsAt?: number
   recoveryUsed?: boolean
   workerName?: string
@@ -26,6 +27,7 @@ export type AgentSessionFailureResumeResult = {
     | 'not-retryable'
     | 'message-attached'
   waiting: number
+  stillHeld?: number
 }
 
 export function heldWorkerDeliveryText(

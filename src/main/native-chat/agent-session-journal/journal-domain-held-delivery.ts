@@ -55,9 +55,10 @@ export function readJournalDomainHeldDelivery(
     failure = 'network'
   }
   const waiting = db
-    .prepare(`SELECT COUNT(*) AS count FROM journal_queue_cards
+    .prepare(`SELECT COUNT(*) AS count${includeReleased ? ", COUNT(json_extract(payload_json,'$.holdReason')) AS individually_held" : ''} FROM journal_queue_cards
     WHERE session_id=? AND epoch=? AND state='waiting'`)
     .get(target.sessionId, target.epoch)
+  const individuallyHeld = Number(waiting?.individually_held ?? 0)
   const failureId = createHash('sha256')
     .update(JSON.stringify([target.sessionId, target.epoch, source.itemId, source.failedAt]))
     .digest('hex')
@@ -87,6 +88,7 @@ export function readJournalDomainHeldDelivery(
     failureId,
     target: { sessionId: target.sessionId },
     waiting: Number(waiting?.count ?? 0),
+    ...(individuallyHeld ? { individuallyHeld } : {}),
     ...(recoveredAfter &&
     source.failedAt > recoveredAfter &&
     !personal &&

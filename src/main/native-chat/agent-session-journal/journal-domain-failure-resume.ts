@@ -11,7 +11,12 @@ import { readJournalDomainQueuePauseContext } from './journal-domain-queue-pause
 
 type Resume = Extract<JournalWriterCommand['operation'], { kind: 'failure-resume' }>
 type Target = { sessionId: string; epoch: string }
-type Ready = { status: 'ready'; waiting: number; itemId: string; failedAt: number }
+type Ready = {
+  status: 'ready'
+  result: AgentSessionFailureResumeResult
+  itemId: string
+  failedAt: number
+}
 
 export function prepareJournalFailureResume(
   db: Database.Database,
@@ -63,7 +68,16 @@ export function prepareJournalFailureResume(
   if (failure.reason.failure !== 'network' && failure.reason.failure !== 'provider') {
     return { status: 'not-retryable', waiting }
   }
-  return { status: 'ready', waiting, itemId: source.itemId, failedAt: source.failedAt }
+  return {
+    status: 'ready',
+    result: {
+      status: 'resumed',
+      waiting,
+      ...(failure.individuallyHeld ? { stillHeld: failure.individuallyHeld } : {})
+    },
+    itemId: source.itemId,
+    failedAt: source.failedAt
+  }
 }
 
 export function commitJournalFailureResume(
