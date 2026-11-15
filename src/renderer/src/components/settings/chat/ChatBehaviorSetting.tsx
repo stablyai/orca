@@ -56,6 +56,7 @@ export function ChatBehaviorSetting({
     entries.idleStop,
     ...(hostContinuesUsageLimits ? [entries.autoContinueAfterUsageLimit] : []),
     ...(hostQueuesMessages ? [entries.queueFollowUps] : []),
+    entries.enterToSend,
     entries.scrollToLatestOnSend,
     entries.markNewMessages,
     entries.linkPreviews,
@@ -147,6 +148,23 @@ export function ChatBehaviorSetting({
           />
         </SearchableSetting>
       ) : null}
+      <SearchableSetting
+        {...entries.enterToSend}
+        id={entries.enterToSend.targetSectionId}
+        forceVisible={forceVisible}
+        className="max-w-none"
+      >
+        <SettingsSwitchRow
+          label={entries.enterToSend.title}
+          description={entries.enterToSend.description}
+          checked={settings.nativeChatEnterToSend !== false}
+          onChange={() =>
+            updateSettings({
+              nativeChatEnterToSend: settings.nativeChatEnterToSend === false
+            })
+          }
+        />
+      </SearchableSetting>
       <SearchableSetting
         {...entries.scrollToLatestOnSend}
         id={entries.scrollToLatestOnSend.targetSectionId}

@@ -25,6 +25,7 @@ export type UseNativeChatComposerKeyDownArgs = {
   draft: string
   /** Image chips count as composer content, like typed text. */
   hasAttachments?: boolean
+  enterToSend?: boolean
   recall?: NativeChatComposerRecall | undefined
   isComposing: () => boolean
   completePickerItem: (item: NativeChatPickerItem) => void
@@ -48,6 +49,7 @@ export function useNativeChatComposerKeyDown({
   activeSuggestion,
   draft,
   hasAttachments = false,
+  enterToSend = true,
   recall,
   isComposing,
   completePickerItem,
@@ -78,6 +80,7 @@ export function useNativeChatComposerKeyDown({
       if (event.key === 'Escape' && event.defaultPrevented && autocomplete.mode === 'none') {
         return
       }
+      const modified = event.key === 'Enter' && (isMacPlatform() ? event.metaKey : event.ctrlKey)
 
       if (autocomplete.mode !== 'none') {
         const items = autocomplete.mode === 'slash' ? autocomplete.items : mentionFiles.files
@@ -102,7 +105,12 @@ export function useNativeChatComposerKeyDown({
           }
           const item = autocomplete.items[activeSuggestion] ?? autocomplete.items[0]
           // Only dispatch a command at a dispatchable prompt position; embedded tokens merely complete.
-          if (event.key === 'Enter' && item.kind === 'command' && autocomplete.dispatchable) {
+          if (
+            event.key === 'Enter' &&
+            (enterToSend || modified) &&
+            item.kind === 'command' &&
+            autocomplete.dispatchable
+          ) {
             dispatchPickerCommand(item)
           } else {
             completePickerItem(item)
@@ -126,7 +134,6 @@ export function useNativeChatComposerKeyDown({
         interrupt()
         return
       }
-      const modified = event.key === 'Enter' && (isMacPlatform() ? event.metaKey : event.ctrlKey)
       // Why before Shift+Enter: that adds a newline, and this chord leaves the draft alone.
       if (modified && event.shiftKey) {
         event.preventDefault()
@@ -137,8 +144,11 @@ export function useNativeChatComposerKeyDown({
         return
       }
       if (event.key === 'Enter' && !event.shiftKey) {
+        if (!enterToSend && !modified) {
+          return
+        }
         event.preventDefault()
-        if (!modified) {
+        if (!modified || !enterToSend) {
           send()
         } else if (draft.trim() !== '' || hasAttachments) {
           // The other thing than the setting, for this one message.
@@ -188,6 +198,7 @@ export function useNativeChatComposerKeyDown({
       dispatchPickerCommand,
       draft,
       hasAttachments,
+      enterToSend,
       interrupt,
       isComposing,
       mentionFiles,
