@@ -77,6 +77,9 @@ export async function workspaceHistorySessionRemovals(
     }
     case 'prime-agent':
       return [file(filePath)]
+    // Database rows are deleted by the SQLite pass, never as files.
+    case 'opencode2':
+    case 'zcode':
     default:
       return null
   }

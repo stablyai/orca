@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { LoaderCircle } from 'lucide-react'
 import { toast } from 'sonner'
 import { useTranslate } from '@/i18n/use-translate'
+import { uiNumberFormat } from '@/i18n/ui-intl-formatters'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import type { GlobalSettings } from '../../../../../shared/global-settings-types'
 import type { WorkspaceAgentHistoryTally } from '../../../../../shared/workspace-agent-history/workspace-agent-history-types'
@@ -73,6 +74,10 @@ function freshMeasurement(): WorkspaceAgentHistoryTally | null {
   return lastMeasurement && Date.now() - lastMeasurement.at < MEASUREMENT_REUSE_MS
     ? lastMeasurement.tally
     : null
+}
+
+function formatCount(value: number): string {
+  return uiNumberFormat({}).format(value)
 }
 
 function requestHistoryDelete(): Promise<
@@ -180,11 +185,11 @@ function DeletedWorkspacesHistoryRow(): React.JSX.Element {
             'components.settings.workspaceCleanup.agentHistory.summary',
             'History from deleted workspaces: {{sessions}} of {{sessionTotal}} agent sessions ({{size}}) and {{chats}} of {{chatTotal}} Orca chats.',
             {
-              sessions: measurement.tally.transcripts.matched.toLocaleString(),
-              sessionTotal: measurement.tally.transcripts.total.toLocaleString(),
+              sessions: formatCount(measurement.tally.transcripts.matched),
+              sessionTotal: formatCount(measurement.tally.transcripts.total),
               size: formatBytes(measurement.tally.transcripts.bytes),
-              chats: measurement.tally.chats.matched.toLocaleString(),
-              chatTotal: measurement.tally.chats.total.toLocaleString()
+              chats: formatCount(measurement.tally.chats.matched),
+              chatTotal: formatCount(measurement.tally.chats.total)
             }
           )
   const remoteNote = t(
@@ -234,22 +239,22 @@ function DeletedWorkspacesHistoryRow(): React.JSX.Element {
       >
         <DialogContent className="max-w-md" showCloseButton={!deleting}>
           <DialogHeader>
-            <DialogTitle className="text-sm">
+            <DialogTitle>
               {t(
                 'components.settings.workspaceCleanup.agentHistory.confirmTitle',
                 'Delete history from deleted workspaces?'
               )}
             </DialogTitle>
-            <DialogDescription className="text-xs">
+            <DialogDescription>
               {t(
                 'components.settings.workspaceCleanup.agentHistory.confirmBody',
                 "Deletes from this computer: agent sessions, {{sessions}} ({{size}}); Orca chats, {{chats}}. Anything in use is skipped. This can't be undone.",
                 {
                   sessions: tally
-                    ? (tally.transcripts.matched - tally.transcripts.inUse).toLocaleString()
+                    ? formatCount(tally.transcripts.matched - tally.transcripts.inUse)
                     : '0',
                   size: formatBytes(tally?.transcripts.bytes ?? 0),
-                  chats: tally ? (tally.chats.matched - tally.chats.inUse).toLocaleString() : '0'
+                  chats: tally ? formatCount(tally.chats.matched - tally.chats.inUse) : '0'
                 }
               )}
             </DialogDescription>
