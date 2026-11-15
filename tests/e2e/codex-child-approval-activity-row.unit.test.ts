@@ -119,7 +119,7 @@ beforeEach(async () => {
     agentStatusByPaneKey: {},
     acknowledgedAgentsByPaneKey: {},
     activityClearedAtByPaneKey: {},
-    retainedAgentsByPaneKey: {},
+
     refreshGitHubForWorktreeIfStale: vi.fn(),
     testRuntimeOwner: null,
     repos: [makeRepo()],

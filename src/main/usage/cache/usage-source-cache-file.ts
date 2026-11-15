@@ -48,7 +48,7 @@ export async function readUsageSourceCache<T>(ref: UsageSourceCacheRef): Promise
     return parsed?.schemaVersion === ref.schemaVersion &&
       parsed.worktreeFingerprint === ref.worktreeFingerprint &&
       Array.isArray(parsed.sources)
-      ? parsed.sources
+      ? parsed.sources.filter(isSourceRecord)
       : []
   } catch {
     return []
@@ -70,10 +70,11 @@ export async function readUsageSourceCacheForScan<T>(ref: UsageSourceCacheRef): 
     if (parsed?.schemaVersion !== ref.schemaVersion || !Array.isArray(parsed.sources)) {
       return { sources: [], reuseProjections: false, accountAttributionAvailable: false }
     }
+    const sources = parsed.sources.filter(isSourceRecord)
     return {
-      sources: parsed.sources,
+      sources,
       reuseProjections: ref.reuse && parsed.worktreeFingerprint === ref.worktreeFingerprint,
-      accountAttributionAvailable: parsed.sources.length > 0 || ref.hadPreviousHistory !== true
+      accountAttributionAvailable: sources.length > 0 || ref.hadPreviousHistory !== true
     }
   } catch (error) {
     return {
@@ -82,6 +83,11 @@ export async function readUsageSourceCacheForScan<T>(ref: UsageSourceCacheRef): 
       accountAttributionAvailable: isDefinitiveAbsence(error) && ref.hadPreviousHistory !== true
     }
   }
+}
+
+// One unreadable entry would otherwise fail every later scan, since a failed scan never rewrites the sidecar.
+function isSourceRecord(source: unknown): boolean {
+  return typeof source === 'object' && source !== null && !Array.isArray(source)
 }
 
 export async function writeUsageSourceCache(

@@ -1,5 +1,5 @@
 import { hideRetainedHostWhileGuestIsBlank } from './browser-client-page-retained-elements'
-import { isWebviewDragPassthroughActive } from './host-guest/webview-drag-passthrough'
+import { isWebviewDragPassthroughActive } from './host-guest/drag/webview-drag-passthrough'
 import {
   isBrowserPageRemotelyViewed,
   onBrowserRemoteViewerChange

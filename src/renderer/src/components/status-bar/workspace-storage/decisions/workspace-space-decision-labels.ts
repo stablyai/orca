@@ -13,39 +13,15 @@ function formatActiveAgents(count: number, t: Translate = translate): string {
   )
 }
 
-function formatCompletedAgents(count: number, t: Translate = translate): string {
-  return t(
-    'auto.components.status.bar.workspaceSpaceDecision.completedAgents',
-    '{{count}} completed agents',
-    { count: count, defaultValue_one: '{{count}} completed agent' }
-  )
-}
-
 export function getAgentDecisionLabel(
   details: WorkspaceDecisionDetails,
   t: Translate = translate
 ): string {
-  const { activeAgentCount, completedAgentCount } = details
-  if (activeAgentCount > 0 && completedAgentCount > 0) {
-    return t(
-      'auto.components.status.bar.workspaceSpaceDecision.activeAndCompletedAgents',
-      '{{active}}, {{completed}}',
-      {
-        active: formatActiveAgents(activeAgentCount, t),
-        completed: formatCompletedAgents(completedAgentCount, t)
-      }
-    )
-  }
+  const { activeAgentCount } = details
   if (activeAgentCount > 0) {
     return formatActiveAgents(activeAgentCount, t)
   }
-  if (completedAgentCount > 0) {
-    return t(
-      'auto.components.status.bar.workspaceSpaceDecision.completedAgentsRetained',
-      '{{count}} completed agents retained',
-      { count: completedAgentCount, defaultValue_one: '{{count}} completed agent retained' }
-    )
-  }
+
   return t(
     'auto.components.status.bar.workspaceSpaceDecision.noTrackedAgents',
     'No tracked agents running'

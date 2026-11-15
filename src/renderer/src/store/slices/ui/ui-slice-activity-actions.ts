@@ -52,19 +52,6 @@ export function createUiActivityActions(set: UISliceSet, _get: UISliceGet): Acti
             })
             stamp = Math.max(stamp, latestAgentTurnTimestamp(liveEntry))
           }
-          const retained = s.retainedAgentsByPaneKey?.[key]
-          if (retained) {
-            collectAcknowledgedAgentNotificationId({
-              state: s,
-              ids: notificationIdsToDismiss,
-              worktreeId: retained.worktreeId,
-              ptyId: retained.tab.ptyId,
-              paneKey: key,
-              stateStartedAt: retained.entry.stateStartedAt,
-              previousAckAt: prev
-            })
-            stamp = Math.max(stamp, latestAgentTurnTimestamp(retained.entry))
-          }
           for (const unsupported of migrationUnsupported) {
             if (unsupported.paneKey === key) {
               stamp = Math.max(stamp, usableTimestamp(unsupported.updatedAt))
@@ -108,9 +95,7 @@ export function createUiActivityActions(set: UISliceSet, _get: UISliceGet): Acti
             next ??= { ...s.acknowledgedAgentsByPaneKey }
             delete next[key]
           }
-          const turnTimestamp =
-            s.agentStatusByPaneKey?.[key]?.stateStartedAt ??
-            s.retainedAgentsByPaneKey?.[key]?.entry.stateStartedAt
+          const turnTimestamp = s.agentStatusByPaneKey?.[key]?.stateStartedAt
           if (
             turnTimestamp !== undefined &&
             s.manuallyUnreadTurnsByPaneKey[key] !== turnTimestamp

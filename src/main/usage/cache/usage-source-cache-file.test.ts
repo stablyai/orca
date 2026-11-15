@@ -4,6 +4,7 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import {
   readUsageSourceCache,
+  readUsageSourceCacheForScan,
   splitUsageCacheFile,
   usageSourceCachePath,
   writeUsageSourceCache
@@ -100,6 +101,31 @@ describe('usage source cache file', () => {
       writeFileSync(ref.path, text)
       expect(await readUsageSourceCache(ref)).toEqual([])
     }
+  })
+
+  it('drops entries that are not records so one bad entry cannot fail every later scan', async () => {
+    const ref = {
+      path: join(directory, 'sources.json'),
+      schemaVersion: 7,
+      worktreeFingerprint: 'w',
+      reuse: true
+    }
+    writeFileSync(
+      ref.path,
+      '{"schemaVersion":7,"worktreeFingerprint":"w","sources":[null,7,["a.jsonl"],{"path":"a.jsonl"}]}'
+    )
+    expect(await readUsageSourceCache(ref)).toEqual([{ path: 'a.jsonl' }])
+    expect(await readUsageSourceCacheForScan({ ...ref, hadPreviousHistory: true })).toEqual({
+      sources: [{ path: 'a.jsonl' }],
+      reuseProjections: true,
+      accountAttributionAvailable: true
+    })
+    writeFileSync(ref.path, '{"schemaVersion":7,"worktreeFingerprint":"w","sources":[null,7,[]]}')
+    expect(await readUsageSourceCacheForScan({ ...ref, hadPreviousHistory: true })).toEqual({
+      sources: [],
+      reuseProjections: true,
+      accountAttributionAvailable: false
+    })
   })
 
   it('keeps the prior cache and removes the partial temp when encoding fails after writing', async () => {

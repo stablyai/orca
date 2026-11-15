@@ -4,7 +4,7 @@ import { registerBrowserClientPagePositionSync } from '../browser-client-page-po
 import {
   isWebviewDragPassthroughActive,
   registerWebviewDragPassthroughSurface
-} from '../host-guest/webview-drag-passthrough'
+} from '../host-guest/drag/webview-drag-passthrough'
 
 export type BrowserDevToolsDockSnapshot = { url: string; width: number; height: number }
 

@@ -177,6 +177,15 @@ export function buildSkillDiscoverySources(
       'home',
       ['agent-skills'],
       'muse'
+    ),
+    // Why: Antigravity also reads its CLI's skill folder beside the `config/skills` install root.
+    source(
+      'home-antigravity-cli',
+      'Antigravity CLI home',
+      pathApi.join(home, '.gemini', 'antigravity-cli', 'skills'),
+      'home',
+      ['agent-skills'],
+      'antigravity'
     )
   ]
 
