@@ -34,11 +34,12 @@ import {
 } from './status-bar-claude-accounts'
 import { handleRunningClaudeSessionsAfterSwitch } from '@/lib/provider-accounts/claude-account-switch-sessions'
 import { AccountRuntimeToggle } from '../composition/StatusBarAccountControls'
+import { InlineUsageSignInAction, InlineUsageSkeleton } from '../usage/InlineProviderUsage'
 import {
-  InlineUsageBars,
-  InlineUsageSignInAction,
-  InlineUsageSkeleton
-} from '../usage/InlineProviderUsage'
+  AccountUsageGauge,
+  AccountUsageNotChecked,
+  isClaudeAccountNotChecked
+} from './AccountUsageGauge'
 import { AccountSwitchSection, AccountSwitchSignedOutHeading } from './AccountSwitchList'
 import { AccountSwitchRowItem } from './AccountSwitchRowItem'
 import { ProviderDetailsMenu } from '../usage/ProviderDetailsMenu'
@@ -244,6 +245,41 @@ export function ClaudeSwitcherForOwner({
     signInId: target.needsSignIn && !hasActiveRuntimeEnvironment ? target.id : null
   }))
   const signedOutRows = rows.filter((row) => row.signInId)
+  // Why not the hook: this runs after an early return, so it must stay a plain call.
+  const notCheckedDescription = t(
+    'auto.components.status.bar.tooltip.claude.waiting.label',
+    'Updates when Claude runs'
+  )
+  // Why: rows follow this desktop's Claude target, so a remote owner's usage could land on the wrong row.
+  const liveActiveUsage = !hasActiveRuntimeEnvironment && !chatAction ? claude : null
+  const rowUsage = (
+    target: (typeof rows)[number]['target'],
+    inactiveUsage: (typeof rows)[number]['inactiveUsage']
+  ): React.ReactNode => {
+    if (target.active && liveActiveUsage) {
+      return (
+        <AccountUsageGauge
+          limits={liveActiveUsage}
+          isFetching={liveActiveUsage.status === 'fetching'}
+        />
+      )
+    }
+    if (inactiveUsage?.isFetching && !inactiveUsage.rateLimits) {
+      return <InlineUsageSkeleton />
+    }
+    if (inactiveUsage?.rateLimits) {
+      return (
+        <AccountUsageGauge
+          limits={inactiveUsage.rateLimits}
+          isFetching={inactiveUsage.isFetching}
+        />
+      )
+    }
+    // Why local only: a remote owner never reads inactive accounts here, so "not checked" would be wrong.
+    return target.id && !target.active && !hasActiveRuntimeEnvironment ? (
+      <AccountUsageNotChecked />
+    ) : null
+  }
   const renderRow = ({
     target,
     inactiveUsage,
@@ -254,6 +290,16 @@ export function ClaudeSwitcherForOwner({
       detail={target.hint}
       active={target.active}
       key={`${selectedGroup?.key}:${target.id ?? 'system'}`}
+      aria-description={
+        !signInId &&
+        !target.active &&
+        target.id &&
+        !hasActiveRuntimeEnvironment &&
+        !inactiveUsage?.isFetching &&
+        isClaudeAccountNotChecked(inactiveUsage?.rateLimits)
+          ? notCheckedDescription
+          : undefined
+      }
       disabled={
         isSwitching ||
         signingInId !== null ||
@@ -278,11 +324,7 @@ export function ClaudeSwitcherForOwner({
         ) : undefined
       }
     >
-      {signInId ? null : inactiveUsage?.isFetching && !inactiveUsage.rateLimits ? (
-        <InlineUsageSkeleton />
-      ) : inactiveUsage?.rateLimits ? (
-        <InlineUsageBars limits={inactiveUsage.rateLimits} isFetching={inactiveUsage.isFetching} />
-      ) : null}
+      {signInId ? null : rowUsage(target, inactiveUsage)}
     </AccountSwitchRowItem>
   )
 
@@ -319,7 +361,7 @@ export function ClaudeSwitcherForOwner({
       onOpenChange={handleOpenChange}
     >
       <AccountSwitchSection
-        heading={t('auto.components.status.bar.StatusBar.d450654fa2', 'Claude Account')}
+        heading={t('auto.components.status.bar.AccountSwitchList.accounts', 'Accounts')}
         targets={selectedGroup?.targets ?? []}
         panelShowsActiveAccount={!hasActiveRuntimeEnvironment}
         onOpenSettings={() => {

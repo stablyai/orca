@@ -136,6 +136,33 @@
       "title": "Terminal"
     }
   },
+  "appMove": {
+    "play": {
+      "title": "Orca artık Google Play'de",
+      "description": "Bu uygulama çalışmaya devam ediyor, ancak güncellemeler artık Google Play üzerinden geliyor. Geçiş birkaç dakika sürer.",
+      "installTitle": "Orca'yı Google Play'den yükleyin",
+      "installDescription": "Bunu şimdi, nerede olursanız olun yapabilirsiniz.",
+      "openGooglePlay": "Google Play'i aç",
+      "cantUseGooglePlay": "Google Play'i kullanamıyorum"
+    },
+    "download": {
+      "title": "Yeni Orca uygulamasını edinin",
+      "description": "Bu uygulama çalışmaya devam ediyor, ancak güncellemeler ve güvenlik düzeltmeleri artık yeni uygulama üzerinden geliyor. Geçiş birkaç dakika sürer.",
+      "installTitle": "Yeni uygulamayı indirin",
+      "installDescription": "Telefonunuz sorarsa tarayıcınızın uygulama yüklemesine izin verin.",
+      "download": "İndir",
+      "keepThisVersion": "Bu sürümü kullanmaya devam et",
+      "keepThisVersionNote": "Güvenlik düzeltmelerini kaçıracaksınız. Size bir hafta sonra hatırlatacağız."
+    },
+    "pairTitle": "Bilgisayarınızla eşleştirin",
+    "pairDescription": "Bilgisayarınızdaki Orca'da Ayarlar → Mobil bölümüne gidin ve kodu tarayın.",
+    "deleteTitle": "Bu uygulamayı silin",
+    "deleteDescription": "Yeni uygulama ajanlarınızı gösterdiğinde. O zamana kadar bunu kullanmaya devam edin.",
+    "dataKept": "Ajanlarınız, sohbetleriniz ve çalışma alanlarınız bilgisayarınızda kayıtlı, bu yüzden hepsini yeni uygulamada göreceksiniz.",
+    "banner": {
+      "seeHowToSwitch": "Nasıl geçiş yapılır"
+    }
+  },
   "browser": {
     "addressField": {
       "urlPlaceholder": "URL"

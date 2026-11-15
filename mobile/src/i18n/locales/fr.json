@@ -140,6 +140,33 @@
       "title": "Terminal"
     }
   },
+  "appMove": {
+    "play": {
+      "title": "Orca est maintenant sur Google Play",
+      "description": "Cette app fonctionne toujours, mais les mises à jour arrivent désormais par Google Play. Le changement ne prend que quelques minutes.",
+      "installTitle": "Installez Orca depuis Google Play",
+      "installDescription": "Vous pouvez le faire dès maintenant, où que vous soyez.",
+      "openGooglePlay": "Ouvrir Google Play",
+      "cantUseGooglePlay": "Je ne peux pas utiliser Google Play"
+    },
+    "download": {
+      "title": "Installez la nouvelle app Orca",
+      "description": "Cette app fonctionne toujours, mais les mises à jour et correctifs de sécurité arrivent désormais par la nouvelle app. Le changement ne prend que quelques minutes.",
+      "installTitle": "Téléchargez la nouvelle app",
+      "installDescription": "Si votre téléphone le demande, autorisez votre navigateur à installer des apps.",
+      "download": "Télécharger",
+      "keepThisVersion": "Continuer avec cette version",
+      "keepThisVersionNote": "Vous ne recevrez plus les correctifs de sécurité. Nous vous le rappellerons dans une semaine."
+    },
+    "pairTitle": "Appairez-la avec votre ordinateur",
+    "pairDescription": "Dans Orca sur votre ordinateur, allez dans Paramètres → Mobile et scannez le code.",
+    "deleteTitle": "Supprimez cette app",
+    "deleteDescription": "Une fois que la nouvelle app affiche vos agents. D'ici là, continuez d'utiliser celle-ci.",
+    "dataKept": "Vos agents, discussions et espaces de travail sont enregistrés sur votre ordinateur : vous les retrouverez tous dans la nouvelle app.",
+    "banner": {
+      "seeHowToSwitch": "Voir comment changer"
+    }
+  },
   "browser": {
     "addressField": {
       "urlPlaceholder": "URL"
