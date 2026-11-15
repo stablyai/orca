@@ -22,8 +22,9 @@ export function pickCloudServerName(
     return first
   }
   const numbered = number ? `${base} ${formatWorkspaceNumber(number)}` : base
-  for (let n = 1; n < 100; n++) {
-    const candidate = label(n === 1 && number ? numbered : `${numbered} ${n}`)
+  // "W-715", then "W-715 2", "W-715 3"; without a number, "2", "3".
+  for (let n = number ? 1 : 2; n < 100; n++) {
+    const candidate = label(n === 1 ? numbered : `${numbered} ${n}`)
     if (free(candidate)) {
       return candidate
     }
