@@ -92,6 +92,7 @@ function registerPendingVmCheckoutHandlers(): void {
       // window publishes its empty set when it starts.
       const drop = (): void => {
         pendingCheckoutOwners.delete(ownerId)
+        sender.removeListener('destroyed', drop)
         sender.removeListener('render-process-gone', drop)
         pendingVmCheckouts.publish(ownerId, [])
       }
