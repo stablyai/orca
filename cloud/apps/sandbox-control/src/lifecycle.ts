@@ -15,7 +15,7 @@ import {
 } from './guardrails'
 import { DEFAULT_EGRESS_ALLOWLIST, DEFAULT_EGRESS_PRESET, KEYS_WITHHELD_BODY, compileNetworkPolicy, egressProxyMissing, gitBasicAuthorization, type CredentialRoute, type EgressPreset, type PlatformHostSuffixesConfigError } from './network-policy'
 import { applyQueuedRevokes } from './grant-revokes'
-import { ensureEntryPoints } from './golden-images'
+import { ENTRY_POINTS_PROBE, ensureEntryPoints, entryPointsBehind, installEntryPoints, parseEntryPointsProbe } from './golden-images'
 import { RUNTIME_REFRESH_SCRIPT, type RuntimeBundle } from './runtime-bundles'
 import { memberPlaceholder, type MemberGitIdentity } from './github-user-tokens'
 import { connectedMembers, memberGitConfigs } from './member-git'
@@ -638,7 +638,9 @@ export const MEMBERS_COMMAND = '/opt/orca/bin/orca-sandbox-members'
 /**
  * ENV-STALE boot step: a sandbox whose orcad is behind its region's active golden (booted from an environment
  * build snapshot, or resumed from an older image) installs the golden's runtime bundle before orcad starts.
- * Best effort and quiet: any failure keeps the old orcad, and every outcome is logged with its timing.
+ * The same command probes the VM's entry points (ENTRY-POINTS-BEFORE-START): scripts older than this
+ * Worker's are installed before the start script runs, so the common case adds no round trip.
+ * Best effort and quiet: any failure keeps the old orcad and scripts, and every outcome is logged with its timing.
  */
 export async function refreshRuntime(deps: LifecycleDeps, row: SandboxRow, sessionId: string): Promise<string | null> {
   if (!deps.runtimeRefresh) {
@@ -647,28 +649,41 @@ export async function refreshRuntime(deps: LifecycleDeps, row: SandboxRow, sessi
   const started = deps.now()
   let result = 'error'
   let target: string | null = null
+  let entryPoints = 'unknown'
   try {
     const plan = await deps.runtimeRefresh(row.region, started)
-    if (!plan) {
-      result = 'no_bundle'
-      return result
-    }
-    target = plan.bundle.commit
+    target = plan?.bundle.commit ?? null
     const run = await deps.provider.runCommand(sessionId, {
       command: 'bash',
-      args: ['-c', RUNTIME_REFRESH_SCRIPT],
-      env: { WANT: plan.bundle.commit, SHA: plan.bundle.sha256, RT: plan.bundle.runtime, URL: plan.url },
+      args: ['-c', plan ? `${ENTRY_POINTS_PROBE}\n${RUNTIME_REFRESH_SCRIPT}` : ENTRY_POINTS_PROBE],
+      env: plan ? { WANT: plan.bundle.commit, SHA: plan.bundle.sha256, RT: plan.bundle.runtime, URL: plan.url } : {},
       sudo: true,
       timeoutMs: 40_000
     })
-    result = run.stdout.trim().split('\n').pop() ?? 'error'
+    result = plan ? (run.stdout.trim().split('\n').pop() ?? 'error') : 'no_bundle'
+    const image = parseEntryPointsProbe(run.stdout)
+    entryPoints = entryPointsBehind(image) ? 'behind' : image ? 'current' : 'unknown'
+    if (entryPoints === 'behind') {
+      entryPoints = await installEntryPoints(deps, sessionId).then(
+        () => 'installed',
+        () => 'install_failed'
+      )
+    }
     return result
   } catch {
     return result
   } finally {
     const [outcome, from] = result.split(' ')
     console.log(
-      JSON.stringify({ event: 'runtime_refresh', sandboxId: row.id, outcome, from: from ?? null, to: target, ms: deps.now() - started })
+      JSON.stringify({
+        event: 'runtime_refresh',
+        sandboxId: row.id,
+        outcome,
+        from: from ?? null,
+        to: target,
+        entryPoints,
+        ms: deps.now() - started
+      })
     )
   }
 }

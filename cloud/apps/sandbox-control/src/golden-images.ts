@@ -362,13 +362,13 @@ export function entryPointsVersion(): string {
 
 // One round trip: the image's scripts stamp (missing = 0: images from before stamps) and whether
 // this Worker's entry points are already installed.
-const ENTRY_POINTS_PROBE = [
+export const ENTRY_POINTS_PROBE = [
   'stamp="$(cat /opt/orca/bin/.scripts-stamp 2>/dev/null || true)"',
   'echo "stamp=${stamp:-0}"',
   `if [ -e /opt/orca/bin/.entry-points-${VM_SCRIPTS_HASH} ]; then echo marker=1; else echo marker=0; fi`
 ].join('\n')
 
-function parseEntryPointsProbe(stdout: string): { stamp: number; marker: boolean } | null {
+export function parseEntryPointsProbe(stdout: string): { stamp: number; marker: boolean } | null {
   const marker = /^marker=([01])$/m.exec(stdout)?.[1]
   if (marker === undefined) {
     return null
@@ -397,6 +397,16 @@ export async function ensureEntryPoints(deps: { provider: Pick<SandboxProviderAp
     return
   }
   await installEntryPoints(deps, sessionId)
+}
+
+/**
+ * ENTRY-POINTS-BEFORE-START: a boot from an environment build made on an older golden would run that
+ * golden's orca-sandbox-start (no agent prefetch, no OpenCode first run) until the environment is
+ * rebuilt, hours later. True when the image's scripts are older than this Worker's: no marker for this
+ * set and a lower stamp (an equal stamp is the same scripts: the stamp only moves when they change).
+ */
+export function entryPointsBehind(image: { stamp: number; marker: boolean } | null): boolean {
+  return image !== null && !image.marker && image.stamp < VM_SCRIPTS_STAMP
 }
 
 export async function installEntryPoints(deps: { provider: Pick<SandboxProviderApi, 'runCommand'> }, sessionId: string): Promise<void> {
