@@ -16,7 +16,6 @@ import {
   rewriteWatcherEvents,
   resolveWatcherRootPaths
 } from '../root-paths/watcher-event-root-path-rewrite'
-import { withMacosProtectedWatchExclusions } from '../root-paths/macos-protected-watch-exclusions'
 import type {
   HostToWatcherMessage,
   WatcherProcessSubscribeOptions
@@ -69,7 +68,7 @@ export function sendWatcherSubscribe(
 export function subscribeThroughWatcherSupervisor({
   dir,
   callback: rawCallback,
-  opts: callerOpts,
+  opts,
   hooks,
   shutdownRequested,
   entryPath,
@@ -106,8 +105,6 @@ export function subscribeThroughWatcherSupervisor({
   }
   // Watch the resolved directory, then restore caller spelling for desktop/runtime/relay paths; native backends reject or canonicalize aliases.
   const { watchRoot, rewriteEventPath } = resolveWatcherRootPaths(dir)
-  // Decide exclusions against the canonical root that is actually subscribed.
-  const opts = withMacosProtectedWatchExclusions(watchRoot, callerOpts)
   const callback: WatcherProcessCallback = (error, events) =>
     rawCallback(error, rewriteWatcherEvents(events, rewriteEventPath))
   // Vitest mocks Parcel in-process instead of forking a watcher child.

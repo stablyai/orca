@@ -1,3 +1,4 @@
+import { realpathSync } from 'node:fs'
 import { mkdir, mkdtemp, realpath, rm, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -49,17 +50,22 @@ describe.skipIf(process.platform !== 'darwin')(
     ): Promise<Event[]> {
       const { watchRoot } = resolveWatcherRootPaths(requestedRoot)
       const base = buildParcelWatcherIgnoreOptions(WATCHER_IGNORE_DIRS)
-      const opts = homes ? withMacosProtectedWatchExclusions(watchRoot, base, { homes }) : base
+      const opts = homes
+        ? withMacosProtectedWatchExclusions(watchRoot, base, {
+            homes,
+            realpath: realpathSync.native
+          })
+        : base
       const events: Event[] = []
       subscription = await subscribe(watchRoot, (_error, batch) => events.push(...batch), opts)
       const canonicalLibrary = await realpath(fixture.library)
       const sentinel = join(watchRoot, 'notes.md')
+      let revision = 0
       await vi.waitFor(
         async () => {
-          await Promise.all(
-            fixture.containerFiles.map((file) => writeFile(file, String(Date.now())))
-          )
-          await writeFile(sentinel, String(Date.now()))
+          revision += 1
+          await Promise.all(fixture.containerFiles.map((file) => writeFile(file, `v${revision}`)))
+          await writeFile(sentinel, `v${revision}`)
           expect(events.some((event) => event.path === sentinel)).toBe(true)
         },
         { timeout: DELIVERY_TIMEOUT_MS, interval: 200 }

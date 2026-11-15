@@ -1,5 +1,7 @@
 // Isolate native watcher teardown crashes so they cannot kill the app and its agent sessions (#7547).
+import { realpathSync } from 'node:fs'
 import type * as ParcelWatcher from '@parcel/watcher'
+import { withMacosProtectedWatchExclusions } from './root-paths/macos-protected-watch-exclusions'
 import { loadParcelWatcher } from './native-subscriptions/parcel-watcher-module-loader'
 import { startShallowWatcher } from './native-subscriptions/parcel-watcher-shallow-subscription'
 import { detectShallowWatchDelivery } from './native-subscriptions/shallow-watch-delivery-probe'
@@ -144,7 +146,10 @@ function main(): void {
                   )
               }
             },
-            opts as ParcelWatcher.Options
+            // The host sends the canonical root; decide exclusions here, off Electron main.
+            withMacosProtectedWatchExclusions(dir, opts, {
+              realpath: realpathSync.native
+            }) as ParcelWatcher.Options
           )
         } finally {
           activeSubscriptionCrawlId = null
