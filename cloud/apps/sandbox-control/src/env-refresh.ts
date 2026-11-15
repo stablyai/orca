@@ -3,6 +3,7 @@
 // memory-only env file new shells and agent launches read. Processes already running keep the
 // values they started with. Egress routes and the allowlist follow the new env first, so a new
 // model key is reachable before any shell can see its placeholder.
+import type { CredentialChange } from './credential-outbox'
 import { applySandboxPolicy, firewallClasses, type LifecycleDeps } from './lifecycle'
 import { ProviderError } from './sandbox-provider'
 import { refreshSessionEnv } from './sandbox-vm-commands'
@@ -101,6 +102,53 @@ export async function refreshSandboxEnv(deps: LifecycleDeps, row: SandboxRow): P
     }
     throw error
   }
+}
+
+/** Why a credential push re-applies the policy (design §7): the narrowing ones are in NARROWING_POLICY_REASONS. */
+export type PolicyReason = 'refresh' | 'account_revoked' | 'account_signed_out' | 'credential_deleted'
+
+/** The reason for a credential change, from its current state (the outbox records only that it changed). */
+async function reasonFor(deps: LifecycleDeps, change: CredentialChange): Promise<PolicyReason> {
+  if (change.kind === 'account') {
+    const row = await deps.db
+      .prepare('SELECT state, expires_at FROM agent_credentials WHERE user_id = ? AND agent = ?')
+      .bind(change.userId, change.agent)
+      .first<{ state: string; expires_at: number | null }>()
+    if (!row) {
+      return 'credential_deleted'
+    }
+    if (row.state === 'revoked') {
+      return 'account_revoked'
+    }
+    return row.expires_at !== null && row.expires_at <= deps.now() ? 'account_signed_out' : 'refresh'
+  }
+  const row = await deps.db
+    .prepare('SELECT access_expires_at, last_error FROM github_user_tokens WHERE account_id = ? AND user_id = ?')
+    .bind(change.accountId, change.userId)
+    .first<{ access_expires_at: number | null; last_error: string | null }>()
+  const dead = !row || (row.access_expires_at !== null && row.access_expires_at <= deps.now()) || ['bad_refresh_token', 'refresh_expired', 'no_refresh_token'].includes(row.last_error ?? '')
+  return dead ? 'credential_deleted' : 'refresh'
+}
+
+/**
+ * EGRESS-REFRESH push: a credential this sandbox carries changed (refreshed, expired, revoked, removed). An
+ * account sign-in also changes the session env (placeholders come and go), so that is refreshed first; the
+ * policy is then rewritten whole. False when the sandbox is no longer running (nothing to push).
+ */
+export async function pushCredentialToSandbox(deps: LifecycleDeps, sandboxId: string, change: CredentialChange): Promise<boolean> {
+  const row = await deps.db.prepare('SELECT * FROM sandboxes WHERE id = ?').bind(sandboxId).first<SandboxRow>()
+  if (!row || row.status !== 'running' || !row.session_id) {
+    return false
+  }
+  if (change.kind === 'account') {
+    await refreshSandboxEnv(deps, row)
+  }
+  const current = (await deps.db.prepare('SELECT * FROM sandboxes WHERE id = ?').bind(sandboxId).first<SandboxRow>()) ?? row
+  const applied = await applySandboxPolicy(deps, current, await reasonFor(deps, change), { sessionId: current.session_id ?? row.session_id })
+  if (applied.gitExpiresAt !== null) {
+    await transition(deps.db, current, { github_token_expires_at: applied.gitExpiresAt }, deps.now())
+  }
+  return true
 }
 
 const REFRESH_CONCURRENCY = 8

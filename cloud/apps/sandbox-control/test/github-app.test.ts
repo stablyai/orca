@@ -153,8 +153,11 @@ describe('GitHub App installation tokens', () => {
     expect(await minter.tokenForRepo(REPO, 'user:bob')).toBeNull()
     expect(github.calls.filter((c) => c.path.endsWith('/access_tokens'))).toHaveLength(1)
 
-    now += 30 * MIN
+    // Cached while more than REFRESH_MARGIN_MS (30 min) is left; re-minted after that (EGRESS-REFRESH).
+    now += 29 * MIN
     expect(await minter.tokenForRepo('https://github.com/alice-gh/private-repo', 'user:alice')).toEqual(token)
+    now += 2 * MIN
+    expect(await minter.tokenForRepo(REPO, 'user:alice')).not.toEqual(token)
     bound.delete('77:user:alice')
     expect(await minter.tokenForRepo(REPO, 'user:alice')).toBeNull()
 

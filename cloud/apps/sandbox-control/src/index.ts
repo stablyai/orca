@@ -133,11 +133,14 @@ import { reconcile } from './reconcile'
 import { egressAccountRoutes, egressSecretHosts, placeholderValues, secretPlaceholder } from './secret-egress'
 import { SecretError, handleSecretsRoute, keyringFor, type SecretChange } from './secrets'
 import { SecretsKmsError } from './secrets-kms'
-import { refreshAfterSecretChange, refreshSandboxEnv } from './env-refresh'
-import { ACCOUNT_PROVIDERS, accountProvider, isSharedWorkspace } from './account-providers'
-import { handleAccountRequestSucceeded, handleAccountUnauthorized, verifyAccountCredential } from './agent-credential-checks'
+import { pushCredentialToSandbox, refreshAfterSecretChange, refreshSandboxEnv } from './env-refresh'
+import { credentialPushTargets, markCredentialChanged, pushCredentialChange, pushPendingCredentialChanges, type CredentialChange, type PushDeps } from './credential-outbox'
+import { markExpiredAccountCredentials, refreshGitHubUserTokens } from './credential-refresh'
+import type { CredentialAgent } from './agent-credential-names'
+import { ACCOUNT_PROVIDERS, accountProvider, claudeAccount, isSharedWorkspace } from './account-providers'
+import { handleAccountRequestSucceeded, handleAccountUnauthorized, runScheduledAccountChecks, verifyAccountCredential } from './agent-credential-checks'
 import { codexBrokerTick, handleCodexBrokerRoute, type BrokerDeps } from './codex-broker'
-import { codexAccount, refreshCodexLeases } from './codex-credentials'
+import { codexAccount, parseStoredCodex, refreshCodexLeases, storeCodexLogin } from './codex-credentials'
 import {
   AgentCredentialError,
   PutClaudeSchema,
@@ -409,7 +412,7 @@ function egressRoutes(env: Env, deps: Deps): (row: SandboxRow, host: string) => 
   // A refreshed Codex token reaches every place that holds it: caches, and running firewall policies.
   const codexChanged = async (userId: string): Promise<void> => {
     forgetAccountCredential(userId, 'codex')
-    await refreshOwnersSandboxes(env, deps, userId)
+    await refreshOwnersSandboxes(env, deps, userId, 'codex')
   }
   // CODEX-PLACEHOLDER-REFRESH: Codex in the sandbox refreshing its placeholder login (POST /oauth/token, no
   // placeholder header: the policy forwards it by path). It gets the placeholder back, never a real token,
@@ -546,7 +549,7 @@ function egressRoutes(env: Env, deps: Deps): (row: SandboxRow, host: string) => 
                     return
                   }
                   forgetAccountCredential(row.user_id, agent)
-                  await refreshOwnersSandboxes(env, deps, row.user_id)
+                  await refreshOwnersSandboxes(env, deps, row.user_id, agent)
                 })
                 if (deps.waitUntil) {
                   deps.waitUntil(work.catch(() => undefined))
@@ -637,28 +640,33 @@ function scheduleEnvRefresh(env: Env, deps: Deps, row: SandboxRow): void {
   }
 }
 
-/** Running sandboxes of this person whose session env depends on their account credential. */
-async function refreshOwnersSandboxes(env: Env, deps: Deps, userId: string): Promise<void> {
-  const { results } = await env.SANDBOX_DB.prepare(`SELECT * FROM sandboxes WHERE user_id = ? AND status = 'running' LIMIT 200`).bind(userId).all<SandboxRow>()
-  if (results.length === 0) {
-    return
-  }
+/**
+ * This person's account sign-in changed: every running sandbox of theirs gets the new session env and policy.
+ * Recorded in the outbox first (credential-outbox.ts), so a push this isolate can't finish is retried by the tick.
+ */
+async function refreshOwnersSandboxes(env: Env, deps: Deps, userId: string, agent: CredentialAgent): Promise<void> {
+  const change: CredentialChange = { kind: 'account', agent, userId }
   const work = lifecycleDeps(env, deps).then(async (life) => {
     if (life) {
-      for (const row of results) {
-        await refreshSandboxEnv(life, row).catch(() => false)
-        // CODEX-FIREWALL-SWAP: the firewall holds the token itself, so a refreshed one must reach it now.
-        if ((life.config.codexFirewallSwap || egressSwapModeFor(life, row) === 'firewall') && row.session_id && egressAccountRoutes(row).some((route) => route.agent === 'codex')) {
-          // applySandboxPolicy logs a failure itself (code only, never the error text: it could echo a header).
-          await applySandboxPolicy(life, row, 'refresh').catch(() => undefined)
-        }
-      }
+      await pushCredentialChange(credentialPushDeps(life), change)
+    } else {
+      await markCredentialChanged(env.SANDBOX_DB, change, (deps.now ?? Date.now)())
     }
   })
   if (deps.waitUntil) {
     deps.waitUntil(work.catch(() => undefined))
   } else {
     await work
+  }
+}
+
+/** The outbox's push: the lifecycle's whole-policy rewrite (env-refresh.ts), per affected running sandbox. */
+function credentialPushDeps(life: LifecycleDeps): PushDeps {
+  return {
+    db: life.db,
+    now: life.now,
+    targets: (change) => credentialPushTargets(life.db, change),
+    push: (sandboxId, change) => pushCredentialToSandbox(life, sandboxId, change)
   }
 }
 
@@ -673,7 +681,7 @@ async function codexBrokerDeps(env: Env, deps: Deps): Promise<BrokerDeps | null>
     keyring,
     onStored: async (userId) => {
       forgetAccountCredential(userId, 'codex')
-      await refreshOwnersSandboxes(env, deps, userId)
+      await refreshOwnersSandboxes(env, deps, userId, 'codex')
     }
   }
 }
@@ -697,7 +705,7 @@ async function agentCredentialsRoute(request: Request, url: URL, env: Env, deps:
       }
       await putClaudeCredential(db, await keyring, env, caller, body.data, now)
       forgetAccountCredential(caller.userId, 'claude')
-      await refreshOwnersSandboxes(env, deps, caller.userId)
+      await refreshOwnersSandboxes(env, deps, caller.userId, 'claude')
       return noStore(await agentCredentialsView(db, env, caller.userId, now))
     }
     // Pre-launch check (desktop): a recent pass answers at once; otherwise one rate-limited auth check with
@@ -717,7 +725,7 @@ async function agentCredentialsRoute(request: Request, url: URL, env: Env, deps:
       })
       if (result.outcome === 'revoked') {
         forgetAccountCredential(caller.userId, 'claude')
-        await refreshOwnersSandboxes(env, deps, caller.userId)
+        await refreshOwnersSandboxes(env, deps, caller.userId, 'claude')
       }
       if (result.outcome === 'suspect') {
         forgetAccountCredential(caller.userId, 'claude')
@@ -736,7 +744,7 @@ async function agentCredentialsRoute(request: Request, url: URL, env: Env, deps:
       }
       forgetAccountCredential(caller.userId, agent)
       console.log(JSON.stringify({ event: 'agent_credential_deleted', agent, by: caller.userId }))
-      await refreshOwnersSandboxes(env, deps, caller.userId)
+      await refreshOwnersSandboxes(env, deps, caller.userId, agent)
       return noStore(await agentCredentialsView(db, env, caller.userId, now))
     }
     return fail('not_found', 404)
@@ -1513,6 +1521,21 @@ async function routeRequest(request: Request, env: Env, deps: Deps): Promise<Res
         )
         return json({ stored: true, expiresAt: minted.expiresAt })
       }
+      if (url.pathname === '/v1/internal/dev/codex-login' && request.method === 'POST' && env.SANDBOX_ENV !== 'prod') {
+        // Dev rehearsal only (EGRESS-REFRESH): store a Codex login for a throwaway identity, so the central
+        // refresher can be exercised with a near-expiry or bogus token without a real ChatGPT sign-in.
+        const body = DevCodexLoginSchema.safeParse(await readJson(request))
+        const keyring = keyringFor(env)
+        const tokens = body.success ? parseStoredCodex(JSON.stringify({ ...body.data.tokens, account_id: null })) : null
+        if (!body.success || !tokens) {
+          return fail('invalid_request', 400)
+        }
+        if (!keyring) {
+          return fail('not_configured', 503)
+        }
+        await storeCodexLogin(env.SANDBOX_DB, await keyring, { userId: body.data.userId, accountId: body.data.accountId }, tokens, life.now())
+        return json({ stored: true })
+      }
       if (url.pathname === '/v1/internal/org-members/removed' && request.method === 'POST') {
         // Auth pushes this when a member leaves or is removed: everything of theirs stops acting for them.
         const body = MemberRemovedSchema.safeParse(await readJson(request))
@@ -2280,6 +2303,14 @@ async function internalInstallUrl(env: Env, deps: Deps, url: URL): Promise<Respo
   }
 }
 
+const DevCodexLoginSchema = z
+  .object({
+    accountId: z.string().min(1).max(160).regex(/^dev:/),
+    userId: z.string().min(1).max(128).regex(/^[A-Za-z0-9_.:-]+$/),
+    tokens: z.object({ access_token: z.string().min(1).max(16_384), refresh_token: z.string().min(1).max(16_384), id_token: z.string().min(1).max(16_384) }).strict()
+  })
+  .strict()
+
 const DevMemberGitHubSchema = z
   .object({
     accountId: z.string().min(1).max(160),
@@ -2785,6 +2816,7 @@ export default {
       })
     )
     const fifthMinute = new Date(controller.scheduledTime).getUTCMinutes() % 5 === 0
+    ctx.waitUntil(credentialTick(env, fifthMinute))
     if (env.AGENT_ACCOUNTS_CODEX === 'on') {
       ctx.waitUntil(codexTick(env, fifthMinute))
     }
@@ -2860,6 +2892,57 @@ export async function codexTick(env: Env, fifthMinute: boolean, deps: Deps = {})
     if (!('due' in refresh) || refresh.due > 0) {
       console.log(JSON.stringify({ event: 'codex_refresh', ...refresh }))
     }
+  }
+}
+
+/**
+ * EGRESS-REFRESH (credential-refresh.ts): every minute, expired sign-ins are recorded and pending credential
+ * changes are pushed to running sandboxes' policies; every fifth, member GitHub tokens are refreshed ahead of
+ * expiry and Claude sign-ins in use get their scheduled check (needs-check only, never a revoke). (Codex: codexTick; GitHub App
+ * installation tokens: reconcile.) Counts only reach the log.
+ */
+export async function credentialTick(env: Env, fifthMinute: boolean, deps: Deps = {}): Promise<void> {
+  const life = await lifecycleDeps(env, deps)
+  if (!life) {
+    return
+  }
+  const db = env.SANDBOX_DB
+  const now = deps.now ?? Date.now
+  const report: Record<string, unknown> = {}
+  const guard = async <T>(name: string, step: () => Promise<T>): Promise<T | null> =>
+    step().catch((error: unknown) => {
+      report[name] = { error: String(error).slice(0, 200) }
+      return null
+    })
+  const expired = await guard('expired', () => markExpiredAccountCredentials(db, now()))
+  if (expired) {
+    report.expired = expired
+  }
+  const keyring = keyringFor(env)
+  if (fifthMinute && keyring) {
+    const ring = await keyring
+    const connect = githubConnect(env, deps)
+    if (connect) {
+      const users = await guard('githubUsers', () => refreshGitHubUserTokens({ db, keyring: ring, config: connect, now }))
+      if (users && users.due > 0) {
+        report.githubUsers = users
+      }
+    }
+    if (providerEnabled(env).claude) {
+      const checks = await guard('claudeChecks', () =>
+        runScheduledAccountChecks({ db, keyring: ring, provider: claudeAccount, now: now(), fetch: deps.egressFetch ?? fetch })
+      )
+      if (checks && checks.due > 0) {
+        report.claudeChecks = checks
+      }
+    }
+  }
+  const pushed = await guard('pushes', () => pushPendingCredentialChanges(credentialPushDeps(life)))
+  if (pushed && pushed.pending > 0) {
+    report.pushes = pushed
+  }
+  if (Object.keys(report).length > 0) {
+    console.log(JSON.stringify({ event: 'credential_tick', ...report }))
   }
 }
 

@@ -20,8 +20,9 @@ export type GitHubAppMinter = {
   /**
    * Repo token (contents + pull requests). `issues: true` also asks for issues:write (routine comments on
    * plain issues); an installation that has not accepted that permission yet gets the standard token.
+   * `minValidityMs` (EGRESS-REFRESH): a cached token with less than this left is re-minted (default REFRESH_MARGIN_MS).
    */
-  tokenForRepo(repoUrl: string, accountId: string, options?: { issues?: boolean }): Promise<GitHubRepoToken | null>
+  tokenForRepo(repoUrl: string, accountId: string, options?: { issues?: boolean; minValidityMs?: number }): Promise<GitHubRepoToken | null>
   /** App-level installation lookup (operator binding). Null when absent. */
   getInstallation(installationId: number): Promise<GitHubInstallation | null>
   /** The installation covering a github.com repo URL, or null. */
@@ -63,7 +64,12 @@ export type GitHubListedRepo = {
 /** Whether `accountId` holds a live binding to the installation. */
 export type InstallationBindingCheck = (installationId: number, accountId: string) => Promise<boolean>
 
-const REFRESH_MARGIN_MS = 5 * 60_000
+/**
+ * A cached token with less than this left is re-minted. EGRESS-REFRESH: longer than reconcile's rotation
+ * window (GITHUB_TOKEN_ROTATE_AHEAD_MS), so a policy rotation always gets a token with most of its hour left
+ * and the token sitting in a live policy never runs out between two reconcile ticks.
+ */
+export const REFRESH_MARGIN_MS = 30 * 60_000
 const REPO_PERMISSIONS = { contents: 'write', pull_requests: 'write', metadata: 'read' } as const
 
 const OrgMembershipBody = z.looseObject({
@@ -280,7 +286,7 @@ export function createGitHubAppMinter(config: {
       // Separate cache entries: an issues token is never handed to the VM's git/gh path.
       const key = `${parsed.owner}/${parsed.repo}${options.issues ? '#issues' : ''}`.toLowerCase()
       const cached = cache.get(key)
-      if (cached && cached.expiresAt - now() > REFRESH_MARGIN_MS) {
+      if (cached && cached.expiresAt - now() > (options.minValidityMs ?? REFRESH_MARGIN_MS)) {
         // The binding is re-checked on every use: a revoked binding stops a cached token too.
         return (await config.isBound(cached.installationId, accountId)) ? { token: cached.token, expiresAt: cached.expiresAt } : null
       }

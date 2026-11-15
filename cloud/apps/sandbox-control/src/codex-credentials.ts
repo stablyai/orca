@@ -15,6 +15,7 @@ import { codexPathAllowed } from './codex-paths'
 
 export { codexPathAllowed }
 import { credentialBinding, putAgentCredential, readUsableAgentCredential } from './agent-credentials'
+import { markCredentialChanged } from './credential-outbox'
 import type { Keyring } from './secrets-crypto'
 import type { SandboxRow } from './store'
 
@@ -28,8 +29,12 @@ export const CODEX_PLACEHOLDER_ENV = 'ORCA_CODEX_AUTH_PLACEHOLDER'
 
 /** Refresh this long before the access token expires (ChatGPT access tokens last about 10 days). */
 export const REFRESH_AHEAD_MS = 3 * 24 * 60 * 60_000
-/** And at least this often, whatever the token says (Codex itself refreshes every 8 days). */
-export const REFRESH_EVERY_MS = 7 * 24 * 60 * 60_000
+/**
+ * And at least this often, whatever the token says. EGRESS-REFRESH: daily, because a refresh is also the
+ * revocation check (the Worker can't call chatgpt.com, and the firewall swap means no 401 reaches us): a
+ * login signed out at ChatGPT ends here within a day instead of at its access token's expiry.
+ */
+export const REFRESH_EVERY_MS = 24 * 60 * 60_000
 /** Longer than the token call's timeout plus the write: the holder always finishes inside its lease. */
 export const LEASE_MS = 120_000
 const TOKEN_TIMEOUT_MS = 20_000
@@ -216,6 +221,7 @@ export async function storeCodexLogin(
     )
     .bind(owner.userId, accessExpiry(tokens), now)
     .run()
+  await markCredentialChanged(db, { kind: 'account', agent: 'codex', userId: owner.userId }, now)
 }
 
 // ---- lease refresher -------------------------------------------------------------------------------
@@ -386,6 +392,8 @@ export async function refreshCodexCredential(deps: RefreshDeps, userId: string):
       }
       await release(db, userId, owner, { access_expires_at: accessExpiry(next), refreshed_at: now, next_attempt_at: null, failures: 0, last_error: null })
       log('codex_token_refreshed', { userId })
+      // Recorded first: if the immediate push below dies with the isolate, the tick pushes it.
+      await markCredentialChanged(db, { kind: 'account', agent: 'codex', userId }, now)
       await deps.onChanged?.(userId)
       return 'refreshed'
     }
@@ -400,6 +408,7 @@ export async function refreshCodexCredential(deps: RefreshDeps, userId: string):
       }
       await release(db, userId, owner, { failures, last_error: result.code, next_attempt_at: null })
       log('codex_token_dead', { userId, code: result.code })
+      await markCredentialChanged(db, { kind: 'account', agent: 'codex', userId }, now)
       await deps.onChanged?.(userId)
       return 'revoked'
     }
