@@ -59,9 +59,8 @@ type RichMarkdownEditorSurfaceProps = {
   commentOwner: DiffCommentOwner | null
   worktreeId: string
   filePath: string
-  markdownCommentsCount: number
+  markdownComments: readonly DiffComment[]
   reviewRailOpen: boolean
-  reviewNotesCopied: boolean
   unsentMarkdownReviewScope: NotesSendMenuScope<MarkdownReviewNote>[]
   linkBubble: LinkBubbleState | null
   isEditingLink: boolean
@@ -153,9 +152,8 @@ export function RichMarkdownEditorSurface({
   commentOwner,
   worktreeId,
   filePath,
-  markdownCommentsCount,
+  markdownComments,
   reviewRailOpen,
-  reviewNotesCopied,
   unsentMarkdownReviewScope,
   linkBubble,
   isEditingLink,
@@ -336,14 +334,13 @@ export function RichMarkdownEditorSurface({
           onCancelPopover={onCancelAnnotationPopover}
           onSubmit={onSubmitAnnotation}
         />
-        {markdownCommentsCount > 0 ? (
+        {markdownComments.length > 0 ? (
           <RichMarkdownReviewRailActions
             owner={commentOwner}
             worktreeId={worktreeId}
             filePath={filePath}
-            noteCount={markdownCommentsCount}
+            notes={markdownComments}
             railOpen={reviewRailOpen}
-            notesCopied={reviewNotesCopied}
             unsentScope={unsentMarkdownReviewScope}
             onToggleRail={onToggleReviewRail}
             onCopyNotes={onCopyReviewNotes}

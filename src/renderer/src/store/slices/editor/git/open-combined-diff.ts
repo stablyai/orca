@@ -10,6 +10,22 @@ import { editorOpenOwner, qualifyEditorContentId } from './editor-open-owner'
 import { toBranchCompareSnapshot, toCommitCompareSnapshot } from './git-status-reconciliation'
 import { openWorkspaceEditorItem } from '../tabs/workspace-editor-item'
 
+/** The Changes tab id openAllDiffs uses for this worktree's copy. */
+export function combinedUncommittedDiffId(
+  worktreeId: string,
+  contentOwner: ReturnType<typeof editorOpenOwner>,
+  areaFilter?: string
+): string {
+  const baseId = areaFilter
+    ? `${worktreeId}::all-diffs::uncommitted::${areaFilter}`
+    : `${worktreeId}::all-diffs::uncommitted`
+  return qualifyEditorContentId(
+    baseId,
+    contentOwner.runtimeEnvironmentId,
+    contentOwner.operationProvenance?.generation.route.executionHostId ?? undefined
+  )
+}
+
 export function createOpenCombinedDiff(
   set: EditorSet,
   get: EditorGet
@@ -17,14 +33,7 @@ export function createOpenCombinedDiff(
   return {
     openAllDiffs: (worktreeId, worktreePath, alternate, areaFilter, entriesSnapshot, options) => {
       const contentOwner = editorOpenOwner(get(), worktreeId, options)
-      const baseId = areaFilter
-        ? `${worktreeId}::all-diffs::uncommitted::${areaFilter}`
-        : `${worktreeId}::all-diffs::uncommitted`
-      const id = qualifyEditorContentId(
-        baseId,
-        contentOwner.runtimeEnvironmentId,
-        contentOwner.operationProvenance?.generation.route.executionHostId ?? undefined
-      )
+      const id = combinedUncommittedDiffId(worktreeId, contentOwner, areaFilter)
       const label = areaFilter
         ? ({ staged: 'Staged Changes', unstaged: 'Changes', untracked: 'Untracked Files' }[
             areaFilter

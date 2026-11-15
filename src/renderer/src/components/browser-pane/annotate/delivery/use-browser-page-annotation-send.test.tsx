@@ -129,4 +129,16 @@ describe('website annotations handed to a send', () => {
     act(secondDelivered)
     expect(notes()).toEqual([])
   })
+
+  it('clears the annotations the confirmation counted and keeps ones added since', async () => {
+    const view = mount()
+    const request = view.result.current.createBrowserAnnotationsClearRequest()
+    act(() => store.getState().addBrowserPageAnnotation(second()))
+
+    await act(async () => {
+      await request.clear()
+    })
+
+    expect(notes().map((note) => note.id)).toEqual(['second'])
+  })
 })

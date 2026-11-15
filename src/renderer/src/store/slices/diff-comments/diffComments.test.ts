@@ -187,7 +187,7 @@ describe('bulk clear diff comments', () => {
     )
     const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
 
-    const clearPromise = store.getState().clearDiffComments(capturedOwner(store, WT))
+    const clearPromise = store.getState().deleteDiffCommentsByIds(capturedOwner(store, WT), ['c1'])
     await Promise.resolve()
     seed(store, laterComments)
     rejectPersist(new Error('disk full'))
@@ -197,6 +197,26 @@ describe('bulk clear diff comments', () => {
     expect(ok).toBe(false)
     expect(store.getState().getDiffComments(WT)).toBe(laterComments)
     errSpy.mockRestore()
+  })
+  it('clears the notes it was given and keeps ones added since', async () => {
+    const store = createTestStore()
+    seed(store, [
+      makeComment({ id: 'c1', body: 'edited after the clear was asked' }),
+      makeComment({ id: 'c2' }),
+      makeComment({ id: 'added-later' })
+    ])
+
+    const ok = await store
+      .getState()
+      .deleteDiffCommentsByIds(capturedOwner(store, WT), ['c1', 'c2', 'deleted-elsewhere'])
+
+    expect(ok).toBe(true)
+    expect(
+      store
+        .getState()
+        .getDiffComments(WT)
+        .map((comment) => comment.id)
+    ).toEqual(['added-later'])
   })
 })
 

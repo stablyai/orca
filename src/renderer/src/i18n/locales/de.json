@@ -14105,8 +14105,6 @@
                 "pendingCount_other": "{{count}} ausstehend",
                 "unresolvedCount_one": "{{count}} ungelöst",
                 "unresolvedCount_other": "{{count}} ungelöst",
-                "sendQueuedCommentsToAi_one": "{{count}} Kommentar aus der Warteschlange an die KI senden",
-                "sendQueuedCommentsToAi_other": "{{count}} Kommentare aus der Warteschlange an die KI senden",
                 "conflictsBlockThisMr": "Konflikte blockieren diesen MR",
                 "conflictsBlockThisPr": "Konflikte blockieren diesen PR",
                 "copyComment": "Kommentar kopieren",
@@ -16099,10 +16097,6 @@
           "39b6b9e4e4": "Auf Branch committet"
         },
         "CombinedDiffViewer": {
-          "1da745c551": "Gesendet",
-          "84898c548d": "Leeren",
-          "88b70d0ef5": "Kopieren",
-          "bb84b4c374": "KI-Notizen",
           "948a5fd6c8": "Notizen löschen",
           "0f806a2ab1": "Abbrechen",
           "b6c3b84476": "Dateibaum anzeigen",
@@ -16112,7 +16106,6 @@
           "820ec01f24": "Dateien mit Konflikten werden separat geprüft",
           "fd8892b120": "Keine Änderungen zum Anzeigen",
           "eb5f40e49c": "Diese Diff-Ansicht schließt ungelöste Konflikte aus, da die normale Zwei-Wege-Diff-Verarbeitung Konflikte nicht sicher verarbeiten kann.",
-          "45cf23b418": "Die Notizen konnten nicht gelöscht werden.",
           "ec5053c7f5": "Nebeneinander",
           "f786fd54e1": "Untereinander",
           "ea08dae15b": "Alle einklappen",
@@ -16127,19 +16120,12 @@
           "noExtension": "(keine Dateiendung)",
           "diffLoadTimedOut": "Der Diff wurde nicht vollständig geladen.",
           "diffLoadFailed": "Der Diff konnte nicht geladen werden.",
-          "moreNotesInSourceControl_one": "{{count}} weitere Notiz in der Quellcodeverwaltung",
-          "moreNotesInSourceControl_other": "{{count}} weitere Notizen in der Quellcodeverwaltung",
-          "clearNotesConfirm_one": "{{count}} Notiz aus diesem Worktree löschen?",
-          "clearNotesConfirm_other": "{{count}} Notizen aus diesem Worktree löschen?",
           "changedFilesVs_one": "{{count}} geänderte Datei gegenüber {{baseRef}}",
           "changedFilesVs_other": "{{count}} geänderte Dateien gegenüber {{baseRef}}",
           "changedFilesIn_one": "{{count}} geänderte Datei in {{compareRef}}",
           "changedFilesIn_other": "{{count}} geänderte Dateien in {{compareRef}}",
           "changedFiles_one": "{{count}} geänderte Datei",
           "changedFiles_other": "{{count}} geänderte Dateien",
-          "showAiNotes_one": "{{count}} KI-Notiz anzeigen",
-          "showAiNotes_other": "{{count}} KI-Notizen anzeigen",
-          "send": "Senden",
           "openDiff": "Diff öffnen",
           "openInEditor": "Im Editor öffnen"
         },
@@ -16340,7 +16326,6 @@
           "b1bfc04034": "Ausgewählter Text",
           "f37b98999e": "Diese Notiz",
           "2b2b31382c": "Metadaten",
-          "bb629de58a": "Notizen für Agenten kopieren",
           "322afab6ff": "Review-Notizen",
           "0f9969a159": "Zur ersten Review-Notiz springen",
           "12052c639c": "Suche schließen",
@@ -16411,7 +16396,6 @@
         },
         "NotesSendMenu": {
           "44dc5e60a6": "Notizen senden",
-          "433928cd9f": "{{value0}} an einen Agenten senden",
           "thisNote": "Diese Notiz",
           "noteAlreadySent": "Notiz bereits gesendet",
           "sendNotesToAgent": "Notizen an einen Agenten senden",
@@ -16497,8 +16481,6 @@
           "3ababd949d": "Review-Notizen"
         },
         "RichMarkdownReviewRailActions": {
-          "636394af72": "Notizen für Agenten kopieren",
-          "a807596997": "Notizen kopiert",
           "8aaf2c4c69": "Review-Notizen anzeigen",
           "af02dc2456": "Review-Notizen ausblenden"
         },
@@ -17328,10 +17310,6 @@
             "fa6ea61de3": "Abbrechen",
             "c2ef0359b9": "Inhalt kopieren",
             "f2d0c22d67": "Anmerkung {{value0}} löschen",
-            "11c5084aa2": "Anmerkungen entfernen",
-            "734e4343ec": "Browser-Anmerkungen entfernen",
-            "95af781091": "Feedback an einen Agenten senden",
-            "ac39b9366b": "Senden",
             "366bf5d62c": "Neuen Tab öffnen",
             "781d6459ad": "Erneut versuchen",
             "2fdca7df09": "Ausblenden",
@@ -17363,9 +17341,6 @@
             "b5ba6085de": "Frage",
             "143204e423": "Änderung",
             "b71dc3d930": "Erneut verbinden",
-            "d51ef37351": "Kopieren",
-            "6f4ab3592b": "Kopiert",
-            "499b31b84e": "Alles kopieren",
             "168350ae6a": "Ein Element anklicken oder mit dem Mauszeiger darauf zeigen, dann C zum Kopieren oder S für einen Screenshot drücken.",
             "e852e20cea": "Kopiert – S für einen Screenshot drücken oder ein anderes Element auswählen",
             "777b5bc4ec": "Ein Element anklicken, um Feedback für den Agenten hinzuzufügen.",
@@ -17376,8 +17351,6 @@
             "cc4a071d3a": "Seitenelement mit Anmerkung versehen ({{value0}})",
             "572046436a": "Entfernter Browser",
             "b313a7275b": "Entfernter Browser wird geöffnet",
-            "ea6af700da": "{{value0}} Anmerkung",
-            "c13693fe27": "{{value0}} Anmerkungen",
             "074f0ed10b": "{{value0}} Anmerkung bereit. Ein anderes Element auswählen oder das gesamte Feedback kopieren.",
             "a2164a6e5a": "{{value0}} Anmerkungen bereit. Ein anderes Element auswählen oder das gesamte Feedback kopieren.",
             "9f6f2e8c19": "Der Pfad der heruntergeladenen Datei ist nicht verfügbar.",
@@ -20980,6 +20953,24 @@
     "toastFallbacks": {
       "worktreeCreateFailed": "Worktree konnte nicht erstellt werden.",
       "missingBaseBranchHelp": "Erstellen Sie einen ersten Commit (zum Beispiel auf main) oder wählen Sie unter „Erstellen von“ einen vorhandenen Branch aus und versuchen Sie es erneut."
+    },
+    "notes": {
+      "sendButton": {
+        "clearPageNotes_one": "{{count}} Notiz von dieser Seite löschen?",
+        "clearPageNotes_other": "{{count}} Notizen von dieser Seite löschen?",
+        "sendCommentsToAgent_one": "{{count}} Kommentar an einen Agenten senden",
+        "sendCommentsToAgent_other": "{{count}} Kommentare an einen Agenten senden",
+        "sendNotesToAgent_one": "{{count}} Notiz an einen Agenten senden",
+        "sendNotesToAgent_other": "{{count}} Notizen an einen Agenten senden",
+        "sending": "Wird gesendet…",
+        "sendShort": "{{count}} senden",
+        "sendComments_one": "{{count}} Kommentar senden",
+        "sendComments_other": "{{count}} Kommentare senden",
+        "sendNotes_one": "{{count}} Notiz senden",
+        "sendNotes_other": "{{count}} Notizen senden",
+        "copyNotes": "Notizen kopieren",
+        "clearNotes": "Notizen löschen…"
+      }
     }
   },
   "dashboardPopout": {

@@ -5,6 +5,13 @@ import React, { useCallback, useMemo } from 'react'
 import type { DiffComment } from '../../../../../../shared/diff-comment-types'
 import { formatDiffComments } from '../../../../../../shared/diff-comments-format'
 import { NotesSendMenu, type NotesSendMenuScope } from '../../review-note-delivery/NotesSendMenu'
+import type { SendNotesButtonSize } from '../../review-note-delivery/SendNotesButton'
+import {
+  copyNotesText,
+  diffNotesClearRequest,
+  NotesMenuCopyClearItems,
+  useClearNotesConfirm
+} from '../../review-note-delivery/notes-copy-clear'
 import { useTranslate } from '@/i18n/use-translate'
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 
@@ -19,11 +26,9 @@ export function DiffNotesSendMenu({
   filePath,
   showFileScope = false,
   triggerClassName,
-  triggerLabel,
-  triggerCount,
-  actionLabel,
   iconClassName = 'size-3.5',
   align = 'end',
+  batch,
   respondToOpenRequest = false
 }: {
   /** The copy `comments` were read from, so delivered notes clear there. */
@@ -34,11 +39,10 @@ export function DiffNotesSendMenu({
   filePath?: string
   showFileScope?: boolean
   triggerClassName?: string
-  triggerLabel?: string
-  triggerCount?: number
-  actionLabel?: string
   iconClassName?: string
   align?: 'start' | 'center' | 'end'
+  /** The shared "Send N notes" button, with Copy and Clear for the file (or all notes) in its menu. */
+  batch?: { size?: SendNotesButtonSize; flush?: boolean }
   // Enable on exactly one instance per worktree to avoid opening multiple menus for one shortcut.
   respondToOpenRequest?: boolean
 }): React.JSX.Element {
@@ -88,27 +92,43 @@ export function DiffNotesSendMenu({
     // oxlint-disable-next-line react-hooks/exhaustive-deps -- translate() reads the UI language implicitly.
   }, [canSendFileScope, unsentFileNotes, unsentNotes, languageRevision, t])
 
+  const clearConfirm = useClearNotesConfirm()
+  const requestedNotes = canSendFileScope ? fileNotes : comments
+  const menuFooter =
+    batch && owner ? (
+      <NotesMenuCopyClearItems
+        onCopy={() => void copyNotesText(formatDiffComments(requestedNotes))}
+        onClear={() =>
+          clearConfirm.requestClear(
+            diffNotesClearRequest(owner, requestedNotes, canSendFileScope ? filePath : undefined)
+          )
+        }
+      />
+    ) : null
+
   return (
-    <NotesSendMenu
-      owner={owner}
-      worktreeId={worktreeId}
-      groupId={groupId}
-      modeIdParts={['diff-notes', worktreeId, groupId, filePath ?? 'all']}
-      scopes={scopes}
-      // File menus must not broaden delivery before the user enters All unsent notes.
-      defaultScopeId={canSendFileScope ? 'file' : 'all'}
-      triggerClassName={triggerClassName}
-      triggerLabel={triggerLabel}
-      triggerCount={triggerCount}
-      actionLabel={actionLabel}
-      iconClassName={iconClassName}
-      align={align}
-      openRequestNonce={openRequestNonce}
-      openRequestExpiresAt={openRequestExpiresAt}
-      onOpenRequestHandled={handleOpenRequestHandled}
-      onDelivered={(notes) =>
-        void (owner && useAppStore.getState().clearDeliveredDiffComments(owner, notes))
-      }
-    />
+    <>
+      <NotesSendMenu
+        owner={owner}
+        worktreeId={worktreeId}
+        groupId={groupId}
+        modeIdParts={['diff-notes', worktreeId, groupId, filePath ?? 'all']}
+        scopes={scopes}
+        // File menus must not broaden delivery before the user enters All unsent notes.
+        defaultScopeId={canSendFileScope ? 'file' : 'all'}
+        triggerClassName={triggerClassName}
+        iconClassName={iconClassName}
+        align={align}
+        batchTrigger={batch}
+        menuFooter={menuFooter}
+        openRequestNonce={openRequestNonce}
+        openRequestExpiresAt={openRequestExpiresAt}
+        onOpenRequestHandled={handleOpenRequestHandled}
+        onDelivered={(notes) =>
+          void (owner && useAppStore.getState().clearDeliveredDiffComments(owner, notes))
+        }
+      />
+      {batch ? clearConfirm.dialog : null}
+    </>
   )
 }

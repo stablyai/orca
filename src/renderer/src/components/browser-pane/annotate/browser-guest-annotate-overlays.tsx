@@ -77,7 +77,8 @@ export function BrowserGuestAnnotateOverlays({
     handleBrowserAnnotationsHandedOff,
     handleCopyBrowserAnnotations,
     browserAnnotationsCopied,
-    handleClearBrowserAnnotations,
+    createBrowserAnnotationsClearRequest,
+    sendableAnnotationCount,
     handleDeleteBrowserAnnotation,
     handleUpdateBrowserAnnotation
   } = annotationSend
@@ -129,7 +130,8 @@ export function BrowserGuestAnnotateOverlays({
           handleBrowserAnnotationsHandedOff={handleBrowserAnnotationsHandedOff}
           handleCopyBrowserAnnotations={handleCopyBrowserAnnotations}
           browserAnnotationsCopied={browserAnnotationsCopied}
-          handleClearBrowserAnnotations={handleClearBrowserAnnotations}
+          createBrowserAnnotationsClearRequest={createBrowserAnnotationsClearRequest}
+          sendableAnnotationCount={sendableAnnotationCount}
           handleDeleteBrowserAnnotation={handleDeleteBrowserAnnotation}
           handleUpdateBrowserAnnotation={handleUpdateBrowserAnnotation}
         />

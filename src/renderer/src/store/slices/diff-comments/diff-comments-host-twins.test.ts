@@ -114,8 +114,7 @@ describe('captured note owners across delivery and selection', () => {
       worktreesByRepo: { [REPO]: [worktree('local', [sent])] }
     })
     expect(await store.getState().clearDeliveredDiffComments(owner, [sent])).toBe(false)
-    expect(await store.getState().clearDiffComments(owner)).toBe(false)
-    expect(await store.getState().clearDiffCommentsForFile(owner, 'a')).toBe(false)
+    expect(await store.getState().deleteDiffCommentsByIds(owner, [sent.id])).toBe(false)
     expect(await store.getState().markDiffCommentsSent(owner, [sent.id])).toBe(false)
     expect(await store.getState().updateDiffComment(owner, sent.id, 'changed')).toBe(false)
     await store.getState().deleteDiffComment(owner, sent.id)

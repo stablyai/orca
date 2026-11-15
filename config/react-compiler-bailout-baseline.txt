@@ -97,7 +97,6 @@
 1 src/renderer/src/components/editor/combined-diff/resolve-changes/use-combined-diff-entry-set.ts
 9 src/renderer/src/components/editor/combined-diff/resolve-changes/use-combined-diff-section-index-map.ts
 1 src/renderer/src/components/editor/combined-diff/resolve-changes/use-combined-diff-section-row-keys.ts
-1 src/renderer/src/components/editor/combined-diff/review-controls/use-combined-diff-notes-actions.ts
 1 src/renderer/src/components/editor/combined-diff/scroll-viewport/use-combined-diff-virtualizer.ts
 1 src/renderer/src/components/editor/csv/CsvViewer.tsx
 1 src/renderer/src/components/editor/csv/editing/clipboard/useCsvClipboard.ts

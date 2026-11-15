@@ -14040,9 +14040,6 @@
                 "unresolvedCount_one": "{{count}} non résolu",
                 "unresolvedCount_other": "{{count}} non résolus",
                 "unresolvedCount_many": "{{count}} non résolus",
-                "sendQueuedCommentsToAi_one": "Envoyer {{count}} commentaire en file d'attente à l'IA",
-                "sendQueuedCommentsToAi_other": "Envoyer {{count}} commentaires en file d'attente à l'IA",
-                "sendQueuedCommentsToAi_many": "Envoyer {{count}} commentaires en file d'attente à l'IA",
                 "conflictsBlockThisMr": "Des conflits bloquent cette MR",
                 "conflictsBlockThisPr": "Des conflits bloquent cette PR",
                 "copyComment": "Copier le commentaire",
@@ -16050,10 +16047,6 @@
           "39b6b9e4e4": "Committé sur la branche"
         },
         "CombinedDiffViewer": {
-          "1da745c551": "Envoyé",
-          "84898c548d": "Effacer",
-          "88b70d0ef5": "Copier",
-          "bb84b4c374": "Notes IA",
           "948a5fd6c8": "Effacer les notes",
           "0f806a2ab1": "Annuler",
           "b6c3b84476": "Afficher l'arborescence des fichiers",
@@ -16061,7 +16054,6 @@
           "820ec01f24": "Les fichiers en conflit sont examinés séparément",
           "fd8892b120": "Aucune modification à afficher",
           "eb5f40e49c": "Cette vue de diff exclut les conflits non résolus, car le pipeline de diff bidirectionnel habituel n'est pas conçu pour gérer les conflits.",
-          "45cf23b418": "Échec de l'effacement des notes.",
           "ec5053c7f5": "Côte à côte",
           "f786fd54e1": "En ligne",
           "ea08dae15b": "Tout réduire",
@@ -16079,12 +16071,6 @@
           "noExtension": "(sans extension)",
           "diffLoadTimedOut": "Le chargement du diff n'a pas abouti.",
           "diffLoadFailed": "Impossible de charger le diff.",
-          "moreNotesInSourceControl_one": "{{count}} note supplémentaire dans « Contrôle de code source »",
-          "moreNotesInSourceControl_other": "{{count}} notes supplémentaires dans « Contrôle de code source »",
-          "moreNotesInSourceControl_many": "{{count}} notes supplémentaires dans « Contrôle de code source »",
-          "clearNotesConfirm_one": "Effacer {{count}} note de ce worktree ?",
-          "clearNotesConfirm_other": "Effacer {{count}} notes de ce worktree ?",
-          "clearNotesConfirm_many": "Effacer {{count}} notes de ce worktree ?",
           "changedFilesVs_one": "{{count}} fichier modifié par rapport à {{baseRef}}",
           "changedFilesVs_other": "{{count}} fichiers modifiés par rapport à {{baseRef}}",
           "changedFilesVs_many": "{{count}} fichiers modifiés par rapport à {{baseRef}}",
@@ -16094,10 +16080,6 @@
           "changedFiles_one": "{{count}} fichier modifié",
           "changedFiles_other": "{{count}} fichiers modifiés",
           "changedFiles_many": "{{count}} fichiers modifiés",
-          "showAiNotes_one": "Afficher {{count}} note IA",
-          "showAiNotes_other": "Afficher {{count}} notes IA",
-          "showAiNotes_many": "Afficher {{count}} notes IA",
-          "send": "Envoyer",
           "openDiff": "Ouvrir le diff",
           "openInEditor": "Ouvrir dans l'éditeur",
           "skippedConflictsExcluded": "Les conflits non résolus {{count}} ont été exclus de cette vue différentielle."
@@ -16300,7 +16282,6 @@
           "b1bfc04034": "Texte sélectionné",
           "f37b98999e": "Cette note",
           "2b2b31382c": "Front Matter",
-          "bb629de58a": "Copier les notes pour l'agent",
           "322afab6ff": "Notes de revue",
           "0f9969a159": "Aller à la première note de revue",
           "12052c639c": "Fermer la recherche",
@@ -16371,7 +16352,6 @@
         },
         "NotesSendMenu": {
           "44dc5e60a6": "Envoyer les notes",
-          "433928cd9f": "Envoyer {{value0}} à un agent",
           "thisNote": "Cette note",
           "noteAlreadySent": "Note déjà envoyée",
           "sendNotesToAgent": "Envoyer les notes à un agent",
@@ -16457,8 +16437,6 @@
           "3ababd949d": "Notes de revue"
         },
         "RichMarkdownReviewRailActions": {
-          "636394af72": "Copier les notes pour l'agent",
-          "a807596997": "Notes copiées",
           "8aaf2c4c69": "Afficher les notes de revue",
           "af02dc2456": "Masquer les notes de revue"
         },
@@ -17317,10 +17295,6 @@
             "fa6ea61de3": "Annuler",
             "c2ef0359b9": "Copier le contenu",
             "f2d0c22d67": "Supprimer l'annotation {{value0}}",
-            "11c5084aa2": "Effacer les annotations",
-            "734e4343ec": "Effacer les annotations du navigateur",
-            "95af781091": "Envoyer un retour à un agent",
-            "ac39b9366b": "Envoyer",
             "366bf5d62c": "Nouvel onglet",
             "781d6459ad": "Réessayer",
             "2fdca7df09": "Ignorer",
@@ -17352,9 +17326,6 @@
             "b5ba6085de": "Question",
             "143204e423": "Modifier",
             "b71dc3d930": "Reconnecter",
-            "d51ef37351": "Copier",
-            "6f4ab3592b": "Copied",
-            "499b31b84e": "Tout copier",
             "168350ae6a": "Cliquez ou survolez un élément, puis appuyez sur C pour copier ou S pour capturer.",
             "e852e20cea": "Copié — appuyez sur S pour capturer, ou sélectionnez un autre élément",
             "777b5bc4ec": "Cliquez sur un élément pour ajouter un retour pour l'agent.",
@@ -17365,8 +17336,6 @@
             "cc4a071d3a": "Annoter un élément de la page ({{value0}})",
             "572046436a": "Navigateur distant",
             "b313a7275b": "Ouverture du navigateur distant",
-            "ea6af700da": "{{value0}} annotation",
-            "c13693fe27": "{{value0}} annotations",
             "074f0ed10b": "{{value0}} annotation prête. Sélectionnez un autre élément ou copiez tous les retours.",
             "a2164a6e5a": "{{value0}} annotations prêtes. Sélectionnez un autre élément ou copiez tous les retours.",
             "9f6f2e8c19": "Le chemin du fichier téléchargé est indisponible.",
@@ -21132,6 +21101,29 @@
     "toastFallbacks": {
       "worktreeCreateFailed": "Impossible de créer l’arbre de travail.",
       "missingBaseBranchHelp": "Créez un premier commit (par exemple sur main), ou sélectionnez une branche existante dans « Créer à partir de », puis réessayez."
+    },
+    "notes": {
+      "sendButton": {
+        "clearPageNotes_one": "Effacer {{count}} note de cette page ?",
+        "clearPageNotes_other": "Effacer {{count}} notes de cette page ?",
+        "clearPageNotes_many": "Effacer {{count}} notes de cette page ?",
+        "sendCommentsToAgent_one": "Envoyer {{count}} commentaire à un agent",
+        "sendCommentsToAgent_other": "Envoyer {{count}} commentaires à un agent",
+        "sendCommentsToAgent_many": "Envoyer {{count}} commentaires à un agent",
+        "sendNotesToAgent_one": "Envoyer {{count}} note à un agent",
+        "sendNotesToAgent_other": "Envoyer {{count}} notes à un agent",
+        "sendNotesToAgent_many": "Envoyer {{count}} notes à un agent",
+        "sending": "Envoi…",
+        "sendShort": "Envoyer {{count}}",
+        "sendComments_one": "Envoyer {{count}} commentaire",
+        "sendComments_other": "Envoyer {{count}} commentaires",
+        "sendComments_many": "Envoyer {{count}} commentaires",
+        "sendNotes_one": "Envoyer {{count}} note",
+        "sendNotes_other": "Envoyer {{count}} notes",
+        "sendNotes_many": "Envoyer {{count}} notes",
+        "copyNotes": "Copier les notes",
+        "clearNotes": "Effacer les notes…"
+      }
     }
   },
   "dashboardPopout": {
