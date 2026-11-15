@@ -54,7 +54,8 @@ export async function startGitCommonWatch(
       )
     ])
     return {
-      coversCatalog: () => narrowWatch.coversCatalog?.() === true,
+      coversCatalog: () =>
+        narrowWatch.coversCatalog?.() === true && primaryWatch.coversCatalog?.() === true,
       unsubscribe: async () => {
         await Promise.all([narrowWatch.unsubscribe(), primaryWatch.unsubscribe()])
       }
