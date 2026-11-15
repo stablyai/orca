@@ -1,6 +1,6 @@
 // Release probe for sandbox egress, against DEV only, through Orca's own paths: real dev workspaces
 // created with a dev-JWK user token, driven from a terminal over the `orca` CLI's pairing code (the
-// desktop's E2EE path). Bogus tokens only; postman-echo.com plays the model provider.
+// desktop's E2EE path). Bogus tokens only; httpbin.org plays the model provider.
 //   pnpm --filter @orca-cloud/sandbox-control exec tsx scripts/egress-probe.ts [--keep]
 //
 // A throwaway identity gets: the dev GitHub App installation bound for one test repo (operator), a
@@ -29,7 +29,7 @@ import { execFile } from 'node:child_process'
 import { randomBytes } from 'node:crypto'
 import { readFileSync } from 'node:fs'
 import { SignJWT, importJWK, type JWK } from 'jose'
-import { judge, parseRunnerOutput, runnerCommand, sha8, type ProbeCase } from './egress-probe-checks'
+import { judge, latencyByClass, parseRunnerOutput, runnerCommand, sha8, type ProbeCase } from './egress-probe-checks'
 
 const CONTROL_URL = process.env.ORCA_PROBE_CONTROL_URL ?? 'https://orca-sandbox-control-dev.lovecast.workers.dev'
 const ORCA_CLI = process.env.ORCA_PROBE_CLI ?? '/Applications/Orca.app/Contents/Resources/bin/orca'
@@ -37,13 +37,22 @@ const ORCA_CLI = process.env.ORCA_PROBE_CLI ?? '/Applications/Orca.app/Contents/
 const APP_REPO = process.env.ORCA_PROBE_APP_REPO ?? 'https://github.com/nwparker/orca-sandbox-push-test'
 /** Public, and the dev App is not installed on its owner. */
 const PUBLIC_REPO = 'https://github.com/octocat/Hello-World'
-const ECHO = 'https://postman-echo.com'
+/** The model provider stand-in (ANTHROPIC_BASE_URL): echoes headers, streams, takes bodies up to ~1 MB. */
+const ECHO = 'https://httpbin.org'
+/** A WebSocket echo: COPILOT_PROVIDER_BASE_URL points here, so it carries a credential claim. */
+const WS_ECHO = 'https://ws.postman-echo.com'
+/** A host no credential is for: a placeholder sent here must arrive unswapped. */
+const OTHER_ECHO = 'https://postman-echo.com'
+type Mode = 'proxy' | 'firewall'
 
 if (!/^https:\/\/[a-z0-9-]+-dev\.lovecast\.workers\.dev$|^http:\/\/(127\.0\.0\.1|localhost)(:\d+)?$/.test(CONTROL_URL)) {
   throw new Error(`refusing a non-dev control plane: ${CONTROL_URL}`)
 }
 
 const keep = process.argv.includes('--keep')
+const modeArg = process.argv.includes('--mode') ? process.argv[process.argv.indexOf('--mode') + 1] : 'default'
+/** `default`: the environment's EGRESS_SWAP_MODE, unchanged. Otherwise each mode in turn, set per sandbox. */
+const MODES: readonly (Mode | 'default')[] = modeArg === 'both' ? ['proxy', 'firewall'] : modeArg === 'proxy' || modeArg === 'firewall' ? [modeArg] : ['default']
 const runId = randomBytes(4).toString('hex')
 const sub = `egress-probe-${runId}`
 const accountId = `dev:${sub}`
@@ -106,15 +115,24 @@ const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
 
 /** Runs one line in a fresh workspace terminal and returns the output once `PRB-END` shows. */
 async function inTerminal(pairingCode: string, projectRoot: string, line: string): Promise<string> {
-  await orca(pairingCode, ['repo', 'add', '--path', projectRoot, '--kind', 'git'])
-  const created = await orca(pairingCode, ['terminal', 'create', '--worktree', `path:${projectRoot}`, '--title', 'egress-probe'])
-  const handle: string | undefined = created?.result?.terminal?.handle ?? created?.result?.handle ?? created?.result?.terminal?.id
+  // A project whose clone failed is not a git repo: register it as a folder then (the checks still run).
+  const repo = await orca(pairingCode, ['repo', 'add', '--path', projectRoot, '--kind', 'git'])
+  if (!repo?.ok) {
+    await orca(pairingCode, ['repo', 'add', '--path', projectRoot, '--kind', 'folder'])
+  }
+  let handle: string | undefined
+  for (let attempt = 0; attempt < 3 && !handle; attempt++) {
+    const created = await orca(pairingCode, ['terminal', 'create', '--worktree', `path:${projectRoot}`, '--title', 'egress-probe'])
+    handle = created?.result?.terminal?.handle ?? created?.result?.handle ?? created?.result?.terminal?.id
+    if (!handle) await sleep(2_000)
+  }
   if (!handle) {
     throw new Error('could not open a workspace terminal')
   }
   // `clear` first: the read must only see this run's lines.
   await orca(pairingCode, ['terminal', 'send', '--terminal', handle, '--text', `clear; ${line}`, '--enter'])
-  const deadline = Date.now() + 180_000
+  // Generous: in a mode with hangs every request may take its full 30 s client timeout.
+  const deadline = Date.now() + 900_000
   while (Date.now() < deadline) {
     const read = await orca(pairingCode, ['terminal', 'read', '--terminal', handle])
     const text = textOf(read?.result)
@@ -140,14 +158,24 @@ function factsScript(gitChecks: Record<string, string>, bogus: Record<string, st
 
 async function main(): Promise<void> {
   const failures: string[] = []
-  const report: Record<string, unknown> = { runId }
+  const report: Record<string, unknown> = { runId, modes: MODES }
   const cleanup: (() => Promise<unknown>)[] = []
   const started = Date.now()
-  console.error(`[egress-probe] run ${runId}: throwaway identity ${sub}`)
+  console.error(`[egress-probe] run ${runId}: throwaway identity ${sub}, modes ${MODES.join(', ')}`)
   const user = client(await userToken())
   const operator = client(fileSecret('ORCA_PROBE_OPERATOR_TOKEN_FILE'))
-  const bogusAnthropic = `sk-ant-api03-orcaprobe${randomBytes(16).toString('hex')}`
-  const bogusOpenAI = `sk-proj-orcaprobe${randomBytes(16).toString('hex')}`
+  const bogus = {
+    ANTHROPIC_API_KEY: `sk-ant-api03-orcaprobe${randomBytes(16).toString('hex')}`,
+    OPENAI_API_KEY: `sk-proj-orcaprobe${randomBytes(16).toString('hex')}`,
+    COPILOT_PROVIDER_API_KEY: `orcaprobe-${randomBytes(16).toString('hex')}`
+  }
+  const results: Record<string, unknown>[] = []
+  const check = (mode: string, workspace: string, name: string, ok: boolean, detail: string) => {
+    results.push({ mode, workspace, check: name, ok })
+    if (!ok) {
+      failures.push(`[${mode}/${workspace}] ${name}: ${detail}`)
+    }
+  }
   try {
     // Identity: the App bound for the test repo, and a stored GitHub identity (member placeholders).
     const bound = await operator('POST', '/v1/internal/github/bindings', { repoUrl: APP_REPO, accountId })
@@ -161,10 +189,12 @@ async function main(): Promise<void> {
       throw new Error(`store the probe's GitHub identity: ${member.status} ${member.body?.error ?? ''}`)
     }
     for (const [name, value] of [
-      ['ANTHROPIC_API_KEY', bogusAnthropic],
+      ['ANTHROPIC_API_KEY', bogus.ANTHROPIC_API_KEY],
       ['ANTHROPIC_BASE_URL', ECHO],
-      ['OPENAI_API_KEY', bogusOpenAI],
-      ['OPENAI_BASE_URL', 'https://chatgpt.com/backend-api/codex']
+      ['OPENAI_API_KEY', bogus.OPENAI_API_KEY],
+      ['OPENAI_BASE_URL', 'https://chatgpt.com/backend-api/codex'],
+      ['COPILOT_PROVIDER_API_KEY', bogus.COPILOT_PROVIDER_API_KEY],
+      ['COPILOT_PROVIDER_BASE_URL', WS_ECHO]
     ] as const) {
       const put = await user('PUT', `/v1/secrets/personal/${name}`, { value })
       cleanup.push(() => user('DELETE', `/v1/secrets/personal/${name}`))
@@ -172,6 +202,7 @@ async function main(): Promise<void> {
         throw new Error(`PUT secret ${name}: ${put.status} ${put.body?.error ?? ''}`)
       }
     }
+    const clones: Record<string, string> = {}
     const create = async (label: string, repo: string) => {
       console.error(`[egress-probe] creating the ${label} workspace (${sub}-${label})`)
       const reply = await user('POST', '/v1/sandboxes', { workspaceId: `${sub}-${label}`, machineSize: 'standard', repo: { url: repo }, useEnvironment: false })
@@ -192,67 +223,111 @@ async function main(): Promise<void> {
       clones[label] = clone
       return { id: id!, pairingCode: reply.body.connection.pairingCode as string, projectRoot: reply.body.connection.projectRoot as string }
     }
-    const clones: Record<string, string> = {}
     const [publicBox, appBox] = await Promise.all([create('public', PUBLIC_REPO), create('app', APP_REPO)])
     report.workspaces = { public: publicBox.id, app: appBox.id }
+    for (const [workspace, state] of Object.entries(clones)) {
+      check('create', workspace, 'github.com: the workspace repo clones (desktop create)', state === 'done', `clone ${state}`)
+    }
 
-    const anthropic: ProbeCase[] = [
+    // Header values the runner reads from env (`$NAME`): the Bearer forms, and git's own header.
+    const prelude = [
+      'export PROBE_OPENAI_BEARER="Bearer $OPENAI_API_KEY" PROBE_COPILOT_BEARER="Bearer $COPILOT_PROVIDER_API_KEY" PROBE_GH_BEARER="Bearer $GH_TOKEN"',
+      'PROBE_GIT_AUTH="$(git config --global --get-all http.https://github.com/.extraheader | tail -n 1)"; export PROBE_GIT_AUTH="${PROBE_GIT_AUTH#Authorization: }"'
+    ].join('; ')
+    const publicCases: ProbeCase[] = [
       {
-        name: 'echo host (ANTHROPIC_BASE_URL): placeholder swapped, other auth untouched',
-        url: `${ECHO}/post`,
+        name: 'custom base URL (model key): placeholder swapped, other auth untouched',
+        url: `${ECHO}/anything`,
         method: 'POST',
         headers: { 'x-api-key': '$ANTHROPIC_API_KEY', authorization: 'Bearer probe-keep-bearer' },
-        expect: { kind: 'swapped', headers: { 'x-api-key': bogusAnthropic, authorization: 'Bearer probe-keep-bearer' } }
+        expect: { kind: 'swapped', headers: { 'x-api-key': bogus.ANTHROPIC_API_KEY }, keep: ['authorization'] },
+        repeat: 5,
+        latency: 'model_key'
       },
-      { name: 'echo host: foreign key fails closed', url: `${ECHO}/post`, method: 'POST', headers: { 'x-api-key': 'sk-ant-probe-foreign' }, expect: { kind: 'denied' } },
+      { name: 'custom base URL: foreign key fails closed', url: `${ECHO}/anything`, method: 'POST', headers: { 'x-api-key': 'sk-ant-probe-foreign' }, expect: { kind: 'denied' } },
+      { name: 'custom base URL: chunked stream (SSE framing) through the swap', url: `${ECHO}/stream/5`, headers: { 'x-api-key': '$ANTHROPIC_API_KEY' }, stream: true, expect: { kind: 'streamed', minChunks: 1 }, latency: 'model_key_stream' },
       {
-        name: 'chatgpt.com: placeholder reaches ChatGPT (relay)',
-        url: 'https://chatgpt.com/backend-api/codex/models',
-        headers: { authorization: '$PROBE_OPENAI_BEARER' },
-        expect: { kind: 'upstream' }
+        // 1 MB: the public echo hosts refuse larger bodies themselves (httpbin 413 at 2 MB, postman-echo 500 at 1 MB).
+        name: 'custom base URL: 1 MB upload through the swap',
+        url: `${ECHO}/anything`,
+        method: 'POST',
+        uploadBytes: 1 << 20,
+        headers: { 'x-api-key': '$ANTHROPIC_API_KEY', 'content-type': 'application/octet-stream' },
+        expect: { kind: 'swapped', headers: { 'x-api-key': bogus.ANTHROPIC_API_KEY } },
+        latency: 'upload_1mb'
       },
+      { name: 'chatgpt.com: placeholder reaches ChatGPT', url: 'https://chatgpt.com/backend-api/codex/models', headers: { authorization: '$PROBE_OPENAI_BEARER' }, expect: { kind: 'upstream' }, repeat: 5, latency: 'codex' },
       { name: 'chatgpt.com: foreign bearer fails closed', url: 'https://chatgpt.com/backend-api/codex/models', headers: { authorization: 'Bearer probe-foreign' }, expect: { kind: 'denied' } },
+      { name: 'WebSocket upgrade through the swap', url: `${WS_ECHO}/raw`, headers: { authorization: '$PROBE_COPILOT_BEARER' }, websocket: true, expect: { kind: 'upgraded' }, latency: 'websocket' },
+      { name: 'WebSocket host: no credential fails closed', url: `${WS_ECHO}/raw`, websocket: true, expect: { kind: 'denied' } },
+      { name: 'a placeholder sent to another host arrives unswapped', url: `${OTHER_ECHO}/get`, headers: { 'x-api-key': '$ANTHROPIC_API_KEY' }, expect: { kind: 'unswapped', headers: ['x-api-key'] } },
       { name: 'api.github.com: no credential fails closed', url: 'https://api.github.com/rate_limit', expect: { kind: 'denied' } }
     ]
     const appCases: ProbeCase[] = [
-      { name: 'api.github.com: workspace placeholder swapped (GitHub answers 200)', url: 'https://api.github.com/rate_limit', headers: { authorization: '$PROBE_GH_BEARER' }, expect: { kind: 'upstream' } },
+      { name: 'api.github.com: workspace placeholder swapped (GitHub answers)', url: 'https://api.github.com/rate_limit', headers: { authorization: '$PROBE_GH_BEARER' }, expect: { kind: 'upstream' }, repeat: 5, latency: 'github_api' },
+      { name: 'github.com: git smart-HTTP with the workspace header', url: `${APP_REPO}.git/info/refs?service=git-upload-pack`, headers: { authorization: '$PROBE_GIT_AUTH' }, expect: { kind: 'upstream' }, repeat: 5, latency: 'git_http' },
+      {
+        name: 'github.com: LFS batch API with the workspace header',
+        url: `${APP_REPO}.git/info/lfs/objects/batch`,
+        method: 'POST',
+        headers: { authorization: '$PROBE_GIT_AUTH', accept: 'application/vnd.git-lfs+json', 'content-type': 'application/vnd.git-lfs+json' },
+        expect: { kind: 'upstream' },
+        latency: 'git_lfs'
+      },
       { name: 'github.com: anonymous fails closed with an App token', url: `${APP_REPO}.git/info/refs?service=git-upload-pack`, expect: { kind: 'denied' } }
     ]
-    const digests = { ANTHROPIC_API_KEY: sha8(bogusAnthropic), OPENAI_API_KEY: sha8(bogusOpenAI) }
-    // The runner reads whole header values from env (`$NAME`), so the Bearer forms are built here.
-    const prelude = 'export PROBE_OPENAI_BEARER="Bearer $OPENAI_API_KEY" PROBE_GH_BEARER="Bearer $GH_TOKEN"; '
-    console.error('[egress-probe] running the checks in both workspaces')
-    const runs = await Promise.all([
-      inTerminal(publicBox.pairingCode, publicBox.projectRoot, `${prelude}${factsScript({ 'git.public-anonymous': `git ls-remote ${PUBLIC_REPO} HEAD` }, digests)}; ${runnerCommand(anthropic)}`),
-      inTerminal(appBox.pairingCode, appBox.projectRoot, `${prelude}${factsScript({ 'git.app-anonymous': `git -c http.extraheader= -c http.https://github.com/.extraheader= ls-remote ${APP_REPO} HEAD`, 'git.app-workspace': 'git ls-remote origin HEAD' }, {})}; ${runnerCommand(appCases)}`)
-    ])
-    const results: Record<string, unknown>[] = []
-    const check = (workspace: string, name: string, ok: boolean, detail: string) => {
-      results.push({ workspace, check: name, ok })
-      if (!ok) {
-        failures.push(`[${workspace}] ${name}: ${detail}`)
+    const digests = Object.fromEntries(Object.entries(bogus).map(([name, value]) => [name, sha8(value)]))
+    const latency: Record<string, unknown> = {}
+    for (const mode of MODES) {
+      if (mode !== 'default') {
+        for (const box of [publicBox, appBox]) {
+          const set = await operator('POST', `/v1/internal/sandboxes/${box.id}/egress-mode`, { mode })
+          if (set.status !== 200) {
+            throw new Error(`set egress mode ${mode} on ${box.id}: ${set.status} ${set.body?.error ?? ''} (is EGRESS_SWAP_MODE (A2) on dev?)`)
+          }
+        }
+      }
+      console.error(`[egress-probe] mode ${mode}: running the checks in both workspaces`)
+      const branch = `egress-probe-${runId}-${mode}`
+      const runs = await Promise.all([
+        inTerminal(publicBox.pairingCode, publicBox.projectRoot, `${prelude}; ${factsScript({ 'git.public-anonymous': `git ls-remote ${PUBLIC_REPO} HEAD` }, digests)}; ${runnerCommand(publicCases)}`),
+        inTerminal(
+          appBox.pairingCode,
+          appBox.projectRoot,
+          `${prelude}; ${factsScript(
+            {
+              'git.app-anonymous': `git -c http.extraheader= -c http.https://github.com/.extraheader= ls-remote ${APP_REPO} HEAD`,
+              'git.app-fetch': 'git fetch -q origin',
+              'git.app-push': `git push -q origin HEAD:refs/heads/${branch}`,
+              'git.app-push-delete': `git push -q origin --delete ${branch}`
+            },
+            {}
+          )}; ${runnerCommand(appCases)}`
+        )
+      ])
+      for (const [workspace, text, cases] of [['public', runs[0], publicCases], ['app', runs[1], appCases]] as const) {
+        const summaries = parseRunnerOutput(text, cases.length)
+        cases.forEach((probeCase, i) => {
+          const problems = judge(probeCase, summaries[i]!)
+          check(mode, workspace, probeCase.name, problems.length === 0, problems.join('; '))
+        })
+        latency[`${mode}/${workspace}`] = latencyByClass(cases, summaries)
+      }
+      const rc = (text: string, name: string) => new RegExp(`PRB ${name.replaceAll('.', '\\.')} rc=(\\d+)`).exec(text)?.[1]
+      check(mode, 'public', 'github.com: anonymous git ls-remote of a public repo works (#758)', rc(runs[0], 'git.public-anonymous') === '0', `rc=${rc(runs[0], 'git.public-anonymous')}`)
+      check(mode, 'app', 'github.com: anonymous git ls-remote is refused with an App token', !['0', undefined].includes(rc(runs[1], 'git.app-anonymous')), `rc=${rc(runs[1], 'git.app-anonymous')}`)
+      for (const step of ['fetch', 'push', 'push-delete']) {
+        check(mode, 'app', `github.com: git ${step} through the workspace's own header`, rc(runs[1], `git.app-${step}`) === '0', `rc=${rc(runs[1], `git.app-${step}`)}`)
+      }
+      for (const name of Object.keys(digests)) {
+        check(mode, 'public', `the VM holds a placeholder for ${name}`, new RegExp(`PRB env\\.${name} holds=placeholder`).test(runs[0]), 'the VM env holds the bogus value itself')
       }
     }
-    for (const [workspace, text, cases] of [['public', runs[0], anthropic], ['app', runs[1], appCases]] as const) {
-      const summaries = parseRunnerOutput(text, cases.length)
-      cases.forEach((probeCase, i) => {
-        const problems = judge(probeCase, summaries[i]!)
-        check(workspace, probeCase.name, problems.length === 0, problems.join('; '))
-      })
-    }
-    const rc = (text: string, name: string) => new RegExp(`PRB ${name.replaceAll('.', '\\.')} rc=(\\d+)`).exec(text)?.[1]
-    check('public', 'github.com: anonymous git ls-remote of a public repo works (#758)', rc(runs[0], 'git.public-anonymous') === '0', `rc=${rc(runs[0], 'git.public-anonymous')}`)
-    check('app', 'github.com: anonymous git ls-remote is refused with an App token', rc(runs[1], 'git.app-anonymous') !== '0' && rc(runs[1], 'git.app-anonymous') !== undefined, `rc=${rc(runs[1], 'git.app-anonymous')}`)
-    check('app', "github.com: the workspace's own git (placeholder) works", rc(runs[1], 'git.app-workspace') === '0', `rc=${rc(runs[1], 'git.app-workspace')}`)
-    for (const [workspace, state] of Object.entries(clones)) {
-      check(workspace, 'github.com: the workspace repo clones', state === 'done', `clone ${state}`)
-    }
-    for (const name of Object.keys(digests)) {
-      check('public', `the VM holds a placeholder for ${name}`, new RegExp(`PRB env\\.${name} holds=placeholder`).test(runs[0]), 'the VM env holds the bogus value itself')
-    }
     report.checks = results
+    report.latency = latency
   } catch (error) {
     failures.push(`probe error: ${error instanceof Error ? error.message : String(error)}`)
+    report.checks = results
   } finally {
     if (!keep) {
       for (const step of cleanup) {

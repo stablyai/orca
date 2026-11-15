@@ -5,6 +5,13 @@ name: Cloud Egress Probe
 # Details and the local run: cloud/apps/sandbox-control/scripts/README.md
 on:
   workflow_dispatch:
+    inputs:
+      mode:
+        description: EGRESS_SWAP_MODE to check (both runs proxy, then firewall, on the same workspaces)
+        required: false
+        default: both
+        type: choice
+        options: [both, firewall, proxy]
 
 permissions:
   contents: read
@@ -24,6 +31,7 @@ jobs:
     env:
       DEV_TEST_JWK: ${{ secrets.ORCA_DEV_TEST_JWK }}
       DEV_OPERATOR_TOKEN: ${{ secrets.ORCA_DEV_OPERATOR_TOKEN }}
+      MODE: ${{ inputs.mode || 'both' }}
     steps:
       - name: Check the dev credentials are configured
         id: creds
@@ -71,7 +79,7 @@ jobs:
           printf '%s' "$DEV_TEST_JWK" > "$RUNNER_TEMP/dev-jwk.json"
           printf '%s' "$DEV_OPERATOR_TOKEN" > "$RUNNER_TEMP/dev-operator"
           ORCA_PROBE_DEV_JWK_FILE="$RUNNER_TEMP/dev-jwk.json" ORCA_PROBE_OPERATOR_TOKEN_FILE="$RUNNER_TEMP/dev-operator" \
-            pnpm --filter @orca-cloud/sandbox-control exec tsx scripts/egress-probe.ts > "$RUNNER_TEMP/egress-probe.json"
+            pnpm --filter @orca-cloud/sandbox-control exec tsx scripts/egress-probe.ts --mode "$MODE" > "$RUNNER_TEMP/egress-probe.json"
 
       - uses: actions/upload-artifact@v4
         if: always() && steps.creds.outputs.skip != '1'
