@@ -48,6 +48,11 @@ final class AppDelegate: NSObject, WKApplicationDelegate, UNUserNotificationCent
     withCompletionHandler completionHandler: @escaping () -> Void
   ) {
     let info = response.notification.request.content.userInfo
+    let tapped = response.actionIdentifier.replacingOccurrences(
+      of: UNNotificationDefaultActionIdentifier, with: "open")
+    UserDefaults.standard.set(
+      "\(Date().formatted(date: .omitted, time: .standard)) \(tapped) prompt=\(info["promptId"] as? String ?? "none")",
+      forKey: "lastNotificationTap")
     guard let promptId = info["promptId"] as? String else {
       completionHandler()
       return
@@ -168,6 +173,8 @@ struct PromptListView: View {
           }
         }
         Button("Refresh") { Task { await store.refresh() } }
+        Text("Last tap: \(UserDefaults.standard.string(forKey: "lastNotificationTap") ?? "none")")
+          .font(.system(size: 10)).foregroundStyle(.secondary)
       }
       .navigationTitle("Orca")
       .navigationDestination(for: PendingPrompt.self) { PromptDetailView(prompt: $0, store: store) }
