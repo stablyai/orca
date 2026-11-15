@@ -253,6 +253,7 @@
     "message": {
       "copyMessage": "Copiar mensaje",
       "forkFromResponse": "Crear una rama desde esta respuesta",
+      "scrollMessageToTop": "Desplazar este mensaje hacia arriba",
       "forkFromResponseHint": "Un chat nuevo con esta respuesta completa, hasta el final de su turno"
     },
     "messageActionsSheet": {

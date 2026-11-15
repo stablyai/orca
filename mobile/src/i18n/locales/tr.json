@@ -249,6 +249,7 @@
     "message": {
       "copyMessage": "Mesajı kopyala",
       "forkFromResponse": "Bu yanıttan çatalla",
+      "scrollMessageToTop": "Bu mesajı yukarı kaydır",
       "forkFromResponseHint": "Bu yanıtın tamamını turun sonuna kadar içeren yeni bir sohbet"
     },
     "messageActionsSheet": {

@@ -249,6 +249,7 @@
     "message": {
       "copyMessage": "Nachricht kopieren",
       "forkFromResponse": "Ab dieser Antwort abzweigen",
+      "scrollMessageToTop": "Diese Nachricht ganz nach oben scrollen",
       "forkFromResponseHint": "Ein neuer Chat mit dieser vollständigen Antwort bis zum Ende des Durchgangs"
     },
     "messageActionsSheet": {

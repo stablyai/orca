@@ -271,6 +271,7 @@
     "message": {
       "copyMessage": "Copiar mensagem",
       "forkFromResponse": "Criar ramificação a partir desta resposta",
+      "scrollMessageToTop": "Rolar esta mensagem para o topo",
       "forkFromResponseHint": "Um novo chat com toda esta resposta, até o fim do turno"
     },
     "messageActionsSheet": {
