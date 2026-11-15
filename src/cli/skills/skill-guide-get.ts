@@ -12,14 +12,20 @@ import {
   hasHostCapabilityBlocks,
   readEnabledHostCapabilities
 } from './skill-guide-host-gate'
+import {
+  filterPlatformBlocks,
+  resolveGuidePlatform,
+  type GuidePlatformSelection
+} from './skill-guide-platform'
 
 type GuideSelection = { full: boolean; reference: string | null; listReferences: boolean }
 type HostGate = (markdown: string) => Promise<string>
 
 // Query the host at most once, and only when the served text has host-gated blocks.
-function createHostGate(ctx: HandlerContext): HostGate {
+function createHostGate(ctx: HandlerContext, platform: GuidePlatformSelection): HostGate {
   let enabled: ReturnType<typeof readEnabledHostCapabilities> | undefined
-  return async (markdown) => {
+  return async (source) => {
+    const markdown = filterPlatformBlocks(source, platform)
     if (!hasHostCapabilityBlocks(markdown)) {
       return markdown
     }
@@ -140,7 +146,12 @@ export const SKILL_GUIDE_GET_HANDLER: Record<string, CommandHandler> = {
     const selection = resolveSelection(flags)
     const guides = await loadCanonicalGuides()
     const guide = requireTopic(flags, guides)
-    const gate = createHostGate(ctx)
+    const platform = resolveGuidePlatform(flags, {
+      platform: process.platform,
+      isRemote: ctx.client.isRemote,
+      env: process.env
+    })
+    const gate = createHostGate(ctx, platform)
 
     if (selection.listReferences) {
       const names = (await servedReferences(guide, gate)).map((reference) => reference.name)
@@ -171,7 +182,7 @@ export const SKILL_GUIDE_GET_HANDLER: Record<string, CommandHandler> = {
         : kernel
     writeStdoutLine(
       json
-        ? JSON.stringify({ name: guide.name, full: selection.full, markdown }, null, 2)
+        ? JSON.stringify({ name: guide.name, full: selection.full, platform, markdown }, null, 2)
         : markdown
     )
   }

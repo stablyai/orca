@@ -150,6 +150,9 @@ function formatCommandFlagHelp(flag: string, commandPath: string[]): string {
   if (command === 'skills get' && flag === 'full') {
     return '--full                 Print the full guide with bundled references'
   }
+  if (command === 'skills get' && flag === 'platform') {
+    return '--platform <name|all>  macos, linux, windows or all; defaults to this machine'
+  }
   if (command === 'orchestration worker-list' && flag === 'include-remote') {
     return '--include-remote      Include connected-server worker observations'
   }
