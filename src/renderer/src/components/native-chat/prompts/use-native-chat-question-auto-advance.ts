@@ -14,7 +14,12 @@ export function useNativeChatQuestionAutoAdvance(disabled = false): {
     timerRef.current = setTimeout(step, NATIVE_CHAT_QUESTION_AUTO_ADVANCE_MS)
   }
   useNativeChatPaneLifetimeEffect(
-    useCallback(() => () => clearTimeout(timerRef.current), [disabled])
+    useCallback(() => {
+      if (disabled) {
+        clearTimeout(timerRef.current)
+      }
+      return () => clearTimeout(timerRef.current)
+    }, [disabled])
   )
   return { schedule, cancel }
 }

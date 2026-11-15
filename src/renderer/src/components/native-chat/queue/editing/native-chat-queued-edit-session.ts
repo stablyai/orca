@@ -20,7 +20,7 @@ import { promptMarkersToImageReferences } from '../../../../../../shared/native-
 import { nativeChatImageRowIds } from '../../composer/editor/native-chat-composer-image-references'
 import { useCallback, useEffect } from 'react'
 import { toast } from 'sonner'
-import { useTranslate } from '@/i18n/use-translate'
+import { queuedEditReturnedNotice } from './queued-message-edit-notices'
 import { subscribeToNativeChatPendingAttachments } from '../../attachments/chips/native-chat-pending-attachment-cache'
 import type { RuntimeClientTarget } from '../../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import type { AgentSessionQueuedMessage } from '../../../../../../shared/agent-session/requests/agent-session-queued-message-wire'
@@ -104,12 +104,14 @@ export function useNativeChatQueuedEditLifetime({
   close: (edit?: NativeChatQueuedEditSession | null) => void
   render: (edit: NativeChatQueuedEditSession | null) => void
 }) {
-  const t = useTranslate()
   // On chat/host/composer changes, unmount or reload, hand unsaved typing back to its original chat.
   useNativeChatPaneLifetimeEffect(
     useCallback(() => {
       const handOff = (): void => {
         const edit = active.current
+        if (edit && edit.scope !== scope) {
+          return
+        }
         active.current = null
         reopen.current = null
         if (!edit) {
@@ -120,9 +122,7 @@ export function useNativeChatQueuedEditLifetime({
           return
         }
         if (handBackNativeChatQueuedEdit(edit, edit.uncertain)) {
-          toast.error(
-            t('components.native-chat.queuedMessages.editReturned', 'Your edit is in the chat box.')
-          )
+          toast.error(queuedEditReturnedNotice())
         }
         close(edit)
       }
@@ -131,7 +131,7 @@ export function useNativeChatQueuedEditLifetime({
         window.removeEventListener('pagehide', handOff)
         handOff()
       }
-    }, [scope, close, active, reopen, t])
+    }, [scope, close, active, reopen])
   )
 
   useEffect(() => {
