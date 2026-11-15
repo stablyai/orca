@@ -175,6 +175,8 @@ export type AcpDialect = {
   authenticationRequired?(error: AcpAgentError): boolean
   /** The agent dropped this session; only a new child can reopen it. */
   sessionLost?(error: AcpAgentError, sessionId: string): boolean
+  /** The agent refused to reopen this session from `cwd` because it keeps it in another folder. */
+  sessionInOtherFolder?(error: AcpAgentError, sessionId: string, cwd: string): boolean
   hookBlock?(meta: unknown): AcpHookBlock | undefined
   failedTurnText?(stopReason: string): string
   compactionReply?(text: string): AcpCompactionReply | undefined
