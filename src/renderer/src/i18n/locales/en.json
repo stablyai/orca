@@ -82,6 +82,7 @@
       "exampleChildren": "1 child",
       "statusCaption": "Title flags agents that need you",
       "childrenCaption": "Parents sum up child worktrees",
+      "unreadCaption": "<label>Blue dot:</label> unread",
       "dismiss": "Dismiss"
     },
     "revealFiltered": {
