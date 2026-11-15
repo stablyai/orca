@@ -1,4 +1,4 @@
-import { useCallback, useMemo } from 'react'
+import { useCallback, useLayoutEffect, useMemo, useRef } from 'react'
 import type { AgentSessionRewindSurface } from '../../../../../../src/shared/agent-session/lifecycle/rewind/agent-session-rewind-request'
 import type { NativeChatMessage } from '../../../../../../src/shared/native-chat/native-chat-types'
 import { triggerMediumImpact } from '../../../../platform/haptics/haptics'
@@ -58,10 +58,19 @@ export function MobileNativeChatRowOverlaysHost({
     }),
     [setShown, openRewind, imageSource]
   )
+  // Why a ref: every markdown block reads openLink, so a reconnect must not change its identity.
+  const linkRouteRef = useRef({ linkOpenMode, onOpenUrlInOrca })
+  useLayoutEffect(() => {
+    linkRouteRef.current = { linkOpenMode, onOpenUrlInOrca }
+  }, [linkOpenMode, onOpenUrlInOrca])
   const openLink = useCallback(
-    (url: string) =>
-      openMobileWebLink(url, linkOpenMode, onOpenUrlInOrca, (link) => setShown({ link })),
-    [linkOpenMode, onOpenUrlInOrca, setShown]
+    (url: string) => {
+      const route = linkRouteRef.current
+      openMobileWebLink(url, route.linkOpenMode, route.onOpenUrlInOrca, (link) =>
+        setShown({ link })
+      )
+    },
+    [setShown]
   )
   // Memoize overlay callbacks so streamed words cannot rebuild them.
   const opened = useMemo(() => {
