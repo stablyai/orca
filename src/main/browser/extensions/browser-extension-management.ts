@@ -18,11 +18,11 @@ import {
   withBrowserExtensionProfileOperation,
   enableBrowserExtensionInProfile,
   listBrowserExtensionSessions,
-  loadBrowserExtensionCandidateIntoProfile,
   revokeBrowserExtensionEnable,
   unloadBrowserExtensionEverywhere,
   unloadBrowserExtensionFromProfile
 } from './profile-sessions/browser-extension-session-loader'
+import { loadBrowserExtensionCandidateIntoProfile } from './profile-sessions/browser-extension-profile-candidate-load'
 import { clearBrowserExtensionSessionData } from './profile-storage/browser-extension-data-removal'
 import {
   forgetHeldBrowserExtensionUpdate,

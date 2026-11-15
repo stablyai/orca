@@ -54,7 +54,7 @@ vi.mock('../../plugins/panels/guest-isolation/plugin-frame-guest-registry', () =
 vi.mock('../../browser-passwords/browser-password-guest-service', () => ({
   attachBrowserPasswordGuest: vi.fn()
 }))
-vi.mock('../../browser/extensions/profile-sessions/browser-extension-profile-demand', () => ({
+vi.mock('../../browser/extensions/profile-sessions/browser-extension-page-demand', () => ({
   onBrowserExtensionPageReadiness: (_guest: unknown, listener: (ready: Promise<void>) => void) => {
     listener(state.ready)
     return () => {}

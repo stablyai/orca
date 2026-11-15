@@ -5,9 +5,9 @@ import {
   admitBrowserExtensionTargetReplacement,
   attachBrowserExtensionProfileDemand,
   detachBrowserExtensionProfileDemand,
-  retainBrowserExtensionPage,
   trackBrowserExtensionTargetReadiness
 } from './browser-extension-profile-demand'
+import { retainBrowserExtensionPage } from './browser-extension-page-demand'
 import { setBrowserExtensionSupportEnabled } from '../browser-extension-support'
 
 vi.mock('../../sessions/profiles/browser-session-profile-identity', () => ({

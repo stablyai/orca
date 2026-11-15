@@ -285,10 +285,3 @@ export function trackBrowserExtensionTargetReadiness(
   setTarget(demand, extensionId, target)
   publish(demand)
 }
-
-export {
-  retainBrowserExtensionPage,
-  onBrowserExtensionPageReadiness,
-  refreshBrowserExtensionPageDemand,
-  onBrowserExtensionPageRetained
-} from './browser-extension-page-demand'

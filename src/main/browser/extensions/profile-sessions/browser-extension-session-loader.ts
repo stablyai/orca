@@ -24,11 +24,11 @@ import {
   forgetBrowserExtensionTargetDemand,
   type BrowserExtensionTargetReplacement
 } from './browser-extension-profile-demand'
+export { hasBrowserExtensionProfileDemand } from './browser-extension-profile-demand'
 export {
   retainBrowserExtensionPage,
-  refreshBrowserExtensionPageDemand,
-  hasBrowserExtensionProfileDemand
-} from './browser-extension-profile-demand'
+  refreshBrowserExtensionPageDemand
+} from './browser-extension-page-demand'
 import {
   getBrowserExtensionExecution,
   retireBrowserExtensionExecution
@@ -67,7 +67,6 @@ import {
 import { removeBrowserExtensionFromSession } from './browser-extension-worker-registration'
 import { loadInstalledBrowserExtensionIntoSession } from './browser-extension-session-load'
 import type { InstalledBrowserExtension } from '../../../../shared/browser/extensions/browser-extension-types'
-export { loadBrowserExtensionCandidateIntoProfile } from './browser-extension-profile-candidate-load'
 
 const PRELOAD_FILE_NAME = 'browser-extension-preload.js'
 const PRELOAD_ID = 'orca-browser-extension-frame'

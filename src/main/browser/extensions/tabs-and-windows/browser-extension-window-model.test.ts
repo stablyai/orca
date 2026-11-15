@@ -55,6 +55,7 @@ vi.mock('../../guest-lifecycle/browser-main-window-readiness', () => ({
 const { BrowserWindow } = await import('electron')
 const model = await import('./browser-extension-window-model')
 const demand = await import('../profile-sessions/browser-extension-profile-demand')
+const pageDemand = await import('../profile-sessions/browser-extension-page-demand')
 
 // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the model compares sessions by identity only.
 const profileA = { name: 'a' } as unknown as Electron.Session
@@ -77,7 +78,7 @@ describe("a profile's extension windows", () => {
       isDestroyed: () => false
     })
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The owned Electron fixture supplies the session identity and lifecycle methods this path uses.
-    await demand.retainBrowserExtensionPage(source as unknown as Electron.WebContents)
+    await pageDemand.retainBrowserExtensionPage(source as unknown as Electron.WebContents)
     const popout = model.createBrowserExtensionPopout(profileA, {
       url: 'https://retained.test/',
       type: 'popup',

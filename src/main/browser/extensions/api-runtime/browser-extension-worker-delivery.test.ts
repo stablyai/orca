@@ -7,7 +7,9 @@ vi.mock('./browser-extension-execution-authority', () => ({
 }))
 const pages = vi.hoisted(() => ({ live: false, notify: (_profile: string) => {} }))
 vi.mock('../profile-sessions/browser-extension-profile-demand', () => ({
-  hasBrowserExtensionProfilePage: () => pages.live,
+  hasBrowserExtensionProfilePage: () => pages.live
+}))
+vi.mock('../profile-sessions/browser-extension-page-demand', () => ({
   onBrowserExtensionPageRetained: (listener: (profile: string) => void) => {
     pages.notify = listener
     return () => {

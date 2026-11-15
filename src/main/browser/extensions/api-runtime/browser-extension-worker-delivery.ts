@@ -5,10 +5,8 @@ import {
   isBrowserExtensionExecutionLive,
   type BrowserExtensionExecution
 } from './browser-extension-execution-authority'
-import {
-  hasBrowserExtensionProfilePage,
-  onBrowserExtensionPageRetained
-} from '../profile-sessions/browser-extension-profile-demand'
+import { hasBrowserExtensionProfilePage } from '../profile-sessions/browser-extension-profile-demand'
+import { onBrowserExtensionPageRetained } from '../profile-sessions/browser-extension-page-demand'
 
 // Chromium's default external-event request timeout; this bounds missing receipt, not worker age.
 const DELIVERY_TIMEOUT_MS = 5 * 60 * 1000

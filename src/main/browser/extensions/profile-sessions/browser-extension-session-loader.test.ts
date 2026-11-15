@@ -139,6 +139,8 @@ mocks.userData = mkdtempSync(join(tmpdir(), 'orca-extension-loader-'))
 const contexts = await import('../api-runtime/browser-extension-contexts')
 const { setBrowserExtensionSupportEnabled } = await import('../browser-extension-support')
 const loader = await import('./browser-extension-session-loader')
+const { loadBrowserExtensionCandidateIntoProfile } =
+  await import('./browser-extension-profile-candidate-load')
 function attachProfile(
   profile: Parameters<typeof loader.attachBrowserExtensionsToProfileSession>[0],
   initialEnabled: string[]
@@ -611,7 +613,7 @@ describe('admitted target operations', () => {
     const options = { replaces: true, refresh: false }
     const warm = vi.fn()
     await expect(
-      loader.loadBrowserExtensionCandidateIntoProfile(
+      loadBrowserExtensionCandidateIntoProfile(
         profile.id,
         chosen,
         loader.admitBrowserExtensionEnable(profile.id, ID),
@@ -630,7 +632,7 @@ describe('admitted target operations', () => {
     mocks.missingPaths.add('/old/vault')
     const before = mocks.preparedPaths.length
     const cold = vi.fn()
-    await loader.loadBrowserExtensionCandidateIntoProfile(
+    await loadBrowserExtensionCandidateIntoProfile(
       profile.id,
       chosen,
       loader.admitBrowserExtensionEnable(profile.id, ID),
@@ -644,7 +646,7 @@ describe('admitted target operations', () => {
     mocks.session.extensions.loadExtension.mockRejectedValueOnce(new Error('Invalid manifest'))
     const failed = vi.fn()
     await expect(
-      loader.loadBrowserExtensionCandidateIntoProfile(
+      loadBrowserExtensionCandidateIntoProfile(
         profile.id,
         chosen,
         loader.admitBrowserExtensionEnable(profile.id, ID),
@@ -653,6 +655,31 @@ describe('admitted target operations', () => {
       )
     ).rejects.toThrow('Invalid manifest')
     expect(failed).not.toHaveBeenCalled()
+  })
+
+  it('a rejected same-id folder restores the running saved copy and reports its error', async () => {
+    const old = { ...installed, source: 'unpacked' as const, path: '/old/vault' }
+    getBrowserExtensionInstallStore().save(old)
+    const profile = await attachDemandedProfile('candidate-restore')
+    const tab = makeTab()
+    await loader.retainBrowserExtensionPage(tab)
+    mocks.session.extensions.loadExtension.mockRejectedValueOnce(
+      new Error('Missing content script')
+    )
+    const commit = vi.fn()
+    await expect(
+      loadBrowserExtensionCandidateIntoProfile(
+        profile.id,
+        { ...old, path: '/new/vault' },
+        loader.admitBrowserExtensionEnable(profile.id, ID),
+        { replaces: true, refresh: false },
+        commit
+      )
+    ).rejects.toThrow('Missing content script')
+    expect(commit).not.toHaveBeenCalled()
+    expect(mocks.preparedPaths.slice(-2)).toEqual(['/new/vault', '/old/vault'])
+    expect(mocks.loaded.has(ID)).toBe(true)
+    tab.emit('destroyed')
   })
 
   it('waits for an admitted data deletion before a candidate opens native storage', async () => {
@@ -690,7 +717,7 @@ describe('admitted target operations', () => {
       order.push('loaded')
       return native(directory)
     })
-    const loading = loader.loadBrowserExtensionCandidateIntoProfile(
+    const loading = loadBrowserExtensionCandidateIntoProfile(
       profile.id,
       candidate,
       loader.admitBrowserExtensionEnable(profile.id, candidate.id),

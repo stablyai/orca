@@ -10,9 +10,11 @@ import {
   BROWSER_EXTENSION_PROFILE_UNAVAILABLE,
   throwIfBrowserExtensionAuthorityRevoked,
   throwIfBrowserExtensionLoadCancelled,
-  type BrowserExtensionLoadAuthority
+  type BrowserExtensionLoadAuthority,
+  type BrowserExtensionProfileLoad
 } from './browser-extension-profile-loads'
 import { loadBrowserExtensionIntoSession } from './browser-extension-session-load'
+import { trackInstalledBrowserExtensionLoad } from './browser-extension-profile-loading'
 import { unloadBrowserExtensionFromProfile } from './browser-extension-session-loader'
 
 /**
@@ -42,37 +44,69 @@ export async function loadBrowserExtensionCandidateIntoProfile(
     throw new Error(BROWSER_EXTENSION_PROFILE_UNAVAILABLE)
   }
   const reservation = getBrowserExtensionInstallStore().reserve(candidate)
+  const restores = options.replaces && Boolean(state.session.extensions.getExtension(candidate.id))
+  let attempt: BrowserExtensionProfileLoad | undefined
+  let rejected: { error: unknown } | undefined
+  // Disable, removal, a successor or teardown owns the slot instead of the saved copy.
+  const restoring = {
+    get current() {
+      return (
+        !attempt?.cancelled &&
+        admission.current &&
+        replacement.current &&
+        stateByProfileId.get(profileId) === state
+      )
+    }
+  }
   try {
     const unloaded = options.replaces
       ? unloadBrowserExtensionFromProfile(profileId, candidate.id, replacement)
       : Promise.resolve()
     void unloaded.catch(() => {})
-    return await replacement.settle(
-      state.loads.track(candidate.id, async (load) => {
-        await unloaded
-        throwIfBrowserExtensionLoadCancelled(load)
-        throwIfBrowserExtensionAuthorityRevoked(admission)
-        // Only an unreplaced same-folder copy can still be loaded here; it is the chosen package.
-        let loaded = state.session.extensions.getExtension(candidate.id)
-        if (!loaded) {
-          loaded = await loadBrowserExtensionIntoSession(
-            state.session,
-            profileId,
-            reservation.record,
-            'other',
-            load
-          )
-          await completeBrowserExtensionProfileLoad(state, loaded, load)
+    const loading = state.loads.track(candidate.id, async (load) => {
+      attempt = load
+      await unloaded
+      throwIfBrowserExtensionLoadCancelled(load)
+      throwIfBrowserExtensionAuthorityRevoked(admission)
+      // Only an unreplaced same-folder copy can still be loaded here; it is the chosen package.
+      let loaded = state.session.extensions.getExtension(candidate.id)
+      if (!loaded) {
+        loaded = await loadBrowserExtensionIntoSession(
+          state.session,
+          profileId,
+          reservation.record,
+          'other',
+          load
+        )
+        await completeBrowserExtensionProfileLoad(state, loaded, load)
+      }
+      throwIfBrowserExtensionLoadCancelled(load)
+      throwIfBrowserExtensionAuthorityRevoked(admission)
+      commit(loaded, reservation.record)
+      return loaded
+    })
+    // Why: like Chrome's Load unpacked, a rejected folder leaves the running copy running. Orca
+    // already unloaded it, so the gate follows the saved copy's restore for waiting pages.
+    const loaded = await replacement.settle(
+      loading.catch((error: unknown) => {
+        rejected = { error }
+        // Why first: the saved copy loads under its own precedence, not the rejected candidate's.
+        reservation.release()
+        const saved = getBrowserExtensionInstallStore().get(candidate.id)
+        if (!restores || !saved || !restoring.current) {
+          throw error
         }
-        throwIfBrowserExtensionLoadCancelled(load)
-        throwIfBrowserExtensionAuthorityRevoked(admission)
-        commit(loaded, reservation.record)
-        return loaded
+        // A failed restore records its own load error for Settings.
+        return trackInstalledBrowserExtensionLoad(state, saved, 'other', restoring)
       })
     )
+    if (rejected) {
+      throw rejected.error
+    }
+    return loaded
   } catch (error) {
     replacement.revoke()
-    throw error
+    throw rejected ? rejected.error : error
   } finally {
     reservation.release()
   }

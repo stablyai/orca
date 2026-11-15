@@ -178,13 +178,17 @@ export function BrowserExtensionsSection({
 
   const run = async (
     busyKey: string,
-    action: () => Promise<BrowserExtensionActionResult>
+    action: () => Promise<BrowserExtensionActionResult>,
+    retry?: () => void
   ): Promise<void> => {
     setBusyId(busyKey)
     try {
       const outcome = await action()
       if (!outcome.ok) {
-        toast.error(outcome.error)
+        toast.error(
+          outcome.error,
+          retry ? { action: { label: t('common.retry', 'Retry'), onClick: retry } } : undefined
+        )
       }
     } finally {
       setBusyId(null)
@@ -192,12 +196,18 @@ export function BrowserExtensionsSection({
     }
   }
 
+  // Why Retry: a rejected folder keeps the running copy, so the fix is editing it and loading again.
+  const loadUnpackedFrom = (directory: string): Promise<void> =>
+    run(
+      'load-unpacked',
+      () => window.api.browser.extensionsLoadUnpacked({ profileId, directory }),
+      () => void loadUnpackedFrom(directory)
+    )
+
   const loadUnpacked = async (): Promise<void> => {
     const directory = await window.api.shell.pickDirectory({})
     if (directory) {
-      await run('load-unpacked', () =>
-        window.api.browser.extensionsLoadUnpacked({ profileId, directory })
-      )
+      await loadUnpackedFrom(directory)
     }
   }
 

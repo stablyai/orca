@@ -1,4 +1,4 @@
-import { onBrowserExtensionPageReadiness } from './browser-extension-profile-demand'
+import { onBrowserExtensionPageReadiness } from './browser-extension-page-demand'
 
 const pending = new WeakMap<Electron.WebContents, () => void>()
 
