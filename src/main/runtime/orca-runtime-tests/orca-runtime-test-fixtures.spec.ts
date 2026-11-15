@@ -25,7 +25,7 @@ import {
   computeWorktreePathMock,
   ensurePathWithinWorkspaceMock
 } from '../orca-runtime-test-mocks/setup.spec'
-import type { ProjectGroup } from '../../../shared/project-group-types'
+import type { ProjectGroup } from '../../../shared/project/groups/project-group-types'
 import type { RpcRequest } from '../rpc/core'
 import type { WorktreeMeta } from '../../../shared/worktree/meta-types'
 import type { TerminalLayoutSnapshot } from '../../../shared/workspace-layout/terminal-tab-types'

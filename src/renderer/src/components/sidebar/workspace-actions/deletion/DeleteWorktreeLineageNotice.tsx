@@ -1,11 +1,11 @@
 import { Workflow } from 'lucide-react'
 import { useMemo, type JSX } from 'react'
-import type { Repo } from '../../../../../../shared/repo-types'
+import type { Repo } from '../../../../../../shared/repository/repo-types'
 import { useAppStore } from '@/store'
 import {
   buildProjectGroupingIndex,
   getProjectGroupingForRepo
-} from '../../../../../../shared/project-section-grouping'
+} from '../../../../../../shared/sidebar-list/sections/project-section-grouping'
 import type { Worktree } from '../../../../../../shared/worktree/types'
 import { getWorktreeHostIdentity } from '../../../../../../shared/worktree/host-qualified-identity'
 import { DeleteWorktreeDirtyChangeHint } from './DeleteWorktreeDirtyChangeHint'

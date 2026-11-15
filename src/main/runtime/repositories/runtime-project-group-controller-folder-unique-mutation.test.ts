@@ -7,7 +7,7 @@ import type { RuntimeStore } from '../construction/runtime-store-contract'
 import { FolderWorkspacePersistenceOperations } from '../../persistence/restoring-sessions/folder-workspace-operations'
 import { getDefaultPersistedState } from '../../../shared/constants'
 import type { FolderWorkspace } from '../../../shared/folder-workspaces/folder-workspace-types'
-import type { ProjectGroup } from '../../../shared/project-group-types'
+import type { ProjectGroup } from '../../../shared/project/groups/project-group-types'
 
 const unused = (): never => {
   throw new Error('unused')

@@ -1,6 +1,6 @@
-import type { Repo } from '../../../../../shared/repo-types'
+import type { Repo } from '../../../../../shared/repository/repo-types'
 import { getRepositoryPresenceSearchEntries } from './repository-project-presence-search'
-import { isFolderRepo } from '../../../../../shared/repo-kind'
+import { isFolderRepo } from '../../../../../shared/repository/repo-kind'
 import {
   getRepoExecutionHostId,
   LOCAL_EXECUTION_HOST_ID

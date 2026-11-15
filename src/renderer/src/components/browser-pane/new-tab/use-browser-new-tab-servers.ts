@@ -8,7 +8,7 @@ import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/h
 import type {
   WorkspacePort,
   WorkspacePortPageProbeResult
-} from '../../../../../shared/workspace-ports'
+} from '../../../../../shared/workspace/ports/workspace-ports'
 
 export type BrowserNewTabServer = {
   port: WorkspacePort

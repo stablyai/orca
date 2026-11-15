@@ -8,7 +8,7 @@ import { resolveLocalWindowsTerminalShellOverrideForTab } from '../../../../../.
 import { resolveWindowsShellStartupFamily } from '../../../../../../shared/shell/launch/windows-terminal-shell'
 import { resolveStartupShell } from '../../../../../../shared/agent-launch/startup/tui-agent-startup-shell'
 import type { AgentStartupShell } from '../../../../../../shared/agent-launch/startup/tui-agent-startup-shell'
-import { parseWorkspaceKey } from '../../../../../../shared/workspace-scope'
+import { parseWorkspaceKey } from '../../../../../../shared/workspace/identity/workspace-scope'
 import { parseWslUncPath } from '../../../../../../shared/file-access/wsl-paths'
 import {
   selectFolderWorkspaces,

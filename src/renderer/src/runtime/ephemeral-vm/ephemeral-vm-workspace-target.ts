@@ -6,7 +6,7 @@ import {
 import type {
   ProjectHostSetupExistingFolderArgs,
   ProjectHostSetupResult
-} from '../../../../shared/project-types'
+} from '../../../../shared/project/project-types'
 import {
   getEphemeralVmRecipeResultCheckoutMode,
   getEphemeralVmRecipeResultProjectRoot

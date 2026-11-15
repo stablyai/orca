@@ -11,7 +11,7 @@ import {
 import '../../../shared/agent-launch/catalog/tui-agent-config'
 
 import type * as SkillRootFileWalk from './skill-root-file-walk'
-import type { Repo } from '../../../shared/repo-types'
+import type { Repo } from '../../../shared/repository/repo-types'
 
 let unavailableRootPath: string | null = null
 

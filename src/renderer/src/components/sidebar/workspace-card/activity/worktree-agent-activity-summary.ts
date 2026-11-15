@@ -16,7 +16,7 @@ import {
 } from '../../../../../../shared/agent-status/identity/agent-status-worktree-attribution'
 
 import type { AgentStatusOrchestrationContext } from '../../../../../../shared/agent-status/contracts/agent-status-types'
-import { applyAgentPaneActivityFlags } from '../../../../../../shared/worktree-status-rollup'
+import { applyAgentPaneActivityFlags } from '../../../../../../shared/worktree/row-display/worktree-status-rollup'
 import { getTabIdToWorktreeId } from '@/lib/workspace/tabs/tab-worktree-index'
 
 export type WorktreeAgentActivitySummary = {

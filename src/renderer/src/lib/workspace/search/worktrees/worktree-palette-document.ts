@@ -24,7 +24,7 @@ import {
   resolveWorktreeDisplayName
 } from '../../display/worktree-default-display-name'
 import type { HostedReviewInfo } from '../../../../../../shared/source-control/hosted-review/hosted-review-contracts'
-import type { Repo } from '../../../../../../shared/repo-types'
+import type { Repo } from '../../../../../../shared/repository/repo-types'
 import { getWorkspaceAttachments } from '../../../../../../shared/workspace-attachments/workspace-attachments'
 import { getWorkspaceAttachmentKey } from '../../../../../../shared/workspace-attachments/workspace-attachment-normalization'
 import type { Worktree } from '../../../../../../shared/worktree/types'

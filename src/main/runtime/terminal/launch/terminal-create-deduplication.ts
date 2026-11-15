@@ -2,7 +2,7 @@ import { agentPromptRidesLaunchCommand } from '../../../../shared/agent-launch/s
 import type { SessionOptionValue } from '../../../../shared/native-chat/input/native-chat-session-options'
 import type { TerminalWorkspaceCreationEvidence } from './terminal-workspace-scope'
 import type { FolderWorkspace } from '../../../../shared/folder-workspaces/folder-workspace-types'
-import type { Repo } from '../../../../shared/repo-types'
+import type { Repo } from '../../../../shared/repository/repo-types'
 
 import { OrcaRuntimeWithCreateAgentSession } from '../../session-construction/agent-session/orca-runtime-create-agent-session'
 import type { RuntimeTerminalCreate } from '../../../../shared/terminal/runtime/runtime-terminal-create-contract'

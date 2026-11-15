@@ -5,7 +5,7 @@ import { isRemoteRuntimePtyId } from '../../../../shared/remote-runtime/remote-r
 import type { RuntimeTerminalSplit } from '../../../../shared/terminal/runtime/runtime-terminal-contracts'
 import { parseExecutionHostId } from '../../../../shared/execution-host'
 import { isRestoreSpawnIntent } from '../../../../shared/terminal/pty/admission/spawn-admission-contract'
-import { parseWorkspaceKey } from '../../../../shared/workspace-scope'
+import { parseWorkspaceKey } from '../../../../shared/workspace/identity/workspace-scope'
 import { getRepoIdFromWorktreeId } from '../../../../shared/worktree/id'
 import {
   readWorkspaceRecord,

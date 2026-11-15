@@ -7,7 +7,7 @@ import {
   normalizeWorkspaceStatuses,
   clampWorkspaceBoardColumnWidth,
   clampWorkspaceBoardOpacity
-} from '../../../shared/workspace-statuses'
+} from '../../../shared/workspace/status/workspace-statuses'
 import { normalizeUsagePercentageDisplay } from '../../../shared/usage-percentage-display'
 import { normalizeStatusBarUsageMode } from '../../../shared/status-bar-usage-mode'
 import { normalizeStatusBarUsageFormat } from '../../../shared/status-bar-usage-format'

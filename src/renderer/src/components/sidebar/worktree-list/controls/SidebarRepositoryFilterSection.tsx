@@ -6,7 +6,7 @@ import {
   DropdownMenuSubTrigger
 } from '@/components/ui/dropdown-menu'
 import { SidebarProjectFilterPanel } from './SidebarProjectFilterPanel'
-import type { Repo } from '../../../../../../shared/repo-types'
+import type { Repo } from '../../../../../../shared/repository/repo-types'
 import { withoutHiddenRepos } from '../../../../../../shared/hidden-projects'
 import { translate } from '@/i18n/i18n'
 import { useTranslate, type Translate } from '@/i18n/use-translate'

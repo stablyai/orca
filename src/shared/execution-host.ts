@@ -1,5 +1,5 @@
 import type { GlobalSettings } from './global-settings-types'
-import type { Repo } from './repo-types'
+import type { Repo } from './repository/repo-types'
 import type { Worktree } from './worktree/types'
 
 export const LOCAL_EXECUTION_HOST_ID = 'local'

@@ -3,7 +3,7 @@ import type {
   TerminalQuickCommand,
   TerminalQuickCommandScope
 } from '../../../../shared/terminal/quick-commands/terminal-quick-command-types'
-import type { Repo } from '../../../../shared/repo-types'
+import type { Repo } from '../../../../shared/repository/repo-types'
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import {
   getTerminalQuickCommandAction,

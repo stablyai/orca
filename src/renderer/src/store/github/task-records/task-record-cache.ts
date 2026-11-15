@@ -1,6 +1,6 @@
 import type { GitHubWorkItem } from '../../../../../shared/github/work-items/work-item-types'
 import type { GitHubAssignableUser } from '../../../../../shared/github/pull-requests/pull-request-types'
-import type { Repo } from '../../../../../shared/repo-types'
+import type { Repo } from '../../../../../shared/repository/repo-types'
 import type { AppState } from '../../types'
 import type { StoreApi } from 'zustand'
 import { githubTaskIdentity } from '@/lib/work-items/github/github-task-target'

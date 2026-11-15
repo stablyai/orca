@@ -11,7 +11,7 @@ import type {
   PersistedOpenFile,
   WorkspaceSessionState
 } from '../../../shared/workspace-session/workspace-session-state-types'
-import { isWorkspaceKey } from '../../../shared/workspace-scope'
+import { isWorkspaceKey } from '../../../shared/workspace/identity/workspace-scope'
 import { SESSION_FIELDS_COPIED_BY_OWNER_KEY } from './profile-project-session-field-disposition'
 import { mapMarkdownFrontmatterVisible } from './profile-session-markdown-transfer'
 

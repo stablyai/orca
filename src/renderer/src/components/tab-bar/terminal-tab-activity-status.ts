@@ -19,7 +19,7 @@ import {
   type WorktreeStatus,
   applyAgentPaneActivityFlags,
   type AgentPaneActivityFlags
-} from '../../../../shared/worktree-status-rollup'
+} from '../../../../shared/worktree/row-display/worktree-status-rollup'
 import type {
   TerminalLayoutSnapshot,
   TerminalTab

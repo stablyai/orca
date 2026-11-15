@@ -1,4 +1,4 @@
-import type { IssueSourcePreference } from '../../../../shared/repo-types'
+import type { IssueSourcePreference } from '../../../../shared/repository/repo-types'
 import type { GhAccountBinding } from '../../../../shared/github/accounts/account-binding'
 import { pickPreferredGitRemote } from '../../../../shared/preferred-git-remote'
 import { getDefaultRemote } from '../../../git/remotes/repo-remote-queries'

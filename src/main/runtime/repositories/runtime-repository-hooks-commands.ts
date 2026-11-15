@@ -2,8 +2,8 @@ import { getRepoDialableSshTargetId, isRepoOnCatalogHost } from '../../../shared
 import { scopeHooksToRepoKind } from '../../../shared/folder-workspace-hooks'
 import { windowsFsPath } from '../../wsl/filesystem/wsl-unc-drive-fs-path'
 import { readFile } from 'node:fs/promises'
-import type { WorkspaceHookOwner } from '../../../shared/workspace-hook-owner'
-import type { Repo } from '../../../shared/repo-types'
+import type { WorkspaceHookOwner } from '../../../shared/workspace-setup/hooks/workspace-hook-owner'
+import type { Repo } from '../../../shared/repository/repo-types'
 import type { OrcaHooks } from '../../../shared/orca-yaml-hook-types'
 import {
   getEffectiveHooks,
@@ -15,7 +15,7 @@ import { getEffectiveSetupRunPolicy } from '../../workspace-hooks/effective-hook
 import { resolveHookCommandSourcePolicy } from '../../../shared/hook-command-source-policy'
 import { getSetupConfig, getSetupTrustContent } from '../../../shared/orca-hook-setup-config'
 import { isENOENT } from '../../ipc/filesystem/access/filesystem-path-containment'
-import { isFolderRepo } from '../../../shared/repo-kind'
+import { isFolderRepo } from '../../../shared/repository/repo-kind'
 import { inspectSetupScriptImportCandidates } from '../../../shared/workspace-setup/setup-script-imports'
 import { joinWorktreeRelativePath } from '../files/paths/runtime-relative-paths'
 import { blockedWslDistroForPath } from '../../wsl/filesystem/wsl-unc-access-gate'

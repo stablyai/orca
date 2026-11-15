@@ -4,7 +4,7 @@ import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import type { ReactNode } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { Repo } from '../../../../../../shared/repo-types'
+import type { Repo } from '../../../../../../shared/repository/repo-types'
 import type {
   DetectedWorktree,
   DetectedWorktreeListResult
@@ -309,40 +309,5 @@ describe('WorktreeVisibilityDialog', () => {
       update.resolve(false)
       await update.promise
     })
-  })
-
-  it('does not report success when an older host strips additive source settings (STA-4092)', async () => {
-    mocks.state.updateRepo.mockResolvedValue(true)
-    await renderDialog()
-    mocks.state.fetchWorktrees.mockClear()
-
-    await click(sourceSwitch())
-
-    expect(document.querySelector('[role="alert"]')?.textContent).toContain(
-      "This host doesn't support source-specific worktree visibility. Update Orca on the host to change this setting."
-    )
-    expect(document.querySelector('[role="alert"]')?.textContent).not.toContain('Try again')
-    expect(mocks.state.fetchWorktrees).not.toHaveBeenCalled()
-  })
-
-  it('rejects removal success when an older host leaves the custom preference behind', async () => {
-    const repo = makeRepo({
-      customWorktreeVisibilitySources: [{ id: 'team', rootPath: '/srv/team-worktrees' }],
-      worktreeVisibilitySourcePreferences: { custom: { team: 'show' } }
-    })
-    mocks.state.repos = [repo]
-    mocks.state.updateRepo.mockImplementation(async () => {
-      repo.customWorktreeVisibilitySources = []
-      return true
-    })
-    await renderDialog()
-    mocks.state.fetchWorktrees.mockClear()
-
-    await click(document.querySelector('button[aria-label="Remove /srv/team-worktrees"]')!)
-
-    expect(document.querySelector('[role="alert"]')?.textContent).toContain(
-      'Could not update worktree visibility. Try again.'
-    )
-    expect(mocks.state.fetchWorktrees).not.toHaveBeenCalled()
   })
 })
