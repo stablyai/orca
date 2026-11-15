@@ -2,6 +2,7 @@
 
 import { appendFileSync } from 'node:fs'
 import { open, rename, stat } from 'node:fs/promises'
+import { withTimeout } from '../../shared/promise-timeout-fallback'
 
 const PRIVATE_FILE_MODE = 0o600
 export const DEFAULT_MAX_QUEUED_CHARS = 1024 * 1024
@@ -27,6 +28,8 @@ export type BoundedLogFileWriter = {
   flushSync(): void
   /** Stops accepting lines and flushes synchronously, for exit paths. */
   close(): void
+  /** Stops admission and drains asynchronously; deadline expiry drops pending lines, never sync-flushes. */
+  closeAsync(timeoutMs: number): Promise<void>
 }
 
 // A number marks where that many entries were dropped.
@@ -48,6 +51,8 @@ export function createBoundedLogFileWriter(
   let inFlight: { start: number; done: Promise<void> } | null = null
   let timer: NodeJS.Timeout | null = null
   let closed = false
+  let abandoned = false
+  let closing: Promise<void> | null = null
 
   function nextIndex(): number {
     return headIndex + queue.length
@@ -101,13 +106,21 @@ export function createBoundedLogFileWriter(
   async function fileSize(): Promise<number> {
     return stat(filePath).then(
       (stats) => stats.size,
-      () => 0
+      (error: unknown) => {
+        if (error instanceof Error && 'code' in error && error.code === 'ENOENT') {
+          return 0
+        }
+        throw error
+      }
     )
   }
 
   async function rotate(): Promise<void> {
     // Oldest generation first, so each rename lands on a freed name.
     for (let i = maxFiles - 1; i >= 1; i--) {
+      if (abandoned) {
+        throw new Error('Writer abandoned')
+      }
       const from = i === 1 ? filePath : `${filePath}.${i - 1}`
       await rename(from, `${filePath}.${i}`).catch(() => undefined)
     }
@@ -116,12 +129,22 @@ export function createBoundedLogFileWriter(
   // Appends the batch in as few writes as the OS allows, normally one, so a concurrent sync
   // append lands between batches rather than inside a record.
   async function append(text: string): Promise<void> {
+    if (abandoned) {
+      throw new Error('Writer abandoned')
+    }
     const handle = await open(filePath, 'a', PRIVATE_FILE_MODE)
     try {
       const data = Buffer.from(text, 'utf8')
       let offset = 0
       while (offset < data.length) {
-        offset += (await handle.write(data, offset)).bytesWritten
+        if (abandoned) {
+          throw new Error('Writer abandoned')
+        }
+        const { bytesWritten } = await handle.write(data, offset)
+        if (bytesWritten <= 0) {
+          throw new Error('Write made no progress')
+        }
+        offset += bytesWritten
       }
     } finally {
       await handle.close()
@@ -133,10 +156,17 @@ export function createBoundedLogFileWriter(
     let written = true
     try {
       const text = render(items)
+      const bytes = Buffer.byteLength(text, 'utf8')
+      if (bytes > maxBytes) {
+        throw new Error('Batch exceeds file budget')
+      }
       const size = await fileSize()
-      // Avoid empty rotated files on new installations.
-      if (maxFiles > 1 && size > 0 && size + Buffer.byteLength(text, 'utf8') > maxBytes) {
+      if (maxFiles > 1 && size > 0 && size + bytes > maxBytes) {
         await rotate()
+      }
+      // A failed rename must not turn a bounded log into an unbounded append.
+      if (size + bytes > maxBytes && (await fileSize()) + bytes > maxBytes) {
+        throw new Error('File budget unavailable')
       }
       if (text) {
         await append(text)
@@ -167,7 +197,8 @@ export function createBoundedLogFileWriter(
     }
     // An empty batch still runs the size check, for appends made by flushSync.
     const start = headIndex
-    inFlight = { start, done: writeBatch(dequeueAll()) }
+    const items = dequeueAll()
+    inFlight = { start, done: Promise.resolve().then(() => writeBatch(items)) }
     return inFlight.done
   }
 
@@ -194,6 +225,25 @@ export function createBoundedLogFileWriter(
     }
   }
 
+  async function flush(): Promise<void> {
+    if (abandoned) {
+      return
+    }
+    queueDroppedMarker()
+    const target = nextIndex()
+    while (oldestUnsettled() < target) {
+      await startDrain()
+    }
+  }
+
+  function stopAdmission(): void {
+    closed = true
+    if (timer) {
+      clearTimeout(timer)
+      timer = null
+    }
+  }
+
   return {
     write(line: string): void {
       if (closed) {
@@ -210,25 +260,29 @@ export function createBoundedLogFileWriter(
       queuedChars += line.length
       scheduleDrain()
     },
-    async flush(): Promise<void> {
-      queueDroppedMarker()
-      const target = nextIndex()
-      // Each turn awaits a real write, or the condition is already false.
-      while (oldestUnsettled() < target) {
-        await startDrain()
-      }
-    },
+    flush,
     flushSync,
     close(): void {
       if (closed) {
         return
       }
-      closed = true
-      if (timer) {
-        clearTimeout(timer)
-        timer = null
-      }
+      stopAdmission()
       flushSync()
+    },
+    closeAsync(timeoutMs): Promise<void> {
+      if (closing) {
+        return closing
+      }
+      if (closed) {
+        return Promise.resolve()
+      }
+      stopAdmission()
+      closing = withTimeout(flush(), timeoutMs, undefined).finally(() => {
+        abandoned = true
+        dequeueAll()
+        droppedEntries = 0
+      })
+      return closing
     }
   }
 }

@@ -1,0 +1,33 @@
+# Compositor diagnostics
+
+This is an operator-only investigation path for [#14882](https://github.com/stablyai/orca/issues/14882). It observes renderer-process CPU and analyzes an operator-supplied trace offline. It does not detect or recover a Chromium FrameSorter stall. Missing proxy events do not prove a stall; process CPU does not identify a hot compositor thread.
+
+All packaged builds and ordinary development launches keep it off. To investigate in an isolated local development profile, explicitly launch that build with `ORCA_COMPOSITOR_DIAGNOSTICS=1` using the repository's development launcher and profile isolation. Agent launches must also set `ORCA_BACKGROUND_LAUNCH=1`. There is no remote flag, enable RPC, product setting, notification or new visible text. CI and `ORCA_DIAGNOSTICS_DISABLED` disable local collection. DNT and telemetry opt-out disable uploads, but permit existing local diagnostics.
+
+The monitor shares cumulative CPU samples across registered UI renderers, keyed by PID and creation time. At most 64 targets and 32 process baselines are retained. Sampling backs off from 30 seconds to five minutes for quiet renderers. A native metrics call exceeding five milliseconds or throwing disables the monitor for the rest of the process. Closing the last window pauses sampling; reopening a window resumes the same session and preserves terminal disable decisions. Sleep, navigation and renderer replacement invalidate baselines. There is no threshold-triggered recording or recovery action.
+
+The app never starts native tracing, attaches a debugger, wraps `contentTracing`, changes window visibility or throttling, invalidates a surface or starts an animation. Its native capture duration and storage budgets are both zero, browser-wide. References cached before installation, independent CDP clients, DevTools Performance and agent debugger leases remain owned by their callers. Native trace expansion and interrupted/shared-client stream cleanup remain unproven; automatic capture must not be reintroduced without establishing those contracts.
+
+Read the single local operator status with:
+
+```sh
+node config/scripts/diagnostics/compositor-stall/read-compositor-status.mjs /absolute/path/to/isolated/profile
+```
+
+The JSON contains state, last result, coverage limits and the session-disable reason. Missing files mean off; records older than ten minutes are stale. Local consent comes from process environment at launch; there is no supported mutable setting or consent RPC for this experiment. Consent is also checked before every synchronous sample and enqueue. There is no asynchronous capture to cancel. Changing a parent shell's environment does not change a running app; relaunch the isolated development profile with diagnostics disabled to stop collection.
+
+Only numeric identifiers, intervals, engine-version components and counts, together with fixed schema/status enums, are retained in `<profile>/compositor-diagnostics/observations.ndjson`. No URL, title, DOM/terminal/chat text, cookies, arbitrary process/frame names or path is retained. Writes use the existing private local sink, a 64 KiB queue and two rotated 256 KiB files. Live disable and quit request an asynchronous close with a 500 ms deadline and no synchronous fallback. Final batches follow rotation and size admission; failed rotation or an unknown size refuses the append. On expiry pending records are dropped and no later write starts; an already-submitted OS write may still complete. Shutdown is best effort, so the final status record may be missing, particularly at process exit. Records remain until rotation overwrites them or the operator deletes the directory. The directory is outside the standard feedback trace family; nothing automatically uploads or attaches it. Sharing requires an explicit owner action.
+
+An operator who already owns a JSON trace may explicitly analyze it, without connecting to Orca or creating a raw trace copy:
+
+```sh
+node config/scripts/diagnostics/compositor-stall/analyze-compositor-trace.mjs /absolute/path/to/trace.json 12345
+```
+
+The command accepts up to 32 renderer PIDs and a regular file of at most 8 MiB. It streams 64 KiB chunks through one bounded parser worker, with 100 ms parser CPU, 32/4 MiB V8 heap limits, one-second request deadlines and a ten-second processing cancellation deadline. It writes numeric observations and fixed enums to stdout; failure output contains no input path, payload or exception. It neither retains nor uploads the input or result. The supplied trace remains in the operator's custody, with its existing retention and privacy properties. This command does not acquire a trace or make an existing trace safe to share.
+
+Attempts and calculation aborts are renderer-process observations. `compositorThreadCoverage` is `unidentified` when metadata is missing or filtered, and compositor slice/wall/thread totals remain null. An identified thread with no matching slices has zero matching slices, which does not establish zero compositor activity. Missing thread timing remains null. Frame tracker proxy progress is process-scoped and incomplete: it cannot establish the health of a particular surface. Submission, presentation, sorter progress, surface identity and tracker coverage remain unknown even when proxy events exist.
+
+Validation keeps all app fixtures hidden and in the background. Functional tests cover missing/filtered metadata versus identified-zero totals, close-last/reopen behavior with preserved terminal disable, consent-stop, final-batch rotation, failed/unavailable storage and deadline expiry without replay after late storage recovery. An authenticated hidden fixture checks numeric-only output and that a cached-before-install `contentTracing` call, an independent external CDP recording and an agent debugger lease still succeed. No diagnostics code owns a debugger lease or creates a native trace stream, so there is no diagnostic capture to preempt, no diagnostic abort budget and no diagnostic stream to clean up.
+
+Before enabling beyond isolated investigation, compare monitor-on/off terminal and chat input at actual 60/120 Hz on an M4 Air: p95 keystroke-to-paint increase <=one frame, no additional dropped frames during scrolling/streaming, unchanged IME/caret/selection/native and DOM focus. Native-visible/focus tests remain on an isolated display or CI. These timing runs are unrun and need not block PR creation when code-based performance reasoning is supplied. Healthy no-load controls, a real sorter stall and safe recovery evidence are still required before claiming a fix. Automatic recovery remains disabled.

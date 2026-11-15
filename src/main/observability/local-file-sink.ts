@@ -56,7 +56,10 @@ function droppedRecordMarker(fields: Record<string, unknown>): string {
   })}\n`
 }
 
-export function createLocalFileSink(opts: LocalFileSinkOptions): LocalFileSink {
+export function createLocalFileSink(opts: LocalFileSinkOptions): LocalFileSink & {
+  /** Best-effort bounded runtime shutdown; expiry drops pending records without a sync fallback. */
+  closeAsync(timeoutMs: number): Promise<void>
+} {
   const filePath = opts.filePath
   const maxBytes = opts.maxBytes ?? DEFAULT_MAX_BYTES
   const maxFiles = opts.maxFiles ?? DEFAULT_MAX_FILES
@@ -116,7 +119,8 @@ export function createLocalFileSink(opts: LocalFileSinkOptions): LocalFileSink {
     },
     flush: () => writer.flushSync(),
     flushAsync: () => writer.flush(),
-    close: () => writer.close()
+    close: () => writer.close(),
+    closeAsync: (timeoutMs) => writer.closeAsync(timeoutMs)
   }
 }
 
