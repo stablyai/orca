@@ -53,6 +53,7 @@ type ArtifactPublishAuthContext = {
   profileId: string
   scope: ArtifactShareScope
   assertCurrent: () => void
+  assertCanReplay: () => void
 }
 
 function artifactOperationQueueKey(
@@ -188,7 +189,8 @@ export class ArtifactPublisher {
       const item = await artifactRequest<ArtifactListItem>(apiUrl, token, `/${record.slug}`, {
         method: 'PUT',
         editToken: record.editToken,
-        body: artifactWriteBody(request)
+        body: artifactWriteBody(request),
+        beforeReplay: auth.assertCanReplay
       })
       auth.assertCurrent()
       refreshArtifactShareRecordExpiration(
@@ -227,7 +229,8 @@ export class ArtifactPublisher {
       response = await artifactRequest<ArtifactCreateResponse>(apiUrl, token, '', {
         method: 'POST',
         body: intent.body,
-        idempotencyKey: intent.idempotencyKey
+        idempotencyKey: intent.idempotencyKey,
+        beforeReplay: auth.assertCanReplay
       })
     } catch (error) {
       // A replay may outlive its server receipt, so never abandon a possibly committed artifact.

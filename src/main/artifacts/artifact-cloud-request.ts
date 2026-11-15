@@ -27,6 +27,8 @@ type ArtifactRequestOptions = {
   body?: unknown
   editToken?: string
   idempotencyKey?: string
+  /** Throws when the account that sent the first attempt is no longer signed in; without it a 429 never replays. */
+  beforeReplay?: () => void
 }
 
 function sendArtifactRequest(
@@ -51,7 +53,10 @@ function sendArtifactRequest(
 
 // A POST without an Idempotency-Key could create a second artifact if the first one landed.
 function canReplay(options: ArtifactRequestOptions): boolean {
-  return (options.method ?? 'GET') !== 'POST' || Boolean(options.idempotencyKey)
+  return (
+    options.beforeReplay !== undefined &&
+    ((options.method ?? 'GET') !== 'POST' || Boolean(options.idempotencyKey))
+  )
 }
 
 export async function artifactRequest<T>(
@@ -73,6 +78,8 @@ export async function artifactRequest<T>(
       throw limited.error
     }
     await new Promise((resolve) => setTimeout(resolve, delay * 1000))
+    // A sign-out or account switch during the wait must not create, update or delete under the old token.
+    options.beforeReplay?.()
     response = await sendArtifactRequest(apiUrl, token, path, options)
     if (response.status === 429) {
       throw (await readArtifactRateLimitResponse(response)).error
