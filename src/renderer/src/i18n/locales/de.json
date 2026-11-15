@@ -11582,6 +11582,7 @@
           "e27c8d45bf": "Die Diagnose ist durch eine Umgebungsvariable deaktiviert."
         },
         "ShortcutCommandBlock": {
+          "retryAfterError": "Ein anderes Tastenkürzel drücken oder mit Esc abbrechen.",
           "eb72c52c28": "Ein Tastenkürzel drücken oder eine Zusatztaste zweimal antippen (z. B. {{value0}}). Esc bricht ab.",
           "70b5d25583": "Tastenkürzel für {{value0}}",
           "287e07ddde": "Geändert",
