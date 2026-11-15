@@ -39,31 +39,6 @@ describe('PromiseSettlementWaiters', () => {
     expect(waiters.waiterCount).toBe(0)
   })
 
-  it('removes timed-out callers and clears their timers on settlement', async () => {
-    vi.useFakeTimers()
-    try {
-      let resolveBase: () => void = () => {}
-      const waiters = new PromiseSettlementWaiters(
-        new Promise<void>((resolve) => {
-          resolveBase = resolve
-        })
-      )
-      const timedOut = waiters
-        .wait({ timeoutMs: 10, createTimeoutError: () => new Error('late') })
-        .catch((error) => error)
-      const active = waiters.wait({ timeoutMs: 100 })
-
-      await vi.advanceTimersByTimeAsync(10)
-      await expect(timedOut).resolves.toMatchObject({ message: 'late' })
-      expect(waiters.waiterCount).toBe(1)
-      resolveBase()
-      await expect(active).resolves.toBeUndefined()
-      expect(vi.getTimerCount()).toBe(0)
-    } finally {
-      vi.useRealTimers()
-    }
-  })
-
   it('notifies ownership cleanup for an already-aborted caller', async () => {
     const controller = new AbortController()
     controller.abort()

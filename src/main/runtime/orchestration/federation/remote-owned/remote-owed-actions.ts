@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { mapWithConcurrency } from '../../../../../shared/map-with-concurrency'
+import { mapWithConcurrency } from '../../../../../shared/concurrency/map-with-concurrency'
 import { HelperStopOutcome } from '../../../../../shared/orchestration/workers/orchestration-worker-stop-receipt'
 import { PeerRunCancelResult } from '../../../../../shared/orchestration/remote-owned-wire'
 import { OrchestrationError } from '../../orchestration-error'

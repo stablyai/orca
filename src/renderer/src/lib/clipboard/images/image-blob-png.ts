@@ -1,4 +1,4 @@
-import { abortSignalReason } from '../../../../../shared/abort-signal-reason'
+import { abortSignalReason } from '../../../../../shared/concurrency/abort-signal-reason'
 import {
   CLIPBOARD_IMAGE_MAX_PIXELS,
   assertClipboardImageByteLengthWithinLimit,

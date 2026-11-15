@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import { agentJournalSubmissionKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
 import { claudePromptUuidForSubmission } from './claude-structured-session-id'
-import { isAbortSignalReason } from '../../../shared/abort-signal-reason'
+import { isAbortSignalReason } from '../../../shared/concurrency/abort-signal-reason'
 import {
   forgetRetiredWaiter,
   forgetWaiter,

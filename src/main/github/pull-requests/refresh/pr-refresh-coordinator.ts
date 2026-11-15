@@ -1,4 +1,4 @@
-import { sharedPromiseSettlementWaiters } from '../../../../shared/promise-settlement-waiters'
+import { sharedPromiseSettlementWaiters } from '../../../../shared/concurrency/promise-settlement-waiters'
 import { runImmediatePRRefresh } from './pr-refresh-immediate-read'
 import type {
   GitHubPRRefreshAlias,

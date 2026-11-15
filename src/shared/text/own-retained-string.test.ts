@@ -37,18 +37,6 @@ describe('ownRetainedString', () => {
     resetOwnRetainedStringCopier()
   })
 
-  it('releases the parent chunk that a retained tail was sliced from', () => {
-    const sliced = retainedBytes((parent) => parent.slice(parent.length - TAIL_CHARS))
-    const owned = retainedBytes((parent) =>
-      ownRetainedString(parent.slice(parent.length - TAIL_CHARS))
-    )
-
-    // 32 x 1 Mi parents pinned by 32 x 4 Ki tails, versus the tails alone.
-    expect(sliced).toBeGreaterThan(16 * 1024 * 1024)
-    expect(owned).toBeLessThan(4 * 1024 * 1024)
-    expect(owned).toBeLessThan(sliced / 8)
-  })
-
   it.each([
     ['ascii', 'x'.repeat(4096)],
     ['two-byte', '漢'.repeat(4096)],

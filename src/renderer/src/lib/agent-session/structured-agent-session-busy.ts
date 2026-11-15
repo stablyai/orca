@@ -1,4 +1,4 @@
-import { sharedPromiseSettlementWaiters } from '../../../../shared/promise-settlement-waiters'
+import { sharedPromiseSettlementWaiters } from '../../../../shared/concurrency/promise-settlement-waiters'
 import { useAppStore } from '@/store'
 import type { Tab } from '../../../../shared/tab-types'
 import { structuredAgentSessionPaneKey } from '../../../../shared/agent-session/view/structured-agent-session-projection'

@@ -4,7 +4,7 @@ import {
   isKnownBadPRReorderedDefaultStatusPayload,
   isLegacyDefaultWorkflowStatusPayload
 } from './workspace-status-default-migration'
-import { sliceAtCodeUnitLimit } from '../../surrogate-safe-text-slice'
+import { sliceAtCodeUnitLimit } from '../../text/surrogate-safe-text-slice'
 
 const WORKSPACE_STATUS_GROUP_PREFIX = 'workspace-status:'
 const MAX_STATUS_LABEL_LENGTH = 32

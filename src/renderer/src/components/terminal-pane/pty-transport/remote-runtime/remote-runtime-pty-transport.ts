@@ -118,7 +118,7 @@ import { RemoteRuntimePtyRecoveryState } from './recovery/remote-runtime-pty-rec
 import { REMOTE_RUNTIME_AUTO_RECOVERY_TIMEOUT_MS } from './recovery/remote-runtime-pty-recovery-limits'
 import { registerRemoteRuntimePtyControlReadyReviver } from './recovery/remote-runtime-pty-control-ready-revivers'
 import type { RemoteRuntimePtyRecoveryPhase } from './recovery/remote-runtime-pty-recovery-state'
-import { createNonSecureContextUuid as createBrowserUuid } from '../../../../../../shared/non-secure-context-uuid'
+import { createNonSecureContextUuid as createBrowserUuid } from '../../../../../../shared/identifiers/non-secure-context-uuid'
 import {
   createAgentSessionCreateOperation,
   withAgentSessionCreateOperationId

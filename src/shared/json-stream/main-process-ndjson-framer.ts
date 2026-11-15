@@ -1,4 +1,4 @@
-import { ownRetainedString } from './own-retained-string'
+import { ownRetainedString } from '../text/own-retained-string'
 
 export const NDJSON_MAX_LINE_BYTES = 16 * 1024 * 1024
 

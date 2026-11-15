@@ -1,5 +1,8 @@
 import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
-import { InFlightPromiseDedupe, stableInFlightKey } from '../../../shared/in-flight-promise-dedupe'
+import {
+  InFlightPromiseDedupe,
+  stableInFlightKey
+} from '../../../shared/concurrency/in-flight-promise-dedupe'
 import { setBoundedScopeCacheEntry } from '../../../shared/native-chat/native-chat-scope-cache'
 import { PRIMARY_AGENT_DIR_ENV_BY_KIND } from '../../../shared/agent-launch/catalog/pi-agent-kind'
 import { onAgentsRefreshedOnHost } from '../../preflight/agents-refreshed-on-host'

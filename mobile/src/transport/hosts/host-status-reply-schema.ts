@@ -1,5 +1,5 @@
 import * as z from 'zod'
-import { salvagedOptional } from '../../../../src/shared/zod-salvage'
+import { salvagedOptional } from '../../../../src/shared/validation/zod-salvage'
 import { NODE_PLATFORM_NAMES } from '../connection/mobile-runtime-host-platform'
 import { HOST_MACHINE_KINDS } from '../../../../src/shared/execution-host/host-machine-line'
 
