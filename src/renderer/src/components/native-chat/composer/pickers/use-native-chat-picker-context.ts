@@ -1,17 +1,12 @@
-import { useEffect, useRef, type RefObject } from 'react'
+import { useEffect, useEffectEvent, useRef } from 'react'
 
-/** Only a different draft context resets autocomplete choices; reconnecting its view does not. */
-export function useNativeChatPickerContext(
-  context: string,
-  skillOrigin: RefObject<string | null>,
-  clearDismissal: (value: null) => void
-) {
+export function useNativeChatPickerContext(context: string, onChange: () => void): void {
   const previous = useRef(context)
+  const changed = useEffectEvent(onChange)
   useEffect(() => {
     if (previous.current !== context) {
       previous.current = context
-      skillOrigin.current = null
-      clearDismissal(null)
+      changed()
     }
-  }, [context, skillOrigin, clearDismissal])
+  }, [context])
 }

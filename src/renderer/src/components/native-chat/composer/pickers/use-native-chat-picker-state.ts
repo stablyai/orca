@@ -124,7 +124,10 @@ export function useNativeChatPickerState(args: {
   const dismissalContext = `${draftScopeKey}:${agent}`
   const [dismissed, setDismissed] = useState<{ context: string; triggerKey: string } | null>(null)
   const skillOriginRef = useRef<string | null>(null)
-  useNativeChatPickerContext(dismissalContext, skillOriginRef, setDismissed)
+  useNativeChatPickerContext(dismissalContext, () => {
+    skillOriginRef.current = null
+    setDismissed(null)
+  })
   const lastOpenKeyRef = useRef<string | null>(null)
   const derivedAutocomplete = useMemo<ComposerAutocomplete>(
     () =>
@@ -230,10 +233,9 @@ export function useNativeChatPickerState(args: {
 
   const completeMention = useCallback(
     (path: string) => {
-      if (disabledRef.current || autocomplete.mode !== 'mention') {
-        return
+      if (!disabledRef.current && autocomplete.mode === 'mention') {
+        commitCompletion(applyMentionSuggestion(...liveDraft(), path))
       }
-      commitCompletion(applyMentionSuggestion(...liveDraft(), path))
     },
     [autocomplete, commitCompletion, liveDraft]
   )
