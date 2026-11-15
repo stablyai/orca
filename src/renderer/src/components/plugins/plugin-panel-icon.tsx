@@ -1,9 +1,6 @@
 import { useEffect, useState, type ComponentType } from 'react'
 import { Plug } from 'lucide-react'
-import {
-  pluginPanelIconFileFormat,
-  pluginPanelIconKind
-} from '../../../../shared/plugins/contributions/plugin-panel-icon'
+import { pluginPanelIconKind } from '../../../../shared/plugins/contributions/plugin-panel-icon'
 import { pluginPanelIconUrl } from '../../../../shared/plugins/images/plugin-image-url'
 import { cn } from '@/lib/class-names'
 import { resolvePluginIconGlyph } from './plugin-icon-glyphs'
@@ -23,45 +20,6 @@ function cachedPanelIcon(
   const component = create()
   panelIconComponents.set(key, component)
   return component
-}
-
-function EmojiPanelIcon({
-  icon,
-  size = 18,
-  className
-}: PluginPanelIconProps & { icon: string }): React.JSX.Element {
-  return (
-    <span
-      className={cn('inline-flex shrink-0 items-center justify-center leading-none', className)}
-      style={{ width: size, height: size, fontSize: Math.round(size * 0.9) }}
-      aria-hidden="true"
-    >
-      {icon}
-    </span>
-  )
-}
-
-function PngPanelIcon({
-  url,
-  size = 18,
-  className
-}: PluginPanelIconProps & { url: string }): React.JSX.Element {
-  const [failed, setFailed] = useState(false)
-  useEffect(() => setFailed(false), [url])
-  return failed ? (
-    <Plug size={size} className={className} />
-  ) : (
-    <img
-      src={url}
-      alt=""
-      aria-hidden="true"
-      draggable={false}
-      width={size}
-      height={size}
-      className={cn('shrink-0 object-contain', className)}
-      onError={() => setFailed(true)}
-    />
-  )
 }
 
 function SvgPanelIcon({
@@ -116,19 +74,10 @@ export function resolvePluginPanelIcon(
   iconUrl?: string
 ): ComponentType<PluginPanelIconProps> {
   const kind = icon ? pluginPanelIconKind(icon) : null
-  if (kind === 'emoji' && icon) {
-    return cachedPanelIcon(`emoji:${icon}`, () => (props) => (
-      <EmojiPanelIcon {...props} icon={icon} />
-    ))
-  }
   if (kind === 'file' && icon) {
     const url = iconUrl ? pluginPanelIconUrl(iconUrl) : null
-    const format = pluginPanelIconFileFormat(icon)
-    if (url && format === 'svg') {
+    if (url) {
       return cachedPanelIcon(`svg:${url}`, () => (props) => <SvgPanelIcon {...props} url={url} />)
-    }
-    if (url && format === 'png') {
-      return cachedPanelIcon(`png:${url}`, () => (props) => <PngPanelIcon {...props} url={url} />)
     }
   }
   return resolvePluginIconGlyph(icon, Plug)

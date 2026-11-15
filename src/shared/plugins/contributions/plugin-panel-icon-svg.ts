@@ -1,5 +1,3 @@
-import { PLUGIN_PANEL_ICON_FILE_MAX_BYTES } from './plugin-panel-icon-format'
-
 /** Elements and attributes kept when an icon SVG is drawn; anything else is removed. */
 export const PLUGIN_ICON_SVG_ELEMENTS = new Set([
   'svg',
@@ -199,9 +197,6 @@ function svgAttributesError(attributes: string, root: boolean): string | null {
  *  event handlers, network references or foreign content. */
 export function pluginPanelIconSvgError(source: string): string | null {
   const text = source.trim()
-  if (new TextEncoder().encode(text).byteLength > PLUGIN_PANEL_ICON_FILE_MAX_BYTES) {
-    return `must be at most ${PLUGIN_PANEL_ICON_FILE_MAX_BYTES / 1024} KB`
-  }
   if (/<!(?:DOCTYPE|ENTITY)\b/i.test(text)) {
     return 'SVG document types and entities are not allowed'
   }

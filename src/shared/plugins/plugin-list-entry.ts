@@ -9,9 +9,9 @@ import type { PluginStatusBarItemContribution } from './contributions/plugin-sta
 export type PluginHostPanel = {
   id: string
   title: string
-  /** The manifest's icon: a built-in name, one emoji, or a plugin-relative file path. */
+  /** The manifest's icon: a built-in name or a plugin-relative SVG path. */
   icon?: string
-  /** orca-plugin-image URL when the icon is a file; absent for names and emoji. */
+  /** orca-plugin-image URL when the icon is a file; absent for built-in names. */
   iconUrl?: string
   tabKey: `plugin:${string}`
 }

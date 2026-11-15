@@ -16,6 +16,7 @@ import {
   strictPluginArtifactErrors,
   strictPluginArtifactWarnings
 } from '../../../shared/plugins/authoring/plugin-strict-artifact-checks'
+import { pluginPanelIconWarnings } from '../../../main/plugins/media/plugin-panel-icon-artifacts'
 import { validatePluginFile } from '../../../shared/plugins/installation/plugin-file-validation'
 import {
   localPluginPublisher,
@@ -114,7 +115,10 @@ export async function validatePluginTarget(target: string): Promise<PluginValida
   }
   const { manifest } = parsed
   errors.push(...(await contentErrors(root, manifest)))
-  const warnings = strictPluginArtifactWarnings(manifest, manifestTextReader(root))
+  const warnings = [
+    ...strictPluginArtifactWarnings(manifest, manifestTextReader(root)),
+    ...(await pluginPanelIconWarnings(root, manifest))
+  ]
   return {
     path: root,
     file,

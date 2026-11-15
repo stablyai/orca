@@ -2,16 +2,14 @@ import type { PluginManifest } from '../../../shared/plugins/manifest/plugin-man
 import {
   PLUGIN_PANEL_ICON_FILE_MAX_BYTES,
   pluginPanelIconFileError,
-  pluginPanelIconFileFormat,
-  pluginPanelIconKind,
-  type PluginPanelIconFileFormat
+  pluginPanelIconKind
 } from '../../../shared/plugins/contributions/plugin-panel-icon'
 import { readContainedPluginArtifactBytes } from '../artifacts/plugin-contained-artifact'
 
 export type DeclaredPluginPanelIcon = {
+  panelIndex: number
   path: string
   slot: string
-  format: PluginPanelIconFileFormat
 }
 
 /** Panel icons that name a file, with the stable image-protocol slot for each panel. */
@@ -23,16 +21,16 @@ export function declaredPluginPanelIcons(manifest: PluginManifest): DeclaredPlug
     if (panel.icon === undefined || pluginPanelIconKind(panel.icon) !== 'file') {
       return []
     }
-    const format = pluginPanelIconFileFormat(panel.icon)
-    return format ? [{ path: panel.icon, slot: `panel-icon-${index}`, format }] : []
+    return [{ panelIndex: index, path: panel.icon, slot: `panel-icon-${index}` }]
   })
 }
 
-/** Validates each panel icon image by its extension and bytes before install. */
-export async function validatePluginPanelIconArtifacts(
+/** Invalid panel icons fall back to `plug`, so report them without blocking the plugin. */
+export async function pluginPanelIconWarnings(
   rootDir: string,
   manifest: PluginManifest
-): Promise<{ ok: true } | { ok: false; error: string }> {
+): Promise<string[]> {
+  const warnings: string[] = []
   for (const icon of declaredPluginPanelIcons(manifest)) {
     try {
       const bytes = await readContainedPluginArtifactBytes(
@@ -45,13 +43,12 @@ export async function validatePluginPanelIconArtifacts(
         throw new Error(error)
       }
     } catch (error) {
-      return {
-        ok: false,
-        error: `panel icon ${icon.path}: ${error instanceof Error ? error.message : String(error)}`
-      }
+      warnings.push(
+        `contributes.panels[${icon.panelIndex}].icon (${icon.path}): ${error instanceof Error ? error.message : String(error)}`
+      )
     }
   }
-  return { ok: true }
+  return warnings
 }
 
 export type CheckedPluginPanelIcon = { bytes: Buffer; mimeType: string }
@@ -72,7 +69,7 @@ export async function readCheckedPluginPanelIcon(
     }
     return {
       bytes,
-      mimeType: pluginPanelIconFileFormat(path) === 'svg' ? 'image/svg+xml' : 'image/png'
+      mimeType: 'image/svg+xml'
     }
   } catch {
     return null

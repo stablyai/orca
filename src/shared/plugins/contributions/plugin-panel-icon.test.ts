@@ -7,24 +7,13 @@ import {
   pluginPanelIconSvgError
 } from './plugin-panel-icon'
 
-const PNG = Buffer.from(
-  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=',
-  'base64'
-)
 const SVG =
   '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M1 1h22v22H1z" fill="currentColor"/></svg>'
 
 describe('plugin panel icons', () => {
   it.each([
     ['database', 'builtin'],
-    ['🧩', 'emoji'],
-    ['1️⃣', 'emoji'],
-    ['#️⃣', 'emoji'],
-    ['*️⃣', 'emoji'],
-    ['❤️', 'emoji'],
-    ['👩🏽‍💻', 'emoji'],
-    ['icons/panel.svg', 'file'],
-    ['icons/panel.PNG', 'file']
+    ['icons/panel.svg', 'file']
   ])('classifies %s as %s', (value, kind) => {
     expect(pluginPanelIconKind(value)).toBe(kind)
     expect(pluginPanelIconSchema.safeParse(value).success).toBe(true)
@@ -36,9 +25,7 @@ describe('plugin panel icons', () => {
 
   it.each([
     'mail',
-    '❤',
     '1',
-    '🧩🧩',
     '../panel.svg',
     '/assets/panel.svg',
     'https://evil.example/panel.svg',
@@ -51,10 +38,8 @@ describe('plugin panel icons', () => {
 })
 
 describe('plugin panel icon files', () => {
-  it('checks SVG structure and PNG bytes', () => {
+  it('checks SVG structure and bytes', () => {
     expect(pluginPanelIconFileError('icons/panel.svg', Buffer.from(SVG))).toBeNull()
-    expect(pluginPanelIconFileError('icons/panel.png', PNG)).toBeNull()
-    expect(pluginPanelIconFileError('icons/panel.png', Buffer.from(SVG))).toMatch(/PNG/)
     expect(
       pluginPanelIconFileError(
         'icons/panel.svg',

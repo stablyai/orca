@@ -191,6 +191,7 @@ export const PLUGIN_AUTHORING_HANDLERS: Record<string, CommandHandler> = {
     const failed = [...panels, ...editors].some((check) => check.issues.length > 0)
     const text = [
       `${report.file}: ok`,
+      ...(report.warnings ?? []).map((warning) => `warning: ${warning}`),
       ...panels.flatMap(formatPluginPanelCheck),
       ...editors.flatMap(formatPluginEditorCheck),
       ...(panels.length === 0 && editors.length === 0

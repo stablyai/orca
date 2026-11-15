@@ -58,7 +58,7 @@ describe('pluginManifestSchema boundaries', () => {
     })
   })
 
-  it('requires the panel icon floor for emoji and file icons', () => {
+  it('requires the panel icon floor for SVG file icons', () => {
     const format2 = (orcVersion: string, icon: string) => ({
       manifestVersion: 2,
       execution: 'sandboxed-ui',
@@ -72,19 +72,25 @@ describe('pluginManifestSchema boundaries', () => {
       }
     })
 
-    expect(pluginManifestSchema.safeParse(format2('1.4.259', '🧩')).success).toBe(false)
-    expect(pluginManifestSchema.safeParse(format2('1.4.260', '🧩')).success).toBe(true)
-    expect(pluginManifestSchema.safeParse(format2('1.4.259', 'icons/panel.svg')).success).toBe(
-      false
-    )
-    expect(pluginManifestSchema.safeParse(format2('1.4.260', 'icons/panel.png')).success).toBe(true)
-    expect(parseHostPluginManifest(format2('1.4.259', '🧩')).ok).toBe(true)
+    expect(pluginManifestSchema.safeParse(format2('1.4.259', 'database')).success).toBe(true)
+    const below = pluginManifestSchema.safeParse(format2('1.4.259', 'icons/panel.svg'))
+    expect(below.success).toBe(false)
+    if (!below.success) {
+      expect(
+        below.error.issues.find((issue) => issue.path.join('.') === 'contributes.panels.0.icon')
+          ?.message
+      ).toMatch(/>=1\.4\.260.*manifest format 2/)
+    }
+    expect(pluginManifestSchema.safeParse(format2('1.4.260', 'icons/panel.svg')).success).toBe(true)
+    expect(parseHostPluginManifest(format2('1.4.259', 'icons/panel.svg')).ok).toBe(true)
   })
 
   it('keeps format 1 panel icons in the older closed-name vocabulary', () => {
     const result = parsePluginManifest(
       manifest({
-        contributes: { panels: [{ id: 'one', title: 'One', icon: '🧩', entry: 'panel.html' }] }
+        contributes: {
+          panels: [{ id: 'one', title: 'One', icon: 'icons/panel.svg', entry: 'panel.html' }]
+        }
       })
     )
 

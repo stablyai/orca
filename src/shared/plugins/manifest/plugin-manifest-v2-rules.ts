@@ -70,7 +70,7 @@ const engineBelow = (range: string, version: string): boolean =>
   orcaEngineRangeSchema.safeParse(range).success &&
   !satisfiesOrcaEngineRange(range.slice(2), `>=${version}`)
 
-/** Why authoring only: a host that reads emoji and files renders them even when the declaration
+/** Why authoring only: a host that reads SVG files renders them even when the declaration
  *  promises an earlier release; the floor makes older hosts refuse instead of hide them. */
 export function validatePanelIconFloor(
   manifest: {
@@ -82,13 +82,13 @@ export function validatePanelIconFloor(
   manifest.contributes.panels.forEach((panel, index) => {
     if (
       panel.icon !== undefined &&
-      pluginPanelIconKind(panel.icon) !== 'builtin' &&
+      pluginPanelIconKind(panel.icon) === 'file' &&
       engineBelow(manifest.engines.orca, PLUGIN_PANEL_ICON_SINCE)
     ) {
       ctx.addIssue({
         code: 'custom',
         path: ['contributes', 'panels', index, 'icon'],
-        message: `must be at least >=${PLUGIN_PANEL_ICON_SINCE} when a panel icon is an emoji or file, because older Orca cannot render it`
+        message: `must be at least >=${PLUGIN_PANEL_ICON_SINCE} when a panel icon is an .svg file, because older Orca cannot render file icons; the file form also requires manifest format 2`
       })
     }
   })

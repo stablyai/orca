@@ -10,12 +10,7 @@ import { PLUGIN_IMAGE_RULES } from '../../../shared/plugins/images/plugin-image-
 import { PLUGIN_NEW_FILE_TEMPLATE_MAX_BYTES } from '../../../shared/plugins/contributions/plugin-new-file-contribution'
 import { validatePluginImageArtifacts } from '../media/plugin-image-artifact-validation'
 import { validatePluginFontArtifacts } from '../media/plugin-font-files'
-import { validatePluginPanelIconArtifacts } from '../media/plugin-panel-icon-artifacts'
 import { PLUGIN_FONT_FILE_MAX_BYTES } from '../../../shared/plugins/contributions/plugin-font-contribution'
-import {
-  PLUGIN_PANEL_ICON_FILE_MAX_BYTES,
-  pluginPanelIconKind
-} from '../../../shared/plugins/contributions/plugin-panel-icon'
 import { PLUGIN_PANEL_ENTRY_MAX_BYTES } from '../../../shared/plugins/frames/plugin-frame-entry-limits'
 import {
   PLUGIN_WORKER_ENTRY_MAX_BYTES,
@@ -55,12 +50,9 @@ function declaredArtifactPaths(manifest: PluginManifest): DeclaredArtifact[] {
         ]
       : []),
     ...declaredFile('worker entry', manifest.main, PLUGIN_WORKER_ENTRY_MAX_BYTES),
-    ...c.panels.flatMap((panel) => [
-      ...declaredFile(`panel "${panel.id}" entry`, panel.entry, PLUGIN_PANEL_ENTRY_MAX_BYTES),
-      ...(panel.icon && pluginPanelIconKind(panel.icon) === 'file'
-        ? declaredFile(`panel "${panel.id}" icon`, panel.icon, PLUGIN_PANEL_ICON_FILE_MAX_BYTES)
-        : [])
-    ]),
+    ...c.panels.flatMap((panel) =>
+      declaredFile(`panel "${panel.id}" entry`, panel.entry, PLUGIN_PANEL_ENTRY_MAX_BYTES)
+    ),
     ...c.customEditors.flatMap((editor) => [
       ...declaredFile(
         `custom editor "${editor.id}" entry`,
@@ -210,10 +202,6 @@ export async function validatePluginInstallContent(
   const fonts = await validatePluginFontArtifacts(rootDir, manifest)
   if (!fonts.ok) {
     return fonts
-  }
-  const panelIcons = await validatePluginPanelIconArtifacts(rootDir, manifest)
-  if (!panelIcons.ok) {
-    return panelIcons
   }
   const vmRecipeIds = new Set<string>()
   for (const contribution of manifest.contributes.vmRecipes) {

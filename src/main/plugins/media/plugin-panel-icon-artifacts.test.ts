@@ -4,17 +4,12 @@ import { dirname, join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { pluginManifestSchema } from '../../../shared/plugins/manifest/plugin-manifest'
 import { pluginInstalledImageUrl } from '../../../shared/plugins/images/plugin-image-url'
-import {
-  validateDeclaredPluginArtifacts,
-  validatePluginInstallContent
-} from '../artifacts/plugin-artifact-validation'
+import { validatePluginTarget } from '../../../cli/plugins/authoring/plugin-folder-validation'
+import { validateDeclaredPluginArtifacts } from '../artifacts/plugin-artifact-validation'
 import type { ValidDiscoveredPlugin } from '../discovery/plugin-discovery'
 import { PluginImageCache } from './plugin-image-cache'
 import { createPluginImageRequestHandler } from './plugin-image-protocol'
-import {
-  declaredPluginPanelIcons,
-  validatePluginPanelIconArtifacts
-} from './plugin-panel-icon-artifacts'
+import { declaredPluginPanelIcons, pluginPanelIconWarnings } from './plugin-panel-icon-artifacts'
 
 vi.mock('electron', () => ({ protocol: { handle: vi.fn() } }))
 
@@ -40,6 +35,7 @@ async function pluginWith(icon: string, iconFile: { path: string; contents: stri
       panels: [{ id: 'one', title: 'One', icon, entry: 'panel.html' }]
     }
   })
+  await writeFile(join(root, 'orca-plugin.json'), JSON.stringify(manifest))
   return { root, manifest }
 }
 
@@ -55,13 +51,13 @@ describe('panel icon artifacts', () => {
     })
 
     expect(declaredPluginPanelIcons(manifest)).toEqual([
-      { path: 'icons/panel.svg', slot: 'panel-icon-0', format: 'svg' }
+      { panelIndex: 0, path: 'icons/panel.svg', slot: 'panel-icon-0' }
     ])
     await expect(validateDeclaredPluginArtifacts(root, manifest)).resolves.toEqual({ ok: true })
-    await expect(validatePluginPanelIconArtifacts(root, manifest)).resolves.toEqual({ ok: true })
+    await expect(pluginPanelIconWarnings(root, manifest)).resolves.toEqual([])
   })
 
-  it('refuses SVG scripts before install', async () => {
+  it('warns about unsafe SVG icons without blocking the plugin', async () => {
     const script =
       '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1 1"><script>alert(1)</script></svg>'
     const { root, manifest } = await pluginWith('icons/panel.svg', {
@@ -69,9 +65,13 @@ describe('panel icon artifacts', () => {
       contents: script
     })
 
-    await expect(validatePluginInstallContent(root, manifest)).resolves.toMatchObject({
-      ok: false,
-      error: expect.stringContaining('SVG element "script" is not allowed')
+    await expect(pluginPanelIconWarnings(root, manifest)).resolves.toEqual([
+      expect.stringContaining('SVG element "script" is not allowed')
+    ])
+    await expect(validatePluginTarget(root)).resolves.toMatchObject({
+      valid: true,
+      errors: [],
+      warnings: [expect.stringContaining('SVG element "script" is not allowed')]
     })
   })
 
