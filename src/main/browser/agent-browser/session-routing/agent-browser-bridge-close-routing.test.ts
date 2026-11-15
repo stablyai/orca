@@ -129,7 +129,7 @@ async function measure(action: () => Promise<unknown>): Promise<{ keyed: number;
 }
 
 // Collection entries reachable from the bridge, so a derived record that outlives its references shows up.
-function retainedEntries(root: object): number {
+function retainedEntries(root: AgentBrowserBridge): number {
   const seen = new Set<object>()
   let entries = 0
   const visit = (value: unknown): void => {
