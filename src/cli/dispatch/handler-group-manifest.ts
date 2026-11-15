@@ -26,6 +26,11 @@ export const HANDLER_GROUPS: readonly HandlerGroup[] = [
   },
   ...SERVE_PAIRING_HANDLER_GROUPS,
   {
+    name: 'mcp',
+    keys: ['mcp'],
+    load: async () => (await import('../mcp/mcp-command.js')).MCP_HANDLERS
+  },
+  {
     name: 'serve-reset-identity',
     keys: ['serve reset-identity'],
     load: async () =>
