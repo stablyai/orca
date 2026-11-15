@@ -24,7 +24,10 @@ CLONE_TIMEOUT_S="${ORCA_CLONE_TIMEOUT_S:-900}"
 export GIT_TERMINAL_PROMPT=0
 auth=()
 if [ -n "${ORCA_GIT_EXTRAHEADER:-}" ]; then
-  auth=(-c "http.https://github.com/.extraheader=$ORCA_GIT_EXTRAHEADER")
+  # The empty value first clears any extraheader already in ~/.gitconfig: extraheader is a list, and a
+  # background clone still running when orca-sandbox-start writes the global one sent Authorization
+  # twice; the firewall answered 400 and the clone failed ("could not fetch ... from promisor remote").
+  auth=(-c "http.https://github.com/.extraheader=" -c "http.https://github.com/.extraheader=$ORCA_GIT_EXTRAHEADER")
 fi
 ref="${ORCA_REPO_REF:-}"
 
@@ -100,7 +103,7 @@ run_detached() {
   export ORCA_PRELUDE_AUTH="${ORCA_GIT_EXTRAHEADER:-}" ORCA_PRELUDE_STEP="$1"
   setsid bash -c '
     auth=()
-    [ -n "$ORCA_PRELUDE_AUTH" ] && auth=(-c "http.https://github.com/.extraheader=$ORCA_PRELUDE_AUTH")
+    [ -n "$ORCA_PRELUDE_AUTH" ] && auth=(-c "http.https://github.com/.extraheader=" -c "http.https://github.com/.extraheader=$ORCA_PRELUDE_AUTH")
     unset ORCA_PRELUDE_AUTH
     "$ORCA_PRELUDE_STEP" >>"$CLONE_DIR/progress.log" 2>&1
     status=$?
