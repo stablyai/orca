@@ -164,50 +164,51 @@ describe('a Claude steer during foreground work', () => {
   })
 })
 
+function childStreamAfterHandoff() {
+  const writes: { body: AgentJournalItemBody; lifecycle?: boolean }[] = []
+  const translator = createClaudeJournalTranslator({
+    sink: {
+      appendItem: (_identity, body, options) =>
+        writes.push({ body, lifecycle: options?.lifecycle }),
+      appendTombstone: () => {},
+      publish: () => {}
+    },
+    steerAwaitingEcho: () => true
+  })
+  const frame = (message: Record<string, unknown>, observedAt: number, startsTurn = false) =>
+    translator.handle({
+      type: 'message',
+      sessionId: 'orca-session',
+      observedAt,
+      ...(startsTurn ? { startsTurn: true } : {}),
+      message: { session_id: 'claude-session', parent_tool_use_id: null, ...message }
+    })
+  frame({ type: 'user', uuid: 'prompt', message: { role: 'user', content: 'go' } }, 1_000, true)
+  frame(
+    {
+      type: 'stream_event',
+      uuid: 'child-delta',
+      parent_tool_use_id: 'agent-tool',
+      event: { type: 'content_block_delta', index: 0, delta: { type: 'text_delta', text: 'Half' } }
+    },
+    2_000
+  )
+  frame(
+    {
+      type: 'result',
+      subtype: 'success',
+      uuid: 'r',
+      is_error: false,
+      terminal_reason: 'aborted_tools'
+    },
+    3_000
+  )
+  return { translator, frame, writes }
+}
+
 describe('a subagent text stream after a steer hand-off', () => {
   it('ends when the turn goes idle, so cancelled turns retain no blocks', () => {
-    const writes: { body: AgentJournalItemBody; lifecycle?: boolean }[] = []
-    const translator = createClaudeJournalTranslator({
-      sink: {
-        appendItem: (_identity, body, options) =>
-          writes.push({ body, lifecycle: options?.lifecycle }),
-        appendTombstone: () => {},
-        publish: () => {}
-      },
-      steerAwaitingEcho: () => true
-    })
-    const frame = (message: Record<string, unknown>, observedAt: number, startsTurn = false) =>
-      translator.handle({
-        type: 'message',
-        sessionId: 'orca-session',
-        observedAt,
-        ...(startsTurn ? { startsTurn: true } : {}),
-        message: { session_id: 'claude-session', parent_tool_use_id: null, ...message }
-      })
-    frame({ type: 'user', uuid: 'prompt', message: { role: 'user', content: 'go' } }, 1_000, true)
-    frame(
-      {
-        type: 'stream_event',
-        uuid: 'child-delta',
-        parent_tool_use_id: 'agent-tool',
-        event: {
-          type: 'content_block_delta',
-          index: 0,
-          delta: { type: 'text_delta', text: 'Half' }
-        }
-      },
-      2_000
-    )
-    frame(
-      {
-        type: 'result',
-        subtype: 'success',
-        uuid: 'r',
-        is_error: false,
-        terminal_reason: 'aborted_tools'
-      },
-      3_000
-    )
+    const { translator, frame, writes } = childStreamAfterHandoff()
     expect(translator.pendingStreamedBlocks).toBe(1)
 
     frame({ type: 'system', subtype: 'session_state_changed', state: 'idle', uuid: 'idle' }, 9_000)
@@ -218,5 +219,18 @@ describe('a subagent text stream after a steer hand-off', () => {
       body: { role: 'assistant', blocks: [{ type: 'text', text: 'Half' }] },
       lifecycle: true
     })
+  })
+
+  it('keeps streaming into the next turn when a new prompt supersedes this one', () => {
+    const { translator, frame, writes } = childStreamAfterHandoff()
+
+    frame(
+      { type: 'user', uuid: 'prompt-2', message: { role: 'user', content: 'next' } },
+      5_000,
+      true
+    )
+
+    expect(translator.pendingStreamedBlocks).toBe(1)
+    expect(writes.some((write) => write.lifecycle && write.body.kind === 'message')).toBe(false)
   })
 })

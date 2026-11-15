@@ -50,7 +50,7 @@ export type ClaudeOpenTurnDeps = {
   /** The superseded turn's spawn calls get no announcement now. */
   turnSuperseded: () => void
   /** Ends what the ending turn left open, at the instant it ended; no later frame will. */
-  endOpenWork: (completedAt: number) => void
+  endOpenWork: (completedAt: number, settles?: boolean) => void
   onOpen?: () => void
 }
 
@@ -230,7 +230,7 @@ export class ClaudeOpenTurn {
     this.inputChoiceWorkObserved = false
     this.usageLimitEvidence = null
     // End suppressed work even when no turn is open, at the real settle time.
-    this.deps.endOpenWork(settled.completedAt)
+    this.deps.endOpenWork(settled.completedAt, true)
     if (this.current) {
       this.publish(
         this.current,

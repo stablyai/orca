@@ -64,7 +64,7 @@ export function createClaudeJournalTranslator(
     sink: deps.sink,
     // Keep existing stamps when superseding a turn ends pending attribution corrections.
     turnSuperseded: () => corrections.abandon(),
-    endOpenWork: (at) => endClaudeStreams(streamedThinking, streamedText, streamedBlocks, at),
+    endOpenWork: (...e) => endClaudeStreams(streamedThinking, streamedText, streamedBlocks, ...e),
     onOpen: () => context.markActivity()
   })
   const context = new ClaudeContextFacts(turn, deps.sink)
