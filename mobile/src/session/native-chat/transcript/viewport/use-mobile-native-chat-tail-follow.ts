@@ -28,6 +28,8 @@ function isAtTail(event: NativeScrollEvent): boolean {
 export type MobileNativeChatListHandle = {
   scrollToOffset: (params: { animated: boolean; offset: number }) => void
   scrollToEnd: (params: { animated: boolean }) => void
+  /** Puts the drawn row `key`'s start at the top of the view; only the page list draws row keys. */
+  scrollRowToTop?: (key: string) => void
 }
 
 export type MobileNativeChatTailFollow = {
@@ -41,6 +43,7 @@ export type MobileNativeChatTailFollow = {
   pinToTail: () => void
   pinToTailAfterContentResize: (_width: number, height: number) => void
   jumpToTail: () => void
+  scrollRowToTop: (key: string) => void
   beginUserScroll: () => void
   endUserDrag: (event: NativeSyntheticEvent<NativeScrollEvent>) => void
   beginMomentum: () => void
@@ -138,6 +141,17 @@ export function useMobileNativeChatTailFollow(args: {
     pinToTail()
   }, [clearUserScrollSettle, pinToTail, setAtTail, setFollowing])
 
+  // Release the follow first, as desktop's scrollMessageToTop does, so streaming cannot pull the row away.
+  const scrollRowToTop = useCallback(
+    (key: string) => {
+      clearUserScrollSettle()
+      userScrollActiveRef.current = false
+      setFollowing(false)
+      listRef.current?.scrollRowToTop?.(key)
+    },
+    [clearUserScrollSettle, setFollowing]
+  )
+
   const beginUserScroll = useCallback(() => {
     clearUserScrollSettle()
     userScrollActiveRef.current = true
@@ -212,6 +226,7 @@ export function useMobileNativeChatTailFollow(args: {
     pinToTail,
     pinToTailAfterContentResize,
     jumpToTail,
+    scrollRowToTop,
     beginUserScroll,
     endUserDrag,
     beginMomentum,
