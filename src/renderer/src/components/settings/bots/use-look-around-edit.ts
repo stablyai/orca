@@ -38,6 +38,9 @@ export function useLookAroundEdit(
   const setting = botLookAround(bot)
   const key = botRefKey(bot)
   const localIntent = useRef(createLookEditState(key))
+  // A zone picked here that the bot doesn't show yet. A schedule edit meanwhile saves with it instead
+  // of waiting for this editor to see the zone land, which closing Settings would never do.
+  const pickedZone = useRef<{ key: string; timezone: string | null } | null>(null)
   const [held, setHeld] = useState<HeldEdit | null>(null)
   const hostZone = status?.upNext.hostTimeZone
   const clockReady =
@@ -90,8 +93,14 @@ export function useLookAroundEdit(
     save(held.patch, held.intent, current)
   }, [held, key, clockReady, askZone, setting.timezone, save])
 
-  const change = (next: LookAroundPatch): void => {
-    const schedule = next.every !== undefined || next.times !== undefined
+  const change = (edit: LookAroundPatch): void => {
+    const schedule = edit.every !== undefined || edit.times !== undefined
+    const zone = !setting.timezone && pickedZone.current?.key === key ? pickedZone.current : null
+    const next =
+      schedule && edit.timezone === undefined && zone ? { ...edit, timezone: zone.timezone } : edit
+    if (next.timezone !== undefined) {
+      pickedZone.current = { key, timezone: next.timezone }
+    }
     const choosing = schedule || next.timezone !== undefined
     const state = lookEditState(key, localIntent.current)
     localIntent.current = state

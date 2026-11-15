@@ -88,9 +88,20 @@ export function BotLookAroundSection({
     status,
     readError
   )
+  const [savedTimes, setSavedTimes] = useState(setting.times)
+  // The draft a save acknowledged: close never sends it again, so a later save from elsewhere wins.
+  const [ackedDraft, setAckedDraft] = useState<string[] | null>(null)
   const changeDraft = (draft: string[] | null): void => {
     latestDraft.current = draft
     setDraftTimes(draft)
+  }
+  if (setting.times !== savedTimes && !sameTimes(setting.times ?? [], savedTimes)) {
+    // A save landed. One matching the draft acknowledges it.
+    setSavedTimes(setting.times)
+    if (draftTimes && sameTimes(draftTimes, setting.times)) {
+      setDraftTimes(null)
+      setAckedDraft(draftTimes)
+    }
   }
   if (setting.focus !== savedFocus) {
     // Changed elsewhere (the bot, asked in chat): follow it unless the owner is typing.
@@ -111,6 +122,7 @@ export function BotLookAroundSection({
     const times = latestDraft.current
     if (
       times &&
+      times !== ackedDraft &&
       !sameTimes(times, setting.times) &&
       shown.every === CUSTOM &&
       !heldEdit &&
