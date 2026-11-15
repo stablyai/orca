@@ -1,4 +1,7 @@
-import type { AiVaultSessionTitlesResult } from '../../../../../../shared/ai-vault/contracts/ai-vault-session-title'
+import type {
+  AiVaultSessionTitle,
+  AiVaultSessionTitlesResult
+} from '../../../../../../shared/ai-vault/contracts/ai-vault-session-title'
 import type { TerminalTab } from '../../../../../../shared/workspace-layout/terminal-tab-types'
 import type { AppState } from '@/store/types'
 import { useAppStore } from '@/store/index'
@@ -18,12 +21,16 @@ function terminalTab(worktreeId: string, aiVaultTitle?: TerminalTab['aiVaultTitl
   }
 }
 
-export function titleResult(agent: 'claude' | 'codex', title: string): AiVaultSessionTitlesResult {
-  return { titles: [{ agent, sessionId: `${agent}-session`, title }] }
+export function titleResult(
+  agent: AiVaultSessionTitle['agent'],
+  title: string,
+  kind?: AiVaultSessionTitle['kind']
+): AiVaultSessionTitlesResult {
+  return { titles: [{ agent, sessionId: `${agent}-session`, title, ...(kind ? { kind } : {}) }] }
 }
 
 export function makeState(args: {
-  agent?: 'claude' | 'codex'
+  agent?: AiVaultSessionTitle['agent']
   aiVaultTitle?: TerminalTab['aiVaultTitle']
   executionHostId: 'local' | 'ssh:dev-box' | 'runtime:server-1'
   sleeping?: boolean

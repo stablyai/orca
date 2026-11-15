@@ -1,6 +1,8 @@
 import { parseJsonObject } from '../../parsing/session-json-object'
+import { extractString } from '../../../../shared/trimmed-string'
+import { normalizeTitleText } from '../../parsing/session-scanner-text-normalization'
 
-export const ANTIGRAVITY_INDEX_MAX_BYTES = 4 * 1024 * 1024
+export const ANTIGRAVITY_INDEX_MAX_BYTES = 16 * 1024 * 1024
 const MAX_INDEX_ENTRIES = 10_000
 
 type JsonRecord = Record<string, unknown>
@@ -66,6 +68,22 @@ export function antigravityMetadataWorkspaces(contents: {
     }
   }
   return paths
+}
+
+/** Extracts normalized conversation summary titles keyed by session ID from conversation_metadata.json. */
+export function antigravityMetadataTitles(metadataContent: string | null): Map<string, string> {
+  const titles = new Map<string, string>()
+  for (const [id, value] of entries(parse(metadataContent)?.conversations)) {
+    if (!id || id.length > 512) {
+      continue
+    }
+    const raw = extractString(record(record(value)?.summary)?.Title)
+    const title = raw ? normalizeTitleText(raw) : null
+    if (title) {
+      titles.set(id, title)
+    }
+  }
+  return titles
 }
 
 export async function readBoundedAntigravityIndex(

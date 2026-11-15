@@ -4,19 +4,27 @@ import {
 } from '../../transcripts/remote-session-content-lines'
 import { consumeCompleteJsonlLines } from '../../parsing/session-scanner-jsonl-reader'
 import { MAX_SESSION_TRANSCRIPT_RECORD_BYTES } from '../../transcripts/session-transcript-record-budget'
-import type { AiVaultSession } from '../../../../shared/ai-vault/contracts/ai-vault-types'
+import type {
+  AiVaultSession,
+  AiVaultSessionTitleKind
+} from '../../../../shared/ai-vault/contracts/ai-vault-types'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 import {
-  accumulatorFoldResumeState,
+  accumulatorSessionIdentity,
+  cloneSessionAccumulator,
   createAccumulator,
+  finalizeSession,
   timestampIso,
   updateTimeline
 } from '../../parsing/session-scanner-accumulator'
 import { addSessionText } from '../../parsing/session-scanner-messages'
+import { waitForAiVaultScan } from '../../scan-lifecycle/ai-vault-scan-cancellation'
 import { antigravityConversationIdFromTranscriptPath } from './session-scanner-antigravity-paths'
 import { antigravityHistoryPromptHash } from './antigravity-history-prompt'
+import { readAntigravityMetadataTitle } from './session-scanner-antigravity-title-index'
 import type {
   FileWithMtime,
+  ResumableParseFinalizeOptions,
   ResumableSessionParseState,
   SessionAccumulator
 } from '../../session-scanner-types'
@@ -58,7 +66,8 @@ export async function parseAntigravitySessionContent(
     file,
     lines: remoteSessionContentLines(content, signal),
     platform,
-    options
+    options,
+    enableLocalTitleIndex: false
   })
 }
 
@@ -68,10 +77,52 @@ export function createAntigravitySessionResumeState(
 ): ResumableSessionParseState {
   const sessionId = antigravityConversationIdFromTranscriptPath(file.path) ?? ''
   // Transcripts lack cwd/model; enrich cwd conservatively from history rather than unstable binary stores.
-  return accumulatorFoldResumeState(
+  return antigravityResumeStateFromAccumulator(
     createAccumulator({ agent: 'antigravity', file, sessionId, messages }),
-    consumeAntigravityRecordLine
+    file,
+    (id, signal) => readAntigravityMetadataTitle(file.path, id, signal)
   )
+}
+
+function antigravityResumeStateFromAccumulator(
+  accumulator: SessionAccumulator,
+  file: FileWithMtime,
+  readTitle?: (sessionId: string, signal?: AbortSignal) => Promise<string | null>
+): ResumableSessionParseState {
+  return {
+    consumeLine: (line) => consumeAntigravityRecordLine(accumulator, line),
+    identity: () => accumulatorSessionIdentity(accumulator),
+    clone: () =>
+      antigravityResumeStateFromAccumulator(cloneSessionAccumulator(accumulator), file, readTitle),
+    touchFile: (nextFile) => {
+      accumulator.modifiedAt = nextFile.modifiedAt
+    },
+    // Snapshot so appends cannot change published previews and sidecar merges stay outside the live fold.
+    finalize: (platform, options) =>
+      finalizeAntigravityAccumulator(accumulator, platform, options, readTitle)
+  }
+}
+
+async function finalizeAntigravityAccumulator(
+  accumulator: SessionAccumulator,
+  platform: NodeJS.Platform,
+  options: ResumableParseFinalizeOptions | undefined,
+  readTitle?: (sessionId: string, signal?: AbortSignal) => Promise<string | null>
+): Promise<AiVaultSession | null> {
+  const snapshot = cloneSessionAccumulator(accumulator)
+  const sessionId = snapshot.sessionId.trim()
+  let titleKind: AiVaultSessionTitleKind = 'fallback'
+  if (sessionId && readTitle) {
+    const indexedTitle = await waitForAiVaultScan(
+      readTitle(sessionId, options?.signal),
+      options?.signal
+    )
+    if (indexedTitle) {
+      snapshot.title = indexedTitle
+      titleKind = 'named'
+    }
+  }
+  return finalizeSession(snapshot, platform, { ...options, titleKind })
 }
 
 async function parseAntigravitySessionLines(args: {
@@ -80,8 +131,21 @@ async function parseAntigravitySessionLines(args: {
   platform: NodeJS.Platform
   options?: ParserSessionOptions
   messages?: TranscriptMessageSink
+  enableLocalTitleIndex?: boolean
 }): Promise<AiVaultSession | null> {
-  const state = createAntigravitySessionResumeState(args.file, args.messages)
+  const sessionId = antigravityConversationIdFromTranscriptPath(args.file.path) ?? ''
+  const state =
+    args.enableLocalTitleIndex === false
+      ? antigravityResumeStateFromAccumulator(
+          createAccumulator({
+            agent: 'antigravity',
+            file: args.file,
+            sessionId,
+            messages: args.messages
+          }),
+          args.file
+        )
+      : createAntigravitySessionResumeState(args.file, args.messages)
   for await (const line of args.lines) {
     state.consumeLine(line)
   }

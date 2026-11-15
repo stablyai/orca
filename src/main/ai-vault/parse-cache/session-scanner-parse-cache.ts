@@ -18,6 +18,7 @@ import { countSubagentTranscripts } from '../scanners/claude/session-scanner-sub
 import { countOmpSubagentTranscripts } from '../scanners/omp/session-scanner-omp-subagent-transcripts'
 import type { ResumableSessionParseState, SessionFileCandidate } from '../session-scanner-types'
 import { refreshCachedCodexTitle } from '../scanners/codex/session-scanner-codex-cached-title'
+import { refreshCachedAntigravityTitle } from '../scanners/antigravity/session-scanner-antigravity-title-index'
 import {
   getSessionParseCacheEntry,
   noteSessionParseCacheListed,
@@ -286,6 +287,11 @@ async function reuseCachedSession(
   // Index titles can change independently of the transcript signature.
   if (session && candidate.agent === 'codex') {
     session = await waitForAiVaultScan(refreshCachedCodexTitle(candidate, session), signal)
+  } else if (session && candidate.agent === 'antigravity') {
+    session = await waitForAiVaultScan(
+      refreshCachedAntigravityTitle(candidate, session, signal),
+      signal
+    )
   }
   throwIfAiVaultScanCancelled(signal)
   storeSessionParseCacheEntry(key, { ...entry, session })

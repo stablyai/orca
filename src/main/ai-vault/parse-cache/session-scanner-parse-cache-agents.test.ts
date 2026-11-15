@@ -9,12 +9,15 @@ import {
 } from '../scanners/codex/session-scanner-codex-fixtures'
 import { createSessionParseStats, parseAgentSessionFileCached } from './session-scanner-parse-cache'
 import { resetSessionParseCacheForTests } from './session-parse-cache-store'
+import { resetAntigravityMetadataTitleCacheForTests } from '../scanners/antigravity/session-scanner-antigravity-title-index'
+import { writeJsonlFile } from '../scanner-fixtures/session-scanner-test-fixtures'
 import type { SessionFileCandidate } from '../session-scanner-types'
 
 let tempRoots: string[] = []
 
 beforeEach(() => {
   resetSessionParseCacheForTests()
+  resetAntigravityMetadataTitleCacheForTests()
 })
 
 afterEach(async () => {
@@ -79,6 +82,61 @@ describe('codex-specific resume behavior', () => {
     expect(renamed?.titleKind).toBe('named')
     expect(renamed).toEqual(
       await parseAgentSessionFile(await candidateFor('codex', path, codexHome), process.platform)
+    )
+  })
+})
+
+describe('antigravity-specific resume behavior', () => {
+  it('picks up a conversation_metadata summary title written after the transcript was cached', async () => {
+    const root = await makeTempDir()
+    const antigravityHome = join(root, 'antigravity-cli')
+    const sessionId = '11111111-2222-4333-8444-555555555555'
+    const path = join(
+      antigravityHome,
+      'brain',
+      sessionId,
+      '.system_generated',
+      'logs',
+      'transcript_full.jsonl'
+    )
+    await writeJsonlFile(path, [
+      {
+        source: 'USER_EXPLICIT',
+        type: 'USER_INPUT',
+        created_at: '2026-05-01T10:00:00.000Z',
+        content: '<USER_REQUEST>Antigravity seed question</USER_REQUEST>'
+      }
+    ])
+
+    const seeded = await parseAgentSessionFileCached(
+      await candidateFor('antigravity', path),
+      process.platform
+    )
+    expect(seeded?.title).toBe('Antigravity seed question')
+    expect(seeded?.titleKind).toBe('fallback')
+
+    await mkdir(join(antigravityHome, 'cache'), { recursive: true })
+    await writeFile(
+      join(antigravityHome, 'cache', 'conversation_metadata.json'),
+      JSON.stringify({
+        conversations: {
+          [sessionId]: {
+            summary: { Title: 'Refactor Session Title Sync' }
+          }
+        }
+      })
+    )
+    const stats = createSessionParseStats()
+    const renamed = await parseAgentSessionFileCached(
+      await candidateFor('antigravity', path),
+      process.platform,
+      stats
+    )
+    expect(stats.reused).toBe(1)
+    expect(renamed?.title).toBe('Refactor Session Title Sync')
+    expect(renamed?.titleKind).toBe('named')
+    expect(renamed).toEqual(
+      await parseAgentSessionFile(await candidateFor('antigravity', path), process.platform)
     )
   })
 })

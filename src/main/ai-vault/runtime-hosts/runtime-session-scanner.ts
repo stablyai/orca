@@ -138,6 +138,7 @@ export async function scanRuntimeAiVaultSessions(
   })
 }
 
+/** Resolves session titles on a paired runtime host, retrying legacy agents if an older host rejects antigravity. */
 export async function resolveRuntimeAiVaultSessionTitles(
   userDataPath: string,
   environmentId: string,
@@ -150,6 +151,15 @@ export async function resolveRuntimeAiVaultSessionTitles(
     { requests: args.requests }
   )
   if (response.ok !== true) {
+    if (response.error.code === 'invalid_argument' || response.error.code === 'invalid_params') {
+      // Older orcad hosts validate only ['claude', 'codex']; retry legacy agents so mixed batches still resolve.
+      const legacyRequests = args.requests.filter((request) => request.agent !== 'antigravity')
+      if (legacyRequests.length > 0 && legacyRequests.length < args.requests.length) {
+        return resolveRuntimeAiVaultSessionTitles(userDataPath, environmentId, {
+          requests: legacyRequests
+        })
+      }
+    }
     return { titles: [] }
   }
   try {

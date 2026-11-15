@@ -3,6 +3,7 @@ import { requestSessionSearchRoots } from './session-scanner-service-root-reques
 import { aiVaultScanWork, trackAiVaultScanProgress } from '../scan-lifecycle/ai-vault-scan-progress'
 import type { AiVaultScanWork } from '../../../shared/ai-vault/scanning/ai-vault-scan-progress'
 import type { AiVaultListResult } from '../../../shared/ai-vault/contracts/ai-vault-types'
+import { isAiVaultTitleAgent } from '../../../shared/ai-vault/contracts/ai-vault-session-title'
 import { readAiVaultFirstUserPrompt } from '../prompts/session-first-user-prompt-read'
 import {
   flushSessionParseCachePersist,
@@ -117,7 +118,7 @@ async function executeRequest(request: AiVaultServiceRequest): Promise<AiVaultSe
     const startedAt = performance.now()
     const { result, work } = await scanReportingProgress(request, controller.signal)
     for (const session of result.sessions) {
-      if ((session.agent === 'claude' || session.agent === 'codex') && session.title.trim()) {
+      if (isAiVaultTitleAgent(session.agent) && session.title.trim()) {
         cacheServiceTitle(titleIndex, {
           agent: session.agent,
           sessionId: session.sessionId,

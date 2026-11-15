@@ -36,6 +36,7 @@ import {
 } from '../../shared/ai-vault/scanning/ai-vault-scope-cwd-match'
 import { throwIfAiVaultScanCancelled } from './scan-lifecycle/ai-vault-scan-cancellation'
 import { DEFAULT_AI_VAULT_SCAN_LIMIT } from '../../shared/ai-vault/scanning/ai-vault-session-depth'
+import { withAntigravityMetadataTitles } from './scanners/antigravity/session-scanner-antigravity-title-index'
 import { withDevinSessionsDbScan } from './scanners/devin/session-scanner-devin-db'
 import { withOpenCodeSqliteScanScope } from './scanners/opencode/sqlite/session-scanner-opencode-sqlite-scan-scope'
 
@@ -45,7 +46,9 @@ const SESSION_PARSE_CANDIDATE_MULTIPLIER = 2
 export async function scanAiVaultSessions(
   options: AiVaultScanOptions = {}
 ): Promise<AiVaultListResult> {
-  return withOpenCodeSqliteScanScope(() => scanAiVaultSessionStores(options))
+  return withOpenCodeSqliteScanScope(() =>
+    withAntigravityMetadataTitles(() => scanAiVaultSessionStores(options))
+  )
 }
 
 async function scanAiVaultSessionStores(options: AiVaultScanOptions): Promise<AiVaultListResult> {
