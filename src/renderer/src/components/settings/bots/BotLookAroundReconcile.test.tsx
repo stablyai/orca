@@ -164,3 +164,20 @@ it.each([true, false])(
     expect(settings.saved()).toMatchObject({ every: 'mornings', timezone: 'UTC' })
   }
 )
+
+it('CS-C4-2: a preset chosen while a first zone is pending saves nothing if the zone is refused', async () => {
+  const zone = deferred()
+  mocks.probe.mockReturnValueOnce(zone.promise).mockResolvedValue(false)
+  const unzoned = { ...base.lookAround!, every: 'every-4h' as const, timezone: undefined }
+  mocks.status = { setting: unzoned, upNext: { running: false, seenAt: 0, hostTimeZone: 'UTC' } }
+  const settings = live(unzoned)
+  settings.render()
+  fireEvent.click(screen.getByRole('button', { name: 'Change' }))
+  fireEvent.change(screen.getAllByRole('combobox')[1]!, { target: { value: 'UTC' } })
+  fireEvent.change(screen.getAllByRole('combobox')[0]!, { target: { value: 'mornings' } })
+  settings.close()
+  await act(async () => zone.resolve(false))
+  await act(async () => {})
+  expect(settings.update).not.toHaveBeenCalled()
+  expect(settings.saved()).toMatchObject({ every: 'every-4h', timezone: undefined })
+})
