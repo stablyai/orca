@@ -6,7 +6,7 @@ import {
   parseServeSupervisorMessage,
   parseServeUpdateHandoffState,
   type ServeUpdateHandoffState
-} from '../../../../shared/serve-update-handoff'
+} from '../../../../shared/remote-runtime/serve-supervisor/serve-update-handoff'
 import {
   QUIT_RENDERER_ACK_TIMEOUT_MS,
   WILL_QUIT_TEARDOWN_DEADLINE_MS

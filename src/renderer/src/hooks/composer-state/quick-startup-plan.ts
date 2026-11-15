@@ -2,7 +2,7 @@ import { planLaunchAgentStartupPrompt } from '@/lib/agent-session/launch/prompt/
 import { TUI_AGENT_CONFIG } from '../../../../shared/agent-launch/catalog/tui-agent-config'
 import { parseExecutionHostId } from '../../../../shared/execution-host'
 import { readCachedRuntimeEnvironmentCapability } from '@/runtime/rpc/compatibility/runtime-compatibility-cache'
-import { WORKTREE_CREATE_AGENT_OPTIONS_RUNTIME_CAPABILITY } from '../../../../shared/worktree-runtime-capabilities'
+import { WORKTREE_CREATE_AGENT_OPTIONS_RUNTIME_CAPABILITY } from '../../../../shared/remote-runtime/protocol/worktree-runtime-capabilities'
 import { terminalSessionOptionInputs } from '../../../../shared/agent-launch/startup/tui-agent-launch-command'
 import { resolveStartupShell } from '../../../../shared/agent-launch/startup/tui-agent-startup-shell'
 import { useAppStore } from '@/store/index'
@@ -18,7 +18,7 @@ import type { AgentStartupPlan } from '../../../../shared/agent-launch/startup/t
 
 import { resolveAgentStartupPlanInputs } from '../../../../shared/agent-launch/startup/agent-startup-plan-inputs'
 import '@/diagnostics/telemetry/telemetry'
-import { tuiAgentToAgentKind } from '../../../../shared/agent-kind'
+import { tuiAgentToAgentKind } from '../../../../shared/agent-status/identity/agent-kind'
 import { getAgentLabel } from '@/lib/agent-catalog/agent-catalog'
 import { translate } from '@/i18n/i18n'
 import { requireExecutionHostPlatform } from '@/runtime/hosts/platform/execution-host-facts'

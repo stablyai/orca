@@ -5,7 +5,7 @@ import {
 import type { ConnectionState } from '../../../transport/connection/connection-state'
 import type { ServerHostDesktopReach } from '../../../worktree/execution-hosts/server-workspaces'
 import { translate, type Translate } from '../../../i18n/mobile-i18n'
-import { formatOfflineAsOfTime } from '../../../components/offline-as-of-time'
+import { formatOfflineAsOfTime } from '../../../components/host-connection/offline-as-of-time'
 import type { MobileSessionController } from '../../use-mobile-session-controller'
 
 /** The composer's status line while the chat's host is out, with Reconnect only when redialing can help. */

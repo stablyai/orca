@@ -123,7 +123,13 @@ const block = z.discriminatedUnion('type', [
     failure: storedFailureFact.optional(),
     orcaStop: z.object({ cause: z.string(), turnItemId: text }).optional(),
     usageLimitTurnItemId: text,
-    forkedFrom: z.object({ sessionId: z.string() }).optional()
+    forkedFrom: z
+      .object({
+        sessionId: z.string(),
+        sourceForked: z.literal(true).optional(),
+        sourceMissing: z.literal(true).optional()
+      })
+      .optional()
   }),
   toolCallBlock.extend({ state: text, endedAs: text }),
   toolResultBlock.extend({

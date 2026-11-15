@@ -4,14 +4,14 @@ import {
   SkillDiscoveryTargetSchema,
   type SkillDiscoveryResult,
   type SkillDiscoveryTarget
-} from '../../shared/skills'
+} from '../../shared/skills/discovery/skills'
 import {
   BundledSkillAutoUpdateRequestSchema,
   LocalBundledSkillExecuteRequestSchema,
   LocalBundledSkillPlanRequestSchema,
   type BundledSkillInstallResult,
   type BundledSkillPlan
-} from '../../shared/bundled-skill-plan'
+} from '../../shared/skills/bundled/bundled-skill-plan'
 import {
   discoverSkillsOnTarget,
   resolveSkillDiscoveryTarget

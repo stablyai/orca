@@ -1,4 +1,7 @@
-import { asBrowserFindTarget, type BrowserFindSource } from '../../../shared/browser-find-source'
+import {
+  asBrowserFindTarget,
+  type BrowserFindSource
+} from '../../../shared/browser/guest-lifecycle/browser-find-source'
 
 type BrowserFindCallback = () => void
 

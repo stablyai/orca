@@ -20,7 +20,7 @@ import {
   ListGroup,
   ListRow
 } from '../../components/list/ListGroup'
-import { TaskProviderLogo } from '../../components/TaskProviderLogo'
+import { TaskProviderLogo } from '../../components/icons/TaskProviderLogo'
 import { getWorktreeGitIdentityDisplay } from '../../../../src/shared/worktree/row-display/git-identity-display'
 import {
   buildWorkspaceDetailLinks,

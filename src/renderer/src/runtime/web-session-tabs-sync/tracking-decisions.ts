@@ -1,5 +1,5 @@
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
-import type { RuntimeMobileSessionTabsResult } from '../../../../shared/runtime-types'
+import type { RuntimeMobileSessionTabsResult } from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import {
   latestSessionTabsSnapshotByWorktree,
   replayableSessionTabsSnapshotByWorktree,

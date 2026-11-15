@@ -10,7 +10,7 @@ import { useMobileDiffReviewController } from './use-mobile-diff-review-controll
 import { useForceReconnect } from '../../transport/connection/host-client-hooks'
 import { useWorkspaceClient } from '../../worktree/execution-hosts/use-workspace-client'
 import { useHostConnectionInputs } from '../../transport/connection/client-context-connection-metrics'
-import { useHostProtocolGates } from '../../components/host-protocol-gates-context'
+import { useHostProtocolGates } from '../../components/host-connection/host-protocol-gates-context'
 import { useWorkspaceRouteHandoff } from '../../navigation/workspace-route-handoff'
 
 // Keep the screen importable by the page: native route modules mount the shell.

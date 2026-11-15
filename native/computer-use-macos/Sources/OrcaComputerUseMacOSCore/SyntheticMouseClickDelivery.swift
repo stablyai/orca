@@ -1,3 +1,5 @@
+import CoreGraphics
+
 /// Foreground (--restore-window) clicks: HID taps behind a focused-recipient fence; background clicks use BackgroundInputTransport.
 /// Pace down/up events or WindowServer can drop mouseUp.
 public enum SyntheticMouseClickDelivery {
@@ -54,6 +56,46 @@ public enum SyntheticMouseClickDelivery {
             return 0
         case let .buttonDown(pressIndex), let .buttonUp(pressIndex):
             return Int64(pressIndex)
+        }
+    }
+
+    /// Puts the user's pointer back after a HID gesture, unless they moved it at any point during the gesture.
+    public struct PointerRestore {
+        /// Apps read the live pointer while handling a gesture (hover, menus, drops), so wait before putting it back.
+        public static let settleMicroseconds: UInt32 = 200_000
+
+        public private(set) var saved: CGPoint?
+        private var lastPosted: CGPoint?
+        private var userMoved = false
+
+        public init() {}
+
+        /// Call before posting each event with the live pointer; the first call saves it, and later ones latch
+        /// any move away from the previous posted point as the user's.
+        public mutating func willPost(at point: CGPoint, current: CGPoint?) {
+            if let lastPosted {
+                if current.map({ !Self.near($0, lastPosted) }) ?? true {
+                    userMoved = true
+                }
+            } else {
+                saved = current
+            }
+            lastPosted = point
+        }
+
+        /// Whether a restore may still be due, so the settle pause is skipped when it can't be.
+        public var mayRestore: Bool {
+            guard let saved, let lastPosted else { return false }
+            return !userMoved && !Self.near(saved, lastPosted)
+        }
+
+        public func shouldRestore(current: CGPoint) -> Bool {
+            guard mayRestore, let lastPosted else { return false }
+            return Self.near(current, lastPosted)
+        }
+
+        private static func near(_ a: CGPoint, _ b: CGPoint) -> Bool {
+            abs(a.x - b.x) <= 1 && abs(a.y - b.y) <= 1
         }
     }
 

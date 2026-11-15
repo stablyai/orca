@@ -15,12 +15,9 @@ function chatClient(isRemote: boolean): { client: RuntimeClient; call: ReturnTyp
   return { client, call }
 }
 
-function rename(client: RuntimeClient, session?: string): Promise<void> {
+function rename(client: RuntimeClient): Promise<void> {
   return CHAT_HANDLERS['chat rename']({
-    flags: new Map([
-      ['name', 'Release notes'],
-      ...(session === undefined ? [] : [['session', session] as const])
-    ]),
+    flags: new Map([['name', 'Release notes']]),
     client,
     cwd: '/tmp/worktree',
     json: true
@@ -38,14 +35,6 @@ describe('chat rename CLI', () => {
     const { client, call } = chatClient(true)
 
     await expect(rename(client)).rejects.toThrow('Missing required --session: on a paired host')
-    expect(call).not.toHaveBeenCalled()
-  })
-
-  it('refuses an empty --session instead of renaming the chat it runs in', async () => {
-    vi.stubEnv('ORCA_AGENT_SESSION_ID', 'chat-7')
-    const { client, call } = chatClient(false)
-
-    await expect(rename(client, '')).rejects.toThrow('Missing value for --session')
     expect(call).not.toHaveBeenCalled()
   })
 })

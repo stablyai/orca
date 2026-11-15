@@ -51,12 +51,12 @@ async function relaunch(listed: PtyProcessInfo[]) {
   return runtime
 }
 
-function showSurvivorIn(
+async function showSurvivorIn(
   runtime: InstanceType<typeof OrcaRuntimeService>,
   tabId: string,
   leafId: string
-): void {
-  runtime.syncWindowGraph(1, {
+): Promise<void> {
+  await runtime.syncWindowGraph(1, {
     tabs: [
       { tabId, worktreeId: TEST_WORKTREE_ID, title: 'Terminal', activeLeafId: leafId, layout: null }
     ],
@@ -64,8 +64,10 @@ function showSurvivorIn(
   })
 }
 
-function showSurvivorInNewTab(runtime: InstanceType<typeof OrcaRuntimeService>): void {
-  showSurvivorIn(runtime, NEW_TAB, NEW_LEAF)
+async function showSurvivorInNewTab(
+  runtime: InstanceType<typeof OrcaRuntimeService>
+): Promise<void> {
+  await showSurvivorIn(runtime, NEW_TAB, NEW_LEAF)
 }
 
 function listedSurvivor(spawnPaneKey?: string): PtyProcessInfo {
@@ -99,7 +101,7 @@ describe('agent status of a terminal re-homed after a restart', () => {
     hookFromOldShell('working')
     const runtime = await relaunch([listedSurvivor(OLD_PANE_KEY)])
 
-    showSurvivorInNewTab(runtime)
+    await showSurvivorInNewTab(runtime)
 
     expect(statesOn(NEW_PANE_KEY)).toEqual(['working'])
     hookFromOldShell('done')
@@ -111,7 +113,7 @@ describe('agent status of a terminal re-homed after a restart', () => {
     hookFromOldShell('working')
     const listed = [listedSurvivor(OLD_PANE_KEY)]
     const runtime = await relaunch(listed)
-    showSurvivorInNewTab(runtime)
+    await showSurvivorInNewTab(runtime)
     listed.push({ ...listedSurvivor(OLD_PANE_KEY), id: OTHER })
 
     await runtime.listTerminals()
@@ -125,9 +127,9 @@ describe('agent status of a terminal re-homed after a restart', () => {
   it('brings the row back when the terminal is shown in its exported pane again', async () => {
     hookFromOldShell('working')
     const runtime = await relaunch([listedSurvivor(OLD_PANE_KEY)])
-    showSurvivorInNewTab(runtime)
+    await showSurvivorInNewTab(runtime)
 
-    showSurvivorIn(runtime, OLD_TAB, OLD_LEAF)
+    await showSurvivorIn(runtime, OLD_TAB, OLD_LEAF)
 
     expect(statesOn(OLD_PANE_KEY)).toEqual(['working'])
     expect(statesOn(NEW_PANE_KEY)).toEqual([])

@@ -11,9 +11,9 @@ import type {
   RuntimeSyncWindowGraphResult,
   RuntimeStatus,
   RuntimeTerminalDriverState
-} from '../../../shared/runtime-session-contracts'
-import type { RuntimeRpcResponse } from '../../../shared/runtime-rpc-envelope'
-import type { ClientHostedBrowserRowsEvent } from '../../../shared/client-hosted-browser-rows'
+} from '../../../shared/remote-runtime/session-graph/runtime-session-contracts'
+import type { RuntimeRpcResponse } from '../../../shared/remote-runtime/rpc/runtime-rpc-envelope'
+import type { ClientHostedBrowserRowsEvent } from '../../../shared/browser/client-hosting/client-hosted-browser-rows'
 import type { SidebarInputsChangedEvent } from '../../../shared/sidebar-list/feed/sidebar-inputs-feed-contract'
 import type {
   PublicKnownRuntimeEnvironment,
@@ -25,7 +25,7 @@ import type {
   BrowserPageCreationPlacement
 } from '../../../shared/browser/client-hosting/browser-client-host-placement'
 import type { RemoteRuntimeSharedConnectionDiagnostics } from '../../../shared/remote-runtime/control/remote-runtime-shared-control-types'
-import type { WslOrcadAccountNotAppliedEvent } from '../../../shared/wsl-orcad-account-notice'
+import type { WslOrcadAccountNotAppliedEvent } from '../../../shared/remote-runtime/wsl-hosts/wsl-orcad-account-notice'
 
 export type RuntimeEnvironmentSubscriptionHandle = {
   unsubscribe: () => void

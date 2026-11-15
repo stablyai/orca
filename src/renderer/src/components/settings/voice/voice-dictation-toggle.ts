@@ -1,6 +1,6 @@
 import type { DeveloperPermissionRequestResult } from '../../../../../shared/developer-permissions-types'
-import type { FeatureTipId } from '../../../../../shared/feature-tips'
-import type { VoiceSettings } from '../../../../../shared/speech-types'
+import type { FeatureTipId } from '../../../../../shared/feature-education/feature-tips'
+import type { VoiceSettings } from '../../../../../shared/speech/speech-types'
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 

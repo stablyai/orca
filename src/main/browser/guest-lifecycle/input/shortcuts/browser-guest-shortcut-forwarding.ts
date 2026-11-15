@@ -7,7 +7,7 @@ import {
   resolveWindowShortcutAction
 } from '../../../../../shared/window-shortcut-policy'
 import type { KeybindingOverrides } from '../../../../../shared/keybindings/types'
-import type { BrowserPageZoomDirection } from '../../../../../shared/browser-page-zoom'
+import type { BrowserPageZoomDirection } from '../../../../../shared/browser/site-settings/browser-page-zoom'
 import {
   ModifierDoubleTapDetector,
   toModifierDoubleTapEvent

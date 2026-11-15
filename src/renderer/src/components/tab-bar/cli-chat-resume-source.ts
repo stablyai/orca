@@ -8,7 +8,7 @@ import type { ExecutionHostId } from '../../../../shared/execution-host'
 import {
   adoptsCliConversations,
   type CliConversationRowAgent
-} from '../../../../shared/structured-agent-cli-conversation-adoption'
+} from '../../../../shared/agent-session/view/structured-agent-cli-conversation-adoption'
 import { resolvePaneResumeInNewChatOffer } from './tab-session-history-switch'
 
 export type CliChatResumeSource = {

@@ -1,5 +1,4 @@
 import type { AppState } from '../../types'
-import type { PtyExecutionHost } from '../../../../../shared/terminal/pty/lifecycle/terminal-execution-host'
 import type {
   AgentStatusEntry,
   AgentStatusOrchestrationContext,
@@ -14,17 +13,6 @@ import type {
   ResumableTuiAgent,
   SleepingAgentLaunchConfig
 } from '../../../../../shared/agent-session/lifecycle/agent-session-resume'
-import type { TerminalTab } from '../../../../../shared/workspace-layout/terminal-tab-types'
-
-export type RetainedAgentEntry = {
-  executionHostId?: PtyExecutionHost
-  entry: AgentStatusEntry
-  worktreeId: string
-  /** Snapshot of the tab at retention time; kept full (not just an id) because the tab may be gone from `tabsByWorktree` by render time. */
-  tab: TerminalTab
-  agentType: AgentType
-  startedAt: number
-}
 
 export type AgentStatusWorktreeShutdownReason =
   | 'manual-sleep'
@@ -35,12 +23,6 @@ export type AllAgentSessionCaptureMode = 'periodic' | 'quit'
 
 export type DropAgentStatusByWorktreeOptions = {
   shutdownReason?: AgentStatusWorktreeShutdownReason
-  sleepingPaneKeys?: readonly string[] | ReadonlySet<string>
-  retainedCompletionEvidence?: readonly RetainedAgentEntry[]
-}
-
-export type DropHibernatedAgentPaneOptions = {
-  retainedCompletionEvidence?: readonly RetainedAgentEntry[]
 }
 
 export type DropAgentStatusOptions = {
@@ -83,6 +65,7 @@ export type AgentStatusPayload = ParsedAgentStatusPayload & {
 }
 
 export type AgentStatusTiming = {
+  isReplay?: boolean
   /** Ordered authoritative sources may correct a prior publication clock. */
   allowOlderTimestamp?: boolean
   updatedAt?: number

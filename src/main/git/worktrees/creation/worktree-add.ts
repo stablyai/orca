@@ -4,7 +4,7 @@ import type {
   LocalBaseRefRefreshResult,
   LocalBaseRefUpdateSuggestion
 } from '../../../../shared/worktree/base-refs/base-ref-drift-types'
-import { windowsLongPathGitArgs } from '../../../../shared/windows-long-path-git-args'
+import { windowsLongPathGitArgs } from '../../../../shared/git/compatibility/windows-long-path-git-args'
 import { checkoutWorkersGitArgs } from './checkout-workers-git-args'
 import { withRepoRefMaintenancePaused } from '../../refs/maintenance/local-repo-ref-maintenance'
 import { gitExecFileAsync } from '../../command-runner/git-exec-file'

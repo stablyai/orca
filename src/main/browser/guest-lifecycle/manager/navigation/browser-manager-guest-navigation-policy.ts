@@ -1,7 +1,7 @@
 import {
   normalizeBrowserNavigationUrl,
   toSecureCertificateEndpoint
-} from '../../../../../shared/browser-url'
+} from '../../../../../shared/browser/navigation/browser-url'
 import { isChromiumInternalErrorUrl } from './browser-main-frame-navigation'
 import { watchDecisionBlockedMainFrames } from '../../../sessions/requests/browser-session-request-decisions'
 import {

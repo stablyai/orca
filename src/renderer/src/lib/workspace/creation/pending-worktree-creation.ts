@@ -28,7 +28,7 @@ import type { AgentLaunchRoute } from '@/lib/agent-session/launch/routing/agent-
 import type { LinkedPluginTask } from '../../../../../shared/plugins/tasks/plugin-task-link'
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
-import type { EnvironmentDoctorCheck } from '../../../../../shared/environment-doctor-types'
+import type { EnvironmentDoctorCheck } from '../../../../../shared/workspace-setup/environment-doctor/environment-doctor-types'
 import type { NativeChatComposerDraftImage } from '@/components/native-chat/drafts/native-chat-composer-draft-storage'
 import type { AgentJournalSkillRef } from '../../../../../shared/agent-session/journal/agent-session-journal-types'
 

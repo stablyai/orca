@@ -1,4 +1,4 @@
-import type { DiscoveredSkill } from '../skills'
+import type { DiscoveredSkill } from '../skills/discovery/skills'
 import type { NativeChatSessionSkill } from './input/commands/native-chat-slash-commands'
 import type { NativeChatPickerItem } from './input/composer/native-chat-picker-items'
 import { isSafeDisplayCharacter, stripUnsafeDisplayCharacters } from '../display-text-safety'
@@ -52,8 +52,12 @@ export function getSafeSkillName(skill: DiscoveredSkill): string | null {
   if (isTokenSafe(skill.name)) {
     return skill.name
   }
-  const directoryName = skill.directoryPath.split(/[\\/]/).findLast(Boolean) ?? ''
+  const directoryName = skillDirectoryName(skill)
   return isTokenSafe(directoryName) ? directoryName : null
+}
+
+export function skillDirectoryName(skill: Pick<DiscoveredSkill, 'directoryPath'>): string {
+  return skill.directoryPath.split(/[\\/]/).findLast(Boolean) ?? ''
 }
 
 export function isTokenSafe(value: string): boolean {

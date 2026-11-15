@@ -1,4 +1,4 @@
-import { wslDistroForCommand } from '../../../shared/wsl-paths'
+import { wslDistroForCommand } from '../../../shared/file-access/wsl-paths'
 import { mergeCommandEnvironment } from '../../../shared/command-environment'
 import type { CommitMessagePlan } from '../../../shared/source-control/ai/generation/commit-message-plan'
 import {

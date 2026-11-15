@@ -4,7 +4,7 @@ import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { expect, vi } from 'vitest'
-import { quotePowerShellLiteral } from '../../../src/shared/powershell-native-argument'
+import { quotePowerShellLiteral } from '../../../src/shared/shell/launch/powershell-native-argument'
 
 export type WindowFixture = { pid: number; dir: string }
 

@@ -1,7 +1,7 @@
 import { readdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { grantDirAclAsync } from '../../windows/windows-directory-acl'
-import { loadWindowsSecurity } from '../../../shared/windows-security-addon'
+import { loadWindowsSecurity } from '../../../shared/secure-storage/windows-security-addon'
 
 /** #1152: Chromium replaces userData DACL and inherited child ACEs become inherit-only, causing EPERM. Grant explicit root/immediate-child access once per identity; inherited propagation covers descendants (full 28k-file walk measured 62s). Run in the pool; per-write EPERM retries cover startup races. */
 

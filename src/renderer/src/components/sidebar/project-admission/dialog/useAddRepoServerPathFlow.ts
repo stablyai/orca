@@ -5,8 +5,8 @@ import {
   buildNestedRepoScanTelemetry,
   createNestedRepoTelemetryAttemptId,
   type NestedRepoTelemetryRuntimeKind
-} from '../../../../../../shared/nested-repo-telemetry'
-import type { AddRepoExistingWorkspaceSource } from '../../../../../../shared/telemetry-events'
+} from '../../../../../../shared/telemetry/nested-repo-telemetry'
+import type { AddRepoExistingWorkspaceSource } from '../../../../../../shared/telemetry/schemas/telemetry-property-schemas'
 import type { NestedRepoScanResult } from '../../../../../../shared/project-group-types'
 import type { Repo } from '../../../../../../shared/repo-types'
 import type { WorktreeFetchOptions } from '@/store/slices/worktrees/listing/worktree-fetch-options'
@@ -19,7 +19,7 @@ import {
 import {
   wslHostWindowsDriveRefusalForLinuxPath,
   type WslHostWindowsDriveRefusal
-} from '../../../../../../shared/wsl-host-windows-drive-refusal'
+} from '../../../../../../shared/remote-runtime/wsl-hosts/wsl-host-windows-drive-refusal'
 import { getWindowsPathAccess } from '@/lib/files/os-open/windows-path-access'
 import type { AddRepoPathOptions } from '@/store/repos/repo-state'
 import { addRepoBusyLabels } from './add-repo-busy-labels'

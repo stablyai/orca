@@ -7,14 +7,14 @@ import type {
   SkillDeletePlan,
   SkillDeleteRequest,
   SkillDeleteResult
-} from '../../../../../shared/skill-delete-contract'
-import type { DiscoveredSkill } from '../../../../../shared/skills'
+} from '../../../../../shared/skills/deletion/skill-delete-contract'
+import type { DiscoveredSkill } from '../../../../../shared/skills/discovery/skills'
 import {
   deleteSkillsOnRuntimeTarget,
   previewSkillDeletionOnRuntimeTarget,
   runtimeTargetSupportsSkillDelete
 } from '../../../runtime/skills/configuration/runtime-skills-client'
-import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import {
   skillDeleteActionLabel,
   skillDeleteBlockedLines,

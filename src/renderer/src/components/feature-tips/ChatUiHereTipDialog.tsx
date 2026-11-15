@@ -1,5 +1,5 @@
 import { useRef, type JSX } from 'react'
-import type { FeatureTip } from '../../../../shared/feature-tips'
+import type { FeatureTip } from '../../../../shared/feature-education/feature-tips'
 import { DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { useTranslate } from '@/i18n/use-translate'
 import { ChatUiHereFeatureTipVisual } from './ChatUiHereFeatureTipVisual'

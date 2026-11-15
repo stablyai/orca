@@ -1,9 +1,9 @@
 import { useEffect, useRef } from 'react'
-import type { ContextualTourId } from '../../../../shared/contextual-tours'
+import type { ContextualTourId } from '../../../../shared/feature-education/contextual-tours/contextual-tours'
 import {
   hasFeatureInteraction,
   type FeatureInteractionState
-} from '../../../../shared/feature-interactions'
+} from '../../../../shared/feature-education/interactions/feature-interactions'
 import { useAppStore } from '@/store'
 import {
   isContextualTourSessionConsumed,

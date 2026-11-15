@@ -87,7 +87,7 @@ export const WORKSPACE_LAYOUT_METHODS = [
     handler: async (_params, { runtime }) => {
       // Removed servers' saved snapshots must not seed views again.
       const known = new Set(
-        listEnvironments(getAppEnvironment().getPath('userData')).map(({ id }) => id)
+        (await listEnvironments(getAppEnvironment().getPath('userData'))).map(({ id }) => id)
       )
       return {
         snapshots: Object.fromEntries(

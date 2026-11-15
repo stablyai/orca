@@ -1,7 +1,7 @@
 import {
   CLIENT_NAVIGATION_PUBLICATION_EPOCH_SUFFIX,
   type RuntimeMobileSessionTabsResult
-} from '../../../../shared/runtime-session-contracts'
+} from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import type { PersistedMobileClientTabSelections } from '../../../../shared/persisted-state-types'
 import {
   forgetClosedClientSessionTabsByWorktree,

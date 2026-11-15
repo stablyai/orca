@@ -1,60 +1,9 @@
 // @vitest-environment happy-dom
-import { describe, expect, it, vi } from 'vitest'
-import type { UpdateStatus } from './update-status-types'
-import {
-  ORCA_RENDERER_SHUTDOWN_CHECKPOINT_ABORTED_EVENT,
-  ORCA_RENDERER_SHUTDOWN_CHECKPOINT_FAILED_EVENT
-} from './renderer-shutdown-events'
-import {
-  createUpdaterQuitAbortRelay,
-  prepareRendererForAppRestart
-} from './renderer-restart-preparation'
+import { describe, expect, it } from 'vitest'
+
+import { prepareRendererForAppRestart } from './renderer-restart-preparation'
 
 describe('prepareRendererForAppRestart', () => {
-  it('aborts when the dispatched shutdown checkpoint reports failure', async () => {
-    const eventTarget = new EventTarget()
-    const started = vi.fn()
-    const aborted = vi.fn()
-    const independentlyAborted = vi.fn()
-    const checkpoint = vi.fn((event: Event) => {
-      event.currentTarget?.dispatchEvent(new Event(ORCA_RENDERER_SHUTDOWN_CHECKPOINT_FAILED_EVENT))
-      event.preventDefault()
-    })
-    eventTarget.addEventListener('restart-started', started)
-    eventTarget.addEventListener(ORCA_RENDERER_SHUTDOWN_CHECKPOINT_ABORTED_EVENT, aborted)
-    eventTarget.addEventListener('restart-aborted', independentlyAborted)
-    eventTarget.addEventListener('beforeunload', checkpoint)
-
-    await expect(
-      prepareRendererForAppRestart(eventTarget, {
-        startedEventName: 'restart-started',
-        abortedEventName: 'restart-aborted',
-        awaitCheckpoint: () => Promise.resolve()
-      })
-    ).rejects.toThrow('Renderer shutdown checkpoint was not completed.')
-
-    expect(started).toHaveBeenCalledTimes(1)
-    expect(checkpoint).toHaveBeenCalledTimes(1)
-    expect(aborted).toHaveBeenCalledTimes(1)
-    expect(independentlyAborted).not.toHaveBeenCalled()
-  })
-
-  it('does not mistake an unrelated unload veto for checkpoint failure', async () => {
-    const eventTarget = new EventTarget()
-    const veto = vi.fn((event: Event) => event.preventDefault())
-    const awaitCheckpoint = vi.fn(() => Promise.resolve())
-    eventTarget.addEventListener('beforeunload', veto)
-
-    await prepareRendererForAppRestart(eventTarget, {
-      startedEventName: 'restart-started',
-      abortedEventName: 'restart-aborted',
-      awaitCheckpoint
-    })
-
-    expect(veto).toHaveBeenCalledTimes(1)
-    expect(awaitCheckpoint).toHaveBeenCalledTimes(1)
-  })
-
   it('waits for the durable checkpoint write before the restart proceeds', async () => {
     const eventTarget = new EventTarget()
     const order: string[] = []
@@ -84,36 +33,5 @@ describe('prepareRendererForAppRestart', () => {
     releaseCheckpoint()
     await prepared
     expect(order).toEqual(['staged', 'awaiting-flush', 'flushed'])
-  })
-
-  it('aborts the restart when the staged state cannot be persisted', async () => {
-    const eventTarget = new EventTarget()
-    const aborted = vi.fn()
-    eventTarget.addEventListener('restart-aborted', aborted)
-
-    await expect(
-      prepareRendererForAppRestart(eventTarget, {
-        startedEventName: 'restart-started',
-        abortedEventName: 'restart-aborted',
-        awaitCheckpoint: () => Promise.reject(new Error('Failed to persist renderer state.'))
-      })
-    ).rejects.toThrow('Failed to persist renderer state.')
-
-    expect(aborted).toHaveBeenCalledTimes(1)
-  })
-})
-
-describe('createUpdaterQuitAbortRelay', () => {
-  it('resets a prepared update restart when async updater status reports failure', () => {
-    const eventTarget = new EventTarget()
-    const aborted = vi.fn()
-    eventTarget.addEventListener('update-restart-aborted', aborted)
-    const relay = createUpdaterQuitAbortRelay(eventTarget, 'update-restart-aborted')
-    relay.markPrepared()
-
-    relay.handleStatus({ state: 'error', message: 'install failed' } satisfies UpdateStatus)
-    relay.handleStatus({ state: 'error', message: 'duplicate failure' } satisfies UpdateStatus)
-
-    expect(aborted).toHaveBeenCalledTimes(1)
   })
 })

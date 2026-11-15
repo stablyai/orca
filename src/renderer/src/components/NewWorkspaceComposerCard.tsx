@@ -22,7 +22,7 @@ import {
   DEFAULT_DISABLED_TUI_AGENTS,
   filterEnabledTuiAgents
 } from '../../../shared/agent-launch/catalog/tui-agent-selection'
-import type { RuntimeStatus } from '../../../shared/runtime-session-contracts'
+import type { RuntimeStatus } from '../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import type { AddRepoDialogEntryRequest } from '@/components/sidebar/project-admission/dialog/add-repo-dialog-types'
 import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
 import { NewWorkspaceComposerAdvancedSection } from './new-workspace/composer/NewWorkspaceComposerAdvancedSection'

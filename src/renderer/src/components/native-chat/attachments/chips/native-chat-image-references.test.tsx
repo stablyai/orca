@@ -16,7 +16,7 @@ import { handBackStructuredAgentSessionMessage } from '../../session/structured/
 
 import { fileReferenceContent } from '../../composer/editor/native-chat-prompt-document'
 
-import { formatNativeChatFileReference } from '../../../../../../shared/agent-image-paste'
+import { formatNativeChatFileReference } from '../../../../../../shared/native-chat/input/composer/agent-image-paste'
 import {
   promptEditor,
   promptValue

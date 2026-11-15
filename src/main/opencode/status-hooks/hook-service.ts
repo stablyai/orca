@@ -20,7 +20,7 @@ import {
   writeOpenCodeOverlayManifest,
   type OpenCodeOverlayManifest
 } from './opencode-overlay-manifest'
-import { resolveOpenCodeConfigDirectory } from '../../../shared/opencode-config-directory'
+import { resolveOpenCodeConfigDirectory } from '../../../shared/agent-launch/plugins/opencode/opencode-config-directory'
 import {
   getOpenCodeLegacySharedConfigDir,
   OPENCODE2_LEGACY_HOOKS_DIR,
@@ -29,7 +29,7 @@ import {
 import {
   openCodeTuiPluginDirName,
   writeOpenCodeTuiPlugin
-} from '../../../shared/opencode-tui-plugin-install'
+} from '../../../shared/agent-launch/plugins/opencode/opencode-tui-plugin-install'
 import { writeLegacyOpenCodePluginWithAclRetry } from './legacy-plugin-acl-retry'
 import {
   OPENCODE_OVERLAY_DIR,
@@ -38,7 +38,7 @@ import {
 } from './overlay-dir-names'
 import { OpenCodeDirGcLifecycle } from './overlay-dir-gc-lifecycle'
 
-import { writeCanonicalOpenCodePluginAtomically } from '../../../shared/opencode-plugin-atomic-write'
+import { writeCanonicalOpenCodePluginAtomically } from '../../../shared/agent-launch/plugins/opencode/opencode-plugin-atomic-write'
 import { writeOpenCodePluginConfig } from './opencode-plugin-config-writer'
 
 type OpenCodeHookVariant = {

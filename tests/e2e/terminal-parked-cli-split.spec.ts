@@ -9,7 +9,7 @@ import type {
   RuntimeTerminalListResult,
   RuntimeTerminalSplit,
   RuntimeTerminalSummary
-} from '../../src/shared/runtime-types'
+} from '../../src/shared/terminal/runtime/runtime-terminal-contracts'
 import { expect, test } from './helpers/orca-app'
 import {
   readPaneIdentitySnapshot,

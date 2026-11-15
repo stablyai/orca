@@ -1,6 +1,6 @@
 import type { TuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-agent'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
-import { nativeChatPreferenceFor } from '../../../../../../shared/structured-native-chat-launch-route'
+import { nativeChatPreferenceFor } from '../../../../../../shared/agent-launch/choices/structured-native-chat-launch-route'
 import type { AgentLaunchSurface } from './agent-session-launch-plan'
 import type { AgentLaunchRoute } from './agent-launch-routing'
 import type {

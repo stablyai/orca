@@ -9,9 +9,9 @@ import type {
   RateLimitRuntimeTarget
 } from '../../../../../shared/rate-limit-types'
 import type { CodexConfigSyncStatus } from '../../../../../shared/codex-config-sync-types'
-import type { FeatureInteractionId } from '../../../../../shared/feature-interaction-catalog'
+import type { FeatureInteractionId } from '../../../../../shared/feature-education/interactions/feature-interaction-catalog'
 import type { ProviderAccountRuntimeView } from '../../provider-accounts/provider-account-visibility'
-import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import type { SettingsHostScope } from '../host-scope/settings-host-scope'
 import type { LocalAccountRuntime } from '../../../lib/provider-accounts/account-runtime-label'
 

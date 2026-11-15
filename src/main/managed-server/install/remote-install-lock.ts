@@ -17,7 +17,7 @@ import {
   type RemoteHostPlatform
 } from '../../ssh/remote-host/ssh-remote-platform'
 import { removeRemoteTreeCommand } from '../../ssh/remote-exec/ssh-remote-commands'
-import { RELAY_INSTALL_LOCK_NAME } from '../../../shared/relay-install-lock-name'
+import { RELAY_INSTALL_LOCK_NAME } from '../../../shared/remote-runtime/relay/relay-install-lock-name'
 
 const INSTALL_LOCK_POLL_MS = 1_000
 // Fresh locks may become stale during our wait; infrequent rechecks permit recovery without an exec per poll.

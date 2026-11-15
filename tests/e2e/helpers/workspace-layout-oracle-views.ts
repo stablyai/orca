@@ -6,8 +6,8 @@ import {
   type ExecutionHostId
 } from '../../../src/shared/execution-host'
 import { readPersistedProfileState } from './persisted-profile-state'
-import type { RuntimeMobileSessionTabsResult } from '../../../src/shared/runtime-session-contracts'
-import type { RuntimeTerminalListResult } from '../../../src/shared/runtime-terminal-contracts'
+import type { RuntimeMobileSessionTabsResult } from '../../../src/shared/remote-runtime/session-graph/runtime-session-contracts'
+import type { RuntimeTerminalListResult } from '../../../src/shared/terminal/runtime/runtime-terminal-contracts'
 import type { WorkspaceSessionState } from '../../../src/shared/workspace-session/workspace-session-state-types'
 import type { WorkspaceLayoutPartition } from './workspace-layout-oracle-model'
 

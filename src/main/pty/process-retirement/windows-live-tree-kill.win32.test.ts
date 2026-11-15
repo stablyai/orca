@@ -8,7 +8,7 @@ import { setAppEnvironment, type AppEnvironment } from '../../../shared/app-envi
 import { setProcessTreeKillGate } from '@orca/process-host/process-tree-kill-gate'
 import { signalProcessTree } from '@orca/process-host/process-tree-termination'
 import { windowsSystem32Binary } from '@orca/process-host/windows-system-binary'
-import { removeTreeSync } from '../../../shared/windows-transient-lock-removal'
+import { removeTreeSync } from '../../../shared/file-write/windows-transient-lock-removal'
 import {
   findSelfInitiatedTreeKills,
   resetSelfInitiatedTreeKillLogForTest
