@@ -30,6 +30,9 @@ export type MobileNativeChatReadingUnit = {
   placed: string
 }
 
+/** How many screens of rows the page list draws above the view. */
+export const DRAW_AHEAD_SCREENS = 3
+
 const ROW = 'chat-row:'
 const MEMBER = 'chat-member:'
 const ROWS = 'data-chat-rows'
@@ -200,12 +203,13 @@ function drawn(
   return row && tagged(row, MEMBER).find((m) => m.id === member || m.id === paired)?.node
 }
 
+/** How far the place's first still-drawn unit moved; undefined when none of it is drawn. */
 export function mobileNativeChatReadingDrift(
   place: readonly MobileNativeChatReadingUnit[],
   scroller: MobileNativeChatScrollNode,
   keys: Keys,
   roots?: MobileNativeChatScrollRoots
-): number {
+): number | undefined {
   const rows = new Map(
     drawnRows(scroller).flatMap((node) => {
       const id = rowIdOf(node)
@@ -218,5 +222,5 @@ export function mobileNativeChatReadingDrift(
       return node.getBoundingClientRect().top - unit.top
     }
   }
-  return 0
+  return undefined
 }

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { Platform, type NativeScrollEvent, type NativeSyntheticEvent } from 'react-native'
+import { forgetMobileNativeChatPlace } from './use-mobile-native-chat-place-keeper'
 
 const AT_TAIL_SLOP = 80
 
@@ -38,6 +39,7 @@ export type MobileNativeChatTailFollow = {
     ref: (list: MobileNativeChatListHandle | null) => void
     isFollowing: () => boolean
     onEndDistance: (fromEnd: number, byReader: boolean) => void
+    onPlaceRestored: (scope: string) => void
   }
   showJumpToTail: boolean
   pinToTail: () => void
@@ -56,7 +58,7 @@ export type MobileNativeChatTailFollow = {
 // Reader gestures and explicit jumps own follow intent; correction metrics must not change it.
 export function useMobileNativeChatTailFollow(args: {
   hasItems: boolean
-  /** The chat shown; another one opens following, whatever the reader did here. */
+  /** The chat shown; another one opens following unless the list puts back where the reader left it. */
   scopeKey: string
 }): MobileNativeChatTailFollow {
   const { hasItems, scopeKey } = args
@@ -69,6 +71,7 @@ export function useMobileNativeChatTailFollow(args: {
   const userScrollActiveRef = useRef(false)
   const userScrollSettleFrameRef = useRef<number | null>(null)
   const scopeKeyRef = useRef(scopeKey)
+  const restoredScopeRef = useRef<string | null>(null)
 
   // Single writer, so the event-time ref and the render flag cannot disagree.
   const setFollowing = useCallback((next: boolean) => {
@@ -136,6 +139,7 @@ export function useMobileNativeChatTailFollow(args: {
   const jumpToTail = useCallback(() => {
     clearUserScrollSettle()
     userScrollActiveRef.current = false
+    forgetMobileNativeChatPlace(scopeKeyRef.current)
     setAtTail(true)
     setFollowing(true)
     pinToTail()
@@ -208,20 +212,35 @@ export function useMobileNativeChatTailFollow(args: {
 
   const isFollowing = useCallback(() => followingRef.current, [])
 
+  // The list commits before this view's chat-change effect, so the scope says which chat it restored.
+  const onPlaceRestored = useCallback(
+    (scope: string) => {
+      restoredScopeRef.current = scope
+      clearUserScrollSettle()
+      userScrollActiveRef.current = false
+      setFollowing(false)
+    },
+    [clearUserScrollSettle, setFollowing]
+  )
+
   // Reset before paint on chat changes so a mounted view cannot expose the previous reader position.
   useLayoutEffect(() => {
     if (scopeKeyRef.current === scopeKey) {
       return
     }
     scopeKeyRef.current = scopeKey
-    jumpToTail()
+    const restored = restoredScopeRef.current === scopeKey
+    restoredScopeRef.current = null
+    if (!restored) {
+      jumpToTail()
+    }
   }, [scopeKey, jumpToTail])
 
   useEffect(() => clearUserScrollSettle, [clearUserScrollSettle])
 
   return {
     listProps: { ref: attachList },
-    pageListProps: { ref: attachList, isFollowing, onEndDistance },
+    pageListProps: { ref: attachList, isFollowing, onEndDistance, onPlaceRestored },
     showJumpToTail: !following && !atTail,
     pinToTail,
     pinToTailAfterContentResize,
