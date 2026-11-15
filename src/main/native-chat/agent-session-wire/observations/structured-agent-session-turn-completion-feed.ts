@@ -238,6 +238,9 @@ export class StructuredAgentSessionTurnCompletionFeed {
     if (request.outcome !== 'success' || state.summary.status === 'attention') {
       return false
     }
+    if (state.goalContinues) {
+      return true
+    }
     const held = foldAgentLeadStatus({
       leadState: 'done',
       childWorkLiveness: agentChildWorkLiveness(this.deps.readChildWork(sessionId))
