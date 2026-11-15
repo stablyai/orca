@@ -146,6 +146,7 @@ const DEPENDENCY_ISOLATION_PREFIXES = [
   'config/build-plugins/markdown-parser-exports',
   'config/tsconfig',
   'src/packages/',
+  'native/windows-notifications/package.json',
   'native/windows-registry/package.json',
   'native/windows-security/package.json'
 ]
@@ -349,6 +350,7 @@ const NATIVE_CACHE_PREFIXES = [
   'config/patches/node-pty@',
   'config/patches/@vscode__windows-process-tree',
   // The vendored addons' sources: build/ and bin/ beside them are ignored, so nothing else lands here.
+  'native/windows-notifications/',
   'native/windows-registry/',
   'native/windows-security/'
 ]

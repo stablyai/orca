@@ -10,7 +10,7 @@ import {
   getSelectedNotificationSoundPath,
   NOTIFICATION_SOUND_MIME_BY_EXTENSION
 } from './notification-sound-selection'
-import { isMacosFocusActive } from '../notifications/macos-focus-state'
+import { isNotificationFocusActive } from '../notifications/notification-focus-state'
 
 const MAX_NOTIFICATION_SOUND_BYTES = 10 * 1024 * 1024
 
@@ -20,9 +20,8 @@ export function registerNotificationSoundHandlers(store: Store): void {
   ipcMain.handle(
     'notifications:resolveSoundPath',
     async (_event, options?: { force?: boolean }): Promise<NotificationSoundPathResult> => {
-      // Why: Orca plays custom sounds itself (the banner is silent), so the OS cannot mute them under Focus.
-      // Previews pass force so the user can still audition sounds.
-      if (options?.force !== true && (await isMacosFocusActive())) {
+      // Custom audio bypasses OS notification muting; explicit previews bypass this gate.
+      if (options?.force !== true && (await isNotificationFocusActive())) {
         return { ok: false, reason: 'focus-active' }
       }
       const selectedSound = getSelectedNotificationSoundPath(store.getSettings().notifications)
