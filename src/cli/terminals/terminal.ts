@@ -52,6 +52,7 @@ import { getTerminalHandle } from './terminal-selector'
 import { revealPairedTerminalOnLocalDesktop } from './paired-terminal-desktop-reveal'
 import { terminalCloseHandler } from './terminal-close'
 import { terminalSendHandler } from './terminal-send'
+import { terminalWatchFocusHandler } from './terminal-watch-focus'
 
 // Long terminal waits must outlive the ordinary transport timeout.
 const DEFAULT_TERMINAL_WAIT_RPC_TIMEOUT_MS = 5 * 60 * 1000
@@ -213,6 +214,7 @@ export const TERMINAL_HANDLERS: Record<string, CommandHandler> = {
     printResult(result, json, formatTerminalCreate)
   },
   'terminal switch': terminalFocusHandler,
+  'terminal watch-focus': terminalWatchFocusHandler,
   'terminal close': terminalCloseHandler,
   'terminal split': async ({ flags, client, cwd, json }) => {
     const directionFlag = getOptionalStringFlag(flags, 'direction')

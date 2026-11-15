@@ -46,6 +46,13 @@ export type RuntimeTerminalSummary = {
   verdict?: PtyLivenessVerdict['status']
   /** Only when the caller asked for it; absent on older hosts. */
   attention?: RuntimeTerminalAttention
+  /** In `terminal.list`: true for the one pane the desktop window has focused; absent on older hosts. */
+  focused?: boolean
+}
+
+/** `terminal.watchFocus`: the focused pane's handle; null while the window shows no terminal or is closed. */
+export type RuntimeTerminalWatchFocus = {
+  handle: string | null
 }
 
 /** Use of a PTY that its host's own window can't see: a remote client showing it, or input from anywhere. */

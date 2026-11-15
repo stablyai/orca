@@ -50,6 +50,7 @@ type RuntimeTerminalListDependencies = {
     worktrees: Iterable<ResolvedWorktree>,
     queriedHostIds: ReadonlySet<ExecutionHostId>
   ): { hostIds: ExecutionHostId[]; omittedHostIds: ExecutionHostId[] }
+  getFocusedHandle(): string | null
   /** Layout-owner builds: main lists every saved pane of the workspace, a live terminal or not. */
   listsEveryPane?: (worktreeId: string) => boolean
 }
@@ -158,7 +159,10 @@ export class RuntimeTerminalList {
     const matching = requestedHandles
       ? terminals.filter((terminal) => requestedHandles.has(terminal.handle))
       : terminals
-    const listed = matching.slice(0, limit)
+    const focusedHandle = this.deps.getFocusedHandle()
+    const listed = matching
+      .slice(0, limit)
+      .map((terminal) => ({ ...terminal, focused: terminal.handle === focusedHandle }))
     const snapshots = this.deps.getSnapshots()
     const visualLayouts =
       opts.includeVisualLayouts === false

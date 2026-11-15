@@ -746,6 +746,7 @@ import {
   TerminalUnsubscribe,
   TerminalUpdateViewport
 } from './terminal/terminal-viewport-schemas-params'
+import { TerminalWatchFocus } from './terminal/terminal-watch-focus-params'
 import { UpdaterCheckParams } from './updater/updater-params'
 import {
   WorkspaceCleanupPreviewParams,
@@ -1652,6 +1653,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'terminal.updateViewport': TerminalUpdateViewport,
   'terminal.viewClaudeAgent': TerminalViewClaudeAgent,
   'terminal.wait': TerminalWait,
+  'terminal.watchFocus': TerminalWatchFocus,
   'terminalDaemon.limit': null,
   'terminalDaemon.restartSevered': TerminalDaemonRestartSeveredParams,
   'terminalDaemon.setLimit': TerminalLimitUpdateParams,

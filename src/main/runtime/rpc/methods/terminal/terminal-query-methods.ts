@@ -20,6 +20,10 @@ import {
   TerminalResolvePane,
   TerminalSetPaneTitle
 } from '../../../../../shared/rpc-contract/terminal/terminal-unary-params'
+import {
+  TERMINAL_WATCH_FOCUS_MAX_WAIT_MS,
+  TerminalWatchFocus
+} from '../../../../../shared/rpc-contract/terminal/terminal-watch-focus-params'
 
 export const TERMINAL_QUERY_METHODS = [
   defineMethod({
@@ -61,6 +65,18 @@ export const TERMINAL_QUERY_METHODS = [
         params.worktree,
         params.requireUnambiguous ? { requireUnambiguous: true } : {}
       )
+    })
+  }),
+  defineMethod({
+    // A long poll, so a tool following the focused pane is pushed each change instead of polling.
+    name: 'terminal.watchFocus',
+    permission: 'workspace',
+    params: TerminalWatchFocus,
+    handler: async (params, { runtime, signal }) => ({
+      focus: await runtime.focusedTerminal.waitForChange(params.after, {
+        timeoutMs: params.timeoutMs ?? TERMINAL_WATCH_FOCUS_MAX_WAIT_MS,
+        signal
+      })
     })
   }),
   defineMethod({
