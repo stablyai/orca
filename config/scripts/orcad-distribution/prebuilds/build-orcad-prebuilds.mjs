@@ -8,7 +8,7 @@ import { createRequire } from 'node:module'
 import { dirname, join } from 'node:path'
 import process from 'node:process'
 import { NODE_RUNTIME_PIN } from '../../../../src/shared/node-runtime-pin.ts'
-import { ORCAD_PROVIDER_EXEC_SLOT_FILE } from '../../../../src/shared/orcad-artifacts.ts'
+import { ORCAD_PROVIDER_EXEC_SLOT_FILE } from '../../../../src/shared/remote-runtime/orcad-distribution/orcad-artifacts.ts'
 import { buildProviderExec } from '../../native-build/posix/build-provider-exec.mjs'
 import {
   assertCompatSlotHost,

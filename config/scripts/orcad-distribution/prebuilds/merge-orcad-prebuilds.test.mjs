@@ -10,7 +10,7 @@ import {
   sha256Of,
   slotNeedsProviderExec
 } from './orcad-prebuild-slot-contents.mjs'
-import { ORCAD_PROVIDER_EXEC_SLOT_FILE } from '../../../../src/shared/orcad-artifacts.ts'
+import { ORCAD_PROVIDER_EXEC_SLOT_FILE } from '../../../../src/shared/remote-runtime/orcad-distribution/orcad-artifacts.ts'
 
 const dirs = []
 function temp() {

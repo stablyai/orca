@@ -10,7 +10,7 @@ import {
   readManifest,
   slotNeedsProviderExec
 } from './orcad-prebuild-slot-contents.mjs'
-import { ORCAD_PROVIDER_EXEC_SLOT_FILE } from '../../../../src/shared/orcad-artifacts.ts'
+import { ORCAD_PROVIDER_EXEC_SLOT_FILE } from '../../../../src/shared/remote-runtime/orcad-distribution/orcad-artifacts.ts'
 import { ensurePinnedNodeExecutable } from './pinned-node-downloads.mjs'
 import { runProcessSync } from '@orca/process-host'
 

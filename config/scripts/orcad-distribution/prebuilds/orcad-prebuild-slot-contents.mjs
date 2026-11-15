@@ -6,7 +6,7 @@ import { join } from 'node:path'
 import {
   ORCAD_PROVIDER_EXEC_FILENAME,
   ORCAD_PROVIDER_EXEC_SLOT_FILE
-} from '../../../../src/shared/orcad-artifacts.ts'
+} from '../../../../src/shared/remote-runtime/orcad-distribution/orcad-artifacts.ts'
 
 const require = createRequire(import.meta.url)
 
