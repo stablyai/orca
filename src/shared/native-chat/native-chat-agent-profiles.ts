@@ -120,7 +120,11 @@ export function getTextDrivenNativeChatCommands(
   if (!agent) {
     return []
   }
-  const names = new Set(getNativeChatAgentProfile(agent)?.textDrivenCommands ?? [])
+  const profile = getNativeChatAgentProfile(agent)
+  if (profile?.expandsSlashCommandsFromText) {
+    return getVerifiedNativeChatCommands(agent)
+  }
+  const names = new Set(profile?.textDrivenCommands ?? [])
   return names.size === 0
     ? []
     : getVerifiedNativeChatCommands(agent).filter((command) => names.has(command.name))

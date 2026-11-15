@@ -31,6 +31,7 @@ import {
 import { isAiVaultDatabaseAgent } from '../../../../../../shared/ai-vault/contracts/ai-vault-session-handoff'
 import { activateAiVaultStructuredSession } from '@/lib/agent-session/open/activate-ai-vault-structured-session'
 import { adoptsCliConversations } from '../../../../../../shared/agent-session/view/structured-agent-cli-conversation-adoption'
+import { nativeChatPreferenceFor } from '../../../../../../shared/agent-launch/choices/structured-native-chat-launch-route'
 
 import { createNonSecureContextUuid } from '../../../../../../shared/identifiers/non-secure-context-uuid'
 import { describeAiVaultResumeFailure } from '@/lib/agent-session/resume/history/ai-vault-resume-refusal'
@@ -140,10 +141,43 @@ export function useAiVaultSessionLaunchActions({
     [activeWorktree?.id, activeWorktreeId, targetState]
   )
 
+  const handleResumeInNewChat = useCallback(
+    (session: AiVaultSession, targetWorktreeId?: string): void => {
+      if (!adoptsCliConversations(session.agent)) {
+        return
+      }
+      const worktreeId = targetWorktreeId ?? activeWorktreeId ?? activeWorktree?.id ?? null
+      if (!worktreeId) {
+        toast.error(
+          translate(
+            'auto.components.right.sidebar.AiVaultPanel.openWorkspaceBeforeResuming',
+            'Open a workspace before resuming a session.'
+          )
+        )
+        return
+      }
+      void resumeAiVaultSessionInNewChat(
+        session,
+        session.agent,
+        worktreeId,
+        createNonSecureContextUuid()
+      )
+    },
+    [activeWorktree?.id, activeWorktreeId]
+  )
+
   const handleResume = useCallback(
     (session: AiVaultSession, targetWorktreeId?: string): void => {
       if (session.structuredSession) {
         void activateAiVaultStructuredSession(session)
+        return
+      }
+      // When the user configured Chat mode for this agent, resume in native chat.
+      if (
+        adoptsCliConversations(session.agent) &&
+        nativeChatPreferenceFor(useAppStore.getState().settings, session.agent)
+      ) {
+        handleResumeInNewChat(session, targetWorktreeId)
         return
       }
       launchInTerminal(
@@ -156,7 +190,7 @@ export function useAiVaultSessionLaunchActions({
         (message) => describeAiVaultResumeFailure(new Error(message), session.agent)
       )
     },
-    [buildResumeStartup, launchInTerminal]
+    [buildResumeStartup, handleResumeInNewChat, launchInTerminal]
   )
 
   // Native chat keeps the conversation it owns; the terminal gets a copy (see the fork builder).
@@ -201,31 +235,6 @@ export function useAiVaultSessionLaunchActions({
       launchInTerminal(session, targetWorktreeId, prepareStartup, describeAiVaultCliForkFailure)
     },
     [agentCmdOverrides, launchInTerminal]
-  )
-
-  const handleResumeInNewChat = useCallback(
-    (session: AiVaultSession, targetWorktreeId?: string): void => {
-      if (!adoptsCliConversations(session.agent)) {
-        return
-      }
-      const worktreeId = targetWorktreeId ?? activeWorktreeId ?? activeWorktree?.id ?? null
-      if (!worktreeId) {
-        toast.error(
-          translate(
-            'auto.components.right.sidebar.AiVaultPanel.openWorkspaceBeforeResuming',
-            'Open a workspace before resuming a session.'
-          )
-        )
-        return
-      }
-      void resumeAiVaultSessionInNewChat(
-        session,
-        session.agent,
-        worktreeId,
-        createNonSecureContextUuid()
-      )
-    },
-    [activeWorktree?.id, activeWorktreeId]
   )
 
   const handleContinueInNewSession = useCallback(

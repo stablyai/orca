@@ -120,11 +120,32 @@ const OMP_COMMANDS: readonly SlashCommandSuggestion[] = [
   { name: 'hotkeys', description: 'Show keyboard shortcuts in Terminal' }
 ]
 
+// OpenCode CLI commands supported by its conversation harness.
+const OPENCODE_COMMANDS: readonly SlashCommandSuggestion[] = [
+  { name: 'session', description: 'Show session information and controls' },
+  { name: 'sessions', description: 'List or switch sessions' },
+  { name: 'clear', description: 'Clear conversation history' },
+  { name: 'compact', description: 'Compact conversation context' },
+  { name: 'new', description: 'Start a new session' },
+  { name: 'undo', description: 'Undo the last turn' },
+  { name: 'redo', description: 'Redo the undone turn' },
+  { name: 'init', description: 'Initialize project configuration' },
+  { name: 'share', description: 'Share the current session' },
+  { name: 'details', description: 'Show session details' },
+  { name: 'timeline', description: 'Show session timeline' },
+  { name: 'export', description: 'Export the session' },
+  { name: 'models', description: 'List available models' },
+  { name: 'thinking', description: 'Toggle thinking mode' },
+  { name: 'help', description: 'Show available commands' }
+]
+
 const COMMANDS_BY_AGENT: Partial<Record<AgentType, readonly SlashCommandSuggestion[]>> = {
   claude: CLAUDE_COMMANDS,
   openclaude: OPENCLAUDE_COMMANDS,
   codex: CODEX_COMMANDS,
-  omp: OMP_COMMANDS
+  omp: OMP_COMMANDS,
+  opencode: OPENCODE_COMMANDS,
+  opencode2: OPENCODE_COMMANDS
 }
 
 /** Known slash commands for an agent, falling back to a small common set so the
