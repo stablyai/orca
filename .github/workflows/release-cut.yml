@@ -889,18 +889,6 @@ jobs:
 
       - *verify-release-checkout
 
-      - name: Restore skill-sharing test harness from the workflow ref
-        shell: bash
-        env:
-          WORKFLOW_SHA: ${{ github.workflow_sha }}
-        run: |
-          git fetch --no-tags --depth=1 origin "$WORKFLOW_SHA"
-          SKILL_ROOTS_TEST=src/main/skills/providers/skill-provider-runtime-roots.test.ts
-          if [ ! -f src/main/skills/providers/skill-provider-runtime-roots.ts ]; then
-            SKILL_ROOTS_TEST=src/main/skills/skill-provider-runtime-roots.test.ts
-          fi
-          git show "$WORKFLOW_SHA:src/main/skills/providers/skill-provider-runtime-roots.test.ts" > "$SKILL_ROOTS_TEST"
-
       - uses: ./.github/actions/install-node-dependencies
         with:
           native-runtime: node
@@ -952,18 +940,6 @@ jobs:
         run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
 
       - *verify-release-checkout
-
-      - name: Restore skill-sharing test harness from the workflow ref
-        shell: bash
-        env:
-          WORKFLOW_SHA: ${{ github.workflow_sha }}
-        run: |
-          git fetch --no-tags --depth=1 origin "$WORKFLOW_SHA"
-          SKILL_ROOTS_TEST=src/main/skills/providers/skill-provider-runtime-roots.test.ts
-          if [ ! -f src/main/skills/providers/skill-provider-runtime-roots.ts ]; then
-            SKILL_ROOTS_TEST=src/main/skills/skill-provider-runtime-roots.test.ts
-          fi
-          git show "$WORKFLOW_SHA:src/main/skills/providers/skill-provider-runtime-roots.test.ts" > "$SKILL_ROOTS_TEST"
 
       - uses: ./.github/actions/install-node-dependencies
         with:

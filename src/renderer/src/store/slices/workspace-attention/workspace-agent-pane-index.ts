@@ -53,7 +53,6 @@ let terminalTabs: AppState['tabsByWorktree'] | null = null
 let unifiedTabs: AppState['unifiedTabsByWorktree'] | null = null
 const tabOwners = new Map<string, string>()
 const liveIndex = createAgentPaneWorkspaceIndex<AppState['agentStatusByPaneKey'][string]>()
-const retainedIndex = createAgentPaneWorkspaceIndex<AppState['retainedAgentsByPaneKey'][string]>()
 
 /** Explicit reads include completed orphans and parent-attributed panes, even without a sidebar row. */
 export function workspaceAgentPaneKeys(state: AppState, worktreeId: string): string[] {
@@ -77,6 +76,5 @@ export function workspaceAgentPaneKeys(state: AppState, worktreeId: string): str
     (entry) => resolveAgentStatusWorktreeId(entry, tabOwners),
     tabsChanged
   )
-  const retained = retainedIndex(state.retainedAgentsByPaneKey, (entry) => entry.worktreeId)
-  return [...(live.get(worktreeId) ?? []), ...(retained.get(worktreeId) ?? [])]
+  return [...(live.get(worktreeId) ?? [])]
 }
