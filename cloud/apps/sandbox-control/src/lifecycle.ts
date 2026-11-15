@@ -27,8 +27,9 @@ import { memberPlaceholder, type MemberGitIdentity } from './github-user-tokens'
 import { connectedMembers, memberGitConfigs } from './member-git'
 import type { RetentionConfig } from './retention'
 import { ProviderError, type ProviderSandboxState, type SandboxProviderApi } from './sandbox-provider'
-import { egressAccountRoutes, egressSecretHosts, placeholderValues, secretPlaceholder } from './secret-egress'
-import { egressAllowHosts, sessionSecretEnv, type SessionSecrets } from './session-env'
+import { egressAccountRoutes, egressSecretHosts, placeholderValues, secretPlaceholder, type SecretEgressHost } from './secret-egress'
+import { credentialTargets } from './provider-env'
+import { egressAllowHosts, resolvedProviderEnv, sessionSecretEnv, type SessionSecrets } from './session-env'
 import type { Keyring } from './secrets-crypto'
 import type { SecretsKmsReason } from './secrets-kms'
 import { captureReadSnapshot, deleteReadSnapshot } from './read-snapshots'
@@ -177,6 +178,8 @@ export type LifecycleDeps = {
     codexFirewallSwap?: boolean
     /** EGRESS_SWAP_MODE: the default swap mode for sandboxes without their own (design §3). Unset: proxy. */
     egressSwapMode?: EgressSwapMode
+    /** EGRESS_FIREWALL_CLASSES: the classes firewall mode swaps (default all); a removed class goes back to the proxy. */
+    egressFirewallClasses?: readonly FirewallClass[]
     /** SHARE_LINK_SECRET: each session's share-proxy key derives from it; unset = no share links. */
     shareLinkSecret?: string
   }
@@ -301,8 +304,8 @@ type BootPrep = {
   minted: { token: string; expiresAt: number } | null
   /** Members whose own GitHub identity this session may use (git as the sender). */
   memberPlaceholders: string[]
-  /** CODEX-FIREWALL-SWAP: account tokens the firewall swaps itself. */
-  firewall: FirewallAccount[]
+  /** What the firewall swaps itself (null: proxy mode). */
+  firewall: FirewallInputs | null
 }
 
 /** Everything a boot needs that does not depend on the VM: resolved concurrently with the VM work. */
@@ -313,7 +316,7 @@ async function prepareBoot(deps: LifecycleDeps, row: SandboxRow): Promise<BootPr
     memberPlaceholdersFor(deps, row)
   ])
   // The account routes come from the secrets just resolved (egress_secret_hosts), so this runs after them.
-  const firewall = await firewallAccountsFor(deps, routedRow(row, { secrets } as BootPrep))
+  const firewall = await firewallInputsFor(deps, routedRow(row, { secrets } as BootPrep))
   return { secrets, minted, memberPlaceholders, firewall }
 }
 
@@ -368,35 +371,90 @@ export function egressSwapModeFor(deps: Pick<LifecycleDeps, 'config'>, row: Pick
   return parseEgressSwapMode(row.egress_swap_mode) ?? deps.config.egressSwapMode ?? 'proxy'
 }
 
-/** A Codex account token the sandbox firewall swaps itself, on CODEX_FIREWALL_PATHS only (CODEX-FIREWALL-SWAP). */
-export type FirewallAccount = { agent: 'codex'; host: string; authorization: string; accountId: string | null }
+/** Credential classes the firewall may swap (design §1); EGRESS_FIREWALL_CLASSES narrows them. */
+export const FIREWALL_CLASSES = ['model_key', 'claude', 'codex', 'github_app'] as const
+export type FirewallClass = (typeof FIREWALL_CLASSES)[number]
+
+/** An Orca-account token for the firewall: `authorization` null means the account doesn't apply (signed out). */
+export type FirewallAccount = { agent: 'claude' | 'codex'; host: string; authorization: string | null; accountId: string | null }
 
 /**
- * CODEX-FIREWALL-SWAP: chatgpt.com answers the sandbox's own egress, so the firewall can swap the Codex
- * token for its hot calls with no Worker or relay hop. The same rules as the egress proxy's credential
- * (index.ts): the owner's own account, never on a shared workspace, only while the provider is on and the
- * token is usable. Anything else leaves the proxy route alone, which answers the signed-out cases.
+ * What the firewall swaps itself for this sandbox (design §1). Null: proxy mode, the egress proxy swaps
+ * everything. Resolved at compile time from current state; nothing here is logged or stored.
  */
-export async function firewallAccountsFor(deps: LifecycleDeps, row: SandboxRow): Promise<FirewallAccount[]> {
-  const firewallMode = deps.config.codexFirewallSwap || egressSwapModeFor(deps, row) === 'firewall'
-  if (!firewallMode || !deps.config.egressProxyUrl || !deps.secrets || !deps.secrets.accountProviders?.codex) {
-    return []
-  }
-  if (isSharedWorkspace(row)) {
-    return []
-  }
-  const out: FirewallAccount[] = []
-  for (const route of egressAccountRoutes(row)) {
-    if (route.agent !== 'codex' || route.owner !== row.user_id) {
-      continue
+export type FirewallInputs = {
+  classes: ReadonlySet<FirewallClass>
+  accounts: readonly FirewallAccount[]
+  /** Model keys by secret name; null: not usable now (deleted, moved away, unreadable). */
+  secrets: ReadonlyMap<string, string | null>
+}
+
+export function parseFirewallClasses(value: string): FirewallClass[] {
+  const known = new Set<string>(FIREWALL_CLASSES)
+  return value
+    .split(',')
+    .map((name) => name.trim())
+    .filter((name): name is FirewallClass => known.has(name))
+}
+
+export function firewallClasses(deps: Pick<LifecycleDeps, 'config'>, row: Pick<SandboxRow, 'egress_swap_mode'>): ReadonlySet<FirewallClass> {
+  const out = new Set<FirewallClass>()
+  if (egressSwapModeFor(deps, row) === 'firewall') {
+    for (const name of deps.config.egressFirewallClasses ?? FIREWALL_CLASSES) {
+      out.add(name)
     }
-    const stored = await readUsableAgentCredential(deps.db, deps.secrets.keyring, row.user_id, 'codex', deps.now()).catch(() => null)
-    const tokens = stored ? parseStoredCodex(stored) : null
-    if (tokens) {
-      out.push({ agent: 'codex', host: route.host, authorization: `Bearer ${tokens.access_token}`, accountId: tokens.account_id })
-    }
+  } else if (deps.config.codexFirewallSwap) {
+    // CODEX-FIREWALL-SWAP (#776): Codex's hot calls only, in proxy mode.
+    out.add('codex')
   }
   return out
+}
+
+/**
+ * CODEX-FIREWALL-SWAP / EGRESS firewall mode: the values the firewall needs. Same eligibility as the egress
+ * proxy's per-request checks (index.ts): the owner's own account, never on a shared workspace, only while
+ * the provider is on and the token is usable; a key only while it is still meant for that host.
+ */
+export async function firewallInputsFor(deps: LifecycleDeps, row: SandboxRow): Promise<FirewallInputs | null> {
+  const classes = firewallClasses(deps, row)
+  if (classes.size === 0 || !deps.config.egressProxyUrl || !deps.secrets) {
+    return null
+  }
+  const keyring = deps.secrets.keyring
+  const accounts: FirewallAccount[] = []
+  for (const route of egressAccountRoutes(row)) {
+    if (!classes.has(route.agent)) {
+      continue
+    }
+    const applies = route.owner === row.user_id && !isSharedWorkspace(row) && Boolean(deps.secrets.accountProviders?.[route.agent])
+    const stored = applies ? await readUsableAgentCredential(deps.db, keyring, row.user_id, route.agent, deps.now()).catch(() => null) : null
+    if (route.agent === 'codex') {
+      const tokens = stored ? parseStoredCodex(stored) : null
+      accounts.push({ agent: 'codex', host: route.host, authorization: tokens ? `Bearer ${tokens.access_token}` : null, accountId: tokens?.account_id ?? null })
+    } else {
+      const provider = accountProvider('claude')
+      accounts.push({ agent: 'claude', host: route.host, authorization: stored && provider ? provider.format(stored) : null, accountId: null })
+    }
+  }
+  const secrets = new Map<string, string | null>()
+  const entries = classes.has('model_key') ? egressSecretHosts(row).filter(firewallEligibleKey) : []
+  if (entries.length > 0) {
+    const current = await resolvedProviderEnv(deps.db, keyring, row).catch(() => null)
+    const targets = current ? credentialTargets(current.env, current.scopes) : []
+    for (const entry of entries) {
+      const stillHere = targets.some((target) => target.secret === entry.secret && target.host === entry.host)
+      secrets.set(entry.secret, stillHere ? (current?.env[entry.secret] ?? null) : null)
+    }
+  }
+  return { classes, accounts, secrets }
+}
+
+/**
+ * Keys the firewall can swap: no response filtering (Cursor's exchange, W1) and no path scope (Copilot's
+ * PAT on api.github.com, W2: a prefix can't be pinned at the firewall). Those stay on the egress proxy.
+ */
+export function firewallEligibleKey(entry: SecretEgressHost): boolean {
+  return !entry.keepResponseFields && !entry.paths
 }
 
 export function egressPolicy(
@@ -404,16 +462,18 @@ export function egressPolicy(
   row: SandboxRow,
   gitToken?: string,
   memberPlaceholders: readonly string[] = [],
-  firewall: readonly FirewallAccount[] = []
+  firewall: FirewallInputs | null = null
 ) {
   const proxyUrl = deps.config.egressProxyUrl
   const gitPlaceholder = gitBasicAuthorization(githubPlaceholderToken(row))
   // The workspace repo's installation token. With the egress proxy (every deployed env) it is forwarded and
   // swapped there, so the real token never sits in Vercel's policy store; the inline transform is the
   // no-proxy fallback only (git/libcurl is unaffected by the transform framing hang).
+  // Firewall mode (design §1): the token sits in the policy itself, swapped by the firewall.
+  const appOnFirewall = Boolean(firewall?.classes.has('github_app'))
   const git: CredentialRoute[] = !gitToken
     ? []
-    : proxyUrl
+    : proxyUrl && !appOnFirewall
       ? [{ host: 'github.com', header: 'authorization', placeholders: [gitPlaceholder], via: 'forward', forwardURL: proxyUrl }]
       : [{ host: 'github.com', header: 'authorization', placeholders: [gitPlaceholder], via: 'transform', value: gitBasicAuthorization(gitToken) }]
   const credentials: CredentialRoute[] = proxyUrl
@@ -441,13 +501,26 @@ export function egressPolicy(
               }
             ]
           : []),
-        {
-          host: 'api.github.com',
-          header: 'authorization',
-          placeholders: githubPlaceholderHeaders(row),
-          via: 'forward',
-          forwardURL: proxyUrl
-        },
+        ...(appOnFirewall && gitToken
+          ? githubPlaceholderHeaders(row).map(
+              (placeholder): CredentialRoute => ({
+                host: 'api.github.com',
+                header: 'authorization',
+                placeholders: [placeholder],
+                via: 'transform',
+                // `Bearer <placeholder>` / `token <placeholder>`: the same scheme with the real token.
+                value: `${placeholder.slice(0, placeholder.indexOf(' '))} ${gitToken}`
+              })
+            )
+          : [
+              {
+                host: 'api.github.com',
+                header: 'authorization',
+                placeholders: githubPlaceholderHeaders(row),
+                via: 'forward' as const,
+                forwardURL: proxyUrl
+              }
+            ]),
         // Model API keys swapped at egress (phase 2); each host also ends in the 403 deny rule, except a
         // host whose client sends its own short-lived token on later calls (Cursor).
         // An agent's Orca-account placeholder (D10): forwarded, claimed only by that exact Bearer value.
@@ -458,35 +531,50 @@ export function egressPolicy(
           }
           const placeholders = [provider.format(provider.placeholder(row))]
           const forward: CredentialRoute = { host, header: provider.header, placeholders, via: 'forward', forwardURL: proxyUrl }
-          const swap = firewall.find((entry) => entry.agent === agent && entry.host === host)
+          const swap = firewall?.accounts.find((entry) => entry.agent === agent && entry.host === host)
+          if (!swap) {
+            return [forward]
+          }
+          if (!swap.authorization) {
+            // Fail closed (design §4.2): signed out, revoked, expired or not this owner's: the provider-shaped
+            // answer from the firewall itself, so the agent says what to do.
+            return provider.signedOut
+              ? [{ host, header: provider.header, placeholders, via: 'respond', statusCode: provider.signedOut.status, body: provider.signedOut.body }]
+              : [{ host, header: provider.header, placeholders, via: 'respond', statusCode: 403, body: KEYS_WITHHELD_BODY }]
+          }
+          if (agent === 'claude') {
+            return [{ host, header: provider.header, placeholders, via: 'transform', value: swap.authorization }]
+          }
           // CODEX-FIREWALL-SWAP: the hot calls first (exact paths), swapped right here; every other call with the
           // placeholder still goes to the proxy, whose path pinning holds against encoded dot segments.
-          return swap
-            ? [
-                {
-                  host,
-                  header: provider.header,
-                  placeholders,
-                  paths: CODEX_FIREWALL_PATHS,
-                  via: 'transform',
-                  value: swap.authorization,
-                  ...(swap.accountId ? { extraHeaders: { 'chatgpt-account-id': swap.accountId } } : {})
-                },
-                forward
-              ]
-            : [forward]
+          return [
+            {
+              host,
+              header: provider.header,
+              placeholders,
+              paths: CODEX_FIREWALL_PATHS,
+              via: 'transform',
+              value: swap.authorization,
+              ...(swap.accountId ? { extraHeaders: { 'chatgpt-account-id': swap.accountId } } : {})
+            },
+            forward
+          ]
         }),
         ...egressSecretHosts(row).flatMap((entry) =>
-          Object.keys(entry.headers).map(
-            (header): CredentialRoute => ({
-              host: entry.host,
-              header,
-              placeholders: placeholderValues(entry, header, secretPlaceholder(row, entry.secret)),
-              via: 'forward',
-              forwardURL: proxyUrl,
-              ...(entry.allowUnclaimed ? { allowUnclaimed: true } : {})
-            })
-          )
+          Object.keys(entry.headers).flatMap((header): CredentialRoute[] => {
+            const placeholders = placeholderValues(entry, header, secretPlaceholder(row, entry.secret))
+            const open = entry.allowUnclaimed ? { allowUnclaimed: true } : {}
+            if (!firewall || !firewall.secrets.has(entry.secret)) {
+              return [{ host: entry.host, header, placeholders, via: 'forward', forwardURL: proxyUrl, ...open }]
+            }
+            const value = firewall.secrets.get(entry.secret)
+            if (!value) {
+              return [{ host: entry.host, header, placeholders, via: 'respond', statusCode: 403, body: KEYS_WITHHELD_BODY, ...open }]
+            }
+            // Each placeholder form maps to the same form of the real key (x-api-key raw, `Bearer …`, `token …`).
+            const values = placeholderValues(entry, header, value)
+            return placeholders.map((placeholder, index) => ({ host: entry.host, header, placeholders: [placeholder], via: 'transform', value: values[index]!, ...open }))
+          })
         )
       ]
     : // No proxy (EGRESS-SWAP-FAIL-CLOSED): keys were withheld and only placeholders reached the VM. The firewall
@@ -620,7 +708,7 @@ async function boot(
     !options.policyApplied &&
     (git ||
       prep.memberPlaceholders.length > 0 ||
-      prep.firewall.length > 0 ||
+      prep.firewall !== null ||
       routed.egress_secret_hosts ||
       row.egress_secret_hosts ||
       routed.egress_allow_hosts ||
@@ -724,7 +812,7 @@ export async function compileSandboxPolicy(
 ): Promise<{ policy: ReturnType<typeof egressPolicy>; gitExpiresAt: number | null }> {
   const [members, firewall, minted] = await Promise.all([
     memberPlaceholdersFor(deps, row),
-    firewallAccountsFor(deps, row),
+    firewallInputsFor(deps, row),
     deps.github && row.repo_url ? deps.github.tokenForRepo(row.repo_url, row.account_id) : Promise.resolve(null)
   ])
   return { policy: egressPolicy(deps, row, minted?.token, members, firewall), gitExpiresAt: minted?.expiresAt ?? null }
@@ -745,8 +833,28 @@ export const NARROWING_POLICY_REASONS: ReadonlySet<string> = new Set([
   'app_uninstalled',
   'binding_revoked',
   'kill_switch',
-  'mode_change'
+  'mode_change',
+  // An operator input changed (§7.2): it may have removed access, so it fails closed like a revoke.
+  'config_change'
 ])
+
+/**
+ * Design §7.2: a hash of the operator inputs a policy was compiled from. Reconcile re-applies a running
+ * sandbox whose stored hash differs, so a kill switch or class change reaches every live policy in one tick.
+ */
+export async function policyConfigHash(deps: Pick<LifecycleDeps, 'config' | 'secrets'>, row: Pick<SandboxRow, 'egress_swap_mode'>): Promise<string> {
+  const inputs = JSON.stringify({
+    mode: egressSwapModeFor(deps, row),
+    classes: [...firewallClasses(deps, row)].sort(),
+    accounts: deps.secrets?.accountProviders ?? null,
+    preset: deps.config.egressPreset ?? null,
+    allowlist: deps.config.egressAllowlist ?? null,
+    extra: deps.config.extraEgressHosts ?? null,
+    proxy: Boolean(deps.config.egressProxyUrl)
+  })
+  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(inputs))
+  return Array.from(new Uint8Array(digest).slice(0, 12), (b) => b.toString(16).padStart(2, '0')).join('')
+}
 
 const POLICY_WRITE_TRIES = 3
 const policyChains = new Map<string, Promise<unknown>>()
@@ -796,7 +904,10 @@ async function applyOnce(deps: LifecycleDeps, row: SandboxRow, reason: string, s
     try {
       const { policy, gitExpiresAt } = await compileSandboxPolicy(deps, row)
       await deps.provider.updateNetworkPolicy(sessionId, policy)
-      await deps.db.prepare('UPDATE sandboxes SET policy_stale_at = NULL WHERE id = ? AND policy_stale_at IS NOT NULL').bind(row.id).run()
+      await deps.db
+        .prepare('UPDATE sandboxes SET policy_stale_at = NULL, policy_config_hash = ? WHERE id = ?')
+        .bind(await policyConfigHash(deps, row), row.id)
+        .run()
       console.log(JSON.stringify({ event: 'policy_applied', sandboxId: row.id, reason, ms: deps.now() - started }))
       return { applied: true, gitExpiresAt, generation }
     } catch (error) {

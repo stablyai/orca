@@ -3,7 +3,7 @@
 // memory-only env file new shells and agent launches read. Processes already running keep the
 // values they started with. Egress routes and the allowlist follow the new env first, so a new
 // model key is reachable before any shell can see its placeholder.
-import { applySandboxPolicy, type LifecycleDeps } from './lifecycle'
+import { applySandboxPolicy, firewallClasses, type LifecycleDeps } from './lifecycle'
 import { ProviderError } from './sandbox-provider'
 import { refreshSessionEnv } from './sandbox-vm-commands'
 import { normalizeRepo, type SecretChange } from './secrets'
@@ -84,6 +84,10 @@ export async function refreshSandboxEnv(deps: LifecycleDeps, row: SandboxRow): P
     if (applied.gitExpiresAt !== null) {
       current = (await transition(deps.db, current, { github_token_expires_at: applied.gitExpiresAt }, deps.now())) ?? current
     }
+  } else if (firewallClasses(deps, current).size > 0) {
+    // Firewall mode (design §7.3): the firewall holds the values themselves, so any env change (a key edited
+    // in place, a share, an owner change) must reach it even when the routes stayed the same.
+    await applySandboxPolicy(deps, current, 'env_refresh', { sessionId: row.session_id })
   }
   try {
     const applied = await refreshSessionEnv(deps.provider, current.session_id!, secrets.env, generation)

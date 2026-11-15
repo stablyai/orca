@@ -18,7 +18,7 @@ import { readBearer } from './auth'
 import type { GitHubAppMinter } from './github-app'
 import { bindInstallation, revokeInstallation, timingSafeEqual } from './github-connect'
 import { countAllActive, getControlState, killSwitchOn, setKillSwitch } from './guardrails'
-import { guardrails, type LifecycleDeps } from './lifecycle'
+import { applySandboxPolicy, egressSwapModeFor, guardrails, type LifecycleDeps } from './lifecycle'
 import { drainAll, housekeeping } from './retention'
 import { memberChangeTime, recordMemberChange } from './member-changes'
 import { memberEventActor, memberEventTarget, removeMember } from './member-removal'
@@ -26,7 +26,7 @@ import type { Keyring } from './secrets-crypto'
 import { SecretsKmsError } from './secrets-kms'
 import { kekStatus, rewrapBatch, RewrapError, REWRAP_MAX_LIMIT } from './secrets-rewrap'
 import { fairUseReport, FAIR_USE_WINDOW_DAYS, sweepSessionCpu } from './session-cpu'
-import { listByStatus } from './store'
+import { getSandbox, listByStatus } from './store'
 
 const KillSwitchBody = z.object({ enabled: z.boolean(), drain: z.boolean().optional() }).strict()
 const AccountId = z.string().min(1).max(160).regex(/^(user|org|dev):[A-Za-z0-9_.:-]+$/)
@@ -76,6 +76,21 @@ export async function handleOperator(
   const { life } = deps
   const now = life.now()
   const route = `${request.method} ${path}`
+  // Design §3: one sandbox's swap mode (canary or rollback), applied at once. `null` returns it to the default.
+  const egressMode = /^\/v1\/internal\/sandboxes\/([A-Za-z0-9_]+)\/egress-mode$/.exec(path)
+  if (egressMode && request.method === 'POST') {
+    const body = EgressModeBody.safeParse(await deps.readJson())
+    const row = body.success ? await getSandbox(life.db, egressMode[1]!) : null
+    if (!body.success || !row) {
+      return Response.json({ error: body.success ? 'not_found' : 'invalid_request' }, { status: body.success ? 404 : 400 })
+    }
+    await life.db.prepare('UPDATE sandboxes SET egress_swap_mode = ? WHERE id = ?').bind(body.data.mode, row.id).run()
+    const next = { ...row, egress_swap_mode: body.data.mode }
+    // Leaving the firewall takes values out of the policy store: it fails closed if the write doesn't land.
+    const applied = row.status === 'running' && row.session_id ? await applySandboxPolicy(life, next, 'mode_change') : null
+    console.log(JSON.stringify({ event: 'egress_mode_set', sandboxId: row.id, mode: body.data.mode, applied: applied?.applied ?? false }))
+    return Response.json({ sandboxId: row.id, mode: egressSwapModeFor(life, next), applied: applied?.applied ?? false })
+  }
   switch (route) {
     case 'GET /v1/internal/status':
       return Response.json({
@@ -205,3 +220,5 @@ export async function handleOperator(
       return null
   }
 }
+
+const EgressModeBody = z.object({ mode: z.enum(['proxy', 'firewall']).nullable() })
