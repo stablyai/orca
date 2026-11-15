@@ -8,9 +8,9 @@ import { worktreeWorkspaceKey } from '../../../shared/workspace-scope'
 import type { WorktreeMeta } from '../../../shared/worktree/meta-types'
 import {
   captureNativeLocalWorktreeMetadataScanExpectation,
-  pruneMissingLocalWorktreeSessionsForRepo,
   pruneSessionlessMissingLocalWorktreeMetadataForRepo
 } from './missing-local-worktree-metadata-pruning'
+import { pruneMissingLocalWorktreeSessionsForRepo } from './missing-local-worktree-session-pruning'
 
 const REPO_ID = 'repo-1'
 const LIVE_ID = `${REPO_ID}::/workspace/live`
@@ -314,5 +314,35 @@ describe('pruneMissingLocalWorktreeSessionsForRepo', () => {
     })
     expect(state.workspaceSession.activeTabIdByWorktree).toEqual({})
     expect(state.workspaceSession.openFilesByWorktree).toEqual({ [draftId]: [draft] })
+  })
+
+  it('keeps an archived workspace whose saved key differs only in Windows path casing', () => {
+    const state = makeState(makeRepo({ path: 'C:\\Work\\repo' }))
+    state.worktreeMeta[`${REPO_ID}::C:\\Work\\archived`] = {
+      ...makeMeta(`${REPO_ID}::C:\\Work\\archived`),
+      isArchived: true,
+      archivedCheckout: { branch: 'feature/archived', archivedAt: 1 }
+    }
+    const savedKey = `${REPO_ID}::c:\\work\\archived`
+    state.workspaceSession = { ...getDefaultWorkspaceSession(), unifiedTabs: { [savedKey]: [] } }
+
+    expect(
+      pruneMissingLocalWorktreeSessionsForRepo(state, capture(state), [savedKey], 'win32')
+    ).toEqual([])
+    expect(state.workspaceSession.unifiedTabs).toEqual({ [savedKey]: [] })
+  })
+
+  // A reference removal never deletes must not count as pruned, or every scan re-arms cleanup.
+  it('reports nothing and keeps the session when only a kept close intent names the worktree', () => {
+    const state = makeState()
+    const goneId = `${REPO_ID}::/workspace/gone`
+    const session = {
+      ...getDefaultWorkspaceSession(),
+      pairedTerminalTabCloseIntentsByEnvironment: { env: [{ worktreeId: goneId }] as never }
+    }
+    state.workspaceSession = session
+
+    expect(pruneMissingLocalWorktreeSessionsForRepo(state, capture(state), [goneId])).toEqual([])
+    expect(state.workspaceSession).toBe(session)
   })
 })

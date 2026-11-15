@@ -10,10 +10,7 @@ import type { GitWorktreeInfo } from '../../../../shared/worktree/types'
 import { isWslUncPath } from '../../../../shared/wsl-paths'
 import { agentHookServer } from '../../../agent-hooks/server/agent-hook-server'
 import type { Store } from '../../../persistence/loading-store/store'
-import {
-  selectLocalWorktreeSessionOwnersForRepo,
-  type NativeLocalWorktreeMetadataScanExpectation
-} from '../../../persistence/tracking-repos/missing-local-worktree-metadata-pruning'
+import type { NativeLocalWorktreeMetadataScanExpectation } from '../../../persistence/tracking-repos/missing-local-worktree-metadata-pruning'
 import { pruneWorkspaceCleanupScanSnapshots } from '../../../workspaces/cleanup/workspace-cleanup-scan-snapshot'
 import { pruneWorkspaceSpaceAnalysisSnapshots } from '../../../workspaces/space-analysis/workspace-space-analysis-snapshot'
 import { isLocalWorktreeScanGenerationCurrent } from '../../../workspaces/catalog/local-worktree-scan-generation'
@@ -29,7 +26,7 @@ type AuthoritativeLocalMetadataPruneStore = Pick<
     Pick<
       Store,
       | 'selectProbeableLocalWorktreeMetadataCandidates'
-      | 'getWorkspaceSession'
+      | 'selectRemovableLocalWorktreeSessionOwnersForRepo'
       | 'pruneMissingLocalWorktreeSessionsForRepo'
     >
   >
@@ -141,9 +138,8 @@ export async function pruneMetadataMissingFromAuthoritativeLocalScan({
     return pathValue ? [{ metadata, pathValue }] : []
   })
   // Saved session state of a deleted worktree outlives its metadata; probe those owners too.
-  const localSession = store.getWorkspaceSession?.()
   const sessionCandidates = (
-    localSession ? selectLocalWorktreeSessionOwnersForRepo(localSession, repo.id, platform) : []
+    store.selectRemovableLocalWorktreeSessionOwnersForRepo?.(repo.id) ?? []
   ).flatMap((worktreeId) => {
     const pathValue = isProbeable(worktreeId)
     return pathValue ? [{ worktreeId, pathValue }] : []

@@ -1,10 +1,6 @@
 import type { TerminalTab } from '../../../shared/workspace-layout/terminal-tab-types'
 import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
 import { getRepoIdFromWorktreeId } from '../../../shared/worktree/id'
-import {
-  getWorktreeIdFromHostIdentity,
-  isWorktreeHostIdentity
-} from '../../../shared/worktree/host-qualified-identity'
 import { worktreeWorkspaceKey } from '../../../shared/workspace-scope'
 import { sessionFieldsRemovedWithWorkspace } from '../../orca-profiles/project-transfer/profile-project-session-field-disposition'
 import { markdownFileIdCandidates } from '../../orca-profiles/project-transfer/profile-session-markdown-transfer'
@@ -100,15 +96,6 @@ export function deleteOwnerKeyedSessionFields(
     const record = next[field] as Record<string, unknown> | undefined
     if (record) {
       delete record[ownerKey]
-    }
-  }
-  // Include host-qualified executionHostId|worktreeId keys.
-  if (next.lastVisitedAtByWorktreeId) {
-    for (const key of Object.keys(next.lastVisitedAtByWorktreeId)) {
-      const rawId = isWorktreeHostIdentity(key) ? getWorktreeIdFromHostIdentity(key) : key
-      if (key === ownerKey || rawId === ownerKey) {
-        delete next.lastVisitedAtByWorktreeId[key]
-      }
     }
   }
   // Worktree owners are raw ids, but the active key stores their canonical worktree: form.

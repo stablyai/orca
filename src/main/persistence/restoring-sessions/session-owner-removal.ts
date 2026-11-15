@@ -6,6 +6,10 @@ import {
   type ExecutionHostId
 } from '../../../shared/execution-host'
 import '../../../shared/workspace-session/workspace-session-partition-owner'
+import {
+  getWorktreeIdFromHostIdentity,
+  isWorktreeHostIdentity
+} from '../../../shared/worktree/host-qualified-identity'
 import { isWslMoveWorkspaceSessionFrozen } from '../moving-wsl-projects/quiescence/wsl-move-scope-guard'
 import {
   cloneWorkspaceSessionState,
@@ -66,6 +70,13 @@ export function deleteScannedSessionFieldsForOwners(
     }
     for (const id of removedFileIds) {
       delete next.markdownFrontmatterVisible[id]
+    }
+  }
+  // One scan for all owners; keys may be host-qualified executionHostId|worktreeId.
+  for (const key of Object.keys(next.lastVisitedAtByWorktreeId ?? {})) {
+    const rawId = isWorktreeHostIdentity(key) ? getWorktreeIdFromHostIdentity(key) : key
+    if (isRemovedOwner(key) || isRemovedOwner(rawId)) {
+      delete next.lastVisitedAtByWorktreeId![key]
     }
   }
   next.activeWorktreeIdsOnShutdown = next.activeWorktreeIdsOnShutdown?.filter(

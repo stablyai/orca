@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { getDefaultWorkspaceSession } from '../../../shared/constants'
 import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
-import { deleteOwnerKeyedSessionFields } from './session-owner-fields'
+import { removeWorkspaceSessionOwner } from './session-owner-removal'
 
 const REMOVED_OWNER_KEY = 'repo-1::/tmp/worktree-a'
 const RETAINED_OWNER_KEY = 'repo-1::/tmp/worktree-b'
@@ -20,9 +20,9 @@ describe('deleting a workspace owner session fields', () => {
       }
     }
 
-    deleteOwnerKeyedSessionFields(session, REMOVED_OWNER_KEY, new Set())
-
-    expect(session.lastVisitedAtByWorktreeId).toEqual({
+    expect(
+      removeWorkspaceSessionOwner(session, REMOVED_OWNER_KEY)?.lastVisitedAtByWorktreeId
+    ).toEqual({
       [RETAINED_OWNER_KEY]: 3,
       [`ssh:user@host|${RETAINED_OWNER_KEY}`]: 4
     })

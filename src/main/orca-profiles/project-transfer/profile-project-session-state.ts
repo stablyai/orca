@@ -6,7 +6,10 @@ import {
   SESSION_FIELDS_PRUNED_BY_OWNER_KEY,
   sessionFieldsRemovedWithWorkspace
 } from './profile-project-session-field-disposition'
-import { removeWorkspaceSessionOwners } from '../../persistence/restoring-sessions/session-owner-removal'
+import {
+  removeWorkspaceSessionOwners,
+  withoutWslMoveFrozenOwners
+} from '../../persistence/restoring-sessions/session-owner-removal'
 import { markdownFileIdCandidates } from './profile-session-markdown-transfer'
 import {
   isRepoWorktreeId,
@@ -166,8 +169,11 @@ export function removeRepoFromWorkspaceSession(
       }
     }
   }
+  const removableOwnerKeys = withoutWslMoveFrozenOwners(ownerKeys)
   const next =
-    ownerKeys.size > 0 ? removeWorkspaceSessionOwners(base, ownerKeys)! : structuredClone(base)
+    removableOwnerKeys.size > 0
+      ? removeWorkspaceSessionOwners(base, removableOwnerKeys)!
+      : structuredClone(base)
   const removedTerminalTabIds = new Set<string>()
   const removedMarkdownFileIds = new Set<string>()
   for (const [ownerKey, files] of Object.entries(next.openFilesByWorktree ?? {})) {
