@@ -1,23 +1,19 @@
 import type { Rgba } from '../color/rgba-contrast'
-import { CSS_COLOR_SPACES, type CssColorSpace, type Vec3 } from './css-color-spaces'
+import type { CssColorSpace, Vec3 } from './css-color-spaces'
+import {
+  CSS_NUMBER,
+  parsedFromCoords,
+  spaceOf,
+  splitTopLevel,
+  UNCHECKED,
+  words,
+  type ParsedCssColor,
+  type ParseResult
+} from './css-color-parse'
 import { colorMix } from './css-color-mix'
 import { CSS_NAMED_COLORS } from './css-named-colors'
 import type { ColorProbe } from './theme-contrast-engine'
 
-/** A parsed color: unclipped sRGB 0-1, plus its own space's coordinates (NaN where `none`). */
-export type ParsedCssColor = {
-  rgb: Vec3
-  alpha: number
-  space: CssColorSpace
-  coords: Vec3
-  alphaMissing: boolean
-}
-
-/** Valid CSS a browser paints but this probe does not model (relative colors, calc(), …). */
-export const UNCHECKED = 'unchecked'
-export type ParseResult = ParsedCssColor | null | typeof UNCHECKED
-
-export const CSS_NUMBER = /^[+-]?(?:\d+(?:\.\d+)?|\.\d+)(?:e[+-]?\d+)?$/
 const clamp = (value: number, min = 0, max = 1): number => Math.min(max, Math.max(min, value))
 const SYSTEM_COLORS = new Set(
   'accentcolor accentcolortext activetext buttonborder buttonface buttontext canvas canvastext field fieldtext graytext highlight highlighttext linktext mark marktext selecteditem selecteditemtext visitedtext'.split(
@@ -66,41 +62,6 @@ function angle(raw: string): Component | null {
     return null
   }
   return { value: Number(match[1]) * DEGREES[match[2] ?? 'deg'], kind: 'number' }
-}
-
-/** Splits on top-level separators, leaving nested functions whole; keeps empty parts. */
-export function splitTopLevel(text: string, separator: ',' | '/'): string[] {
-  const parts: string[] = []
-  let depth = 0
-  let current = ''
-  for (const char of text) {
-    depth += char === '(' ? 1 : char === ')' ? -1 : 0
-    if (depth === 0 && char === separator) {
-      parts.push(current.trim())
-      current = ''
-    } else {
-      current += char
-    }
-  }
-  parts.push(current.trim())
-  return parts
-}
-
-export const words = (text: string): string[] => text.split(/\s+/).filter((part) => part.length > 0)
-
-const fill = (coords: Vec3): Vec3 => [
-  Number.isNaN(coords[0]) ? 0 : coords[0],
-  Number.isNaN(coords[1]) ? 0 : coords[1],
-  Number.isNaN(coords[2]) ? 0 : coords[2]
-]
-
-export function parsedFromCoords(
-  space: CssColorSpace,
-  coords: Vec3,
-  alpha: number,
-  alphaMissing = false
-): ParsedCssColor {
-  return { rgb: CSS_COLOR_SPACES[space].from(fill(coords)), alpha, space, coords, alphaMissing }
 }
 
 function withAlpha(
@@ -227,12 +188,6 @@ function colorSpaceFunction(body: string): ParsedCssColor | null {
   const alpha = slash[1] === undefined ? ONE : component(slash[1], 1)
   return withAlpha(target, [a.value, b.value, c.value], alpha)
 }
-
-function isCssColorSpace(name: string): name is CssColorSpace {
-  return Object.hasOwn(CSS_COLOR_SPACES, name)
-}
-
-export const spaceOf = (name: string): CssColorSpace | null => (isCssColorSpace(name) ? name : null)
 
 export function parseCssColor(input: string): ParseResult {
   const value = input.trim().toLowerCase()

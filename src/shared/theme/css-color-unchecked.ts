@@ -1,4 +1,5 @@
-import { parseCssColor, UNCHECKED } from './css-color-probe'
+import { UNCHECKED } from './css-color-parse'
+import { parseCssColor } from './css-color-probe'
 
 /** True for valid CSS the browser would resolve but this probe cannot (system colors, relative
  *  colors, calc()), so a check can say "not checked" instead of calling it invalid. */

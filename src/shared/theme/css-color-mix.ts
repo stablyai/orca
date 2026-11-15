@@ -8,7 +8,7 @@ import {
   words,
   type ParsedCssColor,
   type ParseResult
-} from './css-color-probe'
+} from './css-color-parse'
 
 const HUE_METHODS = ['shorter', 'longer', 'increasing', 'decreasing'] as const
 type HueMethod = (typeof HUE_METHODS)[number]
