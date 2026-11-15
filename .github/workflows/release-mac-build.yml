@@ -97,8 +97,10 @@ jobs:
           git fetch --no-tags --quiet origin "+refs/tags/$TAG:refs/release-tag-check/$TAG"
           remote="$(git rev-parse --verify --quiet "refs/release-tag-check/$TAG^{commit}" || true)"
           [[ "$remote" == "$RELEASE_SHA" ]] || fail "Remote tag $TAG resolves to '$remote', not $RELEASE_SHA."
+          # shellcheck disable=SC2016 # $p is jq, not shell.
+          # path may be ref-qualified (".github/workflows/release-cut.yml@main"); only main's ref is accepted.
           run_ok="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$RELEASE_RUN_ID" --jq \
-            '.path == ".github/workflows/release-cut.yml" and .head_branch == "main" and .status != "completed"')"
+            '(.path | split("@")) as $p | $p[0] == ".github/workflows/release-cut.yml" and ($p | length) <= 2 and (($p | length) == 1 or $p[1] == "main" or $p[1] == "refs/heads/main") and .head_branch == "main" and .status != "completed"')"
           [[ "$run_ok" == "true" ]] || fail "Run $RELEASE_RUN_ID is not a running release-cut.yml run on main."
           # The parent names a job after the tag it cut and the mac run it dispatched; it may still be queued.
           export BINDING_JOB="mac release build $GITHUB_RUN_ID for $TAG"
