@@ -26,6 +26,7 @@ import { WorktreeHostContextBadge } from '../host/WorktreeHostContextBadge'
 import { WorktreeCardHostMark, WorktreeCardHostStateWord } from '../host/WorktreeCardHostMark'
 import { WorktreeTitleInlineRename } from '../identity/WorktreeTitleInlineRename'
 import { CloudAgentHeldMark } from '@/components/orca-cloud/CloudAgentHeldMark'
+import { CloudMemoryPressureMark } from '@/components/orca-cloud/CloudMemoryPressureMark'
 import { cardElement } from './card-template-compiler'
 
 type Card = WorktreeCardController
@@ -58,6 +59,8 @@ function title(props: Readonly<Record<string, unknown>>, card: Card): React.Reac
       />
       {/* N-03: the agent waits on its pane's strip (Orca Cloud): this mark is the signal away. */}
       {card.titleRenaming ? null : <CloudAgentHeldMark worktreeId={worktree.id} />}
+      {/* MEMGUARD: the cloud VM is short of memory. */}
+      {card.titleRenaming ? null : <CloudMemoryPressureMark worktreeId={worktree.id} />}
     </>
   )
 }

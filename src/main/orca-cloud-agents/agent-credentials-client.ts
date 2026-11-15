@@ -7,6 +7,7 @@ import {
   CodexBrokerStartResponseSchema,
   CodexBrokerStatusResponseSchema,
   type AgentCredentialsView,
+  type AgentDefaultSourceChoice,
   type AgentSource,
   type AgentSourcesView,
   type CodexBrokerStart,
@@ -28,7 +29,10 @@ export type AgentCredentialsClient = {
   /** Main only, right after setup-token on this computer or a paste. */
   putClaude(token: string, label?: string): Promise<AgentCredentialsView>
   remove(agent: OrcaCloudAccountAgent): Promise<AgentCredentialsView>
-  setDefaultSource(agent: OrcaCloudAccountAgent, source: AgentSource): Promise<AgentSourcesView>
+  setDefaultSource(
+    agent: OrcaCloudAccountAgent,
+    source: AgentDefaultSourceChoice
+  ): Promise<AgentSourcesView>
   /** The Source for one workspace (sandbox id); the reply describes that workspace. */
   setWorkspaceSource(
     agent: OrcaCloudAccountAgent,

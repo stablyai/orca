@@ -1,5 +1,5 @@
 // PC-3b: what the "not set up" strip's buttons do. Set up once runs S0's setup for the agent (the
-// same flow as Settings › Accounts › Orca Cloud); Start releases the held launch. Cancel during a
+// same flow as Settings › Orca Cloud › Cloud agent sign-ins); Start releases the held launch. Cancel during a
 // setup stops only that setup: the launch stays held on "Set up once", and a setup finished from
 // anywhere (here or Settings) turns the strip into "Start". Cancel with no setup running gives up
 // the held launch and opens a plain shell, like cancelling any held launch (RR-a).
@@ -10,6 +10,7 @@ import {
 import {
   reloadOrcaCloudAgentAccounts,
   runOrcaCloudAgentSetups,
+  setOrcaCloudAgentDefaultSource,
   stopOrcaCloudAgentSetups
 } from '@/lib/orca-cloud/orca-cloud-agent-accounts-store'
 import type { HostAgentSignInAgent } from '../../../../shared/host-agent-sign-in-status'
@@ -29,6 +30,8 @@ export function cloudSetupStripActions(args: {
    * running setup and the chat stays held on its strip. Closing the chat gives the launch up.
    */
   keepHoldOnCancel?: boolean
+  /** The choice wasn't saved (nothing changed; the strip stays on "Set up once"). */
+  onSaveFailed?: () => void
 }): CloudStripActions {
   const { agent, holdKey } = args
   const api = window.api?.orcaCloudAgents
@@ -44,6 +47,14 @@ export function cloudSetupStripActions(args: {
       } else if (action.kind === 'start') {
         // HELD-STALE-COVERED: Start reads the account again; a revoked sign-in shows Renew instead.
         void startCloudAgentHold(holdKey)
+      } else if (action.kind === 'signInInsideWorkspace') {
+        // Remembered for this person and agent. The saved reply releases every launch held on "Set up
+        // once" for the agent, and each starts as it is, asking for its own sign-in in the pane.
+        void setOrcaCloudAgentDefaultSource(agent, 'in-workspace').then((error) => {
+          if (error) {
+            args.onSaveFailed?.()
+          }
+        })
       }
     },
     submitCode: (token) => {

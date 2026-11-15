@@ -15,8 +15,15 @@ export const HostedGithubRepoAccessResponseSchema = z.object({
   // installation). true: the caller can install it on the owner (their own account, or org admin);
   // false: another user's account, or a non-admin org member; null: unknown (no connected GitHub
   // user, membership unreadable, or GitHub didn't answer).
-  canInstall: z.boolean().nullable().optional()
+  canInstall: z.boolean().nullable().optional(),
+  // CREATE-GH-STEP: can a workspace on this repository push? `ok`: granted. `not_installed`: the
+  // App isn't on the owner. `repo_not_selected`: it is, without this repository (configureUrl is
+  // the installation's settings page). `not_connected`: the App reaches the repository through an
+  // installation this Orca account isn't bound to. Absent from an older control plane.
+  push: z.enum(['ok', 'not_installed', 'repo_not_selected', 'not_connected']).optional(),
+  configureUrl: z.string().url().optional()
 })
+export type HostedGithubRepoAccessPush = NonNullable<HostedGithubRepoAccessResponse['push']>
 export type HostedGithubRepoAccessResponse = z.infer<typeof HostedGithubRepoAccessResponseSchema>
 
 /** GET /v1/github/repositories[?cursor=]: repositories the account's GitHub installations reach. */

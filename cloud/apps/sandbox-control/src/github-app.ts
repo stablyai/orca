@@ -26,6 +26,11 @@ export type GitHubAppMinter = {
   getInstallation(installationId: number): Promise<GitHubInstallation | null>
   /** The installation covering a github.com repo URL, or null. */
   getRepoInstallation(repoUrl: string): Promise<GitHubInstallation | null>
+  /**
+   * The App's installation on a GitHub org or user (whatever repositories it selected), or null.
+   * Tells "not installed on the owner" from "installed, but this repository isn't selected".
+   */
+  getOwnerInstallation?(owner: string): Promise<GitHubInstallation | null>
   /** App-JWT request to an app-level endpoint (operator: /app, /app/hook/config). */
   appRequest?(method: string, path: '/app' | '/app/hook/config', body?: unknown): Promise<Response>
   /**
@@ -260,6 +265,14 @@ export function createGitHubAppMinter(config: {
         throw new Error('github source request refused')
       }
       return github(method, path, body)
+    },
+
+    async getOwnerInstallation(owner) {
+      if (!/^[A-Za-z0-9-]{1,39}$/.test(owner)) {
+        return null
+      }
+      // Orgs and users have separate lookups; an org login 404s on /users/{login}/installation.
+      return (await installationFor(`/orgs/${owner}/installation`)) ?? installationFor(`/users/${owner}/installation`)
     },
 
     async getRepoInstallation(repoUrl) {

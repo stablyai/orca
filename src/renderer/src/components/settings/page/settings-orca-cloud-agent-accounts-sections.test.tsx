@@ -1,18 +1,42 @@
-import { describe, expect, it } from 'vitest'
-import { orcaCloudAgentAccountsParts } from './settings-orca-cloud-agent-accounts-sections'
+// @vitest-environment happy-dom
+import { fireEvent, render, screen } from '@testing-library/react'
+import { describe, expect, it, vi } from 'vitest'
+import {
+  orcaCloudAgentAccountsLead,
+  orcaCloudAgentAccountsParts
+} from './settings-orca-cloud-agent-accounts-sections'
 import type { SettingsRenderContext } from './settings-render-context'
 
-function context(model: { showDesktopOnlySettings: boolean; orcaCloudApiAvailable: boolean }) {
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the parts read only model.showDesktopOnlySettings and model.orcaCloudApiAvailable.
-  return { model } as unknown as SettingsRenderContext
+function context(
+  model: { showDesktopOnlySettings: boolean; orcaCloudApiAvailable: boolean },
+  scrollToSection = vi.fn()
+) {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the parts and the lead read only these two model flags and actions.scrollToSection.
+  return { model, actions: { scrollToSection } } as unknown as SettingsRenderContext
 }
 
 describe('Agent accounts: Orca Cloud parts', () => {
-  it('puts Orca Cloud above Hosts, after This computer (JA-04, option A1)', () => {
+  it('adds Hosts after This computer; Orca Cloud sign-ins are their own Orca Cloud page', () => {
     const parts = orcaCloudAgentAccountsParts(
       context({ showDesktopOnlySettings: true, orcaCloudApiAvailable: true })
     )
-    expect(parts.map((part) => part.id)).toEqual(['accounts-orca-cloud', 'accounts-hosts'])
+    expect(parts.map((part) => part.id)).toEqual(['accounts-hosts'])
+  })
+
+  it('keeps one row that opens Cloud agent sign-ins', () => {
+    const scrollToSection = vi.fn()
+    const lead = orcaCloudAgentAccountsLead(
+      context({ showDesktopOnlySettings: true, orcaCloudApiAvailable: true }, scrollToSection)
+    )
+    render(<>{lead}</>)
+    fireEvent.click(screen.getByRole('button', { name: /Orca Cloud sign-ins live in/ }))
+    expect(scrollToSection).toHaveBeenCalledWith('cloud-agent-sign-ins')
+    for (const model of [
+      { showDesktopOnlySettings: true, orcaCloudApiAvailable: false },
+      { showDesktopOnlySettings: false, orcaCloudApiAvailable: true }
+    ]) {
+      expect(orcaCloudAgentAccountsLead(context(model))).toBeNull()
+    }
   })
 
   it('adds nothing without an Orca Cloud control plane or outside the desktop', () => {

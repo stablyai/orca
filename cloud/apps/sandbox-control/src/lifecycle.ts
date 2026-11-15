@@ -15,7 +15,7 @@ import {
 } from './guardrails'
 import { DEFAULT_EGRESS_ALLOWLIST, DEFAULT_EGRESS_PRESET, KEYS_WITHHELD_BODY, compileNetworkPolicy, egressProxyMissing, gitBasicAuthorization, type CredentialRoute, type EgressPreset, type PlatformHostSuffixesConfigError } from './network-policy'
 import { applyQueuedRevokes } from './grant-revokes'
-import { ensureEntryPoints } from './golden-images'
+import { ENTRY_POINTS_PROBE, ensureEntryPoints, entryPointsBehind, installEntryPoints, parseEntryPointsProbe } from './golden-images'
 import { RUNTIME_REFRESH_SCRIPT, type RuntimeBundle } from './runtime-bundles'
 import { memberPlaceholder, type MemberGitIdentity } from './github-user-tokens'
 import { connectedMembers, memberGitConfigs } from './member-git'
@@ -120,7 +120,8 @@ export type LifecycleDeps = {
    * lists, `touch` when a create booted from an automatic one. Absent: neither happens.
    */
   autoEnvironment?: {
-    ensure(accountId: string, repoUrl: string): Promise<unknown>
+    /** `region`: where the create that asked runs; the environment builds there (a snapshot is region-bound). */
+    ensure(accountId: string, repoUrl: string, region: string): Promise<unknown>
     touch(environmentId: string): Promise<unknown>
   }
   /**
@@ -224,18 +225,48 @@ export function phaseTimer(now: () => number = Date.now) {
     failed: null as { phase: string; ms: number } | null,
     async time<T>(phase: string, work: () => Promise<T>): Promise<T> {
       const started = now()
+      const limit = PHASE_LIMITS[phase]
+      let watch: ReturnType<typeof setTimeout> | undefined
       try {
-        return await work()
+        if (limit === undefined) {
+          return await work()
+        }
+        // A phase with nothing slow in it that still hasn't answered is stuck (a create sat 180 s
+        // before its write-ahead insert with no provider call stalled). Name it in the log; fail it
+        // unless abandoning the work could strand something (the pool claim holds a VM).
+        return await Promise.race([
+          work(),
+          new Promise<never>((_, reject) => {
+            watch = setTimeout(() => {
+              console.log(JSON.stringify({ event: 'phase_timeout', phase, ms: limit.ms, failed: limit.fail }))
+              if (limit.fail) {
+                reject(new LifecycleError('provider_unavailable', `phase_timeout_${phase}`))
+              }
+            }, limit.ms)
+          })
+        ])
       } catch (error) {
         timer.failed ??= { phase, ms: now() - started }
         throw error
       } finally {
+        clearTimeout(watch)
         timings[phase] = now() - started
       }
     }
   }
   return timer
 }
+
+/**
+ * Bounds for the phases before a create's write-ahead insert (D1 reads, billing, the pool claim).
+ * The VM, policy and orcad phases are bounded by the provider calls inside them.
+ */
+export const PHASE_DEADLINES_MS = {
+  environment: { ms: 20_000, fail: true },
+  entitlement: { ms: 20_000, fail: true },
+  pool: { ms: 45_000, fail: false }
+}
+const PHASE_LIMITS: Partial<Record<string, { ms: number; fail: boolean }>> = PHASE_DEADLINES_MS
 
 /**
  * CREATE-BUILD-SNAPSHOT-404: a VM create from an environment build's snapshot can answer 404 just
@@ -645,7 +676,9 @@ export const MEMBERS_COMMAND = '/opt/orca/bin/orca-sandbox-members'
 /**
  * ENV-STALE boot step: a sandbox whose orcad is behind its region's active golden (booted from an environment
  * build snapshot, or resumed from an older image) installs the golden's runtime bundle before orcad starts.
- * Best effort and quiet: any failure keeps the old orcad, and every outcome is logged with its timing.
+ * The same command probes the VM's entry points (ENTRY-POINTS-BEFORE-START): scripts older than this
+ * Worker's are installed before the start script runs, so the common case adds no round trip.
+ * Best effort and quiet: any failure keeps the old orcad and scripts, and every outcome is logged with its timing.
  */
 export async function refreshRuntime(deps: LifecycleDeps, row: SandboxRow, sessionId: string): Promise<string | null> {
   if (!deps.runtimeRefresh) {
@@ -654,28 +687,41 @@ export async function refreshRuntime(deps: LifecycleDeps, row: SandboxRow, sessi
   const started = deps.now()
   let result = 'error'
   let target: string | null = null
+  let entryPoints = 'unknown'
   try {
     const plan = await deps.runtimeRefresh(row.region, started)
-    if (!plan) {
-      result = 'no_bundle'
-      return result
-    }
-    target = plan.bundle.commit
+    target = plan?.bundle.commit ?? null
     const run = await deps.provider.runCommand(sessionId, {
       command: 'bash',
-      args: ['-c', RUNTIME_REFRESH_SCRIPT],
-      env: { WANT: plan.bundle.commit, SHA: plan.bundle.sha256, RT: plan.bundle.runtime, URL: plan.url },
+      args: ['-c', plan ? `${ENTRY_POINTS_PROBE}\n${RUNTIME_REFRESH_SCRIPT}` : ENTRY_POINTS_PROBE],
+      env: plan ? { WANT: plan.bundle.commit, SHA: plan.bundle.sha256, RT: plan.bundle.runtime, URL: plan.url } : {},
       sudo: true,
       timeoutMs: 40_000
     })
-    result = run.stdout.trim().split('\n').pop() ?? 'error'
+    result = plan ? (run.stdout.trim().split('\n').pop() ?? 'error') : 'no_bundle'
+    const image = parseEntryPointsProbe(run.stdout)
+    entryPoints = entryPointsBehind(image) ? 'behind' : image ? 'current' : 'unknown'
+    if (entryPoints === 'behind') {
+      entryPoints = await installEntryPoints(deps, sessionId).then(
+        () => 'installed',
+        () => 'install_failed'
+      )
+    }
     return result
   } catch {
     return result
   } finally {
     const [outcome, from] = result.split(' ')
     console.log(
-      JSON.stringify({ event: 'runtime_refresh', sandboxId: row.id, outcome, from: from ?? null, to: target, ms: deps.now() - started })
+      JSON.stringify({
+        event: 'runtime_refresh',
+        sandboxId: row.id,
+        outcome,
+        from: from ?? null,
+        to: target,
+        entryPoints,
+        ms: deps.now() - started
+      })
     )
   }
 }
@@ -768,7 +814,13 @@ export async function createSandbox(
   request: {
     workspaceId: string
     machineSize: MachineSize
+    /** Explicit (the caller's or its project's): authoritative, and never moved by the capacity fallback. */
     region?: string
+    /**
+     * Served regions nearest the caller first (regions.ts nearestRegions): where a create with nothing
+     * pinned starts, and the capacity fallback's order. Absent: the default region, then its fallbacks.
+     */
+    nearRegions?: readonly string[]
     repo?: { url: string; ref?: string }
     /** Boot from exactly this environment build (bld_...). */
     environmentBuildId?: string
@@ -829,7 +881,12 @@ export async function createSandbox(
   const machineSize = source && !source.auto ? source.machineSize : request.machineSize
   await timer.time('entitlement', () => requireStart(deps, caller.accountId, caller.userId, machineSize))
   // A snapshot only boots in its own region: an environment build pins the region it was built in.
-  const region = source?.region ?? request.region ?? deps.config.defaultRegion
+  // Then an explicit region; else the nearest served one (each has a golden image).
+  const region =
+    source?.region ??
+    request.region ??
+    request.nearRegions?.find((candidate) => goldenFor(deps, candidate)) ??
+    deps.config.defaultRegion
   const bootSnapshotId = source?.snapshotId ?? goldenFor(deps, region)
   if (!bootSnapshotId) {
     throw new LifecycleError('conflict', 'region_unavailable')
@@ -919,7 +976,7 @@ export async function createSandbox(
     const work = source?.auto
       ? deps.autoEnvironment.touch(source.environmentId)
       : !source
-        ? deps.autoEnvironment.ensure(caller.accountId, request.repo.url)
+        ? deps.autoEnvironment.ensure(caller.accountId, request.repo.url, region)
         : null
     if (work) {
       const settled = work.catch(() => undefined)
@@ -1005,7 +1062,7 @@ export async function createSandbox(
     // Only a create nothing pinned to a region moves on: no explicit region, no environment build.
     const fallback =
       options.fallback !== false && !request.region && !source && isRegionalFailure(error)
-        ? deps.config.fallbackRegions?.find((candidate) => candidate !== region && goldenFor(deps, candidate))
+        ? (request.nearRegions ?? deps.config.fallbackRegions)?.find((candidate) => candidate !== region && goldenFor(deps, candidate))
         : undefined
     if (fallback) {
       console.log(JSON.stringify({ event: 'region_fallback', from: region, to: fallback, error: String(error).slice(0, 200) }))

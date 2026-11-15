@@ -8,6 +8,7 @@ import {
   buildOrcaCloudSettingsSections,
   gatherOrcaCloudSettingsGroup,
   resolveAccountBillingTarget,
+  resolveCloudAgentSignInsTarget,
   labelAccountBilling,
   hasOrcaBillingAccount,
   ACCOUNT_BILLING_PLAN_ANCHOR,
@@ -37,6 +38,7 @@ describe('Orca Cloud settings group', () => {
     const sections = buildOrcaCloudSettingsSections(options({}))
     expect(sections.map((section) => section.id)).toEqual([
       'cloud-billing',
+      'cloud-agent-sign-ins',
       'cloud-secrets',
       'cloud-skills',
       'cloud-environments',
@@ -60,7 +62,12 @@ describe('Orca Cloud settings group', () => {
     expect(ids({})).not.toContain('cloud-workspaces')
     expect(ids({ isOrcaTeamAdmin: false })).not.toContain('cloud-workspaces')
     const admin = ids({ isOrcaTeamAdmin: true })
-    expect(admin.slice(0, 3)).toEqual(['cloud-billing', 'cloud-workspaces', 'cloud-secrets'])
+    expect(admin.slice(0, 4)).toEqual([
+      'cloud-billing',
+      'cloud-agent-sign-ins',
+      'cloud-workspaces',
+      'cloud-secrets'
+    ])
     // Team, Enterprise and the audit log are managed in the web console (Account › Team & admin).
     for (const patch of [{}, { isOrcaTeamAdmin: true }]) {
       expect(ids(patch)).not.toContain('cloud-team')
@@ -152,7 +159,7 @@ describe('one Orca Cloud group (JA-16)', () => {
     ])
   })
 
-  it('finds members, single sign-on and the audit log on the Account page\'s Team & admin row', () => {
+  it("finds members, single sign-on and the audit log on the Account page's Team & admin row", () => {
     const account = gatherOrcaCloudSettingsGroup(all, options({})).find(
       (section) => section.id === 'orca-account'
     )
@@ -204,6 +211,37 @@ describe('one Orca Cloud group (JA-16)', () => {
     expect(resolveAccountBillingTarget({ pane: 'cloud-secrets' }, true)).toEqual({
       pane: 'cloud-secrets'
     })
+  })
+
+  it('sends old Agent accounts › Orca Cloud links to Cloud agent sign-ins', () => {
+    for (const sectionId of ['orca-cloud', 'accounts-orca-cloud']) {
+      expect(resolveCloudAgentSignInsTarget({ pane: 'accounts', sectionId }, true)).toEqual({
+        pane: 'cloud-agent-sign-ins',
+        sectionId: undefined
+      })
+      // Without the Orca Cloud group there is no page to send it to.
+      expect(resolveCloudAgentSignInsTarget({ pane: 'accounts', sectionId }, false)).toEqual({
+        pane: 'accounts',
+        sectionId
+      })
+    }
+    // This computer's and the hosts' parts stay on Agent accounts.
+    expect(
+      resolveCloudAgentSignInsTarget({ pane: 'accounts', sectionId: 'accounts-hosts' }, true)
+    ).toEqual({ pane: 'accounts', sectionId: 'accounts-hosts' })
+    expect(resolveCloudAgentSignInsTarget({ pane: 'accounts' }, true)).toEqual({
+      pane: 'accounts'
+    })
+  })
+
+  it('finds Claude and ChatGPT sign-ins on Cloud agent sign-ins', () => {
+    const page = buildOrcaCloudSettingsSections(options({})).find(
+      (section) => section.id === 'cloud-agent-sign-ins'
+    )
+    expect(page?.title).toBe('Cloud agent sign-ins')
+    expect(page?.searchEntries.flatMap((entry) => entry.keywords ?? [])).toEqual(
+      expect.arrayContaining(['subscription', 'chatgpt', 'setup-token', 'renew', 'agent accounts'])
+    )
   })
 
   it('leaves the upstream grouping alone without Orca Cloud', () => {

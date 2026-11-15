@@ -64,6 +64,8 @@ type Entry = {
   generation: number
   /** Re-added: hide from assistive tech until this time (it was announced already). */
   quietUntil: number
+  /** The class its current sonner toast was issued with, kept when the toast is re-issued. */
+  sonnerClassName?: string
 }
 
 /** How long a re-added card stays hidden from assistive tech: longer than the live region's read. */
@@ -104,16 +106,21 @@ function desiredOrder(): string[] {
 /** Long enough for the re-added card to settle, after which it animates like any other toast. */
 const READD_STILL_MS = 600
 
+function issueToSonner(logicalId: string, internalId: string, className: string): void {
+  toast.custom(() => <CloudToastHost logicalId={logicalId} />, {
+    id: internalId,
+    duration: Number.POSITIVE_INFINITY,
+    unstyled: true,
+    dismissible: false,
+    className
+  })
+}
+
 function addToSonner(logicalId: string, entry: Entry, readd: boolean): void {
   const internalId = entry.internalId
   const add = (className: string): void => {
-    toast.custom(() => <CloudToastHost logicalId={logicalId} />, {
-      id: internalId,
-      duration: Number.POSITIVE_INFINITY,
-      unstyled: true,
-      dismissible: false,
-      className
-    })
+    entry.sonnerClassName = className
+    issueToSonner(logicalId, internalId, className)
   }
   // A re-add must look like the card stayed put: no slide-in. Later stack moves animate as usual.
   add(readd ? 'cloud-toast-readd' : '')
@@ -221,11 +228,18 @@ export function showCloudToast(
     const reorder =
       existing.view.priority !== view.priority ||
       existing.scope?.workspaceId !== options.scope?.workspaceId
+    const contentChanged = existing.view !== view
     existing.view = view
     existing.onDismiss = options.onDismiss
     existing.scope = options.scope
     if (reorder) {
       reconcile(now)
+    } else if (contentChanged && sonnerOrder.includes(logicalId)) {
+      // Sonner measures a toast's height only when it is (re)issued, and an expanded stack sizes
+      // every card to that height. A card whose copy grew in place kept its old height, so hovering
+      // it shrank it from the top: it sank out from under the pointer, collapsed, and popped back.
+      // Re-issuing under the same id updates it in place and measures it again.
+      issueToSonner(logicalId, existing.internalId, existing.sonnerClassName ?? '')
     }
     emit()
     return

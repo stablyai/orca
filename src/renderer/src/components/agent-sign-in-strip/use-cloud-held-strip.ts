@@ -2,6 +2,7 @@
 // #40228's per-workspace gate on an Orca Cloud host. Shared by a terminal pane's strip and a structured
 // chat's (CHAT-BANNERS), so both read the same hold and act the same way.
 import { openOrcaCloudSignInSheet } from '@/components/settings/agent-accounts/sign-in-sheet/orca-cloud-sign-in-sheet-store'
+import { toast } from 'sonner'
 import { useAppStore } from '@/store'
 import { useTranslate } from '@/i18n/use-translate'
 import { isOrcaCloudEnvironmentId } from '@/lib/orca-cloud/orca-cloud-environment-id'
@@ -115,7 +116,12 @@ export function useCloudHeldStrip(
         copyText: gateActions.copyText,
         openLink: gateActions.openLink,
         useApiKey: () => openSettings('cloud-secrets'),
-        keepHoldOnCancel: chat
+        keepHoldOnCancel: chat,
+        onSaveFailed: () =>
+          toast.error(
+            t('orcaCloudAccounts.error.saveFailed', 'Couldn’t save to your Orca account.'),
+            { description: t('orcaCloudAccounts.error.nothingChanged', 'Nothing was changed.') }
+          )
       })
     : null
   const gateOrRecovery: CloudStripActions = {
@@ -125,7 +131,8 @@ export function useCloudHeldStrip(
         action.kind === 'restart' ||
         action.kind === 'setUpOnce' ||
         action.kind === 'reopenSetup' ||
-        action.kind === 'start'
+        action.kind === 'start' ||
+        action.kind === 'signInInsideWorkspace'
       ) {
         return
       }

@@ -3,7 +3,7 @@
 import { getIntlLocale } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
 import type { CloudDotState } from '@/lib/orca-cloud/orca-cloud-workspace-state'
-import type { HostedVmMetrics } from '../../../../shared/hosted-sandbox/hosted-sandbox-wire'
+import type { HostedVmMetrics } from '../../../../shared/hosted-sandbox/hosted-workspace-vm-wire'
 import {
   ORCA_CLOUD_IDLE_SLEEP_MINUTES,
   ORCA_CLOUD_SANDBOX_SPEC

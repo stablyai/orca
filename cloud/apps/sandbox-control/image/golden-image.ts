@@ -7,6 +7,7 @@ import type { SandboxProviderApi } from '../src/sandbox-provider'
 export const VM_SCRIPTS = [
   'orca-sandbox-start',
   'orca-sandbox-drain',
+  'orca-memguard',
   'orca-sandbox-env',
   'orca-session-env.sh',
   'orca-env',

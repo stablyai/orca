@@ -260,6 +260,30 @@ describe('Orca Cloud surfaces', () => {
     expect(onDismiss).toHaveBeenCalled()
   })
 
+  it('a guard kill says Orca stopped the process and offers machine sizes, not Restart', () => {
+    const onMachineSize = vi.fn()
+    const onRestart = vi.fn()
+    const { getByRole, queryByRole } = render(
+      <CloudWorkspaceNotice
+        notice={{
+          kind: 'oom',
+          oom: { workspaceId: 'ws', oomKills: 1, victim: 'tsc', stoppedBy: 'guard', at: 1 }
+        }}
+        restarting={false}
+        onRestart={onRestart}
+        onMachineSize={onMachineSize}
+        onDismiss={noop}
+      />
+    )
+    const text = getByRole('alert').textContent
+    expect(text).toContain('Orca stopped tsc to keep the workspace responsive')
+    expect(text).toContain('The workspace was out of memory. Consider a larger machine.')
+    expect(queryByRole('button', { name: 'Restart' })).toBeNull()
+    fireEvent.click(getByRole('button', { name: 'Machine size' }))
+    expect(onMachineSize).toHaveBeenCalled()
+    expect(onRestart).not.toHaveBeenCalled()
+  })
+
   it('version skew: an older sandbox offers a new workspace, a newer one an update', () => {
     const onCheckForUpdates = vi.fn()
     const onCreateWorkspace = vi.fn()

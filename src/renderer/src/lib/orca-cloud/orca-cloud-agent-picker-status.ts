@@ -67,6 +67,7 @@ export function orcaCloudAgentPickerStatus(
         return 'setUp'
       case 'killSwitch':
       case 'unavailable':
+      case 'inWorkspace':
         return 'perWorkspace'
     }
   }

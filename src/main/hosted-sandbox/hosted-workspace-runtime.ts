@@ -115,12 +115,13 @@ export function trimCheckouts(input: HostedArchiveCheckout[]): HostedArchiveChec
 }
 
 /**
- * Announces each new kernel OOM kill once. The counter resets per VM boot; two readings belong to
- * one boot when their implied boot times agree within two minutes (uptime and checkedAt come from
+ * Announces each new OOM kill once: the kernel's, and the memory guard's (MEMGUARD: processes the
+ * VM stopped before the kernel had to). Both counters reset per VM boot; two readings belong to one
+ * boot when their implied boot times agree within two minutes (uptime and checkedAt come from
  * different clocks).
  */
 export function createOomTracker(announce: (event: CloudOomEvent) => void) {
-  const seen = new Map<string, { bootAt: number; kills: number }>()
+  const seen = new Map<string, { bootAt: number; kernel: number; guard: number }>()
   return {
     observe(
       workspaceId: string,
@@ -132,19 +133,26 @@ export function createOomTracker(announce: (event: CloudOomEvent) => void) {
       if (!metrics) {
         return
       }
+      const guardKills = status.memory?.guardKills ?? 0
       const bootAt = status.checkedAt - metrics.uptimeSeconds * 1000
       const previous = seen.get(sandboxId)
       const sameBoot = previous !== undefined && Math.abs(previous.bootAt - bootAt) < 120_000
-      const announced = sameBoot ? previous.kills : 0
+      const kernel = sameBoot ? previous.kernel : 0
+      const guard = sameBoot ? previous.guard : 0
       seen.set(sandboxId, {
         bootAt: sameBoot ? previous.bootAt : bootAt,
-        kills: Math.max(announced, metrics.oomKills)
+        kernel: Math.max(kernel, metrics.oomKills),
+        guard: Math.max(guard, guardKills)
       })
-      if (metrics.oomKills > announced) {
+      const byGuard = guardKills > guard
+      if (byGuard || metrics.oomKills > kernel) {
         announce({
           workspaceId,
-          oomKills: metrics.oomKills,
-          victim: metrics.lastOomVictim,
+          // One count for dismissal: either kind of new kill shows the notice again.
+          oomKills: Math.max(kernel, metrics.oomKills) + Math.max(guard, guardKills),
+          // The guard names the process it chose; the kernel's name comes from its log.
+          victim: byGuard ? (status.memory?.lastGuardVictim ?? null) : metrics.lastOomVictim,
+          ...(byGuard ? { stoppedBy: 'guard' as const } : {}),
           at: now
         })
       }
@@ -166,6 +174,14 @@ export function withGitSetup(
   sandbox: Pick<HostedSandboxView, 'gitSetup'>
 ): CloudWorkspaceStatus {
   return sandbox.gitSetup === 'failed' ? { ...status, gitSetupFailed: true } : status
+}
+
+/** withGitSetup plus the region the sandbox runs in, for the card's details. */
+export function withSandboxFacts(
+  status: HostedWorkspaceStatus,
+  sandbox: Pick<HostedSandboxView, 'gitSetup' | 'region'>
+): CloudWorkspaceStatus {
+  return { ...withGitSetup(status, sandbox), region: sandbox.region }
 }
 
 let current: HostedWorkspaceService | null = null

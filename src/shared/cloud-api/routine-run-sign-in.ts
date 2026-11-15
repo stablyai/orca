@@ -16,4 +16,4 @@ export function isRoutineRunAgentSignInFailure(
 
 /** The plain-English line, for surfaces without the desktop's translations (the CLI). */
 export const ROUTINE_RUN_CLAUDE_NOT_SET_UP =
-  'Claude isn’t set up for Orca Cloud, so this run couldn’t start it. Set it up once in Settings → Agent accounts, then run the routine again.'
+  'Claude isn’t set up for Orca Cloud, so this run couldn’t start it. Set it up once in Settings → Cloud agent sign-ins, then run the routine again.'

@@ -23,6 +23,7 @@
   "include": [
     "src",
     "test",
-    "image"
+    "image",
+    "scripts"
   ]
 }

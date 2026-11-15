@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest'
 import { createGitHubAppMinter } from '../src/github-app'
 import { installUrl, isInstallationBound } from '../src/github-connect'
 import type { SetupNotice } from '../src/github-repo-access'
+import { FOUND_TTL_MS, MISSING_TTL_MS } from '../src/github-installation-cache'
 import { storeUserToken } from '../src/github-user-tokens'
 import { keyringFor } from '../src/secrets'
 import { createHarness } from './harness'
@@ -62,10 +63,11 @@ function fakeGitHub() {
     if (url.pathname.startsWith('/user/memberships/orgs/') && faults.membership === 'forbidden') {
       return new Response(null, { status: 403 })
     }
-    if (url.pathname.startsWith('/users/') && faults.users === 'error') {
+    const anonymousProfile = /^\/users\/[^/]+$/.test(url.pathname)
+    if (anonymousProfile && faults.users === 'error') {
       return new Response(null, { status: 502 })
     }
-    if ((url.pathname.startsWith('/user/memberships/orgs/') && faults.membership === 'hang') || (url.pathname.startsWith('/users/') && faults.users === 'hang')) {
+    if ((url.pathname.startsWith('/user/memberships/orgs/') && faults.membership === 'hang') || (anonymousProfile && faults.users === 'hang')) {
       return new Promise<Response>((_, reject) => init?.signal?.addEventListener('abort', () => reject(init.signal!.reason)))
     }
     if (url.pathname === '/user') {
@@ -99,6 +101,14 @@ function fakeGitHub() {
         : person
           ? Response.json({ id: person.id, login: person.login, type: 'User' })
           : new Response(null, { status: 404 })
+    }
+    const ownerInstall = /^\/(orgs|users)\/([^/]+)\/installation$/.exec(url.pathname)
+    if (ownerInstall) {
+      const login = decodeURIComponent(ownerInstall[2]!).toLowerCase()
+      const found = installations.find(
+        (i) => i.account.login.toLowerCase() === login && (ownerInstall[1] === 'orgs') === (i.account.type === 'Organization')
+      )
+      return found ? Response.json({ id: found.id, account: found.account }) : new Response(null, { status: 404 })
     }
     const repoInstall = /^\/repos\/([^/]+)\/([^/]+)\/installation$/.exec(url.pathname)
     if (repoInstall) {
@@ -203,13 +213,18 @@ const stateOf = (url: string) => new URL(url).searchParams.get('state')!
 describe('GitHub repo access (cloud-start N2/N3, D2)', () => {
   it('answers missing with an install URL, public, then granted once an admin installs and binds', async () => {
     const { h, github, notices, trialNotices, browser } = await setup({ publicRepos: ['https://github.com/acme/site'] })
-    expect((await h.call('GET', `/v1/github/repo-access?repo=${encodeURIComponent('https://github.com/acme/site')}`)).body).toEqual({
+    const site = await h.call('GET', `/v1/github/repo-access?repo=${encodeURIComponent('https://github.com/acme/site')}`)
+    expect(site.body).toEqual({
       access: 'public',
       owner: 'acme',
       repo: 'https://github.com/acme/site',
+      // Clones anonymously, but can't push until the App is on acme (CREATE-GH-STEP).
+      push: 'not_installed',
+      installUrl: expect.stringMatching(/^https:\/\/github\.com\/apps\/orca-cloud-test\/installations\/new\?state=/),
       // The App isn't on acme yet and alice hasn't connected GitHub: unknown.
       canInstall: null
     })
+    expect(HostedGithubRepoAccessResponseSchema.parse(site.body)).toEqual(site.body)
     const missing = await h.call('GET', `/v1/github/repo-access?repo=${encodeURIComponent(`${REPO}.git`)}&session=${SESSION}`)
     expect(missing.body).toMatchObject({ access: 'missing', owner: 'acme', repo: REPO })
     expect(HostedGithubRepoAccessResponseSchema.parse(missing.body)).toEqual(missing.body)
@@ -226,9 +241,10 @@ describe('GitHub repo access (cloud-start N2/N3, D2)', () => {
     expect(notices).toEqual([{ sessionId: SESSION, accountId: 'user:alice', repo: REPO, state: 'done' }])
     // Billing's trial abuse keys: numeric GitHub owner and user ids of the bind.
     expect(trialNotices).toEqual([{ accountId: 'user:alice', githubOwnerId: 50, githubUserId: 3 }])
-    expect((await h.call('GET', `/v1/github/repo-access?repo=${encodeURIComponent(REPO)}`)).body).toEqual({ access: 'granted', owner: 'acme', repo: REPO })
+    expect((await h.call('GET', `/v1/github/repo-access?repo=${encodeURIComponent(REPO)}`)).body).toEqual({ access: 'granted', owner: 'acme', repo: REPO, push: 'ok' })
     // Another Orca account is not granted by alice's binding.
-    expect((await h.call('GET', `/v1/github/repo-access?repo=${encodeURIComponent(REPO)}`, { as: 'bob' })).body.access).toBe('missing')
+    const bob = await h.call('GET', `/v1/github/repo-access?repo=${encodeURIComponent(REPO)}`, { as: 'bob' })
+    expect(bob.body).toMatchObject({ access: 'missing', push: 'not_connected' })
     expect((await h.call('GET', '/v1/github/repo-access?repo=https%3A%2F%2Fgitlab.com%2Facme%2Fweb')).status).toBe(400)
   })
 
@@ -378,6 +394,8 @@ describe('GitHub repo access (cloud-start N2/N3, D2)', () => {
         `INSERT INTO github_installations VALUES (900, 'org:acme-team', 50, 'acme', 'Organization', 'u1', 3, 'oauth', 0, NULL)`
       )
       .run()
+    // Bound straight in the database (no webhook, no setup return): the cached 404 lasts its TTL.
+    h.advance(MISSING_TTL_MS)
     expect((await h.call('GET', path, { bearer: CONTROL_PLANE_TOKEN })).body).toEqual({ access: 'granted', url: null })
     expect((await h.call('GET', path.replace(SESSION, 'bad'), { bearer: CONTROL_PLANE_TOKEN })).status).toBe(400)
   })
@@ -440,7 +458,9 @@ describe('repo-access canInstall (REPO-CAN-INSTALL)', () => {
   const access = (h: Ctx['h'], repo = REPO, as?: string) => h.call('GET', `/v1/github/repo-access?repo=${encodeURIComponent(repo)}`, as ? { as } : {})
   const membershipCalls = (ctx: Ctx) => ctx.github.calls.filter((c) => c.startsWith('GET /user/memberships/orgs/'))
   /** canInstall's reads: owner type and membership. */
-  const github = (ctx: Ctx) => ctx.github.calls.filter((c) => c.startsWith('GET /user/memberships/orgs/') || c.startsWith('GET /users/'))
+  // The anonymous owner read and the membership read (not the app-JWT installation lookups).
+  const github = (ctx: Ctx) =>
+    ctx.github.calls.filter((c) => c.startsWith('GET /user/memberships/orgs/') || (c.startsWith('GET /users/') && !c.endsWith('/installation')))
 
   /** Connects alice (account user:alice, user alice) as the fake GitHub user behind `code`. */
   async function connect(ctx: Ctx, code: string, user: { id: number; login: string }, tokens: { accessExpiresAt?: number | null; refresh?: string | null } = {}) {
@@ -541,13 +561,23 @@ describe('repo-access canInstall (REPO-CAN-INSTALL)', () => {
       access: 'public',
       owner: 'acme',
       repo: 'https://github.com/acme/site',
+      push: 'not_installed',
+      installUrl: expect.any(String),
       canInstall: false
     })
     await connect(ctx, 'code_admin', { id: 3, login: 'admin-gh' })
     expect((await access(ctx.h, 'https://github.com/acme/site')).body).toMatchObject({ access: 'public', canInstall: true })
     // Installed on acme (bound to some other Orca account): the App is there, so no canInstall.
     ctx.github.installations.push({ id: 900, account: ACME, repos: ['acme/site'] })
-    expect((await access(ctx.h, 'https://github.com/acme/site')).body).toEqual({ access: 'public', owner: 'acme', repo: 'https://github.com/acme/site' })
+    ctx.h.advance(MISSING_TTL_MS)
+    // Pushing still needs alice's account bound to it: the install round trip binds it.
+    expect((await access(ctx.h, 'https://github.com/acme/site')).body).toEqual({
+      access: 'public',
+      owner: 'acme',
+      repo: 'https://github.com/acme/site',
+      push: 'not_connected',
+      installUrl: expect.any(String)
+    })
   })
 
   it('granted and requested: absent', async () => {
@@ -556,7 +586,7 @@ describe('repo-access canInstall (REPO-CAN-INSTALL)', () => {
     ctx.github.installations.push({ id: 900, account: ACME, repos: ['acme/web'] })
     const setupPage = await ctx.browser(`https://sandbox.test/v1/github/setup?installation_id=900&setup_action=install&state=${encodeURIComponent(stateOf(missing.body.installUrl))}`)
     await ctx.browser(`https://sandbox.test/v1/github/callback?code=code_admin&state=${encodeURIComponent(stateOf(setupPage.location!))}`)
-    expect((await access(ctx.h)).body).toEqual({ access: 'granted', owner: 'acme', repo: REPO })
+    expect((await access(ctx.h)).body).toEqual({ access: 'granted', owner: 'acme', repo: REPO, push: 'ok' })
 
     // Sam (a member, connected by the request's OAuth round trip) asks an owner: requested.
     const other = await setup()
@@ -564,7 +594,7 @@ describe('repo-access canInstall (REPO-CAN-INSTALL)', () => {
     const page = await other.browser(`https://sandbox.test/v1/github/setup?setup_action=request&state=${encodeURIComponent(stateOf(samMissing.body.installUrl))}`)
     other.github.requests.push({ account: { login: 'acme' }, requester: { id: 2 } })
     await other.browser(`https://sandbox.test/v1/github/callback?code=code_sam&state=${encodeURIComponent(stateOf(page.location!))}`)
-    expect((await access(other.h, REPO, 'sam')).body).toEqual({ access: 'requested', owner: 'acme', repo: REPO })
+    expect((await access(other.h, REPO, 'sam')).body).toEqual({ access: 'requested', owner: 'acme', repo: REPO, push: 'not_installed' })
   })
 
   it('a token near expiry is refreshed through the member-git helper before the membership read', async () => {
@@ -580,5 +610,131 @@ describe('repo-access canInstall (REPO-CAN-INSTALL)', () => {
     await connect(ctx, 'code_admin', { id: 3, login: 'admin-gh' }, { accessExpiresAt: ctx.h.now() - 1, refresh: null })
     expect((await access(ctx.h)).body).toMatchObject({ access: 'missing', canInstall: null })
     expect(membershipCalls(ctx)).toEqual([])
+  })
+})
+
+describe('repo-access push reason and installation cache (CREATE-GH-STEP)', () => {
+  type Ctx = Awaited<ReturnType<typeof setup>>
+  const access = (h: Ctx['h'], repo = REPO, as?: string) => h.call('GET', `/v1/github/repo-access?repo=${encodeURIComponent(repo)}`, as ? { as } : {})
+  const installLookups = (ctx: Ctx) => ctx.github.calls.filter((c) => c.endsWith('/installation'))
+  const bindAcme = async (ctx: Ctx, repos: string[]) => {
+    const missing = await access(ctx.h)
+    ctx.github.installations.push({ id: 900, account: ACME, repos })
+    const setupPage = await ctx.browser(`https://sandbox.test/v1/github/setup?installation_id=900&setup_action=install&state=${encodeURIComponent(stateOf(missing.body.installUrl))}`)
+    await ctx.browser(`https://sandbox.test/v1/github/callback?code=code_admin&state=${encodeURIComponent(stateOf(setupPage.location!))}`)
+  }
+
+  it('installed on the owner without this repository: repo_not_selected with the installation’s settings page', async () => {
+    const ctx = await setup({ publicRepos: ['https://github.com/acme/site'] })
+    await bindAcme(ctx, ['acme/web'])
+    const site = await access(ctx.h, 'https://github.com/acme/site')
+    expect(site.body).toEqual({
+      access: 'public',
+      owner: 'acme',
+      repo: 'https://github.com/acme/site',
+      push: 'repo_not_selected',
+      configureUrl: 'https://github.com/organizations/acme/settings/installations/900',
+      // The admin who bound it may change the selection.
+      canInstall: true
+    })
+    expect(HostedGithubRepoAccessResponseSchema.parse(site.body)).toEqual(site.body)
+    // A private one the installation doesn't select: still missing for cloning, same reason.
+    expect((await access(ctx.h, 'https://github.com/acme/api')).body).toMatchObject({ access: 'missing', push: 'repo_not_selected', installUrl: expect.any(String) })
+  })
+
+  it('a personal account’s installation links to the user settings page', async () => {
+    const ctx = await setup({ publicRepos: ['https://github.com/Alice-GH/dotfiles'] })
+    await connectAlice(ctx)
+    expect((await access(ctx.h, 'https://github.com/Alice-GH/dotfiles')).body).toMatchObject({
+      push: 'repo_not_selected',
+      configureUrl: 'https://github.com/settings/installations/901'
+    })
+  })
+
+  async function connectAlice(ctx: Ctx) {
+    const missing = await access(ctx.h, 'https://github.com/Alice-GH/notes')
+    ctx.github.installations.push({ id: 901, account: { id: 7, login: 'Alice-GH', type: 'User' }, repos: ['alice-gh/notes'] })
+    const setupPage = await ctx.browser(`https://sandbox.test/v1/github/setup?installation_id=901&setup_action=install&state=${encodeURIComponent(stateOf(missing.body.installUrl))}`)
+    await ctx.browser(`https://sandbox.test/v1/github/callback?code=code_alice&state=${encodeURIComponent(stateOf(setupPage.location!))}`)
+  }
+
+  it('an installation on the owner bound to another Orca account: not_connected, with an install page', async () => {
+    const ctx = await setup({ publicRepos: ['https://github.com/acme/site'] })
+    await bindAcme(ctx, ['acme/web'])
+    expect((await access(ctx.h, 'https://github.com/acme/site', 'bob')).body).toMatchObject({ access: 'public', push: 'not_connected', installUrl: expect.any(String) })
+  })
+
+  it('polls answer from the cache; installation webhooks drop it so the next poll sees the change', async () => {
+    const ctx = await setup({ publicRepos: ['https://github.com/acme/site'] })
+    await bindAcme(ctx, ['acme/web'])
+    ctx.github.calls.length = 0
+    expect((await access(ctx.h, 'https://github.com/acme/site')).body.push).toBe('repo_not_selected')
+    expect((await access(ctx.h, 'https://github.com/acme/site')).body.push).toBe('repo_not_selected')
+    // One repository lookup for both polls; the bound installation answers the owner without GitHub.
+    expect(installLookups(ctx)).toEqual(['GET /repos/acme/site/installation'])
+
+    // The owner selects acme/site on GitHub: without the webhook the cached 404 would stand for its TTL.
+    ctx.github.installations[0]!.repos.push('acme/site')
+    expect((await access(ctx.h, 'https://github.com/acme/site')).body.push).toBe('repo_not_selected')
+    const added = await ctx.webhook('installation_repositories', {
+      action: 'added',
+      installation: { id: 900, account: ACME },
+      repository_selection: 'selected',
+      repositories_added: [{ full_name: 'acme/site' }],
+      repositories_removed: [],
+      requester: null,
+      sender: { id: 3, type: 'User' }
+    })
+    expect(added.status).toBe(202)
+    expect((await access(ctx.h, 'https://github.com/acme/site')).body).toMatchObject({ access: 'granted', push: 'ok' })
+
+    // Removed again: found installations are cached too, and dropped the same way.
+    ctx.github.installations[0]!.repos = ['acme/web']
+    await ctx.webhook('installation_repositories', {
+      action: 'removed',
+      installation: { id: 900, account: ACME },
+      repository_selection: 'selected',
+      repositories_added: [],
+      repositories_removed: [{ full_name: 'acme/site' }],
+      requester: null,
+      sender: { id: 3, type: 'User' }
+    })
+    expect((await access(ctx.h, 'https://github.com/acme/site')).body.push).toBe('repo_not_selected')
+  })
+
+  it('a cached 404 lapses after its TTL; a found installation after a minute', async () => {
+    const ctx = await setup({ publicRepos: ['https://github.com/acme/site'] })
+    expect((await access(ctx.h, 'https://github.com/acme/site')).body.push).toBe('not_installed')
+    ctx.github.installations.push({ id: 900, account: ACME, repos: ['acme/site'] })
+    expect((await access(ctx.h, 'https://github.com/acme/site')).body.push).toBe('not_installed')
+    ctx.h.advance(MISSING_TTL_MS)
+    expect((await access(ctx.h, 'https://github.com/acme/site')).body.push).toBe('not_connected')
+    ctx.github.calls.length = 0
+    ctx.h.advance(FOUND_TTL_MS - 1)
+    await access(ctx.h, 'https://github.com/acme/site')
+    expect(installLookups(ctx)).toEqual([])
+    ctx.h.advance(1)
+    await access(ctx.h, 'https://github.com/acme/site')
+    expect(installLookups(ctx)).toEqual(['GET /repos/acme/site/installation'])
+  })
+
+  it('the owner lookup failing never fails the answer: not_installed', async () => {
+    const ctx = await setup({ publicRepos: ['https://github.com/acme/site'] })
+    const failing = ctx.github.fetch
+    const h = await createHarness({}, {
+      github: createGitHubAppMinter({
+        appId: '1',
+        privateKeyPkcs8: await exportPKCS8((await generateKeyPair('RS256', { extractable: true })).privateKey),
+        isBound: async () => false,
+        log: () => undefined,
+        fetch: (async (input: RequestInfo | URL, init?: RequestInit) =>
+          /\/(orgs|users)\/[^/]+\/installation$/.test(new URL(String(input)).pathname) ? new Response(null, { status: 502 }) : failing(input, init)) as typeof fetch
+      }),
+      githubFetch: failing,
+      publicRepoCheck: async () => true
+    })
+    const answer = await h.call('GET', `/v1/github/repo-access?repo=${encodeURIComponent('https://github.com/acme/site')}`)
+    expect(answer.status).toBe(200)
+    expect(answer.body).toMatchObject({ access: 'public', push: 'not_installed' })
   })
 })

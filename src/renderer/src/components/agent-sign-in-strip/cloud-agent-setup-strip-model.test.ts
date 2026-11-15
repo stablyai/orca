@@ -112,4 +112,39 @@ describe('cloudAgentSetupStripModel (PC-3b)', () => {
       primary: { label: 'Start Claude', action: { kind: 'start' } }
     })
   })
+
+  it('offers signing in inside this workspace as a quiet second choice, only while nothing runs', () => {
+    const idle = cloudAgentSetupStripModel({
+      agent: 'codex',
+      setup: { phase: 'idle' },
+      ready: false,
+      t
+    })
+    expect(idle.primary?.action).toEqual({ kind: 'setUpOnce' })
+    expect(idle.alternative).toEqual({
+      label: 'Sign in inside this workspace instead',
+      detail:
+        'Orca won’t store your sign-in. You’ll sign in again in each new workspace. Team API keys won’t be used for this agent.',
+      action: { kind: 'signInInsideWorkspace' }
+    })
+    const failed = cloudAgentSetupStripModel({
+      agent: 'claude',
+      setup: { phase: 'failed', error: 'denied' },
+      ready: false,
+      t
+    })
+    expect(failed.alternative?.action).toEqual({ kind: 'signInInsideWorkspace' })
+    for (const setup of [
+      { phase: 'browser', startedAt: 1, canReopen: true },
+      { phase: 'saving' }
+    ] as const) {
+      expect(
+        cloudAgentSetupStripModel({ agent: 'claude', setup, ready: false, t }).alternative
+      ).toBeUndefined()
+    }
+    expect(
+      cloudAgentSetupStripModel({ agent: 'claude', setup: { phase: 'idle' }, ready: true, t })
+        .alternative
+    ).toBeUndefined()
+  })
 })

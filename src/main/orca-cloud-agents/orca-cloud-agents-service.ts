@@ -5,6 +5,7 @@ import {
   CLAUDE_SETUP_TOKEN_PATTERN,
   IDLE_ORCA_CLOUD_AGENT_SETUPS,
   type AgentCredentialsView,
+  type AgentDefaultSourceChoice,
   type AgentSource,
   type AgentSourcesView,
   type OrcaCloudAccountAgent,
@@ -339,7 +340,7 @@ export function createOrcaCloudAgentsService(deps: OrcaCloudAgentsServiceDeps) {
 
     setDefaultSource: (
       agent: OrcaCloudAccountAgent,
-      source: AgentSource
+      source: AgentDefaultSourceChoice
     ): Promise<OrcaCloudAgentsResult<AgentSourcesView>> =>
       attempt((client) => client.setDefaultSource(agent, source)),
 

@@ -12,6 +12,7 @@ import {
   getOrcaCloudTeamAdminSearchEntries,
   getOrcaCloudWorkspacesSearchEntries
 } from '@/components/settings/orca-cloud/orca-cloud-settings-search'
+import { getCloudAgentSignInsSearchEntries } from '@/components/settings/agent-accounts/agent-accounts-search'
 import { translate } from '@/i18n/i18n'
 import { canManageActiveTeam } from '@/lib/orca-cloud/orca-cloud-team-role'
 import type { Translate } from '@/i18n/use-translate'
@@ -27,6 +28,7 @@ import {
   CreditCard,
   KeySquare,
   LockKeyhole,
+  LogIn,
   Plug,
   SquareTerminal,
   Workflow
@@ -53,6 +55,20 @@ export function buildOrcaCloudSettingsSections(
       ),
       icon: CreditCard,
       searchEntries: getOrcaCloudBillingSearchEntries(),
+      group
+    },
+    // Neil: Orca Cloud's Claude and ChatGPT sign-ins are an Orca Cloud setting, not one of this
+    // computer's Agent accounts; that page keeps a one-line link here. Right after the account,
+    // since setting up an agent once is the first thing a new cloud user does.
+    {
+      id: 'cloud-agent-sign-ins',
+      title: t('settings.cloudAgentSignIns.title', 'Cloud agent sign-ins'),
+      description: t(
+        'orcaCloudAccounts.helpAccountWide',
+        'Set up once. Every cloud workspace uses it, including new, cloned and restarted ones.'
+      ),
+      icon: LogIn,
+      searchEntries: getCloudAgentSignInsSearchEntries(),
       group
     },
     // Team owners and admins only; members and personal accounts never see the entry. Team,
@@ -173,8 +189,8 @@ export const ACCOUNT_TEAM_ADMIN_ANCHOR = 'orca-account-team-admin'
 
 /**
  * JA-16: in Orca Cloud builds the Orca account leads the one Orca Cloud group instead of sitting in
- * Set up. Agent accounts stays in AI capabilities: it covers this computer and hosts as much as
- * Orca Cloud, and its Orca Cloud part is deep-linked from every cloud entry point.
+ * Set up. Agent accounts stays in AI capabilities for this computer and hosts; Orca Cloud's own
+ * sign-ins are the group's Cloud agent sign-ins page (resolveCloudAgentSignInsTarget).
  * Neil: the account and Plan & billing are one page, "Account + Billing" (account on top). Billing's
  * search entries move onto it and land on its Plan & billing part. Searching for members, single
  * sign-on or the audit log lands on its "Team & admin" row, which opens the web console.
@@ -273,6 +289,29 @@ export function resolveAccountBillingTarget<
     pane: 'orca-account',
     sectionId: target.sectionId ?? ACCOUNT_BILLING_PLAN_ANCHOR
   }
+}
+
+/** Where Settings › Agent accounts used to hold Orca Cloud's sign-ins (its part's anchors). */
+const LEGACY_CLOUD_SIGN_IN_ANCHORS: readonly string[] = ['orca-cloud', 'accounts-orca-cloud']
+
+/**
+ * Old links to Agent accounts' Orca Cloud part (pane 'accounts' at 'orca-cloud' or
+ * 'accounts-orca-cloud') open Cloud agent sign-ins. Only when that page exists (desktop with Orca
+ * Cloud); otherwise the target is unchanged.
+ */
+export function resolveCloudAgentSignInsTarget<
+  T extends { pane: SettingsNavTarget; sectionId?: string }
+>(target: T, available: boolean): T {
+  if (
+    !available ||
+    target.pane !== 'accounts' ||
+    !target.sectionId ||
+    !LEGACY_CLOUD_SIGN_IN_ANCHORS.includes(target.sectionId)
+  ) {
+    return target
+  }
+  // The page is the whole target; its legacy anchor doesn't exist there.
+  return { ...target, pane: 'cloud-agent-sign-ins', sectionId: undefined }
 }
 
 /** True for an Orca Cloud group page (team-level, so host-free): the cloud pages and the Orca account. */

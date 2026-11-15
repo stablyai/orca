@@ -86,8 +86,8 @@ function announce(port: WorkspacePort, forward: RuntimePortForward): void {
     .join(' · ')
   toast.success(
     translate(
-      'auto.components.ports.RuntimePortAutoForwarder.forwarded',
-      'Forwarded :{{value0}} to localhost:{{value1}}',
+      'auto.components.ports.RuntimePortAutoForwarder.appAvailable',
+      'Your app on port {{value0}} is available at localhost:{{value1}}',
       { value0: port.port, value1: forward.localPort }
     ),
     {
@@ -115,9 +115,11 @@ function announce(port: WorkspacePort, forward: RuntimePortForward): void {
 /** Several servers at once (a monorepo `dev`) get one toast instead of a stack. */
 function announceMany(environmentId: string, count: number): void {
   toast.success(
-    translate('auto.components.ports.RuntimePortAutoForwarder.many', '{{value0}} ports forwarded', {
-      value0: count
-    }),
+    translate(
+      'auto.components.ports.RuntimePortAutoForwarder.manyAppsAvailable',
+      '{{value0}} apps are available on this computer',
+      { value0: count }
+    ),
     {
       id: `runtime-port-forward:${environmentId}:many`,
       duration: FORWARDED_TOAST_MS,
