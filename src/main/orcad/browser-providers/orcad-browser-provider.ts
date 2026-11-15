@@ -15,7 +15,7 @@ import { watchOrcadBrowserInstallPark } from './orcad-browser-install-park'
 import { openServeBundlePark } from '../../../shared/remote-runtime/serve-supervisor/serve-bundle-park'
 import { ORCAD_BROWSER_PARK_LABEL } from '../../../shared/remote-runtime/serve-supervisor/serve-bundle-coordination'
 import { errorMessage } from '../../../shared/errors/error-message'
-import { ZOTZ_PRODUCT_NAME, ZOTZ_USER_DATA_DIR_NAME } from '../../../shared/zotz/zotz-app-identity'
+import { ZOTZ_PRODUCT_NAME } from '../../../shared/zotz/zotz-app-identity'
 
 export type OrcadBrowserProvider = {
   kind: 'electron' | 'chromium'
@@ -101,7 +101,7 @@ export function installedElectronCandidates(
     ])
   }
   return [
-    `/opt/${ZOTZ_PRODUCT_NAME}/${ZOTZ_USER_DATA_DIR_NAME}`,
+    `/opt/${ZOTZ_PRODUCT_NAME}/orca-ide`,
     joinPath(homePath, '.local', 'bin', 'orca-ide'),
     '/usr/local/bin/orca-ide',
     '/usr/bin/orca-ide',
