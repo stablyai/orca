@@ -72,7 +72,7 @@ export function useRuntimeGraphSync(): void {
 
   useEffect(() => {
     const stopStatusPublication = workspaceSessionReady
-      ? startRendererStatusPublication(useAppStore)
+      ? startRendererStatusPublication(useAppStore, scheduleRuntimeGraphSync)
       : undefined
     setRuntimeGraphSyncEnabled(workspaceSessionReady)
     return () => {

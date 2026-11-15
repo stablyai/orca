@@ -18,7 +18,10 @@ export function rendererStatusGraphAccepted(): void {
   sender?.graphAccepted()
 }
 
-export function startRendererStatusPublication(store: { getState(): AppState }): () => void {
+export function startRendererStatusPublication(
+  store: { getState(): AppState },
+  requestGraphSync: () => void
+): () => void {
   const publication = new RendererStatusSender(
     mobilePublicationEpoch,
     (key) => {
@@ -50,7 +53,8 @@ export function startRendererStatusPublication(store: { getState(): AppState }):
     },
     () => store.getState().agentStatusByPaneKey.keys(),
     (batch) => window.api.runtime.syncAgentStatus(batch),
-    publicationCursor
+    publicationCursor,
+    requestGraphSync
   )
   sender = publication
   const unsubscribeRows = store

@@ -21,7 +21,8 @@ export class RendererStatusSender {
     private readonly capture: (key: string) => RendererStatusRecord | null,
     private readonly keys: () => Iterable<string>,
     private readonly send: (batch: RendererStatusPublication) => Promise<RendererStatusAck>,
-    private readonly cursor = { seq: 0 }
+    private readonly cursor = { seq: 0 },
+    private readonly requestGraph: () => void = () => undefined
   ) {}
 
   graphAccepted(): void {
@@ -42,6 +43,10 @@ export class RendererStatusSender {
       for (const key of keys) {
         this.stage(key)
       }
+    }
+    // Why: only an accepted graph sync activates the sender, so a failed or rejected one must be retried.
+    if (!this.active) {
+      this.requestGraph()
     }
     this.schedule()
   }
@@ -110,7 +115,8 @@ export class RendererStatusSender {
         rows
       })
       if (!ack.accepted && ack.reason === 'superseded') {
-        this.stop()
+        this.active = false
+        this.snapshot = true
         return
       }
       this.retryDelay = ack.accepted ? 0 : Math.min(2000, (this.retryDelay || 50) * 2)
