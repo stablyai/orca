@@ -39,6 +39,8 @@ type SessionCookieTracker = {
   filePath: string
   /** What the file holds now, by scope. */
   saved: Map<string, CdpCookie[]>
+  /** The file may hold cookies `saved` lacks (it could not be read), so the next save must rewrite it. */
+  savedStale: boolean
   /** Scopes whose cookies changed since `saved` was read. */
   changedScopes: Map<string, ScopeChange>
   /** Set while a save reads: scopes that changed meanwhile, which the read may have missed. */
@@ -72,8 +74,13 @@ export async function restoreBrowserSessionCookies(
     profiles.map(async (profile) => {
       const filePath = snapshotPath(profile.id)
       const target = session.fromPartition(profile.partition)
-      const saved = await readSessionCookieSnapshot(filePath)
-      return { profile, target, saved, tracker: track(filePath, target, saved) }
+      // Why before the read: a restored tab's cookie change during a slow read must still be seen.
+      const tracker = track(filePath, target)
+      const snapshot = await readSessionCookieSnapshot(filePath)
+      const saved = snapshot ?? []
+      tracker.saved = groupByScope(saved, cdpCookieScopeKey)
+      tracker.savedStale = snapshot === null
+      return { profile, target, saved, tracker }
     })
   )
   const leftovers = await Promise.all(
@@ -123,10 +130,10 @@ export async function restoreBrowserSessionCookies(
 
 /** For a profile created after launch: nothing to restore yet. */
 export function trackBrowserSessionCookies(profile: BrowserSessionProfile): void {
-  track(snapshotPath(profile.id), session.fromPartition(profile.partition), [])
+  track(snapshotPath(profile.id), session.fromPartition(profile.partition))
 }
 
-function track(filePath: string, target: Session, saved: CdpCookie[]): SessionCookieTracker {
+function track(filePath: string, target: Session): SessionCookieTracker {
   const existing = trackers.get(filePath)
   if (existing) {
     return existing
@@ -134,7 +141,8 @@ function track(filePath: string, target: Session, saved: CdpCookie[]): SessionCo
   const tracker: SessionCookieTracker = {
     target,
     filePath,
-    saved: groupByScope(saved, cdpCookieScopeKey),
+    saved: new Map(),
+    savedStale: false,
     changedScopes: new Map(),
     changedDuringSave: null,
     timer: null,
@@ -194,9 +202,11 @@ async function saveSessionCookies(tracker: SessionCookieTracker): Promise<void> 
     if (cookies && !quitting && trackers.get(tracker.filePath) === tracker) {
       const saved = groupByScope(cookies, cdpCookieScopeKey)
       // Sites often re-set a session cookie to the value it already had; skip the sealed write.
-      if (!sameSavedCookies(tracker.saved, saved)) {
-        tracker.saved = saved
+      if (tracker.savedStale || !sameSavedCookies(tracker.saved, saved)) {
         await writeSessionCookieSnapshot(tracker.filePath, cookies)
+        // Only after the write: a failed one must leave the next save something to write.
+        tracker.saved = saved
+        tracker.savedStale = false
       }
       tracker.changedScopes = changedDuringSave
     }

@@ -19,23 +19,29 @@ function isCdpCookie(value: unknown): value is CdpCookie {
   return isRecord(value) && typeof value.name === 'string' && typeof value.value === 'string'
 }
 
-/** Missing, unreadable or unsealable files read as no saved cookies. */
-export async function readSessionCookieSnapshot(filePath: string): Promise<CdpCookie[]> {
+/** A missing file reads as no saved cookies; null means a file is there but could not be read. */
+export async function readSessionCookieSnapshot(filePath: string): Promise<CdpCookie[] | null> {
+  let raw: string
   try {
-    const persisted: unknown = JSON.parse(await readFile(filePath, 'utf8'))
+    raw = await readFile(filePath, 'utf8')
+  } catch (error) {
+    return isRecord(error) && error.code === 'ENOENT' ? [] : null
+  }
+  try {
+    const persisted: unknown = JSON.parse(raw)
     if (
       !isRecord(persisted) ||
       persisted.format !== SNAPSHOT_FORMAT ||
       typeof persisted.cookies !== 'string'
     ) {
-      return []
+      return null
     }
     const cookies: unknown = JSON.parse(
       getSecretStore().decryptString(Buffer.from(persisted.cookies, 'base64'))
     )
-    return Array.isArray(cookies) ? cookies.filter(isCdpCookie) : []
+    return Array.isArray(cookies) ? cookies.filter(isCdpCookie) : null
   } catch {
-    return []
+    return null
   }
 }
 
