@@ -2,7 +2,6 @@ import { existsSync, lstatSync, readdirSync, readFileSync } from 'node:fs'
 import { mkdir, rm, writeFile } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { dirname, join } from 'node:path'
-import { runProcess } from '@orca/process-host'
 import type { HandlerContext } from '../dispatch/dispatch'
 import { RuntimeClientError } from '../runtime/connection/types'
 import { validatePluginTarget } from '../plugins/authoring/plugin-folder-validation'
@@ -14,6 +13,7 @@ import {
   type ThemeStudioPublishKit
 } from '../../shared/theme-studio/theme-studio-protocol'
 import { call, localPath, print, stringFlag } from './theme-command-io'
+import { assertOwnsRepository, githubUser, parseRepo } from './theme-publish-github'
 import {
   assertGitIdentity,
   assertNotOlderVersion,
@@ -26,35 +26,6 @@ const DEFAULT_VERSION = '1.0.0'
 // Why longer than other theme calls: the host draws three images before answering.
 const PUBLISH_KIT_TIMEOUT_MS = 90_000
 const COMMUNITY_CATALOG = 'stablyai/orca-community-plugins'
-const OWNER = /^[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})$/
-const REPO = /^[A-Za-z0-9._-]{1,100}$/
-
-/** The GitHub user `gh` is signed in as, or null when gh is missing or signed out. */
-async function githubUser(): Promise<string | null> {
-  try {
-    const result = await runProcess({
-      program: 'gh',
-      args: ['api', 'user', '--jq', '.login'],
-      timeoutMs: 15_000
-    })
-    const login = result.stdout.trim()
-    return result.code === 0 && OWNER.test(login) ? login : null
-  } catch {
-    return null
-  }
-}
-
-function parseRepo(value: string | undefined): { owner?: string; name?: string } {
-  if (value === undefined) {
-    return {}
-  }
-  const parts = value.split('/')
-  const [owner, name] = parts
-  if (parts.length !== 2 || !OWNER.test(owner) || !REPO.test(name) || /^\.+$/.test(name)) {
-    throw new RuntimeClientError('invalid_argument', '--repo must look like owner/name.')
-  }
-  return { owner, name }
-}
 
 const notUsable = (folder: string, why: string): RuntimeClientError =>
   new RuntimeClientError('invalid_argument', `${folder} ${why}`, {
@@ -218,6 +189,11 @@ export async function publishTheme(ctx: HandlerContext): Promise<void> {
   await assertNotOlderVersion(folder, version)
   const owner = repo.owner ?? (await githubUser())
   const slug = `${owner ?? '<your-github-user>'}/${repo.name ?? `${kit.id}-orca-theme`}`
+  // Why `=== true`: `--yes=false` must plan, not publish.
+  const publishing = ctx.flags.get('yes') === true
+  if (publishing && owner !== null) {
+    await assertOwnsRepository(owner)
+  }
   await writeKit(folder, contents)
   const files = Object.keys(contents)
   const validation = await validatePluginTarget(folder)
@@ -239,8 +215,7 @@ export async function publishTheme(ctx: HandlerContext): Promise<void> {
     version,
     steps: steps.map((step) => ({ label: step.label, command: shellLine(step.command) }))
   }
-  // Why `=== true`: `--yes=false` must plan, not publish.
-  if (ctx.flags.get('yes') !== true || owner === null) {
+  if (!publishing || owner === null) {
     const rerun = shellLine([
       'orca',
       'theme',

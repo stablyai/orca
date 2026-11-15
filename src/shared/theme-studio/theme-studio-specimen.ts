@@ -73,59 +73,143 @@ export function themeSpecimenHtml(
   }
   const ansi = ['red', 'green', 'yellow', 'blue', 'magenta', 'cyan'] as const
   const ansiColor = (key: (typeof ansi)[number]): string => terminal[key] ?? fallback[key]
+  const git = (key: string): string => token(`--git-decoration-${key}`, muted)
   const css = `
   *{box-sizing:border-box;margin:0}
-  body{width:${size.width}px;height:${size.height}px;overflow:hidden;font:15px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif;background:${bg};color:${fg};display:grid;grid-template-columns:22% 1fr 20%;grid-template-rows:44px 1fr}
-  .title{grid-column:1/4;display:flex;align-items:center;gap:12px;padding:0 18px;background:${token('--tab-bar', token('--card', bg))};border-bottom:1px solid ${token('--border', muted)}}
+  body{width:${size.width}px;height:${size.height}px;overflow:hidden;font:14px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif;background:${bg};color:${fg};display:grid;grid-template-columns:20% 1fr 25%;grid-template-rows:44px 1fr}
+  .title{grid-column:1/4;display:flex;align-items:center;gap:10px;padding:0 16px;background:${token('--tab-bar', token('--card', bg))};border-bottom:1px solid ${token('--border', muted)}}
   .tab{padding:6px 14px;border-radius:7px;color:${token('--tab-inactive-foreground', muted)}}
   .tab.on{background:${token('--tab-active', bg)};color:${token('--tab-active-foreground', fg)};box-shadow:inset 0 -2px 0 ${token('--tab-active-indicator', fg)}}
-  .left{background:${token('--worktree-sidebar', bg)};color:${token('--worktree-sidebar-foreground', fg)};padding:18px 12px;border-right:1px solid ${token('--worktree-sidebar-border', 'transparent')}}
-  .card{padding:10px 12px;border-radius:10px;margin-bottom:6px}
+  .left{background:${token('--worktree-sidebar', bg)};color:${token('--worktree-sidebar-foreground', fg)};padding:14px 10px;border-right:1px solid ${token('--worktree-sidebar-border', 'transparent')};overflow:hidden}
+  .card{padding:8px 10px;border-radius:9px;margin-bottom:4px}
   .card.on{background:${token('--worktree-sidebar-active', token('--worktree-sidebar-accent', bg))}}
-  .badge{display:inline-block;font-size:12px;padding:1px 8px;border-radius:999px;background:${token('--host-badge', token('--accent', bg))};color:${token('--host-badge-foreground', muted)}}
-  .dim{color:${muted};font-size:13px}
-  .main{display:grid;grid-template-rows:1fr 38%}
-  .editor{background:${token('--editor-surface', bg)};padding:20px 24px;font:14.5px/1.7 ui-monospace,Menlo,Consolas,monospace}
+  .badge{display:inline-block;font-size:11px;padding:0 7px;border-radius:999px;background:${token('--host-badge', token('--accent', bg))};color:${token('--host-badge-foreground', muted)}}
+  .dim{color:${muted};font-size:12px}
+  .head{font-size:11px;letter-spacing:.06em;color:${muted};margin:12px 4px 6px}
+  .file{display:flex;justify-content:space-between;padding:3px 6px;font-size:13px}
+  .main{display:grid;grid-template-rows:58% 42%;min-height:0}
+  .editor{background:${token('--editor-surface', bg)};padding:14px 0;font:13.5px/1.62 ui-monospace,Menlo,Consolas,monospace;overflow:hidden}
+  .ln{display:inline-block;width:46px;padding-right:14px;text-align:right;color:${muted};opacity:.7}
   .add{background:${token('--diff-added-background', 'transparent')}}.del{background:${token('--diff-removed-background', 'transparent')}}
-  .term{background:${terminal.background ?? fallback.terminalBackground};color:${terminal.foreground ?? fallback.terminalForeground};padding:16px 24px;font:14px/1.7 ui-monospace,Menlo,Consolas,monospace;border-top:1px solid ${token('--border', muted)}}
+  .term{background:${terminal.background ?? fallback.terminalBackground};color:${terminal.foreground ?? fallback.terminalForeground};padding:12px 20px;font:13px/1.6 ui-monospace,Menlo,Consolas,monospace;border-top:1px solid ${token('--border', muted)};overflow:hidden}
   .sel{background:${terminal.selectionBackground ?? token('--accent', bg)}}
-  .right{background:${token('--sidebar', bg)};color:${token('--sidebar-foreground', fg)};padding:18px 14px;border-left:1px solid ${token('--sidebar-border', 'transparent')}}
-  .bubble{margin-top:18px;padding:12px 14px;border-radius:12px;background:${token('--chat-user-message', token('--muted', bg))}}
-  .inline{font-family:ui-monospace,Menlo,monospace;padding:0 5px;border-radius:5px;background:${token('--chat-inline-code', token('--muted', bg))};color:${token('--chat-inline-code-foreground', fg)}}
-  .btn{display:inline-block;margin-top:16px;padding:7px 14px;border-radius:8px;background:${token('--primary', fg)};color:${token('--primary-foreground', bg)};font-weight:600}
+  .right{background:${token('--sidebar', bg)};color:${token('--sidebar-foreground', fg)};padding:14px;border-left:1px solid ${token('--sidebar-border', 'transparent')};overflow:hidden;display:flex;flex-direction:column;gap:12px}
+  .bubble{padding:10px 12px;border-radius:12px;background:${token('--chat-user-message', token('--muted', bg))};align-self:flex-end;max-width:90%}
+  .inline{font-family:ui-monospace,Menlo,monospace;font-size:12.5px;padding:0 5px;border-radius:5px;background:${token('--chat-inline-code', token('--muted', bg))};color:${token('--chat-inline-code-foreground', fg)}}
+  .block{font:12.5px/1.55 ui-monospace,Menlo,monospace;padding:10px 12px;border-radius:8px;background:${token('--chat-code-block', token('--muted', bg))}}
+  .bold{color:${token('--chat-bold-foreground', fg)};font-weight:600}
+  .btn{display:inline-block;padding:6px 14px;border-radius:8px;background:${token('--primary', fg)};color:${token('--primary-foreground', bg)};font-weight:600}
+  .btn2{display:inline-block;padding:6px 14px;border-radius:8px;background:${token('--secondary', token('--muted', bg))};color:${token('--secondary-foreground', fg)};margin-left:6px}
   .link{color:${token('--text-link', fg)}}
+  .tool{font-size:12.5px;padding:8px 10px;border-radius:8px;border:1px solid ${token('--border', muted)};color:${muted}}
+  .composer{margin-top:auto;padding:10px 12px;border-radius:10px;border:1px solid ${token('--input', token('--border', muted))};background:${token('--card', bg)};color:${muted}}
+  .agent{display:flex;align-items:center;gap:8px;padding:4px 6px;font-size:13px}
+  .dot{width:8px;height:8px;border-radius:50%;display:inline-block}
   `
   const span = (color: string, text: string): string =>
     `<span style="color:${color}">${text}</span>`
+  const kw = (text: string): string => span(code.keyword, text)
+  const str = (text: string): string => span(code.string, text)
+  const fnName = (text: string): string => span(code.fn, text)
+  const comment = (text: string): string => span(code.comment, text)
+  const editorLines: [string, string?][] = [
+    [comment('// Greets each visitor and remembers when they came back.')],
+    [`${kw('import')} { ${fnName('formatDistance')} } ${kw('from')} ${str("'./time'")}`],
+    [''],
+    [`${kw('export interface')} Visitor {`],
+    ['&nbsp;&nbsp;name: string'],
+    ['&nbsp;&nbsp;lastSeen?: Date'],
+    ['}'],
+    [''],
+    [`${kw('export function')} ${fnName('greet')}(visitor: Visitor): string {`],
+    [`&nbsp;&nbsp;${kw('return')} ${str("'Hello'")}`, 'del'],
+    [
+      `&nbsp;&nbsp;${kw('if')} (!visitor.lastSeen) ${kw('return')} ${str('`Welcome, ${visitor.name}!`')}`,
+      'add'
+    ],
+    [
+      `&nbsp;&nbsp;${kw('const')} ago = ${fnName('formatDistance')}(visitor.lastSeen, ${kw('new')} Date())`,
+      'add'
+    ],
+    [
+      `&nbsp;&nbsp;${kw('return')} ${str('`Welcome back, ${visitor.name}. Last visit: ${ago} ago.`')}`,
+      'add'
+    ],
+    ['}'],
+    [''],
+    [comment('// Used by the home page and the mobile app.')],
+    [
+      `${kw('export const')} ${fnName('greetAll')} = (list: Visitor[]) => list.${fnName('map')}(${fnName('greet')})`
+    ],
+    [''],
+    [`${kw('export function')} ${fnName('isNew')}(visitor: Visitor): boolean {`],
+    [`&nbsp;&nbsp;${kw('return')} visitor.lastSeen === ${kw('undefined')}`],
+    ['}'],
+    [''],
+    [`${kw('export default')} { greet, greetAll, isNew }`]
+  ]
+  const editor = editorLines
+    .map(
+      ([line, kind], index) =>
+        `<div${kind ? ` class="${kind}"` : ''}><span class="ln">${index + 1}</span>${line}</div>`
+    )
+    .join('')
+  const files: [string, string, string][] = [
+    ['greet.ts', 'M', git('modified')],
+    ['time.ts', 'A', git('added')],
+    ['greet.test.ts', 'M', git('modified')],
+    ['legacy-hello.ts', 'D', git('deleted')],
+    ['notes.md', 'U', git('untracked')],
+    ['README.md', 'M', git('modified')],
+    ['package.json', 'M', git('modified')]
+  ]
   return `<!doctype html><html><head><meta charset="utf-8"><style>${css}</style></head><body>
-  <div class="title"><b>${escapeHtml(name)}</b><span class="tab on">theme.ts</span><span class="tab">README.md</span><span class="tab">Terminal</span></div>
+  <div class="title"><b>${escapeHtml(name)}</b><span class="tab on">greet.ts</span><span class="tab">time.ts</span><span class="tab">README.md</span><span class="tab">Terminal</span></div>
   <div class="left">
-    <div class="dim" style="margin-bottom:10px">PROJECTS</div>
-    <div class="card on"><b>aurora-app</b><br><span class="badge">Local</span> <span class="dim">feature/dark-mode</span></div>
-    <div class="card"><b>api-gateway</b><br><span class="dim">main</span></div>
-    <div class="card"><b>docs-site</b><br><span style="color:${token('--git-decoration-modified', muted)}">● 3 modified</span></div>
-    <div class="card"><b>mobile</b><br><span style="color:${token('--git-decoration-added', muted)}">+ 1 added</span></div>
+    <div class="head">PROJECTS</div>
+    <div class="card on"><b>aurora-app</b><br><span class="badge">Local</span> <span class="dim">feature/welcome-back</span></div>
+    <div class="card"><b>api-gateway</b><br><span class="badge">SSH</span> <span class="dim">main</span></div>
+    <div class="card"><b>docs-site</b><br>${span(git('modified'), '● 3 modified')}</div>
+    <div class="card"><b>mobile</b><br>${span(git('added'), '+ 1 added')}</div>
+    <div class="card"><b>design-tokens</b><br><span class="dim">release/2.4</span></div>
+    <div class="head">CHANGES</div>
+    ${files.map(([file, mark, color]) => `<div class="file">${span(color, file)}${span(color, mark)}</div>`).join('')}
+    <div class="head">AGENTS</div>
+    <div class="agent"><span class="dot" style="background:${ansiColor('green')}"></span>aurora-app · tests passing</div>
+    <div class="agent"><span class="dot" style="background:${ansiColor('yellow')}"></span>docs-site · waiting for you</div>
+    <div class="agent"><span class="dot" style="background:${ansiColor('blue')}"></span>mobile · writing code</div>
   </div>
   <div class="main">
-    <div class="editor">
-      <div>${span(code.comment, '// Orca theme specimen')}</div>
-      <div>${span(code.keyword, 'export function')} ${span(code.fn, 'greet')}(name: string) {</div>
-      <div class="del">&nbsp;&nbsp;${span(code.keyword, 'return')} ${span(code.string, "'Hello'")}</div>
-      <div class="add">&nbsp;&nbsp;${span(code.keyword, 'return')} ${span(code.string, '`Hello, ${name}!`')}</div>
-      <div>}</div>
-    </div>
+    <div class="editor">${editor}</div>
     <div class="term">
-      <div>$ npm test</div>
-      <div>${span(ansiColor('green'), '✓ 42 passed')} ${span(ansiColor('yellow'), '⚠ 1 skipped')} ${span(ansiColor('red'), '✗ 0 failed')}</div>
-      <div>${ansi.map((key) => span(ansiColor(key), '■■')).join(' ')}</div>
-      <div><span class="sel">selected text</span> ${span(ansiColor('blue'), '~/aurora-app')} ${span(ansiColor('magenta'), 'main')} ${span(ansiColor('cyan'), '↑2')}</div>
+      <div>${span(ansiColor('blue'), '~/aurora-app')} ${span(ansiColor('magenta'), 'feature/welcome-back')} ${span(ansiColor('cyan'), '↑2')} $ npm test</div>
+      <div>${span(ansiColor('green'), ' ✓')} greet › welcomes a first visitor ${span(muted, '(3 ms)')}</div>
+      <div>${span(ansiColor('green'), ' ✓')} greet › says when they last came ${span(muted, '(2 ms)')}</div>
+      <div>${span(ansiColor('green'), ' ✓')} greetAll › keeps the order ${span(muted, '(1 ms)')}</div>
+      <div>${span(ansiColor('yellow'), ' ○')} skipped › greets in French</div>
+      <div>Tests: ${span(ansiColor('green'), '42 passed')}, ${span(ansiColor('yellow'), '1 skipped')}, ${span(ansiColor('red'), '0 failed')}</div>
+      <div>${span(ansiColor('blue'), '~/aurora-app')} $ git status --short</div>
+      <div>${span(ansiColor('red'), ' M')} src/greet.ts&nbsp;&nbsp;${span(ansiColor('green'), 'A')}&nbsp; src/time.ts&nbsp;&nbsp;${span(ansiColor('red'), '??')} notes.md</div>
+      <div>${ansi.map((key) => span(ansiColor(key), '■■■')).join(' ')}</div>
+      <div>${span(ansiColor('blue'), '~/aurora-app')} $ npm run dev</div>
+      <div>${span(ansiColor('cyan'), '  ➜')}  Local:   ${span(ansiColor('cyan'), 'http://localhost:5173/')}</div>
+      <div>${span(ansiColor('magenta'), '  ➜')}  Network: ${span(muted, 'use --host to expose')}</div>
+      <div><span class="sel">selected text</span> ${span(ansiColor('cyan'), 'ready in 412 ms')}</div>
+      <div>${span(ansiColor('yellow'), 'warning')} unused import ${span(ansiColor('cyan'), "'addDays'")} in src/time.ts:2</div>
     </div>
   </div>
   <div class="right">
     <div class="dim">AGENT</div>
-    <div class="bubble">Make the sidebar warmer and keep it readable.</div>
-    <p style="margin-top:14px">Updated <span class="inline">--worktree-sidebar</span> and checked contrast in both modes. <span class="link">View diff</span></p>
-    <span class="btn">Keep</span>
+    <div class="bubble">Welcome returning visitors back and say when they last came.</div>
+    <div>Updated <span class="inline">greet()</span> to use <span class="inline">formatDistance</span>. <span class="bold">All 42 tests pass.</span></div>
+    <div class="block">${kw('if')} (!visitor.lastSeen) {<br>&nbsp;&nbsp;${kw('return')} ${str('`Welcome!`')}<br>}</div>
+    <div>Review the change in <span class="link">greet.ts</span> or open the <span class="link">diff</span>.</div>
+    <div class="tool">✓ Ran npm test · 42 passed, 1 skipped</div>
+    <div class="tool">✎ Edited greet.ts ${span(git('added'), '+4')} ${span(git('deleted'), '−1')} · time.ts ${span(git('added'), '+12')}</div>
+    <div class="bubble">Looks good. Ship it.</div>
+    <div>Committed as <span class="inline">feat: welcome back</span> on <span class="bold">feature/welcome-back</span>.</div>
+    <div><span class="btn">Open pull request</span><span class="btn2">View diff</span></div>
+    <div class="composer">Ask the agent…</div>
   </div>
   </body></html>`
 }

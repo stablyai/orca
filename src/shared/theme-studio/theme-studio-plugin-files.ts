@@ -7,7 +7,11 @@ import {
 } from '../plugins/authoring/plugin-template-files'
 import { hasUsableTerminalThemeColors } from '../terminal-themes/terminal-custom-themes'
 import { THEME_STUDIO_ERROR_CODES, ThemeStudioError } from './theme-studio-errors'
-import { THEME_STUDIO_MODES, type ThemeStudioDraft } from './theme-studio-draft'
+import {
+  THEME_STUDIO_MODES,
+  type ThemeStudioDraft,
+  type ThemeStudioMode
+} from './theme-studio-draft'
 
 const FALLBACK_ID = 'my-theme'
 // Why: ids starting `orca-` install only from Orca's official catalog.
