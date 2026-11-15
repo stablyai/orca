@@ -592,3 +592,27 @@ describe('CODEX-FIREWALL-SWAP: the hot Codex calls are swapped at the sandbox fi
     expect(JSON.stringify(box.policy)).not.toContain(ACCESS)
   })
 })
+
+describe('EGRESS firewall mode: Codex entirely at the firewall (A3)', () => {
+  it('every Codex path is an exact firewall swap, nothing forwards to the proxy, and the placeholder refresh is answered by the firewall', async () => {
+    const t = await setup({ EGRESS_SWAP_MODE: 'firewall' })
+    const mia = await t.as('mia', 'acme', 'member')
+    await t.signIn(mia)
+    const created = await t.h.call('POST', '/v1/sandboxes', { body: { workspaceId: 'ws-1', machineSize: 'standard' }, bearer: mia })
+    const id: string = created.body.sandbox.id
+    const box = [...t.h.vercel.boxes.values()].find((b) => b.params.tags.orcaSandbox === id)!
+    type Rule = { match?: { path?: { exact?: string; startsWith?: string }; method?: string[] }; transform?: unknown; forwardURL?: string; response?: { statusCode: number; body: string } }
+    const chatgpt = (box.policy.allow['chatgpt.com'] ?? []) as Rule[]
+    const swapped = chatgpt.filter((rule) => rule.transform).map((rule) => rule.match?.path?.exact)
+    expect(swapped).toEqual(expect.arrayContaining(['/backend-api/codex/responses', '/backend-api/wham/usage', '/backend-api/ps/plugins/list']))
+    expect(chatgpt.some((rule) => rule.forwardURL || rule.match?.path?.startsWith)).toBe(false)
+    expect(chatgpt.at(-1)?.response?.statusCode).toBe(403)
+    const refresh = (box.policy.allow['auth.openai.com'] ?? []) as Rule[]
+    expect(refresh).toHaveLength(1)
+    expect(refresh[0]!.match).toEqual({ path: { exact: '/oauth/token' }, method: ['POST'] })
+    expect(JSON.parse(refresh[0]!.response!.body).access_token).toBe(codexPlaceholder({ id }))
+    for (const secret of [REFRESH, REFRESH_2, ID]) {
+      expect(JSON.stringify(box.policy)).not.toContain(secret)
+    }
+  })
+})

@@ -88,6 +88,7 @@ import {
   applySandboxPolicy,
   parseEgressSwapMode,
   parseFirewallClasses,
+  codexPlaceholderRefreshBody,
   egressSwapModeFor,
   CODEX_AUTH_HOST,
   applyLiveGitAccess,
@@ -134,7 +135,7 @@ import { refreshAfterSecretChange, refreshSandboxEnv } from './env-refresh'
 import { ACCOUNT_PROVIDERS, accountProvider, isSharedWorkspace } from './account-providers'
 import { handleAccountRequestSucceeded, handleAccountUnauthorized, verifyAccountCredential } from './agent-credential-checks'
 import { codexBrokerTick, handleCodexBrokerRoute, type BrokerDeps } from './codex-broker'
-import { codexAccount, codexPlaceholder, refreshCodexLeases } from './codex-credentials'
+import { codexAccount, refreshCodexLeases } from './codex-credentials'
 import {
   AgentCredentialError,
   PutClaudeSchema,
@@ -416,7 +417,6 @@ function egressRoutes(env: Env, deps: Deps): (row: SandboxRow, host: string) => 
     if (!owned || !keyring) {
       return []
     }
-    const placeholder = codexPlaceholder(row)
     return [
       {
         header: 'authorization',
@@ -430,14 +430,7 @@ function egressRoutes(env: Env, deps: Deps): (row: SandboxRow, host: string) => 
           await keyring
             .then((ring) => codexAccount.onUnauthorized!({ db: env.SANDBOX_DB, keyring: ring, userId: row.user_id, now, waitUntil, onChanged: codexChanged }))
             .catch(() => undefined)
-          return {
-            deny: 'codex_placeholder_refresh',
-            answer: {
-              status: 200,
-              contentType: 'application/json',
-              body: JSON.stringify({ access_token: placeholder, id_token: placeholder, refresh_token: '', token_type: 'Bearer', expires_in: 315_360_000 })
-            }
-          }
+          return { deny: 'codex_placeholder_refresh', answer: { status: 200, contentType: 'application/json', body: codexPlaceholderRefreshBody(row) } }
         }
       }
     ]
