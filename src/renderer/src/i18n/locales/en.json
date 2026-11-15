@@ -1517,7 +1517,9 @@
         "keywordSso": "sso",
         "keywordAudit": "audit log",
         "keywordEnterprise": "enterprise"
-      }
+      },
+      "signInFailed": "Couldn’t sign you in to the console",
+      "signInFailedDetail": "Your browser opened it anyway. Sign in there to continue."
     }
   },
   "menu": {
@@ -29238,13 +29240,6 @@
     "unfollowNamed": "Unfollow {{title}}",
     "followFailed": "Couldn’t follow this workspace",
     "unfollowFailed": "Couldn’t unfollow this workspace"
-  },
-  "sidebarTeam": {
-    "title": "Team",
-    "typingIn": "Typing in {{workspace}}",
-    "viewing": "In {{workspace}}",
-    "theirWorkspaces": "{{name}}’s workspaces",
-    "showAll": "Show all {{count}}"
   },
   "sidebarFollowing": {
     "asleep": "Asleep",

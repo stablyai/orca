@@ -28,6 +28,17 @@ export async function openCloudConsole(
       toast.error(
         translate('settings.cloudConsole.openFailed', 'Couldn’t open the browser. Try again.')
       )
+    } else if (result.ticketError) {
+      // The page opened, but not signed in: say why the browser asks for a sign-in.
+      toast.warning(
+        translate('settings.cloudConsole.signInFailed', 'Couldn’t sign you in to the console'),
+        {
+          description: translate(
+            'settings.cloudConsole.signInFailedDetail',
+            'Your browser opened it anyway. Sign in there to continue.'
+          )
+        }
+      )
     }
   } catch {
     toast.error(

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { presence, SELF_ID, workspace } from '../../cloud-workspaces/cloud-workspaces.test-fixture'
 import { followOffer } from '../../cloud-workspaces/CloudWorkspacePeople'
-import { followedWorkspaces } from './team-activity'
+import { followedWorkspaces, workspaceDisplayLabel } from './followed-workspaces'
 
 describe('followedWorkspaces (PARITY-FOLLOW)', () => {
   it("lists teammates' workspaces you follow, most recently active first, with who's here", () => {
@@ -96,5 +96,21 @@ describe('followOffer (PARITY-FOLLOW)', () => {
     expect(followOffer(after, SELF_ID)).toBeNull()
     expect(followedWorkspaces([before], SELF_ID)).toHaveLength(1)
     expect(followedWorkspaces([after], SELF_ID)).toHaveLength(0)
+  })
+})
+
+describe('workspaceDisplayLabel', () => {
+  it('names a workspace by title, then W-number, then repo', () => {
+    expect(workspaceDisplayLabel(workspace({ title: 'Checkout', number: 7 }))).toBe('Checkout')
+    expect(workspaceDisplayLabel(workspace({ title: '  ', number: 582 }))).toBe('W-582')
+    expect(
+      workspaceDisplayLabel(
+        workspace({
+          title: null,
+          number: null,
+          repo: { url: 'https://github.com/acme/payments.git', branch: null }
+        })
+      )
+    ).toBe('acme/payments')
   })
 })

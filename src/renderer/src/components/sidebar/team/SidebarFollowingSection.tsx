@@ -1,24 +1,14 @@
-// PARITY-FOLLOW: the sidebar's Team list and Following section, under the nav and above Projects,
-// for a team account only. Team: each teammate with what they are doing now (from workspace
-// presence); a row opens their profile, its hover action their workspaces. Following: teammates'
-// cloud workspaces this member follows; a row opens the workspace, its hover action unfollows.
+// PARITY-FOLLOW: the sidebar's Following section, under the nav and above Projects, for a team
+// account only: teammates' cloud workspaces this member follows; a row opens the workspace, its
+// hover action unfollows. (The team list moved to the web console.)
 import React, { useCallback, useState } from 'react'
-import { ChevronRight, LayoutList, Users, X } from 'lucide-react'
+import { ChevronRight, Users, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { useTranslate } from '@/i18n/use-translate'
 import { cn } from '@/lib/class-names'
 import { MemberAvatar } from '@/components/cloud-workspaces/CloudMemberAvatars'
-import {
-  memberHue,
-  type MemberDirectory
-} from '@/components/cloud-workspaces/cloud-workspace-format'
-
-export type SidebarTeammate = {
-  userId: string
-  /** What they are doing now, from workspace presence; null when not in any workspace. */
-  activity: { state: 'viewing' | 'typing'; workspaceLabel: string } | null
-}
+import type { MemberDirectory } from '@/components/cloud-workspaces/cloud-workspace-format'
 
 export type SidebarFollowedWorkspace = {
   sandboxId: string
@@ -31,27 +21,9 @@ export type SidebarFollowedWorkspace = {
   hereNow: number
 }
 
-/** Active first (typing, then viewing), then by name. */
-export function sortTeammates(
-  members: readonly SidebarTeammate[],
-  directory: MemberDirectory
-): SidebarTeammate[] {
-  const rank = (m: SidebarTeammate): number =>
-    m.activity?.state === 'typing' ? 0 : m.activity ? 1 : 2
-  const name = (m: SidebarTeammate): string => directory.get(m.userId)?.name ?? m.userId
-  return [...members].sort((a, b) => rank(a) - rank(b) || name(a).localeCompare(name(b)))
-}
-
-function hueStyle(userId: string): React.CSSProperties & { '--avatar-hue': string } {
-  return { '--avatar-hue': String(memberHue(userId)) }
-}
-
-/** Team rows shown before "Show all". */
-export const TEAM_LIST_CAP = 6
-
 /** A section's open state, remembered on this computer for this member. */
 export function useSidebarSectionOpen(
-  section: 'team' | 'following',
+  section: 'following',
   selfId: string | null,
   defaultOpen: boolean
 ): [boolean, () => void] {
@@ -139,124 +111,6 @@ function HoverAction({
         </TooltipContent>
       </Tooltip>
     </span>
-  )
-}
-
-export function SidebarTeamList({
-  members,
-  directory,
-  selfId,
-  defaultOpen = true,
-  onOpenProfile,
-  onShowWorkspaces
-}: {
-  members: SidebarTeammate[]
-  directory: MemberDirectory
-  selfId: string | null
-  defaultOpen?: boolean
-  onOpenProfile: (userId: string) => void
-  onShowWorkspaces: (userId: string) => void
-}): React.JSX.Element | null {
-  const t = useTranslate()
-  const [open, toggle] = useSidebarSectionOpen('team', selfId, defaultOpen)
-  const [showAll, setShowAll] = useState(false)
-  const teammates = sortTeammates(
-    members.filter((m) => m.userId !== selfId),
-    directory
-  )
-  if (teammates.length === 0) {
-    return null
-  }
-  return (
-    <section aria-label={t('sidebarTeam.title', 'Team')} className="flex flex-col px-2">
-      <SectionHeader
-        title={t('sidebarTeam.title', 'Team')}
-        count={teammates.length}
-        open={open}
-        onToggle={toggle}
-      />
-      {open ? (
-        <ul className="flex flex-col gap-px pb-1">
-          {(showAll ? teammates : teammates.slice(0, TEAM_LIST_CAP)).map((m) => {
-            const name = directory.get(m.userId)?.name ?? m.userId
-            const doing = m.activity
-              ? m.activity.state === 'typing'
-                ? t('sidebarTeam.typingIn', 'Typing in {{workspace}}', {
-                    workspace: m.activity.workspaceLabel
-                  })
-                : t('sidebarTeam.viewing', 'In {{workspace}}', {
-                    workspace: m.activity.workspaceLabel
-                  })
-              : null
-            return (
-              <li key={m.userId}>
-                <div
-                  role="button"
-                  tabIndex={0}
-                  className={ROW}
-                  onClick={() => onOpenProfile(m.userId)}
-                  onKeyDown={(event) => {
-                    if (event.key === 'Enter' || event.key === ' ') {
-                      event.preventDefault()
-                      onOpenProfile(m.userId)
-                    }
-                  }}
-                  aria-label={doing ? `${name}, ${doing}` : name}
-                >
-                  {/* Here now: a ring in their own color (as in the top bar); typing adds the
-                      pulsing dot. Never the workspace status colors. */}
-                  <span
-                    className={cn(
-                      'relative shrink-0 rounded-full',
-                      m.activity
-                        ? 'ring-2 ring-[hsl(var(--avatar-hue)_55%_55%)] dark:ring-[hsl(var(--avatar-hue)_50%_60%)]'
-                        : 'opacity-70'
-                    )}
-                    style={hueStyle(m.userId)}
-                  >
-                    <MemberAvatar
-                      userId={m.userId}
-                      directory={directory}
-                      selfId={selfId}
-                      size="sm"
-                    />
-                    {m.activity?.state === 'typing' ? (
-                      <span
-                        aria-hidden
-                        className="absolute -bottom-0.5 -right-0.5 size-2 rounded-full bg-agent-working ring-2 ring-worktree-sidebar motion-safe:animate-pulse"
-                      />
-                    ) : null}
-                  </span>
-                  <span className="min-w-0 flex-1 truncate">
-                    {name}
-                    {doing ? (
-                      <span className="ml-1.5 text-2xs text-muted-foreground">{doing}</span>
-                    ) : null}
-                  </span>
-                  <HoverAction
-                    label={t('sidebarTeam.theirWorkspaces', '{{name}}’s workspaces', { name })}
-                    onClick={() => onShowWorkspaces(m.userId)}
-                  >
-                    <LayoutList className="size-3.5" aria-hidden />
-                  </HoverAction>
-                </div>
-              </li>
-            )
-          })}
-          {!showAll && teammates.length > TEAM_LIST_CAP ? (
-            <li>
-              <button
-                type="button"
-                onClick={() => setShowAll(true)}
-                className="w-full rounded-md px-2 py-1 text-left text-2xs text-muted-foreground hover:bg-worktree-sidebar-foreground/8 hover:text-foreground"
-              >
-                {t('sidebarTeam.showAll', 'Show all {{count}}', { count: teammates.length })}
-              </button>
-            </li>
-          ) : null}
-        </ul>
-      ) : null}
-    </section>
   )
 }
 

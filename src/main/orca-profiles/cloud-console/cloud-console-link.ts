@@ -2,6 +2,7 @@
 // URL from auth, so the browser lands signed in; when that fails for any reason the console opens
 // without one and the browser asks the person to sign in. The ticket is never logged or kept.
 import { app, shell } from 'electron'
+import { cleanCloudServiceOrigin } from '../../../shared/cloud-service-url'
 import {
   ORCA_CLOUD_CONSOLE_BILLING_HINT_CAPABILITY,
   type OrcaCloudConsoleBillingHint,
@@ -109,24 +110,45 @@ export async function requestCloudConsoleTicket(
   return typeof answer === 'object' && answer !== null && 'url' in answer ? answer.url : null
 }
 
-async function mintTicketUrl(
+type MintedTicket = {
+  /** Auth's answer, unchecked (see acceptedTicketUrl); null when no ticket could be minted. */
+  url: unknown
+  /** The console origin auth advertises in the session's capabilities, when it does. */
+  consoleOrigin: string | null
+  /** A signed-in desktop asked for a ticket (so a missing one is a failure worth saying). */
+  attempted: boolean
+}
+
+/** The advertised console origin, re-checked: https only, an origin and nothing more. */
+export function advertisedConsoleOrigin(value: unknown): string | null {
+  return typeof value === 'string' ? cleanCloudServiceOrigin(value, false) : null
+}
+
+async function mintTicket(
   config: OrcaCloudAuthConfig,
   userDataPath: string,
   section: OrcaCloudConsoleSection,
   billingHint: OrcaCloudConsoleBillingHint | null
-): Promise<unknown> {
+): Promise<MintedTicket> {
+  const none: MintedTicket = { url: null, consoleOrigin: null, attempted: false }
   if (isOrcaCloudDevAuthEnabled()) {
-    return null
+    return none
   }
   const active = ensureActiveOrcaProfile(userDataPath)
   if (!active.profile.cloud) {
-    return null
+    return none
   }
   const orgId = active.profile.cloud.activeOrgId ?? null
-  const result = await runOrgMemberCall(config, active, userDataPath, (session) =>
-    requestCloudConsoleTicket(config, session, { section, orgId, billingHint })
-  )
-  return result.status === 'ok' ? result.value : null
+  const seen: { consoleOrigin: string | null } = { consoleOrigin: null }
+  const result = await runOrgMemberCall(config, active, userDataPath, (session) => {
+    seen.consoleOrigin = advertisedConsoleOrigin(session.capabilities?.consoleOrigin)
+    return requestCloudConsoleTicket(config, session, { section, orgId, billingHint })
+  }).catch(() => null)
+  return {
+    url: result?.status === 'ok' ? result.value : null,
+    consoleOrigin: seen.consoleOrigin,
+    attempted: true
+  }
 }
 
 export async function openOrcaCloudConsole(
@@ -143,16 +165,23 @@ export async function openOrcaCloudConsole(
     return { status: 'unconfigured' }
   }
   const { config } = configState
-  const origin = cloudConsoleOrigin(config, process.env, !app.isPackaged)
-  const ticketUrl = acceptedTicketUrl(
-    await mintTicketUrl(config, userDataPath, section, options.billingHint ?? null).catch(
-      () => null
-    ),
-    [origin, new URL(config.apiBaseUrl).origin]
+  const configured = cloudConsoleOrigin(config, process.env, !app.isPackaged)
+  const minted = await mintTicket(config, userDataPath, section, options.billingHint ?? null)
+  // Auth's own advertised console host is trusted alongside the configured one, so a console that
+  // moved hosts (or a stale ORCA_CLOUD_CONSOLE_URL) still opens signed in. Exact origins only.
+  const allowed = [configured, new URL(config.apiBaseUrl).origin, minted.consoleOrigin].filter(
+    (entry): entry is string => entry !== null
   )
+  const ticketUrl = acceptedTicketUrl(minted.url, allowed)
   try {
-    await openExternal(ticketUrl ?? cloudConsoleFallbackUrl(origin))
-    return { status: 'opened', signedIn: ticketUrl !== null }
+    await openExternal(ticketUrl ?? cloudConsoleFallbackUrl(minted.consoleOrigin ?? configured))
+    return {
+      status: 'opened',
+      signedIn: ticketUrl !== null,
+      ...(minted.attempted && ticketUrl === null
+        ? { ticketError: minted.url === null ? 'failed' : 'rejected' }
+        : {})
+    }
   } catch (error) {
     return { status: 'failed', error: error instanceof Error ? error.message : String(error) }
   }

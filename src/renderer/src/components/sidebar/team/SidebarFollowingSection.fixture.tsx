@@ -1,22 +1,9 @@
-// PARITY-FOLLOW (design review): Team and Following in the sidebar, between the nav and Projects.
+// PARITY-FOLLOW: Following in the sidebar, between the nav and Projects.
 import { defineFixture } from '../../../component-fixtures/component-fixture'
 import { DIRECTORY, SELF_ID } from '../../cloud-workspaces/cloud-workspaces.test-fixture'
-import {
-  SidebarFollowingSection,
-  SidebarTeamList,
-  type SidebarFollowedWorkspace,
-  type SidebarTeammate
-} from './SidebarTeamSections'
+import { SidebarFollowingSection, type SidebarFollowedWorkspace } from './SidebarFollowingSection'
 
 const noop = (): void => {}
-
-const TEAM: SidebarTeammate[] = [
-  { userId: SELF_ID, activity: null },
-  { userId: 'user_alan', activity: null },
-  { userId: 'user_grace', activity: { state: 'typing', workspaceLabel: 'Checkout retries' } },
-  { userId: 'user_linus', activity: { state: 'viewing', workspaceLabel: 'Refund webhooks' } },
-  { userId: 'user_mae', activity: null }
-]
 
 const FOLLOWING: SidebarFollowedWorkspace[] = [
   {
@@ -58,18 +45,11 @@ function Column({ children }: { children: React.ReactNode }): React.JSX.Element 
   )
 }
 
-/** Both sections open: teammates active first; followed workspaces with status and who's here. */
-export const teamAndFollowing = defineFixture({
+/** Followed workspaces with status and who's here. */
+export const following = defineFixture({
   width: 340,
   render: () => (
     <Column>
-      <SidebarTeamList
-        members={TEAM}
-        directory={DIRECTORY}
-        selfId={SELF_ID}
-        onOpenProfile={noop}
-        onShowWorkspaces={noop}
-      />
       <SidebarFollowingSection
         workspaces={FOLLOWING}
         directory={DIRECTORY}
@@ -81,19 +61,11 @@ export const teamAndFollowing = defineFixture({
   )
 })
 
-/** Collapsed headers keep the count; nothing followed hides Following entirely. */
-export const collapsedAndEmpty = defineFixture({
+/** Nothing followed hides Following entirely. */
+export const empty = defineFixture({
   width: 340,
   render: () => (
     <Column>
-      <SidebarTeamList
-        members={TEAM}
-        directory={DIRECTORY}
-        selfId={SELF_ID}
-        defaultOpen={false}
-        onOpenProfile={noop}
-        onShowWorkspaces={noop}
-      />
       <SidebarFollowingSection
         workspaces={[]}
         directory={DIRECTORY}
@@ -105,18 +77,11 @@ export const collapsedAndEmpty = defineFixture({
   )
 })
 
-/** Hovering a row shows its action: a teammate's workspaces, or Unfollow. */
+/** Hovering a row shows Unfollow. */
 export const rowHover = defineFixture({
   width: 340,
   render: () => (
     <Column>
-      <SidebarTeamList
-        members={TEAM}
-        directory={DIRECTORY}
-        selfId={SELF_ID}
-        onOpenProfile={noop}
-        onShowWorkspaces={noop}
-      />
       <SidebarFollowingSection
         workspaces={FOLLOWING}
         directory={DIRECTORY}
@@ -128,7 +93,7 @@ export const rowHover = defineFixture({
   ),
   interact: async (frame) => {
     for (const row of frame.querySelectorAll<HTMLElement>('.group\\/team-row')) {
-      if (row.textContent?.includes('Grace') || row.textContent?.includes('Refund')) {
+      if (row.textContent?.includes('Refund')) {
         row.classList.add('bg-worktree-sidebar-foreground/8')
         for (const el of row.querySelectorAll<HTMLElement>('.group-hover\\/team-row\\:hidden')) {
           el.style.display = 'none'
@@ -141,39 +106,4 @@ export const rowHover = defineFixture({
       }
     }
   }
-})
-
-/** A big team: 6 rows, then "Show all 9". */
-export const teamCapped = defineFixture({
-  width: 340,
-  render: () => (
-    <Column>
-      <SidebarTeamList
-        members={[
-          ...TEAM,
-          ...['Rosa Parks', 'Ken Thompson', 'Barbara Liskov', 'Edsger Dijkstra', 'Hedy Lamarr'].map(
-            (_name, i) => ({ userId: `user_extra_${i}`, activity: null })
-          )
-        ]}
-        directory={
-          new Map([
-            ...DIRECTORY,
-            ...[
-              'Rosa Parks',
-              'Ken Thompson',
-              'Barbara Liskov',
-              'Edsger Dijkstra',
-              'Hedy Lamarr'
-            ].map((name, i): [string, { name: string; email: string | null }] => [
-              `user_extra_${i}`,
-              { name, email: null }
-            ])
-          ])
-        }
-        selfId={SELF_ID}
-        onOpenProfile={noop}
-        onShowWorkspaces={noop}
-      />
-    </Column>
-  )
 })
