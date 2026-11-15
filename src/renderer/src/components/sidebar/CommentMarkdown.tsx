@@ -36,7 +36,8 @@ import {
 } from './comment-markdown-block-pipeline'
 import {
   linkGitHubReferences,
-  type GitHubRepoReference
+  type GitHubRepoReference,
+  type GitHubSeenReferenceRepos
 } from '../../../../shared/github/markdown/github-reference-links'
 
 export type { CommentMarkdownLinkClickHandler } from './comment-markdown-element-renderers'
@@ -59,9 +60,10 @@ function remarkNativeChatFileLinks(
 }
 
 export function remarkGitHubReferences(
-  defaultRepo: GitHubRepoReference
+  defaultRepo: GitHubRepoReference,
+  seenRepos?: GitHubSeenReferenceRepos
 ): () => (tree: Parameters<typeof linkGitHubReferences>[0]) => void {
-  return () => (tree) => linkGitHubReferences(tree, defaultRepo)
+  return () => (tree) => linkGitHubReferences(tree, defaultRepo, seenRepos)
 }
 
 // Escape HTML before remark-breaks so newlines inside it still break.
@@ -100,6 +102,8 @@ type CommentMarkdownProps = React.ComponentPropsWithoutRef<'div'> & {
   math?: boolean
   variant?: 'compact' | 'document'
   githubRepo?: GitHubRepoReference | null
+  /** Repos bare `#123` links follow ahead of `githubRepo`, by number. Keep stable per surface. */
+  githubSeenRepos?: GitHubSeenReferenceRepos
   onLinkClick?: CommentMarkdownLinkClickHandler
   allowFileUriLinks?: boolean
   /** Turns detected file paths into links, keeping only those this confirms exist. */
@@ -131,6 +135,7 @@ const CommentMarkdown = React.memo(
       className,
       variant = 'compact',
       githubRepo,
+      githubSeenRepos,
       onLinkClick,
       allowFileUriLinks = false,
       fileLinkExists,
@@ -176,8 +181,10 @@ const CommentMarkdown = React.memo(
         : basePlugins
       const withMath: RemarkPlugins = math ? [...plugins, remarkChatMath] : plugins
       const withExtension = extension ? [...withMath, ...extension.remarkPlugins] : withMath
-      return githubRepo ? [...withExtension, remarkGitHubReferences(githubRepo)] : withExtension
-    }, [extension, fileLinkExists, githubRepo, math, unknownHtmlAsText])
+      return githubRepo
+        ? [...withExtension, remarkGitHubReferences(githubRepo, githubSeenRepos)]
+        : withExtension
+    }, [extension, fileLinkExists, githubRepo, githubSeenRepos, math, unknownHtmlAsText])
     const blocks = useMarkdownBlocks(
       content,
       growing,

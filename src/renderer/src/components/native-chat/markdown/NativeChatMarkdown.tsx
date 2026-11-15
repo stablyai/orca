@@ -24,6 +24,7 @@ import { NativeChatDeferredMarkdownImage } from '../media/images/NativeChatDefer
 import { remarkNativeChatFileDestinations } from './native-chat-markdown-file-destinations'
 import { NativeChatLinkPeek } from '../links/previews/NativeChatLinkPeek'
 import { NativeChatLinkPeekContext } from '../links/previews/native-chat-link-peek-context'
+import { NativeChatGitHubSeenReposContext } from '../links/previews/native-chat-github-seen-repos'
 import { useNativeChatLinkClick } from '../links/actions/native-chat-link-click-context'
 import './native-chat-markdown.css'
 
@@ -161,6 +162,7 @@ export function NativeChatMarkdown({
     streaming
   )
   const { githubRepo } = useContext(NativeChatLinkPeekContext)
+  const githubSeenRepos = useContext(NativeChatGitHubSeenReposContext)
   return (
     <NativeChatMarkdownRowKeyContext.Provider value={rowKey}>
       <CommentMarkdown
@@ -169,6 +171,7 @@ export function NativeChatMarkdown({
         growing={growing || streaming}
         // Only the document variant's links can peek; bare #123 links follow it.
         githubRepo={variant === 'document' ? githubRepo?.referenceRepo : undefined}
+        githubSeenRepos={variant === 'document' ? githubSeenRepos : undefined}
         onLinkClick={onLinkClick}
         allowFileUriLinks={onLinkClick !== undefined}
         content={
