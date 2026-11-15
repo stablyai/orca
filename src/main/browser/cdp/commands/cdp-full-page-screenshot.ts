@@ -24,14 +24,18 @@ function spans(total: number, step: number, pixelsPerCssPixel: number): Span[] {
   const advance = Math.max(1, Math.floor(step) - 1)
   const edge = (css: number): number => Math.round(css * pixelsPerCssPixel)
   const out: Span[] = []
-  for (let start = 0; start < total; start += advance) {
-    const end = Math.min(total, start + advance)
+  for (let start = 0; ; start += advance) {
+    const length = Math.min(advance + 1, total - start)
+    const last = start + length >= total
     out.push({
       start,
-      length: Math.min(advance + 1, total - start),
+      length,
       offset: edge(start),
-      size: edge(end) - edge(start)
+      size: edge(last ? total : start + advance) - edge(start)
     })
+    if (last) {
+      break
+    }
   }
   return out
 }
