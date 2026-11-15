@@ -133,13 +133,13 @@ export function buildEditorSessionData(
   const editFileIdsByWorktree: Record<string, Set<string>> = {}
   for (const f of editFiles) {
     const arr = byWorktree[f.worktreeId] ?? (byWorktree[f.worktreeId] = [])
-    // Why: never persist a dirty draft for a read-only tab — restoring one would reintroduce writable/hot-exit state for an agent transcript.
     const dirtyDraftContent = f.isDirty && f.readOnly !== true ? editorDrafts[f.id] : undefined
     arr.push({
       filePath: f.filePath,
       relativePath: f.relativePath,
       worktreeId: f.worktreeId,
       language: f.language,
+      ...(f.projectDraftProjectId ? { projectDraftProjectId: f.projectDraftProjectId } : {}),
       isPreview: f.isPreview || undefined,
       runtimeEnvironmentId: f.runtimeEnvironmentId,
       ...(f.mirroredFromRuntimeSession === true ? { mirroredFromRuntimeSession: true } : {}),
@@ -216,9 +216,6 @@ export function buildSanitizedTabsByWorktree(
           restoredFromSession: _restored,
           ...rest
         } = tab
-        void _unused
-        void _recovery
-        void _restored
         return rest.agentLaunchPane
           ? { ...rest, agentLaunchPane: pendingAgentLaunchPane(rest.agentLaunchPane) }
           : rest

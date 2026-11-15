@@ -103,6 +103,9 @@ export function buildHydratedEditorSessionState(
         language: detectLanguage(pf.relativePath || pf.filePath),
         isDirty: !isReadOnly && pf.dirtyDraftContent !== undefined,
         isPreview: pf.isPreview,
+        ...(pf.projectDraftProjectId
+          ? { projectDraftProjectId: pf.projectDraftProjectId, isUntitled: true }
+          : {}),
         runtimeEnvironmentId: pf.runtimeEnvironmentId,
         mirroredFromRuntimeSession: pf.mirroredFromRuntimeSession,
         externalSshTargetId: pf.externalSshTargetId,

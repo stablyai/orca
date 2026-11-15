@@ -9,7 +9,8 @@ export const EditorFileRecord = z.object({
   runtimeEnvironmentId: z.string().nullable().optional(),
   externalSshTargetId: z.string().min(1).optional(),
   readOnly: z.literal(true).optional(),
-  liveTail: z.literal(true).optional()
+  liveTail: z.literal(true).optional(),
+  projectDraftProjectId: z.string().min(1).optional()
 })
 
 const EDITOR_VIEW_MODES: ReadonlySet<unknown> = new Set<EditorTabView['mode']>([

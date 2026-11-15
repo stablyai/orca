@@ -23,6 +23,7 @@ export type PersistedOpenFile = {
   worktreeId: string
   language: string
   isPreview?: boolean
+  projectDraftProjectId?: string
   runtimeEnvironmentId?: string | null
   mirroredFromRuntimeSession?: true
   /** SSH target that owns an absolute path outside the worktree. */

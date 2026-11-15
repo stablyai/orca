@@ -6,6 +6,7 @@ export const persistedOpenFileSchema = z.object({
   worktreeId: z.string(),
   language: z.string(),
   isPreview: z.boolean().optional(),
+  projectDraftProjectId: z.string().min(1).optional(),
   runtimeEnvironmentId: z.string().nullable().optional(),
   mirroredFromRuntimeSession: z.literal(true).optional(),
   externalSshTargetId: z.string().trim().min(1).optional(),

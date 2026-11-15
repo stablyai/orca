@@ -50,6 +50,11 @@ export function useEditorPanelFileContentLoader({
 }: UseEditorPanelFileContentLoaderParams): EditorPanelFileContentLoader {
   return useCallback<EditorPanelFileContentLoader>(
     async (filePath, id, worktreeId, relativePath, options) => {
+      const draftFile = useAppStore.getState().openFiles.find((file) => file.id === id)
+      if (draftFile?.projectDraftProjectId) {
+        setFileContents((previous) => ({ ...previous, [id]: { content: '', isBinary: false } }))
+        return
+      }
       const generation = ++fileReadGenerationCounterRef.current
       fileReadGenerationRef.current[id] = generation
       outstandingFileReadsRef.current[id] = generation

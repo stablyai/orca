@@ -1,4 +1,5 @@
 import React from 'react'
+import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 import { FilePlus, FileText, Globe, Smartphone, TerminalSquare } from 'lucide-react'
 import { useTranslate } from '@/i18n/use-translate'
 import { DropdownMenuItem, DropdownMenuShortcut } from '@/components/ui/dropdown-menu'
@@ -138,6 +139,13 @@ export function TabBarStaticCreateMenu({
         </DropdownMenuItem>
       )
     ) : null
+  const newTextFileMenuItem =
+    !terminalOnly && onNewFileTab && props.worktreeId !== FLOATING_TERMINAL_WORKTREE_ID ? (
+      <DropdownMenuItem onSelect={() => useAppStore.getState().openNewProjectTextDraft(groupId)}>
+        <FilePlus className="size-4 text-muted-foreground" />
+        {t('components.tabBar.newFile', 'New File')}
+      </DropdownMenuItem>
+    ) : null
   const newMarkdownMenuItem =
     !terminalOnly && onNewFileTab ? (
       <DropdownMenuItem
@@ -194,6 +202,7 @@ export function TabBarStaticCreateMenu({
 
   return newTabMenuOrder === 'markdown-first' ? (
     <>
+      {newTextFileMenuItem}
       {newMarkdownMenuItem}
       {pluginNewFileMenuItems}
       {openMarkdownMenuItem}
@@ -206,6 +215,7 @@ export function TabBarStaticCreateMenu({
     <>
       {defaultTerminalMenuItems}
       {newBrowserMenuItem}
+      {newTextFileMenuItem}
       {newMarkdownMenuItem}
       {pluginNewFileMenuItems}
       {openMarkdownMenuItem}

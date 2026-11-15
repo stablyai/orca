@@ -1,3 +1,4 @@
+import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 import type { TabBarCreateMenuController } from './tab-bar-create-menu-contract'
 export type { TabBarCreateMenuController } from './tab-bar-create-menu-contract'
 import { useAgentLaunchPickerInventorySource } from '../agent/use-agent-launch-picker-inventory'
@@ -160,6 +161,7 @@ export function useTabBarCreateMenuController({
         terminalOnly,
         windowsShellEntries,
         hasNewBrowser: !terminalOnly && managedBrowserCreationEnabled,
+        hasNewTextFile: worktreeId !== FLOATING_TERMINAL_WORKTREE_ID,
         hasNewMarkdown: !terminalOnly && Boolean(onNewFileTab),
         hasOpenMarkdown: !terminalOnly && Boolean(onOpenFileTab),
         hasSimulator:
@@ -178,7 +180,8 @@ export function useTabBarCreateMenuController({
       onOpenFileTab,
       terminalOnly,
       windowsShellEntries,
-      workspaceHasSimulatorTab
+      workspaceHasSimulatorTab,
+      worktreeId
     ]
   )
   const handleSelectCreateMenuOption = (option: TabCreateMenuOption): void => {
@@ -202,6 +205,9 @@ export function useTabBarCreateMenuController({
         break
       case 'new-browser':
         onNewBrowserTab()
+        break
+      case 'new-text-file':
+        useAppStore.getState().openNewProjectTextDraft(resolvedGroupId)
         break
       case 'new-markdown':
         onNewFileTab?.()

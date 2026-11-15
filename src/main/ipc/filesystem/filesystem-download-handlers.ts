@@ -1,4 +1,5 @@
 import { BrowserWindow, dialog, ipcMain } from 'electron'
+import path from 'node:path'
 import { randomUUID } from 'node:crypto'
 import { open, writeFile } from 'node:fs/promises'
 import { SshHostNotServedError } from '../../providers/ssh-host-not-served-error'
@@ -47,7 +48,12 @@ export function registerFilesystemDownloadHandlers(context: FilesystemHandlerCon
     'fs:saveDownloadedFile',
     async (
       event,
-      args: { suggestedName?: string; content?: string; encoding?: 'utf8' | 'base64' }
+      args: {
+        suggestedName?: string
+        content?: string
+        encoding?: 'utf8' | 'base64'
+        defaultDirectory?: string
+      }
     ): Promise<DownloadFileResult> => {
       const suggestedName = sanitizeLocalDownloadFilename(
         validateRequiredString(args?.suggestedName, 'suggestedName')
@@ -57,10 +63,14 @@ export function registerFilesystemDownloadHandlers(context: FilesystemHandlerCon
       }
       const content = args.content
       const encoding = args?.encoding === 'base64' ? 'base64' : 'utf8'
+      const defaultPath =
+        typeof args.defaultDirectory === 'string' && path.isAbsolute(args.defaultDirectory)
+          ? path.join(args.defaultDirectory, suggestedName)
+          : suggestedName
       const parentWindow = BrowserWindow.fromWebContents(event.sender) ?? undefined
       const dialogResult = parentWindow
-        ? await dialog.showSaveDialog(parentWindow, { defaultPath: suggestedName })
-        : await dialog.showSaveDialog({ defaultPath: suggestedName })
+        ? await dialog.showSaveDialog(parentWindow, { defaultPath })
+        : await dialog.showSaveDialog({ defaultPath })
       if (dialogResult.canceled || !dialogResult.filePath) {
         return { canceled: true }
       }

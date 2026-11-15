@@ -36,7 +36,10 @@ export function createEditorRestartSaveHandlers({
     try {
       detail.claim()
 
-      const dirtyFiles = restartSaveTargets(store.getState())
+      // Project drafts are backed up with the session, never written to a synthetic path.
+      const dirtyFiles = restartSaveTargets(store.getState()).filter(
+        (file) => !file.projectDraftProjectId
+      )
       const unsupportedDirtyFiles = dirtyFiles.filter((file) => !canAutoSaveOpenFile(file))
       if (unsupportedDirtyFiles.length > 0) {
         detail.reject('Some unsaved editor changes cannot be auto-saved before restart.')

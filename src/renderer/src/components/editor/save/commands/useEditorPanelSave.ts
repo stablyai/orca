@@ -3,6 +3,7 @@ import type { OpenFile } from '@/store/slices/editor/types/open-file'
 import { ConfirmationDialogContext } from '@/components/confirmation-dialog-context'
 import { attemptEditorFileSave, confirmEditorUtf8Conversion } from './editor-file-save-attempt'
 import { getEditorSaveTargetFile } from '../queue/editor-save-target'
+import { saveProjectTextDraft } from '../../project-drafts/save-project-text-draft'
 
 type UseEditorPanelSaveParams = {
   activeFile: OpenFile | null
@@ -25,6 +26,9 @@ export function useEditorPanelSave({
       const saveTargetFile = getEditorSaveTargetFile(file, openFiles)
       if (!saveTargetFile) {
         return false
+      }
+      if (saveTargetFile.projectDraftProjectId) {
+        return saveProjectTextDraft(saveTargetFile, content)
       }
       if (saveTargetFile.isUntitled) {
         requestRenameForFile(saveTargetFile.id)

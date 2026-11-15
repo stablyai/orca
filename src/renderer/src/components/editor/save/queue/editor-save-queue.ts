@@ -1,3 +1,4 @@
+import { saveProjectTextDraft } from '../../project-drafts/save-project-text-draft'
 import type { AppStoreApi, EditorSaveQueue } from './editor-save-queue-contract'
 import {
   clearScheduledEditorAutoSave,
@@ -285,8 +286,14 @@ export function createEditorSaveQueue(store: AppStoreApi): EditorSaveQueue {
     clearScheduledAutoSave(request.recordId)
     return slots.enqueue(request.recordId, request)
   }
-  const queueSave: EditorSaveQueue['queueSave'] = (file, content, trigger = 'user') =>
-    enqueueSave(captureRequest(file, content, trigger))
+  const queueSave: EditorSaveQueue['queueSave'] = (file, content, trigger = 'user') => {
+    if (file.projectDraftProjectId) {
+      return trigger === 'autosave' || trigger === 'restart'
+        ? Promise.resolve('failed')
+        : saveProjectTextDraft(file, content).then((saved) => (saved ? 'written' : 'failed'))
+    }
+    return enqueueSave(captureRequest(file, content, trigger))
+  }
 
   const settleFileSaves = async (fileId: string, flush = true): Promise<void> => {
     // Flush debounced rich-text serialization before dropping its timer.

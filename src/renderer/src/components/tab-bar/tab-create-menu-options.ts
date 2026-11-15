@@ -8,6 +8,7 @@ export type TabCreateMenuOptionKind =
   | 'go-to-simulator'
   | 'new-browser'
   | 'new-markdown'
+  | 'new-text-file'
   | 'new-simulator'
   | 'new-terminal'
   | 'new-terminal-shell'
@@ -37,6 +38,7 @@ export type TabCreateMenuOption = {
 export type TabCreateMenuOptionsContext = {
   hasNewBrowser: boolean
   hasNewMarkdown: boolean
+  hasNewTextFile?: boolean
   hasOpenMarkdown: boolean
   hasSimulator: boolean
   simulatorIsGoTo: boolean
@@ -130,6 +132,17 @@ export function buildTabCreateMenuOptions(
   }
 
   if (context.hasNewMarkdown) {
+    if (context.hasNewTextFile !== false) {
+      options.push({
+        id: 'new-text-file',
+        kind: 'new-text-file',
+        label: t('components.tabBar.newFile', 'New File'),
+        keywords: [
+          t('components.tabBar.plainText', 'plain text'),
+          t('components.tabBar.untitled', 'untitled')
+        ]
+      })
+    }
     const label = t('auto.components.tab.bar.TabBar.3d5d6c960d', 'New Markdown')
     options.push({
       id: 'new-markdown',

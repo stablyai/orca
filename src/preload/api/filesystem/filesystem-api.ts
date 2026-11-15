@@ -108,6 +108,7 @@ export type FilesystemApi = {
       connectionId: string
     }) => Promise<{ canceled: true } | { canceled: false; destinationPath: string }>
     saveDownloadedFile: (args: {
+      defaultDirectory?: string
       suggestedName: string
       content: string
       encoding: 'utf8' | 'base64'

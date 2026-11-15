@@ -22798,6 +22798,17 @@
         "cleaningUp": "Cleaning up…",
         "skipCleanup": "Skip cleanup and insert as heard"
       }
+    },
+    "projectTextDraft": {
+      "savedSnapshot": "Saved {{name}}. Newer edits remain in the draft.",
+      "otherUnsavedTab": "The file was saved. Resolve its other unsaved tab before closing this draft.",
+      "saveFailed": "Could not save the file.",
+      "savedLocalCopy": "Saved a local copy as {{name}}. This project draft is kept."
+    },
+    "tabBar": {
+      "newFile": "New File",
+      "plainText": "plain text",
+      "untitled": "untitled"
     }
   },
   "dashboardPopout": {
