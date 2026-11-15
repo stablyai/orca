@@ -8,7 +8,7 @@ import type {
   OrcaUninstallSimpleEntry,
   OrcaUninstallStep
 } from '../../../../../../shared/uninstall/orca-uninstall-types'
-import type { TerminalAgent } from '../../../../../../shared/agent-status/identity/terminal-agent'
+import { isTuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-agent-config'
 import { AgentIcon } from '@/components/agent/icons/AgentIcon'
 import { getAgentLabel } from '@/lib/agent-catalog/agent-catalog'
 import { cn } from '@/lib/class-names'
@@ -168,7 +168,11 @@ function AgentRows({ model }: { model: RowsModel }): React.JSX.Element | null {
             </span>
             <span className="flex items-center gap-1">
               {agents.slice(0, VISIBLE_AGENT_LOGOS).map((entry) => (
-                <AgentIcon key={entry.agent} agent={entry.agent as TerminalAgent} size={14} />
+                <AgentIcon
+                  key={entry.agent}
+                  agent={isTuiAgent(entry.agent) ? entry.agent : null}
+                  size={14}
+                />
               ))}
               {hidden > 0 ? <span className="text-xs text-muted-foreground">+{hidden}</span> : null}
             </span>
@@ -195,7 +199,7 @@ function AgentSubRow({
   entry: OrcaUninstallAgentEntry
 }): React.JSX.Element {
   const t = useTranslate()
-  const agent = entry.agent as TerminalAgent
+  const agent = isTuiAgent(entry.agent) ? entry.agent : null
   const running =
     (model.runningStep === 'agent-hooks' && entry.state === 'present') ||
     model.retrying.has(orcaUninstallRetryKey('agent-hooks', entry.agent))
@@ -203,7 +207,7 @@ function AgentSubRow({
   return (
     <div className={SUB_ROW_CLASS}>
       <AgentIcon agent={agent} size={14} />
-      <span className="min-w-0 break-words">{getAgentLabel(agent)}</span>
+      <span className="min-w-0 break-words">{agent ? getAgentLabel(agent) : entry.agent}</span>
       <span className={PATH_CLASS}>
         {entry.paths.map((path) => (
           <span key={path} className="block">
