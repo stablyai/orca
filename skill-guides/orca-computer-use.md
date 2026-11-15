@@ -108,7 +108,7 @@ ORCA computer drag --app <app> --from-element-index <index> --to-element-index <
 ORCA computer drag --app <app> --from-x 100 --from-y 100 --to-x 300 --to-y 300 --json
 ```
 
-Use `--no-screenshot` only when pixels are not needed. Use `--text-stdin` or `--value-stdin` for sensitive text so payloads do not land in shell history. On Linux and Windows, action payloads still pass through a short-lived local operation file, so avoid sending secrets unless the user explicitly asked for them:
+Actions return the updated tree without a screenshot unless you pass `--screenshot`. Use `--text-stdin` or `--value-stdin` for sensitive text so payloads do not land in shell history. On Linux and Windows, action payloads still pass through a short-lived local operation file, so avoid sending secrets unless the user explicitly asked for them:
 
 POSIX-shell example (use the equivalent stdin mechanism without command-history exposure in
 PowerShell or cmd.exe):
@@ -166,14 +166,15 @@ Start a closed app with `ORCA computer launch-app <app>`, not `open -a` or `Star
 
 ## Screenshots
 
-`get-app-state` and actions request screenshots by default unless `--no-screenshot` is
-passed. A successful `--json` capture is normally saved at `result.screenshot.path`; if that
-path is absent, use the inline base64 `result.screenshot.data`. Pretty output does not save
-images.
+`get-app-state` requests a screenshot by default unless `--no-screenshot` is passed.
+Actions skip it by default; add `--screenshot` (or any `--screenshot-*` flag) when you need
+to see the result of that action. A successful `--json` capture is normally saved at
+`result.screenshot.path`; if that path is absent, use the inline base64
+`result.screenshot.data`. Pretty output does not save images.
 
 Use the tree for indexes/actions and the screenshot for visual confirmation; failed capture usually means hidden, minimized, off-screen, or permission-blocked.
 
-For smaller screenshots on any action or `get-app-state`, add `--screenshot-scale 1` (at most one pixel per window point, which halves a Retina capture), `--screenshot-max-edge <px>` and `--screenshot-format jpeg`. The result's `screenshot.format` and `screenshot.scale` say what came back; older runtimes ignore these flags and return the full PNG.
+For smaller screenshots on `get-app-state` or an action, add `--screenshot-scale 1` (at most one pixel per window point, which halves a Retina capture), `--screenshot-max-edge <px>` and `--screenshot-format jpeg`. The result's `screenshot.format` and `screenshot.scale` say what came back; older runtimes ignore these flags and return the full PNG.
 
 Coordinates passed to `click`, `scroll`, and `drag` are window-local action coordinates. If the screenshot reports `scale` other than `1`, convert visual screenshot pixels before acting:
 
