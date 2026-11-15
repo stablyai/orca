@@ -1,6 +1,7 @@
 // @vitest-environment happy-dom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store/index'
+import { acceptedAgentStatuses } from '@/store/slices/agent-status/accepted-agent-statuses'
 import type { ManagedPane } from '@/lib/pane-manager/pane-manager-types'
 import type { PaneManager } from '@/lib/pane-manager/pane-manager'
 import { makePaneKey } from '../../../../../../shared/workspace-layout/stable-pane-id'
@@ -19,18 +20,21 @@ const KEYBINDINGS = { 'terminal.copySessionId': ['Mod+Shift+C'] }
 
 function seedClaudePane(shellForeground: boolean): void {
   useAppStore.setState({
-    agentStatusByPaneKey: {
-      [PANE_KEY]: {
-        paneKey: PANE_KEY,
-        state: 'done',
-        prompt: '',
-        updatedAt: 1,
-        stateStartedAt: 1,
-        stateHistory: [],
-        agentType: 'claude',
-        providerSession: { key: 'session_id', id: 'claude-session-1' }
-      }
-    },
+    agentStatusByPaneKey: acceptedAgentStatuses([
+      [
+        PANE_KEY,
+        {
+          paneKey: PANE_KEY,
+          state: 'done',
+          prompt: '',
+          updatedAt: 1,
+          stateStartedAt: 1,
+          stateHistory: [],
+          agentType: 'claude',
+          providerSession: { key: 'session_id', id: 'claude-session-1' }
+        }
+      ]
+    ]),
     paneForegroundAgentByPaneKey: { [PANE_KEY]: { agent: 'claude', shellForeground } }
   })
 }
@@ -91,7 +95,10 @@ async function pressChord(repeat = false) {
 
 describe('terminal Copy Session ID shortcut', () => {
   beforeEach(() => {
-    useAppStore.setState({ agentStatusByPaneKey: {}, paneForegroundAgentByPaneKey: {} })
+    useAppStore.setState({
+      agentStatusByPaneKey: acceptedAgentStatuses(),
+      paneForegroundAgentByPaneKey: {}
+    })
   })
 
   afterEach(() => {

@@ -6,7 +6,7 @@ import {
 // Older hosts return method_not_found (mobile may see forbidden); clients retain static seeds.
 
 import { defineMethod } from '../../../core'
-import { withTimeout } from '../../../../../../shared/promise-timeout-fallback'
+import { withTimeout } from '../../../../../../shared/concurrency/promise-timeout-fallback'
 import { isFloatingWorkspaceSelector } from '../../../../../../shared/floating-workspace-worktree'
 import { AGENT_MODEL_CATALOG_PICKER_WAIT_MS } from '../../../../../native-chat/agent-model-catalog/agent-model-catalog-listing-waiters'
 import {

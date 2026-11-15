@@ -50,7 +50,16 @@ function useSettledSidebarWorktreeSortOrder(args: {
       latched: sessionHasHadLiveSmartSignal.current,
       repoMap,
       now: Date.now(),
-      sources: state
+      sources: {
+        ...state,
+        attentionForWorktree: (worktree, now) =>
+          state.agentStatusByPaneKey.projection.attention(
+            worktree.id,
+            worktree.lastActivityAt,
+            now
+          ),
+        hasFreshAttributedStatus: () => state.agentStatusByPaneKey.projection.hasFreshEvidence()
+      }
     })
     return {
       // Why host identity: same-id copies on two machines are separate cards with their own ranks.

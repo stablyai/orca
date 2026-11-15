@@ -1,5 +1,5 @@
 import { readFile } from 'node:fs/promises'
-import { monotonicNow } from '../../deadline-settle-notifier'
+import { monotonicNow } from '../../concurrency/deadline-settle-notifier'
 import { PS_TIMEOUT_MS, assertWholeCapture, captureProcessTable } from './process-table-ps-capture'
 import {
   captureDarwinProcessTable,

@@ -1,8 +1,8 @@
 import type {
   ClaudeRateLimitAccountsState,
   CodexRateLimitAccountsState
-} from '../../../../../shared/managed-account-types'
-import type { RateLimitState } from '../../../../../shared/rate-limit-types'
+} from '../../../../../shared/agent-accounts/managed-account-types'
+import type { RateLimitState } from '../../../../../shared/agent-usage/rate-limits/rate-limit-types'
 import type { RuntimeRpcResponse } from '../../../../../shared/remote-runtime/rpc/runtime-rpc-envelope'
 import { callRuntimeRpc } from '../../rpc/calls/runtime-rpc-call'
 import { RuntimeRpcCallError } from '../../rpc/calls/runtime-rpc-result'

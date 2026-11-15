@@ -35,7 +35,7 @@ function viewFailure(parent: boolean): string {
 export async function viewClaudeAgentFromRow(agent: DashboardAgentRow): Promise<void> {
   const state = useAppStore.getState()
   const paneKey = agent.activationPaneKey ?? agent.paneKey
-  const parent = state.agentStatusByPaneKey[paneKey] ?? agent.entry
+  const parent = state.agentStatusByPaneKey.get(paneKey) ?? agent.entry
   const child = agent.rowSource === 'subagent'
   if (parent.structuredHostOwned) {
     // A chat pane opens the child in its own view, for any agent; the parent row shows the main agent.
@@ -72,7 +72,7 @@ export async function viewClaudeAgentFromRow(agent: DashboardAgentRow): Promise<
     const ptyId = state.terminalLayoutsByTabId[parsed.tabId]?.ptyIdsByLeafId?.[parsed.leafId]
     current = () => {
       const now = useAppStore.getState()
-      const liveParent = now.agentStatusByPaneKey[paneKey]
+      const liveParent = now.agentStatusByPaneKey.get(paneKey)
       const liveOwner = resolveOwnerOrLocal(now, { workspaceId: agent.tab.worktreeId })
       return (
         latest() &&

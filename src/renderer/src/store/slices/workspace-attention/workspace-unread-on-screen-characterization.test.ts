@@ -1,3 +1,4 @@
+import { acceptedAgentStatuses } from '@/store/slices/agent-status/accepted-agent-statuses'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as WorktreeMetaPersistModule from '../worktrees/metadata/worktree-meta-persist'
 import '../../../../../shared/agent-session/view/structured-agent-session-projection'
@@ -50,17 +51,19 @@ describe('on screen means read', () => {
     const pane = addLiveTerminalTab(store, WS_A, 'tab-a1')
     store.getState().setActiveWorktree(WS_A)
     store.setState({
-      agentStatusByPaneKey: {
-        [pane.paneKey]: {
-          state: 'done',
-          prompt: 'Fix the sidebar',
-          updatedAt: 900,
-          stateStartedAt: 900,
-          stateHistory: [],
-          agentType: 'claude',
-          ...pane
-        }
-      }
+      agentStatusByPaneKey: acceptedAgentStatuses(
+        Object.entries({
+          [pane.paneKey]: {
+            state: 'done',
+            prompt: 'Fix the sidebar',
+            updatedAt: 900,
+            stateStartedAt: 900,
+            stateHistory: [],
+            agentType: 'claude',
+            ...pane
+          }
+        })
+      )
     })
     completeAgentTurn(store, pane)
     await Promise.resolve()

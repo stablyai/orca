@@ -1,4 +1,4 @@
-import { withTimeout } from '../../../../shared/promise-timeout-fallback'
+import { withTimeout } from '../../../../shared/concurrency/promise-timeout-fallback'
 import { runCoalescedProbe, type CoalescedProbes } from '../../remotes/coalesced-probe'
 import type { WorktreeDiffStamp } from './worktree-diff-stamp'
 

@@ -12,13 +12,13 @@ import type { ClaudeRuntimeAuthPreparation } from '../../claude-accounts/runtime
 import type {
   CodexAccountSelectionTarget,
   NormalizedCodexAccountSelectionTarget
-} from '../../../shared/codex-selection-lane'
+} from '../../../shared/agent-accounts/codex/codex-selection-lane'
 import type { NormalizedClaudeAccountSelectionTarget } from '../../claude-accounts/selection/runtime-selection'
 import type {
   ProviderRateLimits,
   RateLimitState,
   CodexRateLimitResetOutcome
-} from '../../../shared/rate-limit-types'
+} from '../../../shared/agent-usage/rate-limits/rate-limit-types'
 import { ApiKeyFileUnreadableError } from '../../credentials/api-key-file-unreadable-error'
 
 const CODEX_RESET_REFRESH_RETRIES = 3

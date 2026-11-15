@@ -1,3 +1,4 @@
+import { acceptedAgentStatuses } from '@/store/slices/agent-status/accepted-agent-statuses'
 import React, { createContext, useContext, useMemo } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { useAppStore } from '@/store/index'
@@ -177,7 +178,7 @@ function buildLiveAgentStatusPaneIdsByTabId(
 }
 
 const EMPTY_LIVE_INPUTS = Object.freeze({
-  agentStatusByPaneKey: {},
+  agentStatusByPaneKey: acceptedAgentStatuses(Object.entries({})),
   runtimePaneTitlesByTabId: {},
   ptyIdsByTabId: {},
   terminalLayoutsByTabId: {},

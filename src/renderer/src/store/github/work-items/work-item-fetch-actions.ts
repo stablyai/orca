@@ -8,7 +8,7 @@ import { isGitHubWorkItemsSshRemoteRequiredError } from '../../../../../shared/g
 import { getTaskSourceCacheScope } from '../../../../../shared/work-items/task-source-context'
 import { isGitHubWorkItemsQueryTooLarge } from '../../../../../shared/github/work-items/work-items-query-bounds'
 import { reconcileCatalogRows } from '../../../../../shared/catalog-row-reconcile'
-import { structuralValuesEqual } from '../../../../../shared/structural-value-equality'
+import { structuralValuesEqual } from '../../../../../shared/collections/structural-value-equality'
 import { workItemsCacheKey, workItemsInflightRequestKey } from '../cache/cache-identity'
 import { isFresh, withBoundedCacheEntry, WORK_ITEMS_CACHE_TTL } from '../cache/cache-policy'
 import {

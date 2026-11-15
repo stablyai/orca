@@ -6,7 +6,7 @@ import {
 } from './web-runtime-dedicated-subscription'
 import type { PairedRuntimeConnection } from '../../../shared/remote-runtime/pairing/paired-runtime-connection'
 import type { PairedE2EEClientHandshake } from '../../../shared/remote-runtime/e2ee/paired-e2ee-client-handshake'
-import { throwIfSignalAborted } from '../../../shared/abort-signal-reason'
+import { throwIfSignalAborted } from '../../../shared/concurrency/abort-signal-reason'
 import type { RuntimeEnvironmentSetupFailure } from '../../../shared/remote-runtime/host-catalog/runtime-environment-subscription-setup'
 import { RuntimeHostStatusOwner } from '../../../shared/remote-runtime/host-status/runtime-host-status-owner'
 import type {

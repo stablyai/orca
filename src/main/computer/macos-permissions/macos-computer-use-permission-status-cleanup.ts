@@ -1,5 +1,5 @@
 import { runProcess } from '@orca/process-host'
-import { escapeRegex } from '../../../shared/string-utils'
+import { escapeRegex } from '../../../shared/text/regex-escaping'
 
 export async function stopMacOSPermissionStatusHelper(statusPath: string): Promise<void> {
   // The unique status path isolates this completed probe from other probes and setup helpers.

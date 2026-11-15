@@ -1,5 +1,5 @@
 import { UnsealedCredentialNotice } from '../../provider-accounts/UnsealedCredentialNotice'
-import type { SecretAtRestProtection } from '../../../../../shared/secret-at-rest-protection'
+import type { SecretAtRestProtection } from '../../../../../shared/secure-storage/secret-at-rest-protection'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { GlobalSettings } from '../../../../../shared/global-settings-types'
 import { getDefaultVoiceSettings } from '../../../../../shared/constants'

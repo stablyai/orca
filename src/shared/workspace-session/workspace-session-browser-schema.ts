@@ -3,7 +3,7 @@ import type { BrowserWorkspace } from '../browser/workspaces/browser-workspace-t
 import { normalizeBrowserHistoryEntries } from './workspace-session-browser-history'
 import { normalizeWorkspaceDocHistoryEntries } from './workspace-doc-history'
 import { isDocPreviewUrl } from '../document-preview/doc-preview-scheme'
-import { salvagingArray } from '../zod-salvage'
+import { salvagingArray } from '../validation/zod-salvage'
 import { browserPageAnnotationSchema } from '../browser/annotations/browser-page-annotation-schema'
 
 const browserLoadErrorSchema = z.object({

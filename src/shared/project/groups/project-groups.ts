@@ -2,7 +2,7 @@ import { getDefaultRepoHookSettings } from '../../constants'
 import { normalizeExecutionHostId } from '../../execution-host'
 import type { ProjectGroup, ProjectGroupCreatedFrom } from './project-group-types'
 import type { Repo } from '../../repository/repo-types'
-import { createNonSecureContextUuid } from '../../non-secure-context-uuid'
+import { createNonSecureContextUuid } from '../../identifiers/non-secure-context-uuid'
 
 export const UNGROUPED_PROJECT_GROUP_KEY = 'project-group:ungrouped'
 

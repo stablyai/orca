@@ -24,7 +24,7 @@ import {
 } from './native-chat-pending-attachment-cache'
 import { nativeChatPendingAttachmentScope } from './native-chat-pending-attachment-scopes'
 import { useNativeChatComposerImageChips } from './use-native-chat-composer-image-chips'
-import { createNonSecureContextUuid as createUuidV4 } from '../../../../../../shared/non-secure-context-uuid'
+import { createNonSecureContextUuid as createUuidV4 } from '../../../../../../shared/identifiers/non-secure-context-uuid'
 import {
   insertImageReferences,
   nativeChatImageRowIds,
