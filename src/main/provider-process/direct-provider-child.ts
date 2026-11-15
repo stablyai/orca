@@ -172,7 +172,7 @@ export class DirectProviderChild extends EventEmitter implements ProviderChild {
   }
 
   kill(signal: NodeJS.Signals | number = 'SIGTERM'): boolean {
-    if (this.settled) {
+    if (this.settled || this.groupVerdict === 'exited') {
       return false
     }
     if (

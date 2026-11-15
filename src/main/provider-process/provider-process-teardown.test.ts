@@ -138,3 +138,43 @@ it.each([true, false])(
     ).resolves.toEqual(delivered ? { tree: 'exited', killDelivered: true } : 'unverifiable')
   }
 )
+
+it('never reads or signals a retired group PID when the CLI wait outcome is unknown', async () => {
+  const target = { ...child(), leaderExited: false, groupVerdict: 'exited' as const }
+  const captureDescendants = vi.fn()
+  await expect(
+    terminateWithEvidence(target, {
+      site: 'lost-parent-test',
+      platform: 'darwin',
+      supervised: true,
+      captureDescendants
+    })
+  ).resolves.toBeNull()
+  expect(target.kill).not.toHaveBeenCalled()
+  expect(captureDescendants).not.toHaveBeenCalled()
+})
+
+it('discards an in-flight tree read after native group absence retires its PID', async () => {
+  const target = { ...child(), leaderExited: false, groupVerdict: 'live' as DescendantTreeVerdict }
+  const snapshot = Promise.withResolvers<{
+    rootPgid: number
+    descendants: never[]
+    capturedAtMs: number
+  }>()
+  const terminateDescendants = vi.fn()
+  const signalProcessGroup = vi.fn()
+  const teardown = terminateWithEvidence(target, {
+    site: 'lost-parent-test',
+    platform: 'darwin',
+    supervised: true,
+    captureDescendants: () => snapshot.promise,
+    terminateDescendants,
+    signalProcessGroup
+  })
+  target.groupVerdict = 'exited'
+  snapshot.resolve({ rootPgid: 1234, descendants: [], capturedAtMs: 1 })
+  await expect(teardown).resolves.toBeNull()
+  expect(target.kill.mock.calls).toEqual([['SIGSTOP']])
+  expect(terminateDescendants).not.toHaveBeenCalled()
+  expect(signalProcessGroup).not.toHaveBeenCalled()
+})

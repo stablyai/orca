@@ -19,7 +19,10 @@ export type ProviderProcessTeardownVerdict =
 
 const activeTeardowns = new WeakMap<object, Promise<ProviderProcessTeardownVerdict>>()
 
-type TeardownChild = Pick<ProviderChild, 'pid' | 'kill' | 'leaderExited' | 'writerPid'>
+type TeardownChild = Pick<
+  ProviderChild,
+  'pid' | 'kill' | 'leaderExited' | 'writerPid' | 'groupVerdict'
+>
 
 export type ProviderProcessTeardownDeps = {
   site: string
@@ -89,7 +92,7 @@ async function terminatePosixTree(
   child.kill('SIGSTOP')
   const capture = deps.captureDescendants ?? captureDescendantSnapshot
   const snapshot = await capture(rootPid).catch(() => null)
-  if (child.leaderExited) {
+  if (child.leaderExited || child.groupVerdict === 'exited') {
     return null
   }
   if (!snapshot) {
@@ -177,6 +180,10 @@ async function terminateOnce(
     }
     // The root may be a cmd.exe shim, so only taskkill proves the writer was terminated.
     return treeTerminated ? { tree: 'exited', killDelivered: true } : 'unverifiable'
+  }
+  // Group absence retires the numeric writer even if its actual wait status was lost.
+  if (child.groupVerdict === 'exited') {
+    return null
   }
   if (child.leaderExited) {
     const delivered = child.kill('SIGKILL')
