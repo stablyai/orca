@@ -1,5 +1,8 @@
 import type { AgentStatusEntry } from '../../agent-status/contracts/agent-status-types'
-import type { BrowserCertificateFailure, BrowserLoadError } from '../../browser-workspace-types'
+import type {
+  BrowserCertificateFailure,
+  BrowserLoadError
+} from '../../browser/workspaces/browser-workspace-types'
 import type { RuntimeBrowserPlacement } from '../../browser/client-hosting/runtime-browser-placement'
 import type { TerminalColorOverrides } from '../../terminal-themes/terminal-color-overrides'
 import type { TerminalLayoutSnapshot, TerminalTab } from '../../workspace-layout/terminal-tab-types'

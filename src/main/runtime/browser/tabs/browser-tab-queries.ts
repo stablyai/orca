@@ -5,7 +5,7 @@ import type {
   BrowserTabShowResult,
   BrowserTabSwitchResult
 } from '../../../../shared/browser/runtime/runtime-browser-contracts'
-import type { BrowserCertificateProceedResult } from '../../../../shared/browser-workspace-types'
+import type { BrowserCertificateProceedResult } from '../../../../shared/browser/workspaces/browser-workspace-types'
 import {
   browserCertificateTrustController,
   browserManager

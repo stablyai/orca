@@ -6,7 +6,7 @@ import {
   type SetupRunnerShell
 } from '../../shared/agent-launch/startup/setup-runner-command'
 import { scriptDeclaresPosixShell } from '../../shared/workspace-setup/setup-script-shebang'
-import { resolveWindowsShellStartupFamily } from '../../shared/windows-terminal-shell'
+import { resolveWindowsShellStartupFamily } from '../../shared/shell/launch/windows-terminal-shell'
 import { resolveWindowsGitBashShellPath } from '../pty/shell-startup/git-bash'
 import { gitExecFileAsync } from '../git/command-runner/git-exec-file'
 import { withRepositoryGitCause } from '../git/repository-git-cause'

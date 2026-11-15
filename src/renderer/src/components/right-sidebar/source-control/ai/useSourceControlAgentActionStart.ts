@@ -4,7 +4,7 @@ import type { SelectedSourceControlActionRecipe } from '../../../../../../shared
 import type { AgentLaunchPreferences } from '@/runtime/agent-launch-settings/host-agent-launch-preferences-resource'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { RuntimeGitContext } from '@/runtime/source-control/git/runtime-git-client-context'
-import type { LaunchSource } from '../../../../../../shared/telemetry-events'
+import type { LaunchSource } from '../../../../../../shared/telemetry/schemas/telemetry-property-schemas'
 import type {
   SourceControlLaunchActionId,
   SourceControlActionRecipe

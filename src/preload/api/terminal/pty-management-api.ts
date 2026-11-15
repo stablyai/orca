@@ -1,4 +1,4 @@
-import type { DaemonPtyCwdClass } from '../../../shared/daemon-adoption-telemetry'
+import type { DaemonPtyCwdClass } from '../../../shared/telemetry/daemon-adoption-telemetry'
 import type { DaemonAsyncIoStatus } from '../../../shared/daemon-async-io-health'
 
 // Mirrors DaemonSessionInfo; preload cannot import main-only daemon protocol types.

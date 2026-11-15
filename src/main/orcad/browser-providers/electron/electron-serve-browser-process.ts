@@ -18,11 +18,11 @@ import { readRuntimeMetadata } from '../../../runtime/rpc/server/runtime-metadat
 import { spawnProcess } from '@orca/process-host'
 import { isProcessAlive } from '../../../../shared/remote-runtime/serve-supervisor/serve-bundle-coordination'
 import { removeTree } from '../../../../shared/windows-transient-lock-removal'
-import { BROWSER_SIDECAR_OWNER_ENV } from '../../../../shared/browser-sidecar-lifetime'
+import { BROWSER_SIDECAR_OWNER_ENV } from '../../../../shared/browser/runtime/browser-sidecar-lifetime'
 import { electronIsolatedProfileSwitches } from '../../../../shared/electron-isolated-profile-switches'
 import { headlessServeOzonePlatformSwitches } from '../../../../shared/headless-serve-ozone-platform'
 import { sendOrcadSidecarRequest } from '../orcad-sidecar-runtime-client'
-import { browserWaitRequestTimeoutMs } from '../../../../shared/browser-wait-timeout'
+import { browserWaitRequestTimeoutMs } from '../../../../shared/browser/automation/browser-wait-timeout'
 import { electronServeEnvironment } from './electron-serve-browser-environment'
 import { reserveLoopbackPort } from './loopback-port-reservation'
 import {

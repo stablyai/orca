@@ -11,7 +11,10 @@ import { setMainUiLanguage } from '../i18n/main-i18n'
 import { rebuildAppMenu } from '../menu/register-app-menu'
 import { rebuildSystemTrayMenu } from '../tray/system-tray'
 import { track } from '../telemetry/client'
-import { SETTINGS_CHANGED_WHITELIST, type SettingsChangedKey } from '../../shared/telemetry-events'
+import {
+  SETTINGS_CHANGED_WHITELIST,
+  type SettingsChangedKey
+} from '../../shared/telemetry/schemas/telemetry-property-schemas'
 import type { AgentAwakeService } from '../power/agent-awake-service'
 import { sanitizeFloatingWorkspaceDirectorySetting } from './floating-workspace-directory'
 import { applyAgentStatusHooksEnabled } from '../agent-hooks/installation/managed-agent-hook-controls'

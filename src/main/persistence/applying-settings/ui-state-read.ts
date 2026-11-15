@@ -18,10 +18,10 @@ import {
   normalizeExecutionHostOrder
 } from '../../../shared/execution-host'
 import { normalizeManualRepoOrder } from '../../../shared/manual-repo-order'
-import { normalizeBrowserPageZoomLevel } from '../../../shared/browser-page-zoom'
-import { normalizeFeatureTipIds } from '../../../shared/feature-tips'
-import { normalizeContextualTourIds } from '../../../shared/contextual-tours'
-import { normalizeFeatureInteractions } from '../../../shared/feature-interactions'
+import { normalizeBrowserPageZoomLevel } from '../../../shared/browser/site-settings/browser-page-zoom'
+import { normalizeFeatureTipIds } from '../../../shared/feature-education/feature-tips'
+import { normalizeContextualTourIds } from '../../../shared/feature-education/contextual-tours/contextual-tours'
+import { normalizeFeatureInteractions } from '../../../shared/feature-education/interactions/feature-interactions'
 import {
   normalizeGroupBy,
   normalizeProjectOrderBy,

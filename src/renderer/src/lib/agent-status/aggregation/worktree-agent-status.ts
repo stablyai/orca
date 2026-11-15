@@ -9,7 +9,7 @@ import { tabHasLivePty } from '../../../../../shared/tab-has-live-pty'
 import type { WorktreeStatus } from '../../../../../shared/worktree-status-rollup'
 import { tuiAgentToAgentKind } from '../../../../../shared/agent-status/identity/agent-kind'
 import { agentTypeToIconAgent } from '../../../../../shared/agent-status/presentation/agent-type-icon-agent'
-import type { AgentKind } from '../../../../../shared/telemetry-property-schemas'
+import type { AgentKind } from '../../../../../shared/telemetry/schemas/telemetry-property-schemas'
 
 import type { AgentStatus } from '../../../../../shared/agent-status/title/agent-title-core'
 import { detectAgentStatusFromTitle } from '../../../../../shared/agent-status/title/agent-title-status'

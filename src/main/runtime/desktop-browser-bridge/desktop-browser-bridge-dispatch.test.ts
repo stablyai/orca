@@ -3,7 +3,7 @@ import { z } from 'zod'
 import {
   DESKTOP_BROWSER_BRIDGE_CANCEL_CAPABILITY,
   DESKTOP_BROWSER_BRIDGE_RUNTIME_CAPABILITY
-} from '../../../shared/desktop-browser-bridge-protocol'
+} from '../../../shared/browser/client-hosting/desktop-browser-bridge-protocol'
 import type { OrcaRuntimeService } from '../orca-runtime'
 import { defineMethod } from '../rpc/core'
 import { RpcDispatcher } from '../rpc/dispatcher'

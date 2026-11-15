@@ -2,7 +2,7 @@
 
 import { realpath } from 'node:fs/promises'
 import type { runProcess } from '@orca/process-host'
-import type { MacTccFolderClass } from '../../../shared/daemon-adoption-telemetry'
+import type { MacTccFolderClass } from '../../../shared/telemetry/daemon-adoption-telemetry'
 import type {
   FolderFlag,
   IcloudManaged,

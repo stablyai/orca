@@ -1,4 +1,4 @@
-import type { DictationTerm } from './dictation-dictionary'
+import type { DictationTerm } from './speech/dictation/dictation-dictionary'
 import type { RepoIcon } from './repo-icon'
 import type { GhAccountBinding } from './github/accounts/account-binding'
 import type { GitHubRepositoryIdentity } from './github/repositories/repository-identity'

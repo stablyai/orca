@@ -4,7 +4,7 @@ import type { AgentStartupSettings } from '../../../../../../shared/agent-launch
 import type { AgentLaunchInputViews } from '../../../../../../shared/agent-launch/choices/agent-launch-choices'
 import type { ProjectGroup } from '../../../../../../shared/project-group-types'
 import type { TuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-agent'
-import type { LaunchSource } from '../../../../../../shared/telemetry-events'
+import type { LaunchSource } from '../../../../../../shared/telemetry/schemas/telemetry-property-schemas'
 import type { TaskSourceContext } from '../../../../../../shared/work-items/task-source-context'
 
 import type {

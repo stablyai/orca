@@ -4,7 +4,7 @@ import {
 } from '../host-guest/metadata/browser-guest-metadata-cache'
 import { useEffect, useLayoutEffect, type MutableRefObject, type RefObject } from 'react'
 import { useAppStore } from '@/store/index'
-import { normalizeBrowserNavigationUrl } from '../../../../../shared/browser-url'
+import { normalizeBrowserNavigationUrl } from '../../../../../shared/browser/navigation/browser-url'
 import '../../../../../shared/constants'
 import { ORCA_BROWSER_BLANK_URL } from '../../../../../shared/browser/browser-blank-page'
 import { normalizeBrowserGuestSrc } from '../../../../../shared/browser/extensions/browser-extension-url'

@@ -7,9 +7,9 @@ import { useAppStore } from '@/store/index'
 import { useShortcutLabel } from '@/hooks/useShortcutLabel'
 import '../../../../../shared/constants'
 import { ORCA_BROWSER_BLANK_URL } from '../../../../../shared/browser/browser-blank-page'
-import { normalizeExternalBrowserUrl } from '../../../../../shared/browser-url'
+import { normalizeExternalBrowserUrl } from '../../../../../shared/browser/navigation/browser-url'
 import { getLiveBrowserUrl } from '../describe-page/live-browser-url-registry'
-import { getBrowserViewportPreset } from '../../../../../shared/browser-viewport-presets'
+import { getBrowserViewportPreset } from '../../../../../shared/browser/guest-lifecycle/browser-viewport-presets'
 import {
   ensureBrowserPageViewport,
   scrollBrowserPageViewport,

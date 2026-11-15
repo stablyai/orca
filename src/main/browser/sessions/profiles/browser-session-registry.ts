@@ -11,7 +11,7 @@ import {
 import type {
   BrowserSessionProfile,
   BrowserSessionProfileScope
-} from '../../../../shared/browser-workspace-types'
+} from '../../../../shared/browser/workspaces/browser-workspace-types'
 import {
   applyPendingBrowserCookieImports,
   clearPendingBrowserCookieImport

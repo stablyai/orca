@@ -23,7 +23,7 @@ import {
   resolveSetupGuideSidebarDismissedOnLoad
 } from '../../applying-settings/onboarding-normalization'
 import type { PersistedState } from '../../../../shared/persisted-state-types'
-import type { OnboardingState } from '../../../../shared/onboarding-state-types'
+import type { OnboardingState } from '../../../../shared/onboarding/onboarding-state-types'
 
 export function normalizeLoadedUiState(
   parsed: PersistedState,

@@ -33,7 +33,7 @@ import type { GrabModeHook } from '../annotate/grab/useGrabMode'
 import type {
   BrowserPageConversionOrigin,
   BrowserViewportPresetId
-} from '../../../../../shared/browser-workspace-types'
+} from '../../../../../shared/browser/workspaces/browser-workspace-types'
 import {
   advanceAcrossBrowserPageConversion,
   returnAcrossBrowserPageConversion

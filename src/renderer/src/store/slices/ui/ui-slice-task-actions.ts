@@ -1,6 +1,6 @@
 import type { UISlice, UISliceGet, UISliceSet } from './ui-slice-contract'
 import { findPrevLiveNonTaskStackHistoryIndex } from './workspace-navigation-history'
-import { hasFeatureInteraction } from '../../../../../shared/feature-interactions'
+import { hasFeatureInteraction } from '../../../../../shared/feature-education/interactions/feature-interactions'
 import {
   normalizeVisibleTaskProviders,
   restoreAvailableDefaultTaskProvider,

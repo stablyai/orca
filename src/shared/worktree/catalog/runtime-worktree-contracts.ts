@@ -1,4 +1,4 @@
-import type { DictationTerm } from '../../dictation-dictionary'
+import type { DictationTerm } from '../../speech/dictation/dictation-dictionary'
 import type { SmartTier } from '../../sidebar-list/sorting/sort-stamps'
 import type {
   AgentStatusState,
