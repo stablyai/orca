@@ -11,9 +11,11 @@ import type { SessionFileCandidate } from '../../ai-vault/session-scanner-types'
 import type { TranscriptSessionIdentity } from '../../ai-vault/transcripts/session-transcript-consumers'
 import {
   fileIdentity,
+  type SessionSearchFailureStat,
   type SessionSearchFileIdentity,
   type SessionSearchIndexedFile
 } from './session-search-file-cursor'
+import { readSessionSearchFileRows } from './session-search-file-rows'
 import {
   SESSION_SEARCH_COMMIT_CHARS,
   SessionSearchIndexWriter,
@@ -175,53 +177,63 @@ export class SessionSearchStore {
     this.onError(error)
   }
 
+  /** Snapshot every indexed file with its stat, for diffing against a fresh discovery pass. */
   files(): SessionSearchFileRow[] {
-    return (
+    return readSessionSearchFileRows(
       this.db
         .prepare(
           // Numeric stat IDs may exceed SQLite's safe INTEGER-to-number read range.
           `SELECT path, CAST(dev AS REAL) AS dev, CAST(ino AS REAL) AS ino,
                   mtime_ms AS mtimeMs, size_bytes AS sizeBytes,
-                  state, fail_count AS failCount, failed_mtime_ms AS failedMtimeMs
+                  sidecar_mtime_ms AS sidecarMtimeMs, sidecar_size_bytes AS sidecarSizeBytes,
+                  state, fail_count AS failCount, failed_mtime_ms AS failedMtimeMs,
+                  failed_sidecar_mtime_ms AS failedSidecarMtimeMs,
+                  failed_sidecar_size_bytes AS failedSidecarSizeBytes,
+                  failed_at_ms AS failedAtMs
            FROM files`
         )
-        .all() as (Omit<SessionSearchFileRow, 'identity'> & {
-        dev: number | null
-        ino: number | null
-      })[]
-    ).map((row) => ({
-      path: row.path,
-      identity:
-        typeof row.dev === 'number' && typeof row.ino === 'number'
-          ? { dev: row.dev, ino: row.ino }
-          : null,
-      mtimeMs: row.mtimeMs,
-      sizeBytes: row.sizeBytes,
-      state: row.state,
-      failCount: row.failCount,
-      failedMtimeMs: row.failedMtimeMs
-    }))
+        .all()
+    )
   }
 
-  setFileState(path: string, state: SessionSearchFileState, atMtimeMs?: number): void {
+  setFileState(
+    path: string,
+    state: SessionSearchFileState,
+    failure?: SessionSearchFailureStat
+  ): void {
     try {
       if (state === 'failed') {
-        // Persist initial failures too, or unreadable new files retry forever.
+        // Persist initial failures too, or unreadable new files retry forever. The sidecar stamp
+        // belongs here because an unchanged metadata file cannot release a held-out sidecar append,
+        // and the clock because a source whose stat never moves can still become readable.
         this.db
           .prepare(
-            `INSERT INTO files(path, byte_offset, mtime_ms, state, fail_count, failed_mtime_ms)
-             VALUES (?, 0, ?, 'failed', 1, ?)
+            `INSERT INTO files(path, byte_offset, mtime_ms, state, fail_count, failed_mtime_ms,
+                               failed_sidecar_mtime_ms, failed_sidecar_size_bytes, failed_at_ms)
+             VALUES (?, 0, ?, 'failed', 1, ?, ?, ?, ?)
              ON CONFLICT(path) DO UPDATE SET
                state = 'failed',
                fail_count = files.fail_count + 1,
-               failed_mtime_ms = excluded.failed_mtime_ms`
+               failed_mtime_ms = excluded.failed_mtime_ms,
+               failed_sidecar_mtime_ms = excluded.failed_sidecar_mtime_ms,
+               failed_sidecar_size_bytes = excluded.failed_sidecar_size_bytes,
+               failed_at_ms = excluded.failed_at_ms`
           )
-          .run(path, atMtimeMs ?? 0, atMtimeMs ?? null)
+          .run(
+            path,
+            failure?.mtimeMs ?? 0,
+            failure?.mtimeMs ?? null,
+            failure?.sidecarMtimeMs ?? null,
+            failure?.sidecarSizeBytes ?? null,
+            Date.now()
+          )
         return
       }
       this.db
         .prepare(
-          'UPDATE files SET state = ?, fail_count = 0, failed_mtime_ms = NULL WHERE path = ?'
+          `UPDATE files SET state = ?, fail_count = 0, failed_mtime_ms = NULL,
+           failed_sidecar_mtime_ms = NULL, failed_sidecar_size_bytes = NULL,
+           failed_at_ms = NULL WHERE path = ?`
         )
         .run(state, path)
     } catch (error) {

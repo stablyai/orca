@@ -1,9 +1,9 @@
 import type {
   AgentProviderSessionMetadata,
   ResumableTuiAgent,
-  SavedResumeStartupSource,
   SleepingAgentSessionRecord
 } from '../../../../../../shared/agent-session/lifecycle/agent-session-resume'
+import type { SavedResumeStartupSource } from '../../../../../../shared/agent-session/lifecycle/saved-resume-startup-source'
 import type { buildAgentResumeStartupPlan } from '../../../../../../shared/agent-launch/startup/tui-agent-resume-startup'
 
 export type PendingStartupCommand = {
