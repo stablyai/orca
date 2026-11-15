@@ -1,7 +1,7 @@
-/** Google publishes no Windows Antigravity chat server Orca can run (#30817); relax this once one ships. */
+/** Previously Google published no Windows Antigravity chat server (#30817); host agy CLI now ships with ACP support on Windows. */
 export function structuredChatUnavailableOnPlatform(
-  agent: string,
-  platform: string | null | undefined
+  _agent: string,
+  _platform: string | null | undefined
 ): boolean {
-  return agent === 'antigravity' && platform === 'win32'
+  return false
 }
