@@ -47,10 +47,11 @@ export function reconcileJournalLegacySource(stateDirectory: string, db: Databas
     return
   }
   const source = openJournalLegacySource(sourcePath)
+  let current: [string, string][] = []
   try {
     if (unchanged) {
       // Converted before revisions were kept, and nothing written since: each chat is current.
-      keepCurrentRevisions(source, db)
+      current = missingRevisions(source, db)
     } else if (!absorbChats(source, db)) {
       // A failed chat leaves the original unabsorbed, so the next launch retries it.
       return
@@ -58,23 +59,26 @@ export function reconcileJournalLegacySource(stateDirectory: string, db: Databas
   } finally {
     source.close()
   }
+  // Revisions read while another process wrote the original are not current; read them next launch.
+  if (unchanged && JSON.stringify(captureJournalLegacySourceReceipt(sourcePath)) !== receipt) {
+    return
+  }
   runJournalTransaction(db, () => {
+    for (const [id, revision] of current) {
+      recordJournalLegacyChatRevision(db, id, revision)
+    }
     writeMeta(db, JOURNAL_LEGACY_SOURCE_RECEIPT, receipt)
     writeMeta(db, JOURNAL_LEGACY_REVISIONS_KEPT, '1')
   })
 }
 
-function keepCurrentRevisions(source: Database.Database, db: Database.Database): void {
-  runJournalTransaction(db, () => {
-    for (const { session_id: id } of source
-      .prepare('SELECT session_id FROM agent_session_records')
-      .all()) {
-      if (readMeta(db, journalLegacyChatRevisionKey(String(id))) === undefined) {
-        const revision = journalLegacyChatRevision(source, String(id)) ?? 'null'
-        recordJournalLegacyChatRevision(db, String(id), revision)
-      }
-    }
-  })
+function missingRevisions(source: Database.Database, db: Database.Database): [string, string][] {
+  return source
+    .prepare('SELECT session_id FROM agent_session_records')
+    .all()
+    .map((row) => String(row.session_id))
+    .filter((id) => readMeta(db, journalLegacyChatRevisionKey(id)) === undefined)
+    .map((id): [string, string] => [id, journalLegacyChatRevision(source, id) ?? 'null'])
 }
 
 type Claim = SqliteRow
