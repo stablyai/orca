@@ -1,4 +1,4 @@
-import { useMemo } from 'react'
+import { useCallback, useMemo, useSyncExternalStore } from 'react'
 import {
   agentChildRowContextForParent,
   type AgentChildRowContext
@@ -23,11 +23,22 @@ export function structuredSessionChildRowContext(
   )
 }
 
+const subscribeToNothing = (): (() => void) => () => {}
+
 /** Use the sidebar’s parent verdict so the same child cannot disagree between strip and sidebar. */
 export function useStructuredSessionChildRowContext(
-  paneKey: string
+  paneKey: string,
+  active = true
 ): AgentChildRowContext | undefined {
-  const parent = useAppStore((state) => state.agentStatusByPaneKey[paneKey])
+  const readParent = useCallback(
+    () => (active ? useAppStore.getState().agentStatusByPaneKey[paneKey] : undefined),
+    [active, paneKey]
+  )
+  const parent = useSyncExternalStore(
+    active ? useAppStore.subscribe : subscribeToNothing,
+    readParent,
+    readParent
+  )
   // The freshness window is thirty minutes; a coarse shared tick is well inside its precision.
   const now = useNow(30_000, parent !== undefined)
   const context = parent ? structuredSessionChildRowContext(parent, now) : undefined
