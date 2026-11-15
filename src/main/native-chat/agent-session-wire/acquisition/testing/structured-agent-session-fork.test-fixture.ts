@@ -1,4 +1,4 @@
-import { withTestAgentSessionDatabase } from '../../../../runtime/agent-session/records/agent-session-record-store-test-harness'
+import { withTestAgentSessionDatabase } from '../../../../runtime/agent-session/records/agent-session-record-store-persistence.test-fixture'
 import { seedJournalForkSource } from '../../../agent-session-journal/journal-fork-source.test-fixture'
 import { vi } from 'vitest'
 import { mkdir, writeFile } from 'node:fs/promises'

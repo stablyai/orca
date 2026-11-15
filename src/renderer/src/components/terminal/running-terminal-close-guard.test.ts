@@ -36,7 +36,6 @@ function setState(overrides: Record<string, unknown> = {}): void {
 function guard(onClose = vi.fn(), onCancel?: () => void): void {
   guardRunningTerminalClose({
     terminalTabId: 'tab-1',
-    tabLabel: 'npm run dev',
     onClose,
     ...(onCancel ? { onCancel } : {})
   })
@@ -85,7 +84,7 @@ describe('guardRunningTerminalClose', () => {
     expect(visibleRequest()).toMatchObject({ terminalTabId: 'tab-1' })
   })
 
-  it('defers a busy terminal behind a confirmation that carries the tab label', async () => {
+  it('defers a busy terminal behind a confirmation until approved', async () => {
     const onClose = vi.fn()
 
     guard(onClose)
@@ -95,7 +94,6 @@ describe('guardRunningTerminalClose', () => {
     expect(onClose).not.toHaveBeenCalled()
     expect(visibleRequest()).toMatchObject({
       terminalTabId: 'tab-1',
-      tabLabel: 'npm run dev',
       copyKind: 'command'
     })
 
@@ -194,7 +192,7 @@ describe('guardRunningTerminalClose', () => {
     await settleProbe()
 
     expect(onClose).not.toHaveBeenCalled()
-    expect(visibleRequest()).toMatchObject({ terminalTabId: 'tab-1', tabLabel: 'npm run dev' })
+    expect(visibleRequest()).toMatchObject({ terminalTabId: 'tab-1' })
 
     useRunningTerminalCloseConfirmStore.getState().confirmRunningTerminalClose()
     expect(onClose).toHaveBeenCalledTimes(1)
