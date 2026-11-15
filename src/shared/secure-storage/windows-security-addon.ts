@@ -1,6 +1,7 @@
 import { realpathSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { basename, isAbsolute, join, relative, toNamespacedPath } from 'node:path'
+import { pathToFileURL } from 'node:url'
 import type * as WindowsSecurityModule from '@orca/windows-security'
 import { ORCAD_WINDOWS_SECURITY_FILENAME } from '../remote-runtime/orcad-distribution/orcad-artifacts'
 
@@ -23,7 +24,11 @@ const nativeLookupDirectory =
     basename(__filename) === 'windows-security-addon.js')
     ? join(__dirname, '..')
     : __dirname
-const requireFromHere = createRequire(join(nativeLookupDirectory, basename(__filename)))
+const requireFromHere = createRequire(
+  nativeLookupDirectory === __dirname
+    ? __filename
+    : new URL(`../${basename(__filename)}`, pathToFileURL(__filename))
+)
 
 let loaded: WindowsSecurity | { error: string } | null = null
 
