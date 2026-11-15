@@ -12,12 +12,12 @@ import { formatCurrencyAmount } from '../../../../../shared/agent-usage/display/
 import { translate } from '@/i18n/i18n'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { formatUsagePercentageLabel } from './usage-percentage-label'
-import { getUsageHealthTone, usageBarClass } from './usage-health-tone'
+import { getUsageHealthTone, PLAIN_USAGE_BAR_CLASS, usageBarClass } from './usage-health-tone'
 
 // Why no green: this is overage spend against a money cap, not an allowance; only warn near the cap.
 function spendBarColor(spentPct: number): string {
   const tone = getUsageHealthTone(spentPct)
-  return tone === 'healthy' ? 'bg-muted-foreground/40' : usageBarClass(spentPct)
+  return tone === 'healthy' ? PLAIN_USAGE_BAR_CLASS : usageBarClass(spentPct)
 }
 
 export function getExtraUsageLabel(
