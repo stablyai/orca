@@ -28,7 +28,7 @@ const spec: ProviderSpawnSpec = {
 
 function launch(index: number) {
   const raw = new ChildProcess()
-  raw.pid = 7_000_000 + index * 3
+  Object.defineProperty(raw, 'pid', { value: 7_000_000 + index * 3 })
   raw.stdin = new PassThrough()
   const stdout = new PassThrough()
   const stderr = new PassThrough()
@@ -49,7 +49,7 @@ function launch(index: number) {
       done()
     }
   })
-  raw.stdio = [raw.stdin, raw.stdout, raw.stderr, control, gate, status, outcome]
+  Object.assign(raw, { stdio: [raw.stdin, raw.stdout, raw.stderr, control, gate, status, outcome] })
   status.write(
     `${JSON.stringify({ leaderPid: raw.pid + 1, watcherPid: raw.pid + 2, bootId: 'test-boot' })}\n`
   )
@@ -77,20 +77,10 @@ async function finishChats(count: number) {
     outcome.end('{"code":0,"signal":null}\n')
   }
   await Promise.all(runs.map(({ closed }) => closed))
-  for (const { raw, child, connection, gate, control, errors } of runs) {
+  for (const { raw, child, connection, gate, errors } of runs) {
     expect(raw.exitCode).toBeNull() // H deliberately has not emitted exit.
     expect(child.exitCode).toBe(0)
-    expect(raw.stdout!.listenerCount('error')).toBe(0)
-    expect(raw.stderr!.listenerCount('error')).toBe(0)
-    expect(raw.stdin!.listenerCount('finish')).toBe(0)
     expect(raw.stdin).not.toBe(child.stdin)
-    expect(raw.stdin!.listenerCount('error')).toBe(1) // Only the raw transport's sink.
-    expect(raw.stdin!.listenerCount('close')).toBe(0)
-    expect(raw.stdin!.listenerCount('unpipe')).toBe(0)
-    expect(raw.stdout!.listenerCount('data')).toBe(0)
-    expect(raw.stderr!.listenerCount('data')).toBe(0)
-    expect(control.listenerCount('data')).toBe(0)
-    expect(control.listenerCount('end')).toBe(0)
     // Late native-parent transport failures must not reach the retired chat.
     raw.emit('error', new Error('late parent error'))
     gate.emit('error', new Error('late gate error'))

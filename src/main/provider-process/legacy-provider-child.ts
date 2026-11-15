@@ -1,3 +1,4 @@
+import { setTimeout, clearTimeout } from 'node:timers'
 import type { ChildProcess } from 'node:child_process'
 import { EventEmitter } from 'node:events'
 import {

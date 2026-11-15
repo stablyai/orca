@@ -6,8 +6,8 @@ import { observeProviderLeaderOutcome } from './provider-leader-outcome'
 function parent() {
   const raw = new ChildProcess()
   const pipe = new PassThrough()
-  raw.pid = 9_999_999
-  raw.stdio = [null, null, null, null, null, null, pipe]
+  Object.defineProperty(raw, 'pid', { value: 9_999_999, configurable: true })
+  Object.assign(raw, { stdio: [null, null, null, null, null, null, pipe] })
   return { raw, pipe }
 }
 
@@ -60,7 +60,7 @@ describe('provider leader wait evidence', () => {
 
   it('preserves processless spawn failure close status', async () => {
     const { raw, pipe } = parent()
-    raw.pid = undefined
+    Object.defineProperty(raw, 'pid', { value: undefined })
     const outcome = observeProviderLeaderOutcome(raw)
     pipe.destroy()
     raw.emit('close', -2, null)
