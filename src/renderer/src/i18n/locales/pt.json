@@ -6540,9 +6540,7 @@
               "modeBasic": "E-mail e token de API",
               "modeToken": "Token de acesso",
               "accessToken": "Token de acesso",
-              "email": "E-mail da conta Atlassian",
               "apiToken": "Token de API",
-              "baseUrl": "URL base da API (opcional)",
               "scopeUser": "Mostrar o nome da sua conta",
               "scopeRepository": "Ler status de build",
               "scopeReadPullRequest": "Ler pull requests",
@@ -22048,7 +22046,6 @@
       }
     },
     "agentSessionContinuation": {
-      "dialogTitle": "Continuar em Nova Sessão",
       "untitledSession": "Sessão atual",
       "agent": "Agente",
       "selectAgent": "Selecionar um Agente",
@@ -22057,8 +22054,6 @@
       "noAgents": "Nenhum Agente ativado foi detectado neste host do espaço de trabalho.",
       "onlySourceFamilyDetected": "Neste host do espaço de trabalho só há Agentes disponíveis que compartilham o limite de uso com {{agent}}. Ative ou instale um Agente diferente.",
       "context": "Contexto",
-      "modeFull": "Transcrição completa da sessão",
-      "startSession": "Iniciar Nova Sessão",
       "starting": "Iniciando…",
       "noContext": "Nenhum contexto de sessão está disponível para continuar em uma nova sessão.",
       "agentDisabled": "{{agent}} está desativado nas configurações de Agente.",
@@ -22715,14 +22710,10 @@
       "oldTerminalDialogRisk": "Sessões do Codex que compartilham um servidor podem encerrar juntas, e o status do agente pode estar incorreto.",
       "oldTerminalDialogCause": "Terminais antigos ainda compartilham um servidor do Codex. Abra um novo terminal para executar o Codex em um servidor separado.",
       "fix": "Corrigir",
-      "copy": "Copiar",
       "copied": "Copiado",
-      "undo": "Para desfazer, execute codex features enable daemon_auto_start.",
-      "turnOff": "Desativar",
       "turningOff": "Desativando…",
       "stopServer": "Parar servidor",
       "stopping": "Parando…",
-      "stopFailed": "O Orca não conseguiu parar o servidor.",
       "cancel": "Cancelar",
       "copyCommand": "Copiar comando",
       "howToUndo": "Como desfazer",
@@ -23026,10 +23017,7 @@
     "moreActions": "Mais opções de exclusão forçada",
     "moreBranchActions": "Mais opções de exclusão de branches",
     "alwaysForceDeleteBranches": "Sempre excluir branches preservadas",
-    "alwaysForceDeleteBranchesDescription": "Aplica-se às branches mantidas após futuras exclusões de espaços de trabalho.",
-    "moreDeleteOptions": "Mais opções de exclusão",
-    "alwaysDelete": "Sempre excluir",
-    "alwaysDeleteTooltip": "Pular esta confirmação em futuras exclusões."
+    "alwaysForceDeleteBranchesDescription": "Aplica-se às branches mantidas após futuras exclusões de espaços de trabalho."
   },
   "worktree": {
     "nestedRemoval": {
@@ -23595,7 +23583,6 @@
     "resources": "Recursos",
     "refresh": "Atualizar",
     "killFailed": "Não foi possível encerrar o terminal. As últimas sessões observadas são mantidas.",
-    "localDaemonScope": "Isso afeta os terminais deste computador.",
     "countUnavailable": "contagem de terminais indisponível",
     "openToObserve": "Abra Recursos para observar as sessões de terminal.",
     "killAllLocal": "Encerrar todas as sessões locais",

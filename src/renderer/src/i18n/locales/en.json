@@ -13387,9 +13387,7 @@
               "modeBasic": "Email & API token",
               "modeToken": "Access token",
               "accessToken": "Access token",
-              "email": "Atlassian account email",
               "apiToken": "API token",
-              "baseUrl": "API base URL (optional)",
               "scopeUser": "Show your account name",
               "scopeRepository": "Read build statuses",
               "scopeReadPullRequest": "Read pull requests",
@@ -22145,7 +22143,6 @@
     "agentSessionContinuation": {
       "preparingContext": "Preparing saved chat context…",
       "handOffToAnotherAgent": "Hand Off to Another Agent",
-      "dialogTitle": "Hand Off to Another Agent",
       "untitledSession": "Current session",
       "agent": "Agent",
       "selectAgent": "Select an Agent",
@@ -22154,8 +22151,6 @@
       "noAgents": "No enabled Agents were detected on this workspace host.",
       "onlySourceFamilyDetected": "Only Agents sharing the usage limit with {{agent}} are available on this workspace host. Enable or install a different Agent.",
       "context": "Context",
-      "modeFull": "Full session transcript",
-      "startSession": "Start New Session",
       "starting": "Starting…",
       "noContext": "No session context is available to continue in a new session.",
       "agentDisabled": "{{agent}} is disabled in Agent settings.",
@@ -23813,14 +23808,10 @@
       "oldTerminalDialogRisk": "Codex sessions that share a server can end together, and agent status can be wrong.",
       "oldTerminalDialogCause": "Older terminals still share a Codex server. Open a new terminal to run Codex on a separate server.",
       "fix": "Fix",
-      "copy": "Copy",
       "copied": "Copied",
-      "undo": "To undo, run codex features enable daemon_auto_start.",
-      "turnOff": "Turn off",
       "turningOff": "Turning off…",
       "stopServer": "Stop server",
       "stopping": "Stopping…",
-      "stopFailed": "Orca couldn't stop the server.",
       "cancel": "Cancel",
       "copyCommand": "Copy command",
       "howToUndo": "How to undo",
@@ -24178,10 +24169,7 @@
     "moreActions": "More force delete options",
     "moreBranchActions": "More branch delete options",
     "alwaysForceDeleteBranches": "Always delete preserved branches",
-    "alwaysForceDeleteBranchesDescription": "Applies to branches kept after future workspace deletions.",
-    "moreDeleteOptions": "More delete options",
-    "alwaysDelete": "Always delete",
-    "alwaysDeleteTooltip": "Skip this confirmation for future deletions."
+    "alwaysForceDeleteBranchesDescription": "Applies to branches kept after future workspace deletions."
   },
   "worktree": {
     "setupTrust": {
@@ -24935,7 +24923,6 @@
     },
     "resources": "Resources",
     "ptys": "PTYs",
-    "localDaemonScope": "This affects terminals on this computer.",
     "countUnavailable": "terminal count unavailable",
     "openToObserve": "Open Resources to observe terminal sessions.",
     "refresh": "Refresh",
@@ -26112,7 +26099,6 @@
   },
   "crashReport": {
     "freeze": {
-      "attach": "Attach saved freeze report and diagnostic logs",
       "attachmentsOmitted": "The saved freeze report and diagnostic logs were not attached: {{value0}}",
       "description": "Send the saved freeze report to help us understand what happened.",
       "notSent": "Freeze report wasn't sent",

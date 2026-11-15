@@ -810,14 +810,6 @@
             "ff8de8a2ad": "display"
           }
         },
-        "bitbucket": {
-          "credentials": {
-            "dialog": {
-              "baseUrl": "API base URL (optional)",
-              "email": "Atlassian account email"
-            }
-          }
-        },
         "claudeSubagentNavigation": {
           "search": {
             "mod": "mod",
@@ -1621,11 +1613,6 @@
       "keywordProfile": "browser profile",
       "keywordSignIn": "sign in"
     },
-    "agentSessionContinuation": {
-      "dialogTitle": "Hand Off to Another Agent",
-      "modeFull": "Full session transcript",
-      "startSession": "Start New Session"
-    },
     "native-chat": {
       "approval": {
         "allow": "Allow",
@@ -2253,11 +2240,6 @@
       }
     }
   },
-  "crashReport": {
-    "freeze": {
-      "attach": "Attach saved freeze report and diagnostic logs"
-    }
-  },
   "dashboard": {
     "sidebar": {
       "closeActivity": "Turn off activity view",
@@ -2404,7 +2386,6 @@
     }
   },
   "resourceManager": {
-    "localDaemonScope": "This affects terminals on this computer.",
     "pty": {
       "localOwnedCount_one": "{{count}} Orca PTY on this computer",
       "localOwnedCount_other": "{{count}} Orca PTYs on this computer"
@@ -2815,12 +2796,6 @@
     }
   },
   "terminal": {
-    "codexSharedServerBanner": {
-      "copy": "Copy",
-      "stopFailed": "Orca couldn't stop the server.",
-      "turnOff": "Turn off",
-      "undo": "To undo, run codex features enable daemon_auto_start."
-    },
     "newerDaemonBanner": {
       "reopenTerminal": "Reopen {{count}} terminals",
       "reopenTerminal_one": "Reopen terminal",
@@ -2877,11 +2852,6 @@
       "showLinked_one": "Show {{count}} linked review or task",
       "showLinked_other": "Show {{count}} linked reviews and tasks"
     }
-  },
-  "workspaceDeletion": {
-    "alwaysDelete": "Always delete",
-    "alwaysDeleteTooltip": "Skip this confirmation for future deletions.",
-    "moreDeleteOptions": "More delete options"
   },
   "workspaceSpace": {
     "compact": {
