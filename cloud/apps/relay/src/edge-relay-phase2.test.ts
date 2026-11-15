@@ -9,6 +9,7 @@ import {
 } from './edge-admin-client.js'
 import { EDGE_CELL_ID, EDGE_EXPORT_SKIP_AFTER_MS, EdgeAssignments, type EdgeRelayConfig } from './edge-relay.js'
 import type { EdgeControlFlags } from './edge-relay-control.js'
+import { parseIpCountryTable } from './ip-country.js'
 
 const fakes = vi.hoisted(() => ({
   verifyRelayToken: vi.fn(async (token: string) => ({ sub: 'user-1', relayHostId: token }))
@@ -154,10 +155,14 @@ async function harness(cohort: 'host' | 'account' = 'host', extra: Partial<EdgeR
     drain: vi.fn(),
     ready: vi.fn(async () => true)
   })
-  const assign = async (region = 'us-central1') =>
+  const assign = async (region = 'us-central1', forwardedFor?: string) =>
     await app.request('/v1/assign', {
       method: 'POST',
-      headers: { authorization: `Bearer ${HOST}`, 'content-type': 'application/json' },
+      headers: {
+        authorization: `Bearer ${HOST}`,
+        'content-type': 'application/json',
+        ...(forwardedFor ? { 'x-forwarded-for': forwardedFor } : {})
+      },
       body: JSON.stringify({ v: 1, relayHostId: HOST, preferredRegion: region })
     })
   const insertDevice = async (row: EdgeDeviceRow) => {
@@ -177,7 +182,7 @@ async function harness(cohort: 'host' | 'account' = 'host', extra: Partial<EdgeR
   const row = async () =>
     (await database.query(`SELECT cell_id, assignment_epoch FROM relay_assignments WHERE relay_host_id = ?`, [HOST]))[0]
   const leaveCohort = () => (edgeConfig.denyHosts as Set<string>).add(HOST)
-  return { database, fake, clock, assignments, assign, insertDevice, postgresDevices, row, leaveCohort }
+  return { database, edge, fake, clock, assignments, assign, insertDevice, postgresDevices, row, leaveCohort }
 }
 
 // Asks every 20 s (desktops retry every 2 s; failures further apart than 30 s restart the clock)
@@ -429,5 +434,99 @@ describe('relay edge phase 2: the director moves host data with the host', () =>
     expect((await h.assign()).status).toBe(200)
     expect(h.fake.exports).toBe(0)
     expect(h.fake.pushes).toHaveLength(0)
+  })
+})
+
+describe('relay edge: a connected host that leaves the cohort with mode on stays on the edge', () => {
+  const CHINA = '192.0.2.200'
+  const ipCountry = parseIpCountryTable('192.0.2.0,192.0.2.255,CN\n')
+
+  // In the cohort by rollout (no allow list), so exclusion and a rollout decrease both apply.
+  async function excludable(flags: EdgeControlFlags) {
+    return await harness('host', { allowHosts: new Set(), control: () => flags, ipCountry })
+  }
+
+  it('answers an excluded, connected host with its edge assignment (no 503, nothing pushed or placed)', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const flags: EdgeControlFlags = { mode: 'on', rolloutPermille: 1000 }
+    const h = await excludable(flags)
+    expect(await (await h.assign()).json()).toMatchObject({ cellUrl: EDGE_URL, assignmentEpoch: 1 })
+    const pushes = h.fake.pushes.length
+    h.fake.connected = true
+    flags.regionExcludeCountries = { 'us-central1': ['CN'] }
+    for (let ask = 0; ask < 3; ask += 1) {
+      const response = await h.assign('us-central1', CHINA)
+      expect(response.status).toBe(200)
+      const body = (await response.json()) as Record<string, unknown>
+      expect(body).toMatchObject({ v: 1, cellUrl: EDGE_URL, assignmentEpoch: 1 })
+      expect(typeof body.lease).toBe('string')
+    }
+    expect(h.fake.pushes).toHaveLength(pushes)
+    expect(h.assignments.assign).not.toHaveBeenCalled()
+    expect(await h.row()).toMatchObject({ cell_id: EDGE_CELL_ID })
+    const deferred = warn.mock.calls
+      .map(([line]) => { try { return JSON.parse(String(line)) as Record<string, unknown> } catch { return {} } })
+      .filter((event) => event.event === 'orca_relay_edge_leave_deferred')
+    expect(deferred).toHaveLength(3)
+    expect(deferred[0]).toEqual({ event: 'orca_relay_edge_leave_deferred', reason: 'host_live' })
+  })
+
+  it('moves the excluded host off at the first ask after its desktop disconnects: export, place, fence', async () => {
+    const flags: EdgeControlFlags = { mode: 'on', rolloutPermille: 1000 }
+    const h = await excludable(flags)
+    await h.insertDevice(device('phone-a'))
+    await h.assign()
+    h.fake.devices = [device('phone-a'), device('phone-b')]
+    h.fake.connected = true
+    flags.regionExcludeCountries = { 'us-central1': ['CN'] }
+    expect(await (await h.assign('us-central1', CHINA)).json()).toMatchObject({ cellUrl: EDGE_URL })
+    // The desktop's control is gone (closed, or closed for silence by the export itself).
+    h.fake.connected = false
+    const response = await h.assign('us-central1', CHINA)
+    expect(response.status).toBe(200)
+    expect(await response.json()).toMatchObject({ cellUrl: 'https://us-c1.relay.example.test', assignmentEpoch: 9 })
+    expect((await h.postgresDevices()).map((d) => d.id)).toEqual(['phone-a', 'phone-b'])
+    expect(h.fake.assignment).toMatchObject({ cellId: 'us-c1', assignmentEpoch: 9 })
+  })
+
+  it('treats a rollout decrease the same as an exclusion', async () => {
+    const flags: EdgeControlFlags = { mode: 'on', rolloutPermille: 1000, leaveCeilingPermille: 1000 }
+    const h = await excludable(flags)
+    await h.assign()
+    h.fake.connected = true
+    flags.rolloutPermille = 0
+    const response = await h.assign()
+    expect(response.status).toBe(200)
+    expect(await response.json()).toMatchObject({ cellUrl: EDGE_URL, assignmentEpoch: 1 })
+    h.fake.connected = false
+    expect(await (await h.assign()).json()).toMatchObject({ cellUrl: 'https://us-c1.relay.example.test' })
+  })
+
+  it('keeps the 503 with mode off (the evacuation sweep drains the host) and for an operator-denied host', async () => {
+    const flags: EdgeControlFlags = { mode: 'on', rolloutPermille: 1000 }
+    const h = await excludable(flags)
+    await h.assign()
+    h.fake.connected = true
+    flags.mode = 'off'
+    const off = await h.assign()
+    expect(off.status).toBe(503)
+    expect(off.headers.get('retry-after')).toBe('2')
+    flags.mode = 'on'
+    h.leaveCohort()
+    expect((await h.assign()).status).toBe(503)
+    expect(h.assignments.assign).not.toHaveBeenCalled()
+  })
+
+  it('keeps the 503 while a front-door switch is pending (the edge may hold an epoch above the row)', async () => {
+    const flags: EdgeControlFlags = { mode: 'on', rolloutPermille: 1000 }
+    const h = await excludable(flags)
+    await h.assign()
+    await h.database.query(
+      `UPDATE relay_edge_host_regions SET pending_epoch = 2, pending_cell_url = ? WHERE relay_host_id = ?`,
+      ['https://cn.relay.example.test', HOST]
+    )
+    h.fake.connected = true
+    flags.regionExcludeCountries = { 'us-central1': ['CN'] }
+    expect((await h.assign('us-central1', CHINA)).status).toBe(503)
   })
 })

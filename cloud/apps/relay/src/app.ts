@@ -55,6 +55,7 @@ import { isRelayDatabaseTransientError } from './database.js'
 import {
   EDGE_CELL_ID,
   EDGE_MOVE_BUSY_RETRY_AFTER_SECONDS,
+  EdgeHostLiveError,
   EdgeMoveDeferredError,
   EdgeMoveBusyError,
   inEdgeCohort,
@@ -62,6 +63,7 @@ import {
   mayBeOnEdge,
   type EdgeAssignments
 } from './edge-relay.js'
+import { EDGE_CONTROL_DEFAULTS } from './edge-relay-control.js'
 import { edgeRoute } from './edge-relay-route.js'
 import { requestCountry } from './ip-country.js'
 import {
@@ -512,6 +514,27 @@ export function createRelayApp(
         leftEdge = await edge.leaveEdge(identity)
       } catch (error) {
         if (!(error instanceof EdgeMoveBusyError) && !isRelayDatabaseTransientError(error)) throw error
+        // The desktop is connected on the edge and nothing needs this host off it now (mode on: a
+        // country exclusion or a rollout decrease): keep it there rather than answer 503 to every
+        // re-ask of a desktop that is working. It leaves at a later ask, once its control is gone.
+        // Mode off or down keeps the 503 (the evacuation sweep drains it; down never exports), and so
+        // does a host an operator denied (ORCA_RELAY_EDGE_DENY_HOSTS), as before.
+        const stayed =
+          error instanceof EdgeHostLiveError &&
+          (edge.config.control?.() ?? EDGE_CONTROL_DEFAULTS).mode === 'on' &&
+          !edge.config.denyHosts.has(claims.relayHostId)
+            ? await edge.stayOnEdge(identity)
+            : null
+        if (stayed) {
+          console.warn(JSON.stringify({ event: 'orca_relay_edge_leave_deferred', reason: 'host_live' }))
+          operations.reservePlacement?.raiseEpochFloor(identity, stayed.assignmentEpoch)
+          return context.json({
+            v: 1,
+            cellUrl: stayed.cellUrl,
+            assignmentEpoch: stayed.assignmentEpoch,
+            lease: await signAssignment(stayed)
+          })
+        }
         logAssignmentRejection({
           route: 'assign',
           lane: 'none',
