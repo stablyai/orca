@@ -4,6 +4,12 @@ import type {
   BrowserGuestIdleDiscardToken,
   BrowserGuestVisibilityReport
 } from '../../../shared/browser/guest-lifecycle/browser-guest-discard-protection'
+import {
+  readBrowserMemorySaverPolicy,
+  type BrowserMemorySaverGlobalSettings,
+  type BrowserMemorySaverPolicy
+} from '../../../shared/browser/guest-lifecycle/browser-memory-saver'
+import type { GlobalSettings } from '../../../shared/global-settings-types'
 import { getSystemAwakeClock } from '../../power/awake-clock'
 import {
   getSystemPowerState,
@@ -17,7 +23,8 @@ type Episode = {
   visible: boolean | null
   visibilityKnown: boolean
   revisits: number
-  deadline: number | null
+  /** Awake-clock time the page went hidden; the deadline follows the live Memory Saver hours. */
+  hiddenAt: number | null
   consumed: boolean
   send: (request: BrowserGuestIdleDiscardRequest) => void
 }
@@ -31,7 +38,22 @@ export function createBrowserPageIdleDiscard(sources: {
   const pages = new Map<string, Episode>()
   const deadlines = new BrowserGuestPriorityIndex<Episode>()
   const pending = new Map<number, { episode: Episode | undefined; retired: boolean }>()
+  let policy = readBrowserMemorySaverPolicy(null)
   let timer: ReturnType<typeof setTimeout> | undefined
+  const index = (pageId: string, episode: Episode): void => {
+    if (
+      policy.enabled &&
+      episode.visibilityKnown &&
+      episode.visible === false &&
+      episode.revisits <= 15 &&
+      !episode.consumed &&
+      episode.hiddenAt !== null
+    ) {
+      deadlines.set(pageId, episode, episode.hiddenAt + policy.idleMs)
+    } else {
+      deadlines.delete(pageId)
+    }
+  }
   const schedule = (): void => {
     clearTimeout(timer)
     timer = undefined
@@ -129,25 +151,16 @@ export function createBrowserPageIdleDiscard(sources: {
         revisits:
           (previous?.revisits ?? 0) +
           (previous && previous.visible === false && visible === true ? 1 : 0),
-        deadline: sameVisibility
-          ? (previous?.deadline ?? null)
+        hiddenAt: sameVisibility
+          ? (previous?.hiddenAt ?? null)
           : visible === false
-            ? sources.now() + 4 * 60 * 60_000
+            ? sources.now()
             : null,
         consumed: sameVisibility && previous?.consumed === true,
         send
       }
       pages.set(report.browserPageId, episode)
-      deadlines.delete(report.browserPageId)
-      if (
-        episode.visibilityKnown &&
-        episode.visible === false &&
-        episode.revisits <= 15 &&
-        !episode.consumed &&
-        episode.deadline !== null
-      ) {
-        deadlines.set(report.browserPageId, episode, episode.deadline)
-      }
+      index(report.browserPageId, episode)
       schedule()
       return true
     },
@@ -158,14 +171,14 @@ export function createBrowserPageIdleDiscard(sources: {
         !episode.visibilityKnown ||
         episode.visible !== false ||
         episode.revisits > 15 ||
-        episode.deadline === null
+        episode.hiddenAt === null
       ) {
         return false
       }
-      if (!sources.awake() || sources.now() < episode.deadline) {
+      if (!policy.enabled || !sources.awake() || sources.now() < episode.hiddenAt + policy.idleMs) {
         removeRequest(episode)
         episode.consumed = false
-        deadlines.set(pageId, episode, episode.deadline)
+        index(pageId, episode)
         schedule()
         return false
       }
@@ -205,6 +218,17 @@ export function createBrowserPageIdleDiscard(sources: {
       deadlines.delete(pageId)
       schedule()
     },
+    /** Live setting changes re-key waiting pages; already freed pages stay freed. */
+    configure(next: BrowserMemorySaverPolicy): void {
+      if (next.enabled === policy.enabled && next.idleMs === policy.idleMs) {
+        return
+      }
+      policy = next
+      for (const [pageId, episode] of pages) {
+        index(pageId, episode)
+      }
+      schedule()
+    },
     dispose(): void {
       unsubscribe()
       clearTimeout(timer)
@@ -225,4 +249,23 @@ export function getBrowserPageIdleDiscard(): ReturnType<typeof createBrowserPage
       return subscribeSystemPowerLifecycle({ onSuspend: changed, onResume: changed })
     }
   }))
+}
+
+export type BrowserMemorySaverSettingsSource = {
+  getSettings: () => BrowserMemorySaverGlobalSettings | undefined
+  onSettingsChanged?: (listener: (updates: Partial<GlobalSettings>) => void) => () => void
+}
+
+let stopMemorySaverSync: (() => void) | undefined
+/** Applies Settings > Browser > Memory Saver now and on every change, without a restart. */
+export function syncBrowserMemorySaverPolicy(store: BrowserMemorySaverSettingsSource): void {
+  stopMemorySaverSync?.()
+  const apply = (): void =>
+    getBrowserPageIdleDiscard().configure(readBrowserMemorySaverPolicy(store.getSettings()))
+  apply()
+  stopMemorySaverSync = store.onSettingsChanged?.((updates) => {
+    if ('browserGuestWorktreeRetentionBudget' in updates || 'browserMemorySaverHours' in updates) {
+      apply()
+    }
+  })
 }

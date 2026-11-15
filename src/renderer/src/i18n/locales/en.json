@@ -1009,6 +1009,20 @@
         "title": "Passwords",
         "description": "Saved logins for Orca’s browser: add, import, edit and delete them.",
         "httpSuffix": " · http"
+      },
+      "memorySaver": {
+        "unviewedForLabel": "Unviewed for",
+        "unviewedForDescription": "How long a tab goes unviewed before it's freed.",
+        "hoursSuffix": "hours",
+        "title": "Memory Saver",
+        "description": "Frees memory from tabs you haven't viewed. They reload when you open them.",
+        "searchKeywords": {
+          "memory": "memory",
+          "tabs": "tabs",
+          "idle": "idle",
+          "sleep": "sleep",
+          "performance": "performance"
+        }
       }
     },
     "agents": {

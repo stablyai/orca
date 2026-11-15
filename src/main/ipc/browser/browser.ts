@@ -13,6 +13,10 @@ import {
 } from './browser-tab-registration-wait'
 import { registerBrowserGuestViewHandlers } from './browser-guest-view-ipc'
 import { registerBrowserGuestDiscardHandlers } from './browser-guest-discard-ipc'
+import {
+  syncBrowserMemorySaverPolicy,
+  type BrowserMemorySaverSettingsSource
+} from '../../browser/guest-lifecycle/browser-page-idle-discard'
 import { registerBrowserDictationHandlers } from './browser-dictation-ipc'
 import {
   disposeGrabModeStateForPage,
@@ -54,7 +58,9 @@ export function setAgentBrowserBridgeRef(bridge: AgentBrowserBridge | null): voi
   agentBrowserBridgeRef = bridge
 }
 
-export function registerBrowserHandlers(store: BrowserPasswordsSettingsSource): void {
+export function registerBrowserHandlers(
+  store: BrowserPasswordsSettingsSource & BrowserMemorySaverSettingsSource
+): void {
   resetGrabModeState()
   ipcMain.removeHandler('browser:registerGuest')
   ipcMain.removeHandler('browser:isGuestRegistered')
@@ -299,6 +305,7 @@ export function registerBrowserHandlers(store: BrowserPasswordsSettingsSource): 
 
   registerBrowserGuestViewHandlers()
   registerBrowserGuestDiscardHandlers()
+  syncBrowserMemorySaverPolicy(store)
   registerBrowserDictationHandlers()
 
   registerBrowserGrabHandlers()
