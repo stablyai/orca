@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { parsePluginManifest } from '../manifest/plugin-manifest'
+import { satisfiesOrcaEngineRange } from '../manifest/plugin-manifest-engine-range'
 import type * as HostApi from '../workers/plugin-host-api'
 import { pluginHostCallFindings } from './plugin-host-call-checks'
 
@@ -19,6 +20,10 @@ vi.mock('../workers/plugin-host-api', async (importOriginal) => {
 })
 
 function check(engines: string, files: Record<string, string>) {
+  // Why format 1 below 1.4.245: format 2 itself needs that release.
+  const format = satisfiesOrcaEngineRange(engines.slice(2), '>=1.4.245')
+    ? {}
+    : { manifestVersion: 1, publisher: 'acme', pluginApi: 1 }
   const parsed = parsePluginManifest({
     manifestVersion: 2,
     execution: 'trusted-worker',
@@ -27,7 +32,8 @@ function check(engines: string, files: Record<string, string>) {
     version: '1.0.0',
     engines: { orca: engines },
     main: 'dist/main.mjs',
-    contributes: { panels: [{ id: 'board', title: 'Board', entry: 'ui/panel.html' }] }
+    contributes: { panels: [{ id: 'board', title: 'Board', entry: 'ui/panel.html' }] },
+    ...format
   })
   if (!parsed.ok) {
     throw new Error(parsed.error)
@@ -86,6 +92,17 @@ describe('host calls in shipped code', () => {
       `dist/main.mjs: calls proposed host method "agents.list"; only development plugins (orca plugin dev) may call it until it is released; the orca.host.has('agents.list') guard skips it`,
       `engines.orca: must be at least >=1.4.259, because dist/main.mjs calls host method "project.list", which needs Orca 1.4.259; or guard the call with orca.host.has('project.list'); taken as guarded by the orca.api.minor check in this plugin`,
       `ui/panel.html: calls host method "terminal.sendText" from panels, which cannot call it (surfaces: worker); the orca.host.has('terminal.sendText') guard skips it`
+    ])
+  })
+
+  it('keeps guarded calls as errors where engines.orca predates orca.host.has', async () => {
+    const { errors } = await check('>=1.4.200', {
+      'dist/main.mjs': `if (orca.host.has('workspace.later')) orca.host.call('workspace.later')`,
+      'ui/panel.html': `<script>if (orca.host.has('terminal.sendText')) orca.host.call('terminal.sendText', {})</script>`
+    })
+    expect(errors).toEqual([
+      `dist/main.mjs: calls host method "workspace.later", which Orca's Host API 1.10 does not have; it is unreleased or misspelled`,
+      'ui/panel.html: calls host method "terminal.sendText" from panels, which cannot call it (surfaces: worker)'
     ])
   })
 

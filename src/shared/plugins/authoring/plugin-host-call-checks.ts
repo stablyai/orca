@@ -208,7 +208,7 @@ export async function pluginHostCallFindings(
   const hasNote = (name: string) => `the orca.host.has('${name}') guard skips it`
   for (const call of firstPer(calls, (c) => c.name)) {
     const spec = getPluginHostMethodSpec(call.name)
-    const isGuarded = guarded.has(call.name)
+    const isGuarded = guardWorks && guarded.has(call.name)
     if (spec === null) {
       add(
         isGuarded,
@@ -232,7 +232,7 @@ export async function pluginHostCallFindings(
     if (spec === null || spec.proposed) {
       continue
     }
-    const isGuarded = guarded.has(call.name)
+    const isGuarded = guardWorks && guarded.has(call.name)
     if (!spec.surfaces.includes(call.surface)) {
       add(
         isGuarded,
@@ -242,11 +242,7 @@ export async function pluginHostCallFindings(
       continue
     }
     const needs = pluginHostMethodRelease(spec, call.surface)
-    if (
-      needs === null ||
-      satisfiesOrcaEngineRange(declared, `>=${needs}`) ||
-      (guardWorks && isGuarded)
-    ) {
+    if (needs === null || satisfiesOrcaEngineRange(declared, `>=${needs}`) || isGuarded) {
       continue
     }
     add(
