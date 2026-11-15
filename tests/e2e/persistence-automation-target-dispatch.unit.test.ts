@@ -11,8 +11,8 @@ import {
 } from '../../src/main/persistence/persistence-test-harness'
 import { getDefaultPersistedState } from '../../src/shared/constants'
 import { OrcaRuntimeService } from '../../src/main/runtime/orca-runtime'
-import { resolveAutomationRunTarget } from '../../src/main/automations/run-target-resolution'
-import { buildAutomationWorktreeCreateArgs } from '../../src/main/automations/automation-workspace-create'
+import { resolveAutomationRunTarget } from '../../src/main/automations/ownership/run-target-resolution'
+import { buildAutomationWorktreeCreateArgs } from '../../src/main/automations/launch/automation-workspace-create'
 
 vi.mock('../../src/main/ssh/config/ssh-config-parser', () => ({
   loadUserSshConfig: () => ({ hosts: [] }),

@@ -1,4 +1,4 @@
-import type { GoogleCookieClearLocalTarget } from '../../../shared/browser-google-cookie-clear'
+import type { GoogleCookieClearLocalTarget } from '../../../shared/browser/cookies/browser-google-cookie-clear'
 import { ipcRenderer } from 'electron'
 import {
   BROWSER_AGENT_ACTIVITY_CHANNEL,
@@ -8,19 +8,19 @@ import {
   type BrowserAgentActivityEvent,
   type BrowserAgentCursorEvent,
   type BrowserAgentViewportEvent
-} from '../../../shared/browser-agent-activity-contract'
+} from '../../../shared/browser/automation/browser-agent-activity-contract'
 import type { PreloadApi } from '../../api-types'
-import type { BrowserUserAgentMode } from '../../../shared/browser-user-agent-mode'
-import type { ManagedBrowserProfileOwner } from '../../../shared/browser-profile-scope'
-import type { GrabIntent } from '../../../shared/browser-grab-types'
+import type { BrowserUserAgentMode } from '../../../shared/browser/identity/browser-user-agent-mode'
+import type { ManagedBrowserProfileOwner } from '../../../shared/browser/profiles/browser-profile-scope'
+import type { GrabIntent } from '../../../shared/browser/element-grab/browser-grab-types'
 import type {
   BrowserSitePermission,
   BrowserSitePermissionDecision
-} from '../../../shared/browser-site-permission'
+} from '../../../shared/browser/site-settings/browser-site-permission'
 import type {
   BrowserContextMenuRequestedEvent,
   BrowserTargetUrlChangedEvent
-} from '../../../shared/browser-guest-events'
+} from '../../../shared/browser/guest-lifecycle/browser-guest-events'
 
 export const browserPageInteractionAndSessionsApi = {
   onContextMenuRequested: (

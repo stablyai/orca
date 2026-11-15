@@ -1,5 +1,5 @@
 import { requestVirtualizedScrollAnchorRecord } from '@/hooks/requestVirtualizedScrollAnchorRecord'
-import { getWorktreeOperationOwnerHostIds } from '@/lib/worktree-operation-route'
+import { getWorktreeOperationOwnerHostIds } from '@/lib/workspace/ownership/worktree-operation-route'
 import { parseExecutionHostId, type ExecutionHostId } from '../../../../../../shared/execution-host'
 import { resolveWorkspaceCleanupRemovalHostId } from '../../../../../../shared/workspace-cleanup/workspace-cleanup-host-identity'
 import { rememberAuthoritativelyRemovedWorktrees } from '../listing/authoritative-worktree-removal-memory'

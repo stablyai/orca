@@ -1,15 +1,15 @@
 // @protected-copy: update signature and publisher warnings.
 import { getUpdateInstallBlockGuidance } from './update-install-block-guidance'
-import type { UpdateStatus } from '../../../../../shared/update-status-types'
+import type { UpdateStatus } from '../../../../../shared/updater/update-status-types'
 import type { UpdateErrorCardModel } from '../../UpdateErrorCardContent'
 import {
   isWindowsSignatureCheckUnavailableFailure,
   isWindowsSignatureMismatchFailure
-} from '../../../../../shared/updater-windows-signature-check'
-import { getReleaseNotesUrlForVersion } from '../../../../../shared/release-channel'
+} from '../../../../../shared/updater/updater-windows-signature-check'
+import { getReleaseNotesUrlForVersion } from '../../../../../shared/updater/release-channel'
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
-import { updaterMessageText } from '@/lib/updater-message-copy'
+import { updaterMessageText } from '@/app-shell/updates/updater-message-copy'
 import { isHttp2ProtocolError } from './update-card-visibility'
 
 export function buildUpdateCardErrorModel(

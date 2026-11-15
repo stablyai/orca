@@ -4,7 +4,7 @@ import {
   type AiVaultListArgs,
   type AiVaultScope
 } from '../../../src/shared/ai-vault/contracts/ai-vault-types'
-import type { Worktree } from '../worktree/workspace-list-types'
+import type { Worktree } from '../worktree/workspace-list/workspace-list-types'
 
 export const MOBILE_AGENT_HISTORY_SCOPE_TABS: { scope: AiVaultScope; label: string }[] = [
   { scope: 'workspace', label: 'Workspace' },

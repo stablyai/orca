@@ -39,6 +39,12 @@ class MockWebContents extends EventEmitter {
     return this.title
   }
 
+  stopPainting(): void {}
+  setFrameRate(): void {}
+  isDestroyed(): boolean {
+    return false
+  }
+
   loadURL(): Promise<void> {
     if (mocks.finishLoads) {
       queueMicrotask(() => this.emit('did-finish-load'))
@@ -69,7 +75,8 @@ class MockBrowserWindow {
 vi.mock('electron', () => ({ BrowserWindow: mocks.BrowserWindow }))
 vi.mock('../sessions/profiles/browser-session-registry', () => ({
   browserSessionRegistry: {
-    getDefaultProfile: vi.fn(() => ({ id: 'default', partition: 'persist:orca-browser' }))
+    getDefaultProfile: vi.fn(() => ({ id: 'default', partition: 'persist:orca-browser' })),
+    attachExtensions: vi.fn()
   }
 }))
 

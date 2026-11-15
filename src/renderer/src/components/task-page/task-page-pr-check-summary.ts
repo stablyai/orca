@@ -1,6 +1,6 @@
 import { summarizeProviderChecks } from '../../../../shared/source-control/checks/provider-check-summary'
-import type { PRCheckDetail } from '../../../../shared/github/check-types'
-import type { ProviderCheckSummary } from '../../../../shared/github/pull-request-types'
+import type { PRCheckDetail } from '../../../../shared/github/checks/check-types'
+import type { ProviderCheckSummary } from '../../../../shared/github/pull-requests/pull-request-types'
 
 export function deriveTaskPagePRCheckSummary(checks: PRCheckDetail[]): ProviderCheckSummary {
   const summary = summarizeProviderChecks(checks)

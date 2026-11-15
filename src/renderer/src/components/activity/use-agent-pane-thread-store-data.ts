@@ -21,8 +21,8 @@ export type AllAgentPaneThreadsStoreData = Pick<
   | 'agentStatusByPaneKey'
   | 'runtimeAgentOrchestrationByPaneKey'
   | 'migrationUnsupportedByPtyId'
-  | 'retainedAgentsByPaneKey'
   | 'tabsByWorktree'
+  | 'ptyIdsByTabId'
   | 'repos'
   | 'worktreesByRepo'
   | 'folderWorkspaces'
@@ -63,8 +63,8 @@ export function useAllAgentPaneThreadStoreData(): AllAgentPaneThreadsStoreData {
       agentStatusByPaneKey: s.agentStatusByPaneKey,
       runtimeAgentOrchestrationByPaneKey: selectVisibleAgentOrchestration(s),
       migrationUnsupportedByPtyId: s.migrationUnsupportedByPtyId,
-      retainedAgentsByPaneKey: s.retainedAgentsByPaneKey,
       tabsByWorktree: s.tabsByWorktree,
+      ptyIdsByTabId: s.ptyIdsByTabId,
       activityTabs: (() => {
         const cache = tabProjectionRef.current
         if (cache.raw === s.unifiedTabsByWorktree && cache.projected) {

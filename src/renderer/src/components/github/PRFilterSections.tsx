@@ -5,13 +5,14 @@ import {
   SingleSelectList,
   type PickerOption
 } from '@/components/github/PRFilterPickers'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
+import { filterAuthorsValue, filterLabelsValue } from '@/components/github/pr-filter-value-summary'
 import type { ParsedTaskQuery } from '../../../../shared/work-items/task-query'
 import { translate } from '@/i18n/i18n'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
 
 export type PRFilterChange = {
-  author?: string | null
+  authors?: string[]
   assignee?: string | null
   reviewer?: { kind: 'requested' | 'reviewed-by'; login: string } | null
   labels?: string[]
@@ -36,19 +37,6 @@ export function filterStateLabel(
 
 export function filterDraftLabel(t: Translate = translate): string {
   return t('auto.components.github.PRFilterSections.draft', 'Draft')
-}
-
-export function filterLabelsValue(labels: string[], t: Translate = translate): string | null {
-  if (labels.length === 0) {
-    return null
-  }
-  if (labels.length === 1) {
-    return labels[0]
-  }
-  return t('auto.components.github.PRFilterSections.labelCount', '{{count}} labels', {
-    count: labels.length,
-    defaultValue_one: '{{count}} label'
-  })
 }
 
 function statusLabel(parsed: ParsedTaskQuery, t: Translate = translate): string {
@@ -207,7 +195,7 @@ export function SectionMenu({
     {
       key: 'author',
       label: t('auto.components.github.PRFilterSections.24754c44ad', 'Author'),
-      value: parsed.author
+      value: filterAuthorsValue(parsed.authors, t)
     },
     {
       key: 'label',
@@ -315,9 +303,9 @@ export function SectionDetail({
         <StatusSection parsed={parsed} kind={kind} onSelect={onSelect} />
       ) : null}
       {section === 'author' ? (
-        <SingleSelectList
+        <MultiSelectList
           options={authorOpts}
-          activeValue={parsed.author}
+          selected={parsed.authors}
           loading={false}
           error={null}
           searchPlaceholder={t(
@@ -327,7 +315,7 @@ export function SectionDetail({
           emptyText={t('auto.components.github.PRFilterSections.458ea3602b', 'No authors')}
           allowCustomValue
           renderOption={(opt) => <UserOptionRow option={opt} />}
-          onSelect={(value) => onSelect({ author: value })}
+          onChange={(next) => onSelect({ authors: next })}
         />
       ) : null}
       {section === 'assignee' ? (

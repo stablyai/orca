@@ -1,0 +1,12 @@
+{
+  "capturedAt": "2026-11-11T00:00:00.000Z",
+  "platform": "darwin",
+  "command": ["claude"],
+  "env": {
+    "TERM": "xterm-256color"
+  },
+  "cols": 100,
+  "rows": 30,
+  "note": "Claude Code 2.1.322; real PTY with a throwaway CLAUDE_CONFIG_DIR and HOME in an already-trusted scratch git repo; a project .mcp.json declares two new servers. Then Down twice moved the highlight to Enable selected; capture ends with the startup menu owning the screen.",
+  "exitCode": -9
+}

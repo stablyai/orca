@@ -1,4 +1,4 @@
-import { createTerminalStructuralReplayCoordinator } from '../../../src/renderer/src/lib/pane-manager/terminal-structural-replay-coordinator'
+import { createTerminalStructuralReplayCoordinator } from '../../../src/renderer/src/lib/pane-manager/terminal-replay/terminal-structural-replay-coordinator'
 
 export type TerminalReplayPresentationProbe = {
   waiting: boolean

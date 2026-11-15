@@ -24,6 +24,7 @@ import {
   type StructuredAgentSessionTrackedStartup
 } from './structured-agent-session-startup-tracking'
 
+import { awakeNow } from '../../../power/awake-clock'
 import './structured-agent-session-startup-attempt-mint'
 
 type Tracked = StructuredAgentSessionTrackedStartup
@@ -44,12 +45,13 @@ export class StructuredAgentSessionStartupAttempts {
       breach?: (breached: StructuredAgentSessionExpiredStartup & { agent: string }) => void
       settled?: (settled: StructuredAgentSessionStartupSettled) => void
       limits?: Partial<StructuredAgentSessionStartupLimits>
-      /** Use elapsed time; host clocks may be pinned. */
+      /** Use elapsed time; host clocks may be pinned. Defaults to the awake clock, so time the
+       *  machine spends asleep never counts toward the ceiling. */
       now?: () => number
     }
   ) {
     this.limits = { ...STRUCTURED_AGENT_SESSION_STARTUP_LIMITS, ...deps.limits }
-    this.now = deps.now ?? Date.now
+    this.now = deps.now ?? awakeNow
   }
 
   /** A start registered before its first wait: its ceiling runs from now. */

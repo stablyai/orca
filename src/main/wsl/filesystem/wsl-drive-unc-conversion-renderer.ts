@@ -3,10 +3,8 @@
  * view preferences, notebook interpreters) live in the renderer's own storage, so it converts them
  * once it opens and records each here. The journal goes once every store is recorded.
  */
-import {
-  WSL_DRIVE_UNC_RENDERER_STORE_IDS,
-  type WslDriveUncPendingRendererRewrite
-} from '../../../shared/wsl-drive-unc-renderer-store-keys'
+import type { WslDriveUncPendingRendererRewrite } from '../../../shared/wsl-move/wsl-drive-unc-renderer-store-keys'
+import { WSL_MOVE_RENDERER_REWRITE_STORE_IDS as WSL_DRIVE_UNC_RENDERER_STORE_IDS } from '../../../shared/wsl-move/wsl-move-renderer-rewrite-types'
 import type { WslMoveRecordStoreRewrittenResult } from '../../../shared/wsl-move/wsl-move-renderer-rewrite-types'
 import {
   listWslDriveUncConversions,

@@ -1,7 +1,10 @@
-import { hasVisibleOverlay } from '@/lib/visible-overlay'
-import { hasContextualTourActionStep } from '../../../../shared/contextual-tour-action-steps'
+import { hasVisibleOverlay } from '@/lib/overlay-interaction/visible-overlay'
+import { hasContextualTourActionStep } from '../../../../shared/feature-education/contextual-tours/contextual-tour-action-steps'
 import { useEffect, useRef, type RefObject } from 'react'
-import { getContextualTour, type ContextualTourId } from '../../../../shared/contextual-tours'
+import {
+  getContextualTour,
+  type ContextualTourId
+} from '../../../../shared/feature-education/contextual-tours/contextual-tours'
 import { getContextualTourFocusableElements } from './ContextualTourOverlaySurface'
 
 // Moves focus into a newly shown tour step and gives it back when the tour ends.

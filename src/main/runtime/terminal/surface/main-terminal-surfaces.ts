@@ -8,7 +8,7 @@ import type { MainPaneBinding } from './main-pane-verdict'
 import type {
   RuntimeSyncWindowGraph,
   RuntimeMobileSessionTabsSnapshot
-} from '../../../../shared/runtime-session-contracts'
+} from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import { withMainSessionTabRows } from '../../session-tabs/main-session-tab-rows'
 import { withMainTabOrder } from '../../session-tabs/main-session-tab-order'
 import { headlessMobileSnapshotContentUnchanged } from '../../session-tabs/mobile-session-snapshot-equality'

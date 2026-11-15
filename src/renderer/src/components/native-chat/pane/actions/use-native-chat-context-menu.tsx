@@ -26,8 +26,8 @@ import {
 import { isMacPlatform } from '../routing/native-chat-shortcut'
 import { formatOptionalPrimaryShortcutLabel } from '@/hooks/useShortcutLabel'
 import { useAppStore } from '@/store'
-import { isEditableTarget } from '@/lib/editable-target'
-import { findEditablePrimarySelectionPasteTarget } from '@/lib/primary-selection-paste'
+import { isEditableTarget } from '@/lib/text-input/focus/editable-target'
+import { findEditablePrimarySelectionPasteTarget } from '@/lib/clipboard/primary-selection/primary-selection-paste'
 import { NativeChatCopyOrcaSessionIdMenuItem } from './NativeChatCopyOrcaSessionIdMenuItem'
 import { NativeChatSelectionQuote } from '../../selection-quotes/NativeChatSelectionQuote'
 import {

@@ -6,17 +6,19 @@ import {
 } from '../panel/worktree-scope'
 import { resolveSourceControlAiEnabled } from '../../../../../../shared/source-control/ai/source-control-ai-operation-policy'
 import { resolveSourceControlAiForOperation } from '../../../../../../shared/source-control/ai/source-control-ai-operation-resolution'
-import { getCommitMessageModelDiscoveryHostKeyForScope } from '../../../../../../shared/source-control/ai/generation/commit-message-host-key'
-import { getRuntimeGitScope } from '@/runtime/source-control/git/runtime-git-client-context'
-import { textGenerationCopyText } from '@/lib/text-generation-error-copy'
+import {
+  getRuntimeGitRepoDiscoveryHostKey,
+  type RuntimeGenerateCommitMessageOverrides
+} from '@/runtime/source-control/git/runtime-git-client-context'
+import { textGenerationCopyText } from '@/lib/text-generation/text-generation-error-copy'
 import { useCallback, useEffect } from 'react'
 import { useStore } from 'zustand'
 import {
   cancelRuntimeGenerateCommitMessage,
   generateRuntimeCommitMessage
 } from '@/runtime/source-control/git/runtime-git-generation-client'
-import type { RuntimeGenerateCommitMessageOverrides } from '@/runtime/source-control/git/runtime-git-client-context'
-import { useAppStore } from '@/store'
+
+import { useAppStore } from '@/store/index'
 import {
   createRunningCommitMessageGenerationRecord,
   getCommitMessageGenerationRecordKey,
@@ -82,11 +84,10 @@ export function useSourceControlCommitMessageGeneration({
           settings,
           repo: activeRepo,
           operation: 'commitMessage',
-          discoveryHostKey: getCommitMessageModelDiscoveryHostKeyForScope(
-            getRuntimeGitScope(
-              activeRepoTarget ?? { kind: 'local' },
-              sourceControlConnectionId(scope, activeWorktreeId)
-            )
+          discoveryHostKey: getRuntimeGitRepoDiscoveryHostKey(
+            activeRepoTarget ?? { kind: 'local' },
+            activeRepo,
+            sourceControlConnectionId(scope, activeWorktreeId)
           )
         })
       : null

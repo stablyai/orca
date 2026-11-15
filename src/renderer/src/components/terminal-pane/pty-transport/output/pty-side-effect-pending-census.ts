@@ -1,4 +1,4 @@
-import { registerRendererMemoryProfileContributor } from '@/lib/renderer-memory-profile'
+import { registerRendererMemoryProfileContributor } from '@/diagnostics/memory/renderer-memory-profile'
 
 /** Queue counts for one PTY output processor, read at heap-highwater time. */
 export type PtySideEffectGauge = {

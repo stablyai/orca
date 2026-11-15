@@ -2,10 +2,10 @@ import { describe, expect, it, vi } from 'vitest'
 import { OrcaRuntimeService } from '../../orca-runtime'
 import { getDefaultWorkspaceSession } from '../../../../shared/constants'
 import type { WorkspaceSessionState } from '../../../../shared/workspace-session/workspace-session-state-types'
-import '../../../../shared/workspace-scope'
+import '../../../../shared/workspace/identity/workspace-scope'
 import type { FolderWorkspace } from '../../../../shared/folder-workspaces/folder-workspace-types'
 import { type ExecutionHostId, LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
-import type { PtyProcessInfo } from '../../../providers/pty-process-info'
+import type { PtyProcessInfo } from '../../../providers/pty/process-info'
 
 export function registerTerminalListExecutionHostScopeTests(): void {
   // A scoped list must identify its hosts so omitting a live remote worker cannot be mistaken for exit.
@@ -51,7 +51,10 @@ export function registerTerminalListExecutionHostScopeTests(): void {
 
   type GraphLeaf = { worktreeId: string; leafId: string; ptyId: string }
 
-  function makeRuntime(leaves: GraphLeaf[], store = makeStore()): OrcaRuntimeService {
+  async function makeRuntime(
+    leaves: GraphLeaf[],
+    store = makeStore()
+  ): Promise<OrcaRuntimeService> {
     const runtime = new OrcaRuntimeService(store as never)
     runtime.setPtyController({
       spawn: vi.fn(async () => ({ id: 'never' })),
@@ -60,7 +63,7 @@ export function registerTerminalListExecutionHostScopeTests(): void {
       listProcesses: vi.fn(async () => leaves.map((leaf) => ({ id: leaf.ptyId, cwd: '/tmp' })))
     } as never)
     runtime.attachWindow(1)
-    runtime.syncWindowGraph(1, {
+    await runtime.syncWindowGraph(1, {
       tabs: leaves.map((leaf, index) => ({
         tabId: `tab-${index + 1}`,
         worktreeId: leaf.worktreeId,
@@ -85,7 +88,7 @@ export function registerTerminalListExecutionHostScopeTests(): void {
     // A targeted listing a newer census overtook joins that census instead of answering for no
     // host; re-listing would overtake the newer one in turn (two workspaces sleeping at once).
     it('answers from a newer concurrent inventory refresh instead of an empty scope', async () => {
-      const runtime = makeRuntime([])
+      const runtime = await makeRuntime([])
       const releases: (() => void)[] = []
       const listProcessesWithHostScope = vi.fn(
         () =>

@@ -1,4 +1,4 @@
-import { PUSH_DEFAULTS } from '@orca-cloud/push-contract'
+import { PUSH_DEFAULTS } from '@orca-cloud/push-contract/push-limits'
 import { z } from 'zod'
 
 export const PUSH_DATABASE_POOL_MAX = 10

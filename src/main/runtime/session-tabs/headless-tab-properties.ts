@@ -1,8 +1,8 @@
 import { renameStructuredSessionTab, type SessionTabProps } from './structured-session-tab-rename'
 import { OrcaRuntimeWithHeadlessPaneMoveToNewTab } from './headless-pane-move-to-new-tab'
 import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
-import type { RuntimeMobileSessionTabsSnapshot } from '../../../shared/runtime-session-contracts'
-import type { RuntimeMobileSessionSnapshotTab } from '../../../shared/runtime-mobile-session-tab-contracts'
+import type { RuntimeMobileSessionTabsSnapshot } from '../../../shared/remote-runtime/session-graph/runtime-session-contracts'
+import type { RuntimeMobileSessionSnapshotTab } from '../../../shared/remote-runtime/session-graph/runtime-mobile-session-tab-contracts'
 import type {
   TerminalLayoutSnapshot,
   TerminalPaneLayoutNode
@@ -12,7 +12,7 @@ import { cloneTerminalLayoutSnapshot } from '../terminal/surface/mobile-session-
 import {
   sameStringRecord,
   terminalLayoutNodeEqual
-} from '../../../shared/workspace-layout/terminal-layout-equality'
+} from '../../../shared/workspace-layout/terminal-topology/terminal-layout-equality'
 
 type HeadlessPaneLayoutEdit = {
   tabId: string

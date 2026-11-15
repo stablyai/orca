@@ -10,7 +10,8 @@ import type {
   AgentSessionJournalIdentity,
   AgentSessionJournalProviderHandle
 } from '../../../src/shared/agent-session/journal/agent-session-journal-identity'
-import { codexProviderHandle } from '../../../src/shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
+import { agentJournalItemKey } from '../../../src/shared/agent-session/journal/agent-session-journal-item-key'
+import { codexProviderHandle } from '../../../src/shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle-encoding'
 import type { AgentSessionRefusalReference } from '../../../src/shared/agent-session/failures/agent-session-wire-refusals'
 import {
   closeTestJournalHostDatabase,
@@ -18,7 +19,8 @@ import {
   insertTestJournalRowJson,
   liveTestJournalRows,
   openTestJournalHostDatabase,
-  SAVED_BY_NEWER_ORCA
+  SAVED_BY_NEWER_ORCA,
+  seedLegacyTestJournal
 } from '../../../src/main/native-chat/agent-session-journal/store-lifecycle/journal-host-database-test-support'
 import { journalOpenRefusal } from '../../../src/main/native-chat/agent-session-journal/replay/journal-open-failure'
 import {
@@ -60,7 +62,7 @@ type NoticeEnglish = (parts: unknown[]) => string
 type IsFinal = (refusal: AgentSessionRefusalReference | undefined) => boolean
 
 let directory: string
-const journals = createTrackedJournalOpener({ legacyInputs: true })
+const journals = createTrackedJournalOpener()
 
 beforeAll(() => {
   directory = mkdtempSync(join(tmpdir(), 'orca-newer-chat-xv-'))
@@ -84,39 +86,43 @@ const NEWER_NESTED_LITERAL = {
 /** A row of a kind this build does not know: the journal's open is refused as a newer Orca's. */
 const NEWER_ROW_KIND = { kind: 'future-mark' }
 
-// Write two current journal items, then a newer body or an unknown closed row.
+const EPOCH = 'epoch-newer-chat'
+
+// A saved chat of two items, then a newer body or an unknown closed row, all before this build
+// first opens it: this build reads saved rows only when it first converts the chat.
 async function journalWithNewerRow(
   row: Record<string, unknown> = NEWER_ROW_KIND
 ): Promise<{ rows: string[]; newer: string }> {
-  const journal = await journals.open({ identity: IDENTITY, stateDirectory: directory })
-  await journal.appendItem(
-    { provider: 'codex', threadId: 'thread-1', turnId: 'turn-1', ordinal: 0 },
-    { kind: 'status', text: 'before' },
-    { fence: 1, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
+  const database = openTestJournalHostDatabase(directory)
+  seedLegacyTestJournal(database, { identity: IDENTITY, mintEpoch: () => EPOCH, now: () => 1_000 })
+  const stored = (seq: number, fields: Record<string, unknown>) =>
+    JSON.stringify({
+      // A version the older build reads, so it meets the kind rather than a newer version.
+      v: AGENT_SESSION_JOURNAL_TURN_ITEM_SCHEMA_VERSION,
+      epoch: EPOCH,
+      seq,
+      fence: 1,
+      ts: 1_000 + seq,
+      ...fields
+    })
+  const before = ['before', 'also before'].map((text, index) => ({
+    kind: 'item',
+    itemId: agentJournalItemKey({
+      provider: 'codex',
+      threadId: 'thread-1',
+      turnId: 'turn-1',
+      ordinal: index * 2
+    }),
+    revision: 1,
+    turnScope: AGENT_JOURNAL_THREAD_SCOPE,
+    body: { kind: 'status', text }
+  }))
+  before.forEach((fields, index) =>
+    insertTestJournalRowJson(database.db, IDENTITY.sessionId, index + 2, stored(index + 2, fields))
   )
-  await journal.appendItem(
-    { provider: 'codex', threadId: 'thread-1', turnId: 'turn-1', ordinal: 2 },
-    { kind: 'status', text: 'also before' },
-    { fence: 1, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
-  )
-  const seq = journal.cursor().sequence + 1
-  const newer = JSON.stringify({
-    // A version the older build reads, so it meets the kind rather than a newer version.
-    v: AGENT_SESSION_JOURNAL_TURN_ITEM_SCHEMA_VERSION,
-    epoch: journal.epoch,
-    seq,
-    fence: 1,
-    ts: 2_000,
-    ...row
-  })
-  await journals.closeAll()
-  insertTestJournalRowJson(
-    openTestJournalHostDatabase(directory).db,
-    IDENTITY.sessionId,
-    seq,
-    newer,
-    2_000
-  )
+  const seq = before.length + 2
+  const newer = stored(seq, row)
+  insertTestJournalRowJson(database.db, IDENTITY.sessionId, seq, newer, 2_000)
   return { rows: await storedRows(), newer }
 }
 

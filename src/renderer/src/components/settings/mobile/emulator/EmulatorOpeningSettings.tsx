@@ -1,9 +1,10 @@
 import type { GlobalSettings } from '../../../../../../shared/global-settings-types'
 import { getEmulatorOpeningMode } from '../../../../../../shared/emulator-opening-preferences'
 import { SettingsRow } from '../../form-controls/SettingsFormControls'
+import { MOBILE_EMULATOR_SETTING_ANCHORS } from './mobile-emulator-search'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../../ui/select'
 import { useTranslate } from '@/i18n/use-translate'
-import { simulatorRuntimeLabel } from '@/lib/simulator-runtime-label'
+import { simulatorRuntimeLabel } from '@/lib/simulator/launch/simulator-runtime-label'
 
 type Device = { name: string; udid: string; runtime?: string; isAvailable?: boolean }
 type Props = {
@@ -21,6 +22,7 @@ export function EmulatorOpeningSettings({ settings, devices, enabled, updateSett
   return (
     <>
       <SettingsRow
+        id={MOBILE_EMULATOR_SETTING_ANCHORS.opening}
         alignTop
         label={t('emulator.opening.when', 'When opening')}
         description={t(

@@ -1,5 +1,6 @@
 import type { HostedReviewProvider } from '../../../../../../shared/source-control/hosted-review/hosted-review-contracts'
 import { normalizeForgeWebHost } from '../../../../../../shared/git/remotes/git-remote-host-alias'
+import { isAzureDevOpsOrganizationName } from '../../../../../../shared/git/remotes/azure-devops-organization-name'
 
 export type ManualReviewProvider = Exclude<HostedReviewProvider, 'unsupported'>
 
@@ -79,17 +80,40 @@ function buildWebOrigin(protocol: string, host: string, hostname: string): strin
     : `https://${hostname}`
 }
 
+function parseAzureDevOpsSshRemote(host: string, rawPath: string): RemoteRepoRef | null {
+  const sshHost = host.toLowerCase()
+  if (sshHost !== 'ssh.dev.azure.com' && sshHost !== 'vs-ssh.visualstudio.com') {
+    return null
+  }
+  const parts = cleanPath(rawPath)?.split('/') ?? []
+  if (parts.length < 4 || parts[0].toLowerCase() !== 'v3') {
+    return null
+  }
+  const [, organization, project, repository] = parts
+  const projectPath = `${encodeURIComponent(project)}/_git/${encodeURIComponent(repository)}`
+  if (sshHost === 'ssh.dev.azure.com') {
+    return {
+      provider: 'azure-devops',
+      path: `${organization}/${project}/_git/${repository}`,
+      webBaseUrl: `https://dev.azure.com/${encodePath(organization)}/${projectPath}`
+    }
+  }
+  if (!isAzureDevOpsOrganizationName(organization)) {
+    return null
+  }
+  return {
+    provider: 'azure-devops',
+    path: `${project}/_git/${repository}`,
+    webBaseUrl: `https://${organization.toLowerCase()}.visualstudio.com/${projectPath}`
+  }
+}
+
 function parseAzureDevOpsRemote(trimmed: string): RemoteRepoRef | null {
   const scpLike = trimmed.match(/^(?:[^@/:]+@)?([^:\s/]+):([^\s]+?)(?:\.git)?$/)
-  if (scpLike && scpLike[1].toLowerCase() === 'ssh.dev.azure.com') {
-    const parts = cleanPath(scpLike[2])?.split('/') ?? []
-    if (parts.length >= 4 && parts[0].toLowerCase() === 'v3') {
-      const [, organization, project, repository] = parts
-      return {
-        provider: 'azure-devops',
-        path: `${organization}/${project}/_git/${repository}`,
-        webBaseUrl: `https://dev.azure.com/${encodePath(organization)}/${encodeURIComponent(project)}/_git/${encodeURIComponent(repository)}`
-      }
+  if (scpLike) {
+    const ssh = parseAzureDevOpsSshRemote(scpLike[1], scpLike[2])
+    if (ssh) {
+      return ssh
     }
   }
 
@@ -100,15 +124,11 @@ function parseAzureDevOpsRemote(trimmed: string): RemoteRepoRef | null {
       return null
     }
     const host = url.hostname.toLowerCase()
-    const parts = cleanPath(url.pathname)?.split('/') ?? []
-    if (host === 'ssh.dev.azure.com' && parts.length >= 4 && parts[0].toLowerCase() === 'v3') {
-      const [, organization, project, repository] = parts
-      return {
-        provider: 'azure-devops',
-        path: `${organization}/${project}/_git/${repository}`,
-        webBaseUrl: `https://dev.azure.com/${encodePath(organization)}/${encodeURIComponent(project)}/_git/${encodeURIComponent(repository)}`
-      }
+    const ssh = parseAzureDevOpsSshRemote(host, url.pathname)
+    if (ssh) {
+      return ssh
     }
+    const parts = cleanPath(url.pathname)?.split('/') ?? []
 
     const gitIndex = parts.findIndex((part) => part.toLowerCase() === '_git')
     if (gitIndex < 1 || gitIndex + 1 >= parts.length) {

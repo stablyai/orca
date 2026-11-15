@@ -2,9 +2,9 @@
 
 import { isPaneSleepRecord } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
 import { isOwnedSshTargetId } from '../../../../shared/execution-host'
-import { parseAppSshPtyId } from '../../../../shared/ssh-pty-id'
-import type { SshConnectionStatus } from '../../../../shared/ssh-types'
-import { collectLayoutLeafIdsInOrder } from '../../../../shared/workspace-layout/terminal-pane-tree'
+import { parseAppSshPtyId } from '../../../../shared/remote-runtime/ssh/ssh-pty-id'
+import type { SshConnectionStatus } from '../../../../shared/remote-runtime/ssh/ssh-types'
+import { collectLayoutLeafIdsInOrder } from '../../../../shared/workspace-layout/terminal-topology/terminal-pane-tree'
 import type { WorkspaceSessionState } from '../../../../shared/workspace-session/workspace-session-state-types'
 
 export type ShutdownReconnectFacts = Pick<

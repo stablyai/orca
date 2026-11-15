@@ -8,9 +8,9 @@ import { firstParam } from '../../../../src/navigation/route-param-reader'
 import {
   shellScreenRoute,
   shellScreenRouteKey
-} from '../../../../src/mobile-web-shell/shell-screen-route'
+} from '../../../../src/mobile-web-shell/routing/shell-screen-route'
 import { MobileWebShellScreen } from '../../../../src/mobile-web-shell/MobileWebShellScreen'
-import { PageRouteUnavailableScreen } from '../../../../src/mobile-web-shell/PageRouteUnavailableScreen'
+import { PageRouteUnavailableScreen } from '../../../../src/mobile-web-shell/presentation/PageRouteUnavailableScreen'
 
 // Gate route and grants before mounting shell; legacy pr/history redirects remain native so the page session cannot retain a replaced pathname.
 export default withWorkspaceRoute(function MobileSourceControlScreen() {

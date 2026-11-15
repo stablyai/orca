@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs'
 import { PNG } from 'pngjs'
-import { resolveClaudeCommand } from '../../src/shared/node-cli-command-resolution'
+import { resolveClaudeCommand } from '../../src/shared/shell/command-resolution/node-cli-command-resolution'
 import { createClaudePluginImageFixture } from './helpers/claude-plugin-image-fixture'
 import { expect, test } from './helpers/orca-app'
 import { ensureTerminalVisible, waitForSessionReady } from './helpers/store'

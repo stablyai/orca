@@ -1,4 +1,4 @@
-import type { SecretAtRestProtection } from './secret-at-rest-protection'
+import type { SecretAtRestProtection } from './secure-storage/secret-at-rest-protection'
 export type BitbucketAuthMode = 'token' | 'basic'
 
 // Offer Disconnect only for in-app stored credentials.

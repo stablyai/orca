@@ -1,13 +1,13 @@
 import type * as WorktreeScanCacheModule from '../../../git/worktrees/catalog/worktree-scan-cache'
 import type * as WorktreeListingModule from '../../../git/worktrees/catalog/worktree-listing'
-import '../unused-default-rpc-methods.test-fixture'
+import '../dispatch/testing/unused-default-rpc-methods.test-fixture'
 import { existsSync, mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { OrcaRuntimeService } from '../../orca-runtime'
 import { OrcaRuntimeRpcServer } from './runtime-rpc'
-import { WebSocketTransport } from '../ws-transport'
+import { WebSocketTransport } from '../transports/websocket/ws-transport'
 
 vi.mock('../../../git/worktrees/catalog/worktree-scan-cache', async (importOriginal) => {
   const facade = getWorktreeListingMocks()

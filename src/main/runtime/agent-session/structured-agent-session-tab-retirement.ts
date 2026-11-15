@@ -1,8 +1,8 @@
 import { retireMobileSessionTabSelection } from '../session-tabs/mobile-session-tab-selection'
 /** Share tab retirement between user close and orchestration settlement so dead tabs cannot reattach sessions. */
 
-import type { RuntimeMobileSessionSnapshotTab } from '../../../shared/runtime-mobile-session-tab-contracts'
-import type { RuntimeMobileSessionTabsSnapshot } from '../../../shared/runtime-session-contracts'
+import type { RuntimeMobileSessionSnapshotTab } from '../../../shared/remote-runtime/session-graph/runtime-mobile-session-tab-contracts'
+import type { RuntimeMobileSessionTabsSnapshot } from '../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import { structuredAgentSessionTabId } from '../../../shared/agent-session/view/structured-agent-session-projection'
 
 export function findStructuredAgentSessionTab(

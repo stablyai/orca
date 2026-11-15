@@ -1,17 +1,19 @@
 import React from 'react'
 import { getPageNumbers } from '@/components/task-page/task-page-pagination-page-numbers'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import { useTranslate } from '@/i18n/use-translate'
 import { ChevronLeft, LoaderCircle, ChevronRight } from 'lucide-react'
 export function PaginationBar({
   currentPage,
   totalPages,
   loadingTarget,
+  disabled = false,
   onPageChange
 }: {
   currentPage: number
   totalPages: number
   loadingTarget: number | null
+  disabled?: boolean
   onPageChange: (page: number) => void
 }): React.JSX.Element {
   const t = useTranslate()
@@ -32,7 +34,7 @@ export function PaginationBar({
     >
       <button
         type="button"
-        disabled={currentPage === 0 || loadingTarget !== null}
+        disabled={disabled || currentPage === 0 || loadingTarget !== null}
         onClick={() => onPageChange(currentPage - 1)}
         aria-label={t('auto.components.TaskPage.6cd6b3ae6a', 'Previous page')}
         className={btnClass}
@@ -54,7 +56,7 @@ export function PaginationBar({
           <button
             key={entry}
             type="button"
-            disabled={loadingTarget !== null && loadingTarget !== entry}
+            disabled={disabled || (loadingTarget !== null && loadingTarget !== entry)}
             onClick={() => onPageChange(entry)}
             aria-label={t('auto.components.TaskPage.ae859c816b', 'Page {{value0}}', {
               value0: entry + 1
@@ -73,7 +75,7 @@ export function PaginationBar({
 
       <button
         type="button"
-        disabled={currentPage >= totalPages - 1 || loadingTarget !== null}
+        disabled={disabled || currentPage >= totalPages - 1 || loadingTarget !== null}
         onClick={() => onPageChange(currentPage + 1)}
         aria-label={t('auto.components.TaskPage.0c8df28045', 'Next page')}
         className={btnClass}

@@ -1,8 +1,10 @@
+import { isProjectGroupHookTrustKey } from '../../../../../shared/workspace-setup/hooks/workspace-hook-owner'
 import { normalizeExplorerDisplayRootByWorktree } from '../../../../../shared/file-listing/file-explorer-display-root'
 import type { AppState } from '../../types'
 import type { PersistedTrustedOrcaHooks } from '../../../../../shared/orca-yaml-hook-types'
 import type { PersistedUIState } from '../../../../../shared/persisted-ui-state-types'
 import type {
+  ActivityBarPosition,
   TaskViewPresetId,
   TopLevelView,
   VisibleWorkspaceHostIds,
@@ -17,7 +19,8 @@ import { isTopLevelView } from '../../../../../shared/top-level-view'
 import { AGENT_STATUS_HYDRATE_MAX_AGE_MS } from '../../../../../shared/agent-status/contracts/agent-status-freshness'
 import { resolveVisibleWorkspaceHostIds } from '../../../../../shared/workspace-view/workspace-host-visibility'
 import { persistedUIValuesEqual } from '../../../../../shared/persisted-ui-equality'
-import { DEFAULT_STATUS_BAR_ITEMS } from '../../../../../shared/constants'
+import '../../../../../shared/constants'
+import { DEFAULT_STATUS_BAR_ITEMS } from '../../../../../shared/status-bar/status-bar-defaults'
 import type { UISlice } from './ui-slice-contract'
 
 const MIN_SIDEBAR_WIDTH = 220
@@ -73,7 +76,7 @@ export function hydrateTrustedOrcaHooks(
   }
   const next: PersistedTrustedOrcaHooks = {}
   for (const [repoId, entry] of Object.entries(sanitized)) {
-    if (validRepoIds.has(repoId)) {
+    if (validRepoIds.has(repoId) || isProjectGroupHookTrustKey(repoId)) {
       next[repoId] = entry
     }
   }
@@ -103,6 +106,11 @@ export function sanitizePersistedSidebarWidth(
     return fallback
   }
   return Math.min(maxWidth, Math.max(MIN_SIDEBAR_WIDTH, width))
+}
+
+// Any other value would hide the activity bar entirely, since the layout renders only Top or Side.
+export function sanitizeActivityBarPosition(position: unknown): ActivityBarPosition {
+  return position === 'side' ? 'side' : 'top'
 }
 
 export function sanitizePaneKeyTimestampRecord(

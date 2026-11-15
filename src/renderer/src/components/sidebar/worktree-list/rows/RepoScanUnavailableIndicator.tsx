@@ -1,11 +1,11 @@
 import React from 'react'
 import { TriangleAlert } from 'lucide-react'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import { useTranslate } from '@/i18n/use-translate'
-import { useAppStore } from '@/store'
-import type { Repo } from '../../../../../../shared/repo-types'
-import type { WorktreeScanFailureKind } from '../../../../../../shared/worktree-scan-failure'
+import { useAppStore } from '@/store/index'
+import type { Repo } from '../../../../../../shared/repository/repo-types'
+import type { WorktreeScanFailureKind } from '../../../../../../shared/worktree/catalog/worktree-scan-failure'
 import { isLocalToolchainFailure, resolveRepoScanFailure } from '../../repo-scan-failure'
 import {
   handleRepoHeaderActionPointerDown,
@@ -59,7 +59,7 @@ export function RepoScanUnavailableIndicator({ repo }: { repo: Repo }): React.JS
   ].join('\n')
   return (
     <TooltipProvider disableHoverableContent={false}>
-      <Tooltip delayDuration={400}>
+      <Tooltip>
         <TooltipTrigger asChild>
           <button
             type="button"

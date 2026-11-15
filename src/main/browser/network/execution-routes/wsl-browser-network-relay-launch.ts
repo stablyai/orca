@@ -11,7 +11,7 @@ import {
   WSL_BROWSER_NETWORK_RELAY_SENTINEL,
   WSL_BROWSER_NETWORK_RELAY_STALE_EXIT_CODE,
   WSL_BROWSER_NETWORK_RELAY_VERSION_FILE
-} from '../../../../shared/wsl-browser-network-relay-contract'
+} from '../../../../shared/browser/network/tunnels/wsl-browser-network-relay-contract'
 
 const STARTUP_TIMEOUT_MS = 10_000
 const INSTALL_TIMEOUT_MS = 30_000

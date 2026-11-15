@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import type { RuntimeMobileSessionTabsResult } from '../../../../../../shared/runtime-session-contracts'
+import type { RuntimeMobileSessionTabsResult } from '../../../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import type { TabGroupLayoutNode } from '../../../../../../shared/tab-types'
 import type { TerminalPaneLayoutNode } from '../../../../../../shared/workspace-layout/terminal-tab-types'
 

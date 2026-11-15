@@ -9,12 +9,13 @@ import {
 import type { AgentStatusIpcPayload } from '../../../../shared/agent-status/contracts/agent-status-ipc-payload'
 import type { AgentProviderSessionMetadata } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
 import type { ProgramStatusFacet } from '../../../../shared/program-status/facet'
-import type { RuntimeTerminalAgentStatus } from '../../../../shared/runtime-terminal-contracts'
+import type { RuntimeTerminalAgentStatus } from '../../../../shared/terminal/runtime/runtime-terminal-contracts'
 import { mapExplicitAgentStateToRuntimeTerminalStatus } from './runtime-worktree-status-projection'
 import { mainAgentState } from '../../../../shared/agent-status/lifecycle/main-agent-status'
 
 /** One hook-server row projected into the shape the runtime's own readers consume. */
 export type RuntimeAgentRowSnapshot = {
+  paneSleep?: AgentStatusIpcPayload['paneSleep']
   paneKey: string
   worktreeId?: string
   tabId?: string
@@ -26,6 +27,7 @@ export type RuntimeAgentRowSnapshot = {
   updatedAt: number
   evidenceObservedAt?: number
   providerSession?: AgentProviderSessionMetadata
+  orcaSessionId?: string | null
   programStatus?: ProgramStatusFacet
 }
 
@@ -69,7 +71,8 @@ export function selectFreshExplicitAgentStatusRow(args: HookRowJoin): AgentStatu
     if (
       !row.state ||
       typeof row.receivedAt !== 'number' ||
-      now - (row.evidenceObservedAt ?? row.receivedAt) > AGENT_STATUS_STALE_AFTER_MS ||
+      (!row.paneSleep &&
+        now - (row.evidenceObservedAt ?? row.receivedAt) > AGENT_STATUS_STALE_AFTER_MS) ||
       !(isLiveObservation(row) || isHeldRestoredPermission(row, args))
     ) {
       continue
@@ -129,7 +132,8 @@ export function selectFreshAgentRowForMobileTab(args: {
   for (const row of args.hookRows) {
     if (
       !isLiveObservation(row) ||
-      now - (row.evidenceObservedAt ?? row.receivedAt) > AGENT_STATUS_STALE_AFTER_MS
+      (!row.paneSleep &&
+        now - (row.evidenceObservedAt ?? row.receivedAt) > AGENT_STATUS_STALE_AFTER_MS)
     ) {
       continue
     }
@@ -153,6 +157,7 @@ export function selectFreshAgentRowForMobileTab(args: {
   }
   return {
     paneKey: match.paneKey,
+    ...(match.paneSleep ? { paneSleep: match.paneSleep } : {}),
     connectionId: match.connectionId ?? null,
     ...(match.worktreeId ? { worktreeId: match.worktreeId } : {}),
     ...(match.tabId ? { tabId: match.tabId } : {}),
@@ -161,6 +166,7 @@ export function selectFreshAgentRowForMobileTab(args: {
     ...pickHostTurnEnd(match),
     updatedAt: match.receivedAt,
     ...(match.providerSession ? { providerSession: match.providerSession } : {}),
+    ...(match.orcaSessionId !== undefined ? { orcaSessionId: match.orcaSessionId } : {}),
     ...(match.programStatus ? { programStatus: match.programStatus } : {}),
     ...(match.evidenceObservedAt !== undefined
       ? { evidenceObservedAt: match.evidenceObservedAt }

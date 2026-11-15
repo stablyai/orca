@@ -43,7 +43,7 @@ test('names a folder terminal recovered from the daemon after restart without an
         cols: 80,
         rows: 24,
         cwd: folderPath,
-        worktreeId: `folder:${folder.id}`,
+        worktreeId: `folder:${folder.folderWorkspace.id}`,
         initiallyHidden: true
       })
     }, root)
