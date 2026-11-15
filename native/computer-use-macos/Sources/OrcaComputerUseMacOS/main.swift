@@ -752,12 +752,7 @@ final class Provider {
                 if lhs.app.isActive != rhs.app.isActive {
                     return lhs.app.isActive && !rhs.app.isActive
                 }
-                let order = lhs.name.localizedCaseInsensitiveCompare(rhs.name)
-                if order == .orderedSame {
-                    // Why: a name query should pick the app over a same-named helper without a Dock icon.
-                    return lhs.app.activationPolicy == .regular && rhs.app.activationPolicy != .regular
-                }
-                return order == .orderedAscending
+                return lhs.name.localizedCaseInsensitiveCompare(rhs.name) == .orderedAscending
             }
     }
 
@@ -840,7 +835,9 @@ final class Provider {
         if blockedBundleIds.contains(trimmed) {
             throw ProviderError.coded("app_blocked", "app '\(trimmed)' is blocked for safety")
         }
-        if let app = listApps(includingWindowlessAccessoryApps: true).first(where: { matches($0, query: trimmed) }) {
+        let matching = listApps(includingWindowlessAccessoryApps: true).filter { matches($0, query: trimmed) }
+        // Why: a name query should pick the app over a same-named helper without a Dock icon, even an active one.
+        if let app = matching.first(where: { $0.app.activationPolicy == .regular }) ?? matching.first {
             try rejectBlockedApp(app)
             return app
         }
