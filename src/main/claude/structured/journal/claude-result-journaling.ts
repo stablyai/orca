@@ -102,6 +102,7 @@ export function journalClaudeResult(
     // The steer continues this open turn, so only the cut-off step's streamed output ends here.
     corrections.abandon()
     streamedText.finishRoot({ completedAt: observedAt })
+    streamedBlocks.clearScope(String(message.session_id), null)
     streamedThinking.finishRoot(String(message.session_id), observedAt)
     turn.holdForSteer(claudeTurnEndForResult(message, observedAt))
     return

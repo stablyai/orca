@@ -228,8 +228,8 @@ export class ClaudeOpenTurn {
     this.cycleWorkObserved = false
     this.inputChoiceWorkObserved = false
     this.usageLimitEvidence = null
-    // End suppressed work even when no turn is open.
-    this.deps.endOpenWork(end.completedAt)
+    // End suppressed work even when no turn is open, at the real settle time.
+    this.deps.endOpenWork(settled.completedAt)
     if (this.current) {
       this.publish(
         this.current,

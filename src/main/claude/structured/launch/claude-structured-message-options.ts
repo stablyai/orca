@@ -118,9 +118,18 @@ export async function dispatchClaudeMessage(
   const outcome = await dispatchClaudeTurn(session, input, async () => {
     try {
       input.signal?.throwIfAborted()
-      const steers =
+      input.onInputPreparation?.()
+      let steers =
         session.translator?.openTurnHasInputWork === true &&
         input.body.from?.orchestration?.message !== 'mail-notice'
+      if (steers) {
+        await waitForPromiseWithSignal(
+          backgroundClaudeWorkForSteer(session, input, logger),
+          input.signal
+        )
+        // The turn can end during the wait; then this is a plain send with its own choices.
+        steers = session.translator?.openTurnHasInputWork === true
+      }
       // Input joining a running turn, and Orca mail notices, run on the choices Claude already has;
       // new choices apply at the next new turn.
       const messageOptions =
@@ -130,18 +139,11 @@ export async function dispatchClaudeMessage(
         input.body.from?.orchestration?.message === 'mail-notice'
           ? undefined
           : input.executionOptions
-      input.onInputPreparation?.()
       if (messageOptions !== undefined) {
         await applyClaudeMessageOptions(session, messageOptions, timeoutMs, input.signal)
       }
       input.signal?.throwIfAborted()
       await input.beforeDispatch?.()
-      if (steers) {
-        await waitForPromiseWithSignal(
-          backgroundClaudeWorkForSteer(session, input, logger),
-          input.signal
-        )
-      }
       input.onExecutionSnapshot?.()
       ranOptions = claudeExecutionObservations(session)
       if (messageOptions?.model && ranOptions.model !== messageOptions.model) {
