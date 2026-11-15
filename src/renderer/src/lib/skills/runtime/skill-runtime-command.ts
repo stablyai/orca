@@ -5,7 +5,7 @@ import { normalizeGlobalWindowsRuntimeDefault } from '../../../../../shared/exec
 import {
   quotePowerShellLiteral,
   quotePowerShellNativeArgument
-} from '../../../../../shared/powershell-native-argument'
+} from '../../../../../shared/shell/launch/powershell-native-argument'
 import { buildWslLoginShellCommand } from '../../../../../shared/shell/wsl/wsl-login-shell-command'
 import { isWslShellName } from '../../../../../shared/shell/launch/local-windows-terminal-runtime'
 import { resolveWindowsShellStartupFamily } from '../../../../../shared/shell/launch/windows-terminal-shell'

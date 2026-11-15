@@ -8,7 +8,7 @@ import {
   NODE_RUNTIME_ASSETS,
   SERVER_TARGETS,
   type ServerTarget
-} from '../../../../shared/node-runtime-pin'
+} from '../../../../shared/node-runtime/node-runtime-pin'
 import {
   ORCAD_NODE_PTY_DIR,
   ORCAD_NODE_RUNTIME_MARKER_FILENAME,

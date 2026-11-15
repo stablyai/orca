@@ -1,15 +1,18 @@
 import { recognizeAgentProcessFromCommandLine } from '../../../shared/agent-status/process/agent-process-recognition'
 import { resolveOuterWrapperForegroundProcess } from '../../../shared/agent-status/process/foreground-wrapper-agent'
-import { unreadableArgvName, type ProcessTableRow } from '../../../shared/process-table-snapshot'
+import {
+  unreadableArgvName,
+  type ProcessTableRow
+} from '../../../shared/process-observation/tables/process-table-snapshot'
 import {
   getFreshProcessTableSnapshot,
   getFreshShellForegroundSnapshot,
   getProcessTableSnapshot
-} from '../../../shared/process-table-snapshot-reader'
+} from '../../../shared/process-observation/tables/process-table-snapshot-reader'
 import {
   collectDescendantsFromIndex,
   getProcessTableIndex
-} from '../../../shared/process-table-index'
+} from '../../../shared/process-observation/tables/process-table-index'
 import {
   resolveWindowsAgentForegroundProcessWithAvailability,
   shouldInspectWindowsAgentForeground,

@@ -27,7 +27,7 @@ import { STATUS_METHODS } from '../host-management/status'
 import type { RpcRequest } from '../../core'
 import { WorkspaceLifecycleQueue } from '../../../workspaces/lifecycle/workspace-lifecycle-queue'
 import { installRealWorkerThreadChildProcesses } from '../../../../worker-thread-child-process/worker-thread-child-process-real.test-fixtures'
-import { removeTree } from '../../../../../shared/windows-transient-lock-removal'
+import { removeTree } from '../../../../../shared/file-write/windows-transient-lock-removal'
 import {
   _resetPendingWorktreeRemovalsForTests,
   _settlePendingWorktreeRemovalsForTests,

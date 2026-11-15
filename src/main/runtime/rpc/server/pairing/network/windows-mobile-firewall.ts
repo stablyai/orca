@@ -5,7 +5,7 @@ import type {
   WindowsMobileFirewallStatus,
   WindowsNetworkCategory
 } from '../../../../../../shared/remote-runtime/pairing/windows-mobile-firewall'
-import { quotePowerShellLiteral } from '../../../../../../shared/powershell-native-argument'
+import { quotePowerShellLiteral } from '../../../../../../shared/shell/launch/powershell-native-argument'
 import { hasSufficientWindowsFirewallRemoteScope } from './windows-firewall-remote-scope'
 
 const FIREWALL_RULE_NAME = 'Orca.MobilePairing'

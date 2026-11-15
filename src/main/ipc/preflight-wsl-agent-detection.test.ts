@@ -8,7 +8,7 @@ const runWslProcessMock = vi.hoisted(() => vi.fn())
 vi.mock('../wsl/execution/wsl-runner', () => ({ runWslProcess: runWslProcessMock }))
 
 import { detectWslCommandsOnPath } from './preflight-wsl-agent-detection'
-import { buildPosixCommandPathLookupScript } from '../../shared/posix-command-path-lookup'
+import { buildPosixCommandPathLookupScript } from '../../shared/shell/command-resolution/posix-command-path-lookup'
 
 describe('the detection script itself, run by a real POSIX shell', () => {
   // Execute real shell globbing and executable checks; Windows has no /bin/sh.

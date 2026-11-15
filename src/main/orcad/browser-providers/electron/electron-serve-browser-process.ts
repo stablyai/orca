@@ -17,7 +17,7 @@ import { BROWSER_UNAVAILABLE_ERROR_CODE } from '../../../../shared/remote-runtim
 import { readRuntimeMetadata } from '../../../runtime/rpc/server/runtime-metadata'
 import { spawnProcess } from '@orca/process-host'
 import { isProcessAlive } from '../../../../shared/remote-runtime/serve-supervisor/serve-bundle-coordination'
-import { removeTree } from '../../../../shared/windows-transient-lock-removal'
+import { removeTree } from '../../../../shared/file-write/windows-transient-lock-removal'
 import { BROWSER_SIDECAR_OWNER_ENV } from '../../../../shared/browser/runtime/browser-sidecar-lifetime'
 import { electronIsolatedProfileSwitches } from '../../../../shared/electron-isolated-profile-switches'
 import { headlessServeOzonePlatformSwitches } from '../../../../shared/headless-serve-ozone-platform'

@@ -21,7 +21,7 @@ import { claudeConfigDirEnvPatch } from '../structured/launch/claude-config-dir-
 import {
   envWithPathRelativeTo,
   catalogListingDirectory
-} from '../../../shared/node-cli-command-resolution'
+} from '../../../shared/shell/command-resolution/node-cli-command-resolution'
 import {
   CLAUDE_DEFAULT_SETTING_SOURCES,
   resolveClaudeStructuredInvocation,

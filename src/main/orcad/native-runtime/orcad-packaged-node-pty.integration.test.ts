@@ -6,7 +6,7 @@ import { join, resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { runProcess } from '@orca/process-host'
 import { ORCAD_NODE_PTY_DIR } from '../../../shared/remote-runtime/orcad-distribution/orcad-artifacts'
-import { removeTreeSync } from '../../../shared/windows-transient-lock-removal'
+import { removeTreeSync } from '../../../shared/file-write/windows-transient-lock-removal'
 import {
   locatePinnedNodeForTests,
   skipForMissingInputs

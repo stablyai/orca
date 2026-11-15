@@ -11,7 +11,7 @@ import { parseWslUncPath } from '../../../../shared/file-access/wsl-paths'
 import { CODEX_SHORT_LIVED_PROBE_APP_SERVER_ARGS } from '../../../codex-cli/codex-read-only-app-server-args'
 import { resolveCodexCommand } from '../../../codex-cli/command'
 // Import the pure helper directly so CLI-command mocks do not replace it.
-import { withCliRuntimeOnPath } from '../../../../shared/node-cli-command-resolution'
+import { withCliRuntimeOnPath } from '../../../../shared/shell/command-resolution/node-cli-command-resolution'
 import {
   resolveCodexHomeProcessLockKey,
   withCodexHomeProcessLock

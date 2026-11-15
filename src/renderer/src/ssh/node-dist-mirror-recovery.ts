@@ -2,7 +2,7 @@
 import {
   normalizeNodeDistMirrorUrl,
   type NodeDistMirrorRefusal
-} from '../../../shared/node-dist-mirror'
+} from '../../../shared/node-runtime/node-dist-mirror'
 import type { SshManagedServerStatus } from '../../../shared/remote-runtime/ssh/ssh-types'
 import { translate } from '@/i18n/i18n'
 import { isPairedWebClientWindow } from '@/app-shell/chrome/desktop-window-chrome'
