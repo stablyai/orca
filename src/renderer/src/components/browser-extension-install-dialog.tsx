@@ -12,6 +12,7 @@ import {
 } from '@/components/ui/dialog'
 import { translate } from '@/i18n/i18n'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
+import { translateBrowserSessionProfileLabel } from '@/lib/browser/profiles/browser-session-profile-label'
 import { useAppStore } from '@/store'
 import type { BrowserExtensionInstallPromptRequest } from '../../../shared/browser/extensions/browser-extension-webstore'
 import {
@@ -72,7 +73,7 @@ function promptDescription(
     ? t(
         'browserExtensions.install.profileDescription',
         'It runs in tabs that use the {{profile}} profile.',
-        { profile: request.profileLabel }
+        { profile: translateBrowserSessionProfileLabel(request.profileLabel) }
       )
     : t('browserExtensions.install.description', 'It runs in Orca browser tabs.')
 }

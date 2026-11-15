@@ -7,7 +7,7 @@ import type {
   AgentPromptDelivery
 } from '../../../../../shared/agent-session/agent-session-host-authority'
 import type { StartupCommandDelivery } from '../../../../../shared/agent-launch/startup/codex-startup-delivery'
-import type { RuntimeTerminalCreate } from '../../../../../shared/runtime-terminal-create-contract'
+import type { RuntimeTerminalCreate } from '../../../../../shared/terminal/runtime/runtime-terminal-create-contract'
 import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent'
 import type { SessionOptionValue } from '../../../../../shared/native-chat/input/native-chat-session-options'
 import type { RuntimeCapability } from '../../../../../shared/protocol-version'

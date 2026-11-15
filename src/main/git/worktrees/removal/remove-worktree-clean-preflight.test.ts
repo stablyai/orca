@@ -7,14 +7,16 @@ const {
   translateWslOutputPathsMock,
   statMock,
   readFileMock,
-  resolveGitDirMock
+  resolveGitDirMock,
+  gitStreamStdoutMock
 } = vi.hoisted(() => ({
   gitExecFileAsyncMock: vi.fn(),
   gitExecFileSyncMock: vi.fn(),
   translateWslOutputPathsMock: vi.fn((output: string) => output),
   statMock: vi.fn(),
   readFileMock: vi.fn(),
-  resolveGitDirMock: vi.fn()
+  resolveGitDirMock: vi.fn(),
+  gitStreamStdoutMock: vi.fn()
 }))
 
 vi.mock('../../command-runner/git-exec-file', async (importOriginal) => ({
@@ -22,12 +24,16 @@ vi.mock('../../command-runner/git-exec-file', async (importOriginal) => ({
   gitExecFileAsync: gitExecFileAsyncMock
 }))
 
+vi.mock('../../command-runner/git-stream-stdout', () => ({
+  gitStreamStdout: gitStreamStdoutMock
+}))
+
 vi.mock('../../command-runner/git-exec-file-sync', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   gitExecFileSync: gitExecFileSyncMock
 }))
 
-vi.mock('../../command-runner/wsl-path-translation', async (importOriginal) => ({
+vi.mock('../../command-runner/host-routing/wsl-path-translation', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   translateWslOutputPaths: translateWslOutputPathsMock
 }))
@@ -56,10 +62,9 @@ beforeEach(() => {
 
 describe('assertWorktreeCleanForRemoval', () => {
   beforeEach(() => {
-    // Calls after the status read are the submodule probe's `ls-files`; failing leaves the verdict to Git.
-    gitExecFileAsyncMock
-      .mockReset()
-      .mockRejectedValue(new Error('git ls-files exited with code 128'))
+    gitExecFileAsyncMock.mockReset()
+    // A failed submodule probe leaves the verdict to Git.
+    gitStreamStdoutMock.mockReset().mockRejectedValue(new Error('git exited with 128: '))
   })
 
   it('ignores configured linked paths without mutating them before preflight', async () => {

@@ -1,4 +1,4 @@
-import type { BrowserHttpAuthCredentials } from '../../../../shared/browser-http-auth'
+import type { BrowserHttpAuthCredentials } from '../../../../shared/browser/prompts/browser-http-auth'
 import { browserManager } from '../manager/browser-manager'
 import { browserPagePromptOrigin, openBrowserPagePrompt } from './browser-page-prompts'
 

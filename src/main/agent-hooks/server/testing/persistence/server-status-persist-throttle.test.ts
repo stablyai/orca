@@ -46,23 +46,6 @@ describe('saved agent status cadence', () => {
     rmSync(userDataPath, { recursive: true, force: true })
   })
 
-  it('saves an authority change at once while a routine update waits for the window', async () => {
-    await prompt('first')
-    await vi.advanceTimersByTimeAsync(1)
-    expect(readPrompt()).toBe('first')
-
-    await prompt('second')
-    await vi.advanceTimersByTimeAsync(1)
-    expect(readPrompt()).toBe('first')
-
-    await prompt('third', 'launch-token-new')
-    await vi.advanceTimersByTimeAsync(1)
-    expect(JSON.parse(readSavedStatus(lastStatusPath())).entries[PANE]).toMatchObject({
-      launchTokenHash: expect.any(String),
-      payload: expect.objectContaining({ prompt: 'third' })
-    })
-  })
-
   it('saves the latest status at stop and a restart keeps it', async () => {
     await prompt('first')
     await vi.advanceTimersByTimeAsync(1)

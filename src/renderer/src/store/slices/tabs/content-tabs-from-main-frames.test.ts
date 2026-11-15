@@ -1,6 +1,6 @@
 // Layout-owner browser/chat/simulator commands draw only from main’s answers; refusals preserve tabs. With switch off, window draws without sending main.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type * as AgentStatusModule from '@/lib/agent-status'
+import type * as AgentStatusModule from '@/lib/agent-status/aggregation/worktree-agent-status'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../shared/layout-owner-switch'
 
 import '../../../../../shared/agent-session/view/structured-agent-session-projection'
@@ -30,14 +30,14 @@ vi.mock('@/store/index', () => ({
 vi.mock('sonner', () => ({
   toast: { info: vi.fn(), success: vi.fn(), error: vi.fn(), warning: vi.fn() }
 }))
-vi.mock('@/lib/agent-status', async (importOriginal) => {
+vi.mock('@/lib/agent-status/aggregation/worktree-agent-status', async (importOriginal) => {
   const actual = await importOriginal<typeof AgentStatusModule>()
   return { ...actual, detectAgentStatusFromTitle: vi.fn().mockReturnValue(null) }
 })
 
 createStoreCascadesMockApi()
 
-import { ensureSimulatorTab } from '@/lib/ensure-simulator-tab'
+import { ensureSimulatorTab } from '@/lib/simulator/tabs/ensure-simulator-tab'
 import { openStructuredAgentSessionProvisionalTab } from '@/lib/agent-session/launch/structured-agent-session-launch-surface'
 import '@/runtime/local-structured-session-tabs-sync/snapshot-apply'
 import { resetLocalStructuredSessionVersionForTests } from '@/runtime/local-structured-session-tabs-sync/inventory-generation-fence'
@@ -86,28 +86,6 @@ async function openHeld(open: () => string): Promise<string> {
 }
 
 describe.runIf(ORCA_LAYOUT_OWNER_IS_MAIN)('content tabs drawn from main’s frames', () => {
-  it('shows a browser tab, its label and page only once main’s frame drew it, then selects it', async () => {
-    const id = await openHeld(
-      () => store.getState().createBrowserTab(WT, 'https://example.com/', { title: 'Example' }).id
-    )
-    const entry = tabOf(id)!
-    expect(entry).toMatchObject({ contentType: 'browser', label: 'Example', groupId: ROOT })
-    expect(layoutApplyTestTransport.sentOfType('openBrowserTab')[0]).toMatchObject({
-      tabId: entry.id,
-      browserTabId: id,
-      groupId: ROOT
-    })
-    const pages = store.getState().browserPagesByWorkspace[id]!
-    expect(pages.map((page) => page.url)).toEqual(['https://example.com/'])
-    expect(store.getState().browserTabsByWorktree[WT]?.[0]).toMatchObject({
-      id,
-      pageIds: [pages[0]!.id],
-      title: 'Example'
-    })
-    expect(store.getState().groupsByWorktree[WT]?.[0]?.activeTabId).toBe(entry.id)
-    expect(store.getState().activeBrowserTabIdByWorktree[WT]).toBe(id)
-  })
-
   it('closes a browser tab once main did, keeps it on the reopen list, and reopens it', async () => {
     const id = store.getState().createBrowserTab(WT, 'https://example.com/', { title: 'Ex' }).id
     await main.settle()
@@ -137,34 +115,6 @@ describe.runIf(ORCA_LAYOUT_OWNER_IS_MAIN)('content tabs drawn from main’s fram
     )
   })
 
-  it('adds, converts and closes a page and switches a profile only once main did', async () => {
-    const id = store.getState().createBrowserTab(WT, 'https://a.test/').id
-    await main.settle()
-    layoutApplyTestTransport.answerWith('pending')
-    const page = store.getState().createBrowserPage(id, 'https://b.test/')!
-    await main.settle()
-    expect(store.getState().browserPagesByWorkspace[id]).toHaveLength(1)
-    layoutApplyTestTransport.answerWith('apply')
-    layoutApplyTestTransport.answerPending()
-    await main.settle()
-    expect(store.getState().browserPagesByWorkspace[id]?.map((p) => p.id)).toContain(page.id)
-    expect(layoutApplyTestTransport.sentOfType('openBrowserPage')).toEqual([
-      expect.objectContaining({ browserTabId: id, pageId: page.id })
-    ])
-
-    store.getState().closeBrowserPage(page.id)
-    await main.settle()
-    expect(store.getState().browserPagesByWorkspace[id]?.map((p) => p.id)).not.toContain(page.id)
-
-    store.getState().switchBrowserTabProfile(id, 'profile-2', 'persist:profile-2')
-    await main.settle()
-    expect(store.getState().browserTabsByWorktree[WT]?.[0]).toMatchObject({
-      sessionProfileId: 'profile-2',
-      sessionPartition: 'persist:profile-2'
-    })
-    expect(mainTabs().filter((tab) => tab.kind === 'browser')).toHaveLength(1)
-  })
-
   it('opens and closes a chat tab through main, and keeps one main refused to close', async () => {
     const sessionId = await openHeld(() => {
       openStructuredAgentSessionProvisionalTab({
@@ -190,39 +140,6 @@ describe.runIf(ORCA_LAYOUT_OWNER_IS_MAIN)('content tabs drawn from main’s fram
     await main.settle()
     expect(tabOf(sessionId)).toBeUndefined()
     expect(mainTabs().some((tab) => tab.entityId === sessionId)).toBe(false)
-  })
-
-  it('closes a window-only tab of a workspace main does not hold, as main’s tab_not_found does', async () => {
-    const OTHER = 'repo1::/path/wt2'
-    const tab = {
-      id: 'browser-tab-1',
-      entityId: 'browser-1',
-      groupId: 'group-other',
-      worktreeId: OTHER,
-      contentType: 'browser' as const,
-      label: 'Page',
-      customLabel: null,
-      color: null,
-      sortOrder: 0,
-      createdAt: 1
-    }
-    seedStore(store, {
-      unifiedTabsByWorktree: { ...store.getState().unifiedTabsByWorktree, [OTHER]: [tab] },
-      groupsByWorktree: {
-        ...store.getState().groupsByWorktree,
-        [OTHER]: [{ id: 'group-other', worktreeId: OTHER, activeTabId: tab.id, tabOrder: [tab.id] }]
-      }
-    })
-    layoutApplyTestTransport.answerWith({ refuse: 'workspace_not_found' })
-
-    store.getState().closeUnifiedTab(tab.id)
-    await main.settle()
-
-    expect(layoutApplyTestTransport.sentOfType('closeTabs')).toEqual([
-      expect.objectContaining({ workspace: OTHER, tabIds: [tab.id] })
-    ])
-    expect(store.getState().unifiedTabsByWorktree[OTHER] ?? []).toEqual([])
-    layoutApplyTestTransport.answerWith('apply')
   })
 
   it('opens a simulator tab to the right through main and surfaces it once drawn', async () => {

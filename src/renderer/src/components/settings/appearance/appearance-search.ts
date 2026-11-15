@@ -8,6 +8,7 @@ import { translateSearchKeyword } from '../search/settings-search-keywords'
 import { SHOW_UI_LANGUAGE_SETTING } from '@/i18n/supported-languages'
 import { getStatusBarToggles } from './appearance-status-bar-search'
 import { getUsagePercentageDisplayEntry } from './appearance-usage-percentage-search'
+import { getStatusBarUsageFormatEntry } from './appearance-status-bar-usage-format-search'
 import { getMenuBarIconEntries, getSystemTrayEntries } from './appearance-system-presence-search'
 import { getReduceVisualEffectsEntries } from './appearance-reduce-visual-effects-search'
 import { getAppIconEntries } from './appearance-app-icon-search'
@@ -31,8 +32,11 @@ export const getThemeEntries = createLocalizedCatalog((): SettingsSearchEntry[] 
   }
 ])
 
+export const APPEARANCE_EDITOR_THEME_SETTING_ID = 'appearance-editor-theme'
+
 export const getCodeEditorThemeEntries = createLocalizedCatalog((): SettingsSearchEntry[] => [
   {
+    targetSectionId: APPEARANCE_EDITOR_THEME_SETTING_ID,
     title: translate('settings.appearance.editorTheme.title', 'Editor theme'),
     description: translate(
       'settings.appearance.editorTheme.description',
@@ -104,7 +108,7 @@ export const getLanguageEntries = createLocalizedCatalog((): SettingsSearchEntry
 
 export const getZoomEntries = createLocalizedCatalog((): SettingsSearchEntry[] => [
   {
-    title: translate('auto.components.settings.appearance.search.c5e933970f', 'UI Zoom'),
+    title: translate('auto.components.settings.appearance.search.37e6b58b0e', 'UI zoom'),
     description: translate(
       'auto.components.settings.appearance.search.adddb91a3d',
       'Scale the entire application interface.'
@@ -119,7 +123,7 @@ export const getZoomEntries = createLocalizedCatalog((): SettingsSearchEntry[] =
 
 export const getTypographyEntries = createLocalizedCatalog((): SettingsSearchEntry[] => [
   {
-    title: translate('auto.components.settings.appearance.search.ddb991024d', 'IDE Font'),
+    title: translate('auto.components.settings.appearance.search.aff6e6afdf', 'IDE font'),
     description: translate(
       'auto.components.settings.appearance.search.07c7c38fac',
       'Choose the font used by the Orca interface.'
@@ -185,8 +189,8 @@ export const getFollowSymlinkedDirectoriesEntry = (
 export const getLayoutEntries = createLocalizedCatalog((): SettingsSearchEntry[] => [
   {
     title: translate(
-      'auto.components.settings.appearance.search.f8129fb544',
-      'Show Git-Ignored Files'
+      'auto.components.settings.appearance.search.4af9002a0c',
+      'Show Git-ignored files'
     ),
     description: translate(
       'auto.components.settings.appearance.search.7164edf71a',
@@ -212,7 +216,7 @@ export const getLayoutEntries = createLocalizedCatalog((): SettingsSearchEntry[]
 
 export const getTitlebarEntries = createLocalizedCatalog((): SettingsSearchEntry[] => [
   {
-    title: translate('auto.components.settings.appearance.search.fdd31b00d0', 'Titlebar App Name'),
+    title: translate('auto.components.settings.appearance.search.fb2353b8dd', 'Titlebar app name'),
     description: translate(
       'auto.components.settings.appearance.search.18b4c4c30b',
       'Show Orca in the titlebar.'
@@ -230,8 +234,10 @@ export const getTitlebarEntries = createLocalizedCatalog((): SettingsSearchEntry
   }
 ])
 
+/** Search entries for every Status Bar control, including the per-provider toggles. */
 export const getStatusBarEntries = createLocalizedCatalog((): SettingsSearchEntry[] => [
   getUsagePercentageDisplayEntry(),
+  getStatusBarUsageFormatEntry(),
   ...getStatusBarToggles().map(({ title, description, keywords }) => ({
     title,
     description,
@@ -247,10 +253,7 @@ const getAppearanceSectionEntries = createLocalizedCatalog((): SettingsSearchEnt
     title: translate('auto.components.settings.AppearancePane.terminalTitle', 'Terminal')
   },
   {
-    title: translate(
-      'auto.components.settings.AppearancePane.windowSidebarTitle',
-      'Window & Sidebar'
-    ),
+    title: translate('auto.components.settings.AppearancePane.e90c5d745a', 'Window & sidebar'),
     description: translate(
       'auto.components.settings.AppearancePane.windowSidebarSummary',
       'Sidebar, status bar, and file explorer'

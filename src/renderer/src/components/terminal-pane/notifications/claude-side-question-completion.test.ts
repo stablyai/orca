@@ -169,7 +169,9 @@ describe('Claude completion banners through the real pane and hook lanes', () =>
       dispatchNotification: (event: Parameters<typeof dispatchTerminalNotification>[1]) =>
         dispatchTerminalNotification('wt-1', event)
     })
-    const agentTitleMocks = await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+    const agentTitleMocks = await vi.importMock<PtyConnectionAgentTitleMocks>(
+      '@/lib/agent-status/aggregation/worktree-agent-status'
+    )
 
     await connectMockPanePty(
       createPane(1),
@@ -253,12 +255,18 @@ describe('Claude completion banners through the real pane and hook lanes', () =>
         stateStartedAt,
         ...pickHostTurnEnd(hostRow)
       }
-      mockStoreState.agentStatusByPaneKey[PANE_KEY] = {
-        ...payload,
-        paneKey: PANE_KEY,
-        updatedAt: Date.now(),
-        stateHistory: []
-      }
+      mockStoreState.agentStatusByPaneKey = mockStoreState.agentStatusByPaneKey.replace([
+        [
+          PANE_KEY,
+          {
+            ...payload,
+            stateStartedAt: stateStartedAt ?? Date.now(),
+            paneKey: PANE_KEY,
+            updatedAt: Date.now(),
+            stateHistory: []
+          }
+        ]
+      ])
       observeAgentHookCompletionForNotification({ paneKey: PANE_KEY, worktreeId: 'wt-1', payload })
     }
     await vi.advanceTimersByTimeAsync(5_000)

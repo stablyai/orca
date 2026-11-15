@@ -3,7 +3,7 @@ import {
   inProcessDeadlineAllowanceMs,
   inProcessSliceMs,
   runPsInProcess
-} from '../../../shared/libproc-process-table'
+} from '../../../shared/process-observation/darwin/libproc-process-table'
 import { parseProcessTable, type ProcessTableRow } from './pty-process-table-parser'
 
 export const DESCENDANT_SNAPSHOT_TIMEOUT_MS = 1_000

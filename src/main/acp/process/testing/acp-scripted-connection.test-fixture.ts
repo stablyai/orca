@@ -25,6 +25,9 @@ export class FakeAcpChild extends AcpSessionRuntime implements AcpStructuredConn
   private exitedWith: ProviderProcessExit | null = null
   closes = 0
 
+  closeSession = (sessionId: string, timeoutMs = 10_000): Promise<unknown> =>
+    this.peer.request('session/close', { sessionId }, { timeoutMs, onTimeout: 'cancel' })
+
   constructor(
     readonly launch: ProviderProcessLaunch,
     private readonly connectionOptions: AcpAgentConnectionOptions,

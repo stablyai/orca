@@ -1,6 +1,6 @@
 import { isRemoteRuntimePtyId } from '../../../../shared/remote-runtime/remote-runtime-pty-id'
 import { getPtyIpc } from '../pty-host-bindings'
-import { parseAppSshPtyId } from '../../../providers/ssh-pty-id'
+import { parseAppSshPtyId } from '../../../../shared/remote-runtime/ssh/ssh-pty-id'
 import {
   findPaneCodexOnSharedServer,
   resolveCodexPaneHome
@@ -14,7 +14,7 @@ import {
   CODEX_FISH_SHELL_FUNCTION_DAEMON_PROTOCOL_VERSION,
   CODEX_NO_DAEMON_SHELL_LAUNCH_DAEMON_PROTOCOL_VERSION
 } from '../../../daemon/protocol/daemon-protocol-version'
-import type { CodexSharedServerStatus } from '../../../../shared/codex-shared-server-command'
+import type { CodexSharedServerStatus } from '../../../../shared/agent-launch/startup/codex-shared-server-command'
 import { ptyOwnership } from '../provider/ownership-state'
 import { getProviderForPty, hasPtyProviderForInspection } from '../provider/registry'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'

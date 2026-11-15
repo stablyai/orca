@@ -10,26 +10,27 @@ import {
   carriedChatUiLaunchSettings
 } from '../../../../shared/native-chat/native-chat-providers'
 import { normalizeAutoRenameBranchFromWorkDefaultOn } from '../../../../shared/auto-rename-branch-from-work-settings'
-import {
-  getDefaultSettings,
-  normalizeAgentActivityDisplayMode,
-  normalizeWorktreeCardProperties
-} from '../../../../shared/constants'
+import { getDefaultSettings, normalizeAgentActivityDisplayMode } from '../../../../shared/constants'
+import { normalizeWorktreeCardProperties } from '../../../../shared/worktree/row-display/card-properties'
 import {
   normalizeContextualTourIds,
   type ContextualTourId
-} from '../../../../shared/contextual-tours'
+} from '../../../../shared/feature-education/contextual-tours/contextual-tours'
 
 import {
   normalizeFeatureInteractions,
-  type FeatureInteractionId,
   type FeatureInteractionState
-} from '../../../../shared/feature-interactions'
+} from '../../../../shared/feature-education/interactions/feature-interactions'
+import type { FeatureInteractionId } from '../../../../shared/feature-education/interactions/feature-interaction-catalog'
 
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
-import type { PairedUiState, PairingLocalUiField } from '../../../../shared/pairing-local-ui-fields'
+import type {
+  PairedUiState,
+  PairingLocalUiField
+} from '../../../../shared/remote-runtime/pairing/pairing-local-ui-fields'
 import type { PersistedUIState } from '../../../../shared/persisted-ui-state-types'
-import { normalizeStatusBarUsageMode } from '../../../../shared/status-bar-usage-mode'
+import { normalizeStatusBarUsageMode } from '../../../../shared/status-bar/status-bar-usage-mode'
+import { normalizeStatusBarUsageFormat } from '../../../../shared/status-bar/status-bar-usage-format'
 import { normalizeTerminalCustomThemes } from '../../../../shared/terminal-themes/terminal-custom-themes'
 import { splitLegacyTerminalColorOverrides } from '../../../../shared/terminal-themes/terminal-color-overrides'
 import {
@@ -40,12 +41,12 @@ import {
 } from '../../../../shared/agent-launch/choices/tui-agent-launch-defaults'
 import { hasTypedAgentPermission } from '../../../../shared/agent-launch/permissions/tui-agent-permission-choice'
 import { migrateAgentPermissionChoice } from '../../../../shared/agent-launch/permissions/tui-agent-permission-lift'
-import { normalizeOsc52ClipboardDefaultOn } from '../../../../shared/osc52-clipboard-settings'
+import { normalizeOsc52ClipboardDefaultOn } from '../../../../shared/terminal/clipboard/osc52-clipboard-settings'
 import { normalizeTerminalCursorStyleDefault } from '../../../../shared/terminal/appearance/terminal-cursor-style-settings'
 import { normalizeDisabledTuiAgents } from '../../../../shared/agent-launch/catalog/tui-agent-selection'
 import { normalizeUiLanguage } from '../../../../shared/ui-language'
 import { migratePortugueseUiLanguageOnLoad } from '../../../../shared/portuguese-ui-language-migration'
-import { normalizeUsagePercentageDisplay } from '../../../../shared/usage-percentage-display'
+import { normalizeUsagePercentageDisplay } from '../../../../shared/agent-usage/display/usage-percentage-display'
 import { mergeWorkspaceCleanupUIState } from '../../../../shared/workspace-cleanup/workspace-cleanup-ui-state'
 
 export function mergeWebUIState(
@@ -77,6 +78,9 @@ export function mergeWebUIState(
     ),
     statusBarUsageMode: normalizeStatusBarUsageMode(
       safeUpdates.statusBarUsageMode ?? base.statusBarUsageMode
+    ),
+    statusBarUsageFormat: normalizeStatusBarUsageFormat(
+      safeUpdates.statusBarUsageFormat ?? base.statusBarUsageFormat
     )
   }
 }
@@ -92,6 +96,7 @@ export function mergeHostWebUIState(
     manualRepoOrder: local.manualRepoOrder,
     workspaceHostOrder: local.workspaceHostOrder,
     sidebarOpen: local.sidebarOpen,
+    activityBarPosition: local.activityBarPosition,
     showAgentModels: local.showAgentModels !== false,
     agentsVisibleHostIds: local.agentsVisibleHostIds,
     agentsFilterRepoIds: local.agentsFilterRepoIds,

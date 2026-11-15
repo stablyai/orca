@@ -12,7 +12,7 @@ import { encodeRawMarkdownHtmlForRichEditor } from '../raw-source/raw-markdown-h
 import { commitRichMarkdownSerialization } from '../document/rich-markdown-serialization-commit'
 
 // Pin the shortcut platform because navigator.userAgent varies across test environments.
-vi.mock('@/lib/shortcut-platform', () => ({
+vi.mock('@/lib/keyboard/shortcut-platform', () => ({
   getShortcutPlatform: () => 'darwin' as NodeJS.Platform
 }))
 

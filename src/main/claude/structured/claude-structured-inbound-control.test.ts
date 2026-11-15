@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { CanUseTool } from '@anthropic-ai/claude-agent-sdk'
-import { ClaudePromptRegistry } from '../claude-prompt-registry'
+import { ClaudePromptRegistry } from './permissions/claude-prompt-registry'
 import { buildClaudePermissionCallbacks } from './claude-structured-inbound-control'
 
 type CanUseToolOptions = Parameters<CanUseTool>[2]

@@ -6,10 +6,18 @@ import {
   normalizeGitLabIssueAssignee,
   normalizeGitLabIssueListState,
   normalizeGitLabPositiveInteger
-} from '../../gitlab/gitlab-preload-args'
-import { addIssueComment, createIssue, getIssue, listIssues } from '../../gitlab/issues'
-import { listAssignableUsers, listLabels } from '../../gitlab/project-label-and-member-lookup'
-import { updateIssue } from '../../gitlab/issue-update'
+} from '../../gitlab/requests/gitlab-preload-args'
+import {
+  addIssueComment,
+  createIssue,
+  getIssue,
+  listIssues
+} from '../../gitlab/issues/gitlab-issue-queries'
+import {
+  listAssignableUsers,
+  listLabels
+} from '../../gitlab/projects/project-label-and-member-lookup'
+import { updateIssue } from '../../gitlab/issues/issue-update'
 
 import {
   type GitLabRepoSelectorArgs,

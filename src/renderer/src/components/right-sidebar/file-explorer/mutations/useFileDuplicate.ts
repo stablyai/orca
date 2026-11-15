@@ -5,6 +5,7 @@ import type { TreeNode } from '../tree/file-explorer-types'
 import { copyRuntimePath } from '@/runtime/files/mutations/runtime-file-mutation-client'
 import { runtimePathExists } from '@/runtime/files/metadata/runtime-file-metadata-client'
 import { captureFileExplorerOperationGuard } from '../navigation/file-explorer-operation-owner'
+import { translate } from '@/i18n/i18n'
 
 /** Strip Electron invoke error wrappers before showing the underlying message. */
 function extractIpcErrorMessage(err: unknown, fallback: string): string {
@@ -42,7 +43,16 @@ export function useFileDuplicate({
         try {
           operationGuard = captureFileExplorerOperationGuard(activeWorktreeId, node.operationOwner)
         } catch (err) {
-          toast.error(extractIpcErrorMessage(err, `Failed to duplicate '${name}'.`))
+          toast.error(
+            extractIpcErrorMessage(
+              err,
+              translate(
+                'components.toastFallbacks.fileDuplicateFailed',
+                "Failed to duplicate '{{name}}'.",
+                { name }
+              )
+            )
+          )
           return
         }
         const context = {
@@ -80,7 +90,16 @@ export function useFileDuplicate({
               retries += 1
               continue
             }
-            toast.error(extractIpcErrorMessage(err, `Failed to duplicate '${name}'.`))
+            toast.error(
+              extractIpcErrorMessage(
+                err,
+                translate(
+                  'components.toastFallbacks.fileDuplicateFailed',
+                  "Failed to duplicate '{{name}}'.",
+                  { name }
+                )
+              )
+            )
             return
           }
         }

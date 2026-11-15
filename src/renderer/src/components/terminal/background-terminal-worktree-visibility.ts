@@ -1,3 +1,4 @@
+import { invalidateTerminalParkingInputs } from '../terminal-pane/parking/terminal-parking-input-events'
 import { addBackgroundMountedTerminalWorktree } from './background-terminal-worktree-mount'
 
 export const BACKGROUND_WORKTREE_MEASURE_WINDOW_MS = 3000
@@ -36,10 +37,12 @@ export function scheduleBackgroundTerminalWorktreeMeasure({
   const timer = setTimeoutFn(() => {
     measurableBackgroundWorktreeIds.delete(worktreeId)
     timers.delete(worktreeId)
+    invalidateTerminalParkingInputs(worktreeId)
     onRevision()
   }, BACKGROUND_WORKTREE_MEASURE_WINDOW_MS)
 
   timers.set(worktreeId, timer)
+  invalidateTerminalParkingInputs(worktreeId)
   onRevision()
   return added
 }

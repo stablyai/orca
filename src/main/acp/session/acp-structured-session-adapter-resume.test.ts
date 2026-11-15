@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import type { AgentJournalMessageItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import { readAgentSessionFailureFact } from '../../../shared/agent-session/failures/agent-session-failure'
-import { readAgentJournalTurn } from '../../../shared/agent-session/lifecycle/agent-session-turn-record'
+import { readAgentJournalTurn } from '../../../shared/agent-session/lifecycle/records/agent-session-turn-record'
 import {
   closeProviderTimelineRigs,
   messageText,
@@ -33,8 +33,8 @@ const resume = {
     resume: {
       sessionId: PROVIDER_SESSION,
       key: 'acp:grok:saved',
-      mayBeUnsaved: () => false,
-      unannouncedLosses: () => []
+      mayBeUnsaved: async () => false,
+      lossKeys: []
     }
   }
 }
@@ -196,8 +196,8 @@ describe('reattaching a Grok chat the journal holds', () => {
           resume: {
             sessionId: 'saved-1',
             key: 'acp-key-saved-1',
-            mayBeUnsaved: () => mayBeUnsaved,
-            unannouncedLosses: () => []
+            mayBeUnsaved: async () => mayBeUnsaved,
+            lossKeys: []
           }
         },
         initialize: RESUMES,

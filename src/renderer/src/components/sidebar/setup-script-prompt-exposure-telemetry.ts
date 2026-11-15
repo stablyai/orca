@@ -1,4 +1,4 @@
-import { track } from '@/lib/telemetry'
+import { track } from '@/diagnostics/telemetry/telemetry'
 import { buildSetupScriptPromptTelemetry } from '../../../../shared/workspace-setup/setup-script-telemetry'
 import type { SetupScriptPromptState } from './setup-script-prompt-render-state'
 

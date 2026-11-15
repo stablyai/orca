@@ -1,7 +1,7 @@
 import type {
   NativeChatAppendedMessages,
   NativeChatReadSessionResult
-} from '../../../../../../../preload/api/native-chat-api'
+} from '../../../../../../../preload/api/native-chat/native-chat-api'
 import type { NativeChatTurnLifecycle } from '../../../../../../../shared/native-chat/native-chat-types'
 import { translate } from '@/i18n/i18n'
 

@@ -1,7 +1,7 @@
 import { toast } from 'sonner'
 import EmojiPicker, { EmojiStyle, Theme, type EmojiClickData } from 'emoji-picker-react'
-import type { RepoIcon } from '../../../../../../shared/repo-icon'
-import { sanitizeRepoIcon } from '../../../../../../shared/repo-icon'
+import type { RepoIcon } from '../../../../../../shared/repository/appearance/repo-icon'
+import { sanitizeRepoIcon } from '../../../../../../shared/repository/appearance/repo-icon'
 import { useDocumentDarkTheme } from '@/hooks/use-document-dark-theme'
 import { useTranslate } from '@/i18n/use-translate'
 

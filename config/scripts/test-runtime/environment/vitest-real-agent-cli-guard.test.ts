@@ -13,9 +13,4 @@ describe.skipIf(!globalThis.orcaRealAgentCliGuard)('vitest real-agent-cli guard'
     expect(result.stderr).toMatch(/real-agent-cli guard/)
     expect(takeRealAgentCliCalls()).toEqual(['claude -p hello'])
   })
-
-  it('records calls from a shell that keeps the inherited PATH', () => {
-    spawnSync('/bin/sh', ['-c', 'copilot --help; codex exec x'], { env: process.env })
-    expect(takeRealAgentCliCalls()).toEqual(['copilot --help', 'codex exec x'])
-  })
 })

@@ -5,6 +5,8 @@ export type OrcaGzipUtf8CodecModule = {
   gunzip(input: Uint8Array, outputLimit: number): Uint8Array
   /** Well-formed UTF-8 with no leading BOM, decoded; null otherwise. */
   decodeUtf8(input: Uint8Array): string | null
+  /** Inflate one brotli stream into at most outputLimit bytes, off the JS thread; throws on bad input. */
+  brotliDecompress(input: Uint8Array, outputLimit: number): Promise<Uint8Array<ArrayBuffer>>
 }
 
 /** Null in a binary built before the module existed. */

@@ -1,4 +1,4 @@
-import type { MobileRelayCredentialBundle } from '../hosts/mobile-relay-credential-bundle'
+import type { MobileRelayCredentialBundle } from '../../host-credentials/mobile-relay-credential-bundle'
 import type { RelayReconnectController } from './mobile-relay-reconnect-controller'
 
 // Adopt durable state only when it restores a dialable credential; fresh renewals/re-pairing do not reliably increase version.

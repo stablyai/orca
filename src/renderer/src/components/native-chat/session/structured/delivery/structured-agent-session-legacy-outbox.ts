@@ -5,7 +5,7 @@ import type {
 } from '../../../../../../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentSessionWriteNoticePart } from '../../../../../../../shared/agent-session/failures/agent-session-write-notice-copy'
 import { agentSessionWriteNotDoneParts } from '../../../../../../../shared/agent-session/failures/agent-session-refusal-notice'
-import type { RuntimeClientTarget } from '../../../../../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import { readStructuredAgentSessionConversationOutline } from '@/runtime/native-chat/journal/structured-agent-session-journal-reads'
 import { agentSessionWriteNoticeText } from '../../../messages/notices/agent-session-write-notice-text'
 import { handBackStructuredAgentSessionMessage } from './structured-agent-session-message-hand-back'

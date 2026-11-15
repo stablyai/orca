@@ -1,14 +1,16 @@
+import { followTestSinkSnapshots } from '../../native-chat/agent-session-wire/host/testing/structured-agent-session-direct-sink.test-fixture'
+import { readTestJournalItems } from '../../native-chat/agent-session-journal/journal-observation.test-support'
 import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { createTrackedJournalOpener } from '../../native-chat/agent-session-journal/store-lifecycle/journal-host-database-test-support'
 import { createDeferredStructuredAgentSessionEventSink } from '../../native-chat/agent-session-wire/journal-ingress/structured-agent-session-event-sink'
-import { testEventSinkLogging } from '../../native-chat/agent-session-wire/host/testing/structured-agent-session-logger-test-support'
+import { testEventSinkLogging } from '../../native-chat/agent-session-wire/host/testing/structured-agent-session-logger.test-fixture'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   agentSessionLeaseFixture,
   agentSessionRecordFixture
-} from '../../../shared/agent-session/lifecycle/agent-session-record.test-fixture'
+} from '../../../shared/agent-session/lifecycle/records/agent-session-record.test-fixture'
 import type { AgentSessionRecord } from '../../../shared/agent-session/lifecycle/agent-session-record'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host'
 import { reviseAgentSessionProviderResumePoint } from '../../runtime/agent-session/ownership/agent-session-provider-handle-transition'
@@ -20,11 +22,10 @@ import type {
 import {
   fakeClaude,
   identityFor,
-  PROVIDER_SESSION_ID,
-  tick
+  PROVIDER_SESSION_ID
 } from './claude-structured-session-test-support'
 import { claudeStartupSettled } from './claude-structured-startup-settled-test-support'
-import { claudeProviderHandle } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
+import { claudeProviderHandle } from '../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle-encoding'
 
 const FENCE = 7
 const journals = createTrackedJournalOpener()
@@ -83,6 +84,7 @@ async function liveOwner(
   }
   const journal = await journals.open({ identity: identityFor(), stateDirectory: root })
   const deferred = createDeferredStructuredAgentSessionEventSink(testEventSinkLogging())
+  await followTestSinkSnapshots(deferred, journal)
   deferred.bind({ journal, fence: FENCE, publish: () => {} })
   const store = { record: liveRecord() }
   const claude = fakeClaude()
@@ -149,7 +151,7 @@ async function liveOwner(
     })
     frame({ type: 'system', subtype: 'stop_hook_summary', uuid: `${assistantUuid}-hook` })
     frame({ type: 'result', subtype: 'success', uuid: `${assistantUuid}-result` })
-    await tick()
+    await expect(deferred.drained()).resolves.toEqual({ ok: true })
   }
   return {
     adapter,
@@ -199,6 +201,7 @@ describe('Claude durable resume point at turn end', () => {
         .map((row) => `${JSON.stringify(row)}\n`)
         .join('')
     )
+    await followTestSinkSnapshots(deferred, journal)
     await adapter.acquire({
       identity: identityFor(),
       fence: FENCE,
@@ -207,20 +210,18 @@ describe('Claude durable resume point at turn end', () => {
     })
     await claudeStartupSettled(adapter, 'session-1')
     expect(
-      journal
-        .snapshot()
-        .items.some(
-          (item) =>
-            item.body.kind === 'message' &&
-            item.body.blocks.some(
-              (block) => block.type === 'text' && block.text === 'outside reply'
-            )
-        )
+      (await readTestJournalItems(journal)).some(
+        (item) =>
+          item.body.kind === 'message' &&
+          item.body.blocks.some((block) => block.type === 'text' && block.text === 'outside reply')
+      )
     ).toBe(true)
     expect(store.record.providerHandleChain.at(-1)?.handle).toMatchObject({
       resumeCursor: 'resumed-at'
     })
     await turn('u2', 'a2')
-    expect(store.record.providerHandleChain.at(-1)?.handle).toMatchObject({ resumeCursor: 'a2' })
+    await vi.waitFor(() =>
+      expect(store.record.providerHandleChain.at(-1)?.handle).toMatchObject({ resumeCursor: 'a2' })
+    )
   })
 })

@@ -1,7 +1,10 @@
 import { useAppStore } from '@/store/index'
-import { paneShowsWslHostStoppedCard, selectStoppedWslDistro } from '@/lib/wsl-host-stopped-status'
+import {
+  paneShowsWslHostStoppedCard,
+  selectStoppedWslDistro
+} from '@/runtime/hosts/wsl/wsl-host-stopped-status'
 import { selectWorkspaceRuntimeEnvironmentId } from '../../../../../lib/workspace/ownership/workspace-runtime-environment'
-import { selectWslHostUnavailableReason } from '../../../../../lib/wsl-host-availability'
+import { selectWslHostUnavailableReason } from '../../../../../runtime/hosts/wsl/wsl-host-availability'
 
 /**
  * Whether the active pane's raw error toast gives way to the stopped distro's Start card: only

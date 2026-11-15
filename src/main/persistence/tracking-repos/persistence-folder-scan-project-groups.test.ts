@@ -42,6 +42,43 @@ describe('Flat folder-scan project groups adaptation', () => {
     rmSync(testState.dir, { recursive: true, force: true })
   })
 
+  it('retains old group defaults and locally configured hooks through restart', async () => {
+    const store = createStore()
+    const old = store.createProjectGroup({
+      name: 'Old',
+      parentPath: testState.dir,
+      createdFrom: 'folder-scan'
+    })
+    const configured = store.createProjectGroup({
+      name: 'Configured',
+      parentPath: testState.dir,
+      createdFrom: 'folder-scan'
+    })
+    store.updateProjectGroup(configured.id, {
+      hookSettings: {
+        mode: 'auto',
+        scripts: { setup: 'echo setup', archive: 'echo archive' },
+        commandSourcePolicy: 'local-only',
+        setupRunPolicy: 'ask',
+        setupAgentStartupPolicy: 'wait-for-setup'
+      }
+    })
+    store.flush()
+    await closeTestStores()
+    const reloaded = createStore()
+    expect(
+      reloaded.getProjectGroups().find((group) => group.id === old.id)?.hookSettings
+    ).toBeUndefined()
+    expect(
+      reloaded.getProjectGroups().find((group) => group.id === configured.id)?.hookSettings
+    ).toEqual({
+      mode: 'auto',
+      scripts: { setup: 'echo setup', archive: 'echo archive' },
+      commandSourcePolicy: 'local-only',
+      setupRunPolicy: 'ask',
+      setupAgentStartupPolicy: 'wait-for-setup'
+    })
+  })
   it.each([false, true])(
     'preserves saved order through a Store restart (folder repo: %s)',
     async (includeFolder) => {

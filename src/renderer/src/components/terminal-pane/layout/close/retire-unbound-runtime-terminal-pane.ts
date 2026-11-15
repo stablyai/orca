@@ -1,10 +1,10 @@
-import { resolveTerminalHostOwnership } from '@/lib/terminal-worktree-route'
+import { resolveTerminalHostOwnership } from '@/lib/workspace/ownership/terminal-worktree-route'
 import { parseRemoteRuntimePtyId } from '../../../../../../shared/remote-runtime/remote-runtime-pty-id'
 import {
   buildTerminalTabRetirementPlan,
   getTerminalPtyOwnershipIdentity
-} from '@/store/terminals/terminal-tab-retirement'
-import { startTerminalTabProviderRetirement } from '@/store/terminals/terminal-tab-close-providers'
+} from '@/store/terminals/retirement/terminal-tab-retirement'
+import { startTerminalTabProviderRetirement } from '@/store/terminals/retirement/terminal-tab-close-providers'
 import {
   terminalPaneHasOtherOwner,
   type UnboundTerminalPaneRetirement

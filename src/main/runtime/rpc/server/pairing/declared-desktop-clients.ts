@@ -1,4 +1,4 @@
-import type { OrcadPeerDesktopsResult } from '../../../../../shared/orcad-peer-desktops-contract'
+import type { OrcadPeerDesktopsResult } from '../../../../../shared/remote-runtime/orcad-lifecycle/orcad-peer-desktops-contract'
 import { sanitizeDeviceLabel } from '../../../../../shared/remote-runtime/pairing/device-key-proof'
 import type { DeviceEntry } from './device-entry'
 

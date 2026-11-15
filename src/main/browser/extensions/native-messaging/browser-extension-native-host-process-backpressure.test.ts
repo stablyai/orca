@@ -2,13 +2,13 @@ import { once } from 'node:events'
 
 import { PassThrough, Writable } from 'node:stream'
 import { spawnProcess } from '@orca/process-host'
-import type { PipedChildProcess } from '@orca/process-host/process-spec'
+import type { ChildProcessWithoutNullStreams } from 'node:child_process'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { NATIVE_HOST_ERRORS } from './browser-extension-native-host-errors'
 import { startNativeHost, type NativeHostConnection } from './browser-extension-native-host-process'
 
 const owned: {
-  child: PipedChildProcess
+  child: ChildProcessWithoutNullStreams
   connection: NativeHostConnection
   closed: Promise<unknown>
 }[] = []
@@ -23,7 +23,7 @@ async function controlledHost(script = 'setInterval(() => {}, 1000);', bufferStd
     }
   })
   const write = vi.spyOn(stdin, 'write')
-  const children: PipedChildProcess[] = []
+  const children: ChildProcessWithoutNullStreams[] = []
   const closes: string[] = []
   const messages: string[] = []
   let closed: Promise<unknown> = Promise.resolve()

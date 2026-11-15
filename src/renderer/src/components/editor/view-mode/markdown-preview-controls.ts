@@ -1,5 +1,5 @@
 import type { MarkdownViewMode, OpenFile } from '@/store/slices/editor/types/open-file'
-import '../../../../../shared/keybindings'
+
 import { keybindingMatchesAction } from '../../../../../shared/keybindings/matching'
 import type { KeybindingOverrides } from '../../../../../shared/keybindings/types'
 import type { EditorToggleValue } from './EditorViewToggle'

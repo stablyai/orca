@@ -1,7 +1,7 @@
 // Rank Cmd+J engine results together for the new-tab omnibox.
 
 import { capPaletteSection } from '../cmd-j/palette-section-render-cap'
-import { isClipboardTextByteLengthOverLimit } from '../../../../shared/clipboard-text'
+import { isClipboardTextByteLengthOverLimit } from '../../../../shared/clipboard/clipboard-text'
 import type { PaletteDocumentRank } from '../../../../shared/palette-match/palette-document'
 import {
   comparePaletteEntityRanks,
@@ -16,12 +16,12 @@ import {
   type BrowserPaletteSearchResult,
   type SearchableBrowserPage
 } from '@/lib/browser/palette/browser-palette-search'
-import {
-  searchSimulatorTabs,
-  type SearchableSimulatorTab,
-  type SimulatorPaletteSearchResult
-} from '@/lib/simulator-palette-search'
-import { getUnifiedTabPaletteExecutionHostId } from '@/lib/unified-tab-host-ownership'
+import { searchSimulatorTabs } from '@/lib/simulator/search/simulator-palette-search'
+import type {
+  SearchableSimulatorTab,
+  SimulatorPaletteSearchResult
+} from '@/lib/simulator/search/simulator-palette-search-types'
+import { getUnifiedTabPaletteExecutionHostId } from '@/lib/workspace/ownership/unified-tab-host-ownership'
 import type { TerminalAgent } from '../../../../shared/agent-status/identity/terminal-agent'
 import '@/lib/workspace/search/tabs/workspace-tab-search-types'
 import { searchWorkspaceTabs } from '@/lib/workspace/search/tabs/workspace-tab-palette-results'

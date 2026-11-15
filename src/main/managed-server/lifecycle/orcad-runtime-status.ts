@@ -1,4 +1,4 @@
-import type { OrcadManagedRuntimeStatus } from '../../../shared/orcad-managed-runtime'
+import type { OrcadManagedRuntimeStatus } from '../../../shared/remote-runtime/orcad-lifecycle/orcad-managed-runtime'
 import { runTargetLifecycle } from '../../ipc/ssh/ssh-target-lifecycle-queue'
 import type { OrcadActivationTransaction } from '../activation/orcad-activation-transaction'
 import { readOrcadActivationTransaction } from '../activation/orcad-activation-transaction-store'
@@ -19,7 +19,7 @@ export async function getManagedOrcadRuntimeStatus(
   selector: string,
   signal?: AbortSignal
 ): Promise<OrcadManagedRuntimeStatus> {
-  const { environment, deployment } = requireManagedOrcadEnvironment(userDataPath, selector)
+  const { environment, deployment } = await requireManagedOrcadEnvironment(userDataPath, selector)
   const { status, record, serverTarget } = await runTargetLifecycle(
     deployment.sshTargetId,
     async () => {

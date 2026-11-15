@@ -33,18 +33,20 @@ export function updateTomlLineScanState(state: TomlLineScanState, line: string):
         index += 2
         continue
       }
-      if (line.startsWith('"""', index)) {
+      const closing = getTomlMultilineCloserLength(line, index, '"')
+      if (closing !== null) {
         mode = null
-        index += 3
+        index += closing
         continue
       }
       index += 1
       continue
     }
     if (mode === 'literal') {
-      if (line.startsWith("'''", index)) {
+      const closing = getTomlMultilineCloserLength(line, index, "'")
+      if (closing !== null) {
         mode = null
-        index += 3
+        index += closing
         continue
       }
       index += 1
@@ -197,6 +199,19 @@ export function parseTomlStringValue(source: string, offset: number): ParsedToml
     index += 1
   }
   return null
+}
+
+// Up to two content quotes may sit against the closer, so a run of 3-5 quotes ends the string.
+function getTomlMultilineCloserLength(
+  line: string,
+  index: number,
+  quote: '"' | "'"
+): number | null {
+  let run = 0
+  while (line[index + run] === quote) {
+    run += 1
+  }
+  return run < 3 ? null : Math.min(run, 5)
 }
 
 function skipTomlBasicString(line: string, startIndex: number): number {

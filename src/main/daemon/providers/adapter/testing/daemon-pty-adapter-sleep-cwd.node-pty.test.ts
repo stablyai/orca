@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type * as pty from 'node-pty'
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
-import { loadNodePtyForTests } from '../../../../orcad/orcad-node-slot-fixture'
+import { loadNodePtyForTests } from '../../../../orcad/testing/native-slots/orcad-node-slot-fixture'
 import { DaemonPtyAdapter } from '../daemon-pty-adapter'
 import {
   startDaemonAdapterHarness,

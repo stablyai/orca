@@ -15,19 +15,6 @@ export function encodeClaudeProjectPath(pathValue: string): string {
   return trimmed.replace(/[^a-zA-Z0-9]/g, '-')
 }
 
-/** Require an encoded separator boundary so orca cannot match its sibling orcadyne. */
-export function isClaudeProjectDirInScope(
-  projectDirName: string,
-  scopePrefixes: ReadonlySet<string> | readonly string[]
-): boolean {
-  for (const prefix of scopePrefixes) {
-    if (projectDirName === prefix || projectDirName.startsWith(`${prefix}-`)) {
-      return true
-    }
-  }
-  return false
-}
-
 // Claude Code names a longer encoded path's bucket `<first 200 characters>-<hash>`; older versions kept the full name.
 const CLAUDE_BUCKET_NAME_MAX_LENGTH = 200
 
@@ -40,22 +27,36 @@ export function claudeProjectBucketScopePrefixes(pathValue: string): string[] {
   )
 }
 
-/** Like isClaudeProjectDirInScope, but a root (`-`, `C--`) keeps its separator, so it prefixes every bucket. */
+/** Whether a bucket is a scope's own or one below it; see claudeProjectBucketNameBelowScope. */
 export function isClaudeProjectBucketInScope(
   projectDirName: string,
-  scopePrefixes: ReadonlySet<string>
+  scopePrefixes: Iterable<string>
 ): boolean {
   for (const prefix of scopePrefixes) {
-    const isRoot = prefix === '-' || /^[A-Za-z]--$/.test(prefix)
-    if (
-      isRoot
-        ? projectDirName.startsWith(prefix)
-        : isClaudeProjectDirInScope(projectDirName, [prefix])
-    ) {
+    if (claudeProjectBucketNameBelowScope(projectDirName, prefix) !== null) {
       return true
     }
   }
   return false
+}
+
+/** The encoded path below one scope prefix (`''` for the scope's own bucket), or null when the bucket is outside it.
+ * An encoded separator boundary keeps orca from matching its sibling orcadyne; a root (`-`, `C--`) keeps its separator. */
+export function claudeProjectBucketNameBelowScope(
+  projectDirName: string,
+  scopePrefix: string
+): string | null {
+  if (projectDirName === scopePrefix) {
+    return ''
+  }
+  const isRoot = scopePrefix === '-' || /^[A-Za-z]--$/.test(scopePrefix)
+  const head = isRoot ? scopePrefix : `${scopePrefix}-`
+  return projectDirName.startsWith(head) ? projectDirName.slice(head.length) : null
+}
+
+/** A name this long may be a `<first 200>-<hash>` cut that no longer spells the path; legacy full names are this long too. */
+export function mayBeHashedClaudeProjectBucketName(projectDirName: string): boolean {
+  return projectDirName.length > CLAUDE_BUCKET_NAME_MAX_LENGTH
 }
 
 /** Transcripts sit in project buckets (depth 0); `<session id>/` folders below hold only subagent and tool output. */
