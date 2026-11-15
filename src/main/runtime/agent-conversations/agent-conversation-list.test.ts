@@ -9,6 +9,14 @@ const hookServer = vi.hoisted(() => ({
 }))
 vi.mock('../../agent-hooks/server/agent-hook-server', () => ({ agentHookServer: hookServer }))
 
+function namingRuntime(name: (source: { paneKey: string; ptyId?: string }) => string | null) {
+  return {
+    orchestrationSenderNames: { agentRowNamer: () => name },
+    getAgentStatusOrchestrationContextForPaneKey: () => undefined,
+    getTerminalPtyIdForHandle: (handle: string) => `pty-of-${handle}`
+  }
+}
+
 function status(paneKey: string, orcaSessionId: string) {
   return {
     paneKey,
@@ -39,6 +47,7 @@ it.each([750, 7_500])(
       (paneKey: string) => rows.get(paneKey) ?? []
     )
     const runtime = {
+      ...namingRuntime(() => null),
       getWorkspaceLabel: vi.fn(() => ({ workspace: 'Workspace', repo: 'repo' })),
       getWorktreePs: vi.fn()
     }
@@ -60,3 +69,24 @@ it.each([750, 7_500])(
     expect(runtime.getWorktreePs).not.toHaveBeenCalled()
   }
 )
+
+it('shows a live agent with the title and last reply its list row has', async () => {
+  hookServer.terminalAgentPlaces.mockResolvedValue([{ paneKey: 'tab-a:1' }])
+  hookServer.getPublicStatusSnapshotForPane.mockReset()
+  hookServer.getPublicStatusSnapshotForPane.mockReturnValue([
+    { ...status('tab-a:1', TERMINAL), terminalHandle: 'term-1', lastAssistantMessage: 'Done.' }
+  ])
+  const runtime = {
+    ...namingRuntime((source) =>
+      source.paneKey === 'tab-a:1' && source.ptyId === 'pty-of-term-1' ? 'Fix the login flow' : null
+    ),
+    getWorkspaceLabel: () => ({ workspace: 'Workspace' })
+  }
+
+  const [place] = await agentConversationPlaces(runtime, {
+    kind: 'terminal',
+    orcaSessionId: TERMINAL
+  })
+
+  expect(place).toMatchObject({ title: 'Fix the login flow', lastAssistantMessage: 'Done.' })
+})

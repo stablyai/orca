@@ -145,10 +145,16 @@ function runtimeOver(
 ) {
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a real runtime prototype; the label and place code read only the store and catalog cache assigned here.
   const runtime = Object.create(Selectors.prototype) as RuntimeWorkspaceSelectors
-  return Object.assign(runtime, { store, resolvedWorktrees: cache })
+  return Object.assign(runtime, {
+    store,
+    resolvedWorktrees: cache,
+    orchestrationSenderNames: { agentRowNamer: () => () => null },
+    getAgentStatusOrchestrationContextForPaneKey: () => undefined,
+    getTerminalPtyIdForHandle: () => null
+  })
 }
 
-async function show(runtime: RuntimeWorkspaceSelectors, connectionId: string | null) {
+async function show(runtime: ReturnType<typeof runtimeOver>, connectionId: string | null) {
   hooks.statuses.clear()
   hooks.statuses.set('pane-1', { connectionId })
   if (!isOrcaSessionId(AGENT)) {

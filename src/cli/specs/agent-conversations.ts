@@ -11,7 +11,8 @@ export const AGENT_CONVERSATION_COMMAND_SPECS: CommandSpec[] = [
       "Lists the agents open in this Orca host's workspaces: chats and terminal agents alike, each with its `orca_session_id:` ID. A terminal agent shows no ID until it first reports to Orca.",
       'A chat keeps its ID across /clear; a terminal agent gets a new one when /clear starts a new conversation.',
       '--state keeps agents in one state: working, blocked, waiting or done.',
-      'Agents on other hosts are not listed here; the output names those hosts and the `--environment` that lists them.'
+      'Agents on other hosts are not listed here; the output names those hosts and the `--environment` that lists them.',
+      'Sleeping terminal agents are not listed yet; `orca agent show` and `orca agent read` still take their IDs.'
     ],
     examples: ['orca agent list --json', 'orca agent list --worktree active --state working']
   },
@@ -23,7 +24,7 @@ export const AGENT_CONVERSATION_COMMAND_SPECS: CommandSpec[] = [
     positionalArgs: ['id'],
     notes: [
       '<id> is the `orca_session_id:` ID from `orca agent list` or Copy Orca Session ID.',
-      'An agent resumed in two panes shows both; one that is not open shows none.'
+      'An agent resumed in two panes shows both; one that is not open, such as a sleeping terminal agent, shows none.'
     ],
     examples: ['orca agent show orca_session_id:claude_1234 --json']
   },
@@ -36,7 +37,7 @@ export const AGENT_CONVERSATION_COMMAND_SPECS: CommandSpec[] = [
     notes: [
       "Reads the conversation, not a terminal screen: a chat's history, or a terminal agent's own transcript. The agent need not be running, and reading never starts it.",
       '--limit is the number of newest entries (default 20, at most 100).',
-      'A terminal agent can be read while Orca knows where its transcript is: while it is open, or asleep in a workspace. On Windows, an asleep agent that ran in WSL can be read once its workspace wakes.'
+      'A terminal agent can be read while Orca knows where its transcript is: while it is open, or asleep in a workspace. On Windows, a sleeping agent that ran in WSL can be read once its tab is reopened.'
     ],
     examples: [
       'orca agent read orca_session_id:claude_1234 --limit 10',
