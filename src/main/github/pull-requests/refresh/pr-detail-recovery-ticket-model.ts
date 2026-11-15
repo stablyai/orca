@@ -22,6 +22,7 @@ export type PRDetailRecoveryCaller = {
   windowId?: number
   pacingScope?: string
   authority?: AuthorizationIncarnation
+  isOwnerCurrent?: () => boolean
 }
 
 export type PRDetailRecoveryTicket = {

@@ -86,7 +86,9 @@ export async function runPRDetailRecoveryEntry(
     return
   }
   const candidate = ticket.candidate
-  if (!(deps.registrationCheck()?.(candidate) ?? true)) {
+  const isRegistered = (): boolean =>
+    (ticket.caller.isOwnerCurrent?.() ?? true) && (deps.registrationCheck()?.(candidate) ?? true)
+  if (!isRegistered()) {
     deps.tickets.close(ticket, { kind: 'not-admitted', reason: 'unregistered' })
     return
   }
@@ -137,6 +139,11 @@ export async function runPRDetailRecoveryEntry(
     if (ticket.caller.authority?.signal.aborted) {
       deps.tickets.cancelCaller(ticket.caller.callerKey)
     }
+    return
+  }
+  if (!isRegistered()) {
+    prepared.release()
+    deps.tickets.close(ticket, { kind: 'not-admitted', reason: 'unregistered' })
     return
   }
   deps.queue.delete(entry.key)

@@ -1,4 +1,5 @@
 import { ipcMain, type IpcMainInvokeEvent } from 'electron'
+import { normalizeExecutionHostId } from '../../../shared/execution-host'
 import type {
   PRDetailRecoveryCancelArgs,
   PRDetailRecoveryCommitArgs,
@@ -16,7 +17,11 @@ import {
   startPRDetailRecovery,
   waitPRDetailRecovery
 } from '../../github/pull-requests/refresh/pr-detail-recovery-coordinator'
-import { validateAutomaticPRRefreshCandidate } from './github-repo-routing'
+import {
+  applyRegisteredRepoToPRRefreshCandidate,
+  assertRegisteredGitHubRepo
+} from './github-repo-routing'
+import { prRefreshRequestDigest } from '../../github/pull-requests/refresh/pr-refresh-request-registry'
 import { abortWhenRendererGone } from '../renderer-lifetime-abort'
 
 const leasedSenders = new Set<number>()
@@ -43,11 +48,25 @@ function resolveCandidate(
   args: PRDetailRecoveryStartArgs
 ): GitHubPRRefreshCandidate | 'validation' {
   const candidate = prDetailRecoveryCandidate(args)
-  if (!candidate) {
+  const executionHostId = normalizeExecutionHostId(args.identity.executionHostId)
+  if (!candidate || !executionHostId) {
     return 'validation'
   }
-  const validation = validateAutomaticPRRefreshCandidate(candidate, store)
-  return validation.kind === 'ok' ? validation.candidate : 'validation'
+  try {
+    const repo = assertRegisteredGitHubRepo(
+      {
+        repoId: candidate.repoId,
+        repoPath: candidate.repoPath,
+        repoOwnerExecutionHostId: executionHostId
+      },
+      store
+    )
+    return (repo.kind ?? 'git') === 'git'
+      ? applyRegisteredRepoToPRRefreshCandidate(store, repo, candidate)
+      : 'validation'
+  } catch {
+    return 'validation'
+  }
 }
 
 /** Native detail recovery: the same coordinator ticket the runtime methods use, leased to this window. */
@@ -56,10 +75,19 @@ export function registerGitHubPRDetailRecoveryHandlers(store: Store): void {
     'gh:startPRDetailRecovery',
     (event, args: PRDetailRecoveryStartArgs): PRDetailRecoverySnapshot => {
       const key = callerKey(event)
+      const candidate = resolveCandidate(store, args)
+      const ownerDigest = candidate === 'validation' ? null : prRefreshRequestDigest(candidate)
       return startPRDetailRecovery(
-        { callerKey: key, windowId: event.sender.id },
+        {
+          callerKey: key,
+          windowId: event.sender.id,
+          isOwnerCurrent: () => {
+            const current = resolveCandidate(store, args)
+            return current !== 'validation' && prRefreshRequestDigest(current) === ownerDigest
+          }
+        },
         args,
-        resolveCandidate(store, args)
+        candidate
       )
     }
   )
