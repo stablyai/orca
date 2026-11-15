@@ -91,6 +91,13 @@ export type OrcaCloudWorkspaceApi = {
   getStatus: (args: CloudWorkspaceTarget) => Promise<CloudWorkspaceResult<CloudWorkspaceStatus>>
   /** "Restart" (Unresponsive / OOM): rehydrate the same disk and re-pair; agents auto-resume. */
   restart: (args: CloudWorkspaceTarget) => Promise<CloudWorkspaceResult<null>>
+  /**
+   * LIVE-GIT-ACCESS: apply a GitHub App install made after this workspace started, to the running VM.
+   * `applied` false says why not (`not_installed`, `not_running`, ...). Absent on clients without it.
+   */
+  refreshGitAccess?: (
+    args: CloudWorkspaceTarget
+  ) => Promise<CloudWorkspaceResult<{ applied: boolean; reason?: string }>>
   /** Sleep, then archive with a snapshot TTL; metadata captured in the VM or from the client cache. */
   archive: (
     args: CloudWorkspaceTarget & { pullRequests?: HostedArchivePullRequest[] }
@@ -162,6 +169,7 @@ export type OrcaCloudWorkspaceApi = {
 export const ORCA_CLOUD_WORKSPACE_CHANNELS = {
   getStatus: 'orcaCloudWorkspace:getStatus',
   restart: 'orcaCloudWorkspace:restart',
+  refreshGitAccess: 'orcaCloudWorkspace:refreshGitAccess',
   archive: 'orcaCloudWorkspace:archive',
   unarchive: 'orcaCloudWorkspace:unarchive',
   getArchive: 'orcaCloudWorkspace:getArchive',

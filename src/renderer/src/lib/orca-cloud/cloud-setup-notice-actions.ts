@@ -51,8 +51,23 @@ export async function openOrcaGitHubAppInstall(repoUrl: string): Promise<boolean
  * yet, 'refused' when the installation landed but the sandbox still can't push or reach origin
  * (a workspace started before the install needs a restart to use it).
  */
+/**
+ * LIVE-GIT-ACCESS: asks the control plane to put the GitHub App's repo token into this running workspace
+ * (live egress policy + the VM's git header), so an install made after it started works without a
+ * restart. True when it is live now; false when there's nothing to apply yet or it couldn't be asked.
+ */
+export async function applyLiveGitAccess(workspaceId: string | undefined): Promise<boolean> {
+  const api = cloudWorkspaceApi()
+  if (!workspaceId || !api?.refreshGitAccess) {
+    return false
+  }
+  const result = await api.refreshGitAccess({ workspaceId }).catch(() => null)
+  return Boolean(result?.ok && result.value.applied)
+}
+
 export async function recheckCloudPushAccess(
-  environmentId: string
+  environmentId: string,
+  options: { workspaceId?: string } = {}
 ): Promise<'granted' | 'waiting' | 'refused'> {
   const record = getCloudSetupNoticesRecord(environmentId)
   const watched = new Set(
@@ -68,6 +83,8 @@ export async function recheckCloudPushAccess(
   if (access?.access !== 'granted') {
     return 'waiting'
   }
+  // The App reaches the repository: make this running workspace use it before checking again.
+  await applyLiveGitAccess(options.workspaceId)
   const result = await runVmEnvironmentCheck(null, environmentId, record.path)
   const passed = (id: string): boolean => {
     const check = result.checks.find((candidate) => candidate.id === id)
