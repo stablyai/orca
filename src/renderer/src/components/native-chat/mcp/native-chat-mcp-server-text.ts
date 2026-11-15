@@ -1,4 +1,8 @@
-import type { AgentSessionMcpServer } from '../../../../../shared/agent-session/agent-session-mcp'
+import type {
+  AgentSessionMcpServer,
+  AgentSessionMcpSignIn
+} from '../../../../../shared/agent-session/agent-session-mcp'
+import { agentSessionMcpServerDisplayName } from '../../../../../shared/agent-session/view/agent-session-mcp-server-presentation'
 import type { Translate } from '@/i18n/use-translate'
 
 export function mcpSourceLabel(source: string, t: Translate): string {
@@ -20,14 +24,15 @@ export function mcpSourceLabel(source: string, t: Translate): string {
   }
 }
 
+/** The row's dot already says connected, so a connected server shows its tools. */
 export function mcpServerStatusLine(server: AgentSessionMcpServer, t: Translate): string {
   switch (server.status) {
     case 'connected':
       return server.toolCount === null
         ? t('components.native-chat.mcp.status.connected', 'Connected')
-        : t('components.native-chat.mcp.status.connectedTools', 'Connected · {{count}} tools', {
+        : t('components.native-chat.mcp.status.tools', '{{count}} tools', {
             count: server.toolCount,
-            defaultValue_one: 'Connected · {{count}} tool'
+            defaultValue_one: '{{count}} tool'
           })
     case 'pending':
       return t('components.native-chat.mcp.status.pending', 'Connecting…')
@@ -47,4 +52,54 @@ export function mcpServerStatusLine(server: AgentSessionMcpServer, t: Translate)
     case 'disabled':
       return t('components.native-chat.mcp.status.disabled', 'Disabled')
   }
+}
+
+export type McpTraySummaryPart = { text: string; tone: 'muted' | 'warning' }
+
+/** The tray header's counts, only those above zero; a sign-in in progress replaces them. */
+export function mcpTraySummary(
+  servers: readonly AgentSessionMcpServer[],
+  signIn: AgentSessionMcpSignIn | null,
+  t: Translate
+): McpTraySummaryPart[] {
+  if (signIn) {
+    const server = servers.find((entry) => entry.name === signIn.server)
+    const name = server ? agentSessionMcpServerDisplayName(server) : signIn.server
+    return [
+      {
+        text: t('components.native-chat.mcp.summary.signingIn', 'signing in to {{name}}', { name }),
+        tone: 'muted'
+      }
+    ]
+  }
+  const count = (status: AgentSessionMcpServer['status']): number =>
+    servers.filter((server) => server.status === status).length
+  const connected = count('connected')
+  const needsAuth = count('needs-auth')
+  const failed = count('failed')
+  const parts: McpTraySummaryPart[] = []
+  if (connected > 0) {
+    parts.push({
+      text: t('components.native-chat.mcp.summary.connected', '{{count}} connected', {
+        count: connected
+      }),
+      tone: 'muted'
+    })
+  }
+  if (needsAuth > 0) {
+    parts.push({
+      text: t('components.native-chat.mcp.summary.needsAuth', '{{count}} need sign-in', {
+        count: needsAuth,
+        defaultValue_one: '{{count}} needs sign-in'
+      }),
+      tone: 'warning'
+    })
+  }
+  if (failed > 0) {
+    parts.push({
+      text: t('components.native-chat.mcp.summary.failed', '{{count}} failed', { count: failed }),
+      tone: 'muted'
+    })
+  }
+  return parts
 }

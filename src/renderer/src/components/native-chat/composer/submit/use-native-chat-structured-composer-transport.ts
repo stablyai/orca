@@ -1,5 +1,5 @@
 import { openNativeChatAccountUsageModal } from '@/components/native-chat/usage/native-chat-account-usage-modal'
-import { openNativeChatMcpServersModal } from '@/components/native-chat/mcp/native-chat-mcp-servers-modal'
+import { useNativeChatMcpTray } from '@/components/native-chat/mcp/use-native-chat-mcp-tray'
 import { useStructuredAgentSessionHostCapabilityState } from '@/runtime/native-chat/host-capabilities/structured-agent-session-host-capability'
 import { AGENT_SESSION_MCP_RUNTIME_CAPABILITY } from '../../../../../../shared/agent-session/agent-session-runtime-capabilities'
 import { useMemo, type Dispatch, type SetStateAction } from 'react'
@@ -81,7 +81,10 @@ export function nativeChatForkCommand(
 }
 
 export function useNativeChatStructuredComposerTransport(args: {
-  props: Pick<NativeChatStructuredViewProps, 'agent' | 'sessionId' | 'tabId' | 'target'>
+  props: Pick<
+    NativeChatStructuredViewProps,
+    'agent' | 'sessionId' | 'tabId' | 'target' | 'isVisible'
+  >
   controller: ReturnType<typeof useStructuredAgentSession>
   /** The session's fork, run by `/fork` and `/btw`. */
   forks: NativeChatPaneForks
@@ -122,15 +125,11 @@ export function useNativeChatStructuredComposerTransport(args: {
   const managesMcp =
     hostAgent?.capabilities.mcpServers === true &&
     (props.target.kind === 'local' || remoteManagesMcp)
+  const mcpTray = useNativeChatMcpTray(props.sessionId, props.isVisible)
   const { fork, sideChat } = forks
   return useMemo((): NativeChatStructuredComposerTransport => {
     const threadGoal = controller.threadGoal
-    const mcpPanel = managesMcp
-      ? {
-          open: () =>
-            openNativeChatMcpServersModal({ sessionId: props.sessionId, target: props.target })
-        }
-      : undefined
+    const mcpPanel = managesMcp ? mcpTray : undefined
     // A held host takes no turn; pausing or clearing a goal starts none.
     const changeThreadGoal = threadGoal?.hostChanges
       ? (change: AgentSessionThreadGoalChange) =>
@@ -239,6 +238,7 @@ export function useNativeChatStructuredComposerTransport(args: {
     acceptsImages,
     controller,
     managesMcp,
+    mcpTray,
     fork,
     sideChat,
     worktreeId,

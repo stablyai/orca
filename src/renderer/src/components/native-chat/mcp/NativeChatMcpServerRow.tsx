@@ -37,6 +37,9 @@ function PendingLabel({ pending, children }: { pending: boolean; children: React
   )
 }
 
+/** Indents a row's detail under its name, past the status dot. */
+const DETAIL_INSET = 'mr-2 mb-1.5 ml-8'
+
 export function NativeChatMcpServerRow({
   server,
   runtime,
@@ -68,17 +71,38 @@ export function NativeChatMcpServerRow({
   const refusal = agentSessionMcpRowFailure(server, failure, signIn)
   const enabled = pending?.action === 'toggle' ? pending.enabled : server.status !== 'disabled'
   const statusLine = signIn
-    ? signIn.finish === 'callback' && runtime === 'local'
-      ? t(
-          'components.native-chat.mcp.signIn.waitingBrowser',
-          'Waiting for sign-in in your browser…'
-        )
-      : t('components.native-chat.mcp.signIn.waiting', 'Waiting for sign-in…')
+    ? signIn.finish === 'external'
+      ? t('components.native-chat.mcp.signIn.external', 'Finish on the page that opened')
+      : runtime === 'local'
+        ? t('components.native-chat.mcp.signIn.waitingBrowser', 'Waiting for your browser…')
+        : t('components.native-chat.mcp.signIn.waiting', 'Waiting for sign-in…')
     : mcpServerStatusLine(server, t)
-  const action = signIn ? (
+  const cancel = (
     <Button type="button" variant="ghost" size="xs" onClick={dismissSignIn}>
       {t('components.native-chat.mcp.cancel', 'Cancel')}
     </Button>
+  )
+  const actions = signIn ? (
+    <>
+      {signIn.finish === 'external' ? (
+        // The provider's site finishes it; reconnecting picks the new sign-in up.
+        <Button
+          type="button"
+          size="xs"
+          disabled={busy}
+          onClick={() => run({ action: 'reconnect', server: signIn.server })}
+        >
+          <PendingLabel pending={pending?.action === 'reconnect'}>
+            {t('components.native-chat.mcp.signIn.done', 'Done')}
+          </PendingLabel>
+        </Button>
+      ) : (
+        <Button type="button" variant="ghost" size="xs" onClick={() => openUrl(signIn.url)}>
+          {t('components.native-chat.mcp.signIn.openAgain', 'Open again')}
+        </Button>
+      )}
+      {cancel}
+    </>
   ) : server.canSignIn && server.status === 'needs-auth' ? (
     <Button
       type="button"
@@ -104,32 +128,31 @@ export function NativeChatMcpServerRow({
     </Button>
   ) : null
   return (
-    <div className="border-b border-border/60 last:border-b-0">
-      <div className="flex items-center gap-2.5 px-3 py-2">
+    <li>
+      <div className="flex h-8 min-w-0 items-center gap-2 pr-2 pl-3">
         <span aria-hidden="true" className="flex size-3 shrink-0 items-center justify-center">
           {signIn || server.status === 'pending' ? (
             <LoadingSpinner className="size-3 text-muted-foreground" />
           ) : (
-            <span className={cn('size-2 rounded-full', DOT_CLASS[server.status])} />
+            <span className={cn('size-1.75 rounded-full', DOT_CLASS[server.status])} />
           )}
         </span>
-        <div className="min-w-0 flex-1">
-          <div className="truncate text-sm font-medium text-foreground">
-            {agentSessionMcpServerDisplayName(server)}
-          </div>
-          <div
-            className={cn(
-              'truncate text-xs',
-              server.status === 'failed' && !signIn ? 'text-destructive' : 'text-muted-foreground'
-            )}
-            title={statusLine}
-          >
-            {statusLine}
-          </div>
-        </div>
-        {action}
+        <span className="max-w-1/2 shrink-0 truncate font-medium text-foreground">
+          {agentSessionMcpServerDisplayName(server)}
+        </span>
+        <span
+          className={cn(
+            'min-w-0 flex-1 truncate',
+            server.status === 'failed' && !signIn ? 'text-destructive' : 'text-muted-foreground'
+          )}
+          title={statusLine}
+        >
+          {statusLine}
+        </span>
+        {actions}
         {server.canToggle && !signIn ? (
           <Switch
+            size="compact"
             checked={enabled}
             disabled={busy}
             aria-label={t('components.native-chat.mcp.toggle', 'Use {{name}}', { name })}
@@ -137,19 +160,17 @@ export function NativeChatMcpServerRow({
           />
         ) : null}
       </div>
-      {signIn ? (
-        <McpSignInBox
+      {signIn?.finish === 'callback' && runtime === 'remote' ? (
+        <McpSignInAddressBox
           key={signIn.url}
           signIn={signIn}
-          runtime={runtime}
           pending={pending}
           busy={busy}
           run={run}
-          openUrl={openUrl}
         />
       ) : null}
       {refusal ? (
-        <div className="-mt-1 pr-3 pb-2 pl-8.5 text-xs text-destructive">
+        <p className={cn(DETAIL_INSET, '-mt-1 text-destructive')}>
           {refusal.kind === 'signInUnfinished'
             ? t(
                 'components.native-chat.mcp.signIn.unfinished',
@@ -157,78 +178,30 @@ export function NativeChatMcpServerRow({
               )
             : (refusal.message ??
               t('components.native-chat.mcp.actionFailed', 'Couldn’t do that. Try again.'))}
-        </div>
+        </p>
       ) : null}
-    </div>
+    </li>
   )
 }
 
-function McpSignInBox({
+/** A browser on another device can't reach the agent's callback; the user pastes where it landed. */
+function McpSignInAddressBox({
   signIn,
-  runtime,
   pending,
   busy,
-  run,
-  openUrl
+  run
 }: {
   signIn: AgentSessionMcpSignIn
-  runtime: 'local' | 'remote'
   pending: McpServerAction | null
   busy: boolean
   run: (operation: McpServerAction) => void
-  openUrl: (url: string) => void
 }): React.JSX.Element {
   const t = useTranslate()
   const [callbackUrl, setCallbackUrl] = useState('')
-  const openAgain = (
-    <Button type="button" variant="outline" size="xs" onClick={() => openUrl(signIn.url)}>
-      {t('components.native-chat.mcp.signIn.openAgain', 'Open again')}
-    </Button>
-  )
-  const box = 'mr-3 mb-2.5 ml-8.5 rounded-md border border-border bg-muted/40 p-2.5 text-xs'
-  const hint = 'mb-2 text-muted-foreground'
-  if (signIn.finish === 'external') {
-    return (
-      <div className={box}>
-        <p className={hint}>
-          {t(
-            'components.native-chat.mcp.signIn.external',
-            'Finish signing in on the page that opened, then press Done.'
-          )}
-        </p>
-        <div className="flex items-center gap-1.5">
-          <Button
-            type="button"
-            size="xs"
-            disabled={busy}
-            onClick={() => run({ action: 'reconnect', server: signIn.server })}
-          >
-            <PendingLabel pending={pending?.action === 'reconnect'}>
-              {t('components.native-chat.mcp.signIn.done', 'Done')}
-            </PendingLabel>
-          </Button>
-          {openAgain}
-        </div>
-      </div>
-    )
-  }
-  if (runtime === 'local') {
-    return (
-      <div className={box}>
-        <p className={hint}>
-          {t(
-            'components.native-chat.mcp.signIn.local',
-            'Opened the sign-in page in your browser. This updates when you finish.'
-          )}
-        </p>
-        {openAgain}
-      </div>
-    )
-  }
   const address = callbackUrl.trim()
   return (
     <form
-      className={box}
+      className={cn(DETAIL_INSET, 'rounded-md border border-border bg-background p-2')}
       onSubmit={(event) => {
         event.preventDefault()
         if (address && !busy) {
@@ -236,7 +209,7 @@ function McpSignInBox({
         }
       }}
     >
-      <p className={hint}>
+      <p className="mb-1.5 text-muted-foreground">
         {t(
           'components.native-chat.mcp.signIn.remote',
           'After you sign in, the browser lands on a page that won’t load. Copy that page’s address and paste it here.'
@@ -263,7 +236,6 @@ function McpSignInBox({
             {t('components.native-chat.mcp.signIn.finish', 'Finish')}
           </PendingLabel>
         </Button>
-        {openAgain}
       </div>
     </form>
   )
