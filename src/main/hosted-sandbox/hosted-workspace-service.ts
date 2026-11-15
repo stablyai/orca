@@ -41,7 +41,7 @@ import {
   findCloudRuntime,
   readCachedCheckouts,
   announceWakeUsable,
-  withGitSetup,
+  withSandboxFacts,
   type CloudRuntime
 } from './hosted-workspace-runtime'
 
@@ -204,7 +204,7 @@ export function installHostedWorkspaceService(deps: {
     try {
       const { sandbox, status } = await deps.client.workspaceStatus(found.sandboxId)
       oom.observe(args.workspaceId, found.sandboxId, status)
-      return { ok: true, value: withGitSetup(status, sandbox) }
+      return { ok: true, value: withSandboxFacts(status, sandbox) }
     } catch (error) {
       // Gone server-side: prune it now rather than show "Couldn't start" until the next relist.
       if (isEnvironmentProviderError(error, 'not_found')) {

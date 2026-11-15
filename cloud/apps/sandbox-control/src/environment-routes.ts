@@ -26,6 +26,7 @@ import {
   type BuildRow
 } from './environment-builds'
 import { checkStaleness } from './environment-staleness'
+import { nearestRegions } from './regions'
 import {
   CreateEnvironmentSchema,
   EnvironmentError,
@@ -135,7 +136,9 @@ export async function handleEnvironmentRoute(
       if (!body.success) {
         return json({ error: 'invalid_request', reason: body.error.issues[0]?.path.join('.') }, 400)
       }
-      return json({ environment: environmentView(await createEnvironment(db, caller, body.data, deps.now())) })
+      // Its builds run, and its workspaces boot, where it lives: the served region nearest whoever creates it.
+      const region = nearestRegions(request, deps.config.regions ?? [], deps.config.nearestRegion !== false)?.[0] ?? null
+      return json({ environment: environmentView(await createEnvironment(db, caller, body.data, deps.now(), region)) })
     }
     return json({ error: 'not_found' }, 404)
   }

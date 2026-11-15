@@ -6,7 +6,7 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { noteCloudPairingBindings } from '../cloud-workspaces/cloud-paired-environment-ids'
-import { createOomTracker, withGitSetup } from './hosted-workspace-runtime'
+import { createOomTracker, withGitSetup, withSandboxFacts } from './hosted-workspace-runtime'
 import { findCloudSandbox } from './cloud-workspace-target'
 
 function status(checkedAt: number, uptimeSeconds: number, oomKills: number): HostedWorkspaceStatus {
@@ -94,6 +94,12 @@ describe('GIT-SETUP on the status read', () => {
     const read = status(1_000, 10, 0)
     expect(withGitSetup(read, { gitSetup: 'failed' })).toEqual({ ...read, gitSetupFailed: true })
     expect(withGitSetup(read, {})).toBe(read)
+  })
+
+  it('carries the sandbox region for the card details', () => {
+    const read = status(1_000, 10, 0)
+    expect(withSandboxFacts(read, { region: 'iad1' })).toEqual({ ...read, region: 'iad1' })
+    expect(withSandboxFacts(read, { region: 'pdx1', gitSetup: 'failed' })).toEqual({ ...read, gitSetupFailed: true, region: 'pdx1' })
   })
 
   it('the strict sandbox view accepts the field the server sends with feature git-setup', () => {

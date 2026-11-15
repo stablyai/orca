@@ -168,6 +168,14 @@ export function withGitSetup(
   return sandbox.gitSetup === 'failed' ? { ...status, gitSetupFailed: true } : status
 }
 
+/** withGitSetup plus the region the sandbox runs in, for the card's details. */
+export function withSandboxFacts(
+  status: HostedWorkspaceStatus,
+  sandbox: Pick<HostedSandboxView, 'gitSetup' | 'region'>
+): CloudWorkspaceStatus {
+  return { ...withGitSetup(status, sandbox), region: sandbox.region }
+}
+
 let current: HostedWorkspaceService | null = null
 export function setHostedWorkspaceService(next: HostedWorkspaceService | null): void {
   current = next

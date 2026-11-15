@@ -15,12 +15,14 @@
 // - an environment below the security floor (environment-security.ts) is rebuilt regardless;
 // - refresh builds are metered internally, never charged to the team (reportBuildUsage).
 // Staleness is exact: environment_builds.base_snapshot_id is the golden snapshot each build started from.
-// Regions (U17): an environment lives in the default region, so a build is compared with the default
-// region's golden. An older build from another region (iad1 before pdx1 became the default) is stale
-// by that rule and is rebuilt in the default region; its workspaces boot in the build's own region
-// until the new build is active.
+// Regions (U17): an environment lives in its recorded region while that region is served, else the
+// default (environmentRegion), so a build is compared with that region's golden. A build from another
+// region (iad1 before pdx1 became the default, for an environment that records none) is stale by that
+// rule and is rebuilt where the environment lives; its workspaces boot in the build's own region until
+// the new build is active.
 import type { SandboxCaller } from './auth'
 import {
+  environmentRegion,
   GOLDEN_REFRESH_USER,
   parseConfig,
   startBuild,
@@ -53,13 +55,42 @@ type StaleRow = EnvironmentRow & {
   active_created_at: number
 }
 
+// The golden a new build of e starts from: its region's (?1, region -> golden JSON of the served
+// regions), else the default region's (?2). The same rule as environmentRegion + regionGolden.
+const TARGET_GOLDEN = `coalesce(json_extract(?1, '$.' || e.region), ?2)`
 const STALE_SQL = `SELECT e.*, b.config AS active_config, b.base_snapshot_id AS active_base, b.created_at AS active_created_at
    FROM environments e JOIN environment_builds b ON b.id = e.active_build_id
-  WHERE e.deleted_at IS NULL AND b.base_snapshot_id != ?
+  WHERE e.deleted_at IS NULL AND b.base_snapshot_id != ${TARGET_GOLDEN}
     AND NOT EXISTS (
       SELECT 1 FROM environment_builds x WHERE x.environment_id = e.id
          AND (x.status IN ('starting', 'running', 'snapshotting')
-              OR (x.base_snapshot_id = ? AND x.status != 'canceled')))`
+              OR (x.base_snapshot_id = ${TARGET_GOLDEN} AND x.status != 'canceled')))`
+
+/** ?1 of TARGET_GOLDEN: each served region other than the default, with its golden. */
+function servedGoldens(config: BuildDeps['config']): string {
+  const goldens: Record<string, string> = {}
+  for (const region of config.regions ?? []) {
+    const golden = config.goldenSnapshots?.[region]
+    if (region !== config.region && golden) {
+      goldens[region] = golden
+    }
+  }
+  return JSON.stringify(goldens)
+}
+
+/** The security floor of the region each environment builds in, read once per region. */
+function floors(deps: BuildDeps): (environment: EnvironmentRow) => Promise<number> {
+  const cache = new Map<string, Promise<number>>()
+  return (environment) => {
+    const region = environmentRegion(deps.config, environment.region)
+    let floor = cache.get(region)
+    if (!floor) {
+      floor = securityFloor(deps.db, region)
+      cache.set(region, floor)
+    }
+    return floor
+  }
+}
 
 /** Why a stale environment rebuilds now ('security' | 'due'), or null to wait. */
 async function refreshReason(
@@ -95,13 +126,15 @@ export async function refreshStaleEnvironments(
   deps: BuildDeps,
   options: GoldenRefreshOptions = {}
 ): Promise<GoldenRefreshTick> {
-  const golden = deps.config.goldenSnapshotId
   const maxStarts = options.maxStartsPerTick ?? 2
   const maxInFlight = options.maxInFlight ?? 3
   const minIntervalMs = options.minIntervalMs ?? DEFAULT_REFRESH_MIN_INTERVAL_MS
   const recentMs = options.recentMs ?? DEFAULT_REFRESH_RECENT_MS
-  const { results: stale } = await deps.db.prepare(`${STALE_SQL} ORDER BY e.updated_at DESC`).bind(golden, golden).all<StaleRow>()
-  const floor = await securityFloor(deps.db, deps.config.region)
+  const { results: stale } = await deps.db
+    .prepare(`${STALE_SQL} ORDER BY e.updated_at DESC`)
+    .bind(servedGoldens(deps.config), deps.config.goldenSnapshotId)
+    .all<StaleRow>()
+  const floorOf = floors(deps)
   const inFlight =
     (await deps.db
       .prepare(`SELECT count(*) AS n FROM environment_builds WHERE status IN ('starting', 'running', 'snapshotting')`)
@@ -110,7 +143,7 @@ export async function refreshStaleEnvironments(
   const ranked: { environment: StaleRow; reason: 'security' | 'due' }[] = []
   let deferred = 0
   for (const environment of stale) {
-    const reason = await refreshReason(deps, environment, floor, { minIntervalMs, recentMs })
+    const reason = await refreshReason(deps, environment, await floorOf(environment), { minIntervalMs, recentMs })
     if (reason) {
       ranked.push({ environment, reason })
     } else {
@@ -147,15 +180,14 @@ export async function refreshEnvironment(
   options: Pick<GoldenRefreshOptions, 'minIntervalMs'> = {}
 ): Promise<'started' | 'current' | 'deferred' | 'skipped'> {
   try {
-    const golden = deps.config.goldenSnapshotId
     const environment = await deps.db
-      .prepare(`${STALE_SQL} AND e.id = ?`)
-      .bind(golden, golden, environmentId)
+      .prepare(`${STALE_SQL} AND e.id = ?3`)
+      .bind(servedGoldens(deps.config), deps.config.goldenSnapshotId, environmentId)
       .first<StaleRow>()
     if (!environment) {
       return 'current'
     }
-    const floor = await securityFloor(deps.db, deps.config.region)
+    const floor = await securityFloor(deps.db, environmentRegion(deps.config, environment.region))
     // Used right now, so no recency test: only the interval (or the floor) decides.
     const reason = await refreshReason(deps, environment, floor, {
       minIntervalMs: options.minIntervalMs ?? DEFAULT_REFRESH_MIN_INTERVAL_MS

@@ -162,8 +162,12 @@ export type BuildDeps = {
     goldenSnapshotId: string
     /** Every region's golden image (staleness compares a build with its own region's). */
     goldenSnapshots?: Record<string, string>
-    /** The default region: new builds run here. */
+    /** The default region: builds of an environment without a served region of its own run here. */
     region: string
+    /** Served regions, default first (each has a golden image); an environment may live in any of them. */
+    regions?: readonly string[]
+    /** A new environment lives in the served region nearest the admin who creates it (off: VERCEL_NEAREST_REGION=off). */
+    nearestRegion?: boolean
     guardrails?: GuardrailConfig
     /** The workspace base allowlist (ORCA_PLATFORM_HOST_SUFFIXES included); the smoke boot uses it too. */
     egressAllowlist?: readonly string[]
@@ -173,6 +177,24 @@ export type BuildDeps = {
 }
 
 const log = (event: string, fields: Record<string, unknown>) => console.log(JSON.stringify({ event, ...fields }))
+
+type RegionConfig = Pick<BuildDeps['config'], 'region' | 'regions' | 'goldenSnapshotId' | 'goldenSnapshots'>
+
+/**
+ * Where an environment's builds run: the region it records, while that region is still served (has a
+ * golden image); else the default. A null region (an environment from before regions were recorded) is the default.
+ */
+export function environmentRegion(config: RegionConfig, region: string | null | undefined): string {
+  if (region && region !== config.region && config.regions?.includes(region) && config.goldenSnapshots?.[region]) {
+    return region
+  }
+  return config.region
+}
+
+/** The golden image a new build of an environment living in `region` (environmentRegion) starts from. */
+export function regionGolden(config: RegionConfig, region: string): string {
+  return region === config.region ? config.goldenSnapshotId : (config.goldenSnapshots?.[region] ?? config.goldenSnapshotId)
+}
 
 function randomId(): string {
   const bytes = crypto.getRandomValues(new Uint8Array(10))
@@ -303,6 +325,8 @@ export async function startBuild(
   }
   const now = deps.now()
   const id = randomId()
+  // A snapshot only boots in its own region: the build runs where the environment lives.
+  const region = environmentRegion(deps.config, environment.region)
   const base: BuildConfig = options.config ?? {
     revision: environment.revision,
     repos,
@@ -336,7 +360,7 @@ export async function startBuild(
          WHERE changes() = 1`
       )
       .bind(id, environment.id, environment.account_id, environment.next_build_number, JSON.stringify(config),
-        deps.config.goldenSnapshotId, deps.config.region, `orca-${deps.config.environment}-envbuild-${id}`, caller.userId, now, now)
+        regionGolden(deps.config, region), region, `orca-${deps.config.environment}-envbuild-${id}`, caller.userId, now, now)
   ])
   }
   if (bumped[0]?.meta.changes !== 1) {

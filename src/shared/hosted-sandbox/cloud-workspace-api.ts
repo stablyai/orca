@@ -71,6 +71,8 @@ export type GitHubInstallRights = { admin: boolean; ownerType: 'User' | 'Organiz
 export type CloudWorkspaceStatus = HostedWorkspaceStatus & {
   /** GIT-SETUP: commits and pushes are refused in the VM until a boot installs the identities. */
   gitSetupFailed?: true
+  /** The provider region the sandbox runs in (e.g. `pdx1`), from the sandbox view. */
+  region?: string
 }
 
 export type CloudArchiveInfo = NonNullable<HostedArchiveResponse['archive']>

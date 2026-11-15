@@ -7,6 +7,7 @@ import { useTranslate } from '@/i18n/use-translate'
 import { cn } from '@/lib/class-names'
 import {
   formatBytes,
+  formatCloudRegion,
   formatDuration,
   formatShortDate,
   percentOf
@@ -144,6 +145,12 @@ export function CloudWorkspaceCardDetails({
           <Fact
             label={t('orcaCloudWorkspace.uptime', 'Up for')}
             value={formatDuration(status.uptimeMs)}
+          />
+        ) : null}
+        {status.region ? (
+          <Fact
+            label={t('orcaCloudWorkspace.region', 'Region')}
+            value={formatCloudRegion(status.region)}
           />
         ) : null}
         <Fact
