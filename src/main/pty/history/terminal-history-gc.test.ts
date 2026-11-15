@@ -6,6 +6,7 @@ import {
   readFileSync,
   rmSync,
   statSync,
+  symlinkSync,
   utimesSync,
   writeFileSync
 } from 'node:fs'
@@ -175,7 +176,10 @@ describe('history GC daemon session folders', () => {
     const workspaces = join(userDataDir, 'workspaces')
     const repoPath = join(userDataDir, 'repo')
     mkdirSync(join(workspaces, 'kept-on-disk'), { recursive: true })
+    mkdirSync(join(userDataDir, 'empty-mount-point'))
     mkdirSync(repoPath)
+    writeFileSync(join(repoPath, 'README'), 'x')
+    symlinkSync(join(userDataDir, 'ejected-volume', 'wt'), join(workspaces, 'linked'), 'junction')
     const sessionFolder = (name: string, worktreeId: string, suffix = 'abcd1234'): void => {
       const dir = seedDir(encodeURIComponent(`${worktreeId}@@${suffix}`), {
         'meta.json': JSON.stringify({ cwd: '/', cols: 80, rows: 24, startedAt: 'x' }),
@@ -190,23 +194,31 @@ describe('history GC daemon session folders', () => {
     sessionFolder('forgotten-on-disk', `repo-1::${join(workspaces, 'kept-on-disk')}`)
     sessionFolder('live-missing', `repo-1::${join(workspaces, 'live-missing')}`)
     sessionFolder('unmounted', `repo-1::${join(userDataDir, 'unmounted-volume', 'wt')}`)
+    sessionFolder('empty-mount-point', `repo-1::${join(userDataDir, 'empty-mount-point', 'wt')}`)
+    sessionFolder('dangling-link', `repo-1::${join(workspaces, 'linked')}`)
+    sessionFolder('saved-tab', `repo-1::${join(workspaces, 'saved-tab')}`)
     sessionFolder('remote-repo', `ssh-repo::${join(workspaces, 'deleted')}`)
     sessionFolder('folder-workspace', 'folder:gone-folder')
 
     await runHistoryGc(new Set([`repo-1::${join(workspaces, 'live-missing')}`]), {
       localRepoPaths: new Map([['repo-1', repoPath]]),
-      liveSessionIds: new Set([`${deleted}@@running1`])
+      liveSessionIds: new Set([`${deleted}@@running1`]),
+      persistedSessionOwners: (ids) =>
+        new Set([...ids].filter((id) => id === `repo-1::${join(workspaces, 'saved-tab')}`))
     })
 
     const kept = [...survivingDirs()].map((name) =>
       readFileSync(join(historyRoot, name, 'scrollback.bin'), 'utf8')
     )
     expect(kept.sort()).toEqual([
+      'dangling-link',
       'deleted-running',
+      'empty-mount-point',
       'folder-workspace',
       'forgotten-on-disk',
       'live-missing',
       'remote-repo',
+      'saved-tab',
       'unmounted'
     ])
   })
@@ -260,7 +272,11 @@ describe('history GC concurrency behaviour', () => {
 
     await vi.advanceTimersByTimeAsync(10_000)
     cancelHistoryGc()
-    resolveLiveIds({ liveWorktreeIds: new Set([LIVE_WORKTREE_ID]), localRepoPaths: new Map() })
+    resolveLiveIds({
+      liveWorktreeIds: new Set([LIVE_WORKTREE_ID]),
+      localRepoPaths: new Map(),
+      persistedSessionOwners: () => new Set()
+    })
     await vi.advanceTimersByTimeAsync(0)
 
     expect(survivingDirs().has('orphan-old')).toBe(true)

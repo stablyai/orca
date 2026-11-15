@@ -39,6 +39,7 @@ let activeHistoryGcAbort: AbortController | null = null
 export type HistoryGcOwners = {
   liveWorktreeIds: Set<string>
   localRepoPaths: ReadonlyMap<string, string>
+  persistedSessionOwners: SessionFolderGcOwners['persistedSessionOwners']
   /** Null when the daemon inventory is unknown; session folders are then kept. */
   liveSessionIds?: ReadonlySet<string> | null
 }
@@ -81,10 +82,7 @@ async function gcScanEntry(
         (await isSessionFolderOfGoneWorktree(entryPath, owner, sessionFolders)) &&
         now - (await stat(entryPath)).mtimeMs >= GC_MIN_AGE_MS
       ) {
-        result.orphaned++
-        if (scheduleWorktreeHistoryTreeDeletion(entryPath, root)) {
-          result.pruned++
-        }
+        sessionFolders.candidates.push({ root, entryPath, worktreeId: owner.worktreeId })
       }
       return
     }
@@ -166,7 +164,8 @@ async function executeHistoryGc(
       ...sessionFolderOwners,
       liveWorktreeIds,
       goneByWorktreeId: new Map(),
-      dirExistsByPath: new Map()
+      dirHasEntriesByPath: new Map(),
+      candidates: []
     }
     const main = await gcScanRoot(getHistoryRoot(), liveWorktreeIds, sessionFolders, signal)
 
@@ -191,6 +190,10 @@ async function executeHistoryGc(
       return
     }
 
+    const sessionTotals = sessionFolders
+      ? pruneGoneWorktreeSessionFolders(sessionFolders)
+      : { orphaned: 0, pruned: 0 }
+
     // Fish files can outlive their metadata; include recorded dirs in case XDG_DATA_HOME changed.
     const fishDirs = new Set([resolveFishHistoryDir()])
     for (const dir of liveFishHistoryDirs) {
@@ -206,13 +209,38 @@ async function executeHistoryGc(
     }
 
     const totalDirs = main.totalDirs + wslTotals.totalDirs
-    const orphaned = main.orphaned + wslTotals.orphaned
-    const pruned = main.pruned + wslTotals.pruned
+    const orphaned = main.orphaned + wslTotals.orphaned + sessionTotals.orphaned
+    const pruned = main.pruned + wslTotals.pruned + sessionTotals.pruned
 
     console.log(`[pty:history:gc] totalDirs=${totalDirs} orphaned=${orphaned} pruned=${pruned}`)
   } catch (err) {
     console.warn(`[pty:history:gc] GC failed: ${err instanceof Error ? err.message : String(err)}`)
   }
+}
+
+/** Saved tabs are checked once over all candidates, after every root is scanned. */
+function pruneGoneWorktreeSessionFolders(scan: SessionFolderGcScan): {
+  orphaned: number
+  pruned: number
+} {
+  if (scan.candidates.length === 0) {
+    return { orphaned: 0, pruned: 0 }
+  }
+  const owned = scan.persistedSessionOwners(
+    new Set(scan.candidates.map((candidate) => candidate.worktreeId))
+  )
+  let orphaned = 0
+  let pruned = 0
+  for (const { root, entryPath, worktreeId } of scan.candidates) {
+    if (owned.has(worktreeId)) {
+      continue
+    }
+    orphaned++
+    if (scheduleWorktreeHistoryTreeDeletion(entryPath, root)) {
+      pruned++
+    }
+  }
+  return { orphaned, pruned }
 }
 
 export function runHistoryGc(
@@ -257,13 +285,13 @@ export function scheduleHistoryGc(getOwners: () => Promise<HistoryGcOwners>): vo
     scheduledHistoryGcTimer = null
     historyGcStarting = true
     try {
-      const { liveWorktreeIds, localRepoPaths, liveSessionIds } = await getOwners()
+      const { liveWorktreeIds, liveSessionIds, ...sessionFolderOwners } = await getOwners()
       if (historyGcCancelled) {
         return
       }
       await runHistoryGc(
         liveWorktreeIds,
-        liveSessionIds ? { localRepoPaths, liveSessionIds } : null
+        liveSessionIds ? { ...sessionFolderOwners, liveSessionIds } : null
       )
     } catch (err) {
       console.warn(
