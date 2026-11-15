@@ -185,9 +185,32 @@ export function liveResumeRecordChange(
   live: SleepingAgentSessionRecord | null
 ): { set: SleepingAgentSessionRecord } | 'clear' | null {
   if (live) {
-    return recoveryRecordMatches(existing, live) ? null : { set: live }
+    const next = withSameSessionClaudeAccount(existing, live)
+    return recoveryRecordMatches(existing, next) ? null : { set: next }
   }
   return existing ? 'clear' : null
+}
+
+/**
+ * A status row loses its pinned account once the pane's process is gone (a sleeping row's later
+ * publishes), so its absence is no evidence: a conversation keeps the account it ran on.
+ */
+function withSameSessionClaudeAccount(
+  existing: SleepingAgentSessionRecord | undefined,
+  live: SleepingAgentSessionRecord
+): SleepingAgentSessionRecord {
+  const saved = existing?.launchConfig?.claudeAccountId ?? existing?.claudeAccountId
+  if (
+    !saved ||
+    live.claudeAccountId ||
+    live.launchConfig?.claudeAccountId ||
+    !recoveryRecordTargetsSameSession(existing, live)
+  ) {
+    return live
+  }
+  return live.launchConfig
+    ? { ...live, launchConfig: { ...live.launchConfig, claudeAccountId: saved } }
+    : { ...live, claudeAccountId: saved }
 }
 
 /** Quit captures keep running agents resumable; periodic capture must not replace a quit record. Null leaves the existing record. */

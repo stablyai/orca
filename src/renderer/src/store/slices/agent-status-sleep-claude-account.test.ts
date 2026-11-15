@@ -10,6 +10,7 @@ import {
   sleepingRecordsEquivalentIgnoringCaptureTime
 } from '../../../../shared/agent-session/lifecycle/resume/agent-resume-record-equivalence'
 import { acceptedAgentStatuses } from '@/store/slices/agent-status/accepted-agent-statuses'
+import { liveResumeRecordChange } from '../../../../shared/agent-session/lifecycle/resume/agent-resume-record-from-status'
 
 const NOW = 1_800_000_000_000
 const PANE_KEY = 'tab-1:leaf-1'
@@ -122,5 +123,30 @@ describe('record-level Claude account in capture equivalence', () => {
     expect(sleepingRecordsEquivalentIgnoringCaptureTime(pinnedA, pinnedB)).toBe(false)
     expect(recoveryRecordMatches(pinnedA, pinnedB)).toBe(false)
     expect(recoveryRecordMatches(pinnedA, { ...pinnedA })).toBe(true)
+  })
+})
+
+describe("a sleeping pane's row republished without its account", () => {
+  function recordAfter(
+    saved: SleepingAgentSessionRecord,
+    live: SleepingAgentSessionRecord
+  ): SleepingAgentSessionRecord | undefined {
+    const change = liveResumeRecordChange(saved, live)
+    return change === null ? saved : change === 'clear' ? undefined : change.set
+  }
+
+  it('keeps the saved account for the same conversation, but not for another one', () => {
+    const saved = priorRecord('acct-b')
+    const { launchConfig: _omit, ...rowWithoutAccount } = { ...saved, updatedAt: NOW }
+
+    expect(resumedAccount(recordAfter(saved, rowWithoutAccount))).toBe('acct-b')
+    expect(
+      resumedAccount(
+        recordAfter(saved, {
+          ...rowWithoutAccount,
+          providerSession: { key: 'session_id', id: 'another-session' }
+        })
+      )
+    ).toBe('acct-project-default')
   })
 })
