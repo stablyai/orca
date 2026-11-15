@@ -1,5 +1,5 @@
-import type { DiscoveredSkill } from '../../../skills'
-import { formatNativeChatFileReference } from '../../../agent-image-paste'
+import type { DiscoveredSkill } from '../../../skills/discovery/skills'
+import { formatNativeChatFileReference } from './agent-image-paste'
 import type { NativeChatAgentProfile } from '../../native-chat-agent-profiles'
 import type {
   NativeChatSessionSkill,

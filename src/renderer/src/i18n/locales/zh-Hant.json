@@ -3967,7 +3967,8 @@
             "remoteTerminalClosed": "遠端終端機已關閉。",
             "ptyAllocationLimit": "系統無法再分配 pty 裝置。請在 Orca 或其他程式中關閉一些不用的終端機，然後重試。",
             "terminalProcessLimit": "系統無法再啟動終端機行程。請關閉不用的終端機或結束不用的行程，然後重試。",
-            "hostTerminalCap": "主機上執行的終端機數量已達到 Orca 允許的上限。請關閉一個不再需要的終端機，然後重試。"
+            "hostTerminalCap": "主機上執行的終端機數量已達到 Orca 允許的上限。請關閉一個不再需要的終端機，然後重試。",
+            "copyErrorDetails": "複製錯誤詳細資訊"
           },
           "TerminalProcessExitOverlay": {
             "capacityTitle": "已達到 Git Bash 主控台上限",
@@ -13031,7 +13032,8 @@
           "catalog": "目錄",
           "clear": "清除篩選",
           "themes": "主題",
-          "languages": "語言",
+          "codeLanguages": "程式語言",
+          "translations": "翻譯",
           "icons": "圖示",
           "commands": "命令和面板",
           "catalogLabel": "依目錄篩選",

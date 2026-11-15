@@ -4011,7 +4011,8 @@
             "remoteTerminalClosed": "Uzak terminal kapatıldı.",
             "ptyAllocationLimit": "Sisteminiz daha fazla pty aygıtı ayıramıyor. Orca'da veya başka bir programda kullanmadığınız terminalleri kapatıp tekrar deneyin.",
             "terminalProcessLimit": "Sisteminiz başka bir terminal süreci başlatamıyor. Kullanmadığınız terminalleri kapatın veya kullanılmayan süreçlerden çıkıp tekrar deneyin.",
-            "hostTerminalCap": "Bu ana makine zaten Orca'nın izin verdiği en yüksek sayıda terminali çalıştırıyor. Artık ihtiyacınız olmayan bir terminali kapatıp tekrar deneyin."
+            "hostTerminalCap": "Bu ana makine zaten Orca'nın izin verdiği en yüksek sayıda terminali çalıştırıyor. Artık ihtiyacınız olmayan bir terminali kapatıp tekrar deneyin.",
+            "copyErrorDetails": "Hata ayrıntılarını kopyala"
           },
           "TerminalProcessExitOverlay": {
             "capacityTitle": "Git Bash konsol sınırına ulaşıldı",
@@ -13185,7 +13186,8 @@
           "catalog": "Katalog",
           "clear": "Filtreleri temizle",
           "themes": "Temalar",
-          "languages": "Diller",
+          "codeLanguages": "Programlama dilleri",
+          "translations": "Çeviriler",
           "icons": "Simgeler",
           "commands": "Komutlar ve paneller",
           "catalogLabel": "Kataloğa göre filtrele",

@@ -3,7 +3,7 @@ import type {
   AgentSenderAssociation,
   AgentSenderPublication,
   AgentSenderRevision
-} from '../../../shared/agent-sender-associations'
+} from '../../../shared/orchestration/mailbox/agent-sender-associations'
 
 export type AgentSenderScope = AgentSenderPublication & {
   associations: AgentSenderAssociation[]

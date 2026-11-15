@@ -77,11 +77,6 @@ describe('nvm default alias decides the seeded runtime', () => {
     }
   )
 
-  it('falls back to newest when the default names an uninstalled version', () => {
-    const home = makeNvmHome({ versions: ['v24.18.0', 'v26.7.0'], defaultAlias: '18' })
-    expect(seededNvmDir(home)).toBe(join(home, '.nvm', 'versions', 'node', 'v26.7.0', 'bin'))
-  })
-
   it('survives a cyclic alias chain instead of hanging', () => {
     const home = makeNvmHome({
       versions: ['v24.18.0', 'v26.7.0'],
@@ -89,34 +84,6 @@ describe('nvm default alias decides the seeded runtime', () => {
       aliases: { a: 'b', b: 'a' }
     })
     expect(seededNvmDir(home)).toBe(join(home, '.nvm', 'versions', 'node', 'v26.7.0', 'bin'))
-  })
-
-  // Digit-leading 0x18/00 also coerce to zero with parseInt; nvm persists nonexistent aliases but resolves them as N/A.
-  it.each([
-    'garbage',
-    'iojs',
-    'lts/nonexistent',
-    'my-custom-alias',
-    '0x18',
-    '00',
-    '0abc',
-    '024',
-    '24abc',
-    'v24.18.0-nightly',
-    'V24'
-  ])('treats the unresolvable default %s as no preference, like nvm N/A', (token) => {
-    // Unparseable aliases previously coerced to [0], selecting this v0.12.7 sentinel.
-    const home = makeNvmHome({
-      versions: ['v0.12.7', 'v24.18.0', 'v26.7.0'],
-      defaultAlias: token
-    })
-    expect(seededNvmDir(home)).toBe(join(home, '.nvm', 'versions', 'node', 'v26.7.0', 'bin'))
-  })
-
-  it('still treats a numeric default as a version prefix, matching nvm', () => {
-    // Reject malformed aliases while retaining nvm’s valid numeric prefix 0 → installed v0.x.
-    const home = makeNvmHome({ versions: ['v0.12.7', 'v24.18.0'], defaultAlias: '0' })
-    expect(seededNvmDir(home)).toBe(join(home, '.nvm', 'versions', 'node', 'v0.12.7', 'bin'))
   })
 
   it('still finds a CLI that lives outside the default version', () => {

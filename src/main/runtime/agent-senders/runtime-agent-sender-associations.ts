@@ -8,7 +8,7 @@ import type {
   AgentSenderAssociation,
   AgentSenderPublication,
   AgentSenderRevision
-} from '../../../shared/agent-sender-associations'
+} from '../../../shared/orchestration/mailbox/agent-sender-associations'
 
 import { readLiveAgentSenderPanes, type AgentSenderPane } from './agent-sender-live-panes'
 import { prepareAgentSenderPrincipals, type AgentSenderPrincipal } from './agent-sender-principals'

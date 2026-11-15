@@ -38,7 +38,7 @@ import {
 } from '../../../shared/agent-session/lifecycle/records/agent-session-record.test-fixture'
 import '../orchestration/terminal-authority/structured-sessions/structured-worker-identity'
 
-import { testOrcaSessionId } from '../../../shared/orca-session-address-test-fixture'
+import { testOrcaSessionId } from '../../../shared/agent-session/identity/orca-session-address-test-fixture'
 
 import '../rpc/methods/session-tabs/session-tabs-inventory'
 import { AGENT_SENDER_PANE_READS } from './runtime-agent-sender-worker-history'
