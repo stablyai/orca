@@ -25,7 +25,6 @@ import { makeRepo, makeTab, makeWorktree, PANE_KEY } from './ActivityPrototypePa
     return buildActivityEvents({
       chatNames: new Map(),
       agentStatusByPaneKey: args.entries ?? {},
-      retainedAgentsByPaneKey: {},
       tabsByWorktree: { [worktree.id]: [tab] },
       worktreeMap: new Map([[worktree.id, worktree]]),
       repoMap: new Map([[repo.id, repo]]),

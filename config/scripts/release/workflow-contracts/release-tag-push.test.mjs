@@ -156,6 +156,30 @@ describe('release-cut job split', () => {
   })
 })
 
+describe('homebrew bump after draft recovery', () => {
+  it('reads the recovered RC tag from the job that publishes drafts, which runs without a cut', () => {
+    const [producer, job] = Object.entries(workflow.jobs).find(([, candidate]) =>
+      (candidate.steps ?? []).some((step) =>
+        step.run?.includes('publication/publish-complete-draft-releases.mjs')
+      )
+    )
+    const step = job.steps.find((candidate) =>
+      candidate.run?.includes('publication/publish-complete-draft-releases.mjs')
+    )
+    const [output] = Object.entries(job.outputs).find(
+      ([, value]) => value === `\${{ steps.${step.id}.outputs.latest_published_tag }}`
+    )
+    // A recovery-only run has no tag to push, so cut (and everything after it) is skipped.
+    expect(producer).not.toBe('cut')
+    expect([job.needs ?? []].flat()).not.toContain('cut')
+    const bump = workflow.jobs['homebrew-bump-published-rc-draft']
+    expect(bump.needs).toEqual([producer])
+    expect(bump.if).toBe(`\${{ needs.${producer}.outputs.${output} != '' }}`)
+    expect(bump.with.tag).toBe(`\${{ needs.${producer}.outputs.${output} }}`)
+    expect(workflowText).not.toContain('needs.cut.outputs.latest_published_rc_tag')
+  })
+})
+
 describe.skipIf(process.platform === 'win32')('verify-release-tag.sh', () => {
   let dir
   afterEach(() => dir && rmSync(dir, { recursive: true, force: true }))

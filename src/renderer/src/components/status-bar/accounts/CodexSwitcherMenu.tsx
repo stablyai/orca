@@ -7,8 +7,8 @@ import {
   AccountRuntimeToggle,
   CodexRestartStatusPrompt
 } from '../composition/StatusBarAccountControls'
+import { AccountUsageGauge } from './AccountUsageGauge'
 import {
-  InlineUsageBars,
   InlineUsageSignInAction,
   InlineUsageSkeleton,
   isUnavailableInactiveUsage
@@ -116,13 +116,13 @@ export function CodexSwitcherMenu({
   ): React.ReactNode {
     // Why: rows follow this desktop's codexTarget, so a remote owner's usage could land on the wrong row.
     if (active && !hasActiveRuntimeEnvironment) {
-      return <InlineUsageBars limits={codex} isFetching={codex.status === 'fetching'} />
+      return <AccountUsageGauge limits={codex} isFetching={codex.status === 'fetching'} />
     }
     if (inactiveUsage?.isFetching && !inactiveUsage.rateLimits) {
       return <InlineUsageSkeleton />
     }
     return inactiveUsage?.rateLimits ? (
-      <InlineUsageBars limits={inactiveUsage.rateLimits} isFetching={inactiveUsage.isFetching} />
+      <AccountUsageGauge limits={inactiveUsage.rateLimits} isFetching={inactiveUsage.isFetching} />
     ) : null
   }
 
@@ -187,7 +187,7 @@ export function CodexSwitcherMenu({
       />
       {open ? <CodexRestartStatusPrompt /> : null}
       <AccountSwitchSection
-        heading={t('auto.components.status.bar.StatusBar.7657e3db9c', 'Codex Account')}
+        heading={t('auto.components.status.bar.AccountSwitchList.accounts', 'Accounts')}
         targets={selectedGroup?.targets ?? []}
         panelShowsActiveAccount={!hasActiveRuntimeEnvironment}
         onOpenSettings={() => {
