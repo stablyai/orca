@@ -51,6 +51,12 @@ export default function AiVaultSessionHistoryDialog(): React.JSX.Element | null 
   if (!request) {
     return null
   }
+  // Row actions can settle after this opening closed and another modal took the slot.
+  const closeOwnModal = (): void => {
+    if (useAppStore.getState().modalData === modalData) {
+      closeModal()
+    }
+  }
   const enterKey = navigator.userAgent.includes('Mac') ? '⏎' : 'Enter'
   return (
     <Dialog open onOpenChange={(open) => !open && closeModal()}>
@@ -88,7 +94,7 @@ export default function AiVaultSessionHistoryDialog(): React.JSX.Element | null 
             initialQuery={request.initialQuery}
             // An agent the filter doesn't list leaves every agent shown rather than none.
             initialAgents={request.agent ? aiVaultHistoryAgents(request.agent) : AI_VAULT_AGENTS}
-            onSessionOpened={closeModal}
+            onSessionOpened={closeOwnModal}
             // Without a chat to replace, rows keep the sidebar's actions and resume in new tabs.
             resumeHere={
               request.chatTabId
@@ -96,12 +102,7 @@ export default function AiVaultSessionHistoryDialog(): React.JSX.Element | null 
                     tabId: request.chatTabId,
                     workspaceId: request.workspace.worktreeId,
                     agent: request.agent,
-                    // A refusal can settle after this opening closed and another modal took the slot.
-                    dismiss: () => {
-                      if (useAppStore.getState().modalData === modalData) {
-                        closeModal()
-                      }
-                    },
+                    dismiss: closeOwnModal,
                     confirm
                   }
                 : undefined
