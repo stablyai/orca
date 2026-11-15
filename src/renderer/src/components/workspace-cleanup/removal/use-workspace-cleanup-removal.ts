@@ -4,7 +4,6 @@ import { useMountedRef } from '@/hooks/useMountedRef'
 import type { WorkspaceCleanupCandidate } from '../../../../../shared/workspace-cleanup/workspace-cleanup'
 import {
   getWorkspaceCleanupCandidateIdentity,
-  getWorkspaceCleanupHostIdentity,
   resolveWorkspaceCleanupRemovalHostId
 } from '../../../../../shared/workspace-cleanup/workspace-cleanup-host-identity'
 import { getWorktreeDeleteStateKey } from '@/store/slices/worktrees/teardown/worktree-delete-state'
@@ -16,6 +15,11 @@ import {
 import { filterWorkspaceCleanupRemovalCandidates } from './workspace-cleanup-removal-candidates'
 import { createWorkspaceCleanupSnapshotPruneBatch } from './workspace-cleanup-snapshot-prune-batch'
 import { useWorkspaceCleanupUnverifiedRemoval } from './use-workspace-cleanup-unverified-removal'
+import { useWorkspaceCleanupRunStore } from './run/workspace-cleanup-run-store'
+import {
+  createWorkspaceCleanupRunReporter,
+  getWorkspaceCleanupFailureIdentity
+} from './run/workspace-cleanup-run-reporter'
 import {
   useWorkspaceCleanupAgentStopGate,
   type WorkspaceCleanupAgentStopRequest
@@ -181,11 +185,15 @@ export function useWorkspaceCleanupRemoval({
     })
     const removableIdentities = removableCandidates.map(getWorkspaceCleanupCandidateIdentity)
     setRowFailures({})
+    const runReporter = createWorkspaceCleanupRunReporter(
+      useWorkspaceCleanupRunStore.getState().startRun(removableCandidates)
+    )
     setDeletionPhaseByIdentity(
       Object.fromEntries(removableIdentities.map((identity) => [identity, 'queued' as const]))
     )
     markWorktreesQueuedForDeletion(removableDeleteStateTargets)
     const handleRemovalError = (): void => {
+      runReporter.onError()
       for (const target of removableDeleteStateTargets) {
         if (typeof target === 'string') {
           clearWorktreeDeleteState(target)
@@ -212,8 +220,11 @@ export function useWorkspaceCleanupRemoval({
             )
           }
         },
+        onRowStarted: runReporter.onRowStarted,
+        onRowRemoved: runReporter.onRowRemoved,
         onRowFailed: (failure) => {
           clearQueuedDeleteState(failure.worktreeId, failure.executionHostId)
+          runReporter.onRowFailed(failure)
           if (!mountedRef.current) {
             return
           }
@@ -225,6 +236,7 @@ export function useWorkspaceCleanupRemoval({
           })
         },
         onResult: (result) => {
+          runReporter.onResult(result)
           const nextFailures: Record<string, WorkspaceCleanupFailure> = {}
           for (const failure of result.failures) {
             nextFailures[getWorkspaceCleanupFailureIdentity(failure)] = failure
@@ -239,6 +251,7 @@ export function useWorkspaceCleanupRemoval({
           removalInFlightRef.current = false
         },
         onLateResult: (result) => {
+          runReporter.onLateResult(result)
           for (const failure of result.failures) {
             // Late preflight failures may never reach deleting; clear their queued overlay too.
             clearQueuedDeleteState(failure.worktreeId, failure.executionHostId)
@@ -304,11 +317,4 @@ export function useWorkspaceCleanupRemoval({
     confirmStopAgents,
     cancelStopAgents: clearAgentStopRequest
   }
-}
-
-/** Row key for a failure; an id-only failure lands on the local row, as before. */
-function getWorkspaceCleanupFailureIdentity(failure: WorkspaceCleanupFailure): string {
-  return failure.executionHostId
-    ? getWorkspaceCleanupHostIdentity(failure.executionHostId, failure.worktreeId)
-    : getWorkspaceCleanupCandidateIdentity({ worktreeId: failure.worktreeId })
 }

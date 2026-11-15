@@ -3,6 +3,7 @@ import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { TooltipProvider } from '@/components/ui/tooltip'
+import type { WorkspaceCleanupGroup } from '../../../../../shared/workspace-cleanup/workspace-cleanup-groups'
 import { makeCandidate } from '../query/workspace-cleanup-candidate-state.test-fixture'
 import { CandidateRow } from './workspace-cleanup-candidate-row'
 
@@ -14,16 +15,7 @@ afterEach(() => {
   root = null
 })
 
-function render(overrides: { gitEvidencePending: boolean; dirty: boolean }): HTMLElement {
-  const candidate = makeCandidate({
-    git: {
-      clean: !overrides.dirty,
-      upstreamAhead: overrides.dirty ? 2 : 0,
-      upstreamBehind: 0,
-      checkedAt: overrides.gitEvidencePending ? null : 1
-    },
-    blockers: overrides.dirty ? ['dirty-files'] : []
-  })
+function render(candidate = makeCandidate(), group: WorkspaceCleanupGroup): HTMLElement {
   const noop = (): void => {}
   const container = document.createElement('div')
   document.body.appendChild(container)
@@ -34,14 +26,12 @@ function render(overrides: { gitEvidencePending: boolean; dirty: boolean }): HTM
         <CandidateRow
           candidate={candidate}
           identity="id"
+          group={group}
           expanded={false}
-          gitEvidencePending={overrides.gitEvidencePending}
           last={false}
           lastActivityLabel="1d ago"
           reviewInfo={{ hasReview: false, label: null, state: null, provider: null } as never}
           repo={null}
-          showHostLabel={false}
-          showSizeColumn
           selected={false}
           onIgnore={noop}
           onRestore={noop}
@@ -56,25 +46,45 @@ function render(overrides: { gitEvidencePending: boolean; dirty: boolean }): HTM
   return container
 }
 
-// jsdom has no layout, so assert the reservation itself: one fixed-height, fixed-width,
-// non-wrapping slot holds every git state, so evidence swaps contents without resizing the row.
-function gitSlotClass(container: HTMLElement): string | undefined {
-  return container.querySelector('[data-workspace-cleanup-git-slot]')?.className
+// happy-dom has no layout, so assert the reservation itself: the second line is one
+// fixed-height, non-wrapping, clipped line whatever it says, so it can never grow the row.
+function noticeLineClass(container: HTMLElement): string | undefined {
+  return container.querySelector('div.mt-0\\.5.h-5')?.className
 }
 
-describe('CandidateRow git status slot', () => {
-  it('uses the same fixed slot while checking, clean and dirty', () => {
-    const checking = gitSlotClass(render({ gitEvidencePending: true, dirty: false }))
+describe('CandidateRow second line', () => {
+  it('is one fixed, non-wrapping line for every notice', () => {
+    const longNames = Array.from({ length: 40 }, (_, i) => `ignored-${i}.log`)
+    const dirty = noticeLineClass(
+      render(
+        makeCandidate({
+          git: {
+            clean: false,
+            upstreamAhead: 0,
+            upstreamBehind: 0,
+            checkedAt: 1,
+            atRiskLocalFiles: { count: longNames.length, samplePaths: longNames, complete: true }
+          },
+          blockers: ['dirty-files', 'ignored-files']
+        }),
+        'local-files'
+      )
+    )
     act(() => root?.unmount())
-    const clean = gitSlotClass(render({ gitEvidencePending: false, dirty: false }))
-    act(() => root?.unmount())
-    const dirty = gitSlotClass(render({ gitEvidencePending: false, dirty: true }))
+    const blocked = noticeLineClass(
+      render(makeCandidate({ blockers: ['main-worktree'] }), 'cannot-delete')
+    )
     // A stray JS comment inside JSX would render as visible text.
     expect(document.body.textContent).not.toContain('//')
-    expect(checking).toBeDefined()
-    expect(clean).toBe(checking)
-    expect(dirty).toBe(checking)
-    expect(checking).toContain('overflow-hidden')
-    expect(checking).toContain('h-5')
+    expect(dirty).toBeDefined()
+    expect(blocked).toBe(dirty)
+    expect(dirty).toContain('h-5')
+    expect(dirty).toContain('flex-nowrap')
+    expect(dirty).toContain('overflow-hidden')
+  })
+
+  it('renders no second line when there is nothing to say', () => {
+    const clean = render(makeCandidate(), 'nothing-local')
+    expect(noticeLineClass(clean)).toBeUndefined()
   })
 })

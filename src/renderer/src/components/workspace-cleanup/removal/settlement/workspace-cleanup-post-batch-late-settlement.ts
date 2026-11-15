@@ -171,6 +171,7 @@ async function reconcilePostBatchLateSettlement(
         worktreeId: ancestor.worktreeId,
         executionHostId: getWorkspaceCleanupCandidateHostId(ancestor),
         displayName: ancestor.displayName,
+        provisional,
         message: getSkippedAncestorMessage(provisional)
       }
       if (provisional) {

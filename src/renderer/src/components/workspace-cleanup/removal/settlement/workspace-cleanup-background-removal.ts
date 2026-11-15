@@ -22,6 +22,10 @@ import {
   type WorkspaceCleanupLateSettlementTracker
 } from './workspace-cleanup-removal-settlement'
 import { showWorkspaceCleanupRemovalResultToasts } from './workspace-cleanup-removal-toasts'
+import {
+  removeArrayEntry,
+  reportLateWorkspaceCleanupResult
+} from './workspace-cleanup-late-result-report'
 import { reclassifySkippedWorkspaceCleanupAncestors } from './workspace-cleanup-skipped-ancestor-reclassification'
 
 const DEFAULT_WORKSPACE_CLEANUP_REMOVAL_TIMEOUT_MS = 120_000
@@ -47,6 +51,9 @@ export type WorkspaceCleanupBackgroundRemovalArgs = {
   onError?: (error: unknown) => void
   // Report preflight/nested-workspace failures immediately so queued overlays clear before batch completion.
   onRowFailed?: (failure: WorkspaceCleanupFailure) => void
+  /** Rows delete one at a time; these let a step show which row is current and which finished. */
+  onRowStarted?: (candidate: WorkspaceCleanupCandidate) => void
+  onRowRemoved?: (candidate: WorkspaceCleanupCandidate) => void
   removalTimeoutMs?: number
   removalSettlementGraceMs?: number
   snapshotPruneBatch?: {
@@ -65,6 +72,8 @@ export function startWorkspaceCleanupBackgroundRemoval({
   onLateResult,
   onError,
   onRowFailed,
+  onRowStarted,
+  onRowRemoved,
   removalTimeoutMs = DEFAULT_WORKSPACE_CLEANUP_REMOVAL_TIMEOUT_MS,
   removalSettlementGraceMs = DEFAULT_WORKSPACE_CLEANUP_SETTLEMENT_GRACE_MS,
   snapshotPruneBatch,
@@ -142,6 +151,7 @@ export function startWorkspaceCleanupBackgroundRemoval({
       worktreeId: candidate.worktreeId,
       executionHostId: getWorkspaceCleanupCandidateHostId(candidate),
       displayName: candidate.displayName,
+      provisional,
       message: getSkippedAncestorMessage(provisional)
     }
     if (provisional) {
@@ -191,6 +201,7 @@ export function startWorkspaceCleanupBackgroundRemoval({
           continue
         }
         try {
+          onRowStarted?.(candidate)
           const outcome = await waitForWorkspaceCleanupRemovalWithTimeout(
             removeCandidates([candidate.worktreeId], {
               approvedCandidates: [candidate],
@@ -237,6 +248,8 @@ export function startWorkspaceCleanupBackgroundRemoval({
           reportFailures(result.failures)
           if (result.failures.length > 0) {
             failedCandidates.push(candidate)
+          } else {
+            onRowRemoved?.(candidate)
           }
         } catch (error: unknown) {
           failedCandidates.push(candidate)
@@ -302,24 +315,4 @@ export function startWorkspaceCleanupBackgroundRemoval({
       }
     )
   })
-}
-
-function reportLateWorkspaceCleanupResult(
-  result: WorkspaceCleanupRemoveResult,
-  onLateResult: WorkspaceCleanupBackgroundRemovalArgs['onLateResult'],
-  pendingSettlementFailures?: ReadonlySet<WorkspaceCleanupFailure>
-): void {
-  try {
-    onLateResult?.(result)
-  } catch (callbackError) {
-    console.error('Workspace cleanup late result callback failed', callbackError)
-  }
-  showWorkspaceCleanupRemovalResultToasts(result, pendingSettlementFailures)
-}
-
-function removeArrayEntry<T>(entries: T[], entry: T): void {
-  const index = entries.indexOf(entry)
-  if (index !== -1) {
-    entries.splice(index, 1)
-  }
 }

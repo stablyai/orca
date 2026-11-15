@@ -1,4 +1,9 @@
 import { translate } from '@/i18n/i18n'
+import {
+  canQueueWorkspaceCleanupCandidate,
+  type WorkspaceCleanupCandidate
+} from '../../../../../shared/workspace-cleanup/workspace-cleanup'
+import { getWorkspaceCleanupCandidateIdentity } from '../../../../../shared/workspace-cleanup/workspace-cleanup-host-identity'
 
 export function formatVanishedSelectionNotice(count: number): string {
   return translate(
@@ -28,4 +33,21 @@ export function toggleSetMember(current: Set<string>, value: string): Set<string
     next.add(value)
   }
   return next
+}
+
+/** Ticked rows delete can queue and that are not already being deleted, from live row data. */
+export function getSelectedDeletableCandidates(
+  rows: readonly { identity: string; candidate: WorkspaceCleanupCandidate }[],
+  selectedIds: ReadonlySet<string>,
+  deletingIdentities: ReadonlySet<string>
+): WorkspaceCleanupCandidate[] {
+  const byIdentity = new Map(rows.map((row) => [row.identity, row.candidate]))
+  return [...selectedIds]
+    .map((identity) => byIdentity.get(identity))
+    .filter(
+      (candidate): candidate is WorkspaceCleanupCandidate =>
+        candidate != null &&
+        canQueueWorkspaceCleanupCandidate(candidate) &&
+        !deletingIdentities.has(getWorkspaceCleanupCandidateIdentity(candidate))
+    )
 }

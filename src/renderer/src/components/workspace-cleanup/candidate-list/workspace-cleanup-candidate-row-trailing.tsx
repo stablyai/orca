@@ -5,7 +5,6 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { cn } from '@/lib/class-names'
 import { useTranslate } from '@/i18n/use-translate'
 import type { WorkspaceCleanupCandidate } from '../../../../../shared/workspace-cleanup/workspace-cleanup'
-import { WorkspaceCleanupForgetLocallyButton } from '../removal/workspace-cleanup-forget-locally-button'
 import { getWorkspaceCleanupCandidateAccessibleName } from './workspace-cleanup-host-label'
 
 type CandidateRowTrailingProps = {
@@ -16,14 +15,9 @@ type CandidateRowTrailingProps = {
   /** Queueable and not already deleting; gates Remove. */
   selectable: boolean
   lastActivityLabel: string
-  /** Joined from the workspace-space scan; null when this row was not measured. */
-  sizeLabel: string | null
-  /** False until any row has a measured size. */
-  showSizeColumn: boolean
   onIgnore: (candidate: WorkspaceCleanupCandidate) => void
   onRestore: (candidate: WorkspaceCleanupCandidate) => void
   onRemove: (candidate: WorkspaceCleanupCandidate) => void
-  onForgetLocally?: (candidate: WorkspaceCleanupCandidate) => void
   onToggleExpanded: (identity: string) => void
   onView: (candidate: WorkspaceCleanupCandidate) => void
 }
@@ -36,12 +30,9 @@ export function CandidateRowTrailing({
   hasExpandableDetails,
   selectable,
   lastActivityLabel,
-  sizeLabel,
-  showSizeColumn,
   onIgnore,
   onRestore,
   onRemove,
-  onForgetLocally,
   onToggleExpanded,
   onView
 }: CandidateRowTrailingProps): React.JSX.Element {
@@ -106,28 +97,17 @@ export function CandidateRowTrailing({
             className="text-destructive hover:text-destructive"
             onClick={() => onRemove(candidate)}
           />
-        ) : candidate.blockers.includes('ssh-disconnected') && onForgetLocally ? (
-          <WorkspaceCleanupForgetLocallyButton candidate={candidate} onForget={onForgetLocally} />
         ) : (
           <ActionSlotPlaceholder />
         )}
       </div>
-      <div className="flex items-center gap-4 text-xs tabular-nums text-muted-foreground">
+      <div className="flex items-center text-xs tabular-nums text-muted-foreground">
         <RowMetric
           label={t('components.workspace.cleanup.browse.lastActive', 'Last active {{value0}}', {
             value0: lastActivityLabel
           })}
           value={lastActivityLabel}
         />
-        {showSizeColumn ? (
-          <RowMetric
-            label={t('components.workspace.cleanup.browse.sizeOnDisk', 'Size on disk: {{value0}}', {
-              value0:
-                sizeLabel ?? t('components.workspace.cleanup.browse.notMeasured', 'Not measured')
-            })}
-            value={sizeLabel ?? '—'}
-          />
-        ) : null}
       </div>
       {hasExpandableDetails ? (
         <RowIconAction

@@ -13,6 +13,8 @@ import type {
 } from '@/store/slices/workspace-cleanup/workspace-cleanup-removal'
 import { startWorkspaceCleanupBackgroundRemoval } from './settlement/workspace-cleanup-background-removal'
 import type { WorkspaceCleanupDeletionPhase } from '../candidate-list/workspace-cleanup-candidate-row'
+import { useWorkspaceCleanupRunStore } from './run/workspace-cleanup-run-store'
+import { createWorkspaceCleanupRunReporter } from './run/workspace-cleanup-run-reporter'
 import { createWorkspaceCleanupSnapshotPruneBatch } from './workspace-cleanup-snapshot-prune-batch'
 
 type UnverifiedRemovalArgs = {
@@ -49,6 +51,10 @@ export function useWorkspaceCleanupUnverifiedRemoval({
       setRowFailures((current) => withoutIdentity(current, identity))
       setDeletionPhaseByIdentity((current) => ({ ...current, [identity]: 'queued' }))
       markQueued([hostId ? { id: candidate.worktreeId, hostId } : candidate.worktreeId])
+      // A retry joins the run that failed (or starts a one-row run when none is left).
+      const runReporter = createWorkspaceCleanupRunReporter(
+        useWorkspaceCleanupRunStore.getState().beginRowRetry(candidate)
+      )
       startWorkspaceCleanupBackgroundRemoval({
         candidates: [candidate],
         removeCandidates,
@@ -56,12 +62,15 @@ export function useWorkspaceCleanupUnverifiedRemoval({
         getRemoveOptions: () => ({
           unverifiedRemovalConsent: { identity, attemptId }
         }),
+        onRowStarted: runReporter.onRowStarted,
+        onRowRemoved: runReporter.onRowRemoved,
         onProgress: () => {
           if (mountedRef.current) {
             setDeletionPhaseByIdentity((current) => ({ ...current, [identity]: 'deleting' }))
           }
         },
         onRowFailed: (failure) => {
+          runReporter.onRowFailed(failure)
           clearQueuedDeleteState(failure.worktreeId, failure.executionHostId)
           // Clear optimistic deleting immediately on preflight/timeout failure, before batch settlement.
           if (mountedRef.current) {
@@ -69,18 +78,21 @@ export function useWorkspaceCleanupUnverifiedRemoval({
           }
         },
         onResult: (result) => {
+          runReporter.onResult(result)
           clearQueuedDeleteState(candidate.worktreeId, hostId ?? undefined)
           if (mountedRef.current) {
             applyResult(result, identity, setRowFailures, setDeletionPhaseByIdentity, onDeselect)
           }
         },
         onLateResult: (result) => {
+          runReporter.onLateResult(result)
           if (mountedRef.current) {
             setDeletionPhaseByIdentity((current) => withoutIdentity(current, identity))
             applyLateResult(result, setRowFailures, onDeselect)
           }
         },
-        onError: () => {
+        onError: (error) => {
+          runReporter.onError(error)
           clearQueuedDeleteState(candidate.worktreeId, hostId ?? undefined)
           if (mountedRef.current) {
             setDeletionPhaseByIdentity((current) => withoutIdentity(current, identity))
