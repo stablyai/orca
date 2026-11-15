@@ -40,6 +40,10 @@ class MockWebContents extends EventEmitter {
   }
 
   stopPainting(): void {}
+  setFrameRate(): void {}
+  isDestroyed(): boolean {
+    return false
+  }
 
   loadURL(): Promise<void> {
     if (mocks.finishLoads) {

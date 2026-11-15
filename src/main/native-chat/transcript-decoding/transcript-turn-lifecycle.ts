@@ -4,7 +4,7 @@ import { resolveNativeChatTranscriptAgent } from '../../../shared/native-chat/na
 import { isNoiseMessage } from '../../../shared/native-chat/native-chat-noise'
 import { claudeBashInputAsTypedCommand } from '../../../shared/agent-hook-listener/providers/claude/transcripts/claude-bash-input'
 import { asRecord } from '../../ai-vault/parsing/session-record-fields'
-import { extractString } from '../../../shared/trimmed-string'
+import { extractString } from '../../../shared/text/trimmed-string'
 import { parseJsonObject } from '../../ai-vault/parsing/session-json-object'
 import { timestampMs } from '../../ai-vault/parsing/session-record-time'
 import { decodeClaudeTranscriptLine } from './transcript-line-decoders-claude'

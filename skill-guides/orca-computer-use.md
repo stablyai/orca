@@ -71,7 +71,7 @@ ORCA computer wait --app <app> --window-title "Save As" --json
 
 ## App Selectors
 
-Prefer bundle IDs from `list-apps`; names are acceptable when unambiguous. Use `pid:<number>` only when bundle ID or name matching is ambiguous.
+Prefer bundle IDs from `list-apps`; names are acceptable when unambiguous. Use `pid:<number>` only when bundle ID or name matching is ambiguous. On macOS, apps without a Dock icon (`accessory: true`), such as menu bar apps, are listed only while they show a window.
 
 ```text
 ORCA computer get-app-state --app com.microsoft.edgemac --json
@@ -172,6 +172,8 @@ path is absent, use the inline base64 `result.screenshot.data`. Pretty output do
 images.
 
 Use the tree for indexes/actions and the screenshot for visual confirmation; failed capture usually means hidden, minimized, off-screen, or permission-blocked.
+
+For smaller screenshots on any action or `get-app-state`, add `--screenshot-scale 1` (at most one pixel per window point, which halves a Retina capture), `--screenshot-max-edge <px>` and `--screenshot-format jpeg`. The result's `screenshot.format` and `screenshot.scale` say what came back; older runtimes ignore these flags and return the full PNG.
 
 Coordinates passed to `click`, `scroll`, and `drag` are window-local action coordinates. If the screenshot reports `scale` other than `1`, convert visual screenshot pixels before acting:
 

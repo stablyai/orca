@@ -1,4 +1,5 @@
-import { useCallback, useMemo, useSyncExternalStore } from 'react'
+import { useAgentStatus } from '@/runtime/agent-status/use-agent-status'
+import { useMemo } from 'react'
 import {
   agentChildRowContextForParent,
   type AgentChildRowContext
@@ -9,8 +10,6 @@ import {
 } from '../../../../../../shared/agent-status/contracts/agent-status-freshness'
 import type { AgentStatusEntry } from '../../../../../../shared/agent-status/contracts/agent-status-types'
 import { useNow } from '@/hooks/use-now'
-
-import { useAppStore } from '@/store'
 
 /** The verdict a session's status row gives its children, exactly as the sidebar derives it. */
 export function structuredSessionChildRowContext(
@@ -23,22 +22,13 @@ export function structuredSessionChildRowContext(
   )
 }
 
-const subscribeToNothing = (): (() => void) => () => {}
-
 /** Use the sidebar’s parent verdict so the same child cannot disagree between strip and sidebar. */
 export function useStructuredSessionChildRowContext(
   paneKey: string,
   active = true
 ): AgentChildRowContext | undefined {
-  const readParent = useCallback(
-    () => (active ? useAppStore.getState().agentStatusByPaneKey[paneKey] : undefined),
-    [active, paneKey]
-  )
-  const parent = useSyncExternalStore(
-    active ? useAppStore.subscribe : subscribeToNothing,
-    readParent,
-    readParent
-  )
+  // A hidden strip passes no key, so it holds no status subscription.
+  const parent = useAgentStatus(active ? paneKey : null)
   // The freshness window is thirty minutes; a coarse shared tick is well inside its precision.
   const now = useNow(30_000, parent !== undefined)
   const context = parent ? structuredSessionChildRowContext(parent, now) : undefined

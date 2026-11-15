@@ -1,4 +1,4 @@
-import { isPositiveSafeInteger } from '../../../../shared/positive-safe-integer'
+import { isPositiveSafeInteger } from '../../../../shared/validation/positive-safe-integer'
 
 export function isGitObjectId(value: unknown): value is string {
   return typeof value === 'string' && /^(?:[0-9a-f]{40}|[0-9a-f]{64})$/i.test(value)

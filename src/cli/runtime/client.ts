@@ -16,7 +16,7 @@ import { openLocalOrca } from './app-launch/open-local-orca'
 import { getDefaultUserDataPath, readMetadata } from './profile/metadata'
 import { getCliStatus, getOfflineRuntimeAdmission } from './status/status'
 import type { OfflineRuntimeAdmission } from './status/status'
-import { projectRemoteAppStatus } from '../../shared/cli-app-status-projection'
+import { projectRemoteAppStatus } from '../../shared/remote-runtime/session-graph/cli-app-status-projection'
 import { sendRequest } from './connection/transport'
 import { attachMutationRecovery, isRequestUnsent } from './connection/client-error-recovery'
 import { RuntimeClientError, RuntimeRpcFailureError } from './connection/types'
@@ -46,7 +46,7 @@ import {
   resolveWorkerStartClientTimeoutMs,
   resolveWorkerStartReadinessTimeoutMs
 } from '../../shared/orchestration/orchestration-timing-budgets'
-import { MAX_TIMER_DELAY_MS } from '../../shared/timer-delay'
+import { MAX_TIMER_DELAY_MS } from '../../shared/concurrency/timer-delay'
 import {
   buildOrchestrationRecoveryCommand,
   resolveOrchestrationCliExecutable

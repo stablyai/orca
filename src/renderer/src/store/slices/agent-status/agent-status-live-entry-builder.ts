@@ -44,7 +44,7 @@ export function buildAgentStatusLiveEntry(
   args: AgentStatusLiveEntryArgs
 ): AgentStatusLiveEntryBuild | AgentStatusLiveEntryRejection {
   const { state, paneKey, payload, terminalTitle, timing, routing, metadata, updatedAt } = args
-  const existing = state.agentStatusByPaneKey[paneKey]
+  const existing = state.agentStatusByPaneKey.get(paneKey)
   if (existing && updatedAt < existing.updatedAt && !timing?.allowOlderTimestamp) {
     return { entry: null, reason: 'stale' }
   }
@@ -226,6 +226,7 @@ export function buildAgentStatusLiveEntry(
       : {}),
     ...(promptInteractionKey ? { promptInteractionKey } : {}),
     ...(payload.restoredUnconfirmed ? { restoredUnconfirmed: true } : {}),
+    ...(payload.paneSleep ? { paneSleep: payload.paneSleep } : {}),
     acceptedStatusSeq: (existing?.acceptedStatusSeq ?? 0) + 1,
     ...(payload.observation ? { observation: payload.observation } : {}),
     ...(programStatus ? { programStatus } : {}),

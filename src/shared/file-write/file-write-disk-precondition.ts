@@ -1,5 +1,5 @@
 import { getDiskBaselineSignature, getWrittenContentDiskSignature } from './disk-baseline-signature'
-import { ERRNO_CODE_PATTERN } from '../errno-code'
+import { ERRNO_CODE_PATTERN } from '../errors/errno-code'
 
 // Why: the host serves `files.writeIfUnchanged`; without it a client compares from its side first.
 export const FILE_WRITE_DISK_PRECONDITION_RUNTIME_CAPABILITY =

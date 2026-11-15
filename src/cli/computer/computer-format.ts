@@ -70,7 +70,7 @@ export function prepareComputerCliJsonResult<TResult>(
       COMPUTER_SCREENSHOT_TEMP_DIR,
       response.id,
       screenshot.data,
-      screenshot.format === 'png' ? 'png' : 'img'
+      screenshot.format === 'jpeg' ? 'jpg' : screenshot.format === 'png' ? 'png' : 'img'
     )
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: only the screenshot field is rewritten; every other TResult field is spread through unchanged.
     return {
@@ -104,7 +104,8 @@ export function formatListApps(result: ComputerListAppsResult): string {
   return result.apps
     .map((app) => {
       const bundle = app.bundleId ? `  ${app.bundleId}` : ''
-      return `${app.name}  pid:${app.pid}${bundle}`
+      const accessory = app.accessory ? '  (no Dock icon)' : ''
+      return `${app.name}  pid:${app.pid}${bundle}${accessory}`
     })
     .join('\n')
 }

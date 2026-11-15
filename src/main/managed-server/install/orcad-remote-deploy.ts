@@ -11,7 +11,7 @@ import type { OrcadActivationVerdict } from '../activation/orcad-activation-gate
 import type { OrcadTerminalCensus } from '../../../shared/remote-runtime/orcad-lifecycle/orcad-terminal-census'
 import type { RemoteHostPlatform } from '../../ssh/remote-host/ssh-remote-platform'
 import { installOrcadBundle } from './orcad-remote-install'
-import { getAppEnvironment } from '../../../shared/app-environment'
+import { getAppEnvironment } from '../../../shared/app-lifecycle/app-environment'
 import type { NodeRuntimeTarget } from '../../../shared/node-runtime/node-runtime-pin'
 import { ORCAD_STARTUP_READINESS_TIMEOUT_MS } from '../../../shared/remote-runtime/orcad-distribution/orcad-profile-preflight'
 import { materializeOrcadArtifact } from '../../orcad/artifact-slots/orcad-artifact-materializer'

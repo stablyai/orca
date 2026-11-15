@@ -2,7 +2,10 @@ import type { ChildProcess } from 'node:child_process'
 import type { SearchOptions, SearchResult } from '../../shared/file-search/code-search-types'
 import { RipgrepSearchDiagnostics } from '../../shared/ripgrep/ripgrep-search-diagnostics'
 import { SearchSubprocessLineAccumulator } from '../../shared/search-subprocess-lines'
-import { throwIfSignalAborted, abortSignalReason } from '../../shared/abort-signal-reason'
+import {
+  throwIfSignalAborted,
+  abortSignalReason
+} from '../../shared/concurrency/abort-signal-reason'
 import {
   buildRgArgs,
   createAccumulator,

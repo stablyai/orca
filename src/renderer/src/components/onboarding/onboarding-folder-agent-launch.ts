@@ -14,7 +14,7 @@ import {
   type AgentSessionLaunchPlan
 } from '@/lib/agent-session/launch/routing/agent-session-launch-plan'
 
-import { createNonSecureContextUuid } from '../../../../shared/non-secure-context-uuid'
+import { createNonSecureContextUuid } from '../../../../shared/identifiers/non-secure-context-uuid'
 import {
   buildOnboardingFolderAgentStartup,
   onboardingFolderDefaultAgent,

@@ -104,7 +104,7 @@ export const store = {
 }
 
 const mockLaunchUuid = vi.hoisted(() => () => 'tab-1')
-vi.mock('../../../../../../shared/non-secure-context-uuid', () => ({
+vi.mock('../../../../../../shared/identifiers/non-secure-context-uuid', () => ({
   createNonSecureContextUuid: mockLaunchUuid
 }))
 

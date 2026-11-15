@@ -13,7 +13,7 @@ import {
   STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY
 } from '../../../../src/shared/agent-session/agent-session-runtime-capabilities'
 import { AGENT_SESSION_CURRENT_REQUESTS_CLIENT_CAPABILITY } from '../../../../src/shared/agent-session/requests/agent-session-current-requests-capability'
-import '../../../../src/shared/protocol-version'
+import '../../../../src/shared/remote-runtime/protocol/protocol-version'
 import {
   AGENT_STATUS_RESTORED_UNCONFIRMED_RUNTIME_CAPABILITY,
   SESSION_TABS_SPLIT_GROUP_PLACEMENT_RUNTIME_CAPABILITY

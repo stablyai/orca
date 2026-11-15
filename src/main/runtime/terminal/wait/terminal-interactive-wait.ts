@@ -14,7 +14,7 @@ import type {
   TerminalWaitStatusEvidence
 } from './terminal-wait-permission'
 import type { AgentLaunchScope } from '../../session-tabs/structured-session-tab-restoration'
-import { withTimeout } from '../../../../shared/promise-timeout-fallback'
+import { withTimeout } from '../../../../shared/concurrency/promise-timeout-fallback'
 import { TERMINAL_INTERACTIVE_WAIT_PROBE_TIMEOUT_MS } from './terminal-interactive-probe-budget'
 import { parsePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import {
@@ -212,7 +212,7 @@ export abstract class OrcaRuntimeWithGetTerminalInteractiveWait extends OrcaRunt
       launchToken,
       wslDistro,
       observedAfter,
-      statuses: this.getAgentStatusSnapshotFn?.() ?? []
+      statuses: this.publicPaneStatusFn?.(paneKey) ?? []
     })
     const launchConfig = session ? heldLaunchConfig(pty, session.agent) : undefined
     return session && launchConfig ? { ...session, launchConfig } : session

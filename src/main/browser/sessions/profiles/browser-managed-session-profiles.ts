@@ -4,7 +4,7 @@ import {
   managedBrowserProfileOwnerKey,
   type ManagedBrowserProfileOwner
 } from '../../../../shared/browser/profiles/browser-profile-scope'
-import { InFlightPromiseDedupe } from '../../../../shared/in-flight-promise-dedupe'
+import { InFlightPromiseDedupe } from '../../../../shared/concurrency/in-flight-promise-dedupe'
 import { browserSessionRegistry } from './browser-session-registry'
 
 const creations = new InFlightPromiseDedupe<BrowserSessionProfile | null>()

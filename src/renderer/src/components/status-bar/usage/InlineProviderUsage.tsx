@@ -3,16 +3,16 @@ import React from 'react'
 import { Button } from '@/components/ui/button'
 import { DropdownMenuItem } from '@/components/ui/dropdown-menu'
 import { useAppStore } from '../../../store/index'
-import type { ProviderRateLimits } from '../../../../../shared/rate-limit-types'
+import type { ProviderRateLimits } from '../../../../../shared/agent-usage/rate-limits/rate-limit-types'
 import {
   getDisplayedUsagePercentage,
   normalizeUsagePercentageDisplay,
   clampUsedPercent
-} from '../../../../../shared/usage-percentage-display'
+} from '../../../../../shared/agent-usage/display/usage-percentage-display'
 import { useResetCountdownClock } from '@/hooks/useResetCountdownClock'
-import { usageBarClass, usageTextClass } from './usage-health-tone'
-import { formatWindowLabel } from '../../../../../shared/rate-limit-window-label'
-import { formatResetDuration } from '../../../../../shared/rate-limit-reset-format'
+import { usageBarClass } from './usage-health-tone'
+import { formatWindowLabel } from '../../../../../shared/agent-usage/rate-limits/rate-limit-window-label'
+import { formatResetDuration } from '../../../../../shared/agent-usage/rate-limits/rate-limit-reset-format'
 import { formatBareUsagePercentage, formatUsagePercentageLabel } from './usage-percentage-label'
 import { getUsageRosterRowState } from './usage-roster-row-state'
 import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
@@ -126,7 +126,7 @@ export function InlineUsageBars({
                 style={{ width: `${getDisplayedUsagePercentage(window.used, display)}%` }}
               />
             </div>
-            <span className={`w-8 shrink-0 text-right tabular-nums ${usageTextClass(window.used)}`}>
+            <span className="w-8 shrink-0 text-right tabular-nums">
               {formatBareUsagePercentage(window.used, display, t)}
             </span>
             <span className="w-11 shrink-0 break-all text-right tabular-nums">{resetDuration}</span>

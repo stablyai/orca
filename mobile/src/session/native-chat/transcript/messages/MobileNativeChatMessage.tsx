@@ -391,6 +391,7 @@ function MobileNativeChatMessageImpl({
         {isChatTurn && !agentFrom ? (
           <MobileNativeChatMessageMeta
             message={message}
+            rowKey={rowKey ?? message.id}
             fontScale={fontScale}
             rewindable={rewindable}
           />

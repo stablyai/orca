@@ -1,7 +1,7 @@
 import { powerMonitor } from 'electron'
 import { recoverOrcadManagedTunnelsAfterHostResume } from '../../managed-server/lifecycle/orcad-managed-tunnel'
 import { getSshConnectionManager } from '../../ssh/targets/ssh-target-registry'
-import { errorMessage } from '../../../shared/error-message'
+import { errorMessage } from '../../../shared/errors/error-message'
 
 let powerMonitorUnsubscribe: (() => void) | null = null
 let registeredGetUserDataPath: (() => string) | undefined

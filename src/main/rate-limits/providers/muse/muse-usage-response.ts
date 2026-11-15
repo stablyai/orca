@@ -2,7 +2,7 @@ import type {
   ProviderRateLimits,
   RateLimitWindow,
   UsageRateLimitFailureKind
-} from '../../../../shared/rate-limit-types'
+} from '../../../../shared/agent-usage/rate-limits/rate-limit-types'
 
 // Muse plans meter a five-hour session window and a weekly allowance.
 const SESSION_WINDOW_MINUTES = 300

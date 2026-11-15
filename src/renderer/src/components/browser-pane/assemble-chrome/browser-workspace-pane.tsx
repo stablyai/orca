@@ -28,6 +28,7 @@ import {
   useManagedBrowserProfileStatus
 } from './profile-routing/managed-browser-profile-hold'
 import { useBrowserPageMountAdmissions } from '../host-guest/retention/browser-page-mount-admission'
+import { takeBackAllFromPhone } from '../../terminal-pane/viewport/take-back-all-from-phone'
 
 export default function BrowserPane({
   browserTab,
@@ -104,6 +105,16 @@ export default function BrowserPane({
     }
     const { reclaimed } = await window.api.runtime.reclaimBrowserForDesktop(activeBrowserPageId)
     if (!reclaimed) {
+      throw new Error('Could not reclaim browser control')
+    }
+  }, [activeBrowserPageId])
+
+  const takeBackAllForDesktop = useCallback(async (): Promise<void> => {
+    const { reclaimedBrowserPageIds } = await takeBackAllFromPhone(
+      useAppStore.getState().settings ?? undefined,
+      { includeBrowserPages: true }
+    )
+    if (activeBrowserPageId && !reclaimedBrowserPageIds.has(activeBrowserPageId)) {
       throw new Error('Could not reclaim browser control')
     }
   }, [activeBrowserPageId])
@@ -209,6 +220,7 @@ export default function BrowserPane({
               <BrowserMobileDriverOverlay
                 driver={activeBrowserDriver}
                 onTakeBack={reclaimActiveBrowserForDesktop}
+                onTakeBackAll={takeBackAllForDesktop}
               />
             </div>
           )}

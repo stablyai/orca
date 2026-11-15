@@ -218,6 +218,7 @@ struct Snapshot {
 
 struct ScreenshotPayload {
     let data: String
+    let format: ScreenshotFormat
     let width: Int
     let height: Int
     let scale: Double
@@ -513,6 +514,7 @@ final class Provider {
         let snapshot = try buildSnapshot(
             app: app,
             includeScreenshot: params["noScreenshot"]?.bool != true,
+            screenshotOptions: screenshotOptions(params),
             windowId: subtree.map(\.base.windowId) ?? windowId,
             windowIndex: subtree == nil ? windowIndex : nil,
             subtree: subtree,
@@ -728,10 +730,18 @@ final class Provider {
         }
     }
 
-    private func listApps() -> [AppDescriptor] {
+    /// Without `includingWindowlessAccessoryApps`, apps without a Dock icon are listed only while they show a window,
+    /// since they include dozens of windowless system agents; resolving still finds one whose window is minimized or hidden.
+    private func listApps(includingWindowlessAccessoryApps: Bool = false) -> [AppDescriptor] {
         var seen = Set<String>()
+        let accessoryWindowOwners = includingWindowlessAccessoryApps ? nil : WindowCapture.ownersOfStandardWindows()
         return NSWorkspace.shared.runningApplications
-            .filter { !$0.isTerminated && $0.activationPolicy == .regular }
+            .filter { app in
+                guard !app.isTerminated else { return false }
+                if app.activationPolicy == .regular { return true }
+                guard app.activationPolicy == .accessory else { return false }
+                return accessoryWindowOwners?.contains(app.processIdentifier) ?? true
+            }
             .compactMap { app in
                 guard let name = app.localizedName, !name.isEmpty else { return nil }
                 let pid = app.processIdentifier
@@ -753,6 +763,7 @@ final class Provider {
             "name": app.name,
             "bundleId": jsonNullable(app.bundleId),
             "pid": Int(app.pid),
+            "accessory": app.app.activationPolicy == .accessory,
             "isRunning": true,
             "lastUsedAt": NSNull(),
             "useCount": NSNull(),
@@ -826,7 +837,9 @@ final class Provider {
         if blockedBundleIds.contains(trimmed) {
             throw ProviderError.coded("app_blocked", "app '\(trimmed)' is blocked for safety")
         }
-        if let app = listApps().first(where: { matches($0, query: trimmed) }) {
+        let matching = listApps(includingWindowlessAccessoryApps: true).filter { matches($0, query: trimmed) }
+        // Why: a name query should pick the app over a same-named helper without a Dock icon, even an active one.
+        if let app = matching.first(where: { $0.app.activationPolicy == .regular }) ?? matching.first {
             try rejectBlockedApp(app)
             return app
         }
@@ -854,7 +867,7 @@ final class Provider {
             if blockedBundleIds.contains(bundleId) {
                 throw ProviderError.coded("app_blocked", "app '\(bundleId)' is blocked for safety")
             }
-            // Why: a path or display-name query misses the running check above, and menu bar apps aren't listed.
+            // Why: a path or display-name query misses the running check above, and windowless menu bar apps aren't listed.
             if let running = NSRunningApplication.runningApplications(withBundleIdentifier: bundleId)
                 .first(where: { !$0.isTerminated }),
                 let app = appByPid(running.processIdentifier) {
@@ -946,6 +959,7 @@ final class Provider {
     private func buildSnapshot(
         app: AppDescriptor,
         includeScreenshot: Bool,
+        screenshotOptions: ScreenshotOptions,
         windowId: CGWindowID?,
         windowIndex: Int?,
         subtree: (root: ElementRecord, base: Snapshot)?,
@@ -1032,7 +1046,7 @@ final class Provider {
             elements = kept.merging(renderer.records) { _, walked in walked }
             elementOrder = subtree.base.elementOrder.filter { kept[$0] != nil } + indexes.order
         }
-        let screenshot = includeScreenshot ? capture.screenshotPayload() : nil
+        let screenshot = includeScreenshot ? capture.screenshotPayload(screenshotOptions) : nil
         let screenshotStatus: ScreenshotStatus = if screenshot != nil {
             .captured
         } else if includeScreenshot && !canCaptureScreenshot {
@@ -1073,7 +1087,7 @@ final class Provider {
         if let payload = snapshot.screenshot {
             screenshot = [
                 "data": payload.data,
-                "format": "png",
+                "format": payload.format.rawValue,
                 "width": payload.width,
                 "height": payload.height,
                 "scale": payload.scale,
@@ -2221,6 +2235,15 @@ private func requestedWindowIndex(_ params: [String: JSONValue]) throws -> Int? 
     return index
 }
 
+/// The RPC layer validates these, so a value it would refuse is ignored here rather than failing the observe.
+private func screenshotOptions(_ params: [String: JSONValue]) -> ScreenshotOptions {
+    ScreenshotOptions(
+        format: params["screenshotFormat"]?.string.flatMap(ScreenshotFormat.init(rawValue:)) ?? .png,
+        maxScale: params["screenshotScale"]?.number.flatMap { $0.isFinite && $0 > 0 ? $0 : nil },
+        maxEdge: params["screenshotMaxEdge"]?.number.flatMap { $0 >= 1 ? boundedInteger($0, as: Int.self) : nil }
+    )
+}
+
 private func usableWindow(_ element: AXUIElement) -> Bool {
     stringAttribute(element, kAXRoleAttribute as String) == kAXWindowRole as String &&
         boolAttribute(element, kAXMinimizedAttribute as String) != true
@@ -3349,49 +3372,68 @@ private struct WindowCapture {
 
     /// Off-screen windows include minimized, hidden and other-Space ones, but also closed windows apps keep; see `windowInventory`.
     static func candidates(pid: pid_t, includeOffScreen: Bool = false) -> [WindowCandidate] {
-        let options: CGWindowListOption = includeOffScreen ? [.optionAll, .excludeDesktopElements] : [.optionOnScreenOnly]
-        guard let infos = CGWindowListCopyWindowInfo(options, kCGNullWindowID) as? [[String: Any]] else {
-            return []
-        }
-        return infos.compactMap { info in
-            guard let ownerPid = info[kCGWindowOwnerPID as String] as? pid_t, ownerPid == pid,
-                  let number = info[kCGWindowNumber as String] as? NSNumber,
-                  let layer = info[kCGWindowLayer as String] as? Int,
-                  let boundsDictionary = info[kCGWindowBounds as String] as? NSDictionary,
-                  let bounds = CGRect(dictionaryRepresentation: boundsDictionary),
-                  bounds.width >= 48,
-                  bounds.height >= 48
-            else {
-                return nil
+        windowInfos(includeOffScreen: includeOffScreen)
+            .compactMap { info in
+                guard info[kCGWindowOwnerPID as String] as? pid_t == pid else { return nil }
+                return candidate(info, includeOffScreen: includeOffScreen)
             }
-            let alpha = info[kCGWindowAlpha as String] as? CGFloat ?? 1
-            guard alpha > 0.01 else { return nil }
-            let sharing = (info[kCGWindowSharingState as String] as? NSNumber).map { $0.intValue }
-            if sharing == 0 { return nil }
-            // Why: CoreGraphics omits the key for off-screen windows, and every window of an on-screen-only list is on screen.
-            let isOnScreen = (info[kCGWindowIsOnscreen as String] as? Bool) ?? !includeOffScreen
-            return WindowCandidate(
-                windowId: CGWindowID(number.uint32Value),
-                layer: layer,
-                bounds: bounds,
-                title: info[kCGWindowName as String] as? String,
-                alpha: alpha,
-                isOnScreen: isOnScreen,
-                sharingState: sharing
-            )
-        }
-        .sorted { lhs, rhs in
-            lhs.score > rhs.score
-        }
+            .sorted { lhs, rhs in
+                lhs.score > rhs.score
+            }
     }
 
-    func screenshotPayload() -> ScreenshotPayload? {
-        guard let image, let bounded = boundedPngData(image.image) else { return nil }
+    /// Processes with an on-screen window at the normal level, the windows `list-windows` lists; leaves out the Dock, banners and overlays.
+    static func ownersOfStandardWindows() -> Set<pid_t> {
+        Set(windowInfos(includeOffScreen: false).compactMap { info in
+            guard let owner = info[kCGWindowOwnerPID as String] as? pid_t,
+                  candidate(info, includeOffScreen: false)?.layer == 0
+            else { return nil }
+            return owner
+        })
+    }
+
+    private static func windowInfos(includeOffScreen: Bool) -> [[String: Any]] {
+        let options: CGWindowListOption = includeOffScreen ? [.optionAll, .excludeDesktopElements] : [.optionOnScreenOnly]
+        return CGWindowListCopyWindowInfo(options, kCGNullWindowID) as? [[String: Any]] ?? []
+    }
+
+    private static func candidate(_ info: [String: Any], includeOffScreen: Bool) -> WindowCandidate? {
+        guard let number = info[kCGWindowNumber as String] as? NSNumber,
+              let layer = info[kCGWindowLayer as String] as? Int,
+              let boundsDictionary = info[kCGWindowBounds as String] as? NSDictionary,
+              let bounds = CGRect(dictionaryRepresentation: boundsDictionary),
+              bounds.width >= 48,
+              bounds.height >= 48
+        else {
+            return nil
+        }
+        let alpha = info[kCGWindowAlpha as String] as? CGFloat ?? 1
+        guard alpha > 0.01 else { return nil }
+        let sharing = (info[kCGWindowSharingState as String] as? NSNumber).map { $0.intValue }
+        if sharing == 0 { return nil }
+        // Why: CoreGraphics omits the key for off-screen windows, and every window of an on-screen-only list is on screen.
+        let isOnScreen = (info[kCGWindowIsOnscreen as String] as? Bool) ?? !includeOffScreen
+        return WindowCandidate(
+            windowId: CGWindowID(number.uint32Value),
+            layer: layer,
+            bounds: bounds,
+            title: info[kCGWindowName as String] as? String,
+            alpha: alpha,
+            isOnScreen: isOnScreen,
+            sharingState: sharing
+        )
+    }
+
+    func screenshotPayload(_ options: ScreenshotOptions) -> ScreenshotPayload? {
+        guard let image, let encoded = ScreenshotEncoding.encode(image.image, windowWidth: bounds.width, options: options) else {
+            return nil
+        }
         return ScreenshotPayload(
-            data: bounded.data.base64EncodedString(),
-            width: bounded.width,
-            height: bounded.height,
-            scale: Double(bounded.width) / max(Double(bounds.width), 1)
+            data: encoded.data.base64EncodedString(),
+            format: encoded.format,
+            width: encoded.width,
+            height: encoded.height,
+            scale: Double(encoded.width) / max(Double(bounds.width), 1)
         )
     }
 
@@ -3453,48 +3495,6 @@ private enum BlockingAsync {
         }
         return try box.result!.get()
     }
-}
-
-private struct BoundedPNG {
-    let data: Data
-    let width: Int
-    let height: Int
-}
-
-private func boundedPngData(_ image: CGImage) -> BoundedPNG? {
-    let rep = NSBitmapImageRep(cgImage: image)
-    guard let data = rep.representation(using: .png, properties: [:]) else { return nil }
-    if data.count <= 900_000 {
-        return BoundedPNG(data: data, width: image.width, height: image.height)
-    }
-    var scale = min(1, 1280 / CGFloat(max(image.width, image.height)))
-    var best = BoundedPNG(data: data, width: image.width, height: image.height)
-    while scale >= 0.25 {
-        guard let resized = resizePng(image, scale: scale) else {
-            break
-        }
-        best = resized
-        if resized.data.count <= 900_000 {
-            return resized
-        }
-        scale *= 0.85
-    }
-    return best
-}
-
-private func resizePng(_ image: CGImage, scale: CGFloat) -> BoundedPNG? {
-    let width = max(1, Int(CGFloat(image.width) * scale))
-    let height = max(1, Int(CGFloat(image.height) * scale))
-    guard let context = CGContext(data: nil, width: width, height: height, bitsPerComponent: 8, bytesPerRow: 0, space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) else {
-        return nil
-    }
-    context.interpolationQuality = .medium
-    context.draw(image, in: CGRect(x: 0, y: 0, width: width, height: height))
-    guard let resized = context.makeImage() else { return nil }
-    guard let data = NSBitmapImageRep(cgImage: resized).representation(using: .png, properties: [:]) else {
-        return nil
-    }
-    return BoundedPNG(data: data, width: width, height: height)
 }
 
 private enum Input {

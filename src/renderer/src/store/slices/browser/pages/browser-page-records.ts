@@ -10,7 +10,7 @@ import { getBrowserDisplayTitle } from '../../../../../../shared/browser/browser
 import { redactKagiSessionToken } from '../../../../../../shared/browser/navigation/browser-url'
 import { isDocPreviewUrl } from '../../../../../../shared/document-preview/doc-preview-scheme'
 import { basename } from '@/lib/path'
-import { createNonSecureContextUuid as createBrowserUuid } from '../../../../../../shared/non-secure-context-uuid'
+import { createNonSecureContextUuid as createBrowserUuid } from '../../../../../../shared/identifiers/non-secure-context-uuid'
 import { translate } from '@/i18n/i18n'
 
 export function normalizeUrl(url: string): string {

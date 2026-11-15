@@ -1,6 +1,6 @@
 import { randomBytes } from 'node:crypto'
 import { readOpenCodeTextTaskServerUrl } from './opencode-text-task-server-ready'
-import { waitForPromiseWithSignal } from '../../../shared/abort-signal-reason'
+import { waitForPromiseWithSignal } from '../../../shared/concurrency/abort-signal-reason'
 import type { OpenCodeCliCapabilities } from '../../../shared/agent-launch/startup/opencode-cli-version'
 import {
   probeOpenCodeCliVersion,

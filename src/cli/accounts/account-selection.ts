@@ -5,13 +5,13 @@ import { ANTIGRAVITY_ACCOUNTS_RUNTIME_CAPABILITY } from '../../shared/remote-run
 import type {
   AntigravityAccountState,
   AntigravityAccountTarget
-} from '../../shared/antigravity-account-types'
+} from '../../shared/agent-accounts/antigravity/antigravity-account-types'
 import type {
   ClaudeRateLimitAccountsState,
   CodexRateLimitAccountsState,
   ManagedDataAccountProvider,
   ManagedDataAccountsState
-} from '../../shared/managed-account-types'
+} from '../../shared/agent-accounts/managed-account-types'
 import type { RuntimeStatus } from '../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import { getWslAccountTarget } from './account-wsl-location'
 import {

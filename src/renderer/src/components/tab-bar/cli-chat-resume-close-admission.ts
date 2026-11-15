@@ -8,7 +8,7 @@ import { toRuntimeWorktreeSelector } from '@/runtime/rpc/targets/runtime-worktre
 import { readStructuredChatHostPermissionVerdict } from '@/runtime/native-chat/host-capabilities/structured-chat-host-permission'
 import { structuredAgentSessionHostSupports } from '@/runtime/native-chat/host-capabilities/structured-agent-session-host-support'
 import { probePtyRunningWork } from '../terminal/pty-running-work-probe'
-import { waitForPromiseWithSignal } from '../../../../shared/abort-signal-reason'
+import { waitForPromiseWithSignal } from '../../../../shared/concurrency/abort-signal-reason'
 import { STRUCTURED_AGENT_SESSION_CLOSE_TERMINAL_FOR_CHAT_RUNTIME_CAPABILITY } from '../../../../shared/agent-session/structured-agent-session-surface-capabilities'
 import {
   chatAgentsShareConversations,
@@ -121,7 +121,7 @@ export async function admitCliChatResumeClose(
   }
   const state = useAppStore.getState()
   // Main's answer to a chat that already holds the conversation; the host's create judges terminals.
-  const ownerRow = Object.values(state.agentStatusByPaneKey).find(
+  const ownerRow = Array.from(state.agentStatusByPaneKey.values()).find(
     (row) =>
       row.terminalResumeEligible === false &&
       !!row.worktreeId &&

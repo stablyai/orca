@@ -37,7 +37,7 @@ import {
   daemonSocketDirIsTrusted,
   ensureDaemonSocketDir
 } from '../../../daemon/endpoint/publication/daemon-socket-endpoint-path'
-import { errorMessage } from '../../../../shared/error-message'
+import { errorMessage } from '../../../../shared/errors/error-message'
 import { logClientConnection } from './runtime-rpc-client-connection-log'
 import {
   loadHostDescriptor,
