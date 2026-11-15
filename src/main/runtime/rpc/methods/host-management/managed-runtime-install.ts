@@ -70,7 +70,11 @@ function installationFor(agent: string, runtime: OrcaRuntimeService): ManagedRun
 export function reclaimManagedRuntimeReleasesAtLaunch(runtime: OrcaRuntimeService): void {
   for (const spec of ACP_LAUNCH_SPECS) {
     if (spec.managedRuntime) {
-      installationFor(spec.agent, runtime)
+      try {
+        installationFor(spec.agent, runtime)
+      } catch (error) {
+        console.warn(`[managed-runtime] ${spec.agent} releases not reclaimed at launch:`, error)
+      }
     }
   }
 }

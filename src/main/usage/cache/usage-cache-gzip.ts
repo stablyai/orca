@@ -69,22 +69,39 @@ export async function* decodedUsageCacheText(path: string): AsyncGenerator<strin
   }
 }
 
+class PlainSizeLimitError extends Error {}
+
 /** Publish gzip only when its plain size is readable back and it saves space; false means write plain. */
 export async function publishGzipUsageCache(
   path: string,
   text: Iterable<string>,
   maxPlainBytes = MAX_GZIP_PLAIN_BYTES
 ): Promise<boolean> {
+  const chunks = text[Symbol.iterator]()
+  const head: string[] = []
+  let plainBytes = 0
+  // Small caches stay plain without a throwaway compressed write.
+  while (plainBytes < MIN_GZIP_PLAIN_BYTES) {
+    const next = chunks.next()
+    if (next.done) {
+      return false
+    }
+    head.push(next.value)
+    plainBytes += Buffer.byteLength(next.value)
+  }
+  function* counted(): Generator<string> {
+    yield* head
+    for (let next = chunks.next(); !next.done; next = chunks.next()) {
+      plainBytes += Buffer.byteLength(next.value)
+      if (plainBytes > maxPlainBytes) {
+        throw new PlainSizeLimitError()
+      }
+      yield next.value
+    }
+  }
   await mkdir(dirname(path), { recursive: true })
   await removeStaleDurableWriteTempFiles(path)
   const candidate = durableWriteTempPath(path, threadId > 0 ? String(threadId) : undefined)
-  let plainBytes = 0
-  function* counted(): Generator<string> {
-    for (const chunk of text) {
-      plainBytes += Buffer.byteLength(chunk)
-      yield chunk
-    }
-  }
   async function* gzipChunks(): AsyncGenerator<Buffer> {
     const input = Readable.from(counted())
     const compressed = input.pipe(createGzip({ level: 1, chunkSize: CHUNK_BYTES }))
@@ -99,15 +116,16 @@ export async function publishGzipUsageCache(
   let published = false
   try {
     await writeTempFileDurable(candidate, gzipChunks(), 0o600)
-    if (
-      plainBytes >= MIN_GZIP_PLAIN_BYTES &&
-      plainBytes <= maxPlainBytes &&
-      (await stat(candidate)).size < plainBytes
-    ) {
+    if ((await stat(candidate)).size < plainBytes) {
       await renameDurable(candidate, path)
       published = true
     }
     return published
+  } catch (error) {
+    if (error instanceof PlainSizeLimitError) {
+      return false
+    }
+    throw error
   } finally {
     if (!published) {
       await rm(candidate, { force: true }).catch(() => {})
