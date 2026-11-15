@@ -8,7 +8,7 @@ import { yieldToEventLoop } from '../../../../../../shared/concurrency/event-loo
 import type { NativeChatGalleryEntry } from './native-chat-gallery-entries'
 import type { NativeChatGallerySurface } from './native-chat-gallery-surfaces'
 
-type ProjectionOptions = { stoppedLabel: string; visuals: boolean }
+type ProjectionOptions = { stoppedLabel: string; visuals: boolean; allowFileUriLinks?: boolean }
 export type NativeChatGalleryGroupInput = {
   key: string
   message: Pick<NativeChatMessage, 'id' | 'blocks'>
@@ -63,6 +63,7 @@ export class NativeChatGalleryProjectionCache {
       before.active !== input.active ||
       before.trailing !== input.trailing ||
       group.options.visuals !== options.visuals ||
+      Boolean(group.options.allowFileUriLinks) !== Boolean(options.allowFileUriLinks) ||
       group.options.stoppedLabel !== options.stoppedLabel
     ) {
       return null
@@ -98,7 +99,11 @@ export class NativeChatGalleryProjectionCache {
     return {
       handle: ++this.nextHandle,
       input,
-      options: { stoppedLabel: options.stoppedLabel, visuals: options.visuals },
+      options: {
+        stoppedLabel: options.stoppedLabel,
+        visuals: options.visuals,
+        allowFileUriLinks: options.allowFileUriLinks
+      },
       surfaces,
       projectionMs: performance.now() - started
     }

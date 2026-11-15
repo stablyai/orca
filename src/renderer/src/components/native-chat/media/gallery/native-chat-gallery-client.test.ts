@@ -19,6 +19,7 @@ function snapshot(paths: string[]): NativeChatGallerySnapshot {
     scopeKey: 'chat',
     stoppedLabel: '',
     visuals: false,
+    allowFileUriLinks: false,
     waitingSlots: [],
     slots: paths.map((path) => ({
       kind: 'message',

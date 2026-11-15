@@ -125,6 +125,10 @@ export function assertNativeChatGalleryProjection(input: {
         }
       } else if (block.type === 'tool-result') {
         metadata(block.callId)
+      } else if (block.type === 'background-task') {
+        metadata(block.summary)
+        metadata(block.error)
+        metadata(block.label)
       }
     }
   }

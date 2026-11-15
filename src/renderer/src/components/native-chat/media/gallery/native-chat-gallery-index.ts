@@ -20,6 +20,7 @@ type DocumentCache = {
   text: string
   growing: boolean
   visuals: boolean
+  allowFileUriLinks: boolean
   images: readonly NativeChatDocumentImage[]
 }
 
@@ -166,7 +167,8 @@ export class NativeChatGalleryIndex {
       if (
         cached?.text === surface.text &&
         cached.growing === surface.growing &&
-        cached.visuals === surface.visuals
+        cached.visuals === surface.visuals &&
+        cached.allowFileUriLinks === Boolean(surface.allowFileUriLinks)
       ) {
         images = cached.images
         this.metrics.cachedDocuments++
@@ -179,6 +181,7 @@ export class NativeChatGalleryIndex {
           text: surface.text,
           growing: surface.growing,
           visuals: surface.visuals,
+          allowFileUriLinks: Boolean(surface.allowFileUriLinks),
           images
         })
       }

@@ -122,6 +122,8 @@ async function run() {
       { name: 'large-unrelated-tool-input', options: { count: 1, largeTool: true, warm: true } },
       { name: 'oversized-serialized-read', options: { count: 1, serializedTool: true } },
       { name: 'oversized-work-run', options: { count: 1, longRun: true } },
+      { name: 'oversized-background-task', options: { count: 1, backgroundTask: true } },
+      { name: 'plan-document-file-image', options: { count: 1, plan: true, warm: true } },
       { name: 'large-unique-image-source', options: { count: 1, largeSource: true, warm: true } },
       { name: 'large-plain-document', options: { count: 1, hugeDocument: true, warm: true } },
       { name: '100k-image', options: { count: 1, giant: true, image: true, warm: true } },

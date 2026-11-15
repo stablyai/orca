@@ -174,3 +174,41 @@ it('keeps huge image fields exact while assigning bounded duplicate-safe rendere
   expect(new Set(entries.map((entry) => entry.key)).size).toBe(2)
   expect(entries.map((entry) => entry.source)).toEqual([source, source, second])
 })
+
+it('preserves raw file-linked image actions and custody only for the enabled matching target', async () => {
+  const document = (target: string, allowFileUriLinks: boolean): NativeChatGallerySurface[] => [
+    {
+      kind: 'document',
+      ownerId: 'html',
+      slotKey: 'html',
+      role: 'row-document',
+      growing: false,
+      visuals: false,
+      allowFileUriLinks,
+      text: `<a href="${target}"><img src="https://example.com/image.png" alt="image"></a>`
+    }
+  ]
+  const index = new NativeChatGalleryIndex()
+  await index.handle({ type: 'begin', id: 1, revision: 1, scopeKey: 'chat' })
+  const original = await put(index, 1, 10, document('file:///tmp/one.pdf', true))
+  expect(
+    original.map((entry) => (entry.kind === 'document' ? entry.linkedHref : undefined))
+  ).toEqual(['file:///tmp/one.pdf'])
+  const selected = original[0]!.key
+  const restored = new NativeChatGalleryIndex()
+  await restored.handle({ type: 'begin', id: 2, revision: 1, scopeKey: 'chat' })
+  await restored.handle({ type: 'restore', id: 3, revision: 1, entries: original })
+  const same = await put(restored, 1, 11, document('file:///tmp/one.pdf', true))
+  expect(same.find((entry) => entry.key === selected)?.source).toBe('https://example.com/image.png')
+  const different = await put(restored, 1, 12, document('file:///tmp/two.pdf', true))
+  expect(different.find((entry) => entry.key === selected)).toBeUndefined()
+  expect(
+    different.map((entry) => (entry.kind === 'document' ? entry.linkedHref : undefined))
+  ).toEqual(['file:///tmp/two.pdf'])
+  await restored.handle({ type: 'begin', id: 4, revision: 2, scopeKey: 'chat' })
+  const unavailable = await put(restored, 2, 13, document('file:///tmp/two.pdf', false))
+  expect(
+    unavailable.map((entry) => (entry.kind === 'document' ? entry.linkedHref : undefined))
+  ).toEqual([undefined])
+  expect(unavailable.map((entry) => entry.source)).toEqual(['https://example.com/image.png'])
+})

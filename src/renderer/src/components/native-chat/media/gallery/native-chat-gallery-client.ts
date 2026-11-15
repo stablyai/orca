@@ -29,6 +29,7 @@ export type NativeChatGallerySnapshot = {
   liveReasoning?: { message: Pick<NativeChatMessage, 'id' | 'blocks'>; growing: boolean }
   stoppedLabel: string
   visuals: boolean
+  allowFileUriLinks: boolean
 }
 
 export type NativeChatGalleryReady = {
@@ -255,7 +256,12 @@ export class NativeChatGalleryClient {
         ? this.request(job, { type: 'reuse', handles: [cached] })
         : this.sendGroups(job, [
             this.cache.prepare(input, snapshot, () => [
-              nativeChatReasoningImageSurface(message, message.id, growing)
+              nativeChatReasoningImageSurface(
+                message,
+                message.id,
+                growing,
+                snapshot.allowFileUriLinks
+              )
             ])
           ]))
     }

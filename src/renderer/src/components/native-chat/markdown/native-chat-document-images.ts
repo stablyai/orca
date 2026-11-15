@@ -1,7 +1,8 @@
 import type { Element, Root, RootContent } from 'hast'
 import {
   commentMarkdownAllowedTagNames,
-  commentMarkdownUrlTransform
+  commentMarkdownUrlTransform,
+  commentMarkdownFileUriUrlTransform
 } from '../../sidebar/comment-markdown-sanitize'
 import { isGitHubUserAttachmentUrl } from '../../sidebar/github-user-attachment-url'
 import {
@@ -34,6 +35,7 @@ export function nativeChatDocumentImages(input: {
   start?: number
   growing?: boolean
   visuals?: boolean
+  allowFileUriLinks?: boolean
 }): NativeChatDocumentImage[] {
   const text =
     input.visuals && input.growing
@@ -67,20 +69,25 @@ export function nativeChatDocumentImages(input: {
         ? structuredClone(block.tree)
         : parser.parse(source.text)
     const root = parser.runSync(tree)
-    return nativeChatImagesFromTree(root, origins.finalNodes)
+    return nativeChatImagesFromTree(root, origins.finalNodes, input.allowFileUriLinks)
   })
 }
 
 export function nativeChatImagesFromTree(
   root: Root,
-  origins: WeakMap<Element, NativeChatDocumentImageOrigin>
+  origins: WeakMap<Element, NativeChatDocumentImageOrigin>,
+  allowFileUriLinks = false
 ): NativeChatDocumentImage[] {
   const images: NativeChatDocumentImage[] = []
   function collect(node: Root | RootContent, linkedHref?: string): void {
     if (node.type === 'element' && node.tagName === 'a') {
       linkedHref =
         typeof node.properties.href === 'string'
-          ? (commentMarkdownUrlTransform(node.properties.href, 'href', node) ?? undefined)
+          ? ((allowFileUriLinks ? commentMarkdownFileUriUrlTransform : commentMarkdownUrlTransform)(
+              node.properties.href,
+              'href',
+              node
+            ) ?? undefined)
           : undefined
     }
     if (

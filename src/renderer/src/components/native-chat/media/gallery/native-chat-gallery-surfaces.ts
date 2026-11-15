@@ -5,7 +5,10 @@ import type {
 } from '../../../../../../shared/native-chat/native-chat-types'
 import { nativeChatMessageDisplayBlocks } from '../../../../../../shared/native-chat/transcript/row-content/native-chat-message-display-blocks'
 import { deriveNativeChatRowContent } from '../../../../../../shared/native-chat/transcript/row-content/native-chat-row-content'
-import { nativeChatNoticeBlock } from '../../../../../../shared/native-chat/native-chat-notice'
+import {
+  nativeChatNoticeBlock,
+  nativeChatNoticeLook
+} from '../../../../../../shared/native-chat/native-chat-notice'
 import { agentMessageTranscriptText } from '../../../../../../shared/agent-session/agent-message-display-text'
 import { nativeChatWorkRunEntries } from '../../../../../../shared/native-chat/native-chat-work-run'
 import { nativeChatAskRunBlocks } from '../../../../../../shared/native-chat/input/questions/native-chat-ask-row'
@@ -17,7 +20,13 @@ type SurfaceOwner = { ownerId: string; slotKey: string; role: string }
 export type NativeChatGallerySurface = SurfaceOwner &
   (
     | { kind: 'files'; blocks: readonly NativeChatImageRefBlock[] }
-    | { kind: 'document'; text: string; growing: boolean; visuals: boolean }
+    | {
+        kind: 'document'
+        text: string
+        growing: boolean
+        visuals: boolean
+        allowFileUriLinks?: boolean
+      }
   )
 
 export type NativeChatGallerySlot = {
@@ -47,7 +56,8 @@ function files(
 export function nativeChatReasoningImageSurface(
   message: Pick<NativeChatMessage, 'id' | 'blocks'>,
   slotKey = message.id,
-  growing = false
+  growing = false,
+  allowFileUriLinks = false
 ): NativeChatGallerySurface {
   return {
     kind: 'document',
@@ -56,13 +66,14 @@ export function nativeChatReasoningImageSurface(
     role: 'reasoning-document',
     text: deriveNativeChatRowContent(message.blocks).markdown,
     growing,
-    visuals: false
+    visuals: false,
+    allowFileUriLinks
   }
 }
 
 export function nativeChatGallerySlotSurfaces(
   slot: NativeChatGallerySlot,
-  options: { stoppedLabel: string; visuals: boolean }
+  options: { stoppedLabel: string; visuals: boolean; allowFileUriLinks?: boolean }
 ): NativeChatGallerySurface[] {
   if (!slot.drawsMessage || slot.receipt) {
     return []
@@ -72,11 +83,25 @@ export function nativeChatGallerySlotSurfaces(
   const content = deriveNativeChatRowContent(blocks)
   const slotKey = message.id
   const agentStart = Boolean(message.agentStart && message.from)
-  if (
-    !agentStart &&
-    ((message.role === 'system' && nativeChatNoticeBlock(blocks)) ||
-      blocks.some((block) => block.type === 'text' && block.providerFrame))
-  ) {
+  const notice =
+    !agentStart && message.role === 'system' ? nativeChatNoticeBlock(blocks) : undefined
+  if (notice) {
+    return nativeChatNoticeLook(notice).kind === 'plan'
+      ? [
+          {
+            kind: 'document',
+            ownerId: message.id,
+            slotKey,
+            role: 'plan-document',
+            text: notice.text,
+            growing: false,
+            visuals: false,
+            allowFileUriLinks: options.allowFileUriLinks
+          }
+        ]
+      : []
+  }
+  if (!agentStart && blocks.some((block) => block.type === 'text' && block.providerFrame)) {
     return []
   }
   if (message.from && (agentStart || message.role === 'user')) {
@@ -89,12 +114,13 @@ export function nativeChatGallerySlotSurfaces(
         role: 'agent-card-document',
         text: agentMessageTranscriptText(message.blocks, message.from, message.shortened),
         growing: false,
-        visuals: false
+        visuals: false,
+        allowFileUriLinks: options.allowFileUriLinks
       }
     ]
   }
   if (message.role === 'reasoning' && slot.workRun === undefined) {
-    return [nativeChatReasoningImageSurface(message, slotKey)]
+    return [nativeChatReasoningImageSurface(message, slotKey, false, options.allowFileUriLinks)]
   }
   const surfaces: NativeChatGallerySurface[] = [
     files(message.id, slotKey, 'row-attachment', content.prose)
@@ -111,7 +137,8 @@ export function nativeChatGallerySlotSurfaces(
         slot.activeTurnIsWorking &&
         slot.trailingRun &&
         message.blocks.at(-1)?.type === 'text',
-      visuals: options.visuals && message.role === 'assistant'
+      visuals: options.visuals && message.role === 'assistant',
+      allowFileUriLinks: options.allowFileUriLinks
     })
   }
   if (message.role === 'user') {
@@ -138,7 +165,9 @@ export function nativeChatGallerySlotSurfaces(
     const positions = nativeChatToolRunAsidePositions(work, run.thoughtsBefore, run.thoughtsAfter)
     for (const thoughts of positions.values()) {
       for (const thought of thoughts) {
-        surfaces.push(nativeChatReasoningImageSurface(thought, slotKey))
+        surfaces.push(
+          nativeChatReasoningImageSurface(thought, slotKey, false, options.allowFileUriLinks)
+        )
       }
     }
   }

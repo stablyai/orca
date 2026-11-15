@@ -111,6 +111,7 @@ export function galleryBenchmarkSnapshot(
   }
   return {
     scopeKey: 'seeded-gallery',
+    allowFileUriLinks: false,
     slots,
     waitingSlots: [],
     stoppedLabel: 'Stopped before starting',

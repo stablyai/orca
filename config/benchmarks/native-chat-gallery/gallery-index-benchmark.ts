@@ -51,6 +51,8 @@ type GalleryBenchmarkOptions = {
   longRun?: boolean
   largeSource?: boolean
   hugeDocument?: boolean
+  plan?: boolean
+  backgroundTask?: boolean
 }
 async function runGalleryBenchmark(options: GalleryBenchmarkOptions): Promise<unknown> {
   const data = galleryBenchmarkSnapshot(
@@ -59,6 +61,31 @@ async function runGalleryBenchmark(options: GalleryBenchmarkOptions): Promise<un
     options.image ?? true
   )
   const first = data.slots[0]
+  if (first?.kind === 'message' && options.plan) {
+    data.allowFileUriLinks = true
+    first.message.role = 'system'
+    first.message.blocks = [
+      {
+        type: 'text',
+        presentation: 'plan-document',
+        text: '<a href="file:///fixture/report.pdf"><img src="https://example.com/plan.png"></a>'
+      }
+    ]
+  }
+  if (first?.kind === 'message' && options.backgroundTask) {
+    first.message.blocks = [
+      { type: 'text', text: '![image](/fixture/task.png)' },
+      { type: 'text', text: 'stopped', presentation: 'stopped-before-start' },
+      {
+        type: 'background-task',
+        taskId: 'task',
+        kind: 'agent',
+        state: 'done',
+        label: 'Task',
+        summary: `${' '.repeat(2_000_000)}done`
+      }
+    ]
+  }
   if (first?.kind === 'message' && options.largeFields) {
     first.message.blocks = [
       { type: 'image-ref', path: '/fixture/large.png', alt: '😀'.repeat(500_000) }
@@ -196,7 +223,7 @@ async function runGalleryBenchmark(options: GalleryBenchmarkOptions): Promise<un
       let rejectedProjection = false
       const result = await pending.catch((error: unknown) => {
         if (
-          (options.serializedTool || options.longRun) &&
+          (options.serializedTool || options.longRun || options.backgroundTask) &&
           error instanceof NativeChatGalleryProjectionLimitError
         ) {
           rejectedProjection = true
@@ -214,6 +241,10 @@ async function runGalleryBenchmark(options: GalleryBenchmarkOptions): Promise<un
         inputTaskDelayMs: inputDelay,
         imageCount: result?.entries.length ?? null,
         rejectedProjection,
+        linkedHref: options.plan
+          ? result?.entries.find((entry) => entry.kind === 'document')?.linkedHref
+          : undefined,
+        surfaceRole: options.plan ? result?.entries[0]?.role : undefined,
         latestImage: options.stream ? (result?.entries.at(-1)?.source ?? null) : undefined,
         supersededRevisions: options.stream
           ? revisions.filter(

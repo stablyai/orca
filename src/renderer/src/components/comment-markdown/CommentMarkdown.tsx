@@ -8,7 +8,8 @@ import type { Components, Options as MarkdownOptions } from 'react-markdown'
 import {
   commentMarkdownSanitizeSchema,
   commentMarkdownAllowedTagNames,
-  commentMarkdownUrlTransform
+  commentMarkdownUrlTransform,
+  commentMarkdownFileUriUrlTransform
 } from './comment-markdown-sanitize'
 import {
   commentMarkdownRemarkPlugins as remarkPlugins,
@@ -59,15 +60,6 @@ export type CommentMarkdownBlockPreparer = (input: {
   afterRehypePlugins?: MarkdownPlugins
   wrap?: (element: React.ReactElement) => React.ReactNode
 }
-type UrlTransform = NonNullable<MarkdownOptions['urlTransform']>
-
-const commentMarkdownFileUriUrlTransform: UrlTransform = (value, key, node) => {
-  if (key === 'href' && node?.tagName === 'a' && value.trim().toLowerCase().startsWith('file:')) {
-    return value
-  }
-  return commentMarkdownUrlTransform(value, key, node)
-}
-
 function remarkNativeChatFileLinks(
   exists: FileLinkExists
 ): () => (tree: Parameters<typeof linkNativeChatFilePaths>[0]) => void {
