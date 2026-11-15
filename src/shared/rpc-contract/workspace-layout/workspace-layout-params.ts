@@ -39,6 +39,7 @@ const SplitPaneCommand = z.object({
   type: z.literal('splitPane'),
   ...OnPane,
   direction: z.enum(['horizontal', 'vertical']),
+  insertBefore: z.boolean().optional(),
   newLeafId: z.string().refine(isTerminalLeafId).optional()
 })
 

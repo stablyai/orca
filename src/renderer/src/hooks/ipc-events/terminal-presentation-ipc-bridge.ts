@@ -52,6 +52,7 @@ export function registerTerminalPresentationIpcBridge(unsubs: (() => void)[]): v
         leafId,
         splitFromLeafId,
         splitDirection,
+        splitInsertBefore,
         splitTelemetrySource
       }) => {
         try {
@@ -197,6 +198,7 @@ export function registerTerminalPresentationIpcBridge(unsubs: (() => void)[]): v
                 worktreeId,
                 paneRuntimeId: -1,
                 direction: splitDirection ?? 'horizontal',
+                insertBefore: splitInsertBefore,
                 sourceLeafId: splitFromLeafId,
                 sourcePtyId: existingLayout?.ptyIdsByLeafId?.[splitFromLeafId],
                 telemetrySource: splitTelemetrySource,
@@ -220,7 +222,8 @@ export function registerTerminalPresentationIpcBridge(unsubs: (() => void)[]): v
                   ptyId,
                   splitDirection ?? 'horizontal',
                   title,
-                  shouldActivate
+                  shouldActivate,
+                  splitInsertBefore
                 )
               )
               if (targetMounted) {

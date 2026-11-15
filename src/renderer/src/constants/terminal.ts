@@ -42,6 +42,7 @@ export type SplitTerminalPaneDetail = {
   worktreeId?: string
   paneRuntimeId: number
   direction: 'horizontal' | 'vertical'
+  insertBefore?: boolean
   command?: string
   sourceLeafId?: string
   sourcePtyId?: string

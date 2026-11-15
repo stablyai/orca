@@ -145,31 +145,43 @@ export const TERMINAL_LIFECYCLE_METHODS = [
     name: 'terminal.split',
     permission: 'workspace',
     params: TerminalSplit,
-    handler: async (params, { runtime, caller }) => ({
-      split:
-        params.pane && !params.terminal
-          ? await runtime.splitTerminalPane(params.pane, {
-              direction: params.direction ?? 'horizontal',
-              newLeafId: params.newLeafId,
-              cwd: params.cwd,
-              initialSize: params.initialSize,
-              command: params.command,
-              env: params.env,
-              // The window's split shows why its start failed, as its own spawn did.
-              keepPaneOnStartFailure: true,
-              wslUserAct: true
-            })
-          : // The schema requires a handle when no pane is named.
-            await runtime.splitTerminal(params.terminal ?? '', {
-              direction: params.direction,
-              command: params.command,
-              env: params.env,
-              telemetrySource: params.telemetrySource,
-              retrySplit: params.retrySplit,
-              ...(caller?.kind === 'local-cli' ? { activate: false } : {}),
-              wslUserAct: true
-            })
-    })
+    handler: async (params, { runtime, caller }) => {
+      const direction =
+        params.direction === 'left' ||
+        params.direction === 'right' ||
+        params.direction === 'vertical'
+          ? 'vertical'
+          : 'horizontal'
+      const placement = {
+        direction,
+        ...(params.direction === 'up' || params.direction === 'left' ? { insertBefore: true } : {})
+      } as const
+      return {
+        split:
+          params.pane && !params.terminal
+            ? await runtime.splitTerminalPane(params.pane, {
+                ...placement,
+                newLeafId: params.newLeafId,
+                cwd: params.cwd,
+                initialSize: params.initialSize,
+                command: params.command,
+                env: params.env,
+                // The window's split shows why its start failed, as its own spawn did.
+                keepPaneOnStartFailure: true,
+                wslUserAct: true
+              })
+            : // The schema requires a handle when no pane is named.
+              await runtime.splitTerminal(params.terminal ?? '', {
+                ...placement,
+                command: params.command,
+                env: params.env,
+                telemetrySource: params.telemetrySource,
+                retrySplit: params.retrySplit,
+                ...(caller?.kind === 'local-cli' ? { activate: false } : {}),
+                wslUserAct: true
+              })
+      }
+    }
   }),
   ...TERMINAL_WORKSPACE_STOP_METHODS,
   defineMethod({

@@ -1,12 +1,14 @@
+import { terminalSplitSide } from '../../../../shared/workspace-layout/terminal-topology/terminal-split-side'
 import '../../components/terminal-pane/layout/terminal-layout-leaf-traversal'
-import { collectLayoutLeafIdsInOrder } from '../../../../shared/workspace-layout/terminal-topology/terminal-pane-tree'
+import {
+  collectLayoutLeafIdsInOrder,
+  insertLeafBeside,
+  layoutContainsLeafId
+} from '../../../../shared/workspace-layout/terminal-topology/terminal-pane-tree'
 import { focusTerminalTabSurface } from '@/components/terminal-pane/input/focus/focus-terminal-tab-surface'
 import { focusRuntimeTerminalSurface } from '@/runtime/hosted-terminals/mounted-surfaces/mounted-terminal-tab-registry'
 import type { RuntimeTerminalPresentation } from '../../../../shared/runtime-terminal-contracts'
-import type {
-  TerminalLayoutSnapshot,
-  TerminalPaneLayoutNode
-} from '../../../../shared/workspace-layout/terminal-tab-types'
+import type { TerminalLayoutSnapshot } from '../../../../shared/workspace-layout/terminal-tab-types'
 
 export function resolveTerminalPresentation(data: {
   presentation?: RuntimeTerminalPresentation
@@ -37,37 +39,6 @@ export function focusTerminalInitiatedTab(
 
 type TerminalSplitDirection = 'horizontal' | 'vertical'
 
-function insertLeafAfterSource(
-  node: TerminalPaneLayoutNode,
-  sourceLeafId: string,
-  newLeafId: string,
-  direction: TerminalSplitDirection
-): { node: TerminalPaneLayoutNode; inserted: boolean } {
-  if (node.type === 'leaf') {
-    if (node.leafId !== sourceLeafId) {
-      return { node, inserted: false }
-    }
-    return {
-      node: {
-        type: 'split',
-        direction,
-        first: node,
-        second: { type: 'leaf', leafId: newLeafId },
-        ratio: 0.5
-      },
-      inserted: true
-    }
-  }
-  const first = insertLeafAfterSource(node.first, sourceLeafId, newLeafId, direction)
-  if (first.inserted) {
-    return { node: { ...node, first: first.node }, inserted: true }
-  }
-  const second = insertLeafAfterSource(node.second, sourceLeafId, newLeafId, direction)
-  return second.inserted
-    ? { node: { ...node, second: second.node }, inserted: true }
-    : { node, inserted: false }
-}
-
 export function addSplitLeafToLayout(
   layout: TerminalLayoutSnapshot | null | undefined,
   sourceLeafId: string,
@@ -75,7 +46,8 @@ export function addSplitLeafToLayout(
   ptyId: string,
   direction: TerminalSplitDirection,
   title?: string | null,
-  activateNewLeaf = true
+  activateNewLeaf = true,
+  insertBefore = false
 ): TerminalLayoutSnapshot {
   const root = layout?.root ?? { type: 'leaf', leafId: sourceLeafId }
   const existingLeafIds = collectLayoutLeafIdsInOrder(root)
@@ -86,15 +58,19 @@ export function addSplitLeafToLayout(
   const nextRoot = existingLeafIds.includes(newLeafId)
     ? root
     : (() => {
-        const inserted = insertLeafAfterSource(root, sourceLeafId, newLeafId, direction)
-        if (inserted.inserted) {
-          return inserted.node
+        if (layoutContainsLeafId(root, sourceLeafId)) {
+          return insertLeafBeside(
+            root,
+            sourceLeafId,
+            newLeafId,
+            terminalSplitSide(direction, insertBefore)
+          )
         }
         return {
           type: 'split' as const,
           direction,
-          first: root,
-          second: { type: 'leaf' as const, leafId: newLeafId },
+          first: insertBefore ? { type: 'leaf' as const, leafId: newLeafId } : root,
+          second: insertBefore ? root : { type: 'leaf' as const, leafId: newLeafId },
           ratio: 0.5
         }
       })()

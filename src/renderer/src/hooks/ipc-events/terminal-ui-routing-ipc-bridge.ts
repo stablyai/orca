@@ -117,6 +117,7 @@ export function routeRuntimeTerminalSplitRequest(request: RuntimeTerminalSplitRe
     worktreeId,
     paneRuntimeId: request.paneRuntimeId,
     direction: request.direction,
+    insertBefore: request.insertBefore,
     command: request.command,
     sourceLeafId: request.sourceLeafId,
     telemetrySource: request.telemetrySource,

@@ -29,6 +29,19 @@ import type {
 } from '../../../shared/runtime-terminal-contracts'
 import type { PreloadApi } from '../../api-types'
 
+export type TerminalSplitRequest = {
+  tabId: string
+  paneRuntimeId: number
+  direction: 'horizontal' | 'vertical'
+  insertBefore?: boolean
+  command?: string
+  worktreeId?: string
+  sourceLeafId?: string
+  telemetrySource?: TerminalPaneSplitSource
+  newLeafId?: string
+  activate?: false
+}
+
 export const uiTerminalAndSessionTabsApi = {
   onCreateTerminal: (
     callback: (data: {
@@ -56,6 +69,7 @@ export const uiTerminalAndSessionTabsApi = {
       leafId?: string
       splitFromLeafId?: string
       splitDirection?: 'horizontal' | 'vertical'
+      splitInsertBefore?: boolean
       splitTelemetrySource?: TerminalPaneSplitSource
     }) => void
   ): (() => void) => {
@@ -86,6 +100,7 @@ export const uiTerminalAndSessionTabsApi = {
         leafId?: string
         splitFromLeafId?: string
         splitDirection?: 'horizontal' | 'vertical'
+        splitInsertBefore?: boolean
         splitTelemetrySource?: TerminalPaneSplitSource
       }
     ) => callback(data)
@@ -148,33 +163,8 @@ export const uiTerminalAndSessionTabsApi = {
     ipcRenderer.on('ui:launchRecipe', listener)
     return () => ipcRenderer.removeListener('ui:launchRecipe', listener)
   },
-  onSplitTerminal: (
-    callback: (data: {
-      tabId: string
-      paneRuntimeId: number
-      direction: 'horizontal' | 'vertical'
-      command?: string
-      worktreeId?: string
-      sourceLeafId?: string
-      telemetrySource?: TerminalPaneSplitSource
-      newLeafId?: string
-      activate?: false
-    }) => void
-  ): (() => void) => {
-    const listener = (
-      _event: Electron.IpcRendererEvent,
-      data: {
-        tabId: string
-        paneRuntimeId: number
-        direction: 'horizontal' | 'vertical'
-        command?: string
-        worktreeId?: string
-        sourceLeafId?: string
-        telemetrySource?: TerminalPaneSplitSource
-        newLeafId?: string
-        activate?: false
-      }
-    ) => callback(data)
+  onSplitTerminal: (callback: (data: TerminalSplitRequest) => void): (() => void) => {
+    const listener = (_: Electron.IpcRendererEvent, data: TerminalSplitRequest) => callback(data)
     ipcRenderer.on('ui:splitTerminal', listener)
     return () => ipcRenderer.removeListener('ui:splitTerminal', listener)
   },

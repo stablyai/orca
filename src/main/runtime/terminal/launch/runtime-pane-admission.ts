@@ -51,6 +51,7 @@ function admissionFor(args: AdmittedSpawnArgs): TerminalPaneAdmission {
       tabId,
       leafId: parentLeafId,
       direction,
+      insertBefore: placement.insertBefore,
       newLeafId: leafId
     }
   }

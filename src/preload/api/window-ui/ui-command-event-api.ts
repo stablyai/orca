@@ -1,3 +1,4 @@
+import type { TerminalSplitRequest } from './ui-bridge-terminal-and-session-tabs'
 import type {
   RuntimeEditorTabReveal,
   RuntimeFileOpenPosition
@@ -212,6 +213,7 @@ export type UiCommandEventApi = {
       leafId?: string
       splitFromLeafId?: string
       splitDirection?: 'horizontal' | 'vertical'
+      splitInsertBefore?: boolean
       splitTelemetrySource?: TerminalPaneSplitSource
     }) => void
   ) => () => void
@@ -230,19 +232,7 @@ export type UiCommandEventApi = {
   replyTerminalPaneReveal: (reply: TerminalPaneRevealReply) => void
   onApplyAgentPaneActivity: (callback: (data: AgentPaneActivityRequest) => void) => () => void
   replyAgentPaneActivity: (reply: AgentPaneActivityReply) => void
-  onSplitTerminal: (
-    callback: (data: {
-      tabId: string
-      paneRuntimeId: number
-      direction: 'horizontal' | 'vertical'
-      command?: string
-      worktreeId?: string
-      sourceLeafId?: string
-      telemetrySource?: TerminalPaneSplitSource
-      newLeafId?: string
-      activate?: false
-    }) => void
-  ) => () => void
+  onSplitTerminal: (callback: (data: TerminalSplitRequest) => void) => () => void
   onRenameTerminal: (
     callback: (data: { tabId: string; title: string | null; recordInteraction?: false }) => void
   ) => () => void

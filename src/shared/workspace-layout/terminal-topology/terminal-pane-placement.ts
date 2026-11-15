@@ -32,6 +32,7 @@ const SplitPlacement = z.object({
     .max(128)
     .refine((value): boolean => isTerminalLeafId(value)),
   direction: z.enum(['horizontal', 'vertical']),
+  insertBefore: z.boolean().optional(),
   ratio: z.number().optional().catch(undefined),
   /** The tab's tree after the split, which `parentLeafId` alone can't express (subtrees, before/after). */
   proposedRoot: terminalPaneLayoutNodeSchema.optional().catch(undefined)

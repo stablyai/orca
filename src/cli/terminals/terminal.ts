@@ -41,7 +41,8 @@ import {
 import '../../shared/protocol-version'
 import {
   TERMINAL_CREATE_SHELL_SELECTION_RUNTIME_CAPABILITY,
-  TERMINAL_SPLIT_RETRY_RUNTIME_CAPABILITY
+  TERMINAL_SPLIT_RETRY_RUNTIME_CAPABILITY,
+  TERMINAL_SPLIT_DIRECTION_RUNTIME_CAPABILITY
 } from '../../shared/terminal/runtime-policy/terminal-runtime-capabilities'
 import {
   getBrowserWorktreeSelector,
@@ -219,9 +220,16 @@ export const TERMINAL_HANDLERS: Record<string, CommandHandler> = {
     if (
       directionFlag !== undefined &&
       directionFlag !== 'horizontal' &&
-      directionFlag !== 'vertical'
+      directionFlag !== 'vertical' &&
+      directionFlag !== 'up' &&
+      directionFlag !== 'down' &&
+      directionFlag !== 'left' &&
+      directionFlag !== 'right'
     ) {
-      throw new RuntimeClientError('invalid_argument', '--direction must be horizontal or vertical')
+      throw new RuntimeClientError(
+        'invalid_argument',
+        '--direction must be up, down, left, right, horizontal or vertical'
+      )
     }
     // A blank id (an unset variable) must not fall through to a fresh split of the same command.
     const retrySplit = flags.has('retry-split')
@@ -229,27 +237,48 @@ export const TERMINAL_HANDLERS: Record<string, CommandHandler> = {
       : undefined
     // Why refused rather than sent: an older host strips the unknown param and splits again,
     // starting a second copy of the command the retry exists to avoid.
-    if (retrySplit !== undefined) {
+    const needsDirectionalHost =
+      retrySplit === undefined && (directionFlag === 'up' || directionFlag === 'left')
+    if (retrySplit !== undefined || needsDirectionalHost) {
       const status = await client.getCliStatus()
       if (!status.result.runtime.reachable) {
         throw new RuntimeClientError(
           'runtime_unavailable',
-          'Orca could not verify --retry-split support on the execution host, so nothing was split. Wait for the execution host to become reachable and retry.'
+          'Orca could not verify terminal split support on the execution host, so nothing was split. Wait for the execution host to become reachable and retry.'
         )
       }
       if (
+        retrySplit !== undefined &&
         status.result.runtime.capabilities?.includes(TERMINAL_SPLIT_RETRY_RUNTIME_CAPABILITY) !==
-        true
+          true
       ) {
         throw new RuntimeClientError(
           'incompatible_runtime',
           'This Orca host does not support --retry-split and would split again. Nothing was split; check `orca terminal list --json` for the pane instead.'
         )
       }
+      if (
+        needsDirectionalHost &&
+        status.result.runtime.capabilities?.includes(
+          TERMINAL_SPLIT_DIRECTION_RUNTIME_CAPABILITY
+        ) !== true
+      ) {
+        throw new RuntimeClientError(
+          'incompatible_runtime',
+          'This Orca host does not support --direction up or left. Nothing was split; update the execution host and retry.'
+        )
+      }
     }
     const result = await client.call<{ split: RuntimeTerminalSplit }>('terminal.split', {
       terminal: await getTerminalHandle(flags, cwd, client),
-      direction: directionFlag,
+      direction:
+        retrySplit !== undefined
+          ? undefined
+          : directionFlag === 'right'
+            ? 'vertical'
+            : directionFlag === 'down'
+              ? 'horizontal'
+              : directionFlag,
       command: getOptionalStringFlag(flags, 'command'),
       ...(retrySplit !== undefined ? { retrySplit } : {})
     })

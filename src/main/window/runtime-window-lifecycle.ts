@@ -146,6 +146,9 @@ export function registerRuntimeWindowLifecycle(
           ...(opts.leafId !== undefined ? { leafId: opts.leafId } : {}),
           ...(opts.splitFromLeafId !== undefined ? { splitFromLeafId: opts.splitFromLeafId } : {}),
           ...(opts.splitDirection !== undefined ? { splitDirection: opts.splitDirection } : {}),
+          ...(opts.splitInsertBefore !== undefined
+            ? { splitInsertBefore: opts.splitInsertBefore }
+            : {}),
           ...(opts.splitTelemetrySource !== undefined
             ? { splitTelemetrySource: opts.splitTelemetrySource }
             : {}),
@@ -172,6 +175,7 @@ export function registerRuntimeWindowLifecycle(
         tabId,
         paneRuntimeId,
         direction: opts.direction,
+        insertBefore: opts.insertBefore,
         command: opts.command,
         worktreeId: opts.worktreeId,
         sourceLeafId: opts.sourceLeafId,

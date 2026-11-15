@@ -275,7 +275,7 @@ Terminal rules:
 - Start a fresh agent with `agent launch` in the current worktree, or `worktree create --agent` for a separate checkout (see Starting agents).
 - Use `terminal wait --for tui-idle` for agent CLIs such as Claude Code, Gemini, Codex, OMP, Pi, and Grok; always pass `--timeout-ms`.
 - For long output, use cursor reads. After a limited tail preview, page from `oldestCursor`; after a cursor read, continue with `nextCursor` while `limited` is true and `nextCursor !== latestCursor`.
-- `--direction vertical` splits left/right. `--direction horizontal` splits top/bottom.
+- `terminal split --direction up|down|left|right` chooses the new pane’s side. `horizontal` remains an alias for `down` (the default), and `vertical` for `right`. `up` and `left` require an updated execution host; older hosts are refused before splitting. A `--retry-split` only waits for the original pane and does not change its placement.
 
 <!-- host-capability: artifact-publishing -->
 

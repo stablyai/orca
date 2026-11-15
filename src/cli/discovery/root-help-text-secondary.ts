@@ -70,7 +70,7 @@ export const ROOT_HELP_TEXT_SECONDARY = [
   '  orca terminal wait [--terminal <handle>] --for exit|tui-idle [--timeout-ms <ms>] [--json]',
   '  orca agent launch --agent <id> [--worktree <selector>] [--prompt <text>] [--model <id>] [--effort <level>] [--focus] [--json]',
   '  orca terminal create [--worktree <selector>] [--title <name>] [--command <text>] [--shell <shell>] [--focus] [--json]',
-  '  orca terminal split [--terminal <handle>] [--direction horizontal|vertical] [--command <text>] [--retry-split <leafId>] [--json]',
+  '  orca terminal split [--terminal <handle>] [--direction up|down|left|right|horizontal|vertical] [--command <text>] [--retry-split <leafId>] [--json]',
   '  orca terminal switch [--terminal <handle>] [--json]',
   '  orca terminal close ([--terminal <handle>] [--tab] | --worktree <selector> --all) [--json]',
   '  orca project list [--json]',
