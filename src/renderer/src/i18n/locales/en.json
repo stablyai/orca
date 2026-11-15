@@ -20338,7 +20338,6 @@
         "previewHint": "An agent is editing this theme. Keep saves it as one of your themes.",
         "keep": "Keep",
         "discard": "Discard",
-        "lastBy": "{{label}} · by {{by}}",
         "autoFixed": "{{count}} issues auto-fixed",
         "undo": "Undo",
         "changesLatest": "{{count}} changes · latest: {{label}}",
