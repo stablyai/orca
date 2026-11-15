@@ -18,5 +18,5 @@ const render = (): React.JSX.Element => (
 
 export const shown = defineFixture({ width: 280, store, render })
 
-// The sidebar's narrowest width: every caption should still fit on one line.
+// The sidebar's narrowest width: the unread caption should still fit on one line.
 export const narrow = defineFixture({ width: 220, store, render })

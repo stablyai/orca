@@ -107,7 +107,7 @@ function UpdateDemo(): React.JSX.Element {
         </Callout>
       </div>
       {/* Why a line of its own: on a card that needs you, the question icon owns the lane and hides the dot. */}
-      <div className="flex min-w-0 items-center gap-1.5 border-t border-border pt-1.5">
+      <div className="flex min-w-0 items-center gap-1.5 border-t border-border pt-1.5 pb-0.5">
         {/* Why negative margins: the real 20px lane, pulled toward the lines above without clipping its outline. */}
         <span className="-my-1 -mr-2.5 -ml-0.5 inline-flex">
           <Callout tone="unread">
@@ -184,7 +184,9 @@ export function WorktreeCardsUpdateNotice(): React.JSX.Element | null {
       <UpdateDemo />
       <ul className="space-y-1 text-xs leading-snug">
         <KeyItem
-          glyph={<span className="size-[7px] rounded-full bg-unread ring-2 ring-unread/30" />}
+          glyph={
+            <span className="size-[7px] rounded-full bg-unread-inverse ring-2 ring-unread-inverse/30" />
+          }
         >
           <Trans
             i18n={i18n}
