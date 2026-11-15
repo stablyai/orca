@@ -35,7 +35,8 @@ public enum AccessibilityAttributeBatch {
         guard let values, values.count == requested.count else { return nil }
         var decoded: [String: CFTypeRef?] = [:]
         for (attribute, value) in zip(requested, values) {
-            decoded[attribute] = isMissing(value) ? nil : value
+            // Why: the key must stay, with a nil value, so the caller caches the attribute as missing.
+            decoded.updateValue(isMissing(value) ? nil : value, forKey: attribute)
         }
         return decoded
     }
