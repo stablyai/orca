@@ -33,7 +33,7 @@ const identity = {
 }
 
 it('pages a large chat journal through to its newest message', async () => {
-  // 200 messages of six 1,200-character blocks: far past one 512 KiB response.
+  // Six 1,200-character blocks of 3-byte text: the journal and each 50-message page exceed 512 KiB.
   host.items = Array.from({ length: 200 }, (_, index): AgentJournalRenderItem => ({
     itemId: `i${index}`,
     revision: 1,
@@ -44,13 +44,13 @@ it('pages a large chat journal through to its newest message', async () => {
       role: 'assistant',
       blocks: Array.from({ length: 6 }, () => ({
         type: 'text' as const,
-        text: index === 199 ? 'FINAL ANSWER' : 'x'.repeat(1_200)
+        text: index === 199 ? 'FINAL ANSWER' : '界'.repeat(1_200)
       }))
     }
   }))
   const served: string[] = []
   let cursor: string | undefined
-  for (let reads = 0; reads < 10; reads++) {
+  for (let reads = 0; reads < 30; reads++) {
     const page = await readStructuredWorkerJournal({
       identity,
       dispatchId: 'd1',
@@ -67,6 +67,5 @@ it('pages a large chat journal through to its newest message', async () => {
     cursor = page.cursor
   }
 
-  expect(served).toHaveLength(200)
-  expect(served.at(-1)).toBe('i199')
+  expect(served).toEqual(Array.from({ length: 200 }, (_, index) => `i${index}`))
 })
