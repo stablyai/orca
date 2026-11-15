@@ -248,9 +248,11 @@ jobs:
       - name: Skip if this PT release window already ran
         id: existing
         if: github.event_name == 'schedule' && steps.window.outputs.allowed == 'true'
+        env:
+          SLOT: ${{ steps.slot.outputs.value }}
         run: |
           # Repeated target-hour schedules deduplicate via a slot marker in the release commit.
-          if git log origin/main --grep="\\[rc-slot:${{ steps.slot.outputs.value }}\\]" -n 1 --format=%H | grep -q .; then
+          if git log origin/main --grep="\\[rc-slot:${SLOT}\\]" -n 1 --format=%H | grep -q .; then
             echo "already_ran=true" >>"$GITHUB_OUTPUT"
             exit 0
           fi
@@ -262,7 +264,7 @@ jobs:
             latest_rc_tag_date="${latest_rc_tag#* }"
             latest_rc_slot="$(TZ=America/Los_Angeles date -d "$latest_rc_tag_date" '+%Y-%m-%d-%H')"
 
-            if [[ "$latest_rc_slot" == "${{ steps.slot.outputs.value }}" ]]; then
+            if [[ "$latest_rc_slot" == "$SLOT" ]]; then
               echo "already_ran=true" >>"$GITHUB_OUTPUT"
               echo "reason=latest_rc_tag:$latest_rc_tag_name" >>"$GITHUB_OUTPUT"
               exit 0
@@ -273,22 +275,34 @@ jobs:
 
       - name: Dry run summary
         if: github.event_name == 'workflow_dispatch' && inputs.dry_run
+        env:
+          SLOT: ${{ steps.slot.outputs.value }}
+          WINDOW_ALLOWED: ${{ steps.window.outputs.allowed }}
+          WINDOW_REASON: ${{ steps.window.outputs.reason }}
+          ALREADY_RAN: ${{ steps.existing.outputs.already_ran }}
+          REASON: ${{ steps.existing.outputs.reason }}
         run: |
           echo "Dry run only."
-          echo "Current PT slot: ${{ steps.slot.outputs.value }}"
-          echo "Window allowed: ${{ steps.window.outputs.allowed }}"
-          echo "Window reason: ${{ steps.window.outputs.reason }}"
-          echo "Already ran this slot: ${{ steps.existing.outputs.already_ran }}"
-          echo "Reason: ${{ steps.existing.outputs.reason }}"
+          echo "Current PT slot: $SLOT"
+          echo "Window allowed: $WINDOW_ALLOWED"
+          echo "Window reason: $WINDOW_REASON"
+          echo "Already ran this slot: $ALREADY_RAN"
+          echo "Reason: $REASON"
 
       - name: Skip summary
         if: steps.window.outputs.allowed != 'true' || steps.existing.outputs.already_ran == 'true'
+        env:
+          SLOT: ${{ steps.slot.outputs.value }}
+          WINDOW_ALLOWED: ${{ steps.window.outputs.allowed }}
+          WINDOW_REASON: ${{ steps.window.outputs.reason }}
+          ALREADY_RAN: ${{ steps.existing.outputs.already_ran }}
+          REASON: ${{ steps.existing.outputs.reason }}
         run: |
           echo "Skipping release cut."
-          echo "Current PT slot: ${{ steps.slot.outputs.value }}"
-          echo "Window reason: ${{ steps.window.outputs.reason }}"
-          echo "Already ran this slot: ${{ steps.existing.outputs.already_ran }}"
-          echo "Reason: ${{ steps.existing.outputs.reason }}"
+          echo "Current PT slot: $SLOT"
+          echo "Window reason: $WINDOW_REASON"
+          echo "Already ran this slot: $ALREADY_RAN"
+          echo "Reason: $REASON"
 
       - name: Publish complete release-cut RC drafts from prior runs
         id: publish_drafts
@@ -1579,9 +1593,11 @@ jobs:
           timeout_minutes: 10
           max_attempts: 3
           retry_wait_seconds: 30
-          command: gh release upload "${{ needs.cut.outputs.tag }}" "${{ runner.temp }}/orca-sourcemaps-${{ needs.cut.outputs.tag }}.zip" --clobber --repo "${{ github.repository }}"
+          shell: bash
+          command: gh release upload "$TAG" "$RUNNER_TEMP/orca-sourcemaps-$TAG.zip" --clobber --repo "$GITHUB_REPOSITORY"
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ needs.cut.outputs.tag }}
 
       - name: Publish release artifacts (Linux)
         if: matrix.platform == 'linux-x64' || matrix.platform == 'linux-arm64'
@@ -2286,9 +2302,12 @@ jobs:
           timeout_minutes: 10
           max_attempts: 3
           retry_wait_seconds: 30
-          command: gh release upload "${{ needs.cut.outputs.tag }}" "dist/orca-windows-setup.exe" "dist/orca-windows-setup.exe.blockmap" "dist/latest.yml" --clobber --repo "${{ github.repository }}"
+          # bash on Windows too, so "$TAG" expands from env.
+          shell: bash
+          command: gh release upload "$TAG" "dist/orca-windows-setup.exe" "dist/orca-windows-setup.exe.blockmap" "dist/latest.yml" --clobber --repo "$GITHUB_REPOSITORY"
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ needs.cut.outputs.tag }}
 
       - name: Verify release remains draft after artifact upload
         # Re-draft immediately if publish:always exposed a partial release, then fail so latest cannot keep missing Windows assets. Use bash for $TAG expansion.
