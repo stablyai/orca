@@ -2,6 +2,11 @@ export function quotePowerShellLiteral(value: string): string {
   if (/[\r\n]/.test(value)) {
     return quotePowerShellMultilineLiteral(value)
   }
+  return quotePowerShellSingleQuoted(value)
+}
+
+/** Single-quoted with no backtick escapes, so it stays literal in POSIX shells too (except apostrophes). */
+export function quotePowerShellSingleQuoted(value: string): string {
   // Why: PowerShell also ends single-quoted strings at typographic single quotes.
   return `'${value.replace(/['\u2018\u2019\u201A\u201B]/g, '$&$&')}'`
 }

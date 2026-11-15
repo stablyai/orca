@@ -10,6 +10,7 @@ describe('quoteCliCommandArgument on Windows', () => {
     vi.spyOn(process, 'platform', 'get').mockReturnValue('win32')
     expect(quoteCliCommandArgument('path:C:/work/$review')).toBe("'path:C:/work/$review'")
     expect(quoteCliCommandArgument("C:/it's `n $(x)")).toBe("'C:/it''s `n $(x)'")
+    expect(quoteCliCommandArgument('App\n$(x)')).toBe("'App\n$(x)'")
     expect(quoteCliCommandArgument('path:C:/my work')).toBe('"path:C:/my work"')
   })
 })
