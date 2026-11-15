@@ -1,5 +1,4 @@
 import { getStructuredAgentSessionTabsByPaneKey } from '@/components/native-chat/session/status/structured-agent-session-tabs'
-import type { RetainedAgentEntry } from '@/store/slices/agent-status/agent-status-contract'
 import type { AppState } from '@/store/types'
 import { getTabIdToWorktreeId } from '@/lib/workspace/tabs/tab-worktree-index'
 import type { AgentStatusEntry } from '../../../../../../shared/agent-status/contracts/agent-status-types'
@@ -8,6 +7,7 @@ import { parsePaneKey } from '../../../../../../shared/workspace-layout/stable-p
 import {
   type LiveEntriesByWorktreeCache,
   liveEntryWorktreeId,
+  agentRowEntriesEqual,
   patchLiveEntriesByWorktree
 } from './worktree-agent-live-index-patch'
 import './worktree-agent-orchestration-index'
@@ -20,7 +20,6 @@ export const EMPTY_LIVE_ENTRIES = Object.freeze([]) as unknown as AgentStatusEnt
 export const EMPTY_MIGRATION_UNSUPPORTED_ENTRIES = Object.freeze(
   []
 ) as unknown as MigrationUnsupportedPtyEntry[]
-export const EMPTY_RETAINED = Object.freeze([]) as unknown as RetainedAgentEntry[]
 export const EMPTY_TERMINAL_LAYOUTS: Record<string, TerminalLayoutSnapshot | undefined> =
   Object.freeze({})
 // Partial test stores need missing maps to behave as stable empty slices.
@@ -28,10 +27,7 @@ const EMPTY_RECORD = {}
 
 type WorktreeAgentRowsState = Pick<
   AppState,
-  | 'agentStatusByPaneKey'
-  | 'migrationUnsupportedByPtyId'
-  | 'retainedAgentsByPaneKey'
-  | 'tabsByWorktree'
+  'agentStatusByPaneKey' | 'migrationUnsupportedByPtyId' | 'tabsByWorktree'
 > & {
   unifiedTabsByWorktree?: AppState['unifiedTabsByWorktree']
 }
@@ -51,15 +47,9 @@ type MigrationUnsupportedByWorktreeCache = {
   entriesByWorktree: Map<string, MigrationUnsupportedPtyEntry[]>
 }
 
-type RetainedEntriesByWorktreeCache = {
-  retainedAgentsByPaneKey: WorktreeAgentRowsState['retainedAgentsByPaneKey']
-  entriesByWorktree: Map<string, RetainedAgentEntry[]>
-}
-
 let liveTabWorktreeIndexCache: LiveTabWorktreeIndexCache | null = null
 let liveEntriesByWorktreeCache: LiveEntriesByWorktreeCache | null = null
 let migrationUnsupportedByWorktreeCache: MigrationUnsupportedByWorktreeCache | null = null
-let retainedEntriesByWorktreeCache: RetainedEntriesByWorktreeCache | null = null
 
 // Share exact array reuse with WorktreeList so equal epoch-derived rows do not rerender cards.
 export function reuseArrayIfEqual<T>(previous: T[] | undefined, next: T[]): T[] {
@@ -150,7 +140,15 @@ function getLiveEntriesByWorktree(state: WorktreeAgentRowsState): Map<string, Ag
     }
   }
   for (const [worktreeId, entries] of entriesByWorktree) {
-    entriesByWorktree.set(worktreeId, reuseArrayIfEqual(previous?.get(worktreeId), entries))
+    const old = previous?.get(worktreeId)
+    entriesByWorktree.set(
+      worktreeId,
+      old &&
+        old.length === entries.length &&
+        entries.every((entry, i) => agentRowEntriesEqual(old[i], entry))
+        ? old
+        : entries
+    )
   }
   liveEntriesByWorktreeCache = {
     tabsByWorktree,
@@ -203,34 +201,6 @@ function getMigrationUnsupportedByWorktree(
   return entriesByWorktree
 }
 
-function getRetainedEntriesByWorktree(
-  state: WorktreeAgentRowsState
-): Map<string, RetainedAgentEntry[]> {
-  const retainedAgentsByPaneKey = state.retainedAgentsByPaneKey ?? EMPTY_RECORD
-  if (retainedEntriesByWorktreeCache?.retainedAgentsByPaneKey === retainedAgentsByPaneKey) {
-    return retainedEntriesByWorktreeCache.entriesByWorktree
-  }
-
-  const previous = retainedEntriesByWorktreeCache?.entriesByWorktree
-  const entriesByWorktree = new Map<string, RetainedAgentEntry[]>()
-  for (const retained of Object.values(retainedAgentsByPaneKey)) {
-    const bucket = entriesByWorktree.get(retained.worktreeId)
-    if (bucket) {
-      bucket.push(retained)
-    } else {
-      entriesByWorktree.set(retained.worktreeId, [retained])
-    }
-  }
-  for (const [worktreeId, entries] of entriesByWorktree) {
-    entriesByWorktree.set(worktreeId, reuseArrayIfEqual(previous?.get(worktreeId), entries))
-  }
-  retainedEntriesByWorktreeCache = {
-    retainedAgentsByPaneKey,
-    entriesByWorktree
-  }
-  return entriesByWorktree
-}
-
 export function selectLiveAgentStatusEntriesForWorktree(
   state: WorktreeAgentRowsState,
   worktreeId: string
@@ -245,13 +215,6 @@ export function selectMigrationUnsupportedEntriesForWorktree(
   return (
     getMigrationUnsupportedByWorktree(state).get(worktreeId) ?? EMPTY_MIGRATION_UNSUPPORTED_ENTRIES
   )
-}
-
-export function selectRetainedAgentEntriesForWorktree(
-  state: WorktreeAgentRowsState,
-  worktreeId: string
-): RetainedAgentEntry[] {
-  return getRetainedEntriesByWorktree(state).get(worktreeId) ?? EMPTY_RETAINED
 }
 
 export const selectTerminalLayoutsForWorktree = createWorktreeRecordSelector<

@@ -4,7 +4,7 @@ import { isCursorUsageBucket } from '../../../../../shared/cursor-usage-buckets'
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
 import { formatRateLimitWindowChipLabel } from '../../../../../shared/rate-limit-window-label'
-import { getUsageHeadlineSection } from '../usage/UsageRosterPanel'
+import { getUsageHeadlineSection } from '../usage/usage-headline-sections'
 
 export type StatusBarUsageSection = {
   key: string

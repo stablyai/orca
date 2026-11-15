@@ -13,14 +13,3 @@ export function formatPlanLabel(planType: string | null | undefined): string | n
     })
     .join(' ')
 }
-
-// Match usage-bar 60/80 thresholds while keeping low consumption neutral.
-export function usageTextColorClass(usedPercent: number): string {
-  if (usedPercent >= 80) {
-    return 'text-red-500'
-  }
-  if (usedPercent >= 60) {
-    return 'text-yellow-500'
-  }
-  return 'text-foreground'
-}

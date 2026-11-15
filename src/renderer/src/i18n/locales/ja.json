@@ -183,6 +183,7 @@
         "fontFamily": "フォント",
         "fontFamilyDescription": "メッセージ、アクティビティ、入力欄に使用するフォント。",
         "inheritFont": "IDE と同じフォント",
+        "systemFont": "システムフォント",
         "fontPreviewLabel": "チャットフォントのプレビュー",
         "fontPreview": "この文章でチャットのフォントを確認できます。",
         "title": "チャット UI",
@@ -3208,6 +3209,7 @@
             "1e4b81d892": "ドスン",
             "86af8d938c": "ボン",
             "80f7cc95b3": "ツートーン",
+            "silent": "サイレント",
             "017abebfa6": "システムのデフォルト"
           }
         }
@@ -3404,8 +3406,7 @@
             "stop_command_description": "このターミナルを閉じると、その中で実行中のコマンドが停止します。",
             "dont_ask_again": "実行中のターミナルでは今後確認しない",
             "stop_agent_confirm": "Agent を停止",
-            "stop_command_confirm": "停止して閉じる",
-            "automatic_resume_warning": "このターミナルは自動的に再開されません。後で再開するには、ワークスペースをキャンセルしてスリープ状態にします。"
+            "stop_command_confirm": "停止して閉じる"
           },
           "MobileDriverOverlay": {
             "c6460cf584": "操作を取り戻す",
@@ -4068,7 +4069,6 @@
             "c8857b40f7": "使用状況データを更新する",
             "75ded02687": "アカウントを管理…",
             "ff0fbe9311": "アクティブ",
-            "7657e3db9c": "Codex アカウント",
             "38b5647724": "Codex 使用ランタイム",
             "ba55303942": "Codex の詳細とアカウント切り替えを開く",
             "c35af53b73": "サインイン",
@@ -4076,7 +4076,6 @@
             "5c938d39ac": "週",
             "54e8d6bb2d": "Fable",
             "a79c64f87e": "Fable",
-            "d450654fa2": "Claude アカウント",
             "11e2354daf": "Claude 使用ランタイム",
             "3dd7ddfae1": "Claude の詳細とアカウント切り替えを開く",
             "59c6e7b4e0": "表示されているセッションが再開されます。他のものは、ワークツリーがアクティブになると再起動します。",
@@ -4335,7 +4334,8 @@
             "compact": "コンパクト",
             "footerDetailAria": "使用量フッターの詳細",
             "detailedTooltip": "バー・ラベル・パーセントを含む完全な使用状況",
-            "compactTooltip": "簡潔な使用状況：プロバイダーごとに1つの概要"
+            "compactTooltip": "簡潔な使用状況：プロバイダーごとに1つの概要",
+            "notChecked": "未確認"
           },
           "RemoteServerUpdateStatusSegment": {
             "updating": "{{value0}}/{{value1}}を更新中",
@@ -4461,9 +4461,6 @@
             "ahead": "{{ahead}} コミット先行",
             "behind": "{{behind}} コミット遅延",
             "activeAgents_other": "稼働中の Agent {{count}} 件",
-            "completedAgents_other": "完了した Agent {{count}} 件",
-            "activeAndCompletedAgents": "{{active}}、{{completed}}",
-            "completedAgentsRetained_other": "完了した Agent {{count}} 件を保持",
             "noTrackedAgents": "追跡中の Agent は実行されていません",
             "noTerminalTabs": "ターミナルタブなし",
             "liveTerminalTabs_other": "ターミナルタブ {{count}} 個中 {{live}} 個が稼働中",
@@ -4509,12 +4506,17 @@
           "AccountSwitchList": {
             "used": "使用済み",
             "left": "残り",
-            "reset": "リセット"
+            "reset": "リセット",
+            "accounts": "アカウント"
           },
           "InlineUsageBars": {
             "now": "今",
             "resetsNow": "今リセット",
             "resetsIn": "{{duration}}後にリセット"
+          },
+          "UsageDisplayToggle": {
+            "showRemaining": "残りの使用量を表示",
+            "showUsed": "使用済みの使用量を表示"
           }
         }
       },
@@ -19071,7 +19073,8 @@
         "safetyReviewApproved": "{{agent}} がこの操作を承認しました。詳細を表示。",
         "safetyReview": "{{agent}} が安全性レビューの警告を報告しました。詳細を表示。",
         "truncatedResponse": "プロバイダーの応答は切り詰められています（元のサイズ：{{bytes}} バイト）。",
-        "forkedFrom": "分岐元"
+        "forkedFrom": "分岐元",
+        "forkedFromUnknown": "別のチャットから分岐"
       },
       "providerFrame": {
         "byteCount_other": "{{count}} バイト"
@@ -19515,7 +19518,12 @@
         "failed": "{{agent}} はこのチャットを分岐できませんでした",
         "hostUnsupported": "このホストでは古いバージョンの Orca が実行されています。ホストの Orca を更新して再試行してください。",
         "failedDetail": "チャットは変更されていません。もう一度お試しください。",
-        "commandWorking": "{{agent}} の応答中は分岐できません。応答が終わったら、もう一度 /fork を実行してください。"
+        "commandWorking": "{{agent}} の応答中は分岐できません。応答が終わったら、もう一度 /fork を実行してください。",
+        "mark": "分岐 ·",
+        "markedName": "{{mark}} {{name}}",
+        "accessibleName": "分岐: {{name}}",
+        "sourceTooltip": "{{name}} から分岐",
+        "unknownSourceTooltip": "別のチャットから分岐"
       },
       "cardKindHidden": {
         "description": "いつでも次の場所で変更できます：",
@@ -19631,7 +19639,7 @@
           "pinned": "ピン留め済み",
           "unread": "未読",
           "comment": "コメントあり",
-          "retainedDoneAgents": "完成した Agent のトランスクリプト",
+          "finishedAgents": "完成した Agent",
           "contextPresence": "タブ、ターミナル、コメントを開く",
           "completelyEmpty": "失うものは何も残っていない",
           "noWorkspaces": "ワークスペースが見つかりません。",
@@ -19749,7 +19757,7 @@
               "comment": "コメント",
               "prunable": "剪定可能",
               "locked": "ロックされています",
-              "retainedAgents": "完成した Agent"
+              "finishedAgents": "完成した Agent"
             }
           },
           "forceDeleteRisk_other": "現在 {{count}} 件のワークスペースにリスクがあり、強制削除が必要になる可能性があります",

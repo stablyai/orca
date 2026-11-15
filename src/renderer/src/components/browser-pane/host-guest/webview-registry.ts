@@ -1,16 +1,14 @@
 import { clearLiveBrowserUrl } from '../describe-page/live-browser-url-registry'
-import { retireBrowserGuestMetadata } from './browser-guest-metadata-cache'
+import { retireBrowserGuestMetadata } from './metadata/browser-guest-metadata-cache'
 import {
   clearBrowserPageViewportPresetSize,
   removeBrowserPageViewport
-} from './browser-page-viewport'
+} from './viewport/browser-page-viewport'
 import {
   acquireWebviewsDragPassthrough,
   isWebviewDragPassthroughActive,
   registerWebviewDragPassthroughSurface
-} from './webview-drag-passthrough'
-
-export { acquireWebviewsDragPassthrough } from './webview-drag-passthrough'
+} from './drag/webview-drag-passthrough'
 
 // Keep guest coordination outside React to break the store/slices → components → store cleanup cycle.
 export const webviewRegistry = new Map<string, Electron.WebviewTag>()
