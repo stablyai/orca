@@ -11,6 +11,7 @@ import type {
 import type { Tab } from '../../../../../../shared/tab-types'
 import type { AppState } from '@/store/types'
 
+import { tabActivationPatch } from '@/store/slices/tabs/tabs-focus-actions'
 import { makeWorktree } from '@/store/slices/worktrees/worktree.test-fixture'
 
 type TestStore = {
@@ -106,6 +107,7 @@ describe('StructuredAgentSessionStatusBridge with tab actions', () => {
   afterEach(() => {
     cleanup()
     resetStructuredAgentSessionStatusFeedsForTests()
+    vi.useRealTimers()
   })
 
   it('rebinds an unstamped chat to its new owner host without changing membership', async () => {
@@ -154,5 +156,64 @@ describe('StructuredAgentSessionStatusBridge with tab actions', () => {
       structuredAgentSessionPaneKey('chat-1', 'session-1')
     ])
     expect(statusFor('chat-1', 'session-1')?.updatedAt).toBe(20)
+  })
+
+  it.each([150, 1500])('keeps %i pending replies off a focus-only tab switch', async (count) => {
+    const tabs: Tab[] = Array.from({ length: count }, (_, index) => ({
+      id: `chat-${index}`,
+      worktreeId: 'wt-1',
+      groupId: 'group-1',
+      contentType: 'agent-session',
+      entityId: `session-${index}`,
+      label: 'Codex Chat',
+      customLabel: null,
+      color: null,
+      sortOrder: index,
+      createdAt: 0,
+      isPinned: false,
+      agentSessionAgent: 'codex',
+      executionHostId: 'local'
+    }))
+    useAppStore.setState({ unifiedTabsByWorktree: { 'wt-1': tabs } })
+    render(<StructuredAgentSessionStatusBridge />)
+    await waitFor(() => expect(mocks.subscribeStatus).toHaveBeenCalledOnce())
+    vi.useFakeTimers()
+    const sessions = tabs.map((tab) =>
+      summary({ sessionId: tab.entityId, status: 'working', lastAssistantMessage: 'First reply' })
+    )
+    act(() => feed().emit({ type: 'snapshot', sessions }))
+    let publications = 0
+    const unsubscribe = useAppStore.subscribe((state, previous) => {
+      if (state.agentStatusByPaneKey !== previous.agentStatusByPaneKey) {
+        publications++
+      }
+    })
+    try {
+      act(() => {
+        for (const session of sessions) {
+          feed().emit({
+            type: 'status',
+            session: { ...session, updatedAt: 2, lastAssistantMessage: 'Latest reply' }
+          })
+        }
+        useAppStore.setState(tabActivationPatch(useAppStore.getState(), tabs[0], 'wt-1', {}, false))
+      })
+      expect(publications).toBe(0)
+      expect(statusFor('chat-0', 'session-0')?.lastAssistantMessage).toBe('First reply')
+      act(() => vi.advanceTimersByTime(33))
+      expect(publications).toBe(1)
+      expect(statusFor('chat-0', 'session-0')?.lastAssistantMessage).toBe('Latest reply')
+      expect(statusFor(`chat-${count - 1}`, `session-${count - 1}`)?.lastAssistantMessage).toBe(
+        'Latest reply'
+      )
+      act(() =>
+        feed().emit({ type: 'status', session: { ...sessions[0], status: 'idle', updatedAt: 3 } })
+      )
+      expect(statusFor('chat-0', 'session-0')?.state).toBe('idle')
+      act(() => feed().emit({ type: 'status', session: { ...sessions[0], updatedAt: 4 } }))
+      expect(statusFor('chat-0', 'session-0')?.state).toBe('working')
+    } finally {
+      unsubscribe()
+    }
   })
 })

@@ -354,12 +354,7 @@ function installStatusProjection(): () => void {
     }
     const ownersChanged = ownerInputs.some((key) => ownerInputChanged(state, previous, key))
     if (ownersChanged || useAppStore.getState().unifiedTabsByWorktree !== tabsSource) {
-      boundary(() => {
-        if (!draining) {
-          burst.flush()
-        }
-        reconcile(ownersChanged)
-      })
+      boundary(() => reconcile(ownersChanged))
     }
   })
   const unsubscribeLaunch = subscribeStructuredAgentLaunchStatus((sessionIds) =>
