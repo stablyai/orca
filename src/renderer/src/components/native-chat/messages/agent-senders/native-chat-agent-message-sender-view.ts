@@ -13,7 +13,7 @@ import {
   agentMessageSenderOpens,
   resolveAgentMessageSenderTarget
 } from './native-chat-agent-message-sender-target'
-import { parseOrcaSessionAddress } from '../../../../../../shared/orca-session-address'
+import { parseOrcaSessionAddress } from '../../../../../../shared/agent-session/identity/orca-session-address'
 import { agentMessageSavedKind } from '../../../../../../shared/agent-session/agent-message-presentation'
 
 /** A terminal may outlive its sender; only a saved actor reference selects current activity. */

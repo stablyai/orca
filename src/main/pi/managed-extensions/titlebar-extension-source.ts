@@ -1,5 +1,5 @@
 import { getPiTitlebarLifetimeSourceLines } from './titlebar-extension-lifetime-source'
-import type { PiAgentKind } from '../../../shared/pi-agent-kind'
+import type { PiAgentKind } from '../../../shared/agent-launch/catalog/pi-agent-kind'
 import { getPiOmpRuntimeDetectionSourceLines } from './agent-status/agent-status-runtime-detection-source'
 
 export const ORCA_PI_EXTENSION_FILE = 'orca-titlebar-spinner.ts'

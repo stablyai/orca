@@ -1,4 +1,4 @@
-import type { AgentSenderPublication } from '../../../../../shared/agent-sender-associations'
+import type { AgentSenderPublication } from '../../../../../shared/orchestration/mailbox/agent-sender-associations'
 import type { AgentSenderPublications } from '@/runtime/native-chat/agent-senders/agent-sender-publication-patch'
 import type {
   AgentLaunchConfigRegistryEntry,

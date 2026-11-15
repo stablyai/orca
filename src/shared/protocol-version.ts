@@ -30,7 +30,7 @@ import {
   SESSION_TAB_CLOSE_INTENT_RUNTIME_CAPABILITY,
   SESSION_TABS_RUNTIME_CAPABILITIES
 } from './remote-runtime/protocol/session-tabs-runtime-capabilities'
-import { SKILL_RUNTIME_CAPABILITIES } from './skill-install-capability'
+import { SKILL_RUNTIME_CAPABILITIES } from './skills/capabilities/skill-install-capability'
 import { SOURCE_CONTROL_RUNTIME_CAPABILITIES } from './source-control/runtime/source-control-runtime-capabilities'
 import { TASK_SOURCE_RUNTIME_CAPABILITIES } from './work-items/task-source-runtime-capabilities'
 import { TERMINAL_RUNTIME_CAPABILITIES } from './terminal/runtime-policy/terminal-runtime-capabilities'

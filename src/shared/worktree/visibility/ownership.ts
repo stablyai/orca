@@ -11,7 +11,7 @@ import {
 import {
   isAgentScratchWorktreePath,
   type AgentScratchWorktreePathMatcher
-} from '../../agent-scratch-worktrees'
+} from './agent-scratch-worktrees'
 import {
   createWorktreeVisibilitySourceMatcher,
   resolveCustomWorktreeVisibilitySources,

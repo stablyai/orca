@@ -4,7 +4,7 @@ import type { OrchestrationDb } from '../../../../../../orchestration/db/orchest
 import {
   formatOrcaSessionAddress,
   isOrcaSessionId
-} from '../../../../../../../../shared/orca-session-address'
+} from '../../../../../../../../shared/agent-session/identity/orca-session-address'
 import { canonicalOrcaSessionId } from '../../../../../../orchestration/addressing/session-lineage/canonical-orca-session-id'
 import {
   orcaSessionIdOrHandle,

@@ -17,7 +17,7 @@ import {
   resolveWslSkillProviderRoots,
   withClaudeSkillProviderRoot
 } from '../../../skills/providers/skill-provider-runtime-roots'
-import type { SkillInstallRequest } from '../../../../shared/skill-install-contract'
+import type { SkillInstallRequest } from '../../../../shared/skills/installation/skill-install-contract'
 import type { SkillProviderRootOverrides } from '../../../skills/providers/skill-provider-destinations'
 import type { RuntimeSkillCommandHost } from './runtime-skill-command-contract'
 

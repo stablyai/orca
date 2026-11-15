@@ -13,7 +13,7 @@ import { isTuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-ag
 import { callStructuredAgentSession } from '@/runtime/native-chat/requests/structured-agent-session-call'
 import { supportsStructuredAgentSessionContinuationContext } from '@/runtime/native-chat/host-capabilities/structured-agent-session-host-support'
 import { executionHostIdForStructuredTarget } from '@/runtime/native-chat/session-ownership/structured-agent-session-owner'
-import { buildAgentSessionHandoffContext } from '../../../../../../shared/agent-session-handoff-context'
+import { buildAgentSessionHandoffContext } from '../../../../../../shared/native-chat/transcript/agent-session-handoff-context'
 import type { AgentSessionContinuationContext } from '../../../../../../shared/agent-session/agent-session-wire'
 import type { NativeChatMessage } from '../../../../../../shared/native-chat/native-chat-types'
 import type { NativeChatStructuredViewProps } from '../../native-chat-view-types'
