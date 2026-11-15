@@ -1,3 +1,4 @@
+import * as treeTermination from '@orca/process-host/process-tree-termination'
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createFakeSpawnedChild as createMockChildProcess } from '../../../shared/__fixtures__/fake-spawned-child'
 
@@ -135,7 +136,9 @@ describe('runner execFile timeout handling', () => {
 describe('gitStreamStdout', () => {
   beforeEach(() => {
     spawnMock.mockReset()
+    vi.spyOn(treeTermination, 'processGroupExists').mockReturnValue(false)
   })
+  afterEach(() => vi.restoreAllMocks())
 
   it('rejects (not crashes) when the onStdout callback throws', async () => {
     const child = createMockChildProcess(1234)
@@ -152,7 +155,6 @@ describe('gitStreamStdout', () => {
     child.stdout.emit('data', Buffer.from('? a.txt\n'))
 
     await rejection
-    expect(child.kill).toHaveBeenCalled()
     child.emit('close', null, 'SIGTERM')
   })
 

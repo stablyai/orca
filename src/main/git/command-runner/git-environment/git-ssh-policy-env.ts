@@ -47,6 +47,7 @@ export async function buildNetworkSshPolicyEnv(
   try {
     const { stdout } = await execFileCapture(resolved.binary, resolved.args, {
       cwd: resolved.cwd,
+      ownedPosixGroup: process.platform !== 'win32' && !resolved.wsl,
       encoding: 'utf-8',
       maxBuffer: DEFAULT_GIT_MAX_BUFFER,
       timeout: Math.min(

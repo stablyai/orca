@@ -1,7 +1,7 @@
-import { EventEmitter } from 'node:events'
+import { createFakeSpawnedChild } from '../../../../shared/__fixtures__/fake-spawned-child'
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-// Callback fixtures exercise native execFile; Mac spawn capture has real-child coverage.
+// Keep this protocol fixture on the synchronous POSIX launch leg.
 const restorePlatform = vi.hoisted(() => {
   const platform = process.platform
   if (platform === 'darwin') {
@@ -11,28 +11,23 @@ const restorePlatform = vi.hoisted(() => {
 })
 afterAll(restorePlatform)
 
-const { execFileMock } = vi.hoisted(() => ({ execFileMock: vi.fn() }))
-vi.mock('node:child_process', () => ({
-  execFile: execFileMock,
-  execFileSync: vi.fn(),
-  spawn: vi.fn()
+const { spawnMock, execFileMock } = vi.hoisted(() => ({
+  spawnMock: vi.fn(),
+  execFileMock: vi.fn()
+}))
+const captureMock = process.platform === 'win32' ? execFileMock : spawnMock
+vi.mock('node:child_process', async (original) => ({
+  ...(await original()),
+  spawn: spawnMock,
+  execFile: execFileMock
 }))
 
 import { gitExecFileAsync } from '../git-exec-file'
 import { GitAdmissionScheduler } from '../../../../shared/git/admission/git-admission-scheduler'
 import { _resetGitAdmissionForTests } from '../admission/git-subprocess-admission'
 
-class MockChildProcess extends EventEmitter {
-  stdout = new EventEmitter()
-  stderr = new EventEmitter()
-  kill = vi.fn()
-  constructor(readonly pid: number) {
-    super()
-  }
-}
-const createMockChildProcess = (pid: number): MockChildProcess => new MockChildProcess(pid)
-
 beforeEach(() => {
+  spawnMock.mockReset()
   execFileMock.mockReset()
 })
 afterEach(() => _resetGitAdmissionForTests())
@@ -43,11 +38,13 @@ describe('network Git SSH policy', () => {
     _resetGitAdmissionForTests(scheduler)
     const blocker = await scheduler.acquire({ args: ['status'], cwd: '/repo', tier: 'status' })
     const calls: string[][] = []
-    execFileMock.mockImplementation((_cmd, args, _opts, cb) => {
-      const child = createMockChildProcess(1234 + calls.length)
+    captureMock.mockImplementation((_cmd, args, _options, callback) => {
+      const child = createFakeSpawnedChild(1234 + calls.length)
       calls.push(args)
-      cb(null, '', '')
-      queueMicrotask(() => child.emit('close', 0, null))
+      queueMicrotask(() => {
+        callback?.(null, '', '')
+        child.emit('close', 0, null)
+      })
       return child
     })
 
@@ -57,7 +54,7 @@ describe('network Git SSH policy', () => {
       useConfiguredSshCommandForNetwork: true
     })
     await Promise.resolve()
-    expect(execFileMock).not.toHaveBeenCalled()
+    expect(captureMock).not.toHaveBeenCalled()
 
     blocker.release()
     await pending
@@ -72,15 +69,20 @@ describe('network Git SSH policy', () => {
     'does not select a generic SSH command after a %s config failure',
     async (code) => {
       const error = Object.assign(new Error('SSH configuration unavailable'), { code })
-      execFileMock.mockImplementation((_cmd, _args, _opts, cb) => {
-        cb(error, '', '')
-        return createMockChildProcess(1234)
+      captureMock.mockImplementation((_cmd, _args, _options, callback) => {
+        const child = createFakeSpawnedChild()
+        Object.defineProperty(child, 'pid', { value: undefined })
+        queueMicrotask(() => {
+          callback?.(error, '', '')
+          child.emit('error', error)
+        })
+        return child
       })
       await expect(gitExecFileAsync(['fetch', 'origin'], { cwd: '/repo', env: {} })).rejects.toBe(
         error
       )
-      expect(execFileMock).toHaveBeenCalledTimes(1)
-      expect(execFileMock.mock.calls[0]?.[1]?.[0]).toBe('config')
+      expect(captureMock).toHaveBeenCalledTimes(1)
+      expect(captureMock.mock.calls[0]?.[1]?.[0]).toBe('config')
     }
   )
 })

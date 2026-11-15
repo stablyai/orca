@@ -42,6 +42,8 @@ export const WINDOWS_PREBUILD_CACHE_INPUTS = [
   'src/packages/process-host/scripts/build-dist.mjs',
   'src/packages/process-host/tsconfig.json',
   'src/packages/process-host/src/run-process.ts',
+  'src/packages/process-host/src/run-process-sync.ts',
+  'src/packages/process-host/src/posix-group-termination.ts',
   'src/packages/process-host/src/spawn-resolution.ts',
   'src/packages/process-host/src/process-tree-termination.ts',
   'src/packages/process-host/src/process-tree-kill-gate.ts',

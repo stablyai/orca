@@ -7,6 +7,8 @@ import {
 import { attachLogFixture, failedLogJob } from './check-job-log-test-fixture'
 import { prCheckLogTailCache } from './check-job-log-tails'
 import { createCheckDetailsAdmissionLifetime } from './check-details-admission-lifetime'
+const { groupExists } = vi.hoisted(() => ({ groupExists: vi.fn(() => true) }))
+
 const { spawnMock, signalMock, forceMock, resolverMock } = vi.hoisted(() => ({
   spawnMock: vi.fn(),
   signalMock: vi.fn(),
@@ -15,6 +17,7 @@ const { spawnMock, signalMock, forceMock, resolverMock } = vi.hoisted(() => ({
 }))
 vi.mock('node:child_process', async (original) => ({ ...(await original()), spawn: spawnMock }))
 vi.mock('@orca/process-host/process-tree-termination', () => ({
+  processGroupExists: groupExists,
   signalProcessTree: signalMock,
   forceTerminateProcessTree: forceMock
 }))
@@ -30,6 +33,7 @@ function spawn(): ChildProcess {
 }
 describe('independent readers and positively closed retirement', () => {
   beforeEach(() => {
+    groupExists.mockReturnValue(true)
     vi.useFakeTimers()
     children.length = 0
     spawnMock.mockReset().mockImplementation(spawn)
@@ -44,6 +48,7 @@ describe('independent readers and positively closed retirement', () => {
   })
   afterEach(async () => {
     for (const child of children) {
+      groupExists.mockReturnValue(false)
       child.emit('close', 0, null)
     }
     await vi.advanceTimersByTimeAsync(15_000)
@@ -101,9 +106,11 @@ describe('independent readers and positively closed retirement', () => {
     await vi.advanceTimersByTimeAsync(12_000)
     expect(children).toHaveLength(1)
     expect(prCheckLogTailCache.size).toBe(0)
+    groupExists.mockReturnValue(false)
     children[0].emit('close', null, 'SIGKILL')
     await vi.advanceTimersByTimeAsync(0)
     expect(children).toHaveLength(2)
+    groupExists.mockReturnValue(false)
     children[0].emit('close', null, 'SIGKILL')
     const joiner = attachLogFixture([failedLogJob()])
     await vi.advanceTimersByTimeAsync(0)
@@ -129,6 +136,7 @@ describe('independent readers and positively closed retirement', () => {
     await expect(attachLogFixture([failedLogJob()], { controller: aborted })).rejects.toMatchObject(
       { name: 'AbortError' }
     )
+    groupExists.mockReturnValue(false)
     children[0].emit('close', null, 'SIGKILL')
     await vi.advanceTimersByTimeAsync(0)
     expect(children).toHaveLength(1)
