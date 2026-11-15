@@ -50,6 +50,8 @@ const STATIC_TITLE_COPY = {
   'sidebar.ports.toggle': () => translate('keybindings.title.cb816639bd', 'Show ports'),
   'sidebar.sleepingWorkspaces.toggle': () =>
     translate('keybindings.title.437260810f', 'Toggle sleeping workspaces'),
+  'sidebar.activity.toggle': () =>
+    translate('keybindings.title.sidebarActivityToggle', 'Toggle activity view'),
   'sidebar.focusWorktreeList': () =>
     translate('keybindings.title.sidebarFocusWorktreeList', 'Focus worktree list'),
   'floatingTerminal.toggle': () =>

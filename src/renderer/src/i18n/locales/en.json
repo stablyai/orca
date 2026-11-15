@@ -24687,6 +24687,7 @@
       "voiceDictation": "Dictation",
       "sidebarExplorerToggle": "Show Explorer",
       "sidebarFocusWorktreeList": "Focus worktree list",
+      "sidebarActivityToggle": "Toggle activity view",
       "tabNewTerminal": "New terminal tab",
       "tabNewAgent": "New agent tab (default agent)",
       "tabNewBrowser": "New browser tab",

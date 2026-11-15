@@ -50,6 +50,7 @@ export type KeybindingActionId =
   | 'sidebar.checks.toggle'
   | 'sidebar.ports.toggle'
   | 'sidebar.sleepingWorkspaces.toggle'
+  | 'sidebar.activity.toggle'
   | 'sidebar.childWorkspaces.toggle'
   | 'sidebar.projects.toggleCollapse'
   | 'sidebar.focusWorktreeList'

@@ -6,6 +6,7 @@ import { requestScrollToCurrentWorkspaceRevealAndRename } from '@/lib/workspace/
 import { requestVirtualizedScrollAnchorRecord } from '@/hooks/requestVirtualizedScrollAnchorRecord'
 import { showTerminalShortcutCaptureNotification } from '@/lib/notifications/terminal-shortcut-capture-notification'
 import { shouldShowWorktreeHistoryControls } from './chrome/titlebar-worktree-history-controls'
+import { applySidebarActivityToggle } from '../components/sidebar/sidebar-activity-toggle'
 import { TOGGLE_WORKSPACE_BOARD_EVENT } from '../components/sidebar/workspace-board/surface/useWorkspaceBoardPanel'
 import {
   getRenderedLineageChipKeys,
@@ -152,6 +153,13 @@ export function createAppCommandHandlers(
           if (nextShowSleeping) {
             store.setSidebarOpen(true)
           }
+        })
+    ],
+    [
+      'sidebar.activity.toggle',
+      () =>
+        claim('sidebar.activity.toggle', () => {
+          applySidebarActivityToggle(useAppStore.getState())
         })
     ],
     [
