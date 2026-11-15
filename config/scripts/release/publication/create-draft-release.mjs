@@ -3,6 +3,7 @@
 import { execFileSync } from 'node:child_process'
 import { appendFileSync } from 'node:fs'
 import { pathToFileURL } from 'node:url'
+import { assertPolicyKeepsAppRelease } from './release-app-publish-guard.mjs'
 
 const API_VERSION = '2022-11-28'
 export const MAX_RELEASE_BODY_LENGTH = 120_000
@@ -158,7 +159,7 @@ async function assertTagUnchanged(identity, tagObject, phase) {
 }
 
 // Mirror electron-builder's publisher: default first page, first exact or bare-version match.
-// A default-branch target must never leave an untagged or shadowed draft the uploader would miss.
+// A draft must never be left untagged or shadowed where the uploader would miss it.
 async function verifyUploaderDraft({ base, tag, token, release, fetchImpl, sleep }) {
   if (!Number.isInteger(release?.id) || release.draft !== true || release.tag_name !== tag) {
     throw new Error(`Expected an exact-tag draft for ${tag}`)
@@ -217,13 +218,9 @@ export async function createDraftRelease({
   const base = `https://api.github.com/repos/${repo}`
   const identity = { base, tag, token, targetCommitish, sourceSha, fetchImpl }
   const tagObject = await verifyReleaseSource(identity)
-  const repository = await githubJson(fetchImpl, base, token)
-  if (typeof repository?.default_branch !== 'string' || !repository.default_branch) {
-    throw new Error('Repository default branch is missing')
-  }
-  // API metadata only: GitHub ignores target_commitish for an existing tag, and a release-SHA target
-  // needs workflow authority GITHUB_TOKEN cannot get (403 in run 43573545467).
-  const targetMetadata = repository.default_branch
+  await assertPolicyKeepsAppRelease({ repo, tag, commitSha: targetCommitish, token, fetchImpl })
+  // Why the exact verified commit, not the default branch: if the tag vanishes before undraft, GitHub
+  // recreates it at target_commitish. This target needs workflows write, so the job uses the release App token.
   let preparedRelease
 
   const previousTag = latestPreviousPublishedDesktopReleaseTag(releases, tag)
@@ -276,7 +273,8 @@ export async function createDraftRelease({
       token,
       {
         method: 'PATCH',
-        body: JSON.stringify({ body, target_commitish: targetMetadata })
+        // tag_name on every PATCH: one without it reset the v1.4.259 draft to an untagged-… release.
+        body: JSON.stringify({ tag_name: tag, body, target_commitish: targetCommitish })
       }
     )
     if (patchedRelease?.draft !== true) {
@@ -303,7 +301,7 @@ export async function createDraftRelease({
         token,
         {
           method: 'PATCH',
-          body: JSON.stringify({ body: publishedBody })
+          body: JSON.stringify({ tag_name: tag, body: publishedBody })
         }
       )
       throw new Error(
@@ -313,8 +311,7 @@ export async function createDraftRelease({
     preparedRelease = patchedRelease
   } else {
     await assertTagUnchanged(identity, tagObject, 'during draft preparation')
-    // #21835: a default-branch target without the tag yields an untagged draft electron-builder misses.
-    // The tag was verified above and the uploader check below refuses that shape.
+    // #21835: a draft without its tag is untagged and electron-builder misses it; the uploader check refuses that.
     preparedRelease = await githubJson(
       fetchImpl,
       `https://api.github.com/repos/${repo}/releases`,
@@ -323,7 +320,7 @@ export async function createDraftRelease({
         method: 'POST',
         body: JSON.stringify({
           tag_name: tag,
-          target_commitish: targetMetadata,
+          target_commitish: targetCommitish,
           name,
           body,
           draft: true,
@@ -353,7 +350,10 @@ async function main() {
   const tag = process.argv[2]
   const token = process.env.GH_TOKEN || process.env.GITHUB_TOKEN
   const repo = process.env.GITHUB_REPOSITORY || 'stablyai/orca'
-  const targetCommitish = execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' }).trim()
+  // The privileged job checks out only the workflow commit and passes the verified release commit.
+  const targetCommitish =
+    process.env.RELEASE_SHA ||
+    execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' }).trim()
   const sourceSha = process.env.SOURCE_SHA
   const prepared = await createDraftRelease({ repo, tag, token, targetCommitish, sourceSha })
   if (process.env.GITHUB_OUTPUT) {
