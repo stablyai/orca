@@ -45,7 +45,9 @@ function questionRequest(params: unknown): AcpRequestPresentation {
       label: option.label,
       ...(option.description === undefined ? {} : { description: option.description })
     })),
-    freeTextQuestionId: `q${index + 1}`
+    freeTextQuestionId: `q${index + 1}`,
+    // Grok takes answers that leave a question out, as its own question card sends.
+    skippable: true as const
   }))
   const body = {
     kind: 'question' as const,

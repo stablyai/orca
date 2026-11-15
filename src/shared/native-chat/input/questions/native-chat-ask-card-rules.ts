@@ -49,6 +49,14 @@ export function askConfirmAction(args: {
   return args.fromKeyboard ? 'stay' : 'cancel'
 }
 
+/** Where a submit goes instead of sending: the first required question left unanswered, or -1. */
+export function askUnansweredRequired(
+  questions: readonly Pick<AskQuestion, 'required'>[],
+  answered: (index: number) => boolean
+): number {
+  return questions.findIndex((question, index) => question.required === true && !answered(index))
+}
+
 /** The last step says Submit whenever any answer will be sent, even if its own question was skipped. */
 export function askConfirmLabel(
   currentAnswered: boolean,

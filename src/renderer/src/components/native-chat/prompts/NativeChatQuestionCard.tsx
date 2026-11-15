@@ -30,6 +30,7 @@ import {
   askQuestionShowsPreviews,
   askConfirmLabel,
   askTypedText,
+  askUnansweredRequired,
   toggleAskOption
 } from '../../../../../shared/native-chat/input/questions/native-chat-ask-card-rules'
 
@@ -161,18 +162,22 @@ export function NativeChatQuestionCard({
     return [...picked, ...(other ? [other] : [])].join(', ')
   }
 
-  const answered = (qi: number): boolean => answerFor(qi).length > 0 || acceptsEmpty(qi)
-  const currentAnswered = answered(index)
-  const anyAnswered = prompt.questions.some((_, i) => answered(i))
+  const answeredAt = (qi: number, sel = selections, oth = otherText): boolean =>
+    answerFor(qi, sel, oth).length > 0 || acceptsEmpty(qi)
+  const currentAnswered = answeredAt(index)
+  const anyAnswered = prompt.questions.some((_, i) => answeredAt(i))
   // With nothing to dismiss (an item's ask), only a whole answer goes: Submit waits for every step.
   const nothingToSend =
-    !onCancel && isLast && prompt.questions.some((_, i) => !answerFor(i) && !acceptsEmpty(i))
+    !onCancel && isLast && prompt.questions.some((_, i) => !answeredAt(i))
   const confirmLabel = askConfirmLabel(currentAnswered, isLast, anyAnswered || nothingToSend)
   // A caller that needs every answer sends Submit to the open step instead of skipping it.
   const canSkipSteps = !nothingToSend && !requiresEveryAnswer
   const skipAndSubmit = confirmLabel === 'submit' && !currentAnswered && total > 1 && canSkipSteps
   const outlinedConfirm =
     skipAndSubmit || nothingToSend || (requiresEveryAnswer && !currentAnswered)
+  // Submit is idle on the required question it would only return to.
+  const submitBlocked =
+    isLast && anyAnswered && askUnansweredRequired(prompt.questions, (i) => answeredAt(i)) === index
   const currentTypedAnswerChosen = typedAnswerChosen(index)
 
   const submitAll = (sel: number[][], oth: string[]): void => {
@@ -202,7 +207,12 @@ export function NativeChatQuestionCard({
   // Submit from an explicit snapshot so the latest pick cannot be lost to asynchronous state updates.
   const advanceOrSubmit = (sel: number[][], oth: string[]): void => {
     if (isLast) {
-      submitAll(sel, oth)
+      const unanswered = askUnansweredRequired(prompt.questions, (i) => answeredAt(i, sel, oth))
+      if (unanswered === -1) {
+        submitAll(sel, oth)
+      } else {
+        setIndex(unanswered)
+      }
     } else {
       setIndex((i) => Math.min(i + 1, total - 1))
     }
@@ -439,7 +449,7 @@ export function NativeChatQuestionCard({
               enterHint={
                 currentAnswered && !isSubmitting && !q.multiSelect && !freeTextInput?.multiline
               }
-              disabled={blocked || nothingToSend}
+              disabled={blocked || nothingToSend || submitBlocked}
               onConfirm={() => confirm()}
             />
           </div>

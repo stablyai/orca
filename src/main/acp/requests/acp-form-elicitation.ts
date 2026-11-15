@@ -149,6 +149,8 @@ export function acpFormElicitationPresentation(params: unknown): AcpRequestPrese
         ...(choice.description ? { description: choice.description } : {})
       })),
       ...(!choices || otherKey ? { freeTextQuestionId: id } : {}),
+      // The form's schema lets an optional field be left out; a required one must be answered.
+      ...(required.has(key) ? {} : { skippable: true as const }),
       ...(!choices
         ? {
             freeTextInput: {
@@ -191,11 +193,8 @@ export function acpFormElicitationPresentation(params: unknown): AcpRequestPrese
       const content: Record<string, string | boolean | string[]> = {}
       for (const { key, otherKey, choices, question } of fields) {
         const answer = answers.find((entry) => entry.questionId === question.id)!
-        // A skipped optional field is left out of the form content, as the schema allows.
+        // Validation admits a skip only for an optional field, which the form content leaves out.
         if (!isAgentSessionQuestionAnswered(question, answer)) {
-          if (required.has(key)) {
-            throw new AcpRpcError(-32602, `Question answer must answer the required ${key} field`)
-          }
           continue
         }
         if (!choices) {

@@ -30,7 +30,8 @@ export function structuredQuestionCard(
           label: option.label,
           ...(option.description ? { description: option.description } : {}),
           ...(option.preview ? { preview: option.preview } : {})
-        }))
+        })),
+        ...(question.skippable ? {} : { required: true as const })
       }))
     },
     allowOther: questions.map((question) => Boolean(question.freeTextQuestionId)),

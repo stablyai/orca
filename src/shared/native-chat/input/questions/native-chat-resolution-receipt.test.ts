@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { AgentJournalQuestionItem } from '../agent-session/journal/agent-session-journal-types'
+import type { AgentJournalQuestionItem } from '../../../agent-session/journal/agent-session-journal-types'
 import { nativeChatReceiptAnswers } from './native-chat-resolution-receipt'
 
 const question = (n: number) => ({
