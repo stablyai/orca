@@ -141,6 +141,18 @@ async function startQuit(
   return { app, admission, store, state }
 }
 
+it('quits at the teardown deadline without releasing admission while the writer is pending', async () => {
+  const { app, admission, store, state } = await startQuit(() => new Promise<void>(() => {}))
+  await vi.advanceTimersByTimeAsync(WILL_QUIT_TEARDOWN_DEADLINE_MS - 1)
+  expect(app.quit).not.toHaveBeenCalled()
+  await vi.advanceTimersByTimeAsync(1)
+  expect(app.quit).toHaveBeenCalledOnce()
+  expect(store.flushFinalOrThrowAsync).toHaveBeenCalledOnce()
+  expect(store.freezeWritesAsync).not.toHaveBeenCalled()
+  expect(admission.release).not.toHaveBeenCalled()
+  expect(state.profileStateAdmission).toBe(admission)
+})
+
 it('checkpoints pane state during a held synchronous deletion, then saves later metadata before releasing ownership', async () => {
   const directory = await mkdtemp(join(tmpdir(), 'orca-quit-checkpoint-'))
   const { Store } = await import('../../persistence/loading-store/store')

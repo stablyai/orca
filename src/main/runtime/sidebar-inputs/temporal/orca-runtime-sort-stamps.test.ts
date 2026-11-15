@@ -21,7 +21,7 @@ vi.mock('../../../../shared/sidebar-inputs-switch', () => ({ ORCA_SIDEBAR_INPUTS
 const WT = 'repo-1::/tmp/worktree-a'
 const FOLDER_ID = 'fw-1'
 
-function createHeadlessRuntime(
+async function createHeadlessRuntime(
   stored: Pick<WorktreeMeta, 'lastActivityAt' | 'smartTier' | 'smartAt'> = { lastActivityAt: 0 },
   workspaceId = WT
 ) {
@@ -70,7 +70,7 @@ function createHeadlessRuntime(
   }
   const runtime = new OrcaRuntimeService(partialRuntimeStore(store))
   // No window: a server with no client attached must still see its own bells and titles.
-  runtime.syncWindowGraph(HEADLESS_RUNTIME_WINDOW_ID, {
+  await runtime.syncWindowGraph(HEADLESS_RUNTIME_WINDOW_ID, {
     tabs: [
       {
         tabId: 'tab-1',
@@ -103,12 +103,12 @@ function createHeadlessRuntime(
 describe('host sort stamps on a headless runtime', () => {
   it.each(['worktree', 'folder'] as const)(
     're-tiers a read Done beside a Working pane when any writer clears the %s flag',
-    (kind) => {
+    async (kind) => {
       vi.useFakeTimers({ now: 80_000 })
       try {
         const workspaceId = kind === 'folder' ? folderWorkspaceKey(FOLDER_ID) : WT
         const { runtime, meta, folder, setWorktreeMeta, updateFolderWorkspace } =
-          createHeadlessRuntime(undefined, workspaceId)
+          await createHeadlessRuntime(undefined, workspaceId)
         const record = (): Pick<WorktreeMeta, 'isUnread' | 'smartTier' | 'smartAt'> =>
           kind === 'folder' ? folder : meta[WT]
         const server = new AgentHookServer()

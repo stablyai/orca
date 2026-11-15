@@ -14,7 +14,7 @@ export async function releaseEphemeralVmRuntimeEnvironments(
   retireRemovedEnvironment: (environmentId: string) => void
 ): Promise<void> {
   // Relay-era conversions may have recorded only the SSH target, not the server ID.
-  const environments = listEnvironments(userDataPath).filter(
+  const environments = (await listEnvironments(userDataPath)).filter(
     (entry) =>
       entry.id === runtime.runtimeEnvironmentId ||
       (runtime.sshTargetId !== undefined &&
@@ -22,14 +22,14 @@ export async function releaseEphemeralVmRuntimeEnvironments(
   )
   for (const environment of environments) {
     if (!environment.orcadDeployment) {
-      removeEnvironment(userDataPath, environment.id)
+      await removeEnvironment(userDataPath, environment.id)
       retireRemovedEnvironment(environment.id)
       continue
     }
     const { closeOrcadManagedTunnel } =
       await import('../managed-server/lifecycle/orcad-managed-tunnel')
     await closeOrcadManagedTunnel(environment.id).catch(() => undefined)
-    removeManagedOrcadEnvironment(userDataPath, environment.id)
+    await removeManagedOrcadEnvironment(userDataPath, environment.id)
     retireRemovedEnvironment(environment.id)
   }
 }

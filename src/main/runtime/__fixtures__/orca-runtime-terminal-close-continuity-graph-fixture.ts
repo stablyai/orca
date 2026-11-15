@@ -152,7 +152,7 @@ export function createCloseContinuityGraphFixture({
         [makePaneKey(TAB_ID, SIBLING_LEAF_ID)]: SIBLING_INCARNATION_ID
       }
     })
-    runtime.syncWindowGraph(1, {
+    return runtime.syncWindowGraph(1, {
       tabs: [
         {
           tabId: TAB_ID,

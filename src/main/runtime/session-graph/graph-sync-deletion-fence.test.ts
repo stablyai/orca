@@ -89,12 +89,12 @@ describe('graph-sync deletion fence', () => {
     const runtime = new OrcaRuntimeService(store as never)
     const internals = runtime as unknown as FenceInternals
     const events: RuntimeMobileSessionTabsResult[] = []
-    runtime.onMobileSessionTabsChanged((snapshot) => events.push(snapshot))
-    const sync = (
+    runtime.onMobileSessionTabsChanged((snapshot) => events.push(snapshot), undefined, 'mobile')
+    const sync = async (
       mobileSessionTabs: RuntimeMobileSessionTabsSnapshot[],
       extra: { rendererGeneration?: string; unchanged?: string[] } = {}
     ) =>
-      runtime.syncWindowGraph(1, {
+      await runtime.syncWindowGraph(1, {
         tabs: [],
         leaves: [],
         ...(extra.rendererGeneration ? { rendererGeneration: extra.rendererGeneration } : {}),
@@ -108,9 +108,9 @@ describe('graph-sync deletion fence', () => {
     return { runtime, internals, events, sync, recreate, remove }
   }
 
-  it("rejects the deleted occupant's late snapshot after same-id recreation", () => {
+  it("rejects the deleted occupant's late snapshot after same-id recreation", async () => {
     const { internals, events, sync, recreate, remove } = createFencedRuntime()
-    sync([{ ...makeRendererSnapshot({ version: 1 }), worktreeInstanceId: 'old-instance' }])
+    await sync([{ ...makeRendererSnapshot({ version: 1 }), worktreeInstanceId: 'old-instance' }])
     vi.advanceTimersByTime(60)
     expect(internals.mobileSessionTabsByWorktree.has(WT)).toBe(true)
     events.length = 0
@@ -120,20 +120,20 @@ describe('graph-sync deletion fence', () => {
     events.length = 0
     recreate('new-instance')
 
-    sync([{ ...makeRendererSnapshot({ version: 2 }), worktreeInstanceId: 'old-instance' }])
+    await sync([{ ...makeRendererSnapshot({ version: 2 }), worktreeInstanceId: 'old-instance' }])
     vi.advanceTimersByTime(60)
 
     expect(internals.mobileSessionTabsByWorktree.has(WT)).toBe(false)
     expect(events).toHaveLength(0)
   })
 
-  it("accepts the recreated occupant's snapshot and clears the fence", () => {
+  it("accepts the recreated occupant's snapshot and clears the fence", async () => {
     const { internals, events, sync, recreate, remove } = createFencedRuntime()
     remove()
     events.length = 0
     recreate('new-instance')
 
-    sync([{ ...makeRendererSnapshot({ version: 3 }), worktreeInstanceId: 'new-instance' }])
+    await sync([{ ...makeRendererSnapshot({ version: 3 }), worktreeInstanceId: 'new-instance' }])
     vi.advanceTimersByTime(60)
 
     expect(internals.mobileSessionTabsByWorktree.has(WT)).toBe(true)

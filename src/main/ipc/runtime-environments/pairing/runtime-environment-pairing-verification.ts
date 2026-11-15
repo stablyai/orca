@@ -107,9 +107,9 @@ export async function verifyAndAddRuntimeEnvironmentFromPairingCode(
     offer: link.pairing,
     hostCapabilities: runtimeStatus.capabilities
   })
-  let outcome: ReturnType<typeof addOrUpdateEnvironmentFromPairingCode>
+  let outcome: Awaited<ReturnType<typeof addOrUpdateEnvironmentFromPairingCode>>
   try {
-    outcome = addOrUpdateEnvironmentFromPairingCode(userDataPath, {
+    outcome = await addOrUpdateEnvironmentFromPairingCode(userDataPath, {
       ...args,
       pairingCode,
       // Only a verified key match permits updating an existing server identity.
@@ -132,7 +132,7 @@ export async function verifyAndRepairRuntimeEnvironmentFromPairingCode(
   userDataPath: string,
   args: { selector: string; pairingCode: string }
 ): Promise<VerifyAndAddRuntimeEnvironmentResult> {
-  const existing = resolveEnvironment(userDataPath, args.selector)
+  const existing = await resolveEnvironment(userDataPath, args.selector)
   if (isEphemeralVmRuntimeEnvironment(existing)) {
     return pairingSaveFailure(null, 'repairCloudWorkspace')
   }
@@ -157,9 +157,9 @@ export async function verifyAndRepairRuntimeEnvironmentFromPairingCode(
     offer: verified.link.pairing,
     hostCapabilities: verified.runtimeStatus.capabilities
   })
-  let environment: ReturnType<typeof updateEnvironmentFromPairingCode>
+  let environment: Awaited<ReturnType<typeof updateEnvironmentFromPairingCode>>
   try {
-    environment = updateEnvironmentFromPairingCode(userDataPath, existing.id, {
+    environment = await updateEnvironmentFromPairingCode(userDataPath, existing.id, {
       pairingCode,
       // The verified same host may have restarted with a new runtimeId.
       runtimeId: verified.runtimeStatus.runtimeId
