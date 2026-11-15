@@ -19,7 +19,7 @@ import {
   readWindowsProcessIdentityTableFresh
 } from '../../windows/windows-process-table'
 
-function executableName(command: string): string {
+export function executableName(command: string): string {
   return getCommandTokenPathBasename(getFirstCommandToken(command)).replace(/^-/, '')
 }
 

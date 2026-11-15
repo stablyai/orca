@@ -73,7 +73,7 @@ async function recoverJob(
   ) {
     throw new Error('Could not verify the retired macOS terminal service for recovery')
   }
-  const verdict = await terminateShutdownDescendants(snapshot)
+  const verdict = await terminateShutdownDescendants(snapshot, false)
   if (verdict !== 'exited') {
     throw new Error(`Retired macOS terminal service descendants are ${verdict}`)
   }
