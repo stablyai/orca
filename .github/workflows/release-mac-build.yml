@@ -313,6 +313,20 @@ jobs:
             gh release upload "$TAG" dist/*-mac.yml --repo "$GITHUB_REPOSITORY" --clobber
           fi
 
+      - name: Verify release remains draft after artifact upload
+        if: ${{ !inputs.qualification_only }}
+        # Re-draft premature builder publication before failing; latest must not keep an incomplete Windows release.
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ inputs.tag }}
+        run: node config/scripts/release/publication/assert-github-release-is-draft.mjs "$TAG"
+
+      # Check after publish because builder’s single pack/upload invocation has no cheap interposition point.
+      - name: Verify telemetry constants present in app.asar
+        run: node config/scripts/desktop-build/telemetry-contracts/verify-telemetry-constants.mjs
+
+      # Why after the draft and telemetry checks: a run that fails either leaves no manifest to accept.
       # Why: records exactly what this run uploaded (after the gate rewrite), so publishing can refuse a swapped asset.
       - name: Record the uploaded release assets
         if: ${{ !inputs.qualification_only }}
@@ -334,19 +348,6 @@ jobs:
           path: ${{ runner.temp }}/release-asset-manifest/manifest.json
           if-no-files-found: error
           overwrite: true
-
-      - name: Verify release remains draft after artifact upload
-        if: ${{ !inputs.qualification_only }}
-        # Re-draft premature builder publication before failing; latest must not keep an incomplete Windows release.
-        shell: bash
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          TAG: ${{ inputs.tag }}
-        run: node config/scripts/release/publication/assert-github-release-is-draft.mjs "$TAG"
-
-      # Check after publish because builder’s single pack/upload invocation has no cheap interposition point.
-      - name: Verify telemetry constants present in app.asar
-        run: node config/scripts/desktop-build/telemetry-contracts/verify-telemetry-constants.mjs
 
       - name: Upload qualification artifacts
         if: inputs.qualification_only
