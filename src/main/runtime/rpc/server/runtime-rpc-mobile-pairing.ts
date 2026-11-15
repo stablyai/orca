@@ -126,7 +126,10 @@ export class RuntimeRpcMobilePairing extends RuntimeRpcPairing {
       this.deviceRegistry?.getMobilePairingConnectionMode(pending.deviceId) !== connectionMode
     if (args.rotate || switchingPendingMode) {
       // Durably enqueue cloud revocation for every offer rotation drops, or old invites outlive the QR.
-      for (const offer of this.deviceRegistry?.listPendingDevices('mobile') ?? []) {
+      for (const offer of this.deviceRegistry?.listPendingDevices(
+        'mobile',
+        args.preserveBind ? 'this-computer' : undefined
+      ) ?? []) {
         if (offer.relayBinding && !this.queueRelayDeviceRevoke(offer.relayBinding)) {
           return pairingUnavailable(
             'device_registry_unavailable',

@@ -113,7 +113,9 @@ export class DeviceRegistry extends DeviceRegistrySightings {
     offerTtlMs?: number
   ): TokenDeviceEntry {
     // Authentication marks seen before child sync, so pending runtime offers cannot have children.
-    const pending = new Set<DeviceEntry>(this.listPendingDevices(scope))
+    const pending = new Set<DeviceEntry>(
+      this.listPendingDevices(scope, pairingReach === 'this-computer' ? 'this-computer' : undefined)
+    )
     const retained = this.devices.filter((d) => !pending.has(d))
     return this.createAndPersistDevice(retained, name, scope, pairingReach, grants, offerTtlMs)
   }
@@ -159,14 +161,14 @@ export class DeviceRegistry extends DeviceRegistrySightings {
     reach?: RuntimePairingReach
   ): TokenDeviceEntry | null {
     this.adoptExternalEdits({ fresh: true })
-    const offers = this.listPendingDevices(scope).filter(
-      (device) => !reach || device.pairingReach === reach
-    )
+    const offers = this.listPendingDevices(scope, reach)
     return reusablePairingOffer(offers, validGrants(grants, scope) ?? [], offerTtlMs)
   }
 
-  listPendingDevices(scope: DeviceScope): TokenDeviceEntry[] {
-    return pendingPairingOffers(this.devices, scope, this.seenDeviceIds)
+  listPendingDevices(scope: DeviceScope, reach?: RuntimePairingReach): TokenDeviceEntry[] {
+    return pendingPairingOffers(this.devices, scope, this.seenDeviceIds).filter(
+      (device) => !reach || device.pairingReach === reach
+    )
   }
 
   listExpiredPairingOffers(scope: DeviceScope): DeviceEntry[] {

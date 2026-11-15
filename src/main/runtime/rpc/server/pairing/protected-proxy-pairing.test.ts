@@ -79,15 +79,37 @@ describe('owner pairing through a protected loopback proxy', () => {
           scope,
           pairingReach: 'this-computer'
         })
-        expect(server.getDeviceRegistry()!.validateToken(unrelated.token)?.deviceId).toBe(
-          unrelated.deviceId
-        )
+        expect(offer.deviceId).not.toBe(unrelated.deviceId)
+        expect(server.getDeviceRegistry()!.validateToken(unrelated.token)).toMatchObject({
+          deviceId: unrelated.deviceId,
+          pairingReach: 'network'
+        })
         const repeated = await request({
           scope,
           preserveBind: true,
           address: 'wss://orca.example.com'
         })
         expect(repeated.result).toMatchObject({ available: true, deviceId: offer.deviceId })
+        const rotation = await request({
+          scope,
+          preserveBind: true,
+          rotate: true,
+          address: 'wss://orca.example.com'
+        })
+        const rotated = z
+          .object({ available: z.literal(true), deviceId: z.string() })
+          .parse(rotation.result)
+        expect(rotated.deviceId).not.toBe(offer.deviceId)
+        expect(rotated.deviceId).not.toBe(unrelated.deviceId)
+        expect(server.getDeviceRegistry()!.getDevice(rotated.deviceId)).toMatchObject({
+          scope,
+          pairingReach: 'this-computer'
+        })
+        expect(server.getDeviceRegistry()!.getDevice(offer.deviceId)).toBeNull()
+        expect(server.getDeviceRegistry()!.validateToken(unrelated.token)).toMatchObject({
+          deviceId: unrelated.deviceId,
+          pairingReach: 'network'
+        })
         expect(server.getWebSocketEndpoint()).toBe(endpoint)
         sendEncryptedWsRequest(session, {
           id: 'still-connected',
@@ -102,6 +124,45 @@ describe('owner pairing through a protected loopback proxy', () => {
         reader.dispose()
         session.ws.close()
       }
+    }
+  )
+
+  it('keeps a pending network mobile Relay invite out of proxy rotation cleanup', async () => {
+    const { server, request } = await start()
+    const registry = server.getDeviceRegistry()!
+    const network = registry.addDevice('network phone', 'mobile', 'network')
+    registry.setRelayBinding(network.deviceId, {
+      relayHostId: 'existing-relay-host',
+      relayDeviceId: network.deviceId,
+      ownerIdentityKey: 'existing-owner'
+    })
+    expect(
+      await request({
+        scope: 'mobile',
+        preserveBind: true,
+        rotate: true,
+        address: 'wss://orca.example.com'
+      })
+    ).toMatchObject({ ok: true, result: { available: true } })
+    expect(
+      server.getRelayRevokeOutbox()?.pendingFor('existing-owner', 'existing-relay-host')
+    ).toEqual([])
+    expect(registry.validateToken(network.token)).toMatchObject({
+      deviceId: network.deviceId,
+      pairingReach: 'network',
+      relayBinding: { relayDeviceId: network.deviceId }
+    })
+  })
+
+  it.each(['https://user:password@orca.example.com', 'https://orca.example.com#fragment'])(
+    'refuses credential-bearing or fragment URL %s independently',
+    async (address) => {
+      const { server, request } = await start()
+      expect(await request({ scope: 'runtime', preserveBind: true, address })).toMatchObject({
+        ok: true,
+        result: { available: false, reason: 'invalid_advertised_endpoint' }
+      })
+      expect(server.getDeviceRegistry()!.listDevices()).toEqual([])
     }
   )
 
