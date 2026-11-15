@@ -10,7 +10,10 @@ import {
   Text,
   View
 } from 'react-native'
+import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { colors, radii, spacing, typography } from '../theme/mobile-theme'
+import { themedStyleSheet } from '../theme/themed-styles'
+import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import type { AndroidUpdateState } from './android-update-controller'
 import { androidUpdateController } from './android-update-runtime'
 
@@ -33,27 +36,39 @@ function AndroidAppUpdateContent({
   onHide: () => void
   onRelease: () => void
 }) {
+  const t = useMobileTranslation()
   const busy = ['loading', 'downloading', 'verifying', 'installing'].includes(state.phase)
   const installing = state.phase === 'installing'
   const ready = state.phase === 'ready'
   const permission = state.phase === 'permission'
   const title = ready
-    ? 'Ready to install'
+    ? t('androidAppUpdate.readyTitle', 'Ready to install')
     : permission
-      ? 'Allow updates from Orca'
-      : `Update to Orca ${state.version}`
+      ? t('androidAppUpdate.permissionTitle', 'Allow updates from Orca')
+      : t('settings.appUpdateSettingsRows.updateToVersion', 'Update to Orca {{version}}', {
+          version: state.version
+        })
   const detail = ready
-    ? 'The APK matches this release and your installed app. Android will ask you to confirm the update.'
+    ? t(
+        'androidAppUpdate.readyDescription',
+        'The APK matches this release and your installed app. Android will ask you to confirm the update.'
+      )
     : permission
-      ? 'Enable “Allow from this source” in Android Settings. Installation continues when you return.'
-      : 'Download the update here, then confirm with Android. Your paired hosts and settings stay in place.'
+      ? t(
+          'androidAppUpdate.permissionDescription',
+          'Enable “Allow from this source” in Android Settings. Installation continues when you return.'
+        )
+      : t(
+          'androidAppUpdate.downloadDescription',
+          'Download the update here, then confirm with Android. Your paired hosts and settings stay in place.'
+        )
   const stage = installing
-    ? 'Opening Android installer…'
+    ? t('androidAppUpdate.installing', 'Opening Android installer…')
     : state.phase === 'loading'
-      ? 'Getting release details…'
+      ? t('androidAppUpdate.loading', 'Getting release details…')
       : state.phase === 'verifying'
-        ? 'Verifying APK…'
-        : 'Downloading update…'
+        ? t('androidAppUpdate.verifying', 'Verifying APK…')
+        : t('androidAppUpdate.downloading', 'Downloading update…')
   const percent =
     state.total > 0 ? Math.min(100, Math.floor((state.downloaded * 100) / state.total)) : 0
   return (
@@ -65,13 +80,13 @@ function AndroidAppUpdateContent({
           <ArrowDownToLine size={28} color={colors.textPrimary} />
         )}
       </View>
-      <Text style={styles.eyebrow}>ORCA FOR ANDROID</Text>
+      <Text style={styles.eyebrow}>{t('androidAppUpdate.platform', 'ORCA FOR ANDROID')}</Text>
       <Text accessibilityRole="header" style={styles.title}>
         {title}
       </Text>
       <Text style={styles.detail}>{detail}</Text>
       <View style={styles.summary}>
-        <Text style={styles.label}>New version</Text>
+        <Text style={styles.label}>{t('androidAppUpdate.newVersion', 'New version')}</Text>
         <Text style={styles.value}>{state.version}</Text>
       </View>
       {busy ? (
@@ -91,14 +106,19 @@ function AndroidAppUpdateContent({
           </View>
           <Text style={styles.caption}>
             {state.total > 0
-              ? `${mb(state.downloaded)} of ${mb(state.total)} MB`
-              : 'Connecting to GitHub'}
+              ? t('androidAppUpdate.progress', '{{downloaded}} of {{total}} MB', {
+                  downloaded: mb(state.downloaded),
+                  total: mb(state.total)
+                })
+              : t('androidAppUpdate.connecting', 'Connecting to GitHub')}
           </Text>
         </View>
       ) : ready ? (
         <View style={styles.verified}>
           <Check size={16} color={colors.textPrimary} />
-          <Text style={styles.caption}>Checksum and signing certificate verified</Text>
+          <Text style={styles.caption}>
+            {t('androidAppUpdate.verified', 'Checksum and signing certificate verified')}
+          </Text>
         </View>
       ) : null}
       {state.error && (
@@ -114,12 +134,12 @@ function AndroidAppUpdateContent({
         >
           <Text style={styles.primaryText}>
             {ready
-              ? 'Install update'
+              ? t('androidAppUpdate.install', 'Install update')
               : permission
-                ? 'Open Android Settings'
+                ? t('androidAppUpdate.settings', 'Open Android Settings')
                 : state.phase === 'error'
-                  ? 'Try again'
-                  : 'Download update'}
+                  ? t('androidAppUpdate.retry', 'Try again')
+                  : t('androidAppUpdate.download', 'Download update')}
           </Text>
         </Pressable>
       )}
@@ -128,24 +148,33 @@ function AndroidAppUpdateContent({
         style={({ pressed }) => [styles.secondary, pressed && styles.pressed]}
         onPress={onHide}
       >
-        <Text style={styles.secondaryText}>{busy ? 'Keep using Orca' : 'Not now'}</Text>
+        <Text style={styles.secondaryText}>
+          {busy
+            ? t('androidAppUpdate.keepUsing', 'Keep using Orca')
+            : t('androidAppUpdate.notNow', 'Not now')}
+        </Text>
       </Pressable>
       {busy && !installing && (
         <Pressable accessibilityRole="button" style={styles.link} onPress={onCancel}>
-          <Text style={styles.caption}>Cancel download</Text>
+          <Text style={styles.caption}>{t('androidAppUpdate.cancel', 'Cancel download')}</Text>
         </Pressable>
       )}
       {!busy && (
         <Pressable accessibilityRole="link" style={styles.link} onPress={onRelease}>
-          <Text style={styles.caption}>View release on GitHub</Text>
+          <Text style={styles.caption}>
+            {t('androidAppUpdate.release', 'View release on GitHub')}
+          </Text>
         </Pressable>
       )}
-      <Text style={styles.footnote}>Nothing installs without your confirmation.</Text>
+      <Text style={styles.footnote}>
+        {t('androidAppUpdate.confirmation', 'Nothing installs without your confirmation.')}
+      </Text>
     </ScrollView>
   )
 }
 
 export function AndroidAppUpdateModal() {
+  useMobileColorScheme()
   const controller = androidUpdateController
   const state = useSyncExternalStore(
     controller?.subscribe ?? noopSubscribe,
@@ -184,7 +213,7 @@ export function AndroidAppUpdateModal() {
   )
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyleSheet(() => ({
   backdrop: {
     flex: 1,
     backgroundColor: 'rgba(0, 0, 0, 0.6)',
@@ -197,7 +226,7 @@ const styles = StyleSheet.create({
     maxWidth: 420,
     maxHeight: '90%',
     backgroundColor: colors.bgPanel,
-    borderRadius: radii.card,
+    borderRadius: radii.floating,
     borderWidth: 1,
     borderColor: colors.borderSubtle,
     overflow: 'hidden'
@@ -206,7 +235,7 @@ const styles = StyleSheet.create({
   icon: {
     width: 56,
     height: 56,
-    borderRadius: radii.card,
+    borderRadius: radii.tile,
     backgroundColor: colors.bgRaised,
     alignItems: 'center',
     justifyContent: 'center',
@@ -254,7 +283,7 @@ const styles = StyleSheet.create({
   track: {
     height: 4,
     backgroundColor: colors.bgRaised,
-    borderRadius: radii.row,
+    borderRadius: radii.pill,
     overflow: 'hidden'
   },
   fill: { height: '100%', backgroundColor: colors.textPrimary },
@@ -273,7 +302,7 @@ const styles = StyleSheet.create({
   },
   primary: {
     backgroundColor: colors.surfaceBright,
-    borderRadius: radii.button,
+    borderRadius: radii.control,
     alignItems: 'center',
     padding: spacing.md,
     minHeight: 48,
@@ -290,4 +319,4 @@ const styles = StyleSheet.create({
     marginTop: spacing.md
   },
   pressed: { opacity: 0.7 }
-})
+}))

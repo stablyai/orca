@@ -1,8 +1,12 @@
 # Android in-app updates
 
 Orca's existing release checker owns discovery, its daily cadence, manual checks and per-version
-dismissals. Android APKs use the `mobile-android-v*` channel, including its published prereleases.
-Desktop releases must not be used as Android update metadata.
+dismissals. This updater remains scoped to the legacy `com.stably.orca.mobile` APK's
+`mobile-android-v*` channel, including its published prereleases. That channel is now retired;
+the existing migration screen remains unchanged. The current `dev.orca.app` package uses
+`android-v*` releases and retains its release-page fallback for sideloaded installs. Google Play
+installs keep Play-managed updates and never enter this installer. The install-packages permission
+is included only for the legacy package. Desktop releases must not be used as Android metadata.
 
 Home and Settings now open an in-app update dialog. Downloading is explicit and cancellable.
 “Keep using Orca” hides the dialog without stopping the transfer; reopening it restores progress.

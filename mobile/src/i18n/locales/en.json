@@ -1,4 +1,29 @@
 {
+  "androidAppUpdate": {
+    "readyTitle": "Ready to install",
+    "permissionTitle": "Allow updates from Orca",
+    "readyDescription": "The APK matches this release and your installed app. Android will ask you to confirm the update.",
+    "permissionDescription": "Enable “Allow from this source” in Android Settings. Installation continues when you return.",
+    "downloadDescription": "Download the update here, then confirm with Android. Your paired hosts and settings stay in place.",
+    "installing": "Opening Android installer…",
+    "loading": "Getting release details…",
+    "verifying": "Verifying APK…",
+    "downloading": "Downloading update…",
+    "connecting": "Connecting to GitHub",
+    "install": "Install update",
+    "settings": "Open Android Settings",
+    "retry": "Try again",
+    "download": "Download update",
+    "keepUsing": "Keep using Orca",
+    "notNow": "Not now",
+    "platform": "ORCA FOR ANDROID",
+    "newVersion": "New version",
+    "verified": "Checksum and signing certificate verified",
+    "cancel": "Cancel download",
+    "release": "View release on GitHub",
+    "confirmation": "Nothing installs without your confirmation.",
+    "progress": "{{downloaded}} of {{total}} MB"
+  },
   "settings": {
     "appearance": {
       "theme": {
