@@ -1,13 +1,14 @@
 import { ignoreProviderTransportError } from './provider-child'
-import type { ChildProcess } from 'node:child_process'
-import type { PassThrough } from 'node:stream'
+import type { PassThrough, Writable } from 'node:stream'
 
-/** H may outlive a chat; its stdin must not retain connection error callbacks. */
+/** CLI input must survive H's exit and release its connection when the CLI retires. */
 export function pipeDirectProviderInput(
-  raw: ChildProcess,
+  destination: Writable | undefined,
   input: PassThrough,
-  onFinish: () => void
+  onFinish: () => void,
+  onEnd: () => void
 ): { release: () => void; end: () => void } {
+  let released = false
   const onError = (error: Error): void => {
     input.destroy(error)
   }
@@ -15,29 +16,36 @@ export function pipeDirectProviderInput(
     input.destroy()
   }
   input.on('error', ignoreProviderTransportError)
-  raw.stdin?.once('close', onClose)
-  if (raw.stdin?.destroyed) {
+  destination?.once('close', onClose)
+  if (destination?.destroyed) {
     onClose()
   }
-  raw.stdin?.on('error', onError)
-  raw.stdin?.once('finish', onFinish)
-  if (raw.stdin) {
-    input.pipe(raw.stdin)
+  destination?.on('error', onError)
+  destination?.once('finish', onFinish)
+  input.once('end', onEnd)
+  if (destination) {
+    // EOF is an ownership action too: a pending fault must capture before it is delivered.
+    input.pipe(destination, { end: false })
   }
   return {
     release: () => {
-      raw.stdin?.off('close', onClose)
-      raw.stdin?.off('finish', onFinish)
-      raw.stdin?.off('error', onError)
-      raw.stdin?.on('error', ignoreProviderTransportError)
-      input.unpipe(raw.stdin ?? undefined)
-      raw.stdin?.destroy()
+      if (released) {
+        return
+      }
+      released = true
+      input.off('end', onEnd)
+      destination?.off('close', onClose)
+      destination?.off('finish', onFinish)
+      destination?.off('error', onError)
+      destination?.on('error', ignoreProviderTransportError)
+      input.unpipe(destination)
+      destination?.destroy()
     },
     // Ends the CLI's input as an owner death would; later owner writes stay buffered, not failed.
     end: () => {
-      input.unpipe(raw.stdin ?? undefined)
-      if (raw.stdin && !raw.stdin.writableEnded) {
-        raw.stdin.end()
+      input.unpipe(destination)
+      if (destination && !destination.destroyed && !destination.writableEnded) {
+        destination.end()
       }
     }
   }

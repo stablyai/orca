@@ -305,6 +305,7 @@ export function createProviderSpawnSpec(
     program: supervised ? resolveProviderExecPath(platform) : launch.command,
     args: supervised
       ? [
+          '--cli-input-fd7',
           String(stdinEndGraceMs),
           String(sigtermGraceMs),
           lifetime,

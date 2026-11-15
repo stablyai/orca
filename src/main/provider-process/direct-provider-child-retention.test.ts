@@ -46,7 +46,8 @@ function launch(index: number) {
   const raw = new ChildProcess()
   const parentPid = 7_000_000 + index * 3
   Object.defineProperty(raw, 'pid', { value: parentPid })
-  raw.stdin = new PassThrough()
+  raw.stdin = null
+  const destination = new PassThrough()
   const stdout = new PassThrough()
   const stderr = new PassThrough()
   raw.stdout = stdout
@@ -55,7 +56,9 @@ function launch(index: number) {
   const outcome = new PassThrough()
   const gate = new PassThrough()
   const control = createControl()
-  Object.assign(raw, { stdio: [raw.stdin, raw.stdout, raw.stderr, control, gate, status, outcome] })
+  Object.assign(raw, {
+    stdio: [raw.stdin, raw.stdout, raw.stderr, control, gate, status, outcome, destination]
+  })
   status.write(`${JSON.stringify({ leaderPid: parentPid + 1, watcherPid: parentPid + 2 })}\n`)
   gate.once('finish', () => status.end())
   const child = new DirectProviderChild(raw, spec, 'test-boot')
@@ -65,7 +68,19 @@ function launch(index: number) {
   const errors: Error[] = []
   child.on('error', (error) => errors.push(error))
   const closed = new Promise<void>((resolve) => child.once('close', () => resolve()))
-  return { raw, child, connection, gate, control, outcome, stdout, stderr, errors, closed }
+  return {
+    raw,
+    child,
+    connection,
+    destination,
+    gate,
+    control,
+    outcome,
+    stdout,
+    stderr,
+    errors,
+    closed
+  }
 }
 
 async function finishChats(count: number) {
@@ -81,14 +96,15 @@ async function finishChats(count: number) {
     outcome.end('{"code":0,"signal":null}\n')
   }
   await Promise.all(runs.map(({ closed }) => closed))
-  for (const { raw, child, connection, gate, errors } of runs) {
+  for (const { raw, child, connection, destination, gate, errors } of runs) {
     expect(raw.exitCode).toBeNull() // H deliberately has not emitted exit.
     expect(child.exitCode).toBe(0)
     expect(raw.stdin).not.toBe(child.stdin)
     // Late native-parent transport failures must not reach the retired chat.
     raw.emit('error', new Error('late parent error'))
     gate.emit('error', new Error('late gate error'))
-    raw.stdin!.emit('error', new Error('late stdin error'))
+    expect(destination.destroyed).toBe(true)
+    destination.emit('error', new Error('late stdin error'))
     expect(errors).toEqual([])
     expect(connection.failures).toEqual([])
     raw.stdout!.destroy()
@@ -118,7 +134,7 @@ describe('finished CLI retention while native parents keep reaping', () => {
 it('closes public input as soon as its native destination closes', async () => {
   const run = launch(2000)
   await run.child.ready
-  run.raw.stdin!.destroy()
+  run.destination.destroy()
   await new Promise<void>((resolve) => setImmediate(resolve))
   expect(run.child.stdin.destroyed).toBe(true)
   run.stdout.end()

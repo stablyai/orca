@@ -1,14 +1,14 @@
 import { createFakePipedChild } from '../../shared/__fixtures__/fake-spawned-child'
 import { PassThrough } from 'node:stream'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { PipedProcessSpawner } from '@orca/process-host/process-spec'
+import type { ProviderProcessSpawner } from './provider-process-spawn'
 import type { DescendantSnapshot } from '../pty/process-retirement/pty-descendant-termination'
 import { spawnManagedProviderProcess } from './managed-provider-process'
 
 vi.mock('./provider-process-spawn', () => ({
   spawnProviderProcess: (
     spec: { program: string; args: string[]; env: NodeJS.ProcessEnv },
-    spawn: PipedProcessSpawner
+    spawn: ProviderProcessSpawner
   ) => spawn({ program: spec.program, args: spec.args, env: spec.env })
 }))
 
@@ -52,7 +52,7 @@ function rootOnly(platform: NodeJS.Platform) {
       return true
     })
   })
-  const spawnImpl: PipedProcessSpawner = () => child
+  const spawnImpl: ProviderProcessSpawner = () => child
   return spawnManagedProviderProcess(
     { command: 'fixture-provider', args: [] },
     { spawnImpl, platform, site: 'fixture-provider-teardown' }

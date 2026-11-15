@@ -135,6 +135,32 @@ async function readText(stream: Readable): Promise<string> {
 }
 
 describe.runIf(process.platform !== 'win32')('direct provider ownership', () => {
+  it.each(['old-protocol', 'missing-input'])(
+    'refuses a %s helper contract before CLI execution',
+    async (fault) => {
+      const spec = createProviderSpawnSpec(
+        { command: process.execPath, args: ['-e', "process.stdout.write('MUST NOT EXECUTE')"] },
+        process.env,
+        process.platform
+      )
+      const raw = spawnProcess({
+        program: spec.program,
+        args: fault === 'old-protocol' ? spec.args.slice(1) : spec.args,
+        cwd: state.root,
+        env: spec.env,
+        stdio:
+          fault === 'missing-input'
+            ? ['ignore', 'pipe', 'pipe', 'pipe', 'pipe', 'pipe', 'pipe']
+            : ['ignore', 'pipe', 'pipe', 'pipe', 'pipe', 'pipe', 'pipe', 'pipe']
+      })
+      const output = raw.stdout ? readText(raw.stdout) : Promise.resolve('')
+      raw.stderr?.resume()
+      const [code] = await once(raw, 'close')
+      expect(code).toBe(64)
+      expect(await output).toBe('')
+    }
+  )
+
   it('publishes ownership before execution, preserves argv/environment, and drains the real final output', async () => {
     const run = launch(
       String.raw`

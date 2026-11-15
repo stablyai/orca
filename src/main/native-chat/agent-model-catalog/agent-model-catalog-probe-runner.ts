@@ -1,5 +1,5 @@
 import type { ClaudeBackgroundFailedExit } from '../../../shared/text-generation/launch/claude-background-run-isolation'
-import type { PipedProcessSpawner } from '@orca/process-host/process-spec'
+import type { ProviderProcessSpawner } from '../../provider-process/provider-process-spawn'
 import { StringDecoder } from 'node:string_decoder'
 import { withTimeout } from '../../../shared/concurrency/promise-timeout-fallback'
 
@@ -57,7 +57,7 @@ export type AgentModelCatalogRunnerOptions = {
   timeoutMs?: number | null
   maxOutputBytes?: number
   signal?: AbortSignal
-  spawnImpl?: PipedProcessSpawner
+  spawnImpl?: ProviderProcessSpawner
   platform?: NodeJS.Platform
   inheritedEnv?: NodeJS.ProcessEnv
   /** Finish required replies even when an optional control request never completes. */

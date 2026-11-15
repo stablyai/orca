@@ -1,6 +1,6 @@
 import { withOrcaClaudeChatEntrypoint } from '../../../shared/agent-launch/startup/claude-chat-entrypoint'
 import { awaitProviderChildSpawn, type ProviderChild } from '../../provider-process/provider-child'
-import type { PipedProcessSpawner } from '@orca/process-host/process-spec'
+import type { ProviderProcessSpawner } from '../../provider-process/provider-process-spawn'
 import type { SpawnOptions as ClaudeAgentSdkSpawnOptions } from '@anthropic-ai/claude-agent-sdk'
 import { spawnProcess } from '@orca/process-host'
 import {
@@ -50,7 +50,7 @@ function observeStdoutWithReader(
 // Orca owns the child for PID-based exit proof and Windows .cmd quoting.
 // POSIX owner watchers stop Claude if Orca dies; Windows spawns Claude directly.
 export function createClaudeCodeProcessSpawn(
-  spawnImpl: PipedProcessSpawner = spawnProcess,
+  spawnImpl: ProviderProcessSpawner = spawnProcess,
   platform: NodeJS.Platform = process.platform,
   launch?: { pathToClaudeCodeExecutable: string; prefixArgs?: readonly string[] },
   onStdout?: (chunk: Buffer | string) => void

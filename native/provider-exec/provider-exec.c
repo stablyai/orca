@@ -4,8 +4,9 @@
 // the next reaper. The leader starts its own session, forks the same-session owner-pipe
 // watcher, reports both on fd 5, waits for the owner's GO on fd 4, then execs the CLI with its argv,
 // environment, signal mask and dispositions unchanged.
-// Usage: orca-provider-exec <stdinEndGraceMs> <sigtermGraceMs> <session|one-shot>
+// Usage: orca-provider-exec --cli-input-fd7 <stdinEndGraceMs> <sigtermGraceMs> <session|one-shot>
 //          <stdin-end|stdin-end-and-sigterm> -- <command> [args...]
+// The fixed --cli-input-fd7 prefix identifies the private input protocol.
 #if !defined(__APPLE__)
 #define _POSIX_C_SOURCE 200809L
 #endif
@@ -29,7 +30,7 @@
 #include <sys/sysctl.h>
 #endif
 
-enum { OWNER_FD = 3, GATE_FD = 4, STATUS_FD = 5, OUTCOME_FD = 6 };
+enum { OWNER_FD = 3, GATE_FD = 4, STATUS_FD = 5, OUTCOME_FD = 6, INPUT_FD = 7 };
 enum {
     EXIT_USAGE = 64,
     EXIT_GATE_CLOSED = 69,
@@ -367,6 +368,7 @@ static _Noreturn void run_watcher(int report_fd, struct watcher *w) {
     close(null_fd);
     close(GATE_FD);
     close(STATUS_FD);
+    close(INPUT_FD);
     struct timespec probe;
     if (chdir("/") != 0 || clock_gettime(CLOCK_MONOTONIC, &probe) != 0) {
         goto failed;
@@ -519,6 +521,11 @@ static _Noreturn void run_leader(struct watcher *watcher, char *command[]) {
         fail(EXIT_GATE_CLOSED);
     }
     close(GATE_FD);
+    // The GUI owns this channel independently of the parent's ChildProcess stdin.
+    if (dup2(INPUT_FD, STDIN_FILENO) < 0) {
+        fail(EXIT_BOOTSTRAP);
+    }
+    close(INPUT_FD);
 
     sigprocmask(SIG_BLOCK, &stop_set, NULL);
     restore_signal_actions();
@@ -580,6 +587,7 @@ static _Noreturn void await_leader(pid_t leader) {
         sigaction(IGNORED_SIGNALS[i], &ignore, NULL);
     }
     sigprocmask(SIG_SETMASK, &saved_mask, NULL);
+    close(INPUT_FD);
     int null_fd = open("/dev/null", O_RDWR | O_CLOEXEC);
     for (int fd = 0; fd <= STATUS_FD; fd++) {
         if (fd > 2 || null_fd < 0 || dup2(null_fd, fd) < 0) {
@@ -631,14 +639,16 @@ int main(int argc, char *argv[]) {
 #endif
     unsigned stdin_end_grace_ms;
     unsigned sigterm_grace_ms;
-    if (argc < 7 || parse_ms(argv[1], STDIN_END_GRACE_MAX_MS, &stdin_end_grace_ms) != 0 ||
-            parse_ms(argv[2], SIGTERM_GRACE_MAX_MS, &sigterm_grace_ms) != 0 ||
-            (strcmp(argv[3], "session") != 0 && strcmp(argv[3], "one-shot") != 0) ||
-            (strcmp(argv[4], "stdin-end") != 0 && strcmp(argv[4], "stdin-end-and-sigterm") != 0) ||
-            strcmp(argv[5], "--") != 0 || argv[6][0] == '\0') {
+    // A fixed protocol discriminator rejects mismatched helpers before a CLI can execute.
+    if (argc < 8 || strcmp(argv[1], "--cli-input-fd7") != 0 ||
+            parse_ms(argv[2], STDIN_END_GRACE_MAX_MS, &stdin_end_grace_ms) != 0 ||
+            parse_ms(argv[3], SIGTERM_GRACE_MAX_MS, &sigterm_grace_ms) != 0 ||
+            (strcmp(argv[4], "session") != 0 && strcmp(argv[4], "one-shot") != 0) ||
+            (strcmp(argv[5], "stdin-end") != 0 && strcmp(argv[5], "stdin-end-and-sigterm") != 0) ||
+            strcmp(argv[6], "--") != 0 || argv[7][0] == '\0') {
         return EXIT_USAGE;
     }
-    for (int fd = 0; fd <= OUTCOME_FD; fd++) {
+    for (int fd = 0; fd <= INPUT_FD; fd++) {
         if (fcntl(fd, F_GETFD) < 0) {
             return EXIT_USAGE;
         }
@@ -647,8 +657,8 @@ int main(int argc, char *argv[]) {
     struct watcher watcher = {
         .stdin_end_grace_ms = stdin_end_grace_ms,
         .sigterm_grace_ms = sigterm_grace_ms,
-        .session = strcmp(argv[3], "session") == 0,
-        .close_stdin_end = strcmp(argv[4], "stdin-end") == 0,
+        .session = strcmp(argv[4], "session") == 0,
+        .close_stdin_end = strcmp(argv[5], "stdin-end") == 0,
         .phase = WATCH_IDLE,
     };
     sigset_t fork_set;
@@ -689,7 +699,7 @@ int main(int argc, char *argv[]) {
     }
     pid_t leader = fork();
     if (leader == 0) {
-        run_leader(&watcher, &argv[6]);
+        run_leader(&watcher, &argv[7]);
     }
     if (leader < 0) {
         return EXIT_BOOTSTRAP;

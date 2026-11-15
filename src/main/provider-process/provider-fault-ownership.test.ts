@@ -1,5 +1,8 @@
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
-import { terminateProviderFaultDescendants } from './provider-fault-ownership'
+import {
+  ProviderFaultOwnership,
+  terminateProviderFaultDescendants
+} from './provider-fault-ownership'
 import type { ProviderProcessRow, ProcessRowRead } from './provider-process-row-read'
 import type { ProcessTableRow } from '../pty/process-retirement/pty-process-table-parser'
 
@@ -22,6 +25,27 @@ beforeEach(() => {
   vi.setSystemTime(NOW)
 })
 afterEach(() => vi.useRealTimers())
+
+it('holds and coalesces EOF, TERM and reap until the one fault task settles', async () => {
+  const publication = Promise.withResolvers<never>()
+  const fault = new ProviderFaultOwnership()
+  const actions: string[] = []
+  const ownerLost = () => actions.push('owner-loss')
+  fault.stopAfterCapture(publication.promise, ownerLost)
+  const task = fault.task
+  for (let index = 0; index < 1_500; index++) {
+    fault.stopAfterCapture(publication.promise, ownerLost)
+    expect(fault.deferStop('stdin', () => actions.push('stdin'))).toBe(true)
+    expect(fault.deferStop('term', () => actions.push('term'))).toBe(true)
+    expect(fault.deferStop('reap', () => actions.push('reap'))).toBe(true)
+  }
+  expect(fault.task).toBe(task)
+  expect(actions).toEqual([])
+  publication.reject(new Error('Identity read refused'))
+  await expect(task).resolves.toBe('unverifiable')
+  expect(actions).toEqual(['owner-loss', 'stdin', 'term', 'reap'])
+  expect(fault.deferStop('stdin', () => actions.push('unexpected'))).toBe(false)
+})
 
 it.each([150, 1_500])('skips host inventories for %s absent provider roots', async (count) => {
   const readTable = vi.fn(async () => ({ rows: [root, tool], capturedAtMs: NOW }))

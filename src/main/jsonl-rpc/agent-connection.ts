@@ -1,4 +1,4 @@
-import type { PipedProcessSpawner } from '@orca/process-host/process-spec'
+import type { ProviderProcessSpawner } from '../provider-process/provider-process-spawn'
 import { spawnProcess } from '@orca/process-host'
 import {
   providerDiagnostic,
@@ -56,7 +56,7 @@ export class JsonlRpcAgentConnection {
   constructor(
     launch: ProviderProcessLaunch,
     private readonly options: JsonlRpcAgentConnectionOptions = {},
-    spawnImpl: PipedProcessSpawner = spawnProcess
+    spawnImpl: ProviderProcessSpawner = spawnProcess
   ) {
     const peerOptions = resolveJsonlRpcPeerOptions(options.peer)
     this.managed = spawnManagedProviderProcess(launch, {

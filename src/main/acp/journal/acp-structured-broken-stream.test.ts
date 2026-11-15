@@ -144,7 +144,7 @@ describe('ACP connection to a directly launched agent that closes stdout but kee
             options,
             (spec) => {
               const child = spawnProcess(spec)
-              child.stdout.once('end', () => {
+              child.stdout!.once('end', () => {
                 stdoutEnded = true
               })
               return child

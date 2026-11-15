@@ -1,6 +1,7 @@
 import { PassThrough } from 'node:stream'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { PipedProcessSpawner, PipedProcessSpec } from '@orca/process-host/process-spec'
+import type { PipedProcessSpec } from '@orca/process-host/process-spec'
+import type { ProviderProcessSpawner } from '../../provider-process/provider-process-spawn'
 import { createFakePipedChild } from '../../../shared/__fixtures__/fake-spawned-child'
 import type { terminateProviderProcessTree } from '../../provider-process/provider-process-teardown'
 import {
@@ -15,7 +16,7 @@ import { AcpScriptedAgent, deferred, tick } from './testing/acp-scripted-agent.t
 
 // Protocol fixtures supply a provider child, not the native bootstrap's control pipes.
 vi.mock('../../provider-process/provider-process-spawn', () => ({
-  spawnProviderProcess: (spec: PipedProcessSpec, spawn: PipedProcessSpawner) => spawn(spec)
+  spawnProviderProcess: (spec: PipedProcessSpec, spawn: ProviderProcessSpawner) => spawn(spec)
 }))
 
 const teardown = vi.hoisted(() =>
@@ -45,7 +46,7 @@ function fixture(
     stderr: new PassThrough(),
     kill: vi.fn(() => true)
   })
-  const spawn = vi.fn<PipedProcessSpawner>(() => {
+  const spawn = vi.fn<ProviderProcessSpawner>(() => {
     return child
   })
   agent.on('initialize', (frame) => agent.reply(frame, { protocolVersion: 1 }))

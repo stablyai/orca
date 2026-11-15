@@ -41,7 +41,7 @@ export class DirectProviderChild extends EventEmitter implements ProviderChild {
   connected = true
   groupVerdict: 'exited' | 'live' | 'unverifiable' = 'unverifiable'
   writerPid?: number
-  private launchedPid?: number
+  pid?: number
   private publication?: Promise<Ownership>
   private ownership?: Ownership
   private control?: Duplex
@@ -70,10 +70,16 @@ export class DirectProviderChild extends EventEmitter implements ProviderChild {
     this.stop = new DirectProviderStop(spec, () => this.control, this.forceReap.bind(this))
     const control = raw.stdio?.at(3)
     const gate = raw.stdio?.at(4)
-    const status = raw.stdio?.at(5)
+    const destination = raw.stdio?.at(7)
+    const status = destination instanceof Writable ? raw.stdio?.at(5) : null
     this.control = control instanceof Duplex ? control : undefined
     this.gate = gate instanceof Writable ? gate : undefined
-    this.input = pipeDirectProviderInput(raw, this.stdin, () => this.stdinEnded())
+    this.input = pipeDirectProviderInput(
+      destination instanceof Writable ? destination : undefined,
+      this.stdin,
+      () => this.stdinEnded(),
+      () => this.faultOwnership.stop('stdin', this.input.end)
+    )
     const releaseOutput = pipeDirectProviderOutput(raw, this.stdout, this.stderr)
     if (this.control) {
       readProviderControlCompletion(this.control, (completion) => {
@@ -92,15 +98,17 @@ export class DirectProviderChild extends EventEmitter implements ProviderChild {
     }
     raw.once('error', onError)
     this.releaseRaw = () => {
-      raw.off('error', onError)
-      raw.on('error', ignoreProviderTransportError)
-      this.gate?.off('error', gateError)
-      this.gate?.on('error', ignoreProviderTransportError)
+      raw.off('error', onError).on('error', ignoreProviderTransportError)
+      this.gate?.off('error', gateError).on('error', ignoreProviderTransportError)
       this.input.release()
       releaseOutput()
     }
     void observeProviderLeaderOutcome(raw).then((outcome) => {
       this.outcome = outcome
+      if (outcome !== null) {
+        // P's outcome ends input ownership even while H is still retiring adopted children.
+        this.input.release()
+      }
       if (this.leaderExited && this.connected) {
         this.stop.leaderExited(this.released)
       } else if (this.leaderExited || this.connected) {
@@ -110,19 +118,14 @@ export class DirectProviderChild extends EventEmitter implements ProviderChild {
       void this.settle()
     })
     const bootstrap = status instanceof Readable ? readBootstrapStatus(status) : null
-    this.ready = Promise.resolve()
-      .then(() => withProviderBootstrapDeadline(() => this.start(bootstrap)))
-      .catch(async (error) => {
-        this.cancelLaunch()
-        this.failure ??= this.reportFailure(error)
-        throw await this.failure
-      })
+    this.ready = withProviderBootstrapDeadline(() => this.start(bootstrap)).catch(async (error) => {
+      this.cancelLaunch()
+      this.failure ??= this.reportFailure(error)
+      throw await this.failure
+    })
     void this.ready.catch(() => {})
   }
 
-  get pid(): number | undefined {
-    return this.launchedPid
-  }
   get leaderExited(): boolean {
     return (
       this.raw.pid !== undefined &&
@@ -131,7 +134,7 @@ export class DirectProviderChild extends EventEmitter implements ProviderChild {
   }
 
   get outcomeLost(): boolean {
-    return this.outcome === null && this.launchedPid !== undefined && !this.failure
+    return this.outcome === null && this.pid !== undefined && !this.failure
   }
 
   get numericIdentityRetired(): boolean {
@@ -159,14 +162,11 @@ export class DirectProviderChild extends EventEmitter implements ProviderChild {
       leaderPid,
       watcherPid,
       this.raw.pid
-    ).then(async (ownership) => {
-      this.ownership = ownership
-      if (this.canceled) {
-        await ownership.remove()
-      }
-      return ownership
-    })
+    )
     this.ownership = await this.publication
+    if (this.canceled) {
+      await this.ownership.remove()
+    }
     if (this.canceled || this.outcome !== undefined) {
       throw new Error('Provider launch canceled before execution')
     }
@@ -180,7 +180,7 @@ export class DirectProviderChild extends EventEmitter implements ProviderChild {
     if (this.canceled) {
       throw new Error('Provider bootstrap ended before launch completed')
     }
-    this.launchedPid = leaderPid
+    this.pid = leaderPid
     notifyProviderChild(this, 'spawn')
   }
 
@@ -218,6 +218,9 @@ export class DirectProviderChild extends EventEmitter implements ProviderChild {
   }
 
   private startTerm(resend = false): boolean {
+    if (this.faultOwnership.deferStop('term', () => this.startTerm(resend))) {
+      return false
+    }
     if (this.stop.reaping || (!this.stop.term() && !resend)) {
       return false
     }
@@ -243,7 +246,7 @@ export class DirectProviderChild extends EventEmitter implements ProviderChild {
     if (this.settled || (this.reapTask && !completion)) {
       return false
     }
-    if (!completion && this.faultOwnership.deferReap(this.forceReap.bind(this))) {
+    if (this.faultOwnership.deferStop('reap', () => this.forceReap(completion))) {
       return false
     }
     this.nativeCompletion = completion

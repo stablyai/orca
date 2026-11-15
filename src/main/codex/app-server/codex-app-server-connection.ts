@@ -1,4 +1,4 @@
-import type { PipedProcessSpawner } from '@orca/process-host/process-spec'
+import type { ProviderProcessSpawner } from '../../provider-process/provider-process-spawn'
 import { spawnProcess } from '@orca/process-host'
 import { spawnManagedProviderProcess } from '../../provider-process/managed-provider-process'
 import { awaitProviderChildSpawn } from '../../provider-process/provider-child'
@@ -31,7 +31,7 @@ export const DEFAULT_CODEX_REQUEST_TIMEOUT_MS = 30_000
 async function connectCodexAppServer(
   launch: CodexAppServerLaunch,
   handlers: CodexAppServerConnectionHandlers = {},
-  spawnImpl: PipedProcessSpawner,
+  spawnImpl: ProviderProcessSpawner,
   initialize: boolean
 ): Promise<CodexAppServerConnection> {
   const managed = spawnManagedProviderProcess(launch, {
@@ -276,7 +276,7 @@ async function connectCodexAppServer(
 export function spawnCodexAppServerConnection(
   launch: CodexAppServerLaunch,
   handlers: CodexAppServerConnectionHandlers = {},
-  spawnImpl: PipedProcessSpawner = spawnProcess
+  spawnImpl: ProviderProcessSpawner = spawnProcess
 ): Promise<CodexAppServerConnection> {
   return connectCodexAppServer(launch, handlers, spawnImpl, false)
 }
@@ -284,7 +284,7 @@ export function spawnCodexAppServerConnection(
 export function openCodexAppServerConnection(
   launch: CodexAppServerLaunch,
   handlers: CodexAppServerConnectionHandlers = {},
-  spawnImpl: PipedProcessSpawner = spawnProcess
+  spawnImpl: ProviderProcessSpawner = spawnProcess
 ): Promise<CodexAppServerConnection> {
   return connectCodexAppServer(launch, handlers, spawnImpl, true)
 }

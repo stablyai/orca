@@ -87,6 +87,7 @@ async function gatedNative(detachedTool = false) {
   const child = spawn(
     resolveProviderExecPath(),
     [
+      '--cli-input-fd7',
       '20',
       '100',
       'session',
@@ -104,7 +105,7 @@ async function gatedNative(detachedTool = false) {
     {
       env: process.env,
       detached: true,
-      stdio: ['pipe', 'pipe', 'pipe', 'pipe', 'pipe', 'pipe', 'pipe']
+      stdio: ['ignore', 'pipe', 'pipe', 'pipe', 'pipe', 'pipe', 'pipe', 'pipe']
     }
   )
   const closed = track(child)
@@ -214,8 +215,8 @@ describe.runIf(process.platform !== 'win32')('provider orphan ownership', () => 
         '-e',
         String.raw`
       const { spawn } = require('node:child_process')
-      const child = spawn(process.argv[1], ['20', '100', 'session', 'stdin-end-and-sigterm', '--', process.execPath, process.argv[3]],
-        { detached: true, env: process.env, stdio: ['pipe', 'pipe', 'pipe', 'pipe', 'pipe', 'pipe', 'pipe'] })
+      const child = spawn(process.argv[1], ['--cli-input-fd7', '20', '100', 'session', 'stdin-end-and-sigterm', '--', process.execPath, process.argv[3]],
+        { detached: true, env: process.env, stdio: ['ignore', 'pipe', 'pipe', 'pipe', 'pipe', 'pipe', 'pipe', 'pipe'] })
       child.stdout.pipe(process.stdout)
       child.stderr.pipe(process.stderr)
       child.stdio[3].resume()

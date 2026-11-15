@@ -3,6 +3,11 @@ import { parseLinuxProcStat, readPosixProcessRow } from './provider-process-row-
 import { setLibprocAddonForTests } from '../../shared/process-observation/darwin/libproc-addon'
 import { resetNativeReadsForTests } from '../../shared/process-observation/darwin/libproc-native-reads'
 
+// Pin the exact-birth helper fallback to a failed read so fail-closed results are deterministic.
+vi.mock('./provider-exec-process-row', () => ({
+  readProviderExecProcessRow: vi.fn(async () => 'unverifiable')
+}))
+
 afterEach(() => {
   setLibprocAddonForTests(undefined)
   resetNativeReadsForTests()

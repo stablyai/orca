@@ -133,9 +133,10 @@ export async function terminateDescendantSnapshotWithVerdict(
     capture: ProcessTableCapture,
     live: readonly ProcessTableRow[]
   ): void => {
+    const observed = new Set(live.map((current) => current.pid))
     for (const row of snapshot.descendants) {
       const lastSeen = lastSeenAtMs.get(row.pid) ?? Infinity
-      if (live.some((current) => current.pid === row.pid)) {
+      if (observed.has(row.pid)) {
         missingObservations.set(row.pid, 0)
         // A read that started earlier but resolved later must not move the sighting back.
         lastSeenAtMs.set(row.pid, Math.max(lastSeen, capture.capturedAtMs))

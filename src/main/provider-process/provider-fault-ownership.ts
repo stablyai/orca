@@ -24,7 +24,7 @@ import type { publishProviderOwnership } from './provider-ownership-journal'
 export class ProviderFaultOwnership {
   task?: Promise<DescendantTreeVerdict | undefined>
   private pending = false
-  private reapQueued = false
+  private readonly deferred = new Map<'stdin' | 'term' | 'reap' | 'owner-loss', () => void>()
 
   stopAfterCapture(
     ownership: Promise<Awaited<ReturnType<typeof publishProviderOwnership>>> | undefined,
@@ -39,9 +39,14 @@ export class ProviderFaultOwnership {
         .catch(() => 'unverifiable' as const)
         .finally(() => {
           this.pending = false
+          const deferred = [...this.deferred.values()]
+          this.deferred.clear()
+          for (const action of deferred) {
+            action()
+          }
         })
     }
-    void this.task.then(() => stop())
+    this.stop('owner-loss', stop)
   }
 
   /** Only an attempted capture can fail; normal exit never claims detached tools. */
@@ -50,15 +55,19 @@ export class ProviderFaultOwnership {
     return verdict === undefined || verdict === 'exited'
   }
 
-  deferReap(reap: () => boolean): boolean {
+  /** Coalesce destructive requests while the one bounded fault task owns the last anchor. */
+  deferStop(kind: 'stdin' | 'term' | 'reap' | 'owner-loss', stop: () => void): boolean {
     if (!this.pending) {
       return false
     }
-    if (!this.reapQueued) {
-      this.reapQueued = true
-      void this.task?.then(reap)
-    }
+    this.deferred.set(kind, stop)
     return true
+  }
+
+  stop(kind: 'stdin' | 'owner-loss', stop: () => void): void {
+    if (!this.deferStop(kind, stop)) {
+      stop()
+    }
   }
 }
 

@@ -1,13 +1,13 @@
 import { spawnProcess } from '@orca/process-host'
 import type { ChildProcess } from 'node:child_process'
-import type { PipedProcessSpec } from '@orca/process-host/process-spec'
+import type { PipedProcessSpec, ProcessSpec } from '@orca/process-host/process-spec'
 import type { ProviderChild } from './provider-child'
 import { supervisedPosixLaunch, type ProviderSpawnSpec } from './provider-process-supervisor'
 import { DirectProviderChild } from './direct-provider-child'
 import { LegacyProviderChild } from './legacy-provider-child'
 import { providerOwnershipBootId } from './provider-ownership-journal'
 
-export type ProviderProcessSpawner = (spec: PipedProcessSpec) => ChildProcess
+export type ProviderProcessSpawner = (spec: ProcessSpec) => ChildProcess
 
 /** Shared launch seam; ownership stays in this runtime until a compatible host contract exists. */
 export function spawnProviderProcess(
@@ -26,7 +26,7 @@ export function spawnProviderProcess(
           env: spec.env,
           detached: spec.detached,
           stdio: native
-            ? ['pipe', 'pipe', 'pipe', 'pipe', 'pipe', 'pipe', 'pipe']
+            ? ['ignore', 'pipe', 'pipe', 'pipe', 'pipe', 'pipe', 'pipe', 'pipe']
             : ['pipe', 'pipe', 'pipe']
         }
   )
@@ -48,7 +48,7 @@ export function spawnProviderProcess(
 /** The returned child is the legacy supervisor, including its PID and signal semantics. */
 function createLegacyProviderSpawnSpec(spec: ProviderSpawnSpec): PipedProcessSpec {
   const legacy = supervisedPosixLaunch(
-    { command: spec.command, args: spec.args.slice(6), cwd: spec.cwd },
+    { command: spec.command, args: spec.args.slice(7), cwd: spec.cwd },
     spec.env,
     spec
   )
