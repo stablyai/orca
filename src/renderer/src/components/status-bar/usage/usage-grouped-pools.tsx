@@ -7,6 +7,7 @@ import {
   type GroupedUsagePool
 } from './usage-pool-label'
 import { formatBareUsagePercentage } from './usage-percentage-label'
+import { usageTextClass } from './usage-health-tone'
 import { useTranslate } from '../../../i18n/use-translate'
 
 // Shortest window first; an unknown window (0) sorts last. Stable, so ties keep agy's order.
@@ -72,7 +73,10 @@ export function GroupedPoolUsage({
               return (
                 <React.Fragment key={key}>
                   {index > 0 ? <span className="text-muted-foreground">·</span> : null}
-                  <span className="tabular-nums">{`${percentage} ${window}`.trim()}</span>
+                  <span className="tabular-nums">
+                    <span className={usageTextClass(bucket.usedPercent)}>{percentage}</span>
+                    {window ? ` ${window}` : ''}
+                  </span>
                 </React.Fragment>
               )
             })}
