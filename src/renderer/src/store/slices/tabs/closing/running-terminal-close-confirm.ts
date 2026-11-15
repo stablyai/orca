@@ -6,6 +6,10 @@ import type { CloseTerminalDialogCopyKind } from '@/components/terminal-pane/lay
 export type RunningTerminalCloseConfirmRequest = {
   terminalTabId: string
   copyKind: CloseTerminalDialogCopyKind
+  /** The tab's workspace, named in the title. */
+  worktreeId?: string
+  /** Sleeping this workspace keeps the busy agents resumable, so it is offered instead. */
+  canSleepInstead?: boolean
   onConfirm: () => void
   onCancel?: () => void
 }

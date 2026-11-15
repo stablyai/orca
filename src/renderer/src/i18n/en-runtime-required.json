@@ -810,6 +810,14 @@
             "ff8de8a2ad": "display"
           }
         },
+        "bitbucket": {
+          "credentials": {
+            "dialog": {
+              "baseUrl": "API base URL (optional)",
+              "email": "Atlassian account email"
+            }
+          }
+        },
         "claudeSubagentNavigation": {
           "search": {
             "mod": "mod",
@@ -1613,6 +1621,11 @@
       "keywordProfile": "browser profile",
       "keywordSignIn": "sign in"
     },
+    "agentSessionContinuation": {
+      "dialogTitle": "Hand Off to Another Agent",
+      "modeFull": "Full session transcript",
+      "startSession": "Start New Session"
+    },
     "native-chat": {
       "approval": {
         "allow": "Allow",
@@ -2233,9 +2246,16 @@
           "closedToast_one": "Closed {{count}} file with unsaved edits from {{workspace}}",
           "closedToast_other": "Closed {{count}} files with unsaved edits from {{workspace}}",
           "discarded_one": "Unsaved edits in {{count}} file will be discarded:",
-          "discarded_other": "Unsaved edits in {{count}} files will be discarded:"
+          "discarded_other": "Unsaved edits in {{count}} files will be discarded:",
+          "line_one": "{{count}} unsaved file: {{files}}",
+          "line_other": "{{count}} unsaved files: {{files}}"
         }
       }
+    }
+  },
+  "crashReport": {
+    "freeze": {
+      "attach": "Attach saved freeze report and diagnostic logs"
     }
   },
   "dashboard": {
@@ -2384,6 +2404,7 @@
     }
   },
   "resourceManager": {
+    "localDaemonScope": "This affects terminals on this computer.",
     "pty": {
       "localOwnedCount_one": "{{count}} Orca PTY on this computer",
       "localOwnedCount_other": "{{count}} Orca PTYs on this computer"
@@ -2794,6 +2815,12 @@
     }
   },
   "terminal": {
+    "codexSharedServerBanner": {
+      "copy": "Copy",
+      "stopFailed": "Orca couldn't stop the server.",
+      "turnOff": "Turn off",
+      "undo": "To undo, run codex features enable daemon_auto_start."
+    },
     "newerDaemonBanner": {
       "reopenTerminal": "Reopen {{count}} terminals",
       "reopenTerminal_one": "Reopen terminal",
@@ -2851,10 +2878,27 @@
       "showLinked_other": "Show {{count}} linked reviews and tasks"
     }
   },
+  "workspaceDeletion": {
+    "alwaysDelete": "Always delete",
+    "alwaysDeleteTooltip": "Skip this confirmation for future deletions.",
+    "moreDeleteOptions": "More delete options"
+  },
   "workspaceSpace": {
     "compact": {
       "linkedAndScannedCount_one": "{{size}} in linked worktrees · {{count}} workspace",
       "linkedAndScannedCount_other": "{{size}} in linked worktrees · {{count}} workspaces"
+    }
+  },
+  "worktree": {
+    "delete": {
+      "loss": {
+        "changes_one": "{{count}} uncommitted change",
+        "changes_other": "{{count}} uncommitted changes",
+        "unsavedFiles_one": "{{count}} unsaved file",
+        "unsavedFiles_other": "{{count}} unsaved files"
+      },
+      "withChildrenTitle_one": "Delete {{name}} and {{count}} child workspace?",
+      "withChildrenTitle_other": "Delete {{name}} and {{count}} child workspaces?"
     }
   },
   "worktreeJumpPalette": {

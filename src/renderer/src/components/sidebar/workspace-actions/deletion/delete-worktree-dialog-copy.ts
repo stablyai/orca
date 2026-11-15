@@ -158,3 +158,45 @@ export function getDeleteWorktreeLineageDialogDescription(
     }
   )
 }
+
+/** The question title and the verb button for this delete. */
+export function getDeleteWorktreeDialogHeading(
+  args: {
+    isBatchDelete: boolean
+    deleteAllLineage: boolean
+    name: string
+    worktreeCount: number
+    childWorkspaceCount: number
+  },
+  t: Translate = translate
+): { title: string; deleteLabel: string } {
+  const { name } = args
+  if (args.isBatchDelete) {
+    return {
+      title: t('worktree.delete.batchTitle', 'Delete {{count}} workspaces?', {
+        count: args.worktreeCount
+      }),
+      deleteLabel: t('worktree.delete.batchVerb', 'Delete {{count}} workspaces', {
+        count: args.worktreeCount
+      })
+    }
+  }
+  if (args.deleteAllLineage) {
+    return {
+      title: t(
+        'worktree.delete.withChildrenTitle',
+        'Delete {{name}} and {{count}} child workspaces?',
+        {
+          name,
+          count: args.childWorkspaceCount,
+          defaultValue_one: 'Delete {{name}} and {{count}} child workspace?'
+        }
+      ),
+      deleteLabel: t('worktree.delete.allVerb', 'Delete all')
+    }
+  }
+  return {
+    title: t('worktree.delete.singleTitle', 'Delete {{name}}?', { name }),
+    deleteLabel: t('worktree.delete.singleVerb', 'Delete workspace')
+  }
+}
