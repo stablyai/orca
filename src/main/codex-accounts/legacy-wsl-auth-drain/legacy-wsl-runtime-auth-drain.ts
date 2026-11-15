@@ -173,8 +173,24 @@ export async function drainLegacyWslRuntimeAuth(
     maxOutputBytes: 16 * 1024
   })
   if (result.code !== 0 || result.timedOut) {
-    // Any apply failure — guest script exits or wsl.exe host failures (#42641) — re-inspects for the truth.
-    return recoverAfterFailedApply(options.distro, paths)
+    if (result.timedOut || isWslHostFailureExitCode(result.code)) {
+      // Environmental failure says nothing about migration state; keep the diagnostic and retry (#42641).
+      console.warn(
+        `[codex-wsl-auth-drain] apply step could not reach WSL, will retry: ${describeWslProcessFailure(result)}`
+      )
+      return recoverAfterFailedApply(options.distro, paths)
+    }
+    const recovered = await recoverAfterFailedApply(options.distro, paths)
+    // Exits 37/38 are hash drift since inspection — the next drain re-reads the new state. Any
+    // other guest exit is deterministic: with migration state unchanged it would fail on every
+    // launch, so surface it instead of retrying silently.
+    if (recovered === 'pending' && result.code !== 37 && result.code !== 38) {
+      const detail = result.stderr.trim()
+      throw new Error(
+        `Legacy WSL auth drain apply failed (exit ${result.code})${detail ? `: ${detail}` : ''}`
+      )
+    }
+    return recovered
   }
   if (!deleteSource) {
     rememberPendingRoute(distroKey, sessionBridgeRoute)
