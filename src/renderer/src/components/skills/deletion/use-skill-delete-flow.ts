@@ -7,14 +7,14 @@ import type {
   SkillDeletePlan,
   SkillDeleteRequest,
   SkillDeleteResult
-} from '../../../../../shared/skill-delete-contract'
-import type { DiscoveredSkill } from '../../../../../shared/skills'
+} from '../../../../../shared/skills/deletion/skill-delete-contract'
+import type { DiscoveredSkill } from '../../../../../shared/skills/discovery/skills'
 import {
   deleteSkillsOnRuntimeTarget,
   previewSkillDeletionOnRuntimeTarget,
   runtimeTargetSupportsSkillDelete
 } from '../../../runtime/skills/configuration/runtime-skills-client'
-import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import {
   skillDeleteActionLabel,
   skillDeleteBlockedLines,
@@ -107,8 +107,9 @@ export function useSkillDeleteFlow(
           return false
         }
         const confirmed = await confirm({
-          title: skillDeleteActionLabel(actionable.length),
+          title: translate('common.delete', 'Delete'),
           description: [
+            skillDeleteActionLabel(actionable.length),
             hostLabel
               ? translate('auto.components.skills.SkillDelete.confirmHost', 'On {{host}}.', {
                   host: hostLabel
@@ -128,7 +129,7 @@ export function useSkillDeleteFlow(
           ]
             .filter((line): line is string => Boolean(line))
             .join('\n'),
-          confirmLabel: skillDeleteActionLabel(actionable.length),
+          confirmLabel: translate('common.delete', 'Delete'),
           confirmVariant: 'destructive'
         })
         if (!confirmed) {

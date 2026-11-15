@@ -27,11 +27,23 @@ export class PluginHostCallError extends Error {
   constructor(
     readonly code: PluginErrorCode,
     message: string,
-    readonly retryAfterMs?: number
+    readonly retryAfterMs?: number,
+    /** What actually failed, for the plugin's log only; the plugin gets `message`. */
+    readonly detail?: string,
+    options?: ErrorOptions
   ) {
-    super(message)
+    super(message, options)
   }
 }
+
+/**
+ * A runtime refusal as the plugin sees it. Its code applies from host API 1.7; a method that
+ * shipped earlier reports every runtime refusal as `action_failed`, as it always has.
+ */
+export class PluginRuntimeCallError extends PluginHostCallError {}
+
+/** The host API minor whose methods report runtime refusals with their own codes. */
+export const PLUGIN_RUNTIME_FAILURE_CODES_SINCE = 7
 
 export function pluginHostCallRevoked(): PluginHostCallError {
   return new PluginHostCallError('consent_required', 'plugin is no longer enabled')

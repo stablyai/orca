@@ -12,7 +12,7 @@ import {
   isAgentTaskCompleteOsNotificationEnabledFromState,
   isAgentTaskCompleteTrackingEnabledFromState
 } from '../../notifications/agent-task-complete-policy'
-import { createCommandCodeOutputStatusDetector } from '../../../../../../shared/command-code-output-status'
+import { createCommandCodeOutputStatusDetector } from '../../../../../../shared/agent-status/output/command-code-output-status'
 import { createOsc133CommandFinishedScanner } from '../../../../../../shared/terminal/output/terminal-osc133-command-finished'
 import {
   createParkedTerminalCommandStatusPolicy,

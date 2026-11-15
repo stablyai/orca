@@ -5,6 +5,7 @@ type Entry<T> = {
   bytes: number
   /** Started before an `expire`, so its answer may predate the change. */
   expired?: boolean
+  accepts?: () => boolean
 }
 
 /** One request per key at a time; answers stay fresh for `freshMs`, and empty answers retry on the next open.
@@ -19,7 +20,7 @@ export function createHoverPreviewCache<T>({
   budget?: { maxBytes: number; sizeOf: (value: T) => number }
 }): {
   read: (key: string) => T | null
-  load: (key: string, fetch: () => Promise<T | null>) => Promise<T | null>
+  load: (key: string, fetch: () => Promise<T | null>, accepts?: () => boolean) => Promise<T | null>
   /** The next load asks again, even past one already under way; `read` keeps the old answer. */
   expire: (key: string) => void
 } {
@@ -48,11 +49,12 @@ export function createHoverPreviewCache<T>({
         entry.expired = true
       }
     },
-    load: (key, fetch) => {
+    load: (key, fetch, accepts) => {
       const cached = entries.get(key)
       if (
         cached &&
         !cached.expired &&
+        (cached.settledAt !== null || cached.accepts?.() !== false) &&
         (cached.settledAt === null || Date.now() - cached.settledAt < freshMs)
       ) {
         return cached.promise
@@ -62,6 +64,7 @@ export function createHoverPreviewCache<T>({
       const entry: Entry<T> = {
         promise: Promise.resolve(null),
         settledAt: null,
+        accepts,
         value: cached?.value,
         bytes: cached?.value === undefined ? 0 : cached.bytes
       }
@@ -78,6 +81,10 @@ export function createHoverPreviewCache<T>({
       }
       entry.promise = fetch().then(
         (value) => {
+          if (accepts?.() === false) {
+            forget()
+            return null
+          }
           if (!value) {
             forget()
           } else if (entries.get(key) === entry) {

@@ -45,6 +45,10 @@ import { browserManager } from '../browser-manager'
 import { withAgentInputInjection } from '../../../cdp/input/agent-input-injection'
 import { runWithActiveRpcCaller } from '../../../../runtime/rpc/callers/active-call'
 import {
+  registerBrowserRouteGuestPopup,
+  releaseBrowserRouteGuestPopup
+} from '../../../routing/guest-authority/browser-route-guest-popup-ownership'
+import {
   guestNavigationMethods,
   rendererWebContentsId,
   resetBrowserManagerMocks,
@@ -73,7 +77,12 @@ describe('browserManager', () => {
   // #36804: headless serve pages have no renderer to own Orca's tab model.
   // orcad's Electron browser registers pages without a workspace, so there is no tab list to open into.
 
-  it("opens an agent's link behind the user's tab, and the user's own click in front", async () => {
+  function attachGuest(): {
+    guest: { id: number }
+    rendererSendMock: ReturnType<typeof vi.fn>
+    openLink: (url: string) => void
+    pressMouse: () => void
+  } {
     const rendererSendMock = vi.fn()
     const guest = {
       ...guestNavigationMethods(),
@@ -99,11 +108,6 @@ describe('browserManager', () => {
       return null
     })
     browserManager.attachGuestPolicies(guest as never)
-    browserManager.registerGuest({
-      browserPageId: 'browser-1',
-      webContentsId: guest.id,
-      rendererWebContentsId
-    })
     const handler: (details: {
       url: string
       frameName: string
@@ -111,24 +115,46 @@ describe('browserManager', () => {
       disposition: string
     }) => unknown = guestSetWindowOpenHandlerMock.mock.calls[0][0]
     const inputEventHandler = guestOnMock.mock.calls.find(([event]) => event === 'input-event')?.[1]
-    const openLink = (url: string): void => {
-      handler({ url, frameName: '', features: '', disposition: 'foreground-tab' })
+    return {
+      guest,
+      rendererSendMock,
+      openLink: (url) => {
+        handler({ url, frameName: '', features: '', disposition: 'foreground-tab' })
+      },
+      pressMouse: () => inputEventHandler({}, { type: 'mouseUp' })
     }
+  }
+
+  function registerAsTab(guest: { id: number }): void {
+    browserManager.registerGuest({
+      browserPageId: 'browser-1',
+      webContentsId: guest.id,
+      rendererWebContentsId
+    })
+  }
+
+  function openedTabs(rendererSendMock: ReturnType<typeof vi.fn>): unknown[] {
+    return rendererSendMock.mock.calls.filter(
+      ([channel]) => channel === 'browser:open-link-in-orca-tab'
+    )
+  }
+
+  it("opens an agent's link behind the user's tab, and the user's own click in front", async () => {
+    const { guest, rendererSendMock, openLink, pressMouse } = attachGuest()
+    registerAsTab(guest)
     const command = runWithActiveRpcCaller({ kind: 'local-cli' }, () =>
       browserManager.beginAgentCommand('browser-1')
     )
 
     await withAgentInputInjection(guest as never, async () => {
-      inputEventHandler({}, { type: 'mouseUp' })
+      pressMouse()
     })
     openLink('https://docs.example.com/agent')
-    inputEventHandler({}, { type: 'mouseUp' })
+    pressMouse()
     openLink('https://docs.example.com/user')
     command.end()
 
-    expect(
-      rendererSendMock.mock.calls.filter(([channel]) => channel === 'browser:open-link-in-orca-tab')
-    ).toEqual([
+    expect(openedTabs(rendererSendMock)).toEqual([
       [
         'browser:open-link-in-orca-tab',
         { browserPageId: 'browser-1', url: 'https://docs.example.com/agent', activate: false }
@@ -137,6 +163,161 @@ describe('browserManager', () => {
         'browser:open-link-in-orca-tab',
         { browserPageId: 'browser-1', url: 'https://docs.example.com/user' }
       ]
+    ])
+  })
+
+  it('keeps a tab the page opens long after the agent left behind the user, until the user uses the page', async () => {
+    vi.useFakeTimers()
+    const { guest, rendererSendMock, openLink, pressMouse } = attachGuest()
+    registerAsTab(guest)
+    runWithActiveRpcCaller({ kind: 'local-cli' }, () =>
+      browserManager.beginAgentCommand('browser-1')
+    ).end()
+
+    vi.advanceTimersByTime(60_000)
+    openLink('https://login.example.com/late')
+    pressMouse()
+    vi.advanceTimersByTime(5_000)
+    openLink('https://login.example.com/after-user')
+
+    expect(openedTabs(rendererSendMock)).toEqual([
+      [
+        'browser:open-link-in-orca-tab',
+        { browserPageId: 'browser-1', url: 'https://login.example.com/late', activate: false }
+      ],
+      [
+        'browser:open-link-in-orca-tab',
+        { browserPageId: 'browser-1', url: 'https://login.example.com/after-user' }
+      ]
+    ])
+  })
+
+  it("keeps a late tab from a popup the agent's page opened behind the user", () => {
+    vi.useFakeTimers()
+    const { guest, rendererSendMock } = attachGuest()
+    registerAsTab(guest)
+    runWithActiveRpcCaller({ kind: 'local-cli' }, () =>
+      browserManager.beginAgentCommand('browser-1')
+    ).end()
+    const popup = { ...guest, id: 146 }
+    const onDidCreateWindow = guestOnMock.mock.calls.find(
+      ([event]) => event === 'did-create-window'
+    )?.[1]
+    onDidCreateWindow({ webContents: popup })
+    const popupHandler = guestSetWindowOpenHandlerMock.mock.calls[1][0]
+
+    vi.advanceTimersByTime(60_000)
+    popupHandler({
+      url: 'https://login.example.com/from-popup',
+      frameName: '',
+      features: '',
+      disposition: 'foreground-tab'
+    })
+
+    expect(openedTabs(rendererSendMock)).toEqual([
+      [
+        'browser:open-link-in-orca-tab',
+        { browserPageId: 'browser-1', url: 'https://login.example.com/from-popup', activate: false }
+      ]
+    ])
+  })
+
+  it("keeps a late tab from an SSH route popup of the agent's page behind the user", () => {
+    vi.useFakeTimers()
+    const { guest, rendererSendMock } = attachGuest()
+    registerAsTab(guest)
+    runWithActiveRpcCaller({ kind: 'local-cli' }, () =>
+      browserManager.beginAgentCommand('browser-1')
+    ).end()
+    const routePopup = { ...guest, id: 147 }
+    registerBrowserRouteGuestPopup({ popupWebContentsId: 147, openerWebContentsId: guest.id })
+
+    vi.advanceTimersByTime(60_000)
+    browserManager.openNewTabPopup(
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: openNewTabPopup reads only the guest fields this fake copies from the tab guest.
+      routePopup as never,
+      { url: 'https://login.example.com/from-route', frameName: '', disposition: 'foreground-tab' },
+      null
+    )
+    releaseBrowserRouteGuestPopup(147)
+
+    expect(openedTabs(rendererSendMock)).toEqual([
+      [
+        'browser:open-link-in-orca-tab',
+        { browserPageId: 'browser-1', url: 'https://login.example.com/from-route', activate: false }
+      ]
+    ])
+  })
+
+  it("tells the agent's page it leads it, so its print is refused and reported, until the user uses the page", () => {
+    const { guest, pressMouse } = attachGuest()
+    registerAsTab(guest)
+    const leads: [number, boolean][] = []
+    browserManager.setAgentLeadListener((guestId, led) => leads.push([guestId, led]))
+    const events: unknown[] = []
+    browserManager.observePageEvents('browser-1', (event) => events.push(event))
+    runWithActiveRpcCaller({ kind: 'local-cli' }, () =>
+      browserManager.beginAgentCommand('browser-1')
+    ).end()
+    runWithActiveRpcCaller({ kind: 'local-cli' }, () =>
+      browserManager.beginAgentCommand('browser-1')
+    ).end()
+
+    browserManager.reportRefusedPrint(guest.id, 'https://shop.example.com')
+    pressMouse()
+    browserManager.reportRefusedPrint(guest.id, 'https://shop.example.com')
+
+    expect(leads).toEqual([
+      [guest.id, true],
+      [guest.id, false]
+    ])
+    expect(events).toEqual([{ kind: 'print', origin: 'https://shop.example.com' }])
+  })
+
+  it('reports a refused print to an agent command on the popup page that asked', () => {
+    const { guest } = attachGuest()
+    registerAsTab(guest)
+    const onDidCreateWindow = guestOnMock.mock.calls.find(
+      ([event]) => event === 'did-create-window'
+    )?.[1]
+    onDidCreateWindow({ webContents: { ...guest, id: 146 } })
+    const events: unknown[] = []
+    browserManager.observePageEvents('popup-146', (event) => events.push(event))
+    runWithActiveRpcCaller({ kind: 'local-cli' }, () =>
+      browserManager.beginAgentCommand('popup-146')
+    ).end()
+
+    browserManager.reportRefusedPrint(146, 'https://pay.example.com')
+    expect(events).toEqual([{ kind: 'print', origin: 'https://pay.example.com' }])
+  })
+
+  it('leads an SSH route popup the agent drives directly through its opener', () => {
+    const { guest } = attachGuest()
+    registerAsTab(guest)
+    registerBrowserRouteGuestPopup({ popupWebContentsId: 147, openerWebContentsId: guest.id })
+    runWithActiveRpcCaller({ kind: 'local-cli' }, () =>
+      browserManager.beginAgentCommand('popup-147')
+    ).end()
+
+    const led = browserManager.isAgentLedGuest(147)
+    releaseBrowserRouteGuestPopup(147)
+    expect(led).toBe(true)
+  })
+
+  it("opens the system browser for a page with no tab only on the desktop user's own click", async () => {
+    const { guest, openLink, pressMouse } = attachGuest()
+
+    await withAgentInputInjection(guest as never, async () => {
+      pressMouse()
+    })
+    openLink('https://docs.example.com/agent')
+    openLink('https://docs.example.com/scripted')
+    expect(browserMocks.shellOpenExternalMock).not.toHaveBeenCalled()
+
+    pressMouse()
+    openLink('https://docs.example.com/user')
+    expect(browserMocks.shellOpenExternalMock.mock.calls).toEqual([
+      ['https://docs.example.com/user']
     ])
   })
 })

@@ -1,15 +1,16 @@
+import { readTestJournalItems } from '../../../native-chat/agent-session-journal/journal-observation.test-support'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentJournalItemIdentity } from '../../../../shared/agent-session/journal/agent-session-journal-identity'
-import { codexProviderHandle } from '../../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
-import { readAgentJournalTurn } from '../../../../shared/agent-session/lifecycle/agent-session-turn-record'
+import { codexProviderHandle } from '../../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle-encoding'
+import { readAgentJournalTurn } from '../../../../shared/agent-session/lifecycle/records/agent-session-turn-record'
 import { selectStructuredAgentContextUsage } from '../../../../shared/agent-session/structured-agent-session-context-usage'
 import { createTrackedJournalOpener } from '../../../native-chat/agent-session-journal/store-lifecycle/journal-host-database-test-support'
 import { createDeferredStructuredAgentSessionEventSink } from '../../../native-chat/agent-session-wire/journal-ingress/structured-agent-session-event-sink'
-import { testEventSinkLogging } from '../../../native-chat/agent-session-wire/host/testing/structured-agent-session-logger-test-support'
+import { testEventSinkLogging } from '../../../native-chat/agent-session-wire/host/testing/structured-agent-session-logger.test-fixture'
 import {
   createCodexHistoryTranslator,
   createCodexJournalTranslator
@@ -112,13 +113,12 @@ async function session() {
         on('thread/tokenUsage/updated', { turnId, tokenUsage }, threadId),
       contextUsage: async () => {
         await expect(deferred.drained()).resolves.toEqual({ ok: true })
-        return selectStructuredAgentContextUsage(journal.snapshot().items)
+        return selectStructuredAgentContextUsage(await readTestJournalItems(journal))
       },
       turnRecord: async (turnId: string) => {
         await expect(deferred.drained()).resolves.toEqual({ ok: true })
-        return journal
-          .snapshot()
-          .items.map((item) => readAgentJournalTurn(item.body))
+        return (await readTestJournalItems(journal))
+          .map((item) => readAgentJournalTurn(item.body))
           .find((turn) => turn?.turnId === turnId)
       }
     }

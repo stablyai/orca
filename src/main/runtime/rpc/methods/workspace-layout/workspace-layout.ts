@@ -10,8 +10,8 @@ import {
   LayoutReportViewParams,
   LayoutSubscribeParams,
   LayoutUnsubscribeParams
-} from '../../../../../shared/rpc-contract/workspace-layout-params'
-import { LayoutReopenHeldPanesParams } from '../../../../../shared/rpc-contract/workspace-layout-held-panes-params'
+} from '../../../../../shared/rpc-contract/workspace-layout/workspace-layout-params'
+import { LayoutReopenHeldPanesParams } from '../../../../../shared/rpc-contract/workspace-layout/workspace-layout-held-panes-params'
 import type { WorkspaceLayoutStreamFrame } from '../../../../../shared/workspace-layout/published-layout/workspace-layout-stream-frames'
 import { defineMethod, defineStreamingMethod } from '../../core'
 import { getAppEnvironment } from '../../../../../shared/app-environment'
@@ -87,7 +87,7 @@ export const WORKSPACE_LAYOUT_METHODS = [
     handler: async (_params, { runtime }) => {
       // Removed servers' saved snapshots must not seed views again.
       const known = new Set(
-        listEnvironments(getAppEnvironment().getPath('userData')).map(({ id }) => id)
+        (await listEnvironments(getAppEnvironment().getPath('userData'))).map(({ id }) => id)
       )
       return {
         snapshots: Object.fromEntries(

@@ -12,8 +12,8 @@
 import type { FolderWorkspace } from '../../../../shared/folder-workspaces/folder-workspace-types'
 import type { OrcadMigrationManifest } from '../../../../shared/orcad-migration/orcad-migration-manifest'
 import { isOrcadMigrationLocalWslSource } from '../../../../shared/orcad-migration/orcad-migration-source-kind'
-import type { ProjectGroup } from '../../../../shared/project-group-types'
-import type { Repo } from '../../../../shared/repo-types'
+import type { ProjectGroup } from '../../../../shared/project/groups/project-group-types'
+import type { Repo } from '../../../../shared/repository/repo-types'
 import {
   WSL_MOVE_CUTOVER_PHASES,
   WSL_MOVE_CUTOVER_VERSION,

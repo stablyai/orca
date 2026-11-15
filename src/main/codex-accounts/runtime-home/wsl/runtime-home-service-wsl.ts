@@ -1,5 +1,9 @@
 import { join, win32 as pathWin32 } from 'node:path'
-import { parseWslUncPath, toLinuxPath, toWindowsWslUncPath } from '../../../../shared/wsl-paths'
+import {
+  parseWslUncPath,
+  toLinuxPath,
+  toWindowsWslUncPath
+} from '../../../../shared/file-access/wsl-paths'
 import { getSelectedCodexAccountIdForTarget } from '../../account-management/runtime-selection'
 import {
   getCodexSelectionLaneKey,

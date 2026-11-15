@@ -14,7 +14,7 @@ import {
   parseExecutionHostId,
   type ExecutionHostId
 } from '../../../../shared/execution-host'
-import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import {
   normalizeTaskSourceContext,
   type TaskSourceContext
@@ -23,7 +23,7 @@ import {
   normalizeVisibleTaskProviders,
   type TaskProvider
 } from '../../../../shared/work-items/task-providers'
-import type { Repo } from '../../../../shared/repo-types'
+import type { Repo } from '../../../../shared/repository/repo-types'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import type { PaletteFilterState } from './palette-filter'
 import { getTaskEligibleRepos } from '../task-page/task-page-default-repo-selection'

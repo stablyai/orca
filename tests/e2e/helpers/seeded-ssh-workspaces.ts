@@ -1,5 +1,5 @@
 import type { ElectronApplication, Page, TestInfo } from '@stablyai/playwright-test'
-import type { Repo } from '../../../src/shared/repo-types'
+import type { Repo } from '../../../src/shared/repository/repo-types'
 import { toSshExecutionHostId } from '../../../src/shared/execution-host'
 import { expect } from './orca-app'
 import { seedRelayEraTarget } from './orcad-upgrade-profile'

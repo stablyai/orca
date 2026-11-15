@@ -8,14 +8,14 @@ import {
   parseExecutionHostId,
   type ExecutionHostId
 } from '../../../shared/execution-host'
-import { getHostDisplayLabelOverrides } from '../../../shared/host-setting-overrides'
+import { getHostDisplayLabelOverrides } from '../../../shared/execution-host/host-setting-overrides'
 import { buildExecutionHostRegistry } from '../../../shared/execution-host/execution-host-registry'
 import type { PublicKnownRuntimeEnvironment } from '../../../shared/remote-runtime/host-catalog/runtime-environments'
 import { useAppStore } from '@/store'
 import type {
   RuntimeTerminalQuickCommands,
   TerminalQuickCommandHostsSlice
-} from '@/store/terminals/terminal-quick-command-hosts'
+} from '@/store/terminals/quick-commands/terminal-quick-command-hosts'
 import { getExecutionHostIdForWorktree } from '@/lib/workspace/ownership/worktree-runtime-owner'
 import {
   getTranslatedExecutionHostLabel,

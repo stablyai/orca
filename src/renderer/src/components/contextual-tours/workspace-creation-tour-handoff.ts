@@ -1,5 +1,5 @@
 import { useAppStore } from '@/store'
-import { getContextualTour } from '../../../../shared/contextual-tours'
+import { getContextualTour } from '../../../../shared/feature-education/contextual-tours/contextual-tours'
 import { requestContextualTourWhenReady } from './request-contextual-tour-when-ready'
 
 export function openWorkspaceCreationComposerWithTourHandoff(): void {

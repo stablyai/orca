@@ -1,5 +1,5 @@
 import type { AgentDotState } from '@/components/AgentStateDot'
-import type { DashboardAgentRow as DashboardAgentRowData } from '@/components/dashboard/useDashboardData'
+import type { DashboardAgentRow as DashboardAgentRowData } from '@/components/dashboard/rows/dashboard-agent-row'
 import { formatAgentTypeLabel } from '../../../../../../shared/agent-status/presentation/agent-type-label'
 import { agentRowDisplayDotState as getAgentDotState } from '@/lib/agent-status/presentation/agent-row-dot-state'
 import { translate } from '@/i18n/i18n'
@@ -7,6 +7,8 @@ import type { Translate } from '@/i18n/use-translate'
 
 export type SummaryAgentGroup = {
   state: AgentDotState
+  /** Done agents the user has not read yet; drawn as the unread dot ahead of every other group. */
+  unread?: boolean
   agents: DashboardAgentRowData[]
 }
 
@@ -191,10 +193,19 @@ function formatAllAgentsInState(
   }
 }
 
-export function buildSummaryAgentGroups(agents: DashboardAgentRowData[]): SummaryAgentGroup[] {
+export function buildSummaryAgentGroups(
+  agents: DashboardAgentRowData[],
+  isUnread?: (agent: DashboardAgentRowData) => boolean
+): SummaryAgentGroup[] {
   const groups = new Map<AgentDotState, DashboardAgentRowData[]>()
+  const unreadDone: DashboardAgentRowData[] = []
   for (const agent of agents) {
     const dotState = getAgentDotState(agent)
+    // Split unread completions out so the collapsed pill names which agent holds the card's unread.
+    if (dotState === 'done' && isUnread?.(agent)) {
+      unreadDone.push(agent)
+      continue
+    }
     const group = groups.get(dotState)
     if (group) {
       group.push(agent)
@@ -202,10 +213,13 @@ export function buildSummaryAgentGroups(agents: DashboardAgentRowData[]): Summar
       groups.set(dotState, [agent])
     }
   }
-  return SUMMARY_STATE_ORDER.flatMap((state) => {
+  const stateGroups = SUMMARY_STATE_ORDER.flatMap((state) => {
     const groupAgents = groups.get(state)
     return groupAgents ? [{ state, agents: groupAgents }] : []
   })
+  return unreadDone.length > 0
+    ? [{ state: 'done', unread: true, agents: unreadDone }, ...stateGroups]
+    : stateGroups
 }
 
 export function summarizeAgents(

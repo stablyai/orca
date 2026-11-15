@@ -1,5 +1,8 @@
-import { throwIfAiVaultScanCancelled, waitForAiVaultScan } from '../../ai-vault-scan-cancellation'
-import { wslGatedReaddir } from '../../../native-chat/wsl-transcript-fs-access'
+import {
+  throwIfAiVaultScanCancelled,
+  waitForAiVaultScan
+} from '../../scan-lifecycle/ai-vault-scan-cancellation'
+import { wslGatedReaddir } from '../../../native-chat/transcript-filesystem/wsl-transcript-fs-access'
 import { basename, dirname, extname, join } from 'node:path'
 
 export const SUBAGENT_DIR_NAME = 'subagents'

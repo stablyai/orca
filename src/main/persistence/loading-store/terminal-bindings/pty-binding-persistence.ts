@@ -14,7 +14,7 @@ import { resolveHostId, type SessionHostPartitionOperations } from '../workspace
 import {
   withdrawUnstartedPane,
   type UnstartedPaneKept
-} from '../../terminal-topology/unstarted-pane-withdraw'
+} from '../../terminal-topology/pane-admission/unstarted-pane-withdraw'
 import { evaluatePtyBindingFastLane } from './pty-binding-fast-lane'
 import { durabilityOnlyBindingResult, isDurabilityOnlyMatch } from './pty-binding-durability-only'
 import { ptyBindingIsRefused } from './pty-binding-refusals'
@@ -41,7 +41,7 @@ import {
 import type {
   TerminalPaneAdmission,
   TerminalPaneAdmissionOutcome
-} from '../../terminal-topology/terminal-pane-admission'
+} from '../../terminal-topology/pane-admission/terminal-pane-admission'
 import type {
   CommandOf,
   LayoutRefusalCode

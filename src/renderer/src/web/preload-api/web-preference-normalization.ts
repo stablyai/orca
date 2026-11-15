@@ -10,24 +10,24 @@ import {
   carriedChatUiLaunchSettings
 } from '../../../../shared/native-chat/native-chat-providers'
 import { normalizeAutoRenameBranchFromWorkDefaultOn } from '../../../../shared/auto-rename-branch-from-work-settings'
-import {
-  getDefaultSettings,
-  normalizeAgentActivityDisplayMode,
-  normalizeWorktreeCardProperties
-} from '../../../../shared/constants'
+import { getDefaultSettings, normalizeAgentActivityDisplayMode } from '../../../../shared/constants'
+import { normalizeWorktreeCardProperties } from '../../../../shared/worktree/row-display/card-properties'
 import {
   normalizeContextualTourIds,
   type ContextualTourId
-} from '../../../../shared/contextual-tours'
+} from '../../../../shared/feature-education/contextual-tours/contextual-tours'
 
 import {
   normalizeFeatureInteractions,
-  type FeatureInteractionId,
   type FeatureInteractionState
-} from '../../../../shared/feature-interactions'
+} from '../../../../shared/feature-education/interactions/feature-interactions'
+import type { FeatureInteractionId } from '../../../../shared/feature-education/interactions/feature-interaction-catalog'
 
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
-import type { PairedUiState, PairingLocalUiField } from '../../../../shared/pairing-local-ui-fields'
+import type {
+  PairedUiState,
+  PairingLocalUiField
+} from '../../../../shared/remote-runtime/pairing/pairing-local-ui-fields'
 import type { PersistedUIState } from '../../../../shared/persisted-ui-state-types'
 import { normalizeStatusBarUsageMode } from '../../../../shared/status-bar-usage-mode'
 import { normalizeStatusBarUsageFormat } from '../../../../shared/status-bar-usage-format'

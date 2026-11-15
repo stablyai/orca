@@ -1,5 +1,8 @@
 // Restored tunnels bypass SSH connect; perform its update check once per server/session in the background.
-import type { SshManagedServerUpdateNote, SshTarget } from '../../../shared/ssh-types'
+import type {
+  SshManagedServerUpdateNote,
+  SshTarget
+} from '../../../shared/remote-runtime/ssh/ssh-types'
 import {
   checkManagedServerUpdate,
   type ManagedServerUpdateDeps

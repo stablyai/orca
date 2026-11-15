@@ -1,14 +1,14 @@
 import {
   agentSessionLeaseFixture,
   agentSessionRecordFixture
-} from '../../../shared/agent-session/lifecycle/agent-session-record.test-fixture'
-import { agentSessionConversationView } from '../../../shared/agent-session/lifecycle/agent-session-conversation-view'
+} from '../../../shared/agent-session/lifecycle/records/agent-session-record.test-fixture'
+import { agentSessionConversationView } from '../../../shared/agent-session/lifecycle/leases/agent-session-conversation-view'
 // Child exit proof precedes advisory tab cleanup; failed stops retain the original surface.
 
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { StructuredAgentSessionCloseCause } from '../../native-chat/agent-session-wire/termination/structured-agent-session-host-lifetime'
 import type { AgentSessionRecord } from '../../../shared/agent-session/lifecycle/agent-session-record'
-import { recordingStructuredAgentSessionLogger } from '../../native-chat/agent-session-wire/host/testing/structured-agent-session-logger-test-support'
+import { recordingStructuredAgentSessionLogger } from '../../native-chat/agent-session-wire/host/testing/structured-agent-session-logger.test-fixture'
 
 const hostRef: { current: unknown } = { current: null }
 

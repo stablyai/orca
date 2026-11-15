@@ -4,7 +4,7 @@ import { extractExecError } from '../../git/command-runner/process-capture/exec-
 import { NEGATIVE_ENTRY_TTL_MS } from '../../git/remotes/remote-ref-probe-cache'
 import { glabExecFileAsync } from '../../git/command-runner/hosted-cli/glab-exec-file'
 import { DEFAULT_GITLAB_HOSTS, normalizeGitLabHost } from './project-ref-parser'
-import type { GitAdmissionTier } from '../../../shared/rpc-contract/git-admission-tier-params'
+import type { GitAdmissionTier } from '../../../shared/rpc-contract/source-control/git-admission-tier-params'
 
 export type LocalGitExecOptions = {
   wslDistro?: string

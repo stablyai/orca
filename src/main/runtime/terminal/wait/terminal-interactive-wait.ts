@@ -6,7 +6,7 @@ import type {
   RuntimeTerminalAgentStatus,
   RuntimeTerminalInteractiveWait,
   RuntimeTerminalWaitBlockedReason
-} from '../../../../shared/runtime-terminal-contracts'
+} from '../../../../shared/terminal/runtime/runtime-terminal-contracts'
 import type { RuntimeTerminalAgentStatusSnapshot } from '../query/runtime-terminal-agent-status-query'
 import type {
   TerminalInteractiveWaitEvidence,
@@ -29,7 +29,7 @@ import { selectExactWorkerProviderSession } from '../../orchestration/workers/tr
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import { isTuiAgentEnabled } from '../../../../shared/agent-launch/catalog/tui-agent-selection'
 import { OrchestrationError } from '../../orchestration/orchestration-error'
-import { resolveLocalWindowsAgentStartupShell } from '../../../../shared/windows-terminal-shell'
+import { resolveLocalWindowsAgentStartupShell } from '../../../../shared/shell/launch/windows-terminal-shell'
 import {
   resolveStartupShell,
   type AgentStartupShell
@@ -37,7 +37,7 @@ import {
 import { isTuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent-config'
 import { resolveConfiguredWorkerAgent } from '../../orchestration/workers/launch/configured-worker-agent-selector'
 import { resolveAgentLaunchRuntime } from '../launch/agent-launch-scope-runtime'
-import { parseWslUncPath } from '../../../../shared/wsl-paths'
+import { parseWslUncPath } from '../../../../shared/file-access/wsl-paths'
 import { resolveAgentStartupPlanInputs } from '../../../../shared/agent-launch/startup/agent-startup-plan-inputs'
 import { resolveOpenCodeModelLaunchRoute } from '../../../opencode/model-launch/opencode-model-startup-plan'
 import type { RuntimePtyWorktreeRecord } from '../records/runtime-terminal-state-records'
@@ -171,6 +171,7 @@ export abstract class OrcaRuntimeWithGetTerminalInteractiveWait extends OrcaRunt
         const resolved = await this.resolveWorkspaceSelector(`id:${worktreeId}`, scope)
         return {
           worktreeId: resolved.id,
+          ...(resolved.identity ? { identityKey: resolved.identity.key } : {}),
           path: resolved.git.path,
           branch: resolved.git.branch,
           displayName: resolved.displayName

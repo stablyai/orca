@@ -7,10 +7,10 @@ import {
   isCurrentCompactWorktreeCardProperties,
   isDefaultedCompactWorktreeCardProperties,
   normalizeWorktreeCardProperties
-} from '../../../../shared/worktree/card-properties'
-import { isExistingPersistedProfile } from '../../../../shared/project-order-manual-default-notice'
+} from '../../../../shared/worktree/row-display/card-properties'
+import { isExistingPersistedProfile } from '../../../../shared/sidebar-list/sections/project-order-manual-default-notice'
 import { resolveUsagePercentageDisplayChangeNoticeDismissed } from '../../../../shared/usage-percentage-display-change-notice'
-import { normalizePersistedWorkspaceStatuses } from '../../../../shared/workspace-statuses'
+import { normalizePersistedWorkspaceStatuses } from '../../../../shared/workspace/status/workspace-statuses'
 import {
   normalizeRightSidebarExplorerView,
   normalizeRightSidebarTab,
@@ -23,7 +23,7 @@ import {
   resolveSetupGuideSidebarDismissedOnLoad
 } from '../../applying-settings/onboarding-normalization'
 import type { PersistedState } from '../../../../shared/persisted-state-types'
-import type { OnboardingState } from '../../../../shared/onboarding-state-types'
+import type { OnboardingState } from '../../../../shared/onboarding/onboarding-state-types'
 
 export function normalizeLoadedUiState(
   parsed: PersistedState,

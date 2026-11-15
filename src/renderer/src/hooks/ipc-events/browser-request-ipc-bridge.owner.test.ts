@@ -35,7 +35,7 @@ const mocks = vi.hoisted(() => {
 vi.mock('@/components/browser-pane/host-guest/webview-registry', () => ({
   destroyPersistentWebview: vi.fn()
 }))
-vi.mock('../../store', () => ({ useAppStore: { getState: mocks.getState } }))
+vi.mock('../../store/index', () => ({ useAppStore: { getState: mocks.getState } }))
 vi.mock('./browser-automation-bootstrap-lease', () => ({
   acquireBrowserAutomationBootstrapLease: vi.fn()
 }))

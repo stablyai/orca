@@ -12,11 +12,11 @@ import {
   getProjectHostSetupSelectionKey,
   type ProjectHostSetupOption
 } from '@/lib/workspace/creation/project-host-setup-options'
-import { NewWorkspaceComposerProjectSection } from '@/components/new-workspace/NewWorkspaceComposerProjectSection'
+import { NewWorkspaceComposerProjectSection } from '@/components/new-workspace/composer/NewWorkspaceComposerProjectSection'
 import { SidebarHeaderActions } from '../../sidebar-header-actions'
 import type { AddRepoDialogEntryRequest } from '../dialog/add-repo-dialog-types'
 
-vi.mock('@/components/new-workspace/use-recent-project-ids', () => ({
+vi.mock('@/components/new-workspace/project-selection/use-recent-project-ids', () => ({
   useRecentProjectIds: () => []
 }))
 vi.mock('@/components/sidebar/host-admission/ssh/AddRemoteHostDialog', () => ({

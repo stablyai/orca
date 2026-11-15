@@ -1,5 +1,5 @@
 // Per-device revocable tokens isolate compromises; persist with hardened metadata-style permissions.
-import type { DeviceScope } from '../../../../../shared/runtime-session-contracts'
+import type { DeviceScope } from '../../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import { mintTokenDevice } from './device-credential'
 import { planDeviceKeyFork } from './device-key-fork'
 import {
@@ -10,9 +10,9 @@ import {
 } from './pairing-ticket-exchange'
 import { planIdleEphemeralPrune } from './ephemeral-device-rows'
 import { DeviceRegistrySightings } from './device-registry-sightings'
-import type { RelayDeviceBinding } from '../../../mobile-cloud-relay/relay-revoke-outbox'
+import type { RelayDeviceBinding } from '../../../mobile-cloud-relay/pairing/relay-revoke-outbox'
 import type { MobilePairingConnectionMode } from '../../../../../shared/remote-runtime/pairing/mobile-pairing-connection-mode'
-import type { RuntimePairingReach } from '../../../../../shared/runtime-pairing-reach'
+import type { RuntimePairingReach } from '../../../../../shared/remote-runtime/pairing/runtime-pairing-reach'
 import type { DelegatedPhone } from '../../../../../shared/delegated-mobile-device-contract'
 import {
   planDelegatedMobileDevices,

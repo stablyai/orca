@@ -1,5 +1,5 @@
 import { rm, stat } from 'node:fs/promises'
-import { renameFileWithWindowsRetryAsync } from '../../shared/windows-retry-file-operations'
+import { renameFileWithWindowsRetryAsync } from '../../shared/file-write/windows-retry-file-operations'
 
 const exists = (path: string): Promise<boolean> =>
   stat(path).then(

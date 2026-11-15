@@ -1,4 +1,4 @@
-import { sleepingAgentRecordIndex } from '@/store/terminals/sleeping-agent-record-index'
+import { sleepingAgentRecordIndex } from '@/store/terminals/sleep/sleeping-agent-record-index'
 import { useAppStore } from '@/store/index'
 import type { PtyListedSession } from '../../../../../shared/terminal/pty/lifecycle/pty-listed-session'
 import {
@@ -6,7 +6,7 @@ import {
   PTY_SESSION_ID_SEPARATOR
 } from '../../../../../shared/terminal/pty/lifecycle/pty-session-id-format'
 import { parsePaneKey } from '../../../../../shared/workspace-layout/stable-pane-id'
-import { parseWorkspaceKey } from '../../../../../shared/workspace-scope'
+import { parseWorkspaceKey } from '../../../../../shared/workspace/identity/workspace-scope'
 import { worktreeIdsEqual } from '../../../../../shared/worktree/id'
 import { listActivationPtySessions } from './worktree-activation-pty-inventory'
 import { resumeSleepingAgentSessionsForWorktree } from '../../agent-session/resume/resume-sleeping-agent-session'

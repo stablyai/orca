@@ -9,7 +9,7 @@ import {
   ORCA_APP_ID,
   parseLocalBuildCompatibility,
   type LocalBuildCompatibility
-} from '../../shared/local-build-compatibility'
+} from '../../shared/remote-runtime/orcad-distribution/local-build-compatibility'
 import { isValidAppVersion } from '../../shared/app-version'
 
 const MAX_MANIFEST_BYTES = 256 * 1024

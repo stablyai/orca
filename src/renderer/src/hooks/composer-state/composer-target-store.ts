@@ -2,13 +2,13 @@ import { useMemo } from 'react'
 import { useAppStore } from '@/store'
 import { useShallow } from 'zustand/react/shallow'
 import { getNewWorkspaceDialogEligibleRepos } from '../../../../shared/new-workspace-dialog-repo'
-import { resolveComposerActiveRepoId } from '@/lib/workspace/creation/new-workspace-composer-repo'
+import { resolveComposerSeedRepoId } from '@/lib/workspace/creation/new-workspace-composer-repo'
 import { buildExecutionHostRegistry } from '../../../../shared/execution-host/execution-host-registry'
-import { getHostDisplayLabelOverrides } from '../../../../shared/host-setting-overrides'
-import type { GitHubWorkItem } from '../../../../shared/github/work-item-types'
+import { getHostDisplayLabelOverrides } from '../../../../shared/execution-host/host-setting-overrides'
+import type { GitHubWorkItem } from '../../../../shared/github/work-items/work-item-types'
 import type { TaskSourceContext } from '../../../../shared/work-items/task-source-context'
 import type { WorkspaceStatus } from '../../../../shared/worktree/types'
-import type { WorkspaceSource as WorkspaceCreateTelemetrySource } from '../../../../shared/workspace-source'
+import type { WorkspaceSource as WorkspaceCreateTelemetrySource } from '../../../../shared/workspace/creation/workspace-source'
 import type { LinkedWorkItemSummary } from '@/lib/workspace/creation/new-workspace'
 import type { ComposerDecisions } from './composer-decisions'
 import type { WorkspaceCreationTargetHint } from '@/lib/workspace/creation/project-host-workspace-target'
@@ -157,7 +157,7 @@ export function useComposerTargetStore(options: ComposerStateInput, decisions: C
   )
 
   const seedActiveRepoId = useMemo(
-    () => resolveComposerActiveRepoId(repos, eligibleRepos, activeRepoId, runtimeEnvironments),
+    () => resolveComposerSeedRepoId(repos, eligibleRepos, activeRepoId, runtimeEnvironments),
     [repos, eligibleRepos, activeRepoId, runtimeEnvironments]
   )
 

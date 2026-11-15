@@ -1,10 +1,11 @@
 import { posix } from 'node:path'
+import { throwIfSignalAborted } from '../../../shared/abort-signal-reason'
 import { runProcess } from '@orca/process-host'
 import { lstat, stat, readFile, realpath } from 'node:fs/promises'
-import { buildWslExecArgs } from '../../../shared/wsl-login-shell-command'
+import { buildWslExecArgs } from '../../../shared/shell/wsl/wsl-login-shell-command'
 import { quotePosixShell } from '../../../shared/shell/launch/shell-argument-quoting'
 import { removeHostTree } from '../../filesystem/host-tree-removal'
-import { toLinuxPath } from '../../../shared/wsl-paths'
+import { toLinuxPath } from '../../../shared/file-access/wsl-paths'
 import { resolveWslInteropSpawnCwd } from '../../wsl/execution/wsl-interop-spawn-directory'
 import { describeWslProcessFailure } from '../../wsl/execution/wsl-process-failure'
 import type { WorktreeProofAccess } from './worktree-orphan-gitdir-proof'
@@ -121,6 +122,7 @@ export async function removeLocalWorktreePath(
 ): Promise<void> {
   const distro = options.wslDistro?.trim()
   if (!shouldUseWslFilesystem(options) || !distro) {
+    throwIfSignalAborted(signal)
     await removeHostTree(targetPath, { signal })
     return
   }

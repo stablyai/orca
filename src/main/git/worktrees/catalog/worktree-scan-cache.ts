@@ -1,17 +1,23 @@
+import { readTranslatedWorktreeGraph } from './worktree-list-reader'
+import { abortSignalReason } from '../../../../shared/abort-signal-reason'
 import type { GitWorktreeInfo } from '../../../../shared/worktree/types'
 import {
   annotateSparseCheckoutStatus,
   listWorktreeGraph as listWorktreeGraphUnshared,
-  listWorktreesStrict as listWorktreesStrictUnshared,
-  listWorktreesStrictAllowingTrueEmpty as listWorktreesStrictAllowingTrueEmptyUnshared
+  listWorktreesStrict as listWorktreesStrictUnshared
 } from './worktree-listing'
+import { listWorktreesStrictAllowingTrueEmpty as listWorktreesStrictAllowingTrueEmptyUnshared } from './strict-true-empty-worktree-listing'
 import type { GitWorktreeExecOptions } from '../worktree-operation-options'
 import { WORKTREE_LIST_TIMEOUT_MS } from '../worktree-operation-options'
 import { resolveGitAdmissionTier } from '../../command-runner/admission/git-operation-executor'
+import { withRepositoryGitCause } from '../../repository-git-cause'
+
+let signalIdentities = new WeakMap<AbortSignal, number>()
+let nextSignalIdentity = 0
 
 const inFlightWorktreeScans = new Map<string, Promise<GitWorktreeInfo[]>>()
 
-type WorktreeScanKind = 'graph' | 'lenient' | 'strict' | 'strict-true-empty'
+type WorktreeScanKind = 'graph' | 'strict-graph' | 'lenient' | 'strict' | 'strict-true-empty'
 
 const worktreeScanGenerations = new Map<string, number>()
 
@@ -25,7 +31,17 @@ function hasInFlightWorktreeScanForRepo(repoPath: string): boolean {
   return false
 }
 
+const scanGenerationBumpListeners = new Set<(repoPath: string) => void>()
+
+/** Settled catalog owners outlive in-flight scans, so mutations must reach them too. */
+export function onWorktreeScanGenerationBump(listener: (repoPath: string) => void): void {
+  scanGenerationBumpListeners.add(listener)
+}
+
 export function bumpWorktreeScanGeneration(repoPath: string): void {
+  for (const listener of scanGenerationBumpListeners) {
+    listener(repoPath)
+  }
   // Retain generations only while a pre-mutation scan can still be joined.
   if (!hasInFlightWorktreeScanForRepo(repoPath)) {
     return
@@ -51,6 +67,8 @@ export function _getWorktreeScanCacheSizesForTests(): { inFlight: number; genera
 }
 
 export function _resetWorktreeScanCacheForTests(): void {
+  signalIdentities = new WeakMap()
+  nextSignalIdentity = 0
   inFlightWorktreeScans.clear()
   worktreeScanGenerations.clear()
 }
@@ -62,18 +80,28 @@ function shareWorktreeScan(
   kind: WorktreeScanKind,
   run: (repoPath: string, options: GitWorktreeExecOptions) => Promise<GitWorktreeInfo[]>
 ): Promise<GitWorktreeInfo[]> {
+  if (options.signal?.aborted) {
+    return Promise.reject(abortSignalReason(options.signal))
+  }
+  let signalIdentity = 0
   if (options.signal) {
-    return run(repoPath, options)
+    signalIdentity = signalIdentities.get(options.signal) ?? ++nextSignalIdentity
+    signalIdentities.set(options.signal, signalIdentity)
   }
   const generation = worktreeScanGenerations.get(repoPath) ?? 0
   const timeout = options.timeout ?? WORKTREE_LIST_TIMEOUT_MS
   // Separate deadlines, failure contracts and admission tiers so joiners cannot inherit weaker scans.
-  const key = `${repoPath}\0${options.wslDistro ?? ''}\0${timeout}\0${options.includeCreatePreparations === true}\0${generation}\0${kind}\0${resolveGitAdmissionTier(options.admissionTier)}`
+  const key = `${repoPath}\0${options.wslDistro ?? ''}\0${timeout}\0${options.includeCreatePreparations === true}\0${generation}\0${kind}\0${resolveGitAdmissionTier(options.admissionTier)}\0${signalIdentity}`
   const inFlight = inFlightWorktreeScans.get(key)
   if (inFlight) {
     return inFlight
   }
-  const scan = run(repoPath, options).finally(() => {
+  const scan = withRepositoryGitCause(
+    repoPath,
+    options,
+    { family: 'catalog', reason: 'worktree-scan', cache: 'miss' },
+    () => run(repoPath, options)
+  ).finally(() => {
     if (inFlightWorktreeScans.get(key) === scan) {
       inFlightWorktreeScans.delete(key)
     }
@@ -92,7 +120,7 @@ async function runAnnotatedWorktreeScan(
   return annotateSparseCheckoutStatus(repoPath, worktrees, options)
 }
 
-/** Git failures return []; matching callers coalesce, while AbortSignal callers stay isolated. */
+/** Git failures return []; matching callers coalesce, while different cancellation scopes stay isolated. */
 export function listWorktrees(
   repoPath: string,
   options: GitWorktreeExecOptions = {}
@@ -100,7 +128,7 @@ export function listWorktrees(
   return shareWorktreeScan(repoPath, options, 'lenient', runAnnotatedWorktreeScan)
 }
 
-/** Skip sparse probes while retaining generation fencing and AbortSignal isolation. */
+/** Skip sparse probes while retaining generation fencing and cancellation-scope isolation. */
 export function listWorktreeGraph(
   repoPath: string,
   options: GitWorktreeExecOptions = {}
@@ -127,4 +155,12 @@ export function listWorktreesSharedStrictAllowingTrueEmpty(
     'strict-true-empty',
     listWorktreesStrictAllowingTrueEmptyUnshared
   )
+}
+
+/** Strict authority includes every registration, without preparation filtering or sparse probes. */
+export function listWorktreeGraphSharedStrict(
+  repoPath: string,
+  options: GitWorktreeExecOptions = {}
+): Promise<GitWorktreeInfo[]> {
+  return shareWorktreeScan(repoPath, options, 'strict-graph', readTranslatedWorktreeGraph)
 }

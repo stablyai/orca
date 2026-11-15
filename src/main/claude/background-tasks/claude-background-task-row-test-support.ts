@@ -103,3 +103,15 @@ export const START_BASH = {
   description: 'Wait for the verification verdict',
   is_backgrounded: true
 }
+
+// CLI 2.1.319, isolated real run: parent Stop, live child roster, then separate child Stop; IDs/paths sanitized.
+import { readFileSync } from 'node:fs'
+type CapturedFrame = { at: number; frame: Record<string, unknown> }
+
+export const PARENT_TASK_STOP: CapturedFrame[] = readFileSync(
+  new URL('../__fixtures__/claude-parent-task-stop-2.1.319.jsonl', import.meta.url),
+  'utf8'
+)
+  .trim()
+  .split('\n')
+  .map((line) => JSON.parse(line))

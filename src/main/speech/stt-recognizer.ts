@@ -11,9 +11,9 @@ export type SttRecognizerInit = {
 }
 
 export type SttRecognizerEvent =
-  /** One committed offline chunk; `samples` counts the stream's input-rate samples committed so far. */
+  /** Newly committed text; `samples` counts the stream's input-rate samples it and earlier chunks account for. */
   | { type: 'chunk'; streamId: string; text: string; samples: number }
-  /** The uncommitted phrases' live text so far; the next chunk replaces it. */
+  /** The uncommitted text so far, which may still change; the next chunk replaces it. */
   | { type: 'partial'; streamId: string; text: string }
   /** Pause-cut streams only: speech was heard whose text hasn't arrived yet. */
   | { type: 'speech-pending'; streamId: string; pending: boolean }

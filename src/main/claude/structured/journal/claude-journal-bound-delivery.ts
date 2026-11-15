@@ -32,7 +32,7 @@ export class ClaudeJournalBoundDelivery {
     return (
       !this.closed &&
       this.published() &&
-      (!this.sink?.onJournalBound || this.sink.journalLinkage?.() !== null)
+      (!this.sink?.onJournalBound || this.sink.journalSnapshot?.() != null)
     )
   }
 

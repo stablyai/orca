@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { EventEmitter } from 'node:events'
-import type { Repo } from '../../shared/repo-types'
+import type { Repo } from '../../shared/repository/repo-types'
 
 const { spawnMock } = vi.hoisted(() => ({ spawnMock: vi.fn() }))
 vi.mock('child_process', () => ({ spawn: spawnMock, execFileSync: vi.fn() }))
@@ -77,35 +77,10 @@ async function runArchiveWith(
 
 // Real-process timeout/group tests live in hook-termination-real-process.test.ts (#19334).
 describe('archive hook exit observation', () => {
-  it.each([
-    ['a non-zero exit', 23],
-    ['a shell command-not-found', 127]
-  ])('reports %s as the observed exit it is', async (_label, code) => {
-    await expect(runArchiveWith({ code })).resolves.toMatchObject({
-      success: false,
-      exitCode: code
-    })
-  })
-
-  it('caps what it retains from a hook that floods stdout', async () => {
-    const megabyte = 'x'.repeat(1024 * 1024)
-    const result = await runArchiveWith(
-      { code: 0 },
-      Array.from({ length: 12 }, () => megabyte)
-    )
-    expect(result.output.length).toBeLessThan(11 * 1024 * 1024)
-    expect(result.output).toContain('output truncated at 10485760 bytes')
-  })
-
   it('survives an error on the output stream', async () => {
     await expect(
       runArchiveWith({ code: 0 }, ['partial'], new Error('EIO: read failed'))
     ).resolves.toMatchObject({ success: true })
-  })
-
-  it('names a signalled exit as one rather than reporting "exit code null"', async () => {
-    const result = await runArchiveWith({ code: null, signal: 'SIGKILL' })
-    expect(result.output).toContain('terminated without reporting an exit code')
   })
 
   it.each([

@@ -1,5 +1,5 @@
-import { isClaudeToolResultContent } from '../../../shared/claude-tool-content'
-import { decodeClaudeTranscriptLine } from '../../native-chat/transcript-line-decoders-claude'
+import { isClaudeToolResultContent } from '../../../shared/agent-hook-listener/providers/claude/transcripts/claude-tool-content'
+import { decodeClaudeTranscriptLine } from '../../native-chat/transcript-decoding/transcript-line-decoders-claude'
 import { claudeEnvelopeStopHookFeedbackRow } from '../structured/journal/claude-stop-hook-feedback'
 import {
   claudeRecord,

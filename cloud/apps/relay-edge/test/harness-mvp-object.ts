@@ -5,7 +5,7 @@ import { readFileSync } from 'node:fs'
 import { SignJWT, type KeyLike } from 'jose'
 import nacl from 'tweetnacl'
 import WebSocket from 'ws'
-import { RelayControlClient } from '../../../../src/main/runtime/mobile-cloud-relay/relay-control-client'
+import { RelayControlClient } from '../../../../src/main/runtime/mobile-cloud-relay/control-channel/relay-control-client'
 import { CloudRelayTransport } from '../../../../src/main/runtime/rpc/transports/relay-transport'
 
 export const PORT = 8789

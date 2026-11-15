@@ -1,5 +1,5 @@
 // Lost channels drop their sockets but keep the listener; tunnel reconnect logic owns recovery.
-import { OrcadStdioBridgeUnavailableError } from '../../orcad/orcad-host-unavailable'
+import { OrcadStdioBridgeUnavailableError } from '../../orcad/diagnostics/orcad-host-unavailable'
 import type { OrcadHostTransport } from '../install/orcad-host-transport'
 import {
   checkOrcadStdioBridge,

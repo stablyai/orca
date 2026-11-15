@@ -1,5 +1,4 @@
-import { collectSavedStructuredAgentSessionIds } from '../agent-session/lifecycle/saved-structured-agent-session-restoration'
-import { LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host'
+import { collectLocalSavedStructuredAgentSessionIds } from '../agent-session/lifecycle/saved-structured-agent-session-restoration'
 import type {
   RuntimeConstructionBindings as Bindings,
   RuntimeConstructionDependencies
@@ -14,7 +13,7 @@ import type { ProjectExecutionRuntimeResolution } from '../../../shared/executio
 import { OrcaRuntimeWithLinearCommands } from '../integrations/linear/linear-commands'
 
 import type { RuntimeStore } from './runtime-store-contract'
-import { installGitHubProjectAccounts } from '../../github/github-project-account'
+import { installGitHubProjectAccounts } from '../../github/accounts/github-project-account'
 import type { WorkspaceSleepPlatform } from '../workspaces/sleep/workspace-sleep-platform'
 import type { StatsCollector } from '../../stats/collector'
 
@@ -50,13 +49,13 @@ import { RuntimeClientSettingsController } from '../client/settings/runtime-clie
 import { RuntimeSessionSearchSettingsController } from '../integrations/ai-vault/runtime-session-search-settings'
 import { RuntimeAutomationController } from '../integrations/automations/runtime-automation-controller'
 import { RuntimeOrchestrationFederation } from '../orchestration/federation/runtime-orchestration-federation'
-import { configureAiVaultSessionSources } from '../../ai-vault/cached-session-list'
-import { configureHostReadableTranscriptPathSources } from '../../native-chat/host-readable-transcript-path'
+import { configureAiVaultSessionSources } from '../../ai-vault/discovery/ai-vault-scan-roots'
+import { configureHostReadableTranscriptPathSources } from '../../native-chat/transcript-discovery/host-readable-transcript-path'
 import { createEphemeralAgentSessionClaimSigner } from '../agent-session/ownership/agent-session-claim-identity'
 import { registerConptyDa1OverrideInstaller } from '../terminal/output/terminal-model-query-authority'
 import { registerTerminalViewAttributesApplier } from '../terminal/view/terminal-view-attribute-store'
 import { RuntimeMachineName } from '../hosts/platform-probe/runtime-machine-name'
-import { setPRConflictSummaryRemoteFetches } from '../../github/conflict-summary'
+import { setPRConflictSummaryRemoteFetches } from '../../github/pull-requests/conflicts/conflict-summary'
 import { DESKTOP_TERMINAL_SCROLLBACK_ROWS_DEFAULT } from '../../../shared/terminal/replay/terminal-scrollback-policy'
 
 // oxlint-disable-next-line typescript/no-unsafe-declaration-merging -- SAFETY: The constructor installs every checked canonical surface.
@@ -136,11 +135,8 @@ export abstract class OrcaRuntimeWithStateFields extends OrcaRuntimeWithLinearCo
     super()
     this.store = store
     installGitHubProjectAccounts(store, () => this.resolvedWorktrees.peek()?.worktrees ?? [])
-    this.legacyStructuredSessionTabIds = Object.freeze(
-      collectSavedStructuredAgentSessionIds(
-        store?.getWorkspaceSession?.(LOCAL_EXECUTION_HOST_ID) ?? null
-      )
-    )
+    this.legacyStructuredSessionTabIds =
+      deps?.legacyStructuredSessionTabIds ?? collectLocalSavedStructuredAgentSessionIds(store)
     this.machineName.start()
     this.getSetupTerminalTitle = deps?.getSetupTerminalTitle ?? (() => 'Setup')
     this.prepareClaudeAuth = deps?.prepareClaudeAuth

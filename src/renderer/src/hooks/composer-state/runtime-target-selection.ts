@@ -7,7 +7,7 @@ import { selectRepoSshGateInput } from '@/lib/workspace/catalog/repo-ssh-connect
 import { useFolderWorkspaceComposerPathStatus } from '@/components/sidebar/workspace-creation/folder/folder-workspace-composer-path-status'
 import { useDetectedAgents } from '@/hooks/useDetectedAgents'
 import { resolveWorkspaceCreationTarget } from '@/lib/workspace/creation/project-host-workspace-target'
-import { isGitRepoKind } from '../../../../shared/repo-kind'
+import { isGitRepoKind } from '../../../../shared/repository/repo-kind'
 import { CLIENT_PLATFORM } from '@/lib/workspace/creation/new-workspace'
 import { getLocalRepoProjectExecutionRuntimeContext } from '@/runtime/hosts/preflight/local-preflight-context'
 import {
@@ -24,6 +24,7 @@ import { selectProjectFirstReason } from './runtime-target-selection-copy'
 import type { ComposerRuntimeTargetSelectionInput } from './composer-target-input-contracts'
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import type { ExecutionHostPlatformFact } from '@/runtime/hosts/platform/execution-host-platform-fact'
+import { pickerRepos } from '../../../../shared/hidden-projects'
 
 export function useComposerRuntimeTargetSelection(input: ComposerRuntimeTargetSelectionInput) {
   const {
@@ -226,11 +227,11 @@ export function useComposerRuntimeTargetSelection(input: ComposerRuntimeTargetSe
       buildNewWorkspaceCreateTargetOptions({
         projects,
         projectHostSetups,
-        eligibleRepos,
+        eligibleRepos: pickerRepos(eligibleRepos, selectedRepo?.id),
         projectGroups,
         hosts: hostOptions
       }),
-    [eligibleRepos, hostOptions, projectGroups, projectHostSetups, projects]
+    [eligibleRepos, hostOptions, projectGroups, projectHostSetups, projects, selectedRepo?.id]
   )
 
   // Why: probes and attachment uploads inspect the selected repo, even though creation defaults still follow host scope.

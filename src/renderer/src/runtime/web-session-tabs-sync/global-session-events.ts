@@ -1,6 +1,7 @@
-import type { RuntimeRpcResponse } from '../../../../shared/runtime-rpc-envelope'
-import type { RuntimeMobileSessionTabsResult } from '../../../../shared/runtime-types'
-import { isRuntimeSubscriptionReplayResponse } from '../../../../shared/runtime-subscription-replay'
+import { carryBrowserInitializationReceipt } from './browser-initialization-presentation'
+import type { RuntimeRpcResponse } from '../../../../shared/remote-runtime/rpc/runtime-rpc-envelope'
+import type { RuntimeMobileSessionTabsResult } from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
+import { isRuntimeSubscriptionReplayResponse } from '../../../../shared/remote-runtime/rpc/runtime-subscription-replay'
 import { useAppStore } from '../../store'
 import { recoverMirroredTerminalOrphansBeforeApply } from './mirror-terminal-orphan-recovery'
 import { sessionTabsFreshnessKey, acceptReplayedWebSessionTabsSnapshot } from './state'
@@ -97,12 +98,11 @@ export function handleGlobalSessionEvent(args: GlobalSessionEventArgs): void {
         environmentId,
         expectedEnvironmentPairingRevision,
         isCurrent,
-        applySnapshot: (snapshot, censusResponse) =>
-          handleGlobalSessionEvent({
-            ...args,
-            event: { ...snapshot, type: 'snapshot' },
-            response: censusResponse
-          })
+        applySnapshot: (snapshot, censusResponse) => {
+          const event = { ...snapshot, type: 'snapshot' as const }
+          carryBrowserInitializationReceipt(snapshot, event)
+          handleGlobalSessionEvent({ ...args, event, response: censusResponse })
+        }
       },
       event.worktree,
       event.publicationEpoch

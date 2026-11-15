@@ -1,5 +1,5 @@
 import type { AppState } from '@/store/types'
-import type { TerminalTabRetirementPlan } from '@/store/terminals/terminal-tab-retirement'
+import type { TerminalTabRetirementPlan } from '@/store/terminals/retirement/terminal-tab-retirement'
 
 export type PrecomputedTerminalCloseState = {
   owningWorktreeId: string

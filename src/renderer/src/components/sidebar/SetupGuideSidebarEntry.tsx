@@ -12,8 +12,8 @@ import {
 import {
   getFirstIncompleteFeatureWallSetupStepId,
   type FeatureWallSetupStepId
-} from '../../../../shared/feature-wall-setup-steps'
-import type { FeatureWallSetupProgress } from '../feature-wall/feature-wall-setup-progress'
+} from '../../../../shared/feature-education/explore/feature-wall-setup-steps'
+import type { FeatureWallSetupProgress } from '../feature-wall/setup/feature-wall-setup-progress'
 import { SetupGuideProgressRing } from '../setup-guide/SetupGuideProgressRing'
 import { useSetupGuideProgress } from '../setup-guide/use-setup-guide-progress'
 import { useTranslate } from '@/i18n/use-translate'

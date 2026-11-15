@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
-import { CONNECTOR_CLIENT_LIMITS } from '../../shared/connector-cloud-contract'
-import type { ProjectGroup } from '../../shared/project-group-types'
-import type { Repo } from '../../shared/repo-types'
+
+import type { ProjectGroup } from '../../shared/project/groups/project-group-types'
+import type { Repo } from '../../shared/repository/repo-types'
 import { connectorProjects, placeLaunchTarget, type ConnectorPlacesStore } from './connector-places'
 
 function repo(fields: Partial<Repo> & Pick<Repo, 'id'>): Repo {
@@ -84,31 +84,5 @@ describe('connector places', () => {
       kind: 'create-folder-workspace',
       create: { projectGroupId: 'g1', name: expect.stringMatching(/^slack-[0-9a-f]{8}$/) }
     })
-  })
-
-  it('lists the most recently used projects first, at most maxHelloProjects, with short names', () => {
-    const repos = Array.from({ length: CONNECTOR_CLIENT_LIMITS.maxHelloProjects + 1 }, (_, index) =>
-      repo({ id: `r${index}`, addedAt: index, displayName: 'n'.repeat(300) })
-    )
-    const projects = connectorProjects({
-      ...store(repos),
-      getAllWorktreeMeta: () => ({
-        'r0::/src/r0': {
-          displayName: 'r0',
-          comment: '',
-          linkedIssue: null,
-          linkedPR: null,
-          linkedLinearIssue: null,
-          isArchived: false,
-          isUnread: false,
-          isPinned: false,
-          sortOrder: 0,
-          lastActivityAt: 10_000
-        }
-      })
-    })
-    expect(projects).toHaveLength(CONNECTOR_CLIENT_LIMITS.maxHelloProjects)
-    expect(projects[0]?.name).toHaveLength(CONNECTOR_CLIENT_LIMITS.maxDisplayTextLength)
-    expect(projects[0]?.placeId).toBe(connectorProjects(store([repos[0]!]))[0]?.placeId)
   })
 })

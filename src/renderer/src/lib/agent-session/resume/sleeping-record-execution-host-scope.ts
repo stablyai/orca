@@ -9,7 +9,7 @@ import {
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../shared/constants'
 
 import { getRepoIdFromWorktreeId } from '../../../../../shared/worktree/id'
-import { parseWorkspaceKey } from '../../../../../shared/workspace-scope'
+import { parseWorkspaceKey } from '../../../../../shared/workspace/identity/workspace-scope'
 import {
   findFolderWorkspaceOwner,
   getExplicitRuntimeEnvironmentIdForFolderWorkspace,

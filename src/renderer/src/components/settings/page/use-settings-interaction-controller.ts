@@ -1,3 +1,4 @@
+import { isAgentSettingsRowId } from '../agents/agent-settings-navigation'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { SourceControlAiSettingsPatch } from '../../../../../shared/source-control/ai/settings/source-control-ai-settings-types'
 import { useAppStore } from '../../../store/index'
@@ -10,9 +11,17 @@ import {
 import type { SettingsStoreModel } from './use-settings-store-model'
 import type { SettingsDeepLinkTargetWatch } from '../navigation/settings-deep-link-target-watcher'
 import {
+  applySettingsTargetHighlightBleed,
+  clearSettingsTargetHighlightBleed,
+  resolveSettingsHighlightElement,
+  SETTINGS_TARGET_HIGHLIGHT_CLASS_NAME
+} from '../section-layout/settings-target-highlight'
+import {
   cancelPendingSettingsDeepLinkTargetWatch,
   cancelPendingSettingsSubsectionScrollFrame,
+  getSettingsScrollTarget,
   readSourceControlAiSettings,
+  scrollSubsectionIntoView,
   SETTINGS_TARGET_HIGHLIGHT_MS
 } from '../navigation/settings-navigation-foundations'
 
@@ -34,6 +43,14 @@ export type SettingsInteractionModel = Pick<
   | 'settings'
   | 'updateSettingsOrThrow'
 >
+
+const SETTINGS_REVEAL_SETTLE_MS = 250
+
+function isFullyVisibleIn(target: HTMLElement, container: HTMLElement): boolean {
+  const targetRect = target.getBoundingClientRect()
+  const containerRect = container.getBoundingClientRect()
+  return targetRect.top >= containerRect.top && targetRect.bottom <= containerRect.bottom
+}
 
 export function useSettingsInteractionController(model: SettingsInteractionModel) {
   const {
@@ -143,6 +160,38 @@ export function useSettingsInteractionController(model: SettingsInteractionModel
     )
     return () => window.clearTimeout(timeout)
   }, [highlightedSettingsTarget, setHighlightedSettingsTarget])
+
+  useEffect(() => {
+    const targetId = highlightedSettingsTarget?.id
+    if (!targetId) {
+      return
+    }
+    const target = getSettingsScrollTarget(targetId, contentScrollRef.current)
+    if (!target) {
+      return
+    }
+    // The one owner of the highlight, on the element the jump scrolled to (or its card).
+    const highlighted = resolveSettingsHighlightElement(target)
+    highlighted.classList.add(SETTINGS_TARGET_HIGHLIGHT_CLASS_NAME)
+    applySettingsTargetHighlightBleed(highlighted)
+    // A section the jump just revealed grows over ~200ms; re-scroll once if the row is still cut off.
+    const settle = isAgentSettingsRowId(targetId)
+      ? undefined
+      : window.setTimeout(() => {
+          const container = contentScrollRef.current
+          if (container && !isFullyVisibleIn(target, container)) {
+            scrollSubsectionIntoView(targetId, container)
+          }
+          applySettingsTargetHighlightBleed(highlighted)
+        }, SETTINGS_REVEAL_SETTLE_MS)
+    return () => {
+      if (settle !== undefined) {
+        window.clearTimeout(settle)
+      }
+      clearSettingsTargetHighlightBleed(highlighted)
+      highlighted.classList.remove(SETTINGS_TARGET_HIGHLIGHT_CLASS_NAME)
+    }
+  }, [highlightedSettingsTarget])
 
   const requestFontSuggestions = useCallback((): void => {
     if (installedFontsLoadedRef.current || installedFontsLoadPromiseRef.current) {

@@ -8,15 +8,15 @@ import type {
   GitLabTaskFilter,
   GitLabIssueFilter
 } from '@/components/task-page/task-page-localized-options'
-import type { GitHubWorkItem } from '../../../../shared/github/work-item-types'
+import type { GitHubWorkItem } from '../../../../shared/github/work-items/work-item-types'
 import type { GitLabWorkItem } from '../../../../shared/gitlab-types'
 import type { JiraIssue } from '../../../../shared/jira/jira-types'
-import type { Repo } from '../../../../shared/repo-types'
+import type { Repo } from '../../../../shared/repository/repo-types'
 import type { TaskPageRepoCacheRowInput } from './task-page-cache-selectors'
 import {
   getLinkedWorkItemWorkspaceName,
   getLinkedWorkItemSuggestedName
-} from '../../../../shared/workspace-name'
+} from '../../../../shared/workspace/naming/workspace-name'
 import { getJiraIssueKeyCasingSeedOptions } from '@/lib/work-items/jira/jira-issue-key-casing'
 import {
   type TaskSourceContext,

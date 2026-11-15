@@ -4,7 +4,7 @@ import {
   BACKEND_CONNECTION_CHANGED,
   BACKEND_PORT_DELIVERY,
   BACKEND_PORT_REQUEST
-} from '../../shared/backend-service-contract'
+} from '../../shared/backend/backend-service-contract'
 const rig = vi.hoisted(() => ({
   fork: vi.fn(),
   handle: vi.fn(),
@@ -23,7 +23,7 @@ vi.mock('electron', () => ({
   }
 }))
 vi.mock('./backend-bootstrap', () => ({ capturedBootstrap: {} }))
-vi.mock('../../shared/backend-port-rpc', () => ({
+vi.mock('../../shared/backend/backend-port-rpc', () => ({
   BackendPortRpc: class {
     call = rig.call
     close() {}
@@ -37,7 +37,7 @@ vi.mock('../worker-threads/worker-thread-entry-path', () => ({
   currentWorkerEntryLayout: () => ({ moduleDir: '/' }),
   resolveWorkerThreadEntryPath: () => 'backend-entry.js'
 }))
-vi.mock('../window/renderer-document-navigation', () => ({
+vi.mock('../window/security/renderer-document-navigation', () => ({
   isRendererDocumentNavigation: () => true
 }))
 vi.mock('../usage/worktree-attribution/usage-worktree-metadata', () => ({

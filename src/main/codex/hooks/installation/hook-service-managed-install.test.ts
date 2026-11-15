@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
-import { removeTreeSync } from '../../../../shared/windows-transient-lock-removal'
+import { removeTreeSync } from '../../../../shared/file-write/windows-transient-lock-removal'
 import { homedir, tmpdir } from 'node:os'
 import type * as Os from 'node:os'
 import { join } from 'node:path'

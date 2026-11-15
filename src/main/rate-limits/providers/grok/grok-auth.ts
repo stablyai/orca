@@ -1,6 +1,6 @@
 import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { resolveGrokHomeDir } from '../../../../shared/grok-session-paths'
+import { resolveGrokHomeDir } from '../../../../shared/agent-hook-listener/providers/grok/grok-session-paths'
 import { isGrokAccessTokenFreshAt } from './grok-auth-expiry'
 
 export function getGrokHome(): string {

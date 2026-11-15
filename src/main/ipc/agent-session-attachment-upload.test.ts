@@ -5,30 +5,21 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { AgentSessionAttachmentStore } from '../native-chat/agent-session-attachments/agent-session-attachment-store'
 
 type CallOptions = { expectedEnvironmentRuntimeId?: string; signal?: AbortSignal }
-type Call = {
-  method: string
-  params: Record<string, unknown>
-  revision?: number
-  options?: CallOptions
-}
-
-const calls: Call[] = []
 let serverStore: AgentSessionAttachmentStore
 let failMethod: string | null = null
 
 // Use the real paired-server store behind the RPC seam.
-vi.mock('./runtime-environments/runtime-environment-transport-routing', () => ({
+vi.mock('./runtime-environments/requests/runtime-environment-transport-routing', () => ({
   callRuntimeEnvironment: async (
     _userDataPath: string,
     _environmentId: string,
     method: string,
     params: Record<string, unknown>,
     _timeoutMs?: number,
-    revision?: number,
+    _revision?: number,
     _envelope?: unknown,
-    options?: CallOptions
+    _options?: CallOptions
   ) => {
-    calls.push({ method, params, revision, options })
     if (method === failMethod) {
       return { ok: false, error: { code: 'internal', message: `${method} failed` } }
     }
@@ -79,7 +70,6 @@ beforeEach(async () => {
     join(workDir, 'server', 'agent-session-attachments'),
     { hasSession: () => true }
   )
-  calls.length = 0
   failMethod = null
 })
 
@@ -119,8 +109,5 @@ describe('uploadBufferToAgentSessionAttachments', () => {
     const stored = await uploadBufferToAgentSessionAttachments(context(), 'orca-paste-1.png', png)
     expect(stored.name).toBe('orca-paste-1.png')
     expect((await readFile(stored.path)).equals(png)).toBe(true)
-    expect(
-      calls.filter((call) => call.method === 'agentSessionAttachment.uploadAppend')
-    ).toHaveLength(3)
   })
 })

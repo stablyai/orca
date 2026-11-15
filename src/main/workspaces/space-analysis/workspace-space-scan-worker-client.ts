@@ -1,7 +1,7 @@
 import { existsSync } from 'node:fs'
 import type { Worker } from 'node:worker_threads'
 import { spawnWorkerThread } from '../../worker-threads/worker-thread-spawn'
-import type { Repo } from '../../../shared/repo-types'
+import type { Repo } from '../../../shared/repository/repo-types'
 import type { Worktree } from '../../../shared/worktree/types'
 import type { WorkspaceSpaceWorktree } from '../../../shared/workspace-disk-space/workspace-space-types'
 import { WorkerThreadRequestQueue } from '../../worker-threads/worker-thread-request-queue'

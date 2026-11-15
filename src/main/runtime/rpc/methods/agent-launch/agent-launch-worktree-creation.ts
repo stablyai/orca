@@ -1,4 +1,4 @@
-import type { RuntimeTerminalCreate } from '../../../../../shared/runtime-terminal-create-contract'
+import type { RuntimeTerminalCreate } from '../../../../../shared/terminal/runtime/runtime-terminal-create-contract'
 /** Terminal launches create agent-first worktrees; structured launches create the workspace without an agent and add chat afterwards.
  * The executor chooses; setup, default tabs, provenance and lineage use the normal create path. */
 
@@ -11,7 +11,7 @@ import {
   releaseAutomationWorkspaceProvenanceRequest,
   resolveAutomationWorkspaceProvenance,
   resolveClientAutomationWorkspaceProvenance
-} from '../../../../automations/workspace-provenance'
+} from '../../../../automations/ownership/workspace-provenance'
 import type { AgentLaunchWorkspaceFactory } from '../../../../agent-launch/agent-launch-surface-factories'
 import { combineLaunchWarnings } from '../../../../agent-launch/agent-launch-warnings'
 import type { RpcContext } from '../../core'
@@ -21,7 +21,7 @@ import {
   worktreeCreateRepoSelector
 } from '../workspaces/worktree-create-args'
 import { toAgentLaunchPreferences } from '../../../../../shared/agent-launch/choices/agent-launch-preferences'
-import type { AgentLaunchParams } from '../../../../../shared/rpc-contract/agent-launch-params'
+import type { AgentLaunchParams } from '../../../../../shared/rpc-contract/agent-launch/agent-launch-params'
 import { agentLaunchFolderWorkspaceCreator } from './agent-launch-folder-workspace-creation'
 import { agentLaunchMovesHostWindow } from './agent-launch-tab-publication'
 
@@ -159,7 +159,7 @@ function withoutHostActivation(params: WorktreeCreateParams): WorktreeCreatePara
   }
 }
 
-async function waitForStructuredSetup(
+export async function waitForStructuredSetup(
   runtime: Pick<OrcaRuntimeService, 'waitForSetupTerminalCompletion'>,
   receipt: Awaited<ReturnType<OrcaRuntimeService['createManagedWorktree']>>['setupReceipt']
 ): Promise<void> {

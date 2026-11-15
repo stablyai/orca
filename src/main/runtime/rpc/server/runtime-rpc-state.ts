@@ -1,5 +1,5 @@
 import { randomBytes } from 'node:crypto'
-import type { RuntimeTransportMetadata } from '../../../../shared/runtime-bootstrap'
+import type { RuntimeTransportMetadata } from '../../../../shared/remote-runtime/bootstrap/runtime-bootstrap'
 import type { OrcaRuntimeService } from '../../orca-runtime'
 import { RpcDispatcher } from '../dispatcher'
 import { ALL_RPC_METHODS } from '../methods/rpc-method-registry'
@@ -12,7 +12,7 @@ import type { UnpairedDeviceAuthThrottle } from '../mobile/unpaired-device-auth-
 import type { MobileSocketWiring } from '../mobile/mobile-socket-wiring'
 import type { MobileDesktopRelay } from '../../mobile-desktop-relay/mobile-desktop-relay'
 import type { MobileRelayHostCatalog } from '../../mobile-desktop-relay/mobile-relay-host-catalog'
-import { RelayRevokeOutbox } from '../../mobile-cloud-relay/relay-revoke-outbox'
+import { RelayRevokeOutbox } from '../../mobile-cloud-relay/pairing/relay-revoke-outbox'
 import { PushUnregisterOutbox } from '../../push/push-unregister-outbox'
 import { RuntimeBinaryMessageRouter } from './runtime-binary-message-router'
 

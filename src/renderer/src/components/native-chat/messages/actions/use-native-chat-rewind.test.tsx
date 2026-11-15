@@ -8,7 +8,7 @@ vi.mock('sonner', () => ({ toast: { error: toastError, message: vi.fn() } }))
 import { EMPTY_STRUCTURED_AGENT_SESSION } from '../../../../../../shared/agent-session/structured-agent-session-reducer'
 import type { AgentJournalRenderItem } from '../../../../../../shared/agent-session/journal/agent-session-journal-types'
 
-import { AGENT_SESSION_REWIND_RESET_TIMEOUT_MS } from '../../../../../../shared/agent-session/lifecycle/agent-session-rewind-request'
+import { AGENT_SESSION_REWIND_RESET_TIMEOUT_MS } from '../../../../../../shared/agent-session/lifecycle/rewind/agent-session-rewind-request'
 import { useNativeChatRewind } from './use-native-chat-rewind'
 
 import type { AgentSessionWriteFailure } from '../../../../../../shared/agent-session/failures/agent-session-write-failure'

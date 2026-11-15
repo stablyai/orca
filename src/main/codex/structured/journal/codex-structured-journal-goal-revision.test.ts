@@ -1,3 +1,4 @@
+import { readTestJournalItems } from '../../../native-chat/agent-session-journal/journal-observation.test-support'
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -14,8 +15,8 @@ import { createTrackedJournalOpener } from '../../../native-chat/agent-session-j
 import { readAgentSessionHistory } from '../../../native-chat/agent-session-wire/publication/history/agent-session-history-page'
 import { createDeferredStructuredAgentSessionEventSink } from '../../../native-chat/agent-session-wire/journal-ingress/structured-agent-session-event-sink'
 import { CodexJournalGoals } from './codex-structured-journal-goals'
-import { testEventSinkLogging } from '../../../native-chat/agent-session-wire/host/testing/structured-agent-session-logger-test-support'
-import { codexProviderHandle } from '../../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
+import { testEventSinkLogging } from '../../../native-chat/agent-session-wire/host/testing/structured-agent-session-logger.test-fixture'
+import { codexProviderHandle } from '../../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle-encoding'
 
 const THREAD = '01a08cc2-f96e-76d0-bb74-88b9bc0b03fc'
 const IDENTITY: AgentSessionJournalIdentity = {
@@ -57,7 +58,7 @@ function goalFrame(goal: Record<string, unknown> = {}) {
 
 function journalSink(journal: AgentSessionJournal) {
   const deferred = createDeferredStructuredAgentSessionEventSink(testEventSinkLogging())
-  const published: AgentSessionHistoryPage[] = []
+  const pages: Promise<AgentSessionHistoryPage | null>[] = []
   let subscriberCursor: AgentJournalCursor | null = null
   deferred.bind({
     journal,
@@ -66,14 +67,13 @@ function journalSink(journal: AgentSessionJournal) {
       if (subscriberCursor === null) {
         return
       }
-      const result = readAgentSessionHistory(journal, {
-        sessionId: IDENTITY.sessionId,
-        direction: 'after',
-        cursor: subscriberCursor
-      })
-      if (result.ok) {
-        published.push(result.page)
-      }
+      pages.push(
+        readAgentSessionHistory(journal, {
+          sessionId: IDENTITY.sessionId,
+          direction: 'after',
+          cursor: subscriberCursor
+        }).then((result) => (result.ok ? result.page : null))
+      )
     }
   })
   return {
@@ -82,7 +82,8 @@ function journalSink(journal: AgentSessionJournal) {
     subscribe: () => {
       subscriberCursor = journal.cursor()
     },
-    published
+    published: async () =>
+      (await Promise.all(pages)).filter((page): page is AgentSessionHistoryPage => page !== null)
   }
 }
 
@@ -100,7 +101,7 @@ describe('codex goal accounting revisions', () => {
 
     goals.handle({ threadId: THREAD, method: 'thread/goal/updated', params: goalFrame() })
     await drained()
-    const [, created] = journal.snapshot().items
+    const [, created] = await readTestJournalItems(journal)
     await journal.appendItem(
       { provider: 'orca', clientMessageId: 'later' },
       { kind: 'status', text: 'Something after the goal' },
@@ -114,8 +115,8 @@ describe('codex goal accounting revisions', () => {
       params: goalFrame({ timeUsedSeconds: 10, updatedAt: 1789067998 })
     })
     await drained()
-    expect(journal.snapshot().items[1]?.revision).toBe(created?.revision)
-    expect(published).toEqual([])
+    expect((await readTestJournalItems(journal))[1]?.revision).toBe(created?.revision)
+    expect(await published()).toEqual([])
 
     goals.handle({
       threadId: THREAD,
@@ -124,7 +125,7 @@ describe('codex goal accounting revisions', () => {
     })
     await drained()
 
-    const items = journal.snapshot().items
+    const items = await readTestJournalItems(journal)
     expect(items.map((item) => item.itemId)).toEqual([
       'orca:earlier',
       created?.itemId,
@@ -138,7 +139,7 @@ describe('codex goal accounting revisions', () => {
       timeUsedSeconds: 45,
       updatedAt: 1789068033_000
     })
-    expect(published).toEqual([
+    expect(await published()).toEqual([
       expect.objectContaining({
         items: [
           expect.objectContaining({
