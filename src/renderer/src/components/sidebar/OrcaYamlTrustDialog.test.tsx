@@ -10,7 +10,7 @@ import {
   confirmCreatedWorktreeSetupContent,
   ensureHooksConfirmed
 } from '@/runtime/repo-hooks/ensure-hooks-confirmed'
-import type { Repo } from '../../../../shared/repo-types'
+import type { Repo } from '../../../../shared/repository/repo-types'
 
 const hooksCheck = vi.fn()
 const uiSet = vi.fn<(updates: unknown) => Promise<void>>()

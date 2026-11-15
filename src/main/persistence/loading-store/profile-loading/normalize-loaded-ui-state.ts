@@ -8,9 +8,9 @@ import {
   isDefaultedCompactWorktreeCardProperties,
   normalizeWorktreeCardProperties
 } from '../../../../shared/worktree/row-display/card-properties'
-import { isExistingPersistedProfile } from '../../../../shared/project-order-manual-default-notice'
+import { isExistingPersistedProfile } from '../../../../shared/sidebar-list/sections/project-order-manual-default-notice'
 import { resolveUsagePercentageDisplayChangeNoticeDismissed } from '../../../../shared/usage-percentage-display-change-notice'
-import { normalizePersistedWorkspaceStatuses } from '../../../../shared/workspace-statuses'
+import { normalizePersistedWorkspaceStatuses } from '../../../../shared/workspace/status/workspace-statuses'
 import {
   normalizeRightSidebarExplorerView,
   normalizeRightSidebarTab,

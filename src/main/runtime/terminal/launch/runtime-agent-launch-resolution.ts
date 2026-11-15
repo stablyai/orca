@@ -1,6 +1,6 @@
 import { getRepoRoutingConnectionId } from '../../../../shared/execution-host'
 import { createHash } from 'node:crypto'
-import type { Repo } from '../../../../shared/repo-types'
+import type { Repo } from '../../../../shared/repository/repo-types'
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import type { SleepingAgentLaunchConfig } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
 import type { ClaudeAgentTeamsMode } from '../../../../shared/agent-launch/startup/claude-agent-teams-tmux-compat'

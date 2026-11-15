@@ -28,7 +28,7 @@ import {
   clampWorkspaceBoardColumnWidth,
   clampWorkspaceBoardOpacity,
   normalizeWorkspaceStatuses
-} from '../../../../../shared/workspace-statuses'
+} from '../../../../../shared/workspace/status/workspace-statuses'
 import { PET_SIZE_DEFAULT, PET_SIZE_MAX, PET_SIZE_MIN } from '../../../../../shared/pet-types'
 import { clampMarkdownTocPanelWidth } from '../../../../../shared/markdown-toc-panel-width'
 import { normalizeBrowserDevToolsDockLayout } from '../../../../../shared/browser/devtools/browser-devtools-dock'
@@ -44,7 +44,7 @@ import {
   sanitizeSetupScriptPromptDismissals
 } from '../../../runtime/repo-hooks/setup-script-prompt'
 import { isBundledPetId, DEFAULT_PET_ID } from '../../../components/pet/pet-models'
-import { getRepoHostIdentity } from '../../../../../shared/repo-host-identity'
+import { getRepoHostIdentity } from '../../../../../shared/repository/repo-host-identity'
 import {
   withWslMovedRepoIds,
   withWslMovedSetupScriptDismissals

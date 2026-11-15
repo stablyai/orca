@@ -5,7 +5,7 @@ import { normalizeRuntimePathForComparison } from '../../../../shared/cross-plat
 import { isRepoOnCatalogHost } from '../../../../shared/execution-host'
 import type { OrcadMigrationSourceCutover } from '../../../../shared/orcad-migration/orcad-migration-source-cutover'
 import type { SshManagedServerLinkedProject } from '../../../../shared/remote-runtime/ssh/ssh-types'
-import { parseWorkspaceKey } from '../../../../shared/workspace-scope'
+import { parseWorkspaceKey } from '../../../../shared/workspace/identity/workspace-scope'
 import { splitWorktreeId } from '../../../../shared/worktree/id'
 import type { Store } from '../../../persistence/loading-store/store'
 import {

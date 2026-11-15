@@ -1,6 +1,6 @@
 import { getDefaultSettings } from '../../../../../shared/constants'
 import type { AgentWorkspaceTrustDecision } from '../../../../../shared/agent-launch/permissions/agent-workspace-trust-decision'
-import type { Repo } from '../../../../../shared/repo-types'
+import type { Repo } from '../../../../../shared/repository/repo-types'
 import { defineFixture } from '../../../component-fixtures/component-fixture'
 import { RepositoryAgentTrustSection } from './RepositoryAgentTrustSection'
 

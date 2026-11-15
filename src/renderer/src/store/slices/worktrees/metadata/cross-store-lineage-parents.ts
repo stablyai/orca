@@ -11,7 +11,7 @@ import {
   type SidebarLineageParentIdentities
 } from '../../../../../../shared/sidebar-list/lineage/worktree-lineage-projection'
 import { getWorktreeHostIdentity } from '../../../../../../shared/worktree/host-qualified-identity'
-import { worktreeWorkspaceKey } from '../../../../../../shared/workspace-scope'
+import { worktreeWorkspaceKey } from '../../../../../../shared/workspace/identity/workspace-scope'
 import {
   pickFolderLineageRecord,
   readInlineFolderLineage

@@ -9,8 +9,8 @@ import { captureAgentTabLaunchContext } from '@/components/agent-tab-launch-cont
 import { activateAndRevealWorktreeWithOutcome } from '@/lib/workspace/activation/worktree-activation'
 import { reportAgentWorkspaceActivation } from '@/lib/workspace/activation/worktree-activation-outcome'
 import { focusTerminalTabSurface } from '@/components/terminal-pane/input/focus/focus-terminal-tab-surface'
-import { isGitRepoKind } from '../../../../../shared/repo-kind'
-import type { Repo } from '../../../../../shared/repo-types'
+import { isGitRepoKind } from '../../../../../shared/repository/repo-kind'
+import type { Repo } from '../../../../../shared/repository/repo-types'
 import type { Worktree } from '../../../../../shared/worktree/types'
 import {
   buildEnvironmentSetupAgentPrompt,

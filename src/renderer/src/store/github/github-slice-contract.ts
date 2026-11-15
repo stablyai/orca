@@ -15,7 +15,7 @@ import type {
 import type { GitHubRepositoryIdentity as GitHubOwnerRepo } from '../../../../shared/github/repositories/repository-identity'
 import type { IssueInfo, PRInfo } from '../../../../shared/github/pull-requests/pull-request-types'
 import type { GitHubWorkItem } from '../../../../shared/github/work-items/work-item-types'
-import type { IssueSourcePreference } from '../../../../shared/repo-types'
+import type { IssueSourcePreference } from '../../../../shared/repository/repo-types'
 import type {
   GitHubProjectFieldMutationValue,
   GitHubProjectTable

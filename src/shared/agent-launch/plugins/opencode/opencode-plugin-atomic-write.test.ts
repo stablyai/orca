@@ -14,7 +14,7 @@ import {
 import type * as NodeFs from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import * as retryOps from '../../../windows-retry-file-operations'
+import * as retryOps from '../../../file-write/windows-retry-file-operations'
 import {
   resolveCanonicalPluginWritePath,
   writeCanonicalOpenCodePluginAtomically,

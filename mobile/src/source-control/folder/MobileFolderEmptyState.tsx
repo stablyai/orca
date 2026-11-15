@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useSyncExternalStore } from 'react'
 import { ActivityIndicator, ScrollView, View } from 'react-native'
 import { FolderGit2, GitBranch, Plus } from 'lucide-react-native'
-import type { Repo } from '../../../../src/shared/repo-types'
+import type { Repo } from '../../../../src/shared/repository/repo-types'
 import { projectGroupIdFromRepoId } from '../../../../src/shared/folder-workspaces/folder-workspace-worktree'
 import { getRepoExecutionHostId } from '../../../../src/shared/execution-host'
 import { WORKTREE_CREATE_EXACT_NAME_RUNTIME_CAPABILITY } from '../../../../src/shared/remote-runtime/protocol/worktree-runtime-capabilities'

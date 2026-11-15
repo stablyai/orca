@@ -4,14 +4,14 @@ import { prGroupOfPsLinkedPR } from '../../../../src/shared/sidebar-list/feed-fa
 import {
   buildWorktreeOccurrencePlan,
   type WorktreeOccurrenceSection
-} from '../../../../src/shared/worktree-occurrence-plan'
+} from '../../../../src/shared/sidebar-list/lineage/worktree-occurrence-plan'
 import type { WorkspaceStatusDefinition } from '../../../../src/shared/worktree/types'
 import {
   getWorkspaceStatus,
   getWorkspaceStatusGroupKey,
   withDefaultWorkspaceStatuses
-} from '../../../../src/shared/workspace-statuses'
-import { DEFAULT_WORKSPACE_STATUSES } from '../../../../src/shared/workspace-status-defaults'
+} from '../../../../src/shared/workspace/status/workspace-statuses'
+import { DEFAULT_WORKSPACE_STATUSES } from '../../../../src/shared/workspace/status/workspace-status-defaults'
 import {
   getMobileOccurrenceRows,
   getMobileWorkspaceLineageChildren
@@ -38,8 +38,8 @@ import {
   buildProjectSections,
   getProjectGroupingForRepo,
   type ProjectSectionModel
-} from '../../../../src/shared/project-section-grouping'
-import { withRepoSectionDisplayLabels } from '../../../../src/shared/project-section-order'
+} from '../../../../src/shared/sidebar-list/sections/project-section-grouping'
+import { withRepoSectionDisplayLabels } from '../../../../src/shared/sidebar-list/sections/project-section-order'
 import type { ProjectOrderBy } from '../../../../src/shared/ui-chrome-types'
 import { translate } from '../../i18n/mobile-i18n'
 import {

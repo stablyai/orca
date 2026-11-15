@@ -11,7 +11,9 @@ import { DaemonPtyRouter } from '../../../daemon/providers/routing/daemon-pty-ro
 
 const mocks = vi.hoisted(() => ({ runProcess: vi.fn() }))
 vi.mock('@orca/process-host', () => ({ runProcess: mocks.runProcess }))
-vi.mock('../../../../shared/libproc-process-table', () => ({ runPsInProcess: async () => null }))
+vi.mock('../../../../shared/process-observation/darwin/libproc-process-table', () => ({
+  runPsInProcess: async () => null
+}))
 
 // Linux ps prefixes the sid column readPtyTerminalRows asks for there.
 const rows = (pid: number, withSid = process.platform === 'linux') =>

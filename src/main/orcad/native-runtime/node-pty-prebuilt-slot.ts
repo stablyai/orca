@@ -5,8 +5,11 @@ import { chmodSync, copyFileSync, existsSync, mkdirSync, readFileSync } from 'no
 import { dirname, join } from 'node:path'
 import process from 'node:process'
 import { z } from 'zod'
-import { usesNodePtySpawnHelper } from '../../../shared/node-pty-spawn-helper'
-import { COMPAT_SERVER_TARGET_BASES, COMPAT_SERVER_TARGETS } from '../../../shared/node-runtime-pin'
+import { usesNodePtySpawnHelper } from './node-pty-spawn-helper'
+import {
+  COMPAT_SERVER_TARGET_BASES,
+  COMPAT_SERVER_TARGETS
+} from '../../../shared/node-runtime/node-runtime-pin'
 import {
   compareDottedVersions,
   hostNodeApiVersion,

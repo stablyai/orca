@@ -2,8 +2,8 @@ import { getRepoExecutionHostId, LOCAL_EXECUTION_HOST_ID } from '../../shared/ex
 import { throwIfSignalAborted, waitForPromiseWithSignal } from '../../shared/abort-signal-reason'
 import { mapSettledWithConcurrency } from '../../shared/map-with-concurrency'
 import { parsePtySessionId } from '../../shared/terminal/pty/lifecycle/pty-session-id-format'
-import { isFolderRepo } from '../../shared/repo-kind'
-import type { Repo } from '../../shared/repo-types'
+import { isFolderRepo } from '../../shared/repository/repo-kind'
+import type { Repo } from '../../shared/repository/repo-types'
 import { splitWorktreeId, worktreeIdentityKey } from '../../shared/worktree/id'
 import { getDaemonProvider } from '../daemon/providers/lifecycle/daemon-provider-state'
 import {

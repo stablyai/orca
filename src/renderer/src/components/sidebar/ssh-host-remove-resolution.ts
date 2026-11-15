@@ -1,4 +1,4 @@
-import type { Repo } from '../../../../shared/repo-types'
+import type { Repo } from '../../../../shared/repository/repo-types'
 import type { Worktree } from '../../../../shared/worktree/types'
 
 /** A host's workspaces can only be forgotten here (this app's main serves no ssh: host); empty hosts need no workspace choice. */

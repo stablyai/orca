@@ -13,7 +13,7 @@ import type {
   ProjectGroupUpdate,
   ProjectGroupMutation,
   ProjectGroupImportResult
-} from '../../../../shared/project-group-types'
+} from '../../../../shared/project/groups/project-group-types'
 import type {
   Project,
   ProjectHostSetup,
@@ -27,9 +27,9 @@ import type {
   ProjectHostSetupUpdateArgs,
   ProjectHostSetupUpdateResult,
   ProjectUpdateArgs
-} from '../../../../shared/project-types'
-import type { Repo } from '../../../../shared/repo-types'
-import type { RepoHostTarget } from '../../../../shared/repo-host-identity'
+} from '../../../../shared/project/project-types'
+import type { Repo } from '../../../../shared/repository/repo-types'
+import type { RepoHostTarget } from '../../../../shared/repository/repo-host-identity'
 import type {
   FolderWorkspacePathStatus,
   FolderWorkspacePathStatusRequest

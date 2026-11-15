@@ -1,5 +1,8 @@
 import { parseRoutableExecutionHostId } from '../../shared/execution-host'
-import { windowsPathAccess, type WindowsPathAccess } from '../../shared/windows-path-access'
+import {
+  windowsPathAccess,
+  type WindowsPathAccess
+} from '../../shared/file-access/windows-path-access'
 import { getWslHostService } from '../wsl/host-lifecycle/wsl-host-service-instance'
 
 export async function resolveWindowsPathAccess(

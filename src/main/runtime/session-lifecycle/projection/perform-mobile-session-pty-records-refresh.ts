@@ -17,10 +17,10 @@ import type {
 import type { ResolvedWorktree } from '../../workspaces/catalog/runtime-worktree-path-identity'
 import { includeTargetResolvedWorktree } from '../../workspaces/catalog/runtime-worktree-path-identity'
 import { parseExecutionHostId } from '../../../../shared/execution-host'
-import { parseWorkspaceKey } from '../../../../shared/workspace-scope'
+import { parseWorkspaceKey } from '../../../../shared/workspace/identity/workspace-scope'
 import { navigationTargetsHost } from '../../../../shared/remote-runtime/session-graph/runtime-navigation'
 import { isAutomaticTabActivation } from '../../../../shared/tab-activation-intent'
-import { isWorktreeTerminalsSleepingError } from '../../../../shared/workspace-sleep'
+import { isWorktreeTerminalsSleepingError } from '../../../../shared/workspace/lifecycle/workspace-sleep'
 
 import { paneHoldsSession } from '../../terminal/surface/main-terminal-surfaces'
 import { recordShownTerminalUserOpen } from '../../terminal/lifecycle/run-terminal-client-use'

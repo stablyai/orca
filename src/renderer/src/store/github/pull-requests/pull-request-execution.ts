@@ -4,7 +4,7 @@ import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/h
 import type { AppState } from '../../types'
 import type { RuntimeFocusSettings } from '../../../../../shared/github/cache/github-cache-key'
 import type { GitHubSlice } from '../github-slice-contract'
-import type { Repo } from '../../../../../shared/repo-types'
+import type { Repo } from '../../../../../shared/repository/repo-types'
 import type { PRInfo } from '../../../../../shared/github/pull-requests/pull-request-types'
 import type { CacheEntry, GitHubPRFallbackSource } from '../cache/cache-model'
 import {

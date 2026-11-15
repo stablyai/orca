@@ -2,7 +2,7 @@ import { acceptedAgentStatuses } from '@/store/slices/agent-status/accepted-agen
 import { useState } from 'react'
 import { defineFixture } from '../../../../component-fixtures/component-fixture'
 import { useAppStore } from '@/store'
-import type { Repo } from '../../../../../../shared/repo-types'
+import type { Repo } from '../../../../../../shared/repository/repo-types'
 import type { Worktree } from '../../../../../../shared/worktree/types'
 import type { Tab } from '../../../../../../shared/tab-types'
 import type { AgentStatusEntry } from '../../../../../../shared/agent-status/contracts/agent-status-types'

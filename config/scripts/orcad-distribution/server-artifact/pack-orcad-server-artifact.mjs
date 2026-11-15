@@ -32,7 +32,7 @@ import {
   nodeRuntimeExecutablePath,
   nodeRuntimeReleaseUrl,
   pinnedNodeRuntimeAsset
-} from '../../../../src/shared/node-runtime-pin.ts'
+} from '../../../../src/shared/node-runtime/node-runtime-pin.ts'
 import {
   ensurePinnedNodeExecutable,
   fetchPinnedFile,

@@ -8,14 +8,14 @@ import {
 } from '../controls/sidebar-filter-actions'
 import { useShallow } from 'zustand/react/shallow'
 import type { AppState } from '@/store/types'
-import type { Repo } from '../../../../../../shared/repo-types'
+import type { Repo } from '../../../../../../shared/repository/repo-types'
 import {
   activeWorkspaceRowFilterKeys,
   type WorkspaceRowFilters
 } from '../../../../../../shared/workspace-view/workspace-row-filters'
 import { resolveVisibleWorkspaceHostIds } from '../../../../../../shared/workspace-view/workspace-host-visibility'
 import type { Worktree } from '../../../../../../shared/worktree/types'
-import { parseWorkspaceKey } from '../../../../../../shared/workspace-scope'
+import { parseWorkspaceKey } from '../../../../../../shared/workspace/identity/workspace-scope'
 import {
   getWorktreeExecutionHostId,
   getSettingsFocusedExecutionHostId,
@@ -31,7 +31,7 @@ import { getFolderWorkspaceExecutionHostIdForRows } from '../../../../../../shar
 import {
   getPairedDeviceIdsByEnvironment,
   isWorkspaceOwnedBySomeoneElse
-} from '../../../../../../shared/workspace-creator-visibility'
+} from '../../../../../../shared/workspace-view/workspace-creator-visibility'
 import { createSleepingSweepHiddenCheck } from './sleeping-sweep-visibility'
 import { selectFolderWorkspaces } from '@/store/workspaces/catalog/workspace-record-fields'
 

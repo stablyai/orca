@@ -9,7 +9,7 @@ import type {
   WorkspacePort,
   WorkspacePortOwner,
   WorkspacePortProbe
-} from '../../shared/workspace-ports'
+} from '../../shared/workspace/ports/workspace-ports'
 import type { AdvertisedUrlWatcher } from './advertised-url-watcher'
 import { connectHostForBindHost } from './local-workspace-port-address'
 import type {

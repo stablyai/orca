@@ -1,8 +1,8 @@
 // Seed a stopped v1.4.218 relay-era profile with unfenced SSH target, repo/folder workspaces and saved editor/terminal state.
 // The next launch then exercises first-time automatic conversion.
 import type { FolderWorkspace } from '../../../src/shared/folder-workspaces/folder-workspace-types'
-import type { ProjectGroup } from '../../../src/shared/project-group-types'
-import type { Repo } from '../../../src/shared/repo-types'
+import type { ProjectGroup } from '../../../src/shared/project/groups/project-group-types'
+import type { Repo } from '../../../src/shared/repository/repo-types'
 import type {
   SshTarget,
   SshTargetCreateInput

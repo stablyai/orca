@@ -2,9 +2,9 @@ import { normalize } from 'node:path'
 import { realpath, stat } from 'node:fs/promises'
 import type { Store } from '../../../persistence/loading-store/store'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
-import type { Repo } from '../../../../shared/repo-types'
+import type { Repo } from '../../../../shared/repository/repo-types'
 import { getRepoExecutionHostId, LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
-import { isFolderRepo } from '../../../../shared/repo-kind'
+import { isFolderRepo } from '../../../../shared/repository/repo-kind'
 import {
   getRuntimePathBasename,
   normalizeRuntimePathForComparison

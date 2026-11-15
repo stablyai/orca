@@ -8,7 +8,7 @@ import type { DashboardSnapshotInput as DashboardSnapshotState } from './build-d
 
 import type { AgentStatusEntry } from '../../../../../shared/agent-status/contracts/agent-status-types'
 
-import { folderWorkspaceKey } from '../../../../../shared/workspace-scope'
+import { folderWorkspaceKey } from '../../../../../shared/workspace/identity/workspace-scope'
 import { makePaneKey } from '../../../../../shared/workspace-layout/stable-pane-id'
 import type { TerminalTab } from '../../../../../shared/workspace-layout/terminal-tab-types'
 import type { Worktree } from '../../../../../shared/worktree/types'

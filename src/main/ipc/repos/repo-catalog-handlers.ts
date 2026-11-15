@@ -1,6 +1,6 @@
 import { type BrowserWindow, ipcMain } from 'electron'
 import type { Store } from '../../persistence/loading-store/store'
-import type { Project, ProjectUpdateArgs } from '../../../shared/project-types'
+import type { Project, ProjectUpdateArgs } from '../../../shared/project/project-types'
 import {
   getRepoExecutionHostId,
   normalizeExecutionHostId,

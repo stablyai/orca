@@ -3,7 +3,10 @@
 import { chmodSync, copyFileSync, existsSync, linkSync, mkdirSync, readFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { runProcess } from '@orca/process-host'
-import { NODE_RUNTIME_ASSETS, type ServerTarget } from '../../../shared/node-runtime-pin'
+import {
+  NODE_RUNTIME_ASSETS,
+  type ServerTarget
+} from '../../../shared/node-runtime/node-runtime-pin'
 import {
   ORCAD_SERVER_ENTRY_FILENAME,
   ORCAD_VERSION_FILENAME,

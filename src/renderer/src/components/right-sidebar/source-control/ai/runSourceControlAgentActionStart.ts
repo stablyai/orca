@@ -16,7 +16,7 @@ import { launchAgentInNewTabWithOutcome } from '@/lib/agent-session/launch/new-t
 
 import { createNonSecureContextUuid } from '../../../../../../shared/non-secure-context-uuid'
 import type { RuntimeGitContext } from '@/runtime/source-control/git/runtime-git-client-context'
-import type { Repo } from '../../../../../../shared/repo-types'
+import type { Repo } from '../../../../../../shared/repository/repo-types'
 import type { TuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-agent'
 import type { AgentLaunchChoice } from '@/lib/agent-session/launch/routing/agent-menu-selection'
 import type { LaunchSource } from '../../../../../../shared/telemetry/schemas/telemetry-property-schemas'

@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createAgentStatusStore } from '../../agent-status/store/agent-status-store'
-import type { ProcessTableRow } from '../../process-table-snapshot'
+import type { ProcessTableRow } from '../../process-observation/tables/process-table-snapshot'
 import { TmuxAgentHookOwner } from './tmux-agent-hook-owner'
 import type { TmuxManagedPty } from './tmux-agent-hook-contract'
 

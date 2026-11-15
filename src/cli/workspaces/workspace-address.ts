@@ -1,6 +1,6 @@
 import { isUnresolvedOwnerHostId, parseExecutionHostId } from '../../shared/execution-host'
 import { listEnvironments } from '../../shared/remote-runtime/host-store/runtime-environment-store'
-import { parseWorkspaceKey } from '../../shared/workspace-scope'
+import { parseWorkspaceKey } from '../../shared/workspace/identity/workspace-scope'
 import type { CrossStoreParentRef } from '../../shared/worktree/lineage-types'
 import { LOCAL_ENVIRONMENT } from '../hosts/local-environment-selector'
 import type { RuntimeClient } from '../runtime/client'

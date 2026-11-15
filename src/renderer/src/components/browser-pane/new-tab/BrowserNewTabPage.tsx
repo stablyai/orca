@@ -11,7 +11,7 @@ import {
 } from '@/lib/browser/history/browser-history-match'
 import { BrowserFavicon } from '@/components/browser-favicon'
 import type { BrowserHistoryEntry } from '../../../../../shared/browser/workspaces/browser-workspace-types'
-import type { Repo } from '../../../../../shared/repo-types'
+import type { Repo } from '../../../../../shared/repository/repo-types'
 import type { Worktree } from '../../../../../shared/worktree/types'
 import type { WorkspaceLinkedItemRow } from '../../sidebar/workspace-card/review/workspace-hover-attachments'
 import { BrowserNewTabTile } from './browser-new-tab-tile'

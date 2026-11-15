@@ -1,5 +1,5 @@
-import { isFolderRepo } from '../../../shared/repo-kind'
-import type { Repo } from '../../../shared/repo-types'
+import { isFolderRepo } from '../../../shared/repository/repo-kind'
+import type { Repo } from '../../../shared/repository/repo-types'
 import { isFullGitObjectId } from '../../git/refs/resolution/commit-object-ref'
 import { hasLocalWorktreeBaseRef } from '../../git/worktrees/creation/worktree-base-ref-probe'
 import { getDefaultBaseRefAsync as getBaseRefDefault } from '../../git/refs/resolution/repo-default-base-ref'

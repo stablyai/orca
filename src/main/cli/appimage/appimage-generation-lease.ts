@@ -12,7 +12,7 @@ import {
   resolveAppImageGenerationOfExecutable,
   type AppImageGenerationLocation,
   isAppImageCacheKey
-} from '../../../shared/appimage-cache-identity'
+} from '../../../shared/desktop-distribution/appimage/appimage-cache-identity'
 
 const LEASE_DIRECTORY_NAME = 'leases'
 const LEASE_SUFFIX = '.json'

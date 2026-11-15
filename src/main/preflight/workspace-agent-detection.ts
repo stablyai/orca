@@ -1,4 +1,4 @@
-import { isFolderRepo } from '../../shared/repo-kind'
+import { isFolderRepo } from '../../shared/repository/repo-kind'
 import type { ProjectLaunchContext } from '../../shared/rpc-contract/preflight/preflight-params'
 import { isTuiAgent } from '../../shared/agent-launch/catalog/tui-agent-config'
 import { WORKSPACE_ON_OTHER_RUNTIME } from '../../shared/remote-runtime/protocol/preflight-runtime-capabilities'
@@ -15,8 +15,8 @@ import {
   resolveFolderWorkspaceHost
 } from '../../shared/folder-workspaces/folder-workspace-execution-host'
 import type { FolderWorkspace } from '../../shared/folder-workspaces/folder-workspace-types'
-import type { ProjectGroup } from '../../shared/project-group-types'
-import type { Repo } from '../../shared/repo-types'
+import type { ProjectGroup } from '../../shared/project/groups/project-group-types'
+import type { Repo } from '../../shared/repository/repo-types'
 import {
   resolveLocalWorkspaceRuntime,
   type ProjectRuntimeResolutionStore

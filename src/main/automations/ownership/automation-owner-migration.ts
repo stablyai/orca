@@ -2,8 +2,8 @@ import { automationRequiresHostReselection } from '../../../shared/automations/o
 import type { Automation } from '../../../shared/automations/automation-definition'
 import type { SshTarget } from '../../../shared/remote-runtime/ssh/ssh-types'
 import type { FolderWorkspace } from '../../../shared/folder-workspaces/folder-workspace-types'
-import type { ProjectGroup } from '../../../shared/project-group-types'
-import type { Repo } from '../../../shared/repo-types'
+import type { ProjectGroup } from '../../../shared/project/groups/project-group-types'
+import type { Repo } from '../../../shared/repository/repo-types'
 import { parseExecutionHostId } from '../../../shared/execution-host'
 import {
   resolveAutomationWorkspaceSshTargetId,

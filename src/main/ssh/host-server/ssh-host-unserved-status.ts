@@ -1,4 +1,4 @@
-import type { NodeDistMirrorAttempt } from '../../../shared/node-dist-mirror'
+import type { NodeDistMirrorAttempt } from '../../../shared/node-runtime/node-dist-mirror'
 import type { SshManagedServerStatus } from '../../../shared/remote-runtime/ssh/ssh-types'
 import type { HostServerOnConnectResult } from './ssh-host-server-on-connect'
 import {

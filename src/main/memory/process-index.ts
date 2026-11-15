@@ -2,7 +2,7 @@ import type { ProcessMemoryMetric } from '../../shared/diagnostics/process-stats
 import {
   getProcessOutputFields,
   iterateProcessOutputLines
-} from '../../shared/process-output-field-scanner'
+} from '../../shared/process-observation/process-output-field-scanner'
 
 export type ProcRow = {
   pid: number

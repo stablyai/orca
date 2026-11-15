@@ -28,7 +28,7 @@ on:
       - 'config/scripts/orcad-distribution/prebuilds/pinned-node-downloads.mjs'
       - 'config/scripts/node-runtime/archive-identity/update-node-runtime-pin.mjs'
       - 'config/scripts/workspace-package-build/build-workspace-packages.mjs'
-      - 'src/shared/node-runtime-pin.ts'
+      - 'src/shared/node-runtime/node-runtime-pin.ts'
       - 'src/packages/process-host/**'
       - '.github/actions/prepare-git-compatibility/**'
       - '.github/actions/prepare-linux-package-fixture/**'
