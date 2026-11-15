@@ -2164,9 +2164,10 @@ struct UnfocusedTargetClick {
 /// app is now in front but the click opened and focused nothing (a new window, menu or popover needs its app in front).
 private func restoreUserFrontApp(_ previous: NSRunningApplication, target app: AppDescriptor, before click: UnfocusedTargetClick) {
     guard previous.processIdentifier != app.pid, !previous.isTerminated,
-          NSWorkspace.shared.frontmostApplication?.processIdentifier == app.pid,
           focusedWindowId(of: app) == click.focusedWindowID,
-          Set(WindowCapture.candidates(pid: app.pid).map(\.windowId)).isSubset(of: click.windowIDs)
+          WindowCapture.onScreenWindowIDs(pid: app.pid).isSubset(of: click.windowIDs),
+          // Why: last, after the reads above can wait on the app, so a switch the user made meanwhile is never undone.
+          NSWorkspace.shared.frontmostApplication?.processIdentifier == app.pid
     else { return }
     _ = previous.activate(options: [])
     _ = AXUIElementSetAttributeValue(AXUIElementCreateApplication(previous.processIdentifier), kAXFrontmostAttribute as CFString, kCFBooleanTrue)
@@ -3423,6 +3424,16 @@ private struct WindowCapture {
         })
     }
 
+    /// Every on-screen window of the process, however small: menus and popovers count as something a click opened.
+    static func onScreenWindowIDs(pid: pid_t) -> Set<CGWindowID> {
+        Set(windowInfos(includeOffScreen: false).compactMap { info in
+            guard info[kCGWindowOwnerPID as String] as? pid_t == pid, let number = info[kCGWindowNumber as String] as? NSNumber else {
+                return nil
+            }
+            return CGWindowID(number.uint32Value)
+        })
+    }
+
     private static func windowInfos(includeOffScreen: Bool) -> [[String: Any]] {
         let options: CGWindowListOption = includeOffScreen ? [.optionAll, .excludeDesktopElements] : [.optionOnScreenOnly]
         return CGWindowListCopyWindowInfo(options, kCGNullWindowID) as? [[String: Any]] ?? []
@@ -3590,7 +3601,7 @@ private enum Input {
         let unfocusedClick = refusedFocus && appFocusedWindow != targetWindow.windowId
             ? UnfocusedTargetClick(
                 focusedWindowID: appFocusedWindow,
-                windowIDs: Set(WindowCapture.candidates(pid: targetWindow.app.pid).map(\.windowId))
+                windowIDs: WindowCapture.onScreenWindowIDs(pid: targetWindow.app.pid)
             )
             : nil
         if refusedFocus {
