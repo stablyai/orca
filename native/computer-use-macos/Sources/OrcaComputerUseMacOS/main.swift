@@ -284,6 +284,8 @@ final class Provider {
     /// Per app, window elements already read (valid while the window lives) for when a window moves to another Space,
     /// and when a remote-token lookup last missed, since a window becomes findable only once some client reads it.
     private var otherSpaceLookups: [pid_t: OtherSpaceLookups] = [:]
+    /// Set by a --restore-window click that went to a target window that never took focus, for the front-app restore after it.
+    private var unfocusedTargetClick: UnfocusedTargetClick?
     /// When this provider last asked each app process for its full accessibility tree.
     private var manualAccessibilityRequests: [pid_t: (launched: Date?, at: Date)] = [:]
 
@@ -338,13 +340,11 @@ final class Provider {
         let userFrontApp = isForegroundRequest(requestParams) ? NSWorkspace.shared.frontmostApplication : nil
         // Why: raise once, before the action's reads, so the pre and post observations never raise again.
         let params = isForegroundRequest(requestParams) ? try recoverRequestedWindow(params: requestParams) : requestParams
-        let raisedWindowId = params["windowId"]?.number.flatMap { boundedInteger($0, as: CGWindowID.self) }
-        let raise = frontmostObservation(of: app)
-        let refusedFocus = userFrontApp != nil && raisedWindowId != nil && !(raise.frontmost && raise.focusedWindowID == raisedWindowId)
+        unfocusedTargetClick = nil
         // Why: after the delivery read, so a click that brought the app forward still reports foreground.
         defer {
-            if refusedFocus, let userFrontApp, let raisedWindowId {
-                restoreUserFrontApp(userFrontApp, target: app, windowId: raisedWindowId)
+            if let click = unfocusedTargetClick, let userFrontApp {
+                restoreUserFrontApp(userFrontApp, target: app, focusedWindowBeforeClick: click.focusedWindowID)
             }
         }
         var action = try runAction(params)
@@ -1192,7 +1192,7 @@ final class Provider {
                 try requireBackgroundInputReachable(snapshot, input: "pointer click")
             }
             let point = try pointerTarget(record, snapshot: snapshot)
-            try clickPointer(at: point, button: button, count: count, modifiers: modifiers, snapshot: snapshot, foreground: foreground, element: record.element)
+            unfocusedTargetClick = try clickPointer(at: point, button: button, count: count, modifiers: modifiers, snapshot: snapshot, foreground: foreground, element: record.element)
             guard unselectedRow else {
                 return actionMetadata(
                     path: "synthetic",
@@ -1210,7 +1210,7 @@ final class Provider {
             try requireBackgroundInputReachable(snapshot, input: "pointer click")
         }
         let point = try coordinatePoint(params: params, xKey: "x", yKey: "y", snapshot: snapshot)
-        try clickPointer(at: point, button: button, count: count, modifiers: modifiers, snapshot: snapshot, foreground: foreground)
+        unfocusedTargetClick = try clickPointer(at: point, button: button, count: count, modifiers: modifiers, snapshot: snapshot, foreground: foreground)
         return actionMetadata(
             path: "synthetic",
             verification: unverifiedAction(reason: "synthetic_input")
@@ -2023,10 +2023,9 @@ private func clickPointer(
     snapshot: Snapshot,
     foreground: Bool,
     element: AXUIElement? = nil
-) throws {
+) throws -> UnfocusedTargetClick? {
     if foreground {
-        try Input.click(at: point, button: button, count: count, modifiers: modifiers, targetWindow: snapshot)
-        return
+        return try Input.click(at: point, button: button, count: count, modifiers: modifiers, targetWindow: snapshot)
     }
     guard let hitElement = element ?? elementAtPoint(point, pid: snapshot.app.pid) else {
         throw unidentifiedBackgroundTarget
@@ -2046,6 +2045,7 @@ private func clickPointer(
             hit: hit
         )
     }
+    return nil
 }
 
 private func elementAtPoint(_ point: CGPoint, pid: pid_t) -> AXUIElement? {
@@ -2152,12 +2152,17 @@ private func matchingWindow(appElement: AXUIElement, capture: WindowCapture, foc
     } ?? focused
 }
 
-/// For a target window that refused focus when raised (#32040): if the raise or the action left its app in front without
-/// that window focused, puts back the app the user had in front, since only the target window was meant to come forward.
-private func restoreUserFrontApp(_ previous: NSRunningApplication, target app: AppDescriptor, windowId: CGWindowID) {
+/// A --restore-window click that went to a target window that never took focus, and the app's focused window just before it.
+struct UnfocusedTargetClick {
+    let focusedWindowID: CGWindowID?
+}
+
+/// After a click on a target window that refused focus (#32040), puts back the app the user had in front if the target's
+/// app is now in front without the click having focused anything new: the raise and the click only brought the app forward.
+private func restoreUserFrontApp(_ previous: NSRunningApplication, target app: AppDescriptor, focusedWindowBeforeClick: CGWindowID?) {
     guard previous.processIdentifier != app.pid, !previous.isTerminated,
           NSWorkspace.shared.frontmostApplication?.processIdentifier == app.pid,
-          focusedWindowId(of: app) != windowId
+          focusedWindowId(of: app) == focusedWindowBeforeClick
     else { return }
     _ = previous.activate(options: [])
     _ = AXUIElementSetAttributeValue(AXUIElementCreateApplication(previous.processIdentifier), kAXFrontmostAttribute as CFString, kCFBooleanTrue)
@@ -3565,7 +3570,7 @@ private enum Input {
         count: Int,
         modifiers: [KeyModifier],
         targetWindow: Snapshot
-    ) throws {
+    ) throws -> UnfocusedTargetClick? {
         guard let source = CGEventSource(stateID: .combinedSessionState) else {
             throw ProviderError.coded("accessibility_error", "failed to create event source")
         }
@@ -3576,6 +3581,7 @@ private enum Input {
         let observe = refusedFocus
             ? { topmostSyntheticClickRecipient(snapshot: targetWindow, point: point) }
             : { currentSyntheticClickRecipient(snapshot: targetWindow, point: point) }
+        let unfocusedClick = refusedFocus ? UnfocusedTargetClick(focusedWindowID: focusedWindowId(of: targetWindow.app)) : nil
         if refusedFocus {
             let topmost = observe()
             guard topmost == .focused(target) else {
@@ -3624,6 +3630,7 @@ private enum Input {
                 pause: { _ = usleep($0) }
             )
         }
+        return unfocusedClick
     }
 
     /// Posts a pointer gesture through the HID tap, then puts the user's pointer back unless they moved it meanwhile.
