@@ -36,9 +36,15 @@ anthropic_key_scrub=''
 gateway_key=''
 gemini_key=''
 codex_placeholder=''
+sign_in_inside=''
 while IFS= read -r line; do
   name="${line%%=*}" b64="${line#*=}"
   # Not for shells: the Codex account placeholder becomes ~/.codex/auth.json below.
+  # Not for shells: the agents the person signs in inside this workspace (e.g. `claude,codex`).
+  if [ "$name" = ORCA_SIGN_IN_INSIDE ]; then
+    sign_in_inside="$(printf '%s' "$b64" | base64 -d)"
+    case "$sign_in_inside" in *[!a-z,]*) sign_in_inside='' ;; esac
+  fi
   if [ "$name" = ORCA_CODEX_AUTH_PLACEHOLDER ]; then
     codex_placeholder="$(printf '%s' "$b64" | base64 -d)"
     case "$codex_placeholder" in *[!A-Za-z0-9._-]*) codex_placeholder='' ;; esac
@@ -164,7 +170,9 @@ fi
 # through them, and the agent would sit there doing nothing. Merges; never touches credentials.
 node_bin="$(command -v node || find /opt/orca/runtime/runtimes -type f -name node 2>/dev/null | head -n 1)"
 if [ -n "$node_bin" ]; then
-  ORCA_PROJECT="$PROJECT" ORCA_KEY_TAIL="$anthropic_key_tail" ORCA_KEY_SCRUB="$anthropic_key_scrub" ORCA_GEMINI_KEY="$gemini_key" \
+  claude_inside=''
+  case ",$sign_in_inside," in *,claude,*) claude_inside=1 ;; esac
+  ORCA_CLAUDE_INSIDE="$claude_inside" ORCA_PROJECT="$PROJECT" ORCA_KEY_TAIL="$anthropic_key_tail" ORCA_KEY_SCRUB="$anthropic_key_scrub" ORCA_GEMINI_KEY="$gemini_key" \
     ORCA_GATEWAY_MODEL="${gateway_key:+${anthropic_model:-$openai_model}}" "$node_bin" -e '
 const fs = require("fs"), path = require("path"), os = require("os")
 const home = os.homedir()
@@ -178,7 +186,11 @@ const write = (file, value) => {
 const claudeFile = path.join(process.env.CLAUDE_CONFIG_DIR || home, ".claude.json")
 const c = readJson(claudeFile)
 const before = JSON.stringify(c)
-c.hasCompletedOnboarding = true
+// Signed in inside this workspace and no login here yet: leave first-run onboarding to Claude, so it opens
+// on its own sign-in screens instead of "Not logged in". Once a login exists, onboarding is done as usual.
+const claudeCredentials = path.join(process.env.CLAUDE_CONFIG_DIR || path.join(home, ".claude"), ".credentials.json")
+if (process.env.ORCA_CLAUDE_INSIDE === "1" && !fs.existsSync(claudeCredentials)) delete c.hasCompletedOnboarding
+else c.hasCompletedOnboarding = true
 c.theme = c.theme || "dark"
 c.bypassPermissionsModeAccepted = true
 c.projects = c.projects && typeof c.projects === "object" ? c.projects : {}

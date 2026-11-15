@@ -14,6 +14,9 @@ import { SecretsKmsError } from './secrets-kms'
 import type { SandboxRow } from './store'
 import { secretLog } from './secret-log'
 
+/** Session env name the VM env script reads for the agents signed in inside the workspace ('claude,codex'). */
+export const SIGN_IN_INSIDE_ENV = 'ORCA_SIGN_IN_INSIDE'
+
 export type SessionSecrets = {
   env: Record<string, string>
   /** Row value for `egress_secret_hosts`. */
@@ -134,6 +137,10 @@ export async function sessionSecretEnv(
   const env = withoutSignInCredentials(derived, dropped)
   const scopes = deriveProviderScopes(stored, env, storedScopes)
   const egressAllowHosts = providerHosts(env).join(',') || null
+  // Not a secret and never in shells (ORCA_*): tells the VM env script which agents sign in there, so a
+  // first run with no login of its own shows the agent's sign-in screens instead of skipping them.
+  const inside = (Object.keys(modes) as CredentialAgent[]).filter((agent) => modes[agent] === 'inside')
+  const insideEnv: Record<string, string> = inside.length > 0 ? { [SIGN_IN_INSIDE_ENV]: inside.join(',') } : {}
   // Counts only.
   secretLog('session_secrets', { sandboxId: row.id, injected: Object.keys(env).length, skipped })
   if (withhold) {
@@ -153,7 +160,7 @@ export async function sessionSecretEnv(
       }
     }
     const hosts = [encodeEgressSecretHosts(withheld.targets), ...accountRoutes].filter(Boolean).join(',') || null
-    return { env: { ...withheld.env, ...accountEnv }, egressSecretHosts: hosts, egressAllowHosts }
+    return { env: { ...withheld.env, ...accountEnv, ...insideEnv }, egressSecretHosts: hosts, egressAllowHosts }
   }
   if (!swap) {
     // An operator turned placeholders off for this account (SECRETS_EGRESS_PLACEHOLDERS=off or accounts:<ids>
@@ -162,7 +169,7 @@ export async function sessionSecretEnv(
     if (plain > 0 && !egressSwapWanted(deps, row) && firstReadThisSession('plain', row)) {
       secretLog('egress_swap_disabled', { sandboxId: row.id, plainKeys: plain })
     }
-    return { env, egressSecretHosts: null, egressAllowHosts }
+    return { env: { ...env, ...insideEnv }, egressSecretHosts: null, egressAllowHosts }
   }
   const swapped = applySecretPlaceholders(row, env, scopes)
   const accountEnv: Record<string, string> = {}
@@ -175,7 +182,7 @@ export async function sessionSecretEnv(
     }
   }
   const secretHosts = [encodeEgressSecretHosts(swapped.targets), ...accountRoutes].filter(Boolean).join(',') || null
-  return { env: { ...swapped.env, ...accountEnv }, egressSecretHosts: secretHosts, egressAllowHosts }
+  return { env: { ...swapped.env, ...accountEnv, ...insideEnv }, egressSecretHosts: secretHosts, egressAllowHosts }
 }
 
 /** Provider hosts from the session's secrets plus the workspace's declared tool hosts (MCP). */

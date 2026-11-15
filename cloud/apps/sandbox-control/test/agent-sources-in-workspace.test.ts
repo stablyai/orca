@@ -76,6 +76,8 @@ describe('Source "in-workspace" (sign in inside this workspace)', () => {
       expect(env[name]).toBeUndefined()
     }
     expect(Object.values(env).some((value) => value.startsWith('orca-ph-'))).toBe(false)
+    // The VM env script's cue (never a shell variable): these agents sign in inside the workspace.
+    expect(env.ORCA_SIGN_IN_INSIDE).toBe('claude,codex')
     // Open egress: "*" plus only hosts that carry rules. No vendor host carries one (no claim, no 403).
     const allow = policy()
     expect(allow['*']).toEqual([])
@@ -116,8 +118,10 @@ describe('Source "in-workspace" (sign in inside this workspace)', () => {
     await h.call('PUT', '/v1/agent-sources', { bearer: mia, body: { agent: 'claude', source: 'in-workspace' } })
     expect(lastEnv(ENV_COMMAND).CLAUDE_CODE_OAUTH_TOKEN).toBeUndefined()
     expect([...h.vercel.boxes.values()][0]!.policy.allow['api.anthropic.com']).toBeUndefined()
+    expect(lastEnv(ENV_COMMAND).ORCA_SIGN_IN_INSIDE).toBe('claude')
     await h.call('PUT', '/v1/agent-sources', { bearer: mia, body: { agent: 'claude', source: null } })
     expect(lastEnv(ENV_COMMAND).CLAUDE_CODE_OAUTH_TOKEN).toBe(`orca-ph-claude-account-${id}`)
+    expect(lastEnv(ENV_COMMAND).ORCA_SIGN_IN_INSIDE).toBeUndefined()
   })
 
   it('is a per-person default only: a workspace override is refused, and an explicit workspace Source still wins', async () => {

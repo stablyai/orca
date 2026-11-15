@@ -38,7 +38,7 @@ export function signInInsideWorkspaceAlternative(
     label: t('agentSignInStrip.signInInsideWorkspace', 'Sign in inside this workspace instead'),
     detail: t(
       'agentSignInStrip.signInInsideWorkspaceDetail',
-      'Orca won’t store your sign-in. You’ll sign in again in each new workspace.'
+      'Orca won’t store your sign-in. You’ll sign in again in each new workspace. Team API keys won’t be used for this agent.'
     ),
     action: { kind: 'signInInsideWorkspace' }
   }
