@@ -6,11 +6,8 @@ import type {
   BrowserEvalResult
 } from '../../../../shared/browser/runtime/runtime-browser-contracts'
 import { BrowserError } from '../../browser-error'
-import {
-  captureFullPageScreenshot,
-  SCREENSHOT_TIMEOUT_MS,
-  withTimeout
-} from '../../cdp/commands/cdp-screenshot'
+import { SCREENSHOT_TIMEOUT_MS, withTimeout } from '../../cdp/commands/cdp-screenshot'
+import { captureFullPageScreenshot } from '../../cdp/commands/cdp-full-page-screenshot'
 import {
   agentBrowserScreenshotArgs,
   readAgentBrowserScreenshot
