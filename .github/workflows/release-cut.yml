@@ -85,6 +85,8 @@ jobs:
           filter: blob:none
           # Fetch unpublished tags for version recovery; hidden tags can recreate/overwrite an existing version.
           fetch-tags: true
+          # Nothing in this job pushes; never leave a token in .git/config for the source's code.
+          persist-credentials: false
 
       # Why: a relay-era ref (before #27215) needs the Windows relay addon this build no longer compiles.
       - name: Refuse a ref that still ships the SSH relay
@@ -304,15 +306,8 @@ jobs:
           echo "Already ran this slot: $ALREADY_RAN"
           echo "Reason: $REASON"
 
-      - name: Publish complete release-cut RC drafts from prior runs
-        id: publish_drafts
-        # Recover complete RC drafts before deciding whether manual dispatch needs another tag.
-        if: steps.window.outputs.allowed == 'true' && !(github.event_name == 'workflow_dispatch' && inputs.dry_run)
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: node config/scripts/release/publication/publish-complete-draft-releases.mjs
-
-      # Why: the cut job recomputes the version with these exact scripts; both must agree.
+      # Why: the draft publisher holds a write token, and the cut job recomputes the version with these exact
+      # scripts; neither may use the source's copies.
       - name: Use release scripts from the workflow commit
         env:
           WORKFLOW_SHA: ${{ github.workflow_sha }}
@@ -321,6 +316,14 @@ jobs:
           git fetch --no-tags origin "$WORKFLOW_SHA"
           mkdir -p "$RUNNER_TEMP/workflow-scripts"
           git archive "$WORKFLOW_SHA" config/scripts/release | tar -x -C "$RUNNER_TEMP/workflow-scripts"
+
+      - name: Publish complete release-cut RC drafts from prior runs
+        id: publish_drafts
+        # Recover complete RC drafts before deciding whether manual dispatch needs another tag.
+        if: steps.window.outputs.allowed == 'true' && !(github.event_name == 'workflow_dispatch' && inputs.dry_run)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: node "$RUNNER_TEMP/workflow-scripts/config/scripts/release/publication/publish-complete-draft-releases.mjs"
 
       - name: Compute next version
         id: version
@@ -771,7 +774,7 @@ jobs:
             fi
             bundle="$RUNNER_TEMP/release-tag-bundle/release-tag.bundle"
             git bundle verify "$bundle" >/dev/null
-            git fetch --no-tags "$bundle" "+refs/tags/$tag:$ref"
+            git -c transfer.fsckObjects=true -c fetch.fsckObjects=true fetch --no-tags "$bundle" "+refs/tags/$tag:$ref"
           fi
           release_sha="$(bash "$VERIFY" "$ref" "${tag#v}" "$SOURCE_SHA" "$message")"
           # Why: a patch cut from a base older than #24155 has no orcad template to build or ship.

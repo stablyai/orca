@@ -135,7 +135,14 @@ describe.skipIf(process.platform === 'win32')('verify-release-tag.sh', () => {
     writeFileSync(join(dir, 'package.json'), `${JSON.stringify(pkg, null, 2)}\n`)
 
   // Mirrors release-cut: source commit, then a package.json-only release commit and an annotated tag.
-  function repo({ version = '1.2.3', extraFile = false, otherField = false, tagger = env } = {}) {
+  function repo({
+    version = '1.2.3',
+    extraFile = false,
+    otherField = false,
+    tagger = env,
+    releaseJson = null,
+    lightweight = false
+  } = {}) {
     dir = mkdtempSync(join(tmpdir(), 'release-tag-verify-'))
     git('init', '-q')
     writePackage({ name: 'orca', version: '1.2.2' })
@@ -143,12 +150,15 @@ describe.skipIf(process.platform === 'win32')('verify-release-tag.sh', () => {
     git('commit', '-qm', 'source')
     const source = git('rev-parse', 'HEAD')
     writePackage({ name: otherField ? 'evil' : 'orca', version })
+    if (releaseJson !== null) {
+      writeFileSync(join(dir, 'package.json'), releaseJson)
+    }
     if (extraFile) {
       writeFileSync(join(dir, 'payload.sh'), 'echo hi\n')
     }
     git('add', '.')
     git('commit', '-qm', 'release: v1.2.3')
-    execFileSync('git', ['tag', '-a', 'v1.2.3', '-m', 'v1.2.3'], {
+    execFileSync('git', lightweight ? ['tag', 'v1.2.3'] : ['tag', '-a', 'v1.2.3', '-m', 'v1.2.3'], {
       cwd: dir,
       env: { ...tagger, GIT_CONFIG_GLOBAL: '/dev/null', GIT_CONFIG_NOSYSTEM: '1' }
     })
@@ -186,10 +196,25 @@ describe.skipIf(process.platform === 'win32')('verify-release-tag.sh', () => {
     expect(verify('f'.repeat(40)).code).toBe(1)
   })
 
-  it('applies the same content allowlist to a recovered tag', () => {
+  it('holds a recovered tag to the same tag and content rules', () => {
     expect(verify(repo(), null).code).toBe(0)
     expect(verify(repo({ extraFile: true }), null).code).toBe(1)
-    expect(verify(repo({ tagger: { ...env, GIT_COMMITTER_NAME: 'person' } }), null).code).toBe(0)
+    expect(verify(repo({ tagger: { ...env, GIT_COMMITTER_NAME: 'person' } }), null).code).toBe(1)
+    expect(verify(repo({ lightweight: true }), null).code).toBe(1)
+  })
+
+  it.each([
+    [
+      'a duplicate version key',
+      '{\n  "name": "orca",\n  "version": "1.2.3",\n  "version": "1.2.3"\n}\n'
+    ],
+    [
+      'an escaped key that parses the same',
+      '{\n  "name": "orca",\n  "\\u0076ersion": "1.2.3"\n}\n'
+    ],
+    ['reformatting', '{"name":"orca","version":"1.2.3"}\n']
+  ])('refuses a package.json that only parses like the expected one: %s', (_name, releaseJson) => {
+    expect(verify(repo({ releaseJson })).code).toBe(1)
   })
 
   it('carries the prepared tag through a git bundle into the privileged checkout', () => {
