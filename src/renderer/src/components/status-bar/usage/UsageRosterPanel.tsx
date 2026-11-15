@@ -274,6 +274,8 @@ export function UsageRosterPanel({
   canSignIn,
   onManageAccounts,
   onUsageDetails,
+  actionsAvailable = true,
+  unavailableReason,
   renderRow
 }: {
   providers: ProviderRateLimits[]
@@ -286,6 +288,8 @@ export function UsageRosterPanel({
   onSignIn: (provider: ProviderId) => void
   canSignIn: (provider: ProviderId) => boolean
   onManageAccounts: () => void
+  actionsAvailable?: boolean
+  unavailableReason?: string
   onUsageDetails: () => void
   // Return null to use the default row instead of a host-supplied detail/account wrapper.
   renderRow?: (p: ProviderRateLimits, row: React.ReactNode) => React.ReactNode
@@ -317,6 +321,7 @@ export function UsageRosterPanel({
               event.preventDefault()
               onRefresh()
             }}
+            disabled={!actionsAvailable}
             aria-label={t('auto.components.status.bar.StatusBar.3325d996cb', 'Refresh rate limits')}
             className="size-5 justify-center p-0"
           >
@@ -356,10 +361,14 @@ export function UsageRosterPanel({
           ]}
         />
       </div>
+      {unavailableReason ? (
+        <div className="px-3.5 pb-2 text-2xs text-muted-foreground">{unavailableReason}</div>
+      ) : null}
       <div className="border-t border-border/70" />
       {sorted.map((p) => {
         const state = getUsageRosterRowState(p, usedSections(p, t).length > 0, t)
-        const showSignInAction = state.kind === 'sign-in' && canSignIn(p.provider)
+        const showSignInAction =
+          actionsAvailable && state.kind === 'sign-in' && canSignIn(p.provider)
         const rowNode = (
           <UsageRow
             p={p}
@@ -381,13 +390,14 @@ export function UsageRosterPanel({
             </DropdownMenuItem>
           )
         }
-        const custom = renderRow?.(p, rowNode)
+        const custom = actionsAvailable ? renderRow?.(p, rowNode) : null
         if (custom) {
           return <React.Fragment key={p.provider}>{custom}</React.Fragment>
         }
         return (
           <DropdownMenuItem
             key={p.provider}
+            disabled={!actionsAvailable}
             onSelect={() => onOpenProvider(p.provider)}
             className="w-full cursor-pointer rounded-none px-3.5 py-2.5"
           >
@@ -397,6 +407,7 @@ export function UsageRosterPanel({
       })}
       <div className="border-t border-border/70" />
       <DropdownMenuItem
+        disabled={!actionsAvailable}
         onSelect={onUsageDetails}
         className="w-full cursor-pointer justify-between rounded-none px-3.5 py-2.5 text-[13px] text-foreground"
       >
@@ -404,6 +415,7 @@ export function UsageRosterPanel({
         <ChevronRight size={14} className="text-muted-foreground" />
       </DropdownMenuItem>
       <DropdownMenuItem
+        disabled={!actionsAvailable}
         onSelect={onManageAccounts}
         className="w-full cursor-pointer justify-between rounded-none px-3.5 py-2.5 text-[13px] text-foreground"
       >

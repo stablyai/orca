@@ -27,7 +27,8 @@ export function useCodexResetAction(
   codex: ProviderRateLimits,
   hostEnvironmentId: string | null,
   hostSnapshot: ProviderAccountsSnapshot | null,
-  menuOpen: boolean
+  menuOpen: boolean,
+  enabled = true
 ) {
   const t = useTranslate()
   const [resetConfirmOpen, setResetConfirmOpen] = useState(false)
@@ -60,7 +61,7 @@ export function useCodexResetAction(
   }, [])
 
   useEffect(() => {
-    if (!menuOpen || !hostEnvironmentId) {
+    if (!enabled || !menuOpen || !hostEnvironmentId) {
       return
     }
     let live = true
@@ -74,10 +75,15 @@ export function useCodexResetAction(
     return () => {
       live = false
     }
-  }, [menuOpen, hostEnvironmentId])
+  }, [enabled, menuOpen, hostEnvironmentId])
+
+  const canRedeemCurrentReset = (): boolean =>
+    enabled &&
+    mountedRef.current &&
+    (hostEnvironmentId !== null || useAppStore.getState().rateLimits.codexTarget.runtime === 'host')
 
   const redeem = async (scope: CodexResetCreditExpectedScope | null): Promise<void> => {
-    if (isRedeemingReset) {
+    if (isRedeemingReset || !canRedeemCurrentReset()) {
       return
     }
     setIsRedeemingReset(true)
@@ -92,6 +98,9 @@ export function useCodexResetAction(
   }
 
   const handleResetMenuSelect = (): void => {
+    if (!canRedeemCurrentReset()) {
+      return
+    }
     if (
       skipResetConfirm ||
       (hostEnvironmentId !== null && hasUnansweredHostCodexReset(hostEnvironmentId))
@@ -106,7 +115,7 @@ export function useCodexResetAction(
   }
 
   const handleConfirmReset = async (): Promise<void> => {
-    if (isRedeemingReset) {
+    if (isRedeemingReset || !canRedeemCurrentReset()) {
       return
     }
     if (skipFutureResetConfirm) {
@@ -129,7 +138,7 @@ export function useCodexResetAction(
       hostSupport.supported
     : true
   return {
-    ...getCodexResetProjection(codex, redeemable, t),
+    ...getCodexResetProjection(codex, enabled && redeemable, t),
     /** The host account the open confirmation will spend for, so its label can't drift. */
     confirmedResetAccountId: confirmedScope?.accountId ?? null,
     handleConfirmReset,

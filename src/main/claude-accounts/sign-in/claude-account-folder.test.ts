@@ -1,4 +1,13 @@
-import { existsSync, mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  renameSync,
+  rmSync,
+  symlinkSync,
+  utimesSync,
+  writeFileSync
+} from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -21,7 +30,11 @@ vi.mock('../../macos-keychain/generic-password', () => ({
   }
 }))
 
-import { removeClaudeAccountFolder } from './claude-account-folder'
+import {
+  readClaudeFolderLogin,
+  readClaudeFolderLoginAsync,
+  removeClaudeAccountFolder
+} from './claude-account-folder'
 
 import { claudeKeychainService } from '../runtime-auth/keychain'
 
@@ -81,3 +94,23 @@ describe('claude account folder', () => {
     }
   )
 })
+
+it.each(['sync', 'async'] as const)(
+  'refreshes shared login identity after an equal-metadata local replacement primed by %s',
+  async (mode) => {
+    const { root } = fixture()
+    const state = join(root, '.claude.json')
+    const staged = join(root, '.claude.next.json')
+    const stamp = new Date('2025-01-01T00:00:00Z')
+    writeFileSync(state, JSON.stringify({ oauthAccount: { emailAddress: 'a@example.test' } }))
+    utimesSync(state, stamp, stamp)
+    const first =
+      mode === 'sync' ? readClaudeFolderLogin(state) : await readClaudeFolderLoginAsync(state)
+    expect(first?.email).toBe('a@example.test')
+    writeFileSync(staged, JSON.stringify({ oauthAccount: { emailAddress: 'b@example.test' } }))
+    utimesSync(staged, stamp, stamp)
+    renameSync(staged, state)
+    expect(readClaudeFolderLogin(state)?.email).toBe('b@example.test')
+    expect((await readClaudeFolderLoginAsync(state))?.email).toBe('b@example.test')
+  }
+)

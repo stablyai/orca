@@ -24,10 +24,14 @@ export function StatusBarUsageEmptyCta({
   // Open all providers because a new user has no provider selection yet.
   const handleOpenSettings = useCallback(() => {
     recordFeatureInteraction('usage-tracking')
+    const hostScope = getUsageOwnerHostScope(remoteOwner)
+    if (!hostScope) {
+      return
+    }
     openSettingsTarget({
       pane: 'accounts',
       repoId: null,
-      hostScope: getUsageOwnerHostScope(remoteOwner)
+      hostScope
     })
     openSettingsPage()
   }, [openSettingsPage, openSettingsTarget, recordFeatureInteraction, remoteOwner])
@@ -47,6 +51,7 @@ export function StatusBarUsageEmptyCta({
       <HoverCardTrigger asChild>
         <button
           type="button"
+          disabled={getUsageOwnerHostScope(remoteOwner) === null}
           onClick={handleOpenSettings}
           aria-label={label}
           className="inline-flex h-5 cursor-pointer items-center gap-1.5 rounded px-1.5 text-xs font-normal text-muted-foreground transition-colors hover:bg-accent/70 hover:text-foreground"
@@ -113,6 +118,7 @@ export function StatusBarUsageEmptyCta({
             type="button"
             variant="default"
             size="sm"
+            disabled={getUsageOwnerHostScope(remoteOwner) === null}
             onClick={handleOpenSettings}
             className="mt-0.5 h-7 w-full text-xs"
           >

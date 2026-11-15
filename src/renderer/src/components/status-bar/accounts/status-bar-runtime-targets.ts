@@ -29,6 +29,9 @@ export type CodexStatusSwitchGroup = {
 }
 
 export type ClaudeStatusSwitchTarget = {
+  usageAccountId?: string
+  usableAccountId?: string | null
+  detail?: string
   id: string | null
   label: string
   active: boolean

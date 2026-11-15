@@ -80,7 +80,7 @@ export function useStatusBarController(floatingTerminalOpen: boolean) {
 
   const refreshDetectedAgents = useAppStore((s) => s.refreshDetectedAgents)
   const handleRefresh = useCallback(async () => {
-    if (isRefreshing) {
+    if (isRefreshing || (remoteOwner !== null && remoteOwner.environmentId === null)) {
       return
     }
     setIsRefreshing(true)
@@ -95,7 +95,7 @@ export function useStatusBarController(floatingTerminalOpen: boolean) {
         setIsRefreshing(false)
       }
     }
-  }, [isRefreshing, refreshRemote, refreshRateLimits, refreshDetectedAgents])
+  }, [isRefreshing, remoteOwner, refreshRemote, refreshRateLimits, refreshDetectedAgents])
 
   if (!statusBarVisible) {
     return null
@@ -233,20 +233,22 @@ export function useStatusBarController(floatingTerminalOpen: boolean) {
 
   // Why: the shown accounts are the owning host's; without a scope Settings opens on the default host.
   const hostScope = getUsageOwnerHostScope(remoteOwner)
-  const handleManageAccounts = (): void => {
-    setUsageMenuOpen(false)
-    openSettingsTarget({ pane: 'accounts', repoId: null, hostScope })
-    openSettingsPage()
-  }
+  const handleManageAccounts = (): void => handleOpenProviderAccounts(null)
   const handleUsageDetails = (): void => {
+    if (!hostScope) {
+      return
+    }
     setUsageMenuOpen(false)
-    openSettingsTarget({ pane: 'stats', repoId: null })
+    openSettingsTarget({ pane: 'stats', repoId: null, hostScope })
     openSettingsPage()
   }
-  const handleOpenProviderAccounts = (provider: ProviderRateLimits['provider']): void => {
-    const sectionId = getUsageProviderAccountsSectionId(provider)
+  const handleOpenProviderAccounts = (provider: ProviderRateLimits['provider'] | null): void => {
+    if (!hostScope) {
+      return
+    }
+    const sectionId = provider ? getUsageProviderAccountsSectionId(provider) : null
     // Why: a placeholder for a CLI-owned provider still leads to the host's accounts.
-    if (!sectionId && !remoteOwner) {
+    if (provider && !sectionId && !remoteOwner) {
       return
     }
     setUsageMenuOpen(false)
@@ -259,7 +261,7 @@ export function useStatusBarController(floatingTerminalOpen: boolean) {
     openSettingsPage()
   }
   const canSignInFromUsageRow = (provider: ProviderRateLimits['provider']): boolean =>
-    usageRowSignInOpensSettings(provider, settings)
+    hostScope !== null && usageRowSignInOpensSettings(provider, settings)
   const handleUsageMenuOpenChange = (nextOpen: boolean): void => {
     if (nextOpen) {
       usageMenuFocusHandoff.reset()
