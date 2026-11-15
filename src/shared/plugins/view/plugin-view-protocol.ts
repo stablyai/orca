@@ -13,8 +13,12 @@ export const PLUGIN_VIEW_REPLY_CHANNEL = 'plugins:viewReply'
 
 export type PluginViewColorScheme = 'light' | 'dark'
 
-/** Orca's chrome a plugin draws into: the status bar, or the whole window. */
-export type PluginChromeRegion = 'status-bar' | 'window'
+/** Parts of Orca a theme shot can crop to (`orca theme shot --region`). */
+export const THEME_SHOT_REGIONS = ['sidebar', 'tabs', 'editor', 'terminal', 'chat'] as const
+export type ThemeShotRegion = (typeof THEME_SHOT_REGIONS)[number]
+
+/** Orca's chrome a capture measures: the status bar, the whole window, or a themed region. */
+export type PluginChromeRegion = 'status-bar' | 'window' | ThemeShotRegion
 
 export type PluginViewCapture = {
   /** The guest URL's `rev` the drawn panel must come from; null takes whatever is drawn. */

@@ -267,10 +267,12 @@ export const HANDLER_GROUPS: readonly HandlerGroup[] = [
       'theme edit',
       'theme set',
       'theme adjust',
+      'theme pair',
       'theme check',
       'theme undo',
       'theme redo',
       'theme shot',
+      'theme specimen',
       'theme apply',
       'theme discard',
       'theme export'

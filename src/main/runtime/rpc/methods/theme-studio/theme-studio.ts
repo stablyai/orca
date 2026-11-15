@@ -6,6 +6,8 @@ import {
   ThemeStudioApplyParams,
   ThemeStudioCallerParams,
   ThemeStudioCheckParams,
+  ThemeStudioPairParams,
+  ThemeStudioSpecimenParams,
   ThemeStudioEditParams,
   ThemeStudioPatchParams,
   ThemeStudioShotParams,
@@ -110,6 +112,20 @@ export const THEME_STUDIO_METHODS = [
       requireThemeStudio().adjust(params, await callerOf(params, context))
   }),
   defineMethod({
+    // A hidden window that is never shown or focused, closed after the capture.
+    name: 'themeStudio.specimen',
+    permission: 'host-admin',
+    params: ThemeStudioSpecimenParams,
+    handler: async (params) => requireThemeStudio().specimen(params.variants ?? ['light', 'dark'])
+  }),
+  defineMethod({
+    name: 'themeStudio.pair',
+    permission: 'host-admin',
+    params: ThemeStudioPairParams,
+    handler: async (params, context) =>
+      requireThemeStudio().pair(params.from, await callerOf(params, context))
+  }),
+  defineMethod({
     name: 'themeStudio.check',
     permission: 'host-admin',
     params: ThemeStudioCheckParams,
@@ -138,7 +154,7 @@ export const THEME_STUDIO_METHODS = [
     name: 'themeStudio.shot',
     permission: 'host-admin',
     params: ThemeStudioShotParams,
-    handler: async (params) => requireThemeStudio().shot(params.mode)
+    handler: async (params) => requireThemeStudio().shot(params.mode, params.region)
   }),
   defineMethod({
     name: 'themeStudio.apply',

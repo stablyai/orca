@@ -11,12 +11,14 @@ ORCA theme tokens --json
 ORCA theme edit [--from current|<theme-id>|<plugin-key>|<dir>|<file.json>] [--name <name>] --json
 ORCA theme set <token>=<color>... [--mode light|dark|both] [--unset <token>]... [--patch <json|@file> | --patch-stdin] --json
 ORCA theme adjust [--warmth <n>] [--hue <deg>] [--saturation <%>] [--lightness <%>] [--contrast <%>] [--separate <ΔL> [--scope sidebar|tabs|cards|editor]] [--only <prefix,...>] [--mode light|dark|both] --json
+ORCA theme pair [--from dark|light] --json
 ORCA theme check [--fix [--finding <id>]...] --json
 ORCA theme undo --json
 ORCA theme redo --json
 ORCA theme history --json
 ORCA theme reset --json
-ORCA theme shot [--mode light|dark] [--out <file.png>] --json
+ORCA theme specimen [--variant dark|light|both] [--out <file.png>] --json
+ORCA theme shot [--mode light|dark] [--region sidebar|tabs|editor|terminal|chat] [--out <file.png>] --json
 ORCA theme apply [--name <name>] --json
 ORCA theme discard --json
 ORCA theme export <dir> [--name <name>] [--id <plugin-id>] --json
@@ -30,14 +32,20 @@ ORCA theme export <dir> [--name <name>] [--id <plugin-id>] --json
    `adjust --separate 0.04` (both sidebars and their hover/selected rows move together, hue
    kept). `--contrast` moves colors away from the background they sit on. `adjust` fixes the
    contrast issues it causes in the same step (`autoFixed`). Change both modes unless the user named
-   one: `--mode both` for `set`; `adjust` changes both by default.
+   one: `--mode both` for `set`; `adjust` changes both by default. When the theme has only one
+   mode, `ORCA theme pair` makes the other from it (lightness mirrored, hue kept, contrast fixed)
+   as one undoable step.
 3. Read `report` and `paint` in the result. Each finding has an `id`, the `effect` the person
    will see, and up to two `fixes` (smallest change first, lightness only). Apply one with its
    `command` (`ORCA theme check --fix --finding <id>`), all with `ORCA theme check --fix`, or
    `set` your own value. `paint.status` other than `painted` means the screen does not show the
-   change yet (`other-variant`: shoot that mode).
-4. `ORCA theme shot --mode dark --json` and `--mode light`, then read the PNGs. Look at the result
-   before you tell the user it is done.
+   change yet (`other-variant`: shoot that mode). `warnings` are advice that never blocks a
+   color: ANSI colors too dim or no longer reading as their name, a terminal/editor seam, diff
+   hues that disagree with the terminal's, accents that change hue between light and dark.
+4. `ORCA theme specimen --json` draws both modes side by side on Orca's parts (sidebar, tabs,
+   editor, terminal with all 16 ANSI colors, chat, a dialog) without switching Orca; read the PNG.
+   `ORCA theme shot --region terminal` (or sidebar, tabs, editor, chat) crops the live window to
+   one part. Look at the result before you tell the user it is done.
 5. Ask the user whether to keep it. `apply` saves it as one of their themes and switches to it;
    `discard` puts their theme back. The user can also press Keep, Undo or Discard in Orca's
    notice or in Settings → Appearance, where saved themes show with a Custom badge, who made them

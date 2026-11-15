@@ -18,11 +18,15 @@ export type ThemeStudioPaint = {
 /** The smallest fix of each finding (or only of `ids`), as one patch. */
 export function fixPatch(
   report: ThemeStudioReport | null,
-  ids?: ReadonlySet<string>
+  ids?: ReadonlySet<string>,
+  onlyModes?: readonly ThemeStudioMode[]
 ): { patch: ThemeStudioPatch; fixed: string[] } {
   const patch: ThemeStudioPatch = {}
   const fixed: string[] = []
   for (const { mode, findings } of report?.modes ?? []) {
+    if (onlyModes && !onlyModes.includes(mode)) {
+      continue
+    }
     const set: Record<string, string> = {}
     for (const finding of findings) {
       const fix = finding.fixes[0]

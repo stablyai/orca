@@ -39,6 +39,7 @@ import { getUserPluginsDir } from '../plugins/discovery/plugin-discovery'
 import { readPluginLockfile } from '../plugins/installation/plugin-install-lockfile-store'
 import { ThemeStudioSession } from './theme-studio-session'
 import { createThemeStudioService, type ThemeStudioWindow } from './theme-studio-service'
+import { renderThemeStudioSpecimen } from './theme-studio-specimen-window'
 
 const REQUEST_TIMEOUT_MS = 10_000
 
@@ -129,9 +130,10 @@ export function bindThemeStudio(options: {
       },
       select: async (pluginKey) =>
         (await ask(target, { kind: 'select', pluginKey })).selected === true,
-      capture: (mode) =>
+      specimen: renderThemeStudioSpecimen,
+      capture: (mode, region) =>
         captureOrcaChrome(target, isPluginShotWindowShown(mainWindow), {
-          region: 'window',
+          region: region ?? 'window',
           ...(mode ? { colorScheme: mode } : {})
         })
     }

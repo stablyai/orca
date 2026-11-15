@@ -25,7 +25,7 @@ import {
   patchFlag
 } from './theme-command-args'
 import { draftFromLocal } from './theme-local-draft'
-import { exportDraft, shot } from './theme-file-commands'
+import { exportDraft, shot, specimen } from './theme-file-commands'
 import { history, show, tokens } from './theme-read-commands'
 import { themeStudioSetLabel } from '../../shared/theme-studio/theme-studio-labels'
 
@@ -119,6 +119,14 @@ export const THEME_HANDLERS: Record<string, CommandHandler> = {
   'theme edit': edit,
   'theme set': set,
   'theme adjust': adjust,
+  'theme pair': (ctx) => {
+    const modes = modesFlag(ctx, 'from')
+    if (modes && modes.length !== 1) {
+      throw new RuntimeClientError('invalid_argument', '--from is light or dark.')
+    }
+    return mutate(ctx, 'themeStudio.pair', modes ? { from: modes[0] } : {})
+  },
+  'theme specimen': specimen,
   'theme check': (ctx) => {
     const findings = listFlag(ctx, 'finding')
     return mutate(ctx, 'themeStudio.check', {

@@ -33,15 +33,21 @@ export type Mutation = {
     editor?: string
     predicted?: Partial<Record<ThemeStudioMode, string[]>>
   }
+  warnings?: { id: string; mode?: ThemeStudioMode; message: string }[]
 }
 
 export function print(ctx: HandlerContext, result: unknown, text: string): void {
   writeStdoutLine(ctx.json ? JSON.stringify({ ok: true, result }, null, 2) : text)
 }
 
-export async function call<T>(ctx: HandlerContext, method: string, params?: unknown): Promise<T> {
+export async function call<T>(
+  ctx: HandlerContext,
+  method: string,
+  params?: unknown,
+  timeoutMs = RPC_TIMEOUT_MS
+): Promise<T> {
   try {
-    return (await ctx.client.call<T>(method, params, { timeoutMs: RPC_TIMEOUT_MS })).result
+    return (await ctx.client.call<T>(method, params, { timeoutMs })).result
   } catch (error) {
     if (
       error instanceof RuntimeRpcFailureError &&
@@ -85,8 +91,8 @@ export function numberFlag(ctx: HandlerContext, name: string): number | undefine
 }
 
 /** --mode light|dark|both; `fallback` when absent (null: the mode Orca shows, decided by the host). */
-export function modesFlag(ctx: HandlerContext): ThemeStudioMode[] | null {
-  const value = stringFlag(ctx, 'mode')
+export function modesFlag(ctx: HandlerContext, flag = 'mode'): ThemeStudioMode[] | null {
+  const value = stringFlag(ctx, flag)
   if (value === undefined) {
     return null
   }
@@ -96,7 +102,7 @@ export function modesFlag(ctx: HandlerContext): ThemeStudioMode[] | null {
   if (value === 'light' || value === 'dark') {
     return [value]
   }
-  throw new RuntimeClientError('invalid_argument', '--mode must be light, dark or both.')
+  throw new RuntimeClientError('invalid_argument', `--${flag} must be light, dark or both.`)
 }
 
 /** Files here are on the machine running the CLI; a forwarding shell runs it on another one. */
@@ -159,7 +165,15 @@ function formatMutation(result: Mutation): string {
           ...predictedLines(result.paint)
         ]
       : []),
-    ...formatReport(result.report)
+    ...formatReport(result.report),
+    ...(result.warnings?.length
+      ? [
+          `Warnings (${result.warnings.length}; painted anyway):`,
+          ...result.warnings.map(
+            (warning) => `  ${warning.mode ? `${warning.mode}: ` : ''}${warning.message}`
+          )
+        ]
+      : [])
   ].join('\n')
 }
 

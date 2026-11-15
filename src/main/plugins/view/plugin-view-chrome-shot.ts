@@ -59,7 +59,9 @@ export async function captureOrcaChrome(
         throw new PluginCliError('invalid_argument', reply.message, {
           reason: reply.code,
           nextSteps: [
-            'Show the status bar from the View menu, or leave Settings, then run this again.'
+            region === 'status-bar' || region === 'window'
+              ? 'Show the status bar from the View menu, or leave Settings, then run this again.'
+              : `Open a ${region} in the active workspace (\`orca theme shot\` without --region captures the window), then run this again.`
           ]
         })
       }

@@ -13,10 +13,21 @@ import { themeStudioPluginFiles } from '../../shared/theme-studio/theme-studio-p
 import { ThemeStudioError } from '../../shared/theme-studio/theme-studio-errors'
 import { call, localPath, modesFlag, print, stringFlag } from './theme-command-io'
 
+// Why longer than other theme calls: the host opens a window and draws before answering.
+const SPECIMEN_TIMEOUT_MS = 60_000
+import { THEME_SHOT_REGIONS } from '../../shared/plugins/view/plugin-view-protocol'
+
 export async function shot(ctx: HandlerContext): Promise<void> {
   const modes = modesFlag(ctx)
   if (modes && modes.length > 1) {
     throw new RuntimeClientError('invalid_argument', '--mode for a shot is light or dark.')
+  }
+  const region = stringFlag(ctx, 'region')
+  if (region !== undefined && !THEME_SHOT_REGIONS.some((name) => name === region)) {
+    throw new RuntimeClientError(
+      'invalid_argument',
+      `--region is one of ${THEME_SHOT_REGIONS.join(', ')}.`
+    )
   }
   const reply = await call<{
     png: string
@@ -26,11 +37,27 @@ export async function shot(ctx: HandlerContext): Promise<void> {
     themeApplied: boolean
     themeReason?: string
     draft: boolean
-  }>(ctx, 'themeStudio.shot', modes ? { mode: modes[0] } : {})
+    region?: string
+  }>(ctx, 'themeStudio.shot', {
+    ...(modes ? { mode: modes[0] } : {}),
+    ...(region ? { region } : {})
+  })
+  // Why check the echo: an older Orca ignores --region and would hand back the whole window.
+  if (region && reply.region !== region) {
+    throw new RuntimeClientError(
+      'runtime_unsupported',
+      'This Orca cannot crop a shot to one region; update it, or shoot the whole window.',
+      { nextSteps: ['Run `orca theme shot` without --region.'] }
+    )
+  }
   const out = stringFlag(ctx, 'out')
   const path = out
     ? localPath(ctx, out, 'shot')
-    : join(tmpdir(), 'orca-theme-shots', `theme-${reply.colorScheme}-${Date.now()}.png`)
+    : join(
+        tmpdir(),
+        'orca-theme-shots',
+        `theme-${reply.colorScheme}${region ? `-${region}` : ''}-${Date.now()}.png`
+      )
   await mkdir(dirname(path), { recursive: true })
   await writeFile(path, Buffer.from(reply.png, 'base64'))
   const result = {
@@ -38,6 +65,7 @@ export async function shot(ctx: HandlerContext): Promise<void> {
     width: reply.width,
     height: reply.height,
     mode: reply.colorScheme,
+    region: region ?? 'window',
     themeApplied: reply.themeApplied,
     ...(reply.themeReason ? { themeReason: reply.themeReason } : {}),
     draft: reply.draft
@@ -108,4 +136,38 @@ export async function exportDraft(ctx: HandlerContext): Promise<void> {
   if (!validation.valid) {
     process.exitCode = 1
   }
+}
+
+/** `orca theme specimen`: one PNG of the draft (or the themes in use) on Orca's parts. */
+export async function specimen(ctx: HandlerContext): Promise<void> {
+  const variant = stringFlag(ctx, 'variant') ?? 'both'
+  if (variant !== 'both' && variant !== 'light' && variant !== 'dark') {
+    throw new RuntimeClientError('invalid_argument', '--variant is dark, light or both.')
+  }
+  const variants: ThemeStudioMode[] = variant === 'both' ? ['light', 'dark'] : [variant]
+  const reply = await call<{
+    png: string
+    width: number
+    height: number
+    variants: ThemeStudioMode[]
+    draft: boolean
+  }>(ctx, 'themeStudio.specimen', { variants }, SPECIMEN_TIMEOUT_MS)
+  const out = stringFlag(ctx, 'out')
+  const path = out
+    ? localPath(ctx, out, 'specimen')
+    : join(tmpdir(), 'orca-theme-shots', `theme-specimen-${variant}-${Date.now()}.png`)
+  await mkdir(dirname(path), { recursive: true })
+  await writeFile(path, Buffer.from(reply.png, 'base64'))
+  const result = {
+    path,
+    width: reply.width,
+    height: reply.height,
+    variants: reply.variants,
+    draft: reply.draft
+  }
+  print(
+    ctx,
+    result,
+    `Saved ${path} (${reply.width}x${reply.height}, ${reply.variants.join(' and ')}${reply.draft ? ', the draft' : ', the themes in use'})`
+  )
 }
