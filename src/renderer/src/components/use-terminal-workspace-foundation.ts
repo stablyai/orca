@@ -85,9 +85,6 @@ export function useTerminalWorkspaceFoundation() {
   const terminalRetentionBudgetEnabled = useAppStore(
     (state) => state.settings?.terminalHiddenWorktreeRetentionBudget !== false
   )
-  const browserGuestRetentionBudgetEnabled = useAppStore(
-    (state) => state.settings?.browserGuestWorktreeRetentionBudget !== false
-  )
   const terminalTitleSnapshotAuthorityEnabled = useAppStore((state) =>
     isMainTerminalSideEffectAuthorityForPty({
       settings: state.settings,
@@ -116,7 +113,6 @@ export function useTerminalWorkspaceFoundation() {
     terminalSshParkingEnabled,
     pairedRuntimeParkingEnvironmentIds,
     terminalRetentionBudgetEnabled,
-    browserGuestRetentionBudgetEnabled,
     terminalTitleSnapshotAuthorityEnabled
   }
 }

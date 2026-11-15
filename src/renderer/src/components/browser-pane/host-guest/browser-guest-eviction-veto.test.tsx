@@ -8,14 +8,11 @@ import { registerPersistentWebview, unregisterPersistentWebview } from './webvie
 import { useTerminalBrowserRetention } from '../../use-terminal-browser-retention'
 import type { BrowserGuestIdleDiscardRequest } from '../../../../../shared/browser/guest-lifecycle/browser-guest-discard-protection'
 
-const state = vi.hoisted(() => ({
-  settings: { browserGuestWorktreeRetentionBudget: false },
-  browserAudiblePageIds: {}
-}))
+const state = vi.hoisted(() => ({ browserAudiblePageIds: {} }))
 vi.mock('../../../store', () => ({ useAppStore: { getState: () => state } }))
 
-function Host({ enabled }: { enabled: boolean }): null {
-  useTerminalBrowserRetention({ browserGuestRetentionBudgetEnabled: enabled })
+function Host(): null {
+  useTerminalBrowserRetention()
   return null
 }
 
@@ -59,9 +56,8 @@ async function fixture() {
     registerPersistentWebview(`page-${id}`, webview as unknown as Electron.WebviewTag)
     setBrowserGuestVisible(`page-${id}`, false)
   }
-  const render = async (enabled: boolean): Promise<void> => {
-    state.settings.browserGuestWorktreeRetentionBudget = enabled
-    await act(async () => root.render(<Host enabled={enabled} />))
+  const render = async (): Promise<void> => {
+    await act(async () => root.render(<Host />))
   }
   const run = async (action: () => void): Promise<void> => {
     await act(async () => action())
@@ -102,7 +98,7 @@ afterEach(() => vi.useRealTimers())
 it('protects downloads and paired viewers at a due attempt, without retrying on release', async () => {
   const f = await fixture()
   try {
-    await f.render(true)
+    await f.render()
     f.addGuest(1)
     f.addGuest(2)
     f.addGuest(3)
@@ -126,14 +122,11 @@ it('protects downloads and paired viewers at a due attempt, without retrying on 
   }
 })
 
-it('protects an active page and refuses policy attempts while the existing retention setting is disabled', async () => {
+it('protects a page that became active before its due attempt', async () => {
   const f = await fixture()
   try {
-    await f.render(false)
+    await f.render()
     f.addGuest(1)
-    await f.run(() => f.due(1))
-    expect(f.reserve).not.toHaveBeenCalled()
-    await f.render(true)
     setBrowserGuestVisible('page-1', true)
     await f.run(() => f.due(1))
     expect(f.reserve).not.toHaveBeenCalled()

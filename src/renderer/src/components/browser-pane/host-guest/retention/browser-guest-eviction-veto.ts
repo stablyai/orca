@@ -8,7 +8,6 @@ export function browserPageVetoesGuestEviction(pageId: string): boolean {
   const protection = browserGuestActivity.get(pageId)?.protection
   const state = useAppStore.getState()
   return (
-    state.settings?.browserGuestWorktreeRetentionBudget === false ||
     (protection !== undefined && protection !== 'discardable') ||
     isBrowserPageRendererRecoveryPending(pageId) ||
     browserPageNeedsPaintRetention(pageId) ||

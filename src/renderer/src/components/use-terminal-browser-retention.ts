@@ -10,11 +10,8 @@ import {
 import { installBrowserGuestPageRetention } from './browser-pane/host-guest/browser-guest-page-retention'
 import { discardPersistentWebview } from './browser-pane/host-guest/webview-registry'
 import { releaseBrowserPageMount } from './browser-pane/host-guest/retention/browser-page-mount-admission'
-import type { TerminalParkingFoundation } from './use-terminal-parking-foundation'
 
-export function useTerminalBrowserRetention({
-  browserGuestRetentionBudgetEnabled
-}: Pick<TerminalParkingFoundation, 'browserGuestRetentionBudgetEnabled'>): void {
+export function useTerminalBrowserRetention(): void {
   useEffect(() => {
     const removeDownloadTracking = installBrowserPageDownloadActivityTracking(
       invalidateBrowserGuestActivity
@@ -36,8 +33,7 @@ export function useTerminalBrowserRetention({
 
   useEffect(() => {
     return installBrowserGuestPageRetention({
-      isBlocked: (pageId) =>
-        !browserGuestRetentionBudgetEnabled || browserPageVetoesGuestEviction(pageId),
+      isBlocked: browserPageVetoesGuestEviction,
       discard: (pageId, webview, webContentsId, policyToken) => {
         const discarded = discardPersistentWebview(pageId, webview, webContentsId, policyToken)
         if (discarded) {
@@ -46,5 +42,5 @@ export function useTerminalBrowserRetention({
         return discarded
       }
     })
-  }, [browserGuestRetentionBudgetEnabled])
+  }, [])
 }

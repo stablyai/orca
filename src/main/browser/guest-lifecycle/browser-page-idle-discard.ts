@@ -36,20 +36,20 @@ export function createBrowserPageIdleDiscard(sources: {
   subscribe: (changed: () => void) => () => void
 }) {
   const pages = new Map<string, Episode>()
+  // Keyed by hiddenAt: one shared idle offset keeps the order, so changing the hours re-keys nothing.
   const deadlines = new BrowserGuestPriorityIndex<Episode>()
   const pending = new Map<number, { episode: Episode | undefined; retired: boolean }>()
   let policy = readBrowserMemorySaverPolicy(null)
   let timer: ReturnType<typeof setTimeout> | undefined
   const index = (pageId: string, episode: Episode): void => {
     if (
-      policy.enabled &&
       episode.visibilityKnown &&
       episode.visible === false &&
       episode.revisits <= 15 &&
       !episode.consumed &&
       episode.hiddenAt !== null
     ) {
-      deadlines.set(pageId, episode, episode.hiddenAt + policy.idleMs)
+      deadlines.set(pageId, episode, episode.hiddenAt)
     } else {
       deadlines.delete(pageId)
     }
@@ -58,19 +58,19 @@ export function createBrowserPageIdleDiscard(sources: {
     clearTimeout(timer)
     timer = undefined
     const next = deadlines.peek()
-    if (!next || !sources.awake() || pending.size >= 4) {
+    if (!next || !policy.enabled || !sources.awake() || pending.size >= 4) {
       return
     }
-    timer = setTimeout(pump, Math.max(0, next.key - sources.now()))
+    timer = setTimeout(pump, Math.max(0, next.key + policy.idleMs - sources.now()))
     timer.unref?.()
   }
   const pump = (): void => {
     timer = undefined
-    if (sources.awake()) {
+    if (policy.enabled && sources.awake()) {
       // Acknowledgments schedule another bounded batch, never a whole-inventory sweep.
       for (let count = 0; count < 4 && pending.size < 4; count++) {
         const next = deadlines.peek()
-        if (!next || next.key > sources.now()) {
+        if (!next || next.key + policy.idleMs > sources.now()) {
           break
         }
         deadlines.pop()
@@ -218,15 +218,9 @@ export function createBrowserPageIdleDiscard(sources: {
       deadlines.delete(pageId)
       schedule()
     },
-    /** Live setting changes re-key waiting pages; already freed pages stay freed. */
+    /** Live setting changes move every waiting deadline at once; already freed pages stay freed. */
     configure(next: BrowserMemorySaverPolicy): void {
-      if (next.enabled === policy.enabled && next.idleMs === policy.idleMs) {
-        return
-      }
       policy = next
-      for (const [pageId, episode] of pages) {
-        index(pageId, episode)
-      }
       schedule()
     },
     dispose(): void {
