@@ -139,7 +139,7 @@ export function applyJournalDomainControlCommand(
       writeMark(db, target, operation.fence, savedAt, result, (sequence) =>
         failureResume.commitJournalFailureResume(db, target, operation, prepared, sequence)
       )
-      result.value = { status: 'resumed', waiting: prepared.waiting }
+      result.value = prepared.result
       return result
     }
     case 'stop':

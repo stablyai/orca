@@ -108,6 +108,21 @@ it('never spends a failure recovery through a personal Stop or reopen hold', asy
   expect((await f.resume(second, 'reopened')).value).toEqual({ status: 'blocked', waiting: 1 })
 })
 
+it('reports individually held messages separately and leaves them held after recovery', async () => {
+  const f = fixture()
+  await f.enqueue('held', { holdReason: 'send_failed' })
+  await f.enqueue('ready')
+  const token = await f.failure('first')
+  expect((await f.resume(token, 'resume-1')).value).toEqual({
+    status: 'resumed',
+    waiting: 2,
+    stillHeld: 1
+  })
+  expect((await f.claim('handoff', f.prepare())).value).toMatchObject({ kind: 'claimed' })
+  expect(f.card('ready')?.state).toBe('dispatched')
+  expect(f.card('held')?.state).toBe('waiting')
+})
+
 it('requires the owner when the coordinator recovery itself fails again', async () => {
   const f = fixture()
   await f.enqueue('kept')

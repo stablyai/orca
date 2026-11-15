@@ -106,6 +106,7 @@ export async function resumeWorkerFailure(
   if (result.status === 'not-failed' && params.subject) {
     return null
   }
+  const goingNext = result.waiting - (result.stillHeld ?? 0)
   return {
     delivered: false as const,
     state: result.status === 'resumed' ? ('resuming' as const) : ('idle' as const),
@@ -113,7 +114,7 @@ export async function resumeWorkerFailure(
     target: { sessionId: custody.sessionId, dispatchId },
     recoveryMessage:
       result.status === 'resumed'
-        ? `Resuming ${dispatch.assignee_handle ?? dispatchId}.${result.waiting ? ` ${result.waiting} held ${result.waiting === 1 ? 'message goes' : 'messages go'} next.` : ''}`
+        ? `Resuming ${dispatch.assignee_handle ?? dispatchId}.${goingNext ? ` ${goingNext} held ${goingNext === 1 ? 'message goes' : 'messages go'} next.` : ''}${result.stillHeld ? ` ${result.stillHeld} ${result.stillHeld === 1 ? 'message' : 'messages'} still held.` : ''}`
         : ''
   }
 }
