@@ -753,6 +753,7 @@ import {
   ThemeStudioCheckParams,
   ThemeStudioEditParams,
   ThemeStudioPatchParams,
+  ThemeStudioPublishKitParams,
   ThemeStudioShotParams,
   ThemeStudioStatusParams,
   ThemeStudioStepParams
@@ -1673,6 +1674,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'themeStudio.discard': ThemeStudioCallerParams,
   'themeStudio.edit': ThemeStudioEditParams,
   'themeStudio.patch': ThemeStudioPatchParams,
+  'themeStudio.publishKit': ThemeStudioPublishKitParams,
   'themeStudio.reset': ThemeStudioCallerParams,
   'themeStudio.shot': ThemeStudioShotParams,
   'themeStudio.status': ThemeStudioStatusParams,

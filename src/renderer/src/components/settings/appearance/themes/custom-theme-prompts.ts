@@ -15,9 +15,9 @@ export function customThemeEditPrompt(theme: ThemeStudioSavedTheme): string {
 /** What "Publish with your agent" copies: a flow that shows everything before anything is public. */
 export function customThemePublishPrompt(theme: ThemeStudioSavedTheme): string {
   return [
-    `Publish my Orca theme "${theme.name}" (${theme.pluginKey}) on GitHub so others can install it.`,
-    'Load the guides first: orca skills get orca-cli --reference references/themes.md and orca skills get orca-plugin-authoring',
-    `Write the plugin folder with: orca theme edit --from ${theme.pluginKey}, then orca theme export <folder>`,
-    'Before creating a repository, pushing, tagging or opening any pull request, show me exactly what will be published and where, and wait for my yes.'
+    `Publish my Orca theme "${theme.name}" on GitHub so others can install it.`,
+    'First load the guide: orca skills get orca-cli --reference references/themes.md',
+    `Then run the dry run: orca theme publish ${theme.pluginKey}`,
+    'Show me the plan (the folder, the public repository and every command). Only after I say yes, run it again with --yes.'
   ].join('\n')
 }

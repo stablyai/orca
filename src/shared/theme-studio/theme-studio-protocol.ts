@@ -116,3 +116,14 @@ export type ThemeStudioSavedAction = z.infer<typeof themeStudioSavedActionSchema
 export type ThemeStudioSavedActionResult =
   | { ok: true; pluginKey?: string; path?: string; restored?: boolean }
   | { ok: false; message?: string; cancelled?: true }
+
+const pngSchema = z.object({ mode: z.enum(THEME_STUDIO_MODES), png: z.string() })
+/** What `orca theme publish` gets from the host: the saved theme and images drawn from it. */
+export const themeStudioPublishKitSchema = z.object({
+  pluginKey: z.string().max(256),
+  id: z.string().max(64),
+  name: z.string().max(64),
+  draft: themeStudioDraftSchema,
+  images: z.object({ cover: pngSchema, screenshots: z.array(pngSchema).max(2) })
+})
+export type ThemeStudioPublishKit = z.infer<typeof themeStudioPublishKitSchema>

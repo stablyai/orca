@@ -8,6 +8,7 @@ import {
   ThemeStudioCheckParams,
   ThemeStudioEditParams,
   ThemeStudioPatchParams,
+  ThemeStudioPublishKitParams,
   ThemeStudioShotParams,
   ThemeStudioStatusParams,
   ThemeStudioStepParams
@@ -146,6 +147,13 @@ export const THEME_STUDIO_METHODS = [
     params: ThemeStudioApplyParams,
     handler: async (params, context) =>
       requireThemeStudio().apply(params.name, await callerOf(params, context))
+  }),
+  defineMethod({
+    // Reads a saved theme and draws images in a hidden window; publishing itself runs in the CLI.
+    name: 'themeStudio.publishKit',
+    permission: 'host-admin',
+    params: ThemeStudioPublishKitParams,
+    handler: async (params) => requireThemeStudio().publishKit(params.pluginKey)
   }),
   defineMethod({
     name: 'themeStudio.discard',

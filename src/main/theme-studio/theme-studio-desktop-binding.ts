@@ -29,6 +29,7 @@ import {
   uninstallHostWrittenPlugin
 } from '../runtime/rpc/methods/plugins/plugin-install-methods'
 import { ThemeStudioSavedThemes } from './theme-studio-saved'
+import { renderThemeSpecimenImages } from './theme-studio-specimen-render'
 import { requestFromRenderer } from '../ipc/renderer-request-relay'
 import { captureOrcaChrome } from '../plugins/view/plugin-view-chrome-shot'
 import { isPluginShotWindowShown } from '../plugins/view/plugin-shot-policy'
@@ -155,6 +156,7 @@ export function bindThemeStudio(options: {
     },
     installFolder: installHostWrittenPluginFolder,
     uninstall: uninstallHostWrittenPlugin,
+    renderImages: renderThemeSpecimenImages,
     savedThemes: new ThemeStudioSavedThemes(join(root, 'saved.json'), (themes) =>
       contents()?.send(THEME_STUDIO_SAVED_CHANNEL, themes)
     ),

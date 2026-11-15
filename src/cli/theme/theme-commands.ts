@@ -28,6 +28,7 @@ import { draftFromLocal } from './theme-local-draft'
 import { exportDraft, shot } from './theme-file-commands'
 import { history, show, tokens } from './theme-read-commands'
 import { themeStudioSetLabel } from '../../shared/theme-studio/theme-studio-labels'
+import { publishTheme } from './theme-publish'
 
 async function edit(ctx: HandlerContext): Promise<void> {
   const from = stringFlag(ctx, 'from') ?? 'current'
@@ -138,5 +139,6 @@ export const THEME_HANDLERS: Record<string, CommandHandler> = {
     )
     print(ctx, result, result.discarded ? `Discarded ${result.name}.` : 'No theme draft was open.')
   },
-  'theme export': exportDraft
+  'theme export': exportDraft,
+  'theme publish': publishTheme
 }
