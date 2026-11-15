@@ -7,8 +7,7 @@ import {
   type LucideIcon
 } from 'lucide-react-native'
 import { useEffect, useState } from 'react'
-import { Platform, Pressable, StyleSheet, Text } from 'react-native'
-import { SafeAreaView } from 'react-native-safe-area-context'
+import { Platform, Pressable, StyleSheet, Text, View } from 'react-native'
 import Animated, {
   useAnimatedStyle,
   useSharedValue,
@@ -35,6 +34,7 @@ export const HOME_TAB_BAR_HEIGHT = 52
 export function MobileHomeTabBar(props: {
   tabs: readonly HomeTabId[]
   active: HomeTabId
+  bottomInset: number
   /** Agents that need you; shown on Agents. */
   agentsBadge: number
   onSelect: (tab: HomeTabId) => void
@@ -49,9 +49,9 @@ export function MobileHomeTabBar(props: {
     settings: t('common.settings', 'Settings')
   }
   return (
-    <SafeAreaView
-      style={styles.bar}
-      edges={['bottom']}
+    <View
+      // Why lg: some Android tablets report a gesture inset smaller than the visible pill (#41969).
+      style={[styles.bar, { paddingBottom: Math.max(props.bottomInset, spacing.lg) }]}
       // Android has no 'tabbar' role and crashes on mount; iOS keeps its tab-bar trait.
       accessibilityRole={Platform.OS === 'ios' ? 'tabbar' : 'tablist'}
     >
@@ -65,7 +65,7 @@ export function MobileHomeTabBar(props: {
           onPress={() => props.onSelect(tab)}
         />
       ))}
-    </SafeAreaView>
+    </View>
   )
 }
 
@@ -145,7 +145,6 @@ const styles = themedStyleSheet(() => ({
   bar: {
     flexDirection: 'row',
     paddingTop: 6,
-    paddingBottom: spacing.sm,
     paddingHorizontal: spacing.xs,
     backgroundColor: colors.bgBase,
     borderTopWidth: StyleSheet.hairlineWidth,
