@@ -1,6 +1,9 @@
 import { app, autoUpdater as nativeUpdater } from 'electron'
+import { homedir } from 'node:os'
 import type { UpdateStatus } from '../../../shared/update-status-types'
+import { macCoordinationRoot } from '../../../shared/remote-runtime/serve-supervisor/serve-bundle-coordination'
 import { recordUpdaterLifecycle } from '../updater-lifecycle-diagnostics'
+import { commitServeSupervisorParkOnQuit } from '../lifecycle/serve-supervisor-install-park'
 
 const MAC_INSTALL_READY_TIMEOUT_MS = 15000
 
@@ -38,6 +41,12 @@ export function registerMacUpdaterEvents({
           releaseUrl: getKnownReleaseUrl()
         })
       })
+    })
+    // will-quit is past every quit veto; Squirrel installs the staged update once this process exits.
+    app.on('will-quit', () => {
+      if (shouldDeferMacQuitForInstall() && squirrelReady && hasInstallableDownloadedVersion()) {
+        commitServeSupervisorParkOnQuit(process.execPath, macCoordinationRoot(homedir()))
+      }
     })
   }
 

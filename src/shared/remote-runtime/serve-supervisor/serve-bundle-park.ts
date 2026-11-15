@@ -17,6 +17,7 @@ import {
   formatBundleIdentity,
   isProcessAlive,
   isServeSupervisorLabel,
+  macAppBundleOf,
   macCoordinationRoot,
   parkRecordPath,
   parseServeParkRecord,
@@ -53,7 +54,7 @@ function readParkRecord(dir: string): ServeParkRecord | null {
   }
 }
 
-function readBundleIdentity(bundlePath: string): string {
+export function readBundleIdentity(bundlePath: string): string {
   try {
     return formatBundleIdentity(statSync(bundleInfoPlistPath(bundlePath)))
   } catch {
@@ -76,8 +77,8 @@ export function openServeBundlePark(input: {
   if ((input.platform ?? process.platform) !== 'darwin' || !isServeSupervisorLabel(label)) {
     return null
   }
-  const bundle = dirname(dirname(dirname(input.executable)))
-  if (!bundle.endsWith('.app')) {
+  const bundle = macAppBundleOf(input.executable)
+  if (!bundle) {
     return null
   }
   let realBundle: string
