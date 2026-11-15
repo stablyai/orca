@@ -2568,6 +2568,15 @@
       "workspacePortBrowserOpen": {
         "systemBrowserHint": "{{shortcut}}+click to open in the system browser",
         "tooltip": "{{label}}. {{hint}}"
+      },
+      "worktreePaletteEvidence": {
+        "workspaceComment": "Workspace comment",
+        "createdByAutomation": "Created by automation",
+        "linkedTask": "Linked task",
+        "pullRequest": "Pull request",
+        "mergeRequest": "Merge request",
+        "linkedIssue": "Linked issue",
+        "listeningPort": "Listening port"
       }
     },
     "hooks": {
