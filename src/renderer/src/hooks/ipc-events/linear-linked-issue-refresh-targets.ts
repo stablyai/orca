@@ -1,6 +1,6 @@
 import type { AppState } from '@/store/types'
-import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
-import type { RuntimeClientEvent } from '../../../../shared/runtime-client-events'
+import type { RuntimeClientTarget } from '../../../../shared/remote-runtime/host-catalog/runtime-client-target'
+import type { RuntimeClientEvent } from '../../../../shared/remote-runtime/session-graph/runtime-client-events'
 import type { Worktree } from '../../../../shared/worktree/types'
 import {
   getRepoExecutionHostId,

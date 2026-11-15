@@ -5,8 +5,8 @@ import type {
 } from '../../../../shared/browser/client-hosting/browser-client-host-placement'
 import { expectsBrowserClientHosting } from '../../../../shared/browser/client-hosting/browser-client-hosting-eligibility'
 import type { KnownRuntimeEnvironment } from '../../../../shared/remote-runtime/host-catalog/runtime-environments'
-import type { RuntimeRpcResponse } from '../../../../shared/runtime-rpc-envelope'
-import type { RuntimeStatus } from '../../../../shared/runtime-session-contracts'
+import type { RuntimeRpcResponse } from '../../../../shared/remote-runtime/rpc/runtime-rpc-envelope'
+import type { RuntimeStatus } from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 
 const SERVER_PLACEMENT = Object.freeze({ kind: 'server' as const })
 

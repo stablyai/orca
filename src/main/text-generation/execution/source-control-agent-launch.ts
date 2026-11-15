@@ -1,4 +1,4 @@
-import { wslDistroForCommand } from '../../../shared/wsl-paths'
+import { wslDistroForCommand } from '../../../shared/file-access/wsl-paths'
 import { spawnProcess } from '@orca/process-host'
 import {
   withCliRuntimeOnPath,

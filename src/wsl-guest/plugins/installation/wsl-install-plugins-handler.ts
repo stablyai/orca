@@ -8,7 +8,7 @@ import { assertPluginSourceUnderByteCap } from './plugin-source-limit'
 import {
   sanitizeWslHookInstanceKey,
   WSL_HOOK_RELAY_INSTANCE_ENV
-} from '../../../shared/wsl-hook-relay-contract'
+} from '../../../shared/agent-hook-listener/transport/wsl-hook-relay-contract'
 
 export type InstallPluginsResult = {
   installed: {

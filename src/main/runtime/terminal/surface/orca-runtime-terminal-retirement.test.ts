@@ -5,7 +5,7 @@ import { getDefaultWorkspaceSession } from '../../../../shared/constants'
 import type {
   RuntimeMobileSessionTabsResult,
   RuntimeMobileSessionTabsSnapshot
-} from '../../../../shared/runtime-session-contracts'
+} from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import type { WorkspaceSessionState } from '../../../../shared/workspace-session/workspace-session-state-types'
 
 import { OrcaRuntimeService } from '../../orca-runtime'

@@ -3,7 +3,7 @@ import '../../../../src/shared/protocol-version'
 import {
   PREFLIGHT_OTHER_RUNTIME_REFUSAL_RUNTIME_CAPABILITY,
   WORKSPACE_ON_OTHER_RUNTIME
-} from '../../../../src/shared/preflight-runtime-capabilities'
+} from '../../../../src/shared/remote-runtime/protocol/preflight-runtime-capabilities'
 import {
   findFolderWorkspaceCandidateRepos,
   resolveFolderWorkspaceHost

@@ -1,4 +1,4 @@
-import { formatSshUserDisconnectedMessage } from '../../../shared/ssh-user-disconnect-message'
+import { formatSshUserDisconnectedMessage } from '../../../shared/remote-runtime/ssh/ssh-user-disconnect-message'
 import {
   getRuntimeSshAccess,
   type KnownRuntimeEnvironment

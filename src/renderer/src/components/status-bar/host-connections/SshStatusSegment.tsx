@@ -11,7 +11,7 @@ import {
 import { useAppStore } from '../../../store/index'
 import { translate } from '@/i18n/i18n'
 import { useTranslate } from '@/i18n/use-translate'
-import { getHostDisplayLabelOverrides } from '../../../../../shared/host-setting-overrides'
+import { getHostDisplayLabelOverrides } from '../../../../../shared/execution-host/host-setting-overrides'
 import {
   isOwnedSshTargetId,
   toRuntimeExecutionHostId,
@@ -41,7 +41,7 @@ import type { RuntimeHostBlockedRecovery } from './remote-host-connection-status
 import { runtimeHostConnectionStateForEntry } from '@/runtime/hosts/connections/runtime-host-connection-state'
 import { isConnectedRuntimeHostState } from '../../../../../shared/remote-runtime/host-status/runtime-host-connection-state'
 import { RuntimeRepairDialog } from '../../runtime-access/RuntimeRepairDialog'
-import type { SshConnectionStatus } from '../../../../../shared/ssh-types'
+import type { SshConnectionStatus } from '../../../../../shared/remote-runtime/ssh/ssh-types'
 
 export function SshStatusSegment({
   compact,

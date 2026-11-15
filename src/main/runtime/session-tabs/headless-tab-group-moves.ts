@@ -5,7 +5,7 @@ import type {
   RuntimeMobileSessionTabMove,
   RuntimeMobileSessionTabMoveResult,
   RuntimeMobileSessionTabsSnapshot
-} from '../../../shared/runtime-session-contracts'
+} from '../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import {
   buildHeadlessTabGroupMove,
   buildHeadlessTabGroupSplit

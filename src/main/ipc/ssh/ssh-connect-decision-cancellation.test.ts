@@ -22,7 +22,10 @@ vi.mock(
   })
 )
 
-import type { SshManagedServerStatus, SshTarget } from '../../../shared/ssh-types'
+import type {
+  SshManagedServerStatus,
+  SshTarget
+} from '../../../shared/remote-runtime/ssh/ssh-types'
 import type { SshConnection } from '../../ssh/connection/ssh-connection'
 import { recordSshConnectionOpened } from '../../ssh/connection/ssh-connection-attribution'
 import {

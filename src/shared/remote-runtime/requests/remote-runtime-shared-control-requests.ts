@@ -11,7 +11,7 @@ import type {
   RuntimeOrchestrationEnvelope,
   RuntimeRequestPreparation,
   RuntimeRpcResponse
-} from '../../runtime-rpc-envelope'
+} from '../rpc/runtime-rpc-envelope'
 import { serializePreparedRemoteRuntimeRequest } from './remote-runtime-request-preparation'
 import { toRemoteRuntimeClientError } from '../control/remote-runtime-shared-control-protocol'
 import { rejectSharedControlPendingRequest } from '../control/remote-runtime-shared-control-state'

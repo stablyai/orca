@@ -16,7 +16,7 @@ import { resolveWslWorktreeGitPath } from '../git/worktrees/catalog/wsl-worktree
 import { knownWslAutomountRoots } from '../wsl/filesystem/wsl-automount-root'
 import { isWslPath } from '../wsl/filesystem/unc-path-access'
 import { windowsFsPath } from '../wsl/filesystem/wsl-unc-drive-fs-path'
-import { toWindowsWslPath, toLinuxPath } from '../../shared/wsl-paths'
+import { toWindowsWslPath, toLinuxPath } from '../../shared/file-access/wsl-paths'
 import {
   getHookRuntimeTarget,
   getHookWslContext,

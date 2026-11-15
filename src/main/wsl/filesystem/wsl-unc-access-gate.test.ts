@@ -22,7 +22,7 @@ import {
 } from '../discovery/wsl-background-distro-gate'
 import '../orcad/wsl-orcad-liveness-evidence'
 import { isWslUserActFor } from '../discovery/wsl-user-act-scope'
-import '../../../shared/wsl-distro-not-running-refusal'
+import '../../../shared/remote-runtime/wsl-hosts/wsl-distro-not-running-refusal'
 import {
   _resetRunningWslDistroCacheForTests,
   resolveRunningWslDistros

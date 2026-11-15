@@ -4,7 +4,7 @@ import type {
   SkillPlacementResult
 } from '../../../shared/skill-install-contract'
 import type { DiscoveredSkill, SkillDiscoveryResult } from '../../../shared/skills'
-import { parseWslUncPath } from '../../../shared/wsl-paths'
+import { parseWslUncPath } from '../../../shared/file-access/wsl-paths'
 import { discoverSkills } from '../discovery/skill-native-discovery'
 import { discoverSkillsInWsl } from '../discovery/skill-discovery-wsl'
 import type { SkillProviderRootOverrides } from '../providers/skill-provider-destinations'

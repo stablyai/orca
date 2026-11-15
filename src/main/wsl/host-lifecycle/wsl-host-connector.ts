@@ -35,7 +35,7 @@ import type { WslOrcadLivenessSupervisor } from '../orcad/wsl-orcad-liveness-sup
 import { confirmsRunning } from '../orcad/wsl-orcad-liveness-evidence'
 import { requireConfirmedRunning } from '../orcad/wsl-orcad-connection-errors'
 import { wslDistroHolderKey } from '../discovery/wsl-distro-holder-record'
-import { wslHostServerStopReason } from '../../../shared/wsl-host-failure-copy'
+import { wslHostServerStopReason } from '../../../shared/remote-runtime/wsl-hosts/wsl-host-failure-copy'
 
 function targetFor(distro: string): WslOrcadHostTarget {
   return { kind: 'wsl', id: defaultWslOrcadEnvironmentId(distro), distro, label: distro }

@@ -1,4 +1,4 @@
-import { parseWslUncPath, toLinuxPath } from '../../../shared/wsl-paths'
+import { parseWslUncPath, toLinuxPath } from '../../../shared/file-access/wsl-paths'
 import {
   getOpenCodeCliCapabilities,
   type OpenCodeCliCapabilities

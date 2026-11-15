@@ -1,7 +1,7 @@
 /** #29626: only the relay's proof that the last bridged terminal ended retries the waiting move. */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { toAppSshPtyId } from '../../../../shared/ssh-pty-id'
-import type { SshRemotePtyLease } from '../../../../shared/ssh-types'
+import { toAppSshPtyId } from '../../../../shared/remote-runtime/ssh/ssh-pty-id'
+import type { SshRemotePtyLease } from '../../../../shared/remote-runtime/ssh/ssh-types'
 import { unusedSshConnection } from '../../../managed-server/testing/managed-host-transport.test-fixture'
 import {
   ENDPOINT,

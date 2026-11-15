@@ -19,7 +19,7 @@ import type { PtyProviderBufferSnapshot } from '../../../providers/pty/provider-
 import type { createAgentStatusOscProcessor } from '../../../../shared/agent-status/transport/agent-status-osc'
 import { RuntimeTerminalViewSubscribers } from '../view/runtime-terminal-view-subscribers'
 import { MainDaemonAttachments } from './main-daemon-attachments'
-import { parseAppSshPtyId } from '../../../../shared/ssh-pty-id'
+import { parseAppSshPtyId } from '../../../../shared/remote-runtime/ssh/ssh-pty-id'
 
 export abstract class OrcaRuntimeWithFitOverrideListeners extends OrcaRuntimeWithStopRequestedPtyIds {
   protected readonly terminalIdentity = new TerminalIdentitySource(this.crewChanges.notify)

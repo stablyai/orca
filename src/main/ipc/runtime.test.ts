@@ -21,7 +21,7 @@ vi.mock('electron', () => ({
   }
 }))
 import { registerRuntimeHandlers } from './runtime'
-import { EphemeralVmFailureError } from '../../shared/ephemeral-vm-failure-copy'
+import { EphemeralVmFailureError } from '../../shared/remote-runtime/ephemeral-vm-recipes/ephemeral-vm-failure-copy'
 
 describe('registerRuntimeHandlers', () => {
   beforeEach(() => {

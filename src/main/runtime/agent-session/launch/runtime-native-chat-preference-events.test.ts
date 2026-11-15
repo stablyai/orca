@@ -1,7 +1,7 @@
 import { expect, it } from 'vitest'
 import { getDefaultSettings } from '../../../../shared/constants'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
-import type { RuntimeClientEvent } from '../../../../shared/runtime-client-events'
+import type { RuntimeClientEvent } from '../../../../shared/remote-runtime/session-graph/runtime-client-events'
 import type { OrcaRuntimeService } from '../../orca-runtime'
 import { RuntimeClientSettingsController } from '../../client/settings/runtime-client-settings'
 import { publishNativeChatPreferenceChanges } from './runtime-native-chat-preference-events'

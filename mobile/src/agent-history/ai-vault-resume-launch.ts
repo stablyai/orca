@@ -13,7 +13,7 @@ import {
 } from '../../../src/shared/ai-vault/resume/ai-vault-resume-host-startup'
 import { isTuiAgent } from '../../../src/shared/agent-launch/catalog/tui-agent-config'
 import type { TuiAgent } from '../../../src/shared/agent-launch/catalog/tui-agent'
-import { parseWslUncPath } from '../../../src/shared/wsl-paths'
+import { parseWslUncPath } from '../../../src/shared/file-access/wsl-paths'
 import { resolveWindowsShellStartupFamily } from '../../../src/shared/windows-terminal-shell'
 import { RESUME_RPC_TIMEOUT_MS } from './ai-vault-resume-preparation'
 import type { UnvalidatedRpcRequestPort } from '../transport/rpc/unvalidated-rpc-request-port'

@@ -2,7 +2,7 @@ import { agentRowDisplayDotState } from '@/lib/agent-status/presentation/agent-r
 import type { AppState } from '@/store/types'
 import type { WorktreeRuntimeOwnerState } from '@/lib/workspace/ownership/worktree-runtime-owner-state'
 import { agentPaneConversationForEntry } from '@/store/slices/agent-status/agent-pane-conversation'
-import { resolveRuntimePaneTitleLeafId } from '../../../../../../shared/runtime-pane-title-leaf-id'
+import { resolveRuntimePaneTitleLeafId } from '../../../../../../shared/workspace-layout/terminal-topology/runtime-pane-title-leaf-id'
 import type { AgentDotState } from '@/components/AgentStateDot'
 import type { AiVaultSession } from '../../../../../../shared/ai-vault/contracts/ai-vault-types'
 import {

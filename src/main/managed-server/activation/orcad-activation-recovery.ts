@@ -20,7 +20,7 @@ import {
   recoverOrcadIncumbent,
   type OrcadIncumbentRecoveryOptions
 } from './orcad-incumbent-recovery'
-import type { OrcadManagedRefusal } from '../../../shared/orcad-managed-runtime'
+import type { OrcadManagedRefusal } from '../../../shared/remote-runtime/orcad-lifecycle/orcad-managed-runtime'
 import { resumeInterruptedOrcadCandidate } from './orcad-interrupted-candidate-resume'
 import { errorMessage } from '../../../shared/error-message'
 import { isOrcadLaunchFailure } from './orcad-launch-failure'

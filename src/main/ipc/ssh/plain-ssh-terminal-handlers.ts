@@ -5,7 +5,7 @@ import {
   PLAIN_SSH_TERMINAL_CHANNELS,
   type PlainSshTerminalEvent
 } from '../../../shared/plain-ssh-terminal'
-import { isSshHostMoveBlocked } from '../../../shared/ssh-host-move-blocked'
+import { isSshHostMoveBlocked } from '../../../shared/remote-runtime/ssh/ssh-host-move-blocked'
 import { mayUserSshConfigClaimAlias } from '../../ssh/config/ssh-config-alias-claim'
 import { getSshHostServerStatus } from '../../ssh/host-server/ssh-host-server-status'
 import { getSshTargetRegistryStore } from '../../ssh/targets/ssh-target-registry'

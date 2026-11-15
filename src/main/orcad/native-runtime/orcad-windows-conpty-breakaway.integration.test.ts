@@ -8,7 +8,7 @@ import { quoteWindowsArgument } from '@orca/process-host/windows-command-line'
 import {
   ORCAD_NODE_PTY_DIR,
   ORCAD_WINDOWS_PROCESS_TREE_FILENAME
-} from '../../../shared/orcad-artifacts'
+} from '../../../shared/remote-runtime/orcad-distribution/orcad-artifacts'
 import { removeTreeSync } from '../../../shared/windows-transient-lock-removal'
 import {
   installPackagedOrcadSlotForTests,

@@ -1,4 +1,4 @@
-import type { SshConnectionStatus } from '../../../../src/shared/ssh-types'
+import type { SshConnectionStatus } from '../../../../src/shared/remote-runtime/ssh/ssh-types'
 import { hostUnionArms } from '../../../../src/shared/zod-salvage'
 
 // hostUnionArms makes additions or removals in the host union fail typecheck here.

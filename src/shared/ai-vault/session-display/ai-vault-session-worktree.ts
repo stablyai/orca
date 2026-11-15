@@ -1,6 +1,6 @@
 // Which live workspace owns a saved session's cwd, on the host that recorded it; shared by desktop and mobile.
 
-import { parseWslUncPath } from '../../wsl-paths'
+import { parseWslUncPath } from '../../file-access/wsl-paths'
 import { splitWorktreeIdForFilesystem } from '../../worktree/id'
 import {
   getRepoExecutionHostId,

@@ -1,4 +1,7 @@
-import type { RemovedSshTargetTombstone, SshTarget } from '../../../../shared/ssh-types'
+import type {
+  RemovedSshTargetTombstone,
+  SshTarget
+} from '../../../../shared/remote-runtime/ssh/ssh-types'
 import { WORKSPACE_SESSION_DOMAINS } from '../../workspace-session-domains'
 import { WORKTREE_METADATA_DOMAINS } from '../../profile-save-domains'
 import {

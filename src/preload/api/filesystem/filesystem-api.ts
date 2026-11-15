@@ -19,7 +19,7 @@ import type {
   LocalLogTailReadResult,
   LocalLogTailWatchArgs
 } from '../../../shared/local-log-tail-types'
-import type { SshMutationExpectation } from '../../../shared/ssh-types'
+import type { SshMutationExpectation } from '../../../shared/remote-runtime/ssh/ssh-types'
 import type { LocalFileAccess } from '../../../shared/file-access/local-file-access'
 import type { RemoteFilePreviewAddress } from '../../../shared/file-preview/remote-file-preview-address'
 import type { FileBytesWritePrecondition } from '../../../shared/file-write/file-bytes-write'

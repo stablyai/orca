@@ -12,8 +12,8 @@ import {
   MAX_ORCA_YAML_ALIAS_COUNT,
   MAX_ORCA_YAML_COLLECTION_ENTRIES
 } from './orca-yaml-file-limit'
-import { parseEphemeralVmRecipeTimeoutSeconds } from './ephemeral-vm-recipe-timeouts'
-import { parseRecipePassEnv } from './ephemeral-vm-recipe-env'
+import { parseEphemeralVmRecipeTimeoutSeconds } from './remote-runtime/ephemeral-vm-recipes/ephemeral-vm-recipe-timeouts'
+import { parseRecipePassEnv } from './remote-runtime/ephemeral-vm-recipes/ephemeral-vm-recipe-env'
 
 function asRecord(value: unknown): Record<string, unknown> | null {
   return value !== null && typeof value === 'object' && !Array.isArray(value)

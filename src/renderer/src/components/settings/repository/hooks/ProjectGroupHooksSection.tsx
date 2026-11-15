@@ -7,7 +7,7 @@ import { getRepoExecutionHostId } from '../../../../../../shared/execution-host'
 import {
   PROJECT_GROUP_FOLDER_SETUP_RUNTIME_CAPABILITY,
   PROJECT_GROUP_FOLDER_ARCHIVE_RUNTIME_CAPABILITY
-} from '../../../../../../shared/worktree-runtime-capabilities'
+} from '../../../../../../shared/remote-runtime/protocol/worktree-runtime-capabilities'
 import { getFolderSourceRepos } from '../../../../../../shared/folder-workspaces/folder-workspace-source-repos'
 import { projectGroupSetupExample } from '../../../../../../shared/project-group-setup-example'
 import { useFolderSetupSupport } from '@/lib/workspace/creation/setup/folder-setup-support'

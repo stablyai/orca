@@ -12,7 +12,7 @@ import {
   WslHostDeploymentStoreInvalidError,
   type WslHostDeploymentRecord
 } from './wsl-host-deployment-store'
-import { WSL_HOSTS_INTERNAL_GATE_ENV } from '../../wsl-host-internal-gate'
+import { WSL_HOSTS_INTERNAL_GATE_ENV } from '../wsl-hosts/wsl-host-internal-gate'
 
 const pairing = {
   v: 2 as const,

@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 import { afterEach, expect, it, vi } from 'vitest'
 import { captureGitHubImageUpload } from './github-image-upload'
-import type { RuntimeRpcResponse } from '../../../../shared/runtime-rpc-envelope'
+import type { RuntimeRpcResponse } from '../../../../shared/remote-runtime/rpc/runtime-rpc-envelope'
 import { GITHUB_IMAGE_ATTACHMENT_CAPABILITY } from '../../../../shared/github/attachments/image-attachment'
 
 const { call } = vi.hoisted(() => ({ call: vi.fn() }))

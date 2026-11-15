@@ -31,7 +31,7 @@ export const SHELL_PREFIXES = [
   'src/shared/draft-paste-ready-scanner.ts',
   'src/main/wsl/filesystem/wsl-shell-cwd-report',
   'src/main/wsl/filesystem/wsl-sh-cwd-report',
-  'src/shared/wsl-login-shell-command',
+  'src/shared/shell/wsl/wsl-login-shell-command',
   'config/patches/node-pty@',
   'config/scripts/ensure-native-runtime',
   'config/scripts/native-build/node-addons/ensure-native-runtime',

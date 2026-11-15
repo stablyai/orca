@@ -1,6 +1,6 @@
 import React from 'react'
 import { advertisedBrowserUrlForDetectedPort } from '@/lib/workspace-ports/workspace-port-urls'
-import type { EnrichedDetectedPort } from '../../../../../shared/ssh-types'
+import type { EnrichedDetectedPort } from '../../../../../shared/remote-runtime/ssh/ssh-types'
 import { useTranslate } from '@/i18n/use-translate'
 
 export function SshDetectedPortRow({

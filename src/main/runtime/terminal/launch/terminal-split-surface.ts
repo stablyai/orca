@@ -1,7 +1,7 @@
 import { OrcaRuntimeWithSplitTerminal } from './terminal-split'
 import type { RuntimePtyWorktreeRecord } from '../records/runtime-terminal-state-records'
 import type { TerminalPaneSplitSource } from '../../../../shared/feature-education-telemetry'
-import type { RuntimeTerminalSplit } from '../../../../shared/runtime-terminal-contracts'
+import type { RuntimeTerminalSplit } from '../../../../shared/terminal/runtime/runtime-terminal-contracts'
 import { makePaneKey, parsePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import {
   recordPtySurface,

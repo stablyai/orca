@@ -8,9 +8,9 @@ import type {
   LegacyRelayBridgeCloseResult,
   LegacyRelayBridgedPane
 } from '../../../../shared/legacy-relay-bridge-contract'
-import { parseAppSshPtyId } from '../../../../shared/ssh-pty-id'
-import type { SshPendingPtyKill } from '../../../../shared/ssh-pending-pty-kill'
-import type { SshRemotePtyLease } from '../../../../shared/ssh-types'
+import { parseAppSshPtyId } from '../../../../shared/remote-runtime/ssh/ssh-pty-id'
+import type { SshPendingPtyKill } from '../../../../shared/remote-runtime/ssh/ssh-pending-pty-kill'
+import type { SshRemotePtyLease } from '../../../../shared/remote-runtime/ssh/ssh-types'
 import type { SshConnection } from '../../connection/ssh-connection'
 import { waitForSentinel } from '../handshake/ssh-relay-sentinel'
 import type { OrcaRuntimeService } from '../../../runtime/orca-runtime'

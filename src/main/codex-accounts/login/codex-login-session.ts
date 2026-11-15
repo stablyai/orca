@@ -3,7 +3,7 @@ import type { WindowsHostInteractiveLoginSpawn } from '../../../shared/windows-i
 import { buildWindowsHostInteractiveLoginSpawn } from '../../../shared/windows-interactive-login-spawn'
 import { withCliRuntimeOnPath } from '../../../shared/node-cli-command-resolution'
 import { CODEX_LOGIN_CANCELLED_MESSAGE } from '../../../shared/codex-auth-errors'
-import { parseWslUncPath } from '../../../shared/wsl-paths'
+import { parseWslUncPath } from '../../../shared/file-access/wsl-paths'
 import { resolveCodexCommand } from '../../codex-cli/command'
 import { codexSpawnEnoent } from '../../codex-cli/windows-only-agent-cli'
 import { getSpawnArgsForWindows } from '../../../shared/windows-batch-spawn'

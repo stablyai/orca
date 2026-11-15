@@ -278,7 +278,7 @@ const CROSS_VERSION_WIRE_PREFIXES = [
   'src/main/runtime/workspaces/process-listing/runtime-worktree-agent-',
   'src/main/runtime/workspaces/startup/runtime-worktree-agent-startup',
   'src/main/runtime/workspaces/process-listing/runtime-worktree-pty-agent-sources',
-  'src/shared/runtime-worktree-contracts',
+  'src/shared/worktree/catalog/runtime-worktree-contracts',
   'src/renderer/src/runtime/hosted-terminals/streams/',
   'src/renderer/src/runtime/hosted-terminals/snapshots/',
   'src/renderer/src/runtime/rpc/subscriptions/runtime-environment-subscription-handle.ts',

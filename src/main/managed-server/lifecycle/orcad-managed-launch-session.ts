@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto'
-import type { OrcadManagedRestartResult } from '../../../shared/orcad-managed-runtime'
+import type { OrcadManagedRestartResult } from '../../../shared/remote-runtime/orcad-lifecycle/orcad-managed-runtime'
 import {
   withOrcadActivationLock,
   type OrcadActivationLockControl

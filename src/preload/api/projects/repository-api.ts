@@ -29,7 +29,7 @@ import type {
 } from '../../../shared/project-types'
 import type { BaseRefDefaultResult, BaseRefSearchResult, Repo } from '../../../shared/repo-types'
 import type { WslMovedProject } from '../../../shared/wsl-move/wsl-moved-project'
-import type { HostRepoCatalogSnapshot } from '../../../shared/host-repo-catalog-snapshot'
+import type { HostRepoCatalogSnapshot } from '../../../shared/execution-host/host-repo-catalog-snapshot'
 
 export type RepositoryApi = {
   list: () => Promise<Repo[]>

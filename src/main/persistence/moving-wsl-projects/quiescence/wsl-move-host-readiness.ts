@@ -5,7 +5,7 @@
  */
 import type { WslRunningDistrosRead } from '../../../wsl/discovery/wsl-background-distro-gate'
 import { wslMoveJournalKey } from '../../../../shared/wsl-move/wsl-move-cutover'
-import type { WslHostAddResult } from '../../../../shared/wsl-host-types'
+import type { WslHostAddResult } from '../../../../shared/remote-runtime/wsl-hosts/wsl-host-types'
 import type { WslMoveHostReadiness } from '../orchestration/wsl-move-orchestrator-ports'
 
 export type WslMoveHostReadinessDeps = {

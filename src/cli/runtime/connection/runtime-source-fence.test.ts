@@ -8,7 +8,7 @@ import {
   RUNTIME_SOURCE_ID_ENV,
   RUNTIME_SOURCE_INCARNATION_ENV,
   RUNTIME_SOURCE_PROFILE_PATH_ENV
-} from '../../../shared/runtime-source-env'
+} from '../../../shared/remote-runtime/host-catalog/runtime-source-env'
 import { RuntimeClient } from '../client'
 import { RuntimeClientError } from './types'
 

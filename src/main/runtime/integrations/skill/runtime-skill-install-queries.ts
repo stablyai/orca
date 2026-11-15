@@ -11,7 +11,7 @@ import {
   previewSharedSkillInstall
 } from '../../../skills/install/skill-install-preview'
 import { removeSharedSkillInstall } from '../../../skills/managed-remove/skill-managed-remove-request'
-import { toLinuxPath } from '../../../../shared/wsl-paths'
+import { toLinuxPath } from '../../../../shared/file-access/wsl-paths'
 import type { SkillBundleInstallPreviewRequest } from '../../../../shared/skill-bundle-install-contract'
 import type {
   SkillInstallPreviewRequest,

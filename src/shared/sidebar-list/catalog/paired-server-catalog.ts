@@ -6,7 +6,7 @@ import type { ProjectGroup } from '../../project-group-types'
 import { projectHostSetupProjectionFromRepos } from '../../project-host-setup-projection'
 import type { Project, ProjectHostSetup } from '../../project-types'
 import type { Repo } from '../../repo-types'
-import type { RuntimeRpcResponse } from '../../runtime-rpc-envelope'
+import type { RuntimeRpcResponse } from '../../remote-runtime/rpc/runtime-rpc-envelope'
 import type { PairedServerCatalog } from './sidebar-project-catalog'
 import { salvagingArray } from '../../zod-salvage'
 

@@ -6,7 +6,7 @@ import type {
   InitializationOutcome,
   InitializationDisposition
 } from '../../browser-host/client-pages/browser-host-page-initialization-records'
-import { sameRuntimeBrowserPlacement } from '../../../../shared/runtime-browser-placement'
+import { sameRuntimeBrowserPlacement } from '../../../../shared/browser/client-hosting/runtime-browser-placement'
 import type { BrowserHostLeaseRegistry } from '../../browser-host/leases/browser-host-lease-registry'
 import type { BrowserHostLeaseIdentity } from '../../browser-host/leases/browser-host-lease-records'
 import type { BrowserClientHostedPageInventory } from '../../../../shared/browser/client-hosting/browser-client-host-protocol'

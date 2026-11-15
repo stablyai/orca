@@ -9,7 +9,7 @@ import {
   type RepoRefMaintenanceOptions,
   type RepoRefMaintenanceTarget
 } from '../../../../shared/repo-ref-maintenance-policy'
-import { isWslUncPath, toWindowsWslPath } from '../../../../shared/wsl-paths'
+import { isWslUncPath, toWindowsWslPath } from '../../../../shared/file-access/wsl-paths'
 import { withSpan } from '../../../observability/tracer'
 import { PackRefsLockOwnership } from './pack-refs-lock-ownership'
 import {

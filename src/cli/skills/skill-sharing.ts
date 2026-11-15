@@ -14,7 +14,7 @@ import type { CommandHandler, HandlerContext } from '../dispatch/dispatch'
 import { getRepeatedStringFlag } from '../arguments/flags'
 import { printResult } from '../output/command-result-output'
 import { RuntimeClientError, RuntimeRpcFailureError } from '../runtime/connection/types'
-import type { RuntimeRpcSuccess } from '../../shared/runtime-rpc-envelope'
+import type { RuntimeRpcSuccess } from '../../shared/remote-runtime/rpc/runtime-rpc-envelope'
 
 const SHARE_TIMEOUT_MS = 10 * 60_000
 
