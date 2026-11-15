@@ -1207,7 +1207,7 @@ jobs:
         run: |
           set -euo pipefail
           git fetch --no-tags --depth=1 origin "$WORKFLOW_SHA"
-          git checkout "$WORKFLOW_SHA" -- config/scripts/release/publication/assert-github-release-is-draft.mjs config/scripts/release/operations/run-release-mac-build-workflow.mjs
+          git checkout "$WORKFLOW_SHA" -- config/scripts/release/publication/assert-github-release-is-draft.mjs config/scripts/release/operations/run-release-mac-build-workflow.mjs config/scripts/release/operations/workflow-run-path.mjs
 
       - name: Restore composite actions from the workflow ref
         shell: bash
