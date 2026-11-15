@@ -106,6 +106,13 @@ describe('resolveAgentConversation', () => {
       code: 'agent_unavailable'
     })
   })
+
+  it('asks to retry a provider id while the identity store cannot answer', async () => {
+    hookServer.terminalAgentIdsOfProviderSession.mockResolvedValue(undefined)
+    await expect(resolveAgentConversation(runtime, 'session-a')).rejects.toMatchObject({
+      code: 'agent_unavailable'
+    })
+  })
 })
 
 it('resolves a terminal with only the record store open and no chat host', async () => {

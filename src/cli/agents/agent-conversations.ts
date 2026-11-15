@@ -128,6 +128,12 @@ function formatAgentList(result: WithAnnotatedHostScope<AgentListResult>): strin
   const lines = [
     result.agents.length === 0 ? 'No open agents.' : result.agents.map(formatAgentRow).join('\n\n')
   ]
+  if (result.truncated) {
+    lines.push(
+      '',
+      'This list is incomplete: this host has too many workspaces to check them all. Narrow it with `--worktree <selector>`.'
+    )
+  }
   // Agents on hosts this one does not list are reached by running there or with --environment.
   if (!scope || scope.omittedHostIds.length > 0) {
     lines.push('', formatListingHostScope(scope))

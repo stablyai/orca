@@ -31,7 +31,7 @@ class IdentityTestServer extends AgentHookServer {
   }
 }
 
-function hook(sessionId: string, transcriptPath: string) {
+function hook(sessionId: string, transcriptPath?: string) {
   const event = normalizeHookPayload(
     createHookListenerState(),
     'claude',
@@ -39,7 +39,7 @@ function hook(sessionId: string, transcriptPath: string) {
       {
         hook_event_name: 'UserPromptSubmit',
         session_id: sessionId,
-        transcript_path: transcriptPath,
+        ...(transcriptPath ? { transcript_path: transcriptPath } : {}),
         prompt: 'task'
       },
       { paneKey: PANE, tabId: 'tab-0' }
@@ -119,6 +119,37 @@ it.skipIf(process.platform === 'win32')(
     })
     expect(server.identityClient.providerKeyRequests).toBe(1)
     expect(partitionReads).toBe(1)
+  }
+)
+
+it.skipIf(process.platform === 'win32')(
+  "takes a sleeping record's transcript path when the live row of its conversation has none",
+  async () => {
+    const server = await started()
+    server.ingestRemote(hook('session-a'), null)
+    await answered()
+    const id = server.getStatusSnapshot()[0]?.orcaSessionId
+    const asleep = {
+      agent: 'claude' as const,
+      providerSession: {
+        key: 'session_id' as const,
+        id: 'session-a',
+        transcriptPath: '/tmp/agent-history/thread-file.jsonl'
+      },
+      connectionId: null
+    }
+    expect(
+      await server.terminalAgentTranscriptSource(id!, () => ({ 'other-pane': asleep }))
+    ).toMatchObject({
+      key: { wslDistro: '', providerSessionId: 'session-a' },
+      providerSession: { id: 'session-a', transcriptPath: '/tmp/agent-history/thread-file.jsonl' }
+    })
+    // Another conversation's path is never borrowed.
+    const unrelated = await server.terminalAgentTranscriptSource(id!, () => ({
+      'other-pane': { ...asleep, providerSession: { ...asleep.providerSession, id: 'other' } }
+    }))
+    expect(unrelated).toMatchObject({ providerSession: { id: 'session-a' } })
+    expect(unrelated).not.toHaveProperty('providerSession.transcriptPath')
   }
 )
 

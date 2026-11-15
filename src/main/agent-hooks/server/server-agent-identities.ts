@@ -203,11 +203,11 @@ export abstract class AgentHookServerAgentIdentities extends AgentHookServerStat
   }
 
   /** Orca ids this host linked to a provider's own session id; unavailable when this identity
-   *  file can't answer that by index. */
+   *  file can't answer that by index; undefined when the store cannot answer now. */
   async terminalAgentIdsOfProviderSession(
     providerSessionId: string
-  ): Promise<OrcaSessionId[] | ReverseLookupUnavailable> {
-    return (await this.agentIdentities.idsOfProviderSession(providerSessionId)) ?? []
+  ): Promise<OrcaSessionId[] | ReverseLookupUnavailable | undefined> {
+    return this.agentIdentities.idsOfProviderSession(providerSessionId)
   }
 
   /** Where terminal agent `id`'s transcript is: a current row carrying the id, in any state (a read
@@ -223,31 +223,35 @@ export abstract class AgentHookServerAgentIdentities extends AgentHookServerStat
   ): Promise<TerminalAgentTranscriptSource | ReverseLookupUnavailable | null | undefined> {
     const authority = this.agentIdentities.authority()
     const live = this.liveTranscriptSource(id, authority)
-    if (live) {
+    if (live?.providerSession.transcriptPath) {
       return live
     }
+    // A live row without a path still lets a sleeping record of the same conversation supply one.
     const linked =
       known?.authority === authority
         ? { key: known.key }
         : await this.agentIdentities.providerKeyOf(id)
-    if (!linked || authority !== this.agentIdentities.generation) {
+    if (authority !== this.agentIdentities.generation) {
       return undefined
     }
+    if (!linked) {
+      return live ?? undefined
+    }
     if (isReverseLookupUnavailable(linked)) {
-      return linked
+      return live ?? linked
     }
     const { key } = linked
     const windows = process.platform === 'win32'
     // Sleeping records carry no WSL distro, so one names a WSL agent's key only while its hooks
     // still say so; a native Windows agent's record matches its full key like any other.
     if (!key || (windows && key.wslDistro !== '')) {
-      return null
+      return live
     }
     const record = sleepingRecordOfKey(readSleeping(), key, windows)
-    if (record) {
+    if (record && (!live || record.providerSession.transcriptPath)) {
       return { key, providerSession: record.providerSession, authority }
     }
-    return null
+    return live
   }
 
   private liveTranscriptSource(

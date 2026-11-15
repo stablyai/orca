@@ -78,6 +78,12 @@ export async function resolveAgentConversation(
   }
   // A provider's own id (a bare UUID can also pass as an Orca ID) gets the ID to use instead.
   const linked = text ? await agentHookServer.terminalAgentIdsOfProviderSession(text) : []
+  if (linked === undefined) {
+    throw new AgentConversationRefusal(
+      CODES.unavailable,
+      `Orca can't look up agent IDs right now, so it can't tell whether ${text} names an agent here. Try again in a moment.`
+    )
+  }
   if (isReverseLookupUnavailable(linked)) {
     // Chat and terminal membership both missed, and this file can't convert provider ids: that
     // says nothing about whether the agent exists or where.
