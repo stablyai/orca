@@ -4,7 +4,7 @@
 // and a running sandbox's policy is rewritten at once. Public hostnames only: no wildcards, IPs,
 // localhost or private suffixes, so the fail-closed allowlist can't be turned into "open".
 import { z } from 'zod'
-import { egressPolicy, refreshGitCredentials, type LifecycleDeps } from './lifecycle'
+import { rewriteLivePolicy, type LifecycleDeps } from './lifecycle'
 import { transition, type SandboxRow } from './store'
 
 export const MAX_USER_HOSTS = 32
@@ -44,10 +44,7 @@ export async function setEgressUserHosts(deps: LifecycleDeps, row: SandboxRow, h
   }
   if (next.status === 'running' && next.session_id) {
     // A policy write replaces the whole policy, so the git route is re-minted alongside.
-    const git = await refreshGitCredentials(deps, next, next.session_id)
-    if (!git) {
-      await deps.provider.updateNetworkPolicy(next.session_id, egressPolicy(deps, next))
-    }
+    await rewriteLivePolicy(deps, next, next.session_id)
   }
   // Counts only; hostnames are not secrets but stay out of logs anyway (they can name private tools).
   console.log(JSON.stringify({ event: 'egress_user_hosts_set', sandboxId: row.id, count: hosts.length }))

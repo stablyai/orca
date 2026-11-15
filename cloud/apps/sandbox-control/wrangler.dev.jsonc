@@ -81,6 +81,8 @@
     // CODEX-RELAY: chatgpt.com refuses Workers' egress; its requests go through this Cloud Run relay
     // (cloud/infra/chatgpt-relay, staging). Secret CHATGPT_RELAY_SERVICE_ACCOUNT holds its invoker key.
     "CHATGPT_RELAY_URL": "https://orca-chatgpt-relay-gjzz5mc7ka-uc.a.run.app",
+    // CODEX-FIREWALL-SWAP: Codex's hot calls swapped at the sandbox firewall; the relay keeps the rest (and is the fallback).
+    "CODEX_EGRESS_SWAP": "firewall",
     // SEC-3 phase 1: the secret store's KEK comes out of Cloud KMS (src/secrets-kms.ts); the Worker
     // holds only the KMS-wrapped KEK (secret SECRETS_KEK_WRAPPED, AAD orca-secrets-kek:<SECRETS_KEK_ID>)
     // and a service account that can only decrypt with this key (secret SECRETS_KMS_SERVICE_ACCOUNT).

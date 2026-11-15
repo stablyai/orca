@@ -27,3 +27,18 @@ export function codexPathAllowed(method: string, path: string): boolean {
   }
   return method.toUpperCase() === 'GET' && CODEX_EXACT_GETS.has(pathname)
 }
+
+
+/**
+ * CODEX-FIREWALL-SWAP: the hot Codex calls whose token is swapped at the sandbox firewall itself (no Worker
+ * hop). Exact paths only: the firewall compares the raw path, so a prefix could be walked out of with an
+ * encoded dot segment (/backend-api/codex/%2e%2e/conversations, seen live) that the upstream then
+ * normalises. Every other Codex call keeps the egress proxy, whose pinning (codexPathAllowed) rejects that.
+ * Each entry must also pass codexPathAllowed (tested). The firewall matches the path without its query.
+ */
+export const CODEX_FIREWALL_PATHS: readonly { exact: string; methods: readonly string[] }[] = [
+  { exact: '/backend-api/codex/responses', methods: ['POST'] },
+  { exact: '/backend-api/codex/responses/compact', methods: ['POST'] },
+  { exact: '/backend-api/codex/models', methods: ['GET'] },
+  { exact: '/backend-api/wham/usage', methods: ['GET'] }
+]

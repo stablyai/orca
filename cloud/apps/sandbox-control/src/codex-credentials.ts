@@ -136,7 +136,7 @@ export const codexAccount: AccountProvider = {
   },
   // A 401 from chatgpt.com: refresh now instead of revoking (the refresher revokes a dead login itself).
   // At most once per UNAUTHORIZED_REFRESH_MS, so a burst of 401s never spends token after token.
-  onUnauthorized: async ({ db, keyring, userId, now, waitUntil }) => {
+  onUnauthorized: async ({ db, keyring, userId, now, waitUntil, onChanged }) => {
     const lease = await db
       .prepare('SELECT refreshed_at, next_attempt_at, last_error FROM codex_leases WHERE user_id = ?')
       .bind(userId)
@@ -149,7 +149,7 @@ export const codexAccount: AccountProvider = {
       return
     }
     log('codex_token_unauthorized', { userId })
-    waitUntil(refreshCodexCredential({ db, keyring, now: () => now }, userId))
+    waitUntil(refreshCodexCredential({ db, keyring, now: () => now, ...(onChanged ? { onChanged } : {}) }, userId))
   },
   // RS-4: a request still carrying this sandbox's placeholder once the account no longer applies gets a
   // message saying what to do, not a bare proxy 403. Still a 403, never a 401: on a 401 from chatgpt.com

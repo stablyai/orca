@@ -1,6 +1,12 @@
 // Sandbox lifecycle: one persistent provider sandbox per Orca workspace, with an Orca-owned lease,
 // a forced stop before the provider's 24h cap, usage metering and write-ahead rows.
 import { accountProvider } from './account-providers'
+import { readUsableAgentCredential } from './agent-credentials'
+import { CODEX_FIREWALL_PATHS } from './codex-paths'
+/** Where Codex refreshes its ChatGPT login. */
+export const CODEX_AUTH_HOST = 'auth.openai.com'
+import { parseStoredCodex } from './codex-credentials'
+import { isSharedWorkspace } from './shared-workspace'
 import { deleteAgentSourcesForSandbox } from './agent-sources'
 import { signOutAgentsBeforeDelete } from './agent-signout'
 import type { EntitlementClient, MachineSize } from './entitlements'
@@ -166,6 +172,8 @@ export type LifecycleDeps = {
     dockerEnabled?: boolean
     /** Workspace sandbox egress (SANDBOX_EGRESS_PRESET); default DEFAULT_EGRESS_PRESET ("open"). */
     egressPreset?: EgressPreset
+    /** CODEX-FIREWALL-SWAP: swap the Codex account token at the sandbox firewall for its hot calls (no Worker hop). */
+    codexFirewallSwap?: boolean
     /** SHARE_LINK_SECRET: each session's share-proxy key derives from it; unset = no share links. */
     shareLinkSecret?: string
   }
@@ -290,6 +298,8 @@ type BootPrep = {
   minted: { token: string; expiresAt: number } | null
   /** Members whose own GitHub identity this session may use (git as the sender). */
   memberPlaceholders: string[]
+  /** CODEX-FIREWALL-SWAP: account tokens the firewall swaps itself. */
+  firewall: FirewallAccount[]
 }
 
 /** Everything a boot needs that does not depend on the VM: resolved concurrently with the VM work. */
@@ -299,7 +309,9 @@ async function prepareBoot(deps: LifecycleDeps, row: SandboxRow): Promise<BootPr
     deps.github && row.repo_url ? deps.github.tokenForRepo(row.repo_url, row.account_id) : Promise.resolve(null),
     memberPlaceholdersFor(deps, row)
   ])
-  return { secrets, minted, memberPlaceholders }
+  // The account routes come from the secrets just resolved (egress_secret_hosts), so this runs after them.
+  const firewall = await firewallAccountsFor(deps, routedRow(row, { secrets } as BootPrep))
+  return { secrets, minted, memberPlaceholders, firewall }
 }
 
 function routedRow(row: SandboxRow, prep: BootPrep): SandboxRow {
@@ -342,7 +354,43 @@ export function assertEgressAllowlistUsable(deps: Pick<LifecycleDeps, 'config'>,
   }
 }
 
-export function egressPolicy(deps: LifecycleDeps, row: SandboxRow, gitToken?: string, memberPlaceholders: readonly string[] = []) {
+/** A Codex account token the sandbox firewall swaps itself, on CODEX_FIREWALL_PATHS only (CODEX-FIREWALL-SWAP). */
+export type FirewallAccount = { agent: 'codex'; host: string; authorization: string; accountId: string | null }
+
+/**
+ * CODEX-FIREWALL-SWAP: chatgpt.com answers the sandbox's own egress, so the firewall can swap the Codex
+ * token for its hot calls with no Worker or relay hop. The same rules as the egress proxy's credential
+ * (index.ts): the owner's own account, never on a shared workspace, only while the provider is on and the
+ * token is usable. Anything else leaves the proxy route alone, which answers the signed-out cases.
+ */
+export async function firewallAccountsFor(deps: LifecycleDeps, row: SandboxRow): Promise<FirewallAccount[]> {
+  if (!deps.config.codexFirewallSwap || !deps.config.egressProxyUrl || !deps.secrets || !deps.secrets.accountProviders?.codex) {
+    return []
+  }
+  if (isSharedWorkspace(row)) {
+    return []
+  }
+  const out: FirewallAccount[] = []
+  for (const route of egressAccountRoutes(row)) {
+    if (route.agent !== 'codex' || route.owner !== row.user_id) {
+      continue
+    }
+    const stored = await readUsableAgentCredential(deps.db, deps.secrets.keyring, row.user_id, 'codex', deps.now()).catch(() => null)
+    const tokens = stored ? parseStoredCodex(stored) : null
+    if (tokens) {
+      out.push({ agent: 'codex', host: route.host, authorization: `Bearer ${tokens.access_token}`, accountId: tokens.account_id })
+    }
+  }
+  return out
+}
+
+export function egressPolicy(
+  deps: LifecycleDeps,
+  row: SandboxRow,
+  gitToken?: string,
+  memberPlaceholders: readonly string[] = [],
+  firewall: readonly FirewallAccount[] = []
+) {
   const proxyUrl = deps.config.egressProxyUrl
   const gitPlaceholder = gitBasicAuthorization(githubPlaceholderToken(row))
   // The workspace repo's installation token. With the egress proxy (every deployed env) it is forwarded and
@@ -390,9 +438,28 @@ export function egressPolicy(deps: LifecycleDeps, row: SandboxRow, gitToken?: st
         // An agent's Orca-account placeholder (D10): forwarded, claimed only by that exact Bearer value.
         ...egressAccountRoutes(row).flatMap(({ agent, host }): CredentialRoute[] => {
           const provider = accountProvider(agent)
-          return provider
-            ? [{ host, header: provider.header, placeholders: [provider.format(provider.placeholder(row))], via: 'forward', forwardURL: proxyUrl }]
-            : []
+          if (!provider) {
+            return []
+          }
+          const placeholders = [provider.format(provider.placeholder(row))]
+          const forward: CredentialRoute = { host, header: provider.header, placeholders, via: 'forward', forwardURL: proxyUrl }
+          const swap = firewall.find((entry) => entry.agent === agent && entry.host === host)
+          // CODEX-FIREWALL-SWAP: the hot calls first (exact paths), swapped right here; every other call with the
+          // placeholder still goes to the proxy, whose path pinning holds against encoded dot segments.
+          return swap
+            ? [
+                {
+                  host,
+                  header: provider.header,
+                  placeholders,
+                  paths: CODEX_FIREWALL_PATHS,
+                  via: 'transform',
+                  value: swap.authorization,
+                  ...(swap.accountId ? { extraHeaders: { 'chatgpt-account-id': swap.accountId } } : {})
+                },
+                forward
+              ]
+            : [forward]
         }),
         ...egressSecretHosts(row).flatMap((entry) =>
           Object.keys(entry.headers).map(
@@ -430,9 +497,16 @@ export function egressPolicy(deps: LifecycleDeps, row: SandboxRow, gitToken?: st
         )
       ]
   const all = [...git, ...credentials]
+  // CODEX-PLACEHOLDER-REFRESH: Codex in the sandbox, answered a 401, refreshes against auth.openai.com with
+  // its placeholder login. That request goes to the egress proxy, which answers it with the placeholder
+  // again and refreshes the real token centrally (index.ts), so the retry works instead of failing sign-in.
+  const pathForwards =
+    proxyUrl && egressAccountRoutes(row).some((route) => route.agent === 'codex')
+      ? [{ host: CODEX_AUTH_HOST, path: { exact: '/oauth/token', methods: ['POST'] }, forwardURL: proxyUrl }]
+      : []
   if (effectiveEgressPreset(deps, row) === 'open') {
     // Every host is reachable; the credential claims (and their trailing 403s) still apply.
-    return compileNetworkPolicy({ mode: 'open', credentials: all })
+    return compileNetworkPolicy({ mode: 'open', credentials: all, pathForwards })
   }
   // Limited: custom model-provider hosts (ANTHROPIC_BASE_URL / OPENAI_BASE_URL secrets) recorded at
   // boot, MCP hosts the desktop declared, plus operator-configured extra hosts.
@@ -440,7 +514,7 @@ export function egressPolicy(deps: LifecycleDeps, row: SandboxRow, gitToken?: st
     throw deps.config.egressAllowlistError
   }
   const allowlist = [...new Set([...(deps.config.egressAllowlist ?? DEFAULT_EGRESS_ALLOWLIST), ...(deps.config.extraEgressHosts ?? []), ...egressAllowHosts(row)])]
-  return compileNetworkPolicy({ mode: 'allowlist', allowlist, credentials: all })
+  return compileNetworkPolicy({ mode: 'allowlist', allowlist, credentials: all, pathForwards })
 }
 
 export function sessionFields(deps: LifecycleDeps, state: ProviderSandboxState): SessionFields {
@@ -531,6 +605,7 @@ async function boot(
     !options.policyApplied &&
     (git ||
       prep.memberPlaceholders.length > 0 ||
+      prep.firewall.length > 0 ||
       routed.egress_secret_hosts ||
       row.egress_secret_hosts ||
       routed.egress_allow_hosts ||
@@ -541,7 +616,7 @@ async function boot(
   const [, connection] = await Promise.all([
     needsPolicy
       ? options.timer.time('policy', () =>
-          deps.provider.updateNetworkPolicy(state.session.id, egressPolicy(deps, routed, prep.minted?.token, prep.memberPlaceholders))
+          deps.provider.updateNetworkPolicy(state.session.id, egressPolicy(deps, routed, prep.minted?.token, prep.memberPlaceholders, prep.firewall))
         )
       : Promise.resolve(),
     options.timer.time('orcad', async () => {
@@ -614,16 +689,31 @@ export async function refreshGitCredentials(
   row: SandboxRow,
   sessionId: string
 ): Promise<{ expiresAt: number } | null> {
-  const members = await memberPlaceholdersFor(deps, row)
+  const [members, firewall] = await Promise.all([memberPlaceholdersFor(deps, row), firewallAccountsFor(deps, row)])
   const minted = deps.github && row.repo_url ? await deps.github.tokenForRepo(row.repo_url, row.account_id) : null
   if (!minted) {
-    if (members.length > 0) {
-      await deps.provider.updateNetworkPolicy(sessionId, egressPolicy(deps, row, undefined, members))
+    if (members.length > 0 || firewall.length > 0) {
+      await deps.provider.updateNetworkPolicy(sessionId, egressPolicy(deps, row, undefined, members, firewall))
     }
     return null
   }
-  await deps.provider.updateNetworkPolicy(sessionId, egressPolicy(deps, row, minted.token, members))
+  await deps.provider.updateNetworkPolicy(sessionId, egressPolicy(deps, row, minted.token, members, firewall))
   return { expiresAt: minted.expiresAt }
+}
+
+/**
+ * Rewrites a running session's whole policy from current state: what a policy write elsewhere must use, so
+ * the git route, member identities and firewall-swapped account tokens are never dropped by it.
+ */
+export async function rewriteLivePolicy(deps: LifecycleDeps, row: SandboxRow, sessionId: string): Promise<{ expiresAt: number } | null> {
+  const git = await refreshGitCredentials(deps, row, sessionId)
+  if (!git) {
+    const [members, firewall] = await Promise.all([memberPlaceholdersFor(deps, row), firewallAccountsFor(deps, row)])
+    if (members.length === 0 && firewall.length === 0) {
+      await deps.provider.updateNetworkPolicy(sessionId, egressPolicy(deps, row))
+    }
+  }
+  return git
 }
 
 async function memberPlaceholdersFor(deps: LifecycleDeps, row: SandboxRow): Promise<string[]> {
@@ -937,7 +1027,7 @@ export async function createSandbox(
   if (pooled) {
     try {
       const state = await timer.time('vm', () =>
-        adoptPooledVm(deps, pooled, egressPolicy(deps, routedRow(row, prep), prep.minted?.token, prep.memberPlaceholders))
+        adoptPooledVm(deps, pooled, egressPolicy(deps, routedRow(row, prep), prep.minted?.token, prep.memberPlaceholders, prep.firewall))
       )
       const ready = await boot(deps, row, state, prep, {
         repo: request.repo,
@@ -980,7 +1070,7 @@ export async function createSandbox(
         region: row.region,
         timeoutMs: LEASE_MS,
         ports: [ORCAD_PORT, SHARE_PROXY_PORT],
-        networkPolicy: egressPolicy(deps, routedRow(row, prep), prep.minted?.token, prep.memberPlaceholders),
+        networkPolicy: egressPolicy(deps, routedRow(row, prep), prep.minted?.token, prep.memberPlaceholders, prep.firewall),
         snapshotExpirationMs: deps.config.snapshotExpirationMs ?? DEFAULT_SNAPSHOT_EXPIRATION_MS,
         tags: { orcaSandbox: row.id, orcaEnv: deps.config.environment }
       })

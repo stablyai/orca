@@ -27,7 +27,15 @@ export type AccountProvider = {
    * The provider answered 401 to this credential. Default (absent): mark it revoked. Codex instead
    * kicks a single-flight lease refresh, which marks it expired/revoked itself if the refresh token is dead.
    */
-  onUnauthorized?(ctx: { db: D1Database; keyring: Keyring; userId: string; now: number; waitUntil: (work: Promise<unknown>) => void }): Promise<void>
+  onUnauthorized?(ctx: {
+    db: D1Database
+    keyring: Keyring
+    userId: string
+    now: number
+    waitUntil: (work: Promise<unknown>) => void
+    /** After a refresh stored a new token: push it where it is held (CODEX-FIREWALL-SWAP: running policies). */
+    onChanged?: (userId: string) => Promise<void> | void
+  }): Promise<void>
   /** The real value for this person, or null (none, expired, revoked). */
   credential(db: D1Database, keyring: Keyring, userId: string, now: number): Promise<string | null>
   /**
