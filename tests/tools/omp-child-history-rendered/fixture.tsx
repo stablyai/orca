@@ -147,6 +147,7 @@ function App() {
             onOpenLog={ignore}
             onRevealLog={ignore}
             onOpenCwd={ignore}
+            onRevealArtifacts={ignore}
             onRequestDelete={ignore}
           />
         </div>

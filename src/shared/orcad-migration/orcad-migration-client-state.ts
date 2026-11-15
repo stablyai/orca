@@ -1,4 +1,4 @@
-import type { PersistedAutomationHostFilter } from '../automation-host-filter'
+import type { PersistedAutomationHostFilter } from '../automations/ownership/automation-host-filter'
 import type { PersistedMobileClientTabSelections } from '../persisted-state-types'
 import type {
   ManualRepoOrderEntry,
@@ -6,7 +6,7 @@ import type {
   WorkspaceHostOrder,
   WorkspaceHostScope
 } from '../ui-chrome-types'
-import type { SavedPortForward } from '../ssh-types'
+import type { SavedPortForward } from '../remote-runtime/ssh/ssh-types'
 import {
   parseClientHostedBrowserCloseIntents,
   parseMobileSelections,

@@ -9,17 +9,15 @@
  */
 import type { LegacyRelayBridgeAttachResult } from '../../../../../../shared/legacy-relay-bridge-contract'
 import type { PtyConnectResult, PtyTransport } from '../pty-transport-types'
-import type { RemoteRuntimeSnapshotRequestOptions } from '../../../../runtime/remote-runtime-terminal-multiplexer-types'
-import { SSH_SESSION_EXPIRED_ERROR } from '../../pty-connection/pty-connect-limits'
+import type { RemoteRuntimeSnapshotRequestOptions } from '../../../../runtime/hosted-terminals/snapshots/remote-terminal-snapshot-contracts'
+import { SSH_SESSION_EXPIRED_ERROR } from '../host-ownership/ssh-session-gone-verdict'
 import {
   legacyRelayBridgedPane,
   onLegacyRelayBridgedPanesChanged
-} from '../../legacy-relay-bridge-panes'
+} from './legacy-relay-bridge-panes'
+import { legacyRelayBridgeUnreachableMessage } from './legacy-relay-bridge-copy'
 
 type Callbacks = Parameters<PtyTransport['connect']>[0]['callbacks']
-
-const UNREACHABLE_MESSAGE =
-  'This terminal is still running on the host under an older version of Orca. Reconnecting to it…'
 
 export function createLegacyRelayBridgeTransport(ptyId: string, inner: PtyTransport): PtyTransport {
   const api = window.api.legacyRelayBridge
@@ -30,7 +28,7 @@ export function createLegacyRelayBridgeTransport(ptyId: string, inner: PtyTransp
   let unsubscribe: (() => void)[] = []
   let reattaching = false
   let reattachQueued = false
-  let showingUnreachable = false
+  let unreachableMessage: string | null = null
   let lastState: 'live' | 'unverifiable' | null = null
   /** Bumped by release, so an attach answered after the pane left hands its viewer back. */
   let epoch = 0
@@ -77,16 +75,17 @@ export function createLegacyRelayBridgeTransport(ptyId: string, inner: PtyTransp
   }
 
   const showUnreachable = (): void => {
-    if (!showingUnreachable) {
-      showingUnreachable = true
-      callbacks?.onError?.(UNREACHABLE_MESSAGE)
+    if (unreachableMessage === null) {
+      unreachableMessage = legacyRelayBridgeUnreachableMessage()
+      callbacks?.onError?.(unreachableMessage)
     }
   }
 
   const clearUnreachable = (): void => {
-    if (showingUnreachable) {
-      showingUnreachable = false
-      callbacks?.onErrorCleared?.(UNREACHABLE_MESSAGE)
+    if (unreachableMessage !== null) {
+      const message = unreachableMessage
+      unreachableMessage = null
+      callbacks?.onErrorCleared?.(message)
     }
   }
 
@@ -292,6 +291,8 @@ export function createLegacyRelayBridgeTransport(ptyId: string, inner: PtyTransp
     isConnected: () => (bridged() ? viewer !== null : inner.isConnected()),
     getPtyId: () => (bridged() ? ptyId : inner.getPtyId()),
     isConnectPending: () => (bridged() ? false : (inner.isConnectPending?.() ?? false)),
+    // Why not pending: selecting the bridge never drains the inner hold.
+    isHoldingInput: () => mode === 'inner' && (inner.isHoldingInput?.() ?? false),
     getRuntimeEnvironmentId: () => (bridged() ? null : (inner.getRuntimeEnvironmentId?.() ?? null)),
     getExecutionHostId: () => (bridged() ? null : (inner.getExecutionHostId?.() ?? null)),
     onExecutionHostChange: (listener) => inner.onExecutionHostChange?.(listener) ?? (() => {}),

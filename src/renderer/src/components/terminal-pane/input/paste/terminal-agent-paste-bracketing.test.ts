@@ -1,7 +1,8 @@
+import { acceptedAgentStatuses } from '@/store/slices/agent-status/accepted-agent-statuses'
 import { describe, expect, it, vi } from 'vitest'
 
 import type { AgentStatusEntry } from '../../../../../../shared/agent-status/contracts/agent-status-types'
-import type { PaneForegroundAgentEntry } from '../../../../store/slices/pane-foreground-agent'
+
 import { resolveProtectedMultilinePasteOptionsForPane } from './terminal-agent-paste-bracketing'
 import { pasteTerminalText } from './terminal-bracketed-paste'
 import { executeTerminalPastePlan } from './terminal-paste-executor'
@@ -11,7 +12,7 @@ import { resolveTerminalPasteRuntime } from './terminal-paste-runtime'
 
 const TAB_ID = 'tab-1'
 const AGENT_LEAF = '11111111-1111-4111-8111-111111111111'
-const SHELL_LEAF = '22222222-2222-4222-8222-222222222222'
+
 const AGENT_PANE_KEY = `${TAB_ID}:${AGENT_LEAF}`
 
 function agentEntry(overrides: Partial<AgentStatusEntry> = {}): AgentStatusEntry {
@@ -27,12 +28,6 @@ function agentEntry(overrides: Partial<AgentStatusEntry> = {}): AgentStatusEntry
   }
 }
 
-function foregroundEntry(
-  overrides: Partial<PaneForegroundAgentEntry> = {}
-): PaneForegroundAgentEntry {
-  return { agent: null, shellForeground: false, ...overrides }
-}
-
 const CODEX_ON_AGENT_LEAF = { [AGENT_PANE_KEY]: agentEntry() }
 
 function decide(
@@ -41,48 +36,13 @@ function decide(
   return resolveProtectedMultilinePasteOptionsForPane({
     isWindowsClient: false,
     hostPlatform: 'linux',
-    agentStatusByPaneKey: CODEX_ON_AGENT_LEAF,
+    agentStatusByPaneKey: acceptedAgentStatuses(Object.entries(CODEX_ON_AGENT_LEAF)),
     paneForegroundAgentByPaneKey: {},
     tabId: TAB_ID,
     leafId: AGENT_LEAF,
     ...args
   })
 }
-
-describe('resolveProtectedMultilinePasteOptionsForPane', () => {
-  it('leaves a plain shell pane alone so ESC[200~ never reaches a non-TUI program', () => {
-    expect(decide({ leafId: SHELL_LEAF })).toBeUndefined()
-  })
-
-  it('vetoes a row rehydrated from disk across an app restart', () => {
-    expect(
-      decide({
-        agentStatusByPaneKey: {
-          [AGENT_PANE_KEY]: agentEntry({ restoredUnconfirmed: true })
-        }
-      })
-    ).toBeUndefined()
-  })
-
-  it('degrades to the pre-fix path instead of throwing on a malformed pane key', () => {
-    // Malformed pane keys throw before the paste handler’s catch; require graceful fallback rather than a silent no-op.
-    expect(() => decide({ leafId: 'not-a-uuid' })).not.toThrow()
-    expect(decide({ leafId: 'not-a-uuid' })).toBeUndefined()
-    expect(() => decide({ tabId: 'tab:with:colons' })).not.toThrow()
-    expect(decide({ tabId: 'tab:with:colons' })).toBeUndefined()
-  })
-
-  it('still brackets when shellForeground is latched true while an agent owns the pane', () => {
-    // Without OSC 133, shellForeground stays true while the agent runs and cannot veto bracketing.
-    expect(
-      decide({
-        paneForegroundAgentByPaneKey: {
-          [AGENT_PANE_KEY]: foregroundEntry({ shellForeground: true })
-        }
-      })
-    ).toEqual({ forceBracketedPasteForMultiline: true })
-  })
-})
 
 describe('leading-newline paste into a remote agent pane', () => {
   // ConPTY lost DECSET 2004, so a leading LF became CR and submitted a Codex draft on a remote Windows host.

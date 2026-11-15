@@ -10,8 +10,8 @@ import type { TerminalLimitStatus } from '../../../../../../shared/terminal/runt
 import { useAppStore } from '@/store/index'
 import { i18n } from '@/i18n/i18n'
 
-import type { RuntimeStatus } from '../../../../../../shared/runtime-session-contracts'
-import { advanceRuntimeEnvironmentConnectionGeneration } from '@/store/slices/runtime-status-connection-generation'
+import type { RuntimeStatus } from '../../../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
+import { advanceRuntimeEnvironmentConnectionGeneration } from '@/store/slices/runtime-status/runtime-status-connection-generation'
 
 vi.mock('./terminal-limit-transport', () => ({
   readTerminalLimit: vi.fn(),
@@ -22,7 +22,7 @@ vi.mock('sonner', () => ({ toast: { warning: vi.fn(), dismiss: vi.fn() } }))
 vi.mock('@/store/index', async () => {
   const { useStore } = await import('zustand')
   const { createRuntimeStatusTestStore } =
-    await import('@/store/slices/runtime-status.test-fixture')
+    await import('@/store/slices/runtime-status/runtime-status.test-fixture')
   const store = createRuntimeStatusTestStore()
   return {
     useAppStore: Object.assign(
@@ -32,7 +32,7 @@ vi.mock('@/store/index', async () => {
     )
   }
 })
-vi.mock('@/store/host-catalog-fencing', () => ({
+vi.mock('@/runtime/rpc/environment-revisions/host-identity-fence', () => ({
   captureHostIdentityFence: () => ({}),
   isHostIdentityFenceCurrent: () => true
 }))

@@ -1,5 +1,5 @@
 import { useMemo } from 'react'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 import type { GitBranchCompareSummary } from '../../../../../../shared/git/diff/git-diff-compare-types'
 import { isStageableStatusEntry } from '../../../../../../shared/source-control/listing/source-control-discard-all-sequence'
@@ -68,6 +68,7 @@ export function useSourceControlActionModel({
   conflictOperation: DropdownInput['conflictOperation']
   effectiveBaseRef: string | null
 }) {
+  const t = useTranslate()
   const languageRevision = useUiLanguageRevision()
   const createReviewEligibility = hasSuppressedGitHubPRState ? null : hostedReviewCreation
   const createReviewHeaderEligibility = hasSuppressedGitHubPRState
@@ -139,40 +140,41 @@ export function useSourceControlActionModel({
     if (hasSuppressedGitHubPRState) {
       return null
     }
-    const action = resolveCreatePrHeaderAction({
-      stagedCount: grouped.staged.length,
-      hasUnstagedChanges,
-      hasStageableChanges,
-      hasPartiallyStagedChanges,
-      hasMessage: commitMessage.trim().length > 0,
-      hasUnresolvedConflicts: unresolvedConflictCount > 0,
-      isCommitting,
-      isRemoteOperationActive: isRemoteOperationActive || isAbortingOperation,
-      upstreamStatus: remoteStatus,
-      prState: hostedReviewState,
-      isPRStateLoading: isHostedReviewStateLoading,
-      inFlightRemoteOpKind,
-      hostedReviewCreation: createReviewHeaderEligibility,
-      isHostedReviewCreationLoading:
-        isHostedReviewCreationLoading && createReviewHeaderEligibility !== null,
-      branchCommitsAhead:
-        branchSummary?.status === 'ready' ? (branchSummary.commitsAhead ?? 0) : undefined,
-      hasCurrentBranch: Boolean(branchName),
-      isPrIntentInFlight: isCreatePrIntentInFlight
-    })
+    const action = resolveCreatePrHeaderAction(
+      {
+        stagedCount: grouped.staged.length,
+        hasUnstagedChanges,
+        hasStageableChanges,
+        hasPartiallyStagedChanges,
+        hasMessage: commitMessage.trim().length > 0,
+        hasUnresolvedConflicts: unresolvedConflictCount > 0,
+        isCommitting,
+        isRemoteOperationActive: isRemoteOperationActive || isAbortingOperation,
+        upstreamStatus: remoteStatus,
+        prState: hostedReviewState,
+        isPRStateLoading: isHostedReviewStateLoading,
+        inFlightRemoteOpKind,
+        hostedReviewCreation: createReviewHeaderEligibility,
+        isHostedReviewCreationLoading:
+          isHostedReviewCreationLoading && createReviewHeaderEligibility !== null,
+        branchCommitsAhead:
+          branchSummary?.status === 'ready' ? (branchSummary.commitsAhead ?? 0) : undefined,
+        hasCurrentBranch: Boolean(branchName),
+        isPrIntentInFlight: isCreatePrIntentInFlight
+      },
+      t
+    )
     if ((prGenerating || isCreatingPr) && action?.kind === 'create_pr') {
       return {
         ...action,
         title: prGenerating
-          ? translate(
+          ? t(
               'auto.components.right.sidebar.SourceControl.createPrIntentGeneratingDetails',
               'Generating review details…'
             )
-          : translate(
-              'auto.components.right.sidebar.SourceControl.fe5bd1a610',
-              'Creating {{value0}}...',
-              { value0: hostedReviewReviewLabel }
-            ),
+          : t('auto.components.right.sidebar.SourceControl.fe5bd1a610', 'Creating {{value0}}...', {
+              value0: hostedReviewReviewLabel
+            }),
         disabled: true
       }
     }
@@ -202,7 +204,8 @@ export function useSourceControlActionModel({
     prGenerating,
     remoteStatus,
     unresolvedConflictCount,
-    languageRevision
+    languageRevision,
+    t
   ])
   const directCreatePrAction =
     createPrHeaderAction?.kind === 'create_pr' &&

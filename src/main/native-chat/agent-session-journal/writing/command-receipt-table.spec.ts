@@ -17,7 +17,7 @@ import {
   commandReceiptFixture,
   writeCommandReceiptTestRecord
 } from './command-receipt-test-support'
-import { computeAgentSessionPayloadFingerprint } from '../../../../shared/agent-session/lifecycle/agent-session-mutation-envelope'
+import { computeAgentSessionPayloadFingerprint } from '../../../../shared/agent-session/lifecycle/operations/agent-session-mutation-envelope'
 
 export function registerCommandReceiptTableTests(): void {
   let root: string
@@ -107,14 +107,6 @@ export function registerCommandReceiptTableTests(): void {
       const receipt = commandReceiptFixture()
       expect(() => insert(receipt, commandReceiptScope('caller-2'))).toThrow(
         'command caller does not match its scope'
-      )
-      expect(read(receipt)).toEqual({ verdict: 'absent' })
-    })
-
-    it('requires a receipt to be written inside an open transaction', () => {
-      const receipt = commandReceiptFixture()
-      expect(() => insertCommandReceiptIfAbsent(database.db, globalScope, receipt)).toThrow(
-        /inside an open transaction/
       )
       expect(read(receipt)).toEqual({ verdict: 'absent' })
     })

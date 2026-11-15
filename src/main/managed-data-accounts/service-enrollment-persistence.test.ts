@@ -4,7 +4,7 @@ import { existsSync, mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync 
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import SyncDatabase from '../sqlite/sync-database'
-import * as secureFile from '../../shared/secure-file'
+import * as secureFile from '../../shared/secure-storage/secure-file'
 import { ManagedDataAccountService } from './service'
 
 vi.mock('node:fs', async (importOriginal) => {

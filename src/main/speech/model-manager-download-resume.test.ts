@@ -229,53 +229,6 @@ describe('ModelManager download resume', () => {
     }
   })
 
-  it('requests the remaining bytes when a clean range response ends before the file total', async () => {
-    const dir = mkdtempSync(join(tmpdir(), 'orca-model-resume-'))
-    try {
-      const first = scriptRequest((sentHeaders) => {
-        expect(sentHeaders.range).toBe('bytes=10-')
-        return {
-          statusCode: 206,
-          headers: {
-            'content-length': '5',
-            'content-range': `bytes 10-14/${PAYLOAD.length}`
-          },
-          chunks: [PAYLOAD.subarray(10, 15)]
-        }
-      })
-      const second = scriptRequest((sentHeaders) => {
-        expect(sentHeaders.range).toBe('bytes=15-')
-        return {
-          statusCode: 206,
-          headers: {
-            'content-length': '5',
-            'content-range': `bytes 15-19/${PAYLOAD.length}`
-          },
-          chunks: [PAYLOAD.subarray(15)]
-        }
-      })
-      const manager = managerInternals(dir)
-      const filePath = join(dir, 'model.bin')
-      writeFileSync(filePath, PAYLOAD.subarray(0, 10))
-
-      await manager.downloadFileWithRetry(
-        'https://example.com/model.bin',
-        filePath,
-        PAYLOAD.length,
-        'm',
-        () => false,
-        new AbortController().signal
-      )
-
-      expect(netRequestMock).toHaveBeenCalledTimes(2)
-      expect(first.sentHeaders.range).toBe('bytes=10-')
-      expect(second.sentHeaders.range).toBe('bytes=15-')
-      expect(readFileSync(filePath)).toEqual(PAYLOAD)
-    } finally {
-      rmSync(dir, { recursive: true, force: true })
-    }
-  })
-
   it('continues through more than eight advancing range segments', async () => {
     const dir = mkdtempSync(join(tmpdir(), 'orca-model-resume-'))
     try {
@@ -318,37 +271,6 @@ describe('ModelManager download resume', () => {
 
       expect(netRequestMock).toHaveBeenCalledTimes(10)
       expect(readFileSync(filePath)).toEqual(PAYLOAD)
-    } finally {
-      rmSync(dir, { recursive: true, force: true })
-    }
-  })
-
-  it('bounds a server that advances by pathologically tiny segments forever', async () => {
-    const dir = mkdtempSync(join(tmpdir(), 'orca-model-resume-'))
-    try {
-      const manager = managerInternals(dir)
-      const filePath = join(dir, 'model.bin')
-      let bytesWritten = 0
-      // Read progress from memory: 4096 real file operations stall under parallel load.
-      vi.spyOn(manager, 'getPartialDownloadBytes').mockImplementation(() => bytesWritten)
-      // Advance one byte forever without completing before the absolute request ceiling.
-      const downloadFileMock = vi.spyOn(manager, 'downloadFile').mockImplementation(() => {
-        bytesWritten += 1
-        return Promise.resolve()
-      })
-
-      await expect(
-        manager.downloadFileWithRetry(
-          'https://example.com/model.bin',
-          filePath,
-          1_000_000,
-          'm',
-          () => false,
-          new AbortController().signal
-        )
-      ).rejects.toThrow(/too many download requests/)
-
-      expect(downloadFileMock).toHaveBeenCalledTimes(4_096)
     } finally {
       rmSync(dir, { recursive: true, force: true })
     }

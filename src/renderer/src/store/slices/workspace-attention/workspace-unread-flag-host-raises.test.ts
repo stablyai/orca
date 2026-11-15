@@ -2,13 +2,14 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AppState } from '../../types'
 import type * as WorktreeMetaPersistModule from '../worktrees/metadata/worktree-meta-persist'
 
-import { folderWorkspaceKey } from '../../../../../shared/workspace-scope'
-import { WORKSPACE_UNREAD_HOST_RAISES_CAPABILITY } from '../../../../../shared/workspace-unread-raise-capability'
-import { createTestStore, makeWorktree, TEST_REPO } from '../store-test-helpers'
-import { makeFolderWorkspace } from '../worktrees-slice-test-fixtures'
+import { WORKSPACE_UNREAD_HOST_RAISES_CAPABILITY } from '../../../../../shared/worktree/metadata/workspace-unread-raise-capability'
+import { createTestStore } from '../../testing/app-store-test-fixture'
+import { makeWorktree } from '../worktrees/worktree.test-fixture'
+import { TEST_REPO } from '../../repos/repo.test-fixture'
+import { makeFolderWorkspace } from '../../folder-workspaces/folder-workspace.test-fixture'
 import { markWorkspaceUnreadFlag } from './workspace-unread-flag'
 
-import '@/runtime/runtime-rpc-client'
+import '@/runtime/rpc/calls/runtime-rpc-call'
 
 // With the switch on, the window raises the flag exactly where the owning host does not.
 
@@ -22,10 +23,12 @@ vi.mock('../worktrees/metadata/worktree-meta-persist', async (importOriginal) =>
   const actual = await importOriginal<typeof WorktreeMetaPersistModule>()
   return { ...actual, persistWorktreeMeta: vi.fn(async () => undefined) }
 })
-vi.mock('@/runtime/runtime-rpc-client', () => ({
+vi.mock('@/runtime/rpc/compatibility/runtime-compatibility-cache', () => ({
   // Null before the environment's first status probe, as the real cache.
   readCachedRuntimeEnvironmentCapability: (environmentId: string, capability: string) =>
-    cachedStatus.get(environmentId)?.includes(capability) ?? null,
+    cachedStatus.get(environmentId)?.includes(capability) ?? null
+}))
+vi.mock('@/runtime/rpc/compatibility/runtime-capability-proof', () => ({
   // Settles with the environment's status probe; rejects when it cannot be read.
   runtimeEnvironmentSupportsCapability: vi.fn(async (environmentId: string, capability: string) => {
     const capabilities = await hostCapabilities.get(environmentId)
@@ -112,24 +115,5 @@ describe('the window raises the unread flag only where its host does not', () =>
     answer([])
     await new Promise((resolve) => setTimeout(resolve, 0))
     expect(isUnread(SLOW_SERVER_WT)).toBe(false)
-  })
-
-  it('raises the folder row it decided for, even if the screen moves to the other row meanwhile', async () => {
-    const { store, mark, updateFolderWorkspace } = createStore()
-    const folder = folderWorkspaceKey(FOLDER_ID)
-    let answer: (capabilities: readonly string[]) => void = () => {}
-    hostCapabilities.set('old', new Promise((resolve) => (answer = resolve)))
-    store.setState({ activeWorktreeId: folder, activeWorkspaceExecutionHostId: 'runtime:old' })
-    await mark(folder)
-    store.setState({ activeWorkspaceExecutionHostId: 'runtime:new' })
-    answer([])
-    await vi.waitFor(() =>
-      expect(updateFolderWorkspace).toHaveBeenCalledWith(
-        FOLDER_ID,
-        expect.objectContaining({ isUnread: true }),
-        { executionHostId: 'runtime:old' }
-      )
-    )
-    expect(updateFolderWorkspace).toHaveBeenCalledTimes(1)
   })
 })

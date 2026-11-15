@@ -2,7 +2,7 @@ import { runProcess } from '@orca/process-host'
 import {
   isZCodeMissingTuiOutput,
   type ZCodeInteractiveCapability
-} from '../../shared/zcode-missing-tui'
+} from '../../shared/agent-launch/installation/zcode-missing-tui'
 
 /** Probe before opening a pane to avoid racing fast startup failure. version/doctor never load TUI; no-TTY launch distinguishes missing @zcode/tui from loaded UI rejecting a terminal. npm resolves the package, SEA embeds assets, bundled desktop lacks both. */
 export type { ZCodeInteractiveCapability }

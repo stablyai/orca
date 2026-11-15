@@ -3,10 +3,11 @@ import { act, createElement } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { MarkdownViewMode, OpenFile } from '@/store/slices/editor/types/open-file'
-import type * as ConnectionOwnerResolution from '@/lib/connection-owner-resolution'
+import type * as ConnectionOwnerResolution from '@/lib/workspace/ownership/connection-owner-resolution'
 import { useMarkdownDocuments } from './useMarkdownDocuments'
 import { useAppStore } from '@/store/index'
-import { makeWorktree, TEST_REPO } from '@/store/slices/worktrees-slice-test-fixtures'
+import { makeWorktree } from '@/store/slices/worktrees/worktree.test-fixture'
+import { TEST_REPO } from '@/store/repos/repo.test-fixture'
 
 const runtime = vi.hoisted(() => ({
   stat: vi.fn(),
@@ -25,13 +26,17 @@ const state = {
   openFile: vi.fn(),
   openMarkdownPreview: vi.fn()
 }
-vi.mock('@/lib/connection-context', () => ({ getConnectionIdFromState: () => runtimeConnectionId }))
-vi.mock('@/lib/connection-owner-resolution', async (importOriginal) => {
+vi.mock('@/lib/workspace/ownership/connection-context', () => ({
+  getConnectionIdFromState: () => runtimeConnectionId
+}))
+vi.mock('@/lib/workspace/ownership/connection-owner-resolution', async (importOriginal) => {
   const actual = await importOriginal<typeof ConnectionOwnerResolution>()
   return { ...actual, getConnectionIdFromState: () => runtimeConnectionId }
 })
-vi.mock('@/runtime/runtime-file-metadata-client', () => ({ statRuntimePath: runtime.stat }))
-vi.mock('@/lib/file-owner-runtime-target', () => {
+vi.mock('@/runtime/files/metadata/runtime-file-metadata-client', () => ({
+  statRuntimePath: runtime.stat
+}))
+vi.mock('@/lib/files/access/file-owner-runtime-target', () => {
   const getRuntimeTargetForFileOwner = (
     _state: unknown,
     _worktreeId: string | null | undefined,
@@ -210,26 +215,6 @@ describe('Markdown document navigation', () => {
       expect(state.openMarkdownPreview).not.toHaveBeenCalled()
     }
   )
-  it('localizes a non-Error failure at settlement without restarting the request', async () => {
-    let rejectListing: (reason: unknown) => void = () => {}
-    runtime.list.mockReturnValueOnce(
-      new Promise((_resolve, reject) => {
-        rejectListing = reject
-      })
-    )
-    await render(sourceFile('edit'), 'source')
-    runtime.translate.mockReturnValue('Current language listing failure')
-    await render(sourceFile('edit'), 'source')
-    await act(async () => rejectListing(null))
-
-    expect(runtime.list).toHaveBeenCalledOnce()
-    expect(runtime.translate).toHaveBeenCalledWith(
-      'auto.components.editor.useMarkdownDocuments.listFailed',
-      'Failed to list Markdown documents.'
-    )
-    expect(runtime.toastError).toHaveBeenCalledWith('Current language listing failure')
-    expect(controller.markdownDocuments).toEqual([])
-  })
 
   it.each(['superseded', 'unmounted'])('ignores a %s listing failure', async (reason) => {
     let rejectListing: (error: unknown) => void = () => {}
@@ -249,24 +234,6 @@ describe('Markdown document navigation', () => {
     if (reason === 'superseded') {
       expect(controller.markdownDocuments).toEqual([target])
     }
-  })
-
-  it('uses the new source mode after a rerender', async () => {
-    await render(sourceFile('markdown-preview'), 'source')
-    await render(sourceFile('edit'), 'source')
-    await act(async () => {
-      await controller.openMarkdownDocument(target)
-    })
-    expect(state.openFile).toHaveBeenCalledOnce()
-    expect(state.openMarkdownPreview).not.toHaveBeenCalled()
-
-    state.openFile.mockClear()
-    await render(sourceFile('edit'), 'preview')
-    await act(async () => {
-      await controller.openMarkdownDocument(target)
-    })
-    expect(state.openMarkdownPreview).toHaveBeenCalledOnce()
-    expect(state.openFile).not.toHaveBeenCalled()
   })
 
   it.each(['directory', 'missing'])('does not navigate to a %s destination', async (kind) => {

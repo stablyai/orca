@@ -1,8 +1,8 @@
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
-import type { WorktreeSortOrderUpdate } from '../../../../../../shared/worktree/sort-order-update'
+import type { WorktreeSortOrderUpdate } from '../../../../../../shared/worktree/metadata/sort-order-update'
 import type { AppState } from '../../../types'
 import { worktreeHostMatchOptions, worktreeMatchesHost } from './worktree-host-ownership'
-import { selectWorktreesByRepo } from '../../../workspace-record-selectors'
+import { selectWorktreesByRepo } from '../../../workspaces/catalog/workspace-record-fields'
 
 export type WorktreeSortOrderPatch = {
   repoId: string

@@ -1,13 +1,10 @@
-import {
-  formatKeybinding,
-  formatKeybindingList,
-  getEffectiveKeybindingsForAction,
-  isDoubleTapBinding,
-  type KeybindingActionId,
-  type KeybindingOverrides
-} from '../../../shared/keybindings'
-import { useAppStore } from '../store'
-import { getShortcutPlatform } from '../lib/shortcut-platform'
+import { useAppStateValue } from '@/store/retained-views/app-state-view'
+import { formatKeybinding, formatKeybindingList } from '../../../shared/keybindings/formatting'
+import { getEffectiveKeybindingsForAction } from '../../../shared/keybindings/effective'
+import { isDoubleTapBinding } from '../../../shared/keybindings/normalization'
+import type { KeybindingActionId, KeybindingOverrides } from '../../../shared/keybindings/types'
+import { getShortcutPlatform } from '../lib/keyboard/shortcut-platform'
+import { localizeUnassignedDisplay } from '@/i18n/unassigned-label'
 
 export { getShortcutPlatform }
 
@@ -54,8 +51,13 @@ export function formatShortcutLabel(
   overrides?: KeybindingOverrides
 ): string {
   const platform = getShortcutPlatform()
-  return memoizeShortcut('label', actionId, platform, overrides, () =>
-    formatKeybindingList(getEffectiveKeybindingsForAction(actionId, platform, overrides), platform)
+  return localizeUnassignedDisplay(
+    memoizeShortcut('label', actionId, platform, overrides, () =>
+      formatKeybindingList(
+        getEffectiveKeybindingsForAction(actionId, platform, overrides),
+        platform
+      )
+    )
   )
 }
 
@@ -64,14 +66,16 @@ export function formatPrimaryShortcutLabel(
   overrides?: KeybindingOverrides
 ): string {
   const platform = getShortcutPlatform()
-  return memoizeShortcut('primary', actionId, platform, overrides, () => {
-    const [binding] = getEffectiveKeybindingsForAction(actionId, platform, overrides)
-    return binding ? formatKeybindingList([binding], platform) : 'Unassigned'
-  })
+  return localizeUnassignedDisplay(
+    memoizeShortcut('primary', actionId, platform, overrides, () => {
+      const [binding] = getEffectiveKeybindingsForAction(actionId, platform, overrides)
+      return binding ? formatKeybindingList([binding], platform) : 'Unassigned'
+    })
+  )
 }
 
 export function useShortcutLabel(actionId: KeybindingActionId): string {
-  const keybindings = useAppStore((state) => state.keybindings)
+  const keybindings = useAppStateValue((state) => state.keybindings)
   return formatShortcutLabel(actionId, keybindings)
 }
 
@@ -102,7 +106,7 @@ export function formatOptionalPrimaryShortcutLabel(
 }
 
 export function useOptionalShortcutLabel(actionId: KeybindingActionId): string | null {
-  const keybindings = useAppStore((state) => state.keybindings)
+  const keybindings = useAppStateValue((state) => state.keybindings)
   return formatOptionalShortcutLabel(actionId, keybindings)
 }
 
@@ -123,7 +127,7 @@ export function formatShortcutKeyComboDetails(
 export function useShortcutKeyComboDetails(
   actionId: KeybindingActionId
 ): ShortcutKeyComboDetails[] {
-  const keybindings = useAppStore((state) => state.keybindings)
+  const keybindings = useAppStateValue((state) => state.keybindings)
   return formatShortcutKeyComboDetails(actionId, keybindings)
 }
 

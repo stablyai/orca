@@ -12,6 +12,8 @@ import {
   type TaskProviderReadiness
 } from '../../tasks/task-source-setup-state'
 import { translate } from '@/i18n/i18n'
+import { useTranslate, type Translate } from '@/i18n/use-translate'
+import { SettingsGroup } from '../../section-layout/SettingsGroup'
 
 /** The guide renders the skill row, so unlike other providers those facts are required. */
 export type LinearSetupReadiness = TaskProviderReadiness & {
@@ -69,7 +71,10 @@ function SetupStatusIcon({
 
 type LinearSetupPill = { tone: IntegrationStatusTone; label: string; showCount: boolean }
 
-function getLinearSetupPill(readiness: LinearSetupReadiness): LinearSetupPill {
+function getLinearSetupPill(
+  readiness: LinearSetupReadiness,
+  t: Translate = translate
+): LinearSetupPill {
   const { completed, total } = getTaskProviderCompletedSteps(readiness)
   // Share card precedence so unverified skill status cannot outrank a confirmed unfinished step.
   const status = getTaskProviderSetupStatus(readiness)
@@ -77,14 +82,14 @@ function getLinearSetupPill(readiness: LinearSetupReadiness): LinearSetupPill {
   if (status === 'checking') {
     return {
       tone,
-      label: translate('auto.components.settings.LinearAgentSkillGuide.setupChecking', 'Checking…'),
+      label: t('auto.components.settings.LinearAgentSkillGuide.setupChecking', 'Checking…'),
       showCount: false
     }
   }
   if (status === 'ready') {
     return {
       tone,
-      label: translate('auto.components.settings.LinearAgentSkillGuide.setupReady', 'All set'),
+      label: t('auto.components.settings.LinearAgentSkillGuide.setupReady', 'All set'),
       showCount: false
     }
   }
@@ -92,16 +97,13 @@ function getLinearSetupPill(readiness: LinearSetupReadiness): LinearSetupPill {
   if (status === 'skill-unverified') {
     return {
       tone,
-      label: translate(
-        'auto.components.settings.LinearAgentSkillGuide.setupUnverified',
-        'Cannot verify'
-      ),
+      label: t('auto.components.settings.LinearAgentSkillGuide.setupUnverified', 'Cannot verify'),
       showCount: true
     }
   }
   return {
     tone,
-    label: translate(
+    label: t(
       'auto.components.settings.LinearAgentSkillGuide.setupProgress',
       '{{done}} of {{total}} ready',
       { done: completed, total }
@@ -116,27 +118,19 @@ export function LinearAgentSkillGuide({
   onManageLinearAccess,
   skillPanel
 }: LinearAgentSkillGuideProps): React.JSX.Element {
+  const t = useTranslate()
   // Share arithmetic with Task Sources so both setup surfaces agree.
-  const pill = getLinearSetupPill(readiness)
+  const pill = getLinearSetupPill(readiness, t)
   const { completed, total } = getTaskProviderCompletedSteps(readiness)
 
   return (
-    <section className="space-y-3 rounded-xl border border-border/60 bg-card/30 p-4">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <div className="space-y-0.5">
-          <h3 className="text-sm font-semibold text-foreground">
-            {translate(
-              'auto.components.settings.LinearAgentSkillGuide.setupTitle',
-              'Setup checklist'
-            )}
-          </h3>
-          <p className="text-xs text-muted-foreground">
-            {translate(
-              'auto.components.settings.LinearAgentSkillGuide.setupBody',
-              'All three are required for the full Tasks + agent loop. First-time path is also under Task Sources.'
-            )}
-          </p>
-        </div>
+    <SettingsGroup
+      title={t('auto.components.settings.LinearAgentSkillGuide.setupTitle', 'Setup checklist')}
+      description={t(
+        'auto.components.settings.LinearAgentSkillGuide.setupBody',
+        'All three are required for the full Tasks + agent loop. First-time path is also under Task Sources.'
+      )}
+      action={
         <span className="inline-flex items-center gap-2">
           <IntegrationStatusPill tone={pill.tone}>{pill.label}</IntegrationStatusPill>
           {pill.showCount ? (
@@ -146,22 +140,22 @@ export function LinearAgentSkillGuide({
             </span>
           ) : null}
         </span>
-      </div>
-
-      <div className="divide-y divide-border/50">
+      }
+    >
+      <div className="divide-y divide-border">
         <div className="flex flex-wrap items-start gap-3 py-3">
           <div className="mt-0.5">
             <SetupStatusIcon done={readiness.connected} checking={readiness.checking} />
           </div>
           <div className="min-w-0 flex-1 space-y-0.5">
             <p className="text-sm font-medium text-foreground">
-              {translate(
+              {t(
                 'auto.components.settings.LinearAgentSkillGuide.setupConnectTitle',
                 '1. Connect Linear'
               )}
             </p>
             <p className="text-xs text-muted-foreground">
-              {translate(
+              {t(
                 'auto.components.settings.LinearAgentSkillGuide.setupConnectBody',
                 'Personal API key so Orca can list issues and open linked workspaces.'
               )}
@@ -175,11 +169,8 @@ export function LinearAgentSkillGuide({
             onClick={onManageLinearAccess}
           >
             {readiness.connected
-              ? translate(
-                  'auto.components.settings.LinearAgentSkillGuide.manageKeys',
-                  'Manage keys'
-                )
-              : translate('auto.components.settings.LinearAgentSkillGuide.addAccess', 'Add access')}
+              ? t('auto.components.settings.LinearAgentSkillGuide.manageKeys', 'Manage keys')
+              : t('auto.components.settings.LinearAgentSkillGuide.addAccess', 'Add access')}
           </Button>
         </div>
 
@@ -194,13 +185,13 @@ export function LinearAgentSkillGuide({
             </div>
             <div className="min-w-0 flex-1 space-y-0.5">
               <p className="text-sm font-medium text-foreground">
-                {translate(
+                {t(
                   'auto.components.settings.LinearAgentSkillGuide.setupSkillTitle',
                   '2. Install the agent skill'
                 )}
               </p>
               <p className="text-xs text-muted-foreground">
-                {translate(
+                {t(
                   'auto.components.settings.LinearAgentSkillGuide.setupSkillBody',
                   'Gives coding agents /orca-linear for reading, updates, triage, and attaching pull or merge requests.'
                 )}
@@ -216,13 +207,13 @@ export function LinearAgentSkillGuide({
           </div>
           <div className="min-w-0 flex-1 space-y-0.5">
             <p className="text-sm font-medium text-foreground">
-              {translate(
+              {t(
                 'auto.components.settings.LinearAgentSkillGuide.setupVisibleTitle',
                 '3. Show Linear in Tasks'
               )}
             </p>
             <p className="text-xs text-muted-foreground">
-              {translate(
+              {t(
                 'auto.components.settings.LinearAgentSkillGuide.setupVisibleBody',
                 'Keeps Linear in the Tasks source picker and sidebar shortcuts.'
               )}
@@ -235,13 +226,10 @@ export function LinearAgentSkillGuide({
             className="shrink-0"
             onClick={onOpenTaskSources}
           >
-            {translate(
-              'auto.components.settings.LinearAgentSkillGuide.openTaskSources',
-              'Task Sources'
-            )}
+            {t('auto.components.settings.LinearAgentSkillGuide.c5cd02806b', 'Task sources')}
           </Button>
         </div>
       </div>
-    </section>
+    </SettingsGroup>
   )
 }

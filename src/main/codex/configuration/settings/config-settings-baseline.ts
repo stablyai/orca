@@ -1,9 +1,10 @@
 import { writeFileSync } from 'node:fs'
 import { isDefinitiveAbsence } from '../../../../shared/definitive-filesystem-absence'
-import { JsonTextStructureCapacityError } from '../../../../shared/json-text-structure-limit'
-import { NodeFileReadTooLargeError } from '../../../../shared/node-bounded-file-reader'
+import { JsonTextStructureCapacityError } from '../../../../shared/json-stream/json-text-structure-limit'
+import { NodeFileReadTooLargeError } from '../../../../shared/file-content/node-bounded-file-reader'
 import { join } from 'node:path'
 import { readAgentStateFileSync, readAgentStateJsonFileSync } from '../agent-state-file-reader'
+import { observeFilePublication } from '../../../filesystem/file-content-observation'
 
 const SETTINGS_BASELINE_FILE = '.orca-config-settings-baseline.json'
 
@@ -159,6 +160,7 @@ export function writeCodexSettingsBaseline(
     return
   }
   writeFileSync(baselinePath, serialized, { encoding: 'utf-8', mode: 0o600 })
+  observeFilePublication(baselinePath, serialized)
 }
 
 export function getCodexSettingsBaselinePath(runtimeHomePath: string): string {

@@ -1,7 +1,5 @@
-import type {
-  RuntimeNativeChatFileContext,
-  RuntimeTerminalPathResolution
-} from '../../../shared/runtime-types'
+import type { RuntimeNativeChatFileContext } from '../../../shared/native-chat/native-chat-file-context'
+import type { RuntimeTerminalPathResolution } from '../../../shared/terminal/runtime-terminal-file-path'
 import { parseWslPath } from '../../wsl/filesystem/unc-path-access'
 import { relativePathInsideRoot, resolveRuntimePath } from '../../../shared/cross-platform-path'
 import { homedir } from 'node:os'
@@ -11,7 +9,7 @@ import { isSafeMobileRelativePath } from '../files/mobile-file-kind'
 import { isENOENT } from '../../ipc/filesystem/access/filesystem-path-containment'
 import type { RuntimeFileCommandHost } from '../files/file-command-host'
 import type { RuntimeTerminalArtifacts } from './artifacts/terminal-artifacts'
-import { SSH_OUTSIDE_WORKSPACE_UNSUPPORTED_MESSAGE } from '../../../shared/runtime-file-contracts'
+import { SSH_OUTSIDE_WORKSPACE_UNSUPPORTED_MESSAGE } from '../../../shared/terminal/runtime-terminal-file-path'
 
 type RuntimeTerminalPathHost = Pick<
   RuntimeFileCommandHost,
@@ -118,6 +116,23 @@ export class RuntimeTerminalPathResolver {
               absolutePath
             )
           ).type === 'directory'
+        // Why: a workspace nested inside this one is inside its root, so the outside-root lookup above never sees it.
+        const nestedWorkspace =
+          crossWorkspace && isDirectory && !knownWorkspaceTarget && ownedRelativePath !== ''
+            ? await this.host.resolveKnownWorkspaceFileTarget?.(
+                absolutePath,
+                target.executionHostId
+              )
+            : null
+        if (nestedWorkspace?.relativePath === '') {
+          return {
+            worktree: nestedWorkspace.worktree.id,
+            relativePath: '',
+            absolutePath,
+            exists: true,
+            isDirectory: true
+          }
+        }
         return {
           worktree: ownedWorktree.id,
           relativePath: ownedRelativePath,

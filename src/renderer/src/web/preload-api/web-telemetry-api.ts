@@ -6,6 +6,7 @@ export function createWebTelemetryApi(): Partial<PreloadApi> {
     telemetrySetOptIn: () => Promise.resolve(),
     telemetryGetConsentState: () =>
       Promise.resolve({ optedIn: false, source: 'default', blockedByEnv: false } as never),
-    telemetryAcknowledgeBanner: () => Promise.resolve()
+    telemetryAcknowledgeBanner: () => Promise.resolve(),
+    telemetryAssignBrowserExtensionsBanner: () => Promise.resolve({ status: 'not_enrolled' })
   }
 }

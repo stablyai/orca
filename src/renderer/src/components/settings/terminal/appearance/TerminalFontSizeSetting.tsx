@@ -4,7 +4,7 @@ import { Button } from '../../../ui/button'
 import { Input } from '../../../ui/input'
 import { SettingsRow } from '../../form-controls/SettingsFormControls'
 import { SearchableSetting } from '../../section-layout/SearchableSetting'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 
 export function TerminalFontSizeSetting({
   settings,
@@ -15,10 +15,15 @@ export function TerminalFontSizeSetting({
   updateSettings: (updates: Partial<GlobalSettings>) => void
   forceVisible?: boolean
 }): React.JSX.Element {
+  const t = useTranslate()
+  const fontSizeLabel = t(
+    'auto.components.settings.TerminalFontSizeSetting.a653570abf',
+    'Font size'
+  )
   return (
     <SearchableSetting
-      title={translate('auto.components.settings.TerminalFontSizeSetting.a4a352b1e9', 'Font Size')}
-      description={translate(
+      title={fontSizeLabel}
+      description={t(
         'auto.components.settings.TerminalFontSizeSetting.0f4c92e595',
         'Default terminal font size for new panes and live updates.'
       )}
@@ -26,10 +31,7 @@ export function TerminalFontSizeSetting({
       forceVisible={forceVisible}
     >
       <SettingsRow
-        label={translate(
-          'auto.components.settings.TerminalFontSizeSetting.a4a352b1e9',
-          'Font Size'
-        )}
+        label={fontSizeLabel}
         control={
           <div className="flex items-center gap-2">
             <Button
@@ -40,6 +42,7 @@ export function TerminalFontSizeSetting({
                 updateSettings({ terminalFontSize: next })
               }}
               disabled={settings.terminalFontSize <= 10}
+              aria-label={t('settings.terminal.fontSize.decrease', 'Decrease font size')}
             >
               <Minus className="size-3" />
             </Button>
@@ -48,6 +51,7 @@ export function TerminalFontSizeSetting({
               type="number"
               min={10}
               max={24}
+              aria-label={fontSizeLabel}
               value={settings.terminalFontSize}
               onChange={(e) => {
                 const value = Number.parseInt(e.target.value, 10)
@@ -65,11 +69,12 @@ export function TerminalFontSizeSetting({
                 updateSettings({ terminalFontSize: next })
               }}
               disabled={settings.terminalFontSize >= 24}
+              aria-label={t('settings.terminal.fontSize.increase', 'Increase font size')}
             >
               <Plus className="size-3" />
             </Button>
             <span className="text-xs text-muted-foreground">
-              {translate('auto.components.settings.TerminalFontSizeSetting.9b5252c85a', 'px')}
+              {t('auto.components.settings.TerminalFontSizeSetting.9b5252c85a', 'px')}
             </span>
           </div>
         }

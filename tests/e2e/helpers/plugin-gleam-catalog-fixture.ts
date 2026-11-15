@@ -1,6 +1,6 @@
 import { cp, mkdir, realpath, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
-import { hashPluginTree } from '../../../src/main/plugins/plugin-content-hash'
+import { hashPluginTree } from '../../../src/main/plugins/artifacts/plugin-content-hash'
 import { pluginContributionSummary } from '../../../src/shared/plugins/contributions/plugin-contribution-summary'
 import { pluginEditorFileTypes } from '../../../src/shared/plugins/contributions/plugin-file-type'
 import { parsePluginManifest } from '../../../src/shared/plugins/manifest/plugin-manifest'

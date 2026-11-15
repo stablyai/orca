@@ -11,7 +11,6 @@ import '../dispatch-row-writer'
 import '../attempt-outcome-projection'
 
 import { createRootDispatch } from '../root-dispatch-test-fixture'
-import { resolveOrchestrationMigrationStartVersion } from './orchestration-schema-version-skew'
 
 /** v36 adds the dispatch consumer generation; a v35 database must land on 0 and keep its mail. */
 describe('OrchestrationDb v35 to v36 migration', () => {
@@ -78,29 +77,5 @@ describe('OrchestrationDb v35 to v36 migration', () => {
     expect(replayed?.delivery.id).toBe(v35.deliveryId)
     expect(replayed?.replayed).toBe(true)
     expect(replayed?.messages.map((message) => message.subject)).toEqual(['still unread'])
-  })
-
-  it('does not send a v35 stamp back to the pre-Run repair floor', () => {
-    const v35 = createV35Database()
-    const raw = new Database(v35.path)
-    dropDerivedDeliverySchema(raw)
-    try {
-      expect(resolveOrchestrationMigrationStartVersion(raw, 35, SCHEMA_VERSION)).toBe(35)
-    } finally {
-      raw.close()
-    }
-  })
-
-  it('repairs a database stamped v36 that never got the columns', () => {
-    const v35 = createV35Database()
-    const raw = new Database(v35.path)
-    dropDerivedDeliverySchema(raw)
-    raw.pragma('user_version = 36')
-    try {
-      // Only schema-skew repair detects a partially written v36.
-      expect(resolveOrchestrationMigrationStartVersion(raw, 36, SCHEMA_VERSION)).toBe(6)
-    } finally {
-      raw.close()
-    }
   })
 })

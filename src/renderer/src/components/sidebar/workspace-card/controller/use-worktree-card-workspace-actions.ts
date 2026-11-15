@@ -1,7 +1,7 @@
 import { draggedWorktreeCopiesOf } from '../../worktree-list/drag/dragged-worktree-copies'
 import React, { useCallback } from 'react'
 
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { useAppStore } from '@/store'
 import { runWorktreeDelete } from '../../workspace-actions/deletion/delete-worktree-flow'
 import { deleteFolderWorkspaceUnlessUnsaved } from '../../workspace-actions/deletion/folder-workspace-delete'
@@ -48,6 +48,7 @@ export function useWorktreeCardWorkspaceActions({
   Pick<ReviewDetails, 'folderWorkspaceId'> & {
     showDeleteQuickAction: boolean
   }) {
+  const t = useTranslate()
   const handleWorkspaceQuickAction = useCallback(
     (event: React.MouseEvent<HTMLButtonElement>) => {
       event.preventDefault()
@@ -76,20 +77,20 @@ export function useWorktreeCardWorkspaceActions({
     [setShowRenameErrorDialog]
   )
   const unreadTooltip = worktree.isUnread
-    ? translate('auto.components.sidebar.useWorktreeCardWorkspaceActions.markRead', 'Mark read')
-    : translate('auto.components.sidebar.useWorktreeCardWorkspaceActions.markUnread', 'Mark unread')
+    ? t('auto.components.sidebar.useWorktreeCardWorkspaceActions.markRead', 'Mark read')
+    : t('auto.components.sidebar.useWorktreeCardWorkspaceActions.markUnread', 'Mark unread')
   const lineageChildAriaLabel = lineageCollapsed
-    ? translate(
+    ? t(
         'auto.components.sidebar.WorktreeList.showChildWorkspaces',
         'Show {{count}} child workspaces',
         { count: lineageChildCount, defaultValue_one: 'Show {{count}} child workspace' }
       )
-    : translate(
+    : t(
         'auto.components.sidebar.WorktreeList.hideChildWorkspaces',
         'Hide {{count}} child workspaces',
         { count: lineageChildCount, defaultValue_one: 'Hide {{count}} child workspace' }
       )
-  const childWorkspaceShortLabel = translate(
+  const childWorkspaceShortLabel = t(
     'auto.components.sidebar.WorktreeList.childCount',
     '{{count}} children',
     { count: lineageChildCount, defaultValue_one: '{{count}} child' }

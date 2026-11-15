@@ -1,5 +1,5 @@
 import { translate } from '@/i18n/i18n'
-import { OS_FILE_DROP_OWNER_ATTRIBUTE } from '../../../../../shared/native-file-drop-preparation'
+import { OS_FILE_DROP_OWNER_ATTRIBUTE } from '../../../../../shared/file-import/native-file-drop-preparation'
 
 export const NATIVE_CHAT_PASTE_REQUEST_EVENT = 'orca-native-chat-paste-request'
 export const NATIVE_CHAT_ROOT_SELECTOR = '[data-native-chat-root="true"]'

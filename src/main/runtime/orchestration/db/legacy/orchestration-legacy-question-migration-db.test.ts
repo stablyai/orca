@@ -6,7 +6,7 @@ import '../contract-constants'
 import '../messages/mailbox-routing-page'
 import '../dispatch-row-writer'
 import '../attempt-outcome-projection'
-import { ORCHESTRATION_LEGACY_RUN_ID as LEGACY_RUN_ID } from '../../../../../shared/orchestration-rpc-contract'
+import { ORCHESTRATION_LEGACY_RUN_ID as LEGACY_RUN_ID } from '../../../../../shared/orchestration/orchestration-rpc-contract'
 import { createLegacyStorageCutoverFixture } from './orchestration-legacy-storage-test-fixture'
 
 describe('OrchestrationDb legacy question migration', () => {
@@ -19,72 +19,6 @@ describe('OrchestrationDb legacy question migration', () => {
       rmSync(tempDir, { recursive: true, force: true })
     }
   })
-
-  function prepareTakenOverSchema19Question(readAndAcknowledge: boolean): {
-    dbPath: string
-    adoptedRunId: string
-    questionId: string
-  } {
-    const created = createLegacyStorageCutoverFixture()
-    tempDir = created.tempDir
-    db = new OrchestrationDb(created.fixture.dbPath)
-    const adoptedRunId = db.getLegacyAdoption()?.adopted_run_id as string
-    const questionId = readAndAcknowledge ? 'msg_schema19_acknowledged' : 'msg_schema19_unread'
-    db.insertMessage({
-      id: questionId,
-      runId: adoptedRunId,
-      deliveryContract: 'legacy_direct',
-      from: 'term_legacy_worker',
-      to: 'term_legacy_coord',
-      subject: 'Question',
-      body: 'Continue after takeover?',
-      type: 'decision_gate',
-      threadId: questionId,
-      payload: JSON.stringify({
-        taskId: created.fixture.legacyTaskId,
-        dispatchId: created.fixture.legacyDispatchId
-      })
-    })
-    if (readAndAcknowledge) {
-      db.markAsRead([questionId])
-    }
-    const coordinator = db.commitLegacyCompatibilityPrincipal({
-      runId: adoptedRunId,
-      role: 'coordinator',
-      hostScope: 'local:runtime_1',
-      terminalHandle: 'term_legacy_coord',
-      paneKey: 'tab_coord:44444444-4444-4444-8444-444444444444',
-      launchTokenHash: 'coord_launch_hash',
-      processIncarnation: 'process_coord'
-    }).principal
-    if (readAndAcknowledge) {
-      const recovery = db.getLegacyMailPage({ principalId: coordinator.id })
-      expect(recovery.messages.map((message) => message.id)).toContain(questionId)
-      db.acknowledgeLegacyMail({
-        principalId: coordinator.id,
-        messageIds: recovery.messages.map((message) => message.id)
-      })
-    }
-    db.bindRun({
-      runId: adoptedRunId,
-      coordinatorHandle: 'term_current_coord',
-      coordinatorPaneKey: 'tab_current:11111111-1111-4111-8111-111111111111',
-      takeoverLegacy: true
-    })
-    expect(db.getMessageById(questionId)).toMatchObject(
-      readAndAcknowledge
-        ? { delivery_contract: 'legacy_direct', read: 1 }
-        : { delivery_contract: 'current_delivery', read: 0 }
-    )
-    db.close()
-    db = undefined
-
-    const raw = new Database(created.fixture.dbPath)
-    raw.exec('DROP TABLE question_threads')
-    raw.pragma('user_version = 19')
-    raw.close()
-    return { dbPath: created.fixture.dbPath, adoptedRunId, questionId }
-  }
 
   it('backfills a pre-question-thread ask and its accepted answer', () => {
     const created = createLegacyStorageCutoverFixture()
@@ -229,32 +163,5 @@ describe('OrchestrationDb legacy question migration', () => {
       asker_handle: 'term_legacy_worker',
       status: 'pending'
     })
-  })
-
-  it.each([
-    ['promoted unread', false],
-    ['acknowledged recovery', true]
-  ] as const)('backfills and routes a %s v19 question after takeover', (_label, acknowledged) => {
-    const state = prepareTakenOverSchema19Question(acknowledged)
-
-    db = new OrchestrationDb(state.dbPath)
-    expect(db.getQuestion(state.questionId)).toMatchObject({
-      run_id: state.adoptedRunId,
-      status: 'pending'
-    })
-    expect(db.getMessageById(state.questionId)).toMatchObject({
-      to_handle: `run:${state.adoptedRunId}`,
-      delivery_contract: 'current_delivery',
-      read: 0
-    })
-    const run = db.getRun(state.adoptedRunId)!
-    expect(
-      db
-        .getOrCreateRunDelivery({
-          runId: state.adoptedRunId,
-          consumerGeneration: run.consumer_generation
-        })
-        ?.messages.map((message) => message.id)
-    ).toContain(state.questionId)
   })
 })

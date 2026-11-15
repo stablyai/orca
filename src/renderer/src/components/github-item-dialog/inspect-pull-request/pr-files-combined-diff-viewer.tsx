@@ -1,3 +1,4 @@
+import { githubCommentImageUploadAddress } from '@/components/github/github-comment-image-upload-address'
 import React, { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import type { editor as monacoEditor } from 'monaco-editor'
@@ -301,6 +302,9 @@ function PRFilesCombinedDiffSections({
 
   return (
     <PRFilesCombinedDiffBody
+      imageUploadAddress={() =>
+        githubCommentImageUploadAddress({ repoPath, repoId, sourceContext, type: 'pr', prRepo })
+      }
       files={files}
       repoPath={repoPath}
       repoId={repoId}

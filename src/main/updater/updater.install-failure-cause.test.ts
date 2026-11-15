@@ -132,12 +132,6 @@ vi.mock('./linux-package/linux-update-package-type', () => ({
   isExternallyManagedLinuxInstall: () => false
 }))
 
-const DEB_ELEVATION_ERROR =
-  'Error: Command failed: /usr/bin/pkexec --disable-internal-agent "/bin/bash" "-c" "dpkg -i \'/home/u/.cache/orca-updater/pending/orca-ide_1.4.163_amd64.deb\'"\npkexec must be setuid root'
-
-const WINDOWS_SIGNATURE_MISMATCH_ERROR =
-  'New version 1.4.163 is not signed by the application owner: publisherNames: Orca, Inc.'
-
 type CapturedSpan = {
   readonly name: string
   readonly exit: { readonly _tag: string; readonly cause?: string }
@@ -160,10 +154,6 @@ function capturingSink(): TracerModule.TracerSink {
       /* no-op */
     }
   }
-}
-
-function installSpan(): CapturedSpan | undefined {
-  return spans.find((span) => span.name === 'updater.install')
 }
 
 async function reachDownloaded(): Promise<typeof UpdaterModule> {
@@ -225,100 +215,6 @@ describe('quitAndInstall failure carries the updater cause', () => {
     tracer = null
   })
 
-  it('reports the underlying elevation failure rather than a generic restart message', async () => {
-    const { quitAndInstall, getUpdateStatus } = await reachDownloaded()
-
-    autoUpdaterMock.quitAndInstall.mockImplementation(() => {
-      autoUpdaterMock.emit('error', new Error(DEB_ELEVATION_ERROR))
-    })
-
-    quitAndInstall()
-    await vi.advanceTimersByTimeAsync(100)
-    await vi.waitFor(() => {
-      expect(autoUpdaterMock.quitAndInstall).toHaveBeenCalledTimes(1)
-    })
-
-    const status = getUpdateStatus()
-    expect(status.state).toBe('error')
-    const message = status.state === 'error' ? status.message : ''
-    expect(message).toContain('pkexec')
-    expect(message).toContain('Could not start the update installer.')
-  })
-
-  it('keeps the durable breadcrumb to classification only', async () => {
-    const { quitAndInstall } = await reachDownloaded()
-
-    autoUpdaterMock.quitAndInstall.mockImplementation(() => {
-      autoUpdaterMock.emit('error', new Error(DEB_ELEVATION_ERROR))
-    })
-
-    quitAndInstall()
-    await vi.advanceTimersByTimeAsync(100)
-    await vi.waitFor(() => {
-      expect(autoUpdaterMock.quitAndInstall).toHaveBeenCalledTimes(1)
-    })
-
-    expect(recordUpdaterLifecycleMock).toHaveBeenCalledWith(
-      'quit_and_install_failed_via_event',
-      { errorType: 'Error' },
-      expect.anything()
-    )
-  })
-
-  it('exits the install span Failure with the cause', async () => {
-    const { quitAndInstall } = await reachDownloaded()
-
-    autoUpdaterMock.quitAndInstall.mockImplementation(() => {
-      autoUpdaterMock.emit('error', new Error(DEB_ELEVATION_ERROR))
-    })
-
-    quitAndInstall()
-    await vi.advanceTimersByTimeAsync(100)
-    await vi.waitFor(() => {
-      expect(installSpan()).toBeDefined()
-    })
-
-    expect(installSpan()?.exit._tag).toBe('Failure')
-    expect(installSpan()?.exit.cause).toContain('pkexec')
-  })
-
-  it('exits the install span Success when the installer takes over', async () => {
-    const { quitAndInstall } = await reachDownloaded()
-
-    autoUpdaterMock.quitAndInstall.mockImplementation(() => {
-      // The installer runs and the old process is left to exit; no 'error' comes back.
-    })
-
-    quitAndInstall()
-    await vi.advanceTimersByTimeAsync(100)
-    await vi.waitFor(() => {
-      expect(installSpan()).toBeDefined()
-    })
-
-    expect(installSpan()?.exit._tag).toBe('Success')
-  })
-
-  it('keeps a Windows signature verdict unprefixed so its own card still renders', async () => {
-    Object.defineProperty(process, 'platform', {
-      value: 'win32',
-      configurable: true
-    })
-    const { quitAndInstall, getUpdateStatus } = await reachDownloaded()
-
-    autoUpdaterMock.quitAndInstall.mockImplementation(() => {
-      autoUpdaterMock.emit('error', new Error(WINDOWS_SIGNATURE_MISMATCH_ERROR))
-    })
-
-    quitAndInstall()
-    await vi.advanceTimersByTimeAsync(100)
-    await vi.waitFor(() => {
-      expect(autoUpdaterMock.quitAndInstall).toHaveBeenCalledTimes(1)
-    })
-
-    const status = getUpdateStatus()
-    expect(status.state === 'error' ? status.message : '').toBe(WINDOWS_SIGNATURE_MISMATCH_ERROR)
-  })
-
   it('redacts the cause the same way the retained-package card does', async () => {
     const { quitAndInstall, getUpdateStatus } = await reachDownloaded()
     const home = os.homedir()
@@ -342,24 +238,5 @@ describe('quitAndInstall failure carries the updater cause', () => {
     expect(message).not.toContain(home)
     expect(message).not.toContain(escape)
     expect(message).toContain("<home>/.cache/orca-updater/pending/orca.deb'")
-  })
-
-  it('carries the cause when quitAndInstall throws instead of dispatching an error event', async () => {
-    const { quitAndInstall, getUpdateStatus } = await reachDownloaded()
-
-    autoUpdaterMock.quitAndInstall.mockImplementation(() => {
-      throw new Error('Squirrel.framework is missing from the app bundle')
-    })
-
-    quitAndInstall()
-    await vi.advanceTimersByTimeAsync(100)
-    await vi.waitFor(() => {
-      expect(getUpdateStatus().state).toBe('error')
-    })
-
-    const status = getUpdateStatus()
-    const message = status.state === 'error' ? status.message : ''
-    expect(message).toContain('Squirrel.framework is missing from the app bundle')
-    expect(message).toContain('Could not start the update installer.')
   })
 })

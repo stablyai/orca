@@ -1,20 +1,24 @@
-import type { PRComment } from '../../../../../shared/github/comment-types'
-import type { WorkItemDetailsCacheEntry } from './work-item-details-cache'
+import type { PRComment } from '../../../../../shared/github/comments/comment-types'
 import {
   GitHubWorkItemTargetError,
   matchesGitHubWorkItemTarget,
   requireGitHubWorkItemTargetDetails,
   type GitHubWorkItemTarget
-} from '../../../../../shared/github/work-item-target'
+} from '../../../../../shared/github/work-items/work-item-target'
+import {
+  githubTaskRpcOptions,
+  type GitHubTaskTarget
+} from '@/lib/work-items/github/github-task-target'
 import type {
   GitHubWorkItem,
   GitHubWorkItemDetails
-} from '../../../../../shared/github/work-item-types'
-import type { GitHubTaskRecordCache, TaskBinding } from '@/store/github/task-record-cache'
-import { githubTaskRpcOptions, type GitHubTaskTarget } from '@/lib/github-task-target'
+} from '../../../../../shared/github/work-items/work-item-types'
+import type { GitHubTaskRecordCache } from '@/store/github/task-records/task-record-cache'
+import type { TaskBinding } from '@/store/github/task-records/task-record-model'
 import { useAppStore } from '@/store'
 import { lookupGitHubWorkItemDetailsForSource } from '@/lib/work-items/github/github-work-item-source-lookup'
 import {
+  type WorkItemDetailsCacheEntry,
   WORK_ITEM_DETAILS_UNAVAILABLE_MESSAGE,
   WORK_ITEM_DETAILS_FRESH_MS,
   markUserActionWorkItemDetailsRead,

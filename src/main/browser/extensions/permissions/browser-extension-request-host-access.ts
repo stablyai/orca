@@ -1,4 +1,4 @@
-import type { DnrHostAccess } from '../declarative-net-request/extension-matcher'
+import type { DnrHostAccess } from '../declarative-net-request/matching/extension-matcher'
 import { browserExtensionActiveTabCovers } from './browser-extension-active-tab'
 import { matchesExtensionMatchPattern } from './browser-extension-match-pattern'
 import { manifestPermissionSets } from './browser-extension-permission-grants'

@@ -8,16 +8,16 @@ import '../../workspace-status/presentation/workspace-status'
 import {
   getWorkspaceStatus,
   getWorkspaceStatusGroupKey
-} from '../../../../../../shared/workspace-statuses'
+} from '../../../../../../shared/workspace/status/workspace-statuses'
 import {
   buildManualOrderUpdatesForGroupDrop,
   buildManualOrderUpdatesForVisibleGroups,
   shouldWriteManualOrderForGroupDrop
 } from './worktree-manual-order'
 import { buildWorkspaceKanbanSidebarDropUpdates } from '../../workspace-board/drag/workspace-kanban-sidebar-drop'
-import type { SortBy } from '../../../../../../shared/sidebar-list/smart-sort'
+import type { WorkspaceSortBy as SortBy } from '../../../../../../shared/workspace-view/workspace-row-sort'
 import { switchSortToManualAfterDrop } from '../listing/manual-sort-switch-toast'
-import { isWorkspaceStatusAllowedOnHost } from '@/store/host-workspace-status-columns'
+import { isWorkspaceStatusAllowedOnHost } from '@/store/workspaces/status/host-workspace-status-columns'
 import type { WorktreeReorderArgs, WorktreeStatusDropAtIndexArgs } from './drop-commit-context'
 import type { WorktreeManualOrderCatalog } from './worktree-manual-order-catalog'
 import {

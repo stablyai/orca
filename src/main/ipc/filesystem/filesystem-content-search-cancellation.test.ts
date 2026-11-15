@@ -1,4 +1,4 @@
-import type * as WslPaths from '../../../shared/wsl-paths'
+import type * as WslPaths from '../../../shared/file-access/wsl-paths'
 import { isAbsolute } from 'node:path'
 import { spawnProcess } from '@orca/process-host'
 import { EventEmitter } from 'node:events'
@@ -39,7 +39,7 @@ vi.mock('../../git/command-runner/git-exec-file', async (importOriginal) => ({
   gitExecFileAsync: vi.fn()
 }))
 
-vi.mock('../../git/command-runner/wsl-aware-spawn', async (importOriginal) => ({
+vi.mock('../../git/command-runner/host-routing/wsl-aware-spawn', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   wslAwareSpawn: wslAwareSpawnMock
 }))
@@ -47,7 +47,7 @@ vi.mock('../../git/command-runner/wsl-aware-spawn', async (importOriginal) => ({
 vi.mock('../../wsl/filesystem/unc-path-access', () => ({
   parseWslPath: parseWslPathMock
 }))
-vi.mock('../../../shared/wsl-paths', async (importOriginal) => ({
+vi.mock('../../../shared/file-access/wsl-paths', async (importOriginal) => ({
   ...(await importOriginal<typeof WslPaths>()),
   ...(await (() => ({
     toWindowsWslPath: toWindowsWslPathMock

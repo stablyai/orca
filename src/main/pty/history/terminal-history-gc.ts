@@ -13,8 +13,8 @@ import {
 import { readHistoryMetaAsync } from './terminal-history'
 import { resolveFishHistoryDir, sweepOrphanedFishHistoryFiles } from './fish-history-session'
 import { hashWorktreeId } from './terminal-history-id'
-import { forEachWithConcurrency } from '../../../shared/map-with-concurrency'
-import { yieldToEventLoop } from '../../../shared/event-loop-yield'
+import { forEachWithConcurrency } from '../../../shared/concurrency/map-with-concurrency'
+import { yieldToEventLoop } from '../../../shared/concurrency/event-loop-yield'
 
 // Protect history created after the live-worktree snapshot was taken.
 const GC_MIN_AGE_MS = 5 * 60 * 1000

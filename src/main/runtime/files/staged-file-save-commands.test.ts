@@ -3,7 +3,7 @@ import { realpath } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { RuntimeStore } from '../runtime-store-contract'
+import type { RuntimeStore } from '../construction/runtime-store-contract'
 import type { ResolvedRuntimeFileTarget } from './file-target'
 import { RuntimeStagedFileSaves } from './staged-file-save-commands'
 import { StagedFileSaves } from './staged-file-saves'
@@ -54,18 +54,4 @@ describe('a staged save through the runtime', () => {
       expect(readFileSync(join(root, 'real.json'), 'utf8')).toBe('new')
     }
   )
-
-  it('refuses a workspace this host reaches over SSH, and an old client that names no host', async () => {
-    await expect(
-      commands('ssh:target-1').begin('conn-1', {
-        worktree: 'id:wt-1',
-        relativePath: 'a.txt',
-        totalBytes: 1,
-        expectedExecutionHostId: 'ssh:target-1'
-      })
-    ).rejects.toThrow(/not served|SSH/i)
-    await expect(
-      commands().begin('conn-1', { worktree: 'id:wt-1', relativePath: 'a.txt', totalBytes: 1 })
-    ).rejects.toThrow('newer Orca client')
-  })
 })

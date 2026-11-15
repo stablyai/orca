@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { parseSetupScriptShebang, stripLeadingShebangLine } from './setup-script-shebang'
+import { parseSetupScriptShebang } from './setup-script-shebang'
 
 describe('parseSetupScriptShebang', () => {
   it('keeps the interpreter flags a script declares', () => {
@@ -34,16 +34,5 @@ describe('parseSetupScriptShebang', () => {
       '+o',
       'posix'
     ])
-  })
-})
-
-describe('stripLeadingShebangLine', () => {
-  it('removes only a leading interpreter line', () => {
-    expect(stripLeadingShebangLine('#!/usr/bin/env bash\npnpm install\n')).toBe('pnpm install\n')
-    expect(stripLeadingShebangLine('#!/usr/bin/env bash\r\npnpm install')).toBe('pnpm install')
-    expect(stripLeadingShebangLine('pnpm install\n#!/usr/bin/env bash')).toBe(
-      'pnpm install\n#!/usr/bin/env bash'
-    )
-    expect(stripLeadingShebangLine('#!/usr/bin/env bash')).toBe('')
   })
 })

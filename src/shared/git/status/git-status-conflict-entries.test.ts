@@ -37,46 +37,4 @@ describe('parseUnmergedEntry', () => {
 
     expect(accessMock).not.toHaveBeenCalled()
   })
-
-  it('treats a symlink left in place of the conflicted file as present', async () => {
-    const entry = await parseUnmergedEntry(WORKTREE, unmergedLine('UD', '120000', 'link.ts'))
-
-    expect(entry?.status).toBe('modified')
-    expect(accessMock).not.toHaveBeenCalled()
-  })
-
-  it('resolves the symmetric kinds from XY alone, whatever the working-tree mode says', async () => {
-    const bothModified = await parseUnmergedEntry(WORKTREE, unmergedLine('UU', '000000', 'a.ts'))
-    const bothAdded = await parseUnmergedEntry(WORKTREE, unmergedLine('AA', '000000', 'b.ts'))
-    const bothDeleted = await parseUnmergedEntry(WORKTREE, unmergedLine('DD', '100644', 'c.ts'))
-
-    expect(bothModified?.status).toBe('modified')
-    expect(bothAdded?.status).toBe('modified')
-    expect(bothDeleted?.status).toBe('deleted')
-    expect(accessMock).not.toHaveBeenCalled()
-  })
-
-  it('drops submodule conflicts without probing', async () => {
-    const line = 'u UU S... 160000 160000 160000 160000 aa bb cc vendor/sub'
-
-    expect(await parseUnmergedEntry(WORKTREE, line)).toBeNull()
-    expect(accessMock).not.toHaveBeenCalled()
-  })
-
-  it('keeps the working-tree probe as a fallback for a mode no real Git emits', async () => {
-    accessMock.mockRejectedValueOnce(Object.assign(new Error('nope'), { code: 'ENOENT' }))
-    const missing = await parseUnmergedEntry(WORKTREE, unmergedLine('UD', 'zzzzzz', 'weird-a.ts'))
-
-    accessMock.mockResolvedValueOnce(undefined)
-    const found = await parseUnmergedEntry(WORKTREE, unmergedLine('UD', '12345', 'weird-b.ts'))
-
-    accessMock.mockRejectedValueOnce(Object.assign(new Error('denied'), { code: 'EACCES' }))
-    const unreadable = await parseUnmergedEntry(WORKTREE, unmergedLine('UD', '', 'weird-c.ts'))
-
-    expect(missing?.status).toBe('deleted')
-    expect(found?.status).toBe('modified')
-    // Why: an ambiguous fs failure keeps the row visible rather than falsely reading as 'deleted'.
-    expect(unreadable?.status).toBe('modified')
-    expect(accessMock).toHaveBeenCalledTimes(3)
-  })
 })

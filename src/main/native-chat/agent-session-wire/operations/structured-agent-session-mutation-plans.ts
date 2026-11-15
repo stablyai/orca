@@ -1,4 +1,5 @@
-import type { AgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-record'
+import type { AgentSessionRecordAcceptance } from '../../../runtime/agent-session/records/agent-session-store-mutation'
+import type { JournalReceiptRowBinding } from '../../agent-session-journal/journal-writer-effects'
 // Command receipts prove acceptance; other plans use ledger rows and journal replay.
 
 import { readNoChoiceOptionResult } from '../options/structured-agent-session-option-observation'
@@ -10,7 +11,7 @@ import {
   USER_MESSAGE_SOURCE,
   type AgentSessionMessageSource
 } from '../../../../shared/agent-session/agent-session-message-source'
-import type { AgentSessionOperationOutcome } from '../../../../shared/agent-session/lifecycle/agent-session-operation-ledger'
+import type { AgentSessionOperationOutcome } from '../../../../shared/agent-session/lifecycle/operations/agent-session-operation-ledger'
 import type {
   AgentSessionCancelResult,
   AgentSessionMutationEnvelope,
@@ -34,25 +35,28 @@ import {
   STRUCTURED_AGENT_SESSION_COMPACT_COMMAND,
   structuredAgentSessionCompactBody
 } from './structured-agent-session-command-turn'
-import { performSend } from './structured-agent-session-turns'
-import type {
-  AgentSessionTurnContext,
-  AgentSessionReplayContext,
-  TurnOutcome
+import {
+  performSend,
+  type AgentSessionTurnContext,
+  type AgentSessionReplayContext,
+  type TurnOutcome
 } from './structured-agent-session-turns'
+
 import { queuedSendAnswer } from '../delivery/structured-agent-session-queued-send-answer'
 import { STOP_COMMAND_RECEIPT } from './structured-agent-session-stop-acceptance'
 import { runTargetedCancel } from './structured-agent-session-targeted-cancel'
+import { journalRowReceiptResult } from './structured-agent-session-journal-row-receipt'
+
+export { journalRowReceiptResult }
 import type { JournalOperationReceipt } from '../../agent-session-journal/writing/journal-row-writer'
 import type { CommandReceiptResult } from '../../agent-session-journal/writing/command-receipt-schema'
 import type { JournalRow } from '../../agent-session-journal/durable-rows/journal-row-schema'
-export { promptPlan } from './structured-agent-session-prompt-plan'
 
 export type MutationPlan<TValue> = {
   method: string
   fields: Record<string, unknown>
   operationIdScope?: 'global'
-  acceptanceRecord?: (record: AgentSessionRecord) => AgentSessionRecord
+  acceptanceRecord?: AgentSessionRecordAcceptance
   /** Needs no writer lease. */
   conversationWrite?: true
   run: (ctx: AgentSessionTurnContext) => Promise<TurnOutcome<TValue>>
@@ -61,7 +65,7 @@ export type MutationPlan<TValue> = {
     ctx: AgentSessionReplayContext,
     outcome: AgentSessionOperationOutcome,
     receipt?: CommandReceiptResult
-  ) => TValue | null
+  ) => TValue | null | Promise<TValue | null>
   rerunWhenReplayMissing?: (ctx: AgentSessionReplayContext) => boolean
   recoverUnknownFromDurableState?: boolean
 } & (
@@ -87,24 +91,21 @@ export type MutationPlan<TValue> = {
 
 /** Insert acceptance with its effect, if absent. */
 export type MutationCommandReceipt<TValue> = {
+  binding: JournalReceiptRowBinding
   /** Resolve inside the effect transaction; draft writes have no journal row. */
   result: (row: JournalRow | undefined) => CommandReceiptResult
   /** Commit a standalone receipt before answering a row-free result; null records nothing. */
   unwritten?: (value: TValue, ctx: AgentSessionTurnContext) => CommandReceiptResult | null
 }
 
-export function journalRowReceiptResult(
-  row: JournalRow | undefined,
-  ...kinds: JournalRow['kind'][]
-): CommandReceiptResult {
-  if (!row || !kinds.includes(row.kind)) {
-    throw new Error(`an accepted command requires its ${kinds.join(' or ')} row`)
-  }
-  return { kind: 'journal-row', epoch: row.epoch, sequence: row.seq }
-}
-
 function submissionOrDraftReceipt<TValue>(clientMessageId: string): MutationCommandReceipt<TValue> {
   return {
+    binding: {
+      at: 'last',
+      kinds: ['submission'],
+      answer: 'journal-row',
+      absent: { kind: 'queued-draft', messageId: clientMessageId }
+    },
     result: (row) =>
       row
         ? journalRowReceiptResult(row, 'submission')
@@ -129,7 +130,7 @@ export function sendPlan(
     userSend?: true
     /** Host-sent personal text; userSend always implies this. */
     personsMessage?: true
-    beforeRun?: () => void
+    beforeRun?: () => void | Promise<void>
   }
 ): MutationPlan<AgentSessionSendResult> {
   // Match operation ID to optimistic client message ID for durable reconciliation.
@@ -144,7 +145,6 @@ export function sendPlan(
     recoverUnknownFromDurableState: true,
     // retryUnknown is compatibility-only; recorded sends replay without redelivery.
     run: async (ctx) => {
-      params.beforeRun?.()
       const source = sendSource(params)
       return performSend(ctx, {
         origin: params.userSend ? 'client' : 'host',
@@ -157,17 +157,12 @@ export function sendPlan(
         body: params.body
       })
     },
-    replay: (ctx, outcome) => {
-      // Replay requested queue sends from card/handoff, including withdrawn cards; direct sends
-      // must answer from submissions readable by clients that never supplied delivery.
-      const queued =
-        params.delivery === 'queue-if-active'
-          ? queuedSendAnswer(ctx.journal, clientMessageId)
-          : null
+    replay: async (ctx, outcome) => {
+      const queued = await queuedSendAnswer(ctx.journal, clientMessageId)
       if (queued) {
         return queued
       }
-      const submission = ctx.journal.submission(clientMessageId)
+      const submission = await ctx.journal.reads.submission(clientMessageId)
       if (submission) {
         return { clientMessageId, submission: { ...submission } }
       }
@@ -225,18 +220,14 @@ export function conversationCommandPlan(params: {
       })
       return sent.ok ? { ok: true, value: { clientMessageId } } : sent
     },
-    replay: (ctx) => {
-      // Only queue-requesting commands may replay from cards before their submission exists.
-      const queued =
-        params.delivery === 'queue-if-active'
-          ? queuedSendAnswer(ctx.journal, clientMessageId)
-          : null
+    replay: async (ctx) => {
+      const queued = await queuedSendAnswer(ctx.journal, clientMessageId)
       if (queued) {
         return 'queued' in queued
           ? { queued: queued.queued }
           : { clientMessageId: queued.submission.clientMessageId }
       }
-      if (ctx.journal.submission(clientMessageId) !== undefined) {
+      if ((await ctx.journal.reads.submission(clientMessageId)) !== undefined) {
         return { clientMessageId }
       }
       const prior = params.priorRecord()

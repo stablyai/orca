@@ -114,7 +114,7 @@ export function ComponentFixtureFrame({
 }): React.JSX.Element {
   return (
     <I18nProvider>
-      <TooltipProvider delayDuration={400}>
+      <TooltipProvider>
         <div
           id={FRAME_ID}
           className="inline-block bg-background p-4 text-foreground"

@@ -1,9 +1,9 @@
 import { ipcMain } from 'electron'
 import { readLocalFileRange } from './local-file-range-read'
-import { validateFileRangeRequest } from '../../../shared/file-range-read'
+import { validateFileRangeRequest } from '../../../shared/file-content/file-range-read'
 import { SshHostNotServedError } from '../../providers/ssh-host-not-served-error'
 import { resolveLocalFileRequestPath } from './access/local-file-access-resolution'
-import type { LocalFileAccess } from '../../../shared/local-file-access'
+import type { LocalFileAccess } from '../../../shared/file-access/local-file-access'
 import type { FilesystemHandlerContext } from './filesystem-handler-context'
 import { guardWslUncPathAccess } from '../../wsl/filesystem/wsl-unc-access-gate'
 

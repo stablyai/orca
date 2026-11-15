@@ -1,4 +1,4 @@
-import type { Repo } from '../../../../shared/repo-types'
+import type { Repo } from '../../../../shared/repository/repo-types'
 import type { ProjectRuntimeResolutionStore } from '../../../workspaces/execution-host/local-project-runtime-resolution'
 import type { GitWorktreeInfo } from '../../../../shared/worktree/types'
 import type { WorktreeRemovalRoute } from '../../../workspaces/removal/worktree-removal-execution-host-route'

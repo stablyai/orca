@@ -3,12 +3,12 @@ import { createTerminalTitleTracker } from '../../src/shared/terminal/output/ter
 import { createAgentCompletionCoordinator } from '../../src/renderer/src/components/terminal-pane/agent-completion/agent-completion-coordinator'
 import { resetAgentCompletionCoordinatorIdentitiesForTest } from '../../src/renderer/src/components/terminal-pane/agent-completion/agent-completion-identity-store'
 import type { AgentCompletionDispatchMeta } from '../../src/renderer/src/components/terminal-pane/agent-completion/agent-completion-coordinator-types'
-import { inspectRuntimeTerminalProcess } from '../../src/renderer/src/runtime/runtime-terminal-inspection'
-import { clearRuntimeCompatibilityCacheForTests } from '../../src/renderer/src/runtime/runtime-rpc-client'
+import { inspectRuntimeTerminalProcess } from '../../src/renderer/src/runtime/hosted-terminals/inspection/runtime-terminal-process-inspection'
+import { clearRuntimeCompatibilityCache as clearRuntimeCompatibilityCacheForTests } from '../../src/renderer/src/runtime/rpc/compatibility/runtime-compatibility-cache'
 import {
   createCompatibleRuntimeStatusResponseIfNeeded,
   type RuntimeEnvironmentCallRequest
-} from '../../src/renderer/src/runtime/runtime-compatibility-test-fixture'
+} from '../../src/renderer/src/runtime/rpc/testing/runtime-compatibility-test-fixture'
 
 const REMOTE_PTY_ID = 'remote:remote-host@@term_remote_agent'
 

@@ -11,12 +11,12 @@ import type { RuntimeFileCommandHost } from './file-command-host'
 import { resolveRuntimeAuthorizedPath } from './chat-scratch-file-root'
 import { constants, copyFile, mkdir, rm } from 'node:fs/promises'
 import { dirname } from 'node:path'
-import type { FileBytesWritePrecondition } from '../../../shared/file-bytes-write'
+import type { FileBytesWritePrecondition } from '../../../shared/file-write/file-bytes-write'
 import { replaceLocalFileBytesIfUnchanged } from '../../ipc/filesystem/local-disk-bytes-replace'
 import type {
   FileWriteDiskPrecondition,
   FileWriteResult
-} from '../../../shared/file-write-disk-precondition'
+} from '../../../shared/file-write/file-write-disk-precondition'
 
 type RuntimeFileMutationHost = Pick<
   RuntimeFileCommandHost,

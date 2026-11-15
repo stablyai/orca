@@ -1,8 +1,8 @@
 import {
   setWorktreeNavActivator,
   setWorktreeNavViewActivator
-} from '@/store/slices/worktree-nav-history'
-import type { WorktreeNavHistoryViewEntry } from '@/store/slices/worktree-nav-history'
+} from '@/store/slices/ui/workspace-navigation-history'
+import type { WorktreeNavHistoryViewEntry } from '@/store/slices/ui/workspace-navigation-history'
 
 type ActivateFn = (worktreeId: string, opts: { navigationIntent: 'user-open' }) => unknown
 type ViewActivateFn = (entry: WorktreeNavHistoryViewEntry) => void

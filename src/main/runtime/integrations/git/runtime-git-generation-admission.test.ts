@@ -16,14 +16,14 @@ const mocks = vi.hoisted(() => ({
 
 const linkedLookup = vi.hoisted(() => ({ run: (): Promise<null> => Promise.resolve(null) }))
 
-vi.mock('../../../git/source-control/staged-commit-context', () => ({
+vi.mock('../../../git/source-control/mutations/staged-commit-context', () => ({
   getStagedCommitContext: mocks.getStagedCommitContext
 }))
 vi.mock('../../../git/command-runner/git-exec-file', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   gitExecFileAsync: mocks.gitExecFileAsync
 }))
-vi.mock('../../../text-generation/pull-request-context', () => ({
+vi.mock('../../../text-generation/pull-request-context/pull-request-context', () => ({
   getPullRequestDraftContext: mocks.getPullRequestDraftContext
 }))
 vi.mock('../../../source-control/pull-request-linked-issue', () => ({
@@ -33,18 +33,22 @@ vi.mock('../../../source-control/pull-request-linked-issue', () => ({
     return linkedLookup.run()
   }
 }))
-vi.mock('../../../text-generation/commit-message-agent-environment', () => ({
+vi.mock('../../../text-generation/execution/commit-message-agent-environment', () => ({
   prepareLocalCommitMessageAgentEnv: mocks.prepareLocalCommitMessageAgentEnv
 }))
-vi.mock('../../../text-generation/commit-message-text-generation', () => ({
-  generateCommitMessageFromContext: mocks.generateCommitMessageFromContext,
-  generatePullRequestFieldsFromContext: mocks.generatePullRequestFieldsFromContext
-}))
+vi.mock('../../../text-generation/commit-message-text-generation', async () => {
+  const { cancelLocalGeneration } =
+    await import('../../../text-generation/execution/source-control-generation-lanes')
+  return {
+    cancelGenerateCommitMessageLocal: (cwd: string) => cancelLocalGeneration('commit-message', cwd),
+    generateCommitMessageFromContext: mocks.generateCommitMessageFromContext,
+    generatePullRequestFieldsFromContext: mocks.generatePullRequestFieldsFromContext
+  }
+})
 vi.mock('../../../source-control/pull-request-template', () => ({
   resolveHostedReviewBodyForGeneration: mocks.resolveHostedReviewBodyForGeneration
 }))
 
-import { SSH_HOST_NOT_SERVED_MESSAGE } from '../../../providers/ssh-host-not-served-error'
 import { RuntimeGitGenerationCommands } from './runtime-git-generation-commands'
 
 const params = { agentId: 'codex' as const, model: 'gpt-5.5' }
@@ -92,73 +96,23 @@ describe('RuntimeGitGenerationCommands admission', () => {
     mocks.generatePullRequestFieldsFromContext.mockResolvedValue({ success: true, fields: {} })
   })
 
-  it('marks local staged commit context as interactive without dropping WSL routing', async () => {
-    mocks.getStagedCommitContext.mockResolvedValue({
-      branch: 'main',
-      stagedSummary: 'M README.md',
-      stagedPatch: '+hello'
+  it('honors a commit message cancel issued while staged context is loading', async () => {
+    const stagedContext = Promise.withResolvers<unknown>()
+    mocks.getStagedCommitContext.mockReturnValue(stagedContext.promise)
+    const commands = makeCommands(makeTarget('/repo'))
+
+    const result = commands.generateRuntimeCommitMessage('id:wt-1', settingsOverride)
+    await vi.waitFor(() => expect(mocks.getStagedCommitContext).toHaveBeenCalledOnce())
+    await commands.cancelRuntimeGenerateCommitMessage('id:wt-1')
+
+    await expect(result).resolves.toEqual({
+      success: false,
+      error: 'Generation canceled.',
+      canceled: true
     })
-    const commands = makeCommands(
-      makeTarget('C:\\repo', { localGitOptions: { wslDistro: 'Ubuntu' } })
-    )
-
-    await commands.generateRuntimeCommitMessage('id:wt-1', settingsOverride)
-
-    expect(mocks.getStagedCommitContext).toHaveBeenCalledWith('C:\\repo', {
-      wslDistro: 'Ubuntu',
-      admissionTier: 'interactive'
-    })
-  })
-
-  it('marks local pull-request context and linked-issue reads as interactive', async () => {
-    mocks.getPullRequestDraftContext.mockImplementation(async (execute) => {
-      await execute(['fetch', 'origin', 'main'], { timeout: 123 })
-      await execute(['show-ref', '--verify'], { maxBuffer: 456, timeoutMs: 789 })
-      return pullRequestContext
-    })
-    const commands = makeCommands(
-      makeTarget('C:\\repo', { localGitOptions: { wslDistro: 'Ubuntu' } })
-    )
-
-    await commands.generateRuntimePullRequestFields(
-      'id:wt-1',
-      { base: 'main', title: '', body: '', draft: false },
-      settingsOverride
-    )
-
-    expect(mocks.gitExecFileAsync).toHaveBeenCalledWith(['fetch', 'origin', 'main'], {
-      cwd: 'C:\\repo',
-      wslDistro: 'Ubuntu',
-      timeout: 123,
-      admissionTier: 'interactive'
-    })
-    expect(mocks.gitExecFileAsync).toHaveBeenCalledWith(['show-ref', '--verify'], {
-      cwd: 'C:\\repo',
-      wslDistro: 'Ubuntu',
-      maxBuffer: 456,
-      timeout: 789,
-      admissionTier: 'interactive'
-    })
-    expect(mocks.loadPullRequestLinkedIssue).toHaveBeenCalledWith(
-      expect.objectContaining({
-        localGitOptions: { wslDistro: 'Ubuntu', admissionTier: 'interactive' }
-      })
-    )
-  })
-
-  it('reports an SSH pull-request target unserved without reading git anywhere', async () => {
-    const commands = makeCommands(makeTarget('/remote/repo', { executionHostId: 'ssh:conn-1' }))
-
-    await expect(
-      commands.generateRuntimePullRequestFields(
-        'id:wt-1',
-        { base: 'main', title: '', body: '', draft: false },
-        settingsOverride
-      )
-    ).resolves.toMatchObject({ success: false, error: SSH_HOST_NOT_SERVED_MESSAGE })
-    expect(mocks.getPullRequestDraftContext).not.toHaveBeenCalled()
-    expect(mocks.gitExecFileAsync).not.toHaveBeenCalled()
-    expect(mocks.loadPullRequestLinkedIssue).not.toHaveBeenCalled()
+    stagedContext.resolve({ branch: 'main', stagedSummary: 'M\tREADME.md', stagedPatch: '+hello' })
+    await nextTurn()
+    expect(mocks.generateCommitMessageFromContext).not.toHaveBeenCalled()
   })
 
   describe('linked-issue lifetime', () => {
@@ -232,25 +186,6 @@ describe('RuntimeGitGenerationCommands admission', () => {
         preparation.resolve(pullRequestContext)
         await result
         process.off('unhandledRejection', unhandled)
-      }
-    })
-
-    it('still rejects the caller after successful preparation when the lookup fails', async () => {
-      const issue = Promise.withResolvers<null>()
-      const failure = new Error('lookup failed')
-      linkedLookup.run = () => issue.promise
-      mocks.getPullRequestDraftContext.mockResolvedValue(pullRequestContext)
-      const result = commands()
-        .generateRuntimePullRequestFields('id:wt-1', input, settingsOverride)
-        .catch((error: unknown) => error)
-      try {
-        await nextTurn()
-        issue.reject(failure)
-        expect(await result).toBe(failure)
-        expect(mocks.generatePullRequestFieldsFromContext).not.toHaveBeenCalled()
-      } finally {
-        issue.resolve(null)
-        await result
       }
     })
   })

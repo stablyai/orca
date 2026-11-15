@@ -1,13 +1,13 @@
-import { focusTerminalTabSurface } from '@/lib/focus-terminal-tab-surface'
+import { focusTerminalTabSurface } from '@/components/terminal-pane/input/focus/focus-terminal-tab-surface'
 import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/workspace/ownership/worktree-runtime-owner'
-import { activateWebRuntimeSessionTab } from '@/runtime/web-runtime-session-tab-lifecycle'
-import { isWebRuntimeSessionActive } from '@/runtime/web-runtime-session-environment'
+import { activateWebRuntimeSessionTab } from '@/runtime/web-session-tabs-sync/actions/web-runtime-session-tab-lifecycle'
+import { isWebRuntimeSessionActive } from '@/runtime/web-session-tabs-sync/identity/web-runtime-session-environment'
 import { useAppStore } from '@/store/index'
 import type { AppState } from '@/store/types'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
 import { activateAndRevealWorkspace } from '../../activation/worktree-activation'
 import { activateStructuredAgentSessionTab } from '../../../agent-session/structured-agent-session-tab-activation'
-import { clearClientHostedBrowserRowSelection } from '../../../pane-manager/client-hosted-browser-row-state'
+import { clearClientHostedBrowserRowSelection } from '../../../../runtime/browser/client-hosting/client-hosted-browser-row-state'
 import { isEditorTabContentType } from '@/store/slices/editor/tabs/editor-tab-content-type'
 import {
   findAmbiguousWorktreeIds,
@@ -15,7 +15,7 @@ import {
   hasOpenFileExecutionHostEvidence,
   isOpenFileOwnedByWorktree,
   isUnifiedTabOwnedByWorktree
-} from '../../../unified-tab-host-ownership'
+} from '../../ownership/unified-tab-host-ownership'
 import type { WorkspaceTabPaletteSearchResult } from './workspace-tab-palette-results'
 
 export type WorkspaceTabPaletteActivationFailure =
@@ -46,6 +46,7 @@ type WorkspaceTabPaletteActivationState = Pick<
   | 'setActiveFile'
   | 'setActiveTab'
   | 'setActiveTabType'
+  | 'terminalLayoutsByTabId'
   | 'unifiedTabsByWorktree'
   | 'worktreesByRepo'
 >
@@ -136,16 +137,19 @@ export function activateWorkspaceTabPaletteResult(
   state.activateTab(result.tabId, { worktreeId: result.worktreeId })
 
   if (result.contentType === 'terminal') {
+    // Why: the palette already took focus, so a tab-wide focus or host activation picks the first split pane.
+    const activeLeafId = state.terminalLayoutsByTabId[result.entityId]?.activeLeafId ?? null
     if (isWebRuntimeSessionActive(runtimeEnvironmentId)) {
       void activateWebRuntimeSessionTab({
         worktreeId: result.worktreeId,
         tabId: result.entityId,
-        environmentId: runtimeEnvironmentId
+        environmentId: runtimeEnvironmentId,
+        leafId: activeLeafId
       })
     }
     state.setActiveTab(result.entityId)
     state.setActiveTabType('terminal', result.worktreeId)
-    focusTerminalTabSurface(result.entityId)
+    focusTerminalTabSurface(result.entityId, activeLeafId)
     return { status: 'activated' }
   }
 

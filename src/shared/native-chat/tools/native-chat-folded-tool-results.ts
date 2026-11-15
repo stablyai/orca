@@ -121,6 +121,13 @@ export class FoldedToolResultSources {
   }
 }
 
+const ORPHAN_ROW_ID_PREFIX = 'unpaired-tool-results:'
+
+/** Whether the row id has the shape `orphanRowId` mints. */
+export function isOrphanRowId(id: string): boolean {
+  return id.startsWith(ORPHAN_ROW_ID_PREFIX)
+}
+
 export function orphanRowId(
   sourceId: string,
   allocated: ReadonlySet<string>,
@@ -128,10 +135,10 @@ export function orphanRowId(
   reserved?: ReadonlySet<string>
 ): string {
   let occurrence = occurrences.get(sourceId) ?? 0
-  let id = `unpaired-tool-results:${JSON.stringify([sourceId, occurrence])}`
+  let id = `${ORPHAN_ROW_ID_PREFIX}${JSON.stringify([sourceId, occurrence])}`
   while (allocated.has(id) || reserved?.has(id)) {
     occurrence += 1
-    id = `unpaired-tool-results:${JSON.stringify([sourceId, occurrence])}`
+    id = `${ORPHAN_ROW_ID_PREFIX}${JSON.stringify([sourceId, occurrence])}`
   }
   occurrences.set(sourceId, occurrence + 1)
   return id

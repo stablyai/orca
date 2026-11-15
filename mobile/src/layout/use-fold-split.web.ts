@@ -1,6 +1,6 @@
 import { useSyncExternalStore } from 'react'
 import { useWindowDimensions } from 'react-native'
-import { usePageBridgeClient } from '../transport/client-context.web'
+import { usePageBridgeClient } from '../transport/connection/client-context.web'
 import type { FoldSplit } from './fold-division'
 
 /** The fold the shell measured over this page, in the page's px; null when none splits it. */

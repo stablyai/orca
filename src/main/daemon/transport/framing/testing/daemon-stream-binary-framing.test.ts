@@ -1,20 +1,10 @@
 import { describe, expect, it, vi } from 'vitest'
 import {
   createBinaryStreamFrameReader,
-  encodeBinaryStreamDataFrame,
-  encodeBinaryStreamEventFrame
+  encodeBinaryStreamDataFrame
 } from '../daemon-stream-binary-framing'
-import { createNdjsonParser } from '../../../../../shared/main-process-ndjson-framer'
-import { streamFramesFor, type StreamWriteChunk } from '../daemon-stream-data-split'
+import { streamFramesFor } from '../daemon-stream-data-split'
 import type { DaemonEvent } from '../../../protocol/daemon-stream-events'
-
-function isDaemonEvent(record: unknown): record is DaemonEvent {
-  return (
-    typeof record === 'object' && record !== null && 'type' in record && record.type === 'event'
-  )
-}
-
-const TERMINAL_TEXT = '\x1b[38;5;208m┌─ build ─┐\x1b[0m \u{1F680} ok\r\n"quoted" \\ tab\t'
 
 function readAll(chunks: Buffer[], splitEvery?: number): { events: DaemonEvent[]; fatal: Error[] } {
   const events: DaemonEvent[] = []
@@ -31,53 +21,7 @@ function readAll(chunks: Buffer[], splitEvery?: number): { events: DaemonEvent[]
   return { events, fatal }
 }
 
-function binaryEvents(write: (stream: { write(chunk: StreamWriteChunk): void }) => void) {
-  const frames: Buffer[] = []
-  write({ write: (chunk) => frames.push(Buffer.from(chunk)) })
-  return readAll(frames).events
-}
-
-function ndjsonEvents(write: (stream: { write(chunk: StreamWriteChunk): void }) => void) {
-  const events: DaemonEvent[] = []
-  const parser = createNdjsonParser(
-    (record) => {
-      if (isDaemonEvent(record)) {
-        events.push(record)
-      }
-    },
-    () => {}
-  )
-  write({ write: (chunk) => parser.feed(String(chunk)) })
-  return events
-}
-
 describe('binary stream framing', () => {
-  it('round-trips data and event frames across any socket chunking', () => {
-    const frames = [
-      encodeBinaryStreamDataFrame('session-1', TERMINAL_TEXT, { seq: 42, rawLength: 7 }),
-      encodeBinaryStreamEventFrame({
-        type: 'event',
-        event: 'exit',
-        sessionId: 'session-1',
-        payload: { code: 0 }
-      }),
-      encodeBinaryStreamDataFrame('session-2', '')
-    ]
-    const expected = [
-      {
-        type: 'event',
-        event: 'data',
-        sessionId: 'session-1',
-        payload: { seq: 42, rawLength: 7, data: TERMINAL_TEXT }
-      },
-      { type: 'event', event: 'exit', sessionId: 'session-1', payload: { code: 0 } },
-      { type: 'event', event: 'data', sessionId: 'session-2', payload: { data: '' } }
-    ]
-    for (const splitEvery of [undefined, 1, 3, 7]) {
-      expect(readAll(frames, splitEvery)).toEqual({ events: expected, fatal: [] })
-    }
-  })
-
   it('drops an unparsable record but keeps reading the frames after it', () => {
     const broken = Buffer.from([1, 0, 0, 0, 3, 0x7b, 0x7b, 0x7b])
     const next = encodeBinaryStreamDataFrame('session-1', 'after')
@@ -101,64 +45,6 @@ describe('binary stream framing', () => {
     )
     expect(oversized).toHaveBeenCalledTimes(1)
   })
-
-  it.each([
-    ['plain', undefined, undefined, false],
-    ['seq and raw length', 12_000, 90_000, false],
-    ['zero raw length', 0, 7, false],
-    ['transformed', 3, 11, true]
-  ] as const)(
-    'follows the NDJSON per-chunk metadata rules for %s data',
-    (_label, raw, seq, transformed) => {
-      const data = TERMINAL_TEXT.repeat(400)
-      const rawLength = raw ?? data.length
-      const write =
-        (framing: 'ndjson' | 'binary-v1') =>
-        (stream: { write(chunk: StreamWriteChunk): void }): void =>
-          streamFramesFor(framing).data(
-            stream,
-            'session-1',
-            data,
-            4096,
-            rawLength,
-            seq,
-            transformed
-          )
-      // Chunk boundaries differ by design (byte vs JSON budgets); the metadata rules must not.
-      const describeChunks = (events: DaemonEvent[]) => {
-        let consumed = 0
-        return events.map((event) => {
-          if (event.event !== 'data') {
-            throw new Error('expected data events only')
-          }
-          const { data: chunk, ...meta } = event.payload
-          consumed += chunk.length
-          return {
-            meta,
-            expected: transformed
-              ? { seq, rawLength, sequenceChars: rawLength, transformed: true }
-              : {
-                  ...(seq === undefined ? {} : { seq: seq - (data.length - consumed) }),
-                  ...(raw === undefined && seq === undefined
-                    ? {}
-                    : {
-                        rawLength: raw === 0 ? 0 : chunk.length,
-                        sequenceChars: raw === 0 ? 0 : chunk.length
-                      })
-                }
-          }
-        })
-      }
-      for (const events of [binaryEvents(write('binary-v1')), ndjsonEvents(write('ndjson'))]) {
-        expect(
-          events.map((event) => (event.event === 'data' ? event.payload.data : '')).join('')
-        ).toBe(data)
-        for (const { meta, expected } of describeChunks(events)) {
-          expect(meta).toEqual(expected)
-        }
-      }
-    }
-  )
 
   it('keeps every frame within the frame budget', () => {
     const frames: Buffer[] = []

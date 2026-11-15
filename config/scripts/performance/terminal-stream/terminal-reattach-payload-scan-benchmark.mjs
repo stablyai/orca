@@ -10,13 +10,13 @@ const jiti = createJiti(import.meta.url, {
   alias: { '@': fileURLToPath(new URL('../../../../src/renderer/src', import.meta.url)) }
 })
 const { CSI_SEQUENCE_PATTERN } = await jiti.import(
-  '../../../../src/shared/ansi-escape-sequences.ts'
+  '../../../../src/shared/terminal/protocol/escape/ansi-escape-sequences.ts'
 )
 const { TerminalKittyKeyboardModeTracker } = await jiti.import(
   '../../../../src/shared/terminal/protocol/input-modes/terminal-kitty-keyboard-mode-tracker.ts'
 )
 const { hasCursorAgentReattachPayloadScreenSignal: signalSuffixRegex } = await jiti.import(
-  '../../../../src/renderer/src/components/terminal-pane/pty-connection/cursor-agent-reattach-screen.ts'
+  '../../../../src/renderer/src/components/terminal-pane/pty-connection/reattach/cursor-agent-reattach-screen.ts'
 )
 
 const ROUNDS = Number(process.env.ORCA_REATTACH_SCAN_BENCH_ROUNDS ?? '7')

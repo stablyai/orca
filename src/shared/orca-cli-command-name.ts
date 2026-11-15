@@ -1,4 +1,4 @@
-import { getAppEnvironment, hasAppEnvironment } from './app-environment'
+import { getAppEnvironment, hasAppEnvironment } from './app-lifecycle/app-environment'
 
 export function getOrcaCliCommandNameForPlatform(platform: NodeJS.Platform): string {
   if (platform === 'linux') {

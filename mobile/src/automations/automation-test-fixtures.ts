@@ -1,7 +1,8 @@
 import { getSshTargetIdForExecutionHost } from '../../../src/shared/execution-host'
 import { vi } from 'vitest'
-import type { RpcClient } from '../transport/rpc-client'
-import type { ConnectionState, RpcResponse } from '../transport/types'
+import type { RpcClient } from '../transport/rpc/rpc-client-contract'
+import type { ConnectionState } from '../transport/connection/connection-state'
+import type { RpcResponse } from '../transport/rpc/rpc-wire-types'
 import { automationSchema, runSchema, setupInventorySchema } from './automation-reply-schema'
 import type { AutomationTargets } from './automation-target-inventory'
 

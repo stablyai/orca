@@ -18,7 +18,7 @@ import type {
 } from '../../../../shared/mobile-push-contract'
 import { MobileNotificationReplayBuffer } from './mobile-notification-replay'
 import { notifyRuntimeListeners } from '../../events/runtime-listener-delivery'
-import { getRuntimeDesktopSurface } from '../../runtime-desktop-surface'
+import { getRuntimeDesktopSurface } from '../../construction/runtime-desktop-surface'
 import { MobileNotificationDismissalStore } from './mobile-notification-dismissal-store'
 import { DesktopClientPresenceTracker } from './desktop-client-presence-tracker'
 import type { DeliveredNotificationIdentity } from '../../../../shared/mobile-notification-identity'

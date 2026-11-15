@@ -1,7 +1,7 @@
 import {
   enqueueAgentProcessInspection,
   type InspectionPriority
-} from '../agent-process-inspection-queue'
+} from './process-inspection/agent-process-inspection-queue'
 import {
   recognizeAgentProcess,
   type RecognizedAgentProcess

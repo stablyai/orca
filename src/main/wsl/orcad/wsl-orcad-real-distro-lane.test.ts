@@ -1,3 +1,4 @@
+import '../../../shared/remote-runtime/host-store/environment-store-worker-test-fixture'
 // C10 real WSL2/systemd-on/off contract: C4 deploy, C5 RPC bridge, C6 loss/recovery, E1 deferred/forced/idle updates, then a separate survive process proves holder adoption, git/folder chat, a mid-reply distro stop resumed by Start and Continue, and cleanup. wsl-orcad-e2e.yml imports/runs both phases.
 // Run: ORCA_RUN_WSL_ORCAD_LANE=1 ORCA_WSL_ORCAD_LANE_PHASE=launch|survive pnpm test <this file>
 import { createHash, randomBytes } from 'node:crypto'
@@ -9,17 +10,17 @@ import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 vi.mock('electron', () => ({ app: { getAppPath: () => process.cwd() } }))
 
 import { runProcess } from '@orca/process-host'
-import { setAppEnvironment } from '../../../shared/app-environment'
-import { ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES } from '../../../shared/electron-remote-runtime-client-capabilities'
+import { setAppEnvironment } from '../../../shared/app-lifecycle/app-environment'
+import { ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES } from '../../../shared/remote-runtime/protocol/electron-remote-runtime-client-capabilities'
 import { pairedRuntimeConnectionFromOffer } from '../../../shared/remote-runtime/pairing/paired-runtime-connection'
 import { parsePairingCode } from '../../../shared/remote-runtime/pairing/pairing'
-import { sendRemoteRuntimeRequest } from '../../../shared/remote-runtime/remote-runtime-client'
-import { buildWslExecArgs } from '../../../shared/wsl-login-shell-command'
+import { sendRemoteRuntimeRequestOnSocket } from '../../../shared/remote-runtime/requests/remote-runtime-request-socket'
+import { buildWslExecArgs } from '../../../shared/shell/wsl/wsl-login-shell-command'
 import {
   ORCAD_LAUNCHER_FILENAME,
   ORCAD_TEMPLATE_MANIFEST_FILENAME
-} from '../../../shared/orcad-artifacts'
-import { requestOrcadTerminalCensus } from '../../ssh/orcad-terminal-census-client'
+} from '../../../shared/remote-runtime/orcad-distribution/orcad-artifacts'
+import { requestOrcadTerminalCensus } from '../../managed-server/lifecycle/orcad-terminal-census-client'
 import { execCommand } from '../../ssh/remote-exec/remote-exec-command'
 import { readConfirmedRunningWslDistros } from '../discovery/wsl-background-distro-gate'
 import { readWindowsProcessTableFresh } from '../../windows/windows-process-table'
@@ -30,10 +31,8 @@ import { listenWslOrcadStdioBridge } from './wsl-orcad-stdio-bridge'
 import { createWslDistroHolder } from '../discovery/wsl-distro-holder'
 import type { WslDistroHolder } from '../discovery/wsl-distro-holder-types'
 import { proveWslStructuredChat } from './__tests__/wsl-orcad-structured-chat-contract'
-import {
-  createLaneWslHost,
-  proveWslMidTurnStopAndContinue
-} from './__tests__/wsl-orcad-midturn-stop-lane'
+import { proveWslMidTurnStopAndContinue } from './__tests__/wsl-orcad-midturn-stop-lane'
+import { createLaneWslHost } from './__tests__/wsl-orcad-lane-host-fixture'
 import {
   reinstallWslGuestCli,
   WSL_CHAT_GUEST_BIN
@@ -211,14 +210,17 @@ function pairedConnection(connection: WslOrcadConnection) {
 }
 
 async function rpc<T>(connection: WslOrcadConnection, method: string, params?: unknown) {
-  const response = await sendRemoteRuntimeRequest<T>(
+  const response = await sendRemoteRuntimeRequestOnSocket<T>(
     pairedConnection(connection),
     method,
     params,
     30_000,
     undefined,
     undefined,
-    ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES
+    undefined,
+    ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES,
+    undefined,
+    undefined
   )
   if (!response.ok) {
     throw new Error(`${method} failed: ${response.error.code}: ${response.error.message}`)

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { useHostClient } from '../transport/host-client-hooks'
+import { useHostClient } from '../transport/connection/host-client-hooks'
 import { fetchMobileWebBundle } from '../transport/web-bundle/mobile-web-bundle-fetch'
 import { readMobileWebBundleErrorCode } from '../transport/web-bundle/mobile-web-bundle-operations'
 import { startDiagnosticFetchTimeout } from './diagnostic-fetch-timeout'

@@ -1,4 +1,4 @@
-import type { ProjectHostSetup } from '../../../../../../shared/project-types'
+import type { ProjectHostSetup } from '../../../../../../shared/project/project-types'
 import type { DetectedWorktreeListResult } from '../../../../../../shared/worktree/types'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
 import { sanitizeHostedReviewLinksForBranchClears } from '../metadata/hosted-review-link-mutation'

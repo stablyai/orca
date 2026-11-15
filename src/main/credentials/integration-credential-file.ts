@@ -9,9 +9,9 @@ import {
   unlinkSync,
   writeSync
 } from 'node:fs'
-import { getSecretStore } from '../../shared/secret-store'
-import { fsyncFileSync } from '../../shared/secure-file'
-import { writeRestrictedWindowsFile } from '../../shared/secure-path-windows-acl'
+import { getSecretStore } from '../../shared/secure-storage/secret-store'
+import { fsyncFileSync } from '../../shared/secure-storage/secure-file'
+import { writeRestrictedWindowsFile } from '../../shared/secure-storage/secure-path-windows-acl'
 import {
   credentialDecryptionMessage,
   type IntegrationCredentialService

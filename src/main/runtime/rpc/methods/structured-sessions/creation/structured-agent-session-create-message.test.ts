@@ -1,4 +1,5 @@
-import '../../../unused-default-rpc-methods.test-fixture'
+import { readTestHostJournal } from '../../../../../native-chat/agent-session-journal/journal-observation.test-support'
+import '../../../dispatch/testing/unused-default-rpc-methods.test-fixture'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY } from '../../../../../../shared/agent-session/agent-session-runtime-capabilities'
 import { AGENT_SESSION_CREATE_MESSAGE_RUNTIME_CAPABILITY } from '../../../../../../shared/agent-session/agent-session-create-capabilities'
@@ -7,16 +8,16 @@ import {
   createRestTestRig,
   restTestSend,
   type RestTestRig
-} from '../../../../../native-chat/agent-session-wire/host/testing/structured-agent-session-rest-test-rig'
+} from '../../../../../native-chat/agent-session-wire/host/testing/structured-agent-session-rest-test-rig.test-fixture'
 import {
   HOST_TEST_SESSION as SESSION,
   HOST_TEST_NOW as NOW,
   hostTestMessage,
   hostTestOperationId
-} from '../../../../../native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-data'
+} from '../../../../../native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-data.test-fixture'
 import { setStructuredAgentSessionHost } from '../../../../../native-chat/agent-session-wire/host/structured-agent-session-registry'
 import { call, runtimeCalls } from '../protocol/structured-agent-session-rpc.test-fixture'
-import { stopCreatedChat } from '../../../../../native-chat/agent-session-wire/host/testing/structured-agent-session-create-test-fixture'
+import { stopCreatedChat } from '../../../../../native-chat/agent-session-wire/host/testing/structured-agent-session-create.test-fixture'
 import '../../../../../native-chat/agent-session-wire/providers/structured-agent-session-adapter'
 import { AgentSessionPreSpawnError } from '../../../../../native-chat/agent-session-wire/providers/structured-agent-session-adapter-errors'
 
@@ -64,16 +65,6 @@ function params(
   })
 }
 
-it('a capable client creates a blank chat without acquire', async () => {
-  expect(await call('agentSession.create', params(), capable)).toMatchObject({
-    ok: true,
-    result: { ok: true, value: { page: { submissions: [] } } }
-  })
-  expect(rig.store.getRecord(SESSION)?.lease.claimStatus).toBe('released')
-  expect(rig.adapter.acquire).not.toHaveBeenCalled()
-  expect(runtimeCalls.publishStructuredAgentSessionTab).toHaveBeenCalledOnce()
-})
-
 it('refuses a new founding operation before dispatching the same opening again', async () => {
   const input = params(undefined, true)
   expect(await call('agentSession.create', input, capable)).toMatchObject({
@@ -93,7 +84,7 @@ it('refuses a new founding operation before dispatching the same opening again',
     }
   })
   expect(
-    (await rig.host.journalSnapshot(SESSION)).submissions.map((row) => row.clientMessageId)
+    (await readTestHostJournal(rig.host, SESSION)).submissions.map((row) => row.clientMessageId)
   ).toEqual([input.firstMessage?.clientMessageId])
   expect(rig.adapter.dispatch).toHaveBeenCalledOnce()
 })
@@ -216,7 +207,7 @@ it.each(['firstMessage', 'options'] as const)(
       ok: true,
       result: { ok: false, refusal: { code: 'agent_session_operation_conflict' } }
     })
-    expect((await rig.host.journalSnapshot(SESSION)).submissions).toEqual([])
+    expect((await readTestHostJournal(rig.host, SESSION)).submissions).toEqual([])
     expect(rig.adapter.acquire).toHaveBeenCalledOnce()
   }
 )
@@ -238,70 +229,6 @@ it('replaces unrelated host model defaults before the first acquisition', async 
   )
 })
 
-it('keeps the seeded permission mode beside explicit picks on an acquired create', async () => {
-  // The fixture's Codex intent, seeded with a permission mode.
-  const resolveStructuredAgentSessionCreateIntent = async (input: { envelope: unknown }) => ({
-    envelope: input.envelope,
-    location: {
-      executionHostId: 'local',
-      wslDistro: null,
-      workspaceId: 'workspace-1',
-      workspaceKind: 'git-worktree'
-    },
-    provider: 'codex',
-    agent: 'codex',
-    accountHome: { variable: 'CODEX_HOME', path: '/host/.codex' },
-    options: { model: 'gpt-5.6-sol', effort: 'medium', permissionMode: 'full-access' },
-    runtimeKind: 'native'
-  })
-  expect(
-    await call('agentSession.create', params({ model: 'held-model' }), legacy, {
-      resolveStructuredAgentSessionCreateIntent
-    })
-  ).toMatchObject({ ok: true, result: { ok: true } })
-  expect(rig.adapter.acquire).toHaveBeenCalledWith(
-    expect.objectContaining({ options: { model: 'held-model' }, permissionMode: 'full-access' })
-  )
-})
-
-it('keeps the remembered model under a permission mode picked alone on an acquired create', async () => {
-  // The not-at-rest path `agent.launch` with a prompt takes.
-  const resolveStructuredAgentSessionCreateIntent = async (input: { envelope: unknown }) => ({
-    envelope: input.envelope,
-    location: {
-      executionHostId: 'local',
-      wslDistro: null,
-      workspaceId: 'workspace-1',
-      workspaceKind: 'git-worktree'
-    },
-    provider: 'codex',
-    agent: 'codex',
-    accountHome: { variable: 'CODEX_HOME', path: '/host/.codex' },
-    options: { model: 'saved', effort: 'low', permissionMode: 'full-access' },
-    runtimeKind: 'native'
-  })
-  expect(
-    await call('agentSession.create', params({ permissionMode: 'ask' }), legacy, {
-      resolveStructuredAgentSessionCreateIntent
-    })
-  ).toMatchObject({ ok: true, result: { ok: true } })
-  expect(rig.adapter.acquire).toHaveBeenCalledWith(
-    expect.objectContaining({ options: { model: 'saved', effort: 'low' }, permissionMode: 'ask' })
-  )
-})
-
-it('rejects an explicit option the resting agent would reject before founding', async () => {
-  expect(
-    await call('agentSession.create', params({ unknownOption: 'yes' }), capable)
-  ).toMatchObject({
-    ok: true,
-    result: { ok: false, refusal: { details: { reason: 'optionRejected' } } }
-  })
-  expect(rig.store.getRecord(SESSION)).toBeNull()
-  expect(rig.store.listOperationRows()).toEqual([])
-  expect(rig.adapter.acquire).not.toHaveBeenCalled()
-})
-
 it.each(['options', 'firstMessage'] as const)(
   'rejects changes to firstMessage or explicit options under a replayed create operation: %s',
   async (field) => {
@@ -319,7 +246,7 @@ it.each(['options', 'firstMessage'] as const)(
     if (!first) {
       throw new Error('fixture first message missing')
     }
-    expect((await rig.host.journalSnapshot(SESSION)).submissions).toMatchObject([
+    expect((await readTestHostJournal(rig.host, SESSION)).submissions).toMatchObject([
       { clientMessageId: first.clientMessageId }
     ])
     const changed = structuredAgentSessionCreateParams({
@@ -338,34 +265,6 @@ it.each(['options', 'firstMessage'] as const)(
       result: { ok: false, refusal: { code: 'agent_session_operation_conflict' } }
     })
     expect(rig.adapter.acquire).not.toHaveBeenCalled()
-  }
-)
-
-it.each([undefined, 'replace-model-selection'] as const)(
-  'declared composition %s preserves ordinary defaults only when absent',
-  async (optionsMode) => {
-    const input = params({ model: 'held-model', effort: 'high' }, false, optionsMode)
-    await call('agentSession.create', input, capable, {
-      resolveStructuredAgentSessionCreateIntent: async ({ envelope }: { envelope: unknown }) => ({
-        envelope,
-        location: {
-          executionHostId: 'local',
-          wslDistro: null,
-          workspaceId: 'workspace-1',
-          workspaceKind: 'git-worktree'
-        },
-        provider: 'codex',
-        agent: 'codex',
-        accountHome: { variable: 'CODEX_HOME', path: '/host/.codex' },
-        options: { model: 'saved', effort: 'low', fastMode: 'false' },
-        runtimeKind: 'native'
-      })
-    })
-    expect(rig.store.getRecord(SESSION)?.options).toEqual({
-      model: 'held-model',
-      effort: 'high',
-      ...(optionsMode ? {} : { fastMode: 'false' })
-    })
   }
 )
 

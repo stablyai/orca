@@ -1,9 +1,12 @@
-import { assertPositiveInt, projectGhExecOptions, runGraphql, validateSlugArgs } from './internals'
-import type { PRComment } from '../../../shared/github/comment-types'
-import type { GitHubAssignableUser } from '../../../shared/github/pull-request-types'
-import type { GitHubWorkItemDetails } from '../../../shared/github/work-item-types'
-import type { ProjectWorkItemDetailsBySlugResult } from '../../../shared/github/project-result-types'
-import type { ProjectWorkItemDetailsBySlugArgs } from '../../../shared/github/project-request-types'
+import { githubBodyImageUrls, removeFailedGitHubBodyHtml } from '../attachments/body-image-urls'
+import { assertPositiveInt, validateSlugArgs } from './project-argument-validation'
+import { projectGhExecOptions } from './project-host-execution'
+import { runGraphql } from './project-graphql'
+import type { PRComment } from '../../../shared/github/comments/comment-types'
+import type { GitHubAssignableUser } from '../../../shared/github/pull-requests/pull-request-types'
+import type { GitHubWorkItemDetails } from '../../../shared/github/work-items/work-item-types'
+import type { ProjectWorkItemDetailsBySlugResult } from '../../../shared/github/projects/project-result-types'
+import type { ProjectWorkItemDetailsBySlugArgs } from '../../../shared/github/projects/project-request-types'
 
 type RawUser = { login?: string; name?: string | null; avatarUrl?: string | null }
 type RawLabel = { name?: string; color?: string }
@@ -11,6 +14,7 @@ type RawComment = {
   databaseId?: number
   author?: { login?: string; avatarUrl?: string; __typename?: string } | null
   body?: string
+  bodyHTML?: unknown
   createdAt?: string
   url?: string
 }
@@ -24,6 +28,7 @@ type RawWorkItemContent = {
   isDraft?: boolean
   updatedAt?: string
   body?: string
+  bodyHTML?: unknown
   headRefName?: string
   baseRefName?: string
   author?: { login?: string } | null
@@ -31,6 +36,13 @@ type RawWorkItemContent = {
   assignees?: { nodes?: RawUser[] }
   participants?: { nodes?: RawUser[] }
   comments?: { nodes?: (RawComment | null)[] }
+}
+
+type RawWorkItemDetailsResponse = {
+  repository?: {
+    issue?: RawWorkItemContent | null
+    pullRequest?: RawWorkItemContent | null
+  } | null
 }
 
 export async function getWorkItemDetailsBySlug(
@@ -51,49 +63,63 @@ export async function getWorkItemDetailsBySlug(
     }
   }
   const contentFragment = args.type === 'issue' ? ISSUE_FRAGMENT : PULL_REQUEST_FRAGMENT
-  const result = await runGraphql<{
-    repository?: {
-      issue?: RawWorkItemContent | null
-      pullRequest?: RawWorkItemContent | null
-    } | null
-  }>(
+  const result = await runGraphql<RawWorkItemDetailsResponse>(
     `query($owner:String!, $repo:String!, $num:Int!) {
        repository(owner:$owner, name:$repo) { ${contentFragment} }
      }`,
     { owner: args.owner, repo: args.repo, num: args.number },
     projectGhExecOptions(args.host)
   )
-  if (!result.ok) {
+  let data: RawWorkItemDetailsResponse | undefined
+  if (result.ok) {
+    data = result.data
+  } else {
+    try {
+      const response: { data?: RawWorkItemDetailsResponse; errors?: unknown[] } = JSON.parse(
+        result.raw.stdout
+      )
+      if (
+        !response.errors?.length ||
+        removeFailedGitHubBodyHtml(response.data, response.errors)?.length
+      ) {
+        return { ok: false, error: result.error }
+      }
+      data = response.data
+    } catch {
+      return { ok: false, error: result.error }
+    }
+  }
+  const raw = args.type === 'issue' ? data?.repository?.issue : data?.repository?.pullRequest
+  if (!result.ok && typeof raw?.body !== 'string') {
     return { ok: false, error: result.error }
   }
-  const raw =
-    args.type === 'issue' ? result.data.repository?.issue : result.data.repository?.pullRequest
   if (!raw) {
     return {
       ok: false,
       error: { type: 'not_found', message: 'Item not found.', reason: 'item_not_found' }
     }
   }
-  return { ok: true, details: mapWorkItemDetails(raw, args) }
+  const details = mapWorkItemDetails(raw, args)
+  return { ok: true, details }
 }
 
 const ISSUE_FRAGMENT = `issue(number:$num) {
-  id number title url state stateReason updatedAt body author { login }
+  id number title url state stateReason updatedAt body bodyHTML author { login }
   labels(first:50) { nodes { name } }
   assignees(first:50) { nodes { login } }
   participants(first:50) { nodes { login name avatarUrl } }
   comments(first:100) {
-    nodes { databaseId author { login avatarUrl __typename } body createdAt url }
+    nodes { databaseId author { login avatarUrl __typename } body bodyHTML createdAt url }
   }
 }`
 
 const PULL_REQUEST_FRAGMENT = `pullRequest(number:$num) {
-  id number title url state isDraft updatedAt headRefName baseRefName body author { login }
+  id number title url state isDraft updatedAt headRefName baseRefName body bodyHTML author { login }
   labels(first:50) { nodes { name } }
   assignees(first:50) { nodes { login } }
   participants(first:50) { nodes { login name avatarUrl } }
   comments(first:100) {
-    nodes { databaseId author { login avatarUrl __typename } body createdAt url }
+    nodes { databaseId author { login avatarUrl __typename } body bodyHTML createdAt url }
   }
 }`
 
@@ -117,6 +143,7 @@ function mapWorkItemDetails(
       author: comment.author?.login ?? '',
       authorAvatarUrl: comment.author?.avatarUrl ?? '',
       body: comment.body,
+      bodyImageUrls: githubBodyImageUrls(comment.body, comment.bodyHTML),
       createdAt: typeof comment.createdAt === 'string' ? comment.createdAt : '',
       url: typeof comment.url === 'string' ? comment.url : '',
       isBot: comment.author?.__typename === 'Bot'
@@ -161,6 +188,7 @@ function mapWorkItemDetails(
         args.type === 'pr' && typeof raw.baseRefName === 'string' ? raw.baseRefName : undefined
     },
     body: typeof raw.body === 'string' ? raw.body : '',
+    bodyImageUrls: githubBodyImageUrls(raw.body, raw.bodyHTML),
     comments,
     participants,
     assignees

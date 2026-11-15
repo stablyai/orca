@@ -1,25 +1,26 @@
-import { prepareWorktreeCreationHooks } from '@/lib/workspace/creation/worktree-creation-hook-preparation'
+import { prepareWorktreeCreationHooks, setupCreateArgs } from './worktree-creation-hook-preparation'
 import { useAppStore } from '@/store/index'
-import {
-  activateAndRevealWorktree,
-  type ActivateAndRevealResult
-} from '@/lib/workspace/activation/worktree-activation'
+import { activateAndRevealWorktree } from '@/lib/workspace/activation/worktree-activation'
+import type { ActivateAndRevealResult } from '@/lib/workspace/activation/worktree-activation-outcome'
 import { ensureWorktreeHasInitialTerminal } from '@/lib/workspace/activation/initial-surface/worktree-initial-terminal-seeding'
 import {
   attachEphemeralVmRuntimeToWorkspace,
   cleanupEphemeralVmRuntimeForFailedCreate,
   prepareRequestForCreate
-} from '@/lib/ephemeral-vm-worktree-creation'
-import { getProvisionedRootCreateOptions } from '@/lib/provisioned-root-create-options'
+} from '@/lib/workspace/creation/ephemeral-vm-worktree-creation'
+import { getProvisionedRootCreateOptions } from '@/lib/workspace/creation/provisioned-root-create-options'
+import { releaseVmCreateCheckout } from '@/runtime/ephemeral-vm/vm-create-hidden-checkouts'
 import {
   formatWorkspaceCreateError,
   getWorkspaceCreateErrorToastMessage
-} from '@/lib/workspace-create-error-format'
+} from '@/lib/workspace/creation/workspace-create-error-format'
 import type { CreatedWorktreeResult } from '@/store/slices/worktrees/create/worktree-create-payload'
 import type { WorktreeCreationRequest } from '@/lib/workspace/creation/pending-worktree-creation'
 import { resolveBackendDraftStartup } from '@/lib/workspace/creation/worktree-draft-startup-view-mode'
 import {
+  recoverWorktreeLegacyPreparation,
   hostPlannableAgentLaunch,
+  worktreeCreationAgentLaunchOptions,
   windowStartupAfterCreate
 } from '@/lib/workspace/creation/worktree-creation-host-agent-launch'
 import {
@@ -29,7 +30,7 @@ import {
 import { completeWorktreeCreation } from '@/lib/workspace/creation/worktree-creation-completion'
 import { showWorktreeCreationReadyToast } from '@/lib/workspace/creation/worktree-creation-ready-toast'
 import { mountCreatedWorktreeStartupTabsInBackground } from '@/lib/workspace/creation/worktree-creation-background-mount'
-import { ensureWebRuntimeWorktreeTerminalAfterWake } from '@/lib/web-runtime-worktree-terminal-after-wake'
+import { ensureWebRuntimeWorktreeTerminalAfterWake } from '@/runtime/hosted-terminals/restoration/web-runtime-worktree-terminal-after-wake'
 import {
   isCreatedWorkspaceInView,
   showWorktreeCreationError
@@ -45,10 +46,8 @@ export async function executeWorktreeCreation(
   const trustedRequest = request.hookPreparation
     ? await prepareWorktreeCreationHooks(creationId, request)
     : request
-  if (!trustedRequest) {
-    return
-  }
-  const preparedRequest = await prepareRequestForCreate(creationId, trustedRequest)
+  const preparedRequest =
+    trustedRequest && (await prepareRequestForCreate(creationId, trustedRequest))
   if (!preparedRequest) {
     return
   }
@@ -56,7 +55,6 @@ export async function executeWorktreeCreation(
   const structuredLaunch = preparedRequest.agentLaunchRoute === 'structured-native-chat'
   const creationHostId =
     preparedRequest.workspaceRunContext?.hostId ?? preparedRequest.executionHostId
-  // Named to later steps, so a same-path twin on another host can't blur the owner (L277).
   const onCreationHost = creationHostId ? { executionHostId: creationHostId } : {}
   const hostAgentLaunch = hostPlannableAgentLaunch(preparedRequest)
   let result: CreatedWorktreeResult
@@ -93,9 +91,10 @@ export async function executeWorktreeCreation(
         preparedRequest.linkedGiteaPR,
         preparedRequest.compareBaseRef,
         {
-          setupOnly: preparedRequest.setupOnly,
+          ...setupCreateArgs(preparedRequest),
           ...(preparedRequest.branchIntent ? { branchIntent: preparedRequest.branchIntent } : {}),
           ...(hostAgentLaunch ? { hostAgentLaunch } : {}),
+          ...worktreeCreationAgentLaunchOptions(preparedRequest),
           executionHostId: creationHostId,
           ...(preparedRequest.nameWasGenerated ? { nameWasGenerated: true } : {}),
           ...(preparedRequest.displayNameKind
@@ -117,7 +116,8 @@ export async function executeWorktreeCreation(
           ...(provisionedRoot ? { provisionedRoot } : {}),
           ...(preparedRequest.parentWorktreeId
             ? { parentWorktreeId: preparedRequest.parentWorktreeId }
-            : {})
+            : {}),
+          ...(preparedRequest.note ? { note: preparedRequest.note } : {})
         }
       )
   } catch (error) {
@@ -126,7 +126,10 @@ export async function executeWorktreeCreation(
       return
     }
     if (preparedRequest.ephemeralVmRuntimeId) {
-      await cleanupEphemeralVmRuntimeForFailedCreate(preparedRequest)
+      await cleanupEphemeralVmRuntimeForFailedCreate(preparedRequest, creationId)
+    }
+    if (recoverWorktreeLegacyPreparation(creationId, preparedRequest, error)) {
+      return
     }
     const message = getWorkspaceCreateErrorToastMessage(formatWorkspaceCreateError(error))
     showWorktreeCreationError(
@@ -143,10 +146,12 @@ export async function executeWorktreeCreation(
   // Why: cancellation can race a successful backend adoption; clean up again after it settles so an adopted workspace cannot outlive its destroyed VM.
   if (!useAppStore.getState().pendingWorktreeCreations[creationId]) {
     if (preparedRequest.ephemeralVmRuntimeId) {
-      await cleanupEphemeralVmRuntimeForFailedCreate(preparedRequest)
+      await cleanupEphemeralVmRuntimeForFailedCreate(preparedRequest, creationId)
     }
     return
   }
+  // The VM's checkout is now this workspace (or its project), so the sidebar may list it.
+  releaseVmCreateCheckout(creationId)
   await attachEphemeralVmRuntimeToWorkspace(preparedRequest, worktree.id)
 
   const backendSpawned = result.startupTerminal?.spawned === true
@@ -163,7 +168,6 @@ export async function executeWorktreeCreation(
   const setupIsOnlySurface = preparedRequest.setupOnly === true && result.setup !== undefined
   const defaultTabs = setupIsOnlySurface ? undefined : result.defaultTabs
 
-  // Contain post-create follow-ups independently; fire-and-forget throws otherwise strand creation UI over a completed workspace.
   let activation: ActivateAndRevealResult | false = false
   let primaryTabId: string | null = null
   if (shouldActivateOnCompletion && !structuredLaunch) {
@@ -217,11 +221,7 @@ export async function executeWorktreeCreation(
             unknownHostCountIsEmpty: true
           })
         } catch (recoveryError) {
-          console.error(
-            'worktree create: activation recovery after-wake seeding failed',
-            worktree.id,
-            recoveryError
-          )
+          console.error('worktree create: after-wake recovery failed', worktree.id, recoveryError)
         }
       }
     }
@@ -300,11 +300,7 @@ export async function executeWorktreeCreation(
   }
 
   if (!shouldActivateOnCompletion && useAppStore.getState().pendingWorktreeCreations[creationId]) {
-    try {
-      showWorktreeCreationReadyToast(worktree, creationHostId)
-    } catch (error) {
-      console.error('worktree create: ready toast failed', worktree.id, error)
-    }
+    showWorktreeCreationReadyToast(worktree, creationHostId)
   }
 
   await completeWorktreeCreation({
@@ -315,6 +311,7 @@ export async function executeWorktreeCreation(
     activation,
     primaryTabId,
     startupTerminalTabId: result.startupTerminal?.tabId,
+    startupAgent: result.worktree.createdWithAgent ?? undefined,
     backendSpawned,
     hostPlannedStartup: result.hostPlannedStartup === true,
     focusOnCompletion: shouldActivateOnCompletion

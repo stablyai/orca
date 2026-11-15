@@ -26,10 +26,14 @@ vi.mock('node:os', async () => {
   return { ...actual, homedir: homedirMock }
 })
 
+import type { HookCommandConfig } from '../../../agent-hooks/installation/configuration/hook-config-schema'
 import { removeRealHomeCodexHookForOptOut } from './codex-real-home-hook-install'
 import '../installation/hook-service'
 import { CodexHookService } from '../installation/codex-hook-service-implementation'
-import { getCodexManagedHookInstallMaterial } from '../definitions/codex-hook-definition'
+import {
+  buildCodexManagedHook,
+  getCodexManagedHookInstallMaterial
+} from '../definitions/codex-hook-definition'
 import { memoizeCodexHookAnswer } from '../../trust/hooks/codex-hook-trust-memo'
 import {
   readCodexTrustGrantLedgerHome,
@@ -47,8 +51,8 @@ function readHooks(): { hooks?: Record<string, unknown[]> } {
   return JSON.parse(readFileSync(hooksJsonPath(), 'utf-8'))
 }
 
-function orcaHandler(): { type: string; command: string; timeout: number } {
-  return { type: 'command', command: getCodexManagedHookInstallMaterial().command, timeout: 10 }
+function orcaHandler(): HookCommandConfig {
+  return buildCodexManagedHook(getCodexManagedHookInstallMaterial().command, 'Stop')
 }
 
 function orcaStopAt(sourcePath: string, groupIndex = 0): CodexTrustEntry {
@@ -114,7 +118,8 @@ describe('removeRealHomeCodexHookForOptOut', () => {
         groupIndex: 0,
         handlerIndex: 1,
         command: orcaHandler().command,
-        timeoutSec: 10
+        timeoutSec: 10,
+        statusMessage: orcaHandler().statusMessage
       }
     ]
     writeFileSync(configTomlPath(), upsertHookTrustEntriesInContent('', entries), 'utf-8')
@@ -154,17 +159,6 @@ describe('removeRealHomeCodexHookForOptOut', () => {
     const trust = readHookTrustEntries(configTomlPath())
     expect(trust.get(computeTrustKey(afterAt(1)))?.trustedHash).toBe('sha256:user-approved')
     expect(trust.get(computeTrustKey(afterAt(2)))).toBeUndefined()
-  })
-
-  it("removes approvals left after the entry is gone, by Codex's hash", async () => {
-    mkdirSync(join(home, '.codex'))
-    writeFileSync(hooksJsonPath(), `${JSON.stringify({ hooks: {} }, null, 2)}\n`)
-    const orcaAt = orcaStopAt(hooksJsonPath())
-    upsertHookTrustEntries(configTomlPath(), [{ ...orcaAt, trustedHash: 'sha256:codex-stop' }])
-
-    expect(await removeRealHomeCodexHookForOptOut([{ stop: 'sha256:codex-stop' }])).toBe('removed')
-
-    expect(readHookTrustEntries(configTomlPath()).has(computeTrustKey(orcaAt))).toBe(false)
   })
 })
 

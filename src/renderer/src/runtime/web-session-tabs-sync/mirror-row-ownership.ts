@@ -3,10 +3,10 @@
 import type { AppState } from '@/store/types'
 import type { TerminalTab } from '../../../../shared/workspace-layout/terminal-tab-types'
 import type { Tab } from '../../../../shared/tab-types'
-import type { BrowserPage } from '../../../../shared/browser-workspace-types'
-import { getBrowserPageRemoteOwnerEnvironmentId } from '../remote-browser-tab-ownership'
+import type { BrowserPage } from '../../../../shared/browser/workspaces/browser-workspace-types'
+import { getBrowserPageRemoteOwnerEnvironmentId } from '../browser/ownership/remote-browser-tab-ownership'
 import { parseExecutionHostId } from '../../../../shared/execution-host'
-import { getRemoteRuntimePtyEnvironmentId } from '../runtime-terminal-stream'
+import { getRemoteRuntimePtyEnvironmentId } from '../hosted-terminals/identity/remote-runtime-pty-owner'
 import type { WebSessionTabsSyncState } from './state'
 import { environmentIdsMirroringLocalTab } from './tracking-mappings'
 

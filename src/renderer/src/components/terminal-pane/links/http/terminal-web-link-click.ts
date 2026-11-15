@@ -1,12 +1,14 @@
+import type {
+  HttpLinkActionDestinations as TerminalHttpLinkActionDestinations,
+  HttpLinkRoutingPreferenceRequester as TerminalLinkRoutingPreferenceRequester
+} from '@/lib/browser/navigation/http-link-destinations'
 import type { Terminal } from '@xterm/xterm'
 import type { LinkHandlerDeps } from '../files/terminal-link-handlers'
 import { isTerminalOwnedLinkGesture } from '../gestures/terminal-link-activation'
 import { handleOscLink } from '../terminal-osc-link-routing'
 import {
   findHttpLinkAtTerminalMouseEvent,
-  handleTerminalHttpLink,
-  type TerminalHttpLinkActionDestinations,
-  type TerminalLinkRoutingPreferenceRequester
+  handleTerminalHttpLink
 } from './terminal-url-link-hit-testing'
 import type { HttpLinkSourceOwner } from '@/lib/browser/navigation/http-link-routing'
 import type { TerminalLinkActionContext } from '../terminal-link-action-request'

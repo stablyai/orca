@@ -1,36 +1,29 @@
-import type { MutableRefObject } from 'react'
-import type { Editor } from '@tiptap/react'
-import type { EditorView } from '@tiptap/pm/view'
 import { toast } from 'sonner'
-import type { HttpLinkSourceOwner } from '@/lib/browser/navigation/http-link-routing'
-import {
-  httpLinkActionDestinationsFor,
-  openRoutedHttpLink
-} from '@/lib/browser/navigation/http-link-destinations'
 import { useAppStore } from '@/store/index'
-import '@/lib/browser/workspace/workspace-browser-tab-open'
 import {
-  canOpenWorkspaceBrowserTabOnRuntime,
-  canOpenWorkspaceBrowserTabOnSsh
-} from '@/lib/browser/workspace/workspace-browser-route-eligibility'
-import { isLocalPathOpenBlocked, showLocalPathOpenBlockedToast } from '@/lib/local-path-open-guard'
-import { getLinkSourceLocalOpenOwner } from '@/lib/link-source-local-open-owner'
+  isLocalPathOpenBlocked,
+  showLocalPathOpenBlockedToast
+} from '@/lib/files/os-open/local-path-open-guard'
+import { getLinkSourceLocalOpenOwner } from '@/lib/links/ownership/link-source-local-open-owner'
+import { openMarkdownExternalUrl } from '../../markdown/link-routing/markdown-external-url-open'
 import {
   absolutePathToFileUri as toFileUrlForOsEscape,
   resolveMarkdownLinkTarget
 } from '../../markdown/link-routing/markdown-internal-links'
+import { openMarkdownFileLinkWithSystemDefault } from '../../markdown/link-routing/markdown-file-link-system-open'
 import { scrollToAnchorInEditor } from '../../markdown/navigation/markdown-anchor-scroll'
 import { getRichMarkdownCommentAtPos } from '../review/rich-markdown-review-annotations'
-import type { DiffComment } from '../../../../../../shared/diff-comment-types'
-import {
-  LOCAL_EXECUTION_HOST_ID,
-  toRuntimeExecutionHostId
-} from '../../../../../../shared/execution-host'
+import { toRuntimeExecutionHostId } from '../../../../../../shared/execution-host'
 import { translate } from '@/i18n/i18n'
-import {
-  classifyHtmlSuperscriptLinkAction,
-  type RichMarkdownHtmlSuperscriptLinkContext
-} from '../citations/rich-markdown-html-superscript-link-context'
+import { classifyHtmlSuperscriptLinkAction } from '../citations/rich-markdown-html-superscript-link-context'
+import type { RichMarkdownHtmlSuperscriptLinkContext } from '../citations/rich-markdown-html-superscript-link-context'
+import { getClickedLinkHref } from './rich-markdown-link-dom-events'
+import type { MutableRefObject } from 'react'
+import type { Editor } from '@tiptap/react'
+import type { EditorView } from '@tiptap/pm/view'
+import type { Node as ProseMirrorNode } from '@tiptap/pm/model'
+import type { HttpLinkSourceOwner } from '@/lib/browser/navigation/http-link-routing'
+import type { DiffComment } from '../../../../../../shared/diff-comment-types'
 
 export type ActivateMarkdownLink = (
   href: string,
@@ -87,6 +80,67 @@ export function handleRichMarkdownEditorClick({
   if (!editor) {
     return false
   }
+  const clickedNode = getClickedNode(view, pos, event)
+  if (modKey) {
+    if (clickedNode?.type.name === 'image') {
+      return activateMarkdownImageClick({
+        activateMarkdownLink,
+        filePath,
+        runtimeEnvironmentId,
+        src: (clickedNode.attrs.src as string | undefined) ?? '',
+        sourceOwner,
+        worktreeId,
+        worktreeRoot
+      })
+    }
+    if (clickedNode?.type.name === 'markdownDocLink') {
+      onOpenDocLinkRef.current?.(clickedNode.attrs.target as string)
+      return true
+    }
+  }
+  const isSuperscriptLink = clickedNode?.type.name === 'richMarkdownHtmlSuperscriptLink'
+  const href = isSuperscriptLink
+    ? String(clickedNode.attrs.href ?? '')
+    : getClickedLinkHref(view, event)
+  if (isSuperscriptLink && !classifyHtmlSuperscriptLinkAction(href, sourceSnapshot)) {
+    return modKey
+  }
+  if (href) {
+    if (href.startsWith('#')) {
+      scrollToAnchorInEditor(rootRef.current, href.slice(1))
+      return true
+    }
+    if (modKey && event.shiftKey) {
+      openShiftModifiedMarkdownLink({
+        activateMarkdownLink,
+        href,
+        filePath,
+        runtimeEnvironmentId,
+        sourceOwner,
+        worktreeId,
+        worktreeRoot
+      })
+      return true
+    }
+    const classified = resolveMarkdownLinkTarget(href, filePath, worktreeRoot)
+    if (classified?.kind === 'external') {
+      openMarkdownExternalUrl(classified.url, {
+        state: useAppStore.getState(),
+        worktreeId,
+        sourceOwner,
+        destination: 'orca'
+      })
+      return true
+    }
+    void activateMarkdownLink(href, {
+      sourceFilePath: filePath,
+      worktreeId,
+      worktreeRoot,
+      runtimeEnvironmentId,
+      sourceOwner
+    })
+    return true
+  }
   if (!modKey) {
     const selectedComment = getRichMarkdownCommentAtPos(
       editor,
@@ -97,60 +151,8 @@ export function handleRichMarkdownEditorClick({
     if (selectedComment) {
       scrollRichMarkdownReviewNoteCardIntoView(selectedComment.id)
     }
-    return false
   }
-  const clickedNode = view.state.doc.nodeAt(pos)
-  if (clickedNode?.type.name === 'image') {
-    return activateMarkdownImageClick({
-      activateMarkdownLink,
-      filePath,
-      runtimeEnvironmentId,
-      src: (clickedNode.attrs.src as string | undefined) ?? '',
-      sourceOwner,
-      worktreeId,
-      worktreeRoot
-    })
-  }
-  if (clickedNode?.type.name === 'markdownDocLink') {
-    onOpenDocLinkRef.current?.(clickedNode.attrs.target as string)
-    return true
-  }
-  const href =
-    clickedNode?.type.name === 'richMarkdownHtmlSuperscriptLink'
-      ? String(clickedNode.attrs.href ?? '')
-      : getClickedLinkHref(view, event)
-  if (
-    clickedNode?.type.name === 'richMarkdownHtmlSuperscriptLink' &&
-    !classifyHtmlSuperscriptLinkAction(href, sourceSnapshot)
-  ) {
-    return true
-  }
-  if (!href) {
-    return false
-  }
-  if (href.startsWith('#')) {
-    scrollToAnchorInEditor(rootRef.current, href.slice(1))
-    return true
-  }
-  if (event.shiftKey) {
-    openShiftModifiedMarkdownLink({
-      href,
-      filePath,
-      runtimeEnvironmentId,
-      sourceOwner,
-      worktreeId,
-      worktreeRoot
-    })
-    return true
-  }
-  void activateMarkdownLink(href, {
-    sourceFilePath: filePath,
-    worktreeId,
-    worktreeRoot,
-    runtimeEnvironmentId,
-    sourceOwner
-  })
-  return true
+  return false
 }
 
 function activateMarkdownImageClick({
@@ -183,29 +185,21 @@ function activateMarkdownImageClick({
   return true
 }
 
-function getClickedLinkHref(view: EditorView, event: MouseEvent): string {
-  const target =
-    event.target instanceof Element
-      ? event.target
-      : event.target instanceof Node
-        ? event.target.parentElement
-        : null
-  const link = target?.closest('a')
-  if (!link || !view.dom.contains(link)) {
-    return ''
+// posAtCoords resolves a click on an inline atom's right half to the position after it.
+function getClickedNode(view: EditorView, pos: number, event: MouseEvent): ProseMirrorNode | null {
+  const before = view.state.doc.resolve(pos).nodeBefore
+  if (
+    before?.isAtom &&
+    event.target instanceof Node &&
+    view.nodeDOM(pos - before.nodeSize)?.contains(event.target)
+  ) {
+    return before
   }
-  // The rendered href is blanked for file:, drive-path and custom schemes, so read the mark instead.
-  let linkPos: number
-  try {
-    linkPos = view.posAtDOM(link, 0)
-  } catch {
-    return ''
-  }
-  const linkMark = view.state.doc.nodeAt(linkPos)?.marks.find((mark) => mark.type.name === 'link')
-  return linkMark ? String(linkMark.attrs.href ?? '') : ''
+  return view.state.doc.nodeAt(pos)
 }
 
 function openShiftModifiedMarkdownLink({
+  activateMarkdownLink,
   href,
   filePath,
   worktreeRoot,
@@ -213,6 +207,7 @@ function openShiftModifiedMarkdownLink({
   sourceOwner,
   worktreeId
 }: {
+  activateMarkdownLink: ActivateMarkdownLink
   href: string
   filePath: string
   worktreeRoot: string | null
@@ -228,21 +223,11 @@ function openShiftModifiedMarkdownLink({
     return
   }
   if (classified.kind === 'external') {
-    const state = useAppStore.getState()
-    const canOpenOwnedBrowser =
-      sourceOwner.kind === 'runtime'
-        ? canOpenWorkspaceBrowserTabOnRuntime(state, worktreeId, sourceOwner.runtimeEnvironmentId)
-        : sourceOwner.kind === 'ssh' &&
-          canOpenWorkspaceBrowserTabOnSsh(state, worktreeId, sourceOwner.connectionId)
-    const destinations = httpLinkActionDestinationsFor(
-      state.settings,
-      sourceOwner,
-      canOpenOwnedBrowser
-    )
-    openRoutedHttpLink(classified.url, {
+    openMarkdownExternalUrl(classified.url, {
+      state: useAppStore.getState(),
       worktreeId,
       sourceOwner,
-      forceDestination: destinations.alternate ?? destinations.primary
+      destination: 'system'
     })
     return
   }
@@ -260,6 +245,15 @@ function openShiftModifiedMarkdownLink({
     showLocalPathOpenBlockedToast()
     return
   }
+  // Scripts main declines to launch open in a tab, like a plain click.
+  const openInEditor = (): void =>
+    void activateMarkdownLink(href, {
+      sourceFilePath: filePath,
+      worktreeId,
+      worktreeRoot,
+      runtimeEnvironmentId,
+      sourceOwner
+    })
   if (classified.kind === 'markdown') {
     // A click is a user act: it may start the link's stopped WSL distro.
     void window.api.shell
@@ -275,12 +269,12 @@ function openShiftModifiedMarkdownLink({
           )
           return
         }
-        void window.api.shell.openFileUri(
+        void openMarkdownFileLinkWithSystemDefault(
           toFileUrlForOsEscape(classified.absolutePath),
-          LOCAL_EXECUTION_HOST_ID
+          openInEditor
         )
       })
     return
   }
-  void window.api.shell.openFileUri(classified.uri, LOCAL_EXECUTION_HOST_ID)
+  void openMarkdownFileLinkWithSystemDefault(classified.uri, openInEditor)
 }

@@ -2,12 +2,12 @@ import { useEffect } from 'react'
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store'
-import { isClientHostedBrowserPageHandle } from '@/store/slices/browser'
+import { isClientHostedBrowserPageHandle } from '@/store/slices/browser/hosts/browser-host-state'
 import type {
   BrowserDownloadFinishedEvent,
   BrowserDownloadProgressEvent,
   BrowserDownloadRequestedEvent
-} from '../../../../shared/browser-guest-events'
+} from '../../../../shared/browser/guest-lifecycle/browser-guest-events'
 import { formatBrowserRemoteDownloadMessage } from './browser-download-destination-toast'
 import { formatByteCount } from './navigate/browser-notices'
 

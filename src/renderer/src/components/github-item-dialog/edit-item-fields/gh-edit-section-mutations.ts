@@ -4,13 +4,13 @@ import type { useImmediateMutation } from '@/hooks/useIssueMetadata'
 import {
   buildTaskPageGitHubCloseUpdate,
   type TaskPageGitHubCloseAction
-} from '@/components/task-page/github/task-page-github-status-actions'
+} from '@/components/task-page/github/issue-status/task-page-github-status-actions'
 import { beginEdit, isTrackedEdit } from './gh-edit-task-record'
-import { assertTaskPageGitHubDialogStateAuthority } from '@/components/task-page/github/task-page-github-dialog-state-authority'
+import { assertTaskPageGitHubDialogStateAuthority } from '@/components/task-page/github/mutations/task-page-github-dialog-state-authority'
 import { runIssueUpdate } from '@/components/github/github-work-item-edit-mutations'
-import type { GitHubWorkItem } from '../../../../../shared/github/work-item-types'
-import type { GitHubOwnerRepo } from '../../../../../shared/github/pull-request-types'
-import type { TaskSourceContext } from '../../../../../shared/task-source-context'
+import type { GitHubWorkItem } from '../../../../../shared/github/work-items/work-item-types'
+import type { GitHubRepositoryIdentity as GitHubOwnerRepo } from '../../../../../shared/github/repositories/repository-identity'
+import type { TaskSourceContext } from '../../../../../shared/work-items/task-source-context'
 import type { GitHubItemDialogProjectOrigin } from '../load-item-details/github-item-dialog-types'
 
 export type GHEditProjectRowPatch = {

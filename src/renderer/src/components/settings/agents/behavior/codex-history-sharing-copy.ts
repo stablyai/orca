@@ -1,22 +1,20 @@
 import { translate } from '@/i18n/i18n'
+import type { Translate } from '@/i18n/use-translate'
 import { searchKeywords } from '../../search/settings-search-keywords'
 
-export function getCodexHistorySharingTitle(): string {
-  return translate(
-    'settings.agents.codexHistorySharing.title',
-    'Share Codex history across accounts'
-  )
+export function getCodexHistorySharingTitle(t: Translate = translate): string {
+  return t('settings.agents.codexHistorySharing.title', 'Share Codex history across accounts')
 }
 
-export function getCodexHistorySharingDescription(): string {
-  return translate(
+export function getCodexHistorySharingDescription(t: Translate = translate): string {
+  return t(
     'settings.agents.codexHistorySharing.description',
     "Lets each Codex account, and your own ~/.codex, resume conversations started on the others. Turn off to keep every account's history separate. Turning it off removes nothing already shared."
   )
 }
 
-export function getCodexHistorySharingUnsupported(host: string): string {
-  return translate(
+export function getCodexHistorySharingUnsupported(host: string, t: Translate = translate): string {
+  return t(
     'settings.agents.codexHistorySharing.unsupported',
     'Update Orca on {{host}} to change this setting there.',
     { host }

@@ -4,7 +4,8 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { Toaster, toast } from 'sonner'
 import { useAppStore } from '@/store/index'
 import { getDefaultSettings } from '../../../../../../shared/constants'
-import { makeFolderWorkspace, makeWorktree } from '@/store/slices/worktrees-slice-test-fixtures'
+import { makeFolderWorkspace } from '@/store/folder-workspaces/folder-workspace.test-fixture'
+import { makeWorktree } from '@/store/slices/worktrees/worktree.test-fixture'
 import { launchAgentSessionContinuation } from './launch-agent-session-continuation'
 import type { LaunchAgentInNewTabArgs } from '../new-tab/launch-agent-in-new-tab-args'
 import type { LaunchAgentInNewTabResult } from '../new-tab/launch-agent-in-new-tab-host-agents'
@@ -13,17 +14,17 @@ const mocks = vi.hoisted(() => ({
   launch: vi.fn<(args: LaunchAgentInNewTabArgs) => LaunchAgentInNewTabResult>()
 }))
 vi.mock('@/lib/agent-session/launch/new-tab/launch-agent-in-new-tab', () => ({
-  launchAgentInNewTab: mocks.launch
+  launchAgentInNewTabWithOutcome: mocks.launch
 }))
-vi.mock('@/runtime/structured-agent-session-tab-retirement', () => ({
+vi.mock('@/runtime/native-chat/tab-retirement/structured-agent-session-tab-retirement', () => ({
   beginStructuredAgentSessionTabClose: vi.fn()
 }))
-vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) =>
+vi.mock('@/runtime/rpc/calls/runtime-rpc-call', async (importOriginal) =>
   (
-    await import('@/runtime/layout-apply-test-transport.test-fixture')
+    await import('@/runtime/workspace-layout/testing/layout-apply-test-transport.test-fixture')
   ).runtimeRpcClientWithLayoutApply(await importOriginal())
 )
-vi.mock('../../../host-chat-program-acquisition', () => ({
+vi.mock('../inventory/host-chat-program-acquisition', () => ({
   acquireAgentLaunchChoices: async () => ({ detected: ['codex'], offered: ['codex'] })
 }))
 
