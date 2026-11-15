@@ -1,8 +1,16 @@
 // Builds check out the commit release-cut recorded, never the movable tag name.
 import { execFileSync } from 'node:child_process'
-import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import {
+  chmodSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync
+} from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join, resolve } from 'node:path'
+import { dirname, join, normalize, resolve } from 'node:path'
 import { runProcessSync } from '@orca/process-host'
 import { afterEach, describe, expect, it } from 'vitest'
 import { parse } from 'yaml'
@@ -316,4 +324,57 @@ jq -r "$filter" "${dir}/$fixture.json"
     expect(result.code).toBe(1)
     expect(readFileSync(output, 'utf8')).toBe('')
   })
+})
+
+// Steps that copy single scripts from the workflow commit over an older release checkout must copy everything those
+// scripts import, or an older release crashes with ERR_MODULE_NOT_FOUND.
+describe('scripts restored from the workflow ref', () => {
+  const RELATIVE_IMPORT = /(?:\bfrom\s*|\bimport\s*\(?\s*)['"](\.{1,2}\/[^'"]+)['"]/g
+  function closure(file, seen = new Set()) {
+    if (seen.has(file)) {
+      return seen
+    }
+    seen.add(file)
+    expect(existsSync(file), file).toBe(true)
+    for (const [, spec] of readFileSync(file, 'utf8').matchAll(RELATIVE_IMPORT)) {
+      closure(normalize(join(dirname(file), spec)), seen)
+    }
+    return seen
+  }
+  const copySteps = []
+  for (const [file, wf] of [
+    ['release-cut.yml', releaseCut],
+    ['release-mac-build.yml', macBuild]
+  ]) {
+    for (const [job, { steps = [] }] of Object.entries(wf.jobs)) {
+      for (const step of steps) {
+        // The path list runs to the first newline not escaped by a trailing backslash.
+        const match = step.run?.match(/git checkout "\$WORKFLOW_SHA" --((?:\\\n|[^\n])*)/)
+        if (match) {
+          const paths = match[1].replace(/\\\n/g, ' ').trim().split(/\s+/)
+          copySteps.push([`${file} ${job} ${step.name}`, paths])
+        }
+      }
+    }
+  }
+
+  it('finds the copy steps and only their path lists', () => {
+    expect(copySteps.length).toBeGreaterThanOrEqual(4)
+    for (const [name, paths] of copySteps) {
+      for (const path of paths) {
+        expect(path, name).toMatch(/^[\w.-]+(\/[\w.-]+)*$/)
+      }
+    }
+  })
+
+  it.each(copySteps)(
+    '%s copies the full import closure of every script it copies',
+    (_name, paths) => {
+      for (const script of paths.filter((path) => path.endsWith('.mjs'))) {
+        for (const needed of closure(script)) {
+          expect(paths, `${script} imports ${needed}`).toContain(needed)
+        }
+      }
+    }
+  )
 })

@@ -1,8 +1,8 @@
 // Every job that uploads desktop release assets records exactly what it uploaded, before anything is published.
 import { createHash } from 'node:crypto'
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { dirname, join, normalize } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { parse } from 'yaml'
 import { buildManifest, MANIFEST_SCHEMA } from '../publication/write-release-asset-manifest.mjs'
@@ -162,4 +162,58 @@ describe('write-release-asset-manifest', () => {
       buildManifest({ ...base, source: 'evil', files: [file('a.yml', 'a')] })
     ).rejects.toThrow(/Unknown manifest source/)
   })
+})
+
+// A sparse workflow checkout must hold every script a job runs from it, and everything those scripts import.
+describe('sparse workflow checkouts', () => {
+  const RELATIVE_IMPORT = /(?:\bfrom\s*|\bimport\s*\(?\s*)['"](\.{1,2}\/[^'"]+)['"]/g
+  function closure(file, seen = new Set()) {
+    if (!seen.has(file)) {
+      seen.add(file)
+      expect(existsSync(file), file).toBe(true)
+      for (const [, spec] of readFileSync(file, 'utf8').matchAll(RELATIVE_IMPORT)) {
+        closure(normalize(join(dirname(file), spec)), seen)
+      }
+    }
+    return seen
+  }
+  const sparse = []
+  for (const [file, wf] of [
+    ['release-cut.yml', releaseCut],
+    ['release-mac-build.yml', macBuild]
+  ]) {
+    for (const [id, job] of Object.entries(wf.jobs)) {
+      for (const step of job.steps ?? []) {
+        if (step.with?.['sparse-checkout']) {
+          sparse.push([`${file} ${id}`, job, step.with.path, String(step.with['sparse-checkout'])])
+        }
+      }
+    }
+  }
+
+  it('finds the sparse checkouts', () => {
+    expect(sparse.length).toBeGreaterThanOrEqual(1)
+  })
+
+  it.each(sparse)(
+    '%s runs only scripts whose imports are in its sparse checkout',
+    (_name, job, path, dirs) => {
+      const roots = dirs.split(/\s+/).filter(Boolean)
+      const prefix = `$GITHUB_WORKSPACE/${path}/`
+      const scripts = (job.steps ?? []).flatMap((step) =>
+        [...String(step.run ?? '').matchAll(/\$GITHUB_WORKSPACE\/([\w.-]+)\/(\S+?\.mjs)/g)]
+          .filter((match) => `$GITHUB_WORKSPACE/${match[1]}/` === prefix)
+          .map((match) => match[2])
+      )
+      expect(scripts.length).toBeGreaterThan(0)
+      for (const script of scripts) {
+        for (const needed of closure(script)) {
+          expect(
+            roots.some((root) => needed.startsWith(`${root}/`)),
+            `${script} needs ${needed}`
+          ).toBe(true)
+        }
+      }
+    }
+  )
 })
