@@ -109,7 +109,7 @@ export async function runCloudArchiveHook(
                 name
               }
             ),
-        { id: toastId, description: 'orca.yaml scripts.archive' }
+        { id: toastId }
       ),
     // A workspace without a hook answers at once: no toast flashes for it.
     400
