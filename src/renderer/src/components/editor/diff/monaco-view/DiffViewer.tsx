@@ -1,20 +1,26 @@
-import { NO_RESOURCE_EVIDENCE } from '@/lib/workspace-copy-owner'
+import { NO_RESOURCE_EVIDENCE } from '@/lib/workspace/ownership/workspace-copy-owner'
 import { useDiffCommentView } from '../../../diff-comments/use-diff-comment-owner'
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { DiffEditor, type DiffOnMount } from '@monaco-editor/react'
 import type { editor } from 'monaco-editor'
 import { useAppStore } from '@/store/index'
-import { diffViewStateCache, setWithLRU } from '@/lib/scroll-cache'
-import { monacoTypographyOptions } from '@/lib/editor-typography'
+import {
+  diffViewStateCache,
+  setWithLRU
+} from '@/components/editor/model-lifetime/retention/editor-view-state-cache'
+import { monacoTypographyOptions } from '@/lib/editor/appearance/editor-typography'
 import { useEditorTypography } from '@/hooks/use-editor-typography'
-import { useContextualCopySetup } from '../../useContextualCopySetup'
+import { useContextualCopySetup } from '../../contextual-copy/useContextualCopySetup'
 import { useDiffCommentDecorator } from '../../../diff-comments/useDiffCommentDecorator'
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 import { useTranslate } from '@/i18n/use-translate'
 import { applyDiffEditorLineNumberOptions } from './diff-editor-line-number-options'
-import { isDiffComment } from '@/lib/diff-comment-compat'
-import { installEditorSaveShortcut, installMonacoEditorFindShortcut } from '../../editor-shortcuts'
+import { isDiffComment } from '@/lib/source-control/review/comments/diff-comment-compat'
+import {
+  installEditorSaveShortcut,
+  installMonacoEditorFindShortcut
+} from '../../commands/editor-shortcuts'
 import { diffEditorScrollbarOptions } from './diff-editor-scrollbar-options'
 import { LargeDiffFallback } from '../large-files/LargeDiffFallback'
 import { getLargeDiffRenderLimit } from '../../../../../../shared/large-diff-render-limit'
@@ -30,15 +36,15 @@ import {
 import { buildDiffEditorHideUnchangedOptions } from './diff-editor-hide-unchanged-options'
 import { useDiffEditorRegistration } from '../review/diff-navigation-context'
 import { preserveDiffViewStateAcrossModelSwaps } from './diff-model-swap-view-state'
-import { monacoFindOptions } from '../../monaco-find-options'
-import { buildEditorUnicodeHighlightOptions } from '../../editor-unicode-highlight-options'
-import { usePluginSyntaxLanguage } from '../../use-plugin-syntax-language'
+import { monacoFindOptions } from '../../monaco/monaco-find-options'
+import { buildEditorUnicodeHighlightOptions } from '../../monaco/editor-unicode-highlight-options'
+import { usePluginSyntaxLanguage } from '../../monaco/use-plugin-syntax-language'
 import {
   PLUGIN_SYNTAX_EDITOR_OPTIONS,
   applyModelLanguage
 } from '@/lib/monaco-languages/plugin-syntax-editor-options'
 import { useMonacoTheme } from '@/hooks/use-monaco-theme'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import { wholeFileDiffTintClass } from './whole-file-diff-tint'
 
 export default function DiffViewer({

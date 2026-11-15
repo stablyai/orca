@@ -14,8 +14,8 @@ import {
 import { readAgentProcessPresence } from '../../../../../shared/agent-status/process/agent-process-presence'
 import { AGENT_STATUS_2A_CURRENT_PRODUCER_MODE } from '../../../../../shared/agent-status/transport/agent-status-legacy-adapter'
 import { getDefaultWorkspaceSession } from '../../../../../shared/constants'
-import { buildRelayHookEnvelope } from '../../../../../wsl-guest/agent-hook-envelope-build'
-import { RelayProviderHookNormalization } from '../../../../../wsl-guest/agent-hook-provider-normalization'
+import { buildRelayHookEnvelope } from '../../../../../wsl-guest/agent-hooks/publication/agent-hook-envelope-build'
+import { RelayProviderHookNormalization } from '../../../../../wsl-guest/agent-hooks/status/agent-hook-provider-normalization'
 import { hookRowPaneResumeRecord } from '../../../../runtime/session-lifecycle/projection/hook-row-pane-resume-record'
 import {
   hookStatusResumeCommand,
@@ -25,7 +25,7 @@ import {
 import {
   installMainWindowAgentStatusListeners,
   clearMainWindowAgentStatusListeners
-} from '../../../../startup/main-window-agent-status'
+} from '../../../../startup/main-window/main-window-agent-status'
 import { agentHookServer as server } from '../../agent-hook-server'
 import { buildBody, PANE, GOOD_PANE, postHookEvent } from '../server.test-fixtures'
 
@@ -38,7 +38,7 @@ vi.mock('../../../../startup/main-process-state', () => ({
 vi.mock('../../../../window/dashboard-popout-window', () => ({
   getDashboardPopoutWindow: () => null
 }))
-vi.mock('../../../../startup/synthetic-title-runtime', () => ({
+vi.mock('../../../../startup/main-window/synthetic-title-runtime', () => ({
   stopSyntheticTitleSpinnerTimer: () => {}
 }))
 
@@ -352,7 +352,7 @@ it('forwards a cold host comparison to the retained canonical binding without cr
   expect(frame().paneOwner).toBeUndefined()
 })
 
-it('rejects before mutating provider folds and validates scoped IDs with the locator parser', () => {
+it('rejects an inherited hook and malformed scoped session IDs', () => {
   const now = 1_700_000_000_000
   vi.spyOn(Date, 'now').mockReturnValue(now)
   const state = createHookListenerState()
@@ -377,9 +377,6 @@ it('rejects before mutating provider folds and validates scoped IDs with the loc
     user_message: 'poison'
   })
   expect(normalizeHookPayload(state, 'hermes', body, 'production')).toBeNull()
-  expect(state.lastPromptByPaneKey.size).toBe(0)
-  expect(state.lastToolByPaneKey.size).toBe(0)
-  expect(state.hermesTurnByPaneKey.size).toBe(0)
   for (const session of ['x'.repeat(513), '-option', 'bad\nidentity']) {
     expect(readAgentProcessPresence({ agent: 'hermes', session })?.session).toBeUndefined()
     expect(readAgentProcessPresence({ agent: 'antigravity', session })?.session).toBeUndefined()

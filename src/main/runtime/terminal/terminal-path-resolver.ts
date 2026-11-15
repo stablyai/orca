@@ -116,6 +116,23 @@ export class RuntimeTerminalPathResolver {
               absolutePath
             )
           ).type === 'directory'
+        // Why: a workspace nested inside this one is inside its root, so the outside-root lookup above never sees it.
+        const nestedWorkspace =
+          crossWorkspace && isDirectory && !knownWorkspaceTarget && ownedRelativePath !== ''
+            ? await this.host.resolveKnownWorkspaceFileTarget?.(
+                absolutePath,
+                target.executionHostId
+              )
+            : null
+        if (nestedWorkspace?.relativePath === '') {
+          return {
+            worktree: nestedWorkspace.worktree.id,
+            relativePath: '',
+            absolutePath,
+            exists: true,
+            isDirectory: true
+          }
+        }
         return {
           worktree: ownedWorktree.id,
           relativePath: ownedRelativePath,

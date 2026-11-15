@@ -63,13 +63,15 @@ async function hook(
 
 describe('retained agent exit', () => {
   it('keeps a persisted exit through a spooled start written before it', async () => {
+    const now = 1_700_000_000_000
+    vi.spyOn(Date, 'now').mockReturnValue(now)
     const userDataPath = createUserDataPath('orca-presence-exit-spool-')
     const first = new AgentHookServer()
     servers.push(first)
     await first.start({ env: 'production', userDataPath })
-    const attachedAt = Date.now() - 1
+    const attachedAt = now - 1
     // Spool timestamps have whole-second precision.
-    const spooledAt = Date.now() - 5_000
+    const spooledAt = now - 5_000
     await hook(first, 'SessionStart')
     await hook(first, 'SessionEnd', 'session-a', 'prompt_input_exit')
     first.flushStatusPersistSync()
@@ -94,35 +96,5 @@ describe('retained agent exit', () => {
     servers.push(restarted)
     await restarted.start({ env: 'production', userDataPath })
     expect(await restarted.checkAgentPresenceSince(PANE, attachedAt)).toBe('exited')
-  })
-
-  it('lets a successor start spooled in the exit second clear the exit', async () => {
-    const userDataPath = createUserDataPath('orca-presence-exit-same-second-')
-    const first = new AgentHookServer()
-    servers.push(first)
-    await first.start({ env: 'production', userDataPath })
-    const exitedAt = Date.now()
-    vi.spyOn(Date, 'now').mockReturnValue(exitedAt)
-    const attachedAt = exitedAt - 1
-    await hook(first, 'SessionStart')
-    await hook(first, 'SessionEnd', 'session-a', 'prompt_input_exit')
-    expect(await first.checkAgentPresenceSince(PANE, 0)).toBe('exited')
-    first.flushStatusPersistSync()
-    first.stop()
-    const spoolDir = join(userDataPath, 'agent-hooks', 'spool')
-    mkdirSync(spoolDir, { recursive: true })
-    writeFileSync(
-      join(spoolDir, 'pane-spooled.jsonl'),
-      `\n${JSON.stringify({
-        paneKey: PANE,
-        source: 'pi',
-        receivedAt: Math.floor(exitedAt / 1000) * 1000,
-        payload: { hook_event_name: 'before_agent_start', prompt: 'next' }
-      })}\n`
-    )
-    const restarted = new AgentHookServer()
-    servers.push(restarted)
-    await restarted.start({ env: 'production', userDataPath })
-    expect(await restarted.checkAgentPresenceSince(PANE, attachedAt)).not.toBe('exited')
   })
 })

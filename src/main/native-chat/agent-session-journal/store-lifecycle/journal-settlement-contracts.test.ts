@@ -5,7 +5,6 @@ import { registerJournalRowContextUsageTests } from '../durable-rows/journal-row
 import { registerJournalSubagentItemTests } from '../item-lifecycle/journal-subagent-item.spec'
 import { registerJournalSubmissionPositionsTests } from '../submissions/journal-submission-positions.spec'
 import { registerJournalSubmissionQueuedLinkTests } from '../submissions/journal-submission-queued-link.spec'
-import { registerJournalTerminalSettlementValidationTests } from '../item-lifecycle/journal-terminal-settlement-validation.spec'
 
 afterEach(() => vi.restoreAllMocks())
 
@@ -15,4 +14,3 @@ describe('journal-row-context-usage', registerJournalRowContextUsageTests)
 describe('journal-subagent-item', registerJournalSubagentItemTests)
 describe('journal-submission-positions', registerJournalSubmissionPositionsTests)
 describe('journal-submission-queued-link', registerJournalSubmissionQueuedLinkTests)
-describe('journal-terminal-settlement-validation', registerJournalTerminalSettlementValidationTests)

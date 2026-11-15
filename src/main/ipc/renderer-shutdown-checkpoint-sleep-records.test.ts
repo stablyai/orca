@@ -8,7 +8,7 @@ import {
   emptySession,
   GIT_KEY,
   leaf
-} from '../../shared/workspace-layout/workspace-layout-session.test-fixture'
+} from '../../shared/workspace-layout/persistence/workspace-layout-session.test-fixture'
 import type { SleepingAgentSessionRecord } from '../../shared/agent-session/lifecycle/agent-session-resume'
 import type { WorkspaceSessionState } from '../../shared/workspace-session/workspace-session-state-types'
 

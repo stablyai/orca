@@ -4,8 +4,8 @@ import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../shared/sidebar-inputs-swit
 import {
   LAYOUT_INTENTS_RUNTIME_CAPABILITY,
   LAYOUT_REOPEN_HELD_PANES_CAPABILITY
-} from '../../../shared/workspace-layout/layout-intents-capability'
-import { WORKSPACE_UNREAD_HOST_RAISES_CAPABILITY } from '../../../shared/workspace-unread-raise-capability'
+} from '../../../shared/workspace-layout/published-layout/layout-intents-capability'
+import { WORKSPACE_UNREAD_HOST_RAISES_CAPABILITY } from '../../../shared/worktree/metadata/workspace-unread-raise-capability'
 
 export function darkSwitchRuntimeCapabilities(): RuntimeCapability[] {
   const capabilities: RuntimeCapability[] = []

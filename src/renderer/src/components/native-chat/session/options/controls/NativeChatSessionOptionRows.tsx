@@ -1,12 +1,12 @@
 import { useId, useLayoutEffect, useRef } from 'react'
 import { Zap } from 'lucide-react'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import { Button } from '@/components/ui/button'
 import { Switch } from '@/components/ui/switch'
 import { Toggle } from '@/components/ui/toggle'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { sortNativeChatSessionOptions } from '../../../../../../../shared/native-chat/input/native-chat-session-option-snapshot'
+import { sortNativeChatSessionOptions } from '../../../../../../../shared/native-chat/input/session-options/native-chat-session-option-snapshot'
 import {
   isReadOnlySessionOptionValue,
   type SessionOptionDescriptor,
@@ -19,9 +19,11 @@ import {
   nativeChatSessionOptionActionLabel,
   nativeChatSessionOptionDisabledReason,
   nativeChatSessionOptionLabel
-} from '../../../../../../../shared/native-chat/input/native-chat-session-option-labels'
+} from '../../../../../../../shared/native-chat/input/session-options/native-chat-session-option-labels'
 import { sayNativeChatSessionOptionTranslated as say } from './native-chat-session-option-labels-text'
 import { NativeChatSessionOptionWriteGroup } from './NativeChatSessionOptionWriteGroup'
+import { NativeChatSessionSpeedButton } from './NativeChatSessionSpeedButton'
+import { speedButtonTiers } from '../../../../../../../shared/native-chat/input/session-options/native-chat-session-speed-tiers'
 
 type NativeChatSessionOptionRowsProps = {
   /** The current model's options, in display order. */
@@ -124,8 +126,10 @@ function OptionRow(props: {
       </div>
     )
   }
-  if (descriptor.kind.type === 'boolean' && layout === 'inline' && descriptor.id === 'fastMode') {
-    return (
+  // Every agent's speed is one button: Fast on/off for two modes, a list for more.
+  const speed = speedButtonTiers(descriptor)
+  const speedButton =
+    descriptor.kind.type === 'boolean' && descriptor.id === 'fastMode' ? (
       <Toggle
         variant="chip"
         size="xs"
@@ -136,6 +140,29 @@ function OptionRow(props: {
         <Zap className="size-3" />
         {say('fast')}
       </Toggle>
+    ) : speed && descriptor.kind.type === 'select' ? (
+      <NativeChatSessionSpeedButton
+        label={say('speed')}
+        standard={speed.standard}
+        tiers={speed.tiers}
+        current={gone ? undefined : descriptor.kind.currentValue}
+        disabled={off}
+        onSet={onSet}
+      />
+    ) : null
+  if (speedButton) {
+    return layout === 'inline' ? (
+      speedButton
+    ) : (
+      <div
+        className={cn(
+          'flex min-h-7 items-center justify-between gap-3 text-xs text-muted-foreground',
+          layout === 'menu' && 'px-2'
+        )}
+      >
+        {say('speed')}
+        {speedButton}
+      </div>
     )
   }
   if (descriptor.kind.type === 'boolean') {

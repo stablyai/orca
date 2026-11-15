@@ -9,12 +9,12 @@ import {
   CommandList
 } from '@/components/ui/command'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
-import { useAppStore } from '@/store'
-import { isGitRepoKind } from '../../../../shared/repo-kind'
-import { searchRepos } from '@/lib/repo-search'
-import { cn } from '@/lib/utils'
+import { useAppStore } from '@/store/index'
+import { isGitRepoKind } from '../../../../shared/repository/repo-kind'
+import { searchRepos } from '@/lib/workspace/catalog/repo-search'
+import { cn } from '@/lib/class-names'
 import { useMountedRef } from '@/hooks/useMountedRef'
-import type { Repo } from '../../../../shared/repo-types'
+import type { Repo } from '../../../../shared/repository/repo-types'
 import RepoBadgeLabel from './RepoBadgeLabel'
 import { useTranslate } from '@/i18n/use-translate'
 

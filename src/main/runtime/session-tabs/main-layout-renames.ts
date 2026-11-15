@@ -4,7 +4,7 @@ import { OrcaRuntimeWithMainLayoutAgentLaunchTabs } from './main-layout-agent-la
 import type {
   RuntimeTerminalRename,
   RuntimeTerminalSetPaneTitle
-} from '../../../shared/runtime-terminal-contracts'
+} from '../../../shared/terminal/runtime/runtime-terminal-contracts'
 import type { TerminalPaneLayoutNode } from '../../../shared/workspace-layout/terminal-tab-types'
 import type { WindowLayoutCommand } from '../terminal/layout/runtime-layout-apply'
 import type { RuntimePtyWorktreeRecord } from '../terminal/records/runtime-terminal-state-records'

@@ -32,8 +32,8 @@ it('keeps history it could not read and merges dismissals recorded meanwhile', a
     const store = new MobileNotificationDismissalStore(dir)
     store.record(dismiss('old', 1))
     await store.close()
-    // Both the read-only snapshot and the writable open fail once.
-    failure.remainingOpens = 2
+    // The startup read fails; close() retries it and saves what was recorded meanwhile.
+    failure.remainingOpens = 1
     vi.spyOn(console, 'warn').mockImplementation(() => {})
     const restarted = new MobileNotificationDismissalStore(dir)
     expect(restarted.hasLiveDelivery('anything')).toBe(true)

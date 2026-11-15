@@ -1,5 +1,5 @@
-import { resolveOwner } from '@/lib/resolve-owner'
-import type { WorktreeOperationRouteState } from '@/lib/worktree-operation-route'
+import { resolveOwner } from '@/lib/workspace/ownership/resolve-owner'
+import type { WorktreeOperationRouteState } from '@/lib/workspace/ownership/worktree-operation-route'
 import type { AppState } from '../../store/types'
 
 /** Refuse desktop-runtime browser commands where a paired server owns or may own the workspace; its page registry is authoritative. */

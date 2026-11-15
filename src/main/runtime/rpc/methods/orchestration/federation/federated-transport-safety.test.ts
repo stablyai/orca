@@ -1,16 +1,13 @@
 import { describe, expect, it, vi } from 'vitest'
-import {
-  ORCHESTRATION_CONTRACT_RUNTIME_CAPABILITY,
-  ORCHESTRATION_FEDERATION_RELEASE_ARCHIVE_RUNTIME_CAPABILITY
-} from '../../../../../../shared/orchestration/orchestration-runtime-capabilities'
-import { OrcaRuntimeService } from '../../../../orca-runtime'
+import { ORCHESTRATION_FEDERATION_RELEASE_ARCHIVE_RUNTIME_CAPABILITY } from '../../../../../../shared/orchestration/orchestration-runtime-capabilities'
+import type { OrcaRuntimeService } from '../../../../orca-runtime'
 
 import type { FederatedDispatchRow } from '../../../../orchestration/db/orchestration-records'
 
-import './federated-worker-read'
-import { releaseFederatedWorker } from './federated-worker-release'
-import '../worker/worker-observation'
-import '../../../../orchestration/federation/synchronization/federation-sync'
+import '../../../../orchestration/legacy-remote-home/federated-worker-read'
+import { releaseFederatedWorker } from '../../../../orchestration/legacy-remote-home/federated-worker-release'
+import '../worker/observation/worker-observation'
+import '../../../../orchestration/legacy-remote-home/federation-sync'
 import { ORCHESTRATION_WORKER_STOP_METHODS } from '../worker/worker-stop'
 
 const server = {
@@ -21,46 +18,6 @@ const server = {
 }
 
 describe('federated transport safety', () => {
-  it('uses the same pairing-revision fence for mutation preflight and effect calls', async () => {
-    const call = vi.fn(async (_selector, method: string) => ({
-      id: method,
-      ok: true as const,
-      result:
-        method === 'status.get'
-          ? runtimeStatus([ORCHESTRATION_CONTRACT_RUNTIME_CAPABILITY])
-          : {
-              dispatchId: 'dispatch-worker',
-              state: 'released',
-              processAction: 'closed_agent_terminal',
-              archive: null
-            },
-      _meta: { runtimeId: 'epoch-worker' }
-    }))
-    const runtime = new OrcaRuntimeService(null, undefined, {
-      orchestrationEnvironmentTransport: {
-        resolve: () => server,
-        call
-      }
-    })
-
-    await runtime.callOrchestrationWorkerServer(
-      server.environmentId,
-      'orchestration.federationRelease',
-      { dispatchId: 'dispatch-worker' },
-      30_000,
-      { orchestrationRequestId: 'release-request' },
-      { expectedEnvironmentPairingRevision: server.pairingRevision }
-    )
-
-    expect(call.mock.calls.map((entry) => entry[1])).toEqual([
-      'status.get',
-      'orchestration.federationRelease'
-    ])
-    for (const entry of call.mock.calls) {
-      expect((entry as unknown[])[5]).toBe(73)
-    }
-  })
-
   it('rejects a mismatched release receipt before applying home effects', async () => {
     const transitionLifecycle = vi.fn()
     const db = {

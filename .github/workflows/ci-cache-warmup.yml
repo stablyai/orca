@@ -45,6 +45,7 @@ on:
       - 'config/scripts/electron-installation/shared-dist-cache/shared-electron-dist-cache.mjs'
       - 'config/scripts/artifact-storage/reflink-copy/space-sharing-copy.mjs'
       - 'config/patches/**'
+      - 'native/windows-notifications/**'
       - 'native/windows-registry/**'
       - 'native/windows-security/**'
   pull_request:

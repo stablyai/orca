@@ -6,13 +6,13 @@ import { join } from 'node:path'
 import * as pty from 'node-pty'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { recognizeAgentProcess } from '../../../../shared/agent-status/process/agent-process-recognition'
-import { getStrictProcessTableSnapshotWithAge } from '../../../../shared/process-table-snapshot-reader'
+import { getStrictProcessTableSnapshotWithAge } from '../../../../shared/process-observation/tables/process-table-snapshot-reader'
 import { createPtyForegroundProcessTracker } from '../../../daemon/pty-subprocess/foreground-process-tracker'
-import { resolveRemoteForegroundEvidence } from '../../../providers/agent-foreground-process-batch'
+import { resolveRemoteForegroundEvidence } from '../../../providers/foreground/agent-process-batch'
 import {
   prepareMacosTccLoginShell,
   wrapShellSpawnForMacosTccAttribution
-} from '../../../providers/macos-tcc-login-shell'
+} from '../../../providers/shell-launch/macos/tcc-login-shell'
 import { readLaunchedAgentForeground } from './launched-agent-foreground'
 import { createLaunchedAgentWriteGuard } from './launched-agent-write-guard'
 import { waitForWorktreeStartupDraft } from '../../workspaces/startup/runtime-worktree-startup-readiness'

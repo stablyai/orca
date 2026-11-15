@@ -2,7 +2,7 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { Repo } from '../../../../shared/repo-types'
+import type { Repo } from '../../../../shared/repository/repo-types'
 import { getDefaultSettings } from '../../../../shared/constants'
 import { hashOrcaHookTrustContent } from '../../../workspace-hooks/created-worktree-setup-trust'
 import { runApprovedCreatedWorktreeSetup } from './created-worktree-approved-setup'
@@ -22,7 +22,12 @@ let repo: Repo
 const provisionManagedWorktreeTerminals = vi.fn()
 
 function runtimeFor() {
-  const worktree = { id: `repo::${worktreePath}`, repoId: 'repo', path: worktreePath }
+  const worktree = {
+    id: `repo::${worktreePath}`,
+    repoId: 'repo',
+    path: worktreePath,
+    displayName: 'w'
+  }
   return {
     showManagedWorktree: vi.fn(async () => worktree),
     requireStore: () => ({

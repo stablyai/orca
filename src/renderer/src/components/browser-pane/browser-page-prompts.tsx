@@ -4,7 +4,7 @@ import type {
   BrowserPagePromptDetails,
   BrowserPagePromptKind,
   BrowserPagePromptRequest
-} from '../../../../shared/browser-page-prompt'
+} from '../../../../shared/browser/prompts/browser-page-prompt'
 import {
   useConfirmationDialog,
   type ConfirmationDialogContextValue
@@ -52,7 +52,7 @@ async function answerPrompt<K extends BrowserPagePromptKind>(
   }
 }
 
-export function subscribeBrowserPagePrompts(confirm: ConfirmationDialogContextValue): () => void {
+function subscribeBrowserPagePrompts(confirm: ConfirmationDialogContextValue): () => void {
   if (typeof window.api.browser?.onPagePromptRequest !== 'function') {
     return () => {}
   }

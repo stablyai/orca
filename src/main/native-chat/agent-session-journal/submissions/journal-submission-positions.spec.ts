@@ -1,3 +1,4 @@
+import { readTestJournalItems } from '../journal-observation.test-support'
 // Rejections move rendered rows; submission positions must preserve original send order across replay.
 
 import { mkdtemp, rm } from 'node:fs/promises'
@@ -15,7 +16,7 @@ import {
   type AgentJournalMessageItem
 } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentSessionJournalIdentity } from '../../../../shared/agent-session/journal/agent-session-journal-identity'
-import { codexProviderHandle } from '../../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
+import { codexProviderHandle } from '../../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle-encoding'
 import { readAgentSessionHydrationPage } from '../../agent-session-wire/publication/history/agent-session-history-page'
 import { createTrackedJournalOpener } from '../store-lifecycle/journal-host-database-test-support'
 
@@ -60,7 +61,7 @@ export function registerJournalSubmissionPositionsTests(): void {
       fence: 1,
       turnScope: AGENT_JOURNAL_THREAD_SCOPE
     })
-    const pending = { ...journal.submission('send-1') }
+    const pending = { ...(await journal.reads.submission('send-1')) }
     const withdrawn = await journal.resolveDispatch({
       clientMessageId: 'send-1',
       state: 'rejected',
@@ -102,16 +103,16 @@ export function registerJournalSubmissionPositionsTests(): void {
       const journal = await sendWithdrawnByItsTurnEnd()
       const turnItemId = agentJournalItemKey(TURN)
 
-      expect(journal.submission('send-1')).toMatchObject({
+      expect(await journal.reads.submission('send-1')).toMatchObject({
         dispatchState: 'rejected',
         answeredInTurn: { turnItemId, via: 'start' }
       })
-      expect(readAgentSessionHydrationPage(journal).submissions).toEqual([
+      expect((await readAgentSessionHydrationPage(journal)).submissions).toEqual([
         expect.objectContaining({ answeredInTurn: { turnItemId, via: 'start' } })
       ])
       await journals.closeAll()
       const replayed = await journals.open({ identity: IDENTITY, stateDirectory: root! })
-      expect(replayed.submission('send-1')).toMatchObject({
+      expect(await replayed.reads.submission('send-1')).toMatchObject({
         answeredInTurn: { turnItemId, via: 'start' }
       })
     })
@@ -123,16 +124,17 @@ export function registerJournalSubmissionPositionsTests(): void {
         await sendHandedOverThenWithdrawn()
 
       expect(pending).toMatchObject({ submittedSequence: submitted.sequence })
-      expect(handedOver.sequence).toBeGreaterThan(submitted.sequence)
-      expect(journal.submission('send-1')).toMatchObject({
+      expect(handedOver?.sequence).toBeGreaterThan(submitted.sequence)
+      expect(await journal.reads.submission('send-1')).toMatchObject({
         dispatchState: 'rejected',
         submittedSequence: submitted.sequence
       })
       // The rendered row moved; only the submission position retains send order.
       expect(
-        journal.snapshot().items.find((item) => item.itemId === agentJournalSubmissionKey('send-1'))
-          ?.sequence
-      ).toBe(withdrawn.sequence)
+        (await readTestJournalItems(journal)).find(
+          (item) => item.itemId === agentJournalSubmissionKey('send-1')
+        )?.sequence
+      ).toBe(withdrawn?.sequence)
     })
   })
 }

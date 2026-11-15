@@ -4,8 +4,8 @@ import { getVerifiedNativeChatCommands } from '../../../../../../shared/native-c
 import type {
   NativeChatSessionSkill,
   SlashCommandSuggestion
-} from '../../../../../../shared/native-chat/input/native-chat-slash-commands'
-import { nativeChatSessionSkills } from '../../../../../../shared/native-chat/input/native-chat-skill-visibility'
+} from '../../../../../../shared/native-chat/input/commands/native-chat-slash-commands'
+import { nativeChatSessionSkills } from '../../../../../../shared/native-chat/input/commands/native-chat-skill-visibility'
 import { structuredSessionSlashCommands } from '../../../../../../shared/agent-session/view/structured-agent-session-composer'
 import { withNativeChatResumeCommand } from '@/components/native-chat/composer/pickers/use-native-chat-resume-command'
 import { withNativeChatSideChatRows } from '@/components/native-chat/composer/pickers/use-native-chat-side-chat-command'

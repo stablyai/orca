@@ -1,4 +1,4 @@
-import { localAiVaultScanRoots } from '../cached-session-list'
+import { localAiVaultScanRoots } from '../discovery/ai-vault-scan-roots'
 import type { SessionSearchHostScope } from '../../ai-vault-search/session-search-service'
 import { fork, type ChildProcess } from 'node:child_process'
 import { existsSync } from 'node:fs'
@@ -17,7 +17,7 @@ import type {
   AiVaultSessionTitlesResult
 } from '../../../shared/ai-vault/contracts/ai-vault-session-title'
 import { withSpan } from '../../observability/tracer'
-import type { ReadAiVaultFirstUserPromptArgs } from '../session-first-user-prompt-read'
+import type { ReadAiVaultFirstUserPromptArgs } from '../prompts/session-first-user-prompt-read'
 
 import { sessionSearchServiceInit } from '../../ai-vault-search/session-search-service-init'
 import { getSessionParseCachePersistenceOptions } from '../parse-cache/session-parse-cache-persistence'
@@ -34,7 +34,7 @@ import type {
 import {
   requestLocalAiVaultScan,
   type LocalAiVaultScanProgressHandle
-} from '../ai-vault-local-scan-progress'
+} from '../scan-lifecycle/ai-vault-local-scan-progress'
 
 export function spawnAiVaultServiceProcess(): ChildProcess {
   const entryPath = getAiVaultServiceEntryPath()

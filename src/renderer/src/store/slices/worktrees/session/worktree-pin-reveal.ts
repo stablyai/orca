@@ -4,7 +4,7 @@ import type { WorktreeSliceGet, WorktreeSliceSet } from '../listing/worktree-sli
 import {
   getActiveSidebarWorkspaceId,
   parseWorkspaceKey
-} from '../../../../../../shared/workspace-scope'
+} from '../../../../../../shared/workspace/identity/workspace-scope'
 import {
   getCyclicWorktreeLineageChildIds,
   isValidResolvedWorktreeLineageEdge

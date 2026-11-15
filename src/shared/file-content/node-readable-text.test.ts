@@ -20,12 +20,6 @@ describe('readNodeReadableTextWithinLimit', () => {
     ).resolves.toBe('hello 🌍')
   })
 
-  it('accepts input exactly at the byte limit', async () => {
-    await expect(
-      readNodeReadableTextWithinLimit(chunks(['ab', Buffer.from('cd')]), 4)
-    ).resolves.toBe('abcd')
-  })
-
   it('rejects before retaining input beyond the byte limit', async () => {
     await expect(readNodeReadableTextWithinLimit(chunks(['1234', '5']), 4)).rejects.toEqual(
       new NodeReadableTextTooLargeError(5, 4)

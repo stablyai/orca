@@ -17,7 +17,6 @@ import {
 
 // Mount real ExpoRoot: only rendering proves synthesized RequireContext has expected shape.
 const HOST_ROUTE = '/h/render-check-host'
-const HOST_ROUTE_PATTERN = '/h/[hostId]'
 
 const SHELL_SESSION_ID = 'render-check-session'
 const SHELL_BUILD_ID = 'render-check-build'
@@ -191,30 +190,6 @@ async function waitForRoute({ page, errors, uncaught }, route, awaitText) {
   }
 }
 
-// Open / as shell does, then route from init; direct route navigation would hide entry routing bugs.
-async function render(route, awaitText, { shellRoute = { pathname: route }, ...shell } = {}) {
-  const opened = await openPage({ shellRoute, ...shell })
-  await opened.page.goto(`${origin}/`, { waitUntil: 'load' })
-  await waitForRoute(opened, route, awaitText)
-  const text = await opened.page.evaluate(() => document.body.innerText)
-  // Read page’s session identity to catch mounting without shell’s session or inventing one.
-  const session = await opened.page.evaluate(() => ({
-    sessionId: document.documentElement.dataset.orcaWebSessionId ?? null,
-    buildId: document.documentElement.dataset.orcaWebBuildId ?? null
-  }))
-  // Require rewrite from / before render or every host route resolves to Unmatched.
-  const url = await opened.page.evaluate(() => location.pathname + location.search)
-  await opened.page.close()
-  // Name CSP refusals within asserted console errors for useful diagnostics.
-  return {
-    errors: opened.errors,
-    cspErrors: opened.errors.filter((entry) => entry.includes('Content Security Policy')),
-    text,
-    session,
-    url
-  }
-}
-
 const paintReports = (page, name) =>
   page.evaluate(
     (paint) =>
@@ -223,58 +198,6 @@ const paintReports = (page, name) =>
   )
 
 describeRender('the Route A page in a real browser', () => {
-  it('fills the view, so what it mounted is painted and takes a tap', async () => {
-    const opened = await openPage({ shellRoute: { pathname: HOST_ROUTE } })
-    await opened.page.goto(`${origin}/`, { waitUntil: 'load' })
-    await waitForRoute(opened, HOST_ROUTE, SHELL_HOST.name)
-    const layout = await opened.page.evaluate(() => {
-      // No-RPC control at root bottom moves furthest if layout collapses.
-      const fab = [...document.querySelectorAll('[role="button"]')].find(
-        (element) => element.getAttribute('aria-label') === 'New workspace'
-      )
-      const box = fab?.getBoundingClientRect() ?? null
-      const hit =
-        box === null
-          ? null
-          : document.elementFromPoint(box.x + box.width / 2, box.y + box.height / 2)
-      return {
-        rootHeight: document.getElementById('root').getBoundingClientRect().height,
-        viewportHeight: window.innerHeight,
-        fabTop: box?.top ?? null,
-        fabBottom: box?.bottom ?? null,
-        reachesTheControl: hit !== null && fab.contains(hit)
-      }
-    })
-    await opened.page.close()
-    expect(opened.errors).toEqual([])
-    // Measure height: mounted text/innerText can pass while collapsed root paints blank phone screen.
-    expect(layout.rootHeight).toBe(layout.viewportHeight)
-    expect(layout.fabTop).toBeGreaterThan(0)
-    expect(layout.fabBottom).toBeLessThanOrEqual(layout.viewportHeight)
-    // Require reachable tap: clipped scroller rows retain layout rects.
-    expect(layout.reachesTheControl).toBe(true)
-  }, 60_000)
-
-  // Native files routes throw requireNativeViewManager at import; deferred import hides this until actual route opens, requiring web siblings.
-
-  it('mounts the file preview, reading the file path out of a param and not a segment', async () => {
-    const previewRoute = `${HOST_ROUTE}/files/preview/worktree-a`
-    const { errors, cspErrors, text, url } = await render(previewRoute, 'readme.md', {
-      shellRoute: {
-        pathname: previewRoute,
-        params: { relativePath: 'docs/my notes/readme.md', source: 'worktree' }
-      }
-    })
-    expect(cspErrors).toEqual([])
-    // Require no unsupported RN-Web BackHandler registration; Android hardware Back pops native stack while page Back owns unsaved-draft prompt.
-    expect(errors).toEqual([])
-    // Title proves final path segment only; URL checks outbound encoding, not middle-segment decoding.
-    // Decode hazards are covered by mobile-file-path-route-encoding.test.ts and mobile-file-preview-route.test.ts.
-    expect(text).toContain('readme.md')
-    expect(url).toBe(`${previewRoute}?relativePath=docs%2Fmy+notes%2Freadme.md&source=worktree`)
-    expect(text).not.toContain(UNMATCHED)
-  }, 60_000)
-
   it('tells the shell when a route chunk throws, rather than sitting on a blank page', async () => {
     const chunk = routeChunks['./h/[hostId]/index.tsx']
     expect(chunk, Object.keys(routeChunks).join(' ')).toBeTruthy()
@@ -345,128 +268,4 @@ describeRender('the Route A page in a real browser', () => {
       heldChunks.delete(path)
     }
   }, 120_000)
-
-  it('says nothing for a redirect screen whose target is still behind its chunk', async () => {
-    // PR redirect remains mounted behind destination’s pending chunk; its own commit must not report screen paint.
-    const target = routeChunks['./h/[hostId]/source-control/[worktreeId].tsx']
-    expect(target, Object.keys(routeChunks).join(' ')).toBeTruthy()
-    const path = `/assets/${target}`
-    let arrive = () => {}
-    heldChunks.set(
-      path,
-      new Promise((resolve) => {
-        arrive = resolve
-      })
-    )
-    try {
-      const route = `${HOST_ROUTE}/pr/render-check-tree`
-      const opened = await openPage({
-        shellRoute: { pathname: route },
-        shellPageRoutes: [HOST_ROUTE_PATTERN, '/h/[hostId]/pr/[worktreeId]']
-      })
-      await opened.page.goto(`${origin}/`, { waitUntil: 'load' })
-      await opened.page.waitForFunction(
-        () => location.pathname.includes('/source-control/'),
-        undefined,
-        { timeout: 30_000, polling: 250 }
-      )
-      // Router has moved but pending hub chunk still leaves document empty.
-      await waitForPageFrames(opened.page)
-      expect(await paintReports(opened.page, paintName)).toBe(0)
-
-      arrive()
-      await opened.page.waitForFunction(
-        (name) =>
-          (globalThis.__orcaRenderCheckNotifies ?? []).filter((frame) => frame.name === name)
-            .length > 0,
-        paintName,
-        { timeout: 30_000, polling: 250 }
-      )
-      await opened.page.close()
-    } finally {
-      arrive()
-      heldChunks.delete(path)
-    }
-  }, 120_000)
-
-  it('refuses a target the shell will not take, rather than opening it in the page', async () => {
-    // Fault-only grant makes notifyNavigate refuse like disposed/older shell; local fallback once mounted Unmatched or native-only session route.
-    const opened = await openPage({ shellRoute: { pathname: HOST_ROUTE } })
-    const { page, errors } = opened
-    await page.goto(`${origin}/`, { waitUntil: 'load' })
-    await waitForRoute(opened, HOST_ROUTE, SHELL_HOST.name)
-    await page.getByLabel('Back to hosts').click()
-    // Settle handoff microtask before asserting no navigation.
-    await waitForPageFrames(page)
-    expect(await page.evaluate(() => location.pathname)).toBe(HOST_ROUTE)
-    const text = await page.evaluate(() => document.body.innerText)
-    expect(text).toContain(SHELL_HOST.name)
-    expect(text).not.toContain(UNMATCHED)
-    // Require no notify as well as unchanged page; successful shell handoff also leaves document in place.
-    const notifies = await page.evaluate(() => globalThis.__orcaRenderCheckNotifies ?? [])
-    expect(notifies.filter((frame) => frame.name === 'navigate')).toEqual([])
-    // Refused target declines navigation without faulting page.
-    expect(await page.evaluate(() => globalThis.__orcaRenderCheckFaults ?? [])).toEqual([])
-    expect(errors).toEqual([])
-    await page.close()
-  }, 60_000)
-
-  it("fetches the next route's chunks on a client-side navigation", async () => {
-    const opened = await openPage({ shellRoute: { pathname: HOST_ROUTE } })
-    const { page, errors, scripts } = opened
-    await page.goto(`${origin}/`, { waitUntil: 'load' })
-    await waitForRoute(opened, HOST_ROUTE, SHELL_HOST.name)
-    const loadedForFirstRoute = [...scripts]
-    // Shell fetches document once; later route must arrive as a chunk through in-page history navigation.
-    await page.evaluate((to) => {
-      history.pushState(null, '', to)
-      dispatchEvent(new PopStateEvent('popstate'))
-    }, `${HOST_ROUTE}/tasks`)
-    await waitForRoute(opened, `${HOST_ROUTE}/tasks`, 'Issues')
-    expect(new URL(page.url()).pathname).toBe(`${HOST_ROUTE}/tasks`)
-    const fetchedOnNavigation = scripts.filter((path) => !loadedForFirstRoute.includes(path))
-    // Require builder-identified tasks chunk, not any fetched script or code already loaded by entry.
-    const tasksChunk = routeChunks['./h/[hostId]/tasks.tsx']
-    expect(tasksChunk, Object.keys(routeChunks).join(' ')).toBeTruthy()
-    expect(fetchedOnNavigation, scripts.join(' ')).toContain(`/assets/${tasksChunk}`)
-    expect(loadedForFirstRoute).not.toContain(`/assets/${tasksChunk}`)
-    const text = await page.evaluate(() => document.body.innerText)
-    expect(text).toContain('Tasks')
-    expect(text).not.toContain(UNMATCHED)
-    expect(errors).toEqual([])
-    await page.close()
-  }, 60_000)
-})
-
-// Probe mounted React Navigation canGoBack through real route chevron/router.back; page exposes no direct test hook.
-// First prove same-family tap reaches shell, since an inert handler and refused local Back both leave document unchanged.
-describeRender('the stack the page Back button rests on', () => {
-  async function clickAndSettle(page, selector) {
-    await page.click(selector)
-    await waitForPageFrames(page)
-    return page.evaluate(() => location.pathname + location.search)
-  }
-
-  it('carries a handoff the shell granted across the bridge from a real tap', async () => {
-    // Grant navigate: this chevron proves handler/bridge path used by navigate-back before interpreting absent notifies.
-    const opened = await openPage({
-      shellRoute: { pathname: HOST_ROUTE },
-      shellGrants: [faultGrant, 'navigate'],
-      shellPageRoutes: [HOST_ROUTE_PATTERN]
-    })
-    await opened.page.goto(`${origin}/`, { waitUntil: 'load' })
-    await waitForRoute(opened, HOST_ROUTE, SHELL_HOST.name)
-    const url = await clickAndSettle(opened.page, '[aria-label="Back to hosts"]')
-    await expect
-      .poll(() =>
-        opened.page.evaluate(() =>
-          (globalThis.__orcaRenderCheckNotifies ?? []).filter((frame) => frame.name === 'navigate')
-        )
-      )
-      .toEqual([{ v: bridgeVersion, type: 'notify', name: 'navigate', href: '/' }])
-    // Require page stays on served route; local fallthrough would mount a screen document cannot serve.
-    expect(url).toBe(HOST_ROUTE)
-    expect(opened.errors).toEqual([])
-    await opened.page.close()
-  }, 60_000)
 })

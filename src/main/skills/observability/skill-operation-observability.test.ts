@@ -5,12 +5,12 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import type {
   SkillBundleInstallRequest,
   SkillBundleInstallResult
-} from '../../../shared/skill-bundle-install-contract'
+} from '../../../shared/skills/installation/skill-bundle-install-contract'
 import type {
   SkillInstallRequest,
   SkillInstallResult
-} from '../../../shared/skill-install-contract'
-import { SKILL_PACKAGE_CONTENT_TYPE } from '../../../shared/skill-package-manifest'
+} from '../../../shared/skills/installation/skill-install-contract'
+import { SKILL_PACKAGE_CONTENT_TYPE } from '../../../shared/skills/packages/skill-package-manifest'
 import { collectBundle } from '../../observability/bundle'
 import { setActiveSink, type TracerSink } from '../../observability/tracer'
 import {

@@ -2,10 +2,8 @@ import { Smartphone, Trash2 } from 'lucide-react'
 import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
 import type { PairedMobileDevice } from './paired-mobile-devices'
 
-export type PairedDevice = PairedMobileDevice
-
 type HeroPairedProps = {
-  devices: readonly PairedDevice[]
+  devices: readonly PairedMobileDevice[]
   onPairAnother: () => void
   onRevoke: (deviceId: string) => void
   revokingDeviceIds: readonly string[]

@@ -1,5 +1,5 @@
 import { expect, it } from 'vitest'
-import type { ProviderRateLimits } from '../../shared/rate-limit-types'
+import type { ProviderRateLimits } from '../../shared/agent-usage/rate-limits/rate-limit-types'
 import { credential, harness, refreshedWithoutIdToken } from './native-account-test-fixtures'
 
 function reading(usedPercent: number, updatedAt: number): ProviderRateLimits {

@@ -3,10 +3,12 @@ export const CLI_GLOBAL_FLAGS: readonly string[] = ['help', 'json', ...CLI_GLOBA
 
 export const CLI_BOOLEAN_FLAGS = new Set([
   'accept-changed-state',
+  'activate',
   'agent-wait',
   'all',
   'allow-failed-archive-hook',
   'allow-public',
+  'allow-system-shortcut',
   'annotate',
   'attachments',
   'check',
@@ -62,6 +64,7 @@ export const CLI_BOOLEAN_FLAGS = new Set([
   'return-preamble',
   'rotate',
   'run-hooks',
+  'run-setup',
   'show-profile',
   'staged',
   'supervise',

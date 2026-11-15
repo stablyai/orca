@@ -1,8 +1,9 @@
 import { useDeferredValue, useMemo, useRef } from 'react'
 import { useAppStore } from '@/store'
 import { useStructuredChatTabNames } from '@/runtime/native-chat/naming/structured-chat-name-observation'
-import { buildActivityEvents, createActivityEventBuildCache } from './activity-event-builder'
-import { freshActivityLiveAgentState } from './activity-event-state'
+import { buildActivityEvents } from './activity-event-builder'
+import { createActivityEventBuildCache } from '@/components/activity/activity-event-build-cache'
+import { freshActivityLiveAgentState, isRunningActivityState } from './activity-event-state'
 import {
   useAgentPaneThreadsDefaultHostId,
   useAllAgentPaneThreadStoreData,
@@ -14,7 +15,7 @@ import { collectHiddenChildAgentPaneKeys } from './activity-thread-child-agent'
 import {
   EMPTY_PAIRED_DEVICE_IDS_BY_ENVIRONMENT,
   getPairedDeviceIdsByEnvironment
-} from '../../../../shared/workspace-creator-visibility'
+} from '../../../../shared/workspace-view/workspace-creator-visibility'
 import { filterThreadsByActivityScope, resolveActivityScopeRepoIds } from './activity-scope-filter'
 import {
   createActivityThreadSearchMatcher,
@@ -62,11 +63,12 @@ export function useAllAgentPaneThreads({ badgeOnly = false }: { badgeOnly?: bool
       if (
         badgeOnly &&
         Object.keys(storeData.migrationUnsupportedByPtyId).length === 0 &&
-        !Object.values(storeData.agentStatusByPaneKey).some((entry) =>
+        !Array.from(storeData.agentStatusByPaneKey.values()).some((entry) =>
           freshActivityLiveAgentState(entry, now)
         )
       ) {
         eventBuildCacheRef.current.panes.clear()
+        eventBuildCacheRef.current.tabs = undefined
         return EMPTY_ACTIVITY_BUILD
       }
       // Global history caps affect live-thread unread and search state.
@@ -76,8 +78,8 @@ export function useAllAgentPaneThreads({ badgeOnly = false }: { badgeOnly?: bool
           agentStatusByPaneKey: storeData.agentStatusByPaneKey,
           runtimeAgentOrchestrationByPaneKey: storeData.runtimeAgentOrchestrationByPaneKey,
           migrationUnsupportedByPtyId: storeData.migrationUnsupportedByPtyId,
-          retainedAgentsByPaneKey: storeData.retainedAgentsByPaneKey,
           tabsByWorktree: storeData.tabsByWorktree,
+          ptyIdsByTabId: storeData.ptyIdsByTabId,
           unifiedTabsByWorktree: storeData.activityTabs,
           worktreeMap: storeData.worktreeMap,
           repoMap: storeData.repoMap,
@@ -225,7 +227,8 @@ export function useAgentPaneThreads(args: {
       if (
         readFilter === 'unread' &&
         !thread.unread &&
-        (thread.currentAgentState === null || thread.migrationUnsupportedPtyId !== undefined) &&
+        (!isRunningActivityState(thread.currentAgentState) ||
+          thread.migrationUnsupportedPtyId !== undefined) &&
         thread.paneKey !== effectiveSelectedPaneKey
       ) {
         return false

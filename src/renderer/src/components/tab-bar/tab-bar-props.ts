@@ -1,5 +1,5 @@
-import type { BrowserTab as BrowserTabState } from '../../../../shared/browser-workspace-types'
-import type { ClientHostedBrowserRow } from '../../../../shared/client-hosted-browser-rows'
+import type { BrowserWorkspace } from '../../../../shared/browser/workspaces/browser-workspace-types'
+import type { ClientHostedBrowserRow } from '../../../../shared/browser/client-hosting/client-hosted-browser-rows'
 import type { Tab, WorkspaceVisibleTabType } from '../../../../shared/tab-types'
 import type { TerminalTab } from '../../../../shared/workspace-layout/terminal-tab-types'
 import type { OpenFile } from '../../store/slices/editor/types/open-file'
@@ -33,7 +33,7 @@ export type TabBarProps = {
   onSetTabColor: (tabId: string, color: string | null) => void
   onTogglePaneExpand: (tabId: string) => void
   editorFiles?: (OpenFile & { tabId?: string })[]
-  browserTabs?: (BrowserTabState & { tabId?: string })[]
+  browserTabs?: (BrowserWorkspace & { tabId?: string })[]
   /** Pages rendering on a paired client. Appended after the real tabs; never part of tab order. */
   clientHostedBrowserRows?: readonly ClientHostedBrowserRow[]
   /** The group's own active tab at render time; a client-hosted selection dies when it moves. */

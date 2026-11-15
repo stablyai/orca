@@ -4,7 +4,7 @@ import {
   OPENCODE_MODEL_CONFIG_REFUSAL,
   OPENCODE_MODEL_VERSION_REFUSAL
 } from '../../../../shared/agent-launch/choices/agent-launch-model-preferences'
-import { prepareOpenCodeModelStartupInputs } from '../../../opencode/opencode-model-startup-plan'
+import { prepareOpenCodeModelStartupInputs } from '../../../opencode/model-launch/opencode-model-startup-plan'
 
 export async function prepareWorktreeModelStartupInputs(
   options: Parameters<typeof prepareOpenCodeModelStartupInputs>[0]

@@ -97,6 +97,36 @@ export function noteCodexTurnOpened(
   }
 }
 
+export function publishCodexTurnOpened(
+  session: CodexSession,
+  frame: { sessionId: string; method: string; params: unknown },
+  sessions: ReadonlyMap<string, CodexSession>
+): void {
+  const { method, params } = frame
+  const turnId = method === 'turn/started' ? readCodexTurnId(params) : null
+  if (!turnId || (readCodexThreadId(params) ?? session.threadId) !== session.threadId) {
+    return
+  }
+  const publish = (): void => {
+    if (!session.ended && sessions.get(frame.sessionId) === session) {
+      session.dispatchEchoes.published(session.threadId, turnId)
+    }
+  }
+  const written = session.events?.written?.()
+  if (written) {
+    void written.then(
+      (result) => {
+        if (result.ok) {
+          publish()
+        }
+      },
+      () => {}
+    )
+  } else {
+    publish()
+  }
+}
+
 export function settleCodexSendsInEndedTurn(
   session: Pick<CodexSession, 'threadId' | 'dispatchEchoes' | 'account'>,
   frame: { sessionId: string; method: string; params: unknown }

@@ -1,4 +1,4 @@
-import type { BrowserPageAnnotation } from '../../../../../../shared/browser-grab-types'
+import type { BrowserPageAnnotation } from '../../../../../../shared/browser/element-grab/browser-grab-types'
 
 export function makeAnnotation(pageId: string, id = 'annotation-1'): BrowserPageAnnotation {
   return {

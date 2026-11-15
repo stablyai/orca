@@ -2,11 +2,12 @@
 
 import type { AppState } from '@/store/types'
 import { getIndexedAllWorktrees } from '@/store/slices/worktrees/listing/worktree-catalog-index'
+
 import {
   collectAgentPaneConversations,
   resolvePaneAgentConversation,
   resolvePaneLastAgentConversation
-} from '@/lib/agent-session/history/title-sync/ai-vault-tab-title-requests'
+} from '../../lib/agent-session/identity/pane-agent-conversations'
 import {
   isAiVaultSessionResumableContent,
   type AiVaultListArgs,
@@ -23,7 +24,7 @@ import {
   CLI_CONVERSATION_ADOPTING_AGENTS,
   cliConversationRowsShareAgent,
   type CliConversationRowAgent
-} from '../../../../shared/structured-agent-cli-conversation-adoption'
+} from '../../../../shared/agent-session/view/structured-agent-cli-conversation-adoption'
 import { agentForksConversations } from '../../../../shared/agent-launch/startup/agent-resume-argv'
 import type { TerminalTab } from '../../../../shared/workspace-layout/terminal-tab-types'
 import type { AgentType } from '../../../../shared/agent-status/contracts/agent-status-types'

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import type { RuntimeTerminalCreate } from '../../../../shared/runtime-terminal-create-contract'
+import type { RuntimeTerminalCreate } from '../../../../shared/terminal/runtime/runtime-terminal-create-contract'
 
 import { RemoteRuntimeTerminalCreateIdempotency } from '../identity/remote-runtime-terminal-create-idempotency'
 

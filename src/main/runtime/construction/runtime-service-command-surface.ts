@@ -201,7 +201,8 @@ export function installRuntimeServiceCommandSurface(
     clearOpenAiSpeechKey: speech.clearOpenAiKey.bind(speech),
     startMobileDictation: dictation.start.bind(dictation),
     feedMobileDictation: dictation.feed.bind(dictation),
-    finishMobileDictation: dictation.finish.bind(dictation),
+    finishMobileDictation: (params) =>
+      dictation.finish(params, accounts.getCommitMessageAgentEnvironment()),
     cancelMobileDictation: dictation.cancel.bind(dictation),
     getAllBrowserDrivers: browsers.getAll.bind(browsers),
     reclaimBrowserForDesktop: browsers.reclaimForDesktop.bind(browsers),

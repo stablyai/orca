@@ -1,3 +1,4 @@
+import { closeBrowserMemoryPage } from '../../../browser/guest-lifecycle/browser-page-memory'
 import type { RuntimeBrowserTabQueries } from './browser-tab-queries'
 import {
   resolveClientPageToClose,
@@ -64,10 +65,20 @@ export class RuntimeBrowserTabClose {
       pageParam === null && params.index !== undefined
         ? await this.listedTabAt(params.index, params.worktree)
         : null
-    const namedPageId = pageParam ?? indexed?.browserPageId ?? null
+    const current =
+      pageParam === null && params.index === undefined
+        ? await this.queries.browserTabCurrent({ worktree: params.worktree }).catch((error) => {
+            if (error instanceof BrowserError && error.code === 'browser_no_tab') {
+              return null
+            }
+            throw error
+          })
+        : null
+    const selected = indexed ?? current?.tab
+    const namedPageId = pageParam ?? selected?.browserPageId ?? null
     const explicitPage = namedPageId !== null
-    const worktreeId = indexed
-      ? (indexed.worktreeId ?? undefined)
+    const worktreeId = selected
+      ? (selected.worktreeId ?? undefined)
       : explicitPage
         ? params.worktree
           ? (await this.host.resolveWorkspaceSelector(params.worktree)).id
@@ -137,6 +148,9 @@ export class RuntimeBrowserTabClose {
 
     const win = authoritativeWindow ?? this.host.getAuthoritativeWindow()
     await closeBrowserTabInRenderer(win, tabId, worktreeId)
+    if (tabId) {
+      closeBrowserMemoryPage(tabId)
+    }
 
     return { closed: true }
   }

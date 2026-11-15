@@ -47,6 +47,12 @@ export function releaseModuleLocation(
   if (tree.exists(named) || !sourceRoot.startsWith('src/')) {
     return named
   }
+  if (named === 'src/main/runtime/rpc/responses/rpc-response.ts') {
+    const legacyResponse = posix.join(posix.dirname(named), '..', 'errors.ts')
+    if (tree.exists(legacyResponse)) {
+      return legacyResponse
+    }
+  }
   if (named === 'src/main/runtime/rpc/methods/rpc-method-registry.ts') {
     const legacyRegistry = 'src/main/runtime/rpc/methods/index.ts'
     if (tree.exists(legacyRegistry)) {

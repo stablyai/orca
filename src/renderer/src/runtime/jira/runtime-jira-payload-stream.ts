@@ -1,4 +1,4 @@
-import type { RuntimeRpcResponse } from '../../../../shared/runtime-rpc-envelope'
+import type { RuntimeRpcResponse } from '../../../../shared/remote-runtime/rpc/runtime-rpc-envelope'
 import {
   isJiraPayloadStreamMessage,
   JIRA_PAYLOAD_MAX_CHARS

@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next'
 import { NativeChatExpandable } from '../../messages/disclosure/NativeChatExpandable'
 import { useNativeChatDisclosure } from '../../messages/disclosure/native-chat-disclosure-store'
 import { Check } from 'lucide-react'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import { useTranslate } from '@/i18n/use-translate'
 import { recomputeOn } from '@/lib/recompute-on'
 import {
@@ -13,22 +13,18 @@ import {
   type NativeChatSubagentGroupBlock,
   type NativeChatToolCallBlock
 } from '../../../../../../shared/native-chat/native-chat-types'
-import { isRenderableSubagentGroup } from '../../../../../../shared/native-chat/transcript/native-chat-subagent-summary'
+import { isRenderableSubagentGroup } from '../../../../../../shared/native-chat/transcript/subagents/native-chat-subagent-summary'
 import type { NativeChatDiffReveal } from '../../../../../../shared/native-chat/tools/native-chat-turn-diffs'
 import { nativeChatToolRunSentence } from './native-chat-tool-run-label'
 import { NATIVE_CHAT_TOOL_ACTIVITY_COPY } from '../../../../../../shared/native-chat/tools/native-chat-tool-activity'
 import { nativeChatToolRunHeader } from '../../../../../../shared/native-chat/tools/native-chat-tool-run-header'
-import { nativeChatAskRunSubject } from '../../../../../../shared/native-chat/input/native-chat-ask-row'
+import { nativeChatAskRunSubject } from '../../../../../../shared/native-chat/input/questions/native-chat-ask-row'
 import { NativeChatAwaitingInputRow } from '../../prompts/NativeChatAwaitingInputRow'
 import { NativeChatBackgroundTaskRun } from '../tasks/NativeChatBackgroundTaskRun'
 import { NativeChatSubagentRun } from '../../subagents/NativeChatSubagentRun'
-import type {
-  NativeChatSubagentDisclosure,
-  NativeChatSubagentRosterState
-} from '../../subagents/native-chat-subagent-sections'
 import { NativeChatToolRunIcon } from '../lines/NativeChatToolIcon'
 import { NativeChatToolRunCallCounts } from './NativeChatToolRunCallCounts'
-import { NativeChatToolRunMembers, revealNativeChatToolRunMember } from './NativeChatToolRunMembers'
+import { revealNativeChatToolRunMember } from './NativeChatToolRunMembers'
 import { NativeChatToolRunMemberList } from './NativeChatToolRunMemberList'
 import { NativeChatBrowserRunPageButton } from './NativeChatBrowserPageButton'
 import { NativeChatImageAttachments } from '../../media/images/NativeChatImageAttachments'
@@ -52,8 +48,7 @@ export function NativeChatToolRun({
   revealedDiff,
   onRevealDiff,
   subagentGroups = NO_SUBAGENT_GROUPS,
-  subagentRoster,
-  subagentDisclosure,
+  onOpenSubagent,
   backgroundTasks = NO_BACKGROUND_TASKS,
   followsProse = true,
   expandSignal,
@@ -70,9 +65,8 @@ export function NativeChatToolRun({
   onRevealDiff?: (element: HTMLElement) => void
   /** Spawn-group rosters that belong with this run's activity, one row each. */
   subagentGroups?: NativeChatSubagentGroupBlock[]
-  /** The rosters' list state, and their children whose rows open below this run. */
-  subagentRoster?: NativeChatSubagentRosterState
-  subagentDisclosure?: NativeChatSubagentDisclosure
+  /** Opens one of the rosters' subagents in its own view. */
+  onOpenSubagent?: (agentId: string) => void
   /** Background tasks that belong with this run's activity, one row each. */
   backgroundTasks?: NativeChatBackgroundTaskBlock[]
   /** The row draws prose above this run, which the run then sits just under. */
@@ -115,14 +109,8 @@ export function NativeChatToolRun({
       <NativeChatSubagentRun
         key={group.groupId}
         block={group}
-        open={subagentRoster?.open}
-        onSetOpen={
-          subagentRoster && subagentDisclosure && disclosureId !== undefined
-            ? (open) => subagentDisclosure.setRosterOpen(disclosureId, open)
-            : undefined
-        }
-        sections={subagentRoster?.sections}
-        onSetSectionOpen={subagentDisclosure?.setSectionOpen}
+        disclosureId={disclosureId}
+        onOpenSubagent={onOpenSubagent}
       />
     ))
   // Roster/task rows bypass tool-header hiding because they carry durable state beyond the originating turn.
@@ -243,22 +231,19 @@ export function NativeChatToolRun({
         className="mb-0 mt-1"
       />
       <NativeChatExpandable open={open && showsHeader}>
-        <NativeChatToolRunMembers
+        <NativeChatToolRunMemberList
+          blocks={blocks}
+          headerBlocks={headerBlocks}
+          asides={asides}
+          previousTodoWrite={previousTodoWrite}
+          previousUpdatePlan={previousUpdatePlan}
+          revealedDiff={revealedDiff}
+          onRevealDiff={revealDiff}
+          disclosureId={disclosureId}
           followKey={blocks.length + asideCount}
           startsAtEnd={live && !revealedDiff}
           memoryKey={runKey}
-        >
-          <NativeChatToolRunMemberList
-            blocks={blocks}
-            headerBlocks={headerBlocks}
-            asides={asides}
-            previousTodoWrite={previousTodoWrite}
-            previousUpdatePlan={previousUpdatePlan}
-            revealedDiff={revealedDiff}
-            onRevealDiff={revealDiff}
-            disclosureId={disclosureId}
-          />
-        </NativeChatToolRunMembers>
+        />
       </NativeChatExpandable>
     </div>
   )

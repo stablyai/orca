@@ -4,6 +4,8 @@ import { ScrollArea } from '@/components/ui/scroll-area'
 import type { Worktree } from '../../../../../../shared/worktree/types'
 import { getWorktreeHostIdentity } from '../../../../../../shared/worktree/host-qualified-identity'
 import { DeleteWorktreeDirtyChangeHint } from './DeleteWorktreeDirtyChangeHint'
+import { DeleteWorktreeLocalFilesHint } from './DeleteWorktreeLocalFilesHint'
+import type { WorktreeAtRiskLocalFiles } from '../../../../../../shared/worktree/removal/at-risk-local-files'
 import type {
   DeleteWorktreeChangeCheckState,
   DeleteWorktreeDirtyChangePreview
@@ -52,7 +54,8 @@ export function DeleteWorktreeTargetPreview({
   deleteStateByWorktreeId,
   dirtyChangeCountsByWorktreeId,
   dirtyChangePreviewsByWorktreeId,
-  changeCheckStatesByWorktreeId
+  changeCheckStatesByWorktreeId,
+  atRiskLocalFilesByIdentity
 }: {
   isBatchDelete: boolean
   worktree: Worktree | null
@@ -63,6 +66,7 @@ export function DeleteWorktreeTargetPreview({
   dirtyChangeCountsByWorktreeId: ReadonlyMap<string, number>
   dirtyChangePreviewsByWorktreeId: ReadonlyMap<string, DeleteWorktreeDirtyChangePreview>
   changeCheckStatesByWorktreeId?: ReadonlyMap<string, DeleteWorktreeChangeCheckState>
+  atRiskLocalFilesByIdentity?: ReadonlyMap<string, WorktreeAtRiskLocalFiles>
 }): JSX.Element | null {
   const t = useTranslate()
   const targetIdPrefix = useId()
@@ -111,6 +115,9 @@ export function DeleteWorktreeTargetPreview({
                       preview={dirtyChangePreviewsByWorktreeId.get(
                         item.hostId ? getWorktreeHostIdentity(item) : item.id
                       )}
+                    />
+                    <DeleteWorktreeLocalFilesHint
+                      files={atRiskLocalFilesByIdentity?.get(getWorktreeHostIdentity(item))}
                     />
                     {itemDeleteError ? (
                       <div className="mt-1 whitespace-pre-wrap break-all text-destructive">
@@ -167,6 +174,9 @@ export function DeleteWorktreeTargetPreview({
         preview={dirtyChangePreviewsByWorktreeId.get(
           worktree.hostId ? getWorktreeHostIdentity(worktree) : worktree.id
         )}
+      />
+      <DeleteWorktreeLocalFilesHint
+        files={atRiskLocalFilesByIdentity?.get(getWorktreeHostIdentity(worktree))}
       />
     </div>
   )
