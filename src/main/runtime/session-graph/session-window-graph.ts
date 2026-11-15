@@ -5,6 +5,7 @@ import type {
   RuntimeSyncWindowGraphResult
 } from '../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import { assertUniqueRuntimeGraphTabIds } from './runtime-graph-tab-ids'
+import { isTerminalLeafId, makePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
 import { HEADLESS_RUNTIME_WINDOW_ID } from '../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import type { RuntimeLeafRecord } from '../terminal/records/runtime-terminal-state-records'
 
@@ -17,18 +18,6 @@ export abstract class OrcaRuntimeWithSyncWindowGraph extends OrcaRuntimeWithAdmi
   protected abstract withMainSurfaces(windowId: number, graph: Graph): Graph
   declare protected terminalGroupGridSizes?: RuntimeSyncWindowGraph['terminalGroupGridSizes']
   declare protected singleGroupWorkspaceGridSize?: RuntimeSyncWindowGraph['singleGroupWorkspaceGridSize']
-
-  // Remounts briefly clear ptyId; retain the live handle paired clients still use (#23759).
-  private isLeafRemountingLivePty(
-    ptyId: string,
-    incomingPtyIds: ReadonlySet<string | null>
-  ): boolean {
-    return (
-      !incomingPtyIds.has(ptyId) &&
-      this.controllerKnowsPtyIsLive(ptyId) &&
-      this.getPtyLivenessVerdict(ptyId)?.status !== 'exited'
-    )
-  }
 
   shouldRelayTerminalBrowserOpens(): boolean {
     return this.authoritativeWindowId === HEADLESS_RUNTIME_WINDOW_ID
@@ -101,8 +90,13 @@ export abstract class OrcaRuntimeWithSyncWindowGraph extends OrcaRuntimeWithAdmi
       }
       const leafKey = this.getLeafKey(leaf.tabId, leaf.leafId)
       const existing = this.leaves.get(leafKey)
-      if (graph === rendererGraph) {
-        this.noteStatusBinding(rendererBindings, leaf, existing?.ptyId, changedMobileWorktrees)
+      // Why: status rows are keyed by UUID leaf ids; older or mirrored leaves can't carry one.
+      if (
+        graph === rendererGraph &&
+        isTerminalLeafId(leaf.leafId) &&
+        (changedMobileWorktrees.has(leaf.worktreeId) || existing?.ptyId !== leaf.ptyId)
+      ) {
+        rendererBindings.set(makePaneKey(leaf.tabId, leaf.leafId), leaf.ptyId)
       }
       const ptyId =
         leaf.ptyId === null &&
