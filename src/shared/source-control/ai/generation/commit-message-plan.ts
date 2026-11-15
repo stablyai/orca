@@ -35,6 +35,7 @@ import {
   mergeOpenCodeGenerationArgs
 } from '../../../text-generation/launch/opencode-generation-command'
 import { buildAntigravityGenerationInput } from '../../../text-generation/output/antigravity-generation-stream'
+import { DEVIN_TEXT_TASK_CONFIG, DEVIN_TEXT_TASK_CONFIG_ARG } from './devin-text-task-config'
 
 // Share pure request/prompt-to-spawn validation and argv planning between local main and SSH JSON-RPC generators.
 
@@ -244,6 +245,10 @@ export function planCommitMessageGeneration(
     input.agentId === 'kimi'
       ? findRecipeOption(generationArgs, ['--output-format'], KIMI_VALUE_OPTIONS)
       : null
+  // A recipe --config replaces the generated placeholder through the singleton group; then no
+  // policy file is attached and the user's own config governs the run.
+  const devinConfigIndex =
+    input.agentId === 'devin' ? generationArgs.indexOf(DEVIN_TEXT_TASK_CONFIG_ARG) : -1
   const directOpenCode = isDirectOpenCodeGenerationCommand(
     command.binary,
     merged.prefixArgs.map(generationArgumentText)
@@ -280,6 +285,17 @@ export function planCommitMessageGeneration(
             }
           }
         : {}),
+      ...(devinConfigIndex === -1
+        ? {}
+        : {
+            taskFiles: [
+              {
+                name: 'devin-text-task-config.json',
+                content: DEVIN_TEXT_TASK_CONFIG,
+                argIndex: devinConfigIndex
+              }
+            ]
+          }),
       label: spec.label,
       ...(input.agentId === 'codex'
         ? {

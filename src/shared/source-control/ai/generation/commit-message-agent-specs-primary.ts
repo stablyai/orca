@@ -2,6 +2,7 @@ import {
   claudeBackgroundArgs,
   claudeTextGenerationToolArgs
 } from '../../../text-generation/launch/claude-background-run-isolation'
+import { DEVIN_TEXT_TASK_CONFIG_ARG } from './devin-text-task-config'
 import type { TuiAgent } from '../../../agent-launch/catalog/tui-agent'
 import type {
   CommitMessageAgentSpec,
@@ -256,10 +257,13 @@ export function buildPrimaryCommitMessageAgentSpecs({
         // Print mode cannot answer the workspace-trust prompt.
         '--respect-workspace-trust',
         'false',
+        // No tool-disable flag exists; the planner materializes a deny-all user config here.
+        '--config',
+        DEVIN_TEXT_TASK_CONFIG_ARG,
         ...(model && model !== 'default' ? ['--model', model] : []),
         prompt
       ],
-      singletonOptions: [['--model']],
+      singletonOptions: [['--model'], ['--config']],
       modelSource: 'static',
       models: [{ id: 'default', label: 'Config default' }],
       defaultModelId: 'default'

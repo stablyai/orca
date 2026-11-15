@@ -33,7 +33,7 @@ describe('devinTranscriptImport', () => {
   it('stores conversations under the account data home', () => {
     const importer = devinTranscriptImport({ managedAccounts: () => unmanaged() })
     expect(importer.conversationStore({ accountHome: HOME, launchEnv: {} })).toBe(
-      '/data/home/devin/cli'
+      join('/data/home', 'devin', 'cli')
     )
   })
 
@@ -62,7 +62,7 @@ describe('devinTranscriptImport', () => {
     expect(importer.accountHomeCandidates({ settings: {}, selectedAccountHome: HOME })).toEqual([
       HOME,
       { variable: 'XDG_DATA_HOME', path: '/managed/one' },
-      { variable: 'XDG_DATA_HOME', path: '/person/.local/share' }
+      { variable: 'XDG_DATA_HOME', path: join('/person', '.local', 'share') }
     ])
   })
 })

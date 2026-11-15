@@ -37,7 +37,7 @@ const scrub = (env: Record<string, string>) => scrubDevinAcpEnvironment(env, {})
 describe('Devin chat account binding', () => {
   it('pins the default data folder without exporting it to the child', async () => {
     const home = await binding().resolve(resolveInput({}))
-    expect(home).toEqual({ variable: 'XDG_DATA_HOME', path: '/home/u/.local/share' })
+    expect(home).toEqual({ variable: 'XDG_DATA_HOME', path: join('/home/u', '.local', 'share') })
     const env = binding().environment(home, { PATH: '/bin' })
     expect(env).toEqual({ PATH: '/bin' })
     expect(scrub(env)).toContain('XDG_DATA_HOME')
