@@ -42,3 +42,13 @@ export const CODEX_FIREWALL_PATHS: readonly { exact: string; methods: readonly s
   { exact: '/backend-api/codex/models', methods: ['GET'] },
   { exact: '/backend-api/wham/usage', methods: ['GET'] }
 ]
+
+/**
+ * Firewall mode (design §1): every Codex call is swapped at the firewall, so the catalog GETs join the hot
+ * paths (still exact). Anything else Codex sends with the placeholder gets the 403: a new Codex endpoint is
+ * added here once seen, never covered by a prefix.
+ */
+export const CODEX_FIREWALL_ALL_PATHS: readonly { exact: string; methods: readonly string[] }[] = [
+  ...CODEX_FIREWALL_PATHS,
+  ...[...CODEX_EXACT_GETS].filter((exact) => !CODEX_FIREWALL_PATHS.some((path) => path.exact === exact)).map((exact) => ({ exact, methods: ['GET'] }))
+]

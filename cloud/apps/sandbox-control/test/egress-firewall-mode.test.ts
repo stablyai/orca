@@ -102,7 +102,7 @@ describe('EGRESS firewall mode', () => {
     const { h } = await setup()
     const life = (await lifecycleDeps(h.env, h.deps))!
     const row = { id: 'sbx_x', egress_secret_hosts: 'ANTHROPIC_API_KEY@api.anthropic.com', egress_allow_hosts: null, egress_user_hosts: null } as never
-    const policy = egressPolicy(life, row, undefined, [], { classes: new Set(['model_key']), accounts: [], secrets: new Map([['ANTHROPIC_API_KEY', null]]) })
+    const policy = egressPolicy(life, row, undefined, [], { classes: new Set(['model_key']), full: true, accounts: [], secrets: new Map([['ANTHROPIC_API_KEY', null]]) })
     const anthropic = policy.allow['api.anthropic.com']!
     expect(anthropic.filter((rule) => 'response' in rule && rule.response.body === KEYS_WITHHELD_BODY).length).toBeGreaterThan(0)
     expect(anthropic.some((rule) => 'forwardURL' in rule || 'transform' in rule)).toBe(false)

@@ -222,7 +222,7 @@ export type EgressPolicyInput = {
    * token refresh against auth.openai.com, which the proxy answers itself (CODEX-FIREWALL-SWAP). The host
    * gets no 403 rule from these; everything else on it passes as before.
    */
-  pathForwards?: readonly { host: string; path: PathMatch; forwardURL: string }[]
+  pathForwards?: readonly ({ host: string; path: PathMatch } & ({ forwardURL: string } | { response: { statusCode: number; body: string; contentType: string } }))[]
 }
 
 
@@ -239,7 +239,7 @@ export function compileNetworkPolicy(input: EgressPolicyInput): NetworkPolicy {
       path: forward.path.exact !== undefined ? { exact: forward.path.exact } : { startsWith: forward.path.startsWith ?? '/' },
       ...(forward.path.methods ? { method: [...forward.path.methods] } : {})
     }
-    allow[host] = [...(allow[host] ?? []), { match, forwardURL: forward.forwardURL }]
+    allow[host] = [...(allow[host] ?? []), 'forwardURL' in forward ? { match, forwardURL: forward.forwardURL } : { match, response: forward.response }]
   }
   for (const route of input.credentials ?? []) {
     const host = checkedHost(route.host)

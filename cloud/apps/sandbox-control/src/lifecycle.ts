@@ -2,7 +2,8 @@
 // a forced stop before the provider's 24h cap, usage metering and write-ahead rows.
 import { accountProvider } from './account-providers'
 import { readUsableAgentCredential } from './agent-credentials'
-import { CODEX_FIREWALL_PATHS } from './codex-paths'
+import { CODEX_FIREWALL_ALL_PATHS, CODEX_FIREWALL_PATHS } from './codex-paths'
+import { codexPlaceholder } from './codex-credentials'
 /** Where Codex refreshes its ChatGPT login. */
 export const CODEX_AUTH_HOST = 'auth.openai.com'
 import { parseStoredCodex } from './codex-credentials'
@@ -384,6 +385,8 @@ export type FirewallAccount = { agent: 'claude' | 'codex'; host: string; authori
  */
 export type FirewallInputs = {
   classes: ReadonlySet<FirewallClass>
+  /** Firewall mode proper (not #776's Codex-only alias): nothing that can be swapped here goes to the proxy. */
+  full: boolean
   accounts: readonly FirewallAccount[]
   /** Model keys by secret name; null: not usable now (deleted, moved away, unreadable). */
   secrets: ReadonlyMap<string, string | null>
@@ -446,7 +449,7 @@ export async function firewallInputsFor(deps: LifecycleDeps, row: SandboxRow): P
       secrets.set(entry.secret, stillHere ? (current?.env[entry.secret] ?? null) : null)
     }
   }
-  return { classes, accounts, secrets }
+  return { classes, full: egressSwapModeFor(deps, row) === 'firewall', accounts, secrets }
 }
 
 /**
@@ -455,6 +458,12 @@ export async function firewallInputsFor(deps: LifecycleDeps, row: SandboxRow): P
  */
 export function firewallEligibleKey(entry: SecretEgressHost): boolean {
   return !entry.keepResponseFields && !entry.paths
+}
+
+/** What Codex's own refresh of its placeholder login gets back: the same placeholder (CODEX-PLACEHOLDER-REFRESH). */
+export function codexPlaceholderRefreshBody(row: Pick<SandboxRow, 'id'>): string {
+  const placeholder = codexPlaceholder(row)
+  return JSON.stringify({ access_token: placeholder, id_token: placeholder, refresh_token: '', token_type: 'Bearer', expires_in: 315_360_000 })
 }
 
 export function egressPolicy(
@@ -545,20 +554,18 @@ export function egressPolicy(
           if (agent === 'claude') {
             return [{ host, header: provider.header, placeholders, via: 'transform', value: swap.authorization }]
           }
-          // CODEX-FIREWALL-SWAP: the hot calls first (exact paths), swapped right here; every other call with the
-          // placeholder still goes to the proxy, whose path pinning holds against encoded dot segments.
-          return [
-            {
-              host,
-              header: provider.header,
-              placeholders,
-              paths: CODEX_FIREWALL_PATHS,
-              via: 'transform',
-              value: swap.authorization,
-              ...(swap.accountId ? { extraHeaders: { 'chatgpt-account-id': swap.accountId } } : {})
-            },
-            forward
-          ]
+          // CODEX-FIREWALL-SWAP: exact paths only, swapped right here. Firewall mode swaps every Codex call this way
+          // and 403s the rest (no Worker, no relay); the #776 alias keeps the other calls on the proxy.
+          const codexSwap: CredentialRoute = {
+            host,
+            header: provider.header,
+            placeholders,
+            paths: firewall?.full ? CODEX_FIREWALL_ALL_PATHS : CODEX_FIREWALL_PATHS,
+            via: 'transform',
+            value: swap.authorization,
+            ...(swap.accountId ? { extraHeaders: { 'chatgpt-account-id': swap.accountId } } : {})
+          }
+          return firewall?.full ? [codexSwap] : [codexSwap, forward]
         }),
         ...egressSecretHosts(row).flatMap((entry) =>
           Object.keys(entry.headers).flatMap((header): CredentialRoute[] => {
@@ -603,10 +610,14 @@ export function egressPolicy(
   // CODEX-PLACEHOLDER-REFRESH: Codex in the sandbox, answered a 401, refreshes against auth.openai.com with
   // its placeholder login. That request goes to the egress proxy, which answers it with the placeholder
   // again and refreshes the real token centrally (index.ts), so the retry works instead of failing sign-in.
-  const pathForwards =
-    proxyUrl && egressAccountRoutes(row).some((route) => route.agent === 'codex')
-      ? [{ host: CODEX_AUTH_HOST, path: { exact: '/oauth/token', methods: ['POST'] }, forwardURL: proxyUrl }]
-      : []
+  const codexRefresh = { host: CODEX_AUTH_HOST, path: { exact: '/oauth/token', methods: ['POST'] } }
+  const pathForwards = !proxyUrl || !egressAccountRoutes(row).some((route) => route.agent === 'codex')
+    ? []
+    : firewall?.full && firewall.classes.has('codex')
+      ? // Firewall mode answers it here: the placeholder login again (not a secret); the real token is
+        // refreshed centrally on schedule (workstream B), never by this request.
+        [{ ...codexRefresh, response: { statusCode: 200, contentType: 'application/json', body: codexPlaceholderRefreshBody(row) } }]
+      : [{ ...codexRefresh, forwardURL: proxyUrl }]
   if (effectiveEgressPreset(deps, row) === 'open') {
     // Every host is reachable; the credential claims (and their trailing 403s) still apply.
     return compileNetworkPolicy({ mode: 'open', credentials: all, pathForwards })
