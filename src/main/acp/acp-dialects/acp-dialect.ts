@@ -94,6 +94,8 @@ export type AcpDialectNotification =
   | { disposition: 'ignore' }
   | {
       disposition: 'map'
+      /** The update's own row is replaced by this map's items. */
+      consumed?: true
       turn?: string
       replay?: boolean
       at?: number

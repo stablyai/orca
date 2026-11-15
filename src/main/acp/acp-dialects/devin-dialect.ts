@@ -11,6 +11,24 @@ const displayEchoSchema = z.looseObject({
     _meta: z.looseObject({ 'cognition.ai/displayMessage': z.literal(true) })
   })
 })
+const updateMetaSchema = z.looseObject({
+  update: z.looseObject({
+    _meta: z
+      .looseObject({
+        'cognition.ai/subagent_started': z
+          .looseObject({ agentId: z.string().min(1), title: z.string().optional() })
+          .optional(),
+        'cognition.ai/subagent_completed': z
+          .looseObject({
+            agentId: z.string().min(1),
+            success: z.boolean().optional(),
+            summary: z.string().optional()
+          })
+          .optional()
+      })
+      .optional()
+  })
+})
 
 // Devin's session errors are also its ACP codes, for releases without errorKind metadata.
 const SESSION_NOT_FOUND = -32016
@@ -20,8 +38,40 @@ function errorKind(error: AcpAgentError): string | undefined {
   return errorKindSchema.safeParse(error.data).data?.['cognition.ai/errorKind']
 }
 
-// Compaction reports are not turn events; the display-only echo is not agent text.
+// Compaction reports are not turn events; the display-only echo is not agent text. Child-agent
+// progress arrives as tool_call_update frames for a call that never opened — map them to the
+// subagent roster so no orphan tool row appears.
 function notification(method: string, params: unknown): AcpDialectNotification | undefined {
+  const started =
+    updateMetaSchema.safeParse(params).data?.update._meta?.['cognition.ai/subagent_started']
+  if (started) {
+    return {
+      disposition: 'map',
+      consumed: true,
+      subagents: [
+        {
+          id: started.agentId,
+          state: 'working',
+          ...(started.title ? { label: started.title } : {})
+        }
+      ]
+    }
+  }
+  const completed =
+    updateMetaSchema.safeParse(params).data?.update._meta?.['cognition.ai/subagent_completed']
+  if (completed) {
+    return {
+      disposition: 'map',
+      consumed: true,
+      subagents: [
+        {
+          id: completed.agentId,
+          state: completed.success === false ? 'failed' : 'completed',
+          ...(completed.summary ? { result: completed.summary } : {})
+        }
+      ]
+    }
+  }
   if (
     method === '_cognition.ai/compaction' ||
     (method === 'session/update' && displayEchoSchema.safeParse(params).success)

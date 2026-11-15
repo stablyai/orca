@@ -255,6 +255,9 @@ export class AcpTimelineTranslator {
       }
       return events
     }
+    if (extension?.consumed === true) {
+      return events
+    }
     if (standard) {
       const messageKey =
         turn && this.dialect.injectedPromptIdentity
