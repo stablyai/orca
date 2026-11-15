@@ -1,6 +1,6 @@
 import type { Automation } from '../automation-definition'
 import type { AutomationLaunchSetup, AutomationLaunchSetupPatch } from './automation-launch-types'
-import { AutomationLaunchSetupPatch as PatchSchema } from '../../rpc-contract/automation-params'
+import { AutomationLaunchSetupPatch as PatchSchema } from '../../rpc-contract/automations/automation-params'
 import { automationCanonicalLaunchSetup } from './automation-canonical-launch-setup'
 import {
   automationLaunchInputs,

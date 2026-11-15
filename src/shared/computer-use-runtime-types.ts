@@ -1,6 +1,8 @@
 export const COMPUTER_ERROR_CODES = {
   app_not_found: 'app_not_found',
   app_blocked: 'app_blocked',
+  app_launch_failed: 'app_launch_failed',
+  system_shortcut_blocked: 'system_shortcut_blocked',
   window_not_found: 'window_not_found',
   window_not_focused: 'window_not_focused',
   background_unavailable: 'background_unavailable',
@@ -8,8 +10,10 @@ export const COMPUTER_ERROR_CODES = {
   provider_incompatible: 'provider_incompatible',
   unsupported_capability: 'unsupported_capability',
   permission_denied: 'permission_denied',
+  screen_locked: 'screen_locked',
   element_not_found: 'element_not_found',
   element_not_clickable: 'element_not_clickable',
+  element_not_enabled: 'element_not_enabled',
   action_not_supported: 'action_not_supported',
   value_not_settable: 'value_not_settable',
   invalid_argument: 'invalid_argument',
@@ -20,6 +24,10 @@ export const COMPUTER_ERROR_CODES = {
 } as const
 
 export type ComputerErrorCode = keyof typeof COMPUTER_ERROR_CODES
+
+// Keep in sync with SessionLockProbe.lockedMessage in the macOS helper.
+export const COMPUTER_SCREEN_LOCKED_MESSAGE =
+  "The Mac's screen is locked or asleep, so Orca can't see or control windows. Wake and unlock the Mac, then retry."
 
 export type ComputerAppQuery = string
 
@@ -51,6 +59,10 @@ export type ComputerSnapshotData = {
   treeText: string
   elementCount: number
   focusedElementId: number | null
+  // Elements rendered with the `(disabled)` trait; a label can hold the same text. Absent from older hosts.
+  disabledElementIndexes?: number[]
+  // Present only when treeText is the subtree of this element, read with rootElementIndex.
+  rootElementIndex?: number
   // Present only when treeText is a diff against the previous snapshot of the same window.
   treeDiff?: {
     baseSnapshotId: string
@@ -98,7 +110,7 @@ export type ComputerActionMetadata = {
   fallbackReason?: string | null
   targetWindowId?: number | null
   targetWindowIndex?: number | null
-  // Absent from providers that predate background input (Linux, Windows, older macOS helpers).
+  // Absent from providers that predate background input (Linux, older Windows and macOS helpers).
   delivery?: 'background' | 'foreground'
   verification?: ComputerActionVerification
 }
@@ -106,9 +118,7 @@ export type ComputerActionMetadata = {
 export type ComputerActionVerification =
   | {
       state: 'verified'
-      property: 'focusedText' | 'selection' | 'value'
-      expected?: string | null
-      actualPreview?: string | null
+      property: 'focusedText' | 'elementText' | 'selection' | 'value'
     }
   | {
       state: 'unverified'
@@ -122,7 +132,9 @@ export type ComputerActionVerification =
         | 'value_mismatch'
         // The accessibility call succeeded but the window and the app's windows looked the same about a second later.
         | 'suspected_noop'
-      expected?: string | null
+        // Typed or pasted text was read back and the focused field does not hold what inserting it should produce.
+        | 'text_mismatch'
+      // Only on value_mismatch from a non-secure field; results never repeat the requested value.
       actualPreview?: string | null
     }
 
@@ -146,6 +158,8 @@ export type ComputerProviderCapabilities = {
       list: boolean
       bundleIds: boolean
       pids: boolean
+      // Starts a closed app without taking the foreground. Absent from providers that predate launch-app.
+      launch?: boolean
     }
     windows: {
       list: boolean
@@ -161,10 +175,14 @@ export type ComputerProviderCapabilities = {
       ocr: boolean
       // Absent from runtimes that predate action-result tree diffs.
       treeDiff?: boolean
+      // Tree lines mark disabled elements with a `(disabled)` trait. Absent from older Linux and Windows providers.
+      disabledState?: boolean
     }
     actions: {
       click: boolean
       typeText: boolean
+      // Absent from providers that predate element-targeted typing; they type at focus and ignore the element.
+      typeTextElement?: boolean
       pressKey: boolean
       hotkey: boolean
       pasteText: boolean
@@ -195,6 +213,14 @@ export type ComputerWindowListWindow = ComputerWindowInfo & {
 export type ComputerListWindowsResult = {
   app: ComputerAppInfo
   windows: ComputerWindowListWindow[]
+}
+
+export type ComputerLaunchAppResult = {
+  app: ComputerAppInfo & { pid: number }
+  // False when the app was already running and was left as it was.
+  launched: boolean
+  // Measured after the launch: 'foreground' when the app ended up frontmost.
+  delivery: 'background' | 'foreground'
 }
 
 export type ComputerListAppsResult = {

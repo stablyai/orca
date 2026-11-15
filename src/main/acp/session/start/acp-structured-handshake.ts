@@ -1,11 +1,14 @@
+import { withStructuredHistoryInvocation } from '../../../native-chat/agent-session-wire/acquisition/structured-agent-session-history-invocation'
 import { observeAcpForkSupport } from '../../capabilities/acp-fork-support'
+import { acpSessionStartMeta } from '../../launch/acp-session-meta'
+import { withAcpStartupDiagnostic } from './acp-startup-diagnostic'
 // An ACP child's handshake, run after the host has published it: initialize, reopen the chat's
 // session or start a new one, then return its protocol facts to the host. A saved session the
 // agent cannot reopen is replaced by a new one, with a warning row that any later start writes if
 // this one never did; while a reopened session replays its history, nothing it sends is written
 // except context usage, and afterwards the turns of it the chat never saw are added once.
 
-import type { AgentSessionProviderHandleLink } from '../../../../shared/agent-session/lifecycle/agent-session-provider-handle'
+import type { AgentSessionProviderHandleLink } from '../../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle'
 import type { StructuredAgentSessionAcquireInput } from '../../../native-chat/agent-session-wire/providers/structured-agent-session-adapter'
 import type { StructuredAgentSessionProviderOpenResult } from '../../../native-chat/agent-session-wire/startup/structured-agent-session-provider-open-contract'
 import {
@@ -34,6 +37,7 @@ import {
 
 type AcpHandshakeInput = {
   acquire: StructuredAgentSessionAcquireInput
+  signal: AbortSignal
   deps: AcpStructuredSessionAdapterDeps
   generation: string
   launch: AcpStructuredLaunch
@@ -66,6 +70,13 @@ export async function initializeAcpStructuredSession(
   assertStarting()
   observeAcpForkSupport(spec.agent, initialized)
   options.adoptInitialize(initialized)
+  const meta = await spec.resolveSessionMeta?.({
+    initialized,
+    cwd: launch.cwd,
+    env: launch.env,
+    signal: input.signal
+  })
+  assertStarting()
   // Choose authentication using the execution host's launch environment.
   const authMethodId = spec.authMethod?.({
     advertised: (initialized.authMethods ?? []).map((method) => method.id),
@@ -73,6 +84,7 @@ export async function initializeAcpStructuredSession(
     antigravityChatAuth: launch.antigravityChatAuth
   })
   const setup = {
+    ...acpSessionStartMeta(spec, meta),
     authMethodId,
     authMethodUnavailableMessage: spec.authMethodUnavailableMessage,
     resumePreference: spec.resumePreference
@@ -80,7 +92,7 @@ export async function initializeAcpStructuredSession(
   const resume = launch.resume
   let started: Awaited<ReturnType<AcpStructuredConnection['start']>> | null = null
   let liveLane: AcpStructuredLane | null = null
-  let takeover: ReturnType<typeof acpReopenTakeover> | null = null
+  let takeover: Awaited<ReturnType<typeof acpReopenTakeover>> | null = null
   let replayed: AcpLoadHistoryFrame[] | null = null
   const acceptSession = (accepted: NonNullable<typeof started>): void => {
     assertStarting()
@@ -107,7 +119,8 @@ export async function initializeAcpStructuredSession(
       replayed = input.lanes.finishLoad()
       attaching.translator.finishLoad()
     } catch (error) {
-      takeover = acpReopenTakeover(error, resume, {
+      withAcpStartupDiagnostic(error, connection, spec.dialect)
+      takeover = await acpReopenTakeover(error, resume, {
         // An agent already exited, its output still draining, has no session to take over in.
         over: connection.closed || connection.exited || input.abandoned(),
         now: now(),
@@ -134,20 +147,25 @@ export async function initializeAcpStructuredSession(
     started.sessionId === resume?.sessionId &&
     acquire.events
   ) {
-    await catchUpAcpHistory({
-      frames: replayed,
-      identity: spec.historyCatchUp,
-      sink: acquire.events,
-      sessionId,
-      agent: spec.agent,
-      providerSessionId: started.sessionId,
-      dialect: spec.dialect,
-      assertCurrent: assertStarting,
-      ...(deps.logger ? { logger: deps.logger } : {})
-    })
+    const identity = spec.historyCatchUp
+    const sink = acquire.events
+    await withStructuredHistoryInvocation(child, input.signal, (signal) =>
+      catchUpAcpHistory({
+        signal,
+        frames: replayed,
+        identity,
+        sink,
+        sessionId,
+        agent: spec.agent,
+        providerSessionId: started.sessionId,
+        dialect: spec.dialect,
+        assertCurrent: assertStarting,
+        ...(deps.logger ? { logger: deps.logger } : {})
+      })
+    )
     assertStarting()
   }
-  const childStops = await probeAcpChildStops(connection, spec.dialect)
+  const childStops = await probeAcpChildStops(connection, spec.dialect, initialized)
   assertStarting()
   liveLane.apply(liveLane.translator.contextModels(started.response.models, now()))
   const mode = spec.permissionModeConfig
@@ -197,7 +215,7 @@ export async function initializeAcpStructuredSession(
   }
   // Include warning rows missed by earlier failed starts.
   const lost = [
-    ...(launch.resume?.unannouncedLosses() ?? []),
+    ...(launch.resume?.lossKeys ?? []),
     ...(takeover?.replaces ? [takeover.replaces.key] : [])
   ]
   for (const key of lost) {

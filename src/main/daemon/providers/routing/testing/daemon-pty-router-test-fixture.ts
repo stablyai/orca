@@ -1,11 +1,9 @@
 import { vi } from 'vitest'
-import { settledWriteStub } from '../../../../providers/settled-pty-write-stub'
+import { settledWriteStub } from '../../../../providers/testing/settled-pty-write-stub'
 import type { DaemonPtyAdapter } from '../../adapter/daemon-pty-adapter'
-import type {
-  PtyBackgroundStreamEvent,
-  PtySpawnOptions,
-  PtySpawnResult
-} from '../../../../providers/pty-provider-contract'
+import type { PtyBackgroundStreamEvent } from '../../../../providers/pty/events'
+import type { PtySpawnOptions } from '../../../../providers/pty/provider-contract'
+import type { PtySpawnResult } from '../../../../providers/pty/spawn-result'
 import {
   AGENT_SESSION_CLAIM_DAEMON_PROTOCOL_VERSION,
   AGENT_SESSION_CREATE_OPERATION_DAEMON_PROTOCOL_VERSION,

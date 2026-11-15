@@ -1,16 +1,16 @@
 import {
   antigravitySessionOrigin,
   isAntigravityReferenceSession
-} from '../../../../../../shared/antigravity-session-origin'
+} from '../../../../../../shared/agent-session/lifecycle/provider-handles/antigravity-session-origin'
 import type React from 'react'
 import { Badge } from '@/components/ui/badge'
 import { WorktreeHostContextBadge } from '@/components/sidebar/workspace-card/host/WorktreeHostContextBadge'
 import RepoBadgeLabel from '@/components/repo/RepoBadgeLabel'
 import { AgentStateDot, type AgentDotState } from '@/components/AgentStateDot'
-import { AgentIcon } from '@/lib/agent-catalog'
+import { AgentIcon } from '@/components/agent/icons/AgentIcon'
 
 import { useRepoById } from '@/store/repos/use-repository-catalog'
-import { resolveRepoBadgeColor } from '../../../../../../shared/repo-badge-color'
+import { resolveRepoBadgeColor } from '../../../../../../shared/repository/appearance/repo-badge-color'
 import { splitWorktreeIdForFilesystem } from '../../../../../../shared/worktree/id'
 import {
   isAiVaultSessionRecoverableEmpty,

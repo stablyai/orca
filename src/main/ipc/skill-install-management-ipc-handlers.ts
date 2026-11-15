@@ -1,27 +1,27 @@
 import { randomUUID } from 'node:crypto'
 import { app } from 'electron'
 import { z } from 'zod'
-import { SKILL_INSTALL_UPDATE_REQUIRED_MESSAGE } from '../../shared/skill-install-capability'
+import { SKILL_INSTALL_UPDATE_REQUIRED_MESSAGE } from '../../shared/skills/capabilities/skill-install-capability'
 import {
   SkillBundleInstallPreviewRequestSchema,
   SkillBundleInstallPreviewSchema
-} from '../../shared/skill-bundle-install-contract'
+} from '../../shared/skills/installation/skill-bundle-install-contract'
 import {
   ManagedSkillInstallListSchema,
   SkillInstallDestinationSchema,
   SkillInstallPreviewSchema,
   SkillInstallResultSchema,
   SkillPackageIdentitySchema
-} from '../../shared/skill-install-contract'
+} from '../../shared/skills/installation/skill-install-contract'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import {
   supportsSkillRuntimeBundleInstall,
   supportsSkillRuntimeManagement
 } from '../skills/runtime-transfer/skill-runtime-capability'
 import { listWslDistrosAsync } from '../wsl/discovery/distro-catalog'
-import { callRuntimeEnvironment } from './runtime-environments/runtime-environment-transport-routing'
+import { callRuntimeEnvironment } from './runtime-environments/requests/runtime-environment-transport-routing'
 import { handleMainWindowSkillIpc } from './skill-ipc-main-window'
-import { getRuntimeEnvironmentRegistryRoot } from './runtime-environments/runtime-environment-registry-root'
+import { getRuntimeEnvironmentRegistryRoot } from './runtime-environments/catalog/runtime-environment-registry-root'
 
 const environmentIdSchema = z.string().min(1).max(128)
 const skillNameSchema = z.string().regex(/^[a-z0-9][a-z0-9-]{0,63}$/)

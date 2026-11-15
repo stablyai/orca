@@ -1,5 +1,5 @@
 import { Button } from '@/components/ui/button'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import { TaskSourceStepRow } from './TaskSourceStepRow'
 import { translate } from '@/i18n/i18n'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
@@ -74,7 +74,7 @@ export function TaskSourceShowInTasksStep({
     <TaskSourceStepRow
       index={index}
       state={visible ? 'done' : 'pending'}
-      title={t('auto.components.settings.TaskSourceShowInTasksStep.title', 'Show in Tasks')}
+      title={t('auto.components.settings.TaskSourceShowInTasksStep.8f0bb9edf3', 'Show in tasks')}
       description={
         description ??
         t(

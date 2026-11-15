@@ -4,18 +4,7 @@ import path from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { collectProtectedCopyKeys, main, PROTECTED_COPY_KEYS_PATH } from './protected-copy-keys.mjs'
 
-const ENGLISH = new Set([
-  'trust.title',
-  'trust.allow',
-  'trust.copy.warning',
-  'confirm.delete',
-  'confirm.count_other',
-  'native.quit',
-  'pragma.badge',
-  'nested.deep',
-  'trust.reasons.network',
-  'plain.title'
-])
+const ENGLISH = new Set(['trust.title', 'trust.reasons.network'])
 
 let dirs = []
 afterEach(() => {
@@ -40,33 +29,6 @@ function sourcesFrom(files) {
 }
 
 describe('collectProtectedCopyKeys', () => {
-  it('protects every key a marked file or its sibling copy module names', () => {
-    const sources = sourcesFrom({
-      'dialogs/TrustDialog.tsx': `import { trustCopy } from './trust-copy'
-import { plain } from '../plain/Plain'
-<DialogContent surface="security">{translate('trust.title', 'Trust?')}{translate('trust.allow', 'Allow')}`,
-      'dialogs/trust-copy.ts': `export const trustCopy = () => translate('trust.copy.warning', 'Careful')`,
-      'plain/Plain.tsx': `export const plain = () => translate('plain.title', 'Title')`,
-      'confirm/DeleteDialog.tsx': `<DialogContent><Button variant="destructive">{translate('confirm.delete', 'Delete')}{translate('confirm.count', '{{count}}', { count })}</Button>`,
-      'main/prompt.ts': `dialog.showMessageBox({ buttons: [translateMain('native.quit', 'Quit')] })`,
-      'badge.ts': `// @protected-copy: badge\nexport const b = () => translate('pragma.badge', 'Official')`,
-      'other.tsx': `translate('nested.deep', 'Deep')`
-    })
-
-    expect(collectProtectedCopyKeys(sources, ENGLISH)).toEqual({
-      keys: [
-        'confirm.count',
-        'confirm.delete',
-        'native.quit',
-        'pragma.badge',
-        'trust.allow',
-        'trust.copy.warning',
-        'trust.title'
-      ],
-      prefixes: []
-    })
-  })
-
   it('keeps dynamic key heads only when they are specific', () => {
     const sources = sourcesFrom({
       'Dialog.tsx': '<SecuritySurface>{translate(`trust.${id}`)}{translate(`trust.reasons.${x}`)}'

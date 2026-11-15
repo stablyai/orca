@@ -1,11 +1,11 @@
-import { ImeInput } from '@/lib/ime-text-field'
+import { ImeInput } from '@/lib/text-input/ime/ime-text-field'
 import { useEffect, useState, useCallback } from 'react'
 import { ChevronUp, ChevronDown, X, CaseSensitive, Regex } from 'lucide-react'
 import type { SearchAddon } from '@xterm/addon-search'
 import { Button } from '@/components/ui/button'
 import type { SearchState } from '@/components/terminal-pane/input/keyboard/terminal-keyboard-shortcut-matching'
 import { useTranslate } from '@/i18n/use-translate'
-import { getFindRequestQuery } from '@/lib/find-query-bounds'
+import { getFindRequestQuery } from '@/lib/text-search/find-query-bounds'
 import { safeFind } from './terminal-search-safe-find'
 import { buildTerminalSearchOptions } from './terminal-search-options'
 

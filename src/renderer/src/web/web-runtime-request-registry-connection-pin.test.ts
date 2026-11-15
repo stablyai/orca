@@ -1,8 +1,6 @@
+import { RuntimeConnectionChangedBeforeSendError } from '../runtime/rpc/calls/runtime-rpc-result'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import {
-  RUNTIME_CONNECTION_CHANGED_MESSAGE,
-  WebRuntimeRequestRegistry
-} from './web-runtime-request-registry'
+import { WebRuntimeRequestRegistry } from './web-runtime-request-registry'
 
 describe('web runtime request connection pin', () => {
   beforeEach(() => {
@@ -37,7 +35,7 @@ describe('web runtime request connection pin', () => {
     const write = registry.call('files.write', {}, { expectedConnectionEpoch: probedEpoch })
     reconnect()
 
-    await expect(write).rejects.toThrow(RUNTIME_CONNECTION_CHANGED_MESSAGE)
+    await expect(write).rejects.toBeInstanceOf(RuntimeConnectionChangedBeforeSendError)
     expect(sendEncrypted).not.toHaveBeenCalled()
   })
 })

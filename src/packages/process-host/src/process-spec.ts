@@ -5,10 +5,6 @@ import type {
   StdioOptions
 } from 'node:child_process'
 
-export type ChildProcessHandle = ChildProcess
-
-export type SpawnedProcess = ChildProcess
-
 export type ProcessSpec = {
   /** Prefer an absolute Windows path; stripped Electron PATHs may not resolve bare names. */
   program: string
@@ -42,13 +38,11 @@ export type ProcessSpec = {
   onStderr?: (chunk: Buffer | string) => void
 }
 
-export type PipedChildProcess = ChildProcessWithoutNullStreams
-
 export type PipedProcessSpec = Omit<ProcessSpec, 'stdio'> & {
   stdio?: 'pipe' | ['pipe', 'pipe', 'pipe', ...Exclude<StdioOptions, string>]
 }
 
-export type PipedProcessSpawner = (spec: PipedProcessSpec) => PipedChildProcess
+export type PipedProcessSpawner = (spec: PipedProcessSpec) => ChildProcessWithoutNullStreams
 
 export type ProcessTerminationBarrier = {
   observeStderr?: (chunk: Buffer | string) => void

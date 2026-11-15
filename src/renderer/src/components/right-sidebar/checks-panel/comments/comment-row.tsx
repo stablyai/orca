@@ -5,7 +5,7 @@ import {
 } from '@/components/github/use-github-image-uploads'
 import React, { useCallback, useState } from 'react'
 import { Button } from '@/components/ui/button'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import CommentMarkdown from '@/components/sidebar/CommentMarkdown'
 import { reviewCommentMarkdown } from './review-comment-markdown'
 import { CommentReactions } from '@/components/github/CommentReactions'
@@ -13,7 +13,7 @@ import { isBotPRComment } from '../../../../../../shared/source-control/review-c
 import type {
   GitHubReactionContent,
   PRComment
-} from '../../../../../../shared/github/comment-types'
+} from '../../../../../../shared/github/comments/comment-types'
 import type { PRCommentGroupActionState } from '@/lib/source-control/review/comments/pr-comment-action-state'
 import type { PRCommentPresentationClasses } from './pr-comment-presentation'
 import { formatPrCommentRelativeTime } from '../../../../../../shared/source-control/review-comments/pr-comment-time'
@@ -27,7 +27,7 @@ import {
   QueueForAgentButton,
   ResolveButton
 } from './comment-controls'
-import { isMutablePRConversationComment } from '../../../../../../shared/github/pr-comment-mutability'
+import { isMutablePRConversationComment } from '../../../../../../shared/github/comments/pr-comment-mutability'
 
 export function CommentRow({
   imageUploadAddress,

@@ -6,7 +6,7 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { CodeXml, SquareParking } from 'lucide-react'
 import { useTranslate } from '@/i18n/use-translate'
-import { requestManualTerminalWorktreePark } from '@/lib/manual-terminal-worktree-parking'
+import { requestManualTerminalWorktreePark } from '@/components/terminal-pane/parking/lifecycle/manual-terminal-worktree-parking'
 
 export function WorktreeDeveloperMenu({
   worktreeId,

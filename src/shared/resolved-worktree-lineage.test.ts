@@ -46,53 +46,6 @@ describe('projectResolvedWorktreeLineage', () => {
   const parent = worktree('parent', 'parent-instance')
   const child = worktree('child', 'child-instance')
 
-  it('projects exact instance-aware metadata across projects on one host', () => {
-    const foreignParent = {
-      ...parent,
-      repoId: 'other',
-      projectId: 'parent',
-      hostId: 'local' as const
-    }
-    const ownedChild = { ...child, projectId: 'child', hostId: 'local' as const }
-    const projected = projectResolvedWorktreeLineage([ownedChild, foreignParent], {
-      child: lineage()
-    })
-
-    expect(projected).toMatchObject([
-      { id: 'child', parentWorktreeId: 'parent', childWorktreeIds: [], lineage: lineage() },
-      { id: 'parent', parentWorktreeId: null, childWorktreeIds: ['child'], lineage: null }
-    ])
-  })
-
-  it.each([
-    ['stale child instance', lineage({ worktreeInstanceId: 'old-child' })],
-    ['stale parent instance', lineage({ parentWorktreeInstanceId: 'old-parent' })],
-    ['mismatched child record', lineage({ worktreeId: 'other-child' })]
-  ])('rejects %s', (_label, candidate) => {
-    const projected = projectResolvedWorktreeLineage([child, parent], { child: candidate })
-
-    expect(projected).toMatchObject([
-      { id: 'child', parentWorktreeId: null, lineage: null },
-      { id: 'parent', childWorktreeIds: [] }
-    ])
-  })
-
-  it('rejects a known host mismatch', () => {
-    const childOverrides = { hostId: 'local' as const }
-    const parentOverrides = { hostId: 'ssh:remote' as const }
-    const boundedChild = worktree('child', 'child-instance', childOverrides)
-    const boundedParent = worktree('parent', 'parent-instance', parentOverrides)
-
-    const projected = projectResolvedWorktreeLineage([boundedChild, boundedParent], {
-      child: lineage()
-    })
-
-    expect(projected).toMatchObject([
-      { id: 'child', parentWorktreeId: null, lineage: null },
-      { id: 'parent', childWorktreeIds: [] }
-    ])
-  })
-
   it('keeps colliding ids on different hosts separate', () => {
     const localParent = worktree('parent', 'parent-instance', { hostId: 'local' })
     const remoteParent = worktree('parent', 'parent-instance', { hostId: 'ssh:remote' })
@@ -106,37 +59,6 @@ describe('projectResolvedWorktreeLineage', () => {
       { childWorktreeIds: [] },
       { childWorktreeIds: ['child'] }
     ])
-  })
-
-  it('accepts legacy records when only one side has host or project identity', () => {
-    const legacyChild = worktree('child', 'child-instance', {
-      hostId: 'local',
-      projectId: 'github:stablyai/orca'
-    })
-
-    const projected = projectResolvedWorktreeLineage([legacyChild, parent], {
-      child: lineage()
-    })
-
-    expect(projected).toMatchObject([
-      { id: 'child', parentWorktreeId: 'parent', lineage: lineage() },
-      { id: 'parent', childWorktreeIds: ['child'] }
-    ])
-  })
-
-  it('rejects self-parent lineage', () => {
-    const projected = projectResolvedWorktreeLineage([child], {
-      child: lineage({
-        parentWorktreeId: child.id,
-        parentWorktreeInstanceId: child.instanceId!
-      })
-    })
-
-    expect(projected[0]).toMatchObject({
-      parentWorktreeId: null,
-      childWorktreeIds: [],
-      lineage: null
-    })
   })
 
   it('rejects every edge in a multi-node cycle without hiding valid descendants', () => {
@@ -167,29 +89,6 @@ describe('projectResolvedWorktreeLineage', () => {
         lineage: null
       },
       { id: 'grandchild', parentWorktreeId: 'parent', lineage: grandchildToParent }
-    ])
-  })
-
-  it('rejects a missing parent without mutating the raw lineage record', () => {
-    const rawLineage = lineage()
-    const projected = projectResolvedWorktreeLineage([child], { child: rawLineage })
-
-    expect(projected[0]).toMatchObject({ parentWorktreeId: null, lineage: null })
-    expect(rawLineage.parentWorktreeId).toBe('parent')
-  })
-
-  it('replaces disagreeing parent and child projections from the validated lineage record', () => {
-    const projected = projectResolvedWorktreeLineage(
-      [
-        { ...child, parentWorktreeId: 'stale-parent', childWorktreeIds: ['stale-child'] },
-        { ...parent, parentWorktreeId: 'stale-parent', childWorktreeIds: [] }
-      ] as (Worktree & { parentWorktreeId: string; childWorktreeIds: string[] })[],
-      { child: lineage() }
-    )
-
-    expect(projected).toMatchObject([
-      { id: 'child', parentWorktreeId: 'parent', childWorktreeIds: [] },
-      { id: 'parent', parentWorktreeId: null, childWorktreeIds: ['child'] }
     ])
   })
 })

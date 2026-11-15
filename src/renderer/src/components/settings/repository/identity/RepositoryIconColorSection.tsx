@@ -2,10 +2,10 @@ import {
   DEFAULT_REPO_BADGE_COLOR,
   REPO_COLORS,
   normalizeRepoBadgeColor
-} from '../../../../../../shared/repo-badge-color'
+} from '../../../../../../shared/repository/appearance/repo-badge-color'
 import { Label } from '../../../ui/label'
 import { ColorPicker } from '../../../ui/color-picker'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import { useTranslate } from '@/i18n/use-translate'
 
 type RepositoryIconColorSectionProps = {
@@ -63,7 +63,7 @@ export function RepositoryIconColorSection({
                 )
           }
           selected={!isPresetBadgeColor}
-          triggerLabel="Custom"
+          triggerLabel={t('auto.components.settings.RepositoryIconPicker.custom', 'Custom')}
           showHexInTrigger={!isPresetBadgeColor}
           className="h-7 px-2"
         />

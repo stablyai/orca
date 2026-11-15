@@ -7,7 +7,7 @@ import {
   type HookPaneProcessIo,
   type HookRootEvidenceReader
 } from './hook-process-root-evidence'
-import { PrioritySemaphore } from '../../priority-semaphore'
+import { PrioritySemaphore } from '../../concurrency/priority-semaphore'
 import {
   readSelectedRows,
   readTerminalRows,

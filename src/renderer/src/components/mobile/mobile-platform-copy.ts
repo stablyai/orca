@@ -4,7 +4,7 @@ import type { Translate } from '@/i18n/use-translate'
 
 export type InstallCopy = { ctaLabel: string; url: string }
 
-export const ANDROID_INSTALL_GUIDE_URL = 'https://www.onorca.dev/docs/android-apk'
+export const ANDROID_INSTALL_GUIDE_URL = 'https://orca.dev/docs/android-apk'
 
 export function getInstallCopy(platform: Platform, t: Translate = translate): InstallCopy {
   return platform === 'ios'
@@ -14,6 +14,6 @@ export function getInstallCopy(platform: Platform, t: Translate = translate): In
       }
     : {
         ctaLabel: t('auto.components.mobile.mobile.platform.copy.downloadApk', 'Download APK'),
-        url: 'https://www.onorca.dev/download/android'
+        url: 'https://orca.dev/download/android'
       }
 }

@@ -1,13 +1,13 @@
 import type {
   RuntimeMobileSessionRetiredTerminalSurface,
   RuntimeMobileSessionTabsResult
-} from '../../../../../../shared/runtime-session-contracts'
-import type { RuntimeMobileSessionTerminalClientTab } from '../../../../../../shared/runtime-mobile-session-tab-contracts'
+} from '../../../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
+import type { RuntimeMobileSessionTerminalClientTab } from '../../../../../../shared/remote-runtime/session-graph/runtime-mobile-session-tab-contracts'
 import type {
   TerminalLayoutSnapshot,
   TerminalPaneLayoutNode
 } from '../../../../../../shared/workspace-layout/terminal-tab-types'
-import { resolveRootlessTerminalLayoutLeafId } from '../../../../../../shared/workspace-layout/terminal-pane-tree'
+import { resolveRootlessTerminalLayoutLeafId } from '../../../../../../shared/workspace-layout/terminal-topology/terminal-pane-tree'
 
 export function surfaceKey(tabId: string, leafId: string): string {
   return `${tabId}\0${leafId}`

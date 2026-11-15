@@ -5,7 +5,7 @@ import * as HoverCardPrimitive from 'radix-ui/hover-card'
 import { useControllableState } from 'radix-ui/internal'
 import { cva, type VariantProps } from 'class-variance-authority'
 
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 
 const HoverCardInteractionContext = React.createContext({
   dismiss: () => {},

@@ -19,6 +19,13 @@ export function deriveAxUrlFromStreamUrl(streamUrl: string | undefined): string 
   return `${streamUrl.slice(0, -MJPEG_STREAM_SUFFIX.length)}/ax`
 }
 
+export function deriveAvccUrlFromStreamUrl(streamUrl: string): string | undefined {
+  if (!streamUrl.endsWith(MJPEG_STREAM_SUFFIX)) {
+    return undefined
+  }
+  return `${streamUrl.slice(0, -MJPEG_STREAM_SUFFIX.length)}/stream.avcc`
+}
+
 export function parseServeSimDetachedSession(raw: unknown, udid: string): EmulatorSessionInfo {
   if (!raw || typeof raw !== 'object') {
     throw new EmulatorError('emulator_helper_failed', emulatorFailureText('serveSimNoEndpoints'))

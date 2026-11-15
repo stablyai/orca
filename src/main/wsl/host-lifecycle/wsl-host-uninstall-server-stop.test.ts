@@ -1,9 +1,10 @@
+import '../../../shared/remote-runtime/host-store/environment-store-worker-test-fixture'
 import { spawnSync } from 'node:child_process'
 import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { WslHostServerStop } from '../../../shared/wsl-host-types'
+import type { WslHostServerStop } from '../../../shared/remote-runtime/wsl-hosts/wsl-host-types'
 
 const { execCommand, decommission, dispose } = vi.hoisted(() => ({
   execCommand: vi.fn<(conn: unknown, command: string) => Promise<string>>(),

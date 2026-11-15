@@ -1,10 +1,10 @@
 import { ORCA_CLI_POSIX_PATH_RESTORE } from '../../../shared/orca-cli-shell-path'
-import { MANAGED_DATA_ACCOUNT_POSIX_RESTORE } from '../../../shared/managed-data-account-shell'
+import { MANAGED_DATA_ACCOUNT_POSIX_RESTORE } from '../../../shared/shell/launch/agents/managed-data-account-shell'
 /** Restore ZDOTDIR before user startup; define functions first so .zshenv emulation cannot change their parsing. */
 import { getPosixOmpShellWrapper } from './omp-shell-wrapper'
 import { WSL_MANAGED_CLI_PATH_RESTORE } from '../../wsl/execution/wsl-managed-cli-path-restore'
-import { getPosixCodexShellLaunchPreflight } from '../../../shared/codex-shell-function'
-import { getPosixClaudeShellFunction } from '../../../shared/claude-shell-function'
+import { getPosixCodexShellLaunchPreflight } from '../../../shared/shell/launch/agents/codex-shell-function'
+import { getPosixClaudeShellFunction } from '../../../shared/shell/launch/agents/claude-shell-function'
 import {
   ZSH_DEFERRED_LINE_INIT_BLOCK,
   ZSH_DEFERRED_LINE_INIT_CLEANUP_BLOCK,

@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { create } from 'zustand'
 import type { AppState } from '../../types'
-import type { Repo } from '../../../../../shared/repo-types'
+import type { Repo } from '../../../../../shared/repository/repo-types'
 
 import { createDetectedAgentsSlice } from './create-detected-agents-slice'
 import { createRuntimeDetectedAgentsSlice } from './runtime-detected-agents'
@@ -172,6 +172,58 @@ describe('createDetectedAgentsSlice remote detection', () => {
     await expect(store.getState().ensureRemoteDetectedAgents('ssh-1')).resolves.toEqual(['kilo'])
     expect(store.getState().remoteDetectedAgentIds['ssh-1']).toEqual(['kilo'])
   })
+
+  it.each([false, true])(
+    'follows an automatic host refresh with one explicit request (automatic fails: %s)',
+    async (fails) => {
+      const store = createTestStore()
+      const automaticReply = Promise.withResolvers<unknown>()
+      runtimeEnvironmentCall.mockImplementation(
+        ({ method, params }: { method: string; params?: { userInitiated?: boolean } }) => {
+          if (method === 'preflight.refreshAgents') {
+            return params?.userInitiated
+              ? Promise.resolve({ id: method, ok: true, result: { agents: ['grok'] } })
+              : automaticReply.promise
+          }
+          return Promise.resolve({
+            id: method,
+            ok: true,
+            result: {
+              runtimeId: 'runtime',
+              rendererGraphEpoch: 1,
+              graphStatus: 'ready',
+              authoritativeWindowId: null,
+              liveTabCount: 0,
+              liveLeafCount: 0,
+              runtimeProtocolVersion: RUNTIME_PROTOCOL_VERSION,
+              minCompatibleRuntimeClientVersion: MIN_COMPATIBLE_RUNTIME_CLIENT_VERSION
+            }
+          })
+        }
+      )
+      const automatic = store.getState().refreshRuntimeDetectedAgents('env-explicit')
+      const explicit = store
+        .getState()
+        .refreshRuntimeDetectedAgents('env-explicit', undefined, { userInitiated: true })
+      expect(
+        store
+          .getState()
+          .refreshRuntimeDetectedAgents('env-explicit', undefined, { userInitiated: true })
+      ).toBe(explicit)
+      if (fails) {
+        automaticReply.reject(new Error('host temporarily unavailable'))
+      } else {
+        automaticReply.resolve({
+          id: 'preflight.refreshAgents',
+          ok: true,
+          result: { agents: ['claude'] }
+        })
+      }
+      await automatic
+      expect(await explicit).toEqual(['grok'])
+      expect(store.getState().runtimeDetectedAgentIds['env-explicit']).toEqual(['grok'])
+    }
+  )
 
   it('keeps a late initial detect from overwriting a runtime refresh', async () => {
     const store = createTestStore()

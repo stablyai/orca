@@ -2,8 +2,8 @@ import { describe, expect, it } from 'vitest'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
 
 import type { PersistedState } from '../../../shared/persisted-state-types'
-import type { Repo } from '../../../shared/repo-types'
-import { getAllWorktreeMetaForHost } from '../../persistence/loading-store/worktree-identity-metadata'
+import type { Repo } from '../../../shared/repository/repo-types'
+import { getAllWorktreeMetaForHost } from '../../persistence/loading-store/worktree-metadata/worktree-identity-metadata'
 import { normalizeWorktreeLinkedItemMetadata } from '../../persistence/tracking-repos/worktree-metadata-normalization'
 
 import { collectDependentStateBlockers } from './ssh-target-orcad-dependents'

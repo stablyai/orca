@@ -1,0 +1,180 @@
+import { ImeInput } from '@/lib/text-input/ime/ime-text-field'
+import { useEffect, useRef, useState } from 'react'
+import { Eye, Pencil } from 'lucide-react'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuShortcut,
+  DropdownMenuTrigger
+} from '@/components/ui/dropdown-menu'
+import { useShortcutLabel } from '@/hooks/useShortcutLabel'
+import { isImeCompositionKeyDown } from '@/lib/text-input/ime/ime-composition-keyboard-event'
+import { useTranslate } from '@/i18n/use-translate'
+import type { OpenFile } from '@/store/slices/editor/types/open-file'
+import { isVirtualEditorFile } from '@/store/slices/editor/tabs/editor-tab-content-type'
+import { CLOSE_ALL_CONTEXT_MENUS_EVENT } from '@/lib/overlay-interaction/close-all-context-menus'
+import { useEditorHeaderFileRename } from './editor-header-file-rename'
+import { getEditorHeaderCopyState } from './editor-header'
+import { splitPathForDisplay } from './editor-path-display'
+import { EditorFileLocationMenuItems } from './EditorFileLocationMenuItems'
+
+type EditorPanelHeaderPathProps = {
+  activeFile: OpenFile
+  copiedPathVisible: boolean
+  canShowMarkdownPreview: boolean
+  onCopyPath: () => void
+  onOpenMarkdownPreview: () => void
+}
+
+export function EditorPanelHeaderPath({
+  activeFile,
+  copiedPathVisible,
+  canShowMarkdownPreview,
+  onCopyPath,
+  onOpenMarkdownPreview
+}: EditorPanelHeaderPathProps): React.JSX.Element {
+  const t = useTranslate()
+  const [pathMenuOpen, setPathMenuOpen] = useState(false)
+  const [pathMenuPoint, setPathMenuPoint] = useState({ x: 0, y: 0 })
+  const skipMenuFocusRestoreRef = useRef(false)
+  const headerCopyState = getEditorHeaderCopyState(activeFile, t)
+  const displayPath = splitPathForDisplay(headerCopyState.pathLabel)
+  const canCopyHeaderPath = headerCopyState.copyText !== null
+  // Why: virtual editor tabs use synthetic ids instead of on-disk paths.
+  const isVirtualEditorTab = isVirtualEditorFile(activeFile)
+  const markdownPreviewShortcutLabel = useShortcutLabel('editor.markdownPreview')
+  const {
+    canRename,
+    currentFileName,
+    isRenaming,
+    renameInputRef,
+    openRenameInput,
+    commitRename,
+    cancelRename
+  } = useEditorHeaderFileRename(activeFile)
+
+  useEffect(() => {
+    const closeMenu = (): void => setPathMenuOpen(false)
+    window.addEventListener(CLOSE_ALL_CONTEXT_MENUS_EVENT, closeMenu)
+    return () => window.removeEventListener(CLOSE_ALL_CONTEXT_MENUS_EVENT, closeMenu)
+  }, [])
+
+  return (
+    <div className="editor-header-text">
+      <div
+        className="editor-header-path-row"
+        onContextMenuCapture={(event) => {
+          event.preventDefault()
+          window.dispatchEvent(new Event(CLOSE_ALL_CONTEXT_MENUS_EVENT))
+          setPathMenuPoint({ x: event.clientX, y: event.clientY })
+          setPathMenuOpen(true)
+        }}
+      >
+        {isRenaming ? (
+          <ImeInput
+            ref={renameInputRef}
+            data-editor-header-rename-input="true"
+            aria-label={t(
+              'auto.components.editor.EditorPanelHeader.1bb1e226ec',
+              'Rename file {{value0}}',
+              { value0: currentFileName }
+            )}
+            defaultValue={currentFileName}
+            // Span header for long-path rename space instead of sizing to filename.
+            className="h-6 w-full min-w-0 max-w-full rounded-md border border-accent/40 bg-input/40 px-1.5 font-mono text-xs text-foreground outline-none focus:border-accent focus:ring-1 focus:ring-ring"
+            spellCheck={false}
+            onPointerDown={(event) => event.stopPropagation()}
+            onMouseDown={(event) => event.stopPropagation()}
+            onClick={(event) => event.stopPropagation()}
+            onDoubleClick={(event) => event.stopPropagation()}
+            onKeyDown={(event) => {
+              // IME candidate-confirming Enter must not commit rename; wait until composition ends.
+              if (isImeCompositionKeyDown(event)) {
+                return
+              }
+              if (event.key === 'Enter') {
+                event.preventDefault()
+                event.stopPropagation()
+                commitRename()
+              } else if (event.key === 'Escape') {
+                event.preventDefault()
+                event.stopPropagation()
+                cancelRename()
+              }
+            }}
+            onBlur={commitRename}
+          />
+        ) : (
+          <button
+            type="button"
+            className={`editor-header-path${canCopyHeaderPath ? '' : ' editor-header-path--static'}`}
+            onClick={canCopyHeaderPath ? onCopyPath : undefined}
+            disabled={!canCopyHeaderPath}
+            title={headerCopyState.pathTitle}
+          >
+            <span className="editor-header-path-prefix">{displayPath.prefix}</span>
+            <span className="editor-header-path-file">{displayPath.fileName}</span>
+          </button>
+        )}
+        {/* Unmount opacity-hidden toast while renaming or it reserves ~100px for an impossible message. */}
+        {!isRenaming && (
+          <span
+            className={`editor-header-copy-toast${copiedPathVisible ? ' is-visible' : ''}`}
+            aria-live="polite"
+          >
+            {headerCopyState.copyToastLabel}
+          </span>
+        )}
+      </div>
+      <DropdownMenu open={pathMenuOpen} onOpenChange={setPathMenuOpen} modal={false}>
+        <DropdownMenuTrigger asChild>
+          <button
+            aria-hidden
+            tabIndex={-1}
+            className="pointer-events-none fixed size-px opacity-0"
+            style={{ left: pathMenuPoint.x, top: pathMenuPoint.y }}
+          />
+        </DropdownMenuTrigger>
+        <DropdownMenuContent
+          className="min-w-56"
+          sideOffset={0}
+          align="start"
+          onCloseAutoFocus={(event) => {
+            if (!skipMenuFocusRestoreRef.current) {
+              return
+            }
+            skipMenuFocusRestoreRef.current = false
+            event.preventDefault()
+          }}
+        >
+          <DropdownMenuItem
+            disabled={!canRename}
+            onSelect={() => {
+              skipMenuFocusRestoreRef.current = true
+              openRenameInput()
+            }}
+          >
+            <Pencil className="w-3.5 h-3.5 mr-1.5" />
+            {t('auto.components.editor.EditorPanelHeader.84cdc0794b', 'Rename')}
+          </DropdownMenuItem>
+          <DropdownMenuSeparator />
+          {!isVirtualEditorTab && (
+            <EditorFileLocationMenuItems file={activeFile} onCopyPath={onCopyPath} />
+          )}
+          {canShowMarkdownPreview && (
+            <>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onSelect={onOpenMarkdownPreview}>
+                <Eye className="w-3.5 h-3.5 mr-1.5" />
+                {t('auto.components.editor.EditorPanelHeader.4157f3cbf3', 'Open Markdown Preview')}
+                <DropdownMenuShortcut>{markdownPreviewShortcutLabel}</DropdownMenuShortcut>
+              </DropdownMenuItem>
+            </>
+          )}
+        </DropdownMenuContent>
+      </DropdownMenu>
+    </div>
+  )
+}

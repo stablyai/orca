@@ -14,7 +14,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { SettingsRow } from '../form-controls/SettingsFormControls'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { readPrefersReducedTransparency } from '@/hooks/use-reduce-visual-effects'
-import { activeWindowMaterial, rendererWindowMaterialHost } from '@/lib/window-material-runtime'
+import {
+  activeWindowMaterial,
+  rendererWindowMaterialHost
+} from '@/app-shell/appearance/window-material-runtime'
 import { translate } from '@/i18n/i18n'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
 
@@ -133,7 +136,7 @@ export function WindowMaterialSetting({
   const t = useTranslate()
   const host = rendererWindowMaterialHost()
   const selectable = selectableWindowMaterials(host)
-  const label = t('settings.windowMaterial.title', 'Window Material')
+  const label = t('settings.windowMaterial.fc2ba9b528', 'Window material')
   // Why compare resolved values: opacity and Reduce Visual Effects also decide the material.
   const restartPending =
     resolveWindowMaterial(settings, host, readPrefersReducedTransparency()) !==

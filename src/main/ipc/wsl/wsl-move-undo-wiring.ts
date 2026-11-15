@@ -6,26 +6,26 @@ import { z } from 'zod'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host'
 import type { WslMoveCutover } from '../../../shared/wsl-move/wsl-move-cutover'
 import type { Store } from '../../persistence/loading-store/store'
-import { wslMoveDesktopRewriteContext } from '../../persistence/moving-wsl-projects/wsl-move-desktop-rewrite'
+import { wslMoveDesktopRewriteContext } from '../../persistence/moving-wsl-projects/desktop-state/wsl-move-desktop-rewrite'
 import {
   probeWslMoveHostCopies,
   stopWslMoveHostCopies,
   type WslMoveHostCopyOutcome,
   type WslMoveHostCopyPort,
   type WslMoveHostCopyStop
-} from '../../persistence/moving-wsl-projects/wsl-move-host-copy-stop'
-import { wslMoveRewriteScope } from '../../persistence/moving-wsl-projects/wsl-move-rewrite-scope'
-import { wslMoveReleasedSessionFocusPatch } from '../../persistence/moving-wsl-projects/wsl-move-session-rewrite'
-import { applyWslMoveSessionFocus } from '../../persistence/moving-wsl-projects/wsl-move-main-rewrite-stores'
+} from '../../persistence/moving-wsl-projects/quiescence/wsl-move-host-copy-stop'
+import { wslMoveRewriteScope } from '../../persistence/moving-wsl-projects/desktop-state/wsl-move-rewrite-scope'
+import { wslMoveReleasedSessionFocusPatch } from '../../persistence/moving-wsl-projects/terminal-state/wsl-move-session-rewrite'
+import { applyWslMoveSessionFocus } from '../../persistence/moving-wsl-projects/desktop-state/wsl-move-main-rewrite-stores'
 import { listEnvironments } from '../../../shared/remote-runtime/host-store/runtime-environment-store'
-import { callRuntimeEnvironment } from '../runtime-environments/runtime-environment-transport-routing'
+import { callRuntimeEnvironment } from '../runtime-environments/requests/runtime-environment-transport-routing'
 import { wasWslHostKeptForPeers } from '../../wsl/host-lifecycle/wsl-host-kept-for-peers'
 import {
   stopWslMoveHostAutomations,
   wslMoveMovedAutomationIds,
   type WslMoveHostAutomationStop
-} from '../../persistence/moving-wsl-projects/wsl-move-undo-host-automations'
-import { scheduleWslMoveRewriteRetry } from '../../persistence/moving-wsl-projects/wsl-move-rewrite-retry'
+} from '../../persistence/moving-wsl-projects/cutover-recovery/wsl-move-undo-host-automations'
+import { scheduleWslMoveRewriteRetry } from '../../persistence/moving-wsl-projects/cutover-recovery/wsl-move-rewrite-retry'
 import { connectWslMoveHostService, wslHostRemovalPending } from './wsl-move-host-connect'
 import { getWslHostService } from '../../wsl/host-lifecycle/wsl-host-service-instance'
 import {
@@ -104,7 +104,9 @@ async function withHostCopyPort<T extends WslMoveHostCopyStop>(
 ): Promise<T | 'stopped' | 'unreachable'> {
   // A host the user removed ran its terminals down with it, unless its Remove kept the server
   // running for another Orca (R39): then its copies may still run, and nothing here reaches them.
-  if (!listEnvironments(userDataPath).some((env) => env.id === move.destinationEnvironmentId)) {
+  if (
+    !(await listEnvironments(userDataPath)).some((env) => env.id === move.destinationEnvironmentId)
+  ) {
     return wasWslHostKeptForPeers(userDataPath, move.destinationEnvironmentId)
       ? 'unreachable'
       : 'stopped'
@@ -199,14 +201,16 @@ export function createWslMoveUndoPorts(
       try {
         // A removed host took its automations with it, unless another Orca keeps its server (R39).
         if (
-          !listEnvironments(userDataPath).some((env) => env.id === move.destinationEnvironmentId)
+          !(await listEnvironments(userDataPath)).some(
+            (env) => env.id === move.destinationEnvironmentId
+          )
         ) {
           return wasWslHostKeptForPeers(userDataPath, move.destinationEnvironmentId)
             ? { outcome: 'unreachable' }
             : { outcome: 'stopped', restore: async () => {}, applyHere: () => () => {} }
         }
         // E11: a Remove that could not prove the server stopped; the host is not to be touched.
-        if (wslHostRemovalPending(userDataPath, move.manifest.source.distro)) {
+        if (await wslHostRemovalPending(userDataPath, move.manifest.source.distro)) {
           return { outcome: 'removal-pending' }
         }
         if (!(await connectUndoHost(userDataPath, move, mode))) {

@@ -1,18 +1,21 @@
-import type { ExternalWorktreeVisibility, Repo } from '../../../../../../shared/repo-types'
+import type {
+  ExternalWorktreeVisibility,
+  Repo
+} from '../../../../../../shared/repository/repo-types'
 import type { WorktreeVisibilityDefaults } from '../../../../../../shared/global-settings-types'
 import {
   effectiveExternalWorktreeVisibility,
   isLegacyRepoForExternalWorktreeVisibility
-} from '../../../../../../shared/external-worktree-visibility'
+} from '../../../../../../shared/worktree/visibility/external-worktree-visibility'
 import {
   effectiveBuiltInWorktreeSourceVisibility,
   effectiveCustomWorktreeSourceVisibility,
   normalizeWorktreeVisibilitySourcePreferences
-} from '../../../../../../shared/worktree/visibility-sources'
+} from '../../../../../../shared/worktree/visibility/visibility-sources'
 import {
   removeBuiltInWorktreeSourcePreference,
   removeCustomWorktreeSourcePreference
-} from '../../../../../../shared/worktree/visibility-source-preferences'
+} from '../../../../../../shared/worktree/visibility/visibility-source-preferences'
 import type { WorktreeVisibilitySourceRow } from '../sources/WorktreeVisibilitySourceList'
 import type { WorktreeVisibilitySourceMutation } from '../sources/worktree-visibility-source-mutation'
 import {

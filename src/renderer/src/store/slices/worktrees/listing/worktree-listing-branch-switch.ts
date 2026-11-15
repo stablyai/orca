@@ -1,5 +1,7 @@
 import type { Worktree } from '../../../../../../shared/worktree/types'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
+import { forgetDetachedOwner } from '../metadata/detached-hosted-review-owners'
+import { worktreeCopyOwnerKey } from '../metadata/worktree-copy-review-clear'
 
 function indexUnambiguousWorktrees(
   worktrees: readonly Worktree[],
@@ -47,6 +49,7 @@ export function routeListingBranchSwitchesThroughGitIdentity(args: {
   requestStarted: readonly Worktree[] | undefined
   current: readonly Worktree[] | undefined
   incoming: Worktree[]
+  refreshHostId: ExecutionHostId
   matchesRefreshHost: (worktree: Worktree) => boolean
   hasBranchScopedReviewContext: (worktree: Worktree) => boolean
   updateWorktreeGitIdentity: (
@@ -59,6 +62,7 @@ export function routeListingBranchSwitchesThroughGitIdentity(args: {
     requestStarted,
     current,
     incoming,
+    refreshHostId,
     matchesRefreshHost,
     hasBranchScopedReviewContext,
     updateWorktreeGitIdentity
@@ -90,12 +94,15 @@ export function routeListingBranchSwitchesThroughGitIdentity(args: {
       continue
     }
     if (
-      isAmbiguousAcrossHosts ||
       !requestStartedWorktree ||
       !existing ||
       existing.branch === worktree.branch ||
       !hasBranchScopedReviewContext(existing)
     ) {
+      if (worktree.branch !== '') {
+        // Unrouted, an applied attached row still proves a reattach; the old proof must not judge it.
+        forgetDetachedOwner(worktree.id, worktreeCopyOwnerKey(worktree))
+      }
       continue
     }
     updateWorktreeGitIdentity(
@@ -106,8 +113,8 @@ export function routeListingBranchSwitchesThroughGitIdentity(args: {
         // explicit detached signal expected by updateWorktreeGitIdentity.
         branch: worktree.branch === '' ? null : worktree.branch
       },
-      // Why null: ambiguous ids were skipped above, so this id has one copy.
-      null
+      // Same-ID twins need the listing's host to reconcile only the observed copy.
+      isAmbiguousAcrossHosts ? refreshHostId : null
     )
   }
   return reconciled ?? incoming

@@ -1,19 +1,20 @@
+import { readTestJournalSnapshot } from '../../../agent-session-journal/journal-observation.test-support'
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../../../shared/agent-session/journal/agent-session-journal-types'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { expect, it } from 'vitest'
-import type { AgentSessionDeathEvidence } from '../../../../../shared/agent-session/lifecycle/agent-session-death-evidence'
-import { readAgentJournalTurn } from '../../../../../shared/agent-session/lifecycle/agent-session-turn-record'
+import type { AgentSessionDeathEvidence } from '../../../../../shared/agent-session/lifecycle/leases/agent-session-death-evidence'
+import { readAgentJournalTurn } from '../../../../../shared/agent-session/lifecycle/records/agent-session-turn-record'
 import { createTrackedJournalOpener } from '../../../agent-session-journal/store-lifecycle/journal-host-database-test-support'
 import '../structured-agent-session-dead-generation-settlement'
 import { settleStaleStructuredAgentSessionState } from '../structured-agent-session-stale-state-settlement'
-import { codexProviderHandle } from '../../../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
+import { codexProviderHandle } from '../../../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle-encoding'
 import {
   RUNNING_IDENTITY,
   THREAD,
   turnScopeOf
-} from './structured-agent-session-stale-verdict-contract-test-fixture'
+} from './structured-agent-session-stale-verdict-contract.test-fixture'
 
 it('ends a crashed turn at its last proof of life, not at a send accepted before the proof', async () => {
   const root = await mkdtemp(join(tmpdir(), 'orca-stale-session-'))
@@ -52,8 +53,11 @@ it('ends a crashed turn at its last proof of life, not at a send accepted before
       })
     now = 3_600_000
     await settle(null)
-    const turn = () => journal.snapshot().items.map((item) => readAgentJournalTurn(item.body))[0]
-    expect(turn()).toMatchObject({ state: 'unverifiable' })
+    const turn = async () =>
+      (await readTestJournalSnapshot(journal)).items.map((item) =>
+        readAgentJournalTurn(item.body)
+      )[0]
+    expect(await turn()).toMatchObject({ state: 'unverifiable' })
     now = 3_605_000
     await journal.appendSubmission({
       clientMessageId: 'send-1',
@@ -78,7 +82,7 @@ it('ends a crashed turn at its last proof of life, not at a send accepted before
       lastProvenAliveAt: 210
     })
 
-    expect(turn()).toMatchObject({ state: 'interrupted', completedAt: 210 })
+    expect(await turn()).toMatchObject({ state: 'interrupted', completedAt: 210 })
   } finally {
     await journals.closeAll()
     await rm(root, { recursive: true, force: true })

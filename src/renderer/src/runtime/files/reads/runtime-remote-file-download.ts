@@ -6,7 +6,7 @@ import { callRuntimeRpc } from '../../rpc/calls/runtime-rpc-call'
 import { RuntimeRpcCallError } from '../../rpc/calls/runtime-rpc-result'
 import type { RuntimeFileDownloadResult } from '../runtime-file-client-types'
 import type { getRemoteFileArgs } from '../runtime-file-routing'
-import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import { toRuntimeWorktreeSelector } from '../../rpc/targets/runtime-worktree-selector'
 import { captureRuntimeEnvironmentRequestRevision } from '../../rpc/environment-revisions/runtime-environment-revision'
 
@@ -55,6 +55,19 @@ export async function readRemoteDownloadChunk(
       length: REMOTE_DOWNLOAD_CHUNK_BYTES
     },
     { timeoutMs: 60_000 }
+  )
+}
+
+/** A workspace file on a paired host, streamed in pages, or in one reply from hosts that can't page. */
+export async function downloadRemoteRuntimeFile(
+  remoteArgs: RemoteFileDownloadArgs,
+  suggestedName: string
+): Promise<RuntimeFileDownloadResult> {
+  if (!(await remoteChunkedDownloadAvailable(remoteArgs))) {
+    return downloadRemoteFileViaPreview(remoteArgs, suggestedName)
+  }
+  return streamDownloadedFile(suggestedName, (offset) =>
+    readRemoteDownloadChunk(remoteArgs, offset)
   )
 }
 

@@ -1,3 +1,4 @@
+import { acceptedAgentStatuses } from '@/store/slices/agent-status/accepted-agent-statuses'
 // @vitest-environment happy-dom
 
 // Child updatedAt changes must not reset the parent’s host-dated completion/read stamp; older hosts retain legacy dating.
@@ -82,7 +83,7 @@ function summary(overrides: Partial<AgentSessionStatusSummary> = {}): AgentSessi
 }
 
 function row(): AgentStatusEntry {
-  const [entry] = Object.values(mocks.store?.getState().agentStatusByPaneKey ?? {})
+  const [entry] = Array.from(mocks.store?.getState().agentStatusByPaneKey?.values() ?? [])
   if (!entry) {
     throw new Error('status row missing')
   }
@@ -102,7 +103,7 @@ describe("the structured row's state clock", () => {
     resetStructuredAgentSessionStatusFeedsForTests()
     mocks.subscribeStatus.mockResolvedValue({ unsubscribe: mocks.unsubscribe })
     mocks.store?.setState({
-      agentStatusByPaneKey: {},
+      agentStatusByPaneKey: acceptedAgentStatuses(Object.entries({})),
       acknowledgedAgentsByPaneKey: {},
       testRuntimeOwner: null,
       unifiedTabsByWorktree: { 'wt-1': [structuredTab] }

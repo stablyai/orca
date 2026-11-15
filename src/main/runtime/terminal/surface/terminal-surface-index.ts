@@ -9,13 +9,13 @@ import type {
   RuntimeSyncedLeaf,
   RuntimeSyncedTab,
   RuntimeSyncWindowGraph
-} from '../../../../shared/runtime-session-contracts'
-import type { LoadedWorkspaceLayout } from '../../../../shared/workspace-layout/workspace-layout-load-types'
+} from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
+import type { LoadedWorkspaceLayout } from '../../../../shared/workspace-layout/persistence/workspace-layout-load-types'
 import type {
   LayoutTab,
   WorkspaceLayout
 } from '../../../../shared/workspace-layout/workspace-layout-model'
-import { collectLayoutLeafIdsInOrder } from '../../../../shared/workspace-layout/terminal-pane-tree'
+import { collectLayoutLeafIdsInOrder } from '../../../../shared/workspace-layout/terminal-topology/terminal-pane-tree'
 import { bindingOf } from './pane-live-facts'
 import { worktreeIdsEqual } from '../../../../shared/worktree/id'
 import { isRemoteRuntimePtyId } from '../../../../shared/remote-runtime/remote-runtime-pty-id'

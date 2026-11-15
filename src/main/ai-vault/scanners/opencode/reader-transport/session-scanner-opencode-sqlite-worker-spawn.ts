@@ -1,18 +1,21 @@
 import { aiVaultScopePathsForWslDistro } from '../../../../../shared/ai-vault/scanning/ai-vault-scope-cwd-match'
-import { recordSessionScanIssue, scanIssueTextFromError } from '../../../session-scan-issues'
+import {
+  recordSessionScanIssue,
+  scanIssueTextFromError
+} from '../../../parsing/session-scan-issues'
 import { existsSync } from 'node:fs'
 import type { Worker } from 'node:worker_threads'
 import { spawnWorkerThread } from '../../../../worker-threads/worker-thread-spawn'
 import type * as AiVault from '../../../../../shared/ai-vault/contracts/ai-vault-types'
-import { throwIfSignalAborted } from '../../../../../shared/abort-signal-reason'
-import { openCodeTranscriptPageLimit } from '../../../../../shared/opencode-transcript-page-limit'
+import { throwIfSignalAborted } from '../../../../../shared/concurrency/abort-signal-reason'
+import { openCodeTranscriptPageLimit } from '../../../../../shared/agent-session/lifecycle/provider-handles/opencode-transcript-page-limit'
 import type { SessionFileCandidate } from '../../../session-scanner-types'
 import type { OpenCodeSqliteCaptureValue } from './session-scanner-opencode-sqlite-worker-protocol'
 import { OpenCodeSqliteWorkerClient } from './session-scanner-opencode-sqlite-worker-client'
 import {
   buildOpenCodeSqliteCandidatePath,
   splitOpenCodeSqliteCandidate
-} from '../../../../../shared/opencode-sqlite-session-path'
+} from '../../../../../shared/agent-session/lifecycle/provider-handles/opencode-sqlite-session-path'
 import {
   mapOpenCodeWslSession,
   openCodeWslClient,
@@ -20,7 +23,10 @@ import {
 } from './session-scanner-opencode-wsl-client'
 import { findForeignSqliteReaderEntry } from '../../../../foreign-sqlite-readers/foreign-sqlite-reader-entry-path'
 import { runOpenCodeSqliteScanRequest } from '../sqlite/session-scanner-opencode-sqlite-scan-scope'
-import { noteAiVaultScanDatabases, openAiVaultScanSource } from '../../../ai-vault-scan-progress'
+import {
+  noteAiVaultScanDatabases,
+  openAiVaultScanSource
+} from '../../../scan-lifecycle/ai-vault-scan-progress'
 
 export function resolveOpenCodeSqliteWorkerEntryPath(
   runtimeDir = __dirname,

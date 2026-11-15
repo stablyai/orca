@@ -1,6 +1,6 @@
 import type { Session } from 'electron'
 
-import { toSecureCertificateEndpoint } from '../../../shared/browser-url'
+import { toSecureCertificateEndpoint } from '../../../shared/browser/navigation/browser-url'
 import { getProxySessionApplicationReadiness } from '../../network/proxy-settings'
 import { MAX_CERTIFICATE_GRANTS, type CertificateTrustGrant } from './browser-certificate-challenge'
 import { answerBrowserSessionBeforeRequest } from '../sessions/requests/browser-session-request-decisions'

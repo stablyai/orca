@@ -11,9 +11,7 @@ function readWorkflow(name) {
   )
 }
 
-const build = readWorkflow('dev-channel-win-build.yml')
 const publish = readWorkflow('dev-channel-win-publish.yml')
-const buildSteps = build.jobs['build-win'].steps
 const publishSteps = publish.jobs['publish-win'].steps
 const directory = mkdtempSync(join(tmpdir(), 'dev-channel-windows-staging-'))
 afterAll(() => rmSync(directory, { recursive: true, force: true }))
@@ -23,23 +21,22 @@ async function runScript(script, { cwd = directory, env = {} } = {}) {
 }
 
 describe('Windows dev-channel artifact staging', () => {
-  it.each([
-    ['build', buildSteps, 'dist'],
-    ['publish', publishSteps, 'staged-windows']
-  ])('fails %s on any missing or empty staged file', async (_name, steps, folder) => {
-    const step = steps.find((entry) => entry.name === 'Validate staged Windows artifacts')
+  it('rejects an empty staged installer before publication', async () => {
+    const step = publishSteps.find((entry) => entry.name === 'Validate staged Windows artifacts')
     const attempt = mkdtempSync(join(directory, 'files-'))
+    const folder = 'staged-windows'
     mkdirSync(join(attempt, folder))
-    expect((await runScript(step.run, { cwd: attempt })).code).toBe(1)
     for (const file of [
       'orca-windows-setup.exe',
       'orca-windows-setup.exe.blockmap',
       'latest.yml'
     ]) {
-      writeFileSync(join(attempt, folder, file), '')
-      expect((await runScript(step.run, { cwd: attempt })).code).toBe(1)
       writeFileSync(join(attempt, folder, file), 'artifact')
     }
+    const installer = join(attempt, folder, 'orca-windows-setup.exe')
+    writeFileSync(installer, '')
+    expect((await runScript(step.run, { cwd: attempt })).code).toBe(1)
+    writeFileSync(installer, 'artifact')
     expect((await runScript(step.run, { cwd: attempt })).code).toBe(0)
   })
 

@@ -4,7 +4,7 @@ import {
   useAppStateValue
 } from '@/store/retained-views/app-state-view'
 import { useCallback, useEffect, useMemo } from 'react'
-import { isAgentSessionHandleProvider } from '../../../../../shared/agent-session/lifecycle/agent-session-provider-handle'
+import { isAgentSessionHandleProvider } from '../../../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle'
 import {
   LOCAL_EXECUTION_HOST_ID,
   toRuntimeExecutionHostId
@@ -14,7 +14,7 @@ import {
   MANAGED_RUNTIME_REMOVE_RUNTIME_CAPABILITY
 } from '../../../../../shared/managed-runtime-install'
 import { lastVerifiedRuntimeStatus } from '../../../../../shared/remote-runtime/host-status/runtime-host-status'
-import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import {
   hostStructuredAgentsReadFailed,
   loadHostStructuredAgents,
