@@ -680,7 +680,6 @@ jobs:
       should_release: ${{ steps.verify.outputs.tag != '' }}
       # Every build checks out this verified commit, never the movable tag name.
       release_sha: ${{ steps.verify.outputs.release_sha }}
-      latest_published_rc_tag: ${{ needs.prepare.outputs.latest_published_rc_tag }}
       # Why: downstream SignPath Slack pings need the cut source (not only the
       # new tag) so approvers know what they're signing and who cut it.
       source_ref: ${{ github.event_name == 'schedule' && 'main' || inputs.ref || 'main' }}
@@ -797,10 +796,10 @@ jobs:
       # timeouts for a release commit whose .github/workflows differ from main's.
       - name: Require release App credentials
         if: steps.verify.outputs.fresh == 'true'
-        env: &release-app-credentials
+        env:
           RELEASE_APP_CLIENT_ID: ${{ vars.RELEASE_APP_CLIENT_ID }}
           HAS_RELEASE_APP_KEY: ${{ secrets.RELEASE_APP_PRIVATE_KEY != '' }}
-        run: &require-release-app |
+        run: |
           if [[ -z "$RELEASE_APP_CLIENT_ID" || "$HAS_RELEASE_APP_KEY" != "true" ]]; then
             echo "::error::Release GitHub App is not configured: set variable RELEASE_APP_CLIENT_ID and secret RELEASE_APP_PRIVATE_KEY on the 'release' environment."
             exit 1
@@ -811,7 +810,7 @@ jobs:
         id: release-app-token
         if: steps.verify.outputs.fresh == 'true'
         uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
-        with: &release-app-token
+        with:
           client-id: ${{ vars.RELEASE_APP_CLIENT_ID }}
           private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
           owner: ${{ github.repository_owner }}
@@ -2642,14 +2641,16 @@ jobs:
     secrets: inherit
 
   homebrew-bump-published-rc-draft:
+    # Why prepare, not cut: draft recovery runs in prepare, and cut is skipped when there is no tag to push, which is
+    # exactly a recovery-only run.
     needs:
-      - cut
+      - prepare
     # Why: publish-complete-draft-releases can expose a recovered RC without
     # running the build/publish jobs; still advance the RC cask to that tag.
-    if: ${{ needs.cut.outputs.latest_published_rc_tag != '' }}
+    if: ${{ needs.prepare.outputs.latest_published_rc_tag != '' }}
     uses: ./.github/workflows/homebrew-bump.yml
     with:
-      tag: ${{ needs.cut.outputs.latest_published_rc_tag }}
+      tag: ${{ needs.prepare.outputs.latest_published_rc_tag }}
     secrets: inherit
 
   homebrew-bump:
