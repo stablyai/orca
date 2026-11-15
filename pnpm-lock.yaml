@@ -699,6 +699,9 @@ importers:
         specifier: ^5.1.0
         version: 5.1.0(@types/react@19.2.18)(@types/use-sync-external-store@0.0.6)(react@19.2.8)(use-sync-external-store@1.6.0(@types/react@19.2.18)(react@19.2.8))
     optionalDependencies:
+      '@orca/windows-notifications':
+        specifier: workspace:*
+        version: link:native/windows-notifications
       '@orca/windows-registry':
         specifier: workspace:*
         version: link:native/windows-registry
@@ -726,6 +729,12 @@ importers:
       transcribe-cpp:
         specifier: 0.4.1
         version: 0.4.1
+
+  native/windows-notifications:
+    dependencies:
+      node-addon-api:
+        specifier: ^8.9.2
+        version: 8.9.2
 
   native/windows-registry:
     dependencies:
