@@ -57,7 +57,11 @@ function deferredPermissionSummary(
   descriptor: SessionOptionDescriptor,
   choice: NonNullable<ReturnType<typeof selectedNativeChatChoice>>
 ): { compact: string; full: string } | null {
-  if (descriptor.valueSource !== 'dispatched' || typeof descriptor.activeValue !== 'string') {
+  if (
+    descriptor.kind.type !== 'select' ||
+    descriptor.valueSource !== 'dispatched' ||
+    typeof descriptor.activeValue !== 'string'
+  ) {
     return null
   }
   const active = descriptor.kind.choices.find((choice) => choice.value === descriptor.activeValue)

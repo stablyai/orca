@@ -148,29 +148,30 @@ describe('MobileNativeChatSessionOptionPickers', () => {
     renderer = null
   })
 
-  it('names a deferred permission pick on the model pill and explains it in the drill-in', () => {
+  it('names both the saved and running permission on the model pill and in the drill-in', () => {
     mount([MODEL_DESCRIPTOR, DEFERRED_PERMISSION_DESCRIPTOR], false, 'permissionMode')
-    expect(pill('Model').props.accessibilityLabel).toContain(
-      'Full access applies to your next message; running Ask for approval'
+    const name = pill('Model').props.accessibilityLabel as string
+    expect(name).toMatch(/Full access.*Ask for approval$/)
+    const texts = findAllByHostType(findByHostType(renderer!.root, 'BottomDrawer'), 'Text').map(
+      (node) => node.props.children
     )
-    expect(
-      findAllByHostType(findByHostType(renderer!.root, 'BottomDrawer'), 'Text').map(
-        (node) => node.props.children
-      )
-    ).toContain('Full access applies to your next message; running Ask for approval')
+    expect(texts.some((text) => /Full access.*Ask for approval/.test(String(text)))).toBe(true)
   })
 
-  it('uses the full deferred explanation for the home permissions row accessibility label', () => {
+  it('keeps the running permission out of the home row text but in its accessible name', () => {
     mount([MODEL_DESCRIPTOR, DEFERRED_PERMISSION_DESCRIPTOR], false, 'model')
     const row = renderer!.root.find(
       (node) =>
         String(node.type) === 'Pressable' &&
-        node.props.accessibilityLabel ===
-          'Permissions, Full access applies to your next message; running Ask for approval'
+        typeof node.props.accessibilityLabel === 'string' &&
+        node.props.accessibilityLabel.startsWith('Permissions')
     )
-    expect(findAllByHostType(row, 'Text').map((node) => node.props.children)).toContain(
-      'Full access · next message'
-    )
+    expect(row.props.accessibilityLabel).toContain('Ask for approval')
+    const value = findAllByHostType(row, 'Text')
+      .map((node) => node.props.children)
+      .find((text) => typeof text === 'string' && text.includes('Full access'))
+    expect(value).toBeDefined()
+    expect(value).not.toContain('Ask for approval')
   })
 
   it('consumes a refused page without replay, then permits a fresh open and permission pick', async () => {
