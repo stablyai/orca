@@ -14,7 +14,7 @@ const platform = vi.hoisted(() => ({ OS: 'ios' }))
 
 vi.mock('@react-native-async-storage/async-storage', () => ({ default: asyncStorage }))
 vi.mock('expo-secure-store', () => ({
-  WHEN_UNLOCKED_THIS_DEVICE_ONLY: 'WHEN_UNLOCKED_THIS_DEVICE_ONLY',
+  AFTER_FIRST_UNLOCK_THIS_DEVICE_ONLY: 'AFTER_FIRST_UNLOCK_THIS_DEVICE_ONLY',
   ...secureStore
 }))
 vi.mock('expo-crypto', () => ({ getRandomBytes: vi.fn() }))
