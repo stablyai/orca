@@ -22,7 +22,7 @@ import {
   heldConversationCommandParts,
   structuredConversationCommandHold,
   type StructuredConversationCommandHold
-} from '../../../../../../../shared/structured-conversation-command-hold'
+} from '../../../../../../../shared/native-chat/input/commands/structured-conversation-command-hold'
 import type { StructuredAgentSessionWriteOutcome } from './use-structured-agent-session-mutate'
 import { structuredAgentSessionCommandWriteRefusalCause } from '../../../../../../../shared/agent-session/failures/structured-agent-session-command-refusal-cause'
 

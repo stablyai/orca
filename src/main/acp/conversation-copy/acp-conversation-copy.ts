@@ -4,7 +4,7 @@ import { readOpenCodeForkCoverageViaWorker } from '../../ai-vault/scanners/openc
 import type { NativeCopyCoverage } from '../../native-chat/agent-session-journal/context-epochs/journal-history-origin'
 import { observeAcpForkSupport } from '../capabilities/acp-fork-support'
 import { normalizeAgentProviderSession } from '../../../shared/agent-session/lifecycle/agent-session-resume'
-import { OpenCodeCopyServerRouteError } from '../../../shared/opencode-launch-command'
+import { OpenCodeCopyServerRouteError } from '../../../shared/agent-launch/startup/opencode-launch-command'
 import {
   agentSessionAccountHomesEqual,
   type AgentSessionAccountHome

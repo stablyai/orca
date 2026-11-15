@@ -8,7 +8,7 @@ import { RuntimeAgentOrchestrationProjection } from '../../orchestration/crew/ru
 import { attachRuntimeWorktreeAgentRows } from './runtime-worktree-agent-rows'
 import type { RuntimeWorktreePsSummary } from '../../../../shared/worktree/catalog/runtime-worktree-contracts'
 import type { RuntimeWorktreeAgentSource } from './runtime-worktree-agent-source'
-import { testOrcaSessionId } from '../../../../shared/orca-session-address-test-fixture'
+import { testOrcaSessionId } from '../../../../shared/agent-session/identity/orca-session-address-test-fixture'
 import {
   structuredAgentSessionPaneKey,
   structuredAgentSessionTabId

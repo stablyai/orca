@@ -3,7 +3,7 @@ import type { RuntimePtyWorktreeRecord } from '../records/runtime-terminal-state
 import { parseAppSshPtyId } from '../../../../shared/remote-runtime/ssh/ssh-pty-id'
 import { splitWorktreeIdForFilesystem } from '../../../../shared/worktree/id'
 import { parseWslUncPath } from '../../../../shared/file-access/wsl-paths'
-import { cloneAgentSessionOwnerBinding } from '../../../../shared/claimed-agent-pty-owner-snapshot'
+import { cloneAgentSessionOwnerBinding } from '../../../../shared/agent-session/lifecycle/leases/claimed-agent-pty-owner-snapshot'
 import { advertisedUrlWatcher } from '../../../ports/advertised-url-watcher'
 import { maxTimestamp } from '../../workspaces/process-listing/runtime-worktree-status-projection'
 import type { RuntimeSyncedLeaf } from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'

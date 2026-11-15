@@ -1,7 +1,7 @@
 import type { RuntimeTerminalAgentStatusEvent } from './terminal-agent-status-events'
 import { OrcaRuntimeWithApplyTrackedPtyTitle } from './terminal-title-observation'
 import type { RuntimePtyTitleTrackerEntry } from '../records/runtime-terminal-state-records'
-import { createCommandCodeOutputStatusDetector } from '../../../../shared/command-code-output-status'
+import { createCommandCodeOutputStatusDetector } from '../../../../shared/agent-status/output/command-code-output-status'
 
 type TerminalAgentStatusTarget = Pick<
   RuntimeTerminalAgentStatusEvent,

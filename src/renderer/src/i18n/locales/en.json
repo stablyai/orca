@@ -4667,7 +4667,8 @@
             "terminalProcessLimit": "Your system cannot start another terminal process. Close unused terminals or quit unused processes, then try again.",
             "hostTerminalCap": "The host is already running as many terminals as Orca allows. Close a terminal you no longer need, then try again.",
             "title": "Terminal issue",
-            "errorTitle": "Terminal error"
+            "errorTitle": "Terminal error",
+            "copyErrorDetails": "Copy error details"
           },
           "TerminalProcessExitOverlay": {
             "capacityTitle": "Git Bash console limit reached",
@@ -14023,7 +14024,8 @@
           "catalog": "Catalog",
           "clear": "Clear filters",
           "themes": "Themes",
-          "languages": "Languages",
+          "codeLanguages": "Code languages",
+          "translations": "Translations",
           "icons": "Icons",
           "commands": "Commands & panels",
           "catalogLabel": "Filter by catalog",
@@ -17540,10 +17542,9 @@
           "725868c75d": "Browse folders",
           "5e7f0d8a80": "Folder picker unavailable for remote files",
           "30099dca46": "Folder",
-          "2d7d39dc63": ".md",
           "c8ac7868e6": "file name",
           "b6ed807cc6": "Name",
-          "e365f3c638": "Name your markdown file and pick a folder.",
+          "description": "Name your file and pick a folder.",
           "674b046582": "Save as",
           "nameEmpty": "Name cannot be empty",
           "nameHasSeparators": "Name cannot contain path separators",

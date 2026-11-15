@@ -6,7 +6,7 @@ import { agentHookServer } from '../../../../agent-hooks/server/agent-hook-serve
 import {
   formatOrcaSessionAddress,
   type OrcaSessionAddress
-} from '../../../../../shared/orca-session-address'
+} from '../../../../../shared/agent-session/identity/orca-session-address'
 import {
   TerminalAgentId,
   TerminalHandle,

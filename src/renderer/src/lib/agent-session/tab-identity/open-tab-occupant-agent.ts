@@ -9,7 +9,7 @@ import {
   resolveSiblingCompletedTabAgent,
   resolveSiblingTabAgent
 } from './tab-agent'
-import { resolveTabAgentFromSignalSnapshot } from '../../../../../shared/tab-agent-from-signals'
+import { resolveTabAgentFromSignalSnapshot } from '../../../../../shared/agent-status/identity/tab-agent-from-signals'
 import type { PaneForegroundAgentEntry } from '@/store/slices/agent-status/pane-foreground-agent'
 import type { SleepingAgentSessionRecord } from '../../../../../shared/agent-session/lifecycle/agent-session-resume'
 import type { TerminalLayoutSnapshot } from '../../../../../shared/workspace-layout/terminal-tab-types'

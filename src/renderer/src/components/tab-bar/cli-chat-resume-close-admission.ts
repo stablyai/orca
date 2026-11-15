@@ -13,7 +13,7 @@ import { STRUCTURED_AGENT_SESSION_CLOSE_TERMINAL_FOR_CHAT_RUNTIME_CAPABILITY } f
 import {
   chatAgentsShareConversations,
   namesCliConversation
-} from '../../../../shared/structured-agent-cli-conversation-adoption'
+} from '../../../../shared/agent-session/view/structured-agent-cli-conversation-adoption'
 import { recognizeAgentProcess } from '../../../../shared/agent-status/process/agent-process-recognition'
 import { reportCliChatResumeOwner } from './cli-chat-resume-feedback'
 import { cliChatResumeClosingPaneKeys } from './cli-chat-resume-close-terminal'

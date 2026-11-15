@@ -14,7 +14,7 @@ import { UNPUBLISHED_WORKTREE_PUBLICATION_EPOCH } from '../../../shared/remote-r
 import { getRuntimeBrowserPageRegistry } from '../browser/client-pages/runtime-browser-page-registry'
 import { getMobileSessionTabOrderIds } from '../session-lifecycle/projection/mobile-session-tab-merge'
 import { readCreatedWorkspaceLaunch } from '../../agent-launch/agent-launch-created-workspace'
-import type { AgentSenderRevision } from '../../../shared/agent-sender-associations'
+import type { AgentSenderRevision } from '../../../shared/orchestration/mailbox/agent-sender-associations'
 import { worktreeIdsEqual } from '../../../shared/worktree/id'
 
 export abstract class OrcaRuntimeWithScheduleMobileSessionTabsChanged extends OrcaRuntimeWithStoredMobileSnapshotHasStalePreservedTab {

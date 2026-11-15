@@ -1,4 +1,4 @@
-import type { SkillInstallProviderId } from '../../../../../shared/skill-install-providers'
+import type { SkillInstallProviderId } from '../../../../../shared/skills/installation/skill-install-providers'
 import {
   parseExecutionHostId,
   toRuntimeExecutionHostId,

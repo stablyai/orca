@@ -4042,7 +4042,8 @@
             "remoteTerminalClosed": "Das entfernte Terminal wurde geschlossen.",
             "ptyAllocationLimit": "Das System kann keine weiteren pty-Geräte zuweisen. Einige ungenutzte Terminals in Orca oder einem anderen Programm schließen und anschließend erneut versuchen.",
             "terminalProcessLimit": "Das System kann keinen weiteren Terminal-Prozess starten. Ungenutzte Terminals schließen oder ungenutzte Prozesse beenden und anschließend erneut versuchen.",
-            "hostTerminalCap": "Auf dem Host laufen bereits so viele Terminals, wie Orca zulässt. Ein nicht mehr benötigtes Terminal schließen und anschließend erneut versuchen."
+            "hostTerminalCap": "Auf dem Host laufen bereits so viele Terminals, wie Orca zulässt. Ein nicht mehr benötigtes Terminal schließen und anschließend erneut versuchen.",
+            "copyErrorDetails": "Fehlerdetails kopieren"
           },
           "TerminalProcessExitOverlay": {
             "capacityTitle": "Konsolenlimit von Git Bash erreicht",
@@ -13208,7 +13209,8 @@
           "catalog": "Katalog",
           "clear": "Filter zurücksetzen",
           "themes": "Designs",
-          "languages": "Sprachen",
+          "codeLanguages": "Programmiersprachen",
+          "translations": "Übersetzungen",
           "icons": "Symbole",
           "commands": "Befehle & Panels",
           "catalogLabel": "Nach Katalog filtern",
@@ -16554,10 +16556,9 @@
           "725868c75d": "Ordner durchsuchen",
           "5e7f0d8a80": "Ordnerauswahl für entfernte Dateien nicht verfügbar",
           "30099dca46": "Ordner",
-          "2d7d39dc63": ".md",
           "c8ac7868e6": "Dateiname",
           "b6ed807cc6": "Name",
-          "e365f3c638": "Die Markdown-Datei benennen und einen Ordner auswählen.",
+          "description": "Datei benennen und einen Ordner auswählen.",
           "674b046582": "Speichern unter",
           "nameEmpty": "Name darf nicht leer sein",
           "nameHasSeparators": "Name darf keine Pfadtrennzeichen enthalten",

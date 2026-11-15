@@ -131,7 +131,6 @@ const NODE_RUNTIME_INCLUDE = [
   'tests/e2e/helpers/persisted-profile-state.unit.test.ts',
   'src/main/runtime/push/notifications/mobile-notification-dismissal-store.test.ts',
   'src/main/runtime/push/notifications/mobile-notification-dismissal-read-failure.test.ts',
-  'src/main/ipc/notifications-subject-retirement.test.ts',
   'src/main/ipc/notifications-external-acknowledgement.test.ts'
 ]
 

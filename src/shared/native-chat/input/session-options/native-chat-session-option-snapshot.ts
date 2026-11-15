@@ -1,6 +1,6 @@
 import { AGENT_CHAT_PERMISSION_MODE_OPTION_ID } from '../../../agent-launch/permissions/agent-chat-permission-mode-option-id'
-import { labelFromModelId } from '../../../model-id-label'
-import { classifyAgentModels } from '../../../legacy-agent-models'
+import { labelFromModelId } from '../../../agent-session/options/model-catalog/model-id-label'
+import { classifyAgentModels } from '../../../agent-session/options/model-catalog/legacy-agent-models'
 import type {
   AgentSessionOptionCatalog,
   CatalogMidSessionApply,
