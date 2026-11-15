@@ -23514,6 +23514,7 @@
     "argumentsHint": "S’applique uniquement aux lancements CLI.",
     "launchChat": "Lancer le chat",
     "launchTerminal": "Lancer le terminal",
+    "resumeSession": "Reprendre la session…",
     "setByArguments": "Défini par vos arguments",
     "searchModels": "Rechercher des modèles",
     "noModels": "Aucun modèle ne correspond à votre recherche.",

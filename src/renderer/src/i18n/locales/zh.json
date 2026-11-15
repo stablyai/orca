@@ -23172,6 +23172,7 @@
     "argumentsHint": "仅适用于 CLI 启动。",
     "launchChat": "启动聊天",
     "launchTerminal": "启动终端",
+    "resumeSession": "恢复会话…",
     "setByArguments": "由参数设置",
     "searchModels": "搜索模型",
     "noModels": "没有与搜索匹配的模型。",

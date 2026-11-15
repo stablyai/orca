@@ -28,6 +28,11 @@ import { TabBarStaticCreateMenu } from './tab-bar-static-create-menu'
 import ClientHostedBrowserTabRows from './ClientHostedBrowserTabRows'
 import type { ClientHostedBrowserRow } from '../../../../shared/browser/client-hosting/client-hosted-browser-rows'
 import { advanceAgentSessionsTourPastNewTab } from '@/components/contextual-tours/agent-sessions-tour-new-tab'
+import {
+  AgentLaunchResumeSessionContext,
+  openAgentLaunchSessionHistory
+} from '@/components/agent/agent-launch-resume-session'
+import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 
 const EMPTY_CLIENT_HOSTED_ROWS: readonly ClientHostedBrowserRow[] = []
 
@@ -95,6 +100,11 @@ export function renderTabBarSurface(
     queueFocusAfterNewTabMenuClose,
     showStaticCreateMenuItems
   } = createMenu
+  // The history dialog opens once the menu has closed and handed focus back.
+  const resumeAgentSession = (agent: TuiAgent): void => {
+    queueFocusAfterNewTabMenuClose(() => openAgentLaunchSessionHistory(worktreeId, agent))
+    setNewTabMenuOpen(false)
+  }
   const { orderedItems, sortableIds, dropIndicatorByVisibleId } = itemProjection
   const clientHostedBrowserRows = props.clientHostedBrowserRows ?? EMPTY_CLIENT_HOSTED_ROWS
   const {
@@ -242,64 +252,66 @@ export function renderTabBarSurface(
             advanceAgentSessionsTourPastNewTab()
           }}
         >
-          {!terminalOnly && onOpenEntry ? (
-            <>
-              <TabBarAgentPickerEntry
-                inventory={agentPickerInventory}
-                terminalPending={agentMenu.state === 'settled' && agentMenu.terminalPending}
-                worktreeId={worktreeId}
+          <AgentLaunchResumeSessionContext value={resumeAgentSession}>
+            {!terminalOnly && onOpenEntry ? (
+              <>
+                <TabBarAgentPickerEntry
+                  inventory={agentPickerInventory}
+                  terminalPending={agentMenu.state === 'settled' && agentMenu.terminalPending}
+                  worktreeId={worktreeId}
+                  groupId={resolvedGroupId}
+                  menuOpen={newTabMenuOpen}
+                  menuOptions={createMenuOptions}
+                  onLaunchAgentOption={launchAgentFromNewTabEntry}
+                  onOpenDefaultTerminal={() => {
+                    queueNewActiveTerminalFocusAfterNewTabMenuClose()
+                    onNewTerminalTab()
+                  }}
+                  onOpenEntry={onOpenEntry}
+                  onQueryChange={setCreateMenuQuery}
+                  onQueueSwitchFocus={queueFocusAfterNewTabMenuClose}
+                  onSelectMenuOption={handleSelectCreateMenuOption}
+                  onDidOpenEntry={() => setNewTabMenuOpen(false)}
+                />
+                {showStaticCreateMenuItems ? <DropdownMenuSeparator /> : null}
+              </>
+            ) : null}
+            {showStaticCreateMenuItems ? (
+              <TabBarStaticCreateMenu
+                props={props}
                 groupId={resolvedGroupId}
-                menuOpen={newTabMenuOpen}
-                menuOptions={createMenuOptions}
-                onLaunchAgentOption={launchAgentFromNewTabEntry}
-                onOpenDefaultTerminal={() => {
-                  queueNewActiveTerminalFocusAfterNewTabMenuClose()
-                  onNewTerminalTab()
-                }}
-                onOpenEntry={onOpenEntry}
-                onQueryChange={setCreateMenuQuery}
-                onQueueSwitchFocus={queueFocusAfterNewTabMenuClose}
-                onSelectMenuOption={handleSelectCreateMenuOption}
-                onDidOpenEntry={() => setNewTabMenuOpen(false)}
+                terminalOnly={terminalOnly}
+                mobileEmulatorEnabled={mobileEmulatorEnabled}
+                managedBrowserCreationEnabled={managedBrowserCreationEnabled}
+                mobileEmulatorCreationEnabled={mobileEmulatorCreationEnabled}
+                workspaceHasSimulatorTab={workspaceHasSimulatorTab}
+                showMobileEmulatorIntroCallout={showMobileEmulatorIntroCallout}
+                windowsShellEntries={windowsShellEntries}
+                defaultWindowsPowerShellImplementation={defaultWindowsPowerShellImplementation}
+                pwshAvailable={windowsTerminalCapabilities.pwshAvailable}
+                newTerminalShortcut={newTerminalShortcut}
+                newBrowserShortcut={newBrowserShortcut}
+                newSimulatorShortcut={newSimulatorShortcut}
+                newFileShortcut={newFileShortcut}
+                openMarkdownShortcut={openMarkdownShortcut}
+                queueNewActiveTerminalFocusAfterNewTabMenuClose={
+                  queueNewActiveTerminalFocusAfterNewTabMenuClose
+                }
               />
-              {showStaticCreateMenuItems ? <DropdownMenuSeparator /> : null}
-            </>
-          ) : null}
-          {showStaticCreateMenuItems ? (
-            <TabBarStaticCreateMenu
-              props={props}
-              groupId={resolvedGroupId}
-              terminalOnly={terminalOnly}
-              mobileEmulatorEnabled={mobileEmulatorEnabled}
-              managedBrowserCreationEnabled={managedBrowserCreationEnabled}
-              mobileEmulatorCreationEnabled={mobileEmulatorCreationEnabled}
-              workspaceHasSimulatorTab={workspaceHasSimulatorTab}
-              showMobileEmulatorIntroCallout={showMobileEmulatorIntroCallout}
-              windowsShellEntries={windowsShellEntries}
-              defaultWindowsPowerShellImplementation={defaultWindowsPowerShellImplementation}
-              pwshAvailable={windowsTerminalCapabilities.pwshAvailable}
-              newTerminalShortcut={newTerminalShortcut}
-              newBrowserShortcut={newBrowserShortcut}
-              newSimulatorShortcut={newSimulatorShortcut}
-              newFileShortcut={newFileShortcut}
-              openMarkdownShortcut={openMarkdownShortcut}
-              queueNewActiveTerminalFocusAfterNewTabMenuClose={
-                queueNewActiveTerminalFocusAfterNewTabMenuClose
-              }
-            />
-          ) : null}
-          {showStaticCreateMenuItems && showAgentLaunchItems ? (
-            <>
-              <DropdownMenuSeparator />
-              <ProjectedAgentMenuItems
-                model={agentMenu}
-                pickerInventory={agentPickerInventory}
-                onSelectPickerAgent={selectPickerAgent}
-                hidePickerSearch={!terminalOnly && Boolean(onOpenEntry)}
-                runLaunch={launchAgentRow}
-              />
-            </>
-          ) : null}
+            ) : null}
+            {showStaticCreateMenuItems && showAgentLaunchItems ? (
+              <>
+                <DropdownMenuSeparator />
+                <ProjectedAgentMenuItems
+                  model={agentMenu}
+                  pickerInventory={agentPickerInventory}
+                  onSelectPickerAgent={selectPickerAgent}
+                  hidePickerSearch={!terminalOnly && Boolean(onOpenEntry)}
+                  runLaunch={launchAgentRow}
+                />
+              </>
+            ) : null}
+          </AgentLaunchResumeSessionContext>
         </DropdownMenuContent>
       </DropdownMenu>
     </div>

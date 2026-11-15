@@ -22807,6 +22807,7 @@
     "argumentsHint": "CLI 실행에만 적용됩니다.",
     "launchChat": "채팅 시작",
     "launchTerminal": "터미널 시작",
+    "resumeSession": "세션 재개…",
     "setByArguments": "인수로 설정됨",
     "searchModels": "모델 검색",
     "noModels": "검색과 일치하는 모델이 없습니다.",

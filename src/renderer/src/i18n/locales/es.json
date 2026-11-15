@@ -23491,6 +23491,7 @@
     "argumentsHint": "Solo se aplica a los inicios de CLI.",
     "launchChat": "Iniciar chat",
     "launchTerminal": "Iniciar terminal",
+    "resumeSession": "Reanudar sesión…",
     "setByArguments": "Definido por tus argumentos",
     "searchModels": "Buscar modelos",
     "noModels": "Ningún modelo coincide con tu búsqueda.",

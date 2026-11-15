@@ -8,8 +8,8 @@ import type { AiVaultPanelWorkspace } from '../scope/ai-vault-panel-workspace'
 
 export type AgentSessionHistoryModalRequest = {
   workspace: AiVaultPanelWorkspace
-  /** The chat `/resume` was typed in, which a picked conversation replaces. */
-  chatTabId: string
+  /** The chat `/resume` was typed in, which a picked conversation replaces; absent, rows resume in new tabs. */
+  chatTabId?: string
   initialQuery: string
   /** The chat's agent, which the panel's agent filter starts on. */
   agent?: AiVaultAgent
@@ -19,7 +19,7 @@ export function openAgentSessionHistoryModal(request: AgentSessionHistoryModalRe
   useAppStore.getState().openModal('agent-session-history', {
     worktreeId: request.workspace.worktreeId,
     executionHostId: request.workspace.executionHostId,
-    chatTabId: request.chatTabId,
+    ...(request.chatTabId ? { chatTabId: request.chatTabId } : {}),
     initialQuery: request.initialQuery,
     agent: request.agent
   })
@@ -28,7 +28,7 @@ export function openAgentSessionHistoryModal(request: AgentSessionHistoryModalRe
 export function readAgentSessionHistoryModalRequest(
   data: Record<string, unknown>
 ): AgentSessionHistoryModalRequest | null {
-  if (typeof data.worktreeId !== 'string' || typeof data.chatTabId !== 'string') {
+  if (typeof data.worktreeId !== 'string') {
     return null
   }
   const executionHostId =
@@ -38,7 +38,7 @@ export function readAgentSessionHistoryModalRequest(
       worktreeId: data.worktreeId,
       ...(executionHostId ? { executionHostId } : {})
     },
-    chatTabId: data.chatTabId,
+    ...(typeof data.chatTabId === 'string' ? { chatTabId: data.chatTabId } : {}),
     initialQuery: typeof data.initialQuery === 'string' ? data.initialQuery : '',
     ...(isAiVaultAgent(data.agent) ? { agent: data.agent } : {})
   }
