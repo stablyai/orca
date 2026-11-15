@@ -1,3 +1,4 @@
+import type { NativeChatSpeechSettings } from './native-chat-speech'
 import type { NativeChatProviderChoices } from './native-chat-providers'
 
 export type NativeChatAppearanceSettings = {
@@ -33,6 +34,8 @@ export type NativeChatGlobalSettings = {
   nativeChatCiResultLines?: boolean
   /** A "New" line above what arrived while the reader was away. Absent follows the default below. */
   nativeChatMarkNewMessages?: boolean
+  /** How a finished agent reply is read aloud. Absent keeps Speak on the system voice. */
+  nativeChatSpeech?: NativeChatSpeechSettings
 }
 
 /** Not written into default settings, so flipping this reaches everyone who never chose. */

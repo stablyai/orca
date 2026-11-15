@@ -11,7 +11,9 @@ import type { SourceControlAiSettingsPatch } from '../../../../../shared/source-
 
 import { useAppStore } from '../../../store/index'
 import { getChatAppearanceSearchEntries } from '../appearance/chat/chat-appearance-search'
+import { ChatSpeechSetting } from './ChatSpeechSetting'
 import { ChatTurnActivitySetting } from './ChatTurnActivitySetting'
+import { getChatSpeechSearchEntries } from './chat-speech-search'
 import { getChatTurnActivityTitle } from './chat-turn-activity-search'
 import { getChatBehaviorTitle } from './chat-behavior-search'
 import { AgentDefaultSurfaceSection } from '../agents/surfaces/AgentDefaultSurfaceSection'
@@ -103,6 +105,15 @@ export function ChatSettingsSection({
             forceVisible={matchesSettingsSearch(query, [
               { title },
               { title: getChatTurnActivityTitle(t) }
+            ])}
+          />
+          <ChatSpeechSetting
+            settings={settings}
+            updateSettings={updateSettings}
+            showEngine={showDesktopOnlySettings}
+            forceVisible={matchesSettingsSearch(query, [
+              { title },
+              ...getChatSpeechSearchEntries(t, { includeEngine: showDesktopOnlySettings })
             ])}
           />
           {showDesktopOnlySettings ? (

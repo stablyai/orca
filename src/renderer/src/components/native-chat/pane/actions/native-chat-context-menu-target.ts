@@ -11,6 +11,8 @@ export type NativeChatContextMenuTarget = {
   link: FileLinkActions | null
   codeText: string | null
   messageText: string | null
+  /** Assistant reply the hover Speak button would read. The user's own rows stay null. */
+  speakMessageId: string | null
   rewindItemId: string | null
 }
 
@@ -19,6 +21,7 @@ export const noNativeChatContextMenuTarget: NativeChatContextMenuTarget = {
   link: null,
   codeText: null,
   messageText: null,
+  speakMessageId: null,
   rewindItemId: null
 }
 
@@ -39,9 +42,8 @@ export function readNativeChatContextMenuTarget(
   // The attribute, not the resolved `href` property, which rewrites chat file links into page URLs.
   const link = element?.closest('a[href], [data-native-chat-link-href]')
   const href = link?.getAttribute('data-native-chat-link-href') ?? link?.getAttribute('href')
-  const messageId = element
-    ?.closest('[data-native-chat-message-id]')
-    ?.getAttribute('data-native-chat-message-id')
+  const row = element?.closest('[data-native-chat-message-id]')
+  const messageId = row?.getAttribute('data-native-chat-message-id')
   return {
     quoteText: quotable?.text ?? null,
     link: href ? nativeChatLinkActions(href, linkContext) : null,
@@ -50,6 +52,7 @@ export function readNativeChatContextMenuTarget(
         ?.closest('[data-native-chat-code-block]')
         ?.querySelector('[data-native-chat-code-content]')?.textContent || null,
     messageText: (messageId && messageList?.messageCopyText(messageId)) || null,
+    speakMessageId: (row?.hasAttribute('data-native-chat-speakable') && messageId) || null,
     rewindItemId:
       element
         ?.closest('[data-native-chat-rewind-item]')

@@ -1,4 +1,15 @@
-import { Copy, ExternalLink, FileText, Globe, Quote, Search, Undo2 } from 'lucide-react'
+import { useSyncExternalStore } from 'react'
+import {
+  Copy,
+  ExternalLink,
+  FileText,
+  Globe,
+  Quote,
+  Search,
+  Undo2,
+  Volume2,
+  VolumeX
+} from 'lucide-react'
 import { DropdownMenuItem, DropdownMenuShortcut } from '@/components/ui/dropdown-menu'
 import { formatOptionalPrimaryShortcutLabel } from '@/hooks/useShortcutLabel'
 import { useAppStore } from '@/store'
@@ -7,6 +18,15 @@ import type { LinkAction } from '@/components/link-actions/link-action-request'
 import { useTranslate } from '@/i18n/use-translate'
 import type { NativeChatContextMenuTarget } from './native-chat-context-menu-target'
 import type { NativeChatRewindSurface } from '../../messages/actions/use-native-chat-rewind-host'
+import {
+  getNativeChatSpeechPreferences,
+  subscribeNativeChatSpeechPreferences
+} from '../../messages/actions/native-chat-speech-preferences'
+import {
+  getNativeChatSpeakingMessageId,
+  subscribeNativeChatSpeech,
+  toggleNativeChatMessageSpeech
+} from '../../messages/actions/native-chat-speech-session'
 
 function copyText(text: string): void {
   // Best-effort, as the row Copy buttons are: the clipboard can reject when unfocused.
@@ -24,7 +44,7 @@ export function NativeChatContextMenuTargetItems({
   rewind: NativeChatRewindSurface | undefined
 }): React.JSX.Element {
   const t = useTranslate()
-  const { quoteText, link, codeText, messageText, rewindItemId } = target
+  const { quoteText, link, codeText, messageText, speakMessageId, rewindItemId } = target
   const linkRows = link ? [link.primary, link.alternate, ...(link.secondaryActions ?? [])] : []
   return (
     <>
@@ -56,6 +76,9 @@ export function NativeChatContextMenuTargetItems({
           {t('components.native-chat.copyCode', 'Copy code')}
         </DropdownMenuItem>
       ) : null}
+      {speakMessageId && messageText ? (
+        <NativeChatSpeakMenuItem messageId={speakMessageId} markdown={messageText} />
+      ) : null}
       {messageText ? (
         <DropdownMenuItem onSelect={() => copyText(messageText)}>
           <Copy />
@@ -78,6 +101,42 @@ export function NativeChatFindMenuItem({ onSelect }: { onSelect: () => void }): 
       <Search />
       {t('components.native-chat.find.label', 'Find in chat')}
       {shortcut ? <DropdownMenuShortcut>{shortcut}</DropdownMenuShortcut> : null}
+    </DropdownMenuItem>
+  )
+}
+
+/** The hover Speak button's action, hidden when speech is turned off in Chat settings. */
+function NativeChatSpeakMenuItem({
+  messageId,
+  markdown
+}: {
+  messageId: string
+  markdown: string
+}): React.JSX.Element | null {
+  const t = useTranslate()
+  const settings = useSyncExternalStore(
+    subscribeNativeChatSpeechPreferences,
+    getNativeChatSpeechPreferences,
+    getNativeChatSpeechPreferences
+  )
+  const speakingId = useSyncExternalStore(
+    subscribeNativeChatSpeech,
+    getNativeChatSpeakingMessageId,
+    getNativeChatSpeakingMessageId
+  )
+  if (!settings.enabled) {
+    return null
+  }
+  const speaking = speakingId === messageId
+  const label = speaking
+    ? t('components.native-chat.speakMessage.stop', 'Stop speaking')
+    : t('components.native-chat.speakMessage.speak', 'Speak message')
+  return (
+    <DropdownMenuItem
+      onSelect={() => toggleNativeChatMessageSpeech({ messageId, markdown, settings })}
+    >
+      {speaking ? <VolumeX /> : <Volume2 />}
+      {label}
     </DropdownMenuItem>
   )
 }
