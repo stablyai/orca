@@ -43,10 +43,42 @@ export function acpSubagentOutcome(
 export class AcpSubagents {
   private readonly known = new Map<string, KnownSubagent>()
   private readonly pending: AgentChildWorkEvidence[] = []
+  /** Last accepted `_omp/subagents` snapshot seq; -1 until one arrives. */
+  private rosterSeq = -1
 
   /** Include settled subagents so they cannot be reclassified as background tasks. */
   has(id: string): boolean {
     return this.known.has(id)
+  }
+
+  /** Accepted snapshots supersede task-tool progress. */
+  hasRoster(): boolean {
+    return this.rosterSeq >= 0
+  }
+
+  /** Snapshots replace the roster; a repeated or older seq is stale. Retained ids stay live. */
+  translateRoster(
+    roster: { seq: number; children: readonly AcpSubagentUpdate[]; retainedIds: readonly string[] },
+    join: ProviderTimelineJoin,
+    at: number
+  ): ProviderTimelineEvent[] {
+    const { seq, children, retainedIds } = roster
+    if (seq <= this.rosterSeq) {
+      return []
+    }
+    this.rosterSeq = seq
+    const present = new Set([...children.map((child) => child.id), ...retainedIds])
+    const updates: AcpSubagentUpdate[] = children.map((child) =>
+      child.state === 'working' && this.known.get(child.id)?.ended !== undefined
+        ? { ...child, restart: true as const }
+        : child
+    )
+    for (const id of this.known.keys()) {
+      if (!present.has(id)) {
+        updates.push({ id, state: 'stopped', knownOnly: true })
+      }
+    }
+    return this.translate(updates, join, at)
   }
 
   dispose(): void {
@@ -92,7 +124,7 @@ export class AcpSubagents {
       }
       const ending = update.state !== undefined && acpSubagentOutcome(update.state) !== undefined
       // Late live reports must not resurrect an ended run after the host retires its record.
-      if (ending || subagent.ended === undefined) {
+      if (subagent.ended === undefined) {
         this.pending.push(subagentEvidence(update, at))
       }
       if (ending) {

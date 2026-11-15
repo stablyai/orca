@@ -1,0 +1,2 @@
+{"sessionId":"01a1bf9d-8777-70e1-8f1c-a4d3fded25bd","parentToolCallId":"toolu_01LCSjwRCFzNcZ3eEMuN3ZGa","seq":1,"children":[{"id":"PkgNameReader","agent":"task","description":null,"status":"running","async":true,"updatedAt":1794216140825}]}
+{"sessionId":"01a1bf9d-8777-70e1-8f1c-a4d3fded25bd","parentToolCallId":"toolu_01LCSjwRCFzNcZ3eEMuN3ZGa","seq":2,"children":[{"id":"PkgNameReader","agent":"task","description":null,"status":"completed","async":true,"updatedAt":1794216144994}]}

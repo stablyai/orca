@@ -1,7 +1,14 @@
+import { readFile } from 'node:fs/promises'
 import { describe, expect, it } from 'vitest'
 import type { NativeChatMessage } from './native-chat-types'
-import { mergeNativeChatLiveSession, nativeChatHookAwaitsInput } from './native-chat-live-status'
+import {
+  mergeNativeChatLiveSession,
+  nativeChatHookAwaitsInput,
+  nativeChatHookHasWorkingSubagents
+} from './native-chat-live-status'
 import { shouldShowNativeChatWorking } from './native-chat-working-suppression'
+import { OMP_ACP_DIALECT } from '../../main/acp/acp-dialects/omp-dialect'
+import { AcpTimelineTranslator } from '../../main/acp/timeline/acp-timeline-translator'
 
 function assistant(id: string, text: string): NativeChatMessage {
   return {
@@ -136,6 +143,60 @@ describe('mergeNativeChatLiveSession', () => {
       hookHasWorkingSubagents: true
     })
     expect(session.status).toBe('working')
+  })
+
+  it('keeps a completed lead working while the producer roster has a live child, then settles', async () => {
+    const text = await readFile(
+      new URL('../../main/acp/fixtures/omp-subagents-roster.jsonl', import.meta.url),
+      'utf8'
+    )
+    const frames: unknown[] = text
+      .trim()
+      .split('\n')
+      .map((line) => JSON.parse(line))
+    const translator = new AcpTimelineTranslator({
+      sessionId: 'session-a',
+      dialect: OMP_ACP_DIALECT
+    })
+    // Live children as the host records them: the evidence each roster frame emits.
+    const working = new Map<string, number>()
+    const replay = (frame: unknown) => {
+      translator.notification('_omp/subagents', frame, 0)
+      for (const evidence of translator.subagents.drainEvidence()) {
+        if (evidence.type === 'live') {
+          working.set(evidence.child.handle.id, evidence.observedAt)
+        } else if (evidence.type === 'ended') {
+          working.delete(evidence.handle.id)
+        }
+      }
+      return [...working].map(([id, startedAt]) => ({ id, state: 'working' as const, startedAt }))
+    }
+    const base = {
+      messages: [assistant('a-1', 'lead done')],
+      sessionId: 'session-a',
+      agent: 'omp' as const,
+      hookState: 'working' as const,
+      stateStartedAt: 0,
+      transcriptLifecycle: { state: 'completed' as const, turnId: 'turn-1', timestamp: 2 }
+    }
+    const liveRoster = { stateStartedAt: 0, subagents: replay(frames[0]) }
+    expect(
+      mergeNativeChatLiveSession({
+        ...base,
+        hookHasWorkingSubagents: nativeChatHookHasWorkingSubagents(liveRoster)
+      }).status
+    ).toBe('working')
+    for (const frame of frames.slice(1, 3)) {
+      replay(frame)
+    }
+    const settledRoster = { stateStartedAt: 0, subagents: replay(frames[3]) }
+    expect(
+      mergeNativeChatLiveSession({
+        ...base,
+        hookState: 'done',
+        hookHasWorkingSubagents: nativeChatHookHasWorkingSubagents(settledRoster)
+      }).status
+    ).toBe('ready')
   })
 
   it('settles on an interruption even while the hook reports a live background child', () => {

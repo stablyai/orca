@@ -1,0 +1,4 @@
+{"sessionId":"session-a","parentToolCallId":"tool-1","seq":1,"children":[{"id":"0-A","agent":"explore","description":"first","status":"running","async":true,"updatedAt":1794215691578}]}
+{"sessionId":"session-a","parentToolCallId":"tool-1","seq":2,"children":[{"id":"0-A","agent":"explore","description":"first","status":"running","async":true,"updatedAt":1794215691578},{"id":"1-B","agent":"explore","description":null,"status":"running","async":false,"updatedAt":1794215691578}]}
+{"sessionId":"session-a","parentToolCallId":"tool-1","seq":3,"children":[{"id":"0-A","agent":"explore","description":"first","status":"running","async":true,"updatedAt":1794215691578},{"id":"1-B","agent":"explore","description":null,"status":"completed","async":false,"updatedAt":1794215691578}]}
+{"sessionId":"session-a","parentToolCallId":"tool-1","seq":4,"children":[{"id":"0-A","agent":"explore","description":"first","status":"failed","async":true,"updatedAt":1794215691578}]}
