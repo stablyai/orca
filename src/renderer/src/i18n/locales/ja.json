@@ -886,7 +886,8 @@
     "voice": {
       "cleanup": {
         "recipeDescription": "音声入力したテキストを挿入前に整えます。"
-      }    },
+      }
+    },
     "groupHooks": {
       "invalidSetup": "ファイルは存在しますが、Orca は有効なセットアップスクリプトを見つけられませんでした。",
       "supportedKeys": "サポートされているキーのみを定義してください: `scripts` と `setup`。"
