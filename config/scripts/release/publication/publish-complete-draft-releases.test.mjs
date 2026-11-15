@@ -9,6 +9,7 @@ import {
   publishCompleteDraftReleases,
   verifyDraftReleaseTag
 } from './publish-complete-draft-releases.mjs'
+import { verifyPriorRunProvenance } from './verify-prior-run-provenance.mjs'
 import { getRequiredReleaseAssetNames } from './verify-release-required-assets.mjs'
 
 function git(cwd, args) {
@@ -102,6 +103,9 @@ describe('publishCompleteDraftReleases', () => {
       const fetchImpl = vi.fn(async (url, options) => {
         if (url === 'https://api.github.com/repos/stablyai/orca/releases?per_page=100') {
           return jsonResponse(releases)
+        }
+        if (url === 'https://api.github.com/repos/stablyai/orca/releases/7' && !options.method) {
+          return jsonResponse(releases[0])
         }
         if (manifestUrls.has(url) && !options.method) {
           return jsonResponse(manifestUrls.get(url))
@@ -216,12 +220,23 @@ describe('RC draft tag verification', () => {
   async function run(
     release,
     tagRef,
-    { oldPolicy = false, pipelineTag = false, verifyDraftTag = () => {} } = {}
+    {
+      oldPolicy = false,
+      pipelineTag = false,
+      verifyDraftTag = () => {},
+      verifyAssetProvenance = async () => {},
+      snapshot = release,
+      calls = []
+    } = {}
   ) {
     const patches = []
     const fetchImpl = vi.fn(async (url, options = {}) => {
       if (url.endsWith('/releases?per_page=100')) {
         return jsonResponse([release])
+      }
+      if (url.endsWith(`/releases/${release.id}`) && !options.method) {
+        calls.push('snapshot')
+        return jsonResponse(snapshot)
       }
       if (url.endsWith(`/git/ref/tags/${release.tag_name}`)) {
         return tagRef ? jsonResponse(tagRef) : jsonResponse({}, { ok: false, status: 404 })
@@ -245,6 +260,7 @@ describe('RC draft tag verification', () => {
         return jsonResponse({ content: Buffer.from(policy).toString('base64') })
       }
       if (options.method === 'PATCH') {
+        calls.push('undraft')
         patches.push(JSON.parse(options.body))
         return jsonResponse({ ...release, draft: false })
       }
@@ -256,7 +272,7 @@ describe('RC draft tag verification', () => {
       fetchImpl,
       verifyReleaseAssets: async () => {},
       isDraftBuiltFromCurrentRef: () => true,
-      verifyAssetProvenance: async () => {},
+      verifyAssetProvenance,
       verifyDraftTag,
       log: vi.fn()
     })
@@ -264,23 +280,40 @@ describe('RC draft tag verification', () => {
   }
 
   it('refuses a draft whose build run cannot be verified', async () => {
-    const patches = []
-    const fetchImpl = vi.fn(async (url, options = {}) => {
-      if (options.method === 'PATCH') {
-        patches.push(url)
-      }
-      return jsonResponse([draft])
-    })
-    const result = await publishCompleteDraftReleases({
-      repo: 'stablyai/orca',
-      token: 'token',
-      fetchImpl,
-      verifyReleaseAssets: async () => {},
-      isDraftBuiltFromCurrentRef: () => true,
-      log: vi.fn()
+    // The real provenance check needs an actions token, which this run does not have.
+    const tagRef = ref({ type: 'tag', sha: tagObject })
+    const { result, patches } = await run(draft, tagRef, {
+      verifyAssetProvenance: verifyPriorRunProvenance
     })
     expect(result.published).toEqual([])
     expect(result.skipped[0].reason).toMatch(/actions: read token is required/)
+    expect(patches).toEqual([])
+  })
+
+  it('checks a fresh snapshot of the draft, provenance last, and undrafts right after', async () => {
+    const calls = []
+    const fresh = { ...draft, body: 'fresh', assets: [{ name: 'fresh' }] }
+    const { result } = await run(draft, ref({ type: 'tag', sha: tagObject }), {
+      snapshot: fresh,
+      calls,
+      verifyDraftTag: () => calls.push('tag'),
+      verifyAssetProvenance: async ({ release }) => calls.push(['provenance', release])
+    })
+    expect(result.published).toEqual(['v1.4.3-rc.1'])
+    expect(calls).toEqual(['snapshot', 'tag', ['provenance', fresh], 'undraft'])
+  })
+
+  it.each([
+    ['published meanwhile', { draft: false }],
+    ['re-tagged meanwhile', { tag_name: 'v1.4.3-rc.2' }],
+    ['another release', { id: 10 }]
+  ])('leaves a draft whose snapshot was %s', async (_name, change) => {
+    const { result, patches } = await run(draft, ref({ type: 'tag', sha: tagObject }), {
+      snapshot: { ...draft, ...change }
+    })
+    expect(result.skipped).toEqual([
+      { tag: 'v1.4.3-rc.1', reason: 'draft changed while it was being checked' }
+    ])
     expect(patches).toEqual([])
   })
 

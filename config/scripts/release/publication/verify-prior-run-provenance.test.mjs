@@ -115,7 +115,8 @@ const macRun = {
   path: '.github/workflows/release-mac-build.yml',
   event: 'workflow_dispatch',
   conclusion: 'success',
-  display_title: `Mac release build ${TAG} (500)`
+  display_title: `Mac release build ${TAG} (500)`,
+  run_attempt: 1
 }
 // Linux x64 gets the first six required names, Linux arm64 the next four, Windows two, mac the rest.
 const split = { 'linux-x64': [0, 6], 'linux-arm64': [6, 10], win: [10, 12], mac: [12, 20] }
@@ -134,6 +135,19 @@ const manifestFor = (source, runId = '500', overrides = {}) =>
   })
 
 const serverJob = (conclusion) => ({ name: 'upload-orca-server-artifact', conclusion })
+const success = (name) => ({ name, conclusion: 'success' })
+// The latest-attempt jobs of a release-cut run that built and qualified every desktop asset.
+const desktopJobs = [
+  success('cut'),
+  success('create-release'),
+  success('build (windows-2022, win)'),
+  success('build (ubuntu-24.04, linux-x64)'),
+  success('build (ubuntu-24.04-arm, linux-arm64)'),
+  success('build-mac'),
+  success(`mac release build 600 for ${TAG}`),
+  success('verify-mac-build')
+]
+const jobsWith = (conclusion) => [...desktopJobs, serverJob(conclusion)]
 const SERVER_ASSETS = [
   'orca-server-linux-x64.tar.gz',
   'orca-server-linux-arm64.tar.gz',
@@ -162,7 +176,8 @@ function stubGithub({
   macRuns = [macRun],
   artifacts = {},
   recordText = JSON.stringify(record),
-  jobs = [{ name: 'build (win)', conclusion: 'success' }, serverJob('skipped')],
+  jobs = jobsWith('skipped'),
+  macRunPages = null,
   jobsStatus = 200
 } = {}) {
   const files = {
@@ -191,7 +206,9 @@ function stubGithub({
         return json({ total_count: jobs.length, jobs })
       }
       if (path.endsWith('/workflows/release-mac-build.yml/runs')) {
-        return json({ workflow_runs: macRuns })
+        expect(query.get('per_page')).toBe('100')
+        const pages = macRunPages ?? [macRuns]
+        return json({ workflow_runs: pages[Number(query.get('page')) - 1] ?? [] })
       }
       const runArtifacts = path.match(/\/actions\/runs\/(\d+)\/artifacts$/)
       if (runArtifacts) {
@@ -275,31 +292,31 @@ describe('orca-server manifest expectation', () => {
   const server = { 'release-asset-manifest-orca-server': serverManifest }
 
   it('requires the server manifest and assets when the upload job succeeded', async () => {
-    stubGithub({ jobs: [serverJob('success')], artifacts: server })
+    stubGithub({ jobs: jobsWith('success'), artifacts: server })
     await expect(verify(withServer)).resolves.toBeUndefined()
     // Deleting the manifest artifact and the three draft assets does not drop the requirement.
-    stubGithub({ jobs: [serverJob('success')] })
+    stubGithub({ jobs: jobsWith('success') })
     await expect(verify(release)).rejects.toThrow(
       /no single usable release-asset-manifest-orca-server/
     )
-    stubGithub({ jobs: [serverJob('success')], artifacts: server })
+    stubGithub({ jobs: jobsWith('success'), artifacts: server })
     await expect(verify(release)).rejects.toThrow(/orca-server/)
   })
 
   it('requires no server manifest when the upload job was skipped', async () => {
-    stubGithub({ jobs: [serverJob('skipped')] })
+    stubGithub({ jobs: jobsWith('skipped') })
     await expect(verify(release)).resolves.toBeUndefined()
-    stubGithub({ jobs: [serverJob('skipped')], artifacts: server })
+    stubGithub({ jobs: jobsWith('skipped'), artifacts: server })
     await expect(verify(withServer)).rejects.toThrow(/skipped upload-orca-server-artifact but has/)
-    stubGithub({ jobs: [serverJob('skipped')] })
+    stubGithub({ jobs: jobsWith('skipped') })
     await expect(verify(withServer)).rejects.toThrow()
   })
 
   it.each([
-    ['no upload job', []],
-    ['a failed upload job', [serverJob('failure')]],
-    ['a cancelled upload job', [serverJob('cancelled')]],
-    ['two upload jobs', [serverJob('success'), serverJob('success')]]
+    ['no upload job', desktopJobs],
+    ['a failed upload job', jobsWith('failure')],
+    ['a cancelled upload job', jobsWith('cancelled')],
+    ['two upload jobs', [...jobsWith('success'), serverJob('success')]]
   ])('refuses %s', async (_name, jobs) => {
     stubGithub({ jobs, artifacts: server })
     await expect(verify(withServer)).rejects.toThrow(/upload-orca-server-artifact job/)
@@ -308,6 +325,70 @@ describe('orca-server manifest expectation', () => {
   it('refuses when the jobs API fails', async () => {
     stubGithub({ jobsStatus: 500, artifacts: server })
     await expect(verify(withServer)).rejects.toThrow(/500/)
+  })
+})
+
+describe('desktop jobs and the macOS run of the prior run', () => {
+  afterEach(() => vi.unstubAllGlobals())
+  const without = (name) => jobsWith('skipped').filter((job) => job.name !== name)
+  const failing = (name) =>
+    jobsWith('skipped').map((job) => (job.name === name ? { ...job, conclusion: 'failure' } : job))
+
+  it.each([
+    [
+      'a failed Windows build (signing and final checks run there)',
+      failing('build (windows-2022, win)'),
+      /desktop build job/
+    ],
+    [
+      'a cancelled Linux build',
+      jobsWith('skipped').map((job) =>
+        job.name.includes('linux-x64') ? { ...job, conclusion: 'cancelled' } : job
+      ),
+      /desktop build job/
+    ],
+    ['a missing build job', without('build (ubuntu-24.04-arm, linux-arm64)'), /desktop build job/],
+    ['a failed macOS qualification', failing('verify-mac-build'), /verify-mac-build job/],
+    ['a failed macOS dispatch', failing('build-mac'), /build-mac job/],
+    [
+      'no binding to this macOS run',
+      without(`mac release build 600 for ${TAG}`),
+      /mac release build 600/
+    ],
+    ['a failed draft', failing('create-release'), /create-release job/]
+  ])('refuses %s', async (_name, jobs, reason) => {
+    stubGithub({ jobs })
+    await expect(verify()).rejects.toThrow(reason)
+  })
+
+  it('refuses when the jobs API fails', async () => {
+    stubGithub({ jobsStatus: 500 })
+    await expect(verify()).rejects.toThrow(/500/)
+  })
+
+  it('finds the macOS run on a later page of the search', async () => {
+    const filler = Array.from({ length: 100 }, (_, i) => ({
+      ...macRun,
+      id: 1000 + i,
+      display_title: 'x'
+    }))
+    stubGithub({ macRunPages: [filler, [macRun]] })
+    await expect(verify()).resolves.toBeUndefined()
+    stubGithub({ macRunPages: [filler, [macRun, { ...macRun, id: 601 }]] })
+    await expect(verify()).rejects.toThrow(/found 2/)
+  })
+
+  it("binds the macOS manifest to that run's current attempt", async () => {
+    stubGithub({ macRuns: [{ ...macRun, run_attempt: 2 }] })
+    await expect(verify()).rejects.toThrow(/run_attempt '1'/)
+    const later = manifestFor('mac', '600', { run_attempt: '2' })
+    stubGithub({
+      macRuns: [{ ...macRun, run_attempt: 2 }],
+      artifacts: { 'release-asset-manifest-mac': later }
+    })
+    await expect(verify()).resolves.toBeUndefined()
+    stubGithub({ artifacts: { 'release-asset-manifest-mac': later } })
+    await expect(verify()).rejects.toThrow(/run_attempt '2'/)
   })
 })
 

@@ -97,22 +97,48 @@ export function assertReleaseCutRun(run, { repo, runId }) {
   }
 }
 
-// Why the job, not the artifact: anyone with write access can delete a run's artifacts (and the draft's server
-// assets), but nobody can change which jobs a finished run ran or how they ended. So the orca-server manifest is
-// required exactly when that run's upload job succeeded, and must be absent when it was skipped. Any other state, no
-// such job, or an API failure refuses the draft.
-async function orcaServerUploadConclusion(get, runId) {
-  const jobs = []
-  for (let page = 1; page <= 10; page += 1) {
-    const body = await get(`/actions/runs/${runId}/jobs?filter=latest&per_page=100&page=${page}`)
-    const batch = Array.isArray(body?.jobs) ? body.jobs : []
-    jobs.push(...batch)
+const MAX_PAGES = 10
+
+// Reads every page (bounded) of a list endpoint; more than MAX_PAGES full pages is refused, never truncated.
+async function readAllPages(get, path, key) {
+  const items = []
+  for (let page = 1; page <= MAX_PAGES; page += 1) {
+    const body = await get(`${path}&per_page=100&page=${page}`)
+    const batch = Array.isArray(body?.[key]) ? body[key] : []
+    items.push(...batch)
     if (batch.length < 100) {
-      break
+      return items
     }
   }
-  const found = jobs.filter((job) => job?.name === 'upload-orca-server-artifact')
-  const conclusion = found.length === 1 ? found[0].conclusion : undefined
+  throw new Error(`${path} has more than ${MAX_PAGES} pages`)
+}
+
+// Why the jobs, not the artifacts: anyone with write access can delete a run's artifacts (and a draft's assets), but
+// nobody can change which jobs a finished run ran or how they ended. So the run's desktop build jobs (the build
+// matrix, which also signs Windows and runs the final draft and telemetry checks), its macOS dispatch, binding and
+// qualification must all have succeeded on their latest attempt, and the orca-server manifest is required exactly
+// when that run's upload job succeeded and must be absent when it was skipped. Anything else refuses the draft.
+export function assertRunJobs(jobs, { runId, tag, macRunId }) {
+  const named = (name) => jobs.filter((job) => job?.name === name)
+  const required = [
+    'cut',
+    'create-release',
+    'build-mac',
+    `mac release build ${macRunId} for ${tag}`,
+    'verify-mac-build'
+  ]
+  for (const name of required) {
+    const found = named(name)
+    if (found.length !== 1 || found[0].conclusion !== 'success') {
+      throw new Error(`run ${runId} has no single successful ${name} job`)
+    }
+  }
+  const builds = jobs.filter((job) => String(job?.name).startsWith('build ('))
+  if (builds.length < 3 || builds.some((job) => job.conclusion !== 'success')) {
+    throw new Error(`run ${runId} did not finish every desktop build job successfully`)
+  }
+  const server = named('upload-orca-server-artifact')
+  const conclusion = server.length === 1 ? server[0].conclusion : undefined
   if (conclusion !== 'success' && conclusion !== 'skipped') {
     throw new Error(
       `run ${runId} has no single successful or skipped upload-orca-server-artifact job`
@@ -135,7 +161,6 @@ export async function verifyPriorRunProvenance({ repo, token, actionsToken, rele
   const run = await get(`/actions/runs/${runId}`)
   assertReleaseCutRun(run, { repo, runId })
   const tag = release.tag_name
-  const serverUpload = await orcaServerUploadConclusion(get, runId)
 
   const artifactsNamed = async (fromRunId, name) => {
     const list = await get(`/actions/runs/${fromRunId}/artifacts?name=${name}&per_page=100`)
@@ -163,16 +188,24 @@ export async function verifyPriorRunProvenance({ repo, token, actionsToken, rele
 
   // The macOS run that run dispatched for this tag, found by its run name and checked like publish-release does.
   const since = encodeURIComponent(`>=${run.created_at}`)
-  const macRuns = await get(
-    `/actions/workflows/release-mac-build.yml/runs?branch=main&event=workflow_dispatch&status=success&created=${since}&per_page=100`
+  const macRuns = await readAllPages(
+    get,
+    `/actions/workflows/release-mac-build.yml/runs?branch=main&event=workflow_dispatch&status=success&created=${since}`,
+    'workflow_runs'
   )
   const title = `Mac release build ${tag} (${runId})`
-  const matches = (macRuns.workflow_runs ?? []).filter((r) => r.display_title === title)
+  const matches = macRuns.filter((r) => r.display_title === title)
   if (matches.length !== 1) {
     throw new Error(`found ${matches.length} successful macOS runs for ${tag}, expected one`)
   }
   const macRunId = String(matches[0].id)
-  assertMacRun(matches[0], { repo, tag, releaseRunId: runId, macRunId })
+  // That run's own attempt, which its manifest must also carry.
+  const macRunAttempt = String(matches[0].run_attempt)
+  assertMacRun(matches[0], { repo, tag, releaseRunId: runId, macRunId, macRunAttempt })
+  const serverUpload = assertRunJobs(
+    await readAllPages(get, `/actions/runs/${runId}/jobs?filter=latest`, 'jobs'),
+    { runId, tag, macRunId }
+  )
 
   const common = { tag, release_sha: release.target_commitish }
   const manifests = []
@@ -189,7 +222,14 @@ export async function verifyPriorRunProvenance({ repo, token, actionsToken, rele
     manifests.push(parseManifest(await download(runId, name), expected))
   }
   const macText = await download(macRunId, 'release-asset-manifest-mac')
-  manifests.push(parseManifest(macText, { ...common, source: 'mac', run_id: macRunId }))
+  manifests.push(
+    parseManifest(macText, {
+      ...common,
+      source: 'mac',
+      run_id: macRunId,
+      runAttempt: macRunAttempt
+    })
+  )
   await verifyAssetProvenance({
     tag,
     assets: release.assets ?? [],

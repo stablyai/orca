@@ -215,8 +215,23 @@ export async function publishCompleteDraftReleases({
     }
 
     try {
-      await verifyAssetProvenance({ repo, token, actionsToken, release })
-      await assertDraftTagMatchesTarget(fetchImpl, repo, token, release, verifyDraftTag)
+      // Why a fresh snapshot: the list above can be minutes old. Every check below reads this one snapshot, the
+      // asset provenance check (the slowest) runs last, and the undraft follows it directly, so the window in which
+      // a swapped asset or a re-pointed draft could slip through is as short as this job can make it.
+      const snapshot = await githubJson(
+        fetchImpl,
+        `https://api.github.com/repos/${repo}/releases/${release.id}`,
+        token
+      )
+      if (
+        snapshot?.id !== release.id ||
+        snapshot.tag_name !== tag ||
+        !isReleaseCutDraft(snapshot)
+      ) {
+        throw new Error('draft changed while it was being checked')
+      }
+      await assertDraftTagMatchesTarget(fetchImpl, repo, token, snapshot, verifyDraftTag)
+      await verifyAssetProvenance({ repo, token, actionsToken, release: snapshot })
     } catch (error) {
       const reason = error instanceof Error ? error.message.split('\n')[0] : String(error)
       skipped.push({ tag, reason })
