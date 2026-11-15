@@ -50,7 +50,7 @@ describe('orca computer wait', () => {
     expect(callMock).toHaveBeenCalledTimes(3)
     expect(callMock).toHaveBeenLastCalledWith(
       'computer.getAppState',
-      { session: 'manual', app: 'TextEdit', noScreenshot: true },
+      { session: 'manual', app: 'TextEdit', noScreenshot: true, fullValues: true },
       expect.anything()
     )
     const output = JSON.parse(vi.mocked(console.log).mock.calls[0][0])

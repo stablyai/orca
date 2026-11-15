@@ -56,7 +56,8 @@ export async function waitForComputerSnapshot(
     call: (readTimeoutMs) =>
       client.call<ComputerSnapshotResult>(
         'computer.getAppState',
-        { ...params, noScreenshot: true },
+        // Why: text scrolled out of a long editor still counts, so the wait matches whole values.
+        { ...params, noScreenshot: true, fullValues: true },
         { timeoutMs: readTimeoutMs }
       ),
     check: (result) => snapshotMiss(condition, result.snapshot)
