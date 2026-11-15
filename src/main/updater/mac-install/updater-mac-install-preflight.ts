@@ -36,13 +36,17 @@ export abstract class UpdaterMacInstallPreflight extends UpdaterPackageRecovery 
       recordUpdaterLifecycle('macos_running_instances_check_failed')
       return false
     }
-    // Park even with no blockers: the commit record also holds helpers started after this check.
-    const park = await parkServeSupervisorsForInstall(process.execPath, blockers, {
-      macUserDataRoot: macCoordinationRoot(homedir()),
-      listBlockers: () => getMacUpdateRunningInstances()
-    })
+    // The desktop parks even with no blockers so its commit also holds helpers started later.
+    // A supervised serve is itself its supervisor's child, which a blocker-free park would stop.
+    const park =
+      blockers.length > 0 || this.updateInstallMode === 'interactive'
+        ? await parkServeSupervisorsForInstall(process.execPath, blockers, {
+            macUserDataRoot: macCoordinationRoot(homedir()),
+            listBlockers: () => getMacUpdateRunningInstances()
+          })
+        : null
     // Registered serve supervisors can park their servers; other blockers remain refused.
-    if (park.kind === 'refused' && blockers.length > 0) {
+    if (park?.kind === 'refused' && blockers.length > 0) {
       const instances = await describeMacUpdateBlockers(process.execPath, park.pids)
       this.resetQuitForUpdateState()
       this.sendToMainWindow('updater:quitAndInstallAborted')
