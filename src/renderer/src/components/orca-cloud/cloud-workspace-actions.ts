@@ -24,6 +24,12 @@ import {
   registerQueuedCloudArchive
 } from '@/lib/orca-cloud/pending-cloud-archive'
 import { cloudSyncRemovalPreview } from '@/lib/orca-cloud/cloud-sync-store'
+import { cloudWorkspaceTarget } from '@/lib/orca-cloud/orca-cloud-workspace-store'
+import {
+  askArchiveAnywayAfterHookFailure,
+  cloudArchiveHookNeedsWake,
+  runCloudArchiveHook
+} from './cloud-archive-hook-flow'
 
 /** Codes map to plain copy; raw control-plane messages never reach a toast. */
 function failureToast(title: string, result: CloudWorkspaceResult<null>): void {
@@ -118,6 +124,8 @@ export function runArchiveWithUndo(
     reportFailure?: () => boolean
     /** The copy synced to this computer, which goes with the archive (said in the toast). */
     localCopy?: { hasLocalCopy: boolean; editedHere: number }
+    /** ARCHIVE-HOOK: it sleeps and will be woken for its archive hook; the toast offers Skip. */
+    onSkipHookWake?: () => void
   }
 ): Promise<boolean> {
   return new Promise((resolve) => {
@@ -152,20 +160,44 @@ export function runArchiveWithUndo(
       })
     }, options.undoMs ?? ARCHIVE_UNDO_MS)
     const unregister = registerQueuedCloudArchive(key, cancel)
-    toast(
-      options.name
-        ? translate('orcaCloudWorkspace.archivedNamed', 'Archived {{name}}', { name: options.name })
-        : translate('orcaCloudWorkspace.archivedWorkspace', 'Archived the workspace'),
-      {
-        id: toastId,
-        duration: options.undoMs ?? ARCHIVE_UNDO_MS,
-        description: archivedDetail(options.localCopy),
-        action: {
-          label: translate('orcaCloudWorkspace.undo', 'Undo'),
-          onClick: cancel
+    const undoMs = options.undoMs ?? ARCHIVE_UNDO_MS
+    const shownAt = Date.now()
+    const show = (askHookWake: boolean): void => {
+      toast(
+        options.name
+          ? translate('orcaCloudWorkspace.archivedNamed', 'Archived {{name}}', {
+              name: options.name
+            })
+          : translate('orcaCloudWorkspace.archivedWorkspace', 'Archived the workspace'),
+        {
+          id: toastId,
+          duration: Math.max(1, undoMs - (Date.now() - shownAt)),
+          description: askHookWake
+            ? `${archivedDetail(options.localCopy)} ${translate(
+                'orcaCloudWorkspace.archiveHook.wakeFirst',
+                'It wakes first to run its archive hook.'
+              )}`
+            : archivedDetail(options.localCopy),
+          action: {
+            label: translate('orcaCloudWorkspace.undo', 'Undo'),
+            onClick: cancel
+          },
+          ...(askHookWake
+            ? {
+                cancel: {
+                  label: translate('orcaCloudWorkspace.archiveHook.skip', 'Skip hook'),
+                  onClick: () => {
+                    options.onSkipHookWake?.()
+                    // Keep Undo for the rest of the window.
+                    setTimeout(() => !undone && show(false), 0)
+                  }
+                }
+              }
+            : {})
         }
-      }
-    )
+      )
+    }
+    show(options.onSkipHookWake !== undefined)
   })
 }
 
@@ -202,16 +234,37 @@ export async function runArchiveCloudWorkspace(
   // for a workspace that is going away, which is not worth an error toast.
   const sleep = (id: string): Promise<readonly { completed: boolean }[] | void> =>
     isCloudWorkspaceDeleting(id) ? Promise.resolve() : runSleepWorktree(id)
-  const localCopy = await cloudSyncRemovalPreview(workspaceId).catch(() => undefined)
+  const target = cloudWorkspaceTarget(workspaceId)
+  const [localCopy, hookNeedsWake] = await Promise.all([
+    cloudSyncRemovalPreview(workspaceId).catch(() => undefined),
+    cloudArchiveHookNeedsWake(target)
+  ])
   // A Delete that started while the preview was read found no queued archive to cancel yet:
   // the workspace is going away, so this archive never queues (INT-T1).
   if (isCloudWorkspaceDeleting(workspaceId)) {
     return
   }
+  let skipHook = false
+  const beforeSleep = async (): Promise<boolean> => {
+    if (skipHook) {
+      console.warn('[orca-cloud] archive hook skipped by the user (asleep)', { workspaceId })
+      return true
+    }
+    const outcome = await runCloudArchiveHook(workspaceId, {
+      name: options.name,
+      wake: hookNeedsWake,
+      target
+    })
+    if (outcome.kind === 'proceed') {
+      return true
+    }
+    return askArchiveAnywayAfterHookFailure(workspaceId, outcome.result, options.name)
+  }
   await runArchiveWithUndo(workspaceId, {
     ...options,
     ...(localCopy ? { localCopy } : {}),
-    commit: () => archiveCloudWorkspace(workspaceId, { sleep }),
+    ...(hookNeedsWake ? { onSkipHookWake: () => (skipHook = true) } : {}),
+    commit: () => archiveCloudWorkspace(workspaceId, { sleep, beforeSleep }),
     reportFailure: () => !isCloudWorkspaceDeleting(workspaceId)
   })
 }

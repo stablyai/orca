@@ -17,11 +17,8 @@ import {
   HostedSandboxConfigResponseSchema,
   HostedGithubConnectResponseSchema,
   type HostedSandboxConfigResponse,
-  HostedArchiveResponseSchema,
   HostedWakeResponseSchema,
   HostedWorkspaceStatusResponseSchema,
-  type HostedArchiveRequest,
-  type HostedArchiveResponse,
   type HostedWakeResponse,
   type HostedWorkspaceStatus,
   HostedSandboxListResponseSchema,
@@ -49,10 +46,11 @@ import {
   type HostedGithubRepositoriesResponse
 } from '../../shared/hosted-sandbox/hosted-github-wire'
 import type { z } from 'zod'
+import { archiveClientMethods, type HostedArchiveClient } from './hosted-archive-client'
 
 type HostedGithubConnectResponse = z.infer<typeof HostedGithubConnectResponseSchema>
 
-export type HostedSandboxControlPlaneClient = {
+export type HostedSandboxControlPlaneClient = HostedArchiveClient & {
   create(
     body: HostedSandboxCreateRequest,
     signal?: AbortSignal,
@@ -84,12 +82,6 @@ export type HostedSandboxControlPlaneClient = {
   ): Promise<{ sandbox: HostedSandboxView; status: HostedWorkspaceStatus }>
   /** Forced rehydrate for an unresponsive workspace (same disk, new session). */
   restart(sandboxId: string, signal?: AbortSignal): Promise<HostedSandboxReadyResponse>
-  archive(
-    sandboxId: string,
-    body: HostedArchiveRequest,
-    signal?: AbortSignal
-  ): Promise<HostedSandboxView>
-  archiveInfo(sandboxId: string, signal?: AbortSignal): Promise<HostedArchiveResponse['archive']>
   unarchive(sandboxId: string, signal?: AbortSignal): Promise<HostedSandboxReadyResponse>
   /** Installs (or revokes) one desktop's key in the running VM's sshd; answers its pinned host key. */
   installSshKey(
@@ -237,21 +229,7 @@ export function createHostedSandboxControlPlaneClient(
         kind: 'boot',
         signal
       }),
-    archive: async (id, body, signal) =>
-      (
-        await call('POST', sandboxPath(id, '/archive'), HostedSandboxStatusResponseSchema, {
-          body,
-          kind: 'boot',
-          signal
-        })
-      ).sandbox,
-    archiveInfo: async (id, signal) =>
-      (
-        await call('GET', sandboxPath(id, '/archive'), HostedArchiveResponseSchema, {
-          kind: 'control',
-          signal
-        })
-      ).archive,
+    ...archiveClientMethods(call, sandboxPath),
     unarchive: (id, signal) =>
       call('POST', sandboxPath(id, '/unarchive'), HostedSandboxReadyResponseSchema, {
         kind: 'boot',

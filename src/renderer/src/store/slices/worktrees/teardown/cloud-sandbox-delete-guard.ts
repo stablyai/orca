@@ -15,6 +15,13 @@ import type { WorktreeSliceGet } from '../listing/worktree-slice-types'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
 import { getRepoIdFromWorktreeId } from '../../../../../../shared/worktree/id'
 import { ensureHooksConfirmed } from '@/runtime/repo-hooks/ensure-hooks-confirmed'
+import { formatArchiveHookFailure } from '../../../../../../shared/worktree/archive-hook-removal-gate'
+import {
+  archiveHookOutputTail,
+  cloudArchiveHookNeedsWake,
+  describeArchiveHookFailure,
+  runCloudArchiveHook
+} from '@/components/orca-cloud/cloud-archive-hook-flow'
 
 type Preflight = Awaited<
   ReturnType<NonNullable<typeof window.api.ephemeralVm.preflightCloudDelete>>
@@ -101,6 +108,7 @@ export async function shouldSkipArchiveHooks(
  * - A sandbox Orca Cloud already destroyed has nothing left to protect.
  */
 export async function prepareCloudSandboxDelete(args: {
+  worktreeId: string
   force: boolean | undefined
   options: RemoveWorktreeOptions | undefined
   target: RuntimeClientTarget
@@ -129,9 +137,48 @@ export async function prepareCloudSandboxDelete(args: {
   if (unreachable && !args.force) {
     throw new Error(CLOUD_UNREACHABLE_DELETE_REFUSAL)
   }
+  if (!result.gone && args.options?.allowFailedArchiveHook !== true) {
+    await runCloudArchiveHookBeforeDelete(args.worktreeId, args.target.environmentId, unreachable)
+  }
   // forget-local skips the transport's own pre-send checks, so run them here.
   args.assertBeforeDispatch()
   return { ...args.options, mode: 'forget-local' }
+}
+
+/**
+ * ARCHIVE-HOOK: Delete through Orca Cloud never reaches the workspace's server, so its worktree
+ * removal can't run the repo's archive hook. The control plane runs it instead: woken for it when
+ * the workspace sleeps and its repo has one. A failure refuses like any archive-hook failure, so
+ * the failure toast offers "Delete anyway" (allowFailedArchiveHook).
+ */
+async function runCloudArchiveHookBeforeDelete(
+  worktreeId: string,
+  environmentId: string,
+  running: boolean
+): Promise<void> {
+  const target = { workspaceId: worktreeId, environmentId }
+  if (!running && !(await cloudArchiveHookNeedsWake(target))) {
+    return
+  }
+  const outcome = await runCloudArchiveHook(worktreeId, { wake: !running, target })
+  if (outcome.kind === 'proceed') {
+    return
+  }
+  const failed = outcome.result.runs.find((run) => run.exitCode !== 0)
+  throw new Error(
+    formatArchiveHookFailure({
+      worktreePath: failed?.path ?? worktreeId,
+      ...(typeof failed?.exitCode === 'number'
+        ? { outcome: 'exited' as const, exitCode: failed.exitCode }
+        : { outcome: 'unverifiable' as const }),
+      output: [
+        describeArchiveHookFailure(outcome.result),
+        archiveHookOutputTail(outcome.result.runs)
+      ]
+        .filter(Boolean)
+        .join(' ')
+    })
+  )
 }
 
 function retryDestroy(runtimeId: string): void {

@@ -4,6 +4,7 @@ import type { MachineSize } from '../entitlements'
 import { createSandbox, destroySandbox, resumeSandbox, suspendSandbox, type LifecycleDeps } from '../lifecycle'
 import { getSandbox, markUserSlept, type SandboxRow } from '../store'
 import { archiveSandbox, unarchiveSandbox } from '../workspace-lifecycle'
+import { runArchiveHookBeforeUnattendedArchive } from '../archive-hook-route'
 import { ApiError } from './caller'
 import { randomId } from './keys'
 import { startProjectSetup } from '../project-setup'
@@ -212,7 +213,8 @@ export async function wakeWorkspace(life: LifecycleDeps, row: WorkspaceRow): Pro
  * repo metadata captured in the VM, provider snapshot expiry shortened, cron deletes after the TTL).
  */
 export async function archiveWorkspace(life: LifecycleDeps, row: WorkspaceRow): Promise<WorkspaceRow> {
-  const archived = await archiveSandbox(life, row, {})
+  await runArchiveHookBeforeUnattendedArchive(life, row, {})
+  const archived = await archiveSandbox(life, (await getSandbox(life.db, row.id)) ?? row, {})
   return (await getSandbox(life.db, archived.id)) as WorkspaceRow
 }
 

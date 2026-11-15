@@ -32,6 +32,8 @@ function stub(
     archive: vi.fn(unused),
     unarchive: vi.fn(unused),
     getArchive: vi.fn(unused),
+    runArchiveHook: vi.fn(unused),
+    getArchiveHookState: vi.fn(unused),
     listCloudWorkspaceIds: vi.fn(async () => ids),
     getConfig: vi.fn(async () => null),
     connectGitHub: vi.fn(unused),
