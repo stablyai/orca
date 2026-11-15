@@ -2,6 +2,7 @@ import React, { useId } from 'react'
 import type { LucideIcon } from 'lucide-react'
 import {
   CircleArrowUp,
+  Gauge,
   Loader2,
   MemoryStick,
   Plus,
@@ -85,21 +86,59 @@ function CloudNoticeCard({
 
 /**
  * The workspace stopped answering, or a process ran out of memory. Both offer Restart (same disk).
+ * MEMGUARD: when Orca's memory guard stopped the process, the workspace is fine and needs no
+ * restart: the notice says what was stopped and offers machine sizes instead.
  */
 export function CloudWorkspaceNotice({
   notice,
   restarting,
   onRestart,
+  onMachineSize,
   onDismiss
 }: {
   notice: CloudNoticeKind
   restarting: boolean
   onRestart: () => void
+  /** Opens where machine sizes are chosen (cloud environments); without it the guard notice has no action. */
+  onMachineSize?: () => void
   onDismiss?: () => void
 }): React.JSX.Element {
   const t = useTranslate()
   const isOom = notice.kind === 'oom'
   const victim = isOom ? notice.oom.victim : null
+  if (isOom && notice.oom.stoppedBy === 'guard') {
+    return (
+      <CloudNoticeCard
+        noticeKind="oom-guard"
+        icon={MemoryStick}
+        title={
+          victim
+            ? t(
+                'orcaCloudWorkspace.oom.guardTitle',
+                'Orca stopped {{name}} to keep the workspace responsive',
+                { name: victim }
+              )
+            : t(
+                'orcaCloudWorkspace.oom.guardTitleProcess',
+                'Orca stopped a process to keep the workspace responsive'
+              )
+        }
+        detail={t(
+          'orcaCloudWorkspace.oom.guardDetail',
+          'The workspace was out of memory. Consider a larger machine.'
+        )}
+        onDismiss={onDismiss}
+        action={
+          onMachineSize ? (
+            <Button size="xs" variant="outline" onClick={onMachineSize}>
+              <Gauge />
+              {t('orcaCloudWorkspace.oom.machineSize', 'Machine size')}
+            </Button>
+          ) : null
+        }
+      />
+    )
+  }
   const title = isOom
     ? victim
       ? t('orcaCloudWorkspace.oom.titleRan', '{{name}} ran out of memory', { name: victim })

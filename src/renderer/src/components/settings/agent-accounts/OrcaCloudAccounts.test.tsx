@@ -194,7 +194,7 @@ describe('OrcaCloudAccountsView', () => {
     expect(screen.getByText('Signs in inside each workspace')).toBeTruthy()
     expect(
       screen.getByText(
-        'Orca doesn’t store your ChatGPT sign-in. You sign in again in each new cloud workspace.'
+        'Orca doesn’t store your ChatGPT sign-in. You sign in again in each new cloud workspace. Team API keys aren’t used for this agent.'
       )
     ).toBeTruthy()
     fireEvent.click(screen.getByRole('button', { name: 'Use my ChatGPT account' }))

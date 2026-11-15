@@ -64,3 +64,38 @@ describe('cloudChatSignInContent', () => {
     expect(cloudChatSignInContent(true, 'notSignedIn', 'Antigravity')).toBeUndefined()
   })
 })
+
+describe('the not-signed-in card when the agent signs in inside the workspace', () => {
+  it('says so and offers a terminal running the agent’s login', async () => {
+    cloud.on = true
+    const { setOrcaCloudAgentAccountsStateForTest } =
+      await import('@/lib/orca-cloud/orca-cloud-agent-accounts-store')
+    setOrcaCloudAgentAccountsStateForTest({
+      load: {
+        kind: 'ready',
+        status: {
+          credentials: {
+            claude: { state: 'none' },
+            codex: { state: 'none' },
+            providerEnabled: { claude: true, codex: true }
+          },
+          sources: {
+            defaults: {},
+            coveredByKey: { claude: false, codex: false },
+            inWorkspace: { claude: true, codex: false }
+          }
+        }
+      },
+      setups: { claude: { phase: 'idle' }, codex: { phase: 'idle' } },
+      keyKinds: { claude: null, codex: null },
+      queue: { agents: [], index: 0 }
+    })
+    card('Claude')
+    expect(
+      screen.getByText('Claude needs you to sign in inside this workspace')
+    ).toBeInTheDocument()
+    expect(screen.queryByText(/Renew it above/)).toBeNull()
+    screen.getByRole('button', { name: 'Open terminal to sign in' }).click()
+    expect(signIn.signIn).toHaveBeenCalled()
+  })
+})

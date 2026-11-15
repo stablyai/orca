@@ -55,9 +55,11 @@ export type CloudWakeProgressEvent = {
 
 export type CloudOomEvent = {
   workspaceId: string
-  /** Kernel OOM-kill counter after this notice (monotonic per VM boot). */
+  /** Kernel plus memory-guard kills after this notice (monotonic per VM boot). */
   oomKills: number
   victim: string | null
+  /** MEMGUARD: Orca's memory guard stopped it (the workspace stayed responsive), not the kernel. */
+  stoppedBy?: 'guard'
   at: number
 }
 

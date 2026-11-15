@@ -1,4 +1,5 @@
 import { useCallback } from 'react'
+import { useCloudChatSignInInside } from '../../../agent-sign-in-strip/cloud-chat-sign-in-notice'
 import {
   useCloudHeldChatUnavailable,
   useIsCloudHeldChat
@@ -94,7 +95,8 @@ export function useNativeChatStructuredPaneNotices({
     launchFailure: launch.lifecycle === 'failed' ? provisionalLaunch.failure : null,
     journalItems: controller.journalItems,
     submissions: controller.submissions,
-    deliveryNotices
+    deliveryNotices,
+    signInInside: useCloudChatSignInInside(props.agent)
   })
   // While Install shows, it says what to do; a start failure's "send again" or Retry can't help.
   const notices = structuredSessionNotices(
