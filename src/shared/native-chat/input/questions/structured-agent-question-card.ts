@@ -2,7 +2,10 @@ import type {
   AgentJournalFreeTextInput,
   AgentJournalQuestion
 } from '../../../agent-session/journal/agent-session-journal-types'
-import type { AgentSessionQuestionAnswer } from '../../../agent-session/requests/prompts/agent-session-question-answer'
+import {
+  isAgentSessionQuestionAnswered,
+  type AgentSessionQuestionAnswer
+} from '../../../agent-session/requests/prompts/agent-session-question-answer'
 import type { AskAnswerSelection } from './native-chat-ask-answer'
 import type { AskPrompt } from './native-chat-ask-types'
 import { askTypedText } from './native-chat-ask-card-rules'
@@ -35,7 +38,7 @@ export function structuredQuestionCard(
   }
 }
 
-/** Null until every question has an answer, because hosts refuse a partial set. */
+/** One entry per question, a skipped one left empty; null when nothing was answered. */
 export function structuredQuestionAnswers(
   questions: readonly AgentJournalQuestion[],
   selections: readonly AskAnswerSelection[]
@@ -57,7 +60,7 @@ export function structuredQuestionAnswers(
         : {})
     }
   })
-  return answers.every((answer) => answer.optionIds.length > 0 || answer.other !== undefined)
+  return answers.some((answer, index) => isAgentSessionQuestionAnswered(questions[index]!, answer))
     ? answers
     : null
 }

@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import {
+  isAgentSessionQuestionAnswered,
   isValidAgentSessionQuestionAnswers,
   legacyAgentSessionQuestionAnswers
 } from '../../../shared/agent-session/requests/prompts/agent-session-question-answer'
@@ -185,11 +186,18 @@ export function acpFormElicitationPresentation(params: unknown): AcpRequestPrese
           ? response.answers
           : legacyAgentSessionQuestionAnswers(body, response.optionId)
       if (!answers || !isValidAgentSessionQuestionAnswers(questions, answers)) {
-        throw new AcpRpcError(-32602, 'Question answer must answer every offered question')
+        throw new AcpRpcError(-32602, 'Question answer does not match the offered questions')
       }
       const content: Record<string, string | boolean | string[]> = {}
       for (const { key, otherKey, choices, question } of fields) {
         const answer = answers.find((entry) => entry.questionId === question.id)!
+        // A skipped optional field is left out of the form content, as the schema allows.
+        if (!isAgentSessionQuestionAnswered(question, answer)) {
+          if (required.has(key)) {
+            throw new AcpRpcError(-32602, `Question answer must answer the required ${key} field`)
+          }
+          continue
+        }
         if (!choices) {
           content[key] = answer.other ?? ''
           continue

@@ -70,12 +70,12 @@ function questionRequest(params: unknown): AcpRequestPresentation {
           : answer
       )
       if (!answers || !choices || !isValidAgentSessionQuestionAnswers(questions, choices)) {
-        throw new AcpRpcError(-32602, 'Question answer must answer every offered question')
+        throw new AcpRpcError(-32602, 'Question answer does not match the offered questions')
       }
       return {
         outcome: 'accepted',
         answers: Object.fromEntries(
-          questions.map((question) => {
+          questions.flatMap((question) => {
             const answer = answers.find((entry) => entry.questionId === question.id)!
             const values = answer.optionIds.map(
               (id) => question.options.find((option) => option.id === id)!.label
@@ -83,7 +83,10 @@ function questionRequest(params: unknown): AcpRequestPresentation {
             if (values.length === 0 && answer.other?.trim()) {
               values.push('Other')
             }
-            return [question.question, question.multiSelect ? values : values[0]]
+            // Grok's own question card leaves a skipped question out of `answers`.
+            return values.length === 0
+              ? []
+              : [[question.question, question.multiSelect ? values : values[0]]]
           })
         ),
         ...(answers.some((answer) => answer.other?.trim())
