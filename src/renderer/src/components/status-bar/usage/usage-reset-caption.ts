@@ -1,7 +1,7 @@
 import type { Translate } from '@/i18n/use-translate'
 import { uiNumberFormat } from '@/i18n/ui-intl-formatters'
 import { formatUiNarrowDuration } from '@/i18n/relative-time-format'
-import { formatResetDuration } from '../../../../../shared/rate-limit-reset-format'
+import { formatResetDuration } from '../../../../../shared/agent-usage/rate-limits/rate-limit-reset-format'
 
 const RESET_UNIT_FORMATS: Record<'minute' | 'hour' | 'day', Intl.NumberFormatOptions> = {
   minute: { style: 'unit', unit: 'minute', unitDisplay: 'short' },

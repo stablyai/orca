@@ -3,7 +3,7 @@ import type {
   ProviderRateLimits,
   RateLimitWindow,
   UsageRateLimitMetadata
-} from '../../../../shared/rate-limit-types'
+} from '../../../../shared/agent-usage/rate-limits/rate-limit-types'
 import { abortSignalWithTimeout } from '../../../lib/abort-signal-with-timeout'
 import { classifyThrownUsageRequestError } from '../usage-request-failure-kind'
 import {

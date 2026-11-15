@@ -116,6 +116,8 @@ export type ClaudeControlSurface = {
     options?: ClaudeControlOptions
   ) => Promise<void>
   stopTask: (taskId: string, options?: ClaudeControlOptions) => Promise<void>
+  /** The blocking subagent or command started by `toolUseId` returns at once and keeps running. */
+  backgroundTask: (toolUseId: string, options?: ClaudeControlOptions) => Promise<boolean>
   supportedModels: (options?: ClaudeControlOptions) => Promise<unknown[]>
   /** Initialization is untimed; child exit closes the query. */
   initializationResult: () => Promise<unknown>
@@ -168,6 +170,12 @@ export function createClaudeControlSurface(query: Query): ClaudeControlSurface {
     stopTask: (taskId, options) =>
       runClaudeControl('stop_task', () => query.stopTask(taskId), options?.timeoutMs).then(
         () => {}
+      ),
+    backgroundTask: (toolUseId, options) =>
+      runClaudeControl(
+        'background_tasks',
+        () => query.backgroundTasks(toolUseId),
+        options?.timeoutMs
       ),
     supportedModels: (options) =>
       runClaudeControl('list_models', () => query.supportedModels(), options?.timeoutMs),

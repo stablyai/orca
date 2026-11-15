@@ -29,8 +29,8 @@ import type {
   PairingLocalUiField
 } from '../../../../shared/remote-runtime/pairing/pairing-local-ui-fields'
 import type { PersistedUIState } from '../../../../shared/persisted-ui-state-types'
-import { normalizeStatusBarUsageMode } from '../../../../shared/status-bar-usage-mode'
-import { normalizeStatusBarUsageFormat } from '../../../../shared/status-bar-usage-format'
+import { normalizeStatusBarUsageMode } from '../../../../shared/status-bar/status-bar-usage-mode'
+import { normalizeStatusBarUsageFormat } from '../../../../shared/status-bar/status-bar-usage-format'
 import { normalizeTerminalCustomThemes } from '../../../../shared/terminal-themes/terminal-custom-themes'
 import { splitLegacyTerminalColorOverrides } from '../../../../shared/terminal-themes/terminal-color-overrides'
 import {
@@ -46,7 +46,7 @@ import { normalizeTerminalCursorStyleDefault } from '../../../../shared/terminal
 import { normalizeDisabledTuiAgents } from '../../../../shared/agent-launch/catalog/tui-agent-selection'
 import { normalizeUiLanguage } from '../../../../shared/ui-language'
 import { migratePortugueseUiLanguageOnLoad } from '../../../../shared/portuguese-ui-language-migration'
-import { normalizeUsagePercentageDisplay } from '../../../../shared/usage-percentage-display'
+import { normalizeUsagePercentageDisplay } from '../../../../shared/agent-usage/display/usage-percentage-display'
 import { mergeWorkspaceCleanupUIState } from '../../../../shared/workspace-cleanup/workspace-cleanup-ui-state'
 
 export function mergeWebUIState(

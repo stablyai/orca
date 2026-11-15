@@ -3,7 +3,7 @@ import { join } from 'node:path'
 
 import { normalizeRuntimePathForComparison } from '../../../shared/cross-platform-path'
 import type { GlobalSettings } from '../../../shared/global-settings-types'
-import type { CodexAccountSelectionTarget } from '../../../shared/codex-selection-lane'
+import type { CodexAccountSelectionTarget } from '../../../shared/agent-accounts/codex/codex-selection-lane'
 
 const AUTH_READY_TIMEOUT_MS = 1_500
 const AUTH_READY_RETRY_MS = 25

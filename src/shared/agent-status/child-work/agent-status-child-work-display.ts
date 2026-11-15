@@ -7,7 +7,7 @@ import {
 } from './agent-status-child-work-liveness'
 import type { AgentChildWorkView } from './agent-status-child-work-view'
 import type { AgentStatusState } from '../contracts/agent-status-types'
-import { groupedBy } from '../../grouped-by'
+import { groupedBy } from '../../collections/grouped-by'
 
 // Keep renderer-safe display policy separate from projection, whose status-subject owner resolution reaches host-only code.
 

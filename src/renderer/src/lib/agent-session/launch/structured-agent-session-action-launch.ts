@@ -1,6 +1,6 @@
 import { structuredAgentLabel } from './structured-agent-session-launch-label'
 import { translate } from '@/i18n/i18n'
-import { joinSentences } from '../../../../../shared/sentence-joining'
+import { joinSentences } from '../../../../../shared/text/sentence-joining'
 import { readStructuredChatTabSavedName } from '@/runtime/native-chat/naming/structured-chat-tab-name'
 import {
   getStructuredLaunchStateBySessionId,

@@ -6,7 +6,12 @@ import { isOrcaSessionId, type OrcaSessionId } from './identity/orca-session-add
 import type { OrchestrationPartyIdentity } from '../orchestration/mailbox/orchestration-party-identity'
 import type { AgentType } from '../agent-status/contracts/agent-status-types'
 import { AGENT_TYPE_MAX_LENGTH } from '../agent-status/contracts/agent-status-field-normalization'
-import { openEnum, salvagedField, salvagedOptional, salvagingArray } from '../zod-salvage'
+import {
+  openEnum,
+  salvagedField,
+  salvagedOptional,
+  salvagingArray
+} from '../validation/zod-salvage'
 
 /** Resolve senders through the storing host's orchestration mailbox address (dispatch:<id> for federation), never a pane key. */
 export type AgentMessageSender = Readonly<{

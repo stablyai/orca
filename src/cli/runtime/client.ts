@@ -46,7 +46,7 @@ import {
   resolveWorkerStartClientTimeoutMs,
   resolveWorkerStartReadinessTimeoutMs
 } from '../../shared/orchestration/orchestration-timing-budgets'
-import { MAX_TIMER_DELAY_MS } from '../../shared/timer-delay'
+import { MAX_TIMER_DELAY_MS } from '../../shared/concurrency/timer-delay'
 import {
   buildOrchestrationRecoveryCommand,
   resolveOrchestrationCliExecutable

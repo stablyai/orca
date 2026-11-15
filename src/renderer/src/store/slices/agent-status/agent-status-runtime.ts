@@ -6,7 +6,7 @@ import {
   buildAgentStatusBatchPatch
 } from './agent-status-batch-update'
 import { projectAgentPaneConversation } from './agent-pane-conversation'
-import { structuralValuesEqualIgnoringUndefined } from '../../../../../shared/structural-value-equality'
+import { structuralValuesEqualIgnoringUndefined } from '../../../../../shared/collections/structural-value-equality'
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../../types'
 import type {

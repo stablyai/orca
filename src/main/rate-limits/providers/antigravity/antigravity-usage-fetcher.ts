@@ -3,7 +3,7 @@ import type { ProcessResult } from '@orca/process-host/process-spec'
 import {
   localAccountRuntimeTargetKey,
   type LocalAccountRuntimeTarget
-} from '../../../../shared/local-account-runtime'
+} from '../../../../shared/agent-accounts/local-account-runtime'
 import {
   resolveWslDefaultDistro,
   UNRESOLVED_WSL_DEFAULT
@@ -16,7 +16,7 @@ import { hostShellEnvironment } from '../../../runtime/agent-session/environment
 import type {
   ProviderRateLimits,
   UsageRateLimitFailureKind
-} from '../../../../shared/rate-limit-types'
+} from '../../../../shared/agent-usage/rate-limits/rate-limit-types'
 import {
   ANTIGRAVITY_MIN_USAGE_VERSION,
   ANTIGRAVITY_PROBE_ENV,

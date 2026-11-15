@@ -5,7 +5,7 @@ import {
   ProjectSectionCatalogSchema,
   type ServedProjectSections
 } from '../../../../src/shared/sidebar-list/catalog/project-section-catalog-schema'
-import { salvagingArray } from '../../../../src/shared/zod-salvage'
+import { salvagingArray } from '../../../../src/shared/validation/zod-salvage'
 import { bindDeferredRpcOperation, defineRpcOperation } from '../../transport/rpc/rpc-operation'
 import { rpcResultVariant } from '../../transport/rpc/rpc-operation-result-reader'
 import { isMobileMethodUnavailableError } from '../../transport/rpc/mobile-method-unavailable'

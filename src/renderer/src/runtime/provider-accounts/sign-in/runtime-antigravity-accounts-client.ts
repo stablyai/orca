@@ -1,8 +1,8 @@
-import type { AntigravityChatAuthConfig } from '../../../../../shared/antigravity-chat-auth-config'
+import type { AntigravityChatAuthConfig } from '../../../../../shared/agent-accounts/antigravity/antigravity-chat-auth-config'
 import type {
   AntigravityAccountState,
   AntigravityAccountTarget
-} from '../../../../../shared/antigravity-account-types'
+} from '../../../../../shared/agent-accounts/antigravity/antigravity-account-types'
 import {
   ANTIGRAVITY_ACCOUNTS_RUNTIME_CAPABILITY,
   ANTIGRAVITY_CHAT_AUTH_CONFIG_RUNTIME_CAPABILITY,

@@ -9,7 +9,7 @@ import { randomUUID } from 'node:crypto'
 import {
   CLAUDE_STATUSLINE_PATHNAME,
   parseClaudeStatusLineBody
-} from '../../../shared/claude-statusline-rate-limits'
+} from '../../../shared/agent-usage/rate-limits/claude-statusline-rate-limits'
 import { mergeAgentHookRequestHeaders } from '../../../shared/agent-hook-listener/hook-envelope'
 import { readRequestBody } from '../../../shared/agent-hook-listener/request-body'
 import { resolveHookSource } from '../../../shared/agent-hook-listener/source-routing'

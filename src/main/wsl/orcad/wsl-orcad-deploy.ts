@@ -21,7 +21,7 @@ import { isWaitingOrcadUpdateDeferral } from '../../managed-server/lifecycle/orc
 import { clearOrcadUpdateFailedThisLaunch } from '../../managed-server/lifecycle/orcad-managed-update-failure-memory'
 import type { OrcadUpdateIntent } from '../../managed-server/lifecycle/orcad-managed-update-decision'
 import type { OrcadActivationRecord } from '../../managed-server/activation/orcad-activation-record'
-import { errorMessage } from '../../../shared/error-message'
+import { errorMessage } from '../../../shared/errors/error-message'
 import { pruneWslOrcadVersionsUntilClean } from './wsl-orcad-version-gc-memo'
 import { pruneSupersededOrcadCandidates } from '../../managed-server/lifecycle/orcad-managed-version-gc'
 import { wakeAlreadyActiveOrcad } from '../../managed-server/lifecycle/orcad-already-active-wake'

@@ -3,9 +3,12 @@ import {
   formatRateLimitWindowChipLabel,
   formatWindowLabel
 } from './rate-limit-window-localized-label'
-import { CURSOR_MODELS_BUCKET_NAME } from '../../../../../shared/cursor-usage-buckets'
-import type { ProviderRateLimits, RateLimitWindow } from '../../../../../shared/rate-limit-types'
-import { clampUsedPercent } from '../../../../../shared/usage-percentage-display'
+import { CURSOR_MODELS_BUCKET_NAME } from '../../../../../shared/agent-usage/rate-limits/cursor-usage-buckets'
+import type {
+  ProviderRateLimits,
+  RateLimitWindow
+} from '../../../../../shared/agent-usage/rate-limits/rate-limit-types'
+import { clampUsedPercent } from '../../../../../shared/agent-usage/display/usage-percentage-display'
 import { getWindowSections } from './provider-usage-panel'
 import { USAGE_URGENT_PERCENT } from './usage-health-tone'
 

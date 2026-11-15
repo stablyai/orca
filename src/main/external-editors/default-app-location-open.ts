@@ -3,7 +3,7 @@ import { app, shell } from 'electron'
 import { posix } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { formatFileLinkLocation } from '../../shared/file-links/file-link-location'
-import { isPositiveSafeInteger } from '../../shared/positive-safe-integer'
+import { isPositiveSafeInteger } from '../../shared/validation/positive-safe-integer'
 import type { RuntimeFileOpenPosition } from '../../shared/file-access/runtime-editor-file-open'
 
 // Bundles whose app accepts `--goto path:line:column` on its command line.

@@ -8,7 +8,7 @@ import {
   type SetupRunnerCommandPlatform,
   type SetupRunnerShell
 } from './setup-runner-command'
-import { createNonSecureContextUuid } from '../../non-secure-context-uuid'
+import { createNonSecureContextUuid } from '../../identifiers/non-secure-context-uuid'
 import { quotePowerShellLiteral } from '../../shell/launch/powershell-native-argument'
 
 const DEFAULT_WAIT_TIMEOUT_SECONDS = 2 * 60 * 60

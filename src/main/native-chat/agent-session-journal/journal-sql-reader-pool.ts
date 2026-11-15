@@ -1,7 +1,7 @@
 import type { JournalSqlForkReader, JournalSqlConversionReader } from './journal-sql-reader-slot'
 import { ReaderSlot } from './journal-sql-reader-slot'
 import type { JournalForkPreparationInput } from './journal-fork-preparation'
-import { throwIfSignalAborted } from '../../../shared/abort-signal-reason'
+import { throwIfSignalAborted } from '../../../shared/concurrency/abort-signal-reason'
 import type { JournalOutlineCache } from './journal-domain-outline'
 import {
   currentWorkerEntryLayout,

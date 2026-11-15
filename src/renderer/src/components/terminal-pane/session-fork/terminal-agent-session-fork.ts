@@ -18,7 +18,7 @@ import { getLocalProjectExecutionRuntimeContext } from '@/runtime/hosts/prefligh
 import { translate } from '@/i18n/i18n'
 import { planAgentSessionLaunch } from '@/lib/agent-session/launch/routing/agent-session-launch-plan'
 
-import { createNonSecureContextUuid } from '../../../../../shared/non-secure-context-uuid'
+import { createNonSecureContextUuid } from '../../../../../shared/identifiers/non-secure-context-uuid'
 import type { ManagedPane } from '@/lib/pane-manager/pane-manager-types'
 import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent'
 

@@ -1,6 +1,6 @@
 import type { AtRestCommandDemand } from '../../native-chat/agent-session-wire/options/at-rest-command-demand'
-import { waitForPromiseWithSignal } from '../../../shared/abort-signal-reason'
-import { PrioritySemaphore } from '../../../shared/priority-semaphore'
+import { waitForPromiseWithSignal } from '../../../shared/concurrency/abort-signal-reason'
+import { PrioritySemaphore } from '../../../shared/concurrency/priority-semaphore'
 import type { AgentSessionRecord } from '../../../shared/agent-session/lifecycle/agent-session-record'
 import {
   isLegacyAgentSessionAccountHome,

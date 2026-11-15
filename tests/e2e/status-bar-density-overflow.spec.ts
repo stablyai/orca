@@ -1,4 +1,4 @@
-import type { ProviderRateLimits } from '../../src/shared/rate-limit-types'
+import type { ProviderRateLimits } from '../../src/shared/agent-usage/rate-limits/rate-limit-types'
 import { expect, test } from './helpers/orca-app'
 
 test.use({ seedTestRepo: false })
