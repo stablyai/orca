@@ -1,6 +1,6 @@
 import { runInNewContext } from 'node:vm'
 import { expect, it, vi } from 'vitest'
-import { CLAUDE_TERMINAL_MAIL_PATH } from '../../../shared/claude-agent-view'
+import { CLAUDE_TERMINAL_MAIL_PATH } from '../../../shared/agent-hook-listener/providers/claude/view/claude-agent-view'
 import { CLAUDE_AGENT_VIEW_MOD_SOURCE } from './agent-view-mod-source'
 
 type HookEvent = Record<string, unknown>

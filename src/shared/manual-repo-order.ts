@@ -1,6 +1,6 @@
 import { getRepoExecutionHostId, normalizeExecutionHostId } from './execution-host'
-import { getRepoHostIdentityForParts } from './repo-host-identity'
-import type { Repo } from './repo-types'
+import { getRepoHostIdentityForParts } from './repository/repo-host-identity'
+import type { Repo } from './repository/repo-types'
 import type { ManualRepoOrderEntry } from './ui-chrome-types'
 
 function getEntryKey(entry: ManualRepoOrderEntry): string {

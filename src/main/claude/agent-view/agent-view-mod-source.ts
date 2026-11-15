@@ -1,7 +1,7 @@
 import {
   CLAUDE_AGENT_VIEW_PATH,
   CLAUDE_TERMINAL_MAIL_PATH
-} from '../../../shared/claude-agent-view'
+} from '../../../shared/agent-hook-listener/providers/claude/view/claude-agent-view'
 import { parseAgentHookEndpointFile } from '../../../shared/agent-hook-listener/transport/agent-hook-endpoint-file'
 
 export const CLAUDE_AGENT_VIEW_MOD_SOURCE = String.raw`

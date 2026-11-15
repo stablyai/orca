@@ -624,6 +624,7 @@
         "fontKeywordTypeface": "字體",
         "fontKeywordTypography": "排版",
         "inheritFont": "與 IDE 字型相同",
+        "systemFont": "系統字型",
         "fontPreviewLabel": "聊天字型預覽",
         "fontPreview": "敏捷的棕色狐狸躍過懶狗。",
         "title": "聊天介面",
@@ -1344,7 +1345,7 @@
             "33290e88ed": "連線設定檔失敗",
             "9fcb07a796": "設定檔已連線",
             "2f6c78a039": "重新整理設定檔身分驗證失敗",
-            "a37b5e6d37": "已登出設定檔",
+            "a37b5e6d37": "已登出 Orca",
             "83600521e7": "登出失敗",
             "76deec8f58": "切換組織失敗",
             "7d4bc516ee": "切換設定檔失敗",
@@ -1928,6 +1929,15 @@
       "workspacePortBrowserOpen": {
         "systemBrowserHint": "按住 {{shortcut}} 並點擊以在系統瀏覽器中開啟",
         "tooltip": "{{label}}。{{hint}}"
+      },
+      "worktreePaletteEvidence": {
+        "workspaceComment": "工作區留言",
+        "createdByAutomation": "由自動化建立",
+        "linkedTask": "連結的任務",
+        "pullRequest": "PR",
+        "mergeRequest": "合併請求",
+        "linkedIssue": "連結的議題",
+        "listeningPort": "監聽連接埠"
       }
     },
     "hooks": {
@@ -3551,6 +3561,7 @@
           "bd162b7d5a": "已合併",
           "draft": "草稿",
           "labelCount_other": "{{count}} 個標籤",
+          "authorCount_other": "{{count}} 位作者",
           "allStates": "全部",
           "filterPullRequests": "篩選 PR",
           "filterIssues": "篩選議題",
@@ -3701,6 +3712,7 @@
             "1e4b81d892": "撲通",
             "86af8d938c": "咚",
             "80f7cc95b3": "二音",
+            "silent": "靜音",
             "017abebfa6": "系統預設值"
           }
         }
@@ -3889,7 +3901,6 @@
         },
         "pane": {
           "CloseTerminalDialog": {
-            "automatic_resume_warning": "該終端機不會自動恢復。取消並將工作區置於睡眠狀態以便稍後恢復。",
             "1d1a7a9c1f": "取消",
             "stop_agent_title": "停止此代理程式？",
             "stop_command_title": "停止執行中的命令？",
@@ -3966,7 +3977,8 @@
             "remoteTerminalClosed": "遠端終端機已關閉。",
             "ptyAllocationLimit": "系統無法再分配 pty 裝置。請在 Orca 或其他程式中關閉一些不用的終端機，然後重試。",
             "terminalProcessLimit": "系統無法再啟動終端機行程。請關閉不用的終端機或結束不用的行程，然後重試。",
-            "hostTerminalCap": "主機上執行的終端機數量已達到 Orca 允許的上限。請關閉一個不再需要的終端機，然後重試。"
+            "hostTerminalCap": "主機上執行的終端機數量已達到 Orca 允許的上限。請關閉一個不再需要的終端機，然後重試。",
+            "copyErrorDetails": "複製錯誤詳細資訊"
           },
           "TerminalProcessExitOverlay": {
             "capacityTitle": "已達到 Git Bash 主控台上限",
@@ -4550,7 +4562,6 @@
             "c8857b40f7": "重新整理用量資料",
             "75ded02687": "管理帳戶…",
             "ff0fbe9311": "目前",
-            "7657e3db9c": "Codex 帳戶",
             "38b5647724": "Codex 用量執行環境",
             "ba55303942": "開啟 Codex 詳情和帳戶切換器",
             "c35af53b73": "登入",
@@ -4558,7 +4569,6 @@
             "5c938d39ac": "週",
             "54e8d6bb2d": "Fable",
             "a79c64f87e": "Fable",
-            "d450654fa2": "Claude 帳戶",
             "11e2354daf": "Claude 用量執行環境",
             "3dd7ddfae1": "開啟 Claude 詳情和帳戶切換器",
             "59c6e7b4e0": "可見工作階段將立即重新啟動。其他工作階段會在其工作樹變為作用中狀態時重新啟動。",
@@ -4829,7 +4839,8 @@
             "compact": "精簡",
             "detailedTooltip": "完整用量資訊，包含長條圖、標籤和百分比",
             "compactTooltip": "精簡用量資訊：每個供應商顯示一項摘要",
-            "footerDetailAria": "用量頁尾詳細資訊"
+            "footerDetailAria": "用量頁尾詳細資訊",
+            "notChecked": "未檢查"
           },
           "RemoteServerUpdateStatusSegment": {
             "updating": "正在更新 {{value0}}/{{value1}}",
@@ -4951,9 +4962,6 @@
             "ahead": "領先 {{ahead}}",
             "behind": "落後 {{behind}}",
             "activeAgents_other": "{{count}} 個作用中的代理程式",
-            "completedAgents_other": "{{count}} 個已完成的代理程式",
-            "activeAndCompletedAgents": "{{active}}、{{completed}}",
-            "completedAgentsRetained_other": "保留了 {{count}} 個已完成的代理程式",
             "noTrackedAgents": "沒有追蹤中的代理程式正在執行",
             "noTerminalTabs": "沒有終端機分頁",
             "liveTerminalTabs_other": "{{count}} 個終端機分頁中有 {{live}} 個執行中",
@@ -4999,12 +5007,17 @@
           "AccountSwitchList": {
             "used": "已用",
             "left": "剩餘",
-            "reset": "重設"
+            "reset": "重設",
+            "accounts": "帳戶"
           },
           "InlineUsageBars": {
             "now": "現在",
             "resetsNow": "現在重設",
             "resetsIn": "{{duration}}後重設"
+          },
+          "UsageDisplayToggle": {
+            "showRemaining": "顯示剩餘用量",
+            "showUsed": "顯示已用用量"
           }
         }
       },
@@ -7615,7 +7628,10 @@
           "b4e9d3f2a1c5": "已從 {{value1}} 匯入 {{value0}} 個 Cookie 到 {{value2}}。",
           "c5a273a809": "從 {{value0}}",
           "80bffd32bf": "匯入 Cookie",
-          "bd7d68f138": "從檔案..."
+          "bd7d68f138": "從檔案...",
+          "4054c458e1": "清除預設 cookie",
+          "3b662becd5": "要清除預設設定檔中的 cookie 嗎？",
+          "f159cf5a3e": "這可能會讓你登出此設定檔中的網站。"
         },
         "BrowserUseComputerUseNotice": {
           "79209b37b9": "如果 cookie 匯入不合適，「電腦使用」可以控制本機應用程式，並可視情況使用瀏覽器現有的已登入工作階段。安裝 Orca Computer Use 技能； macOS 還需要隱私權限。",
@@ -11403,6 +11419,7 @@
           "e27c8d45bf": "診斷已被環境變數停用。"
         },
         "ShortcutCommandBlock": {
+          "retryAfterError": "按下其他快速鍵，或按 Esc 取消。",
           "eb72c52c28": "按下快速鍵，或雙擊修飾鍵（例如 {{value0}}）。Esc 取消。",
           "70b5d25583": "{{value0}} 快速鍵",
           "287e07ddde": "已修改",
@@ -13025,7 +13042,8 @@
           "catalog": "目錄",
           "clear": "清除篩選",
           "themes": "主題",
-          "languages": "語言",
+          "codeLanguages": "程式語言",
+          "translations": "翻譯",
           "icons": "圖示",
           "commands": "命令和面板",
           "catalogLabel": "依目錄篩選",
@@ -16327,10 +16345,9 @@
           "725868c75d": "瀏覽資料夾",
           "5e7f0d8a80": "資料夾選擇器不可用於遠端檔案",
           "30099dca46": "資料夾",
-          "2d7d39dc63": ".md",
           "c8ac7868e6": "檔名",
           "b6ed807cc6": "名稱",
-          "e365f3c638": "為您的 Markdown 檔案命名並選擇一個資料夾。",
+          "description": "為您的檔案命名並選擇一個資料夾。",
           "674b046582": "另存新檔",
           "nameEmpty": "名稱不可為空白",
           "nameHasSeparators": "名稱不可包含路徑分隔符號",
@@ -19209,7 +19226,8 @@
         "safetyReviewApproved": "{{agent}} 已核准此操作。查看詳細資訊。",
         "safetyReview": "{{agent}} 回報了安全審查警告。查看詳細資訊。",
         "truncatedResponse": "供應商回應已截斷（原始大小：{{bytes}} 位元組）。",
-        "forkedFrom": "分支來源"
+        "forkedFrom": "分支來源",
+        "forkedFromUnknown": "分支來源：另一個聊天"
       },
       "composer": {
         "planMode": "規劃",
@@ -19666,7 +19684,7 @@
       "queuedMessages": {
         "steer": "引導",
         "send": "傳送",
-        "steerHint": "提交且不中斷模型",
+        "steerHint": "在代理程式工作時立即傳送",
         "sendHint": "立即傳送此訊息",
         "delete": "刪除",
         "moreActions": "更多操作",
@@ -19915,7 +19933,12 @@
         "failed": "{{agent}} 無法從此聊天建立分支",
         "hostUnsupported": "此主機執行的是舊版 Orca。請更新主機上的 Orca 後再試一次。",
         "failedDetail": "聊天未變更。請再試一次。",
-        "commandWorking": "{{agent}} 回覆期間無法建立分支。回覆結束後，請再次執行 /fork。"
+        "commandWorking": "{{agent}} 回覆期間無法建立分支。回覆結束後，請再次執行 /fork。",
+        "mark": "分支 ·",
+        "markedName": "{{mark}} {{name}}",
+        "accessibleName": "分支：{{name}}",
+        "sourceTooltip": "{{name}} 的分支",
+        "unknownSourceTooltip": "另一個聊天的分支"
       },
       "cardKindHidden": {
         "description": "你可以隨時在此處變更",
@@ -20031,7 +20054,7 @@
           "pinned": "已固定",
           "unread": "未讀",
           "comment": "有留言",
-          "retainedDoneAgents": "已完成的代理程式對話紀錄",
+          "finishedAgents": "已完成的代理程式",
           "contextPresence": "開啟中的分頁、終端機、留言",
           "completelyEmpty": "沒有需要保留的內容",
           "noWorkspaces": "未找到工作區。",
@@ -20149,7 +20172,7 @@
               "comment": "留言",
               "prunable": "可修剪",
               "locked": "已鎖定",
-              "retainedAgents": "已完成的代理程式"
+              "finishedAgents": "已完成的代理程式"
             }
           },
           "forceDeleteRisk_other": "{{count}} 個工作區目前存在風險，可能需要強制刪除",
@@ -20272,7 +20295,8 @@
       "TerminalContextMenu": {
         "copySessionId": "複製工作階段 ID",
         "copySessionIdSuccess": "已複製工作階段 ID",
-        "copySessionIdError": "複製工作階段 ID 失敗"
+        "copySessionIdError": "複製工作階段 ID 失敗",
+        "copySessionIdUnavailable": "沒有可複製的工作階段 ID"
       },
       "hostFile": {
         "updateHostForOutsideFiles": "更新 {{value0}} 上的 Orca，以開啟其工作區以外的檔案"
@@ -22290,6 +22314,8 @@
       "tabCloseAll": "關閉所有編輯器分頁",
       "tabRename": "重新命名目前分頁",
       "tabReopenClosed": "重新開啟已關閉的分頁",
+      "tabMoveLeft": "將使用中的分頁左移",
+      "tabMoveRight": "將使用中的分頁右移",
       "tabNextSameType": "下一個分頁（同類型）",
       "tabPreviousSameType": "上一個分頁（同類型）",
       "tabNextAllTypes": "下一個分頁（所有類型）",
@@ -22300,6 +22326,7 @@
       "tabOpenQuickCommandsMenu": "顯示或隱藏快速指令選單",
       "editorFind": "在編輯器中尋找",
       "editorReplace": "在編輯器中取代",
+      "editorToggleChangesView": "切換變更檢視",
       "fileExplorerUndo": "復原檔案操作",
       "fileExplorerRedo": "重做檔案操作",
       "fileExplorerCopyPath": "複製檔案路徑",
@@ -22317,6 +22344,7 @@
       "chatFind": "在聊天中尋找",
       "terminalToggleNativeChat": "在聊天介面與終端機之間切換",
       "terminalClosePane": "關閉作用中的窗格",
+      "terminalCopySessionId": "複製工作階段 ID",
       "terminalSplitRight": "向右分割終端機",
       "terminalSplitDown": "向下分割終端機",
       "terminalSwitchInputSource": "切換輸入來源／語言（原生）",

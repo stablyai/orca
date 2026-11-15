@@ -87,7 +87,16 @@ struct AppDescriptor {
 
     var needsManualAccessibilityMode: Bool {
         // Chromium/Electron apps often need this private AX mode, but applying it
-        // broadly can corrupt native Cocoa app trees into app-root-only nodes.
+        // broadly can corrupt native Cocoa app trees into app-root-only nodes. Not every
+        // Electron app either: it turns on screen-reader mode, which VS Code and its forks react to.
+        if let bundleId, TrustedOrcaApplication.isTrusted(bundleId: bundleId) {
+            return true
+        }
+        // Why: Gecko ships its engine as Contents/MacOS/XUL, which covers Firefox, its forks, Thunderbird and Zotero.
+        if let bundleURL = app.bundleURL,
+           FileManager.default.fileExists(atPath: bundleURL.appendingPathComponent("Contents/MacOS/XUL").path) {
+            return true
+        }
         guard let bundleId = bundleId?.lowercased() else {
             return false
         }
@@ -209,6 +218,7 @@ struct Snapshot {
 
 struct ScreenshotPayload {
     let data: String
+    let format: ScreenshotFormat
     let width: Int
     let height: Int
     let scale: Double
@@ -275,6 +285,8 @@ final class Provider {
     /// Per app, window elements already read (valid while the window lives) for when a window moves to another Space,
     /// and when a remote-token lookup last missed, since a window becomes findable only once some client reads it.
     private var otherSpaceLookups: [pid_t: OtherSpaceLookups] = [:]
+    /// When this provider last asked each app process for its full accessibility tree.
+    private var manualAccessibilityRequests: [pid_t: (launched: Date?, at: Date)] = [:]
 
     init() {
         // Why: the system-wide element sets the wait for every AX call in this process, so a hung app costs one bounded timeout whatever the macOS default.
@@ -411,6 +423,25 @@ final class Provider {
     }
 
     /// On-screen windows, plus minimized, hidden and other-Space windows that accessibility can still read.
+    private func requestManualAccessibility(_ appElement: AXUIElement, app: AppDescriptor) {
+        manualAccessibilityRequests = manualAccessibilityRequests.filter { pidIsLive($0.key) }
+        let launched = app.app.launchDate
+        let last = manualAccessibilityRequests[app.pid].flatMap { $0.launched == launched ? $0.at : nil }
+        // Why: Chromium turns its full tree on 2 s after the last request and each request restarts that wait, so not on
+        // every snapshot. Ask again now and then, since VoiceOver turning off drops the mode and it never reads back as on.
+        if let last, Date().timeIntervalSince(last) < 30 {
+            return
+        }
+        guard enableManualAccessibility(appElement) else {
+            return
+        }
+        manualAccessibilityRequests[app.pid] = (launched, Date())
+        if last == nil {
+            // Why: until the full tree is on, AXPress on web content does nothing (measured on Electron 43).
+            Thread.sleep(forTimeInterval: 2.5)
+        }
+    }
+
     private func windowInventory(app: AppDescriptor, appElement: AXUIElement) -> WindowInventory {
         let all = WindowCapture.candidates(pid: app.pid, includeOffScreen: true)
         let offScreen = all.filter { !$0.isOnScreen && $0.layer == 0 }
@@ -483,6 +514,7 @@ final class Provider {
         let snapshot = try buildSnapshot(
             app: app,
             includeScreenshot: params["noScreenshot"]?.bool != true,
+            screenshotOptions: screenshotOptions(params),
             windowId: subtree.map(\.base.windowId) ?? windowId,
             windowIndex: subtree == nil ? windowIndex : nil,
             subtree: subtree,
@@ -698,10 +730,18 @@ final class Provider {
         }
     }
 
-    private func listApps() -> [AppDescriptor] {
+    /// Without `includingWindowlessAccessoryApps`, apps without a Dock icon are listed only while they show a window,
+    /// since they include dozens of windowless system agents; resolving still finds one whose window is minimized or hidden.
+    private func listApps(includingWindowlessAccessoryApps: Bool = false) -> [AppDescriptor] {
         var seen = Set<String>()
+        let accessoryWindowOwners = includingWindowlessAccessoryApps ? nil : WindowCapture.ownersOfStandardWindows()
         return NSWorkspace.shared.runningApplications
-            .filter { !$0.isTerminated && $0.activationPolicy == .regular }
+            .filter { app in
+                guard !app.isTerminated else { return false }
+                if app.activationPolicy == .regular { return true }
+                guard app.activationPolicy == .accessory else { return false }
+                return accessoryWindowOwners?.contains(app.processIdentifier) ?? true
+            }
             .compactMap { app in
                 guard let name = app.localizedName, !name.isEmpty else { return nil }
                 let pid = app.processIdentifier
@@ -723,6 +763,7 @@ final class Provider {
             "name": app.name,
             "bundleId": jsonNullable(app.bundleId),
             "pid": Int(app.pid),
+            "accessory": app.app.activationPolicy == .accessory,
             "isRunning": true,
             "lastUsedAt": NSNull(),
             "useCount": NSNull(),
@@ -796,7 +837,9 @@ final class Provider {
         if blockedBundleIds.contains(trimmed) {
             throw ProviderError.coded("app_blocked", "app '\(trimmed)' is blocked for safety")
         }
-        if let app = listApps().first(where: { matches($0, query: trimmed) }) {
+        let matching = listApps(includingWindowlessAccessoryApps: true).filter { matches($0, query: trimmed) }
+        // Why: a name query should pick the app over a same-named helper without a Dock icon, even an active one.
+        if let app = matching.first(where: { $0.app.activationPolicy == .regular }) ?? matching.first {
             try rejectBlockedApp(app)
             return app
         }
@@ -824,7 +867,7 @@ final class Provider {
             if blockedBundleIds.contains(bundleId) {
                 throw ProviderError.coded("app_blocked", "app '\(bundleId)' is blocked for safety")
             }
-            // Why: a path or display-name query misses the running check above, and menu bar apps aren't listed.
+            // Why: a path or display-name query misses the running check above, and windowless menu bar apps aren't listed.
             if let running = NSRunningApplication.runningApplications(withBundleIdentifier: bundleId)
                 .first(where: { !$0.isTerminated }),
                 let app = appByPid(running.processIdentifier) {
@@ -916,6 +959,7 @@ final class Provider {
     private func buildSnapshot(
         app: AppDescriptor,
         includeScreenshot: Bool,
+        screenshotOptions: ScreenshotOptions,
         windowId: CGWindowID?,
         windowIndex: Int?,
         subtree: (root: ElementRecord, base: Snapshot)?,
@@ -940,7 +984,9 @@ final class Provider {
         if AccessibilityMessaging.timedOut(AXUIElementCopyAttributeValue(appElement, kAXRoleAttribute as CFString, &role), since: probeStart) {
             throw AccessibilityMessaging.appNotResponding(app.name)
         }
-        enableManualAccessibilityIfNeeded(appElement, app: app)
+        if app.needsManualAccessibilityMode {
+            requestManualAccessibility(appElement, app: app)
+        }
         let inventory = windowInventory(app: app, appElement: appElement)
         let observable = inventory.windows
         let focused = try focusedWindow(appElement: appElement, app: app, inventory: inventory)
@@ -1000,7 +1046,7 @@ final class Provider {
             elements = kept.merging(renderer.records) { _, walked in walked }
             elementOrder = subtree.base.elementOrder.filter { kept[$0] != nil } + indexes.order
         }
-        let screenshot = includeScreenshot ? capture.screenshotPayload() : nil
+        let screenshot = includeScreenshot ? capture.screenshotPayload(screenshotOptions) : nil
         let screenshotStatus: ScreenshotStatus = if screenshot != nil {
             .captured
         } else if includeScreenshot && !canCaptureScreenshot {
@@ -1041,7 +1087,7 @@ final class Provider {
         if let payload = snapshot.screenshot {
             screenshot = [
                 "data": payload.data,
-                "format": "png",
+                "format": payload.format.rawValue,
                 "width": payload.width,
                 "height": payload.height,
                 "scale": payload.scale,
@@ -1614,18 +1660,18 @@ private func openSystemSettings(_ value: String) {
     NSWorkspace.shared.open(url)
 }
 
-private func enableManualAccessibilityIfNeeded(_ appElement: AXUIElement, app: AppDescriptor) {
-    guard app.needsManualAccessibilityMode else {
-        return
-    }
+/// Returns whether it turned a mode on.
+private func enableManualAccessibility(_ appElement: AXUIElement) -> Bool {
     if isSettable(appElement, "AXManualAccessibility") {
-        _ = AXUIElementSetAttributeValue(appElement, "AXManualAccessibility" as CFString, kCFBooleanTrue)
-        return
+        return AXUIElementSetAttributeValue(appElement, "AXManualAccessibility" as CFString, kCFBooleanTrue) == .success
     }
     // Why: the older, broader switch, so only for apps that lack AXManualAccessibility and only when it is off.
-    if boolAttribute(appElement, "AXEnhancedUserInterface") != true {
-        _ = AXUIElementSetAttributeValue(appElement, "AXEnhancedUserInterface" as CFString, kCFBooleanTrue)
+    guard boolAttribute(appElement, "AXEnhancedUserInterface") != true else {
+        return false
     }
+    // Why: Chromium applies it but answers kAXErrorNotImplemented, so the result says nothing.
+    _ = AXUIElementSetAttributeValue(appElement, "AXEnhancedUserInterface" as CFString, kCFBooleanTrue)
+    return true
 }
 
 private func focusedWindow(appElement: AXUIElement, app: AppDescriptor, inventory: WindowInventory) throws -> AXUIElement {
@@ -2187,6 +2233,15 @@ private func requestedWindowIndex(_ params: [String: JSONValue]) throws -> Int? 
         throw ProviderError.coded("invalid_argument", "windowIndex is out of range")
     }
     return index
+}
+
+/// The RPC layer validates these, so a value it would refuse is ignored here rather than failing the observe.
+private func screenshotOptions(_ params: [String: JSONValue]) -> ScreenshotOptions {
+    ScreenshotOptions(
+        format: params["screenshotFormat"]?.string.flatMap(ScreenshotFormat.init(rawValue:)) ?? .png,
+        maxScale: params["screenshotScale"]?.number.flatMap { $0.isFinite && $0 > 0 ? $0 : nil },
+        maxEdge: params["screenshotMaxEdge"]?.number.flatMap { $0 >= 1 ? boundedInteger($0, as: Int.self) : nil }
+    )
 }
 
 private func usableWindow(_ element: AXUIElement) -> Bool {
@@ -3317,49 +3372,68 @@ private struct WindowCapture {
 
     /// Off-screen windows include minimized, hidden and other-Space ones, but also closed windows apps keep; see `windowInventory`.
     static func candidates(pid: pid_t, includeOffScreen: Bool = false) -> [WindowCandidate] {
-        let options: CGWindowListOption = includeOffScreen ? [.optionAll, .excludeDesktopElements] : [.optionOnScreenOnly]
-        guard let infos = CGWindowListCopyWindowInfo(options, kCGNullWindowID) as? [[String: Any]] else {
-            return []
-        }
-        return infos.compactMap { info in
-            guard let ownerPid = info[kCGWindowOwnerPID as String] as? pid_t, ownerPid == pid,
-                  let number = info[kCGWindowNumber as String] as? NSNumber,
-                  let layer = info[kCGWindowLayer as String] as? Int,
-                  let boundsDictionary = info[kCGWindowBounds as String] as? NSDictionary,
-                  let bounds = CGRect(dictionaryRepresentation: boundsDictionary),
-                  bounds.width >= 48,
-                  bounds.height >= 48
-            else {
-                return nil
+        windowInfos(includeOffScreen: includeOffScreen)
+            .compactMap { info in
+                guard info[kCGWindowOwnerPID as String] as? pid_t == pid else { return nil }
+                return candidate(info, includeOffScreen: includeOffScreen)
             }
-            let alpha = info[kCGWindowAlpha as String] as? CGFloat ?? 1
-            guard alpha > 0.01 else { return nil }
-            let sharing = (info[kCGWindowSharingState as String] as? NSNumber).map { $0.intValue }
-            if sharing == 0 { return nil }
-            // Why: CoreGraphics omits the key for off-screen windows, and every window of an on-screen-only list is on screen.
-            let isOnScreen = (info[kCGWindowIsOnscreen as String] as? Bool) ?? !includeOffScreen
-            return WindowCandidate(
-                windowId: CGWindowID(number.uint32Value),
-                layer: layer,
-                bounds: bounds,
-                title: info[kCGWindowName as String] as? String,
-                alpha: alpha,
-                isOnScreen: isOnScreen,
-                sharingState: sharing
-            )
-        }
-        .sorted { lhs, rhs in
-            lhs.score > rhs.score
-        }
+            .sorted { lhs, rhs in
+                lhs.score > rhs.score
+            }
     }
 
-    func screenshotPayload() -> ScreenshotPayload? {
-        guard let image, let bounded = boundedPngData(image.image) else { return nil }
+    /// Processes with an on-screen window at the normal level, the windows `list-windows` lists; leaves out the Dock, banners and overlays.
+    static func ownersOfStandardWindows() -> Set<pid_t> {
+        Set(windowInfos(includeOffScreen: false).compactMap { info in
+            guard let owner = info[kCGWindowOwnerPID as String] as? pid_t,
+                  candidate(info, includeOffScreen: false)?.layer == 0
+            else { return nil }
+            return owner
+        })
+    }
+
+    private static func windowInfos(includeOffScreen: Bool) -> [[String: Any]] {
+        let options: CGWindowListOption = includeOffScreen ? [.optionAll, .excludeDesktopElements] : [.optionOnScreenOnly]
+        return CGWindowListCopyWindowInfo(options, kCGNullWindowID) as? [[String: Any]] ?? []
+    }
+
+    private static func candidate(_ info: [String: Any], includeOffScreen: Bool) -> WindowCandidate? {
+        guard let number = info[kCGWindowNumber as String] as? NSNumber,
+              let layer = info[kCGWindowLayer as String] as? Int,
+              let boundsDictionary = info[kCGWindowBounds as String] as? NSDictionary,
+              let bounds = CGRect(dictionaryRepresentation: boundsDictionary),
+              bounds.width >= 48,
+              bounds.height >= 48
+        else {
+            return nil
+        }
+        let alpha = info[kCGWindowAlpha as String] as? CGFloat ?? 1
+        guard alpha > 0.01 else { return nil }
+        let sharing = (info[kCGWindowSharingState as String] as? NSNumber).map { $0.intValue }
+        if sharing == 0 { return nil }
+        // Why: CoreGraphics omits the key for off-screen windows, and every window of an on-screen-only list is on screen.
+        let isOnScreen = (info[kCGWindowIsOnscreen as String] as? Bool) ?? !includeOffScreen
+        return WindowCandidate(
+            windowId: CGWindowID(number.uint32Value),
+            layer: layer,
+            bounds: bounds,
+            title: info[kCGWindowName as String] as? String,
+            alpha: alpha,
+            isOnScreen: isOnScreen,
+            sharingState: sharing
+        )
+    }
+
+    func screenshotPayload(_ options: ScreenshotOptions) -> ScreenshotPayload? {
+        guard let image, let encoded = ScreenshotEncoding.encode(image.image, windowWidth: bounds.width, options: options) else {
+            return nil
+        }
         return ScreenshotPayload(
-            data: bounded.data.base64EncodedString(),
-            width: bounded.width,
-            height: bounded.height,
-            scale: Double(bounded.width) / max(Double(bounds.width), 1)
+            data: encoded.data.base64EncodedString(),
+            format: encoded.format,
+            width: encoded.width,
+            height: encoded.height,
+            scale: Double(encoded.width) / max(Double(bounds.width), 1)
         )
     }
 
@@ -3423,48 +3497,6 @@ private enum BlockingAsync {
     }
 }
 
-private struct BoundedPNG {
-    let data: Data
-    let width: Int
-    let height: Int
-}
-
-private func boundedPngData(_ image: CGImage) -> BoundedPNG? {
-    let rep = NSBitmapImageRep(cgImage: image)
-    guard let data = rep.representation(using: .png, properties: [:]) else { return nil }
-    if data.count <= 900_000 {
-        return BoundedPNG(data: data, width: image.width, height: image.height)
-    }
-    var scale = min(1, 1280 / CGFloat(max(image.width, image.height)))
-    var best = BoundedPNG(data: data, width: image.width, height: image.height)
-    while scale >= 0.25 {
-        guard let resized = resizePng(image, scale: scale) else {
-            break
-        }
-        best = resized
-        if resized.data.count <= 900_000 {
-            return resized
-        }
-        scale *= 0.85
-    }
-    return best
-}
-
-private func resizePng(_ image: CGImage, scale: CGFloat) -> BoundedPNG? {
-    let width = max(1, Int(CGFloat(image.width) * scale))
-    let height = max(1, Int(CGFloat(image.height) * scale))
-    guard let context = CGContext(data: nil, width: width, height: height, bitsPerComponent: 8, bytesPerRow: 0, space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) else {
-        return nil
-    }
-    context.interpolationQuality = .medium
-    context.draw(image, in: CGRect(x: 0, y: 0, width: width, height: height))
-    guard let resized = context.makeImage() else { return nil }
-    guard let data = NSBitmapImageRep(cgImage: resized).representation(using: .png, properties: [:]) else {
-        return nil
-    }
-    return BoundedPNG(data: data, width: width, height: height)
-}
-
 private enum Input {
     static func click(
         at point: CGPoint,
@@ -3478,7 +3510,7 @@ private enum Input {
         }
         let flags = eventFlags(modifiers)
         let target = syntheticClickRecipient(pid: targetWindow.app.pid, windowId: targetWindow.windowId)
-        try withRecipientErrors {
+        try hidGesture { post in
             try SyntheticMouseClickDelivery.deliver(
                 clickCount: count,
                 target: target,
@@ -3510,9 +3542,30 @@ private enum Input {
                     }
                     return event
                 },
-                post: { $0.post(tap: .cghidEventTap) },
+                post: post,
                 pause: { _ = usleep($0) }
             )
+        }
+    }
+
+    /// Posts a pointer gesture through the HID tap, then puts the user's pointer back unless they moved it meanwhile.
+    private static func hidGesture(_ body: (_ post: (CGEvent) -> Void) throws -> Void) throws {
+        var restore = SyntheticMouseClickDelivery.PointerRestore()
+        defer {
+            if restore.mayRestore, let saved = restore.saved {
+                usleep(SyntheticMouseClickDelivery.PointerRestore.settleMicroseconds)
+                if let current = CGEvent(source: nil)?.location, restore.shouldRestore(current: current) {
+                    CGWarpMouseCursorPosition(saved)
+                    // Why: without re-associating, a warp freezes the user's mouse for about a quarter second.
+                    CGAssociateMouseAndMouseCursorPosition(1)
+                }
+            }
+        }
+        try withRecipientErrors {
+            try body { event in
+                restore.willPost(at: event.location, current: CGEvent(source: nil)?.location)
+                event.post(tap: .cghidEventTap)
+            }
         }
     }
 
@@ -3542,12 +3595,12 @@ private enum Input {
             throw ProviderError.coded("accessibility_error", "failed to create scroll event")
         }
         wheel.location = point
-        try withRecipientErrors {
+        try hidGesture { post in
             try SyntheticMouseClickDelivery.deliverScroll(
                 move: move, wheel: wheel,
                 target: syntheticClickRecipient(pid: targetWindow.app.pid, windowId: targetWindow.windowId),
                 currentObservation: { currentSyntheticClickRecipient(snapshot: targetWindow, point: point) },
-                post: { $0.post(tap: .cghidEventTap) },
+                post: post,
                 pause: { _ = usleep($0) }
             )
         }
@@ -3561,12 +3614,12 @@ private enum Input {
             let progress = CGFloat(step) / 10
             return try mouseEvent(.leftMouseDragged, at: CGPoint(x: start.x + (end.x - start.x) * progress, y: start.y + (end.y - start.y) * progress))
         }
-        try withRecipientErrors {
+        try hidGesture { post in
             try SyntheticMouseClickDelivery.deliverDrag(
                 move: move, down: down, dragged: dragged, up: up,
                 target: syntheticClickRecipient(pid: targetWindow.app.pid, windowId: targetWindow.windowId),
                 currentObservation: { currentSyntheticClickRecipient(snapshot: targetWindow, point: start) },
-                post: { $0.post(tap: .cghidEventTap) },
+                post: post,
                 pause: { _ = usleep($0) }
             )
         }

@@ -1,6 +1,6 @@
 import { expect, it, vi } from 'vitest'
 import { updaterMainWindow } from '../updater/testing/updater-test-main-window'
-import { LOCAL_BUILD_COMPATIBILITY_CONTRACT } from '../../shared/local-build-compatibility-contract'
+import { LOCAL_BUILD_COMPATIBILITY_CONTRACT } from '../../shared/remote-runtime/orcad-distribution/local-build-compatibility-contract'
 import type { LocalBuildCandidate } from './local-build-candidate'
 
 const { showOpenDialog, showMessageBox, loadCandidate } = vi.hoisted(() => ({

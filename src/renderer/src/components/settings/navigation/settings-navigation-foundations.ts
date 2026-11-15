@@ -1,6 +1,6 @@
 import type { MutableRefObject } from 'react'
 import type { GlobalSettings } from '../../../../../shared/global-settings-types'
-import type { SpeechModelState } from '../../../../../shared/speech-types'
+import type { SpeechModelState } from '../../../../../shared/speech/speech-types'
 import type { SourceControlAiSettings } from '../../../../../shared/source-control/ai/settings/source-control-ai-settings-types'
 import { normalizeSourceControlAiSettings } from '../../../../../shared/source-control/ai/settings/source-control-ai-settings'
 import { getDefaultVoiceSettings } from '../../../../../shared/constants'

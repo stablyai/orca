@@ -1,3 +1,4 @@
+import type { JournalKeyedMap, JournalKeyedSet } from '../journal-keyed-storage'
 import { z } from 'zod'
 import type { AgentJournalRenderItem } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import { createJournalReducerState, type JournalReducerState } from '../projection/journal-reducer'
@@ -109,7 +110,7 @@ const isString = (key: unknown): key is string => typeof key === 'string'
 const isNumber = (key: unknown): key is number => typeof key === 'number'
 
 function collectionTargets(state: JournalReducerState): Map<string, Target> {
-  const map = <K, V>(target: Map<K, V>, isKey: (key: unknown) => key is K): Target => {
+  const map = <K, V>(target: JournalKeyedMap<K, V>, isKey: (key: unknown) => key is K): Target => {
     const admitted = z.custom<[K, V]>()
     return {
       set: (entry) => {
@@ -124,7 +125,7 @@ function collectionTargets(state: JournalReducerState): Map<string, Target> {
     }
   }
   const member = z.custom<[string, string]>()
-  const set = (target: Set<string>): Target => ({
+  const set = (target: JournalKeyedSet<string>): Target => ({
     set: (entry) => {
       target.add(member.parse(entry)[0])
     },

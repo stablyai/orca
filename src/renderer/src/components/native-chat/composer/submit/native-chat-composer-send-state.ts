@@ -1,4 +1,4 @@
-import type { NativeChatFollowUpBehavior } from '../../../../../../shared/native-chat/input/native-chat-follow-up-behavior'
+import type { NativeChatFollowUpBehavior } from '../../../../../../shared/native-chat/input/composer/native-chat-follow-up-behavior'
 import type { NativeChatComposerImageAttachment } from '../../attachments/chips/native-chat-image-attachment'
 import type { NativeChatStructuredComposerTransport } from './native-chat-structured-composer-transport'
 import type { AgentType } from '../../../../../../shared/agent-status/contracts/agent-status-types'
@@ -67,7 +67,7 @@ export function nativeChatComposerSendState(
         input.agent,
         transport.optionSnapshot
       ) &&
-      !structuredAgentSessionCommandChangesConversation(input.draft))
+      !structuredAgentSessionCommandChangesConversation(input.draft, input.agent))
   const draftHeld = localHold || (hostHold && !runsWhileHostHolds)
   const hasDraft = input.draft.trim() !== '' || input.imageAttachments.length > 0
   // Like Enter, a typed draft sends while the agent works; only an empty one offers Stop.

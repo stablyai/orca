@@ -5,14 +5,14 @@ import type {
   AgentLaunchModeReason,
   AgentLaunchModeReceipt
 } from '../../shared/agent-launch/contracts/agent-launch-intent'
-import { RUNTIME_CAPABILITIES } from '../../shared/protocol-version'
+import { RUNTIME_CAPABILITIES } from '../../shared/remote-runtime/protocol/protocol-version'
 import { STRUCTURED_AGENT_RUNTIME_METADATA } from '../runtime/agent-session/installation/structured-agent-runtime-metadata'
 import {
   nativeChatPreferenceFor,
   resolveStructuredNativeChatSupport,
   type NativeChatDefaultSettings,
   type StructuredNativeChatBlocker
-} from '../../shared/structured-native-chat-launch-route'
+} from '../../shared/agent-launch/choices/structured-native-chat-launch-route'
 import type { TuiAgent } from '../../shared/agent-launch/catalog/tui-agent'
 import type {
   StructuredAgentCreateSupportReason,

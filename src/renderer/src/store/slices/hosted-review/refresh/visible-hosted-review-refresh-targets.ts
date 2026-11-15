@@ -17,7 +17,11 @@ import { findIndexedDetectedWorktrees } from '@/lib/workspace/ownership/worktree
 import { findIndexedRepoOwnerForHost } from '@/lib/workspace/ownership/repo-owner-index'
 import { worktreeOwnerHostIds } from '@/lib/workspace/ownership/workspace-catalog-owner-index'
 import { findKnownWorktreeById } from '../../worktrees/listing/detected-worktree-meta'
-import { getPRRefreshRuntimeRepoTarget } from '../../../github/repositories/repository-routing'
+import {
+  getPRRefreshOwnerRuntimeEnvironmentId,
+  getPRRefreshRuntimeRepoTarget
+} from '../../../github/repositories/repository-routing'
+import { hostPRAutoRefreshCadence } from '../../../github/refresh/remote-host-pr-auto-refresh-cadence'
 import type { VisibleHostedReviewRefreshTarget } from './visible-hosted-review-refresh-scheduler'
 import { shouldCoordinateVisibleGitHubReview } from './visible-hosted-review-refresh-ownership'
 import {
@@ -170,6 +174,15 @@ export function getVisibleHostedReviewRefreshTargets(
       prEntry.fetchedAt >= (hostedEntry?.fetchedAt ?? -Infinity)
     const review = usePR ? prEntry.data : hostedEntry?.data
     const fetchedAt = usePR ? prEntry.fetchedAt : (hostedEntry?.fetchedAt ?? null)
+    // The host that runs the read owns the cadence: a paired host's setting, else this app's.
+    const cadenceHost = getPRRefreshOwnerRuntimeEnvironmentId(candidate)
+    const cadence = hostPRAutoRefreshCadence(cadenceHost)
+    const intervalInput = {
+      state: review?.state,
+      checksStatus: usePR ? prEntry.data?.checksStatus : hostedEntry?.data?.status,
+      hasReview: review ? true : fetchedAt !== null ? false : null,
+      selected
+    }
     const target: VisibleHostedReviewRefreshTarget = {
       key,
       revision: `${candidate.currentHeadOid ?? ''}|${linkedReviewHintKey(hints)}`,
@@ -181,14 +194,12 @@ export function getVisibleHostedReviewRefreshTargets(
           ? null
           : fetchedAt,
       selected,
+      cadence,
+      cadenceHost,
       refreshOnForeground:
         !!runtime && knownGitHub && (review?.state === 'open' || review?.state === 'draft'),
-      intervalMs: reviewRefreshIntervalMs({
-        state: review?.state,
-        checksStatus: usePR ? prEntry.data?.checksStatus : hostedEntry?.data?.status,
-        hasReview: review ? true : fetchedAt !== null ? false : null,
-        selected
-      }),
+      intervalMs: reviewRefreshIntervalMs(intervalInput, cadence),
+      foregroundIntervalMs: reviewRefreshIntervalMs(intervalInput, 'default'),
       refresh: async (force = true, signal, intent) => {
         let outcome: PRSnapshotReply | undefined
         const before = getState()
@@ -224,9 +235,12 @@ export function getVisibleHostedReviewRefreshTargets(
             }))
         const after = getState()
         if (runtime && outcome) {
+          const failed = 'kind' in outcome && outcome.kind === 'upstream-error' ? outcome : null
           return {
-            succeeded: !('kind' in outcome) || outcome.kind !== 'upstream-error',
-            retryAfterMs: outcome.revalidation?.retryAfterMs
+            succeeded: !failed,
+            retryAfterMs: outcome.revalidation?.retryAfterMs,
+            // The host's Retry-After for this request: no automatic read or return goes sooner.
+            retryDisabledUntil: failed?.retryDisabledUntil
           }
         }
         const afterFetchedAt = knownGitHub

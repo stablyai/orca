@@ -5,7 +5,7 @@ import {
 } from './orcad-managed-remote-stop'
 import { settleOrcadDecommissionStop } from './orcad-decommission-stop'
 import type { OrcadSlotOptions } from '../activation/orcad-recovery-slot'
-import type { OrcadManagedStopContext } from '../../../shared/orcad-stop-request'
+import type { OrcadManagedStopContext } from '../../../shared/remote-runtime/orcad-lifecycle/orcad-stop-request'
 
 type OrcadRollbackBarrier =
   | { state: 'retired' }

@@ -8,7 +8,7 @@ import {
 } from '@/diagnostics/react-commits/react-commit-cascade-store-write-samples'
 import { readStoreListenerCount } from '@/store/diagnostics/store-listener-census'
 import type { RendererSurface } from '@/diagnostics/memory/renderer-memory-sampling'
-import { REACT_NESTED_UPDATE_LIMIT } from '../../../../shared/react-update-depth-attribution'
+import { REACT_NESTED_UPDATE_LIMIT } from '../../../../shared/crash-reporting/react-update-depth-attribution'
 
 export const REACT_COMMIT_CASCADE_BREADCRUMB = 'react_commit_cascade'
 

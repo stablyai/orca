@@ -32,7 +32,7 @@ vi.mock('./ssh-identity-file-read', () => ({
 import { buildConnectConfig } from '../connection/ssh-connect-config'
 import '../system-transport/system-ssh-args'
 import { walkInitialAuthLadder } from '../connection/testing/ssh-connection-test-fixtures'
-import type { SshTarget } from '../../../shared/ssh-types'
+import type { SshTarget } from '../../../shared/remote-runtime/ssh/ssh-types'
 import type { SshResolvedConfig } from '../config/ssh-g-config-resolution'
 
 function makeTarget(overrides: Partial<SshTarget> = {}): SshTarget {

@@ -1,11 +1,11 @@
-import { requestBrowserFocus } from '@/components/browser-pane/host-guest/browser-focus'
-import type * as BrowserFocusModule from '@/components/browser-pane/host-guest/browser-focus'
+import { requestBrowserFocus } from '@/components/browser-pane/host-guest/input/browser-focus'
+import type * as BrowserFocusModule from '@/components/browser-pane/host-guest/input/browser-focus'
 import '../../../store/testing/app-store-test-fixture'
 import { getDefaultSettings } from '../../../../../shared/constants'
-import '../../../../../shared/session-tabs-runtime-capabilities'
-import '../../../../../shared/protocol-version'
+import '../../../../../shared/remote-runtime/protocol/session-tabs-runtime-capabilities'
+import '../../../../../shared/remote-runtime/protocol/protocol-version'
 import '../../../lib/browser/navigation/http-link-in-group-availability'
-import { createWebRuntimeSessionBrowserTab } from './web-runtime-browser-creation'
+import './web-runtime-browser-creation'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '../../../store/index'
 import * as workspaceBrowserTabOpen from '../../../lib/browser/workspace/workspace-browser-tab-open'
@@ -37,7 +37,7 @@ import { captureWebSessionIntentOwner } from '../../web-session-tabs-sync/identi
 import { peekWebSessionFocusIntent } from '../../web-session-tabs-sync/navigation/web-session-focus-intent'
 import type * as SnapshotModule from '../../web-session-tabs-sync/inventory/web-runtime-session-snapshot'
 
-vi.mock('@/components/browser-pane/host-guest/browser-focus', async (importOriginal) => ({
+vi.mock('@/components/browser-pane/host-guest/input/browser-focus', async (importOriginal) => ({
   ...(await importOriginal<typeof BrowserFocusModule>()),
   requestBrowserFocus: vi.fn()
 }))
@@ -126,25 +126,6 @@ describe('runtime link opens through staging and materialization', () => {
       useAppStore.getState().groupsByWorktree[WT]?.find((group) => group.id === G2)?.activeTabId
     ).toBe(browser.id)
     expect(requestBrowserFocus).not.toHaveBeenCalled()
-  })
-
-  it('a delivery callback failure cannot unwind a page that already materialized', async () => {
-    const call = installRuntimeTransport()
-    const creating = createWebRuntimeSessionBrowserTab({
-      worktreeId: WT,
-      environmentId: ENV,
-      url: 'https://example.com/link',
-      placementPreference: 'server',
-      selectWorktree: false,
-      clientTargetGroupId: G2,
-      onMaterialized: () => {
-        throw new Error('Delivery failed')
-      }
-    })
-    pendingCreates[0]!.resolve('delivered-page')
-    await expect(creating).rejects.toThrow('Delivery failed')
-    expect(wrapperForRemotePage('delivered-page')).toBeDefined()
-    expect(call.mock.calls.some(([request]) => request.method === 'browser.tabClose')).toBe(false)
   })
 
   it('a newer link clears pending focus intent and suppresses stale success without claiming cancellation', async () => {

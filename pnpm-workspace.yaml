@@ -1,7 +1,8 @@
 # Exclude mobile’s independent workspace/lockfile: recursive discovery causes ERR_PNPM_UNUSED_PATCH.
-# Explicit registry/security workspaces avoid file:-dependency relinks, whose virtual-store churn
+# Explicit Windows addon workspaces avoid file:-dependency relinks, whose virtual-store churn
 # raced Windows node-gyp and removed @vscode/windows-process-tree’s binding.gyp mid-rebuild.
 packages:
+  - native/windows-notifications
   - native/windows-registry
   - native/windows-security
   - src/packages/*
@@ -66,6 +67,7 @@ allowBuilds:
   msw: false
   node-pty: true
   ssh2: false
+  '@orca/windows-notifications': false
   '@orca/windows-registry': false
   '@orca/windows-security': false
 

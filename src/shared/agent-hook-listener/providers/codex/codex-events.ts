@@ -16,15 +16,15 @@ import {
   enrichCodexSubagentIdentity,
   finishCodexSubagent,
   upsertCodexSubagent
-} from '../../../codex-subagent-roster'
+} from './codex-subagent-roster'
 import {
   codexTranscriptTurnEnd,
   reconcileCodexSubagentTranscript
-} from '../../../codex-subagent-transcript'
+} from './codex-subagent-transcript'
 import {
   codexTurnApprovalsAreAutoReviewed,
   reconcileCodexSubagentReviewer
-} from '../../../codex-subagent-reviewer'
+} from './codex-subagent-reviewer'
 import { readFirstString } from '../../interactive-tool'
 import type { HookListenerState } from '../../listener-state'
 import { resolvePrompt, resolveToolState } from '../../prompt-fields'

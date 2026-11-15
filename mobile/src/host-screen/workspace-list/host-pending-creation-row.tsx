@@ -2,7 +2,7 @@ import { ActivityIndicator, Text, View } from 'react-native'
 import { colors, spacing, typography } from '../../theme/mobile-theme'
 import { themedStyleSheet } from '../../theme/themed-styles'
 import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
-import type { SectionPendingCreation } from '../../worktree/workspace-list-types'
+import type { SectionPendingCreation } from '../../worktree/workspace-list/workspace-list-types'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 
 export function HostPendingCreationRow({ creation }: { creation: SectionPendingCreation }) {

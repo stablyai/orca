@@ -9,7 +9,7 @@ import { ClaudeTerminalMailBridge } from '../../claude/terminal-mail/claude-term
 import {
   CLAUDE_AGENT_VIEW_PATH,
   CLAUDE_TERMINAL_MAIL_PATH
-} from '../../../shared/claude-agent-view'
+} from '../../../shared/agent-hook-listener/providers/claude/view/claude-agent-view'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import type { AgentHookSource } from '../../../shared/agent-hook-listener/transport/agent-hook-relay'
 import type { AgentHookEventPayload } from '../../../shared/agent-hook-listener/listener-event'

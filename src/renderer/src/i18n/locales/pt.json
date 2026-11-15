@@ -1360,6 +1360,7 @@
         "fontFamily": "Fonte",
         "fontFamilyDescription": "Fonte usada nas mensagens, na atividade e na caixa de mensagem.",
         "inheritFont": "Mesma fonte do IDE",
+        "systemFont": "Fonte do sistema",
         "fontPreviewLabel": "Prévia da fonte do chat",
         "fontPreview": "A rápida raposa marrom salta sobre o cão preguiçoso.",
         "title": "Interface de chat",
@@ -1983,6 +1984,10 @@
       "availableOn": "Disponível para você em {{date}} ({{relative}})",
       "clearedTitle": "Orca {{version}} está pronto",
       "released": "Lançado {{released}}"
+    },
+    "groupHooks": {
+      "invalidSetup": "O arquivo está presente, mas o Orca não encontrou um script de configuração válido.",
+      "supportedKeys": "Defina apenas as chaves compatíveis: `scripts` e `setup`."
     }
   },
   "auto": {
@@ -2350,7 +2355,7 @@
             "33290e88ed": "Falha ao conectar o perfil",
             "9fcb07a796": "Perfil conectado",
             "2f6c78a039": "Falha ao atualizar a autenticação do perfil",
-            "a37b5e6d37": "Desconectado do perfil",
+            "a37b5e6d37": "Sessão do Orca encerrada",
             "83600521e7": "Falha ao sair",
             "76deec8f58": "Falha ao alternar organização",
             "7d4bc516ee": "Falha ao alternar perfil",
@@ -3096,6 +3101,15 @@
       "workspacePortBrowserOpen": {
         "systemBrowserHint": "{{shortcut}}+clique para abrir no navegador do sistema",
         "tooltip": "{{label}}. {{hint}}"
+      },
+      "worktreePaletteEvidence": {
+        "workspaceComment": "Comentário do espaço de trabalho",
+        "createdByAutomation": "Criado por automação",
+        "linkedTask": "Tarefa vinculada",
+        "pullRequest": "Pull request",
+        "mergeRequest": "Merge request",
+        "linkedIssue": "Issue vinculada",
+        "listeningPort": "Porta em escuta"
       }
     },
     "components": {
@@ -3378,7 +3392,6 @@
             "c8857b40f7": "Atualizar dados de uso",
             "75ded02687": "Gerenciar Contas…",
             "ff0fbe9311": "Ativo",
-            "7657e3db9c": "Conta do Codex",
             "38b5647724": "Runtime de uso do Codex",
             "ba55303942": "Abrir detalhes do Codex e alternador de conta",
             "c35af53b73": "Entrar",
@@ -3386,7 +3399,6 @@
             "5c938d39ac": "sem",
             "54e8d6bb2d": "Fable",
             "a79c64f87e": "Fable",
-            "d450654fa2": "Conta do Claude",
             "11e2354daf": "Runtime de uso do Claude",
             "3dd7ddfae1": "Abrir detalhes do Claude e alternador de conta",
             "59c6e7b4e0": "As sessões visíveis reiniciam agora. As outras reiniciam quando sua worktree se tornar ativa.",
@@ -3674,7 +3686,8 @@
             "compact": "Compacto",
             "detailedTooltip": "Uso completo com barras, rótulos e porcentagens",
             "compactTooltip": "Uso condensado: somente a janela mais restrita",
-            "footerDetailAria": "Detalhe do rodapé de uso"
+            "footerDetailAria": "Detalhe do rodapé de uso",
+            "notChecked": "Não verificado"
           },
           "RemoteServerUpdateStatusSegment": {
             "updating": "Atualizando {{value0}}/{{value1}}",
@@ -3829,13 +3842,6 @@
             "activeAgents_one": "{{count}} agente ativo",
             "activeAgents_other": "{{count}} agentes ativos",
             "activeAgents_many": "{{count}} agentes ativos",
-            "completedAgents_one": "{{count}} agente concluído",
-            "completedAgents_other": "{{count}} agentes concluídos",
-            "completedAgents_many": "{{count}} agentes concluídos",
-            "activeAndCompletedAgents": "{{active}}, {{completed}}",
-            "completedAgentsRetained_one": "{{count}} agente concluído mantido",
-            "completedAgentsRetained_other": "{{count}} agentes concluídos mantidos",
-            "completedAgentsRetained_many": "{{count}} agentes concluídos mantidos",
             "noTrackedAgents": "Nenhum agente monitorado em execução",
             "noTerminalTabs": "Nenhuma aba de terminal",
             "liveTerminalTabs_one": "{{live}} em execução de {{count}} aba de terminal",
@@ -3895,12 +3901,17 @@
           "AccountSwitchList": {
             "used": "Usado",
             "left": "Restante",
-            "reset": "Redefinição"
+            "reset": "Redefinição",
+            "accounts": "Contas"
           },
           "InlineUsageBars": {
             "now": "agora",
             "resetsNow": "redefinição agora",
             "resetsIn": "redefinição em {{duration}}"
+          },
+          "UsageDisplayToggle": {
+            "showRemaining": "Mostrar uso restante",
+            "showUsed": "Mostrar uso consumido"
           }
         }
       },
@@ -8006,6 +8017,7 @@
           "b2c384cfd6": "Nenhuma interface encontrada"
         },
         "ShortcutCommandBlock": {
+          "retryAfterError": "Pressione outro atalho ou Esc para cancelar.",
           "eb72c52c28": "Pressione um atalho, ou toque duas vezes em um modificador (ex.: {{value0}}). Esc cancela.",
           "70b5d25583": "Atalho de {{value0}}",
           "287e07ddde": "Modificado",
@@ -8048,7 +8060,10 @@
           "b4e9d3f2a1c5": "{{value0}} cookies importados de {{value1}} para {{value2}}.",
           "c5a273a809": "De {{value0}}",
           "80bffd32bf": "Importar Cookies",
-          "bd7d68f138": "De um Arquivo…"
+          "bd7d68f138": "De um Arquivo…",
+          "4054c458e1": "Limpar cookies padrão",
+          "3b662becd5": "Limpar os cookies do perfil padrão?",
+          "f159cf5a3e": "Isso pode desconectar você de sites neste perfil."
         },
         "GhosttyImportModal": {
           "f96688b6bc": "Cancelar",
@@ -9816,7 +9831,8 @@
           "catalog": "Catálogo",
           "clear": "Limpar filtros",
           "themes": "Temas",
-          "languages": "Linguagens",
+          "codeLanguages": "Linguagens de programação",
+          "translations": "Traduções",
           "icons": "Ícones",
           "commands": "Comandos e painéis",
           "catalogLabel": "Filtrar por catálogo",
@@ -13593,10 +13609,9 @@
           "725868c75d": "Navegar pelas pastas",
           "5e7f0d8a80": "Seletor de pasta indisponível para arquivos remotos",
           "30099dca46": "Pasta",
-          "2d7d39dc63": ".md",
           "c8ac7868e6": "nome do arquivo",
           "b6ed807cc6": "Nome",
-          "e365f3c638": "Nomeie seu arquivo markdown e escolha uma pasta.",
+          "description": "Nomeie seu arquivo e escolha uma pasta.",
           "674b046582": "Salvar como",
           "nameEmpty": "O nome não pode estar vazio",
           "nameHasSeparators": "O nome não pode conter separadores de caminho",
@@ -16378,6 +16393,9 @@
           "labelCount_one": "{{count}} rótulo",
           "labelCount_other": "{{count}} rótulos",
           "labelCount_many": "{{count}} rótulos",
+          "authorCount_one": "{{count}} autor",
+          "authorCount_other": "{{count}} autores",
+          "authorCount_many": "{{count}} autores",
           "allStates": "Todos",
           "filterPullRequests": "Filtrar pull requests",
           "filterIssues": "Filtrar issues",
@@ -16801,10 +16819,10 @@
             "ownerHostMismatch": "A sessão salva deste terminal pertence a outra conexão de host, então o Orca não pode reconectá-la aqui. Abra um novo terminal para continuar.",
             "ptyAllocationLimit": "Seu sistema não consegue alocar mais dispositivos pty. Feche alguns terminais que você não está usando, no Orca ou em outro programa, e tente novamente.",
             "terminalProcessLimit": "Seu sistema não consegue iniciar outro processo de terminal. Feche terminais ou processos sem uso e tente novamente.",
-            "hostTerminalCap": "O host já está executando o máximo de terminais permitido pelo Orca. Feche um terminal de que não precisa mais e tente novamente."
+            "hostTerminalCap": "O host já está executando o máximo de terminais permitido pelo Orca. Feche um terminal de que não precisa mais e tente novamente.",
+            "copyErrorDetails": "Copiar detalhes do erro"
           },
           "CloseTerminalDialog": {
-            "automatic_resume_warning": "Este terminal não vai retomar automaticamente. Cancele e coloque o espaço de trabalho em suspensão para retomá-lo depois.",
             "1d1a7a9c1f": "Cancelar",
             "stop_agent_title": "Parar este agente?",
             "stop_command_title": "Parar o comando em execução?",
@@ -19784,6 +19802,7 @@
             "1e4b81d892": "Thump",
             "86af8d938c": "Bong",
             "80f7cc95b3": "Dois Tons",
+            "silent": "Silencioso",
             "017abebfa6": "Padrão do Sistema"
           }
         }
@@ -20661,7 +20680,8 @@
         "safetyReview": "{{agent}} relatou um aviso de revisão de segurança. Ver detalhes.",
         "truncatedResponse": "Resposta do provedor truncada (tamanho original: {{bytes}} bytes).",
         "forkedFrom": "Ramificado de",
-        "modelFallback": "Claude mudou de modelo: {{from}} → {{to}}."
+        "modelFallback": "Claude mudou de modelo: {{from}} → {{to}}.",
+        "forkedFromUnknown": "Ramificado de outro chat"
       },
       "composer": {
         "planMode": "Planejar",
@@ -21422,7 +21442,7 @@
       "queuedMessages": {
         "steer": "Orientar",
         "send": "Enviar",
-        "steerHint": "Enviar sem interromper o modelo",
+        "steerHint": "Enviar agora, enquanto o agente continua trabalhando",
         "sendHint": "Enviar esta mensagem agora",
         "delete": "Excluir",
         "moreActions": "Mais ações",
@@ -21677,7 +21697,12 @@
         "unconfirmedDetail": "Ela pode ter sido aberta. Confira o histórico de sessões antes de tentar novamente.",
         "failed": "{{agent}} não conseguiu ramificar este chat",
         "failedDetail": "Seu chat não foi alterado. Tente novamente.",
-        "commandWorking": "Não é possível criar uma ramificação enquanto {{agent}} responde. Execute /fork novamente quando terminar."
+        "commandWorking": "Não é possível criar uma ramificação enquanto {{agent}} responde. Execute /fork novamente quando terminar.",
+        "mark": "Fork ·",
+        "markedName": "{{mark}} {{name}}",
+        "accessibleName": "Fork: {{name}}",
+        "sourceTooltip": "Ramificação de {{name}}",
+        "unknownSourceTooltip": "Ramificação de outro chat"
       },
       "cardKindHidden": {
         "description": "Você pode alterar isso a qualquer momento em",
@@ -21840,7 +21865,7 @@
           "pinned": "Fixado",
           "unread": "Não lido",
           "comment": "Tem comentário",
-          "retainedDoneAgents": "Transcrições de agentes concluídos",
+          "finishedAgents": "Agentes concluídos",
           "contextPresence": "Abas abertas, terminais, comentários",
           "completelyEmpty": "Nada a perder",
           "noWorkspaces": "Nenhum espaço de trabalho encontrado.",
@@ -21958,7 +21983,7 @@
               "comment": "Comentário",
               "prunable": "Removível",
               "locked": "Bloqueado",
-              "retainedAgents": "Agentes concluídos"
+              "finishedAgents": "Agentes concluídos"
             }
           },
           "forceDeleteRisk_one": "{{count}} espaço de trabalho apresenta riscos no momento e pode exigir uma exclusão forçada",
@@ -22115,7 +22140,8 @@
       "TerminalContextMenu": {
         "copySessionId": "Copiar ID da Sessão",
         "copySessionIdSuccess": "ID da sessão copiado",
-        "copySessionIdError": "Não foi possível copiar o ID da sessão"
+        "copySessionIdError": "Não foi possível copiar o ID da sessão",
+        "copySessionIdUnavailable": "Nenhum ID de sessão para copiar"
       },
       "hostFile": {
         "updateHostForOutsideFiles": "Atualize o Orca em {{value0}} para abrir arquivos fora dos espaços de trabalho dele"
@@ -23559,6 +23585,8 @@
       "tabCloseAll": "Fechar todas as abas do editor",
       "tabRename": "Renomear aba ativa",
       "tabReopenClosed": "Reabrir aba fechada",
+      "tabMoveLeft": "Mover aba ativa para a esquerda",
+      "tabMoveRight": "Mover aba ativa para a direita",
       "tabNextSameType": "Próxima aba (mesmo tipo)",
       "tabPreviousSameType": "Aba anterior (mesmo tipo)",
       "tabNextAllTypes": "Próxima aba (todos os tipos)",
@@ -23569,6 +23597,7 @@
       "tabOpenQuickCommandsMenu": "Alternar menu de Comandos Rápidos",
       "editorFind": "Localizar no editor",
       "editorReplace": "Substituir no editor",
+      "editorToggleChangesView": "Alternar Visualização de Alterações",
       "fileExplorerUndo": "Desfazer operação de arquivo",
       "fileExplorerRedo": "Refazer operação de arquivo",
       "fileExplorerCopyPath": "Copiar caminho do arquivo",
@@ -23586,6 +23615,7 @@
       "chatFind": "Localizar no chat",
       "terminalToggleNativeChat": "Alternar entre a interface de chat e o terminal",
       "terminalClosePane": "Fechar painel ativo",
+      "terminalCopySessionId": "Copiar ID da Sessão",
       "terminalSplitRight": "Dividir terminal para a direita",
       "terminalSplitDown": "Dividir terminal para baixo",
       "terminalSwitchInputSource": "Alternar fonte de entrada / idioma (nativo)",

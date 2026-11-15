@@ -11,7 +11,7 @@ import { resolveReviewRepository } from '@/lib/source-control/review/review-owne
 import { findWorktreeById, getWorktreeLookupIndex } from '../refresh/worktree-refresh'
 import type { AppState } from '../../types'
 import type { Worktree } from '../../../../../shared/worktree/types'
-import type { Repo } from '../../../../../shared/repo-types'
+import type { Repo } from '../../../../../shared/repository/repo-types'
 
 export type LinkedReviewClearScope = {
   repository: Repo

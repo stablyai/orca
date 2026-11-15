@@ -183,6 +183,7 @@
         "fontFamily": "Fuente",
         "fontFamilyDescription": "Fuente de los mensajes, la actividad y el cuadro de mensaje.",
         "inheritFont": "Misma fuente que el IDE",
+        "systemFont": "Fuente del sistema",
         "fontPreviewLabel": "Vista previa de la fuente del chat",
         "fontPreview": "El veloz zorro marrón salta sobre el perro perezoso.",
         "title": "Interfaz de chat",
@@ -564,6 +565,10 @@
       "saving": "Guardando…",
       "save": "Guardar formateador",
       "710343e374": "Comando de formateo"
+    },
+    "groupHooks": {
+      "invalidSetup": "El archivo existe, pero Orca no encontró un script de configuración válido.",
+      "supportedKeys": "Define solo las claves admitidas: `scripts` y `setup`."
     }
   },
   "menu": {
@@ -913,7 +918,7 @@
             "33290e88ed": "Error al conectar perfil",
             "9fcb07a796": "Perfil conectado",
             "2f6c78a039": "Error al actualizar autenticación del perfil",
-            "a37b5e6d37": "Sesión cerrada del perfil",
+            "a37b5e6d37": "Sesión cerrada en Orca",
             "83600521e7": "Error al cerrar sesión",
             "76deec8f58": "Error al cambiar organización",
             "7d4bc516ee": "Error al cambiar perfil",
@@ -1490,6 +1495,15 @@
       "workspacePortBrowserOpen": {
         "systemBrowserHint": "{{shortcut}}+clic para abrir en el navegador del sistema",
         "tooltip": "{{label}}. {{hint}}"
+      },
+      "worktreePaletteEvidence": {
+        "workspaceComment": "Comentario del espacio de trabajo",
+        "createdByAutomation": "Creado por automatización",
+        "linkedTask": "Tarea vinculada",
+        "pullRequest": "Pull request",
+        "mergeRequest": "Merge request",
+        "linkedIssue": "Issue vinculado",
+        "listeningPort": "Puerto en escucha"
       }
     },
     "hooks": {
@@ -3112,6 +3126,9 @@
           "labelCount_one": "{{count}} etiqueta",
           "labelCount_other": "{{count}} etiquetas",
           "labelCount_many": "{{count}} etiquetas",
+          "authorCount_one": "{{count}} autor",
+          "authorCount_other": "{{count}} autores",
+          "authorCount_many": "{{count}} autores",
           "allStates": "Todos",
           "filterPullRequests": "Filtrar pull requests",
           "filterIssues": "Filtrar issues",
@@ -3266,6 +3283,7 @@
             "1e4b81d892": "Thump",
             "86af8d938c": "Bong",
             "80f7cc95b3": "Dos tonos",
+            "silent": "Silencioso",
             "017abebfa6": "Valor predeterminado del sistema"
           }
         }
@@ -3462,8 +3480,7 @@
             "stop_command_description": "Al cerrar esta terminal, se detendrá el comando que se está ejecutando en ella.",
             "dont_ask_again": "No volver a preguntar para terminales en ejecución",
             "stop_agent_confirm": "Detener agente",
-            "stop_command_confirm": "Detener y cerrar",
-            "automatic_resume_warning": "Esta terminal no se reanudará automáticamente. Cancele y ponga el espacio de trabajo en suspensión para reanudarlo más tarde."
+            "stop_command_confirm": "Detener y cerrar"
           },
           "MobileDriverOverlay": {
             "c6460cf584": "Recuperar control",
@@ -3531,7 +3548,8 @@
             "e16012e31e": "El demonio de terminal propietario de esta sesión salió, por lo que no se pudo recuperar la sesión y su desplazamiento hacia atrás. Abra una nueva terminal para continuar.",
             "sessionUnavailable": "Orca no pudo volver a conectarse a la sesión de terminal de este panel en el host. Abra una nueva terminal para continuar.",
             "sourceRestoring": "Reconectando este terminal: se está restableciendo su salida. La sesión aún está en marcha.",
-            "ownerHostMismatch": "La sesión guardada de este terminal pertenece a otra conexión de host, así que Orca no puede reconectarlo aquí. Abre un terminal nuevo para continuar."
+            "ownerHostMismatch": "La sesión guardada de este terminal pertenece a otra conexión de host, así que Orca no puede reconectarlo aquí. Abre un terminal nuevo para continuar.",
+            "copyErrorDetails": "Copiar detalles del error"
           },
           "TerminalProcessExitOverlay": {
             "capacityTitle": "Se alcanzó el límite de consolas de Git Bash",
@@ -4146,7 +4164,6 @@
             "c8857b40f7": "Actualizar datos de uso",
             "75ded02687": "Administrar cuentas…",
             "ff0fbe9311": "Activo",
-            "7657e3db9c": "Cuenta del Codex",
             "38b5647724": "Uso de Codex",
             "ba55303942": "Abrir detalles de Codex y cambiar de cuenta",
             "c35af53b73": "Iniciar sesión",
@@ -4154,7 +4171,6 @@
             "5c938d39ac": "semana",
             "54e8d6bb2d": "Fable",
             "a79c64f87e": "Fable",
-            "d450654fa2": "Cuenta de Claude",
             "11e2354daf": "Uso de Claude",
             "3dd7ddfae1": "Abrir detalles de Claude y cambiar de cuenta",
             "59c6e7b4e0": "Las sesiones visibles se reinician ahora. Las demás se reinician cuando su worktree se activa.",
@@ -4425,7 +4441,8 @@
             "compact": "Compact",
             "footerDetailAria": "Usage footer detail",
             "detailedTooltip": "Uso completo con barras, etiquetas y porcentajes",
-            "compactTooltip": "Uso condensado: un resumen por proveedor"
+            "compactTooltip": "Uso condensado: un resumen por proveedor",
+            "notChecked": "Sin comprobar"
           },
           "RemoteServerUpdateStatusSegment": {
             "updating": "Updating {{value0}}/{{value1}}",
@@ -4576,13 +4593,6 @@
             "activeAgents_one": "{{count}} agente activo",
             "activeAgents_other": "{{count}} agentes activos",
             "activeAgents_many": "{{count}} agentes activos",
-            "completedAgents_one": "{{count}} agente completado",
-            "completedAgents_other": "{{count}} agentes completados",
-            "completedAgents_many": "{{count}} agentes completados",
-            "activeAndCompletedAgents": "{{active}}, {{completed}}",
-            "completedAgentsRetained_one": "{{count}} agente completado conservado",
-            "completedAgentsRetained_other": "{{count}} agentes completados conservados",
-            "completedAgentsRetained_many": "{{count}} agentes completados conservados",
             "noTrackedAgents": "No hay agentes registrados en ejecución",
             "noTerminalTabs": "No hay pestañas de terminal",
             "liveTerminalTabs_one": "{{live}} en ejecución de {{count}} pestaña de terminal",
@@ -4642,12 +4652,17 @@
           "AccountSwitchList": {
             "used": "Usado",
             "left": "Restante",
-            "reset": "Restablecimiento"
+            "reset": "Restablecimiento",
+            "accounts": "Cuentas"
           },
           "InlineUsageBars": {
             "now": "ahora",
             "resetsNow": "se restablece ahora",
             "resetsIn": "se restablece en {{duration}}"
+          },
+          "UsageDisplayToggle": {
+            "showRemaining": "Mostrar uso restante",
+            "showUsed": "Mostrar uso consumido"
           }
         }
       },
@@ -6779,24 +6794,24 @@
                 "a3cdd9d9e6_one": "Git mantuvo la rama local {{count}} porque puede contener confirmaciones no fusionadas. Las ramas mantenidas no conservan las carpetas del espacio de trabajo; sus confirmaciones permanecen en el repositorio. Orca puede continuar liberando espacio en el disco del espacio de trabajo en segundo plano.",
                 "a3cdd9d9e6_other": "Git mantuvo {{count}} ramas locales porque pueden contener confirmaciones no fusionadas. Las ramas mantenidas no conservan las carpetas del espacio de trabajo; sus confirmaciones permanecen en el repositorio. Orca puede continuar liberando espacio en el disco del espacio de trabajo en segundo plano.",
                 "a3cdd9d9e6_many": "Git mantuvo {{count}} ramas locales porque pueden contener confirmaciones no fusionadas. Las ramas mantenidas no conservan las carpetas del espacio de trabajo; sus confirmaciones permanecen en el repositorio. Orca puede continuar liberando espacio en el disco del espacio de trabajo en segundo plano.",
-                "6310412304_one": "Revisar sucursal {{count}}",
-                "6310412304_other": "Revisar sucursales {{count}}",
-                "6310412304_many": "Revisar sucursales {{count}}",
+                "6310412304_one": "Revisar {{count}} rama",
+                "6310412304_other": "Revisar {{count}} ramas",
+                "6310412304_many": "Revisar {{count}} ramas",
                 "cea24c2b7d_one": "{{count}} espacio de trabajo eliminado",
                 "cea24c2b7d_other": "{{count}} espacios de trabajo eliminados",
                 "cea24c2b7d_many": "{{count}} espacios de trabajo eliminados",
-                "0e0379f24a_one": "{{count}} sucursal mantenida",
-                "0e0379f24a_other": "{{count}} sucursales mantenidas",
-                "0e0379f24a_many": "{{count}} sucursales mantenidas",
+                "0e0379f24a_one": "{{count}} rama conservada",
+                "0e0379f24a_other": "{{count}} ramas conservadas",
+                "0e0379f24a_many": "{{count}} ramas conservadas",
                 "4cf75caab7": "{{value0}}, {{value1}}",
-                "e61d78054f": "Eliminando sucursales locales: {{value0}}",
-                "1e1a5f6763": "Sucursales locales eliminadas: {{value0}}",
+                "e61d78054f": "Eliminando ramas locales: {{value0}}",
+                "1e1a5f6763": "Ramas locales eliminadas: {{value0}}",
                 "43d9395605": "{{value0}} eliminado, {{value1}} no eliminado",
-                "d42f1f14e0_one": "Reintentar rama {{count}}",
+                "d42f1f14e0_one": "Reintentar {{count}} rama",
                 "d42f1f14e0_other": "Reintentar {{count}} ramas",
                 "d42f1f14e0_many": "Reintentar {{count}} ramas",
-                "0e0379f24a": "{{count}} sucursales mantenidas",
-                "6310412304": "Revisar sucursales {{count}}",
+                "0e0379f24a": "{{count}} ramas conservadas",
+                "6310412304": "Revisar {{count}} ramas",
                 "a3cdd9d9e6": "Git mantuvo {{count}} ramas locales porque pueden contener confirmaciones no fusionadas. Las ramas mantenidas no conservan las carpetas del espacio de trabajo; sus confirmaciones permanecen en el repositorio. Orca puede continuar liberando espacio en el disco del espacio de trabajo en segundo plano.",
                 "cea24c2b7d": "{{count}} espacios de trabajo eliminados",
                 "d42f1f14e0": "Reintentar {{count}} ramas"
@@ -7404,7 +7419,10 @@
           "b4e9d3f2a1c5": "Se importaron {{value0}} cookies de {{value1}} a {{value2}}.",
           "c5a273a809": "Desde {{value0}}",
           "80bffd32bf": "Importar cookies",
-          "bd7d68f138": "Desde archivo…"
+          "bd7d68f138": "Desde archivo…",
+          "4054c458e1": "Borrar las cookies predeterminadas",
+          "3b662becd5": "¿Borrar las cookies del perfil predeterminado?",
+          "f159cf5a3e": "Es posible que se cierre tu sesión en sitios de este perfil."
         },
         "BrowserUseComputerUseNotice": {
           "79209b37b9": "Si importar cookies no encaja, Computer Use puede controlar apps locales y usar sesiones de navegador existentes donde aplique. Instala el skill Orca Computer Use; macOS también requiere permisos de privacidad.",
@@ -11216,6 +11234,7 @@
           "e27c8d45bf": "Los diagnósticos están desactivados por una variable de entorno."
         },
         "ShortcutCommandBlock": {
+          "retryAfterError": "Pulsa otro atajo o Esc para cancelar.",
           "eb72c52c28": "Pulsa un atajo o toca dos veces una tecla modificadora (p. ej., {{value0}}). Esc cancela.",
           "70b5d25583": "Atajo de {{value0}}",
           "287e07ddde": "Modificado",
@@ -12851,7 +12870,8 @@
           "catalog": "Catálogo",
           "clear": "Borrar filtros",
           "themes": "Temas",
-          "languages": "Lenguajes",
+          "codeLanguages": "Lenguajes de programación",
+          "translations": "Traducciones",
           "icons": "Iconos",
           "commands": "Comandos y paneles",
           "catalogLabel": "Filtrar por catálogo",
@@ -16255,10 +16275,9 @@
           "725868c75d": "Explorar carpetas",
           "5e7f0d8a80": "Selector de carpetas no disponible para archivos remotos",
           "30099dca46": "Carpeta",
-          "2d7d39dc63": ".Maryland",
           "c8ac7868e6": "Nombre del archivo",
           "b6ed807cc6": "Nombre",
-          "e365f3c638": "Asigne un nombre a su archivo de markdowns y elija una carpeta.",
+          "description": "Asigne un nombre a su archivo y elija una carpeta.",
           "674b046582": "Guardar como",
           "nameEmpty": "El nombre no puede estar vacío",
           "nameHasSeparators": "El nombre no puede contener separadores de ruta",
@@ -17283,7 +17302,7 @@
           "2df8970cd5": "Agente",
           "e353ab9516": "verificación previa",
           "15ea446b93": "Sesión",
-          "5405a09b1f": "Ejecutar ubicación",
+          "5405a09b1f": "Ubicación de ejecución",
           "2f8baf5360": "Crear desde",
           "578ff46987": "Próxima ejecución",
           "18763ded26": "Cronograma",
@@ -17293,7 +17312,7 @@
           "221916d93c": "Cree una automatización para comenzar a programar el trabajo de los agentes.",
           "b09b2384fd": "En pausa",
           "eaa02014f8": "Activado",
-          "29baf8f4c2": "Source",
+          "29baf8f4c2": "Origen",
           "lastRunFailed": "La última ejecución falló.",
           "noGrace": "Sin período de gracia",
           "graceMinutes_one": "{{count}} minuto",
@@ -19539,7 +19558,7 @@
         "listLabel": "Mensajes en cola",
         "steer": "Enviar ahora",
         "send": "Enviar",
-        "steerHint": "Enviar sin interrumpir al modelo",
+        "steerHint": "Enviar ahora, mientras el agente sigue trabajando",
         "sendHint": "Enviar este mensaje ahora",
         "delete": "Eliminar",
         "moreActions": "Más acciones",
@@ -19709,7 +19728,8 @@
         "safetyReviewApproved": "{{agent}} aprobó esta acción. Ver detalles.",
         "safetyReview": "{{agent}} notificó una advertencia de revisión de seguridad. Ver detalles.",
         "truncatedResponse": "Respuesta del proveedor truncada (tamaño original: {{bytes}} bytes).",
-        "forkedFrom": "Rama creada desde"
+        "forkedFrom": "Rama creada desde",
+        "forkedFromUnknown": "Rama creada desde otro chat"
       },
       "providerFrame": {
         "byteCount_one": "{{count}} byte",
@@ -20022,7 +20042,12 @@
         "failed": "{{agent}} no pudo crear una rama de este chat",
         "hostUnsupported": "Este host ejecuta una versión anterior de Orca. Actualiza Orca en el host y vuelve a intentarlo.",
         "failedDetail": "Tu chat no ha cambiado. Inténtalo de nuevo.",
-        "commandWorking": "No se puede crear una rama mientras {{agent}} responde. Vuelve a ejecutar /fork cuando termine."
+        "commandWorking": "No se puede crear una rama mientras {{agent}} responde. Vuelve a ejecutar /fork cuando termine.",
+        "mark": "Rama ·",
+        "markedName": "{{mark}} {{name}}",
+        "accessibleName": "Rama: {{name}}",
+        "sourceTooltip": "Rama de {{name}}",
+        "unknownSourceTooltip": "Rama de otro chat"
       },
       "cardKindHidden": {
         "description": "Puedes cambiar esto en cualquier momento en",
@@ -20154,7 +20179,7 @@
               "repo": "Repositorio",
               "blocker": "Bloqueo",
               "comment": "Comentario",
-              "retainedAgents": "Agentes finalizados"
+              "finishedAgents": "Agentes finalizados"
             },
             "idleDays": "Inactivo {{value0}}d+",
             "neverVisited": "Nunca visitado",
@@ -20221,7 +20246,7 @@
           "pinned": "Fijado",
           "unread": "Sin leer",
           "comment": "Tiene comentario",
-          "retainedDoneAgents": "Transcripciones de agente finalizadas",
+          "finishedAgents": "Agentes finalizados",
           "contextPresence": "Pestañas, terminales y comentarios abiertos",
           "completelyEmpty": "Nada más que perder",
           "noMatches": "Ningún espacio de trabajo coincide con estos filtros.",
@@ -20382,7 +20407,8 @@
       "TerminalContextMenu": {
         "copySessionId": "Copiar ID de sesión",
         "copySessionIdSuccess": "ID de sesión copiado",
-        "copySessionIdError": "No se pudo copiar el ID de sesión"
+        "copySessionIdError": "No se pudo copiar el ID de sesión",
+        "copySessionIdUnavailable": "No hay ningún ID de sesión para copiar"
       },
       "hostFile": {
         "updateHostForOutsideFiles": "Actualiza Orca en {{value0}} para abrir archivos fuera de sus espacios de trabajo"
@@ -22992,6 +23018,8 @@
       "tabCloseAll": "Cerrar todas las pestañas del editor",
       "tabRename": "Renombrar pestaña activa",
       "tabReopenClosed": "Reabrir pestaña cerrada",
+      "tabMoveLeft": "Mover pestaña activa a la izquierda",
+      "tabMoveRight": "Mover pestaña activa a la derecha",
       "tabNextSameType": "Pestaña siguiente (mismo tipo)",
       "tabPreviousSameType": "Pestaña anterior (mismo tipo)",
       "tabNextAllTypes": "Pestaña siguiente (todos los tipos)",
@@ -23002,6 +23030,7 @@
       "tabOpenQuickCommandsMenu": "Alternar menú de comandos rápidos",
       "editorFind": "Buscar en el editor",
       "editorReplace": "Reemplazar en el editor",
+      "editorToggleChangesView": "Alternar vista de cambios",
       "fileExplorerUndo": "Deshacer operación de archivo",
       "fileExplorerRedo": "Rehacer operación de archivo",
       "fileExplorerCopyPath": "Copiar ruta del archivo",
@@ -23019,6 +23048,7 @@
       "chatFind": "Buscar en el chat",
       "terminalToggleNativeChat": "Cambiar entre la interfaz de chat y el terminal",
       "terminalClosePane": "Cerrar panel activo",
+      "terminalCopySessionId": "Copiar ID de sesión",
       "terminalSplitRight": "Dividir terminal a la derecha",
       "terminalSplitDown": "Dividir terminal hacia abajo",
       "terminalSwitchInputSource": "Cambiar fuente de entrada / idioma (nativo)",

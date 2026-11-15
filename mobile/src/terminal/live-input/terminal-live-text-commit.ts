@@ -1,5 +1,5 @@
 import { getTerminalLiveSpecialKeyBytes } from './terminal-live-input'
-import { readUtf8CodePointAt } from '../../../../src/shared/utf8-byte-limits'
+import { readUtf8CodePointAt } from '../../../../src/shared/text/utf8-byte-limits'
 import {
   encodeModifyOtherKeysEnter,
   TERMINAL_KITTY_SHIFT_ENTER_INPUT

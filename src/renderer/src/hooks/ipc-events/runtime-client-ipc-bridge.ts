@@ -22,8 +22,8 @@ import { toRemoteRuntimePtyId } from '../../../../shared/remote-runtime/remote-r
 import { getEnvironmentSshStateGeneration } from '@/store/slices/ssh/runtime-environment-ssh'
 import { getRuntimeEnvironmentConnectionGeneration } from '@/store/slices/runtime-status/runtime-status-connection-generation'
 import { getRepoExecutionHostId, toRuntimeExecutionHostId } from '../../../../shared/execution-host'
-import type { RuntimeClientEvent } from '../../../../shared/runtime-client-events'
-import { navigationTargetsClients } from '../../../../shared/runtime-navigation'
+import type { RuntimeClientEvent } from '../../../../shared/remote-runtime/session-graph/runtime-client-events'
+import { navigationTargetsClients } from '../../../../shared/remote-runtime/session-graph/runtime-navigation'
 import { useAppStore } from '../../store/index'
 import { invalidateRemoteWorktreeLineage } from '../../store/slices/worktrees/metadata/worktree-lineage-readiness'
 import {

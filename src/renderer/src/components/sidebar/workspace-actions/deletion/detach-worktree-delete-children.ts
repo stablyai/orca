@@ -1,5 +1,5 @@
 import type { AppState } from '@/store/types'
-import { forEachWithConcurrency } from '../../../../../../shared/map-with-concurrency'
+import { forEachWithConcurrency } from '../../../../../../shared/concurrency/map-with-concurrency'
 import { isPathInsideOrEqual } from '../../../../../../shared/cross-platform-path'
 import { getWorktreeHostIdentity } from '../../../../../../shared/worktree/host-qualified-identity'
 import type { Worktree } from '../../../../../../shared/worktree/types'

@@ -1,4 +1,4 @@
-import { getPackagedElectronExecutable } from '../../runtime/packaged-cli-interpreter'
+import { getPackagedElectronExecutable } from '../../runtime/app-launch/packaged-cli-interpreter'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'

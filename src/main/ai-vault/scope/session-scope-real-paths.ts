@@ -9,7 +9,7 @@ import {
   relativePathInsideRoot
 } from '../../../shared/cross-platform-path'
 import { sessionFileExecutionNamespace } from '../../../shared/ai-vault/scanning/ai-vault-scope-cwd-match'
-import { parseWslUncPath } from '../../../shared/wsl-paths'
+import { parseWslUncPath } from '../../../shared/file-access/wsl-paths'
 
 type AiVaultScopeLink = { scopePath: string; realPath: string }
 

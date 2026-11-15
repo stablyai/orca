@@ -3,7 +3,7 @@
 import { homedir } from 'node:os'
 import { posix, win32 } from 'node:path'
 import { isWindowsAbsolutePathLike } from '../../../shared/cross-platform-path'
-import { parseWslUncPath, toWindowsWslDrivePath } from '../../../shared/wsl-paths'
+import { parseWslUncPath, toWindowsWslDrivePath } from '../../../shared/file-access/wsl-paths'
 
 export type PathOps = typeof posix
 

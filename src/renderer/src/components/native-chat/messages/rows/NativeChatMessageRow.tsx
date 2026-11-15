@@ -8,7 +8,7 @@ import type {
   NativeChatMessage,
   NativeChatToolCallBlock
 } from '../../../../../../shared/native-chat/native-chat-types'
-import { deriveNativeChatRowContent } from '../../../../../../shared/native-chat/transcript/native-chat-row-content'
+import { deriveNativeChatRowContent } from '../../../../../../shared/native-chat/transcript/row-content/native-chat-row-content'
 import { NativeChatReasoningRow } from '../reasoning/NativeChatReasoningRow'
 import { NativeChatNoticeRow } from '../notices/NativeChatNoticeRow'
 import { nativeChatNoticeBlock } from '../../../../../../shared/native-chat/native-chat-notice'

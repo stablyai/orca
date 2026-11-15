@@ -7,7 +7,7 @@ import {
   AntigravityChatSignInCompleteParams,
   AntigravityChatSignInFlowParams
 } from '../../../../../shared/rpc-contract/accounts/antigravity-accounts-params'
-import { AntigravityChatAuthConfigSchema } from '../../../../../shared/antigravity-chat-auth-config'
+import { AntigravityChatAuthConfigSchema } from '../../../../../shared/agent-accounts/antigravity/antigravity-chat-auth-config'
 import { getAntigravityAccountService } from '../../../../antigravity/native-account-host'
 import {
   cancelAntigravityChatSignIn,

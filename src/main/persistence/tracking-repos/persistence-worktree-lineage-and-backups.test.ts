@@ -17,8 +17,11 @@ import { createProfileStateStore } from '../profile-state/startup/profile-state-
 import { ProfileStateAuthorityBootstrapError } from '../profile-state/recovery/profile-state-recovery-required'
 import { restoreProfileStateJsonExport } from '../profile-state/legacy-json/profile-state-recovery'
 import { acquireProfileStateMaintenance } from '../profile-state/access/profile-state-access'
-import type { Repo } from '../../../shared/repo-types'
-import { folderWorkspaceKey, worktreeWorkspaceKey } from '../../../shared/workspace-scope'
+import type { Repo } from '../../../shared/repository/repo-types'
+import {
+  folderWorkspaceKey,
+  worktreeWorkspaceKey
+} from '../../../shared/workspace/identity/workspace-scope'
 
 const { loadUserSshConfigMock, sshConfigHostsToTargetsMock } = vi.hoisted(() => ({
   loadUserSshConfigMock: vi.fn(),

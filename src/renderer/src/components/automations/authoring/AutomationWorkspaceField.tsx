@@ -4,7 +4,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { CreateFromPicker } from '@/components/repo/CreateFromPicker'
 import { useTranslate } from '@/i18n/use-translate'
 import type { AutomationWorkspaceMode } from '../../../../../shared/automations/automation-definition'
-import type { Repo } from '../../../../../shared/repo-types'
+import type { Repo } from '../../../../../shared/repository/repo-types'
 import type { Worktree } from '../../../../../shared/worktree/types'
 import { AUTOMATION_EDITOR_SECTION_LABEL_CLASS, Field } from '../automation-page-parts'
 import { WorkspaceCombobox } from './WorkspaceCombobox'

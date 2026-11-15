@@ -95,8 +95,8 @@ it('applies restored effort after a withdrawn model control despite an interveni
       resume: {
         sessionId: PROVIDER_SESSION,
         key: 'acp:grok:saved',
-        mayBeUnsaved: () => false,
-        unannouncedLosses: () => []
+        mayBeUnsaved: async () => false,
+        lossKeys: []
       }
     },
     script: (agent) => {

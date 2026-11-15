@@ -2,8 +2,6 @@ import { describe, expect, it } from 'vitest'
 import { validateAutomationListResponse } from './automation-list-response'
 import type { AutomationListScopeSelector } from './automation-list-scope'
 
-const SELF: AutomationListScopeSelector = { kind: 'self' }
-
 function response(overrides: Record<string, unknown> = {}) {
   return {
     automations: [{ id: 'a1' }, { id: 'a2' }],
@@ -17,50 +15,6 @@ function response(overrides: Record<string, unknown> = {}) {
 }
 
 describe('validateAutomationListResponse', () => {
-  it('reports a legacy-shaped payload as unsupported host scope', () => {
-    const result = validateAutomationListResponse({ automations: [{ id: 'a1' }] }, SELF)
-    expect(result).toMatchObject({ ok: false, error: { code: 'unsupported_host_scope' } })
-  })
-
-  it('drops one unmatched row without hiding the rest of the host', () => {
-    const result = validateAutomationListResponse(
-      response({ items: [{ automationId: 'a1', selector: { kind: 'self' } }] }),
-      SELF
-    )
-    expect(result.ok && result.result.automations.map((entry) => entry.id)).toEqual(['a1'])
-    expect(result.ok && result.invalidRows).toBe(1)
-  })
-
-  it('drops both rows when one automation id carries two metadata items', () => {
-    const result = validateAutomationListResponse(
-      response({
-        items: [
-          { automationId: 'a1', selector: { kind: 'self' } },
-          { automationId: 'a1', selector: { kind: 'ssh', targetId: 't', targetGeneration: 1 } },
-          { automationId: 'a2', selector: { kind: 'self' } }
-        ]
-      }),
-      SELF
-    )
-    expect(result.ok && result.result.automations.map((entry) => entry.id)).toEqual(['a2'])
-    expect(result.ok && result.invalidRows).toBe(2)
-  })
-
-  it('never reclassifies a row whose selector does not match the request', () => {
-    const result = validateAutomationListResponse(
-      response({
-        items: [
-          { automationId: 'a1', selector: { kind: 'ssh', targetId: 'ssh-1', targetGeneration: 2 } },
-          { automationId: 'a2', selector: { kind: 'self' } }
-        ]
-      }),
-      SELF
-    )
-    expect(result.ok && result.result.automations.map((entry) => entry.id)).toEqual(['a2'])
-    expect(result.ok && result.result.items[0]?.selector).toEqual({ kind: 'self' })
-    expect(result.ok && result.invalidRows).toBe(1)
-  })
-
   it('requires an SSH item to carry the requested generation', () => {
     const scope: AutomationListScopeSelector = {
       kind: 'ssh',

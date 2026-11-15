@@ -15,7 +15,7 @@ import type {
   WatcherProcessSubscribeOptions,
   WatcherToHostMessage
 } from './parcel-watcher-process-protocol'
-import { errorMessage } from '../../../../shared/error-message'
+import { errorMessage } from '../../../../shared/errors/error-message'
 
 type WatcherSubscription = {
   unsubscribe: () => Promise<void>

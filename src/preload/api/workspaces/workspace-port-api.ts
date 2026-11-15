@@ -10,7 +10,7 @@ import type {
   WorkspacePortPageProbeResult,
   WorkspacePortScanRequest,
   WorkspacePortScanResult
-} from '../../../shared/workspace-ports'
+} from '../../../shared/workspace/ports/workspace-ports'
 
 export type WorkspacePortsApi = {
   scan: (args: WorkspacePortScanRequest) => Promise<WorkspacePortScanResult>

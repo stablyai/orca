@@ -8,7 +8,7 @@ import {
   extractPreviewContentText,
   normalizePreviewText
 } from './session-scanner-text-normalization'
-import { sliceAtCodeUnitLimit } from '../../../shared/surrogate-safe-text-slice'
+import { sliceAtCodeUnitLimit } from '../../../shared/text/surrogate-safe-text-slice'
 import type { SessionAccumulator } from '../session-scanner-types'
 import { transcriptMessagesFromDecodedMessage } from '../transcripts/session-transcript-message-content'
 import {

@@ -1,5 +1,6 @@
+import { awaitSshStartupReady } from './ssh-startup-ready'
 import { appendFileSync } from 'node:fs'
-import type { SshConnectionState } from '../../../shared/ssh-types'
+import type { SshConnectionState } from '../../../shared/remote-runtime/ssh/ssh-types'
 import { createCancelledConnectAttemptError } from '../../ssh/connection/reconnect/ssh-connect-attempt-cancellation'
 import {
   getSshProviderAuthority,
@@ -11,7 +12,7 @@ import {
   runAttributedToSshOwner
 } from '../../ssh/connection/ssh-connection-attribution'
 import { getSshTargetRegistryStore } from '../../ssh/targets/ssh-target-registry'
-import { getManagedOrcadFenceEnvironmentId } from '../../../shared/managed-orcad-ssh-owner'
+import { getManagedOrcadFenceEnvironmentId } from '../../../shared/remote-runtime/ssh/managed-orcad-ssh-owner'
 import { noteRuntimeEnvironmentConnectRequested } from '../runtime-environments/pairing/runtime-environment-pairing-refusal-registry'
 import {
   decideHostServer,
@@ -58,6 +59,7 @@ export async function connectTarget(
   targetId: string,
   options: { automatic?: boolean; quiet?: boolean } = {}
 ): Promise<SshConnectionState> {
+  await awaitSshStartupReady()
   const e2eProbePath = process.env.ORCA_E2E_FORBID_LOCAL_SSH_CONNECT_PROBE
   if (e2eProbePath) {
     appendFileSync(e2eProbePath, `${JSON.stringify(targetId)}\n`)
@@ -79,11 +81,11 @@ export async function connectTarget(
   if (managedEnvironmentId) {
     noteRuntimeEnvironmentConnectRequested(managedEnvironmentId)
   }
-  const liftedEnvironments = liftSshHostUserDisconnect(targetId)
+  const liftedEnvironments = await liftSshHostUserDisconnect(targetId)
   try {
     return await admitConnect(targetId)
   } finally {
-    resumeRuntimeEnvironmentStatus(liftedEnvironments)
+    await resumeRuntimeEnvironmentStatus(liftedEnvironments)
   }
 }
 
@@ -182,7 +184,7 @@ async function doConnect(
     throw new Error(`SSH target "${targetId}" not found`)
   }
   // Read after the lifecycle wait: a Stop or Forget this connect queued behind wrote the hold.
-  if (automatic && isManagedServerRemovalHeld(target)) {
+  if (automatic && (await isManagedServerRemovalHeld(target))) {
     throw createSshUserDisconnectedError(target.label)
   }
 

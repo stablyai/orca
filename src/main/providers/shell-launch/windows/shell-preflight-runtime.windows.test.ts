@@ -12,7 +12,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import * as pty from 'node-pty'
 import { afterEach, describe, expect, it } from 'vitest'
-import { CODEX_COMMAND_IDENTITY_ENV_KEYS } from '../../../../shared/codex-shell-function'
+import { CODEX_COMMAND_IDENTITY_ENV_KEYS } from '../../../../shared/shell/launch/agents/codex-shell-function'
 import { resolveGitBashPath } from '../../../pty/shell-startup/git-bash'
 import { resolveWindowsShellLaunchArgs } from './shell-args'
 

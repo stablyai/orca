@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import './runtime/packaged-cli-interpreter'
+import './runtime/app-launch/packaged-cli-interpreter'
 import {
   findCommandSpec,
   isCommandGroup,
@@ -17,7 +17,7 @@ import {
 } from './hosts/execution-host-flag'
 import { fetchSshTargetSummaries, listSshTargets } from './hosts/host-selector-alternatives'
 import { reportCliError } from './output/cli-error'
-import { RuntimeClientError } from './runtime/types'
+import { RuntimeClientError } from './runtime/connection/types'
 import { cliErrorExitCode } from './output/cli-exit-code'
 import { printHelp } from './discovery/help'
 import type { RuntimeClient } from './runtime/client'
@@ -29,6 +29,10 @@ import {
   isLocalEnvironmentSelector,
   refuseLocalManagementSelector
 } from './hosts/local-environment-selector'
+import {
+  closeAdmittedEnvironmentStore,
+  useInlineEnvironmentStoreForCli
+} from '../shared/remote-runtime/host-store/runtime-environment-store-execution'
 
 const COMMAND_PATHS = COMMAND_SPECS.flatMap((spec) => specPaths(spec))
 
@@ -45,7 +49,8 @@ function resolveInvocationCwd(): string {
 
 export async function main(
   argv = process.argv.slice(2),
-  cwd = resolveInvocationCwd()
+  cwd = resolveInvocationCwd(),
+  configureExecutable?: (commandPath: readonly string[]) => void
 ): Promise<void> {
   // Why: version audits use the bundled launcher; Electron intercepts direct binary version flags.
   if (argv.length === 1 && (argv[0] === '--version' || argv[0] === '-v')) {
@@ -59,6 +64,7 @@ export async function main(
     return
   }
   if (argv[0] === 'agent-teams-tmux') {
+    configureExecutable?.(['agent-teams-tmux'])
     await runAgentTeamsTmuxShim(argv.slice(1))
     return
   }
@@ -103,6 +109,7 @@ export async function main(
   try {
     // Report invalid commands before runtime lookup can mask them with connection errors.
     validateCommandAndFlags(COMMAND_SPECS, parsed)
+    configureExecutable?.(parsed.commandPath)
     const commandSpec = findCommandSpec(COMMAND_SPECS, parsed.commandPath)
     refuseConflictingSessionCallerFlags(commandSpec, parsed.flags)
     await refuseLocalManagementSelector(parsed.commandPath, parsed.flags)
@@ -263,5 +270,10 @@ async function runAgentTeamsTmuxShim(argv: string[]): Promise<void> {
 }
 
 if (require.main === module) {
-  void main()
+  void main(process.argv.slice(2), resolveInvocationCwd(), (commandPath) => {
+    // Serve supervises a local host; claude-teams supervises its agent child and stays on the worker default.
+    if (commandPath[0] !== 'serve') {
+      useInlineEnvironmentStoreForCli()
+    }
+  }).finally(closeAdmittedEnvironmentStore)
 }

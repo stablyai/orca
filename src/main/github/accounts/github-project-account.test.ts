@@ -55,8 +55,8 @@ vi.mock('electron', () => ({
   webContents: { fromId: () => null, getAllWebContents: () => [] }
 }))
 vi.mock('../../ipc/ui', () => ({ sendToTrustedUIRenderer: vi.fn() }))
-import type { Project } from '../../../shared/project-types'
-import type { Repo } from '../../../shared/repo-types'
+import type { Project } from '../../../shared/project/project-types'
+import type { Repo } from '../../../shared/repository/repo-types'
 import { ghRepoExecOptions, githubRepoContext } from '../repositories/github-repository-identity'
 import { installGitHubProjectAccounts } from './github-project-account'
 

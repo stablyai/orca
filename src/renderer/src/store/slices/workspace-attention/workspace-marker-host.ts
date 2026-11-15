@@ -62,7 +62,7 @@ function markerTabHost(
 ) {
   const layout = state.terminalLayoutsByTabId[tab.id]
   const leafId = parsePaneKey(paneKey)?.leafId
-  const entry = state.agentStatusByPaneKey[paneKey]
+  const entry = state.agentStatusByPaneKey.get(paneKey)
   const ptyId =
     (leafId ? layout?.ptyIdsByLeafId?.[leafId] : undefined) ??
     index.terminalPtyById.get(tab.id) ??

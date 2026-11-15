@@ -10,7 +10,7 @@ import type {
   Repo,
   WorktreeVisibilitySourcePreferences,
   WorktreeVisibilityDefaults
-} from '../../repo-types'
+} from '../../repository/repo-types'
 
 export const MAX_CUSTOM_WORKTREE_VISIBILITY_SOURCES = 32
 const MAX_SOURCE_ID_LENGTH = 128

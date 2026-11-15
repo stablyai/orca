@@ -4,12 +4,12 @@ import type { CommandTemplateBackslash } from '../../../shared/source-control/ai
 import {
   getAgentModelProbeSpec,
   type AgentModelProbeSpec
-} from '../../../shared/agent-model-probe-spec'
+} from '../../../shared/agent-session/options/model-catalog/agent-model-probe-spec'
 import type { CommitMessagePlan } from '../../../shared/source-control/ai/generation/commit-message-plan'
 import {
   runClaudeBackgroundAttempts,
   type ClaudeBackgroundFailedExit
-} from '../../../shared/claude-background-run-isolation'
+} from '../../../shared/text-generation/launch/claude-background-run-isolation'
 import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
 import { resolveCodexHomeProcessLockKeyForSpawnEnv } from '../../codex-cli/codex-home-process-lock'
 import { supervisedProviderSpawnFailure } from '../../provider-process/provider-spawn-failure-report'

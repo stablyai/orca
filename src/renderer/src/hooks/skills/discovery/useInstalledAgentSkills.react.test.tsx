@@ -8,7 +8,7 @@ import type {
   SkillDiscoveryResult,
   SkillDiscoverySource,
   SkillDiscoveryTarget
-} from '../../../../../shared/skills'
+} from '../../../../../shared/skills/discovery/skills'
 
 import type { GlobalSettings } from '../../../../../shared/global-settings-types'
 

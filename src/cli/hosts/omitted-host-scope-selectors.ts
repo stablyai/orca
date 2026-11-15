@@ -3,7 +3,7 @@ import {
   type ExecutionHostId,
   type ParsedExecutionHost
 } from '../../shared/execution-host'
-import type { RuntimeListingHostScope } from '../../shared/runtime-listing-host-scope'
+import type { RuntimeListingHostScope } from '../../shared/execution-host/runtime-listing-host-scope'
 import { findEnvironmentByName } from './host-selector-alternatives'
 
 export type OmittedHostScopeSelector = {
@@ -40,11 +40,11 @@ export async function resolveOmittedHostScopeSelectors(
 
 async function listPairedEnvironments(): Promise<{ id: string; name: string }[]> {
   const [, { getDefaultUserDataPath }, { listEnvironments }] = await Promise.all([
-    import('../runtime/environments.js'),
-    import('../runtime/metadata.js'),
+    import('../runtime/pairing/environments.js'),
+    import('../runtime/profile/metadata.js'),
     import('../../shared/remote-runtime/host-store/runtime-environment-store.js')
   ])
-  return listEnvironments(getDefaultUserDataPath()).map((environment) => ({
+  return (await listEnvironments(getDefaultUserDataPath())).map((environment) => ({
     id: environment.id,
     name: environment.name
   }))

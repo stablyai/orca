@@ -3,20 +3,23 @@ import type { ProcessResult } from '@orca/process-host/process-spec'
 import {
   localAccountRuntimeTargetKey,
   type LocalAccountRuntimeTarget
-} from '../../../../shared/local-account-runtime'
+} from '../../../../shared/agent-accounts/local-account-runtime'
 import {
   resolveWslDefaultDistro,
   UNRESOLVED_WSL_DEFAULT
 } from '../../../wsl/discovery/wsl-default-distro'
 import { runWslProcess } from '../../../wsl/execution/wsl-runner'
 import { isWslDistroRunningForBackgroundWork } from '../../../wsl/discovery/wsl-background-distro-gate'
-import { hasReachedAppVersion, parseCliVersion } from '../../../../shared/app-version'
+import {
+  hasReachedAppVersion,
+  parseCliVersion
+} from '../../../../shared/app-lifecycle/identity/app-version'
 import { resolveCommandOnLocalPath } from '../../../ipc/command-path/command-path-resolver'
 import { hostShellEnvironment } from '../../../runtime/agent-session/environment/structured-agent-shell-environment'
 import type {
   ProviderRateLimits,
   UsageRateLimitFailureKind
-} from '../../../../shared/rate-limit-types'
+} from '../../../../shared/agent-usage/rate-limits/rate-limit-types'
 import {
   ANTIGRAVITY_MIN_USAGE_VERSION,
   ANTIGRAVITY_PROBE_ENV,

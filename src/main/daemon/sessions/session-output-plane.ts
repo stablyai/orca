@@ -2,7 +2,7 @@ import {
   resolveProcessExitCause,
   type TerminalExitCause
 } from '../../../shared/terminal/pty/lifecycle/terminal-exit-cause'
-import type { XtermConptyOptions } from '../../../shared/xterm-conpty-options'
+import type { XtermConptyOptions } from '../../../shared/terminal/pty/native-process/xterm-conpty-options'
 import { HeadlessEmulator } from '../emulation/headless-emulator'
 import { StartupDeviceAttributesQueryFilter } from '../emulation/startup-device-attributes-responder'
 import { normalizePtySize } from '../protocol/daemon-pty-size'

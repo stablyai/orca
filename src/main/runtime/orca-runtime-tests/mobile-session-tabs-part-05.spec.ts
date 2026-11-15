@@ -6,7 +6,7 @@ import { committingSpawn, registerLivePty } from './bind-first-pane.test-fixture
 import './runtime-test-module-registration.spec'
 import { OrcaRuntimeService } from '../orca-runtime'
 import { electronMocks } from '../orca-runtime-test-mocks/setup.spec'
-import type { RuntimeMobileSessionTabsResult } from '../../../shared/runtime-session-contracts'
+import type { RuntimeMobileSessionTabsResult } from '../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import {
   HEADLESS_LEAF_ID,
   TEST_WORKTREE_ID,
@@ -34,7 +34,7 @@ describe('OrcaRuntimeService', () => {
     })
     runtime.onPtyData('laptop-created-pty', '\x1b]0;Claude working\x07', 123)
     runtime.attachWindow(1)
-    runtime.syncWindowGraph(1, {
+    await runtime.syncWindowGraph(1, {
       tabs: [
         {
           tabId: 'laptop-tab',
@@ -102,7 +102,7 @@ describe('OrcaRuntimeService', () => {
       getForegroundProcess: async () => null
     })
     const events: RuntimeMobileSessionTabsResult[] = []
-    runtime.onMobileSessionTabsChanged((snapshot) => events.push(snapshot))
+    runtime.onMobileSessionTabsChanged((snapshot) => events.push(snapshot), undefined, 'mobile')
 
     const laptopTerminal = await runtime.createTerminal(`id:${TEST_WORKTREE_ID}`, {
       tabId: 'laptop-tab',
@@ -139,7 +139,7 @@ describe('OrcaRuntimeService', () => {
       getForegroundProcess: async () => null,
       listProcesses: async () => []
     })
-    runtime.syncWindowGraph(1, {
+    await runtime.syncWindowGraph(1, {
       tabs: [
         {
           tabId: 'host-tab',
@@ -208,7 +208,7 @@ describe('OrcaRuntimeService', () => {
       getForegroundProcess: async () => null,
       listProcesses: async () => []
     })
-    runtime.syncWindowGraph(1, {
+    await runtime.syncWindowGraph(1, {
       tabs: [
         {
           tabId: 'host-tab',
@@ -299,7 +299,7 @@ describe('OrcaRuntimeService', () => {
       getForegroundProcess: async () => null,
       listProcesses: async () => []
     })
-    runtime.syncWindowGraph(1, {
+    await runtime.syncWindowGraph(1, {
       tabs: [
         {
           tabId: 'host-tab',
@@ -370,7 +370,7 @@ describe('OrcaRuntimeService', () => {
       tabsByWorktree: { ...session.tabsByWorktree, [TEST_WORKTREE_ID]: [] },
       terminalLayoutsByTabId: {}
     })
-    runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
+    await runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
 
     acknowledged.resolve()
     await expect(pending).resolves.toEqual({ closed: true, retirementConfirmed: true })
@@ -420,7 +420,7 @@ describe('OrcaRuntimeService', () => {
       kill,
       getForegroundProcess: async () => null
     })
-    runtime.syncWindowGraph(0, { tabs: [], leaves: [] })
+    await runtime.syncWindowGraph(0, { tabs: [], leaves: [] })
     const terminal = await runtime.createTerminal(`id:${TEST_WORKTREE_ID}`, {
       tabId: 'durable-tab',
       leafId: HEADLESS_LEAF_ID
@@ -455,7 +455,7 @@ describe('OrcaRuntimeService', () => {
         getForegroundProcess: async () => null,
         listProcesses: async () => []
       })
-      runtime.syncWindowGraph(1, {
+      await runtime.syncWindowGraph(1, {
         tabs: [
           {
             tabId: 'host-tab',

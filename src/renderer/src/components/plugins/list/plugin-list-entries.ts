@@ -8,7 +8,7 @@ import {
   pluginCatalogReleaseTypes,
   type PluginCatalogType
 } from '../../../../../shared/plugins/catalog/plugin-catalog-release'
-import { compareAppVersions } from '../../../../../shared/app-version'
+import { compareAppVersions } from '../../../../../shared/app-lifecycle/identity/app-version'
 import {
   gitRepositoryOwnerLabel,
   splitQualifiedPluginKey

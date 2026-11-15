@@ -331,7 +331,9 @@
       "github": {
         "PRFilterSections": {
           "labelCount_one": "{{count}} label",
-          "labelCount_other": "{{count}} labels"
+          "labelCount_other": "{{count}} labels",
+          "authorCount_one": "{{count}} author",
+          "authorCount_other": "{{count}} authors"
         },
         "project": {
           "ProjectPicker": {
@@ -1216,10 +1218,6 @@
             "browserTabsOpen_other": "{{count}} browser tabs open",
             "changedFiles_one": "{{count}} changed file",
             "changedFiles_other": "{{count}} changed files",
-            "completedAgentsRetained_one": "{{count}} completed agent retained",
-            "completedAgentsRetained_other": "{{count}} completed agents retained",
-            "completedAgents_one": "{{count}} completed agent",
-            "completedAgents_other": "{{count}} completed agents",
             "dirtyEditorBuffers_one": "{{count}} dirty editor buffer",
             "dirtyEditorBuffers_other": "{{count}} dirty editor buffers",
             "editorFilesOpen_one": "{{count}} editor file open",
@@ -1610,6 +1608,11 @@
     }
   },
   "components": {
+    "RepositoryBrowserProfileSection": {
+      "keywordCookies": "cookies",
+      "keywordProfile": "browser profile",
+      "keywordSignIn": "sign in"
+    },
     "native-chat": {
       "approval": {
         "allow": "Allow",
@@ -1854,6 +1857,7 @@
         "continuedOutside": "Continued outside this chat.",
         "continuedOutsideRewound": "Continued outside this chat. Earlier replies above are no longer in this conversation's history.",
         "forkedFrom": "Forked from",
+        "forkedFromUnknown": "Forked from another chat",
         "historyItemTooLarge": "This part of the chat was too large to show.",
         "historyRepaired": "Part of this chat's history couldn't be loaded.",
         "modelFallback": "Claude switched models: {{from}} → {{to}}.",
@@ -2130,6 +2134,10 @@
         "change": {
           "description_one": "This change makes 1 more workspace match right now. It'll be deleted a few seconds after you apply it.",
           "description_other": "This change makes {{count}} more workspaces match right now. They'll be deleted a few seconds after you apply it."
+        },
+        "disableIgnoredFiles": {
+          "matches_one": "Without pinning, {{count}} additional workspace will be deleted a few seconds after you turn off protection.",
+          "matches_other": "Without pinning, {{count}} additional workspaces will be deleted a few seconds after you turn off protection."
         },
         "enable": {
           "description_one": "1 workspace matches right now. It'll be deleted a few seconds after you turn this on.",

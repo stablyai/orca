@@ -1,7 +1,7 @@
 import { z } from 'zod'
-import { PI_THINKING_LEVELS } from '../../../../shared/agent-session/options/structured-agent-session-effective-effort'
-import type { AgentSessionOptionsResult } from '../../../../shared/agent-session/options/agent-session-options-result'
-import { isPiModelOptionId } from '../../../../shared/agent-session/options/agent-session-option-catalog-pi'
+import { PI_THINKING_LEVELS } from '../../../../shared/agent-session/options/reconciliation/structured-agent-session-effective-effort'
+import type { AgentSessionOptionsResult } from '../../../../shared/agent-session/options/protocol/agent-session-options-result'
+import { isPiModelOptionId } from '../../../../shared/agent-session/options/catalog-providers/agent-session-option-catalog-pi'
 import { piRpcModelSchema } from './rpc-model-schema'
 
 export type PiRpcRequester = {

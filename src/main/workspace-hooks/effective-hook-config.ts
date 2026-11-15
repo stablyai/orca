@@ -5,7 +5,7 @@ import type {
   OrcaHooks,
   SetupRunPolicy
 } from '../../shared/orca-yaml-hook-types'
-import type { WorkspaceHookOwner } from '../../shared/workspace-hook-owner'
+import type { WorkspaceHookOwner } from '../../shared/workspace-setup/hooks/workspace-hook-owner'
 import type { SetupDecision } from '../../shared/worktree/create-types'
 import type { WorktreeDefaultTabsLaunch } from '../../shared/worktree/creation/launch-types'
 

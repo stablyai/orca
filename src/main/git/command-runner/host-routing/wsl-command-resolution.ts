@@ -1,13 +1,13 @@
 import { assertWslDistroAllowed } from '@orca/process-host/wsl-distro-allowlist'
 import { getDefaultWslDistro } from '../../../wsl/discovery/distro-catalog'
 import { parseWslPath } from '../../../wsl/filesystem/unc-path-access'
-import type { WslUncPathInfo as WslPathInfo } from '../../../../shared/wsl-paths'
+import type { WslUncPathInfo as WslPathInfo } from '../../../../shared/file-access/wsl-paths'
 import {
   buildWslCapturedLoginShellCommand,
   buildWslExecArgs,
   buildWslLoginShellCommand,
   type WslCapturedLoginShellCommand
-} from '../../../../shared/wsl-login-shell-command'
+} from '../../../../shared/shell/wsl/wsl-login-shell-command'
 import { quotePosixShell } from '../../../../shared/shell/launch/shell-argument-quoting'
 import { UNTRANSLATED_GIT_OUTPUT_ENV } from '../../../../shared/git/commands/git-output-locale'
 import type { WslGitReadEnvironment } from './wsl-git-read-environment'

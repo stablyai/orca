@@ -2,7 +2,7 @@ import { AgentConversationCopyError } from '../../native-chat/conversation-adopt
 import { existsSync } from 'node:fs'
 import { rm } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
-import type { AgentSessionRewindFork } from '../../../shared/agent-session/lifecycle/agent-session-rewind'
+import type { AgentSessionRewindFork } from '../../../shared/agent-session/lifecycle/rewind/agent-session-rewind'
 import { spawnWorkerThread } from '../../worker-threads/worker-thread-spawn'
 import {
   currentWorkerEntryLayout,

@@ -6,8 +6,8 @@ import type { Store } from '../../../persistence/loading-store/store'
 import type * as RepoWorktrees from '../../../workspaces/catalog/repo-worktrees'
 import { listRepoWorktreeGraph } from '../../../workspaces/catalog/repo-worktrees'
 import type { FolderWorkspace } from '../../../../shared/folder-workspaces/folder-workspace-types'
-import type { ProjectGroup } from '../../../../shared/project-group-types'
-import type { Repo } from '../../../../shared/repo-types'
+import type { ProjectGroup } from '../../../../shared/project/groups/project-group-types'
+import type { Repo } from '../../../../shared/repository/repo-types'
 import { resolveAuthorizedPath } from './filesystem-auth'
 import {
   __resetCreatedWorktreeRootsForTests,

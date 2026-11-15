@@ -2,7 +2,7 @@ import {
   captureBrowserInitializationDelivery,
   recordBrowserInitializationReceipt
 } from '../browser-initialization-presentation'
-import type { RuntimeMobileSessionTabsResult } from '../../../../../shared/runtime-session-contracts'
+import type { RuntimeMobileSessionTabsResult } from '../../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import { nextReceivedSessionTabsFrame } from '../state'
 
 /** Share request identity with joiners. A fresh join-time receipt could rank a pre-close list above the retraction that overtook it; joiners never run load themselves. */
