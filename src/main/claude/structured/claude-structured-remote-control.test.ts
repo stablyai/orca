@@ -72,4 +72,23 @@ describe('Claude chat Remote Control', () => {
     expect(remoteControlRequests()).toBe(1)
     expect(claudeWasSent(connection, 'ship it')).toBe(true)
   })
+
+  it('keeps the chat working while Remote Control has not answered', async () => {
+    const pending = Promise.withResolvers<unknown>()
+    const { adapter, connection, remoteControlRequests } = await openChat(
+      { remote_control_auto_enable: true },
+      () => pending.promise
+    )
+
+    await adapter.dispatch({
+      sessionId: 'session-1',
+      clientMessageId: 'client-turn-1',
+      body: USER_MESSAGE,
+      fence: 7
+    })
+
+    expect(remoteControlRequests()).toBe(1)
+    expect(claudeWasSent(connection, 'ship it')).toBe(true)
+    pending.resolve({})
+  })
 })
