@@ -12,14 +12,16 @@ export const ElectronSidecarTabSchema = z
     index: z.number().optional(),
     active: z.boolean().optional(),
     certificateFailure: CertificateFailure,
-    openerBrowserPageId: z.string().optional()
+    openerBrowserPageId: z.string().optional(),
+    worktreeId: z.string().nullable().optional()
   })
   .passthrough()
 const ElectronSidecarResult = z
   .object({
     browserPageId: z.string().optional(),
     sourceBrowserPageId: z.string().optional(),
-    tab: ElectronSidecarTabSchema.optional()
+    tab: ElectronSidecarTabSchema.optional(),
+    worktreeId: z.string().nullable().optional()
   })
   .passthrough()
 
@@ -180,6 +182,9 @@ export class ElectronSidecarTabRegistry {
       return result
     }
     const rewritten = { ...parsed.data }
+    if ('worktreeId' in rewritten) {
+      rewritten.worktreeId = this.projectedWorktreeId(rewritten.browserPageId, rewritten.worktreeId)
+    }
     if (rewritten.browserPageId) {
       rewritten.browserPageId = this.publicPageId(rewritten.browserPageId)
     }
@@ -196,6 +201,7 @@ export class ElectronSidecarTabRegistry {
     return {
       ...tab,
       browserPageId: this.publicPageId(tab.browserPageId),
+      worktreeId: this.projectedWorktreeId(tab.browserPageId, tab.worktreeId),
       ...(tab.openerBrowserPageId
         ? { openerBrowserPageId: this.publicPageId(tab.openerBrowserPageId) }
         : {}),
@@ -208,5 +214,14 @@ export class ElectronSidecarTabRegistry {
           }
         : {})
     }
+  }
+
+  // The sidecar has no workspace catalog, so a reply's worktreeId is null. Scope lives on the page registered here.
+  private projectedWorktreeId(
+    sidecarPageId: string | undefined,
+    reported: string | null | undefined
+  ): string | null {
+    const page = sidecarPageId ? this.pagesBySidecarId.get(sidecarPageId) : undefined
+    return page ? (page.worktreeId ?? null) : (reported ?? null)
   }
 }
