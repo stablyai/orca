@@ -1,5 +1,4 @@
 import type { IDisposable } from '@xterm/xterm'
-import { TERMINAL_KITTY_SHIFT_ENTER_INPUT } from '../../../../../../shared/terminal/protocol/input-modes/terminal-modified-enter-encoding'
 import type { PaneManager } from '@/lib/pane-manager/pane-manager'
 import type { PtyTransport } from '../../pty-transport/pty-transport-types'
 import type { PaneCwdMap } from '../../layout/split/resolve-split-cwd'
@@ -19,12 +18,6 @@ import {
   getTerminalImeModifiedEnterKind
 } from '../ime/terminal-ime-deferred-newline'
 import { createTerminalImeDeferredChordSender } from '../ime/terminal-ime-deferred-chord'
-import {
-  sendCapturedTerminalInput,
-  requestCapturedTerminalReconfirmation,
-  type TerminalCapturedInputBinding
-} from '../paste/terminal-captured-input-dispatch'
-import { recordTerminalUserInputForLeaf } from '../terminal-input-activity'
 import { useAppStore } from '@/store/index'
 import { makePaneKey } from '../../../../../../shared/workspace-layout/stable-pane-id'
 import { resolveWindowsShiftEnterEncodingForPane } from './terminal-windows-shift-enter'
@@ -33,10 +26,12 @@ import { titleHasExplicitAgentIdentity } from '../../titles/title-agent-identity
 import { isTuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-agent-config'
 import { resolveTerminalInputHostPlatform } from '../terminal-input-host-platform'
 import { isTerminalPaneLocalWindowsConpty } from '../../host-state/terminal-pane-local-windows-conpty'
+import { readLocalWindowsCmdPromptPane } from './terminal-local-windows-cmd-conpty'
 import { keyboardEventBelongsToScope } from './terminal-keyboard-scope'
 import { isEditableTarget } from './terminal-keyboard-shortcut-matching'
 import { resolveTerminalShortcutAction as resolveTerminalKeyboardShortcutAction } from './terminal-shortcut-policy'
 import { createTerminalNativeOnlyShortcutTracker } from './terminal-native-only-shortcut'
+import { createTerminalKeyboardInputSender } from './terminal-keyboard-captured-input'
 
 type RuntimeOptions = {
   tabId: string
@@ -128,9 +123,7 @@ export function createTerminalKeyboardRuntime(options: RuntimeOptions) {
       }
     }
   }
-  const isLocalWindowsConptyPane = (): boolean => {
-    const manager = managerRef.current
-    const pane = manager?.getActivePane() ?? manager?.getPanes()[0]
+  const isLocalWindowsConptyForPane = (pane: { id: number } | undefined): boolean => {
     if (!pane) {
       return false
     }
@@ -146,6 +139,10 @@ export function createTerminalKeyboardRuntime(options: RuntimeOptions) {
       transport: paneTransportsRef.current.get(pane.id) ?? null
     })
   }
+  const isLocalWindowsConptyPane = (): boolean =>
+    isLocalWindowsConptyForPane(
+      managerRef.current?.getActivePane() ?? managerRef.current?.getPanes()[0]
+    )
   const getActivePaneWindowsShiftEnterEncoding = () => {
     const manager = managerRef.current
     const pane = manager?.getActivePane() ?? manager?.getPanes()[0]
@@ -216,6 +213,15 @@ export function createTerminalKeyboardRuntime(options: RuntimeOptions) {
     }
     return !titleHasExplicitAgentIdentity(state.runtimePaneTitlesByTabId[tabId]?.[pane.id] ?? '')
   }
+  const isPaneLocalCmdPrompt = (pane: { id: number; leafId: string } | undefined): boolean => {
+    return readLocalWindowsCmdPromptPane({
+      isWindows,
+      tabId,
+      pane,
+      transport: pane && paneTransportsRef.current.get(pane.id),
+      isLocalWindowsConpty: () => isLocalWindowsConptyForPane(pane)
+    })
+  }
   const resolveShortcutEvent = (
     event: Parameters<typeof resolveTerminalKeyboardShortcutAction>[0]
   ) =>
@@ -234,43 +240,19 @@ export function createTerminalKeyboardRuntime(options: RuntimeOptions) {
       terminalShortcutPolicy,
       hasActivePaneCtrlEnterCsiUAuthority,
       getModifyOtherKeysActivePane,
-      isActivePaneNonAgentFullScreen
+      isActivePaneNonAgentFullScreen,
+      () =>
+        isPaneLocalCmdPrompt(
+          managerRef.current?.getActivePane() ?? managerRef.current?.getPanes()[0]
+        )
     )
-  const createCapturedInputSender = (pane: { id: number; leafId: string }, data: string) => {
-    const capturedTransport = paneTransportsRef.current.get(pane.id)
-    const capturedPtyId = capturedTransport?.getPtyId() ?? null
-    const capturedBinding = panePtyBindingsRef.current.get(pane.id) as
-      | (IDisposable & TerminalCapturedInputBinding)
-      | undefined
-    return (overrideData = data) => {
-      const currentManager = managerRef.current
-      const sent = sendCapturedTerminalInput({
-        targetPaneMounted:
-          currentManager
-            ?.getPanes()
-            .some((candidate) => candidate.id === pane.id && candidate.leafId === pane.leafId) ===
-          true,
-        currentTransport: paneTransportsRef.current.get(pane.id),
-        capturedTransport,
-        capturedPtyId,
-        data: overrideData,
-        onAccepted: () => {
-          if (panePtyBindingsRef.current.get(pane.id) === capturedBinding) {
-            capturedBinding?.markShortcutTerminalInputSent?.()
-          }
-        }
-      })
-      if (sent) {
-        recordTerminalUserInputForLeaf(tabId, pane.leafId)
-        if (overrideData === TERMINAL_KITTY_SHIFT_ENTER_INPUT) {
-          requestCapturedTerminalReconfirmation(
-            panePtyBindingsRef.current.get(pane.id),
-            capturedBinding
-          )
-        }
-      }
-    }
-  }
+  const createCapturedInputSender = createTerminalKeyboardInputSender({
+    tabId,
+    managerRef,
+    paneTransportsRef,
+    panePtyBindingsRef,
+    isLocalCmdPrompt: isPaneLocalCmdPrompt
+  })
   return {
     optionKeyLocations,
     optionKittyReleases,
