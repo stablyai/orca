@@ -98,6 +98,7 @@ export async function withLocalCheckSlot(
   if (inherited) {
     const lease = await readLease(inherited)
     if (lease && isAlive(lease.pid)) {
+      signal?.throwIfAborted()
       return run()
     }
   }

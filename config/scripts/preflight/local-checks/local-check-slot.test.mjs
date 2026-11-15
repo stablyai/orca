@@ -189,3 +189,26 @@ it('cancels a queued check without running it or retaining a reservation', async
   }
   await expect(withLocalCheckSlot(() => 42, { directory, env: {} })).resolves.toBe(42)
 })
+
+it('honors cancellation while inheriting an active reservation', async () => {
+  const { directory } = await setup()
+  const env = {}
+  await withLocalCheckSlot(
+    async () => {
+      const controller = new AbortController()
+      const check = withLocalCheckSlot(
+        () => {
+          throw new Error('Cancelled check started')
+        },
+        {
+          directory,
+          env,
+          signal: controller.signal
+        }
+      )
+      controller.abort()
+      await expect(check).rejects.toMatchObject({ name: 'AbortError' })
+    },
+    { directory, env }
+  )
+})
