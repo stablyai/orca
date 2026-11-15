@@ -21,6 +21,12 @@ export function releaseRunMarker(runId) {
   return `\n\n<!-- orca-release-run: ${runId} -->\n`
 }
 
+// Why: generated notes quote PR titles and bodies, which anyone can write. A marker copied from them would give every
+// draft two markers, and the publisher would skip all of them. "&#58;" renders as ":" but never matches RUN_MARKER.
+export function neutralizeRunMarkers(text) {
+  return text.replace(/orca-release-run:/gi, 'orca-release-run&#58;')
+}
+
 // Strict reader for an artifact zip holding exactly one small manifest.json. Nothing is written to disk, so entry
 // names can never escape a directory; any other name, count, method or size is refused.
 export function readZipManifest(buf) {
@@ -28,23 +34,37 @@ export function readZipManifest(buf) {
     throw new Error('artifact zip must hold only a small manifest.json')
   }
   const eocd = buf.lastIndexOf(Buffer.from([0x50, 0x4b, 0x05, 0x06]))
-  if (eocd < 0 || buf.length < eocd + 22 || buf.readUInt16LE(eocd + 10) !== 1) fail()
+  if (eocd === -1 || buf.length < eocd + 22 || buf.readUInt16LE(eocd + 10) !== 1) {
+    fail()
+  }
   const cd = buf.readUInt32LE(eocd + 16)
-  if (cd + 46 > buf.length || buf.readUInt32LE(cd) !== 0x02014b50) fail()
+  if (cd + 46 > buf.length || buf.readUInt32LE(cd) !== 0x02014b50) {
+    fail()
+  }
   const flags = buf.readUInt16LE(cd + 8)
   const method = buf.readUInt16LE(cd + 10)
   const [packed, size] = [buf.readUInt32LE(cd + 20), buf.readUInt32LE(cd + 24)]
   const name = buf.toString('utf8', cd + 46, cd + 46 + buf.readUInt16LE(cd + 28))
   const local = buf.readUInt32LE(cd + 42)
-  if (name !== 'manifest.json' || flags & 1 || ![0, 8].includes(method) || size > MAX_BYTES) fail()
-  if (local + 30 > buf.length || buf.readUInt32LE(local) !== 0x04034b50) fail()
+  if (name !== 'manifest.json' || flags & 1 || ![0, 8].includes(method) || size > MAX_BYTES) {
+    fail()
+  }
+  if (local + 30 > buf.length || buf.readUInt32LE(local) !== 0x04034b50) {
+    fail()
+  }
   const nameEnd = local + 30 + buf.readUInt16LE(local + 26)
-  if (buf.toString('utf8', local + 30, nameEnd) !== name) fail()
+  if (buf.toString('utf8', local + 30, nameEnd) !== name) {
+    fail()
+  }
   const start = nameEnd + buf.readUInt16LE(local + 28)
   const data = buf.subarray(start, start + packed)
-  if (data.length !== packed) fail()
+  if (data.length !== packed) {
+    fail()
+  }
   const out = method === 0 ? data : inflateRawSync(data, { maxOutputLength: MAX_BYTES })
-  if (out.length !== size) fail()
+  if (out.length !== size) {
+    fail()
+  }
   return out.toString('utf8')
 }
 
@@ -77,8 +97,34 @@ export function assertReleaseCutRun(run, { repo, runId }) {
   }
 }
 
+// Why the job, not the artifact: anyone with write access can delete a run's artifacts (and the draft's server
+// assets), but nobody can change which jobs a finished run ran or how they ended. So the orca-server manifest is
+// required exactly when that run's upload job succeeded, and must be absent when it was skipped. Any other state, no
+// such job, or an API failure refuses the draft.
+async function orcaServerUploadConclusion(get, runId) {
+  const jobs = []
+  for (let page = 1; page <= 10; page += 1) {
+    const body = await get(`/actions/runs/${runId}/jobs?filter=latest&per_page=100&page=${page}`)
+    const batch = Array.isArray(body?.jobs) ? body.jobs : []
+    jobs.push(...batch)
+    if (batch.length < 100) {
+      break
+    }
+  }
+  const found = jobs.filter((job) => job?.name === 'upload-orca-server-artifact')
+  const conclusion = found.length === 1 ? found[0].conclusion : undefined
+  if (conclusion !== 'success' && conclusion !== 'skipped') {
+    throw new Error(
+      `run ${runId} has no single successful or skipped upload-orca-server-artifact job`
+    )
+  }
+  return conclusion
+}
+
 export async function verifyPriorRunProvenance({ repo, token, actionsToken, release }) {
-  if (!actionsToken) throw new Error('an actions: read token is required to read build manifests')
+  if (!actionsToken) {
+    throw new Error('an actions: read token is required to read build manifests')
+  }
   const get = async (path, auth = actionsToken) =>
     (await githubFetch(`${API}/repos/${repo}${path}`, auth)).json()
   const markers = [...String(release.body ?? '').matchAll(RUN_MARKER)]
@@ -89,12 +135,15 @@ export async function verifyPriorRunProvenance({ repo, token, actionsToken, rele
   const run = await get(`/actions/runs/${runId}`)
   assertReleaseCutRun(run, { repo, runId })
   const tag = release.tag_name
+  const serverUpload = await orcaServerUploadConclusion(get, runId)
 
-  // Each artifact name must exist exactly once, in that run, unexpired and small.
-  const download = async (fromRunId, name, required = true) => {
+  const artifactsNamed = async (fromRunId, name) => {
     const list = await get(`/actions/runs/${fromRunId}/artifacts?name=${name}&per_page=100`)
-    const found = (list.artifacts ?? []).filter((artifact) => artifact.name === name)
-    if (found.length === 0 && !required) return null
+    return (list.artifacts ?? []).filter((artifact) => artifact.name === name)
+  }
+  // Each artifact name must exist exactly once, in that run, unexpired and small.
+  const download = async (fromRunId, name) => {
+    const found = await artifactsNamed(fromRunId, name)
     const [artifact] = found
     if (
       found.length !== 1 ||
@@ -128,11 +177,16 @@ export async function verifyPriorRunProvenance({ repo, token, actionsToken, rele
   const common = { tag, release_sha: release.target_commitish }
   const manifests = []
   for (const source of ['linux-x64', 'linux-arm64', 'win', 'orca-server']) {
-    const text = await download(runId, `release-asset-manifest-${source}`, source !== 'orca-server')
-    if (text !== null) {
-      const expected = { ...common, source, run_id: runId, firstAttempt: source === 'win' }
-      manifests.push(parseManifest(text, expected))
+    const name = `release-asset-manifest-${source}`
+    if (source === 'orca-server' && serverUpload === 'skipped') {
+      // The release ships without the server tarballs, as publish-release does when the upload job is skipped.
+      if ((await artifactsNamed(runId, name)).length !== 0) {
+        throw new Error(`run ${runId} skipped upload-orca-server-artifact but has ${name}`)
+      }
+      continue
     }
+    const expected = { ...common, source, run_id: runId, firstAttempt: source === 'win' }
+    manifests.push(parseManifest(await download(runId, name), expected))
   }
   const macText = await download(macRunId, 'release-asset-manifest-mac')
   manifests.push(parseManifest(macText, { ...common, source: 'mac', run_id: macRunId }))

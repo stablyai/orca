@@ -133,11 +133,37 @@ const manifestFor = (source, runId = '500', overrides = {}) =>
     ...overrides
   })
 
+const serverJob = (conclusion) => ({ name: 'upload-orca-server-artifact', conclusion })
+const SERVER_ASSETS = [
+  'orca-server-linux-x64.tar.gz',
+  'orca-server-linux-arm64.tar.gz',
+  'orca-server-sha256sums.txt'
+]
+const serverAsset = (name, id) => ({
+  id: 100 + id,
+  name,
+  size: name.length,
+  state: 'uploaded',
+  digest: `sha256:${sha(name)}`
+})
+const withServer = { ...release, assets: [...release.assets, ...SERVER_ASSETS.map(serverAsset)] }
+const serverManifest = JSON.stringify({
+  schema: MANIFEST_SCHEMA,
+  source: 'orca-server',
+  tag: TAG,
+  release_sha: SHA,
+  run_id: '500',
+  run_attempt: '1',
+  assets: SERVER_ASSETS.map((name) => ({ name, size: name.length, sha256: sha(name) }))
+})
+
 function stubGithub({
   run = cutRun,
   macRuns = [macRun],
   artifacts = {},
-  recordText = JSON.stringify(record)
+  recordText = JSON.stringify(record),
+  jobs = [{ name: 'build (win)', conclusion: 'success' }, serverJob('skipped')],
+  jobsStatus = 200
 } = {}) {
   const files = {
     'release-record': recordText,
@@ -154,7 +180,16 @@ function stubGithub({
       const path = new URL(url).pathname
       const query = new URL(url).searchParams
       const json = (body) => ({ ok: true, json: async () => body })
-      if (path === `/repos/${repo}/actions/runs/500`) return json(run)
+      if (path === `/repos/${repo}/actions/runs/500`) {
+        return json(run)
+      }
+      if (path === `/repos/${repo}/actions/runs/500/jobs`) {
+        expect(query.get('filter')).toBe('latest')
+        if (jobsStatus !== 200) {
+          throw new Error(`GitHub request failed ${jobsStatus}`)
+        }
+        return json({ total_count: jobs.length, jobs })
+      }
       if (path.endsWith('/workflows/release-mac-build.yml/runs')) {
         return json({ workflow_runs: macRuns })
       }
@@ -162,7 +197,9 @@ function stubGithub({
       if (runArtifacts) {
         const name = query.get('name')
         const inRun = name === 'release-asset-manifest-mac' ? '600' : '500'
-        if (files[name] == null || runArtifacts[1] !== inRun) return json({ artifacts: [] })
+        if (files[name] == null || runArtifacts[1] !== inRun) {
+          return json({ artifacts: [] })
+        }
         const artifact = {
           id: ids.indexOf(name),
           name,
@@ -230,6 +267,47 @@ describe('verifyPriorRunProvenance', () => {
       index === 0 ? { ...asset, digest: `sha256:${sha('evil')}` } : asset
     )
     await expect(verify({ ...release, assets: swapped })).rejects.toThrow(/does not match/)
+  })
+})
+
+describe('orca-server manifest expectation', () => {
+  afterEach(() => vi.unstubAllGlobals())
+  const server = { 'release-asset-manifest-orca-server': serverManifest }
+
+  it('requires the server manifest and assets when the upload job succeeded', async () => {
+    stubGithub({ jobs: [serverJob('success')], artifacts: server })
+    await expect(verify(withServer)).resolves.toBeUndefined()
+    // Deleting the manifest artifact and the three draft assets does not drop the requirement.
+    stubGithub({ jobs: [serverJob('success')] })
+    await expect(verify(release)).rejects.toThrow(
+      /no single usable release-asset-manifest-orca-server/
+    )
+    stubGithub({ jobs: [serverJob('success')], artifacts: server })
+    await expect(verify(release)).rejects.toThrow(/orca-server/)
+  })
+
+  it('requires no server manifest when the upload job was skipped', async () => {
+    stubGithub({ jobs: [serverJob('skipped')] })
+    await expect(verify(release)).resolves.toBeUndefined()
+    stubGithub({ jobs: [serverJob('skipped')], artifacts: server })
+    await expect(verify(withServer)).rejects.toThrow(/skipped upload-orca-server-artifact but has/)
+    stubGithub({ jobs: [serverJob('skipped')] })
+    await expect(verify(withServer)).rejects.toThrow()
+  })
+
+  it.each([
+    ['no upload job', []],
+    ['a failed upload job', [serverJob('failure')]],
+    ['a cancelled upload job', [serverJob('cancelled')]],
+    ['two upload jobs', [serverJob('success'), serverJob('success')]]
+  ])('refuses %s', async (_name, jobs) => {
+    stubGithub({ jobs, artifacts: server })
+    await expect(verify(withServer)).rejects.toThrow(/upload-orca-server-artifact job/)
+  })
+
+  it('refuses when the jobs API fails', async () => {
+    stubGithub({ jobsStatus: 500, artifacts: server })
+    await expect(verify(withServer)).rejects.toThrow(/500/)
   })
 })
 

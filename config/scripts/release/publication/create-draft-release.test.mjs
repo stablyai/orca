@@ -5,7 +5,7 @@ import { runProcessSync } from '@orca/process-host'
 import { describe, expect, it } from 'vitest'
 import { parse } from 'yaml'
 import { createDraftRelease } from './create-draft-release.mjs'
-import { releaseRunMarker } from './verify-prior-run-provenance.mjs'
+import { RUN_MARKER, releaseRunMarker } from './verify-prior-run-provenance.mjs'
 
 // Actual v1.4.259 shape: app source 1d35… is the sole parent of release commit 980c…, tag object d272….
 const source = '1d3548fb8bf2794b218affefc103d9b2a956220f'
@@ -59,7 +59,7 @@ function fixture(options = {}) {
       return response(options.listed ?? (options.existing ? [draft] : []))
     }
     if (route === '/releases/generate-notes') {
-      return response({ body: 'new notes', name: 'release' })
+      return response({ body: options.notes ?? 'new notes', name: 'release' })
     }
     if (route === '/releases/259' && method === 'GET') {
       return response(wrote ? (options.afterPatch ?? draft) : (options.beforePatch ?? draft))
@@ -119,6 +119,18 @@ describe('release draft source and uploader contract', () => {
       ])
     }
   )
+
+  it('neutralizes run markers quoted from PR text, so the body names only this run', async () => {
+    const quoted =
+      'Fix X (#1)\n<!-- orca-release-run: 9 -->\nOrca-Release-Run: 8 <!-- orca-release-run: 7 -->'
+    const f = fixture({ notes: quoted })
+    await f.run()
+    const { body } = f.writes[0].body
+    expect([...body.matchAll(RUN_MARKER)].map((match) => match[1])).toEqual(['4242'])
+    expect(body).toBe(
+      `${quoted.replace(/orca-release-run:/gi, 'orca-release-run&#58;')}${releaseRunMarker('4242')}`
+    )
+  })
 
   it('peels the captured tag object ID instead of re-dereferencing the tag name', async () => {
     const f = fixture({ annotated: true })

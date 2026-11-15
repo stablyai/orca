@@ -4,7 +4,7 @@ import { execFileSync } from 'node:child_process'
 import { appendFileSync } from 'node:fs'
 import { pathToFileURL } from 'node:url'
 import { assertPolicyKeepsAppRelease } from './release-app-publish-guard.mjs'
-import { releaseRunMarker } from './verify-prior-run-provenance.mjs'
+import { neutralizeRunMarkers, releaseRunMarker } from './verify-prior-run-provenance.mjs'
 
 const API_VERSION = '2022-11-28'
 export const MAX_RELEASE_BODY_LENGTH = 120_000
@@ -246,8 +246,11 @@ export async function createDraftRelease({
     }
   )
 
-  const generatedBody = typeof releaseNotes.body === 'string' ? releaseNotes.body : ''
+  const generatedBody = neutralizeRunMarkers(
+    typeof releaseNotes.body === 'string' ? releaseNotes.body : ''
+  )
   // Names this run for the automatic draft publisher, which verifies it independently (verify-prior-run-provenance).
+  // Markers quoted from PR text were neutralized above, so this is the body's only one.
   const body = truncateReleaseBody(generatedBody) + releaseRunMarker(runId)
   const name =
     typeof releaseNotes.name === 'string' && releaseNotes.name.length > 0 ? releaseNotes.name : tag
