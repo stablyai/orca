@@ -3,7 +3,8 @@
 //   (aud = BILLING_JWT_AUDIENCE, purpose = 'billing'), verified against the auth JWKS — the same
 //   pattern the relay uses, so billing never sees the user's refresh or access token.
 // - Control plane: a static bearer secret (rotation: comma-separated), compared in constant time.
-import { createLocalJWKSet, createRemoteJWKSet, jwtVerify, type JSONWebKeySet, type JWTVerifyGetKey } from 'jose'
+import { createLocalJWKSet, jwtVerify, type JSONWebKeySet, type JWTVerifyGetKey } from 'jose'
+import { settledRemoteJWKSet } from './settled-jwks'
 import { z } from 'zod'
 import type { Env } from './env'
 import { constantTimeEqual } from './webhook-signature'
@@ -39,7 +40,7 @@ function keysFor(env: Env): JWTVerifyGetKey {
   let keys = keySets.get(source)
   if (!keys) {
     keys = env.BILLING_JWKS_URL
-      ? createRemoteJWKSet(new URL(env.BILLING_JWKS_URL))
+      ? settledRemoteJWKSet(new URL(env.BILLING_JWKS_URL))
       : createLocalJWKSet(JSON.parse(env.BILLING_JWKS ?? '{"keys":[]}') as JSONWebKeySet)
     keySets.set(source, keys)
   }
@@ -85,7 +86,7 @@ function stagingKeysFor(env: Env): { keys: JWTVerifyGetKey; issuer: string[] | u
   if (stagingKeys?.source !== env.BILLING_STAGING_JWKS_URL) {
     stagingKeys = {
       source: env.BILLING_STAGING_JWKS_URL,
-      keys: createRemoteJWKSet(new URL(env.BILLING_STAGING_JWKS_URL))
+      keys: settledRemoteJWKSet(new URL(env.BILLING_STAGING_JWKS_URL))
     }
   }
   return { keys: stagingKeys.keys, issuer: issuerList(env.BILLING_STAGING_AUTH_ISSUER) }

@@ -909,16 +909,14 @@ export function configChangeNarrows(previous: string | null | undefined, next: s
 }
 
 const POLICY_WRITE_TRIES = 3
-const policyChains = new Map<string, Promise<unknown>>()
 let lastGeneration = 0
 
 export type AppliedPolicy = { applied: boolean; gitExpiresAt: number | null; generation: number | null }
 
 /**
  * EGRESS-COMPILE: THE way to write a running session's policy. Compiles everything from current state, so no
- * writer can drop a class (git route, member identities, account tokens, keys). One at a time per sandbox in
- * this isolate, and ordered across isolates by policy_generation: an older compile never lands over a newer
- * one. Values are never logged; failures log the provider's code only.
+ * writer can drop a class (git route, member identities, account tokens, keys). Ordered by policy_generation:
+ * an older compile never lands over a newer one. Values are never logged; failures log the provider's code only.
  */
 export function applySandboxPolicy(
   deps: LifecycleDeps,
@@ -926,15 +924,9 @@ export function applySandboxPolicy(
   reason: string,
   options: { sessionId?: string } = {}
 ): Promise<AppliedPolicy> {
-  const previous = policyChains.get(row.id) ?? Promise.resolve()
-  const next = previous.catch(() => undefined).then(() => applyOnce(deps, row, reason, options.sessionId ?? row.session_id))
-  policyChains.set(row.id, next)
-  void next.finally(() => {
-    if (policyChains.get(row.id) === next) {
-      policyChains.delete(row.id)
-    }
-  }).catch(() => undefined)
-  return next
+  // No in-isolate chain: a chained promise from a cancelled request would never settle and hang every later
+  // write for this sandbox (WORKER-XREQ-PROMISE). Ordering is the D1 generation's job (and review F2's re-check).
+  return applyOnce(deps, row, reason, options.sessionId ?? row.session_id)
 }
 
 async function applyOnce(deps: LifecycleDeps, row: SandboxRow, reason: string, sessionId: string | null): Promise<AppliedPolicy> {

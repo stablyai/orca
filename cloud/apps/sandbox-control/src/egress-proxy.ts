@@ -2,7 +2,8 @@
 // with an OIDC token; we swap the VM's placeholder for the real credential and return a normally
 // framed response (works around undici hanging on transform-rule responses). Real tokens never
 // enter the VM or Vercel's policy store.
-import { createRemoteJWKSet, decodeJwt, jwtVerify, type JWTVerifyGetKey } from 'jose'
+import { decodeJwt, jwtVerify, type JWTVerifyGetKey } from 'jose'
+import { settledRemoteJWKSet } from './settled-jwks'
 import type { SandboxRow, SandboxStatus } from './store'
 import { secretLog } from './secret-log'
 
@@ -97,7 +98,7 @@ const remoteKeys = new Map<string, JWTVerifyGetKey>()
 function defaultKeys(issuer: string): JWTVerifyGetKey {
   let keys = remoteKeys.get(issuer)
   if (!keys) {
-    keys = createRemoteJWKSet(new URL(`${issuer.replace(/\/$/, '')}/.well-known/jwks`))
+    keys = settledRemoteJWKSet(new URL(`${issuer.replace(/\/$/, '')}/.well-known/jwks`))
     remoteKeys.set(issuer, keys)
   }
   return keys

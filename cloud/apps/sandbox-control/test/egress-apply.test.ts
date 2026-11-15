@@ -81,24 +81,12 @@ describe('applySandboxPolicy (EGRESS-COMPILE)', () => {
     vi.restoreAllMocks()
   })
 
-  it('writes one at a time per sandbox, in call order', async () => {
+  it('two writes at once both land and the newer generation wins (no in-isolate chain to hang on)', async () => {
     const t = await setup()
-    const order: string[] = []
-    const deps: LifecycleDeps = {
-      ...t.life,
-      provider: {
-        ...t.life.provider,
-        updateNetworkPolicy: async (sessionId, policy) => {
-          order.push('start')
-          await new Promise((r) => setTimeout(r, 10))
-          order.push('end')
-          return t.life.provider.updateNetworkPolicy(sessionId, policy)
-        }
-      }
-    }
     const row = await t.row()
-    await Promise.all([applySandboxPolicy(deps, row, 'refresh'), applySandboxPolicy(deps, row, 'refresh')])
-    expect(order).toEqual(['start', 'end', 'start', 'end'])
+    const [a, b] = await Promise.all([applySandboxPolicy(t.life, row, 'refresh'), applySandboxPolicy(t.life, row, 'refresh')])
+    expect([a.applied, b.applied].filter(Boolean).length).toBeGreaterThanOrEqual(1)
+    expect((await t.row()).policy_generation).toBe(Math.max(a.generation ?? 0, b.generation ?? 0))
   })
 })
 

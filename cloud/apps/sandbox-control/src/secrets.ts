@@ -484,7 +484,10 @@ export async function effectiveSecrets(
     })
 }
 
-let cachedKeyring: { source: string; keyring: Promise<Keyring>; failedAt?: number } | null = null
+/** SECRETS_KEK (no KMS): a WebCrypto import, no request I/O, so the promise may be shared. */
+let plainKeyring: { source: string; keyring: Promise<Keyring> } | null = null // xreq-ok: WebCrypto import only
+/** The last KMS failure, settled (an outage costs one KMS round trip per KMS_RETRY_AFTER_MS, not per request). */
+let kmsFailure: { source: string; failedAt: number; error: unknown } | null = null
 /** The KMS keyring once loaded (a value, never a promise in flight: see kmsKeyring). */
 let kmsReady: { source: string; keyring: Keyring } | null = null
 /** How long a failed KMS unwrap is remembered, so an outage is not one KMS round trip per request. */
@@ -513,9 +516,8 @@ function kmsKeyring(env: Env, sealFormat: SealFormat, fetcher: typeof fetch | un
   if (kmsReady?.source === source) {
     return Promise.resolve(kmsReady.keyring)
   }
-  const cached = cachedKeyring
-  if (cached?.source === source && cached.failedAt !== undefined && Date.now() - cached.failedAt < KMS_RETRY_AFTER_MS) {
-    return cached.keyring
+  if (kmsFailure?.source === source && Date.now() - kmsFailure.failedAt < KMS_RETRY_AFTER_MS) {
+    return Promise.reject(kmsFailure.error)
   }
   const load = async (): Promise<Keyring> => {
     if (!env.SECRETS_KMS_KEY || !env.SECRETS_KMS_SERVICE_ACCOUNT || !env.SECRETS_KEK_WRAPPED) {
@@ -550,18 +552,20 @@ function kmsKeyring(env: Env, sealFormat: SealFormat, fetcher: typeof fetch | un
       throw new SecretsKmsError('invalid')
     }
   }
-  const entry: NonNullable<typeof cachedKeyring> = { source, keyring: load() }
-  entry.keyring.then((keyring) => {
-    kmsReady = { source, keyring }
-  }, () => undefined)
-  entry.keyring.catch((error: unknown) => {
-    entry.failedAt = Date.now()
-    const kms = error instanceof SecretsKmsError ? error : null
-    // Reason and HTTP status only: never a response body, a token or a key.
-    secretLog('secrets_kms_unavailable', { reason: kms?.reason ?? 'error', ...(kms?.status ? { status: kms.status } : {}) })
-  })
-  cachedKeyring = entry
-  return entry.keyring
+  const loading = load()
+  loading.then(
+    (keyring) => {
+      kmsReady = { source, keyring }
+      kmsFailure = null
+    },
+    (error: unknown) => {
+      kmsFailure = { source, failedAt: Date.now(), error }
+      const kms = error instanceof SecretsKmsError ? error : null
+      // Reason and HTTP status only: never a response body, a token or a key.
+      secretLog('secrets_kms_unavailable', { reason: kms?.reason ?? 'error', ...(kms?.status ? { status: kms.status } : {}) })
+    }
+  )
+  return loading
 }
 
 /**
@@ -578,13 +582,13 @@ export function keyringFor(env: Env, fetcher?: typeof fetch): Promise<Keyring> |
     return null
   }
   const source = `${env.SECRETS_KEK_ID ?? 'k1'}\n${env.SECRETS_KEK}\n${env.SECRETS_KEK_RETIRED ?? ''}\n${sealFormat}`
-  if (cachedKeyring?.source !== source) {
-    cachedKeyring = {
+  if (plainKeyring?.source !== source) {
+    plainKeyring = {
       source,
       keyring: createKeyring({ id: env.SECRETS_KEK_ID ?? 'k1', key: env.SECRETS_KEK }, parseKeyMap(env.SECRETS_KEK_RETIRED), { sealFormat })
     }
   }
-  return cachedKeyring.keyring
+  return plainKeyring.keyring
 }
 
 /**
