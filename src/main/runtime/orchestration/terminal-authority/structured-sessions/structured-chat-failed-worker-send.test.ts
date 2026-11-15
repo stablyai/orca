@@ -1,7 +1,7 @@
 import '../../../rpc/dispatch/testing/unused-default-rpc-methods.test-fixture'
 import { expect, it, vi } from 'vitest'
-import { formatOrcaSessionAddress } from '../../../../../shared/orca-session-address'
-import { testOrcaSessionId } from '../../../../../shared/orca-session-address-test-fixture'
+import { formatOrcaSessionAddress } from '../../../../../shared/agent-session/identity/orca-session-address'
+import { testOrcaSessionId } from '../../../../../shared/agent-session/identity/orca-session-address-test-fixture'
 import { idOf } from '../../../rpc/orchestration/callers/session.test-fixture'
 import {
   COORDINATOR,

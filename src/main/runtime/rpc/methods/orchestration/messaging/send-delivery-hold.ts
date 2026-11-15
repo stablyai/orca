@@ -17,7 +17,7 @@ import type { OrchestrationPartyIdentity } from '../../../../../../shared/orches
 import { runBoundToCoordinator } from '../../../../orchestration/addressing/orchestration-caller-identity'
 import { formatAgentTypeLabel } from '../../../../../../shared/agent-status/presentation/agent-type-label'
 import { currentRunCoordinatorOrcaSessionId } from '../../../../orchestration/db/runs/run-coordinator-orca-session'
-import { formatOrcaSessionAddress } from '../../../../../../shared/orca-session-address'
+import { formatOrcaSessionAddress } from '../../../../../../shared/agent-session/identity/orca-session-address'
 
 type DeliveryWarning = SendRecipientWarning & { held?: AgentSessionHeldDelivery; busy?: true }
 
