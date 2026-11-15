@@ -46,8 +46,8 @@ function harness(primaryThreadId: string | null = PARENT) {
       }
       return { accepted: true }
     },
-    tryAppendLifecycleTransition: (identity, body, _resolve, options) => {
-      record(identity, body, options)
+    tryAppendLifecycleTransition: (identity, resolution, options) => {
+      record(identity, resolution.choice.body, options)
       return { accepted: true }
     },
     appendTombstone: () => {},

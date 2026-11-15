@@ -9,6 +9,7 @@ import type { BrowserBackend } from '../../../browser/browser-backend'
 import type { BrowserSessionTabSelectionOptions } from '../tabs/browser-tab-create-publication'
 import type { ServeBrowserTabs } from '../headless/serve-browser-tabs'
 import type { BrowserTabBarEntry } from '../tabs/browser-tab-listing'
+import type { BrowserPageAnnotation } from '../../../../shared/browser/element-grab/browser-grab-types'
 
 export type BrowserCommandTargetParams = {
   worktree?: string
@@ -20,6 +21,10 @@ export type ResolvedBrowserCommandTarget = {
   worktreeId?: string
   browserPageId?: string
 }
+
+export type BrowserAnswerAdmission = (
+  target: ResolvedBrowserCommandTarget
+) => ResolvedBrowserCommandTarget
 
 export type ResolvedBrowserPageWebContents = {
   browserPageId: string
@@ -58,8 +63,10 @@ export type RuntimeBrowserCommandHost = {
     worktreeId: string | undefined,
     browserPageId: string,
     options?: BrowserSessionTabSelectionOptions
-  ): void
+  ): Promise<void>
   notifyHeadlessBrowserSessionTabsChanged?(worktreeId: string): void
+  /** A page's unsent notes; see readSavedBrowserPageAnnotations. */
+  readBrowserPageAnnotations?(browserPageId: string): BrowserPageAnnotation[]
   /** The tab bar's browser tabs, loaded or not, from the published session snapshot. */
   readBrowserTabBar?(worktreeId: string | undefined): BrowserTabBarEntry[]
   retireRuntimeOwnedBrowserSessionTab?(worktreeId: string, browserPageId: string): boolean | void

@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { Terminal } from '@xterm/xterm'
-import { isCurrentPlatformIosWeb } from '../../../../lib/ios-web-platform'
+import { isCurrentPlatformIosWeb } from '../../../../app-shell/platform/ios-web-platform'
 import { installTerminalImeCompositionTracker } from './terminal-ime-composition-tracker'
 import { createTerminalIosHangulPreeditRenderer } from './terminal-ios-hangul-preedit-overlay'
 import {

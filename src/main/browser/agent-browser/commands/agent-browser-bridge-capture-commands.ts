@@ -1,16 +1,13 @@
-import type { BrowserScreenshotOptions } from '../../../../shared/rpc-contract/browser-observation-params'
+import type { BrowserScreenshotOptions } from '../../../../shared/rpc-contract/browser/browser-observation-params'
 import { z } from 'zod'
 import { app, nativeImage, type WebContents } from 'electron'
 import type {
   BrowserScreenshotResult,
   BrowserEvalResult
-} from '../../../../shared/runtime-browser-contracts'
+} from '../../../../shared/browser/runtime/runtime-browser-contracts'
 import { BrowserError } from '../../browser-error'
-import {
-  captureFullPageScreenshot,
-  SCREENSHOT_TIMEOUT_MS,
-  withTimeout
-} from '../../cdp/commands/cdp-screenshot'
+import { SCREENSHOT_TIMEOUT_MS, withTimeout } from '../../cdp/commands/cdp-screenshot'
+import { captureFullPageScreenshot } from '../../cdp/commands/cdp-full-page-screenshot'
 import {
   agentBrowserScreenshotArgs,
   readAgentBrowserScreenshot
@@ -24,7 +21,7 @@ import { captureRemoteCliBrowserWorkBound } from '../../../runtime/desktop-brows
 import {
   throwIfSignalAborted,
   waitForPromiseWithSignal
-} from '../../../../shared/abort-signal-reason'
+} from '../../../../shared/concurrency/abort-signal-reason'
 
 export abstract class AgentBrowserBridgeCaptureCommands extends AgentBrowserBridgeUtilityCommands {
   async screenshot(

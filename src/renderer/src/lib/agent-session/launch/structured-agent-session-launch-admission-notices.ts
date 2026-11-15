@@ -5,7 +5,7 @@ import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-ag
 import type { ExecutionHostId } from '../../../../../shared/execution-host'
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store/index'
-import { selectExecutionHostDisplayLabel } from '@/lib/execution-host-display-label'
+import { selectExecutionHostDisplayLabel } from '@/runtime/hosts/display/execution-host-display-label'
 import { structuredAgentLabel } from '@/lib/agent-session/launch/structured-agent-session-launch-label'
 import { structuredChatUnavailableText } from '@/lib/agent-session/launch/structured-agent-session-launch-failure'
 

@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react'
-import { useAppStore } from '@/store'
-import { SCROLL_TO_CURRENT_WORKSPACE_REVEAL_REQUEST_EVENT } from '@/lib/scroll-to-current-workspace-status'
+import { useAppStore } from '@/store/index'
+import { SCROLL_TO_CURRENT_WORKSPACE_REVEAL_REQUEST_EVENT } from '@/lib/workspace/navigation/scroll-to-current-workspace-status'
 
 /** Capture reveal requests while Agents hides the list; switch to Spaces and replay after the listener mounts. */
 export function useWorkspaceRevealBodyRedirect(agentsBodyShowing: boolean): void {

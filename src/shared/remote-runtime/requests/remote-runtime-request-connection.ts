@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import WebSocket from 'ws'
-import { abortSignalReason } from '../../abort-signal-reason'
+import { abortSignalReason } from '../../concurrency/abort-signal-reason'
 import type { PairedRuntimeConnection } from '../pairing/paired-runtime-connection'
 import { scheduleOrphanedRemoteRuntimeSocketClose } from '../remote-runtime-abort-orphaned-socket'
 import { serializeRemoteRuntimeRpcRequest } from '../remote-runtime-memory-limits'
@@ -21,7 +21,7 @@ import {
   remoteRuntimeUnavailableError
 } from './remote-runtime-request-frames'
 import { settleRemoteRuntimeRequestRpcFrame } from './remote-runtime-request-rpc-frame'
-import type { RuntimeRpcResponse } from '../../runtime-rpc-envelope'
+import type { RuntimeRpcResponse } from '../rpc/runtime-rpc-envelope'
 import {
   rejectRemoteRuntimeRequestReadyWaiters,
   resolveRemoteRuntimeRequestReadyWaiters,

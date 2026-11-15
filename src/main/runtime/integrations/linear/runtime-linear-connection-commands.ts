@@ -4,10 +4,10 @@ import {
   getStatus as getLinearStatus,
   selectWorkspace as selectLinearWorkspace,
   testConnection as testLinearConnection
-} from '../../../linear/client'
-import { searchIssues as searchLinearIssues } from '../../../linear/linear-issue-lookups'
-import { readLinearIssueContext } from '../../../linear/issue-context/read-context'
-import { searchLinearIssuesForAgents } from '../../../linear/issue-context/client'
+} from '../../../linear/accounts/linear-account-client'
+import { searchIssues as searchLinearIssues } from '../../../linear/issues/linear-issue-lookups'
+import { readLinearIssueContext } from '../../../linear/issues/context/read-issue-context'
+import { searchLinearIssuesForAgents } from '../../../linear/issues/context/issue-context-resolution'
 import type { LinearIssueRequest } from '../../../../shared/linear/agent-access'
 import type { LinearWorkspaceSelection } from '../../../../shared/linear/workspace-types'
 import { RuntimeLinearReadCommands } from './runtime-linear-read-commands'

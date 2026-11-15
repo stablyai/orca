@@ -1,4 +1,4 @@
-import type { ClaudeManagedHookPlan } from '../claude/claude-managed-hook-events'
+import type { ClaudeManagedHookPlan } from '../claude/hooks/claude-managed-hook-events'
 import { ClaudeHookService } from '../claude/hook-service'
 
 // Qoder documents Claude-shaped hooks at https://docs.qoder.com/cli/hooks.

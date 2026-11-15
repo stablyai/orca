@@ -1,6 +1,6 @@
 import { useState } from 'react'
-import type { OrcadManagedRestartResult } from '../../../../../../shared/orcad-managed-runtime'
-import type { SshManagedServerStatus } from '../../../../../../shared/ssh-types'
+import type { OrcadManagedRestartResult } from '../../../../../../shared/remote-runtime/orcad-lifecycle/orcad-managed-runtime'
+import type { SshManagedServerStatus } from '../../../../../../shared/remote-runtime/ssh/ssh-types'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { translate } from '@/i18n/i18n'
 import { useTranslate } from '@/i18n/use-translate'
@@ -13,7 +13,7 @@ import {
   DialogHeader,
   DialogTitle
 } from '../../../ui/dialog'
-import { getManagedOrcadApi } from '../../runtime-environments/managed-servers/use-managed-server-catalog'
+import { getManagedOrcadApi } from '../../../../runtime/hosts/installation/managed-orcad-api-availability'
 
 /** Offered only when the launching SSH session proved ended. */
 export function canRestartSshHostServer(status: SshManagedServerStatus | undefined): boolean {

@@ -5,8 +5,8 @@ import {
   isAgentSessionOwnerBinding,
   type AgentSessionOwnerBinding
 } from '../../../../shared/agent-session/agent-session-host-authority'
-import { MAX_CLAIMED_AGENT_PTY_OWNER_ENTRIES } from '../../../../shared/claimed-agent-pty-owner'
-import { cloneAgentSessionOwnerBinding } from '../../../../shared/claimed-agent-pty-owner-snapshot'
+import { MAX_CLAIMED_AGENT_PTY_OWNER_ENTRIES } from '../../../../shared/agent-session/lifecycle/leases/claimed-agent-pty-owner'
+import { cloneAgentSessionOwnerBinding } from '../../../../shared/agent-session/lifecycle/leases/claimed-agent-pty-owner-snapshot'
 import { recordAuthenticatedInventory } from '../../observability/daemon-audit-classifier'
 import { isMissingWindowsNamedPipeError } from '../../endpoint/identity/daemon-endpoint-errors'
 import { DaemonPtyProcessInspection } from './daemon-pty-process-inspection'
@@ -14,8 +14,8 @@ import { remainingDaemonRequestTimeoutMs } from '../../launch/daemon-request-dea
 import { parsePtySessionId } from '../../../../shared/terminal/pty/lifecycle/pty-session-id-format'
 import type { ListSessionsResult } from '../../protocol/daemon-rpc-contract'
 import type { SessionInfo } from '../../protocol/daemon-session-info'
-import { PtyProcessListAdmission } from '../../../providers/pty-process-list-admission'
-import type { PtyProcessInfo } from '../../../providers/pty-provider-contract'
+import { PtyProcessListAdmission } from '../../../providers/pty/process-list-admission'
+import type { PtyProcessInfo } from '../../../providers/pty/process-info'
 
 export abstract class DaemonPtySessionInventory extends DaemonPtyProcessInspection {
   async listProcesses(opts?: {

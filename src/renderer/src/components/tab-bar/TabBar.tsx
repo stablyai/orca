@@ -9,8 +9,8 @@ import { usePluginNewFileMenuOptions } from './use-plugin-new-file-menu-options'
 import { useTabBarItemProjection } from './use-tab-bar-item-projection'
 import { renderTabBarSurface } from './tab-bar-surface'
 import { useTabBarItemActions } from './use-tab-bar-item-actions'
-import { useActiveClientHostedBrowserRowId } from '@/lib/pane-manager/client-hosted-browser-row-state'
-import { useEditorGroupFileDropOwner } from '../editor/use-editor-group-file-drop-owner'
+import { useActiveClientHostedBrowserRowId } from '@/runtime/browser/client-hosting/client-hosted-browser-row-state'
+import { useEditorGroupFileDropOwner } from '../editor/file-drop/use-editor-group-file-drop-owner'
 import { useTranslate } from '@/i18n/use-translate'
 
 function TabBarInner(props: TabBarProps): React.JSX.Element {

@@ -1,6 +1,6 @@
 /** Release background-page start admission on every removal, including bulk purge; exercise the same sweep as useTerminalWindowLifecycle (STA-7436). */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type * as AgentStatusModule from '@/lib/agent-status'
+import type * as AgentStatusModule from '@/lib/agent-status/aggregation/worktree-agent-status'
 import { createTestStore, seedStore } from '../../../testing/app-store-test-fixture'
 import { makeWorktree } from '../../worktrees/worktree.test-fixture'
 import { createStoreCascadesMockApi } from '../../../testing/app-store-cascade-api.test-fixture'
@@ -20,15 +20,18 @@ vi.mock('@/components/terminal-pane/pty-transport/shutdown/pty-shutdown-data-sus
   unregisterPtyDataHandlers: vi.fn(() => [])
 }))
 
-vi.mock('@/lib/agent-status', async (importOriginal) => {
+vi.mock('@/lib/agent-status/aggregation/worktree-agent-status', async (importOriginal) => {
   const actual = await importOriginal<typeof AgentStatusModule>()
   return { ...actual, detectAgentStatusFromTitle: vi.fn().mockReturnValue(null) }
 })
 
-vi.mock('@/components/browser-pane/host-guest/webview-registry', async (importOriginal) => ({
-  ...(await importOriginal<object>()),
-  destroyPersistentWebview: vi.fn(() => Promise.resolve())
-}))
+vi.mock(
+  '@/components/browser-pane/host-guest/browser-webview-disposal',
+  async (importOriginal) => ({
+    ...(await importOriginal<object>()),
+    closePersistentBrowserPage: vi.fn(() => Promise.resolve())
+  })
+)
 
 // Main answers the window's layout commands; its frames draw the browser tabs.
 vi.mock('@/runtime/rpc/calls/runtime-rpc-call', async (importOriginal) =>
@@ -45,8 +48,8 @@ vi.mock('@/runtime/workspace-layout/frames/runtime-layout-client', async (import
 createStoreCascadesMockApi()
 
 const { isBrowserPageMountAdmitted } =
-  await import('@/components/browser-pane/host-guest/browser-page-mount-admission')
-const { destroyWebviewsRemovedFromStore, destroyWorktreeBrowserGuests } =
+  await import('@/components/browser-pane/host-guest/retention/browser-page-mount-admission')
+const { destroyWebviewsRemovedFromStore, destroyRemovedBrowserWebview } =
   await import('./browser-webview-cleanup')
 
 const WT = 'repo1::/path/wt1'
@@ -123,10 +126,11 @@ describe('browser page mount admission ends when the page leaves the store', () 
   it('ends when the guest is evicted, though the page stays in the store', async () => {
     const store = await storeWithWorktree()
     const pageIds = await openBackgroundTabs(store, 3)
-    const state = store.getState()
     expect(admittedCount(pageIds)).toBe(3)
 
-    destroyWorktreeBrowserGuests(state.browserTabsByWorktree, state.browserPagesByWorkspace, WT)
+    for (const pageId of pageIds) {
+      destroyRemovedBrowserWebview(pageId)
+    }
 
     expect(admittedCount(pageIds)).toBe(0)
     expect(Object.values(store.getState().browserPagesByWorkspace).flat()).toHaveLength(3)

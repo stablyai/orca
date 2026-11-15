@@ -3,7 +3,7 @@ import {
   SkillInstallRequestSchema,
   type SkillInstallRequest,
   type SkillInstallResult
-} from '../../../shared/skill-install-contract'
+} from '../../../shared/skills/installation/skill-install-contract'
 import {
   resolveSkillInstallDestination,
   type SkillInstallDestinationAuthority
@@ -11,7 +11,7 @@ import {
 import { installSharedSkill } from './skill-installation'
 import { downloadSkillPackageGrant } from '../package-download/skill-package-download'
 import { detectSkillProvidersInWsl } from '../providers/skill-wsl-provider-detection'
-import { selectedOrDetectedSkillProviders } from '../../../shared/skill-install-providers'
+import { selectedOrDetectedSkillProviders } from '../../../shared/skills/installation/skill-install-providers'
 import { createWslSkillInstallFilesystem } from '../filesystem/skill-wsl-install-filesystem'
 import { skillInstallFailureFromError } from './skill-install-operation-error'
 import { startSkillInstallOperation } from '../observability/skill-operation-observability'

@@ -1,7 +1,7 @@
 import type { Page } from '@stablyai/playwright-test'
 import { expect } from '@stablyai/playwright-test'
 import { getRepoExecutionHostId } from '../../../src/shared/execution-host'
-import { getRepoHostIdentityForParts } from '../../../src/shared/repo-host-identity'
+import { getRepoHostIdentityForParts } from '../../../src/shared/repository/repo-host-identity'
 
 // Dismiss every loaded repo’s setup prompt through its action; workspace switches can re-inspect and show it between visibility checks.
 export async function dismissSetupScriptPrompts(page: Page): Promise<void> {

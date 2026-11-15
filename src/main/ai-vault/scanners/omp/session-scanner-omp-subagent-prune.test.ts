@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { scanAiVaultSessions } from '../../session-scanner'
-import { isolatedScanRoots, jsonLines } from '../../session-scanner-test-fixtures'
+import { isolatedScanRoots, jsonLines } from '../../scanner-fixtures/session-scanner-test-fixtures'
 
 const SESSION_STEM = '2026-05-01T10-00-00-000Z_cccccccc-dddd-4eee-8fff-000000000000'
 const SESSION_ID = 'cccccccc-dddd-4eee-8fff-000000000000'

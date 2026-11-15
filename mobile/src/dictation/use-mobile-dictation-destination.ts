@@ -4,8 +4,8 @@ import {
   captureMobileNativeChatTextDestination,
   type MobileNativeChatDictationPreview,
   type MobileNativeChatTextDestination
-} from '../session/native-chat/composer/mobile-native-chat-draft-inputs'
-import { editMobileNativeChatDraft } from '../session/native-chat/composer/mobile-native-chat-draft-store'
+} from '../session/native-chat/composer/drafts/mobile-native-chat-draft-inputs'
+import { editMobileNativeChatDraft } from '../session/native-chat/composer/drafts/mobile-native-chat-draft-store'
 
 type MobileDictationTarget =
   | { field: 'chat'; scope: string | null; anchor: MobileDictationAnchor | null }
@@ -39,6 +39,7 @@ export function useMobileDictationDestination({
             ? { field: 'live', handle: terminalHandle }
             : null
       setTarget(targetRef.current)
+      return targetRef.current
     },
     [chatComposerScopeKey]
   )

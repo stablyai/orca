@@ -7,7 +7,7 @@ import type { GitUpstreamStatus } from '../../../../shared/git/status/git-status
 import type { GitPushTarget } from '../../../../shared/worktree/types'
 import { materializeWorktreePushTargetRemote } from '../../../ipc/worktree-remote'
 import { assertRuntimeReadWslDistroRunning } from './runtime-wsl-background-read-gate'
-import type { LocalGitProvider } from '../../../providers/local-git-provider'
+import type { LocalGitProvider } from '../../../providers/git/local-provider'
 import {
   localGitOptionsForTarget,
   requireRuntimeGitProvider,

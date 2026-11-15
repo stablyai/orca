@@ -1,3 +1,4 @@
+import '../../shared/remote-runtime/host-store/environment-store-worker-test-fixture'
 // #36923: a remote open can wake an SSH-connected recipe VM. If the user disconnects its host while
 // the recipe resumes, the wake must not reconnect it: the VM is up, and the host stays held.
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -13,20 +14,22 @@ const mocks = vi.hoisted(() => ({
 }))
 
 vi.mock('electron', () => ({ app: { getPath: () => '/user-data' } }))
-vi.mock('../../shared/ephemeral-vm-runtime-store', () => ({
-  findWorkspaceEphemeralVmRuntime: () => ({ id: 'vm-1', status: 'suspended', repoId: 'repo-1' }),
+vi.mock('../../shared/remote-runtime/ephemeral-vm-store/ephemeral-vm-runtime-store', () => ({
   updateEphemeralVmRuntimeStatus: mocks.updateStatus
+}))
+vi.mock('../../shared/remote-runtime/ephemeral-vm-store/ephemeral-vm-workspace-runtime', () => ({
+  findWorkspaceEphemeralVmRuntime: () => ({ id: 'vm-1', status: 'suspended', repoId: 'repo-1' })
 }))
 vi.mock('../../shared/remote-runtime/host-store/runtime-environment-store', () => ({
   resolveEnvironment: () => ({ id: 'env-vm', pairingRevision: 9, createdAt: 0 }),
   updateEnvironmentFromPairingCode: vi.fn()
 }))
-vi.mock('../../shared/ephemeral-vm-recipes', () => ({
+vi.mock('../../shared/remote-runtime/ephemeral-vm-recipes/ephemeral-vm-recipes', () => ({
   getEphemeralVmRecipeResultConnection: () => ({ type: 'ssh', target: { host: 'vm' } }),
   getEphemeralVmRecipeResultPairingCode: () => null
 }))
 vi.mock('../ipc/ephemeral-vm-recipe-context', () => ({
-  getRuntimeRecipeContext: () => ({ repo: { repo: { path: '/repo' } }, recipe: {} })
+  getRuntimeRecipeContext: () => ({ repoPath: '/repo', recipe: {} })
 }))
 vi.mock('../ipc/runtime-environments/runtime-environments', () => ({
   invalidateRuntimeEnvironmentTransport: vi.fn()

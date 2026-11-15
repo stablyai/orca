@@ -1,7 +1,7 @@
 import { useAppStore } from '../../../../store/index'
 import type { ManagedPane } from '@/lib/pane-manager/pane-manager-types'
 import type { PtyTransport } from '../../pty-transport/pty-transport-types'
-import { getConnectionId } from '@/lib/connection-context'
+import { getConnectionId } from '@/lib/workspace/ownership/connection-context'
 import type { TerminalPasteSource, TerminalPasteTextOptions } from './terminal-paste-model'
 import {
   resolveTerminalPasteRuntime,
@@ -17,7 +17,7 @@ import { recordTerminalUserInputForLeaf } from '../terminal-input-activity'
 import { scheduleImagePasteWebglAtlasRecovery } from '../../render-health/terminal-webgl-atlas-recovery'
 import { pasteTerminalClipboard } from '../../clipboard/terminal-clipboard-paste'
 import { createTerminalClipboardCopiedFiles } from '../../clipboard/terminal-clipboard-copied-files'
-import type { ReadClipboardTextOptions } from '../../../../../../shared/clipboard-text'
+import type { ReadClipboardTextOptions } from '../../../../../../shared/clipboard/clipboard-text'
 import type { TerminalPaneCloseController } from '../../layout/close/use-terminal-pane-close-actions'
 import { resolveProtectedMultilinePasteOptionsForPane } from './terminal-agent-paste-bracketing'
 import { resolveTerminalInputHostPlatform } from '../terminal-input-host-platform'

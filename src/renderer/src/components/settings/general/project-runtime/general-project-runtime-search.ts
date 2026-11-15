@@ -5,8 +5,8 @@ import { translateSearchKeyword } from '../../search/settings-search-keywords'
 export const getGeneralProjectRuntimeSearchEntries = createLocalizedCatalog(() => [
   {
     title: translate(
-      'auto.components.settings.general.search.defaultProjectRuntime',
-      'Default Project Runtime'
+      'auto.components.settings.general.search.a361519c97',
+      'Default project runtime'
     ),
     description: translate(
       'auto.components.settings.general.search.defaultProjectRuntimeDescription',

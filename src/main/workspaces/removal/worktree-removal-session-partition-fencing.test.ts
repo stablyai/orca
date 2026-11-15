@@ -15,7 +15,7 @@ import type { TerminalTab } from '../../../shared/workspace-layout/terminal-tab-
 import { getDefaultWorkspaceSession } from '../../../shared/constants'
 import { toRuntimeExecutionHostId } from '../../../shared/execution-host'
 import { removeWorktreeMetaRow } from '../../persistence/host-qualified-worktree-meta'
-import { RUNTIME_PARTITION_TOPOLOGY_FENCE_MS } from '../../persistence/loading-store/runtime-partition-topology-fence'
+import { RUNTIME_PARTITION_TOPOLOGY_FENCE_MS } from '../../persistence/loading-store/workspace-sessions/runtime-partition-topology-fence'
 import { TEST_LEAF_1 } from '../../persistence/persistence-session-fixtures'
 
 let hasCreatedStoreInCase = false

@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 
-import { decodeBrowserScreencastFrame } from '../../../../../shared/browser-screencast-protocol'
-import type { BrowserScreencastFrameMetadata } from '../../../../../shared/browser-screencast-protocol'
-import type { BrowserTabInfo } from '../../../../../shared/runtime-types'
+import { decodeBrowserScreencastFrame } from '../../../../../shared/browser/screencast/browser-screencast-protocol'
+import type { BrowserScreencastFrameMetadata } from '../../../../../shared/browser/screencast/browser-screencast-protocol'
+import type { BrowserTabInfo } from '../../../../../shared/browser/runtime/runtime-browser-contracts'
 import type { RemoteBrowserStreamLifecycle } from './remote-browser-stream-lifecycle'
 import type {
   RemoteBrowserStreamToken,
@@ -58,7 +58,7 @@ export function useRemoteBrowserPageStream({
   pendingFrameDecodeRef: React.MutableRefObject<number>
   streamBridgeRef: React.MutableRefObject<RemoteBrowserStreamBridge>
   isActiveRef: React.RefObject<boolean>
-  applyTabInfo: (tab: Pick<BrowserTabInfo, 'url' | 'title'>) => void
+  applyTabInfo: (tab: BrowserTabInfo) => void
   clearStreamFrame: () => void
   closeMissingRemotePage: (remotePageId?: string | null) => void
   clearPendingRemoteWheel: () => void

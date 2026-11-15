@@ -9,11 +9,11 @@ import {
 } from 'react'
 import { GitPullRequest } from 'lucide-react'
 import { useTranslate } from '@/i18n/use-translate'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import { getReviewStateIcon } from '@/components/github/review-state-presentation'
 import { DiffLineCounts } from '@/components/right-sidebar/source-control/listing/diff-line-counts'
-import type { GitHubIssueOrPRLink } from '../../../../../../shared/github/links'
-import type { GitHubWorkItem } from '../../../../../../shared/github/work-item-types'
+import type { GitHubIssueOrPRLink } from '../../../../../../shared/github/repositories/links'
+import type { GitHubWorkItem } from '../../../../../../shared/github/work-items/work-item-types'
 import {
   nativeChatOpenedPullRequestKey,
   type NativeChatOpenedPullRequest
@@ -223,7 +223,7 @@ export function NativeChatOpenedPullRequestCard({
     <div
       className={`${NATIVE_CHAT_HIDEABLE_CARD_CLASS} rounded-lg border border-chat-code-border p-2 text-sm`}
     >
-      <div className="flex min-w-0 items-center gap-1.5 px-1 pb-1 text-xs text-chat-foreground-faint">
+      <div className="flex min-w-0 items-center gap-1.5 px-1 pb-1 text-sm text-chat-foreground-faint">
         <span className="min-w-0 truncate">
           {pullRequests.length === 1 && first
             ? t('components.native-chat.openedPullRequests.one', 'Opened {{name}}', {

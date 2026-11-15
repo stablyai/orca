@@ -1,4 +1,4 @@
-import type { RuntimeTerminalPresentation } from '../../../../shared/runtime-terminal-contracts'
+import type { RuntimeTerminalPresentation } from '../../../../shared/terminal/runtime/runtime-terminal-contracts'
 
 export function createTerminalRevealWarning(handle: string, error?: unknown): string {
   const reason =

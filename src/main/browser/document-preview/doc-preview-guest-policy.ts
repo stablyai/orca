@@ -3,7 +3,7 @@ import {
   parseDocPreviewUrl,
   type DocPreviewExternalLink
 } from '../../../shared/document-preview/doc-preview-scheme'
-import { normalizeExternalBrowserUrl } from '../../../shared/browser-url'
+import { normalizeExternalBrowserUrl } from '../../../shared/browser/navigation/browser-url'
 import { enforceBrowserRouteWebRtcPolicy } from '../network/egress/browser-route-webrtc-policy'
 import { getDocPreviewGrant } from './doc-preview-grant-registry'
 
@@ -64,6 +64,12 @@ export function isWorkspaceDocPageId(browserPageId: string): boolean {
 // Session events supply only WebContents; recover its bound grant id.
 export function readDocPreviewGuestBoundGrantId(guest: Electron.WebContents): string | null {
   return previewGuests.get(guest)?.readBoundGrantId() ?? null
+}
+
+/** Browser page of the guest's live grant; null before the grant binds or once it is revoked. */
+export function readDocPreviewGuestBoundPageId(guest: Electron.WebContents): string | null {
+  const grantId = readDocPreviewGuestBoundGrantId(guest)
+  return (grantId && getDocPreviewGrant(grantId)?.browserPageId) || null
 }
 
 /** URL of the guest's committed document; unlike getURL(), pushState cannot rewrite it. */

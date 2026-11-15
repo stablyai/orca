@@ -12,7 +12,7 @@ import {
 } from '../../../../../../../shared/agent-session/failures/agent-session-refusal-notice'
 import type { AgentSessionWriteNoticePart } from '../../../../../../../shared/agent-session/failures/agent-session-write-notice-copy'
 import { structuredAgentSessionMessageSendMutation } from '../../../../../../../shared/agent-session/requests/structured-agent-session-send-mutation'
-import { structuredAgentSessionBlocksTooLarge } from '../../../../../../../shared/rpc-contract/structured-agent-session-message-params'
+import { structuredAgentSessionBlocksTooLarge } from '../../../../../../../shared/rpc-contract/structured-agent-session/structured-agent-session-message-params'
 import { AGENT_SESSION_SEND_SKILLS_RUNTIME_CAPABILITY } from '../../../../../../../shared/agent-session/agent-session-create-capabilities'
 import {
   structuredAgentSessionSendEvidence,
@@ -20,7 +20,7 @@ import {
   type StructuredAgentSessionSendEvidence
 } from '../../../../../../../shared/agent-session/requests/structured-agent-session-send-evidence'
 import { ensureRuntimeEnvironmentCompatible } from '@/runtime/rpc/compatibility/runtime-compatibility-probe'
-import type { RuntimeClientTarget } from '../../../../../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import { RuntimeRpcCallError } from '@/runtime/rpc/calls/runtime-rpc-result'
 import { isRuntimeCompatBlockError } from '@/runtime/rpc/compatibility/runtime-protocol-compat'
 import {

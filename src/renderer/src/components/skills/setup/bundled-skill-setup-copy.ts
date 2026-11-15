@@ -1,13 +1,13 @@
 import type {
   BundledSkillInstallResult,
   BundledSkillPlan
-} from '../../../../../shared/bundled-skill-plan'
+} from '../../../../../shared/skills/bundled/bundled-skill-plan'
 import {
   bundledSkillLocation,
   type BundledSkillLocation
-} from '../../../../../shared/bundled-skill-locations'
-import { bundledSkillInstallAgents } from '../../../../../shared/bundled-skill-summary'
-import { agentNames } from '../skill-plan-op-copy'
+} from '../../../../../shared/skills/bundled/bundled-skill-locations'
+import { bundledSkillInstallAgents } from '../../../../../shared/skills/bundled/bundled-skill-summary'
+import { agentNames } from '../freshness/skill-plan-op-copy'
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
 

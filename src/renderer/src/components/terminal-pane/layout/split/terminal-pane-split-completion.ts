@@ -1,6 +1,6 @@
-import { trackTerminalPaneSplit } from '@/lib/feature-education-telemetry'
+import { trackTerminalPaneSplit } from '@/diagnostics/telemetry/feature-education-telemetry'
 import { useAppStore } from '@/store/index'
-import type { TerminalPaneSplitSource } from '../../../../../../shared/feature-education-telemetry'
+import type { TerminalPaneSplitSource } from '../../../../../../shared/feature-education/feature-education-telemetry'
 
 export type TerminalPaneSplitCompletion = {
   source: TerminalPaneSplitSource

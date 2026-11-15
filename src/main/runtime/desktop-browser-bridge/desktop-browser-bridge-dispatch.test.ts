@@ -3,14 +3,14 @@ import { z } from 'zod'
 import {
   DESKTOP_BROWSER_BRIDGE_CANCEL_CAPABILITY,
   DESKTOP_BROWSER_BRIDGE_RUNTIME_CAPABILITY
-} from '../../../shared/desktop-browser-bridge-protocol'
+} from '../../../shared/browser/client-hosting/desktop-browser-bridge-protocol'
 import type { OrcaRuntimeService } from '../orca-runtime'
 import { defineMethod } from '../rpc/core'
 import { RpcDispatcher } from '../rpc/dispatcher'
 import { DESKTOP_BROWSER_BRIDGE_RPC_METHODS } from '../rpc/methods/browser/desktop-browser-bridge'
 import { BrowserTarget } from '../../../shared/rpc-contract/rpc-param-primitives'
-import { Goto } from '../../../shared/rpc-contract/browser-params'
-import { BrowserOpenUrlParams } from '../../../shared/rpc-contract/browser-tab-create-params'
+import { Goto } from '../../../shared/rpc-contract/browser/browser-params'
+import { BrowserOpenUrlParams } from '../../../shared/rpc-contract/browser/browser-tab-create-params'
 import {
   getDesktopBrowserBridgeRegistry,
   setDesktopBrowserBridgeHostEnabled

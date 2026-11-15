@@ -1,8 +1,9 @@
 import { useCallback } from 'react'
 import type { ManagedPane } from '@/lib/pane-manager/pane-manager-types'
-import { getMobileFitOverridePtyIds } from '@/lib/pane-manager/mobile-fit-overrides'
+import { getMobileFitOverridePtyIds } from '@/lib/pane-manager/terminal-fit/mobile-fit-overrides'
 import { getAllDrivers } from '@/lib/pane-manager/mobile-driver-state'
 import { refitAndRefreshAllTerminalPanes } from '@/lib/pane-manager/pane-manager-registry'
+import { reclaimMobileDrivenBrowserPagesForDesktop } from '@/runtime/browser/ownership/browser-desktop-reclaim'
 import { restoreTerminalFitToDesktop, restoreTerminalFitsToDesktop } from './terminal-fit-restore'
 import type { TerminalPaneContextController } from '../controller/use-terminal-pane-context-actions'
 
@@ -43,11 +44,15 @@ export function useMobileTerminalFitActions({
     [refreshMobileOverlays, scheduleRestoredTerminalRefit, paneTransportsRef, settingsRef]
   )
   const restoreAllTerminalFits = useCallback(
-    async (focusPane: ManagedPane): Promise<void> => {
-      const restored = await restoreTerminalFitsToDesktop(
-        getMobileOwnedTerminalPtyIds(),
-        settingsRef.current ?? undefined
-      )
+    async (focusPane: ManagedPane, phoneIsDriving: boolean): Promise<void> => {
+      const [restored] = await Promise.all([
+        restoreTerminalFitsToDesktop(
+          getMobileOwnedTerminalPtyIds(),
+          settingsRef.current ?? undefined
+        ),
+        // Why: held-fit "Restore all" only resizes; it must not cut a phone still browsing.
+        phoneIsDriving ? reclaimMobileDrivenBrowserPagesForDesktop() : undefined
+      ])
       if (restored) {
         scheduleRestoredTerminalRefit()
         focusPane.terminal.focus()

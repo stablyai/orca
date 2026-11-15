@@ -18,7 +18,7 @@ import type {
 } from '../../../../../../shared/ai-vault/contracts/ai-vault-types'
 import type { AiVaultSearchScopeIdentity } from '../../../../../../shared/ai-vault/search/ai-vault-search-scope'
 import { resolveAiVaultSearchSettings } from '../../../../../../shared/ai-vault/search/ai-vault-search-settings'
-import { isWebClientLocation } from '@/lib/web-client-location'
+import { isWebClientLocation } from '@/app-shell/platform/web-client-location'
 import { useAppStore } from '@/store/index'
 import { useAiVaultAssociationObservation } from '../scanning/ai-vault-association-observation'
 import { aiVaultSearchHitToSession } from './ai-vault-search-session'
@@ -72,11 +72,9 @@ export function useAiVaultSearch(
       started = true
       const revision = associations.getSnapshot()
       const isCurrent = () => !cancelled && revision === associations.getSnapshot()
-      // Only a rerun of the same request touches its page; a new request's page waits for its reply.
+      // Only a rerun of the same request touches its page, keeping its reply so its cursor survives revalidation.
       setPage((previous) =>
-        previous?.identity === identity
-          ? { ...previous, response: null, error: false, loading: true }
-          : previous
+        previous?.identity === identity ? { ...previous, error: false, loading: true } : previous
       )
       try {
         let response = await window.api.aiVault.searchSessions({ ...request, cursor }, scope)
@@ -106,7 +104,13 @@ export function useAiVaultSearch(
         }))
       } catch {
         if (isCurrent()) {
-          setPage({ identity, hits: [], response: null, error: true, loading: false })
+          setPage((previous) => ({
+            identity,
+            hits: previous?.identity === identity ? previous.hits : [],
+            response: previous?.identity === identity ? previous.response : null,
+            error: true,
+            loading: false
+          }))
         }
       } finally {
         pending = false

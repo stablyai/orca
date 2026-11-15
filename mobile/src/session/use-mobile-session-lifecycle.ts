@@ -1,20 +1,25 @@
-import { useShellStorage } from '../platform/shell-storage'
+import { useShellStorage } from '../platform/shell-storage/shell-storage'
 import { useDirectionPadAvailable } from '../layout/use-shell-side-rail'
 import { settleSessionPreferenceRead } from './session-preference-read'
 import { useEffect, useRef, useCallback, useState } from 'react'
 import { AppState, type AppStateStatus, Platform } from 'react-native'
 import { useFocusEffect } from 'expo-router'
+import { currentAppStateStatus } from '../platform/app-state-status'
 import { subscribeMirroredKey } from '../storage/mirrored-storage-keys'
-import { loadHosts } from '../transport/hosts/host-store'
+import { loadHosts } from '../host-catalog/host-store'
 import {
   TERMINAL_ACCESSORY_LAYOUT_STORAGE_KEY,
-  loadTerminalAccessoryLayout
-} from '../terminal/terminal-accessory-layout'
+  loadTerminalAccessoryLayout,
+  saveTerminalSmartRail
+} from '../terminal/key-input/terminal-accessory-layout'
 import {
   recoverActiveTerminalAfterForeground,
   shouldRecoverTerminalOnAppStateChange
-} from '../terminal/terminal-foreground-recovery'
-import { loadCustomKeys, subscribeStoredCustomKeys } from '../terminal/terminal-custom-keys'
+} from '../terminal/webview/terminal-foreground-recovery'
+import {
+  loadCustomKeys,
+  subscribeStoredCustomKeys
+} from '../terminal/key-input/terminal-custom-keys'
 import type { MobileSessionTabReconciliationModel } from './tabs/use-mobile-session-tab-reconciliation'
 
 export function useMobileSessionLifecycle(scope: MobileSessionTabReconciliationModel) {
@@ -30,6 +35,7 @@ export function useMobileSessionLifecycle(scope: MobileSessionTabReconciliationM
     setShortcutLayout,
     setVisibleBuiltInIds,
     setDirectionPadEnabled,
+    setSmartRailEnabled,
     setHostEndpoint,
     setHostName,
     connStateRef,
@@ -107,6 +113,7 @@ export function useMobileSessionLifecycle(scope: MobileSessionTabReconciliationM
           setShortcutLayout?.(layout)
           setVisibleBuiltInIds(layout.visibleBuiltInIds)
           setDirectionPadEnabled(layout.directionPadEnabled !== false)
+          setSmartRailEnabled(layout.smartRail === true)
         }
         setAccessoryLayoutLoaded(true)
       }
@@ -122,6 +129,19 @@ export function useMobileSessionLifecycle(scope: MobileSessionTabReconciliationM
       }
     }
   }, [padAvailable, shellStorage])
+
+  const handleSmartRailChange = useCallback(
+    (enabled: boolean) => {
+      // A read that started before the toggle must not flip it back.
+      layoutReadRevisionRef.current += 1
+      setSmartRailEnabled(enabled)
+      saveTerminalSmartRail(enabled, padAvailable).catch((error: unknown) => {
+        console.warn('[terminal-keys] the store would not take the Smart rail setting', error)
+        setSmartRailEnabled(!enabled)
+      })
+    },
+    [padAvailable]
+  )
 
   useFocusEffect(
     useCallback(() => {
@@ -158,7 +178,7 @@ export function useMobileSessionLifecycle(scope: MobileSessionTabReconciliationM
 
   const pendingForegroundRecoveryRef = useRef(false)
   useEffect(() => {
-    let previousAppState: AppStateStatus | null = AppState.currentState
+    let previousAppState: AppStateStatus | null = currentAppStateStatus()
     const sub = AppState.addEventListener('change', (nextAppState: AppStateStatus) => {
       const shouldRecover = shouldRecoverTerminalOnAppStateChange(
         previousAppState,
@@ -214,6 +234,7 @@ export function useMobileSessionLifecycle(scope: MobileSessionTabReconciliationM
   }, [connState, scheduleDelayedAction, subscribeToTerminal, terminalResume, unsubscribeTerminal])
   return {
     accessoryPreferencesReady: customKeysLoaded && accessoryLayoutLoaded,
+    handleSmartRailChange,
     pendingForegroundRecoveryRef
   }
 }

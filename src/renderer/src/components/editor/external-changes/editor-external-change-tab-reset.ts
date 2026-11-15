@@ -1,4 +1,4 @@
-import { getConnectionIdForFile } from '@/lib/connection-context'
+import { getConnectionIdForFile } from '@/lib/workspace/ownership/connection-context'
 import {
   getOpenFilesForExternalFileChange,
   type EditorPathMutationTarget

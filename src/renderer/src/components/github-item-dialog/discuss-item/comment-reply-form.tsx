@@ -2,13 +2,13 @@ import React, { useCallback, useState } from 'react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { useMountedRef } from '@/hooks/useMountedRef'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import { GitHubMarkdownComposer } from '@/components/github/GitHubMarkdownComposer'
 import type { GitHubImageUploadAddress } from '@/components/github/github-image-upload'
 import {
   getCommentBodySubmitState,
   hasBoundedCommentBodyText
-} from '@/lib/comment-body-submit-state'
+} from '@/lib/source-control/review/comments/comment-body-submit-state'
 import { translate } from '@/i18n/i18n'
 import { useTranslate } from '@/i18n/use-translate'
 

@@ -1,3 +1,5 @@
+import { recordDraft } from '../../../keyed-record-transitions'
+
 /** Preserve identity when no key matches or teardown rerenders selectors for dozens of unchanged maps. Nullish partial-test slices normalize to {}, matching spread/delete; production initializes them. */
 export function omitRecordKeys<T>(
   record: Record<string, T> | undefined,
@@ -6,13 +8,9 @@ export function omitRecordKeys<T>(
   if (!record) {
     return {}
   }
-  let next: Record<string, T> | null = null
+  const draft = recordDraft(record)
   for (const key of keys) {
-    if (!(key in record)) {
-      continue
-    }
-    next ??= { ...record }
-    delete next[key]
+    draft.delete(key)
   }
-  return next ?? record
+  return draft.finish()
 }

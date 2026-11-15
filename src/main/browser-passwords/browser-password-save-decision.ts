@@ -1,4 +1,4 @@
-import type { BrowserPasswordFormKind } from '../../shared/browser-passwords-types'
+import type { BrowserPasswordFormKind } from '../../shared/browser/passwords/browser-passwords-types'
 
 export type BrowserPasswordSavedLogin = { id: string; username: string; password: string }
 
