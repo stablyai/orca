@@ -22,16 +22,6 @@ export function manualRefreshResult(
     : { kind: 'skipped' }
 }
 
-/** Report only what this click did: a latched, superseded or skipped click records nothing. */
-export async function reportedManualRefresh(
-  run: () => Promise<void>,
-  lastResult: { current: ChecksPanelManualRefreshResult }
-): Promise<ChecksPanelManualRefreshResult> {
-  lastResult.current = { kind: 'skipped' }
-  await run()
-  return lastResult.current
-}
-
 /** Retry keeps the positive evidence's number as a hosted-review hint when nothing is usable. */
 export function manualRetryPRHint(
   linkedPR: number | null,

@@ -130,6 +130,10 @@ export function waitForTicketChange(
   signal?: AbortSignal
 ): Promise<void> {
   return new Promise<void>((resolve) => {
+    if (signal?.aborted) {
+      resolve()
+      return
+    }
     const done = (): void => {
       clearTimeout(timer)
       signal?.removeEventListener('abort', done)

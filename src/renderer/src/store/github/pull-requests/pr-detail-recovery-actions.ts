@@ -29,6 +29,7 @@ import {
   awaitWithBudget,
   detachPRDetailRecoverySubscription as detach,
   newPRDetailRecoverySubscription,
+  commitWithResume,
   recoveryRuntimeTarget,
   retainedEpochs,
   startWithResume,
@@ -36,9 +37,6 @@ import {
   terminalRecoveryStatus,
   type PRDetailRecoverySubscription as Subscription
 } from './pr-detail-recovery-subscription'
-
-type SetState = Parameters<StateCreator<AppState>>[0]
-type GetState = Parameters<StateCreator<AppState>>[1]
 
 export type PRDetailRecoverySlice = {
   prDetailRecovery: PRDetailRecoveryUiState | null
@@ -70,8 +68,8 @@ onPRLookupIntent((cacheKey) => {
 })
 
 export const createPRDetailRecoveryActions = (
-  set: SetState,
-  get: GetState
+  set: Parameters<StateCreator<AppState>>[0],
+  get: Parameters<StateCreator<AppState>>[1]
 ): PRDetailRecoverySlice => {
   const record = (contextKey: string, status: PRDetailRecoveryStatus, bump: number): void => {
     retainedEpochs.set(contextKey, status)
@@ -138,7 +136,7 @@ export const createPRDetailRecoveryActions = (
       publicationGrantId: sub.grant.grantId
     }
     // Commit is idempotent: a lost acknowledgment replays the same token and grant.
-    await sub.transport.commit(args).catch(() => sub.transport?.commit(args).catch(() => null))
+    await commitWithResume(sub.transport, args, () => live(sub))
   }
 
   const settle = (sub: Subscription, snapshot: PRDetailRecoverySnapshot): void => {

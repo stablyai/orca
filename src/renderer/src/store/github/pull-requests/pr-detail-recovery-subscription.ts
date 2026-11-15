@@ -1,4 +1,5 @@
 import type {
+  PRDetailRecoveryCommitArgs,
   PRDetailRecoveryIdentity,
   PRDetailRecoverySnapshot,
   PRDetailRecoveryTerminal
@@ -64,7 +65,7 @@ export function buildPRDetailRecoveryIdentity(
     worktreeId: context.worktreeId,
     branch: context.branch,
     currentHeadOid: context.headOid,
-    executionHostId: sub.owner.repo.executionHostId ?? null,
+    executionHostId: sub.owner.executionHostId,
     provider: 'github',
     linkedPRNumber: context.linkedPRNumber,
     fallbackPRNumber: unlinked ? context.hintPRNumber : null,
@@ -101,20 +102,28 @@ export function terminalRecoveryStatus(
 }
 
 const START_RESUME_DELAYS_MS = [1_000, 3_000]
-// One start observation never outlasts the host's own bounded wait; an unanswered invoke is a lost reply.
-const START_OBSERVATION_MS = 20_000
+// An unanswered native invoke is a lost reply; ticket observation must be able to resume.
+const REPLY_OBSERVATION_MS = 20_000
 
-function observeStart(
-  start: () => Promise<PRDetailRecoverySnapshot>
-): Promise<PRDetailRecoverySnapshot | null> {
+function observeRecoveryReply<T>(send: () => Promise<T>): Promise<T | null> {
   return new Promise((resolve) => {
-    const timer = setTimeout(() => resolve(null), START_OBSERVATION_MS)
-    const settle = (snapshot: PRDetailRecoverySnapshot | null): void => {
+    const timer = setTimeout(() => resolve(null), REPLY_OBSERVATION_MS)
+    const settle = (snapshot: T | null): void => {
       clearTimeout(timer)
       resolve(snapshot)
     }
-    start().then(settle, () => settle(null))
+    send().then(settle, () => settle(null))
   })
+}
+
+export async function commitWithResume(
+  transport: PRDetailRecoveryTransport,
+  args: PRDetailRecoveryCommitArgs,
+  stillCurrent: () => boolean
+): Promise<void> {
+  if (!(await observeRecoveryReply(() => transport.commit(args))) && stillCurrent()) {
+    await observeRecoveryReply(() => transport.commit(args))
+  }
 }
 
 /**
@@ -127,7 +136,7 @@ export async function startWithResume(
   start: () => Promise<PRDetailRecoverySnapshot>,
   stillCurrent: () => boolean
 ): Promise<PRDetailRecoverySnapshot | null> {
-  const first = await observeStart(start)
+  const first = await observeRecoveryReply(start)
   if (first) {
     return first
   }
@@ -136,7 +145,7 @@ export async function startWithResume(
     if (!stillCurrent()) {
       return null
     }
-    const resumed = await observeStart(start)
+    const resumed = await observeRecoveryReply(start)
     if (resumed) {
       return resumed
     }

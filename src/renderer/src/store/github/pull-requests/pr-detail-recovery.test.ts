@@ -70,6 +70,7 @@ const bridge: {
   starts: unknown[]
   loseNextStartReply: boolean
   startReply: ((snapshot: unknown) => Promise<unknown>) | null
+  commitReply: ((snapshot: unknown) => Promise<unknown>) | null
   directGate: Promise<void> | null
   host: HostModule
   coordinator: HostModule
@@ -77,6 +78,7 @@ const bridge: {
   starts: [],
   loseNextStartReply: false,
   startReply: null,
+  commitReply: null,
   directGate: null,
   host: {},
   coordinator: {}
@@ -99,6 +101,7 @@ async function connectNativeBridge(): Promise<void> {
     starts: [],
     loseNextStartReply: false,
     startReply: null,
+    commitReply: null,
     directGate: null,
     host,
     coordinator
@@ -125,8 +128,10 @@ async function connectNativeBridge(): Promise<void> {
     },
     waitPRDetailRecovery: (args: { ticketId: string; afterRevision: number }) =>
       host.waitPRDetailRecovery(callerKey, args.ticketId, args.afterRevision),
-    commitPRDetailRecovery: async (args: PRDetailRecoveryCommitArgs) =>
-      host.commitPRDetailRecovery(callerKey, args),
+    commitPRDetailRecovery: async (args: PRDetailRecoveryCommitArgs) => {
+      const snapshot = host.commitPRDetailRecovery(callerKey, args)
+      return bridge.commitReply ? bridge.commitReply(snapshot) : snapshot
+    },
     cancelPRDetailRecovery: async (args: { ticketId: string }) =>
       host.cancelPRDetailRecovery(callerKey, args.ticketId)
   })
@@ -328,6 +333,29 @@ describe('Checks detail recovery through the host coordinator', () => {
     await vi.advanceTimersByTimeAsync(2_000)
     expect(ticketIdOf(bridge.starts.at(-1))).toBe(ticketIdOf(bridge.starts[0]))
     expect(store.getState().prCache[cacheKey]?.data?.number).toBe(8)
+  })
+
+  it('publishes the host outcome even when native commit acknowledgements never arrive', async () => {
+    getPRForBranchOutcomeMock.mockResolvedValue({
+      kind: 'found',
+      pr: makePR({ number: 8, headSha: 'h2' }),
+      fetchedAt: START_AT
+    })
+    const { store, cacheKey } = setup()
+    bridge.commitReply = () => new Promise(() => {})
+    store.getState().notePRDetailRecoveryPanelVisible(true)
+    store.getState().reconcileGitHubPRDetails(context)
+    await vi.advanceTimersByTimeAsync(45_000)
+    expect(store.getState().prCache[cacheKey]?.data?.number).toBe(8)
+    expect(store.getState().prDetailRecovery?.status).toEqual({ kind: 'resolved' })
+  })
+
+  it('leaves recovery unavailable when the context repository has disappeared', () => {
+    const { store } = setup()
+    store.setState({ repos: [] })
+    store.getState().notePRDetailRecoveryPanelVisible(true)
+    store.getState().reconcileGitHubPRDetails(context)
+    expect(store.getState().prDetailRecovery).toBeNull()
   })
 
   it('does not resume a lost start once its context changed, and the orphan never reads', async () => {

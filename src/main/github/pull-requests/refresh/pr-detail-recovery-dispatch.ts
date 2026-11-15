@@ -154,6 +154,20 @@ export async function runPRDetailRecoveryEntry(
       requestSequence
     )
   }
+  // Admission and pacing stay serialized; provider settlement must not hold every repository's drain.
+  void settleRecoveryRead(deps, ticket, prepared, absorbed, requestSequence, requestStartedAt)
+}
+
+async function settleRecoveryRead(
+  deps: PRDetailRecoveryDispatchDeps,
+  ticket: PRDetailRecoveryTicket,
+  prepared: PreparedPRBranchRead,
+  absorbed: PRRefreshQueueEntry | null,
+  requestSequence: number,
+  requestStartedAt: number
+): Promise<void> {
+  const candidate = ticket.candidate
+  const absorbedAliases = absorbed ? Array.from(absorbed.aliases.values()) : []
   const requestId = `t:${ticket.ticketId}`
   deps.requests.start({
     requestId,

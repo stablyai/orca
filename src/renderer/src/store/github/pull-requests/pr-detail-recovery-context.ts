@@ -94,12 +94,12 @@ export function resolvePRDetailRecoveryOwner(
   state: AppState,
   context: PRDetailRecoveryContext
 ): PRDetailRecoveryOwner | null {
-  const repo = findRepoForGitHubOwner(
-    state,
-    context.repoId,
-    context.repoPath,
-    context.executionHostId
-  )
+  let repo: Repo | undefined
+  try {
+    repo = findRepoForGitHubOwner(state, context.repoId, context.repoPath, context.executionHostId)
+  } catch {
+    return null
+  }
   if (!repo) {
     return null
   }

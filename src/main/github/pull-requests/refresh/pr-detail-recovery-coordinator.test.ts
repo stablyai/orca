@@ -236,6 +236,57 @@ describe('PR detail recovery tickets', () => {
     await vi.advanceTimersByTimeAsync(10_000)
   })
 
+  it('delivers another repository refresh while a recovery read remains pending', async () => {
+    const api = await load()
+    const pending = deferred<PRRefreshOutcome>()
+    getPRForBranchOutcomeMock.mockImplementation((repoPath) =>
+      repoPath === '/repo'
+        ? pending.promise
+        : Promise.resolve({ kind: 'found', pr: makePR({ number: 23 }), fetchedAt: START_AT })
+    )
+    const started = api.startPRDetailRecovery(CALLER, startArgs(1), H2)
+    await vi.advanceTimersByTimeAsync(0)
+    await api.commit(started.ticketId)
+    await vi.advanceTimersByTimeAsync(0)
+    await vi.waitFor(async () => expect((await api.snapshot(started.ticketId)).admitted).toBe(true))
+    const delivered: PRRefreshOutcome[] = []
+    const unsubscribe = api.addPRRefreshOutcomeObserver((candidate, outcome) => {
+      if (candidate.repoPath === '/other') {
+        delivered.push(outcome)
+      }
+    })
+    try {
+      api.enqueuePRRefresh(
+        makeCandidate({ repoPath: '/other', repoId: 'repo-2', cacheKey: '/other::feature/test' }),
+        'active',
+        80,
+        1
+      )
+      await vi.advanceTimersByTimeAsync(30_000)
+      expect(delivered).toContainEqual(
+        expect.objectContaining({ kind: 'found', pr: expect.objectContaining({ number: 23 }) })
+      )
+    } finally {
+      unsubscribe()
+      pending.resolve(noPR())
+      await vi.advanceTimersByTimeAsync(0)
+    }
+  })
+
+  it('returns the current ticket snapshot when observation is already aborted', async () => {
+    const api = await load()
+    const started = api.startPRDetailRecovery(CALLER, startArgs(1), H2)
+    const controller = new AbortController()
+    controller.abort()
+    const observed = await api.waitPRDetailRecovery(
+      CALLER.callerKey,
+      started.ticketId,
+      started.revision,
+      controller.signal
+    )
+    expect(observed).toMatchObject({ phase: 'queued', admitted: false })
+  })
+
   it('waits for a host rate gate and then reads once with the original hint', async () => {
     const api = await load()
     const resetAt = START_AT + 60_000

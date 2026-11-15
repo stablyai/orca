@@ -1,11 +1,10 @@
 import { getRepoExecutionHostId } from '../../../../../../shared/execution-host'
-import { useCallback, useRef } from 'react'
+import { useCallback } from 'react'
 import { useAppStore } from '@/store/index'
 import type { PRRefreshErrorType } from '../../../../../../shared/github/pull-requests/refresh/pull-request-refresh-types'
 import {
   manualRefreshResult,
   manualRetryPRHint,
-  reportedManualRefresh,
   type ChecksPanelManualRefreshResult
 } from './checks-panel-manual-refresh-result'
 import { buildGitHubPRRefreshStateClearToken } from '@/store/github/refresh/pr-refresh-state'
@@ -82,14 +81,13 @@ export function useChecksPanelManualRefresh(model: ChecksPanelManualRefreshInput
     fallbackGitHubPRNumber,
     checksPanelReviewLookupResult
   )
-  const lastRefreshRef = useRef<ChecksPanelManualRefreshResult>({ kind: 'skipped' })
-  const runRefresh = useCallback(async () => {
+  const handleRefresh = useCallback(async (): Promise<ChecksPanelManualRefreshResult> => {
     if (!repo || !branch) {
-      return
+      return { kind: 'skipped' }
     }
     const repoOptions = { repoId: repo.id, repoOwnerExecutionHostId: getRepoExecutionHostId(repo) }
     if (refreshInFlightRef.current) {
-      return
+      return { kind: 'skipped' }
     }
     // Latch before render disables the button so double-clicks cannot duplicate Git subprocesses.
     refreshInFlightRef.current = true
@@ -109,6 +107,8 @@ export function useChecksPanelManualRefresh(model: ChecksPanelManualRefreshInput
     const refreshProvider = checksPanelManualRefreshProvider(model)
     let refreshOutcome = 'started'
     let failedErrorType: PRRefreshErrorType | undefined
+    const result = (): ChecksPanelManualRefreshResult =>
+      manualRefreshResult(refreshOutcome, isCurrentRequest(), failedErrorType)
     setIsRefreshing(true)
     const breadcrumb = (
       fields: Pick<Parameters<typeof recordChecksPanelPRRefreshBreadcrumb>[0], 'event'> &
@@ -145,7 +145,7 @@ export function useChecksPanelManualRefresh(model: ChecksPanelManualRefreshInput
           )
           // A discovered terminal branch switch must restart branch-keyed effects rather than refresh old PR data.
           refreshOutcome = 'branch-changed'
-          return
+          return result()
         }
         try {
           const statusContext = {
@@ -170,7 +170,7 @@ export function useChecksPanelManualRefresh(model: ChecksPanelManualRefreshInput
           ) {
             // A discovered terminal branch switch must restart branch-keyed effects rather than refresh old PR data.
             refreshOutcome = 'branch-changed'
-            return
+            return result()
           }
           const freshRemoteStatus = await readManualRefreshRemoteStatus(
             statusContext,
@@ -202,7 +202,7 @@ export function useChecksPanelManualRefresh(model: ChecksPanelManualRefreshInput
           refreshProvider,
           isCurrentRequest
         )
-        return
+        return result()
       }
       const refreshStoreState = useAppStore.getState()
       const startedPRRefreshToken = buildGitHubPRRefreshStateClearToken(
@@ -231,7 +231,7 @@ export function useChecksPanelManualRefresh(model: ChecksPanelManualRefreshInput
       const prLookupFailed = !refreshedPR && prLookupState?.status === 'error'
       failedErrorType = prLookupFailed ? prLookupState?.errorType : undefined
       if (!isCurrentRequest()) {
-        return
+        return result()
       }
       // The PR read above owns GitHub's refresh status, checks and comments; the review card read only refreshes the card.
       await refreshHostedReviewForClick(
@@ -241,11 +241,11 @@ export function useChecksPanelManualRefresh(model: ChecksPanelManualRefreshInput
         refreshedPR?.number ?? fallbackGitHubPRNumber
       ).catch(() => null)
       if (!isCurrentRequest()) {
-        return
+        return result()
       }
       if (prLookupFailed) {
         refreshOutcome = 'error'
-        return
+        return result()
       }
       if (refreshedPR) {
         refreshOutcome = 'pr'
@@ -257,7 +257,7 @@ export function useChecksPanelManualRefresh(model: ChecksPanelManualRefreshInput
           refreshedPR.headSha
         )
         if (!isCurrentAsyncResult(initialRequestKey) && !isCurrentRequest()) {
-          return
+          return result()
         }
         // Forced refresh may discover the number before React repaints; mark these checks current now.
         asyncResultKeyRef.current = prRequestKey
@@ -337,11 +337,6 @@ export function useChecksPanelManualRefresh(model: ChecksPanelManualRefreshInput
         setManualFailure(getHostedReviewManualRefreshError(refreshProvider))
       }
     } finally {
-      lastRefreshRef.current = manualRefreshResult(
-        refreshOutcome,
-        isCurrentRequest(),
-        failedErrorType
-      )
       breadcrumb({
         event: 'done',
         outcome: refreshOutcome,
@@ -358,6 +353,7 @@ export function useChecksPanelManualRefresh(model: ChecksPanelManualRefreshInput
         setEligibilityRefreshNonce((value) => value + 1)
       }
     }
+    return result()
   }, [
     model,
     repo,
@@ -402,10 +398,6 @@ export function useChecksPanelManualRefresh(model: ChecksPanelManualRefreshInput
     pollIntervalRef,
     refreshInFlightRef
   ])
-  const handleRefresh = useCallback(
-    () => reportedManualRefresh(runRefresh, lastRefreshRef),
-    [runRefresh]
-  )
   return {
     handleRefresh,
     manualRefreshError

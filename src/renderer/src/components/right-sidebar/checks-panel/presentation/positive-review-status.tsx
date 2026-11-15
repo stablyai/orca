@@ -149,7 +149,7 @@ export function ChecksPanelPositiveReview({
   const cancelRecovery = useAppStore((s) => s.cancelGitHubPRDetailRecovery)
   const settleRetry = useAppStore((s) => s.settleGitHubPRDetailRetry)
   const blockRef = useRef<HTMLDivElement>(null)
-  const pendingRetry = useRef(false)
+  const pendingRetry = useRef<object | null>(null)
   const retryTimers = useRef(new Set<ReturnType<typeof setTimeout>>())
   // A Retry budget belongs to its context: drop it on a context change or unmount.
   useEffect(() => {
@@ -159,9 +159,9 @@ export function ChecksPanelPositiveReview({
         clearTimeout(timer)
       }
       timers.clear()
-      pendingRetry.current = false
+      pendingRetry.current = null
     }
-  }, [recoveryContextKey])
+  }, [worktreeId, recoveryContextKey])
   // Automatic success unmounts this block; keep focus that was inside it by handing it to the header.
   useLayoutEffect(() => {
     const block = blockRef.current
@@ -214,11 +214,15 @@ export function ChecksPanelPositiveReview({
           const previous = recovery?.status
           cancelRecovery()
           setRetrying(true)
-          pendingRetry.current = true
+          const retry = {}
+          pendingRetry.current = retry
           const contextKey = recoveryContextKey
           let settled = false
           // Still mounted when this click's own read ends means no details appeared.
           const report = (status: PRDetailRecoveryStatus): void => {
+            if (pendingRetry.current !== retry) {
+              return
+            }
             setRetrying(false)
             if (contextKey && blockRef.current) {
               settleRetry(contextKey, status)
@@ -232,15 +236,18 @@ export function ChecksPanelPositiveReview({
           retryTimers.current.add(budget)
           void onRetry().then((result) => {
             settled = true
-            pendingRetry.current = false
             clearTimeout(budget)
             retryTimers.current.delete(budget)
+            if (pendingRetry.current !== retry) {
+              return
+            }
             // A click that read nothing restores what was shown, unannounced; a late real result replaces a timeout.
             if (result.kind === 'skipped') {
               setRetrying(false)
               if (contextKey && previous && blockRef.current) {
                 settleRetry(contextKey, previous, false)
               }
+              pendingRetry.current = null
               return
             }
             report(
@@ -248,6 +255,7 @@ export function ChecksPanelPositiveReview({
                 ? { kind: 'failed', errorType: result.errorType }
                 : { kind: 'unusable' }
             )
+            pendingRetry.current = null
           })
         }}
       />
