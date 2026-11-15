@@ -6,7 +6,7 @@ import type {
 import { resolveNativeChatTranscriptAgent } from '../../../shared/native-chat/native-chat-agent-support'
 import { parseJsonObject } from '../../ai-vault/parsing/session-json-object'
 import { asRecord } from '../../ai-vault/parsing/session-record-fields'
-import { extractString } from '../../../shared/trimmed-string'
+import { extractString } from '../../../shared/text/trimmed-string'
 import { decodeClaudeTurnLifecycle, decodeCodexTurnLifecycle } from './transcript-turn-lifecycle'
 
 export type NativeChatTurnEvidence = {
