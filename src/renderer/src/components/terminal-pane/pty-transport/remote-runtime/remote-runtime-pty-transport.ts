@@ -64,7 +64,7 @@ import type {
   RuntimeTerminalShow
 } from '../../../../../../shared/terminal/runtime/runtime-terminal-contracts'
 import type { RuntimeTerminalSend } from '../../../../../../shared/terminal/runtime/runtime-terminal-send-contract'
-import { SAVED_RESUME_ORIGIN_RUNTIME_CAPABILITY } from '../../../../../../shared/protocol-version'
+import { SAVED_RESUME_ORIGIN_RUNTIME_CAPABILITY } from '../../../../../../shared/remote-runtime/protocol/protocol-version'
 import { TERMINAL_CREATE_IDEMPOTENCY_RUNTIME_CAPABILITY } from '../../../../../../shared/terminal/runtime-policy/terminal-runtime-capabilities'
 import { agentResumeHostAuthorityCapability } from '../../../../runtime/hosted-terminals/creation/agent-launch/agent-resume-host-authority-capability'
 import {

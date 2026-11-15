@@ -1,5 +1,5 @@
 import { lstat } from 'node:fs/promises'
-import { getAppEnvironment } from '../../../../shared/app-environment'
+import { getAppEnvironment } from '../../../../shared/app-lifecycle/app-environment'
 import { captureDescendantSnapshot } from '../../../pty/process-retirement/pty-descendant-termination'
 import {
   endpointIsProvenDead,

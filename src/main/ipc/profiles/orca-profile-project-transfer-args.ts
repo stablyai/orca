@@ -1,4 +1,4 @@
-import type { TransferOrcaProfileProjectArgs } from '../../../shared/orca-profiles'
+import type { TransferOrcaProfileProjectArgs } from '../../../shared/orca-profiles/orca-profiles'
 
 export function transferProjectArgsFromUnknown(args: unknown): TransferOrcaProfileProjectArgs {
   if (

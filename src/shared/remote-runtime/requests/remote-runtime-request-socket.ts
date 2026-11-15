@@ -1,7 +1,7 @@
 import WebSocket from 'ws'
 import { abortSignalReason, throwIfSignalAborted } from '../../concurrency/abort-signal-reason'
 import type { PairedRuntimeConnection } from '../pairing/paired-runtime-connection'
-import type { RuntimeCapability } from '../../protocol-version'
+import type { RuntimeCapability } from '../protocol/protocol-version'
 import { remoteRuntimeClientCapabilities } from '../remote-runtime-client-capabilities'
 import {
   formatRemoteRuntimeCloseMessage,

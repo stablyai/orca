@@ -2,7 +2,7 @@
 
 import { access } from 'node:fs/promises'
 import { join } from 'node:path'
-import { getAppEnvironment, hasAppEnvironment } from '../../../shared/app-environment'
+import { getAppEnvironment, hasAppEnvironment } from '../../../shared/app-lifecycle/app-environment'
 
 const PLUGIN_DIR_NAME = 'native-chat-visuals'
 export const NATIVE_CHAT_VISUALS_SKILL_NAME = 'orca-chat-visuals'

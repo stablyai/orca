@@ -1,6 +1,6 @@
 import { defineMethod } from '../../core'
 import type { z } from 'zod'
-import { getAppEnvironment } from '../../../../../shared/app-environment'
+import { getAppEnvironment } from '../../../../../shared/app-lifecycle/app-environment'
 import { SkillDeleteRequestSchema } from '../../../../../shared/skills/deletion/skill-delete-contract'
 import {
   BundledSkillAutoUpdateRequestSchema,

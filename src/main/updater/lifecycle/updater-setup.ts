@@ -1,12 +1,12 @@
 import { app, powerMonitor } from 'electron'
 import type { BrowserWindow } from 'electron'
-import type { ReleaseBuild, ReleaseChannel } from '../../../shared/release-channel'
+import type { ReleaseBuild, ReleaseChannel } from '../../../shared/updater/release-channel'
 import type { ReleaseBuildListOptions } from '../releases/updater-release-build-cache'
 import type {
   LinuxPackageInstallInstructions,
   UpdateCheckOptions,
   UpdateStatus
-} from '../../../shared/update-status-types'
+} from '../../../shared/updater/update-status-types'
 import type {
   RemoteServerUpdateInstallResult,
   RemoteServerUpdaterSnapshot,

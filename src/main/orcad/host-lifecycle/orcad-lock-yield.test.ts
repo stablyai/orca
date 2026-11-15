@@ -15,7 +15,7 @@ import { readOrcadInstanceLockRecord } from '../instance-lock/orcad-instance-loc
 import { installOrcadShutdownSignals, startOrcadWithHost } from './orcad-lifecycle'
 import { ORCAD_LOCK_HEARTBEAT_MS } from '../instance-lock/orcad-lock-clone-machine'
 import { orcadRunFailed } from './orcad-unexpected-exit'
-import { SINGLE_INSTANCE_ALREADY_RUNNING_EXIT_CODE } from '../../../shared/single-instance-exit-code'
+import { SINGLE_INSTANCE_ALREADY_RUNNING_EXIT_CODE } from '../../../shared/app-lifecycle/launch/single-instance-exit-code'
 import { _resetPendingWorktreeRemovalsForTests } from '../../workspaces/removal/worktree-background-removal'
 
 const roots: string[] = []

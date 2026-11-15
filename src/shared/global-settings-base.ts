@@ -19,7 +19,7 @@ import type { TerminalScrollSettings } from './terminal/appearance/terminal-scro
 import type { WorktreeDeletionPreferences } from './worktree/removal/worktree-deletion-preferences'
 import type { AgentPermissionGlobalSettings } from './agent-launch/permissions/tui-agent-permission-choice'
 import type { TerminalColorOverrideGlobalSettings } from './terminal-themes/terminal-color-overrides'
-import type { WindowMaterialSettings } from './window-material'
+import type { WindowMaterialSettings } from './app-lifecycle/windows/window-material'
 import type { EditorSaveSettings } from './editor-save-settings'
 import type { NestedWorkerDepthSettings } from './orchestration/workers/nested-worker-depth'
 import type { SshRemoteControlSettings } from './remote-runtime/ssh/ssh-remote-control-settings'

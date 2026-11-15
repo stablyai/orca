@@ -8,7 +8,7 @@ import type { CodexSharedServerStatus } from '../../../shared/agent-launch/start
 import type {
   NewerDaemonHeldScreen,
   NewerDaemonReopenResult
-} from '../../../shared/newer-daemon-hold'
+} from '../../../shared/terminal/daemon/newer-daemon-hold'
 
 export const ptyStreamAndSerializationApi = {
   inspectProcess: (
