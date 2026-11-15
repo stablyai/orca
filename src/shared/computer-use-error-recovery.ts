@@ -59,6 +59,16 @@ export function computerUseErrorRecoveryData(
         'Otherwise reach the goal with a semantic action such as `set-value` or `perform-secondary-action` if one fits.',
         FOREGROUND_ONLY_WITH_CONSENT
       )
+    case 'secure_input_active':
+      return recoverWith(
+        'Nothing was sent: a password or other secure field has keyboard focus, so keys could be typed into it.',
+        'Ask the user to finish or close that field, or to enter the secret themselves, then retry.'
+      )
+    case 'user_actively_typing':
+      return recoverWith(
+        'Nothing was sent: the user is typing in the app this input goes to.',
+        'Wait a few seconds and retry the same command. If it is refused again, tell the user what you are about to do and ask them to pause typing.'
+      )
     case 'window_stale':
       return recoverWith(
         'Run `orca computer list-windows --app <app> --json` and choose a current window selector.',
