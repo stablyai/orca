@@ -3142,7 +3142,8 @@
       "availableAfterSessionStarts": "Available after the session starts.",
       "sessionOptions": "Session options",
       "permissionAppliesNextMessage": "{{saved}} applies to your next message; running {{active}}",
-      "permissionAppliesNextMessageCompact": "{{saved}} · next message"
+      "permissionAppliesNextMessageCompact": "{{saved}} · next message",
+      "permissionAppliesNextMessageTiming": "Applies next message · running {{active}}"
     },
     "streamFrame": {
       "streamFailed": "Transcript stream failed",

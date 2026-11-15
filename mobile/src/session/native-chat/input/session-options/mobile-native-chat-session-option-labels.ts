@@ -42,21 +42,23 @@ export function mobileSessionOptionSummaryValue(descriptor: SessionOptionDescrip
   return nativeChatSessionChoiceLabel(choice, say, descriptor.id)
 }
 
-/** The complete deferred-mode explanation for an accessibility label or the permission drill-in. */
+type DeferredPermissionSummary = { saved: string; compact: string; timing: string; full: string }
+
+/** A permission pick saved for the next message while another launch mode runs, in every length mobile shows. */
 export function mobileDeferredPermissionSummary(
   descriptor: SessionOptionDescriptor
-): string | null {
+): DeferredPermissionSummary | null {
   if (descriptor.id !== 'permissionMode' || descriptor.kind.type !== 'select') {
     return null
   }
   const choice = selectedNativeChatChoice(descriptor)
-  return choice ? (deferredPermissionSummary(descriptor, choice)?.full ?? null) : null
+  return choice ? deferredPermissionSummary(descriptor, choice) : null
 }
 
 function deferredPermissionSummary(
   descriptor: SessionOptionDescriptor,
   choice: NonNullable<ReturnType<typeof selectedNativeChatChoice>>
-): { compact: string; full: string } | null {
+): DeferredPermissionSummary | null {
   if (
     descriptor.kind.type !== 'select' ||
     descriptor.valueSource !== 'dispatched' ||
@@ -75,10 +77,16 @@ function deferredPermissionSummary(
   }
   const saved = nativeChatSessionChoiceLabel(choice, say, descriptor.id)
   return {
+    saved,
     compact: translate(
       'chat.sessionOptionCopy.permissionAppliesNextMessageCompact',
       '{{saved}} · next message',
       { saved }
+    ),
+    timing: translate(
+      'chat.sessionOptionCopy.permissionAppliesNextMessageTiming',
+      'Applies next message · running {{active}}',
+      { active: activeLabel }
     ),
     full: translate(
       'chat.sessionOptionCopy.permissionAppliesNextMessage',

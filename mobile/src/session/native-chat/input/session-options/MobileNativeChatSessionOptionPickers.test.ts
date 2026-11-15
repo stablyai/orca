@@ -158,7 +158,7 @@ describe('MobileNativeChatSessionOptionPickers', () => {
     expect(texts.some((text) => /Full access.*Ask for approval/.test(String(text)))).toBe(true)
   })
 
-  it('keeps the running permission out of the home row text but in its accessible name', () => {
+  it('shows the saved permission as the home row value and the running one in its subtitle', () => {
     mount([MODEL_DESCRIPTOR, DEFERRED_PERMISSION_DESCRIPTOR], false, 'model')
     const row = renderer!.root.find(
       (node) =>
@@ -166,12 +166,12 @@ describe('MobileNativeChatSessionOptionPickers', () => {
         typeof node.props.accessibilityLabel === 'string' &&
         node.props.accessibilityLabel.startsWith('Permissions')
     )
-    expect(row.props.accessibilityLabel).toContain('Ask for approval')
-    const value = findAllByHostType(row, 'Text')
-      .map((node) => node.props.children)
-      .find((text) => typeof text === 'string' && text.includes('Full access'))
-    expect(value).toBeDefined()
-    expect(value).not.toContain('Ask for approval')
+    expect(row.props.accessibilityLabel).toMatch(/Full access.*Ask for approval/)
+    const texts = findAllByHostType(row, 'Text').map((node) => String(node.props.children))
+    expect(texts).toContain('Full access')
+    expect(
+      texts.some((text) => !text.includes('Full access') && text.includes('Ask for approval'))
+    ).toBe(true)
   })
 
   it('consumes a refused page without replay, then permits a fresh open and permission pick', async () => {

@@ -148,7 +148,7 @@ export function MobileNativeChatSessionOptionPickers({
   const primary = model
     ? nativeChatModelPillLabel(model, say)
     : mobileSessionOptionSummaryValue(home)
-  const permissionDeferred = permission ? mobileDeferredPermissionSummary(permission) : null
+  const permissionDeferred = permission ? mobileDeferredPermissionSummary(permission)?.full : null
   const secondary = (model && nativeChatOptionValuesLabel(options, say)) || null
   // The model pill shows permission only as a warning tint, so its name carries a deferred pick.
   const modelValue = [primary, secondary, model && permissionDeferred].filter(Boolean).join(' ')
@@ -348,6 +348,7 @@ function OptionRows({
       <ListGroup>
         {descriptors.flatMap((descriptor) => {
           const isPermission = descriptor === permission
+          const deferred = isPermission ? mobileDeferredPermissionSummary(descriptor) : null
           const disabled = locked(descriptor) || !descriptor.settable
           if (showsSessionOptionAsSwitch(descriptor)) {
             return descriptorRowElements(
@@ -368,8 +369,9 @@ function OptionRows({
                   ? t('chat.sessionOptionPickers.permissions', 'Permissions')
                   : nativeChatSessionOptionLabel(descriptor, say)
               }
-              value={mobileSessionOptionSummaryValue(descriptor)}
-              accessibleValue={isPermission ? mobileDeferredPermissionSummary(descriptor) : null}
+              value={deferred?.saved ?? mobileSessionOptionSummaryValue(descriptor)}
+              subtitle={deferred?.timing}
+              accessibleValue={deferred?.full}
               valueColor={isPermission ? permissionColor : undefined}
               disabled={disabled}
               onPress={

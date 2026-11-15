@@ -92,6 +92,7 @@ function TintedValue({ value, color }: { value: string; color: string }): React.
 export function SessionOptionSummaryRow({
   label,
   value,
+  subtitle,
   accessibleValue,
   valueColor,
   disabled,
@@ -99,7 +100,9 @@ export function SessionOptionSummaryRow({
 }: {
   label: string
   value: string
-  accessibleValue?: string | null
+  /** Wraps under the label, for context too long for the one-line value. */
+  subtitle?: string
+  accessibleValue?: string
   valueColor?: string
   disabled: boolean
   onPress?: () => void
@@ -108,6 +111,7 @@ export function SessionOptionSummaryRow({
   const row = (
     <ListRow
       title={label}
+      subtitle={subtitle}
       value={tinted ? undefined : value}
       accessory={tinted}
       navigates={onPress !== undefined}
