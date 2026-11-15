@@ -8,7 +8,7 @@ import { adoptEndpointRepo } from '../../../../../../shared/endpoint-catalog-ado
 import { applyManualRepoOrder } from '../../../../../../shared/manual-repo-order'
 import { mergeFetchedHostProjectCatalog } from '../../../../../../shared/project-compatibility-host-merge'
 import { projectHostSetupProjectionFromRepos } from '../../../../../../shared/project-host-setup-projection'
-import type { RuntimeRpcResponse } from '../../../../../../shared/runtime-rpc-envelope'
+import type { RuntimeRpcResponse } from '../../../../../../shared/remote-runtime/rpc/runtime-rpc-envelope'
 import { buildSidebarProjectCatalog } from '../../../../../../shared/sidebar-list/catalog/sidebar-project-catalog'
 import { fetchPairedServerCatalog } from '../../../../../../shared/sidebar-list/catalog/paired-server-catalog'
 import { group, mainWt, repo } from './sidebar-list-golden-factories.test-fixture'

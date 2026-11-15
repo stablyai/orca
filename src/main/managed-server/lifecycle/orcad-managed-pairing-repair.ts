@@ -1,7 +1,7 @@
 // Repair over trusted host access, but accept only offers matching the desktop's pinned server key.
 import { parsePairingCode } from '../../../shared/remote-runtime/pairing/pairing'
 import { errorMessage } from '../../../shared/error-message'
-import { getManagedOrcadFenceEnvironmentId } from '../../../shared/managed-orcad-ssh-owner'
+import { getManagedOrcadFenceEnvironmentId } from '../../../shared/remote-runtime/ssh/managed-orcad-ssh-owner'
 import { refreshManagedOrcadPairing } from '../../../shared/remote-runtime/host-store/runtime-environment-managed-orcad-store'
 import { assertRuntimeEnvironmentNotReconciling } from '../../../shared/remote-runtime/host-catalog/runtime-environment-reconciliation-record'
 import { resolveEnvironment } from '../../../shared/remote-runtime/host-store/runtime-environment-store'

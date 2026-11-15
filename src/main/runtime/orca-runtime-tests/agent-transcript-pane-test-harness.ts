@@ -1,4 +1,4 @@
-import type { RuntimeTerminalCreate } from '../../../shared/runtime-terminal-create-contract'
+import type { RuntimeTerminalCreate } from '../../../shared/terminal/runtime/runtime-terminal-create-contract'
 import { vi } from 'vitest'
 import { OrcaRuntimeService } from '../orca-runtime'
 import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'

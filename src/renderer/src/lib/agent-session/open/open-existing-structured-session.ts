@@ -25,7 +25,7 @@ import { STRUCTURED_AGENT_SESSION_REVEAL_RUNTIME_CAPABILITY } from '../../../../
 import { isRuntimeCompatBlockError } from '@/runtime/rpc/compatibility/runtime-protocol-compat'
 import { executionHostIdForStructuredTarget } from '@/runtime/native-chat/session-ownership/structured-agent-session-owner'
 import type { OrchestrationPartyLocationResult } from '../../../../../shared/orchestration/orchestration-caller-status'
-import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 
 const STRUCTURED_SESSION_RESTORE_TIMEOUT_MS = 5_000
 

@@ -3,7 +3,7 @@ import {
   type ExecutionHostId,
   type ParsedExecutionHost
 } from '../../shared/execution-host'
-import type { RuntimeListingHostScope } from '../../shared/runtime-listing-host-scope'
+import type { RuntimeListingHostScope } from '../../shared/execution-host/runtime-listing-host-scope'
 import { findEnvironmentByName } from './host-selector-alternatives'
 
 export type OmittedHostScopeSelector = {

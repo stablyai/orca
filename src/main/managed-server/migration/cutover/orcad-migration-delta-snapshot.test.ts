@@ -3,7 +3,7 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { getManagedOrcadFenceEnvironmentId } from '../../../../shared/managed-orcad-ssh-owner'
+import { getManagedOrcadFenceEnvironmentId } from '../../../../shared/remote-runtime/ssh/managed-orcad-ssh-owner'
 import { encodePairingOffer } from '../../../../shared/remote-runtime/pairing/pairing'
 import { PAIRING_OFFER_VERSION } from '../../../../shared/remote-runtime/pairing/mobile-relay-pairing-offer'
 import { addManagedOrcadEnvironment } from '../../../../shared/remote-runtime/host-store/runtime-environment-managed-orcad-store'
@@ -12,7 +12,7 @@ import {
   resolveEnvironment
 } from '../../../../shared/remote-runtime/host-store/runtime-environment-store'
 import type { Repo } from '../../../../shared/repo-types'
-import type { SshTarget } from '../../../../shared/ssh-types'
+import type { SshTarget } from '../../../../shared/remote-runtime/ssh/ssh-types'
 import { folderWorkspaceKey } from '../../../../shared/workspace-scope'
 import {
   closeTestStores,

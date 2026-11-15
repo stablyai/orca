@@ -1,5 +1,5 @@
 import { createBrowserTabInRenderer } from './browser-tab-renderer-create'
-import type { RuntimeNavigationTarget } from '../../../../shared/runtime-navigation'
+import type { RuntimeNavigationTarget } from '../../../../shared/remote-runtime/session-graph/runtime-navigation'
 import type { BrowserPageCreationPlacement } from '../../../../shared/browser/client-hosting/browser-client-host-placement'
 import type { BrowserTabSplitDirection } from '../../../../shared/browser-tab-split-direction'
 import {

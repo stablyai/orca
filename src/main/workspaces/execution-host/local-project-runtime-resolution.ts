@@ -22,7 +22,7 @@ import {
 import { getCachedWslDistros, hasCachedWslDistros } from '../../wsl/discovery/distro-catalog'
 import { getRepoIdFromWorktreeId } from '../../../shared/worktree/id'
 import { projectMatchesRepo } from '../../../shared/project-repo-match'
-import type { LocalWindowsTerminalRuntimeOptions } from '../../../shared/local-windows-terminal-runtime'
+import type { LocalWindowsTerminalRuntimeOptions } from '../../../shared/shell/launch/local-windows-terminal-runtime'
 import { resolveLocalPtyOptions, type LocalPtySettings } from './local-project-runtime-pty-options'
 
 import {

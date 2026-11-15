@@ -3,7 +3,7 @@ import {
   wslHostsPolicyMovedProjects,
   wslHostsPolicyState,
   type WslHostsPolicy
-} from '../../../shared/wsl-hosts-policy'
+} from '../../../shared/remote-runtime/wsl-hosts/wsl-hosts-policy'
 import { listWslMoveCutovers } from '../../persistence/moving-wsl-projects/cutover-recovery/wsl-move-cutover-journal'
 import { configureWslHostsGate } from './wsl-host-gate'
 import { readCachedWslHostsPolicy } from './wsl-hosts-policy-live-update'

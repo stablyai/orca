@@ -1,5 +1,5 @@
 import { formatTerminalStartFailure } from '../../../../shared/terminal/pty/lifecycle/terminal-start-failure'
-import { readableWslDistroHoldText } from '../../../../shared/wsl-distro-stopped-hold'
+import { readableWslDistroHoldText } from '../../../../shared/remote-runtime/wsl-hosts/wsl-distro-stopped-hold'
 import { RuntimeLineageError } from '../lineage/runtime-lineage-error'
 import { paneIdentity } from '../../terminal/identity/runtime-terminal-pane-identity'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'

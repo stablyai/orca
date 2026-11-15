@@ -27,7 +27,7 @@ import {
 import {
   isPendingVmCheckout,
   type PendingVmCheckoutIndex
-} from '../../../shared/pending-vm-checkouts'
+} from '../../../shared/remote-runtime/ephemeral-vm-store/pending-vm-checkouts'
 
 export type MobileRelayRecipeEnvironmentLookup = (
   hostId: string

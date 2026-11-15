@@ -30,7 +30,7 @@ import type {
   AgentPaneActivityReply,
   AgentPaneActivityRequest
 } from '../../../shared/agent-status/presentation/agent-list-status'
-import type { RuntimeNavigationTarget } from '../../../shared/runtime-navigation'
+import type { RuntimeNavigationTarget } from '../../../shared/remote-runtime/session-graph/runtime-navigation'
 import type {
   ProjectMovePauseRequest,
   ProjectMovePauseResponse
@@ -55,11 +55,11 @@ import type {
   SleepingAgentLaunchConfig
 } from '../../../shared/agent-session/lifecycle/agent-session-resume'
 import type { TerminalPaneSplitSource } from '../../../shared/feature-education-telemetry'
-import type { RuntimeMobileSessionTabMove } from '../../../shared/runtime-session-contracts'
+import type { RuntimeMobileSessionTabMove } from '../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import type {
   RuntimeTerminalCreateRequestPayload,
   RuntimeTerminalPresentation
-} from '../../../shared/runtime-terminal-contracts'
+} from '../../../shared/terminal/runtime/runtime-terminal-contracts'
 import type { TerminalTabCreateReply } from '../../../shared/workspace-layout/terminal-surfaces/terminal-reveal-identity'
 import type {
   TerminalTabCloseRequest,

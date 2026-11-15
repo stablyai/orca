@@ -7,7 +7,7 @@ import { createRuntimeFixture } from './active-tab-publication.test-fixture'
 import type {
   RuntimeMobileSessionTabsResult,
   RuntimeMobileSessionTabsSnapshot
-} from '../../../src/shared/runtime-session-contracts'
+} from '../../../src/shared/remote-runtime/session-graph/runtime-session-contracts'
 import { buildMobileSessionTabSnapshots } from '../../../src/renderer/src/runtime/sync-runtime-graph/mobile-session-snapshots'
 import { makeState } from '../../../src/renderer/src/runtime/sync-runtime-graph/testing/sync-runtime-graph-test-harness'
 

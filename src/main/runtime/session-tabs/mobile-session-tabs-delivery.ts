@@ -1,6 +1,6 @@
 import type { RuntimeAgentSenderAssociations } from '../agent-senders/runtime-agent-sender-associations'
 import type { MobileSessionTabSubscription } from '../construction/runtime-identity-state'
-import type { RuntimeMobileSessionTabsResult } from '../../../shared/runtime-session-contracts'
+import type { RuntimeMobileSessionTabsResult } from '../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 
 type DeliveryArgs = [
   result: RuntimeMobileSessionTabsResult,

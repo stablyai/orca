@@ -4,7 +4,7 @@ import {
   type KnownRuntimeEnvironment
 } from '../../../../shared/remote-runtime/host-catalog/runtime-environments'
 import type { RuntimeHostStatusOwner } from '../../../../shared/remote-runtime/host-status/runtime-host-status-owner'
-import type { RuntimeStatus } from '../../../../shared/runtime-session-contracts'
+import type { RuntimeStatus } from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import { runtimeEnvironmentConnectionPairingKey as getPairingKey } from '../connections/runtime-environment-capability-evidence'
 import { createRuntimeEnvironmentStatusOwner } from './runtime-environment-status-owner'
 import { isRuntimeEnvironmentManuallyDisconnected } from '../connectivity/runtime-environment-manual-disconnect'

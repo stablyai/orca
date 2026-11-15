@@ -1,7 +1,7 @@
 // Phones/paired desktops must project main layout after create/close/rename despite stale window rows; rows arrive with the window's next publication.
 import { describe, expect, it, vi } from 'vitest'
-import type { RuntimeMobileSessionTabsSnapshot } from '../../../shared/runtime-session-contracts'
-import '../../../shared/runtime-types'
+import type { RuntimeMobileSessionTabsSnapshot } from '../../../shared/remote-runtime/session-graph/runtime-session-contracts'
+
 import {
   HEADLESS_LEAF_ID,
   HEADLESS_SECOND_LEAF_ID,

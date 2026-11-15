@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import type { Repo } from '../../../../shared/repo-types'
 
-import type { RuntimeClientEvent } from '../../../../shared/runtime-client-events'
+import type { RuntimeClientEvent } from '../../../../shared/remote-runtime/session-graph/runtime-client-events'
 
 import { OrcaRuntimeService } from '../../orca-runtime'
 

@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 
 import { spawnWorktreeTarget } from '../../../../shared/worktree/host-qualified-identity'
 
-import type { RuntimeClientEvent } from '../../../../shared/runtime-client-events'
+import type { RuntimeClientEvent } from '../../../../shared/remote-runtime/session-graph/runtime-client-events'
 
 // Fragments stay side-effect ordered: mocks, then lifecycle, then fixtures.
 await import('../../orca-runtime-tests/runtime-test-module-registration.spec')

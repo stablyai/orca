@@ -14,7 +14,7 @@ const { join, relative, resolve, sep } = require('node:path')
 const {
   ORCAD_TEMPLATE_MANIFEST_FILENAME,
   ORCAD_TEMPLATE_TARGETS_DIR
-} = require('../../../../src/shared/orcad-artifacts.ts')
+} = require('../../../../src/shared/remote-runtime/orcad-distribution/orcad-artifacts.ts')
 const { verifyPackagedOrcadTemplate } = require('./verify-packaged-orcad-template.cjs')
 const {
   compactPackagedOrcadRipgrep,

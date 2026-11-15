@@ -6,12 +6,12 @@ import type {
   SshTargetAddResult,
   SshTargetCreateInput,
   SshTargetUpdateInput
-} from '../../../shared/ssh-types'
+} from '../../../shared/remote-runtime/ssh/ssh-types'
 import {
   listUserSshConfigHostSummaries,
   resolveUserSshConfigHost
 } from '../../ssh/config/ssh-config-host-picker'
-import { getManagedOrcadFenceEnvironmentId } from '../../../shared/managed-orcad-ssh-owner'
+import { getManagedOrcadFenceEnvironmentId } from '../../../shared/remote-runtime/ssh/managed-orcad-ssh-owner'
 import { closeOrcadManagedTunnel } from '../../managed-server/lifecycle/orcad-managed-tunnel'
 import { rotateSshProviderAuthority } from '../../ssh/connection/authority/ssh-provider-authority'
 import {
@@ -32,7 +32,7 @@ import {
   requestDesktopBrowserBridgeReconcile,
   setDesktopBrowserBridgeHostStopped
 } from '../browser/desktop-browser-bridge-reconcile'
-import { isRemoteCliControlAllowed } from '../../../shared/ssh-remote-cli-control'
+import { isRemoteCliControlAllowed } from '../../../shared/remote-runtime/ssh/ssh-remote-cli-control'
 
 // Add/import can re-adopt orphaned workspaces; report them so the renderer refreshes repo ownership.
 function takeRepoReadoptions(): SshRepoReadoption[] {

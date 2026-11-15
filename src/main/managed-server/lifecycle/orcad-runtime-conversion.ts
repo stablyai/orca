@@ -1,7 +1,7 @@
 // Resume journaled migrations after lost contact; source rows stay authoritative until proven commit.
 // Retain source rows afterwards for downgrade compatibility.
 import { randomUUID } from 'node:crypto'
-import type { OrcadManagedConversionResult } from '../../../shared/orcad-managed-runtime'
+import type { OrcadManagedConversionResult } from '../../../shared/remote-runtime/orcad-lifecycle/orcad-managed-runtime'
 import type { OrcadMigrationSourceCutover } from '../../../shared/orcad-migration/orcad-migration-source-cutover'
 import { recordManagedOrcadMigration } from '../../../shared/remote-runtime/host-store/runtime-environment-managed-orcad-store'
 import { listEnvironments } from '../../../shared/remote-runtime/host-store/runtime-environment-store'
@@ -22,7 +22,7 @@ import {
   findOrcadMigrationSourceCutoverForTarget,
   removeOrcadMigrationJournalsForDestination
 } from '../../persistence/migrating-orcad-catalog/cutover-journals/orcad-migration-cutover-journal'
-import type { SshTarget } from '../../../shared/ssh-types'
+import type { SshTarget } from '../../../shared/remote-runtime/ssh/ssh-types'
 import type { CensusHostRelayTerminals } from '../../ssh/migration-source/orcad-migration-terminal-gate'
 import { createManagedOrcadEnvironment } from './orcad-runtime-deployment'
 import { createSshRelayMigrationSource } from '../../ssh/migration-source/orcad-migration-ssh-relay-source'

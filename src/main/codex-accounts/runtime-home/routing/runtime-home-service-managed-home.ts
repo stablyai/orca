@@ -13,7 +13,7 @@ import {
   resolveHostCodexSessionSourceHome,
   resolveWslCodexSessionSourceHome
 } from '../../../codex/history/rollouts/codex-session-source-home'
-import { parseWslUncPath } from '../../../../shared/wsl-paths'
+import { parseWslUncPath } from '../../../../shared/file-access/wsl-paths'
 import { normalizeRuntimePathForComparison } from '../../../../shared/cross-platform-path'
 import { normalizeCodexRuntimeSelection } from '../../account-management/runtime-selection'
 import {

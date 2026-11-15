@@ -1,5 +1,5 @@
 import { sendSharedControlRequest } from './remote-runtime-shared-control-connection-actions'
-import type { RuntimeRequestGuard } from '../../runtime-rpc-envelope'
+import type { RuntimeRequestGuard } from '../rpc/runtime-rpc-envelope'
 import type { PairedRuntimeConnection } from '../pairing/paired-runtime-connection'
 import { requestSharedControl } from '../requests/remote-runtime-shared-control-requests'
 import { startSharedControlSubscription } from '../requests/remote-runtime-shared-control-subscription-start'

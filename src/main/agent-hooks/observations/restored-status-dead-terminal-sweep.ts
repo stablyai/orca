@@ -7,7 +7,7 @@ import type { FolderWorkspace } from '../../../shared/folder-workspaces/folder-w
 import type { ProjectGroup } from '../../../shared/project-group-types'
 import { getRepoIdFromWorktreeId } from '../../../shared/worktree/id'
 import { parseWorkspaceKey } from '../../../shared/workspace-scope'
-import { isLocalHookConnectionId } from '../../../shared/wsl-hook-relay-contract'
+import { isLocalHookConnectionId } from '../../../shared/agent-hook-listener/transport/wsl-hook-relay-contract'
 import type { AgentHookServer } from '../server/agent-hook-server'
 
 type RestoredStatusSweepServer = Pick<

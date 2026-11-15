@@ -1,7 +1,7 @@
 // #24399: plain shells have no agent sleep record; only host sleep proves they slept.
 import { describe, expect, it, vi } from 'vitest'
 import { spawnWorktreeTarget } from '../../../../shared/worktree/host-qualified-identity'
-import type { RuntimeClientEvent } from '../../../../shared/runtime-client-events'
+import type { RuntimeClientEvent } from '../../../../shared/remote-runtime/session-graph/runtime-client-events'
 
 // Preserve side-effect order: mocks, lifecycle, fixtures.
 await import('../../orca-runtime-tests/runtime-test-module-registration.spec')

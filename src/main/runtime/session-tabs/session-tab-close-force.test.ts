@@ -1,6 +1,6 @@
 // Confirmed pinned-tab closes carry force in both layout builds.
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { SESSION_TAB_CLOSE_INTENT_RUNTIME_CAPABILITY } from '../../../shared/session-tabs-runtime-capabilities'
+import { SESSION_TAB_CLOSE_INTENT_RUNTIME_CAPABILITY } from '../../../shared/remote-runtime/protocol/session-tabs-runtime-capabilities'
 import { z } from 'zod'
 import { RpcDispatcher } from '../rpc/dispatcher'
 import { SESSION_TAB_METHODS } from '../rpc/methods/session-tabs/session-tabs'

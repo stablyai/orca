@@ -21,7 +21,7 @@ import {
   rewriteOrcadMigrationPathValue,
   type OrcadMigrationPathRewriter
 } from '../../persistence/migrating-orcad-catalog/path-rewrite/orcad-migration-path-rewrite'
-import { wslUncDrivePathToWindows } from '../../../shared/wsl-paths'
+import { wslUncDrivePathToWindows } from '../../../shared/file-access/wsl-paths'
 
 export type WslDriveUncRewriteScope = {
   distro: string

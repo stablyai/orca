@@ -1,6 +1,6 @@
 import type { PreloadApi } from '../../../../preload/api-types'
-import { enqueueRuntimeSubscription } from '../../../../shared/runtime-rpc-subscription-queue'
-import { isTimedPRRead } from '../../../../shared/runtime-rpc-call-queue'
+import { enqueueRuntimeSubscription } from '../../../../shared/remote-runtime/rpc/runtime-rpc-subscription-queue'
+import { isTimedPRRead } from '../../../../shared/remote-runtime/rpc/runtime-rpc-call-queue'
 import type { WebRuntimeSubscriptionRegistration } from './web-runtime-crew-subscription'
 import { assertEnvironmentPairing, pinnedWebSubscriptionOptions } from './web-runtime-calls'
 import {

@@ -7,8 +7,7 @@ import {
 export { readRuntimeDesktopSidebarFacts } from './sidebar-inputs-desktop-facts'
 
 import { getWslHostService } from '../../wsl/host-lifecycle/wsl-host-service-instance'
-import type { RuntimeClientEvent } from '../../../shared/runtime-client-events'
-
+import type { RuntimeClientEvent } from '../../../shared/remote-runtime/session-graph/runtime-client-events'
 import type { RuntimeStore } from '../construction/runtime-store-contract'
 import { savedWorkspaceCatalog } from '../../persistence/profile-save-domains'
 

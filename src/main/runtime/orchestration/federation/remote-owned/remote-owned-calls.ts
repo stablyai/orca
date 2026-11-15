@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto'
 import type { OrcaRuntimeService } from '../../../orca-runtime'
 import { OrchestrationError } from '../../orchestration-error'
 import { environmentStoreWriteCount } from '../../../../../shared/remote-runtime/host-store/runtime-environment-store-worker-client'
-import type { RuntimeRequestGuard } from '../../../../../shared/runtime-rpc-envelope'
+import type { RuntimeRequestGuard } from '../../../../../shared/remote-runtime/rpc/runtime-rpc-envelope'
 import { pairedOrchestrationPeers, type OrchestrationWorkerServer } from '../environment-transport'
 import {
   closeRemoteRunLink,

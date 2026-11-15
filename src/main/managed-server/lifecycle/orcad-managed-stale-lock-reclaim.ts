@@ -5,15 +5,15 @@ import {
   ORCAD_RECLAIM_STALE_LOCK_FLAG,
   ORCAD_STALE_LOCK_DATA_ROOT_FLAG,
   ORCAD_STALE_LOCK_EXPECT_NONCE_FLAG
-} from '../../../shared/orcad-stale-lock-reclaim'
+} from '../../../shared/remote-runtime/orcad-lifecycle/orcad-stale-lock-reclaim'
 import type {
   OrcadManagedStaleLockReclaimRequest,
   OrcadManagedStaleLockReclaimResult
-} from '../../../shared/orcad-managed-runtime'
+} from '../../../shared/remote-runtime/orcad-lifecycle/orcad-managed-runtime'
 import {
   ORCAD_LAUNCHER_FILENAME,
   ORCAD_SERVER_ENTRY_FILENAME
-} from '../../../shared/orcad-artifacts'
+} from '../../../shared/remote-runtime/orcad-distribution/orcad-artifacts'
 import { withOrcadActivationLock } from '../activation/orcad-activation-lock'
 import { readOrcadActivationRecord } from '../activation/orcad-activation-record-store'
 import { followLaunchedServerPort, withManagedOrcadLifecycle } from './orcad-managed-lifecycle'

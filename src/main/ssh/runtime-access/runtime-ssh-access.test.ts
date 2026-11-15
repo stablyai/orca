@@ -11,7 +11,7 @@ import {
 } from '../../../shared/remote-runtime/host-store/runtime-environment-store'
 
 import { resolveEnvironment as readDurableEnvironment } from '../../../shared/remote-runtime/host-store/runtime-environment-store-operations'
-import type { SshTarget } from '../../../shared/ssh-types'
+import type { SshTarget } from '../../../shared/remote-runtime/ssh/ssh-types'
 
 const mocks = vi.hoisted(() => ({
   infrastructure: vi.fn(),

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { wslHookRelayConnectionId } from '../../../../shared/wsl-hook-relay-contract'
+import { wslHookRelayConnectionId } from '../../../../shared/agent-hook-listener/transport/wsl-hook-relay-contract'
 import { OrcaRuntimeWithGetTerminalInteractiveWait } from './terminal-interactive-wait'
 
 const PANE_KEY = 'tab:worker'

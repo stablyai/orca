@@ -1,18 +1,18 @@
 import { app } from 'electron'
 import type { Store } from '../persistence/loading-store/store'
-import { updateEphemeralVmRuntimeStatus } from '../../shared/ephemeral-vm-runtime-store'
-import { findWorkspaceEphemeralVmRuntime } from '../../shared/ephemeral-vm-workspace-runtime'
-import type { EphemeralVmRuntimeRecord } from '../../shared/ephemeral-vm-runtimes'
+import { updateEphemeralVmRuntimeStatus } from '../../shared/remote-runtime/ephemeral-vm-store/ephemeral-vm-runtime-store'
+import { findWorkspaceEphemeralVmRuntime } from '../../shared/remote-runtime/ephemeral-vm-store/ephemeral-vm-workspace-runtime'
+import type { EphemeralVmRuntimeRecord } from '../../shared/remote-runtime/ephemeral-vm-store/ephemeral-vm-runtimes'
 import {
   getEphemeralVmRecipeResultConnection,
   getEphemeralVmRecipeResultPairingCode
-} from '../../shared/ephemeral-vm-recipes'
+} from '../../shared/remote-runtime/ephemeral-vm-recipes/ephemeral-vm-recipes'
 import { resolveEnvironment } from '../../shared/remote-runtime/host-store/runtime-environment-store'
 import {
   EphemeralVmFailureError,
   ephemeralVmFailureFromError,
   pickEphemeralVmFailureCode
-} from '../../shared/ephemeral-vm-failure-copy'
+} from '../../shared/remote-runtime/ephemeral-vm-recipes/ephemeral-vm-failure-copy'
 import { resumeEphemeralVmRuntime } from './runtime-service'
 import { connectRuntimeOwnedSshTarget, refreshRuntimeOwnedSshTarget } from './runtime-ssh'
 import { noteRecipeVmWakePairing } from './recipe-vm-wake-pairings'

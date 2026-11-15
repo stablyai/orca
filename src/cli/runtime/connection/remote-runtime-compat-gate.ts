@@ -1,5 +1,8 @@
 import type { PairedRuntimeConnection } from '../../../shared/remote-runtime/pairing/paired-runtime-connection'
-import { describeRuntimeCompatBlock, evaluateRuntimeCompat } from '../../../shared/protocol-compat'
+import {
+  describeRuntimeCompatBlock,
+  evaluateRuntimeCompat
+} from '../../../shared/remote-runtime/protocol/protocol-compat'
 import {
   MIN_COMPATIBLE_RUNTIME_SERVER_VERSION,
   RUNTIME_PROTOCOL_VERSION
@@ -8,8 +11,8 @@ import type {
   RuntimeRequestSelection,
   RuntimeOrchestrationEnvelope,
   RuntimeRpcResponse
-} from '../../../shared/runtime-rpc-envelope'
-import type { RuntimeStatus } from '../../../shared/runtime-session-contracts'
+} from '../../../shared/remote-runtime/rpc/runtime-rpc-envelope'
+import type { RuntimeStatus } from '../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import { recordRuntimeEnvironmentUsage } from '../../../shared/remote-runtime/host-store/runtime-environment-usage-record'
 import { prepareRecipeVmEnvironmentCall } from '../pairing/recipe-vm-wake-gate'
 import { resolveRemoteConnection } from '../pairing/runtime-remote-pairing'

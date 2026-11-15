@@ -5,7 +5,7 @@ import {
   type ProviderAccountsSnapshot
 } from '@/runtime/provider-accounts/observations/runtime-provider-accounts-client'
 import { observedProviderAccounts } from '@/runtime/provider-accounts/observations/observed-provider-accounts'
-import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 
 const noSubscription = () => () => {}
 const noSnapshot = () => null

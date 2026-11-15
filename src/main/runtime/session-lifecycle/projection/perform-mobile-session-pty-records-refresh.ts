@@ -7,18 +7,18 @@ import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switc
 import type { PtyControllerInventory } from '../../terminal/lifecycle/runtime-pty-controller-contract'
 import { isAgentLaunchRunningIn } from '../../../agent-launch/agent-launch-pane-attachment'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
-import type { RuntimeNavigationTarget } from '../../../../shared/runtime-navigation'
+import type { RuntimeNavigationTarget } from '../../../../shared/remote-runtime/session-graph/runtime-navigation'
 import type { TabActivationIntent } from '../../../../shared/tab-activation-intent'
 import type {
   RuntimeMobileSessionTabsResult,
   RuntimeMobileSessionTabsSnapshot,
   RuntimeMobileSessionTabActivationResult
-} from '../../../../shared/runtime-session-contracts'
+} from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import type { ResolvedWorktree } from '../../workspaces/catalog/runtime-worktree-path-identity'
 import { includeTargetResolvedWorktree } from '../../workspaces/catalog/runtime-worktree-path-identity'
 import { parseExecutionHostId } from '../../../../shared/execution-host'
 import { parseWorkspaceKey } from '../../../../shared/workspace-scope'
-import { navigationTargetsHost } from '../../../../shared/runtime-navigation'
+import { navigationTargetsHost } from '../../../../shared/remote-runtime/session-graph/runtime-navigation'
 import { isAutomaticTabActivation } from '../../../../shared/tab-activation-intent'
 import { isWorktreeTerminalsSleepingError } from '../../../../shared/workspace-sleep'
 

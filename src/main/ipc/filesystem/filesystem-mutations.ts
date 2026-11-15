@@ -11,7 +11,7 @@ import {
 import type { LocalFileAccess } from '../../../shared/file-access/local-file-access'
 import { SshHostNotServedError } from '../../providers/ssh-host-not-served-error'
 import { resolveLocalDroppedPathsForAgent } from '../dropped-path-resolution'
-import type { SshMutationExpectation } from '../../../shared/ssh-types'
+import type { SshMutationExpectation } from '../../../shared/remote-runtime/ssh/ssh-types'
 import { assertSshMutationExpectation } from '../../ssh/connection/authority/ssh-connection-generation'
 import { renameLocalPathSerializedByDestination } from '../../filesystem/destination-serialized-local-rename'
 import { assertNotExists, rethrowWithUserMessage } from './filesystem-create-path-guards'

@@ -5,7 +5,7 @@ import {
   type RuntimeSshTunnelLink
 } from '../../../shared/remote-runtime/host-catalog/runtime-environments'
 import type { SshConnection } from '../../ssh/connection/ssh-connection'
-import type { SshTarget } from '../../../shared/ssh-types'
+import type { SshTarget } from '../../../shared/remote-runtime/ssh/ssh-types'
 import type { OrcadManagedServing } from './orcad-managed-serving'
 import type { SshConnectionManager } from '../../ssh/connection/ssh-connection-manager'
 import type { SshPortForwardManager } from '../../ssh/port-forwarding/ssh-port-forward'

@@ -1,7 +1,7 @@
 import { expect } from 'vitest'
 import WebSocket from 'ws'
 import { parsePairingCode } from '../../../../shared/remote-runtime/pairing/pairing'
-import type { RuntimeMobileSessionTabsResult } from '../../../../shared/runtime-session-contracts'
+import type { RuntimeMobileSessionTabsResult } from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import type { OrcaRuntimeService } from '../../orca-runtime'
 import type { Repo } from '../../../../shared/repo-types'
 import type { WorktreeMeta } from '../../../../shared/worktree/meta-types'

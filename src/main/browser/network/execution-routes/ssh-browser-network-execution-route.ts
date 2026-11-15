@@ -1,4 +1,7 @@
-import type { DirectSshAuthority, SshProviderEpoch } from '../../../../shared/ssh-types'
+import type {
+  DirectSshAuthority,
+  SshProviderEpoch
+} from '../../../../shared/remote-runtime/ssh/ssh-types'
 import type { SshConnection } from '../../../ssh/connection/ssh-connection'
 import type { SshConnectionManager } from '../../../ssh/connection/ssh-connection-manager'
 import type { Client as SshClient, ClientChannel } from 'ssh2'

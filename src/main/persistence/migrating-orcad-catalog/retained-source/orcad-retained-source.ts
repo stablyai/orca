@@ -12,7 +12,7 @@ import {
 
 import { listEnvironments } from '../../../../shared/remote-runtime/host-store/runtime-environment-store'
 import { getOrcadSshDeployment } from '../../../../shared/remote-runtime/host-catalog/runtime-environments'
-import type { SshTarget } from '../../../../shared/ssh-types'
+import type { SshTarget } from '../../../../shared/remote-runtime/ssh/ssh-types'
 import type { Store } from '../../loading-store/store'
 import { collectOrcadMigrationSourceCatalog } from '../source/catalog/orcad-source-catalog'
 import {

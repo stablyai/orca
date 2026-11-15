@@ -1,7 +1,7 @@
 // Runs on plain Node, as orcad does: a host with no window raises and clears its own unread flags.
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { HEADLESS_RUNTIME_WINDOW_ID } from '../../../../shared/runtime-session-contracts'
+import { HEADLESS_RUNTIME_WINDOW_ID } from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import { folderWorkspaceKey } from '../../../../shared/workspace-scope'
 import { AgentHookServer } from '../../../agent-hooks/server/agent-hook-server'
 import { OrcaRuntimeService } from '../../orca-runtime'

@@ -2,7 +2,7 @@ import type {
   RuntimeOrchestrationEnvelope,
   RuntimeRequestGuard,
   RuntimeRequestPreparation
-} from '../../../../shared/runtime-rpc-envelope'
+} from '../../../../shared/remote-runtime/rpc/runtime-rpc-envelope'
 
 /** One RPC as the runtime-environment routes send it, whichever socket carries it. */
 export type RuntimeEnvironmentCall = {

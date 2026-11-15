@@ -20,8 +20,8 @@ import {
   orcadNodePtySlotFiles,
   orcadTemplateCommonFilenames,
   orcadTemplateTargetFilenames
-} from '../../../../src/shared/orcad-artifacts.ts'
-import { orcadAgentBrowserNativeName } from '../../../../src/shared/orcad-agent-browser-name.ts'
+} from '../../../../src/shared/remote-runtime/orcad-distribution/orcad-artifacts.ts'
+import { orcadAgentBrowserNativeName } from '../../../../src/shared/remote-runtime/orcad-distribution/orcad-agent-browser-name.ts'
 import {
   COMPAT_SERVER_TARGET_BASES,
   COMPAT_SERVER_TARGETS,

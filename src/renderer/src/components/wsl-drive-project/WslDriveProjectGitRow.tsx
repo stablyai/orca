@@ -6,7 +6,7 @@ import { Checkbox } from '@/components/ui/checkbox'
 import { Label } from '@/components/ui/label'
 import type { ProjectExecutionRuntimeResolution } from '../../../../shared/execution-host/project-execution-runtime'
 import type { ProjectUpdateArgs } from '../../../../shared/project-types'
-import type { WslDriveProjectPreview } from '../../../../shared/wsl-drive-project-types'
+import type { WslDriveProjectPreview } from '../../../../shared/wsl-move/wsl-drive-project-types'
 import { SettingsRow } from '../settings/form-controls/SettingsFormControls'
 import { wslDriveProjectBlockerMessage } from './wsl-drive-project-copy'
 

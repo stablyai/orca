@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest'
-import type { RuntimeMobileSessionFileTab } from '../../../../../shared/runtime-mobile-session-tab-contracts'
+import type { RuntimeMobileSessionFileTab } from '../../../../../shared/remote-runtime/session-graph/runtime-mobile-session-tab-contracts'
 import type { OpenFile } from '../../../store/slices/editor/types/open-file'
 import { applyWebSessionTabsSnapshot } from '../snapshot-api'
 import {

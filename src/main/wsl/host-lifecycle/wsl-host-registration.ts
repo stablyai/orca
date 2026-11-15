@@ -2,7 +2,10 @@
 import { errorMessage } from '../../../shared/error-message'
 import { addWslHostEnvironment } from '../../../shared/remote-runtime/host-store/runtime-environment-wsl-host-store'
 import type { WslHostDeploymentRecord } from '../../../shared/remote-runtime/host-store/wsl-host-deployment-store'
-import { wslHostEnvironmentLabel, type WslHostAddResult } from '../../../shared/wsl-host-types'
+import {
+  wslHostEnvironmentLabel,
+  type WslHostAddResult
+} from '../../../shared/remote-runtime/wsl-hosts/wsl-host-types'
 import {
   admitWslHostDistro,
   wslHostAddRefusal,

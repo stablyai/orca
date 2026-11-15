@@ -1,4 +1,4 @@
-import type { RuntimeMobileSessionTabsSnapshot } from '../../../shared/runtime-session-contracts'
+import type { RuntimeMobileSessionTabsSnapshot } from '../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 
 // Compare rebuilt snapshots by value, excluding newly minted publicationEpoch/snapshotVersion.
 export function headlessMobileSnapshotContentUnchanged(

@@ -5,12 +5,12 @@ import {
 import type {
   RuntimeOrchestrationEnvelope,
   RuntimeRpcResponse
-} from '../../../../shared/runtime-rpc-envelope'
+} from '../../../../shared/remote-runtime/rpc/runtime-rpc-envelope'
 import {
   isOrchestrationMutation,
   orchestrationMigrationData
 } from '../../../../shared/orchestration/orchestration-rpc-contract'
-import type { RuntimeStatus } from '../../../../shared/runtime-session-contracts'
+import type { RuntimeStatus } from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import type {
   OrchestrationEnvironmentCallOptions,
   OrchestrationEnvironmentTransport,

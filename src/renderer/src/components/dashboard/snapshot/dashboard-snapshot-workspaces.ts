@@ -15,9 +15,9 @@ import {
   type ExecutionHostId
 } from '../../../../../shared/execution-host'
 import { folderWorkspaceToWorktree } from '../../../../../shared/folder-workspaces/folder-workspace-worktree'
-import { getHostDisplayLabelOverrides } from '../../../../../shared/host-setting-overrides'
+import { getHostDisplayLabelOverrides } from '../../../../../shared/execution-host/host-setting-overrides'
 import { isFolderRepo } from '../../../../../shared/repo-kind'
-import { parseAppSshPtyId } from '../../../../../shared/ssh-pty-id'
+import { parseAppSshPtyId } from '../../../../../shared/remote-runtime/ssh/ssh-pty-id'
 import { selectWorktreesByRepo } from '@/store/workspaces/catalog/workspace-record-fields'
 
 export type ActiveDashboardWorkspace = {

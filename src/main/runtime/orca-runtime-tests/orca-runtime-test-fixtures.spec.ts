@@ -18,7 +18,7 @@ import { makePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
 import type { LayoutCommand } from '../../../shared/workspace-layout/workspace-layout-command-types'
 import { applyCommandToSession } from '../../persistence/terminal-topology/pane-admission/terminal-pane-admission'
 import { resolveHostId } from '../../persistence/loading-store/workspace-sessions/session-host-partitions'
-import { toComparableRelaySshPtyId } from '../../../shared/ssh-pty-id'
+import { toComparableRelaySshPtyId } from '../../../shared/remote-runtime/ssh/ssh-pty-id'
 import '../terminal/launch/spawned-pty-env-fixtures'
 import './runtime-test-module-registration.spec'
 import {

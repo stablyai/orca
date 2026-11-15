@@ -16,9 +16,9 @@ import type { Repo } from '../../../../../shared/repo-types'
 import type { HostWorktreeTarget } from '../../../../../shared/worktree/host-qualified-identity'
 
 import * as appEnvironment from '../../../../../shared/app-environment'
-import type { SshTarget } from '../../../../../shared/ssh-types'
+import type { SshTarget } from '../../../../../shared/remote-runtime/ssh/ssh-types'
 
-import { getRuntimeMetadataPath } from '../../../../../shared/runtime-bootstrap'
+import { getRuntimeMetadataPath } from '../../../../../shared/remote-runtime/bootstrap/runtime-bootstrap'
 
 import { UnixSocketTransport } from '../../transports/unix-socket-transport'
 import { RpcDispatcher } from '../../dispatcher'

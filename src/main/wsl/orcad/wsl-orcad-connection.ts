@@ -9,7 +9,7 @@ import {
   WslOrcadConnectionSupersededError,
   WslOrcadLaunchDeferredError
 } from './wsl-orcad-connection-errors'
-import type { WslHostConnectIntent } from '../../../shared/wsl-host-types'
+import type { WslHostConnectIntent } from '../../../shared/remote-runtime/wsl-hosts/wsl-host-types'
 import { errorMessage } from '../../../shared/error-message'
 import { parsePairingCode } from '../../../shared/remote-runtime/pairing/pairing'
 import type { PairingOffer } from '../../../shared/remote-runtime/pairing/mobile-relay-pairing-offer'

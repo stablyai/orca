@@ -12,7 +12,7 @@ import {
   resolveWorkerThreadEntryPath
 } from '../../../main/worker-threads/worker-thread-entry-path'
 import { spawnWorkerThread } from '../../../main/worker-threads/worker-thread-spawn'
-import { isWslHostsServing } from '../../wsl-host-internal-gate'
+import { isWslHostsServing } from '../wsl-hosts/wsl-host-internal-gate'
 import { reportSecurePathHardening } from '../../secure-storage/secure-path-hardening-report'
 import {
   RuntimeEnvironmentStoreError,

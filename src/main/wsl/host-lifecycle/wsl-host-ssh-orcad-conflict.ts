@@ -2,7 +2,7 @@
 import { errorMessage } from '../../../shared/error-message'
 import { listEnvironments } from '../../../shared/remote-runtime/host-store/runtime-environment-store'
 import { E2EE_KEYPAIR_FILENAME } from '../../../shared/remote-runtime/host-store/runtime-e2ee-keypair-file'
-import type { WslHostAddResult } from '../../../shared/wsl-host-types'
+import type { WslHostAddResult } from '../../../shared/remote-runtime/wsl-hosts/wsl-host-types'
 import {
   getPreferredPairingOffer,
   type KnownRuntimeEnvironment

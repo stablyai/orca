@@ -2,7 +2,7 @@ import { withDurableRuntimeStore } from '../orca-runtime-tests/runtime-durable-s
 import { vi, type Mock } from 'vitest'
 import { makePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
 import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
-import type { RuntimeTerminalListResult } from '../../../shared/runtime-terminal-contracts'
+import type { RuntimeTerminalListResult } from '../../../shared/terminal/runtime/runtime-terminal-contracts'
 import { OrcaRuntimeService } from '../orca-runtime'
 import { withMainLayout } from './main-layout-close-fixture'
 import {

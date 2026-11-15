@@ -10,7 +10,7 @@ import {
   RUNTIME_PROTOCOL_VERSION
 } from '../../../shared/protocol-version'
 import type { PublicKnownRuntimeEnvironment } from '../../../shared/remote-runtime/host-catalog/runtime-environments'
-import type { RuntimeStatus } from '../../../shared/runtime-types'
+import type { RuntimeStatus } from '../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import { clearRuntimeCompatibilityCache as clearRuntimeCompatibilityCacheForTests } from '@/runtime/rpc/compatibility/runtime-compatibility-cache'
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true

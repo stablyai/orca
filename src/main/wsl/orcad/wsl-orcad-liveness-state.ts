@@ -1,5 +1,5 @@
 import { EXIT_SETTLE_MS } from './wsl-orcad-liveness-evidence'
-import type { OrcadTerminalCensus } from '../../../shared/orcad-terminal-census'
+import type { OrcadTerminalCensus } from '../../../shared/remote-runtime/orcad-lifecycle/orcad-terminal-census'
 import type { SystemPowerLifecycleListener } from '../../power/system-power-lifecycle'
 import type { WslRunningDistrosRead } from '../discovery/wsl-background-distro-gate'
 import type { WslGuestIdentity } from '../execution/wsl-guest-process-identity'

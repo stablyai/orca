@@ -5,7 +5,7 @@ import {
 import {
   relayHostCloseReasonFrom,
   type RelayHostCloseReason
-} from '../../../../src/shared/relay-host-close-reason'
+} from '../../../../src/shared/remote-runtime/relay/relay-host-close-reason'
 import { latchHostToE2EEV2 } from './e2ee-v2-host-latch'
 import { MobileE2EEV2ClientSession } from './mobile-e2ee-v2-client-session'
 import { MobileE2EEV2PhysicalChannel } from './mobile-e2ee-v2-physical-channel'

@@ -1,5 +1,5 @@
 import { recordRuntimeEnvironmentUsage } from '../../../../shared/remote-runtime/host-store/runtime-environment-usage-record'
-import type * as Rpc from '../../../../shared/runtime-rpc-envelope'
+import type * as Rpc from '../../../../shared/remote-runtime/rpc/runtime-rpc-envelope'
 
 export function markEnvironmentUsedFromResponse(
   userDataPath: string,

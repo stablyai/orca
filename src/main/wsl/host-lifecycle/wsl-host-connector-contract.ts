@@ -1,5 +1,8 @@
 /** What the WSL host service drives (the C3 holder, C5 connections and C6 liveness, or an e2e fake), and its dependencies. */
-import type { WslHostServerStop, WslHostStatus } from '../../../shared/wsl-host-types'
+import type {
+  WslHostServerStop,
+  WslHostStatus
+} from '../../../shared/remote-runtime/wsl-hosts/wsl-host-types'
 import type { WslHostDistroCandidate } from './wsl-host-distro-list'
 import type { WslOrcadConnection } from '../orcad/wsl-orcad-connection-types'
 import type { WslOrcadConnectIntent } from '../orcad/wsl-orcad-connection-status'

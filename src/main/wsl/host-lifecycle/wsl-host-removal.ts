@@ -4,13 +4,16 @@
  * Dropping it would strand a still-running server that blocks the next add's activation.
  */
 import { errorMessage } from '../../../shared/error-message'
-import { wslHostServerStopReason } from '../../../shared/wsl-host-failure-copy'
+import { wslHostServerStopReason } from '../../../shared/remote-runtime/wsl-hosts/wsl-host-failure-copy'
 import {
   removeWslHostEnvironment,
   setWslHostPendingStop
 } from '../../../shared/remote-runtime/host-store/runtime-environment-wsl-host-store'
 import type { WslHostDeploymentRecord } from '../../../shared/remote-runtime/host-store/wsl-host-deployment-store'
-import type { WslHostAddResult, WslHostServerStop } from '../../../shared/wsl-host-types'
+import type {
+  WslHostAddResult,
+  WslHostServerStop
+} from '../../../shared/remote-runtime/wsl-hosts/wsl-host-types'
 import { admitWslHostDistro, wslHostRemovalPendingMessage } from './wsl-host-add-admission'
 import type { WslHostDistroCandidate } from './wsl-host-distro-list'
 import type { WslHostConnector } from './wsl-host-connector-contract'

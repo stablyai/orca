@@ -9,7 +9,7 @@ import { createRuntimeFixture } from './active-tab-publication.test-fixture'
 import type {
   RuntimeMobileSessionTabsResult,
   RuntimeMobileSessionTabsSnapshot
-} from '../../../src/shared/runtime-session-contracts'
+} from '../../../src/shared/remote-runtime/session-graph/runtime-session-contracts'
 import { getDefaultWorkspaceSession } from '../../../src/shared/constants'
 
 const list = (runtime: OrcaRuntimeService) => runtime.listMobileSessionTabs(`id:${WT}`)

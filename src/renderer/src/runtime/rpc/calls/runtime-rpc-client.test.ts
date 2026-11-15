@@ -12,7 +12,7 @@ import {
   MIN_COMPATIBLE_RUNTIME_CLIENT_VERSION,
   RUNTIME_PROTOCOL_VERSION
 } from '../../../../../shared/protocol-version'
-import '../../../../../shared/runtime-rpc-feature-interaction-source'
+import '../../../../../shared/remote-runtime/rpc/runtime-rpc-feature-interaction-source'
 
 const runtimeCall = vi.fn()
 const runtimeEnvironmentCall = vi.fn()

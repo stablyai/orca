@@ -2,16 +2,14 @@ import { createRuntimeEnvironmentStatusOwnerRegistry } from '../status/runtime-e
 import { runtimeEnvironmentConnectionPairingKey as getPairingKey } from './runtime-environment-capability-evidence'
 import type { RuntimeEnvironmentCall } from '../requests/runtime-environment-call'
 import type { PairedRuntimeConnection } from '../../../../shared/remote-runtime/pairing/paired-runtime-connection'
-
-import type { RuntimeStatus } from '../../../../shared/runtime-session-contracts'
-
+import type { RuntimeStatus } from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import { ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES } from '../../../../shared/electron-remote-runtime-client-capabilities'
 import type {
   RuntimeOrchestrationEnvelope,
   RuntimeRequestGuard,
   RuntimeRequestPreparation,
   RuntimeRpcResponse
-} from '../../../../shared/runtime-rpc-envelope'
+} from '../../../../shared/remote-runtime/rpc/runtime-rpc-envelope'
 import { RemoteRuntimeRequestConnection } from '../../../../shared/remote-runtime/requests/remote-runtime-request-connection'
 import { RemoteRuntimeSharedControlConnection } from '../../../../shared/remote-runtime/control/remote-runtime-shared-control-connection'
 import { probeAllRemoteRuntimeSocketsNow } from '../../../../shared/remote-runtime/remote-runtime-socket-liveness'

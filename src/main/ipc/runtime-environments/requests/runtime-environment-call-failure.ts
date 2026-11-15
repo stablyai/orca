@@ -1,7 +1,10 @@
 import type { resolveEnvironment } from '../../../../shared/remote-runtime/host-store/runtime-environment-store'
 import { RemoteRuntimeClientError } from '../../../../shared/remote-runtime/remote-runtime-client-error'
-import { RuntimeRpcCallQueueOverloadError } from '../../../../shared/runtime-rpc-call-queue'
-import type { RuntimeRpcFailure, RuntimeRpcResponse } from '../../../../shared/runtime-rpc-envelope'
+import { RuntimeRpcCallQueueOverloadError } from '../../../../shared/remote-runtime/rpc/runtime-rpc-call-queue'
+import type {
+  RuntimeRpcFailure,
+  RuntimeRpcResponse
+} from '../../../../shared/remote-runtime/rpc/runtime-rpc-envelope'
 import { runtimeEnvironmentManualDisconnectReason } from '../connectivity/runtime-environment-manual-disconnect'
 
 export function manuallyDisconnectedResponse(

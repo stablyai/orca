@@ -1,4 +1,4 @@
-import type * as Rpc from '../../../../shared/runtime-rpc-envelope'
+import type * as Rpc from '../../../../shared/remote-runtime/rpc/runtime-rpc-envelope'
 import type { KnownRuntimeEnvironment } from '../../../../shared/remote-runtime/host-catalog/runtime-environments'
 import {
   prepareManagedRuntimeRequest,

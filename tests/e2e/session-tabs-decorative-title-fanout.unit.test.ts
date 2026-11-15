@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type {
   RuntimeMobileSessionTabsResult,
   RuntimeMobileSessionTabsSnapshot
-} from '../../src/shared/runtime-types'
+} from '../../src/shared/remote-runtime/session-graph/runtime-session-contracts'
 import '../../src/shared/agent-status/title/agent-title-status'
 import {
   AGENT_STATUS_STALE_AFTER_MS,

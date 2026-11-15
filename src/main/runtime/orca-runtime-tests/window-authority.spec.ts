@@ -1,7 +1,7 @@
 import '../../../shared/layout-owner-switch'
 import { describe, expect, it, vi } from 'vitest'
 import './runtime-test-module-registration.spec'
-import { HEADLESS_RUNTIME_WINDOW_ID } from '../../../shared/runtime-session-contracts'
+import { HEADLESS_RUNTIME_WINDOW_ID } from '../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import '../orca-runtime'
 import { RUNTIME_GRAPH_RELOAD_TIMEOUT_MS } from '../session-graph/runtime-graph-reload-lifecycle'
 import '../orca-runtime-test-mocks/setup.spec'

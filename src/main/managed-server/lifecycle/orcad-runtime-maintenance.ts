@@ -3,7 +3,7 @@ import { redactRuntimeEnvironment } from '../../../shared/remote-runtime/host-ca
 import type {
   OrcadManagedDeployResult,
   OrcadManagedPastLiveTerminals
-} from '../../../shared/orcad-managed-runtime'
+} from '../../../shared/remote-runtime/orcad-lifecycle/orcad-managed-runtime'
 
 import { materializeOrcadArtifact } from '../../orcad/artifact-slots/orcad-artifact-materializer'
 import { wakeAlreadyActiveOrcad } from './orcad-already-active-wake'

@@ -17,12 +17,12 @@ import type {
   RuntimeMobileSessionCreateTerminalResult,
   RuntimeMobileSessionTabsResult,
   RuntimeMobileSessionTabsSnapshot
-} from '../../../shared/runtime-session-contracts'
+} from '../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import type {
   RuntimeTerminalFocus,
   RuntimeTerminalResolvePane,
   RuntimeWorktreeTerminalSleepResult
-} from '../../../shared/runtime-terminal-contracts'
+} from '../../../shared/terminal/runtime/runtime-terminal-contracts'
 import {
   RUNTIME_GRAPH_RELOAD_TIMEOUT_MS,
   RuntimeGraphReloadLifecycle

@@ -8,7 +8,7 @@ import { electronMocks } from '../../orca-runtime-test-mocks/setup.spec'
 
 import { TEST_WORKTREE_ID, store } from '../../orca-runtime-tests/orca-runtime-test-fixtures.spec'
 
-import type { RuntimeMobileSessionTabsSnapshot } from '../../../../shared/runtime-session-contracts'
+import type { RuntimeMobileSessionTabsSnapshot } from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 
 it('drops renderer browser rows once the serve desktop window closes', async () => {
   const runtime = new OrcaRuntimeService(store)

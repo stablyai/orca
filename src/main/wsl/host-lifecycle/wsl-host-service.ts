@@ -13,7 +13,7 @@ import type {
   WslHostDistro,
   WslHostServerStop,
   WslHostStatus
-} from '../../../shared/wsl-host-types'
+} from '../../../shared/remote-runtime/wsl-hosts/wsl-host-types'
 import type { WslHostConnector, WslHostServiceDependencies } from './wsl-host-connector-contract'
 import { wslDistroHolderKey } from '../discovery/wsl-distro-holder-record'
 import {

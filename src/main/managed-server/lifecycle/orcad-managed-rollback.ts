@@ -3,7 +3,7 @@ import {
   type KnownRuntimeEnvironment
 } from '../../../shared/remote-runtime/host-catalog/runtime-environments'
 
-import type { OrcadManagedRollbackResult } from '../../../shared/orcad-managed-runtime'
+import type { OrcadManagedRollbackResult } from '../../../shared/remote-runtime/orcad-lifecycle/orcad-managed-runtime'
 import { probeActiveOrcadReadiness } from '../activation/orcad-active-readiness'
 import { CURRENT_ORCAD_DAEMON_PROTOCOL } from '../activation/orcad-daemon-protocol-crossing'
 import {

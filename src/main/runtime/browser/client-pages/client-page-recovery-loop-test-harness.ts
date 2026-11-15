@@ -3,7 +3,7 @@ import {
   type RecoveryRuntimeObservation
 } from './client-page-recovery-workspace-test-harness'
 import { BROWSER_CLIENT_AUTOMATION_HOST_CAPABILITY } from '../../../../shared/browser/client-hosting/browser-client-automation-protocol'
-import type { RuntimeMobileSessionTabsResult } from '../../../../shared/runtime-session-contracts'
+import type { RuntimeMobileSessionTabsResult } from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import { createProfile } from './client-hosted-browser-persistence-test-harness'
 import { RpcDispatcher } from '../../rpc/dispatcher'
 import { BROWSER_CLIENT_HOST_METHODS } from '../../rpc/methods/browser/browser-client-host'

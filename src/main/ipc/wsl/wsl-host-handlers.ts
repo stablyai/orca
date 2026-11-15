@@ -4,7 +4,10 @@ export { WSL_HOST_HANDLER_CHANNELS } from './wsl-host-handler-channels'
 import { ipcMain } from 'electron'
 import { abortWhenRendererGone } from '../renderer-lifetime-abort'
 import { noteWslHostUserAction } from '../../wsl/host-lifecycle/wsl-host-user-actions'
-import type { WslHostAddResult, WslHostCapability } from '../../../shared/wsl-host-types'
+import type {
+  WslHostAddResult,
+  WslHostCapability
+} from '../../../shared/remote-runtime/wsl-hosts/wsl-host-types'
 import type { Store } from '../../persistence/loading-store/store'
 import { createWslHostConnector } from '../../wsl/host-lifecycle/wsl-host-connector'
 import {

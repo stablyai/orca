@@ -9,7 +9,7 @@ import { remoteRuntimeClientCapabilities } from '../../../../shared/remote-runti
 import type {
   RuntimeWorktreeListResult,
   RuntimeWorktreePsResult
-} from '../../../../shared/runtime-worktree-contracts'
+} from '../../../../shared/worktree/catalog/runtime-worktree-contracts'
 import {
   _resetPendingWorktreeRemovalsForTests,
   _settlePendingWorktreeRemovalsForTests,

@@ -2,7 +2,7 @@ import {
   ORCHESTRATION_FEDERATION_RELEASE_ARCHIVE_RUNTIME_CAPABILITY,
   ORCHESTRATION_WORKER_AUTO_RELEASE_RUNTIME_CAPABILITY
 } from '../../../../shared/orchestration/orchestration-runtime-capabilities'
-import type { RuntimeStatus } from '../../../../shared/runtime-session-contracts'
+import type { RuntimeStatus } from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import { z } from 'zod'
 import { getOrchestrationPeerCapabilityCache } from '../federation/orchestration-peer-capability-cache'
 import { OrchestrationError } from '../orchestration-error'

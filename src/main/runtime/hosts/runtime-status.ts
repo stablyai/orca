@@ -14,9 +14,9 @@ import {
 } from '../browser/installation/runtime-browser-commands-factory'
 import { isBrowserIdentityModeStoreInitialized } from '../../browser/identity/mode/browser-identity-mode-store'
 import { servesLocalWslMigrationSource } from '../../orcad/migration/orcad-migration-wsl-destination'
-import { ORCAD_MIGRATION_LOCAL_WSL_SOURCE_RUNTIME_CAPABILITY } from '../../../shared/orcad-runtime-capabilities'
+import { ORCAD_MIGRATION_LOCAL_WSL_SOURCE_RUNTIME_CAPABILITY } from '../../../shared/remote-runtime/protocol/orcad-runtime-capabilities'
 import { advertisedOrcadMigrationDestinationCapabilities } from '../../orcad/migration/orcad-migration-destination-capabilities'
-import { USAGE_CREDENTIALS_RUNTIME_CAPABILITY } from '../../../shared/account-runtime-capabilities'
+import { USAGE_CREDENTIALS_RUNTIME_CAPABILITY } from '../../../shared/remote-runtime/protocol/account-runtime-capabilities'
 import {
   MIN_COMPATIBLE_RUNTIME_CLIENT_VERSION,
   RUNTIME_CAPABILITIES,
@@ -26,24 +26,24 @@ import {
 import {
   MANAGED_SERVER_RUNTIME_CAPABILITY,
   REMOTE_RUNTIME_SHARED_CONTROL_CAPABILITY
-} from '../../../shared/host-runtime-capabilities'
-import { SESSION_TABS_AUTHORITATIVE_INVENTORY_RUNTIME_CAPABILITY } from '../../../shared/session-tabs-runtime-capabilities'
+} from '../../../shared/remote-runtime/protocol/host-runtime-capabilities'
+import { SESSION_TABS_AUTHORITATIVE_INVENTORY_RUNTIME_CAPABILITY } from '../../../shared/remote-runtime/protocol/session-tabs-runtime-capabilities'
 import {
   TERMINAL_PROMPT_DELIVERY_RUNTIME_CAPABILITY,
   TERMINAL_PAIRED_PARKING_RUNTIME_CAPABILITY
 } from '../../../shared/terminal/runtime-policy/terminal-runtime-capabilities'
-import type { RuntimeDegradation } from '../../../shared/runtime-capability-degradation'
+import type { RuntimeDegradation } from '../../../shared/remote-runtime/protocol/runtime-capability-degradation'
 
 import {
   type RuntimeStatus,
   BROWSER_UNAVAILABLE_ERROR_CODE,
   browserUnavailableMessage
-} from '../../../shared/runtime-session-contracts'
+} from '../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import {
   TERMINAL_PERSISTENCE_DEGRADATION_CAPABILITY,
   TERMINAL_PERSISTENCE_UNAVAILABLE_CODE,
   TERMINAL_PERSISTENCE_UNAVAILABLE_MESSAGE
-} from '../../../shared/runtime-capability-degradation'
+} from '../../../shared/remote-runtime/protocol/runtime-capability-degradation'
 import { MOBILE_WEB_BUNDLE_CAPABILITY } from '../../../shared/mobile-web-bundle/mobile-web-bundle-capability'
 import { getBundledMobileWebBundleRoot } from '../rpc/methods/mobile-delivery/bundled-mobile-web-bundle'
 import { runtimeTerminalDegradation } from '../terminal/launch/native-terminal-availability'

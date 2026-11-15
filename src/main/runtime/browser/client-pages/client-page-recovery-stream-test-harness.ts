@@ -1,4 +1,4 @@
-import type { RuntimeMobileSessionTabsResult } from '../../../../shared/runtime-session-contracts'
+import type { RuntimeMobileSessionTabsResult } from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import type { OrcaRuntimeService } from '../../orca-runtime'
 import { RpcDispatcher } from '../../rpc/dispatcher'
 import { SESSION_TAB_METHODS } from '../../rpc/methods/session-tabs/session-tabs'

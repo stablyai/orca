@@ -2,7 +2,7 @@ import { BrowserError } from '../../../browser/browser-error'
 import {
   sameRuntimeBrowserPlacement,
   type RuntimeBrowserPlacement
-} from '../../../../shared/runtime-browser-placement'
+} from '../../../../shared/browser/client-hosting/runtime-browser-placement'
 import { closeRuntimeBrowserClientPage } from './runtime-browser-client-page-creation'
 import type { RuntimeBrowserClientPage } from './runtime-browser-page-registry'
 import type { RuntimeBrowserCommandHost } from '../commands/browser-command-contracts'

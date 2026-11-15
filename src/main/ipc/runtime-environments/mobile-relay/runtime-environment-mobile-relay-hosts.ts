@@ -29,7 +29,7 @@ import {
   getWslHostService,
   onWslHostStatusesChanged
 } from '../../../wsl/host-lifecycle/wsl-host-service-instance'
-import type { SshConnectionState } from '../../../../shared/ssh-types'
+import type { SshConnectionState } from '../../../../shared/remote-runtime/ssh/ssh-types'
 import {
   getRegisteredSshState,
   listRegisteredSshTargets
@@ -40,7 +40,7 @@ import {
   subscribeRuntimeEnvironment
 } from '../requests/runtime-environment-transport-routing'
 import type { RemoteRuntimeTransportSubscription } from '../../../../shared/remote-runtime/requests/remote-runtime-subscription-contract'
-import { isRuntimeSubscriptionReplayResponse } from '../../../../shared/runtime-subscription-replay'
+import { isRuntimeSubscriptionReplayResponse } from '../../../../shared/remote-runtime/rpc/runtime-subscription-replay'
 import {
   isRuntimeEnvironmentManuallyDisconnected,
   runtimeEnvironmentManualDisconnectCount

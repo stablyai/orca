@@ -31,7 +31,7 @@ import {
   resolveBrowserHomePageDraftState
 } from './browser-home-page-draft-state'
 import { buildSidebarHostOptions } from '../../sidebar/worktree-list/controls/sidebar-host-options'
-import { getHostDisplayLabelOverrides } from '../../../../../shared/host-setting-overrides'
+import { getHostDisplayLabelOverrides } from '../../../../../shared/execution-host/host-setting-overrides'
 import {
   getSettingsFocusedExecutionHostId,
   LOCAL_EXECUTION_HOST_ID,

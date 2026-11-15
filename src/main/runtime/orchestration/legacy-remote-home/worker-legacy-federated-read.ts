@@ -1,5 +1,5 @@
 import type { ORCHESTRATION_WORKER_READ_SOURCES } from '../../../../shared/orchestration/workers/orchestration-worker-output'
-import type { RuntimeTerminalRead } from '../../../../shared/runtime-terminal-contracts'
+import type { RuntimeTerminalRead } from '../../../../shared/terminal/runtime/runtime-terminal-contracts'
 import { OrchestrationError } from '../orchestration-error'
 import {
   createWorkerOutputSourceIdentity,

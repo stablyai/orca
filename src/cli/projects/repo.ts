@@ -1,7 +1,7 @@
 import type {
   RuntimeRepoList,
   RuntimeRepoSearchRefs
-} from '../../shared/runtime-worktree-contracts'
+} from '../../shared/worktree/catalog/runtime-worktree-contracts'
 import type { CommandHandler, HandlerContext } from '../dispatch/dispatch'
 import { formatRepoList, formatRepoRefs, formatRepoShow } from './repo-format'
 import { printResult } from '../output/command-result-output'

@@ -9,7 +9,7 @@ import {
   ReleaseMismatchError
 } from './runtime-archive-download'
 import { findOrcadCachePath } from './orcad-cache-path'
-import { orcadNodeRuntimeExecutable } from '../../shared/orcad-artifacts'
+import { orcadNodeRuntimeExecutable } from '../../shared/remote-runtime/orcad-distribution/orcad-artifacts'
 import { nodeDistMirrorUrl } from '../../shared/node-dist-mirror'
 import { configuredNodeDistMirror } from './node-dist-mirror-setting'
 import {

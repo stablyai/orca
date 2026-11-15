@@ -6,8 +6,8 @@ import { isCodexAuthError } from '../../../../shared/codex-auth-errors'
 import {
   buildWslExecArgs,
   buildWslLoginShellCommand
-} from '../../../../shared/wsl-login-shell-command'
-import { parseWslUncPath } from '../../../../shared/wsl-paths'
+} from '../../../../shared/shell/wsl/wsl-login-shell-command'
+import { parseWslUncPath } from '../../../../shared/file-access/wsl-paths'
 import { CODEX_SHORT_LIVED_PROBE_APP_SERVER_ARGS } from '../../../codex-cli/codex-read-only-app-server-args'
 import { resolveCodexCommand } from '../../../codex-cli/command'
 // Import the pure helper directly so CLI-command mocks do not replace it.

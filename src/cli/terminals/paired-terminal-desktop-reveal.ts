@@ -1,5 +1,5 @@
 import { toRuntimeExecutionHostId } from '../../shared/execution-host'
-import type { RuntimeTerminalShow } from '../../shared/runtime-terminal-contracts'
+import type { RuntimeTerminalShow } from '../../shared/terminal/runtime/runtime-terminal-contracts'
 import type { RuntimeTerminalReveal } from '../../shared/workspace-layout/terminal-surfaces/terminal-pane-reveal'
 import { RuntimeClient } from '../runtime/client'
 import { resolveEnvironment } from '../runtime/pairing/environments'

@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { RuntimeRequestGuard, RuntimeRpcResponse } from '../../runtime-rpc-envelope'
+import type { RuntimeRequestGuard, RuntimeRpcResponse } from '../rpc/runtime-rpc-envelope'
 import { RemoteRuntimeSharedControlConnection } from '../control/remote-runtime-shared-control-connection'
 import {
   closeSharedControlTestServers,

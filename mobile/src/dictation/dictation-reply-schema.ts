@@ -1,5 +1,5 @@
 import * as z from 'zod'
-import type { RuntimeSpeechModelSummary } from '../../../src/shared/runtime-worktree-contracts'
+import type { RuntimeSpeechModelSummary } from '../../../src/shared/worktree/catalog/runtime-worktree-contracts'
 import { hostUnionArms, salvagedOptional, salvagingArray } from '../../../src/shared/zod-salvage'
 import { normalizeDictationTerms } from '../../../src/shared/dictation-dictionary'
 

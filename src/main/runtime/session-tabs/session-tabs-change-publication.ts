@@ -4,13 +4,13 @@ import type { BrowserTabInfo } from '../../../shared/browser/runtime/runtime-bro
 import type {
   RuntimeMobileSessionClientTab,
   RuntimeMobileSessionMarkdownTab
-} from '../../../shared/runtime-mobile-session-tab-contracts'
+} from '../../../shared/remote-runtime/session-graph/runtime-mobile-session-tab-contracts'
 import type {
   RuntimeMobileSessionTabGroup,
   RuntimeMobileSessionTabsResult,
   RuntimeMobileSessionTabsSnapshot
-} from '../../../shared/runtime-session-contracts'
-import { UNPUBLISHED_WORKTREE_PUBLICATION_EPOCH } from '../../../shared/runtime-session-contracts'
+} from '../../../shared/remote-runtime/session-graph/runtime-session-contracts'
+import { UNPUBLISHED_WORKTREE_PUBLICATION_EPOCH } from '../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import { getRuntimeBrowserPageRegistry } from '../browser/client-pages/runtime-browser-page-registry'
 import { getMobileSessionTabOrderIds } from '../session-lifecycle/projection/mobile-session-tab-merge'
 import { readCreatedWorkspaceLaunch } from '../../agent-launch/agent-launch-created-workspace'

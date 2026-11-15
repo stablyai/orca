@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import type { RuntimeBrowserClientPlacement } from '../../../../shared/runtime-browser-placement'
+import type { RuntimeBrowserClientPlacement } from '../../../../shared/browser/client-hosting/runtime-browser-placement'
 import { RuntimeBrowserPageRegistry } from './runtime-browser-page-registry'
 import { recoverUnavailableRuntimeBrowserClientPages } from './runtime-browser-client-page-recovery'
 

@@ -1,4 +1,4 @@
-import type { OrcadManagedRuntimeStatus } from '../../../shared/orcad-managed-runtime'
+import type { OrcadManagedRuntimeStatus } from '../../../shared/remote-runtime/orcad-lifecycle/orcad-managed-runtime'
 import { runTargetLifecycle } from '../../ipc/ssh/ssh-target-lifecycle-queue'
 import type { OrcadActivationTransaction } from '../activation/orcad-activation-transaction'
 import { readOrcadActivationTransaction } from '../activation/orcad-activation-transaction-store'

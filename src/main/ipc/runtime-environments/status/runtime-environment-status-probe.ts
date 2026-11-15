@@ -5,8 +5,8 @@ import {
   getPreferredPairingOffer,
   type KnownRuntimeEnvironment
 } from '../../../../shared/remote-runtime/host-catalog/runtime-environments'
-import type { RuntimeRpcResponse } from '../../../../shared/runtime-rpc-envelope'
-import type { RuntimeStatus } from '../../../../shared/runtime-session-contracts'
+import type { RuntimeRpcResponse } from '../../../../shared/remote-runtime/rpc/runtime-rpc-envelope'
+import type { RuntimeStatus } from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import { getRuntimeEnvironmentCapabilityIncarnation } from '../connections/runtime-environment-capability-evidence'
 import { getRuntimeEnvironmentStatusOwner } from '../connections/runtime-environment-request-connections'
 import {

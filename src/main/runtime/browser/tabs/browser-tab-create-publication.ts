@@ -4,7 +4,7 @@ import {
   navigationTargetsHost,
   resolveRuntimeNavigationTarget,
   type RuntimeNavigationTarget
-} from '../../../../shared/runtime-navigation'
+} from '../../../../shared/remote-runtime/session-graph/runtime-navigation'
 
 export type BrowserTabCreatePlacementKind = 'client' | 'offscreen' | 'renderer'
 

@@ -111,8 +111,7 @@ const NODE_RUNTIME_INCLUDE = [
   'src/main/computer/desktop-script/runtime-host/desktop-script-serve-channel.test.ts',
   'src/main/providers/working-directory/validation.test.ts',
   'src/main/pty/process-retirement/posix-pty-process-groups.integration.test.ts',
-  'src/shared/ephemeral-vm-recipe-output-capture.test.ts',
-  'src/main/updater/lifecycle/main-window-updater-deferred-setup.test.ts',
+  'src/shared/remote-runtime/ephemeral-vm-recipes/ephemeral-vm-recipe-output-capture.test.ts',
   'src/main/native-chat/agent-session-journal/**/*.test.ts',
   'src/main/runtime/agent-session/records/agent-session-conversation-name-store.test.ts',
   'src/main/runtime/rpc/methods/structured-sessions/attachments/structured-agent-session-visual.test.ts',
@@ -134,7 +133,6 @@ const NODE_RUNTIME_INCLUDE = [
   'src/shared/remote-runtime/control/remote-runtime-shared-control-connection.test.ts',
   'src/main/runtime/mobile-cloud-relay/control-channel/relay-control-client.test.ts',
   'src/main/ipc/filesystem/watchers/filesystem-watcher-ignore-real.test.ts',
-  'src/main/ipc/runtime-environments/catalog/runtime-environment-preference.test.ts',
   'config/scripts/desktop-distribution/runtime-verification/process-host-dev-rebuild.test.ts',
   'config/scripts/test-runtime/node-worker/vitest-node-runtime-pool.test.ts',
   // Reopen WAL-backed row caches read-only, which Bun on macOS cannot.

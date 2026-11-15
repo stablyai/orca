@@ -7,10 +7,13 @@ import {
   publishWslHostsGateState,
   resolveWslHostsGateState,
   type WslHostsGateState
-} from '../../../shared/wsl-host-internal-gate'
+} from '../../../shared/remote-runtime/wsl-hosts/wsl-host-internal-gate'
 import type { OrcadDeploymentLink } from '../../../shared/remote-runtime/host-catalog/runtime-environments'
 import { wslHostRunRefusal, WSL_HOST_REMOVING_MESSAGE } from './wsl-host-add-admission'
-import type { WslHostsMovedProjects, WslHostsPolicyState } from '../../../shared/wsl-hosts-policy'
+import type {
+  WslHostsMovedProjects,
+  WslHostsPolicyState
+} from '../../../shared/remote-runtime/wsl-hosts/wsl-hosts-policy'
 
 export const WSL_HOSTS_GATED_OFF_MESSAGE = 'WSL hosts are turned off for this launch of Orca.'
 

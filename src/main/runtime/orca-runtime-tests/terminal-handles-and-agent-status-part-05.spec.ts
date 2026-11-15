@@ -1,4 +1,4 @@
-import type { RuntimeMobileSessionTabsResult } from '../../../shared/runtime-session-contracts'
+import type { RuntimeMobileSessionTabsResult } from '../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import { describe, expect, it, vi } from 'vitest'
 import { committingSpawn } from './bind-first-pane.test-fixture'
 import './runtime-test-module-registration.spec'

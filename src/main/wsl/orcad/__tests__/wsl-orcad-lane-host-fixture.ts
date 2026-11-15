@@ -1,4 +1,4 @@
-import type { WslHostStatus } from '../../../../shared/wsl-host-types'
+import type { WslHostStatus } from '../../../../shared/remote-runtime/wsl-hosts/wsl-host-types'
 import { hasOrcadTemplate } from '../../../orcad/artifact-slots/orcad-artifact-materializer'
 import { createWslHostConnector } from '../../host-lifecycle/wsl-host-connector'
 import type { WslHostConnector } from '../../host-lifecycle/wsl-host-connector-contract'

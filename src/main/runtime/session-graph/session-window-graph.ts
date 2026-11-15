@@ -4,8 +4,8 @@ import type {
   RuntimeSyncedTab,
   RuntimeSyncWindowGraph,
   RuntimeSyncWindowGraphResult
-} from '../../../shared/runtime-session-contracts'
-import { HEADLESS_RUNTIME_WINDOW_ID } from '../../../shared/runtime-session-contracts'
+} from '../../../shared/remote-runtime/session-graph/runtime-session-contracts'
+import { HEADLESS_RUNTIME_WINDOW_ID } from '../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import type { RuntimeLeafRecord } from '../terminal/records/runtime-terminal-state-records'
 
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'

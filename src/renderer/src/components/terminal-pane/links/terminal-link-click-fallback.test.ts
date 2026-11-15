@@ -170,7 +170,8 @@ describe('createFilePathLinkProvider range bounds', () => {
 
     expect(openFilePathMock).toHaveBeenCalledWith(
       '/private/tmp/orca-setup-e2e.hOW01f/workspaces/test-wt-5/mobile/packages/expo-two-way-audio/android/src/main/java/expo/modules/twowayaudio/ExpoTwoWayAudioLifeCycleListener.kt',
-      'local'
+      'local',
+      undefined
     )
     expect(preventDefault).toHaveBeenCalled()
     expect(stopPropagation).toHaveBeenCalled()
@@ -180,7 +181,7 @@ describe('createFilePathLinkProvider range bounds', () => {
     expect(element.removeEventListener).toHaveBeenCalledWith('mouseup', mouseUp, { capture: true })
   })
 
-  it('opens a deeply wrapped absolute path from its final short continuation row', async () => {
+  it('opens a deeply wrapped absolute path at its line from its final short continuation row', async () => {
     setPlatform('Macintosh')
     const rows = [
       makeBufferLine('/private/tmp/or'),
@@ -194,7 +195,7 @@ describe('createFilePathLinkProvider range bounds', () => {
       makeBufferLine('/modules/twoway'),
       makeBufferLine('audio/ExpoTwoW'),
       makeBufferLine('ayAudioLifeCyc'),
-      makeBufferLine('leListener.kt')
+      makeBufferLine('leListener.kt:12:3')
     ]
 
     const opened = openFilePathLinkAtBufferPosition(makeBuffer(rows), { x: 4, y: 12 }, 15, {
@@ -209,7 +210,8 @@ describe('createFilePathLinkProvider range bounds', () => {
     expect(opened).toBe(true)
     expect(openFilePathMock).toHaveBeenCalledWith(
       '/private/tmp/orca-setup-e2e.hOW01f/workspaces/test-wt-5/mobile/packages/expo-two-way-audio/android/src/main/java/expo/modules/twowayaudio/ExpoTwoWayAudioLifeCycleListener.kt',
-      'local'
+      'local',
+      { line: 12, column: 3 }
     )
   })
 

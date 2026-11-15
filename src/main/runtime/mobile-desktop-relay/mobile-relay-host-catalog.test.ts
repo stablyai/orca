@@ -5,9 +5,9 @@ import {
   runtimeEnvironmentStatusFromSnapshot,
   type RuntimeHostStatusSnapshot
 } from '../../../shared/remote-runtime/host-status/runtime-host-status'
-import type { RuntimeRpcResponse } from '../../../shared/runtime-rpc-envelope'
-import type { RuntimeStatus } from '../../../shared/runtime-session-contracts'
-import type { SshConnectionState } from '../../../shared/ssh-types'
+import type { RuntimeRpcResponse } from '../../../shared/remote-runtime/rpc/runtime-rpc-envelope'
+import type { RuntimeStatus } from '../../../shared/remote-runtime/session-graph/runtime-session-contracts'
+import type { SshConnectionState } from '../../../shared/remote-runtime/ssh/ssh-types'
 
 import type { MobileDesktopRelayHosts } from './mobile-desktop-relay-hosts'
 import { MobileRelayHostCatalog } from './mobile-relay-host-catalog'

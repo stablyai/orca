@@ -1,6 +1,6 @@
 import { getNextRootProjectOrder } from '../../../../shared/root-project-order'
 import type { ProjectGroup, ProjectGroupMutation } from '../../../../shared/project-group-types'
-import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import type { RepoSlice } from '../repos/repo-state'
 import {
   PROJECT_GROUP_UPDATE_MANY_RUNTIME_CAPABILITY,

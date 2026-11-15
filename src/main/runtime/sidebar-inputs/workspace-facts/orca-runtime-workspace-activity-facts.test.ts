@@ -1,6 +1,6 @@
 // Runs on plain Node, as orcad does: the producer and its runtime wiring import no Electron.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { RuntimeMobileSessionTabsSnapshot } from '../../../../shared/runtime-session-contracts'
+import type { RuntimeMobileSessionTabsSnapshot } from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import { AgentHookServer } from '../../../agent-hooks/server/agent-hook-server'
 import { OrcaRuntimeService } from '../../orca-runtime'
 

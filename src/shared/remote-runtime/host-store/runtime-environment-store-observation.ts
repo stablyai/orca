@@ -3,7 +3,7 @@ import {
   type BoundedNodeFileRead
 } from '../../file-content/node-bounded-file-reader'
 import { hardenExistingSecureFile } from '../../secure-storage/secure-file'
-import { isWslHostsServing } from '../../wsl-host-internal-gate'
+import { isWslHostsServing } from '../wsl-hosts/wsl-host-internal-gate'
 
 let observation: Map<string, BoundedNodeFileRead | null> | undefined
 let servingWsl: boolean | undefined

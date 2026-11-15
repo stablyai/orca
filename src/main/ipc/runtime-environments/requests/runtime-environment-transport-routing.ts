@@ -11,7 +11,7 @@ import {
   requireWslHostWithoutStart,
   type ManagedRuntimeCallPreparation
 } from '../managed-orcad/runtime-environment-managed-tunnel'
-import type * as Rpc from '../../../../shared/runtime-rpc-envelope'
+import type * as Rpc from '../../../../shared/remote-runtime/rpc/runtime-rpc-envelope'
 import '../../../../shared/remote-runtime/requests/remote-runtime-request-socket'
 import { withRuntimeUnreachableHint } from './runtime-environment-unreachable-hint'
 import { enqueueRuntimeCall } from './runtime-environment-call-queue'

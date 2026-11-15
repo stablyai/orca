@@ -17,7 +17,7 @@ import type {
   RuntimeMobileSessionTabsResult,
   RuntimeSyncedTab,
   RuntimeSyncWindowGraph
-} from '../../../shared/runtime-session-contracts'
+} from '../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import type { RuntimeLeafRecord } from '../terminal/records/runtime-terminal-state-records'
 import type { PtyControllerInventory } from '../terminal/lifecycle/runtime-pty-controller-contract'
 import type { PaneStartStatuses } from '../terminal/surface/pane-start-statuses'
