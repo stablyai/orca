@@ -38,7 +38,6 @@ export function useWorktreeJumpPaletteController({
       browserPages: storeState.browserPagesByWorkspace,
       browserWorkspaces: storeState.browserTabsByWorktree,
       openFiles: storeState.openFiles,
-      retainedAgents: storeState.retainedAgentsByPaneKey,
       sleepingAgents: storeState.sleepingAgentSessionsByPaneKey,
       unifiedTabs: storeState.unifiedTabsByWorktree,
       visible
@@ -50,7 +49,6 @@ export function useWorktreeJumpPaletteController({
       storeState.browserPagesByWorkspace,
       storeState.browserTabsByWorktree,
       storeState.openFiles,
-      storeState.retainedAgentsByPaneKey,
       storeState.sleepingAgentSessionsByPaneKey,
       storeState.unifiedTabsByWorktree,
       visible

@@ -32,10 +32,12 @@ import { setStructuredAgentSessionHost } from '../../../native-chat/agent-sessio
 import { closeTestJournalHostDatabase } from '../../../native-chat/agent-session-journal/store-lifecycle/journal-host-database-test-support'
 import {
   openTestAgentSessionRecordStore,
-  readPersistedTestAgentSessionStoreText,
-  openTestAgentSessionDatabase,
-  withTestAgentSessionDatabase
+  openTestAgentSessionDatabase
 } from '../../agent-session/records/agent-session-record-store-test-harness'
+import {
+  readPersistedTestAgentSessionStoreText,
+  withTestAgentSessionDatabase
+} from '../../agent-session/records/agent-session-record-store-persistence.test-fixture'
 import { idOf, isRecord, resultOf } from '../orchestration/callers/session.test-fixture'
 
 const CLI_PATH = join(process.cwd(), 'out', 'cli', 'index.js')
@@ -85,10 +87,6 @@ async function runBuiltCli(
     stderr: stderrChunks.join('')
   }
 }
-
-describeIfBuilt('orca orchestration check --wait subprocess (§3.4)', () => {})
-
-describeIfBuilt('orca orchestration reset subprocess', () => {})
 
 describeIfBuilt('orca orchestration task readiness subprocess', () => {
   it('creates a late dependent as ready through the built CLI and runtime', async () => {

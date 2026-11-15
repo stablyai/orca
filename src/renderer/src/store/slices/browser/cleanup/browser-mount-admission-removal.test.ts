@@ -45,7 +45,7 @@ vi.mock('@/runtime/workspace-layout/frames/runtime-layout-client', async (import
 createStoreCascadesMockApi()
 
 const { isBrowserPageMountAdmitted } =
-  await import('@/components/browser-pane/host-guest/browser-page-mount-admission')
+  await import('@/components/browser-pane/host-guest/retention/browser-page-mount-admission')
 const { destroyWebviewsRemovedFromStore, destroyWorktreeBrowserGuests } =
   await import('./browser-webview-cleanup')
 

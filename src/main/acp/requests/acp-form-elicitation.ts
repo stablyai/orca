@@ -110,11 +110,12 @@ export function acpFormElicitationPresentation(params: unknown): AcpRequestPrese
     const otherKey = otherKeys.get(key)
     const choices = fieldChoices(property, otherKey !== undefined)
     const id = `q${index + 1}`
+    const ownText = [property.title, property.description].filter(Boolean)
+    // The form message is shared context, so it opens only the first card (or stands in for a bare field).
+    const shared = message && (index === 0 || ownText.length === 0) ? [message] : []
     const question: AgentJournalQuestion = {
       id,
-      question: [...new Set([message, property.title, property.description].filter(Boolean))].join(
-        '\n\n'
-      ),
+      question: [...new Set([...shared, ...ownText])].join('\n\n'),
       ...(property.title ? { header: property.title } : {}),
       multiSelect: property.type === 'array',
       options: (choices ?? []).map((choice, choiceIndex) => ({

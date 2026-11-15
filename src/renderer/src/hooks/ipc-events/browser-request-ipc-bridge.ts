@@ -1,7 +1,7 @@
 import { destroyPersistentWebview } from '@/components/browser-pane/host-guest/webview-registry'
 import { translate } from '@/i18n/i18n'
 import { closeBrowserTabWithReply } from './browser-tab-close-with-reply'
-import { useAppStore } from '../../store'
+import { useAppStore } from '../../store/index'
 import { acquireBrowserAutomationBootstrapLease } from './browser-automation-bootstrap-lease'
 import {
   browserTabSplitTarget,

@@ -108,7 +108,7 @@ const PAGE_BYTES = 1024 * 1024
  * Restores a chat's frozen copied source once, as an open interprets it, and returns its current
  * domain records as bounded typed pages. The source never changes before its chat is ready, so
  * every read is its own short statement: no transaction may span the restore and pin the WAL.
- * Returns null for a chat with nothing saved; its first open founds the epoch.
+ * Returns null without transcript content; the reader separately preserves empty saved epochs.
  */
 export function prepareJournalDomainImport(
   db: Database.Database,

@@ -9,6 +9,7 @@ import { admitSshConnectionState } from '../../../../../shared/ssh-retained-payl
 import { getRuntimeEnvironmentRevision } from '../environment-revisions/runtime-environment-revision'
 import { subscribeRuntimeEnvironment } from '../environment-revisions/runtime-environment-pairing-refresh'
 import { answerBrowserClientHostRequest } from '../../browser/client-hosting/browser-client-host-request-answer'
+import { readHostPRAutoRefreshCadence } from '@/store/github/refresh/remote-host-pr-auto-refresh-cadence-sync'
 
 export type RuntimeClientEventSubscription = {
   unsubscribe: () => void
@@ -80,6 +81,13 @@ function handleRuntimeClientEventResponse(
   }
   if (message.type === 'browserHostRequested') {
     void answerBrowserClientHostRequest(environmentId, message.requestId)
+    return
+  }
+  // The host's own PR auto-refresh setting governs this client's timers for that host's workspaces.
+  if (message.type === 'settingsChanged') {
+    if (Array.isArray(message.keys) && message.keys.includes('prAutoRefresh')) {
+      void readHostPRAutoRefreshCadence(environmentId)
+    }
     return
   }
   if (message.type === 'sshStateChanged') {

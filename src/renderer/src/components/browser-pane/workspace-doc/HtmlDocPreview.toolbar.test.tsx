@@ -7,7 +7,7 @@ import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ConfirmationDialogContext } from '@/components/confirmation-dialog-context'
 import { TooltipProvider } from '@/components/ui/tooltip'
-import { acquireWebviewsDragPassthrough } from '@/components/browser-pane/host-guest/webview-drag-passthrough'
+import { acquireWebviewsDragPassthrough } from '@/components/browser-pane/host-guest/drag/webview-drag-passthrough'
 
 const confirmExternalLink = async (): Promise<boolean> => false
 
@@ -129,7 +129,7 @@ const storeState = {
   }
 }
 
-vi.mock('@/store', () => ({
+vi.mock('@/store/index', () => ({
   useAppStore: Object.assign(
     (selector?: (state: typeof storeState) => unknown) =>
       selector ? selector(storeState) : storeState,
@@ -232,7 +232,7 @@ describe('HtmlDocPreview browser chrome', () => {
   it('counts document guests in the workspace budget and restores only on activation', async () => {
     const { hasLiveBrowserGuest, webviewRegistry } = await import('../host-guest/webview-registry')
     const { worktreeHoldsLiveBrowserGuests, selectBrowserGuestEvictionWorktreeIds } =
-      await import('../host-guest/browser-guest-worktree-retention')
+      await import('../host-guest/retention/browser-guest-worktree-retention')
     const { destroyWorktreeBrowserGuests } =
       await import('@/store/slices/browser/cleanup/browser-webview-cleanup')
     const guest = await renderPreview(container, root)

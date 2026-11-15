@@ -1,5 +1,5 @@
 import { focusOpenedBrowserLink } from './browser-link-focus'
-import { releaseBrowserPageMount } from '@/components/browser-pane/host-guest/browser-page-mount-admission'
+import { releaseBrowserPageMount } from '@/components/browser-pane/host-guest/retention/browser-page-mount-admission'
 import { createBrowserLinkHostMatcher } from './browser-link-owner'
 import { useAppStore } from '@/store/index'
 import { activateBrowserWorkspaceTab } from '../workspace/browser-workspace-tab-activation'
