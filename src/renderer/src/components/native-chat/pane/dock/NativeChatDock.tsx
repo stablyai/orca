@@ -18,7 +18,8 @@ export function NativeChatDock({ children }: { children: React.ReactNode }): Rea
       aria-label={
         scrolls ? t('components.native-chat.dock.label', 'Message box and prompts') : undefined
       }
-      className="scrollbar-sleek flex min-h-0 shrink flex-col outline-none [[data-native-chat-dock-fit~=dock]_&]:overflow-y-auto [[data-native-chat-dock-fit~=dock]_&>*]:shrink-0!"
+      // Once the transcript gives up its floor, the dock reaches the pane top: clear the pane's title actions.
+      className="scrollbar-sleek flex min-h-0 shrink flex-col outline-none [[data-native-chat-dock-fit~=transcript]_&]:pt-[var(--orca-pane-title-height,calc(var(--spacing)*6))] [[data-native-chat-dock-fit~=dock]_&]:overflow-y-auto [[data-native-chat-dock-fit~=dock]_&>*]:shrink-0!"
     >
       {children}
     </div>

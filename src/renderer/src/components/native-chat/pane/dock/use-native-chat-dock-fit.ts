@@ -27,7 +27,12 @@ function watchNativeChatDock(root: HTMLElement, dock: HTMLElement): () => void {
     queued = false
     // A pass queued before teardown must not mark a root the dock has left.
     if (!disposed) {
+      const start = performance.now()
       runNativeChatDockFit(root, dock)
+      // Dev builds attribute the pass in the performance timeline; production records nothing.
+      if (import.meta.env.DEV) {
+        performance.measure('native-chat-dock-fit', { start })
+      }
     }
   }
   // Coalesce invalidations from one commit; a microtask still runs before the browser paints.

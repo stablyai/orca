@@ -63,11 +63,28 @@ function controller(
   }
 }
 
+// The same queue after its question closes: the dock's own item goes, the list stays mounted.
+async function cleanupRender(queue: StructuredAgentSessionQueuedMessagesController): Promise<void> {
+  rerender(
+    <TooltipProvider>
+      <div data-native-chat-root="true">
+        <div data-native-chat-dock="">
+          <NativeChatQueuedMessageList controller={{ ...queue }} chatWorktreeId={null} />
+        </div>
+      </div>
+    </TooltipProvider>
+  )
+  // The queue learns the question left from a mutation observer on the dock.
+  await act(async () => {})
+}
+
+let rerender: (ui: React.ReactElement) => void = () => {}
+
 function renderQueue(
   queue: StructuredAgentSessionQueuedMessagesController,
   { questionOpen = false }: { questionOpen?: boolean } = {}
 ): void {
-  render(
+  rerender = render(
     <TooltipProvider>
       <div data-native-chat-root="true">
         <div data-native-chat-dock="">
@@ -76,7 +93,7 @@ function renderQueue(
         </div>
       </div>
     </TooltipProvider>
-  )
+  ).rerender
 }
 
 it("shows a send-failed card as Couldn't send with Retry, which sends it again", () => {
@@ -204,4 +221,13 @@ it('keeps a list folded for room open while +N more holds focus, and keeps focus
   expect(fold.getAttribute('aria-expanded')).toBe('true')
   act(() => fold.focus())
   expect(fold.getAttribute('aria-expanded')).toBe('false')
+})
+
+it('moves focus into the queue when a focused +N more goes away with the question', async () => {
+  const queue = controller([1, 2, 3, 4, 5, 6].map((i) => card(i)))
+  renderQueue(queue, { questionOpen: true })
+  act(() => screen.getByRole('button', { name: '+3 more' }).focus())
+  await cleanupRender(queue)
+  expect(screen.queryByRole('button', { name: /more$/ })).toBeNull()
+  expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Queued message 1' }))
 })

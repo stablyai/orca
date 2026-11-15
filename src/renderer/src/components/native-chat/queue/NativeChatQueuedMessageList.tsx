@@ -1,5 +1,5 @@
 import { NativeChatQueuedMessageRows } from './NativeChatQueuedMessageRows'
-import { useEffect, useId, useLayoutEffect, useRef, useState } from 'react'
+import { useEffect, useId, useInsertionEffect, useLayoutEffect, useRef, useState } from 'react'
 import { useTranslate } from '@/i18n/use-translate'
 import { cn } from '@/lib/class-names'
 import {
@@ -128,6 +128,22 @@ export function NativeChatQueuedMessageList({
     }
   })
   const moreRef = useRef<HTMLButtonElement>(null)
+  // "+N more" goes away when the pane grows or the question closes; focus on it moves into the queue
+  // rather than falling to the page. Read before this commit's DOM changes, moved after them.
+  const moreHadFocus = useRef(false)
+  useInsertionEffect(() => {
+    moreHadFocus.current = moreRef.current !== null && moreRef.current === document.activeElement
+  })
+  useLayoutEffect(() => {
+    if (!moreHadFocus.current || moreRef.current) {
+      return
+    }
+    moreHadFocus.current = false
+    const list = listRef.current
+    const firstRow = list?.querySelector<HTMLElement>('li button')
+    // The first row if the list is showing, else the toggle that opens it.
+    ;(firstRow && firstRow.getClientRects().length > 0 ? firstRow : foldRef.current)?.focus()
+  })
   const leaveList = (event: React.FocusEvent): void => {
     const next = event.relatedTarget
     const staysInList =
@@ -200,8 +216,10 @@ export function NativeChatQueuedMessageList({
                   : { maxHeight: `calc(var(--queued-row) * ${rowCap} + var(--spacing) * 0.5)` }
               }
               className={cn(
-                'scrollbar-sleek min-h-(--queued-row) shrink overflow-y-auto px-1 py-px',
+                'scrollbar-sleek min-h-(--queued-row) shrink px-1 py-px',
                 rowCap === null && 'max-h-72',
+                // Behind "+N more" the capped rows are the whole view; scrolling starts once expanded.
+                offersMore && !showAll ? 'overflow-hidden' : 'scrollbar-sleek overflow-y-auto',
                 // Folded for room unless the person opened it, is editing, or has focus in it.
                 '[[data-native-chat-dock-fit~=queue]_[data-native-chat-queue]:not([data-user-open],[data-editing],[data-list-focus])_&]:hidden'
               )}
