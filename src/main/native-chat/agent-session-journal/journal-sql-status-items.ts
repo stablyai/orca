@@ -1,5 +1,5 @@
 import type { SqliteRow } from '../../sqlite/sqlite-statement'
-import { CODEX_ASYNC_QUESTION_TOOL } from '../../../shared/codex-async-question-input'
+import { CODEX_ASYNC_QUESTION_TOOL } from '../../../shared/native-chat/input/questions/codex-async-question-input'
 import { AGENT_SESSION_ITEM_WIRE_VERSION } from '../agent-session-wire/publication/history/agent-session-item-presentation-contract'
 import {
   readJournalDomainStopStates,
