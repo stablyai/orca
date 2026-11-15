@@ -19,6 +19,8 @@ import { recordProcessGoneCrash } from './main-window/main-window-lifecycle-flag
 import { handleGpuChildCrash } from './gpu-recovery/gpu-lifecycle'
 import { isGpuFallbackCrashCandidate } from '../crash-reporting/recovery/gpu-crash-fallback-decision'
 import { startCodexHooks } from '../codex/hooks/reconciliation/codex-hook-reconcile'
+import { startCodexStateDbBackfillRecoveryInBackground } from '../codex/history/index/codex-state-db-backfill-recovery'
+import { getOrcaManagedCodexHomePath } from '../codex/configuration/homes/codex-home-paths'
 import { hydrateAgentCliShellPath } from '../agent-hooks/installation/local-agent-cli-presence'
 import { isAgentStatusHooksEnabledForAgent } from '../../shared/agent-hook-listener/configuration/agent-status-hooks-setting'
 import { reconcileStartupManagedAgentHooks } from '../agent-hooks/installation/managed-agent-hook-startup'
@@ -144,8 +146,15 @@ export async function initializeReadyRuntimeServices(): Promise<void> {
     })
   }, WORKTREE_TRASH_SWEEP_FALLBACK_MS)
   nativeTheme.themeSource = store.getSettings().theme ?? 'system'
-  // Wait for shell PATH before probing Codex; start reconciliation early so first launch can share it.
+  const providerMaintenanceReady = new Promise<void>((resolve) => {
+    runAfterFirstWindowShown(resolve, WORKTREE_TRASH_SWEEP_FALLBACK_MS)
+  })
+  void providerMaintenanceReady.then(() =>
+    startCodexStateDbBackfillRecoveryInBackground(getOrcaManagedCodexHomePath())
+  )
+  // Register launch reconciliation now; defer background probes and scratch cleanup until first paint.
   startCodexHooks({
+    startAfter: providerMaintenanceReady,
     pathReady: app.isPackaged ? hydrateAgentCliShellPath() : Promise.resolve(),
     isEnabled: () => isAgentStatusHooksEnabledForAgent(store.getSettings(), 'codex'),
     resolveLaunchHome: () => {

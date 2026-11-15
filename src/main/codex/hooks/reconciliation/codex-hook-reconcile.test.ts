@@ -6,6 +6,7 @@ import {
   readdirSync,
   readFileSync,
   realpathSync,
+  utimesSync,
   rmSync,
   statSync,
   writeFileSync
@@ -246,6 +247,14 @@ describe('reconcileCodexHooks', () => {
 
   it('holds the startup lookup and reconcile until startAfter settles', async () => {
     writeHooks({ Stop: [olderBuildStop()] })
+    const scratchRoot = join(root, 'scratch')
+    const staleScratch = join(scratchRoot, 'orca-codex-hook-trust-abandoned')
+    mkdirSync(staleScratch, { recursive: true })
+    const old = new Date(Date.now() - 2 * 60 * 60_000)
+    utimesSync(staleScratch, old, old)
+    vi.stubEnv('TMPDIR', scratchRoot)
+    vi.stubEnv('TEMP', scratchRoot)
+    vi.stubEnv('TMP', scratchRoot)
     const published = Promise.withResolvers<void>()
     startCodexHooks({
       isEnabled: () => enabled,
@@ -256,12 +265,14 @@ describe('reconcileCodexHooks', () => {
     await new Promise((resolve) => setImmediate(resolve))
     expect(mocks.probeCodexVersion).not.toHaveBeenCalled()
     expect(mocks.realHomeRuns).toBe(0)
+    expect(existsSync(staleScratch)).toBe(true)
 
     published.resolve()
     await _internals.settledForTesting()
 
     expect(mocks.probeCodexVersion).toHaveBeenCalled()
     expect(mocks.realHomeRuns).toBe(1)
+    await vi.waitFor(() => expect(existsSync(staleScratch)).toBe(false))
     expect(readHooks().Stop).toEqual([{ hooks: [buildCodexManagedHook(command(), 'Stop')] }])
   })
 
