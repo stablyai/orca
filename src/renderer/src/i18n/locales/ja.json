@@ -19870,7 +19870,8 @@
       "TerminalContextMenu": {
         "copySessionId": "セッション ID をコピー",
         "copySessionIdSuccess": "セッション ID をコピーしました",
-        "copySessionIdError": "セッション ID のコピーに失敗しました"
+        "copySessionIdError": "セッション ID のコピーに失敗しました",
+        "copySessionIdUnavailable": "コピーできるセッション ID がありません"
       },
       "hostFile": {
         "updateHostForOutsideFiles": "ワークスペース外のファイルを開くには、{{value0}} の Orca を更新してください"
@@ -22366,6 +22367,7 @@
       "chatFind": "チャット内を検索",
       "terminalToggleNativeChat": "チャット UI とターミナルを切り替え",
       "terminalClosePane": "アクティブなペインを閉じる",
+      "terminalCopySessionId": "セッション ID をコピー",
       "terminalSplitRight": "ターミナルを右に分割",
       "terminalSplitDown": "ターミナルを下に分割",
       "terminalSwitchInputSource": "入力ソース / 言語を切り替え（ネイティブ）",

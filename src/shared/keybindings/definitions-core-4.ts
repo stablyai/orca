@@ -88,6 +88,14 @@ export const KEYBINDING_DEFINITION_CORE_4: readonly KeybindingDefinition[] = [
     defaultBindings: platformBindings([])
   },
   {
+    id: 'terminal.copySessionId',
+    title: 'Copy Session ID',
+    group: 'Terminal Panes',
+    scope: 'terminal',
+    searchKeywords: ['shortcut', 'terminal', 'pane', 'agent', 'copy', 'session id', 'fork'],
+    defaultBindings: platformBindings([])
+  },
+  {
     id: 'terminal.closePane',
     title: 'Close active pane',
     group: 'Terminal Panes',
