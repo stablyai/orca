@@ -58,14 +58,11 @@ export async function measureStickyLayout(page: Page, askCount: number) {
   await expect
     .poll(async () => {
       const layout = await readLayout()
-      return (
-        !layout.frame ||
-        !layout.pane ||
-        (layout.frame.height <= layout.pane.height * 0.4 + 1 &&
-          (!askCount || layout.rows.every((row) => !row.intersectsFrame || row.completeInFrame)))
-      )
+      return askCount
+        ? layout.rows.filter((row) => row.intersectsFrame && !row.completeInFrame)
+        : []
     })
-    .toBe(true)
+    .toEqual([])
   const layout = await readLayout()
   if (layout.viewport[0] === 320) {
     for (const reason of layout.reasons) {

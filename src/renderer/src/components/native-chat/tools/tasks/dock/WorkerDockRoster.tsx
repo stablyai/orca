@@ -11,6 +11,7 @@ import { workerDockSummary } from './worker-dock-summary'
 import { WorkerDockHeader } from './WorkerDockHeader'
 import { useWorkerDockScroll } from './use-worker-dock-scroll'
 import { useWorkerDockRowCache } from './use-worker-dock-row-cache'
+import { workerDockAnchorIndex, type WorkerDockScrollAnchor } from './worker-dock-scroll-anchor'
 
 export function WorkerDockRoster(props: {
   identities: readonly {
@@ -39,7 +40,7 @@ export function WorkerDockRoster(props: {
   const root = useRef<HTMLDivElement>(null)
   const viewport = useRef<HTMLDivElement>(null)
   const summary = useRef<HTMLButtonElement>(null)
-  const anchor = useRef<{ id: string; offset: number; index: number } | null>(null)
+  const anchor = useRef<WorkerDockScrollAnchor | null>(null)
   const [held, setHeld] = useState<
     | readonly {
         id: string
@@ -194,8 +195,10 @@ export function WorkerDockRoster(props: {
       return
     }
     const saved = anchor.current
-    const index = items.findIndex((row) => row.id === saved.id)
-    const target = index !== -1 ? index : Math.min(saved.index, items.length - 1)
+    const target = workerDockAnchorIndex(saved, items)
+    if (target < 0) {
+      return
+    }
     const offset = small
       ? viewport.current.querySelector<HTMLElement>(`[data-index="${target}"]`)?.offsetTop
       : virtual.getOffsetForIndex(target, 'start')?.[0]
@@ -204,7 +207,7 @@ export function WorkerDockRoster(props: {
     }
   })
   const identityOrder = items.map((row) => row.id).join('|')
-  useLayoutEffect(preserveAnchor, [identityOrder, preserveAnchor])
+  useLayoutEffect(preserveAnchor, [identityOrder, props.rows, preserveAnchor])
   const hold = () => setHeld((previous) => previous ?? props.identities)
   const release = () => {
     if (
@@ -234,7 +237,7 @@ export function WorkerDockRoster(props: {
     virtual,
     items,
     onAnchorChange: (value) => {
-      anchor.current = value
+      anchor.current = { ...value, order: items }
     },
     measure,
     hold,

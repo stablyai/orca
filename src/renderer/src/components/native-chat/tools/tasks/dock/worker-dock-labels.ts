@@ -36,8 +36,10 @@ export function workerDockKindLabel(t: Translate, kind: string): string {
       return t('components.native-chat.workerDock.workflow', 'Workflow')
     case 'monitor':
       return t('components.native-chat.workerDock.monitor', 'Monitor')
-    default:
+    case 'agent':
       return t('components.native-chat.workerDock.agent', 'Agent')
+    default:
+      return t('components.native-chat.workerDock.task', 'Task')
   }
 }
 export function workerDockKindCount(t: Translate, kind: string, count: number): string {
@@ -62,10 +64,15 @@ export function workerDockKindCount(t: Translate, kind: string, count: number): 
         count,
         defaultValue_one: '{{count}} monitor'
       })
-    default:
+    case 'agent':
       return t('components.native-chat.workerDock.agentCount', '{{count}} agents', {
         count,
         defaultValue_one: '{{count}} agent'
+      })
+    default:
+      return t('components.native-chat.workerDock.taskCount', '{{count}} tasks', {
+        count,
+        defaultValue_one: '{{count}} task'
       })
   }
 }

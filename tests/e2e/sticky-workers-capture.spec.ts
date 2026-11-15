@@ -30,6 +30,13 @@ test('captures the worker strip in an isolated hidden native chat', async ({
     }))
   }))
   expect(identity.windows.every((window) => !window.visible && !window.focused)).toBe(true)
+  if (process.platform === 'darwin') {
+    await page.evaluate(() => window.api.macosTccPrompts.dismiss())
+    const nudge = page.getByRole('button', { name: "Don't show again", exact: true })
+    if (await nudge.count()) {
+      await nudge.click()
+    }
+  }
   const chat = await openStubChat(page, claudeStub.command)
   await page.evaluate(() => {
     void window.api.starNag.disable()

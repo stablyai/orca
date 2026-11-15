@@ -83,6 +83,7 @@ export async function measureStickyPerformance(page: Page, composer: Locator, tr
       const previous = new Map(before.metrics.map((metric) => [metric.name, metric.value]))
       repeats.push({
         renderCounts: counts,
+        residentRows: await page.locator('[data-worker-dock-row]').count(),
         keyToFrameMs,
         rendererMetricsDelta: Object.fromEntries(
           after.metrics

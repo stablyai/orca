@@ -40,11 +40,13 @@ function observeDockFrame(element: HTMLDivElement | null, measure: () => void) {
     schedule()
   }
   observeChildren()
+  element.addEventListener('scroll', schedule)
   const mutations = new MutationObserver(observeChildren)
   mutations.observe(element, { childList: true, subtree: true })
   return () => {
     resize.disconnect()
     mutations.disconnect()
+    element.removeEventListener('scroll', schedule)
     cancelAnimationFrame(scheduled)
   }
 }

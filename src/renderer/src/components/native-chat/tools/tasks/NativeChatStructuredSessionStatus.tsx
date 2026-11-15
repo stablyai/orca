@@ -60,14 +60,13 @@ export function NativeChatStructuredSessionStatus(props: {
     () =>
       new Map(
         [...feed.rows].map(([id, row]) => {
-          const prompt =
+          const settled =
             row.state === 'failed' || row.state === 'unexpected' || row.state === 'saving'
-              ? undefined
-              : openApprovals.get(row.dispatchId)
+          const prompt = settled ? undefined : openApprovals.get(row.dispatchId)
           return [
             id,
-            !feed.available
-              ? { ...row, state: 'unavailable' as const, stoppable: false }
+            !feed.available && !settled
+              ? { ...row, state: 'unavailable' as const, changedAt: null, stoppable: false }
               : prompt
                 ? {
                     ...row,
@@ -83,12 +82,11 @@ export function NativeChatStructuredSessionStatus(props: {
   const workerIdentities = useMemo(
     () =>
       feed.snapshot?.identities.map((row) => {
-        const prompt =
+        const settled =
           row.state === 'failed' || row.state === 'unexpected' || row.state === 'saving'
-            ? undefined
-            : openApprovals.get(row.dispatchId)
-        return !feed.available
-          ? { ...row, state: 'unavailable' as const }
+        const prompt = settled ? undefined : openApprovals.get(row.dispatchId)
+        return !feed.available && !settled
+          ? { ...row, state: 'unavailable' as const, changedAt: null }
           : prompt
             ? {
                 ...row,
