@@ -41,8 +41,9 @@ export const DEVIN_ACP_DIALECT: AcpDialect = {
   // The result names the provider's turn, which its session/load replay repeats.
   promptTurnId: (meta) =>
     promptResultMetaSchema.safeParse(meta).data?.['cognition.ai/userMessageId'],
-  // Account, mode and model commands bypass the chat's sign-in and pickers;
-  // /compact replies before compacting, so the chat would look idle while Devin works.
+  // Account, mode and model commands bypass the chat's sign-in and pickers; /compact and
+  // /goal keep Devin working after their reply, and /rename, /share and /handoff mutate or
+  // move the session outside Orca.
   withheldCommands: [
     'login',
     'logout',
@@ -53,6 +54,10 @@ export const DEVIN_ACP_DIALECT: AcpDialect = {
     'smart',
     'bypass',
     'fast',
-    'compact'
+    'compact',
+    'goal',
+    'rename',
+    'share',
+    'handoff'
   ]
 }
