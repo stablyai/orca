@@ -30,7 +30,7 @@ describe('host memory', () => {
     vi.spyOn(os, 'loadavg').mockReturnValue([1.5, 1, 0.5])
   })
 
-  it('uses macOS memory-pressure availability instead of immediate free pages', async () => {
+  it('reports occupied macOS RAM even when kernel pressure is low', async () => {
     vi.spyOn(os, 'platform').mockReturnValue('darwin')
     runProcessMock.mockResolvedValue({
       code: 0,
@@ -46,38 +46,13 @@ describe('host memory', () => {
     expect(host).toMatchObject({
       totalMemory: 1_000,
       freeMemory: 100,
-      availableMemory: 790,
-      availableMemorySource: 'memory-pressure',
-      usedMemory: 210,
-      memoryUsagePercent: 21,
-      cpuCoreCount: 2,
-      loadAverage1m: 1.5
-    })
-    expect(runProcessMock).toHaveBeenCalledWith({
-      program: '/usr/bin/memory_pressure',
-      args: ['-Q'],
-      env: { ...process.env, LC_ALL: 'C', LANG: 'C' },
-      maxOutputBytes: 64 * 1024,
-      timeoutMs: 1_000
-    })
-  })
-
-  it('falls back once when macOS availability cannot be read', async () => {
-    vi.spyOn(os, 'platform').mockReturnValue('darwin')
-    runProcessMock.mockRejectedValue(new Error('unsupported'))
-    const { collectHostMemory } = await loadHostMemory()
-
-    const first = await collectHostMemory()
-    const second = await collectHostMemory()
-
-    expect(first).toMatchObject({
       availableMemory: 100,
       availableMemorySource: 'free-memory',
       usedMemory: 900,
-      memoryUsagePercent: 90
+      memoryUsagePercent: 90,
+      cpuCoreCount: 2,
+      loadAverage1m: 1.5
     })
-    expect(second.availableMemorySource).toBe('free-memory')
-    expect(runProcessMock).toHaveBeenCalledTimes(1)
   })
 
   it('uses Linux MemAvailable and keeps the value within physical RAM', async () => {
@@ -111,13 +86,6 @@ describe('host memory', () => {
 })
 
 describe('host availability parsers', () => {
-  it('parses bounded macOS percentages', async () => {
-    const { parseDarwinAvailableMemory } = await loadHostMemory()
-
-    expect(parseDarwinAvailableMemory('System-wide memory free percentage: 42%', 1_000)).toBe(420)
-    expect(parseDarwinAvailableMemory('System-wide memory free percentage: 101%', 1_000)).toBeNull()
-  })
-
   it('parses Linux MemAvailable in KiB', async () => {
     const { parseLinuxAvailableMemory } = await loadHostMemory()
 
