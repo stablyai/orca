@@ -27542,7 +27542,11 @@
     "oom": {
       "titleRan": "{{name}} ran out of memory",
       "titleProcess": "A process ran out of memory",
-      "stopped": "It was stopped so the sandbox stays up. Restart to recover."
+      "stopped": "It was stopped so the sandbox stays up. Restart to recover.",
+      "guardTitle": "Orca stopped {{name}} to keep the workspace responsive",
+      "guardTitleProcess": "Orca stopped a process to keep the workspace responsive",
+      "guardDetail": "The workspace was out of memory. Consider a larger machine.",
+      "machineSize": "Machine size"
     },
     "unresponsive": {
       "sandboxTitle": "This sandbox isn’t responding"
@@ -28203,6 +28207,10 @@
       "waiting": "Waiting for GitHub… This continues on its own once access is granted.",
       "holding": "Your sandbox is ready. It opens as soon as you grant access or skip.",
       "openNow": "Open now, set up later"
+    },
+    "memoryPressure": {
+      "critical": "Out of memory. Orca may stop the largest process to keep the workspace responsive.",
+      "high": "Running low on memory"
     }
   },
   "runActions": {

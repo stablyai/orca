@@ -4,7 +4,7 @@ import { cn } from '@/lib/class-names'
 import { useTranslate } from '@/i18n/use-translate'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { useCloudWorkspace } from '@/lib/orca-cloud/orca-cloud-workspace-store'
-import { cloudMemoryPressure } from '@/lib/orca-cloud/orca-cloud-workspace-state'
+import { cloudMemoryPressure } from '@/lib/orca-cloud/cloud-memory-pressure'
 
 /**
  * MEMGUARD: the sidebar row's mark for a cloud workspace short of memory, from the status read

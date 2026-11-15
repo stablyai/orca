@@ -3,6 +3,9 @@ import { defineFixture } from '../../component-fixtures/component-fixture'
 import { seedCloudWorkspaceSnapshot } from '@/lib/orca-cloud/orca-cloud-workspace-store'
 import type { HostedWorkspaceStatus } from '../../../../shared/hosted-sandbox/hosted-sandbox-wire'
 import { CloudMemoryPressureMark } from './CloudMemoryPressureMark'
+import { CloudWorkspaceNotice } from './CloudWorkspaceNotice'
+
+const noop = (): void => {}
 
 type Pressure = 'high' | 'critical'
 
@@ -64,3 +67,22 @@ const markFixture = (pressure: Pressure) =>
 export const sidebarRowMemoryHigh = markFixture('high')
 /** Under 8%: Orca's guard may stop the largest process. Amber. */
 export const sidebarRowMemoryCritical = markFixture('critical')
+
+/** MEMGUARD: Orca's memory guard stopped the process; the workspace stayed up, so no Restart. */
+export const noticeOomGuard = defineFixture({
+  width: 420,
+  render: () => (
+    <div className="bg-background p-4">
+      <CloudWorkspaceNotice
+        notice={{
+          kind: 'oom',
+          oom: { workspaceId: 'ws', oomKills: 1, victim: 'tsc', stoppedBy: 'guard', at: Date.now() }
+        }}
+        restarting={false}
+        onRestart={noop}
+        onMachineSize={noop}
+        onDismiss={noop}
+      />
+    </div>
+  )
+})
