@@ -146,7 +146,9 @@ export function legacyHostPermissionDescriptor(): SessionOptionDescriptor {
 /** No runtime permission evidence: the options fallback stands. */
 export const NO_RUNTIME_PERMISSION_REPORT = false
 
-/** A primitive per answer, so subscribers re-render only when it changes: no evidence, cleared or stale (undefined), or the reported mode. */
+/** A primitive per answer, so subscribers re-render only when it changes: no evidence, cleared (undefined), or the reported mode.
+ *  A newer fence's report is current: the first child starts above the fence the chat attached at. An older fence's report
+ *  says nothing about this attachment, so the options fallback stands. */
 export function runtimePermissionReport(
   summary: unknown,
   fence: number | null
@@ -162,10 +164,13 @@ export function runtimePermissionReport(
     !Number.isSafeInteger(report.fence) ||
     typeof report.fence !== 'number' ||
     report.fence < 0 ||
-    report.fence !== fence ||
+    fence === null ||
     !('mode' in report)
   ) {
     return undefined
+  }
+  if (report.fence < fence) {
+    return NO_RUNTIME_PERMISSION_REPORT
   }
   const mode = report.mode
   return mode === null || typeof mode === 'string' ? mode : undefined
