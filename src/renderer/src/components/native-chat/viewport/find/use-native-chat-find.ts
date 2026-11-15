@@ -131,6 +131,8 @@ export function useNativeChatFind(
     (event: ReactKeyboardEvent) => {
       if (
         !isOpen ||
+        // Under a subagent sheet the bar is out of reach; Esc belongs to the sheet.
+        rootRef.current?.querySelector(`[${NATIVE_CHAT_SUBAGENT_SHEET_ATTRIBUTE}]`) ||
         event.key !== 'Escape' ||
         event.defaultPrevented ||
         event.nativeEvent.isComposing ||
@@ -143,7 +145,7 @@ export function useNativeChatFind(
       event.stopPropagation()
       close()
     },
-    [close, isOpen]
+    [close, isOpen, rootRef]
   )
 
   const revealMatch = useCallback(

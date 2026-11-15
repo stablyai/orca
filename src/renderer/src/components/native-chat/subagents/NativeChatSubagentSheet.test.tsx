@@ -5,7 +5,11 @@ import { afterEach, expect, it, vi } from 'vitest'
 import type { AskPrompt } from '../../../../../shared/native-chat/input/questions/native-chat-ask-types'
 import { NativeChatApprovalCard } from '../prompts/NativeChatApprovalCard'
 import { NativeChatQuestionCard } from '../prompts/NativeChatQuestionCard'
-import { openNativeChatSubagent, useNativeChatOpenSubagent } from './native-chat-open-subagent'
+import {
+  noteNativeChatSubagentParent,
+  openNativeChatSubagent,
+  useNativeChatOpenSubagent
+} from './native-chat-open-subagent'
 import { NativeChatSubagentSheet } from './NativeChatSubagentSheet'
 import {
   NativeChatSubagentSheetLayer,
@@ -137,4 +141,21 @@ it("keeps a half-typed answer when the subagent's question moves into its openin
   const field = screen.getByRole('textbox')
   expect(screen.getByRole('dialog').contains(field)).toBe(true)
   expect(field).toHaveProperty('value', 'release/2')
+})
+
+it("keeps focus in the sheet when Esc on a nested subagent's own approval goes up a level", () => {
+  act(() => {
+    openNativeChatSubagent(PANE, 'a1')
+    openNativeChatSubagent(PANE, 'a4')
+    noteNativeChatSubagentParent(PANE, 'a4', 'a1')
+  })
+  render(<Pane promptAgentId="a4">{approval(() => {})}</Pane>)
+  const allow = screen.getByRole('button', { name: 'Allow' })
+  allow.focus()
+
+  fireEvent.keyDown(allow, { key: 'Escape' })
+
+  const sheet = screen.getByRole('dialog')
+  expect(sheet.contains(screen.getByRole('button', { name: 'Allow', hidden: true }))).toBe(false)
+  expect(sheet.contains(document.activeElement)).toBe(true)
 })

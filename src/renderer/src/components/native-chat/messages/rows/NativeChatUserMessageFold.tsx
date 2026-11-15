@@ -28,24 +28,35 @@ export function NativeChatUserMessageFold({
 }): React.JSX.Element {
   const t = useTranslate()
   const disclosure = useNativeChatDisclosure(`user-message:${messageId}`, false)
-  // A line-count fold measures every text; the clip decides whether it fits.
-  const longText = useMemo(
-    () => foldLines !== undefined || nativeChatUserMessageFolds(markdown),
-    [foldLines, markdown]
-  )
+  const lineFold = foldLines !== undefined
+  const longText = useMemo(() => nativeChatUserMessageFolds(markdown), [markdown])
   // A fold clips but still lays out the whole text, so it needs the composer's long-run rule.
   const unkerned = useMemo(() => nativeChatTextHasUnkernedRun(markdown), [markdown])
   // Measure each text revision; long-text heuristics can select a prompt that already fits the clip.
   const [measured, setMeasured] = useState({ markdown, fits: false })
   const fits = measured.markdown === markdown && measured.fits
-  const folds = longText && !fits
-  const folded = folds && !disclosure.open
+  // A line-count fold always clamps; whether the clamp hides anything depends on the width.
+  const [clampHides, setClampHides] = useState(false)
+  const folds = lineFold ? clampHides || disclosure.open : longText && !fits
+  const folded = lineFold ? !disclosure.open : folds && !disclosure.open
   const clipRef = useRef<HTMLDivElement | null>(null)
   const clipId = useId()
   const toggledRef = useRef(false)
   useLayoutEffect(() => {
     const clip = clipRef.current
-    if (folded && clip) {
+    if (!lineFold || !folded || !clip) {
+      return undefined
+    }
+    const measure = (): void => setClampHides(clip.scrollHeight > clip.clientHeight)
+    measure()
+    // The pane narrowing or widening changes how many lines the text wraps to.
+    const observer = new ResizeObserver(measure)
+    observer.observe(clip)
+    return () => observer.disconnect()
+  }, [folded, lineFold, markdown])
+  useLayoutEffect(() => {
+    const clip = clipRef.current
+    if (folded && clip && !lineFold) {
       const fitsNow = clip.scrollHeight <= clip.clientHeight
       setMeasured((current) =>
         current.markdown === markdown && current.fits === fitsNow
@@ -59,7 +70,7 @@ export function NativeChatUserMessageFold({
         onRefolded?.()
       }
     }
-  }, [folded, markdown, onRefolded])
+  }, [folded, lineFold, markdown, onRefolded])
 
   return (
     <>

@@ -67,8 +67,15 @@ export function NativeChatSubagentSheetPromptSlot({
   )
   useLayoutEffect(() => {
     const target = inSheet ? slot : anchorRef.current
-    if (target && box.parentNode !== target) {
-      target.appendChild(box)
+    if (!target || box.parentNode === target) {
+      return
+    }
+    const sheet = box.parentElement?.closest<HTMLElement>('[role="dialog"]')
+    const hadFocus = box.contains(document.activeElement)
+    target.appendChild(box)
+    // Leaving a sheet that stays open (Esc up a level) takes the card's focus with it; the sheet keeps it.
+    if (hadFocus && sheet?.isConnected && !sheet.contains(box)) {
+      sheet.focus({ preventScroll: true })
     }
   }, [box, inSheet, slot])
   useLayoutEffect(() => () => box.remove(), [box])
