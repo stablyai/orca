@@ -292,6 +292,33 @@
       "textSizePickerTitle": "Terminal text size"
     }
   },
+  "appMove": {
+    "play": {
+      "title": "Orca is now on Google Play",
+      "description": "This app still works, but updates now come from Google Play. Switching takes a few minutes.",
+      "installTitle": "Install Orca from Google Play",
+      "installDescription": "You can do this now, wherever you are.",
+      "openGooglePlay": "Open Google Play",
+      "cantUseGooglePlay": "I can't use Google Play"
+    },
+    "download": {
+      "title": "Get the new Orca app",
+      "description": "This app still works, but updates and security fixes now come through the new app. Switching takes a few minutes.",
+      "installTitle": "Download the new app",
+      "installDescription": "If your phone asks, allow your browser to install apps.",
+      "download": "Download",
+      "keepThisVersion": "Keep using this version",
+      "keepThisVersionNote": "You'll miss security fixes. We'll remind you in a week."
+    },
+    "pairTitle": "Pair it with your computer",
+    "pairDescription": "In Orca on your computer, go to Settings → Mobile and scan the code.",
+    "deleteTitle": "Delete this app",
+    "deleteDescription": "Once the new app shows your agents. Until then, keep using this one.",
+    "dataKept": "Your agents, chats and workspaces are saved on your computer, so you'll see them all in the new app.",
+    "banner": {
+      "seeHowToSwitch": "See how to switch"
+    }
+  },
   "accounts": {
     "screen": {
       "invalidSnapshot": "Invalid accounts snapshot from host",

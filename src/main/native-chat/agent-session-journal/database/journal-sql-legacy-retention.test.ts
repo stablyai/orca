@@ -14,7 +14,7 @@ import {
   journalSqlReaderPath,
   journalSqlWorkerPath
 } from '../journal-sql-worker-bundle.test-fixture'
-import { withTestAgentSessionDatabase } from '../../../runtime/agent-session/records/agent-session-record-store-test-harness'
+import { withTestAgentSessionDatabase } from '../../../runtime/agent-session/records/agent-session-record-store-persistence.test-fixture'
 import { codexProviderHandle } from '../../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle-encoding'
 
 const roots: string[] = []
