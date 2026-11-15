@@ -4,7 +4,7 @@ import type {
   WindowsMobileFirewallRepairResult,
   WindowsMobileFirewallStatus,
   WindowsNetworkCategory
-} from '../../../../../../shared/windows-mobile-firewall'
+} from '../../../../../../shared/remote-runtime/pairing/windows-mobile-firewall'
 import { quotePowerShellLiteral } from '../../../../../../shared/powershell-native-argument'
 import { hasSufficientWindowsFirewallRemoteScope } from './windows-firewall-remote-scope'
 

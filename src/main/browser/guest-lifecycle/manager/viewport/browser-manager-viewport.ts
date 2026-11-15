@@ -4,8 +4,8 @@ import {
   buildBrowserAnnotationViewportBridgeScript
 } from '../../../../../shared/browser/annotations/browser-annotation-viewport-bridge'
 import type { BrowserAnnotationViewportBridgeOptions } from '../../../../../shared/browser/annotations/browser-annotation-viewport-bridge'
-import type { BrowserViewportOverride } from '../../../../../shared/browser-workspace-types'
-import { BROWSER_AGENT_VIEWPORT_CHANNEL } from '../../../../../shared/browser-agent-activity-contract'
+import type { BrowserViewportOverride } from '../../../../../shared/browser/workspaces/browser-workspace-types'
+import { BROWSER_AGENT_VIEWPORT_CHANNEL } from '../../../../../shared/browser/automation/browser-agent-activity-contract'
 import { sendGuestCdpCommand } from '../../../cdp/debugger/guest-cdp-command'
 import { touchEmulationParams } from '../../../cdp/input/guest-touch-emulation'
 import { BrowserManagerDevTools } from '../devtools/browser-manager-devtools'

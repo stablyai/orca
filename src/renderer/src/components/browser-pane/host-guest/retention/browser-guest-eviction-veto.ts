@@ -1,4 +1,4 @@
-import type { BrowserWorkspace } from '../../../../../../shared/browser-workspace-types'
+import type { BrowserWorkspace } from '../../../../../../shared/browser/workspaces/browser-workspace-types'
 import { browserTabVisibilityPageIds } from './browser-guest-worktree-retention'
 import { hasActiveBrowserPageDownload } from '../../navigate/browser-page-download-activity'
 import { browserPageNeedsPaintRetention } from './browser-guest-paint-retention'

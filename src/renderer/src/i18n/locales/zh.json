@@ -20134,7 +20134,8 @@
       "TerminalContextMenu": {
         "copySessionId": "复制会话 ID",
         "copySessionIdSuccess": "已复制会话 ID",
-        "copySessionIdError": "复制会话 ID 失败"
+        "copySessionIdError": "复制会话 ID 失败",
+        "copySessionIdUnavailable": "没有可复制的会话 ID"
       },
       "hostFile": {
         "updateHostForOutsideFiles": "更新 {{value0}} 上的 Orca 以打开其工作区之外的文件"
@@ -22758,6 +22759,7 @@
       "tabOpenQuickCommandsMenu": "切换快捷命令菜单",
       "editorFind": "在编辑器中查找",
       "editorReplace": "在编辑器中替换",
+      "editorToggleChangesView": "切换更改视图",
       "fileExplorerUndo": "撤销文件操作",
       "fileExplorerRedo": "重做文件操作",
       "fileExplorerCopyPath": "复制文件路径",
@@ -22775,6 +22777,7 @@
       "chatFind": "在聊天中查找",
       "terminalToggleNativeChat": "在聊天界面和终端之间切换",
       "terminalClosePane": "关闭当前窗格",
+      "terminalCopySessionId": "复制会话 ID",
       "terminalSplitRight": "向右拆分终端",
       "terminalSplitDown": "向下拆分终端",
       "terminalSwitchInputSource": "切换输入法/语言（原生）",

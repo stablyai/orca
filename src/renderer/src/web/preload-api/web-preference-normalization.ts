@@ -15,13 +15,13 @@ import { normalizeWorktreeCardProperties } from '../../../../shared/worktree/row
 import {
   normalizeContextualTourIds,
   type ContextualTourId
-} from '../../../../shared/contextual-tours'
+} from '../../../../shared/feature-education/contextual-tours/contextual-tours'
 
 import {
   normalizeFeatureInteractions,
-  type FeatureInteractionId,
   type FeatureInteractionState
-} from '../../../../shared/feature-interactions'
+} from '../../../../shared/feature-education/interactions/feature-interactions'
+import type { FeatureInteractionId } from '../../../../shared/feature-education/interactions/feature-interaction-catalog'
 
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import type {

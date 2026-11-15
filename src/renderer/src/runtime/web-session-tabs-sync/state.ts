@@ -13,7 +13,7 @@ import type {
   BrowserCertificateFailure,
   BrowserPage,
   BrowserWorkspace
-} from '../../../../shared/browser-workspace-types'
+} from '../../../../shared/browser/workspaces/browser-workspace-types'
 import type { Tab } from '../../../../shared/tab-types'
 import type {
   TerminalLayoutSnapshot,

@@ -1,5 +1,5 @@
 import { useCallback, useRef, type RefObject } from 'react'
-import { browserPageZoomLevelToPercent } from '../../../../../../shared/browser-page-zoom'
+import { browserPageZoomLevelToPercent } from '../../../../../../shared/browser/site-settings/browser-page-zoom'
 import type { BrowserPageFeedbackBadgeHandle } from '../../assemble-chrome/feedback/browser-page-feedback-badge'
 import type { BrowserPageViewportSize } from './use-browser-page-viewport-size-feedback'
 

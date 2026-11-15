@@ -29,7 +29,7 @@ import { selectExactWorkerProviderSession } from '../../orchestration/workers/tr
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import { isTuiAgentEnabled } from '../../../../shared/agent-launch/catalog/tui-agent-selection'
 import { OrchestrationError } from '../../orchestration/orchestration-error'
-import { resolveLocalWindowsAgentStartupShell } from '../../../../shared/windows-terminal-shell'
+import { resolveLocalWindowsAgentStartupShell } from '../../../../shared/shell/launch/windows-terminal-shell'
 import {
   resolveStartupShell,
   type AgentStartupShell

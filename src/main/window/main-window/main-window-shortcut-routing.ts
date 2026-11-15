@@ -19,7 +19,7 @@ import type { CreateMainWindowOptions } from './main-window-contracts'
 import type { MainWindowFocusLifecycle } from './main-window-focus-lifecycle'
 import { sendResolvedWindowShortcutAction } from './main-window-shortcut-actions'
 import { isMacAppPasteInput } from '../editing/mac-app-paste-input'
-import { dictationShortcutMode } from '../../../shared/dictation-shortcut-mode'
+import { dictationShortcutMode } from '../../../shared/speech/dictation/dictation-shortcut-mode'
 import {
   textInputOwnsComposition,
   type TextShortcutInput

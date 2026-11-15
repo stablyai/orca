@@ -4,7 +4,7 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { resetWindowsSecurityLoadForTests } from '../../../shared/windows-security-addon'
 
-import type { CrashReportBreadcrumbData } from '../../../shared/crash-reporting'
+import type { CrashReportBreadcrumbData } from '../../../shared/crash-reporting/crash-reporting'
 import {
   readActiveGpuFallbackMarker,
   writeGpuFallbackMarker

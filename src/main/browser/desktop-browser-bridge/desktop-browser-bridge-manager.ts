@@ -1,4 +1,4 @@
-import type { DesktopBrowserBridgeRequest } from '../../../shared/desktop-browser-bridge-protocol'
+import type { DesktopBrowserBridgeRequest } from '../../../shared/browser/client-hosting/desktop-browser-bridge-protocol'
 import {
   DesktopBrowserBridgeConnection,
   type DesktopBrowserBridgeSubscribe

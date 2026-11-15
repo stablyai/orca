@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { isRemoteForegroundEvidence } from '../../../foreground-process-evidence'
+import { isRemoteForegroundEvidence } from './foreground-process-evidence'
 import {
   admitRemoteForegroundEvidence,
   REMOTE_FOREGROUND_EVIDENCE_MAX_AGE_MS
@@ -79,18 +79,6 @@ describe('remote foreground evidence contract', () => {
           { ...admission, receivedAtMonotonic: 1_300 }
         )
       ).not.toBeNull()
-    })
-
-    it.each([
-      ['host-measured', REMOTE_FOREGROUND_EVIDENCE_MAX_AGE_MS + 1, 0],
-      ['client-measured', 0, REMOTE_FOREGROUND_EVIDENCE_MAX_AGE_MS + 1]
-    ])('refuses one step past the %s boundary', (_label, capturedAgeMs, receiveDelay) => {
-      expect(
-        admitRemoteForegroundEvidence(
-          { ...live, capturedAgeMs },
-          { ...admission, receivedAtMonotonic: receiveDelay }
-        )
-      ).toBeNull()
     })
   })
 

@@ -3,13 +3,14 @@
 // debounced settings save (a crash before that save can re-emit after restart), so dashboards dedupe per install_id.
 
 import type { GlobalSettings } from '../../shared/global-settings-types'
-import { utcDayIndex } from '../../shared/telemetry-day'
-import { eventSchemas, type EventName, type EventProps } from '../../shared/telemetry-events'
+import { utcDayIndex } from '../../shared/telemetry/telemetry-day'
+import { eventSchemas } from '../../shared/telemetry/telemetry-event-registry'
+import type { EventName, EventProps } from '../../shared/telemetry/telemetry-event-classification'
 import type {
   FirstAgentInteractionSource,
   MeaningfulActivityTrigger
-} from '../../shared/telemetry-protected-milestone-schemas'
-import type { TelemetrySettings } from '../../shared/telemetry-settings-types'
+} from '../../shared/telemetry/schemas/telemetry-protected-milestone-schemas'
+import type { TelemetrySettings } from '../../shared/telemetry/telemetry-settings-types'
 import type { Store } from '../persistence/loading-store/store'
 import { consumeBurstToken } from './burst-cap'
 import { validate } from './validator'

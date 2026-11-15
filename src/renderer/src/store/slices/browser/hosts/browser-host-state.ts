@@ -3,7 +3,7 @@ import type {
   BrowserCookieImportResult,
   BrowserPage,
   BrowserSessionProfile
-} from '../../../../../../shared/browser-workspace-types'
+} from '../../../../../../shared/browser/workspaces/browser-workspace-types'
 import {
   getSettingsFocusedExecutionHostId,
   LOCAL_EXECUTION_HOST_ID,

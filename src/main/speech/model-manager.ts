@@ -1,7 +1,7 @@
 import { existsSync, mkdirSync, rmSync } from 'node:fs'
 import { rm } from 'node:fs/promises'
 import { join, relative, resolve } from 'node:path'
-import type { SpeechModelState, SpeechModelStatus } from '../../shared/speech-types'
+import type { SpeechModelState, SpeechModelStatus } from '../../shared/speech/speech-types'
 import { SPEECH_MODEL_CATALOG, getCatalogModel, isLocalSpeechModel } from './model-catalog'
 import type { SpeechModelDownload } from './model-download-catalog'
 import { downloadSileroVadInBackground, speechModelDownload } from './speech-vad-model'

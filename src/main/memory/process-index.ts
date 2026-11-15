@@ -1,4 +1,4 @@
-import type { ProcessMemoryMetric } from '../../shared/process-stats-types'
+import type { ProcessMemoryMetric } from '../../shared/diagnostics/process-stats-types'
 import {
   getProcessOutputFields,
   iterateProcessOutputLines
