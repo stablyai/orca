@@ -77,6 +77,7 @@ function Sidebar() {
           <div
             key={item.id}
             role="option"
+            aria-selected={selection.selectedWorktrees.includes(item)}
             data-testid={`row-${item.id}`}
             onClick={(event) => selection.updateSelectionForGesture(event, item)}
           >
