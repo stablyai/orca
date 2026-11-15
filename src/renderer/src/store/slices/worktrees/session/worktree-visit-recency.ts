@@ -116,7 +116,15 @@ export function createPruneLastVisitedTimestamps(
           changed = true
         }
       }
-      // Default-tab admission is per workspace too; left in the store it re-saves deleted workspaces.
+      // Default-tab admission is a write-once guard: drop it only when no list still shows the id,
+      // since a just-created worktree or a restored placeholder can be missing from the scan.
+      const listedIds = new Set<string>()
+      for (const list of Object.values(selectWorktreesByRepo(s))) {
+        list.forEach((worktree) => listedIds.add(worktree.id))
+      }
+      for (const result of Object.values(selectDetectedWorktreesByRepo(s))) {
+        result.worktrees.forEach((worktree) => listedIds.add(worktree.id))
+      }
       let defaultsChanged = false
       const nextDefaults: Record<string, true> = {}
       for (const [key, applied] of Object.entries(s.defaultTerminalTabsAppliedByWorktreeId ?? {})) {
@@ -124,7 +132,7 @@ export function createPruneLastVisitedTimestamps(
         const id = scope?.type === 'worktree' ? scope.worktreeId : key
         const repoIds =
           scope?.type === 'folder' ? undefined : validIdsByRepo.get(getRepoIdFromWorktreeId(id))
-        if (repoIds && !repoIds.has(id)) {
+        if (repoIds && !repoIds.has(id) && !listedIds.has(id)) {
           defaultsChanged = true
         } else {
           nextDefaults[key] = applied

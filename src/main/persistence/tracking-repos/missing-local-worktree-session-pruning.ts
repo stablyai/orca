@@ -76,24 +76,30 @@ export function selectLocalWorktreeSessionOwnersForRepo(
   return [...owners]
 }
 
-/** Comparison keys of workspaces holding an unsaved draft in any partition. */
-function draftOwnerComparisonKeys(state: PersistedState, platform: NodeJS.Platform): Set<string> {
-  const keys = new Set<string>()
+/** Which candidate comparison keys hold an unsaved draft in any partition; only candidates' files are read. */
+function draftedCandidateKeys(
+  state: PersistedState,
+  candidateKeys: ReadonlySet<string>,
+  platform: NodeJS.Platform
+): Set<string> {
+  const drafted = new Set<string>()
   for (const session of [
     state.workspaceSession,
     ...Object.values(state.workspaceSessionsByHostId ?? {})
   ]) {
     for (const [ownerKey, files] of Object.entries(session?.openFilesByWorktree ?? {})) {
       const worktreeId = getPersistedWorktreeOwnerId(ownerKey)
-      const comparisonKey = worktreeId
-        ? worktreeRetentionIdComparisonKey(worktreeId, platform)
-        : null
-      if (comparisonKey && files.some((file) => file.dirtyDraftContent !== undefined)) {
-        keys.add(comparisonKey)
+      const key = worktreeId ? worktreeRetentionIdComparisonKey(worktreeId, platform) : null
+      if (
+        key &&
+        candidateKeys.has(key) &&
+        files.some((file) => file.dirtyDraftContent !== undefined)
+      ) {
+        drafted.add(key)
       }
     }
   }
-  return keys
+  return drafted
 }
 
 /** Comparison keys of metadata rows that still name a workspace (an archived checkout, another host). */
@@ -143,13 +149,17 @@ export function selectRemovableLocalWorktreeSessionOwners(
   collector.addOwner(state.workspaceSession.activeWorktreeId)
   collector.addOwner(state.workspaceSession.activeWorkspaceKey)
   const protectedKeys = protectedMetadataComparisonKeys(state, repoId, platform)
-  const draftKeys = draftOwnerComparisonKeys(state, platform)
-  return [...candidateIds].filter(
+  const comparisonKey = (worktreeId: string): string =>
+    worktreeRetentionIdComparisonKey(worktreeId, platform) ?? ''
+  const eligible = [...candidateIds].filter(
     (worktreeId) =>
-      !collector.owners.has(worktreeId) &&
-      !draftKeys.has(worktreeRetentionIdComparisonKey(worktreeId, platform) ?? '') &&
-      !protectedKeys.has(worktreeRetentionIdComparisonKey(worktreeId, platform) ?? '')
+      !collector.owners.has(worktreeId) && !protectedKeys.has(comparisonKey(worktreeId))
   )
+  if (eligible.length === 0) {
+    return []
+  }
+  const drafted = draftedCandidateKeys(state, new Set(eligible.map(comparisonKey)), platform)
+  return eligible.filter((worktreeId) => !drafted.has(comparisonKey(worktreeId)))
 }
 
 /** Drop local saved session state for worktrees an authoritative scan no longer lists and whose

@@ -225,6 +225,7 @@ export function rebaseWorkspaceSessionTerminalMembership(
       delete unifiedTabs[worktreeId]
       delete tabGroups[worktreeId]
       delete tabGroupLayouts[worktreeId]
+      delete activeTabIdByWorktree[worktreeId]
       continue
     }
     if (includeUnifiedTabs || rebasedUnifiedTabs.length > 0) {
