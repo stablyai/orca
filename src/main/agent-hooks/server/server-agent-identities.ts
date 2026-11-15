@@ -14,7 +14,7 @@ import type {
   SleepingAgentSessionRecord
 } from '../../../shared/agent-session/lifecycle/agent-session-resume'
 import type { AgentProviderKey } from '../identity/agent-provider-key'
-import { sleepingRecordOfKey } from '../identity/sleeping-agent-records'
+import { sleepingRecordOfKey, sleepingRecordOfPane } from '../identity/sleeping-agent-records'
 import {
   isReverseLookupUnavailable,
   type ReverseLookupUnavailable
@@ -226,7 +226,6 @@ export abstract class AgentHookServerAgentIdentities extends AgentHookServerStat
     if (live?.providerSession.transcriptPath) {
       return live
     }
-    // A live row without a path still lets a sleeping record of the same conversation supply one.
     const linked =
       known?.authority === authority
         ? { key: known.key }
@@ -242,13 +241,23 @@ export abstract class AgentHookServerAgentIdentities extends AgentHookServerStat
     }
     const { key } = linked
     const windows = process.platform === 'win32'
-    // Sleeping records carry no WSL distro, so one names a WSL agent's key only while its hooks
-    // still say so; a native Windows agent's record matches its full key like any other.
+    // Sleeping records carry no distro to prove a WSL path's owner.
     if (!key || (windows && key.wslDistro !== '')) {
       return live
     }
-    const record = sleepingRecordOfKey(readSleeping(), key, windows)
-    if (record && (!live || record.providerSession.transcriptPath)) {
+    const records = readSleeping()
+    if (live) {
+      // Recovery records belong to panes; unrelated saved agents must not slow a live read.
+      for (const place of this.agentIdentities.placesOf(id)) {
+        const record = sleepingRecordOfPane(records, place.paneKey, key, windows)
+        if (record?.providerSession.transcriptPath) {
+          return { key, providerSession: record.providerSession, authority }
+        }
+      }
+      return live
+    }
+    const record = sleepingRecordOfKey(records, key, windows)
+    if (record) {
       return { key, providerSession: record.providerSession, authority }
     }
     return live

@@ -31,7 +31,7 @@ class IdentityTestServer extends AgentHookServer {
   }
 }
 
-function hook(sessionId: string, transcriptPath?: string) {
+function hook(sessionId: string, transcriptPath?: string, paneKey = PANE) {
   const event = normalizeHookPayload(
     createHookListenerState(),
     'claude',
@@ -42,7 +42,7 @@ function hook(sessionId: string, transcriptPath?: string) {
         ...(transcriptPath ? { transcript_path: transcriptPath } : {}),
         prompt: 'task'
       },
-      { paneKey: PANE, tabId: 'tab-0' }
+      { paneKey, tabId: 'tab-0' }
     ),
     'production'
   )
@@ -139,17 +139,107 @@ it.skipIf(process.platform === 'win32')(
       connectionId: null
     }
     expect(
-      await server.terminalAgentTranscriptSource(id!, () => ({ 'other-pane': asleep }))
+      await server.terminalAgentTranscriptSource(id!, () => ({ [PANE]: asleep }))
     ).toMatchObject({
       key: { wslDistro: '', providerSessionId: 'session-a' },
       providerSession: { id: 'session-a', transcriptPath: '/tmp/agent-history/thread-file.jsonl' }
     })
     // Another conversation's path is never borrowed.
     const unrelated = await server.terminalAgentTranscriptSource(id!, () => ({
-      'other-pane': { ...asleep, providerSession: { ...asleep.providerSession, id: 'other' } }
+      [PANE]: { ...asleep, providerSession: { ...asleep.providerSession, id: 'other' } }
     }))
     expect(unrelated).toMatchObject({ providerSession: { id: 'session-a' } })
     expect(unrelated).not.toHaveProperty('providerSession.transcriptPath')
+  }
+)
+
+it.skipIf(process.platform === 'win32')(
+  'skips a pathless saved match for a later live pane of the same conversation',
+  async () => {
+    const server = await started()
+    const secondPane = makePaneKey('tab-0', '00000000-0000-4000-8000-000000000001')
+    server.ingestRemote(hook('session-a'), null)
+    server.ingestRemote(hook('session-a', undefined, secondPane), null)
+    await answered()
+    const id = server.getStatusSnapshot()[0]?.orcaSessionId
+    const pathless = {
+      agent: 'claude' as const,
+      providerSession: { key: 'session_id' as const, id: 'session-a' },
+      connectionId: null
+    }
+    const records = {
+      [PANE]: pathless,
+      [secondPane]: {
+        ...pathless,
+        providerSession: { ...pathless.providerSession, transcriptPath: '/tmp/history/a.jsonl' }
+      }
+    }
+    expect(await server.terminalAgentTranscriptSource(id!, () => records)).toMatchObject({
+      providerSession: { id: 'session-a', transcriptPath: '/tmp/history/a.jsonl' }
+    })
+    server.dropStatusEntry(PANE, { preserveResumeIdentity: false })
+    server.dropStatusEntry(secondPane, { preserveResumeIdentity: false })
+    expect(await server.terminalAgentTranscriptSource(id!, () => records)).toMatchObject({
+      providerSession: { id: 'session-a' }
+    })
+    expect(await server.terminalAgentTranscriptSource(id!, () => records)).not.toHaveProperty(
+      'providerSession.transcriptPath'
+    )
+  }
+)
+
+it.skipIf(process.platform === 'win32')(
+  'bounds pathless live transcript lookup across replaced saved maps at N and 10N',
+  async () => {
+    const server = await started()
+    server.ingestRemote(hook('session-a'), null)
+    await answered()
+    const id = server.getStatusSnapshot()[0]?.orcaSessionId
+    for (const size of [300, 3000]) {
+      for (const hasSavedPath of [true, false]) {
+        let visited = 0
+        for (let read = 0; read < 4; read++) {
+          const records = Object.fromEntries(
+            Array.from({ length: size }, (_, index) => [
+              `unrelated-${index}`,
+              {
+                agent: 'claude' as const,
+                providerSession: { key: 'session_id' as const, id: `unrelated-${index}` }
+              }
+            ])
+          )
+          if (hasSavedPath) {
+            Object.defineProperty(records, PANE, {
+              enumerable: true,
+              value: {
+                agent: 'claude',
+                providerSession: {
+                  key: 'session_id',
+                  id: 'session-a',
+                  transcriptPath: '/tmp/history/a.jsonl'
+                }
+              }
+            })
+          }
+          const saved = new Proxy(records, {
+            get(target, property) {
+              visited++
+              return typeof property === 'string' ? target[property] : undefined
+            }
+          })
+          const source = await server.terminalAgentTranscriptSource(id!, () => saved)
+          if (hasSavedPath) {
+            expect(source).toMatchObject({
+              providerSession: { transcriptPath: '/tmp/history/a.jsonl' }
+            })
+          } else {
+            expect(source).toMatchObject({ providerSession: { id: 'session-a' } })
+            expect(source).not.toHaveProperty('providerSession.transcriptPath')
+          }
+        }
+        expect(visited).toBe(4)
+      }
+    }
   }
 )
 

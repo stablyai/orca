@@ -49,20 +49,27 @@ export function sleepingRecordOfKey(
 ): SleepingAgentSighting | null {
   for (const [paneKey, record] of sleepingByProviderSession(records).get(key.providerSessionId) ??
     []) {
-    if (
-      records[paneKey] !== record ||
-      (windows && isGuestTranscriptPath(record.providerSession.transcriptPath))
-    ) {
-      continue
-    }
-    const recordKey = agentProviderKeyOf({
-      agent: record.agent,
-      providerSession: record.providerSession,
-      connectionId: record.connectionId ?? null
-    })
-    if (recordKey && sameProviderKey(recordKey, key)) {
+    if (sleepingRecordOfPane(records, paneKey, key, windows) === record) {
       return record
     }
   }
   return null
+}
+
+export function sleepingRecordOfPane(
+  records: Readonly<Record<string, SleepingAgentSighting>>,
+  paneKey: string,
+  key: AgentProviderKey,
+  windows: boolean
+): SleepingAgentSighting | null {
+  const record = records[paneKey]
+  if (!record || (windows && isGuestTranscriptPath(record.providerSession.transcriptPath))) {
+    return null
+  }
+  const recordKey = agentProviderKeyOf({
+    agent: record.agent,
+    providerSession: record.providerSession,
+    connectionId: record.connectionId ?? null
+  })
+  return recordKey && sameProviderKey(recordKey, key) ? record : null
 }
