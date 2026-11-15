@@ -5,7 +5,7 @@ import {
 } from '../../../shared/agent-session/failures/agent-session-failure'
 import type { AgentSessionExecutionOptions } from '../../../shared/agent-session/options/protocol/agent-session-execution-options'
 import { AgentSessionOptionRejectedError } from '../../native-chat/agent-session-wire/options/structured-agent-session-option-error'
-import { compareAppVersions } from '../../../shared/app-version'
+import { compareAppVersions } from '../../../shared/app-lifecycle/identity/app-version'
 import { AcpAgentError } from '../transport/acp-errors'
 import { AcpModelCommandRefusedError } from './acp-model-command'
 import type { AcpStructuredSession } from '../session/acp-structured-session-contract'

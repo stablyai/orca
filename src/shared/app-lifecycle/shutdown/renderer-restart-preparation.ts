@@ -1,13 +1,13 @@
 import {
   ORCA_EDITOR_PREPARE_HOT_EXIT_EVENT,
   type EditorPrepareHotExitDetail
-} from './editor-save-events'
+} from '../../editor-save-events'
 import {
   consumeShutdownCheckpointFailureReason,
   ORCA_RENDERER_SHUTDOWN_CHECKPOINT_ABORTED_EVENT,
   ORCA_RENDERER_SHUTDOWN_CHECKPOINT_FAILED_EVENT
 } from './renderer-shutdown-events'
-import type { UpdateStatus } from './update-status-types'
+import type { UpdateStatus } from '../../updater/update-status-types'
 
 export type AppRestartPrepOptions = {
   startedEventName: string

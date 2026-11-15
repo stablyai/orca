@@ -10,7 +10,10 @@ import {
   type AgentSessionAccountHome
 } from '../../shared/agent-session/lifecycle/accounts/agent-session-account-home'
 import { ANTIGRAVITY_ACP_HOME } from '../../shared/agent-session/lifecycle/provider-handles/antigravity-session-origin'
-import { compareAppVersions, isValidAppVersion } from '../../shared/app-version'
+import {
+  compareAppVersions,
+  isValidAppVersion
+} from '../../shared/app-lifecycle/identity/app-version'
 import { initializeAntigravityAcp } from './antigravity-acp-runtime-probe'
 import {
   createAntigravityHostCredentialBackend,

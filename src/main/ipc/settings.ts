@@ -25,7 +25,7 @@ import { applyBrowserSessionProxies } from '../browser/sessions/proxy/browser-se
 import { applyProxyToElectronUpdaterSession } from '../updater/lifecycle/electron-updater-proxy-session'
 import { browserSessionRegistry } from '../browser/sessions/profiles/browser-session-registry'
 import { sanitizeNetworkSettings } from './network-settings-sanitization'
-import { normalizeAppIconId } from '../../shared/app-icon'
+import { normalizeAppIconId } from '../../shared/app-lifecycle/identity/app-icon'
 import { normalizeUiLanguage } from '../../shared/ui-language'
 import { applyAppIcon } from '../window/desktop-integration/app-icon'
 import { registerCustomAppIconHandlers } from './custom-app-icon'
@@ -45,7 +45,7 @@ import {
 import {
   computerAwakeSettingsForMode,
   normalizeComputerAwakeMode
-} from '../../shared/computer-awake-mode'
+} from '../../shared/app-lifecycle/computer-awake-mode'
 import { resolveAiVaultSearchSettings } from '../../shared/ai-vault/search/ai-vault-search-settings'
 import { applySessionSearchSettingsChange } from '../ai-vault-search/session-search-enablement'
 import { getRuntimeEnvironmentRegistryRoot } from './runtime-environments/catalog/runtime-environment-registry-root'

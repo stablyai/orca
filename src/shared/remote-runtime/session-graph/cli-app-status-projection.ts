@@ -1,7 +1,4 @@
-import type {
-  CliStatusResult,
-  RuntimeStatus
-} from './remote-runtime/session-graph/runtime-session-contracts'
+import type { CliStatusResult, RuntimeStatus } from './runtime-session-contracts'
 
 export function resolveDesktopWindowStatus(
   status: RuntimeStatus

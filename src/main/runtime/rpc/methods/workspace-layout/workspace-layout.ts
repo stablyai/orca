@@ -14,7 +14,7 @@ import {
 import { LayoutReopenHeldPanesParams } from '../../../../../shared/rpc-contract/workspace-layout/workspace-layout-held-panes-params'
 import type { WorkspaceLayoutStreamFrame } from '../../../../../shared/workspace-layout/published-layout/workspace-layout-stream-frames'
 import { defineMethod, defineStreamingMethod } from '../../core'
-import { getAppEnvironment } from '../../../../../shared/app-environment'
+import { getAppEnvironment } from '../../../../../shared/app-lifecycle/app-environment'
 import { listEnvironments } from '../../../../../shared/remote-runtime/host-store/runtime-environment-store'
 
 let layoutSubscriptionSeq = 0
