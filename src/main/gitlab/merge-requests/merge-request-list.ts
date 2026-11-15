@@ -3,7 +3,7 @@ import type {
   ListMergeRequestsResult,
   MRListState
 } from '../../../shared/gitlab-types'
-import type { IssueSourcePreference } from '../../../shared/repo-types'
+import type { IssueSourcePreference } from '../../../shared/repository/repo-types'
 import { mapMRToWorkItem } from '../requests/gitlab-response-mapping'
 import { acquire, glabApiWithHeaders, release } from '../requests/glab-request-admission'
 import { classifyListFetchError } from '../requests/glab-error-classification'

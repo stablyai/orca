@@ -23,10 +23,10 @@ type ComposerInitialTargetStateInput = Pick<
 >
 
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { isWorkspaceStatusId } from '../../../../shared/workspace-statuses'
+import { isWorkspaceStatusId } from '../../../../shared/workspace/status/workspace-statuses'
 import { resolveWorkspaceCreationTarget } from '@/lib/workspace/creation/project-host-workspace-target'
 import { findActionableFolderProjectGroup } from '@/lib/workspace/creation/new-workspace-project-options'
-import type { ProjectGroup } from '../../../../shared/project-group-types'
+import type { ProjectGroup } from '../../../../shared/project/groups/project-group-types'
 
 export function useComposerInitialTargetState(input: ComposerInitialTargetStateInput) {
   const {

@@ -1,6 +1,6 @@
 import type { AdmissionClass, AdmissionSlotKind, AdmissionWaiter } from './git-admission-state'
 import { CandidateHeap, type Candidate, type WaiterLane } from './git-admission-candidate-heap'
-import type { GitAdmissionTier } from '../../rpc-contract/git-admission-tier-params'
+import type { GitAdmissionTier } from '../../rpc-contract/source-control/git-admission-tier-params'
 
 type SelectedWaiter = {
   waiter: AdmissionWaiter
@@ -25,7 +25,8 @@ const createTierLanes = (): TierLanes => ({
 export class GitAdmissionWaiterQueue {
   private readonly lanes: Record<AdmissionClass, TierLanes> = {
     general: createTierLanes(),
-    network: createTierLanes()
+    network: createTierLanes(),
+    checkout: createTierLanes()
   }
   private readonly countsByBudget = new Map<string, number>()
   private readonly baseCandidates: Record<AdmissionClass, Record<GitAdmissionTier, CandidateHeap>> =
@@ -39,11 +40,17 @@ export class GitAdmissionWaiterQueue {
         interactive: new CandidateHeap(),
         status: new CandidateHeap(),
         background: new CandidateHeap()
+      },
+      checkout: {
+        interactive: new CandidateHeap(),
+        status: new CandidateHeap(),
+        background: new CandidateHeap()
       }
     }
   private readonly headroomCandidates: Record<AdmissionClass, CandidateHeap> = {
     general: new CandidateHeap(),
-    network: new CandidateHeap()
+    network: new CandidateHeap(),
+    checkout: new CandidateHeap()
   }
   private totalCount = 0
 
@@ -53,8 +60,9 @@ export class GitAdmissionWaiterQueue {
 
   /** @internal - exposed for bounded-storage regression tests only. */
   get candidateCountForTests(): number {
-    let count = this.headroomCandidates.general.size + this.headroomCandidates.network.size
-    for (const admissionClass of ['general', 'network'] as const) {
+    let count = 0
+    for (const admissionClass of ['general', 'network', 'checkout'] as const) {
+      count += this.headroomCandidates[admissionClass].size
       for (const tier of TIERS) {
         count += this.baseCandidates[admissionClass][tier].size
       }
@@ -136,7 +144,7 @@ export class GitAdmissionWaiterQueue {
   }
 
   snapshot(): AdmissionWaiter[] {
-    return (['general', 'network'] as const)
+    return (['general', 'network', 'checkout'] as const)
       .flatMap((admissionClass) =>
         TIERS.flatMap((tier) => {
           return [...this.lanes[admissionClass][tier].values()].flatMap((lane) =>

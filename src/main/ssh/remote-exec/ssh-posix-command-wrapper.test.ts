@@ -1,4 +1,4 @@
-import { encodePosixPrintfRecords } from '../../../shared/posix-printf-encoding'
+import { encodePosixPrintfRecords } from '../../../shared/shell/launch/posix-printf-encoding'
 import { spawnSync } from 'node:child_process'
 import { createHash } from 'node:crypto'
 import { afterAll, describe, expect, it } from 'vitest'

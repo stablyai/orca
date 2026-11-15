@@ -1,4 +1,4 @@
-import { nativeChatPreferenceFor } from '../../../../../../shared/structured-native-chat-launch-route'
+import { nativeChatPreferenceFor } from '../../../../../../shared/agent-launch/choices/structured-native-chat-launch-route'
 import { parseExecutionHostId } from '../../../../../../shared/execution-host'
 import { MANAGED_RUNTIME_INSTALL_RUNTIME_CAPABILITY as INSTALL } from '../../../../../../shared/managed-runtime-install'
 import {

@@ -3,7 +3,7 @@ import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { findOptionOccurrence } from '../../shared/command-option-occurrence'
 import { getCommandTokenPathBasename } from '../../shared/command-token-scanner'
-import { MANAGED_DATA_ACCOUNT_RESUME_ENV } from '../../shared/managed-data-account-resume'
+import { MANAGED_DATA_ACCOUNT_RESUME_ENV } from '../../shared/agent-launch/environment/managed-data-account-resume'
 import { findOpenCodeRunCommand } from '../../shared/agent-status/process/opencode-headless-command'
 import {
   tokenizeStartupCommand,

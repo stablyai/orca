@@ -1,7 +1,7 @@
 import { AtRestCommandDemand } from './at-rest-command-demand'
 import type { AgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-record'
 import type { AgentSessionSlashCommand } from '../../../../shared/agent-session/agent-session-wire'
-import type { AgentSessionAccountHome } from '../../../../shared/agent-session/lifecycle/agent-session-account-home'
+import type { AgentSessionAccountHome } from '../../../../shared/agent-session/lifecycle/accounts/agent-session-account-home'
 import { agentSessionPinnedLaunchDirectory } from '../../../runtime/agent-session/records/agent-session-record-launch-directory'
 import type {
   AtRestCommandChange,
@@ -10,7 +10,7 @@ import type {
 import { atRestCommandContextReady } from './at-rest-command-context'
 import { stat } from 'node:fs/promises'
 import { isDefinitiveAbsence } from '../../../../shared/definitive-filesystem-absence'
-import { waitForPromiseWithSignal } from '../../../../shared/abort-signal-reason'
+import { waitForPromiseWithSignal } from '../../../../shared/concurrency/abort-signal-reason'
 import {
   type AtRestCommandStamp,
   type AtRestCommandStamped,

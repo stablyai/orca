@@ -9,11 +9,11 @@ import type {
   RuntimeMobileSessionAgentTab,
   RuntimeMobileSessionBrowserTab,
   RuntimeMobileSessionTerminalTab
-} from '../../../shared/runtime-mobile-session-tab-contracts'
+} from '../../../shared/remote-runtime/session-graph/runtime-mobile-session-tab-contracts'
 import type {
   RuntimeMobileSessionRetiredTerminalSurface,
   RuntimeMobileSessionTabsSnapshot
-} from '../../../shared/runtime-session-contracts'
+} from '../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import type { RuntimePtyWorktreeRecord } from '../terminal/records/runtime-terminal-state-records'
 import type { BrowserSessionTabSelectionOptions } from '../browser/tabs/browser-tab-create-publication'
 import { getRuntimeBrowserPageRegistry } from '../browser/client-pages/runtime-browser-page-registry'
@@ -184,11 +184,11 @@ export abstract class OrcaRuntimeWithCloseStructuredAgentSessionTab extends Orca
     return true
   }
 
-  protected markHeadlessBrowserSessionTabActive(
+  protected async markHeadlessBrowserSessionTabActive(
     worktreeId: string | undefined,
     browserPageId: string,
     options: BrowserSessionTabSelectionOptions
-  ): void {
+  ): Promise<void> {
     if (!worktreeId) {
       return
     }
@@ -229,7 +229,9 @@ export abstract class OrcaRuntimeWithCloseStructuredAgentSessionTab extends Orca
     if (options.caller) {
       // Keep shared selection; only the originating client selects its newly created tab. Local creates lack a caller.
       this.applyMobileSessionTabNavigation(
-        this.getMobileSessionTabsForWorktree(worktreeId, undefined, { includeAgentSenders: false }),
+        await this.getMobileSessionTabsForWorktree(worktreeId, undefined, {
+          includeAgentSenders: false
+        }),
         tab.id,
         options.caller.navigation,
         options.caller.clientNavigationId,

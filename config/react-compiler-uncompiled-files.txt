@@ -3,17 +3,17 @@
 # are skipped too. Remove a line once its file is safe to compile.
 
 # Render-time reads of providerRuntimeSessionGeneration (lib/provider-runtime-context.ts; hazard live-read-in-memo-block).
-src/renderer/src/components/feature-wall/FeatureWallSetupChecklist.tsx
-src/renderer/src/components/feature-wall/use-integration-connection-status.ts
+src/renderer/src/components/feature-wall/setup/FeatureWallSetupChecklist.tsx
+src/renderer/src/components/feature-wall/setup/integrations/use-integration-connection-status.ts
 src/renderer/src/components/integrations/task-trackers/jira-integration-card.tsx
 src/renderer/src/components/integrations/task-trackers/linear-integration-card.tsx
-src/renderer/src/components/new-workspace/use-jira-source-connection.ts
-src/renderer/src/components/new-workspace/use-work-item-source-foundation.ts
+src/renderer/src/components/new-workspace/source-search/use-jira-source-connection.ts
+src/renderer/src/components/new-workspace/source-search/use-work-item-source-foundation.ts
 src/renderer/src/components/settings/skills/linear/LinearAgentSkillPane.tsx
 src/renderer/src/components/settings/tasks/use-task-source-provider-readiness.ts
 src/renderer/src/components/sidebar/workspace-card/details/use-worktree-card-review-details.ts
 src/renderer/src/components/task-page/jira/Content.tsx
-src/renderer/src/components/task-page/jira/use-task-page-jira-list-projection.ts
+src/renderer/src/components/task-page/jira/listing/use-task-page-jira-list-projection.ts
 src/renderer/src/components/task-page/jira/use-task-page-jira-list-state.ts
 src/renderer/src/hooks/use-integration-provider-status-refresh.ts
 
@@ -28,9 +28,13 @@ src/renderer/src/components/editor/combined-diff/scroll-viewport/combined-diff-s
 src/renderer/src/components/editor/markdown-preview/search/use-markdown-preview-search-reveal.ts
 src/renderer/src/components/editor/markdown-preview/viewport/use-markdown-preview-scroll-anchor.ts
 src/renderer/src/components/github-item-dialog/inspect-pull-request/pr-files-combined-diff-body.tsx
+src/renderer/src/components/native-chat/tools/runs/NativeChatToolRunMembers.tsx
+src/renderer/src/components/native-chat/tools/runs/use-native-chat-tool-run-window.ts
 src/renderer/src/components/right-sidebar/file-explorer/panel/FileExplorerVirtualRows.tsx
 src/renderer/src/components/right-sidebar/file-explorer/tree/FileExplorerFilesTreePane.tsx
 src/renderer/src/components/sidebar/worktree-list/viewport/VirtualizedWorktreeViewport.tsx
+src/renderer/src/components/automations/authoring/WorkspaceCombobox.tsx
+src/renderer/src/components/skills/installation/SkillInstallWorkspaceCombobox.tsx
 
 # The workbench subtree relies on the shell re-rendering on every app render.
 src/renderer/src/app-shell/AppWorkspaceShell.tsx

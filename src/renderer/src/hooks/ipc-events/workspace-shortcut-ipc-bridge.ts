@@ -4,9 +4,7 @@ import { activateTabNumberShortcut } from '@/lib/keyboard/tab-number-shortcuts'
 import { emitCmdJRowIndexJump } from '@/lib/workspace/search/palette/cmd-j-row-index-jump'
 import { getVisibleWorktreeShortcutTargets } from '@/components/sidebar/worktree-list/listing/visible-worktrees'
 import { activateAndRevealWorkspace } from '@/lib/workspace/activation/worktree-activation'
-import { deleteActiveWorkspaceFromShortcut } from '@/components/sidebar/workspace-actions/deletion/active-workspace-delete'
-import { isFloatingWorkspacePanelFocused } from '@/components/floating-terminal/floating-workspace-terminal-actions'
-import { isGitRepoKind } from '../../../../shared/repo-kind'
+import { isGitRepoKind } from '../../../../shared/repository/repo-kind'
 import { runBuiltInOrReplacement } from '@/lib/plugins/commands/plugin-command-replacements'
 import { useAppStore } from '../../store/index'
 import { toggleAgentDashboardFromShortcut } from './agent-dashboard-command'
@@ -34,17 +32,6 @@ export function registerWorkspaceShortcutIpcBridge(unsubs: (() => void)[]): void
       openNewWorkspaceFromShortcut(store)
     })
   )
-
-  if (window.api.ui.onDeleteCurrentWorkspace) {
-    unsubs.push(
-      window.api.ui.onDeleteCurrentWorkspace(() => {
-        if (isFloatingWorkspacePanelFocused()) {
-          return
-        }
-        deleteActiveWorkspaceFromShortcut(useAppStore.getState())
-      })
-    )
-  }
 
   if (window.api.ui.onOpenWorkspaceBoard) {
     unsubs.push(

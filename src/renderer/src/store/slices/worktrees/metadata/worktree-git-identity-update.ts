@@ -9,7 +9,7 @@ import { detachedHeadAutoDerivedDisplayNames } from './detached-head-display-nam
 import {
   hostedReviewClearUpdates,
   type HostedReviewClearUpdates
-} from '../../../../../../shared/worktree/hosted-review-branch-ownership'
+} from '../../../../../../shared/worktree/hosted-review/hosted-review-branch-ownership'
 import { observeDetachedHostedReviewOwner } from './detached-hosted-review-owners'
 import {
   applyHostedReviewLinkClear,
@@ -23,7 +23,7 @@ import {
 import {
   canonicalHostedReviewBranchIdentity,
   CLEARED_HOSTED_REVIEW_LINK_UPDATES
-} from '../../../../../../shared/worktree/hosted-review-links'
+} from '../../../../../../shared/worktree/hosted-review/hosted-review-links'
 import {
   reviewClearTombstoneKey,
   worktreeCopyOwnerKey,
@@ -31,7 +31,7 @@ import {
 } from './worktree-copy-review-clear'
 import { persistWorktreeMeta } from './worktree-meta-persist'
 import { withRepoHostOwnership } from '../listing/worktree-host-ownership'
-import { getRepoRegistrationHostIds } from '../../../../../../shared/repo-host-identity'
+import { getRepoRegistrationHostIds } from '../../../../../../shared/repository/repo-host-identity'
 import { isRuntimeSelectorNotFoundError } from '../listing/runtime-worktree-rpc-errors'
 import { parseExecutionHostId, type ExecutionHostId } from '../../../../../../shared/execution-host'
 import { hostWorktreeTarget } from '../../../../../../shared/worktree/host-qualified-identity'

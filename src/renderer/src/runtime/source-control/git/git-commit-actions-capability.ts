@@ -1,4 +1,4 @@
-import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import { GIT_COMMIT_ACTIONS_CAPABILITY } from '../../../../../shared/source-control/runtime/git-graph-capabilities'
 import { useStructuredAgentSessionHostCapabilityState } from '../../native-chat/host-capabilities/structured-agent-session-host-capability'
 import {

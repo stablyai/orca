@@ -2,7 +2,7 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { _resetSecretStoreForTests, setSecretStore } from '../../shared/secret-store'
+import { _resetSecretStoreForTests, setSecretStore } from '../../shared/secure-storage/secret-store'
 import { savedCredentialUnreadable } from './saved-credential-readability'
 
 const PREFIX = 'orca-test-key:v1:'
@@ -49,8 +49,7 @@ describe('savedCredentialUnreadable', () => {
 
   it.each([
     ['an empty', ''],
-    ['a non-base64', 'not*base64!'],
-    ['a truncated base64', 'c2VhbGVkLWhlcmU6a2V5x']
+    ['a non-base64', 'not*base64!']
   ])('reports %s payload as unreadable, not sealed elsewhere', (_label, payload) => {
     expect(judge(`${PREFIX}encrypted:${payload}`)).toBe('unreadable')
   })

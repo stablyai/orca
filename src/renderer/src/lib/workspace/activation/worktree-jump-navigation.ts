@@ -5,7 +5,7 @@ import { activateAndRevealWorkspace } from '@/lib/workspace/activation/worktree-
 import { getVisibleWorktreeShortcutTargets } from '@/components/sidebar/worktree-list/listing/visible-worktrees'
 import { worktreePassesSidebarFilters } from '@/components/sidebar/worktree-list/listing/worktree-filter-visibility'
 import { sidebarHasActiveFilters } from '@/components/sidebar/worktree-list/controls/sidebar-filter-actions'
-import { parseWorkspaceKey } from '../../../../../shared/workspace-scope'
+import { parseWorkspaceKey } from '../../../../../shared/workspace/identity/workspace-scope'
 import {
   normalizeExecutionHostId,
   type ExecutionHostId

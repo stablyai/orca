@@ -49,13 +49,31 @@ describe('DesktopScriptProviderClient actions', () => {
       noScreenshot: true
     })
 
-    expect(result.action).toMatchObject({
-      verification: {
-        state: 'verified',
-        property: 'value',
-        expected: 'changed',
-        actualPreview: 'changed'
-      }
+    expect(result.action?.verification).toEqual({ state: 'verified', property: 'value' })
+  })
+
+  it.each([
+    ['a redacted secure field', 'hunter2', '[redacted]'],
+    ['a value cut at the provider text limit', 'x'.repeat(600), `${'x'.repeat(500)}...`],
+    ['a value cut at 500 code points', '😀'.repeat(600), `${'😀'.repeat(500)}...`]
+  ])('does not report %s as a failed set-value', async (_case, value, readback) => {
+    mockBridgeResponse({ ok: true, snapshot: sampleBridgeSnapshot('Login', 'initial') })
+    mockBridgeResponse({ ok: true, capabilities: sampleCapabilities() })
+    mockBridgeResponse({ ok: true, snapshot: sampleBridgeSnapshot('Login', readback) })
+
+    const client = await createDesktopScriptProviderClient('linux', '/tmp/runtime.py')
+
+    await client.snapshot({ app: 'Login' })
+    const result = await client.action('setValue', {
+      app: 'Login',
+      elementIndex: 0,
+      value,
+      noScreenshot: true
+    })
+
+    expect(result.action?.verification).toEqual({
+      state: 'unverified',
+      reason: 'readback_unsupported'
     })
   })
 })

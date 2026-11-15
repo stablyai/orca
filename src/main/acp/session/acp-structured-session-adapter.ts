@@ -155,7 +155,7 @@ export class AcpStructuredSessionAdapter implements SessionAdapter {
   cancelTurn: SessionAdapter['cancelTurn'] = async (input) => {
     const session = this.live(input.sessionId)
     // Refuse a stale named turn; a handover with no journal turn can stop the in-flight prompt.
-    const liveTurnId = input.resolveLiveTurnId?.() ?? session.lane.openTurnId
+    const liveTurnId = (await input.resolveLiveTurnId?.()) ?? session.lane.openTurnId
     if (input.turnId !== undefined && liveTurnId !== null && input.turnId !== liveTurnId) {
       return { cancelled: false, refusal: { turnNotRunning: true } }
     }
@@ -220,6 +220,14 @@ export class AcpStructuredSessionAdapter implements SessionAdapter {
   holdsDispatch = (sessionId: string): boolean => {
     const session = this.children.sessions.get(sessionId)
     return session ? childState.isAcpReadySession(session) && session.turns.running : false
+  }
+
+  confirmIdle: NonNullable<SessionAdapter['confirmIdle']> = (sessionId) => {
+    const session = this.children.sessions.get(sessionId)
+    // OMP cannot prove that a finished parent has no background work or pending results.
+    return session?.spec.agent === 'omp' && !session.connection.exited
+      ? Promise.resolve('unknown')
+      : undefined
   }
 
   holdsLiveProviderProcess = (sessionId: string, generation: string): boolean => {

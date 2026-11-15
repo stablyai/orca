@@ -1,4 +1,4 @@
-import { windowsLongPathGitArgs } from '../../../../shared/windows-long-path-git-args'
+import { windowsLongPathGitArgs } from '../../../../shared/git/compatibility/windows-long-path-git-args'
 import { checkoutWorkersGitArgs } from './checkout-workers-git-args'
 import type { AddWorktreeOptions } from '../worktree-operation-options'
 import { gitExecOptions, resolveWorktreeAddTimeoutMs } from '../worktree-operation-options'
@@ -93,7 +93,7 @@ export async function performPreparedWorktreeFinalization(
             '--hard',
             targetHead
           ],
-          gitExecOptions(preparedPath, finalizeGitOptions)
+          { ...gitExecOptions(preparedPath, finalizeGitOptions), admissionClass: 'checkout' }
         )
       }
 

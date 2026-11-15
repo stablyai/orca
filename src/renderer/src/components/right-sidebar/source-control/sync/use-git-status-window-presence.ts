@@ -40,9 +40,15 @@ export function useGitStatusWindowPresence(
     }
     document.addEventListener('visibilitychange', handleVisibilityChange)
     window.addEventListener('focus', handleWindowFocus)
+    const stopResume = window.api?.ui?.onSystemResumed?.(() => {
+      if (canFetch && isWindowVisible()) {
+        schedulerRef.current?.refreshNow()
+      }
+    })
     return () => {
       document.removeEventListener('visibilitychange', handleVisibilityChange)
       window.removeEventListener('focus', handleWindowFocus)
+      stopResume?.()
     }
   }, [schedulerRef, canFetch, pollScope])
 }

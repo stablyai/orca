@@ -1,5 +1,5 @@
 import type { TitleDerivedAgentRowsInput } from './title-derived-agent-row-input'
-import type { DashboardAgentRow } from '@/components/dashboard/useDashboardData'
+import type { DashboardAgentRow } from '@/components/dashboard/rows/dashboard-agent-row'
 import { formatAgentTypeLabel } from '../../../../../../shared/agent-status/presentation/agent-type-label'
 import {
   isClaudeManagementTitle,
@@ -21,7 +21,7 @@ import {
   resolveRuntimePaneTitleLeafIdFromRoot,
   resolveRuntimePaneTitleLeafIdFromSparseSlots,
   collectRuntimePaneLeafIds
-} from '../../../../../../shared/runtime-pane-title-leaf-id'
+} from '../../../../../../shared/workspace-layout/terminal-topology/runtime-pane-title-leaf-id'
 import {
   isTerminalLeafId,
   makePaneKey

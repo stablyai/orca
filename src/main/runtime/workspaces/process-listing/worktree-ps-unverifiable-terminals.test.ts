@@ -49,10 +49,10 @@ function makeStore() {
   }
 }
 
-function makeRuntime(controller: {
+async function makeRuntime(controller: {
   hasPty: () => boolean | null
   listProcesses: () => Promise<{ id: string; worktreeId: string }[]>
-}): OrcaRuntimeService {
+}): Promise<OrcaRuntimeService> {
   const runtime = new OrcaRuntimeService(partialRuntimeStore(makeStore()))
   runtime.setPtyController(
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: worktree.ps reaches only listProcesses and hasPty on this controller.
@@ -64,7 +64,7 @@ function makeRuntime(controller: {
     } as never
   )
   runtime.attachWindow(1)
-  runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
+  await runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
   runtime.registerPty(PTY_ID, WORKTREE_ID, CONNECTION_ID)
   return runtime
 }
@@ -76,7 +76,7 @@ async function psRow(runtime: OrcaRuntimeService) {
 
 describe('worktree.ps terminal verdicts for an SSH host', () => {
   it('reports a terminal on an unreachable host as unverifiable, not zero', async () => {
-    const runtime = makeRuntime({
+    const runtime = await makeRuntime({
       hasPty: () => null,
       listProcesses: async () => {
         throw new Error('relay connection lost')
@@ -95,7 +95,7 @@ describe('worktree.ps terminal verdicts for an SSH host', () => {
   })
 
   it('reports nothing for a terminal whose host confirmed the exit', async () => {
-    const runtime = makeRuntime({ hasPty: () => false, listProcesses: async () => [] })
+    const runtime = await makeRuntime({ hasPty: () => false, listProcesses: async () => [] })
     runtime.onPtyExit(PTY_ID, -1, undefined, { hostExitConfirmed: true })
 
     const row = await psRow(runtime)
@@ -106,7 +106,7 @@ describe('worktree.ps terminal verdicts for an SSH host', () => {
 
   it('returns to live once the reconnected host lists the terminal again', async () => {
     let reachable = false
-    const runtime = makeRuntime({
+    const runtime = await makeRuntime({
       hasPty: () => (reachable ? true : null),
       listProcesses: async () => (reachable ? [{ id: PTY_ID, worktreeId: WORKTREE_ID }] : [])
     })

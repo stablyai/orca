@@ -1,4 +1,4 @@
-import { compareAppVersions } from '../../../shared/app-version'
+import { compareAppVersions } from '../../../shared/app-lifecycle/identity/app-version'
 import { pluginUpdateGrowsAccess } from '../../../shared/plugins/approval/plugin-update-access-growth'
 import type {
   PluginAutoUpdateState,
@@ -8,7 +8,7 @@ import {
   isInvalidDiscoveredPlugin,
   type DiscoveredPlugin,
   type ValidDiscoveredPlugin
-} from '../plugin-discovery'
+} from '../discovery/plugin-discovery'
 import {
   installCatalogReleaseWithApproval,
   readApprovedPredecessor,
@@ -16,7 +16,7 @@ import {
   type PluginCatalogInstallOutcome
 } from './plugin-update-approval'
 import type { PluginLockfile } from '../../../shared/plugins/installation/plugin-install-lockfile'
-import type { PluginPolicySource } from '../plugin-activation-policy'
+import type { PluginPolicySource } from '../activation/plugin-activation-policy'
 import type { PluginMarketplaceInstaller } from './plugin-marketplace-installer'
 import type { PluginReleaseFirstSeenStore } from './plugin-release-first-seen-store'
 

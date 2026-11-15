@@ -9,8 +9,8 @@ import {
   isDashboardPopoutRenderer,
   onDashboardPopoutOpenChanged
 } from '../window/dashboard-popout-window'
-import { safelyRevealWindow } from '../window/focus-existing-window'
-import { isBackgroundLaunch } from '../window/foreground-activation-policy'
+import { safelyRevealWindow } from '../window/activation/focus-existing-window'
+import { isBackgroundLaunch } from '../window/activation/foreground-activation-policy'
 import { getTrustedUIRendererWindow, isTrustedUIRenderer, sendToTrustedUIRenderer } from './ui'
 import {
   admitDashboardSnapshot,

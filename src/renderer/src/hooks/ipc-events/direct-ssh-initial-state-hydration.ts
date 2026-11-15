@@ -1,4 +1,4 @@
-import type { SshConnectionState } from '../../../../shared/ssh-types'
+import type { SshConnectionState } from '../../../../shared/remote-runtime/ssh/ssh-types'
 import { useAppStore } from '../../store'
 
 // Bound parallel probes so one 30s SSH timeout cannot serialize the target list or flood IPC with an unbounded burst.

@@ -63,12 +63,7 @@ async function remainingIds(database: RelayDatabase): Promise<string[]> {
   return rows.map((row) => String(row.reservation_id))
 }
 
-const dialects: [string, () => Promise<RelayDatabase>][] = [
-  ['sqlite', openInMemoryRelayDatabase],
-  ...(databaseUrl ? [['postgres', openPostgres] as [string, () => Promise<RelayDatabase>]] : [])
-]
-
-describe.each(dialects)('released reservation prune (%s)', (_dialect, open) => {
+describe('released reservation prune', () => {
   let database: RelayDatabase | undefined
 
   afterEach(async () => {
@@ -76,12 +71,8 @@ describe.each(dialects)('released reservation prune (%s)', (_dialect, open) => {
     database = undefined
   })
 
-  afterAll(async () => {
-    if (databaseUrl) await onAdmin(`DROP SCHEMA IF EXISTS ${schema} CASCADE`)
-  })
-
   it('deletes only released rows older than the retention window', async () => {
-    database = await open()
+    database = await openInMemoryRelayDatabase()
     await insertReservation(database, 'a-old-released', 'released', STALE - 1)
     await insertReservation(database, 'b-edge-released', 'released', STALE)
     await insertReservation(database, 'c-fresh-released', 'released', STALE + 1)

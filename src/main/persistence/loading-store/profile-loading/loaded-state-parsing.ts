@@ -1,15 +1,15 @@
 import { homedir } from 'node:os'
 import { normalizeProxyUrl } from '../../../../shared/network-proxy'
-import { normalizeKagiSessionLink } from '../../../../shared/browser-url'
+import { normalizeKagiSessionLink } from '../../../../shared/browser/navigation/browser-url'
 import type { PersistedState } from '../../../../shared/persisted-state-types'
 import type { ChatUiLaunchTipAudience } from '../../../../shared/native-chat/chat-ui-launch-tip-audience'
-import type { SshPtyConsumerRecovery } from '../../../../shared/ssh-types'
+import type { SshPtyConsumerRecovery } from '../../../../shared/remote-runtime/ssh/ssh-types'
 import { getDefaultPersistedState } from '../../../../shared/constants'
 import { pruneLocalTerminalScrollbackBuffers } from '../../../../shared/workspace-session/workspace-session-terminal-buffers'
 import { pruneWorkspaceSessionBrowserHistory } from '../../../../shared/workspace-session/workspace-session-browser-history'
-import { clearMissingProjectGroupMemberships } from '../../../../shared/project-groups'
+import { clearMissingProjectGroupMemberships } from '../../../../shared/project/groups/project-groups'
 import { migrateWorkspaceSessionTerminalScrollbackSnapshots } from '../../../pty/scrollback/terminal-scrollback-snapshots'
-import { logStartupMilestone } from '../../../startup/startup-diagnostics'
+import { logStartupMilestone } from '../../../startup/diagnostics/startup-diagnostics'
 import {
   PROTECTED_SECRET_SLOT,
   sshPtyOwnerLeaseSecretSlot
@@ -25,7 +25,7 @@ import {
   normalizeWorktreeLinkedItemMetadata
 } from '../../tracking-repos/worktree-metadata-normalization'
 import { backfillLegacyAutomationContexts } from '../../scheduling-automations/automation-context-migration'
-import { migrateAutomationOwners } from '../../../automations/automation-owner-migration'
+import { migrateAutomationOwners } from '../../../automations/ownership/automation-owner-migration'
 import {
   ENCRYPTED_SSH_PTY_OWNER_LEASE_MAX_LENGTH,
   normalizeSshPtyConsumerRecovery

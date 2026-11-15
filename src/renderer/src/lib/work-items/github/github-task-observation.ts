@@ -1,6 +1,6 @@
 import { getTaskPageRepoSourceContext } from '../task-repo-source-context'
 
-import type { Repo } from '../../../../../shared/repo-types'
+import type { Repo } from '../../../../../shared/repository/repo-types'
 
 import type { TaskSourceContext } from '../../../../../shared/work-items/task-source-context'
 
@@ -12,7 +12,7 @@ import {
 
 import { getRepoExecutionHostId } from '../../../../../shared/execution-host'
 
-import { parseHostAuthorityKey } from '../../../../../shared/host-authority'
+import { parseHostAuthorityKey } from '../../../../../shared/execution-host/host-authority'
 
 import { hostRouteForAuthority } from '@/runtime/rpc/targets/runtime-client-target'
 

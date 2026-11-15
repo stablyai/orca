@@ -1,7 +1,4 @@
 import { useId } from 'react'
-import { useAppStore } from '@/store'
-import { selectActiveWorkspaceDeleteTarget } from '../deletion/active-workspace-delete'
-import { worktreeCopyOwnerKey } from '@/store/slices/worktrees/metadata/worktree-copy-review-clear'
 import { Trash2 } from 'lucide-react'
 import { DropdownMenuItem, DropdownMenuShortcut } from '@/components/ui/dropdown-menu'
 import { useOptionalShortcutLabel } from '@/hooks/useShortcutLabel'
@@ -23,15 +20,6 @@ export function WorktreeContextMenuDeleteItems({ model }: { model: WorktreeConte
     removesProject,
     worktree
   } = model
-  const isActiveDeleteTarget = useAppStore((state) => {
-    const target = selectActiveWorkspaceDeleteTarget(state)
-    return target?.kind === 'folder'
-      ? target.workspaceKey === worktree.id && target.executionHostId === worktree.hostId
-      : target?.kind === 'worktree' &&
-          target.worktree.id === worktree.id &&
-          worktreeCopyOwnerKey(target.worktree) === worktreeCopyOwnerKey(worktree) &&
-          target.worktree.instanceId === worktree.instanceId
-  })
   const projectMissing = !isMultiContext && worktree.isMainWorktree && !removesProject
   const label = contextDeletePending
     ? t('auto.components.sidebar.WorktreeContextMenu.b42391d8bf', 'Deleting…')
@@ -90,7 +78,10 @@ export function WorktreeContextMenuDeleteItems({ model }: { model: WorktreeConte
       >
         <Trash2 className="size-3.5" />
         {label}
-        {!isMultiContext && !removesProject && isActiveDeleteTarget && deleteShortcut ? (
+        {!removesProject &&
+        !projectMissing &&
+        (!isMultiContext || batchDeleteWorktrees.length > 0) &&
+        deleteShortcut ? (
           <DropdownMenuShortcut>{deleteShortcut}</DropdownMenuShortcut>
         ) : null}
       </DropdownMenuItem>

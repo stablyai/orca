@@ -1,5 +1,5 @@
 import type { AppState } from '@/store/types'
-import type { RuntimeMobileTerminalTheme } from '../../../../shared/runtime-mobile-session-tab-contracts'
+import type { RuntimeMobileTerminalTheme } from '../../../../shared/remote-runtime/session-graph/runtime-mobile-session-tab-contracts'
 import type { TabGroupLayoutNode } from '../../../../shared/tab-types'
 import type { TerminalPaneLayoutNode } from '../../../../shared/workspace-layout/terminal-tab-types'
 
@@ -21,7 +21,7 @@ export type RuntimeMobileSessionSyncKey = {
   activeTabId: AppState['activeTabId']
   activeBrowserTabIdByWorktree: AppState['activeBrowserTabIdByWorktree']
   agentStatusEpoch: number
-  agentStatusProjection: string
+  agentStatusProjection: object
   generatedTabTitlesEnabled: boolean
   systemPrefersDark: boolean | null
   terminalThemeProjection: string
@@ -92,7 +92,7 @@ export type EditorDraftHashCache = {
 }
 export type MobileSessionAgentStatusByWorktree = ReadonlyMap<
   string,
-  ReadonlyMap<string, AppState['agentStatusByPaneKey'][string]>
+  ReadonlyMap<string, NonNullable<ReturnType<AppState['agentStatusByPaneKey']['get']>>>
 >
 /** Slices shared by every worktree in one publication; derived from `AppState` exactly once. */
 export type MobileSessionPublicationInputs = {
@@ -120,6 +120,7 @@ export type MobileSessionWorktreeInputs = {
   worktreeInstanceId: string | undefined
   terminalTabs: AppState['tabsByWorktree'][string]
   browserWorkspaces: AppState['browserTabsByWorktree'][string]
+  browserRuntimeEnvironmentId: string | null
   unifiedTabs: AppState['unifiedTabsByWorktree'][string]
   groups: AppState['groupsByWorktree'][string]
   tabBarOrder: AppState['tabBarOrderByWorktree'][string] | undefined
@@ -133,7 +134,10 @@ export type MobileSessionWorktreeInputs = {
     string,
     NonNullable<AppState['nativeChatLaunchDraftByTabId']>[string]
   >
-  agentStatusByPaneKey: ReadonlyMap<string, AppState['agentStatusByPaneKey'][string]>
+  agentStatusByPaneKey: ReadonlyMap<
+    string,
+    NonNullable<ReturnType<AppState['agentStatusByPaneKey']['get']>>
+  >
   editorDraftVersionByFileId: ReadonlyMap<string, string>
   pagesByBrowserWorkspaceId: ReadonlyMap<
     string,

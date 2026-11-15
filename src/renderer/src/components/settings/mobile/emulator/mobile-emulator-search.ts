@@ -2,6 +2,12 @@ import { translate } from '@/i18n/i18n'
 import { translateSearchKeyword } from '../../search/settings-search-keywords'
 import { createLocalizedCatalog } from '@/i18n/localized-catalog'
 
+export const MOBILE_EMULATOR_SETTING_ANCHORS = {
+  availability: 'mobile-emulator-availability',
+  opening: 'mobile-emulator-opening',
+  agentControl: 'mobile-emulator-agent-control'
+} as const
+
 export const getMobileEmulatorSearchEntries = createLocalizedCatalog(() => [
   {
     title: translate(
@@ -68,6 +74,7 @@ export const getMobileEmulatorSearchEntries = createLocalizedCatalog(() => [
     ]
   },
   {
+    targetSectionId: MOBILE_EMULATOR_SETTING_ANCHORS.opening,
     title: translate(
       'auto.components.settings.mobile.emulator.search.b8c9f903eb',
       'Default emulator device'
@@ -100,6 +107,7 @@ export const getMobileEmulatorSearchEntries = createLocalizedCatalog(() => [
     ]
   },
   {
+    targetSectionId: MOBILE_EMULATOR_SETTING_ANCHORS.availability,
     title: translate(
       'auto.components.settings.mobile.emulator.search.de556a0911',
       'Emulator availability'
@@ -132,6 +140,7 @@ export const getMobileEmulatorSearchEntries = createLocalizedCatalog(() => [
     ]
   },
   {
+    targetSectionId: MOBILE_EMULATOR_SETTING_ANCHORS.agentControl,
     title: translate(
       'auto.components.settings.mobile.emulator.search.0d6e7dba38',
       'Agent CLI control'

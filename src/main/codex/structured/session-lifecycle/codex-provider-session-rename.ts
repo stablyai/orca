@@ -1,4 +1,4 @@
-import { requireLegacyAgentSessionAccountHome } from '../../../../shared/agent-session/lifecycle/agent-session-account-home'
+import { requireLegacyAgentSessionAccountHome } from '../../../../shared/agent-session/lifecycle/accounts/agent-session-account-home'
 import type { AgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-record'
 import {
   runCodexAppServerSession,
@@ -20,7 +20,7 @@ import {
 import {
   NATIVE_CHAT_SCRATCH_DIR_ENV,
   LEGACY_NATIVE_CHAT_VISUALS_DIR_ENV
-} from '../../../native-chat/native-chat-visuals-delivery'
+} from '../../../native-chat/conversation-files/native-chat-visuals-delivery'
 import { CODEX_SHORT_LIVED_PROBE_APP_SERVER_ARGS } from '../../../codex-cli/codex-read-only-app-server-args'
 import type { CodexSession } from './codex-structured-session-state'
 
@@ -118,10 +118,17 @@ export async function renameCodexProviderSession(input: {
 export async function runCodexProviderAppServer<T>(
   record: AgentSessionRecord,
   invocation: CodexProviderInvocationDeps,
-  options: { timeoutMs: number; signal?: AbortSignal; experimentalApi?: boolean },
+  options: {
+    timeoutMs: number
+    signal?: AbortSignal
+    experimentalApi?: boolean
+    /** Another home than the chat's, e.g. the source of a mirrored home's config. */
+    codexHome?: string
+  },
   body: (rpc: CodexAppServerRpc, cwd: string) => Promise<T>
 ): Promise<T> {
-  const codexHome = requireLegacyAgentSessionAccountHome(record.accountHome).path
+  const { codexHome = requireLegacyAgentSessionAccountHome(record.accountHome).path, ...session } =
+    options
   const cwd = await codexProviderProbeCwd(record, invocation)
   const { command, prefixArgs, environment } = await resolveCodexStructuredInvocation({
     ...invocation,
@@ -142,7 +149,7 @@ export async function runCodexProviderAppServer<T>(
       cliPath: command,
       env: { ...env, CODEX_HOME: codexHome },
       envToDelete: [NATIVE_CHAT_SCRATCH_DIR_ENV, LEGACY_NATIVE_CHAT_VISUALS_DIR_ENV],
-      ...options
+      ...session
     },
     (rpc) => body(rpc, cwd)
   )

@@ -15,6 +15,16 @@
       "types": "./dist/run-process.d.ts",
       "default": "./dist/run-process.js"
     },
+    "./native-executable-resolution": {
+      "orca-source": "./src/native-executable-resolution.ts",
+      "types": "./dist/native-executable-resolution.d.ts",
+      "default": "./dist/native-executable-resolution.js"
+    },
+    "./native-process-spawn": {
+      "orca-source": "./src/native-process-spawn.ts",
+      "types": "./dist/native-process-spawn.d.ts",
+      "default": "./dist/native-process-spawn.js"
+    },
     "./process-spec": {
       "orca-source": "./src/process-spec.ts",
       "types": "./dist/process-spec.d.ts",

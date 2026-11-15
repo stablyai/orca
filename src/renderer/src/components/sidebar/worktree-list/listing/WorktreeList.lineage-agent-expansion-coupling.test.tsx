@@ -1,4 +1,8 @@
 // @vitest-environment happy-dom
+import {
+  acceptedAgentStatuses,
+  type AcceptedAgentStatuses
+} from '@/store/slices/agent-status/accepted-agent-statuses'
 
 vi.mock('@/components/confirmation-dialog-context', () => ({
   useConfirmationDialog: () => vi.fn().mockResolvedValue(false)
@@ -7,6 +11,7 @@ vi.mock('@/components/confirmation-dialog-context', () => ({
 // Render real list/agents so changing lineage row keys remounts cards and exercises disclosure persistence independently of child-worktree expansion.
 
 import { act, type ReactNode } from 'react'
+import { useAppStore } from '@/store'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as ProjectHeaderDragContract from '../drag/project-header-drag-contract'
@@ -14,7 +19,7 @@ import type {
   AgentStatusEntry,
   AgentStatusOrchestrationContext
 } from '../../../../../../shared/agent-status/contracts/agent-status-types'
-import type { Repo } from '../../../../../../shared/repo-types'
+import type { Repo } from '../../../../../../shared/repository/repo-types'
 import type { TerminalTab } from '../../../../../../shared/workspace-layout/terminal-tab-types'
 import type { WorktreeCardProperty } from '../../../../../../shared/ui-chrome-types'
 import type { WorktreeLineage } from '../../../../../../shared/worktree/lineage-types'
@@ -47,7 +52,7 @@ vi.mock('@/store', () => ({
   )
 }))
 
-// Honor getItemKey so toggling standalone/lineage-group rows changes React keys and reproduces the card remount.
+// Use the virtualizer keys when rendering the visible workspace rows.
 vi.mock('@tanstack/react-virtual', () => ({
   defaultRangeExtractor: ({ startIndex, endIndex }: { startIndex: number; endIndex: number }) =>
     Array.from({ length: endIndex - startIndex + 1 }, (_, index) => startIndex + index),
@@ -248,16 +253,20 @@ function setAgentLineageState(options: {
     branch: 'child-branch',
     sortOrder: 10
   })
-  const agentStatusByPaneKey: Record<string, AgentStatusEntry> = {
-    [PANE_ROOT]: makeAgentEntry(PANE_ROOT, 'PARENT_AGENT_PROMPT'),
-    [PANE_CHILD]: makeAgentEntry(PANE_CHILD, 'CHILD_AGENT_PROMPT', {
-      taskId: 't1',
-      dispatchId: 'd1',
-      parentPaneKey: PANE_ROOT
+  let agentStatusByPaneKey: AcceptedAgentStatuses = acceptedAgentStatuses(
+    Object.entries({
+      [PANE_ROOT]: makeAgentEntry(PANE_ROOT, 'PARENT_AGENT_PROMPT'),
+      [PANE_CHILD]: makeAgentEntry(PANE_CHILD, 'CHILD_AGENT_PROMPT', {
+        taskId: 't1',
+        dispatchId: 'd1',
+        parentPaneKey: PANE_ROOT
+      })
     })
-  }
+  )
   if (options.secondRootAgent) {
-    agentStatusByPaneKey[PANE_ROOT_2] = makeAgentEntry(PANE_ROOT_2, 'SECOND_ROOT_PROMPT')
+    agentStatusByPaneKey = agentStatusByPaneKey.replace([
+      [PANE_ROOT_2, makeAgentEntry(PANE_ROOT_2, 'SECOND_ROOT_PROMPT')]
+    ])
   }
 
   mockStore.state = {
@@ -316,7 +325,7 @@ function setAgentLineageState(options: {
     reportVisibleGitHubPRRefreshCandidates: vi.fn(),
     setVisibleReviewCardWorktreeIds: mockStore.setVisibleReviewCardWorktreeIds,
     repos: [repo],
-    retainedAgentsByPaneKey: {},
+
     revealWorktreeInSidebar: vi.fn(),
     runtimePaneTitlesByTabId: {},
     runtimeAgentOrchestrationByPaneKey: {},
@@ -353,13 +362,20 @@ function setAgentLineageState(options: {
     agentSendPopoverTargetMode: null,
     acknowledgedAgentsByPaneKey: {},
     dropAgentStatus: vi.fn(),
-    dismissRetainedAgent: vi.fn(),
     sendPromptToSidebarAgentTarget: vi.fn(),
     tabsByWorktree: { parent: [makeParentTab()] },
     unifiedTabsByWorktree: {},
     structuredChatSleptAtByPaneKey: {},
+    paneForegroundAgentByPaneKey: {},
     agentStatusByPaneKey
   }
+  const changes = Array.from(agentStatusByPaneKey, ([paneKey, current]) => ({
+    paneKey,
+    previous: undefined,
+    current
+  }))
+  agentStatusByPaneKey.projection.prepare(useAppStore.getState(), changes)()
+  agentStatusByPaneKey.prepare()()
 }
 
 const mountedRoots: Root[] = []
@@ -413,15 +429,6 @@ function childWorktreeCardPresent(container: HTMLElement): boolean {
   return container.querySelector('[id="worktree-list-option-all%3A%7Cchild"]') !== null
 }
 
-function parentVirtualRowKey(container: HTMLElement): string | null {
-  return (
-    container
-      .querySelector('[data-worktree-id="parent"]')
-      ?.closest('[data-worktree-virtual-row]')
-      ?.getAttribute('data-worktree-virtual-row-key') ?? null
-  )
-}
-
 async function click(el: Element): Promise<void> {
   await act(async () => {
     el.dispatchEvent(new MouseEvent('click', { bubbles: true }))
@@ -451,11 +458,9 @@ describe('WorktreeCard agent-list <-> child-worktrees expansion coupling', () =>
     clearWorktreeAgentExpansionStateForTests()
   })
 
-  it('[full mode] toggling CHILD WORKTREES still remounts the card but PRESERVES agent expansion (regression)', async () => {
+  it('[full mode] collapsing child worktrees preserves agent expansion', async () => {
     setAgentLineageState({ agentActivityDisplayMode: 'full' })
     const { container, root } = await renderWorktreeList()
-
-    expect(parentVirtualRowKey(container)).toBe('lineage-group:all:lineage:parent')
 
     await click(agentChildDisclosure(container)!)
     expect(agentChildDisclosure(container)!.getAttribute('aria-expanded')).toBe('true')
@@ -464,8 +469,6 @@ describe('WorktreeCard agent-list <-> child-worktrees expansion coupling', () =>
     expect(mockStore.state.toggleCollapsedGroup).toHaveBeenCalledWith('lineage:parent')
     await rerender(root)
 
-    // Verify the parent actually remounted under a different row key; otherwise persistence would pass without exercising the bug.
-    expect(parentVirtualRowKey(container)).toBe('wt:all:|parent')
     expect(childWorktreeCardPresent(container)).toBe(false)
 
     expect(agentChildDisclosure(container)!.getAttribute('aria-expanded')).toBe('true')

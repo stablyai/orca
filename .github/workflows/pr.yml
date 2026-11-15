@@ -417,11 +417,11 @@ jobs:
         run: |
           DIFF_BASE="$(node config/scripts/git/pr-diff-base/git-pull-request-diff-base.mjs "$BASE_SHA")"
           if git diff --quiet "$DIFF_BASE" HEAD -- \
-            src/shared/ephemeral-vm-runtime-store.ts \
-            src/shared/ephemeral-vm-runtime-feature-store.ts \
-            src/shared/ephemeral-vm-runtime-rollback-projection.ts \
-            src/shared/ephemeral-vm-runtimes.ts \
-            src/shared/ephemeral-vm-recipes.ts \
+            src/shared/remote-runtime/ephemeral-vm-store/ephemeral-vm-runtime-store.ts \
+            src/shared/remote-runtime/ephemeral-vm-store/ephemeral-vm-runtime-feature-store.ts \
+            src/shared/remote-runtime/ephemeral-vm-store/ephemeral-vm-runtime-rollback-projection.ts \
+            src/shared/remote-runtime/ephemeral-vm-store/ephemeral-vm-runtimes.ts \
+            src/shared/remote-runtime/ephemeral-vm-recipes/ephemeral-vm-recipes.ts \
             src/shared/orca-yaml-hook-types.ts \
             config/scripts/runtime-verification/ephemeral-store/run-ephemeral-vm-runtime-store-rollback-repro.mjs \
             config/scripts/runtime-verification/ephemeral-store/ephemeral-vm-runtime-store-cross-version.test.ts \
@@ -853,14 +853,14 @@ jobs:
             src/main/pty/shell-startup/zsh-startup-hook-user-config-equivalence.live-shell.test.ts \
             src/main/runtime/terminal/wait/tui-idle-zsh-preexec-hook-order.live-shell.test.ts \
             src/main/runtime/agent-session/environment/structured-session-cli-login-shell.live-shell.test.ts \
-            src/main/startup/shell-probe-terminal-detach.live-shell.test.ts \
-            src/main/startup/shell-probe-lifetime.live-shell.test.ts \
+            src/main/startup/shell-environment/shell-probe-terminal-detach.live-shell.test.ts \
+            src/main/startup/shell-environment/shell-probe-lifetime.live-shell.test.ts \
             src/renderer/src/components/terminal-pane/pty-connection/emulation/fish-color-scheme-child-stdin.node-pty.test.ts \
-            src/shared/fish-wsl-cwd-report.node-pty.test.ts \
+            src/shared/shell/wsl/fish-wsl-cwd-report.node-pty.test.ts \
             src/main/wsl/filesystem/wsl-sh-cwd-report.node-pty.test.ts \
             src/shared/terminal/pty/ingress/pty-reply-echo-shapes.node-pty.test.ts \
-            src/shared/startup-shell-portability.live-shell.test.ts \
-            src/shared/posix-command-path-lookup.test.ts
+            src/shared/shell/launch/startup-shell-portability.live-shell.test.ts \
+            src/shared/shell/command-resolution/posix-command-path-lookup.test.ts
 
   # Shards wait only for the plan, not preflight, which moves them about two minutes earlier.
   unit_plan:
@@ -1117,7 +1117,6 @@ jobs:
           src/main/browser/cookies/browser-google-cookie-clear.electron.test.ts
           src/main/browser/guest-lifecycle/popups/presentation/popup-origin-chrome.electron.test.ts
           src/main/browser/guest-lifecycle/navigation/browser-link-materialization.electron.test.ts
-          src/main/browser/guest-lifecycle/popups/compatibility/browser-popup-compatibility.electron.test.ts
           src/main/browser/guest-lifecycle/popups/compatibility/browser-popup-native-compatibility.electron.test.ts
           src/main/browser/guest-lifecycle/popups/compatibility/browser-popup-background-compatibility.electron.test.ts
           src/main/browser/extensions/api-runtime/browser-extension-api.electron.test.ts

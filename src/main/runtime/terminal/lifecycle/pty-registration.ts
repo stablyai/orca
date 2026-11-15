@@ -2,7 +2,7 @@ import {
   classifyTerminalCreationFailure,
   terminalExitError
 } from '../../../../shared/terminal/pty/lifecycle/terminal-start-failure'
-import type { PtySpawnResult } from '../../../providers/pty-spawn-result'
+import type { PtySpawnResult } from '../../../providers/pty/spawn-result'
 import type { PtyIncarnationId } from '../../../../shared/terminal/pty/lifecycle/pty-incarnation'
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import type { SleepingAgentLaunchConfig } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
@@ -18,7 +18,7 @@ import type {
   RuntimePtyWorktreeRecord
 } from '../records/runtime-terminal-state-records'
 import type { OrchestrationCompatibilityTerminalAuthority } from '../../orchestration/terminal-authority/orchestration-compatibility-authority'
-import type { RuntimeMobileSessionCreateTerminalResult } from '../../../../shared/runtime-session-contracts'
+import type { RuntimeMobileSessionCreateTerminalResult } from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
 import { mainTerminalRegistered } from '../surface/main-terminal-surfaces'
 import { assertPaneBoundAtRegistration, isRuntimeHostedWorkspace } from './bind-first-registration'

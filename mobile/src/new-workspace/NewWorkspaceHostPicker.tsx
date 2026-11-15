@@ -1,8 +1,11 @@
 import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'expo-router'
-import { PickerModal } from '../components/PickerModal'
+import { PickerModal } from '../components/sheets/PickerModal'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
-import { hostPickerOptions, useHostPickerSearch } from '../components/use-connected-host-picker'
+import {
+  hostPickerOptions,
+  useHostPickerSearch
+} from '../host-catalog/selection/use-connected-host-picker'
 import { selectConnectableHostProfiles } from '../host-catalog/host-catalog-selection'
 import { loadHostCatalog } from '../host-catalog/host-store'
 import type { HostProfile } from '../host-catalog/host-profile'
