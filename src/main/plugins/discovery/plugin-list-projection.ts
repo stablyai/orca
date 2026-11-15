@@ -29,6 +29,7 @@ import {
   customEditorFrame
 } from '../../../shared/plugins/contributions/plugin-custom-editor-contribution'
 import { pluginExecutionProfile } from '../../../shared/plugins/contributions/plugin-execution-profile'
+import { pluginPanelIconKind } from '../../../shared/plugins/contributions/plugin-panel-icon'
 
 const PLUGIN_LIST_PROJECTION_CONCURRENCY = 4
 
@@ -189,10 +190,21 @@ export async function buildPluginList(
           kind: capability.kind,
           description: PLUGIN_CAPABILITY_DESCRIPTIONS[capability.kind]
         })),
-        panels: plugin.manifest.contributes.panels.map((panel) => ({
+        panels: plugin.manifest.contributes.panels.map((panel, index) => ({
           id: panel.id,
           title: panel.title,
           ...(panel.icon ? { icon: panel.icon } : {}),
+          ...(panel.icon &&
+          plugin.manifest.manifestVersion === 2 &&
+          pluginPanelIconKind(panel.icon) === 'file'
+            ? {
+                iconUrl: pluginInstalledImageUrl(
+                  plugin.pluginKey,
+                  plugin.contentHash ?? 'dev',
+                  `panel-icon-${index}`
+                )
+              }
+            : {}),
           tabKey: pluginPanelTabKey(plugin.pluginKey, panel.id)
         })),
         customEditors: plugin.manifest.contributes.customEditors.map((editor, index) => ({

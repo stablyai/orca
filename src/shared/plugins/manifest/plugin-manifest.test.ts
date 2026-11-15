@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { parsePluginManifest } from './plugin-manifest'
+import {
+  parseHostPluginManifest,
+  parsePluginManifest,
+  pluginManifestSchema
+} from './plugin-manifest'
 
 function manifest(overrides: Record<string, unknown> = {}): Record<string, unknown> {
   return {
@@ -52,5 +56,44 @@ describe('pluginManifestSchema boundaries', () => {
         ]
       }
     })
+  })
+
+  it('requires the panel icon floor for emoji and file icons', () => {
+    const format2 = (orcVersion: string, icon: string) => ({
+      manifestVersion: 2,
+      execution: 'sandboxed-ui',
+      id: 'icons',
+      name: 'Icons',
+      version: '1.0.0',
+      engines: { orca: `>=${orcVersion}` },
+      pluginApi: 1,
+      contributes: {
+        panels: [{ id: 'one', title: 'One', icon, entry: 'panel.html' }]
+      }
+    })
+
+    expect(pluginManifestSchema.safeParse(format2('1.4.259', '🧩')).success).toBe(false)
+    expect(pluginManifestSchema.safeParse(format2('1.4.260', '🧩')).success).toBe(true)
+    expect(pluginManifestSchema.safeParse(format2('1.4.259', 'icons/panel.svg')).success).toBe(
+      false
+    )
+    expect(pluginManifestSchema.safeParse(format2('1.4.260', 'icons/panel.png')).success).toBe(true)
+    expect(parseHostPluginManifest(format2('1.4.259', '🧩')).ok).toBe(true)
+  })
+
+  it('keeps format 1 panel icons in the older closed-name vocabulary', () => {
+    const result = parsePluginManifest(
+      manifest({
+        contributes: { panels: [{ id: 'one', title: 'One', icon: '🧩', entry: 'panel.html' }] }
+      })
+    )
+
+    expect(result).toMatchObject({
+      ok: true,
+      manifest: { contributes: { panels: [{ id: 'one', title: 'One' }] } }
+    })
+    if (result.ok) {
+      expect(result.manifest.contributes.panels[0]).not.toHaveProperty('icon')
+    }
   })
 })

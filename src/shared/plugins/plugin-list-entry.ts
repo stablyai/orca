@@ -9,8 +9,10 @@ import type { PluginStatusBarItemContribution } from './contributions/plugin-sta
 export type PluginHostPanel = {
   id: string
   title: string
-  /** Lucide icon name declared in the plugin manifest. */
+  /** The manifest's icon: a built-in name, one emoji, or a plugin-relative file path. */
   icon?: string
+  /** orca-plugin-image URL when the icon is a file; absent for names and emoji. */
+  iconUrl?: string
   tabKey: `plugin:${string}`
 }
 

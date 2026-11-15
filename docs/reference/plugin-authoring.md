@@ -205,6 +205,17 @@ worker pushes back, and both read the same storage, settings and secrets (with t
 capabilities). Every surface spells it the same way: frames on `window.orca`, components panels
 as imports from `orca`, workers on the `orca` from `activate`.
 
+#### Panel icons
+
+`contributes.panels[].icon` accepts a built-in icon name, one emoji, or a `.svg`/`.png` file
+relative to the plugin root, such as `icons/inbox.svg`. Emoji and file icons need manifest format
+2 and `engines.orca` `>=1.4.260`; older Orca releases only know the built-in names.
+
+File icons are limited to 32 KB. The file must stay inside the plugin folder, and SVGs must be one
+static document with a `viewBox`. Validation refuses scripts, event handlers, external URLs,
+foreign content and document types. Orca serves the file through its plugin image protocol and
+draws SVG icons as a one-color mask, so they follow the activity bar's theme and active state.
+
 Declare the contract once, in a file both sides include, and both type-check against it:
 
 ```ts

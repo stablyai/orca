@@ -11,6 +11,7 @@ import { declaredPluginImages } from './plugin-image-artifact-validation'
 import type { PluginImageCache } from './plugin-image-cache'
 import { readPluginFontSlot, type CheckedPluginFont } from './plugin-font-files'
 import { parsePluginFontSlot } from '../../../shared/plugins/contributions/plugin-font-contribution'
+import { declaredPluginPanelIcons, readCheckedPluginPanelIcon } from './plugin-panel-icon-artifacts'
 
 export type PluginImageProtocolDependencies = {
   cache: PluginImageCache
@@ -31,6 +32,12 @@ async function readInstalledImage(
 ): Promise<CheckedPluginImage | null> {
   if (!isCurrentContent(plugin, contentHash)) {
     return null
+  }
+  const panelIcon = declaredPluginPanelIcons(plugin.manifest).find(
+    (candidate) => candidate.slot === slot
+  )
+  if (panelIcon) {
+    return readCheckedPluginPanelIcon(plugin.rootDir, panelIcon.path)
   }
   const declared = declaredPluginImages(plugin.manifest).find(
     (candidate) => candidate.slot === slot

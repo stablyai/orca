@@ -1,0 +1,36 @@
+{
+  "manifestVersion": 2,
+  "execution": "sandboxed-ui",
+  "id": "panel-icons",
+  "name": "Panel Icons",
+  "version": "1.0.0",
+  "description": "Fixture for built-in, emoji and file panel icons.",
+  "engines": { "orca": ">=1.4.260" },
+  "pluginApi": 1,
+  "contributes": {
+    "panels": [
+      {
+        "id": "builtin",
+        "title": "Built-in Icon",
+        "icon": "puzzle",
+        "entry": "src/panel.js",
+        "ui": "components"
+      },
+      {
+        "id": "emoji",
+        "title": "Emoji Icon",
+        "icon": "🧩",
+        "entry": "src/panel.js",
+        "ui": "components"
+      },
+      {
+        "id": "file",
+        "title": "File Icon",
+        "icon": "icons/panel.svg",
+        "entry": "src/panel.js",
+        "ui": "components"
+      }
+    ]
+  },
+  "capabilities": []
+}

@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { pluginShaImageUrl, servedPluginHostImages } from './plugin-image-url'
+import {
+  pluginInstalledImageUrl,
+  pluginPanelIconUrl,
+  pluginShaImageUrl,
+  servedPluginHostImages
+} from './plugin-image-url'
 
 const served = { url: pluginShaImageUrl('a'.repeat(64)), alt: 'Cover' }
 
@@ -13,5 +18,16 @@ describe('servedPluginHostImages', () => {
         screenshots: [hotlinked('data:image/svg+xml,<svg/>'), served, hotlinked('file:///etc/x')]
       })
     ).toEqual({ cover: served, screenshots: [served] })
+  })
+})
+
+describe('pluginPanelIconUrl', () => {
+  it('accepts only a canonical panel icon slot', () => {
+    const url = pluginInstalledImageUrl('acme.icons', 'a'.repeat(64), 'panel-icon-3')
+    expect(pluginPanelIconUrl(`${url}?v=1#fragment`)).toBe(url)
+    expect(
+      pluginPanelIconUrl(pluginInstalledImageUrl('acme.icons', 'a'.repeat(64), 'icon'))
+    ).toBeNull()
+    expect(pluginPanelIconUrl('https://evil.example/panel-icon-0')).toBeNull()
   })
 })
