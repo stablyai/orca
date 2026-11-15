@@ -64,7 +64,7 @@ import { createRoutinesApi } from './routines/api'
 import { handleRoutineHook, isRoutineHookPath } from './routines/hooks'
 import { tickRoutines } from './routines/runs'
 import { activeGoldenSnapshots, advanceGoldenImages } from './golden-images'
-import { sandboxRegions, seedRegion } from './regions'
+import { nearestRegionEnabled, nearestRegions, sandboxRegions, seedRegion, servedRegions } from './regions'
 import { handleRuntimeBundleRoute, runtimeBundleFor, runtimeBundleUrl } from './runtime-bundles'
 import { createIdTokenSource, relayingFetch } from './chatgpt-relay'
 import { NO_CREDENTIALS, handleEgressProxy, type CredentialBroker, type ProxiedRoute } from './egress-proxy'
@@ -982,7 +982,7 @@ export async function lifecycleDeps(env: Env, deps: Deps): Promise<LifecycleDeps
   // AUTO_ENVIRONMENTS=off: creates of repos without an environment keep cloning from scratch.
   if (env.AUTO_ENVIRONMENTS !== 'off') {
     life.autoEnvironment = {
-      ensure: (accountId, repoUrl) => ensureAutoEnvironment(buildDeps(life, deps, env), accountId, repoUrl),
+      ensure: (accountId, repoUrl, region) => ensureAutoEnvironment(buildDeps(life, deps, env), accountId, repoUrl, region),
       touch: (environmentId) => touchEnvironment(env.SANDBOX_DB, environmentId, life.now())
     }
   }
@@ -1051,6 +1051,8 @@ function buildDeps(life: LifecycleDeps, deps: Deps, env?: Env): BuildDeps {
       goldenSnapshotId: life.config.goldenSnapshotId,
       goldenSnapshots: life.config.goldenSnapshots,
       region: life.config.defaultRegion,
+      regions: servedRegions(life.config),
+      nearestRegion: env ? nearestRegionEnabled(env) : true,
       guardrails: life.config.guardrails,
       egressAllowlist: life.config.egressAllowlist,
       egressAllowlistError: life.config.egressAllowlistError
@@ -1861,8 +1863,13 @@ async function routeRequest(request: Request, env: Env, deps: Deps): Promise<Res
             // Member identities install after the response; the VM's git holds commits and pushes until then.
             let ready: Ready
             try {
+              // Nothing pinned: start in the served region nearest the caller (an environment's own region still wins).
+              const nearRegions = body.data.region ? undefined : nearestRegions(request, servedRegions(life.config), nearestRegionEnabled(env))
+              // Region order only (never the caller's location): which region a create preferred, and why.
+              console.log(JSON.stringify({ event: 'create_region_order', explicit: body.data.region ?? null, order: nearRegions ?? null }))
               ready = await createSandbox(life, caller, {
                 ...body.data,
+                ...(nearRegions ? { nearRegions } : {}),
                 cloneInBackground: features.includes('clone-progress'),
                 deferMemberGit: true
               })

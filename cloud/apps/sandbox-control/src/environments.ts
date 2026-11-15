@@ -37,6 +37,8 @@ export type EnvironmentRow = {
    */
   kind?: 'org' | 'auto'
   last_used_at?: number | null
+  /** Where it builds and its workspaces boot (environmentRegion); null for environments made before this was recorded. */
+  region?: string | null
 }
 
 export class EnvironmentError extends Error {
@@ -173,7 +175,9 @@ export async function createEnvironment(
   db: D1Database,
   caller: SandboxCaller,
   input: z.infer<typeof CreateEnvironmentSchema>,
-  now: number
+  now: number,
+  /** The served region nearest the admin creating it; null leaves it to the default region. */
+  region: string | null = null
 ): Promise<EnvironmentRow> {
   requireAdmin(caller)
   const repos = checkedRepos(input.repos)
@@ -188,11 +192,11 @@ export async function createEnvironment(
   await db
     .prepare(
       `INSERT INTO environments (id, account_id, name, repos, install_script, env_var_names, machine_size,
-         revision, next_build_number, created_by, updated_by, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, 1, 1, ?, ?, ?, ?)`
+         revision, next_build_number, created_by, updated_by, created_at, updated_at, region)
+       VALUES (?, ?, ?, ?, ?, ?, ?, 1, 1, ?, ?, ?, ?, ?)`
     )
     .bind(id, caller.accountId, input.name, JSON.stringify(repos), input.installScript,
-      JSON.stringify([...new Set(input.envVarNames)]), input.machineSize, caller.userId, caller.userId, now, now)
+      JSON.stringify([...new Set(input.envVarNames)]), input.machineSize, caller.userId, caller.userId, now, now, region)
     .run()
   return (await getEnvironment(db, caller.accountId, id))!
 }

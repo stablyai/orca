@@ -27584,6 +27584,7 @@
     "disk": "Disk",
     "uptime": "Up for",
     "keptUntil": "Kept until",
+    "region": "Region",
     "ago": "{{ago}} ago",
     "wake": "Wake",
     "error": {

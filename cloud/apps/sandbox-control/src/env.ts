@@ -15,6 +15,8 @@ export type Env = {
   VERCEL_REGION?: string
   /** Comma list tried in order when the default region's create fails on capacity (default `iad1`; "" = none). */
   VERCEL_FALLBACK_REGIONS?: string
+  /** 'off': new workspaces and environments always start in the default region, not the one nearest the caller. */
+  VERCEL_NEAREST_REGION?: string
   /** Overrides the Vercel API origin (tests only). */
   VERCEL_API_BASE?: string
   /** Seed golden image (orcad + agent CLIs), adopted when its region has none yet; see image/. */

@@ -2,15 +2,18 @@
 // A create claims one instead of booting (saves the provider create, ~2 s p50 / ~4 s p95 measured),
 // then applies the caller's policy and starts orcad exactly as a fresh VM would. The pooled id becomes
 // the sandbox id, so the provider name and ownership tag line up without renaming anything.
-// SANDBOX_POOL_SIZE=0 (the default) turns it off; the kill switch drains it.
+// SANDBOX_POOL_SIZE=0 (the default) turns it off; the kill switch drains it. Every served region (the
+// default and its fallbacks, each with a golden image) keeps its own: a create starts in the region
+// nearest the caller (regions.ts), and a snapshot only boots in its own region.
 import type { MachineSize } from './entitlements'
 import { killSwitchOn, type GuardrailConfig } from './guardrails'
 import type { SandboxProviderApi } from './sandbox-provider'
 import { ORCAD_PORT, SHARE_PROXY_PORT } from './sandbox-vm-commands'
 import { SANDBOX_VCPUS } from './machine-size'
+import { servedRegions } from './regions'
 
 export type PoolConfig = {
-  /** Ready VMs kept per (machine size, region); only `standard` in the default region is pooled. */
+  /** Ready VMs kept per (machine size, region); only `standard` is pooled, in every served region. */
   size: number
   /** Recycle a pooled VM after this long so a claimed session keeps most of its 24 h budget. */
   maxAgeMs: number
@@ -36,11 +39,13 @@ export type PoolDeps = {
   now: () => number
   config: {
     environment: string
-    /** The default region's golden image: the pool warms VMs in the default region only. */
+    /** The default region's golden image. */
     goldenSnapshotId: string
     /** Every region's golden image; never deleted with a pooled VM. */
     goldenSnapshots?: Record<string, string>
     defaultRegion: string
+    /** Served besides the default (each has a golden image): pooled too. */
+    fallbackRegions?: readonly string[]
     guardrails?: GuardrailConfig
     snapshotExpirationMs?: number
     pool?: PoolConfig
@@ -91,7 +96,7 @@ export async function claimPooledVm(
   snapshotId: string = deps.config.goldenSnapshotId
 ): Promise<PooledVm | null> {
   const pool = deps.config.pool
-  if (!pool || machineSize !== POOLED_SIZE || region !== deps.config.defaultRegion) {
+  if (!pool || machineSize !== POOLED_SIZE || !servedRegions(deps.config).includes(region)) {
     return null
   }
   return deps.db
@@ -141,29 +146,43 @@ async function takeLease(deps: PoolDeps): Promise<boolean> {
   return taken !== null
 }
 
+/** How many warm VMs of one image to keep, and the region it boots in (the image's own). */
+type PoolTarget = { want: number; region: string }
+
+/** Each served region's golden image, by region. */
+function servedGoldens(config: PoolDeps['config']): [region: string, snapshotId: string][] {
+  return servedRegions(config).flatMap((region) => {
+    const golden = region === config.defaultRegion ? config.goldenSnapshotId : config.goldenSnapshots?.[region]
+    return golden ? [[region, golden] as [string, string]] : []
+  })
+}
+
 /**
- * Images worth a warm VM: the golden image (`size`), plus the active build of every environment in
- * use lately (BUILD_POOL_SIZE each), so a create from an org environment skips the provider boot too.
+ * Images worth a warm VM: each served region's golden image (`size`), plus the active build of every
+ * environment in use lately (BUILD_POOL_SIZE each, in its build's region), so a create from an org
+ * environment skips the provider boot too.
  */
-async function poolTargets(deps: PoolDeps, size: number): Promise<Map<string, number>> {
-  const targets = new Map<string, number>([[deps.config.goldenSnapshotId, size]])
+async function poolTargets(deps: PoolDeps, size: number): Promise<Map<string, PoolTarget>> {
+  const goldens = servedGoldens(deps.config)
+  const targets = new Map<string, PoolTarget>(goldens.map(([region, snapshotId]) => [snapshotId, { want: size, region }]))
+  const regions = goldens.map(([region]) => region)
   const since = deps.now() - HOT_BUILD_WINDOW_MS
   // Hot = a workspace was created from the environment lately (not merely built). Most recent first,
   // so the chosen set is stable tick to tick; capped per account and overall.
   const hot = await deps.db
     .prepare(
-      `SELECT b.snapshot_id AS snapshot_id, e.account_id AS account_id,
+      `SELECT b.snapshot_id AS snapshot_id, b.region AS region, e.account_id AS account_id,
               (SELECT MAX(s.created_at) FROM sandboxes s WHERE s.environment_id = e.id) AS used_at
          FROM environments e JOIN environment_builds b ON b.id = e.active_build_id
         WHERE e.deleted_at IS NULL AND b.status = 'succeeded' AND b.snapshot_id IS NOT NULL
           AND b.snapshot_deleted_at IS NULL AND json_extract(b.config, '$.machineSize') = ?
-          AND b.region = ? AND used_at > ?
+          AND b.region IN (${regions.map(() => '?').join(', ') || 'NULL'}) AND used_at > ?
         ORDER BY used_at DESC LIMIT ?`
     )
-    // Pooled VMs boot in the default region; a build snapshot from another region cannot boot there.
-    .bind(POOLED_SIZE, deps.config.defaultRegion, since, MAX_HOT_BUILDS * 4)
-    .all<{ snapshot_id: string; account_id: string }>()
-    .catch(() => ({ results: [] as { snapshot_id: string; account_id: string }[] }))
+    // A build's VM boots in the build's own region, which must be served.
+    .bind(POOLED_SIZE, ...regions, since, MAX_HOT_BUILDS * 4)
+    .all<{ snapshot_id: string; region: string; account_id: string }>()
+    .catch(() => ({ results: [] as { snapshot_id: string; region: string; account_id: string }[] }))
   const perAccount = new Map<string, number>()
   let hotCount = 0
   for (const row of hot.results) {
@@ -173,7 +192,7 @@ async function poolTargets(deps: PoolDeps, size: number): Promise<Map<string, nu
     }
     perAccount.set(row.account_id, count + 1)
     hotCount++
-    targets.set(row.snapshot_id, Math.max(targets.get(row.snapshot_id) ?? 0, BUILD_POOL_SIZE))
+    targets.set(row.snapshot_id, { want: BUILD_POOL_SIZE, region: row.region })
   }
   return targets
 }
@@ -184,7 +203,7 @@ async function maintain(deps: PoolDeps): Promise<PoolTick> {
   const draining = !pool || (deps.config.guardrails ? await killSwitchOn(deps.db, deps.config.guardrails) : false)
   const all = (await deps.db.prepare(`SELECT * FROM sandbox_pool WHERE status != 'lease'`).all<PooledVm>()).results
   const maxAge = pool?.maxAgeMs ?? DEFAULT_POOL_MAX_AGE_MS
-  const targets = draining || !pool ? new Map<string, number>() : await poolTargets(deps, pool.size)
+  const targets = draining || !pool ? new Map<string, PoolTarget>() : await poolTargets(deps, pool.size)
   const expired = (vm: PooledVm) =>
     draining ||
     !targets.has(vm.snapshot_id) ||
@@ -197,7 +216,7 @@ async function maintain(deps: PoolDeps): Promise<PoolTick> {
   for (const vm of keep) {
     const count = (kept.get(vm.snapshot_id) ?? 0) + 1
     kept.set(vm.snapshot_id, count)
-    if (count > (targets.get(vm.snapshot_id) ?? 0)) {
+    if (count > (targets.get(vm.snapshot_id)?.want ?? 0)) {
       extras.push(vm)
     }
   }
@@ -222,17 +241,19 @@ async function maintain(deps: PoolDeps): Promise<PoolTick> {
   if (draining || !pool) {
     return { created: 0, recycled, ready: Math.max(0, live) }
   }
-  const boots: string[] = []
-  for (const [snapshotId, want] of targets) {
+  const boots: { snapshotId: string; region: string }[] = []
+  for (const [snapshotId, { want, region }] of targets) {
     const have = Math.min(kept.get(snapshotId) ?? 0, want)
     for (let i = have; i < want; i++) {
-      boots.push(snapshotId)
+      boots.push({ snapshotId, region })
     }
   }
   if (boots.length === 0) {
     return { created: 0, recycled, ready: Math.max(0, live) }
   }
-  const results = await Promise.allSettled(boots.slice(0, MAX_BOOTS_PER_TICK).map((snapshotId) => bootPooledVm(deps, snapshotId)))
+  const results = await Promise.allSettled(
+    boots.slice(0, MAX_BOOTS_PER_TICK).map((boot) => bootPooledVm(deps, boot.snapshotId, boot.region))
+  )
   const created = results.filter((r) => r.status === 'fulfilled').length
   for (const failure of results.filter((r) => r.status === 'rejected')) {
     console.log(JSON.stringify({ event: 'pool_boot_failed', error: String(failure.reason).slice(0, 200) }))
@@ -240,14 +261,14 @@ async function maintain(deps: PoolDeps): Promise<PoolTick> {
   return { created, recycled, ready: live + created }
 }
 
-async function bootPooledVm(deps: PoolDeps, snapshotId: string): Promise<void> {
+async function bootPooledVm(deps: PoolDeps, snapshotId: string, region: string): Promise<void> {
   const id = poolId()
   const now = deps.now()
   const row: PooledVm = {
     id,
     provider_name: `orca-${deps.config.environment}-${id}`,
     machine_size: POOLED_SIZE,
-    region: deps.config.defaultRegion,
+    region,
     snapshot_id: snapshotId,
     status: 'warming',
     session_id: null,

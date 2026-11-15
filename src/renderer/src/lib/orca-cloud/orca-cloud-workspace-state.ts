@@ -199,6 +199,36 @@ export function formatShortDate(at: number): string {
   return new Intl.DateTimeFormat(getIntlLocale(), { month: 'short', day: 'numeric' }).format(at)
 }
 
+// City names are proper nouns: shown as-is in every language.
+const REGION_CITIES: Record<string, string> = {
+  iad1: 'Washington, D.C.',
+  cle1: 'Cleveland',
+  pdx1: 'Portland',
+  sfo1: 'San Francisco',
+  yul1: 'Montréal',
+  gru1: 'São Paulo',
+  dub1: 'Dublin',
+  lhr1: 'London',
+  cdg1: 'Paris',
+  fra1: 'Frankfurt',
+  arn1: 'Stockholm',
+  cpt1: 'Cape Town',
+  dxb1: 'Dubai',
+  bom1: 'Mumbai',
+  sin1: 'Singapore',
+  hkg1: 'Hong Kong',
+  icn1: 'Seoul',
+  kix1: 'Osaka',
+  hnd1: 'Tokyo',
+  syd1: 'Sydney'
+}
+
+/** "Portland (pdx1)"; the bare code for a region this build doesn't know. */
+export function formatCloudRegion(region: string): string {
+  const city = REGION_CITIES[region]
+  return city ? `${city} (${region})` : region
+}
+
 export type DiffStat = { files: number; insertions: number; deletions: number }
 
 /** Parses a `--shortstat` line ("2 files changed, 41 insertions(+), 6 deletions(-)"). */

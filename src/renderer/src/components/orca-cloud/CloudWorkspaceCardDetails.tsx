@@ -7,14 +7,13 @@ import { useTranslate } from '@/i18n/use-translate'
 import { cn } from '@/lib/class-names'
 import {
   formatBytes,
+  formatCloudRegion,
   formatDuration,
   formatShortDate,
   percentOf
 } from '@/lib/orca-cloud/orca-cloud-workspace-state'
-import {
-  ORCA_CLOUD_SANDBOX_SPEC,
-  type HostedWorkspaceStatus
-} from '../../../../shared/hosted-sandbox/hosted-sandbox-wire'
+import type { CloudWorkspaceStatus } from '../../../../shared/hosted-sandbox/cloud-workspace-api'
+import { ORCA_CLOUD_SANDBOX_SPEC } from '../../../../shared/hosted-sandbox/hosted-sandbox-wire'
 
 const METER_ROWS = 3
 
@@ -95,7 +94,7 @@ export function CloudWorkspaceCardDetails({
   restarting
 }: {
   id: string
-  status: HostedWorkspaceStatus
+  status: CloudWorkspaceStatus
   showMeters: boolean
   restarting: boolean
 }): React.JSX.Element {
@@ -144,6 +143,12 @@ export function CloudWorkspaceCardDetails({
           <Fact
             label={t('orcaCloudWorkspace.uptime', 'Up for')}
             value={formatDuration(status.uptimeMs)}
+          />
+        ) : null}
+        {status.region ? (
+          <Fact
+            label={t('orcaCloudWorkspace.region', 'Region')}
+            value={formatCloudRegion(status.region)}
           />
         ) : null}
         <Fact

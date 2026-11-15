@@ -7,7 +7,7 @@
 // it on the current image. Unused for 14 days it is deleted with its snapshots, unless an admin edited
 // it (that makes it an ordinary 'org' environment).
 import type { SandboxCaller } from './auth'
-import { listBuilds, startBuild, TERMINAL, type BuildConfig, type BuildDeps } from './environment-builds'
+import { environmentRegion, listBuilds, startBuild, TERMINAL, type BuildConfig, type BuildDeps } from './environment-builds'
 import { canonicalRepoUrl, parseRepos, repoDir, type EnvironmentRow } from './environments'
 import { normalizeRepo } from './secrets'
 import type { SandboxProviderApi } from './sandbox-provider'
@@ -52,16 +52,22 @@ export type AutoEnvironmentOutcome = 'created' | 'rebuilt' | 'exists' | 'skipped
  * A create of `repoUrl` booted without an environment: make (or retry building) the account's automatic
  * environment for it. Never throws; the create it rides behind already succeeded.
  */
-export async function ensureAutoEnvironment(deps: BuildDeps, accountId: string, repoUrl: string): Promise<AutoEnvironmentOutcome> {
+export async function ensureAutoEnvironment(
+  deps: BuildDeps,
+  accountId: string,
+  repoUrl: string,
+  /** The create's region: the environment lives (and builds) there, so the next create of the repo lands there too. */
+  region?: string
+): Promise<AutoEnvironmentOutcome> {
   try {
-    return await ensure(deps, accountId, repoUrl)
+    return await ensure(deps, accountId, repoUrl, region)
   } catch (error) {
     log('auto_environment_failed', { error: String(error).slice(0, 200) })
     return 'skipped'
   }
 }
 
-async function ensure(deps: BuildDeps, accountId: string, repoUrl: string): Promise<AutoEnvironmentOutcome> {
+async function ensure(deps: BuildDeps, accountId: string, repoUrl: string, region?: string): Promise<AutoEnvironmentOutcome> {
   const url = canonicalRepoUrl(repoUrl)
   const wanted = normalizeRepo(url)
   if (!url || !wanted) {
@@ -90,11 +96,11 @@ async function ensure(deps: BuildDeps, accountId: string, repoUrl: string): Prom
   await deps.db
     .prepare(
       `INSERT OR IGNORE INTO environments (id, account_id, name, repos, install_script, env_var_names, machine_size,
-         revision, next_build_number, created_by, updated_by, created_at, updated_at, kind, last_used_at)
-       VALUES (?, ?, ?, ?, '', '[]', 'standard', 1, 1, ?, ?, ?, ?, 'auto', ?)`
+         revision, next_build_number, created_by, updated_by, created_at, updated_at, kind, last_used_at, region)
+       VALUES (?, ?, ?, ?, '', '[]', 'standard', 1, 1, ?, ?, ?, ?, 'auto', ?, ?)`
     )
     .bind(id, accountId, repoDir(url), JSON.stringify([{ url, defaultBranch: null }]), AUTO_ENVIRONMENT_USER,
-      AUTO_ENVIRONMENT_USER, now, now, now)
+      AUTO_ENVIRONMENT_USER, now, now, now, environmentRegion(deps.config, region))
     .run()
   const environment = await deps.db
     .prepare('SELECT * FROM environments WHERE id = ? AND deleted_at IS NULL')
