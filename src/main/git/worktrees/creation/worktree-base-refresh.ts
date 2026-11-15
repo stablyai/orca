@@ -13,15 +13,14 @@ import {
   type LocalBaseBranchGit
 } from '../../../../shared/worktree/base-refs/local-base-branch-fast-forward'
 import { gitExecFileAsync } from '../../command-runner/git-exec-file'
-import { findGitSubcommandIndex } from '../../../../shared/git/commands/git-command-classification'
 import { translateWslOutputPaths } from '../../command-runner/host-routing/wsl-path-translation'
 import { runWithGitReadCacheInvalidation } from '../../source-control/git-read-cache-invalidation'
 import type { AddWorktreeOptions, GitWorktreeExecOptions } from '../worktree-operation-options'
 
-// Bound the create's wait without cancelling the mutating refresh that still owns its checkout.
+// Bound the create's wait on the shared ref-only refresh.
 export const LOCAL_BASE_REF_REFRESH_WAIT_MS = 30_000
 
-// Serialize per branch to avoid index.lock races; coalesce only matching targets.
+// Serialize per branch to avoid ref-lock races; coalesce only matching targets.
 const runPerLocalBaseBranch = createCoalescingKeyedRunner<LocalBaseBranchFastForwardOutcome>()
 
 export function parseRemoteTrackingLocalBaseRef(
@@ -116,13 +115,7 @@ function localBaseBranchGit(options: GitWorktreeExecOptions): LocalBaseBranchGit
     ...(options.admissionTier ? { admissionTier: options.admissionTier } : {})
   })
   return {
-    exec: (args, cwd) =>
-      gitExecFileAsync(args, {
-        ...execOptions(cwd),
-        ...(args[findGitSubcommandIndex(args)] === 'merge'
-          ? { admissionClass: 'checkout' as const }
-          : {})
-      }),
+    exec: (args, cwd) => gitExecFileAsync(args, execOptions(cwd)),
     listWorktrees: async (repoPath) => {
       const { stdout } = await withRepositoryGitCause(
         repoPath,

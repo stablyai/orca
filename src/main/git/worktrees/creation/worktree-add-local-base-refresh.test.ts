@@ -66,27 +66,21 @@ describe('addWorktree', () => {
   })
 
   it('runs worktree add while the local base refresh is still fast-forwarding', async () => {
-    const worktreeListOutput = 'worktree /repo\nHEAD abc123\nbranch refs/heads/main\n'
-    let finishMerge!: () => void
-    let markMergeStarted!: () => void
-    const mergeStarted = new Promise<void>((resolve) => {
-      markMergeStarted = resolve
+    let finishMove!: () => void
+    let markMoveStarted!: () => void
+    const moveStarted = new Promise<void>((resolve) => {
+      markMoveStarted = resolve
     })
-    queueBehindInspection()
-      .mockResolvedValueOnce({ stdout: worktreeListOutput })
-      .mockResolvedValueOnce({ stdout: '' })
-      .mockResolvedValueOnce({ stdout: 'refs/heads/main\n' })
-      .mockImplementationOnce(
-        () =>
-          new Promise((resolve) => {
-            finishMerge = () => resolve({ stdout: '' })
-            markMergeStarted()
-          })
-      )
-      .mockResolvedValueOnce({ stdout: 'remote-main\n' })
+    queueBehindInspection().mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          finishMove = () => resolve({ stdout: '' })
+          markMoveStarted()
+        })
+    )
     checkoutGitMock.mockImplementationOnce(async () => {
-      await mergeStarted
-      finishMerge()
+      await moveStarted
+      finishMove()
       return { stdout: '' }
     })
 
@@ -95,17 +89,13 @@ describe('addWorktree', () => {
     expect(result.localBaseRefRefresh).toEqual({
       status: 'updated',
       baseRef: 'origin/main',
-      localBranch: 'main',
-      ownerWorktreePath: '/repo'
+      localBranch: 'main'
     })
     expect(checkoutGitMock.mock.calls[0]?.[0]).toContain('add')
   })
 
   it('fast-forwards local base via update-ref when localBranch is not checked out', async () => {
-    const worktreeListOutput = 'worktree /repo\nHEAD abc123\nbranch refs/heads/develop\n'
-    queueBehindInspection()
-      .mockResolvedValueOnce({ stdout: worktreeListOutput })
-      .mockResolvedValueOnce({ stdout: '' })
+    queueBehindInspection().mockResolvedValueOnce({ stdout: '' })
 
     const result = await addWorktree('/repo', '/repo-feature', 'feature/test', 'origin/main', true)
 
@@ -125,103 +115,19 @@ describe('addWorktree', () => {
       ],
       { cwd: '/repo' }
     ])
-    expect(refreshGitMock.mock.calls.map(([args]) => args)).not.toContainEqual(
-      ownerFastForwardArgs('remote-main')
-    )
   })
 
-  it('reports the owner dirty when the fast-forward refuses to overwrite an edit made after inspection', async () => {
-    const worktreeListOutput = 'worktree /repo\nHEAD abc123\nbranch refs/heads/main\n'
-    queueBehindInspection()
-      .mockResolvedValueOnce({ stdout: worktreeListOutput })
-      .mockResolvedValueOnce({ stdout: '' })
-      .mockResolvedValueOnce({ stdout: 'refs/heads/main\n' })
-      .mockRejectedValueOnce(
-        Object.assign(new Error('Command failed: git merge'), {
-          stderr:
-            'error: Your local changes to the following files would be overwritten by merge:\n\tpackage.json'
-        })
-      )
-      .mockRejectedValueOnce(Object.assign(new Error('not ancestor'), { code: 1 })) // merge-base
+  it('creates from the remote base and leaves a checked-out local base alone', async () => {
+    queueBehindInspection({ worktrees: 'worktree /repo\nHEAD abc123\nbranch refs/heads/main\n' })
 
     const result = await addWorktree('/repo', '/repo-feature', 'feature/test', 'origin/main', true)
 
-    expect(result.localBaseRefRefresh).toEqual({
-      status: 'skipped_dirty_worktree',
-      baseRef: 'origin/main',
-      localBranch: 'main',
-      ownerWorktreePath: '/repo'
-    })
-    expect(refreshGitMock.mock.calls.at(-1)).toEqual([
-      ['merge-base', '--is-ancestor', 'remote-main', 'refs/heads/main'],
-      expect.objectContaining({ cwd: '/repo' })
-    ])
-    expect(gitExecFileAsyncMock.mock.calls.map(([args]) => args[0])).not.toContain('update-ref')
-    expect(gitExecFileAsyncMock.mock.calls.map(([args]) => args[0])).not.toContain('reset')
-  })
-
-  it('skips local base refresh when the owner worktree switches branches before mutation', async () => {
-    const worktreeListOutput = 'worktree /repo\nHEAD abc123\nbranch refs/heads/main\n'
-    queueBehindInspection()
-      .mockResolvedValueOnce({ stdout: worktreeListOutput })
-      .mockResolvedValueOnce({ stdout: '' })
-      .mockResolvedValueOnce({ stdout: 'refs/heads/develop\n' })
-      .mockRejectedValueOnce(Object.assign(new Error('not ancestor'), { code: 1 })) // merge-base
-
-    const result = await addWorktree('/repo', '/repo-feature', 'feature/test', 'origin/main', true)
-
-    expect(result.localBaseRefRefresh).toEqual({
-      status: 'skipped_error',
-      baseRef: 'origin/main',
-      localBranch: 'main',
-      ownerWorktreePath: '/repo'
-    })
-    expect(gitExecFileAsyncMock.mock.calls.map(([args]) => args)).not.toContainEqual(
-      ownerFastForwardArgs('remote-main')
-    )
-    expect(gitExecFileAsyncMock.mock.calls.map(([args]) => args[0])).not.toContain('update-ref')
-  })
-
-  it('skips local base refresh when worktree ownership cannot be listed', async () => {
-    queueBehindInspection().mockRejectedValueOnce(new Error('worktree list failed'))
-
-    const result = await addWorktree('/repo', '/repo-feature', 'feature/test', 'origin/main', true)
-
-    expect(result.localBaseRefRefresh).toEqual({
-      status: 'skipped_error',
-      baseRef: 'origin/main',
-      localBranch: 'main'
-    })
+    expect(result.localBaseRefRefresh).toBeUndefined()
     expect(refreshGitMock.mock.calls.map(([args]) => args[0])).toEqual([
       'rev-parse',
       'rev-parse',
       'rev-parse',
-      'rev-list',
       'worktree'
-    ])
-  })
-
-  it('skips update when the owning worktree is dirty', async () => {
-    const worktreeListOutput = 'worktree /repo\nHEAD abc123\nbranch refs/heads/main\n'
-    queueBehindInspection()
-      .mockResolvedValueOnce({ stdout: worktreeListOutput })
-      .mockResolvedValueOnce({ stdout: ' M package.json\n' })
-
-    const result = await addWorktree('/repo', '/repo-feature', 'feature/test', 'origin/main', true)
-
-    expect(result.localBaseRefRefresh).toEqual({
-      status: 'skipped_dirty_worktree',
-      baseRef: 'origin/main',
-      localBranch: 'main',
-      ownerWorktreePath: '/repo'
-    })
-
-    expect(refreshGitMock.mock.calls).toHaveLength(6)
-    expect(refreshGitMock.mock.calls[0]?.[0]).toEqual([
-      'rev-parse',
-      '--verify',
-      '--quiet',
-      'refs/remotes/origin/main^{commit}'
     ])
     expect(checkoutGitMock.mock.calls.map((call) => call[0])).toEqual([
       [
@@ -245,45 +151,21 @@ describe('addWorktree', () => {
     ])
   })
 
-  it('skips updating the local branch when its drift probe fails but the branch exists', async () => {
-    queueBehindInspection({ counts: new Error('not a fast-forward') }).mockResolvedValueOnce({
-      stdout: ''
-    })
+  it('skips local base refresh when worktree ownership cannot be listed', async () => {
+    queueBehindInspection({ worktrees: new Error('worktree list failed') })
 
     const result = await addWorktree('/repo', '/repo-feature', 'feature/test', 'origin/main', true)
 
     expect(result.localBaseRefRefresh).toEqual({
-      status: 'skipped_not_fast_forward',
+      status: 'skipped_error',
       baseRef: 'origin/main',
       localBranch: 'main'
     })
-    expect(refreshGitMock.mock.calls).toEqual([
-      [
-        ['rev-parse', '--verify', '--quiet', 'refs/remotes/origin/main^{commit}'],
-        expect.objectContaining({ cwd: '/repo' })
-      ],
-      [
-        ['rev-parse', '--verify', 'refs/heads/main^{commit}'],
-        expect.objectContaining({ cwd: '/repo' })
-      ],
-      [
-        ['rev-parse', '--verify', 'refs/remotes/origin/main^{commit}'],
-        expect.objectContaining({ cwd: '/repo' })
-      ],
-      [
-        ['rev-list', '--left-right', '--count', 'old-main...remote-main'],
-        expect.objectContaining({ cwd: '/repo' })
-      ],
-      [
-        ['show-ref', '--verify', '--quiet', '--', 'refs/heads/main'],
-        expect.objectContaining({ cwd: '/repo' })
-      ]
-    ])
-    expect(checkoutGitMock.mock.calls.map((call) => call[0][0])).toEqual([
-      'worktree',
-      'config',
-      'config',
-      'config'
+    expect(refreshGitMock.mock.calls.map(([args]) => args[0])).toEqual([
+      'rev-parse',
+      'rev-parse',
+      'rev-parse',
+      'worktree'
     ])
   })
 
@@ -300,68 +182,22 @@ describe('addWorktree', () => {
       localBranch: 'main'
     })
     // The only call past the counts is the read-only shallow probe; nothing moves main.
-    expect(refreshGitMock.mock.calls).toHaveLength(5)
+    expect(refreshGitMock.mock.calls).toHaveLength(6)
     expect(refreshGitMock.mock.calls.at(-1)?.[0]).toEqual(['rev-parse', '--is-shallow-repository'])
-  })
-
-  it('reports not-fast-forward when local gained a commit after the inspection', async () => {
-    const worktreeListOutput = 'worktree /repo\nHEAD abc123\nbranch refs/heads/main\n'
-    queueBehindInspection()
-      .mockResolvedValueOnce({ stdout: worktreeListOutput })
-      .mockResolvedValueOnce({ stdout: '' })
-      .mockResolvedValueOnce({ stdout: 'refs/heads/main\n' })
-      .mockRejectedValueOnce(
-        Object.assign(new Error('Command failed: git merge'), {
-          stderr: 'fatal: Not possible to fast-forward, aborting.'
-        })
-      )
-      .mockRejectedValueOnce(Object.assign(new Error('not ancestor'), { code: 1 })) // merge-base
-
-    const result = await addWorktree('/repo', '/repo-feature', 'feature/test', 'origin/main', true)
-
-    expect(result.localBaseRefRefresh).toEqual({
-      status: 'skipped_not_fast_forward',
-      baseRef: 'origin/main',
-      localBranch: 'main',
-      ownerWorktreePath: '/repo'
-    })
-    expect(gitExecFileAsyncMock.mock.calls.map(([args]) => args[0])).not.toContain('reset')
   })
 })
 
-function ownerFastForwardArgs(remoteOid: string): string[] {
-  return [
-    '-c',
-    'core.hooksPath=/dev/null',
-    '-c',
-    'gc.auto=0',
-    '-c',
-    'maintenance.auto=false',
-    '-c',
-    'merge.autoStash=false',
-    '-c',
-    'branch.main.mergeOptions=',
-    'merge',
-    '--ff-only',
-    '-s',
-    'recursive',
-    '--no-verify-signatures',
-    '--no-overwrite-ignore',
-    '--no-stat',
-    '-q',
-    remoteOid
-  ]
-}
-
 function queueBehindInspection(
-  options: { remoteOid?: string; counts?: { stdout: string } | Error } = {}
+  options: { worktrees?: string | Error; counts?: { stdout: string } } = {}
 ) {
-  const counts = options.counts ?? { stdout: '0\t3\n' }
+  const worktrees = options.worktrees ?? 'worktree /repo\nHEAD abc123\nbranch refs/heads/develop\n'
   refreshGitMock
     .mockResolvedValueOnce({ stdout: 'abc123\n' })
     .mockResolvedValueOnce({ stdout: 'old-main\n' })
-    .mockResolvedValueOnce({ stdout: `${options.remoteOid ?? 'remote-main'}\n` })
-  return counts instanceof Error
-    ? refreshGitMock.mockRejectedValueOnce(counts)
-    : refreshGitMock.mockResolvedValueOnce(counts)
+    .mockResolvedValueOnce({ stdout: 'remote-main\n' })
+  if (worktrees instanceof Error) {
+    return refreshGitMock.mockRejectedValueOnce(worktrees)
+  }
+  refreshGitMock.mockResolvedValueOnce({ stdout: worktrees })
+  return refreshGitMock.mockResolvedValueOnce(options.counts ?? { stdout: '0\t3\n' })
 }

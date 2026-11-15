@@ -2640,7 +2640,7 @@
     "ko": "전환"
   },
   "auto.components.settings.git.search.0e993bf00f": {
-    "ko": "워크스페이스를 만들면 Orca가 원격 기준 브랜치를 새로고침하고 main 또는 master 등 일치하는 로컬 브랜치를 안전하게 fast-forward합니다. git diff main...HEAD 같은 명령이 오래된 이력과 비교하지 않도록 하기 위한 동작입니다. 해당 브랜치에 커밋되지 않은 변경 사항이나 로컬에만 있는 커밋이 있으면 Orca가 업데이트를 건너뜁니다."
+    "ko": "워크스페이스를 만들면 Orca가 원격 기준 브랜치를 새로고침하고 main 또는 master 등 일치하는 로컬 브랜치를 안전하게 fast-forward합니다. git diff main...HEAD 같은 명령이 오래된 이력과 비교하지 않도록 하기 위한 동작입니다. 해당 브랜치가 체크아웃되어 있거나 로컬에만 있는 커밋이 있으면 Orca가 업데이트를 건너뜁니다."
   },
   "auto.components.settings.git.search.1d2fae1fa2": {
     "ko": "Git 사용자 이름"
@@ -5523,7 +5523,7 @@
     "ko": "<basePrompt>{basePrompt}</basePrompt> 변수를 사용하면 Orca의 <promptLink>내장 브랜치 이름 프롬프트</promptLink>를 포함할 수 있습니다. <firstPrompt>{firstPrompt}</firstPrompt>와 <assistantMessage>{assistantMessage}</assistantMessage> 변수도 참조할 수 있습니다. Orca는 <example>fix-login-flow</example> 같은 마지막 세그먼트만 생성하며, 브랜치 접두사 설정은 계속 적용됩니다."
   },
   "auto.components.settings.GitPane.refreshLocalBaseDescription": {
-    "ko": "워크스페이스를 만들면 Orca가 원격 기준 브랜치를 새로고침하고 <mainBranch>main</mainBranch>이나 <masterBranch>master</masterBranch> 같은 해당 로컬 브랜치를 안전하게 앞으로 이동(fast-forward)합니다. 그러면 <diffCommand>git diff main...HEAD</diffCommand> 같은 명령이 오래된 이력과 비교하지 않습니다. 해당 브랜치에 커밋되지 않은 변경 사항이나 로컬에만 있는 커밋이 있으면 Orca는 업데이트를 건너뜁니다."
+    "ko": "워크스페이스를 만들면 Orca가 원격 기준 브랜치를 새로고침하고 <mainBranch>main</mainBranch>이나 <masterBranch>master</masterBranch> 같은 해당 로컬 브랜치를 안전하게 앞으로 이동(fast-forward)합니다. 그러면 <diffCommand>git diff main...HEAD</diffCommand> 같은 명령이 오래된 이력과 비교하지 않습니다. 해당 브랜치가 체크아웃되어 있거나 로컬에만 있는 커밋이 있으면 Orca는 업데이트를 건너뜁니다."
   },
   "auto.components.settings.RepositoryHooksSection.issueCommandDescription": {
     "ko": "필요하면 기본 명령을 재정의할 수 있습니다. 연결된 이슈 또는 PR의 URL에는 <artifactUrl>{{artifact_url}}</artifactUrl> 변수를 사용하세요."

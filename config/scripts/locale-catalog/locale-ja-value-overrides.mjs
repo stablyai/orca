@@ -333,8 +333,8 @@ const JA_AUDIT_OVERRIDES = {
   'When you create a workspace, Orca refreshes the remote base and safely fast-forwards your matching local branch, such as':
     'ワークスペースを作成すると、Orca はリモートベースを更新し、一致するローカルブランチを安全に fast-forward します。対象は',
   '. This keeps commands like': '。これにより、',
-  'from comparing against stale history. Orca skips the update if that branch has uncommitted changes or local-only commits.':
-    'などのコマンドが古い履歴と比較されるのを防ぎます。対象のブランチにコミットしていない変更やローカルのみのコミットがある場合、Orca は更新をスキップします。',
+  'from comparing against stale history. Orca skips the update if that branch is checked out or has local-only commits.':
+    'などのコマンドが古い履歴と比較されるのを防ぎます。対象のブランチがチェックアウトされているか、ローカルのみのコミットがある場合、Orca は更新をスキップします。',
   'Supports skills, file paths, and built-in commands like':
     'スキル、ファイルパス、および次のような組み込みコマンドに対応しています:',
   ' · {{value0}} external': ' · 外部 {{value0}} 件',
