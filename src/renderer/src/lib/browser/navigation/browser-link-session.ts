@@ -6,8 +6,6 @@ import '../../../../../shared/constants'
 import { ORCA_BROWSER_PARTITION } from '../../../../../shared/browser/browser-session-partition'
 import { getOrcaProfileBrowserDefaultPartition } from '../../../../../shared/orca-profiles'
 import { resolveNewBrowserTabProfile } from '@/store/slices/browser/profiles/browser-new-tab-profile'
-import { getDefaultBrowserProfileForHost } from '@/store/slices/browser/hosts/browser-host-state'
-import { getManagedBrowserProfileOwner } from '../../../../../shared/browser/profiles/browser-profile-scope'
 
 function createPartitionResolver(
   state: AppState,
@@ -39,14 +37,7 @@ export function resolveBrowserLinkSession(
   worktreeId: string,
   hostId: ExecutionHostId
 ): { sessionProfileId: string | null; sessionPartition: string | null } {
-  const hostKind = parseExecutionHostId(hostId)?.kind
-  const owner =
-    hostKind === 'local' || hostKind === 'ssh'
-      ? getManagedBrowserProfileOwner(state.settings?.browserProfileScope, worktreeId)
-      : null
-  const profile = owner
-    ? resolveNewBrowserTabProfile(state, worktreeId, hostId)
-    : { sessionProfileId: getDefaultBrowserProfileForHost(state, hostId) }
+  const profile = resolveNewBrowserTabProfile(state, worktreeId, hostId)
   return {
     sessionProfileId: profile.sessionProfileId,
     sessionPartition: createPartitionResolver(state, hostId)(

@@ -153,6 +153,43 @@ describe('createBrowserSlice annotations', () => {
     expect(store.getState().managedBrowserProfileStatusById['minted-by-main']).toBeUndefined()
   })
 
+  it("opens new tabs on the repo's picked profile over the scope, until that profile is gone", async () => {
+    const ensureMock = vi.fn(() => new Promise<BrowserSessionProfile>(() => {}))
+    Object.assign(mockApi.browser, { sessionEnsureManagedProfile: ensureMock })
+    const profile = (id: string): BrowserSessionProfile => ({
+      id,
+      scope: id === 'default' ? 'default' : 'isolated',
+      partition: `persist:${id}`,
+      label: id,
+      source: null
+    })
+    const repo = (id: string, browserProfileId: string) => ({
+      id,
+      path: `/${id}`,
+      displayName: id,
+      badgeColor: '#000000',
+      addedAt: 0,
+      browserProfileId
+    })
+    const { store, main } = await createTestStoreDrawnFromMain({
+      repos: [repo('work', 'work-profile'), repo('plain', 'default'), repo('stale', 'deleted')],
+      browserSessionProfilesByHostId: { local: [profile('default'), profile('work-profile')] },
+      settings: { ...getDefaultSettings('/tmp'), browserProfileScope: 'repo' }
+    })
+
+    const work = store.getState().createBrowserTab('work::/work/one', 'about:blank')
+    const plain = store.getState().createBrowserTab('plain::/plain/one', 'about:blank')
+    const stale = store.getState().createBrowserTab('stale::/stale/one', 'about:blank')
+    await main.settle()
+
+    expect(work.sessionProfileId).toBe('work-profile')
+    expect(plain.sessionProfileId).toBeNull()
+    expect(ensureMock.mock.calls.map(([args]) => args)).toEqual([
+      expect.objectContaining({ owner: { kind: 'repo', id: 'stale' } })
+    ])
+    expect(stale.sessionProfileId).not.toBe('deleted')
+  })
+
   it('sanitizes persistent annotation payloads at the store boundary', async () => {
     const { store, main } = await createTestStoreDrawnFromMain()
     const tab = store.getState().createBrowserTab('wt-1', 'https://example.com')
