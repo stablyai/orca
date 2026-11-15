@@ -722,6 +722,10 @@
       "710343e374": "格式化程序命令",
       "placeholder": "npx --no-install prettier --stdin-filepath \"${file}\""
     },
+    "groupHooks": {
+      "invalidSetup": "文件存在，但 Orca 找不到有效的设置脚本。",
+      "supportedKeys": "只定义受支持的键：`scripts` 和 `setup`。"
+    },
     "general": {
       "openInMenu": {
         "keyword": {
@@ -1964,6 +1968,15 @@
       "workspacePortBrowserOpen": {
         "systemBrowserHint": "按住 {{shortcut}} 并点击以在系统浏览器中打开",
         "tooltip": "{{label}}。{{hint}}"
+      },
+      "worktreePaletteEvidence": {
+        "workspaceComment": "工作区评论",
+        "createdByAutomation": "由自动化创建",
+        "linkedTask": "关联的任务",
+        "pullRequest": "PR",
+        "mergeRequest": "合并请求",
+        "linkedIssue": "关联的议题",
+        "listeningPort": "监听端口"
       },
       "environmentSetupAgentLaunch": {
         "noAgent": "此工作区未检测到已启用的 AI 智能体",

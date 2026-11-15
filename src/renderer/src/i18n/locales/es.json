@@ -565,6 +565,10 @@
       "saving": "Guardando…",
       "save": "Guardar formateador",
       "710343e374": "Comando de formateo"
+    },
+    "groupHooks": {
+      "invalidSetup": "El archivo existe, pero Orca no encontró un script de configuración válido.",
+      "supportedKeys": "Define solo las claves admitidas: `scripts` y `setup`."
     }
   },
   "menu": {
@@ -1491,6 +1495,15 @@
       "workspacePortBrowserOpen": {
         "systemBrowserHint": "{{shortcut}}+clic para abrir en el navegador del sistema",
         "tooltip": "{{label}}. {{hint}}"
+      },
+      "worktreePaletteEvidence": {
+        "workspaceComment": "Comentario del espacio de trabajo",
+        "createdByAutomation": "Creado por automatización",
+        "linkedTask": "Tarea vinculada",
+        "pullRequest": "Pull request",
+        "mergeRequest": "Merge request",
+        "linkedIssue": "Issue vinculado",
+        "listeningPort": "Puerto en escucha"
       }
     },
     "hooks": {
