@@ -15,7 +15,8 @@ const BOT_ID_PATTERN = /^[1-9][0-9]*$/
 // emit release events. Match its bot only by the numeric user ID in repo variable RELEASE_APP_BOT_ID: a login
 // could be registered again by another App if this one were ever deleted. No valid ID means no App author.
 export function isReleaseAppBot(author, botId = process.env.RELEASE_APP_BOT_ID) {
-  const id = botId?.trim() ?? ''
+  // No trimming: the value must be exactly the ID, matching docs.yml's check.
+  const id = botId ?? ''
   return BOT_ID_PATTERN.test(id) && author?.type === 'Bot' && String(author.id) === id
 }
 
@@ -124,7 +125,7 @@ export async function enforceReleasePolicy({ github, context, core }) {
   const author = release.author?.login
   const repoRef = context.repo
   const expectedPrerelease = isPrereleaseTag(tag)
-  if (!BOT_ID_PATTERN.test(process.env.RELEASE_APP_BOT_ID?.trim() ?? '')) {
+  if (!BOT_ID_PATTERN.test(process.env.RELEASE_APP_BOT_ID ?? '')) {
     core.warning(
       'Repository variable RELEASE_APP_BOT_ID is not the release App bot user ID; releases by the App are not authorized.'
     )
