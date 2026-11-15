@@ -112,3 +112,29 @@ describe('egressSwapModeFor', () => {
     expect(egressSwapModeFor(deps(), { egress_swap_mode: 'bogus' })).toBe('proxy')
   })
 })
+
+describe('review F2: a stale compile can never be the last write to land', () => {
+  it('a newer writer claimed while ours was in flight: ours writes again from current state', async () => {
+    const t = await setup()
+    const writes: string[] = []
+    let first = true
+    const deps: LifecycleDeps = {
+      ...t.life,
+      provider: {
+        ...t.life.provider,
+        updateNetworkPolicy: async (sessionId, policy) => {
+          writes.push(first ? 'stale' : 'fresh')
+          if (first) {
+            first = false
+            // Another isolate claims a later generation (after, say, a share) while our write lands.
+            await t.h.env.SANDBOX_DB.prepare('UPDATE sandboxes SET policy_generation = ? WHERE id = ?').bind(Number.MAX_SAFE_INTEGER, t.id).run()
+          }
+          return t.life.provider.updateNetworkPolicy(sessionId, policy)
+        }
+      }
+    }
+    const applied = await applySandboxPolicy(deps, await t.row(), 'refresh')
+    expect(applied.applied).toBe(true)
+    expect(writes).toEqual(['stale', 'fresh'])
+  })
+})

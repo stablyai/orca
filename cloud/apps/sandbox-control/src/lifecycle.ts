@@ -29,7 +29,7 @@ import { connectedMembers, memberGitConfigs } from './member-git'
 import type { RetentionConfig } from './retention'
 import { ProviderError, type ProviderSandboxState, type SandboxProviderApi } from './sandbox-provider'
 import { egressAccountRoutes, egressSecretHosts, placeholderValues, secretPlaceholder, type SecretEgressHost } from './secret-egress'
-import { credentialTargets } from './provider-env'
+import { credentialTargets, firewallEligibleSecret } from './provider-env'
 import { egressAllowHosts, resolvedProviderEnv, sessionSecretEnv, type SessionSecrets } from './session-env'
 import type { Keyring } from './secrets-crypto'
 import type { SecretsKmsReason } from './secrets-kms'
@@ -457,7 +457,7 @@ export async function firewallInputsFor(deps: LifecycleDeps, row: SandboxRow): P
  * PAT on api.github.com, W2: a prefix can't be pinned at the firewall). Those stay on the egress proxy.
  */
 export function firewallEligibleKey(entry: SecretEgressHost): boolean {
-  return !entry.keepResponseFields && !entry.paths
+  return firewallEligibleSecret(entry.secret) && !entry.keepResponseFields && !entry.paths
 }
 
 /** What Codex's own refresh of its placeholder login gets back: the same placeholder (CODEX-PLACEHOLDER-REFRESH). */
@@ -845,8 +845,8 @@ export const NARROWING_POLICY_REASONS: ReadonlySet<string> = new Set([
   'binding_revoked',
   'kill_switch',
   'mode_change',
-  // An operator input changed (§7.2): it may have removed access, so it fails closed like a revoke.
-  'config_change'
+  // An operator input changed (§7.2) in a way that removes access (configChangeNarrows): fails closed like a revoke.
+  'config_narrowed'
 ])
 
 /**
@@ -854,17 +854,58 @@ export const NARROWING_POLICY_REASONS: ReadonlySet<string> = new Set([
  * sandbox whose stored hash differs, so a kill switch or class change reaches every live policy in one tick.
  */
 export async function policyConfigHash(deps: Pick<LifecycleDeps, 'config' | 'secrets'>, row: Pick<SandboxRow, 'egress_swap_mode'>): Promise<string> {
+  const summary = policyConfigSummary(deps, row)
   const inputs = JSON.stringify({
-    mode: egressSwapModeFor(deps, row),
-    classes: [...firewallClasses(deps, row)].sort(),
-    accounts: deps.secrets?.accountProviders ?? null,
-    preset: deps.config.egressPreset ?? null,
+    ...summary,
     allowlist: deps.config.egressAllowlist ?? null,
     extra: deps.config.extraEgressHosts ?? null,
     proxy: Boolean(deps.config.egressProxyUrl)
   })
   const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(inputs))
-  return Array.from(new Uint8Array(digest).slice(0, 12), (b) => b.toString(16).padStart(2, '0')).join('')
+  const hash = Array.from(new Uint8Array(digest).slice(0, 12), (b) => b.toString(16).padStart(2, '0')).join('')
+  // Stored with the inputs that decide narrowing (review F3), so the next change can tell if it removes access.
+  return JSON.stringify({ h: hash, ...summary })
+}
+
+type PolicyConfigSummary = { mode: EgressSwapMode; classes: string[]; accounts: Record<string, boolean> | null; preset: string | null }
+
+function policyConfigSummary(deps: Pick<LifecycleDeps, 'config' | 'secrets'>, row: Pick<SandboxRow, 'egress_swap_mode'>): PolicyConfigSummary {
+  return {
+    mode: egressSwapModeFor(deps, row),
+    classes: [...firewallClasses(deps, row)].sort(),
+    accounts: (deps.secrets?.accountProviders as Record<string, boolean> | undefined) ?? null,
+    preset: deps.config.egressPreset ?? null
+  }
+}
+
+/**
+ * Review F3: a config change counts as narrowing (fail closed on a failed write) only when it takes access or
+ * custody away: firewall → proxy, a firewall class removed, an account provider turned off, open → limited.
+ * Anything else (an allowlist edit, a new class) only marks the row stale on failure. Unreadable history: narrowing.
+ */
+export function configChangeNarrows(previous: string | null | undefined, next: string): boolean {
+  // A pre-F3 stamp (a bare hash, written only in proxy mode on dev) carries no inputs to compare: a retry.
+  if (previous != null && !previous.startsWith('{')) {
+    return false
+  }
+  let before: Partial<PolicyConfigSummary>
+  let after: PolicyConfigSummary
+  try {
+    before = JSON.parse(previous ?? '') as Partial<PolicyConfigSummary>
+    after = JSON.parse(next) as PolicyConfigSummary
+  } catch {
+    return true
+  }
+  if (before.mode === 'firewall' && after.mode !== 'firewall') {
+    return true
+  }
+  if ((before.classes ?? []).some((name) => !after.classes.includes(name))) {
+    return true
+  }
+  if (Object.entries(before.accounts ?? {}).some(([agent, on]) => on && !after.accounts?.[agent])) {
+    return true
+  }
+  return before.preset === 'open' && after.preset !== 'open'
 }
 
 const POLICY_WRITE_TRIES = 3
@@ -915,6 +956,17 @@ async function applyOnce(deps: LifecycleDeps, row: SandboxRow, reason: string, s
     try {
       const { policy, gitExpiresAt } = await compileSandboxPolicy(deps, row)
       await deps.provider.updateNetworkPolicy(sessionId, policy)
+      // Review F2: claims are ordered, the writes that land are not. If a newer writer claimed meanwhile, ours may
+      // have landed over its policy (one compiled from fresher state, say after a share): write once more, from
+      // the state as it is now, so the last write to land is never the stale one.
+      const latest = await deps.db.prepare('SELECT policy_generation AS g FROM sandboxes WHERE id = ?').bind(row.id).first<{ g: number | null }>()
+      if (latest?.g != null && latest.g > generation) {
+        console.log(JSON.stringify({ event: 'policy_superseded', sandboxId: row.id, reason }))
+        const fresh = (await getSandbox(deps.db, row.id)) ?? row
+        const again = await compileSandboxPolicy(deps, fresh)
+        await deps.provider.updateNetworkPolicy(sessionId, again.policy)
+        return { applied: true, gitExpiresAt: again.gitExpiresAt, generation: latest.g }
+      }
       await deps.db
         .prepare('UPDATE sandboxes SET policy_stale_at = NULL, policy_config_hash = ? WHERE id = ?')
         .bind(await policyConfigHash(deps, row), row.id)

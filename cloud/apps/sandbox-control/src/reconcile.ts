@@ -13,7 +13,7 @@ import {
   suspendSandbox,
   type LifecycleDeps
 } from './lifecycle'
-import { applySandboxPolicy, guardrails, policyConfigHash } from './lifecycle'
+import { applySandboxPolicy, configChangeNarrows, guardrails, policyConfigHash } from './lifecycle'
 import { killSwitchOn } from './guardrails'
 import { drainAll, housekeeping, openHold, type HousekeepingSummary } from './retention'
 import { CREATE_ABANDONED_MS, listByStatus, transition, type SandboxRow } from './store'
@@ -79,8 +79,15 @@ export async function reconcile(deps: LifecycleDeps): Promise<ReconcileSummary> 
   for (const row of await listByStatus(deps.db, ['running'])) {
     await guard(() => reconcileRunning(deps, row, summary))
     // Design §7.2/§4.5: an operator input changed since this policy was applied, or its last write failed.
-    if (row.session_id && (row.policy_stale_at != null || (row.policy_config_hash ?? null) !== (await policyConfigHash(deps, row)))) {
-      const reason = row.policy_config_hash != null && row.policy_stale_at == null ? 'config_change' : 'stale_retry'
+    const config = row.session_id ? await policyConfigHash(deps, row) : null
+    if (row.session_id && (row.policy_stale_at != null || (row.policy_config_hash ?? null) !== config)) {
+      // Review F3: only a change that removes access fails closed; a first stamp or a widening change retries.
+      const reason =
+        row.policy_stale_at != null || row.policy_config_hash == null
+          ? 'stale_retry'
+          : configChangeNarrows(row.policy_config_hash, config!)
+            ? 'config_narrowed'
+            : 'config_change'
       await guard(async () => {
         await applySandboxPolicy(deps, row, reason)
       })

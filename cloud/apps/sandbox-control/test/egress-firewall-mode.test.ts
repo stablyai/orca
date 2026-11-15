@@ -125,3 +125,34 @@ describe('EGRESS firewall mode', () => {
     expect((await row()).policy_config_hash).toBe(await policyConfigHash(life, await row()))
   })
 })
+
+describe('review fixes (F1–F3)', () => {
+  it('F1: a Copilot PAT never becomes a firewall transform, on any host', async () => {
+    const { secret, create } = await setup()
+    const pat = 'github_pat_REAL_for_tests_000000000000000000000000000000'
+    expect((await secret('COPILOT_GITHUB_TOKEN', pat)).status).toBe(200)
+    const { box } = await create()
+    expect(JSON.stringify(box().policy)).not.toContain(pat)
+    for (const rules of Object.values(box().policy.allow)) {
+      for (const rule of rules as { transform?: { headers: Record<string, string> }[] }[]) {
+        expect(JSON.stringify(rule.transform ?? '')).not.toContain('github_pat_REAL')
+      }
+    }
+  })
+
+  it('F3: only a config change that removes access counts as narrowing', async () => {
+    const { configChangeNarrows } = await import('../src/lifecycle')
+    const cfg = (mode: string, classes: string[], accounts: Record<string, boolean>, preset = 'open') => JSON.stringify({ h: 'x', mode, classes, accounts, preset })
+    const base = cfg('firewall', ['claude', 'model_key'], { claude: true, codex: true })
+    expect(configChangeNarrows(base, cfg('proxy', [], { claude: true, codex: true }))).toBe(true)
+    expect(configChangeNarrows(base, cfg('firewall', ['model_key'], { claude: true, codex: true }))).toBe(true)
+    expect(configChangeNarrows(base, cfg('firewall', ['claude', 'model_key'], { claude: false, codex: true }))).toBe(true)
+    expect(configChangeNarrows(base, cfg('firewall', ['claude', 'model_key'], { claude: true, codex: true }, 'limited'))).toBe(true)
+    // Widening or neutral: a new class, a provider turned on, an allowlist-only change (same summary).
+    expect(configChangeNarrows(base, cfg('firewall', ['claude', 'codex', 'model_key'], { claude: true, codex: true }))).toBe(false)
+    expect(configChangeNarrows(base, base)).toBe(false)
+    // A pre-F3 bare-hash stamp is retried, not failed closed; unreadable history is.
+    expect(configChangeNarrows('402ed84513da7fac4ec3506d', base)).toBe(false)
+    expect(configChangeNarrows('{broken', base)).toBe(true)
+  })
+})

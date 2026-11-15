@@ -229,6 +229,16 @@ function hostsFor(env: Record<string, string>, spec: CredentialSpec, scopes?: Va
 }
 
 /** How a credential is sent and policed on one of its hosts. */
+/**
+ * Whether the sandbox firewall may hold this credential at all (egress design §1, review F1): never one whose
+ * use the egress proxy narrows on any host (response filtering, path scopes). A key scoped on one host is
+ * often unscoped on its others (the Copilot PAT on Copilot's API hosts), so this is decided per secret.
+ */
+export function firewallEligibleSecret(secret: string): boolean {
+  const spec = CREDENTIALS.find((candidate) => candidate.secret === secret)
+  return Boolean(spec) && !spec!.keepResponseFields && !spec!.paths && !spec!.pathsByHost
+}
+
 export function credentialTarget(secret: string, host: string): CredentialTarget | null {
   const spec = CREDENTIALS.find((candidate) => candidate.secret === secret)
   const shape = credentialShape(secret)
