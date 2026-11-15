@@ -2,6 +2,8 @@ import { NativeChatQuestionText } from './NativeChatQuestionText'
 import { useTranslate } from '@/i18n/use-translate'
 import { NativeChatMessageTimestamp } from '../messages/rows/NativeChatMessageTimestamp'
 import { NativeChatAwaitingInputRow } from './NativeChatAwaitingInputRow'
+import { NativeChatUrlRequestReceipt } from './NativeChatUrlRequest'
+import { urlApprovalProgress } from '../../../../../shared/agent-session/agent-session-approval-subject'
 import {
   NATIVE_CHAT_RECEIPT_COPY,
   nativeChatReceiptAnswerHeading,
@@ -36,6 +38,10 @@ export function NativeChatResolutionReceipt({
         disclosureKey={askDisclosureKey}
       />
     ) : null
+  }
+  const urlProgress = body.kind === 'approval' ? urlApprovalProgress(body) : null
+  if (body.kind === 'approval' && urlProgress) {
+    return <NativeChatUrlRequestReceipt body={body} {...urlProgress} />
   }
   const { resolution } = body
   const device = nativeChatReceiptDevice(resolution, {

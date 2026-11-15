@@ -7,7 +7,7 @@ import { selectDiffCommentView, type DiffCommentOwner } from './diff-comment-own
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { toast } from 'sonner'
 import type { DiffComment } from '../../../../../shared/diff-comment-types'
-import type { Repo } from '../../../../../shared/repo-types'
+import type { Repo } from '../../../../../shared/repository/repo-types'
 import type { Worktree } from '../../../../../shared/worktree/types'
 import '../../../../../shared/execution-host'
 import { createTestStore } from '../../testing/app-store-test-fixture'

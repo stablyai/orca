@@ -4,7 +4,7 @@ import {
   isNodeRuntimeTarget,
   type NodeRuntimeTarget,
   type ServerTarget
-} from '../../../shared/node-runtime-pin'
+} from '../../../shared/node-runtime/node-runtime-pin'
 import { ORCAD_SERVER_TARGET_FILENAME } from '../../../shared/remote-runtime/orcad-distribution/orcad-artifacts'
 import type { RemoteInstallTransport } from './remote-install-transport'
 import { probeLinuxLibc, type GlibcVersion } from '../../node-runtime/linux-libc-probe'

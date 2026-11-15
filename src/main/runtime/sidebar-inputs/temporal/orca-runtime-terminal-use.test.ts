@@ -21,7 +21,7 @@ vi.mock('../../../../shared/sidebar-inputs-switch', () => ({ ORCA_SIDEBAR_INPUTS
 const WT = 'repo-1::/tmp/phone-only'
 const DAY_MS = 24 * 60 * 60 * 1000
 
-function createHeadlessRuntime(ptyId = 'pty-1') {
+async function createHeadlessRuntime(ptyId = 'pty-1') {
   // Untouched for 45 days: no agent ran, so no Recent stamp moved.
   const meta: Record<string, WorktreeMeta> = { [WT]: storeWorktreeMeta({ lastActivityAt: 1 }) }
   const repo = storeRepo({ id: 'repo-1', path: '/tmp/repo-1', connectionId: null })
@@ -39,7 +39,7 @@ function createHeadlessRuntime(ptyId = 'pty-1') {
   }
   const runtime = new OrcaRuntimeService(partialRuntimeStore(store))
   // No desktop window: the phone is the only client.
-  runtime.syncWindowGraph(HEADLESS_RUNTIME_WINDOW_ID, {
+  await runtime.syncWindowGraph(HEADLESS_RUNTIME_WINDOW_ID, {
     tabs: [{ tabId: 'tab-1', worktreeId: WT, title: 'zsh', activeLeafId: 'pane:1', layout: null }],
     leaves: [
       {
@@ -56,11 +56,11 @@ function createHeadlessRuntime(ptyId = 'pty-1') {
 }
 
 describe('host-written terminal use', () => {
-  it('a phone-only workspace whose terminals are closed is not idle to cleanup', () => {
+  it('a phone-only workspace whose terminals are closed is not idle to cleanup', async () => {
     const now = 45 * DAY_MS
     vi.useFakeTimers({ now })
     try {
-      const { runtime, meta } = createHeadlessRuntime()
+      const { runtime, meta } = await createHeadlessRuntime()
       // Typing in a plain shell from the phone goes through the host's one input funnel.
       runtime.terminalRunFacts.recordInput('pty-1', 'driving', 'ls\r', now - 2 * DAY_MS)
       runtime.onPtyExit('pty-1', 0)

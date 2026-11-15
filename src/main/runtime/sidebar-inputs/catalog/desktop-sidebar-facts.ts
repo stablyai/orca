@@ -15,7 +15,7 @@ import type { SshConnectionState, SshTarget } from '../../../../shared/remote-ru
 import type { WslHostStatus } from '../../../../shared/remote-runtime/wsl-hosts/wsl-host-types'
 import type { PersistedUIState } from '../../../../shared/persisted-ui-state-types'
 import type { WorkspaceSessionState } from '../../../../shared/workspace-session/workspace-session-state-types'
-import { folderWorkspaceKey } from '../../../../shared/workspace-scope'
+import { folderWorkspaceKey } from '../../../../shared/workspace/identity/workspace-scope'
 import { readAllWorktreeMetaForHost } from '../../../persistence/host-qualified-worktree-meta'
 import type { RuntimeStore } from '../../construction/runtime-store-contract'
 import {

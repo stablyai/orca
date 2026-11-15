@@ -6,7 +6,10 @@ import type {
   WorktreeLineage
 } from '../../../../../shared/worktree/lineage-types'
 import type { Worktree } from '../../../../../shared/worktree/types'
-import { folderWorkspaceKey, worktreeWorkspaceKey } from '../../../../../shared/workspace-scope'
+import {
+  folderWorkspaceKey,
+  worktreeWorkspaceKey
+} from '../../../../../shared/workspace/identity/workspace-scope'
 
 import { getAttachedWorktreesForFolderWorkspace } from './folder-workspace-attached-worktrees'
 

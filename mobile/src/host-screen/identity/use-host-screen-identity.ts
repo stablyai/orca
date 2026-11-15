@@ -32,6 +32,7 @@ export function useHostScreenIdentity(args: {
     setHostLabelById,
     setServedProjectSections,
     setDesktopRepos,
+    setHostProjectGroups,
     setHostHealthById,
     setHostName,
     setHostPlatform,
@@ -82,6 +83,7 @@ export function useHostScreenIdentity(args: {
     setHostLabelById(new Map())
     setServedProjectSections(null)
     setDesktopRepos([])
+    setHostProjectGroups([])
     setHostHealthById(new Map())
     setHostPlatform(null)
     setShowPinnedInGroups(false)

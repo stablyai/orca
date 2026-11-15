@@ -14,7 +14,7 @@ import type {
   WorkspaceSleepOutcome,
   WorkspaceSleepRequest,
   WorkspaceSleepTarget
-} from '../../../../shared/workspace-sleep'
+} from '../../../../shared/workspace/lifecycle/workspace-sleep'
 import {
   requestRemoteWorktreeSleep,
   type RemoteWorkspaceCall

@@ -19,7 +19,7 @@ import {
   type ContextualTourStepPlacement,
   type ContextualTourStepControl,
   type ContextualTourStepAction
-} from '../../../../shared/contextual-tours'
+} from '../../../../shared/feature-education/contextual-tours/contextual-tours'
 import { ContextualTourArrow } from './ContextualTourArrow'
 import { ContextualTourControl } from './ContextualTourControl'
 import { ContextualTourProgressDots } from './ContextualTourProgressDots'

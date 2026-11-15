@@ -1,5 +1,5 @@
-import { WINDOWS_GIT_BASH_SHELL } from '../../../../shared/windows-terminal-shell'
-import type { EventProps } from '../../../../shared/telemetry-events'
+import { WINDOWS_GIT_BASH_SHELL } from '../../../../shared/shell/launch/windows-terminal-shell'
+import type { EventProps } from '../../../../shared/telemetry/telemetry-event-classification'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 
 type WindowsTerminalSnapshot = EventProps<'onboarding_windows_terminal_snapshot'>

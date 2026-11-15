@@ -112,15 +112,17 @@ export async function grantRemoteFilePreview(
   }
   // Why: proving the file and range reads here makes a missing file or an old host fail in the tab, not as a silent player error.
   // An unpinned grant would follow a re-pair to another host; pin the pairing it was minted on.
-  const pinned: RemoteFilePreviewAddress = {
-    ...address,
-    expectedEnvironmentPairingRevision:
-      address.expectedEnvironmentPairingRevision ??
-      readRegisteredPairingRevision(address.environmentId)
-  }
   const lifetime = abortWhenRendererGone(event.sender)
+  let pinned: RemoteFilePreviewAddress
   let snapshot: RemotePreviewFileSnapshot
   try {
+    pinned = {
+      ...address,
+      expectedEnvironmentPairingRevision:
+        address.expectedEnvironmentPairingRevision ??
+        (await readRegisteredPairingRevision(address.environmentId))
+    }
+    lifetime.signal.throwIfAborted()
     snapshot = await statRemotePreviewFile(pinned, lifetime.signal)
     if (snapshot.size > 0) {
       await assertRemoteChunkReadsSupported(pinned, lifetime.signal)

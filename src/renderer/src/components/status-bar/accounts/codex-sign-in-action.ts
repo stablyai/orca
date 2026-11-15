@@ -1,6 +1,6 @@
 import type { Dispatch, MutableRefObject, SetStateAction } from 'react'
 import { toast } from 'sonner'
-import type { CodexRateLimitAccountsState } from '../../../../../shared/managed-account-types'
+import type { CodexRateLimitAccountsState } from '../../../../../shared/agent-accounts/managed-account-types'
 import type { AppState } from '../../../store/types'
 import { translate } from '@/i18n/i18n'
 import {

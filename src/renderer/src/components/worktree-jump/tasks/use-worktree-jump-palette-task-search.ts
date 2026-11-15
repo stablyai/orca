@@ -3,7 +3,7 @@ import { useGitHubTaskItems } from '@/hooks/useGitHubTaskItems'
 import { useEffect, useEffectEvent, useMemo, useState } from 'react'
 import { useAppStore } from '@/store/index'
 import { useShallow } from 'zustand/react/shallow'
-import { forEachWithConcurrency } from '../../../../../shared/map-with-concurrency'
+import { forEachWithConcurrency } from '../../../../../shared/concurrency/map-with-concurrency'
 import { createCmdJTaskSearchRequests } from '../../cmd-j/task-search-requests'
 import {
   isCmdJTaskSearchQuery,

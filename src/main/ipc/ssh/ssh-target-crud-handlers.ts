@@ -160,38 +160,38 @@ async function removeSshTarget(id: string): Promise<void> {
   requestDesktopBrowserBridgeReconcile()
 }
 
-export function registerSshTargetCrudHandlers(): void {
+export function registerSshTargetCrudHandlers(
+  handle: typeof ipcMain.handle = ipcMain.handle.bind(ipcMain)
+): void {
   // Apply identical mutation rules to paired RPC and local Settings.
   setSshTargetMutations({ add: addSshTarget, update: updateSshTarget, remove: removeSshTarget })
 
-  ipcMain.handle('ssh:listTargets', () => {
+  handle('ssh:listTargets', () => {
     return getSshTargetRegistryStore()!.listTargets()
   })
 
-  ipcMain.handle('ssh:listRemovedTargetLabels', () => {
+  handle('ssh:listRemovedTargetLabels', () => {
     return getSshTargetRegistryStore()!.listRemovedTargetLabels()
   })
 
-  ipcMain.handle('ssh:addTarget', (_event, args: { target: SshTargetCreateInput }) =>
+  handle('ssh:addTarget', (_event, args: { target: SshTargetCreateInput }) =>
     addSshTarget(args.target)
   )
 
-  ipcMain.handle(
-    'ssh:updateTarget',
-    (_event, args: { id: string; updates: SshTargetUpdateInput }) =>
-      updateSshTarget(args.id, args.updates)
+  handle('ssh:updateTarget', (_event, args: { id: string; updates: SshTargetUpdateInput }) =>
+    updateSshTarget(args.id, args.updates)
   )
 
-  ipcMain.handle('ssh:removeTarget', (_event, args: { id: string }) => removeSshTarget(args.id))
+  handle('ssh:removeTarget', (_event, args: { id: string }) => removeSshTarget(args.id))
 
-  ipcMain.handle('ssh:importConfig', async (_event, args?: { reAdopt?: boolean }) => {
+  handle('ssh:importConfig', async (_event, args?: { reAdopt?: boolean }) => {
     const { targets, repoReadoptions } =
       await getSshTargetRegistryStore()!.importFromSshConfig(args)
     return { targets, repoReadoptions: publishRepoReadoptions(repoReadoptions) }
   })
 
   // Prefill the add-host form without importing targets; bulk sync belongs to Settings.
-  ipcMain.handle('ssh:listConfigHosts', (_event, args?: SshConfigHostListArgs) => {
+  handle('ssh:listConfigHosts', (_event, args?: SshConfigHostListArgs) => {
     const store = getSshTargetRegistryStore()!
     // The import's own decision, read without waiting on ssh -G; until one exists the flags are alias-only.
     const snapshot = store.currentSshRouteSnapshot()
@@ -209,7 +209,7 @@ export function registerSshTargetCrudHandlers(): void {
     )
   })
 
-  ipcMain.handle('ssh:resolveConfigHost', (_event, args: { alias: string }) => {
+  handle('ssh:resolveConfigHost', (_event, args: { alias: string }) => {
     return resolveUserSshConfigHost(args.alias)
   })
 }

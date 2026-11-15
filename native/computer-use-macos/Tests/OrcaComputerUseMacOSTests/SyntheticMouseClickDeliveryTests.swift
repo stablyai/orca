@@ -1,24 +1,40 @@
-import CoreGraphics
 import XCTest
 @testable import OrcaComputerUseMacOSCore
 
 final class SyntheticMouseClickDeliveryTests: XCTestCase {
-    private let saved = CGPoint(x: 100, y: 100)
-    private let clicked = CGPoint(x: 640.5, y: 480.25)
+    private let target = SyntheticMouseClickDelivery.Recipient(ownerPID: 41, windowID: 101)
+    private let beneath = SyntheticMouseClickDelivery.Recipient(ownerPID: 52, windowID: 202)
 
-    func testPointerGoesBackWhenItStillSitsWhereTheGestureLeftIt() {
-        var restore = SyntheticMouseClickDelivery.PointerRestore()
-        restore.willPost(at: clicked, current: saved)
-        restore.willPost(at: clicked, current: clicked)
-        XCTAssertTrue(restore.shouldRestore(current: clicked))
-        XCTAssertFalse(restore.shouldRestore(current: CGPoint(x: 655, y: 470)))
+    private func clickUnfocusedTarget(afterUp: SyntheticMouseClickDelivery.RecipientObservation, targetOnScreenAfterUp: Bool) throws -> [SyntheticMouseClickDelivery.Step] {
+        var observations = [(SyntheticMouseClickDelivery.RecipientObservation.focused(target), true), (afterUp, targetOnScreenAfterUp)]
+        var posted: [SyntheticMouseClickDelivery.Step] = []
+        try SyntheticMouseClickDelivery.deliver(
+            clickCount: 1,
+            target: target,
+            currentObservation: {
+                let (hit, onScreen) = observations.removeFirst()
+                return SyntheticMouseClickDelivery.topmostObservation(hit: hit, target: target, targetOnScreen: onScreen)
+            },
+            makeEvent: { $0 },
+            post: { posted.append($0) },
+            pause: { _ in }
+        )
+        return posted
     }
 
-    func testUserMovementBetweenEventsKeepsThePointerWhereTheUserPutIt() {
-        var restore = SyntheticMouseClickDelivery.PointerRestore()
-        restore.willPost(at: clicked, current: saved)
-        restore.willPost(at: clicked, current: CGPoint(x: 655, y: 470))
-        XCTAssertFalse(restore.mayRestore)
-        XCTAssertFalse(restore.shouldRestore(current: clicked))
+    func testAClickThatClosesAnUnfocusedTargetSucceeds() throws {
+        XCTAssertEqual(
+            try clickUnfocusedTarget(afterUp: .focused(beneath), targetOnScreenAfterUp: false),
+            [.move, .buttonDown(pressIndex: 1), .buttonUp(pressIndex: 1)]
+        )
+    }
+
+    func testAnotherWindowOverAnUnfocusedTargetStillFailsTheFence() {
+        XCTAssertThrowsError(try clickUnfocusedTarget(afterUp: .focused(beneath), targetOnScreenAfterUp: true)) { error in
+            XCTAssertEqual(
+                error as? SyntheticMouseClickDelivery.FenceFailure,
+                .recipientChanged(expected: target, actual: beneath, deliveredPresses: 1)
+            )
+        }
     }
 }

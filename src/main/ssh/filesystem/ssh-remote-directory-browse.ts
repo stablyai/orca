@@ -2,10 +2,10 @@ import { quotePosixShell } from '../../../shared/shell/launch/shell-argument-quo
 import type { SshConnectionManager } from '../connection/ssh-connection-manager'
 import type { SshExecOptions } from '../connection/ssh-exec-options'
 import { powerShellCommand } from '../remote-exec/ssh-remote-powershell'
-import { quotePowerShellLiteral as powerShellLiteral } from '../../../shared/powershell-native-argument'
+import { quotePowerShellLiteral as powerShellLiteral } from '../../../shared/shell/launch/powershell-native-argument'
 import type { FilesystemPathFlavor } from '../../../shared/file-access/filesystem-path-flavor'
 import { sortDirEntries } from '../../../shared/file-listing/file-name-sort'
-import { buildPosixStdoutFence } from '../../../shared/posix-stdout-fence'
+import { buildPosixStdoutFence } from '../../../shared/shell/launch/posix-stdout-fence'
 
 type RemoteDirEntry = {
   name: string

@@ -3,7 +3,7 @@ import type { RefObject } from 'react'
 import { useCallback, useMemo } from 'react'
 import { useAppStore } from '@/store/index'
 import { createNewTerminalTab } from '@/components/terminal/terminal-tab-create'
-import type { Repo } from '../../../../../../shared/repo-types'
+import type { Repo } from '../../../../../../shared/repository/repo-types'
 import {
   buildAddProjectFromFolderModalData,
   canShowAddAsProjectAction

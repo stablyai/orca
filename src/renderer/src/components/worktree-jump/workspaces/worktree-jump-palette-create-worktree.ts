@@ -9,7 +9,7 @@ import {
 import {
   getLinkedWorkItemSuggestedName,
   getLinkedWorkItemWorkspaceName
-} from '../../../../../shared/workspace-name'
+} from '../../../../../shared/workspace/naming/workspace-name'
 import type { LinkedWorkItemSummary } from '@/lib/workspace/creation/new-workspace'
 import type { WorktreeJumpPaletteCreateWorktreeInput } from './worktree-jump-palette-create-worktree-input'
 import { lookupGitHubWorkItemForSource } from '@/lib/work-items/github/github-work-item-source-lookup'
@@ -17,7 +17,7 @@ import { activateAndRevealWorkspace } from '@/lib/workspace/activation/worktree-
 import { queueWorkspaceActivationTerminalFocus } from '@/lib/workspace/activation/workspace-activation-terminal-focus'
 import { getIndexedRepoMap } from '@/store/repos/repository-catalog-index'
 import { useAppStore } from '@/store/index'
-import { isGitRepoKind } from '../../../../../shared/repo-kind'
+import { isGitRepoKind } from '../../../../../shared/repository/repo-kind'
 import { buildTaskSourceContextFromRepo } from '../../../../../shared/work-items/task-source-context'
 import { buildLinearIssueComposerData } from '@/lib/work-items/linear/linear-linked-work-item'
 import { isWorktreePaletteCreateActivationAllowed } from '@/lib/workspace/search/worktrees/worktree-palette-create-action'

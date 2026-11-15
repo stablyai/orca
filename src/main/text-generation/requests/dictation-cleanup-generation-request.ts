@@ -1,11 +1,11 @@
 import {
   buildDictationCleanupPrompt,
   sanitizeDictationCleanupOutput
-} from '../../../shared/dictation-cleanup'
-import type { DictationTerm } from '../../../shared/dictation-dictionary'
+} from '../../../shared/speech/dictation/dictation-cleanup'
+import type { DictationTerm } from '../../../shared/speech/dictation/dictation-dictionary'
 import { renderSourceControlActionCommandTemplate } from '../../../shared/source-control/ai/recipes/source-control-ai-actions'
 import type { ResolvedSourceControlAiGenerationParams } from '../../../shared/source-control/ai/source-control-ai-operation-resolution'
-import type { VoiceSettings } from '../../../shared/speech-types'
+import type { VoiceSettings } from '../../../shared/speech/speech-types'
 import { runGenerationRequest } from '../agent-generation-request'
 import { spawnSourceControlAgent } from '../execution/source-control-agent-launch'
 import type { CommitMessageGenerationTarget } from '../source-control-text-generation-types'

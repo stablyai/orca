@@ -17,7 +17,6 @@ import {
   type AgentStatusLiveEntryRejection
 } from './agent-status-live-entry-builder'
 import { reduceAgentStatusLiveUpdate } from './agent-status-live-reducer'
-import type { FreshnessLiveEntryDelta } from './agent-status-freshness-scheduler'
 import {
   agentStatusTabAlreadyHasProtectedOrGeneratedTitle,
   getTabIdFromPaneKey,
@@ -36,7 +35,6 @@ export function createAgentStatusLiveActions(
     get,
     set,
     applyGeneratedTabTitleUpdate,
-    freshness,
     requestFreshness,
     transactAgentStatuses
   } = runtime
@@ -66,7 +64,6 @@ export function createAgentStatusLiveActions(
       return
     }
     let built: AgentStatusLiveEntryBuild | AgentStatusLiveEntryRejection | null = null
-    let liveEntryDelta: FreshnessLiveEntryDelta | null = null
     set((state, changedPaneKeys) => {
       const retirement = state.recentlyRetiredAgentStatusPaneKeys[paneKey]
       if (
@@ -105,18 +102,10 @@ export function createAgentStatusLiveActions(
       if (!built.entry) {
         return state
       }
-      const previousEntries = state.agentStatusByPaneKey
       const reduction = reduceAgentStatusLiveUpdate(state, built, updatedAt, projectConversation)
       changedPaneKeys.add(built.entry.paneKey)
       for (const evicted of reduction.evictedEntries) {
         changedPaneKeys.add(evicted.paneKey)
-      }
-      liveEntryDelta = {
-        previousEntries,
-        nextEntries: reduction.patch.agentStatusByPaneKey ?? previousEntries,
-        nextEntry: built.entry,
-        replacedEntry: previousEntries[built.entry.paneKey],
-        evictedEntries: reduction.evictedEntries
       }
       if (retirement !== undefined) {
         // The host confirmed this retired group’s surviving owner; preserve that route for its next retirement.
@@ -131,9 +120,6 @@ export function createAgentStatusLiveActions(
       }
       return reduction.patch
     })
-    if (liveEntryDelta) {
-      freshness.noteLiveEntryDelta(liveEntryDelta)
-    }
     // Zustand's updater runs synchronously, but TypeScript cannot observe the closure assignment.
     const builtResult = built as AgentStatusLiveEntryBuild | AgentStatusLiveEntryRejection | null
     if (!builtResult?.entry) {

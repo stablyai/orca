@@ -19,7 +19,7 @@ import {
 } from '../../../../shared/remote-runtime/protocol/orcad-runtime-capabilities'
 import { getDefaultPersistedState } from '../../../../shared/constants'
 import { terminalTab } from './wsl-mover-profile-rows'
-import type { Repo } from '../../../../shared/repo-types'
+import type { Repo } from '../../../../shared/repository/repo-types'
 import type { WslMoveProgressEvent } from '../../../../shared/wsl-move/wsl-move-driver-types'
 import { collectOrcadMigrationSourceDormantState } from '../../migrating-orcad-catalog/source/dormancy/orcad-source-dormant-state'
 import {

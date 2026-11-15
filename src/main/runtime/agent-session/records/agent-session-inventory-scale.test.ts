@@ -19,7 +19,7 @@ import '../../orchestration/db/dispatch-row-writer'
 import '../../orchestration/db/attempt-outcome-projection'
 import { structuredSessionMailReach } from '../../orchestration/mailbox/routing/structured-session-mail-address'
 import { resolveOrcaSessionParty } from '../../orchestration/addressing/orchestration-party'
-import { testOrcaSessionId } from '../../../../shared/orca-session-address-test-fixture'
+import { testOrcaSessionId } from '../../../../shared/agent-session/identity/orca-session-address-test-fixture'
 import {
   mintStructuredWorkerHandle,
   mintStructuredWorkerPaneKey,

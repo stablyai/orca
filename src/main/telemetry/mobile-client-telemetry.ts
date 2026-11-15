@@ -1,6 +1,6 @@
 /** Paired phones send no telemetry of their own; the host they drive records what reaches it. */
 
-import { tuiAgentToAgentKind } from '../../shared/agent-kind'
+import { tuiAgentToAgentKind } from '../../shared/agent-status/identity/agent-kind'
 import { isTuiAgent } from '../../shared/agent-launch/catalog/tui-agent-config'
 import { track } from './client'
 

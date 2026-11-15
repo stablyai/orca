@@ -4,7 +4,7 @@ import { existsSync, mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
-import type { CodexManagedAccount } from '../../../../shared/managed-account-types'
+import type { CodexManagedAccount } from '../../../../shared/agent-accounts/managed-account-types'
 import type * as NodeOs from 'node:os'
 import { readHookTrustEntries } from '../../../codex/trust/toml/config-toml-trust'
 import '../../../codex/history/index/codex-state-db-test-fixture'

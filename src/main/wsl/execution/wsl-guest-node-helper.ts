@@ -1,6 +1,6 @@
 import { access } from 'node:fs/promises'
 import { join } from 'node:path'
-import { getAppEnvironment } from '../../../shared/app-environment'
+import { getAppEnvironment } from '../../../shared/app-lifecycle/app-environment'
 import { ensureWslPinnedRuntime } from './wsl-pinned-runtime'
 import { relayBundleCandidates } from './relay-bundle-paths'
 import { describeWslProcessFailure } from './wsl-process-failure'

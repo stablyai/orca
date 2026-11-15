@@ -35,7 +35,12 @@ export function nativeChatComposerSendState(
     structuredTransport:
       | Pick<
           NativeChatStructuredComposerTransport,
-          'sendOut' | 'sendBlockedReason' | 'threadGoal' | 'sendFollowUp' | 'optionSnapshot'
+          | 'sendOut'
+          | 'sendBlockedReason'
+          | 'threadGoal'
+          | 'sendFollowUp'
+          | 'optionSnapshot'
+          | 'mcpPanel'
         >
       | undefined
     editSession: { canSave: boolean } | undefined
@@ -65,9 +70,10 @@ export function nativeChatComposerSendState(
         input.draft,
         transport.threadGoal !== undefined,
         input.agent,
-        transport.optionSnapshot
+        transport.optionSnapshot,
+        transport.mcpPanel !== undefined
       ) &&
-      !structuredAgentSessionCommandChangesConversation(input.draft))
+      !structuredAgentSessionCommandChangesConversation(input.draft, input.agent))
   const draftHeld = localHold || (hostHold && !runsWhileHostHolds)
   const hasDraft = input.draft.trim() !== '' || input.imageAttachments.length > 0
   // Like Enter, a typed draft sends while the agent works; only an empty one offers Stop.

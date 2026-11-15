@@ -20,7 +20,7 @@ import { resolveUiLocale } from './supported-languages'
 import type { SupportedUiLocale } from '../../../shared/ui-locale'
 import type { UiLanguage } from '../../../shared/ui-language'
 import type { PluginLanguagePackRegistration } from '../../../shared/plugins/artifacts/plugin-language-pack-artifact'
-import { withTimeout } from '../../../shared/promise-timeout-fallback'
+import { withTimeout } from '../../../shared/concurrency/promise-timeout-fallback'
 import { supportedIntlLocale } from './intl-locale-support'
 import { createOrcaI18n } from '../../../shared/orca-i18n-instance'
 
@@ -142,23 +142,32 @@ export function translate(key: string, fallback: string, options?: TOptions): st
   return value
 }
 
+export class RendererLanguageLoadError extends Error {
+  constructor(readonly completion: Promise<string>) {
+    super('Language catalog unavailable')
+  }
+}
+
 export async function loadRendererUiLanguage(language: UiLanguage): Promise<string> {
   const locale = orcaI18n.resolveResourceLanguage(resolveUiLocale(language))
   const request = i18n.hasResourceBundle(locale, 'translation')
     ? undefined
     : loadLocaleCatalog(locale)
   if (request) {
-    const catalog = await withTimeout(request, 5000, null)
-    if (catalog === null) {
+    const completion = request.then((catalog) => {
+      if (!i18n.hasResourceBundle(locale, 'translation')) {
+        // Freshly parsed and never mutated, so skip i18next's defensive deep copy.
+        i18n.addResourceBundle(locale, 'translation', catalog, false, false, { skipCopy: true })
+      }
+      return locale
+    })
+    const loadedLocale = await withTimeout<string | null>(completion, 5000, null)
+    if (loadedLocale === null) {
       // A retry after a timeout must start a fresh request instead of joining the stalled one.
       if (catalogRequests.get(locale) === request) {
         catalogRequests.delete(locale)
       }
-      throw new Error('Language catalog unavailable')
-    }
-    if (!i18n.hasResourceBundle(locale, 'translation')) {
-      // Freshly parsed and never mutated, so skip i18next's defensive deep copy.
-      i18n.addResourceBundle(locale, 'translation', catalog, false, false, { skipCopy: true })
+      throw new RendererLanguageLoadError(completion)
     }
   }
   return locale

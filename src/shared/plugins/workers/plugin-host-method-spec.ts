@@ -12,6 +12,9 @@ export type PluginHostMethodSpec<
   since: number
   /** Minor in which panels and editors gained a method workers had since `since`. */
   framesSince?: number
+  /** Minor in which each optional param was added. Why: an added param is new surface a plugin
+   *  must be able to require (`api.minor`, `engines.orca`), even though the method is older. */
+  paramsSince?: Readonly<Record<string, number>>
   /** Minor that deprecated it; it keeps working until the next major. */
   deprecatedSince?: number
   /** Not frozen yet: only development plugins may call it, and no minor, method list or typings
@@ -47,6 +50,17 @@ export function pluginHostMethodOffered(
   allowProposed: boolean
 ): boolean {
   return entry.proposed !== true || allowProposed
+}
+
+/** The newest minor among the method and its added params on a surface: what `api.minor` counts. */
+export function pluginHostMethodNewestMinorFor(
+  entry: PluginHostMethodSpec,
+  surface: PluginSurface
+): number {
+  return Math.max(
+    pluginHostMethodSinceFor(entry, surface),
+    ...Object.values(entry.paramsSince ?? {})
+  )
 }
 
 /** The minor a surface first got the method. */

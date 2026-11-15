@@ -95,7 +95,7 @@ describe('OrcaRuntimeService', () => {
     vi.spyOn(orchestrationDb, 'failDispatch').mockImplementation(failDispatch)
     runtime.setOrchestrationDb(orchestrationDb)
     runtime.attachWindow(TEST_WINDOW_ID)
-    runtime.syncWindowGraph(TEST_WINDOW_ID, {
+    await runtime.syncWindowGraph(TEST_WINDOW_ID, {
       tabs: [
         {
           tabId,

@@ -14,7 +14,7 @@ import { runWslProcess } from '../wsl/execution/wsl-runner'
 import { windowsFsPath } from '../wsl/filesystem/wsl-unc-drive-fs-path'
 import type { HookRuntimeTarget } from './hook-runtime-target'
 import type { OrcaHooks } from '../../shared/orca-yaml-hook-types'
-import type { WorkspaceHookOwner } from '../../shared/workspace-hook-owner'
+import type { WorkspaceHookOwner } from '../../shared/workspace-setup/hooks/workspace-hook-owner'
 import type { ProjectExecutionRuntimeResolution } from '../../shared/execution-host/project-execution-runtime'
 import { spawn } from 'node:child_process'
 import {

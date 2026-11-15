@@ -1,6 +1,6 @@
 import * as z from 'zod'
 import { BRIDGE_APP_INACTIVE_FRAME } from '../page-lifecycle/bridge-app-inactive'
-import { salvagedOptional } from '../../../../../src/shared/zod-salvage'
+import { salvagedOptional } from '../../../../../src/shared/validation/zod-salvage'
 import { SUPPORTED_UI_LOCALES } from '../../../../../src/shared/ui-locale'
 import { NODE_PLATFORM_NAMES } from '../../../transport/connection/mobile-runtime-host-platform'
 import { RpcEnvelopeFieldsSchema } from '../../../transport/rpc/rpc-envelope-fields'

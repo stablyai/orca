@@ -1,6 +1,6 @@
 import { ipcRenderer } from 'electron'
 import type { ChatUiLaunchTipVariant } from '../../../shared/native-chat/chat-ui-launch-tip-audience'
-import type { OnboardingState } from '../../../shared/onboarding-state-types'
+import type { OnboardingState } from '../../../shared/onboarding/onboarding-state-types'
 import type { PreloadApi } from '../../api-types'
 
 export const onboardingApi = {

@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import type { ClientHostedBrowserRowsEvent } from '../../../../shared/client-hosted-browser-rows'
+import type { ClientHostedBrowserRowsEvent } from '../../../../shared/browser/client-hosting/client-hosted-browser-rows'
 import { ClientHostedBrowserRowPublisher } from './client-hosted-browser-row-publication'
 import { RuntimeBrowserPageRegistry } from './runtime-browser-page-registry'
 

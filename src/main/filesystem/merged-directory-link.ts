@@ -13,7 +13,7 @@ import {
 import type { BigIntStats } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { isDefinitiveAbsence } from '../../shared/definitive-filesystem-absence'
-import { renameFileWithWindowsRetryAsync } from '../../shared/windows-retry-file-operations'
+import { renameFileWithWindowsRetryAsync } from '../../shared/file-write/windows-retry-file-operations'
 
 /** Where a folder waits while its entries move into the shared one; conflicts stay here. */
 export const MERGE_PENDING_SUFFIX = '.orca-profile-merge'

@@ -3,7 +3,7 @@ import { isSafeOwnedDirectory } from '../../shared/owned-private-directory'
 
 import { lstat, mkdir, opendir } from 'node:fs/promises'
 import { dirname, join, resolve } from 'node:path'
-import { removeTree } from '../../shared/windows-transient-lock-removal'
+import { removeTree } from '../../shared/file-write/windows-transient-lock-removal'
 
 const SWEEP_CONCURRENCY = 8
 

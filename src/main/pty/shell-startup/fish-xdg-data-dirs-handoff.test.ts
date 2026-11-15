@@ -7,7 +7,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import {
   fishRequirementViolation,
   resolveFishBinary
-} from '../../../shared/fish-binary-requirement'
+} from '../../../shared/shell/testing/fish-binary-requirement'
 import {
   buildFishVendorConfWrapperFile,
   FISH_XDG_DATA_DIRS_PREFIX_ENV,

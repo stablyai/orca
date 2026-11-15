@@ -1,4 +1,4 @@
-import type { CodexManagedAccount } from '../../../shared/managed-account-types'
+import type { CodexManagedAccount } from '../../../shared/agent-accounts/managed-account-types'
 import type { Store } from '../../persistence/loading-store/store'
 import { CodexCredentialAbsenceGrace } from '../credentials/codex-credential-absence-grace'
 import type {
@@ -16,7 +16,7 @@ import type {
   CodexSystemDefaultSnapshot
 } from './runtime-home-service-types'
 import type { CodexSessionBackfillDate } from '../../codex/history/backfill/codex-session-backfill-types'
-import type { CodexAccountSelectionTarget } from '../../../shared/codex-selection-lane'
+import type { CodexAccountSelectionTarget } from '../../../shared/agent-accounts/codex/codex-selection-lane'
 import type { LegacyWslRuntimeAuthDestination } from '../legacy-wsl-auth-drain/legacy-wsl-runtime-auth-drain'
 import type { WslCodexAuthRead } from './wsl/wsl-codex-auth-batch-reader'
 

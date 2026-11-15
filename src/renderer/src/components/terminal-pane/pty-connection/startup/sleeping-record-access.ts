@@ -3,7 +3,7 @@ import { launchConfigsEqual } from '../../../../../../shared/agent-session/lifec
 import { useAppStore } from '@/store/index'
 import { sleepingAgentRecordIndex } from '@/store/terminals/sleep/sleeping-agent-record-index'
 import type { PtyConnectResult } from '../../pty-transport/pty-transport-types'
-import { createNonSecureContextUuid as createBrowserUuid } from '../../../../../../shared/non-secure-context-uuid'
+import { createNonSecureContextUuid as createBrowserUuid } from '../../../../../../shared/identifiers/non-secure-context-uuid'
 import { findLegacyNumericSleepingRecord } from '../../../../../../shared/sleeping-record-legacy-pane-key'
 import { neutralTerminalTitle } from '../../../../../../shared/workspace-layout/terminal-surfaces/terminal-pane-title-reset'
 import type { SleepingAgentSessionRecord } from '../../../../../../shared/agent-session/lifecycle/agent-session-resume'

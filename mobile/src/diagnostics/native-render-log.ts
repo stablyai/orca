@@ -1,4 +1,4 @@
-import { sanitizeCrashReportString } from '../../../src/shared/crash-report-redaction'
+import { sanitizeCrashReportString } from '../../../src/shared/crash-reporting/crash-report-redaction'
 import { captureBridgeError } from '../mobile-web-shell/bridge/protocol/bridge-error-capture'
 import { connectionLogStore } from './connection/persisted-connection-log-store'
 

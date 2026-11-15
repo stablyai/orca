@@ -12,7 +12,7 @@ import {
   computerAwakeSettingsForMode,
   normalizeComputerAwakeMode,
   type ComputerAwakeMode
-} from '../../../../../../shared/computer-awake-mode'
+} from '../../../../../../shared/app-lifecycle/computer-awake-mode'
 import { useTranslate } from '../../../../i18n/use-translate'
 
 type AgentAwakeSettingProps = {

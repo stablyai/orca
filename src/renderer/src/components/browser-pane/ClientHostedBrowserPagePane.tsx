@@ -11,7 +11,7 @@ import {
   browserGuestPreservesRequestedDocument,
   subscribeBrowserGuestMetadata
 } from './host-guest/metadata/browser-guest-metadata-cache'
-import { redactKagiSessionToken } from '../../../../shared/browser-url'
+import { redactKagiSessionToken } from '../../../../shared/browser/navigation/browser-url'
 import {
   forgetBrowserClientPageMetadataReports,
   startBrowserClientPageMetadataPublisher

@@ -1,7 +1,7 @@
 import {
   isClipboardTextTooLargeError,
   type ReadClipboardTextOptions
-} from '../../../../../shared/clipboard-text'
+} from '../../../../../shared/clipboard/clipboard-text'
 import { textOnlyLabelsCopiedFiles } from '../../../../../shared/native-chat/input/composer/native-chat-clipboard-event'
 import { TERMINAL_PASTE_MAX_BYTES } from '../input/paste/terminal-paste-limits'
 import type { TerminalPasteTextOptions } from '../input/paste/terminal-paste-model'

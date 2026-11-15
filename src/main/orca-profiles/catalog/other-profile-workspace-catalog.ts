@@ -1,5 +1,5 @@
 import { lstatSync, readFileSync } from 'node:fs'
-import { folderWorkspaceKey } from '../../../shared/workspace-scope'
+import { folderWorkspaceKey } from '../../../shared/workspace/identity/workspace-scope'
 import {
   getOrcaProfileDataFile,
   getOrcaProfileStateDatabaseFile,

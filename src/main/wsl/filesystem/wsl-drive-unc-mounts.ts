@@ -4,7 +4,7 @@
  */
 import { posix } from 'node:path'
 import { runProcess } from '@orca/process-host'
-import { buildPosixStdoutFence } from '../../../shared/posix-stdout-fence'
+import { buildPosixStdoutFence } from '../../../shared/shell/launch/posix-stdout-fence'
 import { normalizeRuntimePathForComparison } from '../../../shared/cross-platform-path'
 import { buildWslExecArgs } from '../../../shared/shell/wsl/wsl-login-shell-command'
 import { wslUncPathToLinux } from '../../../shared/file-access/wsl-paths'

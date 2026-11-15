@@ -14,7 +14,7 @@ describe('OrcaRuntimeService', () => {
   it('keeps published mobile terminal handles usable across renderer graph epochs', async () => {
     const runtime = new OrcaRuntimeService(store)
     runtime.attachWindow(1)
-    runtime.syncWindowGraph(1, {
+    await runtime.syncWindowGraph(1, {
       tabs: [
         {
           tabId: 'tab-1',
@@ -63,7 +63,7 @@ describe('OrcaRuntimeService', () => {
       throw new Error('expected ready terminal tab')
     }
 
-    runtime.syncWindowGraph(1, {
+    await runtime.syncWindowGraph(1, {
       tabs: [
         {
           tabId: 'tab-1',

@@ -1,6 +1,6 @@
 import type { Dispatch, SetStateAction } from 'react'
-import type { FeatureInteractionId } from '../../../../../../shared/feature-interaction-catalog'
-import type { MiniMaxCredentialsStatus } from '../../../../../../shared/minimax-credentials-status'
+import type { FeatureInteractionId } from '../../../../../../shared/feature-education/interactions/feature-interaction-catalog'
+import type { MiniMaxCredentialsStatus } from '../../../../../../shared/agent-accounts/usage-credentials/minimax-credentials-status'
 import type { RuntimeClientTarget } from '../../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'

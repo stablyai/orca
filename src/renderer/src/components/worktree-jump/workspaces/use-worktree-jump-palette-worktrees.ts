@@ -18,7 +18,7 @@ import {
 import {
   EMPTY_PAIRED_DEVICE_IDS_BY_ENVIRONMENT,
   getPairedDeviceIdsByEnvironment
-} from '../../../../../shared/workspace-creator-visibility'
+} from '../../../../../shared/workspace-view/workspace-creator-visibility'
 import type { Worktree } from '../../../../../shared/worktree/types'
 import { indexHiddenProjects } from '../../../../../shared/hidden-projects'
 import { EMPTY_SORTED_WORKTREES } from '../worktree-jump-palette-model'

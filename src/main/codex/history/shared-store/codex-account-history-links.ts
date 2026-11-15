@@ -1,7 +1,7 @@
 import { mkdir, readdir, realpath, rename, unlink, writeFile } from 'node:fs/promises'
 import { basename, join, relative } from 'node:path'
 import { isDefinitiveAbsence } from '../../../../shared/definitive-filesystem-absence'
-import { renameFileWithWindowsRetryAsync } from '../../../../shared/windows-retry-file-operations'
+import { renameFileWithWindowsRetryAsync } from '../../../../shared/file-write/windows-retry-file-operations'
 import {
   DirectoryLinkError,
   MERGE_PENDING_SUFFIX,

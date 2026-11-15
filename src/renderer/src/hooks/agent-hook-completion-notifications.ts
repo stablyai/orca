@@ -245,7 +245,7 @@ export function hookLaneCanAnnouncePaneTurnEnd(paneKey: string): boolean {
 export function hasPendingHookLaneCompletion(paneKey: string, ptyId: string | null): boolean {
   return (
     coordinatorsByPaneKey.get(paneKey)?.coordinator.hasPendingHookDoneCompletion() === true &&
-    hookTurnEndEvidence(ptyId, useAppStore.getState().agentStatusByPaneKey[paneKey]) ===
+    hookTurnEndEvidence(ptyId, useAppStore.getState().agentStatusByPaneKey.get(paneKey)) ===
       'identified'
   )
 }

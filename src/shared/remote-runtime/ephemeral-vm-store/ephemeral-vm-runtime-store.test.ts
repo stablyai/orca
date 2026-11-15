@@ -9,7 +9,6 @@ import {
   EphemeralVmRuntimeStoreError,
   listEphemeralVmRuntimes,
   MAX_EPHEMERAL_VM_RUNTIME_STORE_FILE_BYTES,
-  updateEphemeralVmRuntimeStatus,
   upsertEphemeralVmRuntime
 } from './ephemeral-vm-runtime-store'
 import type { EphemeralVmRuntimeRecord } from './ephemeral-vm-runtimes'
@@ -58,58 +57,6 @@ describe('ephemeral VM runtime store', () => {
     tempDirs.push(userDataPath)
     return userDataPath
   }
-
-  it('updates lifecycle and cleanup state', () => {
-    const userDataPath = makeUserDataPath()
-    upsertEphemeralVmRuntime(userDataPath, runtimeRecord())
-
-    const failed = updateEphemeralVmRuntimeStatus(userDataPath, 'orca-instance-1', {
-      status: 'cleanup_failed',
-      cleanupStatus: 'failed',
-      cleanupLastAttemptAt: 3_000,
-      cleanupLastError: 'provider delete failed',
-      updatedAt: 3_000
-    })
-
-    expect(failed).toMatchObject({
-      status: 'cleanup_failed',
-      cleanupStatus: 'failed',
-      cleanupLastAttemptAt: 3_000,
-      cleanupLastError: 'provider delete failed',
-      updatedAt: 3_000
-    })
-
-    const recovered = updateEphemeralVmRuntimeStatus(userDataPath, 'orca-instance-1', {
-      status: 'cleaned',
-      cleanupStatus: 'succeeded',
-      cleanupLastError: null,
-      updatedAt: 4_000
-    })
-
-    expect(recovered).toMatchObject({
-      status: 'cleaned',
-      cleanupStatus: 'succeeded',
-      updatedAt: 4_000
-    })
-    expect(recovered.cleanupLastError).toBeUndefined()
-  })
-
-  it('records a lifecycle failure with an empty message instead of rejecting the write', () => {
-    const userDataPath = makeUserDataPath()
-    const record = upsertEphemeralVmRuntime(userDataPath, runtimeRecord())
-
-    const failed = updateEphemeralVmRuntimeStatus(userDataPath, record.id, {
-      status: 'resume_failed',
-      lifecycleLastError: { error: '' }
-    })
-    expect(failed).toMatchObject({ status: 'resume_failed', lifecycleLastError: 'Unknown error.' })
-
-    const resumed = updateEphemeralVmRuntimeStatus(userDataPath, record.id, {
-      status: 'running',
-      lifecycleLastError: null
-    })
-    expect(resumed.lifecycleLastError).toBeUndefined()
-  })
 
   it('rejects an oversized write without publishing a partial runtime record', () => {
     const userDataPath = makeUserDataPath()

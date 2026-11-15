@@ -24,8 +24,8 @@ import {
 } from '../../../codex/history/backfill/codex-session-backfill-marker'
 import { getDefaultWslDistro } from '../../../wsl/discovery/distro-catalog'
 import { WslCodexAccountHistoryLaunches } from '../../../codex/history/shared-store/wsl-codex-account-history'
-import type { CodexAccountSelectionTarget } from '../../../../shared/codex-selection-lane'
-import type { CodexManagedAccount } from '../../../../shared/managed-account-types'
+import type { CodexAccountSelectionTarget } from '../../../../shared/agent-accounts/codex/codex-selection-lane'
+import type { CodexManagedAccount } from '../../../../shared/agent-accounts/managed-account-types'
 import { CodexRuntimeHomeSync } from '../runtime-home-service-sync'
 
 export abstract class CodexRuntimeHomeManagedHome extends CodexRuntimeHomeSync {

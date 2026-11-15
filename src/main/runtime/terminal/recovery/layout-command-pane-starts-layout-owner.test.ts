@@ -95,7 +95,7 @@ async function desktopRuntime(
     getForegroundProcess: async () => null,
     listProcesses: async () => []
   })
-  runtime.syncWindowGraph(0, { tabs: [], leaves: [] })
+  await runtime.syncWindowGraph(0, { tabs: [], leaves: [] })
   runtime.attachWindow(TEST_WINDOW_ID)
   runtime.markGraphReady(TEST_WINDOW_ID)
   electronMocks.BrowserWindow.fromId.mockReturnValue({ isDestroyed: () => false })

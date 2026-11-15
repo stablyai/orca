@@ -1,3 +1,4 @@
+import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/workspace/ownership/worktree-runtime-owner'
 import {
   pendingTabRevision,
   pendingEntityWorkspaceIds
@@ -6,7 +7,7 @@ import { editorPlacementIndex } from '@/store/slices/editor/tabs/workspace-edito
 import { runtimeEnvironmentIdForWorkspaceOwner } from '@/lib/workspace/ownership/resolve-owner'
 import { hostSessionTabIdsByLocalTabForWorktree } from '../web-session-tabs-sync/tracking-mappings'
 import type { AppState } from '@/store/types'
-import { parsePaneKey, makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
+import { makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import { nativeChatLaunchAgentForLeaf } from '../../components/native-chat/pane/routing/native-chat-leaf-routing'
 import { getIndexedWorktreesById } from '@/store/slices/worktrees/listing/worktree-catalog-index'
 import {
@@ -114,33 +115,9 @@ export function excludeCrossPlacedEditorFiles(
 
 export function buildMobileSessionAgentStatusByWorktree(
   agentStatusByPaneKey: AppState['agentStatusByPaneKey'],
-  tabsByWorktree: AppState['tabsByWorktree']
+  _tabsByWorktree: AppState['tabsByWorktree']
 ): MobileSessionAgentStatusByWorktree {
-  const byWorktreeId = new Map<string, Map<string, AppState['agentStatusByPaneKey'][string]>>()
-  const paneKeys = Object.keys(agentStatusByPaneKey)
-  if (paneKeys.length === 0) {
-    return byWorktreeId
-  }
-  const worktreeIdByTabId = new Map<string, string>()
-  for (const [worktreeId, tabs] of Object.entries(tabsByWorktree)) {
-    for (const tab of tabs) {
-      worktreeIdByTabId.set(tab.id, worktreeId)
-    }
-  }
-  for (const paneKey of paneKeys) {
-    const tabId = parsePaneKey(paneKey)?.tabId
-    const worktreeId = tabId === undefined ? undefined : worktreeIdByTabId.get(tabId)
-    if (worktreeId === undefined) {
-      continue
-    }
-    let bucket = byWorktreeId.get(worktreeId)
-    if (!bucket) {
-      bucket = new Map()
-      byWorktreeId.set(worktreeId, bucket)
-    }
-    bucket.set(paneKey, agentStatusByPaneKey[paneKey])
-  }
-  return byWorktreeId
+  return agentStatusByPaneKey.projection.mobileSnapshots(agentStatusByPaneKey)
 }
 
 // Bare IDs collide across hosts (STA-4343); ambiguous ownership omits identity so main uses generation fences rather than blanks mobile.
@@ -197,6 +174,10 @@ export function buildMobileSessionWorktreeInputs(
     worktreeInstanceId: resolveWorktreeInstanceId(state, worktreeId),
     terminalTabs,
     browserWorkspaces,
+    browserRuntimeEnvironmentId:
+      browserWorkspaces.length > 0
+        ? runtimeEnvironmentIdOrLocalUnlessTwin(state, worktreeId)
+        : null,
     unifiedTabs: state.unifiedTabsByWorktree[worktreeId] ?? EMPTY_WORKTREE_UNIFIED_TABS,
     groups: state.groupsByWorktree[worktreeId] ?? EMPTY_WORKTREE_TAB_GROUPS,
     tabBarOrder: state.tabBarOrderByWorktree[worktreeId],

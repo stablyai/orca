@@ -3,7 +3,7 @@ import type { BigIntStats } from 'node:fs'
 import { readFile, readdir, unlink, writeFile } from 'node:fs/promises'
 import { join, relative } from 'node:path'
 import { isDefinitiveAbsence } from '../../../../shared/definitive-filesystem-absence'
-import { renameFileWithWindowsRetryAsync } from '../../../../shared/windows-retry-file-operations'
+import { renameFileWithWindowsRetryAsync } from '../../../../shared/file-write/windows-retry-file-operations'
 import { MERGE_PENDING_SUFFIX, lstatIfPresent } from '../../../filesystem/merged-directory-link'
 import {
   COMPRESSED_ROLLOUT_SUFFIX,

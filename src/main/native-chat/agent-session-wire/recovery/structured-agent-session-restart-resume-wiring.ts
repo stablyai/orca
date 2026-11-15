@@ -6,7 +6,7 @@ import type {
 } from '../../../../shared/agent-session/agent-session-wire'
 import type { AgentSessionWireRefusal } from '../../../../shared/agent-session/failures/agent-session-wire-refusals'
 import type { AgentChildWorkView } from '../../../../shared/agent-status/child-work/agent-status-child-work-view'
-import { MAX_TIMER_DELAY_MS } from '../../../../shared/timer-delay'
+import { MAX_TIMER_DELAY_MS } from '../../../../shared/concurrency/timer-delay'
 import type { SendSettlementWaitOptions } from '../delivery/structured-agent-session-send-settlement'
 
 export type StructuredAgentSessionRestartResumeSurfaces = {

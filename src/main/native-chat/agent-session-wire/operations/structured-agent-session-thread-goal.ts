@@ -24,7 +24,7 @@ import {
 } from './structured-agent-session-turns'
 import { isAgentSessionAttachmentExpiredError } from '../../agent-session-attachments/agent-session-attachment-claims'
 import { captureStructuredExecutionOptions } from '../options/structured-agent-session-execution-options'
-import { throwIfSignalAborted } from '../../../../shared/abort-signal-reason'
+import { throwIfSignalAborted } from '../../../../shared/concurrency/abort-signal-reason'
 import { readContextStructuredAgentSessionTurnScope } from '../observations/structured-agent-session-read-work'
 
 function refused(

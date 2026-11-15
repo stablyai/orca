@@ -5,7 +5,7 @@ import type {
   ExtraUsageBalance,
   ProviderRateLimits,
   UsageRateLimitFailureKind
-} from '../../../../shared/rate-limit-types'
+} from '../../../../shared/agent-usage/rate-limits/rate-limit-types'
 import {
   clearOpenCodeSessionCookies,
   createOpenCodeRequestSession,

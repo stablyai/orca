@@ -15,7 +15,7 @@ import {
   ORCHESTRATION_SETUP_DISMISSED_STORAGE_KEY,
   notifyOrchestrationSetupStateChanged
 } from '@/components/orchestration/setup/orchestration-setup-state'
-import type { EventProps } from '../../../../shared/telemetry-event-classification'
+import type { EventProps } from '../../../../shared/telemetry/telemetry-event-classification'
 import type { BundledSkillInstallState } from '@/hooks/skills/installation/use-bundled-skill-install'
 
 export type OnboardingFeatureSetupId =

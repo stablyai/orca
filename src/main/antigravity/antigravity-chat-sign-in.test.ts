@@ -1,4 +1,4 @@
-import type { AntigravityChatAuthConfig } from '../../shared/antigravity-chat-auth-config'
+import type { AntigravityChatAuthConfig } from '../../shared/agent-accounts/antigravity/antigravity-chat-auth-config'
 import { structuredAgentHostLaunchSources } from '../runtime/agent-session/launch/structured-agent-launch-support'
 import * as profileStorage from '../orca-profiles/profile-storage-paths'
 // The chat sign-in against a scripted Antigravity server.
@@ -23,7 +23,7 @@ import { AcpScriptedAgent, deferred } from '../acp/process/testing/acp-scripted-
 import type { RpcContext } from '../runtime/rpc/core'
 import type { RpcCallerIdentity } from '../runtime/rpc/callers/rpc-caller-identity'
 import { ANTIGRAVITY_ACCOUNT_METHODS } from '../runtime/rpc/methods/accounts/antigravity-accounts'
-import type { AntigravityChatSignInStatus } from '../../shared/antigravity-account-types'
+import type { AntigravityChatSignInStatus } from '../../shared/agent-accounts/antigravity/antigravity-account-types'
 
 import * as browserHelper from './antigravity-browser-helper'
 import { ANTIGRAVITY_SIGN_IN_PROMPT } from './antigravity-sign-in-url'

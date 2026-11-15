@@ -25,11 +25,11 @@ export function agentLaunchCallerNavigationId(
 }
 
 /** Bookkeeping, never a gate: the agent already runs, so a failure here only leaves the view as it was. */
-function selectAgentLaunchTabForCaller(
+async function selectAgentLaunchTabForCaller(
   runtime: Pick<OrcaRuntimeService, 'selectCreatedMobileSessionTabForClient'>,
   surface: AgentLaunchPublishedSurface,
   clientNavigationId: string
-): void {
+): Promise<void> {
   const { outcome } = surface
   // Found by pane or session, never by a predicted tab id.
   const selector =
@@ -43,11 +43,11 @@ function selectAgentLaunchTabForCaller(
   }
   try {
     if (
-      !runtime.selectCreatedMobileSessionTabForClient(
+      !(await runtime.selectCreatedMobileSessionTabForClient(
         surface.worktreeId,
         selector,
         clientNavigationId
-      )
+      ))
     ) {
       console.warn('[agent-launch] the launch ran; its tab was not published to select')
     }
@@ -57,15 +57,15 @@ function selectAgentLaunchTabForCaller(
 }
 
 /** Moves the view the launch asked for: the paired caller's own, or the host window's to a focused chat. */
-export function selectLaunchedTab(
+export async function selectLaunchedTab(
   context: Pick<RpcContext, 'runtime' | 'caller' | 'clientKind'>,
   surface: AgentLaunchPublishedSurface,
   presentation: AgentLaunchParams['presentation'],
   callerNavigationId: string | null
-): void {
+): Promise<void> {
   if (callerNavigationId !== null) {
     if (presentation !== 'background') {
-      selectAgentLaunchTabForCaller(context.runtime, surface, callerNavigationId)
+      await selectAgentLaunchTabForCaller(context.runtime, surface, callerNavigationId)
     }
     return
   }

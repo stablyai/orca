@@ -16,7 +16,7 @@ export const RUNTIME_LAUNCHER_PATHS = [
   'src/main/orcad/runtime-launch/orcad-bundled-runtime.ts',
   'src/main/orcad/launcher.ts',
   'config/scripts/orcad-distribution/server-bundle/orcad-entry-build.mjs',
-  'src/shared/node-runtime-pin.ts',
+  'src/shared/node-runtime/node-runtime-pin.ts',
   'src/main/node-runtime/pinned-runtime-materializer.ts',
   'src/main/node-runtime/runtime-archive-download.ts',
   'src/main/managed-server/install/orcad-remote-node-runtime.ts',

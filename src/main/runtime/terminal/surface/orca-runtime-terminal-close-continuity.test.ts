@@ -72,7 +72,7 @@ describe('terminal close and handle incarnation continuity', () => {
   })
 
   it('does not acknowledge final-pane close before durable tab retirement', async () => {
-    const harness = createHarness()
+    const harness = await createHarness()
     const [{ handle }] = (await harness.runtime.listTerminals(`id:${WORKTREE_ID}`)).terminals
     if (ORCA_LAYOUT_OWNER_IS_MAIN) {
       await expect(closeLastPane(harness, handle)).resolves.toMatchObject({
@@ -107,22 +107,22 @@ describe('terminal close and handle incarnation continuity', () => {
   })
 
   it('fences final-pane exit ordering until exact retirement commits', async () => {
-    const harness = createHarness({
+    const harness = await createHarness({
       includeCanary: true,
       publishMobileSurface: true,
       registerPtyBacked: true
     })
-    harness.syncFixtureTabWithoutLeaf()
+    await harness.syncFixtureTabWithoutLeaf()
     const closeMobileSessionTab = vi.spyOn(harness.runtime, 'closeMobileSessionTab')
     const order: string[] = []
-    harness.setCloseTerminalTabAction(() => {
+    harness.setCloseTerminalTabAction(async () => {
       order.push('session-retirement')
       harness.retirePersistedTab()
-      harness.syncCanaryGraph()
+      await harness.syncCanaryGraph()
       order.push('committed-graph-removal')
     })
     harness.setVerifiedStopResult(true)
-    harness.setStopAndWaitAction((stoppingPtyId) => {
+    harness.setStopAndWaitAction(async (stoppingPtyId) => {
       if (ORCA_LAYOUT_OWNER_IS_MAIN) {
         if (!harness.getSession().tabsByWorktree[WORKTREE_ID]?.some((tab) => tab.id === TAB_ID)) {
           order.push('session-retirement')
@@ -133,7 +133,7 @@ describe('terminal close and handle incarnation continuity', () => {
       }
       order.push('pty-stop')
       harness.removeVictimFromInventory()
-      harness.syncCanaryGraph()
+      await harness.syncCanaryGraph()
       order.push('idempotent-graph-removal')
       harness.runtime.onPtyExit(stoppingPtyId, 0, INCARNATION_ID)
       order.push('idempotent-session-retirement')
@@ -193,7 +193,7 @@ describe('terminal close and handle incarnation continuity', () => {
   })
 
   it('keeps a handle through an intermediate empty reload graph', async () => {
-    const harness = createHarness()
+    const harness = await createHarness()
     const [before] = (await harness.runtime.listTerminals(`id:${WORKTREE_ID}`)).terminals
     harness.runtime.onPtyData(PTY_ID, '\x1b]0;\u280b Working on task\x07output\n', 100)
     const waiting = harness.runtime.waitForTerminal(before.handle, {
@@ -202,8 +202,8 @@ describe('terminal close and handle incarnation continuity', () => {
     })
 
     harness.runtime.markRendererReloading(1)
-    harness.syncEmptyGraph()
-    harness.syncFixtureGraph()
+    await harness.syncEmptyGraph()
+    await harness.syncFixtureGraph()
     harness.runtime.onPtyData(PTY_ID, '\x1b]0;\u2733 Task complete\x07done\n', 200)
 
     const [after] = (await harness.runtime.listTerminals(`id:${WORKTREE_ID}`)).terminals
@@ -220,13 +220,13 @@ describe('terminal close and handle incarnation continuity', () => {
   })
 
   it('stales the old handle when the same PTY id names a new incarnation', async () => {
-    const harness = createHarness()
+    const harness = await createHarness()
     const [before] = (await harness.runtime.listTerminals(`id:${WORKTREE_ID}`)).terminals
 
     harness.runtime.markRendererReloading(1)
     harness.replaceIncarnation('33333333-3333-4333-8333-333333333333')
     harness.replacePersistedIncarnation('33333333-3333-4333-8333-333333333333')
-    harness.syncFixtureGraph()
+    await harness.syncFixtureGraph()
 
     const [after] = (await harness.runtime.listTerminals(`id:${WORKTREE_ID}`)).terminals
     expect(after.handle).not.toBe(before.handle)
@@ -250,8 +250,8 @@ describe("a pane close main starts (a phone's, the CLI's)", () => {
   })
 
   it('stops a launch still running in that pane, and only that one', async () => {
-    const harness = createHarness({ publishMobileSurface: true })
-    harness.syncSplitFixtureGraph()
+    const harness = await createHarness({ publishMobileSurface: true })
+    await harness.syncSplitFixtureGraph()
     const closed = launchIn(LEAF_ID)
     const sibling = launchIn(SIBLING_LEAF_ID)
     const terminal = (await harness.runtime.listTerminals(`id:${WORKTREE_ID}`)).terminals.find(

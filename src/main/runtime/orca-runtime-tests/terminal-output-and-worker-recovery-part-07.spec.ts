@@ -26,7 +26,7 @@ describe('OrcaRuntimeService', () => {
     let connected = true
     const writes: [string, string][] = []
     const resize = vi.fn(() => true)
-    const makeRuntime = (): OrcaRuntimeService => {
+    const makeRuntime = async (): Promise<OrcaRuntimeService> => {
       const runtime = new OrcaRuntimeService(runtimeStore as never)
       runtime.setPtyController({
         write: (ptyId, data) => {
@@ -51,17 +51,17 @@ describe('OrcaRuntimeService', () => {
               ]
             : []
       })
-      runtime.syncWindowGraph(0, { tabs: [], leaves: [] })
+      await runtime.syncWindowGraph(0, { tabs: [], leaves: [] })
       return runtime
     }
 
-    const originalRuntime = makeRuntime()
+    const originalRuntime = await makeRuntime()
     const beforeRestart = await originalRuntime.listMobileSessionTabs(`id:${TEST_WORKTREE_ID}`)
     connected = false
     const disconnected = await originalRuntime.listMobileSessionTabs(`id:${TEST_WORKTREE_ID}`)
     connected = true
     const reconnected = await originalRuntime.listMobileSessionTabs(`id:${TEST_WORKTREE_ID}`)
-    const restarted = makeRuntime()
+    const restarted = await makeRuntime()
     const afterRestart = await restarted.listMobileSessionTabs(`id:${TEST_WORKTREE_ID}`)
     const listed = await restarted.listTerminals(`id:${TEST_WORKTREE_ID}`)
     restarted.onPtyData('persisted-pty', 'after restart\n', 1)
@@ -164,7 +164,7 @@ describe('OrcaRuntimeService', () => {
         withDurableRuntimeStore({ ...runtimeStore, flushOrThrow: vi.fn() })
       )
     }
-    const ownerMismatch = makeRuntime()
+    const ownerMismatch = await makeRuntime()
     ownerMismatch.registerPty('pty-wrong-owner', TEST_WORKTREE_ID, 'ssh-other-host')
     ownerMismatch.onPtySpawned('pty-wrong-owner', 'inc-owner', { awaitsRegistration: false })
     ownerMismatch.setPtyController({
@@ -199,7 +199,7 @@ describe('OrcaRuntimeService', () => {
       })
     ).rejects.toThrow('terminal_orphan_owner_mismatch')
 
-    const reusedHandle = makeRuntime()
+    const reusedHandle = await makeRuntime()
     for (const [ptyId, incarnationId] of [
       ['pty-first', 'inc-first'],
       ['pty-second', 'inc-second']

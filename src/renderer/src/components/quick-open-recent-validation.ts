@@ -5,7 +5,7 @@ import {
   cancelRuntimeFileList,
   listRuntimeFiles
 } from '@/runtime/files/search/runtime-file-search-client'
-import { createNonSecureContextUuid as createBrowserUuid } from '../../../shared/non-secure-context-uuid'
+import { createNonSecureContextUuid as createBrowserUuid } from '../../../shared/identifiers/non-secure-context-uuid'
 import { translate } from '@/i18n/i18n'
 import type { RuntimeFileOperationArgs } from '@/runtime/files/runtime-file-client-types'
 

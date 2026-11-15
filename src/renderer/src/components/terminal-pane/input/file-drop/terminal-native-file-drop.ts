@@ -15,7 +15,7 @@ import {
   getTerminalTargetShellForWorktreePath,
   resolveTerminalDropTargetShell
 } from './terminal-drop-shell'
-import { isTerminalDropWindowsPathLike } from '../../../../../../shared/image-path-paste'
+import { isTerminalDropWindowsPathLike } from '../../../../../../shared/terminal/input/image-path-paste'
 import { writeTerminalDropPathsToCapturedTarget } from './terminal-drop-path-writer'
 import { showTerminalDropWriteFailure } from './terminal-drop-write-failure'
 import { joinRuntimeTerminalDropDir } from './terminal-drop-worktree-path'

@@ -1,5 +1,5 @@
 import { ipcRenderer } from 'electron'
-import type { ClaudeAccountSelectionChange } from '../../../shared/managed-account-types'
+import type { ClaudeAccountSelectionChange } from '../../../shared/agent-accounts/managed-account-types'
 import type { PreloadApi } from '../../api-types'
 
 export const claudeAccountsApi = {

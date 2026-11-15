@@ -43,7 +43,7 @@ export function countActivityUnread(source: ActivityUnreadCountSource, now = Dat
     }
   }
 
-  for (const [paneKey, entry] of Object.entries(source.agentStatusByPaneKey)) {
+  for (const [paneKey, entry] of Array.from(source.agentStatusByPaneKey.entries())) {
     seenPaneKeys.add(paneKey)
     countEntry(entry, source.acknowledgedAgentsByPaneKey[paneKey] ?? 0, true)
   }

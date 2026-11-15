@@ -3,15 +3,20 @@ import { BrowserWindow } from 'electron'
 import '../../../shared/constants'
 import { ORCA_BROWSER_PARTITION } from '../../../shared/browser/browser-session-partition'
 import { ORCA_BROWSER_GUEST_WEB_PREFERENCES } from '../../../shared/browser/guest-lifecycle/browser-guest-web-preferences'
-import { mapSettledWithConcurrency } from '../../../shared/map-with-concurrency'
+import { mapSettledWithConcurrency } from '../../../shared/concurrency/map-with-concurrency'
 import type { BrowserBackend, BrowserBackendCreateTab } from '../browser-backend'
 import type { BrowserManager } from '../guest-lifecycle/manager/browser-manager'
 import type { AgentBrowserBridge } from '../agent-browser/agent-browser-bridge'
 import { browserSessionRegistry } from '../sessions/profiles/browser-session-registry'
 import { installBrowserJavaScriptDialogs } from '../guest-lifecycle/prompts/browser-javascript-dialogs'
+import {
+  loadPageWhenReady,
+  whenBrowserExtensionsStartFor
+} from '../extensions/profile-sessions/browser-extension-page-start'
 import type { ServeBrowserPageState } from '../../runtime/browser/headless/serve-browser-tab-layout'
+import { followPublicationLeasesWithFrameRate } from './offscreen-page-frame-rate'
 
-// orca serve has no renderer for webviews; hidden BrowserWindows host its pages.
+// orca serve has no renderer for webviews; hidden offscreen BrowserWindows host its pages.
 // Headless Linux requires Xvfb; Electron --headless segfaults.
 
 const DEFAULT_VIEWPORT_WIDTH = 1280
@@ -46,6 +51,11 @@ export class OffscreenBrowserBackend implements BrowserBackend {
       ? browserSessionRegistry.getProfile(params.profileId)
       : browserSessionRegistry.getDefaultProfile()
     const partition = profile?.partition ?? ORCA_BROWSER_PARTITION
+    if (profile) {
+      // A server page starts its profile's extensions, as a desktop tab does.
+      browserSessionRegistry.attachExtensions(profile.id)
+    }
+    const extensionsReady = profile ? whenBrowserExtensionsStartFor(profile.id) : null
 
     const win = new BrowserWindow({
       show: false,
@@ -54,6 +64,8 @@ export class OffscreenBrowserBackend implements BrowserBackend {
       webPreferences: {
         ...ORCA_BROWSER_GUEST_WEB_PREFERENCES,
         partition,
+        // A hidden window on a headless display has no surface to draw into, so captures came back blank.
+        offscreen: true,
         sandbox: true,
         contextIsolation: true,
         nodeIntegration: false,
@@ -62,6 +74,10 @@ export class OffscreenBrowserBackend implements BrowserBackend {
       }
     })
 
+    // Nothing reads offscreen paint frames: CDP captures and screencasts copy from the compositor,
+    // and delivering every animation frame to main costs hundreds of MB per animated tab.
+    win.webContents.stopPainting()
+    followPublicationLeasesWithFrameRate(win.webContents)
     this.windowsByPageId.set(browserPageId, win)
     // Server pages have no window to ask in; agents and phones answer their dialogs.
     installBrowserJavaScriptDialogs(win.webContents, () => null)
@@ -107,7 +123,10 @@ export class OffscreenBrowserBackend implements BrowserBackend {
     }
 
     const url = params.url || 'about:blank'
-    void this.loadUrl(win, url).catch((error) => {
+    const loaded = extensionsReady
+      ? loadPageWhenReady(win.webContents, extensionsReady, () => this.loadUrl(win, url))
+      : this.loadUrl(win, url)
+    void loaded.catch((error) => {
       console.warn(
         '[offscreen-browser] page load failed:',
         error instanceof Error ? error.message : String(error)

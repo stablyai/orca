@@ -25,7 +25,7 @@ import { wslDistroHoldRpcFailure } from '../../../../shared/remote-runtime/wsl-h
 import { LINEAR_ERROR_CODES } from '../../../../shared/linear/agent-access'
 import { AGENT_SESSION_RPC_ERROR_CODES } from '../../../../shared/agent-session/agent-session-host-authority'
 import { ARTIFACT_SHARING_DISABLED_CODE } from '../../../../shared/artifacts/artifact-sharing-gate'
-import { AGENT_SKILL_SHARING_DISABLED_CODE } from '../../../../shared/agent-skill-sharing-gate'
+import { AGENT_SKILL_SHARING_DISABLED_CODE } from '../../../../shared/skills/sharing/agent-skill-sharing-gate'
 import { SHARING_UNAVAILABLE_ON_HOST_CODE } from '../../../../shared/sharing-unavailable-on-host'
 import {
   AGENT_SKILL_NOT_SHAREABLE_CODE,
@@ -34,11 +34,11 @@ import {
   AGENT_SKILL_SHARING_BUSY_CODE,
   AGENT_SKILL_BUNDLE_NAME_TAKEN_CODE,
   AGENT_SKILL_SHARING_UNSUPPORTED_ENVIRONMENT_CODE
-} from '../../../../shared/agent-skill-sharing-contract'
+} from '../../../../shared/skills/sharing/agent-skill-sharing-contract'
 import {
   SKILL_INSTALL_RPC_ERROR_CODE,
   classifySkillInstallFailureCode
-} from '../../../../shared/skill-install-failure'
+} from '../../../../shared/skills/installation/skill-install-failure'
 import { PLUGIN_CLI_ERROR_CODES } from '../../../../shared/plugins/approval/plugin-cli-approval'
 import { GIT_DIFF_TOO_LARGE_CODE } from '../../../../shared/git/diff/git-diff-transport-budget'
 import { AUTOMATION_OWNER_CONFLICT_CODES } from '../../../../shared/automations/ownership/automation-owner-conflict'

@@ -7,7 +7,7 @@ import {
   scrollTopCache,
   setWithLRU
 } from '@/components/editor/model-lifetime/retention/editor-view-state-cache'
-import { sha256 } from '../../../../../../shared/sha256'
+import { sha256 } from '../../../../../../shared/hashing/sha256'
 import { resolveStepOutcome } from '../../../../../../shared/source-control/checks/pr-check-step-status'
 
 export function checkJobIdentities(
