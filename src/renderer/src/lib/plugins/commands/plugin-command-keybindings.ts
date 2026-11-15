@@ -19,8 +19,8 @@ import {
 import {
   isFloatingWorkspacePanelFocused,
   isFloatingWorkspaceTerminalInputTarget
-} from '../../../components/floating-terminal/floating-workspace-terminal-actions'
-import { matchFloatingWorkspacePanelChord } from '@/components/floating-terminal/floating-workspace-shortcut-policy'
+} from '../../../components/floating-terminal/workspace/floating-workspace-terminal-actions'
+import { matchFloatingWorkspacePanelChord } from '@/components/floating-terminal/shortcuts/floating-workspace-shortcut-policy'
 import { translate } from '@/i18n/i18n'
 import { pluginCommandKeybindingActionId } from '../../../../../shared/plugins/contributions/plugin-command-actions'
 import { isWorkspaceScopedPluginContext } from '../../../../../shared/plugins/contributions/plugin-command-contribution'

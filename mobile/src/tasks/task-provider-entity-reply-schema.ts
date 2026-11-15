@@ -7,7 +7,7 @@ import {
   prFlag,
   prNullableText,
   prText
-} from '../source-control/review/github-pr-entity-reply-schema'
+} from '../source-control/review/github-operations/github-pr-entity-reply-schema'
 
 // Require unguarded consumer fields and salvage guarded members; reuse session combinators to keep absence semantics aligned.
 

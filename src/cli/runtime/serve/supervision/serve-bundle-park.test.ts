@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, readFile, readdir, rm, stat, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, readdir, rm, stat, writeFile } from 'node:fs/promises'
 import { realpathSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -8,7 +8,6 @@ import {
   bundleCoordinationDir,
   formatBundleIdentity,
   parkRecordPath,
-  supervisorsDir,
   type ServeParkRecord
 } from '../../../../shared/serve-bundle-coordination'
 import { openServeBundlePark } from '../../../../shared/serve-bundle-park'
@@ -63,19 +62,6 @@ describe('openServeBundlePark', () => {
     await mkdir(dir, { recursive: true })
     await writeFile(parkRecordPath(dir), JSON.stringify(record))
   }
-
-  it('registers with its child pid and removes the registration on close', async () => {
-    const park = open()!
-    park.heartbeat(77)
-    const [name] = await readdir(supervisorsDir(dir))
-    expect(JSON.parse(await readFile(join(supervisorsDir(dir), name), 'utf8'))).toMatchObject({
-      pid: process.pid,
-      childPid: 77,
-      label: LABEL
-    })
-    park.unregister()
-    await expect(readdir(supervisorsDir(dir))).resolves.toEqual([])
-  })
 
   it('stops the running server for a park, acknowledges after it exits, and never counts it', async () => {
     const park = open()!

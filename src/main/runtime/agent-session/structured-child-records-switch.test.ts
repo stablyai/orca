@@ -370,9 +370,11 @@ describe('the chat strip and the session list read the same host child records',
       turn: { id: 'p2' },
       item: { type: 'userMessage', id: 'user-2', clientId: clientOperationId }
     })
-    await vi.waitFor(() => expect(stored()).toEqual([]))
-    expect(strip.at(-1)).toBeNull()
-    expect(summaries.at(-1)).not.toHaveProperty('children')
+    await vi.waitFor(() => {
+      expect(stored()).toEqual([])
+      expect(strip.at(-1)).toBeNull()
+      expect(summaries.at(-1)).not.toHaveProperty('children')
+    })
 
     // Provider exit ends live status; the agent remains inspectable with an unknown outcome.
     await notify('turn/started', { threadId: REVIEWER, turn: { id: 'r2', status: 'inProgress' } })

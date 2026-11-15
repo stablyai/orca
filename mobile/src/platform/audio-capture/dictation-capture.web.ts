@@ -2,12 +2,15 @@ import { useMemo } from 'react'
 import {
   bridgeAudioInterruptionEndsCapture,
   type BridgeAudioChunk
-} from '../../mobile-web-shell/bridge/bridge-audio-verbs'
+} from '../../mobile-web-shell/bridge/native-capabilities/bridge-audio-verbs'
 import {
   MAX_DICTATION_AUDIO_CHUNK_BYTES as BRIDGE_AUDIO_RING_MAX_BYTES,
   DICTATION_SAMPLE_RATE as MOBILE_DICTATION_PCM_SAMPLE_RATE
 } from '../../../../src/shared/rpc-contract/speech/speech-params'
-import { useNativeVerbs, type NativeVerbs } from '../../mobile-web-shell/bridge/use-native-verbs'
+import {
+  useNativeVerbs,
+  type NativeVerbs
+} from '../../mobile-web-shell/bridge/native-capabilities/use-native-verbs'
 import '../../hooks/mobile-dictation-pending-audio-budget'
 import {
   DICTATION_CAPTURE_DRAIN_INTERVAL_MS,
