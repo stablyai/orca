@@ -6,6 +6,7 @@ import {
   resolvePinnedTabLabel
 } from '@/store/slices/tabs/closing/pinned-tab-close-guard'
 import { createWorkspaceTabCloseCommands } from '@/components/tab-group/workspace-tab-close-commands'
+import { hasUnsentBrowserNotes } from '@/store/slices/browser/annotations/browser-page-annotation'
 import { captureWorkspaceEmptiedReaction } from '@/components/tab-group/workspace-emptied-reaction'
 import {
   handleSwitchRecentTab,
@@ -19,10 +20,13 @@ import {
   isFloatingWorkspacePanelFocused,
   switchFloatingWorkspaceRecentTab,
   switchFloatingWorkspaceTab
-} from '../../floating-workspace-terminal-actions'
-import { TOGGLE_FLOATING_TERMINAL_EVENT } from '../../floating-terminal'
+} from '../../../components/floating-terminal/workspace/floating-workspace-terminal-actions'
+import { TOGGLE_FLOATING_TERMINAL_EVENT } from '../../../components/floating-terminal/workspace/floating-workspace-open-intent'
 import { closeWorkspaceBrowserTab } from '../../browser/workspace/workspace-browser-tab-close'
 import { resolveBrowserWorkspaceOwner } from '../../browser/workspace/browser-workspace-source-resolution'
+import { getActiveTabNavOrder } from '@/components/tab-bar/group-tab-order'
+import { reorderTabInGroup } from '@/components/tab-group/tab-group-layout-owner-commands'
+import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../shared/constants'
 
 export type WorkspaceTabTarget =
   | { kind: 'tab'; worktreeId: string; tabId: string }
@@ -44,6 +48,7 @@ export type WorkspaceTabCommand =
       floatingPanelOwned?: boolean
     }
   | { type: 'previous-recent'; floatingPanelOwned?: boolean }
+  | { type: 'move'; direction: -1 | 1; floatingPanelOwned?: boolean }
 
 type TabState = ReturnType<typeof useAppStore.getState>
 
@@ -127,6 +132,33 @@ function closeFocusedSplitLanding(state: TabState): boolean {
   return true
 }
 
+/** Move the focused group's active tab past its visible neighbor; moves stop at the group's edges. */
+export function moveActiveTab(worktreeId: string | null, direction: -1 | 1): boolean {
+  if (!worktreeId) {
+    return false
+  }
+  const state = useAppStore.getState()
+  const groupId = state.activeGroupIdByWorktree[worktreeId]
+  const group = (state.groupsByWorktree[worktreeId] ?? []).find(
+    (candidate) => candidate.id === groupId
+  )
+  const tabId = group?.activeTabId
+  if (!group || !tabId) {
+    return false
+  }
+  // Step past visible neighbors only, so a stale order entry never swallows the move.
+  const visibleTabIds = getActiveTabNavOrder(state, worktreeId).map((ref) => ref.tabId)
+  const index = visibleTabIds.indexOf(tabId)
+  const neighborId = index === -1 ? undefined : visibleTabIds[index + direction]
+  if (!neighborId || !group.tabOrder.includes(neighborId)) {
+    return false
+  }
+  const tabOrder = group.tabOrder.filter((id) => id !== tabId)
+  tabOrder.splice(tabOrder.indexOf(neighborId) + (direction === 1 ? 1 : 0), 0, tabId)
+  reorderTabInGroup(worktreeId, { kind: 'reorder', tabId, groupId: group.id, tabOrder })
+  return true
+}
+
 /** Input adapters describe intent; targeting and tab operations live here. */
 export function dispatchWorkspaceTabCommand(command: WorkspaceTabCommand): boolean {
   const state = useAppStore.getState()
@@ -174,6 +206,11 @@ export function dispatchWorkspaceTabCommand(command: WorkspaceTabCommand): boole
     if ((command.bulk || command.skipEmptyCheck) && tab.isPinned) {
       return true
     }
+    const unsentNotes = tab.contentType === 'browser' && hasUnsentBrowserNotes(state, tab.entityId)
+    // Bulk closes keep a tab holding unsent notes open, as they keep pinned tabs.
+    if (command.bulk && unsentNotes) {
+      return true
+    }
     // Why before the pin guard: its prompt takes focus, and the floating panel's reaction reads focus.
     const whenEmptied =
       command.bulk || command.skipEmptyCheck
@@ -189,7 +226,8 @@ export function dispatchWorkspaceTabCommand(command: WorkspaceTabCommand): boole
       guardPinnedTabClose({
         isPinned: tab.isPinned === true,
         tabLabel: resolvePinnedTabLabel(state, target.worktreeId, tab.id),
-        onClose: close
+        onClose: close,
+        unsentNotes
       })
     }
     return true
@@ -199,6 +237,13 @@ export function dispatchWorkspaceTabCommand(command: WorkspaceTabCommand): boole
       return switchFloatingWorkspaceRecentTab(state)
     }
     return handleSwitchRecentTab()
+  }
+  if (command.type === 'move') {
+    const floatingPanelOwned = command.floatingPanelOwned || isFloatingWorkspacePanelFocused()
+    return moveActiveTab(
+      floatingPanelOwned ? FLOATING_TERMINAL_WORKTREE_ID : state.activeWorktreeId,
+      command.direction
+    )
   }
   if (command.floatingPanelOwned || isFloatingWorkspacePanelFocused()) {
     switchFloatingWorkspaceTab(state, command.direction, command.scope)

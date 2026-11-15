@@ -1,4 +1,4 @@
-import { startWslHostAndReloadProjects } from '@/lib/wsl-host-user-start'
+import { startWslHostAndReloadProjects } from '@/runtime/hosts/wsl/wsl-host-user-start'
 import { WslDistroStoppedCard } from './WslDistroStoppedCard'
 
 /**

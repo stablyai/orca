@@ -1,10 +1,10 @@
 import { join } from 'node:path'
-import type { Repo } from '../../../shared/repo-types'
+import type { Repo } from '../../../shared/repository/repo-types'
 import type {
   SkillDeletePlan,
   SkillDeleteRequest,
   SkillDeleteResult
-} from '../../../shared/skill-delete-contract'
+} from '../../../shared/skills/deletion/skill-delete-contract'
 import { deleteSkills, previewSkillDeletion, type SkillDeleteServiceInput } from './skill-deletion'
 import type { ResolvedSkillDiscoveryTarget } from '../discovery/skill-discovery-target'
 import { nativeSkillInstallFilesystem } from '../filesystem/skill-install-filesystem'

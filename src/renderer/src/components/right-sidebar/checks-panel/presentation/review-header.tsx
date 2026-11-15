@@ -7,12 +7,12 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import {
   getTerminalUrlOrcaBrowserHint,
   getTerminalUrlSystemBrowserHint
 } from '../../../terminal-pane/links/terminal-link-open-hints'
-import type { ChecksPanelReview } from '../checks-panel-review'
+import type { HostedReviewInfo as ChecksPanelReview } from '../../../../../../shared/source-control/hosted-review/hosted-review-contracts'
 import type { ChecksPanelHostedReviewModifierDestination } from '../review-actions/checks-panel-hosted-review-click-routing'
 import { useTranslate } from '@/i18n/use-translate'
 import { PullRequestIcon, prStateColor } from './check-presentation'

@@ -11,6 +11,8 @@ import { parsePaneKey } from '../../../../../shared/workspace-layout/stable-pane
 import type { OrcaRuntimeService } from '../../../orca-runtime'
 import type { RpcContext } from '../../core'
 import { clientRendersStructuredAgent } from '../structured-sessions/structured-agent-session-policy'
+import type { AgentLaunchParams } from '../../../../../shared/rpc-contract/agent-launch/agent-launch-params'
+import { agentLaunchTabViewerRule } from './agent-launch-tab-publication'
 
 /** The paired client whose view this launch should move, or null when it moves the host's. */
 export function agentLaunchCallerNavigationId(
@@ -23,11 +25,11 @@ export function agentLaunchCallerNavigationId(
 }
 
 /** Bookkeeping, never a gate: the agent already runs, so a failure here only leaves the view as it was. */
-export function selectAgentLaunchTabForCaller(
+async function selectAgentLaunchTabForCaller(
   runtime: Pick<OrcaRuntimeService, 'selectCreatedMobileSessionTabForClient'>,
   surface: AgentLaunchPublishedSurface,
   clientNavigationId: string
-): void {
+): Promise<void> {
   const { outcome } = surface
   // Found by pane or session, never by a predicted tab id.
   const selector =
@@ -41,16 +43,38 @@ export function selectAgentLaunchTabForCaller(
   }
   try {
     if (
-      !runtime.selectCreatedMobileSessionTabForClient(
+      !(await runtime.selectCreatedMobileSessionTabForClient(
         surface.worktreeId,
         selector,
         clientNavigationId
-      )
+      ))
     ) {
       console.warn('[agent-launch] the launch ran; its tab was not published to select')
     }
   } catch (error) {
     console.warn('[agent-launch] the launch ran; selecting its tab for the caller did not', error)
+  }
+}
+
+/** Moves the view the launch asked for: the paired caller's own, or the host window's to a focused chat. */
+export async function selectLaunchedTab(
+  context: Pick<RpcContext, 'runtime' | 'caller' | 'clientKind'>,
+  surface: AgentLaunchPublishedSurface,
+  presentation: AgentLaunchParams['presentation'],
+  callerNavigationId: string | null
+): Promise<void> {
+  if (callerNavigationId !== null) {
+    if (presentation !== 'background') {
+      await selectAgentLaunchTabForCaller(context.runtime, surface, callerNavigationId)
+    }
+    return
+  }
+  // A terminal's reveal selects its own tab; a chat's listing alone never moves the window (#5435).
+  if (
+    surface.outcome.kind === 'structured' &&
+    agentLaunchTabViewerRule(context, presentation) === 'focus-window'
+  ) {
+    context.runtime.focusLaunchedChatInHostWindow(surface.worktreeId, surface.outcome.sessionId)
   }
 }
 

@@ -43,7 +43,9 @@ try {
   runOracle('candidate re-upgrade', root, 'read-after-downgrade', candidateData)
 
   const revertedData = makeDataDir('reverted-data')
-  runOracle('reverted write', revertedRoot, 'write-mixed', revertedData)
+  runOracle('reverted write', revertedRoot, 'write-mixed', revertedData, {
+    storeSource: 'src/shared/ephemeral-vm-runtime-store.ts'
+  })
   runOracle('reverted rollback read', baselineRoot, 'read', revertedData, {
     expectFailure: 'file is invalid'
   })
@@ -94,6 +96,7 @@ function runOracle(label, targetRoot, operation, userDataPath, options = {}) {
     env: {
       ...process.env,
       STA_4274_TARGET_ROOT: resolve(targetRoot),
+      STA_4274_STORE_SOURCE: options.storeSource,
       STA_4274_OPERATION: operation,
       STA_4274_USER_DATA_PATH: userDataPath
     }

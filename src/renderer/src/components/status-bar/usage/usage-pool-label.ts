@@ -1,0 +1,94 @@
+import { translate } from '@/i18n/i18n'
+import type { Translate } from '@/i18n/use-translate'
+import {
+  formatRateLimitWindowChipLabel,
+  formatWindowLabel
+} from './rate-limit-window-localized-label'
+import type {
+  ProviderRateLimits,
+  RateLimitBucket,
+  RateLimitWindow
+} from '../../../../../shared/agent-usage/rate-limits/rate-limit-types'
+import { clampUsedPercent } from '../../../../../shared/agent-usage/display/usage-percentage-display'
+import { USAGE_WARNING_PERCENT } from './usage-health-tone'
+
+export type GroupedUsagePool = RateLimitBucket & { group: string }
+
+const WEEKLY_WINDOW_MINUTES = 10_080
+
+export function isGroupedUsagePool(window: RateLimitWindow): window is GroupedUsagePool {
+  return (
+    'name' in window &&
+    typeof window.name === 'string' &&
+    'group' in window &&
+    typeof window.group === 'string' &&
+    window.group.length > 0
+  )
+}
+
+function shortenGroup(group: string): string {
+  const short = group
+    .replace(/\s+models$/i, '')
+    .replace(/\s+and\s+/gi, '/')
+    .trim()
+  return short || group
+}
+
+export function formatPoolGroupLabel(group: string, buckets: readonly RateLimitBucket[]): string {
+  const short = shortenGroup(group)
+  const collides = buckets.some(
+    (other) =>
+      other.group &&
+      other.group !== group &&
+      (other.group === short || shortenGroup(other.group) === short)
+  )
+  return collides ? group : short
+}
+
+function formatPoolWindowName(bucket: RateLimitBucket, t: Translate = translate): string {
+  // An unmapped agy window has no length; formatWindowLabel(0) would invent "0m".
+  if (!(bucket.windowMinutes > 0)) {
+    return (bucket.windowName ?? '').replace(/\s*limit remaining$/i, '').trim()
+  }
+  if (bucket.windowMinutes === WEEKLY_WINDOW_MINUTES) {
+    return t('auto.components.status.bar.StatusBar.5c938d39ac', 'wk')
+  }
+  return formatWindowLabel(bucket.windowMinutes)
+}
+
+export function formatPoolWindowLabel(
+  bucket: RateLimitBucket,
+  now?: number,
+  t?: Translate
+): string {
+  const label = formatPoolWindowName(bucket, t)
+  // Show the reset once the pool turns yellow, by consumption whatever the % display.
+  if (clampUsedPercent(bucket.usedPercent) >= USAGE_WARNING_PERCENT && bucket.resetsAt != null) {
+    const countdown = formatRateLimitWindowChipLabel(bucket, now)
+    return label ? `${label} (${countdown})` : countdown
+  }
+  return label
+}
+
+export function formatPoolShortLabel(
+  bucket: RateLimitBucket,
+  buckets: readonly RateLimitBucket[],
+  now?: number,
+  t?: Translate
+): string {
+  if (!bucket.group) {
+    return bucket.name
+  }
+  return `${formatPoolGroupLabel(bucket.group, buckets)} ${formatPoolWindowLabel(bucket, now, t)}`.trim()
+}
+
+export function formatStatusBarSectionLabel(
+  p: ProviderRateLimits,
+  section: { label: string; window: RateLimitWindow },
+  now?: number,
+  t?: Translate
+): string {
+  return isGroupedUsagePool(section.window)
+    ? formatPoolShortLabel(section.window, p.buckets ?? [], now, t)
+    : section.label
+}

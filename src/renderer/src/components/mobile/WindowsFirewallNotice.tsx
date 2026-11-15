@@ -1,11 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { CircleAlert, Loader2, ShieldCheck } from 'lucide-react'
 import { toast } from 'sonner'
-import type { WindowsMobileFirewallStatus } from '../../../../shared/windows-mobile-firewall'
+import type { WindowsMobileFirewallStatus } from '../../../../shared/remote-runtime/pairing/windows-mobile-firewall'
 import { useMountedRef } from '../../hooks/useMountedRef'
 import { useTranslate } from '../../i18n/use-translate'
 import { Button } from '../ui/button'
-import { cn } from '../../lib/utils'
+import { cn } from '../../lib/class-names'
 
 type WindowsFirewallNoticeProps = {
   pairingReady: boolean

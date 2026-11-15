@@ -3,8 +3,27 @@ import { toast } from 'sonner'
 import type { AppState } from '../../../types'
 import type { SparsePreset } from '../../../../../../shared/worktree/create-types'
 import { translate } from '@/i18n/i18n'
+import type { SparsePresetFailure } from '../../../../../../shared/worktree/creation/sparse-preset-failure'
 
 const ERROR_TOAST_DURATION = 60_000
+
+function sparsePresetFailureMessage(failure: SparsePresetFailure): string {
+  switch (failure.errorCode) {
+    case 'name_required':
+      return translate('sparsePreset.nameRequired', 'Name is required.')
+    case 'name_too_long':
+      return translate('sparsePreset.nameTooLong', 'Name must be 80 characters or fewer.')
+    case 'directories_required':
+      return translate('auto.lib.sparse.preset.draft.efc05d1820', 'Add at least one directory.')
+    case 'directories_invalid':
+      return translate(
+        'auto.lib.sparse.preset.draft.5915a0a1f6',
+        'Use repo-relative directories, not root, absolute paths, or parent segments.'
+      )
+    default:
+      return failure.error
+  }
+}
 
 export type SparsePresetsLoadStatus = 'idle' | 'loading' | 'loaded' | 'error'
 
@@ -137,6 +156,9 @@ export const createSparsePresetsSlice: StateCreator<AppState, [], [], SparsePres
         }
       }
       const saved = await window.api.sparsePresets.save(args)
+      if ('errorCode' in saved) {
+        throw new Error(sparsePresetFailureMessage(saved))
+      }
       set((s) => {
         const existing = s.sparsePresetsByRepo[args.repoId]
         if (existing === undefined) {

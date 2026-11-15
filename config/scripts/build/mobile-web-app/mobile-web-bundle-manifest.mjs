@@ -3,10 +3,13 @@ import { readFile, mkdir, rm, writeFile } from 'node:fs/promises'
 import { createRequire } from 'node:module'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { promisify } from 'node:util'
+import { brotliCompress, constants as zlibConstants } from 'node:zlib'
 
 const { darkBuildMarkers } = createRequire(import.meta.url)('../../../dark-build-switches.cjs')
 
 const projectDir = fileURLToPath(new URL('../../../..', import.meta.url))
+const brotliCompressAsync = promisify(brotliCompress)
 
 export const MOBILE_WEB_BUNDLE_SCHEMA_VERSION = 1
 export const MOBILE_WEB_BUNDLE_ENTRYPOINT = 'index.html'
@@ -101,18 +104,58 @@ export async function readDesktopVersion() {
   return packageJson.version
 }
 
+// Mirrors mobileWebBundleBrotliPath in src/shared/mobile-web-bundle/manifest-contract.ts.
+export function mobileWebBundleBrotliPath(assetPath) {
+  return `${assetPath}.br`
+}
+
+// Largest first so the slowest file starts first on zlib's thread pool; keep only copies that shrink.
+async function compressWithBrotli(written) {
+  const largestFirst = [...written].sort((left, right) => right.byteLength - left.byteLength)
+  const copies = await Promise.all(
+    largestFirst.map((asset) =>
+      brotliCompressAsync(asset.bytes, {
+        params: {
+          [zlibConstants.BROTLI_PARAM_QUALITY]: zlibConstants.BROTLI_MAX_QUALITY,
+          [zlibConstants.BROTLI_PARAM_SIZE_HINT]: asset.byteLength
+        }
+      })
+    )
+  )
+  return new Map(
+    largestFirst.flatMap((asset, index) =>
+      copies[index].byteLength < asset.byteLength ? [[asset.path, copies[index]]] : []
+    )
+  )
+}
+
 // Single manifest producer keeps builder/contract/packaging guard shape aligned.
 export async function writeMobileWebBundleTree({
   outDir,
   written,
+  // Host-only JSON outside `assets` and buildId, served one at a time over RPC.
+  catalogs = [],
   desktopVersion,
   protocolWindow,
   // Empty route list makes shell render every screen natively.
   routes = [],
+  // Whole-file brotli copies for phones that inflate natively.
+  brotli = false,
   env = process.env
 }) {
+  const brotliCopies = brotli ? await compressWithBrotli(written) : new Map()
   const assets = written
-    .map(({ path, sha256, byteLength, contentType }) => ({ path, sha256, byteLength, contentType }))
+    .map(({ path, sha256, byteLength, contentType, kind }) => {
+      const copy = brotliCopies.get(path)
+      return {
+        path,
+        sha256,
+        byteLength,
+        contentType,
+        ...(copy === undefined ? {} : { brotliByteLength: copy.byteLength }),
+        ...(kind === undefined ? {} : { kind })
+      }
+    })
     .sort((left, right) => (left.path < right.path ? -1 : left.path > right.path ? 1 : 0))
   const manifest = {
     schemaVersion: MOBILE_WEB_BUNDLE_SCHEMA_VERSION,
@@ -124,14 +167,30 @@ export async function writeMobileWebBundleTree({
     entrypoint: MOBILE_WEB_BUNDLE_ENTRYPOINT,
     totalBytes: assets.reduce((total, asset) => total + asset.byteLength, 0),
     assets,
-    routes
+    routes,
+    ...(catalogs.length === 0
+      ? {}
+      : {
+          catalogs: catalogs.map(({ locale, path, sha256, byteLength }) => ({
+            locale,
+            path,
+            sha256,
+            byteLength
+          }))
+        })
   }
 
   // Clear entire output or stale unreferenced assets ship inside asar.
   await rm(outDir, { recursive: true, force: true })
   await mkdir(join(outDir, 'assets'), { recursive: true })
-  for (const asset of written) {
-    await writeFile(join(outDir, asset.path), asset.bytes)
+  if (catalogs.length > 0) {
+    await mkdir(join(outDir, 'catalogs'), { recursive: true })
+  }
+  for (const file of [...written, ...catalogs]) {
+    await writeFile(join(outDir, file.path), file.bytes)
+  }
+  for (const [path, copy] of brotliCopies) {
+    await writeFile(join(outDir, mobileWebBundleBrotliPath(path)), copy)
   }
   await writeFile(join(outDir, 'manifest.json'), `${JSON.stringify(manifest, null, 2)}\n`, 'utf8')
   // Keep switch metadata outside manifest so compiled page bytes/buildId remain unchanged.

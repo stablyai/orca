@@ -1,7 +1,7 @@
 // ACP has no standard skill delivery; use each agent's per-process configuration.
 
 import { hasReachedAppVersion } from '../../../shared/app-version'
-import type { NativeChatVisualsSkillLocation } from '../../native-chat/native-chat-visuals-skill-location'
+import type { NativeChatVisualsSkillLocation } from '../../native-chat/conversation-files/native-chat-visuals-skill-location'
 
 export type AcpVisualsSkillInput = {
   skill: NativeChatVisualsSkillLocation

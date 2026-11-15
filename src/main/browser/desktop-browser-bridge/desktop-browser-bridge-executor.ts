@@ -8,7 +8,7 @@ import {
   DESKTOP_BROWSER_BRIDGE_UNROUTED_CODE,
   isDesktopBrowserBridgeMethod,
   type DesktopBrowserBridgeRequest
-} from '../../../shared/desktop-browser-bridge-protocol'
+} from '../../../shared/browser/client-hosting/desktop-browser-bridge-protocol'
 import type { RpcResponse } from '../../runtime/rpc/core'
 import { runInRemoteCliBrowserScope } from '../../runtime/desktop-browser-bridge/remote-cli-browser-scope'
 import { parseCdpKeyEvent } from '../cdp/input/cdp-keyboard-us-layout'
@@ -254,24 +254,5 @@ function urlOrigin(value: unknown): string | null {
     return new URL(value).origin
   } catch {
     return null
-  }
-}
-
-// Routed tabs can still display local files; those remain off-limits to hosts.
-// Allow chrome-error: so hosts can navigate away from failed loads.
-const HOST_REACHABLE_DOCUMENT_PROTOCOLS = new Set([
-  'http:',
-  'https:',
-  'about:',
-  'blob:',
-  'data:',
-  'chrome-error:'
-])
-
-export function isHostReachableDocument(url: string): boolean {
-  try {
-    return HOST_REACHABLE_DOCUMENT_PROTOCOLS.has(new URL(url).protocol)
-  } catch {
-    return url === ''
   }
 }

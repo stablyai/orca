@@ -1,14 +1,12 @@
 import { createStructuredAgentSessionReadHydrate } from './structured-agent-session-read-hydrate'
-import {
-  type AgentProviderSessionMetadata,
-  agentProviderSessionsEqual
-} from '../../../../../../../shared/agent-session/lifecycle/agent-session-resume'
+import type { AgentProviderSessionMetadata } from '../../../../../../../shared/agent-session/lifecycle/agent-session-resume'
+import { agentProviderSessionsEqual } from '../../../../../../../shared/agent-session/lifecycle/resume/agent-provider-session-equality'
 import {
   EMPTY_STRUCTURED_AGENT_SESSION,
   reduceStructuredAgentSession,
   type StructuredAgentSessionAction
 } from '../../../../../../../shared/agent-session/structured-agent-session-reducer'
-import type { RuntimeClientTarget } from '../../../../../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import { startStructuredAgentSessionReadTransport } from './structured-agent-session-read-transport'
 import { createStructuredAgentSessionPRLinkObserver } from './structured-agent-session-pr-link-observer'
 

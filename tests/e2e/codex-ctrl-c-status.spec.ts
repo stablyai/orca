@@ -5,7 +5,7 @@ import {
   buildShellCommandFromArgv,
   resolveStartupShell
 } from '../../src/shared/agent-launch/startup/tui-agent-startup-shell'
-import { resolveLocalWindowsAgentStartupShell } from '../../src/shared/windows-terminal-shell'
+import { resolveLocalWindowsAgentStartupShell } from '../../src/shared/shell/launch/windows-terminal-shell'
 import { test, expect } from './helpers/orca-app'
 import { emitCodexHookStatus, readHookEndpoint } from './helpers/agent-hook-endpoint'
 import { ensureTerminalVisible, waitForActiveWorktree, waitForSessionReady } from './helpers/store'

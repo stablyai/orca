@@ -28,8 +28,6 @@ export class Session extends SessionProcessInspection {
   readonly terminalHandle: string | null
   readonly launchAgent: TuiAgent | null
   readonly wslDistro: string | null
-  readonly processNameIsSpawnFile: boolean
-  readonly shellIsRootChild: boolean
   private _state: SessionState = 'running'
   private _exitCode: number | null = null
   exitCause: TerminalExitCause | undefined
@@ -51,8 +49,6 @@ export class Session extends SessionProcessInspection {
     this.terminalHandle = opts.terminalHandle ?? null
     this.launchAgent = opts.launchAgent ?? null
     this.wslDistro = opts.wslDistro ?? null
-    this.processNameIsSpawnFile = opts.subprocess.processNameIsSpawnFile === true
-    this.shellIsRootChild = opts.subprocess.shellIsRootChild === true
     this.onSessionExit = opts.onExit
     const isAlive = () => !this._disposed && this._state !== 'exited'
     const pipeline = createSessionOutputPipeline(opts, isAlive)

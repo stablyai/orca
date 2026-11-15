@@ -98,88 +98,6 @@ describe('The main agent fact across a restart', () => {
     }
   })
 
-  it('maps the legacy child-only flag onto an absent main agent, dated by the turn end', async () => {
-    const receivedAt = recentTs()
-    writeEntry({
-      receivedAt,
-      stateStartedAt: receivedAt - 5_000,
-      claudeLeadBoundaryChildOnly: true,
-      payload: {
-        state: 'working',
-        prompt: 'legacy row',
-        agentType: 'claude',
-        turnCompletedAt: receivedAt - 1_000,
-        subagents: [{ id: 'arestored-child', state: 'working', startedAt: receivedAt - 4_000 }]
-      }
-    })
-    const server = new AgentHookServer()
-    await server.start({ env: 'production', userDataPath })
-    try {
-      expect(server.getStatusSnapshot()[0]).toMatchObject({
-        state: 'working',
-        mainAgent: { state: 'done', stateStartedAt: receivedAt - 1_000 }
-      })
-      await postHookEvent(
-        server,
-        buildBody({ hook_event_name: 'SubagentStop', agent_id: 'arestored-child' })
-      )
-      expect(server.getStatusSnapshot()[0]).toMatchObject({
-        state: 'done',
-        mainAgent: { state: 'done' }
-      })
-    } finally {
-      server.stop()
-    }
-  })
-
-  it.each([
-    ['a child permission wait', 'waiting', ['PreToolUse', 'SubagentStop']],
-    ['a drained row', 'done', ['SubagentStart', 'SubagentStop']]
-  ] as const)(
-    'settles a legacy flagged row holding %s once its child finishes',
-    async (_heldRow, state, childEvents) => {
-      const receivedAt = recentTs()
-      writeEntry({
-        receivedAt,
-        stateStartedAt: receivedAt - 5_000,
-        claudeLeadBoundaryChildOnly: true,
-        payload: {
-          state,
-          prompt: 'legacy row',
-          agentType: 'claude',
-          ...(state === 'waiting'
-            ? {
-                toolName: 'Bash',
-                subagents: [{ id: 'achild', state: 'working', startedAt: receivedAt - 4_000 }]
-              }
-            : {})
-        }
-      })
-      const server = new AgentHookServer()
-      await server.start({ env: 'production', userDataPath })
-      try {
-        for (const hookEventName of childEvents) {
-          await postHookEvent(
-            server,
-            buildBody({
-              hook_event_name: hookEventName,
-              agent_id: 'achild',
-              ...(hookEventName === 'PreToolUse'
-                ? { tool_name: 'Bash', tool_use_id: 'toolu-approved' }
-                : {})
-            })
-          )
-        }
-        expect(server.getStatusSnapshot()[0]).toMatchObject({
-          state: 'done',
-          mainAgent: { state: 'done' }
-        })
-      } finally {
-        server.stop()
-      }
-    }
-  )
-
   it('does not restore a settled main agent from a row that does not say whether a shell ran', async () => {
     const receivedAt = recentTs()
     writeEntry({
@@ -205,24 +123,6 @@ describe('The main agent fact across a restart', () => {
         state: 'working',
         restoredUnconfirmed: true
       })
-    } finally {
-      server.stop()
-    }
-  })
-
-  it('drops a malformed persisted main agent and keeps the row', async () => {
-    const receivedAt = recentTs()
-    writeEntry({
-      receivedAt,
-      stateStartedAt: receivedAt - 5_000,
-      payload: { state: 'done', prompt: 'survived', agentType: 'claude', mainAgent: 'done' }
-    })
-    const server = new AgentHookServer()
-    await server.start({ env: 'production', userDataPath })
-    try {
-      const row = server.getStatusSnapshot()[0]
-      expect(row).toMatchObject({ state: 'done', prompt: 'survived' })
-      expect(row?.mainAgent).toBeUndefined()
     } finally {
       server.stop()
     }

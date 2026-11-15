@@ -1,6 +1,6 @@
 import type { OpenFile } from '@/store/slices/editor/types/open-file'
 import { editorPlacementIndex } from '@/store/slices/editor/tabs/workspace-editor-files'
-import { getOpenFileExecutionHostId } from '@/lib/unified-tab-host-ownership'
+import { getOpenFileExecutionHostId } from '@/lib/workspace/ownership/unified-tab-host-ownership'
 import { isEditorTabContentType } from '@/store/slices/editor/tabs/editor-tab-content-type'
 import { structuredLaunchSlotIds } from '../../agent-session/launch/structured-agent-session-launch-persistence'
 import type { Tab, TabGroup, TabGroupLayoutNode } from '../../../../../shared/tab-types'

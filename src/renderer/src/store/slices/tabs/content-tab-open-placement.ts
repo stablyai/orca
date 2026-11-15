@@ -1,6 +1,6 @@
 // Resolve placement like create: requested live group, anchor, active, then first/root; side opens carry their split, including window-only empty groups.
 
-import { createNonSecureContextUuid as createBrowserUuid } from '../../../../../shared/non-secure-context-uuid'
+import { createNonSecureContextUuid as createBrowserUuid } from '../../../../../shared/identifiers/non-secure-context-uuid'
 import type { ExecutionHostId } from '../../../../../shared/execution-host'
 import { folderWorkspaceToWorktree } from '../../../../../shared/folder-workspaces/folder-workspace-worktree'
 import type { NewGroupSplit } from '../../../../../shared/workspace-layout/workspace-layout-command-types'

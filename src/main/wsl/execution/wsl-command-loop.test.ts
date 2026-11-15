@@ -3,14 +3,14 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { spawnProcess } from '@orca/process-host'
-import type { PipedChildProcess } from '@orca/process-host/process-spec'
+import type { ChildProcessWithoutNullStreams } from 'node:child_process'
 import { execCommand } from '../../ssh/remote-exec/remote-exec-command'
 import { WSL_COMMAND_LOOP_ARGV0, WSL_COMMAND_LOOP_SCRIPT } from './wsl-command-loop'
 import { createWslCommandLoopPool, type WslCommandLoopPool } from './wsl-command-loop-pool'
 
 // The guest side is plain POSIX sh, so a local sh stands in for `wsl.exe --exec sh`.
 const posix = process.platform !== 'win32'
-const spawned: PipedChildProcess[] = []
+const spawned: ChildProcessWithoutNullStreams[] = []
 const pools: WslCommandLoopPool[] = []
 
 function pool(options: { maxLoops?: number; script?: string } = {}) {

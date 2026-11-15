@@ -1,5 +1,5 @@
 import { mkdir } from 'node:fs/promises'
-import type { SkillPackageManifestV1 } from '../../../shared/skill-package-manifest'
+import type { SkillPackageManifestV1 } from '../../../shared/skills/packages/skill-package-manifest'
 import { extractSkillPackageArchive } from '../package-archive/skill-package-extraction'
 import type { LocalSkillInstallInput } from './skill-install-transaction'
 

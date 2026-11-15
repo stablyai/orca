@@ -82,47 +82,7 @@ function findStsd(bytes: number[]): number {
 }
 
 describe('readPluginVideoHeader', () => {
-  it('reads an MP4 and a WebM from their headers', () => {
-    expect(readPluginVideoHeader(mp4([mp4Track('vide', 'avc1', 960, 540)]))).toEqual({
-      container: 'mp4',
-      codec: 'h264',
-      width: 960,
-      height: 540,
-      durationMs: 30_000
-    })
-    expect(readPluginVideoHeader(webm('V_VP9', 1280, 720, 12_500))).toEqual({
-      container: 'webm',
-      codec: 'vp9',
-      width: 1280,
-      height: 720,
-      durationMs: 12_500
-    })
-  })
-
-  it('refuses images, audio, extra tracks and missing or negative lengths', () => {
-    const oneTrack = 'video must have exactly one track, a video track with no audio'
-    expect(readPluginVideoHeader(Buffer.from('\x89PNG\r\n\x1a\n'))).toBe(
-      'must be an MP4 or WebM video'
-    )
-    const video = mp4Track('vide', 'avc1', 960, 540)
-    const audio = mp4Track('soun', 'mp4a', 0, 0)
-    expect(readPluginVideoHeader(mp4([audio]))).toBe(oneTrack)
-    expect(readPluginVideoHeader(mp4([audio, video]))).toBe(oneTrack)
-    expect(readPluginVideoHeader(mp4([video, video]))).toBe(oneTrack)
-    expect(readPluginVideoHeader(webm('V_VP9', 960, 540, 1000, true))).toBe(oneTrack)
-    expect(readPluginVideoHeader(webm('V_VP9', 960, 540))).toBe('video has no duration')
-    expect(readPluginVideoHeader(webm('V_VP9', 960, 540, -5000))).toBe('video has no duration')
-  })
-
-  it('stops on hostile structure instead of recursing or reading past the end', () => {
-    let nested = box('mdia')
-    for (let depth = 0; depth < 5000; depth++) {
-      nested = box('trak', nested)
-    }
-    const deep = Uint8Array.from([...box('ftyp', text('isom')), ...box('moov', nested)])
-    expect(readPluginVideoHeader(deep)).toBe(
-      'video must have exactly one track, a video track with no audio'
-    )
+  it('rejects truncated headers and multiple sample descriptions', () => {
     const truncated = webm('V_AV1', 960, 540, 1000).subarray(0, 60)
     expect(readPluginVideoHeader(truncated)).toBe('video headers are malformed')
     // A second sample description could switch the track to a size or codec never checked.

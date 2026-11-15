@@ -4,9 +4,10 @@ import { OrcaRuntimeWithGetUnpersistedTrackedTitleForPty } from './terminal-titl
 import type { TerminalTitleFactMeta } from '../../../../shared/terminal/output/terminal-output-side-effects'
 import { detectAgentStatusFromTitle } from '../../../../shared/agent-status/title/agent-title-status'
 import { terminalTitleBlocksExplicitAgentStatus } from '../../workspaces/process-listing/runtime-worktree-status-projection'
-import type { ClaudeTerminalEvidence } from '../../../../shared/claude-terminal-interrupt'
+import type { ClaudeTerminalEvidence } from '../../../../shared/agent-hook-listener/providers/claude/lifecycle/claude-terminal-interrupt'
 import { agentStatusTakesTypedInput } from '../../orchestration/mailbox/routing/mailbox-owner'
 import { hermesNativeTitleStatus } from '../../../../shared/agent-status/title/providers/hermes-terminal-title'
+import { jcodePaneTitleStatus } from '../../../../shared/agent-status/title/providers/jcode-terminal-title'
 
 export abstract class OrcaRuntimeWithApplyTrackedPtyTitle extends OrcaRuntimeWithGetUnpersistedTrackedTitleForPty {
   protected abstract collectPaneKeysForPty(ptyId: string): Set<string>
@@ -53,9 +54,11 @@ export abstract class OrcaRuntimeWithApplyTrackedPtyTitle extends OrcaRuntimeWit
   /** The PTY's agent status under this title: the program's own OSC 7501 activity while it
    *  reports one, else what the title glyph says. */
   protected classifyPtyTitleStatus(ptyId: string, rawTitle: string): AgentStatus | null {
+    const agent = this.getPaneTerminalAgent(ptyId)
     return (
       this.ptyTitleTrackersByPtyId.get(ptyId)?.programActivity ??
-      hermesNativeTitleStatus(rawTitle, this.getPaneTerminalAgent(ptyId)) ??
+      hermesNativeTitleStatus(rawTitle, agent) ??
+      jcodePaneTitleStatus(rawTitle, agent) ??
       detectAgentStatusFromTitle(rawTitle)
     )
   }
@@ -308,11 +311,8 @@ export abstract class OrcaRuntimeWithApplyTrackedPtyTitle extends OrcaRuntimeWit
       return
     }
     this.terminalSideEffectConsumerAvailable = nextAvailable
-    for (const [ptyId, entry] of this.ptyTitleTrackersByPtyId) {
+    for (const entry of this.ptyTitleTrackersByPtyId.values()) {
       entry.tracker.setTransientSideEffectScanningEnabled(nextAvailable)
-      entry.commandCodeDetector = nextAvailable
-        ? this.createTerminalSideEffectCommandCodeDetector(ptyId)
-        : null
     }
   }
 }

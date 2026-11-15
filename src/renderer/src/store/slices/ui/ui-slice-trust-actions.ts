@@ -1,5 +1,5 @@
 import type { UISlice, UISliceGet, UISliceSet } from './ui-slice-contract'
-import { getSetupScriptPromptDismissalKey } from '../../../lib/setup-script-prompt'
+import { getSetupScriptPromptDismissalKey } from '../../../runtime/repo-hooks/setup-script-prompt'
 import {
   withOrcaHookRepoAlwaysTrusted,
   withOrcaHookScriptConfirmed
@@ -166,6 +166,15 @@ export function createUiTrustActions(set: UISliceSet, _get: UISliceGet): Partial
         }
         window.api.ui.set({ codexSharedSettingsNoticeSeen: true }).catch(console.error)
         return { codexSharedSettingsNoticeSeen: true }
+      }),
+    worktreeCardsUpdateNoticeSeen: true,
+    markWorktreeCardsUpdateNoticeSeen: () =>
+      set((s) => {
+        if (s.worktreeCardsUpdateNoticeSeen) {
+          return s
+        }
+        window.api.ui.set({ worktreeCardsUpdateNoticeSeen: true }).catch(console.error)
+        return { worktreeCardsUpdateNoticeSeen: true }
       }),
     claudeDiffPanelNoticeSeen: true,
     markClaudeDiffPanelNoticeSeen: () =>

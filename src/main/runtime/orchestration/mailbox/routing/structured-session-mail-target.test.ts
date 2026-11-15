@@ -1,5 +1,5 @@
 import { CrewChanges } from '../../crew/crew-changes'
-import { agentSessionConversationView } from '../../../../../shared/agent-session/lifecycle/agent-session-conversation-view'
+import { agentSessionConversationView } from '../../../../../shared/agent-session/lifecycle/leases/agent-session-conversation-view'
 import { existsSync, mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -17,9 +17,9 @@ import type {
 import {
   agentSessionLeaseFixture,
   agentSessionRecordFixture
-} from '../../../../../shared/agent-session/lifecycle/agent-session-record.test-fixture'
-import { formatOrcaSessionAddress } from '../../../../../shared/orca-session-address'
-import { testOrcaSessionId } from '../../../../../shared/orca-session-address-test-fixture'
+} from '../../../../../shared/agent-session/lifecycle/records/agent-session-record.test-fixture'
+import { formatOrcaSessionAddress } from '../../../../../shared/agent-session/identity/orca-session-address'
+import { testOrcaSessionId } from '../../../../../shared/agent-session/identity/orca-session-address-test-fixture'
 
 const hostRef: { current: unknown } = { current: null }
 

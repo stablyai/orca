@@ -10,7 +10,7 @@ import {
   pluginCatalogVersionError
 } from '../../../shared/plugins/catalog/plugin-catalog'
 import { formatPluginSchemaIssues } from '../../../shared/plugins/manifest/plugin-schema-issues'
-import { gitExecFileAsyncBuffer } from '../../git/runner'
+import { gitExecFileAsyncBuffer } from '../../git/command-runner/git-exec-file'
 import { extractCatalogImages, type CatalogBlobReader } from './plugin-catalog-image-extraction'
 import { fillMonorepoReleaseImages } from './plugin-catalog-monorepo-images'
 import { readPluginGitCommit } from '../installation/plugin-git-repository'

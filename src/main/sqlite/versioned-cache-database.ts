@@ -1,7 +1,7 @@
 import { mkdirSync, rmSync } from 'node:fs'
 import { dirname } from 'node:path'
 import SyncDatabase from './sync-database'
-import { removeTreeSync } from '../../shared/windows-transient-lock-removal'
+import { removeTreeSync } from '../../shared/file-write/windows-transient-lock-removal'
 
 export type VersionedCacheDatabaseSchema = {
   version: number

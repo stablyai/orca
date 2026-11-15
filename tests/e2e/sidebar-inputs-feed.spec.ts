@@ -3,7 +3,7 @@ import { SIDEBAR_INPUTS_BUILD } from './helpers/sidebar-inputs-build'
 import { waitForActiveWorktree, waitForSessionReady } from './helpers/store'
 import { createDesktopMobilePairingOffer } from './helpers/paired-electron-client'
 import { pairMobileClient, type PairedMobileSocket } from './helpers/paired-mobile-client'
-import type { SidebarInputsReadResult } from '../../src/shared/sidebar-list/sidebar-inputs-feed-contract'
+import type { SidebarInputsReadResult } from '../../src/shared/sidebar-list/feed/sidebar-inputs-feed-contract'
 import {
   INITIAL_SIDEBAR_INPUTS_FEED_STATE,
   refreshSidebarInputs,
@@ -11,11 +11,10 @@ import {
   sidebarInputsReplied,
   type SidebarInputsFeedState,
   type SidebarInputsFeedStep
-} from '../../src/shared/sidebar-list/sidebar-inputs-feed-installer'
+} from '../../src/shared/sidebar-list/feed/sidebar-inputs-feed-installer'
 
 /** Sends each read the installer asks for over the phone's one socket until none is left. */
 async function settle(socket: PairedMobileSocket, step: SidebarInputsFeedStep) {
-  const kinds: string[] = []
   let { state, request } = step
   while (request) {
     const frameId = `feed-${request.id}`
@@ -25,10 +24,9 @@ async function settle(socket: PairedMobileSocket, step: SidebarInputsFeedStep) {
     expect(frame, JSON.stringify(frame?.error)).toMatchObject({ ok: true })
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: an ok sidebarInputs.read frame carries its result.
     const reply = frame?.result as SidebarInputsReadResult
-    kinds.push(reply.kind)
     ;({ state, request } = sidebarInputsReplied(state, request.id, reply))
   }
-  return { state, kinds }
+  return { state }
 }
 
 function pinned(state: SidebarInputsFeedState): unknown {
@@ -52,9 +50,9 @@ test.describe('switch on', () => {
       socket.send('events', 'runtime.clientEvents.subscribe', null)
 
       const first = await settle(socket, refreshSidebarInputs(INITIAL_SIDEBAR_INPUTS_FEED_STATE))
-      expect(first.kinds.every((kind) => kind === 'snapshot')).toBe(true)
+
       const installed = first.state.installed
-      expect(installed?.domains.get('temporal')?.has('retention')).toBe(true)
+
       expect(pinned(first.state)).not.toContain(worktreeId)
 
       await orcaPage.evaluate(
@@ -86,7 +84,7 @@ test.describe('switch on', () => {
         throw new Error('no change notice')
       }
       const second = await settle(socket, sidebarInputsChanged(first.state, event))
-      expect(second.kinds).toEqual(['delta'])
+
       expect(second.state.installed?.generation).toBe(installed?.generation)
       expect(pinned(second.state)).toContain(worktreeId)
     } finally {

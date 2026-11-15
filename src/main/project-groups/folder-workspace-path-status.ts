@@ -6,10 +6,10 @@ import type {
   FolderWorkspacePathStatus,
   FolderWorkspacePathStatusRequest
 } from '../../shared/folder-workspaces/folder-workspace-path-status'
-import { getProjectGroupSubtreeIds } from '../../shared/project-groups'
+import { getProjectGroupSubtreeIds } from '../../shared/project/groups/project-groups'
 import type { FolderWorkspace } from '../../shared/folder-workspaces/folder-workspace-types'
-import type { ProjectGroup } from '../../shared/project-group-types'
-import type { Repo } from '../../shared/repo-types'
+import type { ProjectGroup } from '../../shared/project/groups/project-group-types'
+import type { Repo } from '../../shared/repository/repo-types'
 import { blockedWslDistroForPath } from '../wsl/filesystem/wsl-unc-access-gate'
 
 type FolderWorkspacePathStatusStore = {

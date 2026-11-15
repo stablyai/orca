@@ -1,6 +1,6 @@
 // Normalize provider names at the write boundary so newlines, bidi overrides and unbounded text never enter the record.
 
-import { sliceAtCodeUnitLimit } from '../surrogate-safe-text-slice'
+import { sliceAtCodeUnitLimit } from '../text/surrogate-safe-text-slice'
 
 /** Well past any provider's own cap, short enough that a pasted essay cannot enter the record. */
 export const AGENT_SESSION_CONVERSATION_NAME_MAX_LENGTH = 200

@@ -1,7 +1,7 @@
 // Window writes OpenFile immediately but selects proposed tabs only after main frames draw them. Tab consumers wait via afterPendingTab.
 
 import type { Tab } from '../../../../../../shared/tab-types'
-import { createNonSecureContextUuid as createBrowserUuid } from '../../../../../../shared/non-secure-context-uuid'
+import { createNonSecureContextUuid as createBrowserUuid } from '../../../../../../shared/identifiers/non-secure-context-uuid'
 import {
   sendLayoutApply,
   type WindowLayoutCommand
@@ -17,12 +17,12 @@ import { isEditorTabContentType, type EditorTabContentType } from './editor-tab-
 import { restorableEditorFile } from './editor-tab-layout-owner'
 import { layoutEditorViewOfOpenFile } from './open-file-layout-view'
 import { layoutFrameWorkspace } from '@/runtime/workspace-layout/frames/layout-frame-workspaces'
-import { editorTabFile } from '../../../../../../shared/workspace-layout/workspace-layout-editor-tab-file'
-import { stableJson } from '../../../../../../shared/workspace-layout/workspace-layout-load-report'
+import { editorTabFile } from '../../../../../../shared/workspace-layout/editor-tabs/workspace-layout-editor-tab-file'
+import { stableJson } from '../../../../../../shared/workspace-layout/persistence/workspace-layout-load-report'
 import {
   publishEditorFile,
   publishEditorView
-} from '../../../../../../shared/workspace-layout/workspace-layout-published'
+} from '../../../../../../shared/workspace-layout/published-layout/workspace-layout-published'
 
 type EditorTabOpen = {
   fixedTabId?: string

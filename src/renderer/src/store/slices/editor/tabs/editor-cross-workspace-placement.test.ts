@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 import { beforeEach, afterEach, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store/index'
-import { worktreeWorkspaceKey } from '../../../../../../shared/workspace-scope'
+import { worktreeWorkspaceKey } from '../../../../../../shared/workspace/identity/workspace-scope'
 import type { AppState } from '@/store/types'
 import {
   drawTabsFromMain,

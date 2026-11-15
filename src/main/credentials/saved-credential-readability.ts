@@ -1,5 +1,5 @@
 import { existsSync, readFileSync } from 'node:fs'
-import { getSecretStore } from '../../shared/secret-store'
+import { getSecretStore } from '../../shared/secure-storage/secret-store'
 
 export type SavedCredentialUnreadable =
   /** Desktop safeStorage and orcad host keys cannot decrypt each other's files in ~/.orca. */

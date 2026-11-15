@@ -8,7 +8,7 @@ import type {
   PluginViewRequestBody
 } from '../../../shared/plugins/view/plugin-view-protocol'
 import type { PluginHostListEntry } from '../../../shared/plugins/plugin-list-entry'
-import type { ValidDiscoveredPlugin } from '../plugin-discovery'
+import type { ValidDiscoveredPlugin } from '../discovery/plugin-discovery'
 import type { PluginViewDesktopDeps } from './plugin-view-desktop'
 import { shootPluginEditor } from './plugin-view-editor-shot'
 

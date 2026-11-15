@@ -1,4 +1,4 @@
-import type { RuntimeStatus } from '../../../../../shared/runtime-session-contracts'
+import type { RuntimeStatus } from '../../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import { RUNTIME_CONNECTION_CHANGED_MESSAGE } from '../../../web/web-runtime-request-registry'
 import { assertFileMutationOwnershipCapability } from '../../../../../shared/file-write/file-mutation-ownership'
 import { callRuntimeRpc } from '../../rpc/calls/runtime-rpc-call'

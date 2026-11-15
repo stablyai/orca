@@ -1,4 +1,4 @@
-import '../../../../../../shared/agent-session/lifecycle/agent-session-start-time'
+import '../../../../../../shared/agent-session/lifecycle/resume/agent-session-start-time'
 import type { AgentStatusEntry } from '../../../../../../shared/agent-status/contracts/agent-status-types'
 import { parseAgentStatusPaneIdentity } from '../../../../../../shared/agent-status/identity/agent-status-worktree-attribution'
 import type { Tab } from '../../../../../../shared/tab-types'

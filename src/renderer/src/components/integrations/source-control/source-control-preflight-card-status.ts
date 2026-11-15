@@ -1,12 +1,12 @@
 import { useState } from 'react'
 import { useMountedRef } from '@/hooks/useMountedRef'
-import { getLocalPreflightContext } from '@/lib/local-preflight-context'
-import { localPreflightContextKey } from '@/lib/local-preflight-context-key'
+import { getLocalPreflightContext } from '@/runtime/hosts/preflight/local-preflight-context'
+import { localPreflightContextKey } from '@/runtime/hosts/preflight/local-preflight-context-key'
 import { useAppStore } from '@/store/index'
-import {
-  getPreflightIntegrationStatuses,
-  type PreflightIntegrationStatuses,
-  type PreflightRefreshProvider
+import { getPreflightIntegrationStatuses } from './integrations-pane-status'
+import type {
+  PreflightIntegrationStatuses,
+  PreflightRefreshProvider
 } from './integrations-pane-status'
 
 type CliStatus = {

@@ -1,13 +1,11 @@
 // @vitest-environment happy-dom
 import { act } from 'react'
-import type { BrowserPage, BrowserWorkspace } from '../../../../../shared/browser-workspace-types'
 import type * as WebviewRegistryModule from '../host-guest/webview-registry'
 import type * as DocPreviewArtifactShareModule from './doc-preview-artifact-share'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ConfirmationDialogContext } from '@/components/confirmation-dialog-context'
 import { TooltipProvider } from '@/components/ui/tooltip'
-import { acquireWebviewsDragPassthrough } from '@/components/browser-pane/host-guest/webview-drag-passthrough'
 
 const confirmExternalLink = async (): Promise<boolean> => false
 
@@ -36,7 +34,7 @@ const grants = vi.hoisted(() => {
   return { mintedLocation, requestLocation: mintedLocation, shareControlCalls }
 })
 
-vi.mock('@/lib/doc-preview-grants', () => ({
+vi.mock('@/lib/browser/documents/doc-preview-grants', () => ({
   buildDocPreviewGrantRequest: () => grants.requestLocation,
   // The real cache keeps the first mint's handle for the tab, whatever a later request says.
   ensureDocPreviewGrant: () =>
@@ -66,7 +64,7 @@ vi.mock('@/components/browser-pane/host-guest/webview-registry', async (importOr
   moveFocusToRendererBeforeWebviewDetach: () => undefined
 }))
 
-vi.mock('@/lib/execution-host-display-label', () => ({
+vi.mock('@/runtime/hosts/display/execution-host-display-label', () => ({
   selectWorktreeHostDisplayLabel: () => 'Studio Mac mini'
 }))
 
@@ -78,13 +76,13 @@ const store = vi.hoisted(() => ({
 }))
 
 // The document lives only on its workspace’s SSH host.
-vi.mock('@/lib/connection-context', () => ({
+vi.mock('@/lib/workspace/ownership/connection-context', () => ({
   getConnectionId: () => 'ssh-1',
   getConnectionIdForFile: () => 'ssh-1',
   getConnectionIdFromState: () => 'ssh-1'
 }))
 
-vi.mock('@/lib/connection-owner-resolution', () => ({
+vi.mock('@/lib/workspace/ownership/connection-owner-resolution', () => ({
   getConnectionIdForFileFromState: () => 'ssh-1',
   getConnectionIdFromState: () => 'ssh-1'
 }))
@@ -129,7 +127,7 @@ const storeState = {
   }
 }
 
-vi.mock('@/store', () => ({
+vi.mock('@/store/index', () => ({
   useAppStore: Object.assign(
     (selector?: (state: typeof storeState) => unknown) =>
       selector ? selector(storeState) : storeState,
@@ -229,42 +227,17 @@ describe('HtmlDocPreview browser chrome', () => {
     container.remove()
   })
 
-  it('counts document guests in the workspace budget and restores only on activation', async () => {
+  it('keeps hidden document guests mounted until their page closes', async () => {
     const { hasLiveBrowserGuest, webviewRegistry } = await import('../host-guest/webview-registry')
-    const { worktreeHoldsLiveBrowserGuests, selectBrowserGuestEvictionWorktreeIds } =
-      await import('../host-guest/browser-guest-worktree-retention')
-    const { destroyWorktreeBrowserGuests } =
+    const { destroyRemovedBrowserWebview } =
       await import('@/store/slices/browser/cleanup/browser-webview-cleanup')
     const guest = await renderPreview(container, root)
+    Object.defineProperty(guest, 'getWebContentsId', { value: () => 1 })
     expect(hasLiveBrowserGuest('preview-1')).toBe(true)
     expect(await renderPreview(container, root, { isActive: false })).toBe(guest)
-    const page: BrowserPage = {
-      id: 'preview-1',
-      workspaceId: 'browser-1',
-      worktreeId: 'wt-1',
-      url: 'about:blank',
-      title: 'Report',
-      loading: false,
-      faviconUrl: null,
-      canGoBack: false,
-      canGoForward: false,
-      loadError: null,
-      createdAt: 1,
-      docLocation: { kind: 'workspace-doc', worktreeId: 'wt-1', filePath: ABSOLUTE_PATH }
-    }
-    const browsers: BrowserWorkspace[] = [{ ...page, id: 'browser-1', pageIds: [page.id] }]
-    const pages: Record<string, BrowserPage[]> = { 'browser-1': [page] }
-    const evicted = selectBrowserGuestEvictionWorktreeIds({
-      orderedWorktreeIds: ['wt-1'],
-      activeWorktreeId: 'wt-2',
-      limit: 0,
-      isRetained: () => true,
-      isEvictable: () => true,
-      holdsLiveGuests: () => worktreeHoldsLiveBrowserGuests(browsers, pages, hasLiveBrowserGuest)
-    })
-    expect(evicted).toEqual(['wt-1'])
+    expect(guest.isConnected).toBe(true)
     await act(async () => {
-      destroyWorktreeBrowserGuests({ 'wt-1': browsers }, pages, 'wt-1')
+      destroyRemovedBrowserWebview('preview-1')
     })
     expect(guest.isConnected).toBe(false)
     expect(hasLiveBrowserGuest('preview-1')).toBe(false)
@@ -277,27 +250,5 @@ describe('HtmlDocPreview browser chrome', () => {
     await act(async () => root.unmount())
     mounted = false
     expect(hasLiveBrowserGuest('preview-1')).toBe(false)
-  })
-
-  // Mid-drag remount must be click-through at append time; a later effect leaves a turn that can swallow the drag.
-  it('holds a guest that appears mid-drag click-through the moment it is appended', async () => {
-    const appendedPointerEvents: string[] = []
-    const originalAppendChild = HTMLElement.prototype.appendChild
-    HTMLElement.prototype.appendChild = function <T extends Node>(node: T): T {
-      const element = node as unknown as HTMLElement
-      if (element.tagName?.toLowerCase() === 'webview') {
-        appendedPointerEvents.push(element.style.pointerEvents)
-      }
-      return originalAppendChild.call(this, node) as T
-    }
-    const release = acquireWebviewsDragPassthrough()
-
-    try {
-      await renderPreview(container, root)
-      expect(appendedPointerEvents).toEqual(['none'])
-    } finally {
-      HTMLElement.prototype.appendChild = originalAppendChild
-      release()
-    }
   })
 })

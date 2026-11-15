@@ -22,7 +22,6 @@ export default function RunningTerminalCloseDialog(): React.JSX.Element {
     <CloseTerminalDialog
       open={request !== null && pinnedRequest === null}
       copyKind={request?.copyKind ?? 'command'}
-      {...(request?.tabLabel ? { tabLabel: request.tabLabel } : {})}
       // Pass the queued subject so checkbox reset runs even while the dialog stays open.
       {...(request ? { subjectKey: request.terminalTabId } : {})}
       onCancel={dismissClose}

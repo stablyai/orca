@@ -1,7 +1,7 @@
 import type * as pty from 'node-pty'
 import { statSync } from 'node:fs'
 import { release } from 'node:os'
-import { getCmdExePath } from '../../../shared/windows-batch-spawn'
+import { getCmdExePath } from '../../../shared/shell/launch/windows-batch-spawn'
 import {
   ensureNodePtySpawnHelperExecutable,
   getNodePtySpawnHelperCandidates
@@ -9,8 +9,8 @@ import {
 import {
   validateWorkingDirectoryAsync,
   WorkingDirectoryValidationAbortedError
-} from '../../providers/working-directory-validation'
-import { resolveSafePtyDefaultCwd } from '../../providers/pty-default-cwd'
+} from '../../providers/working-directory/validation'
+import { resolveSafePtyDefaultCwd } from '../../providers/working-directory/default-cwd'
 import { TerminalAttachCanceledError, DaemonProtocolError } from '../protocol/daemon-errors'
 
 import { checkDaemonAsyncIo } from '../health/daemon-async-io-probe'
