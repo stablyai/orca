@@ -15,6 +15,7 @@ export function reapDirectProviderGroup(
   pid: () => number | undefined,
   ownership: () => Promise<Awaited<ReturnType<typeof publishProviderOwnership>>> | undefined,
   setVerdict: (verdict: 'exited' | 'unverifiable') => void,
+  descendantsCleaned: () => Promise<boolean>,
   completion?: ProviderControlCompletion,
   canceled?: AbortSignal
 ): Promise<void> {
@@ -33,7 +34,10 @@ export function reapDirectProviderGroup(
     if (completion === 'group-absent') {
       // The native frame plus EOF proves the group was absent and the session watcher exited.
       setVerdict('exited')
-      await (await ownership())?.removeAfterNativeExit()
+      // Group absence says nothing about own-session tools whose fault capture failed.
+      if (await descendantsCleaned()) {
+        await (await ownership())?.removeAfterNativeExit()
+      }
       return
     }
     const registered = await ownership()
@@ -59,7 +63,8 @@ export function reapDirectProviderGroup(
         registered.identity,
         Math.max(0, deadline - performance.now()),
         proof.signal
-      ))
+      )) &&
+      (await descendantsCleaned())
     ) {
       await registered.remove()
     }

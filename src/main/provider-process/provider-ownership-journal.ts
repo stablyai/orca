@@ -197,9 +197,11 @@ async function scanOwnership(directory: string, bootId: string): Promise<void> {
     ) {
       continue
     }
-    await terminateProviderFaultDescendants(record)
+    // Without a captured tree the record stays unresolved; it cannot name reparented tools.
+    const descendants = await terminateProviderFaultDescendants(record)
     const swept = await sweepOrphanedProviderGroup(record)
     if (
+      descendants === 'exited' &&
       (swept === 'absent' || swept === 'killed') &&
       (await waitForProviderOwnershipReap(record))
     ) {

@@ -7,7 +7,11 @@ import {
   isNativeReaderHealthy
 } from '../../shared/process-observation/darwin/libproc-native-reads'
 import { monotonicNow, DEADLINE_PASSED } from '../../shared/deadline-settle-notifier'
-import { runPsInProcess } from '../../shared/process-observation/darwin/libproc-process-table'
+import {
+  inProcessSliceMs,
+  runPsInProcess
+} from '../../shared/process-observation/darwin/libproc-process-table'
+import { readProviderExecProcessRow } from './provider-exec-process-row'
 import {
   parseProcessTable,
   type ProcessTableRow
@@ -78,6 +82,7 @@ async function readLinuxProcStatRow(pid: number): Promise<ProcessRowRead> {
 }
 
 async function readDarwinProcessRow(pid: number, preciseOnly: boolean): Promise<ProcessRowRead> {
+  const deadline = monotonicNow() + PROCESS_ROW_TIMEOUT_MS
   const addon = loadLibprocAddon()
   if (addon && isNativeReaderHealthy()) {
     try {
@@ -85,14 +90,14 @@ async function readDarwinProcessRow(pid: number, preciseOnly: boolean): Promise<
         addon,
         { command: false, pids: [pid] },
         registerNativeRequest(),
-        monotonicNow() + PROCESS_ROW_TIMEOUT_MS
+        preciseOnly ? monotonicNow() + inProcessSliceMs(PROCESS_ROW_TIMEOUT_MS) : deadline
       )
       if (rows !== DEADLINE_PASSED && rows !== 'stalled' && rows !== null) {
         const row = rows.find((entry) => entry.pid === pid)
-        if (!row) {
+        if (!row && !preciseOnly) {
           return null
         }
-        if (row.startUsec !== undefined) {
+        if (row?.startUsec !== undefined) {
           return {
             pid,
             ppid: row.ppid,
@@ -106,7 +111,7 @@ async function readDarwinProcessRow(pid: number, preciseOnly: boolean): Promise<
       // Older native readers still have the bounded ps fallback.
     }
   }
-  return preciseOnly ? 'unverifiable' : readPsProcessRow(pid)
+  return preciseOnly ? readProviderExecProcessRow(pid, deadline) : readPsProcessRow(pid)
 }
 
 async function readPsProcessRow(pid: number): Promise<ProcessRowRead> {

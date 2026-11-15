@@ -24,6 +24,10 @@
 #if defined(__linux__)
 #include <sys/prctl.h>
 #endif
+#if defined(__APPLE__)
+#include <limits.h>
+#include <sys/sysctl.h>
+#endif
 
 enum { OWNER_FD = 3, GATE_FD = 4, STATUS_FD = 5, OUTCOME_FD = 6 };
 enum {
@@ -67,6 +71,43 @@ static int write_all(int fd, const char *data, size_t length) {
     }
     return 0;
 }
+
+#if defined(__APPLE__)
+// Independent of the app's addon worker pool; preserves the same exact kernel birth marker.
+static int print_process_row(const char *text) {
+    if (text[0] < '1' || text[0] > '9') {
+        return EXIT_USAGE;
+    }
+    char *end;
+    errno = 0;
+    long value = strtol(text, &end, 10);
+    if (errno != 0 || *end != '\0' || value > INT_MAX) {
+        return EXIT_USAGE;
+    }
+    pid_t pid = (pid_t)value;
+    int mib[] = {CTL_KERN, KERN_PROC, KERN_PROC_PID, pid};
+    struct kinfo_proc row;
+    size_t size = sizeof row;
+    if (sysctl(mib, 4, &row, &size, NULL, 0) != 0) {
+        return EXIT_BOOTSTRAP;
+    }
+    if (size == 0) {
+        return write_all(1, "absent\n", 7) == 0 ? 0 : EXIT_BOOTSTRAP;
+    }
+    if (size != sizeof row || row.kp_proc.p_pid != pid) {
+        return EXIT_BOOTSTRAP;
+    }
+    char frame[128];
+    int length = snprintf(frame, sizeof frame, "%ld %ld %ld %lld %lld\n", (long)pid,
+                          (long)row.kp_eproc.e_ppid, (long)row.kp_eproc.e_pgid,
+                          (long long)row.kp_proc.p_starttime.tv_sec,
+                          (long long)row.kp_proc.p_starttime.tv_usec);
+    return length > 0 && (size_t)length < sizeof frame &&
+                   write_all(1, frame, (size_t)length) == 0
+               ? 0
+               : EXIT_BOOTSTRAP;
+}
+#endif
 
 // Strict decimal: no sign, whitespace or leading zero, and never above `max`.
 static int parse_ms(const char *text, unsigned max, unsigned *out) {
@@ -583,6 +624,11 @@ static _Noreturn void await_leader(pid_t leader) {
 }
 
 int main(int argc, char *argv[]) {
+#if defined(__APPLE__)
+    if (argc == 3 && strcmp(argv[1], "--process-row") == 0) {
+        return print_process_row(argv[2]);
+    }
+#endif
     unsigned stdin_end_grace_ms;
     unsigned sigterm_grace_ms;
     if (argc < 7 || parse_ms(argv[1], STDIN_END_GRACE_MAX_MS, &stdin_end_grace_ms) != 0 ||

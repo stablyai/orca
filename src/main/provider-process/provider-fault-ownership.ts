@@ -22,7 +22,7 @@ import {
 import type { publishProviderOwnership } from './provider-ownership-journal'
 
 export class ProviderFaultOwnership {
-  task?: Promise<void>
+  task?: Promise<DescendantTreeVerdict | undefined>
   private pending = false
   private reapQueued = false
 
@@ -33,17 +33,21 @@ export class ProviderFaultOwnership {
     if (!this.task) {
       this.pending = true
       this.task = Promise.resolve(ownership)
-        .then(async (registered) => {
-          if (registered) {
-            await terminateProviderFaultDescendants(registered.identity)
-          }
-        })
-        .catch(() => {})
+        .then((registered) =>
+          registered ? terminateProviderFaultDescendants(registered.identity) : undefined
+        )
+        .catch(() => 'unverifiable' as const)
         .finally(() => {
           this.pending = false
         })
     }
-    void this.task.then(stop)
+    void this.task.then(() => stop())
+  }
+
+  /** Only an attempted capture can fail; normal exit never claims detached tools. */
+  async descendantsCleaned(): Promise<boolean> {
+    const verdict = await this.task
+    return verdict === undefined || verdict === 'exited'
   }
 
   deferReap(reap: () => boolean): boolean {

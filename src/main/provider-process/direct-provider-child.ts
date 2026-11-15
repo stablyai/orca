@@ -271,6 +271,7 @@ export class DirectProviderChild extends EventEmitter implements ProviderChild {
       (verdict) => {
         this.groupVerdict = this.groupVerdict === 'exited' ? 'exited' : verdict
       },
+      () => this.faultOwnership.descendantsCleaned(),
       completion,
       this.reapAbort.signal
     )
