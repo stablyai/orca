@@ -95,6 +95,13 @@ export function useTaskPageSourceSummary(model: TaskPageSourceAvailabilityPrelud
           sourceCount: 1,
           hostLabelById,
           hostAvailability: accountAvailability
+        }) ?? undefined,
+      plane:
+        getTaskSourceAvailabilityNotice({
+          providerLabel: labelFor('plane'),
+          sourceCount: 1,
+          hostLabelById,
+          hostAvailability: accountAvailability
         }) ?? undefined
     }
   }, [
@@ -115,11 +122,11 @@ export function useTaskPageSourceSummary(model: TaskPageSourceAvailabilityPrelud
     return getTaskSourceAvailabilityNotice({
       providerLabel,
       sourceCount:
-        taskSource === 'linear' || taskSource === 'jira'
+        taskSource === 'linear' || taskSource === 'jira' || taskSource === 'plane'
           ? 1
           : Math.max(1, taskSourceRepoContexts.length),
       hostAvailability:
-        taskSource === 'linear' || taskSource === 'jira'
+        taskSource === 'linear' || taskSource === 'jira' || taskSource === 'plane'
           ? accountBackedTaskSourceHostAvailability
           : taskSourceHostAvailability,
       hostLabelById

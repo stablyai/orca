@@ -492,6 +492,18 @@ import {
 import { WorkerStartParams } from './orchestration/orchestration-worker-start-params'
 import { WorkerDispatchParams as WorkerDispatchParamsOfOrchestrationWorkerStopParams } from './orchestration/orchestration-worker-stop-params'
 import {
+  AddCommentSchema,
+  ConnectSchema,
+  CreateIssueSchema,
+  GetIssueSchema,
+  ListIssuesSchema,
+  ListStatesSchema,
+  SelectWorkspaceSchema,
+  SetPrioritySchema,
+  SetStateSchema,
+  WorkspaceSelection as WorkspaceSelectionOfPlaneParams
+} from './plane-params'
+import {
   PluginCatalogAddParams,
   PluginCatalogRemoveParams,
   PluginDevEmitParams,
@@ -1450,6 +1462,19 @@ export const RPC_PARAMS_BY_METHOD = {
   'pairing.getEndpoints': PairingGetEndpointsParamsSchema,
   'pairing.provisionRelay': PairingProvisionRelayParamsSchema,
   'pairing.registerDeviceKey': RegisterDeviceKeyParamsSchema,
+  'plane.connect': ConnectSchema,
+  'plane.createIssue': CreateIssueSchema,
+  'plane.disconnect': null,
+  'plane.getIssue': GetIssueSchema,
+  'plane.issueAddComment': AddCommentSchema,
+  'plane.issueSetPriority': SetPrioritySchema,
+  'plane.issueSetState': SetStateSchema,
+  'plane.listIssues': ListIssuesSchema,
+  'plane.listProjects': WorkspaceSelectionOfPlaneParams,
+  'plane.listStates': ListStatesSchema,
+  'plane.selectWorkspace': SelectWorkspaceSchema,
+  'plane.status': null,
+  'plane.testConnection': null,
   'plugins.catalogAdd': PluginCatalogAddParams,
   'plugins.catalogList': null,
   'plugins.catalogRemove': PluginCatalogRemoveParams,
