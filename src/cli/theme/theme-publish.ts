@@ -68,6 +68,7 @@ async function writeKit(folder: string, kit: PublishKit, version: string): Promi
       cover: { path: 'images/cover.png', alt: `The ${kit.name} theme in Orca` },
       screenshots: modes.map((mode) => ({
         path: `images/${mode}.png`,
+        alt: `The ${kit.name} theme in Orca, ${mode} mode`,
         caption: `${kit.name} in ${mode} mode`,
         theme: mode
       }))
@@ -196,7 +197,7 @@ export async function publishTheme(ctx: HandlerContext): Promise<void> {
   if (!validation.valid) {
     throw new RuntimeClientError(
       'plugin_invalid',
-      'The theme folder does not pass `orca plugin validate`.',
+      `The theme folder does not pass \`orca plugin validate\`: ${validation.errors.join('; ')}`,
       {
         errors: validation.errors,
         nextSteps: [

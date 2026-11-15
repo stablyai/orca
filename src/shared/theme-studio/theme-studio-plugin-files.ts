@@ -23,7 +23,7 @@ export function themeStudioPluginId(name: string): string {
 export type ThemeStudioListing = {
   version?: string
   cover?: { path: string; alt: string }
-  screenshots?: { path: string; caption?: string; theme?: ThemeStudioMode }[]
+  screenshots?: { path: string; alt: string; caption?: string; theme?: ThemeStudioMode }[]
 }
 
 /** The files of a content-only theme plugin holding the draft: app themes for each mode the
