@@ -19,7 +19,7 @@ describe('PHASE-DEADLINES', () => {
     const timer = phaseTimer(() => Date.now())
     const run = timer.time('entitlement', never)
     const caught = run.catch((error: unknown) => error)
-    await vi.advanceTimersByTimeAsync(PHASE_DEADLINES_MS.entitlement.ms)
+    await vi.advanceTimersByTimeAsync(PHASE_DEADLINES_MS.entitlement!.ms)
     const error = await caught
     expect(error).toBeInstanceOf(LifecycleError)
     expect((error as LifecycleError).code).toBe('provider_unavailable')
@@ -32,7 +32,7 @@ describe('PHASE-DEADLINES', () => {
     const timer = phaseTimer(() => Date.now())
     let finish: (value: string) => void = () => undefined
     const run = timer.time('pool', () => new Promise<string>((resolve) => (finish = resolve)))
-    await vi.advanceTimersByTimeAsync(PHASE_DEADLINES_MS.pool.ms + 1_000)
+    await vi.advanceTimersByTimeAsync(PHASE_DEADLINES_MS.pool!.ms + 1_000)
     expect(console.log).toHaveBeenCalledWith(expect.stringContaining('"phase":"pool"'))
     finish('vm')
     await expect(run).resolves.toBe('vm')
