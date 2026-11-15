@@ -4,6 +4,7 @@ import { Directory, File as FsFile, Paths } from 'expo-file-system'
 import * as ImagePicker from 'expo-image-picker'
 import { agentReadableLibraryImageOptions } from '../../files/attachments/mobile-image-source-picker'
 import type { MediaHandleRegistry } from '../../mobile-web-shell/native-capabilities/media-handle-registry'
+import { BridgeNativeVerbRefusedError } from '../../mobile-web-shell/host-bridge/bridge-host-errors'
 import type { NativeMediaDeps } from './native-media'
 
 // Isolate native imports so handlers can be tested with injected device calls.
@@ -69,6 +70,22 @@ export function nativeMediaDeviceDeps(registry: MediaHandleRegistry): NativeMedi
     // DocumentPicker has no selection cap; enforce remaining room again before staging and minting.
     launchFiles: ({ multiple }) =>
       DocumentPicker.getDocumentAsync({ type: '*/*', multiple, copyToCacheDirectory: true }),
+    launchCamera: async () => {
+      const permission = await ImagePicker.requestCameraPermissionsAsync()
+      if (!permission.granted) {
+        throw new BridgeNativeVerbRefusedError(
+          'native_media_permission_denied',
+          'camera permission was denied'
+        )
+      }
+      return ImagePicker.launchCameraAsync({
+        mediaTypes: ['images'],
+        base64: false,
+        quality: 1,
+        preferredAssetRepresentationMode:
+          ImagePicker.UIImagePickerPreferredAssetRepresentationMode.Compatible
+      })
+    },
     readClipboardImage: () => Clipboard.getImageAsync({ format: 'png' }),
     stageBase64: (base64) => {
       const file = stagedMediaFile('png')

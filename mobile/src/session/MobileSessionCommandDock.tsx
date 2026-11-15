@@ -80,6 +80,7 @@ export function MobileSessionCommandDock({ controller }: { controller: MobileSes
           dictationCancelRef={dictationCancelRef}
           disabledButtonStyle={inputStyles.disabled}
           onAttachImage={() => void attachImage('library')}
+          onTakePhoto={() => void attachImage('camera')}
           onAttachFile={() => void attachImage('files')}
           onDictationToggle={handleDictationToggle}
           onDictationPressIn={handleDictationPressIn}

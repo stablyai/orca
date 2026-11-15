@@ -10,7 +10,10 @@ import {
 import { MobileImageBase64Accumulator } from './mobile-image-base64-accumulator'
 import { isPickedImageMime } from '../../platform/media-picking/mobile-picked-file-name'
 // Import permission errors from the Expo-free contract so page-side catches cannot pull native picker code into the bundle.
-import { ImageLibraryPermissionError } from '../../platform/media-picking/media-picker-contract'
+import {
+  CameraPermissionError,
+  ImageLibraryPermissionError
+} from '../../platform/media-picking/media-picker-contract'
 import type {
   MobileImageSource,
   PickedMobileImage
@@ -86,6 +89,34 @@ export async function readUriAsBase64(
   }
 }
 
+async function* pickFromCamera(
+  requestPermission: typeof ImagePicker.requestCameraPermissionsAsync = ImagePicker.requestCameraPermissionsAsync,
+  launch: typeof ImagePicker.launchCameraAsync = ImagePicker.launchCameraAsync,
+  createFile: MobileImageFileFactory = defaultMobileImageFileFactory
+): AsyncGenerator<PickedMobileImage> {
+  const permission = await requestPermission()
+  if (!permission.granted) {
+    throw new CameraPermissionError()
+  }
+  const result = await launch({
+    mediaTypes: ['images'],
+    base64: false,
+    quality: 1
+  })
+  if (result.canceled) {
+    return
+  }
+  for (const asset of result.assets) {
+    if (!asset.uri) {
+      continue
+    }
+    const base64 = await readUriAsBase64(asset.uri, asset.fileSize, createFile)
+    if (base64) {
+      yield { base64, uri: asset.uri }
+    }
+  }
+}
+
 async function* pickFromLibrary(
   multiple: boolean,
   requestPermission: typeof ImagePicker.requestMediaLibraryPermissionsAsync = ImagePicker.requestMediaLibraryPermissionsAsync,
@@ -146,6 +177,8 @@ async function* pickFromFiles(
 }
 
 type MobileImagePickerDeps = {
+  readonly requestCameraPermission?: typeof ImagePicker.requestCameraPermissionsAsync
+  readonly launchCamera?: typeof ImagePicker.launchCameraAsync
   readonly requestLibraryPermission?: typeof ImagePicker.requestMediaLibraryPermissionsAsync
   readonly launchLibrary?: typeof ImagePicker.launchImageLibraryAsync
   readonly launchFiles?: typeof DocumentPicker.getDocumentAsync
@@ -157,6 +190,9 @@ function pickMobileImagesWithMode(
   multiple: boolean,
   deps?: MobileImagePickerDeps
 ): AsyncIterable<PickedMobileImage> {
+  if (source === 'camera') {
+    return pickFromCamera(deps?.requestCameraPermission, deps?.launchCamera, deps?.createFile)
+  }
   if (source === 'library') {
     return pickFromLibrary(
       multiple,
