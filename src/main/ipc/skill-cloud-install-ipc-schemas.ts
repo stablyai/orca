@@ -1,6 +1,6 @@
 import { z } from 'zod'
-import { SkillBundleInstallRequestSchema } from '../../shared/skill-bundle-install-contract'
-import { SkillInstallDestinationSchema } from '../../shared/skill-install-contract'
+import { SkillBundleInstallRequestSchema } from '../../shared/skills/installation/skill-bundle-install-contract'
+import { SkillInstallDestinationSchema } from '../../shared/skills/installation/skill-install-contract'
 
 export const skillCloudInstallEnvironmentIdSchema = z.string().min(1).max(128)
 

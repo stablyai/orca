@@ -7,7 +7,7 @@ import {
 import {
   buildWslExecArgs,
   buildWslLoginShellCommand
-} from '../../../shared/wsl-login-shell-command'
+} from '../../../shared/shell/wsl/wsl-login-shell-command'
 import { quotePosixShell } from '../../../shared/shell/launch/shell-argument-quoting'
 import { resolveClaudeCommand } from '../../codex-cli/command'
 import {

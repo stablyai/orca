@@ -158,6 +158,7 @@ export async function commitStagedWebStoreExtension(
       await reloadBrowserExtensionWhereEnabled(record)
     }
     if (enableInProfileId) {
+      browserSessionRegistry.attachExtensions(enableInProfileId)
       await loadBrowserExtensionIntoProfile(enableInProfileId, record)
       browserSessionRegistry.updateEnabledExtensionIds((byProfile) =>
         withExtensionEnabled(byProfile, enableInProfileId, extensionId, true)

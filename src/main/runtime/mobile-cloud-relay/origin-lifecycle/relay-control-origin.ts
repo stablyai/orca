@@ -7,7 +7,7 @@ import type {
   RelayHostHelloAckMessage,
   RelayPendingConnection
 } from '../control-channel/relay-control-protocol'
-import type { RelayHostCloseReason } from '../../../../shared/relay-host-close-reason'
+import type { RelayHostCloseReason } from '../../../../shared/remote-runtime/relay/relay-host-close-reason'
 import type { RelayAssignment } from '../director/relay-http-client'
 import { RelayDataAttachHealth } from './relay-data-attach-health'
 

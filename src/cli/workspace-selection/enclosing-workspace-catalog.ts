@@ -4,7 +4,7 @@ import { resolveQualifiedFolderWorkspaceResult } from '../../shared/folder-works
 import type { FolderWorkspace } from '../../shared/folder-workspaces/folder-workspace-types'
 import type { ProjectGroup } from '../../shared/project-group-types'
 import type { Repo } from '../../shared/repo-types'
-import type { RuntimeWorktreeListResult } from '../../shared/runtime-worktree-contracts'
+import type { RuntimeWorktreeListResult } from '../../shared/worktree/catalog/runtime-worktree-contracts'
 import { folderWorkspaceKey } from '../../shared/workspace-scope'
 import type { CatalogRow } from './workspace-catalog-row'
 import type { RuntimeClient } from '../runtime/client'

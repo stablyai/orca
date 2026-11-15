@@ -46,6 +46,12 @@ import { installMainWindowWebviewSecurity } from './security/main-window-webview
 import { rectHasVisibleAreaOnAnyDisplay } from './presentation/window-bounds-validation'
 import { installWindowsPathRegistryChangeListener } from '../pty/environment/windows-path-registry-change'
 import { recordAgentSessionRuntimeEnd } from '../runtime/agent-session/records/agent-session-runtime-end-record'
+import { installNativeUnloadCoordinator } from './renderer-relays/native-unload-coordinator'
+
+// Node warns past this many listeners per event name. Headroom above normal subsystem fan-out,
+// still low enough that a real leak warns. Per-request listeners belong on addFanoutListener,
+// not a higher cap.
+const MAIN_WINDOW_MAX_LISTENERS_PER_EVENT = 30
 
 export function loadMainWindow(mainWindow: BrowserWindow, observer?: MainWindowLoadObserver): void {
   installRendererHangStackPolicy(
@@ -168,6 +174,8 @@ export function createMainWindow(
     }
   })
   rememberWindowMaterial(mainWindow, windowMaterial)
+  mainWindow.setMaxListeners(MAIN_WINDOW_MAX_LISTENERS_PER_EVENT)
+  mainWindow.webContents.setMaxListeners(MAIN_WINDOW_MAX_LISTENERS_PER_EVENT)
   const rendererWebContentsId = mainWindow.webContents.id
   installWindowsPathRegistryChangeListener(mainWindow)
   // Native paste fallback is privileged; trust only the top-level renderer.
@@ -215,6 +223,7 @@ export function createMainWindow(
     store
   })
   installMainWindowWebviewSecurity(mainWindow)
+  installNativeUnloadCoordinator(mainWindow, opts?.onBeforeReload)
   const activity = installMainWindowActivityRelay(mainWindow)
   if (pumpHiddenFrames) {
     stopHiddenWindowFramePumpOnShow(mainWindow)

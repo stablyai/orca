@@ -8,7 +8,7 @@ import type { TerminalTab } from '../../../../shared/workspace-layout/terminal-t
 import {
   type RuntimeBrowserPlacement,
   sameRuntimeBrowserPlacement
-} from '../../../../shared/runtime-browser-placement'
+} from '../../../../shared/browser/client-hosting/runtime-browser-placement'
 import { sameStringArray } from './state-equality-core'
 import { sameAiVaultSessionTitle } from '../../../../shared/ai-vault/contracts/ai-vault-session-title'
 

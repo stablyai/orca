@@ -2,8 +2,8 @@ import { hasReachedAppVersion } from '../../../../../shared/app-version'
 import type {
   RemoteServerUpdateInstallResult,
   RemoteServerUpdaterSnapshot
-} from '../../../../../shared/remote-server-update'
-import type { RuntimeStatus } from '../../../../../shared/runtime-session-contracts'
+} from '../../../../../shared/remote-runtime/host-catalog/remote-server-update'
+import type { RuntimeStatus } from '../../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import { readRemoteServerInstallFailure } from './remote-server-install-failure-probe'
 
 type RestartWaitTransport = {

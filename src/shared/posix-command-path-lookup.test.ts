@@ -14,7 +14,10 @@ import { tmpdir } from 'node:os'
 import { basename, delimiter, dirname, isAbsolute, join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { buildPosixCommandPathLookupScript } from './posix-command-path-lookup'
-import { buildWslCapturedLoginShellCommand, buildWslExecArgs } from './wsl-login-shell-command'
+import {
+  buildWslCapturedLoginShellCommand,
+  buildWslExecArgs
+} from './shell/wsl/wsl-login-shell-command'
 
 type ShellCase = {
   name: string

@@ -3532,7 +3532,8 @@
             "e16012e31e": "El demonio de terminal propietario de esta sesión salió, por lo que no se pudo recuperar la sesión y su desplazamiento hacia atrás. Abra una nueva terminal para continuar.",
             "sessionUnavailable": "Orca no pudo volver a conectarse a la sesión de terminal de este panel en el host. Abra una nueva terminal para continuar.",
             "sourceRestoring": "Reconectando este terminal: se está restableciendo su salida. La sesión aún está en marcha.",
-            "ownerHostMismatch": "La sesión guardada de este terminal pertenece a otra conexión de host, así que Orca no puede reconectarlo aquí. Abre un terminal nuevo para continuar."
+            "ownerHostMismatch": "La sesión guardada de este terminal pertenece a otra conexión de host, así que Orca no puede reconectarlo aquí. Abre un terminal nuevo para continuar.",
+            "copyErrorDetails": "Copiar detalles del error"
           },
           "TerminalProcessExitOverlay": {
             "capacityTitle": "Se alcanzó el límite de consolas de Git Bash",
@@ -7402,7 +7403,10 @@
           "b4e9d3f2a1c5": "Se importaron {{value0}} cookies de {{value1}} a {{value2}}.",
           "c5a273a809": "Desde {{value0}}",
           "80bffd32bf": "Importar cookies",
-          "bd7d68f138": "Desde archivo…"
+          "bd7d68f138": "Desde archivo…",
+          "4054c458e1": "Borrar las cookies predeterminadas",
+          "3b662becd5": "¿Borrar las cookies del perfil predeterminado?",
+          "f159cf5a3e": "Es posible que se cierre tu sesión en sitios de este perfil."
         },
         "BrowserUseComputerUseNotice": {
           "79209b37b9": "Si importar cookies no encaja, Computer Use puede controlar apps locales y usar sesiones de navegador existentes donde aplique. Instala el skill Orca Computer Use; macOS también requiere permisos de privacidad.",
@@ -11214,6 +11218,7 @@
           "e27c8d45bf": "Los diagnósticos están desactivados por una variable de entorno."
         },
         "ShortcutCommandBlock": {
+          "retryAfterError": "Pulsa otro atajo o Esc para cancelar.",
           "eb72c52c28": "Pulsa un atajo o toca dos veces una tecla modificadora (p. ej., {{value0}}). Esc cancela.",
           "70b5d25583": "Atajo de {{value0}}",
           "287e07ddde": "Modificado",
@@ -12849,7 +12854,8 @@
           "catalog": "Catálogo",
           "clear": "Borrar filtros",
           "themes": "Temas",
-          "languages": "Lenguajes",
+          "codeLanguages": "Lenguajes de programación",
+          "translations": "Traducciones",
           "icons": "Iconos",
           "commands": "Comandos y paneles",
           "catalogLabel": "Filtrar por catálogo",
@@ -16253,10 +16259,9 @@
           "725868c75d": "Explorar carpetas",
           "5e7f0d8a80": "Selector de carpetas no disponible para archivos remotos",
           "30099dca46": "Carpeta",
-          "2d7d39dc63": ".Maryland",
           "c8ac7868e6": "Nombre del archivo",
           "b6ed807cc6": "Nombre",
-          "e365f3c638": "Asigne un nombre a su archivo de markdowns y elija una carpeta.",
+          "description": "Asigne un nombre a su archivo y elija una carpeta.",
           "674b046582": "Guardar como",
           "nameEmpty": "El nombre no puede estar vacío",
           "nameHasSeparators": "El nombre no puede contener separadores de ruta",
@@ -22996,6 +23001,8 @@
       "tabCloseAll": "Cerrar todas las pestañas del editor",
       "tabRename": "Renombrar pestaña activa",
       "tabReopenClosed": "Reabrir pestaña cerrada",
+      "tabMoveLeft": "Mover pestaña activa a la izquierda",
+      "tabMoveRight": "Mover pestaña activa a la derecha",
       "tabNextSameType": "Pestaña siguiente (mismo tipo)",
       "tabPreviousSameType": "Pestaña anterior (mismo tipo)",
       "tabNextAllTypes": "Pestaña siguiente (todos los tipos)",

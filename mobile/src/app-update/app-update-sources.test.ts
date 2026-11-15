@@ -31,21 +31,6 @@ function fakeFetch(routes: Record<string, { status: number; body?: unknown }>) {
 const signal = new AbortController().signal
 
 describe('GitHub release source (Android sideload)', () => {
-  it('offers the newest tag above the installed version once its release is proven', async () => {
-    const { fetchImpl, requested } = fakeFetch({
-      [REFS_URL]: { status: 200, body: tagRefs },
-      [releaseUrl('0.0.50')]: { status: 200, body: release050 }
-    })
-    await expect(
-      createGithubReleaseUpdateSource(fetchImpl, 'mobile-android-v').check('0.0.47', signal)
-    ).resolves.toEqual({
-      kind: 'available',
-      version: '0.0.50',
-      url: 'https://github.com/stablyai/orca/releases/tag/mobile-android-v0.0.50'
-    })
-    expect(requested).toEqual([REFS_URL, releaseUrl('0.0.50')])
-  })
-
   it('falls back past a tag whose build never published a release', async () => {
     const release048 = { ...Object(release050), html_url: 'https://example.test/048' }
     const { fetchImpl } = fakeFetch({

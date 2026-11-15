@@ -5,7 +5,7 @@ import { BoundedMap } from '../../../../shared/bounded-map'
 import { resolveWorktreeHostPath } from '../../../../shared/git/metadata/git-metadata-path'
 import { InFlightPromiseDedupe } from '../../../../shared/in-flight-promise-dedupe'
 import { iterateNulDelimitedFields } from '../../../../shared/nul-delimited-fields'
-import { wslDistroForCommand } from '../../../../shared/wsl-paths'
+import { wslDistroForCommand } from '../../../../shared/file-access/wsl-paths'
 import {
   gitReadOptionsForWorktree,
   type GitRuntimeOptions

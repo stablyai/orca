@@ -6,7 +6,7 @@ import { workspaceNavigationToastAction } from '@/lib/workspace/activation/works
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
 import { resolveOwner } from '@/lib/workspace/ownership/resolve-owner'
 import type { WorktreeOperationRouteState } from '@/lib/workspace/ownership/worktree-operation-route'
-import { authorityKey } from '../../../../../../shared/host-authority'
+import { authorityKey } from '../../../../../../shared/execution-host/host-authority'
 
 /** Terminal content still belongs to its placement workspace; a cwd cannot move execution to another host. */
 export function canLaunchSourceControlSectionAgentInPlace(

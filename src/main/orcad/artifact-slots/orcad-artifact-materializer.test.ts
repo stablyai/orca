@@ -24,7 +24,7 @@ import {
   orcadRipgrepArtifact,
   orcadTemplateCommonFilenames,
   orcadTemplateTargetFilenames
-} from '../../../shared/orcad-artifacts'
+} from '../../../shared/remote-runtime/orcad-distribution/orcad-artifacts'
 import {
   getAppEnvironment,
   hasAppEnvironment,

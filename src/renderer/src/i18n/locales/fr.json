@@ -3803,7 +3803,8 @@
             "ptyAllocationLimit": "Votre système ne peut plus allouer de périphériques pty. Fermez quelques terminaux inutilisés, dans Orca ou dans un autre programme, puis réessayez.",
             "terminalProcessLimit": "Votre système ne peut pas démarrer un autre processus de terminal. Fermez les terminaux inutilisés ou quittez les processus inutiles, puis réessayez.",
             "hostTerminalCap": "L'hôte exécute déjà autant de terminaux qu'Orca le permet. Fermez un terminal dont vous n'avez plus besoin, puis réessayez.",
-            "ownerHostMismatch": "La session enregistrée de ce terminal appartient à une autre connexion d'hôte : Orca ne peut donc pas le rattacher ici. Ouvrez un nouveau terminal pour continuer."
+            "ownerHostMismatch": "La session enregistrée de ce terminal appartient à une autre connexion d'hôte : Orca ne peut donc pas le rattacher ici. Ouvrez un nouveau terminal pour continuer.",
+            "copyErrorDetails": "Copier les détails de l'erreur"
           },
           "TerminalProcessExitOverlay": {
             "capacityTitle": "Limite de consoles Git Bash atteinte",
@@ -7673,7 +7674,10 @@
           "b4e9d3f2a1c5": "{{value0}} cookies importés depuis {{value1}} vers {{value2}}.",
           "c5a273a809": "Depuis {{value0}}",
           "80bffd32bf": "Importer des cookies",
-          "bd7d68f138": "Depuis un fichier…"
+          "bd7d68f138": "Depuis un fichier…",
+          "4054c458e1": "Effacer les cookies par défaut",
+          "3b662becd5": "Effacer les cookies du profil par défaut ?",
+          "f159cf5a3e": "Vous pourriez être déconnecté des sites de ce profil."
         },
         "BrowserUseComputerUseNotice": {
           "79209b37b9": "Si l'import de cookies ne convient pas, Computer Use peut contrôler des apps locales et, le cas échéant, réutiliser des sessions de navigateur déjà connectées. Installez la skill Orca Computer Use ; macOS exige aussi des autorisations de confidentialité.",
@@ -11463,6 +11467,7 @@
           "e27c8d45bf": "Les diagnostics sont désactivés par une variable d'environnement."
         },
         "ShortcutCommandBlock": {
+          "retryAfterError": "Appuyez sur un autre raccourci, ou sur Échap pour annuler.",
           "eb72c52c28": "Appuyez sur un raccourci, ou appuyez deux fois sur une touche modificatrice (ex. {{value0}}). Échap annule.",
           "70b5d25583": "Raccourci {{value0}}",
           "287e07ddde": "Modifié",
@@ -13120,7 +13125,8 @@
           "catalog": "Catalogue",
           "clear": "Effacer les filtres",
           "themes": "Thèmes",
-          "languages": "Langages",
+          "codeLanguages": "Langages de programmation",
+          "translations": "Traductions",
           "icons": "Icônes",
           "commands": "Commandes et panneaux",
           "catalogLabel": "Filtrer par catalogue",
@@ -16510,10 +16516,9 @@
           "725868c75d": "Parcourir les dossiers",
           "5e7f0d8a80": "Sélecteur de dossiers indisponible pour les fichiers distants",
           "30099dca46": "Dossier",
-          "2d7d39dc63": ".md",
           "c8ac7868e6": "nom de fichier",
           "b6ed807cc6": "Nom",
-          "e365f3c638": "Nommez votre fichier Markdown et choisissez un dossier.",
+          "description": "Nommez votre fichier et choisissez un dossier.",
           "674b046582": "Enregistrer sous",
           "nameEmpty": "Le nom ne peut pas être vide",
           "nameHasSeparators": "Le nom ne peut pas contenir de séparateurs de chemin",
@@ -23019,6 +23024,8 @@
       "tabCloseAll": "Fermer tous les onglets de l'éditeur",
       "tabRename": "Renommer l'onglet actif",
       "tabReopenClosed": "Rouvrir l'onglet fermé",
+      "tabMoveLeft": "Déplacer l'onglet actif vers la gauche",
+      "tabMoveRight": "Déplacer l'onglet actif vers la droite",
       "tabNextSameType": "Onglet suivant (même type)",
       "tabPreviousSameType": "Onglet précédent (même type)",
       "tabNextAllTypes": "Onglet suivant (tous types)",

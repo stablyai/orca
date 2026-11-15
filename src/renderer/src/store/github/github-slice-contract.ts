@@ -27,7 +27,7 @@ import type {
 import type { GetProjectViewTableArgs } from '../../../../shared/github/projects/project-request-types'
 import type { TaskSourceContext } from '../../../../shared/work-items/task-source-context'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
-import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import type {
   CacheEntry,
   FetchOptions,
@@ -79,7 +79,7 @@ export type GitHubSlice = {
   fetchIssue: (
     repoPath: string,
     number: number,
-    options?: RepoScopedFetchOptions
+    options?: RepoScopedFetchOptions & { ownerRepo?: GitHubOwnerRepo }
   ) => Promise<IssueInfo | null>
   fetchPRChecks: (
     repoPath: string,

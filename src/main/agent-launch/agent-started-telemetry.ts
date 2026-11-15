@@ -1,6 +1,6 @@
 /** Accept newer clients’ launch-source labels as unknown rather than blocking the launch. */
 
-import { tuiAgentToAgentKind } from '../../shared/agent-kind'
+import { tuiAgentToAgentKind } from '../../shared/agent-status/identity/agent-kind'
 import { launchSourceSchema } from '../../shared/telemetry-property-schemas'
 import type { TuiAgent } from '../../shared/agent-launch/catalog/tui-agent'
 import type { WorktreeStartupLaunch } from '../../shared/worktree/creation/launch-types'

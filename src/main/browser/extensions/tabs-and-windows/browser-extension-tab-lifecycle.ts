@@ -13,6 +13,7 @@ import {
   takeDiscardedBrowserTabId
 } from './browser-extension-discarded-tabs'
 import { isBrowserExtensionSupportEnabled } from '../browser-extension-support'
+import { whenBrowserExtensionsReadyForPage } from '../profile-sessions/browser-extension-page-start'
 import {
   canExtensionSeeTabUrl,
   describeBrowserExtensionTab,
@@ -99,6 +100,21 @@ export function announceRegisteredBrowserExtensionTab(
   if (!isBrowserExtensionSupportEnabled() || !contents || contents.isDestroyed()) {
     return
   }
+  // A profile's first tab registers before its extensions have loaded to hear about it.
+  const starting = whenBrowserExtensionsReadyForPage(contents)
+  if (starting) {
+    void starting.then(() => {
+      if (isBrowserExtensionSupportEnabled() && !contents.isDestroyed()) {
+        announceRegisteredTab(contents, browserPageId)
+      }
+    })
+  } else {
+    announceRegisteredTab(contents, browserPageId)
+  }
+}
+
+function announceRegisteredTab(contents: Electron.WebContents, browserPageId: string): void {
+  const webContentsId = contents.id
   pageIdByTabId.set(webContentsId, browserPageId)
   const discarded = takeDiscardedBrowserTabId(browserPageId)
   const replaces = discarded?.session === contents.session

@@ -1,4 +1,4 @@
-import { CLAUDE_AGENT_TEAMS_TMUX_DIR } from './claude-agent-teams-tmux-compat'
+import { CLAUDE_AGENT_TEAMS_TMUX_DIR } from './agent-launch/startup/claude-agent-teams-tmux-compat'
 import { hasControllingTty } from './posix-controlling-terminal'
 import type { ProcessTableRow } from './process-table-snapshot'
 

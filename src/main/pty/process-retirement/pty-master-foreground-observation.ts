@@ -5,7 +5,7 @@ import {
 } from '../../../shared/command-token-scanner'
 import { recognizeAgentProcessFromCommandLine } from '../../../shared/agent-status/process/agent-process-recognition'
 import { selectForegroundProcessCandidate } from '../../../shared/foreground-process-selection'
-import { resolveOuterWrapperForegroundProcess } from '../../../shared/foreground-wrapper-agent'
+import { resolveOuterWrapperForegroundProcess } from '../../../shared/agent-status/process/foreground-wrapper-agent'
 import { unreadableArgvName, type ProcessTableRow } from '../../../shared/process-table-snapshot'
 import { isShellProcess } from '../../../shared/agent-status/process/shell-process-detection'
 import type { TerminalForegroundSample } from '../../../shared/terminal/pty/lifecycle/terminal-foreground-observation'

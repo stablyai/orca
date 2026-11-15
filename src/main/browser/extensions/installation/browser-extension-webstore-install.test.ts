@@ -36,6 +36,7 @@ vi.mock('../../sessions/profiles/browser-session-registry', () => ({
   browserSessionRegistry: {
     listProfiles: () => [{ id: 'default' }, { id: 'work' }],
     getProfile: (id: string) => ({ id }),
+    attachExtensions: () => {},
     getEnabledExtensionIds: (profileId: string) => state.enabled[profileId] ?? [],
     updateEnabledExtensionIds: (
       update: (value: Record<string, string[]>) => Record<string, string[]>

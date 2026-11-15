@@ -1,5 +1,5 @@
 import type { RuntimeCapability } from '../../../../shared/protocol-version'
-import type { RuntimeStatus } from '../../../../shared/runtime-session-contracts'
+import type { RuntimeStatus } from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import { BoundedMap } from '../../../../shared/bounded-map'
 
 const DEFAULT_MAX_PEERS = 128

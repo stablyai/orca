@@ -1,6 +1,6 @@
 import { rmSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
-import type { RuntimeMobileSessionTabsResult } from '../../src/shared/runtime-types'
+import type { RuntimeMobileSessionTabsResult } from '../../src/shared/remote-runtime/session-graph/runtime-session-contracts'
 import { toRemoteRuntimePtyId } from '../../src/shared/remote-runtime/remote-runtime-pty-id'
 import { toWebTerminalSurfaceTabId } from '../../src/shared/workspace-layout/terminal-surface-id'
 import { expect, test } from './helpers/orca-app'

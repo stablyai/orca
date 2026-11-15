@@ -3,10 +3,10 @@ import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import type {
   RuntimeRendererSyncWindowGraph,
   RuntimeStatus,
-  RuntimeSyncWindowGraphResult
-} from '../../shared/runtime-types'
-import type { RuntimeTerminalDriverState } from '../../shared/runtime-session-contracts'
-import type { RuntimeRpcResponse } from '../../shared/runtime-rpc-envelope'
+  RuntimeSyncWindowGraphResult,
+  RuntimeTerminalDriverState
+} from '../../shared/remote-runtime/session-graph/runtime-session-contracts'
+import type { RuntimeRpcResponse } from '../../shared/remote-runtime/rpc/runtime-rpc-envelope'
 import type { ClientHostedBrowserRowsEvent } from '../../shared/client-hosted-browser-rows'
 import { TERMINAL_FIT_RESTORE_DEADLINE_MS } from '../../shared/terminal/viewport/terminal-fit-restore-deadline'
 import { DESKTOP_RENDERER_RUNTIME_CLIENT_CAPABILITIES } from './desktop-renderer-runtime-capabilities'
@@ -52,7 +52,7 @@ export function registerRuntimeHandlers(runtime: OrcaRuntimeService): void {
 
   ipcMain.handle(
     'runtime:syncWindowGraph',
-    (event, graph: RuntimeRendererSyncWindowGraph): RuntimeSyncWindowGraphResult => {
+    async (event, graph: RuntimeRendererSyncWindowGraph): Promise<RuntimeSyncWindowGraphResult> => {
       const window = BrowserWindow.fromWebContents(event.sender)
       if (!window) {
         throw new Error('Runtime graph sync must originate from a BrowserWindow')
@@ -64,7 +64,11 @@ export function registerRuntimeHandlers(runtime: OrcaRuntimeService): void {
       if (typeof graph.rendererGeneration !== 'string' || graph.rendererGeneration.length === 0) {
         throw new Error('Runtime graph sync requires a renderer generation')
       }
-      const result = runtime.syncWindowGraph(window.id, graph)
+      const frame = event.senderFrame
+      const result = await runtime.syncWindowGraph(window.id, graph)
+      if (window.isDestroyed() || frame !== event.sender.mainFrame) {
+        throw new Error('Runtime graph sender changed during publication')
+      }
       // Only the authoritative window's accepted graph may publish its project catalog.
       if (
         graph.projectSectionCatalog &&

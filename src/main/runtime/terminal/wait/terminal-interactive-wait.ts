@@ -6,7 +6,7 @@ import type {
   RuntimeTerminalAgentStatus,
   RuntimeTerminalInteractiveWait,
   RuntimeTerminalWaitBlockedReason
-} from '../../../../shared/runtime-terminal-contracts'
+} from '../../../../shared/terminal/runtime/runtime-terminal-contracts'
 import type { RuntimeTerminalAgentStatusSnapshot } from '../query/runtime-terminal-agent-status-query'
 import type {
   TerminalInteractiveWaitEvidence,
@@ -37,7 +37,7 @@ import {
 import { isTuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent-config'
 import { resolveConfiguredWorkerAgent } from '../../orchestration/workers/launch/configured-worker-agent-selector'
 import { resolveAgentLaunchRuntime } from '../launch/agent-launch-scope-runtime'
-import { parseWslUncPath } from '../../../../shared/wsl-paths'
+import { parseWslUncPath } from '../../../../shared/file-access/wsl-paths'
 import { resolveAgentStartupPlanInputs } from '../../../../shared/agent-launch/startup/agent-startup-plan-inputs'
 import { resolveOpenCodeModelLaunchRoute } from '../../../opencode/model-launch/opencode-model-startup-plan'
 import type { RuntimePtyWorktreeRecord } from '../records/runtime-terminal-state-records'

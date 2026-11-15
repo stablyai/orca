@@ -28,6 +28,9 @@ import { registerHostFrameNavigationGuard } from './host-frame-navigation-guard'
 import { installPrivilegedWindowNavigationPolicy } from './privileged-window-navigation'
 import { parseChromeExtensionUrl } from '../../../shared/browser/extensions/browser-extension-url'
 import { getBrowserExtensionSessionForProfile } from '../../browser/extensions/profile-sessions/browser-extension-session-loader'
+import { isBrowserExtensionEnabledInProfile } from '../../browser/extensions/web-store/browser-extension-webstore-service'
+import { isBrowserExtensionSupportEnabled } from '../../browser/extensions/browser-extension-support'
+import { holdWebviewFirstLoadForExtensions } from '../../browser/extensions/profile-sessions/browser-extension-page-start'
 import { installBrowserJavaScriptDialogs } from '../../browser/guest-lifecycle/prompts/browser-javascript-dialogs'
 import { installNativeChatVisualGuestTheme } from '../../host/native-chat-visual-guest-theme'
 import {
@@ -49,17 +52,20 @@ function isAdmissibleDocPreviewAttach(partition: string, src: string): boolean {
 
 /**
  * Why its own rule: extension pages (options, tabs.create) are not typed URLs, so they attach only
- * in a local browser-profile partition whose session has that extension loaded — i.e. installed
- * and enabled for that profile. Route, SSH and doc-preview partitions never qualify.
+ * in a local browser-profile partition with that extension installed and enabled. Route, SSH and
+ * doc-preview partitions never qualify.
  */
-function isAdmissibleExtensionPageAttach(partition: string, src: string): boolean {
+function isAdmissibleExtensionPageAttach(profileId: string | null, src: string): boolean {
   const extensionUrl = parseChromeExtensionUrl(src)
-  if (!extensionUrl || !browserSessionRegistry.isAllowedPartition(partition)) {
+  if (!extensionUrl || !profileId || !isBrowserExtensionSupportEnabled()) {
     return false
   }
-  const profile = browserSessionRegistry.listProfiles().find((p) => p.partition === partition)
-  const sess = profile ? getBrowserExtensionSessionForProfile(profile.id) : null
-  return Boolean(sess?.extensions.getExtension(extensionUrl.extensionId))
+  // Loaded covers one Settings is still turning on; enabled covers one its profile has yet to load.
+  return Boolean(
+    getBrowserExtensionSessionForProfile(profileId)?.extensions.getExtension(
+      extensionUrl.extensionId
+    ) || isBrowserExtensionEnabledInProfile(profileId, extensionUrl.extensionId)
+  )
 }
 
 export function installMainWindowWebviewSecurity(mainWindow: BrowserWindow): void {
@@ -103,12 +109,13 @@ export function installMainWindowWebviewSecurity(mainWindow: BrowserWindow): voi
       delete params.allowpopups
       return
     }
-    const isProfilePartition = browserSessionRegistry.isAllowedPartition(partition)
+    const profileId = browserSessionRegistry.profileIdForPartition(partition)
+    const isProfilePartition = profileId !== null
     const isRoutePartition = browserRouteSessionRegistry.isAllowedPartition(partition)
     // Direct-SSH partitions exist only after proxy verification; renderer URLs need no main-side grants, like profile partitions.
     const isLocalSshPartition = isLocalSshBrowserPartition(partition)
     const isDocPreviewAttach = isAdmissibleDocPreviewAttach(partition, src)
-    const isExtensionPageAttach = isAdmissibleExtensionPageAttach(partition, src)
+    const isExtensionPageAttach = isAdmissibleExtensionPageAttach(profileId, src)
 
     // Require an allowlisted src/partition; renderer mistakes must not grant preload/Node authority.
     if (
@@ -142,6 +149,11 @@ export function installMainWindowWebviewSecurity(mainWindow: BrowserWindow): voi
     Object.assign(webPreferences, ORCA_BROWSER_GUEST_WEB_PREFERENCES)
     // Preserve only the registry-validated partition so isolated profiles keep their storage.
     webPreferences.partition = partition
+    if (profileId) {
+      // A profile starts its extensions with its first tab, not at launch.
+      browserSessionRegistry.attachExtensions(profileId)
+      holdWebviewFirstLoadForExtensions(mainWindow.webContents, profileId, params)
+    }
   })
 
   mainWindow.webContents.on('did-attach-webview', (_event, guest) => {

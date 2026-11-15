@@ -11,7 +11,7 @@ import {
 import type { AgentStatusIpcPayload } from '../../../../../shared/agent-status/contracts/agent-status-ipc-payload'
 import type { AgentType } from '../../../../../shared/agent-status/contracts/agent-status-types'
 import { formatAgentTypeLabel } from '../../../../../shared/agent-status/presentation/agent-type-label'
-import { structuredChatDisplayName } from '../../../../../shared/structured-chat-row-name'
+import { structuredChatDisplayName } from '../../../../../shared/agent-session/view/structured-chat-row-name'
 import type { Tab } from '../../../../../shared/tab-types'
 import type {
   TerminalLayoutSnapshot,

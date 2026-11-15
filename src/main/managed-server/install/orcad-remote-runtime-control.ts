@@ -1,4 +1,4 @@
-import { ORCAD_STARTUP_READINESS_TIMEOUT_MS } from '../../../shared/orcad-profile-preflight'
+import { ORCAD_STARTUP_READINESS_TIMEOUT_MS } from '../../../shared/remote-runtime/orcad-distribution/orcad-profile-preflight'
 import {
   orcadLaunchCommand,
   parseOrcadReadinessOutput,

@@ -1,4 +1,4 @@
-import type { RuntimeClientEventStreamMessage } from '../../../../src/shared/runtime-client-events'
+import type { RuntimeClientEventStreamMessage } from '../../../../src/shared/remote-runtime/session-graph/runtime-client-events'
 import type { RpcClient } from '../rpc/rpc-client-contract'
 import { hostConnectionEpoch } from '../../query/host-status-query'
 

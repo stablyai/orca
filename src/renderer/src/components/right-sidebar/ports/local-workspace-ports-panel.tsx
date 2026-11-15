@@ -4,7 +4,7 @@ import { toast } from 'sonner'
 import { useAppStore } from '@/store/index'
 import { useActiveWorktree } from '@/store/workspaces/selection/use-selected-worktree'
 import { cn } from '@/lib/class-names'
-import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import {
   killWorkspacePortForTarget,
   openWorkspacePortInBrowser,

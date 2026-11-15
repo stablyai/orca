@@ -8,7 +8,7 @@ import { runtimeEnvironmentSupportsCapability } from '../../rpc/compatibility/ru
 import '../../hosts/capabilities/local-runtime-capabilities'
 import '../../rpc/subscriptions/runtime-rpc-subscribe'
 import { STRUCTURED_AGENT_SESSION_METHOD_TIMEOUT_MS } from './structured-agent-session-request-timeouts'
-import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 
 export async function callStructuredAgentSession<TResult>(
   target: RuntimeClientTarget,

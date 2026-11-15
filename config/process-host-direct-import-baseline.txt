@@ -66,7 +66,7 @@ src/main/ssh/system-transport/file-transfer/system-ssh-file-transfer.ts
 src/main/startup/linux-display/ensure-virtual-display.ts
 src/main/pty/process-retirement/windows-process-tree-kill.ts
 src/main/pty/shell-startup/zsh-startup-hook-pty-harness.ts
-src/shared/ephemeral-vm-recipe-process.ts
+src/shared/remote-runtime/ephemeral-vm-recipes/ephemeral-vm-recipe-process.ts
 src/shared/fish-binary-requirement.ts
 src/shared/process-table-ps-capture.ts
 src/shared/terminal/pty/native-process/pty-slave-line-discipline-echo.ts

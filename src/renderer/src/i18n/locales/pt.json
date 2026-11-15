@@ -8004,6 +8004,7 @@
           "b2c384cfd6": "Nenhuma interface encontrada"
         },
         "ShortcutCommandBlock": {
+          "retryAfterError": "Pressione outro atalho ou Esc para cancelar.",
           "eb72c52c28": "Pressione um atalho, ou toque duas vezes em um modificador (ex.: {{value0}}). Esc cancela.",
           "70b5d25583": "Atalho de {{value0}}",
           "287e07ddde": "Modificado",
@@ -8046,7 +8047,10 @@
           "b4e9d3f2a1c5": "{{value0}} cookies importados de {{value1}} para {{value2}}.",
           "c5a273a809": "De {{value0}}",
           "80bffd32bf": "Importar Cookies",
-          "bd7d68f138": "De um Arquivo…"
+          "bd7d68f138": "De um Arquivo…",
+          "4054c458e1": "Limpar cookies padrão",
+          "3b662becd5": "Limpar os cookies do perfil padrão?",
+          "f159cf5a3e": "Isso pode desconectar você de sites neste perfil."
         },
         "GhosttyImportModal": {
           "f96688b6bc": "Cancelar",
@@ -9814,7 +9818,8 @@
           "catalog": "Catálogo",
           "clear": "Limpar filtros",
           "themes": "Temas",
-          "languages": "Linguagens",
+          "codeLanguages": "Linguagens de programação",
+          "translations": "Traduções",
           "icons": "Ícones",
           "commands": "Comandos e painéis",
           "catalogLabel": "Filtrar por catálogo",
@@ -13591,10 +13596,9 @@
           "725868c75d": "Navegar pelas pastas",
           "5e7f0d8a80": "Seletor de pasta indisponível para arquivos remotos",
           "30099dca46": "Pasta",
-          "2d7d39dc63": ".md",
           "c8ac7868e6": "nome do arquivo",
           "b6ed807cc6": "Nome",
-          "e365f3c638": "Nomeie seu arquivo markdown e escolha uma pasta.",
+          "description": "Nomeie seu arquivo e escolha uma pasta.",
           "674b046582": "Salvar como",
           "nameEmpty": "O nome não pode estar vazio",
           "nameHasSeparators": "O nome não pode conter separadores de caminho",
@@ -16799,7 +16803,8 @@
             "ownerHostMismatch": "A sessão salva deste terminal pertence a outra conexão de host, então o Orca não pode reconectá-la aqui. Abra um novo terminal para continuar.",
             "ptyAllocationLimit": "Seu sistema não consegue alocar mais dispositivos pty. Feche alguns terminais que você não está usando, no Orca ou em outro programa, e tente novamente.",
             "terminalProcessLimit": "Seu sistema não consegue iniciar outro processo de terminal. Feche terminais ou processos sem uso e tente novamente.",
-            "hostTerminalCap": "O host já está executando o máximo de terminais permitido pelo Orca. Feche um terminal de que não precisa mais e tente novamente."
+            "hostTerminalCap": "O host já está executando o máximo de terminais permitido pelo Orca. Feche um terminal de que não precisa mais e tente novamente.",
+            "copyErrorDetails": "Copiar detalhes do erro"
           },
           "CloseTerminalDialog": {
             "1d1a7a9c1f": "Cancelar",
@@ -23563,6 +23568,8 @@
       "tabCloseAll": "Fechar todas as abas do editor",
       "tabRename": "Renomear aba ativa",
       "tabReopenClosed": "Reabrir aba fechada",
+      "tabMoveLeft": "Mover aba ativa para a esquerda",
+      "tabMoveRight": "Mover aba ativa para a direita",
       "tabNextSameType": "Próxima aba (mesmo tipo)",
       "tabPreviousSameType": "Aba anterior (mesmo tipo)",
       "tabNextAllTypes": "Próxima aba (todos os tipos)",

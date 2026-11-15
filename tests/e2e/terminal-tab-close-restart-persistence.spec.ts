@@ -18,9 +18,9 @@ import { RuntimeRpcFailureError } from '../../src/cli/runtime/connection/types'
 import type {
   RuntimeTerminalClose,
   RuntimeTerminalListResult,
-  RuntimeTerminalSplit,
-  RuntimeWorktreeRecord
-} from '../../src/shared/runtime-types'
+  RuntimeTerminalSplit
+} from '../../src/shared/terminal/runtime/runtime-terminal-contracts'
+import type { RuntimeWorktreeRecord } from '../../src/shared/worktree/catalog/runtime-worktree-contracts'
 
 test.describe.configure({ mode: 'serial' })
 

@@ -2,7 +2,7 @@
 import { act, renderHook } from '@testing-library/react'
 import { useState } from 'react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { DiscoveredSkill } from '../../../../../../shared/skills'
+import type { DiscoveredSkill } from '../../../../../../shared/skills/discovery/skills'
 import { useNativeChatPickerState } from './use-native-chat-picker-state'
 
 const skillMock = vi.hoisted((): { skills: DiscoveredSkill[] } => ({ skills: [] }))

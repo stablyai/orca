@@ -1,7 +1,7 @@
 import {
   antigravitySessionOrigin,
   isAntigravityReferenceSession
-} from '../../../../../../shared/antigravity-session-origin'
+} from '../../../../../../shared/agent-session/lifecycle/provider-handles/antigravity-session-origin'
 import type React from 'react'
 import { Badge } from '@/components/ui/badge'
 import { WorktreeHostContextBadge } from '@/components/sidebar/workspace-card/host/WorktreeHostContextBadge'

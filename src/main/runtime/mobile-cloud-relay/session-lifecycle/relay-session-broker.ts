@@ -6,7 +6,7 @@ import {
 } from '../../../../shared/remote-runtime/relay/mobile-relay-status'
 import type { PairingRelay } from '../../../../shared/remote-runtime/pairing/mobile-relay-pairing-offer'
 import type * as RelayCredentials from '../../../../shared/remote-runtime/relay/mobile-relay-credential-contract'
-import type { RelayHostCloseReason } from '../../../../shared/relay-host-close-reason'
+import type { RelayHostCloseReason } from '../../../../shared/remote-runtime/relay/relay-host-close-reason'
 import type { DeviceCredentialInstallAuthorization } from '../control-channel/relay-control-requests'
 import {
   deriveRelayHostId,

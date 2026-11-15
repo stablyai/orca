@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { ORCAD_UPDATE_WSL_MOVE_RUNNING_CODE } from '../../../shared/wsl-host-types'
+import { ORCAD_UPDATE_WSL_MOVE_RUNNING_CODE } from '../../../shared/remote-runtime/wsl-hosts/wsl-host-types'
 import type { OrcadActivationRecord } from '../../managed-server/activation/orcad-activation-record'
 import type { ServeReadiness } from '../../server/serve-readiness'
 import type { OrcadSlotOptions } from '../../managed-server/activation/orcad-recovery-slot'

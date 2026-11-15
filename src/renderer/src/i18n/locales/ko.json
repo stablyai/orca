@@ -3474,7 +3474,8 @@
             "ptyAllocationLimit": "시스템에서 더 이상 pty 장치를 할당할 수 없습니다. Orca 또는 다른 프로그램에서 사용하지 않는 터미널을 몇 개 닫은 후 다시 시도하세요.",
             "terminalProcessLimit": "시스템에서 터미널 프로세스를 더 시작할 수 없습니다. 사용하지 않는 터미널을 닫거나 불필요한 프로세스를 종료한 후 다시 시도하세요.",
             "hostTerminalCap": "호스트에서 이미 Orca가 허용하는 최대 개수의 터미널이 실행 중입니다. 더 이상 필요 없는 터미널을 닫은 후 다시 시도하세요.",
-            "ownerHostMismatch": "이 터미널의 저장된 세션은 다른 호스트 연결에 속해 있어 Orca가 여기에서 다시 연결할 수 없습니다. 계속하려면 새 터미널을 여세요."
+            "ownerHostMismatch": "이 터미널의 저장된 세션은 다른 호스트 연결에 속해 있어 Orca가 여기에서 다시 연결할 수 없습니다. 계속하려면 새 터미널을 여세요.",
+            "copyErrorDetails": "오류 세부 정보 복사"
           },
           "TerminalProcessExitOverlay": {
             "capacityTitle": "Git Bash 콘솔 한도에 도달했습니다",
@@ -7116,7 +7117,10 @@
           "b4e9d3f2a1c5": "{{value1}}에서 {{value0}}개의 쿠키를 {{value2}}(으)로 가져왔습니다.",
           "c5a273a809": "{{value0}}에서",
           "80bffd32bf": "쿠키 가져오기",
-          "bd7d68f138": "파일에서…"
+          "bd7d68f138": "파일에서…",
+          "4054c458e1": "기본 쿠키 삭제",
+          "3b662becd5": "기본 프로필의 쿠키를 삭제할까요?",
+          "f159cf5a3e": "이 프로필의 사이트에서 로그아웃될 수 있습니다."
         },
         "BrowserUseComputerUseNotice": {
           "79209b37b9": "쿠키 가져오기가 적합하지 않은 경우 컴퓨터 사용은 로컬 앱을 제어할 수 있으며 해당되는 경우 기존 로그인 브라우저 세션을 사용할 수 있습니다. Orca Computer Use 스킬을 설치하십시오. macOS에도 개인정보 보호 권한이 필요합니다.",
@@ -10936,6 +10940,7 @@
           "e27c8d45bf": "환경 변수로 인해 진단이 비활성화되었습니다."
         },
         "ShortcutCommandBlock": {
+          "retryAfterError": "다른 단축키를 누르거나 Esc를 눌러 취소하세요.",
           "eb72c52c28": "단축키를 누르거나 수정자 키를 두 번 탭하세요(예: {{value0}}). Esc 키로 취소합니다.",
           "70b5d25583": "{{value0}} 단축키",
           "287e07ddde": "변경됨",
@@ -12568,7 +12573,8 @@
           "catalog": "카탈로그",
           "clear": "필터 지우기",
           "themes": "테마",
-          "languages": "언어",
+          "codeLanguages": "프로그래밍 언어",
+          "translations": "번역",
           "icons": "아이콘",
           "commands": "명령 및 패널",
           "catalogLabel": "카탈로그로 필터링",
@@ -15864,10 +15870,9 @@
           "725868c75d": "폴더 찾아보기",
           "5e7f0d8a80": "원격 파일에는 폴더 선택기를 사용할 수 없습니다.",
           "30099dca46": "폴더",
-          "2d7d39dc63": ".md",
           "c8ac7868e6": "파일 이름",
           "b6ed807cc6": "이름",
-          "e365f3c638": "markdown 파일의 이름을 지정하고 폴더를 선택하세요.",
+          "description": "파일의 이름을 지정하고 폴더를 선택하세요.",
           "674b046582": "다른 이름으로 저장",
           "nameEmpty": "이름은 비워 둘 수 없습니다",
           "nameHasSeparators": "이름에 경로 구분자를 포함할 수 없습니다",
@@ -22323,6 +22328,8 @@
       "tabCloseAll": "모든 편집기 탭 닫기",
       "tabRename": "활성 탭 이름 바꾸기",
       "tabReopenClosed": "닫은 탭 다시 열기",
+      "tabMoveLeft": "활성 탭을 왼쪽으로 이동",
+      "tabMoveRight": "활성 탭을 오른쪽으로 이동",
       "tabNextSameType": "다음 탭(같은 유형)",
       "tabPreviousSameType": "이전 탭(같은 유형)",
       "tabNextAllTypes": "다음 탭(모든 유형)",

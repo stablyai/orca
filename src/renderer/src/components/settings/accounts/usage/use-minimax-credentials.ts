@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useAppStore } from '../../../../store/index'
 import type { MiniMaxCredentialsStatus } from '../../../../../../shared/minimax-credentials-status'
-import type { RuntimeClientTarget } from '../../../../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import { callMiniMaxCredentials } from '@/runtime/provider-accounts/usage/runtime-usage-credentials-client'
 import { createMiniMaxCredentialActions } from './accounts-pane-minimax-actions'
 import {

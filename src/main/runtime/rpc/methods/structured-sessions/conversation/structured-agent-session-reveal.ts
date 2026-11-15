@@ -1,6 +1,6 @@
 import { getStructuredAgentSessionHost } from '../../../../../native-chat/agent-session-wire/host/structured-agent-session-registry'
 import { StructuredWorkspaceUnavailable } from '../../../../session-tabs/structured-workspace-authority'
-import type { StructuredSessionWorkspaceRemovedDetails } from '../../../../../../shared/open-structured-agent-session'
+import type { StructuredSessionWorkspaceRemovedDetails } from '../../../../../../shared/agent-session/view/open-structured-agent-session'
 // Republish an existing host-owned record's tab for history entries holding only session id; unpublished tabs disappear on sync.
 // Unlike ensure, read workspace/provider from host state so callers cannot redirect publication.
 
@@ -126,11 +126,11 @@ export const STRUCTURED_AGENT_SESSION_REVEAL_METHODS = [
         }
         if (
           caller?.kind === 'paired-device' &&
-          !ctx.runtime.reopenMobileSessionTabForClient(
+          !(await ctx.runtime.reopenMobileSessionTabForClient(
             revealed.workspaceId,
             revealed.sessionId,
             caller.deviceId
-          )
+          ))
         ) {
           throw new Error('Could not publish the chat to its caller.')
         }

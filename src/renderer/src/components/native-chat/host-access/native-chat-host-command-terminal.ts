@@ -6,7 +6,7 @@ import { persistAgentLaunchTabOrder } from '@/lib/agent-session/launch/pane/laun
 import { createWebRuntimeSessionTerminalOnHost } from '@/runtime/hosted-terminals/creation/web-runtime-terminal-creation'
 import { notifyWebRuntimeTerminalCreateFailure } from '@/runtime/hosted-terminals/creation/web-runtime-terminal-create-failure-notice'
 import { startStoppedWslHostForUserAct } from '@/runtime/hosts/wsl/wsl-host-user-start'
-import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 
 export type NativeChatHostCommandTerminal = {
   opening: boolean

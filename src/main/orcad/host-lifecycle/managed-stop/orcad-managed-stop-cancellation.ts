@@ -2,7 +2,7 @@ import { rmSync } from 'node:fs'
 import type {
   OrcadManagedStopCancellation,
   OrcadManagedStopRequest
-} from '../../../../shared/orcad-stop-request'
+} from '../../../../shared/remote-runtime/orcad-lifecycle/orcad-stop-request'
 import { claimOrcadManagedStopDecision } from './orcad-managed-stop-decision'
 import {
   orcadManagedStopRequestPath,

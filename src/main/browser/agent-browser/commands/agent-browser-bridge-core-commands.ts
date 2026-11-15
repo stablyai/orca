@@ -19,6 +19,7 @@ import { AgentBrowserBridgeQueue } from '../command-queue/agent-browser-bridge-q
 import { assertRemoteCliPageAccess } from '../../routing/input-ownership/remote-cli-page-admission'
 import { agentBrowserSnapshotArgs } from '../protocol/agent-browser-snapshot-arguments'
 import { getBrowserPasskeyRequest } from '../../webauthn/browser-passkey-requests'
+import { whenBrowserExtensionsReadyForPage } from '../../extensions/profile-sessions/browser-extension-page-start'
 
 export abstract class AgentBrowserBridgeCoreCommands extends AgentBrowserBridgeQueue {
   async snapshot(
@@ -97,6 +98,8 @@ export abstract class AgentBrowserBridgeCoreCommands extends AgentBrowserBridgeQ
         if (!navigationUrl) {
           throw new BrowserError('invalid_argument', `Unsupported browser URL: ${url}`)
         }
+        // A new tab's profile may still be starting its extensions; its first page waits for them.
+        await whenBrowserExtensionsReadyForPage(wc)
         const navigationState: { preventUnloadEvent: Electron.Event | null } = {
           preventUnloadEvent: null
         }

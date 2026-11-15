@@ -3,10 +3,10 @@ import {
   ORCAD_MIGRATION_SOURCE_CUTOVER_VERSION,
   type OrcadMigrationSourceCutover
 } from '../../../../shared/orcad-migration/orcad-migration-source-cutover'
-import type { OrcadDeltaMoveResult } from '../../../../shared/orcad-managed-runtime'
+import type { OrcadDeltaMoveResult } from '../../../../shared/remote-runtime/orcad-lifecycle/orcad-managed-runtime'
 import { recordManagedOrcadMigration } from '../../../../shared/remote-runtime/host-store/runtime-environment-managed-orcad-store'
 import type { KnownRuntimeEnvironment } from '../../../../shared/remote-runtime/host-catalog/runtime-environments'
-import type { SshTarget } from '../../../../shared/ssh-types'
+import type { SshTarget } from '../../../../shared/remote-runtime/ssh/ssh-types'
 import type { Store } from '../../../persistence/loading-store/store'
 import {
   abortOrcadMigrationCutover,
@@ -150,7 +150,7 @@ async function commitDelta(
   store.updateSshTarget(target.id, { orcadFence: { environmentId: plan.environmentId } })
   await args.claims.flush()
   // Record before any new/resumed commit so rollback cannot cross the migration.
-  recordManagedOrcadMigration(userDataPath, plan.environmentId, now().toISOString())
+  await recordManagedOrcadMigration(userDataPath, plan.environmentId, now().toISOString())
   let destination: OrcadMigrationDestinationCatalog
   try {
     destination = await args.connectDestination()
