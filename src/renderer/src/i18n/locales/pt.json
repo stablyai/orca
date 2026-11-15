@@ -1984,6 +1984,10 @@
       "availableOn": "Disponível para você em {{date}} ({{relative}})",
       "clearedTitle": "Orca {{version}} está pronto",
       "released": "Lançado {{released}}"
+    },
+    "groupHooks": {
+      "invalidSetup": "O arquivo está presente, mas o Orca não encontrou um script de configuração válido.",
+      "supportedKeys": "Defina apenas as chaves compatíveis: `scripts` e `setup`."
     }
   },
   "auto": {
@@ -3097,6 +3101,15 @@
       "workspacePortBrowserOpen": {
         "systemBrowserHint": "{{shortcut}}+clique para abrir no navegador do sistema",
         "tooltip": "{{label}}. {{hint}}"
+      },
+      "worktreePaletteEvidence": {
+        "workspaceComment": "Comentário do espaço de trabalho",
+        "createdByAutomation": "Criado por automação",
+        "linkedTask": "Tarefa vinculada",
+        "pullRequest": "Pull request",
+        "mergeRequest": "Merge request",
+        "linkedIssue": "Issue vinculada",
+        "listeningPort": "Porta em escuta"
       }
     },
     "components": {
