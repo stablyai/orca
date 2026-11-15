@@ -173,7 +173,7 @@ function QueuedMessageCardContents({
             </Text>
           ) : null}
         </View>
-        {card.waitsForAgent ? null : (
+        {card.waitsForAgent || card.hold === 'steer' ? null : (
           <Pressable
             accessibilityRole="button"
             accessibilityState={{ disabled: busy || steerHeld }}

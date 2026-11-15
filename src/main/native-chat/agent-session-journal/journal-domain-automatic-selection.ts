@@ -10,5 +10,13 @@ export function selectJournalAutomaticSubmission(
   now: number,
   facts: JournalSqlQueueFacts
 ) {
-  return selectJournalEligibleQueueCard(scope, selection.authority, now, facts, true)
+  return selectJournalEligibleQueueCard(
+    scope,
+    selection.authority,
+    now,
+    facts,
+    true,
+    undefined,
+    selection.canPipelineSteers === true
+  )
 }

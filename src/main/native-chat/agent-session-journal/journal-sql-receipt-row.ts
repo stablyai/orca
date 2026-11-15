@@ -18,6 +18,7 @@ export function receiptRow(operation: JournalSqlStoreOperation): JournalReceiptS
       return 'tombstone'
     case 'queue-insert':
     case 'queue-update':
+    case 'queue-steer':
     case 'queue-hold':
     case 'queue-withdraw':
     case 'queue-move':

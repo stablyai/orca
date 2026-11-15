@@ -81,6 +81,11 @@ export function queuedMessageCardCaption(
             )
       }
       return t('components.native-chat.queuedMessages.paused', 'Paused')
+    case 'steer':
+      return t(
+        'components.native-chat.queuedMessages.pendingSteer',
+        'Pending steer — waiting to send'
+      )
     case 'sending':
       return t('components.native-chat.messageSending', 'Sending…')
     case 'turn':
@@ -263,7 +268,7 @@ export function NativeChatQueuedMessageCard({
         {card.hold === 'sending' ? null : (
           <>
             {/* A command never steers: its Send shows only while the agent is idle. */}
-            {card.waitsForAgent ? null : (
+            {card.waitsForAgent || card.hold === 'steer' ? null : (
               <Tooltip>
                 <TooltipTrigger asChild>
                   <Button

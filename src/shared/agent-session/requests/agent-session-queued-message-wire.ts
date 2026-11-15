@@ -40,6 +40,8 @@ export type AgentSessionQueuedMessage = {
   position: number
   body: AgentJournalMessageItem
   state: 'waiting' | 'returned'
+  /** Accepted steer intent; not evidence of provider receipt. */
+  deliveryMode?: 'queue' | 'steer'
   /** This one card is held, whatever the queue's pause: its conversion failed. */
   paused?: true
   /** send_failed needs explicit Send; unknown markers remain held. queuePause is separate and published with the list. */

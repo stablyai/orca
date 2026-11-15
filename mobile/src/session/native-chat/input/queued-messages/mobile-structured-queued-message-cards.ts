@@ -47,6 +47,8 @@ function queuedMessageCardCaption(
         ? "Couldn't send — tap Send to retry once the agent finishes"
         : "Couldn't send — tap Send to retry"
     // The phone draws no card for a send still on its way.
+    case 'steer':
+      return 'Pending steer — waiting to send'
     case 'sending':
     case 'turn':
     case 'queue-paused':

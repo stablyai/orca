@@ -33,6 +33,7 @@ import {
 export type QueuedMessageCardHold =
   /** Plainly queued, also behind an open question: the question already says the agent waits. */
   | 'turn'
+  | 'steer'
   /** The header owns queue-wide pause wording; answering a prompt does not resume draining. */
   | 'queue-paused'
   | 'paused'
@@ -93,7 +94,9 @@ export function projectQueuedMessageCards(
           ? 'paused'
           : session.queuePaused
             ? 'queue-paused'
-            : 'turn'
+            : message.deliveryMode === 'steer' && !message.body.command
+              ? 'steer'
+              : 'turn'
     const from = readAgentMessageSource(message.body.from)
     return {
       messageId: message.messageId,
@@ -182,7 +185,9 @@ export function headSteerableQueuedMessageCard(
   cards: readonly QueuedMessageCard[]
 ): QueuedMessageCard | null {
   const head = cards[0]
-  return head && head.hold !== 'sending' && queuedMessageCardSteers(head) ? head : null
+  return head && head.hold !== 'sending' && head.hold !== 'steer' && queuedMessageCardSteers(head)
+    ? head
+    : null
 }
 
 /** The card's line: its text, or for a card of images alone, the image's name or their count. */

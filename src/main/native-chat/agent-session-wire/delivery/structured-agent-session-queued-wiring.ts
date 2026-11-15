@@ -38,6 +38,8 @@ export function wireStructuredAgentSessionQueuedMessages(
       const child = sessions.get(sessionId)?.child
       const record = ctx.deps.store.getRecord(sessionId)
       return {
+        canPipelineSteers:
+          !!record && ctx.deps.agents.capabilities(record.provider)?.steering === 'inject',
         authority: captureHostStructuredAgentSessionWork(
           { store: ctx.deps.store, sessions },
           sessionId,

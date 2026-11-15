@@ -95,6 +95,7 @@ function computePublishedQueuedMessages(
       position: row.position,
       body: row.body,
       state: row.state,
+      ...(row.deliveryMode ? { deliveryMode: row.deliveryMode } : {}),
       ...(held ? { paused: true as const } : {}),
       // Unknown stored reasons remain plain holds.
       ...(held && isPublishedPausedReason(row.holdReason) ? { pausedReason: row.holdReason } : {}),

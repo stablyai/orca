@@ -109,6 +109,7 @@ export type JournalWriterInputOperation =
       }
     }
   | { kind: 'queue-update'; input: QueuedMessageUpdate }
+  | { kind: 'queue-steer'; messageId: string }
   | { kind: 'queue-hold'; messageIds: readonly string[]; reason: QueuedMessageHoldReason }
   | { kind: 'queue-withdraw'; messageIds: readonly string[] }
   | { kind: 'queue-move'; input: { messageId: string } & AgentSessionQueuedMessageMoveAnchor }

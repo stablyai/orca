@@ -1,3 +1,4 @@
+import { queuedSendAnswer } from './structured-agent-session-queued-send-answer'
 // Commit action receipts with effects so lost replies replay without ledger admission.
 // Published cards own rendered text; mutation answers carry none.
 
@@ -100,8 +101,14 @@ export function sendQueuedStructuredAgentMessage(
     fields: { messageId },
     conversationWrite: true,
     commandReceipt: {
-      result: (row) => journalRowReceiptResult(row, 'submission'),
-      binding: { at: 'last', kinds: ['submission'], answer: 'journal-row' },
+      result: (row) =>
+        row ? journalRowReceiptResult(row, 'submission') : { kind: 'queued-draft', messageId },
+      binding: {
+        at: 'last',
+        kinds: ['submission'],
+        answer: 'journal-row',
+        absent: { kind: 'queued-draft', messageId }
+      },
       unwritten: (value, ctx) =>
         submissionRowReceipt(ctx, 'submission' in value ? value.submission : undefined)
     },
@@ -134,10 +141,11 @@ export function sendQueuedStructuredAgentMessage(
       if (row.body.command && work.working()) {
         return invalid("A command can't be sent while the agent is working.")
       }
+      // Accept intent before provider readiness; the existing host drain owns delivery.
       if (
-        (work.activeTurnId() !== null || work.queueState().owedEnteredSubmissions.length > 0) &&
-        (work.activeTurnId() === null ||
-          work.queueState().owedEnteredSubmissions.length > 0 ||
+        !row.body.command &&
+        work.working() &&
+        (work.queueState().owedSendingSubmissions.length > 0 ||
           !canSteerStructuredQueuedMessage(
             {
               record,
@@ -147,15 +155,18 @@ export function sendQueuedStructuredAgentMessage(
               adapter: context.deps.adapter
             },
             row
+          ) ||
+          (await ctx.journal.queuedMessages.list()).some(
+            (card) => card.state === 'waiting' && card.deliveryMode === 'steer'
           ))
       ) {
+        await ctx.journal.queuedMessages.steer(messageId, ctx.operationReceipt)
         return {
-          ok: false,
-          refusal: refuse(
-            'agent_session_operation_invalid',
-            { reason: 'turnActive' },
-            'The current turn cannot accept this queued message yet.'
-          )
+          ok: true,
+          value: {
+            clientMessageId: operationId,
+            queued: { messageId, position: row.position, state: 'waiting' }
+          }
         }
       }
       const submissionId = operationId
@@ -213,6 +224,9 @@ export function sendQueuedStructuredAgentMessage(
     },
     // Replay the receipt’s original handoff, never the card’s newer handoff.
     replay: async (ctx, _outcome, receipt) => {
+      if (receipt?.kind === 'queued-draft') {
+        return queuedSendAnswer(ctx.journal, messageId)
+      }
       const submission =
         receipt?.kind === 'journal-row' && receipt.epoch === ctx.journal.cursor().epoch
           ? (await ctx.journal.reads.input({ kind: 'submission-at', sequence: receipt.sequence }))

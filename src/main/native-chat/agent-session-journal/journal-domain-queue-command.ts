@@ -38,6 +38,7 @@ export type JournalDomainQueueOperation = JournalSqlQueueWrite
 export type JournalDomainQueueResult =
   | { kind: 'queue-insert'; card: QueuedMessageRow }
   | { kind: 'queue-update'; update: AgentSessionQueuedMessageUpdateResult }
+  | { kind: 'queue-steer' }
   | { kind: 'queue-hold' }
   | { kind: 'queue-withdraw'; cards: QueuedMessageRow[] }
   | { kind: 'queue-move'; move: AgentSessionQueuedMessageMoveResult }
@@ -159,6 +160,28 @@ export function applyJournalDomainQueueCommand(
           fingerprint: decision.fingerprint
         }
       }
+      break
+    }
+    case 'queue-steer': {
+      const prior = current(operation.messageId)
+      if (prior && isUnsettledQueuedMessage(prior.card)) {
+        changes = [
+          {
+            prior,
+            card: {
+              ...prior.card,
+              state: 'waiting',
+              deliveryMode: 'steer',
+              holdReason: null,
+              returnedReason: null,
+              returnedRejection: null,
+              queuedAt: { ...cursor, sequence: cursor.sequence + 1 }
+            }
+          }
+        ]
+        retire = [operation.messageId]
+      }
+      result = { kind: 'queue-steer' }
       break
     }
     case 'queue-hold':
