@@ -71,13 +71,16 @@ describe('addWorktree', () => {
     const moveStarted = new Promise<void>((resolve) => {
       markMoveStarted = resolve
     })
-    queueBehindInspection().mockImplementationOnce(
-      () =>
-        new Promise((resolve) => {
-          finishMove = () => resolve({ stdout: '' })
-          markMoveStarted()
-        })
-    )
+    queueBehindInspection()
+      .mockResolvedValueOnce({ stdout: '' })
+      .mockResolvedValueOnce({ stdout: '.git\n' })
+      .mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            finishMove = () => resolve({ stdout: '' })
+            markMoveStarted()
+          })
+      )
     checkoutGitMock.mockImplementationOnce(async () => {
       await moveStarted
       finishMove()
@@ -94,8 +97,11 @@ describe('addWorktree', () => {
     expect(checkoutGitMock.mock.calls[0]?.[0]).toContain('add')
   })
 
-  it('fast-forwards local base with a local fetch when localBranch is not checked out', async () => {
-    queueBehindInspection().mockResolvedValueOnce({ stdout: '' })
+  it('fast-forwards local base via update-ref when localBranch is not checked out', async () => {
+    queueBehindInspection()
+      .mockResolvedValueOnce({ stdout: '' })
+      .mockResolvedValueOnce({ stdout: '.git\n' })
+      .mockResolvedValueOnce({ stdout: '' })
 
     const result = await addWorktree('/repo', '/repo-feature', 'feature/test', 'origin/main', true)
 
@@ -106,17 +112,14 @@ describe('addWorktree', () => {
     })
     expect(refreshGitMock.mock.calls.at(-1)).toEqual([
       [
-        '-c',
-        'gc.auto=0',
-        '-c',
-        'maintenance.auto=false',
-        'fetch',
-        '--no-tags',
-        '--no-recurse-submodules',
-        '.',
-        'refs/remotes/origin/main:refs/heads/main'
+        'update-ref',
+        '-m',
+        'orca: fast-forward to refs/remotes/origin/main',
+        'refs/heads/main',
+        'remote-main',
+        'old-main'
       ],
-      { cwd: '/repo' }
+      expect.objectContaining({ cwd: '/repo', admissionExempt: true })
     ])
   })
 

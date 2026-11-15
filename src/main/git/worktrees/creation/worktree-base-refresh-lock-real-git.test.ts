@@ -51,7 +51,7 @@ async function createBehindRepo(lock: 'main-ref' | 'index' = 'main-ref'): Promis
 }
 
 function isWrite(args: readonly string[]): boolean {
-  return args.includes('fetch') || args.includes('merge')
+  return args.includes('update-ref') || args.includes('merge')
 }
 
 /** Counts writes; `onFailure` runs after each failed one, before it is reported. */
@@ -130,6 +130,22 @@ describe('local base refresh of a checked-out branch with real Git', () => {
     expect(spy.writes()).toBe(0)
     expect(git(repoPath, ['rev-parse', 'main'])).toBe(localOid)
     expect(await readFile(lockPath, 'utf8')).toBe('')
+  })
+})
+
+describe('local base refresh of a branch a rebase has reserved with real Git', () => {
+  it('leaves it alone although no worktree lists it as checked out', async () => {
+    const { repoPath, lockPath, localOid } = await createBehindRepo()
+    await rm(lockPath, { force: true })
+    git(repoPath, ['checkout', '--quiet', 'main'])
+    // Stops mid-rebase with HEAD detached; Git still treats main as in use.
+    expect(() => git(repoPath, ['rebase', '--quiet', '--root', '--exec', 'false'])).toThrow()
+    const spy = spyOnFastForwards()
+
+    await expect(refresh(repoPath)).resolves.toBeUndefined()
+
+    expect(spy.writes()).toBe(0)
+    expect(git(repoPath, ['rev-parse', 'main'])).toBe(localOid)
   })
 })
 

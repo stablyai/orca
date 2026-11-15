@@ -82,7 +82,9 @@ function realGit(fixture: Fixture, afterInspection?: () => Promise<void> | void)
       return result
     },
     listWorktrees: async (repoPath) =>
-      parseWorktreeList((await run(['worktree', 'list', '--porcelain'], repoPath)).stdout)
+      parseWorktreeList((await run(['worktree', 'list', '--porcelain'], repoPath)).stdout),
+    listReservedBranches: async () => new Set(),
+    runExclusive: (_repoPath, work) => work(git)
   }
   return { git, commands }
 }
@@ -128,17 +130,6 @@ describe('fastForwardLocalBaseBranch against real Git', () => {
     expect(fixture.git(['status', '--porcelain'])).toBe('')
   })
 
-  it('leaves main alone while a rebase of it is in progress', async () => {
-    const fixture = await createBehindRepo()
-    // Stops mid-rebase: HEAD is detached, so no worktree lists main as checked out.
-    expect(() => fixture.git(['rebase', '--quiet', '--root', '--exec', 'false'])).toThrow()
-
-    const outcome = await fastForward(fixture, realGit(fixture).git)
-
-    expect(outcome).toEqual({ status: 'nothing_to_do' })
-    expect(fixture.git(['rev-parse', 'main'])).toBe(fixture.localOid)
-  })
-
   it('keeps a move of main made after the inspection', async () => {
     const fixture = await createBehindRepo()
     fixture.git(['checkout', '--quiet', '-b', 'develop'])
@@ -151,7 +142,7 @@ describe('fastForwardLocalBaseBranch against real Git', () => {
 
     const outcome = await fastForward(fixture, realGit(fixture, moveMain).git)
 
-    expect(outcome).toEqual({ status: 'skipped_not_fast_forward' })
+    expect(outcome).toEqual({ status: 'skipped_error' })
     expect(fixture.git(['rev-parse', 'main'])).toBe(userCommit)
   })
 

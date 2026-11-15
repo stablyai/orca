@@ -1,3 +1,5 @@
+import { readdir, readFile } from 'node:fs/promises'
+import { isAbsolute, join } from 'node:path'
 import type {
   LocalBaseRefRefreshResult,
   LocalBaseRefUpdateSuggestion
@@ -13,7 +15,12 @@ import {
   type LocalBaseBranchGit
 } from '../../../../shared/worktree/base-refs/local-base-branch-fast-forward'
 import { gitExecFileAsync } from '../../command-runner/git-exec-file'
-import { translateWslOutputPaths } from '../../command-runner/host-routing/wsl-path-translation'
+import {
+  translateWslOutputPath,
+  translateWslOutputPaths
+} from '../../command-runner/host-routing/wsl-path-translation'
+import { acquireGitAdmission } from '../../command-runner/admission/git-subprocess-admission'
+import type { GitExecOptions } from '../../command-runner/git-exec-options'
 import { runWithGitReadCacheInvalidation } from '../../source-control/git-read-cache-invalidation'
 import type { AddWorktreeOptions, GitWorktreeExecOptions } from '../worktree-operation-options'
 
@@ -107,12 +114,16 @@ export async function getLocalBaseRefUpdateSuggestionForWorktreeCreate(
     : undefined
 }
 
-function localBaseBranchGit(options: GitWorktreeExecOptions): LocalBaseBranchGit {
+function localBaseBranchGit(
+  options: GitWorktreeExecOptions,
+  held?: Pick<GitExecOptions, 'admissionExempt' | 'observeChildTermination'>
+): LocalBaseBranchGit {
   // Shared refreshes cannot use any individual create's cancellation signal or timeout.
-  const execOptions = (cwd: string) => ({
+  const execOptions = (cwd: string): GitExecOptions => ({
     cwd,
     ...(options.wslDistro ? { wslDistro: options.wslDistro } : {}),
-    ...(options.admissionTier ? { admissionTier: options.admissionTier } : {})
+    ...(options.admissionTier ? { admissionTier: options.admissionTier } : {}),
+    ...held
   })
   return {
     exec: (args, cwd) => gitExecFileAsync(args, execOptions(cwd)),
@@ -124,7 +135,92 @@ function localBaseBranchGit(options: GitWorktreeExecOptions): LocalBaseBranchGit
         () => gitExecFileAsync(['worktree', 'list', '--porcelain'], execOptions(repoPath))
       )
       return parseWorktreeList(translateWslOutputPaths(stdout, repoPath, options))
+    },
+    listReservedBranches: async (repoPath) => {
+      const { stdout } = await gitExecFileAsync(
+        ['rev-parse', '--git-common-dir'],
+        execOptions(repoPath)
+      )
+      const commonDir = stdout.trim()
+      return readRebaseAndBisectReservations(
+        isAbsolute(commonDir)
+          ? translateWslOutputPath(commonDir, repoPath, options)
+          : join(repoPath, commonDir)
+      )
+    },
+    runExclusive: async (repoPath, work) => {
+      const grant = await acquireGitAdmission({
+        args: ['update-ref'],
+        cwd: repoPath,
+        wslDistro: options.wslDistro,
+        tier: options.admissionTier
+      })
+      const terminations: Promise<void>[] = []
+      try {
+        return await work(
+          localBaseBranchGit(options, {
+            admissionExempt: true,
+            observeChildTermination: (terminated) => terminations.push(terminated)
+          })
+        )
+      } finally {
+        // Like any admitted command, hold the slot until every child has exited.
+        void Promise.all(terminations).then(grant.release)
+      }
     }
+  }
+}
+
+// Git's own in-use rule: a rebase (head-name, --update-refs) or bisect in any worktree reserves its branch.
+async function readRebaseAndBisectReservations(commonDir: string): Promise<ReadonlySet<string>> {
+  const gitDirs = [commonDir]
+  try {
+    for (const entry of await readdir(join(commonDir, 'worktrees'), { withFileTypes: true })) {
+      if (entry.isDirectory()) {
+        gitDirs.push(join(commonDir, 'worktrees', entry.name))
+      }
+    }
+  } catch (error) {
+    rethrowUnlessMissing(error)
+  }
+  const reserved = new Set<string>()
+  await Promise.all(
+    gitDirs.map(async (gitDir) => {
+      const [rebaseMerge, rebaseApply, updateRefs, bisectStart] = await Promise.all([
+        readOptional(join(gitDir, 'rebase-merge', 'head-name')),
+        readOptional(join(gitDir, 'rebase-apply', 'head-name')),
+        readOptional(join(gitDir, 'rebase-merge', 'update-refs')),
+        readOptional(join(gitDir, 'BISECT_START'))
+      ])
+      for (const line of [rebaseMerge, rebaseApply, updateRefs].flatMap((text) =>
+        text.split('\n')
+      )) {
+        if (line.startsWith('refs/heads/')) {
+          reserved.add(line.trim())
+        }
+      }
+      const bisected = bisectStart.trim()
+      if (bisected) {
+        reserved.add(bisected.startsWith('refs/') ? bisected : `refs/heads/${bisected}`)
+      }
+    })
+  )
+  return reserved
+}
+
+async function readOptional(path: string): Promise<string> {
+  try {
+    return await readFile(path, 'utf8')
+  } catch (error) {
+    rethrowUnlessMissing(error)
+    return ''
+  }
+}
+
+function rethrowUnlessMissing(error: unknown): void {
+  const code = (error as NodeJS.ErrnoException | null)?.code
+  if (code !== 'ENOENT' && code !== 'ENOTDIR') {
+    throw error
   }
 }
 
