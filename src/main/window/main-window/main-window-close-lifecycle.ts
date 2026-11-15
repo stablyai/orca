@@ -8,7 +8,11 @@ import type { MainWindowFocusLifecycle } from './main-window-focus-lifecycle'
 import type { MainWindowStateLifecycle } from './main-window-state-lifecycle'
 import { syncTrafficLightPosition } from './main-window-visual-lifecycle'
 import { consumeUserQuitWindowClose } from './user-quit-window-close'
-import { replacePendingReloadWithClose } from '../renderer-relays/native-unload-coordinator'
+import {
+  isWindowCloseInFlight,
+  replacePendingReloadWithClose,
+  setWindowCloseInFlight
+} from '../renderer-relays/native-unload-coordinator'
 
 export function installMainWindowCloseLifecycle(args: {
   focus: MainWindowFocusLifecycle
@@ -26,8 +30,7 @@ export function installMainWindowCloseLifecycle(args: {
   const closeCancelledChannel = 'window:close-cancelled'
   let closeRequestSequence = 0
   let quitRendererAckRequestId: number | null = null
-  // A quit close the renderer acknowledged but has not yet confirmed or cancelled.
-  let quitCloseInFlight = false
+  const rendererWebContents = mainWindow.webContents
   let quitRendererAckTimer: ReturnType<typeof setTimeout> | null = null
   const clearQuitRendererAckTimer = (): void => {
     quitRendererAckRequestId = null
@@ -139,9 +142,9 @@ export function installMainWindowCloseLifecycle(args: {
     const isQuitting = opts?.getIsQuitting?.() ?? false
     sendCloseRequestAfterPendingReload(() => {
       const requestId = ++closeRequestSequence
+      setWindowCloseInFlight(rendererWebContents, { quitting: isQuitting || userQuitClose })
       // User Quit on serve closes windows without quitting the host; still bound frozen-renderer acknowledgement.
       if (isQuitting || userQuitClose) {
-        quitCloseInFlight = true
         armQuitRendererAckTimer(requestId)
       }
       // The always-mounted App subscription can confirm even before a workspace exists (#5144).
@@ -151,19 +154,20 @@ export function installMainWindowCloseLifecycle(args: {
       })
     })
   })
-  // Acknowledgement disarms the frozen-renderer timer, so a renderer that dies before confirming must not strand quit.
+  // A renderer that dies before confirming cannot answer; finish the close a gone renderer may bypass anyway.
   mainWindow.webContents.on('render-process-gone', () => {
-    if (!quitCloseInFlight || mainWindow.isDestroyed()) {
+    if (!isWindowCloseInFlight(rendererWebContents) || mainWindow.isDestroyed()) {
       return
     }
+    setWindowCloseInFlight(rendererWebContents, null)
     clearQuitRendererAckTimer()
-    console.warn('[window] Renderer exited during a quit close; destroying window')
+    console.warn('[window] Renderer exited during a close request; destroying window')
     state.freezeBoundsOnQuit()
     mainWindow.destroy()
   })
   // A veto cancels quit; resume bounds persistence for subsequent user resizing.
   const abortQuit = (): void => {
-    quitCloseInFlight = false
+    setWindowCloseInFlight(rendererWebContents, null)
     state.resumeBoundsPersistence()
     clearQuitRendererAckTimer()
     opts?.onQuitAborted?.()
@@ -174,6 +178,9 @@ export function installMainWindowCloseLifecycle(args: {
   })
   // Renderer prompts never reach will-prevent-unload. IPC is ordered, so a cancel before the newest ack is stale.
   const onCloseCancelled = (event: Electron.IpcMainEvent): void => {
+    if (event.sender.id === rendererWebContentsId) {
+      setWindowCloseInFlight(rendererWebContents, null)
+    }
     if (
       event.sender.id === rendererWebContentsId &&
       lastAcknowledgedRequestId === closeRequestSequence &&
@@ -184,7 +191,7 @@ export function installMainWindowCloseLifecycle(args: {
   }
 
   const onConfirmClose = (): void => {
-    quitCloseInFlight = false
+    setWindowCloseInFlight(rendererWebContents, null)
     clearQuitRendererAckTimer()
     windowCloseConfirmed = true
     if (!mainWindow.isDestroyed()) {
@@ -226,6 +233,7 @@ export function installMainWindowCloseLifecycle(args: {
       return
     }
     sendCloseRequestAfterPendingReload(() => {
+      setWindowCloseInFlight(rendererWebContents, { quitting: false })
       mainWindow.webContents.send('window:close-requested', { isQuitting: false })
     })
   }

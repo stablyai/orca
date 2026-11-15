@@ -9,7 +9,8 @@ vi.mock('electron', async () => {
 import {
   installNativeUnloadCoordinator,
   reloadWithRendererCheckpoint,
-  replacePendingReloadWithClose
+  replacePendingReloadWithClose,
+  setWindowCloseInFlight
 } from './native-unload-coordinator'
 
 function fixture() {
@@ -28,7 +29,7 @@ function fixture() {
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the double implements the webContents members the coordinator uses.
   const webContents = contents as unknown as WebContents
   const reply = (ok: boolean, senderFrame: unknown = frame): void => {
-    const requestId = frame.send.mock.calls.find(
+    const requestId = frame.send.mock.calls.findLast(
       ([channel]) => channel === 'app:prepare-native-unload'
     )?.[1]
     ipcMain.emit('app:native-unload-prepared', { sender: contents, senderFrame }, { requestId, ok })
@@ -38,7 +39,9 @@ function fixture() {
     frame,
     reply,
     reload: (ignoreCache = false) => reloadWithRendererCheckpoint(webContents, ignoreCache),
-    replaceWithClose: () => replacePendingReloadWithClose(webContents)
+    replaceWithClose: () => replacePendingReloadWithClose(webContents),
+    setCloseInFlight: (close: { quitting: boolean } | null) =>
+      setWindowCloseInFlight(webContents, close)
   }
 }
 
@@ -83,7 +86,7 @@ describe('native reload checkpoint', () => {
     expect(contents.reloadIgnoringCache).not.toHaveBeenCalled()
     await vi.advanceTimersByTimeAsync(1)
     await result
-    expect(frame.send).toHaveBeenCalledWith('app:native-unload-expired', expect.any(String))
+    expect(frame.send).toHaveBeenCalledWith('app:native-unload-canceled', expect.any(String))
     expect(contents.reloadIgnoringCache).toHaveBeenCalledOnce()
   })
 
@@ -97,7 +100,7 @@ describe('native reload checkpoint', () => {
   })
 
   it('lets a close requested mid-checkpoint wait for the verdict and replace the reload', async () => {
-    const { contents, reply, reload, replaceWithClose } = fixture()
+    const { contents, frame, reply, reload, replaceWithClose } = fixture()
     const result = reload()
     let closeMayProceed = false
     const close = replaceWithClose()?.then(() => {
@@ -109,5 +112,29 @@ describe('native reload checkpoint', () => {
     await Promise.all([result, close])
     expect(closeMayProceed).toBe(true)
     expect(contents.reload).not.toHaveBeenCalled()
+    // The page suspended its unload guards for the reload; the close must find them restored.
+    expect(frame.send).toHaveBeenLastCalledWith('app:native-unload-canceled', expect.any(String))
+  })
+
+  it('does not reload over a quit close the renderer is still answering', async () => {
+    const { contents, frame, reload, setCloseInFlight } = fixture()
+    setCloseInFlight({ quitting: true })
+    await reload(true)
+    expect(frame.send).not.toHaveBeenCalled()
+    expect(contents.reloadIgnoringCache).not.toHaveBeenCalled()
+  })
+
+  it('asks again after a prepare request could not be sent', async () => {
+    const { contents, frame, reply, reload } = fixture()
+    frame.send.mockImplementationOnce(() => {
+      throw new Error('frame disposed')
+    })
+    await reload()
+    expect(contents.reload).toHaveBeenCalledOnce()
+    const next = reload()
+    expect(frame.send).toHaveBeenCalledTimes(2)
+    reply(true)
+    await next
+    expect(contents.reload).toHaveBeenCalledTimes(2)
   })
 })

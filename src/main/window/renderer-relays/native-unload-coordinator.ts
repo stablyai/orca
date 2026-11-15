@@ -8,15 +8,47 @@ import {
 type BeforeReload = (options: { webContentsId: number; ignoreCache: boolean }) => void
 /** saved: durable; failed: renderer refused (cancel); unreachable: reload as before; superseded: document already gone. */
 type PrepareOutcome = 'saved' | 'failed' | 'unreachable' | 'superseded'
-type NativeUnload = { prepare(): Promise<PrepareOutcome>; beforeReload?: BeforeReload }
+type NativeUnload = {
+  prepare(): Promise<PrepareOutcome>
+  /** Tells the last prepared document that main will not reload it after all. */
+  cancelPrepared(): void
+  beforeReload?: BeforeReload
+}
 
 // Quit's frozen-renderer bound plus the checkpoint flush deadline, so a live renderer still gets main's durable verdict.
-export const NATIVE_UNLOAD_PREPARE_DEADLINE_MS =
+const NATIVE_UNLOAD_PREPARE_DEADLINE_MS =
   QUIT_RENDERER_ACK_TIMEOUT_MS + WILL_QUIT_TEARDOWN_DEADLINE_MS
 
 type ReloadOptions = { ignoreCache: boolean; replacedByClose?: boolean }
 const reloads = new WeakMap<WebContents, { options: ReloadOptions; promise: Promise<void> }>()
 const coordinators = new WeakMap<WebContents, NativeUnload>()
+// Value is whether the close is part of a quit.
+const closesInFlight = new WeakMap<WebContents, boolean>()
+
+/** Main marks a close request until the renderer confirms or cancels it, or dies. */
+export function setWindowCloseInFlight(
+  contents: WebContents,
+  close: { quitting: boolean } | null
+): void {
+  if (close) {
+    closesInFlight.set(contents, close.quitting)
+  } else {
+    closesInFlight.delete(contents)
+  }
+}
+
+export function isWindowCloseInFlight(contents: WebContents): boolean {
+  return closesInFlight.has(contents)
+}
+
+function cancelPreparedUnload(frame: Electron.WebFrameMain, requestId: string): void {
+  try {
+    // Restores the renderer's ordinary unload guards, which its reload preparation suspended.
+    frame.send('app:native-unload-canceled', requestId)
+  } catch {
+    // Frame already gone; nothing left to restore.
+  }
+}
 
 /** Native reloads join the document's durable checkpoint, like the renderer's own restart/reload. */
 export function installNativeUnloadCoordinator(
@@ -26,8 +58,14 @@ export function installNativeUnloadCoordinator(
   const contents = window.webContents
   let pending: Promise<PrepareOutcome> | undefined
   let settlePending: ((outcome: PrepareOutcome) => void) | undefined
+  let lastRequest: { frame: Electron.WebFrameMain; requestId: string } | undefined
   const coordinator: NativeUnload = {
     beforeReload,
+    cancelPrepared() {
+      if (lastRequest) {
+        cancelPreparedUnload(lastRequest.frame, lastRequest.requestId)
+      }
+    },
     prepare() {
       if (pending) {
         return pending
@@ -37,6 +75,7 @@ export function installNativeUnloadCoordinator(
       }
       const frame = contents.mainFrame
       const requestId = randomUUID()
+      lastRequest = { frame, requestId }
       pending = new Promise<PrepareOutcome>((resolve) => {
         const onReply = (
           event: Electron.IpcMainEvent,
@@ -53,12 +92,8 @@ export function installNativeUnloadCoordinator(
         }
         const deadline = setTimeout(() => {
           console.warn('[window] Renderer did not finish its reload checkpoint; reloading anyway')
-          try {
-            // Lets a slow renderer restore its ordinary unload guards before the reload's beforeunload.
-            frame.send('app:native-unload-expired', requestId)
-          } catch {
-            // Frame already gone; the reload below proceeds as before.
-          }
+          // A slow renderer gets its ordinary unload guards back before the reload's beforeunload.
+          cancelPreparedUnload(frame, requestId)
           settle('unreachable')
         }, NATIVE_UNLOAD_PREPARE_DEADLINE_MS)
         const settle = (outcome: PrepareOutcome): void => {
@@ -70,13 +105,15 @@ export function installNativeUnloadCoordinator(
         }
         settlePending = settle
         ipcMain.on('app:native-unload-prepared', onReply)
-        try {
-          frame.send('app:prepare-native-unload', requestId)
-        } catch {
-          settle('unreachable')
-        }
       })
-      return pending
+      const prepared = pending
+      // Sent after `pending` is assigned so a throwing send clears it instead of caching 'unreachable'.
+      try {
+        frame.send('app:prepare-native-unload', requestId)
+      } catch {
+        settlePending?.('unreachable')
+      }
+      return prepared
     }
   }
   coordinators.set(contents, coordinator)
@@ -102,6 +139,10 @@ export async function reloadWithRendererCheckpoint(
   ignoreCache = false,
   beforeReload?: BeforeReload
 ): Promise<void> {
+  // A reload would discard the quit close the renderer is still answering, silently dropping the quit.
+  if (closesInFlight.get(contents) === true) {
+    return
+  }
   const existing = reloads.get(contents)
   if (existing) {
     existing.options.ignoreCache ||= ignoreCache
@@ -114,7 +155,11 @@ export async function reloadWithRendererCheckpoint(
     if (outcome === 'failed') {
       throw new Error('Renderer reload was canceled because its state could not be saved.')
     }
-    if (outcome === 'superseded' || options.replacedByClose || contents.isDestroyed()) {
+    if (outcome === 'superseded' || contents.isDestroyed()) {
+      return
+    }
+    if (options.replacedByClose) {
+      coordinator?.cancelPrepared()
       return
     }
     ;(beforeReload ?? coordinator?.beforeReload)?.({

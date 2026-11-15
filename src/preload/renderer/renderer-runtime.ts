@@ -64,19 +64,13 @@ export const updaterQuitAbortRelay = createUpdaterQuitAbortRelay(
 
 registerRendererRestartIpcRelays(ipcRenderer, window, updaterQuitAbortRelay)
 
-let rendererRequestedReloads = 0
-
-/** Main runs the checkpoint through app:prepare-native-unload; this caller reports its own failure. */
+/** Main runs the checkpoint through app:prepare-native-unload, which reports its own failure. */
 export async function invokeRendererRequestedReload(): Promise<void> {
-  rendererRequestedReloads += 1
-  try {
-    await ipcRenderer.invoke('app:reload')
-  } finally {
-    rendererRequestedReloads -= 1
-  }
+  await ipcRenderer.invoke('app:reload')
 }
 
 const nativeUnloadRequests = new Set<string>()
+let preparedNativeUnload: string | undefined
 
 // Main asks before menu, shortcut, DevTools and in-app reloads; prepare exactly like the renderer's own restart.
 ipcRenderer.on('app:prepare-native-unload', (_event, requestId: unknown) => {
@@ -88,6 +82,7 @@ ipcRenderer.on('app:prepare-native-unload', (_event, requestId: unknown) => {
     window,
     async () => {
       if (nativeUnloadRequests.delete(requestId)) {
+        preparedNativeUnload = requestId
         ipcRenderer.send('app:native-unload-prepared', { requestId, ok: true })
       }
     },
@@ -96,18 +91,21 @@ ipcRenderer.on('app:prepare-native-unload', (_event, requestId: unknown) => {
     if (!nativeUnloadRequests.delete(requestId)) {
       return
     }
-    if (rendererRequestedReloads === 0) {
-      // Preparation consumed the staging reason; republish so the toast names why the reload stopped.
-      publishShutdownCheckpointFailureReason(formatShutdownCheckpointFailureReason(error))
-      window.dispatchEvent(new Event(ORCA_NATIVE_UNLOAD_FAILED_EVENT))
-    }
+    // Preparation consumed the staging reason; republish so the toast names why the reload stopped.
+    publishShutdownCheckpointFailureReason(formatShutdownCheckpointFailureReason(error))
+    window.dispatchEvent(new Event(ORCA_NATIVE_UNLOAD_FAILED_EVENT))
     ipcRenderer.send('app:native-unload-prepared', { requestId, ok: false })
   })
 })
 
-// Main reloads without this checkpoint; restore the ordinary unload guards that reload had before.
-ipcRenderer.on('app:native-unload-expired', (_event, requestId: unknown) => {
-  if (typeof requestId === 'string' && nativeUnloadRequests.delete(requestId)) {
+// Main gave up waiting or replaced the reload with a close; restore the ordinary unload guards.
+ipcRenderer.on('app:native-unload-canceled', (_event, requestId: unknown) => {
+  if (typeof requestId !== 'string') {
+    return
+  }
+  const pending = nativeUnloadRequests.delete(requestId)
+  if (pending || preparedNativeUnload === requestId) {
+    preparedNativeUnload = undefined
     window.dispatchEvent(new Event(ORCA_APP_RESTART_ABORTED_EVENT))
   }
 })
