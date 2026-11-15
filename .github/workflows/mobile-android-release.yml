@@ -20,6 +20,7 @@ on:
 
 jobs:
   android-build:
+    if: github.repository == 'stablyai/orca'
     runs-on: ubuntu-latest
     permissions:
       contents: read

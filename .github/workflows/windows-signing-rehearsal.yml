@@ -30,6 +30,7 @@ jobs:
 
   rehearse:
     needs: orcad-template
+    if: github.repository == 'stablyai/orca'
     # Why: SignPath origin verification requires GitHub-hosted runners, and
     # windows-2022 matches the real release job's build environment.
     runs-on: windows-2022

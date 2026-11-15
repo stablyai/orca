@@ -1,3 +1,6 @@
+> [!NOTE]
+> **Zotz es un fork de [Orca](https://github.com/stablyai/orca)** para correr como nodo remoto de agentes 24/7. Plan del fork: [`docs/zotz/PLAN.md`](docs/zotz/PLAN.md). Todo lo demás de este README es el original de Orca.
+
 <h1 align="center">
   <a href="https://orca.dev"><img src="resources/build/icon.png" alt="Orca" width="64" valign="middle" /></a> Orca
 </h1>
