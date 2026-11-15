@@ -136,7 +136,7 @@ describe('Source "in-workspace" (sign in inside this workspace)', () => {
   it('the migration keeps every row written before the table was widened', () => {
     const dir = fileURLToPath(new URL('../migrations/', import.meta.url).href)
     const files = readdirSync(dir).filter((name) => name.endsWith('.sql')).sort()
-    const widen = files.indexOf('0062_agent_sources_in_workspace.sql')
+    const widen = files.indexOf('0063_agent_sources_in_workspace.sql')
     expect(widen).toBeGreaterThan(0)
     const raw = new DatabaseSync(':memory:')
     for (const file of files.slice(0, widen)) {
