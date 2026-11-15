@@ -30,10 +30,11 @@ If `permissions` reports anything missing, grant Accessibility (and Screen Recor
 Every interaction follows the same loop: read the app's current state, act on a specific element, then re-read state to verify the result.
 
 ```
-orca computer list-apps --json
-orca computer get-app-state --app com.spotify.client --json
-orca computer click --app com.spotify.client --element-index 42 --json
+orca computer get-app-state --app Spotify --no-screenshot
+orca computer click --app com.spotify.client --element-index 42 --no-screenshot --json
 ```
+
+Start from the app name and fall back to `list-apps` only when `get-app-state` fails with `app_not_found`. Leave screenshots off unless the tree can't answer (a canvas, a shallow tree, a click reported as `suspected noop`, or a click by coordinates): each capture adds time and a few hundred KB. Each command is a model turn for an agent, so steps that don't depend on what they'll read can share one shell call joined with `&&`; failed commands exit 1, but unverified results exit 0, so read each result's `verification`.
 
 Element indexes are scoped to the latest `get-app-state` result and may be **sparse**. In `--json` output, read the tree from `result.snapshot.treeText`. Do not invent indexes from `elementCount`. Refresh state after navigation, focus changes, scrolling, or any app re-render before reusing an index.
 
