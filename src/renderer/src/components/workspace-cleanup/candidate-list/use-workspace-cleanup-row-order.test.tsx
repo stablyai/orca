@@ -21,15 +21,24 @@ const row = (identity: string, rev = 0): Row => ({ identity, rev })
 const ids = (rows: readonly Row[]): string[] => rows.map((r) => r.identity)
 
 function mount(initial: Props): {
-  result: { rows: readonly Row[]; resetOrder: () => void }
+  result: {
+    rows: readonly Row[]
+    resetOrder: () => void
+    releaseRows: (identities: readonly string[]) => void
+  }
   update: (patch: Partial<Props>) => void
 } {
   const state = { props: initial }
-  const result = { rows: [] as readonly Row[], resetOrder: () => {} }
+  const result = {
+    rows: [] as readonly Row[],
+    resetOrder: () => {},
+    releaseRows: (_identities: readonly string[]) => {}
+  }
   function Probe(): null {
     const out = useWorkspaceCleanupHeldRows(state.props)
     result.rows = out.rows
     result.resetOrder = out.resetOrder
+    result.releaseRows = out.releaseRows
     return null
   }
   const container = document.createElement('div')
@@ -145,5 +154,31 @@ describe('useWorkspaceCleanupHeldRows', () => {
     expect(ids(result.rows)).toEqual(['a', 'b'])
     act(() => result.resetOrder())
     expect(ids(result.rows)).toEqual(['b', 'a'])
+  })
+
+  it('releaseRows drops only that row, and it re-enters at the end without moving others', () => {
+    const all = [row('a'), row('b'), row('c')]
+    const { result, update } = mount(props(all))
+    // b is ignored: it leaves the live result and its slot is released.
+    update(props([row('a'), row('c')]))
+    act(() => result.releaseRows(['b']))
+    expect(ids(result.rows)).toEqual(['a', 'c'])
+    // Restored: it matches again and appends after the others instead of re-sorting them.
+    update(props([row('a'), row('b'), row('c')]))
+    expect(ids(result.rows)).toEqual(['a', 'c', 'b'])
+  })
+
+  it('re-sorts when git checking finishes under the settle rule', () => {
+    const { result, update } = mount(props([row('a'), row('b')], { gitChecking: true }))
+    update(props([row('b'), row('a')], { gitChecking: true }))
+    expect(ids(result.rows)).toEqual(['a', 'b'])
+    update(props([row('b'), row('a')], { gitChecking: false, shouldResortAtSettle: () => true }))
+    expect(ids(result.rows)).toEqual(['b', 'a'])
+  })
+
+  it('keeps order when git checking finishes after the user has started working', () => {
+    const { result, update } = mount(props([row('a'), row('b')], { gitChecking: true }))
+    update(props([row('b'), row('a')], { gitChecking: false, shouldResortAtSettle: () => false }))
+    expect(ids(result.rows)).toEqual(['a', 'b'])
   })
 })

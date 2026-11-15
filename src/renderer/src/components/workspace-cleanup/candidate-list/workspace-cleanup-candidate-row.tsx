@@ -230,13 +230,19 @@ export const CandidateRow = React.memo(function CandidateRow({
               />
             ) : null}
           </div>
-
-          <div className="mt-0.5 flex min-h-5 min-w-0 flex-wrap items-center gap-x-3 gap-y-1">
+          {/* One fixed-height line that never wraps: late status/review/disconnect data cannot add
+              a line; what does not fit is truncated and keeps its tooltip. */}
+          <div className="mt-0.5 flex h-5 min-w-0 flex-nowrap items-center gap-x-3 overflow-hidden">
             {queueable || deletionPhase ? (
-              // Fixed-size slot: evidence arriving swaps its contents without resizing the row.
+              // Fixed-height slot: evidence arriving swaps its contents without resizing the row.
               <Tooltip>
                 <TooltipTrigger asChild>
-                  <span className="inline-flex h-5 w-60 max-w-full shrink-0 items-center gap-1.5 overflow-hidden">
+                  <span
+                    data-workspace-cleanup-git-slot
+                    role="group"
+                    aria-label={gitSlotText ?? undefined}
+                    className="inline-flex h-5 min-w-0 shrink items-center gap-1.5 overflow-hidden"
+                  >
                     {deletionPhase ? (
                       <StatusPill tone="destructive">
                         {deletionPhase === 'queued'
@@ -316,6 +322,7 @@ export const CandidateRow = React.memo(function CandidateRow({
                   { value0: workspaceStatusLabel }
                 )}
                 value={workspaceStatusLabel}
+                className="min-w-0 shrink"
               />
             ) : null}
             {contextDetails ? (
@@ -323,6 +330,7 @@ export const CandidateRow = React.memo(function CandidateRow({
                 icon={SquareTerminal}
                 label={contextDetails}
                 value={String(contextCount)}
+                className="min-w-0 shrink"
               />
             ) : null}
             {reviewInfo.label ? (
@@ -334,7 +342,6 @@ export const CandidateRow = React.memo(function CandidateRow({
               />
             ) : null}
           </div>
-
           {failure ? (
             <div className="mt-1 flex min-h-5 items-center gap-1.5 text-xs text-destructive">
               <AlertTriangle className="size-3.5" />
@@ -351,7 +358,6 @@ export const CandidateRow = React.memo(function CandidateRow({
               ) : null}
             </div>
           ) : null}
-
           {hasExpandableDetails ? (
             <CandidateRowDetails
               flags={flags}
