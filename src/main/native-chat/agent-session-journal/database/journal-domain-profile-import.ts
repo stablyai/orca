@@ -32,7 +32,7 @@ export function importJournalDomainProfile(
   }
   if (source.prepare("SELECT 1 FROM sqlite_schema WHERE name='sqlite_sequence'").get()) {
     const highWater = source
-      .prepare("SELECT seq FROM sqlite_sequence WHERE name='pr_check_events'")
+      .prepare("SELECT seq FROM main.sqlite_sequence WHERE name='pr_check_events'")
       .get()
     if (highWater) {
       destination.prepare("DELETE FROM sqlite_sequence WHERE name='pr_check_events'").run()

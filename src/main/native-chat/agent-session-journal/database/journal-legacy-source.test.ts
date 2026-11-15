@@ -1,11 +1,12 @@
 import { createHash } from 'node:crypto'
-import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
+import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, expect, it } from 'vitest'
 import { openJournalDatabase, runJournalTransaction } from './journal-database'
 import {
   initializeJournalDomainDatabase,
+  journalDomainDatabasePath,
   openJournalDomainDatabase
 } from './journal-domain-database'
 import { journalDatabasePath } from './journal-host-database'
@@ -83,4 +84,14 @@ it.each([
     db.prepare("SELECT 1 FROM journal_queue_cards WHERE message_id='queued'").get() !== undefined
   ).toBe(shape === EARLY_SCHEMA_4)
   expect(createHash('sha256').update(readFileSync(original)).digest('hex')).toBe(before)
+})
+
+it('still refuses a version-four journal that lost the record tables its version created', async () => {
+  const root = olderJournal(
+    'DROP TABLE agent_session_command_receipts; DROP TABLE agent_session_records'
+  )
+  await expect(initializeJournalDomainDatabase(root)).rejects.toThrow(
+    'no such table: agent_session_records'
+  )
+  expect(existsSync(journalDomainDatabasePath(root))).toBe(false)
 })
