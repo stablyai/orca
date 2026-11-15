@@ -82,9 +82,8 @@ function itemBlocks(item: AgentJournalRenderItem): {
   if (isStructuredAgentSessionToolAction(body)) {
     const call = structuredAgentSessionToolCallBlock(body, item.itemId)
     // Call/result share one row; use its call ID to pair them.
-    const { callId } = call
     if (body.kind === 'diff') {
-      return { role: 'assistant', blocks: [call, toolResult(item, body.patch, callId)] }
+      return { role: 'assistant', blocks: [call, toolResult(item, body.patch, call.callId)] }
     }
     return {
       role: 'assistant',
@@ -93,7 +92,7 @@ function itemBlocks(item: AgentJournalRenderItem): {
         ...(body.output
           ? [
               {
-                ...toolResult(item, body.output, callId),
+                ...toolResult(item, body.output, call.callId),
                 // Interrupted output is not an error reported by the tool.
                 isError: agentJournalToolCallLifecycle(body) === 'failed'
               }
