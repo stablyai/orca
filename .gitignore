@@ -100,6 +100,8 @@ docs/**
 !docs/readme/**
 !docs/bug-reproductions/
 !docs/bug-reproductions/**
+!docs/zotz/
+!docs/zotz/**
 !docs/STYLEGUIDE.md
 !docs/development.md
 !docs/styleguide/
