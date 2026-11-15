@@ -2,7 +2,7 @@
 
 import { appendFileSync } from 'node:fs'
 import { open, rename, stat } from 'node:fs/promises'
-import { withTimeout } from '../../shared/promise-timeout-fallback'
+import { withTimeout } from '../../shared/concurrency/promise-timeout-fallback'
 
 const PRIVATE_FILE_MODE = 0o600
 export const DEFAULT_MAX_QUEUED_CHARS = 1024 * 1024
