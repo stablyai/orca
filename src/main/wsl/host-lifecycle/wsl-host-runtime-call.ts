@@ -43,13 +43,13 @@ export async function ensureWslHostForRuntimeCall(
   if (reachability === 'available') {
     return
   }
-  // A Start or New Terminal connected during the read: its 'stopped' would mark live terminals exited.
-  if (port.readyGeneration() !== generation) {
-    return ensureWslHostForRuntimeCall(environmentId, port)
-  }
   assertWslHostRunAllowed(deps, port.removing, environmentId)
   // A pending host never reconnects for a runtime call.
   await admitConnectToPendingHost(deps.userDataPath(), record, false)
+  // A Start or New Terminal connected during preparation: its 'stopped' would mark live terminals exited.
+  if (port.readyGeneration() !== generation) {
+    return ensureWslHostForRuntimeCall(environmentId, port)
+  }
   if (reachability === 'stopped') {
     parkStopped(record, port)
   }
