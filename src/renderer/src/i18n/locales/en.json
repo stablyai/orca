@@ -18643,6 +18643,9 @@
                 }
               }
             }
+          },
+          "BrowserExtensionSidePanelDock": {
+            "close": "Close side panel"
           }
         },
         "webauthn": {
