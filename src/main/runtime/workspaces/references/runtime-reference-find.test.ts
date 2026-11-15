@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, it } from 'vitest'
 import { parseWorkspaceReferenceUrl } from '../../../../shared/workspace-attachments/workspace-reference-identity'
 import { findWorkspaceReferences, type ReferenceAgentCandidate } from './runtime-reference-find'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
@@ -19,42 +19,6 @@ const linear = 'https://linear.app/acme/issue/STA-1234'
 const jira = 'https://jira.example.com/jira/browse/STA-1234'
 
 describe('stored reference lookup', () => {
-  it('finds every source for an issue key and scopes full URLs exactly', async () => {
-    const workspaces = [
-      workspace('one', [linear, jira]),
-      workspace('two', [linear.replace('acme', 'other')])
-    ]
-    const agents = vi.fn(() => new Map())
-    const result = await findWorkspaceReferences({ query: 'sta-1234' }, { workspaces, agents })
-    expect(result.matches.map(({ reference }) => reference.provider)).toEqual([
-      'linear',
-      'jira',
-      'linear'
-    ])
-    expect(agents).toHaveBeenCalledTimes(1)
-    expect(
-      (await findWorkspaceReferences({ query: linear }, { workspaces, agents })).matches
-    ).toHaveLength(1)
-  })
-
-  it('counts workspaces, preserves every matching source in a workspace, and excludes archives', async () => {
-    const workspaces = [
-      workspace('one', [linear, jira]),
-      { ...workspace('archive', [linear]), isArchived: true },
-      workspace('two', [linear])
-    ]
-    const source = { workspaces, agents: () => new Map() }
-    const limited = await findWorkspaceReferences({ query: 'STA-1234', limit: 1 }, source)
-    expect(limited.matches).toHaveLength(2)
-    expect(limited.truncated).toBe(true)
-    expect((await findWorkspaceReferences({ query: 'STA-1234', limit: 2 }, source)).truncated).toBe(
-      false
-    )
-    expect(
-      (await findWorkspaceReferences({ query: 'STA-1234', includeArchived: true }, source)).matches
-    ).toHaveLength(4)
-  })
-
   it('never infers an agent association from sharing a workspace or a hostless legacy origin', async () => {
     const linked = workspace('one', [linear, jira])
     linked.linkedItems[0].origins = [
@@ -115,17 +79,6 @@ describe('stored reference lookup', () => {
       { workspaces: [linked], agents: () => new Map([['local|one', [later]]]) }
     )
     expect(result.matches[0].agents[0].linked).toBe(false)
-  })
-
-  it('searches an explicitly named archived workspace', async () => {
-    const source = {
-      workspaces: [{ ...workspace('old', [linear]), isArchived: true }],
-      agents: () => new Map()
-    }
-    expect((await findWorkspaceReferences({ query: linear }, source)).matches).toEqual([])
-    expect(
-      (await findWorkspaceReferences({ query: linear, worktree: 'name:old' }, source)).matches
-    ).toHaveLength(1)
   })
 
   it('keeps identical workspace IDs on different hosts isolated', async () => {

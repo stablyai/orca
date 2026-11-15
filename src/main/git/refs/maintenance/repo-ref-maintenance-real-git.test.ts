@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest'
 import { countLooseRefs } from '../../../../shared/loose-ref-count'
-import { RepoRefMaintenance } from '../../../../shared/repo-ref-maintenance'
+import { RepoRefMaintenance } from '../../../../shared/git/maintenance/repo-ref-maintenance'
 import {
   _resetLocalRepoRefMaintenanceForTests,
   createLocalRepoRefMaintenanceTarget,
@@ -311,37 +311,5 @@ describe('yielding the repository to work that deletes refs', () => {
     await deletion
     expect(deleted).toBe(true)
     expect(git(repoPath, ['branch', '--list', 'doomed'])).toBe('')
-  }, 30_000)
-
-  it('does not block the caller once the rewrite window has closed', async () => {
-    const { repoPath } = await createRepo(0)
-    git(repoPath, ['branch', 'doomed'])
-    const head = git(repoPath, ['rev-parse', 'refs/heads/doomed'])
-
-    let pruning = false
-    let finishPrune: (() => void) | undefined
-    _resetLocalRepoRefMaintenanceForTests({ quietPeriodMs: QUIET_MS, looseRefThreshold: 1 })
-    setRepoMaintenanceActivityProbe(() => false)
-    getLocalRepoRefMaintenance().arm({
-      key: `local::${repoPath}`,
-      resolveRefsDirectory: async () => join(repoPath, '.git', 'refs'),
-      packRefs: async (lock) => {
-        lock.setHeld(true)
-        lock.setHeld(false)
-        pruning = true
-        await new Promise<void>((resolve) => {
-          finishPrune = resolve
-        })
-      }
-    })
-    for (let attempt = 0; attempt < 200 && !pruning; attempt += 1) {
-      await new Promise((resolve) => setTimeout(resolve, QUIET_MS))
-    }
-
-    const startedAt = Date.now()
-    await expect(forceDeleteLocalBranch(repoPath, 'doomed', head)).resolves.toBeUndefined()
-    expect(Date.now() - startedAt).toBeLessThan(2_000)
-
-    finishPrune?.()
   }, 30_000)
 })

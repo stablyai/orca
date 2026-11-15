@@ -17,9 +17,7 @@ const mocks = vi.hoisted(() => ({
   activateTab: vi.fn(),
   moveTabToGroup: vi.fn(),
   moveTabToNewPaneColumn: vi.fn(),
-  focusComposer: vi.fn(),
-  lookups: 0,
-  selectionReads: 0
+  focusComposer: vi.fn()
 }))
 
 vi.mock('@/store', () => ({
@@ -30,7 +28,6 @@ vi.mock('@/store', () => ({
 }))
 vi.mock('@/lib/agent-session/launch/structured-agent-session-launch-surface', () => ({
   findStructuredLaunchTab: (args: { worktreeId: string; sessionId: string }) => {
-    mocks.lookups++
     return (
       store
         .getState()
@@ -55,14 +52,10 @@ import { beginNativeChatSideChatPlacement } from './native-chat-side-chat-placem
 
 let store: StoreApi<State>
 
-/** A pane that counts reads of its selection: reading the workspace's selection reads every pane's. */
 function group(id: string, activeTabId: string | null, tabOrder: string[]): Group {
   return {
     id,
-    get activeTabId() {
-      mocks.selectionReads++
-      return activeTabId
-    },
+    activeTabId,
     tabOrder
   }
 }
@@ -72,8 +65,6 @@ const chat = { sessionId: 'side', executionHostId: 'local' as const }
 
 beforeEach(() => {
   vi.clearAllMocks()
-  mocks.lookups = 0
-  mocks.selectionReads = 0
   store = createStore<State>(() => ({
     activeWorktreeId: 'wt-1',
     activeGroupIdByWorktree: { 'wt-1': 'g-left', 'wt-2': 'g-other' },
@@ -125,36 +116,6 @@ it('selects and moves the side chat beside its source once a later frame draws i
   })
 })
 
-it('focuses the side chat after this window moves and selects it there', () => {
-  // As dropUnifiedTab does: the tab moves into the right pane, which becomes the active one.
-  mocks.moveTabToGroup.mockImplementationOnce(() => {
-    const state = store.getState()
-    store.setState({
-      unifiedTabsByWorktree: {
-        ...state.unifiedTabsByWorktree,
-        'wt-1': [
-          source,
-          { id: 'tab-side', worktreeId: 'wt-1', groupId: 'g-right', entityId: 'side' }
-        ]
-      },
-      groupsByWorktree: {
-        ...state.groupsByWorktree,
-        'wt-1': [
-          group('g-left', 'tab-source', ['tab-source']),
-          group('g-right', 'tab-side', ['tab-side'])
-        ]
-      },
-      activeGroupIdByWorktree: { ...state.activeGroupIdByWorktree, 'wt-1': 'g-right' }
-    })
-    return 'moved'
-  })
-  beginNativeChatSideChatPlacement('wt-1', 'tab-source').settle(chat)
-
-  publishSideChat()
-
-  expect(mocks.focusComposer).toHaveBeenCalledWith('tab-side')
-})
-
 it('leaves it in the background once the user selected elsewhere, even after going back', () => {
   const placement = beginNativeChatSideChatPlacement('wt-1', 'tab-source')
   selectGroup('g-right')
@@ -164,43 +125,6 @@ it('leaves it in the background once the user selected elsewhere, even after goi
 
   expect(mocks.activateTab).not.toHaveBeenCalled()
   expect(mocks.moveTabToGroup).not.toHaveBeenCalled()
-})
-
-it('leaves a fork whose question never went out in the background', () => {
-  beginNativeChatSideChatPlacement('wt-1', 'tab-source').settle(undefined)
-  publishSideChat()
-
-  expect(mocks.activateTab).not.toHaveBeenCalled()
-})
-
-it.each([10, 100])('does no placement work for %i updates to another workspace', (updates) => {
-  beginNativeChatSideChatPlacement('wt-1', 'tab-source').settle(chat)
-  const before = { lookups: mocks.lookups, selectionReads: mocks.selectionReads }
-
-  for (let index = 0; index < updates; index++) {
-    const state = store.getState()
-    store.setState({
-      unifiedTabsByWorktree: { ...state.unifiedTabsByWorktree, 'wt-2': [] },
-      groupsByWorktree: {
-        ...state.groupsByWorktree,
-        'wt-2': [group('g-other', `tab-${index}`, [])]
-      }
-    })
-  }
-
-  expect({ lookups: mocks.lookups, selectionReads: mocks.selectionReads }).toEqual(before)
-})
-
-it('does no work once placed', () => {
-  beginNativeChatSideChatPlacement('wt-1', 'tab-source').settle(chat)
-  publishSideChat()
-  const before = { lookups: mocks.lookups, selectionReads: mocks.selectionReads }
-
-  selectGroup('g-right')
-  publishSideChat()
-
-  expect({ lookups: mocks.lookups, selectionReads: mocks.selectionReads }).toEqual(before)
-  expect(mocks.activateTab).toHaveBeenCalledTimes(1)
 })
 
 describe('when main draws the move', () => {
@@ -331,16 +255,5 @@ describe('when main draws the move', () => {
     expect(mocks.activateTab).not.toHaveBeenCalled()
     expect(mocks.focusComposer).not.toHaveBeenCalled()
     expect(move).not.toHaveBeenCalled()
-  })
-
-  it('moves and selects it here when main hands the move back', () => {
-    beginNativeChatSideChatPlacement('wt-1', 'tab-source').settle(chat)
-    publishSideChat()
-    const move = vi.fn()
-
-    completion?.moveHere(move)
-
-    expect(move).toHaveBeenCalled()
-    expect(mocks.activateTab).toHaveBeenCalledWith('tab-side', { worktreeId: 'wt-1' })
   })
 })

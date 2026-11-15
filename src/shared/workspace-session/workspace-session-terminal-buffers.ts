@@ -1,4 +1,4 @@
-import type { Repo } from '../repo-types'
+import type { Repo } from '../repository/repo-types'
 import type { WorkspaceSessionState } from './workspace-session-state-types'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../constants'
 import { getRepoIdFromWorktreeId } from '../worktree/id'

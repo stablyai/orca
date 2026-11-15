@@ -1,8 +1,8 @@
 import type { ClassifiedError } from '../../../../../shared/classified-error'
-import type { GitHubOwnerRepo } from '../../../../../shared/github/pull-request-types'
-import type { GitHubPRRefreshAlias } from '../../../../../shared/github/pull-request-refresh-types'
-import type { GitHubProjectViewError } from '../../../../../shared/github/project-result-types'
-import type { TaskSourceContext } from '../../../../../shared/task-source-context'
+import type { GitHubRepositoryIdentity as GitHubOwnerRepo } from '../../../../../shared/github/repositories/repository-identity'
+import type { GitHubPRRefreshAlias } from '../../../../../shared/github/pull-requests/refresh/pull-request-refresh-types'
+import type { GitHubProjectViewError } from '../../../../../shared/github/projects/project-result-types'
+import type { TaskSourceContext } from '../../../../../shared/work-items/task-source-context'
 
 export type WorkItemsCacheSources = {
   ineligible?: true

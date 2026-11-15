@@ -1,16 +1,16 @@
 import {
   ORCHESTRATION_CONTRACT_RUNTIME_CAPABILITY,
   ORCHESTRATION_CONTRACT_VERSION
-} from '../../../../shared/orchestration-runtime-capabilities'
+} from '../../../../shared/orchestration/orchestration-runtime-capabilities'
 import type {
   RuntimeOrchestrationEnvelope,
   RuntimeRpcResponse
-} from '../../../../shared/runtime-rpc-envelope'
+} from '../../../../shared/remote-runtime/rpc/runtime-rpc-envelope'
 import {
   isOrchestrationMutation,
   orchestrationMigrationData
-} from '../../../../shared/orchestration-rpc-contract'
-import type { RuntimeStatus } from '../../../../shared/runtime-session-contracts'
+} from '../../../../shared/orchestration/orchestration-rpc-contract'
+import type { RuntimeStatus } from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import type {
   OrchestrationEnvironmentCallOptions,
   OrchestrationEnvironmentTransport,
@@ -20,19 +20,39 @@ import { OrchestrationError } from '../orchestration-error'
 import {
   clearFederationAckCheckpoints,
   releaseFederationAckCheckpoint
-} from './synchronization/federation-ack-checkpoints'
-import { syncFederatedDispatch } from './synchronization/federation-sync'
+} from '../legacy-remote-home/federation-ack-checkpoints'
+import {
+  federatedSyncMovedMail,
+  syncFederatedDispatch,
+  type FederatedSyncResult
+} from '../legacy-remote-home/federation-sync'
+import { FederationAcknowledgmentRecovery } from '../legacy-remote-home/federation-acknowledgment-recovery'
 import type { OrchestrationDb } from '../db/orchestration-db'
 import type { FederationRuntime } from './federation-runtime'
+import {
+  FederationRelayScheduler,
+  type FederationRelayTickOutcome
+} from './relay/federation-relay-scheduler'
 
 export class RuntimeOrchestrationFederation {
-  private readonly timers = new Map<string, ReturnType<typeof setInterval>>()
-  private readonly syncs = new Map<string, { db: OrchestrationDb; promise: Promise<void> }>()
+  private readonly relays = new FederationRelayScheduler((dispatchId) => this.relayTick(dispatchId))
+  private readonly acknowledgmentRecovery = new FederationAcknowledgmentRecovery({
+    findNextAfter: (afterRowId) =>
+      this.runtime
+        .getOrchestrationDb()
+        .findNextTerminalFederatedDispatchPendingAcknowledgment(afterRowId),
+    sync: (dispatchId) => this.runtime.syncOrchestrationFederatedDispatch(dispatchId),
+    acknowledgedThrough: (dispatchId) =>
+      this.runtime.getOrchestrationDb().getFederatedDispatch(dispatchId)
+        ?.to_home_acknowledged_sequence ?? null
+  })
+  private readonly syncs = new Map<
+    string,
+    { db: OrchestrationDb; promise: Promise<FederatedSyncResult> }
+  >()
   private readonly warnings = new Set<string>()
-  private terminalRecoveryTimer: ReturnType<typeof setTimeout> | null = null
-  private terminalRecoveryInFlight: Promise<void> | null = null
-  private terminalRecoveryRowId = 0
   private relayGeneration = 0
+  private stopVerifiedWatch: (() => void) | null = null
   /** Worker server -> runtime incarnation that last proved the orchestration contract. */
   private readonly contractVerifiedRuntimeIds = new Map<string, string>()
 
@@ -43,29 +63,22 @@ export class RuntimeOrchestrationFederation {
 
   resetForDatabaseChange(): void {
     this.relayGeneration += 1
-    for (const timer of this.timers.values()) {
-      clearInterval(timer)
-    }
-    this.timers.clear()
-    if (this.terminalRecoveryTimer) {
-      clearTimeout(this.terminalRecoveryTimer)
-    }
-    this.terminalRecoveryTimer = null
-    this.terminalRecoveryInFlight = null
-    this.terminalRecoveryRowId = 0
+    this.unwatchVerifiedEnvironments()
+    this.relays.clear()
+    this.acknowledgmentRecovery.reset()
     clearFederationAckCheckpoints(this.runtime)
     this.syncs.clear()
     this.warnings.clear()
   }
 
-  resolveWorkerServer(selector: string): OrchestrationWorkerServer {
+  async resolveWorkerServer(selector: string): Promise<OrchestrationWorkerServer> {
     if (!this.transport) {
       throw new OrchestrationError(
         'server_required',
         'Connected-server orchestration is unavailable in this runtime.'
       )
     }
-    return this.transport.resolve(selector)
+    return await this.transport.resolve(selector)
   }
 
   async callWorkerServer(
@@ -93,7 +106,11 @@ export class RuntimeOrchestrationFederation {
           ? { ...envelope, orchestrationContractVersion: ORCHESTRATION_CONTRACT_VERSION }
           : envelope,
         internal?.expectedEnvironmentPairingRevision,
-        { prepareRequest: internal?.prepareRequest, expectedRuntimeId }
+        {
+          prepareRequest: internal?.prepareRequest,
+          prepareGuard: internal?.prepareGuard,
+          expectedRuntimeId
+        }
       )
     const response =
       isOrchestrationMutation(method, params) && !internal?.contractVerified
@@ -166,17 +183,22 @@ export class RuntimeOrchestrationFederation {
     await Promise.allSettled(dispatches.map((dispatch) => this.syncDispatch(dispatch.dispatch_id)))
   }
 
-  syncDispatch(dispatchId: string): Promise<void> {
+  syncDispatch(dispatchId: string): Promise<FederatedSyncResult> {
     const db = this.runtime.getOrchestrationDb()
     const current = this.syncs.get(dispatchId)
     if (current?.db === db) {
       return current.promise
     }
-    const sync = syncFederatedDispatch(this.runtime, dispatchId)
-      .then(() => {
+    const generation = this.relayGeneration
+    const isCurrent = (): boolean =>
+      generation === this.relayGeneration && this.runtime.getOrchestrationDb() === db
+    const sync = syncFederatedDispatch(this.runtime, dispatchId, isCurrent)
+      .then((result) => {
         if (this.syncs.get(dispatchId)?.promise === sync) {
           this.warnings.delete(dispatchId)
+          this.relays.noteSynced(dispatchId, federatedSyncMovedMail(result))
         }
+        return result
       })
       .catch((error: unknown) => {
         if (this.syncs.get(dispatchId)?.promise === sync && !this.warnings.has(dispatchId)) {
@@ -200,98 +222,81 @@ export class RuntimeOrchestrationFederation {
 
   async syncDispatchAfterCurrent(dispatchId: string): Promise<void> {
     const db = this.runtime.getOrchestrationDb()
+    const generation = this.relayGeneration
     const current = this.syncs.get(dispatchId)
     if (current?.db === db) {
       await current.promise.catch(() => undefined)
     }
+    if (generation !== this.relayGeneration || this.runtime.getOrchestrationDb() !== db) {
+      return
+    }
     await this.syncDispatch(dispatchId)
   }
 
-  ensureRelay(runId?: string): void {
+  /** keepAwake: a coordinator still waiting re-arms; it holds the base cadence without forcing a sync or cutting a failure backoff. */
+  ensureRelay(runId?: string, options?: { keepAwake?: boolean }): void {
     if (!this.transport) {
       return
     }
+    this.stopVerifiedWatch ??=
+      this.transport.onEnvironmentVerified?.((environmentId) =>
+        this.relays.resetEnvironment(environmentId)
+      ) ?? null
     for (const dispatch of this.runtime.getOrchestrationDb().listActiveFederatedDispatches(runId)) {
-      if (this.timers.has(dispatch.dispatch_id)) {
-        continue
+      if (options?.keepAwake) {
+        this.relays.keepAwake(dispatch.dispatch_id, dispatch.environment_id)
+      } else {
+        this.relays.arm(dispatch.dispatch_id, dispatch.environment_id)
       }
-      const tick = () => {
-        const db = this.runtime.getOrchestrationDb()
-        if (!db.isFederatedDispatchRelayEligible(dispatch.dispatch_id)) {
-          const activeTimer = this.timers.get(dispatch.dispatch_id)
-          if (activeTimer) {
-            clearInterval(activeTimer)
-          }
-          this.timers.delete(dispatch.dispatch_id)
-          this.warnings.delete(dispatch.dispatch_id)
-          return
+    }
+    this.acknowledgmentRecovery.ensure()
+  }
+
+  private async relayTick(dispatchId: string): Promise<FederationRelayTickOutcome> {
+    if (!this.runtime.getOrchestrationDb().isFederatedDispatchRelayEligible(dispatchId)) {
+      this.warnings.delete(dispatchId)
+      return 'ended'
+    }
+    return this.syncDispatch(dispatchId).then(
+      (result): FederationRelayTickOutcome => (federatedSyncMovedMail(result) ? 'moved' : 'idle'),
+      async (): Promise<FederationRelayTickOutcome> => {
+        if (!(await this.isEnvironmentRemoved(dispatchId))) {
+          return 'failed'
         }
-        void this.syncDispatch(dispatch.dispatch_id).catch(() => undefined)
+        this.warnings.delete(dispatchId)
+        return 'ended'
       }
-      const timer = setInterval(tick, 1_000)
-      timer.unref?.()
-      this.timers.set(dispatch.dispatch_id, timer)
-      tick()
-    }
-    this.ensureTerminalHistoryRecovery()
-  }
-
-  private ensureTerminalHistoryRecovery(): void {
-    if (this.terminalRecoveryTimer || this.terminalRecoveryInFlight) {
-      return
-    }
-    const generation = this.relayGeneration
-    const recovery = this.recoverNextTerminalHistoryAcknowledgment(generation).catch((error) => {
-      console.warn('[orchestration] terminal federation acknowledgment recovery failed', error)
-    })
-    this.terminalRecoveryInFlight = recovery
-    void recovery.finally(() => {
-      if (this.terminalRecoveryInFlight === recovery) {
-        this.terminalRecoveryInFlight = null
-      }
-    })
-  }
-
-  private async recoverNextTerminalHistoryAcknowledgment(generation: number): Promise<void> {
-    const db = this.runtime.getOrchestrationDb()
-    let historical = db.findNextTerminalFederatedDispatchPendingAcknowledgment(
-      this.terminalRecoveryRowId
     )
-    if (!historical && this.terminalRecoveryRowId > 0) {
-      this.terminalRecoveryRowId = 0
-      historical = db.findNextTerminalFederatedDispatchPendingAcknowledgment(0)
+  }
+
+  /** Checked only after a failed sync; a store read error keeps the relay retrying. */
+  private async isEnvironmentRemoved(dispatchId: string): Promise<boolean> {
+    const environmentId = this.runtime
+      .getOrchestrationDb()
+      .getFederatedDispatch(dispatchId)?.environment_id
+    if (environmentId === undefined) {
+      return false
     }
-    if (!historical) {
-      return
+    try {
+      // A removed server cannot answer; the next ensureRelay re-arms it if the server is added back.
+      return (await this.transport?.hasEnvironment?.(environmentId)) === false
+    } catch {
+      return false
     }
-    this.terminalRecoveryRowId = historical.rowId
-    await this.runtime
-      .syncOrchestrationFederatedDispatch(historical.dispatchId)
-      .catch(() => undefined)
-    if (generation !== this.relayGeneration) {
-      return
-    }
-    this.terminalRecoveryTimer = setTimeout(() => {
-      this.terminalRecoveryTimer = null
-      this.ensureTerminalHistoryRecovery()
-    }, 1_000)
-    this.terminalRecoveryTimer.unref?.()
+  }
+
+  private unwatchVerifiedEnvironments(): void {
+    this.stopVerifiedWatch?.()
+    this.stopVerifiedWatch = null
   }
 
   stopRelay(): void {
     this.relayGeneration += 1
-    for (const timer of this.timers.values()) {
-      clearInterval(timer)
-    }
-    this.timers.clear()
+    this.unwatchVerifiedEnvironments()
+    this.relays.clear()
+    this.acknowledgmentRecovery.reset()
     this.warnings.clear()
     this.syncs.clear()
-    if (this.terminalRecoveryTimer) {
-      clearTimeout(this.terminalRecoveryTimer)
-    }
-    this.terminalRecoveryTimer = null
-    this.terminalRecoveryInFlight = null
-    this.terminalRecoveryRowId = 0
     clearFederationAckCheckpoints(this.runtime)
   }
 }

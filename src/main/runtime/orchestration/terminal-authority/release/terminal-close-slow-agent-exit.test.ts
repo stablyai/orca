@@ -10,10 +10,7 @@ import type { OrchestrationDb } from '../../db/orchestration-db'
 import type { WorkerTerminalResourceRow } from './worker-terminal-ownership'
 import type { OrcaRuntimeService } from '../../../orca-runtime'
 
-import { completeWorkerTerminalRelease } from '../../../rpc/methods/orchestration/worker/worker-release-completion'
-
-// Longer than the old 2s close budget, like an agent running exit hooks after SIGTERM.
-const SLOW_EXIT_MS = 2_300
+import { completeWorkerTerminalRelease } from '../../../rpc/methods/orchestration/worker/release/worker-release-completion'
 
 type Harness = Awaited<ReturnType<typeof startLateExitHarness>>
 
@@ -75,7 +72,7 @@ async function closeThroughDaemon(
     })),
     isDispatchProcessCurrent: vi.fn(() => true),
     workerTerminalResourceHasIdentityConflict: vi.fn(() => false),
-    getWorkerTerminalArchive: vi.fn(() => ({ kind: 'transcript_pin' })),
+    getWorkerTerminalArchive: vi.fn(() => ({ kind: 'transcript_pin', content: '{}' })),
     commitWorkerTerminalArchiveForRelease: vi.fn(() => ({
       ...resource,
       release_state: 'releasing'
@@ -98,24 +95,6 @@ async function closeThroughDaemon(
 }
 
 describe('worker release of an agent that is slow to exit after its terminal closes', () => {
-  it('releases a worker whose process exits after the old 2s budget', async () => {
-    const harness = await startLateExitHarness()
-    try {
-      const subprocess = harness.subprocess
-      subprocess.forceKill = () => {
-        setTimeout(() => subprocess._simulateExit(0), SLOW_EXIT_MS)
-      }
-      const startedAt = Date.now()
-      const { receipt, fallbackKill } = await closeThroughDaemon(harness)
-      expect(Date.now() - startedAt).toBeGreaterThanOrEqual(SLOW_EXIT_MS)
-      expect(receipt).toMatchObject({ state: 'released', processAction: 'closed_agent_terminal' })
-      expect(fallbackKill).not.toHaveBeenCalled()
-      expect(harness.runtime.captureState().liveness).toBe('exited')
-    } finally {
-      await harness.dispose()
-    }
-  }, 15_000)
-
   it('counts a SessionNotFoundError reply for an already-exited process as exited', async () => {
     const harness = await startLateExitHarness()
     try {

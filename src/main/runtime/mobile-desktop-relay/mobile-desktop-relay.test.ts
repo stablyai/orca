@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { DELEGATED_MOBILE_DEVICES_RUNTIME_CAPABILITY } from '../../../shared/delegated-mobile-device-contract'
 
-import type { RuntimeRpcResponse } from '../../../shared/runtime-rpc-envelope'
+import type { RuntimeRpcResponse } from '../../../shared/remote-runtime/rpc/runtime-rpc-envelope'
 import { RemoteRuntimeClientError } from '../../../shared/remote-runtime/remote-runtime-client-error'
 import type { RemoteRuntimePassthroughCallbacks } from '../../../shared/remote-runtime/remote-runtime-passthrough-socket'
 import { MobileDesktopRelay } from './mobile-desktop-relay'
@@ -161,6 +161,48 @@ describe('MobileDesktopRelay', () => {
       relay.dispose()
     }
   )
+
+  it('answers an opening request retired while its saved server state is pending', async () => {
+    sockets.length = 0
+    const { relay, hosts, phone, replies } = relayWithPhone()
+    try {
+      const listing = { id: 'list', method: 'worktree.ps' }
+      await relay.forward(phone, 'env-1', listing, JSON.stringify(listing))
+      await vi.waitFor(() => expect(sockets[0]?.sent).toHaveLength(1))
+      sockets[0]!.callbacks.onText(JSON.stringify({ ...ok({}), id: 'list' }))
+
+      const reading = Promise.withResolvers<void>()
+      const state = Promise.withResolvers<'up'>()
+      hosts.serverStateForOpening = () => {
+        reading.resolve()
+        return state.promise
+      }
+      const opening = { id: 'open', method: 'worktree.activate' }
+      const forwarded = relay.forward(phone, 'env-1', opening, JSON.stringify(opening))
+      await reading.promise
+      relay.retireEnvironment('env-1')
+      state.resolve('up')
+      await forwarded
+      expect(
+        replies.map((frame) => JSON.parse(frame)).filter((reply) => reply.id === 'open')
+      ).toEqual([
+        expect.objectContaining({
+          id: 'open',
+          ok: false,
+          error: expect.objectContaining({ code: 'remote_runtime_unavailable' })
+        })
+      ])
+      expect(sockets[0]!.sent).toHaveLength(1)
+
+      const retry = { id: 'retry', method: 'terminal.list' }
+      await relay.forward(phone, 'env-1', retry, JSON.stringify(retry))
+      await vi.waitFor(() => expect(sockets[1]?.sent).toHaveLength(1))
+      sockets[1]!.callbacks.onText(JSON.stringify({ ...ok({}), id: 'retry' }))
+      expect(JSON.parse(replies.at(-1)!)).toMatchObject({ id: 'retry', ok: true })
+    } finally {
+      relay.dispose()
+    }
+  })
 
   it('refuses transient preparation failures so the phone can retry its capability probe', async () => {
     sockets.length = 0

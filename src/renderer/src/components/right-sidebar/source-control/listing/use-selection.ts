@@ -190,7 +190,8 @@ export function useSourceControlSelection({
         return
       }
 
-      const container = containerRef.current
+      const panel = containerRef.current
+      const container = panel?.closest('[data-source-control-worktree]') ?? panel
       const target = e.target
       if (!container || !(target instanceof Node) || container.contains(target)) {
         return

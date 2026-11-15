@@ -1,4 +1,4 @@
-import { ORCAD_LAUNCHER_FILENAME } from '../../../shared/orcad-artifacts'
+import { ORCAD_LAUNCHER_FILENAME } from '../../../shared/remote-runtime/orcad-distribution/orcad-artifacts'
 import { quotePosixShell } from '../../../shared/shell/launch/shell-argument-quoting'
 import { execOrcadRemote, type OrcadRemoteExecTarget } from './orcad-remote-runtime-control'
 import { orcadWindowsSlotOpCommand } from './orcad-remote-windows-node'
@@ -7,7 +7,7 @@ import {
   isWindowsRemoteHost,
   joinRemotePath,
   type RemoteHostPlatform
-} from '../../ssh/ssh-remote-platform'
+} from '../../ssh/remote-host/ssh-remote-platform'
 
 export async function readRemoteOrcadBuildHash(
   target: OrcadRemoteExecTarget,

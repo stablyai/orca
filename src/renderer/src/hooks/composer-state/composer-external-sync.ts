@@ -24,7 +24,6 @@ export function useComposerExternalSync(target: ComposerTargetState): ComposerEx
     selectedRepoConnectionIdRef: target.asyncComposerState.selectedRepoConnectionIdRef,
     selectedRepoExecutionHostId: target.runtimeTargetSelection.selectedRepoExecutionHostId,
     selectedRepoHookContextKey: target.runtimeTargetSelection.selectedRepoHookContextKey,
-    selectedRepoIsGit: target.runtimeTargetSelection.selectedRepoIsGit,
     selectedRepoSshStatus: target.runtimeTargetSelection.selectedRepoSshStatus,
     setTuiAgent: target.workspaceIdentityState.setTuiAgent,
     settings: target.composerTargetStore.settings,

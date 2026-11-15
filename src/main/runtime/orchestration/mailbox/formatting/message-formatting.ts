@@ -1,7 +1,11 @@
 import type { MessageRow } from '../../db/orchestration-records'
-import { ORCHESTRATION_LEGACY_RUN_ID } from '../../../../../shared/orchestration-rpc-contract'
+import { ORCHESTRATION_LEGACY_RUN_ID } from '../../../../../shared/orchestration/orchestration-rpc-contract'
 import type { OrchestrationCliCommand } from '../../workers/launch/orchestration-cli-command'
 import type { OrchestrationMailContent } from '../../../../../shared/agent-session/agent-session-message-source'
+import {
+  formatReportFollowUpLine,
+  type ReportFollowUpAction
+} from '../../../../../shared/orchestration/mailbox/orchestration-report-follow-up'
 
 const BANNER_WIDTH = 60
 const SEPARATOR = '─'.repeat(BANNER_WIDTH)
@@ -17,6 +21,8 @@ export type MessageFormattingOptions = {
   supportedActionHints?: readonly string[]
   /** The CLI name the recipient runs; a chat's reply line must name the one it has. */
   cliCommand?: OrchestrationCliCommand
+  /** A finished task's report offers its follow-up instead of a reply its worker would never read. */
+  followUp?: ReportFollowUpAction
 }
 
 function resolveAuthority(
@@ -96,7 +102,9 @@ export function formatMessageBannerWithContent(
   const body = msg.body ? appendField(msg.body) : undefined
   const payload = msg.payload ? appendField(msg.payload, '[Payload: ', ']') : undefined
 
-  if (authority === 'current') {
+  if (authority === 'current' && options.followUp) {
+    lines.push(`[${formatReportFollowUpLine(options.followUp, options.cliCommand ?? 'orca')}]`)
+  } else if (authority === 'current') {
     const explicitFrom =
       msg.to_handle.startsWith('run:') || msg.to_handle.startsWith('dispatch:')
         ? ''

@@ -1,5 +1,5 @@
 import { resolveHostCapabilities } from '@/lib/agent-session/launch/routing/agent-launch-route-input'
-import { workspaceKindForWorktreeId } from '../../../../../../shared/workspace-launch-kind'
+import { workspaceKindForWorktreeId } from '../../../../../../shared/agent-launch/contracts/workspace-launch-kind'
 import {
   structuredAgentSessionLaunchFeasible,
   type AgentSessionStructuredFeasibilityRequest
@@ -11,7 +11,7 @@ import { normalizeExecutionHostId } from '../../../../../../shared/execution-hos
 import {
   adoptsCliConversations,
   CLI_CONVERSATION_ADOPTING_AGENTS
-} from '../../../../../../shared/structured-agent-cli-conversation-adoption'
+} from '../../../../../../shared/agent-session/view/structured-agent-cli-conversation-adoption'
 import {
   STRUCTURED_AGENT_SESSION_RESUME_HISTORY_RUNTIME_CAPABILITY,
   STRUCTURED_AGENT_SESSION_RESUME_LINKED_CWD_RUNTIME_CAPABILITY

@@ -2,12 +2,12 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import type { ElectronApplication, Page } from '@stablyai/playwright-test'
+import type { RuntimeMobileSessionTabsResult } from '../../src/shared/remote-runtime/session-graph/runtime-session-contracts'
 import type {
-  RuntimeMobileSessionTabsResult,
   RuntimeTerminalListResult,
   RuntimeTerminalRead,
   RuntimeTerminalShow
-} from '../../src/shared/runtime-types'
+} from '../../src/shared/terminal/runtime/runtime-terminal-contracts'
 import { toWebTerminalSurfaceTabId } from '../../src/shared/workspace-layout/terminal-surface-id'
 import { expect, test } from './helpers/orca-app'
 import { launchHeadlessPairedRuntimeHost } from './helpers/headless-paired-runtime-host'

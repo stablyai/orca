@@ -1,18 +1,18 @@
 import { useCallback, useEffect, useMemo } from 'react'
-import { useAppStore } from '@/store'
+import { useAppStore } from '@/store/index'
 import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/workspace/ownership/worktree-runtime-owner'
 import { isClientHostedBrowserPageHandle } from '@/store/slices/browser/hosts/browser-host-state'
-import type { BrowserWorkspace as BrowserWorkspaceState } from '../../../../../shared/browser-workspace-types'
+import type { BrowserWorkspace as BrowserWorkspaceState } from '../../../../../shared/browser/workspaces/browser-workspace-types'
 import { destroyPersistentWebview } from '../host-guest/webview-registry'
-import { useBrowserAutomationVisiblePageIds } from '../host-guest/browser-automation-visibility'
+import { useBrowserAutomationVisiblePageIds } from '../host-guest/retention/browser-automation-visibility'
 import { getBrowserPagesForWorkspace } from './browser-pane-page-selection'
-import { BrowserMobileDriverOverlay } from './BrowserMobileDriverOverlay'
+import { BrowserMobileDriverOverlay } from './feedback/BrowserMobileDriverOverlay'
 import {
   IDLE_BROWSER_DRIVER,
   useBrowserDriverForPage,
   useBrowserMobileDrivenPageIds
-} from '@/lib/pane-manager/browser-mobile-driver-state'
-import { useBrowserRemotelyViewedPageIds } from '@/lib/pane-manager/browser-remote-viewer-state'
+} from '@/runtime/browser/ownership/browser-mobile-driver-state'
+import { useBrowserRemotelyViewedPageIds } from '@/runtime/browser/ownership/browser-remote-viewer-state'
 import { useContextualTour } from '@/components/contextual-tours/use-contextual-tour'
 import { getBrowserPageRuntimeEnvironmentId } from '../describe-page/browser-page-url-display'
 import type { BrowserChromeShortcutScope } from '../describe-page/browser-page-types'
@@ -21,16 +21,16 @@ import { ClientHostedBrowserPagePane } from '../ClientHostedBrowserPagePane'
 import { BrowserPagePane } from './browser-page-pane'
 import { WorkspaceDocPagePane } from '../workspace-doc/workspace-doc-page-pane'
 import { DeferredBrowserContent } from './DeferredBrowserContent'
-import { isBrowserPagePanePaintable } from '../host-guest/browser-page-paintability'
-import { SshRoutedBrowserPageGate } from './ssh-routed-browser-page-gate'
+import { isBrowserPagePanePaintable } from '../host-guest/retention/browser-page-paintability'
+import { SshRoutedBrowserPageGate } from './profile-routing/ssh-routed-browser-page-gate'
 import {
   ManagedBrowserProfileHold,
   useManagedBrowserProfileStatus
-} from './managed-browser-profile-hold'
+} from './profile-routing/managed-browser-profile-hold'
 import {
   isBrowserPageMountAdmitted,
   useAnyBrowserPageMountAdmission
-} from '../host-guest/browser-page-mount-admission'
+} from '../host-guest/retention/browser-page-mount-admission'
 
 export default function BrowserPane({
   browserTab,
@@ -97,11 +97,9 @@ export default function BrowserPane({
     }
   }, [activeRuntimeEnvironmentId, browserPages, runtimeEnvironmentActive])
 
-  useContextualTour(
-    'browser',
-    isActive && activeBrowserPage !== null && !runtimeEnvironmentActive,
-    'browser_visible'
-  )
+  const localBrowserPageVisible =
+    isActive && activeBrowserPage !== null && !runtimeEnvironmentActive
+  useContextualTour('browser', localBrowserPageVisible, 'browser_visible')
 
   const reclaimActiveBrowserForDesktop = useCallback(async (): Promise<void> => {
     if (!activeBrowserPageId) {

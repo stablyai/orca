@@ -2,7 +2,7 @@ import { isPtyLocked } from '@/lib/pane-manager/mobile-driver-state'
 import type { ConnectPanePtySession } from '../connect-pane-pty-session'
 import { useAppStore } from '@/store'
 import { isPaneReplaying } from '../../snapshots/replay-guard'
-import { terminalRendersInlineImages } from '@/lib/pane-manager/pane-inline-images'
+import { terminalRendersInlineImages } from '@/lib/pane-manager/terminal-rendering/pane-inline-images'
 import { CONPTY_DA1_RESPONSE } from '../../../../../../shared/conpty-device-attributes'
 import {
   createTerminalPixelSizeQueryResponder,

@@ -113,7 +113,7 @@ const { upsertHookTrustEntries, upsertProjectTrustLevel } =
   await import('../../trust/toml/config-toml-trust')
 const { writeCodexTrustGrantLedgerHome, getCodexTrustGrantLedgerPath } =
   await import('../../trust/grants/codex-trust-grant-ledger')
-await import('../../../agent-hooks/hooks-json-read')
+await import('../../../agent-hooks/installation/configuration/hooks-json-read')
 const { MAX_AGENT_STATE_FILE_BYTES } = await import('../agent-state-file-reader')
 const { observeCodexSettingsBaseline } = await import('../settings/config-settings-baseline')
 const { snapshotCodexRuntimeSettingsBaseline } =

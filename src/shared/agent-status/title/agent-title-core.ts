@@ -62,6 +62,15 @@ export function hasGeminiStatusGlyph(title: string): boolean {
   )
 }
 
+const GEMINI_IDENTITY_FRAME_RE =
+  /^gemini(?: cli)?(?:\s+(?:ready|idle|done|working|thinking|running))?(?:\s*-\s*action required)?$/
+
+// Decorated Claude task text can mention Gemini; behind a spinner/prefix only a Gemini label frame claims identity.
+function isDecoratedNonGeminiFrameSegment(segment: string): boolean {
+  const body = stripLeadingAgentTitleDecorationOrEmpty(segment)
+  return body !== segment.trimStart() && !GEMINI_IDENTITY_FRAME_RE.test(body.trim().toLowerCase())
+}
+
 function computeIsGeminiTerminalTitle(title: string): boolean {
   // Why: native Qoder and DSH markers own titles before the shared Gemini glyphs.
   if (isQoderTerminalTitle(title)) {
@@ -73,6 +82,9 @@ function computeIsGeminiTerminalTitle(title: string): boolean {
   // Why: Gemini OSC glyphs are stronger evidence than any cwd/session text.
   if (hasGeminiStatusGlyph(title)) {
     return true
+  }
+  if (getWrapperTitleSegments(title).some(isDecoratedNonGeminiFrameSegment)) {
+    return false
   }
   // Pi/OMP cwd/session text may contain gemini-project; substrings cannot establish Gemini identity.
   if (isPiAgentTitle(title)) {

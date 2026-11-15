@@ -1,4 +1,4 @@
-import { runKeyedSerializedOperation } from '../../cli/keyed-promise-queue'
+import { runKeyedSerializedOperation } from '../../../shared/concurrency/keyed-serialized-operations'
 
 const acceptanceQueueByRepo = new Map<string, Promise<void>>()
 

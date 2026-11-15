@@ -14,9 +14,9 @@ import {
   sessionTabsBaseline
 } from './helpers/layout-compat-baseline'
 import type { RuntimeCapability } from '../../src/shared/protocol-version'
-import type { RuntimeMobileSessionTabsResult } from '../../src/shared/runtime-session-contracts'
-import type { RuntimeTerminalListResult } from '../../src/shared/runtime-terminal-contracts'
-import type { RuntimeWorktreePsSummary } from '../../src/shared/runtime-worktree-contracts'
+import type { RuntimeMobileSessionTabsResult } from '../../src/shared/remote-runtime/session-graph/runtime-session-contracts'
+import type { RuntimeTerminalListResult } from '../../src/shared/terminal/runtime/runtime-terminal-contracts'
+import type { RuntimeWorktreePsSummary } from '../../src/shared/worktree/catalog/runtime-worktree-contracts'
 
 /** What mobile-android-v0.0.52 advertises (its mobile-runtime-client-capabilities.ts). */
 const OLD_PHONE_CAPABILITIES: readonly RuntimeCapability[] = [

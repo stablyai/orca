@@ -11,7 +11,7 @@ import {
   getAutomationTargetFromHostId,
   listAutomationRunsForTarget,
   listAutomationsForTarget
-} from '@/components/automations/automation-host-client'
+} from '@/components/automations/hosts/automation-host-client'
 
 type WorktreeCardAutomationDetailSectionProps = {
   provenance: AutomationWorkspaceProvenance

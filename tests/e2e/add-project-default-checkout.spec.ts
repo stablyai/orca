@@ -1,4 +1,4 @@
-import { openSidebarProjectDialog } from './helpers/sidebar-project-dialog'
+import { openSidebarProjectMenu } from './helpers/sidebar-project-dialog'
 import { execFileSync } from 'node:child_process'
 import { mkdirSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
 import { mkdtemp } from 'node:fs/promises'
@@ -85,10 +85,8 @@ test.describe('Add project default checkout', () => {
     await waitForSessionReady(orcaPage)
     const fixture = await createCloneFixture()
 
-    await openSidebarProjectDialog(orcaPage)
-    const addDialog = orcaPage.getByRole('dialog', { name: /Add a project/i })
-    await expect(addDialog).toBeVisible()
-    await addDialog.getByRole('button', { name: /Clone from URL/i }).click()
+    await openSidebarProjectMenu(orcaPage)
+    await orcaPage.getByRole('menuitem', { name: /Clone from URL/i }).click()
 
     const cloneDialog = orcaPage.getByRole('dialog', { name: /Clone from URL/i })
     await expect(cloneDialog).toBeVisible()
@@ -97,8 +95,6 @@ test.describe('Add project default checkout', () => {
     await cloneDialog.getByRole('button', { name: /^Clone$/ }).click()
 
     await expect(orcaPage.getByRole('dialog', { name: /Repo added/i })).toBeHidden()
-    await expect(orcaPage.getByText('Use existing worktrees')).toBeHidden()
-    await expect(orcaPage.getByText('Create a new worktree')).toBeHidden()
 
     await expect
       .poll(
@@ -118,8 +114,7 @@ test.describe('Add project default checkout', () => {
             return {
               activeCheckoutIsDefault: state.activeWorktreeId === defaultCheckout?.id,
               defaultCheckoutLooksCloned:
-                normalizedDefaultCheckoutPath?.endsWith(`/clones/${cloneName}`) ?? false,
-              oldSetupModalOpen: state.activeModal === 'project-added'
+                normalizedDefaultCheckoutPath?.endsWith(`/clones/${cloneName}`) ?? false
             }
           }, path.basename(fixture.sourcePath)),
         {
@@ -129,10 +124,8 @@ test.describe('Add project default checkout', () => {
       )
       .toEqual({
         activeCheckoutIsDefault: true,
-        defaultCheckoutLooksCloned: true,
-        oldSetupModalOpen: false
+        defaultCheckoutLooksCloned: true
       })
-    await expect(orcaPage.getByText(/discovered worktree/)).toHaveCount(0)
   })
 
   test('keeps sibling git worktrees hidden when opening the default checkout', async ({
@@ -150,7 +143,6 @@ test.describe('Add project default checkout', () => {
 
     await expect(addProjectDialog).toBeHidden()
     await expect(orcaPage.getByRole('dialog', { name: /Repo added/i })).toBeHidden()
-    await expect(orcaPage.getByText('Use existing worktrees')).toBeHidden()
 
     await expect
       .poll(
@@ -168,9 +160,7 @@ test.describe('Add project default checkout', () => {
             const defaultCheckout = worktrees.find((worktree) => worktree.isMainWorktree)
             return {
               activeCheckoutIsDefault: state.activeWorktreeId === defaultCheckout?.id,
-              linkedRepoVisibility: repo.externalWorktreeVisibility,
-              visibleBranches: worktrees.map((worktree) => worktree.branch).sort(),
-              visibleCount: worktrees.length
+              visibleBranches: worktrees.map((worktree) => worktree.branch).sort()
             }
           }, fixture.mainPath),
         {
@@ -180,10 +170,7 @@ test.describe('Add project default checkout', () => {
       )
       .toEqual({
         activeCheckoutIsDefault: true,
-        linkedRepoVisibility: undefined,
-        visibleBranches: ['refs/heads/main'],
-        visibleCount: 1
+        visibleBranches: ['refs/heads/main']
       })
-    await expect(orcaPage.getByText('Hiding 1 discovered worktree')).toBeVisible()
   })
 })

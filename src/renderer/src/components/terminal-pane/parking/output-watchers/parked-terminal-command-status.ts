@@ -1,12 +1,12 @@
 /** Keep store-level command status while parked; foreground confirmation and input-intent inference remain with mounted panes. */
 import type { AgentStatusEntry } from '../../../../../../shared/agent-status/contracts/agent-status-types'
 import { resolvePaneAgentOwner } from '../../../../../../shared/agent-status/identity/pane-agent-owner'
-import { parseAppSshPtyId } from '../../../../../../shared/ssh-pty-id'
+import { parseAppSshPtyId } from '../../../../../../shared/remote-runtime/ssh/ssh-pty-id'
 import { isShellProcess } from '../../../../../../shared/agent-status/process/shell-process-detection'
 import { dispatchTerminalCommandFinishedEvent } from '@/hooks/terminal-command-finished-event'
-import { resolveLiveAgentStatusConnectionRouting } from '@/lib/agent-status-connection-ownership'
-import { getConnectionIdFromState } from '@/lib/connection-owner-resolution'
-import { rendererAgentStatusObservations } from '@/lib/renderer-agent-status-observations'
+import { resolveLiveAgentStatusConnectionRouting } from '@/lib/agent-status/ownership/agent-status-connection-ownership'
+import { getConnectionIdFromState } from '@/lib/workspace/ownership/connection-owner-resolution'
+import { rendererAgentStatusObservations } from '@/lib/agent-status/evidence/renderer-agent-status-observations'
 import { isRetainedProgramResult } from '@/lib/program-status/row'
 import { useAppStore } from '@/store/index'
 import {
@@ -15,7 +15,7 @@ import {
   setCommandCodeDoneSettleExecutor
 } from '../../agent-completion/command-code/command-code-done-settle'
 import { canCommandCodeOutputOwnPane } from '../../agent-completion/command-code/command-code-output-ownership'
-import { isRemoteExecutionHostPtyId } from '../../../../../../shared/remote-execution-host-pty-id'
+import { isRemoteExecutionHostPtyId } from '../../../../../../shared/execution-host/remote-execution-host-pty-id'
 
 export type ParkedTerminalCommandStatusPolicy = {
   onCommandFinished: (bestEffortExitCode: number | null) => void
@@ -70,8 +70,7 @@ export function createParkedTerminalCommandStatusPolicy(options: {
     return canCommandCodeOutputOwnPane({
       foregroundAgent: foreground?.agent,
       shellForeground: foreground?.shellForeground,
-      paneOwnerAgent,
-      retainedPaneOwnerAgent: state.retainedAgentsByPaneKey[paneKey]?.agentType
+      paneOwnerAgent
     })
   }
 

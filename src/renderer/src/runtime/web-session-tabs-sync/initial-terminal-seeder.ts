@@ -5,8 +5,9 @@ import { isWebRuntimeInitialTerminalBootstrapInFlight } from './initial-terminal
 import { dispatchWebRuntimeInitialTerminalBootstrap } from './initial-terminal/web-runtime-initial-terminal-bootstrap-dispatch'
 import { shouldApplyRecoveredWebSessionTabsSnapshot } from './tracking'
 import { shouldBootstrapInitialWebRuntimeTerminal } from './tracking-decisions'
-import type { RuntimeMobileSessionTabsResult } from '../../../../shared/runtime-types'
+import type { RuntimeMobileSessionTabsResult } from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import type { SessionTabsStreamEvent } from './state'
+import { hasSplitLandingGroup } from '../../store/slices/tabs/split-landing-groups'
 
 type SessionTabsFrame = RuntimeMobileSessionTabsResult & { type: 'snapshot' | 'updated' }
 
@@ -58,6 +59,10 @@ export function createInitialTerminalSeeder(
   }
 
   const seed = async (): Promise<void> => {
+    // Rechecked after the mirror applied: a waiting split chooser is the surface the user left.
+    if (hasSplitLandingGroup(useAppStore.getState(), worktreeId)) {
+      return
+    }
     if (await dispatchWebRuntimeInitialTerminalBootstrap(environmentId, worktreeId)) {
       requestedInitialTerminal = true
     }

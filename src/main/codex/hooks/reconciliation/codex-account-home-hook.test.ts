@@ -12,7 +12,7 @@ import type * as NodeOs from 'node:os'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type * as HashLookup from '../../trust/hooks/codex-hook-hash-lookup'
-import type { HookDefinition } from '../../../agent-hooks/installer-utils'
+import type { HookDefinition } from '../../../agent-hooks/installation/configuration/hook-config-schema'
 
 const mocks = vi.hoisted(() => {
   const hashes: Record<string, string> = {}

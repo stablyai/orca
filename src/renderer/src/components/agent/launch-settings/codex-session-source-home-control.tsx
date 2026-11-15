@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { Info } from 'lucide-react'
 import type { GlobalSettings } from '../../../../../shared/global-settings-types'
-import { normalizeGlobalWindowsRuntimeDefault } from '../../../../../shared/project-execution-runtime'
+import { normalizeGlobalWindowsRuntimeDefault } from '../../../../../shared/execution-host/project-runtime-preference'
 import { Button } from '../../ui/button'
 import { Input } from '../../ui/input'
 import { Tooltip, TooltipContent, TooltipTrigger } from '../../ui/tooltip'
@@ -134,7 +134,8 @@ export function AgentSessionSourceHomeInput({
           }}
           placeholder={runtimeLabel}
           spellCheck={false}
-          className="h-7 flex-1 font-mono text-xs"
+          variant="code"
+          className="h-7 flex-1"
         />
         {value.trim() && (
           <Button

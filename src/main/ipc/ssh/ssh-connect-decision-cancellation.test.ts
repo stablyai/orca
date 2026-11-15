@@ -5,21 +5,36 @@ const mocks = await vi.hoisted(async () => {
   return createSshIpcMocks()
 })
 
+const listing = vi.hoisted(() => vi.fn(async (): Promise<never[]> => []))
+vi.mock(
+  '../../../shared/remote-runtime/host-store/runtime-environment-store',
+  async (importOriginal) => ({
+    ...(await importOriginal<object>()),
+    listEnvironments: listing
+  })
+)
+
 vi.mock('../../ssh/config/ssh-config-host-picker', () => mocks.sshConfigHostPicker)
 vi.mock('electron', () => mocks.electron)
-vi.mock('../../ssh/connection/ssh-connection-store', () => mocks.sshConnectionStore)
+vi.mock('../../ssh/targets/ssh-connection-store', () => mocks.sshConnectionStore)
 vi.mock('./ssh-host-server-connect', () => mocks.hostServerConnect)
 vi.mock('../../ssh/connection/ssh-connection-manager', () => mocks.sshConnectionManager)
-vi.mock('../../ssh/ssh-channel-multiplexer', () => mocks.sshChannelMultiplexer)
+vi.mock('../../ssh/protocol/ssh-channel-multiplexer', () => mocks.sshChannelMultiplexer)
 vi.mock('../../ssh/port-forwarding/ssh-port-forward', () => mocks.sshPortForward)
 vi.mock('../ssh/ssh-port-scanner', () => mocks.sshPortScanner)
-vi.mock(import('../../ssh/legacy-relay/legacy-relay-bridge-registry'), async (importOriginal) => ({
-  ...(await importOriginal()),
-  startLegacyRelayBridge: vi.fn(async () => {}),
-  stopLegacyRelayBridge: vi.fn()
-}))
+vi.mock(
+  import('../../ssh/legacy-relay/bridge/legacy-relay-bridge-registry'),
+  async (importOriginal) => ({
+    ...(await importOriginal()),
+    startLegacyRelayBridge: vi.fn(async () => {}),
+    stopLegacyRelayBridge: vi.fn()
+  })
+)
 
-import type { SshManagedServerStatus, SshTarget } from '../../../shared/ssh-types'
+import type {
+  SshManagedServerStatus,
+  SshTarget
+} from '../../../shared/remote-runtime/ssh/ssh-types'
 import type { SshConnection } from '../../ssh/connection/ssh-connection'
 import { recordSshConnectionOpened } from '../../ssh/connection/ssh-connection-attribution'
 import {
@@ -34,12 +49,15 @@ import { connectInFlight } from './ssh-connect-attempt-registry'
 import {
   getSshProviderAuthority,
   isCurrentSshProviderAuthority
-} from '../../ssh/ssh-provider-authority'
-import { clearSshHostServerStatus, setSshHostServerStatus } from '../../ssh/ssh-host-server-status'
+} from '../../ssh/connection/authority/ssh-provider-authority'
+import {
+  clearSshHostServerStatus,
+  setSshHostServerStatus
+} from '../../ssh/host-server/ssh-host-server-status'
 import {
   startLegacyRelayBridge,
   stopLegacyRelayBridge
-} from '../../ssh/legacy-relay/legacy-relay-bridge-registry'
+} from '../../ssh/legacy-relay/bridge/legacy-relay-bridge-registry'
 import { createSshIpcHarness } from './ssh-ipc-test-harness'
 
 const { mockSshStore, mockConnectionManager } = mocks
@@ -48,7 +66,10 @@ describe('a connect cancelled during its server decision', () => {
   const harness = createSshIpcHarness(mocks)
   const { handlers } = harness
 
-  beforeEach(harness.reset)
+  beforeEach(async () => {
+    listing.mockResolvedValue([])
+    await harness.reset()
+  })
 
   it('does not publish connected when the user disconnected during the legacy bridge wait', async () => {
     const target: SshTarget = {
@@ -68,12 +89,21 @@ describe('a connect cancelled during its server decision', () => {
       mockConnectionManager.getConnection.mockReturnValue(opened)
       return { route: 'managed', environmentId: 'env-1' }
     })
+    const bridge = Promise.withResolvers<void>()
+    const entered = Promise.withResolvers<void>()
     vi.mocked(startLegacyRelayBridge).mockImplementationOnce(async () => {
-      await handlers.get('ssh:disconnect')!(null, { targetId: 'ssh-1' })
+      entered.resolve()
+      await bridge.promise
     })
-    await expect(
-      Promise.resolve(handlers.get('ssh:connect')!(null, { targetId: 'ssh-1' }))
-    ).rejects.toThrow('SSH connection attempt was cancelled')
+    const connecting = Promise.resolve(handlers.get('ssh:connect')!(null, { targetId: 'ssh-1' }))
+    await entered.promise
+    const enumeration = Promise.withResolvers<never[]>()
+    listing.mockReturnValueOnce(enumeration.promise)
+    const disconnecting = handlers.get('ssh:disconnect')!(null, { targetId: 'ssh-1' })
+    bridge.resolve()
+    await expect(connecting).rejects.toThrow('SSH connection attempt was cancelled')
+    enumeration.resolve([])
+    await disconnecting
     expect(publishManagedServerConnect).not.toHaveBeenCalled()
     expect(stopLegacyRelayBridge).toHaveBeenCalledWith('ssh-1')
   })

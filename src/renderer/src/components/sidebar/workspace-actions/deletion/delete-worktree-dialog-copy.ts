@@ -1,7 +1,7 @@
-import { isFolderRepo } from '../../../../../../shared/repo-kind'
+import { isFolderRepo } from '../../../../../../shared/repository/repo-kind'
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
-import type { Repo } from '../../../../../../shared/repo-types'
+import type { Repo } from '../../../../../../shared/repository/repo-types'
 import type { Worktree } from '../../../../../../shared/worktree/types'
 
 type WorktreeRepoRef = Pick<Worktree, 'repoId'>
@@ -97,12 +97,12 @@ export function getDeleteWorktreeDialogCopy(
         )
       : args.isFolderWorkspaceDelete
         ? t(
-            'auto.components.sidebar.DeleteWorktreeDialog.removeSingleFolder',
-            'Remove <target/> from Orca. The project folder on disk will not be deleted.'
+            'auto.components.sidebar.DeleteWorktreeDialog.removeSingleFolderFromOrca',
+            'Removes it from Orca. The folder on disk is kept.'
           )
         : t(
-            'auto.components.sidebar.DeleteWorktreeDialog.removeSingleGit',
-            'Remove <target/> from git and delete its workspace folder.'
+            'auto.components.sidebar.DeleteWorktreeDialog.deleteSingleWorktreeAndBranch',
+            'Deletes the worktree and its branch (kept if unmerged).'
           ),
     mainWorktreeBlocker: args.isFolderWorkspaceDelete
       ? t(

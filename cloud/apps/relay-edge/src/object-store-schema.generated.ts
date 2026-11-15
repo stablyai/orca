@@ -1,5 +1,5 @@
-// GENERATED from the relay's SQLite schema (sqlite_master) by test/object-store-schema.test.ts.
-// Do not edit; regenerate with UPDATE_OBJECT_STORE_SCHEMA=1.
+// GENERATED from the relay's SQLite schema (sqlite_master) by test/generate-object-store-schema.ts.
+// Do not edit; regenerate with UPDATE_OBJECT_STORE_SCHEMA=1 ./node_modules/.bin/tsx test/generate-object-store-schema.ts.
 export const OBJECT_STORE_SCHEMA: readonly string[] = [
   "CREATE TABLE IF NOT EXISTS relay_audit_events (\n  id TEXT PRIMARY KEY,\n  at BIGINT NOT NULL,\n  type TEXT NOT NULL,\n  user_id TEXT,\n  relay_host_id TEXT,\n  relay_device_id TEXT,\n  detail_json TEXT NOT NULL\n)",
   "CREATE TABLE IF NOT EXISTS relay_confirm_results (\n  user_id TEXT NOT NULL,\n  relay_host_id TEXT NOT NULL,\n  req_id TEXT NOT NULL,\n  basis_conn_id TEXT NOT NULL,\n  tuple_json TEXT NOT NULL,\n  result_json TEXT NOT NULL,\n  committed_at BIGINT NOT NULL,\n  PRIMARY KEY (user_id, relay_host_id, req_id)\n)",

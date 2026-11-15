@@ -5,7 +5,7 @@ import {
   RESUMABLE_TUI_AGENTS
 } from '../agent-session/lifecycle/agent-session-resume'
 import { AGENT_EFFORT_LEVEL } from '../agent-launch/choices/agent-effort-level'
-import { isValidTerminalTabId } from '../workspace-layout/terminal-tab-id'
+import { isValidTerminalTabId } from '../workspace-layout/terminal-surfaces/terminal-tab-id'
 import { normalizeMainAgentStatusField } from '../agent-status/contracts/agent-status-types'
 import { salvagingRecord } from '../zod-salvage'
 
@@ -22,7 +22,8 @@ const agentProviderSessionSchema = z.preprocess(
     // Pi resume requires its persisted authoritative transcript path.
     transcriptPath: z.string().min(1).optional(),
     cwd: z.string().min(1).optional(),
-    effort: z.string().regex(AGENT_EFFORT_LEVEL).optional()
+    effort: z.string().regex(AGENT_EFFORT_LEVEL).optional(),
+    permissionMode: z.string().optional()
   })
 )
 

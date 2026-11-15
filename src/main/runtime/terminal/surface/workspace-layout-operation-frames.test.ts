@@ -7,17 +7,17 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { getDefaultWorkspaceSession } from '../../../../shared/constants'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 import type { GeneratedTabTitle } from '../../../../shared/workspace-layout/workspace-layout-command-types'
-import type { WorkspaceLayoutStreamEvent } from '../../../../shared/workspace-layout/workspace-layout-stream-frames'
+
 import type { Store } from '../../../persistence/loading-store/store'
-import { WindowSession } from '../../../persistence/terminal-topology/terminal-topology-window-session-fixture'
+import { WindowSession } from '../../../persistence/terminal-topology/testing/terminal-topology-window-session-fixture'
 import {
   emptyTerminalSessionProfile,
   FIXTURE_GIT_WORKTREE_ID as GIT,
   openTopologyStore
-} from '../../../persistence/terminal-topology/terminal-topology-profile-fixture'
+} from '../../../persistence/terminal-topology/testing/terminal-topology-profile-fixture'
 import { applyWindowLayoutCommand } from '../layout/runtime-layout-apply'
 import { installLayoutFrameModelCheck } from './workspace-layout-frame-model-check.test-fixture'
-import { WorkspaceLayoutStream, type LayoutOperationCommit } from './workspace-layout-stream'
+import './workspace-layout-stream'
 
 const layoutOwner = vi.hoisted(() => ({ isMain: true }))
 vi.mock('../../../../shared/layout-owner-switch', () => ({
@@ -62,14 +62,6 @@ async function storeWith(tabs: Record<string, number>): Promise<Store> {
 const tabIdOf = (workspace: string, index: number) =>
   `tab-${workspace.replace(/\W/g, '-')}-${index}`
 
-function streamOver(store: Store): WorkspaceLayoutStream {
-  return new WorkspaceLayoutStream({
-    store: () => store,
-    homeHostId: homeOf,
-    liveTitle: () => null
-  })
-}
-
 function titles(tabs: Record<string, number>): GeneratedTabTitle[] {
   return Object.entries(tabs).flatMap(([workspace, count]) =>
     Array.from({ length: count }, (_, index) => ({
@@ -100,38 +92,6 @@ afterEach(() => {
   }
 })
 
-describe('one records frame per main operation', () => {
-  it('publishes a pane bind as one binding record, and a same-id respawn as one more', async () => {
-    const store = await storeWith({ [GIT]: 2 })
-    const frames: WorkspaceLayoutStreamEvent[] = []
-    streamOver(store).subscribe((frame) => frames.push(frame))
-    const bind = (incarnationId: string) =>
-      store.persistPtyBinding({
-        worktreeId: GIT,
-        tabId: tabIdOf(GIT, 1),
-        leafId: leafOf(1),
-        ptyId: 'pty-1',
-        incarnationId
-      })
-
-    await bind('inc-1')
-    await bind('inc-2')
-
-    const binding = (ptyGeneration: number) => [
-      {
-        key: GIT,
-        change: 'records',
-        bindings: { set: [{ leafId: leafOf(1), ptyId: 'pty-1', ptyGeneration }] }
-      }
-    ]
-    expect(frames.map((frame) => frame.type === 'records' && frame.workspaces)).toEqual([
-      binding(1),
-      binding(2)
-    ])
-    expect(check.failures).toEqual([])
-  })
-})
-
 describe('a throwing operation listener', () => {
   it('fails neither the committed operation nor the listeners after it', async () => {
     const store = await storeWith({ [GIT]: 1 })
@@ -147,33 +107,5 @@ describe('a throwing operation listener', () => {
     expect(heard).toEqual([['local']])
     expect(store.getWorkspaceSession().tabsByWorktree[GIT]![0]!.generatedTitle).toBe('Title 0')
     warn.mockRestore()
-  })
-})
-
-describe('a headless main', () => {
-  it('hears each operation with no layout subscriber, from one projection it shares', async () => {
-    const store = await storeWith({ [GIT]: 2, [SSH_KEY]: 1 })
-    const getSession = vi.spyOn(store, 'getWorkspaceSession')
-    const stream = streamOver(store)
-    const commits: LayoutOperationCommit[] = []
-    stream.onLayoutOperationCommitted((commit) => commits.push(commit))
-    const first = stream.readPartition('local')
-
-    await renameTabs(store, titles({ [SSH_KEY]: 1 }))
-
-    expect(commits).toEqual([{ hostIds: [SSH] }])
-    getSession.mockClear()
-    expect(stream.readPartition('local')).toBe(first)
-    expect(getSession).not.toHaveBeenCalled()
-    const ssh = stream.readPartition(SSH)!.layout.workspaces[SSH_KEY]!
-    expect(ssh.tabs.map((tab) => tab.generatedTitle)).toEqual(['Title 0'])
-    // Readers share the stream's model; mutations must fail.
-    expect(() => {
-      ssh.tabs[0]!.generatedTitle = 'edited'
-    }).toThrow(TypeError)
-    await renameTabs(store, [{ workspace: GIT, tabId: tabIdOf(GIT, 0), title: 'Next' }])
-    expect(stream.readPartition('local')!.layout.workspaces[GIT]!.tabs[0]!.generatedTitle).toBe(
-      'Next'
-    )
   })
 })

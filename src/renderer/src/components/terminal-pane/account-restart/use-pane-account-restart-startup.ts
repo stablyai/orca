@@ -1,6 +1,6 @@
 import { useCallback } from 'react'
 import { useAppStore } from '../../../store'
-import { buildPaneAccountRestartStartup } from '@/lib/agent-account-restart-startup'
+import { buildPaneAccountRestartStartup } from '@/lib/agent-session/accounts/agent-account-restart-startup'
 import type { TerminalPaneCloseController } from '../layout/close/use-terminal-pane-close-actions'
 import type { AccountRestartAgent } from '@/store/terminals/terminal-contracts'
 

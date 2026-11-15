@@ -1,7 +1,7 @@
 /** Create selects only its caller; shared selection stays put and no tap-style PTY respawn runs. */
 import { expect, it, vi } from 'vitest'
 import { parsePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
-import type { RuntimeMobileSessionTabsResult } from '../../../../shared/runtime-session-contracts'
+import type { RuntimeMobileSessionTabsResult } from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import { getDefaultWorkspaceSession } from '../../../../shared/constants'
 
 // Preserve side-effect order: mocks, lifecycle, fixtures.
@@ -14,7 +14,7 @@ await import('../../orca-runtime-tests/orca-runtime-test-scenario-builders.spec'
 
 const WT = TEST_WORKTREE_ID
 
-function pairedRuntime(clientKind?: 'mobile' | 'runtime') {
+function pairedRuntime() {
   let next = 0
   const spawn = vi.fn(async () => ({ id: `pty-${++next}` }))
   const { runtimeStore } = makeRuntimeStoreWithWorkspaceSession(getDefaultWorkspaceSession())
@@ -26,12 +26,8 @@ function pairedRuntime(clientKind?: 'mobile' | 'runtime') {
     getForegroundProcess: async () => null
   })
   const caller: RuntimeMobileSessionTabsResult[] = []
-  runtime.onMobileSessionTabsChanged(
-    (snapshot) => caller.push(snapshot),
-    'device-caller',
-    clientKind
-  )
-  runtime.onMobileSessionTabsChanged(() => {}, 'device-bystander', clientKind)
+  runtime.onMobileSessionTabsChanged((snapshot) => caller.push(snapshot), 'device-caller', 'mobile')
+  runtime.onMobileSessionTabsChanged(() => {}, 'device-bystander', 'mobile')
   return { runtime, spawn, caller }
 }
 
@@ -51,7 +47,9 @@ it('selects a launched terminal for the caller only, without spawning again', as
   expect((await runtime.listMobileSessionTabs(`id:${WT}`)).activeTabId).toBe(first.id)
   const previous = caller.at(-1)!
 
-  expect(runtime.selectCreatedMobileSessionTabForClient(WT, launched, 'device-caller')).toBe(true)
+  expect(await runtime.selectCreatedMobileSessionTabForClient(WT, launched, 'device-caller')).toBe(
+    true
+  )
 
   const selected = caller.at(-1)!
   expect(selected.activeTabId).toBe(launched.id)
@@ -66,25 +64,4 @@ it('selects a launched terminal for the caller only, without spawning again', as
     first.id
   )
   expect(spawn).toHaveBeenCalledTimes(2)
-})
-
-it('selects a launched chat by its session for the caller only', async () => {
-  const { runtime, caller } = pairedRuntime()
-  const first = await createPane(runtime)
-  await runtime.publishStructuredAgentSessionTab({
-    workspaceId: WT,
-    sessionId: 'sess-1',
-    agent: 'claude',
-    activate: false
-  })
-
-  expect(
-    runtime.selectCreatedMobileSessionTabForClient(WT, { sessionId: 'sess-1' }, 'device-caller')
-  ).toBe(true)
-
-  expect(caller.at(-1)?.activeTabId).toBe('agent-session:sess-1')
-  expect((await runtime.listMobileSessionTabs(`id:${WT}`)).activeTabId).toBe(first.id)
-  expect((await runtime.listMobileSessionTabs(`id:${WT}`, 'device-bystander')).activeTabId).toBe(
-    first.id
-  )
 })

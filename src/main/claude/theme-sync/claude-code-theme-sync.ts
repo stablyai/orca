@@ -2,16 +2,19 @@ import { randomUUID } from 'node:crypto'
 import { mkdir, readFile, realpath, rename, rm, stat, writeFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import { isDefinitiveAbsence } from '../../../shared/definitive-filesystem-absence'
-import { readHooksJson } from '../../agent-hooks/hooks-json-read'
-import { writeHooksJson } from '../../agent-hooks/installer-utils'
-import { defaultClaudeConfigDir } from '../claude-config-dir-pin'
-import { listClaudeProfileHomesAsync } from '../../claude-accounts/claude-profile-homes'
+import { readHooksJson } from '../../agent-hooks/installation/configuration/hooks-json-read'
+import { writeHooksJson } from '../../agent-hooks/installation/configuration/hooks-json-write'
+import { defaultClaudeConfigDir } from '../structured/launch/claude-config-dir-pin'
+import { listClaudeProfileHomesAsync } from '../../claude-accounts/profiles/claude-profile-homes'
 import {
   getClaudeObservedConfigDirs,
   getClaudeProfileRouter
-} from '../../claude-accounts/claude-profile-installed-router'
+} from '../../claude-accounts/profiles/routing/claude-profile-installed-router'
 import { resolveClaudeCommand } from '../../codex-cli/command'
-import { claudeLoadsCustomThemes, probeRecentClaudeCliVersion } from '../claude-hook-event-versions'
+import {
+  claudeLoadsCustomThemes,
+  probeRecentClaudeCliVersion
+} from '../cli-capabilities/claude-hook-event-versions'
 import type { ClaudeCodeTheme } from './claude-code-theme'
 import {
   readClaudeThemeOwnership,

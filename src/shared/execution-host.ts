@@ -1,5 +1,5 @@
 import type { GlobalSettings } from './global-settings-types'
-import type { Repo } from './repo-types'
+import type { Repo } from './repository/repo-types'
 import type { Worktree } from './worktree/types'
 
 export const LOCAL_EXECUTION_HOST_ID = 'local'
@@ -23,7 +23,7 @@ export type ParsedExecutionHost =
   | { kind: 'ssh'; id: `ssh:${string}`; targetId: string }
   | { kind: 'runtime'; id: `runtime:${string}`; environmentId: string }
 
-function getCurrentLocalPlatform(): NodeJS.Platform | null {
+export function getCurrentLocalPlatform(): NodeJS.Platform | null {
   const globalNavigator = (globalThis as { navigator?: { userAgent?: string; platform?: string } })
     .navigator
   const userAgent = globalNavigator?.userAgent || globalNavigator?.platform || ''

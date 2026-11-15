@@ -2,17 +2,17 @@ import { useCallback, useMemo, useRef, useState } from 'react'
 import type {
   CustomWorktreeVisibilitySource,
   WorktreeVisibilityDefaults
-} from '../../../../../shared/repo-types'
+} from '../../../../../shared/repository/repo-types'
 import type { GlobalSettings } from '../../../../../shared/global-settings-types'
 
 import {
   MAX_CUSTOM_WORKTREE_VISIBILITY_SOURCES,
   normalizeCustomWorktreeVisibilitySources
-} from '../../../../../shared/worktree/visibility-sources'
+} from '../../../../../shared/worktree/visibility/visibility-sources'
 import {
   buildDefaultWorktreeSourcePreferenceUpdate,
   removeDefaultCustomWorktreeSourcePreference
-} from '../../../../../shared/worktree/visibility-source-preferences'
+} from '../../../../../shared/worktree/visibility/visibility-source-preferences'
 import type { WorktreeVisibilitySourceAddResult } from '../../sidebar/workspace-visibility/sources/WorktreeVisibilitySourceAddForm'
 import WorktreeVisibilitySourceList, {
   type WorktreeVisibilitySourceRow
@@ -153,6 +153,7 @@ export function GlobalWorktreeVisibilitySourcesSetting({
         customSources={customSources}
         removableSourceIds={removableSourceIds}
         showCounts={false}
+        switches
         disabled={pending || !defaultsSupported}
         sourceDefaultsDisabled={!sourceDefaultsSupported}
         onAdd={handleAdd}

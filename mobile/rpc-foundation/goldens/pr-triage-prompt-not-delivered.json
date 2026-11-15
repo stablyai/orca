@@ -147,12 +147,6 @@
         }
       }
     },
-    "3fde28ed6a57": {
-      "launched": {
-        "kind": "prompt-not-sent",
-        "prompt": "Fix the failing checks"
-      }
-    },
     "742db574bda3": {
       "name": "preflight.detectAgents#1",
       "ordinal": 6,
@@ -202,6 +196,18 @@
       "value": {
         "$rpc": "undefined"
       }
+    },
+    "ef7ff8bff3d5": {
+      "launched": {
+        "kind": "prompt-not-sent",
+        "opens": {
+          "paneKey": {
+            "$rpc": "null"
+          },
+          "worktreeId": "repo-9::/w"
+        },
+        "prompt": "Fix the failing checks"
+      }
     }
   },
   "recording": {
@@ -215,7 +221,7 @@
           "settlements": {
             "launch": "eb79a9b3682a"
           },
-          "state": "3fde28ed6a57",
+          "state": "ef7ff8bff3d5",
           "effects": []
         }
       }

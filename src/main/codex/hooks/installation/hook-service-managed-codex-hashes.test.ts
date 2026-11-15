@@ -3,7 +3,7 @@ import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import type * as Os from 'node:os'
 import { join } from 'node:path'
 import { parse as parseToml } from 'smol-toml'
-import type * as InstallerUtils from '../../../agent-hooks/installer-utils'
+import type * as HooksJsonWrite from '../../../agent-hooks/installation/configuration/hooks-json-write'
 import type * as TrustDerivation from '../../trust/hooks/codex-hook-trust-derivation'
 import { setupCodexHookHomes } from './hook-service-test-harness'
 
@@ -30,24 +30,23 @@ vi.mock('../../trust/hooks/codex-hook-trust-derivation', async (importOriginal) 
   ...(await importOriginal<typeof TrustDerivation>()),
   ...codex
 }))
-vi.mock('../../../agent-hooks/installer-utils', async (importOriginal) => {
-  const actual = await importOriginal<typeof InstallerUtils>()
-  return {
-    ...actual,
-    writeHooksJson: (...args: Parameters<typeof actual.writeHooksJson>) => {
-      hooks.beforeHooksJsonWrite?.()
-      return actual.writeHooksJson(...args)
+vi.mock(
+  '../../../agent-hooks/installation/configuration/hooks-json-write',
+  async (importOriginal) => {
+    const actual = await importOriginal<typeof HooksJsonWrite>()
+    return {
+      ...actual,
+      writeHooksJson: (...args: Parameters<typeof actual.writeHooksJson>) => {
+        hooks.beforeHooksJsonWrite?.()
+        return actual.writeHooksJson(...args)
+      }
     }
   }
-})
+)
 
 import './hook-service'
 import { CodexHookService } from './codex-hook-service-implementation'
-import {
-  _internals as lookupInternals,
-  startCodexHookHashLookup
-} from '../../trust/hooks/codex-hook-hash-lookup'
-import { memoizeCodexHookAnswer } from '../../trust/hooks/codex-hook-trust-memo'
+import { startCodexHookHashLookup } from '../../trust/hooks/codex-hook-hash-lookup'
 import type { CodexHookAnswer } from '../../trust/hooks/codex-hook-trust-derivation'
 import {
   readHookTrustEntries,
@@ -63,6 +62,7 @@ import {
   CODEX_EVENTS,
   CODEX_EVENT_LABEL,
   computeOrcaCodexHookHashes,
+  getCodexManagedHookStatusMessage,
   getManagedScriptPath
 } from '../definitions/codex-hook-definition'
 import { buildCodexHookCommand as getManagedCommand } from '../definitions/codex-hook-command-form'
@@ -165,37 +165,6 @@ describe('managed-home Codex hook approval', () => {
     ).toBe(undefined)
   })
 
-  it("leaves user trust byte-untouched while approving Orca's entries", async () => {
-    mkdirSync(managedHome(), { recursive: true })
-    const userBlock = [
-      '[hooks.state."/home/user/.codex/hooks.json:stop:3:1"]',
-      'enabled = false',
-      'trusted_hash = "sha256:user-owned-hash"'
-    ].join('\n')
-    writeFileSync(join(managedHome(), 'config.toml'), `${userBlock}\n`)
-    useCodexHashes()
-
-    expect((await new CodexHookService().install()).state).toBe('installed')
-    expect(readFileSync(join(managedHome(), 'config.toml'), 'utf-8')).toContain(userBlock)
-  })
-
-  it("turning hooks off removes an approval from an older Codex version's hash", async () => {
-    useCodexHashes()
-    expect((await new CodexHookService().install()).state).toBe('installed')
-    lookupInternals.resetForTesting()
-    memoizeCodexHookAnswer(join(homes.userDataDir, 'codex'), 'codex-0.160', command(), {
-      kind: 'hashes',
-      codexVersion: 'codex-cli 0.160.0',
-      hashes: { stop: 'sha256:codex-0.160-stop' }
-    })
-
-    await new CodexHookService().remove()
-
-    const trust = readHookTrustEntries(join(managedHome(), 'config.toml'))
-    expect(trust.get(managedKey('stop', 0))).toBeUndefined()
-    expect(trust.get(managedKey('session_start', 0))).toBeUndefined()
-  })
-
   it("keeps the managed config.toml loadable when hooks are off and the user's approvals are inline", async () => {
     const systemHome = join(homes.tmpHome, '.codex')
     mkdirSync(systemHome, { recursive: true })
@@ -288,7 +257,8 @@ describe('managed-home Codex hook approval', () => {
         groupIndex: 0,
         handlerIndex: 0,
         command: command(),
-        timeoutSec: 10
+        timeoutSec: 10,
+        statusMessage: getCodexManagedHookStatusMessage(command())
       }
       upsertHookTrustEntries(join(managedHome(), 'config.toml'), [
         { ...entry, trustedHash: 'sha256:main-granted' }

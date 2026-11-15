@@ -7,13 +7,14 @@ import {
   TASK_PROVIDERS,
   normalizeVisibleTaskProviders,
   resolveVisibleTaskProvider
-} from '../../../../../shared/task-providers'
+} from '../../../../../shared/work-items/task-providers'
 import { JiraIcon } from '@/components/icons/JiraIcon'
 import { LinearIcon } from '@/components/icons/LinearIcon'
 import { Button } from '@/components/ui/button'
 import { useAppStore } from '@/store/index'
 import { SearchableSetting } from '../section-layout/SearchableSetting'
-import { CodeHostSetupSteps, JiraSetupSteps } from './TaskSourceSimpleSetup'
+import { CodeHostSetupSteps } from './TaskSourceCodeHostSetup'
+import { JiraSetupSteps } from './TaskSourceJiraSetup'
 import { TaskSourceLinearSetup } from './TaskSourceLinearSetup'
 import { TaskSourceProviderCard } from './TaskSourceProviderCard'
 import {
@@ -173,7 +174,7 @@ export function TasksPane({ settings, updateSettings }: TasksPaneProps): React.J
       ) : null}
 
       <SearchableSetting
-        title={t('auto.components.settings.TasksPane.f71d8a9dd3', 'Task Providers')}
+        title={t('auto.components.settings.TasksPane.30255b39dc', 'Task providers')}
         description={t(
           'auto.components.settings.TasksPane.providersDescription',
           'Each card walks through connection (and skill, for Linear) plus whether it appears in Tasks.'

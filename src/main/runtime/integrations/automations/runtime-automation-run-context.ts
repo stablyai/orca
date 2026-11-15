@@ -1,4 +1,4 @@
-import type { AutomationDestination } from '../../../../shared/automation-owner-precondition'
+import type { AutomationDestination } from '../../../../shared/automations/ownership/automation-owner-precondition'
 import type { RuntimeRepoSelector } from '../../workspaces/catalog/runtime-repo-selector'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 import type { Worktree } from '../../../../shared/worktree/types'
@@ -6,8 +6,8 @@ import type {
   AutomationUpdateInput,
   AutomationCreateInput,
   AutomationWorkspaceMode
-} from '../../../../shared/automations-types'
-import type { Repo } from '../../../../shared/repo-types'
+} from '../../../../shared/automations/automation-definition'
+import type { Repo } from '../../../../shared/repository/repo-types'
 
 export function assertAutomationRunContextMatchesTarget(
   runContext:

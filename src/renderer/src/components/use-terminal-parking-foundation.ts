@@ -13,10 +13,7 @@ import {
   takePendingBackgroundTerminalWorktreeMount
 } from './terminal/background-terminal-worktree-mount'
 import type { StartupTerminalTabHold } from './terminal/startup-terminal-tab-hold'
-import {
-  subscribeTerminalPrewarmWorktrees,
-  type TerminalPrewarmStage
-} from './terminal/terminal-worktree-prewarm'
+import type { TerminalPrewarmStage } from './terminal/terminal-worktree-prewarm'
 import {
   combineTerminalWorktreeParkIds,
   useManualTerminalWorktreeParking
@@ -49,7 +46,6 @@ export function useTerminalParkingFoundation(controller: TerminalEditorCloseCont
 
   const measurableBackgroundWorktreeTimersRef = useRef(new Map<string, number>())
   const [backgroundMountRevision, setBackgroundMountRevision] = useState(0)
-  const [terminalParkingRevision, setTerminalParkingRevision] = useState(0)
   const [browserGuestRetentionRevision, setBrowserGuestRetentionRevision] = useState(0)
   const [parkedTerminalWorktreeIds, setParkedTerminalWorktreeIds] = useState<ReadonlySet<string>>(
     () => new Set()
@@ -141,11 +137,6 @@ export function useTerminalParkingFoundation(controller: TerminalEditorCloseCont
     }
   }, [closeDialogDebounceTimersRef, measurableBackgroundWorktreeIdsRef, mountedWorktreeIdsRef])
 
-  useEffect(
-    () => subscribeTerminalPrewarmWorktrees(() => setTerminalParkingRevision((r) => r + 1)),
-    []
-  )
-
   useEffect(() => {
     const timers = terminalWorktreeParkingTimersRef.current
     return () => {
@@ -160,8 +151,6 @@ export function useTerminalParkingFoundation(controller: TerminalEditorCloseCont
     measurableBackgroundWorktreeTimersRef,
     backgroundMountRevision,
     setBackgroundMountRevision,
-    terminalParkingRevision,
-    setTerminalParkingRevision,
     browserGuestRetentionRevision,
     setBrowserGuestRetentionRevision,
     parkedTerminalWorktreeIds,

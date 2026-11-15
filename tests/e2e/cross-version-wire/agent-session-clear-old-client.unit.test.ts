@@ -11,7 +11,8 @@ import { eventually } from '../../../src/main/native-chat/agent-session-wire/hos
 import {
   HOST_TEST_SESSION as SESSION,
   hostTestOperationId
-} from '../../../src/main/native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-data'
+} from '../../../src/main/native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-data.test-fixture'
+import { readTestHostJournal } from '../../../src/main/native-chat/agent-session-journal/journal-observation.test-support'
 import { agentJournalSubmissionKey } from '../../../src/shared/agent-session/journal/agent-session-journal-item-key'
 import { EMPTY_STRUCTURED_AGENT_SESSION } from '../../../src/shared/agent-session/structured-agent-session-reducer'
 import type { useNativeChatRewind } from '../../../src/renderer/src/components/native-chat/messages/actions/use-native-chat-rewind'
@@ -52,7 +53,7 @@ test('an older desktop releases its clear hold from the actual same-conversation
   }
   const rig = await createQueuedMessageTestRig({ restartable: true })
   try {
-    const before = await rig.host.journalSnapshot(SESSION)
+    const before = await readTestHostJournal(rig.host, SESSION)
     const view = renderHook(() =>
       useCommand(SESSION, async () => {
         const fields = { command: 'clear' as const }
@@ -79,7 +80,7 @@ test('an older desktop releases its clear hold from the actual same-conversation
       })
     })
     expect(held(SESSION)).toBe(false)
-    const after = await rig.host.journalSnapshot(SESSION)
+    const after = await readTestHostJournal(rig.host, SESSION)
     expect(after.cursor.epoch).toBe(before.cursor.epoch)
     expect(after.items.slice(0, before.items.length)).toEqual(before.items)
     expect(after.items.at(-1)?.body).toMatchObject({ presentation: 'context-cleared' })
@@ -134,7 +135,7 @@ test('an older rewind-capable desktop releases its temporary same-epoch hold wit
     ).toMatchObject({ ok: true })
     await send('keep this current-context message', 'kept')
     const target = await send('return this message to the draft', 'target')
-    const before = await rig.host.journalSnapshot(SESSION)
+    const before = await readTestHostJournal(rig.host, SESSION)
     const fields = { itemId: target, expectedEpoch: before.cursor.epoch }
     const result = await rig.host.rewind(CALLER, {
       ...fields,
@@ -144,13 +145,16 @@ test('an older rewind-capable desktop releases its temporary same-epoch hold wit
     if (!result.ok) {
       throw new Error('suffix rewind failed')
     }
-    const after = await rig.host.journalSnapshot(SESSION)
+    const after = await readTestHostJournal(rig.host, SESSION)
     expect(after.cursor.epoch).toBe(before.cursor.epoch)
     expect(result.value.sequence).toBe(after.cursor.sequence)
     expect(after.items.map((item) => item.body)).toEqual(
       before.items.filter((item) => item.itemId !== target).map((item) => item.body)
     )
-    const floor = rig.host.collaboratorsForTests().sessions.get(SESSION)!.journal.context.floor()!
+    const floor = (await rig.host
+      .collaboratorsForTests()
+      .sessions.get(SESSION)!
+      .journal.reads.contextFloor())!
     expect(after.items.filter((item) => item.sequence <= floor.sequence)).toEqual(
       before.items.filter((item) => item.sequence <= floor.sequence)
     )
@@ -189,7 +193,7 @@ test('an older rewind-capable desktop releases its temporary same-epoch hold wit
     expect(view.result.current.pending).toBe(false)
     expect(view.result.current.blockedRef.current).toBe(false)
     expect(toastError).toHaveBeenCalledOnce()
-    expect(await rig.host.journalSnapshot(SESSION)).toEqual(after)
+    expect(await readTestHostJournal(rig.host, SESSION)).toEqual(after)
   } finally {
     cleanup()
     vi.useRealTimers()

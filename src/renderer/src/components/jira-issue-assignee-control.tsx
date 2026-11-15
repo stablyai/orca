@@ -2,7 +2,7 @@ import { useCallback } from 'react'
 import { Button } from '@/components/ui/button'
 import { JiraUserPicker } from '@/components/jira-user-picker'
 import { getJiraSelfUser } from '@/components/jira-self-user'
-import { useJiraSourceConnection } from '@/components/new-workspace/use-jira-source-connection'
+import { useJiraSourceConnection } from '@/components/new-workspace/source-search/use-jira-source-connection'
 import { useAppStore } from '@/store'
 import { compareBaseSensitivityLocaleText } from '../../../shared/locale-text-collators'
 import { jiraListAssignableUsersForTarget } from '@/runtime/jira/runtime-jira-user-fields-client'
@@ -10,8 +10,8 @@ import { useTranslate } from '@/i18n/use-translate'
 import {
   getTaskSourceCacheScope,
   type TaskSourceContext
-} from '../../../shared/task-source-context'
-import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
+} from '../../../shared/work-items/task-source-context'
+import type { RuntimeClientTarget } from '../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import type { JiraIssue, JiraIssueUpdate, JiraUser } from '../../../shared/jira/jira-types'
 
 export function JiraIssueAssigneeControl({

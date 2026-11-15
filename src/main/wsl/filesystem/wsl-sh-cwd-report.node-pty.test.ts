@@ -15,7 +15,7 @@ import {
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { buildWslInteractiveLoginShellCommand } from '../../../shared/wsl-login-shell-command'
+import { buildWslInteractiveLoginShellCommand } from '../../../shared/shell/wsl/wsl-login-shell-command'
 import { SH_WSL_ENV_FILE } from './wsl-shell-cwd-report'
 import { parseFileUriPath } from '../../daemon/emulation/osc7-file-uri'
 

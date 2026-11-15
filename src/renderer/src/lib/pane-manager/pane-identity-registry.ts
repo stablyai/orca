@@ -2,7 +2,7 @@ import {
   isTerminalLeafId,
   type TerminalLeafId
 } from '../../../../shared/workspace-layout/stable-pane-id'
-import { mintStablePaneId } from './mint-stable-pane-id'
+import { mintStablePaneId } from './pane-layout/mint-stable-pane-id'
 import type { ManagedPaneInternal } from './pane-manager-types'
 
 export class PaneIdentityRegistry {

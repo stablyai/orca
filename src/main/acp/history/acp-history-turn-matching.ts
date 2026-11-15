@@ -8,7 +8,7 @@ import type {
   AgentJournalRenderItem
 } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import type { NativeChatBlock } from '../../../shared/native-chat/native-chat-types'
-import { readAgentJournalTurn } from '../../../shared/agent-session/lifecycle/agent-session-turn-record'
+import { readAgentJournalTurn } from '../../../shared/agent-session/lifecycle/records/agent-session-turn-record'
 import { isProviderTimelineTurnInNamespace } from '../../native-chat/agent-session-timeline/provider-timeline-identity'
 import { isHistoricalProviderTimelineItem } from '../../native-chat/agent-session-timeline/provider-timeline-history'
 import type { AcpHistoryItem } from './acp-history-journal-overlay'
@@ -73,7 +73,8 @@ export function matchAcpHistoryTurns(
   candidates: readonly AcpHistoryCandidate[],
   importedAt: number | null,
   requests: ReadonlySet<string>,
-  check: () => void
+  check: () => void,
+  covered?: ReadonlySet<string>
 ) {
   const natives = acpNativeTurns(scope, journal)
   const nativeIndex = new Map(natives.map((native, index) => [native.itemId, index]))
@@ -97,6 +98,10 @@ export function matchAcpHistoryTurns(
   const read = (key: string) => journal.items.get(key) ?? null
   for (const { source, items } of candidates) {
     check()
+    if (covered?.has(source.turn)) {
+      kind.set(source.turn, 'adopted')
+      continue
+    }
     const owners = new Set<number>()
     let heldTurn: AgentJournalRenderItem | undefined
     for (const candidate of items) {

@@ -2,7 +2,7 @@ import { Moon, Play } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { translate } from '@/i18n/i18n'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
-import type { SpawnDeferralReason } from '../../../../../../shared/host-spawn-admission'
+import type { SpawnDeferralReason } from '../../../../../../shared/terminal/pty/admission/spawn-admission-contract'
 
 function sleepingReasonDetail(reason: SpawnDeferralReason, t: Translate = translate): string {
   switch (reason) {

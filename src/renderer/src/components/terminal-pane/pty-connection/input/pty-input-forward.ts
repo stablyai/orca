@@ -1,7 +1,7 @@
 import { subscribeToTerminalInputData } from '../../input/terminal-user-input-signal'
 import { isPassiveTerminalInputReport } from '../../input/terminal-passive-input-report'
 import { installTerminalImeCompositionRoute } from '../../input/ime/terminal-ime-composition-route'
-import { useAppStore } from '@/store'
+import { useAppStore } from '@/store/index'
 import { isTerminalQueryReply } from '../../../../../../shared/terminal/protocol/queries/terminal-query-reply'
 import { isPtyLocked } from '@/lib/pane-manager/mobile-driver-state'
 import { isPaneReplaying } from '../../snapshots/replay-guard'
@@ -18,6 +18,7 @@ import { isCodexPaneStale } from './codex-pane-stale'
 import { installTerminalSelectionFitGuard } from '../../viewport/terminal-selection-fit-guard'
 import { createSessionStaleMouseTrackingGuard } from './session-stale-mouse-tracking-guard'
 import type { ConnectPanePtySession } from '../connect-pane-pty-session'
+import { recordAdmittedTerminalUserInput } from '@/diagnostics/telemetry/telemetry'
 
 export function installPtyInputForward(session: ConnectPanePtySession): void {
   const staleMouseTrackingGuard = createSessionStaleMouseTrackingGuard(session)
@@ -101,6 +102,9 @@ export function installPtyInputForward(session: ConnectPanePtySession): void {
         .sendInputAccepted(data, inputKind)
         .then((accepted): boolean | Promise<boolean> | null => {
           if (accepted) {
+            if (wasUserInput) {
+              recordAdmittedTerminalUserInput()
+            }
             // Why: rejected writes use transport recovery and must not arm a parser probe.
             session.markAcceptedTerminalInputSent()
             session.observeAcceptedShellCommandInput(data)
@@ -127,6 +131,9 @@ export function installPtyInputForward(session: ConnectPanePtySession): void {
     if (intent) {
       session.claimViewportForUserActivity(data)
       if (session.transport.sendInput(data, inputKind)) {
+        if (wasUserInput) {
+          recordAdmittedTerminalUserInput()
+        }
         session.markAcceptedTerminalInputSent()
         session.observeAcceptedShellCommandInput(data)
         session.observeAcceptedTerminalInput(data, intent)
@@ -138,6 +145,9 @@ export function installPtyInputForward(session: ConnectPanePtySession): void {
     }
     session.claimViewportForUserActivity(data)
     if (session.transport.sendInput(data, inputKind)) {
+      if (wasUserInput) {
+        recordAdmittedTerminalUserInput()
+      }
       session.markAcceptedTerminalInputSent()
       session.observeAcceptedShellCommandInput(data)
       session.observeAcceptedTerminalInput(data)

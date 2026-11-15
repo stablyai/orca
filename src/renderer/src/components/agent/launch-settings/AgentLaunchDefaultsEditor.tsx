@@ -9,7 +9,8 @@ import {
   type AgentDefaultEnvDraftInvalidReason
 } from './agent-default-env-draft'
 import { useAgentLaunchFieldWrite } from './use-agent-launch-field-write'
-import { AgentArgsChoiceChips, type AgentArgsChoice } from './AgentPermissionChoiceControls'
+import { AgentArgsChoiceChips } from './AgentArgsChoiceChips'
+import type { AgentArgsChoice } from './agent-args-choice'
 
 export function AgentCommandOverrideInput({
   defaultCmd,
@@ -60,7 +61,8 @@ export function AgentCommandOverrideInput({
           }}
           placeholder={defaultCmd}
           spellCheck={false}
-          className="h-7 flex-1 font-mono text-xs"
+          variant="code"
+          className="h-7 flex-1"
         />
         {cmdOverride && (
           <Button
@@ -158,13 +160,13 @@ export function AgentDefaultArgsInput({
   return (
     <div className="flex min-w-0 flex-col gap-1">
       {hideLabel ? null : (
-        <span className="text-xs font-medium leading-none text-muted-foreground">
+        <span className="text-xs text-muted-foreground">
           {t('auto.components.settings.AgentsPane.cfb3f35775', 'Arguments')}
         </span>
       )}
       <div className="flex min-w-0 items-center gap-2">
         <div
-          className="scrollbar-sleek relative max-h-[calc(var(--spacing)*41+2px)] min-h-7 min-w-0 flex-1 overflow-x-hidden overflow-y-auto rounded-md border border-input px-3 py-0.5 shadow-xs transition-[color,box-shadow] focus-within:border-ring focus-within:ring-[3px] focus-within:ring-ring/50 dark:bg-input/30"
+          className="scrollbar-sleek relative max-h-42 min-h-7 min-w-0 flex-1 overflow-x-hidden overflow-y-auto rounded-md border border-input px-3 py-0.75 shadow-xs transition-[color,box-shadow] focus-within:border-ring focus-within:ring-[3px] focus-within:ring-ring/50 dark:bg-input/30"
           onBlur={(event) => {
             if (
               !(containsFocus
@@ -346,7 +348,8 @@ export function AgentDefaultEnvInput({
           spellCheck={false}
           aria-invalid={envDraftError ? true : undefined}
           aria-describedby={envDraftError ? envDraftErrorId : undefined}
-          className="h-7 flex-1 font-mono text-xs"
+          variant="code"
+          className="h-7 flex-1"
         />
         {(draftSeed !== defaultEnvText || envDraft !== defaultEnvText) && (
           <Button

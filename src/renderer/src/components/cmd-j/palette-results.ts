@@ -1,6 +1,9 @@
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
-import type { SettingsNavIcon, SettingsNavSection } from '@/lib/settings-navigation-types'
+import type {
+  SettingsNavIcon,
+  SettingsNavSection
+} from '@/components/settings/navigation/settings-navigation-types'
 import type { CmdJQuickAction } from './quick-actions'
 import { isClipboardTextByteLengthOverLimit } from '../../../../shared/clipboard-text'
 import {

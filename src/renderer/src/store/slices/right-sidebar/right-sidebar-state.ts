@@ -1,7 +1,7 @@
 import type { EditorGet, EditorSet } from '../editor/types/editor-set-get'
-import type { ActivityBarPosition } from '../editor/types/open-file'
 import type {
   ActiveRightSidebarTab,
+  ActivityBarPosition,
   RightSidebarExplorerView
 } from '../../../../../shared/ui-chrome-types'
 import { defaultFileSearchState } from '../editor/search/file-search-state'

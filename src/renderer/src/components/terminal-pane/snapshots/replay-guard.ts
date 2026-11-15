@@ -1,16 +1,16 @@
 import type { ManagedPane } from '@/lib/pane-manager/pane-manager-types'
-import { writeForegroundTerminalChunk } from '@/lib/pane-manager/pane-terminal-foreground-render-settle'
-import { recordRendererCrashBreadcrumb } from '@/lib/crash-breadcrumb-recorder'
-import { ensureArabicShapingJoinerForText } from '@/lib/pane-manager/terminal-arabic-shaping-joiner'
-import { isXtermInstanceDisposed } from '@/lib/pane-manager/xterm-instance-disposed'
+import { writeForegroundTerminalChunk } from '@/lib/pane-manager/terminal-output/pane-terminal-foreground-render-settle'
+import { recordRendererCrashBreadcrumb } from '@/diagnostics/crash-reporting/crash-breadcrumb-recorder'
+import { ensureArabicShapingJoinerForText } from '@/lib/pane-manager/terminal-rendering/terminal-arabic-shaping-joiner'
+import { isXtermInstanceDisposed } from '@/lib/pane-manager/terminal-output/xterm-instance-disposed'
 import {
   captureTerminalParseProgressGeneration,
   hasTerminalParseProgressSince,
   isTerminalWritePipelineCertifiedDead,
   notifyUndeliverableWrite,
   recordTerminalParseProgress
-} from '@/lib/pane-manager/terminal-write-pipeline-health'
-import { writeXtermParseBarrier } from '@/lib/pane-manager/xterm-parse-barrier'
+} from '@/lib/pane-manager/terminal-output/terminal-write-pipeline-health'
+import { writeXtermParseBarrier } from '@/lib/pane-manager/terminal-output/xterm-parse-barrier'
 import { redactPtyIdForDiagnostics } from '../../../../../shared/terminal/pty/diagnostics/pty-delivery-diagnostics'
 
 // Guard replay auto-replies from shell stdin while xterm’s provenance keeps real typing flowing.

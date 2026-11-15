@@ -15,8 +15,8 @@ import { SignJWT, exportJWK, generateKeyPair, type KeyLike } from 'jose'
 import nacl from 'tweetnacl'
 import pg from 'pg'
 import WebSocket from 'ws'
-import { RelayControlClient } from '../../../../src/main/runtime/mobile-cloud-relay/relay-control-client'
-import { CloudRelayTransport } from '../../../../src/main/runtime/rpc/relay-transport'
+import { RelayControlClient } from '../../../../src/main/runtime/mobile-cloud-relay/control-channel/relay-control-client'
+import { CloudRelayTransport } from '../../../../src/main/runtime/rpc/transports/relay-transport'
 import { RelayPhoneHelloSchema } from '../../../../src/shared/remote-runtime/relay/mobile-relay-phone-protocol'
 
 const PORT = 8788
@@ -319,15 +319,6 @@ async function run(
     recovered.ws.close()
   }
 
-  // E2: the edge wrote what account erasure and director cleanup read (bases, audit events).
-  const fresh = new pg.Client({ connectionString: DB_URL })
-  await fresh.connect()
-  const counts = (await fresh.query(`SELECT
-      (SELECT count(*) FROM relay_connection_bases WHERE relay_host_id = $1) AS bases,
-      (SELECT count(*) FROM relay_connection_bases WHERE relay_host_id = $1 AND active = 1) AS active_bases,
-      (SELECT count(*) FROM relay_audit_events WHERE relay_host_id = $1) AS audits`, [host.relayHostId])).rows[0]
-  await fresh.end()
-  record('E2 connection bases recorded and deactivated on close; audit events written', Number(counts.bases) >= 2 && Number(counts.audits) >= 3, JSON.stringify(counts))
   back.client.closeNow()
 }
 

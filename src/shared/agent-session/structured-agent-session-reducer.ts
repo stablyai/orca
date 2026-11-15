@@ -33,13 +33,14 @@ import type { AgentSessionRefusalReference } from './failures/agent-session-wire
 import { backgroundTaskStatesEqual } from './agent-session-background-task-state-equality'
 import { admitAgentSessionBackgroundTaskState } from './agent-session-background-task-state-admission'
 import {
+  LIVE_TRIM_SLACK_OWN_ITEMS,
   MAX_RETAINED_ITEMS,
   MAX_RETAINED_OWN_ITEMS,
   mergeSubmissions,
   ownItemCount,
   trimRetainedItems
 } from './view/structured-agent-session-item-retention'
-import { readAgentJournalTurn } from './lifecycle/agent-session-turn-record'
+import { readAgentJournalTurn } from './lifecycle/records/agent-session-turn-record'
 import { agentSessionHasOlderTranscript } from './agent-session-context-clear'
 import { queuePublicationField } from './requests/structured-agent-session-queue-publication-field'
 import {
@@ -275,7 +276,12 @@ export function reduceStructuredAgentSession(
   // Retained items already fit the limits, which only grow, so an unchanged journal skips the scan.
   const items = journalUnchanged
     ? merged
-    : trimRetainedItems(merged, state.retainedOwnItemLimit, state.retainedItemCap)
+    : trimRetainedItems(
+        merged,
+        state.retainedOwnItemLimit,
+        state.retainedItemCap,
+        LIVE_TRIM_SLACK_OWN_ITEMS
+      )
   const outsideWindow = [
     ...(liveItems.length < event.batch.items.length
       ? event.batch.items.filter((item) => !liveItems.includes(item))

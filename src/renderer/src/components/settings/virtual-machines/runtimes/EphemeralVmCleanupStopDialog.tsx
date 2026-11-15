@@ -1,5 +1,5 @@
 import { Loader2 } from 'lucide-react'
-import type { EphemeralVmRuntimeRecord } from '../../../../../../shared/ephemeral-vm-runtimes'
+import type { EphemeralVmRuntimeRecord } from '../../../../../../shared/remote-runtime/ephemeral-vm-store/ephemeral-vm-runtimes'
 import { useTranslate } from '@/i18n/use-translate'
 import { Button } from '../../../ui/button'
 import {

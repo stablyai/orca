@@ -1,4 +1,4 @@
-import { isRemoteExecutionHostPtyId } from '../../../../../../../shared/remote-execution-host-pty-id'
+import { isRemoteExecutionHostPtyId } from '../../../../../../../shared/execution-host/remote-execution-host-pty-id'
 import { inspectRuntimeTerminalProcess } from '@/runtime/hosted-terminals/inspection/runtime-terminal-process-inspection'
 import type { PaneForegroundAgentTrackerDeps } from './pane-foreground-agent-tracker-contract'
 import type { ConnectPanePtySession } from '../../connect-pane-pty-session'

@@ -11,7 +11,7 @@ import {
 import type {
   RuntimeGitLocalBranches,
   RuntimeRepoSearchRefs
-} from '../../../../../../shared/runtime-worktree-contracts'
+} from '../../../../../../shared/worktree/catalog/runtime-worktree-contracts'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
 import {
   branchPickerRows,
@@ -32,15 +32,22 @@ export type BranchPickerOptions = {
   workspaces: ReadonlyMap<string, BranchWorkspace>
   onOpenWorkspace: (workspace: BranchWorkspace) => void
   onSwitched: (warning?: string) => void
+  /** Every open change, including the picker closing itself after a switch. */
+  onOpenChange?: (open: boolean) => void
 }
 export function useBranchPicker(options: BranchPickerOptions) {
   const [open, updateOpen] = useState(false)
   const [openedAt, setOpenedAt] = useState(0)
+  const onOpenChangeRef = useRef(options.onOpenChange)
+  useEffect(() => {
+    onOpenChangeRef.current = options.onOpenChange
+  }, [options.onOpenChange])
   const setOpen = useCallback((next: boolean) => {
     if (next) {
       setOpenedAt(Date.now())
     }
     updateOpen(next)
+    onOpenChangeRef.current?.(next)
   }, [])
   const [query, setQuery] = useState('')
   const [local, setLocal] = useState(EMPTY_LOCAL)

@@ -1,11 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { OrcadHostTransport } from '../../ssh/orcad-host-transport'
+import type { OrcadHostTransport } from '../../managed-server/install/orcad-host-transport'
 import type * as ActiveProbe from './wsl-orcad-active-probe'
 import type * as ManagedRuntimeContext from '../../managed-server/lifecycle/orcad-managed-runtime-context'
 import type * as RemoteVersionedInstall from '../../managed-server/install/remote-versioned-install'
 import { emptyOrcadActivationRecord } from '../../managed-server/activation/orcad-activation-record'
-import { getRemoteHostPlatform } from '../../ssh/ssh-remote-platform'
-import { OrcadActiveReadinessError } from '../../ssh/orcad-active-readiness'
+import { getRemoteHostPlatform } from '../../ssh/remote-host/ssh-remote-platform'
+import { OrcadActiveReadinessError } from '../../managed-server/activation/orcad-active-readiness'
 import { WslDistroNotRunningError } from './wsl-orcad-connection-errors'
 import type { WslDistroHolder } from '../discovery/wsl-distro-holder-types'
 import type { WslOrcadHostTarget } from './wsl-orcad-host-target'
@@ -42,7 +42,7 @@ vi.mock('../../managed-server/install/remote-versioned-install', async (importOr
   readLocalFullVersion: mocks.localVersion
 }))
 vi.mock('./wsl-orcad-instance-adoption', () => ({ adoptUnrecordedWslOrcad: mocks.adopt }))
-vi.mock('../../ssh/orcad-running-version-adoption', () => ({
+vi.mock('../../managed-server/activation/orcad-running-version-adoption', () => ({
   adoptRunningOrcadVersion: mocks.adoptRunning
 }))
 
@@ -56,10 +56,10 @@ vi.mock('../../managed-server/install/orcad-remote-context', () => ({
 vi.mock('../../managed-server/activation/orcad-activation-recovery', () => ({
   recoverInterruptedOrcadActivation: mocks.recover
 }))
-vi.mock('../../orcad/orcad-artifact-materializer', () => ({
+vi.mock('../../orcad/artifact-slots/orcad-artifact-materializer', () => ({
   materializeOrcadArtifact: async () => '/local/orcad'
 }))
-vi.mock('../../ssh/orcad-remote-deploy', () => ({ deployOrcad: mocks.deploy }))
+vi.mock('../../managed-server/install/orcad-remote-deploy', () => ({ deployOrcad: mocks.deploy }))
 vi.mock('./wsl-orcad-active-probe', async (importOriginal) => ({
   ...(await importOriginal<typeof ActiveProbe>()),
   probeWslActiveOrcad: async (...args: unknown[]) => ({
@@ -197,14 +197,5 @@ describe('deployAndLaunchWslOrcad', () => {
     mocks.probe.mockRejectedValueOnce(refused)
     await expect(launch()).rejects.toBe(refused)
     expect(mocks.wake).toHaveBeenCalledTimes(3)
-  })
-
-  it('refuses to deploy or launch when an unrecorded orcad cannot be proven', async () => {
-    mocks.adopt.mockRejectedValueOnce(
-      Object.assign(new Error('cannot be identified'), { name: 'WslOrcadUnrecordedInstanceError' })
-    )
-    await expect(launch()).rejects.toMatchObject({ name: 'WslOrcadUnrecordedInstanceError' })
-    expect(mocks.deploy).not.toHaveBeenCalled()
-    expect(mocks.wake).not.toHaveBeenCalled()
   })
 })

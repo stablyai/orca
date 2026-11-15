@@ -1,20 +1,25 @@
 import { CryptoDigestAlgorithm, digest } from 'expo-crypto'
 import { PrioritySemaphore } from '../../../../src/shared/priority-semaphore'
 import { mobileWebBundleManifestRead } from './mobile-web-bundle-operations'
-import type {
-  MobileWebBundleAssetRead,
-  MobileWebBundleManifestRead,
-  MobileWebBundleManifestReply
+import {
+  shellDownloadedAssets,
+  type MobileWebBundleAssetRead,
+  type MobileWebBundleManifestRead,
+  type MobileWebBundleManifestReply
 } from './mobile-web-bundle-reply-schemas'
-import type { RpcClient } from '../rpc-client'
+import type { RpcClient } from '../rpc/rpc-client-contract'
 import { MobileWebBundleFetchError } from './mobile-web-bundle-fetch-refusal'
-import { markRpcDeliveryUnknown } from '../rpc-delivery-ambiguity'
-import { runRpcOperation } from '../rpc-operation'
-import { mobileWebBundleWindowReader } from './mobile-web-bundle-window-reader'
+import { markRpcDeliveryUnknown } from '../rpc/rpc-delivery-ambiguity'
+import { runRpcOperation } from '../rpc/rpc-operation'
+import {
+  mobileWebBundleWindowReader,
+  type MobileWebBundleWindowReader
+} from './mobile-web-bundle-window-reader'
 import {
   assertWindowDescribesAsset,
   assertWindowFillsItsSlot,
-  windowSlotBytes
+  windowSlotBytes,
+  type MobileWebBundleWindowStream
 } from './mobile-web-bundle-window-checks'
 
 // The host admits four window reads per connection; one reader per asset would serialize large scripts.
@@ -38,6 +43,7 @@ export const MOBILE_WEB_BUNDLE_WINDOW_STALL_MS = 30_000
 const WINDOW_READ_BACKSTOP_MS =
   (MAX_CONCURRENT_WINDOW_READS + 1) * MOBILE_WEB_BUNDLE_WINDOW_STALL_MS
 
+// Bytes are what the reader moves (a brotli copy where it reads one, else the asset); reused assets add none.
 export type MobileWebBundleFetchProgress = {
   readonly completedAssets: number
   readonly totalAssets: number
@@ -48,7 +54,7 @@ export type MobileWebBundleFetchProgress = {
 export type MobileWebBundleFetchResult = {
   readonly manifest: MobileWebBundleManifestRead
   readonly assets: ReadonlyMap<string, Uint8Array>
-  // stageGeneration must copy every reused asset or fail rather than stage an incomplete tree.
+  // stageGeneration must copy every reused asset or fail rather than stage an incomplete tree (skipped catalogs aside).
   readonly reused: readonly string[]
   readonly totalBytes: number
   readonly elapsedMs: number
@@ -56,6 +62,7 @@ export type MobileWebBundleFetchResult = {
 
 type AssetReassembly = {
   readonly entry: MobileWebBundleAssetRead
+  readonly stream: MobileWebBundleWindowStream
   readonly whole: Uint8Array<ArrayBuffer>
   outstandingWindows: number
 }
@@ -87,10 +94,12 @@ export async function fetchMobileWebBundle(args: {
   const manifest = opened.manifest
   const reader = mobileWebBundleWindowReader(args.client, opened)
   const connection = connectionReadsOf(args.client)
+  // Before reuse: a skipped catalog an older generation lists may not be on disk there either.
+  const wanted = shellDownloadedAssets(manifest)
   const candidates = new Set(
-    args.reusable === undefined ? [] : manifest.assets.filter((entry) => args.reusable?.has(entry))
+    args.reusable === undefined ? [] : wanted.filter((entry) => args.reusable?.has(entry))
   )
-  const fetched = manifest.assets.filter((entry) => !candidates.has(entry))
+  const fetched = wanted.filter((entry) => !candidates.has(entry))
   const assets = new Map<string, Uint8Array>()
   const reused: string[] = []
   let receivedBytes = 0
@@ -154,9 +163,9 @@ export async function fetchMobileWebBundle(args: {
       return
     }
     assertWindowDescribesAsset(reply.header, asset.entry, manifest.buildId, offset)
-    const bytes = reply.bytes(windowSlotBytes(asset.entry, offset, reader.windowBytes))
+    const bytes = reply.bytes(windowSlotBytes(asset.stream, offset, reader.windowBytes))
     assertWindowFillsItsSlot(
-      asset.entry,
+      asset.stream,
       offset,
       bytes.byteLength,
       reply.header.eof,
@@ -165,7 +174,7 @@ export async function fetchMobileWebBundle(args: {
     asset.whole.set(bytes, offset)
     asset.outstandingWindows -= 1
     if (asset.outstandingWindows === 0) {
-      const verified = await verifyReassembledAsset(asset)
+      const verified = await verifyReassembledAsset(asset, reader)
       throwIfCallerAborted(args.signal)
       // A sibling failed while this hashed; the fetch already rejected with that failure.
       if (stopped.signal.aborted) {
@@ -180,7 +189,7 @@ export async function fetchMobileWebBundle(args: {
   }
 
   const readWindows = async (entries: readonly MobileWebBundleAssetRead[]): Promise<void> => {
-    const queue = planWindowReads(entries, reader.windowBytes)
+    const queue = planWindowReads(entries, reader)
     if (queue.length === 0) {
       return
     }
@@ -241,7 +250,7 @@ export async function fetchMobileWebBundle(args: {
 
   const countDownload = (entries: readonly MobileWebBundleAssetRead[]): void => {
     downloadAssets += entries.length
-    downloadBytes += entries.reduce((sum, entry) => sum + entry.byteLength, 0)
+    downloadBytes += entries.reduce((sum, entry) => sum + reader.streamLength(entry), 0)
   }
 
   try {
@@ -270,30 +279,49 @@ export async function fetchMobileWebBundle(args: {
 // Plan all grid offsets largest-asset first so its tail cannot serialize the end; still validate eof replies.
 function planWindowReads(
   entries: readonly MobileWebBundleAssetRead[],
-  windowBytes: number
+  reader: MobileWebBundleWindowReader
 ): WindowRead[] {
-  const largestFirst = [...entries].sort((left, right) => right.byteLength - left.byteLength)
-  return largestFirst.flatMap((entry) => {
-    const count = Math.max(1, Math.ceil(entry.byteLength / windowBytes))
+  const { windowBytes } = reader
+  const streams = entries.map((entry) => ({
+    entry,
+    stream: { path: entry.path, byteLength: reader.streamLength(entry) }
+  }))
+  const largestFirst = streams.sort(
+    (left, right) => right.stream.byteLength - left.stream.byteLength
+  )
+  return largestFirst.flatMap(({ entry, stream }) => {
+    const count = Math.max(1, Math.ceil(stream.byteLength / windowBytes))
     const asset: AssetReassembly = {
       entry,
-      whole: new Uint8Array(entry.byteLength),
+      stream,
+      whole: new Uint8Array(stream.byteLength),
       outstandingWindows: count
     }
     return Array.from({ length: count }, (_, index) => ({ asset, offset: index * windowBytes }))
   })
 }
 
-async function verifyReassembledAsset(asset: AssetReassembly): Promise<Uint8Array> {
+async function verifyReassembledAsset(
+  asset: AssetReassembly,
+  reader: MobileWebBundleWindowReader
+): Promise<Uint8Array> {
+  const whole = await reader.inflate(asset.entry, asset.whole)
+  const { path, byteLength } = asset.entry
+  if (whole.byteLength !== byteLength) {
+    throw new MobileWebBundleFetchError(
+      whole.byteLength > byteLength ? 'asset-overlong' : 'asset-short',
+      `bundle asset ${path} inflated to ${whole.byteLength} of ${byteLength} declared bytes`
+    )
+  }
   // Native: hashing in JS held the JS thread for seconds, and React's progress renders waited on it.
-  const hashed = toHex(new Uint8Array(await digest(CryptoDigestAlgorithm.SHA256, asset.whole)))
+  const hashed = toHex(new Uint8Array(await digest(CryptoDigestAlgorithm.SHA256, whole)))
   if (hashed !== asset.entry.sha256) {
     throw new MobileWebBundleFetchError(
       'asset-checksum-mismatch',
       `bundle asset ${asset.entry.path} hashed ${hashed}, not ${asset.entry.sha256}`
     )
   }
-  return asset.whole
+  return whole
 }
 
 /** Only the caller's abort surfaces as `fetch-stopped`; an internal stop rejects with the failure

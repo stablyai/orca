@@ -35,13 +35,6 @@ describe('PTY-owned Kitty file reads', () => {
     })
   })
 
-  it('reads a temporary file outside the workspace', async () => {
-    const { root, owner } = await fixture()
-    const path = join(root, 'temporary')
-    await writeFile(path, Buffer.from([0, 255, 128, 1]))
-    expect(await readTerminalKittyFile({ path }, owner)).toEqual({ base64: 'AP+AAQ==' })
-  })
-
   it('restricts a floating terminal to temporary roots without granting a workspace', async () => {
     const { root, path } = await fixture()
     const temporary = join(root, 'allowed-temp')

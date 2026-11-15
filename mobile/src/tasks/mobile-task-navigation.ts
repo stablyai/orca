@@ -1,5 +1,5 @@
 import type { HostStackRouteTarget } from '../navigation/host-stack-navigation'
-import type { TaskProvider } from '../../../src/shared/task-providers'
+import type { TaskProvider } from '../../../src/shared/work-items/task-providers'
 
 export function mobileTasksRouteTarget(
   hostId: string,

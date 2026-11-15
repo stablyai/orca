@@ -7,14 +7,14 @@ import {
   DialogHeader,
   DialogTitle
 } from '@/components/ui/dialog'
-import { isGitRepoKind } from '../../../../../../shared/repo-kind'
+import { isGitRepoKind } from '../../../../../../shared/repository/repo-kind'
 import { useTranslate } from '@/i18n/use-translate'
 import {
   importNewExternalWorktreeInboxPaths,
   type NewExternalWorktreesInboxActionState
 } from '../../worktree-list/listing/new-external-worktrees-inbox-actions'
 import WorktreeVisibilityHelpPopover from './WorktreeVisibilityHelpPopover'
-import { getRepoHostIdentity } from '../../../../../../shared/repo-host-identity'
+import { getRepoHostIdentity } from '../../../../../../shared/repository/repo-host-identity'
 import {
   resolveWorktreeVisibilityHostTarget,
   useWorktreeVisibilityHostActions
@@ -29,17 +29,20 @@ import {
 import WorktreeVisibilitySourceList from '../sources/WorktreeVisibilitySourceList'
 import type { WorktreeVisibilitySourceRow } from '../sources/WorktreeVisibilitySourceList'
 import type { WorktreeVisibilitySourceAddResult } from '../sources/WorktreeVisibilitySourceAddForm'
-import type { CustomWorktreeVisibilitySource, Repo } from '../../../../../../shared/repo-types'
+import type {
+  CustomWorktreeVisibilitySource,
+  Repo
+} from '../../../../../../shared/repository/repo-types'
 import {
   MAX_CUSTOM_WORKTREE_VISIBILITY_SOURCES,
   effectiveCustomWorktreeSourceVisibility,
   normalizeCustomWorktreeVisibilitySources,
   normalizeWorktreeVisibilitySourcePreferences
-} from '../../../../../../shared/worktree/visibility-sources'
+} from '../../../../../../shared/worktree/visibility/visibility-sources'
 import {
   buildWorktreeSourcePreferenceUpdate,
   removeCustomWorktreeSourcePreference
-} from '../../../../../../shared/worktree/visibility-source-preferences'
+} from '../../../../../../shared/worktree/visibility/visibility-source-preferences'
 import HiddenWorktreeRecoveryList from './HiddenWorktreeRecoveryList'
 import { worktreeVisibilityUpdateError } from './worktree-visibility-update-error'
 import { useRepoOwnerVisibilityDefaults } from '../sources/use-repo-owner-visibility-defaults'

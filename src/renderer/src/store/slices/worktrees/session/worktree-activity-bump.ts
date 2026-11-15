@@ -1,7 +1,7 @@
 import type { WorktreeSlice } from '../worktree-slice-contract'
 import { tryRuntimeTargetForWorktreeOwner } from '../listing/worktree-owner-target'
 import type { WorktreeSliceGet, WorktreeSliceSet } from '../listing/worktree-slice-types'
-import { parseWorkspaceKey } from '../../../../../../shared/workspace-scope'
+import { parseWorkspaceKey } from '../../../../../../shared/workspace/identity/workspace-scope'
 import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../../../../shared/sidebar-inputs-switch'
 import { applyWorktreeUpdates } from '../metadata/worktree-meta-update-application'
 import { getRepoIdFromWorktreeId } from '../../../../../../shared/worktree/id'
@@ -10,7 +10,7 @@ import {
   findKnownWorktreeById
 } from '../listing/detected-worktree-meta'
 import { getFolderWorkspaceActivityPersistence } from './folder-workspace-activity'
-import { warnAmbiguousOwnerOnce } from '@/lib/ambiguous-owner-warning'
+import { warnAmbiguousOwnerOnce } from '@/lib/workspace/ownership/ambiguous-owner-warning'
 import { persistWorktreeMeta } from '../metadata/worktree-meta-persist'
 import { isRuntimeSelectorNotFoundError } from '../listing/runtime-worktree-rpc-errors'
 

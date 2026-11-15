@@ -17,8 +17,10 @@ const storeRef = vi.hoisted((): { current: ReturnType<typeof createEditorStore> 
 
 vi.mock('@/store/index', () => ({ useAppStore: { getState: () => storeRef.current?.getState() } }))
 
-vi.mock('@/lib/connection-context', () => ({ getConnectionIdForFile: () => undefined }))
-vi.mock('@/lib/file-owner-runtime-target', () => ({
+vi.mock('@/lib/workspace/ownership/connection-context', () => ({
+  getConnectionIdForFile: () => undefined
+}))
+vi.mock('@/lib/files/access/file-owner-runtime-target', () => ({
   getRuntimeTargetForFileOwner: () => ({ kind: 'local' }),
   requireRuntimeTargetForFileOwner: () => ({ kind: 'local' })
 }))

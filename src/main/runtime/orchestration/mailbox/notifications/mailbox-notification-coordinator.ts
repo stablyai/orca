@@ -62,7 +62,8 @@ export class OrchestrationMailboxNotificationCoordinator<
               db,
               mailboxHandle,
               waiters,
-              reservedTypes: undefined
+              reservedTypes: undefined,
+              excludeRunOwnedDirect: mailboxHandle === terminal.handle
             }).messages.length > 0)
         )
       })

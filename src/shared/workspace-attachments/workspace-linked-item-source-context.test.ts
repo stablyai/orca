@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { TaskSourceContext } from '../task-source-context'
+import type { TaskSourceContext } from '../work-items/task-source-context'
 import type { WorkspaceLinkedItem } from '../worktree/types'
 import { isWorkspaceLinkedItemSourceContextMatch } from './workspace-linked-item-source-context'
 

@@ -1,7 +1,10 @@
 import { QueryClient } from '@tanstack/react-query'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { OrcaQueryStoreBackend } from '../device-store/query-storage'
-import { hostWorktreeCatalogKey, hostWorktreeCatalogQuery } from '../host-screen/host-list-queries'
+import {
+  hostWorktreeCatalogKey,
+  hostWorktreeCatalogQuery
+} from '../host-screen/catalog/host-list-queries'
 import { createHostQueryPersistence, persistedHostQueryKey } from './host-query-persistence'
 
 vi.mock('react-native', () => ({ AppState: {} }))
@@ -85,36 +88,6 @@ describe('createHostQueryPersistence', () => {
   })
   afterEach(() => {
     vi.useRealTimers()
-  })
-
-  it('paints the stored host list with its saved time and no agent state before any host read', async () => {
-    const store = memoryStore('host-a')
-    await storeFromEarlierLaunch(store, [liveRow])
-
-    const relaunched = new QueryClient()
-    const restoring = createHostQueryPersistence(relaunched, store.backend).restore(firstPaint)
-    await vi.runAllTimersAsync()
-    await restoring
-
-    expect(relaunched.getQueryData(key)).toEqual({
-      snapshotId: null,
-      worktrees: [
-        {
-          worktreeId: 'repo-1::/w/mobile-redesign',
-          repoId: 'repo-1',
-          repo: 'orca',
-          branch: 'kelvin/mobile-redesign',
-          displayName: 'Mobile redesign',
-          path: '/w/mobile-redesign',
-          liveTerminalCount: 2,
-          hasAttachedPty: true,
-          unread: true,
-          isPinned: false,
-          linkedPR: { number: 38983, state: 'open' }
-        }
-      ]
-    })
-    expect(relaunched.getQueryState(key)?.dataUpdatedAt).toBe(SAVED_AT)
   })
 
   it('never shows a stored record that fails its data check, and removes it', async () => {

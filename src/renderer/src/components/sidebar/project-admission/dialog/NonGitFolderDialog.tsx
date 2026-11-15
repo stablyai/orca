@@ -13,15 +13,15 @@ import { useAppStore } from '@/store/index'
 import {
   resolveDismissedOnboardingFolderAgentLaunch,
   revealOnboardingFolderWithAgentLaunch
-} from '@/lib/onboarding-folder-agent-launch'
-import { markOnboardingProjectAdded } from '@/lib/onboarding-project-checklist'
+} from '@/components/onboarding/onboarding-folder-agent-launch'
+import { markOnboardingProjectAdded } from '@/components/onboarding/onboarding-project-checklist'
 import { translate } from '@/i18n/i18n'
 import { useTranslate } from '@/i18n/use-translate'
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 import { upsertAddedRepoWithProjectHostSetup } from '../completion/add-repo-store-upsert'
 import { worktreeRefreshOptions } from '../host-selection/add-repo-runtime-owner'
 import { addRuntimeSshRepo } from '@/runtime/hosts/ssh/runtime-ssh-target-management'
-import type { Repo } from '../../../../../../shared/repo-types'
+import type { Repo } from '../../../../../../shared/repository/repo-types'
 import { selectWorktreesByRepo } from '@/store/workspaces/catalog/workspace-record-fields'
 
 // Only the paired server can add folder projects on its own SSH host.

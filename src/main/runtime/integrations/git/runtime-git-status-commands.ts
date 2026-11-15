@@ -5,7 +5,10 @@ import type {
 import type { GitMutationInFlight } from '../../../../shared/git/commands/git-mutation-in-flight'
 import { isGitWorktreeMutationInFlight } from '../../../git/command-runner/git-worktree-mutation-state'
 import type { BranchSwitchTarget } from '../../../../shared/git/branch-switch-target'
-import { BranchSwitchLandedWithWarningError, switchBranchGuarded } from '../../../git/branch-switch'
+import {
+  BranchSwitchLandedWithWarningError,
+  switchBranchGuarded
+} from '../../../git/worktrees/checkout/branch-switch'
 import type {
   GitConflictOperation,
   GitStagingArea,
@@ -15,8 +18,8 @@ import type {
   RuntimeGitSwitchResult,
   RuntimeGitCheckoutResult,
   RuntimeGitLocalBranches
-} from '../../../../shared/runtime-worktree-contracts'
-import type { GitProviderStatusOptions } from '../../../providers/git-provider-status-options'
+} from '../../../../shared/worktree/catalog/runtime-worktree-contracts'
+import type { GitProviderStatusOptions } from '../../../providers/git/status-options'
 import {
   localGitOptionsForTarget,
   requireLocalRuntimeGitRoute,
@@ -25,6 +28,8 @@ import {
   type RuntimeGitTarget
 } from './runtime-git-command-target'
 import { assertRuntimeReadWslDistroRunning } from './runtime-wsl-background-read-gate'
+import type { WorktreeAtRiskLocalFiles } from '../../../../shared/worktree/removal/at-risk-local-files'
+import { readWorktreeAtRiskLocalFiles } from '../../../git/worktrees/removal/worktree-at-risk-local-files'
 
 // Followers nobody is looking at: a stopped distro must stay stopped for them (E9).
 async function resolveGatedGitTarget(
@@ -101,16 +106,31 @@ export class RuntimeGitStatusCommands {
     }
   }
 
+  async readRuntimeWorktreeAtRiskLocalFiles(
+    worktreeSelector: string,
+    signal?: AbortSignal
+  ): Promise<WorktreeAtRiskLocalFiles> {
+    const target = await resolveGatedGitTarget(this.host, worktreeSelector)
+    requireLocalRuntimeGitRoute(target)
+    return readWorktreeAtRiskLocalFiles({
+      worktreePath: target.worktree.path,
+      mainCheckoutPath: target.repo?.path ?? null,
+      gitOptions: { ...localGitOptionsForTarget(target), ...(signal ? { signal } : {}) }
+    })
+  }
+
   async checkoutRuntimeGitBranch(
     worktreeSelector: string,
-    branch: string
+    branch: string,
+    detached = false
   ): Promise<RuntimeGitCheckoutResult> {
     const target = await this.host.resolveRuntimeGitTarget(worktreeSelector)
     const provider = requireRuntimeGitProvider(target)
     const worktreePath = target.worktree.path
+    const checkoutTarget = detached ? branch.toLowerCase() : branch
     const result = await switchBranchGuarded(
       worktreePath,
-      branch,
+      detached ? { commitId: checkoutTarget } : checkoutTarget,
       localGitOptionsForTarget(target),
       {
         getStatus: () =>
@@ -118,9 +138,9 @@ export class RuntimeGitStatusCommands {
             admissionTier: 'interactive',
             includeLineStats: false
           }),
-        checkout: () => provider.checkoutBranch(worktreePath, branch),
+        checkout: () => provider.checkoutBranch(worktreePath, checkoutTarget, undefined, detached),
         getAgentBlocker: async () => this.host.getAgentSwitchBlocker?.(worktreePath) ?? null,
-        onSwitched: () => this.host.recordBranchSwitched?.(target.worktree)
+        onSwitched: () => this.host.recordBranchSwitched?.(target.worktree, detached)
       }
     )
     return { ok: true, branch: result.branch }
@@ -149,10 +169,10 @@ export class RuntimeGitStatusCommands {
           onSwitched: () => this.host.recordBranchSwitched?.(target.worktree)
         }
       )
-      return { ok: true, branch: result.branch }
+      return { ok: true, branch: result.branch, head: result.head }
     } catch (error) {
       if (error instanceof BranchSwitchLandedWithWarningError) {
-        return { ok: true, branch: error.branch, warning: error.message }
+        return { ok: true, branch: error.branch, head: error.head, warning: error.message }
       }
       throw error
     }
