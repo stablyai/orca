@@ -238,7 +238,8 @@ export class StructuredAgentSessionTurnCompletionFeed {
     if (request.outcome !== 'success' || state.summary.status === 'attention') {
       return false
     }
-    if (state.goalContinues) {
+    // An open async question pauses the goal on the user, so it is news now.
+    if (state.goalContinues && state.summary.awaitsAnswer !== true) {
       return true
     }
     const held = foldAgentLeadStatus({
