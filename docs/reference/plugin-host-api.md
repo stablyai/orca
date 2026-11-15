@@ -446,3 +446,20 @@ Plugins are in Alpha: the manifest v2 format and catalog format are stable contr
 - **Deprecation.** A method to be retired is marked deprecated in this table and keeps working for the rest of the major.
 - **New majors.** A breaking change ships as a new `pluginApi` major beside the old one. Orca refuses a manifest whose `pluginApi` names a major it does not implement, with "update Orca", instead of loading it against the wrong API.
 - **Detect, do not assume.** Check `orca.host.has(name)` or `orca.api.minor` before calling a method newer than the oldest Orca you support; a call that slips through fails with `unknown_method`.
+- **Checked at publish.** `orca plugin validate` and `pnpm validate:plugin` read the literal method names your worker, panel and editor code passes to `orca.host.call`, and the Orca plugin directory runs them against the latest Orca release. A method that release does not have, a proposed method, or one the surface cannot call fails the check; so does one newer than your `engines.orca`, unless the call is guarded by `orca.host.has(name)` (itself in Orca 1.4.245 and later). A deprecated method is a warning that starts `deprecated host method <name>`.
+
+The first Orca release with each minor, which is what `engines.orca` must reach for a method of that minor. A few worker methods reached panels and editors in a later minor; the check uses that one for frame code:
+
+| Minor | Orca |
+| --- | --- |
+| 1.0 | 1.4.160 |
+| 1.1 | 1.4.246 |
+| 1.2 | 1.4.246 |
+| 1.3 | 1.4.247 |
+| 1.4 | 1.4.251 |
+| 1.5 | 1.4.256 |
+| 1.6 | 1.4.257 |
+| 1.7 | 1.4.259 |
+| 1.8 | 1.4.259 |
+| 1.9 | 1.4.259 |
+| 1.10 | 1.4.260 |

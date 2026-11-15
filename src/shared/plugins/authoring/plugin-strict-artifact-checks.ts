@@ -14,6 +14,7 @@ import { parsePluginTerminalThemeArtifact } from '../artifacts/plugin-terminal-t
 import { parsePluginAppThemeArtifact } from '../artifacts/plugin-theme-artifact'
 import type { PluginManifest } from '../manifest/plugin-manifest'
 import { formatPluginSchemaIssues } from '../manifest/plugin-schema-issues'
+import { pluginHostCallErrors, pluginHostCallWarnings } from './plugin-host-call-checks'
 
 /** Reads a plugin file by its manifest path (always `/`); null when it does not exist. */
 export type PluginArtifactTextReader = (manifestPath: string) => string | null
@@ -142,7 +143,14 @@ export function strictPluginArtifactErrors(
       (error) => `contributes.themes "${theme.id}" (${theme.path}): ${error}`
     )
   )
-  return [...themeErrors, ...svgErrors, ...backgroundErrors, ...packErrors, ...syntaxErrors]
+  return [
+    ...themeErrors,
+    ...svgErrors,
+    ...backgroundErrors,
+    ...packErrors,
+    ...syntaxErrors,
+    ...pluginHostCallErrors(manifest, read)
+  ]
 }
 
 /** Problems Orca handles safely at load but authors should know about; never block a release. */
@@ -150,7 +158,7 @@ export function strictPluginArtifactWarnings(
   manifest: PluginManifest,
   read: PluginArtifactTextReader
 ): string[] {
-  return manifest.contributes.languagePacks.flatMap((pack) => {
+  const packWarnings = manifest.contributes.languagePacks.flatMap((pack) => {
     const text = read(pack.path)
     const parsed = text === null ? null : checkPluginLanguagePackForAuthoring(text)
     if (!parsed?.ok || parsed.ignoredProtectedStrings === 0) {
@@ -161,4 +169,5 @@ export function strictPluginArtifactWarnings(
       `contributes.languagePacks "${pack.locale}" (${pack.path}): ${count} protected ${count === 1 ? 'string is' : 'strings are'} ignored; Orca always shows its own text for security dialogs`
     ]
   })
+  return [...packWarnings, ...pluginHostCallWarnings(manifest, read)]
 }

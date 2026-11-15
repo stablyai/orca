@@ -48,7 +48,8 @@ function englishLookup() {
 function readPluginText(pluginDir) {
   return (manifestPath) => {
     const file = path.join(pluginDir, ...manifestPath.split('/'))
-    return existsSync(file) ? readFileSync(file, 'utf8') : null
+    // Why isFile: host-call checks probe import paths that may name a folder.
+    return existsSync(file) && statSync(file).isFile() ? readFileSync(file, 'utf8') : null
   }
 }
 
