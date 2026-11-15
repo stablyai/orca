@@ -87,17 +87,11 @@ type SessionRowPlan = {
 
 // Children before parents so databases without ON DELETE CASCADE keep no orphaned rows.
 function sessionRowPlan(db: SyncDatabase): SessionRowPlan {
-  const tables = (
-    db.prepare("SELECT name FROM sqlite_master WHERE type='table'").all() as { name: string }[]
-  ).map((row) => row.name)
+  const tables = rowNames(db.prepare("SELECT name FROM sqlite_master WHERE type='table'").all())
   const columns = new Map(
     tables.map((table) => [
       table,
-      new Set(
-        (db.prepare(`PRAGMA table_info("${table}")`).all() as { name: string }[]).map(
-          (column) => column.name
-        )
-      )
+      new Set(rowNames(db.prepare(`PRAGMA table_info("${table}")`).all()))
     ])
   )
   const sessionTables = SESSION_TABLES.filter((table) => columns.get(table)?.has('id'))
@@ -130,4 +124,12 @@ function sessionRowPlan(db: SyncDatabase): SessionRowPlan {
     .filter((table) => columns.get(table)?.has('time_updated'))
     .map((table) => db.prepare(`SELECT time_updated AS updated FROM "${table}" WHERE id = ?`))
   return { updatedAt, deletes: statements }
+}
+
+function rowNames(rows: readonly unknown[]): string[] {
+  return rows.flatMap((row) =>
+    row && typeof row === 'object' && 'name' in row && typeof row.name === 'string'
+      ? [row.name]
+      : []
+  )
 }

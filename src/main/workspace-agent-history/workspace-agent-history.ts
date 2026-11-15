@@ -205,7 +205,7 @@ async function liveWorktreeAdminNames(current: WorkspaceAgentHistoryStore): Prom
     current
       .getRepos()
       .filter((repo) => isLocalExecutionHost(getRepoExecutionHostId(repo)))
-      .map((repo) => readdir(join(repo.path, '.git', 'worktrees')).catch(() => [] as string[]))
+      .map((repo) => readdir(join(repo.path, '.git', 'worktrees')).catch((): string[] => []))
   )
   return [...new Set(names.flat())]
 }

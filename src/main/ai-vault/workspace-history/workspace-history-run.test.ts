@@ -18,6 +18,7 @@ vi.mock('../session-scanner', () => ({ scanAiVaultSessions }))
 const { runWorkspaceHistory } = await import('./workspace-history-run')
 
 const OLD = new Date('2026-11-01T00:00:00.000Z')
+const RECENT = new Date('2026-11-12T00:00:00.000Z')
 let root: string
 
 beforeEach(() => {
@@ -75,7 +76,7 @@ describe('runWorkspaceHistory', () => {
     linkSync(owned, accountLink)
     const nested = writeRollout(systemSessions, 'rollout-b.jsonl')
     const recent = writeRollout(systemSessions, 'rollout-c.jsonl')
-    utimesSync(recent, new Date(), new Date())
+    utimesSync(recent, RECENT, RECENT)
     scanAiVaultSessions.mockResolvedValue({
       sessions: [
         codexSession(owned, join(removed, 'src'), '2026-11-01T00:00:00.000Z'),

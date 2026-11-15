@@ -75,6 +75,15 @@ function freshMeasurement(): WorkspaceAgentHistoryTally | null {
     : null
 }
 
+function requestHistoryDelete(): Promise<
+  { ok: true; result: WorkspaceAgentHistoryTally } | { ok: false; message: string }
+> {
+  return window.api.aiVault.deleteDeletedWorkspaceHistory().then(
+    (result) => ({ ok: true as const, result }),
+    (error: unknown) => ({ ok: false as const, message: errorMessage(error) })
+  )
+}
+
 type Measurement =
   | { state: 'measuring' }
   | { state: 'ready'; tally: WorkspaceAgentHistoryTally }
@@ -121,8 +130,9 @@ function DeletedWorkspacesHistoryRow(): React.JSX.Element {
   const confirmDelete = async (): Promise<void> => {
     setDeleting(true)
     lastMeasurement = null
-    try {
-      const result = await window.api.aiVault.deleteDeletedWorkspaceHistory()
+    const outcome = await requestHistoryDelete()
+    if (outcome.ok) {
+      const { result } = outcome
       const skipped = result.transcripts.inUse + result.transcripts.failed + result.chats.inUse
       toast.success(
         t(
@@ -140,22 +150,20 @@ function DeletedWorkspacesHistoryRow(): React.JSX.Element {
             }
           : undefined
       )
-    } catch (error) {
+    } else {
       toast.error(
         t(
           'components.settings.workspaceCleanup.agentHistory.deleteFailed',
           "Couldn't delete history from deleted workspaces."
         ),
-        { description: errorMessage(error) }
+        { description: outcome.message }
       )
-    } finally {
-      if (mountedRef.current) {
-        setDeleting(false)
-        setConfirming(false)
-        lastMeasurement = null
-        setMeasurement({ state: 'measuring' })
-        setGeneration((value) => value + 1)
-      }
+    }
+    if (mountedRef.current) {
+      setDeleting(false)
+      setConfirming(false)
+      setMeasurement({ state: 'measuring' })
+      setGeneration((value) => value + 1)
     }
   }
 

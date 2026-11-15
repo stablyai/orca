@@ -24,6 +24,7 @@
 6 src/main/ai-vault/scanners/opencode/sqlite/session-scanner-opencode-sqlite.ts
 5 src/main/ai-vault/scanners/opencode2/session-scanner-opencode2-sqlite-list.ts
 9 src/main/ai-vault/scanners/opencode2/session-scanner-opencode2-sqlite.ts
+13 src/main/ai-vault/workspace-history/workspace-history-sqlite-delete.ts
 5 src/main/browser-passwords/browser-password-chromium-import.ts
 1 src/main/browser/cookies/chromium/prepare-import.ts
 5 src/main/browser/cookies/sources/browser-cookie-firefox-import.ts
@@ -44,6 +45,7 @@
 10 src/main/native-chat/agent-session-journal/database/journal-legacy-source.ts
 12 src/main/native-chat/agent-session-journal/durable-rows/journal-row-table.ts
 18 src/main/native-chat/agent-session-journal/history-import/journal-pi-active-branch.ts
+2 src/main/native-chat/agent-session-journal/journal-domain-chat-purge.ts
 14 src/main/native-chat/agent-session-journal/journal-domain-command-turn.ts
 2 src/main/native-chat/agent-session-journal/journal-domain-context-command.ts
 17 src/main/native-chat/agent-session-journal/journal-domain-context-replacement.ts
