@@ -1,7 +1,6 @@
 import type { ProcessMemoryMetric } from '../../../../../../shared/process-stats-types'
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
-import { usageTextColorClass } from '../../usage/usage-roster-formatting'
 
 export type ResourceMemoryMetricCopy = {
   columnLabel: string
@@ -75,6 +74,17 @@ export function getCommitPressureToneClass(args: {
     return null
   }
   // Uncapped on purpose: commit past 100% of RAM is the loudest case, not an error.
-  const tone = usageTextColorClass((privateMemory / hostTotalMemory) * 100)
+  const tone = memoryPressureTextClass((privateMemory / hostTotalMemory) * 100)
   return tone === 'text-foreground' ? null : tone
+}
+
+// Memory pressure stays neutral until 60% so healthy hosts never read as alarming.
+function memoryPressureTextClass(usedPercent: number): string {
+  if (usedPercent >= 80) {
+    return 'text-red-500'
+  }
+  if (usedPercent >= 60) {
+    return 'text-yellow-500'
+  }
+  return 'text-foreground'
 }

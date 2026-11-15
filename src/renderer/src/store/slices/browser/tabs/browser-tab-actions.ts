@@ -13,7 +13,7 @@ import {
 import { getBrowserSessionProfileHostId } from '../hosts/browser-host-state'
 import { resolveNewBrowserTabProfile } from '../profiles/browser-new-tab-profile'
 import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/workspace/ownership/worktree-runtime-owner'
-import { admitBrowserPageMount } from '@/components/browser-pane/host-guest/browser-page-mount-admission'
+import { admitBrowserPageMount } from '@/components/browser-pane/host-guest/retention/browser-page-mount-admission'
 import {
   getRegisteredPairedBrowserTabCreator,
   loadPairedBrowserTabCreator

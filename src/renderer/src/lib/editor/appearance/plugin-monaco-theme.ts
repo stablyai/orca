@@ -84,6 +84,9 @@ export function derivePluginMonacoTheme(input: {
   const muted = color('--muted-foreground') ?? foreground
   const accent = color('--accent')
   const ring = color('--ring') ?? foreground
+  const themed = input.painted['--editor-selection'] ? color('--editor-selection') : null
+  // Why the ring by default: a theme's accent is a faint hover tint, too weak to read as a selection.
+  const selection: Rgba = themed ?? [ring[0], ring[1], ring[2], 0.3]
   const popover = color('--popover')
   const border = color('--border')
   const colors: Record<string, string> = {
@@ -94,9 +97,13 @@ export function derivePluginMonacoTheme(input: {
     'editorLineNumber.foreground': hex(muted),
     'editorLineNumber.activeForeground': hex(foreground),
     'editorCursor.foreground': hex(ring),
-    // Why from the ring: a theme's accent is a faint hover tint, too weak to read as a selection.
-    'editor.selectionBackground': hex([ring[0], ring[1], ring[2], 0.3]),
-    'editor.inactiveSelectionBackground': hex([ring[0], ring[1], ring[2], 0.15])
+    'editor.selectionBackground': hex(selection),
+    'editor.inactiveSelectionBackground': hex([
+      selection[0],
+      selection[1],
+      selection[2],
+      selection[3] / 2
+    ])
   }
   if (accent) {
     colors['editor.lineHighlightBackground'] = hex(accent)

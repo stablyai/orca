@@ -223,13 +223,15 @@ export function useHostQuery<TInput extends HostQueryParams, TData>(
   options?: {
     enabled?: boolean
     subscribed?: boolean
-    refetchInterval?: number | false
+    // A function decides from the data each read leaves, so one read's answer can time the next.
+    refetchInterval?: number | false | ((data: TData | undefined) => number | false)
     // Replaces the family's own, e.g. once the host is known to signal every change.
     staleTime?: number
   }
 ): UseQueryResult<TData> {
   const { hostId, client } = host
   const enabled = client !== null && options?.enabled !== false
+  const refetchInterval = options?.refetchInterval
   useHostConnectionInvalidation(hostId, enabled ? client : null)
   // A screen alone on its page has no host list to keep the router; its signalled reads hold one.
   useHostEventRouter(hostId, enabled && query.signal ? client : null)
@@ -245,7 +247,10 @@ export function useHostQuery<TInput extends HostQueryParams, TData>(
     ...queryOptions,
     ...(options?.staleTime === undefined ? {} : { staleTime: options.staleTime }),
     subscribed: options?.subscribed,
-    refetchInterval: options?.refetchInterval
+    refetchInterval:
+      typeof refetchInterval === 'function'
+        ? (query) => refetchInterval(query.state.data)
+        : refetchInterval
   })
 }
 

@@ -3,7 +3,7 @@ import type { BrowserGuestMetadata } from '../../../../shared/browser/guest-life
 import {
   cachedBrowserGuestMetadata,
   clearBrowserGuestMetadata
-} from './host-guest/browser-guest-metadata-cache'
+} from './host-guest/metadata/browser-guest-metadata-cache'
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type {
@@ -25,7 +25,7 @@ vi.mock('./browser-client-page-renderer-installation', () => ({
   attachBrowserClientPageToViewport: mocks.attach
 }))
 
-import { useAppStore } from '@/store'
+import { useAppStore } from '@/store/index'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import {
   installClientHostedPaneApi,

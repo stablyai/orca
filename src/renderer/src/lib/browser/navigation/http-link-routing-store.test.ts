@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
-import { requestBrowserFocus } from '@/components/browser-pane/host-guest/browser-focus'
-import type * as BrowserFocusModule from '@/components/browser-pane/host-guest/browser-focus'
+import { requestBrowserFocus } from '@/components/browser-pane/host-guest/input/browser-focus'
+import type * as BrowserFocusModule from '@/components/browser-pane/host-guest/input/browser-focus'
 import { useAppStore } from '@/store/index'
 import { createStoreCascadesMockApi } from '@/store/testing/app-store-cascade-api.test-fixture'
 import '@/store/testing/app-store-test-fixture'
@@ -14,7 +14,7 @@ import '../workspace/workspace-browser-tab-open'
 
 const OTHER_WORKSPACE = 'repo1::/other'
 
-vi.mock('@/components/browser-pane/host-guest/browser-focus', async (importOriginal) => ({
+vi.mock('@/components/browser-pane/host-guest/input/browser-focus', async (importOriginal) => ({
   ...(await importOriginal<typeof BrowserFocusModule>()),
   requestBrowserFocus: vi.fn()
 }))

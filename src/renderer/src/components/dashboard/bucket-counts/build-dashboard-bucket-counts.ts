@@ -99,7 +99,7 @@ function countsEqual(
   )
 }
 
-/** Rows identity covers live/retained records; key acknowledgments separately so reading agents recounts without rebuilding rows. */
+/** Rows identity covers live records; key acknowledgments separately so reading agents recounts without rebuilding rows. */
 function tallyWorktreeRows(
   rows: DashboardAgentRowWithLineage[],
   state: AgentRowUnreadState,

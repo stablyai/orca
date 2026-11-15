@@ -3,7 +3,7 @@ import { legacyAgentSessionQuestionAnswers } from '../../../shared/agent-session
 import { AcpRpcError, acpErrorDataWords, type AcpAgentError } from '../transport/acp-errors'
 import { readAcpPermissionRequest } from '../protocol/acp-permission-requests'
 import { acpPermissionPresentation } from '../requests/acp-timeline-requests'
-import type { ToolCallUpdate } from '../generated/acp-protocol.generated'
+import type { ModelInfo, ToolCallUpdate } from '../generated/acp-protocol.generated'
 import { pendingAcpResolution, type AcpDialect, type AcpRequestPresentation } from './acp-dialect'
 
 // interaction_ permissions are questions, even in yolo mode; never auto-approve them.
@@ -125,6 +125,17 @@ function promptErrorDetail(error: AcpAgentError): string | undefined {
   }
 }
 
+const EFFORT_LEVELS = ['none', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max'] as const
+
+// Model options list families; availableModels lists each level as "<family>-<level>".
+function familyEfforts(family: string, models: readonly ModelInfo[]) {
+  const efforts = EFFORT_LEVELS.flatMap((value) => {
+    const variant = models.find((model) => model.modelId === `${family}-${value}`)
+    return variant ? [{ value, label: /\(([^()]+)\)$/.exec(variant.name)?.[1] ?? value }] : []
+  })
+  return efforts.length > 0 ? { efforts } : undefined
+}
+
 export const ANTIGRAVITY_ACP_DIALECT: AcpDialect = {
   request: (method, params) => questionRequest(method, params) ?? warnedApproval(method, params),
   normalizeToolUpdate,
@@ -132,5 +143,6 @@ export const ANTIGRAVITY_ACP_DIALECT: AcpDialect = {
   // Avoid using the full command line as the tool name.
   toolName: (update) => (update.kind === 'execute' ? 'execute' : undefined),
   // Logout would clear the account shared by every Antigravity chat on this host.
-  withheldCommands: ['logout']
+  withheldCommands: ['logout'],
+  familyEfforts
 }

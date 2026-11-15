@@ -128,12 +128,12 @@ it.each(['queued', 'immediate'] as const)(
       immediate = coordinator.refreshPRNow(candidate, 'active')
     }
     await vi.advanceTimersByTimeAsync(0)
-    vi.setSystemTime(5_000)
+    await vi.advanceTimersByTimeAsync(5_000 - Date.now())
     await expect(foreground(origin === 'immediate')).resolves.toMatchObject({
       fetchedAt: 5_000,
       pr: { title: 'current' }
     })
-    vi.setSystemTime(6_000)
+    await vi.advanceTimersByTimeAsync(6_000 - Date.now())
     old.resolve({ kind: 'no-pr', fetchedAt: 6_000 })
     await immediate
     await vi.advanceTimersByTimeAsync(0)
@@ -171,9 +171,9 @@ it('keeps the accepted external failure and gate when the old local success comp
   }))
   coordinator.reportVisiblePRRefreshCandidates([candidate], 1, 1)
   await vi.advanceTimersByTimeAsync(0)
-  vi.setSystemTime(5_000)
+  await vi.advanceTimersByTimeAsync(5_000 - Date.now())
   await expect(foreground()).resolves.toMatchObject({ errorType: 'rate_limited' })
-  vi.setSystemTime(6_000)
+  await vi.advanceTimersByTimeAsync(6_000 - Date.now())
   old.resolve(found('obsolete'))
   await vi.advanceTimersByTimeAsync(0)
   expect(store.getState().prCache[candidate.cacheKey]?.data).toBeUndefined()
@@ -205,10 +205,10 @@ it.each(['queued', 'immediate'] as const)(
     coordinator.reportVisiblePRRefreshCandidates([candidate], 1, 1)
     const immediate = origin === 'immediate' ? coordinator.refreshPRNow(candidate, 'active') : null
     await vi.advanceTimersByTimeAsync(0)
-    vi.setSystemTime(5_000)
+    await vi.advanceTimersByTimeAsync(5_000 - Date.now())
     const external = foreground(origin === 'immediate')
     await vi.advanceTimersByTimeAsync(0)
-    vi.setSystemTime(6_000)
+    await vi.advanceTimersByTimeAsync(6_000 - Date.now())
     old.resolve({ kind: 'no-pr', fetchedAt: 6_000 })
     if (immediate) {
       await expect(immediate).resolves.toEqual({
@@ -246,10 +246,10 @@ it('keeps rejected raw data out of the actual local action reply writer', async 
     force: true
   })
   await vi.advanceTimersByTimeAsync(0)
-  vi.setSystemTime(5_000)
+  await vi.advanceTimersByTimeAsync(5_000 - Date.now())
   const external = foreground(true)
   await vi.advanceTimersByTimeAsync(0)
-  vi.setSystemTime(6_000)
+  await vi.advanceTimersByTimeAsync(6_000 - Date.now())
   old.resolve({ kind: 'no-pr', fetchedAt: 6_000 })
   await expect(action).resolves.toMatchObject({ title: 'displayed' })
   expect(store.getState().prCache[candidate.cacheKey]).toMatchObject({
@@ -260,12 +260,7 @@ it('keeps rejected raw data out of the actual local action reply writer', async 
   await vi.advanceTimersByTimeAsync(1_000)
   fresh.resolve(found('current'))
   await external
-  await vi.advanceTimersByTimeAsync(4_000)
-  expect(store.getState().prCache[candidate.cacheKey]).toMatchObject({
-    fetchedAt: 500,
-    data: { title: 'displayed' }
-  })
-  await vi.advanceTimersByTimeAsync(109_499)
+  await vi.advanceTimersByTimeAsync(3_999)
   expect(store.getState().prCache[candidate.cacheKey]).toMatchObject({
     fetchedAt: 500,
     data: { title: 'displayed' }
@@ -275,6 +270,13 @@ it('keeps rejected raw data out of the actual local action reply writer', async 
     fetchedAt: 7_000,
     data: { title: 'current' }
   })
+  expect(mocks.resolve).toHaveBeenCalledTimes(2)
+  await vi.advanceTimersByTimeAsync(109_500)
+  expect(store.getState().prCache[candidate.cacheKey]).toMatchObject({
+    fetchedAt: 7_000,
+    data: { title: 'current' }
+  })
+  expect(mocks.resolve).toHaveBeenCalledTimes(2)
 })
 
 it.each([
@@ -292,10 +294,10 @@ it.each([
     try {
       coordinator.reportVisiblePRRefreshCandidates([candidate], 1, 1)
       await vi.advanceTimersByTimeAsync(0)
-      vi.setSystemTime(5_000)
+      await vi.advanceTimersByTimeAsync(5_000 - Date.now())
       const external = foreground()
       await vi.advanceTimersByTimeAsync(0)
-      vi.setSystemTime(6_000)
+      await vi.advanceTimersByTimeAsync(6_000 - Date.now())
       old.resolve({ kind: 'no-pr', fetchedAt: 6_000 })
       await vi.advanceTimersByTimeAsync(0)
       expect(store.getState().prRefreshStates[candidate.cacheKey]?.status).toBe('skipped')
@@ -322,11 +324,27 @@ it.each([
       }
       expect(mocks.resolve).toHaveBeenCalledTimes(2)
       expect(observe).toHaveBeenCalledTimes(1)
-      expect(store.getState().prRefreshStates[candidate.cacheKey]).toMatchObject({
-        status: 'error',
+      const { preparePRBranchRead } =
+        await import('../../src/main/github/client/lookup/pr-for-branch-outcome')
+      const prepared = await preparePRBranchRead('/repo', candidate.branch, null, null, null, {
+        currentHeadOid: 'head-sha'
+      })
+      expect(prepared.cached()?.outcome).toMatchObject({
+        kind: 'upstream-error',
+        fetchedAt: failureAt,
         nextAutoRetryAt: retryAt,
         retryDisabledUntil: retryAt
       })
+      if (duringQuota) {
+        expect(store.getState().prRefreshStates[candidate.cacheKey]).toMatchObject({
+          status: 'error',
+          nextAutoRetryAt: retryAt,
+          retryDisabledUntil: retryAt
+        })
+      } else {
+        expect(store.getState().prRefreshStates[candidate.cacheKey]?.status).toBe('skipped')
+        expect(store.getState().prCache[candidate.cacheKey]).toBeUndefined()
+      }
       await vi.advanceTimersByTimeAsync(remaining)
       expect(mocks.resolve).toHaveBeenCalledTimes(2)
       await vi.advanceTimersByTimeAsync(1)

@@ -11,9 +11,9 @@ import { getStructuredAgentSessionHost } from '../../native-chat/agent-session-w
 import {
   ensureTestStructuredAgentSessionHost as ensureStructuredAgentSessionHost,
   openTestAgentSessionRecordStoreSlot,
-  seedTestAgentSessionRecordStore,
   seedTestAgentSessionStoreFromNewerBuild
 } from './records/agent-session-record-store-test-harness'
+import { seedTestAgentSessionRecordStore } from './records/agent-session-record-store-persistence.test-fixture'
 import { closeTestJournalHostDatabases } from '../../native-chat/agent-session-journal/store-lifecycle/journal-host-database-test-support'
 import { OrcaRuntimeService } from '../orca-runtime'
 import { stopStructuredAgentSessionRuntime } from './structured-agent-session-runtime'

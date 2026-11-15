@@ -1,6 +1,6 @@
 // Route switch rows through palette activation and return focus handoff for after the menu closes.
 
-import { requestBrowserFocus } from '@/components/browser-pane/host-guest/browser-focus'
+import { requestBrowserFocus } from '@/components/browser-pane/host-guest/input/browser-focus'
 import { translate } from '@/i18n/i18n'
 import {
   activateBrowserPagePaletteResult,
