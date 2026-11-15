@@ -43,7 +43,11 @@ export function MobileNativeChatComposerAttachButton({
   }
   const run = (choice: AddContextChoice): void => {
     if (choice.choice === 'recent') {
-      onAttachImages?.({ recentPhotos: choice.images })
+      if (onAttachImages) {
+        onAttachImages({ recentPhotos: choice.images, release: choice.release })
+      } else {
+        choice.release()
+      }
     } else if (choice.choice === 'camera' || choice.choice === 'photos') {
       onAttachImages?.(choice.choice === 'camera' ? 'camera' : 'library')
     } else if (choice.choice === 'files') {
@@ -93,7 +97,7 @@ export function MobileNativeChatComposerAttachButton({
         library={library}
         onRecentPhotos={
           onAttachImages && library
-            ? (ids) => onAttachImages({ recentPhotos: library.pick(ids) })
+            ? (ids) => onAttachImages({ recentPhotos: library.pick(ids), release: () => {} })
             : undefined
         }
         actions={mobileNativeChatAttachActions({

@@ -219,6 +219,31 @@ describe('a provider uri the Android picker can answer', () => {
   })
 })
 
+describe('staging cleanup', () => {
+  it('deletes every owned item of a refused selection, including the ones after the refused one', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const probe = harness({
+      openFile: (uri) =>
+        uri.endsWith('big.jpg')
+          ? { size: 64 * 1024 * 1024, open: () => fakeFile(new Uint8Array()).open() }
+          : fakeFile(bytesOf(4)),
+      launchLibrary: () =>
+        Promise.resolve({
+          canceled: false,
+          assets: [
+            { uri: `${CACHE}/big.jpg`, mimeType: 'image/jpeg' },
+            { uri: `${CACHE}/next.jpg`, mimeType: 'image/jpeg' }
+          ]
+        })
+    })
+    await expect(
+      probe.serve('native.media.pick', { source: 'library', multiple: true })
+    ).rejects.toSatisfy((error) => refusalOf(error) === 'native_media_too_large')
+    expect(probe.discarded.sort()).toEqual([`${CACHE}/big.jpg`, `${CACHE}/next.jpg`])
+    warn.mockRestore()
+  })
+})
+
 describe('Add context', () => {
   const options = { images: true, files: true, structured: true, skillCount: 0 }
 

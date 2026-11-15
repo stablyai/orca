@@ -50,7 +50,11 @@ export class ImageLibraryPermissionError extends Error {
 }
 
 // Recent photos the Add context sheet chose, already resolved to images.
-export type MobileRecentPhotoPick = { readonly recentPhotos: AsyncIterable<PickedMobileImage> }
+export type MobileRecentPhotoPick = {
+  readonly recentPhotos: AsyncIterable<PickedMobileImage>
+  // Frees whatever the reader never reached, including everything when the upload stops before reading.
+  readonly release: () => void
+}
 
 // What the composer's Add context sheet asks to attach.
 export type MobileComposerImagePick = 'library' | 'camera' | MobileRecentPhotoPick
@@ -76,7 +80,9 @@ export type AddContextOptions = {
 
 export type AddContextChoice =
   | { readonly choice: Exclude<AddContextChoiceName, 'recent'> }
-  | { readonly choice: 'recent'; readonly images: AsyncIterable<PickedMobileImage> }
+  | ({ readonly choice: 'recent' } & Omit<MobileRecentPhotoPick, 'recentPhotos'> & {
+        readonly images: AsyncIterable<PickedMobileImage>
+      })
 
 export type AddContextChoiceName =
   | 'dismissed'

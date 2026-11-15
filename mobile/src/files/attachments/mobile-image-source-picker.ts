@@ -180,12 +180,20 @@ async function* pickFromFiles(
 // Rendered JPEG copies keep the same byte ceiling as library picks; the copy doubles as the chip preview.
 export async function* pickRecentPhotos(
   ids: readonly string[],
-  device: Pick<RecentPhotoDevice, 'render'>,
+  device: Pick<RecentPhotoDevice, 'render' | 'discard'>,
   createFile: MobileImageFileFactory = defaultMobileImageFileFactory
 ): AsyncGenerator<PickedMobileImage> {
   for (const id of ids) {
     const photo = await device.render(id)
-    yield { base64: await readUriAsBase64(photo.uri, null, createFile), uri: photo.uri }
+    let base64: string
+    try {
+      base64 = await readUriAsBase64(photo.uri, null, createFile)
+    } catch (error) {
+      // A refused copy never becomes a chip preview, so nothing else would delete it.
+      device.discard(photo.uri)
+      throw error
+    }
+    yield { base64, uri: photo.uri }
   }
 }
 

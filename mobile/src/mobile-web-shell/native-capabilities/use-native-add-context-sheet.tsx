@@ -71,7 +71,8 @@ export function useNativeAddContextSheet(sessionId: string | null): {
       onClose={() => setVisible(false)}
       onAfterClose={() => {
         pending.settle('dismissed')
-        setPending(null)
+        // A request presented after this sheet unmounted must keep its own sheet.
+        setPending((current) => (current === pending ? null : current))
       }}
       library={options?.images ? library : null}
       onPhotos={options?.images ? settle('photos') : undefined}

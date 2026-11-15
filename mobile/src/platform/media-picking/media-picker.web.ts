@@ -129,7 +129,9 @@ function addContextOpener(verbs: NativeVerbs): MediaPicker['openAddContext'] {
       choice,
       images: {
         [Symbol.asyncIterator]: () => readPicked(verbs, items, 'library')
-      }
+      },
+      // Releasing a handle the reader already released is a normal false.
+      release: () => void releaseAllStagedMedia(verbs, items)
     }
   }
 }

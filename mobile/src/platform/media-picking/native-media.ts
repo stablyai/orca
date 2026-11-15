@@ -102,7 +102,9 @@ export function createNativeMediaVerbServer(
         })
       }
     } catch (error) {
-      for (const uri of owned) {
+      // Items after the failing one were never adopted; delete the owned ones too, or nothing ever would.
+      const unadopted = assets.slice(staged.length + 1).map((asset) => asset.uri)
+      for (const uri of new Set([...owned, ...unadopted.filter(deps.ownsStagedUri)])) {
         discardQuietly(uri)
       }
       throw error

@@ -76,12 +76,15 @@ export function useMobileNativeChatImageUpload(args: {
   const attachImage = useCallback(
     async (source: MobileComposerImageSource): Promise<void> => {
       const scope = scopeKey
+      // Staged recent photos are freed whether or not the upload reaches them.
+      const release = typeof source === 'object' && 'recentPhotos' in source ? source.release : null
       if (
         !client ||
         !scope ||
         connState !== 'connected' ||
         (!activeHandleRef.current && !structuredNativeChat)
       ) {
+        release?.()
         return
       }
       const destination = mobileNativeChatDraftDestination(scope)
@@ -117,6 +120,7 @@ export function useMobileNativeChatImageUpload(args: {
       } catch (error) {
         uploadError = error
       } finally {
+        release?.()
         if (started) {
           attachingCount.current -= 1
           if (attachingCount.current === 0) {
