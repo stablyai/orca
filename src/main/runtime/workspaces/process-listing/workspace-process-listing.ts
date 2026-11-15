@@ -69,9 +69,7 @@ export abstract class OrcaRuntimeWithGetWorktreePs extends RuntimeChatWorkerEven
   )
 
   /** The task each pane was dispatched, by pane key, as `worktree.ps` rows title it. */
-  listAgentTasksByPaneKey() {
-    return this.agentOrchestrationProjection.buildByPaneKey() ?? {}
-  }
+  listAgentTasksByPaneKey = () => this.agentOrchestrationProjection.buildByPaneKey() ?? {}
 
   async getWorktreePs(
     limit = DEFAULT_WORKTREE_PS_LIMIT,
@@ -280,6 +278,8 @@ export abstract class OrcaRuntimeWithGetWorktreePs extends RuntimeChatWorkerEven
       prepareLaunchAccountHome: (record, launchDirectory) =>
         this.prepareStructuredAgentLaunchAccountHome(record, launchDirectory),
       onRequestFailure: (failure) => this.onStructuredRequestFailureForErrorMail(failure),
+      readWorkerDockPresence: (sessionId) =>
+        this._orchestrationDb?.workerDockSources.read(sessionId),
       // Structured chat has no CLI hooks; this projection drives first-work renaming.
       onSessionStatusChanged: (summary, options) => {
         this.crewChanges.notify(new Set(['status', 'names']))

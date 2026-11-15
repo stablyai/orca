@@ -21,10 +21,12 @@ import { backfillStructuredWorkerOrcaSessionIds } from './schema/structured-work
 import { reconcileSettledWorkerDispatches } from './worker-dispatch/worker-dispatch-settlement'
 import { refreshOutstandingDeliveryTrigger } from './schema/migrate-v41'
 import { installWorkerDockSchema } from './schema/worker-dock-schema'
+import { WorkerDockSourcePresence } from './worker-dock-source-presence'
 
 class OrchestrationDbCore {
   readonly crewChanges = new CrewChanges()
   db: Database.Database
+  readonly workerDockSources: WorkerDockSourcePresence
 
   // Cache Dispatch emptiness to skip per-terminal queries on 16ms graph ticks for users without orchestration.
   hasAnyDispatchContextsCache: boolean | undefined
@@ -53,6 +55,7 @@ class OrchestrationDbCore {
     migrate.call(this as unknown as OrchestrationDb)
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: attached schema methods are installed before any DB instance is constructed.
     installWorkerDockSchema.call(this as unknown as OrchestrationDb)
+    this.workerDockSources = new WorkerDockSourcePresence(this.db)
     refreshOutstandingDeliveryTrigger(this.db)
     for (const [table, columns] of [
       ['messages', ['answer_sender_snapshot']],

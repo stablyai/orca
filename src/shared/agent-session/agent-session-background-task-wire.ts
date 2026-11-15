@@ -27,8 +27,12 @@ export type AgentSessionBackgroundTask = {
   stoppable?: boolean
 }
 
+export type WorkerDockPresence = { revision: string; open: boolean }
+
 export type AgentSessionBackgroundTaskState = {
   state: 'monitoring'
+  /** Discovery on the existing visible-chat channel; absent means no orchestration history. */
+  workerDock?: WorkerDockPresence
   /** Optional so mixed-version clients can consume state-only hosts. */
   tasks?: AgentSessionBackgroundTask[]
   /** Keep settled rows separate so older clients still render only live tasks. */

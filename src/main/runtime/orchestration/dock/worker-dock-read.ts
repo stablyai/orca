@@ -15,6 +15,7 @@ import {
 import { parseOrcaSessionAddress } from '../../../../shared/agent-session/identity/orca-session-address'
 import { OrchestrationError } from '../orchestration-error'
 import { exposeUtcTimestamp } from '../db/utc-timestamp'
+import { workerDockEligibleSql as eligible } from '../db/worker-dock-eligibility'
 
 export function workerDockSession(party: string): string {
   const session = parseOrcaSessionAddress(party)
@@ -24,11 +25,6 @@ export function workerDockSession(party: string): string {
   return session
 }
 
-const eligible = `f.source = ? AND (f.state <> 'succeeded' OR f.report_id IS NULL)
-  AND NOT EXISTS (SELECT 1 FROM worker_dock_acknowledgments a
-    WHERE a.source = f.source AND a.dispatch_id = f.dispatch_id AND a.settlement = f.settlement)
-  AND NOT EXISTS (SELECT 1 FROM worker_dock_owner_stops s
-    WHERE s.dispatch_id = f.dispatch_id AND s.confirmed = 1 AND s.settlement = f.settlement)`
 const stateSql = `CASE f.state
   WHEN 'ready' THEN COALESCE((SELECT state FROM worker_dock_activity WHERE dispatch_id = f.dispatch_id), 'unavailable') WHEN 'succeeded' THEN CASE WHEN f.result_lost_at IS NOT NULL THEN 'unavailable' ELSE 'saving' END
   WHEN 'stopped' THEN 'unexpected' WHEN 'abandoned' THEN 'unexpected'

@@ -320,8 +320,7 @@ export class StructuredAgentSessionHost {
 
   currentWork = this.clientDelivery.readCurrentWork
   currentWorkAtRest = this.reads.currentWorkAtRest
-  readCurrentRequests: BackgroundTasks['currentRequests'] = (...args) =>
-    this.backgroundTasks.currentRequests(...args)
+  readCurrentRequests = this.backgroundTasks.currentRequests.bind(this.backgroundTasks)
 
   observeJournalPublications = this.clientDelivery.observeJournalPublications
 
@@ -329,6 +328,7 @@ export class StructuredAgentSessionHost {
 
   settleLateDispatch = this.mutations.settleLateDispatch
   publishWorkChanged: (sessionId: string) => void = this.clientDelivery.publishGenerationEnded
+  publishBackgroundTasks = (sessionId: string): void => this.backgroundTasks.publish(sessionId)
 
   publishChildWorkEvidence = this.clientDelivery.publishChildWork
   unsubscribe = (id: string, key: string): void => this.clientDelivery.subscribers.close(id, key)
