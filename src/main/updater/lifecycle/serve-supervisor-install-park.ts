@@ -1,19 +1,12 @@
 import { randomUUID } from 'node:crypto'
-import {
-  closeSync,
-  fsyncSync,
-  mkdirSync,
-  openSync,
-  realpathSync,
-  renameSync,
-  writeSync
-} from 'node:fs'
-import { readdir, readFile, realpath } from 'node:fs/promises'
+import { mkdir, open, readdir, readFile, realpath, rename, stat } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import {
   ackFileName,
   acksDir,
   bundleCoordinationDir,
+  bundleInfoPlistPath,
+  formatBundleIdentity,
   isLiveRegistration,
   macAppBundleOf,
   isProcessAlive,
@@ -27,7 +20,6 @@ import {
   type ServeParkRecord,
   type ServeSupervisorRegistration
 } from '../../../shared/remote-runtime/serve-supervisor/serve-bundle-coordination'
-import { readBundleIdentity } from '../../../shared/remote-runtime/serve-supervisor/serve-bundle-park'
 
 export type ServeInstallParkResult =
   | { kind: 'parked' }
@@ -47,20 +39,19 @@ const ACK_POLL_MS = 500
 /** The attempt this process parked, so commit and release find it without a second lookup. */
 let activePark: { dir: string; record: ServeParkRecord } | null = null
 
-// Synchronous so the quit path can commit before the process exits.
-function writeRecordDurably(dir: string, record: ServeParkRecord): void {
+async function writeRecordDurably(dir: string, record: ServeParkRecord): Promise<void> {
   const target = parkRecordPath(dir)
-  mkdirSync(dirname(target), { recursive: true, mode: 0o700 })
+  await mkdir(dirname(target), { recursive: true, mode: 0o700 })
   const temporary = `${target}.${process.pid}.tmp`
-  const fd = openSync(temporary, 'w', 0o600)
+  const handle = await open(temporary, 'w', 0o600)
   try {
-    writeSync(fd, JSON.stringify(record))
+    await handle.writeFile(JSON.stringify(record))
     // Supervisors trust this record after installer exit and across system crashes; fsync before acknowledgement.
-    fsyncSync(fd)
+    await handle.sync()
   } finally {
-    closeSync(fd)
+    await handle.close()
   }
-  renameSync(temporary, target)
+  await rename(temporary, target)
 }
 
 async function readJson(path: string): Promise<unknown> {
@@ -89,6 +80,14 @@ async function liveRegistrations(dir: string, now: number): Promise<ServeSupervi
     (entry): entry is ServeSupervisorRegistration =>
       entry !== null && isLiveRegistration(entry, now) && isProcessAlive(entry.pid)
   )
+}
+
+async function readBundleIdentity(bundle: string): Promise<string> {
+  try {
+    return formatBundleIdentity(await stat(bundleInfoPlistPath(bundle)))
+  } catch {
+    return formatBundleIdentity(null)
+  }
 }
 
 /** Park registered serve supervisors before desktop install; refuse other blockers. */
@@ -143,10 +142,10 @@ export async function parkServeSupervisorsForInstall(
     createdAt,
     parkDeadlineAt: createdAt + SERVE_PARK_DEADLINE_MS,
     commitDeadlineAt: null,
-    bundleBefore: readBundleIdentity(bundle),
+    bundleBefore: await readBundleIdentity(bundle),
     supervisorPids
   }
-  writeRecordDurably(dir, record)
+  await writeRecordDurably(dir, record)
   activePark = { dir, record }
 
   const deadline = createdAt + (deps.ackWaitMs ?? SERVE_PARK_ACK_WAIT_MS)
@@ -204,22 +203,22 @@ export async function commitServeSupervisorPark(
     phase: 'commit',
     commitDeadlineAt: now() + SERVE_COMMIT_DEADLINE_MS
   }
-  writeRecordDurably(activePark.dir, record)
+  await writeRecordDurably(activePark.dir, record)
   activePark = { ...activePark, record }
 }
 
 /** Install-on-quit has no park handshake: commit so running supervisors stop and new ones wait for the new bundle. */
-export function commitServeSupervisorParkOnQuit(
+export async function commitServeSupervisorParkOnQuit(
   executable: string,
   macUserDataRoot: string,
   now: () => number = Date.now
-): void {
+): Promise<void> {
   const appBundle = macAppBundleOf(executable)
   if (activePark?.record.phase === 'commit' || !appBundle) {
     return
   }
   try {
-    const bundle = realpathSync(appBundle)
+    const bundle = await realpath(appBundle)
     const createdAt = now()
     const record: ServeParkRecord = {
       schemaVersion: 1,
@@ -229,11 +228,11 @@ export function commitServeSupervisorParkOnQuit(
       createdAt,
       parkDeadlineAt: createdAt,
       commitDeadlineAt: createdAt + SERVE_COMMIT_DEADLINE_MS,
-      bundleBefore: readBundleIdentity(bundle),
+      bundleBefore: await readBundleIdentity(bundle),
       supervisorPids: []
     }
     const dir = bundleCoordinationDir(bundle, macUserDataRoot)
-    writeRecordDurably(dir, record)
+    await writeRecordDurably(dir, record)
     activePark = { dir, record }
   } catch {
     // Without a record ShipIt only fails if a helper runs, as before.
@@ -248,7 +247,7 @@ export async function releaseServeSupervisorPark(): Promise<void> {
     return
   }
   try {
-    writeRecordDurably(park.dir, { ...park.record, phase: 'unpark' })
+    await writeRecordDurably(park.dir, { ...park.record, phase: 'unpark' })
   } catch {
     // The park and commit deadlines still end the hold on their own.
   }

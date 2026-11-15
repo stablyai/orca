@@ -51,7 +51,7 @@ describe.skipIf(process.platform === 'win32')('orcad Electron browser helper', (
   })
 
   it('waits for the new bundle when the desktop is installing an update on quit', async () => {
-    commitServeSupervisorParkOnQuit(executable, macCoordinationRoot(root))
+    await commitServeSupervisorParkOnQuit(executable, macCoordinationRoot(root))
     vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval', 'Date'] })
 
     provider = await resolveOrcadBrowserProvider({

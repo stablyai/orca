@@ -54,7 +54,7 @@ function readParkRecord(dir: string): ServeParkRecord | null {
   }
 }
 
-export function readBundleIdentity(bundlePath: string): string {
+function readBundleIdentity(bundlePath: string): string {
   try {
     return formatBundleIdentity(statSync(bundleInfoPlistPath(bundlePath)))
   } catch {
