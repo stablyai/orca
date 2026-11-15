@@ -1,5 +1,7 @@
 import SyncDatabase from '../../sqlite/sync-database'
 import { isWslUncPath } from '../../../shared/file-access/wsl-paths'
+import { yieldToEventLoop } from '../../../shared/concurrency/event-loop-yield'
+import { throwIfAiVaultScanCancelled } from '../scan-lifecycle/ai-vault-scan-cancellation'
 import { OPENCODE_SQLITE_BUSY_TIMEOUT_MS } from '../scanners/opencode/sqlite/session-scanner-opencode-sqlite-open'
 
 export type WorkspaceHistorySqliteOutcome = { deleted: string[]; busy: string[] }
@@ -8,44 +10,61 @@ export type WorkspaceHistorySqliteOutcome = { deleted: string[]; busy: string[] 
 const SESSION_TABLES = ['session', 'session_v2'] as const
 
 /** Delete whole sessions from an agent's database, one short write transaction per session. */
-export function deleteWorkspaceHistorySqliteSessions(
+export async function deleteWorkspaceHistorySqliteSessions(
   dbPath: string,
-  sessionIds: readonly string[]
-): WorkspaceHistorySqliteOutcome {
-  const outcome: WorkspaceHistorySqliteOutcome = { deleted: [], busy: [] }
+  sessionIds: readonly string[],
+  inUseSince: number,
+  signal: AbortSignal
+): Promise<WorkspaceHistorySqliteOutcome> {
   // WSL-share locks are unreliable, so a write there could race the agent inside the distro.
   if (isWslUncPath(dbPath) || sessionIds.length === 0) {
     return { deleted: [], busy: [...sessionIds] }
   }
   let db: SyncDatabase
-  let plan: ReturnType<SyncDatabase['prepare']>[]
+  let plan: SessionRowPlan
   try {
     db = new SyncDatabase(dbPath, { fileMustExist: true, timeout: OPENCODE_SQLITE_BUSY_TIMEOUT_MS })
   } catch {
     return { deleted: [], busy: [...sessionIds] }
   }
   try {
-    db.pragma('foreign_keys = ON')
+    // Explicit per-table deletes; cascades would reach child sessions nobody checked.
+    db.pragma('foreign_keys = OFF')
     plan = sessionRowPlan(db)
   } catch {
     db.close()
     return { deleted: [], busy: [...sessionIds] }
   }
+  const outcome: WorkspaceHistorySqliteOutcome = { deleted: [], busy: [] }
   try {
-    for (const sessionId of sessionIds) {
+    for (const [index, sessionId] of sessionIds.entries()) {
+      await yieldToEventLoop()
+      throwIfAiVaultScanCancelled(signal)
       try {
         db.exec('BEGIN IMMEDIATE')
-        try {
-          for (const statement of plan) {
-            statement.run(sessionId)
-          }
-          db.exec('COMMIT')
-          outcome.deleted.push(sessionId)
-        } catch (error) {
-          db.exec('ROLLBACK')
-          throw error
-        }
       } catch {
+        // The agent holds the write lock; every later session would wait out the same timeout.
+        outcome.busy.push(...sessionIds.slice(index))
+        break
+      }
+      try {
+        // Under the write lock: a session resumed after the scan is in use now.
+        if (
+          plan.updatedAt.some(
+            (statement) => updatedMs(statement.get(sessionId)?.updated) >= inUseSince
+          )
+        ) {
+          db.exec('ROLLBACK')
+          outcome.busy.push(sessionId)
+          continue
+        }
+        for (const statement of plan.deletes) {
+          statement.run(sessionId)
+        }
+        db.exec('COMMIT')
+        outcome.deleted.push(sessionId)
+      } catch {
+        db.exec('ROLLBACK')
         outcome.busy.push(sessionId)
       }
     }
@@ -55,8 +74,19 @@ export function deleteWorkspaceHistorySqliteSessions(
   return outcome
 }
 
+// Agents write milliseconds; a seconds value is scaled so it can never look older than it is.
+function updatedMs(value: unknown): number {
+  const updated = Number(value ?? 0)
+  return updated > 0 && updated < 1e12 ? updated * 1000 : updated
+}
+
+type SessionRowPlan = {
+  updatedAt: ReturnType<SyncDatabase['prepare']>[]
+  deletes: ReturnType<SyncDatabase['prepare']>[]
+}
+
 // Children before parents so databases without ON DELETE CASCADE keep no orphaned rows.
-function sessionRowPlan(db: SyncDatabase): ReturnType<SyncDatabase['prepare']>[] {
+function sessionRowPlan(db: SyncDatabase): SessionRowPlan {
   const tables = (
     db.prepare("SELECT name FROM sqlite_master WHERE type='table'").all() as { name: string }[]
   ).map((row) => row.name)
@@ -96,5 +126,8 @@ function sessionRowPlan(db: SyncDatabase): ReturnType<SyncDatabase['prepare']>[]
   for (const table of sessionTables) {
     statements.push(db.prepare(`DELETE FROM "${table}" WHERE id = ?`))
   }
-  return statements
+  const updatedAt = sessionTables
+    .filter((table) => columns.get(table)?.has('time_updated'))
+    .map((table) => db.prepare(`SELECT time_updated AS updated FROM "${table}" WHERE id = ?`))
+  return { updatedAt, deletes: statements }
 }

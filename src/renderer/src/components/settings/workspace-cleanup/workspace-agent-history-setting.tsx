@@ -120,6 +120,7 @@ function DeletedWorkspacesHistoryRow(): React.JSX.Element {
 
   const confirmDelete = async (): Promise<void> => {
     setDeleting(true)
+    lastMeasurement = null
     try {
       const result = await window.api.aiVault.deleteDeletedWorkspaceHistory()
       const skipped = result.transcripts.inUse + result.transcripts.failed + result.chats.inUse
@@ -192,14 +193,27 @@ function DeletedWorkspacesHistoryRow(): React.JSX.Element {
         )}
         description={`${summary} ${remoteNote}`}
         control={
-          <Button
-            variant="outline"
-            size="sm"
-            disabled={deletable === 0 || deleting}
-            onClick={() => setConfirming(true)}
-          >
-            {t('components.settings.workspaceCleanup.agentHistory.delete', 'Delete…')}
-          </Button>
+          measurement.state === 'error' ? (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                setMeasurement({ state: 'measuring' })
+                setGeneration((value) => value + 1)
+              }}
+            >
+              {t('components.settings.workspaceCleanup.agentHistory.retry', 'Try again')}
+            </Button>
+          ) : (
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={deletable === 0 || deleting}
+              onClick={() => setConfirming(true)}
+            >
+              {t('components.settings.workspaceCleanup.agentHistory.delete', 'Delete…')}
+            </Button>
+          )
         }
       />
       <Dialog

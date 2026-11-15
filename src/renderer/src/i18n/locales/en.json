@@ -22512,7 +22512,8 @@
           "deleting": "Deleting…",
           "deleted": "Deleted {{sessions}} agent sessions and {{chats}} Orca chats.",
           "skipped": "Kept {{count}} that were in use or could not be removed.",
-          "deleteFailed": "Couldn't delete history from deleted workspaces."
+          "deleteFailed": "Couldn't delete history from deleted workspaces.",
+          "retry": "Try again"
         }
       },
       "repository": {

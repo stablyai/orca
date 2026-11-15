@@ -7,6 +7,7 @@ import {
   type AiVaultSessionDeleteRemoval
 } from '../../../shared/ai-vault/contracts/ai-vault-session-deletion'
 import { isPathInsideOrEqual } from '../../../shared/cross-platform-path'
+import { sessionFileExecutionNamespace } from '../../../shared/ai-vault/scanning/ai-vault-scope-cwd-match'
 import { AI_VAULT_AGENT_SOURCES } from '../discovery/session-scanner-agent-sources'
 import { isDiscoverableSessionFile } from '../discovery/session-file-discovery'
 import { validateAiVaultSessionDeleteTarget } from '../deletion/session-delete-target'
@@ -88,13 +89,17 @@ function codexAliasRemovals(
   roots: readonly string[]
 ): AiVaultSessionDeleteRemoval[] {
   const relativePath = relative(matchedRoot, filePath).replace(/\.zst$/i, '')
-  return roots.flatMap((root) =>
-    [join(root, relativePath), join(root, `${relativePath}.zst`)].map((path) => ({
-      path,
-      kind: 'file' as const,
-      roots: [root]
-    }))
-  )
+  // A native rollout has no links inside WSL homes, and probing them costs a wsl.exe per root.
+  const namespace = sessionFileExecutionNamespace(filePath)
+  return roots
+    .filter((root) => sessionFileExecutionNamespace(root) === namespace)
+    .flatMap((root) =>
+      [join(root, relativePath), join(root, `${relativePath}.zst`)].map((path) => ({
+        path,
+        kind: 'file' as const,
+        roots: [root]
+      }))
+    )
 }
 
 // <brain>/<id>/.system_generated/logs/transcript.jsonl: the conversation folder holds its artifacts too.

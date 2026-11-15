@@ -112,20 +112,25 @@ export async function runWorkspaceHistory(
       result.failed++
       continue
     }
-    const bytes = await measureRemovals(removals, countedInodes)
-    result.bytes += bytes
-    if (request.mode === 'measure') {
-      continue
-    }
-    // The scan may be minutes old, and other homes' Codex copies were never scanned: any file written since is in use.
-    const files = removals
-      .filter((removal) => removal.kind === 'file')
-      .map((removal) => removal.path)
-    if (await anyChangedSince(files, request.inUseSince)) {
+    // Folders count too: a recent subagent transcript or artifact means the session is still running.
+    const measured = await walkRemovals(removals, countedInodes)
+    if (measured.newestMtimeMs >= request.inUseSince) {
       result.inUse++
       continue
     }
-    if (await removeAll(removals)) {
+    result.bytes += measured.bytes
+    if (request.mode === 'measure') {
+      continue
+    }
+    // The scan may be minutes old, and other homes' Codex copies were never scanned; look again.
+    if ((await walkRemovals(removals, new Set())).newestMtimeMs >= request.inUseSince) {
+      result.inUse++
+      continue
+    }
+    const files = removals
+      .filter((removal) => removal.kind === 'file')
+      .map((removal) => removal.path)
+    if (await removeAll(removals, session.agent === 'codex')) {
       result.deleted++
       for (const path of new Set([session.filePath, ...files])) {
         result.deletedFilePaths.push(path)
@@ -142,7 +147,12 @@ export async function runWorkspaceHistory(
     }
     await yieldToEventLoop()
     throwIfAiVaultScanCancelled(signal)
-    const outcome = deleteWorkspaceHistorySqliteSessions(dbPath, [...rows.keys()])
+    const outcome = await deleteWorkspaceHistorySqliteSessions(
+      dbPath,
+      [...rows.keys()],
+      request.inUseSince,
+      signal
+    )
     result.inUse += outcome.busy.length
     for (const sessionId of outcome.deleted) {
       const rowPath = buildOpenCodeSqliteCandidatePath(dbPath, sessionId)
@@ -154,39 +164,39 @@ export async function runWorkspaceHistory(
   return result
 }
 
-async function anyChangedSince(filePaths: readonly string[], since: number): Promise<boolean> {
-  for (const filePath of filePaths) {
+// Companions go first, so a refusal part way leaves the transcript listed for a retry. Codex aliases
+// are equals: every link is tried, since any survivor keeps the bytes and resurfaces the session.
+async function removeAll(
+  removals: readonly AiVaultSessionDeleteRemoval[],
+  tryEvery: boolean
+): Promise<boolean> {
+  let removedAll = true
+  for (const removal of removals) {
+    let refused = true
     try {
-      if ((await lstat(filePath)).mtimeMs >= since) {
-        return true
-      }
+      refused = Boolean(
+        await removeAiVaultSessionPath(removal, removeAiVaultSessionPathPermanently)
+      )
     } catch {
-      // A missing companion or alias is not in use.
+      // Counted as a refusal below.
     }
-  }
-  return false
-}
-
-// Companions go first, so a refusal part way leaves the transcript listed for a retry.
-async function removeAll(removals: readonly AiVaultSessionDeleteRemoval[]): Promise<boolean> {
-  try {
-    for (const removal of removals) {
-      if (await removeAiVaultSessionPath(removal, removeAiVaultSessionPathPermanently)) {
+    if (refused) {
+      removedAll = false
+      if (!tryEvery) {
         return false
       }
     }
-    return true
-  } catch {
-    return false
   }
+  return removedAll
 }
 
-/** Bytes freed: hard links share one inode, so each is counted once. */
-async function measureRemovals(
+/** Bytes freed (hard links share one inode, so each counts once) and the newest write under the removals. */
+async function walkRemovals(
   removals: readonly AiVaultSessionDeleteRemoval[],
   counted: Set<string>
-): Promise<number> {
+): Promise<{ bytes: number; newestMtimeMs: number }> {
   let bytes = 0
+  let newestMtimeMs = 0
   const visit = async (path: string, depth: number): Promise<void> => {
     let stats
     try {
@@ -194,6 +204,7 @@ async function measureRemovals(
     } catch {
       return
     }
+    newestMtimeMs = Math.max(newestMtimeMs, stats.mtimeMs)
     const key = `${stats.dev}:${stats.ino}`
     if (stats.isFile() && !counted.has(key)) {
       counted.add(key)
@@ -213,5 +224,5 @@ async function measureRemovals(
   for (const removal of removals) {
     await visit(removal.path, 0)
   }
-  return bytes
+  return { bytes, newestMtimeMs }
 }

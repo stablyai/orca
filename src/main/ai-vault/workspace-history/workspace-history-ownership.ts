@@ -1,5 +1,5 @@
 import { lstat, readdir, stat } from 'node:fs/promises'
-import { join, relative } from 'node:path'
+import { basename, dirname, join, relative } from 'node:path'
 import type { AiVaultSession } from '../../../shared/ai-vault/contracts/ai-vault-types'
 import {
   aiVaultSessionInScope,
@@ -19,6 +19,8 @@ export type WorkspaceHistoryOwnership = {
   scope: WorkspaceHistoryScope
   /** Every workspace Orca still has; a nested survivor keeps its own history. */
   keepPaths: readonly string[]
+  /** Original folder names of live worktrees that Orca later moved; their old paths are not deleted. */
+  keepFolderNames?: readonly string[]
 }
 
 type SessionSpellings = Pick<AiVaultSession, 'cwd' | 'cwdAliases' | 'filePath'>
@@ -28,6 +30,7 @@ export function createWorkspaceHistoryOwner(
   ownership: WorkspaceHistoryOwnership
 ): (session: SessionSpellings) => Promise<boolean> {
   const { scope, keepPaths } = ownership
+  const movedFolderNames = new Set(ownership.keepFolderNames ?? [])
   if (scope.kind === 'removed') {
     const inRemoved = createAiVaultScopeCwdMatcher(scope.paths)
     const survivors = keepPaths.filter((keep) =>
@@ -39,6 +42,7 @@ export function createWorkspaceHistoryOwner(
   }
   const rootPresence = new Map<string, Promise<boolean>>()
   const folderAbsence = new Map<string, Promise<boolean>>()
+  const parentPresence = new Map<string, Promise<boolean>>()
   const rootExists = (root: string): Promise<boolean> => {
     let known = rootPresence.get(root)
     if (!known) {
@@ -62,6 +66,25 @@ export function createWorkspaceHistoryOwner(
     }
     return known
   }
+  // A dangling link to a disconnected volume also reads as ENOENT, so the parent must be a real folder.
+  const parentIsRealDirectory = async (folder: {
+    root: string
+    path: string
+  }): Promise<boolean> => {
+    const parent = dirname(folder.path)
+    if (parent === folder.root) {
+      return true
+    }
+    let known = parentPresence.get(parent)
+    if (!known) {
+      known = lstat(parent).then(
+        (stats) => stats.isDirectory(),
+        () => false
+      )
+      parentPresence.set(parent, known)
+    }
+    return known
+  }
   return async (session) => {
     const spellings = [session.cwd, ...(session.cwdAliases ?? [])].filter(
       (spelling): spelling is string => Boolean(spelling)
@@ -75,10 +98,14 @@ export function createWorkspaceHistoryOwner(
             isPathInsideOrEqual(folder.root, keep) &&
             isPathInsideOrEqual(keep, folder.path))
       )
-      if (survives) {
+      if (survives || movedFolderNames.has(basename(folder.path))) {
         continue
       }
-      if ((await rootExists(folder.root)) && (await folderGone(folder.path))) {
+      if (
+        (await rootExists(folder.root)) &&
+        (await parentIsRealDirectory(folder)) &&
+        (await folderGone(folder.path))
+      ) {
         return true
       }
     }

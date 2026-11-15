@@ -1,4 +1,6 @@
+import { readdir } from 'node:fs/promises'
 import { homedir } from 'node:os'
+import { dirname, join } from 'node:path'
 import type { GlobalSettings } from '../../shared/global-settings-types'
 import type { Repo } from '../../shared/repository/repo-types'
 import type { FolderWorkspace } from '../../shared/folder-workspaces/folder-workspace-types'
@@ -62,7 +64,7 @@ export function deleteAgentHistoryForRemovedWorkspace(event: RuntimeWorktreeLife
     return
   }
   // Remote transcripts live on that host; this computer cannot prove what is there.
-  if (!removedWorkspaceIsLocal(store, event)) {
+  if (!removedWorkspaceIsLocal(store, event) || !isSafeRemovedPath(store, event.path)) {
     return
   }
   const removedAt = Date.now()
@@ -74,7 +76,14 @@ export function deleteAgentHistoryForRemovedWorkspace(event: RuntimeWorktreeLife
       { kind: 'removed', paths },
       {
         inUseSince: removedAt,
-        ownsChat: (location) => worktreeIdsEqual(location.workspaceId, event.worktreeId)
+        // Archiving also announces `removed` but keeps the row, and its chats come back on restore.
+        // A chat started after the removal belongs to a workspace recreated at the same path.
+        ownsChat: (chat) =>
+          chat.createdAt < removedAt &&
+          worktreeIdsEqual(chat.location.workspaceId, event.worktreeId) &&
+          !Object.keys(requireStore().getAllWorktreeMeta()).some((id) =>
+            worktreeIdsEqual(id, event.worktreeId)
+          )
       }
     )
   ).catch((error: unknown) => {
@@ -100,10 +109,11 @@ async function runAlreadyDeleted(mode: 'measure' | 'delete'): Promise<WorkspaceA
   const current = requireStore()
   const scope = { kind: 'already-deleted' as const, layouts: safeWorkspaceLayouts(current) }
   const keepPaths = keepWorkspacePaths(current)
-  const ownsWorktreePath = createWorkspaceHistoryOwner({ scope, keepPaths })
+  const keepFolderNames = await liveWorktreeAdminNames(current)
+  const ownsWorktreePath = createWorkspaceHistoryOwner({ scope, keepPaths, keepFolderNames })
   return runWorkspaceAgentHistory(mode, scope, {
     inUseSince: Date.now() - IN_USE_WINDOW_MS,
-    ownsChat: async (location) => {
+    ownsChat: async ({ location }) => {
       // Removing a folder workspace keeps its folder, so a missing row proves nothing about the chat.
       if (location.workspaceKind === 'folder') {
         return false
@@ -119,16 +129,18 @@ async function runWorkspaceAgentHistory(
   scope: WorkspaceHistoryOwnership['scope'],
   chats: {
     inUseSince: number
-    ownsChat: (location: AgentSessionConversationView['location']) => boolean | Promise<boolean>
+    ownsChat: (chat: AgentSessionConversationView) => boolean | Promise<boolean>
   }
 ): Promise<WorkspaceAgentHistoryTally> {
   const current = requireStore()
+  const keepFolderNames =
+    scope.kind === 'already-deleted' ? await liveWorktreeAdminNames(current) : []
   const transcripts =
     scope.kind === 'removed' && scope.paths.length === 0
       ? { ...EMPTY_TRANSCRIPTS, deletedFilePaths: [] }
       : await runWorkspaceHistoryInService({
           mode,
-          ownership: { scope, keepPaths: keepWorkspacePaths(current) },
+          ownership: { scope, keepPaths: keepWorkspacePaths(current), keepFolderNames },
           inUseSince: chats.inUseSince,
           options: await historyScanOptions()
         })
@@ -142,7 +154,7 @@ async function runWorkspaceAgentHistory(
 
 async function runChats(
   mode: 'measure' | 'delete',
-  owns: (location: AgentSessionConversationView['location']) => boolean | Promise<boolean>
+  owns: (chat: AgentSessionConversationView) => boolean | Promise<boolean>
 ): Promise<WorkspaceAgentHistoryChatTally> {
   await ensureChatHost().catch(() => undefined)
   const recordStore = getStructuredAgentSessionHost()?.deps.store
@@ -156,7 +168,7 @@ async function runChats(
   tally.total = local.length
   const deletable: string[] = []
   for (const chat of local) {
-    if (!(await owns(chat.location))) {
+    if (!(await owns(chat))) {
       continue
     }
     tally.matched++
@@ -179,10 +191,34 @@ async function historyScanOptions() {
   const roots = await localAiVaultScanRoots()
   return {
     ...roots,
+    // Orca's own Antigravity chat transcripts sit behind this flag.
+    includeAntigravityIdeSessions: true,
     additionalCodexSessionsDirs: [
       ...new Set([...roots.additionalCodexSessionsDirs, ...getCodexAccountHomeSessionDirectories()])
     ]
   }
+}
+
+/** Orca renames a folder after first work with `git worktree move`, which keeps the admin folder's original name. */
+async function liveWorktreeAdminNames(current: WorkspaceAgentHistoryStore): Promise<string[]> {
+  const names = await Promise.all(
+    current
+      .getRepos()
+      .filter((repo) => isLocalExecutionHost(getRepoExecutionHostId(repo)))
+      .map((repo) => readdir(join(repo.path, '.git', 'worktrees')).catch(() => [] as string[]))
+  )
+  return [...new Set(names.flat())]
+}
+
+/** A removed path that is empty, a root, home or above it, or a repo would scope every transcript. */
+function isSafeRemovedPath(current: WorkspaceAgentHistoryStore, path: string): boolean {
+  const trimmed = path.trim()
+  return (
+    trimmed.length > 0 &&
+    dirname(trimmed) !== trimmed &&
+    !isPathInsideOrEqual(trimmed, homedir()) &&
+    !current.getRepos().some((repo) => isPathInsideOrEqual(trimmed, repo.path))
+  )
 }
 
 function keepWorkspacePaths(current: WorkspaceAgentHistoryStore): string[] {

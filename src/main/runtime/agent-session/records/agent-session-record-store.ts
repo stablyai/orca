@@ -189,8 +189,11 @@ export class AgentSessionRecordStore extends AgentSessionRecordTabs {
     for (const sessionId of sessionIds) {
       const [deleted] = await this.transactions.command({ kind: 'forget', sessionIds: [sessionId] })
       if (deleted) {
-        await purgeForgottenJournalChat(this.journalDatabase, deleted)
         forgotten.push(deleted)
+        // The record is gone either way; a failed purge leaves pages for later maintenance, not the rest undone.
+        await purgeForgottenJournalChat(this.journalDatabase, deleted).catch((error: unknown) => {
+          console.warn('[agent-session] could not purge a deleted chat journal:', error)
+        })
       }
     }
     return forgotten
