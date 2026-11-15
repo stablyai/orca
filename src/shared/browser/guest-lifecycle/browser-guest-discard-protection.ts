@@ -10,7 +10,6 @@ export type BrowserGuestDiscardProtection = {
     | 'audio'
     | 'frames'
     | 'capture'
-    | 'history'
     | 'observer'
     | 'gone'
     | 'held'

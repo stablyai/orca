@@ -48,10 +48,6 @@ export function readBrowserGuestIdleProtection(
   } catch {
     return { ...protection, protection: 'unknown', reason: 'observer' }
   }
-  // Only web and data pages can be freed; files and workspace documents stay.
-  if (!/^(https?|data):/i.test(url)) {
-    return result('url')
-  }
   if (
     owner.audibleChangedAt !== null &&
     performance.now() - owner.audibleChangedAt < RECENT_AUDIO_MS

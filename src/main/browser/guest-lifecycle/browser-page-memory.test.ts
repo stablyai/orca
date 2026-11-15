@@ -26,7 +26,6 @@ vi.mock('../../window/visibility/renderer-publication-throttle', () => ({
   rendererPublicationThrottle: { acquire: throttle }
 }))
 vi.mock('./manager/registration/browser-guest-discard-protection', () => ({
-  markInitialBrowserGuest: vi.fn(),
   readBrowserGuestDiscardProtection: () => ({ protection: 'discardable' })
 }))
 function startNavigation(guest: Electron.WebContents, url = 'https://example.test/b'): void {

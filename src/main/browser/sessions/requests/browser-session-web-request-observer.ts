@@ -42,16 +42,6 @@ type Observer = (
 ) => void
 
 let observer: Observer | null = null
-const guestObservers = new Map<number, Observer>()
-
-export function observeBrowserGuestRequests(webContentsId: number, next: Observer): () => void {
-  guestObservers.set(webContentsId, next)
-  return () => {
-    if (guestObservers.get(webContentsId) === next) {
-      guestObservers.delete(webContentsId)
-    }
-  }
-}
 
 export function setBrowserSessionWebRequestObserver(next: Observer): void {
   observer = next
@@ -63,9 +53,6 @@ export function reportBrowserSessionWebRequest(
   event: ObservedWebRequestEvent,
   details: ObservedWebRequestDetails
 ): void {
-  if (details.webContentsId !== undefined) {
-    guestObservers.get(details.webContentsId)?.(session, event, details)
-  }
   if (!observer) {
     return
   }
