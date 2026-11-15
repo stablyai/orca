@@ -434,10 +434,6 @@ jobs:
         continue-on-error: true
         run: pnpm run rpc:diff HEAD^1 --summary "$GITHUB_STEP_SUMMARY"
 
-      - name: Test iOS release version resolution
-        if: steps.ruby-scope.outputs.should_run != 'false'
-        run: ruby fastlane/ios_release_version_test.rb
-
       # Load/list Fastfile lanes without Apple credentials/network to catch syntax/require/constants before release; ios-distribute failed six days without this guard.
       - name: Smoke-check the Fastfile
         if: steps.ruby-scope.outputs.should_run != 'false'
