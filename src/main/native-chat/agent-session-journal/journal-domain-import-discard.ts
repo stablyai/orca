@@ -19,32 +19,51 @@ export function discardJournalDomainImportPage(
   if (ready?.epoch !== null && ready?.epoch !== undefined) {
     return { more: false, epoch: String(ready.epoch) }
   }
+  return deleteJournalSessionRowsPage(db, sessionId, JOURNAL_EPOCH_TABLES)
+    ? { more: true, epoch: null }
+    : { more: false, epoch: null }
+}
+
+export type JournalSessionTable = { name: string; key: string; payload?: readonly string[] }
+
+/** Delete one bounded page of a chat's rows (64 rows, 1 MiB or 8 ms); true while rows remain. */
+export function deleteJournalSessionRowsPage(
+  db: Database.Database,
+  sessionId: string,
+  tables: readonly JournalSessionTable[],
+  epochColumn = true
+): boolean {
   const start = performance.now()
   let deleted = 0
   let bytes = 0
-  for (const { name, key, payload } of JOURNAL_EPOCH_TABLES) {
-    const columns = ['session_id', 'epoch', ...(key ? key.split(',') : [])]
+  for (const { name, key, payload } of tables) {
+    const columns = [
+      'session_id',
+      ...(epochColumn ? ['epoch'] : []),
+      ...(key ? key.split(',') : [])
+    ]
     const sizes = [...columns, ...(payload ?? [])]
       .map((column) => `COALESCE(octet_length(${column}),0)`)
       .join('+')
     const remove = db.prepare(
       `DELETE FROM ${name} WHERE ${columns.map((column) => `${column}=?`).join(' AND ')}`
     )
+    const order = columns.slice(1).join(',') || 'session_id'
     const rows = db
       .prepare(`SELECT ${columns.join(',')},${sizes} AS work_bytes FROM ${name}
-      WHERE session_id=? ORDER BY ${columns.slice(1).join(',')} LIMIT ?`)
+      WHERE session_id=? ORDER BY ${order} LIMIT ?`)
       .all(sessionId, 64 - deleted)
     for (const row of rows) {
       const size = Number(row.work_bytes)
       if (deleted && bytes + size > 1024 * 1024) {
-        return { more: true, epoch: null }
+        return true
       }
       deleted += Number(remove.run(...columns.map((column) => row[column])).changes)
       bytes += size
       if (deleted === 64 || bytes >= 1024 * 1024 || performance.now() - start >= 8) {
-        return { more: true, epoch: null }
+        return true
       }
     }
   }
-  return { more: false, epoch: null }
+  return false
 }

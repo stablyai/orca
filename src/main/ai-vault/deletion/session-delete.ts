@@ -27,7 +27,7 @@ export async function deleteAiVaultSessionFile(
 
   try {
     for (const removal of removals) {
-      const rejection = await removeOne(removal, removePath)
+      const rejection = await removeAiVaultSessionPath(removal, removePath)
       if (rejection) {
         return { outcome: 'rejected', agent, reason: rejection }
       }
@@ -43,7 +43,7 @@ export async function deleteAiVaultSessionFile(
 }
 
 // Missing companions or externally removed transcripts are successful, idempotent removals.
-async function removeOne(
+export async function removeAiVaultSessionPath(
   removal: AiVaultSessionDeleteRemoval,
   removePath: AiVaultSessionPathRemover
 ): Promise<'unexpected-target-kind' | 'path-outside-known-roots' | null> {

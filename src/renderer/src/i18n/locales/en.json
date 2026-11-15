@@ -22442,7 +22442,10 @@
           "activityDescription": "What each cleanup run removed and kept.",
           "history": "history",
           "runs": "runs",
-          "envFile": ".env"
+          "envFile": ".env",
+          "agentHistory": "agent history",
+          "chatLogs": "chat logs",
+          "diskSpace": "disk space"
         },
         "cleanUpNow": "Clean up now",
         "status": {
@@ -22491,6 +22494,25 @@
           "description": "Selected workspaces will be pinned when you confirm. Pinned workspaces are excluded from automatic cleanup until you unpin them.",
           "named": "Pin and keep {{name}}",
           "label": "Pin and keep"
+        },
+        "agentHistory": {
+          "group": "History",
+          "title": "Delete agent history with the workspace",
+          "description": "When you delete a workspace, also delete its agent chat logs (Claude Code, Codex, OpenCode and the rest) and its Orca chats. History from other workspaces is kept.",
+          "alreadyDeleted": "Workspaces already deleted",
+          "measuring": "Measuring…",
+          "measureFailed": "Couldn't measure: {{error}}",
+          "summary": "History from deleted workspaces: {{sessions}} of {{sessionTotal}} agent sessions ({{size}}) and {{chats}} of {{chatTotal}} Orca chats.",
+          "remoteNote": "Only this computer is checked; workspaces on SSH hosts and servers keep their history.",
+          "delete": "Delete…",
+          "confirmTitle": "Delete history from deleted workspaces?",
+          "confirmBody": "Deletes {{sessions}} agent sessions ({{size}}) and {{chats}} Orca chats from this computer. Anything in use is skipped. This can't be undone.",
+          "cancel": "Cancel",
+          "confirm": "Delete",
+          "deleting": "Deleting…",
+          "deleted": "Deleted {{sessions}} agent sessions and {{chats}} Orca chats.",
+          "skipped": "Kept {{count}} that were in use or could not be removed.",
+          "deleteFailed": "Couldn't delete history from deleted workspaces."
         }
       },
       "repository": {

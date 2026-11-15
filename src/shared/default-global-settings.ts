@@ -40,6 +40,7 @@ export function buildDefaultSettings(args: {
     workspaceCleanupPolicy: getDefaultWorkspaceCleanupRules(),
     nestWorkspaces: true,
     workspaceDirHistory: [],
+    deleteAgentHistoryWithWorkspace: false,
     refreshLocalBaseRefOnWorktreeCreate: false,
     localBaseRefSuggestionDismissed: false,
     autoRenameBranchFromWork: true,

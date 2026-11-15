@@ -21,6 +21,7 @@ import {
   prepareCodexSessionResumeForLaunch
 } from '../agent-accounts/codex-session-resume-launch'
 import { isRecoveryReloadInFlight } from './main-window-lifecycle-flags'
+import { deleteAgentHistoryForRemovedWorkspace } from '../../workspace-agent-history/workspace-agent-history'
 import { RELAY_HOST_CLOSE_REASON } from '../../../shared/remote-runtime/relay/relay-host-close-reason'
 
 let attachmentTail: Promise<void> = Promise.resolve()
@@ -165,7 +166,10 @@ async function installMainWindowCoreServices(
       onBeforeUpdateQuit: () => preserveStateBeforeUpdateRestart({ codexRuntimeHome, store }),
       onBeforeUpdateQuitFailure: 'abort',
       updateInstallMode: resolveUpdateInstallMode(state.isServeMode),
-      onWorktreeLifecycle: emitPluginWorktreeLifecycle
+      onWorktreeLifecycle: (event) => {
+        emitPluginWorktreeLifecycle(event)
+        deleteAgentHistoryForRemovedWorkspace(event)
+      }
     }
   )
   if (window.isDestroyed() || state.mainWindow !== window || state.isQuitting) {

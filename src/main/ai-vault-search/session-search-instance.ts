@@ -131,6 +131,10 @@ export class SessionSearchInstance {
       signal
     )
   }
+  async forgetFiles(paths: readonly string[]): Promise<void> {
+    await this.transition
+    await this.live?.indexer.forgetFiles(paths)
+  }
   async settled(): Promise<void> {
     await this.transition
     await this.live?.indexer.settled()

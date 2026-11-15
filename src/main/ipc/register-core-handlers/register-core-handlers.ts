@@ -104,6 +104,8 @@ import {
   type CoreHandlerLifecycleOptions
 } from './core-handler-lifecycle'
 
+import { registerWorkspaceAgentHistoryHandlers } from '../workspace-agent-history/workspace-agent-history-handlers'
+
 let registration: Promise<void> | null = null
 
 export async function registerCoreHandlers(
@@ -237,6 +239,7 @@ export async function registerCoreHandlers(
         ),
       ensureStructuredSessionOwnership
     })
+    registerWorkspaceAgentHistoryHandlers(store, runtime, ensureStructuredSessionOwnership)
     registerAiVaultHandlers({
       getUserDataPath: () => app.getPath('userData'),
       ensureStructuredSessionOwnership,

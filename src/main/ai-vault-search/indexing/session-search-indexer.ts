@@ -119,6 +119,20 @@ export class SessionSearchIndexer {
     return this.tick()
   }
 
+  /** Drop rows for transcripts Orca just deleted instead of waiting for a sweep to prove them gone. */
+  async forgetFiles(paths: readonly string[]): Promise<void> {
+    for (const [index, path] of paths.entries()) {
+      if (this.closed) {
+        return
+      }
+      this.store.removeFile(path)
+      if ((index + 1) % 256 === 0) {
+        await this.store.flush()
+      }
+    }
+    await this.store.flush()
+  }
+
   generation(): number {
     return this.store.generation
   }

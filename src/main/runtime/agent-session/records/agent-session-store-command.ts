@@ -66,6 +66,7 @@ export type AgentSessionStoreCommand =
       legacyTabIds: readonly string[]
     }
   | { kind: 'permission-backfill'; fullAccess: ReadonlyMap<string, boolean> }
+  | { kind: 'forget'; sessionIds: readonly string[] }
 
 export type AgentSessionStoreCommandResult<C extends AgentSessionStoreCommand> = C extends {
   kind: 'reserve' | 'found'
@@ -87,7 +88,9 @@ export type AgentSessionStoreCommandResult<C extends AgentSessionStoreCommand> =
                 ? AgentSessionOperationClaim
                 : C extends { kind: 'tab-visibility' }
                   ? string | null
-                  : void
+                  : C extends { kind: 'forget' }
+                    ? string[]
+                    : void
 
 export function agentSessionStoreCommandSelection(command: AgentSessionStoreCommand): {
   recordIds: string[]
@@ -148,6 +151,8 @@ export function agentSessionStoreCommandSelection(command: AgentSessionStoreComm
       return { recordIds: [command.sessionId], legacyRecordIds: command.legacyTabIds, tabs: true }
     case 'permission-backfill':
       return { recordIds: [], missingPermission: true }
+    case 'forget':
+      return { recordIds: [...command.sessionIds], tabs: true }
   }
 }
 
@@ -233,5 +238,23 @@ export function applyAgentSessionStoreCommand(
         }
       }
       return undefined
+    case 'forget':
+      return forgetReleasedAgentSessions(state, command.sessionIds)
   }
+}
+
+// A reserved, live or conflicted lease means something may still write this chat.
+function forgetReleasedAgentSessions(
+  state: AgentSessionStoreState,
+  sessionIds: readonly string[]
+): string[] {
+  return sessionIds.filter((sessionId) => {
+    const record = state.records.get(sessionId)
+    if (!record || record.lease.claimStatus !== 'released' || record.lease.unreconciled) {
+      return false
+    }
+    state.records.delete(sessionId)
+    state.sessionTabs?.hide(sessionId)
+    return true
+  })
 }

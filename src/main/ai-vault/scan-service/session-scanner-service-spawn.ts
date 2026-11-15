@@ -31,6 +31,10 @@ import type {
   AiVaultServiceSubagentRequest,
   AiVaultSessionSearchInit
 } from './session-scanner-service-protocol'
+import type {
+  WorkspaceHistoryRequest,
+  WorkspaceHistoryResult
+} from '../workspace-history/workspace-history-run'
 import {
   requestLocalAiVaultScan,
   type LocalAiVaultScanProgressHandle
@@ -149,6 +153,16 @@ export function clearSessionSearchInService(): Promise<void> {
 
 export function updateSessionSearchInService(init: AiVaultSessionSearchInit): void {
   getSharedClient().updateSessionSearch(init)
+}
+
+export function runWorkspaceHistoryInService(
+  request: WorkspaceHistoryRequest,
+  signal?: AbortSignal
+): Promise<WorkspaceHistoryResult> {
+  return getSharedClient().request(
+    { type: 'request', operation: 'workspaceHistory', request },
+    signal
+  )
 }
 
 export function invalidateAiVaultServiceCache(paths: string[]): Promise<void> {

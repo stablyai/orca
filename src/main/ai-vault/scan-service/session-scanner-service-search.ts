@@ -116,6 +116,11 @@ export class SessionScannerServiceSearch {
     }
   }
 
+  /** Drop index rows for transcripts this service deleted. */
+  forgetFiles(paths: readonly string[]): Promise<void> {
+    return this.transition.then(() => this.instance?.forgetFiles(paths))
+  }
+
   close(): Promise<void> {
     return (this.transition = this.transition.then(() => this.closeInstance()))
   }

@@ -10,7 +10,7 @@ import { classifySqliteReadFailure } from '../../../../sqlite/sqlite-read-failur
 import { errorMessage } from '../../../../../shared/errors/error-message'
 
 // Allow bounded contention waits for native reads without adding retries atop SQLite’s busy handler (#15036).
-const OPENCODE_SQLITE_BUSY_TIMEOUT_MS = 1_500
+export const OPENCODE_SQLITE_BUSY_TIMEOUT_MS = 1_500
 
 /** WSL-share locks fail even when idle; waiting wastes the worker deadline and can exceed the requested timeout. */
 export function openCodeBusyTimeoutMs(dbPath: string): number {

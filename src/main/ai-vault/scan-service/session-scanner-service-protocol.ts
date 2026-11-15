@@ -19,6 +19,10 @@ import type { ReadAiVaultFirstUserPromptArgs } from '../prompts/session-first-us
 import type { SessionParseCachePersistenceOptions } from '../parse-cache/session-parse-cache-persistence'
 import type { AiVaultScanOptions } from '../session-scanner-types'
 import type { AiVaultScanWork } from '../../../shared/ai-vault/scanning/ai-vault-scan-progress'
+import type {
+  WorkspaceHistoryRequest,
+  WorkspaceHistoryResult
+} from '../workspace-history/workspace-history-run'
 
 export const AI_VAULT_SERVICE_PROTOCOL_VERSION = 1
 
@@ -34,6 +38,7 @@ export type AiVaultServiceOperation =
   | 'searchStatus'
   | 'searchReconcile'
   | 'searchClear'
+  | 'workspaceHistory'
 
 const AI_VAULT_SERVICE_OPERATIONS: ReadonlySet<string> = new Set<AiVaultServiceOperation>([
   'scan',
@@ -43,7 +48,8 @@ const AI_VAULT_SERVICE_OPERATIONS: ReadonlySet<string> = new Set<AiVaultServiceO
   'searchSessions',
   'searchStatus',
   'searchReconcile',
-  'searchClear'
+  'searchClear',
+  'workspaceHistory'
 ])
 
 export type AiVaultServiceSubagentRequest = {
@@ -92,6 +98,7 @@ export type AiVaultServiceRequestBody =
   | { type: 'request'; operation: 'searchStatus' }
   | { type: 'request'; operation: 'searchReconcile' }
   | { type: 'request'; operation: 'searchClear' }
+  | { type: 'request'; operation: 'workspaceHistory'; request: WorkspaceHistoryRequest }
 
 export type AiVaultServiceRequest = AiVaultServiceRequestBody & { id: number }
 
@@ -128,6 +135,7 @@ export type AiVaultServiceResultValue =
   | { operation: 'searchStatus'; value: AiVaultSearchStatus }
   | { operation: 'searchReconcile'; value: null }
   | { operation: 'searchClear'; value: null }
+  | { operation: 'workspaceHistory'; value: WorkspaceHistoryResult }
 
 export type AiVaultServiceChildMessage =
   | { type: 'trace'; record: unknown }
@@ -144,7 +152,9 @@ export type AiVaultServiceChildMessage =
 
 /** Keep interactive requests from queueing behind scans and title reads. */
 export function aiVaultServiceLane(operation: AiVaultServiceOperation): AiVaultServiceLane {
-  return operation === 'scan' || operation === 'titles' ? 'cache' : 'interactive'
+  return operation === 'scan' || operation === 'titles' || operation === 'workspaceHistory'
+    ? 'cache'
+    : 'interactive'
 }
 
 export function isAiVaultServiceRequest(value: unknown): value is AiVaultServiceRequest {

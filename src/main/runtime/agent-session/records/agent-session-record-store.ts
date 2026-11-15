@@ -53,6 +53,7 @@ import type { JournalSqlDatabase } from '../../../native-chat/agent-session-jour
 import type { JournalOperationReceipt } from '../../../native-chat/agent-session-journal/writing/journal-row-writer'
 import { agentSessionOperationOutcomeReceipt } from '../agent-session-operation-receipt'
 import { AgentSessionStoreTransactions } from './agent-session-store-transactions'
+import { purgeForgottenJournalChat } from '../../../native-chat/agent-session-journal/journal-chat-purge'
 import { createAgentSessionFoundingStore } from './agent-session-founding-store'
 import type {
   AgentSessionUserNameWrite,
@@ -181,6 +182,15 @@ export class AgentSessionRecordStore extends AgentSessionRecordTabs {
     this.updateRecord(sessionId, { kind: 'launch-directory', launchDirectory, now: Date.now() })
 
   /** Unreadable records still count as present and can never grant writers. */
+  /** Delete chats nothing holds, then their journals; returns the ids actually deleted. */
+  async forgetConversations(sessionIds: readonly string[]): Promise<string[]> {
+    const forgotten = await this.transactions.command({ kind: 'forget', sessionIds })
+    for (const sessionId of forgotten) {
+      await purgeForgottenJournalChat(this.journalDatabase, sessionId)
+    }
+    return forgotten
+  }
+
   isSessionUnreadable = (sessionId: string): boolean => this.state.unreadableRecords.has(sessionId)
 
   listOperationRows = (): AgentSessionOperationRow[] => [...this.state.operations.values()]

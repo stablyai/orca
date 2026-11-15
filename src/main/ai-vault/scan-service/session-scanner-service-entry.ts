@@ -27,6 +27,7 @@ import {
 } from '../session-titles/session-title-file-reader'
 import { resolveHostReadableAiVaultTitleRequests } from '../session-titles/session-title-request-paths'
 import { listLocalAiVaultSubagentSessions } from './session-subagent-reader'
+import { runWorkspaceHistory } from '../workspace-history/workspace-history-run'
 import {
   noteWslDistroMayHaveStopped,
   noteWslDistroWoken
@@ -107,6 +108,16 @@ async function executeRequest(request: AiVaultServiceRequest): Promise<AiVaultSe
         operation: 'subagents',
         value: await listLocalAiVaultSubagentSessions(request.request)
       }
+    }
+    if (request.operation === 'workspaceHistory') {
+      const value = await runWorkspaceHistory(request.request, controller.signal)
+      if (value.deletedFilePaths.length > 0) {
+        titleIndex.clear()
+        void sessionSearch.forgetFiles(value.deletedFilePaths).catch((error: unknown) => {
+          console.warn('[ai-vault-search] could not drop deleted transcripts:', error)
+        })
+      }
+      return { operation: 'workspaceHistory', value }
     }
     if (request.operation === 'firstPrompt') {
       return {

@@ -57,6 +57,8 @@ export type GlobalSettings = GlobalSettingsBase & {
   hostSettingOverrides?: Partial<Record<ExecutionHostId, HostSettingOverrides>>
   nestWorkspaces: boolean
   workspaceDirHistory?: OrcaWorkspaceLayout[]
+  /** Deleting a workspace also deletes its agent transcripts and Orca chats on this computer. */
+  deleteAgentHistoryWithWorkspace: boolean
   refreshLocalBaseRefOnWorktreeCreate: boolean
   /** Permanently dismisses the suggestion to enable local base refresh. */
   localBaseRefSuggestionDismissed: boolean

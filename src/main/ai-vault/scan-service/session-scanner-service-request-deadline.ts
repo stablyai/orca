@@ -13,7 +13,7 @@ function armAiVaultServiceRequestDeadline(
   call: AiVaultServicePendingCall,
   onTimeout: (error: Error) => void
 ): void {
-  if (call.request.operation === 'scan') {
+  if (call.request.operation === 'scan' || call.request.operation === 'workspaceHistory') {
     return
   }
   const timeoutMs = AI_VAULT_SERVICE_INTERACTIVE_TIMEOUT_MS

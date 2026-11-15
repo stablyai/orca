@@ -14,6 +14,7 @@ import type { Translate } from '@/i18n/use-translate'
 import type { SettingsRenderContext } from './settings-render-context'
 import { SettingsGroup } from '../section-layout/SettingsGroup'
 import { WorkspaceCleanupSettingsPane } from '../workspace-cleanup/WorkspaceCleanupSettingsPane'
+import { WorkspaceAgentHistorySetting } from '../workspace-cleanup/workspace-agent-history-setting'
 import { runtimeTargetEnvironmentId } from '@/runtime/rpc/targets/runtime-client-target'
 
 export function renderOrcaAccountSettingsSection(
@@ -256,13 +257,20 @@ export function renderWorkspaceCleanupSettingsSection(
       searchEntries={navigation.getSectionSearchEntries('workspace-cleanup')}
     >
       {view.isSectionMounted('workspace-cleanup') ? (
-        <WorkspaceCleanupSettingsPane
-          // A change waiting on its preview belongs to the host it was made for.
-          key={runtimeTargetEnvironmentId(model.settingsHostScope.target) ?? 'local'}
-          hostScope={model.settingsHostScope}
-          settings={model.settings}
-          updateSettings={model.updateSettingsOrThrow}
-        />
+        <>
+          <WorkspaceCleanupSettingsPane
+            // A change waiting on its preview belongs to the host it was made for.
+            key={runtimeTargetEnvironmentId(model.settingsHostScope.target) ?? 'local'}
+            hostScope={model.settingsHostScope}
+            settings={model.settings}
+            updateSettings={model.updateSettingsOrThrow}
+          />
+          <WorkspaceAgentHistorySetting
+            hostScope={model.settingsHostScope}
+            settings={model.settings}
+            updateSettings={model.updateSettingsOrThrow}
+          />
+        </>
       ) : null}
     </SettingsSection>
   ) : null
