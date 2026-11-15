@@ -2,7 +2,6 @@
 // run `pnpm run generate:rpc-params-catalog`.
 import type { z } from 'zod'
 import { HostAccountLaunchEnvParams } from '../agent-launch/startup/host-account-launch-env'
-import { AgentSkillShareRequestSchema } from '../skills/sharing/agent-skill-sharing-contract'
 import {
   AiVaultSearchRequestSchema,
   AiVaultSearchStatusRequestSchema,
@@ -23,11 +22,6 @@ import {
 import { BrowserClientHostRequestResultParams } from '../browser/client-hosting/browser-client-host-request-protocol'
 import { BrowserClientPageMetadataParams } from '../browser/client-hosting/browser-client-page-metadata-protocol'
 import { BrowserPageInitializationActionParams } from '../browser/client-hosting/browser-page-initialization-action'
-import {
-  BundledSkillAutoUpdateRequestSchema,
-  BundledSkillExecuteRequestSchema,
-  BundledSkillPlanRequestSchema
-} from '../skills/bundled/bundled-skill-plan'
 import { DelegatedMobileDeviceSyncParamsSchema } from '../delegated-mobile-device-contract'
 import {
   DesktopBrowserBridgeAttachParams,
@@ -798,13 +792,19 @@ import {
 import { WorktreeAdoptProvisionedRoot } from './workspaces/worktree-provisioned-root-params'
 import { RepoIconDataUrlsParams } from '../sidebar-list/catalog/repo-icon-data-urls-contract'
 import { SidebarInputsReadParams } from '../sidebar-list/feed/sidebar-inputs-feed-contract'
-import { SkillBundleInstallRequestSchema } from '../skills/installation/skill-bundle-install-contract'
+import {
+  BundledSkillAutoUpdateRequestSchema,
+  BundledSkillExecuteRequestSchema,
+  BundledSkillPlanRequestSchema
+} from '../skills/bundled/bundled-skill-plan'
 import { SkillDeleteRequestSchema } from '../skills/deletion/skill-delete-contract'
+import { SkillBundleInstallRequestSchema } from '../skills/installation/skill-bundle-install-contract'
 import {
   SkillInstallPreviewRequestSchema,
   SkillInstallRequestSchema,
   SkillRemoveRequestSchema
 } from '../skills/installation/skill-install-contract'
+import { AgentSkillShareRequestSchema } from '../skills/sharing/agent-skill-sharing-contract'
 import {
   SkillUploadBeginRequestSchema,
   SkillUploadChunkRequestSchema,
