@@ -1,4 +1,7 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { mkdtempSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const { gitExecFileAsyncMock } = vi.hoisted(() => ({
   gitExecFileAsyncMock:
@@ -10,11 +13,6 @@ vi.mock('../../command-runner/git-exec-file', async (importOriginal) => ({
   gitExecFileAsync: gitExecFileAsyncMock
 }))
 
-// The real scheduler defers grants through queueMicrotask, which these fake timers hold back.
-vi.mock('../../command-runner/admission/git-subprocess-admission', () => ({
-  acquireGitAdmission: async () => ({ queueWaitMs: 0, release: () => {} })
-}))
-
 vi.mock('../../command-runner/host-routing/wsl-path-translation', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   translateWslOutputPaths: (output: string) => output
@@ -24,6 +22,10 @@ import {
   LOCAL_BASE_REF_REFRESH_WAIT_MS,
   refreshLocalBaseRefForWorktreeCreate
 } from './worktree-base-refresh'
+
+// A real, empty Git common dir: no rebase or bisect reserves main.
+const commonDir = mkdtempSync(join(tmpdir(), 'orca-refresh-contention-common-'))
+afterAll(() => rmSync(commonDir, { recursive: true, force: true }))
 
 type GitFake = {
   mutate: () => Promise<{ stdout: string }>
@@ -48,6 +50,9 @@ function installGitFake(fake: GitFake): void {
   gitExecFileAsyncMock.mockImplementation(async (args: string[]) => {
     const command = commandOf(args)
     if (command === 'rev-parse') {
+      if (args[1] === '--git-common-dir') {
+        return { stdout: `${commonDir}\n` }
+      }
       return { stdout: args[2] === 'refs/heads/main^{commit}' ? `${localMain}\n` : 'remote-main\n' }
     }
     if (command === 'rev-list') {
@@ -57,7 +62,8 @@ function installGitFake(fake: GitFake): void {
       return { stdout: '' }
     }
     if (command === 'merge-base') {
-      if (fake.localContainsTarget?.()) {
+      // Local is still an ancestor of the target unless asked whether it already contains it.
+      if (args[2] !== 'remote-main' || fake.localContainsTarget?.()) {
         return { stdout: '' }
       }
       throw Object.assign(new Error('not an ancestor'), { code: 1 })
@@ -83,10 +89,8 @@ function mutationCalls(): string[][] {
 
 describe('refreshLocalBaseRefForWorktreeCreate lock contention', () => {
   beforeEach(() => {
-    vi.useFakeTimers()
     gitExecFileAsyncMock.mockReset()
   })
-  afterEach(() => vi.useRealTimers())
 
   it('does not retry a failure that is not lock contention', async () => {
     const casMismatch = Object.assign(new Error('Command failed: git update-ref'), {
@@ -94,10 +98,7 @@ describe('refreshLocalBaseRefForWorktreeCreate lock contention', () => {
     })
     installGitFake({ mutate: () => Promise.reject(casMismatch) })
 
-    const pending = refresh()
-    await vi.runAllTimersAsync()
-
-    await expect(pending).resolves.toMatchObject({ status: 'skipped_error' })
+    await expect(refresh()).resolves.toMatchObject({ status: 'skipped_error' })
     expect(mutationCalls()).toEqual([
       [
         'update-ref',
@@ -141,6 +142,9 @@ describe('refreshLocalBaseRefForWorktreeCreate runs one refresh at a time per br
           return { stdout: command === 'rev-parse' ? 'current\n' : '' }
         }
         if (command === 'rev-parse') {
+          if (args[1] === '--git-common-dir') {
+            return { stdout: `${commonDir}\n` }
+          }
           return { stdout: args[2]?.startsWith('refs/heads/') ? `${localOid}\n` : 'remote-main\n' }
         }
         if (command === 'rev-list') {

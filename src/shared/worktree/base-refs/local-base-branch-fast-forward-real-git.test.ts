@@ -142,7 +142,7 @@ describe('fastForwardLocalBaseBranch against real Git', () => {
 
     const outcome = await fastForward(fixture, realGit(fixture, moveMain).git)
 
-    expect(outcome).toEqual({ status: 'skipped_error' })
+    expect(outcome).toEqual({ status: 'skipped_not_fast_forward' })
     expect(fixture.git(['rev-parse', 'main'])).toBe(userCommit)
   })
 

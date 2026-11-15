@@ -147,6 +147,21 @@ describe('local base refresh of a branch a rebase has reserved with real Git', (
     expect(spy.writes()).toBe(0)
     expect(git(repoPath, ['rev-parse', 'main'])).toBe(localOid)
   })
+
+  it('leaves a branch alone while a linked worktree bisects it', async () => {
+    const { repoPath, lockPath, localOid } = await createBehindRepo()
+    await rm(lockPath, { force: true })
+    const linkedPath = join(repoPath, '..', 'linked')
+    git(repoPath, ['worktree', 'add', '--quiet', linkedPath, 'main'])
+    git(linkedPath, ['bisect', 'start'])
+    git(linkedPath, ['checkout', '--quiet', '--detach'])
+    const spy = spyOnFastForwards()
+
+    await expect(refresh(repoPath)).resolves.toBeUndefined()
+
+    expect(spy.writes()).toBe(0)
+    expect(git(repoPath, ['rev-parse', 'main'])).toBe(localOid)
+  })
 })
 
 describe('local base refresh against a held ref lock with real Git', () => {

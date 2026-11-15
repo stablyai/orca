@@ -59,7 +59,7 @@ export async function inspectLocalBaseBranch(
   }
 
   try {
-    if (await isCheckedOut(git, repoPath, fullRef)) {
+    if (await isBranchInUse(git, repoPath, fullRef)) {
       return { status: 'nothing_to_do' }
     }
   } catch {
@@ -99,10 +99,7 @@ export async function fastForwardLocalBaseBranch(
     const moved = await retryOnGitLockContention(() =>
       // One grant keeps the last ownership check next to the write; a checkout since then would be stranded.
       git.runExclusive(repoPath, async (held) => {
-        if (
-          (await isCheckedOut(held, repoPath, fullRef)) ||
-          (await held.listReservedBranches(repoPath)).has(fullRef)
-        ) {
+        if (await isBranchInUse(held, repoPath, fullRef)) {
           return false
         }
         await held.exec(
@@ -121,10 +118,13 @@ export async function fastForwardLocalBaseBranch(
     )
     return moved ? { status: 'updated' } : { status: 'nothing_to_do' }
   } catch {
-    // A concurrent pull/Orca update may already have moved local.
-    return (await localContains(git, repoPath, fullRef, remoteOid))
-      ? { status: 'updated' }
-      : { status: 'skipped_error' }
+    // A concurrent pull/Orca update may already have moved local; a user commit leaves it diverged.
+    if (await isAncestor(git, repoPath, remoteOid, fullRef)) {
+      return { status: 'updated' }
+    }
+    return (await isAncestor(git, repoPath, fullRef, remoteOid))
+      ? { status: 'skipped_error' }
+      : { status: 'skipped_not_fast_forward' }
   }
 }
 
@@ -144,12 +144,16 @@ export function toLocalBaseRefRefreshResult(
   }
 }
 
-async function isCheckedOut(
+/** Git's in-use rule: checked out in a worktree, or reserved by a rebase or bisect there. */
+async function isBranchInUse(
   git: LocalBaseBranchGit,
   repoPath: string,
   fullRef: string
 ): Promise<boolean> {
-  return (await git.listWorktrees(repoPath)).some((wt) => wt.branch === fullRef)
+  return (
+    (await git.listReservedBranches(repoPath)).has(fullRef) ||
+    (await git.listWorktrees(repoPath)).some((wt) => wt.branch === fullRef)
+  )
 }
 
 async function revParseCommit(
@@ -202,14 +206,14 @@ async function isRefProvenAbsent(
   }
 }
 
-async function localContains(
+async function isAncestor(
   git: LocalBaseBranchGit,
   repoPath: string,
-  fullRef: string,
-  oid: string
+  ancestor: string,
+  descendant: string
 ): Promise<boolean> {
   try {
-    await git.exec(['merge-base', '--is-ancestor', oid, fullRef], repoPath)
+    await git.exec(['merge-base', '--is-ancestor', ancestor, descendant], repoPath)
     return true
   } catch {
     return false

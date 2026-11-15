@@ -1,4 +1,7 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { mkdtempSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const {
   gitExecFileAsyncMock,
@@ -39,6 +42,10 @@ import { registerWorktreeSuiteHooks } from '../testing/worktree-test-harness'
 
 registerWorktreeSuiteHooks()
 
+// A real, empty Git common dir: no rebase or bisect reserves main.
+const commonDir = mkdtempSync(join(tmpdir(), 'orca-add-refresh-common-'))
+afterAll(() => rmSync(commonDir, { recursive: true, force: true }))
+
 describe('addWorktree', () => {
   afterEach(() => vi.restoreAllMocks())
   beforeEach(() => {
@@ -54,12 +61,14 @@ describe('addWorktree', () => {
     })
     gitExecFileAsyncMock
       .mockReset()
-      .mockImplementation((args: string[], opts: unknown) =>
-        (args[0] === 'worktree' && args[1] === 'add') ||
-        args[0] === 'config' ||
-        (args[0] === 'branch' && args[1] === '--set-upstream-to')
-          ? checkoutGitMock(args, opts)
-          : refreshGitMock(args, opts)
+      .mockImplementation(async (args: string[], opts: unknown) =>
+        args[0] === 'rev-parse' && args[1] === '--git-common-dir'
+          ? { stdout: `${commonDir}\n` }
+          : (args[0] === 'worktree' && args[1] === 'add') ||
+              args[0] === 'config' ||
+              (args[0] === 'branch' && args[1] === '--set-upstream-to')
+            ? checkoutGitMock(args, opts)
+            : refreshGitMock(args, opts)
       )
     gitExecFileSyncMock.mockReset()
     translateWslOutputPathsMock.mockClear()
@@ -73,7 +82,6 @@ describe('addWorktree', () => {
     })
     queueBehindInspection()
       .mockResolvedValueOnce({ stdout: '' })
-      .mockResolvedValueOnce({ stdout: '.git\n' })
       .mockImplementationOnce(
         () =>
           new Promise((resolve) => {
@@ -100,7 +108,6 @@ describe('addWorktree', () => {
   it('fast-forwards local base via update-ref when localBranch is not checked out', async () => {
     queueBehindInspection()
       .mockResolvedValueOnce({ stdout: '' })
-      .mockResolvedValueOnce({ stdout: '.git\n' })
       .mockResolvedValueOnce({ stdout: '' })
 
     const result = await addWorktree('/repo', '/repo-feature', 'feature/test', 'origin/main', true)
