@@ -175,6 +175,8 @@ export type LifecycleDeps = {
     egressPreset?: EgressPreset
     /** CODEX-FIREWALL-SWAP: swap the Codex account token at the sandbox firewall for its hot calls (no Worker hop). */
     codexFirewallSwap?: boolean
+    /** EGRESS_SWAP_MODE: the default swap mode for sandboxes without their own (design §3). Unset: proxy. */
+    egressSwapMode?: EgressSwapMode
     /** SHARE_LINK_SECRET: each session's share-proxy key derives from it; unset = no share links. */
     shareLinkSecret?: string
   }
@@ -355,6 +357,17 @@ export function assertEgressAllowlistUsable(deps: Pick<LifecycleDeps, 'config'>,
   }
 }
 
+export type EgressSwapMode = 'proxy' | 'firewall'
+
+export function parseEgressSwapMode(value: string | null | undefined): EgressSwapMode | undefined {
+  return value === 'proxy' || value === 'firewall' ? value : undefined
+}
+
+/** The swap mode this sandbox runs in: its own override (sandboxes.egress_swap_mode), else the environment's. */
+export function egressSwapModeFor(deps: Pick<LifecycleDeps, 'config'>, row: Pick<SandboxRow, 'egress_swap_mode'>): EgressSwapMode {
+  return parseEgressSwapMode(row.egress_swap_mode) ?? deps.config.egressSwapMode ?? 'proxy'
+}
+
 /** A Codex account token the sandbox firewall swaps itself, on CODEX_FIREWALL_PATHS only (CODEX-FIREWALL-SWAP). */
 export type FirewallAccount = { agent: 'codex'; host: string; authorization: string; accountId: string | null }
 
@@ -365,7 +378,8 @@ export type FirewallAccount = { agent: 'codex'; host: string; authorization: str
  * token is usable. Anything else leaves the proxy route alone, which answers the signed-out cases.
  */
 export async function firewallAccountsFor(deps: LifecycleDeps, row: SandboxRow): Promise<FirewallAccount[]> {
-  if (!deps.config.codexFirewallSwap || !deps.config.egressProxyUrl || !deps.secrets || !deps.secrets.accountProviders?.codex) {
+  const firewallMode = deps.config.codexFirewallSwap || egressSwapModeFor(deps, row) === 'firewall'
+  if (!firewallMode || !deps.config.egressProxyUrl || !deps.secrets || !deps.secrets.accountProviders?.codex) {
     return []
   }
   if (isSharedWorkspace(row)) {
@@ -690,31 +704,121 @@ export async function refreshGitCredentials(
   row: SandboxRow,
   sessionId: string
 ): Promise<{ expiresAt: number } | null> {
-  const [members, firewall] = await Promise.all([memberPlaceholdersFor(deps, row), firewallAccountsFor(deps, row)])
-  const minted = deps.github && row.repo_url ? await deps.github.tokenForRepo(row.repo_url, row.account_id) : null
-  if (!minted) {
-    if (members.length > 0 || firewall.length > 0) {
-      await deps.provider.updateNetworkPolicy(sessionId, egressPolicy(deps, row, undefined, members, firewall))
-    }
-    return null
-  }
-  await deps.provider.updateNetworkPolicy(sessionId, egressPolicy(deps, row, minted.token, members, firewall))
-  return { expiresAt: minted.expiresAt }
+  const applied = await applySandboxPolicy(deps, row, 'git_refresh', { sessionId })
+  return applied.gitExpiresAt !== null ? { expiresAt: applied.gitExpiresAt } : null
+}
+
+/** @deprecated EGRESS-COMPILE: use applySandboxPolicy (kept one release for callers still on it). */
+export async function rewriteLivePolicy(deps: LifecycleDeps, row: SandboxRow, sessionId: string): Promise<{ expiresAt: number } | null> {
+  const applied = await applySandboxPolicy(deps, row, 'rewrite', { sessionId })
+  return applied.gitExpiresAt !== null ? { expiresAt: applied.gitExpiresAt } : null
 }
 
 /**
- * Rewrites a running session's whole policy from current state: what a policy write elsewhere must use, so
- * the git route, member identities and firewall-swapped account tokens are never dropped by it.
+ * EGRESS-COMPILE: the whole policy for this sandbox from current state. A pure read of credentials (it may
+ * mint the GitHub App token, which is idempotent and cached, but never spends a refresh token).
  */
-export async function rewriteLivePolicy(deps: LifecycleDeps, row: SandboxRow, sessionId: string): Promise<{ expiresAt: number } | null> {
-  const git = await refreshGitCredentials(deps, row, sessionId)
-  if (!git) {
-    const [members, firewall] = await Promise.all([memberPlaceholdersFor(deps, row), firewallAccountsFor(deps, row)])
-    if (members.length === 0 && firewall.length === 0) {
-      await deps.provider.updateNetworkPolicy(sessionId, egressPolicy(deps, row))
+export async function compileSandboxPolicy(
+  deps: LifecycleDeps,
+  row: SandboxRow
+): Promise<{ policy: ReturnType<typeof egressPolicy>; gitExpiresAt: number | null }> {
+  const [members, firewall, minted] = await Promise.all([
+    memberPlaceholdersFor(deps, row),
+    firewallAccountsFor(deps, row),
+    deps.github && row.repo_url ? deps.github.tokenForRepo(row.repo_url, row.account_id) : Promise.resolve(null)
+  ])
+  return { policy: egressPolicy(deps, row, minted?.token, members, firewall), gitExpiresAt: minted?.expiresAt ?? null }
+}
+
+/**
+ * Policy writes that take access away (design §7.1). A narrowing write that still fails after its retries
+ * stops the session rather than leave a real credential live in the firewall; any other failure only marks
+ * the row stale for reconcile to retry, the old policy staying live meanwhile.
+ */
+export const NARROWING_POLICY_REASONS: ReadonlySet<string> = new Set([
+  'account_revoked',
+  'account_signed_out',
+  'credential_deleted',
+  'share',
+  'owner_changed',
+  'member_removed',
+  'app_uninstalled',
+  'binding_revoked',
+  'kill_switch',
+  'mode_change'
+])
+
+const POLICY_WRITE_TRIES = 3
+const policyChains = new Map<string, Promise<unknown>>()
+let lastGeneration = 0
+
+export type AppliedPolicy = { applied: boolean; gitExpiresAt: number | null; generation: number | null }
+
+/**
+ * EGRESS-COMPILE: THE way to write a running session's policy. Compiles everything from current state, so no
+ * writer can drop a class (git route, member identities, account tokens, keys). One at a time per sandbox in
+ * this isolate, and ordered across isolates by policy_generation: an older compile never lands over a newer
+ * one. Values are never logged; failures log the provider's code only.
+ */
+export function applySandboxPolicy(
+  deps: LifecycleDeps,
+  row: SandboxRow,
+  reason: string,
+  options: { sessionId?: string } = {}
+): Promise<AppliedPolicy> {
+  const previous = policyChains.get(row.id) ?? Promise.resolve()
+  const next = previous.catch(() => undefined).then(() => applyOnce(deps, row, reason, options.sessionId ?? row.session_id))
+  policyChains.set(row.id, next)
+  void next.finally(() => {
+    if (policyChains.get(row.id) === next) {
+      policyChains.delete(row.id)
+    }
+  }).catch(() => undefined)
+  return next
+}
+
+async function applyOnce(deps: LifecycleDeps, row: SandboxRow, reason: string, sessionId: string | null): Promise<AppliedPolicy> {
+  if (!sessionId) {
+    return { applied: false, gitExpiresAt: null, generation: null }
+  }
+  const started = deps.now()
+  const generation = (lastGeneration = Math.max(lastGeneration + 1, started))
+  const claim = await deps.db
+    .prepare('UPDATE sandboxes SET policy_generation = ? WHERE id = ? AND (policy_generation IS NULL OR policy_generation < ?)')
+    .bind(generation, row.id, generation)
+    .run()
+  if (claim.meta.changes === 0) {
+    // A newer write (another isolate) owns the policy now; it compiled from state at least as fresh.
+    return { applied: false, gitExpiresAt: null, generation: null }
+  }
+  let failure: unknown = null
+  for (let attempt = 0; attempt < POLICY_WRITE_TRIES; attempt++) {
+    try {
+      const { policy, gitExpiresAt } = await compileSandboxPolicy(deps, row)
+      await deps.provider.updateNetworkPolicy(sessionId, policy)
+      await deps.db.prepare('UPDATE sandboxes SET policy_stale_at = NULL WHERE id = ? AND policy_stale_at IS NOT NULL').bind(row.id).run()
+      console.log(JSON.stringify({ event: 'policy_applied', sandboxId: row.id, reason, ms: deps.now() - started }))
+      return { applied: true, gitExpiresAt, generation }
+    } catch (error) {
+      failure = error
     }
   }
-  return git
+  const code = failure instanceof ProviderError ? failure.code ?? `status_${failure.status}` : failure instanceof Error ? failure.name : 'unknown'
+  const narrowing = NARROWING_POLICY_REASONS.has(reason)
+  console.error(JSON.stringify({ event: 'policy_apply_failed', sandboxId: row.id, reason, narrowing, code }))
+  if (narrowing) {
+    // Fail closed: the old policy may still hold a credential that must be gone now. Sleep it (snapshot kept);
+    // if even that fails, stop the session outright.
+    const fresh = await getSandbox(deps.db, row.id).catch(() => null)
+    const slept = fresh && fresh.status === 'running' ? await suspendSandbox(deps, fresh).then(() => true, () => false) : false
+    if (!slept) {
+      await deps.provider.stopSession(sessionId).catch(() => undefined)
+    }
+    console.error(JSON.stringify({ event: 'policy_narrowing_failed', sandboxId: row.id, reason, slept }))
+  } else {
+    await deps.db.prepare('UPDATE sandboxes SET policy_stale_at = ? WHERE id = ?').bind(deps.now(), row.id).run()
+  }
+  throw failure
 }
 
 /** Sets the workspace placeholder header in the VM user's global git config (no secret: a placeholder). */
