@@ -76,7 +76,8 @@ describe('prepared checkout tip refresh', () => {
         repo.path,
         entry.preparedPath,
         expect.anything(),
-        entry.lockReason
+        entry.lockReason,
+        null
       )
       expect(listPreparations()).toEqual([])
     } finally {
@@ -111,7 +112,8 @@ describe('prepared checkout tip refresh', () => {
       repo.path,
       entry.preparedPath,
       expect.anything(),
-      entry.lockReason
+      entry.lockReason,
+      null
     )
   })
 

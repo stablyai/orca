@@ -1,6 +1,6 @@
-import { buildLinearIssueLinkedWorkItem } from '@/lib/linear-linked-work-item'
-import type { LinkedWorkItemSummary } from '@/lib/new-workspace'
-import { getLinearIssueWorkspaceName } from '../../../../shared/workspace-name'
+import { buildLinearWorkspaceSource } from '../../../../shared/new-workspace/workspace-source'
+import type { LinkedWorkItemSummary } from '@/lib/workspace/creation/new-workspace'
+import { getLinearIssueWorkspaceName } from '../../../../shared/workspace/naming/workspace-name'
 import type { AppState } from '../../store/types'
 
 type NewWorkspaceShortcutModalData = {
@@ -22,7 +22,7 @@ export function buildNewWorkspaceShortcutModalData(
     telemetrySource: 'shortcut',
     prefilledName: getLinearIssueWorkspaceName(linearIssue),
     // Cmd+N from a Linear issue mirrors its Start-workspace action with source context.
-    linkedWorkItem: buildLinearIssueLinkedWorkItem(linearIssue)
+    linkedWorkItem: buildLinearWorkspaceSource(linearIssue)
   }
 }
 

@@ -15,14 +15,14 @@
     "typecheck": "pnpm --dir ../.. build:process-host && tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
-    "@hono/node-server": "^2.1.5",
+    "@hono/node-server": "^2.1.6",
     "@orca-cloud/postgres-schema": "workspace:*",
     "@orca-cloud/relay-contract": "workspace:*",
-    "hono": "^4.13.13",
-    "jose": "^6.2.13",
+    "hono": "^4.13.17",
+    "jose": "^6.2.16",
     "pg": "^8.23.1",
     "tweetnacl": "^1.0.3",
-    "ws": "^8.22.0",
+    "ws": "^8.22.2",
     "zod": "^4.6.7"
   },
   "devDependencies": {

@@ -207,7 +207,7 @@ export function createTerminalKeyboardRuntime(options: RuntimeOptions) {
     if (foreground?.agent && !foreground.shellForeground) {
       return false
     }
-    const hookRow = state.agentStatusByPaneKey[paneKey]
+    const hookRow = state.agentStatusByPaneKey.get(paneKey)
     if (hookRow && hookRow.state !== 'done') {
       return false
     }

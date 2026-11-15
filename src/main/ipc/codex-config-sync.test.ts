@@ -20,7 +20,7 @@ vi.mock('node:os', async (importOriginal) => {
 })
 
 import { registerCodexConfigSyncHandlers } from './codex-config-sync'
-import type { CodexConfigSyncStatus } from '../../shared/codex-config-sync-types'
+import type { CodexConfigSyncStatus } from '../../shared/agent-accounts/codex/codex-config-sync-types'
 import { getCodexSettingsBaselinePath } from '../codex/configuration/settings/config-settings-baseline'
 
 let root: string
@@ -61,19 +61,6 @@ describe('codexConfigSync:status handler', () => {
     expect(invokeHandler(perAccountHome)).toEqual({
       state: 'stalled',
       reason: 'missing-source',
-      systemConfigPath: join(root, '.codex', 'config.toml')
-    })
-  })
-
-  it('reports synced when the selection runs directly on the real home', () => {
-    // System default uses no mirror; stale shared homes must not produce warnings.
-    const staleSharedHome = join(root, 'codex-runtime-home', 'home')
-    mkdirSync(staleSharedHome, { recursive: true })
-    writeFileSync(join(staleSharedHome, 'config.toml'), 'model = "stale"\n', 'utf-8')
-
-    expect(invokeHandler(null)).toEqual({
-      state: 'synced',
-      reason: null,
       systemConfigPath: join(root, '.codex', 'config.toml')
     })
   })

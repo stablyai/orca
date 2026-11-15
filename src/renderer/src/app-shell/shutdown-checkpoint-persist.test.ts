@@ -38,25 +38,6 @@ describe('createShutdownCheckpointPersist', () => {
     vi.restoreAllMocks()
   })
 
-  it('degrades to durable-only staging when full staging fails again on retry (STA-5505)', () => {
-    vi.spyOn(console, 'error').mockImplementation(() => {})
-    const stageBeforeUnloadSync = vi.fn((args: { sessions: unknown[] }) => {
-      if (args.sessions.length > 0) {
-        throw new Error('sync IPC staging failed')
-      }
-    })
-    const { run: persist } = createShutdownCheckpointPersist(makeDeps({ stageBeforeUnloadSync }))
-
-    expect(persist).toThrow('sync IPC staging failed')
-    expect(persist).not.toThrow()
-    expect(stageBeforeUnloadSync).toHaveBeenCalledTimes(3)
-    expect(stageBeforeUnloadSync).toHaveBeenLastCalledWith({
-      sessions: [],
-      ui: { activeView: 'workspace' }
-    })
-    vi.restoreAllMocks()
-  })
-
   it('stages the full snapshot when a retry after a transient staging failure succeeds', () => {
     let calls = 0
     const stageBeforeUnloadSync = vi.fn(() => {

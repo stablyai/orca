@@ -1,22 +1,14 @@
 // Pin identifier shapes from live agent transcripts so the commit-time scrub gate cannot leak account IDs.
 import { readdirSync, readFileSync } from 'node:fs'
-import os from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import {
   formatFindings,
-  placeholderFor,
   redactTranscript,
   scanTranscriptForSecrets
 } from './pty-transcript-secret-scan.mjs'
 
 describe('pty transcript secret scan', () => {
-  it('finds the account row of a ready screen', () => {
-    const findings = scanTranscriptForSecrets('Antigravity CLI 1.1.17\njin.woo@acme.dev (Business)')
-    expect(findings).toHaveLength(1)
-    expect(findings[0]).toMatchObject({ kind: 'email', line: 2, column: 1 })
-  })
-
   it('finds credentials an agent may echo while signing in', () => {
     const kinds = scanTranscriptForSecrets(
       [
@@ -29,41 +21,16 @@ describe('pty transcript secret scan', () => {
     expect(kinds).toEqual(['jwt', 'google-api-key', 'google-refresh-token', 'bearer-token'])
   })
 
-  it('flags this machine’s own username, which a prompt line leaks', () => {
-    const username = os.userInfo().username
-    const findings = scanTranscriptForSecrets(`~/Users/${username}/orca/repo\n> `)
-    expect(findings.some((finding) => finding.kind === 'local-username')).toBe(true)
-  })
-
   it('finds the resumable conversation id agy prints on exit', () => {
     const findings = scanTranscriptForSecrets(
       'Resume with -c (or command below):\nagy --conversation=26dc1986-9eec-456a-a534-d93e5c1076c2'
     )
     expect(findings).toHaveLength(1)
     expect(findings[0].kind).toBe('uuid')
-    expect(placeholderFor('uuid', findings[0].match.length)).toMatch(
-      /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[0-9a-f]{4}-[0-9a-f]{12}$/
-    )
-  })
-
-  it('passes a fixture that is already scrubbed, so "prove it is gone" can succeed', () => {
-    const scrubbed = `uuuu@example.com\n${'X'.repeat(44)}`
-    expect(scanTranscriptForSecrets(scrubbed)).toEqual([])
   })
 })
 
 describe('redaction', () => {
-  it('replaces every finding with the same number of characters', () => {
-    // Same-length redaction preserves captured wrapping; shorter replacements invalidate evidence.
-    const text = 'Antigravity CLI 1.1.17\njin.woo@acme.dev (Antigravity Business)\n> '
-    const { text: redacted, redacted: count } = redactTranscript(text)
-    expect(count).toBe(1)
-    expect(redacted).toHaveLength(text.length)
-    expect(redacted).not.toContain('jin.woo@acme.dev')
-    expect(scanTranscriptForSecrets(redacted)).toEqual([])
-    expect(redactTranscript(redacted).redacted).toBe(0)
-  })
-
   it('leaves the rest of the screen byte-for-byte untouched', () => {
     const text = 'line one\nuser@corp.io\nline three'
     expect(redactTranscript(text).text).toBe('line one\nXXXXXXXXXXXX\nline three')

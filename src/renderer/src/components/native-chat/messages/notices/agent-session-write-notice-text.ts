@@ -16,7 +16,7 @@ import type {
   AgentSessionWriteFailure,
   AgentSessionWriteKind
 } from '../../../../../../shared/agent-session/failures/agent-session-write-failure'
-import { joinSentences } from '../../../../../../shared/sentence-joining'
+import { joinSentences } from '../../../../../../shared/text/sentence-joining'
 import { sayAgentSessionFailureTranslated } from './agent-session-failure-words-text'
 
 const SENTENCES: Record<AgentSessionWriteNoticeSentence, () => string> = {

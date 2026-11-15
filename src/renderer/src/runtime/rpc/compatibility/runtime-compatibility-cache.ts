@@ -1,5 +1,5 @@
 import type { RuntimeCapability } from '../../../../../shared/protocol-version'
-import type { RuntimeStatus } from '../../../../../shared/runtime-session-contracts'
+import type { RuntimeStatus } from '../../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import { isRuntimeStatusCompatible } from './runtime-protocol-compat'
 
 /** The capability as last probed, without waiting (for synchronous terminal replies); null before

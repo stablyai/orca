@@ -1,6 +1,6 @@
 import { useAppStore } from '@/store'
-import type { ProjectGroup } from '../../../../shared/project-group-types'
-import type { Repo } from '../../../../shared/repo-types'
+import type { ProjectGroup } from '../../../../shared/project/groups/project-group-types'
+import type { Repo } from '../../../../shared/repository/repo-types'
 import type { ComposerModel } from './composer-model'
 
 type ProjectTargetActionsInput = Pick<
@@ -49,10 +49,10 @@ import {
   getProjectGroupIdFromNewWorkspaceOptionId,
   getProjectRowHostSetups,
   findActionableFolderProjectGroup
-} from '@/lib/new-workspace-project-options'
+} from '@/lib/workspace/creation/new-workspace-project-options'
 import { translate } from '@/i18n/i18n'
 import { getFolderSourceRepos } from '@/components/sidebar/workspace-creation/folder/folder-workspace-source-repos'
-import { resolveWorkspaceCreationRepoId } from '@/lib/project-host-workspace-target'
+import { resolveWorkspaceCreationRepoId } from '@/lib/workspace/creation/project-host-workspace-target'
 
 export function useProjectTargetActions(input: ProjectTargetActionsInput) {
   const {

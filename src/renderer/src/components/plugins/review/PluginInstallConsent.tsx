@@ -1,16 +1,16 @@
 import { useId } from 'react'
 import { AlertTriangle, Check, Loader2, ShieldAlert } from 'lucide-react'
-import type { PluginHostListEntry } from '../../../../../preload/api-types'
+import type { PluginHostListEntry } from '../../../../../shared/plugins/plugin-list-entry'
 import { getIntlLocale } from '@/i18n/i18n'
 import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
-import { getShortcutPlatform } from '@/lib/shortcut-platform'
+import { getShortcutPlatform } from '@/lib/keyboard/shortcut-platform'
 import { Button } from '../../ui/button'
 import { SecuritySurface } from '../../ui/security-surface'
 import {
   pluginCapabilityDescription,
   shownPluginCapabilities
 } from '../presentation/plugin-capability-presentation'
-import { formatKeybindingList } from '../../../../../shared/keybindings'
+import { formatKeybindingList } from '../../../../../shared/keybindings/formatting'
 import { useAppStore } from '@/store'
 import type { PluginTrust } from '../presentation/plugin-access-profile'
 import { pluginTrustLabel, pluginTrustWarnings } from '../presentation/plugin-consent-copy'

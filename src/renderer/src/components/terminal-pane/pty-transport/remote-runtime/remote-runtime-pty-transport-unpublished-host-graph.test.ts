@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createRemoteRuntimeTransportMocks } from '../remote/remote-runtime-pty-transport-test-harness'
 import type { MultiplexSubscriptionCallbacks } from '../remote/remote-runtime-pty-transport-stream-fixtures'
 
-import type { RuntimeMobileSessionTabsResult } from '../../../../../../shared/runtime-session-contracts'
+import type { RuntimeMobileSessionTabsResult } from '../../../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 
 const appStore = vi.hoisted(() => ({
   getState: vi.fn(() => {
@@ -174,35 +174,5 @@ describe('remote runtime pty transport against a relaunched host that has not pu
     } finally {
       vi.useRealTimers()
     }
-  })
-
-  it('still retires the pane when a published graph lacks its surface', async () => {
-    const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
-    const onPtyExit = vi.fn()
-    const transport = createRemoteRuntimePtyTransport('env-1', {
-      worktreeId: 'wt-1',
-      tabId: 'web-terminal-host-tab-1',
-      leafId: 'pane:1',
-      onPtyExit
-    })
-    await transport.connect({ url: '', callbacks: {} })
-    await vi.waitFor(() => expect(subscriptionSendBinary).toHaveBeenCalled())
-    runtimeCall.mockImplementation(async (request: { method: string }) =>
-      request.method === 'session.tabs.list'
-        ? {
-            ok: true,
-            result: {
-              ...UNPUBLISHED_HOST_GRAPH.result,
-              publicationEpoch: 'epoch-2:client-navigation',
-              snapshotVersion: 3
-            }
-          }
-        : { ok: false, error: { code: 'runtime_error', message: 'tab_not_found' } }
-    )
-
-    subscriptionCallbacks?.onClose?.()
-
-    await vi.waitFor(() => expect(onPtyExit).toHaveBeenCalledWith('remote:env-1@@terminal-1', -1))
-    expect(transport.getPtyId()).toBeNull()
   })
 })

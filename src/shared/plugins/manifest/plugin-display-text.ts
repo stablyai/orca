@@ -1,5 +1,5 @@
 import type { z } from 'zod'
-import { stripUnsafeDisplayCharacters } from '../../display-text-safety'
+import { stripUnsafeDisplayCharacters } from '../../text/display-text-safety'
 
 const LINE_BREAKS = /[\t\n\v\f\r\u0085\u2028\u2029]+/g
 /** Manifest and catalog keys whose strings Orca shows as plugin names, titles and listing text. */

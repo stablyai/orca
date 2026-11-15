@@ -7,7 +7,7 @@ import {
   pruneSelection,
   updateAreaSelection,
   updateSelection
-} from '@/lib/list-multi-selection'
+} from '@/lib/list-interaction/list-multi-selection'
 
 /** Returns the first still-rendered selected id, or `null` if the anchor is fine. */
 function resolveRenderedAnchorId(

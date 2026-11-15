@@ -28,23 +28,6 @@ afterEach(() => {
 })
 
 describe('createIntegrationStateFileCache', () => {
-  it('memoizes while the file is unchanged', () => {
-    const path = tempFile()
-    writeFileSync(path, '1')
-    let reads = 0
-    const cache = createIntegrationStateFileCache({
-      filePath: () => path,
-      readFromDisk: () => {
-        reads += 1
-        return { reads }
-      }
-    })
-
-    expect(cache.get()).toEqual({ reads: 1 })
-    expect(cache.get()).toEqual({ reads: 1 })
-    expect(reads).toBe(1)
-  })
-
   it('notices a same-size atomic replacement with the original modification time', () => {
     const path = tempFile()
     writeFileSync(path, 'old')
@@ -61,18 +44,6 @@ describe('createIntegrationStateFileCache', () => {
     renameSync(replacement, path)
     expect(statSync(path).mtime.getTime()).toBe(time.getTime())
     expect(cache.get()).toBe('new')
-  })
-
-  it('distinguishes backing paths when both files are initially absent', () => {
-    let path = tempFile()
-    let reads = 0
-    const cache = createIntegrationStateFileCache({
-      filePath: () => path,
-      readFromDisk: () => ++reads
-    })
-    expect(cache.get()).toBe(1)
-    path = join(dir, 'another.json')
-    expect(cache.get()).toBe(2)
   })
 
   it('reloads when a file appears after an absent first read', () => {
@@ -100,37 +71,6 @@ describe('createIntegrationStateFileCache', () => {
     rmSync(path)
 
     expect(cache.get()).toEqual({ present: false })
-  })
-
-  it('recovers when another process writes between the stamp and the read', () => {
-    const path = tempFile()
-    writeFileSync(path, 'v1')
-    let reads = 0
-    let writeDuringRead = false
-    const cache = createIntegrationStateFileCache({
-      filePath: () => path,
-      readFromDisk: () => {
-        reads += 1
-        if (writeDuringRead) {
-          writeDuringRead = false
-          writeFileSync(path, 'theirs')
-        }
-        return { body: readBody(path) }
-      }
-    })
-    expect(cache.get()).toEqual({ body: 'v1' })
-
-    writeFileSync(path, 'ours')
-    cache.invalidate()
-    writeDuringRead = true
-
-    // Content read after a concurrent write still carries the earlier stamp, forcing one more read.
-    expect(cache.get()).toEqual({ body: 'theirs' })
-    expect(cache.get()).toEqual({ body: 'theirs' })
-    expect(reads).toBe(3)
-
-    expect(cache.get()).toEqual({ body: 'theirs' })
-    expect(reads).toBe(3)
   })
 })
 

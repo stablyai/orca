@@ -2,7 +2,7 @@ import { useId, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Switch } from '@/components/ui/switch'
 import { useTranslate } from '@/i18n/use-translate'
-import { getAgentLabel } from '@/lib/agent-catalog'
+import { getAgentLabel } from '@/lib/agent-catalog/agent-catalog'
 import { useAppStore } from '@/store'
 import {
   applyAgentPermissionOverrides,

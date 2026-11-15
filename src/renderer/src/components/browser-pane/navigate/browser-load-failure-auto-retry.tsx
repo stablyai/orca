@@ -2,8 +2,8 @@ import { useEffect, useEffectEvent, useState, useSyncExternalStore } from 'react
 import type {
   BrowserLoadFailureDescription,
   BrowserLoadFailureRecovery
-} from '../../../../../shared/browser-load-failure'
-import { isWindowVisible } from '@/lib/window-visibility-interval'
+} from '../../../../../shared/browser/navigation/browser-load-failure'
+import { isWindowVisible } from '@/lib/window-activity/window-visibility-interval'
 import { translateLoadFailurePiece } from './browser-notices'
 
 export type BrowserLoadFailureAutoRetry = {

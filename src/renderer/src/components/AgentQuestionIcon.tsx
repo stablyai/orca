@@ -1,6 +1,6 @@
 import React from 'react'
 import { MessageCircleQuestion } from 'lucide-react'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 
 // Share the question glyph and --agent-question token across sidebar, tabs, dashboard and kanban; callers choose size.
 

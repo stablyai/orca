@@ -1,4 +1,4 @@
-import type { NativeChatFollowUpBehavior } from '../../../../../../shared/native-chat/input/native-chat-follow-up-behavior'
+import type { NativeChatFollowUpBehavior } from '../../../../../../shared/native-chat/input/composer/native-chat-follow-up-behavior'
 import type { NativeChatComposerImageAttachment } from '../../attachments/chips/native-chat-image-attachment'
 import type { NativeChatStructuredComposerTransport } from './native-chat-structured-composer-transport'
 import type { AgentType } from '../../../../../../shared/agent-status/contracts/agent-status-types'

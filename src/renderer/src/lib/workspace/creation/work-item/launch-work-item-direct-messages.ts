@@ -1,13 +1,13 @@
 import { toast } from 'sonner'
-import { notifyAgentLaunchFailure } from '@/lib/agent-launch-failure'
+import { notifyAgentLaunchFailure } from '@/lib/agent-session/launch/failure/agent-launch-failure'
 import {
   planAgentCliArgsSuffix,
   type AgentStartupShell
 } from '../../../../../../shared/agent-launch/startup/tui-agent-startup-shell'
-import { getAgentLabel } from '../../../agent-catalog'
+import { getAgentLabel } from '../../../agent-catalog/agent-catalog'
 import type { TuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-agent'
 
-import '@/lib/new-workspace'
+import '@/lib/workspace/creation/new-workspace'
 import { isGitLabIssueUrl } from '../../../../../../shared/new-workspace/workspace-source'
 import { translate } from '@/i18n/i18n'
 

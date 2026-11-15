@@ -1,3 +1,4 @@
+import { acceptedAgentStatuses } from '@/store/slices/agent-status/accepted-agent-statuses'
 // @vitest-environment happy-dom
 
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
@@ -9,10 +10,8 @@ import {
   makeRepo,
   makeWorktree,
   makeTab,
-  makeRetainedDoneEntry,
   makeWorkingEntryWithoutHistory,
-  PANE_KEY,
-  PANE_KEY_2
+  PANE_KEY
 } from '@/components/activity/ActivityPrototypePage-test-fixtures'
 
 const initialState = useAppStore.getState()
@@ -76,11 +75,10 @@ it('preserves workspace focus on mount and focuses search only when explicitly e
   expect(window.api.ui.set).toHaveBeenCalledWith({ agentsShowSearch: true })
 })
 
-it('keeps filtered live badge counts across sidebar modes and excludes retained waiting history', () => {
+it('keeps filtered live badge counts across sidebar modes', () => {
   vi.spyOn(Date, 'now').mockReturnValue(10_000)
   const worktree = makeWorktree()
   const tab = makeTab()
-  const retained = makeRetainedDoneEntry({ ...tab, id: 'tab-2' })
   useAppStore.setState({
     repos: [makeRepo(), { ...makeRepo(), id: 'other-repo' }],
     worktreesByRepo: { 'repo-1': [worktree] },
@@ -90,20 +88,16 @@ it('keeps filtered live badge counts across sidebar modes and excludes retained 
     agentsHideWorkspacesFromOtherDevices: false,
     agentsHideAutomationGeneratedWorkspaces: false,
     agentsHideCliCreatedWorkspaces: false,
-    agentStatusByPaneKey: {
-      [PANE_KEY]: {
-        ...makeWorkingEntryWithoutHistory(),
-        state: 'waiting',
-        updatedAt: 10_000,
-        stateStartedAt: 10_000
-      }
-    },
-    retainedAgentsByPaneKey: {
-      [PANE_KEY_2]: {
-        ...retained,
-        entry: { ...retained.entry, paneKey: PANE_KEY_2, state: 'waiting' }
-      }
-    }
+    agentStatusByPaneKey: acceptedAgentStatuses(
+      Object.entries({
+        [PANE_KEY]: {
+          ...makeWorkingEntryWithoutHistory(),
+          state: 'waiting',
+          updatedAt: 10_000,
+          stateStartedAt: 10_000
+        }
+      })
+    )
   })
   const badgeTarget = document.createElement('span')
   document.body.append(badgeTarget)
@@ -138,15 +132,17 @@ it('preserves historical search, live badges and migration blocks in badge-only 
     agentsHideWorkspacesFromOtherDevices: false,
     agentsHideAutomationGeneratedWorkspaces: false,
     agentsHideCliCreatedWorkspaces: false,
-    agentStatusByPaneKey: {
-      [PANE_KEY]: {
-        ...makeWorkingEntryWithoutHistory(),
-        workingMode: 'monitoring',
-        updatedAt: 10_000,
-        stateStartedAt: 10_000,
-        stateHistory: [{ state: 'done', prompt: 'previous-task', startedAt: 1_000 }]
-      }
-    }
+    agentStatusByPaneKey: acceptedAgentStatuses(
+      Object.entries({
+        [PANE_KEY]: {
+          ...makeWorkingEntryWithoutHistory(),
+          workingMode: 'monitoring',
+          updatedAt: 10_000,
+          stateStartedAt: 10_000,
+          stateHistory: [{ state: 'done', prompt: 'previous-task', startedAt: 1_000 }]
+        }
+      })
+    )
   })
   const badgeTarget = document.createElement('span')
   document.body.append(badgeTarget)
@@ -167,7 +163,9 @@ it('preserves historical search, live badges and migration blocks in badge-only 
   expect(badgeTarget.textContent).toBe('1')
   view.rerender(<SidebarAgentsList {...props} active={false} />)
   expect(badgeTarget.textContent).toBe('1')
-  act(() => useAppStore.setState({ agentStatusByPaneKey: {} }))
+  act(() =>
+    useAppStore.setState({ agentStatusByPaneKey: acceptedAgentStatuses(Object.entries({})) })
+  )
   view.rerender(<SidebarAgentsList {...props} query="" readFilter="all" active={false} />)
   expect(badgeTarget.textContent).toBe('0')
   act(() =>

@@ -1,3 +1,4 @@
+import { isGlobalAiTextAction } from '../../../../../../shared/source-control/ai/recipes/source-control-ai-actions'
 import {
   agentPickerEffectiveChoices,
   type AgentPickerEntry,
@@ -17,7 +18,7 @@ import type {
   RepoSourceControlAiOverrides
 } from '../../../../../../shared/source-control/ai/settings/source-control-ai-settings-types'
 import type { GlobalSettings } from '../../../../../../shared/global-settings-types'
-import type { Repo } from '../../../../../../shared/repo-types'
+import type { Repo } from '../../../../../../shared/repository/repo-types'
 
 export function saveSourceControlTextPickerDraft({
   source,
@@ -61,7 +62,7 @@ export function saveSourceControlTextPickerDraft({
     }
   }
   let currentRepo: Pick<Repo, 'sourceControlAi'> | null =
-    operation !== 'conversationName' && repoId
+    !isGlobalAiTextAction(operation) && repoId
       ? {
           sourceControlAi: {
             ...repoAi,
@@ -103,7 +104,7 @@ export function saveSourceControlTextPickerDraft({
       currentSource = saved.sourceControlAi
       nextChoice = currentSource.modelOverridesByOperation?.[operation]
       nextArgs = currentSource.actions?.[operation]?.agentArgs ?? nextArgs
-    } else if (operation !== 'conversationName') {
+    } else if (!isGlobalAiTextAction(operation)) {
       currentRepo = { sourceControlAi: saved.update.sourceControlAi ?? undefined }
       nextChoice = currentRepo.sourceControlAi?.modelOverridesByOperation?.[operation]
       nextArgs = currentRepo.sourceControlAi?.actionOverrides?.[operation]?.agentArgs ?? nextArgs

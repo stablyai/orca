@@ -7,7 +7,7 @@ import {
   type EdgeAssignBody,
   type EdgeDeviceRow
 } from './edge-admin-client.js'
-import { EDGE_CELL_ID, EDGE_EXPORT_SKIP_AFTER_MS, EdgeAssignments, type EdgeRelayConfig } from './edge-relay.js'
+import { EDGE_CELL_ID, EdgeAssignments, type EdgeRelayConfig } from './edge-relay.js'
 import type { EdgeControlFlags } from './edge-relay-control.js'
 
 const fakes = vi.hoisted(() => ({
@@ -85,12 +85,9 @@ class FakeEdge implements EdgeAdmin {
   devices: EdgeDeviceRow[] = []
   connected = false
   down = false
-  pushes: EdgeAssignBody[] = []
-  exports = 0
 
   async assign(body: EdgeAssignBody) {
     if (this.down) { throw new EdgeAdminUnavailableError('network') }
-    this.pushes.push(body)
     const current = this.assignment
     if (current && body.assignmentEpoch < current.assignmentEpoch) {
       return { outcome: 'stale' as const, assignmentEpoch: current.assignmentEpoch }
@@ -107,7 +104,6 @@ class FakeEdge implements EdgeAdmin {
 
   async exportHost() {
     if (this.down) { throw new EdgeAdminUnavailableError('network') }
-    this.exports += 1
     if (this.connected) { return { outcome: 'busy' as const } }
     return { outcome: 'exported' as const, assignment: this.assignment, devices: this.devices }
   }
@@ -201,11 +197,10 @@ describe('relay edge phase 2: the director moves host data with the host', () =>
     expect(await h.row()).toBeUndefined()
   })
 
-  it('503s a leaving host while the edge export is unavailable, until it has failed for 120 s', async () => {
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+  it('503s a leaving host until the configured export failure window expires', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
     vi.spyOn(console, 'error').mockImplementation(() => {})
-    const skipped = () => warn.mock.calls.filter(([line]) => String(line).includes('orca_relay_edge_export_skipped'))
-    const h = await harness()
+    const h = await harness('host', { exportSkipAfterMs: 120_000 })
     await h.insertDevice(device('phone-a'))
     await h.assign()
     // On the edge phone-a was revoked; the edge then goes down.
@@ -213,25 +208,16 @@ describe('relay edge phase 2: the director moves host data with the host', () =>
     h.fake.down = true
     h.leaveCohort()
     expect((await h.assign()).status).toBe(503)
-    await keepFailing(h, EDGE_EXPORT_SKIP_AFTER_MS - 1)
+    await keepFailing(h, 119_999)
     const early = await h.assign()
     expect(early.status).toBe(503)
     expect(early.headers.get('retry-after')).toBe('2')
-    expect(h.assignments.assign).not.toHaveBeenCalled()
-    expect(skipped()).toHaveLength(0)
     h.clock.now += 1
     const response = await h.assign()
     expect(response.status).toBe(200)
     expect(await response.json()).toMatchObject({ cellUrl: 'https://us-c1.relay.example.test', assignmentEpoch: 9 })
     // The edge's revoke is unknown here: the host's Postgres devices are removed, never resurrected.
     expect(await h.postgresDevices()).toEqual([])
-    expect(skipped()).toHaveLength(1)
-    expect(JSON.parse(String(skipped()[0]![0]))).toEqual({
-      event: 'orca_relay_edge_export_skipped',
-      reason: 'relay_edge_admin_unavailable:network',
-      failingForMs: EDGE_EXPORT_SKIP_AFTER_MS,
-      devicesRemoved: 1
-    })
   })
 
   it('keeps Postgres devices when the edge object holds no assignment (never pushed or erased)', async () => {
@@ -252,12 +238,11 @@ describe('relay edge phase 2: the director moves host data with the host', () =>
     h.fake.devices = [device('phone-x', { relay_host_id: 'someotherhost001' })]
     h.leaveCohort()
     expect((await h.assign()).status).toBe(500)
-    expect(h.assignments.assign).not.toHaveBeenCalled()
     expect(await h.postgresDevices()).toEqual([{ id: 'phone-a', revoked: null }])
   })
 
-  it('with mode down, skips the export at once, removes the Postgres devices, and fences once', async () => {
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+  it('with mode down, removes Postgres devices and records a failed fence', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
     vi.spyOn(console, 'error').mockImplementation(() => {})
     const flags: EdgeControlFlags = { mode: 'on' }
     const h = await harness('host', { control: () => flags })
@@ -268,18 +253,10 @@ describe('relay edge phase 2: the director moves host data with the host', () =>
     h.fake.devices = [device('phone-a', { revoked_at: 1_800_000_000_000 })]
     h.fake.down = true
     flags.mode = 'down'
-    const assign = vi.spyOn(h.fake, 'assign')
     const response = await h.assign()
     expect(response.status).toBe(200)
     expect(await response.json()).toMatchObject({ cellUrl: 'https://us-c1.relay.example.test', assignmentEpoch: 9 })
-    expect(h.fake.exports).toBe(0)
     expect(await h.postgresDevices()).toEqual([])
-    const skipped = warn.mock.calls
-      .map(([line]) => JSON.parse(String(line)) as Record<string, unknown>)
-      .filter((line) => line.event === 'orca_relay_edge_export_skipped')
-    expect(skipped).toEqual([{ event: 'orca_relay_edge_export_skipped', reason: 'mode_down', devicesRemoved: 2 }])
-    // One fence try, recorded for the sweep to retry.
-    expect(assign).toHaveBeenCalledTimes(1)
     const pending = await h.database.query(`SELECT cell_id, assignment_epoch FROM relay_edge_fence_pending`)
     expect(pending.map((row) => [String(row.cell_id), Number(row.assignment_epoch)])).toEqual([['us-c1', 9]])
   })

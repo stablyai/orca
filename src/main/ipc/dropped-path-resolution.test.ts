@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { PASTE_PAYLOAD_CORPUS } from '../../shared/paste-payload-corpus'
+import { PASTE_PAYLOAD_CORPUS } from '../../shared/clipboard/testing/paste-payload-corpus'
 import { resolveLocalDroppedPathsForAgent } from './dropped-path-resolution'
 
 function getPastePayloadCorpusText(name: string): string {

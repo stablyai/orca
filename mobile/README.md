@@ -193,23 +193,38 @@ other catalogs may lag and fall back to English. `pnpm verify:mobile-localizatio
 `ORCA_ANDROID_KEY_ALIAS` and `ORCA_ANDROID_KEY_PASSWORD` at build time; nothing is written into the
 project. Without them, local release builds keep Expo's debug key.
 
-`.github/workflows/mobile-android-release.yml` turns release signing on once the
-`ORCA_ANDROID_RELEASE_CERT_SHA256` repository variable (or `ORCA_ANDROID_REQUIRE_RELEASE_SIGNING=true`)
-is set. Until then it signs with the debug key as before and adds a warning to the run. Once it is
-on, the workflow fails before building if any of these is missing:
+The keystore in these secrets is the Play **upload key**. Google re-signs every upload with its own
+Play app signing key (SHA-256 `A0:A6:67:69:…:DA:07`), which no one outside Google holds. The
+workflow fails before building if any of these is missing:
 
-| Name                               | Kind     | Value                                                   |
-| ---------------------------------- | -------- | ------------------------------------------------------- |
-| `ORCA_ANDROID_KEYSTORE_BASE64`     | secret   | the release keystore, base64-encoded                    |
-| `ORCA_ANDROID_KEYSTORE_PASSWORD`   | secret   | keystore password                                       |
-| `ORCA_ANDROID_KEY_ALIAS`           | secret   | key alias                                               |
-| `ORCA_ANDROID_KEY_PASSWORD`        | secret   | key password (same as the keystore password for PKCS12) |
-| `ORCA_ANDROID_RELEASE_CERT_SHA256` | variable | the key's certificate SHA-256 fingerprint               |
+| Name                             | Kind   | Value                                                   |
+| -------------------------------- | ------ | ------------------------------------------------------- |
+| `ORCA_ANDROID_KEYSTORE_BASE64`   | secret | the upload keystore, base64-encoded                     |
+| `ORCA_ANDROID_KEYSTORE_PASSWORD` | secret | keystore password                                       |
+| `ORCA_ANDROID_KEY_ALIAS`         | secret | key alias                                               |
+| `ORCA_ANDROID_KEY_PASSWORD`      | secret | key password (same as the keystore password for PKCS12) |
+| `ORCA_PLAY_SERVICE_ACCOUNT_JSON` | secret | JSON key of a service account with release access       |
 
-After a release-signed build, the workflow checks that the APK's signing certificate matches
-`ORCA_ANDROID_RELEASE_CERT_SHA256` and is not the debug key, and publishes the fingerprint in the
-release notes. Android only installs an update signed by the same key as the installed app, so
-the keystore must be backed up: losing it means no existing install can be updated in place.
+## Android Release
+
+Android ships as `dev.orca.app` (iOS keeps `com.stably.orca.mobile`). Pushing an `android-v<version>`
+tag, or running `.github/workflows/mobile-android-release.yml` by hand, does this:
+
+- builds the AAB with the upload key and uploads it to Play's internal testing track
+- downloads Google's signed universal APK for that versionCode (`fastlane android download_signed_apk`)
+  and fails unless its `V3.0 Signer` is Google's app signing key
+- publishes that APK and its `.sha256` as the `android-v<version>` GitHub pre-release
+
+Play and GitHub installs are the same signed app, so either can update the other. Promotion to
+production is manual in Play Console. A manual run with `publish_github_release` off only builds the
+AAB and validates it with Play (`validate_only`); nothing is released.
+
+Play rejects a versionCode it has seen, so bump `expo.android.versionCode` for every release. The
+upload fails before anything is published when the bump is missing.
+
+The app checks who installed it at runtime (`modules/orca-play-store-presence`). Installed by the
+Play Store, it shows no GitHub update card and no "Check for updates" row. Otherwise it checks
+GitHub for `android-v` releases. The retired `com.stably.orca.mobile` app checks `mobile-android-v`.
 
 ## Protocol Version Compatibility
 
@@ -238,7 +253,7 @@ Do **not** bump for additive changes:
 
 Set `MIN_COMPATIBLE_MOBILE_VERSION` (kill-switch) when desktop ships a change that requires a minimum mobile version to function safely. Same for `MIN_COMPATIBLE_DESKTOP_VERSION` from the mobile side.
 
-When a verdict is `blocked`, `mobile/src/components/ProtocolBlockScreen.tsx` renders a screen pointing the user at the update that clears it. When mobile is too old it opens the newest release if the installed app's update check knows one, otherwise the App Store (iOS) or GitHub Releases (Android). When desktop is too old it opens GitHub Releases.
+When a verdict is `blocked`, `mobile/src/components/host-connection/ProtocolBlockScreen.tsx` renders a screen pointing the user at the update that clears it. When mobile is too old it opens the newest release if the installed app's update check knows one, otherwise the App Store (iOS), Google Play (Play installs) or GitHub Releases (other Android installs). When desktop is too old it opens GitHub Releases.
 
 To exercise the block screen locally: set `MIN_COMPATIBLE_DESKTOP_VERSION = 999` in `mobile/src/transport/connection/protocol-version.ts`, rebuild, pair to any desktop. Revert before merging.
 
@@ -255,6 +270,7 @@ Connect from the app using endpoint `ws://localhost:6768` and token `mock-device
 ### Environment variables
 
 - `MOCK_NATIVE_CHAT=1` — serve the native-chat scenario (one live agent tab, empty transcript, image upload) instead of the default terminal fixtures.
+- `MOCK_FORKED_CHATS=1` — serve one workspace whose native chats include a fork, a fork of a fork, an unnamed fork and an older-build `… fork` name, across chat tabs, agent rows, Session History and the naming feed (for the fork mark).
 - `MOCK_CHAT_AGENT=omp` — with `MOCK_NATIVE_CHAT=1`, present an OMP tab and four decoded transcript messages, including a tool call and result, instead of the default Claude scenario. It deliberately omits `transcriptPath` to exercise legacy-hook readability discovery; current OMP hooks may report a path.
 - `MOCK_SERVER_KEY_FILE` — persist the server keypair across restarts so a paired device keeps its public-key pin. A missing or invalid file is re-keyed with a warning, which forces a re-pair.
 

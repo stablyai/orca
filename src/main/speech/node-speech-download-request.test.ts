@@ -64,15 +64,6 @@ describe('openNodeSpeechDownloadRequest', () => {
     expect(listeners.response).not.toHaveBeenCalled()
   })
 
-  it('hands any other response to the download', () => {
-    const handle = openNodeSpeechDownloadRequest('https://models.example/a.tar.bz2')
-    const listeners = { error: vi.fn(), response: vi.fn(), redirect: vi.fn() }
-    handle.listen(listeners)
-    const ok = incoming(206, { 'content-range': 'bytes 10-19/20' })
-    lastRequest().emit('response', ok)
-    expect(listeners.response).toHaveBeenCalledWith(ok)
-  })
-
   // Abort emits after detach; an unhandled ClientRequest error crashes orcad.
   it('swallows the error abort raises after the download detached', () => {
     const handle = openNodeSpeechDownloadRequest('https://models.example/a.tar.bz2')

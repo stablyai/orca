@@ -5,7 +5,7 @@ import { decodeJournalOutcome, decodingOutcome } from '../outcomes/journal-outco
 import { JournalOutcomeDecodeError } from '../writing/journal-write-guards'
 import { outcomeFormat1StoredScalars } from '../outcomes/journal-outcome-format-1'
 import { journalOutcomeSource } from '../outcomes/journal-outcome-format'
-import { journalContextCursor } from '../context-epochs/journal-context-cursor'
+import { journalContextCursor } from '../context-epochs/journal-context-epoch'
 import { readJournalSessionEpoch } from '../durable-rows/journal-row-table'
 import {
   agentSessionExecutionLocationsEqual,

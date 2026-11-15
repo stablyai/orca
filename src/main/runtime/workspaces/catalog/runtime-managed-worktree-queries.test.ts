@@ -1,7 +1,7 @@
 import { mergeWorktree } from '../../../ipc/worktree-metadata-merge'
 import type { ResolvedWorktree } from './runtime-worktree-path-identity'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { Repo } from '../../../../shared/repo-types'
+import type { Repo } from '../../../../shared/repository/repo-types'
 import type { WorktreeMeta } from '../../../../shared/worktree/meta-types'
 import type { GitWorktreeInfo } from '../../../../shared/worktree/types'
 
@@ -35,6 +35,12 @@ vi.mock(
 )
 
 import { RuntimeManagedWorktreeQueries } from './runtime-managed-worktree-queries'
+import { runtimeResultForObservation } from './runtime-worktree-catalog-read'
+import {
+  _resetWorktreeCatalogOwnerForTests,
+  readWorktreeCatalog
+} from '../../../workspaces/catalog/repo-worktree-catalog-owner'
+import { setWorktreeCatalogRouteResolver } from '../../../workspaces/catalog/repo-worktree-catalog-route'
 import type { RuntimeStore } from '../../construction/runtime-store-contract'
 import {
   bumpLocalWorktreeScanGeneration,
@@ -287,6 +293,8 @@ describe('RuntimeManagedWorktreeQueries.listDetected overtaken scan', () => {
     expect(pruneLineageMock.mock.calls[0]?.[2]).toEqual(rows([repo.path, created]))
   })
 
+  // #16654: a create landing during the metadata probe writes lineage the scan never saw.
+
   it('publishes the last scan non-authoritatively once the re-scan bound is spent', async () => {
     const scanRepo = vi.fn(overtakenScan([repo.path]))
 
@@ -300,5 +308,57 @@ describe('RuntimeManagedWorktreeQueries.listDetected overtaken scan', () => {
     expect(result.worktrees.map((worktree) => worktree.path)).toEqual([repo.path])
     expect(pruneLineageMock).not.toHaveBeenCalled()
     expect(pruneMetadataMock).not.toHaveBeenCalled()
+  })
+
+  it('never publishes owner rows as authoritative once the owner retired their route', async () => {
+    let live = true
+    setWorktreeCatalogRouteResolver(() =>
+      live ? { repoPath: repo.path, runtimeKey: 'local:default' } : null
+    )
+    try {
+      const { observation } = await readWorktreeCatalog(
+        repo,
+        'local:default',
+        { kind: 'runtime', maxAgeMs: 30_000 },
+        {
+          scan: async () => ({ kind: 'rows', worktrees: rows([repo.path]) }),
+          // The observation carries the pre-scan hygiene claim a pruning listing consumes.
+          captureWitness: () =>
+            // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the mocked prune reads only the expectation's presence.
+            ({
+              authorizedRootsRevision: 0,
+              rootsRevision: 0,
+              hygieneDue: true,
+              expectation: { repo, metadata: [] },
+              release: () => {}
+            }) as never
+        }
+      )
+      const ownerRows = runtimeResultForObservation(observation!)
+      const scanRepo = vi.fn(async () => ownerRows)
+      // The route changes while the listing awaits its own metadata prune, after admission.
+      let helperSawCurrent: boolean | undefined
+      pruneMetadataMock.mockImplementationOnce(async (args: { isCallerCurrent: () => boolean }) => {
+        live = false
+        helperSawCurrent = args.isCallerCurrent()
+        return { scanGenerationCurrent: true, preservedMetadataCandidateIds: new Set() }
+      })
+      const store = gitStore({
+        pruneSessionlessMissingLocalWorktreeMetadataForRepo: vi.fn(() => []),
+        getProfileStorageDirectory: () => '/profile',
+        captureNativeLocalWorktreeMetadataScanExpectation: vi.fn(() => ({ repo, metadata: [] }))
+      })
+
+      const result = await queries(store, { scanRepo }).listDetected(repo)
+
+      expect(pruneMetadataMock).toHaveBeenCalledTimes(1)
+      expect(helperSawCurrent).toBe(false)
+      expect(result).toMatchObject({ authoritative: false, source: 'git' })
+      expect(result.worktrees.map((worktree) => worktree.path)).toEqual([repo.path])
+      expect(pruneLineageMock).not.toHaveBeenCalled()
+    } finally {
+      setWorktreeCatalogRouteResolver(null)
+      _resetWorktreeCatalogOwnerForTests()
+    }
   })
 })

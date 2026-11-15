@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { JSX } from 'react'
 import { ChevronDown, Workflow } from 'lucide-react'
-import { ClaudeIcon, OpenAIIcon } from '../../status-bar/icons'
+import { ClaudeIcon, OpenAIIcon } from '../../status-bar/accounts/provider-icons'
 import {
   BUBBLE_FLIGHT_MS,
   BUBBLE_GAP_MS,
@@ -20,7 +20,7 @@ import {
 import { arrowPathFromCoordTo, bubblePathBetweenRows } from './orchestration-bubble-path'
 import { AgentRow, WorkspaceCard } from './orchestration-cards'
 import { useTranslate } from '@/i18n/use-translate'
-import { forceLayoutReflow } from '@/lib/force-layout-reflow'
+import { forceLayoutReflow } from '@/lib/overlay-interaction/force-layout-reflow'
 
 const INITIAL_CHILD_PENDING: RowPending = {
   'child-codex': true,

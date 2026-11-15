@@ -3,21 +3,22 @@ import { OrcaRuntimeWithMergePreservedHeadlessMobileSessionTabs } from './mobile
 import type {
   RuntimeMobileSessionBrowserTab,
   RuntimeMobileSessionSnapshotTab
-} from '../../../shared/runtime-mobile-session-tab-contracts'
+} from '../../../shared/remote-runtime/session-graph/runtime-mobile-session-tab-contracts'
 import type {
   RuntimeMobileSessionTabsRemovedResult,
   RuntimeMobileSessionTabsSnapshot
-} from '../../../shared/runtime-session-contracts'
+} from '../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import { getMobileSessionSnapshotTabIdentityKeys } from '../session-lifecycle/projection/mobile-session-tab-merge'
 import { getRuntimeBrowserPageRegistry } from '../browser/client-pages/runtime-browser-page-registry'
 import { isHeadlessBuiltPublication } from './mobile-session-snapshot-equality'
-import { sameRuntimeBrowserPlacement } from '../../../shared/runtime-browser-placement'
-import type { ClientHostedBrowserRowsEvent } from '../../../shared/client-hosted-browser-rows'
+import { sameRuntimeBrowserPlacement } from '../../../shared/browser/client-hosting/runtime-browser-placement'
+import type { ClientHostedBrowserRowsEvent } from '../../../shared/browser/client-hosting/client-hosted-browser-rows'
 
 export abstract class OrcaRuntimeWithStoredMobileSnapshotHasStalePreservedTab extends OrcaRuntimeWithMergePreservedHeadlessMobileSessionTabs {
   protected abstract getListedBrowserTabsByPageId(
     ...args: Parameters<ScheduleMobileSessionTabsChangedMethods['getListedBrowserTabsByPageId']>
   ): ReturnType<ScheduleMobileSessionTabsChangedMethods['getListedBrowserTabsByPageId']>
+
   protected abstract notifyMobileSessionTabsChangedNow(
     ...args: Parameters<
       ScheduleMobileSessionTabsChangedMethods['notifyMobileSessionTabsChangedNow']
@@ -208,12 +209,16 @@ export abstract class OrcaRuntimeWithStoredMobileSnapshotHasStalePreservedTab ex
       tabs: []
     }
     const changeSequence = ++this.mobileSessionTabsChangeSequence
-    for (const subscription of this.mobileSessionTabListeners) {
+    for (const subscription of this.selectMobileSessionTabsListeners(worktreeId)) {
+      if (!this.mobileSessionTabListeners.has(subscription)) {
+        continue
+      }
       subscription.listener(
         this.clientSessionTabSelections.project(removed, subscription.clientNavigationId),
         changeSequence
       )
     }
+    this.clientHostedPageReconciliation.forgetWorktree(worktreeId)
     this.clientSessionTabSelections.forgetWorktree(worktreeId)
   }
 

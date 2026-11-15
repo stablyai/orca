@@ -1,5 +1,5 @@
 import { ipcMain, type IpcMainInvokeEvent } from 'electron'
-import { browserSessionRegistry } from '../../browser/sessions/browser-session-registry'
+import { browserSessionRegistry } from '../../browser/sessions/profiles/browser-session-registry'
 import type { BrowserPasswordStore } from '../../browser-passwords/browser-password-store'
 import { browserPasswordVaultFor } from '../../browser-passwords/browser-password-vault-access'
 import { isTrustedBrowserRenderer } from './browser-renderer-trust'

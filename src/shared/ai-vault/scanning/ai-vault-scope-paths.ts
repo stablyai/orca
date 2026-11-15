@@ -1,6 +1,6 @@
 import { isRuntimePathAbsolute, normalizeRuntimePathForComparison } from '../../cross-platform-path'
-import type { ProjectHostSetupProjection } from '../../project-host-setup-projection'
-import type { ProjectHostSetup } from '../../project-types'
+import type { ProjectHostSetupProjection } from '../../project/host-setup/project-host-setup-projection'
+import type { ProjectHostSetup } from '../../project/project-types'
 import type { AiVaultScope } from '../contracts/ai-vault-types'
 import type { Worktree } from '../../worktree/types'
 import { splitWorktreeIdForFilesystem } from '../../worktree/id'

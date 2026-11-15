@@ -1,8 +1,8 @@
 import type React from 'react'
 import { Button } from '@/components/ui/button'
 import { useTranslate } from '@/i18n/use-translate'
-import { getJiraSourceStatusMessage } from '../../../new-workspace/jira-source-status-message'
-import type { WorkItemSourceSearch } from '../../../new-workspace/use-work-item-source-search'
+import { getJiraSourceStatusMessage } from '../../../new-workspace/source-search/jira-source-status-message'
+import type { WorkItemSourceSearch } from '../../../new-workspace/source-search/use-work-item-source-search'
 
 export function WorkspaceAttachmentSourceStatus({
   controller,

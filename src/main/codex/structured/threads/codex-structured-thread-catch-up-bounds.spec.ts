@@ -20,7 +20,7 @@ export function registerCodexHistoryBoundsTests(input: {
     const c = await chat({ now: 1_000 })
     await c.open([], { returnedTurns: [turn(1), turn(2)], paginate: false })
     const identity = codexTurnLifecycleIdentity(SESSION, 'turn-1')
-    const old = c.journal.item(agentJournalItemKey(identity))
+    const old = await c.journal.reads.item(agentJournalItemKey(identity))
     if (old?.body.kind !== 'turn') {
       throw new Error('missing saved lifecycle')
     }
@@ -50,8 +50,8 @@ export function registerCodexHistoryBoundsTests(input: {
       ],
       paginate: false
     })
-    expect(c.texts()).not.toContain('assistant:Must not commit through stale anchor')
-    expect(c.journal.item(old.itemId)?.body).toMatchObject({
+    expect(await c.texts()).not.toContain('assistant:Must not commit through stale anchor')
+    expect((await c.journal.reads.item(old.itemId))?.body).toMatchObject({
       contextUsage: { window: { tokens: 500, capturedAt: 2_000 } }
     })
   })

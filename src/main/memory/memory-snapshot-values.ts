@@ -1,4 +1,7 @@
-import type { MemorySnapshot, ProcessCommitMetric } from '../../shared/process-stats-types'
+import type {
+  MemorySnapshot,
+  ProcessCommitMetric
+} from '../../shared/diagnostics/process-stats-types'
 import { fallbackHostMemory } from './host-memory'
 import { getProcessMemoryMetric } from './process-memory-metric'
 

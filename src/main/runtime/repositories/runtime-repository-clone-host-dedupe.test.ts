@@ -4,12 +4,12 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { Repo } from '../../../shared/repo-types'
+import type { Repo } from '../../../shared/repository/repo-types'
 import { RuntimeRepositoryCloneController } from './runtime-repository-clone-controller'
 import type { RuntimeStore } from '../construction/runtime-store-contract'
 
 vi.mock('../../repository-icons/repo-icon-autodetect', () => ({
-  detectRepoIconAndUpstream: vi.fn().mockResolvedValue({})
+  detectRepoLocalMetadata: vi.fn().mockResolvedValue({})
 }))
 vi.mock('../../workspaces/creation/worktree-root-preparation', () => ({
   prepareLocalWorktreeRootForRepo: vi.fn().mockResolvedValue(undefined)

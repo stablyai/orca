@@ -4,9 +4,9 @@ import type { PreloadApi } from '../../../../preload/api-types'
 import type { SearchResult } from '../../../../shared/file-search/code-search-types'
 import { assertFileMutationOwnershipCapability } from '../../../../shared/file-write/file-mutation-ownership'
 import type { DirEntry } from '../../../../shared/file-listing/directory-entry'
-import type { RuntimeRpcResponse } from '../../../../shared/runtime-rpc-envelope'
-import type { RuntimeStatus } from '../../../../shared/runtime-session-contracts'
-import type { SshConnectionState } from '../../../../shared/ssh-types'
+import type { RuntimeRpcResponse } from '../../../../shared/remote-runtime/rpc/runtime-rpc-envelope'
+import type { RuntimeStatus } from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
+import type { SshConnectionState } from '../../../../shared/remote-runtime/ssh/ssh-types'
 import { toRuntimeWorktreeSelector } from '../../runtime/rpc/targets/runtime-worktree-selector'
 import { createWebFileMutationMethods } from '../web-file-mutation-methods'
 import { RUNTIME_CONNECTION_CHANGED_MESSAGE } from '../web-runtime-request-registry'
@@ -177,6 +177,8 @@ export function createFileApi(): NonNullable<Partial<PreloadApi>['fs']> {
     },
     resolveDroppedPathsForAgent: async () => ({ resolvedPaths: [], skipped: [], failed: [] }),
     uploadPathsToAgentSessionAttachments: uploadBrowserFilesToWebAgentSessionAttachments,
+    // Why: the paired web client watches nothing, so there is no symlinked folder to add a watch for.
+    hasSymlinkBelowRoot: () => Promise.resolve(false),
     watchWorktree: () => Promise.resolve(),
     unwatchWorktree: () => Promise.resolve(),
     onFsChanged: () => noopUnsubscribe

@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto'
 import { appendFileSync, lstatSync, readFileSync, readdirSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { dirname, join, resolve } from 'node:path'
-import { NODE_RUNTIME_PIN } from '../../../../src/shared/node-runtime-pin.ts'
+import { NODE_RUNTIME_PIN } from '../../../../src/shared/node-runtime/node-runtime-pin.ts'
 import { assertNodePtyPatchApplied } from './build-orcad-prebuilds.mjs'
 import { nativeDependencyLockDigest } from '../../native-build/node-addons/native-dependency-lock-digest.mjs'
 import {
@@ -24,7 +24,7 @@ const WINDOWS_PREBUILD_PACKAGE_SCRIPTS = ['build:orcad-prebuilds', 'build:packag
 export const WINDOWS_PREBUILD_CACHE_INPUTS = [
   '.github/actions/prepare-orcad-prebuilds/action.yml',
   'config/patches/node-pty@1.1.0.patch',
-  'src/shared/node-runtime-pin.ts',
+  'src/shared/node-runtime/node-runtime-pin.ts',
   'config/scripts/orcad-distribution/prebuilds/build-orcad-prebuilds.mjs',
   'config/scripts/orcad-distribution/prebuilds/orcad-prebuild-node-gyp.mjs',
   'config/scripts/native-build/windows/initialize-windows-native-toolchain.mjs',

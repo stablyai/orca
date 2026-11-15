@@ -3,12 +3,12 @@ import type {
   SkillInstallRequest,
   SkillInstallResult,
   SkillPlacementResult
-} from '../../../shared/skill-install-contract'
-import type { SkillInstallProviderId } from '../../../shared/skill-install-providers'
+} from '../../../shared/skills/installation/skill-install-contract'
+import type { SkillInstallProviderId } from '../../../shared/skills/installation/skill-install-providers'
 import type {
   SkillBundleInstallRequest,
   SkillBundleInstallResult
-} from '../../../shared/skill-bundle-install-contract'
+} from '../../../shared/skills/installation/skill-bundle-install-contract'
 import { startSpan, type ActiveSpan } from '../../observability/tracer'
 import { summarizeSkillBundleObservation } from './skill-bundle-observation-summary'
 import { skillInstallFailureFromError } from '../install/skill-install-operation-error'

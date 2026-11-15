@@ -1,5 +1,5 @@
 import { posix } from 'node:path'
-import type { WslUncPathInfo as WslPathInfo } from '../../../shared/wsl-paths'
+import type { WslUncPathInfo as WslPathInfo } from '../../../shared/file-access/wsl-paths'
 
 const REJECTION_PREFIX = 'ORCA_WSL_DELETE_REJECT:'
 
