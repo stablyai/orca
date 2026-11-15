@@ -46,7 +46,7 @@ function installThreads(count: number, prompt = 'Task PROJECT ☃ progress'): st
   }
   useAppStore.setState({
     agentStatusByPaneKey: entries,
-    retainedAgentsByPaneKey: {},
+
     migrationUnsupportedByPtyId: {},
     runtimeAgentOrchestrationByPaneKey: {},
     acknowledgedAgentsByPaneKey: {},

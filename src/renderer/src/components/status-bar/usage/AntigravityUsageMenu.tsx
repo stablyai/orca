@@ -60,6 +60,7 @@ export function AntigravityUsageMenu({
       }
     >
       <AccountSwitchList
+        showResetColumn
         heading={t('auto.components.status.bar.antigravity.accounts', 'Saved Antigravity Accounts')}
       >
         {accounts.map((entry) => (
