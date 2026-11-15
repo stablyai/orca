@@ -2,6 +2,7 @@ import { translate } from '@/i18n/i18n'
 import type { AppState } from '../../../types'
 import type { NewBrowserTabProfile } from '../browser-slice-contract'
 import { findFirstIndexedWorktree } from '../../../../lib/workspace/ownership/worktree-runtime-owner-index'
+import { getResourceExecutionHostIdForWorktree } from '../../../../lib/workspace/ownership/worktree-runtime-owner'
 import {
   getBrowserProfileHostId,
   getDefaultBrowserProfileForHost
@@ -47,24 +48,26 @@ export function resolveNewBrowserTabProfile(
   return { sessionProfileId: getDefaultBrowserProfileForHost(state, hostId) }
 }
 
-/** The repo's own profile pick on the tab's host (null = Default), or undefined to follow the Browser setting. */
+/** The repo's own profile pick (null = Default), or undefined to follow the Browser setting. */
 export function getRepoBrowserProfileId(
-  state: Pick<AppState, 'repos' | 'browserSessionProfilesByHostId'>,
+  state: AppState,
   worktreeId: string,
   hostId: ExecutionHostId
 ): string | null | undefined {
   if (parseWorkspaceKey(worktreeId)?.type === 'folder') {
     return undefined
   }
-  // Why profile hosts: ids belong to one host's profile list, and agent opens name SSH pages by this desktop.
+  // Why the workspace's owner: agent opens name an SSH page by this desktop, but the pick lives on the SSH row.
+  const ownerHostId = getResourceExecutionHostIdForWorktree(state, worktreeId)
   const profileHostId = getBrowserProfileHostId(hostId)
+  // Profile ids belong to one host's list, so a pick can't name a profile on another host.
+  if (getBrowserProfileHostId(ownerHostId) !== profileHostId) {
+    return undefined
+  }
   const repoId = getRepoIdFromWorktreeId(worktreeId)
-  const rows = state.repos.filter(
-    (repo) =>
-      repo.id === repoId && getBrowserProfileHostId(getRepoExecutionHostId(repo)) === profileHostId
-  )
-  const profileId = (rows.find((repo) => getRepoExecutionHostId(repo) === hostId) ?? rows[0])
-    ?.browserProfileId
+  const profileId = state.repos.find(
+    (repo) => repo.id === repoId && getRepoExecutionHostId(repo) === ownerHostId
+  )?.browserProfileId
   if (typeof profileId !== 'string' || !profileId) {
     return undefined
   }

@@ -68,7 +68,7 @@ export function RepositoryBrowserProfileSection({
   // Orca-managed repo/workspace profiles go away with their owner, so they're offered only when already picked.
   const choices = (profiles ?? []).filter((profile) => !profile.owner || profile.id === picked)
   const pickMissing = Boolean(picked) && loaded && !choices.some((p) => p.id === picked)
-  const value = picked && !pickMissing ? picked : INHERIT_VALUE
+  const value = picked || INHERIT_VALUE
   const scopeLabel =
     scope === 'repo'
       ? t('settings.browser.profileScope.optionRepo', 'Per repo')
@@ -117,6 +117,12 @@ export function RepositoryBrowserProfileSection({
               )}
             </SelectItem>
             <SelectSeparator />
+            {pickMissing && picked ? (
+              // A distinct value, so choosing the Browser setting still clears the stale pick.
+              <SelectItem value={picked} disabled>
+                {t('components.RepositoryBrowserProfileSection.deletedOption', 'Deleted profile')}
+              </SelectItem>
+            ) : null}
             {choices.map((profile) => (
               <SelectItem key={profile.id} value={profile.id}>
                 {profile.label}
