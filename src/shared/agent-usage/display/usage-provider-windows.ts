@@ -1,4 +1,4 @@
-import type { ProviderRateLimits, RateLimitWindow } from './rate-limit-types'
+import type { ProviderRateLimits, RateLimitWindow } from '../rate-limits/rate-limit-types'
 
 // Structural so mobile's decoded snapshot, whose provider id is any string, fits too.
 type ProviderUsageWindows = {

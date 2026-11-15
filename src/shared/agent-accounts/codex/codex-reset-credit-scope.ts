@@ -2,8 +2,8 @@ import type {
   ProviderRateLimits,
   RateLimitRuntimeTarget,
   RateLimitWindow
-} from './rate-limit-types'
-import type { CodexManagedAccountSummary } from './managed-account-types'
+} from '../../agent-usage/rate-limits/rate-limit-types'
+import type { CodexManagedAccountSummary } from '../managed-account-types'
 
 export type CodexResetCreditExpectedScope = {
   target: RateLimitRuntimeTarget

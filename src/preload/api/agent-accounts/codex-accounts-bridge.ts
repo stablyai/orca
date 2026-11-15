@@ -1,5 +1,5 @@
 import { ipcRenderer } from 'electron'
-import { CODEX_PENDING_LOGIN_URL_CHANGED_CHANNEL } from '../../../shared/codex-auth-errors'
+import { CODEX_PENDING_LOGIN_URL_CHANGED_CHANNEL } from '../../../shared/agent-accounts/codex/codex-auth-errors'
 import type { PreloadApi } from '../../api-types'
 
 export const codexAccountsApi = {

@@ -1,4 +1,4 @@
-import type { CodexAccountSelectionTarget } from './codex-selection-lane'
+import type { CodexAccountSelectionTarget } from './codex/codex-selection-lane'
 
 export type ManagedDataAccountProvider = 'opencode' | 'devin'
 
