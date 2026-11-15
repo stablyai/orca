@@ -6,7 +6,7 @@ import { cn } from '@/lib/class-names'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 
-export function CheckRunCopyButton({
+export function CopyTextButton({
   text,
   label
 }: {

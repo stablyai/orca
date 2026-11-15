@@ -11,6 +11,7 @@ import { useEffect, useState } from 'react'
 import { AlertTriangle, X } from 'lucide-react'
 import { useTranslate } from '@/i18n/use-translate'
 import { Button } from '@/components/ui/button'
+import { CopyTextButton } from '@/components/clipboard/CopyTextButton'
 import { isAgentLaunchOnlyError } from '../launch-outcome/agent-launch-pane-notice-text'
 import { hasClientEnvironmentFooter } from '../../../../../shared/client-environment-info'
 import {
@@ -88,7 +89,11 @@ export function TerminalErrorToast({
     }
   }, [displayError, showClientEnvironment])
 
-  const footer = environmentFooter?.error === displayError ? environmentFooter.footer : ''
+  const footer =
+    showClientEnvironment && environmentFooter?.error === displayError
+      ? environmentFooter.footer
+      : ''
+  const copyText = footer ? `${displayError}\n\n${footer}` : displayError
   const handleRetry = async (): Promise<void> => {
     if (!onRetry || retrying) {
       return
@@ -130,14 +135,23 @@ export function TerminalErrorToast({
               : t('auto.components.terminal.pane.TerminalErrorToast.errorTitle', 'Terminal error')}
           </div>
         </div>
-        <Button
-          variant="ghost"
-          size="icon-xs"
-          onClick={onDismiss}
-          aria-label={t('terminal.paneTopBanner.dismiss', 'Dismiss')}
-        >
-          <X />
-        </Button>
+        <div className="flex shrink-0 items-center gap-1">
+          <CopyTextButton
+            text={copyText}
+            label={t(
+              'auto.components.terminal.pane.TerminalErrorToast.copyErrorDetails',
+              'Copy error details'
+            )}
+          />
+          <Button
+            variant="ghost"
+            size="icon-xs"
+            onClick={onDismiss}
+            aria-label={t('terminal.paneTopBanner.dismiss', 'Dismiss')}
+          >
+            <X />
+          </Button>
+        </div>
       </div>
       <div className="shrink-0 px-4 pb-4">
         <div className="whitespace-pre-wrap break-words text-sm leading-5">{displayError}</div>
@@ -163,7 +177,7 @@ export function TerminalErrorToast({
             .
           </p>
         ) : null}
-        {showClientEnvironment && footer ? (
+        {footer ? (
           <div className="mt-3 whitespace-pre-wrap break-words font-mono text-xs text-muted-foreground">
             {footer}
           </div>
