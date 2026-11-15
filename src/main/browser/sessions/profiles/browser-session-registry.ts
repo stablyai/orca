@@ -7,7 +7,7 @@ import {
   DEFAULT_LOCAL_ORCA_PROFILE_ID,
   getOrcaProfileBrowserDefaultPartition,
   getOrcaProfileBrowserSessionPartition
-} from '../../../../shared/orca-profiles'
+} from '../../../../shared/orca-profiles/orca-profiles'
 import type {
   BrowserSessionProfile,
   BrowserSessionProfileScope

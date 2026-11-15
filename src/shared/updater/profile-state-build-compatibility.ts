@@ -1,4 +1,4 @@
-import { hasReachedAppVersion } from './app-version'
+import { hasReachedAppVersion } from '../app-lifecycle/identity/app-version'
 
 // v1.4.214 is the first stable release containing the SQLite profile cutover.
 export const SQLITE_PROFILE_RELEASE_FLOOR = '1.4.214'

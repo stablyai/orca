@@ -15,7 +15,7 @@ import type { Translate } from '@/i18n/use-translate'
 import {
   MIN_COMPATIBLE_RUNTIME_SERVER_VERSION,
   RUNTIME_PROTOCOL_VERSION
-} from '../../../../../shared/protocol-version'
+} from '../../../../../shared/remote-runtime/protocol/protocol-version'
 import type { AutomationHostTarget } from './automation-host-client'
 import type { SshConnectionState } from '../../../../../shared/remote-runtime/ssh/ssh-types'
 import type { ProjectHostSetup } from '../../../../../shared/project/project-types'

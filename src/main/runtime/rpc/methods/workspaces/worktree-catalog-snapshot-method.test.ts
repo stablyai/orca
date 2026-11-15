@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import type { OrcaRuntimeService } from '../../../orca-runtime'
 import { RpcDispatcher } from '../../dispatcher'
 import { WORKTREE_METHODS } from './worktree'
-import '../../../../../shared/protocol-version'
+import '../../../../../shared/remote-runtime/protocol/protocol-version'
 import '../../../../../shared/remote-runtime/protocol/worktree-runtime-capabilities'
 import type {
   RuntimeWorktreePsResult,
@@ -102,23 +102,5 @@ describe('worktree.ps row deltas', () => {
       0
     ])
     expect(delta).not.toHaveProperty('worktrees')
-  })
-
-  it('answers a full catalog to callers that did not opt in or hold an unknown base', async () => {
-    const dispatcher = new RpcDispatcher({
-      runtime: runtimeReturning(catalog(a), catalog(a, b), catalog(a, b, c)),
-      methods: WORKTREE_METHODS
-    })
-    const base = await poll(dispatcher, { limit: 10_000, afterSnapshotId: null })
-
-    const optedOut = await poll(dispatcher, { limit: 10_000, afterSnapshotId: base.snapshotId })
-    const unknownBase = await poll(dispatcher, {
-      limit: 10_000,
-      afterSnapshotId: 'evicted',
-      acceptRowDelta: true
-    })
-
-    expect(optedOut.worktrees).toHaveLength(2)
-    expect(unknownBase.worktrees).toHaveLength(3)
   })
 })

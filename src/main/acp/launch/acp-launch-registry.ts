@@ -5,7 +5,7 @@ import { OPENCODE_ACP_DIALECT } from '../acp-dialects/opencode-dialect'
 import { directoryAccountBinding } from './acp-account-binding'
 import { openCodeAcpAccountBinding } from '../../opencode/accounts/opencode-structured-account-home'
 import { scrubOpenCodeAcpEnvironment } from '../../opencode/acp/opencode-acp-environment'
-import { compareAppVersions } from '../../../shared/app-version'
+import { compareAppVersions } from '../../../shared/app-lifecycle/identity/app-version'
 import { readGrokModelCatalog } from '../acp-dialects/grok-model-catalog'
 import {
   OPENCODE_MODEL_LISTING_ARGS,

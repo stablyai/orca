@@ -68,7 +68,7 @@ import {
 } from '../../shared/remote-runtime/host-store/runtime-environment-store'
 import { getPreferredPairedRuntimeConnection } from '../../shared/remote-runtime/host-catalog/runtime-environments'
 import { sendRemoteRuntimeRequestOnSocket } from '../../shared/remote-runtime/requests/remote-runtime-request-socket'
-import { ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES } from '../../shared/electron-remote-runtime-client-capabilities'
+import { ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES } from '../../shared/remote-runtime/protocol/electron-remote-runtime-client-capabilities'
 import { runtimeHostStatusError } from '../../shared/remote-runtime/host-status/runtime-host-status'
 import type { RuntimeStatus } from '../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import { DeviceRegistry } from '../runtime/rpc/server/pairing/device-registry'

@@ -1,4 +1,4 @@
-import { compareAppVersions, isValidAppVersion } from './app-version'
+import { compareAppVersions, isValidAppVersion } from '../app-lifecycle/identity/app-version'
 
 export type ReleaseChannel = 'stable' | 'rc' | 'hourly' | 'daily' | 'adhoc'
 

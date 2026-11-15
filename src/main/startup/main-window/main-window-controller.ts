@@ -46,7 +46,7 @@ import {
   applyServeDesktopWindowActivationPolicy
 } from '../../window/activation/foreground-activation-policy'
 import type { MainWindowOpenOptions } from '../../window/main-window/main-window-contracts'
-import { argvRequestsBackgroundOpen } from '../../../shared/background-open-argv'
+import { argvRequestsBackgroundOpen } from '../../../shared/app-lifecycle/launch/background-open-argv'
 
 const TRAY_CREATE_FALLBACK_MS = 12_000
 const AGENT_STATE_CRASH_BREADCRUMB_MIN_INTERVAL_MS = 30_000
