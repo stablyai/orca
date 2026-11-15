@@ -63,12 +63,12 @@ export async function isSessionFolderOfGoneWorktree(
   return gone
 }
 
-/** Uncached recheck just before deletion, in case a volume detached during the scan. */
-export function isWorktreeStillGone(
-  worktreeId: string,
+/** A recheck just before deletion, in case a volume detached during the scan; mounts are re-probed once per parent. */
+export function createStillGoneCheck(
   scan: SessionFolderGcScan
-): Promise<boolean> {
-  return isLocalWorktreeGone(worktreeId, { ...scan, presentByParentKey: new Map() })
+): (worktreeId: string) => Promise<boolean> {
+  const fresh = { ...scan, presentByParentKey: new Map<string, Promise<boolean>>() }
+  return (worktreeId) => isLocalWorktreeGone(worktreeId, fresh)
 }
 
 async function isLocalWorktreeGone(

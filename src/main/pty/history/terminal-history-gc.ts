@@ -17,7 +17,7 @@ import { forEachWithConcurrency } from '../../../shared/concurrency/map-with-con
 import { yieldToEventLoop } from '../../../shared/concurrency/event-loop-yield'
 import {
   isSessionFolderOfGoneWorktree,
-  isWorktreeStillGone,
+  createStillGoneCheck,
   sessionFolderOwner,
   type SessionFolderGcOwners,
   type SessionFolderGcScan
@@ -192,7 +192,7 @@ async function executeHistoryGc(
     }
 
     const sessionTotals = sessionFolders
-      ? await pruneGoneWorktreeSessionFolders(sessionFolders)
+      ? await pruneGoneWorktreeSessionFolders(sessionFolders, signal)
       : { orphaned: 0, pruned: 0 }
 
     // Fish files can outlive their metadata; include recorded dirs in case XDG_DATA_HOME changed.
@@ -220,32 +220,42 @@ async function executeHistoryGc(
 }
 
 /** Saved tabs are checked once over all candidates, after every root is scanned. */
-async function pruneGoneWorktreeSessionFolders(scan: SessionFolderGcScan): Promise<{
-  orphaned: number
-  pruned: number
-}> {
+async function pruneGoneWorktreeSessionFolders(
+  scan: SessionFolderGcScan,
+  signal: AbortSignal
+): Promise<{ orphaned: number; pruned: number }> {
   if (scan.candidates.length === 0) {
     return { orphaned: 0, pruned: 0 }
   }
   const referenced = scan.referencedSessionIds(scan.candidates)
-  const stillGone = new Map<string, Promise<boolean>>()
+  const byWorktree = new Map<string, SessionFolderGcScan['candidates']>()
+  for (const candidate of scan.candidates) {
+    if (referenced.has(candidate.sessionId)) {
+      continue
+    }
+    const folders = byWorktree.get(candidate.worktreeId)
+    if (folders) {
+      folders.push(candidate)
+    } else {
+      byWorktree.set(candidate.worktreeId, [candidate])
+    }
+  }
+  const isStillGone = createStillGoneCheck(scan)
   let orphaned = 0
   let pruned = 0
-  for (const { root, entryPath, sessionId, worktreeId } of scan.candidates) {
-    if (referenced.has(sessionId)) {
+  // Each worktree's folders are removed right after its own recheck.
+  for (const [worktreeId, folders] of byWorktree) {
+    if (signal.aborted) {
+      break
+    }
+    if (!(await isStillGone(worktreeId))) {
       continue
     }
-    let gone = stillGone.get(worktreeId)
-    if (!gone) {
-      gone = isWorktreeStillGone(worktreeId, scan)
-      stillGone.set(worktreeId, gone)
-    }
-    if (!(await gone)) {
-      continue
-    }
-    orphaned++
-    if (scheduleWorktreeHistoryTreeDeletion(entryPath, root)) {
-      pruned++
+    for (const { root, entryPath } of folders) {
+      orphaned++
+      if (scheduleWorktreeHistoryTreeDeletion(entryPath, root)) {
+        pruned++
+      }
     }
   }
   return { orphaned, pruned }
