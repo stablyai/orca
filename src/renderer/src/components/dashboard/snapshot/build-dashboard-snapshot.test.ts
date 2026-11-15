@@ -108,7 +108,6 @@ function baseState(overrides: Partial<DashboardSnapshotState>): DashboardSnapsho
     worktreesByRepo: { r1: [worktree()] },
     tabsByWorktree: { w1: [tab()] },
     agentStatusByPaneKey: {},
-    retainedAgentsByPaneKey: {},
     migrationUnsupportedByPtyId: {},
     runtimeAgentOrchestrationByPaneKey: {},
     terminalLayoutsByTabId: {

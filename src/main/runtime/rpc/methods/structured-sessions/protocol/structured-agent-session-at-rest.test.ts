@@ -22,7 +22,7 @@ import { setStructuredAgentSessionHost } from '../../../../../native-chat/agent-
 import {
   editPersistedTestAgentSessionStore,
   withTestAgentSessionDatabase
-} from '../../../../agent-session/records/agent-session-record-store-test-harness'
+} from '../../../../agent-session/records/agent-session-record-store-persistence.test-fixture'
 import type { RpcResponse } from '../../../core'
 import { journalSqlReads } from '../../../../../native-chat/agent-session-journal/journal-sql-reads'
 

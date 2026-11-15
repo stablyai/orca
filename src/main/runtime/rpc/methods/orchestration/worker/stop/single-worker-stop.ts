@@ -216,11 +216,14 @@ export async function stopSingleWorker(
         stop.closeAttempted ? 'closed_agent_terminal' : 'none'
       )
     }
-    const stopped = db.settleWorkerStop(dispatchId)
+    // Closing the chat already settles the stop, as a terminal's exit does.
+    if (db.getWorkerDispatch(dispatchId)?.state !== 'stopped') {
+      db.settleWorkerStop(dispatchId)
+    }
     runtime.notifyMessageArrived(`dispatch:${dispatchId}`, 'status')
     return {
       dispatchId,
-      state: stopped.state,
+      state: db.getWorkerDispatch(dispatchId)?.state ?? 'stopped',
       alreadySettled: false,
       processAction: 'closed_agent_terminal'
     }
