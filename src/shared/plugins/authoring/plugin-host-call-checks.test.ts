@@ -19,7 +19,7 @@ vi.mock('../workers/plugin-host-api', async (importOriginal) => {
   }
 })
 
-function check(engines: string, files: Record<string, string>) {
+function manifestFor(engines: string) {
   // Why format 1 below 1.4.245: format 2 itself needs that release.
   const format = satisfiesOrcaEngineRange(engines.slice(2), '>=1.4.245')
     ? {}
@@ -38,72 +38,78 @@ function check(engines: string, files: Record<string, string>) {
   if (!parsed.ok) {
     throw new Error(parsed.error)
   }
-  return pluginHostCallFindings(parsed.manifest, async (path) =>
+  return parsed.manifest
+}
+
+function check(engines: string, files: Record<string, string>) {
+  return pluginHostCallFindings(manifestFor(engines), async (path) =>
     path in files ? { text: files[path]! } : null
   )
 }
 
+const unknown = (file: string, name: string) =>
+  `${file}: calls host method "${name}", which Orca's Host API 1.10 does not have; it is unreleased or misspelled`
+
 describe('host calls in shipped code', () => {
-  it('requires engines.orca to cover unguarded calls, per surface', async () => {
-    const { errors } = await check('>=1.4.250', {
-      'dist/main.mjs': `
+  it('warns, per surface, about calls newer than engines.orca unless has-guarded', async () => {
+    expect(
+      await check('>=1.4.250', {
+        'dist/main.mjs': `
         await orca.host.call('project.list', {})
         if (orca.host.has('workspace.rename')) await orca.host.call('workspace.rename', {})
         await orca.host.call('storage.get', { key: 'a' })`,
-      // storage.get reached frames in minor 2 (1.4.246); this floor already covers it.
-      'ui/panel.html': `<script type="module">window.orca.host.call("storage.get", {})</script>`
+        // storage.get reached frames in minor 2 (1.4.246); this floor already covers it.
+        'ui/panel.html': `<script type="module">window.orca.host.call("storage.get", {})</script>`
+      })
+    ).toEqual({
+      errors: [],
+      warnings: [
+        `engines.orca: must be at least >=1.4.259, because dist/main.mjs calls host method "project.list", which needs Orca 1.4.259; or guard the call with orca.host.has('project.list')`
+      ]
     })
-    expect(errors).toEqual([
-      `engines.orca: must be at least >=1.4.259, because dist/main.mjs calls host method "project.list", which needs Orca 1.4.259; or guard the call with orca.host.has('project.list')`
-    ])
   })
 
-  it('follows imports and root-relative scripts to report unknown, proposed and wrong-surface calls', async () => {
-    const { errors, warnings } = await check('>=1.4.259', {
-      'dist/main.mjs': `import { run } from './chunks/run.js'`,
-      'dist/chunks/run.js': `
+  it('fails unknown and proposed calls, and warns about wrong-surface and deprecated ones', async () => {
+    expect(
+      await check('>=1.4.259', {
+        'dist/main.mjs': `import { run } from './chunks/run.js'`,
+        'dist/chunks/run.js': `
         orca.host.call('workspace.nope')
         orca.host.call('agents.list')
         orca.host.call('storage.keys')`,
-      'ui/panel.html': '<script src="/dist/panel.js"></script>',
-      'dist/panel.js': `orca.host.call('terminal.sendText', { terminalId: 't', text: 'x' })`
+        'ui/panel.html': '<script src="/dist/panel.js"></script>',
+        'dist/panel.js': `orca.host.call('terminal.sendText', { terminalId: 't', text: 'x' })`
+      })
+    ).toEqual({
+      errors: [
+        unknown('dist/chunks/run.js', 'workspace.nope'),
+        'dist/chunks/run.js: calls proposed host method "agents.list"; only development plugins (orca plugin dev) may call it until it is released'
+      ],
+      warnings: [
+        'deprecated host method storage.keys: called in dist/chunks/run.js; deprecated since Host API 1.9, it keeps working until the next major',
+        'dist/panel.js: calls host method "terminal.sendText" from panels, which cannot call it (surfaces: worker)'
+      ]
     })
-    expect(errors).toEqual([
-      `dist/chunks/run.js: calls host method "workspace.nope", which Orca's Host API 1.10 does not have; it is unreleased or misspelled`,
-      'dist/chunks/run.js: calls proposed host method "agents.list"; only development plugins (orca plugin dev) may call it until it is released',
-      'dist/panel.js: calls host method "terminal.sendText" from panels, which cannot call it (surfaces: worker)'
-    ])
-    expect(warnings).toEqual([
-      'deprecated host method storage.keys: called in dist/chunks/run.js; deprecated since Host API 1.9, it keeps working until the next major'
-    ])
   })
 
-  it('downgrades guarded calls to warnings', async () => {
+  it('downgrades unknown and proposed calls guarded by a literal has, including has?.()', async () => {
     const { errors, warnings } = await check('>=1.4.250', {
       'dist/main.mjs': `
-        if (orca.api.minor >= 7) await orca.host.call('project.list', {})
-        if (orca.host.has('workspace.later')) orca.host.call('workspace.later')
-        if (orca.host.has('agents.list')) orca.host.call('agents.list')`,
-      'ui/panel.html': `<script>if (orca.host.has('terminal.sendText')) orca.host.call('terminal.sendText', {})</script>`
+        if (orca.host.has?.('workspace.later')) orca.host.call('workspace.later')
+        if (orca.host.has('agents.list')) orca.host.call('agents.list')`
     })
     expect(errors).toEqual([])
     expect(warnings).toEqual([
-      `dist/main.mjs: calls host method "workspace.later", which Orca's Host API 1.10 does not have; it is unreleased or misspelled; the orca.host.has('workspace.later') guard skips it`,
-      `dist/main.mjs: calls proposed host method "agents.list"; only development plugins (orca plugin dev) may call it until it is released; the orca.host.has('agents.list') guard skips it`,
-      `engines.orca: must be at least >=1.4.259, because dist/main.mjs calls host method "project.list", which needs Orca 1.4.259; or guard the call with orca.host.has('project.list'); taken as guarded by the orca.api.minor check in this plugin`,
-      `ui/panel.html: calls host method "terminal.sendText" from panels, which cannot call it (surfaces: worker); the orca.host.has('terminal.sendText') guard skips it`
+      `${unknown('dist/main.mjs', 'workspace.later')}; the orca.host.has('workspace.later') guard skips it`,
+      `dist/main.mjs: calls proposed host method "agents.list"; only development plugins (orca plugin dev) may call it until it is released; the orca.host.has('agents.list') guard skips it`
     ])
   })
 
-  it('keeps guarded calls as errors where engines.orca predates orca.host.has', async () => {
+  it('keeps guarded unknown calls as errors where engines.orca predates orca.host.has', async () => {
     const { errors } = await check('>=1.4.200', {
-      'dist/main.mjs': `if (orca.host.has('workspace.later')) orca.host.call('workspace.later')`,
-      'ui/panel.html': `<script>if (orca.host.has('terminal.sendText')) orca.host.call('terminal.sendText', {})</script>`
+      'dist/main.mjs': `if (orca.host.has('workspace.later')) orca.host.call('workspace.later')`
     })
-    expect(errors).toEqual([
-      `dist/main.mjs: calls host method "workspace.later", which Orca's Host API 1.10 does not have; it is unreleased or misspelled`,
-      'ui/panel.html: calls host method "terminal.sendText" from panels, which cannot call it (surfaces: worker)'
-    ])
+    expect(errors).toEqual([unknown('dist/main.mjs', 'workspace.later')])
   })
 
   it('ignores comments and non-host receivers, but not calls after a URL', async () => {
@@ -115,9 +121,7 @@ describe('host calls in shipped code', () => {
         const url = 'https://example.com/a'; orca.host.call('workspace.afterUrl')`,
       'ui/panel.html': '<!-- <script>orca.host.call("workspace.htmlComment")</script> -->'
     })
-    expect(errors).toEqual([
-      `dist/main.mjs: calls host method "workspace.afterUrl", which Orca's Host API 1.10 does not have; it is unreleased or misspelled`
-    ])
+    expect(errors).toEqual([unknown('dist/main.mjs', 'workspace.afterUrl')])
   })
 
   it('warns when a panel page loads no script the check can read', async () => {
@@ -128,5 +132,27 @@ describe('host calls in shipped code', () => {
     expect(warnings).toEqual([
       'ui/panel.html: loads no script this check could read, so its host calls were not checked'
     ])
+  })
+
+  it('stops probing imports that do not exist at the lookup budget', async () => {
+    const imports = Array.from({ length: 20_000 }, (_, i) => `import './missing-${i}.js'`)
+    const files: Record<string, string> = { 'dist/main.mjs': imports.join('\n') }
+    let reads = 0
+    const { warnings } = await pluginHostCallFindings(manifestFor('>=1.4.259'), async (path) => {
+      reads += 1
+      return path in files ? { text: files[path]! } : null
+    })
+    expect(reads).toBeLessThanOrEqual(512)
+    expect(warnings).toContain(
+      'host calls were checked in the first 64 files (32 MiB, 512 lookups) the entries load; the rest were not checked'
+    )
+  })
+
+  it('reads a page full of unclosed script and comment tags in linear time', async () => {
+    const page = `${'<script <!-- '.repeat(100_000)}`
+    const started = performance.now()
+    await check('>=1.4.259', { 'dist/main.mjs': '', 'ui/panel.html': page })
+    // Why so loose: a quadratic scan of this page takes tens of seconds; linear takes milliseconds.
+    expect(performance.now() - started).toBeLessThan(3000)
   })
 })

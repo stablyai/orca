@@ -40,8 +40,26 @@ function skipString(text: string, start: number): number {
  * Blanks `//` and `/* *\/` comments (and `<!-- -->` in HTML) so commented-out calls do not count,
  * while keeping strings and regex literals, so a URL's `//` does not end the line.
  */
+// Why indexOf, not a lazy regex: many unclosed `<!--` would rescan the rest of the page each time.
+function stripHtmlComments(text: string): string {
+  const kept: string[] = []
+  let from = 0
+  let open = text.indexOf('<!--')
+  while (open !== -1) {
+    kept.push(text.slice(from, open), ' ')
+    const close = text.indexOf('-->', open + 4)
+    if (close === -1) {
+      return kept.join('')
+    }
+    from = close + 3
+    open = text.indexOf('<!--', from)
+  }
+  kept.push(text.slice(from))
+  return kept.join('')
+}
+
 export function stripScriptComments(text: string, html: boolean): string {
-  const source = html ? text.replace(/<!--[\s\S]*?-->/g, ' ') : text
+  const source = html ? stripHtmlComments(text) : text
   const kept: string[] = []
   let from = 0
   let last = ''
