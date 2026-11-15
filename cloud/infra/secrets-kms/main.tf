@@ -91,6 +91,8 @@ resource "google_secret_manager_secret" "kek_escrow" {
 
   lifecycle {
     prevent_destroy = true
+    # Version aliases (k1, k2, ...) and annotations are set with gcloud when a KEK version is added.
+    ignore_changes = [version_aliases, annotations]
   }
 }
 
