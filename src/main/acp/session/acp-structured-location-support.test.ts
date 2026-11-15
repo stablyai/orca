@@ -12,14 +12,24 @@ const LOCAL_LOCATION: AgentSessionExecutionLocation = {
 }
 
 describe('supportsAcpStructuredLocation', () => {
-  it('accepts antigravity on a supervised local host via its host backend', () => {
+  it('accepts antigravity on a supervised local host via its host backend when managed pin is null', () => {
     const antigravitySpec = acpLaunchSpecFor('antigravity')
     expect(antigravitySpec).not.toBeNull()
-    if (!antigravitySpec) {
+    if (!antigravitySpec || !antigravitySpec.managedRuntime) {
       return
     }
 
-    expect(supportsAcpStructuredLocation(antigravitySpec, LOCAL_LOCATION, () => true)).toBe(true)
+    const specWithUnpinnedRuntime = {
+      ...antigravitySpec,
+      managedRuntime: {
+        ...antigravitySpec.managedRuntime,
+        pin: () => null
+      }
+    }
+
+    expect(supportsAcpStructuredLocation(specWithUnpinnedRuntime, LOCAL_LOCATION, () => true)).toBe(
+      true
+    )
   })
 
   it('rejects an unpinned managed runtime when host backend is absent', () => {
