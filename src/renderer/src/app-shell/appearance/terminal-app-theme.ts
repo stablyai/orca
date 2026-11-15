@@ -120,7 +120,6 @@ export function synthesizeTerminalAppTheme(
   }
   const light = base === 'light'
   const { background, foreground, color: ansi, accent: accentColor } = palette
-  const selection = palette.color('selectionBackground')
   const surfacesToward = (tint: Rgba) => ({
     popover: mix(tint, background, 5),
     muted: mix(tint, background, 7),
@@ -160,6 +159,7 @@ export function synthesizeTerminalAppTheme(
     const color = ansi(key)
     return color ? [[`--chart-${index + 1}`, rgbaToHex(color)] as const] : []
   })
+  const selection = palette.color('selectionBackground')
   const tokens = completePluginAppThemeTokens({
     '--background': rgbaToHex(background),
     '--foreground': rgbaToHex(text),
