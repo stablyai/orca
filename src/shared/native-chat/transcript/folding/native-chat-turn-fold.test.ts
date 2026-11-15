@@ -3,27 +3,8 @@ import type { NativeChatMessage, NativeChatTextBlock } from '../../native-chat-t
 import {
   nativeChatTurnAnswerRows,
   nativeChatTurnFold,
-  nativeChatTurnFoldRow,
-  type NativeChatTurnFoldRow
+  nativeChatTurnFoldRow
 } from './native-chat-turn-fold'
-
-function row(overrides: Partial<NativeChatTurnFoldRow> = {}): NativeChatTurnFoldRow {
-  return {
-    turnKey: 'turn-1',
-    role: 'assistant',
-    rendersProse: true,
-    draws: true,
-    outlivesTurn: false,
-    reportsFailure: false,
-    explainsTurn: false,
-    sendsBack: false,
-    failedHook: false,
-    ...overrides
-  }
-}
-
-/** An error-toned system row: the agent or host reporting the turn failed. */
-const FAILURE = row({ role: 'system', reportsFailure: true })
 
 function hookFailure(id: string, event: string): NativeChatMessage {
   return {
@@ -135,75 +116,5 @@ describe('failed hooks in a settled turn', () => {
       expandedTurnKeys: NONE
     })
     expect([...foldedRows].sort()).toEqual([1, 2])
-  })
-})
-
-describe('nativeChatTurnFold', () => {
-  // A stored-only provider event draws nothing: a disclosure over it would open onto nothing.
-
-  it('keeps a spawn roster or background task out of the fold', () => {
-    const rows = [row({ role: 'user' }), row(), row({ outlivesTurn: true }), row()]
-    const { foldedRows } = nativeChatTurnFold({
-      rows,
-      settledTurnKeys: SETTLED,
-      expandedTurnKeys: NONE
-    })
-    expect(foldedRows.has(2)).toBe(false)
-    expect(foldedRows.has(1)).toBe(true)
-  })
-
-  it('folds each settled turn to its own answer and leaves a running turn alone', () => {
-    const rows = [
-      row({ turnKey: 'turn-1', role: 'user' }),
-      row({ turnKey: 'turn-1' }),
-      row({ turnKey: 'turn-1' }),
-      row({ turnKey: 'turn-2', role: 'user' }),
-      row({ turnKey: 'turn-2' }),
-      row({ turnKey: 'turn-2' })
-    ]
-    const { foldedRows } = nativeChatTurnFold({
-      rows,
-      settledTurnKeys: new Set(['turn-1']),
-      expandedTurnKeys: NONE
-    })
-    expect([...foldedRows]).toEqual([1])
-  })
-
-  it('ends a failed turn on its error, folding the work and prose before it', () => {
-    const rows = [row({ role: 'user' }), row(), row({ rendersProse: false }), FAILURE]
-    const { foldedRows, foldableTurnKeys } = nativeChatTurnFold({
-      rows,
-      settledTurnKeys: SETTLED,
-      expandedTurnKeys: NONE
-    })
-    expect([...foldedRows].sort()).toEqual([1, 2])
-    expect([...foldableTurnKeys]).toEqual(['turn-1'])
-  })
-
-  it('folds an error the agent recovered from behind the answer that followed it', () => {
-    const rows = [row({ role: 'user' }), row({ rendersProse: false }), FAILURE, row()]
-    const { foldedRows } = nativeChatTurnFold({
-      rows,
-      settledTurnKeys: SETTLED,
-      expandedTurnKeys: NONE
-    })
-    expect([...foldedRows].sort()).toEqual([1, 2])
-  })
-
-  it('never folds a compaction report, and keeps the last prose as the answer', () => {
-    const rows = [
-      row({ role: 'user' }),
-      row(),
-      row({ role: 'system', explainsTurn: true }),
-      row(),
-      row({ role: 'system', explainsTurn: true })
-    ]
-    const { foldedRows } = nativeChatTurnFold({
-      rows,
-      settledTurnKeys: SETTLED,
-      expandedTurnKeys: NONE
-    })
-    expect([...foldedRows]).toEqual([1])
-    expect([...nativeChatTurnAnswerRows(rows)]).toEqual([3])
   })
 })

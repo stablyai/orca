@@ -777,4 +777,4 @@
 1 test-timeout-needs-reason:tests/e2e/workspace-layout-oracle-headless.spec.ts
 1 test-timeout-needs-reason:tests/e2e/workspace-session-corrupt-tab-salvage.spec.ts
 2 test-timeout-needs-reason:tests/e2e/worktree-reveal-host-sections.spec.ts
-3 test-timeout-needs-reason:tests/e2e/wsl-host-fake-transport.spec.ts
+2 test-timeout-needs-reason:tests/e2e/wsl-host-fake-transport.spec.ts
