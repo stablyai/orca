@@ -4,7 +4,7 @@ import type { BrowserGuestMetadata } from '../../../../../../shared/browser/gues
 import type {
   BrowserPage,
   BrowserWorkspace
-} from '../../../../../../shared/browser-workspace-types'
+} from '../../../../../../shared/browser/workspaces/browser-workspace-types'
 import type { AttachBrowserPageWebviewArgs } from '../lifecycle/attach-browser-page-webview'
 
 const adapters = vi.hoisted(() => ({ ensureViewport: vi.fn(), ensureWebview: vi.fn() }))

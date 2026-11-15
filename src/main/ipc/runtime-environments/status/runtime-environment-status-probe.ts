@@ -25,7 +25,7 @@ export async function getRuntimeEnvironmentStatus(
   /** False for a caller pinned to this pairing revision, which a re-pair must fail instead. */
   followRepair = true
 ): Promise<RuntimeRpcResponse<RuntimeStatus>> {
-  const environment = resolveEnvironment(userDataPath, selector)
+  const environment = await resolveEnvironment(userDataPath, selector)
   if (isRuntimeEnvironmentManuallyDisconnected(environment.id)) {
     return {
       id: 'status.get',
@@ -37,14 +37,16 @@ export async function getRuntimeEnvironmentStatus(
     }
   }
   const incarnation = getRuntimeEnvironmentCapabilityIncarnation(environment.id)
-  const response = await getRuntimeEnvironmentStatusOwner(userDataPath, environment.id).refresh({
+  const response = await (
+    await getRuntimeEnvironmentStatusOwner(userDataPath, environment.id)
+  ).refresh({
     timeoutMs,
     ...options
   })
   // A retired request must not publish old status or borrow its replacement's diagnostics.
   if (getRuntimeEnvironmentCapabilityIncarnation(environment.id) !== incarnation) {
     // Follow one repair started by this probe; the successor owner verifies the new pairing.
-    return followRepair && repairedSameServer(userDataPath, environment)
+    return followRepair && (await repairedSameServer(userDataPath, environment))
       ? getRuntimeEnvironmentStatus(userDataPath, environment.id, timeoutMs, options, false)
       : runtimeEnvironmentChangedFailure(environment, 'status.get')
   }
@@ -59,9 +61,12 @@ export async function getRuntimeEnvironmentStatus(
 }
 
 /** Follow only SSH-managed repairs under the same pinned host key; other replacements remain changed. */
-function repairedSameServer(userDataPath: string, before: KnownRuntimeEnvironment): boolean {
+async function repairedSameServer(
+  userDataPath: string,
+  before: KnownRuntimeEnvironment
+): Promise<boolean> {
   try {
-    const after = resolveEnvironment(userDataPath, before.id)
+    const after = await resolveEnvironment(userDataPath, before.id)
     return (
       (after.pairingRevision ?? after.createdAt) !== (before.pairingRevision ?? before.createdAt) &&
       getOrcadSshDeployment(before) !== undefined &&

@@ -14,7 +14,7 @@ const {
   makeWorkspaceSessionWithHeadlessTerminal
 } = await import('../../orca-runtime-tests/orca-runtime-test-fixtures.spec')
 
-function makeRuntime(listProcesses: () => Promise<never[]> = async () => []) {
+async function makeRuntime(listProcesses: () => Promise<never[]> = async () => []) {
   const { runtimeStore } = makeRuntimeStoreWithWorkspaceSession(
     makeWorkspaceSessionWithHeadlessTerminal()
   )
@@ -28,7 +28,7 @@ function makeRuntime(listProcesses: () => Promise<never[]> = async () => []) {
     getForegroundProcess: async () => null,
     listProcesses
   })
-  runtime.syncWindowGraph(0, { tabs: [], leaves: [] })
+  await runtime.syncWindowGraph(0, { tabs: [], leaves: [] })
   const events: RuntimeClientEvent[] = []
   runtime.onClientEvent((event) => events.push(event))
   const sleepPhases = (): string[] =>
@@ -40,7 +40,7 @@ describe('automatic tab activation honors the host sleep state', () => {
   it('refuses under the spawn lock when a sleep commits while an automatic spawn waits', async () => {
     const inventory = deferred<never[]>()
     const listProcesses = vi.fn(() => inventory.promise)
-    const { runtime, sleepPhases } = makeRuntime(listProcesses)
+    const { runtime, sleepPhases } = await makeRuntime(listProcesses)
     const sleeping = runtime.sleepTerminalsForWorktree(`id:${TEST_WORKTREE_ID}`)
     await vi.waitFor(() => expect(listProcesses).toHaveBeenCalled())
     // Queued behind the sleep's exclusive hold, so the pre-spawn check has already passed.

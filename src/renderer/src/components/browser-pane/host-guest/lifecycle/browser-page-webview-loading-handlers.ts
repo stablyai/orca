@@ -3,8 +3,8 @@ import type { Dispatch, MutableRefObject, RefObject, SetStateAction } from 'reac
 import {
   normalizeBrowserNavigationUrl,
   redactKagiSessionToken
-} from '../../../../../../shared/browser-url'
-import type { BrowserLoadError } from '../../../../../../shared/browser-workspace-types'
+} from '../../../../../../shared/browser/navigation/browser-url'
+import type { BrowserLoadError } from '../../../../../../shared/browser/workspaces/browser-workspace-types'
 import '../../../../../../shared/constants'
 import { ORCA_BROWSER_BLANK_URL } from '../../../../../../shared/browser/browser-blank-page'
 import { translate } from '@/i18n/i18n'

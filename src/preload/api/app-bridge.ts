@@ -1,8 +1,8 @@
 import { ipcRenderer } from 'electron'
 import type { AppIdentity } from '../../shared/app-identity'
-import type { MacosUpgradeSupport } from '../../shared/macos-upgrade-support'
+import type { MacosUpgradeSupport } from '../../shared/updater/requirements/macos-upgrade-support'
 import type { FloatingTerminalCwdRequest } from '../../shared/ui-chrome-types'
-import type { MacCapturedDigitRowChord } from '../../shared/macos-symbolic-hotkeys'
+import type { MacCapturedDigitRowChord } from '../../shared/keybindings/macos-symbolic-hotkeys'
 import type { MarkdownDocument } from '../../shared/file-listing/file-document'
 import type { WriteTerminalRenderDesyncEvidenceArgs } from '../../shared/terminal/diagnostics/terminal-render-desync-evidence'
 import {

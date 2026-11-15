@@ -16,7 +16,7 @@ import { getDefaultWorkspaceSession } from '../../../src/shared/constants'
 const list = (runtime: OrcaRuntimeService) => runtime.listMobileSessionTabs(`id:${WT}`)
 
 function accept(runtime: OrcaRuntimeService, frame: RuntimeMobileSessionTabsSnapshot) {
-  runtime.syncWindowGraph(1, { tabs: [], leaves: [], mobileSessionTabs: [frame] })
+  return runtime.syncWindowGraph(1, { tabs: [], leaves: [], mobileSessionTabs: [frame] })
 }
 
 afterEach(() => {
@@ -84,7 +84,7 @@ describe('legacy host navigation through inventory reconstruction', () => {
       canGoForward: false,
       isActive: id === 'page-a'
     }))
-    accept(runtime, {
+    await accept(runtime, {
       worktree: WT,
       publicationEpoch: 'renderer:legacy-browser',
       snapshotVersion: 10,

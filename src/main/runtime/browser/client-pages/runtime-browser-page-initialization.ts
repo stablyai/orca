@@ -1,7 +1,7 @@
 import {
   normalizeBrowserNavigationUrl,
   redactKagiSessionToken
-} from '../../../../shared/browser-url'
+} from '../../../../shared/browser/navigation/browser-url'
 import type {
   InitializationOutcome,
   InitializationDisposition

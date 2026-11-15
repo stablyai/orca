@@ -5,7 +5,7 @@ import {
 import { isRemoteCliDrivenGuest } from '../../desktop-browser-bridge/remote-cli-driven-workspaces'
 import { browserManager } from '../../guest-lifecycle/manager/browser-manager'
 import type { Session } from 'electron'
-import type { BrowserSessionProfile } from '../../../../shared/browser-workspace-types'
+import type { BrowserSessionProfile } from '../../../../shared/browser/workspaces/browser-workspace-types'
 import { hasSystemMediaAccess, requestSystemMediaAccess } from './browser-media-access'
 import {
   isAutoGrantedBrowserSessionPermission,

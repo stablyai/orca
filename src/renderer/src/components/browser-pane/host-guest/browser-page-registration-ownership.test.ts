@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { BrowserLoadError } from '../../../../../shared/browser-workspace-types'
+import type { BrowserLoadError } from '../../../../../shared/browser/workspaces/browser-workspace-types'
 import {
   createBrowserPageWebviewGuestSession,
   type BrowserPageWebviewGuestSession

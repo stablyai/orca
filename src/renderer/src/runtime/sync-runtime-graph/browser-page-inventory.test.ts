@@ -3,7 +3,10 @@ import { makeState } from './testing/sync-runtime-graph-test-harness'
 import { runtimeEnvironmentIdForWorkspaceOwner } from '@/lib/workspace/ownership/resolve-owner'
 import { describe, expect, it } from 'vitest'
 import { buildBrowserPageInventory } from './browser-page-inventory'
-import type { BrowserPage, BrowserWorkspace } from '../../../../shared/browser-workspace-types'
+import type {
+  BrowserPage,
+  BrowserWorkspace
+} from '../../../../shared/browser/workspaces/browser-workspace-types'
 
 const workspace: BrowserWorkspace = {
   id: 'workspace',

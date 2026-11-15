@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import { BrowserError } from '../../../browser/browser-error'
+import { retireFailedBrowserClientPagePublication } from './browser-client-page-close'
 import '../../../browser/network/execution-routes/browser-network-execution-route'
 import { browserNetworkExecutionHostKey } from '../../../../shared/browser/client-hosting/browser-network-execution-host'
 import type { RuntimeNavigationTarget } from '../../../../shared/remote-runtime/session-graph/runtime-navigation'
@@ -93,6 +94,7 @@ export async function createBrowserClientPage(
   if (pages.getPage(browserPageId)) {
     throw new Error('browser_page_replacement_requires_retirement')
   }
+  let publication: Promise<void> | undefined
   const created = await createRuntimeBrowserClientPage(authority, {
     browserPageId,
     browserHostClientId: params.placement.browserHostClientId,
@@ -114,7 +116,7 @@ export async function createBrowserClientPage(
           loading: url !== 'about:blank',
           active: focus.startsActive
         })
-        publishCreatedBrowserSessionTab(host, {
+        publication = publishCreatedBrowserSessionTab(host, {
           placementKind: 'client',
           browserPageId,
           worktreeId: worktree.id,
@@ -130,6 +132,12 @@ export async function createBrowserClientPage(
       }
     }
   })
+  try {
+    await publication
+  } catch (error) {
+    await retireFailedBrowserClientPagePublication(host, browserPageId, created.placement)
+    throw error
+  }
   if (url !== 'about:blank') {
     try {
       await navigateRuntimeBrowserClientPage(authority, {

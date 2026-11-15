@@ -13,7 +13,7 @@ import {
   closeBrowserMemoryRenderer
 } from '../../../browser/guest-lifecycle/browser-page-memory'
 import type { RuntimeBrowserCommandHost } from './browser-command-contracts'
-import type { BrowserTabCreateRequest } from '../../../../shared/browser-tab-create-request'
+import type { BrowserTabCreateRequest } from '../../../../shared/browser/workspaces/browser-tab-create-request'
 
 const { ipc, guests, registration } = await vi.hoisted(async () => {
   const { EventEmitter } = await import('node:events')

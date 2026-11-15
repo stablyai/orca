@@ -10,7 +10,7 @@ import { isDrvfsLinuxPath, parseWslUncPath } from '../../shared/file-access/wsl-
 import {
   bucketWslUsageCount,
   type WslUsageSnapshotProps
-} from '../../shared/telemetry-wsl-usage-event-schemas'
+} from '../../shared/telemetry/schemas/telemetry-wsl-usage-event-schemas'
 
 export type WslUsageProjectLocation = 'distro_fs' | 'windows_drive'
 

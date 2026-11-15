@@ -1,6 +1,6 @@
 import type { GlobalSettings } from './global-settings-types'
 import type { NotificationSettings } from './notification-settings-types'
-import type { VoiceSettings } from './speech-types'
+import type { VoiceSettings } from './speech/speech-types'
 import { DEFAULT_TERMINAL_FONT_WEIGHT_BOLD } from './terminal/appearance/terminal-fonts'
 import { getDefaultTerminalQuickCommands } from './terminal/quick-commands/terminal-quick-commands'
 import { TASK_PROVIDERS } from './work-items/task-providers'

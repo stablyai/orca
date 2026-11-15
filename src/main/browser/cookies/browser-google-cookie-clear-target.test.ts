@@ -9,7 +9,7 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import type {
   BrowserCookieImportResult,
   BrowserSessionProfile
-} from '../../../shared/browser-workspace-types'
+} from '../../../shared/browser/workspaces/browser-workspace-types'
 
 type ImportExecution = BrowserCookieImportResult & {
   executionMachine: 'client' | 'remote'

@@ -1,7 +1,7 @@
 import type {
   BrowserSitePermission,
   BrowserSitePermissionDecision
-} from '../../../../shared/browser-site-permission'
+} from '../../../../shared/browser/site-settings/browser-site-permission'
 import {
   getBrowserSitePermissionDecision,
   setBrowserSitePermissionDecisions

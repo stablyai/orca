@@ -5,11 +5,11 @@ import {
   normalizeBrowserNavigationUrl,
   SEARCH_ENGINE_LABELS,
   type SearchEngine
-} from '../../../../../../shared/browser-url'
+} from '../../../../../../shared/browser/navigation/browser-url'
 import type {
   BrowserHistoryEntry,
   BrowserPageDocLocation
-} from '../../../../../../shared/browser-workspace-types'
+} from '../../../../../../shared/browser/workspaces/browser-workspace-types'
 import type { WorkspaceDocHistoryEntry } from '../../../../../../shared/workspace-session/workspace-doc-history'
 import {
   formatBrowserHistoryUrl,

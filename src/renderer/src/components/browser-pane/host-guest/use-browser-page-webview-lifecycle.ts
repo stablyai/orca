@@ -16,7 +16,7 @@ import type { BrowserGrabPayload } from '../../../../../shared/browser/element-g
 import type {
   BrowserLoadError,
   BrowserViewportPresetId
-} from '../../../../../shared/browser-workspace-types'
+} from '../../../../../shared/browser/workspaces/browser-workspace-types'
 import {
   EMPTY_BROWSER_ANNOTATIONS,
   type BrowserOverlayViewport

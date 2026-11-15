@@ -4,12 +4,12 @@ import { emitBrowserCookieImportToast } from '@/lib/browser/cookies/browser-cook
 import { useAppStore } from '@/store/index'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { shouldShowBrowserImportHint } from '../profile-routing/browser-import-hint-visibility'
-import type { BrowserViewportPresetId } from '../../../../../../shared/browser-workspace-types'
+import type { BrowserViewportPresetId } from '../../../../../../shared/browser/workspaces/browser-workspace-types'
 import type {
   BrowserPageSiteDisplay,
   BrowserSiteColorScheme
-} from '../../../../../../shared/browser-site-display'
-import type { BrowserPageZoomDirection } from '../../../../../../shared/browser-page-zoom'
+} from '../../../../../../shared/browser/site-settings/browser-site-display'
+import type { BrowserPageZoomDirection } from '../../../../../../shared/browser/site-settings/browser-page-zoom'
 import {
   addBrowserPageSiteDisplayListener,
   publishBrowserPageSiteDisplay

@@ -23,7 +23,7 @@ import {
   getFreshProcessTableSnapshot,
   getProcessTableSnapshot
 } from '../../../shared/process-table-snapshot-reader'
-import { selectForegroundProcessCandidate } from '../../../shared/foreground-process-selection'
+import { selectForegroundProcessCandidate } from '../../../shared/agent-status/process/foreground-process-selection'
 import { resolveOuterWrapperForegroundProcess } from '../../../shared/agent-status/process/foreground-wrapper-agent'
 import { recognizeAgentProcess } from '../../../shared/agent-status/process/agent-process-recognition'
 import {

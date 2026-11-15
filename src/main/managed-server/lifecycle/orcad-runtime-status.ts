@@ -19,7 +19,7 @@ export async function getManagedOrcadRuntimeStatus(
   selector: string,
   signal?: AbortSignal
 ): Promise<OrcadManagedRuntimeStatus> {
-  const { environment, deployment } = requireManagedOrcadEnvironment(userDataPath, selector)
+  const { environment, deployment } = await requireManagedOrcadEnvironment(userDataPath, selector)
   const { status, record, serverTarget } = await runTargetLifecycle(
     deployment.sshTargetId,
     async () => {

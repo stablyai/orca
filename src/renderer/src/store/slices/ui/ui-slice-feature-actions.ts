@@ -4,9 +4,9 @@ import {
   mergeContextualTourSeenIds
 } from './ui-slice-hydration-values'
 import { getContextualTourProgressionForFeatureInteraction } from './ui-slice-contextual-tour-progression'
-import { getContextualTourStepIndex } from '../../../../../shared/contextual-tours'
-import type { FeatureInteractionState } from '../../../../../shared/feature-interactions'
-import { getFeatureTipSeenId } from '../../../../../shared/feature-tips'
+import { getContextualTourStepIndex } from '../../../../../shared/feature-education/contextual-tours/contextual-tours'
+import type { FeatureInteractionState } from '../../../../../shared/feature-education/interactions/feature-interactions'
+import { getFeatureTipSeenId } from '../../../../../shared/feature-education/feature-tips'
 
 export function createUiFeatureActions(set: UISliceSet, get: UISliceGet): Partial<UISlice> {
   return {

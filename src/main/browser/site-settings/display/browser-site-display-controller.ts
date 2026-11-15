@@ -7,13 +7,13 @@ import {
   browserSiteDisplayKey,
   type BrowserPageSiteDisplay,
   type BrowserSiteColorScheme
-} from '../../../../shared/browser-site-display'
+} from '../../../../shared/browser/site-settings/browser-site-display'
 import {
   DEFAULT_BROWSER_PAGE_ZOOM_LEVEL,
   nextBrowserPageZoomLevel,
   normalizeBrowserPageZoomLevel,
   type BrowserPageZoomDirection
-} from '../../../../shared/browser-page-zoom'
+} from '../../../../shared/browser/site-settings/browser-page-zoom'
 import type { PersistedUIState } from '../../../../shared/persisted-ui-state-types'
 import { errorMessage } from '../../../../shared/error-message'
 

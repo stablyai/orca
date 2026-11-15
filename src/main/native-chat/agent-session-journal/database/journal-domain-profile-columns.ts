@@ -1,13 +1,12 @@
 export const JOURNAL_DOMAIN_PROFILE_TABLES: readonly {
   name: string
   columns: readonly string[]
-  requiredFrom?: number
 }[] = [
-  { name: 'agent_session_records', columns: ['session_id', 'record_json'], requiredFrom: 4 },
-  { name: 'agent_session_operations', columns: ['operation_key', 'row_json'], requiredFrom: 4 },
-  { name: 'agent_session_retired_claim_keys', columns: ['key_id', 'retired_at'], requiredFrom: 4 },
-  { name: 'agent_session_tabs', columns: ['tab_id', 'session_id', 'position'], requiredFrom: 4 },
-  { name: 'agent_session_store_meta', columns: ['key', 'value'], requiredFrom: 4 },
+  { name: 'agent_session_records', columns: ['session_id', 'record_json'] },
+  { name: 'agent_session_operations', columns: ['operation_key', 'row_json'] },
+  { name: 'agent_session_retired_claim_keys', columns: ['key_id', 'retired_at'] },
+  { name: 'agent_session_tabs', columns: ['tab_id', 'session_id', 'position'] },
+  { name: 'agent_session_store_meta', columns: ['key', 'value'] },
   {
     name: 'agent_session_command_receipts',
     columns: [

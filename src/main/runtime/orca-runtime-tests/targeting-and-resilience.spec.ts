@@ -216,7 +216,7 @@ describe('OrcaRuntimeService', () => {
         stopAndWait,
         getForegroundProcess: async () => null
       })
-      syncSinglePty(runtime, 'pty-1')
+      await syncSinglePty(runtime, 'pty-1')
 
       await runtime.removeManagedWorktree(TEST_WORKTREE_ID)
 
@@ -249,7 +249,7 @@ describe('OrcaRuntimeService', () => {
         stopAndWait: vi.fn(async () => false),
         getForegroundProcess: async () => null
       })
-      syncSinglePty(runtime, 'pty-1')
+      await syncSinglePty(runtime, 'pty-1')
 
       await expect(runtime.removeManagedWorktree(TEST_WORKTREE_ID)).rejects.toThrow(
         'Failed to physically stop every PTY'
@@ -288,6 +288,109 @@ describe('OrcaRuntimeService', () => {
       expect(preDaemonProvider.shutdown).not.toHaveBeenCalled()
     })
   })
+  describe('stale terminal handle resolution (#7718)', () => {
+    async function syncSingleTerminalGraph(
+      runtime: OrcaRuntimeService,
+      ptyId: string
+    ): Promise<void> {
+      await runtime.syncWindowGraph(1, {
+        tabs: [
+          {
+            tabId: 'tab-1',
+            worktreeId: TEST_WORKTREE_ID,
+            title: 'Terminal 1',
+            activeLeafId: 'pane:1',
+            layout: null
+          }
+        ],
+        leaves: [
+          {
+            tabId: 'tab-1',
+            worktreeId: TEST_WORKTREE_ID,
+            leafId: 'pane:1',
+            paneRuntimeId: 1,
+            ptyId,
+            paneTitle: 'Terminal 1'
+          }
+        ],
+        mobileSessionTabs: [
+          {
+            worktree: TEST_WORKTREE_ID,
+            publicationEpoch: 'epoch-1',
+            snapshotVersion: 1,
+            activeGroupId: 'group-1',
+            activeTabId: 'tab-1::pane:1',
+            activeTabType: 'terminal',
+            tabs: [
+              {
+                type: 'terminal',
+                id: 'tab-1::pane:1',
+                parentTabId: 'tab-1',
+                leafId: 'pane:1',
+                title: 'Terminal 1',
+                isActive: true
+              }
+            ]
+          }
+        ]
+      })
+    }
+
+    // Client LEAF handles can outlive the PTY they originally named.
+    function issueLeafHandle(runtime: OrcaRuntimeService, ptyId: string): string {
+      const internals = runtime as unknown as {
+        leaves: Map<string, { ptyId: string | null }>
+        issueHandle: (leaf: unknown) => string
+      }
+      const leaf = Array.from(internals.leaves.values()).find(
+        (candidate) => candidate.ptyId === ptyId
+      )
+      if (!leaf) {
+        throw new Error('expected leaf record')
+      }
+      return internals.issueHandle(leaf)
+    }
+
+    it('errors with terminal_handle_stale instead of adopting a replacement PTY', async () => {
+      const runtime = new OrcaRuntimeService(store)
+      runtime.attachWindow(1)
+      await syncSingleTerminalGraph(runtime, 'pty-a')
+      const handle = issueLeafHandle(runtime, 'pty-a')
+
+      const internals = runtime as unknown as {
+        leaves: Map<string, { ptyId: string | null }>
+      }
+      for (const leaf of internals.leaves.values()) {
+        if (leaf.ptyId === 'pty-a') {
+          leaf.ptyId = 'pty-b'
+        }
+      }
+
+      expect(runtime.resolveLeafForHandle(handle)).toEqual({ ptyId: 'pty-b' })
+      expect(() => runtime.resolveLiveLeafForHandle(handle)).toThrow('terminal_handle_stale')
+      expect(runtime.getLiveTerminalPaneKey(handle)).toBeNull()
+    })
+
+    it('lets a handle issued before its first PTY adopt that PTY without erroring', async () => {
+      const runtime = new OrcaRuntimeService(store)
+      runtime.attachWindow(1)
+      await syncSingleTerminalGraph(runtime, 'pty-a')
+      const handle = issueLeafHandle(runtime, 'pty-a')
+
+      // A pre-spawn handle has no PTY yet; its first binding must still resolve.
+      const internals = runtime as unknown as {
+        handles: Map<string, { ptyId: string | null }>
+      }
+      const record = internals.handles.get(handle)
+      if (!record) {
+        throw new Error('expected handle record')
+      }
+      record.ptyId = null
+
+      expect(runtime.resolveLiveLeafForHandle(handle)).toEqual({ ptyId: 'pty-a' })
+    })
+  })
+
   describe('mobile terminal create resilience (#7718)', () => {
     it('cancels the surface wait without rolling back when the client connection dies', async () => {
       vi.useFakeTimers()
@@ -306,7 +409,7 @@ describe('OrcaRuntimeService', () => {
         })
         webContents.send = send
         runtime.attachWindow(1)
-        runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
+        await runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
         electronMocks.BrowserWindow.fromId.mockReturnValue({
           isDestroyed: () => false,
           webContents
@@ -353,7 +456,7 @@ describe('OrcaRuntimeService', () => {
         })
         webContents.send = send
         runtime.attachWindow(1)
-        runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
+        await runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
         electronMocks.BrowserWindow.fromId.mockReturnValue({
           isDestroyed: () => false,
           webContents
@@ -386,7 +489,7 @@ describe('OrcaRuntimeService', () => {
           leafId: 'pane:1',
           ptyId: 'pty-stall'
         })
-        runtime.syncWindowGraph(1, {
+        await runtime.syncWindowGraph(1, {
           tabs: [],
           leaves: [
             {

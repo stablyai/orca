@@ -22,11 +22,11 @@ import {
 import { BrowserClientHostRequestResultParams } from '../browser/client-hosting/browser-client-host-request-protocol'
 import { BrowserClientPageMetadataParams } from '../browser/client-hosting/browser-client-page-metadata-protocol'
 import { BrowserPageInitializationActionParams } from '../browser/client-hosting/browser-page-initialization-action'
-import { DelegatedMobileDeviceSyncParamsSchema } from '../delegated-mobile-device-contract'
 import {
   DesktopBrowserBridgeAttachParams,
   DesktopBrowserBridgeResultParams
-} from '../desktop-browser-bridge-protocol'
+} from '../browser/client-hosting/desktop-browser-bridge-protocol'
+import { DelegatedMobileDeviceSyncParamsSchema } from '../delegated-mobile-device-contract'
 import { MobileWebBundleChunkParamsSchema } from '../mobile-web-bundle/bundle-rpc-contract'
 import { MobileWebBundleLocaleCatalogParamsSchema } from '../mobile-web-bundle/locale-catalog-contract'
 import { OrcadMigrationBlobChunkRequestSchema } from '../orcad-migration/orcad-migration-blob-transfer'

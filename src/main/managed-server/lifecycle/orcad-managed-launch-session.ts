@@ -34,7 +34,7 @@ export async function readManagedOrcadLaunchSshSession(
   userDataPath: string,
   environmentId: string
 ): Promise<OrcadLaunchSshSession> {
-  const { deployment } = requireManagedOrcadEnvironment(userDataPath, environmentId)
+  const { deployment } = await requireManagedOrcadEnvironment(userDataPath, environmentId)
   const { connectionManager, targetStore } = requireManagedOrcadInfrastructure()
   const target = targetStore.getTarget(deployment.sshTargetId)
   // Background checks must not reconnect hosts the user left.
@@ -66,80 +66,84 @@ export async function readManagedOrcadLaunchSshSession(
 }
 
 /** Restart only without terminals: surviving daemons retain the old SSH-session attribution. */
-export function restartManagedOrcadEnvironment(
+export async function restartManagedOrcadEnvironment(
   userDataPath: string,
   selector: string
 ): Promise<OrcadManagedRestartResult> {
-  return withManagedOrcadLifecycle(userDataPath, selector, async ({ environment, deployment }) => {
-    const context = await resolveLinkedOrcadContext(environment, deployment)
-    if (!context.activationRecord.active) {
-      return { outcome: 'not-restarted', reason: 'This host has no activated Orca server.' }
-    }
-    const counts = updateTerminalCounts((options) =>
-      collectManagedTerminalCensus(
-        userDataPath,
-        environment,
-        context.activationRecord,
-        undefined,
-        options
-      )
-    )
-    // Reject live terminals before waiting for the host lock.
-    const census = await counts.countFirst()
-    if (census.liveSessions !== 0) {
-      return { outcome: 'terminals-running', liveSessions: census.liveSessions }
-    }
-    const slot = managedOrcadSlot(context, deployment.remotePort)
-    const stopped = await withOrcadActivationLock(
-      slot,
-      (lock) => recountThenStop(slot, lock, counts),
-      (): StopOutcome => ({
-        state: 'kept',
-        reason: 'An update, rollback or recovery holds this host; try again when it finishes.'
-      })
-    )
-    if (stopped.state === 'terminals-running') {
-      return { outcome: 'terminals-running', liveSessions: stopped.liveSessions }
-    }
-    if (stopped.state === 'kept') {
-      return { outcome: 'not-restarted', reason: stopped.reason }
-    }
-    // Wake even when daemon retirement failed: the stopped server cannot serve clients.
-    const wake = await wakeStoppedManagedOrcad(slot)
-    if (wake.outcome !== 'started' && wake.outcome !== 'serving') {
-      return {
-        outcome: 'not-restarted',
-        reason:
-          wake.outcome === 'recovery-refused'
-            ? wake.reason
-            : `This host’s Orca server stopped but did not start again (${wake.outcome}); reconnect to start it.`
+  return await withManagedOrcadLifecycle(
+    userDataPath,
+    selector,
+    async ({ environment, deployment }) => {
+      const context = await resolveLinkedOrcadContext(environment, deployment)
+      if (!context.activationRecord.active) {
+        return { outcome: 'not-restarted', reason: 'This host has no activated Orca server.' }
       }
-    }
-    // Restart may bind a different port than the existing forward.
-    await rebuildOrcadManagedTunnel(userDataPath, environment.id)
-    const dir = orcadSlotDir(slot, stopped.version)
-    if (stopped.state === 'daemon-kept') {
-      // A retained daemon keeps old attribution, so preserve the warning.
-      return { outcome: 'not-restarted', reason: stopped.reason }
-    }
-    const session = parseOrcadLaunchSshSession(
-      await execOrcadRemote(
+      const counts = updateTerminalCounts((options) =>
+        collectManagedTerminalCensus(
+          userDataPath,
+          environment,
+          context.activationRecord,
+          undefined,
+          options
+        )
+      )
+      // Reject live terminals before waiting for the host lock.
+      const census = await counts.countFirst()
+      if (census.liveSessions !== 0) {
+        return { outcome: 'terminals-running', liveSessions: census.liveSessions }
+      }
+      const slot = managedOrcadSlot(context, deployment.remotePort)
+      const stopped = await withOrcadActivationLock(
         slot,
-        orcadLaunchSshSessionProbeCommand(slot.host, dir, slot.userDataDir)
+        (lock) => recountThenStop(slot, lock, counts),
+        (): StopOutcome => ({
+          state: 'kept',
+          reason: 'An update, rollback or recovery holds this host; try again when it finishes.'
+        })
       )
-    )
-    if (session === 'exited') {
-      return {
-        outcome: 'not-restarted',
-        reason:
-          'This host’s Orca server restarted, but its terminals still belong to an SSH session ' +
-          'that has ended: its terminal daemon was still running, or this connection opens a ' +
-          'new SSH session for each command. Turn on SSH connection reuse for this host if ' +
-          'it is off, then restart again.'
+      if (stopped.state === 'terminals-running') {
+        return { outcome: 'terminals-running', liveSessions: stopped.liveSessions }
       }
+      if (stopped.state === 'kept') {
+        return { outcome: 'not-restarted', reason: stopped.reason }
+      }
+      // Wake even when daemon retirement failed: the stopped server cannot serve clients.
+      const wake = await wakeStoppedManagedOrcad(slot)
+      if (wake.outcome !== 'started' && wake.outcome !== 'serving') {
+        return {
+          outcome: 'not-restarted',
+          reason:
+            wake.outcome === 'recovery-refused'
+              ? wake.reason
+              : `This host’s Orca server stopped but did not start again (${wake.outcome}); reconnect to start it.`
+        }
+      }
+      // Restart may bind a different port than the existing forward.
+      await rebuildOrcadManagedTunnel(userDataPath, environment.id)
+      const dir = orcadSlotDir(slot, stopped.version)
+      if (stopped.state === 'daemon-kept') {
+        // A retained daemon keeps old attribution, so preserve the warning.
+        return { outcome: 'not-restarted', reason: stopped.reason }
+      }
+      const session = parseOrcadLaunchSshSession(
+        await execOrcadRemote(
+          slot,
+          orcadLaunchSshSessionProbeCommand(slot.host, dir, slot.userDataDir)
+        )
+      )
+      if (session === 'exited') {
+        return {
+          outcome: 'not-restarted',
+          reason:
+            'This host’s Orca server restarted, but its terminals still belong to an SSH session ' +
+            'that has ended: its terminal daemon was still running, or this connection opens a ' +
+            'new SSH session for each command. Turn on SSH connection reuse for this host if ' +
+            'it is off, then restart again.'
+        }
+      }
+      return { outcome: 'restarted', environmentId: environment.id }
     }
-    return { outcome: 'restarted', environmentId: environment.id }
-  })
+  )
 }
 
 type StopOutcome =

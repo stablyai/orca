@@ -2,11 +2,11 @@ import type { Dispatch, DragEvent, MutableRefObject, RefObject, SetStateAction }
 import {
   normalizeBrowserNavigationUrl,
   redactKagiSessionToken
-} from '../../../../../../shared/browser-url'
+} from '../../../../../../shared/browser/navigation/browser-url'
 import type {
   BrowserLoadError,
   BrowserViewportPresetId
-} from '../../../../../../shared/browser-workspace-types'
+} from '../../../../../../shared/browser/workspaces/browser-workspace-types'
 import { ensureBrowserPageWebview } from './browser-page-webview'
 import { webviewRegistry } from '../webview-registry'
 import { isBrowserPageMountAdmitted } from '../retention/browser-page-mount-admission'

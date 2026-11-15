@@ -1,5 +1,5 @@
 import { EventEmitter } from 'node:events'
-import type { BrowserSessionProfile } from '../../../../../shared/browser-workspace-types'
+import type { BrowserSessionProfile } from '../../../../../shared/browser/workspaces/browser-workspace-types'
 import { expect, it, vi } from 'vitest'
 
 const native = vi.hoisted(() => ({

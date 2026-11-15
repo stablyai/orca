@@ -19,7 +19,10 @@ import { buildMobileSessionTabSnapshots } from '../../../renderer/src/runtime/sy
 import { makeState } from '../../../renderer/src/runtime/sync-runtime-graph/testing/sync-runtime-graph-test-harness'
 import { watchBrowserMainWindowReadiness } from '../../browser/guest-lifecycle/browser-main-window-readiness'
 import { resolveTabRegistrationWaiters } from '../../ipc/browser/browser-tab-registration-wait'
-import type { BrowserPage, BrowserWorkspace } from '../../../shared/browser-workspace-types'
+import type {
+  BrowserPage,
+  BrowserWorkspace
+} from '../../../shared/browser/workspaces/browser-workspace-types'
 import type {
   RuntimeMobileSessionTabsResult,
   RuntimeSyncWindowGraph

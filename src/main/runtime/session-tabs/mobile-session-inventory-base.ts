@@ -1,4 +1,7 @@
-import type { BrowserPageInventoryEntry } from '../../../shared/browser/runtime/browser-page-inventory'
+import {
+  browserPageInventorySchema,
+  type BrowserPageInventoryEntry
+} from '../../../shared/browser/runtime/browser-page-inventory'
 import type {
   RuntimeMobileSessionTabsPublication,
   RuntimeMobileSessionTabsSnapshot
@@ -34,4 +37,22 @@ export function withAcceptedBrowserPageInventory(
     return null
   }
   return { ...snapshot, browserPageInventory: accepted.browserPageInventory }
+}
+
+/** Rejects a renderer frame whose browser inventory is malformed or both reused and resent. */
+export function assertBrowserPageInventoryFrames(
+  snapshots: readonly RuntimeMobileSessionTabsPublication[] | undefined
+): void {
+  for (const snapshot of snapshots ?? []) {
+    const baseVersion = snapshot.browserPageInventoryBaseVersion
+    if (
+      baseVersion !== undefined
+        ? // A base names a reused inventory, so a frame cannot also carry one.
+          !Number.isSafeInteger(baseVersion) || snapshot.browserPageInventory !== undefined
+        : snapshot.browserPageInventory !== undefined &&
+          !browserPageInventorySchema.safeParse(snapshot.browserPageInventory).success
+    ) {
+      throw new Error('invalid_browser_page_inventory')
+    }
+  }
 }

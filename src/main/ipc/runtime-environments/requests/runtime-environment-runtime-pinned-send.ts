@@ -37,7 +37,9 @@ async function sendOneShotRequestOnRuntime(
       requestSignal,
       ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES,
       undefined,
-      requestPreparation
+      requestPreparation,
+      undefined,
+      call.prepareGuard
     )
   } catch (error) {
     if (otherRuntime) {
@@ -81,7 +83,8 @@ export function sendEnvelopedOneShotCall(
         call.envelope,
         call.signal,
         ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES,
-        call.prepareRequest
+        call.prepareRequest,
+        call.prepareGuard
       )
     : sendSupportRoutedCallOnRuntime(route, call, expectedRuntimeId, 'one-shot')
 }

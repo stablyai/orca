@@ -2,7 +2,7 @@ import { z } from 'zod'
 import { RUNTIME_NAVIGATION_TARGETS } from '../../remote-runtime/session-graph/runtime-navigation'
 import { BrowserPageCreationPlacement } from '../../browser/client-hosting/browser-client-host-placement'
 import { OptionalString } from '../rpc-param-primitives'
-import { BROWSER_TAB_SPLIT_DIRECTIONS } from '../../browser-tab-split-direction'
+import { BROWSER_TAB_SPLIT_DIRECTIONS } from '../../browser/workspaces/browser-tab-split-direction'
 
 export const BrowserTabCreateParams = z.object({
   url: OptionalString,

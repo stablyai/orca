@@ -2,16 +2,16 @@ import { browserGuestDiscardApi } from './browser-bridge-guest-discard'
 import type { BrowserGuestMetadata } from '../../../shared/browser/guest-lifecycle/browser-guest-metadata'
 import type { BrowserDevToolsDockBounds } from '../../../shared/browser/devtools/browser-devtools-dock'
 import { ipcRenderer } from 'electron'
-import type { BrowserViewportOverride } from '../../../shared/browser-workspace-types'
+import type { BrowserViewportOverride } from '../../../shared/browser/workspaces/browser-workspace-types'
 import type {
   BrowserPageSiteDisplay,
   BrowserSiteColorScheme
-} from '../../../shared/browser-site-display'
-import type { BrowserPageZoomDirection } from '../../../shared/browser-page-zoom'
+} from '../../../shared/browser/site-settings/browser-site-display'
+import type { BrowserPageZoomDirection } from '../../../shared/browser/site-settings/browser-page-zoom'
 import type {
   BrowserWebAuthnAccountRequest,
   BrowserWebAuthnAccountResponse
-} from '../../../shared/browser-webauthn-account'
+} from '../../../shared/browser/prompts/browser-webauthn-account'
 import type {
   BrowserPagePromptRequest,
   BrowserPagePromptResponse,

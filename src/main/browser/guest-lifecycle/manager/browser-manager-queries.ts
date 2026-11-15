@@ -2,9 +2,9 @@ import { webContents } from 'electron'
 import type {
   BrowserCertificateFailure,
   BrowserLoadError
-} from '../../../../shared/browser-workspace-types'
+} from '../../../../shared/browser/workspaces/browser-workspace-types'
 import type { ManagedBrowserGuestContext } from '../../certificate-trust/browser-certificate-challenge'
-import { redactKagiSessionToken } from '../../../../shared/browser-url'
+import { redactKagiSessionToken } from '../../../../shared/browser/navigation/browser-url'
 import { safeOrigin } from '../browser-event-origin'
 import type { BrowserPopupPage } from '../popups/browser-popup-ownership'
 import { BrowserManagerRegistration } from './registration/browser-manager-registration'

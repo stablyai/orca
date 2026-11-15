@@ -4,7 +4,7 @@ import type { BrowserSiteDisplayController } from '../../site-settings/display/b
 import { createPageInitiatedTabBudget } from '../popups/browser-page-initiated-tab-budget'
 import type { PageInitiatedTabBudget } from '../popups/browser-page-initiated-tab-budget'
 import type { KeybindingOverrides } from '../../../../shared/keybindings/types'
-import type { BrowserLoadError } from '../../../../shared/browser-workspace-types'
+import type { BrowserLoadError } from '../../../../shared/browser/workspaces/browser-workspace-types'
 import { resolveBrowserRouteGuestPopupOpener } from '../../routing/guest-authority/browser-route-guest-popup-ownership'
 import type { BrowserPagePromptTarget } from '../prompts/browser-page-prompts'
 import type { ActiveDownload } from './downloads/browser-active-download'

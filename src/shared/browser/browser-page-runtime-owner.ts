@@ -1,4 +1,4 @@
-import type { BrowserPage } from '../browser-workspace-types'
+import type { BrowserPage } from './workspaces/browser-workspace-types'
 
 export function getBrowserPageRuntimeEnvironmentId(
   page: BrowserPage,

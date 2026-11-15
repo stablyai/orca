@@ -92,12 +92,12 @@ export abstract class OrcaRuntimeWithApplyMobileSessionTabNavigation extends Orc
   }
 
   /** Select a newly created tab for one client; false if absent. Unlike a tap, this never wakes or respawns a pending pane. */
-  selectCreatedMobileSessionTabForClient(
+  async selectCreatedMobileSessionTabForClient(
     worktreeId: string,
     surface: { tabId: string; leafId: string } | { sessionId: string },
     clientNavigationId: string
-  ): boolean {
-    const snapshot = this.getMobileSessionTabsForWorktree(worktreeId, undefined, {
+  ): Promise<boolean> {
+    const snapshot = await this.getMobileSessionTabsForWorktree(worktreeId, undefined, {
       includeAgentSenders: false
     })
     const tab = snapshot.tabs.find((candidate) =>
@@ -114,12 +114,12 @@ export abstract class OrcaRuntimeWithApplyMobileSessionTabNavigation extends Orc
     return true
   }
 
-  reopenMobileSessionTabForClient(
+  async reopenMobileSessionTabForClient(
     worktreeId: string,
     sessionId: string,
     clientNavigationId: string
-  ): boolean {
-    const snapshot = this.getMobileSessionTabsForWorktree(worktreeId, undefined, {
+  ): Promise<boolean> {
+    const snapshot = await this.getMobileSessionTabsForWorktree(worktreeId, undefined, {
       includeAgentSenders: false
     })
     const tab = snapshot.tabs.find(

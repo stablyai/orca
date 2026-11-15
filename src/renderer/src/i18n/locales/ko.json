@@ -19867,7 +19867,8 @@
       "TerminalContextMenu": {
         "copySessionId": "세션 ID 복사",
         "copySessionIdSuccess": "세션 ID를 복사했습니다",
-        "copySessionIdError": "세션 ID를 복사하지 못했습니다"
+        "copySessionIdError": "세션 ID를 복사하지 못했습니다",
+        "copySessionIdUnavailable": "복사할 세션 ID가 없습니다"
       },
       "hostFile": {
         "updateHostForOutsideFiles": "워크스페이스 밖의 파일을 열려면 {{value0}}의 Orca를 업데이트하세요"
@@ -22340,6 +22341,7 @@
       "tabOpenQuickCommandsMenu": "빠른 명령어 메뉴 전환",
       "editorFind": "편집기에서 찾기",
       "editorReplace": "편집기에서 바꾸기",
+      "editorToggleChangesView": "변경 사항 보기 전환",
       "fileExplorerUndo": "파일 작업 실행 취소",
       "fileExplorerRedo": "파일 작업 다시 실행",
       "fileExplorerCopyPath": "파일 경로 복사",
@@ -22357,6 +22359,7 @@
       "chatFind": "채팅에서 찾기",
       "terminalToggleNativeChat": "채팅 UI와 터미널 간 전환",
       "terminalClosePane": "활성 창 닫기",
+      "terminalCopySessionId": "세션 ID 복사",
       "terminalSplitRight": "터미널 오른쪽으로 분할",
       "terminalSplitDown": "터미널 아래로 분할",
       "terminalSwitchInputSource": "입력 소스/언어 전환(네이티브)",

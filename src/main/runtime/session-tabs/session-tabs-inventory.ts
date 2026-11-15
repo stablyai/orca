@@ -151,9 +151,9 @@ export abstract class OrcaRuntimeWithCollectMobileVisibleGraphChangedWorktrees e
     ...args: Parameters<PruneMobileSessionTabGroupLayoutMethods['toMobileSessionTabsFrame']>
   ): ReturnType<PruneMobileSessionTabGroupLayoutMethods['toMobileSessionTabsFrame']>
 
-  protected abstract toMobileSessionTabsFrames(
-    ...args: Parameters<PruneMobileSessionTabGroupLayoutMethods['toMobileSessionTabsFrames']>
-  ): ReturnType<PruneMobileSessionTabGroupLayoutMethods['toMobileSessionTabsFrames']>
+  protected abstract collectMobileSessionTabsFrames(
+    ...args: Parameters<PruneMobileSessionTabGroupLayoutMethods['collectMobileSessionTabsFrames']>
+  ): ReturnType<PruneMobileSessionTabGroupLayoutMethods['collectMobileSessionTabsFrames']>
 
   protected abstract waitForSessionTabsInventoryPublication(
     ...args: Parameters<
@@ -192,7 +192,7 @@ export abstract class OrcaRuntimeWithCollectMobileVisibleGraphChangedWorktrees e
       const resolvedId =
         this.getExplicitSessionWorktreeIdSelector(worktreeSelector) ?? explicitWorktreeId
       this.restoreLivePairedRendererSessionOwnedMobileTerminals(resolvedId)
-      return this.getMobileSessionTabsForWorktree(resolvedId, clientNavigationId, options)
+      return await this.getMobileSessionTabsForWorktree(resolvedId, clientNavigationId, options)
     }
     const worktree = await this.resolveWorkspaceSelector(worktreeSelector)
     this.hydrateHeadlessMobileSessionTabsFromWorkspaceSession(worktree.id, {
@@ -202,7 +202,7 @@ export abstract class OrcaRuntimeWithCollectMobileVisibleGraphChangedWorktrees e
     this.hydrateHeadlessMobileSessionTabsFromWorkspaceSession(worktree.id)
     await this.refreshMobileSessionPtyRecords()
     this.restoreLivePairedRendererSessionOwnedMobileTerminals(worktree.id)
-    return this.getMobileSessionTabsForWorktree(worktree.id, clientNavigationId, options)
+    return await this.getMobileSessionTabsForWorktree(worktree.id, clientNavigationId, options)
   }
 
   async listAllMobileSessionTabs(
@@ -241,11 +241,12 @@ export abstract class OrcaRuntimeWithCollectMobileVisibleGraphChangedWorktrees e
     this.hydrateHeadlessMobileSessionTabsFromWorkspaceSession()
     const ptyInventory = await this.refreshMobileSessionPtyInventory()
     this.restoreLivePairedRendererSessionOwnedMobileTerminals(null)
-    const snapshots = this.toMobileSessionTabsFrames(
+    const { snapshots, changeSequence } = await this.collectMobileSessionTabsFrames(
       this.mobileSessionTabsByWorktree.values(),
-      options?.includeAgentSenders
-    ).map((frame) => this.projectMobileSessionTabsForClient(frame, clientNavigationId))
-    return { snapshots, ptyInventory, changeSequence: this.mobileSessionTabsChangeSequence }
+      options?.includeAgentSenders,
+      clientNavigationId
+    )
+    return { snapshots, ptyInventory, changeSequence }
   }
 
   async listAllMobileSessionTabsInventory(

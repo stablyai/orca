@@ -5,7 +5,7 @@ import { isPtyIncarnationId } from '../../../shared/terminal/pty/lifecycle/pty-i
 import {
   cloneForegroundProcessEvidence,
   isForegroundProcessEvidence
-} from '../../../shared/foreground-process-evidence'
+} from '../../../shared/terminal/pty/foreground/foreground-process-evidence'
 import type { PtyProcessInfo } from './process-info'
 import { readWslGuestRoot } from '../../../shared/shell/wsl/wsl-guest-root-marker'
 
