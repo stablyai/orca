@@ -38,7 +38,7 @@ export function syncSystemConfigIntoManagedCodexHome(
   const result = mirrorSystemConfigIntoManagedCodexHome(homes)
   if (!result.ran) {
     // Apply the daemon guard even on mirror stalls so long home paths can still launch Codex.
-    ensureCodexDaemonSocketGuard(homes.runtimeHomePath, homes.sqliteHome)
+    ensureCodexDaemonSocketGuard(homes.runtimeHomePath)
   }
   return result.complete
 }
@@ -96,15 +96,12 @@ function mirrorSystemConfigIntoManagedCodexHome(homes: CodexSettingsPromotionHom
   return { ran: true, complete }
 }
 
-export function ensureCodexDaemonSocketGuard(
-  runtimeHomePath: string,
-  sqliteHome?: string | null
-): void {
+export function ensureCodexDaemonSocketGuard(runtimeHomePath: string): void {
   try {
     const observation = observeAgentStateFile(join(runtimeHomePath, 'config.toml'))
     if (observation.kind !== 'indeterminate') {
       writeCodexDaemonSocketGuard(
-        { runtimeHomePath, sqliteHome },
+        runtimeHomePath,
         observation.kind === 'present' ? observation.value : null
       )
     }
@@ -113,14 +110,11 @@ export function ensureCodexDaemonSocketGuard(
   }
 }
 
-function writeCodexDaemonSocketGuard(
-  homes: Pick<CodexSettingsPromotionHomes, 'runtimeHomePath' | 'sqliteHome'>,
-  runtimeConfig: string | null
-): void {
-  const guarded = applyRuntimeOwnedConfig(runtimeConfig ?? '', homes, runtimeConfig)
+function writeCodexDaemonSocketGuard(runtimeHomePath: string, runtimeConfig: string | null): void {
+  const guarded = applyRuntimeOwnedConfig(runtimeConfig ?? '', runtimeHomePath, runtimeConfig)
   if (guarded !== (runtimeConfig ?? '')) {
     writeFileAtomicallyIfUnchanged(
-      join(homes.runtimeHomePath, 'config.toml'),
+      join(runtimeHomePath, 'config.toml'),
       runtimeConfig,
       guarded,
       RUNTIME_CONFIG_WRITE
@@ -174,7 +168,7 @@ export function syncSystemConfigIntoLegacySharedCodexHome(
   }
   const nextRuntimeConfig = applyRuntimeOwnedConfig(
     mirroredRuntimeConfig,
-    homes,
+    homes.runtimeHomePath,
     runtimeConfigBeforeMirror
   )
   if ((runtimeConfigBeforeMirror ?? '') === nextRuntimeConfig) {
@@ -233,7 +227,10 @@ function syncSystemConfigIntoManagedCodexHomeUnsafe(
     systemConfigObservation.kind === 'present' ? systemConfigObservation.value : ''
   // Missing/blank cloud-synced configs may be unhydrated; preserve existing runtime settings.
   if (rawSystemConfig.trim() === '') {
-    writeCodexDaemonSocketGuard(homes, runtimeConfigExists ? runtimeConfigObservation.value : null)
+    writeCodexDaemonSocketGuard(
+      runtimeHomePath,
+      runtimeConfigExists ? runtimeConfigObservation.value : null
+    )
     return runtimeConfigExists
       ? { status: 'skipped-missing-source' }
       : {
@@ -248,7 +245,7 @@ function syncSystemConfigIntoManagedCodexHomeUnsafe(
   if (!runtimeConfigExists) {
     const freshRuntimeConfig = applyRuntimeOwnedConfig(
       prepareSystemConfigForFreshRuntimeMirror(rawSystemConfig, sourceConfigDir, runtimeHomePath),
-      homes,
+      runtimeHomePath,
       null
     )
     const ownership = readMcpServerTomlOwnership(freshRuntimeConfig)
@@ -280,7 +277,11 @@ function syncSystemConfigIntoManagedCodexHomeUnsafe(
     ),
     promotionPlan.runtimeValuesToPreserve
   )
-  const nextRuntimeConfig = applyRuntimeOwnedConfig(preserved.content, homes, runtimeConfig)
+  const nextRuntimeConfig = applyRuntimeOwnedConfig(
+    preserved.content,
+    runtimeHomePath,
+    runtimeConfig
+  )
   if (nextRuntimeConfig !== runtimeConfig) {
     writeFileAtomically(runtimeConfigPath, nextRuntimeConfig, RUNTIME_CONFIG_WRITE)
   }

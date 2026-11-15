@@ -3,21 +3,18 @@ import {
   applyCodexSharedSqliteHome,
   readCodexSharedSqliteHome
 } from '../toml/config-toml-shared-sqlite-home'
-import type { CodexSettingsPromotionHomes } from './config-settings-promotion'
 
 /**
  * Values the managed home owns: never mirrored from, or promoted to, the user's own config.
- * A caller that doesn't know the home's sharing state keeps the shared databases it already had.
+ * The shared sqlite_home line belongs to the history link pass; a mirror only carries it forward.
  */
 export function applyRuntimeOwnedConfig(
   config: string,
-  homes: Pick<CodexSettingsPromotionHomes, 'runtimeHomePath' | 'sqliteHome'>,
+  runtimeHomePath: string,
   previousConfig: string | null
 ): string {
   return applyCodexSharedSqliteHome(
-    applyCodexDaemonSocketGuard(config, homes.runtimeHomePath),
-    homes.sqliteHome !== undefined
-      ? homes.sqliteHome
-      : readCodexSharedSqliteHome(previousConfig ?? '')
+    applyCodexDaemonSocketGuard(config, runtimeHomePath),
+    readCodexSharedSqliteHome(previousConfig ?? '')
   )
 }

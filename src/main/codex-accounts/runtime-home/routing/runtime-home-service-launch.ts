@@ -44,6 +44,7 @@ export abstract class CodexRuntimeHomeLaunch extends CodexRuntimeHomeRouting {
       const homePath = this.getWslCodexHomePathForSelection(wslTarget)
       this.startLegacyWslAuthDrain(wslTarget)
       this.finishWslLaunchPreparation(wslTarget, homePath)
+      void this.prepareWslAccountHistory(wslTarget, homePath)
       return homePath
     }
     const selfContainedAccount = this.getSelfContainedManagedHostAccount()
@@ -136,6 +137,8 @@ export abstract class CodexRuntimeHomeLaunch extends CodexRuntimeHomeRouting {
     const homePath = this.getWslCodexHomePathForSelection(wslTarget)
     // Drain potentially fresher retired-home credentials before the first direct-home spawn.
     await this.startLegacyWslAuthDrain(wslTarget, { throwOnFailure: true })
+    // Codex must start on linked history (and the guest's sqlite_home line) in this home.
+    await this.prepareWslAccountHistory(wslTarget, homePath)
     this.finishWslLaunchPreparation(wslTarget, homePath)
     return homePath
   }

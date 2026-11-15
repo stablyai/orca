@@ -77,10 +77,10 @@ export abstract class CodexRuntimeHomeState {
   protected abstract invalidateBackfillAfterManagedSystemDefaultLaunch(
     launchEnv?: NodeJS.ProcessEnv
   ): boolean | null
-  protected abstract startWslSessionBridgeForLaunch(
+  protected abstract prepareWslAccountHistory(
     target: CodexAccountSelectionTarget,
     runtimeHomePath: string | null
-  ): void
+  ): Promise<void>
 
   abstract getHostCodexHomePathsForSessionDiscovery(): string[]
   abstract getSelectedHostAccountCodexHomePath(): string | null

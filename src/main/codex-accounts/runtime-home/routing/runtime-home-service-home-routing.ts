@@ -214,7 +214,6 @@ export abstract class CodexRuntimeHomeRouting extends CodexRuntimeHomeManagedHom
     homePath: string | null
   ): void {
     this.syncWslConfigAndGlobalInstructionsForLaunch(target, homePath)
-    this.startWslSessionBridgeForLaunch(target, homePath)
   }
 
   protected syncWslConfigAndGlobalInstructionsForLaunch(
@@ -241,12 +240,7 @@ export abstract class CodexRuntimeHomeRouting extends CodexRuntimeHomeManagedHom
     syncSystemConfigIntoManagedCodexHome({
       runtimeHomePath,
       systemHomePath,
-      systemConfigDir: toLinuxPath(systemHomePath),
-      sqliteHome: this.getWslSharedSqliteHome(
-        distro,
-        toLinuxPath(runtimeHomePath),
-        toLinuxPath(systemHomePath)
-      )
+      systemConfigDir: toLinuxPath(systemHomePath)
     })
   }
 

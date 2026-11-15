@@ -60,17 +60,8 @@ function hasTopLevelSqliteHome(config: string): boolean {
   return false
 }
 
-/**
- * Points Codex's databases at `sqliteHome` unless the user's own config already sets one;
- * null removes Orca's line and undefined leaves the config as it is.
- */
-export function applyCodexSharedSqliteHome(
-  config: string,
-  sqliteHome: string | null | undefined
-): string {
-  if (sqliteHome === undefined) {
-    return config
-  }
+/** Points Codex's databases at `sqliteHome` unless the user's own config sets one; null removes Orca's line. */
+export function applyCodexSharedSqliteHome(config: string, sqliteHome: string | null): string {
   const stripped = stripCodexSharedSqliteHome(config)
   if (sqliteHome === null || hasTopLevelSqliteHome(stripped)) {
     return stripped

@@ -1,4 +1,3 @@
-import { posix as pathPosix } from 'node:path'
 import { WSL_CODEX_ACCOUNT_HISTORY_HELPER_FILENAME } from '../../../../shared/remote-bundle-artifacts'
 import { runWslGuestNodeHelper } from '../../../wsl/execution/wsl-guest-node-helper'
 import { runWslProcess } from '../../../wsl/execution/wsl-runner'
@@ -11,7 +10,6 @@ import {
   healCodexIndexPendingRollouts,
   isCodexAccountHistoryWorkStopping
 } from './codex-account-history-index'
-import { CODEX_INDEX_PENDING_DIR } from './codex-account-history-links'
 
 export type WslCodexAccountHistoryTarget = {
   distro: string
@@ -45,41 +43,15 @@ const HELPER_TIMEOUT_MS = 10 * 60_000
 const HELPER_MAX_OUTPUT_BYTES = 64 * 1024 * 1024
 const CLEAR_TIMEOUT_MS = 30_000
 
-const runningPasses = new Map<string, Promise<boolean>>()
+type HelperOutput = { result: string; pendingDir: string; pending: string[] }
 
-/**
- * Links (or, with sharing off, unlinks) a WSL account home inside its distro, then indexes moved
- * history; resolves to whether the home's history now lives in the store.
- */
-export function startWslCodexAccountHistoryInBackground(
-  target: WslCodexAccountHistoryTarget,
-  dependenciesOverride: Partial<WslAccountHistoryDependencies> = {}
-): Promise<boolean> {
-  if (isCodexAccountHistoryWorkStopping()) {
-    return Promise.resolve(false)
-  }
-  const key = `${target.distro.toLowerCase()}\0${target.accountHome}`
-  const running = runningPasses.get(key)
-  if (running) {
-    return running
-  }
-  const pass = runPass(target, { ...defaultDependencies, ...dependenciesOverride })
-    .catch((error: unknown) => {
-      console.warn('[codex-account-history] WSL account history pass failed:', error)
-      return false
-    })
-    .finally(() => runningPasses.delete(key))
-  runningPasses.set(key, pass)
-  return pass
-}
-
-async function runPass(
+/** Links (or unlinks) the home inside its distro; the guest helper also owns its sqlite_home. */
+async function linkInGuest(
   target: WslCodexAccountHistoryTarget,
   dependencies: WslAccountHistoryDependencies
-): Promise<boolean> {
+): Promise<HelperOutput | null> {
   // Every wsl.exe step re-checks: the user may stop the distro mid-pass, and a step would boot it.
-  const requireRunning = (): Promise<void> => dependencies.requireRunning(target.distro)
-  await requireRunning()
+  await dependencies.requireRunning(target.distro)
   const stdout = await dependencies.runHelper({
     distro: target.distro,
     helperFilename: WSL_CODEX_ACCOUNT_HISTORY_HELPER_FILENAME,
@@ -88,17 +60,50 @@ async function runPass(
     timeoutMs: HELPER_TIMEOUT_MS,
     maxOutputBytes: HELPER_MAX_OUTPUT_BYTES
   })
-  const { linked, pending } = parseHelperOutput(stdout)
-  if (pending.length === 0 || isCodexAccountHistoryWorkStopping()) {
-    return linked
+  return parseHelperOutput(stdout)
+}
+
+/** Marker lines precede the summary; a missing summary means the list may be clipped. */
+function parseHelperOutput(stdout: string): HelperOutput | null {
+  const lines = stdout
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0)
+  let summary: unknown
+  try {
+    summary = JSON.parse(lines.at(-1) ?? '')
+  } catch {
+    return null
   }
+  if (
+    !summary ||
+    typeof summary !== 'object' ||
+    !('pendingDir' in summary) ||
+    typeof summary.pendingDir !== 'string'
+  ) {
+    return null
+  }
+  // Login scripts may print before the helper; only rollout names are markers.
+  return {
+    result: 'result' in summary && typeof summary.result === 'string' ? summary.result : '',
+    pendingDir: summary.pendingDir,
+    pending: lines.slice(0, -1).filter((line) => line.startsWith('rollout-'))
+  }
+}
+
+/** Codex's own `thread/read` inside the distro indexes moved rollouts against the guest store. */
+async function healInGuest(
+  target: WslCodexAccountHistoryTarget,
+  output: HelperOutput,
+  dependencies: WslAccountHistoryDependencies
+): Promise<void> {
   const distroKey = target.distro.toLowerCase()
   let distroStopped = false
   const unsubscribe = dependencies.subscribeStops((stopped) => {
     distroStopped ||= stopped.some((distro) => distro.toLowerCase() === distroKey)
   })
   const stillRunning = async (): Promise<void> => {
-    await requireRunning().catch((error: unknown) => {
+    await dependencies.requireRunning(target.distro).catch((error: unknown) => {
       distroStopped = true
       throw error
     })
@@ -106,10 +111,10 @@ async function runPass(
   try {
     await healCodexIndexPendingRollouts({
       storeHome: target.storeHome,
-      rolloutNames: pending,
+      rolloutNames: output.pending,
       clear: async (names) => {
         await stillRunning()
-        await clearPendingMarkers(target, names)
+        await clearPendingMarkers(target.distro, output.pendingDir, names)
       },
       options: {
         // Windows can't take SQLite's locks over \\wsl.localhost; the guest's own codex indexes.
@@ -125,44 +130,21 @@ async function runPass(
   } finally {
     unsubscribe()
   }
-  return linked
-}
-
-/** Marker lines precede the summary; a missing summary means the list may be clipped. */
-function parseHelperOutput(stdout: string): { linked: boolean; pending: string[] } {
-  const lines = stdout
-    .split(/\r?\n/)
-    .map((line) => line.trim())
-    .filter((line) => line.length > 0)
-  let result: unknown
-  try {
-    const summary: unknown = JSON.parse(lines.at(-1) ?? '')
-    result = summary && typeof summary === 'object' && 'result' in summary ? summary.result : null
-  } catch {
-    result = null
-  }
-  if (result === null) {
-    return { linked: false, pending: [] }
-  }
-  // Login scripts may print before the helper; only rollout names are markers.
-  return {
-    linked: result === 'shared',
-    pending: lines.slice(0, -1).filter((line) => line.startsWith('rollout-'))
-  }
 }
 
 async function clearPendingMarkers(
-  target: WslCodexAccountHistoryTarget,
+  distro: string,
+  pendingDir: string,
   names: readonly string[]
 ): Promise<void> {
   if (names.length === 0) {
     return
   }
   const result = await runWslProcess({
-    distro: target.distro,
+    distro,
     loginPath: 'none',
     script: 'cd -- "$1" || exit 1\nshift\nrm -f -- "$@"',
-    args: [pathPosix.join(target.accountHome, CODEX_INDEX_PENDING_DIR), ...names],
+    args: [pendingDir, ...names],
     timeoutMs: CLEAR_TIMEOUT_MS
   })
   if (result.code !== 0 || result.timedOut) {
@@ -170,44 +152,65 @@ async function clearPendingMarkers(
   }
 }
 
-/** One guest loop per distro, launched home first; remembers which homes ended up linked. */
-export class WslCodexAccountHistoryLaunches {
-  private readonly loops = new Map<string, Promise<void>>()
-  // Distro and Linux path -> whether the last guest pass left the home's history in the store.
-  private readonly linked = new Map<string, boolean>()
+type QueuedPass = { shared: boolean; pass: Promise<void> }
 
-  start(args: {
-    distro: string
-    launchedHome: string
-    accountHomes: readonly string[]
-    storeHome: string
-    shared: boolean
-  }): void {
-    const distroKey = args.distro.toLowerCase()
-    if (args.accountHomes.length === 0 || this.loops.has(distroKey)) {
-      return
+/**
+ * WSL account history passes, in request order per home (a request joins only the latest queued
+ * one with the same mode); indexing runs detached, one at a time per distro.
+ */
+export class WslCodexAccountHistoryLaunches {
+  private readonly latest = new Map<string, QueuedPass>()
+  private readonly heals = new Map<string, Promise<void>>()
+  // A home shared once this run skips later guest passes.
+  private readonly sharedThisRun = new Set<string>()
+
+  constructor(private readonly dependencies: WslAccountHistoryDependencies = defaultDependencies) {}
+
+  run(target: WslCodexAccountHistoryTarget): Promise<void> {
+    if (isCodexAccountHistoryWorkStopping()) {
+      return Promise.resolve()
     }
-    const ordered = [
-      ...args.accountHomes.filter((home) => home === args.launchedHome),
-      ...args.accountHomes.filter((home) => home !== args.launchedHome)
-    ]
-    const loop = (async () => {
-      for (const accountHome of ordered) {
-        const linked = await startWslCodexAccountHistoryInBackground({
-          distro: args.distro,
-          accountHome,
-          storeHome: args.storeHome,
-          shared: args.shared
-        })
-        this.linked.set(`${distroKey}\0${accountHome}`, linked)
+    const key = `${target.distro.toLowerCase()}\0${target.accountHome}`
+    const previous = this.latest.get(key)
+    if (previous?.shared === target.shared) {
+      return previous.pass
+    }
+    const pass = (previous?.pass ?? Promise.resolve())
+      .then(async () => {
+        if (target.shared && this.sharedThisRun.has(key)) {
+          return
+        }
+        this.sharedThisRun.delete(key)
+        const output = await linkInGuest(target, this.dependencies)
+        if (output?.result === 'shared') {
+          this.sharedThisRun.add(key)
+        }
+        if (output && output.pending.length > 0) {
+          this.startHeal(target, output)
+        }
+      })
+      .catch((error: unknown) => {
+        console.warn('[codex-account-history] WSL account history pass failed:', error)
+      })
+    this.latest.set(key, { shared: target.shared, pass })
+    void pass.finally(() => {
+      if (this.latest.get(key)?.pass === pass) {
+        this.latest.delete(key)
       }
-    })().finally(() => this.loops.delete(distroKey))
-    this.loops.set(distroKey, loop)
+    })
+    return pass
   }
 
-  /** Before this run's first guest pass for the home, the config keeps what it had. */
-  sqliteHome(distro: string, accountHome: string, storeHome: string): string | null | undefined {
-    const linked = this.linked.get(`${distro.toLowerCase()}\0${accountHome}`)
-    return linked === undefined ? undefined : linked ? storeHome : null
+  private startHeal(target: WslCodexAccountHistoryTarget, output: HelperOutput): void {
+    const distroKey = target.distro.toLowerCase()
+    if (this.heals.has(distroKey) || isCodexAccountHistoryWorkStopping()) {
+      return
+    }
+    const heal = healInGuest(target, output, this.dependencies)
+      .catch((error: unknown) => {
+        console.warn('[codex-account-history] Indexing WSL shared history failed:', error)
+      })
+      .finally(() => this.heals.delete(distroKey))
+    this.heals.set(distroKey, heal)
   }
 }

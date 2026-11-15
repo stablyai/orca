@@ -39,9 +39,16 @@ export type MergedDirectoryLinkArgs = {
   platform: NodeJS.Platform
   /** Problems that leave the link published, such as retained conflicts. */
   onWarning: (error: unknown) => void
-  /** Runs before each entry moves into `destination`, with its current path (a folder moves whole). */
-  beforeMove?: (path: string) => void | Promise<void>
+  /**
+   * Runs before an entry joins `destination`, with its current path: one that moves (a folder
+   * moves whole) or a hard-linked duplicate whose name is dropped.
+   */
+  beforeShare?: (path: string) => void | Promise<void>
+  /** Empty files that collide with a shared name are dropped (lock files hold no data). */
+  dropEmptyConflicts?: boolean
 }
+
+type MoveOptions = Pick<MergedDirectoryLinkArgs, 'beforeShare' | 'dropEmptyConflicts'>
 
 export async function lstatIfPresent(file: string): Promise<BigIntStats | undefined> {
   try {
@@ -56,6 +63,8 @@ export async function lstatIfPresent(file: string): Promise<BigIntStats | undefi
 
 type MoveResult = { retained: number; failed: unknown[] }
 
+const HARD_LINK_UNSUPPORTED = new Set(['EPERM', 'ENOTSUP', 'EOPNOTSUPP', 'EMLINK', 'EXDEV'])
+
 // A plain rename replaces an existing file (and on Windows a racing one), so files and links are
 // published with calls that fail on an existing name and only then lose their old name.
 async function moveEntry(from: string, to: string, item: BigIntStats): Promise<void> {
@@ -64,7 +73,17 @@ async function moveEntry(from: string, to: string, item: BigIntStats): Promise<v
     await renameFileWithWindowsRetryAsync(from, to)
     return
   }
-  await (item.isSymbolicLink() ? symlink(await readlink(from), to) : link(from, to))
+  try {
+    await (item.isSymbolicLink() ? symlink(await readlink(from), to) : link(from, to))
+  } catch (error) {
+    const code = (error as NodeJS.ErrnoException | null)?.code ?? ''
+    // Some filesystems refuse hard links; a rename still moves the file when the name is free.
+    if (!HARD_LINK_UNSUPPORTED.has(code) || (await lstatIfPresent(to))) {
+      throw error
+    }
+    await renameFileWithWindowsRetryAsync(from, to)
+    return
+  }
   await unlink(from)
 }
 
@@ -73,7 +92,7 @@ async function moveTree(
   source: string,
   destination: string,
   result: MoveResult,
-  beforeMove: MergedDirectoryLinkArgs['beforeMove']
+  options: MoveOptions
 ): Promise<void> {
   for (const name of await readdir(source)) {
     const from = join(source, name)
@@ -84,12 +103,15 @@ async function moveTree(
         lstatIfPresent(to)
       ])
       if (!existing) {
-        await beforeMove?.(from)
+        await options.beforeShare?.(from)
         await moveEntry(from, to, item)
       } else if (item.isDirectory() && existing.isDirectory()) {
-        await moveTree(from, to, result, beforeMove)
+        await moveTree(from, to, result, options)
       } else if (item.isFile() && item.dev === existing.dev && item.ino === existing.ino) {
         // A hard link to the shared file: dropping this name loses no bytes.
+        await options.beforeShare?.(from)
+        await unlink(from)
+      } else if (options.dropEmptyConflicts && item.isFile() && item.size === 0n) {
         await unlink(from)
       } else {
         result.retained += 1
@@ -109,7 +131,7 @@ async function drain(
   args: MergedDirectoryLinkArgs
 ): Promise<void> {
   const result: MoveResult = { retained: 0, failed: [] }
-  await moveTree(pending, destination, result, args.beforeMove)
+  await moveTree(pending, destination, result, args)
   if (result.failed.length > 0) {
     args.onWarning(result.failed[0])
   }
@@ -159,9 +181,18 @@ export async function mergeDirectoryIntoLink(
       throw crossFilesystem()
     }
     if (await lstatIfPresent(pending)) {
-      throw new DirectoryLinkError('retained-conflict', `Earlier conflicts kept in ${pending}`)
+      // Earlier conflicts wait there (sharing was turned off and on): merge straight in, then set
+      // the new conflicts beside the old ones so the folder can still become a link.
+      await drain(source, destination, args)
+      if (await lstatIfPresent(source)) {
+        await moveTree(source, pending, { retained: 0, failed: [] }, {})
+      }
+      if (await lstatIfPresent(source)) {
+        throw new DirectoryLinkError('retained-conflict', `Conflicts kept in ${source}`)
+      }
+    } else {
+      await renameFileWithWindowsRetryAsync(source, pending)
     }
-    await renameFileWithWindowsRetryAsync(source, pending)
   }
   try {
     // Junctions avoid Windows symlink privilege requirements.
@@ -172,7 +203,7 @@ export async function mergeDirectoryIntoLink(
       if (!(await lstatIfPresent(source))) {
         await renameFileWithWindowsRetryAsync(pending, source)
       } else if ((await lstatIfPresent(source))?.isDirectory()) {
-        await moveTree(pending, source, { retained: 0, failed: [] }, undefined)
+        await moveTree(pending, source, { retained: 0, failed: [] }, {})
       }
     }
     throw new DirectoryLinkError('link-failed', String(error))

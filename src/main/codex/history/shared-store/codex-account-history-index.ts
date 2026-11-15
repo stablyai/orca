@@ -5,13 +5,10 @@ import { isDefinitiveAbsence } from '../../../../shared/definitive-filesystem-ab
 import { healPendingCodexAccountThreads } from '../index/codex-account-session-index-heal'
 import type { CodexSessionIndexHealOptions } from '../index/codex-session-index-heal'
 import { parseCodexRolloutThreadId } from '../rollouts/codex-rollout-thread-id'
-import {
-  CODEX_INDEX_PENDING_DIR,
-  listCodexIndexPendingRollouts
-} from './codex-account-history-links'
+import { listCodexIndexPendingRollouts } from './codex-account-history-links'
 
 let stopping = false
-const hostHealsByAccountHome = new Map<string, Promise<void>>()
+const hostHealsByPendingDir = new Map<string, Promise<void>>()
 
 /** Stops background index work at quit; settled rows and markers are kept. */
 export function stopCodexAccountHistoryWork(): void {
@@ -67,14 +64,13 @@ export async function healCodexIndexPendingRollouts(args: {
   })
 }
 
-/** One background pass per host account home; a later launch resumes what is left. */
-export function startHostCodexAccountIndexHeal(accountHome: string, storeHome: string): void {
-  const key = normalizeRuntimePathForComparison(accountHome)
-  if (stopping || hostHealsByAccountHome.has(key)) {
+/** One background pass per store; a later launch resumes what is left. */
+export function startHostCodexIndexHeal(pendingDir: string, storeHome: string): void {
+  const key = normalizeRuntimePathForComparison(pendingDir)
+  if (stopping || hostHealsByPendingDir.has(key)) {
     return
   }
-  const pendingDir = join(accountHome, CODEX_INDEX_PENDING_DIR)
-  const task = listCodexIndexPendingRollouts(accountHome)
+  const task = listCodexIndexPendingRollouts(pendingDir)
     .then((rolloutNames) =>
       healCodexIndexPendingRollouts({
         storeHome,
@@ -93,13 +89,13 @@ export function startHostCodexAccountIndexHeal(accountHome: string, storeHome: s
     .catch((error: unknown) => {
       console.warn('[codex-account-history] Indexing shared history failed:', error)
     })
-    .finally(() => hostHealsByAccountHome.delete(key))
-  hostHealsByAccountHome.set(key, task)
+    .finally(() => hostHealsByPendingDir.delete(key))
+  hostHealsByPendingDir.set(key, task)
 }
 
 export const _internals = {
   reset: (): void => {
     stopping = false
-    hostHealsByAccountHome.clear()
+    hostHealsByPendingDir.clear()
   }
 }

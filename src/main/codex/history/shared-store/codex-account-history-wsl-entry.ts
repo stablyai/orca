@@ -1,3 +1,5 @@
+import { homedir } from 'node:os'
+import { join } from 'node:path'
 import {
   listCodexIndexPendingRollouts,
   shareCodexAccountHistory,
@@ -5,7 +7,7 @@ import {
 } from './codex-account-history-links'
 
 // Runs inside a WSL distro on Orca's pinned Node: `<share|unshare> <account home> <store home>`.
-// Prints each rollout still owed an index row, then `{"result":…}` last.
+// Prints each rollout still owed an index row, then `{"result":…,"pendingDir":…}` last.
 async function main(): Promise<void> {
   const [mode, accountHome = '', storeHome = ''] = process.argv.slice(2)
   if (!accountHome.startsWith('/') || !storeHome.startsWith('/')) {
@@ -14,20 +16,24 @@ async function main(): Promise<void> {
   const onWarning = (error: unknown): void => {
     console.error(error instanceof Error ? error.message : String(error))
   }
+  // Beside the guest's account homes, so it is per store and never inside the user's ~/.codex.
+  const pendingDir = join(homedir(), '.local', 'share', 'orca', 'codex-index-pending')
+  let result: string = 'unshared'
   if (mode === 'unshare') {
     await unshareCodexAccountHistory({ accountHome, storeHome, onWarning })
-    process.stdout.write(`${JSON.stringify({ result: 'unshared' })}\n`)
-    return
+  } else {
+    result = await shareCodexAccountHistory({
+      accountHome,
+      storeHome,
+      sqliteHome: storeHome,
+      indexPendingDir: pendingDir,
+      platform: 'linux',
+      onWarning
+    })
   }
-  const result = await shareCodexAccountHistory({
-    accountHome,
-    storeHome,
-    platform: 'linux',
-    onWarning
-  })
-  const pending = await listCodexIndexPendingRollouts(accountHome)
+  const pending = await listCodexIndexPendingRollouts(pendingDir)
   process.stdout.write(pending.map((name) => `${name}\n`).join(''))
-  process.stdout.write(`${JSON.stringify({ result })}\n`)
+  process.stdout.write(`${JSON.stringify({ result, pendingDir })}\n`)
 }
 void main().catch((error: unknown) => {
   console.error(error instanceof Error ? error.message : String(error))

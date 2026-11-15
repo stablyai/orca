@@ -48,15 +48,15 @@ const KEEP_ON_REMOVAL_SCRIPT = [
   'done'
 ].join('\n')
 
-/** Deletes the login and private state but keeps shared history; true when anything was kept. */
+/**
+ * Deletes the login and private state but keeps shared history; true when anything was kept.
+ * Links are removed one by one first, so no recursive delete ever meets a Windows junction.
+ */
 async function removeManagedHomeKeepingSharedHistory(home: string): Promise<boolean> {
   const entries = await readdir(home, { withFileTypes: true })
   const kept = (entry: Dirent): boolean =>
     (entry.isSymbolicLink() && KEPT_HISTORY_LINKS.includes(entry.name)) ||
     entry.name.endsWith(MERGE_PENDING_SUFFIX)
-  if (!entries.some(kept)) {
-    return false
-  }
   for (const entry of entries.filter((candidate) => !kept(candidate))) {
     const path = join(home, entry.name)
     if (entry.isSymbolicLink()) {
@@ -71,7 +71,7 @@ async function removeManagedHomeKeepingSharedHistory(home: string): Promise<bool
       retryDelay: WINDOWS_RM_RETRY_DELAY_MS
     })
   }
-  return true
+  return entries.some(kept)
 }
 
 function removeManagedHomeTreeSync(targetPath: string): void {

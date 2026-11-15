@@ -81,8 +81,6 @@ export type CodexSettingsPromotionHomes = {
   systemHomePath: string
   /** Linux spelling of the source config directory when its host path is a drvfs drive. */
   systemConfigDir?: string
-  /** Shared history store whose databases this home uses; null uses its own, absent leaves it. */
-  sqliteHome?: string | null
 }
 
 export type CodexSettingsPromotionPlan = {
