@@ -10,6 +10,7 @@ import {
 import { RetainedPaneHost } from '../../../tab-group/RetainedPaneHost'
 import NativeChatView from '../../NativeChatView'
 import { NativeChatComposerEditorOwner } from '../../composer/editor/native-chat-composer-editor-owner'
+import { NativeChatHostOutageOwner } from '../../host-access/native-chat-host-outage-owner'
 import { NativeChatPaneLifetime } from '../ownership/native-chat-pane-lifetime'
 import { isStructuredTab } from '../../../../../../shared/agent-session/view/structured-agent-session-tab'
 
@@ -56,20 +57,22 @@ const StructuredAgentSessionOverlaySlot = memo(function StructuredAgentSessionOv
       onFocusOwningGroup={onFocusOwningGroup}
     >
       <NativeChatPaneLifetime key={`${owner}:${tab.entityId}`} isVisible={effectsConnected}>
-        <NativeChatComposerEditorOwner>
-          <Activity mode={effectsConnected ? 'visible' : 'hidden'}>
-            <NativeChatView
-              mode="structured"
-              tabId={tab.id}
-              groupId={groupId}
-              sessionId={tab.entityId}
-              agent={tab.agentSessionAgent}
-              isVisible={isActive}
-              isFocusedGroup={isFocusedGroup}
-              target={target}
-            />
-          </Activity>
-        </NativeChatComposerEditorOwner>
+        <NativeChatHostOutageOwner target={target}>
+          <NativeChatComposerEditorOwner>
+            <Activity mode={effectsConnected ? 'visible' : 'hidden'}>
+              <NativeChatView
+                mode="structured"
+                tabId={tab.id}
+                groupId={groupId}
+                sessionId={tab.entityId}
+                agent={tab.agentSessionAgent}
+                isVisible={isActive}
+                isFocusedGroup={isFocusedGroup}
+                target={target}
+              />
+            </Activity>
+          </NativeChatComposerEditorOwner>
+        </NativeChatHostOutageOwner>
       </NativeChatPaneLifetime>
     </RetainedPaneHost>
   )

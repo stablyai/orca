@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState, useSyncExternalStore } from 'react'
+import { useCallback, useContext, useMemo, useState, useSyncExternalStore } from 'react'
 import { useAppStore } from '@/store'
 import { useNativeChatPaneLifetimeEffect } from '../pane/ownership/native-chat-pane-lifetime'
 import { toRuntimeExecutionHostId } from '../../../../../shared/execution-host'
@@ -7,6 +7,7 @@ import { selectExecutionHostDisplayLabel } from '@/runtime/hosts/display/executi
 import { runtimeHostConnectionStateForEntry } from '@/runtime/hosts/connections/runtime-host-connection-state'
 import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 
+import { NativeChatHostOutageContext } from './native-chat-host-outage-owner'
 import {
   createNativeChatHostOutageLatch,
   nativeChatHostOutageKind,
@@ -46,11 +47,13 @@ export function useNativeChatHostOutage(target: RuntimeClientTarget): NativeChat
       ? null
       : selectExecutionHostDisplayLabel(s, toRuntimeExecutionHostId(environmentId))
   )
-  const [latch] = useState(createNativeChatHostOutageLatch)
+  const retainedLatch = useContext(NativeChatHostOutageContext)
+  const [fallbackLatch] = useState(() => retainedLatch ?? createNativeChatHostOutageLatch())
+  const latch = retainedLatch ?? fallbackLatch
   useNativeChatPaneLifetimeEffect(
     useCallback(
-      () => (environmentId === null ? undefined : latch.track(environmentId)),
-      [environmentId, latch]
+      () => (retainedLatch || environmentId === null ? undefined : latch.track(environmentId)),
+      [environmentId, latch, retainedLatch]
     )
   )
   const earned = useSyncExternalStore(latch.subscribe, latch.read, latch.read)

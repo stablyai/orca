@@ -5,6 +5,7 @@ import { expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
 import { NativeChatPaneLifetime } from '../pane/ownership/native-chat-pane-lifetime'
 import { NativeChatComposerNotices } from '../composer/controls/NativeChatComposerNotices'
+import { NativeChatHostOutageOwner } from './native-chat-host-outage-owner'
 import { useNativeChatHostOutage } from './use-native-chat-host-outage'
 import { useNativeChatHostOutageNotice } from './use-native-chat-host-outage-notice'
 
@@ -71,9 +72,11 @@ it('keeps a pending manual reconnect available across a chat switch', async () =
   const pane = (visible: boolean) => (
     <StrictMode>
       <NativeChatPaneLifetime isVisible={visible}>
-        <Activity mode={visible ? 'visible' : 'hidden'}>
-          <HostComposer />
-        </Activity>
+        <NativeChatHostOutageOwner target={{ kind: 'environment', environmentId: 'qa-host' }}>
+          <Activity mode={visible ? 'visible' : 'hidden'}>
+            <HostComposer />
+          </Activity>
+        </NativeChatHostOutageOwner>
       </NativeChatPaneLifetime>
     </StrictMode>
   )
@@ -110,9 +113,11 @@ it('keeps a pending manual reconnect available across a chat switch', async () =
 it('starts a new outage after the host recovers while its chat is hidden', async () => {
   const pane = (visible: boolean) => (
     <NativeChatPaneLifetime isVisible={visible}>
-      <Activity mode={visible ? 'visible' : 'hidden'}>
-        <HostComposer />
-      </Activity>
+      <NativeChatHostOutageOwner target={{ kind: 'environment', environmentId: 'qa-host' }}>
+        <Activity mode={visible ? 'visible' : 'hidden'}>
+          <HostComposer />
+        </Activity>
+      </NativeChatHostOutageOwner>
     </NativeChatPaneLifetime>
   )
   const view = render(pane(true))
@@ -156,14 +161,15 @@ it('shows an outage that earned its grace while the chat was hidden', async () =
   })
   const pane = (visible: boolean) => (
     <NativeChatPaneLifetime isVisible={visible}>
-      <Activity mode={visible ? 'visible' : 'hidden'}>
-        <HostComposer />
-      </Activity>
+      <NativeChatHostOutageOwner target={{ kind: 'environment', environmentId: 'qa-host' }}>
+        <Activity mode={visible ? 'visible' : 'hidden'}>
+          <HostComposer />
+        </Activity>
+      </NativeChatHostOutageOwner>
     </NativeChatPaneLifetime>
   )
-  const view = render(pane(true))
+  const view = render(pane(false))
   try {
-    view.rerender(pane(false))
     act(() => {
       useAppStore.setState({
         runtimeStatusByEnvironmentId: new Map([['qa-host', hostStatus('awaiting_ready', true)]])
