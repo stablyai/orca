@@ -10,6 +10,7 @@ const pids = ids.map(Number)
 let result = { ok: false, reason: 'analysis-unavailable' }
 let parser
 let input
+let deadline
 try {
   if (
     !file ||
@@ -19,7 +20,10 @@ try {
   ) {
     throw new Error('Invalid arguments')
   }
-  const signal = AbortSignal.timeout(10_000)
+  const cancellation = new AbortController()
+  // The foreground CLI must stay alive while its shared background worker is unrefed.
+  deadline = setTimeout(() => cancellation.abort(), 10_000)
+  const signal = cancellation.signal
   input = await open(file, constants.O_RDONLY | constants.O_NONBLOCK)
   const stat = await input.stat()
   if (!stat.isFile() || stat.size > limit) {
@@ -75,6 +79,10 @@ try {
     }
     const ack = await parser.dispatch((id) => ({ id, chunk }), 1000, signal)
     if (ack.ready !== true) {
+      if (ack.ok === false) {
+        const { id: _id, ...failure } = ack
+        result = failure
+      }
       throw new Error('Parser refused')
     }
   }
@@ -87,6 +95,7 @@ try {
   parser?.dispose()
   await parser?.retired()
   await input?.close().catch(() => {})
+  clearTimeout(deadline)
 }
 process.stdout.write(`${JSON.stringify(result)}\n`)
 process.exitCode = result.ok ? 0 : 1

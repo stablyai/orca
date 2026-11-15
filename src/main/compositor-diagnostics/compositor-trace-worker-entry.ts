@@ -1,5 +1,9 @@
 import { parentPort, workerData } from 'node:worker_threads'
-import { createCompositorTraceParser } from './compositor-trace-parser'
+import {
+  CompositorTraceBudgetError,
+  CompositorTraceValidationError,
+  createCompositorTraceParser
+} from './compositor-trace-parser'
 import type { CompositorParserRequest } from './compositor-trace-observations'
 
 const parser = createCompositorTraceParser(workerData.pids)
@@ -12,8 +16,17 @@ parentPort?.on('message', (message: CompositorParserRequest) => {
       parser.write(message.chunk)
       parentPort?.postMessage({ id: message.id, ready: true })
     }
-  } catch {
-    parentPort?.postMessage({ id: message.id, ok: false, reason: 'parser-budget' })
+  } catch (error) {
+    parentPort?.postMessage({
+      id: message.id,
+      ok: false,
+      reason:
+        error instanceof CompositorTraceBudgetError
+          ? 'parser-budget'
+          : error instanceof SyntaxError || error instanceof CompositorTraceValidationError
+            ? 'trace-invalid'
+            : 'parser-unavailable'
+    })
     parentPort?.close()
   }
 })

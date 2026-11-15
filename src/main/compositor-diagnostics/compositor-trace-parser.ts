@@ -19,6 +19,9 @@ type TraceEvent = {
   args?: { name?: unknown; draw_result?: unknown }
 }
 
+export class CompositorTraceBudgetError extends Error {}
+export class CompositorTraceValidationError extends Error {}
+
 function isTraceEvent(value: unknown): value is TraceEvent {
   return (
     typeof value === 'object' &&
@@ -51,7 +54,7 @@ export function createCompositorTraceParser(pids: readonly number[]): {
   let depth = 0
   const collect = (value: unknown): void => {
     if (!isTraceEvent(value)) {
-      throw new Error('Invalid event')
+      throw new CompositorTraceValidationError('Invalid event')
     }
     const event = value
     const row = typeof event.pid === 'number' ? observations.get(event.pid) : undefined
@@ -59,13 +62,13 @@ export function createCompositorTraceParser(pids: readonly number[]): {
       return
     }
     if (typeof event.tid !== 'number' || !Number.isSafeInteger(event.tid)) {
-      throw new Error('Missing thread identity')
+      throw new CompositorTraceValidationError('Missing thread identity')
     }
     const key = `${row.pid}:${event.tid}`
     let thread = threads.get(key)
     if (!thread) {
       if (threads.size >= 4096) {
-        throw new Error('Thread budget')
+        throw new CompositorTraceBudgetError('Thread budget')
       }
       thread = { pid: row.pid, compositor: false, slices: 0, wall: 0, cpu: 0, timed: true }
       threads.set(key, thread)
@@ -108,7 +111,7 @@ export function createCompositorTraceParser(pids: readonly number[]): {
       event.name.includes('cc::Scheduler::FinishImplFrame')
     ) {
       if (typeof event.dur !== 'number' || !Number.isFinite(event.dur) || event.dur < 0) {
-        throw new Error('Invalid duration')
+        throw new CompositorTraceValidationError('Invalid duration')
       }
       thread.slices++
       thread.wall += event.dur / 1000
@@ -149,7 +152,7 @@ export function createCompositorTraceParser(pids: readonly number[]): {
         filter: (path) => path.length === 1 && path[0] === 'traceEvents',
         create: () => {
           if (++arrays > 1) {
-            throw new Error('Duplicate traceEvents')
+            throw new CompositorTraceValidationError('Duplicate traceEvents')
           }
           return null
         },
@@ -162,13 +165,13 @@ export function createCompositorTraceParser(pids: readonly number[]): {
     (token) => {
       if (token.name === 'startObject' || token.name === 'startArray') {
         if (++depth > 16) {
-          throw new Error('Depth budget')
+          throw new CompositorTraceBudgetError('Depth budget')
         }
       } else if (token.name === 'endObject' || token.name === 'endArray') {
         depth--
       }
       if ('value' in token && typeof token.value === 'string' && token.value.length > 256) {
-        throw new Error('Scalar budget')
+        throw new CompositorTraceBudgetError('Scalar budget')
       }
       assembler.consume(token)
     },
@@ -183,7 +186,7 @@ export function createCompositorTraceParser(pids: readonly number[]): {
     write(chunk) {
       bytes += chunk.byteLength
       if (bytes > 8 * 1024 * 1024 || cpuMicros() > 100_000) {
-        throw new Error('Parser budget')
+        throw new CompositorTraceBudgetError('Parser budget')
       }
       reader.write(decoder.write(Buffer.from(chunk)))
     },
