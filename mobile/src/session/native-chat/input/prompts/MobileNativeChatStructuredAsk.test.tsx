@@ -2,7 +2,7 @@ import { createElement } from 'react'
 import { act, type ReactTestInstance, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, expect, it, vi } from 'vitest'
 import { createWithQueryClient } from '../../../../test-support/query-client-test-renderer'
-import { decodeAgentSessionQuestionAnswers } from '../../../../../../src/shared/agent-session/agent-session-question-answer'
+import { decodeAgentSessionQuestionAnswers } from '../../../../../../src/shared/agent-session/requests/prompts/agent-session-question-answer'
 import type { AgentJournalQuestion } from '../../../../../../src/shared/agent-session/journal/agent-session-journal-types'
 import { NATIVE_CHAT_QUESTION_AUTO_ADVANCE_MS } from '../../../../../../src/shared/native-chat/input/questions/native-chat-question-auto-advance'
 import { MobileNativeChatStructuredAsk } from './MobileNativeChatStructuredAsk'
@@ -11,6 +11,7 @@ vi.mock('@react-native-async-storage/async-storage', () => ({
   default: { getItem: vi.fn(), setItem: vi.fn(), removeItem: vi.fn() }
 }))
 vi.mock('react-native', () => ({
+  ActivityIndicator: 'ActivityIndicator',
   Keyboard: { dismiss: () => {} },
   Pressable: 'Pressable',
   ScrollView: 'ScrollView',
@@ -88,13 +89,14 @@ it('offers no Skip on a required question and takes Submit back to it instead of
   expect(shows('Question 2?')).toBe(true)
   expect(footer('Next').props.disabled).toBe(true)
 
-  // Jumping past it by its step tab: Submit returns to it rather than sending.
+  // Jumping past it by its step tab.
   const tab = tree.root.find(
     (node) =>
       isHost(node, 'Pressable') && node.findAll((n) => n.props.children === 'Step 3').length > 0
   )
   act(() => tab.props.onPress())
-  await act(async () => footer('Submit').props.onPress())
+  // The last step says Next: its press returns to the required question rather than sending.
+  await act(async () => footer('Next').props.onPress())
   expect(onAnswer).not.toHaveBeenCalled()
   expect(shows('Question 2?')).toBe(true)
 
@@ -122,4 +124,34 @@ it('keeps Submit idle on an unanswered required last question', async () => {
   await pick('1 B')
   expect(shows('Question 2?')).toBe(true)
   expect(footer('Submit').props.disabled).toBe(true)
+})
+
+it('counts a picked choice with an empty label as an answer to a required question', async () => {
+  vi.useFakeTimers()
+  const onAnswer = vi.fn(async (_encoded: string) => true)
+  const emptyChoice = (n: number): AgentJournalQuestion => ({
+    ...question(n, false),
+    options: [
+      { id: `q${n}:empty`, label: '' },
+      { id: `q${n}:b`, label: `${n} B` }
+    ]
+  })
+  act(() => {
+    tree = createWithQueryClient(
+      createElement(MobileNativeChatStructuredAsk, {
+        questions: [question(1, true), emptyChoice(2), emptyChoice(3)],
+        onAnswer
+      })
+    )
+  })
+
+  await pick('1 B')
+  await pick('')
+  expect(shows('Question 3?')).toBe(true)
+  await pick('')
+  expect(decodeAgentSessionQuestionAnswers(onAnswer.mock.calls[0]![0])).toEqual([
+    { questionId: 'q1', optionIds: ['q1:b'] },
+    { questionId: 'q2', optionIds: ['q2:empty'] },
+    { questionId: 'q3', optionIds: ['q3:empty'] }
+  ])
 })

@@ -274,7 +274,13 @@ export function MobileNativeChatAsk({
   const currentAnswered = isAnswered(index)
   // A required question offers Next or Submit, never Skip, and waits until it is answered.
   const waitsForAnswer = q.required === true && !currentAnswered
-  const confirmLabel = askConfirmLabel(currentAnswered || waitsForAnswer, isLast, anyAnswered())
+  const unansweredRequired = askUnansweredRequired(prompt.questions, (i) => isAnswered(i))
+  const confirmLabel = askConfirmLabel(
+    currentAnswered || waitsForAnswer,
+    isLast,
+    anyAnswered(),
+    unansweredRequired !== -1 && unansweredRequired !== index
+  )
   const confirmSkips = confirmLabel === 'skip'
   const confirmBlocked =
     askConfirmAction({ isLast, anyAnswered: anyAnswered(), waitsForAnswer }) === 'stay'

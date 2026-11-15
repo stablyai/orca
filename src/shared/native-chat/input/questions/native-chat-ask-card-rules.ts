@@ -62,14 +62,16 @@ export function askUnansweredRequired(
   return questions.findIndex((question, index) => question.required === true && !answered(index))
 }
 
-/** The last step says Submit whenever any answer will be sent, even if its own question was skipped. */
+/** The last step says Submit whenever any answer will be sent, even if its own question was skipped;
+ * it says Next when its press returns to an earlier required question instead (`returnsToRequired`). */
 export function askConfirmLabel(
   currentAnswered: boolean,
   isLast: boolean,
-  anyAnswered: boolean
+  anyAnswered: boolean,
+  returnsToRequired = false
 ): 'submit' | 'next' | 'skip' {
   if (isLast) {
-    return anyAnswered ? 'submit' : 'skip'
+    return anyAnswered ? (returnsToRequired ? 'next' : 'submit') : 'skip'
   }
   return currentAnswered ? 'next' : 'skip'
 }

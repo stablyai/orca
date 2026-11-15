@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { isValidAgentSessionQuestionAnswers } from '../../../../shared/agent-session/agent-session-question-answer'
+import { isValidAgentSessionQuestionAnswers } from '../../../../shared/agent-session/requests/prompts/agent-session-question-answer'
 import { structuredQuestionAnswers } from '../../../../shared/native-chat/input/questions/structured-agent-question-card'
 import { ClaudePromptRegistry } from '../permissions/claude-prompt-registry'
 import { claudeQuestionItems } from './claude-structured-prompt-items'
