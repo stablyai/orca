@@ -20,6 +20,7 @@ import { migrate } from './schema/migrate'
 import { backfillStructuredWorkerOrcaSessionIds } from './schema/structured-worker-orca-session-backfill'
 import { reconcileSettledWorkerDispatches } from './worker-dispatch/worker-dispatch-settlement'
 import { refreshOutstandingDeliveryTrigger } from './schema/migrate-v41'
+import { installWorkerDockSchema } from '../dock/worker-dock-schema'
 
 class OrchestrationDbCore {
   readonly crewChanges = new CrewChanges()
@@ -50,6 +51,7 @@ class OrchestrationDbCore {
     // Read before migrate, which drops the capture triggers it may need to rebuild around.
     const removedWorkCaptureWasIntact = isRemovedWorkCaptureIntact(this.db)
     migrate.call(this as unknown as OrchestrationDb)
+    installWorkerDockSchema(this.db)
     refreshOutstandingDeliveryTrigger(this.db)
     for (const [table, columns] of [
       ['messages', ['answer_sender_snapshot']],

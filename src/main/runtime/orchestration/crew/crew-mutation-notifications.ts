@@ -30,6 +30,7 @@ const mutations = [
   'prepareStartingWorkerAuthority',
   'markWorkerDispatchReady',
   'recordWorkerStage',
+  'retainWorkerLaunchObservation',
   'completeDispatch',
   'completeActiveDispatchesForTask',
   'failActiveDispatchForTask',
