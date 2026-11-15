@@ -74,7 +74,7 @@ function agentConversationTitle(
 }
 
 /** Where one resolved conversation is open now, from its own keyed status rows: never a listing
- *  of every workspace. A closed chat or a terminal agent with no live pane has none. */
+ *  of every workspace. A closed chat or a terminal agent with no live or sleeping pane has none. */
 export async function agentConversationPlaces(
   runtime: {
     getWorkspaceLabel(
@@ -151,9 +151,12 @@ async function agentConversationStatuses(resolved: ResolvedAgentConversation) {
           ]
         : []
   } else {
-    paneKeys = ((await agentHookServer.terminalAgentPlaces(resolved.orcaSessionId)) ?? []).map(
-      (place) => place.paneKey
-    )
+    // Sleeping panes too, as `agent list` lists them.
+    paneKeys = (
+      (await agentHookServer.terminalAgentPlaces(resolved.orcaSessionId, {
+        includeSleeping: true
+      })) ?? []
+    ).map((place) => place.paneKey)
   }
   return paneKeys.flatMap((paneKey) =>
     agentHookServer.getPublicStatusSnapshotForPane(paneKey).flatMap((status) => {

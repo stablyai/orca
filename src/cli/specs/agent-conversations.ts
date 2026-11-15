@@ -12,7 +12,7 @@ export const AGENT_CONVERSATION_COMMAND_SPECS: CommandSpec[] = [
       'A chat keeps its ID across /clear; a terminal agent gets a new one when /clear starts a new conversation.',
       '--state keeps agents in one state: working, blocked, waiting or done.',
       'Agents on other hosts are not listed here; the output names those hosts and the `--environment` that lists them.',
-      'Sleeping terminal agents are not listed yet; `orca agent show` and `orca agent read` still take their IDs.'
+      'A terminal agent that finished its turn stays listed, as done, while it sleeps, even after Orca restarts. One put to sleep mid-turn is not listed until it is reopened; `orca agent read` still takes its ID.'
     ],
     examples: ['orca agent list --json', 'orca agent list --worktree active --state working']
   },
@@ -24,7 +24,7 @@ export const AGENT_CONVERSATION_COMMAND_SPECS: CommandSpec[] = [
     positionalArgs: ['id'],
     notes: [
       '<id> is the `orca_session_id:` ID from `orca agent list` or Copy Orca Session ID.',
-      'An agent resumed in two panes shows both; one that is not open, such as a sleeping terminal agent, shows none.'
+      'An agent resumed in two panes shows both; one that is closed shows none. A sleeping terminal agent shows the place `orca agent list` lists it in.'
     ],
     examples: ['orca agent show orca_session_id:claude_1234 --json']
   },

@@ -157,9 +157,11 @@ export abstract class AgentHookServerAgentIdentities extends AgentHookServerStat
   }
 
   /** Panes proven to run terminal agent `id` now; null when this host never minted it. A miss
-   *  in the live index awaits the store, since a dormant conversation keeps its id. */
+   *  in the live index awaits the store, since a dormant conversation keeps its id.
+   *  `includeSleeping` adds finished sleeping panes, as `worktree.ps` lists; they run nothing. */
   async terminalAgentPlaces(
-    id: string
+    id: string,
+    { includeSleeping = false }: { includeSleeping?: boolean } = {}
   ): Promise<{ paneKey: string; worktreeId?: string }[] | null> {
     const authority = this.agentIdentities.authority()
     const known = await this.agentIdentities.isTerminalIdentity(id)
@@ -172,21 +174,21 @@ export abstract class AgentHookServerAgentIdentities extends AgentHookServerStat
     for (const place of this.agentIdentities.placesOf(id)) {
       // Canonical rows are never hydrated; a legacy row counts only once this runtime observed it,
       // since a saved status (even Done) cannot prove its process survived Orca being closed.
+      // A sleeping row needs no such proof: it claims only a finished agent in a placed pane.
       const subject = place.canonical
         ? this.canonicalSubjectsByPane.get(place.paneKey)?.get(place.key)
         : undefined
       const row = place.canonical
         ? subject && this.canonicalStatusStore.getParent(subject)?.status
-        : this.runtimeObservedStatusPaneKeys.has(place.key)
-          ? this.state.lastStatusByPaneKey.get(place.key)
-          : undefined
+        : this.state.lastStatusByPaneKey.get(place.key)
+      const observed = place.canonical || this.runtimeObservedStatusPaneKeys.has(place.key)
+      const ended = row && 'agentPresence' in row && row.agentPresence?.ended === true
       // Resume seeds, exited agents and unconfirmed restored rows prove no running agent.
       if (
         row &&
-        !('paneSleep' in row && row.paneSleep) &&
+        ('paneSleep' in row && row.paneSleep ? includeSleeping : observed && !ended) &&
         row.providerSessionOnly !== true &&
-        row.restoredUnconfirmed !== true &&
-        !('agentPresence' in row && row.agentPresence?.ended === true)
+        row.restoredUnconfirmed !== true
       ) {
         places.push({
           paneKey: place.paneKey,
