@@ -5077,7 +5077,8 @@
             "detailedTooltip": "Полные данные с полосами, подписями и процентами",
             "compactTooltip": "Сжатый вид: одна сводка на провайдера",
             "footerDetailAria": "Сведения об использовании в нижней части панели",
-            "notChecked": "Не проверено"
+            "notChecked": "Не проверено",
+            "modelWeeklyLimit": "Недельный лимит {{model}}: {{usage}}"
           },
           "RemoteServerUpdateStatusSegment": {
             "updating": "Обновление {{value0}}/{{value1}}",

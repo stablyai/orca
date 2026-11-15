@@ -4718,7 +4718,8 @@
             "detailedTooltip": "Utilisation complète avec barres, libellés et pourcentages",
             "compactTooltip": "Utilisation condensée : un résumé par fournisseur",
             "footerDetailAria": "Détail du pied de page d'utilisation",
-            "notChecked": "Non vérifié"
+            "notChecked": "Non vérifié",
+            "modelWeeklyLimit": "Limite hebdomadaire {{model}} : {{usage}}"
           },
           "RemoteServerUpdateStatusSegment": {
             "updating": "Mise à jour de {{value0}}/{{value1}}",

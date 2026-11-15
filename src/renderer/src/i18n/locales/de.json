@@ -4936,7 +4936,8 @@
             "detailedTooltip": "Vollständige Nutzung mit Balken, Beschriftungen und Prozentwerten",
             "compactTooltip": "Kompakte Nutzung: eine Zusammenfassung pro Anbieter",
             "footerDetailAria": "Detailangabe in der Nutzungsfußzeile",
-            "notChecked": "Nicht geprüft"
+            "notChecked": "Nicht geprüft",
+            "modelWeeklyLimit": "Wöchentliches {{model}}-Limit: {{usage}}"
           },
           "RemoteServerUpdateStatusSegment": {
             "updating": "{{value0}}/{{value1}} werden aktualisiert",

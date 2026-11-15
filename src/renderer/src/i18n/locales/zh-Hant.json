@@ -4840,7 +4840,8 @@
             "detailedTooltip": "完整用量資訊，包含長條圖、標籤和百分比",
             "compactTooltip": "精簡用量資訊：每個供應商顯示一項摘要",
             "footerDetailAria": "用量頁尾詳細資訊",
-            "notChecked": "未檢查"
+            "notChecked": "未檢查",
+            "modelWeeklyLimit": "{{model}} 每週上限：{{usage}}"
           },
           "RemoteServerUpdateStatusSegment": {
             "updating": "正在更新 {{value0}}/{{value1}}",
