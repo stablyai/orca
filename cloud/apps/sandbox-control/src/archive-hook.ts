@@ -151,13 +151,16 @@ export function archiveHookMemo(row: SandboxRow): HostedArchiveHookMemo | null {
   return value === 'none' || value === 'pending' || value === 'done' ? value : null
 }
 
-/** `pending` never overwrites `done`: the desktop's Sleep runs after a successful hook, before the archive. */
+/** A hook run's own outcome; a failure after an earlier success makes it pending again. */
 export async function recordArchiveHookMemo(db: D1Database, sandboxId: string, memo: HostedArchiveHookMemo): Promise<void> {
+  await db.prepare('UPDATE sandboxes SET archive_hook = ? WHERE id = ?').bind(memo, sandboxId).run()
+}
+
+/** What a Sleep learned: `pending` keeps `done`, since the desktop's Sleep runs after a successful hook. */
+async function recordLearnedArchiveHook(db: D1Database, sandboxId: string, hasHook: boolean): Promise<void> {
   await db
-    .prepare(
-      `UPDATE sandboxes SET archive_hook = CASE WHEN ?1 = 'pending' AND archive_hook = 'done' THEN 'done' ELSE ?1 END WHERE id = ?2`
-    )
-    .bind(memo, sandboxId)
+    .prepare(`UPDATE sandboxes SET archive_hook = CASE WHEN ?1 = 'pending' AND archive_hook = 'done' THEN 'done' ELSE ?1 END WHERE id = ?2`)
+    .bind(hasHook ? 'pending' : 'none', sandboxId)
     .run()
 }
 
@@ -176,7 +179,7 @@ export async function learnArchiveHook(provider: SandboxProviderApi, db: D1Datab
       readArchiveScript(provider, row.session_id),
       new Promise<never>((_, reject) => setTimeout(() => reject(new Error('timeout')), LEARN_TIMEOUT_MS))
     ])
-    await recordArchiveHookMemo(db, row.id, script ? 'pending' : 'none')
+    await recordLearnedArchiveHook(db, row.id, script !== null)
   } catch (error) {
     console.log(JSON.stringify({ event: 'archive_hook_learn_failed', sandboxId: row.id, error: String(error).slice(0, 120) }))
   }

@@ -93,6 +93,15 @@ describe('archive hook route', () => {
     expect(await hook()).toEqual({ state: 'asleep', memo: 'pending' })
   })
 
+  it('a run that fails after one that succeeded makes the hook pending again', async () => {
+    const { h, id, hook, answer } = await running()
+    expect((await hook()).state).toBe('succeeded')
+    answer(`ORCA_ARCHIVE_HOOK ${b64('/vercel/sandbox/project')} 7 ${b64('')}\n`)
+    expect((await hook()).state).toBe('failed')
+    await h.call('POST', `/v1/sandboxes/${id}/suspend`)
+    expect(await hook()).toEqual({ state: 'asleep', memo: 'pending' })
+  })
+
   it('never wakes a workspace whose repo has no hook, and refuses an archived one', async () => {
     const { h, id, hook } = await running('defaultTabs:\n  - title: x\n')
     await h.call('POST', `/v1/sandboxes/${id}/suspend`)
