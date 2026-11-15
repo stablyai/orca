@@ -22,7 +22,7 @@ import {
   type ClaudeProfileDescriptor
 } from '../claude-profile-paths'
 
-import { getPosixClaudeShellFunction } from '../../../../shared/claude-shell-function'
+import { getPosixClaudeShellFunction } from '../../../../shared/shell/launch/agents/claude-shell-function'
 import { ClaudeProfileRouter, type ClaudeProfileRouterSettings } from './claude-profile-router'
 import {
   claudeProfileHistoryDirs,

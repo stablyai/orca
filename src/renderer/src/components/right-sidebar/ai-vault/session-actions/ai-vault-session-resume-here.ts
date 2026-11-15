@@ -6,7 +6,7 @@ import {
 } from '@/lib/agent-session/open/activate-ai-vault-structured-session'
 import { insertUnifiedTabAfterAnchor } from '@/lib/workspace/tabs/unified-tab-anchor-insertion'
 
-import { createNonSecureContextUuid } from '../../../../../../shared/non-secure-context-uuid'
+import { createNonSecureContextUuid } from '../../../../../../shared/identifiers/non-secure-context-uuid'
 import {
   captureNativeChatComposerFocusIntent,
   requestNativeChatComposerFocus
@@ -18,8 +18,8 @@ import type {
   AiVaultAgent,
   AiVaultSession
 } from '../../../../../../shared/ai-vault/contracts/ai-vault-types'
-import { adoptsCliConversations } from '../../../../../../shared/structured-agent-cli-conversation-adoption'
-import type { CliConversationRowAgent } from '../../../../../../shared/structured-agent-cli-conversation-adoption'
+import { adoptsCliConversations } from '../../../../../../shared/agent-session/view/structured-agent-cli-conversation-adoption'
+import type { CliConversationRowAgent } from '../../../../../../shared/agent-session/view/structured-agent-cli-conversation-adoption'
 import { structuredLaunchConversationOwner } from '@/lib/agent-session/launch/structured-agent-session-launch-failure'
 import { resumeAiVaultSessionInNewChat } from './ai-vault-session-resume-in-chat-launch'
 import type { ConfirmationDialogContextValue } from '@/components/confirmation-dialog-context'

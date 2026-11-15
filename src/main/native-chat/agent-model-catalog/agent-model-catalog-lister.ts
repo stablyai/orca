@@ -1,5 +1,5 @@
 import type { StructuredAgentResolutionOperation } from '../agent-launch/structured-agent-command-resolution'
-import type { PrioritySemaphore } from '../../../shared/priority-semaphore'
+import type { PrioritySemaphore } from '../../../shared/concurrency/priority-semaphore'
 import { startSpan } from '../../observability/tracer'
 import {
   AgentModelCatalogListingStoppedError,

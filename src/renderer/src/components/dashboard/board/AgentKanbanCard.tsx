@@ -17,7 +17,7 @@ import {
   dashboardCardDisplayState,
   type DashboardCard
 } from '../../../../../shared/dashboard-snapshot'
-import type { RepoIcon } from '../../../../../shared/repo-icon'
+import type { RepoIcon } from '../../../../../shared/repository/appearance/repo-icon'
 import { translate } from '@/i18n/i18n'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { DashboardHostBadge } from './DashboardHostBadge'

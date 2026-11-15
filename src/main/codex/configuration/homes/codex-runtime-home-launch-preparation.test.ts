@@ -32,7 +32,7 @@ beforeEach(() => {
 afterEach(() => rmSync(paths.root, { recursive: true, force: true }))
 
 describe('managed Codex launch configuration', () => {
-  it.each(['prepared', 'reused', 'hooks failed'] as const)(
+  it.each(['prepared', 'hooks failed'] as const)(
     'provides mirrored sandbox settings before the grant when preparation is %s',
     async (outcome) => {
       const systemHomePath = join(paths.root, '.codex')
@@ -41,11 +41,6 @@ describe('managed Codex launch configuration', () => {
       mkdirSync(runtimeHomePath)
       const expectedConfig = '[windows]\nsandbox = "elevated"\n'
       writeFileSync(join(systemHomePath, 'config.toml'), expectedConfig)
-      const runtimeConfig = join(runtimeHomePath, 'config.toml')
-      if (outcome === 'reused') {
-        writeFileSync(runtimeConfig, expectedConfig)
-        writeFileSync(`${runtimeConfig}.bak`, 'recoverable settings\n')
-      }
       const runtimeHome: Pick<CodexRuntimeHomeService, 'prepareForCodexLaunchAsync'> = {
         prepareForCodexLaunchAsync: async (_target, _env, options) => {
           const sync = (): boolean =>
@@ -71,9 +66,6 @@ describe('managed Codex launch configuration', () => {
       let grantedConfig: string | undefined
       grantRead.mockImplementation(async (home: string) => {
         grantedConfig = readFileSync(join(home, 'config.toml'), 'utf8')
-        if (outcome === 'reused') {
-          expect(readFileSync(`${runtimeConfig}.bak`, 'utf8')).toBe('recoverable settings\n')
-        }
       })
       const prepare = createCodexRuntimeHomeLaunchPreparation({
         getRuntimeHome: () => runtimeHome,

@@ -1,6 +1,6 @@
 import { onAgentsRefreshedOnHost } from '../../preflight/agents-refreshed-on-host'
 import { onLiveAccount } from './agent-model-catalog-running-account'
-import { agentSessionConversationView } from '../../../shared/agent-session/lifecycle/agent-session-conversation-view'
+import { agentSessionConversationView } from '../../../shared/agent-session/lifecycle/leases/agent-session-conversation-view'
 import type { AgentSessionRecord } from '../../../shared/agent-session/lifecycle/agent-session-record'
 import { readAccountList } from './agent-model-catalog-account-list'
 import { captureAgentModelCatalogRead } from './agent-model-catalog-operation'
@@ -25,7 +25,7 @@ import {
   agentModelCatalogMemoryBinding,
   type AgentModelCatalogBinding
 } from './agent-model-catalog-snapshot'
-import { PrioritySemaphore } from '../../../shared/priority-semaphore'
+import { PrioritySemaphore } from '../../../shared/concurrency/priority-semaphore'
 import {
   AGENT_MODEL_CATALOG_PICKER_WAIT_MS,
   waitForAgentModelCatalogRead,

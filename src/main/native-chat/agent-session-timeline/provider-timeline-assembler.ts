@@ -1,22 +1,23 @@
 // Adapters translate and retry refused events; admission alone advances assembler state.
-// Deferred writes resolve from current journal state, preserving other writers’ answers and Stops.
+// The writer resolves each write at its position, preserving other writers’ answers and Stops.
 // Each provider child gets a fresh assembler and generation.
 
 import type { AgentType } from '../../../shared/agent-status/contracts/agent-status-types'
 import { agentJournalItemKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
-import { readAgentJournalTurn } from '../../../shared/agent-session/lifecycle/agent-session-turn-record'
+import { readAgentJournalTurn } from '../../../shared/agent-session/lifecycle/records/agent-session-turn-record'
 import type { StructuredAgentSessionCommandRun } from '../agent-session-wire/providers/structured-agent-session-adapter'
 import type { AgentSessionDeltaCoalescerDeps } from '../agent-session-wire/publication/subscribers/agent-session-delta-coalescer'
 import type { StructuredAgentSessionSinkAdmission } from '../agent-session-wire/journal-ingress/structured-agent-session-event-sink'
 import type { ProviderTimelineContext } from './provider-timeline-context'
 import {
   decideProviderTimelineEvent,
-  type ProviderTimelineDecidedEvent
+  type ProviderTimelineDecidedEvent,
+  type ProviderTimelineDecision
 } from './provider-timeline-decision'
 import type { ProviderTimelineEvent } from './provider-timeline-event'
 import { createLegacyProviderTimelineIdentityScheme } from './provider-timeline-identity'
 import { ProviderTimelinePlan, type ProviderTimelineSink } from './provider-timeline-plan'
-import { ProviderTimelineRows, providerTimelineTurnRowState } from './provider-timeline-rows'
+import { ProviderTimelineRows, type ProviderTimelineTurnRef } from './provider-timeline-rows'
 import { ProviderTimelineState } from './provider-timeline-state'
 import {
   applyProviderTimelineTextClose,
@@ -85,29 +86,39 @@ export function createProviderTimelineAssembler(
     ...(deps.schedule ? { schedule: deps.schedule } : {})
   })
 
-  const textHost = (journal: ProviderTimelineTextHost['journal']): ProviderTimelineTextHost => ({
-    sink: deps.sink,
-    state,
-    streams,
-    journal
-  })
+  const textHost: ProviderTimelineTextHost = { sink: deps.sink, state, streams }
+  /** Another writer settled this open turn; its closure retries until admitted. */
+  let settledByOther: ProviderTimelineTurnRef | null = null
 
   const applyDecided = (
     event: ProviderTimelineDecidedEvent,
-    journal: ProviderTimelineTextHost['journal'],
     onPublished?: () => void
   ): ProviderTimelineApplyResult => {
     const serials = state.serials()
-    const decision = decideProviderTimelineEvent(
-      { context, state, journal, serial: serials.next },
-      event
-    )
+    const decision = decideProviderTimelineEvent({ context, state, serial: serials.next }, event)
     if (decision.dropped) {
       return { admission: ADMITTED, dropped: decision.dropped }
     }
+    // Observers see only events whose own writes the writer accepted.
+    let refused = false
+    const writes = decision.writes?.map(
+      (write): NonNullable<ProviderTimelineDecision['writes']>[number] => ({
+        ...write,
+        onResolved: (outcome) => {
+          refused ||= outcome.kind === 'dropped'
+          write.onResolved?.(outcome)
+        }
+      })
+    )
+    const observed = onPublished && (() => !refused && onPublished())
     const plan = new ProviderTimelinePlan()
     planProviderTimelineBarrier({ streams, state }, plan, event, decision)
-    planProviderTimelineWrites(context, plan, decision, serials.next)
+    planProviderTimelineWrites(
+      context,
+      plan,
+      { ...decision, ...(writes ? { writes } : {}) },
+      serials.next
+    )
     plan.onAdmitted(() => {
       decision.commit?.(state)
       serials.commit()
@@ -119,38 +130,54 @@ export function createProviderTimelineAssembler(
     ) {
       plan.onAdmitted(() => deps.sink.setActivity?.(null))
     }
-    return { admission: plan.submit(deps.sink, onPublished) }
+    return { admission: plan.submit(deps.sink, observed) }
   }
 
-  /** Settle another writer’s ended turn first; refusal rejects the discovering event so retry repeats both. */
-  const endSettledTurn = (
-    journal: NonNullable<ProviderTimelineTextHost['journal']>
-  ): ProviderTimelineApplyResult | null => {
+  /** Close another writer's settled turn first; refusal rejects the next event so its retry repeats both. */
+  const endSettledTurn = (): ProviderTimelineApplyResult | null => {
     const open = state.open
-    if (state.ended || !open || providerTimelineTurnRowState(journal, open.itemId) !== 'settled') {
+    if (!settledByOther || state.ended || open?.itemId !== settledByOther.itemId) {
+      settledByOther = null
       return null
     }
-    return applyDecided({ type: 'turn.settled', turn: open }, journal)
+    const settled = applyDecided({ type: 'turn.settled', turn: open })
+    if (settled.admission.accepted) {
+      settledByOther = null
+    }
+    return settled
   }
+
+  const releaseSettledTurns = deps.sink.observeSettledTurns?.((turnItemIds) => {
+    const open = state.open
+    if (state.ended || !open || !turnItemIds.includes(open.itemId)) {
+      return
+    }
+    settledByOther = open
+    // Activity clears now even if the closure must wait for queue capacity.
+    deps.sink.setActivity?.(null)
+    endSettledTurn()
+  })
 
   const apply = (
     event: ProviderTimelineEvent,
     onPublished?: () => void
   ): ProviderTimelineApplyResult => {
-    const journal = deps.sink.journalItems()
-    const settled = journal ? endSettledTurn(journal) : null
+    const settled = endSettledTurn()
     if (settled && !settled.admission.accepted) {
       return settled
     }
     switch (event.type) {
       case 'text.delta':
-        return applyProviderTimelineTextDelta(textHost(journal), event)
+        return applyProviderTimelineTextDelta(textHost, event)
       case 'text.close':
-        return applyProviderTimelineTextClose(textHost(journal), event)
+        return applyProviderTimelineTextClose(textHost, event)
       case 'activity': {
         const open = state.open
         if (state.ended || !open) {
           return { admission: ADMITTED, dropped: state.ended ? 'session-ended' : 'no-turn' }
+        }
+        if (settledByOther?.itemId === open.itemId) {
+          return { admission: ADMITTED, dropped: 'turn-settled' }
         }
         deps.sink.setActivity?.(
           event.text === null ? null : { turnId: open.turnId, text: event.text }
@@ -168,7 +195,7 @@ export function createProviderTimelineAssembler(
       case 'context.usage':
       case 'provider.frame':
       case 'session.ended':
-        return applyDecided(event, journal, onPublished)
+        return applyDecided(event, onPublished)
     }
   }
 
@@ -198,7 +225,13 @@ export function createProviderTimelineAssembler(
     get openTurnId() {
       return state.open?.turnId ?? null
     },
-    flush: () => streams.flush(),
-    dispose: () => streams.dispose()
+    flush: () => {
+      endSettledTurn()
+      streams.flush()
+    },
+    dispose: () => {
+      releaseSettledTurns?.()
+      streams.dispose()
+    }
   }
 }

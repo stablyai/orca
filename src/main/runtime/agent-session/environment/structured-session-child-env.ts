@@ -8,13 +8,13 @@ import { getAppEnvironment, hasAppEnvironment } from '../../../../shared/app-env
 import {
   ORCA_AGENT_SESSION_ID_ENV,
   ORCA_AGENT_SESSION_SPAWN_TOKEN_ENV
-} from '../../../../shared/agent-session/lifecycle/agent-session-caller-env'
+} from '../../../../shared/agent-session/lifecycle/launch/agent-session-caller-env'
 import {
   ORCA_SCRUB_SAFE_LAUNCH_ENV,
   ORCA_SCRUB_SAFE_PANE_ENV
 } from '../../../../shared/agent-hook-listener/transport/agent-hook-scrub-safe-env'
-import { ORCA_STRUCTURED_SESSION_ENV } from '../../../../shared/structured-session-marker'
-import { withCliRuntimeOnPath } from '../../../../shared/node-cli-command-resolution'
+import { ORCA_STRUCTURED_SESSION_ENV } from '../../../../shared/agent-launch/environment/structured-session-marker'
+import { withCliRuntimeOnPath } from '../../../../shared/shell/command-resolution/node-cli-command-resolution'
 import { prependOrcaCliDirToChildPath } from '../../../cli/launchers/orca-cli-child-path'
 import { AGENT_HOOK_RUNTIME_ENV_KEYS } from '../../../ipc/pty/host-env/spawn-env-keys'
 import { resolveStructuredWorkerIdentityForSession } from '../../orchestration/terminal-authority/structured-sessions/structured-worker-authority'

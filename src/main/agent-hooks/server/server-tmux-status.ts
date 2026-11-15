@@ -1,5 +1,5 @@
-import { TmuxAgentHookOwner } from '../../../shared/tmux-agent-hook-owner'
-import type { TmuxManagedPty } from '../../../shared/tmux-agent-hook-contract'
+import { TmuxAgentHookOwner } from '../../../shared/agent-hook-listener/presence/tmux-agent-hook-owner'
+import type { TmuxManagedPty } from '../../../shared/agent-hook-listener/presence/tmux-agent-hook-contract'
 import { commitTmuxSelectedStatus } from '../../../shared/tmux-selected-status'
 import {
   serializeAgentStatusSubject,

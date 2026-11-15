@@ -1,5 +1,5 @@
 import type { AppState } from '@/store/types'
-import type { RuntimeMobileTerminalTheme } from '../../../../shared/runtime-mobile-session-tab-contracts'
+import type { RuntimeMobileTerminalTheme } from '../../../../shared/remote-runtime/session-graph/runtime-mobile-session-tab-contracts'
 import type { TabGroupLayoutNode } from '../../../../shared/tab-types'
 import type { TerminalPaneLayoutNode } from '../../../../shared/workspace-layout/terminal-tab-types'
 
@@ -120,6 +120,7 @@ export type MobileSessionWorktreeInputs = {
   worktreeInstanceId: string | undefined
   terminalTabs: AppState['tabsByWorktree'][string]
   browserWorkspaces: AppState['browserTabsByWorktree'][string]
+  browserRuntimeEnvironmentId: string | null
   unifiedTabs: AppState['unifiedTabsByWorktree'][string]
   groups: AppState['groupsByWorktree'][string]
   tabBarOrder: AppState['tabBarOrderByWorktree'][string] | undefined

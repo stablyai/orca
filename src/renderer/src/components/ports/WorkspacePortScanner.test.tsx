@@ -9,7 +9,7 @@ import {
   MIN_COMPATIBLE_RUNTIME_CLIENT_VERSION,
   RUNTIME_PROTOCOL_VERSION
 } from '../../../../shared/protocol-version'
-import type { WorkspacePortScanResult } from '../../../../shared/workspace-ports'
+import type { WorkspacePortScanResult } from '../../../../shared/workspace/ports/workspace-ports'
 import {
   clearRuntimeCompatibilityCache,
   markRuntimeEnvironmentCompatible

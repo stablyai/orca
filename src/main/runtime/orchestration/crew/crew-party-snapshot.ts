@@ -4,7 +4,7 @@ import {
   type OrchestrationCrewSnapshot,
   type OrchestrationCrewRow
 } from '../../../../shared/orchestration/orchestration-crew'
-import { parseOrcaSessionAddress } from '../../../../shared/orca-session-address'
+import { parseOrcaSessionAddress } from '../../../../shared/agent-session/identity/orca-session-address'
 import { isPublicOrchestrationAddress } from '../../../../shared/orchestration/mailbox/orchestration-agent-reference'
 import { createLineageRunningSessionResolver } from '../addressing/session-lineage/structured-session-lineage'
 import { crewDisplayName, crewTaskDisplay } from './crew-rules'

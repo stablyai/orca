@@ -1,4 +1,4 @@
-import { parseAppSshPtyId } from '../../../../shared/ssh-pty-id'
+import { parseAppSshPtyId } from '../../../../shared/remote-runtime/ssh/ssh-pty-id'
 import { getConnectionExecutionHostId } from '../../../../shared/execution-host'
 import { getPtyExecutionHost } from '../../../../shared/terminal/pty/lifecycle/terminal-execution-host'
 import type { RuntimeLegacyWorkerTerminalRecoveryController } from './runtime-legacy-worker-terminal-recovery-controller'

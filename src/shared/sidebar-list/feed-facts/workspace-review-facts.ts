@@ -1,5 +1,5 @@
 import * as z from 'zod'
-import type { Repo } from '../../repo-types'
+import type { Repo } from '../../repository/repo-types'
 import type { Worktree } from '../../worktree/types'
 import { getGitHubPRCacheKeyCandidates } from '../../github/cache/github-cache-key'
 import { isGitHubPRSuppressed } from '../../worktree/hosted-review/github-pr-suppression'
@@ -11,7 +11,7 @@ import {
   type HostScopedWorktreeKey
 } from '../../worktree/host-qualified-identity'
 import { listGitWorkspaceRows } from './workspace-rows'
-import { UNCACHED_LINKED_PR_STATE } from '../../runtime-worktree-contracts'
+import { UNCACHED_LINKED_PR_STATE } from '../../worktree/catalog/runtime-worktree-contracts'
 
 /** PR grouping currently admits only GitHub facts. */
 const WorkspaceReviewFactSchema = z.object({

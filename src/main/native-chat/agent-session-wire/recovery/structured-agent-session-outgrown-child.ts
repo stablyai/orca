@@ -1,8 +1,9 @@
 // Replace an outgrown child only when its provider needs acquisition to apply the current choice.
 
-import { readWholeAgentSessionFailureFact } from '../../../../shared/agent-session/failures/agent-session-failure'
-import { isRootAgentJournalItem } from '../../../../shared/agent-session/journal/agent-session-journal-producer'
-import type { AgentJournalSubmission } from '../../../../shared/agent-session/journal/agent-session-journal-types'
+import type {
+  AgentJournalMessageItem,
+  AgentJournalSubmission
+} from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentChildWorkView } from '../../../../shared/agent-status/child-work/agent-status-child-work-view'
 import type { AgentSessionJournal } from '../../agent-session-journal/journal-store'
 import type { StructuredAgentSessionHostSession } from '../host/structured-agent-session-host-types'
@@ -12,51 +13,20 @@ import {
 } from '../termination/structured-agent-session-idle-sweep'
 import type { StructuredAgentSessionLogger } from '../host/structured-agent-session-logger'
 import type { AgentChatPermissionChoice } from '../../../../shared/agent-launch/permissions/agent-chat-permission-mode'
-import { agentJournalSubmissionKey } from '../../../../shared/agent-session/journal/agent-session-journal-item-key'
 import {
   agentSessionAccountHomesEqual,
   type AgentSessionAccountHome
-} from '../../../../shared/agent-session/lifecycle/agent-session-account-home'
+} from '../../../../shared/agent-session/lifecycle/accounts/agent-session-account-home'
 
 type OutgrownChildReading = Pick<StructuredAgentSessionHostSession, 'child'> & {
-  journal: Pick<
-    AgentSessionJournal,
-    'visitItemsWithLinkage' | 'itemFence' | 'newestTurn' | 'itemBody' | 'inputOrder'
-  >
-}
-
-const signedOut = (failure: unknown): boolean =>
-  readWholeAgentSessionFailureFact(failure)?.kind === 'notSignedIn'
-
-/** Scope sign-out evidence to this child’s fence so replacement children do not inherit it. */
-export function structuredAgentSessionChildReportedSignedOut(
-  session: OutgrownChildReading
-): boolean {
-  const { child, journal } = session
-  if (!child || child.phase === 'starting' || child.close) {
-    return false
-  }
-  if (journal.inputOrder.signedOutAt(child.fence)) {
-    return true
-  }
-  // A subagent’s sign-in failure says nothing about the parent.
-  let found = false
-  journal.visitItemsWithLinkage((itemId, _sequence, body, attribution) => {
-    found ||=
-      body.kind === 'status' &&
-      isRootAgentJournalItem(attribution) &&
-      signedOut(body.failure) &&
-      journal.itemFence(itemId) === child.fence
-  })
-  return found
+  journal: Pick<AgentSessionJournal, 'reads'>
 }
 
 /** Wait for the lead’s wake-up after child completion; unlike idle sweep, immediate restart has no window. */
 function owesWakeUp(
-  journal: Pick<AgentSessionJournal, 'newestTurn'>,
+  ended: number | undefined,
   childWork: readonly AgentChildWorkView[] | undefined
 ): boolean {
-  const ended = journal.newestTurn()?.completedAt
   return (childWork ?? []).some(
     (work) => work.settledAt !== undefined && (ended === undefined || work.settledAt > ended)
   )
@@ -80,16 +50,15 @@ async function launchedWithOtherPermissionMode(
 
 /** Orca mail notices are not the user's turn: they keep the running process and its choices. */
 function picksNewLaunchModel(
-  session: OutgrownChildReading,
+  body: AgentJournalMessageItem | null,
   next: AgentJournalSubmission | undefined,
   requiresModelTransitionRestart: ((next: AgentJournalSubmission) => boolean) | undefined
 ): boolean {
   if (!next || !requiresModelTransitionRestart) {
     return false
   }
-  const body = session.journal.itemBody(agentJournalSubmissionKey(next.clientMessageId))
   return (
-    body?.kind === 'message' &&
+    body !== null &&
     body.from?.orchestration?.message !== 'mail-notice' &&
     requiresModelTransitionRestart(next)
   )
@@ -127,11 +96,18 @@ export async function retireOutgrownStructuredAgentSessionChild(
     logger: StructuredAgentSessionLogger
   }
 ): Promise<void> {
+  if (!session?.child) {
+    return
+  }
+  const { child } = session
+  const facts = await session.journal.reads.outgrownChild({
+    fence: child.fence,
+    ...(deps.next ? { nextClientMessageId: deps.next.clientMessageId } : {})
+  })
   if (
-    !session ||
     !(
-      structuredAgentSessionChildReportedSignedOut(session) ||
-      picksNewLaunchModel(session, deps.next, deps.requiresModelTransitionRestart) ||
+      (child.phase !== 'starting' && !child.close && facts.signedOut) ||
+      picksNewLaunchModel(facts.nextMessage, deps.next, deps.requiresModelTransitionRestart) ||
       (await launchedWithOtherPermissionMode(
         session.child,
         deps.launchPermission,
@@ -139,7 +115,8 @@ export async function retireOutgrownStructuredAgentSessionChild(
       )) ||
       (await launchedUnderOtherAccount(session.child, deps.launchAccountHome))
     ) ||
-    structuredAgentSessionChildOwesWork(session.journal, deps.work)
+    structuredAgentSessionChildHasOpenWork(deps.work, await deps.work.currentWork()) ||
+    owesWakeUp(facts.newestTurnCompletedAt, deps.work.childWork())
   ) {
     return
   }
@@ -152,11 +129,14 @@ export async function retireOutgrownStructuredAgentSessionChild(
   )
 }
 
-export function structuredAgentSessionChildOwesWork(
-  journal: Pick<AgentSessionJournal, 'newestTurn'>,
+export async function structuredAgentSessionChildOwesWork(
   work: StructuredAgentSessionChildWorkReads & {
     childWork: () => readonly AgentChildWorkView[] | undefined
   }
-): boolean {
-  return structuredAgentSessionChildHasOpenWork(work) || owesWakeUp(journal, work.childWork())
+): Promise<boolean> {
+  const current = await work.currentWork()
+  return (
+    structuredAgentSessionChildHasOpenWork(work, current) ||
+    owesWakeUp(current?.newestTurnCompletedAt, work.childWork())
+  )
 }

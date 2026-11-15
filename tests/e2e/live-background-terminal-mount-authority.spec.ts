@@ -14,14 +14,14 @@ import {
   readTerminalPtyWriteEntries
 } from './helpers/terminal-pty-write-spy'
 import { RuntimeClient } from '../../src/cli/runtime/client'
+import type { RuntimeStatus } from '../../src/shared/remote-runtime/session-graph/runtime-session-contracts'
+import type { RuntimeTerminalCreate } from '../../src/shared/terminal/runtime/runtime-terminal-create-contract'
 import type {
-  RuntimeStatus,
-  RuntimeTerminalCreate,
   RuntimeTerminalListResult,
   RuntimeTerminalRead,
-  RuntimeTerminalSummary,
-  RuntimeWorktreeCreateResult
-} from '../../src/shared/runtime-types'
+  RuntimeTerminalSummary
+} from '../../src/shared/terminal/runtime/runtime-terminal-contracts'
+import type { RuntimeWorktreeCreateResult } from '../../src/shared/worktree/catalog/runtime-worktree-contracts'
 import { PROTOCOL_VERSION } from '../../src/main/daemon/protocol/daemon-protocol-version'
 import { makePaneKey } from '../../src/shared/workspace-layout/stable-pane-id'
 import { getDefaultRepoHookSettings } from '../../src/shared/constants'

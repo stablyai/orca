@@ -88,6 +88,7 @@ describe('browserManager', () => {
       ...guestNavigationMethods(),
       id: 145,
       isDestroyed: vi.fn(() => false),
+      isCrashed: vi.fn(() => false),
       isCurrentlyAudible: vi.fn(() => false),
       getType: vi.fn(() => 'webview'),
       setBackgroundThrottling: guestSetBackgroundThrottlingMock,

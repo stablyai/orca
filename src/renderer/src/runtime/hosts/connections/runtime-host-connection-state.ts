@@ -1,7 +1,7 @@
 import { runtimeHostContactFromSnapshot } from '../../../../../shared/remote-runtime/host-status/runtime-host-contact'
 import type { RuntimeHostStatusSnapshot } from '../../../../../shared/remote-runtime/host-status/runtime-host-status'
-import type { RuntimeStatus } from '../../../../../shared/runtime-session-contracts'
-import '../../../../../shared/runtime-workspace-window-availability'
+import type { RuntimeStatus } from '../../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
+import '../../../../../shared/remote-runtime/session-graph/runtime-workspace-window-availability'
 
 import {
   type RuntimeHostConnectionState,

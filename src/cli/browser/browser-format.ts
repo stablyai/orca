@@ -1,7 +1,7 @@
-import { readBrowserActionEffects } from '../../shared/browser-action-effects'
-import { formatBrowserPasskeyRequest } from '../../shared/browser-passkey-request'
+import { readBrowserActionEffects } from '../../shared/browser/automation/browser-action-effects'
+import { formatBrowserPasskeyRequest } from '../../shared/browser/prompts/browser-passkey-request'
 import { writeCliScreenshotTempFile } from '../screenshots/cli-screenshot-temp-file'
-import type { RuntimeRpcSuccess } from '../../shared/runtime-rpc-envelope'
+import type { RuntimeRpcSuccess } from '../../shared/remote-runtime/rpc/runtime-rpc-envelope'
 import { formatBrowserAnnotationsAsMarkdown } from '../../shared/browser/annotations/browser-annotation-output'
 import type {
   BrowserPasskeyRequest,

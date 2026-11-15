@@ -3,11 +3,11 @@ import { AGENT_STATUS_STALE_AFTER_MS } from '../../../../../shared/agent-status/
 import type { AgentStatusEntry } from '../../../../../shared/agent-status/contracts/agent-status-types'
 
 import type { FolderWorkspace } from '../../../../../shared/folder-workspaces/folder-workspace-types'
-import type { ProjectGroup } from '../../../../../shared/project-group-types'
+import type { ProjectGroup } from '../../../../../shared/project/groups/project-group-types'
 import { makePaneKey } from '../../../../../shared/workspace-layout/stable-pane-id'
 import type { TerminalTab } from '../../../../../shared/workspace-layout/terminal-tab-types'
 import type { Worktree } from '../../../../../shared/worktree/types'
-import { folderWorkspaceKey } from '../../../../../shared/workspace-scope'
+import { folderWorkspaceKey } from '../../../../../shared/workspace/identity/workspace-scope'
 import '../../sidebar/workspace-card/activity/worktree-agent-orchestration-batch'
 
 import type { DashboardSnapshotState } from '../snapshot/build-dashboard-snapshot'
@@ -151,7 +151,6 @@ function baseState(): DashboardSnapshotState {
         state: 'waiting'
       })
     },
-    retainedAgentsByPaneKey: {},
     migrationUnsupportedByPtyId: {},
     runtimeAgentOrchestrationByPaneKey: {},
     terminalLayoutsByTabId: {

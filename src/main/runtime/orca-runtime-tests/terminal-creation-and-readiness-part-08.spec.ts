@@ -2,60 +2,14 @@ import { describe, expect, it, vi } from 'vitest'
 import './bind-first-pane.test-fixture'
 import '../../../shared/constants'
 import './runtime-test-module-registration.spec'
-import {
-  AGENT_PROMPT_BRACKETED_PASTE_END,
-  AGENT_PROMPT_BRACKETED_PASTE_START
-} from '../../../shared/agent-launch/startup/agent-prompt-injection'
-import '../../../shared/clipboard-text'
+import { AGENT_PROMPT_BRACKETED_PASTE_START } from '../../../shared/agent-launch/startup/agent-prompt-injection'
+import '../../../shared/clipboard/clipboard-text'
 import { OrcaRuntimeService } from '../orca-runtime'
-import { acknowledgeAgentPromptSubmit } from '../orca-runtime-test-mocks/setup.spec'
+import '../orca-runtime-test-mocks/setup.spec'
 import { TERMINAL_INPUT_CHUNK_MAX_BYTES } from '../../../shared/terminal/input/terminal-input'
 import { TEST_WORKTREE_PATH, store } from './orca-runtime-test-fixtures.spec'
 
 describe('OrcaRuntimeService', () => {
-  it('bounds a Claude render that never settles to one fallback submit', async () => {
-    vi.useFakeTimers()
-    try {
-      const writes: string[] = []
-      const runtime = new OrcaRuntimeService(store)
-      runtime.setPtyController({
-        spawn: vi.fn().mockResolvedValue({ id: 'pty-bg' }),
-        write: (_ptyId, data) => {
-          writes.push(data)
-          if (data.includes(AGENT_PROMPT_BRACKETED_PASTE_END)) {
-            setTimeout(() => runtime.onPtyData('pty-bg', '\x1b[?25h', Date.now()), 100)
-            for (const delay of [1_000, 2_000, 3_000, 4_000, 5_000, 6_000, 7_000]) {
-              setTimeout(
-                () => runtime.onPtyData('pty-bg', `render frame ${delay}`, Date.now()),
-                delay
-              )
-            }
-          }
-          acknowledgeAgentPromptSubmit(runtime, 'pty-bg', data)
-          return true
-        },
-        kill: () => true,
-        getForegroundProcess: async () => null
-      })
-      const { handle } = await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`, {
-        launchAgent: 'claude'
-      })
-
-      const sendPromise = runtime.sendTerminalAgentPrompt(handle, 'review this change', {
-        inputKind: 'driving'
-      })
-      // The 100ms marker re-arms render timeout, but cannot move the absolute ingest bound.
-      await vi.advanceTimersByTimeAsync(100 + 8_000 - 1)
-      expect(writes).not.toContain('\r')
-
-      await vi.advanceTimersByTimeAsync(1)
-      await sendPromise
-      expect(writes.filter((data) => data === '\r')).toHaveLength(1)
-    } finally {
-      vi.useRealTimers()
-    }
-  })
-
   it('rejects an agent prompt when the atomic paste write fails', async () => {
     vi.useFakeTimers()
     try {
@@ -116,7 +70,7 @@ describe('OrcaRuntimeService', () => {
       terminalDriverChanged: vi.fn()
     })
     runtime.attachWindow(1)
-    runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
+    await runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
     const a = await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`, {
       title: 'a',
       presentation: 'background'

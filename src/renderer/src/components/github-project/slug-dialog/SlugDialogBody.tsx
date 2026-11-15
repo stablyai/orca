@@ -1,4 +1,4 @@
-import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { CircleDot, ExternalLink, GitPullRequest, LoaderCircle, X } from 'lucide-react'
 import { toast } from 'sonner'
@@ -15,7 +15,7 @@ import { AssigneesEditor } from './AssigneesEditor'
 import { CommentsList, NewCommentForm } from './Comments'
 import { translate } from '@/i18n/i18n'
 import { useTranslate } from '@/i18n/use-translate'
-import { projectViewErrorMessage } from '../project-view-error-copy'
+import { projectViewErrorMessage } from '../auth-errors/project-view-error-copy'
 import { openAppHttpLink } from '@/lib/browser/navigation/app-http-link-open'
 
 export function SlugDialogBody({

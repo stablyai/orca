@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import type { FeatureWallWorkflowId } from '../../../../../shared/feature-wall-workflows'
-import type { AgentsStepId } from '../../../../../shared/agents-orchestration-steps'
-import type { WorkbenchStepId } from '../../../../../shared/workbench-steps'
-import type { ReviewStepId } from '../../../../../shared/review-steps'
-import type { FeatureWallTourDepthSummary } from '../../../../../shared/feature-wall-tour-depth'
+import type { FeatureWallWorkflowId } from '../../../../../shared/feature-education/explore/feature-wall-workflows'
+import type { AgentsStepId } from '../../../../../shared/feature-education/explore/agents-orchestration-steps'
+import type { WorkbenchStepId } from '../../../../../shared/feature-education/explore/workbench-steps'
+import type { ReviewStepId } from '../../../../../shared/feature-education/explore/review-steps'
+import type { FeatureWallTourDepthSummary } from '../../../../../shared/feature-education/explore/feature-wall-tour-depth'
 import {
   getCommitMessageAgentCapability,
   isCustomAgentId,

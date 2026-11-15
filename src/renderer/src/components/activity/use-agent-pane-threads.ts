@@ -15,7 +15,7 @@ import { collectHiddenChildAgentPaneKeys } from './activity-thread-child-agent'
 import {
   EMPTY_PAIRED_DEVICE_IDS_BY_ENVIRONMENT,
   getPairedDeviceIdsByEnvironment
-} from '../../../../shared/workspace-creator-visibility'
+} from '../../../../shared/workspace-view/workspace-creator-visibility'
 import { filterThreadsByActivityScope, resolveActivityScopeRepoIds } from './activity-scope-filter'
 import {
   createActivityThreadSearchMatcher,
@@ -78,7 +78,6 @@ export function useAllAgentPaneThreads({ badgeOnly = false }: { badgeOnly?: bool
           agentStatusByPaneKey: storeData.agentStatusByPaneKey,
           runtimeAgentOrchestrationByPaneKey: storeData.runtimeAgentOrchestrationByPaneKey,
           migrationUnsupportedByPtyId: storeData.migrationUnsupportedByPtyId,
-          retainedAgentsByPaneKey: storeData.retainedAgentsByPaneKey,
           tabsByWorktree: storeData.tabsByWorktree,
           ptyIdsByTabId: storeData.ptyIdsByTabId,
           unifiedTabsByWorktree: storeData.activityTabs,

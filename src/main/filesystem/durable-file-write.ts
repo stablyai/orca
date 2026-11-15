@@ -7,7 +7,7 @@ import { publishFileWithoutOverwrite } from './atomic-file-publication'
 import {
   renameFileWithWindowsRetry,
   renameFileWithWindowsRetryAsync
-} from '../../shared/windows-retry-file-operations'
+} from '../../shared/file-write/windows-retry-file-operations'
 
 export type DurableFilePayload =
   | string

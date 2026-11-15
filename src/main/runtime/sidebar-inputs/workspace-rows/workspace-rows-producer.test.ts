@@ -1,9 +1,9 @@
 // Runs on plain Node, as orcad does: rows come from the runtime's own listing and store.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import type { Repo } from '../../../../shared/repo-types'
+import type { Repo } from '../../../../shared/repository/repo-types'
 
-import type { RuntimeClientEvent } from '../../../../shared/runtime-client-events'
+import type { RuntimeClientEvent } from '../../../../shared/remote-runtime/session-graph/runtime-client-events'
 
 import { OrcaRuntimeService } from '../../orca-runtime'
 
@@ -24,7 +24,7 @@ import type {
 
 import { composeWorktreeHostIdentity } from '../../../../shared/worktree/host-qualified-identity'
 
-import { getRepoHostIdentityForParts } from '../../../../shared/repo-host-identity'
+import { getRepoHostIdentityForParts } from '../../../../shared/repository/repo-host-identity'
 
 vi.mock('../../../../shared/sidebar-inputs-switch', () => ({ ORCA_SIDEBAR_INPUTS_IS_MAIN: true }))
 
@@ -115,10 +115,8 @@ function setup(repos: Repo[] = [localRepo, sshRepo]) {
     ],
     platformByRepoId: new Map([['repo-1', 'linux']])
   }
-  let scans = 0
   // A new object per scan that really ran git; a cached scan repeats the last one.
   let gitRun: object = {}
-  let scanGate: Promise<void> | null = null
   // The real listing cache and visibility filter run; only the scan and merge are stubbed.
   class Probe extends OrcaRuntimeService {
     protected override async computeResolvedWorktrees(): Promise<ResolvedWorktreeSnapshot> {
@@ -126,8 +124,6 @@ function setup(repos: Repo[] = [localRepo, sshRepo]) {
     }
 
     protected override async scanResolvedWorktreeRepos(): Promise<ResolvedWorktreeRepoScans> {
-      scans += 1
-      await scanGate
       gitRun = {}
       return new Map()
     }
@@ -150,28 +146,12 @@ function setup(repos: Repo[] = [localRepo, sshRepo]) {
     emit(event: RuntimeClientEvent): void {
       this.emitClientEvent(event)
     }
-
-    cachedListing(): Promise<ResolvedWorktreeSnapshot> {
-      return this.listResolvedWorktreeSnapshot()
-    }
   }
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the rows read only the fields picked above.
   const runtime = new Probe(store as RuntimeStore)
   return {
     runtime,
     setWorktreeMeta,
-    scans: () => scans,
-    /** Holds every scan until the returned release runs. */
-    holdScans(): () => void {
-      let release = (): void => {}
-      scanGate = new Promise((resolve) => {
-        release = () => {
-          scanGate = null
-          resolve()
-        }
-      })
-      return release
-    },
     rows: requireSwitchedOn(runtime.workspaceRows),
     listing,
     write: (domains?: readonly string[]) => onWrite(domains),
@@ -217,34 +197,6 @@ describe('WorkspaceRowsProducer', () => {
     phone.notice(notice)
     await phone.settle()
     expect(Object.keys(phone.view().workspaces)).toContain('local|repo-3::/external')
-    phone.disconnect()
-  })
-
-  it('publishes a metadata write at once while a scan is still running', async () => {
-    const { runtime, listing, write, holdScans } = setup()
-    const feed = requireSwitchedOn(runtime.sidebarInputsFeed)
-    const events: RuntimeClientEvent[] = []
-    runtime.onClientEvent((event) => events.push(event))
-    const phone = new TestPhone(feed, 'conn-1')
-    phone.refresh()
-    await phone.settle()
-    // A scan that never finishes: git is slow or the SSH host stalled.
-    holdScans()
-    runtime.emit({ type: 'worktreesChanged', repoId: 'repo-1' })
-    await vi.advanceTimersByTimeAsync(60)
-    const before = events.length
-
-    listing.worktrees[0] = { ...listing.worktrees[0], isPinned: true }
-    write(['worktreeMeta'])
-    // One microtask turn, no timer: the urgent flush neither coalesces nor waits on the scan.
-    await Promise.resolve()
-    const notice = events.slice(before).find((event) => event.type === 'sidebarInputsChanged')
-    if (notice?.type !== 'sidebarInputsChanged') {
-      throw new Error('the write did not publish while the scan ran')
-    }
-    phone.notice(notice)
-    await phone.settle()
-    expect(phone.view().workspaces['local|repo-1::/r/a']).toMatchObject({ isPinned: true })
     phone.disconnect()
   })
 

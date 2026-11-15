@@ -1,5 +1,5 @@
 import { File, FileText, Globe, SquareTerminal } from 'lucide-react-native'
-import { MobileAgentIcon } from '../../components/MobileAgentIcon'
+import { MobileAgentIcon } from '../../components/icons/MobileAgentIcon'
 import { colors } from '../../theme/mobile-theme'
 import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
 import type { MobileSessionTabRow } from './mobile-session-tab-rows'

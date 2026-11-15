@@ -7,8 +7,8 @@ import { AgentIcon } from '@/components/agent/icons/AgentIcon'
 import { focusTerminalTabSurface } from '@/components/terminal-pane/input/focus/focus-terminal-tab-surface'
 import { launchAgentInNewTabWithOutcome } from '@/lib/agent-session/launch/new-tab/launch-agent-in-new-tab'
 
-import { createNonSecureContextUuid } from '../../../../shared/non-secure-context-uuid'
-import { useAppStore } from '@/store'
+import { createNonSecureContextUuid } from '../../../../shared/identifiers/non-secure-context-uuid'
+import { useAppStore } from '@/store/index'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 import {
   DEFAULT_DISABLED_TUI_AGENTS,

@@ -13,7 +13,7 @@ import {
   parseExecutionHostId,
   type ExecutionHostId
 } from '../../../../../../shared/execution-host'
-import { folderWorkspaceKey } from '../../../../../../shared/workspace-scope'
+import { folderWorkspaceKey } from '../../../../../../shared/workspace/identity/workspace-scope'
 import {
   isIdleWorkspaceActivity,
   type WorkspaceActivityFacts

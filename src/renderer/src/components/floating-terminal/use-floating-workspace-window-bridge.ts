@@ -8,7 +8,7 @@ import { registerVisibleTerminalTab } from '@/components/terminal-pane/parking/r
 import { setTabShownOutsidePane } from '@/lib/agent-session/resume/sleeping-agent-wake-requests'
 import { useAppStore } from '@/store'
 import { buildFloatingWorkspaceWindowSnapshot } from './build-floating-workspace-window-snapshot'
-import { persistFloatingTerminalPanelOpen } from './floating-terminal-panel-view-state'
+import { persistFloatingTerminalPanelOpen } from './state/floating-terminal-panel-view-state'
 import { resolveFloatingWorkspaceMode } from './floating-workspace-open-mode'
 
 const SNAPSHOT_DEBOUNCE_MS = 50

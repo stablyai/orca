@@ -10,7 +10,7 @@ import {
   type SettledAgentIdentityPlace
 } from '../identity/pane-agent-identities'
 import type { SleepingAgentSessionRecord } from '../../../shared/agent-session/lifecycle/agent-session-resume'
-import type { OrcaSessionId } from '../../../shared/orca-session-address'
+import type { OrcaSessionId } from '../../../shared/agent-session/identity/orca-session-address'
 
 import type { EnrichedAgentHookEventPayload } from './server-types'
 import type { AgentStatusIpcPayload } from '../../../shared/agent-status/contracts/agent-status-ipc-payload'
@@ -61,6 +61,11 @@ export abstract class AgentHookServerAgentIdentities extends AgentHookServerStat
    *  transition effect or enriched subscriber runs again. */
   protected abstract publishAgentIdentityProjection(row: EnrichedAgentHookEventPayload): void
 
+  protected abstract replaceTranscriptPollRow(
+    previous: EnrichedAgentHookEventPayload,
+    next: EnrichedAgentHookEventPayload
+  ): void
+
   /** A committed answer, or the end of the authority that gave one, re-stamps the current rows
    *  on its key and republishes each as a projection: status, clocks and order stay as they are. */
   private publishSettledAgentIdentities(settled: SettledAgentIdentityPlace[]): void {
@@ -97,6 +102,7 @@ export abstract class AgentHookServerAgentIdentities extends AgentHookServerStat
           AGENT_STATUS_2A_CURRENT_PRODUCER_MODE
         )
       ) {
+        this.replaceTranscriptPollRow(row, next)
         projections.push(next)
       }
     }

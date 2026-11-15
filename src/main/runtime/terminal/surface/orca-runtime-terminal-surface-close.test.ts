@@ -171,8 +171,8 @@ describe('CLI close of one pane in a split tab', () => {
   // L255: expected main-owned headless pane-close failure until its fix lands.
 
   it('keeps the sibling when the stop delivers the exit before the pane commit', async () => {
-    const harness = createHarness()
-    harness.syncSplitFixtureGraph()
+    const harness = await createHarness()
+    await harness.syncSplitFixtureGraph()
     harness.setStopAndWaitAction((stoppingPtyId) => harness.runtime.onPtyExit(stoppingPtyId, 0))
     harness.setVerifiedStopResult(true)
     const terminal = (await harness.runtime.listTerminals(`id:${WORKTREE_ID}`)).terminals.find(

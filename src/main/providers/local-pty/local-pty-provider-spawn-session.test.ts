@@ -1,4 +1,4 @@
-import type * as WslPathOwner from '../../../shared/wsl-paths'
+import type * as WslPathOwner from '../../../shared/file-access/wsl-paths'
 import type * as WslAvailabilityTypes from '../../wsl/discovery/wsl-availability'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as MacosTccLoginShell from '../shell-launch/macos/tcc-login-shell'
@@ -34,7 +34,7 @@ const {
   createShellPromptReadinessProbeMock: vi.fn()
 }))
 
-vi.mock('../../../shared/wsl-paths', async (importOriginal) => ({
+vi.mock('../../../shared/file-access/wsl-paths', async (importOriginal) => ({
   ...(await importOriginal<typeof WslPathOwner>()),
   toLinuxPath: (path: string) => path.replace(/^C:\\/i, '/mnt/c/').replace(/\\/g, '/'),
   toWindowsWslPath: (path: string, distro: string) =>

@@ -6,10 +6,10 @@ import type { RepoSlice } from '../repos/repo-state'
 import { launchDraftSource } from '@/components/native-chat/drafts/native-chat-launch-draft-source'
 import * as chatDrafts from '../slices/worktrees/teardown/removed-worktree-chat-drafts'
 import { callRuntimeRpc } from '../../runtime/rpc/calls/runtime-rpc-call'
-import { folderWorkspaceKey } from '../../../../shared/workspace-scope'
+import { folderWorkspaceKey } from '../../../../shared/workspace/identity/workspace-scope'
 import { getRepoExecutionHostId } from '../../../../shared/execution-host'
-import { projectGroupHookOwner } from '../../../../shared/workspace-hook-owner'
-import { PROJECT_GROUP_FOLDER_ARCHIVE_RUNTIME_CAPABILITY } from '../../../../shared/worktree-runtime-capabilities'
+import { projectGroupHookOwner } from '../../../../shared/workspace-setup/hooks/workspace-hook-owner'
+import { PROJECT_GROUP_FOLDER_ARCHIVE_RUNTIME_CAPABILITY } from '../../../../shared/remote-runtime/protocol/worktree-runtime-capabilities'
 import {
   worktreeRemovalReplyTimeoutMs,
   isArchiveHookRemovalError

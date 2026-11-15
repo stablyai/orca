@@ -2,7 +2,7 @@ import type { AppState } from '@/store/types'
 import type {
   AgentSenderAssociation,
   AgentSenderPublication
-} from '../../../../../shared/agent-sender-associations'
+} from '../../../../../shared/orchestration/mailbox/agent-sender-associations'
 import type { AgentMessageSender } from '../../../../../shared/agent-session/agent-session-message-source'
 import { structuredAgentSessionOwnerInputs } from '../session-ownership/structured-agent-session-owner'
 import type { Tab } from '../../../../../shared/tab-types'

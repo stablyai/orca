@@ -4,7 +4,7 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { getDefaultPersistedState } from '../../shared/constants'
 import { setSecretStore } from '../../shared/secret-store'
-import type { RuntimeRpcResponse } from '../../shared/runtime-rpc-envelope'
+import type { RuntimeRpcResponse } from '../../shared/remote-runtime/rpc/runtime-rpc-envelope'
 import {
   listHostRepoCatalogSnapshots,
   recordHostRepoCatalogAnswer

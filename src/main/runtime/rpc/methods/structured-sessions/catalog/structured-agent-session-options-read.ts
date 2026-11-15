@@ -6,7 +6,7 @@ import {
 // Older hosts return method_not_found (mobile may see forbidden); clients retain static seeds.
 
 import { defineMethod } from '../../../core'
-import { withTimeout } from '../../../../../../shared/promise-timeout-fallback'
+import { withTimeout } from '../../../../../../shared/concurrency/promise-timeout-fallback'
 import { isFloatingWorkspaceSelector } from '../../../../../../shared/floating-workspace-worktree'
 import { AGENT_MODEL_CATALOG_PICKER_WAIT_MS } from '../../../../../native-chat/agent-model-catalog/agent-model-catalog-listing-waiters'
 import {
@@ -29,7 +29,7 @@ import {
 } from '../structured-agent-session-policy'
 import type { AgentSessionModelCatalogResult } from '../../../../../../shared/agent-session/agent-session-wire'
 import { structuredAgentSessionOptionModels } from '../../../../../native-chat/agent-session-wire/options/structured-agent-session-option-models'
-import { finishedListingIds } from '../../../../../../shared/agent-session/options/structured-agent-session-listing-verified-ids'
+import { finishedListingIds } from '../../../../../../shared/agent-session/options/model-catalog/structured-agent-session-listing-verified-ids'
 
 export const STRUCTURED_AGENT_SESSION_OPTIONS_READ_METHODS = [
   defineMethod({

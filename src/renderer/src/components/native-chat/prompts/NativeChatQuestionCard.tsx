@@ -7,8 +7,8 @@ import { useTranslate } from '@/i18n/use-translate'
 import { NativeChatQuestionText } from './NativeChatQuestionText'
 import { NativeChatQuestionOption } from './NativeChatQuestionOption'
 import { NativeChatQuestionConfirmButton } from './NativeChatQuestionConfirmButton'
-import type { AskAnswerSelection } from '../../../../../shared/native-chat/input/native-chat-ask-answer'
-import type { AskPrompt } from '../../../../../shared/native-chat/input/native-chat-ask-types'
+import type { AskAnswerSelection } from '../../../../../shared/native-chat/input/questions/native-chat-ask-answer'
+import type { AskPrompt } from '../../../../../shared/native-chat/input/questions/native-chat-ask-types'
 import { NativeChatPromptCollapseToggle } from './NativeChatPromptCollapse'
 import { useNativeChatPromptCardFocus } from './use-native-chat-prompt-card-focus'
 import { useNativeChatQuestionAutoAdvance } from './use-native-chat-question-auto-advance'
@@ -22,7 +22,7 @@ import {
   askConfirmLabel,
   askTypedText,
   toggleAskOption
-} from '../../../../../shared/native-chat/input/native-chat-ask-card-rules'
+} from '../../../../../shared/native-chat/input/questions/native-chat-ask-card-rules'
 
 export type NativeChatQuestionCardProps = {
   prompt: AskPrompt

@@ -1,7 +1,7 @@
 import type {
   RuntimeRepoList,
   RuntimeRepoSearchRefs
-} from '../../shared/runtime-worktree-contracts'
+} from '../../shared/worktree/catalog/runtime-worktree-contracts'
 import type { CommandHandler, HandlerContext } from '../dispatch/dispatch'
 import { formatRepoList, formatRepoRefs, formatRepoShow } from './repo-format'
 import { printResult } from '../output/command-result-output'
@@ -11,7 +11,7 @@ import {
   getRequiredStringFlag
 } from '../arguments/flags'
 import { resolveRepoPathArgument } from './repo-path-arguments'
-import { RuntimeClientError } from '../runtime/types'
+import { RuntimeClientError } from '../runtime/connection/types'
 import { attachCliErrorData } from '../workspaces/worktree-setup-decision-recovery'
 import { resolveHostFlagTarget } from '../hosts/execution-host-flag'
 

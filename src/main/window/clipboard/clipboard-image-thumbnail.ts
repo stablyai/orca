@@ -2,7 +2,7 @@ import {
   clipboardImageThumbnailSize,
   type ClipboardImageDimensions,
   type ClipboardImageThumbnail
-} from '../../../shared/clipboard-image'
+} from '../../../shared/clipboard/clipboard-image'
 
 /** Minimal NativeImage surface for tests without an Electron runtime. */
 export type ClipboardImageLike = {

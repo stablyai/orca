@@ -6,8 +6,8 @@ import {
 import { act, cleanup, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import type { BrowserPage } from '../../../../shared/browser-workspace-types'
-import type { RuntimeStatus } from '../../../../shared/runtime-types'
+import type { BrowserPage } from '../../../../shared/browser/workspaces/browser-workspace-types'
+import type { RuntimeStatus } from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 
 const mocks = vi.hoisted(() => ({ attach: vi.fn(), createBrowserTab: vi.fn(async () => true) }))
 

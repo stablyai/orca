@@ -1,7 +1,7 @@
 import {
   isReactErrorBoundaryReport,
   type CrashReportRecord
-} from '../../../../shared/crash-reporting'
+} from '../../../../shared/crash-reporting/crash-reporting'
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
 

@@ -1,6 +1,6 @@
 import { markHydratedBrowserPageHandles } from '../hosts/browser-initialization-presentation-ownership'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../../shared/constants'
-import { folderWorkspaceKey } from '../../../../../../shared/workspace-scope'
+import { folderWorkspaceKey } from '../../../../../../shared/workspace/identity/workspace-scope'
 import type { BrowserSlice, BrowserSliceGet, BrowserSliceSet } from '../browser-slice-contract'
 import { addAdditionalValidWorkspaceKeys } from '@/lib/workspace/persistence/workspace-session-hydration-keys'
 import { buildValidWorktreeIdsForSessionHydration } from '../../../../../../shared/worktree/catalog/degraded-repo-worktree-validity'

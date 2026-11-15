@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import type { BrowserPage, BrowserWorkspace } from '../../../../../shared/browser-workspace-types'
+import type {
+  BrowserPage,
+  BrowserWorkspace
+} from '../../../../../shared/browser/workspaces/browser-workspace-types'
 import type { Tab } from '../../../../../shared/tab-types'
 import type { Worktree } from '../../../../../shared/worktree/types'
 import { getWorktreeHostIdentity } from '../../../../../shared/worktree/host-qualified-identity'

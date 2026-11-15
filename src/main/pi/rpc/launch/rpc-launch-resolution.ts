@@ -6,10 +6,10 @@ import {
   agentSessionProviderHandleChainHead,
   type AgentSessionProviderHandleChain,
   type AgentSessionProviderHandleLink
-} from '../../../../shared/agent-session/lifecycle/agent-session-provider-handle'
-import { agentSessionProviderHandleKey } from '../../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
-import { requireLegacyAgentSessionAccountHome } from '../../../../shared/agent-session/lifecycle/agent-session-account-home'
-import type { resolveCliCommand } from '../../../../shared/node-cli-command-resolution'
+} from '../../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle'
+import { agentSessionProviderHandleKey } from '../../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle-encoding'
+import { requireLegacyAgentSessionAccountHome } from '../../../../shared/agent-session/lifecycle/accounts/agent-session-account-home'
+import type { resolveCliCommand } from '../../../../shared/shell/command-resolution/node-cli-command-resolution'
 import { hasReachedAppVersion } from '../../../../shared/app-version'
 import {
   checkAgentCliVersion,

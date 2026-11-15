@@ -1,7 +1,10 @@
 import type { Store } from '../../persistence/loading-store/store'
-import { applyPluginConsent, applyPluginEnablement } from '../../plugins/plugin-enablement'
+import {
+  applyPluginConsent,
+  applyPluginEnablement
+} from '../../plugins/activation/plugin-enablement'
 import type { PluginService } from '../../plugins/plugin-service'
-import type { PluginCliCatalogs } from '../../plugins/plugin-cli-catalog-candidates'
+import type { PluginCliCatalogs } from '../../plugins/cli/plugin-cli-catalog-candidates'
 import { clearPluginFrameStorage } from '../../plugins/panels/guest-isolation/plugin-frame-guest-sessions'
 import { openPluginFrameGuestDevTools } from '../../plugins/panels/guest-isolation/plugin-frame-guest-diagnostics'
 import { setPluginServiceForRpc } from '../../runtime/rpc/methods/plugins/plugins'

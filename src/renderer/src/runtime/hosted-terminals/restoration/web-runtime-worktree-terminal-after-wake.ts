@@ -15,7 +15,7 @@ import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-ag
 import { toast } from 'sonner'
 import { shouldSeedDefaultSurface } from '@/lib/workspace/activation/initial-surface/automatic-default-surface'
 import { runtimeEnvironmentSupportsCapability } from '@/runtime/rpc/compatibility/runtime-capability-proof'
-import { SESSION_TABS_EMPTY_WORKTREE_ANSWER_RUNTIME_CAPABILITY } from '../../../../../shared/session-tabs-runtime-capabilities'
+import { SESSION_TABS_EMPTY_WORKTREE_ANSWER_RUNTIME_CAPABILITY } from '../../../../../shared/remote-runtime/protocol/session-tabs-runtime-capabilities'
 
 export function ensureWebRuntimeWorktreeTerminalAfterWake(
   worktreeId: string,

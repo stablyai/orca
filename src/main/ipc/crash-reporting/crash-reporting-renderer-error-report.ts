@@ -3,15 +3,15 @@ import { app } from 'electron'
 import type {
   ReactErrorBoundaryReportArgs,
   ReactErrorBoundaryReportResult
-} from '../../../shared/crash-reporting'
+} from '../../../shared/crash-reporting/crash-reporting'
 import {
   CRASH_REPORT_ATTRIBUTION_DETAIL_KEY,
   CRASH_REPORT_ATTRIBUTION_NOTE_DETAIL_KEY,
   UNRELIABLE_BOUNDARY_ATTRIBUTION,
   UNRELIABLE_BOUNDARY_ATTRIBUTION_NOTE
-} from '../../../shared/react-update-depth-attribution'
+} from '../../../shared/crash-reporting/react-update-depth-attribution'
 import type { CrashReportStore } from '../../crash-reporting/reports/crash-report-store'
-import { rendererCrashBreadcrumbOrigin } from '../../../shared/crash-breadcrumb-origin'
+import { rendererCrashBreadcrumbOrigin } from '../../../shared/crash-reporting/crash-breadcrumb-origin'
 import { getCrashBreadcrumbSnapshot } from '../../crash-reporting/breadcrumbs/crash-breadcrumb-store'
 
 export const recentRendererErrorReportKeys = new Map<string, number>()

@@ -19,7 +19,7 @@ import {
   type WorktreeStatus,
   applyAgentPaneActivityFlags,
   type AgentPaneActivityFlags
-} from '../../../../shared/worktree-status-rollup'
+} from '../../../../shared/worktree/row-display/worktree-status-rollup'
 import type {
   TerminalLayoutSnapshot,
   TerminalTab
@@ -188,10 +188,9 @@ export function resolveTerminalTabActivityStatus({
     hasFailed: flags?.hasFailed ?? false,
     hasInterrupted: flags?.hasInterrupted ?? false,
     hasUnconfirmed: flags?.hasUnconfirmed ?? false,
-    hasLiveDone: flags?.hasLiveDone ?? false,
+    hasLiveDone: flags?.hasLiveDone ?? false
     // Why: retained/orchestration promotions are worktree-aggregate concerns;
     // a tab reflects its own live panes and title only.
-    hasRetainedDone: false
   })
 }
 

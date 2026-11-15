@@ -21,9 +21,9 @@ import {
   type PaletteSupportingKind
 } from './worktree-palette-evidence'
 import type { HostedReviewInfo } from '../../../../../../shared/source-control/hosted-review/hosted-review-contracts'
-import type { Repo } from '../../../../../../shared/repo-types'
+import type { Repo } from '../../../../../../shared/repository/repo-types'
 import type { Worktree } from '../../../../../../shared/worktree/types'
-import { getWorkspaceLastActiveAt } from '../../../../../../shared/workspace-last-active'
+import { getWorkspaceLastActiveAt } from '../../../../../../shared/workspace-cleanup/workspace-last-active'
 import { getWorktreeVisitTimestamp } from '../../activation/worktree-visit-recency'
 import {
   getPaletteWorktreeExecutionHostId,
