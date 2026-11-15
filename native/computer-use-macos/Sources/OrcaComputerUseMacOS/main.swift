@@ -3518,14 +3518,12 @@ private enum Input {
 
     /// Posts a pointer gesture through the HID tap, then puts the user's pointer back unless they moved it meanwhile.
     private static func hidGesture(_ body: (_ post: (CGEvent) -> Void) throws -> Void) throws {
-        let saved = CGEvent(source: nil)?.location
-        var lastPosted: CGPoint?
+        var restore = CGEvent(source: nil).map { SyntheticMouseClickDelivery.PointerRestore(saved: $0.location) }
         defer {
-            if let saved, lastPosted != nil {
-                usleep(SyntheticMouseClickDelivery.pointerRestoreSettleMicroseconds)
-                if let current = CGEvent(source: nil)?.location,
-                   SyntheticMouseClickDelivery.shouldRestorePointer(saved: saved, lastPosted: lastPosted, current: current) {
-                    CGWarpMouseCursorPosition(saved)
+            if let restore, restore.mayRestore {
+                usleep(SyntheticMouseClickDelivery.PointerRestore.settleMicroseconds)
+                if let current = CGEvent(source: nil)?.location, restore.shouldRestore(current: current) {
+                    CGWarpMouseCursorPosition(restore.saved)
                     // Why: without re-associating, a warp freezes the user's mouse for about a quarter second.
                     CGAssociateMouseAndMouseCursorPosition(1)
                 }
@@ -3533,8 +3531,8 @@ private enum Input {
         }
         try withRecipientErrors {
             try body { event in
+                restore?.willPost(at: event.location, current: CGEvent(source: nil)?.location)
                 event.post(tap: .cghidEventTap)
-                lastPosted = event.location
             }
         }
     }

@@ -59,14 +59,41 @@ public enum SyntheticMouseClickDelivery {
         }
     }
 
-    /// Apps read the live pointer while handling a gesture (hover, menus, drops), so wait before putting it back.
-    public static let pointerRestoreSettleMicroseconds: UInt32 = 200_000
+    /// Puts the user's pointer back after a HID gesture, unless they moved it at any point during the gesture.
+    public struct PointerRestore {
+        /// Apps read the live pointer while handling a gesture (hover, menus, drops), so wait before putting it back.
+        public static let settleMicroseconds: UInt32 = 200_000
 
-    /// The pointer goes back only while it still sits where the last HID event left it; anywhere else means the user moved it.
-    public static func shouldRestorePointer(saved: CGPoint, lastPosted: CGPoint?, current: CGPoint) -> Bool {
-        guard let lastPosted else { return false }
-        func near(_ a: CGPoint, _ b: CGPoint) -> Bool { abs(a.x - b.x) <= 1 && abs(a.y - b.y) <= 1 }
-        return near(current, lastPosted) && !near(saved, lastPosted)
+        public let saved: CGPoint
+        private var lastPosted: CGPoint?
+        private var userMoved = false
+
+        public init(saved: CGPoint) {
+            self.saved = saved
+        }
+
+        /// Call before posting each event; a pointer away from the last posted point means the user moved it.
+        public mutating func willPost(at point: CGPoint, current: CGPoint?) {
+            if let lastPosted, let current, !Self.near(current, lastPosted) {
+                userMoved = true
+            }
+            lastPosted = point
+        }
+
+        /// Whether a restore may still be due, so the settle pause is skipped when it can't be.
+        public var mayRestore: Bool {
+            guard let lastPosted else { return false }
+            return !userMoved && !Self.near(saved, lastPosted)
+        }
+
+        public func shouldRestore(current: CGPoint) -> Bool {
+            guard mayRestore, let lastPosted else { return false }
+            return Self.near(current, lastPosted)
+        }
+
+        private static func near(_ a: CGPoint, _ b: CGPoint) -> Bool {
+            abs(a.x - b.x) <= 1 && abs(a.y - b.y) <= 1
+        }
     }
 
     public static func uniqueWindowCandidate<Candidate>(
