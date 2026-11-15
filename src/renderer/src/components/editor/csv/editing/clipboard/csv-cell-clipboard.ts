@@ -4,7 +4,7 @@ import {
   assertClipboardTextWriteWithinLimit
 } from '../../../../../../../shared/clipboard/clipboard-text'
 import { CSV_MAX_COLUMNS, CSV_RECORD_BYTES } from '../../document/csv-byte-index'
-import { measureUtf8ByteLength } from '../../../../../../../shared/utf8-byte-limits'
+import { measureUtf8ByteLength } from '../../../../../../../shared/text/utf8-byte-limits'
 import { parseCsv } from '../../document/csv-parse'
 import { serializeCsvRecord } from '../../document/csv-serialization'
 import { csvSelectionBounds, type CsvCellSelection } from '../../grid/csv-cell-selection'

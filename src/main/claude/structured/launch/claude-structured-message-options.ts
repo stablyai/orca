@@ -18,7 +18,7 @@ import {
   isAbortSignalReason,
   throwIfSignalAborted,
   waitForPromiseWithSignal
-} from '../../../../shared/abort-signal-reason'
+} from '../../../../shared/concurrency/abort-signal-reason'
 
 const defaultLogger = createStructuredAgentSessionLogger()
 

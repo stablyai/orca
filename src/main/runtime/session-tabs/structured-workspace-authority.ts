@@ -12,7 +12,7 @@ import { resolveQualifiedFolderWorkspaceResult } from '../../../shared/folder-wo
 import { isFloatingWorkspaceId } from '../../../shared/floating-workspace-worktree'
 import { isFolderRepo } from '../../../shared/repository/repo-kind'
 import type { Repo } from '../../../shared/repository/repo-types'
-import { withTimeout } from '../../../shared/promise-timeout-fallback'
+import { withTimeout } from '../../../shared/concurrency/promise-timeout-fallback'
 import { parseWorkspaceKey } from '../../../shared/workspace/identity/workspace-scope'
 import { splitWorktreeIdForFilesystem } from '../../../shared/worktree/id'
 import { beginWatcherInstall } from '../../workspaces/removal/watcher-removal-gate'

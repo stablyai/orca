@@ -1,4 +1,7 @@
-import { throwIfSignalAborted, waitForPromiseWithSignal } from '../../../shared/abort-signal-reason'
+import {
+  throwIfSignalAborted,
+  waitForPromiseWithSignal
+} from '../../../shared/concurrency/abort-signal-reason'
 
 import {
   type RuntimeEnvironmentSetupFailure,

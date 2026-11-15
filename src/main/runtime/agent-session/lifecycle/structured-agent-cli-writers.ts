@@ -3,7 +3,7 @@ import type { StructuredAgentId } from '../../../../shared/agent-session/lifecyc
 import { namesCliConversation } from '../../../../shared/agent-session/view/structured-agent-cli-conversation-adoption'
 import { agentSessionRefusalError } from '../../../../shared/agent-session/failures/agent-session-wire-refusals'
 import type { CliWriterObservation } from '../../../agent-hooks/server/cli-writer-observation'
-import { forEachWithConcurrency } from '../../../../shared/map-with-concurrency'
+import { forEachWithConcurrency } from '../../../../shared/concurrency/map-with-concurrency'
 
 /** The process table's own reader takes about this many reads at once. */
 const WRITER_PROBE_CONCURRENCY = 8

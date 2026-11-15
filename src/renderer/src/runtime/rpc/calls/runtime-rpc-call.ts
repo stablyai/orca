@@ -1,4 +1,4 @@
-import { waitForPromiseWithSignal } from '../../../../../shared/abort-signal-reason'
+import { waitForPromiseWithSignal } from '../../../../../shared/concurrency/abort-signal-reason'
 import type { RuntimeRpcResponse } from '../../../../../shared/remote-runtime/rpc/runtime-rpc-envelope'
 import type { RuntimeStatus } from '../../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import { withBrowserPaneUiRuntimeRpcSource } from '../../../../../shared/remote-runtime/rpc/runtime-rpc-feature-interaction-source'

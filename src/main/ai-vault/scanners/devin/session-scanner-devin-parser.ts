@@ -16,7 +16,7 @@ import {
   type DecodedSessionMessage
 } from '../../transcripts/session-decoded-message'
 import { arrayValue, asRecord } from '../../parsing/session-record-fields'
-import { extractString } from '../../../../shared/trimmed-string'
+import { extractString } from '../../../../shared/text/trimmed-string'
 import { extractContentText } from '../../parsing/session-scanner-text-normalization'
 import { numberValue } from '../../parsing/session-scanner-token-values'
 

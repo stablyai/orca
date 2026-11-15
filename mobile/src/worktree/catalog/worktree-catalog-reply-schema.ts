@@ -1,5 +1,5 @@
 import * as z from 'zod'
-import { salvagedOptional } from '../../../../src/shared/zod-salvage'
+import { salvagedOptional } from '../../../../src/shared/validation/zod-salvage'
 
 // Accept unchanged polls without worktrees; consumers validate their own row projections.
 // Require only an object envelope so null/absent results fail at the boundary.

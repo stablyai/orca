@@ -14,7 +14,7 @@ import type {
   TerminalWaitStatusEvidence
 } from './terminal-wait-permission'
 import type { AgentLaunchScope } from '../../session-tabs/structured-session-tab-restoration'
-import { withTimeout } from '../../../../shared/promise-timeout-fallback'
+import { withTimeout } from '../../../../shared/concurrency/promise-timeout-fallback'
 import { TERMINAL_INTERACTIVE_WAIT_PROBE_TIMEOUT_MS } from './terminal-interactive-probe-budget'
 import { parsePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import {

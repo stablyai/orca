@@ -1,4 +1,4 @@
-import { memoizeStringResult } from '../../string-result-cache'
+import { memoizeStringResult } from '../../collections/string-result-cache'
 import {
   AGENT_STATUS_MAX_FIELD_LENGTH,
   normalizeOptionalField,
@@ -34,7 +34,7 @@ import {
 } from '../structured-agent-session-tool-call-block'
 
 import type { NativeChatBlock, NativeChatMessage } from '../../native-chat/native-chat-types'
-import { sha256 } from '../../sha256'
+import { sha256 } from '../../hashing/sha256'
 import { readAgentMessageSource } from '../agent-session-message-source'
 import { structuredAgentSessionStatusStartedAt } from './structured-agent-session-status-started-at'
 import { owesStructuredAgentSessionWork } from './structured-agent-session-owed-work'
