@@ -2,24 +2,101 @@ import { useCallback, useEffect, useEffectEvent, useMemo, useRef, useState } fro
 
 type HeldRow = { identity: string }
 
+const NO_IDENTITIES: ReadonlySet<string> = new Set()
+
 export type WorkspaceCleanupHeldRowOrder = {
   /** Order is only valid for the reset key it was captured under. */
   key: string
+  /** The sort/filter part of `key`; a reset within the same scope may carry rows over. */
+  scope: string
   /** Host-qualified identity -> slot. Slots are never reused, so a row keeps its place. */
   positions: ReadonlyMap<string, number>
   /** Next unused slot; never derived from the map size, so released slots are not reused. */
   next: number
 }
 
+/** Rows a reset must keep even when they no longer match, placed where they were before. */
+export type WorkspaceCleanupHeldRowCarry = {
+  keep: ReadonlySet<string>
+  previous: WorkspaceCleanupHeldRowOrder
+  /** The row still exists (unfiltered); rows deleted elsewhere are never carried. */
+  exists: (identity: string) => boolean
+}
+
 export function createWorkspaceCleanupHeldRowOrder(
   rows: readonly HeldRow[],
-  key: string
+  key: string,
+  scope = key,
+  carry?: WorkspaceCleanupHeldRowCarry
 ): WorkspaceCleanupHeldRowOrder {
+  const sequence = carry ? withCarriedRows(rows, carry) : rows.map((row) => row.identity)
   return {
     key,
-    positions: new Map(rows.map((row, index) => [row.identity, index])),
-    next: rows.length
+    scope,
+    positions: new Map(sequence.map((identity, index) => [identity, index])),
+    next: sequence.length
   }
+}
+
+/**
+ * The live order, plus each kept row that dropped out of it. A carried row goes right before
+ * the row that followed it last time, so it keeps its place among its neighbours.
+ */
+function withCarriedRows(rows: readonly HeldRow[], carry: WorkspaceCleanupHeldRowCarry): string[] {
+  const present = new Set(rows.map((row) => row.identity))
+  const previous = [...carry.previous.positions]
+    .sort((left, right) => left[1] - right[1])
+    .map(([identity]) => identity)
+  const before = new Map<string | null, string[]>()
+  const placed = new Set<string>()
+  let anchor: string | null = null
+  for (let index = previous.length - 1; index >= 0; index -= 1) {
+    const identity = previous[index]
+    if (present.has(identity)) {
+      anchor = identity
+    } else if (carry.keep.has(identity) && carry.exists(identity)) {
+      const list = before.get(anchor) ?? []
+      list.unshift(identity)
+      before.set(anchor, list)
+      placed.add(identity)
+    }
+  }
+  const sequence: string[] = []
+  for (const row of rows) {
+    sequence.push(...(before.get(row.identity) ?? []), row.identity)
+  }
+  sequence.push(...(before.get(null) ?? []))
+  for (const identity of carry.keep) {
+    if (!present.has(identity) && !placed.has(identity) && carry.exists(identity)) {
+      sequence.push(identity)
+    }
+  }
+  return sequence
+}
+
+/** The order a render should use: the held one, or the one the next reset will adopt. */
+function deriveWorkspaceCleanupHeldRowOrder(
+  current: WorkspaceCleanupHeldRowOrder | null,
+  liveRows: readonly HeldRow[],
+  liveRowByIdentity: ReadonlyMap<string, HeldRow>,
+  fullKey: string,
+  resetKey: string,
+  keepIdentities: ReadonlySet<string>
+): WorkspaceCleanupHeldRowOrder {
+  if (current !== null && current.key === fullKey) {
+    return extendWorkspaceCleanupHeldRowOrder(liveRows, current)
+  }
+  // Refresh/open/settle resets keep the user's selected rows; a sort or filter change does not,
+  // because that is the user's own choice and it prunes the selection with a notice.
+  const carry =
+    current !== null && current.scope === resetKey && keepIdentities.size > 0
+      ? {
+          keep: keepIdentities,
+          previous: current,
+          exists: (identity: string) => liveRowByIdentity.has(identity)
+        }
+      : undefined
+  return createWorkspaceCleanupHeldRowOrder(liveRows, fullKey, resetKey, carry)
 }
 
 /** Rows that first appear later take the next free slot, so they land at the end. */
@@ -73,6 +150,7 @@ export function arrangeWorkspaceCleanupHeldRows<Row extends HeldRow>(
  * refresh row data in place but never move a row. The order is re-derived only when:
  * the sort or filters change (`resetKey`), the dialog opens, a scan starts (Refresh), a
  * scan settles with nothing the user is mid-way through, or `resetOrder()` is called.
+ * A reset never drops a row in `keepIdentities` that still exists, even if it stopped matching.
  */
 export function useWorkspaceCleanupHeldRows<Row extends HeldRow>({
   liveRows,
@@ -81,6 +159,7 @@ export function useWorkspaceCleanupHeldRows<Row extends HeldRow>({
   open,
   loading,
   gitChecking = false,
+  keepIdentities = NO_IDENTITIES,
   shouldResortAtSettle
 }: {
   /** Query result in the active sort; the order a reset adopts. */
@@ -93,6 +172,8 @@ export function useWorkspaceCleanupHeldRows<Row extends HeldRow>({
   loading: boolean
   /** Targeted git checks are still running; their completion counts as a settle. */
   gitChecking?: boolean
+  /** Rows a reset must keep in place (the selection), resolved from `liveRowByIdentity`. */
+  keepIdentities?: ReadonlySet<string>
   /** Read at scan settle: false once the user is mid-selection, scrolling or pointing at rows. */
   shouldResortAtSettle: () => boolean
 }): {
@@ -106,13 +187,27 @@ export function useWorkspaceCleanupHeldRows<Row extends HeldRow>({
   const fullKey = `${resetKey}#${epoch}`
   const previousRef = useRef({ open, loading, gitChecking })
 
-  const rows = useMemo(
-    () =>
-      held === null || held.key !== fullKey
-        ? liveRows
-        : arrangeWorkspaceCleanupHeldRows(liveRows, liveRowByIdentity, held),
-    [fullKey, held, liveRowByIdentity, liveRows]
-  )
+  // Only a pending reset reads the selection, so ticking rows does not re-arrange the list.
+  const resetPending = held === null || held.key !== fullKey
+  const keepForReset = resetPending ? keepIdentities : NO_IDENTITIES
+  const rows = useMemo(() => {
+    if (held === null) {
+      return liveRows
+    }
+    // A reset applies in this same render, so a kept row is never missing for a frame.
+    const order =
+      held.key === fullKey
+        ? held
+        : deriveWorkspaceCleanupHeldRowOrder(
+            held,
+            liveRows,
+            liveRowByIdentity,
+            fullKey,
+            resetKey,
+            keepForReset
+          )
+    return arrangeWorkspaceCleanupHeldRows(liveRows, liveRowByIdentity, order)
+  }, [fullKey, held, keepForReset, liveRowByIdentity, liveRows, resetKey])
 
   const resetOrder = useCallback(() => setEpoch((current) => current + 1), [])
   const releaseRows = useCallback((identities: readonly string[]) => {
@@ -144,9 +239,14 @@ export function useWorkspaceCleanupHeldRows<Row extends HeldRow>({
   const captureOrder = useEffectEvent(() => {
     // Only committed renders advance the held order.
     setHeld((current) =>
-      current !== null && current.key === fullKey
-        ? extendWorkspaceCleanupHeldRowOrder(liveRows, current)
-        : createWorkspaceCleanupHeldRowOrder(liveRows, fullKey)
+      deriveWorkspaceCleanupHeldRowOrder(
+        current,
+        liveRows,
+        liveRowByIdentity,
+        fullKey,
+        resetKey,
+        keepIdentities
+      )
     )
   })
   useEffect(() => {

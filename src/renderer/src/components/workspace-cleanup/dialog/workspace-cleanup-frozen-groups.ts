@@ -44,7 +44,11 @@ function isGroupSettled(
   )
 }
 
-/** Admits newly settled rows as one batch and never changes a row already admitted. */
+/**
+ * Admits newly settled rows as one batch and never moves a row already admitted. A carried
+ * (selected through Refresh) row takes its new snapshot once its evidence settles, in the
+ * same card and slot.
+ */
 export function freezeWorkspaceCleanupGroups(
   frozen: FrozenGroups,
   candidates: readonly WorkspaceCleanupCandidate[],
@@ -52,15 +56,28 @@ export function freezeWorkspaceCleanupGroups(
   gitPendingWorktreeIds: ReadonlySet<string>
 ): FrozenGroups {
   let next: Map<string, WorkspaceCleanupFrozenGroup> | null = null
-  const batch =
-    frozen.size === 0 ? 0 : Math.max(...[...frozen.values()].map((entry) => entry.batch)) + 1
+  // Carried rows sit in the first batch after Refresh, so they keep their place among the rows
+  // admitted with them instead of jumping to the top of their card.
+  let lastBatch = -1
+  for (const entry of frozen.values()) {
+    if (!entry.carried) {
+      lastBatch = Math.max(lastBatch, entry.batch)
+    }
+  }
+  const batch = lastBatch + 1
   for (const candidate of candidates) {
     const identity = getWorkspaceCleanupCandidateIdentity(candidate)
-    if (frozen.has(identity) || !isGroupSettled(candidate, gitChecksDone, gitPendingWorktreeIds)) {
+    const admitted = frozen.get(identity)
+    if (!isGroupSettled(candidate, gitChecksDone, gitPendingWorktreeIds)) {
       continue
     }
-    next ??= new Map(frozen)
-    next.set(identity, { group: getWorkspaceCleanupGroup(candidate), batch, candidate })
+    if (admitted === undefined) {
+      next ??= new Map(frozen)
+      next.set(identity, { group: getWorkspaceCleanupGroup(candidate), batch, candidate })
+    } else if (admitted.carried) {
+      next ??= new Map(frozen)
+      next.set(identity, { group: admitted.group, batch: admitted.batch, candidate })
+    }
   }
   return next ?? frozen
 }
@@ -74,7 +91,7 @@ function carrySelectedGroups(
   const carried = new Map<string, WorkspaceCleanupFrozenGroup>()
   for (const [identity, entry] of previous) {
     if (selectedIds.has(identity)) {
-      carried.set(identity, { ...entry, carried: true })
+      carried.set(identity, { ...entry, batch: 0, carried: true })
     }
   }
   return carried

@@ -138,6 +138,43 @@ describe('useWorkspaceCleanupHeldRows', () => {
     expect(ids(result.rows)).toEqual(['a', 'b'])
   })
 
+  it('keeps a kept (selected) row in its slot through a scan-start reset after it stops matching', () => {
+    const keep = new Set(['b'])
+    const { result, update } = mount(props([row('a'), row('b'), row('c')], { keepIdentities: keep }))
+    const all = new Map([row('a'), row('b', 1), row('c')].map((r) => [r.identity, r]))
+    // b stops matching; Refresh starts and the live order changes.
+    update({ liveRows: [row('c'), row('a')], liveRowByIdentity: all, loading: true })
+    // b goes right before c, the row that followed it, with its live data.
+    expect(result.rows).toEqual([row('b', 1), row('c'), row('a')])
+    // The new order then holds like any other.
+    update({ liveRows: [row('a'), row('c')], loading: true })
+    expect(ids(result.rows)).toEqual(['b', 'c', 'a'])
+  })
+
+  it('places a kept row before the row that followed it, and drops it once it no longer exists', () => {
+    const keep = new Set(['b'])
+    const { result, update } = mount(props([row('a'), row('b'), row('c')], { keepIdentities: keep }))
+    update({
+      liveRows: [row('a'), row('c')],
+      liveRowByIdentity: new Map([row('a'), row('b'), row('c')].map((r) => [r.identity, r])),
+      loading: true
+    })
+    expect(ids(result.rows)).toEqual(['a', 'b', 'c'])
+    update({ liveRowByIdentity: new Map([row('a'), row('c')].map((r) => [r.identity, r])) })
+    expect(ids(result.rows)).toEqual(['a', 'c'])
+  })
+
+  it('does not keep a non-matching row across the user changing sort or filters', () => {
+    const keep = new Set(['b'])
+    const { result, update } = mount(props([row('a'), row('b'), row('c')], { keepIdentities: keep }))
+    update({
+      liveRows: [row('a'), row('c')],
+      liveRowByIdentity: new Map([row('a'), row('b'), row('c')].map((r) => [r.identity, r])),
+      resetKey: 'last-activity:asc:{"query":"x"}'
+    })
+    expect(ids(result.rows)).toEqual(['a', 'c'])
+  })
+
   it('re-sorts once at scan settle only while the user has not started working', () => {
     const { result, update } = mount(props([row('a'), row('b')], { loading: true }))
     update(props([row('b'), row('a')], { loading: false, shouldResortAtSettle: () => true }))

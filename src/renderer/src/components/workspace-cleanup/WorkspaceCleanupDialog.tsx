@@ -178,6 +178,9 @@ function WorkspaceCleanupDialogContent({
     open,
     loading,
     gitChecking: gitEvidence.pendingWorktreeIds.size > 0,
+    // Selected rows are never hidden: a Refresh reset keeps them even if late evidence made
+    // them stop matching the filters. Only the user's own filter change prunes them.
+    keepIdentities: selectedIds,
     // Re-sorting at settle is safe only while the user has not started working in the list.
     shouldResortAtSettle: () => selectedIdsRef.current.size === 0 && !listInteractedRef.current
   })
