@@ -1,9 +1,10 @@
+import { setTimeout as delay } from 'node:timers/promises'
 import {
   providerDiagnostic,
   withProviderDiagnostic
 } from '../../../shared/agent-session/failures/agent-session-failure'
 import type { z } from 'zod'
-import { AcpAuthRequiredError, AcpRpcError, acpAuthRequiredError } from '../transport/acp-errors'
+import { AcpAgentError, AcpAuthRequiredError, AcpRpcError, acpAuthRequiredError } from '../transport/acp-errors'
 import {
   NewSessionResponseSchema,
   LoadSessionResponseSchema,
@@ -41,6 +42,27 @@ type Request = <T>(
   received?: (response: T) => void
 ) => Promise<T>
 
+// OpenCode can answer -32603 while its providers are still opening; load/resume are idempotent, so retry them.
+async function requestRestore<T>(
+  request: Request,
+  method: 'session/load' | 'session/resume',
+  params: unknown,
+  schema: z.ZodType<T>,
+  received?: (response: T) => void
+): Promise<T> {
+  for (const backoffMs of [250, 500]) {
+    try {
+      return await request(method, params, schema, received)
+    } catch (error) {
+      if (!(error instanceof AcpAgentError && error.code === -32603)) {
+        throw error
+      }
+      await delay(backoffMs)
+    }
+  }
+  return request(method, params, schema, received)
+}
+
 export async function setupAcpSession(
   initialized: InitializeResponse,
   options: AcpSessionStartOptions,
@@ -68,7 +90,8 @@ export async function setupAcpSession(
       return {
         kind: 'load',
         sessionId,
-        response: await request(
+        response: await requestRestore(
+          request,
           'session/load',
           { ...params, sessionId },
           loadSessionSchema,
@@ -80,7 +103,8 @@ export async function setupAcpSession(
       return {
         kind: 'resume',
         sessionId,
-        response: await request(
+        response: await requestRestore(
+          request,
           'session/resume',
           { ...params, sessionId },
           resumeSessionSchema,
