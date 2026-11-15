@@ -39,6 +39,7 @@ export const ROOT_HELP_TEXT_SECONDARY = [
   '  orca serve [--port <port>] [--bind <ip>] [--pairing-address <host>] [--allow-public | --refuse-public] [--mobile-pairing] [--no-pairing] [--grant-desktop-control] [--project-root <path>] [--recipe-json] [--supervise] [--json]',
   '  orca status [--json]',
   '  orca diagnostics memory [--json]',
+  '  orca stats usage --provider claude|codex|opencode|muse [--range 7d|30d|90d|all] [--scope orca|all] [--sessions <n>] [--json]',
   '  orca agent-context [--json]',
   '  orca search <query> [--scope conversation|all] [--fresh] [--limit <n>] [--cursor <c>] [--agent <id>] [--path <p>] [--since <iso>] [--sort relevance|newest] [--debug] [--json]',
   '  orca search --index-status [--json]',

@@ -240,6 +240,11 @@ export const HANDLER_GROUPS: readonly HandlerGroup[] = [
     load: async () => (await import('../diagnostics/diagnostics.js')).DIAGNOSTICS_HANDLERS
   },
   {
+    name: 'stats',
+    keys: ['stats usage'],
+    load: async () => (await import('../stats/stats-usage.js')).STATS_HANDLERS
+  },
+  {
     name: 'speech',
     keys: ['speech openai-key status', 'speech openai-key set', 'speech openai-key clear'],
     load: async () => (await import('../speech/speech.js')).SPEECH_HANDLERS

@@ -33,6 +33,11 @@ export const UsageActionSchema = z.enum([
   'getRecentSessions'
 ])
 export type UsageAction = z.infer<typeof UsageActionSchema>
+export type UsageSnapshotQuery = {
+  scope: 'orca' | 'all'
+  range: '7d' | '30d' | '90d' | 'all'
+  limit?: number
+}
 export type BackendResponse = RuntimeRpcResponse<unknown>
 
 export const BackendBootstrapSchema = z

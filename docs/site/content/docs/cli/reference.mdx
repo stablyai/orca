@@ -173,6 +173,16 @@ orca ports --all
 
 `ports` lists the listening ports Orca tied to a workspace, from the host the workspace runs on. It defaults to the workspace that contains the current directory. Each row has `port`, `pid`, `processName`, `connectHost`, `protocol`, how Orca matched it (`owner.confidence`: `cwd` or `command`), and `advertisedUrl` when the dev server printed one in an Orca terminal. `--all` lists every listener on that host. Native folder workspaces need `--all`, because Orca does not tie ports to them. If `unavailableReason` is set, the scan could not run on that host; SSH workspaces opened directly from the desktop report this for now, while a workspace on a managed Orca server is scanned on that server.
 
+## Stats & Usage
+
+```bash
+orca stats usage --provider claude
+orca stats usage --provider codex --range 7d --scope all --json
+orca stats usage --provider claude --sessions 25 --json
+```
+
+`stats usage` prints the token and cost aggregates the **Stats & Usage** pane keeps for one provider (`claude`, `codex`, `opencode` or `muse`) on the Orca host. It reads what the pane already has and never starts a scan, so check `scanState.enabled` and `scanState.lastScanCompletedAt` for whether tracking is on and how fresh the numbers are. The defaults match the pane: `--scope orca` (sessions in Orca workspaces), `--range 30d`, and the 10 most recent sessions (`--sessions` accepts 0-100). `--json` returns the pane's snapshot: `summary`, `daily`, `modelBreakdown`, `projectBreakdown` and `recentSessions`. Token fields differ by provider: Claude reports `cacheReadTokens` and `cacheWriteTokens`, Codex and OpenCode report `cachedInputTokens` and `reasoningOutputTokens`. `estimatedCostUsd` is an estimate at API prices, not billed spend; `summary.hasUnpricedModels` marks models left out of it.
+
 ## References
 
 A workspace can link multiple reviews and issues, including sources outside its repository.

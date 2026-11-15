@@ -179,6 +179,10 @@ export function configureRuntimeServices(runtime: OrcaRuntimeService): void {
   }
   configureDesktopCloudServices(runtime, () => state.store?.getSettings(), app.getPath('userData'))
   runtime.setAccountServices({ claudeAccounts, codexAccounts, rateLimits })
+  const backend = state.backend
+  if (backend) {
+    runtime.setUsageSnapshotReader((provider, query) => backend.readUsageSnapshot(provider, query))
+  }
   installWslOrcadAccountShim(store)
   runtime.setCommitMessageAgentEnvironmentResolvers({
     // Resolve every Codex launch through runtime-home, including default-account hooks/auth.

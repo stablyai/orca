@@ -6,7 +6,9 @@ import {
   BACKEND_PORT_DELIVERY,
   BACKEND_PORT_REQUEST,
   BACKEND_UTILITY_PROCESS_NAME,
-  type AutomationUsageClient
+  type AutomationUsageClient,
+  type UsageProviderKey,
+  type UsageSnapshotQuery
 } from '../../shared/backend/backend-service-contract'
 import { backendMessagePort } from '../backend/backend-message-port'
 import {
@@ -97,19 +99,23 @@ export class BackendSupervisor {
 
   automationClient(provider: 'claudeUsage' | 'codexUsage'): AutomationUsageClient {
     return {
-      getAutomationRunUsage: async (input) => {
-        const ready = this.ensureReady(true)
-        const control = this.control
-        await ready
-        if (!this.desiredRunning || !control || this.control !== control) {
-          throw new Error('Usage disconnected. Try again after it reconnects.')
-        }
-        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The private usage service returns its typed automation result for this provider method.
-        return (await control.call(`${provider}:getAutomationRunUsage`, input)) as Awaited<
-          ReturnType<AutomationUsageClient['getAutomationRunUsage']>
-        >
-      }
+      getAutomationRunUsage: (input) => this.callUsage(`${provider}:getAutomationRunUsage`, input)
     }
+  }
+
+  readUsageSnapshot(provider: UsageProviderKey, query: UsageSnapshotQuery): Promise<unknown> {
+    return this.callUsage(`${provider}:getSnapshot`, query)
+  }
+
+  private async callUsage<TResult>(method: string, params: unknown): Promise<TResult> {
+    const ready = this.ensureReady(true)
+    const control = this.control
+    await ready
+    if (!this.desiredRunning || !control || this.control !== control) {
+      throw new Error('Usage disconnected. Try again after it reconnects.')
+    }
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The private usage service returns the typed result of the provider method the caller names.
+    return (await control.call(method, params)) as TResult
   }
 
   stop(): Promise<void> {
