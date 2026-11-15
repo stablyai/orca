@@ -1,4 +1,7 @@
-import type { BrowserViewportOverride, BrowserViewportPresetId } from './browser-workspace-types'
+import type {
+  BrowserViewportOverride,
+  BrowserViewportPresetId
+} from '../workspaces/browser-workspace-types'
 
 export type BrowserViewportPreset = {
   id: BrowserViewportPresetId

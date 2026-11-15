@@ -1,8 +1,8 @@
 import type { DictationTerm } from './dictation-dictionary'
 import { createDictationDictionary } from './dictation-term-spelling'
-import { engineDictationLanguage } from './dictation-language'
+import { engineDictationLanguage } from '../models/dictation-language'
 import { removeFillerWords } from './dictation-filler-words'
-import type { SpeechModelManifest, VoiceSettings } from './speech-types'
+import type { SpeechModelManifest, VoiceSettings } from '../speech-types'
 
 export type DictationTextSettings = Pick<
   VoiceSettings,

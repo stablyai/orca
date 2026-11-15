@@ -20,7 +20,7 @@ import {
 } from '../../../shared/execution-host'
 import { workspaceHostScopeForVisibleHosts } from '../../../shared/workspace-view/workspace-host-visibility'
 import { normalizeManualRepoOrder } from '../../../shared/manual-repo-order'
-import { normalizeBrowserPageZoomLevel } from '../../../shared/browser-page-zoom'
+import { normalizeBrowserPageZoomLevel } from '../../../shared/browser/site-settings/browser-page-zoom'
 import { normalizeFeatureTipIds } from '../../../shared/feature-tips'
 import { normalizeContextualTourIds } from '../../../shared/contextual-tours'
 import { normalizeFeatureInteractions } from '../../../shared/feature-interactions'

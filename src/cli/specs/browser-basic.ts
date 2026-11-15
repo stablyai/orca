@@ -1,7 +1,7 @@
 import type { CommandSpec } from '../discovery/command-spec'
 import { CLI_GLOBAL_FLAGS as GLOBAL_FLAGS } from '../../shared/cli-argument-boundary'
 import { withBrowserPageTarget } from './browser-page-target'
-import { BROWSER_WAIT_DEFAULT_TIMEOUT_MS } from '../../shared/browser-wait-timeout'
+import { BROWSER_WAIT_DEFAULT_TIMEOUT_MS } from '../../shared/browser/automation/browser-wait-timeout'
 
 export const BROWSER_BASIC_COMMAND_SPECS: CommandSpec[] = withBrowserPageTarget([
   {

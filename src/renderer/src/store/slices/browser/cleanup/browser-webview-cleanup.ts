@@ -1,7 +1,7 @@
 import type {
   BrowserPage,
   BrowserWorkspace
-} from '../../../../../../shared/browser-workspace-types'
+} from '../../../../../../shared/browser/workspaces/browser-workspace-types'
 import { destroyPersistentWebview } from '../../../../components/browser-pane/host-guest/webview-registry'
 import { releaseBrowserPageMount } from '../../../../components/browser-pane/host-guest/retention/browser-page-mount-admission'
 

@@ -1,5 +1,8 @@
-import { DICTATION_LANGUAGE_AUTO } from './dictation-language'
-import type { SpeechModelErrorRate, SpeechModelManifest } from './speech-types'
+import { DICTATION_LANGUAGE_AUTO } from '../../../../../shared/speech/models/dictation-language'
+import type {
+  SpeechModelErrorRate,
+  SpeechModelManifest
+} from '../../../../../shared/speech/speech-types'
 
 /** 5 = Excellent, 4 = Very good, 3 = Good, 2 = Fair, 1 = Poor. */
 export type SpeechModelQualityTier = 1 | 2 | 3 | 4 | 5

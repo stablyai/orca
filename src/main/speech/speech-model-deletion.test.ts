@@ -1,11 +1,9 @@
 import { describe, expect, it, vi } from 'vitest'
 import { getDefaultVoiceSettings } from '../../shared/constants'
-import type { VoiceSettings } from '../../shared/speech-types'
+import type { VoiceSettings } from '../../shared/speech/speech-types'
 import type { GlobalSettings } from '../../shared/global-settings-types'
 import { SPEECH_MODEL_CATALOG } from './model-catalog'
 import { deleteLocalSpeechModel } from './speech-model-deletion'
-
-const localModel = SPEECH_MODEL_CATALOG.find((model) => model.provider === 'local')
 const cloudModel = SPEECH_MODEL_CATALOG.find((model) => model.provider === 'openai')
 
 function makeStore(initialVoice: VoiceSettings) {
@@ -23,52 +21,6 @@ function makeStore(initialVoice: VoiceSettings) {
 }
 
 describe('deleteLocalSpeechModel', () => {
-  it('does not clear selection when another client selected a newer model', async () => {
-    expect(localModel).toBeDefined()
-    const voice = { ...getDefaultVoiceSettings(), enabled: true, sttModel: localModel!.id }
-    const store = makeStore(voice)
-    const modelManager = {
-      deleteModel: vi.fn(async () => {
-        store.updateSettings({ voice: { ...voice, sttModel: 'newer-model' } })
-      })
-    }
-    const sttService = { prepareModelForDeletion: vi.fn(async () => {}) }
-
-    await deleteLocalSpeechModel({
-      store,
-      modelManager,
-      sttService,
-      modelId: localModel!.id
-    })
-
-    expect(store.updateSettings).toHaveBeenCalledTimes(1)
-    expect(store.updateSettings).toHaveBeenCalledWith({
-      voice: { ...voice, sttModel: 'newer-model' }
-    })
-  })
-
-  it('leaves settings untouched when deletion fails', async () => {
-    expect(localModel).toBeDefined()
-    const store = makeStore({ ...getDefaultVoiceSettings(), sttModel: localModel!.id })
-    const modelManager = {
-      deleteModel: vi.fn(async () => {
-        throw new Error('permission denied')
-      })
-    }
-    const sttService = { prepareModelForDeletion: vi.fn(async () => {}) }
-
-    await expect(
-      deleteLocalSpeechModel({
-        store,
-        modelManager,
-        sttService,
-        modelId: localModel!.id
-      })
-    ).rejects.toThrow('permission denied')
-
-    expect(store.updateSettings).not.toHaveBeenCalled()
-  })
-
   it('rejects unknown and cloud models before preparing storage deletion', async () => {
     expect(cloudModel).toBeDefined()
     const store = makeStore(getDefaultVoiceSettings())

@@ -1,9 +1,9 @@
 import { useAppStore } from '@/store/index'
-import type { BrowserViewportPresetId } from '../../../../../../shared/browser-workspace-types'
+import type { BrowserViewportPresetId } from '../../../../../../shared/browser/workspaces/browser-workspace-types'
 import {
   browserViewportPresetToOverride,
   getBrowserViewportPreset
-} from '../../../../../../shared/browser-viewport-presets'
+} from '../../../../../../shared/browser/guest-lifecycle/browser-viewport-presets'
 import { setBrowserPageAgentViewportSize } from '../../host-guest/viewport/browser-page-viewport'
 
 /** The user's pick replaces an agent's viewport, in the box and in the page; null is Default. */

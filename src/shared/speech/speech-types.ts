@@ -1,4 +1,4 @@
-import type { DictationTerm } from './dictation-dictionary'
+import type { DictationTerm } from './dictation/dictation-dictionary'
 export type SpeechModelType =
   | 'transducer'
   | 'paraformer'

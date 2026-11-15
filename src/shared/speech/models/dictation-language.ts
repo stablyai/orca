@@ -1,4 +1,4 @@
-import type { SpeechModelManifest } from './speech-types'
+import type { SpeechModelManifest } from '../speech-types'
 
 export const DICTATION_LANGUAGE_AUTO = 'auto'
 

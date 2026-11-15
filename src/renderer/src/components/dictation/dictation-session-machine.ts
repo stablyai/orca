@@ -1,4 +1,4 @@
-import type { DictationState } from './speech-types'
+import type { DictationState } from '../../../../shared/speech/speech-types'
 
 /** One dictation session's lifecycle, shared so every client follows the same start/stop/cancel rules. */
 export type DictationSession = {

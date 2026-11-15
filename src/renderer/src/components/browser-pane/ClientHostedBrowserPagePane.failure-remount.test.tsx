@@ -10,7 +10,7 @@ import type {
   BrowserCertificateFailure,
   BrowserPage,
   BrowserWorkspace
-} from '../../../../shared/browser-workspace-types'
+} from '../../../../shared/browser/workspaces/browser-workspace-types'
 
 const toastMocks = vi.hoisted(() => ({
   loading: vi.fn(),

@@ -1,6 +1,6 @@
-import './constants'
-import { ORCA_BROWSER_BLANK_URL } from './browser/browser-blank-page'
-import { getCurrentLocalPlatform } from './execution-host'
+import '../../constants'
+import { ORCA_BROWSER_BLANK_URL } from '../browser-blank-page'
+import { getCurrentLocalPlatform } from '../../execution-host'
 
 const LOCAL_ADDRESS_PATTERN =
   /^(?:localhost|127(?:\.\d{1,3}){3}|0\.0\.0\.0|\[[0-9a-f:]+\])(?::\d+)?(?:[/?#].*)?$/i

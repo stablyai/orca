@@ -1,4 +1,4 @@
-import type { VoiceSettings } from './speech-types'
+import type { VoiceSettings } from '../speech-types'
 
 /** The shortcut's behaviour; Auto is Toggle plus hold-to-record, so builds that only know Toggle still toggle. */
 export type DictationShortcutMode = 'auto' | 'hold' | 'toggle'

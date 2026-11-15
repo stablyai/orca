@@ -4,7 +4,7 @@ import {
   registerBrowserSessionFramePreload,
   unregisterBrowserSessionFramePreload
 } from '../../sessions/browser-session-frame-preloads'
-import type { BrowserSessionProfile } from '../../../../shared/browser-workspace-types'
+import type { BrowserSessionProfile } from '../../../../shared/browser/workspaces/browser-workspace-types'
 import type { InstalledBrowserExtension } from '../../../../shared/browser/extensions/browser-extension-types'
 import { isBrowserExtensionSupportEnabled } from '../browser-extension-support'
 import { getBrowserExtensionInstallStore } from '../installation/browser-extension-install-store'

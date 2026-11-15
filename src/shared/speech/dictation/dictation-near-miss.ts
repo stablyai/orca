@@ -1,4 +1,4 @@
-import { levenshtein } from './edit-distance'
+import { levenshtein } from '../../edit-distance'
 import { createWordFilterLookup } from './dictation-word-filter'
 
 // Shorter terms sit too close to ordinary words ("Vite" and "vote", "Hono" and "honey").
