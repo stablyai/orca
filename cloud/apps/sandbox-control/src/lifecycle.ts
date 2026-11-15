@@ -731,7 +731,7 @@ async function boot(
   const [, connection] = await Promise.all([
     needsPolicy
       ? options.timer.time('policy', () =>
-          deps.provider.updateNetworkPolicy(state.session.id, egressPolicy(deps, routed, prep.minted?.token, prep.memberPlaceholders, prep.firewall))
+          writeBootPolicy(deps, routed, state.session.id, egressPolicy(deps, routed, prep.minted?.token, prep.memberPlaceholders, prep.firewall))
         )
       : Promise.resolve(),
     options.timer.time('orcad', async () => {
@@ -756,6 +756,7 @@ async function boot(
     })
   ])
   const readyAt = deps.now()
+  await stampBootPolicy(deps, routed)
   const running = await claim(deps, row, {
     status: 'running',
     last_error: null,
@@ -849,6 +850,108 @@ export async function compileSandboxPolicy(
  * A4 primitive (probe 2: the last session policy survives a stop and is re-applied on resume): write the
  * token-free compile to the stopped sandbox's persistent record. Returns the provider's outcome.
  */
+/**
+ * A4: whether this sandbox's persistent record may hold firewall values: its last applied policy was compiled
+ * with a firewall class (the config stamp says), or it would be now. Proxy-only policies hold no values.
+ */
+export function recordMayHoldValues(deps: Pick<LifecycleDeps, 'config'>, row: SandboxRow): boolean {
+  if (firewallClasses(deps, row).size > 0) {
+    return true
+  }
+  try {
+    const stamp = JSON.parse(row.policy_config_hash ?? '') as { classes?: unknown[] }
+    return Array.isArray(stamp.classes) && stamp.classes.length > 0
+  } catch {
+    return false
+  }
+}
+
+/**
+ * A4, after a voluntary stop (or a timeout reconcile found): the record gets the token-free policy, so a
+ * sleeping workspace keeps no credential at rest in the provider. A failure marks the row for reconcile.
+ */
+export async function scrubStoppedRecord(deps: LifecycleDeps, row: SandboxRow): Promise<void> {
+  if (!recordMayHoldValues(deps, row)) {
+    return
+  }
+  // Review R2: the row may have resumed since it was selected (or since its stop). Only a still-stopped row
+  // with no session is scrubbed; a scrub that raced a resume is undone by a fresh apply right after.
+  const stopped = (fresh: SandboxRow | null): boolean =>
+    fresh !== null && (fresh.status === 'suspended' || fresh.status === 'archived') && !fresh.session_id
+  const before = await getSandbox(deps.db, row.id)
+  if (!before || !stopped(before)) {
+    return
+  }
+  const outcome = await scrubRecordPolicy(deps, before)
+  const after = await getSandbox(deps.db, row.id)
+  if (after && !stopped(after) && after.session_id && (after.status === 'running' || after.status === 'resuming')) {
+    console.log(JSON.stringify({ event: 'policy_scrub_raced_resume', sandboxId: row.id }))
+    await applySandboxPolicy(deps, after, 'scrub_race').catch(() => undefined)
+    return
+  }
+  const ok = outcome === 'scrubbed'
+  await deps.db
+    .prepare('UPDATE sandboxes SET policy_scrub_pending = ?, policy_scrubbed_at = COALESCE(?, policy_scrubbed_at) WHERE id = ?')
+    .bind(ok ? 0 : 1, ok ? deps.now() : null, row.id)
+    .run()
+  console.log(JSON.stringify({ event: 'policy_record_scrub', sandboxId: row.id, outcome: typeof outcome === 'string' ? outcome : outcome.failed }))
+}
+
+/**
+ * Stopped rows whose record may still hold values: a failed scrub, or an apply since the last scrub.
+ * 'failed' rows are left out on purpose (review R4): failAndRelease destroys their provider sandbox, and the
+ * cron retries a destroy that didn't finish, so no record is left to scrub.
+ */
+export async function rowsToScrub(db: D1Database, limit = 25): Promise<SandboxRow[]> {
+  const { results } = await db
+    .prepare(
+      `SELECT * FROM sandboxes WHERE status IN ('suspended', 'archived') AND destroyed_at IS NULL AND (
+         policy_scrub_pending = 1 OR
+         (policy_config_hash LIKE '{%' AND policy_config_hash NOT LIKE '%"classes":[]%' AND
+          (policy_scrubbed_at IS NULL OR policy_scrubbed_at < COALESCE(policy_generation, 0))))
+       LIMIT ?`
+    )
+    .bind(limit)
+    .all<SandboxRow>()
+  return results
+}
+
+const BOOT_POLICY_BACKOFF_MS = [250, 1000, 3000]
+
+/**
+ * A wake's policy write, with backoff. The record it resumes from was scrubbed (A4), so until this lands the
+ * firewall answers the placeholders itself (keys-withheld or signed-out errors the agent prints): fail closed,
+ * never a hang. If it still fails the workspace opens anyway, marked stale for reconcile's next tick.
+ */
+async function writeBootPolicy(deps: LifecycleDeps, row: SandboxRow, sessionId: string, policy: ReturnType<typeof egressPolicy>): Promise<void> {
+  let failure: unknown = null
+  for (let attempt = 0; attempt <= BOOT_POLICY_BACKOFF_MS.length; attempt++) {
+    try {
+      await deps.provider.updateNetworkPolicy(sessionId, policy)
+      return
+    } catch (error) {
+      failure = error
+      const delay = BOOT_POLICY_BACKOFF_MS[attempt]
+      if (delay !== undefined) {
+        await new Promise((resolve) => setTimeout(resolve, delay))
+      }
+    }
+  }
+  const code = failure instanceof ProviderError ? (failure.code ?? `status_${failure.status}`) : failure instanceof Error ? failure.name : 'unknown'
+  console.error(JSON.stringify({ event: 'policy_apply_failed', sandboxId: row.id, reason: 'boot', narrowing: false, code }))
+  await deps.db.prepare('UPDATE sandboxes SET policy_stale_at = ? WHERE id = ?').bind(deps.now(), row.id).run().catch(() => undefined)
+}
+
+/** Stamps what a boot's policy was compiled from (A4/§7.2): the create and wake writes don't go through apply. */
+async function stampBootPolicy(deps: LifecycleDeps, row: SandboxRow): Promise<void> {
+  await deps.db
+    .prepare('UPDATE sandboxes SET policy_config_hash = ?, policy_generation = MAX(COALESCE(policy_generation, 0), ?) WHERE id = ?')
+    // One below now: the stamp marks that a policy was written, but must never outrank a real apply in the same ms.
+    .bind(await policyConfigHash(deps, row), deps.now() - 1, row.id)
+    .run()
+    .catch(() => undefined)
+}
+
 export async function scrubRecordPolicy(deps: LifecycleDeps, row: SandboxRow): Promise<'scrubbed' | 'unsupported' | { failed: string }> {
   if (!deps.provider.updateRecordNetworkPolicy) {
     return 'unsupported'
@@ -1582,7 +1685,10 @@ export async function stopForSuspend(
     await queueUsage(deps.db, row, deps.now())
   }
   await deps.hooks?.afterStop?.(row).catch(() => undefined)
-  return claim(deps, row, { status: 'suspended', ...NO_SESSION })
+  const suspended = await claim(deps, row, { status: 'suspended', ...NO_SESSION })
+  // A4: the stopped record keeps the session's last policy; leave it token-free.
+  await scrubStoppedRecord(deps, suspended).catch(() => undefined)
+  return suspended
 }
 
 /** The provider ended the session on its own (lease lapsed): bill up to when it stopped. */
@@ -1591,7 +1697,10 @@ export async function markProviderStopped(deps: LifecycleDeps, row: SandboxRow):
   await queueUsage(deps.db, row, endedAt)
   await recordSessionEnd(deps.db, row, endedAt, null, deps.now())
   await deps.hooks?.afterStop?.(row).catch(() => undefined)
-  return claim(deps, row, { status: 'suspended', ...NO_SESSION })
+  const suspended = await claim(deps, row, { status: 'suspended', ...NO_SESSION })
+  // A4: a timeout kept the last policy on the record too.
+  await scrubStoppedRecord(deps, suspended).catch(() => undefined)
+  return suspended
 }
 
 export async function suspendSandbox(deps: LifecycleDeps, row: SandboxRow): Promise<SandboxRow> {
@@ -1697,6 +1806,13 @@ export async function wake(deps: LifecycleDeps, row: SandboxRow): Promise<Ready>
   assertEgressAllowlistUsable(deps, row)
   await resetArchiveHookMemo(deps.db, row.id).catch(() => undefined)
   const timer = phaseTimer(deps.now)
+  // A4: the record was scrubbed at stop; give it the full policy first so the resumed session has no gap.
+  // Best effort: the post-resume apply in boot is the backstop.
+  if (recordMayHoldValues(deps, row) && deps.provider.updateRecordNetworkPolicy) {
+    await timer
+      .time('policy-record', async () => deps.provider.updateRecordNetworkPolicy!(row.provider_name, (await compileSandboxPolicy(deps, row)).policy))
+      .catch(() => undefined)
+  }
   // The provider boot is the long pole; secrets and the repo token resolve alongside it.
   const [state, prep] = await Promise.all([
     timer.time('vm', () => deps.provider.getSandbox(row.provider_name, { resume: true })),
