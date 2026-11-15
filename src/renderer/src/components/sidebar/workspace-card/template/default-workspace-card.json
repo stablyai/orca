@@ -194,6 +194,11 @@
         "props": { "unreadAction": "=!place.affiliateList && !vars.newStyle" }
       },
       {
+        "el": "ScheduledBadge",
+        "when": "options.show.status",
+        "props": { "singleLine": "=vars.singleLine" }
+      },
+      {
         "el": "Stack",
         "props": {
           "grow": true,

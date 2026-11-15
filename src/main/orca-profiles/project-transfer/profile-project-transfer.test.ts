@@ -9,6 +9,8 @@ import {
 } from '../../../shared/orca-profiles'
 import type { PersistedState } from '../../../shared/persisted-state-types'
 import type { Repo } from '../../../shared/repo-types'
+import type { ScheduledMessage } from '../../../shared/scheduled-message-types'
+import type { WorktreeMeta } from '../../../shared/worktree/meta-types'
 import {
   exportProfileStateJson,
   importProfileStateJson
@@ -133,6 +135,22 @@ function makeRepo(overrides: Partial<Repo> = {}): Repo {
   }
 }
 
+function makeWorktreeMeta(overrides: Partial<WorktreeMeta> = {}): WorktreeMeta {
+  return {
+    displayName: 'Feature',
+    comment: '',
+    linkedIssue: null,
+    linkedPR: null,
+    linkedLinearIssue: null,
+    isArchived: false,
+    isUnread: false,
+    isPinned: false,
+    sortOrder: 10,
+    lastActivityAt: 123,
+    ...overrides
+  }
+}
+
 function makeState(overrides: Partial<PersistedState> = {}): PersistedState {
   const defaults = getDefaultPersistedState('/Users/tester')
   return {
@@ -168,6 +186,45 @@ describe('profile project transfer', () => {
 
   afterEach(() => {
     rmSync(testState.dir, { recursive: true, force: true })
+  })
+
+  it('drops the moved project’s scheduled messages from the source profile', async () => {
+    const movedWorktreeId = 'repo-1::/workspace/orca-feature'
+    const stayingWorktreeId = 'repo-2::/workspace/other-feature'
+    const message = (worktreeId: string, id: string): ScheduledMessage => ({
+      id,
+      worktreeId,
+      text: 'ping',
+      timing: { kind: 'when-idle' },
+      createdAt: 1,
+      status: 'pending'
+    })
+    writeProfileStateDatabase(
+      'personal',
+      makeState({
+        repos: [makeRepo(), makeRepo({ id: 'repo-2', path: '/workspace/other' })],
+        worktreeMeta: {
+          [movedWorktreeId]: makeWorktreeMeta(),
+          [stayingWorktreeId]: makeWorktreeMeta()
+        },
+        scheduledMessages: [
+          message(movedWorktreeId, 'msg-moved'),
+          message(stayingWorktreeId, 'msg-staying')
+        ]
+      })
+    )
+    writeProfileStateDatabase('work', makeState())
+
+    const { transferOrcaProfileProject } = await loadTransferModule()
+    transferOrcaProfileProject(
+      { sourceProfileId: 'personal', targetProfileId: 'work', repoId: 'repo-1', mode: 'move' },
+      testState.dir
+    )
+
+    const source = readProfileStateDatabase('personal')
+    expect(source.scheduledMessages?.map((entry) => entry.id)).toEqual(['msg-staying'])
+    // A move does not carry them: the row is addressed to a pane in the profile it was queued in.
+    expect(readProfileStateDatabase('work').scheduledMessages ?? []).toEqual([])
   })
 
   it('fences a SQLite transfer write against the revision that was read', async () => {

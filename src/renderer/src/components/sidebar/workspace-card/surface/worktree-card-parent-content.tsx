@@ -8,6 +8,7 @@ import { WorktreeCardIdentityHover } from '../details/worktree-card-details-item
 import type { WorktreeCardPresentation } from './worktree-card-presentation'
 import { WorktreeCardSecondaryRows } from './worktree-card-secondary-rows'
 import { WorktreeCardStatusLane } from './worktree-card-status-lane'
+import { WorktreeCardScheduledMessagesBadge } from '../metadata/WorktreeCardScheduledMessagesBadge'
 import type { WorktreeCardController } from '../controller/use-worktree-card-controller'
 
 export function WorktreeCardParentContent({
@@ -61,6 +62,13 @@ export function WorktreeCardParentContent({
     >
       {showCombinedStatusSlot ? (
         <WorktreeCardStatusLane card={card} showUnreadAction={showUnreadQuickAction} />
+      ) : null}
+      {showCombinedStatusSlot ? (
+        // Beside the status lane, not in it: the lane is one icon wide.
+        <WorktreeCardScheduledMessagesBadge
+          worktreeId={worktree.id}
+          className={titleOnlyCard ? 'mr-1' : 'mr-1 mt-[3px]'}
+        />
       ) : null}
 
       <div

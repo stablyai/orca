@@ -50,6 +50,8 @@ export const WSL_DRIVE_UNC_STATE_DISPOSITIONS = {
   migrationUnsupportedPtyEntries: 'rewrite',
   legacyPaneKeyAliasEntries: 'rewrite',
   automations: 'rewrite',
+  // Each message targets a worktree id and pane key on the converted project.
+  scheduledMessages: 'rewrite',
   // Run history stays as it ran, beside its automation.
   automationRuns: 'keep',
   orcadMigrationImportReceipts: 'keep',

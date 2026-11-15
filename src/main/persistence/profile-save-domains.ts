@@ -60,7 +60,8 @@ export const REMOVE_PROJECT_DOMAINS: readonly string[] = [
   ...WORKTREE_METADATA_DOMAINS,
   ...WORKSPACE_LINEAGE_DOMAINS,
   ...WORKSPACE_SESSION_DOMAINS,
-  'mobileClientTabSelectionsByDeviceId'
+  'mobileClientTabSelectionsByDeviceId',
+  'scheduledMessages'
 ]
 
 /** Removing a folder workspace drops its sessions, lineage and phone selections. */
@@ -72,10 +73,11 @@ export const FOLDER_WORKSPACE_REMOVAL_DOMAINS: readonly string[] = [
   'mobileClientTabSelectionsByDeviceId'
 ]
 
-/** Pruning missing worktrees drops their metadata and lineage. */
+/** Pruning missing worktrees drops their metadata, lineage and scheduled messages. */
 export const WORKTREE_METADATA_PRUNE_DOMAINS: readonly string[] = [
   ...WORKTREE_METADATA_DOMAINS,
-  ...WORKSPACE_LINEAGE_DOMAINS
+  ...WORKSPACE_LINEAGE_DOMAINS,
+  'scheduledMessages'
 ]
 
 /** Removing worktree metadata also drops its lineage and saved session tabs. */

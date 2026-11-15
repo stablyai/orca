@@ -28,6 +28,7 @@ import { AutomationsPageFrame, AutomationsPageNoticeContext } from './Automation
 import { useAutomationsPageRouting } from './use-automations-page-routing'
 import { formatAutomationRunLabel } from './runs/automation-run-identity-label'
 import { automationRowHostLabel } from './listing/automation-list-host'
+import { ScheduledMessagesSection } from '@/components/scheduled-messages/ScheduledMessagesSection'
 
 export function AutomationsPageSurface({
   controller
@@ -360,6 +361,7 @@ export function AutomationsPageSurface({
           </Button>
         )}
       >
+        <ScheduledMessagesSection relativeNow={relativeNow} />
         <AutomationsPageListPanel
           controller={controller}
           onOpenDetail={() => setIsDetailOpen(true)}
