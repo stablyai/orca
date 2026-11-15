@@ -224,17 +224,46 @@ export function phaseTimer(now: () => number = Date.now) {
     failed: null as { phase: string; ms: number } | null,
     async time<T>(phase: string, work: () => Promise<T>): Promise<T> {
       const started = now()
+      const limit = PHASE_DEADLINES_MS[phase]
+      let watch: ReturnType<typeof setTimeout> | undefined
       try {
-        return await work()
+        if (limit === undefined) {
+          return await work()
+        }
+        // A phase with nothing slow in it that still hasn't answered is stuck (a create sat 180 s
+        // before its write-ahead insert with no provider call stalled). Name it in the log; fail it
+        // unless abandoning the work could strand something (the pool claim holds a VM).
+        return await Promise.race([
+          work(),
+          new Promise<never>((_, reject) => {
+            watch = setTimeout(() => {
+              console.log(JSON.stringify({ event: 'phase_timeout', phase, ms: limit.ms, failed: limit.fail }))
+              if (limit.fail) {
+                reject(new LifecycleError('provider_unavailable', `phase_timeout_${phase}`))
+              }
+            }, limit.ms)
+          })
+        ])
       } catch (error) {
         timer.failed ??= { phase, ms: now() - started }
         throw error
       } finally {
+        clearTimeout(watch)
         timings[phase] = now() - started
       }
     }
   }
   return timer
+}
+
+/**
+ * Bounds for the phases before a create's write-ahead insert (D1 reads, billing, the pool claim).
+ * The VM, policy and orcad phases are bounded by the provider calls inside them.
+ */
+export const PHASE_DEADLINES_MS: Record<string, { ms: number; fail: boolean }> = {
+  environment: { ms: 20_000, fail: true },
+  entitlement: { ms: 20_000, fail: true },
+  pool: { ms: 45_000, fail: false }
 }
 
 /**
