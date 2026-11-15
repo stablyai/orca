@@ -18,18 +18,21 @@ export const MANAGED_HOME_MARKER = '.orca-managed-home'
  */
 export const LINKED_MANAGED_HOME_MARKER = '.orca-managed-home-linked'
 
-// The linked marker is checked second: a share pass renames the first into it, never back.
-function lstatMarker(home: string): { path: string; isFile: boolean } {
-  const path = join(home, MANAGED_HOME_MARKER)
-  try {
-    return { path, isFile: lstatSync(path).isFile() }
-  } catch (error) {
-    if (!isDefinitiveAbsence(error)) {
-      throw error
+// The linked marker is read second: a share pass renames the first into it, never back, so a
+// rename landing between the two reads still finds one of them.
+function readMarker(home: string): { isFile: boolean; contents: string } {
+  for (const name of [MANAGED_HOME_MARKER, LINKED_MANAGED_HOME_MARKER]) {
+    const path = join(home, name)
+    try {
+      const isFile = lstatSync(path).isFile()
+      return { isFile, contents: isFile ? readFileSync(path, 'utf-8') : '' }
+    } catch (error) {
+      if (name === LINKED_MANAGED_HOME_MARKER || !isDefinitiveAbsence(error)) {
+        throw error
+      }
     }
   }
-  const linked = join(home, LINKED_MANAGED_HOME_MARKER)
-  return { path: linked, isFile: lstatSync(linked).isFile() }
+  throw new Error('unreachable')
 }
 
 /** Only `untrusted` may clear selection; `indeterminate` must refuse use without erasing state. */
@@ -151,9 +154,9 @@ function evaluate({
   let markerIsRegularFile: boolean
   let markerContents: string
   try {
-    const marker = lstatMarker(canonicalCandidate)
+    const marker = readMarker(canonicalCandidate)
     markerIsRegularFile = marker.isFile
-    markerContents = markerIsRegularFile ? readFileSync(marker.path, 'utf-8') : ''
+    markerContents = marker.contents
   } catch (error) {
     // A missing ownership marker disproves trust; an unreadable one leaves it unknown.
     if (isDefinitiveAbsence(error)) {

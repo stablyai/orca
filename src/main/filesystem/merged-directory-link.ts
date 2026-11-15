@@ -50,11 +50,13 @@ export type MergedDirectoryLinkArgs = {
   setAsidePath?: (from: string, to: string) => Promise<string | null>
   /** False merges a folder file by file, so `setAsidePath` sees each one. */
   movesWhole?: (folder: string) => Promise<boolean>
+  /** The order a folder's entries move in. */
+  entryOrder?: (left: string, right: string) => number
 }
 
 type MoveOptions = Pick<
   MergedDirectoryLinkArgs,
-  'beforeShare' | 'dropEmptyConflicts' | 'setAsidePath' | 'movesWhole'
+  'beforeShare' | 'dropEmptyConflicts' | 'setAsidePath' | 'movesWhole' | 'entryOrder'
 >
 
 export async function lstatIfPresent(file: string): Promise<BigIntStats | undefined> {
@@ -113,7 +115,7 @@ async function moveTree(
   result: MoveResult,
   options: MoveOptions
 ): Promise<void> {
-  for (const name of await readdir(source)) {
+  for (const name of (await readdir(source)).sort(options.entryOrder)) {
     const from = join(source, name)
     const to = join(destination, name)
     try {

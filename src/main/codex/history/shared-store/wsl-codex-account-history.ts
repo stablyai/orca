@@ -63,11 +63,11 @@ async function linkInGuest(
   return parseHelperOutput(stdout)
 }
 
-/** Compares the home's left-behind rollouts with the guest store; true when its budget ran out. */
+/** Compares the home's left-behind rollouts with the guest store within the helper's budget. */
 async function checkInGuest(
   target: WslCodexAccountHistoryTarget,
   dependencies: WslAccountHistoryDependencies
-): Promise<boolean> {
+): Promise<void> {
   const stdout = await dependencies.runHelper({
     distro: target.distro,
     helperFilename: WSL_CODEX_ACCOUNT_HISTORY_HELPER_FILENAME,
@@ -76,7 +76,9 @@ async function checkInGuest(
     timeoutMs: HELPER_TIMEOUT_MS,
     requireRunning: () => dependencies.requireRunning(target.distro)
   })
-  return parseHelperOutput(stdout)?.result === 'stopped'
+  if (!parseHelperOutput(stdout)) {
+    throw new Error('The WSL Codex history check printed no summary')
+  }
 }
 
 /** Marker lines precede the summary; a missing summary means the list may be clipped. */
@@ -315,11 +317,10 @@ export class WslCodexAccountHistoryLaunches {
     }
     const [key, target] = owed
     this.checks.add(distroKey)
+    // An unfinished check resumes on a later launch, never in a loop now.
     void checkInGuest(target, this.dependencies)
-      .then((unfinished) => {
-        if (!unfinished) {
-          this.owedChecks.delete(key)
-        }
+      .then(() => {
+        this.owedChecks.delete(key)
       })
       .catch((error: unknown) => {
         this.owedChecks.delete(key)

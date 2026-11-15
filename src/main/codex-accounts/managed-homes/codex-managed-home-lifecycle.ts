@@ -16,7 +16,9 @@ import type {
 import { writeFileAtomically } from '../../filesystem/atomic-file-publication'
 import { MERGE_PENDING_SUFFIX, removeDirectoryLink } from '../../filesystem/merged-directory-link'
 import {
+  CODEX_DATABASE_FILE,
   HISTORY_CLEANUP_MANIFEST,
+  PRE_SHARE_DATABASES_DIR,
   SET_ASIDE_ROLLOUTS_DIR
 } from '../../codex/history/shared-store/codex-account-history-cleanup-manifest'
 import { ManagedCodexHomeTemporarilyUnavailableError } from './host-codex-managed-home-ownership'
@@ -27,12 +29,14 @@ const WSL_MANAGED_HOME_TIMEOUT_MS = 5_000
 // Codex recorded the account's conversations under its own path in the shared index, a home
 // that was busy at every launch may still hold its only copy, and a merge keeps conflicting
 // copies (and set-aside rollout forms, listed in the cleanup manifest) beside the links; all of
-// it outlives the login.
+// it outlives the login. The account's own databases stay too: deleting them waits for a later
+// release that has seen the shared store work.
 const KEPT_HISTORY = [
   'sessions',
   'archived_sessions',
   SET_ASIDE_ROLLOUTS_DIR,
-  HISTORY_CLEANUP_MANIFEST
+  HISTORY_CLEANUP_MANIFEST,
+  PRE_SHARE_DATABASES_DIR
 ]
 const KEEP_ON_REMOVAL_SCRIPT = [
   'set -u',
@@ -41,6 +45,7 @@ const KEEP_ON_REMOVAL_SCRIPT = [
   '  case "${1##*/}" in',
   '    *.orca-profile-merge) return 0 ;;',
   `    ${KEPT_HISTORY.join(' | ')}) return 0 ;;`,
+  '    *.sqlite | *.sqlite-wal | *.sqlite-shm) return 0 ;;',
   '    *) return 1 ;;',
   '  esac',
   '}',
@@ -66,7 +71,9 @@ const KEEP_ON_REMOVAL_SCRIPT = [
 async function removeManagedHomeKeepingSharedHistory(home: string): Promise<boolean> {
   const entries = await readdir(home, { withFileTypes: true })
   const kept = (entry: Dirent): boolean =>
-    KEPT_HISTORY.includes(entry.name) || entry.name.endsWith(MERGE_PENDING_SUFFIX)
+    KEPT_HISTORY.includes(entry.name) ||
+    entry.name.endsWith(MERGE_PENDING_SUFFIX) ||
+    (entry.isFile() && CODEX_DATABASE_FILE.test(entry.name))
   for (const entry of entries.filter((candidate) => !kept(candidate))) {
     const path = join(home, entry.name)
     if (entry.isSymbolicLink()) {

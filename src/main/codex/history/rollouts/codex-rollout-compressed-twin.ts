@@ -24,30 +24,32 @@ function isFile(stats: BigIntStats | undefined): stats is BigIntStats {
   return stats?.isFile() ?? false
 }
 
+/** Sorts `.zst` names first, so a folder's compressed form reaches the store before its twin. */
+export function compressedRolloutsFirst(left: string, right: string): number {
+  return (
+    Number(right.endsWith(COMPRESSED_ROLLOUT_SUFFIX)) -
+    Number(left.endsWith(COMPRESSED_ROLLOUT_SUFFIX))
+  )
+}
+
 /**
- * Whether the rollout at `from` stays out of the store at `to` so it holds one form only: the
- * `.zst` unless its `.jsonl` twin is newer. A store that already holds either form keeps it alone,
- * except for a newer `.jsonl`, whose appended lines the `.zst` lacks.
+ * Whether the rollout at `from` stays out of the store at `to` because the store already holds
+ * its other form, so the store keeps one form: a `.jsonl` joins only when newer than the store's
+ * `.zst` (its appended lines are missing there). Deciding against the store, never a sibling still
+ * waiting to move, means a form is set aside only once its twin is safely in the store.
  */
 export async function isRolloutTwinKeptFromStore(from: string, to: string): Promise<boolean> {
   if (!parseCodexRolloutThreadId(from)) {
     return false
   }
-  const compressed = from.endsWith(COMPRESSED_ROLLOUT_SUFFIX)
-  const [self, storeTwin, sourceTwin] = await Promise.all([
+  const [self, storeTwin] = await Promise.all([
     lstatIfPresent(from),
-    lstatIfPresent(rolloutTwinPath(to)),
-    lstatIfPresent(rolloutTwinPath(from))
+    lstatIfPresent(rolloutTwinPath(to))
   ])
-  if (!isFile(self)) {
+  if (!isFile(self) || !isFile(storeTwin)) {
     return false
   }
-  const selfWins = (twin: BigIntStats): boolean =>
-    compressed ? !plainWins(twin, self) : plainWins(self, twin)
-  if (isFile(storeTwin)) {
-    return compressed || !selfWins(storeTwin)
-  }
-  return isFile(sourceTwin) && !selfWins(sourceTwin)
+  return from.endsWith(COMPRESSED_ROLLOUT_SUFFIX) || !plainWins(self, storeTwin)
 }
 
 /** Whether a folder holds both forms of a rollout, so it must merge file by file. */

@@ -144,14 +144,27 @@ async function writeManifest(
   }
 }
 
-export async function updateManifest(
+// One read-modify-write at a time per home in this process (a pass and its background check).
+const manifestUpdates = new Map<string, Promise<void>>()
+
+export function updateManifest(
   accountHome: string,
   update: (current: CodexHistoryCleanupManifest | null) => Promise<CodexHistoryCleanupManifest>
 ): Promise<void> {
-  const current = await readManifest(accountHome)
-  if (current !== 'newer') {
-    await writeManifest(accountHome, await update(current))
-  }
+  const run = (manifestUpdates.get(accountHome) ?? Promise.resolve()).then(async () => {
+    const current = await readManifest(accountHome)
+    if (current !== 'newer') {
+      await writeManifest(accountHome, await update(current))
+    }
+  })
+  const settled = run.catch(() => {})
+  manifestUpdates.set(accountHome, settled)
+  void settled.then(() => {
+    if (manifestUpdates.get(accountHome) === settled) {
+      manifestUpdates.delete(accountHome)
+    }
+  })
+  return run
 }
 
 export function sameFacts(left: FileFacts, right: FileFacts | null): boolean {
@@ -184,9 +197,14 @@ async function leftBehindRollouts(
   for (const source of sources) {
     for await (const file of regularFiles(source.root)) {
       const inFolder = `${source.folder}/${toManifestPath(source.root, file.path)}`
-      const twin = source.kind === 'set-aside-twin' ? rolloutTwinPath(inFolder) : null
-      const twinFacts = twin ? await storeFileFacts(storeHome, twin) : null
-      const store = twinFacts ?? (await storeFileFacts(storeHome, inFolder))
+      // A set-aside form matches the store's other form; a conflict usually its same name.
+      const [first, second] =
+        source.kind === 'set-aside-twin'
+          ? [rolloutTwinPath(inFolder), inFolder]
+          : [inFolder, rolloutTwinPath(inFolder)]
+      const store =
+        (await storeFileFacts(storeHome, first)) ??
+        (parseCodexRolloutThreadId(inFolder) ? await storeFileFacts(storeHome, second) : null)
       const facts = factsOf(accountHome, file.path, file.stats)
       const prior = previous.get(facts.path)
       const keepsCheck =
@@ -251,8 +269,9 @@ async function storeTwinPairs(storeHome: string): Promise<string[]> {
 }
 
 /**
- * Rewrites the home's manifest from what is on disk after a pass, keeping content checks whose
- * files are unchanged. A fully shared pass extends the streak; turning sharing off resets it.
+ * After a pass: the shared streak (a fully shared pass extends it, turning sharing off resets it)
+ * and the databases left behind. Only cheap reads, since a launch awaits the pass; the rollout
+ * inventory is rebuilt by `inventoryCodexHistoryLeftBehind` off that path.
  */
 export async function recordCodexHistoryLeftBehind(args: {
   accountHome: string
@@ -263,15 +282,8 @@ export async function recordCodexHistoryLeftBehind(args: {
 }): Promise<void> {
   await updateManifest(args.accountHome, async (current) => {
     const now = new Date().toISOString()
-    const previous = new Map((current?.rollouts ?? []).map((rollout) => [rollout.path, rollout]))
     const sharedNow = args.outcome === 'shared'
     const streak = args.outcome !== 'unshared' && current?.storeHome === args.storeHome
-    const pairs = args.outcome === 'unshared' ? [] : await storeTwinPairs(args.storeHome)
-    if (pairs.length > 0) {
-      console.warn(
-        `[codex-account-history] ${pairs.length} rollouts are in ${args.storeHome} as both .jsonl and .jsonl.zst; both kept`
-      )
-    }
     return {
       version: MANIFEST_VERSION,
       storeHome: args.storeHome,
@@ -282,9 +294,34 @@ export async function recordCodexHistoryLeftBehind(args: {
         args.accountHome,
         args.outcome !== 'unshared' && args.databasesMovedToStore
       ),
+      rollouts: current?.rollouts ?? [],
+      storeTwinPairs: current?.storeTwinPairs ?? [],
+      updatedAt: now
+    }
+  })
+}
+
+/** Rebuilds the left-behind rollouts and store twin pairs from disk, keeping still-valid checks. */
+export async function inventoryCodexHistoryLeftBehind(args: {
+  accountHome: string
+  storeHome: string
+}): Promise<void> {
+  await updateManifest(args.accountHome, async (current) => {
+    if (!current) {
+      throw new Error('No cleanup manifest to inventory')
+    }
+    const previous = new Map(current.rollouts.map((rollout) => [rollout.path, rollout]))
+    const pairs = await storeTwinPairs(args.storeHome)
+    if (pairs.length > 0) {
+      console.warn(
+        `[codex-account-history] ${pairs.length} rollouts are in ${args.storeHome} as both .jsonl and .jsonl.zst; both kept`
+      )
+    }
+    return {
+      ...current,
       rollouts: await leftBehindRollouts(args.accountHome, args.storeHome, previous),
       storeTwinPairs: pairs,
-      updatedAt: now
+      updatedAt: new Date().toISOString()
     }
   })
 }

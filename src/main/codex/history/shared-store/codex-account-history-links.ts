@@ -1,6 +1,7 @@
 import { mkdir, readdir, realpath, rename, unlink, writeFile } from 'node:fs/promises'
 import { basename, join, relative } from 'node:path'
 import { isDefinitiveAbsence } from '../../../../shared/definitive-filesystem-absence'
+import { renameFileWithWindowsRetryAsync } from '../../../../shared/windows-retry-file-operations'
 import {
   DirectoryLinkError,
   MERGE_PENDING_SUFFIX,
@@ -21,6 +22,7 @@ import {
   recordCodexHistoryLeftBehind
 } from './codex-account-history-cleanup-manifest'
 import {
+  compressedRolloutsFirst,
   holdsRolloutTwins,
   isRolloutTwinKeptFromStore
 } from '../rollouts/codex-rollout-compressed-twin'
@@ -150,7 +152,7 @@ async function recordIndexPending(pendingDir: string, path: string): Promise<voi
 /** False when the home has no ownership marker; a link must never land in an unowned home. */
 async function markHomeLinked(accountHome: string): Promise<boolean> {
   try {
-    await rename(
+    await renameFileWithWindowsRetryAsync(
       join(accountHome, MANAGED_HOME_MARKER),
       join(accountHome, LINKED_MANAGED_HOME_MARKER)
     )
@@ -227,7 +229,9 @@ export async function shareCodexAccountHistory(
                 relative(join(args.storeHome, name), to)
               )
             : null,
-        movesWhole: async (folder: string) => !(await holdsRolloutTwins(folder))
+        movesWhole: async (folder: string) => !(await holdsRolloutTwins(folder)),
+        // The `.zst` reaches the store first, so its `.jsonl` is set aside only beside it.
+        entryOrder: compressedRolloutsFirst
       }),
       dropEmptyConflicts: name.endsWith('-locks')
     })
