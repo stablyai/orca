@@ -3,7 +3,7 @@ import {
   ORCAD_UPDATE_ADMISSION_STOP_BY_MS,
   type OrcadTerminalCensus,
   UNVERIFIABLE_ORCAD_TERMINAL_CENSUS
-} from '../../../shared/orcad-terminal-census'
+} from '../../../shared/remote-runtime/orcad-lifecycle/orcad-terminal-census'
 import type { OrcadTerminalCensusRequestOptions } from '../lifecycle/orcad-terminal-census-client'
 
 /** Only the final count closes terminal admission: the initial update census may precede a long upload. */

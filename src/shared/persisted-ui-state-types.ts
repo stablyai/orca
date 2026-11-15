@@ -31,7 +31,7 @@ import type {
 } from './ui-chrome-types'
 import type { WorkspaceStatusDefinition } from './worktree/types'
 import type { PersistedAutomationHostFilter } from './automations/ownership/automation-host-filter'
-import type { PendingRuntimeRepoRemoval } from './pending-runtime-repo-removal'
+import type { PendingRuntimeRepoRemoval } from './remote-runtime/host-catalog/pending-runtime-repo-removal'
 
 export type PersistedUIState = {
   gitGraphFiltersByWorktree?: Record<string, GitHistoryRefs>

@@ -8,14 +8,17 @@ import {
   SERVE_RUNTIME_ENV,
   parseServeRuntimeSelection,
   type ServeRuntimeSelection
-} from '../../../../shared/orcad-local-serve-selection'
+} from '../../../../shared/remote-runtime/serve-supervisor/orcad-local-serve-selection'
 import { waitForRecipeJson } from './serve-recipe-json'
 import { superviseForegroundServe } from '../updates/serve-update-supervisor'
 import { isSupervisedSpawnHeld } from '../supervision/serve-supervised-stop'
 import { redactingSpawn, shouldRedactSupervisedStdout } from './serve-pairing-redaction'
-import { orcadServeArgs, type ServeOrcaAppArgs } from '../../../../shared/orcad-serve-argv'
+import {
+  orcadServeArgs,
+  type ServeOrcaAppArgs
+} from '../../../../shared/remote-runtime/serve-supervisor/orcad-serve-argv'
 import { SPEECH_RECOGNIZER_DIR_ENV } from '../../../../shared/speech-recognizer-package'
-import { ORCA_SERVE_SUPERVISED_ENV } from '../../../../shared/serve-supervised-terminal-durability'
+import { ORCA_SERVE_SUPERVISED_ENV } from '../../../../shared/remote-runtime/serve-supervisor/serve-supervised-terminal-durability'
 
 /** A first run may download and verify the pinned Node; bound it well past that. */
 const SELECTION_TIMEOUT_MS = 10 * 60_000

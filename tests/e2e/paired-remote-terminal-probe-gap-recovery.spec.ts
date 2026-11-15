@@ -6,7 +6,7 @@ import type {
   RuntimeTerminalListResult,
   RuntimeTerminalRead,
   RuntimeTerminalShow
-} from '../../src/shared/runtime-types'
+} from '../../src/shared/terminal/runtime/runtime-terminal-contracts'
 import { toWebTerminalSurfaceTabId } from '../../src/shared/workspace-layout/terminal-surface-id'
 import { expect, test } from './helpers/orca-app'
 import {

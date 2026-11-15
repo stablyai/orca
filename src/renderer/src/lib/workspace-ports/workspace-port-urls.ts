@@ -1,4 +1,7 @@
-import type { PortForwardEntry, EnrichedDetectedPort } from '../../../../shared/ssh-types'
+import type {
+  PortForwardEntry,
+  EnrichedDetectedPort
+} from '../../../../shared/remote-runtime/ssh/ssh-types'
 import type { WorkspacePort } from '../../../../shared/workspace-ports'
 
 const HTTPS_PORTS = new Set([443, 8443])

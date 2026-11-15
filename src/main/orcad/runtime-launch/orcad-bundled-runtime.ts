@@ -9,7 +9,7 @@ import {
   ORCAD_SERVER_TARGET_FILENAME,
   ORCAD_VERSION_FILENAME,
   orcadNodeRuntimeRelativePath
-} from '../../../shared/orcad-artifacts'
+} from '../../../shared/remote-runtime/orcad-distribution/orcad-artifacts'
 import { NODE_RUNTIME_PIN, nodeRuntimeAsset } from '../../../shared/node-runtime-pin'
 
 export class OrcadBundledRuntimeError extends Error {}

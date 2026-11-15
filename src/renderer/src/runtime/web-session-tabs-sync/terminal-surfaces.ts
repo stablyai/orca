@@ -1,9 +1,9 @@
 import { readStructuredAgentLaunchRecord } from '@/lib/agent-session/launch/structured-agent-session-launch-persistence'
-import type { RuntimeMobileSessionTabsResult } from '../../../../shared/runtime-types'
+import type { RuntimeMobileSessionTabsResult } from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import type {
   RuntimeMobileSessionAgentTab,
   RuntimeMobileSessionTerminalClientTab
-} from '../../../../shared/runtime-mobile-session-tab-contracts'
+} from '../../../../shared/remote-runtime/session-graph/runtime-mobile-session-tab-contracts'
 import type {
   TerminalLayoutSnapshot,
   TerminalTab

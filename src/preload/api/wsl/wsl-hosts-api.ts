@@ -9,8 +9,8 @@ import {
   type WslHostDistro,
   type WslHostServerStop,
   type WslHostStatus
-} from '../../../shared/wsl-host-types'
-import { isWslHostsServingForWindow } from '../../../shared/wsl-host-internal-gate'
+} from '../../../shared/remote-runtime/wsl-hosts/wsl-host-types'
+import { isWslHostsServingForWindow } from '../../../shared/remote-runtime/wsl-hosts/wsl-host-internal-gate'
 
 export type WslHostsPreloadApi = {
   getCapability: () => Promise<WslHostCapability>

@@ -1,5 +1,5 @@
 import { STT_UTILITY_PROCESS_NAME } from '../../speech/stt-worker-process'
-import { BACKEND_UTILITY_PROCESS_NAME } from '../../../shared/backend-service-contract'
+import { BACKEND_UTILITY_PROCESS_NAME } from '../../../shared/backend/backend-service-contract'
 
 export type ProcessGoneSource = 'renderer' | 'child'
 export type ExpectedTeardownScope = 'none' | 'renderer-reload' | 'app-shutdown'

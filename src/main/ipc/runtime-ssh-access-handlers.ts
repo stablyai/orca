@@ -2,7 +2,7 @@ import { ipcMain } from 'electron'
 import {
   RuntimeSshAccessLinkRequestSchema,
   RuntimeSshAccessUnlinkRequestSchema
-} from '../../shared/runtime-ssh-access'
+} from '../../shared/remote-runtime/host-catalog/runtime-ssh-access'
 import {
   linkRuntimeSshAccess,
   unlinkRuntimeSshAccess

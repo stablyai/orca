@@ -1,8 +1,11 @@
 import {
   ORCAD_BROWSER_PARK_LABEL,
   SERVE_SUPERVISOR_HEARTBEAT_MS
-} from '../../../shared/serve-bundle-coordination'
-import { openServeBundlePark, type ServeBundlePark } from '../../../shared/serve-bundle-park'
+} from '../../../shared/remote-runtime/serve-supervisor/serve-bundle-coordination'
+import {
+  openServeBundlePark,
+  type ServeBundlePark
+} from '../../../shared/remote-runtime/serve-supervisor/serve-bundle-park'
 
 const PARK_POLL_MS = 1_000
 const RESTART_RETRY_MIN_MS = 5_000

@@ -58,7 +58,7 @@ vi.mock('../../shared/windows-batch-spawn', () => ({
 }))
 
 import { registerShellHandlers } from './shell'
-import type { SshTarget } from '../../shared/ssh-types'
+import type { SshTarget } from '../../shared/remote-runtime/ssh/ssh-types'
 import type { OpenInApplication } from '../../shared/ui-chrome-types'
 expect.objectContaining({
   detached: true,
@@ -232,6 +232,16 @@ describe('registerShellHandlers', () => {
       expect(showItemInFolderMock).toHaveBeenCalledTimes(
         action === 'reveal' ? 2 : action === 'view-as-text' ? 1 : 0
       )
+    })
+
+    it('reveals scripts linked with a line instead of opening them at it', async () => {
+      inspectLinkedFileMock.mockResolvedValue('view-as-text')
+
+      await expect(
+        getHandler('shell:openFilePath')({}, scriptPath, 'local', { line: 4 })
+      ).resolves.toBe(true)
+      expect(openPathMock).not.toHaveBeenCalled()
+      expect(showItemInFolderMock).toHaveBeenCalledWith(scriptPath)
     })
 
     it('refuses non-local owners and remote file URIs before inspecting', async () => {

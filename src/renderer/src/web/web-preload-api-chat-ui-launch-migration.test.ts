@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import type { RuntimeRpcResponse } from '../../../shared/runtime-rpc-envelope'
+import type { RuntimeRpcResponse } from '../../../shared/remote-runtime/rpc/runtime-rpc-envelope'
 import { buildNativeChatProviderUpdate } from '../../../shared/native-chat/native-chat-providers'
 import { nativeChatPreferenceFor } from '../../../shared/structured-native-chat-launch-route'
 import {

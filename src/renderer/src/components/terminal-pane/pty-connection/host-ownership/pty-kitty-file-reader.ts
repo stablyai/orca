@@ -8,8 +8,8 @@ import {
   toHostSessionTabId
 } from '../../../../../../shared/workspace-layout/terminal-surface-id'
 import { toRemoteRuntimePtyId } from '../../../../../../shared/remote-runtime/remote-runtime-pty-id'
-import type { RuntimeTerminalResolvePane } from '../../../../../../shared/runtime-terminal-contracts'
-import type { RuntimeClientTarget } from '../../../../../../shared/runtime-client-target'
+import type { RuntimeTerminalResolvePane } from '../../../../../../shared/terminal/runtime/runtime-terminal-contracts'
+import type { RuntimeClientTarget } from '../../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import type { ConnectPanePtySession } from '../connect-pane-pty-session'
 
 export function installPtyKittyFileReader(session: ConnectPanePtySession): void {

@@ -1,5 +1,5 @@
 import { OrcaRuntimeWithRestoreStructuredAgentSessionTabsOnce } from '../../session-tabs/structured-session-tab-restoration'
-import type { RuntimeWorktreeTerminalSleepResult } from '../../../../shared/runtime-terminal-contracts'
+import type { RuntimeWorktreeTerminalSleepResult } from '../../../../shared/terminal/runtime/runtime-terminal-contracts'
 import type {
   WorkspaceSleepNotice,
   WorkspaceSleepOutcome,
@@ -10,7 +10,7 @@ import type { RecipeVmOpening, RecipeVmState } from './recipe-vm-operations'
 import { dropStrandedSleepRecord } from '../../terminal/stop/worktree-sleep-resume-records'
 import type { RestoredPane } from '../../terminal/recovery/restored-pane-start'
 import type { SleepingAgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
-import type { EphemeralVmRuntimeRecord } from '../../../../shared/ephemeral-vm-runtimes'
+import type { EphemeralVmRuntimeRecord } from '../../../../shared/remote-runtime/ephemeral-vm-store/ephemeral-vm-runtimes'
 import { WorkspaceLifecycleQueue } from '../lifecycle/workspace-lifecycle-queue'
 import {
   deleteLostContact,

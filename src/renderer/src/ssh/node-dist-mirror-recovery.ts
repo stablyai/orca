@@ -3,7 +3,7 @@ import {
   normalizeNodeDistMirrorUrl,
   type NodeDistMirrorRefusal
 } from '../../../shared/node-dist-mirror'
-import type { SshManagedServerStatus } from '../../../shared/ssh-types'
+import type { SshManagedServerStatus } from '../../../shared/remote-runtime/ssh/ssh-types'
 import { translate } from '@/i18n/i18n'
 import { isPairedWebClientWindow } from '@/app-shell/chrome/desktop-window-chrome'
 import { useAppStore } from '@/store/index'

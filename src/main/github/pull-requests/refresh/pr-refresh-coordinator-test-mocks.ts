@@ -4,7 +4,7 @@ import type {
   preparePRBranchRead
 } from '../../client/lookup/pr-for-branch-outcome'
 import { vi, type Mock } from 'vitest'
-import { isWslUncPath } from '../../../../shared/wsl-paths'
+import { isWslUncPath } from '../../../../shared/file-access/wsl-paths'
 
 type PRRefreshWebContentsMock = {
   id: number

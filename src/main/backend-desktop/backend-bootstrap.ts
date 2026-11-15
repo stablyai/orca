@@ -1,5 +1,8 @@
 import { app } from 'electron'
-import { BACKEND_CAPABILITIES, type BackendBootstrap } from '../../shared/backend-service-contract'
+import {
+  BACKEND_CAPABILITIES,
+  type BackendBootstrap
+} from '../../shared/backend/backend-service-contract'
 
 export let capturedBootstrap: BackendBootstrap | undefined
 

@@ -3,7 +3,7 @@ import type {
   WorkspaceCleanupReport,
   WorkspaceCleanupRun
 } from '../../shared/workspace-cleanup/workspace-cleanup-run'
-import type { RuntimeRpcSuccess } from '../../shared/runtime-rpc-envelope'
+import type { RuntimeRpcSuccess } from '../../shared/remote-runtime/rpc/runtime-rpc-envelope'
 import type { CommandHandler, HandlerContext } from '../dispatch/dispatch'
 import { printResult } from '../output/command-result-output'
 import { RuntimeClientError } from '../runtime/connection/types'

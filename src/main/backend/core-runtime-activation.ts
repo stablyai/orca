@@ -5,7 +5,10 @@ import { prepareBackendDaemon } from './core-daemon-startup'
 import { prepareWorktreeRemovalsForStore } from '../workspaces/removal/worktree-removal-records-load'
 import { worktreeRemovalLifetime } from '../workspaces/removal/worktree-removal-lifetime'
 import { getAppEnvironment } from '../../shared/app-environment'
-import { describeOrcadBindExposure, resolveOrcadBindHost } from '../../shared/orcad-bind-address'
+import {
+  describeOrcadBindExposure,
+  resolveOrcadBindHost
+} from '../../shared/remote-runtime/orcad-lifecycle/orcad-bind-address'
 import {
   startOrcadAgentSessionRecordStoreOpen,
   stopOrcadStructuredAgentSessions

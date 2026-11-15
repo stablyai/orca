@@ -1,7 +1,7 @@
 import type { Store } from '../../persistence/loading-store/store'
 import type { OrcaRuntimeService } from '../orca-runtime'
 import type { RuntimeConstructionDependencies } from './runtime-construction-dependencies'
-import { findWorkspaceEphemeralVmRuntime } from '../../../shared/ephemeral-vm-workspace-runtime'
+import { findWorkspaceEphemeralVmRuntime } from '../../../shared/remote-runtime/ephemeral-vm-store/ephemeral-vm-workspace-runtime'
 import { resolveEnvironment } from '../../../shared/remote-runtime/host-store/runtime-environment-store'
 import { callRuntimeEnvironment } from '../../ipc/runtime-environments/requests/runtime-environment-transport-routing'
 import { getRuntimeEnvironmentRegistryRoot } from '../../ipc/runtime-environments/catalog/runtime-environment-registry-root'

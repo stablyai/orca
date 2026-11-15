@@ -11,9 +11,9 @@ import type {
   ExecutionHostHealth,
   ExecutionHostVmState
 } from '../../execution-host/execution-host-health'
-import type { RuntimeCompatVerdict } from '../../protocol-compat'
+import type { RuntimeCompatVerdict } from '../../remote-runtime/protocol/protocol-compat'
 import type { RuntimeHostBlockedReason } from '../../remote-runtime/host-status/runtime-host-status'
-import type { SshConnectionStatus } from '../../ssh-types'
+import type { SshConnectionStatus } from '../../remote-runtime/ssh/ssh-types'
 import type { Row } from '../row-types'
 import { getFolderWorkspaceHostId } from './folder-workspace-host-id'
 import { countWorkspaceRows } from './host-section-workspace-count'

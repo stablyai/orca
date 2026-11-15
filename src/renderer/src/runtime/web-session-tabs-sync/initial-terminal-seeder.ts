@@ -5,7 +5,7 @@ import { isWebRuntimeInitialTerminalBootstrapInFlight } from './initial-terminal
 import { dispatchWebRuntimeInitialTerminalBootstrap } from './initial-terminal/web-runtime-initial-terminal-bootstrap-dispatch'
 import { shouldApplyRecoveredWebSessionTabsSnapshot } from './tracking'
 import { shouldBootstrapInitialWebRuntimeTerminal } from './tracking-decisions'
-import type { RuntimeMobileSessionTabsResult } from '../../../../shared/runtime-types'
+import type { RuntimeMobileSessionTabsResult } from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import type { SessionTabsStreamEvent } from './state'
 import { hasSplitLandingGroup } from '../../store/slices/tabs/split-landing-groups'
 

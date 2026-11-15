@@ -19,7 +19,7 @@ import { resetRendererAppPlatformCacheForTests } from '@/app-shell/platform/rend
 import { getDefaultSettings } from '../../../../shared/constants'
 import type { AppState } from '@/store/types'
 import type { Repo } from '../../../../shared/repo-types'
-import type { SshConnectionState } from '../../../../shared/ssh-types'
+import type { SshConnectionState } from '../../../../shared/remote-runtime/ssh/ssh-types'
 
 import { useAgentMenuObservation } from './use-new-tab-agent-menu-rows'
 import '@/lib/source-control/ai/source-control-agent-picker'
@@ -27,7 +27,7 @@ import { createAgentMenuTerminalPendingSelector } from './agent-menu-launch-fact
 
 import { connectedRuntimeStatus } from '@/runtime/rpc/testing/paired-runtime-environment-test-fixture'
 import { runtimeEnvironmentStatusFromSnapshot } from '../../../../shared/remote-runtime/host-status/runtime-host-status'
-import type { RuntimeStatus } from '../../../../shared/runtime-session-contracts'
+import type { RuntimeStatus } from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 const initial = useAppStore.getState()
 afterEach(() => {
   cleanup()

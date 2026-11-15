@@ -12,7 +12,7 @@ import {
 import type { ProjectHostSetupProjection } from './project-host-setup-projection'
 import type { Project, ProjectHostSetup } from './project-types'
 import type { Repo } from './repo-types'
-import type { RuntimeClientTarget } from './runtime-client-target'
+import type { RuntimeClientTarget } from './remote-runtime/host-catalog/runtime-client-target'
 
 export function adoptEndpointRepo(target: RuntimeClientTarget, repo: Repo): Repo {
   if (target.kind === 'environment') {

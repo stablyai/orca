@@ -1,14 +1,14 @@
 import type { OrcaHooks } from '../../../shared/orca-yaml-hook-types'
 import type { PublicKnownRuntimeEnvironment } from '../../../shared/remote-runtime/host-catalog/runtime-environments'
-import type { EphemeralVmRecipeDoctorResult } from '../../../shared/ephemeral-vm-recipes'
-import type { EphemeralVmRecipeResultWarning } from '../../../shared/ephemeral-vm-recipe-diagnostics'
+import type { EphemeralVmRecipeDoctorResult } from '../../../shared/remote-runtime/ephemeral-vm-recipes/ephemeral-vm-recipes'
+import type { EphemeralVmRecipeResultWarning } from '../../../shared/remote-runtime/ephemeral-vm-recipes/ephemeral-vm-recipe-diagnostics'
 import type {
   EphemeralVmProvisionedRuntimeRecord,
   EphemeralVmRuntimeRecord,
   EphemeralVmWorkspaceLifecycleResult
-} from '../../../shared/ephemeral-vm-runtimes'
-import type { EphemeralVmFailure } from '../../../shared/ephemeral-vm-failure-copy'
-import type { PendingVmCheckout } from '../../../shared/pending-vm-checkouts'
+} from '../../../shared/remote-runtime/ephemeral-vm-store/ephemeral-vm-runtimes'
+import type { EphemeralVmFailure } from '../../../shared/remote-runtime/ephemeral-vm-recipes/ephemeral-vm-failure-copy'
+import type { PendingVmCheckout } from '../../../shared/remote-runtime/ephemeral-vm-store/pending-vm-checkouts'
 
 export type EphemeralVmApi = {
   listRecipes: (args: { repoId: string }) => Promise<{

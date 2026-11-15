@@ -3,7 +3,7 @@ import type { ProjectExecutionRuntimeResolution } from '../../../shared/executio
 import {
   resolveLocalWindowsTerminalRuntimeOptions,
   type LocalWindowsTerminalRuntimeOptions
-} from '../../../shared/local-windows-terminal-runtime'
+} from '../../../shared/shell/launch/local-windows-terminal-runtime'
 import { resolveManagedSshHostLoginShell } from '../../pty/shell-startup/managed-ssh-host-login-shell'
 
 export type LocalPtySettings = Partial<

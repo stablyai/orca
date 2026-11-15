@@ -13,7 +13,7 @@ import {
   type ExecutionHostScope
 } from '../../../shared/execution-host'
 import { worktreeIdsEqual } from '../../../shared/worktree/id'
-import { isLocalHookConnectionId } from '../../../shared/wsl-hook-relay-contract'
+import { isLocalHookConnectionId } from '../../../shared/agent-hook-listener/transport/wsl-hook-relay-contract'
 import type { EnrichedAgentHookEventPayload } from './server-types'
 import { AgentHookServerAuthorityFences } from './server-authority-fences'
 import { recordAgentExit } from './agent-exit-evidence'

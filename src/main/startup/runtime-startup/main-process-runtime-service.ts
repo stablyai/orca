@@ -40,7 +40,7 @@ import {
   prepareCodexRuntimeHomeForLaunch
 } from '../agent-accounts/codex-launch-preparation'
 import { resolveHostAgentBaseEnvironment } from '../../runtime/agent-session/environment/structured-agent-shell-environment'
-import type { RuntimeDesktopWindowStatus } from '../../../shared/runtime-session-contracts'
+import type { RuntimeDesktopWindowStatus } from '../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import {
   AgentStatusObservedPaneIdentities,
   recordObservedAgentStatusPaneIdentity

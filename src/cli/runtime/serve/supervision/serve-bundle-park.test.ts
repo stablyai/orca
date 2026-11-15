@@ -9,8 +9,8 @@ import {
   formatBundleIdentity,
   parkRecordPath,
   type ServeParkRecord
-} from '../../../../shared/serve-bundle-coordination'
-import { openServeBundlePark } from '../../../../shared/serve-bundle-park'
+} from '../../../../shared/remote-runtime/serve-supervisor/serve-bundle-coordination'
+import { openServeBundlePark } from '../../../../shared/remote-runtime/serve-supervisor/serve-bundle-park'
 import { superviseServeService } from './serve-supervised-service'
 import { createSupervisedParkWatch } from './serve-supervised-park-watch'
 
