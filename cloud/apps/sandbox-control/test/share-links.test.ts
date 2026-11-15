@@ -58,10 +58,10 @@ async function freePort(): Promise<number> {
 }
 
 /** Starts the real share proxy for a session key; returns its local port. */
-async function startProxy(key: string): Promise<number> {
+async function startProxy(key: string, extraEnv: Record<string, string> = {}): Promise<number> {
   const port = await freePort()
   // The key goes in on stdin, as orca-sandbox-start pipes it; never through the environment.
-  const child = spawn(process.execPath, [PROXY], { env: { ORCA_SHARE_PROXY_PORT: String(port) }, stdio: ['pipe', 'pipe', 'inherit'] })
+  const child = spawn(process.execPath, [PROXY], { env: { ORCA_SHARE_PROXY_PORT: String(port), ...extraEnv }, stdio: ['pipe', 'pipe', 'inherit'] })
   child.stdin!.end(key)
   proxies.push(child)
   await once(child.stdout!, 'data')
@@ -210,6 +210,64 @@ describe('share links', () => {
     expect(String(echo)).toBe('ping')
     // The grant runs out with the link (rounded down to the second): the proxy hangs up.
     await once(socket, 'close')
+  })
+
+  it('pings an idle WebSocket well before Vercel’s ~340 s idle cut, only between frames and only for websocket upgrades', async () => {
+    const key = await shareProxyKey('x'.repeat(40), 'sbx', 'sess')
+    const port = await startProxy(key, { ORCA_SHARE_PROXY_KEEPALIVE_MS: '150' })
+    // An app that upgrades, then stays silent unless told to send (half) a frame.
+    const silent = net.createServer((conn) => {
+      conn.once('data', (request) => {
+        const protocol = /upgrade: (\S+)/i.exec(String(request))?.[1] ?? 'websocket'
+        conn.write(`HTTP/1.1 101 Switching Protocols\r\nupgrade: ${protocol}\r\nconnection: upgrade\r\n\r\n`)
+        conn.on('data', (cmd) => {
+          // A 10-byte text frame: header + 5 bytes now, the rest on "finish".
+          if (String(cmd).includes('half')) conn.write(Buffer.concat([Buffer.from([0x81, 10]), Buffer.from('hello')]))
+          if (String(cmd).includes('finish')) conn.write(Buffer.from('world'))
+        })
+      })
+    })
+    silent.listen(0, '127.0.0.1')
+    await once(silent, 'listening')
+    const silentPort = (silent.address() as net.AddressInfo).port
+    const open = async (protocol: string) => {
+      const header = await signProxyHeader(key, { port: silentPort, linkId: 'b'.repeat(32), linkExpiresAt: Date.now() + 60_000 }, Date.now())
+      const socket = net.connect(port, '127.0.0.1')
+      await once(socket, 'connect')
+      const received: Buffer[] = []
+      socket.on('data', (chunk) => received.push(chunk))
+      socket.write(`GET /ws HTTP/1.1\r\nhost: x\r\nupgrade: ${protocol}\r\nconnection: upgrade\r\nx-orca-share: ${header}\r\n\r\n`)
+      const after = () => Buffer.concat(received).subarray(Buffer.concat(received).indexOf('\r\n\r\n') + 4)
+      return { socket, after }
+    }
+    const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
+    try {
+      const ws = await open('websocket')
+      await sleep(600)
+      // Idle: at least one ping frame (0x89 0x00), nothing else.
+      const pings = ws.after()
+      expect(pings.length).toBeGreaterThanOrEqual(2)
+      expect([...pings].every((byte, i) => byte === (i % 2 === 0 ? 0x89 : 0x00))).toBe(true)
+      // Mid-frame: no ping may land inside the app's frame.
+      ws.socket.write('half')
+      await sleep(80)
+      const before = ws.after().length
+      await sleep(600)
+      expect(ws.after().subarray(before).length).toBe(0)
+      ws.socket.write('finish')
+      await sleep(600)
+      const tail = ws.after().subarray(before)
+      expect(tail.subarray(0, 5).toString()).toBe('world')
+      expect([...tail.subarray(5, 7)]).toEqual([0x89, 0x00])
+      ws.socket.destroy()
+      // Another upgrade protocol is piped untouched: no frames are invented for it.
+      const other = await open('h2c')
+      await sleep(600)
+      expect(other.after().length).toBe(0)
+      other.socket.destroy()
+    } finally {
+      silent.close()
+    }
   })
 
   it('shows a branded page when nothing listens on the port', async () => {
