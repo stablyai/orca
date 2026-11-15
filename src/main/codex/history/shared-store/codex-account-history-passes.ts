@@ -1,40 +1,58 @@
 import { normalizeRuntimePathForComparison } from '../../../../shared/cross-platform-path'
 import { getSystemCodexHomePath } from '../../configuration/homes/codex-home-paths'
 import { startHostCodexAccountIndexHeal } from './codex-account-history-index'
-import { shareCodexAccountHistory, unshareCodexAccountHistory } from './codex-account-history-links'
+import {
+  isCodexAccountHistoryLinked,
+  shareCodexAccountHistory,
+  unshareCodexAccountHistory
+} from './codex-account-history-links'
 
-/** One history link pass per host account home; a launch joins one already running. */
+/**
+ * Host account history passes, one at a time: two homes moving the same file name into the
+ * store at once could otherwise both see it missing. A request joins an identical queued one.
+ */
 export class CodexAccountHistoryPasses {
-  private readonly running = new Map<string, Promise<void>>()
+  private tail: Promise<unknown> = Promise.resolve()
+  private readonly queued = new Map<string, Promise<boolean>>()
 
-  /** Before Codex starts in the home; after the first run it is a few lstat calls. */
-  run(accountHome: string, shared: boolean): Promise<void> {
-    const key = normalizeRuntimePathForComparison(accountHome)
-    const existing = this.running.get(key)
+  /** Resolves to whether the home's history now lives in the store. */
+  run(accountHome: string, shared: boolean): Promise<boolean> {
+    const key = `${shared}\0${normalizeRuntimePathForComparison(accountHome)}`
+    const existing = this.queued.get(key)
     if (existing) {
       return existing
     }
+    const pass = this.tail
+      .then(() => this.runPass(accountHome, shared))
+      .finally(() => this.queued.delete(key))
+    this.tail = pass.catch(() => {})
+    this.queued.set(key, pass)
+    return pass
+  }
+
+  private async runPass(accountHome: string, shared: boolean): Promise<boolean> {
     const storeHome = getSystemCodexHomePath()
     const onWarning = (error: unknown): void => {
       console.warn('[codex-account-history] Account history was not fully shared:', error)
     }
-    const pass = (
-      shared
-        ? shareCodexAccountHistory({
-            accountHome,
-            storeHome,
-            platform: process.platform,
-            onWarning
-          }).then((result) => {
-            if (result === 'shared') {
-              startHostCodexAccountIndexHeal(accountHome, storeHome)
-            }
-          })
-        : unshareCodexAccountHistory({ accountHome, storeHome, onWarning })
-    )
-      .catch(onWarning)
-      .finally(() => this.running.delete(key))
-    this.running.set(key, pass)
-    return pass
+    try {
+      if (!shared) {
+        await unshareCodexAccountHistory({ accountHome, storeHome, onWarning })
+        return false
+      }
+      const result = await shareCodexAccountHistory({
+        accountHome,
+        storeHome,
+        platform: process.platform,
+        onWarning
+      })
+      if (result === 'shared') {
+        startHostCodexAccountIndexHeal(accountHome, storeHome)
+      }
+      return result === 'shared'
+    } catch (error) {
+      onWarning(error)
+      return isCodexAccountHistoryLinked(accountHome, storeHome).catch(() => false)
+    }
   }
 }

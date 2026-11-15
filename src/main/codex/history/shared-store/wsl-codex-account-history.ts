@@ -45,15 +45,18 @@ const HELPER_TIMEOUT_MS = 10 * 60_000
 const HELPER_MAX_OUTPUT_BYTES = 64 * 1024 * 1024
 const CLEAR_TIMEOUT_MS = 30_000
 
-const runningPasses = new Map<string, Promise<void>>()
+const runningPasses = new Map<string, Promise<boolean>>()
 
-/** Links (or, with sharing off, unlinks) a WSL account home inside its distro, then indexes moved history. */
+/**
+ * Links (or, with sharing off, unlinks) a WSL account home inside its distro, then indexes moved
+ * history; resolves to whether the home's history now lives in the store.
+ */
 export function startWslCodexAccountHistoryInBackground(
   target: WslCodexAccountHistoryTarget,
   dependenciesOverride: Partial<WslAccountHistoryDependencies> = {}
-): Promise<void> {
+): Promise<boolean> {
   if (isCodexAccountHistoryWorkStopping()) {
-    return Promise.resolve()
+    return Promise.resolve(false)
   }
   const key = `${target.distro.toLowerCase()}\0${target.accountHome}`
   const running = runningPasses.get(key)
@@ -63,6 +66,7 @@ export function startWslCodexAccountHistoryInBackground(
   const pass = runPass(target, { ...defaultDependencies, ...dependenciesOverride })
     .catch((error: unknown) => {
       console.warn('[codex-account-history] WSL account history pass failed:', error)
+      return false
     })
     .finally(() => runningPasses.delete(key))
   runningPasses.set(key, pass)
@@ -72,7 +76,7 @@ export function startWslCodexAccountHistoryInBackground(
 async function runPass(
   target: WslCodexAccountHistoryTarget,
   dependencies: WslAccountHistoryDependencies
-): Promise<void> {
+): Promise<boolean> {
   // Every wsl.exe step re-checks: the user may stop the distro mid-pass, and a step would boot it.
   const requireRunning = (): Promise<void> => dependencies.requireRunning(target.distro)
   await requireRunning()
@@ -84,9 +88,9 @@ async function runPass(
     timeoutMs: HELPER_TIMEOUT_MS,
     maxOutputBytes: HELPER_MAX_OUTPUT_BYTES
   })
-  const pending = parsePendingRollouts(stdout)
+  const { linked, pending } = parseHelperOutput(stdout)
   if (pending.length === 0 || isCodexAccountHistoryWorkStopping()) {
-    return
+    return linked
   }
   const distroKey = target.distro.toLowerCase()
   let distroStopped = false
@@ -121,24 +125,30 @@ async function runPass(
   } finally {
     unsubscribe()
   }
+  return linked
 }
 
 /** Marker lines precede the summary; a missing summary means the list may be clipped. */
-function parsePendingRollouts(stdout: string): string[] {
+function parseHelperOutput(stdout: string): { linked: boolean; pending: string[] } {
   const lines = stdout
     .split(/\r?\n/)
     .map((line) => line.trim())
     .filter((line) => line.length > 0)
+  let result: unknown
   try {
     const summary: unknown = JSON.parse(lines.at(-1) ?? '')
-    if (!summary || typeof summary !== 'object' || !('result' in summary)) {
-      return []
-    }
+    result = summary && typeof summary === 'object' && 'result' in summary ? summary.result : null
   } catch {
-    return []
+    result = null
+  }
+  if (result === null) {
+    return { linked: false, pending: [] }
   }
   // Login scripts may print before the helper; only rollout names are markers.
-  return lines.slice(0, -1).filter((line) => line.startsWith('rollout-'))
+  return {
+    linked: result === 'shared',
+    pending: lines.slice(0, -1).filter((line) => line.startsWith('rollout-'))
+  }
 }
 
 async function clearPendingMarkers(
@@ -157,5 +167,47 @@ async function clearPendingMarkers(
   })
   if (result.code !== 0 || result.timedOut) {
     throw new Error(`Could not clear WSL Codex index markers (code ${result.code})`)
+  }
+}
+
+/** One guest loop per distro, launched home first; remembers which homes ended up linked. */
+export class WslCodexAccountHistoryLaunches {
+  private readonly loops = new Map<string, Promise<void>>()
+  // Distro and Linux path -> whether the last guest pass left the home's history in the store.
+  private readonly linked = new Map<string, boolean>()
+
+  start(args: {
+    distro: string
+    launchedHome: string
+    accountHomes: readonly string[]
+    storeHome: string
+    shared: boolean
+  }): void {
+    const distroKey = args.distro.toLowerCase()
+    if (args.accountHomes.length === 0 || this.loops.has(distroKey)) {
+      return
+    }
+    const ordered = [
+      ...args.accountHomes.filter((home) => home === args.launchedHome),
+      ...args.accountHomes.filter((home) => home !== args.launchedHome)
+    ]
+    const loop = (async () => {
+      for (const accountHome of ordered) {
+        const linked = await startWslCodexAccountHistoryInBackground({
+          distro: args.distro,
+          accountHome,
+          storeHome: args.storeHome,
+          shared: args.shared
+        })
+        this.linked.set(`${distroKey}\0${accountHome}`, linked)
+      }
+    })().finally(() => this.loops.delete(distroKey))
+    this.loops.set(distroKey, loop)
+  }
+
+  /** Before this run's first guest pass for the home, the config keeps what it had. */
+  sqliteHome(distro: string, accountHome: string, storeHome: string): string | null | undefined {
+    const linked = this.linked.get(`${distro.toLowerCase()}\0${accountHome}`)
+    return linked === undefined ? undefined : linked ? storeHome : null
   }
 }

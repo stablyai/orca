@@ -26,6 +26,22 @@ export function stripCodexSharedSqliteHome(config: string): string {
   return kept.join('\n')
 }
 
+/** The store path in Orca's own line, or null when the config has none. */
+export function readCodexSharedSqliteHome(config: string): string | null {
+  for (const line of config.split('\n')) {
+    const match = /^sqlite_home = (".*") # orca: /.exec(line.trimEnd())
+    if (match && line.trimEnd().endsWith(CODEX_SHARED_SQLITE_HOME_MARKER)) {
+      try {
+        const value: unknown = JSON.parse(match[1])
+        return typeof value === 'string' ? value : null
+      } catch {
+        return null
+      }
+    }
+  }
+  return null
+}
+
 function hasTopLevelSqliteHome(config: string): boolean {
   let scan = createTomlLineScanState()
   for (const line of config.split('\n')) {

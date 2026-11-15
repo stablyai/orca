@@ -1,4 +1,15 @@
-import { lstat, mkdir, readdir, realpath, rmdir, stat, symlink, unlink } from 'node:fs/promises'
+import {
+  link,
+  lstat,
+  mkdir,
+  readdir,
+  readlink,
+  realpath,
+  rmdir,
+  stat,
+  symlink,
+  unlink
+} from 'node:fs/promises'
 import type { BigIntStats } from 'node:fs'
 import { join } from 'node:path'
 import { isDefinitiveAbsence } from '../../shared/definitive-filesystem-absence'
@@ -28,8 +39,8 @@ export type MergedDirectoryLinkArgs = {
   platform: NodeJS.Platform
   /** Problems that leave the link published, such as retained conflicts. */
   onWarning: (error: unknown) => void
-  /** Each entry moved into `destination`, by its new path (a folder moves whole). */
-  onMoved?: (movedPath: string) => void | Promise<void>
+  /** Runs before each entry moves into `destination`, with its current path (a folder moves whole). */
+  beforeMove?: (path: string) => void | Promise<void>
 }
 
 export async function lstatIfPresent(file: string): Promise<BigIntStats | undefined> {
@@ -45,12 +56,24 @@ export async function lstatIfPresent(file: string): Promise<BigIntStats | undefi
 
 type MoveResult = { retained: number; failed: unknown[] }
 
+// A plain rename replaces an existing file (and on Windows a racing one), so files and links are
+// published with calls that fail on an existing name and only then lose their old name.
+async function moveEntry(from: string, to: string, item: BigIntStats): Promise<void> {
+  if (item.isDirectory()) {
+    // A directory rename never replaces a non-empty one.
+    await renameFileWithWindowsRetryAsync(from, to)
+    return
+  }
+  await (item.isSymbolicLink() ? symlink(await readlink(from), to) : link(from, to))
+  await unlink(from)
+}
+
 // One locked entry must not prevent merging the rest.
 async function moveTree(
   source: string,
   destination: string,
   result: MoveResult,
-  onMoved: MergedDirectoryLinkArgs['onMoved']
+  beforeMove: MergedDirectoryLinkArgs['beforeMove']
 ): Promise<void> {
   for (const name of await readdir(source)) {
     const from = join(source, name)
@@ -61,10 +84,10 @@ async function moveTree(
         lstatIfPresent(to)
       ])
       if (!existing) {
-        await renameFileWithWindowsRetryAsync(from, to)
-        await onMoved?.(to)
+        await beforeMove?.(from)
+        await moveEntry(from, to, item)
       } else if (item.isDirectory() && existing.isDirectory()) {
-        await moveTree(from, to, result, onMoved)
+        await moveTree(from, to, result, beforeMove)
       } else if (item.isFile() && item.dev === existing.dev && item.ino === existing.ino) {
         // A hard link to the shared file: dropping this name loses no bytes.
         await unlink(from)
@@ -86,7 +109,7 @@ async function drain(
   args: MergedDirectoryLinkArgs
 ): Promise<void> {
   const result: MoveResult = { retained: 0, failed: [] }
-  await moveTree(pending, destination, result, args.onMoved)
+  await moveTree(pending, destination, result, args.beforeMove)
   if (result.failed.length > 0) {
     args.onWarning(result.failed[0])
   }

@@ -50,13 +50,15 @@ describe('shareCodexAccountHistory', () => {
     writeFileSync(join(f.account, 'sessions', DAY, ROLLOUT), 'account version\n')
     writeFileSync(join(f.account, 'sessions', DAY, OTHER), 'account only\n')
     writeFileSync(join(f.account, 'auth.json'), '{"account":"a"}')
-    mkdirSync(join(f.store, 'memories'))
+    mkdirSync(join(f.account, 'memories'))
+    writeFileSync(join(f.account, 'memories', 'note.md'), 'remember\n')
     mkdirSync(join(f.store, 'app-server-control'))
     mkdirSync(join(f.account, 'log'))
 
     expect(await f.share()).toBe('shared')
 
     expect(realpathSync(join(f.account, 'sessions'))).toBe(join(f.store, 'sessions'))
+    expect(readFileSync(join(f.account, 'memories', 'note.md'), 'utf8')).toBe('remember\n')
     expect(realpathSync(join(f.account, 'memories'))).toBe(join(f.store, 'memories'))
     expect(readFileSync(join(f.store, 'sessions', DAY, ROLLOUT), 'utf8')).toBe('store version\n')
     expect(readFileSync(join(f.store, 'sessions', DAY, OTHER), 'utf8')).toBe('account only\n')

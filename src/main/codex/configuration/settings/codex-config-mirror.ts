@@ -117,7 +117,7 @@ function writeCodexDaemonSocketGuard(
   homes: Pick<CodexSettingsPromotionHomes, 'runtimeHomePath' | 'sqliteHome'>,
   runtimeConfig: string | null
 ): void {
-  const guarded = applyRuntimeOwnedConfig(runtimeConfig ?? '', homes)
+  const guarded = applyRuntimeOwnedConfig(runtimeConfig ?? '', homes, runtimeConfig)
   if (guarded !== (runtimeConfig ?? '')) {
     writeFileAtomicallyIfUnchanged(
       join(homes.runtimeHomePath, 'config.toml'),
@@ -172,7 +172,11 @@ export function syncSystemConfigIntoLegacySharedCodexHome(
             homes.runtimeHomePath
           )
   }
-  const nextRuntimeConfig = applyRuntimeOwnedConfig(mirroredRuntimeConfig, homes)
+  const nextRuntimeConfig = applyRuntimeOwnedConfig(
+    mirroredRuntimeConfig,
+    homes,
+    runtimeConfigBeforeMirror
+  )
   if ((runtimeConfigBeforeMirror ?? '') === nextRuntimeConfig) {
     return
   }
@@ -244,7 +248,8 @@ function syncSystemConfigIntoManagedCodexHomeUnsafe(
   if (!runtimeConfigExists) {
     const freshRuntimeConfig = applyRuntimeOwnedConfig(
       prepareSystemConfigForFreshRuntimeMirror(rawSystemConfig, sourceConfigDir, runtimeHomePath),
-      homes
+      homes,
+      null
     )
     const ownership = readMcpServerTomlOwnership(freshRuntimeConfig)
     writeFileAtomically(runtimeConfigPath, freshRuntimeConfig, RUNTIME_CONFIG_WRITE)
@@ -275,7 +280,7 @@ function syncSystemConfigIntoManagedCodexHomeUnsafe(
     ),
     promotionPlan.runtimeValuesToPreserve
   )
-  const nextRuntimeConfig = applyRuntimeOwnedConfig(preserved.content, homes)
+  const nextRuntimeConfig = applyRuntimeOwnedConfig(preserved.content, homes, runtimeConfig)
   if (nextRuntimeConfig !== runtimeConfig) {
     writeFileAtomically(runtimeConfigPath, nextRuntimeConfig, RUNTIME_CONFIG_WRITE)
   }

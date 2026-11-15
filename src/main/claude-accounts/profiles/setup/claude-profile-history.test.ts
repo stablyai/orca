@@ -13,7 +13,7 @@ vi.mock('node:fs', async (original) => {
 })
 vi.mock('node:fs/promises', async (original) => {
   const actual = await original<typeof fsPromises>()
-  return { ...actual, rename: vi.fn(actual.rename) }
+  return { ...actual, link: vi.fn(actual.link) }
 })
 import * as fsPromises from 'node:fs/promises'
 import { shareClaudeProfileHistory } from './claude-profile-history'
@@ -101,8 +101,8 @@ describe('Claude profile history sharing', () => {
     for (const name of ['a.json', 'b.json', 'c.json']) {
       fs.writeFileSync(join(f.profileHome, 'todos', name), name)
     }
-    const actual = vi.mocked(fsPromises.rename).getMockImplementation()!
-    vi.mocked(fsPromises.rename).mockImplementation(async (from, to) => {
+    const actual = vi.mocked(fsPromises.link).getMockImplementation()!
+    vi.mocked(fsPromises.link).mockImplementation(async (from, to) => {
       if (String(from).endsWith('b.json')) {
         throw Object.assign(new Error('busy'), { code: 'EBUSY' })
       }
@@ -113,7 +113,7 @@ describe('Claude profile history sharing', () => {
     expect(report.warnings).toContainEqual(
       expect.objectContaining({ surface: 'todos', code: 'failed' })
     )
-    vi.mocked(fsPromises.rename).mockImplementation(actual)
+    vi.mocked(fsPromises.link).mockImplementation(actual)
     await f.share()
     expect(fs.readdirSync(join(f.defaultHome, 'todos')).sort()).toEqual([
       'a.json',
