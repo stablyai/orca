@@ -3,7 +3,7 @@ import {
   type LocalWindowsTerminalRuntimeOptions
 } from '../../../shared/shell/launch/local-windows-terminal-runtime'
 import type { ProjectExecutionRuntimeResolution } from '../../../shared/execution-host/project-execution-runtime'
-import type { StartupCwdFallback } from '../../../shared/startup-cwd-fallback'
+import type { StartupCwdFallback } from '../../../shared/shell/launch/startup-cwd-fallback'
 import {
   resolveTerminalStartupCwd,
   type TerminalStartupCwdMissingDirFallback

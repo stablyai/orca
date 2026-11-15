@@ -72,7 +72,7 @@ const GLOBAL_FORCE_FILES = new Set(['package.json', 'pnpm-lock.yaml'])
 
 const GIT_COMPAT_PREFIXES = [
   '.github/actions/prepare-git-compatibility/',
-  'src/shared/git-',
+  'src/shared/terminal/pty/lifecycle/git-bash-console-capacity',
   'src/shared/git/',
   'src/shared/review-head-tracking-ref',
   'src/shared/worktree/base-refs/local-base-branch-fast-forward',

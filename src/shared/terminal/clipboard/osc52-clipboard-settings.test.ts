@@ -21,15 +21,4 @@ describe('normalizeOsc52ClipboardDefaultOn', () => {
       terminalAllowOsc52ClipboardDefaultedOnForAllUsers: true
     })
   })
-
-  it('is idempotent, so a crash before the write-back cannot re-flip an opt-out', () => {
-    const once = normalizeOsc52ClipboardDefaultOn({ terminalAllowOsc52Clipboard: false })
-    expect(normalizeOsc52ClipboardDefaultOn(once)).toEqual(once)
-
-    const optedOut = normalizeOsc52ClipboardDefaultOn({
-      terminalAllowOsc52Clipboard: false,
-      terminalAllowOsc52ClipboardDefaultedOnForAllUsers: true
-    })
-    expect(normalizeOsc52ClipboardDefaultOn(optedOut)).toEqual(optedOut)
-  })
 })

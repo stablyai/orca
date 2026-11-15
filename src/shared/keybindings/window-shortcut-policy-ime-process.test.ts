@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { resolveWindowShortcutAction, type WindowShortcutInput } from './window-shortcut-policy'
-import { keybindingFromInput } from './keybindings'
+import { keybindingFromInput } from './input'
 
 // A chord pressed while an IME has marked text arrives as key 'Process' (keyCode 229); only `code` names the key.
 function imeChord(code: string, modifiers: Partial<WindowShortcutInput>): WindowShortcutInput {

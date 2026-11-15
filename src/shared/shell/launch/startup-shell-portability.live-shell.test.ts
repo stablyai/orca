@@ -5,8 +5,8 @@ import { existsSync, mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { afterAll, describe, expect, it } from 'vitest'
-import { resolveFishBinary } from './fish-binary-requirement'
-import { clearEnvCommand } from './agent-launch/startup/tui-agent-startup-shell'
+import { resolveFishBinary } from '../testing/fish-binary-requirement'
+import { clearEnvCommand } from '../../agent-launch/startup/tui-agent-startup-shell'
 
 const FISH = resolveFishBinary(4)
 

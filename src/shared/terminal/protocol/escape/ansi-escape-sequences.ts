@@ -1,5 +1,5 @@
 /* eslint-disable no-control-regex -- these patterns exist to match terminal control bytes. */
-import { ownRetainedString } from './own-retained-string'
+import { ownRetainedString } from '../../../own-retained-string'
 
 /** CSI sequences (colors, cursor moves, `\u001b[0K` erase-to-EOL). */
 export const CSI_SEQUENCE_PATTERN = /(?:\u001b\[|\u009b)[0-?]*[ -/]*[@-~]/g

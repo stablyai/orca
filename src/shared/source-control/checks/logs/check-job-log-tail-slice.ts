@@ -7,7 +7,7 @@ import {
 import {
   stripAnsiEscapeSequences,
   TERMINAL_CONTROL_CHARACTER_PATTERN
-} from '../../../ansi-escape-sequences'
+} from '../../../terminal/protocol/escape/ansi-escape-sequences'
 import { PR_CHECK_LOG_TAIL_BYTES, sanitizeCheckJobLogExcerpt } from './check-job-log-excerpt'
 
 export const PR_CHECK_LOG_TAIL_LINES = 200

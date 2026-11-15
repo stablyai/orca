@@ -1,10 +1,7 @@
 import { describe, expect, it } from 'vitest'
-import {
-  getEffectiveKeybindingsForAction,
-  keybindingFromInput,
-  keybindingMatchesAction,
-  keybindingMatchesInput
-} from './keybindings'
+import { getEffectiveKeybindingsForAction } from './effective'
+import { keybindingFromInput } from './input'
+import { keybindingMatchesAction, keybindingMatchesInput } from './matching'
 
 describe('keybindings', () => {
   it('zooms in on the plus key whether or not the layout needs Shift for it', () => {

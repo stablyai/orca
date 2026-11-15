@@ -8,7 +8,7 @@ import {
   getNativeClipboardChordCommand
 } from '@/components/terminal-pane/clipboard/terminal-clipboard-event-paste'
 import { iterateBrowserTextInsertionChunks } from '../../../../../shared/browser/automation/browser-text-insertion-chunks'
-import { assertClipboardTextWithinLimitWithYield } from '../../../../../shared/clipboard-text'
+import { assertClipboardTextWithinLimitWithYield } from '../../../../../shared/clipboard/clipboard-text'
 import { isEditableKeyboardTarget } from '../host-guest/input/browser-keyboard'
 import {
   getRemoteBrowserKeyboardShortcut,

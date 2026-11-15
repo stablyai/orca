@@ -2,12 +2,12 @@
 // well after the composer accepted paste, so GitHub-task launch drafts arrived seconds late.
 import { describe, expect, it } from 'vitest'
 import { createDraftPasteReadyScanner } from './draft-paste-ready-scanner'
-import type { DraftPasteReadySignal } from './agent-launch/catalog/tui-agent-config-types'
+import type { DraftPasteReadySignal } from '../../catalog/tui-agent-config-types'
 import {
   COPILOT_STARTUP_PTY_TRACE,
   COPILOT_TRUST_MENU_PTY_TRACE,
   type CopilotStartupTraceChunk
-} from './__fixtures__/copilot-startup-pty-trace'
+} from '../../../__fixtures__/copilot-startup-pty-trace'
 
 const QUIET_WINDOW_MS = 1500
 

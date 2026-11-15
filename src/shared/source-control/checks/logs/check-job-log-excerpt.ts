@@ -1,7 +1,7 @@
 import {
   stripAnsiEscapeSequences,
   TERMINAL_CONTROL_CHARACTER_PATTERN
-} from '../../../ansi-escape-sequences'
+} from '../../../terminal/protocol/escape/ansi-escape-sequences'
 import { ownRetainedString } from '../../../own-retained-string'
 import { clampUtf8TextTail, isUtf8ByteLengthWithinLimit } from '../../../utf8-byte-limits'
 
