@@ -68,6 +68,8 @@ describe('release policy release authors', () => {
     expect(isReleaseAppBot(appBot, '')).toBe(false)
     expect(isReleaseAppBot(appBot, null)).toBe(false)
     expect(isReleaseAppBot(appBot, 'orca-release[bot]')).toBe(false)
+    expect(isReleaseAppBot(appBot, ' 356766123 ')).toBe(false)
+    expect(isReleaseAppBot(appBot, '356766123\n')).toBe(false)
     expect(isReleaseAppBot({ ...appBot, type: 'User' }, '356766123')).toBe(false)
   })
 })
@@ -147,7 +149,8 @@ describe.skipIf(process.platform === 'win32')('docs release gate', () => {
   it.each([
     ['the configured ID', '356766123', '356766123', true],
     ['the App login with another ID', '999', '356766123', false],
-    ['a missing variable', '356766123', '', false]
+    ['a missing variable', '356766123', '', false],
+    ['a whitespace-padded variable', '356766123', ' 356766123 ', false]
   ])('leaves the deploy to release-cut only for %s', (_name, authorId, botId, skipped) => {
     expect(run(authorId, botId).includes('published by the release App')).toBe(skipped)
   })

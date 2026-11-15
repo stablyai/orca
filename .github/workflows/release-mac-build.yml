@@ -68,17 +68,32 @@ jobs:
         with:
           ref: ${{ inputs.qualification_only && github.sha || inputs.release_sha }}
 
-      # Why: build the commit release-cut verified, never the movable tag name.
+      # Why: anyone with write access can dispatch this workflow, and its signed output replaces the draft's mac
+      # assets. Build only when release_sha is what the live tag points at, for a running release-cut on main.
       - name: Verify checkout is the release commit
         if: ${{ !inputs.qualification_only }}
         env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           RELEASE_SHA: ${{ inputs.release_sha }}
+          TAG: ${{ inputs.tag }}
+          RELEASE_RUN_ID: ${{ inputs.release_run_id }}
         run: |
-          head="$(git rev-parse HEAD)"
-          if [[ ! "$RELEASE_SHA" =~ ^[0-9a-f]{40}$ || "$head" != "$RELEASE_SHA" ]]; then
-            echo "::error::Checkout $head is not the verified release commit '$RELEASE_SHA'."
+          set -euo pipefail
+          fail() {
+            echo "::error::$1"
             exit 1
-          fi
+          }
+          [[ "$RELEASE_SHA" =~ ^[0-9a-f]{40}$ ]] || fail "release_sha '$RELEASE_SHA' is not a full commit SHA."
+          [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-rc\.[0-9]+(\.[0-9A-Za-z]+)?)?$ ]] || fail "tag '$TAG' is not a desktop release tag."
+          [[ "$RELEASE_RUN_ID" =~ ^[1-9][0-9]*$ ]] || fail "release_run_id '$RELEASE_RUN_ID' is not a run ID."
+          head="$(git rev-parse HEAD)"
+          [[ "$head" == "$RELEASE_SHA" ]] || fail "Checkout $head is not the verified release commit $RELEASE_SHA."
+          git fetch --no-tags --quiet origin "+refs/tags/$TAG:refs/release-tag-check/$TAG"
+          remote="$(git rev-parse --verify --quiet "refs/release-tag-check/$TAG^{commit}" || true)"
+          [[ "$remote" == "$RELEASE_SHA" ]] || fail "Remote tag $TAG resolves to '$remote', not $RELEASE_SHA."
+          run_ok="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$RELEASE_RUN_ID" --jq \
+            '.path == ".github/workflows/release-cut.yml" and .head_branch == "main" and .status != "completed"')"
+          [[ "$run_ok" == "true" ]] || fail "Run $RELEASE_RUN_ID is not a running release-cut.yml run on main."
 
       # Why: a relay-era ref (before #27215) needs the Windows relay addon this build no longer compiles.
       - name: Refuse a ref that still ships the SSH relay
