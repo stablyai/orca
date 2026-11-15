@@ -14,6 +14,14 @@ import {
   useNativeChatComposerRevealFocus,
   type NativeChatComposerRevealFocusArgs
 } from './use-native-chat-composer-reveal-focus'
+import { NATIVE_CHAT_SUBAGENT_SHEET_ATTRIBUTE } from '../../subagents/native-chat-open-subagent'
+
+const SHEET_SELECTOR = `[${NATIVE_CHAT_SUBAGENT_SHEET_ATTRIBUTE}]`
+
+/** A subagent sheet covers the composer, so typing must not reach it. */
+function sheetCoversComposer(root: HTMLElement | null): boolean {
+  return root?.querySelector(SHEET_SELECTOR) != null
+}
 
 // Floating panels can reveal a chat beside the workspace’s chat.
 const revealedChatRoots = new Set<HTMLElement>()
@@ -42,7 +50,11 @@ export function useNativeChatRootInputRouting(
       revealedChatRoots.size === 1 &&
       !hasVisibleOverlay({ ignoreDismissed: true })
     const onKeyDown = (event: KeyboardEvent): void => {
-      if (event.target !== root && ownsUnfocusedInput(event.target)) {
+      if (
+        event.target !== root &&
+        ownsUnfocusedInput(event.target) &&
+        !sheetCoversComposer(rootRef.current)
+      ) {
         routeNativeChatRootKeyToInput(
           event,
           nativeChatComposerDestination(rootRef.current, composerRef.current),
@@ -68,10 +80,12 @@ export function useNativeChatRootInputRouting(
 
   const onPointerDownCapture = useCallback(
     (event: ReactPointerEvent) => {
+      // A press inside the sheet keeps focus in it rather than on the pane behind.
       if (
         !event.defaultPrevented &&
         event.button === 0 &&
-        shouldFocusNativeChatPaneFromPointerTarget(event.target)
+        shouldFocusNativeChatPaneFromPointerTarget(event.target) &&
+        !(event.target instanceof Element && event.target.closest(SHEET_SELECTOR))
       ) {
         rootRef.current?.focus({ preventScroll: true })
       }
@@ -81,7 +95,11 @@ export function useNativeChatRootInputRouting(
   const onKeyDownCapture = useCallback(
     (event: ReactKeyboardEvent) => {
       // Portaled menus/dialogs still bubble through React; require a target inside this DOM root.
-      if (event.target instanceof Node && rootRef.current?.contains(event.target)) {
+      if (
+        event.target instanceof Node &&
+        rootRef.current?.contains(event.target) &&
+        !sheetCoversComposer(rootRef.current)
+      ) {
         routeNativeChatRootKeyToInput(
           event,
           nativeChatComposerDestination(rootRef.current, composerRef.current),

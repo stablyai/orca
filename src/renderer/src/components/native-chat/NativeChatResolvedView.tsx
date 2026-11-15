@@ -10,7 +10,7 @@ import { useNativeChatLaunchDraftSignal } from './drafts/use-native-chat-launch-
 import { useNativeChatRetainedSession } from './session/terminal/read/use-native-chat-retained-session'
 import { selectNativeChatViewState } from './session/status/native-chat-view-state'
 import { NativeChatSubagentTranscripts } from './subagents/NativeChatSubagentTranscripts'
-import { closeNativeChatSubagentOnEscape } from './subagents/native-chat-open-subagent'
+import { NativeChatSubagentSheetLayer } from './subagents/NativeChatSubagentSheetLayer'
 import {
   useNativeChatInteractiveSendReveal,
   useNativeChatRevealLatest
@@ -326,93 +326,94 @@ export function NativeChatResolvedView({
         }
         rootInput.onKeyDownCapture(event)
       }}
-      onKeyDown={(event) => closeNativeChatSubagentOnEscape(event, paneKey)}
       onContextMenuCapture={contextMenu.onContextMenuCapture}
       className={cn(
         NATIVE_CHAT_APPEARANCE_ROOT_CLASS,
-        'flex h-full min-h-0 w-full flex-col focus:outline-none'
+        'relative flex h-full min-h-0 w-full flex-col focus:outline-none'
       )}
       style={appearanceStyle}
       data-native-chat-scheme={appearanceStyle.colorScheme}
     >
-      <NativeChatCrewFrame
-        panel={
-          <TerminalChatCrewPanel
-            {...{ terminalTabId, paneKey, targetPtyId, isVisible, composerRef }}
-            canMention={composerReady}
-          />
-        }
-      >
-        {find.isOpen ? <NativeChatFindBar find={find} isVisible={isVisible} /> : null}
-        {viewState.kind === 'loading' ? (
-          <NativeChatEmptyState kind="loading" />
-        ) : viewState.kind === 'error' ? (
-          <NativeChatEmptyState kind="error" message={viewState.message} />
-        ) : viewState.kind === 'empty' ? (
-          <NativeChatEmptyState kind="empty" agent={agent} />
-        ) : (
-          <NativeChatSubagentTranscripts
-            find={find}
+      <NativeChatSubagentSheetLayer paneKey={paneKey} sessionKey={`${agent}:${sessionId ?? ''}`}>
+        <NativeChatCrewFrame
+          panel={
+            <TerminalChatCrewPanel
+              {...{ terminalTabId, paneKey, targetPtyId, isVisible, composerRef }}
+              canMention={composerReady}
+            />
+          }
+        >
+          {find.isOpen ? <NativeChatFindBar find={find} isVisible={isVisible} /> : null}
+          {viewState.kind === 'loading' ? (
+            <NativeChatEmptyState kind="loading" />
+          ) : viewState.kind === 'error' ? (
+            <NativeChatEmptyState kind="error" message={viewState.message} />
+          ) : viewState.kind === 'empty' ? (
+            <NativeChatEmptyState kind="empty" agent={agent} />
+          ) : (
+            <NativeChatSubagentTranscripts
+              find={find}
+              paneKey={paneKey}
+              ref={messageListRef}
+              session={sessionWithPending}
+              isVisible={isVisible}
+              isWorking={turnActive}
+              expandSignal={false}
+              {...turnTiming}
+              awaitingInput={awaitingInput}
+              deliveryNotices={deliveryNotices}
+              runtimeContext={imageRuntimeContext}
+            />
+          )}
+        </NativeChatCrewFrame>
+        {/* A collapsed card stays mounted but hidden, so a partly answered question survives. */}
+        {mountedPromptCard ? (
+          <div hidden={collapsedCard !== null} inert={collapsedCard !== null} className="contents">
+            <NativeChatInteractiveCard
+              key={actionKey}
+              card={mountedPromptCard}
+              send={interactiveSend}
+              requiresTerminal={nativeChatAskRequiresTerminal(agent)}
+              onAnswerInTerminal={onSwitchToTerminal}
+              onDismiss={promptCardPresentation.dismiss}
+              onCollapse={
+                mountedPromptCard?.kind === 'approval' && mountedPromptCard.approval.startupDialog
+                  ? undefined
+                  : promptCardPresentation.collapse
+              }
+              shouldFocus={shownPromptCard !== null && isVisible && isFocusedGroup}
+              answerInputRef={questionAnswerInputRef}
+            />
+          </div>
+        ) : null}
+        {collapsedCard ? (
+          <NativeChatPromptStrip card={collapsedCard} onExpand={promptCardPresentation.expand} />
+        ) : null}
+        {/* Honor mobile PTY ownership; retain the hidden composer’s state but detach its ref from typing, paste and focus routes. */}
+        <div hidden={shownPromptCard !== null} className="contents">
+          <NativeChatComposer
+            ref={shownPromptCard ? undefined : composerRef}
+            inputOwnedByCard={shownPromptCard !== null}
+            terminalTabId={terminalTabId}
             paneKey={paneKey}
-            ref={messageListRef}
-            session={sessionWithPending}
-            isVisible={isVisible}
-            isWorking={turnActive}
-            expandSignal={false}
-            {...turnTiming}
-            awaitingInput={awaitingInput}
-            deliveryNotices={deliveryNotices}
-            runtimeContext={imageRuntimeContext}
-          />
-        )}
-      </NativeChatCrewFrame>
-      {/* A collapsed card stays mounted but hidden, so a partly answered question survives. */}
-      {mountedPromptCard ? (
-        <div hidden={collapsedCard !== null} inert={collapsedCard !== null} className="contents">
-          <NativeChatInteractiveCard
-            key={actionKey}
-            card={mountedPromptCard}
-            send={interactiveSend}
-            requiresTerminal={nativeChatAskRequiresTerminal(agent)}
-            onAnswerInTerminal={onSwitchToTerminal}
-            onDismiss={promptCardPresentation.dismiss}
-            onCollapse={
-              mountedPromptCard?.kind === 'approval' && mountedPromptCard.approval.startupDialog
-                ? undefined
-                : promptCardPresentation.collapse
-            }
-            shouldFocus={shownPromptCard !== null && isVisible && isFocusedGroup}
-            answerInputRef={questionAnswerInputRef}
+            targetPtyId={targetPtyId}
+            agent={agent}
+            canSend={canSend}
+            isWorking={isWorking}
+            onStop={stopAgent}
+            onOptimisticSend={onOptimisticSend}
+            onOptimisticSendCanceled={delivery.cancel}
+            optimisticSendOutcome={delivery}
+            onSlashCommand={onSlashCommand}
+            onSubmitted={revealLatest}
+            answerCommandLocally={answerLocally}
+            onSwitchToTerminal={onSwitchToTerminal}
+            readTerminalScreen={readTerminalScreen}
+            launchSeed={{ ...launchDraftSignal, ownsTabWideLaunchDraft, readTerminalDraft }}
+            recallSource={{ messages: sessionWithPending.messages, commands: commandMarkers }}
           />
         </div>
-      ) : null}
-      {collapsedCard ? (
-        <NativeChatPromptStrip card={collapsedCard} onExpand={promptCardPresentation.expand} />
-      ) : null}
-      {/* Honor mobile PTY ownership; retain the hidden composer’s state but detach its ref from typing, paste and focus routes. */}
-      <div hidden={shownPromptCard !== null} className="contents">
-        <NativeChatComposer
-          ref={shownPromptCard ? undefined : composerRef}
-          inputOwnedByCard={shownPromptCard !== null}
-          terminalTabId={terminalTabId}
-          paneKey={paneKey}
-          targetPtyId={targetPtyId}
-          agent={agent}
-          canSend={canSend}
-          isWorking={isWorking}
-          onStop={stopAgent}
-          onOptimisticSend={onOptimisticSend}
-          onOptimisticSendCanceled={delivery.cancel}
-          optimisticSendOutcome={delivery}
-          onSlashCommand={onSlashCommand}
-          onSubmitted={revealLatest}
-          answerCommandLocally={answerLocally}
-          onSwitchToTerminal={onSwitchToTerminal}
-          readTerminalScreen={readTerminalScreen}
-          launchSeed={{ ...launchDraftSignal, ownsTabWideLaunchDraft, readTerminalDraft }}
-          recallSource={{ messages: sessionWithPending.messages, commands: commandMarkers }}
-        />
-      </div>
+      </NativeChatSubagentSheetLayer>
       {contextMenu.menu}
       <LinkActionPopover request={linkActionRequest} onClose={closeLinkActions} />
     </div>

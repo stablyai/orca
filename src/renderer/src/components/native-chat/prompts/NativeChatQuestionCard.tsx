@@ -9,7 +9,7 @@ import { NativeChatQuestionOption } from './NativeChatQuestionOption'
 import { NativeChatQuestionConfirmButton } from './NativeChatQuestionConfirmButton'
 import type { AskAnswerSelection } from '../../../../../shared/native-chat/input/questions/native-chat-ask-answer'
 import type { AskPrompt } from '../../../../../shared/native-chat/input/questions/native-chat-ask-types'
-import { NativeChatPromptCollapseToggle } from './NativeChatPromptCollapse'
+import { NativeChatPromptCollapseToggle, usePromptCardColumn } from './NativeChatPromptCollapse'
 import { useNativeChatPromptCardFocus } from './use-native-chat-prompt-card-focus'
 import { useNativeChatQuestionAutoAdvance } from './use-native-chat-question-auto-advance'
 import { useNativeChatQuestionKeys } from './use-native-chat-question-keys'
@@ -254,7 +254,7 @@ export function NativeChatQuestionCard({
         }
       }}
     >
-      <div className="mx-auto w-full max-w-(--chat-content-max-width) px-3 pt-2 pb-4 sm:px-4">
+      <div className={usePromptCardColumn('px-3 pb-4 sm:px-4')}>
         {total > 1 ? (
           <div className="mb-2 flex gap-1 overflow-x-auto pb-1 scrollbar-sleek">
             {prompt.questions.map((qq, i) => (

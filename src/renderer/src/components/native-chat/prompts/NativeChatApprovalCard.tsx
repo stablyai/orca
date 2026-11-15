@@ -13,7 +13,7 @@ import {
 } from '../../../../../shared/agent-session/agent-session-approval-subject'
 import { NativeChatCodeBlock } from '../markdown/code/NativeChatCodeBlock'
 import type { ChatApproval } from '../../../../../shared/native-chat/input/native-chat-interactive-prompt'
-import { NativeChatPromptCollapseToggle } from './NativeChatPromptCollapse'
+import { NativeChatPromptCollapseToggle, usePromptCardColumn } from './NativeChatPromptCollapse'
 import { useNativeChatPromptCardFocus } from './use-native-chat-prompt-card-focus'
 
 export type NativeChatApprovalCardProps = {
@@ -54,6 +54,7 @@ export function NativeChatApprovalCard({
   placement = 'composer'
 }: NativeChatApprovalCardProps): React.JSX.Element {
   const t = useTranslate()
+  const column = usePromptCardColumn('px-3 pb-1 sm:px-4')
   const cardRef = useRef<HTMLDivElement>(null)
   const contentRef = useRef<HTMLDivElement>(null)
   const neededPath = approvalBlockedPathToShow(approval)
@@ -74,12 +75,7 @@ export function NativeChatApprovalCard({
   return (
     <SecuritySurface>
       <div className={stacked ? 'bg-chat-pane' : 'min-h-0 shrink overflow-hidden bg-chat-pane'}>
-        <div
-          className={cn(
-            'mx-auto flex w-full max-w-(--chat-content-max-width) px-3 pt-2 pb-1 sm:px-4',
-            !stacked && 'h-full min-h-0 max-h-full'
-          )}
-        >
+        <div className={cn(column, 'flex', !stacked && 'h-full min-h-0 max-h-full')}>
           <div
             ref={cardRef}
             data-native-chat-prompt-card-focus={shouldFocus || undefined}

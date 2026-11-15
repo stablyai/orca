@@ -10,6 +10,8 @@ import { useTranslation } from 'react-i18next'
 import { useSyncExternalStore } from 'react'
 import { NativeChatForkedFromRow } from './NativeChatForkedFromRow'
 import { NativeChatPullRequestEventLine } from './NativeChatPullRequestEventLine'
+import { NativeChatSubagentEndingRow } from '../../subagents/NativeChatSubagentEndingRow'
+import { isNativeChatSubagentEndingPresentation } from '../../subagents/native-chat-subagent-ending'
 import { PULL_REQUEST_EVENT_PRESENTATION } from '../../../../../../shared/native-chat/native-chat-pull-request-event'
 import { NativeChatMarkdown } from '../../markdown/NativeChatMarkdown'
 import { NativeChatCodeBlock } from '../../markdown/code/NativeChatCodeBlock'
@@ -90,6 +92,9 @@ export function NativeChatNoticeRow({
 
   if (block.presentation === PULL_REQUEST_EVENT_PRESENTATION) {
     return <NativeChatPullRequestEventLine block={block} messageId={messageId} />
+  }
+  if (isNativeChatSubagentEndingPresentation(block.presentation)) {
+    return <NativeChatSubagentEndingRow block={block} messageId={messageId} />
   }
   const look = nativeChatNoticeLook(block)
   if (look.kind === 'forked-from') {
