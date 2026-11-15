@@ -3,6 +3,7 @@
 // user text only ever travels as a separate argv entry, never through a shell.
 import { z } from 'zod'
 import { ORCA_CLOUD_IMAGE_AGENTS } from '../../../../../src/shared/hosted-sandbox/orca-cloud-image-agents'
+import { runCommandOnce } from '../command-once'
 import type { SandboxProviderApi } from '../sandbox-provider'
 
 export const PROJECT_ROOT = '/vercel/sandbox/project'
@@ -55,12 +56,22 @@ const Envelope = z.object({
   error: z.object({ code: z.string(), message: z.string().optional() }).loose().optional()
 }).loose()
 
-async function orca(provider: SandboxProviderApi, sessionId: string, args: string[], options: { prepare?: boolean; timeoutMs?: number } = {}) {
-  const result = await provider.runCommand(sessionId, {
+/**
+ * `onceId`: the command has a side effect a repeat would duplicate (typing into an agent, launching
+ * one). It then runs at most once per id on the VM, and a retry replays its result (command-once.ts).
+ */
+async function orca(
+  provider: SandboxProviderApi,
+  sessionId: string,
+  args: string[],
+  options: { prepare?: boolean; timeoutMs?: number; onceId?: string } = {}
+) {
+  const params = {
     command: '/bin/sh',
     args: ['-c', ORCA_SCRIPT, 'orca', ...(options.prepare ? ['--prepare'] : []), ...args],
     timeoutMs: options.timeoutMs ?? 60_000
-  })
+  }
+  const result = options.onceId ? await runCommandOnce(provider, sessionId, options.onceId, params) : await provider.runCommand(sessionId, params)
   // The CLI prints one JSON document; take the outermost object so stray warnings do not break parsing.
   const start = result.stdout.indexOf('{')
   const end = result.stdout.lastIndexOf('}')
@@ -87,7 +98,7 @@ export async function launchAgent(
   sessionId: string,
   agent: AgentId,
   prompt: string | null,
-  options: { model?: string; effort?: string } = {}
+  options: { model?: string; effort?: string; onceId?: string } = {}
 ): Promise<string> {
   const args = ['agent', 'launch', '--agent', agent, '--worktree', `path:${PROJECT_ROOT}`, '--surface', 'terminal']
   if (options.model) {
@@ -99,7 +110,7 @@ export async function launchAgent(
   if (prompt) {
     args.push(`--prompt=${prompt}`)
   }
-  const result = LaunchResult.safeParse(await orca(provider, sessionId, args, { prepare: true, timeoutMs: 90_000 }))
+  const result = LaunchResult.safeParse(await orca(provider, sessionId, args, { prepare: true, timeoutMs: 90_000, onceId: options.onceId }))
   const handle = result.success ? result.data.outcome.handle : undefined
   if (!handle) {
     throw new VmAgentError('agent_launch_failed')
@@ -108,8 +119,14 @@ export async function launchAgent(
 }
 
 /** Types `text` into a running agent session and submits it. */
-export async function sendToSession(provider: SandboxProviderApi, sessionId: string, handle: string, text: string): Promise<void> {
-  await orca(provider, sessionId, ['terminal', 'send', '--terminal', handle, `--text=${text}`, '--enter'], { timeoutMs: 60_000 })
+export async function sendToSession(
+  provider: SandboxProviderApi,
+  sessionId: string,
+  handle: string,
+  text: string,
+  options: { onceId?: string } = {}
+): Promise<void> {
+  await orca(provider, sessionId, ['terminal', 'send', '--terminal', handle, `--text=${text}`, '--enter'], { timeoutMs: 60_000, onceId: options.onceId })
 }
 
 /**

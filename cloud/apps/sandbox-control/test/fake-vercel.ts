@@ -14,6 +14,7 @@ import {
 } from '../src/sandbox-provider'
 import { DESKTOP_COMMAND, DRAIN_COMMAND, ENV_COMMAND, START_COMMAND } from '../src/sandbox-vm-commands'
 import type { GoldenImageProviderApi } from '../src/golden-image-provider'
+import { ONCE_GUARD } from '../src/command-once'
 
 type FakeBox = {
   params: CreateSandboxParams
@@ -92,6 +93,11 @@ export type FakeVercel = SandboxProviderApi & GoldenImageProviderApi & {
   sessionCpu: Map<string, number>
   /** GET session fails (provider outage) when set. */
   failSessionUsage: boolean
+  /**
+   * The in-VM at-most-once ledger (command-once.ts), keyed `<sandbox name>:<id>`: a guarded command
+   * with a recorded success replays it instead of running. Inner commands run through runCommand.
+   */
+  onceLedger: Map<string, { exitCode: number; stdout: string; stderr: string }>
 }
 
 export function createFakeVercel(now: () => number): FakeVercel {
@@ -133,6 +139,7 @@ export function createFakeVercel(now: () => number): FakeVercel {
   const fake: FakeVercel = {
     sessionCpu: new Map(),
     failSessionUsage: false,
+    onceLedger: new Map(),
     boxes,
     snapshots,
     commands,
@@ -267,6 +274,20 @@ export function createFakeVercel(now: () => number): FakeVercel {
       const box = bySession(sessionId)
       if (box.status !== 'running') {
         throw new ProviderError(410, 'sandbox_stopped')
+      }
+      if (params.command === 'bash' && params.args?.[1] === ONCE_GUARD) {
+        const [, , , id, command, ...args] = params.args
+        const key = `${box.params.name}:${id}`
+        const recorded = fake.onceLedger.get(key)
+        if (recorded) {
+          return { ...recorded, stdout: `__orca_once__ {"state":"replayed","exit":${recorded.exitCode}}\n${recorded.stdout}` }
+        }
+        const { ORCA_ONCE_WAIT: _wait, ...env } = params.env ?? {}
+        const ran = await fake.runCommand(sessionId, { ...params, command: command!, args, env })
+        if (ran.exitCode === 0) {
+          fake.onceLedger.set(key, ran)
+        }
+        return { ...ran, stdout: `__orca_once__ {"state":"ran","exit":${ran.exitCode}}\n${ran.stdout}` }
       }
       // A first boot wraps the start script in `bash -c '<prelude>; exec <start>'`: same command to us.
       const command =
