@@ -8,12 +8,14 @@ import { pluginCapabilityReachable } from '../capabilities/plugin-capability-rea
 import { orcaEngineRangeSchema, satisfiesOrcaEngineRange } from './plugin-manifest-engine-range'
 import {
   PLUGIN_DERIVED_PUBLISHER_SINCE,
+  PLUGIN_PANEL_ICON_SINCE,
   PLUGIN_SOURCE_MODULES_SINCE
 } from './plugin-schema-field-docs'
 import {
   isPluginSourceModulePath,
   isPluginWorkerSourcePath
 } from '../frames/plugin-frame-source-modules'
+import { pluginPanelIconKind } from '../contributions/plugin-panel-icon'
 
 type V2RuleSubject = {
   execution: PluginExecutionProfile
@@ -67,6 +69,30 @@ export function validateOmittedPublisherFloor(
 const engineBelow = (range: string, version: string): boolean =>
   orcaEngineRangeSchema.safeParse(range).success &&
   !satisfiesOrcaEngineRange(range.slice(2), `>=${version}`)
+
+/** Why authoring only: a host that reads SVG files renders them even when the declaration
+ *  promises an earlier release; the floor makes older hosts refuse instead of hide them. */
+export function validatePanelIconFloor(
+  manifest: {
+    engines: { orca: string }
+    contributes: { panels: readonly { icon?: string }[] }
+  },
+  ctx: RefinementCtx
+): void {
+  manifest.contributes.panels.forEach((panel, index) => {
+    if (
+      panel.icon !== undefined &&
+      pluginPanelIconKind(panel.icon) === 'file' &&
+      engineBelow(manifest.engines.orca, PLUGIN_PANEL_ICON_SINCE)
+    ) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['contributes', 'panels', index, 'icon'],
+        message: `must be at least >=${PLUGIN_PANEL_ICON_SINCE} when a panel icon is an .svg file, because older Orca cannot render file icons; the file form also requires manifest format 2`
+      })
+    }
+  })
+}
 
 /** Why authoring only: older Orca serves a `.tsx` entry as raw bytes, so it must not install it. */
 export function validateSourceModuleEntryFloor(

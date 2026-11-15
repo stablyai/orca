@@ -11,6 +11,7 @@ import { declaredPluginImages } from './plugin-image-artifact-validation'
 import type { PluginImageCache } from './plugin-image-cache'
 import { readPluginFontSlot, type CheckedPluginFont } from './plugin-font-files'
 import { parsePluginFontSlot } from '../../../shared/plugins/contributions/plugin-font-contribution'
+import { declaredPluginPanelIcons, readCheckedPluginPanelIcon } from './plugin-panel-icon-artifacts'
 
 export type PluginImageProtocolDependencies = {
   cache: PluginImageCache
@@ -31,6 +32,12 @@ async function readInstalledImage(
 ): Promise<CheckedPluginImage | null> {
   if (!isCurrentContent(plugin, contentHash)) {
     return null
+  }
+  const panelIcon = declaredPluginPanelIcons(plugin.manifest).find(
+    (candidate) => candidate.slot === slot
+  )
+  if (panelIcon) {
+    return readCheckedPluginPanelIcon(plugin.rootDir, panelIcon.path)
   }
   const declared = declaredPluginImages(plugin.manifest).find(
     (candidate) => candidate.slot === slot
@@ -58,6 +65,8 @@ export function createPluginImageRequestHandler(
     try {
       let asset: CheckedPluginImage | CheckedPluginFont | null = null
       const isFont = reference?.kind === 'installed' && parsePluginFontSlot(reference.slot) !== null
+      const isPanelIcon =
+        reference?.kind === 'installed' && reference.slot.startsWith('panel-icon-')
       if (reference?.kind === 'sha') {
         asset = await dependencies.cache.get(reference.sha256)
       } else if (reference?.kind === 'installed' && isFont) {
@@ -85,9 +94,9 @@ export function createPluginImageRequestHandler(
               ? 'no-store'
               : 'private, max-age=31536000, immutable',
           'X-Content-Type-Options': 'nosniff',
-          // Why: web fonts load in CORS mode; only the default session handles this scheme, so
-          // plugin frames and browser tabs, which use their own sessions, still cannot reach it.
-          ...(isFont ? { 'Access-Control-Allow-Origin': '*' } : {})
+          // Why: web fonts and CSS masks load in CORS mode; only the default session handles this
+          // scheme, so plugin frames and browser tabs, which use their own sessions, still cannot.
+          ...(isFont || isPanelIcon ? { 'Access-Control-Allow-Origin': '*' } : {})
         }
       })
     } catch {

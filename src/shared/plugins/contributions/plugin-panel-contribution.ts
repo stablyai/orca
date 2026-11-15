@@ -5,91 +5,28 @@ import { PLUGIN_ENUM_SINCE_KEY } from '../manifest/plugin-engine-floor-keys'
 import {
   pluginPathFieldDoc,
   pluginFieldDoc,
+  PLUGIN_PANEL_ICON_SINCE,
   PLUGIN_PANEL_UI_SINCE,
   PLUGIN_SCHEMA_SINCE_V1,
   PLUGIN_SOURCE_MODULES_SINCE
 } from '../manifest/plugin-schema-field-docs'
+import { PLUGIN_PANEL_ICONS, pluginPanelIconSchema } from './plugin-panel-icon'
 
 export const PLUGIN_PANEL_LIMIT = 64
 
-/** Icons a panel (and a component panel's controls) may name; the renderer bundles exactly
- *  these. One vocabulary for manifests and components. Grow additively, with a since below. */
-export const PLUGIN_PANEL_ICONS = [
-  'activity',
-  'bar-chart-3',
-  'bell',
-  'blocks',
-  'book',
-  'bot',
-  'bug',
-  'calendar',
-  'cloud',
-  'code',
-  'database',
-  'file-text',
-  'flag',
-  'folder',
-  'gauge',
-  'globe',
-  'hammer',
-  'layers',
-  'lightbulb',
-  'package',
-  'plug',
-  'puzzle',
-  'rocket',
-  'star',
-  'terminal',
-  'wrench',
-  'zap',
-  'add',
-  'remove',
-  'delete',
-  'edit',
-  'refresh',
-  'search',
-  'settings',
-  'check',
-  'close',
-  'info',
-  'warning',
-  'error',
-  'open-external',
-  'copy',
-  'download',
-  'upload',
-  'play',
-  'pause',
-  'stop',
-  'more',
-  'expand',
-  'collapse',
-  'next',
-  'filter',
-  'branch',
-  'file',
-  'agent',
-  'link'
-] as const
+export {
+  PLUGIN_PANEL_ICONS,
+  canonicalPluginPanelIcon,
+  type PluginPanelIconName
+} from './plugin-panel-icon'
 
 /** Icons added after the first set; older Orcas refuse them, so they raise the engine floor. */
-const PLUGIN_PANEL_ICON_SINCE: Record<string, string> = Object.fromEntries(
+const PLUGIN_PANEL_NAME_SINCE: Record<string, string> = Object.fromEntries(
   PLUGIN_PANEL_ICONS.slice(PLUGIN_PANEL_ICONS.indexOf('add')).map((name) => [
     name,
     PLUGIN_PANEL_UI_SINCE
   ])
 )
-
-export type PluginPanelIconName = (typeof PLUGIN_PANEL_ICONS)[number]
-
-const PANEL_ICON_BY_FOLDED_NAME = new Map<string, PluginPanelIconName>(
-  PLUGIN_PANEL_ICONS.map((name) => [name.replaceAll('-', ''), name])
-)
-
-/** Accepts both Lucide spellings (`file-text`, `FileText`); null for any other name. */
-export function canonicalPluginPanelIcon(name: string): PluginPanelIconName | null {
-  return PANEL_ICON_BY_FOLDED_NAME.get(name.replaceAll('-', '').toLowerCase()) ?? null
-}
 
 /** `html`: the entry is a web page in an isolated frame. `components`: the entry is a module whose
  *  component tree Orca draws with its own controls. */
@@ -111,17 +48,14 @@ export const pluginPanelContributionSchema = z
         'Dashboard'
       ])
     ),
-    icon: z
-      .enum(PLUGIN_PANEL_ICONS)
-      .optional()
-      .meta({
-        ...pluginFieldDoc(
-          'Icon shown in the right-sidebar activity bar. Defaults to `plug`.',
-          PLUGIN_SCHEMA_SINCE_V1,
-          ['database']
-        ),
-        [PLUGIN_ENUM_SINCE_KEY]: PLUGIN_PANEL_ICON_SINCE
-      }),
+    icon: pluginPanelIconSchema.optional().meta({
+      ...pluginFieldDoc(
+        `Icon shown in the right-sidebar activity bar: a built-in name or a plugin-relative \`.svg\` file (at most 32 KB; static, monochrome-ready and with a \`viewBox\`). Defaults to \`plug\`. File icons need manifest format 2 and Orca >=${PLUGIN_PANEL_ICON_SINCE}.`,
+        PLUGIN_SCHEMA_SINCE_V1,
+        ['database', 'icons/panel.svg']
+      ),
+      [PLUGIN_ENUM_SINCE_KEY]: PLUGIN_PANEL_NAME_SINCE
+    }),
     entry: pluginRelativePathSchema.meta(
       pluginPathFieldDoc(
         `What the panel runs: an HTML page for \`ui: "html"\`, a \`.js\`/\`.mjs\` module for \`ui: "components"\`. Either may instead be a \`.ts\`/\`.tsx\`/\`.mts\`/\`.jsx\` file, which Orca transpiles when it loads (needs \`engines.orca\` \`>=${PLUGIN_SOURCE_MODULES_SINCE}\`; an \`html\` panel then gets a generated page around it). It is trusted code: install panels you trust.`,

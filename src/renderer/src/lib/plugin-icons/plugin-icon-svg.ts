@@ -1,90 +1,12 @@
+import {
+  isSafePluginIconAttributeValue,
+  PLUGIN_ICON_SVG_ATTRIBUTES,
+  PLUGIN_ICON_SVG_ELEMENTS
+} from '../../../../shared/plugins/contributions/plugin-panel-icon'
+
 const SVG_NS = 'http://www.w3.org/2000/svg'
 
-// Static shapes, paint servers and clipping only; anything else is removed with its subtree.
-const ALLOWED_ELEMENTS = new Set([
-  'svg',
-  'g',
-  'path',
-  'circle',
-  'ellipse',
-  'rect',
-  'line',
-  'polyline',
-  'polygon',
-  'title',
-  'desc',
-  'defs',
-  'clipPath',
-  'mask',
-  'linearGradient',
-  'radialGradient',
-  'stop'
-])
-
-const ALLOWED_ATTRIBUTES = new Set([
-  'id',
-  'viewBox',
-  'width',
-  'height',
-  'preserveAspectRatio',
-  'version',
-  'd',
-  'x',
-  'y',
-  'x1',
-  'y1',
-  'x2',
-  'y2',
-  'cx',
-  'cy',
-  'r',
-  'rx',
-  'ry',
-  'fx',
-  'fy',
-  'fr',
-  'points',
-  'transform',
-  'fill',
-  'fill-rule',
-  'fill-opacity',
-  'stroke',
-  'stroke-width',
-  'stroke-linecap',
-  'stroke-linejoin',
-  'stroke-miterlimit',
-  'stroke-dasharray',
-  'stroke-dashoffset',
-  'stroke-opacity',
-  'opacity',
-  'color',
-  'clip-path',
-  'clip-rule',
-  'mask',
-  'offset',
-  'stop-color',
-  'stop-opacity',
-  'gradientUnits',
-  'gradientTransform',
-  'spreadMethod',
-  'clipPathUnits',
-  'maskUnits',
-  'maskContentUnits',
-  'vector-effect',
-  'shape-rendering',
-  'style'
-])
-
 const PAINT_ATTRIBUTES = ['fill', 'stroke', 'stop-color', 'color']
-
-// Why: a url() may only name a fragment in the same icon (a gradient, clip path or mask).
-function isSafeAttributeValue(value: string): boolean {
-  const urls = value.match(/url\s*\(([^)]*)\)/gi) ?? []
-  return (
-    !/javascript:|expression\s*\(|[<>]/i.test(value) &&
-    urls.every((url) => /^url\(\s*#[A-Za-z_][\w.-]*\s*\)$/i.test(url))
-  )
-}
 
 const SHAPES = new Set(['path', 'rect', 'circle', 'ellipse', 'polygon', 'polyline', 'text', 'use'])
 
@@ -137,7 +59,7 @@ export function sanitizePluginIconSvg(source: string): SanitizedPluginIcon | nul
   const visit = (element: Element): void => {
     // Why copies: removing nodes mutates the live collections.
     for (const child of Array.from(element.children)) {
-      if (child.namespaceURI !== SVG_NS || !ALLOWED_ELEMENTS.has(child.localName)) {
+      if (child.namespaceURI !== SVG_NS || !PLUGIN_ICON_SVG_ELEMENTS.has(child.localName)) {
         child.remove()
       } else {
         visit(child)
@@ -146,8 +68,8 @@ export function sanitizePluginIconSvg(source: string): SanitizedPluginIcon | nul
     for (const attribute of Array.from(element.attributes)) {
       if (
         attribute.namespaceURI !== null ||
-        !ALLOWED_ATTRIBUTES.has(attribute.localName) ||
-        !isSafeAttributeValue(attribute.value)
+        !PLUGIN_ICON_SVG_ATTRIBUTES.has(attribute.localName) ||
+        !isSafePluginIconAttributeValue(attribute.value)
       ) {
         element.removeAttributeNode(attribute)
       } else if (PAINT_ATTRIBUTES.includes(attribute.localName)) {

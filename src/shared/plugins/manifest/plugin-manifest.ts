@@ -17,6 +17,7 @@ import { validatePluginManifestContributions } from './plugin-manifest-contribut
 import { validatePluginEngineFloor } from './plugin-engine-floor'
 import {
   validateOmittedPublisherFloor,
+  validatePanelIconFloor,
   validateSourceModuleEntryFloor,
   validatePluginManifestV2Rules
 } from './plugin-manifest-v2-rules'
@@ -210,6 +211,7 @@ function buildPluginManifestSchema(enforceEngineFloor: boolean) {
         if (enforceEngineFloor) {
           validatePluginEngineFloor(pluginManifestV2Object, manifest, ctx)
           validateOmittedPublisherFloor(manifest, ctx)
+          validatePanelIconFloor(manifest, ctx)
           validateSourceModuleEntryFloor(manifest, ctx)
         }
       })
