@@ -61,7 +61,12 @@ describe('isTagBuiltFromCurrentRef', () => {
   })
 })
 
+const APP_BOT = { login: 'orca-release[bot]', id: 356766123, type: 'Bot' }
+
 describe('publishCompleteDraftReleases', () => {
+  beforeEach(() => vi.stubEnv('RELEASE_APP_BOT_ID', '356766123'))
+  afterEach(() => vi.unstubAllEnvs())
+
   it('publishes complete release-cut drafts and skips incomplete ones', async () => {
     await withGitRepo(async (repo) => {
       commit(repo, 'release source')
@@ -74,7 +79,7 @@ describe('publishCompleteDraftReleases', () => {
         tag_name: `v1.4.2-rc.${id}`,
         target_commitish: releaseSha,
         created_at: `2026-05-15T0${id}:31:19Z`,
-        author: { login: 'github-actions[bot]' },
+        author: APP_BOT,
         assets: getRequiredReleaseAssetNames(`v1.4.2-rc.${id}`)
           .filter((name) => id === 7 || name !== 'orca-windows-setup.exe')
           .map((name, index) => ({ id: id * 100 + index, name, state: 'uploaded', size: 1 }))
@@ -159,7 +164,7 @@ describe('publishCompleteDraftReleases', () => {
             draft: true,
             tag_name: 'v1.4.2-rc.7',
             created_at: '2026-05-15T07:31:19Z',
-            author: { login: 'github-actions[bot]' },
+            author: APP_BOT,
             assets: getRequiredReleaseAssetNames('v1.4.2-rc.7').map((name) => ({
               name,
               state: 'uploaded',
@@ -282,9 +287,15 @@ describe('RC draft tag verification', () => {
     expect(patches).toEqual([])
   })
 
-  it('recognizes release-cut authors only, the App by its user ID', () => {
+  it('recognizes only the App by its user ID', () => {
     expect(isReleaseCutDraft(draft)).toBe(true)
-    expect(isReleaseCutDraft({ ...draft, author: { login: 'github-actions[bot]' } })).toBe(true)
+    // A github-actions[bot] draft can be made by any workflow with a write token.
+    expect(
+      isReleaseCutDraft({
+        ...draft,
+        author: { login: 'github-actions[bot]', id: 41898282, type: 'Bot' }
+      })
+    ).toBe(false)
     expect(isReleaseCutDraft({ ...draft, author: { ...draft.author, id: 1 } })).toBe(false)
     vi.stubEnv('RELEASE_APP_BOT_ID', '')
     expect(isReleaseCutDraft(draft)).toBe(false)

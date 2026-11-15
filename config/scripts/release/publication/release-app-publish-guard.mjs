@@ -1,6 +1,8 @@
 #!/usr/bin/env node
 // Release Policy runs from the tagged commit. A commit older than the App-aware policy deletes a release the
 // App published unless the release pipeline made its tag, so the App must never draft or publish one of those.
+// This only prevents that accidental deletion. Tagger and commit subject are unauthenticated metadata anyone who
+// can push a tag can set, so this is not a trust boundary; the tag ruleset is.
 
 import { pathToFileURL } from 'node:url'
 

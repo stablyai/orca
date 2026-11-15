@@ -8,14 +8,15 @@ import { assertPolicyKeepsAppRelease } from './release-app-publish-guard.mjs'
 import { verifyRequiredReleaseAssets } from './verify-release-required-assets.mjs'
 
 const API_VERSION = '2022-11-28'
-const RELEASE_CUT_AUTHOR = 'github-actions[bot]'
 const DESKTOP_RC_TAG_PATTERN = /^v[0-9]+\.[0-9]+\.[0-9]+-rc\.[0-9]+$/
 const FULL_SHA = /^[a-f0-9]{40}$/
 
+// Why App only: any workflow with a write token can author a github-actions[bot] draft, so those are not trusted
+// here; older github-actions[bot] drafts must be published by hand.
 export function isReleaseCutDraft(release) {
   return (
     release?.draft === true &&
-    (release?.author?.login === RELEASE_CUT_AUTHOR || isReleaseAppBot(release?.author)) &&
+    isReleaseAppBot(release?.author) &&
     typeof release?.tag_name === 'string' &&
     DESKTOP_RC_TAG_PATTERN.test(release.tag_name)
   )
