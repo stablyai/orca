@@ -6,7 +6,6 @@ import {
   getWakeInputVersion,
   isWorkspaceWaking,
   subscribeWakeInput,
-  subscribeWakeInputDelivered,
   subscribeWakeInputDropped
 } from '@/components/terminal-pane/input/wake-input-buffer'
 
@@ -25,29 +24,15 @@ function readWakeInput(
   return { waking: isWorkspaceWaking(workspaceId), pending: getWakeInputCount(workspaceId) }
 }
 
-/** Toasts for typing held during a wake: it is on the prompt (press Enter), or it was not sent. */
+/** A toast when typing held during a wake was not sent (it otherwise reaches the shell as typed). */
 export function useWakeInputNotices(workspaceId: string): void {
   const t = useTranslate()
   useEffect(() => {
-    const offDelivered = subscribeWakeInputDelivered((delivery) => {
-      if (delivery.workspaceId === workspaceId && delivery.submitted) {
-        // Enter is never replayed into the woken terminal: the person runs it after a look.
-        toast(
-          t(
-            'orcaCloudWorkspace.typedWhileWaking',
-            'What you typed is on the prompt. Press Enter to run it.'
-          )
-        )
-      }
-    })
     const offDropped = subscribeWakeInputDropped((dropped) => {
       if (dropped.workspaceId === workspaceId) {
         toast(t('orcaCloudWorkspace.typingNotSent', 'Your typing wasn’t sent.'))
       }
     })
-    return () => {
-      offDelivered()
-      offDropped()
-    }
+    return offDropped
   }, [workspaceId, t])
 }

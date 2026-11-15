@@ -48,22 +48,22 @@ describe('wake input buffer', () => {
     expect(captureWakeInput('ws', 'leaf-1', 'ls', p.deliver, p.isReady)).toBe(false)
   })
 
-  it('inserts held typing once after re-attach, without ever replaying Enter', () => {
+  it('sends held typing, Enter included, once and in order after re-attach (type-ahead)', () => {
     const p = pane(false)
-    const deliveries: boolean[] = []
-    subscribeWakeInputDelivered((d) => void deliveries.push(d.submitted))
+    const deliveries: string[] = []
+    subscribeWakeInputDelivered((d) => void deliveries.push(d.paneId))
     beginWorkspaceWake('ws', T)
     expect(isWorkspaceWaking('ws')).toBe(true)
     expect(captureWakeInput('ws', 'leaf-1', 'ec', p.deliver, p.isReady)).toBe(true)
-    expect(captureWakeInput('ws', 'leaf-1', 'ho hi\r', p.deliver, p.isReady)).toBe(true)
-    expect(getWakeInputCount('ws')).toBe('echo hi'.length)
+    expect(captureWakeInput('ws', 'leaf-1', 'ho hi\rls', p.deliver, p.isReady)).toBe(true)
+    expect(getWakeInputCount('ws')).toBe('echo hi\rls'.length)
     pumpWakeInputForTests(T + 100)
     expect(p.delivered).toEqual([])
     p.state.ready = true
     pumpWakeInputForTests(T + 200)
     pumpWakeInputForTests(T + 300)
-    expect(p.delivered).toEqual(['echo hi'])
-    expect(deliveries).toEqual([true])
+    expect(p.delivered).toEqual(['echo hi\rls'])
+    expect(deliveries).toEqual(['leaf-1'])
     expect(paneHadUserInputSince('leaf-1', T)).toBe(true)
   })
 
@@ -179,46 +179,41 @@ describe('wake input buffer', () => {
 })
 
 describe('applyWakeInput', () => {
-  const apply = (data: string, text = '') => applyWakeInput({ text, submitted: false }, data)
+  const apply = (data: string, text = '') => applyWakeInput(text, data)
 
-  it('keeps plain text and Tab; notes Enter without keeping it', () => {
-    expect(apply('git st\tatus\r')).toEqual({
-      text: 'git st\tatus',
-      submitted: true,
-      multiline: false
-    })
+  it('keeps plain text, Tab and Enter, in order', () => {
+    expect(apply('git st\tatus\rls\r')).toBe('git st\tatus\rls\r')
   })
 
-  it('Backspace edits the held text and Ctrl-C clears it', () => {
-    expect(apply('lss\x7f -la').text).toBe('ls -la')
-    expect(apply('\x03', 'rm -rf /')).toEqual({
-      text: '',
-      submitted: false,
-      multiline: false
-    })
+  it('Backspace and Ctrl-C edit only the line not yet entered', () => {
+    expect(apply('lss\x7f -la')).toBe('ls -la')
+    expect(apply('\x03', 'rm -rf /')).toBe('')
+    expect(apply('\x7f\x7fx', 'cd a\r')).toBe('cd a\rx')
+    expect(apply('\x03', 'cd a\rgit pu')).toBe('cd a\r')
   })
 
   it('drops escape sequences (arrows, OSC, alt keys) and other controls', () => {
-    expect(apply('a\x04b').text).toBe('ab')
-    expect(apply('\x1b[A\x1b[1;5Cls').text).toBe('ls')
-    expect(apply('\x1bOPx').text).toBe('x')
-    expect(apply('\x1b]0;title\x07y').text).toBe('y')
-    expect(apply('\x1bbz').text).toBe('z')
+    expect(apply('a\x04b')).toBe('ab')
+    expect(apply('\x1b[A\x1b[1;5Cls')).toBe('ls')
+    expect(apply('\x1bOPx')).toBe('x')
+    expect(apply('\x1b]0;title\x07y')).toBe('y')
+    expect(apply('\x1bbz')).toBe('z')
   })
 })
 
-describe('nothing joined, nothing lost silently', () => {
-  it('drops a multi-line paste instead of joining its lines, and says so', () => {
+describe('nothing sent to the wrong terminal, nothing lost silently', () => {
+  it('sends nothing to any terminal when the wake fails, even with an Enter held', () => {
     const p = pane(false)
     const dropped: string[] = []
     subscribeWakeInputDropped((d) => void dropped.push(d.workspaceId))
     beginWorkspaceWake('ws', T)
-    captureWakeInput('ws', 'leaf-1', 'cd a\rgit pull', p.deliver, p.isReady)
-    pumpWakeInputForTests(T)
+    captureWakeInput('ws', 'leaf-1', 'make deploy\r', p.deliver, p.isReady)
+    endWorkspaceWake('ws', 'failed')
     p.state.ready = true
     pumpWakeInputForTests(T + 1)
     expect(p.delivered).toEqual([])
     expect(dropped).toEqual(['ws'])
+    expect(captureWakeInput('ws', 'leaf-1', 'x', p.deliver, p.isReady)).toBe(false)
   })
 
   it('says so when held typing is dropped by a failed wake, the max hold or the grace', () => {
