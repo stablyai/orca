@@ -3,6 +3,8 @@ export const ORCA_RENDERER_SHUTDOWN_CHECKPOINT_FAILED_EVENT =
   'orca:renderer-shutdown-checkpoint-failed'
 export const ORCA_RENDERER_SHUTDOWN_CHECKPOINT_ABORTED_EVENT =
   'orca:renderer-shutdown-checkpoint-aborted'
+/** Main-initiated reloads have no renderer caller to report a failed checkpoint. */
+export const ORCA_NATIVE_UNLOAD_FAILED_EVENT = 'orca:native-unload-failed'
 
 // DOM attributes carry failure details across renderer/preload worlds; event JS payloads cannot cross.
 export const ORCA_SHUTDOWN_CHECKPOINT_FAILURE_REASON_ATTRIBUTE =
