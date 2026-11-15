@@ -42,8 +42,8 @@ describe('direct provider output retirement', () => {
         'final answer 🐳\n',
         'final error\n'
       ])
-      expect(raw.stdout.destroyed).toBe(true)
-      expect(raw.stderr.destroyed).toBe(true)
+      expect(raw.stdout?.destroyed).toBe(true)
+      expect(raw.stderr?.destroyed).toBe(true)
     } finally {
       vi.useRealTimers()
       raw.kill('SIGKILL')
