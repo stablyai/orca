@@ -17,6 +17,8 @@ export type CloudFetchLineHandlers = {
   installing: boolean
   copyRequest: () => void
   copied?: boolean
+  /** LIVE-GIT-ACCESS: the live refresh ran and origin still refused. */
+  needsRestart?: boolean
   restart?: () => void
   recheck?: () => void
   checking?: boolean
@@ -122,7 +124,7 @@ export function cloudFetchNoticeLine(
     case 'granted':
       // The app reaches the repository and GitHub still refused: this workspace started without the
       // app's credential (it was installed after the start). A restart picks it up.
-      if (refusedByGitHub(check) && h.restart) {
+      if ((refusedByGitHub(check) || h.needsRestart) && h.restart) {
         return {
           text: t(
             'orcaCloud.setupNotices.fetchNeedsRestart',
@@ -130,8 +132,8 @@ export function cloudFetchNoticeLine(
             { repo }
           ),
           description: t(
-            'orcaCloud.setupNotices.fetchNeedsRestartMeaning',
-            'Restart the workspace to pick it up. Your files are kept.'
+            'orcaCloud.setupNotices.newAccessNeedsRestart',
+            'Restart the workspace to use the new access. Your files are kept.'
           ),
           action: {
             label: t('orcaCloudWorkspace.restart', 'Restart'),

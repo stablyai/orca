@@ -28162,7 +28162,8 @@
       "fetchNoAccessRequested": "An owner of {{owner}} has been asked to approve it. Pulls and pushes won’t work until they do.",
       "fetchNoAccessCantInstall": "Only an owner of {{owner}} can grant it. Pulls and pushes won’t work until they do.",
       "fetchNeedsRestart": "This workspace can’t use Orca’s access to {{repo}} yet.",
-      "fetchNeedsRestartMeaning": "Restart the workspace to pick it up. Your files are kept."
+      "pushNeedsRestart": "Orca Cloud can push to {{repo}} now, but this workspace can’t use the new access yet.",
+      "newAccessNeedsRestart": "Restart the workspace to use the new access. Your files are kept."
     },
     "toast": {
       "dismiss": "Dismiss"

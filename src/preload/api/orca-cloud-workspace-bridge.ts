@@ -14,6 +14,7 @@ import {
 export const orcaCloudWorkspaceApi = {
   getStatus: (args) => ipcRenderer.invoke(CH.getStatus, args),
   restart: (args) => ipcRenderer.invoke(CH.restart, args),
+  refreshGitAccess: (args) => ipcRenderer.invoke(CH.refreshGitAccess, args),
   archive: (args) => ipcRenderer.invoke(CH.archive, args),
   unarchive: (args) => ipcRenderer.invoke(CH.unarchive, args),
   getArchive: (args) => ipcRenderer.invoke(CH.getArchive, args),

@@ -23,12 +23,19 @@ export type CloudPushNoticeState = {
   copied: boolean
   recheck: () => void
   rechecking: boolean
+  /**
+   * LIVE-GIT-ACCESS: the App reaches the repository, the live refresh ran and the sandbox still can't
+   * push or reach origin. The line says Restart instead of offering Check again forever.
+   */
+  needsRestart: boolean
 }
 
 /** Polls repo access after Install until the push works, GitHub refuses it, or it gives up. */
 function usePushRecheck(
   environmentId: string | undefined,
-  hasPush: boolean
+  hasPush: boolean,
+  workspaceId: string | undefined,
+  onRefused: () => void
 ): { installing: boolean; startInstall: (repoUrl: string) => void } {
   const [installStartedAt, setInstallStartedAt] = useState<number | null>(null)
   const [tick, setTick] = useState(0)
@@ -50,10 +57,13 @@ function usePushRecheck(
           return
         }
         busy.current = true
-        void recheckCloudPushAccess(environmentId)
+        void recheckCloudPushAccess(environmentId, { workspaceId })
           .then((result) => {
             if (result !== 'waiting') {
               setInstallStartedAt(null)
+            }
+            if (result === 'refused') {
+              onRefused()
             }
           })
           .finally(() => {
@@ -64,7 +74,9 @@ function usePushRecheck(
       elapsed < FAST_POLL_WINDOW_MS ? FAST_POLL_MS : SLOW_POLL_MS
     )
     return () => clearTimeout(timer)
-  }, [environmentId, hasPush, installStartedAt, tick])
+    // onRefused only sets state: a fresh closure each render needn't restart the poll.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [environmentId, hasPush, installStartedAt, tick, workspaceId])
 
   // Installed somewhere else (the browser, another device): check again when Orca is focused.
   useEffect(() => {
@@ -74,14 +86,14 @@ function usePushRecheck(
     const onFocus = (): void => {
       if (!busy.current) {
         busy.current = true
-        void recheckCloudPushAccess(environmentId).finally(() => {
+        void recheckCloudPushAccess(environmentId, { workspaceId }).finally(() => {
           busy.current = false
         })
       }
     }
     window.addEventListener('focus', onFocus)
     return () => window.removeEventListener('focus', onFocus)
-  }, [environmentId, hasPush])
+  }, [environmentId, hasPush, workspaceId])
 
   return {
     installing: installStartedAt !== null,
@@ -128,10 +140,12 @@ function usePushAccess(repoUrl: string | null, hasPush: boolean): CloudPushAcces
 export function useCloudPushNotice(
   environmentId: string | undefined,
   repoUrl: string | null,
-  hasPush: boolean
+  hasPush: boolean,
+  workspaceId?: string
 ): CloudPushNoticeState {
   const access = usePushAccess(repoUrl, hasPush)
-  const push = usePushRecheck(environmentId, hasPush)
+  const [needsRestart, setNeedsRestart] = useState(false)
+  const push = usePushRecheck(environmentId, hasPush, workspaceId, () => setNeedsRestart(true))
   const request = useOwnerRequestCopy(repoUrl, 'push')
   const [rechecking, setRechecking] = useState(false)
   const recheckBusy = useRef(false)
@@ -151,12 +165,20 @@ export function useCloudPushNotice(
       }
       recheckBusy.current = true
       setRechecking(true)
-      // A push that works now drops the line (recheckCloudPushAccess); a refusal keeps it.
-      void recheckCloudPushAccess(environmentId).finally(() => {
-        recheckBusy.current = false
-        setRechecking(false)
-      })
+      // LIVE-GIT-ACCESS: the running workspace takes the App's access first, then the check runs again.
+      // A push that works now drops the line; a refusal after that says Restart, not Check again again.
+      void recheckCloudPushAccess(environmentId, { workspaceId })
+        .then((result) => {
+          if (result === 'refused') {
+            setNeedsRestart(true)
+          }
+        })
+        .finally(() => {
+          recheckBusy.current = false
+          setRechecking(false)
+        })
     },
-    rechecking
+    rechecking,
+    needsRestart
   }
 }

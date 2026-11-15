@@ -596,6 +596,43 @@ export async function refreshGitCredentials(
   return { expiresAt: minted.expiresAt }
 }
 
+/** Sets the workspace placeholder header in the VM user's global git config (no secret: a placeholder). */
+export const GIT_EXTRAHEADER_SCRIPT = 'git config --global http.https://github.com/.extraheader "$1"'
+
+export type LiveGitAccess =
+  | { applied: true; expiresAt: number }
+  | { applied: false; reason: 'not_running' | 'not_github' | 'not_installed' }
+
+/**
+ * LIVE-GIT-ACCESS: the GitHub App was installed (or granted the repo) after this workspace booted. Mint the
+ * repo token, swap it into the live egress policy, and give the VM's git the placeholder header boot would
+ * have set (orca-sandbox-start), so pulls and pushes work without a restart. Idempotent; safe to repeat.
+ */
+export async function applyLiveGitAccess(deps: LifecycleDeps, row: SandboxRow): Promise<LiveGitAccess> {
+  if (row.status !== 'running' || !row.session_id) {
+    return { applied: false, reason: 'not_running' }
+  }
+  if (!row.repo_url || !parseGitHubRepo(row.repo_url)) {
+    return { applied: false, reason: 'not_github' }
+  }
+  const git = await refreshGitCredentials(deps, row, row.session_id)
+  if (!git) {
+    return { applied: false, reason: 'not_installed' }
+  }
+  const header = `Authorization: ${gitBasicAuthorization(githubPlaceholderToken(row))}`
+  const result = await deps.provider.runCommand(row.session_id, {
+    command: 'bash',
+    args: ['-c', GIT_EXTRAHEADER_SCRIPT, 'git-access', header],
+    timeoutMs: 15_000
+  })
+  if (result.exitCode !== 0) {
+    throw new LifecycleError('conflict', 'git_config_failed')
+  }
+  await transition(deps.db, row, { github_token_expires_at: git.expiresAt }, deps.now())
+  console.log(JSON.stringify({ event: 'git_access_applied', sandboxId: row.id }))
+  return { applied: true, expiresAt: git.expiresAt }
+}
+
 async function memberPlaceholdersFor(deps: LifecycleDeps, row: SandboxRow): Promise<string[]> {
   if (!deps.memberIdentity || !deps.config.egressProxyUrl || !row.repo_url) {
     return []
