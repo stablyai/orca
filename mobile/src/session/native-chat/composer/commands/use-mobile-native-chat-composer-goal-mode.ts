@@ -55,7 +55,7 @@ export function useMobileNativeChatComposerGoalMode(
       return true
     },
     send: async (send, text, intent) => {
-      // `/mcp` opens its sheet as a command, never becoming the objective, and goal mode stays.
+      // `/mcp` opens its tray as a command, never becoming the objective, and goal mode stays.
       if (!active || (structured?.mcpPanel && /^\/mcp\s*$/i.test(text))) {
         return intent ? send(text, intent) : send(text)
       }

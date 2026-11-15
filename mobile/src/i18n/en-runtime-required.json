@@ -72,8 +72,12 @@
   "chat": {
     "mcp": {
       "status": {
-        "connectedTools_one": "Connected · {{count}} tool",
-        "connectedTools_other": "Connected · {{count}} tools"
+        "tools_one": "{{count}} tool",
+        "tools_other": "{{count}} tools"
+      },
+      "summary": {
+        "needsAuth_one": "{{count}} needs sign-in",
+        "needsAuth_other": "{{count}} need sign-in"
       }
     },
     "notice": {

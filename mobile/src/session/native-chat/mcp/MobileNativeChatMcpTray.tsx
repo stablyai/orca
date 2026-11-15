@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { useWindowDimensions } from 'react-native'
 import { createAgentSessionMcpPanelHook } from '../../../../../src/shared/agent-session/view/use-agent-session-mcp-panel'
-import { BottomDrawer } from '../../../components/bottom-drawer/BottomDrawer'
 import { openExternalLink } from '../../../platform/external-links/external-link'
+import { useMobileNativeChatLowerGeometry } from '../lower-region/mobile-native-chat-lower-region-context'
 import type { MobileStructuredMcpPanel } from './use-mobile-structured-mcp-panel'
 import { MobileNativeChatMcpPanel } from './MobileNativeChatMcpPanel'
 
@@ -12,24 +13,23 @@ const useAgentSessionMcpPanel = createAgentSessionMcpPanelHook({
   useState
 })
 
-/** The `/mcp` sheet; each opening reads the servers afresh. */
-export function MobileNativeChatMcpSheet({
+// Of the chat's visible height, which shrinks while the keyboard is up.
+const LIST_SHARE = 0.4
+
+/** The `/mcp` tray on the composer's top edge; each opening reads the servers afresh. */
+export function MobileNativeChatMcpTray({
   panel
 }: {
   panel: MobileStructuredMcpPanel | null | undefined
 }): React.JSX.Element | null {
-  if (!panel) {
-    return null
-  }
-  return (
-    <BottomDrawer visible={panel.open} onClose={panel.close}>
-      <McpSheetContent panel={panel} />
-    </BottomDrawer>
-  )
+  return panel?.open ? <McpTrayContent panel={panel} /> : null
 }
 
-function McpSheetContent({ panel }: { panel: MobileStructuredMcpPanel }) {
+function McpTrayContent({ panel }: { panel: MobileStructuredMcpPanel }) {
   const state = useAgentSessionMcpPanel(panel.request, openExternalLink)
+  const window = useWindowDimensions()
+  const { allocationHeight } = useMobileNativeChatLowerGeometry()
+  const visibleHeight = allocationHeight ? Math.min(window.height, allocationHeight) : window.height
   return (
     <MobileNativeChatMcpPanel
       {...state}
@@ -37,6 +37,7 @@ function McpSheetContent({ panel }: { panel: MobileStructuredMcpPanel }) {
       retry={() => void state.retry()}
       openUrl={openExternalLink}
       onClose={panel.close}
+      listMaxHeight={Math.round(visibleHeight * LIST_SHARE)}
     />
   )
 }

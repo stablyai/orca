@@ -22,7 +22,7 @@ export type MobileStructuredMcpPanel = {
 
 type McpCommands = Pick<StructuredAgentSessionComposerOptions, 'openMcpPanel'>
 
-/** The chat's `/mcp` sheet, offered where the host manages this agent's MCP servers. */
+/** The chat's `/mcp` tray, offered where the host manages this agent's MCP servers. */
 export function useMobileStructuredMcpPanel<TCommands extends object>(
   session: Pick<
     MobileStructuredAgentSessionArgs,
@@ -33,19 +33,19 @@ export function useMobileStructuredMcpPanel<TCommands extends object>(
 ): { mcpPanel: MobileStructuredMcpPanel | null; commands: TCommands & McpCommands } {
   const { client, sessionId, agent } = session
   const relayed = useRouteRelaysCapability(AGENT_SESSION_MCP_RUNTIME_CAPABILITY)
-  // One hook serves every chat tab, so the sheet belongs to the conversation that opened it.
+  // One hook serves every chat tab, so the tray belongs to the conversation that opened it.
   const [openFor, setOpenFor] = useState<string | null>(null)
-  const sheetOpen = openFor === sessionKey
-  // A reconnect clears host support until it is read again; an open sheet mid sign-in must keep
+  const trayOpen = openFor === sessionKey
+  // A reconnect clears host support until it is read again; an open tray mid sign-in must keep
   // its paste box through that gap.
   const hostReported = session.hostSupport ? session.hostSupport.mcp === true && relayed : undefined
   const [hostKnown, setHostKnown] = useState(false)
   if (hostReported !== undefined && hostKnown !== hostReported) {
     setHostKnown(hostReported)
   }
-  const hostManages = session.enabled && (hostReported ?? (sheetOpen && hostKnown))
+  const hostManages = session.enabled && (hostReported ?? (trayOpen && hostKnown))
   const registered = useMobileRegisteredAgent(client, hostManages, agent)
-  // A reconnect re-reads the agents; an open sheet (mid sign-in, after a trip to the browser) stays.
+  // A reconnect re-reads the agents; an open tray (mid sign-in, after a trip to the browser) stays.
   const [known, setKnown] = useState<{ client: unknown; agent: string | null; mcp: boolean }>()
   const sameChat = known !== undefined && known.client === client && known.agent === agent
   const reported = registered ? registered.capabilities.mcpServers === true : undefined
@@ -54,7 +54,7 @@ export function useMobileStructuredMcpPanel<TCommands extends object>(
   }
   const agentManages = reported ?? (sameChat && known.mcp)
   const offered = hostManages && agentManages && !!client && !!sessionId
-  const open = offered && sheetOpen
+  const open = offered && trayOpen
   const show = useCallback(() => setOpenFor(sessionKey), [sessionKey])
   const close = useCallback(() => setOpenFor(null), [])
   const request = useCallback(

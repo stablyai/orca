@@ -1,5 +1,6 @@
 import { useState } from 'react'
-import { ActivityIndicator, Pressable, Text, View } from 'react-native'
+import { ActivityIndicator, Pressable, ScrollView, Text, View } from 'react-native'
+import { X } from 'lucide-react-native'
 import type {
   AgentSessionMcpOperation,
   AgentSessionMcpServer,
@@ -7,27 +8,23 @@ import type {
 } from '../../../../../src/shared/agent-session/agent-session-mcp'
 import type { AgentSessionMcpPanelState } from '../../../../../src/shared/agent-session/view/use-agent-session-mcp-panel'
 import {
-  LIST_LEADING_INSET,
-  ListGroup,
-  ListRow,
-  SectionHeader
-} from '../../../components/list/ListGroup'
-import { MobileSwitch } from '../../../components/controls/MobileSwitch'
-import { TextField } from '../../../components/composer-input/TextField'
-import { SheetHeader } from '../../../components/nav-bar/SheetHeader'
-import type { Translate } from '../../../i18n/mobile-i18n'
-import { useMobileTranslation } from '../../../i18n/use-mobile-translation'
-import { colors } from '../../../theme/mobile-theme'
-import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
-import {
-  mobileMcpServerStatusLine,
-  mobileMcpSourceLabel
-} from './mobile-native-chat-mcp-server-copy'
-import {
   agentSessionMcpRowFailure,
   agentSessionMcpServerDisplayName,
   groupAgentSessionMcpServers
 } from '../../../../../src/shared/agent-session/view/agent-session-mcp-server-presentation'
+import { MobileSwitch } from '../../../components/controls/MobileSwitch'
+import { TextField } from '../../../components/composer-input/TextField'
+import type { Translate } from '../../../i18n/mobile-i18n'
+import { useMobileTranslation } from '../../../i18n/use-mobile-translation'
+import { colors, spacing } from '../../../theme/mobile-theme'
+import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
+import { queuedMessageStyles } from '../input/queued-messages/mobile-native-chat-queued-message-styles'
+import { trayStripStyles } from '../input/tasks/mobile-native-chat-tray-strip-styles'
+import {
+  mobileMcpServerStatusLine,
+  mobileMcpSourceLabel,
+  mobileMcpTraySummary
+} from './mobile-native-chat-mcp-server-copy'
 import { mcpPanelStyles as styles } from './mobile-native-chat-mcp-panel-styles'
 
 type McpAction = Exclude<AgentSessionMcpOperation, { action: 'status' }>
@@ -38,30 +35,53 @@ export type MobileNativeChatMcpPanelProps = AgentSessionMcpPanelState & {
   dismissSignIn: () => void
   openUrl: (url: string) => void
   onClose: () => void
+  /** The server list's cap, so the tray and composer stay on screen above the keyboard. */
+  listMaxHeight: number
 }
 
-/** The `/mcp` sheet's page: the chat's MCP servers grouped by where the agent found them. */
+/** The `/mcp` tray on the composer's top edge: a summary line over the chat's MCP servers. */
 export function MobileNativeChatMcpPanel(props: MobileNativeChatMcpPanelProps): React.JSX.Element {
   useMobileColorScheme()
   const t = useMobileTranslation()
+  const listed = props.result?.status === 'ok' && props.servers.length > 0
+  const summary = listed ? mobileMcpTraySummary(props.servers, props.signIn, t) : []
   return (
-    <View style={styles.sheet}>
+    <View
+      style={[queuedMessageStyles.box, queuedMessageStyles.composerTab]}
+      testID="native-chat-mcp-tray"
+    >
       <View style={styles.header}>
-        <SheetHeader title={t('chat.mcp.title', 'MCP servers')} onClose={props.onClose} />
+        <Text style={styles.headerText} numberOfLines={1}>
+          <Text style={styles.title}>{t('chat.mcp.title', 'MCP servers')}</Text>
+          {summary.map((part) => (
+            <Text key={part.text}>
+              <Text style={styles.summary}>{' · '}</Text>
+              <Text style={[styles.summary, part.attention && styles.summaryAttention]}>
+                {part.text}
+              </Text>
+            </Text>
+          ))}
+        </Text>
+        {props.result === null ? <ActivityIndicator size="small" color={colors.textMuted} /> : null}
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={t('common.close', 'Close')}
+          hitSlop={spacing.xs}
+          style={({ pressed }) => [styles.close, pressed && styles.pressed]}
+          onPress={props.onClose}
+        >
+          <X size={16} color={colors.textMuted} strokeWidth={2} />
+        </Pressable>
       </View>
-      <McpPanelBody {...props} t={t} />
+      <McpTrayBody {...props} t={t} />
     </View>
   )
 }
 
-function McpPanelBody(props: MobileNativeChatMcpPanelProps & { t: Translate }) {
+function McpTrayBody(props: MobileNativeChatMcpPanelProps & { t: Translate }) {
   const { result, servers, t } = props
   if (result === null) {
-    return (
-      <View style={styles.loading}>
-        <ActivityIndicator color={colors.textSecondary} />
-      </View>
-    )
+    return null
   }
   if (result.status === 'not-running') {
     return (
@@ -94,22 +114,25 @@ function McpPanelBody(props: MobileNativeChatMcpPanelProps & { t: Translate }) {
     return <Notice text={t('chat.mcp.empty', 'No MCP servers are set up for this chat.')} />
   }
   return (
-    <>
-      {groupAgentSessionMcpServers(servers).map((group, index) => (
+    <ScrollView
+      style={[styles.list, { maxHeight: props.listMaxHeight }]}
+      contentContainerStyle={styles.listContent}
+      keyboardShouldPersistTaps="handled"
+      nestedScrollEnabled
+    >
+      {groupAgentSessionMcpServers(servers).map((group) => (
         <View key={group.source ?? ''}>
-          {group.source === null ? (
-            <View style={styles.pageTop} />
-          ) : (
-            <SectionHeader title={mobileMcpSourceLabel(group.source, t)} first={index === 0} />
+          {group.source === null ? null : (
+            <Text style={[trayStripStyles.groupLabel, styles.groupLabel]}>
+              {mobileMcpSourceLabel(group.source, t)}
+            </Text>
           )}
-          <ListGroup separatorInset={LIST_LEADING_INSET}>
-            {group.servers.map((server) => (
-              <McpServerRow key={server.name} server={server} {...props} />
-            ))}
-          </ListGroup>
+          {group.servers.map((server) => (
+            <McpServerRow key={server.name} server={server} {...props} />
+          ))}
         </View>
       ))}
-    </>
+    </ScrollView>
   )
 }
 
@@ -144,51 +167,78 @@ function McpServerRow({
   // A toggle in flight shows where it is going.
   const enabled = mine?.action === 'toggle' ? mine.enabled : server.status !== 'disabled'
   const refusal = agentSessionMcpRowFailure(server, failure, signingIn)
+  const finishExternal = (): void => run({ action: 'reconnect', server: server.name })
   return (
     <View>
-      <ListRow
-        title={agentSessionMcpServerDisplayName(server)}
-        leading={<StatusMark status={server.status} />}
-        detail={
-          <Text
-            style={[styles.statusLine, server.status === 'failed' && styles.statusLineFailed]}
-            numberOfLines={2}
-          >
-            {mobileMcpServerStatusLine(server, t)}
-          </Text>
-        }
-        accessory={
-          action || server.canToggle ? (
-            <View style={styles.accessory}>
-              {action ? (
-                <McpButton
-                  label={
-                    action.action === 'signIn'
-                      ? t('chat.mcp.signIn', 'Sign in')
-                      : t('chat.mcp.reconnect', 'Reconnect')
-                  }
-                  tone={action.action === 'signIn' ? 'primary' : 'secondary'}
-                  busy={mine?.action === action.action}
-                  disabled={busy}
-                  onPress={() => run(action)}
-                />
-              ) : null}
-              {server.canToggle ? (
-                <MobileSwitch
-                  value={enabled}
-                  disabled={busy}
-                  accessibilityLabel={t('chat.mcp.toggleLabel', 'Use {{name}}', {
-                    name: server.name
-                  })}
-                  onValueChange={(next) =>
-                    run({ action: 'toggle', server: server.name, enabled: next })
-                  }
-                />
-              ) : null}
-            </View>
-          ) : undefined
-        }
-      />
+      <View style={styles.row}>
+        <View style={styles.mark}>
+          <StatusMark status={signingIn ? 'pending' : server.status} />
+        </View>
+        <Text style={styles.name} numberOfLines={1}>
+          {agentSessionMcpServerDisplayName(server)}
+        </Text>
+        <Text
+          style={[
+            styles.statusLine,
+            !signingIn && server.status === 'failed' && styles.statusLineFailed
+          ]}
+          numberOfLines={1}
+        >
+          {signingIn
+            ? signingIn.finish === 'external'
+              ? t('chat.mcp.status.finishOnPage', 'Finish on the page that opened')
+              : t('chat.mcp.status.waitingForSignIn', 'Waiting for sign-in…')
+            : mobileMcpServerStatusLine(server, t)}
+        </Text>
+        {signingIn ? (
+          <>
+            {signingIn.finish === 'external' ? (
+              <McpButton
+                label={t('common.done', 'Done')}
+                tone="primary"
+                busy={mine?.action === 'reconnect'}
+                disabled={busy}
+                onPress={finishExternal}
+              />
+            ) : (
+              <McpButton
+                label={t('chat.mcp.openAgain', 'Open again')}
+                tone="plain"
+                onPress={() => openUrl(signingIn.url)}
+              />
+            )}
+            <McpButton label={t('common.cancel', 'Cancel')} tone="plain" onPress={dismissSignIn} />
+          </>
+        ) : (
+          <>
+            {action ? (
+              <McpButton
+                label={
+                  action.action === 'signIn'
+                    ? t('chat.mcp.signIn', 'Sign in')
+                    : t('chat.mcp.reconnect', 'Reconnect')
+                }
+                tone={action.action === 'signIn' ? 'primary' : 'secondary'}
+                busy={mine?.action === action.action}
+                disabled={busy}
+                onPress={() => run(action)}
+              />
+            ) : null}
+            {server.canToggle ? (
+              <MobileSwitch
+                value={enabled}
+                disabled={busy}
+                accessibilityLabel={t('chat.mcp.toggleLabel', 'Use {{name}}', {
+                  name: server.name
+                })}
+                onValueChange={(next) =>
+                  run({ action: 'toggle', server: server.name, enabled: next })
+                }
+              />
+            ) : null}
+          </>
+        )}
+      </View>
       {refusal ? (
         <Text style={styles.rowFailure} accessibilityLiveRegion="polite">
           {refusal.kind === 'signInUnfinished'
@@ -199,16 +249,8 @@ function McpServerRow({
             : (refusal.message ?? t('chat.mcp.actionFailed', "Couldn't do that. Try again."))}
         </Text>
       ) : null}
-      {signingIn ? (
-        <McpSignIn
-          signIn={signingIn}
-          pending={mine}
-          busy={busy}
-          run={run}
-          openUrl={openUrl}
-          onCancel={dismissSignIn}
-          t={t}
-        />
+      {signingIn?.finish === 'callback' ? (
+        <McpPasteBox signIn={signingIn} pending={mine} busy={busy} run={run} t={t} />
       ) : null}
     </View>
   )
@@ -230,72 +272,32 @@ function StatusMark({ status }: { status: AgentSessionMcpServer['status'] }) {
 }
 
 // The phone never runs the agent, so a callback sign-in always finishes by pasting the address.
-function McpSignIn({
+function McpPasteBox({
   signIn,
   pending,
   busy,
   run,
-  openUrl,
-  onCancel,
   t
 }: {
   signIn: AgentSessionMcpSignIn
   pending: McpAction | null
   busy: boolean
   run: (operation: McpAction) => void
-  openUrl: (url: string) => void
-  onCancel: () => void
   t: Translate
 }) {
   const [address, setAddress] = useState('')
   const callbackUrl = address.trim()
   const finish = (): void => {
-    if (signIn.finish === 'external') {
-      run({ action: 'reconnect', server: signIn.server })
-    } else if (callbackUrl) {
+    if (callbackUrl) {
       run({ action: 'finishSignIn', server: signIn.server, callbackUrl })
     }
   }
-  const finishing =
-    pending?.action === (signIn.finish === 'external' ? 'reconnect' : 'finishSignIn')
-  const secondary = (
-    <View style={styles.signInActions}>
-      <McpButton
-        label={t('chat.mcp.openAgain', 'Open again')}
-        tone="secondary"
-        onPress={() => openUrl(signIn.url)}
-      />
-      <McpButton label={t('common.cancel', 'Cancel')} tone="plain" onPress={onCancel} />
-    </View>
-  )
-  if (signIn.finish === 'external') {
-    return (
-      <View style={styles.signIn}>
-        <Text style={styles.signInText}>
-          {t(
-            'chat.mcp.externalSignIn',
-            'Finish signing in on the page that opened, then tap Done.'
-          )}
-        </Text>
-        <View style={styles.signInActions}>
-          <McpButton
-            label={t('common.done', 'Done')}
-            tone="primary"
-            busy={finishing}
-            disabled={busy}
-            onPress={finish}
-          />
-          {secondary}
-        </View>
-      </View>
-    )
-  }
   return (
-    <View style={styles.signIn}>
-      <Text style={styles.signInText}>
+    <View style={styles.pasteBox}>
+      <Text style={styles.pasteHint}>
         {t(
-          'chat.mcp.pasteSignIn',
-          "Sign-in opens in your browser. When it lands on a page that won't load, copy its address and paste it here."
+          'chat.mcp.pasteHint',
+          "When the browser lands on a page that won't load, copy its address and paste it here."
         )}
       </Text>
       <View style={styles.pasteRow}>
@@ -315,12 +317,11 @@ function McpSignIn({
           label={t('chat.mcp.finish', 'Finish')}
           tone="primary"
           tall
-          busy={finishing}
+          busy={pending?.action === 'finishSignIn'}
           disabled={busy || !callbackUrl}
           onPress={finish}
         />
       </View>
-      {secondary}
     </View>
   )
 }

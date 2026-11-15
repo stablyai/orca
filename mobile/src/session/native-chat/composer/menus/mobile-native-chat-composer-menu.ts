@@ -30,7 +30,7 @@ export type MobileComposerStructuredCatalog = {
   reported: readonly AgentSessionSlashCommand[] | undefined
   conversationCommands: readonly AgentSessionConversationCommand[]
   compactInstructions?: boolean
-  /** `/mcp` opens the chat's MCP sheet. */
+  /** `/mcp` opens the chat's MCP tray. */
   mcpPanel?: boolean
 }
 

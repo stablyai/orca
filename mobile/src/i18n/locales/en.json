@@ -3509,14 +3509,16 @@
       },
       "status": {
         "connected": "Connected",
-        "connectedTools_one": "Connected · {{count}} tool",
-        "connectedTools_other": "Connected · {{count}} tools",
         "pending": "Connecting…",
         "needsAuth": "Needs sign-in",
         "failedReason": "Failed: {{error}}",
         "failed": "Failed",
-        "disabled": "Disabled",
-        "needsAuthAfterSend": "Needs sign-in. Send a message to sign in here."
+        "needsAuthAfterSend": "Needs sign-in. Send a message to sign in here.",
+        "finishOnPage": "Finish on the page that opened",
+        "waitingForSignIn": "Waiting for sign-in…",
+        "tools_one": "{{count}} tool",
+        "tools_other": "{{count}} tools",
+        "off": "Off"
       },
       "title": "MCP servers",
       "notRunning": "MCP servers connect when you send your next message.",
@@ -3529,12 +3531,18 @@
       "toggleLabel": "Use {{name}}",
       "actionFailed": "Couldn't do that. Try again.",
       "openAgain": "Open again",
-      "externalSignIn": "Finish signing in on the page that opened, then tap Done.",
-      "pasteSignIn": "Sign-in opens in your browser. When it lands on a page that won't load, copy its address and paste it here.",
       "pastePlaceholder": "Paste address",
       "pasteLabel": "Sign-in page address",
       "finish": "Finish",
-      "signInUnfinished": "Sign-in isn't finished yet. Finish it on the page that opened, then tap Done."
+      "signInUnfinished": "Sign-in isn't finished yet. Finish it on the page that opened, then tap Done.",
+      "summary": {
+        "signingIn": "signing in to {{name}}",
+        "connected": "{{count}} connected",
+        "needsAuth_one": "{{count}} needs sign-in",
+        "needsAuth_other": "{{count}} need sign-in",
+        "failed": "{{count}} failed"
+      },
+      "pasteHint": "When the browser lands on a page that won't load, copy its address and paste it here."
     }
   },
   "sourceControl": {

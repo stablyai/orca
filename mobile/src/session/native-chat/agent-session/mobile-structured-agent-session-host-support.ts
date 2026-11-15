@@ -78,7 +78,7 @@ export type StructuredAgentSessionHostSupport = {
   continueInterrupted?: boolean
   /** Older hosts report goals but refuse the phone's goal changes. */
   phoneThreadGoal?: boolean
-  /** The host answers `agentSession.mcp` for the `/mcp` sheet. */
+  /** The host answers `agentSession.mcp` for the `/mcp` tray. */
   mcp?: boolean
   /** Older hosts advertise rewind but refuse it from a phone. */
   phoneRewind?: boolean
