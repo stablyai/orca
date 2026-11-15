@@ -23,7 +23,6 @@ import {
 import { routeLocalGitOptions } from '../../command-runner/host-routing/local-git-runtime-route'
 import type { GitExecOptions } from '../../command-runner/git-exec-options'
 import { runWithGitReadCacheInvalidation } from '../../source-control/git-read-cache-invalidation'
-import { withRepoRefMaintenancePaused } from '../../refs/maintenance/local-repo-ref-maintenance'
 import type { AddWorktreeOptions, GitWorktreeExecOptions } from '../worktree-operation-options'
 
 // Bound the create's wait on the shared ref-only refresh.
@@ -118,13 +117,11 @@ export function fastForwardCheckedOutLocalBaseAfterCreate(
   const git = localBaseBranchGit(options, { admissionExempt: true })
   void runPerRepoCheckoutFastForward(key, parsed.fullRef, () =>
     runWithGitReadCacheInvalidation(() =>
-      withRepoRefMaintenancePaused('local-base-checkout-fast-forward', () =>
-        fastForwardCheckedOutLocalBaseBranch(git, {
-          repoPath,
-          fullRef: parsed.fullRef,
-          remoteTrackingRef
-        })
-      )
+      fastForwardCheckedOutLocalBaseBranch(git, {
+        repoPath,
+        fullRef: parsed.fullRef,
+        remoteTrackingRef
+      })
     )
   ).catch((error: unknown) => {
     console.warn('addWorktree: checked-out local base fast-forward failed unexpectedly', error)

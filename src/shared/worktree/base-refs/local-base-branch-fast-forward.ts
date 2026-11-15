@@ -1,3 +1,4 @@
+import { windowsLongPathGitArgs } from '../../git/compatibility/windows-long-path-git-args'
 import { retryOnGitLockContention } from '../../git/commands/git-lock-contention'
 import { parseGitRevListAheadBehindCounts } from '../../git/refs/git-rev-list-output'
 import { isShowRefNoMatchError } from '../../git/refs/git-show-ref-no-match'
@@ -70,10 +71,11 @@ function ownerFastForwardArgs(branch: string, targetOid: string): string[] {
   ]
 }
 
-/** Read-only inspection of local drift. A checked-out branch is reported only when strictly behind, so its checkout stays silent otherwise. */
+/** Read-only inspection of local drift. A checked-out branch is reported only when strictly behind, so its checkout stays silent otherwise; `skipCheckedOut` stops before walking its history. */
 export async function inspectLocalBaseBranch(
   git: LocalBaseBranchGit,
-  refs: LocalBaseBranchRefs
+  refs: LocalBaseBranchRefs,
+  { skipCheckedOut = false }: { skipCheckedOut?: boolean } = {}
 ): Promise<LocalBaseBranchInspection> {
   const { repoPath, fullRef, remoteTrackingRef } = refs
   let localOid: string
@@ -100,6 +102,9 @@ export async function inspectLocalBaseBranch(
     owner = (await git.listWorktrees(repoPath)).find((wt) => wt.branch === fullRef)
   } catch {
     return { status: 'skipped_error' }
+  }
+  if (owner && skipCheckedOut) {
+    return { status: 'nothing_to_do' }
   }
   const ownerPath = owner ? { ownerWorktreePath: owner.path } : {}
 
@@ -129,13 +134,10 @@ export async function fastForwardLocalBaseBranch(
   git: LocalBaseBranchGit,
   refs: LocalBaseBranchRefs
 ): Promise<LocalBaseBranchFastForwardOutcome> {
-  const inspection = await inspectLocalBaseBranch(git, refs)
+  // A checked-out branch is left to fastForwardCheckedOutLocalBaseBranch, after the create.
+  const inspection = await inspectLocalBaseBranch(git, refs, { skipCheckedOut: true })
   if (inspection.status !== 'behind') {
     return inspection
-  }
-  if (inspection.ownerWorktreePath) {
-    // Its checkout is updated after the create returns (fastForwardCheckedOutLocalBaseBranch).
-    return { status: 'nothing_to_do' }
   }
   const { repoPath, fullRef, remoteTrackingRef } = refs
   const { localOid, remoteOid } = inspection
@@ -192,7 +194,10 @@ export async function fastForwardCheckedOutLocalBaseBranch(
     if (head.trim() !== refs.fullRef) {
       return
     }
-    await git.exec(ownerFastForwardArgs(branch, remoteOid), ownerWorktreePath)
+    await git.exec(
+      [...windowsLongPathGitArgs(ownerWorktreePath), ...ownerFastForwardArgs(branch, remoteOid)],
+      ownerWorktreePath
+    )
   } catch {
     // A skipped update stays silent; the next create tries again.
   }
