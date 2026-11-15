@@ -6104,8 +6104,8 @@
           "removeBatchFolder_other": "<target>{{count}} Arbeitsbereiche</target> aus Orca entfernen. Projektordner auf dem Datenträger werden nicht gelöscht.",
           "removeBatchMixed_one": "<target>{{count}} Arbeitsbereich</target> aus Orca entfernen. Git-Worktrees werden auch aus git und vom Datenträger entfernt; bei Ordner-Arbeitsbereichen wird nur der Orca-Eintrag entfernt.",
           "removeBatchMixed_other": "<target>{{count}} Arbeitsbereiche</target> aus Orca entfernen. Git-Worktrees werden auch aus git und vom Datenträger entfernt; bei Ordner-Arbeitsbereichen wird nur der Orca-Eintrag entfernt.",
-          "removeBatchGit_one": "<target>{{count}} Arbeitsbereich</target> aus git entfernen und seinen Arbeitsbereichsordner löschen.",
-          "removeBatchGit_other": "<target>{{count}} Arbeitsbereiche</target> aus git entfernen und ihre Arbeitsbereichsordner löschen.",
+          "removeBatchGit_one": "Deletes {{count}} worktree and its branch (kept if unmerged).",
+          "removeBatchGit_other": "Deletes {{count}} worktrees and their branches (kept if unmerged).",
           "removeWithChildrenFolder_one": "<target/> und <descendants>{{count}} untergeordneten Arbeitsbereich</descendants> aus Orca entfernen. Projektordner auf dem Datenträger werden nicht gelöscht.",
           "removeWithChildrenFolder_other": "<target/> und <descendants>{{count}} untergeordnete Arbeitsbereiche</descendants> aus Orca entfernen. Projektordner auf dem Datenträger werden nicht gelöscht.",
           "removeWithChildrenMixed_one": "<target/> und <descendants>{{count}} untergeordneten Arbeitsbereich</descendants> aus Orca entfernen. Git-Worktrees werden auch aus git und vom Datenträger entfernt; bei Ordner-Arbeitsbereichen wird nur der Orca-Eintrag entfernt.",
@@ -20523,7 +20523,7 @@
       "selectAgent": "Agenten auswählen",
       "detectingAgents": "Agenten auf dem Host dieses Arbeitsbereichs werden erkannt…",
       "detectionFailed": "Agenten auf dem Host dieses Arbeitsbereichs konnten nicht erkannt werden.",
-      "noAgents": "Auf dem Host dieses Arbeitsbereichs wurden keine aktivierten Agenten erkannt.",
+      "noAgents": "No enabled agents were detected on this workspace host.",
       "onlySourceFamilyDetected": "Auf dem Host dieses Arbeitsbereichs sind nur Agenten verfügbar, die dasselbe Nutzungslimit wie {{agent}} haben. Einen anderen Agenten aktivieren oder installieren.",
       "context": "Kontext",
       "starting": "Wird gestartet…",
@@ -21756,7 +21756,8 @@
       "dialogSummary": "Schaltet die Codex-Serverfreigabe aus, auch außerhalb von Orca.",
       "alsoStop": "Auch den laufenden Server stoppen (schließt alle Codex-Sitzungen, die ihn nutzen, auch außerhalb von Orca)",
       "couldNotTurnOff": "Die Freigabe konnte nicht ausgeschaltet werden.",
-      "stopFailedAfterOff": "Die Freigabe ist aus, aber der Server wurde nicht gestoppt."
+      "stopFailedAfterOff": "Die Freigabe ist aus, aber der Server wurde nicht gestoppt.",
+      "turnOffAndStop": "Turn off and stop server"
     },
     "paneMove": {
       "failed": "Der Bereich konnte nicht in einen neuen Tab verschoben werden."
@@ -22083,7 +22084,9 @@
       "withChildrenTitle_other": "{{name}} und {{count}} untergeordnete Arbeitsbereiche löschen?",
       "allVerb": "Alle löschen",
       "singleTitle": "{{name}} löschen?",
-      "singleVerb": "Arbeitsbereich löschen"
+      "singleVerb": "Arbeitsbereich löschen",
+      "forceExplanation": "Git couldn’t delete it because it has changes. Force delete removes them anyway.",
+      "errorDetails": "Details"
     }
   },
   "projectBoard": {

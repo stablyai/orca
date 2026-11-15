@@ -5955,7 +5955,7 @@
           "gitBlocksMainWorktree": "Git 不允許移除主工作樹。",
           "removeBatchFolder_other": "從 Orca 移除 <target>{{count}} 個工作區</target>。磁碟上的專案資料夾不會被刪除。",
           "removeBatchMixed_other": "從 Orca 移除 <target>{{count}} 個工作區</target>。Git 工作樹也會從 git 和磁碟中移除；資料夾工作區只會移除 Orca 中的工作區項目。",
-          "removeBatchGit_other": "從 git 移除 <target>{{count}} 個工作區</target>，並刪除其工作區資料夾。",
+          "removeBatchGit_other": "Deletes {{count}} worktrees and their branches (kept if unmerged).",
           "removeWithChildrenFolder_other": "從 Orca 移除 <target/> 和 <descendants>{{count}} 個子工作區</descendants>。磁碟上的專案資料夾不會被刪除。",
           "removeWithChildrenMixed_other": "從 Orca 移除 <target/> 和 <descendants>{{count}} 個子工作區</descendants>。Git 工作樹也會從 git 和磁碟中移除；資料夾工作區只會移除 Orca 中的工作區項目。",
           "removeWithChildrenGit_other": "從 git 移除 <target/> 和 <descendants>{{count}} 個子工作區</descendants>，並刪除其工作區資料夾。",
@@ -20205,7 +20205,7 @@
       "selectAgent": "選擇代理程式",
       "detectingAgents": "正在此工作區主機上偵測代理程式…",
       "detectionFailed": "無法偵測此工作區主機上的代理程式。",
-      "noAgents": "未在此工作區主機上偵測到已啟用的代理程式。",
+      "noAgents": "No enabled agents were detected on this workspace host.",
       "onlySourceFamilyDetected": "此工作區主機上可用的代理程式均與 {{agent}} 共用使用額度。請啟用或安裝其他代理程式。",
       "context": "上下文",
       "starting": "正在啟動…",
@@ -21431,7 +21431,8 @@
       "dialogSummary": "關閉 Codex 伺服器共用，在 Orca 以外也會生效。",
       "alsoStop": "同時停止執行中的伺服器（會關閉所有使用它的 Codex 工作階段，包括 Orca 以外的）",
       "couldNotTurnOff": "無法關閉共用。",
-      "stopFailedAfterOff": "共用已關閉，但伺服器未停止。"
+      "stopFailedAfterOff": "共用已關閉，但伺服器未停止。",
+      "turnOffAndStop": "Turn off and stop server"
     },
     "paneMove": {
       "failed": "無法將窗格移動到新分頁。"
@@ -21755,7 +21756,9 @@
       "withChildrenTitle_other": "要刪除 {{name}} 和 {{count}} 個子工作區嗎？",
       "allVerb": "全部刪除",
       "singleTitle": "要刪除 {{name}} 嗎？",
-      "singleVerb": "刪除工作區"
+      "singleVerb": "刪除工作區",
+      "forceExplanation": "Git couldn’t delete it because it has changes. Force delete removes them anyway.",
+      "errorDetails": "Details"
     }
   },
   "projectBoard": {

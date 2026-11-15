@@ -200,7 +200,7 @@ function OpenRecoverServerDialog({
         {check && !eligible ? <CheckOutcome check={check} detail={detail} /> : null}
         {error ? (
           <>
-            <DialogError onRetry={checkAgain}>{error}</DialogError>
+            <DialogError onRetry={eligible ? undefined : checkAgain}>{error}</DialogError>
             {/* Why one disclosure: the lock evidence and the manual fallback read as one set of details. */}
             <DialogDisclosure label={t('components.settings.recoverServer.details', 'Details')}>
               <div className="space-y-2">

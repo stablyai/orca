@@ -288,7 +288,7 @@ export function DaemonActionDialog({ api }: { api: DaemonActionsApi }): React.JS
               <DialogTitle>{copy.title}</DialogTitle>
               <DialogDescription>{copy.description}</DialogDescription>
             </DialogHeader>
-            {error ? <DialogError onRetry={runConfirmed}>{error}</DialogError> : null}
+            {error ? <DialogError>{error}</DialogError> : null}
             <DialogFooter>
               <DialogCancel>
                 {t('auto.components.shared.useDaemonActions.01af244097', 'Cancel')}

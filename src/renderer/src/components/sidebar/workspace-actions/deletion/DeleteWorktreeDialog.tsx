@@ -1,6 +1,6 @@
 import React, { useCallback, useMemo, useState } from 'react'
 import { Dialog, DialogContent } from '@/components/ui/dialog'
-import { DialogError } from '@/components/ui/dialog-parts'
+import { DeleteWorktreeError } from './DeleteWorktreeError'
 import { useAppStore } from '@/store'
 import { useAllWorktrees } from '@/store/slices/worktrees/listing/use-worktree-catalog'
 import './delete-worktree-flow'
@@ -40,7 +40,6 @@ import { runDialogForceDelete } from './delete-worktree-dialog-force-delete'
 import { getDeleteStateForWorktreeHost } from './worktree-delete-state-host-match'
 import { useSidebarHostScopeOptions } from '../../worktree-list/controls/use-sidebar-host-scope-options'
 import { translateHostDisplayLabel } from '../../execution-host-label'
-import { RemovalUnsavedFilesNotice } from './RemovalUnsavedFilesNotice'
 import { confirmUnsavedDiscard } from '@/store/slices/worktrees/teardown/removed-workspace-unsaved-files'
 import { useDeleteWorktreeDialogTargets } from './use-delete-worktree-dialog-targets'
 import { useDetachWorktreeDeleteChildren } from './use-detach-worktree-delete-children'
@@ -184,7 +183,7 @@ const DeleteWorktreeDialog = React.memo(function DeleteWorktreeDialog() {
     () => deleteTargets.map(({ id, hostId }) => ({ id, hostId })),
     [deleteTargets]
   )
-  const unsavedFiles = useRemovalUnsavedFiles(unsavedTargets, isOpen && !isBatchDelete)
+  const unsavedFiles = useRemovalUnsavedFiles(unsavedTargets, isOpen)
   const deleteError = !isBatchDelete ? getWorktreeDeleteErrorToShow(worktree, deleteState, t) : null
   const canForceDelete = !isBatchDelete && (deleteState?.canForceDelete ?? false)
   const gitStatusByWorktreeIdentity = useDeleteWorktreeStatusHydration({
@@ -344,21 +343,19 @@ const DeleteWorktreeDialog = React.memo(function DeleteWorktreeDialog() {
           <div className="scrollbar-sleek flex max-h-[50vh] min-w-0 flex-col gap-3 overflow-y-auto">
             {hasUnknownChangeState ? <DeleteWorktreeUnknownChangesWarning /> : null}
             {isBatchDelete ? (
-              <>
-                <DeleteWorktreeTargetPreview
-                  isBatchDelete
-                  worktree={worktree}
-                  worktrees={worktrees}
-                  collisionWorktrees={allWorktrees}
-                  hostLabelById={hostLabelById}
-                  deleteStateByWorktreeId={deleteStateByWorktreeId}
-                  changeCheckStatesByWorktreeId={dirtyChanges.checkStates}
-                  dirtyChangeCountsByWorktreeId={dirtyChanges.counts}
-                  dirtyChangePreviewsByWorktreeId={dirtyChanges.previews}
-                  atRiskLocalFilesByIdentity={atRiskLocalFilesByIdentity}
-                />
-                <RemovalUnsavedFilesNotice targets={unsavedTargets} enabled={isOpen} />
-              </>
+              <DeleteWorktreeTargetPreview
+                isBatchDelete
+                unsavedFileCount={unsavedFiles.length}
+                worktree={worktree}
+                worktrees={worktrees}
+                collisionWorktrees={allWorktrees}
+                hostLabelById={hostLabelById}
+                deleteStateByWorktreeId={deleteStateByWorktreeId}
+                changeCheckStatesByWorktreeId={dirtyChanges.checkStates}
+                dirtyChangeCountsByWorktreeId={dirtyChanges.counts}
+                dirtyChangePreviewsByWorktreeId={dirtyChanges.previews}
+                atRiskLocalFilesByIdentity={atRiskLocalFilesByIdentity}
+              />
             ) : worktree ? (
               <DeleteWorktreeChangesSummary
                 worktree={worktree}
@@ -387,7 +384,10 @@ const DeleteWorktreeDialog = React.memo(function DeleteWorktreeDialog() {
         )}
 
         {errorToShow ? (
-          <DialogError className="whitespace-pre-wrap break-all">{errorToShow}</DialogError>
+          <DeleteWorktreeError
+            message={errorToShow}
+            canForceDelete={canForceDelete && !detachError}
+          />
         ) : null}
 
         <DeleteWorktreeDialogFooter

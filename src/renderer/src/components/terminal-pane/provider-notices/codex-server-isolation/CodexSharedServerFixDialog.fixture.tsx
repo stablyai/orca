@@ -23,7 +23,7 @@ async function turnOff(alsoStop: boolean): Promise<void> {
     document.querySelector<HTMLButtonElement>('button[role="checkbox"]')?.click()
     await nextFrame()
   }
-  clickButton('Turn off sharing')
+  clickButton(alsoStop ? 'Turn off and stop server' : 'Turn off sharing')
   // Why wait: disable settles before the stop step starts.
   await new Promise((resolve) => setTimeout(resolve, 50))
 }

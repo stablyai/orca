@@ -124,6 +124,18 @@ function CloseTerminalDialogBody({
             'components.terminal.pane.CloseTerminalDialog.stopRunningCommandTitle',
             'Stop the running command?'
           )
+  const optOut = (
+    <div className="flex items-center gap-2">
+      <Checkbox
+        id={checkboxId}
+        checked={dontAskAgain}
+        onCheckedChange={(checked) => setDontAskAgain(checked === true)}
+      />
+      <Label htmlFor={checkboxId} variant="dialog-muted">
+        {t('auto.components.confirmation.dialog.92bac3217e', "Don't ask again")}
+      </Label>
+    </div>
+  )
   return (
     <>
       <DialogHeader>
@@ -137,16 +149,7 @@ function CloseTerminalDialogBody({
           </DialogDescription>
         ) : null}
       </DialogHeader>
-      <div className="flex items-center gap-2">
-        <Checkbox
-          id={checkboxId}
-          checked={dontAskAgain}
-          onCheckedChange={(checked) => setDontAskAgain(checked === true)}
-        />
-        <Label htmlFor={checkboxId} variant="dialog-muted">
-          {t('auto.components.confirmation.dialog.92bac3217e', "Don't ask again")}
-        </Label>
-      </div>
+      {onSleepInstead ? optOut : null}
       <DialogFooter
         start={
           onSleepInstead ? (
@@ -156,7 +159,9 @@ function CloseTerminalDialogBody({
                 'Sleep workspace instead'
               )}
             </Button>
-          ) : null
+          ) : (
+            optOut
+          )
         }
       >
         <DialogCancel

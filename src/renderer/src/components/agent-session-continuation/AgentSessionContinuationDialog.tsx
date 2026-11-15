@@ -65,6 +65,7 @@ export function AgentSessionContinuationDialog({
   const t = useTranslate()
   const workspace = request ? worktreeLaunchWorkspace(request.worktreeId) : null
   const abortRef = useRef<AbortController | null>(null)
+  const agentFieldRef = useRef<HTMLDivElement>(null)
   const settings = useAppStore((state) => state.settings)
   const [pick, setPick] = useState<{
     request: AgentSessionContinuationRequest | null
@@ -252,13 +253,20 @@ export function AgentSessionContinuationDialog({
             )
           : t(
               'components.agentSessionContinuation.noAgents',
-              'No enabled Agents were detected on this workspace host.'
+              'No enabled agents were detected on this workspace host.'
             )
         : null
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent size="form">
+      <DialogContent
+        size="form"
+        onOpenAutoFocus={(event) => {
+          event.preventDefault()
+          const field = agentFieldRef.current
+          ;(field?.querySelector<HTMLButtonElement>('button:not(:disabled)') ?? field)?.focus()
+        }}
+      >
         <DialogHeader>
           <DialogTitle>
             {t(
@@ -281,7 +289,13 @@ export function AgentSessionContinuationDialog({
           </DialogDescription>
         </DialogHeader>
 
-        <div className="grid min-w-0 gap-1.5">
+        <div
+          className="grid min-w-0 gap-1.5"
+          ref={agentFieldRef}
+          tabIndex={-1}
+          role="group"
+          aria-label={t('components.agentSessionContinuation.agent', 'Agent')}
+        >
           <label className="text-[13px] font-medium">
             {t('components.agentSessionContinuation.agent', 'Agent')}
           </label>
@@ -352,7 +366,6 @@ export function AgentSessionContinuationDialog({
           <Button
             type="button"
             size="sm"
-            autoFocus
             disabled={startDisabled}
             onClick={() => void handleStart()}
           >

@@ -220,7 +220,12 @@ export function TerminalWindowsAdministratorSection(): React.JSX.Element {
                 : t('settings.terminal.windows.closeAdministratorHelp', 'Close')}
             </DialogCancel>
             {showConfirmation ? (
-              <Button size="sm" disabled={restarting} onClick={() => void restartAsAdministrator()}>
+              <Button
+                size="sm"
+                variant="destructive"
+                disabled={restarting}
+                onClick={() => void restartAsAdministrator()}
+              >
                 {restarting
                   ? t('settings.terminal.windows.restartingAdministrator', 'Restarting…')
                   : t('settings.terminal.windows.restartOrca', 'Restart')}

@@ -12546,9 +12546,9 @@
           "removeBatchMixed_one": "Remover <target>{{count}} espaço de trabalho</target> do Orca. Os worktrees Git também serão removidos do git e do disco; nos espaços de trabalho de pasta, apenas a entrada no Orca será removida.",
           "removeBatchMixed_other": "Remover <target>{{count}} espaços de trabalho</target> do Orca. Os worktrees Git também serão removidos do git e do disco; nos espaços de trabalho de pasta, apenas a entrada no Orca será removida.",
           "removeBatchMixed_many": "Remover <target>{{count}} espaços de trabalho</target> do Orca. Os worktrees Git também serão removidos do git e do disco; nos espaços de trabalho de pasta, apenas a entrada no Orca será removida.",
-          "removeBatchGit_one": "Remover <target>{{count}} espaço de trabalho</target> do git e excluir sua pasta de espaço de trabalho.",
-          "removeBatchGit_other": "Remover <target>{{count}} espaços de trabalho</target> do git e excluir suas pastas de espaço de trabalho.",
-          "removeBatchGit_many": "Remover <target>{{count}} espaços de trabalho</target> do git e excluir suas pastas de espaço de trabalho.",
+          "removeBatchGit_one": "Deletes {{count}} worktree and its branch (kept if unmerged).",
+          "removeBatchGit_other": "Deletes {{count}} worktrees and their branches (kept if unmerged).",
+          "removeBatchGit_many": "Deletes {{count}} worktrees and their branches (kept if unmerged).",
           "removeWithChildrenFolder_one": "Remover <target/> e <descendants>{{count}} espaço de trabalho filho</descendants> do Orca. As pastas dos projetos no disco não serão excluídas.",
           "removeWithChildrenFolder_other": "Remover <target/> e <descendants>{{count}} espaços de trabalho filhos</descendants> do Orca. As pastas dos projetos no disco não serão excluídas.",
           "removeWithChildrenFolder_many": "Remover <target/> e <descendants>{{count}} espaços de trabalho filhos</descendants> do Orca. As pastas dos projetos no disco não serão excluídas.",
@@ -22051,7 +22051,7 @@
       "selectAgent": "Selecionar um Agente",
       "detectingAgents": "Detectando Agentes neste host do espaço de trabalho…",
       "detectionFailed": "Não foi possível detectar Agentes neste host do espaço de trabalho.",
-      "noAgents": "Nenhum Agente ativado foi detectado neste host do espaço de trabalho.",
+      "noAgents": "No enabled agents were detected on this workspace host.",
       "onlySourceFamilyDetected": "Neste host do espaço de trabalho só há Agentes disponíveis que compartilham o limite de uso com {{agent}}. Ative ou instale um Agente diferente.",
       "context": "Contexto",
       "starting": "Iniciando…",
@@ -22724,7 +22724,8 @@
       "dialogSummary": "Desativa o compartilhamento do servidor do Codex, também fora do Orca.",
       "alsoStop": "Parar também o servidor em execução (fecha todas as sessões do Codex que o usam, inclusive fora do Orca)",
       "couldNotTurnOff": "Não foi possível desativar o compartilhamento.",
-      "stopFailedAfterOff": "O compartilhamento está desativado, mas o servidor não parou."
+      "stopFailedAfterOff": "O compartilhamento está desativado, mas o servidor não parou.",
+      "turnOffAndStop": "Turn off and stop server"
     },
     "paneMove": {
       "failed": "Não foi possível mover o painel para uma nova aba."
@@ -23062,7 +23063,9 @@
       "withChildrenTitle_many": "Excluir {{name}} e {{count}} espaços de trabalho filhos?",
       "allVerb": "Excluir tudo",
       "singleTitle": "Excluir {{name}}?",
-      "singleVerb": "Excluir espaço de trabalho"
+      "singleVerb": "Excluir espaço de trabalho",
+      "forceExplanation": "Git couldn’t delete it because it has changes. Force delete removes them anyway.",
+      "errorDetails": "Details"
     }
   },
   "projectBoard": {

@@ -6886,8 +6886,8 @@
           "removeBatchFolder_other": "Remove <target>{{count}} workspaces</target> from Orca. Project folders on disk will not be deleted.",
           "removeBatchMixed_one": "Remove <target>{{count}} workspace</target> from Orca. Git worktrees will also be removed from git and disk; folder workspaces will only remove the Orca workspace entry.",
           "removeBatchMixed_other": "Remove <target>{{count}} workspaces</target> from Orca. Git worktrees will also be removed from git and disk; folder workspaces will only remove the Orca workspace entry.",
-          "removeBatchGit_one": "Remove <target>{{count}} workspace</target> from git and delete its workspace folder.",
-          "removeBatchGit_other": "Remove <target>{{count}} workspaces</target> from git and delete their workspace folders.",
+          "removeBatchGit_one": "Deletes {{count}} worktree and its branch (kept if unmerged).",
+          "removeBatchGit_other": "Deletes {{count}} worktrees and their branches (kept if unmerged).",
           "removeWithChildrenFolder_one": "Remove <target/> and <descendants>{{count}} child workspace</descendants> from Orca. Project folders on disk will not be deleted.",
           "removeWithChildrenFolder_other": "Remove <target/> and <descendants>{{count}} child workspaces</descendants> from Orca. Project folders on disk will not be deleted.",
           "removeWithChildrenMixed_one": "Remove <target/> and <descendants>{{count}} child workspace</descendants> from Orca. Git worktrees will also be removed from git and disk; folder workspaces will only remove the Orca workspace entry.",
@@ -22148,7 +22148,7 @@
       "selectAgent": "Select an Agent",
       "detectingAgents": "Detecting Agents on this workspace host…",
       "detectionFailed": "Could not detect Agents on this workspace host.",
-      "noAgents": "No enabled Agents were detected on this workspace host.",
+      "noAgents": "No enabled agents were detected on this workspace host.",
       "onlySourceFamilyDetected": "Only Agents sharing the usage limit with {{agent}} are available on this workspace host. Enable or install a different Agent.",
       "context": "Context",
       "starting": "Starting…",
@@ -23822,7 +23822,8 @@
       "dialogSummary": "Turns off Codex server sharing, also outside Orca.",
       "alsoStop": "Also stop the running server (closes all Codex sessions using it, including outside Orca)",
       "couldNotTurnOff": "Couldn’t turn off sharing.",
-      "stopFailedAfterOff": "Sharing is off, but the server didn’t stop."
+      "stopFailedAfterOff": "Sharing is off, but the server didn’t stop.",
+      "turnOffAndStop": "Turn off and stop server"
     },
     "paneMove": {
       "failed": "Couldn't move the pane to a new tab."
@@ -24230,7 +24231,9 @@
       "withChildrenTitle_other": "Delete {{name}} and {{count}} child workspaces?",
       "allVerb": "Delete all",
       "singleTitle": "Delete {{name}}?",
-      "singleVerb": "Delete workspace"
+      "singleVerb": "Delete workspace",
+      "forceExplanation": "Git couldn’t delete it because it has changes. Force delete removes them anyway.",
+      "errorDetails": "Details"
     }
   },
   "projectBoard": {

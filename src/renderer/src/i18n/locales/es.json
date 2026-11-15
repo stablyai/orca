@@ -5630,9 +5630,9 @@
           "removeBatchMixed_one": "Eliminar <target>{{count}} espacio de trabajo</target> de Orca. Los worktrees de Git también se eliminarán de git y del disco; para los espacios de trabajo de carpeta solo se eliminará la entrada en Orca.",
           "removeBatchMixed_other": "Eliminar <target>{{count}} espacios de trabajo</target> de Orca. Los worktrees de Git también se eliminarán de git y del disco; para los espacios de trabajo de carpeta solo se eliminará la entrada en Orca.",
           "removeBatchMixed_many": "Eliminar <target>{{count}} espacios de trabajo</target> de Orca. Los worktrees de Git también se eliminarán de git y del disco; para los espacios de trabajo de carpeta solo se eliminará la entrada en Orca.",
-          "removeBatchGit_one": "Eliminar <target>{{count}} espacio de trabajo</target> de git y borrar su carpeta de espacio de trabajo.",
-          "removeBatchGit_other": "Eliminar <target>{{count}} espacios de trabajo</target> de git y borrar sus carpetas de espacio de trabajo.",
-          "removeBatchGit_many": "Eliminar <target>{{count}} espacios de trabajo</target> de git y borrar sus carpetas de espacio de trabajo.",
+          "removeBatchGit_one": "Deletes {{count}} worktree and its branch (kept if unmerged).",
+          "removeBatchGit_other": "Deletes {{count}} worktrees and their branches (kept if unmerged).",
+          "removeBatchGit_many": "Deletes {{count}} worktrees and their branches (kept if unmerged).",
           "removeWithChildrenFolder_one": "Eliminar <target/> y <descendants>{{count}} espacio de trabajo secundario</descendants> de Orca. Las carpetas de los proyectos en disco no se borrarán.",
           "removeWithChildrenFolder_other": "Eliminar <target/> y <descendants>{{count}} espacios de trabajo secundarios</descendants> de Orca. Las carpetas de los proyectos en disco no se borrarán.",
           "removeWithChildrenFolder_many": "Eliminar <target/> y <descendants>{{count}} espacios de trabajo secundarios</descendants> de Orca. Las carpetas de los proyectos en disco no se borrarán.",
@@ -20314,7 +20314,7 @@
       "selectAgent": "Selecciona un agente",
       "detectingAgents": "Detectando agentes en el host de este espacio de trabajo…",
       "detectionFailed": "No se pudieron detectar agentes en el host de este espacio de trabajo.",
-      "noAgents": "No se detectaron agentes habilitados en el host de este espacio de trabajo.",
+      "noAgents": "No enabled agents were detected on this workspace host.",
       "onlySourceFamilyDetected": "En el host de este espacio de trabajo solo hay disponibles agentes que comparten el límite de uso con {{agent}}. Activa o instala un agente diferente.",
       "context": "Contexto",
       "starting": "Iniciando…",
@@ -21960,7 +21960,8 @@
       "dialogSummary": "Desactiva el uso compartido del servidor de Codex, también fuera de Orca.",
       "alsoStop": "Detener también el servidor en ejecución (cierra todas las sesiones de Codex que lo usan, también fuera de Orca)",
       "couldNotTurnOff": "No se pudo desactivar el uso compartido.",
-      "stopFailedAfterOff": "El uso compartido está desactivado, pero el servidor no se detuvo."
+      "stopFailedAfterOff": "El uso compartido está desactivado, pero el servidor no se detuvo.",
+      "turnOffAndStop": "Turn off and stop server"
     },
     "sessionSaveFailure": {
       "title": "No se pudo guardar la sesión del terminal",
@@ -22554,7 +22555,9 @@
       "withChildrenTitle_many": "¿Eliminar {{name}} y {{count}} espacios de trabajo secundarios?",
       "allVerb": "Eliminar todo",
       "singleTitle": "¿Eliminar {{name}}?",
-      "singleVerb": "Eliminar espacio de trabajo"
+      "singleVerb": "Eliminar espacio de trabajo",
+      "forceExplanation": "Git couldn’t delete it because it has changes. Force delete removes them anyway.",
+      "errorDetails": "Details"
     }
   },
   "mediaPreview": {

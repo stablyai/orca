@@ -150,7 +150,9 @@ export function CodexSharedServerFixDialog({
       ? t('terminal.codexSharedServerBanner.turningOff', 'Turning off…')
       : phase === 'stopping'
         ? t('terminal.codexSharedServerBanner.stopping', 'Stopping…')
-        : t('terminal.codexSharedServerBanner.turnOffSharing', 'Turn off sharing')
+        : alsoStop
+          ? t('terminal.codexSharedServerBanner.turnOffAndStop', 'Turn off and stop server')
+          : t('terminal.codexSharedServerBanner.turnOffSharing', 'Turn off sharing')
 
   return (
     <Dialog
@@ -218,7 +220,7 @@ export function CodexSharedServerFixDialog({
           <Button
             type="button"
             size="sm"
-            variant={sharingOff ? 'destructive' : 'default'}
+            variant={sharingOff || alsoStop ? 'destructive' : 'default'}
             disabled={busy}
             onClick={() => void run()}
           >

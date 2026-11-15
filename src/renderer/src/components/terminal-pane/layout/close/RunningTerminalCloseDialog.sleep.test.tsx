@@ -46,7 +46,9 @@ describe('sleeping instead of closing a terminal', () => {
     await waitFor(() => expect(toastError).toHaveBeenCalled())
 
     expect(sleep).toHaveBeenCalledWith({
-      targets: [{ worktreeId: 'wt-1', terminalHost: { kind: 'self' }, chatHosts: [{ kind: 'self' }] }],
+      targets: [
+        { worktreeId: 'wt-1', terminalHost: { kind: 'self' }, chatHosts: [{ kind: 'self' }] }
+      ],
       markChatsAsleep: true
     })
     expect(onConfirm).not.toHaveBeenCalled()

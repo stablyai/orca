@@ -79,6 +79,16 @@ export function DeleteWorktreeChangesSummary({
         ? t('components.workspace.delete.changes.unavailable', 'Changes could not be checked')
         : t('components.workspace.delete.changes.checking', 'Checking for changes…')
   const ignoredNames = atRiskLocalFiles ? formatAtRiskLocalFileNames(atRiskLocalFiles, t) : null
+  const ignoredNote = atRiskLocalFiles
+    ? ignoredNames
+      ? t('components.workspace.delete.ignoredFilesLost', 'Ignored files will be lost: {{names}}', {
+          names: ignoredNames
+        })
+      : t(
+          'components.workspace.delete.ignoredFilesUnchecked',
+          'Ignored files could not be fully checked'
+        )
+    : null
   const changedFiles = preview?.files ?? []
   const hasDetails = changedFiles.length > 0 || unsavedFiles.length > 0
   if (!loss && !status && !atRiskLocalFiles) {
@@ -88,24 +98,14 @@ export function DeleteWorktreeChangesSummary({
     <div className="flex min-w-0 flex-col gap-2">
       {loss ? <DialogWarning>{loss}</DialogWarning> : null}
       {status ? <p className="text-[12.5px] text-muted-foreground">{status}</p> : null}
-      {atRiskLocalFiles ? (
-        <DialogWarning>
-          {ignoredNames
-            ? t(
-                'components.workspace.delete.ignoredFilesLost',
-                'Ignored files will be lost: {{names}}',
-                {
-                  names: ignoredNames
-                }
-              )
-            : t(
-                'components.workspace.delete.ignoredFilesUnchecked',
-                'Ignored files could not be fully checked'
-              )}
-        </DialogWarning>
+      {!hasDetails && ignoredNote ? (
+        <p className="text-settings-detail text-muted-foreground">{ignoredNote}</p>
       ) : null}
       {hasDetails ? (
         <DialogDisclosure label={t('worktree.delete.showChanges', 'Show changes')} variant="code">
+          {ignoredNote ? (
+            <p className="mb-2 font-sans text-muted-foreground">{ignoredNote}</p>
+          ) : null}
           <ul className="min-w-0 space-y-0.5">
             {changedFiles.map((file) => (
               <li key={file.path} className="flex min-w-0 items-baseline gap-2">

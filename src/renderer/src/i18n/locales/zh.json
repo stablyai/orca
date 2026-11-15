@@ -6023,7 +6023,7 @@
           "gitBlocksMainWorktree": "Git 不允许移除主工作树",
           "removeBatchFolder_other": "从 Orca 移除<target>{{count}} 个工作区</target>。磁盘上的项目文件夹不会被删除",
           "removeBatchMixed_other": "从 Orca 移除<target>{{count}} 个工作区</target>。Git 工作树也会从 git 和磁盘中移除；文件夹工作区只会移除 Orca 中的工作区条目",
-          "removeBatchGit_other": "从 git 移除<target>{{count}} 个工作区</target>，并删除其工作区文件夹",
+          "removeBatchGit_other": "Deletes {{count}} worktrees and their branches (kept if unmerged).",
           "removeWithChildrenFolder_other": "从 Orca 移除 <target/> 和<descendants>{{count}} 个子工作区</descendants>。磁盘上的项目文件夹不会被删除",
           "removeWithChildrenMixed_other": "从 Orca 移除 <target/> 和<descendants>{{count}} 个子工作区</descendants>。Git 工作树也会从 git 和磁盘中移除；文件夹工作区只会移除 Orca 中的工作区条目",
           "removeWithChildrenGit_other": "从 git 移除 <target/> 和<descendants>{{count}} 个子工作区</descendants>，并删除其工作区文件夹",
@@ -21018,7 +21018,7 @@
       "selectAgent": "选择代理",
       "detectingAgents": "正在此工作区主机上检测代理…",
       "detectionFailed": "无法检测此工作区主机上的代理",
-      "noAgents": "未在此工作区主机上已检测已启用的代理",
+      "noAgents": "No enabled agents were detected on this workspace host.",
       "onlySourceFamilyDetected": "此工作区主机上可用的智能体均与 {{agent}} 共享使用限额。请启用或安装其他智能体。",
       "context": "上下文",
       "starting": "正在启动…",
@@ -23534,7 +23534,8 @@
       "dialogSummary": "关闭 Codex 服务器共享，在 Orca 之外也会生效。",
       "alsoStop": "同时停止正在运行的服务器（会关闭所有使用它的 Codex 会话，包括 Orca 之外的）",
       "couldNotTurnOff": "无法关闭共享。",
-      "stopFailedAfterOff": "共享已关闭，但服务器未停止。"
+      "stopFailedAfterOff": "共享已关闭，但服务器未停止。",
+      "turnOffAndStop": "Turn off and stop server"
     },
     "paneMove": {
       "failed": "无法将窗格移动到新选项卡"
@@ -23735,7 +23736,9 @@
       "withChildrenTitle_other": "要删除 {{name}} 和 {{count}} 个子工作区吗？",
       "allVerb": "全部删除",
       "singleTitle": "要删除 {{name}} 吗？",
-      "singleVerb": "删除工作区"
+      "singleVerb": "删除工作区",
+      "forceExplanation": "Git couldn’t delete it because it has changes. Force delete removes them anyway.",
+      "errorDetails": "Details"
     }
   },
   "mediaPreview": {

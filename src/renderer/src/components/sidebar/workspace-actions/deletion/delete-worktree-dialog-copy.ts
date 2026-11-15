@@ -63,11 +63,10 @@ function getBatchDeleteDescription(
   }
   return t(
     'auto.components.sidebar.DeleteWorktreeDialog.removeBatchGit',
-    'Remove <target>{{count}} workspaces</target> from git and delete their workspace folders.',
+    'Deletes {{count}} worktrees and their branches (kept if unmerged).',
     {
       count,
-      defaultValue_one:
-        'Remove <target>{{count}} workspace</target> from git and delete its workspace folder.'
+      defaultValue_one: 'Deletes {{count}} worktree and its branch (kept if unmerged).'
     }
   )
 }

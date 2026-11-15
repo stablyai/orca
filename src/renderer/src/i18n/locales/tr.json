@@ -6209,8 +6209,8 @@
           "removeBatchFolder_other": "Orca'dan <target>{{count}} çalışma alanı</target> kaldır. Diskteki proje klasörleri silinmeyecek.",
           "removeBatchMixed_one": "Orca'dan <target>{{count}} çalışma alanı</target> kaldır. Git worktree'leri git'ten ve diskten de kaldırılacak; klasör çalışma alanlarında yalnızca Orca kaydı kaldırılacak.",
           "removeBatchMixed_other": "Orca'dan <target>{{count}} çalışma alanı</target> kaldır. Git worktree'leri git'ten ve diskten de kaldırılacak; klasör çalışma alanlarında yalnızca Orca kaydı kaldırılacak.",
-          "removeBatchGit_one": "git'ten <target>{{count}} çalışma alanı</target> kaldır ve çalışma alanı klasörünü sil.",
-          "removeBatchGit_other": "git'ten <target>{{count}} çalışma alanı</target> kaldır ve ilgili çalışma alanı klasörlerini sil.",
+          "removeBatchGit_one": "Deletes {{count}} worktree and its branch (kept if unmerged).",
+          "removeBatchGit_other": "Deletes {{count}} worktrees and their branches (kept if unmerged).",
           "removeWithChildrenFolder_one": "Orca'dan <target/> ve <descendants>{{count}} alt çalışma alanı</descendants> kaldır. Diskteki proje klasörleri silinmeyecek.",
           "removeWithChildrenFolder_other": "Orca'dan <target/> ve <descendants>{{count}} alt çalışma alanı</descendants> kaldır. Diskteki proje klasörleri silinmeyecek.",
           "removeWithChildrenMixed_one": "Orca'dan <target/> ve <descendants>{{count}} alt çalışma alanı</descendants> kaldır. Git worktree'leri git'ten ve diskten de kaldırılacak; klasör çalışma alanlarında yalnızca Orca kaydı kaldırılacak.",
@@ -20668,7 +20668,7 @@
       "selectAgent": "Bir Ajan seçin",
       "detectingAgents": "Bu çalışma alanı ana makinesindeki Ajanlar tespit ediliyor…",
       "detectionFailed": "Bu çalışma alanı ana makinesinde Ajanlar tespit edilemedi.",
-      "noAgents": "Bu çalışma alanı ana makinesinde etkin Ajan tespit edilmedi.",
+      "noAgents": "No enabled agents were detected on this workspace host.",
       "onlySourceFamilyDetected": "Bu çalışma alanı ana makinesinde yalnızca {{agent}} ile kullanım sınırını paylaşan Ajanlar kullanılabilir. Farklı bir Ajanı etkinleştirin veya yükleyin.",
       "context": "Bağlam",
       "starting": "Başlatılıyor…",
@@ -21896,7 +21896,8 @@
       "dialogSummary": "Codex sunucu paylaşımını Orca dışında da kapatır.",
       "alsoStop": "Çalışan sunucuyu da durdur (Orca dışındakiler dahil onu kullanan tüm Codex oturumlarını kapatır)",
       "couldNotTurnOff": "Paylaşım kapatılamadı.",
-      "stopFailedAfterOff": "Paylaşım kapalı ancak sunucu durmadı."
+      "stopFailedAfterOff": "Paylaşım kapalı ancak sunucu durmadı.",
+      "turnOffAndStop": "Turn off and stop server"
     },
     "paneMove": {
       "failed": "Bölme yeni bir sekmeye taşınamadı."
@@ -22223,7 +22224,9 @@
       "withChildrenTitle_other": "{{name}} ve {{count}} alt çalışma alanı silinsin mi?",
       "allVerb": "Tümünü sil",
       "singleTitle": "{{name}} silinsin mi?",
-      "singleVerb": "Çalışma alanını sil"
+      "singleVerb": "Çalışma alanını sil",
+      "forceExplanation": "Git couldn’t delete it because it has changes. Force delete removes them anyway.",
+      "errorDetails": "Details"
     }
   },
   "projectBoard": {

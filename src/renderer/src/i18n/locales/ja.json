@@ -5990,7 +5990,7 @@
           "gitBlocksMainWorktree": "Git ではメインワークツリーを削除できません。",
           "removeBatchFolder_other": "Orca から<target>{{count}} 個のワークスペース</target>を削除します。ディスク上のプロジェクトフォルダーは削除されません。",
           "removeBatchMixed_other": "Orca から<target>{{count}} 個のワークスペース</target>を削除します。Git ワークツリーは git とディスクからも削除されます。フォルダーワークスペースは Orca の登録のみ削除されます。",
-          "removeBatchGit_other": "git から<target>{{count}} 個のワークスペース</target>を削除し、そのワークスペースフォルダーも削除します。",
+          "removeBatchGit_other": "Deletes {{count}} worktrees and their branches (kept if unmerged).",
           "removeWithChildrenFolder_other": "Orca から <target/> と<descendants>{{count}} 個の子ワークスペース</descendants>を削除します。ディスク上のプロジェクトフォルダーは削除されません。",
           "removeWithChildrenMixed_other": "Orca から <target/> と<descendants>{{count}} 個の子ワークスペース</descendants>を削除します。Git ワークツリーは git とディスクからも削除されます。フォルダーワークスペースは Orca の登録のみ削除されます。",
           "removeWithChildrenGit_other": "git から <target/> と<descendants>{{count}} 個の子ワークスペース</descendants>を削除し、それらのワークスペースフォルダーも削除します。",
@@ -20950,7 +20950,7 @@
       "selectAgent": "Agent を選択",
       "detectingAgents": "このワークスペースホストで Agent を検出中…",
       "detectionFailed": "このワークスペースホストで Agent を検出できませんでした。",
-      "noAgents": "このワークスペースホストで有効な Agent が検出されませんでした。",
+      "noAgents": "No enabled agents were detected on this workspace host.",
       "onlySourceFamilyDetected": "このワークスペースホストで利用できる Agent は、{{agent}} と利用上限を共有するものだけです。別の Agent を有効にするか、インストールしてください。",
       "context": "コンテキスト",
       "starting": "開始中…",
@@ -23113,7 +23113,8 @@
       "dialogSummary": "Codex のサーバー共有をオフにします（Orca の外でも適用されます）。",
       "alsoStop": "実行中のサーバーも停止する（Orca の外も含め、それを使うすべての Codex セッションが閉じます）",
       "couldNotTurnOff": "共有をオフにできませんでした。",
-      "stopFailedAfterOff": "共有はオフになりましたが、サーバーは停止しませんでした。"
+      "stopFailedAfterOff": "共有はオフになりましたが、サーバーは停止しませんでした。",
+      "turnOffAndStop": "Turn off and stop server"
     },
     "paneMove": {
       "failed": "ペインを新規タブに移動できませんでした。"
@@ -23314,7 +23315,9 @@
       "withChildrenTitle_other": "{{name}} と子ワークスペース {{count}} 個を削除しますか?",
       "allVerb": "すべて削除",
       "singleTitle": "{{name}} を削除しますか?",
-      "singleVerb": "ワークスペースを削除"
+      "singleVerb": "ワークスペースを削除",
+      "forceExplanation": "Git couldn’t delete it because it has changes. Force delete removes them anyway.",
+      "errorDetails": "Details"
     }
   },
   "mediaPreview": {

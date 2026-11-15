@@ -886,8 +886,8 @@
         "DeleteWorktreeDialog": {
           "removeBatchFolder_one": "Remove <target>{{count}} workspace</target> from Orca. Project folders on disk will not be deleted.",
           "removeBatchFolder_other": "Remove <target>{{count}} workspaces</target> from Orca. Project folders on disk will not be deleted.",
-          "removeBatchGit_one": "Remove <target>{{count}} workspace</target> from git and delete its workspace folder.",
-          "removeBatchGit_other": "Remove <target>{{count}} workspaces</target> from git and delete their workspace folders.",
+          "removeBatchGit_one": "Deletes {{count}} worktree and its branch (kept if unmerged).",
+          "removeBatchGit_other": "Deletes {{count}} worktrees and their branches (kept if unmerged).",
           "removeBatchMixed_one": "Remove <target>{{count}} workspace</target> from Orca. Git worktrees will also be removed from git and disk; folder workspaces will only remove the Orca workspace entry.",
           "removeBatchMixed_other": "Remove <target>{{count}} workspaces</target> from Orca. Git worktrees will also be removed from git and disk; folder workspaces will only remove the Orca workspace entry.",
           "removeWithChildrenFolder_one": "Remove <target/> and <descendants>{{count}} child workspace</descendants> from Orca. Project folders on disk will not be deleted.",

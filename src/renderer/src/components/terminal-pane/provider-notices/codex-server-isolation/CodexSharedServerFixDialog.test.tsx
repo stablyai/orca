@@ -50,7 +50,7 @@ describe('CodexSharedServerFixDialog', () => {
     disable.mockResolvedValue(false)
     const { onOpenChange } = renderFix()
     await userEvent.click(screen.getByRole('checkbox'))
-    await clickButton('Turn off sharing')
+    await clickButton('Turn off and stop server')
 
     expect(stop).not.toHaveBeenCalled()
     expect(screen.getByRole('alert')).toHaveTextContent('Couldn’t turn off sharing.')
@@ -73,7 +73,7 @@ describe('CodexSharedServerFixDialog', () => {
     stop.mockResolvedValue(true)
     const { onOpenChange, onServerStopped } = renderFix()
     await userEvent.click(screen.getByRole('checkbox'))
-    await clickButton('Turn off sharing')
+    await clickButton('Turn off and stop server')
 
     expect(disable.mock.invocationCallOrder[0]).toBeLessThan(stop.mock.invocationCallOrder[0])
     expect(onServerStopped).toHaveBeenCalledOnce()
@@ -85,7 +85,7 @@ describe('CodexSharedServerFixDialog', () => {
     stop.mockResolvedValueOnce(false).mockResolvedValueOnce(true)
     const { onOpenChange, onServerStopped } = renderFix()
     await userEvent.click(screen.getByRole('checkbox'))
-    await clickButton('Turn off sharing')
+    await clickButton('Turn off and stop server')
 
     expect(screen.getByRole('alert')).toHaveTextContent(
       'Sharing is off, but the server didn’t stop.'
@@ -98,5 +98,23 @@ describe('CodexSharedServerFixDialog', () => {
     expect(stop).toHaveBeenCalledTimes(2)
     expect(onServerStopped).toHaveBeenCalledOnce()
     expect(onOpenChange).toHaveBeenCalledWith(false)
+  })
+
+  it('names and marks the destructive action only when stopping is selected', async () => {
+    renderFix()
+    expect(screen.getByRole('button', { name: 'Turn off sharing' })).toHaveAttribute(
+      'data-variant',
+      'default'
+    )
+    await userEvent.click(screen.getByRole('checkbox'))
+    expect(screen.getByRole('button', { name: 'Turn off and stop server' })).toHaveAttribute(
+      'data-variant',
+      'destructive'
+    )
+    await userEvent.click(screen.getByRole('checkbox'))
+    expect(screen.getByRole('button', { name: 'Turn off sharing' })).toHaveAttribute(
+      'data-variant',
+      'default'
+    )
   })
 })

@@ -5413,7 +5413,7 @@
           "gitBlocksMainWorktree": "Git에서는 메인 워크트리를 제거할 수 없습니다.",
           "removeBatchFolder_other": "Orca에서 <target>워크스페이스 {{count}}개</target>를 제거합니다. 디스크의 프로젝트 폴더는 삭제되지 않습니다.",
           "removeBatchMixed_other": "Orca에서 <target>워크스페이스 {{count}}개</target>를 제거합니다. Git 워크트리는 git과 디스크에서도 제거됩니다. 폴더 워크스페이스는 Orca 항목만 제거됩니다.",
-          "removeBatchGit_other": "git에서 <target>워크스페이스 {{count}}개</target>를 제거하고 해당 워크스페이스 폴더를 삭제합니다.",
+          "removeBatchGit_other": "Deletes {{count}} worktrees and their branches (kept if unmerged).",
           "removeWithChildrenFolder_other": "Orca에서 <target/> 및 <descendants>하위 워크스페이스 {{count}}개</descendants>를 제거합니다. 디스크의 프로젝트 폴더는 삭제되지 않습니다.",
           "removeWithChildrenMixed_other": "Orca에서 <target/> 및 <descendants>하위 워크스페이스 {{count}}개</descendants>를 제거합니다. Git 워크트리는 git과 디스크에서도 제거됩니다. 폴더 워크스페이스는 Orca 항목만 제거됩니다.",
           "removeWithChildrenGit_other": "git에서 <target/> 및 <descendants>하위 워크스페이스 {{count}}개</descendants>를 제거하고 해당 워크스페이스 폴더를 삭제합니다.",
@@ -19787,7 +19787,7 @@
       "selectAgent": "에이전트 선택",
       "detectingAgents": "이 워크스페이스 호스트에서 에이전트를 찾는 중…",
       "detectionFailed": "이 워크스페이스 호스트에서 에이전트를 찾을 수 없습니다.",
-      "noAgents": "이 워크스페이스 호스트에서 활성화된 에이전트를 찾지 못했습니다.",
+      "noAgents": "No enabled agents were detected on this workspace host.",
       "onlySourceFamilyDetected": "이 워크스페이스 호스트에서 사용할 수 있는 에이전트는 {{agent}}와 사용 한도를 공유하는 에이전트뿐입니다. 다른 에이전트를 활성화하거나 설치하세요.",
       "context": "컨텍스트",
       "starting": "시작 중…",
@@ -21661,7 +21661,8 @@
       "dialogSummary": "Orca 밖에서도 Codex 서버 공유를 끕니다.",
       "alsoStop": "실행 중인 서버도 중지(Orca 밖을 포함해 이를 사용하는 모든 Codex 세션이 닫힘)",
       "couldNotTurnOff": "공유를 끄지 못했습니다.",
-      "stopFailedAfterOff": "공유는 꺼졌지만 서버가 중지되지 않았습니다."
+      "stopFailedAfterOff": "공유는 꺼졌지만 서버가 중지되지 않았습니다.",
+      "turnOffAndStop": "Turn off and stop server"
     },
     "paneMove": {
       "failed": "분할 창을 새 탭으로 이동할 수 없습니다."
@@ -21831,7 +21832,9 @@
       "withChildrenTitle_other": "{{name}} 및 하위 워크스페이스 {{count}}개를 삭제할까요?",
       "allVerb": "모두 삭제",
       "singleTitle": "{{name}}을(를) 삭제할까요?",
-      "singleVerb": "워크스페이스 삭제"
+      "singleVerb": "워크스페이스 삭제",
+      "forceExplanation": "Git couldn’t delete it because it has changes. Force delete removes them anyway.",
+      "errorDetails": "Details"
     }
   },
   "mediaPreview": {
