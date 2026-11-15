@@ -1,7 +1,13 @@
 /** Why mail to a worker is not delivered right now, read from the same gates that hold it, so a send
  *  receipt says only what is true at send time. Null means delivery would go ahead. */
 
+import {
+  heldWorkerDeliveryText,
+  type AgentSessionHeldDelivery
+} from '../../../../../shared/agent-session/agent-session-held-delivery'
+
 export type MailboxDeliveryHold =
+  | { kind: 'worker-failed'; delivery: AgentSessionHeldDelivery }
   /** A terminal dialog only a person can answer. */
   | { kind: 'prompt' }
   /** Typed text in the worker's terminal that delivery would submit with the mail. */
@@ -18,6 +24,7 @@ export type MailboxDeliveryHold =
   | { kind: 'unsettled' }
   /** The chat accepts the mail into its queue behind an open prompt or question. */
   | { kind: 'behind-prompt' }
+  | { kind: 'busy' }
   /** The chat is detached from its agent, or not attached here; the mail waits for it. */
   | { kind: 'detached' }
   /** The chat refuses new messages for now. */
@@ -26,7 +33,14 @@ export type MailboxDeliveryHold =
 /** What a chat's mail admission would do with a message now; null when the chat cannot be read. */
 export type ChatMailAdmitFacts =
   | { attached: false }
-  | { attached: true; fenced: boolean; refusal: string | null; behindPrompt: boolean }
+  | {
+      attached: true
+      fenced: boolean
+      refusal: string | null
+      behindPrompt: boolean
+      failedDelivery?: AgentSessionHeldDelivery | null
+      busy?: boolean
+    }
 
 export type MailboxDeliveryHoldReaders = {
   /** The chat a mailbox's mail reaches, if a chat holds it. */
@@ -46,7 +60,10 @@ export function chatMailHold(facts: ChatMailAdmitFacts): MailboxDeliveryHold | n
   if (facts.refusal) {
     return { kind: 'refused', reason: facts.refusal }
   }
-  return facts.behindPrompt ? { kind: 'behind-prompt' } : null
+  if (facts.failedDelivery) {
+    return { kind: 'worker-failed', delivery: facts.failedDelivery }
+  }
+  return facts.behindPrompt ? { kind: 'behind-prompt' } : facts.busy ? { kind: 'busy' } : null
 }
 
 export async function readMailboxDeliveryHold(
@@ -65,6 +82,15 @@ export async function readMailboxDeliveryHold(
 
 export function describeMailboxDeliveryHold(recipient: string, hold: MailboxDeliveryHold): string {
   switch (hold.kind) {
+    case 'busy':
+      return `Queued: ${recipient} is busy. Delivers when it's free.`
+    case 'worker-failed':
+      return heldWorkerDeliveryText(hold.delivery, {
+        worker: recipient,
+        owner: 'the owner',
+        provider: 'provider',
+        canResume: false
+      }).message
     case 'prompt':
       return `Queued. ${recipient} is at a prompt that needs a person; delivery is held while it stays open.`
     case 'draft':

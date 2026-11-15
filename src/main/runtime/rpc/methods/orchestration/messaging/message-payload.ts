@@ -36,3 +36,15 @@ export function parseMessageTaskId(payload: string | undefined): string | undefi
 export function isWorkerReportOutcome(value: unknown): value is 'succeeded' | 'failed' {
   return value === 'succeeded' || value === 'failed'
 }
+
+export function requireWorkerDoneOutcome(params: { type?: string; payload?: string }): void {
+  if (
+    params.type === 'worker_done' &&
+    !isWorkerReportOutcome(parseRemoteWorkerPayload(params.payload).outcome)
+  ) {
+    throw new OrchestrationError(
+      'invalid_argument',
+      'worker_done requires outcome=succeeded|failed for a current Dispatch.'
+    )
+  }
+}

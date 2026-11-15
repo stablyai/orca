@@ -18,6 +18,7 @@ import {
 } from './queued-messages/queued-message-published-bytes'
 import type { JournalWriterCommand } from './journal-writer-command'
 import type { JournalSendAdmissionResult } from './journal-send-admission'
+import { readJournalDomainHeldDelivery } from './journal-domain-held-delivery'
 
 /** Replay, queue eligibility, byte budget and acceptance share this writer position. */
 export function applyJournalSqlSendAdmission(
@@ -77,6 +78,13 @@ export function applyJournalSqlSendAdmission(
           ? { clientMessageId: id, submission: { ...(consumed ?? handoff!) } }
           : {
               clientMessageId: id,
+              ...(draft?.state === 'waiting'
+                ? {
+                    delivery:
+                      readJournalDomainHeldDelivery(db, target, facts.reopenFloor ?? null) ??
+                      undefined
+                  }
+                : {}),
               queued: draft
                 ? { messageId: id, position: draft.position, state: draft.state }
                 : { messageId: id, position: 0, state: 'withdrawn' }
@@ -191,7 +199,9 @@ export function applyJournalSqlSendAdmission(
         kind: 'admitted',
         value: {
           clientMessageId: id,
-          queued: { messageId: id, position: card.position, state: card.state }
+          queued: { messageId: id, position: card.position, state: card.state },
+          delivery:
+            readJournalDomainHeldDelivery(db, target, facts.reopenFloor ?? null) ?? undefined
         }
       } satisfies JournalSendAdmissionResult,
       [{ kind: 'queue', epoch: target.epoch, seq: result.cursor.sequence }]

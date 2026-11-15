@@ -20,6 +20,7 @@ import type { JournalLatestStop } from '../../agent-session-journal/context-epoc
 export type StructuredAgentSessionStatusState = JournalObserverResult['state']
 
 export type StructuredAgentSessionJournalProjection = {
+  heldDelivery?: JournalObserverResult['heldDelivery']
   epoch: string
   contextId: string | null
   sequence: number
@@ -271,6 +272,7 @@ export class StructuredAgentSessionJournalProjections {
       return null
     }
     const projection: StructuredAgentSessionJournalProjection = {
+      heldDelivery: result.heldDelivery,
       ...result.cursor,
       lastActivityAt: result.lastActivityAt,
       contextId,

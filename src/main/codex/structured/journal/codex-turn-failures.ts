@@ -180,6 +180,15 @@ export class CodexTurnFailures {
       return existing.kind === 'notSignedIn' ? { ...existing, detail: undefined } : existing
     }
     switch (info?.error ?? 'other') {
+      case 'httpConnectionFailed':
+      case 'responseStreamConnectionFailed':
+      case 'responseStreamDisconnected':
+        return agentSessionFailureFact('providerResponseFailed', {
+          retry: {
+            error: info?.error,
+            ...(typeof info?.status === 'number' ? { status: info.status } : {})
+          }
+        })
       case 'modelNotFound':
         return agentSessionFailureFact('modelUnavailable')
       case 'serverOverloaded':

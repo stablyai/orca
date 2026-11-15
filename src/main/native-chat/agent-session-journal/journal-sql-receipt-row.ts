@@ -13,6 +13,7 @@ export function receiptRow(operation: JournalSqlStoreOperation): JournalReceiptS
     case 'stop':
     case 'stop-accept':
     case 'queue-resume':
+    case 'failure-resume':
     case 'queue-reopen':
     case 'queue-reopen-mark':
       return 'tombstone'

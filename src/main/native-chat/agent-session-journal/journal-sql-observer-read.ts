@@ -7,6 +7,7 @@ import { readJournalSqlStatusIndicators } from './journal-sql-status-indicators'
 import { readJournalSqlUsageLimitCut, readJournalSqlOrcaStopCut } from './journal-sql-status-cuts'
 import { readJournalSqlGoalRows } from './journal-sql-item-reads'
 import { agentSessionThreadGoalStartsTurns } from '../../../shared/agent-session/agent-session-thread-goal'
+import { readJournalDomainHeldDelivery } from './journal-domain-held-delivery'
 
 /** Status, cuts and current work share one ready snapshot and one captured live authority. */
 export function readJournalSqlObserver(
@@ -26,6 +27,14 @@ export function readJournalSqlObserver(
       readJournalSqlGoalRows(context.scope.db, context.scope.prefix)[0]
     )
   return {
+    heldDelivery: readJournalDomainHeldDelivery(
+      context.scope.db,
+      {
+        sessionId: context.scope.sessionId,
+        epoch: context.scope.epoch
+      },
+      authority.reopenFloor
+    ),
     cursor: { epoch: context.epoch, sequence: context.sequence },
     physicalCursor: { epoch: context.scope.epoch, sequence: context.sequence },
     lastActivityAt: context.lastActivityAt,

@@ -2,7 +2,6 @@ import { JournalSqlForkCopy } from '../journal-sql-fork-copy'
 import type { JournalForkPreparationInput } from '../journal-fork-preparation'
 import { randomUUID } from 'node:crypto'
 import type { AgentSessionJournalIdentity } from '../../../../shared/agent-session/journal/agent-session-journal-identity'
-import { AgentSessionTabTable } from '../../../runtime/agent-session/agent-session-tab-table'
 import type { AgentSessionStoreState } from '../../../runtime/agent-session/records/agent-session-store-state'
 import { JournalSqlOwner } from '../journal-sql-owner'
 import { JournalSqlReaderPool } from '../journal-sql-reader-pool'
@@ -17,7 +16,7 @@ import { AgentSessionJournalError } from '../writing/journal-write-guards'
 import { assertJournalChatReadable } from '../replay/journal-open-failure'
 import { journalDatabasePath } from './journal-host-database'
 import { journalDomainDatabasePath } from './journal-domain-database'
-import type { JournalSqlStoredRecords } from '../journal-sql-database-read'
+import { restoreJournalRecordTabs } from '../journal-sql-database-read'
 
 /** The runtime owns workers, never a writable connection or a retained chat projection. */
 type JournalSqlDatabaseOptions = {
@@ -57,7 +56,12 @@ export class JournalSqlDatabase {
       },
       () => assertJournalChatReadable(this.readOnly)
     )
-    this.conversions = new JournalSqlConversions(writer, this.readers, this.activity.waitForIdle)
+    this.conversions = new JournalSqlConversions(
+      writer,
+      this.readers,
+      this.activity.waitForIdle,
+      options.onMaintenanceError
+    )
     this.maintenance = new JournalSqlBackgroundMaintenance(
       writer,
       this.readers,
@@ -84,6 +88,10 @@ export class JournalSqlDatabase {
 
   get isClosed(): boolean {
     return this.closed
+  }
+
+  watchConverted(listener: (sessionId: string) => void): () => void {
+    return this.conversions.watchReady(listener)
   }
 
   set onFault(listener: (error: Error) => void) {
@@ -154,7 +162,7 @@ export class JournalSqlDatabase {
       return this.observeRecords(true)
     }
     try {
-      return this.restoreRecordTabs(await this.writer.installRecords())
+      return restoreJournalRecordTabs(await this.writer.installRecords())
     } catch {
       // Saved chats remain readable; the writer retries installation before admitting any mutation.
       return this.observeRecords(true)
@@ -170,15 +178,7 @@ export class JournalSqlDatabase {
     if (result.kind !== 'records') {
       throw new Error('journal reader returned no records')
     }
-    return this.restoreRecordTabs(result.records)
-  }
-
-  private restoreRecordTabs(records: JournalSqlStoredRecords): AgentSessionStoreState {
-    return {
-      ...records,
-      sessionTabs:
-        records.sessionTabs === null ? null : new AgentSessionTabTable(records.sessionTabs)
-    }
+    return restoreJournalRecordTabs(result.records)
   }
 
   async readCommandReceipt(scope: CommandReceiptScope, operationId: string) {

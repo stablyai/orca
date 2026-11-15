@@ -1,3 +1,4 @@
+import type { AgentSessionHeldDelivery } from '../../../../../shared/agent-session/agent-session-held-delivery'
 import {
   useStructuredAgentSessionQueuedReorder,
   type QueuedMessageReorder
@@ -46,7 +47,10 @@ export type StructuredAgentSessionQueuedMessagesController = {
   /** Clear all waits for sends/actions so it cannot silently clear fewer cards than shown. */
   clearCapable: boolean
   /** Host pause reason for sendable cards; accept future reason strings from newer hosts. */
-  pause: { reason: string } | null
+  pause: {
+    reason: string
+    delivery?: AgentSessionHeldDelivery
+  } | null
   /** Whether the host lifted the pause; a failure is a toast, and Resume is the retry. */
   resume: () => Promise<boolean>
   /** Delete every card shown; false when one could not be (already a toast). */

@@ -146,11 +146,14 @@ export class StructuredAgentSessionHost {
   private readonly reads = createStructuredAgentSessionConversationReads(() => ({
     ...this.lifetimeContext(),
     serialize: this.serialize,
+    onFailureResumed: (id) => this.queued.drain.schedule(id),
     seal: (id) => this.runtimeState.sealEventSink(id),
     readCommands: this.clientDelivery.readCommandsSettled,
     conversation: (sessionId) => this.lifetime.conversation(sessionId)
   }))
   sessionAgent = this.reads.sessionAgent
+  heldDelivery = this.reads.heldDelivery
+  resumeFailure = this.reads.resumeFailure
   attentionReads = this.reads.attentionReads
   readModelCatalog = this.reads.readModelCatalog
   childAccountHome = this.reads.childAccountHome
@@ -232,7 +235,7 @@ export class StructuredAgentSessionHost {
   /** Quit stops delivery and queued-card handover. */
   stopDelivery = () => {
     this.sessions.endPublications()
-    ;[this.conversationDelivery, this.queued.drain].forEach((d) => d.dispose())
+    ;[this.conversationDelivery, this.queued.drain, this.tabs].forEach((d) => d.dispose())
     this.usageLimitContinue.dispose()
   }
 
@@ -248,21 +251,24 @@ export class StructuredAgentSessionHost {
     }).finally(() => this.clientDelivery.closeAll())
   }
 
+  private mutationInputs = (): Parameters<
+    typeof mutationWiring.createStructuredAgentSessionHostMutationContext
+  >[0] => ({
+    deps: this.deps,
+    sessions: this.sessions,
+    subscribers: this.clientDelivery.subscribers,
+    lifetime: this.lifetime,
+    clientDelivery: this.clientDelivery,
+    conversationDelivery: this.conversationDelivery,
+    queued: this.queued,
+    runtimeState: this.runtimeState,
+    attachContext: () => this.attachContext(),
+    trackProviderOperation: (operation) => this.tasks.trackAttach(operation),
+    serialize: (sessionId, task) => this.serialize(sessionId, task),
+    now: () => this.now()
+  })
   private mutationContext = () =>
-    mutationWiring.createStructuredAgentSessionHostMutationContext({
-      deps: this.deps,
-      sessions: this.sessions,
-      subscribers: this.clientDelivery.subscribers,
-      lifetime: this.lifetime,
-      clientDelivery: this.clientDelivery,
-      conversationDelivery: this.conversationDelivery,
-      queued: this.queued,
-      runtimeState: this.runtimeState,
-      attachContext: () => this.attachContext(),
-      trackProviderOperation: (operation) => this.tasks.trackAttach(operation),
-      serialize: (sessionId, task) => this.serialize(sessionId, task),
-      now: () => this.now()
-    })
+    mutationWiring.createStructuredAgentSessionHostMutationContext(this.mutationInputs())
 
   send = this.conversationCommands.send
 
@@ -341,12 +347,5 @@ export class StructuredAgentSessionHost {
   subscribeTurnCompletions = this.clientDelivery.subscribeTurnCompletions
   readStatusSummary = this.clientDelivery.readStatusSummary
 
-  collaboratorsForTests = () => ({
-    sessions: this.sessions,
-    subscribers: this.clientDelivery.subscribers,
-    runtimeState: this.runtimeState,
-    conversationDelivery: this.conversationDelivery,
-    lifetime: this.lifetime,
-    serialize: this.serialize
-  })
+  collaboratorsForTests = this.mutationInputs
 }

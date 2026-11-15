@@ -25,6 +25,18 @@ function useSessionFeed(
   return { feed, subscribe }
 }
 
+export function useStructuredAgentSessionHeldDelivery(
+  sessionId: string,
+  target: RuntimeClientTarget
+): AgentSessionStatusSummary['heldDelivery'] {
+  const { feed, subscribe } = useSessionFeed(sessionId, target)
+  return useSyncExternalStore(
+    subscribe,
+    () => feed.getSnapshot().get(sessionId)?.heldDelivery,
+    () => undefined
+  )
+}
+
 /** Option state reads only the permission answer and observation, so other summary fields never re-render the chat. */
 export function useStructuredAgentSessionPermissionStatus(
   sessionId: string,

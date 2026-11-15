@@ -1,3 +1,4 @@
+import type { AgentSessionHeldDelivery } from '../../../../../shared/agent-session/agent-session-held-delivery'
 import { NativeChatQueuedMessageRows } from './NativeChatQueuedMessageRows'
 import { useEffect, useId, useLayoutEffect, useRef, useState } from 'react'
 import { AlertCircle, ChevronDown, ChevronRight, Play, Trash2 } from 'lucide-react'
@@ -22,6 +23,7 @@ import {
   queuedMessageCardNeedsAttention
 } from '../../../../../shared/agent-session/view/structured-agent-session-queued-cards'
 import type { QueuedEditAttachTarget } from './editing/NativeChatQueuedMessageComposer'
+import { NativeChatWorkerFailureStatus } from './NativeChatWorkerFailureStatus'
 
 /** Keep host-held drafts outside the transcript until consumed; keep the live region mounted for the first card. */
 export function NativeChatQueuedMessageList({
@@ -31,7 +33,8 @@ export function NativeChatQueuedMessageList({
   statedFailures,
   steerHeld = false,
   focusComposer,
-  editAttachTo
+  editAttachTo,
+  onSignIn
 }: {
   controller: StructuredAgentSessionQueuedMessagesController
   /** Where a card's sender is opened from; null shows it unlinked. */
@@ -44,6 +47,7 @@ export function NativeChatQueuedMessageList({
   focusComposer?: () => void
   /** The chat files added in a card's editor attach to, as its chat box attaches them. */
   editAttachTo?: QueuedEditAttachTarget
+  onSignIn?: () => void
 }): React.JSX.Element {
   const t = useTranslate()
   const regionRef = useRef<HTMLDivElement>(null)
@@ -100,6 +104,17 @@ export function NativeChatQueuedMessageList({
   })
   return (
     <div ref={regionRef} aria-live="polite">
+      {pause?.delivery ? (
+        <div className="mx-auto w-full max-w-(--chat-content-max-width) px-4">
+          <NativeChatWorkerFailureStatus
+            delivery={pause.delivery}
+            workerName={pause.delivery.workerName ?? agentName ?? 'Worker'}
+            pending={controller.queuePending !== null}
+            onResume={() => refocusAfter(controller.resume())}
+            onSignIn={onSignIn ?? focusComposer ?? (() => undefined)}
+          />
+        </div>
+      ) : null}
       {cards.length > 0 ? (
         <div ref={queueRef} className="mx-auto w-full max-w-(--chat-content-max-width) px-4 py-1">
           <div className="divide-y divide-border rounded-md border border-border bg-card text-card-foreground">
@@ -181,7 +196,10 @@ function NativeChatQueueHeader({
 }: {
   count: number
   attentionCaption: string | null
-  pause: { reason: string } | null
+  pause: {
+    reason: string
+    delivery?: AgentSessionHeldDelivery
+  } | null
   queuePending: QueuedMessagesPendingAction | null
   clearCapable: boolean
   expanded: boolean
@@ -232,18 +250,20 @@ function NativeChatQueueHeader({
             </NativeChatPendingIcon>
             {t('components.native-chat.queuedMessages.clearAll', 'Clear all')}
           </Button>
-          <Button
-            type="button"
-            variant="ghost"
-            size="xs"
-            disabled={queuePending !== null}
-            onClick={onResume}
-          >
-            <NativeChatPendingIcon pending={queuePending === 'resume'} className="size-3">
-              <Play className="size-3" />
-            </NativeChatPendingIcon>
-            {t('components.native-chat.queuedMessages.resume', 'Resume')}
-          </Button>
+          {!pause.delivery ? (
+            <Button
+              type="button"
+              variant="ghost"
+              size="xs"
+              disabled={queuePending !== null}
+              onClick={onResume}
+            >
+              <NativeChatPendingIcon pending={queuePending === 'resume'} className="size-3">
+                <Play className="size-3" />
+              </NativeChatPendingIcon>
+              {t('components.native-chat.queuedMessages.resume', 'Resume')}
+            </Button>
+          ) : null}
         </>
       ) : null}
       <Tooltip>

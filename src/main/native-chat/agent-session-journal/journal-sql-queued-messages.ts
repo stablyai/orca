@@ -111,6 +111,10 @@ export class SqlJournalQueuedMessages {
     return (await this.read({ kind: 'failure-holds' }, 'failure-holds')).held
   }
 
+  async heldDelivery() {
+    return (await this.read({ kind: 'held-delivery' }, 'held-delivery')).delivery
+  }
+
   async list(): Promise<QueuedMessageRow[]> {
     return (await this.read({ kind: 'list' }, 'list')).cards
   }

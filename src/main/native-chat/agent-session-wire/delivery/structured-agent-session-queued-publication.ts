@@ -150,10 +150,14 @@ async function publishedQueueRows(journal: AgentSessionJournal): Promise<ListMem
 
 /** Compare presence first, including unknown reasons. */
 function sameQueuePause(
-  previous: { reason?: string } | null,
-  next: { reason?: string } | null
+  previous: AgentSessionQueuePause | null,
+  next: AgentSessionQueuePause | null
 ): boolean {
-  return (previous === null) === (next === null) && previous?.reason === next?.reason
+  return (
+    (previous === null) === (next === null) &&
+    previous?.reason === next?.reason &&
+    JSON.stringify(previous?.delivery) === JSON.stringify(next?.delivery)
+  )
 }
 
 /** `inLane`: the caller already holds the chat's command lane, which is not reentrant. Null when
@@ -198,8 +202,17 @@ export async function readQueuePublication(
         ? resumable
         : null
     const working = input.work.activeTurnId() !== null || state.owedEnteredSubmissions.length > 0
-    const queuePause =
-      pause?.reason === 'stopped' || (pause?.reason === 'failed' && !working)
+    const failed = !working ? await journal.queuedMessages.heldDelivery() : null
+    const queuePause: AgentSessionQueuePause | null = failed
+      ? {
+          reason: 'failed',
+          delivery: {
+            ...failed,
+            provider: input.record?.provider,
+            workerName: input.record?.conversationName
+          }
+        }
+      : pause?.reason === 'stopped' || (pause?.reason === 'failed' && !working)
         ? { reason: pause.reason }
         : null
     const nextQueuedMessageId = input.selected?.messageId ?? null

@@ -50,7 +50,7 @@ export const ORCHESTRATION_COMMAND_SPECS: CommandSpec[] = [
     path: ['orchestration', 'send'],
     summary: 'Send an inter-agent message',
     usage:
-      'orca orchestration send --subject <text> [--to <run:id|dispatch:id|legacy_handle>] [--on <server>] [--run <run_id>] [--from <handle>] [--body <text>] [--type <type>] [--priority <level>] [--thread-id <id>] [--payload <json>] [--task-id <id>] [--dispatch-id <id>] [--outcome <succeeded|failed>] [--files-modified <csv>] [--report-path <path>] [--phase <text>] [--retry-request <id>] [--json]',
+      'orca orchestration send (--subject <text> | --resume --failure-id <id>) [--to <run:id|dispatch:id|legacy_handle>] [--on <server>] [--run <run_id>] [--from <handle>] [--body <text>] [--type <type>] [--priority <level>] [--thread-id <id>] [--payload <json>] [--task-id <id>] [--dispatch-id <id>] [--outcome <succeeded|failed>] [--files-modified <csv>] [--report-path <path>] [--phase <text>] [--retry-request <id>] [--json]',
     allowedFlags: [
       ...GLOBAL_FLAGS,
       'to',
@@ -58,6 +58,8 @@ export const ORCHESTRATION_COMMAND_SPECS: CommandSpec[] = [
       'run',
       'from',
       'subject',
+      'resume',
+      'failure-id',
       'body',
       'type',
       'priority',
@@ -74,6 +76,7 @@ export const ORCHESTRATION_COMMAND_SPECS: CommandSpec[] = [
     ],
     identityFlagRoles: { from: 'caller' },
     notes: [
+      '--resume --failure-id <id> resumes the exact failure observed in a held receipt, once, only for that Dispatch’s coordinator; omit subject/body to drain the kept messages without duplicating them.',
       'Valid --type values: status, dispatch, worker_done, merge_ready, escalation, handoff, decision_gate, question, heartbeat.',
       'To answer a worker question, use orchestration reply --id <msg_id> --body <text> with the same Orca CLI executable.',
       'Group addresses (@all, @idle, @codex, ...) reach the live Dispatches of your own Run; a sender in no Run must use run:<id> or dispatch:<id>. @worktree:<id> names one workspace.',

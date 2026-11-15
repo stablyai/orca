@@ -57,6 +57,7 @@ import { useNativeChatRewindHost } from '@/components/native-chat/messages/actio
 import { NativeChatRowActionsProvider } from '@/components/native-chat/messages/actions/NativeChatRowActionsProvider'
 import { useNativeChatPaneFork } from '@/components/native-chat/messages/actions/use-native-chat-fork'
 import { NativeChatQueuedMessageList } from '@/components/native-chat/queue/NativeChatQueuedMessageList'
+import { openProviderAccountSettings } from '@/components/provider-accounts/open-provider-account-settings'
 import {
   cancelStructuredPrompt,
   nativeChatStructuredStopControls
@@ -353,6 +354,7 @@ export function NativeChatStructuredSession(props: Omit<NativeChatStructuredView
             steerHeld={stopControls.stopping || hostHeld}
             focusComposer={focusComposer}
             editAttachTo={{ terminalTabId: props.tabId, agent: props.agent, transport }}
+            onSignIn={() => openProviderAccountSettings(props.agent, props.target)}
           />
           {subagents.strip}
           {/* Workers' open prompts stay pinned here, above this chat's own prompt. */}

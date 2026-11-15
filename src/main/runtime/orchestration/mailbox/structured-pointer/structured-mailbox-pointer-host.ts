@@ -68,11 +68,17 @@ export async function readStructuredMailAdmitFacts(
       : null
   }
   const block = structuredAgentSessionSendBlock(host.deps.store.getRecord(sessionId))
+  const failure = await host.heldDelivery(sessionId)
+  const record = host.deps.store.getRecord(sessionId)
   return {
     attached: true,
     fenced: (host.deps.store.getConversation(sessionId)?.currentFence ?? null) !== null,
     refusal: block ? block.refusal.message : null,
-    behindPrompt: work?.hasActionablePrompt() === true
+    failedDelivery: failure
+      ? { ...failure, provider: record?.provider, workerName: record?.conversationName }
+      : null,
+    behindPrompt: work?.hasActionablePrompt() === true,
+    busy: work?.working() === true
   }
 }
 

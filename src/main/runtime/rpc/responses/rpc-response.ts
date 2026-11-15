@@ -1,3 +1,4 @@
+import { WORKER_HELD_DELIVERY_ERROR_CODES } from '../../../../shared/agent-session/agent-session-held-delivery'
 import { BranchSwitchCollisionError } from '../../../git/worktrees/checkout/branch-switch-target'
 import { SparsePresetValidationError } from '../../../../shared/worktree/creation/sparse-preset-failure'
 import {
@@ -117,6 +118,7 @@ const RUNTIME_PASSTHROUGH_CODES: ReadonlySet<string> = new Set([
 const COMPUTER_PASSTHROUGH_CODES: ReadonlySet<string> = new Set(Object.values(COMPUTER_ERROR_CODES))
 const LINEAR_PASSTHROUGH_CODES: ReadonlySet<string> = new Set(LINEAR_ERROR_CODES)
 const STRUCTURED_RUNTIME_PASSTHROUGH_CODES: ReadonlySet<string> = new Set([
+  ...WORKER_HELD_DELIVERY_ERROR_CODES,
   ...RECIPE_VM_REFUSAL_CODES,
   WORKTREE_CREATE_COLLISION_CODE,
   WORKTREE_CREATE_EXACT_NAME_TAKEN_CODE,
