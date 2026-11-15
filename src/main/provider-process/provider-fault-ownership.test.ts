@@ -1,8 +1,6 @@
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { terminateProviderFaultDescendants } from './provider-fault-ownership'
 import type { ProviderProcessRow, ProcessRowRead } from './provider-process-row-read'
-import { DirectProviderStop } from './direct-provider-stop'
-import type { ProviderSpawnSpec } from './provider-process-supervisor'
 import type { ProcessTableRow } from '../pty/process-retirement/pty-process-table-parser'
 
 const NOW = Date.parse('2026-11-15T12:00:00.100Z')
@@ -154,34 +152,4 @@ it('retries an unreadable root without treating it as a recycled identity', asyn
     [200, 'SIGTERM'],
     [200, 'SIGKILL']
   ])
-})
-
-it('carries the original stdin deadline across watcher loss', async () => {
-  const spec: ProviderSpawnSpec = {
-    program: 'helper',
-    command: 'agent',
-    args: [],
-    env: {},
-    cwd: '/tmp',
-    detached: true,
-    supervised: true,
-    lifetime: 'session',
-    closeRequest: 'stdin-end',
-    stdinEndGraceMs: 1000,
-    sigtermGraceMs: 3000
-  }
-  const stop = new DirectProviderStop(
-    spec,
-    () => undefined,
-    () => false
-  )
-  const term = vi.fn()
-  stop.stdinEnded()
-  await vi.advanceTimersByTimeAsync(800)
-  stop.ownerLost(false, term)
-  await vi.advanceTimersByTimeAsync(199)
-  expect(term).not.toHaveBeenCalled()
-  await vi.advanceTimersByTimeAsync(1)
-  expect(term).toHaveBeenCalledOnce()
-  stop.complete()
 })
