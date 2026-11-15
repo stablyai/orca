@@ -80,7 +80,6 @@ export async function workspaceHistorySessionRemovals(
     // Database rows are deleted by the SQLite pass, never as files.
     case 'opencode2':
     case 'zcode':
-    default:
       return null
   }
 }
