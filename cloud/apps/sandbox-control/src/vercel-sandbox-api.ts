@@ -258,6 +258,31 @@ export function createVercelSandboxApi(
       })
     },
 
+    async updateRecordNetworkPolicy(name, policy: NetworkPolicy) {
+      await request('PATCH', `/v2/sandboxes/${encodeURIComponent(name)}`, {
+        query: { projectId: config.projectId },
+        body: { networkPolicy: policy }
+      })
+    },
+
+    async readRawForAudit(name) {
+      const recordResponse = await request('GET', `/v2/sandboxes/${encodeURIComponent(name)}`, {
+        query: { projectId: config.projectId, resume: 'false' }
+      })
+      const record = await recordResponse.text()
+      let parsed: { sandbox?: { status?: string }; session?: { id?: string; status?: string } } = {}
+      try {
+        parsed = JSON.parse(record) as typeof parsed
+      } catch {
+        // An unreadable body still gets its substring test.
+      }
+      const sessionId = parsed.session?.id
+      const session = sessionId
+        ? await (await request('GET', `/v2/sandboxes/sessions/${encodeURIComponent(sessionId)}`)).text()
+        : null
+      return { record, session, state: parsed.sandbox?.status ?? null, sessionStatus: parsed.session?.status ?? null }
+    },
+
     async updatePorts(name, ports) {
       // PATCH treats `ports` as the full list; a running session gets the new routes immediately
       // (measured live: ~260 ms, route answers at once).

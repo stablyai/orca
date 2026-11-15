@@ -26,6 +26,8 @@ type FakeBox = {
   /** Extra exposed ports beyond orcad's (updatePorts / create params). */
   ports: number[]
   policy: NetworkPolicy
+  /** The persistent record's policy once PATCHed (A4); the create's otherwise. */
+  recordPolicy?: NetworkPolicy
   /** orcad's recipe line for the current boot, once the start command ran. */
   orcadReady?: string
   /** Files in the VM, as the files API would read them. */
@@ -261,6 +263,25 @@ export function createFakeVercel(now: () => number): FakeVercel {
     },
     async updateNetworkPolicy(sessionId, policy) {
       bySession(sessionId).policy = policy
+    },
+    async updateRecordNetworkPolicy(name, policy) {
+      const box = boxes.get(name)
+      if (!box) {
+        throw new ProviderError(404, 'not_found')
+      }
+      box.recordPolicy = policy
+    },
+    async readRawForAudit(name) {
+      const box = boxes.get(name)
+      if (!box) {
+        throw new ProviderError(404, 'not_found')
+      }
+      return {
+        record: JSON.stringify({ sandbox: { status: box.status, networkPolicy: box.recordPolicy ?? box.params.networkPolicy } }),
+        session: JSON.stringify({ session: { status: box.status, networkPolicy: box.policy } }),
+        state: box.status,
+        sessionStatus: box.status
+      }
     },
     async updatePorts(name, ports) {
       const box = boxes.get(name)

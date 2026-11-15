@@ -18,7 +18,7 @@ import { readBearer } from './auth'
 import type { GitHubAppMinter } from './github-app'
 import { bindInstallation, revokeInstallation, timingSafeEqual } from './github-connect'
 import { countAllActive, getControlState, killSwitchOn, setKillSwitch } from './guardrails'
-import { applySandboxPolicy, egressSwapModeFor, guardrails, type LifecycleDeps } from './lifecycle'
+import { applySandboxPolicy, egressSwapModeFor, guardrails, scrubRecordPolicy, type LifecycleDeps } from './lifecycle'
 import { drainAll, housekeeping } from './retention'
 import { memberChangeTime, recordMemberChange } from './member-changes'
 import { memberEventActor, memberEventTarget, removeMember } from './member-removal'
@@ -90,6 +90,33 @@ export async function handleOperator(
     const applied = row.status === 'running' && row.session_id ? await applySandboxPolicy(life, next, 'mode_change') : null
     console.log(JSON.stringify({ event: 'egress_mode_set', sandboxId: row.id, mode: body.data.mode, applied: applied?.applied ?? false }))
     return Response.json({ sandboxId: row.id, mode: egressSwapModeFor(life, next), applied: applied?.applied ?? false })
+  }
+  // Dev only (probe 2, egress-docs): redacted facts about what Vercel holds for one sandbox, read with the
+  // Worker's own token. Never a value or a body; anywhere but dev, these routes don't exist.
+  const policyAudit = /^\/v1\/internal\/sandboxes\/([A-Za-z0-9_]+)\/(provider-policy-audit|provider-policy-scrub-test)$/.exec(path)
+  if (policyAudit && life.config.environment === 'dev') {
+    const row = await getSandbox(life.db, policyAudit[1]!)
+    if (!row) {
+      return Response.json({ error: 'not_found' }, { status: 404 })
+    }
+    if (policyAudit[2] === 'provider-policy-scrub-test' && request.method === 'POST') {
+      const outcome = await scrubRecordPolicy(life, row)
+      console.log(JSON.stringify({ event: 'provider_policy_scrub_test', sandboxId: row.id, outcome: typeof outcome === 'string' ? outcome : 'failed' }))
+      return Response.json({ sandboxId: row.id, outcome })
+    }
+    if (policyAudit[2] === 'provider-policy-audit' && request.method === 'GET') {
+      const marker = new URL(request.url).searchParams.get('marker') ?? ''
+      if (marker.length < 12 || !marker.startsWith('orcaprobebogus')) {
+        return Response.json({ error: 'invalid_marker' }, { status: 400 })
+      }
+      if (!life.provider.readRawForAudit) {
+        return Response.json({ error: 'unsupported' }, { status: 501 })
+      }
+      const raw = await life.provider.readRawForAudit(row.provider_name)
+      const facts = { state: raw.state, sessionStatus: raw.sessionStatus, record: policyFacts(raw.record, marker), session: raw.session === null ? null : policyFacts(raw.session, marker) }
+      console.log(JSON.stringify({ event: 'provider_policy_audit', sandboxId: row.id, markerFound: facts.record.markerFound || Boolean(facts.session?.markerFound) }))
+      return Response.json(facts)
+    }
   }
   switch (route) {
     case 'GET /v1/internal/status':
@@ -222,3 +249,42 @@ export async function handleOperator(
 }
 
 const EgressModeBody = z.object({ mode: z.enum(['proxy', 'firewall']).nullable() })
+
+/** Redacted facts about a raw provider body: rule counts and header NAMES only, plus a marker substring test. */
+export function policyFacts(body: string, marker: string): { hasNetworkPolicy: boolean; transformRuleCount: number; headerNames: string[]; markerFound: boolean } {
+  let parsed: unknown = null
+  try {
+    parsed = JSON.parse(body)
+  } catch {
+    // Facts from the substring test only.
+  }
+  let hasNetworkPolicy = false
+  let transformRuleCount = 0
+  const headerNames = new Set<string>()
+  const walk = (value: unknown, key: string): void => {
+    if (Array.isArray(value)) {
+      if (/transform/i.test(key)) {
+        transformRuleCount += value.length
+      }
+      value.forEach((item) => walk(item, key))
+      return
+    }
+    if (value && typeof value === 'object') {
+      for (const [name, child] of Object.entries(value)) {
+        if (/^networkpolicy$/i.test(name)) {
+          hasNetworkPolicy = true
+        }
+        if (/^headerNames$/i.test(name) && Array.isArray(child)) {
+          for (const header of child) {
+            if (typeof header === 'string' && /^[A-Za-z0-9-]{1,64}$/.test(header)) {
+              headerNames.add(header.toLowerCase())
+            }
+          }
+        }
+        walk(child, name)
+      }
+    }
+  }
+  walk(parsed, '')
+  return { hasNetworkPolicy, transformRuleCount, headerNames: [...headerNames].sort(), markerFound: body.includes(marker) }
+}
