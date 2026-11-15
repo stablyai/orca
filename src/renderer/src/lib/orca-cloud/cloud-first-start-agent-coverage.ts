@@ -11,7 +11,8 @@ let latest: { agent: string; coverage: Coverage } | null = null
 function coverageOf(row: OrcaCloudAgentSetupRowModel): Coverage {
   switch (row.kind) {
     case 'covered':
-      return row.via === 'account' ? 'account' : 'key'
+      // Signing in inside the workspace: nothing of Orca's covers the agent (the schema's 'none').
+      return row.via === 'inWorkspace' ? 'none' : row.via === 'account' ? 'account' : 'key'
     case 'notSetUp':
     case 'expired':
     case 'killSwitch':

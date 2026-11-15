@@ -340,6 +340,32 @@ export function CloudAgentSignInStrip({
             </DropdownMenuContent>
           </DropdownMenu>
         ) : null}
+        {model.alternative && !model.otherWays ? (
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon-xs"
+                aria-label={t('agentSignInStrip.moreChoices', 'More choices')}
+              >
+                <MoreHorizontal aria-hidden />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="max-w-72">
+              <DropdownMenuItem
+                onSelect={() => model.alternative && actions.primary(model.alternative.action)}
+              >
+                <span className="flex flex-col gap-0.5">
+                  <span>{model.alternative.label}</span>
+                  <span className="text-xs leading-4 text-muted-foreground">
+                    {model.alternative.detail}
+                  </span>
+                </span>
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        ) : null}
         {model.settingsLink && !stacked ? (
           <CloudStripSettingsLink label={model.settingsLink} onOpen={actions.openSettings} />
         ) : null}

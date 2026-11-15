@@ -5,8 +5,9 @@ const state = vi.hoisted(() => {
   const value: {
     needsHold: boolean | null
     mainSays: boolean
-    release: ((outcome: 'start' | 'cancel') => void) | null
-  } = { needsHold: true, mainSays: true, release: null }
+    inside: boolean
+    release: ((outcome: 'proceed' | 'cancel') => void) | null
+  } = { needsHold: true, mainSays: true, inside: false, release: null }
   return value
 })
 
@@ -20,6 +21,7 @@ vi.mock('./agent-sign-in-spawn-gate', () => ({
 }))
 vi.mock('@/lib/orca-cloud/cloud-agent-launch-hold', () => ({
   cloudAgentLaunchNeedsHold: () => state.needsHold,
+  cloudAgentSignsInInsideWorkspace: () => state.inside,
   holdCloudAgentLaunch: () =>
     new Promise((resolve) => {
       state.release = resolve
@@ -37,17 +39,26 @@ const { installCloudAgentCredentialGate } = await import('./cloud-agent-credenti
 const flush = () => new Promise((resolve) => setTimeout(resolve, 0))
 
 function session() {
+  // `start` is the launch behind #40228's per-host gate; `ungated` the one in front of it.
   const start = vi.fn(async (_startup?: unknown, _options?: unknown) => 'pty-1')
-  const value = { startFreshSpawn: start, disposed: false, pendingSpawnKey: 'k', tabGeneration: 1 }
+  const ungated = vi.fn(async (_startup?: unknown, _options?: unknown) => 'pty-own-sign-in')
+  const value = {
+    startFreshSpawn: start,
+    startFreshSpawnWithoutSignInGate: ungated,
+    disposed: false,
+    pendingSpawnKey: 'k',
+    tabGeneration: 1
+  }
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the gate reads only these fields
   installCloudAgentCredentialGate(value as unknown as ConnectPanePtySession)
-  return { value, start }
+  return { value, start, ungated }
 }
 
 describe('cloud agent credential spawn gate (FAIL-CLOSED, #568)', () => {
   beforeEach(() => {
     state.needsHold = true
     state.mainSays = true
+    state.inside = false
     state.release = null
   })
 
@@ -57,7 +68,7 @@ describe('cloud agent credential spawn gate (FAIL-CLOSED, #568)', () => {
     await flush()
     expect(start).not.toHaveBeenCalled()
     expect(state.release).not.toBeNull()
-    state.release?.('start')
+    state.release?.('proceed')
     await expect(spawned).resolves.toBe('pty-1')
     expect(start).toHaveBeenCalledOnce()
   })
@@ -76,5 +87,37 @@ describe('cloud agent credential spawn gate (FAIL-CLOSED, #568)', () => {
     await expect(value.startFreshSpawn(undefined, {})).resolves.toBe('pty-1')
     expect(start).toHaveBeenCalledOnce()
     expect(state.release).toBeNull()
+  })
+
+  it('signing in inside the workspace starts the agent past every gate, so its own sign-in shows', async () => {
+    state.needsHold = false
+    state.inside = true
+    const { value, start, ungated } = session()
+    await expect(value.startFreshSpawn(undefined, {})).resolves.toBe('pty-own-sign-in')
+    expect(ungated).toHaveBeenCalledOnce()
+    expect(start).not.toHaveBeenCalled()
+    expect(state.release).toBeNull()
+  })
+
+  it('signing in inside the workspace never skips the per-host gate on a host that is not Orca Cloud', async () => {
+    state.needsHold = false
+    state.inside = true
+    state.mainSays = false
+    const { value, start, ungated } = session()
+    await expect(value.startFreshSpawn(undefined, {})).resolves.toBe('pty-1')
+    expect(start).toHaveBeenCalledOnce()
+    expect(ungated).not.toHaveBeenCalled()
+  })
+
+  it('a launch held on "Set up once" whose person chooses to sign in inside starts past the per-host gate', async () => {
+    const { value, start, ungated } = session()
+    const spawned = value.startFreshSpawn(undefined, {})
+    await flush()
+    expect(state.release).not.toBeNull()
+    state.inside = true
+    state.release?.('proceed')
+    await expect(spawned).resolves.toBe('pty-own-sign-in')
+    expect(ungated).toHaveBeenCalledOnce()
+    expect(start).not.toHaveBeenCalled()
   })
 })

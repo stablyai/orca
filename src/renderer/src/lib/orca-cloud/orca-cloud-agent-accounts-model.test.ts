@@ -13,6 +13,10 @@ function status(overrides: {
   provider?: 'on' | 'off' | 'disabled'
   covered?: boolean
   defaultSource?: 'sign-in' | 'key' | null
+  /** The person signs Claude in inside each workspace. */
+  inWorkspace?: boolean
+  /** The view is for one workspace whose own Source overrides the default. */
+  workspaceOverride?: 'sign-in' | 'key'
 }): OrcaCloudAgentsStatus {
   return {
     credentials: {
@@ -23,7 +27,13 @@ function status(overrides: {
     },
     sources: {
       defaults: { claude: overrides.defaultSource ?? null },
-      coveredByKey: { claude: overrides.covered ?? false, codex: false }
+      coveredByKey: { claude: overrides.covered ?? false, codex: false },
+      ...(overrides.inWorkspace !== undefined
+        ? { inWorkspace: { claude: overrides.inWorkspace, codex: false } }
+        : {}),
+      ...(overrides.workspaceOverride
+        ? { effective: { claude: { source: overrides.workspaceOverride, origin: 'workspace' } } }
+        : {})
     }
   }
 }
@@ -169,5 +179,48 @@ describe('orcaCloudAgentCoverage', () => {
         'personal'
       )
     ).toEqual({ kind: 'key', keyKind: 'personal' })
+  })
+})
+
+describe('signing in inside each workspace', () => {
+  it('wins over a stored account and a covering key, in the S0 row and the coverage', () => {
+    const chosen = status({ claude: ACTIVE, covered: true, inWorkspace: true })
+    expect(orcaCloudAccountRow('claude', chosen, IDLE, 'team')).toEqual({
+      kind: 'inWorkspace',
+      savedSignIn: true
+    })
+    expect(orcaCloudAgentCoverage('claude', chosen, 'team')).toEqual({ kind: 'inWorkspace' })
+    expect(orcaCloudAccountRow('claude', status({ inWorkspace: true }), IDLE, null)).toEqual({
+      kind: 'inWorkspace',
+      savedSignIn: false
+    })
+    // Codex keeps its own Source.
+    expect(orcaCloudAgentCoverage('codex', chosen, null)).toEqual({ kind: 'notSetUp' })
+  })
+
+  it('gives way to a running setup, a provider that is off, and a workspace override', () => {
+    const browser = { phase: 'browser', startedAt: 1, canReopen: true } as const
+    expect(orcaCloudAccountRow('claude', status({ inWorkspace: true }), browser, null).kind).toBe(
+      'setup'
+    )
+    expect(
+      orcaCloudAccountRow(
+        'claude',
+        status({ inWorkspace: true, provider: 'off', enabled: false }),
+        IDLE,
+        null
+      )
+    ).toEqual({ kind: 'unavailable' })
+    expect(
+      orcaCloudAgentCoverage(
+        'claude',
+        status({ claude: ACTIVE, inWorkspace: true, workspaceOverride: 'sign-in' }),
+        null
+      )
+    ).toEqual({ kind: 'account' })
+  })
+
+  it('an older server without the field changes nothing', () => {
+    expect(orcaCloudAgentCoverage('claude', status({}), null)).toEqual({ kind: 'notSetUp' })
   })
 })

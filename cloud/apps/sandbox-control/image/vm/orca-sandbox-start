@@ -195,21 +195,27 @@ fi
 "$ORCA_HOME/bin/orca-sandbox-env" >/dev/null || echo 'session env file unavailable; secrets apply at boot only' >&2
 unset ORCA_SECRET_ENV
 
-# OpenCode's first run in a VM installs its plugin SDK into ~/.config/opencode, creates its database
-# and fetches its model list: ~2.5 s more on the first launch (5.2 s vs 2.7 s warm, n72). orca-sandbox-env
-# just wrote that config, so do the first run now, in the background at low priority, with no
-# credentials (`opencode models` does all of it and exits). The SDK install only happens once orcad
-# has put Orca's plugin in ~/.config/opencode/plugins (~10 s after this, n73), so wait for it (up to
-# 60 s) first. Skipped once it has run on this disk.
-if [ -x "$ORCA_HOME/tools/bin/opencode" ] && [ ! -d "$HOME/.config/opencode/node_modules" ]; then
+# OpenCode installs @opencode-ai/plugin into ~/.config/opencode and, with Orca's plugin configured,
+# draws nothing until that install ends (blank ~85 s on a slow registry, n73). The image carries the
+# install (provision-golden.sh): copy it into a home that has neither node_modules nor a package.json
+# of its own, so the first launch never fetches.
+oc_seed="$ORCA_HOME/opencode-config-seed"
+oc_dir="$HOME/.config/opencode"
+if [ -d "$oc_seed/node_modules" ] && [ ! -e "$oc_dir/node_modules" ] && [ ! -e "$oc_dir/package.json" ]; then
+  mkdir -p "$oc_dir" \
+    && cp -R "$oc_seed/node_modules" "$oc_dir/node_modules" \
+    && cp "$oc_seed/package.json" "$oc_seed/package-lock.json" "$oc_dir/" \
+    || echo 'opencode config seed not copied' >&2
+fi
+# The rest of OpenCode's first run (its database, the model list): ~2.5 s on the first launch
+# (5.2 s vs 2.7 s warm, n72). Done now in the background at low priority with no credentials
+# (`opencode models` does it and exits). Skipped once it has run on this disk.
+if [ -x "$ORCA_HOME/tools/bin/opencode" ] && [ ! -e "$HOME/.local/share/opencode/opencode.db" ]; then
   (
     cd "$HOME" || exit 0
-    # shellcheck disable=SC2016 # expanded by the inner shell
     env -i HOME="$HOME" USER="$(id -un)" LANG=C.UTF-8 PATH="$ORCA_HOME/tools/bin:/usr/local/bin:/usr/bin:/bin" \
-      OPENCODE_DISABLE_AUTOUPDATE=1 setsid nohup nice -n 19 bash -c '
-        for _ in $(seq 1 120); do [ -d "$HOME/.config/opencode/plugins" ] && break; sleep 0.5; done
-        exec timeout 120 "$1" models
-      ' opencode-first-run "$ORCA_HOME/tools/bin/opencode" </dev/null >/dev/null 2>&1 9>&- &
+      OPENCODE_DISABLE_AUTOUPDATE=1 setsid nohup nice -n 19 timeout 120 \
+      "$ORCA_HOME/tools/bin/opencode" models </dev/null >/dev/null 2>&1 9>&- &
   )
 fi
 

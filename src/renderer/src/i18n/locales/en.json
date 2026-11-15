@@ -28358,7 +28358,8 @@
       "failed": "Couldn’t load your agent accounts.",
       "sharedUnavailable": "Not available in shared workspaces",
       "sharedUnavailableDetail": "Personal accounts aren’t used in shared workspaces. Ask an owner or admin to add a team key.",
-      "expiredDetailCloudSignIns": "Renew it once in Cloud agent sign-ins."
+      "expiredDetailCloudSignIns": "Renew it once in Cloud agent sign-ins.",
+      "signsInHereChosen": "Orca doesn’t store this sign-in"
     },
     "kind": {
       "local": "This computer",
@@ -28576,7 +28577,8 @@
     "checking": "Checking {{agent}}",
     "notSetUpCloudSignIns": "{{agent}} isn’t set up for Orca Cloud yet. Set it up once in Settings → Cloud agent sign-ins.",
     "expiredCloudSignIns": "Your {{agent}} sign-in for Orca Cloud expired. Renew it once in Settings → Cloud agent sign-ins.",
-    "signedOutCloudSignIns": "{{agent}}: set up once in Settings → Cloud agent sign-ins after you sign in"
+    "signedOutCloudSignIns": "{{agent}}: set up once in Settings → Cloud agent sign-ins after you sign in",
+    "inWorkspace": "{{agent}} · signs in inside the workspace"
   },
   "orcaCloudAccounts": {
     "paste": {
@@ -28689,7 +28691,10 @@
     "pasteTokenInstead": "Paste a token instead",
     "rowMenu": "{{agent}} account options",
     "helpAccountWide": "Set up once. Every cloud workspace uses it, including new, cloned and restarted ones.",
-    "deviceCodeOffHint": "If OpenAI says device code sign-in is off, turn it on in ChatGPT → Settings → Security, then try again."
+    "deviceCodeOffHint": "If OpenAI says device code sign-in is off, turn it on in ChatGPT → Settings → Security, then try again.",
+    "signInInsideWorkspace": "Sign in inside each workspace instead",
+    "inWorkspace": "Signs in inside each workspace",
+    "inWorkspaceDetail": "Orca doesn’t store your {{product}} sign-in. You sign in again in each new cloud workspace."
   },
   "vmBuildAgents": {
     "menu": {
@@ -28862,7 +28867,10 @@
     "pasteTokenRejectedDetail": "Paste the full token from `claude setup-token`, or run it again.",
     "setupTokenPlaceholder": "Paste token",
     "pasteAgentTokenTitle": "Paste a {{agent}} token",
-    "pasteAgentTokenDetail": "Run `claude setup-token` in any terminal where {{agent}} is installed, then paste the token here. It’s saved to your Orca account, never to a sandbox."
+    "pasteAgentTokenDetail": "Run `claude setup-token` in any terminal where {{agent}} is installed, then paste the token here. It’s saved to your Orca account, never to a sandbox.",
+    "moreChoices": "More choices",
+    "signInInsideWorkspace": "Sign in inside this workspace instead",
+    "signInInsideWorkspaceDetail": "Orca won’t store your sign-in. You’ll sign in again in each new workspace."
   },
   "cloudSetupPage": {
     "back": "Back",
@@ -29319,6 +29327,7 @@
   "terminalPane": {
     "agentStarting": {
       "title": "Starting {{agent}}…",
+      "still": "Still starting {{agent}}…",
       "slow": "Taking longer than usual. It opens here as soon as it’s ready."
     }
   }

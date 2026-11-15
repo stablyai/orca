@@ -7,8 +7,8 @@ import { useWorktreeCreationClock } from '@/components/worktree-creation/worktre
 import { orcaCloudAccountRow } from '@/lib/orca-cloud/orca-cloud-agent-accounts-model'
 import {
   applyOrcaCloudAgentCredentials,
-  applyOrcaCloudAgentSources,
   reloadOrcaCloudAgentAccounts,
+  setOrcaCloudAgentDefaultSource,
   useOrcaCloudAgentAccounts
 } from '@/lib/orca-cloud/orca-cloud-agent-accounts-store'
 import { ORCA_CLOUD_ACCOUNT_AGENTS } from '../../../../../shared/orca-cloud-agents/orca-cloud-agents-wire'
@@ -66,17 +66,7 @@ export function OrcaCloudAccountsSection({
         }
         return result.error
       },
-      setSource: async (agent, source) => {
-        if (!api) {
-          return 'not_configured'
-        }
-        const result = await api.setDefaultSource({ agent, source })
-        if (result.ok) {
-          applyOrcaCloudAgentSources(result.value)
-          return null
-        }
-        return result.error
-      },
+      setSource: (agent, source) => setOrcaCloudAgentDefaultSource(agent, source),
       copyCode: (code) => {
         void window.api.ui
           .writeClipboardText(code)

@@ -47,6 +47,7 @@ export function agentsSummary(
         break
       case 'killSwitch':
       case 'unavailable':
+      case 'inWorkspace':
         rest.push(
           t('agentHostPanel.summary.agentSignsInHere', '{{agent}} signs in for this workspace', {
             agent

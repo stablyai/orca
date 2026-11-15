@@ -5,6 +5,7 @@ import {
   cloudAgentHoldReason,
   cloudAgentLaunchHoldReason,
   cloudAgentLaunchNeedsHold,
+  cloudAgentSignsInInsideWorkspace,
   cloudAgentStripReason,
   holdCloudAgentLaunch,
   readCloudAgentHold,
@@ -156,5 +157,38 @@ describe('cloud agent launch hold', () => {
       holdCloudAgentLaunch({ paneKey: 'tab:e', agent: 'claude', prompt: null, decided: true })
     ).resolves.toBe('proceed')
     expect(readCloudAgentHold('tab:e')).toBeNull()
+  })
+
+  it('signing in inside the workspace never holds, and choosing it on "Set up once" starts the held launch', async () => {
+    const inside = (state: OrcaCloudAgentAccountsState): OrcaCloudAgentAccountsState =>
+      state.load.kind === 'ready'
+        ? {
+            ...state,
+            load: {
+              kind: 'ready',
+              status: {
+                ...state.load.status,
+                sources: {
+                  ...state.load.status.sources,
+                  inWorkspace: { claude: true, codex: false }
+                }
+              }
+            }
+          }
+        : state
+    // Even with an expired account: Orca injects nothing for the agent, so there is nothing to renew.
+    expect(cloudAgentHoldReason('claude', inside(accounts({ state: 'expired' })))).toBeNull()
+    expect(cloudAgentStripReason('claude', inside(accounts({ state: 'expired' })))).toBeNull()
+    setOrcaCloudAgentAccountsStateForTest(accounts({ state: 'none' }))
+    expect(cloudAgentSignsInInsideWorkspace('claude')).toBe(false)
+    const held = holdCloudAgentLaunch({ paneKey: 'tab:f', agent: 'claude', prompt: null })
+    await vi.waitFor(() =>
+      expect(readCloudAgentHold('tab:f')).toMatchObject({ reason: 'notSetUp' })
+    )
+    setOrcaCloudAgentAccountsStateForTest(inside(accounts({ state: 'none' })))
+    await expect(held).resolves.toBe('proceed')
+    expect(readCloudAgentHold('tab:f')).toBeNull()
+    expect(cloudAgentSignsInInsideWorkspace('claude')).toBe(true)
+    expect(cloudAgentLaunchNeedsHold('claude')).toBe(false)
   })
 })

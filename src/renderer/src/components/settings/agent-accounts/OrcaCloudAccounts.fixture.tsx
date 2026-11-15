@@ -79,6 +79,12 @@ export const notSetUp = fixture({
 
 export const loading = fixture(null, { kind: 'loading' })
 
+/** The person signs in inside each workspace (Codex), Claude not set up yet (offers the same). */
+export const inWorkspace = fixture({
+  claude: { kind: 'notSetUp', keyKind: null },
+  codex: { kind: 'inWorkspace', savedSignIn: false }
+})
+
 export const settingUpClaude = fixture({
   claude: {
     kind: 'setup',
