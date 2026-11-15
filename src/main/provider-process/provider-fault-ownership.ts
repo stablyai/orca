@@ -86,6 +86,9 @@ export async function terminateProviderFaultDescendants(
     if (before === 'unverifiable') {
       throw new Error('Provider ownership is unreadable')
     }
+    if (sequence === 1 && !matchesRoot(before, Date.now())) {
+      return { rows: [], capturedAtMs: Date.now() }
+    }
     const capture = await readTable(timeoutMs)
     const roots = capture.rows.filter((row) => row.pid === expected.pid)
     const root = roots.length === 1 ? roots[0] : undefined

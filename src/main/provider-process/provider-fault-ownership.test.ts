@@ -23,6 +23,22 @@ beforeEach(() => {
 })
 afterEach(() => vi.useRealTimers())
 
+it.each([150, 1_500])('skips host inventories for %s absent provider roots', async (count) => {
+  const readTable = vi.fn(async () => ({ rows: [root, tool], capturedAtMs: NOW }))
+  const sendSignal = vi.fn()
+  for (let index = 0; index < count; index++) {
+    await expect(
+      terminateProviderFaultDescendants(identity, {
+        readProcessRow: async () => null,
+        readTable,
+        sendSignal
+      })
+    ).resolves.toBe('unverifiable')
+  }
+  expect(readTable).not.toHaveBeenCalled()
+  expect(sendSignal).not.toHaveBeenCalled()
+})
+
 it('terminates captured same-group and detached tools even after both anchors disappear', async () => {
   let rootReads = 0
   const live = new Map([tool, sameGroupChild].map((row) => [row.pid, row]))
