@@ -107,7 +107,7 @@ export async function storeFileFacts(storeHome: string, path: string): Promise<F
   return stats?.isFile() ? factsOf(storeHome, fromManifestPath(storeHome, path), stats) : null
 }
 
-/** A newer version's manifest is left alone; anything unreadable is rebuilt. */
+/** A newer version's manifest is left alone; anything unreadable or malformed is rebuilt. */
 export async function readManifest(
   accountHome: string
 ): Promise<CodexHistoryCleanupManifest | 'newer' | null> {
@@ -126,7 +126,20 @@ export async function readManifest(
   if (typeof parsed.version === 'number' && parsed.version > MANIFEST_VERSION) {
     return 'newer'
   }
-  return parsed.version === MANIFEST_VERSION ? (parsed as CodexHistoryCleanupManifest) : null
+  return isCurrentManifest(parsed) ? parsed : null
+}
+
+function isCurrentManifest(value: object): value is CodexHistoryCleanupManifest {
+  return (
+    'version' in value &&
+    value.version === MANIFEST_VERSION &&
+    'rollouts' in value &&
+    Array.isArray(value.rollouts) &&
+    'databases' in value &&
+    Array.isArray(value.databases) &&
+    'storeTwinPairs' in value &&
+    Array.isArray(value.storeTwinPairs)
+  )
 }
 
 async function writeManifest(
