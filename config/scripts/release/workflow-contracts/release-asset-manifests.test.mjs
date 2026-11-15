@@ -86,6 +86,38 @@ describe('release asset manifests', () => {
   })
 })
 
+describe('publish-release asset provenance', () => {
+  const job = releaseCut.jobs['publish-release']
+  const ids = job.steps.map((step) => step.id ?? step.name)
+  const verify = job.steps[ids.indexOf('Verify every draft asset matches its build manifest')]
+
+  it('verifies every draft asset against this run and the macOS run before minting the App token', () => {
+    expect(ids.indexOf(verify.name)).toBeLessThan(ids.indexOf('release-app-token'))
+    expect(job.permissions).toEqual({ contents: 'write', actions: 'read' })
+    expect(verify.run).toContain(
+      'node config/scripts/release/publication/verify-release-asset-provenance.mjs'
+    )
+    expect(verify.env).toMatchObject({
+      MAC_RUN_ID: '${{ needs.build-mac.outputs.run_id }}',
+      ORCA_SERVER: "${{ needs.upload-orca-server-artifact.result == 'success' }}"
+    })
+    const downloads = job.steps.filter((step) => step.uses?.startsWith('actions/download-artifact'))
+    expect(downloads.map((step) => step.with)).toEqual([
+      { pattern: 'release-asset-manifest-*', path: '${{ runner.temp }}/asset-manifests/run' },
+      {
+        name: 'release-asset-manifest-mac',
+        path: '${{ runner.temp }}/asset-manifests/mac',
+        'run-id': '${{ needs.build-mac.outputs.run_id }}',
+        'github-token': '${{ secrets.GITHUB_TOKEN }}'
+      }
+    ])
+    for (const step of downloads) {
+      expect(step.uses).toMatch(PINNED)
+      expect(ids.indexOf(step.name)).toBeLessThan(ids.indexOf(verify.name))
+    }
+  })
+})
+
 describe('write-release-asset-manifest', () => {
   let dir
   afterEach(() => dir && rmSync(dir, { recursive: true, force: true }))

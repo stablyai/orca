@@ -105,11 +105,20 @@ async function assertDraftTagMatchesTarget(fetchImpl, repo, token, release) {
   await assertPolicyKeepsAppRelease({ repo, tag, commitSha: expected, token, fetchImpl })
 }
 
+// Why: a draft from an earlier run may be published only once its assets match the manifests that run's builds
+// wrote. Until that check exists, refuse every draft; an operator verifies the assets and publishes by hand.
+export async function refuseUnverifiedProvenance() {
+  throw new Error(
+    'asset provenance of drafts from earlier runs is not verified yet; publish by hand'
+  )
+}
+
 export async function publishCompleteDraftReleases({
   repo,
   token,
   fetchImpl = fetch,
   verifyReleaseAssets = verifyRequiredReleaseAssets,
+  verifyAssetProvenance = refuseUnverifiedProvenance,
   isDraftBuiltFromCurrentRef = ({ tag }) => isTagBuiltFromCurrentRef(tag),
   log = console.log
 }) {
@@ -147,6 +156,7 @@ export async function publishCompleteDraftReleases({
     }
 
     try {
+      await verifyAssetProvenance({ repo, token, release })
       await assertDraftTagMatchesTarget(fetchImpl, repo, token, release)
     } catch (error) {
       const reason = error instanceof Error ? error.message.split('\n')[0] : String(error)

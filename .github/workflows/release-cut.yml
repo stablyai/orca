@@ -2535,6 +2535,8 @@ jobs:
     permissions:
       # GITHUB_TOKEN only reads, but draft releases are listed only to tokens with push access.
       contents: write
+      # Reads the asset manifests of this run and of the macOS build run.
+      actions: read
     env: *no-git-hooks
     steps:
       - name: Check out the workflow commit
@@ -2573,6 +2575,33 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAG: ${{ needs.cut.outputs.tag }}
         run: node config/scripts/release/publication/verify-release-required-assets.mjs "$TAG"
+
+      # Manifests are data the verifier parses strictly; it refuses any file layout other than one manifest.json each.
+      - name: Download this run's release asset manifests
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: release-asset-manifest-*
+          path: ${{ runner.temp }}/asset-manifests/run
+
+      - name: Download the macOS build's release asset manifest
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: release-asset-manifest-mac
+          path: ${{ runner.temp }}/asset-manifests/mac
+          run-id: ${{ needs.build-mac.outputs.run_id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      # Why: anyone with contents write can replace a draft asset; the App must publish only bytes these builds made.
+      - name: Verify every draft asset matches its build manifest
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ needs.cut.outputs.tag }}
+          RELEASE_SHA: ${{ needs.create-release.outputs.release_sha }}
+          MAC_RUN_ID: ${{ needs.build-mac.outputs.run_id }}
+          ORCA_SERVER: ${{ needs.upload-orca-server-artifact.result == 'success' }}
+        run: >-
+          node config/scripts/release/publication/verify-release-asset-provenance.mjs
+          "$RUNNER_TEMP/asset-manifests/run" "$RUNNER_TEMP/asset-manifests/mac"
 
       # Why: Release Policy runs from the tagged commit; an older one would delete this release once the App
       # publishes it, unless the pipeline made the tag.

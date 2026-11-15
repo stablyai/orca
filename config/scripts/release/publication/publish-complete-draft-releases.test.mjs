@@ -129,6 +129,7 @@ describe('publishCompleteDraftReleases', () => {
           token: 'token',
           fetchImpl,
           isDraftBuiltFromCurrentRef: ({ tag }) => isTagBuiltFromCurrentRef(tag, { cwd: repo }),
+          verifyAssetProvenance: async () => {},
           log: vi.fn()
         })
         expect(result).toEqual({
@@ -180,6 +181,7 @@ describe('publishCompleteDraftReleases', () => {
           token: 'token',
           fetchImpl,
           isDraftBuiltFromCurrentRef: ({ tag }) => isTagBuiltFromCurrentRef(tag, { cwd: repo }),
+          verifyAssetProvenance: async () => {},
           log: vi.fn()
         })
         expect(result).toEqual({
@@ -248,10 +250,32 @@ describe('RC draft tag verification', () => {
       fetchImpl,
       verifyReleaseAssets: async () => {},
       isDraftBuiltFromCurrentRef: () => true,
+      verifyAssetProvenance: async () => {},
       log: vi.fn()
     })
     return { result, patches }
   }
+
+  it('refuses every draft by default until prior-run asset provenance is verified', async () => {
+    const patches = []
+    const fetchImpl = vi.fn(async (url, options = {}) => {
+      if (options.method === 'PATCH') {
+        patches.push(url)
+      }
+      return jsonResponse([draft])
+    })
+    const result = await publishCompleteDraftReleases({
+      repo: 'stablyai/orca',
+      token: 'token',
+      fetchImpl,
+      verifyReleaseAssets: async () => {},
+      isDraftBuiltFromCurrentRef: () => true,
+      log: vi.fn()
+    })
+    expect(result.published).toEqual([])
+    expect(result.skipped[0].reason).toMatch(/not verified yet; publish by hand/)
+    expect(patches).toEqual([])
+  })
 
   it('publishes an App-authored draft whose annotated tag still resolves to its commit', async () => {
     const { result, patches } = await run(draft, ref({ type: 'tag', sha: tagObject }))
