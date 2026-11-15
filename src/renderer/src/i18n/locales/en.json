@@ -22365,8 +22365,6 @@
           "title": "Turn on {{rule}}?",
           "description_one": "1 workspace matches right now. It'll be deleted a few seconds after you turn this on.",
           "description_other": "{{count}} workspaces match right now. They'll be deleted a few seconds after you turn this on.",
-          "keepNamed": "Keep {{name}}",
-          "keep": "Keep",
           "summary": "{{count}} will be deleted",
           "cancel": "Cancel",
           "turnOn": "Turn on"
@@ -22461,6 +22459,19 @@
           "automationRuns": "Automation workspaces",
           "orchestrationWorkers": "Orchestration workers",
           "off": "Off"
+        },
+        "disableIgnoredFiles": {
+          "title": "Turn off ignored-file protection?",
+          "description": "For projects using these cleanup rules, ignored files will no longer prevent automatic cleanup. Files such as .env and local config may be deleted and cannot be recovered.",
+          "matches_one": "Without pinning, {{count}} additional workspace will be deleted a few seconds after you turn off protection.",
+          "matches_other": "Without pinning, {{count}} additional workspaces will be deleted a few seconds after you turn off protection.",
+          "noMatches": "No additional workspaces match right now. This setting affects future cleanup in projects using these rules.",
+          "turnOff": "Turn off protection"
+        },
+        "pinAndKeep": {
+          "description": "Selected workspaces will be pinned when you confirm. Pinned workspaces are excluded from automatic cleanup until you unpin them.",
+          "named": "Pin and keep {{name}}",
+          "label": "Pin and keep"
         }
       },
       "repository": {
