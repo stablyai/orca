@@ -2,7 +2,7 @@
 // call per repo answers both "the branch moved" and "a lockfile changed" (installed deps are stale).
 // Uses the GitHub App token when the repo is bound, anonymous otherwise (public repos). Cached briefly
 // per isolate so a settings page polling it costs GitHub nothing extra.
-import { LOCKFILES, getBuild, parseConfig, parseResult, type BuildDeps } from './environment-builds'
+import { LOCKFILES, environmentRegion, getBuild, parseConfig, parseResult, regionGolden, type BuildDeps } from './environment-builds'
 import { parseRepos, type EnvironmentRow } from './environments'
 import { parseGitHubRepo } from './github-app'
 
@@ -37,7 +37,7 @@ export type Staleness = {
 const LOCKFILE_NAMES = new Set(LOCKFILES)
 
 export async function checkStaleness(
-  deps: Pick<BuildDeps, 'db' | 'github' | 'now'> & { githubFetch?: typeof fetch; config?: { goldenSnapshotId: string } },
+  deps: Pick<BuildDeps, 'db' | 'github' | 'now'> & { githubFetch?: typeof fetch; config?: Parameters<typeof regionGolden>[0] },
   environment: EnvironmentRow,
   refresh = false
 ): Promise<Staleness> {
@@ -54,7 +54,9 @@ export async function checkStaleness(
   const config = parseConfig(build)
   const result = parseResult(build)
   const configChanged = config.revision !== environment.revision
-  const imageUpdated = !!deps.config && build.base_snapshot_id !== deps.config.goldenSnapshotId
+  // Compared with the golden of the region the environment builds in (its own, or the default).
+  const imageUpdated =
+    !!deps.config && build.base_snapshot_id !== regionGolden(deps.config, environmentRegion(deps.config, environment.region))
   const repos: RepoStaleness[] = []
   for (const repo of parseRepos(environment)) {
     const built = result?.repos?.find((r) => r.url === repo.url)

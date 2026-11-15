@@ -12,6 +12,8 @@ kill -TERM "$pid"
 for _ in $(seq 1 $((WAIT_SECONDS * 10))); do
   if ! kill -0 "$pid" 2>/dev/null; then
     rm -f "$STATE/orcad.pid" "$STATE/ready.json"
+    # On-demand swap files would ride the stop snapshot (2 GiB each). Best effort, bounded.
+    [ -x /opt/orca/bin/orca-memguard ] && sudo -n timeout 20 /opt/orca/bin/orca-memguard release-swap >/dev/null 2>&1 || true
     exit 0
   fi
   sleep 0.1

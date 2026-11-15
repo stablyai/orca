@@ -19,7 +19,7 @@ export type CloudAgentPanelStatus =
   | { kind: 'notSetUp' }
   | { kind: 'expired' }
   /** No account path and no key: the agent signs in inside this workspace (§5c). */
-  | { kind: 'signsInHere'; reason: 'paused' | 'notOffered' }
+  | { kind: 'signsInHere'; reason: 'paused' | 'notOffered' | 'chosen' }
   /** D13: a shared workspace never uses personal accounts or keys, and no team key covers it. */
   | { kind: 'sharedUnavailable' }
 
@@ -96,6 +96,9 @@ export function cloudAgentPanelRows(
         return { agent, status: { kind: 'signsInHere', reason: 'paused' }, source }
       case 'unavailable':
         return { agent, status: { kind: 'signsInHere', reason: 'notOffered' }, source }
+      case 'inWorkspace':
+        // Nothing of Orca's applies, so there is no Source to switch here either.
+        return { agent, status: { kind: 'signsInHere', reason: 'chosen' }, source: null }
     }
   })
 }

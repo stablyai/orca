@@ -64,7 +64,7 @@ import { createRoutinesApi } from './routines/api'
 import { handleRoutineHook, isRoutineHookPath } from './routines/hooks'
 import { tickRoutines } from './routines/runs'
 import { activeGoldenSnapshots, advanceGoldenImages } from './golden-images'
-import { sandboxRegions, seedRegion } from './regions'
+import { nearestRegionEnabled, nearestRegions, sandboxRegions, seedRegion, servedRegions } from './regions'
 import { handleRuntimeBundleRoute, runtimeBundleFor, runtimeBundleUrl } from './runtime-bundles'
 import { createIdTokenSource, relayingFetch } from './chatgpt-relay'
 import { NO_CREDENTIALS, handleEgressProxy, type CredentialBroker, type ProxiedRoute } from './egress-proxy'
@@ -946,6 +946,34 @@ function fail(error: string, status: number, reason?: string): Response {
   return json(reason ? { error, reason } : { error }, status)
 }
 
+/** CREATE-STEP-WATCH: logs a step still pending after 10 s and, once the create starts, every step's time. */
+export function createStepWatch(enabled: boolean, now: () => number = Date.now) {
+  const started = now()
+  const steps: Record<string, number> = {}
+  let reported = false
+  return {
+    async step<T>(name: string, work: Promise<T>): Promise<T> {
+      if (!enabled) {
+        return work
+      }
+      const at = now()
+      const slow = setTimeout(() => console.log(JSON.stringify({ event: 'create_step_slow', step: name, ms: now() - at })), 10_000)
+      try {
+        return await work
+      } finally {
+        clearTimeout(slow)
+        steps[name] = now() - at
+      }
+    },
+    done() {
+      if (enabled && !reported) {
+        reported = true
+        console.log(JSON.stringify({ event: 'create_steps', ms: now() - started, steps }))
+      }
+    }
+  }
+}
+
 async function readJson(request: Request, maxBytes = MAX_JSON_BYTES): Promise<unknown> {
   const text = await request.text()
   if (text.length > maxBytes) {
@@ -1038,7 +1066,7 @@ export async function lifecycleDeps(env: Env, deps: Deps): Promise<LifecycleDeps
   // AUTO_ENVIRONMENTS=off: creates of repos without an environment keep cloning from scratch.
   if (env.AUTO_ENVIRONMENTS !== 'off') {
     life.autoEnvironment = {
-      ensure: (accountId, repoUrl) => ensureAutoEnvironment(buildDeps(life, deps, env), accountId, repoUrl),
+      ensure: (accountId, repoUrl, region) => ensureAutoEnvironment(buildDeps(life, deps, env), accountId, repoUrl, region),
       touch: (environmentId) => touchEnvironment(env.SANDBOX_DB, environmentId, life.now())
     }
   }
@@ -1107,6 +1135,8 @@ function buildDeps(life: LifecycleDeps, deps: Deps, env?: Env): BuildDeps {
       goldenSnapshotId: life.config.goldenSnapshotId,
       goldenSnapshots: life.config.goldenSnapshots,
       region: life.config.defaultRegion,
+      regions: servedRegions(life.config),
+      nearestRegion: env ? nearestRegionEnabled(env) : true,
       guardrails: life.config.guardrails,
       egressAllowlist: life.config.egressAllowlist,
       egressAllowlistError: life.config.egressAllowlistError
@@ -1863,11 +1893,13 @@ async function routeRequest(request: Request, env: Env, deps: Deps): Promise<Res
     if (!match) {
       return fail('not_found', 404)
     }
-    const caller = await authenticateDesktop(env, request, (deps.now ?? Date.now)())
+    // CREATE-STEP-WATCH: creates hung 180 s with no log and no row (n73). Name the step a create waits in.
+    const watch = createStepWatch(request.method === 'POST' && !match[1])
+    const caller = await watch.step('auth', authenticateDesktop(env, request, (deps.now ?? Date.now)()))
     if (!caller) {
       return fail('unauthorized', 401)
     }
-    const life = await lifecycleDeps(env, deps)
+    const life = await watch.step('deps', lifecycleDeps(env, deps))
     if (!life) {
       return fail('not_configured', 503)
     }
@@ -1890,12 +1922,12 @@ async function routeRequest(request: Request, env: Env, deps: Deps): Promise<Res
       if (request.method !== 'POST') {
         return fail('not_found', 404)
       }
-      if (await tokenMintedBeforeMemberChange(life.db, caller)) {
+      if (await watch.step('stale_token', tokenMintedBeforeMemberChange(life.db, caller))) {
         // ORG-TOKEN-STALE: never create (and bill) with a token minted before a role change.
         return fail('unauthorized', 401, 'stale_token')
       }
-      await consumeCreateToken(life.db, life.config.guardrails!, caller.accountId, life.now())
-      const raw = await readJson(request)
+      await watch.step('create_token', consumeCreateToken(life.db, life.config.guardrails!, caller.accountId, life.now()))
+      const raw = await watch.step('body', readJson(request))
       const body = CreateRequestSchema.safeParse(raw)
       if (!body.success) {
         return fail('invalid_request', 400)
@@ -1913,12 +1945,18 @@ async function routeRequest(request: Request, env: Env, deps: Deps): Promise<Res
           life.db,
           { accountId: caller.accountId, scope: `sandbox.create:${caller.userId}`, key: readIdempotencyKey(request), body: raw, now: life.now() },
           async () => {
+            watch.done()
             // Desktops that show the clone as its own step ask for it in the background (GET .../clone).
             // Member identities install after the response; the VM's git holds commits and pushes until then.
             let ready: Ready
             try {
+              // Nothing pinned: start in the served region nearest the caller (an environment's own region still wins).
+              const nearRegions = body.data.region ? undefined : nearestRegions(request, servedRegions(life.config), nearestRegionEnabled(env))
+              // Region order only (never the caller's location): which region a create preferred, and why.
+              console.log(JSON.stringify({ event: 'create_region_order', explicit: body.data.region ?? null, order: nearRegions ?? null }))
               ready = await createSandbox(life, caller, {
                 ...body.data,
+                ...(nearRegions ? { nearRegions } : {}),
                 cloneInBackground: features.includes('clone-progress'),
                 deferMemberGit: true
               })

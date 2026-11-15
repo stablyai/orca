@@ -55,9 +55,11 @@ export type CloudWakeProgressEvent = {
 
 export type CloudOomEvent = {
   workspaceId: string
-  /** Kernel OOM-kill counter after this notice (monotonic per VM boot). */
+  /** Kernel plus memory-guard kills after this notice (monotonic per VM boot). */
   oomKills: number
   victim: string | null
+  /** MEMGUARD: Orca's memory guard stopped it (the workspace stayed responsive), not the kernel. */
+  stoppedBy?: 'guard'
   at: number
 }
 
@@ -71,6 +73,8 @@ export type GitHubInstallRights = { admin: boolean; ownerType: 'User' | 'Organiz
 export type CloudWorkspaceStatus = HostedWorkspaceStatus & {
   /** GIT-SETUP: commits and pushes are refused in the VM until a boot installs the identities. */
   gitSetupFailed?: true
+  /** The provider region the sandbox runs in (e.g. `pdx1`), from the sandbox view. */
+  region?: string
 }
 
 export type CloudArchiveInfo = NonNullable<HostedArchiveResponse['archive']>

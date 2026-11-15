@@ -64,7 +64,10 @@ import {
 import { renderProjectSettingsSections } from './settings-project-section-renderer'
 import { renderCloudApiSettingsSections } from './settings-cloud-api-section-renderers'
 import { renderOrcaCloudSettingsSections } from './settings-orca-cloud-section-renderers'
-import { orcaCloudAgentAccountsParts } from './settings-orca-cloud-agent-accounts-sections'
+import {
+  orcaCloudAgentAccountsLead,
+  orcaCloudAgentAccountsParts
+} from './settings-orca-cloud-agent-accounts-sections'
 import {
   SettingsHostScopePicker,
   shouldShowSettingsHostScopePicker
@@ -173,7 +176,8 @@ export function renderSettingsPage(
                     {renderAccountsSettingsSection(
                       context,
                       t,
-                      orcaCloudAgentAccountsParts(context, t)
+                      orcaCloudAgentAccountsParts(context, t),
+                      orcaCloudAgentAccountsLead(context)
                     )}
                     {renderAgentApiKeysSettingsSection(context, t)}
                     {renderOrchestrationSettingsSection(context, t)}

@@ -1,9 +1,10 @@
-// What S0 (Settings › Agent accounts › Orca Cloud) and the composer's Agent row show for each agent,
+// What S0 (Settings › Orca Cloud › Cloud agent sign-ins) and the composer's Agent row show for each agent,
 // derived from GET /v1/agent-credentials + /v1/agent-sources and the setup running on this computer.
 import type { CloudEffectiveSecret } from '../../../../shared/cloud-secrets/cloud-secrets-wire'
 import {
   isUsableAgentCredential,
   orcaCloudProviderState,
+  signsInInsideWorkspace,
   type AgentKeyKind,
   type OrcaCloudAccountAgent,
   type OrcaCloudAgentSetup,
@@ -68,6 +69,11 @@ export type OrcaCloudAccountRow =
   | { kind: 'killSwitch' }
   /** This server never offered the provider (flag off): nothing to set up, nothing paused. */
   | { kind: 'unavailable' }
+  /**
+   * The person chose to sign in inside each workspace: Orca stores and injects nothing for the agent.
+   * `savedSignIn`: a sign-in once is still saved (set up elsewhere) and applies again if chosen.
+   */
+  | { kind: 'inWorkspace'; savedSignIn: boolean }
 
 export function orcaCloudAccountRow(
   agent: OrcaCloudAccountAgent,
@@ -91,6 +97,9 @@ export function orcaCloudAccountRow(
   }
   if (setup.phase !== 'idle' && setup.phase !== 'saved') {
     return { kind: 'setup', setup }
+  }
+  if (signsInInsideWorkspace(status.sources, agent)) {
+    return { kind: 'inWorkspace', savedSignIn: isUsableAgentCredential(credential.state) }
   }
   if (credential.state === 'none') {
     return { kind: 'notSetUp', keyKind: fallbackKey }
@@ -124,6 +133,11 @@ export type OrcaCloudAgentCoverage =
   | { kind: 'killSwitch' }
   /** Flag off without a key: no Orca-account path here, so nothing to show. */
   | { kind: 'unavailable' }
+  /**
+   * The person signs in inside each workspace: no account, no key, nothing held. The agent starts
+   * as it is and shows its own sign-in in the pane.
+   */
+  | { kind: 'inWorkspace' }
 
 export function orcaCloudAgentCoverage(
   agent: OrcaCloudAccountAgent,
@@ -136,6 +150,10 @@ export function orcaCloudAgentCoverage(
   const usable = provider === 'on' && isUsableAgentCredential(credential.state)
   const source = status.sources.effective?.[agent]?.source ?? status.sources.defaults[agent] ?? null
   const key: OrcaCloudAgentCoverage = { kind: 'key', keyKind: keyKind ?? 'team' }
+  // The control plane injects nothing for this agent then, whatever is stored or covers it.
+  if (signsInInsideWorkspace(status.sources, agent)) {
+    return { kind: 'inWorkspace' }
+  }
   if (usable && (source === 'sign-in' || !covered)) {
     return { kind: 'account' }
   }

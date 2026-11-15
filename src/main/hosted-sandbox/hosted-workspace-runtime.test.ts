@@ -6,7 +6,7 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { noteCloudPairingBindings } from '../cloud-workspaces/cloud-paired-environment-ids'
-import { createOomTracker, withGitSetup } from './hosted-workspace-runtime'
+import { createOomTracker, withGitSetup, withSandboxFacts } from './hosted-workspace-runtime'
 import { findCloudSandbox } from './cloud-workspace-target'
 
 function status(checkedAt: number, uptimeSeconds: number, oomKills: number): HostedWorkspaceStatus {
@@ -57,6 +57,30 @@ describe('OOM tracker', () => {
     expect(events).toHaveLength(3)
   })
 
+  it('announces guard kills as the guard stopping a named process, counted with kernel kills', () => {
+    const events: CloudOomEvent[] = []
+    const tracker = createOomTracker((event) => events.push(event))
+    const guarded = (checkedAt: number, uptime: number, kernel: number, guardKills: number) => ({
+      ...status(checkedAt, uptime, kernel),
+      memory: {
+        pressure: 'high' as const,
+        guardKills,
+        lastGuardVictim: guardKills ? 'tsc' : null,
+        lastGuardKillAt: guardKills ? checkedAt : null,
+        guarded: true
+      }
+    })
+    const t0 = 1_000_000_000
+    tracker.observe('ws', 'sbx', guarded(t0, 100, 0, 0))
+    tracker.observe('ws', 'sbx', guarded(t0 + 60_000, 160, 0, 1))
+    tracker.observe('ws', 'sbx', guarded(t0 + 120_000, 220, 0, 1))
+    tracker.observe('ws', 'sbx', guarded(t0 + 180_000, 280, 1, 1))
+    expect(events).toEqual([
+      { workspaceId: 'ws', oomKills: 1, victim: 'tsc', stoppedBy: 'guard', at: expect.any(Number) },
+      { workspaceId: 'ws', oomKills: 2, victim: 'node', at: expect.any(Number) }
+    ])
+  })
+
   it('ignores a status without metrics', () => {
     const events: CloudOomEvent[] = []
     createOomTracker((event) => events.push(event)).observe('ws', 'sbx', {
@@ -94,6 +118,12 @@ describe('GIT-SETUP on the status read', () => {
     const read = status(1_000, 10, 0)
     expect(withGitSetup(read, { gitSetup: 'failed' })).toEqual({ ...read, gitSetupFailed: true })
     expect(withGitSetup(read, {})).toBe(read)
+  })
+
+  it('carries the sandbox region for the card details', () => {
+    const read = status(1_000, 10, 0)
+    expect(withSandboxFacts(read, { region: 'iad1' })).toEqual({ ...read, region: 'iad1' })
+    expect(withSandboxFacts(read, { region: 'pdx1', gitSetup: 'failed' })).toEqual({ ...read, gitSetupFailed: true, region: 'pdx1' })
   })
 
   it('the strict sandbox view accepts the field the server sends with feature git-setup', () => {

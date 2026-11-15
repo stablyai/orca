@@ -68,6 +68,7 @@ function covered(coverage: OrcaCloudAgentCoverage): BuildAgentVia | null {
     case 'expired':
     case 'killSwitch':
     case 'unavailable':
+    case 'inWorkspace':
       return null
   }
 }
@@ -132,9 +133,13 @@ export function buildAgentsRow(args: {
     const key = args.desktopKeys.find((candidate) =>
       ORCA_CLOUD_ACCOUNT_AGENTS.some((agent) => agent === candidate.agent)
     )
+    // An agent the person signs in inside each workspace is never offered the one-time setup.
+    const offered = coverage.filter((entry) => entry.coverage.kind !== 'inWorkspace')
     return key
       ? { kind: 'desktopKey', key }
-      : { kind: 'offer', agents: coverage.map((entry) => entry.agent) }
+      : offered.length > 0
+        ? { kind: 'offer', agents: offered.map((entry) => entry.agent) }
+        : { kind: 'hidden' }
   }
   const viaAccount = ready.filter((entry) => entry.via === 'account')
   const labels = new Set(

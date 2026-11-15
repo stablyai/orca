@@ -55,8 +55,11 @@ if [ ! -s "$ORCA_HOME/runtime/orcad/orcad-server.js" ]; then
   server="$(find "$ORCA_HOME/runtime" -name orcad-server.js -type f | head -n 1)"
   [ -n "$server" ] || { log 'bundle has no orcad-server.js'; exit 1; }
   root="$(dirname "$(dirname "$server")")"
-  ln -sfn "$(dirname "$server")" "$ORCA_HOME/runtime/orcad"
-  [ -d "$ORCA_HOME/runtime/runtimes" ] || ln -sfn "$root/runtimes" "$ORCA_HOME/runtime/runtimes"
+  # Move the tree up rather than linking to it: every VM script finds node with
+  # `find .../runtime/runtimes -type f`, and find doesn't descend into a symlinked start point
+  # (a linked release bundle left the build with no node). orcad's ../runtimes still resolves.
+  for entry in "$root"/*; do mv "$entry" "$ORCA_HOME/runtime/"; done
+  rmdir "$root"
 fi
 test -s "$ORCA_HOME/runtime/orcad/orcad-server.js"
 node="$(find "$ORCA_HOME/runtime/runtimes" -type f -name node | head -n 1)"
@@ -98,6 +101,16 @@ if [ -x "$opencode_pkg/bin/opencode.exe" ]; then
     [ "$(stat -c %i "$variant/bin/opencode" 2>/dev/null)" = "$picked" ] || rm -rf "$variant"
   done
   "$opencode_pkg/bin/opencode.exe" --version >/dev/null
+  # OpenCode installs @opencode-ai/plugin (its own version) into ~/.config/opencode on every start
+  # until that dir has node_modules and a lock listing it, and draws nothing until that install ends
+  # once a plugin is configured (Orca's is): with a slow or unreachable registry the first launch
+  # sat blank ~85 s (n73). Install it here once; orca-sandbox-start copies it into a fresh home.
+  oc_seed="$ORCA_HOME/opencode-config-seed"
+  mkdir -p "$oc_seed"
+  printf '{\n  "dependencies": {\n    "@opencode-ai/plugin": "%s"\n  }\n}\n' \
+    "$("$opencode_pkg/bin/opencode.exe" --version)" >"$oc_seed/package.json"
+  (cd "$oc_seed" && npm install --no-fund --no-audit --ignore-scripts >/dev/null)
+  test -s "$oc_seed/package-lock.json" && test -d "$oc_seed/node_modules/@opencode-ai/plugin"
 fi
 
 # Copilot CLI prefers GH_TOKEN/GITHUB_TOKEN over the user's own /login. In Orca Cloud those hold the
@@ -210,7 +223,7 @@ if [ -n "${NOVNC_VERSION:-}" ]; then
 fi
 
 log 'Orca entry points'
-for name in orca-sandbox-start orca-sandbox-drain orca-sandbox-env orca-session-env.sh orca-env orca-egress-probe orca-image-wipe orca-agent-signout orca-share-proxy orca-sshd orca-ssh-keys orca-desktop-start orca-desktop-proxy orca-desktop-page.js orca-sandbox-grant orca-sandbox-revoke orca-sandbox-members orca-sandbox-read-snapshot orca-read-snapshot.cjs orca-git-as orca-git-identity orcad-boot git docker; do
+for name in orca-sandbox-start orca-sandbox-drain orca-memguard orca-sandbox-env orca-session-env.sh orca-env orca-egress-probe orca-image-wipe orca-agent-signout orca-share-proxy orca-sshd orca-ssh-keys orca-desktop-start orca-desktop-proxy orca-desktop-page.js orca-sandbox-grant orca-sandbox-revoke orca-sandbox-members orca-sandbox-read-snapshot orca-read-snapshot.cjs orca-git-as orca-git-identity orcad-boot git docker; do
   var="ORCA_VM_SCRIPT_${name//[-.]/_}"
   printf '%s' "${!var}" | base64 -d >"$ORCA_HOME/bin/$name"
   chmod 0755 "$ORCA_HOME/bin/$name"

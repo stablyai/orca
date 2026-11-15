@@ -40,6 +40,8 @@ export type OverviewCell =
   | { kind: 'cloudExpired' }
   | { kind: 'cloudPaused' }
   | { kind: 'cloudNotOffered' }
+  /** The person signs this agent in inside each workspace (their choice). */
+  | { kind: 'cloudInWorkspace' }
 
 export type OverviewHost = {
   hostId: ExecutionHostId
@@ -161,6 +163,8 @@ function cloudCell(
       return { kind: 'cloudPaused' }
     case 'unavailable':
       return { kind: 'cloudNotOffered' }
+    case 'inWorkspace':
+      return { kind: 'cloudInWorkspace' }
   }
 }
 

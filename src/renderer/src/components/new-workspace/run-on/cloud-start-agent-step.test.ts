@@ -20,7 +20,7 @@ describe('cloudStartAgentStep', () => {
     expect(step).toMatchObject({
       state: 'optional',
       detail:
-        'Claude isn’t set up for Orca Cloud yet. Set it up once in Settings → Agent accounts.',
+        'Claude isn’t set up for Orca Cloud yet. Set it up once in Settings → Cloud agent sign-ins.',
       action: { label: 'Set up once' }
     })
     expect(step?.blocksStart).toBeUndefined()

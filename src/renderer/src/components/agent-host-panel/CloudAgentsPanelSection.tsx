@@ -29,7 +29,7 @@ export type CloudAgentsPanelLoad =
 
 export type CloudAgentsPanelActions = {
   chooseSource: (agent: OrcaCloudAccountAgent, source: Exclude<AgentSource, null>) => void
-  /** Settings › Agent accounts (S0): set up once, or renew. */
+  /** Settings › Orca Cloud › Cloud agent sign-ins (S0): set up once, or renew. */
   manage: () => void
   signIn: () => void
   retry: () => void
@@ -63,7 +63,10 @@ function statusCopy(row: CloudAgentPanelRow, t: Translate): { line: string; deta
         line: t('agentHostPanel.cloud.expired', 'Your {{agent}} sign-in for Orca Cloud expired', {
           agent
         }),
-        detail: t('agentHostPanel.cloud.expiredDetail', 'Renew it once in Agent accounts.')
+        detail: t(
+          'agentHostPanel.cloud.expiredDetailCloudSignIns',
+          'Renew it once in Cloud agent sign-ins.'
+        )
       }
     case 'sharedUnavailable':
       return {
@@ -82,7 +85,9 @@ function statusCopy(row: CloudAgentPanelRow, t: Translate): { line: string; deta
         detail:
           row.status.reason === 'paused'
             ? t('vmBuildAgents.paused', 'Orca account sign-in is paused')
-            : t('vmBuildAgents.notOffered', 'Signs in for each cloud workspace for now')
+            : row.status.reason === 'chosen'
+              ? t('agentHostPanel.cloud.signsInHereChosen', 'Orca doesn’t store this sign-in')
+              : t('vmBuildAgents.notOffered', 'Signs in for each cloud workspace for now')
       }
   }
 }

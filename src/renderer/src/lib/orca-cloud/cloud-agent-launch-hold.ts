@@ -3,7 +3,8 @@
 // (S4-c, card 13) until Renew in S0 fixes it for every workspace. Not set up with no key (PC-3b):
 // the pane holds on the "Set up once" strip, which runs S0 inline and then offers "Start {{agent}}".
 // Kill switch or a provider never offered: no hold here; the per-workspace sign-in (#40228's gate)
-// runs and the strip shows it.
+// runs and the strip shows it. Signing in inside the workspace (the person's choice): no hold and no
+// gate either; the agent starts as it is and shows its own sign-in in the pane.
 import { useSyncExternalStore } from 'react'
 import type { HostAgentSignInAgent } from '../../../../shared/host-agent-sign-in-status'
 import { orcaCloudAgentCoverageFromAccounts } from './orca-cloud-agent-accounts-model'
@@ -35,6 +36,7 @@ export function cloudAgentStripReason(
     case 'account':
     case 'key':
     case 'notSetUp':
+    case 'inWorkspace':
       return null
   }
 }
@@ -65,6 +67,7 @@ export function cloudAgentHoldReason(
     case 'key':
     case 'killSwitch':
     case 'unavailable':
+    case 'inWorkspace':
       return null
   }
   // A coverage kind added later starts the launch rather than holding on an unknown state.
@@ -81,6 +84,17 @@ export function cloudAgentLaunchHoldReason(
 ): CloudAgentHoldReason | 'unknown' | null {
   const accounts = readOrcaCloudAgentAccounts()
   return accounts.load.kind === 'loading' ? 'unknown' : cloudAgentHoldReason(agent, accounts)
+}
+
+/**
+ * The person signs this agent in inside each cloud workspace (from the cached read): its launch
+ * starts with nothing in front of it, neither a hold nor the per-host sign-in gate, so the agent's
+ * own sign-in shows in the pane and its token stays in the workspace.
+ */
+export function cloudAgentSignsInInsideWorkspace(agent: HostAgentSignInAgent): boolean {
+  return (
+    orcaCloudAgentCoverageFromAccounts(agent, readOrcaCloudAgentAccounts())?.kind === 'inWorkspace'
+  )
 }
 
 export type CloudAgentHold = {
@@ -316,6 +330,12 @@ function redecide(entry: Entry, accounts: OrcaCloudAgentAccountsState): void {
     return
   }
   const coverage = orcaCloudAgentCoverageFromAccounts(entry.agent, accounts)?.kind
+  if (coverage === 'inWorkspace') {
+    // "Sign in inside this workspace instead", chosen from this strip or from Settings: nothing is
+    // left to wait for, so the agent starts and asks for its own sign-in in the pane.
+    entry.release('proceed')
+    return
+  }
   if (coverage !== 'account' && coverage !== 'key') {
     return
   }
@@ -357,7 +377,10 @@ export async function startCloudAgentHold(paneKey: string): Promise<'started' | 
   }
   const now = cloudAgentHoldReason(entry.agent, accounts)
   const coverage = orcaCloudAgentCoverageFromAccounts(entry.agent, accounts)?.kind
-  if (now !== null || (coverage !== 'account' && coverage !== 'key')) {
+  if (
+    now !== null ||
+    (coverage !== 'account' && coverage !== 'key' && coverage !== 'inWorkspace')
+  ) {
     if (now !== null && now !== entry.reason) {
       holds.set(paneKey, { ...entry, reason: now, awaiting: undefined })
       notify()

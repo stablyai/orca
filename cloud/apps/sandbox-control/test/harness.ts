@@ -88,7 +88,8 @@ export async function createHarness(overrides: Partial<Env> = {}, extraDeps: Par
   async function call(
     method: string,
     path: string,
-    init: { body?: unknown; as?: string; bearer?: string; headers?: Record<string, string> } = {}
+    /** `cf`: Cloudflare's request properties (geolocation), which the Workers runtime sets on a real request. */
+    init: { body?: unknown; as?: string; bearer?: string; headers?: Record<string, string>; cf?: Record<string, unknown> } = {}
   ) {
     const bearer = init.bearer ?? (await token(init.as ?? 'alice'))
     const request = new Request(`https://sandbox.test${path}`, {
@@ -96,6 +97,9 @@ export async function createHarness(overrides: Partial<Env> = {}, extraDeps: Par
       headers: { authorization: `Bearer ${bearer}`, 'content-type': 'application/json', ...init.headers },
       body: init.body === undefined ? undefined : JSON.stringify(init.body)
     })
+    if (init.cf) {
+      Object.defineProperty(request, 'cf', { value: init.cf })
+    }
     const response = await handleRequest(request, env, deps)
     return { status: response.status, body: (await response.json()) as any }
   }

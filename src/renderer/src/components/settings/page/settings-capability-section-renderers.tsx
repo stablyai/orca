@@ -64,11 +64,13 @@ export function renderAgentsSettingsSection(
  * Settings → Agent accounts: one page for agent sign-ins. "This computer" (or the host picked in the
  * scope picker) holds provider accounts, switching and usage; `additionalParts` lets a build add
  * more parts below it. With more than one part, a jump row under the description links to each.
+ * `lead` sits above the parts (Orca Cloud builds: the link to Cloud agent sign-ins).
  */
 export function renderAccountsSettingsSection(
   context: SettingsRenderContext,
   t: Translate = translate,
-  additionalParts: readonly AgentAccountsPart[] = []
+  additionalParts: readonly AgentAccountsPart[] = [],
+  lead: React.ReactNode = null
 ): React.JSX.Element {
   const { model, navigation, view } = context
   const isLocalScope = model.settingsHostScope.target.kind === 'local'
@@ -94,6 +96,7 @@ export function renderAccountsSettingsSection(
               ...additionalParts.map(({ id, title }) => ({ id, title }))
             ]}
           />
+          {lead}
           <AgentAccountsSubsection
             id={AGENT_ACCOUNTS_HOST_PART_ID}
             title={hostPartTitle}

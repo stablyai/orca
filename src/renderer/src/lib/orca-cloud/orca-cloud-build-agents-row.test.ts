@@ -146,4 +146,13 @@ describe('buildAgentsRow', () => {
     expect(row({ ...base, load: { kind: 'unavailable' } })).toEqual({ kind: 'hidden' })
     expect(buildAgentsRowDensity({ kind: 'loading' })).toBe('twoLine')
   })
+
+  it('never offers the one-time setup for an agent signed in inside each workspace', () => {
+    const inside = (claude: boolean, codex: boolean): OrcaCloudAgentsStatus => ({
+      ...NONE,
+      sources: { ...NONE.sources, inWorkspace: { claude, codex } }
+    })
+    expect(row(accounts(inside(true, false)))).toEqual({ kind: 'offer', agents: ['codex'] })
+    expect(row(accounts(inside(true, true)))).toEqual({ kind: 'hidden' })
+  })
 })

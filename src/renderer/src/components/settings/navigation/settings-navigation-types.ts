@@ -48,6 +48,7 @@ const SETTINGS_NAV_TARGETS = [
   'orca-account',
   'cloud-billing',
   'cloud-workspaces',
+  'cloud-agent-sign-ins',
   'cloud-secrets',
   'cloud-environments',
   'cloud-mcp',

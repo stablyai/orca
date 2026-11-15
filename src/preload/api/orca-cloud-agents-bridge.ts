@@ -1,6 +1,7 @@
 import { ipcRenderer } from 'electron'
 import type {
   AgentCredentialsView,
+  AgentDefaultSourceChoice,
   AgentSource,
   AgentSourcesView,
   OrcaCloudAccountAgent,
@@ -29,7 +30,7 @@ export type OrcaCloudAgentsApi = {
   }) => Promise<OrcaCloudAgentsResult<AgentCredentialsView>>
   setDefaultSource: (request: {
     agent: OrcaCloudAccountAgent
-    source: AgentSource
+    source: AgentDefaultSourceChoice
   }) => Promise<OrcaCloudAgentsResult<AgentSourcesView>>
   /** Main's answer (runtime store + pairing bindings): is this runtime environment Orca Cloud? */
   isCloudEnvironment: (request: { runtimeEnvironmentId: string }) => Promise<boolean>

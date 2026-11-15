@@ -126,7 +126,8 @@ export type LifecycleDeps = {
    * lists, `touch` when a create booted from an automatic one. Absent: neither happens.
    */
   autoEnvironment?: {
-    ensure(accountId: string, repoUrl: string): Promise<unknown>
+    /** `region`: where the create that asked runs; the environment builds there (a snapshot is region-bound). */
+    ensure(accountId: string, repoUrl: string, region: string): Promise<unknown>
     touch(environmentId: string): Promise<unknown>
   }
   /**
@@ -866,7 +867,13 @@ export async function createSandbox(
   request: {
     workspaceId: string
     machineSize: MachineSize
+    /** Explicit (the caller's or its project's): authoritative, and never moved by the capacity fallback. */
     region?: string
+    /**
+     * Served regions nearest the caller first (regions.ts nearestRegions): where a create with nothing
+     * pinned starts, and the capacity fallback's order. Absent: the default region, then its fallbacks.
+     */
+    nearRegions?: readonly string[]
     repo?: { url: string; ref?: string }
     /** Boot from exactly this environment build (bld_...). */
     environmentBuildId?: string
@@ -927,7 +934,12 @@ export async function createSandbox(
   const machineSize = source && !source.auto ? source.machineSize : request.machineSize
   await timer.time('entitlement', () => requireStart(deps, caller.accountId, caller.userId, machineSize))
   // A snapshot only boots in its own region: an environment build pins the region it was built in.
-  const region = source?.region ?? request.region ?? deps.config.defaultRegion
+  // Then an explicit region; else the nearest served one (each has a golden image).
+  const region =
+    source?.region ??
+    request.region ??
+    request.nearRegions?.find((candidate) => goldenFor(deps, candidate)) ??
+    deps.config.defaultRegion
   const bootSnapshotId = source?.snapshotId ?? goldenFor(deps, region)
   if (!bootSnapshotId) {
     throw new LifecycleError('conflict', 'region_unavailable')
@@ -1017,7 +1029,7 @@ export async function createSandbox(
     const work = source?.auto
       ? deps.autoEnvironment.touch(source.environmentId)
       : !source
-        ? deps.autoEnvironment.ensure(caller.accountId, request.repo.url)
+        ? deps.autoEnvironment.ensure(caller.accountId, request.repo.url, region)
         : null
     if (work) {
       const settled = work.catch(() => undefined)
@@ -1103,7 +1115,7 @@ export async function createSandbox(
     // Only a create nothing pinned to a region moves on: no explicit region, no environment build.
     const fallback =
       options.fallback !== false && !request.region && !source && isRegionalFailure(error)
-        ? deps.config.fallbackRegions?.find((candidate) => candidate !== region && goldenFor(deps, candidate))
+        ? (request.nearRegions ?? deps.config.fallbackRegions)?.find((candidate) => candidate !== region && goldenFor(deps, candidate))
         : undefined
     if (fallback) {
       console.log(JSON.stringify({ event: 'region_fallback', from: region, to: fallback, error: String(error).slice(0, 200) }))

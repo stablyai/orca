@@ -1,5 +1,5 @@
 // The status (dot and text) of a cloud agent row that needs sign-in: clicking it opens
-// Settings → Agent accounts, where the fix lives. The rest of the row still opens the pane.
+// Orca Cloud sign-ins, where the fix lives. The rest of the row still opens the pane.
 import React, { useCallback } from 'react'
 import { cn } from '@/lib/class-names'
 import { AgentStateDot } from '@/components/AgentStateDot'

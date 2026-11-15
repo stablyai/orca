@@ -6,6 +6,8 @@ import {
   OrcaCloudSkillsSyncPane,
   OrcaCloudWorkspacesPane
 } from '../orca-cloud/OrcaCloudSettingsPanes'
+import { OrcaCloudAccountsSection } from '../agent-accounts/OrcaCloudAccountsSection'
+import { OrcaCloudAccountsDescription } from '../agent-accounts/OrcaCloudAccountsDescription'
 import { SettingsSection } from '../section-layout/SettingsSection'
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
@@ -23,7 +25,22 @@ export function renderOrcaCloudSettingsSections(
     return null
   }
   // Titles and descriptions come from the nav metadata so the pane and the sidebar never disagree.
-  const sections: { id: string; pane: React.JSX.Element; navOnly?: boolean }[] = [
+  const sections: {
+    id: string
+    pane: React.JSX.Element
+    navOnly?: boolean
+    /** Replaces the nav's plain-text description on the page. */
+    description?: React.ReactNode
+    /** The pane draws its own card. */
+    grouped?: boolean
+  }[] = [
+    // S0, moved here from Settings › Agent accounts (which keeps a link row to this page).
+    {
+      id: 'cloud-agent-sign-ins',
+      pane: <OrcaCloudAccountsSection hideHeader />,
+      description: <OrcaCloudAccountsDescription />,
+      grouped: true
+    },
     // Listed in the nav for team owners and admins only; without the entry there is no page.
     { id: 'cloud-workspaces', pane: <OrcaCloudWorkspacesPane />, navOnly: true },
     { id: 'cloud-secrets', pane: <OrcaCloudSecretsPane /> },
@@ -34,7 +51,7 @@ export function renderOrcaCloudSettingsSections(
   ]
   return (
     <>
-      {sections.map(({ id, pane, navOnly }) => {
+      {sections.map(({ id, pane, navOnly, description, grouped }) => {
         const meta = navigation.navSections.find((section) => section.id === id)
         if (navOnly && !meta) {
           return null
@@ -44,9 +61,10 @@ export function renderOrcaCloudSettingsSections(
             key={id}
             id={id}
             title={meta?.title ?? t('settings.breadcrumb.settings', 'Settings')}
-            description={meta?.description ?? ''}
+            description={description ?? meta?.description ?? ''}
             searchEntries={navigation.getSectionSearchEntries(id)}
-            bodyClassName={BARE_BODY}
+            grouped={grouped}
+            bodyClassName={grouped ? undefined : BARE_BODY}
           >
             {view.isSectionMounted(id) ? pane : null}
           </SettingsSection>

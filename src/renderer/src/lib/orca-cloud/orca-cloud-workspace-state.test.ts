@@ -6,6 +6,7 @@ import {
   deriveCloudDotState,
   formatBytes,
   formatCents,
+  formatCloudRegion,
   formatDuration,
   formatHours,
   formatRelative,
@@ -173,6 +174,12 @@ describe('formatters', () => {
     expect(percentOf(2, 8)).toBe(25)
     expect(percentOf(1, 0)).toBe(0)
     expect(wakeElapsedSeconds(NOW - 3_400, NOW)).toBe(3)
+  })
+
+  it('names a region by its city, and shows an unknown one as its code', () => {
+    expect(formatCloudRegion('pdx1')).toBe('Portland (pdx1)')
+    expect(formatCloudRegion('iad1')).toBe('Washington, D.C. (iad1)')
+    expect(formatCloudRegion('zzz9')).toBe('zzz9')
   })
 })
 

@@ -23,6 +23,7 @@ import { VmBuildFailureCard } from './VmBuildFailureCard'
 import { VmBuildBillingBlocker } from './VmBuildBillingBlocker'
 import { VmBuildAgentSignInRow } from './VmBuildAgentSignInRow'
 import { VmBuildSecretsRow } from '../cloud-secrets-ask/VmBuildSecretsRow'
+import { VmBuildGitHubAccessRow } from './VmBuildGitHubAccessRow'
 import { OrcaCloudQueuedPrompt } from '@/components/orca-cloud/OrcaCloudQueuedPrompt'
 import {
   classifyVmBuildFailure,
@@ -280,20 +281,25 @@ export function VmBuildSheet({
             {gated ? null : (
               <ol className="flex flex-col rounded-lg border border-border bg-card px-4 py-2 text-sm">
                 {steps.map((step) => (
-                  <VmBuildStepRow
-                    key={step.id}
-                    step={step}
-                    cloud={cloud}
-                    detail={
-                      cloud && step.id === 'provision' && step.state === 'running'
-                        ? provisionStageLabel(entry, step.elapsedMs, t)
-                        : step.id === 'clone' && step.state === 'running'
-                          ? cloneStageLabel(step.stage, t, step.cloneMode)
-                          : null
-                    }
-                    timing={timings[step.id] ?? null}
-                    t={t}
-                  />
+                  <React.Fragment key={step.id}>
+                    <VmBuildStepRow
+                      step={step}
+                      cloud={cloud}
+                      detail={
+                        cloud && step.id === 'provision' && step.state === 'running'
+                          ? provisionStageLabel(entry, step.elapsedMs, t)
+                          : step.id === 'clone' && step.state === 'running'
+                            ? cloneStageLabel(step.stage, t, step.cloneMode)
+                            : null
+                      }
+                      timing={timings[step.id] ?? null}
+                      t={t}
+                    />
+                    {/* CREATE-GH-STEP: checked alongside Start sandbox, held before Open. */}
+                    {cloud && step.id === 'provision' ? (
+                      <VmBuildGitHubAccessRow creationId={creationId} />
+                    ) : null}
+                  </React.Fragment>
                 ))}
                 {/* Orca Cloud: agent setup happens after create (the setup page and the workspace's
                   sign-in strip), so the build card has no agent row. Other VMs keep the host's own. */}

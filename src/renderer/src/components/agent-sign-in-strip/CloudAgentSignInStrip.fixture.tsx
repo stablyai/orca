@@ -239,6 +239,21 @@ export const runningRestartFailedNarrow = fixture({
 /** PC-3b: the launch holds; Set up once runs the one-time Orca Cloud setup in the pane. */
 export const notSetUp = fixture({ setUp: { setup: { phase: 'idle' } } })
 export const notSetUpCompact = fixture({ setUp: { setup: { phase: 'idle' } }, width: 320 })
+/** The quiet second choice on "Set up once": the agent signs in inside this workspace instead. */
+export const notSetUpSignInInside = defineFixture({
+  width: 940,
+  render: () => (
+    <div className="pb-24">
+      <Pane setUp={{ setup: { phase: 'idle' } }} agent="codex" />
+    </div>
+  ),
+  interact: async (frame) => {
+    frame
+      .querySelector<HTMLButtonElement>('button[aria-label="More choices"]')
+      ?.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, button: 0 }))
+    await new Promise((resolve) => setTimeout(resolve, 200))
+  }
+})
 /** A half-width split: the held strip wraps its detail rather than cutting it off. */
 export const notSetUpNarrow = fixture({ setUp: { setup: { phase: 'idle' } }, width: 440 })
 export const notSetUpBrowser = fixture({

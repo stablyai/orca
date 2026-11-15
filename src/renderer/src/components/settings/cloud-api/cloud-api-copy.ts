@@ -201,8 +201,8 @@ export function describeRoutineRunError(
   if (isRoutineRunAgentSignInFailure(error, summary)) {
     return failure(
       t(
-        'auto.components.settings.cloudRoutines.runError.claudeNotSetUp',
-        'Claude isn’t set up for Orca Cloud, so this run couldn’t start it. Set it up once in Settings → Agent accounts, then run the routine again.'
+        'auto.components.settings.cloudRoutines.runError.claudeNotSetUpCloudSignIns',
+        'Claude isn’t set up for Orca Cloud, so this run couldn’t start it. Set it up once in Settings → Cloud agent sign-ins, then run the routine again.'
       )
     )
   }

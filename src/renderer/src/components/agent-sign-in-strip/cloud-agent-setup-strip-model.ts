@@ -1,5 +1,5 @@
 // PC-3b: the Orca Cloud pane strip for an agent that isn't set up yet. The launch holds; "Set up
-// once" runs the same one-time setup as Settings › Accounts › Orca Cloud (S0) right in the pane,
+// once" runs the same one-time setup as Settings › Orca Cloud › Cloud agent sign-ins (S0) right in the pane,
 // and once it's saved the strip offers "Start {{agent}}". Pure: the strip renders what this returns.
 import type { Translate } from '@/i18n/use-translate'
 import {
@@ -27,6 +27,20 @@ function base(agent: string, t: Translate): CloudStripModel {
     paste: null,
     otherWays: false,
     announcement: title
+  }
+}
+
+/** "Sign in inside this workspace instead": the in-VM login, as a quiet second choice to Set up once. */
+export function signInInsideWorkspaceAlternative(
+  t: Translate
+): NonNullable<CloudStripModel['alternative']> {
+  return {
+    label: t('agentSignInStrip.signInInsideWorkspace', 'Sign in inside this workspace instead'),
+    detail: t(
+      'agentSignInStrip.signInInsideWorkspaceDetail',
+      'Orca won’t store your sign-in. You’ll sign in again in each new workspace. Team API keys won’t be used for this agent.'
+    ),
+    action: { kind: 'signInInsideWorkspace' }
   }
 }
 
@@ -100,7 +114,7 @@ export function cloudAgentSetupStripModel(args: {
   switch (setup.phase) {
     case 'idle':
     case 'saved':
-      return need
+      return { ...need, alternative: signInInsideWorkspaceAlternative(t) }
     case 'browser':
       return {
         ...need,
@@ -223,6 +237,7 @@ export function cloudAgentSetupStripModel(args: {
                 action: { kind: 'reopenSetup' }
               }
             : { label: t('agentSignInStrip.tryAgain', 'Try again'), action: { kind: 'setUpOnce' } },
+        alternative: signInInsideWorkspaceAlternative(t),
         announcement: copy.title
       }
     }

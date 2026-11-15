@@ -7,7 +7,8 @@ import { closeAgentHostPanel } from './agent-host-panel-store'
 
 const TARGET = {
   accounts: { pane: 'accounts' },
-  agentAccounts: { pane: 'accounts', sectionId: 'orca-cloud' },
+  // Opens the sign-in sheet (below); its page is Settings › Orca Cloud › Cloud agent sign-ins.
+  agentAccounts: { pane: 'cloud-agent-sign-ins' },
   agentApiKeys: { pane: 'agent-api-keys' },
   cloudSecrets: { pane: 'cloud-secrets' },
   customEnvironments: { pane: 'servers' },

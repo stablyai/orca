@@ -1,7 +1,9 @@
 // Agent Source per person (agent-sources contract §2): "Your sign-in" or "API key", per agent, as a
 // default plus an optional per-workspace override, and the one-time "Use my sign-in" offer answer (D8).
+// A default can also be "Sign in inside this workspace" ('in-workspace'): Orca stores and injects nothing
+// for that agent (no account placeholder, no key), and its own login inside each sandbox wins.
 //   GET /v1/agent-sources[?workspaceId=<sandbox id>]
-//   PUT /v1/agent-sources        {agent, source: 'sign-in'|'key'|null, workspaceId?}
+//   PUT /v1/agent-sources        {agent, source: 'sign-in'|'key'|'in-workspace'|null, workspaceId?}
 //   PUT /v1/agent-sources/offer  {agent, answer: 'accepted'|'declined'}
 // A sandbox applies its OWNER's effective source: with 'sign-in', that agent's credential names are left
 // out of the session env (and so out of egress routes, the allowlist and gateway derivation), letting
@@ -23,13 +25,16 @@ const OFFER_SCOPE = 'offer'
 type SourceRow = { scope: string; agent: CredentialAgent; source: string }
 
 const AgentSchema = z.enum(['claude', 'codex'])
+const IN_WORKSPACE = 'in-workspace'
 export const PutSourceSchema = z
   .object({
     agent: AgentSchema,
-    source: z.enum(['sign-in', 'key']).nullable(),
+    source: z.enum(['sign-in', 'key', IN_WORKSPACE]).nullable(),
     workspaceId: z.string().min(1).max(128).optional()
   })
   .strict()
+  // Signing in inside the workspace is a per-person default, never a one-workspace override.
+  .refine((body) => !(body.source === IN_WORKSPACE && body.workspaceId))
 export const PutOfferSchema = z.object({ agent: AgentSchema, answer: z.enum(['accepted', 'declined']) }).strict()
 
 export class AgentSourceError extends Error {
@@ -60,12 +65,15 @@ function byAgent(rows: SourceRow[], scope: string): Record<CredentialAgent, Agen
   return out
 }
 
-/** Agents whose owner chose "Your sign-in" for this sandbox (override first, then default). */
-export async function signInAgentsFor(db: D1Database, row: Pick<SandboxRow, 'id' | 'user_id'>): Promise<Set<CredentialAgent>> {
-  const rows = await rowsFor(db, row.user_id, [row.id, DEFAULT_SCOPE])
-  const workspace = byAgent(rows, row.id)
-  const defaults = byAgent(rows, DEFAULT_SCOPE)
-  return new Set(CREDENTIAL_AGENTS.filter((agent) => (workspace[agent] ?? defaults[agent]) === 'sign-in'))
+/** Agents this person signs in inside each workspace (their default is 'in-workspace'). */
+function inWorkspaceAgents(rows: SourceRow[]): Record<CredentialAgent, boolean> {
+  const out = { claude: false, codex: false } as Record<CredentialAgent, boolean>
+  for (const row of rows) {
+    if (row.scope === DEFAULT_SCOPE && row.source === IN_WORKSPACE) {
+      out[row.agent] = true
+    }
+  }
+  return out
 }
 
 /** Drops the credential names of agents on "Your sign-in" (after preset derivation, so derived ones go too). */
@@ -111,6 +119,7 @@ export async function agentSourcesView(
   const subject = row ? row.user_id : caller.userId
   const rows = await rowsFor(db, subject, [DEFAULT_SCOPE, OFFER_SCOPE, ...(row ? [row.id] : [])])
   const defaults = byAgent(rows, DEFAULT_SCOPE)
+  const inWorkspace = inWorkspaceAgents(rows)
   const workspace = row ? byAgent(rows, row.id) : null
   const effective = await effectiveSecrets(db, caller, row?.repo_url ?? null)
   const covered = coveredByKey(new Set(effective.map((secret) => secret.name)))
@@ -135,6 +144,10 @@ export async function agentSourcesView(
       if (defaults[agent]) {
         return [agent, { source: defaults[agent], origin: 'default' }]
       }
+      // `source` keeps its two values for older desktops; `inWorkspace` says what this one is.
+      if (inWorkspace[agent]) {
+        return [agent, { source: null, origin: 'default' }]
+      }
       return [agent, { source: covered[agent] ? 'key' : usable[agent] ? 'sign-in' : null, origin: 'implicit' }]
     })
   )
@@ -145,7 +158,7 @@ export async function agentSourcesView(
   }
   // D13: personal accounts never apply in a workspace shared with teammates.
   const sharedWorkspace = row ? isSharedWorkspace(row) : false
-  return { defaults, workspace, effective: resolved, coveredByKey: covered, signInOffer, owner, sharedWorkspace }
+  return { defaults, inWorkspace, workspace, effective: resolved, coveredByKey: covered, signInOffer, owner, sharedWorkspace }
 }
 
 async function upsert(db: D1Database, caller: SandboxCaller, scope: string, agent: CredentialAgent, source: string | null, now: number) {
@@ -200,11 +213,12 @@ export async function deleteAgentSourcesForSandbox(db: D1Database, sandboxId: st
 /**
  * How each agent authenticates in this session (D10):
  * - 'account': the owner's Orca-account credential through an egress placeholder (keys for that agent dropped);
+ * - 'inside':  the owner signs in inside each workspace ('in-workspace'): keys dropped, the agent's own login;
  * - 'omit':    kill-switch fallback (Source sign-in, provider off): keys dropped, the agent's own login in the sandbox;
  * - 'keep':    API keys as resolved (precedence), the default.
  * Source: explicit (workspace, then default), else implicit: a covering key wins, else a usable account.
  */
-export type AgentMode = 'account' | 'omit' | 'keep'
+export type AgentMode = 'account' | 'inside' | 'omit' | 'keep'
 export async function agentModesFor(
   db: D1Database,
   row: Pick<SandboxRow, 'id' | 'user_id' | 'visibility' | 'ownership_transferred_at'>,
@@ -219,9 +233,16 @@ export async function agentModesFor(
   const rows = await rowsFor(db, row.user_id, [row.id, DEFAULT_SCOPE])
   const workspace = byAgent(rows, row.id)
   const defaults = byAgent(rows, DEFAULT_SCOPE)
+  const inWorkspace = inWorkspaceAgents(rows)
   const covered = coveredByKey(new Set(Object.keys(env)))
   const modes = {} as Record<CredentialAgent, AgentMode>
   for (const agent of CREDENTIAL_AGENTS) {
+    if (!workspace[agent] && inWorkspace[agent]) {
+      // Nothing of Orca's for this agent: no placeholder, no key, no egress route, so the login the person
+      // makes inside the sandbox (stored in its home, kept across sleep) reaches the vendor untouched.
+      modes[agent] = 'inside'
+      continue
+    }
     const explicit = workspace[agent] ?? defaults[agent]
     const provider = accountProvider(agent)
     const enabled = options.providerEnabled[agent] && provider !== undefined
