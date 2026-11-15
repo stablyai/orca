@@ -131,7 +131,7 @@ describe('run failure copy', () => {
     const copy = describeRoutineRunError('agent_exit_1', translate, summary)
     expect(copy.tone).toBe('error')
     expect(copy.text).toContain('Claude isn’t set up for Orca Cloud')
-    expect(copy.text).toContain('Settings → Agent accounts')
+    expect(copy.text).toContain('Settings → Cloud agent sign-ins')
     expect(copy.text).not.toContain('/login')
     // Another failure, or the same text outside an agent exit, keeps its own copy.
     expect(isRoutineRunAgentSignInFailure('agent_exit_1', 'tests failed')).toBe(false)

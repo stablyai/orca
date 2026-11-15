@@ -16,7 +16,10 @@ import {
 import type { SettingsStoreModel } from './use-settings-store-model'
 import type { SettingsInteractionController } from './use-settings-interaction-controller'
 import { setSettingsActiveSection } from '../host-scope/settings-active-section'
-import { resolveAccountBillingTarget } from '@/hooks/settings-navigation-orca-cloud-sections'
+import {
+  resolveAccountBillingTarget,
+  resolveCloudAgentSignInsTarget
+} from '@/hooks/settings-navigation-orca-cloud-sections'
 import {
   getSettingsSectionId,
   SHORTCUTS_ESCAPE_CONFIRM_TOAST_ID,
@@ -178,9 +181,11 @@ export function useSettingsPageEffects(
       return
     }
     // Plan & billing is part of Account + Billing in Orca Cloud builds; old links land on that part.
-    const settingsNavigationTarget = resolveAccountBillingTarget(
-      requestedNavigationTarget,
-      orcaCloudApiAvailable && showDesktopOnlySettings
+    // Old links to Agent accounts' Orca Cloud part land on Cloud agent sign-ins.
+    const cloudSettingsAvailable = orcaCloudApiAvailable && showDesktopOnlySettings
+    const settingsNavigationTarget = resolveCloudAgentSignInsTarget(
+      resolveAccountBillingTarget(requestedNavigationTarget, cloudSettingsAvailable),
+      cloudSettingsAvailable
     )
 
     const paneSectionId = getSettingsSectionId(

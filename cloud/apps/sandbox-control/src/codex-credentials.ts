@@ -183,7 +183,7 @@ export const codexAccount: AccountProvider = {
     status: 403,
     contentType: 'application/json',
     body: JSON.stringify({
-      detail: 'Orca Cloud can’t use your ChatGPT sign-in here. Check it in Orca: Settings → Agent accounts.'
+      detail: 'Orca Cloud can’t use your ChatGPT sign-in here. Check it in Orca: Settings → Cloud agent sign-ins.'
     })
   },
   // CODEX-EGRESS-BLOCKED: chatgpt.com answers Cloudflare Workers' egress with a 403 "Unable to load

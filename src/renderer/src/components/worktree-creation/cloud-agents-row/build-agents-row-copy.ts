@@ -72,8 +72,8 @@ function setupText(
         // This row has no field: the code goes in where setup has one (the pane, Settings).
         detail: model.setup.acceptsCode
           ? t(
-              'vmBuildAgents.finishInBrowserPaste',
-              'Finish in your browser, then paste the code in Settings → Agent accounts.'
+              'vmBuildAgents.finishInBrowserPasteCloudSignIns',
+              'Finish in your browser, then paste the code in Settings → Cloud agent sign-ins.'
             )
           : t('vmBuildAgents.finishInBrowser', 'Finish in your browser')
       }
@@ -95,7 +95,10 @@ function setupText(
       return {
         title: t('vmBuildAgents.pasteTitle', 'Paste a {{agent}} setup token', { agent }),
         tag,
-        detail: t('vmBuildAgents.pasteDetail', 'Paste it in Settings → Agent accounts.')
+        detail: t(
+          'vmBuildAgents.pasteDetailCloudSignIns',
+          'Paste it in Settings → Cloud agent sign-ins.'
+        )
       }
     case 'saving':
       return {

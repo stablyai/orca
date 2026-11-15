@@ -18,6 +18,9 @@
     }
   },
   "agentHostPanel": {
+    "cloud": {
+      "expiredDetail": "Renew it once in Agent accounts."
+    },
     "recipeEnvDetailNoKeys_one": "{{count}} variable, none that look like keys. The recipe decides what reaches the VM.",
     "recipeEnvDetailNoKeys_other": "{{count}} variables, none that look like keys. The recipe decides what reaches the VM.",
     "recipeEnvDetailOneKey_one": "{{count}} variable, including 1 that looks like a key ({{names}}). The recipe decides what reaches the VM.",
@@ -869,6 +872,11 @@
             "appsCount_other": "{{count}} apps approved with this key are disconnected too."
           }
         },
+        "cloudRoutines": {
+          "runError": {
+            "claudeNotSetUp": "Claude isn’t set up for Orca Cloud, so this run couldn’t start it. Set it up once in Settings → Agent accounts, then run the routine again."
+          }
+        },
         "computerUseSummary": {
           "permissionsRequired_one": "{{value0}} permission required before agents can operate app windows.",
           "permissionsRequired_other": "{{value0}} permissions required before agents can operate app windows."
@@ -1667,6 +1675,9 @@
     }
   },
   "cloudSecrets": {
+    "error": {
+      "subscriptionToken": "This is a Claude or ChatGPT subscription token, so it can’t be saved as a secret. Set up Claude once in Settings → Agent accounts instead."
+    },
     "paste": {
       "blocked": "{{count}} need a fix and will be skipped",
       "blocked_one": "{{count}} needs a fix and will be skipped",
@@ -2520,6 +2531,11 @@
     "unhide": "Show All",
     "zoom": "Zoom"
   },
+  "orcaCloudAgentRow": {
+    "expired": "Your {{agent}} sign-in for Orca Cloud expired. Renew it once in Settings → Agent accounts.",
+    "notSetUp": "{{agent}} isn’t set up for Orca Cloud yet. Set it up once in Settings → Agent accounts.",
+    "signedOut": "{{agent}}: set up once in Settings → Agent accounts after you sign in"
+  },
   "orcaCloudMove": {
     "confirm": {
       "changesCount_one": "{{count}} uncommitted change, plus untracked files",
@@ -2535,6 +2551,9 @@
       "untracked_one": "{{count}} untracked file",
       "untracked_other": "{{count}} untracked files"
     }
+  },
+  "orcaCloudSignInSheet": {
+    "allAccounts": "All agent accounts"
   },
   "orcaCloudSync": {
     "editedHere_one": "{{count}} file changed on this computer. Edits here don’t sync back. The cloud copy replaces it when it changes.",
@@ -2659,6 +2678,9 @@
     }
   },
   "settings": {
+    "agentAccounts": {
+      "hubSearchDescription": "Where Claude and Codex are signed in: Orca Cloud, this computer and your hosts."
+    },
     "agents": {
       "defaultSurfaceKeptChat_one": "{{agents}} stays as a chat, as you set.",
       "defaultSurfaceKeptChat_other": "{{agents}} stay as chats, as you set.",
@@ -3061,6 +3083,10 @@
       "unsignedDevChannel": "{{channel}} builds are unsigned, and this signed build only installs updates signed by Orca's publisher. Download the installer from the release page and run it once — updates work normally from there, including back to Stable.",
       "updateServerUnreachable": "Couldn't reach the update server. Try again in a few minutes."
     }
+  },
+  "vmBuildAgents": {
+    "finishInBrowserPaste": "Finish in your browser, then paste the code in Settings → Agent accounts.",
+    "pasteDetail": "Paste it in Settings → Agent accounts."
   },
   "workspace": {
     "links": {

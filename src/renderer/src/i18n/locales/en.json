@@ -1457,13 +1457,16 @@
         "subscription": "subscription",
         "signIn": "sign in",
         "chatgpt": "chatgpt",
-        "setupToken": "setup-token"
+        "setupToken": "setup-token",
+        "hosts": "hosts"
       },
       "pageDescription": "Sign-ins, account switching and usage for your agents.",
       "thisComputer": "This computer",
       "selectedHost": "Selected host",
       "hostsTitle": "Hosts",
-      "jumpLabel": "Parts of this page"
+      "jumpLabel": "Parts of this page",
+      "cloudSignInsMoved": "Orca Cloud sign-ins live in Orca Cloud settings",
+      "hubSearchDescriptionHosts": "Where Claude and Codex are signed in on this computer and your hosts."
     },
     "accountBilling": {
       "account": "Account",
@@ -1520,6 +1523,15 @@
       },
       "signInFailed": "Couldn’t sign you in to the console",
       "signInFailedDetail": "Your browser opened it anyway. Sign in there to continue."
+    },
+    "cloudAgentSignIns": {
+      "searchTitle": "Cloud agent sign-ins",
+      "searchDescription": "Set up Claude and Codex once for every cloud workspace: your Claude subscription or ChatGPT sign-in.",
+      "search": {
+        "renew": "renew",
+        "agentAccounts": "agent accounts"
+      },
+      "title": "Cloud agent sign-ins"
     }
   },
   "menu": {
@@ -9319,7 +9331,8 @@
             "interrupted": "Orca Cloud restarted during the run.",
             "routineChanged": "The routine changed while this run was queued.",
             "generic": "The run failed.",
-            "claudeNotSetUp": "Claude isn’t set up for Orca Cloud, so this run couldn’t start it. Set it up once in Settings → Agent accounts, then run the routine again."
+            "claudeNotSetUp": "Claude isn’t set up for Orca Cloud, so this run couldn’t start it. Set it up once in Settings → Agent accounts, then run the routine again.",
+            "claudeNotSetUpCloudSignIns": "Claude isn’t set up for Orca Cloud, so this run couldn’t start it. Set it up once in Settings → Cloud agent sign-ins, then run the routine again."
           },
           "event": {
             "prOpened": "PR opened",
@@ -27920,7 +27933,8 @@
       "overridden": "Set again further down; the later line is used.",
       "unknown": "Something went wrong in Orca Cloud. Nothing was changed. Try again.",
       "notSwappable": "A workspace would get this key in full, so Orca doesn’t save it from here. Add it in Cloud secrets if you accept that.",
-      "desktopKeyConflict": "Another agent’s key is saved in your Orca account under this name. Save this one to replace it."
+      "desktopKeyConflict": "Another agent’s key is saved in your Orca account under this name. Save this one to replace it.",
+      "subscriptionTokenCloudSignIns": "This is a Claude or ChatGPT subscription token, so it can’t be saved as a secret. Set up Claude once in Settings → Cloud agent sign-ins instead."
     },
     "vm": {
       "badge": "Real value in sandbox",
@@ -28320,7 +28334,8 @@
       "signIn": "Sign in",
       "failed": "Couldn’t load your agent accounts.",
       "sharedUnavailable": "Not available in shared workspaces",
-      "sharedUnavailableDetail": "Personal accounts aren’t used in shared workspaces. Ask an owner or admin to add a team key."
+      "sharedUnavailableDetail": "Personal accounts aren’t used in shared workspaces. Ask an owner or admin to add a team key.",
+      "expiredDetailCloudSignIns": "Renew it once in Cloud agent sign-ins."
     },
     "kind": {
       "local": "This computer",
@@ -28538,7 +28553,10 @@
     "error": "Couldn’t check whether {{agent}} is set up for Orca Cloud. You can still start.",
     "tryAgain": "Try again",
     "label": "Agent",
-    "checking": "Checking {{agent}}"
+    "checking": "Checking {{agent}}",
+    "notSetUpCloudSignIns": "{{agent}} isn’t set up for Orca Cloud yet. Set it up once in Settings → Cloud agent sign-ins.",
+    "expiredCloudSignIns": "Your {{agent}} sign-in for Orca Cloud expired. Renew it once in Settings → Cloud agent sign-ins.",
+    "signedOutCloudSignIns": "{{agent}}: set up once in Settings → Cloud agent sign-ins after you sign in"
   },
   "orcaCloudAccounts": {
     "paste": {
@@ -28684,7 +28702,9 @@
     "groupKey": "{{agents}} with {{key}}",
     "notOffered": "Signs in for each cloud workspace for now",
     "expiredDetailRenew": "Renew once. Every cloud workspace picks it up.",
-    "finishInBrowserPaste": "Finish in your browser, then paste the code in Settings → Agent accounts."
+    "finishInBrowserPaste": "Finish in your browser, then paste the code in Settings → Agent accounts.",
+    "finishInBrowserPasteCloudSignIns": "Finish in your browser, then paste the code in Settings → Cloud agent sign-ins.",
+    "pasteDetailCloudSignIns": "Paste it in Settings → Cloud agent sign-ins."
   },
   "agentAccountsOverview": {
     "action": {
@@ -28926,7 +28946,8 @@
     "title": "Agents in Orca Cloud",
     "description": "Set up Claude and Codex once. Every cloud workspace uses them, including new, cloned and restarted ones.",
     "footerLabel": "Related settings",
-    "allAccounts": "All agent accounts"
+    "allAccounts": "All agent accounts",
+    "openCloudSettings": "Open in Orca Cloud settings"
   },
   "cloudSkillsSync": {
     "appliesEverywhere": "Applies to every cloud workspace",
