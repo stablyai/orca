@@ -26,6 +26,7 @@ import {
   type BridgePdfOpenParams
 } from './bridge-native-verbs'
 import { imageResultSchema, type BridgeImageRunParams } from './bridge-image-verbs'
+import { BRIDGE_READ_ALOUD_VERB, readAloudResultSchema } from './bridge-read-aloud-verb'
 import {
   BRIDGE_SPEECH_VERB,
   speechCancelResultSchema,
@@ -71,6 +72,11 @@ export type NativeVerbs = {
   speechRead: () => Promise<BridgeSpeechRead>
   speechFinish: () => Promise<BridgeSpeechFinish>
   speechCancel: () => Promise<void>
+  // Older shells lack it; a reply then offers no Read aloud.
+  canReadAloud: boolean
+  // Settles when the phone's voice finishes or is stopped.
+  readAloud: (text: string) => Promise<void>
+  stopReadAloud: () => Promise<void>
   // Older shells lack it; the page then keeps its live region, which VoiceOver may not read.
   canAnnounce: boolean
   // True when the shell spoke it.
@@ -209,6 +215,13 @@ export function useNativeVerbs(): NativeVerbs {
       speechFinish: () => call(BRIDGE_SPEECH_VERB, { action: 'finish' }, speechFinishResultSchema),
       speechCancel: async () => {
         await call(BRIDGE_SPEECH_VERB, { action: 'cancel' }, speechCancelResultSchema)
+      },
+      canReadAloud: has(BRIDGE_READ_ALOUD_VERB),
+      readAloud: async (text) => {
+        await call(BRIDGE_READ_ALOUD_VERB, { action: 'speak', text }, readAloudResultSchema)
+      },
+      stopReadAloud: async () => {
+        await call(BRIDGE_READ_ALOUD_VERB, { action: 'stop' }, readAloudResultSchema)
       },
       canAnnounce: has('native.a11y.announce'),
       announce: async (message) =>

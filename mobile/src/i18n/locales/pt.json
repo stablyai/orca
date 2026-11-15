@@ -271,7 +271,9 @@
     "message": {
       "copyMessage": "Copiar mensagem",
       "forkFromResponse": "Criar ramificação a partir desta resposta",
-      "forkFromResponseHint": "Um novo chat com toda esta resposta, até o fim do turno"
+      "forkFromResponseHint": "Um novo chat com toda esta resposta, até o fim do turno",
+      "readAloud": "Ler em voz alta",
+      "stopReadingAloud": "Parar de ler em voz alta"
     },
     "messageActionsSheet": {
       "clipboardRejected": "A área de transferência rejeitou o texto.",

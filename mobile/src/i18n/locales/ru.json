@@ -257,7 +257,9 @@
     "message": {
       "copyMessage": "Копировать сообщение",
       "forkFromResponse": "Создать ответвление от этого ответа",
-      "forkFromResponseHint": "Новый чат со всем этим ответом до конца хода"
+      "forkFromResponseHint": "Новый чат со всем этим ответом до конца хода",
+      "readAloud": "Прочитать вслух",
+      "stopReadingAloud": "Остановить чтение вслух"
     },
     "messageActionsSheet": {
       "clipboardRejected": "Не удалось записать текст в буфер обмена.",

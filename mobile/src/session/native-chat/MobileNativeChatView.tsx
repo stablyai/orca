@@ -65,6 +65,7 @@ import { MobileNativeChatQueueAbovePromptContext } from './lower-region/mobile-n
 import { MobileNativeChatPromptStrip } from './input/prompts/MobileNativeChatPromptStrip'
 import { MobileNativeChatOfflineQueue } from './input/queued-messages/MobileNativeChatOfflineQueue'
 import { useMobileNativeChatOfflineQueue } from './composer/delivery/use-mobile-native-chat-offline-sends'
+import { useStopReadAloudWithChat } from '../../platform/read-aloud/read-aloud-turn'
 
 export type MobileNativeChatInputLockReason = 'disconnected' | 'waiting'
 
@@ -221,6 +222,7 @@ export function MobileNativeChatView({
   const insets = useSafeAreaInsets()
   const bottomPad = keyboardInset > 0 ? keyboardInset + insets.bottom : insets.bottom
   const { fontScale, pinchGesture } = useMobileNativeChatPinchGesture(sendSurfaceId)
+  useStopReadAloudWithChat(sendSurfaceId)
 
   const data = useMobileNativeChatTransientData(
     { folded, streaming, pending, imagePreviewsByMessageId },
