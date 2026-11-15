@@ -1,6 +1,6 @@
 import type { AppState } from '../../types'
 import type { Worktree } from '../../../../../shared/worktree/types'
-import type { Repo } from '../../../../../shared/repo-types'
+import type { Repo } from '../../../../../shared/repository/repo-types'
 import type { PRRefreshErrorType } from '../../../../../shared/github/pull-requests/refresh/pull-request-refresh-types'
 import { getGitHubRepoCacheKey } from '../../../../../shared/github/cache/github-cache-key'
 import { getRepoExecutionHostId } from '../../../../../shared/execution-host'

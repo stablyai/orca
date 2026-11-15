@@ -3,7 +3,7 @@ import type {
   PRDetailRecoverySnapshot,
   PRDetailRecoveryTerminal
 } from '../../../../../shared/github/pull-requests/refresh/pr-detail-recovery-contract'
-import type { Repo } from '../../../../../shared/repo-types'
+import type { Repo } from '../../../../../shared/repository/repo-types'
 import type { AppState } from '../../types'
 import { getRuntimeRepoTarget } from '../repositories/repository-routing'
 import { getGitHubSourceTarget } from '../work-items/work-item-routing'

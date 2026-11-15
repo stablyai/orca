@@ -35,7 +35,7 @@ vi.mock('../../../../../github/api/rate-limit', () =>
 
 import { makePR } from '../../../../../github/pull-requests/refresh/pr-refresh-coordinator-test-harness'
 import type { RpcContext } from '../../../core'
-import type { Repo } from '../../../../../../shared/repo-types'
+import type { Repo } from '../../../../../../shared/repository/repo-types'
 
 // The coordinator test reset pins fake time here.
 const START_AT = 1_000
