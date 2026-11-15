@@ -54,6 +54,10 @@ export class ThemeStudioSavedThemes {
     }))
   }
 
+  entriesNow(): readonly ThemeStudioSavedEntry[] {
+    return [...this.entries]
+  }
+
   find(pluginKey: string): ThemeStudioSavedEntry | undefined {
     return this.entries.find((entry) => entry.pluginKey === pluginKey)
   }

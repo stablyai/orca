@@ -164,7 +164,10 @@ export async function applyDraft(core: ThemeStudioCore, name: string | undefined
     core.deps.installedFrom
   )
   const installed = await core.deps.installFolder(folder)
-  const restorePoint = core.rememberSlots()
+  await core.deps.savedThemes.ready
+  // Why keep the first restore point: saving again must still lead back to the theme before it.
+  const restorePoint =
+    core.deps.savedThemes.find(installed.pluginKey)?.restorePoint ?? core.rememberSlots()
   core.deps.savedThemes.record({
     pluginKey: installed.pluginKey,
     id,

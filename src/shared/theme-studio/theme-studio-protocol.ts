@@ -113,4 +113,4 @@ export const themeStudioSavedActionSchema = z.discriminatedUnion('action', [
 export type ThemeStudioSavedAction = z.infer<typeof themeStudioSavedActionSchema>
 export type ThemeStudioSavedActionResult =
   | { ok: true; pluginKey?: string; path?: string; restored?: boolean }
-  | { ok: false; message: string }
+  | { ok: false; message?: string; cancelled?: true }

@@ -864,7 +864,10 @@
         "renameAction": "Rename",
         "deleteTitle": "Delete {{name}}?",
         "deleteDescription": "Orca goes back to the theme you had before, or its built-in theme. Export it first to keep a copy.",
-        "deleteAction": "Delete theme"
+        "deleteAction": "Delete theme",
+        "copyFailed": "Could not copy the prompt.",
+        "exportedTo": "Exported to {{path}}",
+        "notInUse": "Not in use"
       }
     },
     "browser": {

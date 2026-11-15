@@ -22,7 +22,7 @@ import {
   type ThemeStudioServiceDeps
 } from './theme-studio-core'
 import { adjustDraft, applyDraft, checkDraft, editDraft, stepDraft } from './theme-studio-changes'
-import { runSavedThemeAction } from './theme-studio-saved-actions'
+import { reconcileSavedThemes, runSavedThemeAction } from './theme-studio-saved-actions'
 import type {
   ThemeStudioSavedAction,
   ThemeStudioSavedActionResult
@@ -168,10 +168,13 @@ export function createThemeStudioService(deps: ThemeStudioServiceDeps) {
         console.warn('[theme-studio] could not act on the draft:', error)
         session.repaint()
       }),
-    savedThemes: async () => {
-      await deps.savedThemes.ready
-      return deps.savedThemes.list()
-    },
+    savedThemes: () =>
+      exclusive(async () => {
+        await reconcileSavedThemes(core)
+        return deps.savedThemes.list()
+      }),
+    /** Plugins changed elsewhere (Settings → Plugins); forget saved themes that are gone. */
+    reconcileSaved: () => exclusive(() => reconcileSavedThemes(core)),
     /** Rename, Duplicate, Export or Delete from Settings; failures come back as a message. */
     savedAction: (request: ThemeStudioSavedAction): Promise<ThemeStudioSavedActionResult> =>
       exclusive(() => runSavedThemeAction(core, request)).catch(

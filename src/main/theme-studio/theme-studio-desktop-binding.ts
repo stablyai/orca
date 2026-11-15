@@ -199,7 +199,10 @@ export function bindThemeStudio(options: {
       void service.settingsChanged({ slots, agentEditsOff })
     }
   })
-  ipcMain.handle(THEME_STUDIO_SAVED_LIST_CHANNEL, () => service.savedThemes())
+  ipcMain.handle(THEME_STUDIO_SAVED_LIST_CHANNEL, (event) =>
+    fromMainWindow(event.sender) ? service.savedThemes() : []
+  )
+  options.pluginService.onChanged(() => void service.reconcileSaved())
   ipcMain.handle(THEME_STUDIO_SAVED_ACTION_CHANNEL, (event, raw: unknown) => {
     const parsed = themeStudioSavedActionSchema.safeParse(raw)
     return fromMainWindow(event.sender) && parsed.success

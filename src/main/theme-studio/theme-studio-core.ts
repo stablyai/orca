@@ -192,8 +192,21 @@ export function createThemeStudioCore(deps: ThemeStudioServiceDeps) {
     }
     return token
   }
-  function restoreSlots(token: string): void {
-    const previous = restorePoints.get(token)
+  /** Puts back the slots a save replaced; with `onlyFor`, only slots that still show that plugin,
+   *  so later choices the person made stay. */
+  function restoreSlots(token: string, onlyFor?: string): void {
+    const saved = restorePoints.get(token)
+    const current = deps.slots.snapshot()
+    const showsPlugin = (value: unknown): boolean =>
+      typeof value === 'string' && value.startsWith(`plugin:${onlyFor}/`)
+    const previous =
+      saved && onlyFor
+        ? Object.fromEntries(
+            Object.entries(saved).filter(([key]) =>
+              showsPlugin(Object.entries(current).find(([name]) => name === key)?.[1])
+            )
+          )
+        : saved
     if (!previous) {
       throw new ThemeStudioError(
         THEME_STUDIO_ERROR_CODES.historyEnd,

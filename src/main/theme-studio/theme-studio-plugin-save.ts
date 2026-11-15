@@ -35,7 +35,7 @@ function assertLoadable(files: Record<string, string>): void {
 }
 
 /** Whether two paths name one folder; macOS temp paths reach the same place by two names. */
-async function sameFolder(left: string, right: string): Promise<boolean> {
+export async function sameFolder(left: string, right: string): Promise<boolean> {
   const real = (path: string): Promise<string> => realpath(path).catch(() => resolve(path))
   return (await real(left)) === (await real(right))
 }
@@ -64,7 +64,7 @@ export async function writeThemeStudioPlugin(
   draft: ThemeStudioDraft,
   pluginsRoot: string,
   installedFrom: (pluginKey: string) => Promise<string | null>,
-  options: { id?: string; fresh?: boolean } = {}
+  options: { id?: string; fresh?: boolean; strict?: boolean } = {}
 ): Promise<{ folder: string; replaced: boolean; id: string }> {
   const base = options.id ?? themeStudioPluginId(draft.name)
   for (let attempt = 1; attempt <= MAX_ID_ATTEMPTS; attempt += 1) {
@@ -76,6 +76,13 @@ export async function writeThemeStudioPlugin(
       () => false
     )
     const ownedElsewhere = owner !== null && !(await sameFolder(owner, folder))
+    if (ownedElsewhere && options.strict) {
+      throw new ThemeStudioError(
+        THEME_STUDIO_ERROR_CODES.invalid,
+        `${LOCAL_PLUGIN_PUBLISHER}.${id} is now installed from another folder.`,
+        { nextSteps: ['Duplicate the theme and rename the copy instead.'] }
+      )
+    }
     if (ownedElsewhere || (options.fresh && (exists || owner !== null))) {
       continue
     }

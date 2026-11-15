@@ -2,7 +2,10 @@ import { useState } from 'react'
 import { Copy, Download, MoreHorizontal, Pencil, Send, Sparkles, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
 import type { GlobalSettings } from '../../../../../../shared/global-settings-types'
-import type { ThemeStudioSavedTheme } from '../../../../../../shared/theme-studio/theme-studio-protocol'
+import type {
+  ThemeStudioSavedActionResult,
+  ThemeStudioSavedTheme
+} from '../../../../../../shared/theme-studio/theme-studio-protocol'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import {
@@ -24,24 +27,33 @@ import { customThemeEditPrompt, customThemePublishPrompt } from './custom-theme-
 type Translate = ReturnType<typeof useTranslate>
 
 async function copyPrompt(text: string, t: Translate): Promise<void> {
-  await window.api.ui.writeClipboardText(text)
-  toast.success(
-    t('settings.appearance.customTheme.promptCopied', 'Prompt copied. Paste it into your agent.')
-  )
+  try {
+    await window.api.ui.writeClipboardText(text)
+    toast.success(
+      t('settings.appearance.customTheme.promptCopied', 'Prompt copied. Paste it into your agent.')
+    )
+  } catch {
+    toast.error(t('settings.appearance.customTheme.copyFailed', 'Could not copy the prompt.'))
+  }
 }
 
 async function runAction(
   request: Parameters<typeof window.api.themeStudio.savedAction>[0],
   t: Translate,
-  done: string
+  done: (path: string | undefined) => string
 ): Promise<void> {
-  const result = await window.api.themeStudio.savedAction(request)
+  const result: ThemeStudioSavedActionResult = await window.api.themeStudio
+    .savedAction(request)
+    .catch((error: unknown): ThemeStudioSavedActionResult => ({
+      ok: false,
+      message: error instanceof Error ? error.message : String(error)
+    }))
   if (result.ok) {
-    toast.success(result.path ? `${done} ${result.path}` : done)
-  } else if (result.message !== 'cancelled') {
+    toast.success(done(result.path))
+  } else if (!result.cancelled) {
     toast.error(
       t('settings.appearance.customTheme.failed', 'Could not do that: {{message}}', {
-        message: result.message
+        message: result.message ?? ''
       })
     )
   }
@@ -112,9 +124,7 @@ function CustomThemeRow({
                 </DropdownMenuItem>
                 <DropdownMenuItem
                   onSelect={() =>
-                    void runAction(
-                      { action: 'duplicate', pluginKey: theme.pluginKey },
-                      t,
+                    void runAction({ action: 'duplicate', pluginKey: theme.pluginKey }, t, () =>
                       t('settings.appearance.customTheme.duplicated', 'Duplicated.')
                     )
                   }
@@ -124,10 +134,10 @@ function CustomThemeRow({
                 </DropdownMenuItem>
                 <DropdownMenuItem
                   onSelect={() =>
-                    void runAction(
-                      { action: 'export', pluginKey: theme.pluginKey },
-                      t,
-                      t('settings.appearance.customTheme.exported', 'Exported to')
+                    void runAction({ action: 'export', pluginKey: theme.pluginKey }, t, (path) =>
+                      t('settings.appearance.customTheme.exportedTo', 'Exported to {{path}}', {
+                        path: path ?? ''
+                      })
                     )
                   }
                 >
@@ -155,9 +165,7 @@ function CustomThemeRow({
         name={theme.name}
         onClose={() => setDialog(null)}
         onRename={(name) =>
-          void runAction(
-            { action: 'rename', pluginKey: theme.pluginKey, name },
-            t,
+          runAction({ action: 'rename', pluginKey: theme.pluginKey, name }, t, () =>
             t('settings.appearance.customTheme.renamed', 'Renamed.')
           )
         }
@@ -167,9 +175,7 @@ function CustomThemeRow({
         name={theme.name}
         onClose={() => setDialog(null)}
         onDelete={() =>
-          void runAction(
-            { action: 'delete', pluginKey: theme.pluginKey },
-            t,
+          runAction({ action: 'delete', pluginKey: theme.pluginKey }, t, () =>
             t('settings.appearance.customTheme.deleted', 'Deleted.')
           )
         }
@@ -227,7 +233,7 @@ function DraftRow(): React.JSX.Element | null {
   )
 }
 
-/** Settings → Appearance: the agent's draft being previewed, and the custom themes in use, as
+/** Settings → Appearance: the agent's draft being previewed, and the custom themes, as
  *  first-class rows with what made them and what can be done with them. */
 export function AppearanceCustomThemeSection({
   settings
@@ -250,19 +256,29 @@ export function AppearanceCustomThemeSection({
         ? t('settings.appearance.customTheme.dark', 'dark')
         : null
     ].filter((mode) => mode !== null)
-  const inUse = saved.filter((theme) => modesOf(theme.pluginKey).length > 0)
+  // Why every saved theme, in-use first: a duplicate or an unused theme still needs its actions.
+  const ordered = [...saved].sort(
+    (left, right) => modesOf(right.pluginKey).length - modesOf(left.pluginKey).length
+  )
   return (
     <div data-theme-studio-settings>
       <DraftRow />
-      {inUse.map((theme) => (
-        <CustomThemeRow
-          key={theme.pluginKey}
-          theme={theme}
-          modes={t('settings.appearance.customTheme.inUse', 'In use for {{modes}}', {
-            modes: modesOf(theme.pluginKey).join(' & ')
-          })}
-        />
-      ))}
+      {ordered.map((theme) => {
+        const modes = modesOf(theme.pluginKey)
+        return (
+          <CustomThemeRow
+            key={theme.pluginKey}
+            theme={theme}
+            modes={
+              modes.length
+                ? t('settings.appearance.customTheme.inUse', 'In use for {{modes}}', {
+                    modes: modes.join(' & ')
+                  })
+                : t('settings.appearance.customTheme.notInUse', 'Not in use')
+            }
+          />
+        )
+      })}
     </div>
   )
 }
