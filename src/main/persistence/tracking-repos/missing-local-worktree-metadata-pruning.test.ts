@@ -338,7 +338,9 @@ describe('pruneMissingLocalWorktreeSessionsForRepo', () => {
     const goneId = `${REPO_ID}::/workspace/gone`
     const session = {
       ...getDefaultWorkspaceSession(),
-      pairedTerminalTabCloseIntentsByEnvironment: { env: [{ worktreeId: goneId }] as never }
+      pairedTerminalTabCloseIntentsByEnvironment: {
+        env: [{ hostTabIds: ['host-tab'], worktreeId: goneId, closedAt: 1 }]
+      }
     }
     state.workspaceSession = session
 

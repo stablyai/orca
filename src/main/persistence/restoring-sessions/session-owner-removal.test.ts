@@ -6,95 +6,117 @@ import { removeWorkspaceSessionOwners } from './session-owner-removal'
 const GONE = 'repo-1::/workspaces/gone'
 const KEPT = 'repo-1::/workspaces/kept'
 
-/** Every per-workspace field one workspace can own, keyed by owner, tab or pane. */
-function workspaceState(worktreeId: string, name: string): Partial<WorkspaceSessionState> {
-  const terminalTabId = `${name}-terminal`
-  // Why a unified-only terminal: its legacy row can be gone while its layout and scrollback remain.
-  const unifiedOnlyTerminalId = `${name}-unified-terminal`
-  const filePath = `/workspaces/${name}/README.md`
-  return {
-    tabsByWorktree: {
-      [worktreeId]: [
-        {
-          id: terminalTabId,
-          ptyId: null,
-          worktreeId,
-          title: 'Terminal 1',
-          customTitle: null,
-          color: null,
-          sortOrder: 0,
-          createdAt: 1
-        }
-      ]
-    },
-    unifiedTabs: {
-      [worktreeId]: [
-        {
-          id: unifiedOnlyTerminalId,
-          entityId: unifiedOnlyTerminalId,
-          groupId: `${name}-group`,
-          worktreeId,
-          contentType: 'terminal',
-          label: 'Terminal 2',
-          customLabel: null,
-          color: null,
-          sortOrder: 1,
-          createdAt: 1
-        }
-      ]
-    },
-    tabGroups: {
-      [worktreeId]: [
-        {
-          id: `${name}-group`,
-          worktreeId,
-          activeTabId: unifiedOnlyTerminalId,
-          tabOrder: [unifiedOnlyTerminalId]
-        }
-      ]
-    },
-    tabGroupLayouts: { [worktreeId]: { type: 'leaf', groupId: `${name}-group` } },
-    activeGroupIdByWorktree: { [worktreeId]: `${name}-group` },
-    activeTabIdByWorktree: { [worktreeId]: terminalTabId },
-    activeTabTypeByWorktree: { [worktreeId]: 'terminal' },
-    terminalLayoutsByTabId: {
-      [terminalTabId]: { root: null, activeLeafId: null, expandedLeafId: null },
-      [unifiedOnlyTerminalId]: { root: null, activeLeafId: null, expandedLeafId: null }
-    },
-    localOnlyScrollbackByTabId: { [unifiedOnlyTerminalId]: { leaf: 'scrollback' } },
-    remoteSessionIdsByTabId: { [terminalTabId]: `${name}-relay` },
-    terminalPtyIncarnationsByPaneKey: { [`${unifiedOnlyTerminalId}:leaf`]: `${name}-incarnation` },
-    openFilesByWorktree: {
-      [worktreeId]: [{ filePath, relativePath: 'README.md', worktreeId, language: 'markdown' }]
-    },
-    activeFileIdByWorktree: { [worktreeId]: filePath },
-    markdownFrontmatterVisible: { [filePath]: false },
-    defaultTerminalTabsAppliedByWorktreeId: { [worktreeId]: true },
-    lastVisitedAtByWorktreeId: { [worktreeId]: 1 },
-    closedTerminalTabTombstonesByTabId: { [`${name}-closed`]: { closedAt: 1, worktreeId } },
-    activeWorktreeIdsOnShutdown: [worktreeId]
-  }
-}
+type Workspace = { id: string; name: string }
 
-function sessionWith(...parts: Partial<WorkspaceSessionState>[]): WorkspaceSessionState {
-  const session: Record<string, unknown> = { ...getDefaultWorkspaceSession() }
-  for (const part of parts) {
-    for (const [field, value] of Object.entries(part)) {
-      const current = session[field]
-      session[field] = Array.isArray(value)
-        ? [...((current as unknown[]) ?? []), ...value]
-        : { ...(current as object), ...(value as object) }
-    }
+const entries = <T>(workspaces: Workspace[], entry: (workspace: Workspace) => [string, T][]) =>
+  Object.fromEntries(workspaces.flatMap(entry))
+
+/** Every per-workspace field a workspace can own, keyed by owner, tab or pane. */
+function sessionFor(...workspaces: Workspace[]): WorkspaceSessionState {
+  // Why a unified-only terminal: its legacy row can be gone while its layout and scrollback remain.
+  const terminal = ({ name }: Workspace) => `${name}-terminal`
+  const unifiedTerminal = ({ name }: Workspace) => `${name}-unified-terminal`
+  const filePath = ({ name }: Workspace) => `/workspaces/${name}/README.md`
+  const emptyLayout = { root: null, activeLeafId: null, expandedLeafId: null }
+  return {
+    ...getDefaultWorkspaceSession(),
+    tabsByWorktree: entries(workspaces, (w) => [
+      [
+        w.id,
+        [
+          {
+            id: terminal(w),
+            ptyId: null,
+            worktreeId: w.id,
+            title: 'Terminal 1',
+            customTitle: null,
+            color: null,
+            sortOrder: 0,
+            createdAt: 1
+          }
+        ]
+      ]
+    ]),
+    unifiedTabs: entries(workspaces, (w) => [
+      [
+        w.id,
+        [
+          {
+            id: unifiedTerminal(w),
+            entityId: unifiedTerminal(w),
+            groupId: `${w.name}-group`,
+            worktreeId: w.id,
+            contentType: 'terminal',
+            label: 'Terminal 2',
+            customLabel: null,
+            color: null,
+            sortOrder: 1,
+            createdAt: 1
+          }
+        ]
+      ]
+    ]),
+    tabGroups: entries(workspaces, (w) => [
+      [
+        w.id,
+        [
+          {
+            id: `${w.name}-group`,
+            worktreeId: w.id,
+            activeTabId: unifiedTerminal(w),
+            tabOrder: [unifiedTerminal(w)]
+          }
+        ]
+      ]
+    ]),
+    tabGroupLayouts: entries(workspaces, (w) => [
+      [w.id, { type: 'leaf', groupId: `${w.name}-group` }]
+    ]),
+    activeGroupIdByWorktree: entries(workspaces, (w) => [[w.id, `${w.name}-group`]]),
+    activeTabIdByWorktree: entries(workspaces, (w) => [[w.id, terminal(w)]]),
+    activeTabTypeByWorktree: entries(workspaces, (w) => [[w.id, 'terminal']]),
+    terminalLayoutsByTabId: entries(workspaces, (w) => [
+      [terminal(w), emptyLayout],
+      [unifiedTerminal(w), emptyLayout]
+    ]),
+    localOnlyScrollbackByTabId: entries(workspaces, (w) => [
+      [unifiedTerminal(w), { leaf: 'scrollback' }]
+    ]),
+    remoteSessionIdsByTabId: entries(workspaces, (w) => [[terminal(w), `${w.name}-relay`]]),
+    terminalPtyIncarnationsByPaneKey: entries(workspaces, (w) => [
+      [`${unifiedTerminal(w)}:leaf`, `${w.name}-incarnation`]
+    ]),
+    openFilesByWorktree: entries(workspaces, (w) => [
+      [
+        w.id,
+        [
+          {
+            filePath: filePath(w),
+            relativePath: 'README.md',
+            worktreeId: w.id,
+            language: 'markdown'
+          }
+        ]
+      ]
+    ]),
+    activeFileIdByWorktree: entries(workspaces, (w) => [[w.id, filePath(w)]]),
+    markdownFrontmatterVisible: entries(workspaces, (w) => [[filePath(w), false]]),
+    defaultTerminalTabsAppliedByWorktreeId: entries(workspaces, (w) => [[w.id, true]]),
+    lastVisitedAtByWorktreeId: entries(workspaces, (w) => [[w.id, 1]]),
+    closedTerminalTabTombstonesByTabId: entries(workspaces, (w) => [
+      [`${w.name}-closed`, { closedAt: 1, worktreeId: w.id }]
+    ]),
+    activeWorktreeIdsOnShutdown: workspaces.map((w) => w.id)
   }
-  return session as WorkspaceSessionState
 }
 
 describe('removeWorkspaceSessionOwners', () => {
   it('drops every owner-, tab- and pane-keyed entry of a removed workspace and keeps its sibling', () => {
-    const session = sessionWith(workspaceState(GONE, 'gone'), workspaceState(KEPT, 'kept'))
+    const gone = { id: GONE, name: 'gone' }
+    const kept = { id: KEPT, name: 'kept' }
 
-    const next = removeWorkspaceSessionOwners(session, new Set([GONE]))
+    const next = removeWorkspaceSessionOwners(sessionFor(gone, kept), new Set([GONE]))
 
-    expect(next).toEqual(sessionWith(workspaceState(KEPT, 'kept')))
+    expect(next).toEqual(sessionFor(kept))
   })
 })

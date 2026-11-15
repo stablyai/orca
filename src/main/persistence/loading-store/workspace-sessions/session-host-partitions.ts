@@ -28,6 +28,7 @@ import {
 } from '../../restoring-sessions/session-owner-removal'
 
 import type { StoreRuntimeState } from '../store-runtime-state'
+import { WORKSPACE_SESSION_DOMAINS } from '../../workspace-session-domains'
 import {
   pruneMissingLocalWorktreeSessionsForRepo as pruneMissingLocalWorktreeSessions,
   selectLocalWorktreeSessionOwnersForRepo,
@@ -169,7 +170,7 @@ export class SessionHostPartitionOperations {
     if (removed.length > 0) {
       // Releasing session ownership unblocks metadata pruning for the same worktrees.
       invalidateLocalWorktreeMetadataPruneInputs()
-      scheduleSave(context.scheduling, ['workspaceSession'], LOCAL_EXECUTION_HOST_ID)
+      scheduleSave(context.scheduling, WORKSPACE_SESSION_DOMAINS, LOCAL_EXECUTION_HOST_ID)
     }
     return removed
   }
