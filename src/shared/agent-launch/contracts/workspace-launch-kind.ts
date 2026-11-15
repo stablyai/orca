@@ -2,7 +2,7 @@
 
 import type { AgentLaunchTarget } from './agent-launch-intent'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../constants'
-import { parseWorkspaceKey } from '../../workspace-scope'
+import { parseWorkspaceKey } from '../../workspace/identity/workspace-scope'
 
 export type WorkspaceLaunchKind = 'git-worktree' | 'folder' | 'floating'
 

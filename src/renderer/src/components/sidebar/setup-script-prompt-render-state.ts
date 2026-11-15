@@ -1,10 +1,10 @@
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
-import type { Repo } from '../../../../shared/repo-types'
+import type { Repo } from '../../../../shared/repository/repo-types'
 import type { Worktree } from '../../../../shared/worktree/types'
 import {
   ignoresSharedSetupScripts,
   type SetupScriptPromptInspection
-} from '@/lib/setup-script-prompt'
+} from '@/runtime/repo-hooks/setup-script-prompt'
 import { findRepoForHost } from '@/store/repos/repo-host-identity'
 import { toRuntimeExecutionHostId } from '../../../../shared/execution-host'
 

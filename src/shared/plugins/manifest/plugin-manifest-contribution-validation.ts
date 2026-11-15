@@ -1,6 +1,6 @@
 import type { RefinementCtx } from 'zod'
 import { isPluginCommandAliasActionId } from '../contributions/plugin-command-actions'
-import { getKeybindingConflictIdentity } from '../../keybindings'
+import { getKeybindingConflictIdentity } from '../../keybindings/matching-key'
 import {
   PLUGIN_EVENT_CAPABILITY,
   type PluginEventName
@@ -229,7 +229,10 @@ export function validatePluginManifestContributions(
   }
   for (const [index, subscription] of manifest.contributes.events.entries()) {
     const required = PLUGIN_EVENT_CAPABILITY[subscription.on]
-    if (!manifest.capabilities.some((capability) => capability.kind === required)) {
+    if (
+      required !== null &&
+      !manifest.capabilities.some((capability) => capability.kind === required)
+    ) {
       ctx.addIssue({
         code: 'custom',
         path: ['contributes', 'events', index, 'on'],

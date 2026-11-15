@@ -1,7 +1,7 @@
 import type { AgentLaunchTabViewerRule } from '../../../../../../shared/agent-launch/contracts/agent-launch-tab-publication'
 import { focusTerminalInitiatedTab } from '../../../../hooks/ipc-events/terminal-command-state'
 import { useAppStore } from '../../../../store/index'
-import { revealWorkspaceSurface } from '../../../workspace-surface-reveal'
+import { revealWorkspaceSurface } from '../../../workspace/activation/workspace-surface-reveal'
 
 /** Early publication and host reveal move the same viewer, under the same policy. */
 export function presentAgentLaunchTab(

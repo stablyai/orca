@@ -43,7 +43,7 @@ const withMeta = (meta: Meta): { _meta?: Meta } => (meta ? { _meta: meta } : {})
 
 /** Stream-level protocol seam; production agents use createAcpAgentConnection. */
 export class AcpSessionRuntime {
-  private readonly peer: AcpJsonRpcPeer
+  protected readonly peer: AcpJsonRpcPeer
   private readonly listeners = new Set<(event: AcpSessionEvent) => void>()
   private initialized?: Promise<InitializeResponse>
   private starting?: Promise<AcpSessionStarted>
@@ -201,19 +201,31 @@ export class AcpSessionRuntime {
     }
     return this.peer.request(method, params, { timeoutMs })
   }
-  async setModel(modelId: string, meta?: Meta): Promise<SetSessionModelResponse> {
+  /** `timeoutMs` drops an unanswered call from the pending set; null waits for the answer. */
+  async setModel(
+    modelId: string,
+    meta?: Meta,
+    timeoutMs: number | null = null
+  ): Promise<SetSessionModelResponse> {
     const params: SetSessionModelRequest = {
       sessionId: this.sessionId(),
       modelId,
       ...withMeta(meta)
     }
-    return this.call('session/set_model', params, SetSessionModelResponseSchema)
+    return this.call(
+      'session/set_model',
+      params,
+      SetSessionModelResponseSchema,
+      undefined,
+      timeoutMs
+    )
   }
   async setConfigOption(
     configId: SetSessionConfigOptionRequest['configId'],
     value: SetSessionConfigOptionRequest['value'],
     meta?: Meta,
-    received?: (response: SetSessionConfigOptionResponse) => void
+    received?: (response: SetSessionConfigOptionResponse) => void,
+    timeoutMs: number | null = null
   ): Promise<SetSessionConfigOptionResponse> {
     const params = { configId, sessionId: this.sessionId(), ...withMeta(meta) }
     const request =
@@ -224,7 +236,8 @@ export class AcpSessionRuntime {
       'session/set_config_option',
       request,
       SetSessionConfigOptionResponseSchema,
-      received
+      received,
+      timeoutMs
     )
   }
 
@@ -248,9 +261,18 @@ export class AcpSessionRuntime {
     method: string,
     params: unknown,
     schema: z.ZodType<T>,
-    received?: (response: T) => void
+    received?: (response: T) => void,
+    timeoutMs: number | null = null
   ): Promise<T> {
-    return callAcpSession(this.peer, method, params, schema, this.options.onAuthAnswered, received)
+    return callAcpSession(
+      this.peer,
+      method,
+      params,
+      schema,
+      this.options.onAuthAnswered,
+      received,
+      timeoutMs
+    )
   }
 
   private handleRequest(method: string, params: unknown, context: AcpRequestContext): unknown {

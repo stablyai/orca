@@ -1,4 +1,4 @@
-import { getConnectionIdForFile } from '@/lib/connection-context'
+import { getConnectionIdForFile } from '@/lib/workspace/ownership/connection-context'
 import type { HttpLinkSourceOwner } from '@/lib/browser/navigation/http-link-routing'
 import { dirname } from '@/lib/path'
 import { findFirstIndexedWorktree } from '@/lib/workspace/ownership/worktree-runtime-owner-index'

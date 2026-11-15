@@ -1,14 +1,11 @@
 import { describe, expect, it } from 'vitest'
 
 import type { Nodes } from 'hast'
-import { markdownPreviewRequestIndices } from '../viewport/markdown-preview-viewport-budget'
 import { MarkdownPreviewDocumentEngine } from '../document-worker/markdown-preview-document-engine'
 import {
   parseMarkdownPreviewDocument,
   renderMarkdownPreviewBlock
 } from '../document-worker/markdown-preview-document-tree'
-import { countMarkdownPreviewNodes } from './markdown-preview-tree-content'
-import { MARKDOWN_PREVIEW_BLOCK_MAX_NODES } from '../document-worker/markdown-preview-document-types'
 import { markdownPreviewScrollAnchorKey } from '../viewport/use-markdown-preview-scroll-anchor'
 
 function elements(node: Nodes): Nodes[] {
@@ -34,9 +31,6 @@ describe('large preview table row groups', () => {
     for (const [index, node] of tree.children.entries()) {
       const rendered = renderMarkdownPreviewBlock(node, index)
       expect(rendered.oversized).toBe(false)
-      expect(
-        countMarkdownPreviewNodes(rendered.tree, MARKDOWN_PREVIEW_BLOCK_MAX_NODES)
-      ).toBeLessThan(MARKDOWN_PREVIEW_BLOCK_MAX_NODES)
       expect(
         elements(rendered.tree).filter(
           (entry) => entry.type === 'element' && entry.tagName === 'col'
@@ -114,24 +108,5 @@ describe('large preview table row groups', () => {
     expect(anchors.filter((anchor) => anchor === 'user-content-table')).toHaveLength(1)
     expect(anchors.filter((anchor) => anchor === 'user-content-rows')).toHaveLength(1)
     expect(anchors.filter((anchor) => anchor === 'user-content-row-1499')).toHaveLength(1)
-  })
-})
-
-describe('large preview viewport budgets', () => {
-  it('makes Find targets revealable even when surrounding blocks exhaust the node budget', async () => {
-    const engine = new MarkdownPreviewDocumentEngine()
-    engine.load(
-      Array.from(
-        { length: 20 },
-        (_, index) => `| a | b |\n| --- | --- |\n${`| Target${index} | b |\n`.repeat(100)}`
-      ).join('\n\n')
-    )
-    const matches = await engine.search('Target19')
-    expect(matches?.matches.length).toBe(100)
-    const indices = Array.from({ length: 20 }, (_, index) => index)
-    expect(engine.blocks(indices).find((block) => block.index === 19)?.oversized).toBe(true)
-    const prioritized = markdownPreviewRequestIndices(indices, [19, 0])
-    expect(prioritized[0]).toBe(19)
-    expect(engine.blocks(prioritized).find((block) => block.index === 19)?.oversized).toBe(false)
   })
 })

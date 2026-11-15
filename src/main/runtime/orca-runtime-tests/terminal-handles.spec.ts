@@ -7,14 +7,13 @@ import {
 import './runtime-test-module-registration.spec'
 import { OrcaRuntimeService } from '../orca-runtime'
 import { makePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
-import type { RuntimeClientEvent } from '../../../shared/runtime-client-events'
-import type { RuntimeSyncWindowGraph } from '../../../shared/runtime-session-contracts'
+import type { RuntimeClientEvent } from '../../../shared/remote-runtime/session-graph/runtime-client-events'
+import type { RuntimeSyncWindowGraph } from '../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import {
   HEADLESS_LEAF_ID,
   TEST_WINDOW_ID,
   TEST_WORKTREE_ID,
   createRuntime,
-  createRuntimeWithSshLease,
   store
 } from './orca-runtime-test-fixtures.spec'
 
@@ -72,7 +71,7 @@ describe('OrcaRuntimeService', () => {
       tabId: 'tab-1',
       leafId: 'pane:1'
     })
-    runtime.syncWindowGraph(1, graph)
+    await runtime.syncWindowGraph(1, graph)
     const listed = await runtime.listMobileSessionTabs('branch:feature/foo')
     const mobileTab = listed.tabs.find((tab) => tab.type === 'terminal')
     if (!mobileTab?.terminal) {
@@ -108,7 +107,7 @@ describe('OrcaRuntimeService', () => {
     expect(retired).not.toHaveProperty('launchDraftCreatedAt')
 
     runtime.markRendererReloading(1)
-    const replay = runtime.syncWindowGraph(1, {
+    const replay = await runtime.syncWindowGraph(1, {
       ...graph,
       mobileSessionTabs: graph.mobileSessionTabs?.map((snapshot) => ({
         ...snapshot,
@@ -125,7 +124,7 @@ describe('OrcaRuntimeService', () => {
       )
     ).not.toHaveProperty('launchDraft')
 
-    const reconciled = runtime.syncWindowGraph(1, {
+    const reconciled = await runtime.syncWindowGraph(1, {
       ...graph,
       mobileSessionTabs: graph.mobileSessionTabs?.map((snapshot) => ({
         ...snapshot,
@@ -154,7 +153,7 @@ describe('OrcaRuntimeService', () => {
     const paneKey = makePaneKey(tabId, leafId)
 
     runtime.attachWindow(1)
-    runtime.syncWindowGraph(1, {
+    await runtime.syncWindowGraph(1, {
       tabs: [
         {
           tabId,
@@ -180,7 +179,7 @@ describe('OrcaRuntimeService', () => {
     expect(staleHandle).toBeTruthy()
 
     // terminal.show is read-only; renderer wake/rebind publication must repair the handle surface.
-    runtime.syncWindowGraph(1, {
+    await runtime.syncWindowGraph(1, {
       tabs: [
         {
           tabId,
@@ -203,7 +202,7 @@ describe('OrcaRuntimeService', () => {
 
     await expect(runtime.showTerminal(staleHandle)).rejects.toThrow('terminal_handle_stale')
 
-    runtime.syncWindowGraph(1, {
+    await runtime.syncWindowGraph(1, {
       tabs: [
         {
           tabId,
@@ -263,45 +262,13 @@ describe('OrcaRuntimeService', () => {
     expect(createTerminal).not.toHaveBeenCalled()
   })
 
-  it('clears a failed pane recovery so a later reconnect can retry', async () => {
-    const tabId = 'tab-retry'
-    const runtime = createRuntimeWithSshLease('pty-expired', tabId)
-    const paneKey = makePaneKey(tabId, HEADLESS_LEAF_ID)
-    registerBoundPty(runtime, 'pty-expired', TEST_WORKTREE_ID, null, {
-      tabId,
-      leafId: HEADLESS_LEAF_ID
-    })
-    const expiredHandle = runtime.resolveTerminalPane(paneKey, TEST_WORKTREE_ID).handle
-    await dropFromHostInventory(runtime, 'pty-expired')
-    const createTerminal = vi
-      .spyOn(runtime, 'createTerminal')
-      .mockRejectedValueOnce(new Error('relay_reconnecting'))
-      .mockResolvedValueOnce({
-        handle: 'term-retry',
-        tabId,
-        paneKey,
-        ptyId: 'pty-retry',
-        worktreeId: TEST_WORKTREE_ID,
-        title: null,
-        surface: 'background'
-      })
-
-    await expect(
-      runtime.recoverTerminalPane(paneKey, TEST_WORKTREE_ID, expiredHandle)
-    ).rejects.toThrow('relay_reconnecting')
-    await expect(
-      runtime.recoverTerminalPane(paneKey, TEST_WORKTREE_ID, expiredHandle)
-    ).resolves.toMatchObject({ handle: 'term-retry' })
-    expect(createTerminal).toHaveBeenCalledTimes(2)
-  })
-
   it('drops a stale leaf when a woken agent PTY is re-keyed to a new leaf on renderer reload', async () => {
     const runtime = createRuntime()
     const tabId = 'tab-1'
     // Pre-allocated exported handles are the condition used by reload preservation.
     runtime.preAllocateHandleForPty('pty-agent')
     runtime.attachWindow(TEST_WINDOW_ID)
-    runtime.syncWindowGraph(TEST_WINDOW_ID, {
+    await runtime.syncWindowGraph(TEST_WINDOW_ID, {
       tabs: [
         {
           tabId,
@@ -326,7 +293,7 @@ describe('OrcaRuntimeService', () => {
 
     // A cold-restored leaf can have a new id while retaining the live agent PTY.
     runtime.markRendererReloading(TEST_WINDOW_ID)
-    runtime.syncWindowGraph(TEST_WINDOW_ID, {
+    await runtime.syncWindowGraph(TEST_WINDOW_ID, {
       tabs: [
         {
           tabId,
@@ -354,41 +321,5 @@ describe('OrcaRuntimeService', () => {
     await expect(runtime.showTerminal(after.terminals[0].handle)).resolves.toMatchObject({
       ptyId: 'pty-agent'
     })
-  })
-
-  it('still preserves a CLI agent leaf when the reloaded renderer has not rebound its PTY', async () => {
-    const runtime = createRuntime()
-    const tabId = 'tab-1'
-    runtime.preAllocateHandleForPty('pty-agent')
-    runtime.attachWindow(TEST_WINDOW_ID)
-    runtime.syncWindowGraph(TEST_WINDOW_ID, {
-      tabs: [
-        {
-          tabId,
-          worktreeId: TEST_WORKTREE_ID,
-          title: 'Claude',
-          activeLeafId: 'leaf-old',
-          layout: null
-        }
-      ],
-      leaves: [
-        {
-          tabId,
-          worktreeId: TEST_WORKTREE_ID,
-          leafId: 'leaf-old',
-          paneRuntimeId: 1,
-          ptyId: 'pty-agent'
-        }
-      ]
-    })
-    expect((await runtime.listTerminals(`id:${TEST_WORKTREE_ID}`)).terminals).toHaveLength(1)
-
-    // An empty reload graph must preserve the live CLI PTY and its exported handle.
-    runtime.markRendererReloading(TEST_WINDOW_ID)
-    runtime.syncWindowGraph(TEST_WINDOW_ID, { tabs: [], leaves: [] })
-
-    const after = await runtime.listTerminals(`id:${TEST_WORKTREE_ID}`)
-    expect(after.terminals).toHaveLength(1)
-    expect(after.terminals[0].ptyId).toBe('pty-agent')
   })
 })

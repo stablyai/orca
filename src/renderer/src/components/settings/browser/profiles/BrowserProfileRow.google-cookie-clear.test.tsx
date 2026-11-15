@@ -6,6 +6,7 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { StrictMode, type ReactNode } from 'react'
 import { useStore } from 'zustand'
 import { ConfirmationDialogContext } from '../../../confirmation-dialog-context'
+import { TooltipProvider } from '../../../ui/tooltip'
 import {
   createTestStore,
   createBrowserMockApi
@@ -13,7 +14,7 @@ import {
 import { getDefaultBrowserProfileForHost } from '@/store/slices/browser/hosts/browser-host-state'
 import type { AppState } from '@/store/types'
 import { createCompatibleRuntimeStatusResponse } from '@/runtime/rpc/testing/runtime-compatibility-test-fixture'
-import type { GoogleCookieClearLocalTarget } from '../../../../../../shared/browser-google-cookie-clear'
+import type { GoogleCookieClearLocalTarget } from '../../../../../../shared/browser/cookies/browser-google-cookie-clear'
 import { i18n } from '@/i18n/i18n'
 
 let store: ReturnType<typeof createTestStore>
@@ -112,7 +113,7 @@ function SessionSection() {
 function mount(node: ReactNode) {
   return render(
     <ConfirmationDialogContext.Provider value={mocks.confirm}>
-      {node}
+      <TooltipProvider>{node}</TooltipProvider>
     </ConfirmationDialogContext.Provider>
   )
 }
@@ -283,3 +284,18 @@ it.each(['success', 'rejection'])(
     )
   }
 )
+
+it('always confirms before clearing default cookies', async () => {
+  const clearDefault = vi.fn(async () => true)
+  store.setState({ clearDefaultSessionCookies: clearDefault })
+  mount(<SessionSection />)
+  const button = screen.getByRole('button', { name: 'Clear default cookies' })
+  mocks.confirm.mockResolvedValueOnce(false)
+  await act(async () => fireEvent.click(button))
+  expect(mocks.confirm).toHaveBeenCalledTimes(1)
+  expect(clearDefault).not.toHaveBeenCalled()
+  await act(async () => fireEvent.click(button))
+  await act(async () => fireEvent.click(button))
+  expect(mocks.confirm).toHaveBeenCalledTimes(3)
+  expect(clearDefault).toHaveBeenCalledTimes(2)
+})

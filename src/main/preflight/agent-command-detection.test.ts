@@ -15,7 +15,7 @@ const { detectInstallDirs, guestMounts } = vi.hoisted(() => {
   }
 })
 
-vi.mock('../../shared/local-agent-install-dir-detection', () => ({
+vi.mock('../../shared/agent-launch/installation/local-agent-install-dir-detection', () => ({
   detectCommandsInInstallDirs: detectInstallDirs
 }))
 vi.mock('../pty/environment/windows-environment-path', () => ({

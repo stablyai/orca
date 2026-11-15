@@ -11,7 +11,7 @@ import {
   type UseQueryOptions,
   type UseQueryResult
 } from '@tanstack/react-query'
-import type { RuntimeClientEventStreamMessage } from '../../../src/shared/runtime-client-events'
+import type { RuntimeClientEventStreamMessage } from '../../../src/shared/remote-runtime/session-graph/runtime-client-events'
 import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import { useHostConnectionInvalidation } from './host-connection-invalidation'
 import { useHostEventRouter } from './host-event-router'
@@ -23,9 +23,6 @@ import {
 } from './host-query-key'
 import { holdsRestoredHostQueryData, type HostQueryPersist } from './host-query-persistence'
 import { hostReadClient } from './host-read-client'
-
-// Exported with the query hooks so the router lands in their page chunk, not a chunk of its own.
-export { useHostEventRouter } from './host-event-router'
 
 export type HostQuery<TInput extends HostQueryParams, TData> = {
   family: string
@@ -141,6 +138,49 @@ export async function readHostQueryLive<TInput extends HostQueryParams, TData>(
   return data
 }
 
+// A cached read through the screen's `read`: reuses a fresh answer and joins a read already out. An answer
+// an event marked stale as it landed predates that change, so it goes to `onStale` (still the newest one) and is
+// read again while `isCurrent` holds: at once after a quiet spell (a write's own event lands mid-read), else
+// `floorMs` after it landed.
+export async function fetchHostQuery<TInput extends HostQueryParams, TData>(
+  queryClient: QueryClient,
+  query: HostQuery<TInput, TData>,
+  host: { hostId: string; client: RpcClient },
+  target: HostQueryTarget,
+  input: TInput,
+  reader: { read: () => Promise<TData>; isCurrent: () => boolean; onStale: (data: TData) => void }
+): Promise<TData> {
+  const { isCurrent } = reader
+  const options = {
+    ...hostQueryOptions(query, host.client, host.hostId, target, input),
+    queryFn: reader.read
+  }
+  const floorMs = query.signal?.floorMs ?? 0
+  const before = queryClient.getQueryState(options.queryKey)
+  let quiet =
+    before?.fetchStatus !== 'fetching' && (before?.dataUpdatedAt ?? 0) + floorMs <= Date.now()
+  let data = await queryClient.fetchQuery(options)
+  for (;;) {
+    const state = queryClient.getQueryState(options.queryKey)
+    // A caller that moved on never shows this answer, so it is not read again.
+    if (!state?.isInvalidated || !isCurrent()) {
+      return data
+    }
+    reader.onStale(data)
+    if (state.fetchStatus === 'idle') {
+      const wait = quiet ? 0 : state.dataUpdatedAt + floorMs - Date.now()
+      quiet = false
+      if (wait > 0) {
+        await new Promise((resolve) => setTimeout(resolve, wait))
+        if (!isCurrent()) {
+          return data
+        }
+      }
+    }
+    data = await queryClient.fetchQuery(options)
+  }
+}
+
 // A read ahead of the user: skipped while the key holds current data, joins a read already out.
 export function prefetchHostQuery<TInput extends HostQueryParams, TData>(
   queryClient: QueryClient,
@@ -156,7 +196,8 @@ export function prefetchHostQuery<TInput extends HostQueryParams, TData>(
 }
 
 // Without a client the observer still reads the cached entry, but never fetches.
-function observerOptions<TInput extends HostQueryParams, TData>(
+// Exported for a screen that reads one query per host through useQueries (native Home); it holds each host's router itself.
+export function hostObserverOptions<TInput extends HostQueryParams, TData>(
   query: HostQuery<TInput, TData>,
   client: RpcClient | null,
   hostId: string,
@@ -168,6 +209,8 @@ function observerOptions<TInput extends HostQueryParams, TData>(
     : {
         queryKey: hostQueryKey(hostId, query.family, target, input),
         queryFn: skipToken,
+        // A family that keeps its answer longer keeps it while no client reads it, too.
+        ...(query.gcTime === undefined ? {} : { gcTime: query.gcTime }),
         meta: { streamBacked: query.streamBacked, signal: query.signal, persist: query.persist }
       }
 }
@@ -180,20 +223,22 @@ export function useHostQuery<TInput extends HostQueryParams, TData>(
   options?: {
     enabled?: boolean
     subscribed?: boolean
-    refetchInterval?: number | false
+    // A function decides from the data each read leaves, so one read's answer can time the next.
+    refetchInterval?: number | false | ((data: TData | undefined) => number | false)
     // Replaces the family's own, e.g. once the host is known to signal every change.
     staleTime?: number
   }
 ): UseQueryResult<TData> {
   const { hostId, client } = host
   const enabled = client !== null && options?.enabled !== false
+  const refetchInterval = options?.refetchInterval
   useHostConnectionInvalidation(hostId, enabled ? client : null)
   // A screen alone on its page has no host list to keep the router; its signalled reads hold one.
   useHostEventRouter(hostId, enabled && query.signal ? client : null)
   // Same options object while nothing changed (target and input count by value), so TanStack's per-render setOptions is a no-op.
   const keyHash = hashKey([target, input])
   const queryOptions = useMemo((): UseQueryOptions<TData, Error, TData, HostQueryKey> => {
-    const observer = observerOptions(query, client, hostId, target, input)
+    const observer = hostObserverOptions(query, client, hostId, target, input)
     // Disable through the observer, not skipToken: observers share the query's options, so a disabled
     // screen's skipToken would leave an enabled one's key with no fetch for invalidation or intervals.
     return enabled ? observer : { ...observer, enabled: false }
@@ -202,7 +247,10 @@ export function useHostQuery<TInput extends HostQueryParams, TData>(
     ...queryOptions,
     ...(options?.staleTime === undefined ? {} : { staleTime: options.staleTime }),
     subscribed: options?.subscribed,
-    refetchInterval: options?.refetchInterval
+    refetchInterval:
+      typeof refetchInterval === 'function'
+        ? (query) => refetchInterval(query.state.data)
+        : refetchInterval
   })
 }
 
@@ -219,7 +267,7 @@ export function useHostQueries<TInput extends HostQueryParams, TData, TCombined>
   useHostEventRouter(hostId, query.signal ? client : null)
   const keyHash = hashKey([target, inputs])
   const queries = useMemo(
-    () => inputs.map((input) => observerOptions(query, client, hostId, target, input)),
+    () => inputs.map((input) => hostObserverOptions(query, client, hostId, target, input)),
     [query, client, hostId, keyHash]
   )
   return useQueries({ queries, combine })

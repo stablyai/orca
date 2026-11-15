@@ -8,14 +8,12 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { z } from 'zod'
-import {
-  RUNTIME_CAPABILITIES,
-  RUNTIME_SOURCE_FENCE_RUNTIME_CAPABILITY
-} from '../../../src/shared/protocol-version'
+import { RUNTIME_CAPABILITIES } from '../../../src/shared/protocol-version'
+import { RUNTIME_SOURCE_FENCE_RUNTIME_CAPABILITY } from '../../../src/shared/remote-runtime/protocol/host-runtime-capabilities'
 import { publishHostDescriptor } from '../../../src/main/runtime/hosts/platform-probe/host-descriptor'
-import type { RuntimeMetadata } from '../../../src/shared/runtime-bootstrap'
-import type { ExpectedRuntimeSource } from '../../../src/shared/runtime-rpc-envelope'
-import { sendRequest } from '../../../src/cli/runtime/transport'
+import type { RuntimeMetadata } from '../../../src/shared/remote-runtime/bootstrap/runtime-bootstrap'
+import type { ExpectedRuntimeSource } from '../../../src/shared/remote-runtime/rpc/runtime-rpc-envelope'
+import { sendRequest } from '../../../src/cli/runtime/connection/transport'
 import {
   importReleaseCheckoutModule,
   materializeReleaseCheckout,

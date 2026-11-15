@@ -1,20 +1,18 @@
+import { linkRecordWrite } from '../../keyed-record-transitions'
 import type {
-  RetainedAgentEntry,
   DropAgentStatusByTabPrefixOptions,
-  DropAgentStatusOptions,
-  DropHibernatedAgentPaneOptions
+  DropAgentStatusOptions
 } from './agent-status-contract'
 import type { AgentStatusSlice } from './agent-status-slice-contract'
 import type { AgentStatusRuntime } from './agent-status-runtime'
 import { buildAgentStatusTabPrefixDropPatch } from './agent-status-drop-reducer'
 import { pruneMigrationUnsupportedEntries } from './agent-status-migration-unsupported-entries'
-import {
-  retainedAgentEntryFromLive,
-  shouldReplaceRetainedWithLive
-} from './agent-status-pane-key-tab-binding'
 import { retireAgentPaneAuthorityAliasesByOwnerTab } from './agent-pane-authority'
-import { agentTurnEndedOnPurpose } from '../../../../../shared/agent-status/lifecycle/agent-main-agent-verdict'
 import { removePaneKeys } from './agent-status-pane-keyed-records'
+import {
+  agentProcessRetirementPatch,
+  isSleepingAgentStatus
+} from './agent-status-process-retirement'
 
 function removeAcknowledgement(
   acknowledgements: Record<string, number>,
@@ -25,23 +23,59 @@ function removeAcknowledgement(
   }
   const next = { ...acknowledgements }
   delete next[paneKey]
-  return next
+  return linkRecordWrite(next, acknowledgements, [paneKey])
 }
 
 export function createAgentStatusDropActions(
   runtime: AgentStatusRuntime
 ): Pick<
   AgentStatusSlice,
-  'dropAgentStatus' | 'dropAgentStatusByTabPrefix' | 'dropHibernatedAgentStatusPane'
+  | 'dropAgentStatus'
+  | 'dropAgentStatusByTabPrefix'
+  | 'dropHibernatedAgentStatusPane'
+  | 'retireAgentStatusProcess'
 > {
-  const { set, freshness } = runtime
+  const { get, set, freshness } = runtime
+  const retireAgentStatusProcess = (paneKey: string, ptyId?: string): void => {
+    if (!isSleepingAgentStatus(get().agentStatusByPaneKey.get(paneKey), ptyId)) {
+      get().removeAgentStatus(paneKey)
+      return
+    }
+    retireSleepingPane(paneKey)
+  }
+  const retireSleepingPane = (paneKey: string): void => {
+    let hadLive = false
+    set((s, changedPaneKeys) => {
+      const row = s.agentStatusByPaneKey.get(paneKey)
+      hadLive = row !== undefined && !isSleepingAgentStatus(row)
+      const agentStatusByPaneKey = hadLive
+        ? removePaneKeys(s.agentStatusByPaneKey, new Set([paneKey]))
+        : s.agentStatusByPaneKey
+      const processRetirement = agentProcessRetirementPatch(s, paneKey)
+      if (!hadLive && !processRetirement.changed) {
+        return s
+      }
+      if (hadLive) {
+        changedPaneKeys.add(paneKey)
+      }
+      // The sleeping pane still owns its read/clear state.
+      return {
+        agentStatusByPaneKey,
+        ...processRetirement.patch,
+        agentStatusEpoch: s.agentStatusEpoch + 1,
+        sortEpoch: s.sortEpoch + 1
+      }
+    })
+    if (hadLive) {
+      freshness.scheduleDeferred()
+    }
+  }
   return {
     dropAgentStatus: (paneKey, opts?: DropAgentStatusOptions) => {
       let liveExisted = false
       set((s, changedPaneKeys) => {
-        const hasLive = paneKey in s.agentStatusByPaneKey
+        const hasLive = s.agentStatusByPaneKey.has(paneKey)
         liveExisted = hasLive
-        const hasRetained = paneKey in s.retainedAgentsByPaneKey
         const migrationUnsupported = pruneMigrationUnsupportedEntries(
           s.migrationUnsupportedByPtyId,
           (entry) => entry.paneKey === paneKey
@@ -64,7 +98,7 @@ export function createAgentStatusDropActions(
         if (hasLaunchConfig) {
           delete nextLaunchConfigs[paneKey]
         }
-        if (!hasLive && !hasRetained && !migrationUnsupported.changed) {
+        if (!hasLive && !migrationUnsupported.changed) {
           const cleanupPatch = {
             ...(nextConversations !== s.agentConversationsByPaneKey
               ? { agentConversationsByPaneKey: nextConversations }
@@ -82,37 +116,22 @@ export function createAgentStatusDropActions(
           }
           return Object.keys(cleanupPatch).length > 0 ? cleanupPatch : s
         }
-        const nextLive = hasLive ? { ...s.agentStatusByPaneKey } : s.agentStatusByPaneKey
+        const nextLive = hasLive
+          ? s.agentStatusByPaneKey.replace([[paneKey, null]])
+          : s.agentStatusByPaneKey
         if (hasLive) {
           changedPaneKeys.add(paneKey)
-          delete nextLive[paneKey]
         }
-        const nextRetained = hasRetained
-          ? { ...s.retainedAgentsByPaneKey }
-          : s.retainedAgentsByPaneKey
-        if (hasRetained) {
-          delete nextRetained[paneKey]
-        }
-        const needsSuppressor = hasLive && !(paneKey in s.retentionSuppressedPaneKeys)
         return {
           agentStatusByPaneKey: nextLive,
           agentConversationsByPaneKey: nextConversations,
           agentLaunchConfigByPaneKey: nextLaunchConfigs,
-          retainedAgentsByPaneKey: nextRetained,
           migrationUnsupportedByPtyId: migrationUnsupported.next,
           ...(nextAck !== s.acknowledgedAgentsByPaneKey
             ? { acknowledgedAgentsByPaneKey: nextAck }
             : {}),
           activityClearedAtByPaneKey: nextClearedAt,
           manuallyUnreadTurnsByPaneKey: nextManualUnread,
-          ...(needsSuppressor
-            ? {
-                retentionSuppressedPaneKeys: {
-                  ...s.retentionSuppressedPaneKeys,
-                  [paneKey]: true
-                }
-              }
-            : {}),
           agentStatusEpoch:
             hasLive || migrationUnsupported.changed ? s.agentStatusEpoch + 1 : s.agentStatusEpoch,
           sortEpoch: hasLive || migrationUnsupported.changed ? s.sortEpoch + 1 : s.sortEpoch
@@ -150,119 +169,7 @@ export function createAgentStatusDropActions(
       }
     },
 
-    dropHibernatedAgentStatusPane: (worktreeId, paneKey, opts?: DropHibernatedAgentPaneOptions) => {
-      let hadLive = false
-      set((s, changedPaneKeys) => {
-        const liveEntry = s.agentStatusByPaneKey[paneKey]
-        const hasLive = liveEntry !== undefined
-        const hasRetained = paneKey in s.retainedAgentsByPaneKey
-        const hasLaunchConfig = paneKey in s.agentLaunchConfigByPaneKey
-        const migrationUnsupported = pruneMigrationUnsupportedEntries(
-          s.migrationUnsupportedByPtyId,
-          (entry) => entry.paneKey === paneKey
-        )
-        const retainedEvidence = new Map<string, RetainedAgentEntry>()
-        for (const retained of opts?.retainedCompletionEvidence ?? []) {
-          if (
-            retained.entry.paneKey === paneKey &&
-            !liveEntry &&
-            shouldReplaceRetainedWithLive(retainedEvidence.get(paneKey), retained)
-          ) {
-            retainedEvidence.set(paneKey, retained)
-          }
-        }
-        if (
-          liveEntry?.state === 'done' &&
-          liveEntry.agentType !== undefined &&
-          !agentTurnEndedOnPurpose(liveEntry)
-        ) {
-          retainedEvidence.set(
-            paneKey,
-            retainedAgentEntryFromLive(s, worktreeId, liveEntry, liveEntry.agentType)
-          )
-        }
-        const keepsCompletionEvidence = retainedEvidence.has(paneKey)
-        const nextAck = !keepsCompletionEvidence
-          ? removeAcknowledgement(s.acknowledgedAgentsByPaneKey, paneKey)
-          : s.acknowledgedAgentsByPaneKey
-        const nextClearedAt = !keepsCompletionEvidence
-          ? removeAcknowledgement(s.activityClearedAtByPaneKey, paneKey)
-          : s.activityClearedAtByPaneKey
-        const nextManualUnread = !keepsCompletionEvidence
-          ? removeAcknowledgement(s.manuallyUnreadTurnsByPaneKey, paneKey)
-          : s.manuallyUnreadTurnsByPaneKey
-        if (
-          !hasLive &&
-          !hasRetained &&
-          !hasLaunchConfig &&
-          !migrationUnsupported.changed &&
-          !keepsCompletionEvidence
-        ) {
-          const cleanupPatch = {
-            ...(nextAck !== s.acknowledgedAgentsByPaneKey
-              ? { acknowledgedAgentsByPaneKey: nextAck }
-              : {}),
-            ...(nextClearedAt !== s.activityClearedAtByPaneKey
-              ? { activityClearedAtByPaneKey: nextClearedAt }
-              : {}),
-            ...(nextManualUnread !== s.manuallyUnreadTurnsByPaneKey
-              ? { manuallyUnreadTurnsByPaneKey: nextManualUnread }
-              : {})
-          }
-          return Object.keys(cleanupPatch).length > 0 ? cleanupPatch : s
-        }
-        hadLive = hasLive
-        const nextLive = hasLive ? { ...s.agentStatusByPaneKey } : s.agentStatusByPaneKey
-        if (hasLive) {
-          changedPaneKeys.add(paneKey)
-          delete nextLive[paneKey]
-        }
-        const nextLaunchConfigs = hasLaunchConfig
-          ? { ...s.agentLaunchConfigByPaneKey }
-          : s.agentLaunchConfigByPaneKey
-        if (hasLaunchConfig) {
-          delete nextLaunchConfigs[paneKey]
-        }
-        const nextRetained =
-          hasRetained || keepsCompletionEvidence
-            ? { ...s.retainedAgentsByPaneKey }
-            : s.retainedAgentsByPaneKey
-        if (hasRetained && !keepsCompletionEvidence) {
-          delete nextRetained[paneKey]
-        }
-        for (const [key, retained] of retainedEvidence) {
-          if (shouldReplaceRetainedWithLive(nextRetained[key], retained)) {
-            nextRetained[key] = retained
-          }
-        }
-        const needsSuppressor =
-          hasLive && !keepsCompletionEvidence && !(paneKey in s.retentionSuppressedPaneKeys)
-        return {
-          agentStatusByPaneKey: nextLive,
-          agentLaunchConfigByPaneKey: nextLaunchConfigs,
-          retainedAgentsByPaneKey: nextRetained,
-          migrationUnsupportedByPtyId: migrationUnsupported.next,
-          ...(nextAck !== s.acknowledgedAgentsByPaneKey
-            ? { acknowledgedAgentsByPaneKey: nextAck }
-            : {}),
-          activityClearedAtByPaneKey: nextClearedAt,
-          manuallyUnreadTurnsByPaneKey: nextManualUnread,
-          ...(needsSuppressor
-            ? {
-                retentionSuppressedPaneKeys: {
-                  ...s.retentionSuppressedPaneKeys,
-                  [paneKey]: true
-                }
-              }
-            : {}),
-          agentStatusEpoch:
-            hasLive || migrationUnsupported.changed ? s.agentStatusEpoch + 1 : s.agentStatusEpoch,
-          sortEpoch: hasLive || migrationUnsupported.changed ? s.sortEpoch + 1 : s.sortEpoch
-        }
-      })
-      if (hadLive) {
-        freshness.scheduleDeferred()
-      }
-    }
+    dropHibernatedAgentStatusPane: (_worktreeId, paneKey) => retireSleepingPane(paneKey),
+    retireAgentStatusProcess
   }
 }

@@ -39,7 +39,10 @@ import {
 import {
   claimAgentSessionAttachmentsInTransaction,
   isAgentSessionAttachmentExpiredError,
-  markUnclaimedUploadForSweep
+  markUnclaimedUploadForSweep,
+  listUploadsBeingSwept,
+  finishUploadSweep,
+  pruneAgentSessionAttachmentClaims
 } from './agent-session-attachment-claims'
 import { agentSessionAttachmentStoreRoot } from './agent-session-attachment-references'
 import { AgentSessionAttachmentStore } from './agent-session-attachment-store'
@@ -79,12 +82,25 @@ afterEach(async () => {
   await rm(stateDirectory, { recursive: true, force: true })
 })
 
-function facts(overrides: Partial<AgentSessionAttachmentSweepFacts> = {}) {
+function facts(
+  overrides: Partial<AgentSessionAttachmentSweepFacts> = {}
+): AgentSessionAttachmentSweepFacts {
   return {
-    database: () => db,
-    write: <T>(run: (db: Database.Database) => T) =>
-      overrides.database?.() === null ? undefined : journal.writeAutocommit(run),
-    recordedSessionIds: () => recorded,
+    listBeingSwept: () => listUploadsBeingSwept(db),
+    markForSweep: (uploadId, now) =>
+      journal.writeAutocommit((connection) =>
+        markUnclaimedUploadForSweep(connection, uploadId, now)
+      ),
+    finishSweep: (uploadId) =>
+      journal.writeAutocommit((connection) => finishUploadSweep(connection, uploadId)),
+    pruneClaims: () => {
+      journal.writeAutocommit((connection) =>
+        pruneAgentSessionAttachmentClaims(connection, {
+          root: store.rootDir,
+          recordedSessionIds: recorded
+        })
+      )
+    },
     ...overrides
   }
 }

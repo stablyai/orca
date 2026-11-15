@@ -1,8 +1,9 @@
+import { readTestHostJournal } from '../../../native-chat/agent-session-journal/journal-observation.test-support'
 // Host-detected startup faults must not be attributed as self-exits without observed CLI exit.
 
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { computeAgentSessionPayloadFingerprint } from '../../../../shared/agent-session/lifecycle/agent-session-mutation-envelope'
-import { hostTestMessage } from '../../../native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-data'
+import { computeAgentSessionPayloadFingerprint } from '../../../../shared/agent-session/lifecycle/operations/agent-session-mutation-envelope'
+import { hostTestMessage } from '../../../native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-data.test-fixture'
 import type { StructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/host/structured-agent-session-host'
 import { waitForStructuredAgentSessionRecovery } from '../structured-agent-session-runtime'
 import {
@@ -51,7 +52,7 @@ async function send(host: StructuredAgentSessionHost, text: string): Promise<str
 }
 
 async function failureRows(host: StructuredAgentSessionHost) {
-  return (await host.journalSnapshot(SESSION)).items.flatMap((item) =>
+  return (await readTestHostJournal(host, SESSION)).items.flatMap((item) =>
     item.body.kind === 'status' && item.body.failure
       ? [{ text: item.body.text, kind: item.body.failure.kind }]
       : []
@@ -59,7 +60,7 @@ async function failureRows(host: StructuredAgentSessionHost) {
 }
 
 async function submission(host: StructuredAgentSessionHost, clientMessageId: string) {
-  return (await host.journalSnapshot(SESSION)).submissions.find(
+  return (await readTestHostJournal(host, SESSION)).submissions.find(
     (entry) => entry.clientMessageId === clientMessageId
   )
 }

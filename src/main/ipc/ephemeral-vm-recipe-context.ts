@@ -1,15 +1,15 @@
 import type { Store } from '../persistence/loading-store/store'
 import { loadHooks } from '../workspace-hooks/hooks'
-import type { EphemeralVmRecipeDoctorResult } from '../../shared/ephemeral-vm-recipes'
-import { listEphemeralVmRuntimes } from '../../shared/ephemeral-vm-runtime-store'
-import type { EphemeralVmRuntimeRecord } from '../../shared/ephemeral-vm-runtimes'
-import { isFolderRepo, isGitRepoKind } from '../../shared/repo-kind'
+import type { EphemeralVmRecipeDoctorResult } from '../../shared/remote-runtime/ephemeral-vm-recipes/ephemeral-vm-recipes'
+import { listEphemeralVmRuntimes } from '../../shared/remote-runtime/ephemeral-vm-store/ephemeral-vm-runtime-store'
+import type { EphemeralVmRuntimeRecord } from '../../shared/remote-runtime/ephemeral-vm-store/ephemeral-vm-runtimes'
+import { isFolderRepo, isGitRepoKind } from '../../shared/repository/repo-kind'
 import type { OrcaVmRecipe } from '../../shared/orca-yaml-hook-types'
 import {
   EphemeralVmFailureError,
   ephemeralVmFailure,
   type EphemeralVmFailure
-} from '../../shared/ephemeral-vm-failure-copy'
+} from '../../shared/remote-runtime/ephemeral-vm-recipes/ephemeral-vm-failure-copy'
 
 export type EphemeralVmRecipeListResult = {
   status: 'ok' | 'error'
@@ -96,19 +96,31 @@ export function getRuntimeRecipeContext(
   runtimeId: string
 ): {
   runtime: EphemeralVmRuntimeRecord
-  repo: Extract<RecipeRepoResult, { ok: true }>
+  repoPath: string
   recipe: OrcaVmRecipe
 } {
   const runtime = listEphemeralVmRuntimes(userDataPath).find((entry) => entry.id === runtimeId)
   if (!runtime) {
     throw new EphemeralVmFailureError(ephemeralVmFailure('runtimeNotFound', { runtimeId }))
   }
-  if (!runtime.repoId) {
-    throw new EphemeralVmFailureError(ephemeralVmFailure('runtimeRepoMissing', { runtimeId }))
-  }
-  const repo = getRecipeRepo(store, runtime.repoId)
-  if (!repo.ok) {
-    throw new EphemeralVmFailureError(repo.failure)
+  const repo = runtime.repoId ? getRecipeRepo(store, runtime.repoId) : null
+  if (!repo?.ok) {
+    // Why: a re-added or removed repo must not strand the VM; the snapshot plus recorded checkout
+    // path are everything destroy needs (stablyai/orca#17293). Only trust the path while it still
+    // holds the same recipe, so a different checkout later placed there can't run its scripts.
+    const fallback = runtime.recipe && runtime.repoPath ? runtime.recipe : null
+    if (fallback && runtime.repoPath) {
+      const sameRecipe = (loadHooks(runtime.repoPath)?.environmentRecipes ?? []).find(
+        (entry) => entry.id === fallback.id && entry.create === fallback.create
+      )
+      if (sameRecipe) {
+        const passEnv = sameRecipe.passEnv ? { passEnv: sameRecipe.passEnv } : {}
+        return { runtime, repoPath: runtime.repoPath, recipe: { ...fallback, ...passEnv } }
+      }
+    }
+    throw new EphemeralVmFailureError(
+      repo ? repo.failure : ephemeralVmFailure('runtimeRepoMissing', { runtimeId })
+    )
   }
   const repoRecipe = (loadHooks(repo.repo.path)?.environmentRecipes ?? []).find(
     (entry) => entry.id === runtime.recipeId
@@ -117,17 +129,21 @@ export function getRuntimeRecipeContext(
   // Snapshots never persist timeoutSeconds, so take the repo's current limits (lifecycle commands stay
   // snapshotted). Only when the repo recipe has the same create command, so a different recipe that
   // later took this id (e.g. a repo recipe shadowing a plugin one) cannot impose its limits.
-  const limits =
-    repoRecipe?.timeoutSeconds && repoRecipe.create === runtime.recipe?.create
+  // passEnv follows the same rule, so suspend/resume/destroy see the environment create saw.
+  const sameCreate = repoRecipe !== undefined && repoRecipe.create === runtime.recipe?.create
+  const fromRepo = {
+    ...(sameCreate && repoRecipe.timeoutSeconds
       ? { timeoutSeconds: repoRecipe.timeoutSeconds }
-      : {}
-  const recipe = runtime.recipe ? { ...runtime.recipe, ...limits } : repoRecipe
+      : {}),
+    ...(sameCreate && repoRecipe.passEnv ? { passEnv: repoRecipe.passEnv } : {})
+  }
+  const recipe = runtime.recipe ? { ...runtime.recipe, ...fromRepo } : repoRecipe
   if (!recipe) {
     throw new EphemeralVmFailureError(
       ephemeralVmFailure('recipeNotFound', { recipeId: runtime.recipeId })
     )
   }
-  return { runtime, repo, recipe }
+  return { runtime, repoPath: repo.repo.path, recipe }
 }
 
 export function resolveRecipeForRepo(

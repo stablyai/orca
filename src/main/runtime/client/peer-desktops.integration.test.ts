@@ -10,14 +10,14 @@ import {
   parsePairingCode
 } from '../../../shared/remote-runtime/pairing/pairing'
 import type { PairingOffer } from '../../../shared/remote-runtime/pairing/mobile-relay-pairing-offer'
-import { sendRemoteRuntimeRequest } from '../../../shared/remote-runtime/remote-runtime-client'
+import { sendRemoteRuntimeRequestOnSocket } from '../../../shared/remote-runtime/requests/remote-runtime-request-socket'
 import {
   ORCAD_DECLARE_CLIENT_METHOD,
   ORCAD_PEER_DESKTOPS_METHOD,
   type OrcadPeerDesktopsResult
-} from '../../../shared/orcad-peer-desktops-contract'
-import { ORCAD_PEER_DESKTOPS_RUNTIME_CAPABILITY } from '../../../shared/orcad-runtime-capabilities'
-import type { RuntimeStatus } from '../../../shared/runtime-session-contracts'
+} from '../../../shared/remote-runtime/orcad-lifecycle/orcad-peer-desktops-contract'
+import { ORCAD_PEER_DESKTOPS_RUNTIME_CAPABILITY } from '../../../shared/remote-runtime/protocol/orcad-runtime-capabilities'
+import type { RuntimeStatus } from '../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import { OrcaRuntimeService } from '../orca-runtime'
 import { OrcaRuntimeRpcServer } from '../rpc/server/runtime-rpc'
 import {
@@ -89,11 +89,17 @@ describe(ORCAD_PEER_DESKTOPS_METHOD, () => {
 
   /** A one-shot socket, as the desktop's Remove uses. */
   function oneShot<T>(offer: PairingOffer, method: string, params?: unknown) {
-    return sendRemoteRuntimeRequest<T>(
+    return sendRemoteRuntimeRequestOnSocket<T>(
       pairedRuntimeConnectionFromOffer(offer),
       method,
       params,
-      5_000
+      5_000,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined
     )
   }
 

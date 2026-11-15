@@ -9,8 +9,8 @@ import {
   assertLocalWslScopeMatchesPayload,
   parseLocalWslSource
 } from './orcad-migration-wsl-source-validation'
-import type { ProjectGroup } from '../project-group-types'
-import type { Repo } from '../repo-types'
+import type { ProjectGroup } from '../project/groups/project-group-types'
+import type { Repo } from '../repository/repo-types'
 import {
   MAX_ORCAD_MIGRATION_FOLDER_WORKSPACES,
   MAX_ORCAD_MIGRATION_REPOSITORIES,
@@ -25,7 +25,7 @@ import {
 import {
   assertOrcadMigrationDormantStateReferences,
   parseOrcadMigrationDormantState
-} from '../orcad-migration-dormant-state-validation'
+} from './orcad-migration-dormant-state-validation'
 
 export { MAX_ORCAD_MIGRATION_FOLDER_WORKSPACES, MAX_ORCAD_MIGRATION_REPOSITORIES }
 export const ORCAD_MIGRATION_MANIFEST_VERSION = 1 as const

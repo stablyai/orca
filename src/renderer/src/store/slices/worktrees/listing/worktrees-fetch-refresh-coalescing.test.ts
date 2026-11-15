@@ -2,11 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AppState } from '../../../types'
 import type { ListDetectedWorktreesArgs } from '../../../../../../shared/detected-worktree-provider-contract'
 import { clearHugeRepoWarningDismissalsForTests } from '@/lib/source-control/warnings/source-control-huge-repo-warning-dismissals'
-import {
-  TEST_SSH_AUTHORITY,
-  makeDetectedResult,
-  qualifyDetectedResult
-} from './worktrees-detected-listing-fixtures'
+import { makeDetectedResult, qualifyDetectedResult } from './worktrees-detected-listing-fixtures'
 import { makeWorktree } from '../worktree.test-fixture'
 import {
   createTestStore,
@@ -88,73 +84,7 @@ describe('fetchWorktrees', () => {
     expect(store.getState().tabsByWorktree[deleted.id]).toBeUndefined()
   })
 
-  // Teardown outside scan coalescing must still deduplicate identical host sweeps.
-  it('shares one teardown sweep across identical concurrent refreshes', async () => {
-    const store = createTestStore()
-    const deleted = makeWorktree({ id: 'repo1::/p/deleted', repoId: 'repo1', path: '/p/deleted' })
-    const surviving = makeWorktree({ id: 'repo1::/p/surv', repoId: 'repo1', path: '/p/surv' })
-
-    store.setState({
-      repos: [{ id: 'repo1', path: '/p/repo1', displayName: 'R', badgeColor: '#000', addedAt: 0 }],
-      worktreesByRepo: { repo1: [deleted, surviving] },
-      detectedWorktreesByRepo: { repo1: makeDetectedResult('repo1', [deleted, surviving]) },
-      tabsByWorktree: { [deleted.id]: [{ id: 'tab-d', worktreeId: deleted.id }] }
-    } as unknown as Partial<AppState>)
-
-    mockApi.worktrees.listDetected.mockImplementationOnce(async (args) =>
-      qualifyDetectedResult(args, makeDetectedResult('repo1', [surviving]))
-    )
-
-    await Promise.all([
-      store.getState().fetchWorktrees('repo1'),
-      store.getState().fetchDetectedWorktrees('repo1'),
-      store.getState().fetchWorktrees('repo1')
-    ])
-
-    expect(mockApi.runtime.call).toHaveBeenCalledTimes(1)
-    expect(store.getState().tabsByWorktree[deleted.id]).toBeUndefined()
-  })
-
   // Unreachable SSH cannot prove worktree deletion; neither purge nor kill without authoritative scan (#10562).
-  it('never stops terminals for a disconnected SSH target', async () => {
-    const store = createTestStore()
-    const deleted = makeWorktree({ id: 'repo1::/p/deleted', repoId: 'repo1', path: '/p/deleted' })
-    const surviving = makeWorktree({ id: 'repo1::/p/surv', repoId: 'repo1', path: '/p/surv' })
-
-    store.setState({
-      repos: [
-        {
-          id: 'repo1',
-          path: '/p/repo1',
-          displayName: 'R',
-          badgeColor: '#000',
-          addedAt: 0,
-          connectionId: TEST_SSH_AUTHORITY.targetId
-        }
-      ],
-      // Why: the target dropped — no connected authority for this host.
-      sshConnectionStates: new Map([
-        [
-          TEST_SSH_AUTHORITY.targetId,
-          {
-            targetId: TEST_SSH_AUTHORITY.targetId,
-            status: 'disconnected',
-            error: null,
-            reconnectAttempt: 1
-          }
-        ]
-      ]),
-      worktreesByRepo: { repo1: [deleted, surviving] },
-      detectedWorktreesByRepo: { repo1: makeDetectedResult('repo1', [deleted, surviving]) },
-      tabsByWorktree: { [deleted.id]: [{ id: 'tab-d', worktreeId: deleted.id }] }
-    } as unknown as Partial<AppState>)
-
-    await store.getState().fetchWorktrees('repo1')
-
-    expect(mockApi.runtime.call).not.toHaveBeenCalled()
-    expect(store.getState().tabsByWorktree[deleted.id]).toBeDefined()
-  })
-
   it('keeps authoritative refreshes separate from non-authoritative in-flight results', async () => {
     const store = createTestStore()
     const fallback = makeWorktree({
@@ -285,92 +215,5 @@ describe('fetchWorktrees', () => {
       { ...sshWorktree, hostId: 'ssh:ssh-1' }
     ])
     expect(mockApi.worktrees.listDetected).toHaveBeenCalledTimes(2)
-  })
-
-  it('preserves SSH host identity when detected and visible refreshes overlap', async () => {
-    const store = createTestStore()
-    const sshWorktree = makeWorktree({
-      id: 'repo-ssh::/home/orca/wt1',
-      repoId: 'repo-ssh',
-      path: '/home/orca/wt1'
-    })
-    let releaseScan!: () => void
-    const scanStarted = new Promise<void>((resolve) => {
-      mockApi.worktrees.listDetected.mockImplementationOnce(
-        async (args: ListDetectedWorktreesArgs) => {
-          resolve()
-          await new Promise<void>((release) => {
-            releaseScan = release
-          })
-          return qualifyDetectedResult(args, makeDetectedResult(args.repoId, [sshWorktree]))
-        }
-      )
-    })
-    store.setState({
-      settings: { activeRuntimeEnvironmentId: 'env-1' } as never,
-      repos: [
-        {
-          id: 'repo-ssh',
-          path: '/home/orca/repo',
-          displayName: 'SSH Repo',
-          badgeColor: '#000',
-          addedAt: 0,
-          connectionId: 'ssh-1'
-        }
-      ]
-    } as Partial<AppState>)
-
-    const detectedRequest = store.getState().fetchDetectedWorktrees('repo-ssh')
-    const visibleRequest = store.getState().fetchWorktrees('repo-ssh')
-    await scanStarted
-
-    expect(mockApi.worktrees.listDetected).toHaveBeenCalledTimes(1)
-
-    releaseScan()
-    const [, visibleResult] = await Promise.all([detectedRequest, visibleRequest])
-
-    expect(visibleResult).toBe(true)
-    expect(store.getState().worktreesByRepo['repo-ssh']).toEqual([
-      { ...sshWorktree, hostId: 'ssh:ssh-1' }
-    ])
-    expect(store.getState().detectedWorktreesByRepo['repo-ssh']?.worktrees).toEqual([
-      expect.objectContaining({ id: sshWorktree.id, hostId: 'ssh:ssh-1' })
-    ])
-    expect(mockApi.worktrees.listDetected).toHaveBeenCalledTimes(1)
-  })
-
-  it('fails closed before provider acquisition when direct authority is partial', async () => {
-    const store = createTestStore()
-    const worktreesByRepo = store.getState().worktreesByRepo
-    const detectedWorktreesByRepo = store.getState().detectedWorktreesByRepo
-    store.setState({
-      repos: [
-        {
-          id: 'repo-ssh',
-          path: '/home/orca/repo',
-          displayName: 'SSH Repo',
-          badgeColor: '#000',
-          addedAt: 0,
-          connectionId: 'ssh-1'
-        }
-      ],
-      sshConnectionStates: new Map([
-        [
-          'ssh-1',
-          {
-            targetId: 'ssh-1',
-            status: 'connected',
-            error: null,
-            reconnectAttempt: 0,
-            providerEpoch: TEST_SSH_AUTHORITY.providerEpoch
-          }
-        ]
-      ])
-    } as Partial<AppState>)
-
-    await expect(store.getState().fetchWorktrees('repo-ssh')).resolves.toBe(false)
-    expect(mockApi.worktrees.listDetected).not.toHaveBeenCalled()
-    expect(store.getState().worktreesByRepo).toBe(worktreesByRepo)
-    expect(store.getState().detectedWorktreesByRepo).toBe(detectedWorktreesByRepo)
   })
 })

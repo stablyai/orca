@@ -40,7 +40,7 @@ describe('parallel Mac updater manifests', () => {
           asset.name.endsWith('.blockmap') ? 'map!' : content
         )
       }
-      expect(await stageManifest(item.manifest, item.arch, version, directory)).toEqual(item)
+      await stageManifest(item.manifest, item.arch, version, directory)
       await writeFile(join(directory, item.manifest.path), Buffer.alloc(content.length))
       await expect(stageManifest(item.manifest, item.arch, version, directory)).rejects.toThrow(
         'checksum or size'

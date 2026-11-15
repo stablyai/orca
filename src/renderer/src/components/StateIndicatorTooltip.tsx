@@ -1,7 +1,7 @@
 import type { ComponentProps, ReactElement } from 'react'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 
-export const STATE_INDICATOR_TOOLTIP_DELAY_MS = 200
+export const STATE_INDICATOR_TOOLTIP_DELAY_MS = 600
 export type StateIndicatorTooltipSide = ComponentProps<typeof TooltipContent>['side']
 
 export function StateIndicatorTooltip({

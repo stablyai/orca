@@ -1,6 +1,6 @@
 import { useEffect } from 'react'
 import { translate } from '@/i18n/i18n'
-import { isIntentionalAppRestartInProgress } from '@/lib/updater-beforeunload'
+import { isIntentionalAppRestartInProgress } from '@/app-shell/updates/updater-beforeunload'
 import type { ConfirmationDialogOptions } from '../confirmation-dialog-context'
 import { registerWindowCloseGuard } from '../window-close-request-coordinator'
 

@@ -1,6 +1,6 @@
 /** Share minted-session parsing across main/renderer hydration and memory attribution; divergent copies caused REMOTE mislabels. */
 
-import { parseWorkspaceKey } from '../../../workspace-scope'
+import { parseWorkspaceKey } from '../../../workspace/identity/workspace-scope'
 
 export const PTY_SESSION_ID_SEPARATOR = '@@'
 export const WORKTREE_ID_SEPARATOR = '::'
@@ -27,6 +27,11 @@ export function parsePtySessionId(sessionId: string): { worktreeId: string | nul
 export function isPtySessionIdOwnedByWorktree(sessionId: string, worktreeId: string): boolean {
   const separatorIdx = sessionId.lastIndexOf(PTY_SESSION_ID_SEPARATOR)
   return separatorIdx === -1 || sessionId.slice(0, separatorIdx) === worktreeId
+}
+
+/** Bare counter ids from the in-process local provider; a start never reattaches one by id alone, only through a pane main already binds it to. */
+export function isLocalCounterPtyId(sessionId: string): boolean {
+  return /^\d+$/.test(sessionId)
 }
 
 const SERVE_PTY_SESSION_TAG = 'serve-'

@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { makeTuiIdleRuntime } from './tui-idle-wait-test-harness'
-import type { RuntimeSyncWindowGraph } from '../../../../shared/runtime-session-contracts'
+import type { RuntimeSyncWindowGraph } from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 
@@ -61,7 +61,7 @@ async function makeRuntime(launchAgent?: TuiAgent) {
     getForegroundProcess: async () => 'codex'
   })
   runtime.attachWindow(1)
-  runtime.syncWindowGraph(1, E2E_GRAPH)
+  await runtime.syncWindowGraph(1, E2E_GRAPH)
   if (launchAgent) {
     registerBoundPty(runtime, E2E_PTY_ID, E2E_WORKTREE_ID, null, {
       tabId: 'tab-1',

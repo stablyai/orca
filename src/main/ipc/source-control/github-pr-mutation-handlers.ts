@@ -1,5 +1,5 @@
 import { ipcMain } from 'electron'
-import type { GitHubOwnerRepo } from '../../../shared/github/pull-request-types'
+import type { GitHubRepositoryIdentity as GitHubOwnerRepo } from '../../../shared/github/repositories/repository-identity'
 import type { GitHubPullRequestStateUpdate } from '../../../shared/issue-mutation-types'
 import { markPRReadyForReview } from '../../github/client/update/pr-ready'
 import { mergePR } from '../../github/client/merge/merge-pr'

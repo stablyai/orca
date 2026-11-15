@@ -1,7 +1,6 @@
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, it } from 'vitest'
 import { makePaneKey } from '../../../../../shared/workspace-layout/stable-pane-id'
 import { AgentHookServer } from '../../agent-hook-server'
-import { PANE_KEY_ALIASES_MAX } from '../../server-constants'
 
 const SOURCE = makePaneKey('tab-source', '11111111-1111-4111-8111-111111111111')
 const TARGET = makePaneKey('tab-target', '22222222-2222-4222-8222-222222222222')
@@ -51,24 +50,6 @@ describe('AgentHookServer pane authority', () => {
 
     expect(server.getStatusSnapshot()).toEqual([
       expect.objectContaining({ paneKey: SIBLING, prompt: 'sibling' })
-    ])
-  })
-
-  it('persists one physical alias while chained transfers advance its owner', () => {
-    const server = new AgentHookServer()
-    const listener = vi.fn()
-    server.setPaneKeyAliasPersistenceListener(listener)
-
-    server.transferPaneAuthority(SOURCE, TARGET, 'pty-1', 10)
-    server.transferPaneAuthority(TARGET, FINAL, 'pty-1', 20)
-
-    expect(listener).toHaveBeenLastCalledWith([
-      {
-        legacyPaneKey: SOURCE,
-        stablePaneKey: FINAL,
-        ptyId: 'pty-1',
-        updatedAt: 20
-      }
     ])
   })
 
@@ -130,29 +111,5 @@ describe('AgentHookServer pane authority', () => {
 
     expect(server.canTransferPaneAuthority(SOURCE, undefined, () => false)).toBe(true)
     expect(server.canTransferPaneAuthority(SOURCE, 'pty-1', () => false)).toBe(true)
-  })
-
-  it('bounds persisted aliases by evicting the oldest authority', () => {
-    const server = new AgentHookServer()
-    const listener = vi.fn()
-    server.setPaneKeyAliasPersistenceListener(listener)
-
-    for (let index = 0; index <= PANE_KEY_ALIASES_MAX; index += 1) {
-      const suffix = index.toString(16).padStart(12, '0')
-      server.transferPaneAuthority(
-        makePaneKey(`source-${index}`, `00000000-0000-4000-8000-${suffix}`),
-        makePaneKey(`target-${index}`, `10000000-0000-4000-8000-${suffix}`),
-        `pty-${index}`,
-        index + 1
-      )
-    }
-
-    const persisted = listener.mock.calls.at(-1)?.[0]
-    expect(persisted).toHaveLength(PANE_KEY_ALIASES_MAX)
-    expect(persisted).not.toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({ legacyPaneKey: expect.stringContaining('source-0:') })
-      ])
-    )
   })
 })

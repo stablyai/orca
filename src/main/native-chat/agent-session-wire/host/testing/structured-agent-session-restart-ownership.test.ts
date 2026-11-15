@@ -1,12 +1,12 @@
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../../../shared/agent-session/journal/agent-session-journal-types'
 import { AgentSessionRecoveryCapsule } from '../../../../runtime/agent-session/records/agent-session-recovery-capsule'
 import { afterEach, expect, it, vi } from 'vitest'
-import { attach, hostTestState } from './structured-agent-session-host-test-harness'
+import { attach, hostTestState } from './structured-agent-session-host.test-fixture'
 import {
   HOST_TEST_NOW as NOW,
   HOST_TEST_SESSION as SESSION,
   HOST_TEST_THREAD as THREAD
-} from './structured-agent-session-host-test-data'
+} from './structured-agent-session-host-test-data.test-fixture'
 
 afterEach(() => vi.useRealTimers())
 

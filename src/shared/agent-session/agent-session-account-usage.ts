@@ -1,7 +1,7 @@
 import type { AgentSessionRecord } from './lifecycle/agent-session-record'
 import { isNativeLocalLocation } from '../execution-host'
-import type { ProviderRateLimits } from '../rate-limit-types'
-import type { CodexResetCreditExpectedScope } from '../codex-reset-credit-scope'
+import type { ProviderRateLimits } from '../agent-usage/rate-limits/rate-limit-types'
+import type { CodexResetCreditExpectedScope } from '../agent-accounts/codex/codex-reset-credit-scope'
 
 /** Which account the chat's pinned home holds; the client owns the copy. */
 export type AgentSessionUsageAccount =

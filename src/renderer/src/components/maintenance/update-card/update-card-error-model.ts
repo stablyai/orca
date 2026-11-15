@@ -9,7 +9,7 @@ import {
 import { getReleaseNotesUrlForVersion } from '../../../../../shared/release-channel'
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
-import { updaterMessageText } from '@/lib/updater-message-copy'
+import { updaterMessageText } from '@/app-shell/updates/updater-message-copy'
 import { isHttp2ProtocolError } from './update-card-visibility'
 
 export function buildUpdateCardErrorModel(

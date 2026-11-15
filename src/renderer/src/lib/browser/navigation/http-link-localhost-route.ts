@@ -3,7 +3,10 @@ import {
   parseLoopbackUrlWithPort,
   type LocalhostWorktreeLabelRoute
 } from '../../../../../shared/localhost-worktree-labels'
-import type { WorkspacePort, WorkspacePortScanResult } from '../../../../../shared/workspace-ports'
+import type {
+  WorkspacePort,
+  WorkspacePortScanResult
+} from '../../../../../shared/workspace/ports/workspace-ports'
 
 export type LocalhostLinkRepo = {
   id: string

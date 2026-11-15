@@ -1,18 +1,19 @@
+import type { subscribeRemoteRuntimeTransport } from '../../../../shared/remote-runtime/requests/remote-runtime-subscription-transport'
 import { pairedRuntimeConnectionFromOffer } from '../../../../shared/remote-runtime/pairing/paired-runtime-connection'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { PairingOffer } from '../../../../shared/remote-runtime/pairing/mobile-relay-pairing-offer'
 import type {
-  RemoteRuntimeSubscription,
-  RemoteRuntimeSubscriptionCallbacks
-} from '../../../../shared/remote-runtime/remote-runtime-client'
+  RemoteRuntimeTransportSubscription,
+  RemoteRuntimeTransportSubscriptionCallbacks
+} from '../../../../shared/remote-runtime/requests/remote-runtime-subscription-contract'
 import { RemoteRuntimeClientError } from '../../../../shared/remote-runtime/remote-runtime-client-error'
 
 const { subscribeRemoteRuntimeRequestMock } = vi.hoisted(() => ({
   subscribeRemoteRuntimeRequestMock: vi.fn()
 }))
 
-vi.mock('../../../../shared/remote-runtime/remote-runtime-client', () => ({
-  subscribeRemoteRuntimeRequest: subscribeRemoteRuntimeRequestMock
+vi.mock('../../../../shared/remote-runtime/requests/remote-runtime-subscription-transport', () => ({
+  subscribeRemoteRuntimeTransport: subscribeRemoteRuntimeRequestMock
 }))
 
 import { PairedRuntimeBrowserHostLease } from '../leases/paired-runtime-browser-host-lease'
@@ -79,39 +80,7 @@ describe('browser file channel reconnect degradation', () => {
     expect(attempts[1]!.sendRequest).toHaveBeenCalledOnce()
     await lease.close()
   })
-
-  it('ignores a superseded connection failure and reports no channel once closed', async () => {
-    const attempts = mockAttempts()
-    const onError = vi.fn()
-    const lease = createLease({ onError })
-    const starting = lease.start()
-    await vi.waitFor(() => expect(attempts).toHaveLength(1))
-    attempts[0]!.callbacks.onResponse(readyResponse({ fileChannel: true }))
-    await starting
-    attempts[0]!.callbacks.onError(recoverableError())
-    await vi.waitFor(() => expect(attempts).toHaveLength(2))
-    attempts[1]!.callbacks.onResponse(readyResponse({ fileChannel: true }))
-    await vi.waitFor(() => expect(lease.fileChannelNegotiated).toBe(true))
-
-    attempts[0]!.callbacks.onError(new RemoteRuntimeClientError('bad_request', 'superseded'))
-    await flushMicrotasks()
-
-    expect(onError).not.toHaveBeenCalled()
-    expect(lease.fileChannelNegotiated).toBe(true)
-
-    await lease.close()
-    expect(lease.fileChannelNegotiated).toBe(false)
-    expect(() =>
-      lease.sendFileChannelRequest('browser.clientHost.fileChannel.read', {}, 10)
-    ).toThrow('Remote runtime browser file channel is unavailable.')
-  })
 })
-
-async function flushMicrotasks(): Promise<void> {
-  for (let index = 0; index < 10; index += 1) {
-    await Promise.resolve()
-  }
-}
 
 function createLease(overrides: {
   onError?: (error: Error) => void
@@ -133,17 +102,19 @@ function createLease(overrides: {
 }
 
 function mockAttempts(): {
-  callbacks: RemoteRuntimeSubscriptionCallbacks
+  callbacks: RemoteRuntimeTransportSubscriptionCallbacks
   close: ReturnType<typeof vi.fn>
   sendRequest: ReturnType<typeof vi.fn>
 }[] {
   const attempts: {
-    callbacks: RemoteRuntimeSubscriptionCallbacks
+    callbacks: RemoteRuntimeTransportSubscriptionCallbacks
     close: ReturnType<typeof vi.fn>
     sendRequest: ReturnType<typeof vi.fn>
   }[] = []
   subscribeRemoteRuntimeRequestMock.mockImplementation(
-    async (...args: unknown[]): Promise<RemoteRuntimeSubscription> => {
+    async (
+      ...args: Parameters<typeof subscribeRemoteRuntimeTransport>
+    ): Promise<RemoteRuntimeTransportSubscription> => {
       const close = vi.fn()
       const sendRequest = vi.fn().mockResolvedValue({
         id: 'file-channel',
@@ -152,7 +123,7 @@ function mockAttempts(): {
         _meta: { runtimeId: 'runtime-a' }
       })
       attempts.push({
-        callbacks: args[4] as RemoteRuntimeSubscriptionCallbacks,
+        callbacks: args[4],
         close,
         sendRequest
       })

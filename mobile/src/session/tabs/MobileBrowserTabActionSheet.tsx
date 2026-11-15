@@ -2,8 +2,8 @@ import { ChevronLeft, ChevronRight, Copy, RefreshCw } from 'lucide-react-native'
 import { useClipboardWriter } from '../../platform/clipboard'
 import { triggerError } from '../../platform/haptics'
 import type { MobileSessionTab } from './mobile-session-tabs'
-import { ActionSheetModal, type ActionSheetAction } from '../../components/ActionSheetModal'
-import { getMobileSessionTabTitle } from '../../terminal/session/mobile-terminal-tab-agent'
+import { ActionSheetModal, type ActionSheetAction } from '../../components/sheets/ActionSheetModal'
+import { getMobileSessionTabTitle } from './mobile-terminal-tab-agent'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 
 type BrowserTab = Extract<MobileSessionTab, { type: 'browser' }>

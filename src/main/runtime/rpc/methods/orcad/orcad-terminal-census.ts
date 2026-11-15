@@ -5,7 +5,7 @@ import {
   ORCAD_TERMINAL_CENSUS_METHOD,
   OrcadTerminalCensusParamsSchema,
   type OrcadTerminalCensus
-} from '../../../../../shared/orcad-terminal-census'
+} from '../../../../../shared/remote-runtime/orcad-lifecycle/orcad-terminal-census'
 
 const SPAWN_SETTLE_MS = 10_000
 const UNVERIFIABLE: OrcadTerminalCensus = {
@@ -40,7 +40,8 @@ async function countTerminals(
   runtime: Pick<OrcaRuntimeService, 'releaseFinishedAutomationRunTerminals'>
 ): Promise<OrcadTerminalCensus> {
   // Import lazily: daemon modules install xterm's global window and must not contaminate every dispatcher process.
-  const { collectOrcadTerminalCensus } = await import('../../../../orcad/orcad-terminal-census')
+  const { collectOrcadTerminalCensus } =
+    await import('../../../../orcad/diagnostics/orcad-terminal-census')
   if (!params.releaseFinishedAutomationTerminals) {
     return collectOrcadTerminalCensus(params.activatedAt)
   }

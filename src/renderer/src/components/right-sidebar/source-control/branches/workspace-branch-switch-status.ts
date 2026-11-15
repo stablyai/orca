@@ -1,10 +1,10 @@
-import { useAppStore } from '@/store'
+import { useAppStore } from '@/store/index'
 import type { AppState } from '@/store/types'
 import {
   resolveWorktreeGitCopyNow,
   worktreeCopyPushTarget,
   worktreeGitCopyHostId
-} from '@/lib/worktree-git-copy'
+} from '@/lib/workspace/ownership/worktree-git-copy'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
 import {
   clearLandedBranchSwitchError,

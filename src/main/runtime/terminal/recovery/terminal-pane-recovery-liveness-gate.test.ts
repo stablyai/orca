@@ -10,8 +10,8 @@ import '../../orca-runtime-tests/runtime-test-module-registration.spec'
 import { makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import { OrcaRuntimeService } from '../../orca-runtime'
 import { registerBoundPty } from '../../orca-runtime-tests/bind-first-pane.test-fixture'
-import type { RuntimeTerminalCreate } from '../../../../shared/runtime-terminal-create-contract'
-import type { RuntimeTerminalResolvePane } from '../../../../shared/runtime-terminal-contracts'
+import type { RuntimeTerminalCreate } from '../../../../shared/terminal/runtime/runtime-terminal-create-contract'
+import type { RuntimeTerminalResolvePane } from '../../../../shared/terminal/runtime/runtime-terminal-contracts'
 
 // Keep these gates in the CI-discovered .test.ts lane; sibling orca-runtime-tests/*.spec.ts fragments are not standalone tests.
 

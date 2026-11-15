@@ -1,4 +1,16 @@
 import { expectAtomicRewindCompletion } from './structured-agent-session-rewind-replay.test-fixture'
+import { expectUsageLimitCompletionRollback } from './structured-agent-session-rewind-usage-limit.test-fixture'
+import {
+  readTestHostJournal,
+  readTestJournalSnapshot
+} from '../../../agent-session-journal/journal-observation.test-support'
+import { AgentSessionJournal } from '../../../agent-session-journal/journal-store'
+import { recoverStructuredRewind } from '../../rewind/structured-rewind-recovery'
+import { persistRewindRecord } from '../../rewind/structured-rewind-record'
+import {
+  projectForkMarker,
+  readForkMarker
+} from '../../publication/history/agent-session-fork-marker'
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../../../shared/agent-session/journal/agent-session-journal-types'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -8,10 +20,13 @@ import {
   agentJournalItemKey,
   agentJournalSubmissionKey
 } from '../../../../../shared/agent-session/journal/agent-session-journal-item-key'
-import { computeAgentSessionPayloadFingerprint } from '../../../../../shared/agent-session/lifecycle/agent-session-mutation-envelope'
-import { expectUsageLimitCompletionRollback } from './structured-agent-session-rewind-usage-limit.test-fixture'
+import { computeAgentSessionPayloadFingerprint } from '../../../../../shared/agent-session/lifecycle/operations/agent-session-mutation-envelope'
 import type { AgentSessionRecordStore } from '../../../../runtime/agent-session/records/agent-session-record-store'
-import { openTestAgentSessionRecordStore } from '../../../../runtime/agent-session/records/agent-session-record-store-test-harness'
+import {
+  openTestAgentSessionRecordStore,
+  openTestAgentSessionDatabase,
+  closeTestAgentSessionRecordStores
+} from '../../../../runtime/agent-session/records/agent-session-record-store-test-harness'
 import { StructuredAgentSessionHost } from '../structured-agent-session-host'
 import type {
   StructuredAgentSessionAdapter,
@@ -27,15 +42,11 @@ import {
   hostTestMessage,
   hostTestOperationId,
   resetHostTestOperationIds
-} from './structured-agent-session-host-test-data'
-import {
-  closeTestJournalHostDatabases,
-  openTestJournalHostDatabase
-} from '../../../agent-session-journal/store-lifecycle/journal-host-database-test-support'
+} from './structured-agent-session-host-test-data.test-fixture'
 import { createStructuredAgentSessionLogger } from '../structured-agent-session-logger'
-import { codexProviderHandle } from '../../../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
-import { claudeAndCodexDeclared } from '../../providers/testing/structured-agent-session-adapter-router-test-support'
-import { startsWhenPublished } from './structured-agent-session-instant-start.test-support'
+import { codexProviderHandle } from '../../../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle-encoding'
+import { claudeAndCodexDeclared } from '../../providers/testing/structured-agent-session-adapter-router.test-fixture'
+import { startsWhenPublished } from './structured-agent-session-instant-start.test-fixture'
 
 const caller = { callerKey: 'desktop' }
 let clock = HOST_TEST_NOW
@@ -111,7 +122,7 @@ beforeEach(async () => {
     logger: createStructuredAgentSessionLogger(),
     store,
     adapter,
-    journalDatabase: openTestJournalHostDatabase(directory),
+    journalDatabase: await openTestAgentSessionDatabase(directory),
     claimKeyId: 'key',
     now: () => clock,
     probeOwner: async () => ({ outcome: 'exit-observed' })
@@ -119,7 +130,7 @@ beforeEach(async () => {
 })
 afterEach(async () => {
   await host.flushAllStreamedEvents()
-  await closeTestJournalHostDatabases()
+  await closeTestAgentSessionRecordStores()
   await rm(directory, { recursive: true, force: true })
 })
 
@@ -169,8 +180,11 @@ async function seed(acceptedSubmissions = false) {
       ).toMatchObject({ ok: true })
       await vi.waitFor(async () =>
         expect(
-          (await host.journalSnapshot(HOST_TEST_SESSION)).submissions.find(
-            (entry) => entry.clientMessageId === clientOperationId
+          (
+            await host
+              .collaboratorsForTests()
+              .sessions.get(HOST_TEST_SESSION)!
+              .journal.reads.submission(clientOperationId)
           )?.dispatchState
         ).toBe('accepted')
       )
@@ -185,7 +199,10 @@ async function seed(acceptedSubmissions = false) {
   return selectedItemId
 }
 async function params(itemId: string, epoch?: string) {
-  const expectedEpoch = epoch ?? (await host.journalSnapshot(HOST_TEST_SESSION)).cursor.epoch
+  const expectedEpoch =
+    epoch ??
+    (await host.collaboratorsForTests().sessions.get(HOST_TEST_SESSION)!.journal.reads.cursor())
+      .epoch
   return {
     itemId,
     expectedEpoch,
@@ -239,4 +256,131 @@ it('persists the live native predecessor before revert and retains it after a lo
     beforeTurnId: 'drop',
     keptTurnId: 'kept'
   })
+})
+
+it('refuses inherited rewind and rewinds the first own prompt to the fork point', async () => {
+  const inherited = await seed()
+  const ancestry = {
+    sessionId: 'original-chat',
+    itemId: 'codex:original-thread:tip:0',
+    childBoundary: {
+      kind: 'item' as const,
+      itemId: agentJournalItemKey({
+        provider: 'codex',
+        threadId: HOST_TEST_THREAD,
+        turnId: 'tip',
+        ordinal: 0
+      })
+    }
+  }
+  await store.commitOperationReceipt(
+    store.conversationReceipts.forkBoundary(HOST_TEST_SESSION, ancestry)
+  )
+  expect(await host.rewind(caller, await params(inherited))).toMatchObject({
+    ok: false,
+    refusal: {
+      code: 'agent_session_operation_invalid',
+      details: { rewindReason: 'invalid-target' }
+    }
+  })
+  sink.appendItem(
+    { provider: 'codex', threadId: HOST_TEST_THREAD, turnId: 'own', ordinal: 0 },
+    { ...hostTestMessage('first own prompt'), role: 'user' },
+    { turnScope: AGENT_JOURNAL_THREAD_SCOPE }
+  )
+  await host.flushStreamedEvents(HOST_TEST_SESSION)
+  adapter.prepareRewind = async () => ({
+    ok: true,
+    revert: { threadId: HOST_TEST_THREAD, beforeTurnId: 'own', keptTurnId: 'tip' }
+  })
+  const own = agentJournalItemKey({
+    provider: 'codex',
+    threadId: HOST_TEST_THREAD,
+    turnId: 'own',
+    ordinal: 0
+  })
+  expect(await host.rewind(caller, await params(own))).toMatchObject({ ok: true })
+  expect(store.getRecord(HOST_TEST_SESSION)?.forkedFrom).toEqual(ancestry)
+  expect(
+    (await readTestHostJournal(host, HOST_TEST_SESSION)).items
+      .filter((item) => item.body.kind === 'message')
+      .map((item) => item.body.kind === 'message' && item.body.blocks)
+  ).toEqual([
+    [{ type: 'text', text: '0' }],
+    [{ type: 'text', text: '1' }],
+    [{ type: 'text', text: '2' }]
+  ])
+})
+
+it('completes an inherited rewind saved by the PR1 build with an atomic surviving divider after restart', async () => {
+  const target = await seed()
+  const fence = store.getRecord(HOST_TEST_SESSION)!.lease.runtimeFence
+  const journal = host.collaboratorsForTests().sessions.get(HOST_TEST_SESSION)!.journal
+  await store.commitOperationReceipt(
+    store.conversationReceipts.forkBoundary(HOST_TEST_SESSION, {
+      sessionId: 'original-chat',
+      itemId: 'codex:original-thread:tip:0',
+      childBoundary: { kind: 'item', itemId: 'codex:019fd532-7c11-7a90-b6de-4e1a2c3d5f60:tip:0' }
+    })
+  )
+  await persistRewindRecord(store, HOST_TEST_SESSION, fence, {
+    operationId: hostTestOperationId(),
+    callerKey: 'desktop',
+    itemId: target,
+    expectedEpoch: journal.cursor().epoch,
+    phase: 'provider-succeeded',
+    providerRevert: {
+      threadId: '019fd532-7c11-7a90-b6de-4e1a2c3d5f60',
+      beforeTurnId: 'drop',
+      keptTurnId: 'kept'
+    }
+  })
+  await journal.close()
+  store = await openTestAgentSessionRecordStore(directory)
+  let reopened = await AgentSessionJournal.open({
+    identity: {
+      sessionId: HOST_TEST_SESSION,
+      workspaceId: 'workspace-1',
+      hostId: 'local',
+      agent: 'codex',
+      providerHandle: codexProviderHandle('019fd532-7c11-7a90-b6de-4e1a2c3d5f60')
+    },
+    database: await openTestAgentSessionDatabase(directory)
+  })
+  const replace = reopened.write.bind(reopened)
+  vi.spyOn(reopened, 'write').mockImplementationOnce(async (...args) => {
+    await replace(...args)
+    throw new Error('crash after atomic completion')
+  })
+  await expect(
+    recoverStructuredRewind(
+      { store, logger: createStructuredAgentSessionLogger() },
+      HOST_TEST_SESSION,
+      reopened,
+      fence
+    )
+  ).rejects.toThrow('crash after atomic completion')
+  await reopened.close()
+  store = await openTestAgentSessionRecordStore(directory)
+  reopened = await AgentSessionJournal.open({
+    identity: reopened.identity,
+    database: await openTestAgentSessionDatabase(directory)
+  })
+  await recoverStructuredRewind(
+    { store, logger: createStructuredAgentSessionLogger() },
+    HOST_TEST_SESSION,
+    reopened,
+    fence
+  )
+  expect(store.getRecord(HOST_TEST_SESSION)?.forkedFrom?.childBoundary).toEqual({
+    kind: 'item',
+    itemId: 'codex:019fd532-7c11-7a90-b6de-4e1a2c3d5f60:kept:0'
+  })
+  expect(
+    projectForkMarker(
+      await readTestJournalSnapshot(reopened),
+      readForkMarker(store, HOST_TEST_SESSION)
+    ).items.map((item) => item.itemId)
+  ).toEqual(['codex:019fd532-7c11-7a90-b6de-4e1a2c3d5f60:kept:0', 'orca:forked-from'])
+  await reopened.close()
 })

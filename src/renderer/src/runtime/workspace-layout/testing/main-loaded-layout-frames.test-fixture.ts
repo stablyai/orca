@@ -2,18 +2,18 @@
 
 import type { ExecutionHostId } from '../../../../../shared/execution-host'
 import type { WorkspaceSessionState } from '../../../../../shared/workspace-session/workspace-session-state-types'
-import { loadWorkspaceLayoutWithoutReport } from '../../../../../shared/workspace-layout/workspace-layout-load'
-import { nameBasedLoadContext } from '../../../../../shared/workspace-layout/workspace-layout-minted-ids'
+import { loadWorkspaceLayoutWithoutReport } from '../../../../../shared/workspace-layout/persistence/workspace-layout-load'
+import { nameBasedLoadContext } from '../../../../../shared/workspace-layout/persistence/workspace-layout-minted-ids'
 import type { WorkspaceLayoutModel } from '../../../../../shared/workspace-layout/workspace-layout-model'
 import {
   publishWorkspaceLayout,
   type PublishedWorkspaceLayout
-} from '../../../../../shared/workspace-layout/workspace-layout-published'
+} from '../../../../../shared/workspace-layout/published-layout/workspace-layout-published'
 import {
   diffPublishedLayouts,
   indexPublishedLayout
-} from '../../../../../shared/workspace-layout/workspace-layout-records'
-import type { WorkspaceLayoutChangeFrame } from '../../../../../shared/workspace-layout/workspace-layout-stream-frames'
+} from '../../../../../shared/workspace-layout/published-layout/workspace-layout-records'
+import type { WorkspaceLayoutChangeFrame } from '../../../../../shared/workspace-layout/published-layout/workspace-layout-stream-frames'
 
 /** The model main loads from one stored partition, with the ids it mints at load. */
 export function loadMainLayoutModel(

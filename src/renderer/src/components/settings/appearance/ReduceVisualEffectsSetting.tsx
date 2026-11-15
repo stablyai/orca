@@ -14,7 +14,7 @@ export function ReduceVisualEffectsSetting({
   updateSettings: (updates: Partial<GlobalSettings>) => void
 }): React.JSX.Element {
   const t = useTranslate()
-  const title = t('settings.appearance.reduceVisualEffects.title', 'Reduce Visual Effects')
+  const title = t('settings.appearance.reduceVisualEffects.08c854149e', 'Reduce visual effects')
   return (
     <SearchableSetting
       title={title}

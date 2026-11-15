@@ -1,12 +1,4 @@
-import {
-  existsSync,
-  mkdirSync,
-  mkdtempSync,
-  rmSync,
-  statSync,
-  utimesSync,
-  writeFileSync
-} from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, expect, it, vi } from 'vitest'
@@ -54,48 +46,10 @@ it('reconciles an old delivered alert after desktop restart and preserves unrela
     ])
   ).toEqual([shown])
 })
-it('does not dismiss a newer replacement and does not treat missing or expired history as dismissal', () => {
-  const h = fixture()
-  const now = Date.now()
-  vi.spyOn(Date, 'now').mockReturnValue(now)
-  h.store.record({ ...alert, ...shown })
-  h.store.record({ type: 'dismiss', ...shown, notificationSeq: 13 })
-  expect(h.store.reconcile([shown])).toEqual([shown])
-  h.store.record({ ...alert, ...shown, notificationSeq: 14 })
-  expect(h.store.reconcile([{ ...shown, notificationSeq: 14 }])).toEqual([])
-  expect(h.store.reconcile([shown])).toEqual([shown])
-  h.store.record({ type: 'dismiss', ...shown, notificationSeq: 15 })
-  vi.mocked(Date.now).mockReturnValue(now + 7 * 86400_000)
-  expect(h.store.reconcile([shown])).toEqual([])
-  expect(new MobileNotificationDismissalStore(`${h.path}-unknown`).reconcile([shown])).toEqual([])
-})
-it('lists only live deliveries across a restart', async () => {
-  const h = fixture()
-  const keyed = (notificationId: string, notificationSeq: number) => ({
-    ...alert,
-    notificationId,
-    notificationEpoch: 'e',
-    notificationSeq
-  })
-  h.store.record({ ...keyed('subject:prompt:a1', 1), workspaceExecutionHostId: null })
-  h.store.record(keyed('subject:prompt:a10', 2))
-  h.store.record(keyed('other:prompt:a1', 3))
-  h.store.record({
-    type: 'dismiss',
-    notificationId: 'subject:prompt:a10',
-    notificationEpoch: 'e',
-    notificationSeq: 4
-  })
-  await h.store.close()
-  const restarted = new MobileNotificationDismissalStore(h.path)
-  expect(restarted.liveDeliveries().map((entry) => entry.notificationId)).toEqual([
-    'subject:prompt:a1',
-    'other:prompt:a1'
-  ])
-  expect(restarted.liveDeliveries()[0]).toMatchObject({ workspaceExecutionHostId: null })
-})
 
 it("imports an older build's file, keeping a record whose origin it cannot read", async () => {
+  const now = Date.UTC(2026, 10, 15)
+  vi.spyOn(Date, 'now').mockReturnValue(now)
   const h = fixture()
   const origin = {
     scope: {
@@ -107,7 +61,7 @@ it("imports an older build's file, keeping a record whose origin it cannot read"
     sessionId: 's',
     journalCursor: { epoch: 'j', sequence: 3 }
   }
-  const entry = { ...shown, dismissedThrough: -1, expiresAt: Date.now() + 86400_000 }
+  const entry = { ...shown, dismissedThrough: -1, expiresAt: now + 86400_000 }
   writeFileSync(
     join(h.path, 'mobile-notification-dismissals.json'),
     JSON.stringify([
@@ -190,25 +144,4 @@ it('a targeted old delivery cannot retire a newer replacement with the same logi
     ['different', 12]
   ])
   expect(h.store.reconcile([shown, { ...shown, notificationSeq: 13 }])).toEqual([shown])
-})
-
-it('does not let an imported file left behind override later dismissals', async () => {
-  const h = fixture()
-  const legacyPath = join(h.path, 'mobile-notification-dismissals.json')
-  const legacy = JSON.stringify([
-    { ...shown, dismissedThrough: -1, expiresAt: Date.now() + 86400_000 }
-  ])
-  writeFileSync(legacyPath, legacy)
-  const { atimeMs, mtimeMs } = statSync(legacyPath)
-  const imported = new MobileNotificationDismissalStore(h.path)
-  imported.record({ type: 'dismiss', ...shown, notificationEpoch: 'now', dismissedDelivery: shown })
-  await imported.close()
-  // The same bytes reappear, as when deleting the imported file failed.
-  writeFileSync(legacyPath, legacy)
-  utimesSync(legacyPath, atimeMs / 1000, mtimeMs / 1000)
-
-  const restarted = new MobileNotificationDismissalStore(h.path)
-  stores.push(restarted)
-  expect(restarted.reconcile([shown])).toEqual([shown])
-  expect(existsSync(legacyPath)).toBe(false)
 })

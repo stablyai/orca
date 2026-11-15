@@ -3,6 +3,10 @@ import type { WorkspaceSessionState } from '../../../../shared/workspace-session
 import { retireTerminalSurfaceFromPersistence } from '../../terminal/surface/mobile-session-terminal-persistence-retirement'
 import type { OrchestrationDb } from '../db/orchestration-db'
 import {
+  reportWorkerTurnStop,
+  type WorkerTurnStopReportDeps
+} from '../workers/turn-stops/worker-turn-stop-report'
+import {
   planLegacyWorkerTerminalRecovery,
   type LegacyWorkerTerminalRecoveryPlan
 } from './release/orchestration-legacy-worker-terminal-recovery'
@@ -15,10 +19,17 @@ import { cloneWorkspaceSessionState } from '../../../persistence/restoring-sessi
 import { rollbackWorkspaceSessionAfterFailedAsyncWrite } from '../../../persistence/restoring-sessions/workspace-session-write-rollback'
 import { worktreeIdsEqual } from '../../../../shared/worktree/id'
 
+/** Where a running worker a recovery pass finds gone is reported, with its terminal's last lines. */
+export type LostWorkerReport = {
+  reportDeps: WorkerTurnStopReportDeps
+  lastOutput: (ptyId: string) => Promise<string | undefined>
+}
+
 export class RuntimeLegacyWorkerTerminalRecoveryPersistence {
   constructor(
     private readonly getStore: () => RuntimeStore | null,
-    private readonly getDb: () => OrchestrationDb,
+    // A profile without a database has no workers to recover.
+    private readonly getDb: () => OrchestrationDb | null,
     private readonly getHostId: (worktreeId: string) => ExecutionHostId | null
   ) {}
 
@@ -108,12 +119,48 @@ export class RuntimeLegacyWorkerTerminalRecoveryPersistence {
     }
   }
 
-  reconcileMissing(candidate: LegacyWorkerRecoveryCandidate): boolean {
+  reconcileMissing(
+    candidate: LegacyWorkerRecoveryCandidate,
+    lostWorkers: LostWorkerReport | null = null
+  ): boolean {
     try {
-      this.getDb().reconcileMissingWorkerTerminal(
+      const db = this.getDb()
+      if (!db) {
+        return false
+      }
+      const before = db.getDispatchContextById(candidate.dispatchId)
+      const worker = db.reconcileMissingWorkerTerminal(
         candidate.dispatchId,
         'The assigned worker terminal is no longer live after orchestration recovery.'
       )
+      const settled = db.getDispatchContextById(candidate.dispatchId)?.status
+      // Only a running worker this pass failed; a pending stop ends as asked, and settled rows were told before.
+      if (
+        lostWorkers &&
+        before &&
+        ['pending', 'dispatched'].includes(before.status) &&
+        worker.state === 'abandoned' &&
+        (settled === 'failed' || settled === 'circuit_broken')
+      ) {
+        // Its last output is read from saved history, so the report follows the settlement.
+        void lostWorkers
+          .lastOutput(candidate.ptyId)
+          .catch(() => undefined)
+          .then((lastOutput) =>
+            reportWorkerTurnStop(
+              db,
+              { kind: 'local', dispatch: before },
+              {
+                from: candidate.terminalHandle,
+                reason: 'lost',
+                cause: 'its terminal was gone when Orca restarted',
+                lastOutput,
+                settled
+              },
+              lostWorkers.reportDeps
+            )
+          )
+      }
       return true
     } catch (error) {
       console.warn('[orchestration] failed to reconcile missing worker terminal', {
@@ -126,10 +173,13 @@ export class RuntimeLegacyWorkerTerminalRecoveryPersistence {
 
   private getPlan(dispatchIds?: readonly string[]): LegacyWorkerTerminalRecoveryPlan | null {
     try {
+      const db = this.getDb()
       return planLegacyWorkerTerminalRecovery(
-        dispatchIds
-          ? this.getDb().listLegacyWorkerTerminalRecoveryRows(dispatchIds)
-          : this.getDb().listLegacyWorkerTerminalRecoveryRows()
+        !db
+          ? []
+          : dispatchIds
+            ? db.listLegacyWorkerTerminalRecoveryRows(dispatchIds)
+            : db.listLegacyWorkerTerminalRecoveryRows()
       )
     } catch (error) {
       console.warn('[orchestration] failed to plan legacy worker terminal recovery', error)

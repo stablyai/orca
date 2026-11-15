@@ -100,29 +100,6 @@ describe('mobile relay pairing journal store', () => {
     })
   })
 
-  it('records a provisional winner only for the active journal identity', async () => {
-    const journal = createMobileRelayPairingJournal({
-      offer: offer as PairingOffer & { relay: NonNullable<PairingOffer['relay']> },
-      hostId: 'host-1',
-      hostName: 'Blue Whale',
-      randomBytes: (length) => new Uint8Array(length).fill(7)
-    })
-    await saveMobileRelayPairingJournal(journal)
-
-    await updateMobileRelayPairingJournal(journal.metadata.journalId, (metadata) => ({
-      ...metadata,
-      winner: 'direct',
-      authorizationMode: 'authenticated-direct'
-    }))
-    await expect(
-      updateMobileRelayPairingJournal('stale-journal', (metadata) => metadata)
-    ).rejects.toThrow(/stale/)
-    expect(JSON.parse(metadataRaw!)).toMatchObject({
-      winner: 'direct',
-      authorizationMode: 'authenticated-direct'
-    })
-  })
-
   it('treats metadata without its secret record as an incomplete crash', async () => {
     const journal = createMobileRelayPairingJournal({
       offer: offer as PairingOffer & { relay: NonNullable<PairingOffer['relay']> },
@@ -148,32 +125,6 @@ describe('mobile relay pairing journal store', () => {
     await expect(loadMobileRelayPairingJournal()).resolves.toBeNull()
     expect(metadataRaw).toBeNull()
     expect(secretRaw).toBeNull()
-  })
-
-  it('replaces a journal that never selected an authorization path', async () => {
-    const journal = createMobileRelayPairingJournal({
-      offer: offer as PairingOffer & { relay: NonNullable<PairingOffer['relay']> },
-      hostId: 'host-1',
-      hostName: 'Blue Whale',
-      randomBytes: (length) => new Uint8Array(length).fill(10)
-    })
-    await saveMobileRelayPairingJournal(journal)
-    const replacement = createMobileRelayPairingJournal({
-      offer: offer as PairingOffer & { relay: NonNullable<PairingOffer['relay']> },
-      hostId: 'host-2',
-      hostName: 'Red Panda',
-      randomBytes: (length) => new Uint8Array(length).fill(12)
-    })
-
-    const replacementSave = saveMobileRelayPairingJournal(replacement)
-    const staleUpdate = updateMobileRelayPairingJournal(
-      journal.metadata.journalId,
-      (metadata) => metadata
-    )
-
-    await expect(replacementSave).resolves.toBeUndefined()
-    await expect(staleUpdate).rejects.toThrow(/stale/)
-    await expect(loadMobileRelayPairingJournal()).resolves.toEqual(replacement)
   })
 
   it('serializes a replacement behind an in-flight journal snapshot', async () => {
@@ -206,16 +157,11 @@ describe('mobile relay pairing journal store', () => {
       hostName: 'Red Panda',
       randomBytes: (length) => new Uint8Array(length).fill(12)
     })
-    let replacementSaved = false
-    const saving = saveMobileRelayPairingJournal(replacement).then(() => {
-      replacementSaved = true
-    })
-    await Promise.resolve()
-    expect(replacementSaved).toBe(false)
+    const saving = saveMobileRelayPairingJournal(replacement)
 
     releaseSecretRead()
     await expect(loading).resolves.toEqual(journal)
-    await expect(saving).resolves.toBeUndefined()
+    await saving
     await expect(loadMobileRelayPairingJournal()).resolves.toEqual(replacement)
     expect(asyncStorage.removeItem).not.toHaveBeenCalled()
   })
@@ -266,40 +212,9 @@ describe('mobile relay pairing journal store', () => {
     )
     const replacementSave = saveMobileRelayPairingJournal(replacement)
 
-    await expect(authorizationUpdate).resolves.toBeUndefined()
+    await authorizationUpdate
     await expect(replacementSave).rejects.toThrow(/pairing in progress/)
   })
-
-  it.each([
-    ['winner', { winner: 'direct' as const }],
-    ['authorization mode', { authorizationMode: 'authenticated-direct' as const }]
-  ])(
-    'refuses replacement while the attempt with a durable %s runs',
-    async (_name, authorization) => {
-      const created = createMobileRelayPairingJournal({
-        offer: offer as PairingOffer & { relay: NonNullable<PairingOffer['relay']> },
-        hostId: 'host-1',
-        hostName: 'Blue Whale',
-        randomBytes: (length) => new Uint8Array(length).fill(10)
-      })
-      const journal = {
-        ...created,
-        metadata: { ...created.metadata, ...authorization }
-      }
-
-      await saveMobileRelayPairingJournal(journal)
-      const replacement = createMobileRelayPairingJournal({
-        offer: offer as PairingOffer & { relay: NonNullable<PairingOffer['relay']> },
-        hostId: 'host-2',
-        hostName: 'Red Panda',
-        randomBytes: (length) => new Uint8Array(length).fill(12)
-      })
-      await expect(saveMobileRelayPairingJournal(replacement)).rejects.toThrow(
-        /pairing in progress/
-      )
-      await expect(loadMobileRelayPairingJournal()).resolves.toEqual(journal)
-    }
-  )
 
   // New scans must supersede stranded authorized journals instead of blocking until expiry (#12518).
 

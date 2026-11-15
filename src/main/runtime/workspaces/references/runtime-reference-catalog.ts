@@ -2,7 +2,7 @@ import type { RuntimeStore } from '../../construction/runtime-store-contract'
 import type {
   ReferenceWorkspace,
   RuntimeReferenceListResult
-} from '../../../../shared/runtime-reference-contracts'
+} from '../../../../shared/workspace-attachments/runtime-reference-contracts'
 import type { Worktree } from '../../../../shared/worktree/types'
 import { mergeWorktree } from '../../../ipc/worktree-metadata-merge'
 import { readAllWorktreeMetaForHost } from '../../../persistence/host-qualified-worktree-meta'
@@ -21,7 +21,7 @@ import {
   isWslUncPathForCallerLinuxPath,
   isWslUncPathForLinuxMountedPath
 } from '../../../../shared/cross-platform-path'
-import { parseWslUncPath } from '../../../../shared/wsl-paths'
+import { parseWslUncPath } from '../../../../shared/file-access/wsl-paths'
 import { branchSelectorMatches, runtimePathsEqual } from '../catalog/runtime-worktree-path-identity'
 
 export function listReferenceWorkspaces(

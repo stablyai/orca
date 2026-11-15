@@ -11,7 +11,10 @@ export function getCursorStatusBarToggleSearchEntry(): {
 } {
   return {
     id: 'cursor',
-    title: translate('auto.components.settings.appearance.search.cursor.title', 'Cursor Usage'),
+    title: translate(
+      'auto.components.settings.appearance.search.cursor.34f2b8c539',
+      'Cursor usage'
+    ),
     description: translate(
       'auto.components.settings.appearance.search.cursor.description',
       'Show Cursor plan usage from the Cursor sign-in on this computer.'

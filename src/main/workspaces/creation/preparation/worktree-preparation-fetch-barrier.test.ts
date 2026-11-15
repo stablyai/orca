@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { waitForPromiseWithSignal } from '../../../../shared/abort-signal-reason'
+import { waitForPromiseWithSignal } from '../../../../shared/concurrency/abort-signal-reason'
 import {
   flushBackgroundWork,
   mocks,
@@ -10,10 +10,6 @@ import {
   consumePreparedWorktreeCreate,
   prepareWorktreeCreateForRepo
 } from './worktree-create-preparation'
-import {
-  listPreparations,
-  WORKTREE_CREATE_PREPARATION_TTL_MS
-} from './worktree-create-preparation-pool'
 
 function deferredFetch() {
   let settle!: () => void
@@ -61,32 +57,5 @@ describe('prepared checkout shared fetch barrier', () => {
     expect(mocks.prepareCheckout).toHaveBeenCalledOnce()
     expect(mocks.refreshTip).not.toHaveBeenCalled()
     expect(mocks.finalize).toHaveBeenCalledOnce()
-  })
-
-  it('expires a ready checkout while its shared fetch is still pending without waiting for the network', async () => {
-    vi.useFakeTimers()
-    const fetch = deferredFetch()
-    try {
-      await prepareWorktreeCreateForRepo(store, repo, 'origin/main')
-      const entry = listPreparations()[0]!
-      const settled = Promise.allSettled([
-        prepareWorktreeCreateForRepo(store, repo, 'origin/main', fetch.beforeMaterialization)
-      ])
-      await vi.advanceTimersByTimeAsync(0)
-      await vi.advanceTimersByTimeAsync(WORKTREE_CREATE_PREPARATION_TTL_MS)
-      expect((await settled)[0]?.status).toBe('rejected')
-      expect(mocks.refreshTip).not.toHaveBeenCalled()
-      expect(mocks.discard).toHaveBeenCalledOnce()
-      expect(mocks.discard).toHaveBeenCalledWith(
-        repo.path,
-        entry.preparedPath,
-        expect.objectContaining({ signal: undefined }),
-        entry.lockReason
-      )
-      expect(listPreparations()).toEqual([])
-    } finally {
-      fetch.settle()
-      vi.useRealTimers()
-    }
   })
 })

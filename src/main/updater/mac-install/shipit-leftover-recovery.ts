@@ -2,12 +2,15 @@
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { mkdir, open, readFile, readdir, rm, unlink, writeFile } from 'node:fs/promises'
-import { isProcessAlive, macCoordinationRoot } from '../../../shared/serve-bundle-coordination'
+import {
+  isProcessAlive,
+  macCoordinationRoot
+} from '../../../shared/remote-runtime/serve-supervisor/serve-bundle-coordination'
 import {
   isShipItRunningForBundleId,
   listProcessCommands
-} from '../../../shared/shipit-process-listing'
-import { LOCAL_BUILD_COMPATIBILITY_CONTRACT } from '../../../shared/local-build-compatibility-contract'
+} from '../../../shared/desktop-distribution/macos/shipit-process-listing'
+import { LOCAL_BUILD_COMPATIBILITY_CONTRACT } from '../../../shared/remote-runtime/orcad-distribution/local-build-compatibility-contract'
 import { recordUpdaterLifecycle } from '../updater-lifecycle-diagnostics'
 
 export type ShipItStagingDeps = {

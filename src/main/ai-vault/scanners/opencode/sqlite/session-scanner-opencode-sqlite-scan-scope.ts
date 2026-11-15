@@ -1,5 +1,5 @@
 import { AsyncLocalStorage } from 'node:async_hooks'
-import { throwIfSignalAborted } from '../../../../../shared/abort-signal-reason'
+import { throwIfSignalAborted } from '../../../../../shared/concurrency/abort-signal-reason'
 import type { WorkerThreadRequestOwner } from '../../../../worker-threads/worker-thread-request-queue'
 
 export const OPENCODE_SQLITE_SCAN_BUDGET_MS = 45_000

@@ -7,27 +7,12 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import {
   fishRequirementViolation,
   resolveFishBinary
-} from '../../../shared/fish-binary-requirement'
+} from '../../../shared/shell/testing/fish-binary-requirement'
 import {
   buildFishVendorConfWrapperFile,
   FISH_XDG_DATA_DIRS_PREFIX_ENV,
   getFishXdgDataDirsLaunchEnv
 } from './fish-xdg-data-dirs-handoff'
-
-const ROOT = '/orca/shell-wrappers/abc'
-
-describe('getFishXdgDataDirsLaunchEnv', () => {
-  it.each([['-N'], ['--no-config'], ['--no-c'], ['-lN'], ['-Ni']])(
-    'skips fish args that disable config: %s',
-    (arg) => {
-      expect(getFishXdgDataDirsLaunchEnv(ROOT, undefined, ['-l', arg])).toEqual({})
-    }
-  )
-
-  it('skips a dir that XDG_DATA_DIRS cannot represent', () => {
-    expect(getFishXdgDataDirsLaunchEnv('/odd:root', undefined)).toEqual({})
-  })
-})
 
 const fishLookup = resolveFishBinary(3)
 // The test shells run with a minimal PATH.

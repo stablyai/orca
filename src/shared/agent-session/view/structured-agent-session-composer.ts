@@ -1,4 +1,4 @@
-import { agentSessionInteractionCommand } from '../options/agent-session-interaction-mode'
+import { agentSessionInteractionCommand } from '../options/permissions/agent-session-interaction-mode'
 import { getTextDrivenNativeChatCommands } from '../../native-chat/native-chat-agent-profiles'
 import type { AgentType } from '../../agent-status/contracts/agent-status-types'
 import type {
@@ -8,7 +8,7 @@ import type {
 import {
   sessionSlashCommandSuggestions,
   type SlashCommandSuggestion
-} from '../../native-chat/input/native-chat-slash-commands'
+} from '../../native-chat/input/commands/native-chat-slash-commands'
 import type { AgentSessionConversationCommand } from '../agent-session-conversation-command'
 import type { AgentSessionThreadGoalChange } from '../agent-session-thread-goal-wire'
 import type { AgentSessionSlashCommand } from '../agent-session-wire'
@@ -43,7 +43,8 @@ export type StructuredAgentSessionComposerOptions = {
   compactInstructions?: boolean
   runConversationCommand?: (
     command: AgentSessionConversationCommand,
-    instructions?: string
+    instructions?: string,
+    onSent?: () => void
   ) => Promise<Omit<StructuredAgentSessionCommandOutcome, 'handled'>>
   /** Without host goal support, /goal remains agent-handled text. */
   changeThreadGoal?: (change: AgentSessionThreadGoalChange) => Promise<boolean>
@@ -244,7 +245,9 @@ function unavailable(name: string): StructuredAgentSessionCommandOutcome {
 
 export async function dispatchStructuredAgentSessionComposerCommand(
   text: string,
-  controller: StructuredAgentSessionComposerOptions
+  controller: StructuredAgentSessionComposerOptions,
+  /** A conversation command left for the host, so the composer can release its draft. */
+  onSent?: () => void
 ): Promise<StructuredAgentSessionCommandOutcome> {
   const interaction = agentSessionInteractionCommand(controller.agent ?? '', text)
   if (interaction !== null && controller.snapshot.some((entry) => entry.id === 'interactionMode')) {
@@ -299,8 +302,8 @@ export async function dispatchStructuredAgentSessionComposerCommand(
     return {
       handled: true,
       ...(await (command.argument
-        ? controller.runConversationCommand(command.name, command.argument)
-        : controller.runConversationCommand(command.name)))
+        ? controller.runConversationCommand(command.name, command.argument, onSent)
+        : controller.runConversationCommand(command.name, undefined, onSent)))
     }
   }
   if (command.name !== 'model' && command.name !== 'effort') {
