@@ -44,6 +44,11 @@ export function nativeChatHostOutageKind(
 /** Use host connection state; the chat stream cannot establish host availability. */
 export function useNativeChatHostOutage(target: RuntimeClientTarget): NativeChatHostOutage | null {
   const environmentId = target.kind === 'environment' ? target.environmentId : null
+  const contactEpoch = useAppStore((s) =>
+    environmentId === null
+      ? 0
+      : (s.runtimeStatusByEnvironmentId.get(environmentId)?.hostContactEpoch ?? 0)
+  )
   const kind = useAppStore((s) =>
     environmentId === null
       ? null
@@ -69,12 +74,16 @@ export function useNativeChatHostOutage(target: RuntimeClientTarget): NativeChat
   // Reset earned outage visibility when this outage or host changes.
   const [earned, setEarned] = useState<{
     environmentId: string
+    contactEpoch: number
     kind: NativeChatHostOutageKind
   } | null>(null)
-  const earnedHere = earned?.environmentId === environmentId ? earned.kind : null
+  const earnedHere =
+    earned?.environmentId === environmentId && earned.contactEpoch === contactEpoch
+      ? earned.kind
+      : null
   // Latch offline until recovery so retry probes cannot flicker the notice.
   if (kind === 'offline' && environmentId !== null && earnedHere !== 'offline') {
-    setEarned({ environmentId, kind: 'offline' })
+    setEarned({ environmentId, contactEpoch, kind: 'offline' })
   }
   const inOutage = kind !== null
   useNativeChatPaneLifetimeEffect(
@@ -84,16 +93,20 @@ export function useNativeChatHostOutage(target: RuntimeClientTarget): NativeChat
       }
       const timer = setTimeout(() => {
         setEarned((current) =>
-          current?.environmentId === environmentId
+          current?.environmentId === environmentId && current.contactEpoch === contactEpoch
             ? current
-            : { environmentId, kind: 'reconnecting' }
+            : { environmentId, contactEpoch, kind: 'reconnecting' }
         )
       }, NATIVE_CHAT_HOST_RECONNECTING_GRACE_MS)
       return () => {
         clearTimeout(timer)
-        setEarned((current) => (current?.environmentId === environmentId ? null : current))
+        setEarned((current) =>
+          current?.environmentId === environmentId && current.contactEpoch === contactEpoch
+            ? null
+            : current
+        )
       }
-    }, [environmentId, inOutage])
+    }, [environmentId, inOutage, contactEpoch])
   )
   const shown = kind === 'offline' ? 'offline' : kind === null ? null : earnedHere
   return useMemo(() => {
