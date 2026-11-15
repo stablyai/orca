@@ -19,10 +19,7 @@ import {
   translateWslOutputPath,
   translateWslOutputPaths
 } from '../../command-runner/host-routing/wsl-path-translation'
-import { acquireGitAdmission } from '../../command-runner/admission/git-subprocess-admission'
 import { routeLocalGitOptions } from '../../command-runner/host-routing/local-git-runtime-route'
-import { pendingWslDriveCheckoutGitRouting } from '../../command-runner/host-routing/wsl-drive-checkout-git-routing'
-import { pendingWslDirectGitReadEnvironment } from '../../command-runner/host-routing/git-command-resolution'
 import type { GitExecOptions } from '../../command-runner/git-exec-options'
 import { runWithGitReadCacheInvalidation } from '../../source-control/git-read-cache-invalidation'
 import type { AddWorktreeOptions, GitWorktreeExecOptions } from '../worktree-operation-options'
@@ -117,73 +114,85 @@ export async function getLocalBaseRefUpdateSuggestionForWorktreeCreate(
     : undefined
 }
 
-function localBaseBranchGit(
-  options: GitWorktreeExecOptions,
-  held?: Pick<GitExecOptions, 'admissionExempt' | 'observeChildTermination'>
-): LocalBaseBranchGit {
-  // The runner may route a Windows drive repo into WSL; its Linux output paths need the same distro.
-  const routedFor = (cwd: string) => routeLocalGitOptions({ cwd, wslDistro: options.wslDistro })
+function localBaseBranchGit(options: GitWorktreeExecOptions): LocalBaseBranchGit {
   // Shared refreshes cannot use any individual create's cancellation signal or timeout.
   const execOptions = (cwd: string): GitExecOptions => ({
     cwd,
     ...(options.wslDistro ? { wslDistro: options.wslDistro } : {}),
-    ...(options.admissionTier ? { admissionTier: options.admissionTier } : {}),
-    ...held
+    ...(options.admissionTier ? { admissionTier: options.admissionTier } : {})
   })
+  // The runner may route a Windows drive repo into WSL; its Linux output paths need the same distro.
+  const routed = (cwd: string) => routeLocalGitOptions({ cwd, wslDistro: options.wslDistro })
+  const listWorktrees = async (repoPath: string) => {
+    const { stdout } = await withRepositoryGitCause(
+      repoPath,
+      options,
+      { family: 'catalog', reason: 'creation-base-refresh', cache: 'uncached' },
+      () => gitExecFileAsync(['worktree', 'list', '--porcelain'], execOptions(repoPath))
+    )
+    return parseWorktreeList(translateWslOutputPaths(stdout, repoPath, routed(repoPath)))
+  }
+  const commonDirOf = async (repoPath: string) => {
+    const { stdout } = await gitExecFileAsync(
+      ['rev-parse', '--git-common-dir'],
+      execOptions(repoPath)
+    )
+    // Only strip the line ending: a path may end in spaces.
+    const commonDir = stdout.replace(/\r?\n$/, '')
+    return isAbsolute(commonDir)
+      ? translateWslOutputPath(commonDir, repoPath, routed(repoPath))
+      : join(repoPath, commonDir)
+  }
   return {
     exec: (args, cwd) => gitExecFileAsync(args, execOptions(cwd)),
-    listWorktrees: async (repoPath) => {
-      const { stdout } = await withRepositoryGitCause(
-        repoPath,
-        options,
-        { family: 'catalog', reason: 'creation-base-refresh', cache: 'uncached' },
-        () => gitExecFileAsync(['worktree', 'list', '--porcelain'], execOptions(repoPath))
-      )
-      return parseWorktreeList(translateWslOutputPaths(stdout, repoPath, routedFor(repoPath)))
-    },
-    listReservedBranches: async (repoPath) => {
-      const { stdout } = await gitExecFileAsync(
-        ['rev-parse', '--git-common-dir'],
-        execOptions(repoPath)
-      )
-      // Only strip the line ending: a path may end in spaces.
-      const commonDir = stdout.replace(/\r?\n$/, '')
-      return readRebaseAndBisectReservations(
-        isAbsolute(commonDir)
-          ? translateWslOutputPath(commonDir, repoPath, routedFor(repoPath))
-          : join(repoPath, commonDir)
-      )
-    },
-    runExclusive: async (repoPath, work) => {
-      const routed = routedFor(repoPath)
-      // Settle WSL routing probes first: they take admission themselves and would wait on this grant.
-      await pendingWslDriveCheckoutGitRouting(['update-ref'], routed)
-      await pendingWslDirectGitReadEnvironment(['worktree', 'list', '--porcelain'], routed)
-      const grant = await acquireGitAdmission({
-        args: ['update-ref'],
-        cwd: repoPath,
-        wslDistro: routed.wslDistro,
-        tier: options.admissionTier
-      })
-      const terminations: Promise<void>[] = []
-      try {
-        return await work(
-          localBaseBranchGit(options, {
-            admissionExempt: true,
-            observeChildTermination: (terminated) => terminations.push(terminated)
-          })
-        )
-      } finally {
-        // Like any admitted command, hold the slot until every child has exited.
-        void Promise.all(terminations).then(grant.release)
+    listWorktrees,
+    listReservedBranches: async (repoPath) =>
+      (await readGitDirState(await commonDirOf(repoPath))).reserved,
+    updateRefUnlessInUse: async (repoPath, fullRef, args) => {
+      const commonDir = await commonDirOf(repoPath)
+      // HEAD files are read before the listing, so a checkout after it shows up as a changed HEAD.
+      const before = await readGitDirState(commonDir)
+      if (
+        before.reserved.has(fullRef) ||
+        (await listWorktrees(repoPath)).some((wt) => wt.branch === fullRef)
+      ) {
+        return false
       }
+      let inUse = false
+      try {
+        await gitExecFileAsync(args, {
+          ...execOptions(repoPath),
+          beforeStart: async () => {
+            const now = await readGitDirState(commonDir)
+            inUse =
+              now.reserved.has(fullRef) ||
+              [...now.heads].some(
+                ([gitDir, head]) => head === `ref: ${fullRef}` && before.heads.get(gitDir) !== head
+              )
+            return !inUse
+          }
+        })
+      } catch (error) {
+        if (inUse) {
+          return false
+        }
+        throw error
+      }
+      return true
     }
   }
 }
 
-// Git's own in-use rule: a rebase (head-name, --update-refs) or bisect in any worktree reserves its branch.
-async function readRebaseAndBisectReservations(commonDir: string): Promise<ReadonlySet<string>> {
-  // Fail closed: an unreadable common dir must not look like "nothing reserved".
+type GitDirState = {
+  /** Each git dir's HEAD file, keyed by git dir. */
+  heads: ReadonlyMap<string, string>
+  /** Branches a rebase (head-name, --update-refs) or bisect reserves: Git's own in-use rule. */
+  reserved: ReadonlySet<string>
+}
+
+// Reads files only: this runs inside an admitted command, where running Git could wait on its own slot.
+async function readGitDirState(commonDir: string): Promise<GitDirState> {
+  // Fail closed: an unreadable common dir must not look like "nothing in use".
   if (!(await stat(commonDir)).isDirectory()) {
     throw new Error(`${commonDir} is not a Git directory`)
   }
@@ -197,15 +206,18 @@ async function readRebaseAndBisectReservations(commonDir: string): Promise<Reado
   } catch (error) {
     rethrowUnlessMissing(error)
   }
+  const heads = new Map<string, string>()
   const reserved = new Set<string>()
   await Promise.all(
     gitDirs.map(async (gitDir) => {
-      const [rebaseMerge, rebaseApply, updateRefs, bisectStart] = await Promise.all([
+      const [head, rebaseMerge, rebaseApply, updateRefs, bisectStart] = await Promise.all([
+        readOptional(join(gitDir, 'HEAD')),
         readOptional(join(gitDir, 'rebase-merge', 'head-name')),
         readOptional(join(gitDir, 'rebase-apply', 'head-name')),
         readOptional(join(gitDir, 'rebase-merge', 'update-refs')),
         readOptional(join(gitDir, 'BISECT_START'))
       ])
+      heads.set(gitDir, head.trim())
       for (const line of [rebaseMerge, rebaseApply, updateRefs].flatMap((text) =>
         text.split('\n')
       )) {
@@ -219,7 +231,7 @@ async function readRebaseAndBisectReservations(commonDir: string): Promise<Reado
       }
     })
   )
-  return reserved
+  return { heads, reserved }
 }
 
 async function readOptional(path: string): Promise<string> {

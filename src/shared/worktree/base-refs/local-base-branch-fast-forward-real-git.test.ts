@@ -84,7 +84,13 @@ function realGit(fixture: Fixture, afterInspection?: () => Promise<void> | void)
     listWorktrees: async (repoPath) =>
       parseWorktreeList((await run(['worktree', 'list', '--porcelain'], repoPath)).stdout),
     listReservedBranches: async () => new Set(),
-    runExclusive: (_repoPath, work) => work(git)
+    updateRefUnlessInUse: async (repoPath, fullRef, args) => {
+      if ((await git.listWorktrees(repoPath)).some((wt) => wt.branch === fullRef)) {
+        return false
+      }
+      await git.exec(args, repoPath)
+      return true
+    }
   }
   return { git, commands }
 }

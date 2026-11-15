@@ -126,7 +126,7 @@ describe('addWorktree', () => {
         'remote-main',
         'old-main'
       ],
-      expect.objectContaining({ cwd: '/repo', admissionExempt: true })
+      expect.objectContaining({ cwd: '/repo', beforeStart: expect.any(Function) })
     ])
   })
 

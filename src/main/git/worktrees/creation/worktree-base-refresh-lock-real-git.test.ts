@@ -164,6 +164,25 @@ describe('local base refresh of a branch a rebase has reserved with real Git', (
   })
 })
 
+describe('local base refresh racing a checkout with real Git', () => {
+  it('skips the write when the branch is checked out while update-ref waits to start', async () => {
+    const { repoPath, lockPath, localOid } = await createBehindRepo()
+    await rm(lockPath, { force: true })
+    const original = gitRunner.gitExecFileAsync
+    vi.spyOn(gitRunner, 'gitExecFileAsync').mockImplementation(async (args, options) => {
+      if (args[0] === 'update-ref') {
+        git(repoPath, ['checkout', '--quiet', 'main'])
+      }
+      return original(args, options)
+    })
+
+    await expect(refresh(repoPath)).resolves.toBeUndefined()
+
+    expect(git(repoPath, ['rev-parse', 'main'])).toBe(localOid)
+    expect(git(repoPath, ['status', '--porcelain'])).toBe('')
+  })
+})
+
 describe('local base refresh against a held ref lock with real Git', () => {
   it('retries once the other git process releases the lock', async () => {
     const { repoPath, lockPath, remoteOid } = await createBehindRepo()

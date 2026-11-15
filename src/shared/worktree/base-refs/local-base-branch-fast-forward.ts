@@ -10,8 +10,8 @@ export type LocalBaseBranchGit = {
   listWorktrees: (repoPath: string) => Promise<readonly { path: string; branch?: string | null }[]>
   /** Full refs a rebase or bisect in any worktree has reserved; their worktrees list a detached HEAD. */
   listReservedBranches: (repoPath: string) => Promise<ReadonlySet<string>>
-  /** Runs `work` under one admission grant, so nothing queues between its commands. */
-  runExclusive: <T>(repoPath: string, work: (git: LocalBaseBranchGit) => Promise<T>) => Promise<T>
+  /** Runs `update-ref args` unless the branch is in use, rechecked once admitted, just before Git starts; false when skipped. */
+  updateRefUnlessInUse: (repoPath: string, fullRef: string, args: string[]) => Promise<boolean>
 }
 
 export type LocalBaseBranchRefs = {
@@ -96,35 +96,31 @@ export async function fastForwardLocalBaseBranch(
   const { repoPath, fullRef, remoteTrackingRef } = refs
   const { localOid, remoteOid } = inspection
   try {
+    // A checkout made after the last check would be stranded, so the check runs right before the write.
     const moved = await retryOnGitLockContention(() =>
-      // One grant keeps the last ownership check next to the write; a checkout since then would be stranded.
-      git.runExclusive(repoPath, async (held) => {
-        if (await isBranchInUse(held, repoPath, fullRef)) {
-          return false
-        }
-        await held.exec(
-          [
-            'update-ref',
-            '-m',
-            `orca: fast-forward to ${remoteTrackingRef}`,
-            fullRef,
-            remoteOid,
-            localOid
-          ],
-          repoPath
-        )
-        return true
-      })
+      git.updateRefUnlessInUse(repoPath, fullRef, [
+        'update-ref',
+        '-m',
+        `orca: fast-forward to ${remoteTrackingRef}`,
+        fullRef,
+        remoteOid,
+        localOid
+      ])
     )
     return moved ? { status: 'updated' } : { status: 'nothing_to_do' }
   } catch {
     // A concurrent pull/Orca update may already have moved local; a user commit leaves it diverged.
-    if (await isAncestor(git, repoPath, remoteOid, fullRef)) {
-      return { status: 'updated' }
+    try {
+      if (await isAncestor(git, repoPath, remoteOid, fullRef)) {
+        return { status: 'updated' }
+      }
+      if (!(await isAncestor(git, repoPath, fullRef, remoteOid))) {
+        return { status: 'skipped_not_fast_forward' }
+      }
+    } catch {
+      // Git could not answer; report the failure itself.
     }
-    return (await isAncestor(git, repoPath, fullRef, remoteOid))
-      ? { status: 'skipped_error' }
-      : { status: 'skipped_not_fast_forward' }
+    return { status: 'skipped_error' }
   }
 }
 
@@ -215,8 +211,12 @@ async function isAncestor(
   try {
     await git.exec(['merge-base', '--is-ancestor', ancestor, descendant], repoPath)
     return true
-  } catch {
-    return false
+  } catch (error) {
+    // Only Git's silent exit 1 means "not an ancestor"; anything else is a failure to answer.
+    if (isShowRefNoMatchError(error)) {
+      return false
+    }
+    throw error
   }
 }
 
