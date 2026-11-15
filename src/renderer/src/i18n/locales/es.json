@@ -21565,6 +21565,15 @@
         "sharedOne": "1 sesión de Claude permanece en {{previous}} porque otro panel tiene abierta la misma conversación. Reiniciarla podría volver a abrir la conversación del otro panel.",
         "sharedOther": "{{count}} sesiones de Claude permanecen en {{previous}} porque otro panel tiene abierta la misma conversación. Reiniciarlas podría volver a abrir la conversación del otro panel."
       },
+      "usageLimitSwitch": {
+        "title": "Cambiar de cuenta cuando Claude alcance un límite de uso",
+        "description": "Selecciona la cuenta guardada cuyo límite semanal se restablece antes en cuanto la actual agota su uso de 5 horas o semanal.",
+        "switched": "Se cambió a {{next}}: {{previous}} alcanzó su límite de uso",
+        "keyword": {
+          "automatic": "automático",
+          "limit": "límite"
+        }
+      },
       "oauthUsage": {
         "title": "Consulta de uso de Claude",
         "description": "Usa tu inicio de sesión de Claude Code para consultar el uso, los créditos y las cuentas inactivas. Desactívala para usar solo las lecturas en directo de las sesiones de terminal.",

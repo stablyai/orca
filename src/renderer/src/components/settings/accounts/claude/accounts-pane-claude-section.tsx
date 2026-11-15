@@ -10,6 +10,7 @@ import { ClaudeIcon } from '../../../status-bar/accounts/provider-icons'
 import { SearchableSetting } from '../../section-layout/SearchableSetting'
 import { ClaudeOAuthUsageSetting } from './claude-oauth-usage-setting'
 import { ClaudeRunningSessionSwitchSetting } from './claude-running-session-switch-setting'
+import { ClaudeUsageLimitSwitchSetting } from './claude-usage-limit-switch-setting'
 import type { AccountsPaneSectionModel } from '../accounts-pane-types'
 import {
   canOfferClaudeSignInLink,
@@ -262,6 +263,13 @@ export function renderClaudeAccountsSection(
         )}
         {isRemoteAccountScope ? null : (
           <ClaudeRunningSessionSwitchSetting settings={settings} updateSettings={updateSettings} />
+        )}
+        {/* Why two host accounts: the switch only moves between accounts on this computer. */}
+        {isRemoteAccountScope ||
+        claudeAccounts.accounts.filter(
+          (account) => (account.managedAuthRuntime ?? 'host') === 'host'
+        ).length < 2 ? null : (
+          <ClaudeUsageLimitSwitchSetting settings={settings} updateSettings={updateSettings} />
         )}
       </SettingsGroup>
     </div>

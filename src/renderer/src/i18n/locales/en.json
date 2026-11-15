@@ -24009,6 +24009,15 @@
         "body_other": "{{count}} Claude sessions are still running on {{previous}}. Restarting continues each conversation on {{next}}. Busy sessions wait for idle before restarting.",
         "restartCount_one": "Restart {{count}} session"
       },
+      "usageLimitSwitch": {
+        "title": "Switch accounts when Claude reaches a usage limit",
+        "description": "Selects the saved account whose weekly limit resets soonest once the current one runs out of its 5-hour or weekly usage.",
+        "switched": "Switched to {{next}}: {{previous}} reached its usage limit",
+        "keyword": {
+          "automatic": "automatic",
+          "limit": "limit"
+        }
+      },
       "oauthUsage": {
         "title": "Claude usage polling",
         "description": "Uses your Claude Code sign-in to check usage, credits, and inactive accounts. Turn off to use live terminal readings only.",

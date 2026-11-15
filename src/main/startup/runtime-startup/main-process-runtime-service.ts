@@ -34,6 +34,7 @@ import { createOrchestrationEnvironmentTransport } from '../../ipc/runtime-envir
 import { trackRuntimeEnvironmentVerifiedTransitions } from '../../ipc/runtime-environments/status/runtime-environment-verified-transitions'
 import { onRuntimeEnvironmentStatusPublished } from '../../ipc/runtime-environments/status/runtime-environment-status-owner'
 import { mainProcessState as state } from '../main-process-state'
+import { startClaudeUsageLimitAccountSwitch } from '../../claude-accounts/selection/claude-usage-limit-account-switch'
 import { installWslOrcadAccountShim } from '../wsl-startup/wsl-orcad-account-env-wiring'
 import {
   codexStructuredLaunchHomeResolvers,
@@ -179,6 +180,13 @@ export function configureRuntimeServices(runtime: OrcaRuntimeService): void {
   }
   configureDesktopCloudServices(runtime, () => state.store?.getSettings(), app.getPath('userData'))
   runtime.setAccountServices({ claudeAccounts, codexAccounts, rateLimits })
+  startClaudeUsageLimitAccountSwitch({
+    rateLimits,
+    settings: () => store.getSettings(),
+    listAccounts: () => claudeAccounts.listAccounts(),
+    // Why the runtime path: it tells the window, which restarts the sessions left behind.
+    select: (accountId) => runtime.selectClaudeAccount(accountId, { reason: 'usage-limit' })
+  })
   installWslOrcadAccountShim(store)
   runtime.setCommitMessageAgentEnvironmentResolvers({
     // Resolve every Codex launch through runtime-home, including default-account hooks/auth.

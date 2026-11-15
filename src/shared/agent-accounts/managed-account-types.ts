@@ -139,6 +139,8 @@ export type ClaudeAccountSelectionChange = {
   target: CodexAccountSelectionTarget
   before: { state: ClaudeRateLimitAccountsState; accountId: string | null }
   after: { state: ClaudeRateLimitAccountsState; accountId: string | null }
+  /** Set when Orca switched because the outgoing account reached a usage limit. */
+  reason?: 'usage-limit'
 }
 
 export type ClaudeManagedAccountRuntimeSelection = {

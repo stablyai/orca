@@ -22233,6 +22233,15 @@
         "sharedOne": "1 session Claude reste sur {{previous}} car la même conversation est ouverte dans un autre volet. Un redémarrage pourrait rouvrir la conversation de l’autre volet.",
         "sharedOther": "{{count}} sessions Claude restent sur {{previous}} car la même conversation est ouverte dans un autre volet. Un redémarrage pourrait rouvrir la conversation de l’autre volet."
       },
+      "usageLimitSwitch": {
+        "title": "Changer de compte quand Claude atteint une limite d’utilisation",
+        "description": "Sélectionne le compte enregistré dont la limite hebdomadaire se réinitialise le plus tôt dès que le compte actuel a épuisé son utilisation sur 5 heures ou sur la semaine.",
+        "switched": "Passage à {{next}} : {{previous}} a atteint sa limite d’utilisation",
+        "keyword": {
+          "automatic": "automatique",
+          "limit": "limite"
+        }
+      },
       "oauthUsage": {
         "title": "Suivi de l’utilisation de Claude",
         "description": "Utilise votre connexion Claude Code pour consulter l’utilisation, les crédits et les comptes inactifs. Désactivez cette option pour utiliser uniquement les données en direct des sessions de terminal.",

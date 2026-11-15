@@ -37,5 +37,22 @@ export const getAccountsClaudeSearchEntries = createLocalizedCatalog(() => [
       ...translateSearchKeyword('accounts.claude.switchSessions.keyword.restart', 'restart'),
       ...translateSearchKeyword('accounts.claude.switchSessions.keyword.running', 'running')
     ]
+  },
+  {
+    title: translate(
+      'accounts.claude.usageLimitSwitch.title',
+      'Switch accounts when Claude reaches a usage limit'
+    ),
+    description: translate(
+      'accounts.claude.usageLimitSwitch.description',
+      'Selects the saved account whose weekly limit resets soonest once the current one runs out of its 5-hour or weekly usage.'
+    ),
+    keywords: [
+      ...translateSearchKeyword('auto.components.settings.accounts.search.e14049e1a8', 'claude'),
+      ...translateSearchKeyword('auto.components.settings.accounts.search.06662af91e', 'account'),
+      ...translateSearchKeyword('auto.components.settings.accounts.search.5b3f18ef4a', 'switch'),
+      ...translateSearchKeyword('accounts.claude.usageLimitSwitch.keyword.automatic', 'automatic'),
+      ...translateSearchKeyword('accounts.claude.usageLimitSwitch.keyword.limit', 'limit')
+    ]
   }
 ])

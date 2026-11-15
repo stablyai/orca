@@ -23423,6 +23423,15 @@
         "sharedOne": "由于另一个窗格打开了同一对话，1 个 Claude 会话将保持在 {{previous}}。重新启动可能会重新打开另一个窗格的对话。",
         "sharedOther": "由于另一个窗格打开了同一对话，{{count}} 个 Claude 会话将保持在 {{previous}}。重新启动可能会重新打开另一个窗格的对话。"
       },
+      "usageLimitSwitch": {
+        "title": "Claude 达到用量上限时切换账号",
+        "description": "当前账号用完 5 小时或每周用量后，选择每周上限最早重置的已保存账号。",
+        "switched": "已切换到 {{next}}：{{previous}} 已达到用量上限",
+        "keyword": {
+          "automatic": "自动",
+          "limit": "上限"
+        }
+      },
       "oauthUsage": {
         "title": "Claude 用量轮询",
         "description": "使用 Claude Code 登录凭据检查用量、额度和非活跃账号。关闭后，仅显示运行中终端会话提供的实时用量。",
