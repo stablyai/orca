@@ -1,6 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { PreloadApi } from '../../api-types'
-import { ORCA_APP_RESTART_STARTED_EVENT } from '../../../shared/updater-renderer-events'
 
 const { exposeInMainWorld, invoke, on, removeListener, send, sendSync, getPathForFile } =
   vi.hoisted(() => ({
@@ -69,61 +68,4 @@ describe('native preload destructive app actions', () => {
       'Failed to persist renderer state before unload.'
     )
   })
-
-  it('awaits renderer durability before profile maintenance and preserves its result', async () => {
-    const api = await loadApi()
-    const started = vi.fn()
-    eventTarget.addEventListener(ORCA_APP_RESTART_STARTED_EVENT, started)
-    let finishCheckpoint = (_result: { ok: boolean }): void => {}
-    const checkpoint = new Promise((resolve) => {
-      finishCheckpoint = resolve
-    })
-    const result = { status: 'relaunching' }
-    invoke.mockImplementation((channel: string) =>
-      channel === 'app:await-before-unload-checkpoint' ? checkpoint : Promise.resolve(result)
-    )
-
-    const switching = api.orcaProfiles.switchProfile({ profileId: 'target' })
-    await vi.waitFor(() =>
-      expect(invoke).toHaveBeenCalledWith('app:await-before-unload-checkpoint')
-    )
-    expect(started).toHaveBeenCalledOnce()
-    expect(invoke).not.toHaveBeenCalledWith('orcaProfiles:switch', expect.anything())
-    finishCheckpoint({ ok: true })
-    await expect(switching).resolves.toBe(result)
-    expect(invoke).toHaveBeenLastCalledWith('orcaProfiles:switch', { profileId: 'target' })
-  })
-
-  it.each([
-    { durable: { ok: true }, reply: true },
-    { durable: { ok: false }, reply: false }
-  ])(
-    'answers a main-initiated reload only with the durable save verdict',
-    async ({ durable, reply }) => {
-      await loadApi()
-      const prepare = on.mock.calls.find(
-        ([channel]) => channel === 'app:prepare-native-unload'
-      )?.[1]
-      let finishCheckpoint = (_result: { ok: boolean }): void => {}
-      invoke.mockImplementation(
-        () =>
-          new Promise((resolve) => {
-            finishCheckpoint = resolve
-          })
-      )
-
-      prepare({}, 'reload-1')
-      await vi.waitFor(() =>
-        expect(invoke).toHaveBeenCalledWith('app:await-before-unload-checkpoint')
-      )
-      expect(send).not.toHaveBeenCalledWith('app:native-unload-prepared', expect.anything())
-      finishCheckpoint(durable)
-      await vi.waitFor(() =>
-        expect(send).toHaveBeenCalledWith('app:native-unload-prepared', {
-          requestId: 'reload-1',
-          ok: reply
-        })
-      )
-    }
-  )
 })

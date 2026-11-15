@@ -1,5 +1,5 @@
 import type { PairedRuntimeConnection } from '../../../../shared/remote-runtime/pairing/paired-runtime-connection'
-import type { RuntimeCapability } from '../../../../shared/protocol-version'
+import type { RuntimeCapability } from '../../../../shared/remote-runtime/protocol/protocol-version'
 import { sendRemoteRuntimeRequestOnSocket } from '../../../../shared/remote-runtime/requests/remote-runtime-request-socket'
 import type {
   RuntimeRequestGuard,

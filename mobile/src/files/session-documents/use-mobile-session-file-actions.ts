@@ -19,7 +19,7 @@ export function useMobileSessionFileActions(scope: MobileSessionTerminalSendActi
     isFloatingWorkspaceRoute,
     client,
     sessionTabsRef,
-    terminalLinkOpenMode,
+    linkOpenMode: terminalLinkOpenMode,
     activeSessionTabIdRef,
     terminalCwdRef,
     activeHandleRef,

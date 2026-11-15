@@ -9,7 +9,7 @@ import {
   MIN_COMPATIBLE_MOBILE_VERSION,
   MIN_COMPATIBLE_RUNTIME_SERVER_VERSION,
   RUNTIME_PROTOCOL_VERSION
-} from '../../protocol-version'
+} from './protocol-version'
 
 const MOBILE_V = 1
 

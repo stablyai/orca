@@ -18,7 +18,7 @@ import { getDataFile, initDataPath } from './loading-store/user-data-path'
 import type { StoreRuntimeOptions } from './loading-store/store-runtime-state'
 import { ProfileStateSqliteAuthority } from './profile-state/profile-state-sqlite-authority'
 import { openProfileStateDatabaseReadOnly } from './profile-state/database/profile-state-database'
-import { profileStateDatabaseFile } from '../../shared/profile-state-storage-paths'
+import { profileStateDatabaseFile } from '../../shared/orca-profiles/profile-state-storage-paths'
 import { exportProfileStateJson } from './profile-state/documents/profile-state-documents'
 
 export const testState = { dir: '' }

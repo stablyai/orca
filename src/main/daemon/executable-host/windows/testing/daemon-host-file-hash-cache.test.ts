@@ -3,7 +3,7 @@ import { mkdtempSync, readFileSync, rmSync, statSync, utimesSync, writeFileSync 
 import os from 'node:os'
 import { dirname, join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { setAppEnvironment } from '../../../../../shared/app-environment'
+import { setAppEnvironment } from '../../../../../shared/app-lifecycle/app-environment'
 import { resetDaemonHostFileHashCacheForTests } from '../daemon-host-file-hash-cache'
 import { buildInstallFixture } from './daemon-host-relocation.test-fixture'
 import { getRelocatedDaemonHost, materializeRelocatedDaemonHost } from '../daemon-host-relocation'

@@ -88,6 +88,7 @@ export function sanitizeRepoUpdatesForPersistence<
     >
   > & {
     ghAccount?: GhAccountBinding | null
+    browserProfileId?: string | null
   }
 >(updates: T): T {
   const sanitized = { ...updates }
@@ -165,6 +166,13 @@ export function sanitizeRepoUpdatesForPersistence<
     } else {
       sanitized.agentWorkspaceTrust = agentWorkspaceTrust
     }
+  }
+  if (
+    'browserProfileId' in sanitized &&
+    sanitized.browserProfileId != null &&
+    (typeof sanitized.browserProfileId !== 'string' || !sanitized.browserProfileId.trim())
+  ) {
+    delete sanitized.browserProfileId
   }
   // Null explicitly clears ghAccount; only malformed shapes are discarded.
   if ('ghAccount' in sanitized && sanitized.ghAccount != null) {
