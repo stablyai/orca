@@ -9,9 +9,12 @@ import type { RuntimeClientTarget } from '../../../../../../shared/remote-runtim
 import type {
   AntigravityAccountState,
   AntigravityAccountTarget
-} from '../../../../../../shared/antigravity-account-types'
-import type { ProviderRateLimits, RateLimitState } from '../../../../../../shared/rate-limit-types'
-import { localAccountRuntimeTargetKey } from '../../../../../../shared/local-account-runtime'
+} from '../../../../../../shared/agent-accounts/antigravity/antigravity-account-types'
+import type {
+  ProviderRateLimits,
+  RateLimitState
+} from '../../../../../../shared/agent-usage/rate-limits/rate-limit-types'
+import { localAccountRuntimeTargetKey } from '../../../../../../shared/agent-accounts/local-account-runtime'
 import { Button } from '../../../ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '../../../ui/tooltip'
 import { ManagedRuntimeInstallRow } from '../../../managed-runtime/ManagedRuntimeInstallRow'

@@ -45,7 +45,7 @@ describe('OrcaRuntimeService', () => {
       })
       webContents.send = send
       runtime.attachWindow(1)
-      runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
+      await runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
       electronMocks.BrowserWindow.fromId.mockReturnValue({
         isDestroyed: () => false,
         webContents
@@ -88,7 +88,7 @@ describe('OrcaRuntimeService', () => {
         webContents
       })
       // Prior renderer frames can leave inflated versions under a stable epoch.
-      runtime.syncWindowGraph(1, {
+      await runtime.syncWindowGraph(1, {
         tabs: [],
         leaves: [],
         mobileSessionTabs: [
@@ -114,7 +114,7 @@ describe('OrcaRuntimeService', () => {
       await vi.waitFor(() => expect(send).toHaveBeenCalledTimes(1))
 
       // #7587: renderer lower-version republish is rejected, leaving create stalled until rescue.
-      runtime.syncWindowGraph(1, {
+      await runtime.syncWindowGraph(1, {
         tabs: [],
         leaves: [],
         mobileSessionTabs: [
@@ -184,7 +184,7 @@ describe('OrcaRuntimeService', () => {
       })
       webContents.send = send
       runtime.attachWindow(1)
-      runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
+      await runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
       electronMocks.BrowserWindow.fromId.mockReturnValue({
         isDestroyed: () => false,
         webContents
@@ -217,7 +217,7 @@ describe('OrcaRuntimeService', () => {
         leafId,
         ptyId: 'pty-catch'
       })
-      runtime.syncWindowGraph(1, {
+      await runtime.syncWindowGraph(1, {
         tabs: [],
         leaves: [
           {

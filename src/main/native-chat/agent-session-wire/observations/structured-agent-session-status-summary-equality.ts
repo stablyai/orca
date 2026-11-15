@@ -50,6 +50,7 @@ export function structuredStatusSummariesEqual(
     a.namingError?.failedAt === b.namingError?.failedAt &&
     a.turnOutcome === b.turnOutcome &&
     a.stopping === b.stopping &&
+    a.awaitsAnswer === b.awaitsAnswer &&
     agentSessionBackgroundTasksEqual(a.backgroundTasks, b.backgroundTasks) &&
     structuredStatusChildrenEqual(a.children, b.children) &&
     agentProviderSessionsEqual(undefined, a.providerSession, b.providerSession)

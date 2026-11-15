@@ -1,7 +1,10 @@
 import { describe, expect, it } from 'vitest'
 
 import type { PortForwardEntry } from '../../../../../shared/remote-runtime/ssh/ssh-types'
-import type { WorkspacePort, WorkspacePortScanResult } from '../../../../../shared/workspace-ports'
+import type {
+  WorkspacePort,
+  WorkspacePortScanResult
+} from '../../../../../shared/workspace/ports/workspace-ports'
 import {
   addressForPort,
   addressForPortForwardEntry,

@@ -6,8 +6,8 @@ import {
   resolveRuntimeNavigationTarget
 } from '../../../../shared/remote-runtime/session-graph/runtime-navigation'
 import { getRepoExecutionHostId } from '../../../../shared/execution-host'
-import { phoneWakeReport } from '../../../../shared/workspace-sleep'
-import type { Repo } from '../../../../shared/repo-types'
+import { phoneWakeReport } from '../../../../shared/workspace/lifecycle/workspace-sleep'
+import type { Repo } from '../../../../shared/repository/repo-types'
 import type { TerminalWorkspaceLaunchScope } from '../../orchestration/terminal-authority/structured-sessions/runtime-legacy-worker-terminal-recovery-types'
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import type { RuntimeTerminalWait } from '../../../../shared/terminal/runtime/runtime-terminal-contracts'

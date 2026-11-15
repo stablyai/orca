@@ -27,7 +27,7 @@ import {
   COMPAT_SERVER_TARGETS,
   ORCAD_TEMPLATE_TARGETS,
   pinnedNodeRuntimeAsset
-} from '../../../../src/shared/node-runtime-pin.ts'
+} from '../../../../src/shared/node-runtime/node-runtime-pin.ts'
 import { ORCAD_PREBUILDS_DIR } from '../prebuilds/build-orcad-prebuilds.mjs'
 import {
   COMPAT_SLOT_ADDONS,

@@ -1,7 +1,7 @@
 import type { AutomationSchedulePreset } from '../automation-definition'
 import { cronHasPossibleOccurrence } from './automation-cron-occurrence'
 
-import { isClipboardTextByteLengthOverLimit } from '../../clipboard-text'
+import { isClipboardTextByteLengthOverLimit } from '../../clipboard/clipboard-text'
 import {
   DAY_NAMES,
   MONTH_NAMES,

@@ -7,7 +7,7 @@ import type * as WorktreeOperationRoute from '@/lib/workspace/ownership/worktree
 import { createTestStore } from '@/store/testing/app-store-test-fixture'
 import { createTabsSliceMockApi } from '@/store/slices/tabs/tabs-slice-test-harness'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../../shared/constants'
-import { folderWorkspaceKey } from '../../../../../../shared/workspace-scope'
+import { folderWorkspaceKey } from '../../../../../../shared/workspace/identity/workspace-scope'
 import { loadWebRuntimeSessionTabsApplyModulesForTests } from '@/runtime/web-session-tabs-sync/inventory/web-runtime-session-snapshot'
 
 let store: ReturnType<typeof createTestStore>

@@ -8,10 +8,12 @@ import { getShortcutPlatform } from '@/lib/keyboard/shortcut-platform'
 import { useAppStore } from '@/store/index'
 import { keybindingMatchesAction } from '../../../../../shared/keybindings/matching'
 import type { KeybindingActionId, KeybindingContext } from '../../../../../shared/keybindings/types'
-import { toModifierDoubleTapEvent } from '../../../../../shared/modifier-double-tap-detector'
+import { toModifierDoubleTapEvent } from '../../../../../shared/keybindings/modifier-double-tap-detector'
 import type { FloatingTerminalPanelLocalState } from '../state/use-floating-terminal-panel-local-state'
 import type { FloatingTerminalPanelShortcuts } from './use-floating-terminal-panel-shortcuts'
 import { addAppKeyListener, removeAppKeyListener } from '@/lib/keyboard/app-keyboard-router'
+import { moveActiveTab } from '@/lib/workspace/tabs/workspace-tab-commands'
+import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../shared/constants'
 
 const FLOATING_TAB_SWITCH_ACTIONS: readonly KeybindingActionId[] = [
   'tab.nextSameType',
@@ -19,7 +21,9 @@ const FLOATING_TAB_SWITCH_ACTIONS: readonly KeybindingActionId[] = [
   'tab.nextAllTypes',
   'tab.previousAllTypes',
   'tab.nextTerminal',
-  'tab.previousTerminal'
+  'tab.previousTerminal',
+  'tab.moveLeft',
+  'tab.moveRight'
 ]
 
 type FloatingTerminalGlobalShortcutListenersInput = Pick<
@@ -127,6 +131,12 @@ export function useFloatingTerminalGlobalShortcutListeners({
       if (terminalTabDirection !== null) {
         consume()
         switchFloatingWorkspaceTab(useAppStore.getState(), terminalTabDirection, 'terminal')
+        return
+      }
+      const moveTabDirection = matches('tab.moveRight') ? 1 : matches('tab.moveLeft') ? -1 : null
+      if (moveTabDirection !== null) {
+        consume()
+        moveActiveTab(FLOATING_TERMINAL_WORKTREE_ID, moveTabDirection)
       }
     }
     const handleFloatingPanelKeyUp = (event: KeyboardEvent): void => {

@@ -3,7 +3,7 @@ import { existsSync } from 'node:fs'
 
 import { getRelayOpenCodePluginPath, type PluginOverlayManager } from '../overlays/plugin-overlay'
 import { resolveOpenCodeSourceConfigDir } from '../overlays/plugin-overlay-env'
-import { resolveOpenCodeConfigDirectory } from '../../../shared/opencode-config-directory'
+import { resolveOpenCodeConfigDirectory } from '../../../shared/agent-launch/plugins/opencode/opencode-config-directory'
 import { assertPluginSourceUnderByteCap } from './plugin-source-limit'
 import {
   sanitizeWslHookInstanceKey,

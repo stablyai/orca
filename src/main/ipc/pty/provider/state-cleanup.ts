@@ -29,8 +29,23 @@ import {
 /** Clear provider-scoped state while preserving requested claim fences across reconnect. */
 export function clearProviderPtyState(
   id: string,
-  opts: { preserveAgentSessionOwners?: boolean } = {}
+  opts: { preserveAgentSessionOwners?: boolean; exitProven?: true } = {}
 ): void {
+  const paneKey = ptyPaneKey.get(id)
+  const incarnationId = ptyIncarnationById.get(id)
+  const existingSleep = paneKey
+    ? agentHookServer.getStatusSnapshotForPane(paneKey)[0]?.paneSleep
+    : undefined
+  const stillOwnsPaneKey = paneKey ? paneKeyPtyId.get(paneKey) === id : false
+  const preserveSleepingDone = Boolean(
+    stillOwnsPaneKey &&
+    paneKey &&
+    ((existingSleep?.ptyId === id &&
+      (!existingSleep.incarnationId ||
+        !incarnationId ||
+        existingSleep.incarnationId === incarnationId)) ||
+      (opts.exitProven && agentHookServer.settleTerminalPaneSleep(paneKey, id, incarnationId)))
+  )
   if (!opts.preserveAgentSessionOwners) {
     agentSessionOwners.release(id)
     // Persisted launch-account identity survives reconnectable disconnects, but real teardown must prevent reuse.
@@ -59,8 +74,6 @@ export function clearProviderPtyState(
   providerSnapshotRequiredPtys.delete(id)
   // Reused IDs must not inherit ConPTY startup-query state.
   clearNativeWindowsConptyPty(id)
-  const paneKey = ptyPaneKey.get(id)
-  const stillOwnsPaneKey = paneKey ? paneKeyPtyId.get(paneKey) === id : false
   // Stop memory snapshots from resolving dead PIDs; SSH PTYs may never have registered.
   unregisterPty(id)
   // SSH reattach/shutdown and spawn failure can bypass runtime exit cleanup; unbind their URL watcher too.
@@ -68,6 +81,9 @@ export function clearProviderPtyState(
   clearMigrationUnsupportedPty(id)
   agentHookServer.clearPaneKeyAliasesForPty(id, {
     shouldClearStablePaneKey: (stablePaneKey) => {
+      if (preserveSleepingDone && stablePaneKey === paneKey) {
+        return false
+      }
       // Without rebuilt spawn mapping, alias ownership must protect a newer PTY on the same stable pane.
       const stablePaneOwner = paneKeyPtyId.get(stablePaneKey)
       if (stablePaneOwner && stablePaneOwner !== id) {
@@ -80,7 +96,9 @@ export function clearProviderPtyState(
   if (paneKey) {
     if (stillOwnsPaneKey) {
       // Preserve proven agent-exit evidence across reconnectable disconnects.
-      if (opts.preserveAgentSessionOwners) {
+      if (preserveSleepingDone) {
+        // Its accepted row now belongs to the sleeping pane, not this retired process.
+      } else if (opts.preserveAgentSessionOwners) {
         agentHookServer.clearPaneState(paneKey)
       } else {
         agentHookServer.clearPaneState(paneKey, { forgetAgentExit: true })

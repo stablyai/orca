@@ -9,7 +9,7 @@ import { browserNetworkExecutionHostKey } from '../../../../../shared/browser/cl
 import type { BrowserNetworkExecutionRouteResolver } from '../../../../browser/network/execution-routes/browser-network-execution-route-contract'
 import { resolveBrowserNetworkExecutionRoute } from '../../../../browser/network/execution-routes/browser-network-execution-route-dispatch'
 import { BrowserNetworkTunnelAttachParams } from '../../../../../shared/browser/client-hosting/browser-client-host-protocol'
-import '../../../../../shared/protocol-version'
+import '../../../../../shared/remote-runtime/protocol/protocol-version'
 import {
   BROWSER_CLIENT_HOST_RUNTIME_CAPABILITY,
   BROWSER_NETWORK_EXECUTION_HOSTS_RUNTIME_CAPABILITY,

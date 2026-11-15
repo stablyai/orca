@@ -71,7 +71,8 @@ export function translateAcpRequest(
   settled?: { reply: unknown }
 } {
   const session = requestSessionSchema.safeParse(params)
-  if (!session.success || session.data.sessionId !== options.sessionId) {
+  const sessionless = options.dialect.sessionlessRequests?.includes(method) && !session.success
+  if (!sessionless && (!session.success || session.data.sessionId !== options.sessionId)) {
     throw new AcpRpcError(-32602, 'ACP request belongs to an unknown session')
   }
   const tool = requestToolSchema.safeParse(params)
@@ -91,7 +92,8 @@ export function translateAcpRequest(
           : [
               {
                 type: 'item.update',
-                item: `${method}:${JSON.stringify(id)}`,
+                // Request ids restart with each process; a tool call id names this plan alone.
+                item: `${method}:${callId ?? JSON.stringify(id)}`,
                 body: {
                   kind: 'status',
                   presentation: 'plan-document',

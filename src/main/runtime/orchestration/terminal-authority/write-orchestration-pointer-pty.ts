@@ -10,7 +10,7 @@ import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent
 import type { TerminalAgent } from '../../../../shared/agent-status/identity/terminal-agent'
 import { selectRuntimeHookAgentRowForPane } from '../../session-lifecycle/projection/runtime-mobile-agent-status-projection'
 import { isTuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent-config'
-import { resolvePublishedPaneAgentIdentity } from '../../../../shared/published-pane-agent-identity'
+import { resolvePublishedPaneAgentIdentity } from '../../../../shared/agent-status/identity/published-pane-agent-identity'
 import type { RuntimeTerminalSummary } from '../../../../shared/terminal/runtime/runtime-terminal-contracts'
 import type { ResolvedWorktree } from '../../workspaces/catalog/runtime-worktree-path-identity'
 import { getLatestLeafTitle } from '../../workspaces/process-listing/runtime-worktree-status-projection'

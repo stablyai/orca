@@ -20,7 +20,7 @@ function hasAgentTerminal(state: AppState, agent: NoticeAgent): boolean {
     ) ||
     // Why the terminal-tab check: native chat (agent-session) tabs project status entries too,
     // but they run no CLI in a terminal, so they must not trigger terminal-only notices.
-    Object.entries(state.agentStatusByPaneKey).some(
+    Array.from(state.agentStatusByPaneKey.entries()).some(
       ([paneKey, entry]) => entry.agentType === agent && isTerminalTab(state, paneKeyTabId(paneKey))
     ) ||
     Object.values(state.paneForegroundAgentByPaneKey).some((entry) => entry.agent === agent)

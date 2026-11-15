@@ -2,7 +2,7 @@ import type * as fs from 'node:fs'
 import * as os from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { setSecretStore } from '../../shared/secret-store'
+import { setSecretStore } from '../../shared/secure-storage/secret-store'
 import type * as SecureFile from '../../shared/secure-storage/secure-file'
 import type * as ZcodePlanApiKeyStore from './zcode-plan-api-key-store'
 

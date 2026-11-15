@@ -1,4 +1,4 @@
-import type { ClaimedAgentPtyOwnerRegistry } from '../../../shared/claimed-agent-pty-owner'
+import type { ClaimedAgentPtyOwnerRegistry } from '../../../shared/agent-session/lifecycle/leases/claimed-agent-pty-owner'
 import type { Session } from '../sessions/session'
 import type { SessionInfo } from '../protocol/daemon-session-info'
 import type { WslGuestRoot } from '../../../shared/shell/wsl/wsl-guest-root-marker'

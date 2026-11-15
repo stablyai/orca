@@ -21,7 +21,7 @@ import {
   MIN_COMPATIBLE_RUNTIME_CLIENT_VERSION,
   RUNTIME_CAPABILITIES,
   RUNTIME_PROTOCOL_VERSION
-} from '../../../shared/protocol-version'
+} from '../../../shared/remote-runtime/protocol/protocol-version'
 
 import {
   MANAGED_SERVER_RUNTIME_CAPABILITY,
@@ -55,7 +55,7 @@ import { getManagedServerActions } from './management/managed-server-actions-reg
 import { getRecipeVmWaker } from '../workspaces/sleep/recipe-vm-waker-registry'
 import { HOST_RECIPE_VM_WAKE_CAPABILITY } from '../../../shared/remote-runtime/recipe-vm-wake'
 import { isDesktopBrowserBridgeHostEnabled } from '../desktop-browser-bridge/desktop-browser-bridge-registry'
-import { DESKTOP_BROWSER_BRIDGE_RUNTIME_CAPABILITY } from '../../../shared/desktop-browser-bridge-protocol'
+import { DESKTOP_BROWSER_BRIDGE_RUNTIME_CAPABILITY } from '../../../shared/browser/client-hosting/desktop-browser-bridge-protocol'
 import { darkSwitchRuntimeCapabilities } from '../construction/dark-switch-runtime-capabilities'
 import { supportsDurableTerminalPromptDelivery } from '../terminal/input/durable-terminal-prompt-delivery-support'
 import { RuntimeWorkspaceChangeEvents } from '../workspaces/catalog/runtime-workspace-change-events'

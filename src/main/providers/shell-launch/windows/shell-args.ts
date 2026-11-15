@@ -10,7 +10,7 @@ import {
 import { quotePosixShell } from '../../../../shared/shell/launch/shell-argument-quoting'
 import { getBashWrapperLaunchArgs } from '../../local-pty/local-pty-shell-ready'
 import { ensureShellReadyWrappersAt } from '../../local-pty/local-pty-shell-ready-wrapper-generation'
-import { encodePowerShellCommand } from '../../../../shared/powershell-command-encoding'
+import { encodePowerShellCommand } from '../../../../shared/shell/launch/powershell-command-encoding'
 import {
   getPowerShellOsc133Bootstrap,
   getPowerShellOsc133StartupCommandMark

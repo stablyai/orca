@@ -184,11 +184,11 @@ export abstract class OrcaRuntimeWithCloseStructuredAgentSessionTab extends Orca
     return true
   }
 
-  protected markHeadlessBrowserSessionTabActive(
+  protected async markHeadlessBrowserSessionTabActive(
     worktreeId: string | undefined,
     browserPageId: string,
     options: BrowserSessionTabSelectionOptions
-  ): void {
+  ): Promise<void> {
     if (!worktreeId) {
       return
     }
@@ -229,7 +229,9 @@ export abstract class OrcaRuntimeWithCloseStructuredAgentSessionTab extends Orca
     if (options.caller) {
       // Keep shared selection; only the originating client selects its newly created tab. Local creates lack a caller.
       this.applyMobileSessionTabNavigation(
-        this.getMobileSessionTabsForWorktree(worktreeId, undefined, { includeAgentSenders: false }),
+        await this.getMobileSessionTabsForWorktree(worktreeId, undefined, {
+          includeAgentSenders: false
+        }),
         tab.id,
         options.caller.navigation,
         options.caller.clientNavigationId,

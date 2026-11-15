@@ -3,7 +3,7 @@ import { lstat, mkdir, rm, writeFile } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { readNodeFileWithinLimit } from '../../../shared/file-content/node-bounded-file-reader'
-import { renameFileWithWindowsRetryAsync } from '../../../shared/windows-retry-file-operations'
+import { renameFileWithWindowsRetryAsync } from '../../../shared/file-write/windows-retry-file-operations'
 import {
   isConfiguredTerminalLimit,
   MAX_CONFIGURED_TERMINALS,

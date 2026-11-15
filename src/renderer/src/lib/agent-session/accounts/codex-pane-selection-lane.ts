@@ -2,8 +2,8 @@ import { parseRemoteRuntimePtyId } from '../../../../../shared/remote-runtime/re
 import {
   getCodexSelectionLaneKey,
   normalizeCodexAccountSelectionTarget
-} from '../../../../../shared/codex-selection-lane'
-import type { CodexAccountSelectionTarget } from '../../../../../shared/codex-selection-lane'
+} from '../../../../../shared/agent-accounts/codex/codex-selection-lane'
+import type { CodexAccountSelectionTarget } from '../../../../../shared/agent-accounts/codex/codex-selection-lane'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../shared/constants'
 import {
   isWslShellName,
@@ -12,7 +12,7 @@ import {
 import type { LocalWindowsTerminalRuntimeOptions } from '../../../../../shared/shell/launch/local-windows-terminal-runtime'
 import { parseAppSshPtyId } from '../../../../../shared/remote-runtime/ssh/ssh-pty-id'
 import { resolveTerminalStartupCwd } from '../../../../../shared/shell/launch/terminal-startup-cwd'
-import { parseWorkspaceKey } from '../../../../../shared/workspace-scope'
+import { parseWorkspaceKey } from '../../../../../shared/workspace/identity/workspace-scope'
 import { parseWslUncPath } from '../../../../../shared/file-access/wsl-paths'
 import { getLocalProjectExecutionRuntimeContext } from '../../../runtime/hosts/preflight/local-preflight-context'
 import { getRendererAppPlatform } from '../../../app-shell/platform/renderer-app-platform'

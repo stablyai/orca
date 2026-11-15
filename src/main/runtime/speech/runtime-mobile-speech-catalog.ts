@@ -1,17 +1,17 @@
-import type { VoiceSettings } from '../../../shared/speech-types'
-import { stopAfterSilenceSeconds } from '../../../shared/dictation-silence-stop'
+import type { VoiceSettings } from '../../../shared/speech/speech-types'
+import { stopAfterSilenceSeconds } from '../../../shared/speech/dictation/dictation-silence-stop'
 import type {
   RuntimeSpeechModelSummary,
   RuntimeSpeechSetupState
 } from '../../../shared/worktree/catalog/runtime-worktree-contracts'
 import { getDefaultVoiceSettings } from '../../../shared/constants'
-import { dictationShortcutModeSettings } from '../../../shared/dictation-shortcut-mode'
+import { dictationShortcutModeSettings } from '../../../shared/speech/dictation/dictation-shortcut-mode'
 import {
   getCatalogModel,
   isLocalSpeechModel,
   SPEECH_MODEL_CATALOG
 } from '../../speech/model-catalog'
-import { isOfferedSpeechModel } from '../../../shared/speech-model-retirement'
+import { isOfferedSpeechModel } from '../../../shared/speech/models/speech-model-retirement'
 import { getSpeechModelManager, getSpeechSttService } from '../../speech/speech-runtime-service'
 import { hasLocalSpeechRecognizer } from '../../speech/stt-worker-paths'
 import {
@@ -26,7 +26,7 @@ import {
   hasOpenAiSpeechApiKey
 } from '../../speech/openai-api-key-store'
 import { saveVerifiedOpenAiSpeechApiKey } from '../../speech/openai-api-key-verification'
-import type { SecretAtRestProtection } from '../../../shared/secret-at-rest-protection'
+import type { SecretAtRestProtection } from '../../../shared/secure-storage/secret-at-rest-protection'
 
 export type OpenAiSpeechKeyStatus = {
   configured: boolean

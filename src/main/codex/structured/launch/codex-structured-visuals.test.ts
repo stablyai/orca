@@ -3,7 +3,7 @@ import type { NativeChatVisualsLaunch } from '../../../native-chat/conversation-
 import { CodexAppServerTimeoutError } from '../../app-server/codex-app-server-session'
 import { prepareCodexThreadForVisuals } from './codex-structured-visuals'
 
-import { codexStructuredPermissionPolicy } from '../../../../shared/codex-permission-policy'
+import { codexStructuredPermissionPolicy } from '../../../../shared/agent-launch/permissions/codex-permission-policy'
 
 const VISUALS: NativeChatVisualsLaunch = {
   folder: '/state/chat-scratch/abc',

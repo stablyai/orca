@@ -1,4 +1,4 @@
-import type { AddRepoExistingWorkspaceSource } from '../../../../shared/telemetry-events'
+import type { AddRepoExistingWorkspaceSource } from '../../../../shared/telemetry/schemas/telemetry-property-schemas'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import type { WslHostAddResult } from '../../../../shared/remote-runtime/wsl-hosts/wsl-host-types'
 

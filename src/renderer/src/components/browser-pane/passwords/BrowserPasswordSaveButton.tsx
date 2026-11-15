@@ -8,7 +8,7 @@ import { useTranslate } from '@/i18n/use-translate'
 import type {
   BrowserPasswordSavePrompt,
   BrowserPasswordSavePromptAction
-} from '../../../../../shared/browser-passwords-types'
+} from '../../../../../shared/browser/passwords/browser-passwords-types'
 import {
   clearBrowserPasswordSavePrompt,
   useBrowserPasswordPageState

@@ -47,11 +47,11 @@ export function requireManagedOrcadTargetStore() {
   return targetStore
 }
 
-export function requireManagedOrcadEnvironment(
+export async function requireManagedOrcadEnvironment(
   userDataPath: string,
   selector: string
-): { environment: KnownRuntimeEnvironment; deployment: OrcadSshDeploymentLink } {
-  const environment = resolveEnvironment(userDataPath, selector)
+): Promise<{ environment: KnownRuntimeEnvironment; deployment: OrcadSshDeploymentLink }> {
+  const environment = await resolveEnvironment(userDataPath, selector)
   const deployment = getOrcadSshDeployment(environment)
   if (!deployment || environment.connectionDependency !== 'ssh-tunnel') {
     throw new Error('This server is not managed through an orcad SSH deployment.')

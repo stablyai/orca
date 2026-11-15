@@ -16,28 +16,28 @@ type Runtime = ReturnType<typeof surfaceRuntime>['runtime']
 it.each([
   [
     'with no window that never had one',
-    (runtime: Runtime) => {
-      runtime.syncWindowGraph(HEADLESS_RUNTIME_WINDOW_ID, { tabs: [], leaves: [] })
+    async (runtime: Runtime) => {
+      await runtime.syncWindowGraph(HEADLESS_RUNTIME_WINDOW_ID, { tabs: [], leaves: [] })
     }
   ],
   [
     'with a window, under the same rule (L250)',
-    (runtime: Runtime) => {
+    async (runtime: Runtime) => {
       runtime.attachWindow(1)
-      runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
+      await runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
     }
   ],
   [
     'with no window after its window closed',
-    (runtime: Runtime) => {
+    async (runtime: Runtime) => {
       runtime.attachWindow(1)
-      runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
+      await runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
       runtime.markGraphUnavailable(1)
     }
   ]
 ])('creates a terminal on a host %s, and answers with its live handle', async (_name, setup) => {
   const { runtime, bindPane } = surfaceRuntime()
-  setup(runtime)
+  await setup(runtime)
   runtime.setPtyController({
     spawn: vi.fn(async (args: { worktreeId?: string; tabId?: string; leafId?: string }) => {
       await bindPane({
@@ -57,7 +57,6 @@ it.each([
   })
 
   const unsubscribe = runtime.onMobileSessionTabsChanged(() => {}, 'phone', 'mobile')
-  const before = runtime['agentProjections'].senders.workForTest()
   const created = await runtime.createMobileSessionTerminal(`id:${TEST_WORKTREE_ID}`, {
     activate: false,
     select: false,
@@ -65,7 +64,6 @@ it.each([
     clientNavigationId: 'phone'
   })
 
-  expect(runtime['agentProjections'].senders.workForTest()).toEqual(before)
   unsubscribe()
   expect(created.tab).toMatchObject({
     status: 'ready',

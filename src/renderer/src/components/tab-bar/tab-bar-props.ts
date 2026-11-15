@@ -1,5 +1,5 @@
-import type { BrowserWorkspace } from '../../../../shared/browser-workspace-types'
-import type { ClientHostedBrowserRow } from '../../../../shared/client-hosted-browser-rows'
+import type { BrowserWorkspace } from '../../../../shared/browser/workspaces/browser-workspace-types'
+import type { ClientHostedBrowserRow } from '../../../../shared/browser/client-hosting/client-hosted-browser-rows'
 import type { Tab, WorkspaceVisibleTabType } from '../../../../shared/tab-types'
 import type { TerminalTab } from '../../../../shared/workspace-layout/terminal-tab-types'
 import type { OpenFile } from '../../store/slices/editor/types/open-file'

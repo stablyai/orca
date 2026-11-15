@@ -5,7 +5,7 @@ import { OPENCODE_ACP_DIALECT } from '../acp-dialects/opencode-dialect'
 import { directoryAccountBinding } from './acp-account-binding'
 import { openCodeAcpAccountBinding } from '../../opencode/accounts/opencode-structured-account-home'
 import { scrubOpenCodeAcpEnvironment } from '../../opencode/acp/opencode-acp-environment'
-import { compareAppVersions } from '../../../shared/app-version'
+import { compareAppVersions } from '../../../shared/app-lifecycle/identity/app-version'
 import { readGrokModelCatalog } from '../acp-dialects/grok-model-catalog'
 import {
   OPENCODE_MODEL_LISTING_ARGS,
@@ -23,12 +23,13 @@ import { GROK_SESSION_HISTORY } from '../../grok/grok-session-history'
 import { GROK_TRANSCRIPT_IMPORT } from '../../grok/grok-transcript-import'
 import { OPENCODE_SESSION_HISTORY } from '../../opencode/transcripts/opencode-session-history'
 import { OPENCODE_TRANSCRIPT_IMPORT } from '../../opencode/transcripts/opencode-transcript-import'
-import { assertOpenCodeCopyUsesLocalStore } from '../../../shared/opencode-launch-command'
+import { assertOpenCodeCopyUsesLocalStore } from '../../../shared/agent-launch/startup/opencode-launch-command'
 import { OMP_SESSION_HISTORY } from '../../omp/omp-session-history'
 import { OMP_TRANSCRIPT_IMPORT } from '../../omp/omp-transcript-import'
 import { ANTIGRAVITY_LAUNCH_SPEC } from '../../antigravity/antigravity-acp-launch-spec'
 import { COPILOT_LAUNCH_SPEC } from '../../copilot/copilot-acp-launch-spec'
 import { KIMI_LAUNCH_SPEC } from '../../kimi/kimi-acp-launch-spec'
+import { CURSOR_LAUNCH_SPEC } from '../../cursor/cursor-acp-launch-spec'
 import type { AcpLaunchSpec } from './acp-launch-contract'
 
 const GROK_LAUNCH_SPEC: AcpLaunchSpec = {
@@ -158,7 +159,8 @@ export const ACP_LAUNCH_SPECS: readonly AcpLaunchSpec[] = [
   OMP_LAUNCH_SPEC,
   ANTIGRAVITY_LAUNCH_SPEC,
   COPILOT_LAUNCH_SPEC,
-  KIMI_LAUNCH_SPEC
+  KIMI_LAUNCH_SPEC,
+  CURSOR_LAUNCH_SPEC
 ]
 
 export function acpLaunchSpecFor(agent: string): AcpLaunchSpec | null {

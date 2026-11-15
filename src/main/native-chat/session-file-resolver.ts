@@ -18,7 +18,7 @@ import { resolveOrcaManagedCodexHomePath } from '../codex/configuration/homes/co
 import {
   findGrokChatHistoryBySessionId,
   resolveGrokSessionsDir
-} from '../../shared/grok-session-paths'
+} from '../../shared/agent-hook-listener/providers/grok/grok-session-paths'
 import {
   hostAdditionalCodexHomePaths,
   needsWslHostResolution,

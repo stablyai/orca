@@ -4,13 +4,13 @@ import { DropdownMenuItem } from '@/components/ui/dropdown-menu'
 import { SettingsSegmentedControl } from '@/components/settings/form-controls/SettingsFormControls'
 import { useResetCountdownClock } from '@/hooks/useResetCountdownClock'
 import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
-import type { ProviderRateLimits } from '../../../../../shared/rate-limit-types'
-import type { UsagePercentageDisplay } from '../../../../../shared/usage-percentage-display'
+import type { ProviderRateLimits } from '../../../../../shared/agent-usage/rate-limits/rate-limit-types'
+import type { UsagePercentageDisplay } from '../../../../../shared/agent-usage/display/usage-percentage-display'
 import { ProviderIcon } from './provider-usage-panel'
-import { getProviderDisplayName } from '../../../../../shared/usage-provider-windows'
+import { getProviderDisplayName } from '../../../../../shared/agent-usage/display/usage-provider-windows'
 import { formatPlanLabel } from './usage-roster-formatting'
 import { getUsageRosterRowState, type UsageRosterRowState } from './usage-roster-row-state'
-import type { StatusBarUsageMode } from '../../../../../shared/status-bar-usage-mode'
+import type { StatusBarUsageMode } from '../../../../../shared/status-bar/status-bar-usage-mode'
 import {
   getUrgentScopedSection,
   getUsageHeadlineSection,
@@ -25,7 +25,7 @@ import {
   validResetAt
 } from './usage-reset-caption'
 import { formatBareUsagePercentage } from './usage-percentage-label'
-import { getUsageHealthTone, usageTextClass } from './usage-health-tone'
+import { getUsageHealthTone } from './usage-health-tone'
 import { UsageBar, UsageDisplayToggle, UsageValue } from './usage-meter'
 
 type ProviderId = ProviderRateLimits['provider']
@@ -64,10 +64,7 @@ function ScopedUsageFlag({
 }): React.JSX.Element {
   const t = useTranslate()
   return (
-    <span
-      data-usage-scoped-urgent
-      className={`shrink-0 text-[11px] ${usageTextClass(section.window.usedPercent)}`}
-    >
+    <span data-usage-scoped-urgent className="shrink-0 text-[11px] text-muted-foreground">
       {`${section.label} ${formatBareUsagePercentage(section.window.usedPercent, display, t)}`}
     </span>
   )

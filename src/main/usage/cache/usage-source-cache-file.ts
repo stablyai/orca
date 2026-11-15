@@ -7,7 +7,8 @@ import {
   writeFileDurable,
   type DurableFilePayload
 } from '../../filesystem/durable-file-write'
-import { encodeUsageCacheJson, readUsageCacheJson } from './usage-cache-json'
+import { encodeUsageCacheJson, parseUsageCacheJson, readUsageCacheJson } from './usage-cache-json'
+import { decodedUsageCacheText, publishGzipUsageCache } from './usage-cache-gzip'
 
 // Only scans need bulky per-source records; worker-owned sidecars keep them off main.
 
@@ -37,11 +38,11 @@ export async function readUsageSourceCache<T>(ref: UsageSourceCacheRef): Promise
     return []
   }
   try {
-    const parsed = await readUsageCacheJson<{
+    const parsed = await parseUsageCacheJson<{
       schemaVersion: number
       worktreeFingerprint: string | null
       sources: T[]
-    }>(ref.path)
+    }>(decodedUsageCacheText(ref.path))
     // The sidecar can commit before its report, so validate attribution independently.
     return parsed?.schemaVersion === ref.schemaVersion &&
       parsed.worktreeFingerprint === ref.worktreeFingerprint &&
@@ -62,14 +63,15 @@ export async function writeUsageSourceCache(
   ref: UsageSourceCacheRef,
   sources: readonly unknown[]
 ): Promise<void> {
-  await writeUsageSourceCacheData(
-    ref,
+  const encode = () =>
     encodeUsageCacheJson({
       schemaVersion: ref.schemaVersion,
       worktreeFingerprint: ref.worktreeFingerprint,
       sources
     })
-  )
+  if (!(await publishGzipUsageCache(ref.path, encode()))) {
+    await writeUsageSourceCacheData(ref, encode())
+  }
 }
 
 export async function writeUsageSourceCacheText(

@@ -1,5 +1,5 @@
 import type { GlobalSettings } from '../../../../../shared/global-settings-types'
-import type { ClaudeRateLimitAccountsState } from '../../../../../shared/managed-account-types'
+import type { ClaudeRateLimitAccountsState } from '../../../../../shared/agent-accounts/managed-account-types'
 import { translate } from '@/i18n/i18n'
 import {
   getCodexStatusRuntimeKey,

@@ -14,7 +14,7 @@ import { FILE_LINK_CONTEXT_INPUT_KEYS } from '../actions/native-chat-file-link-c
 import { resolveOwner } from '@/lib/workspace/ownership/resolve-owner'
 import { authorityKey } from '../../../../../../shared/execution-host/host-authority'
 import { githubPreviewRepoAuthorityKey } from './native-chat-github-route-repo'
-import type { Repo } from '../../../../../../shared/repo-types'
+import type { Repo } from '../../../../../../shared/repository/repo-types'
 import { isUnresolvedOwnerHostId } from '../../../../../../shared/execution-host'
 import {
   githubHostFromIdentityKey,

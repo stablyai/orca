@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { getDefaultPersistedState } from '../../../shared/constants'
-import { createProjectGroup } from '../../../shared/project-groups'
+import { createProjectGroup } from '../../../shared/project/groups/project-groups'
 import { ProjectGroupPersistenceOperations } from './project-group-operations'
 
 function fixture() {

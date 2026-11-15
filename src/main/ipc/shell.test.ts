@@ -48,11 +48,11 @@ vi.mock('node:child_process', () => ({
   spawn: spawnMock
 }))
 
-vi.mock('../../shared/node-cli-command-resolution', () => ({
+vi.mock('../../shared/shell/command-resolution/node-cli-command-resolution', () => ({
   resolveCliCommand: resolveCliCommandMock
 }))
 
-vi.mock('../../shared/windows-batch-spawn', () => ({
+vi.mock('../../shared/shell/launch/windows-batch-spawn', () => ({
   getCmdExePath: () => 'C:\\Windows\\System32\\cmd.exe',
   getSpawnArgsForWindows: getSpawnArgsForWindowsMock
 }))

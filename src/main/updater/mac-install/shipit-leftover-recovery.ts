@@ -9,7 +9,7 @@ import {
 import {
   isShipItRunningForBundleId,
   listProcessCommands
-} from '../../../shared/shipit-process-listing'
+} from '../../../shared/desktop-distribution/macos/shipit-process-listing'
 import { LOCAL_BUILD_COMPATIBILITY_CONTRACT } from '../../../shared/remote-runtime/orcad-distribution/local-build-compatibility-contract'
 import { recordUpdaterLifecycle } from '../updater-lifecycle-diagnostics'
 

@@ -87,7 +87,7 @@ type VerifiedOrcadForwardArgs = {
   rereadRemotePort?: () => Promise<number>
   /** Omit when the caller validates identity itself. */
   verify?: (localPort: number) => Promise<OrcadForwardIdentity>
-  stillCurrent: () => boolean
+  stillCurrent: () => boolean | Promise<() => boolean>
 }
 
 export type OrcadTunnelStartChecks = Pick<
@@ -136,7 +136,7 @@ export async function forwardToVerifiedOrcad(
     const identity = args.verify
       ? await args.verify(forward.localPort)
       : ({ verdict: 'verified' } as const)
-    if (!args.stillCurrent()) {
+    if (!(await prepareCurrentTunnelCheck(args.stillCurrent))()) {
       await args.forwards.removeForwardAndWait(forward.id)
       return null
     }
@@ -160,7 +160,7 @@ export async function forwardToVerifiedOrcad(
     }
     const reread =
       attempt === 0 && args.rereadRemotePort ? await args.rereadRemotePort() : remotePort
-    if (reread === remotePort || !args.stillCurrent()) {
+    if (reread === remotePort || !(await prepareCurrentTunnelCheck(args.stillCurrent))()) {
       throw orcadIdentityRefusal(remotePort, identity)
     }
     remotePort = reread
@@ -183,9 +183,16 @@ async function addCurrentForward(
     await args.forwards.removeForwardAndWait(forward.id)
     throw new Error('Managed Orca tunnel bound an unexpected local port.')
   }
-  if (!args.stillCurrent()) {
+  if (!(await prepareCurrentTunnelCheck(args.stillCurrent))()) {
     await args.forwards.removeForwardAndWait(forward.id)
     return null
   }
   return forward
+}
+
+async function prepareCurrentTunnelCheck(
+  check: VerifiedOrcadForwardArgs['stillCurrent']
+): Promise<() => boolean> {
+  const current = await check()
+  return typeof current === 'function' ? current : () => current
 }
