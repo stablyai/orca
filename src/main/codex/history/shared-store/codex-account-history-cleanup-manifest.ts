@@ -129,8 +129,10 @@ export async function readManifest(
   return isCurrentManifest(parsed) ? parsed : null
 }
 
-function isCurrentManifest(value: object): value is CodexHistoryCleanupManifest {
+function isCurrentManifest(value: unknown): value is CodexHistoryCleanupManifest {
   return (
+    typeof value === 'object' &&
+    value !== null &&
     'version' in value &&
     value.version === MANIFEST_VERSION &&
     'rollouts' in value &&
