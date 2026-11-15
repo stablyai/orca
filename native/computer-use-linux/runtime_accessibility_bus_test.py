@@ -48,8 +48,7 @@ class AccessibilityBusTest(unittest.TestCase):
                if name not in ("DBUS_SESSION_BUS_ADDRESS", "AT_SPI_BUS_ADDRESS")}
         with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as runtime_dir:
             result = self.run_list_apps(runtime_dir, env, ("dbus-run-session", "--"))
-        self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertEqual(json.loads(result.stdout), {"ok": True, "apps": []}, result.stderr)
+        self.assertEqual((result.returncode, result.stdout.strip()), (0, '{"ok":true,"apps":[]}'), result.stderr)
 
 
 if __name__ == "__main__":
