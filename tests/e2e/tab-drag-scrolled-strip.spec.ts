@@ -153,7 +153,8 @@ function moved(
 
 test.describe('tab drops beside a scrolled tab strip', () => {
   test.beforeEach(async ({ orcaPage }) => {
-    await orcaPage.setViewportSize({ width: 1280, height: 800 })
+    // Wide enough that each split's strip shows a few tabs beside its own buttons.
+    await orcaPage.setViewportSize({ width: 1920, height: 900 })
     await waitForSessionReady(orcaPage)
     await waitForActiveWorktree(orcaPage)
     await ensureTerminalVisible(orcaPage)
@@ -177,7 +178,7 @@ test.describe('tab drops beside a scrolled tab strip', () => {
       for (let x = Math.ceil(target.box.left) + 2; x < target.box.right - 2; x++) {
         const point = { x, y }
         const covering = hidden.filter(({ box }) => containsX(box, x))
-        if (covering.length === 0) {
+        if (covering.length === 0 || !containsX(left.scroller, x)) {
           continue
         }
         const margin =
@@ -202,20 +203,28 @@ test.describe('tab drops beside a scrolled tab strip', () => {
 
   test('a drop in the strip gap after the last tab stays in that split', async ({ orcaPage }) => {
     const worktreeId = await waitForActiveWorktree(orcaPage)
-    const splits = await buildSplits(orcaPage, worktreeId, { left: 3, right: 16 })
+    const splits = await buildSplits(orcaPage, worktreeId, { left: 2, right: 24 })
     await scrollStripToEnd(orcaPage, splits.rightGroupId)
     const leftBefore = await stripTabIds(orcaPage, splits.leftGroupId)
     const rightBefore = await stripTabIds(orcaPage, splits.rightGroupId)
     const left = await stripGeometry(orcaPage, splits.leftGroupId)
     const right = await stripGeometry(orcaPage, splits.rightGroupId)
+    const leftStrip = (await orcaPage.locator(stripSelector(splits.leftGroupId)).boundingBox())!
     const last = left.tabs.at(-1)!
-    const point = { x: last.box.right + 24, y: (last.box.top + last.box.bottom) / 2 }
+    const y = (last.box.top + last.box.bottom) / 2
 
-    // Precondition: the gap shows no left tab, but a scrolled-off right tab lies there.
-    expect(left.tabs.some(({ box }) => containsX(box, point.x))).toBe(false)
-    expect(hiddenTabs(right).some(({ box }) => containsX(box, point.x))).toBe(true)
+    // Precondition: a gap in the left strip that shows no left tab, with a scrolled-off right tab there.
+    let gapX: number | null = null
+    for (let x = Math.ceil(last.box.right) + 40; x < leftStrip.x + leftStrip.width - 40; x++) {
+      if (hiddenTabs(right).some(({ box }) => containsX(box, x))) {
+        gapX = x
+        break
+      }
+    }
+    expect(gapX).not.toBeNull()
+    expect(left.tabs.some(({ box }) => containsX(box, gapX!))).toBe(false)
 
-    await dragTab(orcaPage, splits.leftGroupId, leftBefore[0]!, async () => point)
+    await dragTab(orcaPage, splits.leftGroupId, leftBefore[0]!, async () => ({ x: gapX!, y }))
 
     await expect
       .poll(() => stripTabIds(orcaPage, splits.leftGroupId))
@@ -245,10 +254,13 @@ test.describe('tab drops beside a scrolled tab strip', () => {
       })
       await expect.poll(() => scroller.evaluate((el) => el.scrollLeft)).toBeGreaterThan(200)
       const strip = await stripGeometry(orcaPage, splits.leftGroupId)
-      const visible = strip.tabs.filter(
-        ({ box }) => box.left >= strip.scroller.left && box.right <= strip.scroller.right
-      )
-      const target = visible[Math.floor(visible.length / 2)]!
+      // The most-visible tab, so the drop point is clearly on it.
+      const shown = (box: Box) =>
+        Math.min(box.right, strip.scroller.right) - Math.max(box.left, strip.scroller.left)
+      const target = strip.tabs
+        .filter(({ id }) => id !== leftBefore[0])
+        .reduce((best, tab) => (shown(tab.box) > shown(best.box) ? tab : best))
+      expect(shown(target.box)).toBeGreaterThan((target.box.right - target.box.left) * 0.9)
       targetId = target.id
       return {
         x: target.box.right - (target.box.right - target.box.left) / 4,
