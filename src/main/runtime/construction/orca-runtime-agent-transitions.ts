@@ -3,7 +3,7 @@ import { AgentTransitionDetector } from '../../agent-hooks/observations/agent-tr
 import type { ConnectorCloud } from '../../connector-cloud/connector-cloud'
 import type { ExternalConversationSeam } from '../../external-conversations/external-conversation-seam'
 import { installExternalConversations } from '../../external-conversations/external-conversations-install'
-import { HEADLESS_RUNTIME_WINDOW_ID } from '../../../shared/runtime-session-contracts'
+import { HEADLESS_RUNTIME_WINDOW_ID } from '../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import { parsePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
 import { parseWorkspaceKey } from '../../../shared/workspace-scope'
 import { getRepoIdFromWorktreeId } from '../../../shared/worktree/id'

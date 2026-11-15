@@ -1,5 +1,5 @@
 import type { PreloadApi } from '../../../../preload/api-types'
-import type { RuntimeStatus } from '../../../../shared/runtime-types'
+import type { RuntimeStatus } from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import {
   createRuntimeGitLabApi,
   RuntimeCapabilityMissingError

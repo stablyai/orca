@@ -16,7 +16,7 @@ import {
 } from '@/components/github/PRFilterSections'
 import type { GitHubAssignableUser } from '../../../../shared/github/pull-requests/pull-request-types'
 import type { GitHubRepositoryIdentity as GitHubOwnerRepo } from '../../../../shared/github/repositories/repository-identity'
-import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import type { ParsedTaskQuery } from '../../../../shared/work-items/task-query'
 import { translate } from '@/i18n/i18n'
 import { useTranslate, type Translate } from '@/i18n/use-translate'

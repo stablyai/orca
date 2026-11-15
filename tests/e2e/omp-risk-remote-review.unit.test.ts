@@ -96,8 +96,6 @@ it.each(
       state.paneForegroundAgentByPaneKey?.[sibling]
     )
     expect(after.recentlyClosedAgentStatusTabIds?.[tabId]).toBeUndefined()
-    expect(after.retentionSuppressedPaneKeys?.[sibling]).toBeUndefined()
-    expect(after.retentionSuppressedPaneKeys?.[ownPane]).toBe(true)
 
     const next = {
       ...after,

@@ -39,7 +39,7 @@ export function resetSenderStore(): void {
       tabsByWorktree: { workspace: [makeTab({ id: 'tab-0', worktreeId: 'workspace' })] },
       unifiedTabsByWorktree: {},
       agentStatusByPaneKey: { [status(0).paneKey]: status(0) },
-      retainedAgentsByPaneKey: {},
+
       migrationUnsupportedByPtyId: {},
       runtimeAgentOrchestrationByPaneKey: {},
       runtimePaneTitlesByTabId: {},

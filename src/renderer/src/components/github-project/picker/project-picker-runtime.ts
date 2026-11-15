@@ -1,4 +1,4 @@
-import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import { githubProjectHost } from '../../../../../shared/github/projects/project-identity'
 import type { GitHubProjectOwnerType } from '../../../../../shared/github/projects/project-types'

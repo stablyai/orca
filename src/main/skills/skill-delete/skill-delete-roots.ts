@@ -6,7 +6,7 @@ import {
   nativeSkillPathSemantics,
   type SkillPathSemantics
 } from '../../../shared/skill-path-containment'
-import { toWindowsWslPath } from '../../../shared/wsl-paths'
+import { toWindowsWslPath } from '../../../shared/file-access/wsl-paths'
 import { discoverClaudePluginSkillSources } from '../discovery/claude-plugin-skill-sources'
 import { discoverClaudePluginSkillSourcesInWsl } from '../discovery/claude-plugin-skill-sources-wsl'
 import {

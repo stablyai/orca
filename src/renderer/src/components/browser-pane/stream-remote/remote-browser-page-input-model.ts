@@ -1,6 +1,6 @@
 import type { BrowserScreencastFrameMetadata } from '../../../../../shared/browser/screencast/browser-screencast-protocol'
 import type { BrowserTabInfo } from '../../../../../shared/browser/runtime/runtime-browser-contracts'
-import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import type {
   RemoteBrowserOperationToken,
   RemoteBrowserStreamToken,

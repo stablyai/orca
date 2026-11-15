@@ -13,7 +13,7 @@ import {
   type OrcadCompletedStopReceipt,
   type OrcadDaemonRetirementRecord,
   type OrcadManagedStopRequest
-} from '../../../../shared/orcad-stop-request'
+} from '../../../../shared/remote-runtime/orcad-lifecycle/orcad-stop-request'
 
 const RECEIPT_MAX_BYTES = 64 * 1024
 

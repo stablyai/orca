@@ -3,7 +3,7 @@ import { access, lstat, open, readdir, readFile, stat, type FileHandle } from 'n
 import { Readable } from 'node:stream'
 import { StringDecoder } from 'node:string_decoder'
 import { throwIfSignalAborted, waitForPromiseWithSignal } from '../../../shared/abort-signal-reason'
-import { isWslUncPath } from '../../../shared/wsl-paths'
+import { isWslUncPath } from '../../../shared/file-access/wsl-paths'
 import { runWslTranscriptFsTask, type WslTranscriptFsTaskPriority } from './wsl-transcript-fs-gate'
 import {
   closeWslTranscriptFsProcess,

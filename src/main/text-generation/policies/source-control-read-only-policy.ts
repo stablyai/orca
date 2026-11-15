@@ -10,7 +10,7 @@ import {
   KIMI_VALUE_OPTIONS
 } from '../../../shared/source-control/ai/generation/commit-message-generation-options'
 import type { CommitMessagePlan } from '../../../shared/source-control/ai/generation/commit-message-plan'
-import { parseWslUncPath, wslDistroForCommand } from '../../../shared/wsl-paths'
+import { parseWslUncPath, wslDistroForCommand } from '../../../shared/file-access/wsl-paths'
 import { CODEX_DISABLE_PLUGINS_ARGS } from '../../codex-cli/codex-read-only-app-server-args'
 import { runWslProcess } from '../../wsl/execution/wsl-runner'
 import { TEXT_TASK_DIRECTORY } from '../prompts/source-control-prompt-files'

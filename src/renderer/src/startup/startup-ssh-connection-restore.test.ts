@@ -1,5 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest'
-import type { SshConnectionState, SshProviderEpoch, SshTarget } from '../../../shared/ssh-types'
+import type {
+  SshConnectionState,
+  SshProviderEpoch,
+  SshTarget
+} from '../../../shared/remote-runtime/ssh/ssh-types'
 import { restoreSshConnectionsForStartup } from './startup-ssh-connection-restore'
 
 function connectedState(targetId: string): SshConnectionState {

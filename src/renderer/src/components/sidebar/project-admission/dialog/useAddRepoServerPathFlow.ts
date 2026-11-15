@@ -19,7 +19,7 @@ import {
 import {
   wslHostWindowsDriveRefusalForLinuxPath,
   type WslHostWindowsDriveRefusal
-} from '../../../../../../shared/wsl-host-windows-drive-refusal'
+} from '../../../../../../shared/remote-runtime/wsl-hosts/wsl-host-windows-drive-refusal'
 import { getWindowsPathAccess } from '@/lib/files/os-open/windows-path-access'
 import type { AddRepoPathOptions } from '@/store/repos/repo-state'
 import { addRepoBusyLabels } from './add-repo-busy-labels'

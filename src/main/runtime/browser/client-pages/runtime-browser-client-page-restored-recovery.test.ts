@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import type { RuntimeBrowserClientPlacement } from '../../../../shared/runtime-browser-placement'
+import type { RuntimeBrowserClientPlacement } from '../../../../shared/browser/client-hosting/runtime-browser-placement'
 import {
   RESTORED_CLIENT_HOSTED_BROWSER_PLACEMENT,
   RESTORED_CLIENT_HOSTED_EXECUTION_HOST_KEY

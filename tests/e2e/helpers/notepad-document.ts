@@ -1,5 +1,5 @@
 import { expect } from 'vitest'
-import type { ComputerSnapshotResult } from '../../../src/shared/runtime-types'
+import type { ComputerSnapshotResult } from '../../../src/shared/computer-use-runtime-types'
 import { findRoleIndex, parseJsonOutput, runOrcaCli } from './computer-driver'
 
 export const editableRolePattern = /^\s*(\d+)\s+(document|edit|text|pane)(?:\s|$)/im

@@ -5,7 +5,7 @@ import {
 import { selectSidebarLineageParentIdentities } from '@/store/slices/worktrees/metadata/cross-store-lineage-parents'
 import type { Worktree } from '../../../../../../shared/worktree/types'
 import type { AppState } from '@/store/types'
-import { getHostDisplayLabelOverrides } from '../../../../../../shared/host-setting-overrides'
+import { getHostDisplayLabelOverrides } from '../../../../../../shared/execution-host/host-setting-overrides'
 import {
   ALL_EXECUTION_HOSTS_SCOPE,
   getLocalExecutionHostLabel,

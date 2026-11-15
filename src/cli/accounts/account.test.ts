@@ -59,7 +59,7 @@ import {
   ACCOUNT_IMPORT_RUNTIME_CAPABILITY,
   CLAUDE_SIGN_IN_RUNTIME_CAPABILITY,
   DATA_ACCOUNT_RUNTIME_CAPABILITY
-} from '../../shared/account-runtime-capabilities'
+} from '../../shared/remote-runtime/protocol/account-runtime-capabilities'
 
 function helpChild(stdout: string): EventEmitter {
   const child = Object.assign(new EventEmitter(), { stdout: new PassThrough() })

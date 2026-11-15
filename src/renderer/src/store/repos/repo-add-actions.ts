@@ -27,7 +27,7 @@ import {
   runExclusiveForRuntimeEnvironment
 } from './pending-runtime-repo-removals'
 import { RuntimeRpcCallError } from '../../runtime/rpc/calls/runtime-rpc-result'
-import { readWslHostWindowsDriveRefusal } from '../../../../shared/wsl-host-windows-drive-refusal'
+import { readWslHostWindowsDriveRefusal } from '../../../../shared/remote-runtime/wsl-hosts/wsl-host-windows-drive-refusal'
 import { showWslHostWindowsDriveRefusal } from '@/lib/workspace/creation/wsl-host-windows-drive-refusal-toast'
 
 export function createRepoAddActions(

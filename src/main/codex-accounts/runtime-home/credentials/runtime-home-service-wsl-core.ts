@@ -5,7 +5,7 @@ import {
   codexAuthMatchesManagedAccount,
   codexAuthMatchesSystemDefaultIdentity
 } from '../../credentials/codex-auth-identity'
-import { parseWslUncPath } from '../../../../shared/wsl-paths'
+import { parseWslUncPath } from '../../../../shared/file-access/wsl-paths'
 import type { CodexManagedAccount } from '../../../../shared/managed-account-types'
 import type { CodexReadBackMatch } from '../runtime-home-service-types'
 import type { WslCodexAuthRead } from '../wsl/wsl-codex-auth-batch-reader'

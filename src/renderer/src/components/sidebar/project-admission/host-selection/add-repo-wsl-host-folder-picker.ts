@@ -10,7 +10,7 @@ import {
 import {
   wslHostWindowsDriveRefusalForPickedPath,
   type WslHostWindowsDriveRefusal
-} from '../../../../../../shared/wsl-host-windows-drive-refusal'
+} from '../../../../../../shared/remote-runtime/wsl-hosts/wsl-host-windows-drive-refusal'
 import { translate } from '@/i18n/i18n'
 
 export type DroppedHostPath = { hostId: ExecutionHostId; path: string }

@@ -50,7 +50,7 @@ import '../terminal/output/recent-pty-output-buffer'
 import '../session-lifecycle/projection/mobile-session-browser-equality'
 import '../session-lifecycle/projection/mobile-session-browser-group-projection'
 import '../../daemon/emulation/headless-emulator'
-import '../../../shared/runtime-types'
+
 import '../../../shared/terminal/input/terminal-input'
 import '../../../shared/agent-launch/startup/agent-prompt-injection'
 import '../../../shared/clipboard-text'

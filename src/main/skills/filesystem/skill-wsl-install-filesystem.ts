@@ -1,6 +1,6 @@
 import { join, posix } from 'node:path'
 import type { SkillPackageManifestV1 } from '../../../shared/skill-package-manifest'
-import { parseWslUncPath } from '../../../shared/wsl-paths'
+import { parseWslUncPath } from '../../../shared/file-access/wsl-paths'
 import {
   SKILL_PACKAGE_OBSERVATION_LIMITS,
   observeSkillPackage,

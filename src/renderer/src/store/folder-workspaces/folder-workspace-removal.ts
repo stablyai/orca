@@ -9,7 +9,7 @@ import { callRuntimeRpc } from '../../runtime/rpc/calls/runtime-rpc-call'
 import { folderWorkspaceKey } from '../../../../shared/workspace-scope'
 import { getRepoExecutionHostId } from '../../../../shared/execution-host'
 import { projectGroupHookOwner } from '../../../../shared/workspace-hook-owner'
-import { PROJECT_GROUP_FOLDER_ARCHIVE_RUNTIME_CAPABILITY } from '../../../../shared/worktree-runtime-capabilities'
+import { PROJECT_GROUP_FOLDER_ARCHIVE_RUNTIME_CAPABILITY } from '../../../../shared/remote-runtime/protocol/worktree-runtime-capabilities'
 import {
   worktreeRemovalReplyTimeoutMs,
   isArchiveHookRemovalError

@@ -1,7 +1,7 @@
 import { existsSync, statSync } from 'node:fs'
 import { stat } from 'node:fs/promises'
 import { release } from 'node:os'
-import { isWslUncPath, uncRouteKey } from '../../../shared/wsl-paths'
+import { isWslUncPath, uncRouteKey } from '../../../shared/file-access/wsl-paths'
 import { wslUncDirectoryExistsAsync } from '../../wsl/filesystem/unc-path-access'
 import { PrioritySemaphore } from '../../../shared/priority-semaphore'
 

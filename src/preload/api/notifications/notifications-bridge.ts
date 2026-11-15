@@ -68,7 +68,7 @@ export const notificationsApi = {
         { force: options?.force === true }
       )
       if (!resolved.ok) {
-        // Focus suppression is transient; keep the decoded sound for later plays.
+        // System Focus suppression is transient; keep the decoded sound for later plays.
         if (resolved.reason !== 'focus-active' && cachedNotificationSound) {
           disposeCachedNotificationSound()
         }

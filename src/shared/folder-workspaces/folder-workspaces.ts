@@ -7,7 +7,7 @@ import { isWorkspaceLinkedItemSourceContextMatch } from '../workspace-attachment
 import { normalizeWorkspaceCreatorProvenance } from '../workspace-creator-provenance'
 import { getWorkspaceAttachments } from '../workspace-attachments/workspace-attachments'
 import { isSmartTier } from '../sidebar-list/sorting/sort-stamps'
-import { normalizeOrcadRetainedMarker } from '../orcad-retained-marker'
+import { normalizeOrcadRetainedMarker } from '../remote-runtime/orcad-lifecycle/orcad-retained-marker'
 
 export function normalizeFolderWorkspaceName(
   name: string | null | undefined,

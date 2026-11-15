@@ -2,12 +2,12 @@ import type { RuntimeCapability } from '../../../../../shared/protocol-version'
 import '../../../../../shared/protocol-version'
 import { BROWSER_CLIENT_HOST_RUNTIME_CAPABILITY } from '../../../../../shared/browser/runtime/browser-runtime-capabilities'
 import type { TabGroupLayoutNode } from '../../../../../shared/tab-types'
-import type { RuntimeMobileSessionClientTab } from '../../../../../shared/runtime-mobile-session-tab-contracts'
+import type { RuntimeMobileSessionClientTab } from '../../../../../shared/remote-runtime/session-graph/runtime-mobile-session-tab-contracts'
 import type {
   RuntimeMobileSessionTabMove,
   RuntimeMobileSessionTabGroup,
   RuntimeMobileSessionTabsResult
-} from '../../../../../shared/runtime-session-contracts'
+} from '../../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 
 export function clientCanObserveClientHostedBrowserPages(
   clientCapabilities: readonly RuntimeCapability[] | undefined

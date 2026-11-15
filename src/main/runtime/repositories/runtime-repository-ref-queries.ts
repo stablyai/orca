@@ -1,5 +1,5 @@
 import type { BaseRefDefaultResult, Repo } from '../../../shared/repo-types'
-import type { RuntimeRepoSearchRefs } from '../../../shared/runtime-worktree-contracts'
+import type { RuntimeRepoSearchRefs } from '../../../shared/worktree/catalog/runtime-worktree-contracts'
 import { isFolderRepo } from '../../../shared/repo-kind'
 import {
   clampRepoSearchRefsLimit,

@@ -7,8 +7,8 @@ import { useAppStore } from '@/store/index'
 import { createCompatibleRuntimeStatusResponse } from '@/runtime/rpc/testing/runtime-compatibility-test-fixture'
 import type { RuntimeHostStatusSnapshot } from '../../../../../../shared/remote-runtime/host-status/runtime-host-status'
 import type { PublicKnownRuntimeEnvironment } from '../../../../../../shared/remote-runtime/host-catalog/runtime-environments'
-import type { SshConnectionStatus } from '../../../../../../shared/ssh-types'
-import type { RuntimeStatus } from '../../../../../../shared/runtime-session-contracts'
+import type { SshConnectionStatus } from '../../../../../../shared/remote-runtime/ssh/ssh-types'
+import type { RuntimeStatus } from '../../../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 export function environment(id: string, pairedDeviceId?: string): PublicKnownRuntimeEnvironment {
   return {
     id,

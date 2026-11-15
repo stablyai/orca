@@ -2,7 +2,7 @@
 import { act, cleanup, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { SshConfigHostResolution } from '../../../../../../shared/ssh-types'
+import type { SshConfigHostResolution } from '../../../../../../shared/remote-runtime/ssh/ssh-types'
 
 const toastMocks = vi.hoisted(() => ({ error: vi.fn(), success: vi.fn() }))
 vi.mock('sonner', () => ({ toast: Object.assign(vi.fn(), toastMocks) }))

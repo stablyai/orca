@@ -13,17 +13,17 @@ const mocks = vi.hoisted(() => ({
 }))
 
 vi.mock('electron', () => ({ app: { getPath: () => '/user-data' } }))
-vi.mock('../../shared/ephemeral-vm-runtime-store', () => ({
+vi.mock('../../shared/remote-runtime/ephemeral-vm-store/ephemeral-vm-runtime-store', () => ({
   updateEphemeralVmRuntimeStatus: mocks.updateStatus
 }))
-vi.mock('../../shared/ephemeral-vm-workspace-runtime', () => ({
+vi.mock('../../shared/remote-runtime/ephemeral-vm-store/ephemeral-vm-workspace-runtime', () => ({
   findWorkspaceEphemeralVmRuntime: () => ({ id: 'vm-1', status: 'suspended', repoId: 'repo-1' })
 }))
 vi.mock('../../shared/remote-runtime/host-store/runtime-environment-store', () => ({
   resolveEnvironment: () => ({ id: 'env-vm', pairingRevision: 9, createdAt: 0 }),
   updateEnvironmentFromPairingCode: vi.fn()
 }))
-vi.mock('../../shared/ephemeral-vm-recipes', () => ({
+vi.mock('../../shared/remote-runtime/ephemeral-vm-recipes/ephemeral-vm-recipes', () => ({
   getEphemeralVmRecipeResultConnection: () => ({ type: 'ssh', target: { host: 'vm' } }),
   getEphemeralVmRecipeResultPairingCode: () => null
 }))

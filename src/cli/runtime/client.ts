@@ -1,6 +1,9 @@
 import { reenterPackagedElectron } from './app-launch/packaged-cli-interpreter'
 import { randomUUID } from 'node:crypto'
-import type { CliStatusResult, RuntimeStatus } from '../../shared/runtime-session-contracts'
+import type {
+  CliStatusResult,
+  RuntimeStatus
+} from '../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import { runtimeHostConnectionState } from '../../shared/remote-runtime/host-status/runtime-host-connection-state'
 import {
   isDurableMutation,
@@ -16,12 +19,9 @@ import type { OfflineRuntimeAdmission } from './status/status'
 import { projectRemoteAppStatus } from '../../shared/cli-app-status-projection'
 import { sendRequest } from './connection/transport'
 import { attachMutationRecovery, isRequestUnsent } from './connection/client-error-recovery'
-import {
-  RuntimeClientError,
-  RuntimeRpcFailureError,
-  type RuntimeCallOptions
-} from './connection/types'
-import type { RuntimeRpcSuccess } from '../../shared/runtime-rpc-envelope'
+import { RuntimeClientError, RuntimeRpcFailureError } from './connection/types'
+import type { RuntimeCallOptions } from './connection/types'
+import type { RuntimeRpcSuccess } from '../../shared/remote-runtime/rpc/runtime-rpc-envelope'
 import {
   attachDurableMutationRecovery,
   attachLegacyTerminalPromptRecovery,

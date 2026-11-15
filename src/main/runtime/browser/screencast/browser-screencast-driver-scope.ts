@@ -1,4 +1,4 @@
-import type { RuntimeTerminalDriverState } from '../../../../shared/runtime-session-contracts'
+import type { RuntimeTerminalDriverState } from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 
 export type BrowserScreencastSubscriber = {
   cancel: (emitEnd?: boolean) => void

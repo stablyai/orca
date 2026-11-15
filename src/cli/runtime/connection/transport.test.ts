@@ -5,7 +5,7 @@ import { createServer, type Socket } from 'node:net'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { sendRequest } from './transport'
 import { RuntimeClient } from '../client'
-import { getRuntimeMetadataPath } from '../../../shared/runtime-bootstrap'
+import { getRuntimeMetadataPath } from '../../../shared/remote-runtime/bootstrap/runtime-bootstrap'
 import { requestWorktreeRemoval } from '../../workspaces/worktree-removal-request'
 
 const roots: string[] = []

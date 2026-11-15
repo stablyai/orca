@@ -8,8 +8,8 @@ import type {
   RuntimeEnvironmentStatus,
   RuntimeHostStatusSnapshot
 } from '../../../../../shared/remote-runtime/host-status/runtime-host-status'
-import type { RuntimeStatus } from '../../../../../shared/runtime-session-contracts'
-import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
+import type { RuntimeStatus } from '../../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
+import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import {
   NATIVE_CHAT_HOST_RECONNECTING_GRACE_MS,
   useNativeChatHostOutage

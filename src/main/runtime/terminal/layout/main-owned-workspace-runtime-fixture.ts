@@ -3,7 +3,7 @@ import { getDefaultWorkspaceSession } from '../../../../shared/constants'
 import type { WorkspaceSessionState } from '../../../../shared/workspace-session/workspace-session-state-types'
 import type { TerminalPaneLayoutNode } from '../../../../shared/workspace-layout/terminal-tab-types'
 import type { LayoutCommand } from '../../../../shared/workspace-layout/workspace-layout-command-types'
-import { HEADLESS_RUNTIME_WINDOW_ID } from '../../../../shared/runtime-session-contracts'
+import { HEADLESS_RUNTIME_WINDOW_ID } from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import { applyCommandToSession } from '../../../persistence/terminal-topology/pane-admission/terminal-pane-admission'
 import { resolveHostId } from '../../../persistence/loading-store/workspace-sessions/session-host-partitions'
 import {

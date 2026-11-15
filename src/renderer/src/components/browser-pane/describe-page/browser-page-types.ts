@@ -1,4 +1,4 @@
-import type { RuntimeBrowserClientPlacement } from '../../../../../shared/runtime-browser-placement'
+import type { RuntimeBrowserClientPlacement } from '../../../../../shared/browser/client-hosting/runtime-browser-placement'
 import type { Dispatch, MutableRefObject, SetStateAction } from 'react'
 import type {
   BrowserAnnotationIntent,

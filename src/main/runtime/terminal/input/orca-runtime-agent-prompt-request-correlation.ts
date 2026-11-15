@@ -1,5 +1,5 @@
 import { OrcaRuntimeWithSerializeAgentPromptSubmission } from './terminal-agent-status-and-submission'
-import type { RuntimeTerminalPromptDelivery } from '../../../../shared/runtime-terminal-send-contract'
+import type { RuntimeTerminalPromptDelivery } from '../../../../shared/terminal/runtime/runtime-terminal-send-contract'
 import type {
   AgentPromptTurnStartEvidence,
   AgentPromptWaitTextCache

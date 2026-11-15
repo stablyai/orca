@@ -15,10 +15,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { foundAgentSessionRecord } from '../records/agent-session-record-founding'
 import {
   openTestAgentSessionRecordStore,
-  seedTestAgentSessionRecordStore,
-  closeTestAgentSessionRecordStores,
-  withTestAgentSessionDatabase
+  closeTestAgentSessionRecordStores
 } from '../records/agent-session-record-store-test-harness'
+import {
+  seedTestAgentSessionRecordStore,
+  withTestAgentSessionDatabase
+} from '../records/agent-session-record-store-persistence.test-fixture'
 
 let root: string
 beforeEach(async () => {

@@ -3,8 +3,8 @@ import type {
   OrcadManagedCancelStopResult,
   OrcadManagedForgetResult,
   OrcadManagedStopResult
-} from '../../../shared/orcad-managed-runtime'
-import type { OrcadDaemonRetirementVerdict } from '../../../shared/orcad-stop-request'
+} from '../../../shared/remote-runtime/orcad-lifecycle/orcad-managed-runtime'
+import type { OrcadDaemonRetirementVerdict } from '../../../shared/remote-runtime/orcad-lifecycle/orcad-stop-request'
 import { removeManagedOrcadEnvironment } from '../../../shared/remote-runtime/host-store/runtime-environment-managed-orcad-store'
 import { listEnvironments } from '../../../shared/remote-runtime/host-store/runtime-environment-store'
 import { findManagedSshTwin } from '../../../shared/remote-runtime/host-catalog/runtime-environment-host-key-match'

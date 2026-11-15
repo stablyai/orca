@@ -1,6 +1,6 @@
 import type { FederatedWorkerStartRequest } from './federated-worker-start-request'
 import { isTuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent-config'
-import type { RuntimeStatus } from '../../../../shared/runtime-session-contracts'
+import type { RuntimeStatus } from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import {
   ORCHESTRATION_CONTRACT_RUNTIME_CAPABILITY,
   ORCHESTRATION_FEDERATION_CONTROL_MAIL_PROTOCOL_VERSION,
