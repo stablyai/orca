@@ -7,10 +7,7 @@ import { closeAllWatchers } from '../../ipc/filesystem/watchers/filesystem-watch
 import { disposeWorktreeBaseDirectoryWatchers } from '../../ipc/worktrees/creation/worktree-base-directory-watcher'
 import { stopFolderRepoGitUpgradeWatch } from '../../ipc/folder-repo-git-upgrade'
 import { killAllPty } from '../../ipc/pty/kill-all'
-import {
-  disconnectDaemon,
-  shutdownDaemon
-} from '../../daemon/providers/lifecycle/daemon-provider-state'
+import * as daemon from '../../daemon/providers/lifecycle/daemon-provider-state'
 import { beginSshShutdown } from '../../ipc/ssh/ssh-shutdown-drain'
 import { agentHookServer } from '../../agent-hooks/server/agent-hook-server'
 import { wslHookRelayManager } from '../../agent-hooks/wsl-relay/wsl-hook-relay-manager'
@@ -284,7 +281,7 @@ function installWillQuitHandler(): void {
     ]).then(() => state.runtime?.closeNotificationDismissals())
     // Normal quits preserve the detached daemon for warm reattach; dev-parent death leaves its temporary profile ownerless.
     const daemonTeardown = removalQuiescence.then(() =>
-      isDevParentShutdownRequested() ? shutdownDaemon() : disconnectDaemon()
+      isDevParentShutdownRequested() ? daemon.shutdownDaemon() : daemon.disconnectDaemon()
     )
     // Bound unsettled transports and these final writes so quit cannot hang (#9447). Failures still exit; atomic swaps preserve old files if the final debounce is lost.
     // Extension storage's final save runs after this, unbounded, as its old synchronous will-quit save was.
