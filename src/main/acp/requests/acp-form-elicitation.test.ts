@@ -16,6 +16,14 @@ function form(required: string[]) {
 }
 
 describe('ACP form elicitation replies', () => {
+  it('lets only optional fields be skipped', () => {
+    const { body } = form(['features'])
+    expect(body.kind === 'question' && body.questions?.map((q) => q.skippable)).toEqual([
+      true,
+      undefined
+    ])
+  })
+
   it('leaves a skipped optional field out of the form content', () => {
     expect(
       form([]).reply({
@@ -37,6 +45,6 @@ describe('ACP form elicitation replies', () => {
           { questionId: 'q2', optionIds: [] }
         ]
       })
-    ).toThrow(/required features field/)
+    ).toThrow(/does not match/)
   })
 })

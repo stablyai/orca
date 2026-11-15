@@ -7,6 +7,7 @@ import { useTranslate } from '@/i18n/use-translate'
 import { NativeChatQuestionText } from './NativeChatQuestionText'
 import { NativeChatQuestionOption } from './NativeChatQuestionOption'
 import { NativeChatQuestionConfirmButton } from './NativeChatQuestionConfirmButton'
+import { NativeChatQuestionSteps } from './NativeChatQuestionSteps'
 import type { AskAnswerSelection } from '../../../../../shared/native-chat/input/questions/native-chat-ask-answer'
 import type { AskPrompt } from '../../../../../shared/native-chat/input/questions/native-chat-ask-types'
 import { NativeChatPromptCollapseToggle } from './NativeChatPromptCollapse'
@@ -21,6 +22,7 @@ import {
   askQuestionShowsPreviews,
   askConfirmLabel,
   askTypedText,
+  askUnansweredRequired,
   toggleAskOption
 } from '../../../../../shared/native-chat/input/questions/native-chat-ask-card-rules'
 
@@ -131,9 +133,14 @@ export function NativeChatQuestionCard({
     return [...picked, ...(other ? [other] : [])].join(', ')
   }
 
-  const currentAnswered = answerFor(index).length > 0 || acceptsEmpty(index)
-  const anyAnswered = prompt.questions.some((_, i) => answerFor(i).length > 0 || acceptsEmpty(i))
+  const answeredAt = (qi: number, sel = selections, oth = otherText): boolean =>
+    answerFor(qi, sel, oth).length > 0 || acceptsEmpty(qi)
+  const currentAnswered = answeredAt(index)
+  const anyAnswered = prompt.questions.some((_, i) => answeredAt(i))
   const confirmLabel = askConfirmLabel(currentAnswered, isLast, anyAnswered)
+  // Submit is idle on the required question it would only return to.
+  const submitBlocked =
+    isLast && anyAnswered && askUnansweredRequired(prompt.questions, (i) => answeredAt(i)) === index
   const currentTypedAnswerChosen = typedAnswerChosen(index)
 
   const submitAll = (sel: number[][], oth: string[]): void => {
@@ -154,7 +161,12 @@ export function NativeChatQuestionCard({
   // Submit from an explicit snapshot so the latest pick cannot be lost to asynchronous state updates.
   const advanceOrSubmit = (sel: number[][], oth: string[]): void => {
     if (isLast) {
-      submitAll(sel, oth)
+      const unanswered = askUnansweredRequired(prompt.questions, (i) => answeredAt(i, sel, oth))
+      if (unanswered === -1) {
+        submitAll(sel, oth)
+      } else {
+        setIndex(unanswered)
+      }
     } else {
       setIndex((i) => Math.min(i + 1, total - 1))
     }
@@ -256,33 +268,13 @@ export function NativeChatQuestionCard({
     >
       <div className="mx-auto w-full max-w-(--chat-content-max-width) px-3 pt-2 pb-4 sm:px-4">
         {total > 1 ? (
-          <div className="mb-2 flex gap-1 overflow-x-auto pb-1 scrollbar-sleek">
-            {prompt.questions.map((qq, i) => (
-              <button
-                key={i}
-                type="button"
-                data-native-chat-question-step
-                disabled={isSubmitting}
-                onClick={() => goTo(i)}
-                className={cn(
-                  'flex shrink-0 items-center gap-1 rounded-md px-2 py-1 text-xs font-medium disabled:pointer-events-none',
-                  i === index
-                    ? 'bg-accent text-accent-foreground'
-                    : 'text-muted-foreground hover:text-foreground'
-                )}
-              >
-                <span className="max-w-[10rem] truncate">
-                  {qq.header ||
-                    t('components.native-chat.question.step', 'Step {{value0}}', {
-                      value0: i + 1
-                    })}
-                </span>
-                {answerFor(i).length > 0 ? (
-                  <Check className="size-3 text-primary" strokeWidth={3} />
-                ) : null}
-              </button>
-            ))}
-          </div>
+          <NativeChatQuestionSteps
+            questions={prompt.questions}
+            index={index}
+            answered={(i) => answerFor(i).length > 0}
+            disabled={isSubmitting}
+            onSelect={goTo}
+          />
         ) : null}
 
         {/* One 14px gutter (px-3.5) for the question, option tiles and footer, so their edges line up. */}
@@ -423,7 +415,7 @@ export function NativeChatQuestionCard({
               enterHint={
                 currentAnswered && !isSubmitting && !q.multiSelect && !freeTextInput?.multiline
               }
-              disabled={isSubmitting}
+              disabled={isSubmitting || submitBlocked}
               onConfirm={() => confirm()}
             />
           </div>

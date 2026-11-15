@@ -80,13 +80,12 @@ describe('agent-session grouped question answers', () => {
 
     expect(isValidAgentSessionQuestionAnswers(questions, answers)).toBe(true)
     expect(isValidAgentSessionQuestionAnswers(questions, answers.toReversed())).toBe(true)
-    // A skipped question is an empty entry, accepted while another question is answered.
-    expect(
-      isValidAgentSessionQuestionAnswers(questions, [
-        { ...answers[0]!, optionIds: [] },
-        answers[1]!
-      ])
-    ).toBe(true)
+    // A skippable question may be left empty while another is answered; a required one (or one from
+    // a host that predates skipping) may not.
+    const partial = [{ ...answers[0]!, optionIds: [] }, answers[1]!]
+    const skippable = questions.map((question) => ({ ...question, skippable: true as const }))
+    expect(isValidAgentSessionQuestionAnswers(questions, partial)).toBe(false)
+    expect(isValidAgentSessionQuestionAnswers(skippable, partial)).toBe(true)
     const invalid = [
       [],
       [...answers, { questionId: 'q3', optionIds: [] }],
@@ -100,7 +99,7 @@ describe('agent-session grouped question answers', () => {
       ]
     ]
     for (const candidate of invalid) {
-      expect(isValidAgentSessionQuestionAnswers(questions, candidate)).toBe(false)
+      expect(isValidAgentSessionQuestionAnswers(skippable, candidate)).toBe(false)
     }
     expect(
       isValidAgentSessionQuestionAnswers(

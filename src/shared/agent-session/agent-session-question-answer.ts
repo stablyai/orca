@@ -176,7 +176,7 @@ export function isAgentSessionQuestionAnswered(
   )
 }
 
-/** One entry per question; a question may be skipped (empty entry) as long as one is answered. */
+/** One entry per question; a skippable question may be left empty as long as one is answered. */
 export function isValidAgentSessionQuestionAnswers(
   questions: readonly AgentJournalQuestion[],
   answers: readonly AgentSessionQuestionAnswer[]
@@ -204,7 +204,10 @@ export function isValidAgentSessionQuestionAnswers(
       return false
     }
     const answerCount = answer.optionIds.length + (hasOther ? 1 : 0)
-    return question.multiSelect || answerCount <= 1
+    if (answerCount === 0) {
+      return question.skippable === true
+    }
+    return question.multiSelect || answerCount === 1
   })
   return (
     shaped &&

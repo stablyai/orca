@@ -38,7 +38,9 @@ function largestQuestion(): AgentJournalQuestionItem {
       id: `q${q}:choice-${o}`,
       label: `Layout ${o}`,
       preview: PREVIEWS[q - 1]![o - 1]!
-    }))
+    })),
+    // The last question is required, so the card keeps it from being skipped.
+    ...(q < 4 ? { skippable: true as const } : {})
   }))
   return boundJournalPromptBody({
     kind: 'question',
@@ -49,7 +51,7 @@ function largestQuestion(): AgentJournalQuestionItem {
   })
 }
 
-it('saves, cancels and reopens a question whose previews make it larger than one batch', async () => {
+it('saves, cancels and reopens a question larger than one batch with its previews and skippability', async () => {
   root = await mkdtemp(join(tmpdir(), 'orca-prompt-previews-'))
   const open = async () =>
     openAgentSessionJournal({
@@ -91,4 +93,10 @@ it('saves, cancels and reopens a question whose previews make it larger than one
     question.options.map((option) => option.preview)
   )
   expect(previews).toEqual(PREVIEWS.flat())
+  expect(saved!.questions!.map((question) => question.skippable)).toEqual([
+    true,
+    true,
+    true,
+    undefined
+  ])
 })

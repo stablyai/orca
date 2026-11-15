@@ -15,6 +15,7 @@ import {
   askQuestionShowsPreviews,
   askConfirmLabel,
   askTypedText,
+  askUnansweredRequired,
   toggleAskOption
 } from '../../../../../../src/shared/native-chat/input/questions/native-chat-ask-card-rules'
 import { colors, pressedStyle } from '../../../../theme/mobile-theme'
@@ -179,7 +180,10 @@ export function MobileNativeChatAsk({
 
   const advance = async (sel = selections): Promise<void> => {
     autoAdvance.cancel()
-    if (isLast) {
+    const unanswered = askUnansweredRequired(prompt.questions, (i) => isAnswered(i, sel))
+    if (isLast && unanswered !== -1) {
+      showStep(() => unanswered)
+    } else if (isLast) {
       await submit(sel)
     } else {
       showStep((i) => Math.min(i + 1, total - 1))
@@ -219,6 +223,11 @@ export function MobileNativeChatAsk({
   const currentAnswered = isAnswered(index)
   const confirmLabel = askConfirmLabel(currentAnswered, isLast, anyAnswered())
   const confirmSkips = confirmLabel === 'skip'
+  // Submit is idle on the required question it would only return to.
+  const submitBlocked =
+    isLast &&
+    anyAnswered() &&
+    askUnansweredRequired(prompt.questions, (i) => isAnswered(i)) === index
 
   return (
     <View style={styles.card}>
@@ -341,10 +350,11 @@ export function MobileNativeChatAsk({
           style={({ pressed }) => [
             styles.next,
             confirmSkips && styles.nextSkip,
+            submitBlocked && styles.nextBlocked,
             pressed && pressedStyle
           ]}
           onPress={confirm}
-          disabled={submitting}
+          disabled={submitting || submitBlocked}
         >
           <Text style={[styles.nextText, confirmSkips && styles.nextSkipText]}>
             {confirmLabels(t)[confirmLabel]}
