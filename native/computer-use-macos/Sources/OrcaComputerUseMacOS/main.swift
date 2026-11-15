@@ -443,8 +443,16 @@ private final class AccessibilityNotificationWatcher: @unchecked Sendable {
 
 private let notificationWatcher = AccessibilityNotificationWatcher()
 
+/// The last read of a helper-side wait, with the app's notification count when it was taken.
+private struct WaitRead {
+    let snapshot: Snapshot
+    let generation: UInt64?
+    let at: Date
+}
+
 final class Provider {
     private var snapshots: [String: Snapshot] = [:]
+    private var lastWaitRead: WaitRead?
     private var snapshotEntries: [CachedSnapshotEntry] = []
     /// Per app, window elements already read (valid while the window lives) for when a window moves to another Space,
     /// and when a remote-token lookup last missed, since a window becomes findable only once some client reads it.
@@ -469,6 +477,9 @@ final class Provider {
             return try listWindows(params: params)
         case "getAppState":
             let params = isForegroundRequest(params) ? try recoverRequestedWindow(params: params) : params
+            if let wait = try requestedWait(params) {
+                return try waitForCondition(wait.condition, timeout: wait.timeout, params: params)
+            }
             return try renderSnapshot(observe(params: params))
         case "click":
             return try actionResult(params: params) { try click(params: $0) }
@@ -590,6 +601,68 @@ final class Provider {
                 }
             }
         }
+    }
+
+    /// Reads the target until the condition holds or `timeout` passes, re-reading after the app's accessibility
+    /// notifications instead of on a fixed beat (AccessibilityWaitPlan). Returns the last read with `waitFor.held`.
+    private func waitForCondition(_ condition: AccessibilityWaitCondition, timeout: TimeInterval, params: [String: JSONValue]) throws -> [String: Any] {
+        let deadline = Date().addingTimeInterval(timeout)
+        let app = try resolveApp(try requiredString(params, "app"))
+        var seen = notificationWatcher.watch(pid: app.pid, launchDate: app.app.launchDate)
+        var plan = AccessibilityWaitPlan(
+            deadline: deadline,
+            appPostsNotifications: seen != nil && notificationWatcher.postsNotifications(pid: app.pid)
+        )
+        // Why: the CLI waits in back-to-back slices; comparing with the previous slice's last read lets a change
+        // that came with no notification drop the app back to the 250 ms beat.
+        var last = lastWaitRead.flatMap { previous in
+            previous.snapshot.app.pid == app.pid && Date().timeIntervalSince(previous.at) < 2 ? previous : nil
+        }
+        var latest: Snapshot?
+        var reads = 0
+        while true {
+            switch plan.next(now: Date()) {
+            case .finish:
+                // Why: the plan always reads first, so a finished wait has a read of its own to return.
+                guard let latest else { return try waitResult(observe(params: params), held: false, reads: reads + 1) }
+                return waitResult(latest, held: false, reads: reads)
+            case let .wait(until):
+                if let seenGeneration = seen {
+                    if let event = notificationWatcher.wait(pid: app.pid, after: seenGeneration, until: until) {
+                        seen = event.generation
+                        plan.eventArrived(at: event.at)
+                    }
+                } else {
+                    Thread.sleep(until: until)
+                }
+            case .read:
+                plan.didRead(at: Date())
+                let snapshot = try observe(params: params)
+                reads += 1
+                // Why: read after the walk, so a notification that lands while the read runs still counts.
+                let generation = notificationWatcher.generation(pid: app.pid)
+                if let previous = last, seen != nil, !snapshot.showsSameState(as: previous.snapshot) {
+                    notificationWatcher.observedChange(pid: app.pid, announced: generation != previous.generation)
+                    plan.appPostsNotifications = notificationWatcher.postsNotifications(pid: app.pid)
+                }
+                let read = WaitRead(snapshot: snapshot.withoutScreenshotPayload(), generation: generation, at: Date())
+                last = read
+                lastWaitRead = read
+                latest = snapshot
+                let disabled = Set(snapshot.elements.values
+                    .filter { $0.disabled && snapshot.scope?.walkedIndexes.contains($0.index) != false }
+                    .map(\.index))
+                if condition.holds(treeText: snapshot.treeText, disabledIndexes: disabled) {
+                    return waitResult(snapshot, held: true, reads: reads)
+                }
+            }
+        }
+    }
+
+    private func waitResult(_ snapshot: Snapshot, held: Bool, reads: Int) -> [String: Any] {
+        var result = renderSnapshot(snapshot)
+        result["waitFor"] = ["held": held, "reads": reads]
+        return result
     }
 
     /// Brings the requested window forward for --restore-window, once per request, and returns the params pinned
@@ -1740,6 +1813,23 @@ private func requiredInteger(_ params: [String: JSONValue], _ key: String) throw
         throw ProviderError.coded("invalid_argument", "\(key) is out of range")
     }
     return value
+}
+
+/// Never hold the provider for long: other requests queue behind a wait, so the CLI waits in short slices.
+private let maxWaitSlice: TimeInterval = 2
+
+/// `waitFor: {kind, value, timeoutMs}` on getAppState, sent by `orca computer wait --text/--enabled`.
+private func requestedWait(_ params: [String: JSONValue]) throws -> (condition: AccessibilityWaitCondition, timeout: TimeInterval)? {
+    guard let raw = params["waitFor"] else { return nil }
+    guard case let .object(wait) = raw,
+          let kind = wait["kind"]?.string,
+          let value = wait["value"]?.string,
+          let condition = AccessibilityWaitCondition(kind: kind, value: value)
+    else {
+        throw ProviderError.coded("invalid_argument", "waitFor needs a kind of text or enabled and a value")
+    }
+    let timeoutMs = try optionalInteger(wait, "timeoutMs") ?? 0
+    return (condition, min(max(Double(timeoutMs) / 1000, 0), maxWaitSlice))
 }
 
 private func optionalInteger(_ params: [String: JSONValue], _ key: String) throws -> Int? {

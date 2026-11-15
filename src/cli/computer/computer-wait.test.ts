@@ -59,6 +59,73 @@ describe('orca computer wait', () => {
     expect(output.result.snapshot.treeText).not.toContain('2 button Close')
   })
 
+  it('lets a provider that waits re-read in slices, with no CLI sleep between them', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout'] })
+    try {
+      queueFixtures(
+        callMock,
+        okFixture('req_1', {
+          ...snapshot('0 window Editor\n\t1 text Saving…'),
+          waitFor: { held: false, reads: 4 }
+        }),
+        okFixture('req_2', {
+          ...snapshot('0 window Editor\n\t1 text All changes saved'),
+          waitFor: { held: true, reads: 2 }
+        })
+      )
+
+      await run('--text', 'saved')
+    } finally {
+      vi.useRealTimers()
+    }
+
+    expect(callMock).toHaveBeenCalledTimes(2)
+    for (const call of callMock.mock.calls) {
+      expect(call[1]).toMatchObject({
+        noScreenshot: true,
+        waitFor: { kind: 'text', value: 'saved', timeoutMs: expect.any(Number) }
+      })
+      expect(call[1].waitFor.timeoutMs).toBeLessThanOrEqual(1_000)
+    }
+    const output = JSON.parse(vi.mocked(console.log).mock.calls[0][0])
+    expect(output.result.waitFor).toBeUndefined()
+    expect(output.result.snapshot.treeText).toContain('1 text All changes saved')
+  })
+
+  it('stops asking a provider that ignored waitFor and polls instead', async () => {
+    queueFixtures(
+      callMock,
+      okFixture('req_1', snapshot('0 window Editor\n\t1 text Saving…')),
+      okFixture('req_2', snapshot('0 window Editor\n\t1 text All changes saved'))
+    )
+
+    await run('--text', 'saved')
+
+    expect(callMock.mock.calls[0][1]).toHaveProperty('waitFor')
+    expect(callMock.mock.calls[1][1]).not.toHaveProperty('waitFor')
+  })
+
+  it('polls rather than spinning when the provider and the CLI disagree', async () => {
+    queueFixtures(
+      callMock,
+      okFixture('req_1', {
+        ...snapshot('0 window Editor\n\t1 text Saving…'),
+        waitFor: { held: true, reads: 1 }
+      }),
+      okFixture('req_2', {
+        ...snapshot('0 window Editor\n\t1 text All changes saved'),
+        waitFor: { held: true, reads: 1 }
+      })
+    )
+    const sleep = vi.spyOn(globalThis, 'setTimeout')
+
+    await run('--text', 'saved')
+
+    expect(callMock).toHaveBeenCalledTimes(2)
+    expect(callMock.mock.calls[1][1]).toHaveProperty('waitFor')
+    expect(sleep.mock.calls.some(([, delay]) => delay === 250)).toBe(true)
+  })
+
   it('refuses --enabled on a provider that does not mark disabled elements', async () => {
     queueFixtures(callMock, okFixture('req_caps', capabilities(undefined)))
 

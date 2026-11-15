@@ -142,6 +142,8 @@ export type ComputerSnapshotResult = {
   snapshot: ComputerSnapshotData
   screenshot: ComputerScreenshotData | null
   screenshotStatus: ComputerScreenshotStatus
+  // Only from providers that honored a getAppState `waitFor`; `held` says whether the read shown satisfied it.
+  waitFor?: { held: boolean; reads: number }
 }
 
 export type ComputerActionResult = ComputerSnapshotResult & {

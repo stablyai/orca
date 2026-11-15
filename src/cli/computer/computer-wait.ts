@@ -31,17 +31,23 @@ export type ComputerWaitSnapshotResult = ComputerSnapshotResult & { wait: Comput
 export type ComputerWaitWindowsResult = ComputerListWindowsResult & { wait: ComputerWaitSummary }
 
 const POLL_INTERVAL_MS = 250
+// Why: a provider-side wait holds the provider, and every other computer request queues behind it.
+const PROVIDER_WAIT_SLICE_MS = 1_000
 // Why: a read started near the deadline still gets long enough to answer for a large window.
 const MIN_READ_TIMEOUT_MS = 2_000
 // Why: the app or window may not exist yet; waiting for it to appear is part of the wait.
 const NOT_YET_CODES = new Set(['app_not_found', 'window_not_found', 'window_stale'])
 
 type Poll<T> = {
-  call: (timeoutMs: number) => Promise<RuntimeRpcSuccess<T>>
+  call: (readTimeoutMs: number, remainingMs: number) => Promise<RuntimeRpcSuccess<T>>
   check: (result: T) => string | null
+  // True when the provider already waited for the condition, so the next read can start at once.
+  waitedInProvider?: (result: T) => boolean
 }
 
-// Polls the same reads every provider and runtime version serves, so the wait needs no host support.
+// Asks the provider to wait for the condition in short slices (the macOS helper re-reads on accessibility
+// notifications). Runtimes and providers without that return a plain read, and the wait falls back to polling
+// the same reads every provider and runtime version serves. The CLI checks every read it gets either way.
 export async function waitForComputerSnapshot(
   client: RuntimeClient,
   condition: ComputerTreeWaitCondition,
@@ -52,20 +58,37 @@ export async function waitForComputerSnapshot(
   if (condition.kind === 'enabled') {
     await assertDisabledStateSupported(client, Math.max(timeoutMs, MIN_READ_TIMEOUT_MS))
   }
+  let providerWaits = true
   const { response, elapsedMs } = await pollUntil(condition, startedAt, timeoutMs, {
-    call: (readTimeoutMs) =>
+    call: (readTimeoutMs, remainingMs) =>
       client.call<ComputerSnapshotResult>(
         'computer.getAppState',
-        { ...params, noScreenshot: true },
+        {
+          ...params,
+          noScreenshot: true,
+          ...(providerWaits && {
+            waitFor: {
+              kind: condition.kind,
+              value: condition.value,
+              timeoutMs: Math.max(0, Math.min(PROVIDER_WAIT_SLICE_MS, remainingMs))
+            }
+          })
+        },
         { timeoutMs: readTimeoutMs }
       ),
-    check: (result) => snapshotMiss(condition, result.snapshot)
+    check: (result) => snapshotMiss(condition, result.snapshot),
+    waitedInProvider: (result) => {
+      providerWaits = result.waitFor !== undefined
+      // Why: if the provider's check passed but ours did not, an instant retry would spin; poll instead.
+      return result.waitFor?.held === false
+    }
   })
-  const { snapshot } = response.result
+  const { waitFor: _providerWait, ...read } = response.result
+  const { snapshot } = read
   return {
     ...response,
     result: {
-      ...response.result,
+      ...read,
       snapshot: {
         ...snapshot,
         treeText: queryComputerTreeText(snapshot.treeText, { query: condition.value })
@@ -172,14 +195,16 @@ async function pollUntil<T>(
 ): Promise<{ response: RuntimeRpcSuccess<T>; elapsedMs: number }> {
   for (;;) {
     let miss: string
+    let waited = false
     try {
       const remainingMs = timeoutMs - (Date.now() - startedAt)
-      const response = await poll.call(Math.max(remainingMs, MIN_READ_TIMEOUT_MS))
+      const response = await poll.call(Math.max(remainingMs, MIN_READ_TIMEOUT_MS), remainingMs)
       const result = poll.check(response.result)
       if (result === null) {
         return { response, elapsedMs: Date.now() - startedAt }
       }
       miss = result
+      waited = poll.waitedInProvider?.(response.result) ?? false
     } catch (error) {
       const code = cliErrorCode(error)
       if (code === 'runtime_timeout' && Date.now() - startedAt >= timeoutMs) {
@@ -194,7 +219,9 @@ async function pollUntil<T>(
     if (remainingMs <= 0) {
       throw waitTimeoutError(condition, timeoutMs, miss)
     }
-    await new Promise((resolve) => setTimeout(resolve, Math.min(POLL_INTERVAL_MS, remainingMs)))
+    if (!waited) {
+      await new Promise((resolve) => setTimeout(resolve, Math.min(POLL_INTERVAL_MS, remainingMs)))
+    }
   }
 }
 

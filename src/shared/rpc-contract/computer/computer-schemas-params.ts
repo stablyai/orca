@@ -58,7 +58,16 @@ export function validateComputerTarget(
 
 export const ComputerObserveTarget = ComputerObserveTargetBase.extend({
   // Reads one element's subtree. Older runtimes strip it, and their result has no rootElementIndex.
-  rootElementIndex: OptionalNonNegativeInt
+  rootElementIndex: OptionalNonNegativeInt,
+  // Lets a provider re-read until the condition holds, for `orca computer wait`. Older runtimes and providers
+  // without the support return one read and no `waitFor` result, so the CLI keeps polling.
+  waitFor: z
+    .object({
+      kind: z.enum(['text', 'enabled']),
+      value: requiredStringAllowingEmpty('Missing waitFor value'),
+      timeoutMs: z.number().int().nonnegative()
+    })
+    .optional()
 }).superRefine(validateComputerTarget)
 
 export const ListApps = z.object({}).strict()
