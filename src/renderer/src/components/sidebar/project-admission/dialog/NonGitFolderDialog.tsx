@@ -155,7 +155,15 @@ const NonGitFolderDialog = React.memo(function NonGitFolderDialog() {
 
   return (
     <Dialog open={isOpen} onOpenChange={handleOpenChange}>
-      <DialogContent className="max-w-sm sm:max-w-sm" showCloseButton={false}>
+      <DialogContent
+        className="max-w-sm sm:max-w-sm"
+        showCloseButton={false}
+        // Why: this dialog usually opens after a Finder drag, while Finder is
+        // still frontmost. The click that refocuses Orca lands on the overlay
+        // and would silently cancel the add, so only Cancel/Escape dismiss it.
+        onPointerDownOutside={(event) => event.preventDefault()}
+        onInteractOutside={(event) => event.preventDefault()}
+      >
         <DialogHeader>
           <DialogTitle className="text-sm">
             {t('auto.components.sidebar.NonGitFolderDialog.e52454b7f6', 'Open as Folder')}
