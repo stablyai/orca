@@ -16,6 +16,7 @@ import { parseGitSource, resolveSourceHead, type AppRequest, type GitSource, typ
 import type { GoldenImageProviderApi } from './golden-image-provider'
 import { compileNetworkPolicy } from './network-policy'
 import type { SandboxProviderApi } from './sandbox-provider'
+import { snapshotsInUse, type SnapshotRefConfig } from './snapshot-refs'
 import { ORCAD_PORT, startOrcad } from './sandbox-vm-commands'
 
 export type GoldenImageDeps = {
@@ -461,7 +462,9 @@ async function stepSmoke(deps: GoldenImageDeps, row: GoldenRow): Promise<GoldenT
       ports: [ORCAD_PORT],
       networkPolicy: compileNetworkPolicy({ mode: 'allowlist', allowlist: deps.config.egressAllowlist }),
       tags: { orcaGoldenSmoke: row.id, orcaEnv: deps.config.environment },
-      snapshotExpirationMs: 86_400_000
+      snapshotExpirationMs: 0,
+      // Throwaway: a persistent box would leave an automatic snapshot (~325 MB) behind its delete.
+      persistent: false
     })
     await startOrcad(provider, box, { sandboxId: `smoke-${row.id}` })
   } catch (error) {
@@ -479,15 +482,48 @@ async function stepSmoke(deps: GoldenImageDeps, row: GoldenRow): Promise<GoldenT
     db.prepare(`UPDATE golden_images SET status = 'retired', updated_at = ? WHERE status = 'active' AND region = ?`).bind(now, row.region),
     db.prepare(`UPDATE golden_images SET status = 'active', activated_at = ?, updated_at = ? WHERE id = ?`).bind(now, now, row.id)
   ])
-  // Keep one retired image per region as the rollback; older ones are deleted.
-  for (const old of (await rows(db, row.region, ['retired'])).slice(1)) {
-    if (old.snapshot_id) {
-      await provider.deleteSnapshot(old.snapshot_id).catch(() => undefined)
-    }
-    await update(db, old.id, { status: 'deleted' }, now)
-  }
+  // The wrangler seed image may still be what the config hands out elsewhere: never deleted here.
+  await releaseRetiredGoldens({ ...deps, config: { goldenSnapshotId: deps.config.seedSnapshotId ?? '' } }, row.region)
   console.log(JSON.stringify({ event: 'golden_image_activated', id: row.id, region: row.region, source: row.source, snapshotId: row.snapshot_id }))
   return 'activated'
+}
+
+/**
+ * Keeps one retired image per region as the rollback; older ones are deleted once nothing live boots
+ * from them (snapshot-refs.ts). A row is marked deleted only after the provider delete succeeded, so a
+ * failed or deferred delete is retried by the next activation or the hourly housekeeping sweep.
+ */
+export async function releaseRetiredGoldens(
+  deps: { db: D1Database; provider: Pick<SandboxProviderApi, 'deleteSnapshot'>; now: () => number; config: SnapshotRefConfig },
+  region: string
+): Promise<{ deleted: number; kept: number }> {
+  const stale = (await rows(deps.db, region, ['retired'])).slice(1)
+  const inUse = await snapshotsInUse(
+    deps.db,
+    deps.config,
+    stale.flatMap((old) => (old.snapshot_id ? [old.snapshot_id] : [])),
+    { ignoreGoldenRows: stale.map((old) => old.id) }
+  )
+  let deleted = 0
+  let kept = 0
+  for (const old of stale) {
+    if (old.snapshot_id && inUse.has(old.snapshot_id)) {
+      kept++
+      continue
+    }
+    try {
+      if (old.snapshot_id) {
+        await deps.provider.deleteSnapshot(old.snapshot_id)
+      }
+    } catch (error) {
+      console.log(JSON.stringify({ event: 'golden_image_delete_failed', id: old.id, error: String(error).slice(0, 120) }))
+      kept++
+      continue
+    }
+    await update(deps.db, old.id, { status: 'deleted' }, deps.now())
+    deleted++
+  }
+  return { deleted, kept }
 }
 
 async function fail(deps: GoldenImageDeps, id: string, buildName: string | null, error: string): Promise<void> {
