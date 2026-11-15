@@ -40,3 +40,25 @@ describe('E3-PROD-GUARD: open egress never runs without the egress proxy in a de
     expect(errors).not.toHaveBeenCalled()
   })
 })
+
+describe('GH-ANON-403: member identities never 403 anonymous git to github.com', () => {
+  const d = () => deps('dev', PROXY)
+  const members = ['orca-mph-a']
+  const denies = (rules: unknown[] | undefined) => (rules ?? []).some((rule) => JSON.stringify(rule).includes('"statusCode":403'))
+
+  it('no App token (a public repo with no install): github.com has the member claims and no trailing 403', () => {
+    const rules = egressPolicy(d(), row, undefined, members).allow['github.com']
+    expect(rules?.length).toBe(1)
+    expect(rules![0]).toMatchObject({ forwardURL: PROXY })
+    expect(denies(rules)).toBe(false)
+  })
+
+  it('with an App token github.com stays fail-closed', () => {
+    const rules = egressPolicy(d(), row, 'ghs_REALTOKEN', members).allow['github.com']
+    expect(denies(rules)).toBe(true)
+  })
+
+  it('api.github.com stays fail-closed either way (the workspace placeholder route)', () => {
+    expect(denies(egressPolicy(d(), row, undefined, members).allow['api.github.com'])).toBe(true)
+  })
+})

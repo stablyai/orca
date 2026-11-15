@@ -333,7 +333,11 @@ export function egressPolicy(deps: LifecycleDeps, row: SandboxRow, gitToken?: st
                 header: 'authorization',
                 placeholders: memberPlaceholders.map((p) => gitBasicAuthorization(p)),
                 via: 'forward' as const,
-                forwardURL: proxyUrl
+                forwardURL: proxyUrl,
+                // GH-ANON-403: with no App token, plain git sends no credential (a public repo's
+                // clone, fetch, ls-remote). These member rules alone must not 403 it. With a token,
+                // the workspace git route above keeps github.com fail-closed as before.
+                ...(gitToken ? {} : { allowUnclaimed: true })
               },
               {
                 host: 'api.github.com',
@@ -491,9 +495,17 @@ async function boot(
   const gitSetupPending = Boolean(options.deferMemberGit) && memberGitApplies(deps, row)
   // A resumed session keeps its last policy (an expired repo token); swap it in while orcad boots.
   // Nothing in the VM uses git or model keys before orcad answers and the desktop attaches.
+  // Member identities count too (GH-ANON-403): a resumed session must not keep a policy written
+  // before a fix to its member rules.
   const needsPolicy =
     !options.policyApplied &&
-    (git || routed.egress_secret_hosts || row.egress_secret_hosts || routed.egress_allow_hosts || row.egress_allow_hosts || row.egress_user_hosts)
+    (git ||
+      prep.memberPlaceholders.length > 0 ||
+      routed.egress_secret_hosts ||
+      row.egress_secret_hosts ||
+      routed.egress_allow_hosts ||
+      row.egress_allow_hosts ||
+      row.egress_user_hosts)
   // Members revoked while the VM slept must be gone before orcad accepts its first sign-in.
   await applyQueuedRevokes(deps.db, deps.provider, row.id, state.session.id, deps.now())
   const [, connection] = await Promise.all([
