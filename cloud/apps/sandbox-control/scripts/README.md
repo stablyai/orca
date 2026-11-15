@@ -1,51 +1,56 @@
 # Egress release probe
 
-`egress-probe.ts` checks sandbox egress against **dev** before a release. It uses bogus tokens,
-and an echo server running in a throwaway sandbox of our own stands in for the egress proxy and
-for a model provider. No real credential is sent anywhere.
+`egress-probe.ts` checks sandbox egress against **dev** before a release. It goes through Orca's own
+paths: real dev workspaces created with a dev-JWK user token, with commands run in a workspace
+terminal over the shipped `orca` CLI's pairing code (the desktop's E2EE path to orcad). Every
+credential is bogus, and postman-echo.com plays the model provider.
 
-It tests two layers.
+Setup for a throwaway identity, all of it removed afterwards:
 
-**1. Firewall (Vercel only).** A throwaway VM gets the exact policy that `egressPolicy()` compiles
-for a workspace with a Codex account, an Anthropic key and a member's GitHub identity. The forward
-rules point at the echo sandbox. The policy is applied twice: once with the repo's App token and
-once without (the GH-ANON-403 shape, #758). From the VM:
+- the dev GitHub App's installation, bound for the test repo (operator route);
+- a stored GitHub identity, so member placeholders exist (the dev `member-github` route);
+- bogus personal secrets:
+  - `ANTHROPIC_API_KEY`, with `ANTHROPIC_BASE_URL` set to the echo host;
+  - `OPENAI_API_KEY`, with `OPENAI_BASE_URL` set to `chatgpt.com/backend-api/codex`, so its egress
+    takes the ChatGPT relay.
 
-| Host | Placeholder | Foreign or no credential |
-|---|---|---|
-| chatgpt.com | forwarded for chatgpt.com; `chatgpt-account-id` and `x-api-key` unchanged | firewall 403 `orca-egress-denied` |
-| api.anthropic.com | forwarded; the other `authorization` header unchanged | firewall 403 |
-| api.github.com | forwarded | firewall 403 |
-| github.com, App token | forwarded | anonymous: firewall 403; `git ls-remote` refused |
-| github.com, member only (#758) | member placeholder forwarded | anonymous `git ls-remote` of a public repo works |
+The probe creates two workspaces through the desktop's create path (clone after ready):
 
-**2. Swap (the dev control plane).** This layer creates a real dev workspace for a throwaway
-identity, with a bogus `ANTHROPIC_API_KEY` and `ANTHROPIC_BASE_URL` set to the echo sandbox. The VM
-must hold only the placeholder. The echo (as the provider) must see the bogus key where the
-placeholder was, with the other `authorization` header unchanged and no Vercel forwarding headers
-or OIDC token. A foreign key sent to that host must get the firewall 403.
+- **public**: a public repo the App isn't installed on. Member placeholder, no App token (#758).
+- **app**: the App-installed test repo. App token, github.com fail-closed.
 
-The probe takes about 1–2 minutes. It deletes everything it created (`--keep` leaves it in place),
-prints one JSON report, and exits 1 on any failed expectation.
+| Host | What must happen |
+|---|---|
+| echo host (custom base URL) | The provider sees the bogus key where the VM sent the placeholder. The other `authorization` header is unchanged, and no `vercel-forwarded-*` header or OIDC token arrives. A foreign key gets the firewall 403 `orca-egress-denied`. |
+| chatgpt.com | The placeholder reaches ChatGPT: any provider answer counts, but not the firewall 403 and not Cloudflare's edge page. A foreign bearer gets the firewall 403. |
+| api.github.com | No credential gets the firewall 403. With the workspace placeholder, GitHub answers 200. |
+| github.com | Anonymous `git ls-remote` works on **public** (#758) and is refused on **app**. The app repo clones, and the workspace's own git works. |
+| VM env | `ANTHROPIC_API_KEY` and `OPENAI_API_KEY` hold placeholders. This is checked by sha256, so the bogus values never cross the terminal. |
+
+The probe takes about 1–3 minutes, deletes what it created (`--keep` leaves it), prints one JSON
+report and exits 1 on any failed expectation. It refuses any control plane other than dev.
 
 ## Run it locally
+
+You need the Orca app installed (for its `orca` CLI) and `gcloud` access to the dev secrets.
 
 ```sh
 cd cloud
 pnpm install --filter @orca-cloud/sandbox-control...
-# The dev team's Vercel token, from a file (never pasted on the command line):
-export ORCA_PROBE_VERCEL_TOKEN_FILE=/path/to/dev-vercel-token
-# For the swap layer: the dev test signing key, escrowed in Secret Manager.
+K=$(mktemp -d)   # 0700; delete it afterwards
 gcloud --account <you> secrets versions access latest --project onorca-cloud-staging \
-  --secret orca-sandbox-control-dev-test-jwk > "$TMPDIR/dev-jwk.json"
-export ORCA_PROBE_DEV_JWK_FILE="$TMPDIR/dev-jwk.json"
-pnpm --filter @orca-cloud/sandbox-control exec tsx scripts/egress-probe.ts   # --firewall-only skips layer 2
+  --secret orca-sandbox-control-dev-test-jwk > "$K/jwk.json"
+gcloud --account <you> secrets versions access latest --project onorca-cloud-staging \
+  --secret orca-sandbox-control-dev-operator-token > "$K/operator"
+ORCA_PROBE_DEV_JWK_FILE="$K/jwk.json" ORCA_PROBE_OPERATOR_TOKEN_FILE="$K/operator" \
+  pnpm --filter @orca-cloud/sandbox-control exec tsx scripts/egress-probe.ts
+rm -rf "$K"
 ```
 
-The script refuses any control plane other than dev.
+`ORCA_PROBE_CLI` points the probe at another `orca` CLI. The default is the installed app's.
 
 ## CI
 
-`.github/workflows/cloud-egress-probe.yml` runs on manual dispatch and nightly. It needs the
-`ORCA_DEV_VERCEL_TOKEN` and `ORCA_DEV_TEST_JWK` repository secrets, and skips with a notice when
-they are missing.
+`.github/workflows/cloud-egress-probe.yml` runs on manual dispatch. It installs the CLI from the
+latest release's Linux package. It needs the `ORCA_DEV_TEST_JWK` and `ORCA_DEV_OPERATOR_TOKEN`
+repository secrets, and warns and skips when they are missing. None are configured today.

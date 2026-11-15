@@ -1,20 +1,10 @@
 name: Cloud Egress Probe
 
-# Release check for sandbox egress, against DEV: placeholders are forwarded for the right hosts with
-# other auth headers untouched, credential hosts fail closed, anonymous git works without an App
-# token (#758), and the egress proxy swaps a bogus key in for its placeholder. Bogus tokens and
-# throwaway echo sandboxes only. Details: cloud/apps/sandbox-control/scripts/README.md
+# Release check for sandbox egress, against DEV, through Orca's own paths (dev workspaces driven
+# over the shipped `orca` CLI's pairing code). Bogus tokens only; postman-echo.com is the echo host.
+# Details and the local run: cloud/apps/sandbox-control/scripts/README.md
 on:
   workflow_dispatch:
-    inputs:
-      layers:
-        description: firewall (Vercel only) or all (also the dev control plane's swap)
-        required: false
-        default: all
-        type: choice
-        options: [all, firewall]
-  schedule:
-    - cron: '17 9 * * *'
 
 permissions:
   contents: read
@@ -30,18 +20,17 @@ defaults:
 jobs:
   probe:
     runs-on: ubuntu-24.04
-    timeout-minutes: 15
+    timeout-minutes: 20
     env:
-      VERCEL_TOKEN: ${{ secrets.ORCA_DEV_VERCEL_TOKEN }}
       DEV_TEST_JWK: ${{ secrets.ORCA_DEV_TEST_JWK }}
-      LAYERS: ${{ inputs.layers || 'all' }}
+      DEV_OPERATOR_TOKEN: ${{ secrets.ORCA_DEV_OPERATOR_TOKEN }}
     steps:
       - name: Check the dev credentials are configured
         id: creds
         working-directory: .
         run: |
-          if [ -z "$VERCEL_TOKEN" ] || { [ "$LAYERS" = all ] && [ -z "$DEV_TEST_JWK" ]; }; then
-            echo "::notice::ORCA_DEV_VERCEL_TOKEN / ORCA_DEV_TEST_JWK are not set: skipping the egress probe"
+          if [ -z "$DEV_TEST_JWK" ] || [ -z "$DEV_OPERATOR_TOKEN" ]; then
+            echo "::warning::ORCA_DEV_TEST_JWK / ORCA_DEV_OPERATOR_TOKEN are not set: the egress probe did not run"
             echo "skip=1" >> "$GITHUB_OUTPUT"
           fi
 
@@ -62,17 +51,27 @@ jobs:
       - if: steps.creds.outputs.skip != '1'
         run: pnpm install --frozen-lockfile --filter @orca-cloud/sandbox-control...
 
+      # The shipped CLI from the latest release's Linux package: the same pairing path the desktop uses.
+      - name: Install the orca CLI
+        if: steps.creds.outputs.skip != '1'
+        working-directory: .
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release download --repo stablyai/orca --pattern 'orca-ide_*_amd64.deb' --dir "$RUNNER_TEMP/orca"
+          dpkg-deb -x "$RUNNER_TEMP"/orca/orca-ide_*_amd64.deb "$RUNNER_TEMP/orca/x"
+          cli="$(find "$RUNNER_TEMP/orca/x" -path '*/bin/orca' -type f | head -n 1)"
+          test -x "$cli"
+          echo "ORCA_PROBE_CLI=$cli" >> "$GITHUB_ENV"
+
       - name: Probe dev egress
         if: steps.creds.outputs.skip != '1'
         run: |
           umask 077
-          if [ "$LAYERS" = all ]; then
-            printf '%s' "$DEV_TEST_JWK" > "$RUNNER_TEMP/dev-jwk.json"
-            export ORCA_PROBE_DEV_JWK_FILE="$RUNNER_TEMP/dev-jwk.json"
-          fi
-          pnpm --filter @orca-cloud/sandbox-control exec tsx scripts/egress-probe.ts \
-            $([ "$LAYERS" = firewall ] && echo --firewall-only) > "$RUNNER_TEMP/egress-probe.json"
-          rm -f "$RUNNER_TEMP/dev-jwk.json"
+          printf '%s' "$DEV_TEST_JWK" > "$RUNNER_TEMP/dev-jwk.json"
+          printf '%s' "$DEV_OPERATOR_TOKEN" > "$RUNNER_TEMP/dev-operator"
+          ORCA_PROBE_DEV_JWK_FILE="$RUNNER_TEMP/dev-jwk.json" ORCA_PROBE_OPERATOR_TOKEN_FILE="$RUNNER_TEMP/dev-operator" \
+            pnpm --filter @orca-cloud/sandbox-control exec tsx scripts/egress-probe.ts > "$RUNNER_TEMP/egress-probe.json"
 
       - uses: actions/upload-artifact@v4
         if: always() && steps.creds.outputs.skip != '1'

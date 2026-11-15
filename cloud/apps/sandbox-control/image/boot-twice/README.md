@@ -59,12 +59,20 @@ The options:
 What this check does not cover:
 
 - The runtime-bundle refresh: no bundle is published here.
-- The Vercel firewall: that is the release probe, `cloud/apps/acceptance/src/egress-probe.ts`.
+- The Vercel firewall and egress proxy: that is the release probe, `scripts/egress-probe.ts`.
 - Vercel's own VM behaviour, such as snapshot restore timing.
 
 ## CI
 
-`.github/workflows/cloud-vm-boot-twice.yml` runs on pull requests that touch `image/**` or the
-boot-step sources. It caches the provisioned layer in the GitHub Actions cache. On
-nwparker/orca-private, where Actions is off, run the command above on omarchy before merging an
-image change.
+On nwparker/orca-private, where Actions is off, the premerge gate
+(`config/scripts/cloud-integration/premerge-check.sh`) runs
+`config/scripts/cloud-integration/boot-twice-check.sh` whenever a branch touches
+`cloud/apps/sandbox-control/image/**`, which includes every VM script. The step:
+
+- takes its own omarchy slot, waiting at most 5 minutes for one;
+- stops after 10 minutes;
+- prints each failure;
+- **fails open with a loud warning when Docker is unavailable**.
+
+`.github/workflows/cloud-vm-boot-twice.yml` runs the same check on pull requests once Actions is
+on, with the provisioned layer cached in the GitHub Actions cache.

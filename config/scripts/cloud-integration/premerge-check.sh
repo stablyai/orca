@@ -188,5 +188,9 @@ if ((${#tc_pkgs[@]})); then
     (cd "$pkg" && pnpm typecheck)
   done
 fi
+# Image or VM-script changes: boot the image twice (Docker); the second boot must be clean. Fails open without Docker.
+if [[ -n "$(git diff --name-only "$base"...HEAD -- cloud/apps/sandbox-control/image)" ]]; then
+  bash config/scripts/cloud-integration/boot-twice-check.sh
+fi
 if [[ "${PREMERGE_FULL:-}" == 1 ]]; then scope="the full vitest suite"; else scope="${#tests[@]} targeted test file(s)"; fi
 echo "premerge OK: $branch merges cleanly into cloud/integration with typecheck, lint and $scope green."
