@@ -381,9 +381,9 @@ describe('the chat strip and the session list read the same host child records',
     await both([{ kind: 'agent', description: 'review', state: 'working', membership: 'live' }])
     connections[0]?.onExit?.(new Error('scripted provider exit'))
     await settle()
-    expect(summaries.at(-1)).not.toHaveProperty('children')
-    expect(summaries.at(-1)).not.toHaveProperty('backgroundTasks')
-    await vi.waitFor(() =>
+    await vi.waitFor(() => {
+      expect(summaries.at(-1)).not.toHaveProperty('children')
+      expect(summaries.at(-1)).not.toHaveProperty('backgroundTasks')
       expect(stripRows()).toEqual([
         {
           kind: 'agent',
@@ -393,7 +393,7 @@ describe('the chat strip and the session list read the same host child records',
           outcome: 'unknown'
         }
       ])
-    )
+    })
     expect(strip.at(-1)).toMatchObject({ supportsStopAll: false })
     expect(stored()).toEqual([
       {
