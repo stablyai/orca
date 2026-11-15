@@ -1,6 +1,6 @@
 import type { PersistedState } from '../../../shared/persisted-state-types'
 import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
-import { worktreeWorkspaceKey } from '../../../shared/workspace-scope'
+import { worktreeWorkspaceKey } from '../../../shared/workspace/identity/workspace-scope'
 import { getRepoIdFromWorktreeId } from '../../../shared/worktree/id'
 import {
   getWorktreeIdFromHostIdentity,
