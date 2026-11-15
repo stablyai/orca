@@ -1,6 +1,6 @@
 /** Keep recursive macOS watches out of other apps' data stores, which macOS guards with a privacy prompt. */
 import { homedir, userInfo } from 'node:os'
-import { isAbsolute, join, relative } from 'node:path'
+import { isAbsolute, join, relative, sep } from 'node:path'
 import { MACOS_FSEVENTS_EXCLUSION_PATH_LIMIT } from '../../watchers/filesystem-watcher-ignore'
 import type { WatcherProcessSubscribeOptions } from '../parcel-watcher-process-protocol'
 
@@ -14,7 +14,9 @@ type ProtectedExclusionDeps = {
 
 function isStrictAncestor(root: string, target: string): boolean {
   const fromRoot = relative(root, target)
-  return fromRoot !== '' && !fromRoot.startsWith('..') && !isAbsolute(fromRoot)
+  // Only a real parent step leaves the root; a name such as '..profile' stays inside it.
+  const leavesRoot = fromRoot === '..' || fromRoot.startsWith(`..${sep}`)
+  return fromRoot !== '' && !leavesRoot && !isAbsolute(fromRoot)
 }
 
 function hostHomes(): string[] {

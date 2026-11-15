@@ -102,6 +102,12 @@ describe.skipIf(process.platform !== 'darwin')(
       expect(await libraryEventsFor(fixture.home, fixture, [join(parent, 'HOME')])).toEqual([])
     })
 
+    it("excludes a home named like '..profile' under the watched root", async () => {
+      parent = await realpath(await mkdtemp(join(tmpdir(), 'orca-protected-')))
+      const fixture = await makeHome(parent, '..profile')
+      expect(await libraryEventsFor(parent, fixture, [fixture.home])).toEqual([])
+    })
+
     it("excludes the account home's Library when HOME is a separate profile", async () => {
       parent = await realpath(await mkdtemp(join(tmpdir(), 'orca-protected-')))
       const account = await makeHome(parent, 'account')

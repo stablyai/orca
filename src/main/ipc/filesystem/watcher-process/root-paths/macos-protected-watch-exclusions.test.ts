@@ -44,6 +44,23 @@ describe('macosProtectedWatchExclusions', () => {
     }
   })
 
+  it("treats a home named like '..profile' as inside its parent", () => {
+    expect(
+      macosProtectedWatchExclusions('/Users', {
+        ...darwin,
+        homes: ['/Users/..profile'],
+        realpath: (candidate) => candidate
+      })
+    ).toEqual(['/Users/..profile/Library'])
+    expect(
+      macosProtectedWatchExclusions('/Users/me/repo', {
+        ...darwin,
+        homes: ['/Users/me'],
+        realpath: (candidate) => candidate
+      })
+    ).toEqual([])
+  })
+
   it('resolves alias and case-variant homes to the subscribed identity', () => {
     for (const home of ['/var/home-link', '/Users/ME']) {
       expect(macosProtectedWatchExclusions('/Users/me', { ...darwin, homes: [home] })).toEqual([
