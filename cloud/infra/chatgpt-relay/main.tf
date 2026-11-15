@@ -67,7 +67,8 @@ resource "google_cloud_run_v2_service" "relay" {
     max_instance_request_concurrency = 80
 
     scaling {
-      min_instance_count = 0
+      # One warm instance: a cold start cost Codex's first chatgpt.com call ~10.8 s (dev, twice on 2026-11-15).
+      min_instance_count = 1
       max_instance_count = 4
     }
 

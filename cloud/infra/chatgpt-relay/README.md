@@ -22,10 +22,17 @@ Worker: `CHATGPT_RELAY_URL` (wrangler var) = the `relay_url` output; secret `CHA
 a key of `invoker_service_account`, created with `gcloud iam service-accounts keys create` into a 0600 temp
 file, piped into `wrangler secret put`, then deleted. Without both, chatgpt.com goes direct, as before.
 
+## Warm instance
+
+`min_instance_count = 1` (main.tf): a cold start cost the first chatgpt.com call after idle ~10.8 s
+(dev, 2026-11-15); with one warm instance the first call answers in ~0.4 s. Keep it at 1 in production
+too while the relay is in use (cost: one idle 1 vCPU / 512 MiB instance). Firewall mode (EGRESS_SWAP_MODE)
+removes the relay from Codex's path; then it can go back to 0, or be retired.
+
 ## Production (runbook, at Neil's go)
 
 1. Add `backend/production.hcl` (bucket `onorca-cloud-terraform-state`, prefix `terraform/chatgpt-relay`) and
    `environments/production.tfvars` (`project_id = "onorca-cloud"`, `environment = "production"`).
-2. The same three steps against `onorca-cloud`.
+2. The same three steps against `onorca-cloud` (min_instance_count stays 1, see above).
 3. Set `CHATGPT_RELAY_URL` in `wrangler.prod.jsonc` and the secret on `orca-sandbox-control-prod`; deploy.
 4. Check: a Codex turn via the Orca account answers; the relay's logs show `relay ... status 200`.
