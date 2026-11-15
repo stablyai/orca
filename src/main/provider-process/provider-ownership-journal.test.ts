@@ -31,14 +31,15 @@ vi.mock('./provider-process-row-read', () => ({
   readPosixProcessRow: async (pid: number) => ({
     pid,
     ppid: pid === 900002 ? 900001 : process.pid,
-    pgid: pid === process.pid ? process.pid : 900001,
+    pgid: pid,
     startedAt: '1234',
     startResolution: 'clock-tick'
   })
 }))
 vi.mock('./provider-group-orphan-guard', async (importOriginal) => ({
   ...(await importOriginal<typeof GroupGuard>()),
-  providerGroupAbsent: () => true
+  providerGroupAbsent: () => true,
+  providerOwnershipAbsent: () => true
 }))
 
 let root: string | undefined

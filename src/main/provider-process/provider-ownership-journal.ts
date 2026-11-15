@@ -11,6 +11,8 @@ import {
   proveProviderProcessIdentity,
   sweepOrphanedProviderGroup,
   providerGroupAbsent,
+  providerOwnershipAbsent,
+  retireProviderWatcher,
   type ProviderGroupIdentity
 } from './provider-group-orphan-guard'
 import { PROVIDER_GROUP_REAP_TIMEOUT_MS } from './provider-process-supervisor'
@@ -55,6 +57,39 @@ export async function waitForProviderGroupReap(
   return true
 }
 
+export async function waitForProviderOwnershipReap(
+  identity: ProviderGroupIdentity,
+  timeoutMs = PROVIDER_GROUP_REAP_TIMEOUT_MS,
+  signal?: AbortSignal
+): Promise<boolean> {
+  const proof = new AbortController()
+  const abort = (): void => proof.abort()
+  signal?.addEventListener('abort', abort, { once: true })
+  if (signal?.aborted) {
+    proof.abort()
+  }
+  const timer = setTimeout(() => proof.abort(), timeoutMs)
+  const deadline = performance.now() + timeoutMs
+  try {
+    if (!(await waitForProviderGroupReap(identity.pgid, timeoutMs)) || proof.signal.aborted) {
+      return false
+    }
+    if ((await retireProviderWatcher(identity, { signal: proof.signal })) === 'refused') {
+      return false
+    }
+    return (
+      !proof.signal.aborted &&
+      (await waitForProviderGroupReap(
+        identity.watcher.pgid,
+        Math.max(0, deadline - performance.now())
+      ))
+    )
+  } finally {
+    clearTimeout(timer)
+    signal?.removeEventListener('abort', abort)
+  }
+}
+
 /** One shared recovery scan per runtime state directory; a failed scan remains retryable. */
 export function recoverProviderOwnership(directory: string, bootId: string): Promise<void> {
   const path = resolve(directory)
@@ -88,17 +123,19 @@ async function scanOwnership(directory: string, bootId: string): Promise<void> {
     }
     const path = join(directory, entry.name)
     const record = await readRecord(path)
-    if (!record || record.hostname !== localHostname || record.statePath !== directory) {
+    if (!record || record.statePath !== directory) {
       continue
     }
     if (record.bootId !== bootId) {
-      await unlink(path).catch(() => {})
+      if (record.hostname === localHostname) {
+        await unlink(path).catch(() => {})
+      }
       continue
     }
     if (
       record.leader.pid !== record.pgid ||
       record.leader.pgid !== record.pgid ||
-      record.watcher.pgid !== record.pgid
+      record.watcher.pgid !== record.watcher.pid
     ) {
       continue
     }
@@ -119,7 +156,7 @@ async function scanOwnership(directory: string, bootId: string): Promise<void> {
     const swept = await sweepOrphanedProviderGroup(record)
     if (
       (swept === 'absent' || swept === 'killed') &&
-      (await waitForProviderGroupReap(record.pgid))
+      (await waitForProviderOwnershipReap(record))
     ) {
       await unlink(path).catch(() => {})
     }
@@ -179,7 +216,7 @@ export async function publishProviderOwnership(
     leader.ppid !== process.pid ||
     leader.pgid !== leaderPid ||
     watcher.ppid !== leaderPid ||
-    watcher.pgid !== leaderPid ||
+    watcher.pgid !== watcherPid ||
     watcherPid === leaderPid
   ) {
     throw new Error('Cannot establish provider process ownership before launch')
@@ -219,7 +256,7 @@ export async function publishProviderOwnership(
   return {
     identity,
     remove: async () => {
-      if (providerGroupAbsent(leaderPid)) {
+      if (providerOwnershipAbsent(identity)) {
         await unlink(path).catch(() => {})
       }
     }

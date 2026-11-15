@@ -53,9 +53,13 @@ export class DirectProviderStop {
   }
 
   reap(): void {
+    this.complete()
+    this.send('reap')
+  }
+
+  complete(): void {
     this.phase = 'reap'
     clearTimeout(this.watchdog)
-    this.send('reap')
   }
 
   private backupAfter(graceMs: number): void {

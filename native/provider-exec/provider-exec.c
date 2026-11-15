@@ -1,4 +1,4 @@
-// Gated exec for POSIX provider CLIs. Forks the in-group owner-pipe watcher, reports it on fd 5,
+// Gated exec for POSIX provider CLIs. Forks the same-session owner-pipe watcher, reports it on fd 5,
 // waits for the owner's GO on fd 4, then execs the CLI with its argv and environment unchanged.
 // Usage: orca-provider-exec <stdinEndGraceMs> <sigtermGraceMs> <session|one-shot>
 //          <stdin-end|stdin-end-and-sigterm> -- <command> [args...]
@@ -151,13 +151,14 @@ static _Noreturn void fail(int code) {
     _exit(code);
 }
 
-// The watcher runs in this group for the launch's whole life and holds the owner pipe (fd 3).
+// The watcher reserves the CLI session ID from its own group and holds the owner pipe (fd 3).
 // Commands there are stdin-end, term and reap; EOF there is owner death. One phase and absolute
 // deadline own the stop, so owner EOF resumes it and a repeated term never restarts or shortens it.
-enum watcher_phase { WATCH_IDLE, WATCH_STDIN_GRACE, WATCH_TERM_GRACE };
-enum { WATCH_LINE_MAX = 32, WATCH_READ_MAX = 256 };
+enum watcher_phase { WATCH_IDLE, WATCH_STDIN_GRACE, WATCH_TERM_GRACE, WATCH_REAP };
+enum { WATCH_LINE_MAX = 32, WATCH_READ_MAX = 256, WATCH_POLL_MS = 25, WATCH_REAP_MS = 1500 };
 
 struct watcher {
+    pid_t group;
     unsigned stdin_end_grace_ms;
     unsigned sigterm_grace_ms;
     int session;
@@ -169,28 +170,47 @@ struct watcher {
     int discarding;
 };
 
-// Also ends the watcher, which never leaves the group before its final KILL.
-static _Noreturn void kill_group(void) {
-    kill(0, SIGKILL);
-    _exit(EXIT_BOOTSTRAP);
+static _Noreturn void watcher_complete(int absent) {
+    const char *completion = absent ? "group-absent\n" : "group-unverifiable\n";
+    write_all(OWNER_FD, completion, strlen(completion));
+    _exit(absent ? 0 : EXIT_BOOTSTRAP);
 }
 
-static long long monotonic_ns(void) {
+static int group_absent(struct watcher *w) {
+    return kill(-w->group, 0) < 0 && errno == ESRCH;
+}
+
+static long long monotonic_ns(struct watcher *w) {
     struct timespec now;
     if (clock_gettime(CLOCK_MONOTONIC, &now) != 0) {
-        kill_group();
+        kill(-w->group, SIGKILL);
+        watcher_complete(0);
     }
     return (long long)now.tv_sec * 1000000000LL + now.tv_nsec;
 }
 
+static void kill_group(struct watcher *w) {
+    if (w->phase == WATCH_REAP) {
+        return;
+    }
+    if (kill(-w->group, SIGKILL) < 0 && errno == ESRCH) {
+        watcher_complete(1);
+    }
+    w->phase = WATCH_REAP;
+    w->deadline_ns = monotonic_ns(w) + (long long)WATCH_REAP_MS * 1000000LL;
+}
+
 // TERM grace starts once TERM is issued, so a late wakeup never spends it beforehand.
 static void watcher_term(struct watcher *w) {
-    kill(0, SIGTERM);
+    if (kill(-w->group, SIGTERM) < 0 && errno == ESRCH) {
+        watcher_complete(1);
+    }
     if (w->sigterm_grace_ms == 0) {
-        kill_group();
+        kill_group(w);
+        return;
     }
     w->phase = WATCH_TERM_GRACE;
-    w->deadline_ns = monotonic_ns() + (long long)w->sigterm_grace_ms * 1000000LL;
+    w->deadline_ns = monotonic_ns(w) + (long long)w->sigterm_grace_ms * 1000000LL;
 }
 
 static void watcher_stdin_grace(struct watcher *w) {
@@ -199,7 +219,7 @@ static void watcher_stdin_grace(struct watcher *w) {
         return;
     }
     w->phase = WATCH_STDIN_GRACE;
-    w->deadline_ns = monotonic_ns() + (long long)w->stdin_end_grace_ms * 1000000LL;
+    w->deadline_ns = monotonic_ns(w) + (long long)w->stdin_end_grace_ms * 1000000LL;
 }
 
 static void watcher_command(struct watcher *w) {
@@ -209,14 +229,14 @@ static void watcher_command(struct watcher *w) {
             watcher_stdin_grace(w);
         }
     } else if (n == 4 && memcmp(w->line, "term", 4) == 0) {
-        if (w->phase != WATCH_TERM_GRACE) {
+        if (w->phase != WATCH_TERM_GRACE && w->phase != WATCH_REAP) {
             watcher_term(w);
         }
     } else if (n == 4 && memcmp(w->line, "reap", 4) == 0) {
-        kill_group();
+        kill_group(w);
     } else if (n == 11 && memcmp(w->line, "leader-exit", 11) == 0) {
         if (!w->session || w->phase != WATCH_TERM_GRACE) {
-            kill_group();
+            kill_group(w);
         }
     }
 }
@@ -250,36 +270,42 @@ static void watcher_owner_eof(struct watcher *w) {
     }
 }
 
-// Idle blocks in poll with no timeout; only a started stop phase wakes on its deadline.
+// Idle blocks indefinitely; stopping probes only the reserved CLI group, without a table scan.
 static _Noreturn void watch_owner(struct watcher *w) {
     int owner_open = 1;
     struct pollfd owner = {.fd = OWNER_FD, .events = POLLIN};
     for (;;) {
         int timeout = -1;
         if (w->phase != WATCH_IDLE) {
-            long long remaining = w->deadline_ns - monotonic_ns();
+            if (group_absent(w)) {
+                watcher_complete(1);
+            }
+            long long remaining = w->deadline_ns - monotonic_ns(w);
             if (remaining <= 0) {
                 if (w->phase == WATCH_STDIN_GRACE) {
                     watcher_term(w);
                     continue;
                 }
-                kill_group();
+                if (w->phase == WATCH_REAP) {
+                    watcher_complete(0);
+                }
+                kill_group(w);
+                continue;
             }
             timeout = (int)((remaining + 999999LL) / 1000000LL);
+            if (timeout > WATCH_POLL_MS) {
+                timeout = WATCH_POLL_MS;
+            }
         }
         int ready;
-        if (owner_open) {
-            ready = poll(&owner, 1, timeout);
-        } else {
-            // Owner EOF always leaves idle, so there is a deadline to wait for.
-            struct timespec wait = {timeout / 1000, (long)(timeout % 1000) * 1000000L};
-            ready = nanosleep(&wait, NULL);
-        }
+        ready = poll(owner_open ? &owner : NULL, owner_open ? 1 : 0, timeout);
         if (ready < 0) {
             if (errno == EINTR) {
                 continue;
             }
-            kill_group();
+            owner_open = 0;
+            kill_group(w);
+            continue;
         }
         if (ready == 0 || !owner_open) {
             continue;
@@ -291,7 +317,7 @@ static _Noreturn void watch_owner(struct watcher *w) {
             watcher_input(w, data, (size_t)got);
         } else if (got == 0 || (errno != EINTR && errno != EAGAIN && errno != EWOULDBLOCK)) {
             // A failed read also means the owner is unreachable; its pipe leaves the poll set.
-            close(OWNER_FD);
+            // Retain the write side for completion when the owner only half-closed its pipe.
             owner_open = 0;
             watcher_owner_eof(w);
         }
@@ -305,6 +331,13 @@ static _Noreturn void run_watcher(int report_fd, struct watcher *w) {
     memset(&ignore, 0, sizeof ignore);
     ignore.sa_handler = SIG_IGN;
     sigemptyset(&ignore.sa_mask);
+    if (setpgid(0, 0) != 0) {
+        goto failed;
+    }
+    if (getpgrp() != getpid() || getsid(0) != w->group) {
+        errno = EPERM;
+        goto failed;
+    }
     // Survives the group SIGTERM it sends.
     for (size_t i = 0; i < sizeof IGNORED_SIGNALS / sizeof IGNORED_SIGNALS[0]; i++) {
         if (sigaction(IGNORED_SIGNALS[i], &ignore, NULL) != 0) {
@@ -365,6 +398,15 @@ static int start_watcher(struct watcher *w) {
     int answer = -1;
     size_t have = 0;
     while (have < sizeof answer) {
+        struct pollfd startup[] = {{.fd = report[0], .events = POLLIN}, {.fd = GATE_FD}};
+        int ready = poll(startup, 2, -1);
+        if (ready < 0 && errno == EINTR) {
+            continue;
+        }
+        // Gate cancellation must still reap a watcher stopped before its readiness reply.
+        if (ready < 0 || startup[1].revents != 0) {
+            break;
+        }
         ssize_t got = read(report[0], (char *)&answer + have, sizeof answer - have);
         if (got < 0 && errno == EINTR) {
             continue;
@@ -441,13 +483,13 @@ int main(int argc, char *argv[]) {
             strcmp(argv[5], "--") != 0 || argv[6][0] == '\0') {
         return EXIT_USAGE;
     }
-    // The owner signals and records this pid as the CLI's group, so it must lead one.
+    // The CLI leads its group and session; the watcher will retain that session reservation.
     for (int fd = 0; fd <= STATUS_FD; fd++) {
         if (fcntl(fd, F_GETFD) < 0) {
             return EXIT_USAGE;
         }
     }
-    if (getpid() != getpgrp()) {
+    if (getpid() != getpgrp() || getpid() != getsid(0)) {
         return EXIT_USAGE;
     }
 
@@ -462,6 +504,7 @@ int main(int argc, char *argv[]) {
     }
 
     struct watcher watcher = {
+        .group = getpid(),
         .stdin_end_grace_ms = stdin_end_grace_ms,
         .sigterm_grace_ms = sigterm_grace_ms,
         .session = strcmp(argv[3], "session") == 0,

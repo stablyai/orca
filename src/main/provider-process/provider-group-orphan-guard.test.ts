@@ -1,7 +1,8 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   proveProviderProcessIdentity,
-  sweepOrphanedProviderGroup
+  sweepOrphanedProviderGroup,
+  retireProviderWatcher
 } from './provider-group-orphan-guard'
 import type { ProviderProcessRow } from './provider-process-row-read'
 
@@ -15,6 +16,7 @@ const leader: ProviderProcessRow = {
 const watcher: ProviderProcessRow = {
   ...leader,
   pid: 4243,
+  pgid: 4243,
   ppid: 4242,
   startedAt: 'clock-tick:124'
 }
@@ -43,6 +45,50 @@ describe('provider group ownership', () => {
       })
     ).resolves.toBe('refused')
     expect(signalGroup).not.toHaveBeenCalledWith(4242, 'SIGKILL')
+  })
+
+  it('retires a stopped sibling watcher only after the provider group is absent', async () => {
+    const sent: [number, NodeJS.Signals | 0][] = []
+    const deps = {
+      signalGroup: (pgid: number, signal: NodeJS.Signals | 0) => {
+        if (pgid === 4242 && signal === 0) {
+          throw Object.assign(new Error('gone'), { code: 'ESRCH' })
+        }
+        sent.push([pgid, signal])
+      },
+      readProcessRow: async () => ({ ...watcher, ppid: 1 })
+    }
+    await expect(retireProviderWatcher(identity, deps)).resolves.toBe('killed')
+    expect(sent).toEqual([
+      [4243, 0],
+      [4243, 'SIGKILL']
+    ])
+    sent.length = 0
+    await expect(
+      retireProviderWatcher(identity, {
+        ...deps,
+        signalGroup: (pgid, signal) => {
+          sent.push([pgid, signal])
+        }
+      })
+    ).resolves.toBe('refused')
+    expect(sent).toEqual([[4242, 0]])
+  })
+
+  it('does not retire a reused watcher PID even when the provider group is absent', async () => {
+    const sent: [number, NodeJS.Signals | 0][] = []
+    await expect(
+      retireProviderWatcher(identity, {
+        signalGroup: (pgid, signal) => {
+          if (pgid === 4242 && signal === 0) {
+            throw Object.assign(new Error('gone'), { code: 'ESRCH' })
+          }
+          sent.push([pgid, signal])
+        },
+        readProcessRow: async () => ({ ...watcher, startedAt: 'clock-tick:999' })
+      })
+    ).resolves.toBe('refused')
+    expect(sent).toEqual([[4243, 0]])
   })
 
   it('rejects same-second PID reuse when ancestry changes across the boundary', async () => {

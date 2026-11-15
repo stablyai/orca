@@ -3,33 +3,48 @@ import type { ChildProcess } from 'node:child_process'
 import { recordSelfInitiatedTreeKill } from '../crash-reporting/process-exits/self-initiated-tree-kill-log'
 import {
   type publishProviderOwnership,
-  waitForProviderGroupReap
+  waitForProviderGroupReap,
+  waitForProviderOwnershipReap
 } from './provider-ownership-journal'
 import { sweepOrphanedProviderGroup } from './provider-group-orphan-guard'
 import { PROVIDER_GROUP_REAP_TIMEOUT_MS } from './provider-process-supervisor'
+import type { ProviderControlCompletion } from './provider-control-completion'
 
 export function reapDirectProviderGroup(
   delivered: boolean,
   pid: () => number | undefined,
   ownership: () => Awaited<ReturnType<typeof publishProviderOwnership>> | undefined,
   setVerdict: (verdict: 'exited' | 'unverifiable') => void,
-  onFinished: () => void
+  onFinished: () => void,
+  completion?: ProviderControlCompletion,
+  canceled?: AbortSignal
 ): Promise<void> {
   const proof = new AbortController()
+  const abort = (): void => proof.abort()
+  canceled?.addEventListener('abort', abort, { once: true })
   const deadline = performance.now() + PROVIDER_GROUP_REAP_TIMEOUT_MS
   let timer: NodeJS.Timeout | undefined
   const cleanup = async (): Promise<void> => {
+    if (completion === 'group-unverifiable') {
+      setVerdict('unverifiable')
+      return
+    }
     const registered = ownership()
-    if (!delivered && registered) {
+    if (!completion && !delivered && registered) {
       await sweepOrphanedProviderGroup(registered.identity, { signal: proof.signal })
     }
     if (proof.signal.aborted) {
       return
     }
     const groupPid = pid()
-    const absent =
-      !groupPid ||
-      (await waitForProviderGroupReap(groupPid, Math.max(0, deadline - performance.now())))
+    const remaining = Math.max(0, deadline - performance.now())
+    const absent = registered
+      ? await waitForProviderOwnershipReap(registered.identity, remaining, proof.signal)
+      : completion === 'group-absent' || !groupPid
+    if (!registered && !completion && groupPid) {
+      // Before registration only the native completion can also prove the watcher exited.
+      await waitForProviderGroupReap(groupPid, remaining)
+    }
     if (proof.signal.aborted) {
       return
     }
@@ -48,11 +63,16 @@ export function reapDirectProviderGroup(
     })
   ])
     .catch(() => {
-      setVerdict('unverifiable')
+      if (!proof.signal.aborted) {
+        setVerdict('unverifiable')
+      }
     })
     .finally(() => {
       clearTimeout(timer)
-      onFinished()
+      canceled?.removeEventListener('abort', abort)
+      if (!canceled?.aborted) {
+        onFinished()
+      }
     })
 }
 

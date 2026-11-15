@@ -66,7 +66,7 @@ export function providerGroupAbsent(pgid: number): boolean {
   }
 }
 
-/** The watcher anchors a group after its leader exits; neither a reused PID nor an unreadable row authorizes a kill. */
+/** The sibling watcher reserves the CLI session ID after its leader exits; unreadable or reused identities authorize no kill. */
 export async function sweepOrphanedProviderGroup(
   identity: ProviderGroupIdentity,
   deps: ProviderGroupGuardDeps = {}
@@ -106,6 +106,50 @@ export async function sweepOrphanedProviderGroup(
     return 'killed'
   }
   return 'refused'
+}
+
+/** Only retire the separate watcher after the provider group is gone, preserving descendant grace. */
+export async function retireProviderWatcher(
+  identity: ProviderGroupIdentity,
+  deps: ProviderGroupGuardDeps = {}
+): Promise<ProviderGroupSweepVerdict> {
+  const signal = deps.signalGroup ?? ((pgid, value) => process.kill(-pgid, value))
+  try {
+    signal(identity.pgid, 0)
+    return 'refused'
+  } catch (error) {
+    if (!isNoProcess(error)) {
+      return 'refused'
+    }
+  }
+  if (identity.watcher.pgid !== identity.watcher.pid || deps.signal?.aborted) {
+    return 'refused'
+  }
+  try {
+    signal(identity.watcher.pgid, 0)
+  } catch (error) {
+    return isNoProcess(error) ? 'absent' : 'refused'
+  }
+  const actual = await (deps.readProcessRow ?? readPosixProcessRow)(identity.watcher.pid)
+  if (deps.signal?.aborted || actual === 'unverifiable') {
+    return 'refused'
+  }
+  if (!actual) {
+    return 'absent'
+  }
+  if (!sameProviderProcess(identity.watcher, actual)) {
+    return 'refused'
+  }
+  try {
+    signal(identity.watcher.pgid, 'SIGKILL')
+    return 'killed'
+  } catch (error) {
+    return isNoProcess(error) ? 'absent' : 'refused'
+  }
+}
+
+export function providerOwnershipAbsent(identity: ProviderGroupIdentity): boolean {
+  return providerGroupAbsent(identity.pgid) && providerGroupAbsent(identity.watcher.pgid)
 }
 
 function isNoProcess(error: unknown): boolean {

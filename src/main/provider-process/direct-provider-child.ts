@@ -7,6 +7,10 @@ import type { ProviderSpawnSpec } from './provider-process-supervisor'
 import { publishProviderOwnership, providerOwnershipDirectory } from './provider-ownership-journal'
 import { notifyRuntimeListeners } from '../runtime/events/runtime-listener-delivery'
 import { readBootstrapStatus } from './provider-bootstrap-status'
+import {
+  readProviderControlCompletion,
+  type ProviderControlCompletion
+} from './provider-control-completion'
 import { DirectProviderStop, type ProviderControlCommand } from './direct-provider-stop'
 import { drainDirectProviderOutput } from './direct-provider-output-drain'
 import { providerExecFailure, reportProviderLaunchFailure } from './provider-launch-failure'
@@ -43,6 +47,8 @@ export class DirectProviderChild extends EventEmitter implements ProviderChild {
   private settled = false
   private failure?: Promise<Error>
   private reapTask?: Promise<void>
+  private reapAbort?: AbortController
+  private nativeCompletion?: ProviderControlCompletion
   private readonly reaped: Promise<void>
   private finishReap: () => void = () => {}
 
@@ -51,11 +57,7 @@ export class DirectProviderChild extends EventEmitter implements ProviderChild {
     private readonly spec: ProviderSpawnSpec
   ) {
     super()
-    this.stop = new DirectProviderStop(
-      spec,
-      (command) => this.send(command),
-      () => this.forceReap()
-    )
+    this.stop = new DirectProviderStop(spec, this.send.bind(this), () => this.forceReap())
     this.stdin = raw.stdin ?? new PassThrough()
     this.reaped = new Promise((resolve) => {
       this.finishReap = resolve
@@ -63,12 +65,8 @@ export class DirectProviderChild extends EventEmitter implements ProviderChild {
     const control = raw.stdio?.at(3)
     const gate = raw.stdio?.at(4)
     const status = raw.stdio?.at(5)
-    if (control instanceof Duplex) {
-      this.control = control
-    }
-    if (gate instanceof Writable) {
-      this.gate = gate
-    }
+    this.control = control instanceof Duplex ? control : undefined
+    this.gate = gate instanceof Writable ? gate : undefined
     this.stdin.on('error', () => {})
     raw.stdout?.on('error', (error) => this.stdout.destroy(error))
     raw.stderr?.on('error', (error) => this.stderr.destroy(error))
@@ -77,16 +75,12 @@ export class DirectProviderChild extends EventEmitter implements ProviderChild {
     // Keep EOF behind settlement, as well as exit, so protocol peers cannot fail during group cleanup.
     raw.stdout?.pipe(this.stdout, { end: false })
     raw.stderr?.pipe(this.stderr, { end: false })
-    const watcherGone = (): void => {
-      this.connected = false
-      if (!this.stop.reaping && !this.settled) {
-        this.forceReap()
-      }
+    if (this.control) {
+      readProviderControlCompletion(this.control, (completion) => {
+        this.connected = false
+        this.forceReap(completion)
+      })
     }
-    this.control?.once('end', watcherGone)
-    this.control?.once('close', watcherGone)
-    this.control?.on('error', watcherGone)
-    this.control?.resume()
     this.gate?.on('error', () => {
       this.canceled = true
       this.forceReap()
@@ -178,14 +172,10 @@ export class DirectProviderChild extends EventEmitter implements ProviderChild {
     if (errno !== null) {
       throw providerExecFailure(this.spec.command, errno)
     }
-    if (this.canceled || this.leaderOutcome()?.signal) {
+    if (this.canceled) {
       throw new Error('Provider bootstrap ended before launch completed')
     }
     this.notify('spawn')
-  }
-
-  private leaderOutcome(): Outcome | undefined {
-    return this.outcome
   }
 
   kill(signal: NodeJS.Signals | number = 'SIGTERM'): boolean {
@@ -253,25 +243,39 @@ export class DirectProviderChild extends EventEmitter implements ProviderChild {
     })
   }
 
-  private forceReap(): boolean {
-    if (this.reapTask) {
+  private forceReap(completion = this.nativeCompletion): boolean {
+    if (this.settled || (this.reapTask && !completion)) {
       return false
     }
-    this.stop.reap()
-    const delivered = this.signalLiveGroup('SIGKILL')
+    this.nativeCompletion = completion
+    const gated = !this.released && !this.ownership
+    if (gated) {
+      this.canceled = true
+      this.gate?.destroy()
+    }
+    if (completion || gated) {
+      this.stop.complete()
+      this.reapAbort?.abort()
+    } else {
+      this.stop.reap()
+    }
+    this.reapAbort = new AbortController()
+    const delivered = completion || gated ? false : this.signalLiveGroup('SIGKILL')
     this.reapTask = reapDirectProviderGroup(
       delivered,
       () => this.pid,
       () => this.ownership,
       (verdict) => {
-        this.groupVerdict = verdict
+        this.groupVerdict = this.groupVerdict === 'exited' ? 'exited' : verdict
       },
       () => {
         this.finishReap()
         if (this.groupVerdict !== 'exited' && !this.settled) {
           this.reapTask = undefined
         }
-      }
+      },
+      completion,
+      this.reapAbort.signal
     )
     return delivered
   }

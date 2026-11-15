@@ -7,8 +7,16 @@ import { Readable, Writable } from 'node:stream'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createProviderSpawnSpec, resolveProviderExecPath } from './provider-process-supervisor'
 import { spawnProviderProcess } from './provider-process-spawn'
-import { proveProviderProcessIdentity, providerGroupAbsent } from './provider-group-orphan-guard'
-import { recoverProviderOwnership, waitForProviderGroupReap } from './provider-ownership-journal'
+import {
+  proveProviderProcessIdentity,
+  providerGroupAbsent,
+  sweepOrphanedProviderGroup
+} from './provider-group-orphan-guard'
+import {
+  recoverProviderOwnership,
+  waitForProviderGroupReap,
+  waitForProviderOwnershipReap
+} from './provider-ownership-journal'
 
 const state = vi.hoisted(() => ({ root: '' }))
 vi.mock('../../shared/app-environment', () => ({
@@ -78,7 +86,12 @@ async function gatedNative() {
       '--',
       process.execPath,
       '-e',
-      "process.stdout.write('EXECUTED\\n'); setInterval(() => {}, 60000)"
+      String.raw`
+      require('node:child_process').spawn(process.execPath, ['-e',
+        "process.stdout.write('EXECUTED\\n'); setInterval(() => {}, 60000)"
+      ], { stdio: ['ignore', 'inherit', 'inherit'] })
+      setInterval(() => {}, 60000)
+    `
     ],
     {
       env: process.env,
@@ -97,11 +110,12 @@ async function gatedNative() {
     if (!control.destroyed) {
       control.end()
     }
-    try {
-      process.kill(-child.pid!, 'SIGKILL')
-    } catch {}
+    child.kill('SIGKILL')
     await closed
   })
+  if (control instanceof Readable) {
+    control.resume()
+  }
   const boot: { watcherPid: number; bootId: string } = JSON.parse(
     await outputLine(status, () => true)
   )
@@ -112,6 +126,11 @@ async function gatedNative() {
   if (!leader || !watcher) {
     throw new Error('Could not identify native fixture')
   }
+  const identity = { pgid: child.pid, leader, watcher }
+  cleanups.push(async () => {
+    await sweepOrphanedProviderGroup(identity)
+    await waitForProviderOwnershipReap(identity)
+  })
   return { child, closed, exited, boot, leader, watcher }
 }
 
@@ -177,6 +196,7 @@ describe.runIf(process.platform !== 'win32')('provider orphan ownership', () => 
         { detached: true, env: process.env, stdio: ['pipe', 'pipe', 'pipe', 'pipe', 'pipe', 'pipe'] })
       child.stdout.pipe(process.stdout)
       child.stderr.pipe(process.stderr)
+      child.stdio[3].resume()
       let status = ''
       child.stdio[5].on('data', chunk => {
         status += chunk
@@ -240,7 +260,7 @@ describe.runIf(process.platform !== 'win32')('provider orphan ownership', () => 
       JSON.stringify({
         version: 1,
         nonce: randomUUID(),
-        hostname: hostname(),
+        hostname: 'before-network-change',
         statePath: directory,
         bootId: gated.boot.bootId,
         owner,
@@ -257,6 +277,7 @@ describe.runIf(process.platform !== 'win32')('provider orphan ownership', () => 
     const executed = outputLine(gated.child.stdout!, (line) => line === 'EXECUTED')
     gate.end('g\n')
     await executed
+    process.kill(gated.watcher.pid, 'SIGSTOP')
     gated.child.kill('SIGKILL')
     await gated.exited
     expect(providerGroupAbsent(gated.leader.pid)).toBe(false)
