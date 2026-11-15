@@ -16,7 +16,7 @@ import {
   type LiveAgentWorktreeStatus,
   type WorkspaceActivityFacts,
   type WorkspaceActivityFactsSnapshot
-} from '../../../../shared/sidebar-list/workspace-activity-facts'
+} from '../../../../shared/sidebar-list/feed-facts/workspace-activity-facts'
 import type { AgentHookServer } from '../../../agent-hooks/server/agent-hook-server'
 import type { SidebarClock } from '../sidebar-clock'
 

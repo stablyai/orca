@@ -11,7 +11,7 @@ import {
   selectorAmbiguityRecovery
 } from '../workspace-selection/selector-ambiguity-recovery'
 import type { RuntimeRpcFailure } from '../../shared/runtime-rpc-envelope'
-import { RuntimeClientError, RuntimeRpcFailureError } from '../runtime/types'
+import { RuntimeClientError, RuntimeRpcFailureError } from '../runtime/connection/types'
 import { readableWslDistroCliRefusal } from '../hosts/wsl-distro-cli-refusal'
 
 type ContextRecovery = { nextSteps: readonly string[] } & Record<string, unknown>
@@ -88,7 +88,7 @@ export function formatCliError(error: unknown, context: CliErrorContext = {}): s
     if (hasOrchestrationRequestId(error.data)) {
       return message
     }
-    return formatRuntimeUnavailableError(message, error.data)
+    return formatRuntimeUnavailableError(message, error)
   }
   // Match before generic recovery; flattened errors may retain only the conflict token.
   const conflict = automationOwnerConflictRecovery(matchAutomationOwnerConflict(error))
@@ -111,12 +111,6 @@ export function formatCliError(error: unknown, context: CliErrorContext = {}): s
       )
     }
   }
-  if (
-    error instanceof RuntimeRpcFailureError &&
-    error.response.error.code === 'runtime_unavailable'
-  ) {
-    return formatRuntimeUnavailableError(message, error.response.error.data)
-  }
   if (error instanceof RuntimeRpcFailureError) {
     return formatMessageWithNextSteps(message, nextStepsFromData(error.response.error.data))
   }
@@ -131,10 +125,13 @@ function hasOrchestrationRequestId(data: unknown): boolean {
   )
 }
 
-function formatRuntimeUnavailableError(message: string, data: unknown): string {
-  const nextSteps = nextStepsFromData(data)
+function formatRuntimeUnavailableError(message: string, error: RuntimeClientError): string {
+  const nextSteps = nextStepsFromData(error.data)
   if (nextSteps.length > 0) {
     return formatMessageWithNextSteps(message, nextSteps)
+  }
+  if (error instanceof RuntimeRpcFailureError) {
+    return `${message}\nOrca is running but not ready for this yet. Wait a few seconds and retry; do not run 'orca open'. If it keeps failing and 'orca status --json' shows app.desktopWindowStatus "openable", Orca's window is closed: ask the user to reopen it.`
   }
   return `${message}\nOrca is not running. Run 'orca open' first.`
 }

@@ -1,4 +1,5 @@
 import type { WebContents } from 'electron'
+import { initializeClaimedBrowserRouteGuest } from './browser-route-guest-initialization'
 import {
   browserRoutePageKey,
   type BrowserRouteGuestLifecycleClaim,
@@ -14,7 +15,7 @@ import {
   isValidBlankRouteGuest,
   isValidRoutePageRetirement
 } from './browser-route-guest-guard'
-import { claimBrowserRouteGuestLifecycle } from './browser-route-guest-lifecycle-claim'
+import { claimRegisteredBrowserRouteGuestLifecycle } from './browser-route-guest-lifecycle-claim'
 import { releaseBrowserRouteGuest } from './browser-route-guest-release'
 import {
   grantBrowserRouteGuestNavigation,
@@ -22,6 +23,7 @@ import {
 } from './browser-route-navigation-authority'
 import {
   beginBrowserRouteGuestRetirement,
+  retireBrowserRouteGuestPage,
   createBrowserRouteGuestState,
   installBrowserRouteGuestQuarantine,
   isBrowserRouteGuestNavigationAllowed,
@@ -74,6 +76,7 @@ export class BrowserRouteWebContentsRegistry {
           this.dependencies.getPartitionForSession(routeSession),
         reportBlockedPopup: (blocked) => this.dependencies.reportBlockedPopup?.(blocked),
         openNewTabPopup: this.dependencies.openNewTabPopup,
+        releaseAgentLead: this.dependencies.releaseAgentLead,
         isPopupNavigationAllowed: (url) => this.navigationAllowed(state, url, false)
       })
     } catch {
@@ -114,15 +117,11 @@ export class BrowserRouteWebContentsRegistry {
   }
 
   claimGuestLifecycle(registration: GuestIdentity): BrowserRouteGuestLifecycleClaim | null {
-    const state = this.guests.get(registration.webContentsId)
-    return claimBrowserRouteGuestLifecycle(registration, state, () =>
-      Boolean(
-        state &&
-        (!state.registration ||
-          (browserRoutePageKey(state.registration) === browserRoutePageKey(registration) &&
-            this.hasLivePageAuthority(state))) &&
-        this.registrationMatchesGuest(state, registration)
-      )
+    return claimRegisteredBrowserRouteGuestLifecycle(
+      registration,
+      this.guests.get(registration.webContentsId),
+      (state) => this.registrationMatchesGuest(state, registration),
+      (state) => this.hasLivePageAuthority(state)
     )
   }
 
@@ -188,6 +187,21 @@ export class BrowserRouteWebContentsRegistry {
       this.hasLivePageAuthority(state)
     )
     return navigateBrowserRouteGuest(registration, rawUrl, state, () => isCurrent)
+  }
+
+  initializeGuest(
+    claim: BrowserRouteGuestLifecycleClaim,
+    url: string,
+    signal: AbortSignal
+  ): Promise<string> {
+    return initializeClaimedBrowserRouteGuest(
+      claim,
+      url,
+      signal,
+      this.guests,
+      (state) =>
+        this.registrationMatchesGuest(state, claim.registration) && this.hasLivePageAuthority(state)
+    )
   }
 
   beginGuestRetirement(claim: BrowserRouteGuestLifecycleClaim): Promise<void> | null {
@@ -288,34 +302,7 @@ export class BrowserRouteWebContentsRegistry {
   }
 
   private retireGuestPage(state: GuestState): void {
-    if (state.retirementRequested) {
-      return
-    }
-    state.retirementRequested = true
-    state.navigationGranted = false
-    // Fence popups before the logical retirement round trip.
-    state.popups?.closeAll()
-    const registration = state.registration
-    const pageAuthority = state.pageAuthority
-    if (!registration || pageAuthority === null) {
-      this.revokeGuest(state)
-      return
-    }
-    let started = false
-    try {
-      started = this.dependencies.retirePreparedPage({
-        partition: registration.partition,
-        browserPageId: registration.browserPageId,
-        pageHostGeneration: registration.pageHostGeneration,
-        rendererWebContentsId: registration.rendererWebContentsId,
-        pageAuthority
-      })
-    } catch {
-      // Exact guest stays revoked even if logical retirement cannot start.
-    }
-    if (!started) {
-      this.revokeGuest(state)
-    }
+    retireBrowserRouteGuestPage(state, this.dependencies, () => this.revokeGuest(state))
   }
 
   private releaseGuest(state: GuestState): void {

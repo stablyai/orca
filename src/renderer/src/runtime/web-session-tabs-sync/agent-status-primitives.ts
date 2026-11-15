@@ -14,7 +14,7 @@ import type { RuntimeMobileSessionTerminalClientTab } from '../../../../shared/r
 import {
   type RetiredTerminalTabSweepState,
   buildRetiredTerminalTabStateSweepPatch
-} from '../../store/terminals/retired-terminal-tab-state-sweep'
+} from '../../store/terminals/retirement/retired-terminal-tab-state-sweep'
 import { isMirroredTerminalSurfaceId } from './terminal-surfaces'
 import { isAgentStatusFresh } from './state-equality-core'
 
@@ -214,8 +214,6 @@ export function buildRetractedMirroredTabSweepPatch(
     paneForegroundAgentByPaneKey: state.paneForegroundAgentByPaneKey ?? {},
     recentlyClosedAgentStatusTabIds: state.recentlyClosedAgentStatusTabIds ?? {},
     recentlyRetiredAgentStatusPaneKeys: state.recentlyRetiredAgentStatusPaneKeys ?? {},
-    retainedAgentsByPaneKey: state.retainedAgentsByPaneKey ?? {},
-    retentionSuppressedPaneKeys: state.retentionSuppressedPaneKeys ?? {},
     sortEpoch: agentStatusPatch?.sortEpoch ?? state.sortEpoch,
     // Keep the sweep state consistent with the accepted host inventory.
     tabsByWorktree: nextTabsByWorktree,

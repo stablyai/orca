@@ -1,22 +1,17 @@
 import { useState } from 'react'
-import { getDetachedWorkspaceReviewRequest } from '../review/workspace-detached-review-request'
 import { getLinearReadScope, scopedLinearCacheKey } from '@/store/slices/linear/linear-slice-scope'
 import { getWorkspaceAttachmentSourceContext } from '../review/workspace-attachment-source-result'
 import { getWorkspaceReferenceLinearWorkspaceId } from '../review/workspace-reference-details'
-import { getWorktreeGitIdentityDisplay } from '../../../../../../shared/worktree/git-identity-display'
+import { getWorktreeGitIdentityDisplay } from '../../../../../../shared/worktree/row-display/git-identity-display'
 import { useAppStore } from '@/store'
-import { getGitHubPRCacheKey } from '../../../../../../shared/github/cache/github-cache-key'
 import { issueCacheKey as getIssueCacheKey } from '@/store/github/cache/cache-identity'
-import { getHostedReviewCacheKey } from '@/store/slices/hosted-review/hosted-review-cache-identity'
-import { hostedReviewInfoFromGitHubPRInfo } from '../../../../../../shared/source-control/hosted-review/hosted-review-github'
-import type { HostedReviewInfo } from '../../../../../../shared/source-control/hosted-review/hosted-review-contracts'
 import { isFolderRepo } from '../../../../../../shared/repo-kind'
 import { areTaskSourceContextsEqual } from '../../../../../../shared/work-items/task-source-context'
 import { parseWorkspaceKey } from '../../../../../../shared/workspace-scope'
 import {
-  getWorktreeCardPrDisplay,
-  isCachedMergedBranchPRCurrentForWorktree
-} from '../review/worktree-card-pr-display'
+  deriveWorktreeCardPrDisplay,
+  getWorktreeReviewCacheKeys
+} from '../review/worktree-card-pr-derivation'
 import type { WorktreeCardProps } from '../controller/worktree-card-model'
 import type { useWorktreeCardFoundation } from '../controller/use-worktree-card-foundation'
 import { useTranslate } from '@/i18n/use-translate'
@@ -51,32 +46,7 @@ export function useWorktreeCardReviewDetails({
   const folderMetaRowContent = newCardStyle
     ? hasPathIdentityEnabled && Boolean(folderPathIdentityDisplay)
     : isFolder
-  const hostedReviewExactKey = getDetachedWorkspaceReviewRequest(worktree, repo)?.key
-  const hostedReviewCacheKey =
-    hostedReviewExactKey ??
-    (repo && branch
-      ? getHostedReviewCacheKey(
-          repo.path,
-          branch,
-          settings,
-          repo.id,
-          repo.connectionId,
-          repo.executionHostId,
-          true
-        )
-      : '')
-  const prCacheKey =
-    repo && branch
-      ? getGitHubPRCacheKey(
-          repo.path,
-          repo.id,
-          branch,
-          settings,
-          repo.connectionId,
-          repo.executionHostId,
-          true
-        )
-      : ''
+  const { hostedReviewCacheKey, prCacheKey } = getWorktreeReviewCacheKeys(worktree, repo, settings)
   const issueCacheKey =
     repo && worktree.linkedIssue
       ? getIssueCacheKey(
@@ -122,82 +92,15 @@ export function useWorktreeCardReviewDetails({
       : undefined
   )
 
-  const hostedReview: HostedReviewInfo | null | undefined =
-    hostedReviewEntry !== undefined ? hostedReviewEntry.data : undefined
   const linkedGitHubPR = worktree.linkedPR ?? null
   const linkedGitLabMR = worktree.linkedGitLabMR ?? null
   const linkedBitbucketPR = worktree.linkedBitbucketPR ?? null
   const linkedAzureDevOpsPR = worktree.linkedAzureDevOpsPR ?? null
   const linkedGiteaPR = worktree.linkedGiteaPR ?? null
-  const hasNonGitHubLinkedReview =
-    linkedGitLabMR !== null ||
-    linkedBitbucketPR !== null ||
-    linkedAzureDevOpsPR !== null ||
-    linkedGiteaPR !== null
-  const hasLinkedReview =
-    linkedGitHubPR !== null ||
-    linkedGitLabMR !== null ||
-    linkedBitbucketPR !== null ||
-    linkedAzureDevOpsPR !== null ||
-    linkedGiteaPR !== null
-  // Why: a newer hosted-review miss trusts the merged-PR cache only when the stored head proves it still describes the current commit.
-  const cachedBranchPR = prCacheEntry?.data
-  const cachedBranchPRFetchedAt = prCacheEntry?.fetchedAt
-  const cachedMergedBranchPRMatchesCurrentHead = isCachedMergedBranchPRCurrentForWorktree(
-    cachedBranchPR,
-    worktree
-  )
-  const cachedBranchFallbackGitHubPRNumber =
-    linkedGitHubPR === null &&
-    !hasNonGitHubLinkedReview &&
-    cachedBranchPR?.number !== undefined &&
-    (cachedBranchPR.state !== 'merged' || cachedMergedBranchPRMatchesCurrentHead)
-      ? cachedBranchPR.number
-      : null
-  const cachedBranchPRCanDriveDisplay =
-    cachedBranchPR?.state !== 'merged' || cachedMergedBranchPRMatchesCurrentHead
-  const hostedReviewMatchesHeadMatchedCachedMergedPR =
-    cachedMergedBranchPRMatchesCurrentHead &&
-    cachedBranchPR !== null &&
-    cachedBranchPR !== undefined &&
-    hostedReview?.provider === 'github' &&
-    hostedReview.number === cachedBranchPR.number
-  const useCachedBranchReview =
-    cachedBranchPR !== undefined &&
-    cachedBranchPR !== null &&
-    !hasNonGitHubLinkedReview &&
-    cachedBranchPRCanDriveDisplay &&
-    (hostedReview === undefined ||
-      (cachedMergedBranchPRMatchesCurrentHead && !hostedReviewMatchesHeadMatchedCachedMergedPR) ||
-      (hostedReview === null &&
-        ((cachedBranchPRFetchedAt !== undefined &&
-          cachedBranchPRFetchedAt > (hostedReviewEntry?.fetchedAt ?? 0)) ||
-          cachedMergedBranchPRMatchesCurrentHead)))
-  const cachedBranchReview = useCachedBranchReview
-    ? hostedReviewInfoFromGitHubPRInfo(cachedBranchPR)
-    : hostedReview
-  // Why: branch provenance does not supersede the head-ownership gate for merged PRs.
-  const branchLookupGitHubPRNumber =
-    hostedReview?.provider === 'github' &&
-    hostedReview.state === 'merged' &&
-    !isCachedMergedBranchPRCurrentForWorktree(hostedReview, worktree)
-      ? null
-      : hostedReviewEntry?.branchLookupGitHubPRNumber
-  const prDisplay = getWorktreeCardPrDisplay(
-    cachedBranchReview,
-    linkedGitHubPR,
-    linkedGitLabMR,
-    linkedBitbucketPR,
-    linkedAzureDevOpsPR,
-    linkedGiteaPR,
-    {
-      reviewHintKey:
-        (useCachedBranchReview || cachedMergedBranchPRMatchesCurrentHead) && !hasLinkedReview
-          ? ''
-          : hostedReviewEntry?.linkedReviewHintKey,
-      branchLookupGitHubPRNumber,
-      suppressedGitHubPR: worktree.suppressedGitHubPR ?? null
-    },
+  const { prDisplay, cachedBranchFallbackGitHubPRNumber } = deriveWorktreeCardPrDisplay(
+    worktree,
+    hostedReviewEntry,
+    prCacheEntry,
     t
   )
 

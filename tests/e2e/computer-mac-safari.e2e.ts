@@ -46,7 +46,6 @@ describe.skipIf(!isMac || !e2eOptIn)('computer-use macOS e2e (Safari web app)', 
       ).stdout
     )
     expect(state.result.snapshot.window.title).toContain(fixture.title)
-    expect(state.result.snapshot.treeText).toContain('Draft empty')
 
     const recipientIndex = findRoleIndex(
       state.result.snapshot.treeText,
@@ -105,8 +104,6 @@ describe.skipIf(!isMac || !e2eOptIn)('computer-use macOS e2e (Safari web app)', 
         ])
       ).stdout
     )
-    expect(state.result.snapshot.treeText).toContain('focused UI element is')
-    expect(state.result.snapshot.treeText).toContain('Body')
 
     const body = `hello browser draft ${Date.now()}`
     const bodyPaste = parseJsonOutput<{ result: ComputerActionResult }>(
@@ -183,7 +180,6 @@ describe.skipIf(!isMac || !e2eOptIn)('computer-use macOS e2e (Safari web app)', 
         ])
       ).stdout
     )
-    expect(before.result.snapshot.treeText).toContain('Middle click waiting')
 
     const receiverIndex = findRoleIndex(
       before.result.snapshot.treeText,

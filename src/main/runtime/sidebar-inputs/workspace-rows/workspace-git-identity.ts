@@ -5,13 +5,13 @@ import {
   type HostScopedWorktreeKey,
   type HostWorktreeTarget
 } from '../../../../shared/worktree/host-qualified-identity'
-import type { HOSTED_REVIEW_LINK_KEYS } from '../../../../shared/worktree/hosted-review-links'
+import type { HOSTED_REVIEW_LINK_KEYS } from '../../../../shared/worktree/hosted-review/hosted-review-links'
 import {
   branchHostedReviewOwner,
   hostedReviewClearUpdates,
   type HostedReviewClearUpdates,
   type HostedReviewOwner
-} from '../../../../shared/worktree/hosted-review-branch-ownership'
+} from '../../../../shared/worktree/hosted-review/hosted-review-branch-ownership'
 import {
   getRepoHostIdentityForParts,
   type HostScopedRepoKey

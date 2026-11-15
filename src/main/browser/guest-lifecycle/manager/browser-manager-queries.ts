@@ -58,6 +58,20 @@ export abstract class BrowserManagerQueries extends BrowserManagerRegistration {
     return this.worktreeIdByTabId.get(this.getOwningTabIdForPage(browserTabId))
   }
 
+  /** The workspace of a page an agent is driving whose guest lives in `sess` (null when unknown). */
+  findAgentPageInSession(sess: Electron.Session): { worktreeId: string | null } | null {
+    for (const browserPageId of this.agentActivity.activePageIds()) {
+      const guestId =
+        this.resolvePopupPageWebContentsId(browserPageId) ??
+        this.webContentsIdByTabId.get(browserPageId)
+      const guest = guestId === undefined ? undefined : webContents.fromId(guestId)
+      if (guest && !guest.isDestroyed() && guest.session === sess) {
+        return { worktreeId: this.getWorktreeIdForTab(browserPageId) ?? null }
+      }
+    }
+    return null
+  }
+
   getSessionProfileIdForTab(browserTabId: string): string | null {
     return this.sessionProfileIdByPageId.get(this.getOwningTabIdForPage(browserTabId)) ?? null
   }

@@ -1,6 +1,6 @@
 import type { AppState } from '../../types'
 import type { TerminalTab } from '../../../../../shared/workspace-layout/terminal-tab-types'
-import { getTerminalActivationSpawnSuppression } from '../../terminals/terminal-activation-spawn-suppression'
+import { getTerminalActivationSpawnSuppression } from '../../terminals/pty/terminal-activation-spawn-suppression'
 import {
   replaceRecordEntries,
   replaceTabBuckets,

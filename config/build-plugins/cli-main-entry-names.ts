@@ -11,9 +11,9 @@ export const CLI_MAIN_ENTRY_NAMES = [
   'filesystem/macos-tree-clone',
   'orcad/instance-lock/orcad-stale-lock-reclaim',
   'orcad/profile-state/orcad-host-identity-reset',
-  'plugins/plugin-artifact-validation',
-  'plugins/plugin-content-hash',
-  'plugins/plugin-catalog-release-entry',
+  'plugins/artifacts/plugin-artifact-validation',
+  'plugins/artifacts/plugin-content-hash',
+  'plugins/catalog/plugin-catalog-release-entry',
   // `orca vm env doctor` runs its checks in the CLI process.
   'environment-doctor/environment-doctor',
   'environment-doctor/environment-doctor-host',

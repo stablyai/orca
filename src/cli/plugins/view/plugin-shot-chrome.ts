@@ -2,7 +2,7 @@ import { mkdir, writeFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import type { HandlerContext } from '../../dispatch/dispatch'
 import { printPluginResult } from '../plugin-cli-output'
-import { RuntimeClientError } from '../../runtime/types'
+import { RuntimeClientError } from '../../runtime/connection/types'
 import { callPlugins } from '../plugin-runtime'
 import { editorShotPluginKey } from './plugin-shot-editor'
 

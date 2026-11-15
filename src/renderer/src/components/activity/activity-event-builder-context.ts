@@ -18,7 +18,7 @@ import {
 } from '@/runtime/native-chat/naming/structured-chat-tab-name'
 import type { Worktree } from '../../../../shared/worktree/types'
 import { tabFromWorktreeAttributedStatusEntry } from '../sidebar/workspace-card/activity/worktree-agent-row-fallback-tab'
-import { agentEntrySessionStartedAt as effectiveWorktreeAgentRowStartedAt } from '../../../../shared/agent-session/lifecycle/agent-session-start-time'
+import { agentEntrySessionStartedAt as effectiveWorktreeAgentRowStartedAt } from '../../../../shared/agent-session/lifecycle/resume/agent-session-start-time'
 import type { BuildActivityEventsArgs } from './activity-event-builder'
 import { standaloneActivityWorktree } from './activity-standalone-worktree'
 import type { Translate } from '@/i18n/use-translate'

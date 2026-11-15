@@ -6,7 +6,7 @@ import {
   MAX_REPO_ICON_DATA_URL_BYTES,
   repoIconFeedKey,
   type RepoIconDataUrlsReply
-} from '../../../../shared/sidebar-list/repo-icon-data-urls-contract'
+} from '../../../../shared/sidebar-list/catalog/repo-icon-data-urls-contract'
 import {
   fetchRemoteRepoIcon,
   type FetchedRepoIcon,

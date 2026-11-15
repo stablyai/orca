@@ -12,7 +12,7 @@ import {
   MAX_SKILL_REFS,
   MAX_BLOCKS,
   MAX_PROMPT_BYTES
-} from './rpc-contract/structured-agent-session-message-params'
+} from './rpc-contract/structured-agent-session/structured-agent-session-message-params'
 import {
   imageReferenceInsertion,
   withoutImageReference
@@ -21,7 +21,7 @@ import {
   imageReferencesToPromptMarkers,
   promptMarkersToImageReferences,
   stripSentImagePromptMarkers
-} from './native-chat/transcript/native-chat-image-transcript-markers'
+} from './native-chat/transcript/images/native-chat-sent-image-prompt-markers'
 
 export type QueuedMessageImageBlock = Extract<
   AgentJournalMessageItem['blocks'][number],

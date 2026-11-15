@@ -11,7 +11,7 @@ import {
 import type {
   AgentSessionReadVisualResult,
   AgentSessionVisualReadError
-} from '../../../shared/rpc-contract/agent-session-visual-params'
+} from '../../../shared/rpc-contract/structured-agent-session/agent-session-visual-params'
 import { isENOENT } from '../../ipc/filesystem/access/filesystem-path-containment'
 import { readLocalFileBounded } from '../../ipc/filesystem/local-regular-file-read'
 

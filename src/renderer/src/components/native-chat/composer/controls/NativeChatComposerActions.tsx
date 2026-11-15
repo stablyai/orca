@@ -6,7 +6,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { useTranslate } from '@/i18n/use-translate'
 import { getScreenSubmitShortcutLabel } from '@/lib/keyboard/screen-submit-shortcut'
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
-import type { NativeChatFollowUpBehavior } from '../../../../../../shared/native-chat/input/native-chat-follow-up-behavior'
+import type { NativeChatFollowUpBehavior } from '../../../../../../shared/native-chat/input/composer/native-chat-follow-up-behavior'
 import type {
   SessionOptionDescriptor,
   SessionOptionsSurface
@@ -22,7 +22,7 @@ import { NativeChatComposerGoalChip } from './NativeChatComposerGoalChip'
 import { NativeChatContextUsageRing } from '../../usage/NativeChatContextUsageRing'
 import type { NativeChatContextUsageSummary } from '../../../../../../shared/native-chat/native-chat-context-usage-summary'
 import type { NativeChatOptionPickerRequest } from '../../session/options/controls/native-chat-option-picker-request'
-import type { NativeChatSteerChordPreview } from '../../../../../../shared/native-chat/input/use-native-chat-steer-chord-preview'
+import type { NativeChatSteerChordPreview } from '../../../../../../shared/native-chat/input/composer/use-native-chat-steer-chord-preview'
 
 export type NativeChatComposerActionsProps = {
   editSession?: { cancel: () => void }

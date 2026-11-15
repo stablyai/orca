@@ -1,5 +1,5 @@
 import { getDefaultVoiceSettings } from '../../../shared/constants'
-import { MOBILE_DICTATION_RECONNECT_GRACE_MS } from '../../../shared/rpc-contract/speech-params'
+import { MOBILE_DICTATION_RECONNECT_GRACE_MS } from '../../../shared/rpc-contract/speech/speech-params'
 import { speechModelNotReadyError } from '../../../shared/speech-model-retirement'
 import { getSpeechModelManager, getSpeechSttService } from '../../speech/speech-runtime-service'
 import { getCatalogModel, isLocalSpeechModel } from '../../speech/model-catalog'

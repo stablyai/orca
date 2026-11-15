@@ -21,7 +21,7 @@ import {
 import { ExternalChromiumTabRegistry } from './external-chromium-tab-registry'
 import { runExternalChromiumPageInput, type PageInputSession } from './external-chromium-page-input'
 import { agentBrowserSnapshotArgs } from '../../../browser/agent-browser/protocol/agent-browser-snapshot-arguments'
-import { Snapshot } from '../../../../shared/rpc-contract/browser-observation-params'
+import { Snapshot } from '../../../../shared/rpc-contract/browser/browser-observation-params'
 import { ExpectedPageUrlGuard } from '../../../browser/cdp/input/browser-expected-page-url'
 
 const AgentBrowserCurrentUrl = z.object({ url: z.string() })

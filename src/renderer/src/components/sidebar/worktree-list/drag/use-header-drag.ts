@@ -11,7 +11,7 @@ import type { ExecutionHostId } from '../../../../../../shared/execution-host'
 import type {
   HostHeaderRow,
   HostSectionRow
-} from '../../../../../../shared/sidebar-list/host-section-rows'
+} from '../../../../../../shared/sidebar-list/hosts/host-section-rows'
 import type { Row, WorktreeGroupBy } from '../../../../../../shared/sidebar-list/row-types'
 import type { RenderRow } from '../listing/render-row'
 import {

@@ -30,7 +30,7 @@ import type { ConflictResolution } from '../../../shared/source-control/listing/
 import type { GitProviderStatusOptions } from './status-options'
 import type { BranchSwitchCreation } from '../../../shared/git/branch-switch-target'
 import type { RuntimeGitLocalBranches } from '../../../shared/runtime-worktree-contracts'
-import type { GitAdmissionTier } from '../../../shared/rpc-contract/git-admission-tier-params'
+import type { GitAdmissionTier } from '../../../shared/rpc-contract/source-control/git-admission-tier-params'
 
 export type IGitProvider = {
   getStatus(worktreePath: string, options?: GitProviderStatusOptions): Promise<GitStatusResult>

@@ -20,7 +20,7 @@ import {
   supportsSkillRuntimeCancellation,
   supportsSkillRuntimeInstall
 } from '../skills/runtime-transfer/skill-runtime-capability'
-import { callRuntimeEnvironment } from './runtime-environments/runtime-environment-transport-routing'
+import { callRuntimeEnvironment } from './runtime-environments/requests/runtime-environment-transport-routing'
 import { registerSkillInstallManagementIpcHandlers } from './skill-install-management-ipc-handlers'
 import { handleMainWindowSkillIpc } from './skill-ipc-main-window'
 import { sendBundleInstallProgress, sendSkillInstallProgress } from './skill-install-progress-ipc'
@@ -35,7 +35,7 @@ import {
   skillSharePrepareIpcSchema,
   skillSharePublishIpcSchema
 } from './skill-share-publishing-ipc-schemas'
-import { getRuntimeEnvironmentRegistryRoot } from './runtime-environments/runtime-environment-registry-root'
+import { getRuntimeEnvironmentRegistryRoot } from './runtime-environments/catalog/runtime-environment-registry-root'
 
 /** Discovery for Share; `skillDirectories` limits which stopped WSL roots it may read. */
 export type SkillShareDiscover = (

@@ -2,7 +2,7 @@ import {
   resolveTerminalTabTitle,
   resolveUnifiedTabLabel
 } from '../../../../../../shared/tab-title-resolution'
-import { getEditorDisplayLabel } from '@/components/editor/editor-labels'
+import { getEditorDisplayLabel } from '@/components/editor/panel/header/editor-labels'
 import { buildPaletteTabDocument } from '../../../../../../shared/palette-match/tab-document'
 import {
   getPaletteWorktreeIdentity,
@@ -49,7 +49,6 @@ export function buildSearchableWorkspaceTabEntries({
   tabsByWorktree,
   openFiles,
   agentStatusByPaneKey,
-  retainedAgentsByPaneKey,
   sleepingAgentSessionsByPaneKey,
   activeGroupIdByWorktree,
   groupsByWorktree,
@@ -79,7 +78,6 @@ export function buildSearchableWorkspaceTabEntries({
   }
   const agentIndex = buildAgentMetadataTabIndex({
     agentStatusByPaneKey,
-    retainedAgentsByPaneKey,
     sleepingAgentSessionsByPaneKey
   })
   const ambiguousWorktreeIds = findAmbiguousWorktreeIds(ownershipWorktrees ?? worktrees)
@@ -202,7 +200,6 @@ export function buildSearchableWorkspaceTabEntries({
             launchAgent: terminalTab?.launchAgent,
             layout: terminalLayoutsByTabId?.[tab.entityId],
             agentStatusByPaneKey,
-            retainedAgentsByPaneKey,
             sleepingAgentSessionsByPaneKey,
             paneForegroundAgentByPaneKey
           })

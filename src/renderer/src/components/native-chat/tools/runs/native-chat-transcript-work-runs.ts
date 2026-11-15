@@ -1,4 +1,4 @@
-// Combine calls/thoughts after slot selection so every intervening visible row or section boundary ends the run.
+// Combine calls/thoughts after slot selection so every intervening visible row ends the run.
 
 import { agentJournalItemSubagentId } from '../../../../../../shared/agent-session/journal/agent-session-journal-producer'
 import {
@@ -22,17 +22,12 @@ function workRunRow(slot: NativeChatTranscriptSlot): NativeChatWorkRunRow {
     return { member: null, draws: true, scope: undefined }
   }
   return {
-    member:
-      slot.drawsMessage && slot.subagentRoster === undefined
-        ? nativeChatWorkRunMember(
-            slot.message,
-            slot.receipt !== undefined,
-            // At the top level the live line owns the open thought; only a section has none.
-            slot.depth > 0 && slot.activeTurnIsWorking
-          )
-        : null,
+    member: slot.drawsMessage
+      ? // The live line owns the open thought.
+        nativeChatWorkRunMember(slot.message, slot.receipt !== undefined, false)
+      : null,
     draws: true,
-    scope: `${slot.depth}:${agentJournalItemSubagentId(slot.message)}:${slot.turnKey}`
+    scope: `${agentJournalItemSubagentId(slot.message)}:${slot.turnKey}`
   }
 }
 
@@ -60,8 +55,7 @@ function workRunSlot(
         hasStatus: head.status !== undefined,
         hasTurnDiff: turnDiff !== undefined,
         turnDiffFileCount: turnDiff?.files.length,
-        openedPullRequestCount: openedPullRequests?.length,
-        inSubagentSection: head.depth > 0
+        openedPullRequestCount: openedPullRequests?.length
       },
       typography
     )

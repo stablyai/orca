@@ -10,7 +10,7 @@ import {
   type ModelMenuReadScope
 } from '@/runtime/native-chat/model-catalogs/model-menu-catalog-read'
 import { subscribeModelMenuInvalidation } from '@/runtime/native-chat/model-catalogs/model-menu-invalidation'
-import { parseStructuredLaunchSeedOptions } from '../../../../shared/native-chat/input/native-chat-session-option-defaults'
+import { parseStructuredLaunchSeedOptions } from '../../../../shared/native-chat/input/session-options/native-chat-session-option-defaults'
 import { isAgentChatPermissionChoice } from '../../../../shared/agent-launch/permissions/agent-chat-permission-mode'
 import type { AgentPickerEntry } from '../../../../shared/agent-launch/picker/agent-launch-picker'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'

@@ -11,7 +11,7 @@ import {
   buildJiraTextMatchJql
 } from '../../../../src/shared/jira/jira-search-input-jql'
 import { jiraIssueSearchRead } from '../../tasks/providers/jira/mobile-jira-operations'
-import { repoBaseRefSearchRead } from '../../source-control/mobile-repo-base-ref-operations'
+import { repoBaseRefSearchRead } from '../../source-control/branches/mobile-repo-base-ref-operations'
 import {
   githubWorkItemSearchRead,
   gitlabWorkItemSearchRead,

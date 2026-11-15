@@ -15,14 +15,12 @@ import { Label } from '@/components/ui/label'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import {
   formatCrashReportText,
-  isReactErrorBoundaryReport,
   MAX_USER_NOTES_LENGTH,
   type CrashReportDiagnosticBundle,
   type CrashReportRecord
 } from '../../../../shared/crash-reporting'
 import type { GitHubViewer } from '../../../../shared/github/pull-requests/pull-request-types'
-import { translate } from '@/i18n/i18n'
-import { useIntlLocale, useTranslate, type Translate } from '@/i18n/use-translate'
+import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
 import {
   CRASH_REPORT_SUBMIT_FAILURE_TOAST_ID,
   getCrashReportCopySubmissionFailure,
@@ -30,73 +28,12 @@ import {
   getCrashReportSubmitWarningNotice
 } from './crash-report-submit-notice'
 import { useCrashReportCopy } from './use-crash-report-copy'
-
-function formatSummary(report: CrashReportRecord, t: Translate = translate): string {
-  if (isReactErrorBoundaryReport(report)) {
-    const surface = typeof report.details.surface === 'string' ? report.details.surface : null
-    return surface
-      ? t(
-          'auto.components.crash.report.CrashReportDialogSurface.renderErrorIn',
-          'React render error in {{surface}}',
-          { surface }
-        )
-      : t('auto.components.crash.report.CrashReportDialogSurface.renderError', 'React render error')
-  }
-  return `${report.processType} ${report.reason}${
-    report.exitCode === null ? '' : ` (exit ${report.exitCode})`
-  }`
-}
-
-function getDialogTitle(report: CrashReportRecord | null, t: Translate = translate): string {
-  if (!report) {
-    return t('auto.components.crash.report.CrashReportDialogSurface.reportTitle', 'Report a crash')
-  }
-  return report && isReactErrorBoundaryReport(report)
-    ? t(
-        'auto.components.crash.report.CrashReportDialogSurface.uiErrorTitle',
-        'Orca hit a recoverable UI error'
-      )
-    : t(
-        'auto.components.crash.report.CrashReportDialogSurface.closedTitle',
-        'Orca closed unexpectedly'
-      )
-}
-
-function getDialogDescription(report: CrashReportRecord | null, t: Translate = translate): string {
-  if (!report) {
-    return t(
-      'auto.components.crash.report.CrashReportDialogSurface.reportDescription',
-      'Send a privacy-safe crash report. Recent redacted diagnostic logs are included when available.'
-    )
-  }
-  return report && isReactErrorBoundaryReport(report)
-    ? t(
-        'auto.components.crash.report.CrashReportDialogSurface.uiErrorDescription',
-        'Send a privacy-safe diagnostic report to help us understand the failed UI surface.'
-      )
-    : t(
-        'auto.components.crash.report.CrashReportDialogSurface.closedDescription',
-        'Send a privacy-safe diagnostic report to help us understand what happened.'
-      )
-}
-
-function getNotesPlaceholder(report: CrashReportRecord | null, t: Translate = translate): string {
-  if (!report) {
-    return t(
-      'auto.components.crash.report.CrashReportDialogSurface.reportNotesPlaceholder',
-      'Optional: what happened?'
-    )
-  }
-  return report && isReactErrorBoundaryReport(report)
-    ? t(
-        'auto.components.crash.report.CrashReportDialogSurface.uiErrorNotesPlaceholder',
-        'Optional: what were you doing before this UI error?'
-      )
-    : t(
-        'auto.components.crash.report.CrashReportDialogSurface.closedNotesPlaceholder',
-        'Optional: what were you doing before Orca closed?'
-      )
-}
+import {
+  formatSummary,
+  getDialogTitle,
+  getDialogDescription,
+  getNotesPlaceholder
+} from './crash-report-dialog-copy'
 
 type CrashReportDialogSurfaceProps = {
   open: boolean
@@ -129,6 +66,7 @@ export function CrashReportDialogSurface({
     [deferredNotes, report]
   )
   const copyCrashReportDetails = useCrashReportCopy(report, notes)
+  const isFreezeReport = report?.reason === 'main-thread-hang'
 
   const clearViewer = useCallback((): void => {
     viewerRequestIdRef.current += 1
@@ -167,7 +105,7 @@ export function CrashReportDialogSurface({
     diagnosticBundle?: CrashReportDiagnosticBundle
   ): void => {
     const failure = { error, ...(diagnosticBundle ? { diagnosticBundle } : {}) }
-    const notice = getCrashReportSubmitFailureNotice(failure, includeDiagnosticLogs)
+    const notice = getCrashReportSubmitFailureNotice(failure, includeDiagnosticLogs, isFreezeReport)
     const copyFailure = getCrashReportCopySubmissionFailure(failure)
     toast.error(notice.title, {
       id: CRASH_REPORT_SUBMIT_FAILURE_TOAST_ID,
@@ -222,12 +160,18 @@ export function CrashReportDialogSurface({
       onReportChange(result.report)
       setNotes('')
       toast.dismiss(CRASH_REPORT_SUBMIT_FAILURE_TOAST_ID)
-      const warningNotice = getCrashReportSubmitWarningNotice(result, includeDiagnosticLogs)
+      const warningNotice = getCrashReportSubmitWarningNotice(
+        result,
+        includeDiagnosticLogs,
+        isFreezeReport
+      )
       if (warningNotice) {
         toast.warning(warningNotice.title, { description: warningNotice.description })
       } else {
         toast.success(
-          t('auto.components.crash.report.CrashReportDialog.8e24fe4f75', 'Crash report sent.')
+          isFreezeReport
+            ? t('crashReport.freeze.sent', 'Freeze report sent.')
+            : t('auto.components.crash.report.CrashReportDialog.8e24fe4f75', 'Crash report sent.')
         )
       }
       onOpenChange(false)
@@ -277,8 +221,12 @@ export function CrashReportDialogSurface({
               <div className="rounded-md border border-border/70 bg-muted/30 p-3 text-xs">
                 <div className="font-medium text-foreground">{formatSummary(report, t)}</div>
                 <div className="mt-1 text-muted-foreground">
-                  {new Date(report.createdAt).toLocaleString(intlLocale)} · {report.platform}{' '}
-                  {report.arch} ·{' '}
+                  {new Date(
+                    isFreezeReport && typeof report.details.detectedAt === 'string'
+                      ? report.details.detectedAt
+                      : report.createdAt
+                  ).toLocaleString(intlLocale)}{' '}
+                  · {report.platform} {report.arch} ·{' '}
                   {t('auto.components.crash.report.CrashReportDialog.835037edc9', 'Orca')}{' '}
                   {report.appVersion}
                 </div>
@@ -336,16 +284,23 @@ export function CrashReportDialogSurface({
             />
             <div className="space-y-1">
               <Label htmlFor="crash-report-attach-diagnostics" className="text-xs">
-                {t(
-                  'auto.components.crash.report.CrashReportDialog.b082f27490',
-                  'Attach recent diagnostic logs'
-                )}
+                {isFreezeReport
+                  ? t('crashReport.freeze.attach', 'Attach saved freeze report and diagnostic logs')
+                  : t(
+                      'auto.components.crash.report.CrashReportDialog.b082f27490',
+                      'Attach recent diagnostic logs'
+                    )}
               </Label>
               <div className="text-xs leading-5 text-muted-foreground">
-                {t(
-                  'auto.components.crash.report.CrashReportDialog.e59f0b9427',
-                  'Sends a capped redacted log bundle with the report.'
-                )}
+                {isFreezeReport
+                  ? t(
+                      'crashReport.freeze.attachDescription',
+                      'Sends the saved freeze report with a capped, redacted log bundle.'
+                    )
+                  : t(
+                      'auto.components.crash.report.CrashReportDialog.e59f0b9427',
+                      'Sends a capped redacted log bundle with the report.'
+                    )}
               </div>
             </div>
           </div>

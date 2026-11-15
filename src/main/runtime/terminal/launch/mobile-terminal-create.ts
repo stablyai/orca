@@ -1,6 +1,6 @@
 import type { OrcaRuntimeWithScheduleMobileSessionTabsChanged as SessionTabsPublication } from '../../session-tabs/session-tabs-change-publication'
 import { OrcaRuntimeWithFailedStartPanes } from './failed-start-pane'
-import type { WorktreeStartupLaunch } from '../../../../shared/worktree/launch-types'
+import type { WorktreeStartupLaunch } from '../../../../shared/worktree/creation/launch-types'
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import type {
   AgentProviderSessionMetadata,

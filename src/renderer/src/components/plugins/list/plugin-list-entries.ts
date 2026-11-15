@@ -2,7 +2,7 @@ import type { PluginHostListEntry } from '../../../../../shared/plugins/plugin-l
 import type {
   PluginMarketplaceHostListing,
   PluginMarketplaceHostSourceState
-} from '../../../../../preload/api/plugin-host-api'
+} from '../../../../../preload/api/plugins/plugin-host-api'
 import { satisfiesOrcaEngineRange } from '../../../../../shared/plugins/manifest/plugin-manifest'
 import {
   pluginCatalogReleaseTypes,

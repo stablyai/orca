@@ -1,3 +1,6 @@
+import { OrcadProfileShutdown } from './orcad-profile-shutdown'
+import { prepareWorktreeRemovalsForStore } from '../../workspaces/removal/worktree-removal-records-load'
+import { worktreeRemovalLifetime } from '../../workspaces/removal/worktree-removal-lifetime'
 // Compose the Node-host runtime; paired desktop pages work even without a local browser engine.
 import process from 'node:process'
 import { getAppEnvironment } from '../../../shared/app-environment'
@@ -7,11 +10,10 @@ import { installOrcadHostAdapters, runOrcadQuitHandlers } from './orcad-host-ada
 import { prepareOrcadSecretStoreAndMigrate } from '../credentials/orcad-secret-store-startup'
 import { describeOrcadBindExposure, resolveOrcadBindHost } from '../../../shared/orcad-bind-address'
 import {
-  flushOrcadProfileStoreForShutdown,
+  startOrcadAgentSessionRecordStoreOpen,
   startOrcadWithHost,
   stopOrcadStructuredAgentSessions
 } from '../host-lifecycle/orcad-lifecycle'
-import { resolveOrcadWebClientRoot } from '../serve-startup/orcad-command-arguments'
 import type { BackendServiceCleanup } from '../../backend/service-composition'
 import { bindOrcadStopTerminalAdmission } from '../host-lifecycle/managed-stop/orcad-stop-terminal-admission'
 import type { OrcadHandle, OrcadOptions } from '../serve-startup/orcad-start-contract'
@@ -23,7 +25,6 @@ import {
 } from '../../../shared/ai-vault/search/ai-vault-search-settings'
 import { stampRuntimeSourceEnv } from '../../../shared/runtime-source-env'
 import { adoptWslHostLoginEnvironmentLogged } from './orcad-wsl-host-login-environment'
-import { orcadWsPortOptions } from '../serve-startup/orcad-ws-port-policy'
 import { createOrcadStartupTiming } from '../diagnostics/orcad-startup-timing'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
 import { restoreOrcadTerminalAuthority } from './orcad-restored-terminal-authority'
@@ -42,13 +43,14 @@ export async function startOrcad(options: OrcadOptions = {}): Promise<OrcadHandl
   const userDataPath = resolveUserDataPath()
   // Override inherited data roots so CLI-shared Codex homes resolve on this host.
   process.env.ORCA_USER_DATA_PATH = userDataPath
+  const profileShutdown = new OrcadProfileShutdown()
   const { readiness, instance, stop } = await startOrcadWithHost(
     userDataPath,
     (registerCleanup) =>
       activateBackendServices({
         supervised: process.env[ORCA_SERVE_SUPERVISED_ENV] === '1',
         registerCleanup,
-        activate: (cleanup) => activateOrcadRuntime(options, cleanup)
+        activate: (cleanup) => activateOrcadRuntime(options, cleanup, profileShutdown)
       }),
     async () => {
       try {
@@ -59,7 +61,8 @@ export async function startOrcad(options: OrcadOptions = {}): Promise<OrcadHandl
         closeOrcadObservability = () => Promise.resolve()
         await closing
       }
-    }
+    },
+    profileShutdown.checkpoint
   )
   const version = getAppEnvironment().getVersion()
   return { readiness, managedStop: { version, runtimeId: readiness.runtimeId, instance }, stop }
@@ -67,7 +70,8 @@ export async function startOrcad(options: OrcadOptions = {}): Promise<OrcadHandl
 
 async function activateOrcadRuntime(
   options: OrcadOptions,
-  registerCleanup: (cleanup: BackendServiceCleanup) => void
+  registerCleanup: (cleanup: BackendServiceCleanup) => void,
+  profileShutdown: OrcadProfileShutdown
 ): Promise<Pick<OrcadHandle, 'readiness'>> {
   const { time: timed, report: reportStartupTiming } = createOrcadStartupTiming()
   // Overlap login-shell probing with imports and store startup.
@@ -83,7 +87,7 @@ async function activateOrcadRuntime(
   // in-flight spawn settles; a failed one leaves only the disconnect to do.
   registerCleanup(() => daemonStartup.catch(() => {}).then(() => stopOrcadDaemon()))
   const { OrcaRuntimeService } = await import('../../runtime/orca-runtime')
-  const { OrcaRuntimeRpcServer } = await import('../../runtime/rpc/server/runtime-rpc')
+  const { createOrcadRuntimeRpcServer } = await import('./orcad-runtime-rpc')
   const { registerHeadlessPtyRuntime } = await import('../../ipc/pty/register-headless-runtime')
   const { getLocalPtyProvider } = await import('../../ipc/pty/provider/registry')
   const { installOrcadObservability } = await import('../diagnostics/orcad-observability')
@@ -111,8 +115,6 @@ async function activateOrcadRuntime(
   const { disposeWatcherProcessAndWait } =
     await import('../../ipc/filesystem/watcher-process/parcel-watcher-process')
 
-  let paneGridsForShutdown: { flushPaneGrids(): Promise<void> | null } | null = null
-  let profileStoreForShutdown: Parameters<typeof flushOrcadProfileStoreForShutdown>[0] | undefined
   let uninstallHookStatusRepublish = (): void => {}
   let uninstallObservedStatusIdentity = (): void => {}
   // Cleanups run in reverse: RPC, then recovery and watchers, then the final flush; the daemon
@@ -120,16 +122,10 @@ async function activateOrcadRuntime(
   registerCleanup(() => agentHookServer.stop())
   registerCleanup(() => uninstallHookStatusRepublish())
   registerCleanup(() => uninstallObservedStatusIdentity())
-  registerCleanup(async () => {
-    // A SQLite-backed orcad has no JSON mirror to absorb a debounced write after SIGTERM.
-    if (profileStoreForShutdown) {
-      await flushOrcadProfileStoreForShutdown(profileStoreForShutdown, paneGridsForShutdown)
-    }
-  })
+  registerCleanup(profileShutdown.finalize)
   registerCleanup(stopOrcadStructuredAgentSessions)
   registerCleanup(() => disposeWatcherProcessAndWait())
-  const { DesktopPushService } = await import('../../runtime/push/desktop-push-service')
-  const { resolvePushGatewayOrigin } = await import('../../runtime/push/push-gateway-origin')
+  const { startOrcadDesktopPushService } = await import('./orcad-desktop-push')
 
   const runtimeUserDataPath = getAppEnvironment().getPath('userData')
   const { startEventLoopDelayProbe } = await import('../../diagnostics/event-loop-delay-probe')
@@ -145,9 +141,11 @@ async function activateOrcadRuntime(
   const { store: profileStore, authority: profileStateAuthority } = await timed('profile', () =>
     createOrcadProfileStateStartup(runtimeUserDataPath)
   )
+  profileShutdown.store = profileStore
+  registerCleanup(() => worktreeRemovalLifetime.close())
+  await timed('worktree-removals', () => prepareWorktreeRemovalsForStore(profileStore))
   const observedPaneIdentities = new AgentStatusObservedPaneIdentities()
   const observedStatusCapture = new AgentStatusObservedPaneIdentityCapture(observedPaneIdentities)
-  profileStoreForShutdown = profileStore
   uninstallObservedStatusIdentity = agentHookServer.subscribeEnrichedStatus((enriched) =>
     observedStatusCapture.observe(enriched)
   )
@@ -167,6 +165,9 @@ async function activateOrcadRuntime(
     (enabled) => agentHookServer.setStatusHooksEnabled(enabled),
     registerCleanup
   )
+
+  // Boots the chat writer during the daemon wait, after login env; restoration consumes this attempt.
+  const chatJournal = await startOrcadAgentSessionRecordStoreOpen(profileStore)
 
   // Install the daemon provider before PTY handlers can route their first call.
   await daemonStartup
@@ -196,6 +197,7 @@ async function activateOrcadRuntime(
   const { createOrcadPairedEnvironmentOptions } = await import('./orcad-paired-environment-options')
   const pairedEnvironments = createOrcadPairedEnvironmentOptions()
   const runtime = new OrcaRuntimeService(profileStore, stats, {
+    legacyStructuredSessionTabIds: chatJournal.open.legacySessionTabIds,
     // Persistent signatures let restarted runtimes adopt PTYs owned before restart.
     agentSessionClaimSigner: loadAgentSessionClaimSigner(runtimeUserDataPath, runtimeUserDataPath),
     getAdditionalAiVaultCodexHomePaths: () => [
@@ -224,7 +226,8 @@ async function activateOrcadRuntime(
       }
     }
   })
-  paneGridsForShutdown = runtime
+  profileShutdown.paneGrids = runtime
+  runtime.beginStructuredAgentSessionStartupOpen(chatJournal.maintenanceAfter, chatJournal.open)
 
   accountLaunch?.attachToRuntime(runtime)
   const { wireGitHubIssueLinkTitleFill } =
@@ -309,35 +312,15 @@ async function activateOrcadRuntime(
 
   const bindHost = resolveOrcadBindHost(options.bind)
   bindOrcadStopTerminalAdmission(runtime.terminalUpdateAdmission)
-  const rpc = new OrcaRuntimeRpcServer({
-    runtime,
-    userDataPath: runtimeUserDataPath,
-    enableWebSocket: true,
-    // Pin operator exposure across restarts; pairing must not silently widen a loopback bind.
-    pinnedBindHost: bindHost,
-    serveNetworkSources: {
-      allowPublic: options.allowPublic === true,
-      refusePublic: options.refusePublic === true,
-      pairingAddress: options.pairingAddress ?? null
-    },
-    webClientRoot: resolveOrcadWebClientRoot(options.webClientRoot),
-    ...orcadWsPortOptions(options.port)
-  })
+  const rpc = createOrcadRuntimeRpcServer(runtime, runtimeUserDataPath, options, bindHost)
   pairedEnvironments.bindRpc(rpc)
   runtime.setAgentSenderPeerKey(() => rpc.getE2EEPublicKey())
   // Stop RPC before cleanup can tear down writers and runtime state.
   registerCleanup(() => rpc.stop())
   await timed('rpc', () => rpc.start())
-  // The daemon has no window to wait for; its CI-line watches start with the runtime.
-  runtime.startPullRequestWatches()
+  worktreeRemovalLifetime.resume(() => runtime.finishInterruptedWorktreeRemovals())
   startOrcadSchedulers(runtime, profileStore, registerCleanup)
-  const pushService = DesktopPushService.create({
-    runtime,
-    runtimeRpc: rpc,
-    gatewayUrl: resolvePushGatewayOrigin(process.env, getAppEnvironment().isPackaged())
-  })
-  pushService?.start()
-  getAppEnvironment().onWillQuit(() => pushService?.stop())
+  startOrcadDesktopPushService(runtime, rpc)
   console.error(`[orcad] ${describeOrcadBindExposure(bindHost)}`)
 
   const readiness = await buildOrcadServeReadiness({
@@ -353,6 +336,9 @@ async function activateOrcadRuntime(
   })
 
   await new ServeReadinessPublisher().publish(readiness, servePublishMode(options))
+  // Background chat-journal maintenance and CI-line watches start once this host is serving.
+  chatJournal.serving()
+  runtime.startPullRequestWatches({ admit: true })
   reportStartupTiming()
   managedAgentHooks.readinessPublished()
 

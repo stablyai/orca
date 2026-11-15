@@ -1,11 +1,11 @@
-import type { GitHubAttachmentTarget } from '../../../../shared/rpc-contract/github-attachment-params'
+import type { GitHubAttachmentTarget } from '../../../../shared/rpc-contract/github/github-attachment-params'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 import type { RuntimeStatus } from '../../../../shared/runtime-types'
 import {
   assertGitHubImage,
   GITHUB_IMAGE_ATTACHMENT_CAPABILITY
 } from '../../../../shared/github/attachments/image-attachment'
-import { CLIPBOARD_IMAGE_UPLOAD_CHUNK_BASE64_CHARS } from '../../../../shared/rpc-contract/clipboard-params'
+import { CLIPBOARD_IMAGE_UPLOAD_CHUNK_BASE64_CHARS } from '../../../../shared/rpc-contract/clipboard/clipboard-params'
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import { getRuntimeEnvironmentRevision } from '@/runtime/rpc/environment-revisions/runtime-environment-revision'
 import { isWebClientLocation } from '@/app-shell/platform/web-client-location'

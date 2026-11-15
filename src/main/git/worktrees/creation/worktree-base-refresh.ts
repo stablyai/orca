@@ -1,7 +1,7 @@
 import type {
   LocalBaseRefRefreshResult,
   LocalBaseRefUpdateSuggestion
-} from '../../../../shared/worktree/base-ref-drift-types'
+} from '../../../../shared/worktree/base-refs/base-ref-drift-types'
 import { normalizeRuntimePathForComparison } from '../../../../shared/cross-platform-path'
 import { createCoalescingKeyedRunner } from '../../../../shared/coalescing-keyed-runner'
 import { parseWorktreeList } from '../../../../shared/git/worktrees/git-worktree-porcelain-parser'
@@ -11,8 +11,9 @@ import {
   toLocalBaseRefRefreshResult,
   type LocalBaseBranchFastForwardOutcome,
   type LocalBaseBranchGit
-} from '../../../../shared/worktree/local-base-branch-fast-forward'
+} from '../../../../shared/worktree/base-refs/local-base-branch-fast-forward'
 import { gitExecFileAsync } from '../../command-runner/git-exec-file'
+import { findGitSubcommandIndex } from '../../../../shared/git/commands/git-command-classification'
 import { translateWslOutputPaths } from '../../command-runner/host-routing/wsl-path-translation'
 import { runWithGitReadCacheInvalidation } from '../../source-control/git-read-cache-invalidation'
 import type { AddWorktreeOptions, GitWorktreeExecOptions } from '../worktree-operation-options'
@@ -115,7 +116,13 @@ function localBaseBranchGit(options: GitWorktreeExecOptions): LocalBaseBranchGit
     ...(options.admissionTier ? { admissionTier: options.admissionTier } : {})
   })
   return {
-    exec: (args, cwd) => gitExecFileAsync(args, execOptions(cwd)),
+    exec: (args, cwd) =>
+      gitExecFileAsync(args, {
+        ...execOptions(cwd),
+        ...(args[findGitSubcommandIndex(args)] === 'merge'
+          ? { admissionClass: 'checkout' as const }
+          : {})
+      }),
     listWorktrees: async (repoPath) => {
       const { stdout } = await withRepositoryGitCause(
         repoPath,

@@ -3,7 +3,7 @@ import type {
   WorktreeLineage
 } from '../../../../../../shared/worktree/lineage-types'
 import { worktreeWorkspaceKey } from '../../../../../../shared/workspace-scope'
-import { toWorkspaceLineageRow } from '../../../../../../shared/worktree/worktree-lineage-workspace-row'
+import { toWorkspaceLineageRow } from '../../../../../../shared/worktree/lineage/worktree-lineage-workspace-row'
 
 /** Older hosts report only the worktree lineage; the workspace record is its projection. */
 export function projectWorktreeLineageToWorkspaceLineage(

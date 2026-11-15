@@ -5,12 +5,20 @@ import type {
   RuntimeWorktreeSetResult
 } from '../../shared/runtime-worktree-contracts'
 import type { FolderWorkspace } from '../../shared/folder-workspaces/folder-workspace-types'
-import { FOLDER_WORKSPACE_UNIQUE_ID_MUTATION_RUNTIME_CAPABILITY } from '../../shared/worktree-runtime-capabilities'
+import {
+  FOLDER_WORKSPACE_UNIQUE_ID_MUTATION_RUNTIME_CAPABILITY,
+  PROJECT_GROUP_FOLDER_ARCHIVE_RUNTIME_CAPABILITY
+} from '../../shared/worktree-runtime-capabilities'
+import {
+  worktreeRemovalReplyTimeoutMs,
+  type ArchiveHookOverride
+} from '../../shared/worktree/removal/archive-hook-removal-gate'
 import { folderIdOfSelector, folderWorkspaceKey } from '../../shared/workspace-scope'
 import { formatWorktreeShow } from './workspace-format'
+import { printHookWarning } from './worktree-removal-warnings'
 import { printResult } from '../output/command-result-output'
 import { getOptionalStringFlag, getOptionalStringFlagAllowingEmpty } from '../arguments/flags'
-import { RuntimeClientError } from '../runtime/types'
+import { RuntimeClientError } from '../runtime/connection/types'
 import type { RuntimeClient } from '../runtime/client'
 import type { RuntimeRpcSuccess } from '../../shared/runtime-rpc-envelope'
 import { getWorktreeReadFlags } from './worktree-unread-flag'
@@ -38,7 +46,7 @@ async function showFolderWorkspace(
 }
 
 /** Older Orcas edit the first folder that shares an id and delete every one, so they are refused before any change. */
-async function assertUniqueIdMutationSupported(client: RuntimeClient): Promise<void> {
+async function assertUniqueIdMutationSupported(client: RuntimeClient): Promise<RuntimeStatus> {
   const status = await client.call<RuntimeStatus>('status.get')
   if (
     !status.result.capabilities?.includes(FOLDER_WORKSPACE_UNIQUE_ID_MUTATION_RUNTIME_CAPABILITY)
@@ -48,6 +56,7 @@ async function assertUniqueIdMutationSupported(client: RuntimeClient): Promise<v
       'This Orca cannot change folder workspaces from the CLI safely. Update Orca on the computer that owns the folder workspace. Nothing was changed.'
     )
   }
+  return status.result
 }
 
 function folderGone(folderId: string): RuntimeClientError {
@@ -124,8 +133,10 @@ export async function removeIfFolderWorkspace(
   if (folderId === undefined) {
     return false
   }
+  const result = await removeFolderWorkspace(client, flags, folderId)
+  printHookWarning(result.result, json)
   printResult(
-    await removeFolderWorkspace(client, flags, folderId),
+    result,
     json,
     () => 'removed: true\nOrca no longer lists this folder workspace; the folder stays on disk.'
   )
@@ -137,21 +148,48 @@ async function removeFolderWorkspace(
   flags: Flags,
   folderId: string
 ): Promise<RuntimeRpcSuccess<RuntimeWorktreeRemoveResult>> {
-  const noGit = 'does not apply: a folder workspace has no branch or archive hooks.'
-  refuseFolderFlags(flags, [
-    ['delete-branch', noGit],
-    ['run-hooks', noGit],
-    ['allow-failed-archive-hook', noGit]
-  ])
-  await assertUniqueIdMutationSupported(client)
-  const removal = await client.call<{ deleted: boolean }>('folderWorkspace.delete', {
-    folderWorkspaceId: folderId,
-    requireUniqueId: true
-  })
+  refuseFolderFlags(flags, [['delete-branch', 'does not apply: a folder workspace has no branch.']])
+  const runHooks = flags.get('run-hooks') === true
+  const allowFailedArchiveHook = flags.get('allow-failed-archive-hook') === true
+  if (allowFailedArchiveHook && !runHooks) {
+    throw new RuntimeClientError(
+      'invalid_argument',
+      '--allow-failed-archive-hook requires --run-hooks.'
+    )
+  }
+  const status = await assertUniqueIdMutationSupported(client)
+  if (runHooks) {
+    if (!status.capabilities?.includes(PROJECT_GROUP_FOLDER_ARCHIVE_RUNTIME_CAPABILITY)) {
+      throw new RuntimeClientError(
+        'incompatible_runtime',
+        'Update Orca on the computer that owns this folder workspace to run its Archive script. Nothing was changed.'
+      )
+    }
+  }
+  const removal = await client.call<{
+    deleted: boolean
+    archiveHookOverride?: ArchiveHookOverride
+  }>(
+    'folderWorkspace.delete',
+    {
+      folderWorkspaceId: folderId,
+      requireUniqueId: true,
+      ...(runHooks ? { runHooks, allowFailedArchiveHook } : {})
+    },
+    { timeoutMs: worktreeRemovalReplyTimeoutMs(runHooks) }
+  )
   if (!removal.result.deleted) {
     throw folderGone(folderId)
   }
-  return { ...removal, result: { removed: true } }
+  return {
+    ...removal,
+    result: {
+      removed: true,
+      ...(removal.result.archiveHookOverride
+        ? { archiveHookOverride: removal.result.archiveHookOverride }
+        : {})
+    }
+  }
 }
 
 export function refuseFolderWorkspaceActivation(folderId: string): never {

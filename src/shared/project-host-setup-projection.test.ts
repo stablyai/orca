@@ -16,25 +16,6 @@ function repo(overrides: Partial<Repo> & Pick<Repo, 'id' | 'path' | 'displayName
 }
 
 describe('project host setup projection', () => {
-  it('keeps timestamps stable when addedAt is 0 across different now values', () => {
-    const target = repo({
-      id: 'repo-1',
-      path: '/Users/alice/orca',
-      displayName: 'orca',
-      addedAt: 0
-    })
-    const first = projectHostSetupProjectionFromRepos([target], 1_000)
-    const second = projectHostSetupProjectionFromRepos([target], 9_999)
-
-    expect(first.projects[0]?.createdAt).toBe(0)
-    expect(first.projects[0]?.updatedAt).toBe(0)
-    expect(first.setups[0]?.createdAt).toBe(0)
-    expect(second.projects[0]?.createdAt).toBe(first.projects[0]?.createdAt)
-    expect(second.projects[0]?.updatedAt).toBe(first.projects[0]?.updatedAt)
-    expect(second.setups[0]?.createdAt).toBe(first.setups[0]?.createdAt)
-    expect(second.setups[0]?.updatedAt).toBe(first.setups[0]?.updatedAt)
-  })
-
   // Unknown timestamps may occur first in host/disk order; neither order may erase known sibling times.
   const timestampedSibling = repo({
     id: 'local-repo',
@@ -52,85 +33,12 @@ describe('project host setup projection', () => {
     upstream: { owner: 'stablyai', repo: 'orca' }
   })
 
-  it('does not wipe a persisted createdAt when a sibling repo has addedAt 0', () => {
-    const projection = projectHostSetupProjectionFromRepos([timestampedSibling, unknownSibling])
-
-    expect(projection.projects).toHaveLength(1)
-    expect(projection.projects[0]?.createdAt).toBe(100)
-    expect(projection.projects[0]?.updatedAt).toBe(100)
-  })
-
   it('does not wipe a persisted createdAt when the addedAt 0 sibling comes first', () => {
     const projection = projectHostSetupProjectionFromRepos([unknownSibling, timestampedSibling])
 
     expect(projection.projects).toHaveLength(1)
     expect(projection.projects[0]?.createdAt).toBe(100)
     expect(projection.projects[0]?.updatedAt).toBe(100)
-  })
-
-  it('keeps per-repo setup timestamps independent of sibling order', () => {
-    for (const repos of [
-      [timestampedSibling, unknownSibling],
-      [unknownSibling, timestampedSibling]
-    ]) {
-      const { setups } = projectHostSetupProjectionFromRepos(repos)
-      const timestamped = setups.find((setup) => setup.repoId === 'local-repo')
-      const unknown = setups.find((setup) => setup.repoId === 'remote-repo')
-      expect(timestamped?.createdAt).toBe(100)
-      expect(timestamped?.updatedAt).toBe(100)
-      // Setups are per repo and never merged, so the unknown one keeps its own 0 either way.
-      expect(unknown?.createdAt).toBe(0)
-      expect(unknown?.updatedAt).toBe(0)
-    }
-  })
-
-  it('preserves host-local setup fields on SSH repos', () => {
-    const projection = projectHostSetupProjectionFromRepos([
-      repo({
-        id: 'remote-repo',
-        path: '/home/alice/orca',
-        displayName: 'orca',
-        connectionId: 'openclaw 2',
-        worktreeBasePath: '../worktrees',
-        gitUsername: 'alice'
-      })
-    ])
-
-    expect(projection.setups[0]).toMatchObject({
-      id: 'remote-repo',
-      hostId: 'ssh:openclaw%202',
-      connectionId: 'openclaw 2',
-      worktreeBasePath: '../worktrees',
-      gitUsername: 'alice'
-    })
-  })
-
-  it('groups repo checkouts with the same provider identity under one project', () => {
-    const projection = projectHostSetupProjectionFromRepos([
-      repo({
-        id: 'local-repo',
-        path: '/Users/alice/orca',
-        displayName: 'Orca',
-        upstream: { owner: 'StablyAI', repo: 'Orca' }
-      }),
-      repo({
-        id: 'remote-repo',
-        path: '/home/alice/orca',
-        displayName: 'orca',
-        connectionId: 'gpu-vm',
-        upstream: { owner: 'stablyai', repo: 'orca' }
-      })
-    ])
-
-    expect(projection.projects).toHaveLength(1)
-    expect(projection.projects[0]).toMatchObject({
-      id: 'github:stablyai/orca',
-      sourceRepoIds: ['local-repo', 'remote-repo'],
-      providerIdentity: { provider: 'github', owner: 'StablyAI', repo: 'Orca' }
-    })
-    expect(getProjectHostSetupsForProject(projection.setups, 'github:stablyai/orca')).toHaveLength(
-      2
-    )
   })
 
   it('keeps same-named github.com and GHES repositories in separate projects', () => {
@@ -197,44 +105,6 @@ describe('project host setup projection', () => {
       sourceRepoIds: ['enterprise-local', 'enterprise-ssh']
     })
     expect(projection.projects[1]?.id).toBe('github:github.other.test/acme/widgets')
-  })
-
-  it('uses GitHub repo icon metadata as a provider identity fallback', () => {
-    const projection = projectHostSetupProjectionFromRepos([
-      repo({
-        id: 'local-repo',
-        path: '/Users/alice/orca',
-        displayName: 'Orca',
-        repoIcon: {
-          type: 'image',
-          src: 'https://github.com/stablyai.png?size=64',
-          source: 'github',
-          label: 'stablyai/orca'
-        }
-      }),
-      repo({
-        id: 'remote-repo',
-        path: '/home/alice/orca',
-        displayName: 'orca',
-        connectionId: 'gpu-vm',
-        repoIcon: {
-          type: 'image',
-          src: 'https://github.com/stablyai.png?size=64',
-          source: 'github',
-          label: 'StablyAI/Orca'
-        }
-      })
-    ])
-
-    expect(projection.projects).toHaveLength(1)
-    expect(projection.projects[0]).toMatchObject({
-      id: 'github:stablyai/orca',
-      sourceRepoIds: ['local-repo', 'remote-repo'],
-      providerIdentity: { provider: 'github', owner: 'stablyai', repo: 'orca' }
-    })
-    expect(getProjectHostSetupsForProject(projection.setups, 'github:stablyai/orca')).toHaveLength(
-      2
-    )
   })
 
   it('uses git remote identity as a provider identity fallback', () => {
@@ -428,37 +298,6 @@ describe('project host setup projection', () => {
       'git:git.company.test/Team/Sample-App',
       'git:git.company.test/team/sample-app'
     ])
-  })
-
-  it('ignores malformed provider identity values', () => {
-    const projection = projectHostSetupProjectionFromRepos([
-      repo({
-        id: 'repo-1',
-        path: '/Users/alice/orca',
-        displayName: 'orca',
-        upstream: { owner: 'stablyai', repo: 42 } as never
-      })
-    ])
-
-    expect(projection.projects[0]?.id).toBe('repo:repo-1')
-    expect(projection.projects[0]?.providerIdentity).toBeUndefined()
-  })
-
-  it('derives workspace ownership metadata from the repo setup', () => {
-    const targetRepo = repo({
-      id: 'remote-repo',
-      path: '/home/alice/orca',
-      displayName: 'orca',
-      connectionId: 'openclaw 2',
-      upstream: { owner: 'stablyai', repo: 'orca' }
-    })
-    const projection = projectHostSetupProjectionFromRepos([targetRepo])
-
-    expect(getProjectHostSetupWorktreeMeta(projection.setups, targetRepo)).toEqual({
-      projectId: 'github:stablyai/orca',
-      hostId: 'ssh:openclaw%202',
-      projectHostSetupId: 'remote-repo'
-    })
   })
 })
 

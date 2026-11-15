@@ -3,10 +3,10 @@ import { usePathname, useRouter } from 'expo-router'
 import {
   BRIDGE_MAX_ROUTE_HREF_CHARS,
   BRIDGE_ROUTE_HREF_PATTERN
-} from '../mobile-web-shell/bridge/bridge-caps'
-import { BRIDGE_SESSION_PANE_RETURN_GRANT } from '../mobile-web-shell/bridge/bridge-frame-fields'
-import { matchesRoutePattern } from '../mobile-web-shell/page-route-policy'
-import type { BridgeRpcClient } from '../mobile-web-shell/bridge/bridge-rpc-client'
+} from '../mobile-web-shell/bridge/protocol/bridge-caps'
+import { BRIDGE_SESSION_PANE_RETURN_GRANT } from '../mobile-web-shell/bridge/protocol/bridge-frame-fields'
+import { matchesRoutePattern } from '../mobile-web-shell/routing/page-route-policy'
+import type { BridgeRpcClient } from '../mobile-web-shell/bridge/client-state/bridge-rpc-client-contract'
 import { usePageBridgeClient } from '../transport/connection/client-context.web'
 import { stringifyRouteHref, type RouterHref } from './route-href'
 import { useBackClaim } from './use-back-claim.web'

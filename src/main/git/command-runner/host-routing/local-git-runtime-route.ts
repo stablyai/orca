@@ -5,7 +5,7 @@
  * names its distro; a caller that must run the host's Git anyway says so with `hostGit: true`.
  */
 import { isWslDistroNotFoundFailure } from '../../../wsl/discovery/wsl-distro-unsupported'
-import type { GitAdmissionTier } from '../../../../shared/rpc-contract/git-admission-tier-params'
+import type { GitAdmissionTier } from '../../../../shared/rpc-contract/source-control/git-admission-tier-params'
 
 type RoutableGitOptions = {
   cwd: string

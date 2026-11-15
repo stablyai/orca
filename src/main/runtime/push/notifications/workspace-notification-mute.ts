@@ -7,7 +7,7 @@ import { parseWorkspaceKey } from '../../../../shared/workspace-scope'
 import {
   isHiddenByWorkspaceKindSwitch,
   type WorkspaceKindSwitches
-} from '../../../../shared/worktree/workspace-kinds'
+} from '../../../../shared/worktree/visibility/workspace-kinds'
 import {
   EMPTY_PAIRED_DEVICE_IDS_BY_ENVIRONMENT,
   isWorkspaceOwnedBySomeoneElse

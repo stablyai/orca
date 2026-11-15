@@ -2,7 +2,7 @@ import { join } from 'node:path'
 import type { AcpLaunchSpec } from '../acp/launch/acp-launch-contract'
 import { KIMI_ACP_DIALECT } from '../acp/acp-dialects/kimi-dialect'
 import { directoryAccountBinding } from '../acp/launch/acp-account-binding'
-import { agentSessionSetupFor } from '../../shared/agent-session/lifecycle/agent-session-setup-commands'
+import { agentSessionSetupFor } from '../../shared/agent-session/lifecycle/launch/agent-session-setup-commands'
 import {
   resumeInvocationFromOptions,
   type StructuredAgentSessionHistory

@@ -1,4 +1,14 @@
-import type { WorkspaceAttachmentMutation } from '../../../shared/workspace-attachments/workspace-attachment-mutation'
+import type {
+  RuntimeProjectGroupDependencies,
+  FolderWorkspaceUpdates
+} from './runtime-project-group-contract'
+export type { RuntimeProjectGroupDependencies } from './runtime-project-group-contract'
+import { projectGroupHookOwner } from '../../../shared/workspace-hook-owner'
+import { RuntimeRepositoryHooksCommands } from './runtime-repository-hooks-commands'
+import { getEffectiveSetupRunPolicy } from '../../workspace-hooks/effective-hook-config'
+import { getSetupConfig } from '../../../shared/orca-hook-setup-config'
+import type { FolderWorkspaceCreateResult } from '../../../shared/folder-workspaces/folder-workspace-create'
+import type { RuntimeGroupFolderCreateInput } from '../workspaces/creation/runtime-group-folder-setup'
 import { refuseWslHostWindowsDrivePath } from '../terminal/launch/wsl-host-windows-drive-guard'
 import type { FolderWorkspace } from '../../../shared/folder-workspaces/folder-workspace-types'
 import type {
@@ -18,8 +28,6 @@ import {
   getFolderWorkspacePathStatusForPath
 } from '../../project-groups/folder-workspace-path-status'
 import { FolderWorkspaceCreateRefusedError } from '../../project-groups/folder-workspace-create-refusal'
-import type { RuntimeStore } from '../construction/runtime-store-contract'
-import type { RuntimeWorktreeLifecycleEvent } from '../workspaces/lifecycle/worktree-lifecycle-event'
 import {
   runtimeVisibleFolderWorkspaces,
   runtimeVisibleProjectGroups
@@ -28,52 +36,16 @@ import {
   assertUniqueIdWhenRequired,
   type FolderWorkspaceMutationOptions
 } from './folder-workspace-unique-id-mutation'
-import { deleteFolderWorkspaceRow } from './folder-workspace-deletion'
+import {
+  deleteFolderWorkspaceRow,
+  type FolderWorkspaceDeleteOptions
+} from './folder-workspace-deletion'
 import { createFolderWorkspaceWithPluginHooks } from '../../plugins/hooks/workspace-create-plugin-hook'
 import {
   assertWslMoveRepoWritable,
   isLocalWslMoveRow,
   shouldDropWslMoveProjectUpdate
 } from '../../persistence/moving-wsl-projects/quiescence/wsl-move-scope-guard'
-
-export type RuntimeProjectGroupDependencies = {
-  getStore: () => RuntimeStore | null
-  // `connectionId` narrows twins by their SSH target; undefined keeps the plain selector.
-  resolveRepo: (selector: string, connectionId?: string | null) => Promise<Repo>
-  notifyReposChanged: () => void
-  resolveFolderConnectionId: (workspace: FolderWorkspace) => string | null
-  teardownFolderWorkspacePtys: (worktreeId: string, connectionId: string | null) => Promise<void>
-  acquireFileWatcherRemoval: (
-    path: string,
-    connectionId?: string
-  ) => Promise<{ finish(removed: boolean): Promise<void> }>
-  cleanupRemovedFolderWorkspaceState: (worktreeId: string) => void | Promise<void>
-  emitWorktreeLifecycle: (event: RuntimeWorktreeLifecycleEvent) => void
-}
-
-type FolderWorkspaceUpdates = Partial<
-  Pick<
-    FolderWorkspace,
-    | 'name'
-    | 'folderPath'
-    | 'linkedTask'
-    | 'linkedItems'
-    | 'linkedTaskSourceContext'
-    | 'comment'
-    | 'isArchived'
-    | 'isUnread'
-    | 'isPinned'
-    | 'sortOrder'
-    | 'manualOrder'
-    | 'workspaceStatus'
-    | 'createdWithAgent'
-    | 'pendingFirstAgentMessageRename'
-    | 'firstAgentMessageRenameError'
-    | 'lastActivityAt'
-    | 'diffComments'
-  >
-> &
-  WorkspaceAttachmentMutation
 
 export class RuntimeProjectGroupController {
   constructor(private readonly deps: RuntimeProjectGroupDependencies) {}
@@ -93,6 +65,24 @@ export class RuntimeProjectGroupController {
 
   listVisibleFolderWorkspaces(): FolderWorkspace[] {
     return runtimeVisibleFolderWorkspaces(this.deps.getStore())
+  }
+
+  async checkGroupHooks(groupId: string, options: { background?: boolean } = {}) {
+    const group = this.listGroups().find((entry) => entry.id === groupId)
+    const owner = group && projectGroupHookOwner(group)
+    if (!owner) {
+      throw new Error('folder_workspace_project_group_not_found')
+    }
+    const checked = await new RuntimeRepositoryHooksCommands({
+      resolveRepo: async () => owner,
+      readCreateSourceHooks: async () => undefined
+    }).checkRepoHooks(groupId, options)
+    return {
+      ...checked,
+      hookSettings: owner.hookSettings,
+      setupRunPolicy: getEffectiveSetupRunPolicy(owner),
+      setupConfig: getSetupConfig(owner, checked.hooks)
+    }
   }
 
   async createGroup(input: {
@@ -173,18 +163,9 @@ export class RuntimeProjectGroupController {
     return moved
   }
 
-  async createFolderWorkspace(input: {
-    projectGroupId: string
-    name?: string
-    folderPath?: string | null
-    connectionId?: string | null
-    creatorProvenance?: FolderWorkspace['creatorProvenance']
-    linkedTask?: FolderWorkspace['linkedTask']
-    linkedItems?: FolderWorkspace['linkedItems']
-    linkedTaskSourceContext?: FolderWorkspace['linkedTaskSourceContext']
-    createdWithAgent?: FolderWorkspace['createdWithAgent']
-    pendingFirstAgentMessageRename?: boolean
-  }): Promise<FolderWorkspace> {
+  async createFolderWorkspace(
+    input: RuntimeGroupFolderCreateInput
+  ): Promise<FolderWorkspaceCreateResult> {
     // Every refusal below comes before the store write, so it proves nothing was created.
     const store = this.deps.getStore()
     if (!store?.createFolderWorkspace) {
@@ -221,8 +202,21 @@ export class RuntimeProjectGroupController {
         creatorProvenance: request.creatorProvenance ?? { kind: 'host' }
       })
     )
+    input.onWorkspaceCreated?.(`folder:${workspace.id}`)
     this.deps.notifyReposChanged()
-    return workspace
+    try {
+      return (
+        (await this.deps.finishFolderCreation?.(input, group, workspace)) ?? {
+          folderWorkspace: workspace
+        }
+      )
+    } catch (error) {
+      console.warn('[hooks] group workspace startup failed:', error)
+      return {
+        folderWorkspace: workspace,
+        warning: 'Setup or the agent could not start. Open the workspace and try again.'
+      }
+    }
   }
 
   async getFolderPathStatus(
@@ -284,8 +278,8 @@ export class RuntimeProjectGroupController {
 
   async deleteFolderWorkspace(
     folderWorkspaceId: string,
-    options: FolderWorkspaceMutationOptions = {}
-  ): Promise<{ deleted: boolean }> {
+    options: FolderWorkspaceDeleteOptions = {}
+  ): ReturnType<typeof deleteFolderWorkspaceRow> {
     return deleteFolderWorkspaceRow(this.deps, folderWorkspaceId, options)
   }
 }

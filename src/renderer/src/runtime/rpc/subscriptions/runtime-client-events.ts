@@ -9,6 +9,7 @@ import { admitSshConnectionState } from '../../../../../shared/ssh-retained-payl
 import { getRuntimeEnvironmentRevision } from '../environment-revisions/runtime-environment-revision'
 import { subscribeRuntimeEnvironment } from '../environment-revisions/runtime-environment-pairing-refresh'
 import { answerBrowserClientHostRequest } from '../../browser/client-hosting/browser-client-host-request-answer'
+import { readHostPRAutoRefreshCadence } from '@/store/github/refresh/remote-host-pr-auto-refresh-cadence-sync'
 
 export type RuntimeClientEventSubscription = {
   unsubscribe: () => void
@@ -82,6 +83,13 @@ function handleRuntimeClientEventResponse(
     void answerBrowserClientHostRequest(environmentId, message.requestId)
     return
   }
+  // The host's own PR auto-refresh setting governs this client's timers for that host's workspaces.
+  if (message.type === 'settingsChanged') {
+    if (Array.isArray(message.keys) && message.keys.includes('prAutoRefresh')) {
+      void readHostPRAutoRefreshCadence(environmentId)
+    }
+    return
+  }
   if (message.type === 'sshStateChanged') {
     const state = admitSshConnectionState(message.state, message.targetId)
     if (state) {
@@ -113,6 +121,7 @@ function isRuntimeClientEvent(
     message.type === 'linearLinkedIssueUpdated' ||
     message.type === 'activateWorktree' ||
     message.type === 'worktreeTerminalSleepState' ||
-    message.type === 'workspaceViewChanged'
+    message.type === 'workspaceViewChanged' ||
+    message.type === 'workspaceCleanupRunFinished'
   )
 }

@@ -10,13 +10,13 @@ import {
   pruneAgentSessionOperationRows,
   type AgentSessionOperationDecision,
   type AgentSessionOperationRow
-} from '../../../../shared/agent-session/lifecycle/agent-session-operation-ledger'
+} from '../../../../shared/agent-session/lifecycle/operations/agent-session-operation-ledger'
 import {
   agentSessionLeaseIsReleased,
   agentSessionLeaseOwnerVerdict,
   evaluateAgentSessionAcquisition,
   type AgentSessionOwnerProbe
-} from '../../../../shared/agent-session/lifecycle/agent-session-lease-adjudication'
+} from '../../../../shared/agent-session/lifecycle/leases/agent-session-lease-adjudication'
 import {
   agentSessionExecutionLocationsEqual,
   isAgentSessionLaunchEnv,
@@ -26,12 +26,12 @@ import {
   type AgentSessionLaunchEnv,
   type AgentSessionRecord
 } from '../../../../shared/agent-session/lifecycle/agent-session-record'
-import { isAgentSessionLaunchArgs } from '../../../../shared/agent-session/lifecycle/agent-session-launch-args'
-import { agentSessionProviderHandleRoot } from '../../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
+import { isAgentSessionLaunchArgs } from '../../../../shared/agent-session/lifecycle/records/agent-session-launch-args'
+import { agentSessionProviderHandleRoot } from '../../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle-encoding'
 import type {
   StructuredAgentId,
   AgentSessionProviderHandleLink
-} from '../../../../shared/agent-session/lifecycle/agent-session-provider-handle'
+} from '../../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle'
 import {
   reserveAgentSessionOwner,
   type AgentSessionReservation
@@ -46,7 +46,7 @@ import { agentSessionRecordIdentityFields } from '../records/agent-session-recor
 import {
   agentSessionAccountHomesEqual,
   type AgentSessionAccountHome
-} from '../../../../shared/agent-session/lifecycle/agent-session-account-home'
+} from '../../../../shared/agent-session/lifecycle/accounts/agent-session-account-home'
 import { assertReservedTabUnheld } from '../agent-session-tab-table'
 
 export type AgentSessionReserveRequest = {

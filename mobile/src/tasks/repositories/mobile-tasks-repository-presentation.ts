@@ -3,7 +3,7 @@ import { getRepoExecutionHostId, parseExecutionHostId } from '../../../../src/sh
 import {
   getHostContextLabel,
   type HostContextLabelSources
-} from '../../../../src/shared/worktree/host-context-labels'
+} from '../../../../src/shared/worktree/row-display/host-context-labels'
 import { colors } from '../../theme/mobile-theme'
 import { taskTime } from '../item-detail/mobile-tasks-item-mapping'
 import type { TaskItem } from '../mobile-tasks-project-workspace-types'
