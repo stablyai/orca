@@ -61,6 +61,11 @@ final class BridgeClient {
     return try JSONDecoder().decode(Body.self, from: data).prompts
   }
 
+  func register(deviceToken: String, environment: String) async throws {
+    let body = try JSONEncoder().encode(["deviceToken": deviceToken, "environment": environment])
+    _ = try await send(path: "watch/v1/register", method: "POST", body: body)
+  }
+
   func answer(_ answer: PromptAnswer) async throws {
     _ = try await send(path: "watch/v1/answer", method: "POST", body: try JSONEncoder().encode(answer))
   }

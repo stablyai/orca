@@ -21,6 +21,10 @@ targets:
         # Resolved from build settings at build time; pass them to xcodebuild, never commit values.
         OrcaBridgeURL: $(ORCA_BRIDGE_URL)
         OrcaBridgeToken: $(ORCA_BRIDGE_TOKEN)
+    entitlements:
+      path: Generated/OrcaWatch.entitlements
+      properties:
+        aps-environment: development
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.cjna.orca.watch
