@@ -300,6 +300,7 @@ test('adds a WSL distro as a host, adds a project on it, and runs a terminal the
     await addProject.getByRole('menuitem', { name: /Project host:/i }).hover()
     const offRow = page.getByRole('menuitem', { name: /^Ubuntu \(WSL\)/ })
     await expect(offRow).toBeEnabled()
+    await expect(offRow.getByRole('button', { name: 'Turn on', exact: true })).toBeHidden()
     await settleAnimations(page)
     await page.screenshot({ path: testInfo.outputPath('wsl-host-row-setting-off.png') })
     await page.keyboard.press('Escape')
