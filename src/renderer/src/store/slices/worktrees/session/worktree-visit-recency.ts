@@ -3,7 +3,7 @@ import type { WorktreeSlice } from '../worktree-slice-contract'
 import type { AppState } from '../../../types'
 import type { WorktreeSliceGet, WorktreeSliceSet } from '../listing/worktree-slice-types'
 import { getRepoIdFromWorktreeId } from '../../../../../../shared/worktree/id'
-import { worktreeWorkspaceKey } from '../../../../../../shared/workspace-scope'
+import { worktreeWorkspaceKey } from '../../../../../../shared/workspace/identity/workspace-scope'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
 import {
   getWorktreeIdFromVisitKey,

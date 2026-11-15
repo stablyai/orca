@@ -179,6 +179,7 @@ export abstract class OrcaRuntimeWithRuntimeId extends RuntimeConstructionServic
   )
 
   // Main touches advance stored versions; compare renderer resends against the last accepted renderer stamp.
+  // Its occupant and inventory let a later frame name that inventory instead of resending every row.
   protected acceptedRendererMobileSnapshotByWorktree = new Map<
     string,
     {
@@ -187,7 +188,7 @@ export abstract class OrcaRuntimeWithRuntimeId extends RuntimeConstructionServic
       rendererTabCount: number
       rendererTabIdentityKeys: ReadonlySet<string>
       titlePublisher?: SessionTitlePublisher
-    }
+    } & Pick<RuntimeMobileSessionTabsSnapshot, 'worktreeInstanceId' | 'browserPageInventory'>
   >()
 
   // Recreated path ids need occupant fences against pre-delete renderer frames.
@@ -255,7 +256,7 @@ export abstract class OrcaRuntimeWithRuntimeId extends RuntimeConstructionServic
   // The candidate receipt owns its exit evidence until publication or cancellation.
   protected pendingPtyRegistrationIncarnations = new Map<string, PtyRegistrationClaim>()
 
-  readonly intentionalPtyStops = new TerminalIntentionalStops()
+  readonly intentionalPtyStops = new TerminalIntentionalStops((...s) => this.onPtyStopSettled(...s))
 
   readonly terminalRunFacts = new TerminalRunFactsRegister()
 

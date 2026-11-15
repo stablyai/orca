@@ -19,9 +19,9 @@ import {
   parseOrcadMigrationManifest
 } from '../../../../shared/orcad-migration/orcad-migration-manifest-validation'
 import { withoutOrcadRetainedMarker } from '../../../../shared/remote-runtime/orcad-lifecycle/orcad-retained-marker'
-import type { ProjectGroup } from '../../../../shared/project-group-types'
-import type { Repo } from '../../../../shared/repo-types'
-import { parseWorkspaceKey } from '../../../../shared/workspace-scope'
+import type { ProjectGroup } from '../../../../shared/project/groups/project-group-types'
+import type { Repo } from '../../../../shared/repository/repo-types'
+import { parseWorkspaceKey } from '../../../../shared/workspace/identity/workspace-scope'
 import { getRepoIdFromWorktreeId, getRepoMainWorktreeId } from '../../../../shared/worktree/id'
 import { computeOrcadMigrationManifestSha256 } from '../../../orcad/migration/orcad-migration-manifest-digest'
 import { hasDormantState } from '../../migrating-orcad-catalog/source/dormancy/orcad-migration-dormant-state'

@@ -1,5 +1,5 @@
 import { ipcMain, type BrowserWindow } from 'electron'
-import { isCrashReportReason } from '../../../shared/crash-reporting'
+import { isCrashReportReason } from '../../../shared/crash-reporting/crash-reporting'
 import {
   plainTextContextMenuTargetChannel,
   richMarkdownContextMenuTargetChannel,

@@ -11,9 +11,9 @@ import {
   listEnvironments,
   resolveEnvironment
 } from '../../../../shared/remote-runtime/host-store/runtime-environment-store'
-import type { Repo } from '../../../../shared/repo-types'
+import type { Repo } from '../../../../shared/repository/repo-types'
 import type { SshTarget } from '../../../../shared/remote-runtime/ssh/ssh-types'
-import { folderWorkspaceKey } from '../../../../shared/workspace-scope'
+import { folderWorkspaceKey } from '../../../../shared/workspace/identity/workspace-scope'
 import {
   closeTestStores,
   createSqliteTestStore

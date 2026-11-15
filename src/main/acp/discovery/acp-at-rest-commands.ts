@@ -1,6 +1,6 @@
 import { observeAcpForkSupport } from '../capabilities/acp-fork-support'
 import { join } from 'node:path'
-import { PrioritySemaphore } from '../../../shared/priority-semaphore'
+import { PrioritySemaphore } from '../../../shared/concurrency/priority-semaphore'
 import {
   AtRestCommandCatalog,
   type AtRestCommandScan

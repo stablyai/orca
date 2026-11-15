@@ -72,7 +72,7 @@ const GLOBAL_FORCE_FILES = new Set(['package.json', 'pnpm-lock.yaml'])
 
 const GIT_COMPAT_PREFIXES = [
   '.github/actions/prepare-git-compatibility/',
-  'src/shared/git-',
+  'src/shared/terminal/pty/lifecycle/git-bash-console-capacity',
   'src/shared/git/',
   'src/shared/review-head-tracking-ref',
   'src/shared/worktree/base-refs/local-base-branch-fast-forward',
@@ -125,8 +125,8 @@ const CODEX_INDEX_HEAL_CONTRACT_PREFIXES = [
   'src/main/windows/windows-command-paths',
   'src/main/windows/windows-directory-acl',
   'src/main/filesystem/permission-errors',
-  'src/shared/node-cli-command-resolution',
-  'src/shared/windows-batch-spawn'
+  'src/shared/shell/command-resolution/node-cli-command-resolution',
+  'src/shared/shell/launch/windows-batch-spawn'
 ]
 
 const ORCAD_BROWSER_PREFIXES = [

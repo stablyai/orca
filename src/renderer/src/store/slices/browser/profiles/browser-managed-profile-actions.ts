@@ -1,4 +1,4 @@
-import { createNonSecureContextUuid as createBrowserUuid } from '../../../../../../shared/non-secure-context-uuid'
+import { createNonSecureContextUuid as createBrowserUuid } from '../../../../../../shared/identifiers/non-secure-context-uuid'
 import type { BrowserSlice, BrowserSliceGet, BrowserSliceSet } from '../browser-slice-contract'
 import type { BrowserSessionProfile } from '../../../../../../shared/browser/workspaces/browser-workspace-types'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../../../shared/execution-host'

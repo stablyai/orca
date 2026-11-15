@@ -9,7 +9,7 @@ import {
   loadSyntaxLanguage
 } from '@/lib/syntax-highlighting/syntax-highlighter'
 import { recomputeOn } from '@/lib/recompute-on'
-import { BoundedMap } from '../../../shared/bounded-map'
+import { BoundedMap } from '../../../shared/collections/bounded-map'
 
 // Each token is a DOM node, so only the start of a very long block is colored.
 const MAX_HIGHLIGHTED_CODE_LENGTH = 50_000

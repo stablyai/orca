@@ -1,5 +1,9 @@
 import type { StartupCommandDelivery } from '../../agent-launch/startup/codex-startup-delivery'
-import type { AgentKind, LaunchSource, RequestKind } from '../../telemetry-property-schemas'
+import type {
+  AgentKind,
+  LaunchSource,
+  RequestKind
+} from '../../telemetry/schemas/telemetry-property-schemas'
 import type { SleepingAgentLaunchConfig } from '../../agent-session/lifecycle/agent-session-resume'
 import type { SetupRunnerShell } from '../../agent-launch/startup/setup-runner-command'
 import type { OrcaDefaultTabTemplate } from '../../orca-yaml-hook-types'

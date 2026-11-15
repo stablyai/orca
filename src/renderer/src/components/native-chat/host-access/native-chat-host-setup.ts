@@ -14,7 +14,7 @@ import {
 import type { AgentSessionAccountKind } from '../../../../../shared/agent-session/agent-session-availability'
 import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import { lastVerifiedRuntimeStatus } from '../../../../../shared/remote-runtime/host-status/runtime-host-status'
-import { resolveHostAgentStartupShell } from '../../../../../shared/windows-terminal-shell'
+import { resolveHostAgentStartupShell } from '../../../../../shared/shell/launch/windows-terminal-shell'
 import {
   useNativeChatHostCommandTerminal,
   type NativeChatHostCommandTerminal

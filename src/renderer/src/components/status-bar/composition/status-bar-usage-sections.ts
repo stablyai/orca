@@ -1,9 +1,12 @@
-import type { ProviderRateLimits, RateLimitWindow } from '../../../../../shared/rate-limit-types'
-import type { StatusBarUsageMode } from '../../../../../shared/status-bar-usage-mode'
-import { isCursorUsageBucket } from '../../../../../shared/cursor-usage-buckets'
+import type {
+  ProviderRateLimits,
+  RateLimitWindow
+} from '../../../../../shared/agent-usage/rate-limits/rate-limit-types'
+import type { StatusBarUsageMode } from '../../../../../shared/status-bar/status-bar-usage-mode'
+import { isCursorUsageBucket } from '../../../../../shared/agent-usage/rate-limits/cursor-usage-buckets'
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
-import { formatRateLimitWindowChipLabel } from '../../../../../shared/rate-limit-window-label'
+import { formatRateLimitWindowChipLabel } from '../../../../../shared/agent-usage/rate-limits/rate-limit-window-label'
 import { getUsageHeadlineSection } from '../usage/usage-headline-sections'
 
 export type StatusBarUsageSection = {
@@ -24,7 +27,8 @@ export function getStatusBarUsageSections(
     return []
   }
   if (mode === 'compact') {
-    const headline = getUsageHeadlineSection(p, t)
+    // Why 'all': the status bar keeps its original headline, Fable included.
+    const headline = getUsageHeadlineSection(p, t, 'all')
     return headline ? [{ key: 'headline', ...headline }] : []
   }
   if (p.buckets?.length) {

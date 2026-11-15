@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { Repo } from '../repo-types'
+import type { Repo } from '../repository/repo-types'
 import type { JiraIssue } from './jira-types'
 import {
   findJiraIssueDefaultRepo,

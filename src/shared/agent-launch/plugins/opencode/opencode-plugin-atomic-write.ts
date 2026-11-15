@@ -11,7 +11,7 @@ import {
   writeFileSync
 } from 'node:fs'
 import { basename, dirname, join, resolve } from 'node:path'
-import { renameFileWithWindowsRetry } from '../../../windows-retry-file-operations'
+import { renameFileWithWindowsRetry } from '../../../file-write/windows-retry-file-operations'
 
 function isEnoentError(error: unknown): boolean {
   return error instanceof Error && 'code' in error && error.code === 'ENOENT'

@@ -14,7 +14,7 @@ import { ElectronServeBrowserProcess } from './electron/electron-serve-browser-p
 import { watchOrcadBrowserInstallPark } from './orcad-browser-install-park'
 import { openServeBundlePark } from '../../../shared/remote-runtime/serve-supervisor/serve-bundle-park'
 import { ORCAD_BROWSER_PARK_LABEL } from '../../../shared/remote-runtime/serve-supervisor/serve-bundle-coordination'
-import { errorMessage } from '../../../shared/error-message'
+import { errorMessage } from '../../../shared/errors/error-message'
 
 export type OrcadBrowserProvider = {
   kind: 'electron' | 'chromium'

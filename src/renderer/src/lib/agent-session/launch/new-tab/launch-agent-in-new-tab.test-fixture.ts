@@ -1,5 +1,5 @@
 import { beforeEach, type Mock, vi } from 'vitest'
-import type { Project } from '../../../../../../shared/project-types'
+import type { Project } from '../../../../../../shared/project/project-types'
 import type { createWebRuntimeSessionTerminal } from '@/runtime/hosted-terminals/creation/web-runtime-terminal-creation'
 import { setLocalRuntimeCapabilitiesForTests } from '@/runtime/hosts/capabilities/local-runtime-capabilities'
 import type * as LaunchAgentKindModule from '../../../../../../shared/agent-status/identity/agent-kind'
@@ -94,7 +94,7 @@ const store = {
 }
 
 const mockLaunchUuid = vi.hoisted(() => () => 'tab-1')
-vi.mock('../../../../../../shared/non-secure-context-uuid', () => ({
+vi.mock('../../../../../../shared/identifiers/non-secure-context-uuid', () => ({
   createNonSecureContextUuid: mockLaunchUuid
 }))
 

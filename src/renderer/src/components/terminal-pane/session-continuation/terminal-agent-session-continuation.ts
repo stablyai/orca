@@ -33,7 +33,9 @@ function resolveSourceAgent(args: {
   pane: ManagedPane
 }): TuiAgent | null {
   const state = useAppStore.getState()
-  const paneAgent = state.agentStatusByPaneKey[makePaneKey(args.tabId, args.pane.leafId)]?.agentType
+  const paneAgent = state.agentStatusByPaneKey.get(
+    makePaneKey(args.tabId, args.pane.leafId)
+  )?.agentType
   if (isTuiAgent(paneAgent)) {
     return paneAgent
   }
@@ -53,7 +55,7 @@ export function prepareAgentSessionContinuationFromPane({
 }: PrepareAgentSessionContinuationFromPaneArgs): AgentSessionContinuationRequest | null {
   const state = useAppStore.getState()
   const paneKey = makePaneKey(tabId, pane.leafId)
-  const status = state.agentStatusByPaneKey[paneKey]
+  const status = state.agentStatusByPaneKey.get(paneKey)
   const sourceAgent = resolveSourceAgent({ pane, tabId, worktreeId })
   const transcriptPath = resolveAgentSessionContinuationTranscriptPath({
     sourceAgent,

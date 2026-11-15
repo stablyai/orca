@@ -1,9 +1,9 @@
-import type { Project, ProjectHostSetup } from '../../../../shared/project-types'
+import type { Project, ProjectHostSetup } from '../../../../shared/project/project-types'
 import {
   projectHostSetupProjectionFromRepos,
   type ProjectHostSetupProjection
-} from '../../../../shared/project-host-setup-projection'
-import { resolveProjectHostSetupProjection } from '../../../../shared/project-host-setup-hydration'
+} from '../../../../shared/project/host-setup/project-host-setup-projection'
+import { resolveProjectHostSetupProjection } from '../../../../shared/project/host-setup/project-host-setup-hydration'
 import type { AppState } from '../types'
 
 const derivedProjectionByRepos = new WeakMap<AppState['repos'], ProjectHostSetupProjection>()

@@ -8,6 +8,8 @@ import type {
   BrowserViewportPresetId
 } from '../../../../../../shared/browser/workspaces/browser-workspace-types'
 import { ensureBrowserPageWebview } from './browser-page-webview'
+import { webviewRegistry } from '../webview-registry'
+import { isBrowserPageMountAdmitted } from '../retention/browser-page-mount-admission'
 import {
   applyBrowserPageViewportLayout,
   ensureBrowserPageViewport
@@ -67,6 +69,13 @@ export type AttachBrowserPageWebviewArgs = {
 export function attachBrowserPageWebview(
   args: AttachBrowserPageWebviewArgs
 ): (() => void) | undefined {
+  if (
+    !webviewRegistry.has(args.browserTabId) &&
+    !args.isPaintableRef.current &&
+    !isBrowserPageMountAdmitted(args.browserTabId)
+  ) {
+    return
+  }
   const {
     browserTabId,
     workspaceId,

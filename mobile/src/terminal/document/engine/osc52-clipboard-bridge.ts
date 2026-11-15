@@ -1,4 +1,4 @@
-import { createOsc52OscHandler } from '../../../../../src/shared/osc52-clipboard'
+import { createOsc52OscHandler } from '../../../../../src/shared/terminal/clipboard/osc52-clipboard'
 import { notify } from '../host-bridge/host-notify'
 import type { TerminalDocumentScope } from '../document-scope'
 import type { TerminalDocumentTerminal } from '../document-terminal-shape'

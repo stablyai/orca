@@ -8,7 +8,7 @@ import type { track } from '../../../../diagnostics/telemetry/telemetry'
 import type { toast } from 'sonner'
 import type { createWebRuntimeSessionTerminal } from '@/runtime/hosted-terminals/creation/web-runtime-terminal-creation'
 import type { isWebRuntimeSessionActive } from '@/runtime/web-session-tabs-sync/identity/web-runtime-session-environment'
-import type { Project } from '../../../../../../shared/project-types'
+import type { Project } from '../../../../../../shared/project/project-types'
 import type * as LaunchAgentKindModule from '../../../../../../shared/agent-status/identity/agent-kind'
 
 export const mockCreateTab = vi.fn<(...args: Parameters<AppState['createTab']>) => { id: string }>()
@@ -104,7 +104,7 @@ export const store = {
 }
 
 const mockLaunchUuid = vi.hoisted(() => () => 'tab-1')
-vi.mock('../../../../../../shared/non-secure-context-uuid', () => ({
+vi.mock('../../../../../../shared/identifiers/non-secure-context-uuid', () => ({
   createNonSecureContextUuid: mockLaunchUuid
 }))
 

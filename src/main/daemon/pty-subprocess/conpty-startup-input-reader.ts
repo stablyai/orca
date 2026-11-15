@@ -1,6 +1,6 @@
 import type { DaemonPtyPhysicalOwner } from './subprocess-handle'
 import type * as pty from 'node-pty'
-import { CONPTY_DA1_RESPONSE } from '../../../shared/conpty-device-attributes'
+import { CONPTY_DA1_RESPONSE } from '../../../shared/terminal/protocol/queries/conpty-device-attributes'
 
 // Bundled ConPTY queries DA1 (or CPR when inheriting the cursor) right after it starts reading
 // input, and before relaying any client output. A pane without it never reads keyboard input.

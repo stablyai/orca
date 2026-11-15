@@ -29,7 +29,6 @@ type BrowserToolbarMenuProps = {
   workspaceId: string
   browserPageId: string
   viewportPresetId: BrowserViewportPresetId | null
-  onDestroyWebview: () => void
   isActive: boolean
   extensionDiscoveryTarget?: boolean
   /** A blank tab shows the import hint on its new tab page, so the tour points there instead. */
@@ -45,7 +44,6 @@ export function BrowserToolbarMenu({
   workspaceId,
   browserPageId,
   viewportPresetId,
-  onDestroyWebview,
   isActive,
   extensionDiscoveryTarget = false,
   isBlankTab,
@@ -152,8 +150,6 @@ export function BrowserToolbarMenu({
     }
     const targetId = pendingSwitchProfileId ?? 'default'
     const profile = browserSessionProfiles.find((p) => p.id === targetId)
-    // Destroy before updating the store; otherwise the stable registry key would reclaim the old partition.
-    onDestroyWebview()
     // Persist the partition with the profile so stale renderer mirrors cannot weaken tab isolation.
     switchBrowserTabProfile(workspaceId, pendingSwitchProfileId, profile?.partition ?? null)
     toast.success(
@@ -194,7 +190,6 @@ export function BrowserToolbarMenu({
       setNewProfileDialogOpen(false)
       setNewProfileName('')
 
-      onDestroyWebview()
       switchBrowserTabProfile(workspaceId, profile.id, profile.partition)
       toast.success(
         t(

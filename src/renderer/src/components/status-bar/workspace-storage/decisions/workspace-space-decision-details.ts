@@ -1,8 +1,8 @@
-import type { AgentStatusEntry } from '../../../../../../shared/agent-status/contracts/agent-status-types'
+import type { AcceptedAgentStatuses } from '@/store/slices/agent-status/accepted-agent-statuses'
 import type { MigrationUnsupportedPtyEntry } from '../../../../../../shared/agent-status/contracts/agent-status-ipc-payload'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
 import type { HostedReviewProvider } from '../../../../../../shared/source-control/hosted-review/hosted-review-contracts'
-import type { Repo } from '../../../../../../shared/repo-types'
+import type { Repo } from '../../../../../../shared/repository/repo-types'
 import type { TerminalTab } from '../../../../../../shared/workspace-layout/terminal-tab-types'
 import type { Worktree } from '../../../../../../shared/worktree/types'
 import { isGitHubPRSuppressed } from '../../../../../../shared/worktree/hosted-review/github-pr-suppression'
@@ -45,7 +45,7 @@ export type WorkspaceDecisionInputs = {
   repos?: readonly Repo[]
   tabsByWorktree: Record<string, readonly TerminalTab[]>
   ptyIdsByTabId: Record<string, string[]>
-  agentStatusByPaneKey: Record<string, AgentStatusEntry>
+  agentStatusByPaneKey: AcceptedAgentStatuses
   migrationUnsupportedByPtyId: Record<string, MigrationUnsupportedPtyEntry>
   runtimePaneTitlesByTabId: Record<string, Record<number, string>>
   openFiles: readonly { id: string; worktreeId: string; isDirty: boolean }[]

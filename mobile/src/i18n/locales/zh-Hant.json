@@ -249,6 +249,7 @@
     "message": {
       "copyMessage": "複製訊息",
       "forkFromResponse": "從此回覆建立分支",
+      "scrollMessageToTop": "將此訊息捲動到頂端",
       "forkFromResponseHint": "新聊天將包含此回合結束前的完整回覆"
     },
     "messageActionsSheet": {
@@ -2824,12 +2825,14 @@
       "title": "外觀"
     },
     "browserSettingsScreen": {
+      "askEachTime": "每次詢問",
+      "askEachTimeDescription": "每次選擇 Orca 瀏覽器、手機瀏覽器或複製連結。",
       "desktopBrowser": "電腦上的 Orca 瀏覽器",
       "desktopBrowserDescription": "在已配對電腦的瀏覽器中開啟，並串流至手機。",
-      "linksDescription": "選擇點按終端機輸出中的 HTTP(S) 連結時，要在哪裡開啟。",
+      "terminalAndChatLinksDescription": "選擇點按終端機輸出和聊天中的網頁連結時，要在哪裡開啟。",
       "linksHeading": "連結",
       "loadFailed": "無法載入瀏覽器偏好設定，請再試一次。",
-      "openTerminalLinks": "開啟終端機連結",
+      "openLinks": "開啟連結",
       "phoneBrowser": "手機瀏覽器",
       "phoneBrowserDescription": "在此手機上的 Safari、Chrome 或其他瀏覽器中開啟。",
       "saveFailed": "無法儲存瀏覽器偏好設定，請再試一次。",

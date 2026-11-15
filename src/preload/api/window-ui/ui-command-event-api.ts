@@ -34,14 +34,14 @@ import type { RuntimeNavigationTarget } from '../../../shared/remote-runtime/ses
 import type {
   ProjectMovePauseRequest,
   ProjectMovePauseResponse
-} from '../../../shared/project-move-pause'
+} from '../../../shared/project/move/project-move-pause'
 import type { TerminalSurfaceCloseTarget } from '../../../shared/workspace-layout/terminal-surfaces/terminal-surface-close-target'
 import type {
   WorktreeDefaultTabsLaunch,
   WorktreeSetupLaunch,
   WorktreeStartupLaunch
 } from '../../../shared/worktree/creation/launch-types'
-import type { FeatureInteractionId } from '../../../shared/feature-interaction-catalog'
+import type { FeatureInteractionId } from '../../../shared/feature-education/interactions/feature-interaction-catalog'
 import type { KeybindingActionId } from '../../../shared/keybindings/types'
 import type { BrowserFindSource } from '../../../shared/browser/guest-lifecycle/browser-find-source'
 import type {
@@ -54,7 +54,7 @@ import type {
   AgentProviderSessionMetadata,
   SleepingAgentLaunchConfig
 } from '../../../shared/agent-session/lifecycle/agent-session-resume'
-import type { TerminalPaneSplitSource } from '../../../shared/feature-education-telemetry'
+import type { TerminalPaneSplitSource } from '../../../shared/feature-education/feature-education-telemetry'
 import type { RuntimeMobileSessionTabMove } from '../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import type {
   RuntimeTerminalCreateRequestPayload,
@@ -69,7 +69,7 @@ import type {
   SessionTabCloseRequest,
   SessionTabCloseResponse
 } from '../../../shared/session-tab-close'
-import type { WorkspaceSleepNotice } from '../../../shared/workspace-sleep'
+import type { WorkspaceSleepNotice } from '../../../shared/workspace/lifecycle/workspace-sleep'
 import type {
   RemoteCliBrowserScopeQuery,
   RemoteCliBrowserScopeReply

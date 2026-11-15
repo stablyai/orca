@@ -1,5 +1,5 @@
 import { CryptoDigestAlgorithm, digest } from 'expo-crypto'
-import { PrioritySemaphore } from '../../../../src/shared/priority-semaphore'
+import { PrioritySemaphore } from '../../../../src/shared/concurrency/priority-semaphore'
 import { mobileWebBundleManifestRead } from './mobile-web-bundle-operations'
 import {
   shellDownloadedAssets,

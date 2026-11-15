@@ -3,7 +3,7 @@ import { homedir, tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterAll, beforeEach } from 'vitest'
 import { setAppEnvironment, type AppEnvironment } from '../../../../src/shared/app-environment'
-import { setSecretStore } from '../../../../src/shared/secret-store'
+import { setSecretStore } from '../../../../src/shared/secure-storage/secret-store'
 
 // The harness owns its directory even when a suite replaces the fs module.
 const { mkdtempSync, rmSync } = process.getBuiltinModule('fs')

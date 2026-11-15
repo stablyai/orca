@@ -9,7 +9,7 @@ import type * as WebEnvironment from '@/runtime/web-session-tabs-sync/identity/w
 import type * as RuntimeRpcClient from '@/runtime/rpc/compatibility/runtime-capability-proof'
 import type { AgentLaunchChoices } from '../../src/shared/agent-launch/choices/agent-launch-choices'
 import type { FolderWorkspace } from '../../src/shared/folder-workspaces/folder-workspace-types'
-import type { ProjectGroup } from '../../src/shared/project-group-types'
+import type { ProjectGroup } from '../../src/shared/project/groups/project-group-types'
 import type * as LaunchAgentKindModule from '../../src/shared/agent-status/identity/agent-kind'
 
 const mocks = vi.hoisted(() => ({

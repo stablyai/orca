@@ -1,4 +1,4 @@
-import { measureUtf8ByteLength } from '../../utf8-byte-limits'
+import { measureUtf8ByteLength } from '../../text/utf8-byte-limits'
 
 export const SSH_RETAINED_IDENTIFIER_MAX_UTF8_BYTES = 1024
 export const SSH_CONNECTION_ERROR_MAX_UTF8_BYTES = 16 * 1024

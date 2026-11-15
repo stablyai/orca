@@ -3,9 +3,9 @@ import { isPairedWebClientWindow } from '@/app-shell/chrome/desktop-window-chrom
 import { resolveWorktreeOperationRouteForHost } from '@/lib/workspace/ownership/worktree-operation-route'
 import { getWorktreeExecutionHostId } from '../../../../../../shared/execution-host'
 import { getWorktreeHostIdentity } from '../../../../../../shared/worktree/host-qualified-identity'
-import { parseWorkspaceKey } from '../../../../../../shared/workspace-scope'
+import { parseWorkspaceKey } from '../../../../../../shared/workspace/identity/workspace-scope'
 import type { Worktree } from '../../../../../../shared/worktree/types'
-import type { Repo } from '../../../../../../shared/repo-types'
+import type { Repo } from '../../../../../../shared/repository/repo-types'
 import { isContextWorktreeDeletable } from '../../workspace-actions/context-menu/worktree-context-menu-policy'
 import {
   createWorktreeContextMenuDeleteIntent,

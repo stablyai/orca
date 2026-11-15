@@ -1,5 +1,5 @@
 import { RemoteRuntimeClientError } from '../../../../shared/remote-runtime/remote-runtime-client-error'
-import { throwIfSignalAborted } from '../../../../shared/abort-signal-reason'
+import { throwIfSignalAborted } from '../../../../shared/concurrency/abort-signal-reason'
 import {
   type RuntimeEnvironmentSetupFailure,
   runtimeEnvironmentSetupFailure

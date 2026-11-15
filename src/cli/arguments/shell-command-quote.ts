@@ -1,4 +1,4 @@
-import { quotePowerShellLiteral } from '../../shared/powershell-native-argument'
+import { quotePowerShellLiteral } from '../../shared/shell/launch/powershell-native-argument'
 import { quotePosixShell } from '../../shared/shell/launch/shell-argument-quoting'
 
 export function quoteCliCommandArgument(value: string): string {

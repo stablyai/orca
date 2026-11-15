@@ -1,4 +1,4 @@
-import { memoizeStringResult } from '../../string-result-cache'
+import { memoizeStringResult } from '../../collections/string-result-cache'
 import {
   AGENT_STATUS_MAX_FIELD_LENGTH,
   normalizeOptionalField,
@@ -34,7 +34,7 @@ import {
 } from '../structured-agent-session-tool-call-block'
 
 import type { NativeChatBlock, NativeChatMessage } from '../../native-chat/native-chat-types'
-import { sha256 } from '../../sha256'
+import { sha256 } from '../../hashing/sha256'
 import { readAgentMessageSource } from '../agent-session-message-source'
 import { structuredAgentSessionStatusStartedAt } from './structured-agent-session-status-started-at'
 import { owesStructuredAgentSessionWork } from './structured-agent-session-owed-work'
@@ -246,6 +246,8 @@ export type StructuredAgentSessionStatusProjection = {
   /** Idle-only latest-request verdict: turn outcome, host-observed end if absent, or refused-send failure. */
   turnOutcome?: AgentTurnOutcome
   statusStartedAt?: number
+  /** An async question still waits for the person's next message; set by the host's journal reads. */
+  awaitsAnswer?: true
 }
 
 /** Share host/client previews; null status means no turn yet. Bound text because sends admit 256 KB and status frames include all sessions;

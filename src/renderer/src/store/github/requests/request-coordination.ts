@@ -14,7 +14,7 @@ import type { GetProjectViewTableResult } from '../../../../../shared/github/pro
 import type { LinkedReviewClearScope } from '../pull-requests/linked-review-clear'
 import type { AppState } from '../../types'
 import { matchesRepoCacheEviction, type RepoCacheEviction } from '../cache/cache-identity'
-import type { PromiseSettlementWaiters } from '../../../../../shared/promise-settlement-waiters'
+import type { PromiseSettlementWaiters } from '../../../../../shared/concurrency/promise-settlement-waiters'
 
 export type InflightPR = {
   promise: Promise<PRInfo | null>

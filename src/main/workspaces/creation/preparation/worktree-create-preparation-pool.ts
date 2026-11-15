@@ -48,7 +48,7 @@ import {
 } from './worktree-preparation-discard-retry'
 
 import { WorktreePreparationOperation } from '../../../git/worktrees/creation/worktree-preparation-operation'
-import { waitForPromiseWithSignal } from '../../../../shared/abort-signal-reason'
+import { waitForPromiseWithSignal } from '../../../../shared/concurrency/abort-signal-reason'
 export type { StartPreparationArgs } from './worktree-preparation-admission-intents'
 export { WORKTREE_CREATE_PREPARATION_TTL_MS } from '../../../git/worktrees/creation/worktree-preparation-operation'
 export const WORKTREE_CREATE_PREPARATION_LIMIT = 3

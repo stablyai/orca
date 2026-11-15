@@ -1,4 +1,4 @@
-import type { RepoIconPickResult } from '../../../shared/repo-icon-pick-failure-copy'
+import type { RepoIconPickResult } from '../../../shared/repository/appearance/repo-icon-pick-failure-copy'
 import { ipcRenderer } from 'electron'
 import type {
   ShellOpenExternalEditorRequest,

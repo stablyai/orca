@@ -5,7 +5,7 @@ import type { ExternalConversationSeam } from '../../external-conversations/exte
 import { installExternalConversations } from '../../external-conversations/external-conversations-install'
 import { HEADLESS_RUNTIME_WINDOW_ID } from '../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import { parsePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
-import { parseWorkspaceKey } from '../../../shared/workspace-scope'
+import { parseWorkspaceKey } from '../../../shared/workspace/identity/workspace-scope'
 import { getRepoIdFromWorktreeId } from '../../../shared/worktree/id'
 import { OrcaRuntimeWithWindowlessTerminalActivity } from '../sidebar-inputs/temporal/orca-runtime-windowless-terminal-activity'
 import { getRuntimeDesktopSurface } from './runtime-desktop-surface'

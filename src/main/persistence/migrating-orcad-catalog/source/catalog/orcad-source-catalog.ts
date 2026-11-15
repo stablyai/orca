@@ -1,6 +1,6 @@
 import type { OrcadMigrationCatalogPayload } from '../../../../../shared/orcad-migration/orcad-migration-manifest'
 import { withoutOrcadRetainedMarker } from '../../../../../shared/remote-runtime/orcad-lifecycle/orcad-retained-marker'
-import type { ProjectGroup } from '../../../../../shared/project-group-types'
+import type { ProjectGroup } from '../../../../../shared/project/groups/project-group-types'
 import type { SshTarget } from '../../../../../shared/remote-runtime/ssh/ssh-types'
 import type { Store } from '../../../loading-store/store'
 import { orcadSourceFolderWorkspaceIds, repoBelongsToOrcadSource } from './orcad-source-ownership'

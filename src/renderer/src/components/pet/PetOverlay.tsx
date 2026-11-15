@@ -27,7 +27,7 @@ function usePetAnimationName(
   const agentStatusNow = getAgentStatusEpochNow(agentStatusEpoch)
 
   return selectPetAnimationName({
-    entries: Object.values(agentStatusByPaneKey),
+    entries: Array.from(agentStatusByPaneKey.values()),
     dragging,
     dragAnimation,
     hovering,

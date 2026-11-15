@@ -1,6 +1,6 @@
 // Which Add to chat target list is open at a screen point; kept apart from the menu so editors
 // can open it without loading the menu's components.
-import type { LaunchSource } from '../../../../../shared/telemetry-property-schemas'
+import type { LaunchSource } from '../../../../../shared/telemetry/schemas/telemetry-property-schemas'
 
 export type AddToChatSource = { worktreeId: string; quote: string; launchSource: LaunchSource }
 

@@ -19,7 +19,7 @@ import type { LiveAgentWorktreeStatus } from '../../../../../shared/sidebar-list
 import {
   rankWorktreeStatus,
   type WorktreeStatus
-} from '../../../../../shared/worktree-status-rollup'
+} from '../../../../../shared/worktree/row-display/worktree-status-rollup'
 
 type WorktreeStatusHeuristicOptions = {
   liveAgentStatus?: LiveAgentWorktreeStatus

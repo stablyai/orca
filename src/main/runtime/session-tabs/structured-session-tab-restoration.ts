@@ -11,8 +11,8 @@ import { LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host'
 import { restoredChatTabChanges } from './restored-chat-tab-changes'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
 import type { RuntimeRepoSearchRefs } from '../../../shared/worktree/catalog/runtime-worktree-contracts'
-import { REPO_SEARCH_REFS_DEFAULT_LIMIT as DEFAULT_REPO_SEARCH_REFS_LIMIT } from '../../../shared/repo-search-limits'
-import type { Repo } from '../../../shared/repo-types'
+import { REPO_SEARCH_REFS_DEFAULT_LIMIT as DEFAULT_REPO_SEARCH_REFS_LIMIT } from '../../../shared/git/refs/repo-search-limits'
+import type { Repo } from '../../../shared/repository/repo-types'
 import type { GitAdmissionTier } from '../../../shared/rpc-contract/source-control/git-admission-tier-params'
 import {
   getLocalProjectGhExecOptions,
