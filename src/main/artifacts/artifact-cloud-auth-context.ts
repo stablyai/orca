@@ -11,12 +11,37 @@ import {
   isArtifactShareLifecycleCurrent
 } from './artifact-share-record-store'
 
+export type ArtifactRateLimitReplay = {
+  /** Takes the operation's one 429 wait-and-replay; false once any of its requests used it. */
+  claim: () => boolean
+  /** Run before the delayed replay: the token must still belong to a signed-in, unchanged account. */
+  assertCanReplay: () => void
+}
+
+/**
+ * One 429 wait-and-replay for a whole artifact operation. Create it before the 401
+ * session refresh, which re-runs the operation; a re-run must not earn another wait.
+ */
+export type ArtifactRateLimitAllowance = { claim: () => boolean }
+
+export function createArtifactRateLimitAllowance(): ArtifactRateLimitAllowance {
+  let claimed = false
+  return {
+    claim: () => {
+      if (claimed) {
+        return false
+      }
+      claimed = true
+      return true
+    }
+  }
+}
+
 export type ArtifactAuthContext = {
   profileId: string
   scope: ArtifactShareScope
   assertCurrent: () => void
-  /** Run before a delayed rate-limit replay: the token must still belong to a signed-in, unchanged account. */
-  assertCanReplay: () => void
+  rateLimitReplay: ArtifactRateLimitReplay
 }
 
 function tokenFingerprint(token: string): string {
@@ -27,6 +52,7 @@ function authContext(
   active: ActiveOrcaProfileState,
   scope: ArtifactShareScope,
   userDataPath: string,
+  allowance: ArtifactRateLimitAllowance,
   expectedCloud?: { userId: string; profileId: string; organizationId: string }
 ): ArtifactAuthContext {
   const lifecycleGeneration = captureArtifactShareLifecycle(active.profile.id, userDataPath)
@@ -51,18 +77,22 @@ function authContext(
     profileId: active.profile.id,
     scope,
     assertCurrent,
-    assertCanReplay: () => {
-      assertCurrent()
-      // Sign-out fences the session generation before awaiting remote logout, and a revoked
-      // session signs out without unlinking, so neither is visible to assertCurrent yet.
-      if (
-        expectedCloud &&
-        (takeCloudSessionTicket(active.profile.id, userDataPath).generation !== sessionGeneration ||
-          readCloudSession(active.profile.id, userDataPath).status !== 'found')
-      ) {
-        throw new Error(
-          'Signed out of Orca while waiting to retry the artifact request. Sign in and try again.'
-        )
+    rateLimitReplay: {
+      claim: allowance.claim,
+      assertCanReplay: () => {
+        assertCurrent()
+        // Sign-out fences the session generation before awaiting remote logout, and a revoked
+        // session signs out without unlinking, so neither is visible to assertCurrent yet.
+        if (
+          expectedCloud &&
+          (takeCloudSessionTicket(active.profile.id, userDataPath).generation !==
+            sessionGeneration ||
+            readCloudSession(active.profile.id, userDataPath).status !== 'found')
+        ) {
+          throw new Error(
+            'Signed out of Orca while waiting to retry the artifact request. Sign in and try again.'
+          )
+        }
       }
     }
   }
@@ -71,7 +101,8 @@ function authContext(
 export function storedSessionAuthContext(
   active: ActiveOrcaProfileState,
   apiOrigin: string,
-  userDataPath: string
+  userDataPath: string,
+  allowance: ArtifactRateLimitAllowance
 ): ArtifactAuthContext {
   if (!active.profile.cloud) {
     throw new Error('The active Orca profile is not linked to a cloud account.')
@@ -85,6 +116,7 @@ export function storedSessionAuthContext(
       apiOrigin
     },
     userDataPath,
+    allowance,
     {
       userId: active.profile.cloud.userId,
       profileId: active.profile.cloud.cloudProfileId,
@@ -97,7 +129,8 @@ export function explicitTokenAuthContext(
   active: ActiveOrcaProfileState,
   apiOrigin: string,
   token: string,
-  userDataPath: string
+  userDataPath: string,
+  allowance: ArtifactRateLimitAllowance
 ): ArtifactAuthContext {
   const fingerprint = tokenFingerprint(token)
   return authContext(
@@ -108,6 +141,7 @@ export function explicitTokenAuthContext(
       cloudOrganizationId: `token:${fingerprint}`,
       apiOrigin
     },
-    userDataPath
+    userDataPath,
+    allowance
   )
 }

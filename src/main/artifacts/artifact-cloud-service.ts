@@ -29,6 +29,7 @@ import { OrcaCloudRequestError } from '../orca-profiles/cloud-auth/profile-cloud
 
 import {
   type ArtifactAuthContext,
+  createArtifactRateLimitAllowance,
   explicitTokenAuthContext,
   storedSessionAuthContext
 } from './artifact-cloud-auth-context'
@@ -43,7 +44,7 @@ async function deleteArtifactRequest(
   try {
     await artifactRequest<void>(apiUrl, token, path, {
       method: 'DELETE',
-      beforeReplay: auth.assertCanReplay,
+      rateLimitReplay: auth.rateLimitReplay,
       ...(editToken ? { editToken } : {})
     })
   } catch (error) {
@@ -72,7 +73,7 @@ export class ArtifactCloudService {
     return this.withAuth(options, async (token, apiUrl, auth) => {
       const query = options.cursor ? `?cursor=${encodeURIComponent(options.cursor)}` : ''
       return artifactRequest<ArtifactListPage>(apiUrl, token, query, {
-        beforeReplay: auth.assertCanReplay
+        rateLimitReplay: auth.rateLimitReplay
       })
     })
   }
@@ -134,7 +135,7 @@ export class ArtifactCloudService {
               method: 'PUT',
               editToken: record.editToken,
               body: artifactWriteBody(request),
-              beforeReplay: auth.assertCanReplay
+              rateLimitReplay: auth.rateLimitReplay
             }
           )
           auth.assertCurrent()
@@ -198,6 +199,8 @@ export class ArtifactCloudService {
     const apiUrl = resolveArtifactCloudApiUrl(options.apiUrl)
     const active = ensureActiveOrcaProfile(this.userDataPath)
     prepareArtifactCloudUse(active.profile, this.userDataPath)
+    // Outlives the 401 re-run below, so the whole operation gets one rate-limit wait.
+    const rateLimitAllowance = createArtifactRateLimitAllowance()
     if (options.authToken?.trim()) {
       if (!allowsArtifactCloudAuthOverride()) {
         throw new Error(
@@ -205,7 +208,13 @@ export class ArtifactCloudService {
         )
       }
       const token = options.authToken.trim()
-      const auth = explicitTokenAuthContext(active, apiUrl, token, this.userDataPath)
+      const auth = explicitTokenAuthContext(
+        active,
+        apiUrl,
+        token,
+        this.userDataPath,
+        rateLimitAllowance
+      )
       const value = await operation(token, apiUrl, auth)
       auth.assertCurrent()
       return {
@@ -222,7 +231,7 @@ export class ArtifactCloudService {
       active,
       this.userDataPath,
       async (session) => {
-        const auth = storedSessionAuthContext(active, apiUrl, this.userDataPath)
+        const auth = storedSessionAuthContext(active, apiUrl, this.userDataPath, rateLimitAllowance)
         const value = await operation(session.accessToken, apiUrl, auth)
         auth.assertCurrent()
         return value

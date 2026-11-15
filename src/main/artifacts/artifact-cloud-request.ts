@@ -5,6 +5,7 @@ import {
 } from '../../shared/artifacts/artifacts'
 import { OrcaCloudRequestError } from '../orca-profiles/cloud-auth/profile-cloud-client'
 import { readArtifactRateLimitResponse } from './artifact-cloud-rate-limit'
+import type { ArtifactRateLimitReplay } from './artifact-cloud-auth-context'
 
 export type ArtifactWriteBody = {
   content: string
@@ -27,8 +28,8 @@ type ArtifactRequestOptions = {
   body?: unknown
   editToken?: string
   idempotencyKey?: string
-  /** Throws when the account that sent the first attempt is no longer signed in; without it a 429 never replays. */
-  beforeReplay?: () => void
+  /** The operation's single 429 replay; without it a 429 never replays. */
+  rateLimitReplay?: ArtifactRateLimitReplay
 }
 
 function sendArtifactRequest(
@@ -54,7 +55,7 @@ function sendArtifactRequest(
 // A POST without an Idempotency-Key could create a second artifact if the first one landed.
 function canReplay(options: ArtifactRequestOptions): boolean {
   return (
-    options.beforeReplay !== undefined &&
+    options.rateLimitReplay !== undefined &&
     ((options.method ?? 'GET') !== 'POST' || Boolean(options.idempotencyKey))
   )
 }
@@ -69,17 +70,18 @@ export async function artifactRequest<T>(
   if (response.status === 429) {
     const limited = await readArtifactRateLimitResponse(response)
     const delay = limited.retryAfterSeconds
-    // One replay with the same Idempotency-Key for a short wait; never loop on 429.
+    // One replay with the same Idempotency-Key for a short wait, per operation; never loop on 429.
     if (
       delay === null ||
       delay > ARTIFACT_RATE_LIMIT_MAX_RETRY_DELAY_SECONDS ||
-      !canReplay(options)
+      !canReplay(options) ||
+      !options.rateLimitReplay?.claim()
     ) {
       throw limited.error
     }
     await new Promise((resolve) => setTimeout(resolve, delay * 1000))
     // A sign-out or account switch during the wait must not create, update or delete under the old token.
-    options.beforeReplay?.()
+    options.rateLimitReplay?.assertCanReplay()
     response = await sendArtifactRequest(apiUrl, token, path, options)
     if (response.status === 429) {
       throw (await readArtifactRateLimitResponse(response)).error

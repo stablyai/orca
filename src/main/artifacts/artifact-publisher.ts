@@ -9,6 +9,7 @@ import {
   type ArtifactWriteBody,
   artifactWriteBody
 } from './artifact-cloud-request'
+import type { ArtifactRateLimitReplay } from './artifact-cloud-auth-context'
 import {
   type ArtifactCreateIntent,
   getArtifactCreateIntent,
@@ -53,7 +54,7 @@ type ArtifactPublishAuthContext = {
   profileId: string
   scope: ArtifactShareScope
   assertCurrent: () => void
-  assertCanReplay: () => void
+  rateLimitReplay: ArtifactRateLimitReplay
 }
 
 function artifactOperationQueueKey(
@@ -190,7 +191,7 @@ export class ArtifactPublisher {
         method: 'PUT',
         editToken: record.editToken,
         body: artifactWriteBody(request),
-        beforeReplay: auth.assertCanReplay
+        rateLimitReplay: auth.rateLimitReplay
       })
       auth.assertCurrent()
       refreshArtifactShareRecordExpiration(
@@ -230,7 +231,7 @@ export class ArtifactPublisher {
         method: 'POST',
         body: intent.body,
         idempotencyKey: intent.idempotencyKey,
-        beforeReplay: auth.assertCanReplay
+        rateLimitReplay: auth.rateLimitReplay
       })
     } catch (error) {
       // A replay may outlive its server receipt, so never abandon a possibly committed artifact.

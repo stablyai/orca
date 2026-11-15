@@ -16,9 +16,21 @@ export const ARTIFACT_CLOUD_REQUEST_TIMEOUT_MS = 20_000
 /** A 429 asking for a longer wait fails fast; a longer hold would block the file's publish queue. */
 export const ARTIFACT_RATE_LIMIT_MAX_RETRY_DELAY_SECONDS = 60
 
-/** Covers a share's create + follow-up update, each allowed one rate-limit wait and replay. */
+/** Most artifact API requests one share can send: create, its rate-limit replay and the
+ * follow-up update, then create and update again after a 401 session refresh. */
+export const ARTIFACT_MAX_CLOUD_REQUESTS_PER_OPERATION = 5
+
+/** One session refresh request (CLOUD_REFRESH_TIMEOUT_MS): the expiry refresh before the
+ * operation and the 401 refresh during it. The refresh's own 5xx/lost-response replay is
+ * cloud-auth's failure path and is not counted. */
+const ARTIFACT_SESSION_REFRESH_BUDGET_MS = 20_000
+
+/** Covers a share's worst case: every request it can send, the operation's single
+ * rate-limit wait, and both session refreshes. */
 export const ARTIFACT_CLI_REQUEST_TIMEOUT_MS =
-  2 * (2 * ARTIFACT_CLOUD_REQUEST_TIMEOUT_MS + ARTIFACT_RATE_LIMIT_MAX_RETRY_DELAY_SECONDS * 1000) +
+  ARTIFACT_MAX_CLOUD_REQUESTS_PER_OPERATION * ARTIFACT_CLOUD_REQUEST_TIMEOUT_MS +
+  ARTIFACT_RATE_LIMIT_MAX_RETRY_DELAY_SECONDS * 1000 +
+  2 * ARTIFACT_SESSION_REFRESH_BUDGET_MS +
   10_000
 
 export function artifactContentByteLength(content: string): number {
