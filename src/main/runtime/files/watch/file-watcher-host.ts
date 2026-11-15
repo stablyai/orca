@@ -22,6 +22,7 @@ import {
 } from '../../../../shared/file-watch/runtime-file-watch-limits'
 import { PromiseSettlementWaiters } from '../../../../shared/concurrency/promise-settlement-waiters'
 
+const RUNTIME_FILE_WATCH_IGNORE_OPTIONS = buildParcelWatcherIgnoreOptions(WATCHER_IGNORE_DIRS)
 const RUNTIME_FILE_WATCH_EVENT_LIMIT = 200
 
 type RuntimeFileWatchSubscriber = {
@@ -128,7 +129,7 @@ function subscribeRuntimeRootWatch(root: RuntimeRootWatch): Promise<void> {
       }
       emitToSubscribers(root, mapWatcherEvents(events))
     },
-    buildParcelWatcherIgnoreOptions(WATCHER_IGNORE_DIRS, root.rootPath),
+    RUNTIME_FILE_WATCH_IGNORE_OPTIONS,
     {
       delivery: {
         includeDirectoryMetadata: true,

@@ -1,6 +1,3 @@
-import { homedir } from 'node:os'
-import { isAbsolute, join, relative } from 'node:path'
-
 // Share high-churn exclusions across desktop and runtime watchers, following VS Code's recursive-watch defaults.
 export const WATCHER_IGNORE_DIRS: string[] = [
   '.git',
@@ -39,45 +36,20 @@ function buildNestedDirectoryRegex(ignoreDirs: readonly string[]): string {
   return `^(?:[^/]+/)*(?:${alternatives})(?:/[\\s\\S]*)?$`
 }
 
-function isStrictAncestor(root: string, target: string): boolean {
-  const fromRoot = relative(root, target)
-  return fromRoot !== '' && !fromRoot.startsWith('..') && !isAbsolute(fromRoot)
-}
-
-/** macOS privacy-protected stores inside a recursive root. Parcel stats each changed path, and a stat
- *  inside another app's container raises the "access data from other apps" prompt in Orca's name on
- *  every write that app makes; a home-folder project would prompt endlessly. */
-export function macosProtectedWatchExclusions(rootPath: string, homeDir = homedir()): string[] {
-  const library = join(homeDir, 'Library')
-  if (isStrictAncestor(rootPath, library)) {
-    return [library]
-  }
-  return [join(library, 'Containers'), join(library, 'Group Containers')].filter((store) =>
-    isStrictAncestor(rootPath, store)
-  )
-}
-
 export function buildParcelWatcherIgnoreOptions(
-  ignoreDirs: readonly string[],
-  rootPath?: string
+  ignoreDirs: readonly string[]
 ): ParcelWatcherIgnoreOptions {
-  const protectedPaths =
-    process.platform === 'darwin' && rootPath ? macosProtectedWatchExclusions(rootPath) : []
-  if (ignoreDirs.length === 0 && protectedPaths.length === 0) {
+  if (ignoreDirs.length === 0) {
     return {}
   }
   if (process.platform !== 'darwin') {
     // Parcel 2.5.6 leading-** globs cause pathological std::regex lookaheads; one component regex avoids that cost.
     return { ignoreGlobs: [buildNestedDirectoryRegex(ignoreDirs)] }
   }
-  // Absolute paths go first so the FSEvents cap never drops them; Parcel also filters them before any stat.
-  const daemonExcludedDirs = [...protectedPaths, ...ignoreDirs].slice(
-    0,
-    MACOS_FSEVENTS_EXCLUSION_PATH_LIMIT
-  )
+  const daemonExcludedDirs = ignoreDirs.slice(0, MACOS_FSEVENTS_EXCLUSION_PATH_LIMIT)
   return {
-    ignore: daemonExcludedDirs,
+    ignore: [...daemonExcludedDirs],
     // Plain exclusions cover only the root; regex also prunes nested generated directories.
-    ...(ignoreDirs.length > 0 ? { ignoreGlobs: [buildNestedDirectoryRegex(ignoreDirs)] } : {})
+    ignoreGlobs: [buildNestedDirectoryRegex(ignoreDirs)]
   }
 }

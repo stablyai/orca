@@ -80,39 +80,4 @@ describe('filesystem watcher native ignores', () => {
     const generatedPaths = new Set(generatedFiles)
     expect(events.filter((event) => generatedPaths.has(event.path))).toEqual([])
   })
-
-  // A home-folder project must never stat inside other apps' containers (macOS App Data prompt).
-  it.skipIf(process.platform !== 'darwin')(
-    "drops a home root's ~/Library churn while delivering home edits",
-    async () => {
-      root = await realpath(await mkdtemp(join(tmpdir(), 'orca-watch-home-')))
-      const container = join(root, 'Library', 'Containers', 'com.example.app', 'Data')
-      await mkdir(container, { recursive: true })
-      const originalHome = process.env.HOME
-      process.env.HOME = root
-      const events: Event[] = []
-      try {
-        subscription = await subscribe(
-          root,
-          (_error, batch) => events.push(...batch),
-          buildParcelWatcherIgnoreOptions(WATCHER_IGNORE_DIRS, root)
-        )
-      } finally {
-        process.env.HOME = originalHome
-      }
-      const containerFiles = Array.from({ length: 10 }, (_, index) =>
-        join(container, `state-${index}.db`)
-      )
-      await Promise.all(containerFiles.map((file) => writeFile(file, 'app data')))
-      const sentinel = join(root, 'notes.md')
-      await vi.waitFor(
-        async () => {
-          await writeFile(sentinel, 'home')
-          expect(events.some((event) => event.path === sentinel)).toBe(true)
-        },
-        { timeout: DELIVERY_TIMEOUT_MS, interval: 200 }
-      )
-      expect(events.filter((event) => event.path.startsWith(join(root!, 'Library')))).toEqual([])
-    }
-  )
 })

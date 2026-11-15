@@ -231,7 +231,7 @@ export async function createLocalWatcher(
     let errorCleanedUp = false
 
     const watcherOptions = {
-      ...buildParcelWatcherIgnoreOptions(WATCHER_IGNORE_DIRS, rootPath),
+      ...buildParcelWatcherIgnoreOptions(WATCHER_IGNORE_DIRS),
       // Pin Windows backend to avoid Parcel's noisy Watchman probe.
       ...(process.platform === 'win32' ? { backend: 'windows' as const } : {})
     }
