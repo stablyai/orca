@@ -9,6 +9,7 @@ import {
 } from '../../../workspaces/catalog/workspace-record-fields'
 import { parseWorkspaceKey } from '../../../../../../shared/workspace/identity/workspace-scope'
 import {
+  getRepoExecutionHostId,
   LOCAL_EXECUTION_HOST_ID,
   parseExecutionHostId,
   type ExecutionHostId
@@ -18,7 +19,6 @@ import {
   type ManagedBrowserProfileOwner
 } from '../../../../../../shared/browser/profiles/browser-profile-scope'
 import { getRepoIdFromWorktreeId } from '../../../../../../shared/worktree/id'
-import { findRepoForHost } from '../../../repos/repo-host-identity'
 
 /** Profile a new tab gets when its caller names none: the repo's pick, else the workspace's own under a repo or workspace scope, else the host default. */
 export function resolveNewBrowserTabProfile(
@@ -55,9 +55,10 @@ export function getRepoBrowserProfileId(
     return undefined
   }
   // Why the tab's host: profile ids belong to one host, so another host's copy of the repo can't name one here.
-  const profileId = findRepoForHost(state.repos, getRepoIdFromWorktreeId(worktreeId), {
-    hostId
-  })?.browserProfileId
+  const repoId = getRepoIdFromWorktreeId(worktreeId)
+  const profileId = state.repos.find(
+    (repo) => repo.id === repoId && getRepoExecutionHostId(repo) === hostId
+  )?.browserProfileId
   if (typeof profileId !== 'string' || !profileId) {
     return undefined
   }

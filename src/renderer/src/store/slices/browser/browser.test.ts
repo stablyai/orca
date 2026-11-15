@@ -154,7 +154,9 @@ describe('createBrowserSlice annotations', () => {
   })
 
   it("opens new tabs on the repo's picked profile over the scope, until that profile is gone", async () => {
-    const ensureMock = vi.fn(() => new Promise<BrowserSessionProfile>(() => {}))
+    const ensureMock = vi.fn(
+      (_args: { owner: ManagedBrowserProfileOwner }) => new Promise<BrowserSessionProfile>(() => {})
+    )
     Object.assign(mockApi.browser, { sessionEnsureManagedProfile: ensureMock })
     const profile = (id: string): BrowserSessionProfile => ({
       id,

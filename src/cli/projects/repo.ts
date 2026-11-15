@@ -25,7 +25,7 @@ async function resolveBrowserProfileFlag(
   if (value === 'inherit') {
     return null
   }
-  const { profiles } = await client.call<BrowserProfileListResult>('browser.profileList')
+  const { profiles } = (await client.call<BrowserProfileListResult>('browser.profileList')).result
   if (!profiles.some((profile) => profile.id === value)) {
     throw new RuntimeClientError(
       'invalid_argument',
@@ -121,7 +121,7 @@ export const REPO_HANDLERS: Record<string, CommandHandler> = {
     // A host from before per-repo browser profiles drops the field and still answers with its row.
     if (
       browserProfileId !== undefined &&
-      (result.repo.browserProfileId ?? null) !== browserProfileId
+      (result.result.repo.browserProfileId ?? null) !== browserProfileId
     ) {
       throw new RuntimeClientError(
         'incompatible_runtime',
