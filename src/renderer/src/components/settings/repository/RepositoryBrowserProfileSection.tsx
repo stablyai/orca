@@ -3,7 +3,10 @@ import { useAppStore } from '@/store'
 import { translate } from '@/i18n/i18n'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
 import type { Repo } from '../../../../../shared/repository/repo-types'
-import { getRepoExecutionHostId } from '../../../../../shared/execution-host'
+import {
+  getRepoExecutionHostId,
+  LOCAL_EXECUTION_HOST_ID
+} from '../../../../../shared/execution-host'
 import { getBrowserProfileHostId } from '@/store/slices/browser/hosts/browser-host-state'
 import {
   Select,
@@ -54,16 +57,20 @@ export function RepositoryBrowserProfileSection({
   const entry = getRepositoryBrowserProfileSearchEntry(t)
   const selectLabelId = useId()
   const [saveFailed, setSaveFailed] = useState(false)
+  const [saving, setSaving] = useState(false)
   const profileHostId = getBrowserProfileHostId(getRepoExecutionHostId(repo))
   const profiles = useAppStore((s) => s.browserSessionProfilesByHostId[profileHostId])
   const fetchProfiles = useAppStore((s) => s.fetchBrowserSessionProfiles)
-  const scope = useAppStore((s) => s.settings?.browserProfileScope ?? 'shared')
+  const scopeSetting = useAppStore((s) => s.settings?.browserProfileScope ?? 'shared')
+  // Why: the per-repo/workspace scopes apply only to pages on this desktop; a paired runtime uses its default.
+  const scope = profileHostId === LOCAL_EXECUTION_HOST_ID ? scopeSetting : 'shared'
 
   useEffect(() => {
     void fetchProfiles(profileHostId)
   }, [fetchProfiles, profileHostId])
 
-  const loaded = Boolean(profiles?.length)
+  // A real listing always has Default; a cache holding only an adopted managed profile is not one.
+  const loaded = Boolean(profiles?.some((profile) => profile.id === 'default'))
   const picked = repo.browserProfileId
   // Orca-managed repo/workspace profiles go away with their owner, so they're offered only when already picked.
   const choices = (profiles ?? []).filter((profile) => !profile.owner || profile.id === picked)
@@ -94,15 +101,20 @@ export function RepositoryBrowserProfileSection({
         </span>
         <Select
           value={value}
-          disabled={!loaded}
+          disabled={!loaded || saving}
           onValueChange={(next) => {
             if (next === value) {
               return
             }
             setSaveFailed(false)
+            // Why: the row updates only when the host answers, so a second pick before then would be lost.
+            setSaving(true)
             void Promise.resolve(
               updateRepo(repo.id, { browserProfileId: next === INHERIT_VALUE ? null : next })
-            ).then((saved) => setSaveFailed(saved === false))
+            )
+              .then((saved) => setSaveFailed(saved === false))
+              .catch(() => setSaveFailed(true))
+              .finally(() => setSaving(false))
           }}
         >
           <SelectTrigger size="sm" className="w-full" aria-labelledby={selectLabelId}>

@@ -75,8 +75,11 @@ export function getRepoBrowserProfileId(
     return null
   }
   const profiles = state.browserSessionProfilesByHostId[profileHostId]
-  // A deleted pick would load nowhere, so it falls back; an unloaded list (no Default yet) proves nothing.
-  if (profiles?.length && !profiles.some((profile) => profile.id === profileId)) {
+  // A deleted pick would load nowhere, so it falls back; only a real listing (it always has Default) proves deletion.
+  if (
+    profiles?.some((profile) => profile.id === 'default') &&
+    !profiles.some((profile) => profile.id === profileId)
+  ) {
     return undefined
   }
   return profileId
