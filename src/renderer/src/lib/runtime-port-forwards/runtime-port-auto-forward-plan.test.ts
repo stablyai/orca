@@ -123,8 +123,13 @@ describe('planAutoForwards', () => {
 
   it('skips an anonymous ephemeral port, but not one with a known web port or a printed URL', () => {
     const settings = DEFAULT_RUNTIME_PORT_FORWARD_SETTINGS
-    const unknown = (port: number): WorkspacePort => ({
-      ...workspace(port),
+    const unknown = (port: number): Extract<WorkspacePort, { kind: 'workspace' }> => ({
+      id: `127.0.0.1:${port}`,
+      kind: 'workspace',
+      owner,
+      bindHost: '127.0.0.1',
+      connectHost: 'localhost',
+      port,
       protocol: 'unknown',
       processName: 'node'
     })
