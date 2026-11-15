@@ -48,10 +48,14 @@ export function deleteScannedSessionFieldsForOwners(
   }
   // Close evidence and resume records expire with the workspace they govern.
   for (const field of OWNER_ROW_FIELDS) {
-    const record = next[field] as Record<string, { worktreeId?: string } | undefined> | undefined
-    for (const [key, row] of Object.entries(record ?? {})) {
-      if (row?.worktreeId && isRemovedOwner(row.worktreeId)) {
-        delete record![key]
+    const record = next[field]
+    if (!isSessionRecord(record)) {
+      continue
+    }
+    for (const [key, row] of Object.entries(record)) {
+      const worktreeId = sessionRowWorktreeId(row)
+      if (worktreeId && isRemovedOwner(worktreeId)) {
+        delete record[key]
       }
     }
   }
@@ -181,4 +185,18 @@ export function removeWorkspaceSessionOwnersEverywhere(
     }
   }
   state.workspaceSessionsByHostId = next
+}
+
+/** The workspace a session record row names, if it names one. */
+export function sessionRowWorktreeId(row: unknown): string | undefined {
+  return typeof row === 'object' &&
+    row !== null &&
+    'worktreeId' in row &&
+    typeof row.worktreeId === 'string'
+    ? row.worktreeId
+    : undefined
+}
+
+function isSessionRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
 }

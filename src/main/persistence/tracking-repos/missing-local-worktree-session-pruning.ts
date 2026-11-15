@@ -13,7 +13,6 @@ import {
 } from '../restoring-sessions/session-worktree-ownership'
 import { sessionFieldsRemovedWithWorkspace } from '../../orca-profiles/project-transfer/profile-project-session-field-disposition'
 
-type OwnerRow = { worktreeId?: string } | undefined
 const OWNER_KEYED_FIELDS = [
   'tabsByWorktree',
   'browserTabsByWorktree',
@@ -23,6 +22,7 @@ const OWNER_KEYED_FIELDS = [
 const OWNER_ROW_FIELDS = sessionFieldsRemovedWithWorkspace('ownerRow')
 import {
   removeWorkspaceSessionOwners,
+  sessionRowWorktreeId,
   withoutWslMoveFrozenOwners
 } from '../restoring-sessions/session-owner-removal'
 import {
@@ -56,7 +56,7 @@ export function selectLocalWorktreeSessionOwnersForRepo(
   }
   // Only references removal deletes; a row filed under a live workspace must not re-arm cleanup.
   for (const field of OWNER_KEYED_FIELDS) {
-    for (const key of Object.keys((session[field] ?? {}) as Record<string, unknown>)) {
+    for (const key of Object.keys(session[field] ?? {})) {
       // Removal deletes host-qualified keys only from the recency map.
       if (field === 'lastVisitedAtByWorktreeId' || !isWorktreeHostIdentity(key)) {
         add(key)
@@ -64,10 +64,11 @@ export function selectLocalWorktreeSessionOwnersForRepo(
     }
   }
   for (const field of OWNER_ROW_FIELDS) {
-    for (const row of Object.values((session[field] ?? {}) as Record<string, OwnerRow>)) {
+    for (const row of Object.values(session[field] ?? {})) {
+      const worktreeId = sessionRowWorktreeId(row)
       // Removal matches row owners exactly, so a host-qualified one would never be deleted.
-      if (row?.worktreeId && !isWorktreeHostIdentity(row.worktreeId)) {
-        add(row.worktreeId)
+      if (worktreeId && !isWorktreeHostIdentity(worktreeId)) {
+        add(worktreeId)
       }
     }
   }
