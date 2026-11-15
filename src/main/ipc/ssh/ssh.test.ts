@@ -14,7 +14,7 @@ vi.mock('../../ssh/protocol/ssh-channel-multiplexer', () => mocks.sshChannelMult
 vi.mock('../../ssh/port-forwarding/ssh-port-forward', () => mocks.sshPortForward)
 vi.mock('../ssh/ssh-port-scanner', () => mocks.sshPortScanner)
 
-import type { SshConnectionState, SshTarget } from '../../../shared/ssh-types'
+import type { SshConnectionState, SshTarget } from '../../../shared/remote-runtime/ssh/ssh-types'
 import { createSshIpcHarness } from './ssh-ipc-test-harness'
 import { decideHostServer, publishUnservedHostServer } from './ssh-host-server-connect'
 import {

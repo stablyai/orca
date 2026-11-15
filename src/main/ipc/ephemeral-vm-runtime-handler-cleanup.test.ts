@@ -1,12 +1,13 @@
+import { EventEmitter } from 'node:events'
 import { existsSync, mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { removeTempDirs } from '../../shared/testing/remove-temp-dirs.test-support'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
-import { upsertEphemeralVmRuntime } from '../../shared/ephemeral-vm-runtime-store'
+import { upsertEphemeralVmRuntime } from '../../shared/remote-runtime/ephemeral-vm-store/ephemeral-vm-runtime-store'
 import type * as RuntimeEnvironmentStore from '../../shared/remote-runtime/host-store/runtime-environment-store'
 
-const handlers = new Map<string, (_event: unknown, args: { runtimeId: string }) => unknown>()
+const handlers = new Map<string, (_event: unknown, args: unknown) => unknown>()
 const { getPathMock, handleMock, removeRuntimeOwnedSshTargetMock, removeHandlerMock } = vi.hoisted(
   () => ({
     getPathMock: vi.fn(),
@@ -60,7 +61,7 @@ beforeEach(() => {
   removeRuntimeOwnedSshTargetMock.mockReset().mockResolvedValue(undefined)
   removeHandlerMock.mockReset()
   handleMock.mockImplementation(
-    (channel: string, handler: (_event: unknown, args: { runtimeId: string }) => unknown) => {
+    (channel: string, handler: (_event: unknown, args: unknown) => unknown) => {
       handlers.set(channel, handler)
     }
   )
@@ -68,6 +69,22 @@ beforeEach(() => {
 
 afterEach(async () => {
   await removeTempDirs(tempDirs.splice(0))
+})
+
+it("removes its 'destroyed' listener when a crashed renderer republishes pending checkouts", () => {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the pending-checkout handlers never read the store.
+  registerEphemeralVmRuntimeHandlers({} as never)
+  const sender = Object.assign(new EventEmitter(), { id: 42 })
+  const publish = handlers.get('ephemeralVm:publishPendingCheckouts')
+
+  for (let crash = 0; crash < 25; crash++) {
+    publish?.({ sender }, [])
+    expect(sender.listenerCount('destroyed')).toBe(1)
+    sender.emit('render-process-gone')
+  }
+
+  expect(sender.listenerCount('destroyed')).toBe(0)
+  expect(sender.listenerCount('render-process-gone')).toBe(0)
 })
 
 it('removes the hidden SSH target when provider cleanup cannot start', async () => {

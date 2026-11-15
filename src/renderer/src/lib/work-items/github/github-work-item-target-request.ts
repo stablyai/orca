@@ -3,8 +3,8 @@ import { isWebClientLocation } from '../../../app-shell/platform/web-client-loca
 import { GITHUB_EXACT_WORK_ITEM_TARGET_RUNTIME_CAPABILITY } from '../../../../../shared/source-control/runtime/source-control-runtime-capabilities'
 import { GITHUB_EXACT_OPERATION_UNSUPPORTED } from '../../../../../shared/github/work-items/work-item-target'
 import type { GitHubRepositoryIdentity as GitHubOwnerRepo } from '../../../../../shared/github/repositories/repository-identity'
-import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
-import type { RuntimeStatus } from '../../../../../shared/runtime-session-contracts'
+import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
+import type { RuntimeStatus } from '../../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import {
   captureRuntimeEnvironmentRequestRevision,

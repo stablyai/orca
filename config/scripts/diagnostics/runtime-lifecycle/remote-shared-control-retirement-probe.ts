@@ -6,7 +6,7 @@ import {
   resolveEnvironmentPairingOffer
 } from '../../../../src/shared/remote-runtime/host-store/runtime-environment-store'
 import type { MemorySnapshot } from '../../../../src/shared/process-stats-types'
-import type { RuntimeStatus } from '../../../../src/shared/runtime-types'
+import type { RuntimeStatus } from '../../../../src/shared/remote-runtime/session-graph/runtime-session-contracts'
 
 async function main(): Promise<void> {
   const environmentName = process.env.ORCA_PROBE_ENVIRONMENT_NAME

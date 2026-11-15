@@ -7,7 +7,7 @@ import type {
   ScopedExternalManagerActionRequest,
   ScopedExternalManagerListRequest
 } from '../../../shared/external-automation-scope'
-import type { AutomationsChangedPayload } from '../../../shared/runtime-client-events'
+import type { AutomationsChangedPayload } from '../../../shared/remote-runtime/session-graph/runtime-client-events'
 
 export const automationsApi = {
   listExternalManagerForOwner: (

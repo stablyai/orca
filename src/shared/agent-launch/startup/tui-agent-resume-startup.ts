@@ -13,7 +13,7 @@ import type { TuiAgent } from '../catalog/tui-agent'
 import { buildAgentResumeLaunchCommand } from './agent-resume-launch-command'
 import { buildAiVaultResumeShellCommand } from '../../ai-vault/resume/ai-vault-resume-command'
 import { normalizeRuntimePathForComparison } from '../../cross-platform-path'
-import { parseWslUncPath } from '../../wsl-paths'
+import { parseWslUncPath } from '../../file-access/wsl-paths'
 import { dropRecordedAgentPermissionArgs } from '../permissions/tui-agent-permission-lift'
 
 export function buildAgentResumeStartupPlan(args: {

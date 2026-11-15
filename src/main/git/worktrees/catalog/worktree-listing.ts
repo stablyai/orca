@@ -8,7 +8,7 @@ import { isDefinitiveAbsence } from '../../../../shared/definitive-filesystem-ab
 import { resolveGitMetadataPath } from '../../../../shared/git/metadata/git-metadata-path'
 import { parseGitdirMarkerPayload } from '../../../../shared/git/metadata/gitdir-marker-payload'
 import { isWorktreeCreatePreparation } from '../../../../shared/worktree/creation/create-preparation'
-import { toWslExecutionSpace } from '../../../../shared/wsl-paths'
+import { toWslExecutionSpace } from '../../../../shared/file-access/wsl-paths'
 import type { GitWorktreeInfo } from '../../../../shared/worktree/types'
 import {
   readCheckedOutBranchRef,

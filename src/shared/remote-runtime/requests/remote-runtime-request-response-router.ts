@@ -5,9 +5,9 @@ import {
   isKeepaliveFrame,
   RuntimeRpcEnvelopeSchema,
   type RuntimeRpcResponse
-} from '../../runtime-rpc-envelope'
+} from '../rpc/runtime-rpc-envelope'
 import { parseRemoteRuntimeJsonText } from './remote-runtime-request-frames'
-import type { RuntimeStatus } from '../../runtime-session-contracts'
+import type { RuntimeStatus } from '../session-graph/runtime-session-contracts'
 import {
   acceptSealedReady,
   openSealedText,

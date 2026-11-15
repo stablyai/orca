@@ -10,7 +10,7 @@ import type { DetectedWorktreeListResult } from '../../../../shared/worktree/typ
 import { isFolderRepo } from '../../../../shared/repo-kind'
 import { projectWorktreeLineageWithHostPeers } from '../../../workspaces/catalog/worktree-lineage-host-peers'
 import type { DirectSshDetectedWorktreeRequest } from '../../../../shared/detected-worktree-provider-contract'
-import { isAdmissibleDirectSshAuthority } from '../../../../shared/ssh-retained-payload-admission'
+import { isAdmissibleDirectSshAuthority } from '../../../../shared/remote-runtime/ssh/ssh-retained-payload-admission'
 import {
   buildDetectedGitWorktrees,
   createSshWorktreeMetaIndex,

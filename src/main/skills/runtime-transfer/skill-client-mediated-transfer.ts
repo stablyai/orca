@@ -1,6 +1,6 @@
 import { open } from 'node:fs/promises'
 import { join } from 'node:path'
-import type { RuntimeRpcResponse } from '../../../shared/runtime-rpc-envelope'
+import type { RuntimeRpcResponse } from '../../../shared/remote-runtime/rpc/runtime-rpc-envelope'
 import type { SkillPackageIdentity } from '../../../shared/skill-install-contract'
 import type { SkillBundlePackageIdentity } from '../../../shared/skill-bundle-install-contract'
 import {

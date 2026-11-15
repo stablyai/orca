@@ -1,4 +1,4 @@
-import type { RuntimeRpcResponse } from '../../runtime-rpc-envelope'
+import type { RuntimeRpcResponse } from '../rpc/runtime-rpc-envelope'
 import type { RemoteRuntimeClientError } from '../remote-runtime-client-error'
 import type { RemoteRuntimePreparedRequest } from '../requests/remote-runtime-prepared-request-admission'
 import type { RuntimeCapability } from '../../protocol-version'

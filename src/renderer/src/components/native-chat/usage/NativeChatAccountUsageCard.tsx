@@ -12,7 +12,7 @@ import type {
   AgentSessionUsageAccount
 } from '../../../../../shared/agent-session/agent-session-account-usage'
 import type { CodexRateLimitResetOutcome } from '../../../../../shared/rate-limit-types'
-import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import { normalizeUsagePercentageDisplay } from '../../../../../shared/usage-percentage-display'
 import { getProviderDisplayName } from '../../../../../shared/usage-provider-windows'
 import { ProviderIdentityCard } from '../../status-bar/accounts/ProviderIdentityCard'

@@ -10,9 +10,9 @@ import {
   type HostAccountSignInProvider,
   type HostAccountSignInStatus
 } from '../../../../../shared/host-account-sign-in-types'
-import { HOST_ACCOUNT_SIGN_IN_RUNTIME_CAPABILITY } from '../../../../../shared/account-runtime-capabilities'
+import { HOST_ACCOUNT_SIGN_IN_RUNTIME_CAPABILITY } from '../../../../../shared/remote-runtime/protocol/account-runtime-capabilities'
 import { CODEX_LOGIN_CANCELLED_MESSAGE } from '../../../../../shared/codex-auth-errors'
-import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import { classifyTerminalProcessInspectionFailure } from '../../../../../shared/terminal/pty/lifecycle/terminal-process-inspection'
 import { assertRuntimeEnvironmentCapability } from '../../rpc/compatibility/runtime-capability-proof'
 import { callRuntimeRpc } from '../../rpc/calls/runtime-rpc-call'

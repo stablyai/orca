@@ -1,4 +1,4 @@
-import type { RuntimeClientEvent } from '../../../shared/runtime-client-events'
+import type { RuntimeClientEvent } from '../../../shared/remote-runtime/session-graph/runtime-client-events'
 import type { MobileRelayHostsListResult } from '../../../shared/remote-runtime/relay/mobile-relay-hosts-contract'
 import type { MobileDesktopRelayHosts } from './mobile-desktop-relay-hosts'
 

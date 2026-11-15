@@ -6,7 +6,7 @@ import { committingSpawn, registerLivePty } from './bind-first-pane.test-fixture
 import './runtime-test-module-registration.spec'
 import { OrcaRuntimeService } from '../orca-runtime'
 import { electronMocks } from '../orca-runtime-test-mocks/setup.spec'
-import type { RuntimeMobileSessionTabsResult } from '../../../shared/runtime-session-contracts'
+import type { RuntimeMobileSessionTabsResult } from '../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import {
   HEADLESS_LEAF_ID,
   TEST_WORKTREE_ID,

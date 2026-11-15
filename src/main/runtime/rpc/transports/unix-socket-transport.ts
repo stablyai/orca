@@ -3,7 +3,7 @@
 import { createServer, type Server, type Socket } from 'node:net'
 import { chmodSync, existsSync, rmSync } from 'node:fs'
 import type { RpcMessageContext, RpcTransport } from '../transport'
-import { MAX_LOCAL_RUNTIME_RPC_MESSAGE_BYTES } from '../../../../shared/local-runtime-rpc-limits'
+import { MAX_LOCAL_RUNTIME_RPC_MESSAGE_BYTES } from '../../../../shared/remote-runtime/rpc/local-runtime-rpc-limits'
 
 const RUNTIME_RPC_SOCKET_IDLE_TIMEOUT_MS = 30_000
 const MAX_RUNTIME_RPC_CONNECTIONS = 32

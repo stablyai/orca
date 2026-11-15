@@ -6,7 +6,7 @@ import { resolveTabAgentFromSignalSnapshot } from '../../../../src/shared/tab-ag
 import { resolveTabNameSource } from '../../../../src/shared/tab-title-resolution'
 import type { AgentStatusEntry } from '../../../../src/shared/agent-status/contracts/agent-status-types'
 import type { TuiAgent } from '../../../../src/shared/agent-launch/catalog/tui-agent'
-import type { RuntimeMobileSessionTerminalTab } from '../../../../src/shared/runtime-mobile-session-tab-contracts'
+import type { RuntimeMobileSessionTerminalTab } from '../../../../src/shared/remote-runtime/session-graph/runtime-mobile-session-tab-contracts'
 import {
   resolveAgentSmartKeys,
   type AgentSmartKeySet

@@ -1,6 +1,6 @@
 import { posix, win32 } from 'node:path'
 import { isWindowsAbsolutePathLike } from '../../../../shared/cross-platform-path'
-import { foldWslUncPathCaseInsensitiveParts } from '../../../../shared/wsl-paths'
+import { foldWslUncPathCaseInsensitiveParts } from '../../../../shared/file-access/wsl-paths'
 import type { GitWorktreeExecOptions } from '../worktree-operation-options'
 import { translateWslOutputPaths } from '../../command-runner/host-routing/wsl-path-translation'
 

@@ -1,7 +1,7 @@
 import { lstat, readFile } from 'node:fs/promises'
 import { setTimeout as delay } from 'node:timers/promises'
 import { runProcess } from '@orca/process-host'
-import { getRuntimeMetadataPath } from '../../../shared/runtime-bootstrap'
+import { getRuntimeMetadataPath } from '../../../shared/remote-runtime/bootstrap/runtime-bootstrap'
 import type { UpdateInstallBlocker } from '../../../shared/update-status-types'
 import { getMacUpdateRunningInstances } from './macos-update-running-instances'
 

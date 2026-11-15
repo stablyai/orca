@@ -6,8 +6,8 @@ import {
   quotePowerShellLiteral,
   quotePowerShellNativeArgument
 } from '../../../../../shared/powershell-native-argument'
-import { buildWslLoginShellCommand } from '../../../../../shared/wsl-login-shell-command'
-import { isWslShellName } from '../../../../../shared/local-windows-terminal-runtime'
+import { buildWslLoginShellCommand } from '../../../../../shared/shell/wsl/wsl-login-shell-command'
+import { isWslShellName } from '../../../../../shared/shell/launch/local-windows-terminal-runtime'
 import { resolveWindowsShellStartupFamily } from '../../../../../shared/windows-terminal-shell'
 import { useAppStore } from '@/store/index'
 import { translate } from '@/i18n/i18n'

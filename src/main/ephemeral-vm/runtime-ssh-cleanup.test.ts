@@ -3,8 +3,8 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { removeTempDirs } from '../../shared/testing/remove-temp-dirs.test-support'
 import { afterEach, expect, it, vi } from 'vitest'
-import { upsertEphemeralVmRuntime } from '../../shared/ephemeral-vm-runtime-store'
-import type { EphemeralVmRuntimeRecord } from '../../shared/ephemeral-vm-runtimes'
+import { upsertEphemeralVmRuntime } from '../../shared/remote-runtime/ephemeral-vm-store/ephemeral-vm-runtime-store'
+import type { EphemeralVmRuntimeRecord } from '../../shared/remote-runtime/ephemeral-vm-store/ephemeral-vm-runtimes'
 import { removeEphemeralVmRuntimeSshTarget } from './runtime-ssh-cleanup'
 
 const tempDirs: string[] = []

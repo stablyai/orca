@@ -16,7 +16,7 @@ import {
   isGitHubCheckDetailsTimeout
 } from '../../../../../shared/github/checks/check-details-deadline'
 import { syncPRChecksStatus } from './github-checks'
-import { isWslDistroNotRunningRefusal } from '../../../../../shared/wsl-distro-not-running-refusal'
+import { isWslDistroNotRunningRefusal } from '../../../../../shared/remote-runtime/wsl-hosts/wsl-distro-not-running-refusal'
 import { findRepoForGitHubOwner } from '../repositories/repository-routing'
 import { hostedReviewOwnerIpcArgs } from '../../slices/hosted-review/hosted-review-cache-state'
 import {

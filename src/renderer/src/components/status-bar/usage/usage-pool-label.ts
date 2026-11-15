@@ -10,7 +10,7 @@ import type {
   RateLimitWindow
 } from '../../../../../shared/rate-limit-types'
 import { clampUsedPercent } from '../../../../../shared/usage-percentage-display'
-import { USAGE_URGENT_PERCENT } from './provider-extra-usage-section'
+import { USAGE_WARNING_PERCENT } from './usage-health-tone'
 
 export type GroupedUsagePool = RateLimitBucket & { group: string }
 
@@ -62,8 +62,8 @@ export function formatPoolWindowLabel(
   t?: Translate
 ): string {
   const label = formatPoolWindowName(bucket, t)
-  // Urgency follows consumption even when the user displays the percentage remaining.
-  if (clampUsedPercent(bucket.usedPercent) >= USAGE_URGENT_PERCENT && bucket.resetsAt != null) {
+  // Show the reset once the pool turns yellow, by consumption whatever the % display.
+  if (clampUsedPercent(bucket.usedPercent) >= USAGE_WARNING_PERCENT && bucket.resetsAt != null) {
     const countdown = formatRateLimitWindowChipLabel(bucket, now)
     return label ? `${label} (${countdown})` : countdown
   }

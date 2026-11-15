@@ -16,11 +16,11 @@ import type { PtyLivenessVerdict } from '../../../../shared/terminal/pty/lifecyc
 import type {
   RuntimeTerminalClose,
   RuntimeTerminalRead
-} from '../../../../shared/runtime-terminal-contracts'
+} from '../../../../shared/terminal/runtime/runtime-terminal-contracts'
 import type { ExactWorkerProviderSession } from '../../../../shared/orchestration/workers/orchestration-worker-output'
 import type { RuntimeProviderSnapshotReadOptions } from '../output/provider-snapshot-read-options'
 import { OrcaRuntimeWithFitOverrideListeners } from '../lifecycle/terminal-view-resources'
-import type { RuntimeTerminalDriverState } from '../../../../shared/runtime-session-contracts'
+import type { RuntimeTerminalDriverState } from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import type {
   ApplyLayoutResult,
   PtyLayoutTarget,
@@ -36,7 +36,7 @@ import { getBrowserHostRequestRegistry } from '../../browser-host/leases/browser
 
 import { RuntimeBrowserDriverController } from '../../browser/driver/runtime-browser-driver-controller'
 import { RemoteDesktopTerminalFloor } from '../layout/remote-desktop-terminal-floor'
-import { HEADLESS_RUNTIME_WINDOW_ID } from '../../../../shared/runtime-session-contracts'
+import { HEADLESS_RUNTIME_WINDOW_ID } from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import type { StatsCollector } from '../../../stats/collector'
 import { RuntimeRemoteFetchController } from '../../repositories/runtime-remote-fetch-controller'
 import { RuntimeWorktreeBaseReconciliation } from '../../workspaces/metadata/runtime-worktree-base-reconciliation'

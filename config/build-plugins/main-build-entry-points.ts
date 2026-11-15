@@ -1,5 +1,5 @@
 import { resolve } from 'node:path'
-import { ORCAD_LOCAL_SERVE_SELECTION_ENTRY } from '../../src/shared/orcad-local-serve-selection'
+import { ORCAD_LOCAL_SERVE_SELECTION_ENTRY } from '../../src/shared/remote-runtime/serve-supervisor/orcad-local-serve-selection'
 import { CLI_MAIN_ENTRY_NAMES } from './cli-main-entry-names'
 
 /** Main-build Rollup inputs: output file name (without .js) to its source entry. */

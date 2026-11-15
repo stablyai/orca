@@ -2,7 +2,7 @@ import type { ExecutionHostId } from '../../../../shared/execution-host'
 import type { GitHubWorkItem } from '../../../../shared/github/work-items/work-item-types'
 import type { ProjectGroup } from '../../../../shared/project-group-types'
 import type { Repo } from '../../../../shared/repo-types'
-import type { SshConnectionState } from '../../../../shared/ssh-types'
+import type { SshConnectionState } from '../../../../shared/remote-runtime/ssh/ssh-types'
 import type { TaskSourceContext } from '../../../../shared/work-items/task-source-context'
 import type { UISlice } from '../../store/slices/ui/ui-slice-contract'
 import type {

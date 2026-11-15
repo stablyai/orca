@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { SESSION_TABS_TAB_DELTA_RUNTIME_CAPABILITY } from './session-tabs-runtime-capabilities'
+import { SESSION_TABS_TAB_DELTA_RUNTIME_CAPABILITY } from './remote-runtime/protocol/session-tabs-runtime-capabilities'
 import {
   createSessionTabsTabDeltaDecoder,
   createSessionTabsTabDeltaEncoder

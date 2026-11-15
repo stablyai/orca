@@ -1,7 +1,7 @@
 import type {
   BackendConnectionListener,
   BackendConnectionPurpose
-} from '../../../../../shared/backend-service-contract'
+} from '../../../../../shared/backend/backend-service-contract'
 import type {
   ClaudeUsageRange,
   ClaudeUsageScope,

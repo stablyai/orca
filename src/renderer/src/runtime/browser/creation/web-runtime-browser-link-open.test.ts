@@ -2,7 +2,7 @@ import { requestBrowserFocus } from '@/components/browser-pane/host-guest/input/
 import type * as BrowserFocusModule from '@/components/browser-pane/host-guest/input/browser-focus'
 import '../../../store/testing/app-store-test-fixture'
 import { getDefaultSettings } from '../../../../../shared/constants'
-import '../../../../../shared/session-tabs-runtime-capabilities'
+import '../../../../../shared/remote-runtime/protocol/session-tabs-runtime-capabilities'
 import '../../../../../shared/protocol-version'
 import '../../../lib/browser/navigation/http-link-in-group-availability'
 import { createWebRuntimeSessionBrowserTab } from './web-runtime-browser-creation'

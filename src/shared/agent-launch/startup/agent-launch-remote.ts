@@ -4,7 +4,7 @@ import {
   parseExecutionHostId,
   type ParsedExecutionHost
 } from '../../execution-host'
-import { isWslUncPath } from '../../wsl-paths'
+import { isWslUncPath } from '../../file-access/wsl-paths'
 
 /** SSH relays and Orca servers put plain `orca` on PATH; the Linux `orca-ide` rename is for local desktops and WSL. */
 export function launchHostIsRemote(

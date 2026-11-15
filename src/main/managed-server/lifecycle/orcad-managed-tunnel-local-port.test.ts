@@ -7,7 +7,7 @@ import { encodePairingOffer } from '../../../shared/remote-runtime/pairing/pairi
 import { addManagedOrcadEnvironment } from '../../../shared/remote-runtime/host-store/runtime-environment-managed-orcad-store'
 import { resolveEnvironment } from '../../../shared/remote-runtime/host-store/runtime-environment-store'
 import { getRuntimeSshAccess } from '../../../shared/remote-runtime/host-catalog/runtime-environments'
-import type { SshTarget } from '../../../shared/ssh-types'
+import type { SshTarget } from '../../../shared/remote-runtime/ssh/ssh-types'
 import type { SshConnection } from '../../ssh/connection/ssh-connection'
 import type { SshConnectionManager } from '../../ssh/connection/ssh-connection-manager'
 import type { SshConnectionStore } from '../../ssh/targets/ssh-connection-store'

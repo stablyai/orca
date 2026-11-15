@@ -1,5 +1,8 @@
 import type { DiffComment } from '../../../../../shared/diff-comment-types'
-import { authorityKey, type HostAuthority } from '../../../../../shared/host-authority'
+import {
+  authorityKey,
+  type HostAuthority
+} from '../../../../../shared/execution-host/host-authority'
 import type { Worktree } from '../../../../../shared/worktree/types'
 import type { AppState } from '../../types'
 import { findFolderWorkspaceOwner } from '@/lib/workspace/ownership/folder-workspace-runtime-owner'

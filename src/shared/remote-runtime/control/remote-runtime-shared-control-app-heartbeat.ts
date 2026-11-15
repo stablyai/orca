@@ -1,4 +1,4 @@
-import type { RuntimeRpcResponse } from '../../runtime-rpc-envelope'
+import type { RuntimeRpcResponse } from '../rpc/runtime-rpc-envelope'
 
 // Why: ws pings prove only the nearest hop and the host's socket layer. A relay, proxy or a runtime whose
 // request path is stuck still answers them, so a socket can stay "ready" for hours with no updates (#39785).

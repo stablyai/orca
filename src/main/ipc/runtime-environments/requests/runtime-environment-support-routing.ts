@@ -4,7 +4,7 @@ import type {
   RuntimeOrchestrationEnvelope,
   RuntimeRequestPreparation,
   RuntimeRpcResponse
-} from '../../../../shared/runtime-rpc-envelope'
+} from '../../../../shared/remote-runtime/rpc/runtime-rpc-envelope'
 
 import {
   type KnownRuntimeEnvironment,

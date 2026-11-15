@@ -3,7 +3,7 @@ import { WorkspaceAttachmentsSchema } from '../../workspace-attachments/workspac
 import { WorkspaceLinkedItemSchema } from '../../workspace-attachments/workspace-linked-item-schema'
 import { TaskSourceContextSchema } from '../../work-items/task-source-context-schema'
 import { workspaceSourceSchema } from '../../telemetry-property-schemas'
-import { RUNTIME_NAVIGATION_TARGETS } from '../../runtime-navigation'
+import { RUNTIME_NAVIGATION_TARGETS } from '../../remote-runtime/session-graph/runtime-navigation'
 import { sleepingAgentLaunchConfigSchema } from '../../workspace-session/workspace-session-sleeping-agents'
 import { isTuiAgent } from '../../agent-launch/catalog/tui-agent-config'
 import { AgentArgs, LaunchPreferences } from '../terminal/agent-session-params'

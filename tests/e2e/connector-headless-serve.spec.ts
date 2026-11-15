@@ -16,7 +16,7 @@ import {
   type FakeClaude
 } from './helpers/connector-fake-claude'
 import Database from '../../src/main/sqlite/sync-database'
-import type { RuntimeWorktreePsSummary } from '../../src/shared/runtime-worktree-contracts'
+import type { RuntimeWorktreePsSummary } from '../../src/shared/worktree/catalog/runtime-worktree-contracts'
 
 test.skip(process.platform === 'win32', 'the scripted Claude runs its hooks through sh')
 

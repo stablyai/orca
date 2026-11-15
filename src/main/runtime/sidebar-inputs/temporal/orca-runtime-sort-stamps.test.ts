@@ -1,6 +1,6 @@
 // Runs on plain Node, as orcad does: a paired server stamps its own rows through this same wiring.
 import { describe, expect, it, vi } from 'vitest'
-import { HEADLESS_RUNTIME_WINDOW_ID } from '../../../../shared/runtime-session-contracts'
+import { HEADLESS_RUNTIME_WINDOW_ID } from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import type { WorktreeMeta } from '../../../../shared/worktree/meta-types'
 import type { FolderWorkspace } from '../../../../shared/folder-workspaces/folder-workspace-types'
 import { AgentHookServer } from '../../../agent-hooks/server/agent-hook-server'

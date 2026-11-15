@@ -1,5 +1,5 @@
 import { BrowserError } from '../../browser/browser-error'
-import { BROWSER_UNAVAILABLE_ERROR_CODE } from '../../../shared/runtime-session-contracts'
+import { BROWSER_UNAVAILABLE_ERROR_CODE } from '../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import type { RuntimeBrowserCommands } from '../../runtime/browser/commands/browser-commands'
 import {
   browserUnavailableError,

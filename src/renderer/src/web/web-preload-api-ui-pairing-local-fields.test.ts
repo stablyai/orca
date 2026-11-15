@@ -2,9 +2,9 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   PAIRING_LOCAL_UI_FIELDS,
   type PairingLocalUiField
-} from '../../../shared/pairing-local-ui-fields'
+} from '../../../shared/remote-runtime/pairing/pairing-local-ui-fields'
 import type { PersistedUIState } from '../../../shared/persisted-ui-state-types'
-import type { RuntimeRpcResponse } from '../../../shared/runtime-rpc-envelope'
+import type { RuntimeRpcResponse } from '../../../shared/remote-runtime/rpc/runtime-rpc-envelope'
 import {
   installBrowserGlobals,
   writeStoredRuntimeEnvironment
