@@ -15,6 +15,7 @@ export type JournalStatusItemSelection =
     }
   | { kind: 'users'; floor?: number; unknown?: true }
   | { kind: 'assistant-prose'; floor?: number }
+  | { kind: 'async-question-candidates'; after: JournalStatusPosition; floor?: number }
   | { kind: 'assistant-exists' }
   | { kind: 'prompt' }
   | { kind: 'pending-prompts'; floor?: number }

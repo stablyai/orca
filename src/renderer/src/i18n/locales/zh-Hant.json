@@ -1345,7 +1345,7 @@
             "33290e88ed": "連線設定檔失敗",
             "9fcb07a796": "設定檔已連線",
             "2f6c78a039": "重新整理設定檔身分驗證失敗",
-            "a37b5e6d37": "已登出設定檔",
+            "a37b5e6d37": "已登出 Orca",
             "83600521e7": "登出失敗",
             "76deec8f58": "切換組織失敗",
             "7d4bc516ee": "切換設定檔失敗",
@@ -1929,6 +1929,15 @@
       "workspacePortBrowserOpen": {
         "systemBrowserHint": "按住 {{shortcut}} 並點擊以在系統瀏覽器中開啟",
         "tooltip": "{{label}}。{{hint}}"
+      },
+      "worktreePaletteEvidence": {
+        "workspaceComment": "工作區留言",
+        "createdByAutomation": "由自動化建立",
+        "linkedTask": "連結的任務",
+        "pullRequest": "PR",
+        "mergeRequest": "合併請求",
+        "linkedIssue": "連結的議題",
+        "listeningPort": "監聽連接埠"
       }
     },
     "hooks": {
@@ -3552,6 +3561,7 @@
           "bd162b7d5a": "已合併",
           "draft": "草稿",
           "labelCount_other": "{{count}} 個標籤",
+          "authorCount_other": "{{count}} 位作者",
           "allStates": "全部",
           "filterPullRequests": "篩選 PR",
           "filterIssues": "篩選議題",
@@ -3967,7 +3977,8 @@
             "remoteTerminalClosed": "遠端終端機已關閉。",
             "ptyAllocationLimit": "系統無法再分配 pty 裝置。請在 Orca 或其他程式中關閉一些不用的終端機，然後重試。",
             "terminalProcessLimit": "系統無法再啟動終端機行程。請關閉不用的終端機或結束不用的行程，然後重試。",
-            "hostTerminalCap": "主機上執行的終端機數量已達到 Orca 允許的上限。請關閉一個不再需要的終端機，然後重試。"
+            "hostTerminalCap": "主機上執行的終端機數量已達到 Orca 允許的上限。請關閉一個不再需要的終端機，然後重試。",
+            "copyErrorDetails": "複製錯誤詳細資訊"
           },
           "TerminalProcessExitOverlay": {
             "capacityTitle": "已達到 Git Bash 主控台上限",
@@ -7617,7 +7628,10 @@
           "b4e9d3f2a1c5": "已從 {{value1}} 匯入 {{value0}} 個 Cookie 到 {{value2}}。",
           "c5a273a809": "從 {{value0}}",
           "80bffd32bf": "匯入 Cookie",
-          "bd7d68f138": "從檔案..."
+          "bd7d68f138": "從檔案...",
+          "4054c458e1": "清除預設 cookie",
+          "3b662becd5": "要清除預設設定檔中的 cookie 嗎？",
+          "f159cf5a3e": "這可能會讓你登出此設定檔中的網站。"
         },
         "BrowserUseComputerUseNotice": {
           "79209b37b9": "如果 cookie 匯入不合適，「電腦使用」可以控制本機應用程式，並可視情況使用瀏覽器現有的已登入工作階段。安裝 Orca Computer Use 技能； macOS 還需要隱私權限。",
@@ -11405,6 +11419,7 @@
           "e27c8d45bf": "診斷已被環境變數停用。"
         },
         "ShortcutCommandBlock": {
+          "retryAfterError": "按下其他快速鍵，或按 Esc 取消。",
           "eb72c52c28": "按下快速鍵，或雙擊修飾鍵（例如 {{value0}}）。Esc 取消。",
           "70b5d25583": "{{value0}} 快速鍵",
           "287e07ddde": "已修改",
@@ -13027,7 +13042,8 @@
           "catalog": "目錄",
           "clear": "清除篩選",
           "themes": "主題",
-          "languages": "語言",
+          "codeLanguages": "程式語言",
+          "translations": "翻譯",
           "icons": "圖示",
           "commands": "命令和面板",
           "catalogLabel": "依目錄篩選",
@@ -16329,10 +16345,9 @@
           "725868c75d": "瀏覽資料夾",
           "5e7f0d8a80": "資料夾選擇器不可用於遠端檔案",
           "30099dca46": "資料夾",
-          "2d7d39dc63": ".md",
           "c8ac7868e6": "檔名",
           "b6ed807cc6": "名稱",
-          "e365f3c638": "為您的 Markdown 檔案命名並選擇一個資料夾。",
+          "description": "為您的檔案命名並選擇一個資料夾。",
           "674b046582": "另存新檔",
           "nameEmpty": "名稱不可為空白",
           "nameHasSeparators": "名稱不可包含路徑分隔符號",
@@ -19669,7 +19684,7 @@
       "queuedMessages": {
         "steer": "引導",
         "send": "傳送",
-        "steerHint": "提交且不中斷模型",
+        "steerHint": "在代理程式工作時立即傳送",
         "sendHint": "立即傳送此訊息",
         "delete": "刪除",
         "moreActions": "更多操作",
@@ -20280,7 +20295,8 @@
       "TerminalContextMenu": {
         "copySessionId": "複製工作階段 ID",
         "copySessionIdSuccess": "已複製工作階段 ID",
-        "copySessionIdError": "複製工作階段 ID 失敗"
+        "copySessionIdError": "複製工作階段 ID 失敗",
+        "copySessionIdUnavailable": "沒有可複製的工作階段 ID"
       },
       "hostFile": {
         "updateHostForOutsideFiles": "更新 {{value0}} 上的 Orca，以開啟其工作區以外的檔案"
@@ -22298,6 +22314,8 @@
       "tabCloseAll": "關閉所有編輯器分頁",
       "tabRename": "重新命名目前分頁",
       "tabReopenClosed": "重新開啟已關閉的分頁",
+      "tabMoveLeft": "將使用中的分頁左移",
+      "tabMoveRight": "將使用中的分頁右移",
       "tabNextSameType": "下一個分頁（同類型）",
       "tabPreviousSameType": "上一個分頁（同類型）",
       "tabNextAllTypes": "下一個分頁（所有類型）",
@@ -22308,6 +22326,7 @@
       "tabOpenQuickCommandsMenu": "顯示或隱藏快速指令選單",
       "editorFind": "在編輯器中尋找",
       "editorReplace": "在編輯器中取代",
+      "editorToggleChangesView": "切換變更檢視",
       "fileExplorerUndo": "復原檔案操作",
       "fileExplorerRedo": "重做檔案操作",
       "fileExplorerCopyPath": "複製檔案路徑",
@@ -22325,6 +22344,7 @@
       "chatFind": "在聊天中尋找",
       "terminalToggleNativeChat": "在聊天介面與終端機之間切換",
       "terminalClosePane": "關閉作用中的窗格",
+      "terminalCopySessionId": "複製工作階段 ID",
       "terminalSplitRight": "向右分割終端機",
       "terminalSplitDown": "向下分割終端機",
       "terminalSwitchInputSource": "切換輸入來源／語言（原生）",

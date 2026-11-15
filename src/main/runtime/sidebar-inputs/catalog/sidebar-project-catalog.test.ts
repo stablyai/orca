@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
-import type { ProjectGroup } from '../../../../shared/project-group-types'
-import { projectHostSetupProjectionFromRepos } from '../../../../shared/project-host-setup-projection'
-import type { Repo } from '../../../../shared/repo-types'
+import type { ProjectGroup } from '../../../../shared/project/groups/project-group-types'
+import { projectHostSetupProjectionFromRepos } from '../../../../shared/project/host-setup/project-host-setup-projection'
+import type { Repo } from '../../../../shared/repository/repo-types'
 import {
   readSidebarProjectCatalog,
   type SidebarProjectCatalogStore

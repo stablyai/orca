@@ -3,7 +3,7 @@ import {
   normalizeExecutionHostId,
   type ExecutionHostId
 } from '../../../shared/execution-host'
-import type { ProjectHostSetup } from '../../../shared/project-types'
+import type { ProjectHostSetup } from '../../../shared/project/project-types'
 import type { WorktreeMeta } from '../../../shared/worktree/meta-types'
 import type { GlobalSettings } from '../../../shared/global-settings-types'
 import { readAllWorktreeMetaForHost } from '../../persistence/host-qualified-worktree-meta'

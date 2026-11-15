@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import {
   MOBILE_BROWSER_TUNNEL_METHOD,
   type MobileBrowserTunnelEvent
-} from '../../../src/shared/mobile-browser-tunnel-protocol'
+} from '../../../src/shared/browser/network/tunnels/mobile-browser-tunnel-protocol'
 import { OrcaProxiedBrowser } from '../../modules/orca-proxied-browser/src'
 import { translate } from '../i18n/mobile-i18n'
 import type { RpcClient } from '../transport/rpc/rpc-client-contract'

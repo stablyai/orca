@@ -13,7 +13,7 @@ import {
   folderWorkspaceKey,
   parseWorkspaceKey,
   worktreeWorkspaceKey
-} from '../../../../shared/workspace-scope'
+} from '../../../../shared/workspace/identity/workspace-scope'
 import { sharesResolvedWorktreeLineageBoundary } from '../../../../shared/resolved-worktree-lineage'
 import { crossStoreParentRefOfRow } from '../../../../shared/worktree/lineage/lineage-row-identity'
 import type { OrchestrationDb } from '../../orchestration/db/orchestration-db'

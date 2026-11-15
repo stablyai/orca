@@ -1,13 +1,14 @@
 import type { GlobalSettings } from './global-settings-types'
 import type { NotificationSettings } from './notification-settings-types'
-import type { VoiceSettings } from './speech-types'
+import type { VoiceSettings } from './speech/speech-types'
 import { DEFAULT_TERMINAL_FONT_WEIGHT_BOLD } from './terminal/appearance/terminal-fonts'
 import { getDefaultTerminalQuickCommands } from './terminal/quick-commands/terminal-quick-commands'
 import { TASK_PROVIDERS } from './work-items/task-providers'
 import { getDefaultSourceControlAiSettings } from './source-control/ai/settings/source-control-ai-settings'
-import { DEFAULT_APP_ICON_ID } from './app-icon'
+import { DEFAULT_APP_ICON_ID } from './app-lifecycle/identity/app-icon'
 import { DEFAULT_OPEN_IN_APPLICATIONS } from './open-in-applications'
 import { DEFAULT_NATIVE_CHAT_IDLE_STOP_MINUTES } from './native-chat/native-chat-idle-stop'
+import { DEFAULT_BROWSER_MEMORY_SAVER_HOURS } from './browser/guest-lifecycle/browser-memory-saver'
 import { DEFAULT_DISABLED_TUI_AGENTS } from './agent-launch/catalog/tui-agent-selection'
 import { UI_LANGUAGE_SYSTEM } from './ui-language'
 import {
@@ -218,6 +219,7 @@ export function buildDefaultSettings(args: {
     terminalSshViewParking: true,
     terminalHiddenWorktreeRetentionBudget: true,
     browserGuestWorktreeRetentionBudget: true,
+    browserMemorySaverHours: DEFAULT_BROWSER_MEMORY_SAVER_HOURS,
     terminalMainSideEffectAuthority: true,
     terminalHiddenDeliveryGate: true,
     terminalModelQueryAuthority: true,

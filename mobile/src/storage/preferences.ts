@@ -154,31 +154,35 @@ export async function saveHostDockWidth(width: number): Promise<void> {
   await persistMirrored(DOCK_WIDTH_KEY, value)
 }
 
-export type MobileTerminalLinkOpenMode = 'orca-browser' | 'phone-browser'
+/** Where a web link tapped in terminal output or chat opens; 'ask' shows the link sheet each time. */
+export type MobileLinkOpenMode = 'ask' | 'orca-browser' | 'phone-browser'
 
-const TERMINAL_LINK_OPEN_MODE_KEY = 'orca:terminalLinkOpenMode'
-export const DEFAULT_TERMINAL_LINK_OPEN_MODE: MobileTerminalLinkOpenMode = 'orca-browser'
-let terminalLinkWriteBarrier: Promise<void> | null = null
+// The key predates chat links following this choice; renaming it would drop saved choices.
+const LINK_OPEN_MODE_KEY = 'orca:terminalLinkOpenMode'
+export const DEFAULT_LINK_OPEN_MODE: MobileLinkOpenMode = 'ask'
+let linkOpenModeWriteBarrier: Promise<void> | null = null
 
-export async function loadTerminalLinkOpenMode(): Promise<MobileTerminalLinkOpenMode> {
-  await terminalLinkWriteBarrier
+export async function loadLinkOpenMode(): Promise<MobileLinkOpenMode> {
+  await linkOpenModeWriteBarrier
   try {
-    const raw = await AsyncStorage.getItem(TERMINAL_LINK_OPEN_MODE_KEY)
-    return raw === 'phone-browser' || raw === 'orca-browser' ? raw : DEFAULT_TERMINAL_LINK_OPEN_MODE
+    const raw = await AsyncStorage.getItem(LINK_OPEN_MODE_KEY)
+    return raw === 'ask' || raw === 'phone-browser' || raw === 'orca-browser'
+      ? raw
+      : DEFAULT_LINK_OPEN_MODE
   } catch {
-    return DEFAULT_TERMINAL_LINK_OPEN_MODE
+    return DEFAULT_LINK_OPEN_MODE
   }
 }
 
-export function saveTerminalLinkOpenMode(mode: MobileTerminalLinkOpenMode): Promise<void> {
-  const write = (terminalLinkWriteBarrier ?? Promise.resolve()).then(() =>
-    persistMirrored(TERMINAL_LINK_OPEN_MODE_KEY, mode)
+export function saveLinkOpenMode(mode: MobileLinkOpenMode): Promise<void> {
+  const write = (linkOpenModeWriteBarrier ?? Promise.resolve()).then(() =>
+    persistMirrored(LINK_OPEN_MODE_KEY, mode)
   )
   const barrier = write.catch(() => undefined)
-  terminalLinkWriteBarrier = barrier
+  linkOpenModeWriteBarrier = barrier
   void barrier.then(() => {
-    if (terminalLinkWriteBarrier === barrier) {
-      terminalLinkWriteBarrier = null
+    if (linkOpenModeWriteBarrier === barrier) {
+      linkOpenModeWriteBarrier = null
     }
   })
   return write

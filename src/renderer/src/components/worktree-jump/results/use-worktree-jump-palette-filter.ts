@@ -6,9 +6,9 @@ import {
   buildPaletteFilterPredicate,
   isPaletteFilterActive
 } from '@/components/cmd-j/palette-filter'
-import { getRepoHostIdentity } from '../../../../../shared/repo-host-identity'
+import { getRepoHostIdentity } from '../../../../../shared/repository/repo-host-identity'
 import { getPaletteWorktreeExecutionHostId } from '@/lib/workspace/search/palette-repo-resolution'
-import { getHostDisplayLabelOverrides } from '../../../../../shared/host-setting-overrides'
+import { getHostDisplayLabelOverrides } from '../../../../../shared/execution-host/host-setting-overrides'
 import { getSettingsFocusedExecutionHostId } from '../../../../../shared/execution-host'
 import type { WorktreeJumpPaletteLocalState } from '../state/use-worktree-jump-palette-local-state'
 import type { WorktreeJumpPaletteStoreState } from '../state/use-worktree-jump-palette-store-state'

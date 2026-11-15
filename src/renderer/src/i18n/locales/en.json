@@ -1009,6 +1009,20 @@
         "title": "Passwords",
         "description": "Saved logins for Orca’s browser: add, import, edit and delete them.",
         "httpSuffix": " · http"
+      },
+      "memorySaver": {
+        "unviewedForLabel": "Unviewed for",
+        "unviewedForDescription": "How long a tab goes unviewed before it's freed.",
+        "hoursSuffix": "hours",
+        "title": "Memory Saver",
+        "description": "Frees memory from tabs you haven't viewed. They reload when you open them.",
+        "searchKeywords": {
+          "memory": "memory",
+          "tabs": "tabs",
+          "idle": "idle",
+          "sleep": "sleep",
+          "performance": "performance"
+        }
       }
     },
     "agents": {
@@ -2554,6 +2568,15 @@
       "workspacePortBrowserOpen": {
         "systemBrowserHint": "{{shortcut}}+click to open in the system browser",
         "tooltip": "{{label}}. {{hint}}"
+      },
+      "worktreePaletteEvidence": {
+        "workspaceComment": "Workspace comment",
+        "createdByAutomation": "Created by automation",
+        "linkedTask": "Linked task",
+        "pullRequest": "Pull request",
+        "mergeRequest": "Merge request",
+        "linkedIssue": "Linked issue",
+        "listeningPort": "Listening port"
       }
     },
     "hooks": {
@@ -4220,6 +4243,8 @@
           "draft": "Draft",
           "labelCount_one": "{{count}} label",
           "labelCount_other": "{{count}} labels",
+          "authorCount_one": "{{count}} author",
+          "authorCount_other": "{{count}} authors",
           "allStates": "All",
           "filterPullRequests": "Filter pull requests",
           "filterIssues": "Filter issues",
@@ -4667,7 +4692,8 @@
             "terminalProcessLimit": "Your system cannot start another terminal process. Close unused terminals or quit unused processes, then try again.",
             "hostTerminalCap": "The host is already running as many terminals as Orca allows. Close a terminal you no longer need, then try again.",
             "title": "Terminal issue",
-            "errorTitle": "Terminal error"
+            "errorTitle": "Terminal error",
+            "copyErrorDetails": "Copy error details"
           },
           "TerminalProcessExitOverlay": {
             "capacityTitle": "Git Bash console limit reached",
@@ -8501,8 +8527,11 @@
           "a3f8c2d1e0b4": "Imported {{value0}} cookies from {{value1}} ({{value2}}) into {{value3}}.",
           "b4e9d3f2a1c5": "Imported {{value0}} cookies from {{value1}} into {{value2}}.",
           "c5a273a809": "From {{value0}}",
+          "4054c458e1": "Clear default cookies",
           "80bffd32bf": "Import cookies",
-          "bd7d68f138": "From file…"
+          "bd7d68f138": "From file…",
+          "3b662becd5": "Clear cookies in the Default profile?",
+          "f159cf5a3e": "This may sign you out of sites in this profile."
         },
         "BrowserUseComputerUseNotice": {
           "79209b37b9": "If cookie import is not the right fit, Computer Use can control local apps and may use existing logged-in browser sessions where applicable. Install the Orca Computer Use skill; macOS also requires privacy permissions.",
@@ -12368,6 +12397,7 @@
           "e27c8d45bf": "Diagnostics are disabled by an environment variable."
         },
         "ShortcutCommandBlock": {
+          "retryAfterError": "Press another shortcut, or Esc to cancel.",
           "eb72c52c28": "Press a shortcut, or double-tap a modifier (e.g. {{value0}}). Esc cancels.",
           "70b5d25583": "{{value0}} shortcut",
           "287e07ddde": "Modified",
@@ -14019,7 +14049,8 @@
           "catalog": "Catalog",
           "clear": "Clear filters",
           "themes": "Themes",
-          "languages": "Languages",
+          "codeLanguages": "Code languages",
+          "translations": "Translations",
           "icons": "Icons",
           "commands": "Commands & panels",
           "catalogLabel": "Filter by catalog",
@@ -17536,10 +17567,9 @@
           "725868c75d": "Browse folders",
           "5e7f0d8a80": "Folder picker unavailable for remote files",
           "30099dca46": "Folder",
-          "2d7d39dc63": ".md",
           "c8ac7868e6": "file name",
           "b6ed807cc6": "Name",
-          "e365f3c638": "Name your markdown file and pick a folder.",
+          "description": "Name your file and pick a folder.",
           "674b046582": "Save as",
           "nameEmpty": "Name cannot be empty",
           "nameHasSeparators": "Name cannot contain path separators",
@@ -20835,7 +20865,9 @@
           "medium": "Med",
           "xhigh": "XHigh"
         },
-        "imageUnavailable": "Preview unavailable"
+        "imageUnavailable": "Preview unavailable",
+        "modelAndEffortValue": "{{model}} · {{effort}}",
+        "modelAndEffort": "Model and effort"
       },
       "tool": {
         "exitCode": "exit {{value0}}",
@@ -21285,7 +21317,7 @@
       "queuedMessages": {
         "steer": "Steer",
         "send": "Send",
-        "steerHint": "Submit without interrupting the model",
+        "steerHint": "Send now, while the agent keeps working",
         "sendHint": "Send this message now",
         "delete": "Delete",
         "moreActions": "More actions",
@@ -21988,6 +22020,7 @@
         "copySessionId": "Copy Session ID",
         "copySessionIdSuccess": "Session ID copied",
         "copySessionIdError": "Unable to copy session ID",
+        "copySessionIdUnavailable": "No session ID to copy",
         "copyOrcaSessionId": "Copy Orca Session ID",
         "orcaSessionIdTooltip": "Orca's ID for this agent, separate from the agent CLI's own session ID. Agents use it to refer to each other through Orca.",
         "orcaSessionIdCopied": "Orca session ID copied",
@@ -22362,8 +22395,6 @@
           "title": "Turn on {{rule}}?",
           "description_one": "1 workspace matches right now. It'll be deleted a few seconds after you turn this on.",
           "description_other": "{{count}} workspaces match right now. They'll be deleted a few seconds after you turn this on.",
-          "keepNamed": "Keep {{name}}",
-          "keep": "Keep",
           "summary": "{{count}} will be deleted",
           "cancel": "Cancel",
           "turnOn": "Turn on"
@@ -22458,6 +22489,19 @@
           "automationRuns": "Automation workspaces",
           "orchestrationWorkers": "Orchestration workers",
           "off": "Off"
+        },
+        "disableIgnoredFiles": {
+          "title": "Turn off ignored-file protection?",
+          "description": "For projects using these cleanup rules, ignored files will no longer prevent automatic cleanup. Files such as .env and local config may be deleted and cannot be recovered.",
+          "matches_one": "Without pinning, {{count}} additional workspace will be deleted a few seconds after you turn off protection.",
+          "matches_other": "Without pinning, {{count}} additional workspaces will be deleted a few seconds after you turn off protection.",
+          "noMatches": "No additional workspaces match right now. This setting affects future cleanup in projects using these rules.",
+          "turnOff": "Turn off protection"
+        },
+        "pinAndKeep": {
+          "description": "Selected workspaces will be pinned when you confirm. Pinned workspaces are excluded from automatic cleanup until you unpin them.",
+          "named": "Pin and keep {{name}}",
+          "label": "Pin and keep"
         }
       },
       "repository": {
@@ -22554,6 +22598,18 @@
       "keywordJira": "jira",
       "keywordDefaultProject": "default project",
       "keywordIssuePicker": "issue picker"
+    },
+    "RepositoryBrowserProfileSection": {
+      "title": "Browser profile",
+      "description": "New browser tabs in this project, including ones agents open, use this profile. Point several projects at one profile to share a sign-in.",
+      "keywordProfile": "browser profile",
+      "keywordCookies": "cookies",
+      "keywordSignIn": "sign in",
+      "selectLabel": "Profile for new tabs",
+      "inherit": "Browser setting ({{scope}})",
+      "deletedOption": "Deleted profile",
+      "deleted": "The profile picked for this project was deleted, so new tabs follow the Browser setting.",
+      "saveFailed": "Couldn't save the browser profile. The Orca on this project's host may need an update."
     },
     "managed-runtime": {
       "cancelled": "Installation cancelled.",
@@ -24680,6 +24736,8 @@
       "tabCloseAll": "Close all editor tabs",
       "tabRename": "Rename active tab",
       "tabReopenClosed": "Reopen closed tab",
+      "tabMoveLeft": "Move active tab left",
+      "tabMoveRight": "Move active tab right",
       "tabNextSameType": "Next tab (same type)",
       "tabPreviousSameType": "Previous tab (same type)",
       "tabNextAllTypes": "Next tab (all types)",
@@ -24690,6 +24748,7 @@
       "tabOpenQuickCommandsMenu": "Toggle Quick Commands menu",
       "editorFind": "Find in editor",
       "editorReplace": "Replace in editor",
+      "editorToggleChangesView": "Toggle changes view",
       "fileExplorerUndo": "Undo file operation",
       "fileExplorerRedo": "Redo file operation",
       "fileExplorerCopyPath": "Copy file path",
@@ -24707,6 +24766,7 @@
       "chatFind": "Find in chat",
       "terminalToggleNativeChat": "Switch between Chat UI and terminal",
       "terminalClosePane": "Close active pane",
+      "terminalCopySessionId": "Copy Session ID",
       "terminalSplitRight": "Split terminal right",
       "terminalSplitDown": "Split terminal down",
       "terminalSwitchInputSource": "Switch input source / language (native)",

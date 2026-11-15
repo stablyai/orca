@@ -10,7 +10,7 @@ import {
   ORPHANED_WORKTREE_DIRECTORY_MESSAGE
 } from './worktree-removal-safety'
 import { CLIENT_REMOVAL_HOME } from './worktree-removal-home-guard'
-import { throwIfSignalAborted } from '../../../shared/abort-signal-reason'
+import { throwIfSignalAborted } from '../../../shared/concurrency/abort-signal-reason'
 
 export async function cleanupLocalOrphanedWorktreeDirectory(
   repoPath: string,

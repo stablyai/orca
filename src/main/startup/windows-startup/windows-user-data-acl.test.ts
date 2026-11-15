@@ -5,12 +5,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   resetWindowsSecurityLoadForTests,
   setWindowsSecurityForTests
-} from '../../../shared/windows-security-addon'
+} from '../../../shared/secure-storage/windows-security-addon'
 import {
   createFakeWindowsSecurity,
   FAKE_USER_SID,
   type FakeWindowsSecurity
-} from '../../../shared/windows-security-addon.test-fixture'
+} from '../../../shared/secure-storage/windows-security-addon.test-fixture'
 import {
   ensureWindowsUserDataAclGrant,
   WINDOWS_ACL_GRANT_MARKER_FILE,

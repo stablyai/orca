@@ -13,7 +13,7 @@ import {
   MOBILE_BROWSER_TUNNEL_UNSUBSCRIBE_METHOD,
   MobileBrowserTunnelParams,
   MobileBrowserTunnelUnsubscribeParams
-} from '../../../../../shared/mobile-browser-tunnel-protocol'
+} from '../../../../../shared/browser/network/tunnels/mobile-browser-tunnel-protocol'
 import { defineMethod, defineStreamingMethod } from '../../core'
 import { BROWSER_NETWORK_TUNNEL_OUTBOUND_MEMORY } from './browser-network-tunnel'
 

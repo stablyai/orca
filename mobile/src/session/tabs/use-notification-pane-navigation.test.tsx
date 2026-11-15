@@ -1,4 +1,4 @@
-import type { StructuredSessionOpenSource } from '../../../../src/shared/open-structured-agent-session'
+import type { StructuredSessionOpenSource } from '../../../../src/shared/agent-session/view/open-structured-agent-session'
 import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { beforeEach, describe, expect, it, vi } from 'vitest'

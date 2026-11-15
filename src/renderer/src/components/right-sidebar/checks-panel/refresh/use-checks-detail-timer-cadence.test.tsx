@@ -26,7 +26,7 @@ vi.mock('@/store/github/repositories/repository-routing', () => ({
 }))
 
 import { useChecksDetailTimer } from './use-checks-detail-timer'
-import { RuntimeRpcCallQueuePool } from '../../../../../../shared/runtime-rpc-call-queue'
+import { RuntimeRpcCallQueuePool } from '../../../../../../shared/remote-runtime/rpc/runtime-rpc-call-queue'
 
 describe('checks detail timer follows PR auto-refresh cadence changes while mounted', () => {
   beforeEach(() => {

@@ -45,6 +45,7 @@ function restartedServe(session: WorkspaceSessionState = savedServeTabs()) {
       getRemoteTabFaviconUrl: () => null,
       getPageNavigationState: () => null,
       getRegisteredTabs: vi.fn(() => registered()),
+      getRegisteredPageWebContentsId: (page: string) => registered().get(page),
       snapshot: vi.fn(async () => ({ snapshot: '' })),
       getActivePageId: vi.fn(() => livePages[0] ?? null),
       setActiveTab: vi.fn(),

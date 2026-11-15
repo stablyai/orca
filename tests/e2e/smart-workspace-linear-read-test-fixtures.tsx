@@ -17,10 +17,10 @@ import { useWorkItemSourceSearch } from '../../src/renderer/src/components/new-w
 import type * as MainLinearClient from '../../src/main/linear/accounts/linear-account-client'
 import type * as RuntimeLinearClient from '@/runtime/linear/runtime-linear-client'
 import type * as RuntimeLinearIssueMutations from '@/runtime/linear/runtime-linear-issue-client'
-import type { RuntimeClientEvent } from '../../src/shared/runtime-client-events'
+import type { RuntimeClientEvent } from '../../src/shared/remote-runtime/session-graph/runtime-client-events'
 import type { LinearIssue } from '../../src/shared/linear/issue-types'
 import type { LinearConnectionStatus } from '../../src/shared/linear/workspace-types'
-import type { Repo } from '../../src/shared/repo-types'
+import type { Repo } from '../../src/shared/repository/repo-types'
 
 // @vitest-environment happy-dom
 

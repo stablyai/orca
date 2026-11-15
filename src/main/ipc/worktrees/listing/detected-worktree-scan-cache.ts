@@ -1,9 +1,9 @@
 import { getRepoExecutionHostId, LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
 import type { GitWorktreeInfo } from '../../../../shared/worktree/types'
 import type { Store } from '../../../persistence/loading-store/store'
-import type { Repo } from '../../../../shared/repo-types'
+import type { Repo } from '../../../../shared/repository/repo-types'
 import { getLocalProjectWorktreeGitOptions } from '../../../workspaces/execution-host/project-runtime-git-options'
-import { isFolderRepo } from '../../../../shared/repo-kind'
+import { isFolderRepo } from '../../../../shared/repository/repo-kind'
 import { withRepositoryGitCause } from '../../../git/repository-git-cause'
 import { listRepoWorktreesForDetectedScan } from '../../../workspaces/catalog/repo-worktrees'
 import {

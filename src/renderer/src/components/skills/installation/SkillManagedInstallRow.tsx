@@ -10,9 +10,9 @@ import {
 } from '@/components/ui/select'
 import { cn } from '@/lib/class-names'
 import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
-import type { SkillBundleInstallResult } from '../../../../../shared/skill-bundle-install-contract'
-import type { SkillInstallResult } from '../../../../../shared/skill-install-contract'
-import type { SkillCloudPackageDetails } from '../../../../../shared/skill-cloud-contract'
+import type { SkillBundleInstallResult } from '../../../../../shared/skills/installation/skill-bundle-install-contract'
+import type { SkillInstallResult } from '../../../../../shared/skills/installation/skill-install-contract'
+import type { SkillCloudPackageDetails } from '../../../../../shared/skills/sharing/skill-cloud-contract'
 import type { SkillManagedInstallGroup } from './skill-managed-install-groups'
 import {
   managedInstalledOnLabel,

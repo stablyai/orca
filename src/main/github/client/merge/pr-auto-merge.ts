@@ -9,7 +9,7 @@ import type { GitHubRepositoryIdentity as GitHubApiRepository } from '../../../.
 import { githubPRStackExecutionScope, type GhExecOptions } from './../github-exec-scope'
 import { detectRepositoryMergeMetadata } from './../detect/repository-merge-metadata'
 import { getRestPRByNumber } from './../lookup/pr-number-lookup'
-import { errorMessage } from '../../../../shared/error-message'
+import { errorMessage } from '../../../../shared/errors/error-message'
 import {
   classifiedFailure,
   codeHostFailure,

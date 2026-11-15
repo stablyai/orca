@@ -1,3 +1,4 @@
+import { acceptedAgentStatuses } from '@/store/slices/agent-status/accepted-agent-statuses'
 import { describe, expect, it } from 'vitest'
 import { useAppStore } from '@/store'
 import type { AppState } from '@/store/types'
@@ -61,7 +62,7 @@ function buildState(tabCount: number, unrelatedCount: number): AppState {
     unifiedTabsByWorktree: { [WS]: unified },
     terminalLayoutsByTabId: {},
     ptyIdsByTabId: {},
-    agentStatusByPaneKey: {}
+    agentStatusByPaneKey: acceptedAgentStatuses()
   }
 }
 

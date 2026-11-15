@@ -9,7 +9,7 @@ import {
   type BrowserNetworkTunnelFrame,
   type BrowserNetworkTunnelOpen
 } from '../../../src/shared/browser/network/tunnels/browser-network-tunnel-protocol'
-import type { MobileBrowserTunnelEvent } from '../../../src/shared/mobile-browser-tunnel-protocol'
+import type { MobileBrowserTunnelEvent } from '../../../src/shared/browser/network/tunnels/mobile-browser-tunnel-protocol'
 import type { BrowserTunnelFrameChannel } from '../transport/rpc/browser-tunnel-frame-channel'
 
 // Matches the host session's window: credit beyond it is a protocol error.

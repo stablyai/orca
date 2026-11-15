@@ -14,7 +14,7 @@ import {
 import { browserSiteDisplayController } from '../browser/site-settings/display/browser-site-display-controller'
 import { ensureActiveOrcaProfile } from '../orca-profiles/profile-index-store'
 import { getCanonicalUserDataPath } from '../persistence/loading-store/user-data-path'
-import { getAppEnvironment } from '../../shared/app-environment'
+import { getAppEnvironment } from '../../shared/app-lifecycle/app-environment'
 import { loadWslMoveFence } from '../persistence/moving-wsl-projects/quiescence/wsl-move-scope-guard'
 import { startWslMoveStartup } from '../persistence/moving-wsl-projects/startup/wsl-move-startup'
 import { startWslHostsPolicyLiveUpdates } from '../wsl/host-lifecycle/wsl-hosts-policy-live-update'
@@ -49,7 +49,6 @@ import {
   initializeBrowserExtensionSupport,
   switchBrowserExtensionSupport
 } from '../browser/extensions/browser-extension-startup'
-import { whenBrowserExtensionSessionsLoaded } from '../browser/extensions/profile-sessions/browser-extension-session-loader'
 import { browserSessionRegistry } from '../browser/sessions/profiles/browser-session-registry'
 import { logStartupMilestone } from './diagnostics/startup-diagnostics'
 import { writeHttp1CompatibilityMarker } from './network-compatibility/http1-compatibility-marker'
@@ -324,6 +323,4 @@ export async function initializeReadyFoundation(): Promise<void> {
   } catch {
     console.warn('[proxy] Failed to apply network proxy settings to browser sessions')
   }
-  // Why bounded: restored tabs should get content scripts, but a slow extension never blocks launch.
-  await whenBrowserExtensionSessionsLoaded(3_000)
 }

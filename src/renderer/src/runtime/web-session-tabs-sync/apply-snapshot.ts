@@ -2,7 +2,7 @@ import { agentSenderPublicationPatch } from '../native-chat/agent-senders/agent-
 import { isWebSessionTabsWorktreeRemovalFrame } from './session-tabs-inventory-absence'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
-import type { RuntimeMobileSessionTabsResult } from '../../../../shared/runtime-types'
+import type { RuntimeMobileSessionTabsResult } from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import { LOCAL_STRUCTURED_SESSION_OWNER } from '../native-chat/local-sessions/local-structured-session-owner'
 import type {
   WebSessionTabsBatchContext,

@@ -7,7 +7,10 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { registerWslHookFsHandlers } from './wsl-hook-fs-bridge'
 import type { MethodHandler, RequestContext } from '../transport/connection/dispatcher-contract'
 import type { RelayDispatcher } from '../transport/publication/dispatcher'
-import { WSL_HOOK_FS_METHODS, type WslFsResult } from '../../shared/wsl-hook-relay-contract'
+import {
+  WSL_HOOK_FS_METHODS,
+  type WslFsResult
+} from '../../shared/agent-hook-listener/transport/wsl-hook-relay-contract'
 
 describe.skipIf(process.platform === 'win32')('registerWslHookFsHandlers (WSL fs bridge)', () => {
   let home: string

@@ -1,6 +1,6 @@
 import type { GitHubWorkItem } from '../../../../../../shared/github/work-items/work-item-types'
 import type { GitHubAssignableUser } from '../../../../../../shared/github/pull-requests/pull-request-types'
-import type { Repo } from '../../../../../../shared/repo-types'
+import type { Repo } from '../../../../../../shared/repository/repo-types'
 import type { TaskSourceContext } from '../../../../../../shared/work-items/task-source-context'
 import React, { useState, useMemo, useRef, useCallback } from 'react'
 import { useAppStore } from '@/store/index'

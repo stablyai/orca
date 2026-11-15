@@ -3,7 +3,7 @@ import { legacyMatchTerminalSidebarWrite } from '../../../../shared/plugin-theme
 import {
   computerAwakeSettingsForMode,
   normalizeComputerAwakeMode
-} from '../../../../shared/computer-awake-mode'
+} from '../../../../shared/app-lifecycle/computer-awake-mode'
 import { normalizeTerminalCursorStyleDefault } from '../../../../shared/terminal/appearance/terminal-cursor-style-settings'
 import { mergeSettings, stripRetiredWebChatSettings } from './web-preference-normalization'
 import {

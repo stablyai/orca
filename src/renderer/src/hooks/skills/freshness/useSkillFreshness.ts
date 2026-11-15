@@ -1,6 +1,6 @@
 import { useEffect, useEffectEvent, useRef, useSyncExternalStore } from 'react'
-import type { BundledSkillPlan } from '../../../../../shared/bundled-skill-plan'
-import { summarizeBundledSkillPlan } from '../../../../../shared/bundled-skill-summary'
+import type { BundledSkillPlan } from '../../../../../shared/skills/bundled/bundled-skill-plan'
+import { summarizeBundledSkillPlan } from '../../../../../shared/skills/bundled/bundled-skill-summary'
 import {
   bundledSkillTargetKey,
   type BundledSkillTarget

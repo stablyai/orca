@@ -8,7 +8,7 @@ import { runProcess } from '@orca/process-host'
 import {
   getOpenCodeCliCapabilities,
   type OpenCodeCliCapabilities
-} from '../../../shared/opencode-cli-version'
+} from '../../../shared/agent-launch/startup/opencode-cli-version'
 
 export type OpenCodeCliVersionProbe = {
   executablePath: string

@@ -4,7 +4,7 @@ import type { AgentSessionPromptResponse } from '../../../../../shared/agent-ses
 import {
   structuredQuestionAnswers,
   structuredQuestionCard
-} from '../../../../../shared/structured-agent-question-card'
+} from '../../../../../shared/native-chat/input/questions/structured-agent-question-card'
 import { NativeChatQuestionCard } from './NativeChatQuestionCard'
 
 export function NativeChatStructuredQuestionCard({

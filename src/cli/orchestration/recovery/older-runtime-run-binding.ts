@@ -1,6 +1,6 @@
 import { RuntimeClientError } from '../../runtime/connection/types'
 import type { RuntimeClient } from '../../runtime/client'
-import type { RuntimeStatus } from '../../../shared/runtime-session-contracts'
+import type { RuntimeStatus } from '../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import {
   ORCHESTRATION_RETAINED_RUN_BINDINGS_RUNTIME_CAPABILITY,
   ORCHESTRATION_WORKER_START_IMPLICIT_RUN_RUNTIME_CAPABILITY

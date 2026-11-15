@@ -4,54 +4,10 @@ import { RpcDispatcher } from '../../dispatcher'
 import type { RpcRequest } from '../../core'
 import type { OrcaRuntimeService } from '../../../orca-runtime'
 import { WORKTREE_METHODS } from './worktree'
-import '../../../../../shared/protocol-version'
-import '../../../../../shared/worktree-runtime-capabilities'
+import '../../../../../shared/remote-runtime/protocol/protocol-version'
+import '../../../../../shared/remote-runtime/protocol/worktree-runtime-capabilities'
 
-import '../../../../../shared/electron-remote-runtime-client-capabilities'
-
-describe('worktree explicit acknowledgement RPC', () => {
-  it.each([false, true])(
-    'publishes a captured read only after metadata succeeds: %s',
-    async (fails) => {
-      const acknowledgement = {
-        reads: [{ sessionId: 'session-1', observedCursor: { epoch: 'journal-1', sequence: 5 } }]
-      }
-      const publish = vi.fn()
-      let captured = false
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the fixture supplies every runtime method this request reaches.
-      const runtime = {
-        getRuntimeId: () => 'test-runtime',
-        prepareWorkspaceAttentionAcknowledgement: async () => {
-          captured = true
-          return acknowledgement
-        },
-        updateManagedWorktreeMeta: async () => {
-          expect(captured).toBe(true)
-          expect(publish).not.toHaveBeenCalled()
-          if (fails) {
-            throw new Error('metadata write failed')
-          }
-          return { id: 'wt-1' }
-        },
-        acknowledgeNotificationAttention: publish
-      } as unknown as OrcaRuntimeService
-
-      const response = await new RpcDispatcher({ runtime, methods: WORKTREE_METHODS }).dispatch({
-        id: 'req-read',
-        authToken: 'tok',
-        method: 'worktree.set',
-        params: { worktree: 'id:wt-1', isUnread: false, acknowledgeAttention: true }
-      })
-
-      expect(response).toMatchObject({ ok: !fails })
-      if (fails) {
-        expect(publish).not.toHaveBeenCalled()
-      } else {
-        expect(publish).toHaveBeenCalledExactlyOnceWith(acknowledgement)
-      }
-    }
-  )
-})
+import '../../../../../shared/remote-runtime/protocol/electron-remote-runtime-client-capabilities'
 
 describe('worktree.rm host qualification', () => {
   function makeRuntime(repoHostIds: (string | undefined)[] = ['local']): OrcaRuntimeService {

@@ -1,5 +1,5 @@
 import type { AgentType } from '../agent-status/contracts/agent-status-types'
-import type { SkillDiscoverySource } from '../skills'
+import type { SkillDiscoverySource } from '../skills/discovery/skills'
 import {
   getAgentSlashCommands,
   type NativeChatCommandReply,

@@ -1397,7 +1397,7 @@
             "33290e88ed": "Profil konnte nicht verbunden werden",
             "9fcb07a796": "Profil verbunden",
             "2f6c78a039": "Profil-Authentifizierung konnte nicht aktualisiert werden",
-            "a37b5e6d37": "Vom Profil abgemeldet",
+            "a37b5e6d37": "Von Orca abgemeldet",
             "83600521e7": "Abmelden fehlgeschlagen",
             "76deec8f58": "Organisation konnte nicht gewechselt werden",
             "7d4bc516ee": "Profil konnte nicht gewechselt werden",
@@ -1981,6 +1981,15 @@
       "workspacePortBrowserOpen": {
         "systemBrowserHint": "{{shortcut}}+Klick zum Öffnen im Systembrowser",
         "tooltip": "{{label}}. {{hint}}"
+      },
+      "worktreePaletteEvidence": {
+        "workspaceComment": "Arbeitsbereich-Kommentar",
+        "createdByAutomation": "Durch Automatisierung erstellt",
+        "linkedTask": "Verknüpfte Aufgabe",
+        "pullRequest": "Pull Request",
+        "mergeRequest": "Merge Request",
+        "linkedIssue": "Verknüpftes Issue",
+        "listeningPort": "Lauschender Port"
       }
     },
     "hooks": {
@@ -3625,6 +3634,8 @@
           "draft": "Entwurf",
           "labelCount_one": "{{count}} Label",
           "labelCount_other": "{{count}} Labels",
+          "authorCount_one": "{{count}} Autor",
+          "authorCount_other": "{{count}} Autoren",
           "allStates": "Alle",
           "filterPullRequests": "Pull Requests filtern",
           "filterIssues": "Issues filtern",
@@ -4042,7 +4053,8 @@
             "remoteTerminalClosed": "Das entfernte Terminal wurde geschlossen.",
             "ptyAllocationLimit": "Das System kann keine weiteren pty-Geräte zuweisen. Einige ungenutzte Terminals in Orca oder einem anderen Programm schließen und anschließend erneut versuchen.",
             "terminalProcessLimit": "Das System kann keinen weiteren Terminal-Prozess starten. Ungenutzte Terminals schließen oder ungenutzte Prozesse beenden und anschließend erneut versuchen.",
-            "hostTerminalCap": "Auf dem Host laufen bereits so viele Terminals, wie Orca zulässt. Ein nicht mehr benötigtes Terminal schließen und anschließend erneut versuchen."
+            "hostTerminalCap": "Auf dem Host laufen bereits so viele Terminals, wie Orca zulässt. Ein nicht mehr benötigtes Terminal schließen und anschließend erneut versuchen.",
+            "copyErrorDetails": "Fehlerdetails kopieren"
           },
           "TerminalProcessExitOverlay": {
             "capacityTitle": "Konsolenlimit von Git Bash erreicht",
@@ -7794,7 +7806,10 @@
           "b4e9d3f2a1c5": "{{value0}} Cookies aus {{value1}} in {{value2}} importiert.",
           "c5a273a809": "Aus {{value0}}",
           "80bffd32bf": "Cookies importieren",
-          "bd7d68f138": "Aus Datei…"
+          "bd7d68f138": "Aus Datei…",
+          "4054c458e1": "Cookies des Standardprofils löschen",
+          "3b662becd5": "Cookies im Standardprofil löschen?",
+          "f159cf5a3e": "Dadurch wirst du möglicherweise auf Websites in diesem Profil abgemeldet."
         },
         "BrowserUseComputerUseNotice": {
           "79209b37b9": "Falls der Cookie-Import nicht geeignet ist, kann Computer Use lokale Apps steuern und gegebenenfalls bestehende angemeldete Browser-Sitzungen nutzen. Den Orca Computer Use-Skill installieren; unter macOS sind zusätzlich Datenschutzberechtigungen erforderlich.",
@@ -11582,6 +11597,7 @@
           "e27c8d45bf": "Die Diagnose ist durch eine Umgebungsvariable deaktiviert."
         },
         "ShortcutCommandBlock": {
+          "retryAfterError": "Ein anderes Tastenkürzel drücken oder mit Esc abbrechen.",
           "eb72c52c28": "Ein Tastenkürzel drücken oder eine Zusatztaste zweimal antippen (z. B. {{value0}}). Esc bricht ab.",
           "70b5d25583": "Tastenkürzel für {{value0}}",
           "287e07ddde": "Geändert",
@@ -13204,7 +13220,8 @@
           "catalog": "Katalog",
           "clear": "Filter zurücksetzen",
           "themes": "Designs",
-          "languages": "Sprachen",
+          "codeLanguages": "Programmiersprachen",
+          "translations": "Übersetzungen",
           "icons": "Symbole",
           "commands": "Befehle & Panels",
           "catalogLabel": "Nach Katalog filtern",
@@ -16550,10 +16567,9 @@
           "725868c75d": "Ordner durchsuchen",
           "5e7f0d8a80": "Ordnerauswahl für entfernte Dateien nicht verfügbar",
           "30099dca46": "Ordner",
-          "2d7d39dc63": ".md",
           "c8ac7868e6": "Dateiname",
           "b6ed807cc6": "Name",
-          "e365f3c638": "Die Markdown-Datei benennen und einen Ordner auswählen.",
+          "description": "Datei benennen und einen Ordner auswählen.",
           "674b046582": "Speichern unter",
           "nameEmpty": "Name darf nicht leer sein",
           "nameHasSeparators": "Name darf keine Pfadtrennzeichen enthalten",
@@ -19974,7 +19990,7 @@
       "queuedMessages": {
         "steer": "Steuern",
         "send": "Senden",
-        "steerHint": "Ohne Unterbrechung des Modells übermitteln",
+        "steerHint": "Jetzt senden, während der Agent weiterarbeitet",
         "sendHint": "Diese Nachricht jetzt senden",
         "delete": "Löschen",
         "moreActions": "Weitere Aktionen",
@@ -20595,7 +20611,8 @@
       "TerminalContextMenu": {
         "copySessionId": "Sitzungs-ID kopieren",
         "copySessionIdSuccess": "Sitzungs-ID kopiert",
-        "copySessionIdError": "Sitzungs-ID konnte nicht kopiert werden"
+        "copySessionIdError": "Sitzungs-ID konnte nicht kopiert werden",
+        "copySessionIdUnavailable": "Keine Sitzungs-ID zum Kopieren"
       },
       "hostFile": {
         "updateHostForOutsideFiles": "Orca auf {{value0}} aktualisieren, um Dateien außerhalb seiner Arbeitsbereiche zu öffnen"
@@ -22788,6 +22805,8 @@
       "tabCloseAll": "Alle Editor-Tabs schließen",
       "tabRename": "Aktiven Tab umbenennen",
       "tabReopenClosed": "Geschlossenen Tab erneut öffnen",
+      "tabMoveLeft": "Aktiven Tab nach links verschieben",
+      "tabMoveRight": "Aktiven Tab nach rechts verschieben",
       "tabNextSameType": "Zum nächsten Tab wechseln (gleicher Typ)",
       "tabPreviousSameType": "Zum vorherigen Tab wechseln (gleicher Typ)",
       "tabNextAllTypes": "Zum nächsten Tab wechseln (alle Typen)",
@@ -22798,6 +22817,7 @@
       "tabOpenQuickCommandsMenu": "Menü für Schnellbefehle ein-/ausblenden",
       "editorFind": "Im Editor suchen",
       "editorReplace": "Im Editor ersetzen",
+      "editorToggleChangesView": "Änderungsansicht ein-/ausschalten",
       "fileExplorerUndo": "Dateivorgang rückgängig machen",
       "fileExplorerRedo": "Dateivorgang wiederholen",
       "fileExplorerCopyPath": "Dateipfad kopieren",
@@ -22815,6 +22835,7 @@
       "chatFind": "Im Chat suchen",
       "terminalToggleNativeChat": "Zwischen Chat-Oberfläche und Terminal wechseln",
       "terminalClosePane": "Aktiven Bereich schließen",
+      "terminalCopySessionId": "Sitzungs-ID kopieren",
       "terminalSplitRight": "Terminal nach rechts teilen",
       "terminalSplitDown": "Terminal nach unten teilen",
       "terminalSwitchInputSource": "Eingabequelle / Sprache wechseln (nativ)",

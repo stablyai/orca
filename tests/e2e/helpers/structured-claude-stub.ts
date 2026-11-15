@@ -15,7 +15,7 @@ import type { Page } from '@stablyai/playwright-test'
 import { test as base, expect } from './orca-app'
 import { waitForActiveWorktree, waitForSessionReady } from './store'
 import { buildFakeAgentCommandOverride } from './fake-agent-command-override'
-import { resolveCliCommand } from '../../../src/shared/node-cli-command-resolution'
+import { resolveCliCommand } from '../../../src/shared/shell/command-resolution/node-cli-command-resolution'
 import { createStructuredAgentSessionId } from '../../../src/shared/agent-session/structured-agent-session-create'
 import {
   createStructuredAgentSessionOperationId,

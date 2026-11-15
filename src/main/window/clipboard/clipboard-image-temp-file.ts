@@ -3,8 +3,8 @@ import path from 'node:path'
 import { randomUUID } from 'node:crypto'
 
 import { SshHostNotServedError } from '../../providers/ssh-host-not-served-error'
-import { getAppEnvironment } from '../../../shared/app-environment'
-import { assertClipboardImageByteLengthWithinLimit } from '../../../shared/clipboard-image'
+import { getAppEnvironment } from '../../../shared/app-lifecycle/app-environment'
+import { assertClipboardImageByteLengthWithinLimit } from '../../../shared/clipboard/clipboard-image'
 import {
   agentSessionPastedImageName,
   sanitizeAgentSessionAttachmentName,

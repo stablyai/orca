@@ -3,7 +3,7 @@ import type {
   GitLabPipelineJob,
   GitLabRetryJobResult
 } from '../../../shared/gitlab-types'
-import type { IssueSourcePreference } from '../../../shared/repo-types'
+import type { IssueSourcePreference } from '../../../shared/repository/repo-types'
 import { acquire, release } from '../requests/glab-request-admission'
 import {
   classifyGlabError,

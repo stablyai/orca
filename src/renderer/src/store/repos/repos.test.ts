@@ -3,7 +3,7 @@ import { getRepoExecutionHostId } from '../../../../shared/execution-host'
 import { createTestStore } from '../testing/app-store-test-fixture'
 import { makeWorktree } from '../slices/worktrees/worktree.test-fixture'
 
-import type { Repo } from '../../../../shared/repo-types'
+import type { Repo } from '../../../../shared/repository/repo-types'
 import '../../../../shared/global-settings-test-fixture'
 import '../../web/preload-api/web-fallback-api'
 import {

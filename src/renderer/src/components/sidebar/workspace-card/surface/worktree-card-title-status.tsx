@@ -4,7 +4,7 @@ import { useShallow } from 'zustand/react/shallow'
 import type { DashboardAgentRow } from '@/components/dashboard/rows/dashboard-agent-row'
 import { useNow } from '@/hooks/use-now'
 import { useAppStore } from '@/store'
-import type { WorktreeStatus } from '../../../../../../shared/worktree-status-rollup'
+import type { WorktreeStatus } from '../../../../../../shared/worktree/row-display/worktree-status-rollup'
 import { lineageLaneStatus } from './worktree-card-lineage-lane-status'
 import {
   composeWorktreeHostIdentity,

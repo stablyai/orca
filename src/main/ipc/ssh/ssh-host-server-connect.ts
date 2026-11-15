@@ -1,4 +1,4 @@
-import { getAppEnvironment } from '../../../shared/app-environment'
+import { getAppEnvironment } from '../../../shared/app-lifecycle/app-environment'
 import type {
   SshConnectionState,
   SshManagedServerLinkedProject,
@@ -6,7 +6,7 @@ import type {
   SshManagedServerServingNote,
   SshManagedServerUpdateNote,
   SshTarget
-} from '../../../shared/ssh-types'
+} from '../../../shared/remote-runtime/ssh/ssh-types'
 import type { HostServerOnConnectResult } from '../../ssh/host-server/ssh-host-server-on-connect'
 import {
   unservedHostServerMessage,

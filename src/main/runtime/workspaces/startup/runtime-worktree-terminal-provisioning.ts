@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import type { CreateWorktreeResult } from '../../../../shared/worktree/create-types'
-import { shouldSeedWorktreePrimaryTerminal } from '../../../../shared/worktree-first-surface'
+import { shouldSeedWorktreePrimaryTerminal } from '../../../../shared/worktree/creation/worktree-first-surface'
 import { buildObservedSetupCommand } from '../../orchestration/workers/launch/setup-completion-signal'
 import { buildSetupRunnerCommand } from '../../../../shared/agent-launch/startup/setup-runner-command'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'

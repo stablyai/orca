@@ -1,5 +1,5 @@
 import { OrcaRuntimeWithCloseMobileRowInMainLayout } from './close-mobile-row-in-main-layout'
-import type { RuntimeMobileSessionTerminalTab } from '../../../../shared/runtime-mobile-session-tab-contracts'
+import type { RuntimeMobileSessionTerminalTab } from '../../../../shared/remote-runtime/session-graph/runtime-mobile-session-tab-contracts'
 import {
   adjudicateAbsentMobileSessionTabClose,
   resolveMobileSessionLifecycleCloseContext,

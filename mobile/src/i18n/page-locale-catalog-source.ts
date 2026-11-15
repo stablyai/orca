@@ -5,7 +5,7 @@ import {
   MOBILE_WEB_BUNDLE_LOCALE_CATALOG_METHOD,
   MobileWebBundleLocaleCatalogResultSchema
 } from '../../../src/shared/mobile-web-bundle/locale-catalog-contract'
-import { withTimeoutResult } from '../../../src/shared/promise-timeout-fallback'
+import { withTimeoutResult } from '../../../src/shared/concurrency/promise-timeout-fallback'
 import {
   decodeDeviceStoreValue,
   encodeDeviceStoreValue

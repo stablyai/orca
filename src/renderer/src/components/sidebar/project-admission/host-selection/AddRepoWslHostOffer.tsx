@@ -5,7 +5,7 @@ import { useTranslate } from '@/i18n/use-translate'
 import { readIpcErrorDetail } from '@/runtime/errors/ipc-error'
 import { addOnThisComputerLabel } from '@/lib/workspace/creation/wsl-host-windows-drive-refusal-toast'
 import { useAppStore } from '@/store/index'
-import type { AddRepoExistingWorkspaceSource } from '../../../../../../shared/telemetry-events'
+import type { AddRepoExistingWorkspaceSource } from '../../../../../../shared/telemetry/schemas/telemetry-property-schemas'
 import { addWslHostDistro } from '../../host-admission/wsl/add-wsl-host-distro'
 import { wslHostAddRefusalMessage } from '../../wsl-host-failure-text'
 import {

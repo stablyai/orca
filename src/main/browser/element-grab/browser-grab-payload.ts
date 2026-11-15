@@ -7,7 +7,7 @@ import {
   GRAB_SAFE_ATTRIBUTE_NAMES,
   GRAB_SECRET_PATTERNS
 } from '../../../shared/browser/element-grab/browser-grab-types'
-import { isSafeDisplayCharacter } from '../../../shared/display-text-safety'
+import { isSafeDisplayCharacter } from '../../../shared/text/display-text-safety'
 import { resolveDocPreviewUrlFilePath } from '../document-preview/doc-preview-grant-registry'
 
 const SAFE_GRAB_URL_PROTOCOLS = new Set(['http:', 'https:', 'file:'])

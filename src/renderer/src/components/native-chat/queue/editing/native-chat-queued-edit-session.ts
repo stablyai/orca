@@ -21,7 +21,7 @@ import { useEffect } from 'react'
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 import { subscribeToNativeChatPendingAttachments } from '../../attachments/chips/native-chat-pending-attachment-cache'
-import type { RuntimeClientTarget } from '../../../../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import type { AgentSessionQueuedMessage } from '../../../../../../shared/agent-session/requests/agent-session-queued-message-wire'
 import type {
   AgentJournalMessageItem,

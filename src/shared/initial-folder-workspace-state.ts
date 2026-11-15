@@ -1,9 +1,9 @@
 import { LOCAL_EXECUTION_HOST_ID } from './execution-host'
 import type { PersistedState } from './persisted-state-types'
-import { projectHostSetupProjectionFromRepos } from './project-host-setup-projection'
-import type { Repo } from './repo-types'
+import { projectHostSetupProjectionFromRepos } from './project/host-setup/project-host-setup-projection'
+import type { Repo } from './repository/repo-types'
 import { getRepoMainWorktreeId } from './worktree/id'
-import { worktreeWorkspaceKey } from './workspace-scope'
+import { worktreeWorkspaceKey } from './workspace/identity/workspace-scope'
 
 export function createInitialFolderWorkspaceState(
   state: PersistedState,

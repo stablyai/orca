@@ -5,9 +5,9 @@ import BrowserSettingsScreen from './browser-settings-screen'
 import { PickerModal } from '../components/sheets/PickerModal'
 import {
   loadBrowserDrawing,
-  loadTerminalLinkOpenMode,
-  saveTerminalLinkOpenMode,
-  type MobileTerminalLinkOpenMode
+  loadLinkOpenMode,
+  saveLinkOpenMode,
+  type MobileLinkOpenMode
 } from '../storage/preferences'
 
 vi.mock(
@@ -37,10 +37,10 @@ vi.mock('lucide-react-native', () => ({
 }))
 vi.mock('../components/sheets/PickerModal', () => ({ PickerModal: () => null }))
 vi.mock('../storage/preferences', () => ({
-  DEFAULT_TERMINAL_LINK_OPEN_MODE: 'orca-browser',
+  DEFAULT_LINK_OPEN_MODE: 'ask',
   DEFAULT_BROWSER_DRAWING: 'host',
-  loadTerminalLinkOpenMode: vi.fn(),
-  saveTerminalLinkOpenMode: vi.fn(),
+  loadLinkOpenMode: vi.fn(),
+  saveLinkOpenMode: vi.fn(),
   loadBrowserDrawing: vi.fn(),
   saveBrowserDrawing: vi.fn()
 }))
@@ -61,14 +61,14 @@ afterEach(() => {
 
 describe('browser settings persistence', () => {
   it('does not replace a new selection with an older pending hydration read', async () => {
-    let resolveLoad = (_value: MobileTerminalLinkOpenMode) => {}
-    vi.mocked(loadTerminalLinkOpenMode).mockImplementation(
+    let resolveLoad = (_value: MobileLinkOpenMode) => {}
+    vi.mocked(loadLinkOpenMode).mockImplementation(
       () =>
         new Promise((resolve) => {
           resolveLoad = resolve
         })
     )
-    vi.mocked(saveTerminalLinkOpenMode).mockResolvedValue()
+    vi.mocked(saveLinkOpenMode).mockResolvedValue()
     await act(async () => {
       renderer = create(createElement(BrowserSettingsScreen))
     })
@@ -82,14 +82,14 @@ describe('browser settings persistence', () => {
   })
 
   it('restores the hydrated destination when the save fails before the first read finishes', async () => {
-    let resolveLoad = (_value: MobileTerminalLinkOpenMode) => {}
-    vi.mocked(loadTerminalLinkOpenMode).mockImplementation(
+    let resolveLoad = (_value: MobileLinkOpenMode) => {}
+    vi.mocked(loadLinkOpenMode).mockImplementation(
       () =>
         new Promise((resolve) => {
           resolveLoad = resolve
         })
     )
-    vi.mocked(saveTerminalLinkOpenMode).mockRejectedValue(new Error('storage unavailable'))
+    vi.mocked(saveLinkOpenMode).mockRejectedValue(new Error('storage unavailable'))
     await act(async () => {
       renderer = create(createElement(BrowserSettingsScreen))
     })

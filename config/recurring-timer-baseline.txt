@@ -90,4 +90,4 @@
 1 src/renderer/src/runtime/hosts/wsl/wsl-refused-read-watch.ts
 1 src/shared/remote-runtime/control/remote-runtime-shared-control-app-heartbeat.ts
 1 src/shared/remote-runtime/remote-runtime-socket-liveness.ts
-1 src/shared/tmux-agent-hook-owner.ts
+1 src/shared/agent-hook-listener/presence/tmux-agent-hook-owner.ts
