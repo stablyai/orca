@@ -44,6 +44,13 @@ import { clearWakeInput } from '@/components/terminal-pane/input/wake-input-buff
 import { runUnarchiveCloudWorkspace, wakeCloudWorkspace } from './cloud-workspace-actions'
 import { keepWorkspaceAwakeDuringSleep } from '@/components/sidebar/workspace-actions/sleep/workspace-sleep-follower'
 
+/** Machine sizes live on the team's cloud environments (MEMGUARD's "Consider a larger machine"). */
+function openMachineSizes(): void {
+  const store = useAppStore.getState()
+  store.openSettingsTarget({ pane: 'cloud-environments', repoId: null })
+  store.openSettingsPage()
+}
+
 /**
  * The Orca Cloud layer over the active workspace, one mount for all of it: the archived view,
  * the "Waking…" overlay, the asleep (cached, read-only) view, and the not-responding / out-of-
@@ -265,6 +272,7 @@ function CloudSurface({ workspaceId }: { workspaceId: string }): React.JSX.Eleme
         notice={{ kind: 'oom', oom: view.oom }}
         restarting={view.pending === 'restart'}
         onRestart={restart}
+        onMachineSize={openMachineSizes}
         onDismiss={() => dismissCloudOom(workspaceId)}
       />
     )

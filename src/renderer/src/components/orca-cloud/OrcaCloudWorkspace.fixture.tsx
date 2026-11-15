@@ -308,6 +308,25 @@ export const noticeOom = defineFixture({
   )
 })
 
+/** MEMGUARD: Orca's memory guard stopped the process; the workspace stayed up, so no Restart. */
+export const noticeOomGuard = defineFixture({
+  width: 420,
+  render: () => (
+    <div className="bg-background p-4">
+      <CloudWorkspaceNotice
+        notice={{
+          kind: 'oom',
+          oom: { workspaceId: 'ws', oomKills: 1, victim: 'tsc', stoppedBy: 'guard', at: Date.now() }
+        }}
+        restarting={false}
+        onRestart={noop}
+        onMachineSize={noop}
+        onDismiss={noop}
+      />
+    </div>
+  )
+})
+
 function IdleToast(): React.JSX.Element {
   useEffect(() => {
     showIdleSleepNotice('ws', 'fix-auth-redirect', 20 * 60_000)

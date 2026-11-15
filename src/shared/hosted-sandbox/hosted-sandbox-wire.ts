@@ -272,6 +272,19 @@ export const HostedWorkspaceStatusSchema = z
     archive: z.object({ archivedAt: Millis, expiresAt: Millis.nullable() }).strict().nullable(),
     // Optional: older control planes omit it; the desktop then uses its 15 min fallback.
     idleSleepMinutes: z.number().int().positive().max(1440).optional(),
+    // Optional: older control planes omit it. MEMGUARD: memory pressure in the VM and the processes
+    // its memory guard stopped this boot (kernel OOM kills stay in `metrics.oomKills`).
+    memory: z
+      .object({
+        pressure: z.enum(['ok', 'high', 'critical']),
+        guardKills: z.number().int().nonnegative(),
+        lastGuardVictim: z.string().max(64).nullable(),
+        lastGuardKillAt: Millis.nullable(),
+        guarded: z.boolean()
+      })
+      .strip()
+      .nullable()
+      .optional(),
     // Optional (feature `wake-hints`): predictive wake's inputs. The last sleep someone chose, from
     // any client (not the idle timer), and sandboxes running against the owner's seat and account.
     lastUserSleepAt: Millis.nullable().optional(),
