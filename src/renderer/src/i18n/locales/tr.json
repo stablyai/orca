@@ -1950,6 +1950,15 @@
       "workspacePortBrowserOpen": {
         "systemBrowserHint": "Sistem tarayıcısında açmak için {{shortcut}}+tıklayın",
         "tooltip": "{{label}}. {{hint}}"
+      },
+      "worktreePaletteEvidence": {
+        "workspaceComment": "Çalışma alanı yorumu",
+        "createdByAutomation": "Otomasyon tarafından oluşturuldu",
+        "linkedTask": "Bağlı görev",
+        "pullRequest": "Pull request",
+        "mergeRequest": "Merge request",
+        "linkedIssue": "Bağlı sorun",
+        "listeningPort": "Dinlenen port"
       }
     },
     "hooks": {

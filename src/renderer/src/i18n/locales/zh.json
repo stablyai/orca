@@ -1669,6 +1669,15 @@
       "workspacePortBrowserOpen": {
         "systemBrowserHint": "按住 {{shortcut}} 并点击以在系统浏览器中打开",
         "tooltip": "{{label}}。{{hint}}"
+      },
+      "worktreePaletteEvidence": {
+        "workspaceComment": "工作区评论",
+        "createdByAutomation": "由自动化创建",
+        "linkedTask": "关联的任务",
+        "pullRequest": "PR",
+        "mergeRequest": "合并请求",
+        "linkedIssue": "关联的议题",
+        "listeningPort": "监听端口"
       }
     },
     "hooks": {
