@@ -39,6 +39,7 @@ import { nativeChatCommandOpensTerminal } from '../../../../../../src/shared/nat
 import { mobileNativeChatSessionOptionSay } from './native-chat-session-option-copy'
 import { useMobileTranslation } from '../../../../i18n/use-mobile-translation'
 import type { Translate } from '../../../../i18n/mobile-i18n'
+import { withAnsweringModelLabel } from './mobile-answering-model-label'
 
 export type MobileNativeChatSessionOptionsController = {
   /** Read by the composer's status row; only a terminal-backed Claude chat has one. */
@@ -261,10 +262,19 @@ export function useMobileNativeChatSessionOptions(
     surface
   ])
 
-  const snapshot = useSyncExternalStore(
+  const liveSnapshot = useSyncExternalStore(
     surface?.subscribe ?? subscribeEmpty,
     surface?.getSnapshot ?? getEmptySnapshot,
     surface?.getSnapshot ?? getEmptySnapshot
+  )
+  const fileModel = args.sessionReport?.model ?? null
+  // The catalog names a family; the session file names the version that actually answered.
+  const snapshot = useMemo(
+    () =>
+      fileModel
+        ? liveSnapshot.map((descriptor) => withAnsweringModelLabel(descriptor, fileModel))
+        : liveSnapshot,
+    [fileModel, liveSnapshot]
   )
 
   const track = useCallback(
