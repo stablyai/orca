@@ -75,7 +75,10 @@ test('captures the worker strip in an isolated hidden native chat', async ({
         : 'Show the synthetic worker roster'
   )
   await chat.send.click()
-  await expect(page.getByText('Stub reply.', { exact: true }).last()).toBeVisible()
+  // Large rosters persist every task_started frame before the stub turn can finish.
+  await expect(page.getByText('Stub reply.', { exact: true }).last()).toBeVisible({
+    timeout: 60_000
+  })
   const strip = page.locator('[data-native-chat-background-tasks="true"]')
   await expect(strip).toBeVisible({ timeout: 30_000 })
   const disclosure = strip.getByRole('button', { expanded: false })
