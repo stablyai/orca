@@ -29269,5 +29269,11 @@
     "tryAgain": "Try again",
     "goneTitle": "Couldn’t find {{name}}",
     "goneDescription": "It may have been deleted."
+  },
+  "terminalPane": {
+    "agentStarting": {
+      "title": "Starting {{agent}}…",
+      "slow": "Taking longer than usual. It opens here as soon as it’s ready."
+    }
   }
 }

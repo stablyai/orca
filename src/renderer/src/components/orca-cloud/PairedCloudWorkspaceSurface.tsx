@@ -134,10 +134,13 @@ export function PairedCloudWorkspaceSurface({
     isWakeActive(view.wake, Math.max(now, view.wake.at))
   )
   // Sleep pressed here: its status read can still say ready, but it is going to sleep.
+  // Before the first status read "sleeping" only means no pane has opened yet (a workspace that was
+  // just created and is about to start its agent): never show it as asleep on that alone.
   const asleep =
     !wakeInFlight &&
     view.state !== 'archived' &&
-    (view.state === 'sleeping' || copySaveEntry?.state === 'saving')
+    ((view.state === 'sleeping' && Boolean(view.entry?.status)) ||
+      copySaveEntry?.state === 'saving')
   const layer: 'waking' | 'asleep' | null = overlay.wake ? 'waking' : asleep ? 'asleep' : null
 
   const sandbox = usePairedSandboxId(workspaceId, layer === 'asleep')

@@ -13,6 +13,7 @@ import { isPaneOwnerRecoveryError } from '../errors/terminal-error-display'
 import { TerminalErrorToast } from '../errors/TerminalErrorToast'
 import { openTerminalBesideTab } from '../context-menu/open-terminal-beside-tab'
 import { AgentLaunchPaneNoticePortal } from '../launch-outcome/AgentLaunchPaneNotice'
+import { AgentStartingPortals } from '../launch-outcome/AgentStartingPortals'
 import { TerminalSessionStateSaveFailureDialog } from '../layout/persistence/TerminalSessionStateSaveFailureDialog'
 import { LinkActionPopover } from '@/components/link-actions/LinkActionPopover'
 import { TerminalAgentSessionForkDialog } from '../session-fork/TerminalAgentSessionForkDialog'
@@ -233,6 +234,7 @@ export function TerminalPaneSurface({
             `terminal-error-${activePane.id}`
           )
         : null}
+      <AgentStartingPortals controller={controller} />
       <TerminalPaneProcessExitPortals controller={controller} />
       <TerminalPaneSshReconnectPortals controller={controller} />
       <DaemonActionDialog api={daemonActions} />
