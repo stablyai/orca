@@ -1459,7 +1459,7 @@ jobs:
         run: |
           set -euo pipefail
           git fetch --no-tags --depth=1 origin "$WORKFLOW_SHA"
-          git checkout "$WORKFLOW_SHA" -- config/scripts/release/publication/assert-github-release-is-draft.mjs config/scripts/release/operations/run-release-mac-build-workflow.mjs
+          git checkout "$WORKFLOW_SHA" -- config/scripts/release/publication/assert-github-release-is-draft.mjs config/scripts/release/operations/run-release-mac-build-workflow.mjs config/scripts/release/publication/write-release-asset-manifest.mjs
 
       - name: Restore composite actions from the workflow ref
         shell: bash
@@ -2376,6 +2376,36 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAG: ${{ needs.cut.outputs.tag }}
 
+      # Why: records exactly what this job uploaded, so publishing can refuse a draft asset someone swapped later.
+      # Windows uploads only on attempt 1, so its manifest is attempt 1's too and is never overwritten.
+      - name: Record the uploaded release assets
+        if: matrix.platform != 'win' || github.run_attempt == 1
+        shell: bash
+        env:
+          TAG: ${{ needs.cut.outputs.tag }}
+          RELEASE_SHA: ${{ needs.cut.outputs.release_sha }}
+          PLATFORM: ${{ matrix.platform }}
+          HAS_MAPS: ${{ steps.bundle-main-sourcemaps.outputs.has_maps }}
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          if [[ "$PLATFORM" == win ]]; then
+            files=(dist/orca-windows-setup.exe dist/orca-windows-setup.exe.blockmap dist/latest.yml)
+          else
+            files=(dist/*.AppImage dist/*.deb dist/*.rpm dist/*-linux*.yml)
+            if [[ "$HAS_MAPS" == true ]]; then files+=("$RUNNER_TEMP/orca-sourcemaps-$TAG.zip"); fi
+          fi
+          node config/scripts/release/publication/write-release-asset-manifest.mjs "$RUNNER_TEMP/release-asset-manifest/manifest.json" "$PLATFORM" "${files[@]}"
+
+      - name: Upload the release asset manifest
+        if: matrix.platform != 'win' || github.run_attempt == 1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: release-asset-manifest-${{ matrix.platform }}
+          path: ${{ runner.temp }}/release-asset-manifest/manifest.json
+          if-no-files-found: error
+          overwrite: ${{ matrix.platform != 'win' }}
+
       - name: Verify release remains draft after artifact upload
         # Re-draft immediately if publish:always exposed a partial release, then fail so latest cannot keep missing Windows assets. Use bash for $TAG expansion.
         shell: bash
@@ -2486,6 +2516,7 @@ jobs:
       - skill-sharing-linux-floor-release-gate
       - skill-sharing-release-gate
       - terminal-rendering-golden
+      - upload-orca-server-artifact
     # Why explicit: a skipped orcad-template (tags that predate it) would skip every job after it.
     if: >-
       !cancelled() &&
@@ -2496,7 +2527,8 @@ jobs:
       needs.verify-mac-build.result == 'success' &&
       needs.skill-sharing-linux-floor-release-gate.result == 'success' &&
       needs.skill-sharing-release-gate.result == 'success' &&
-      needs.terminal-rendering-golden.result == 'success'
+      needs.terminal-rendering-golden.result == 'success' &&
+      (needs.upload-orca-server-artifact.result == 'success' || needs.upload-orca-server-artifact.result == 'skipped')
     # Holds the release App key; runs only workflow-commit scripts with the runner's Node.
     runs-on: ubuntu-24.04
     environment: release
@@ -2603,20 +2635,26 @@ jobs:
             --prerelease="$prerelease" \
             --repo "$GITHUB_REPOSITORY"
 
-  # After publish: the draft's asset checks and undraft never see these, and a failure here only
-  # leaves the server tarballs missing from an already published release.
-  publish-orca-server-artifact:
+  # Before publish, so the provenance check covers these too and published assets never change afterwards.
+  # A packing failure skips this job and the release ships without them, as before; an upload failure holds it.
+  upload-orca-server-artifact:
     needs:
       - cut
-      - publish-release
+      - create-release
       - orca-server-artifact
-    if: ${{ !cancelled() && needs.publish-release.result == 'success' && needs.orca-server-artifact.result == 'success' && needs.orca-server-artifact.outputs.packed == 'true' && needs.cut.outputs.tag != '' }}
+    if: ${{ !cancelled() && needs.create-release.result == 'success' && needs.orca-server-artifact.result == 'success' && needs.orca-server-artifact.outputs.packed == 'true' && needs.cut.outputs.tag != '' }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:
       contents: write
     steps:
-      - uses: actions/download-artifact@v8
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          ref: ${{ github.workflow_sha }}
+          path: workflow
+          sparse-checkout: config/scripts/release/publication
+          persist-credentials: false
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           pattern: orca-server-linux-*
           path: orca-server
@@ -2625,16 +2663,22 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAG: ${{ needs.cut.outputs.tag }}
+          RELEASE_SHA: ${{ needs.cut.outputs.release_sha }}
         working-directory: orca-server
         run: |
           set -euo pipefail
           cat orca-server-linux-x64.tar.gz.sha256 orca-server-linux-arm64.tar.gz.sha256 > orca-server-sha256sums.txt
           sha256sum -c orca-server-sha256sums.txt
-          gh release upload "$TAG" \
-            orca-server-linux-x64.tar.gz \
-            orca-server-linux-arm64.tar.gz \
-            orca-server-sha256sums.txt \
-            --clobber --repo "$GITHUB_REPOSITORY"
+          files=(orca-server-linux-x64.tar.gz orca-server-linux-arm64.tar.gz orca-server-sha256sums.txt)
+          gh release upload "$TAG" "${files[@]}" --clobber --repo "$GITHUB_REPOSITORY"
+          node "$GITHUB_WORKSPACE/workflow/config/scripts/release/publication/write-release-asset-manifest.mjs" \
+            "$RUNNER_TEMP/release-asset-manifest/manifest.json" orca-server "${files[@]}"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: release-asset-manifest-orca-server
+          path: ${{ runner.temp }}/release-asset-manifest/manifest.json
+          if-no-files-found: error
+          overwrite: true
 
   post-release-e2e:
     needs:

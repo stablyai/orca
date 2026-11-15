@@ -110,7 +110,7 @@ jobs:
         run: |
           set -euo pipefail
           git fetch --no-tags --depth=1 origin "$WORKFLOW_SHA"
-          git checkout "$WORKFLOW_SHA" -- config/scripts/release/publication/assert-github-release-is-draft.mjs
+          git checkout "$WORKFLOW_SHA" -- config/scripts/release/publication/assert-github-release-is-draft.mjs config/scripts/release/publication/write-release-asset-manifest.mjs
 
       - name: Setup pnpm
         uses: pnpm/setup@v2
@@ -287,6 +287,28 @@ jobs:
           if [ "$PUBLISH" = true ]; then
             gh release upload "$TAG" dist/*-mac.yml --repo "$GITHUB_REPOSITORY" --clobber
           fi
+
+      # Why: records exactly what this run uploaded (after the gate rewrite), so publishing can refuse a swapped asset.
+      - name: Record the uploaded release assets
+        if: ${{ !inputs.qualification_only }}
+        shell: bash
+        env:
+          TAG: ${{ inputs.tag }}
+          RELEASE_SHA: ${{ inputs.release_sha }}
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          node config/scripts/release/publication/write-release-asset-manifest.mjs "$RUNNER_TEMP/release-asset-manifest/manifest.json" mac \
+            dist/*.dmg dist/*.dmg.blockmap dist/*.zip dist/*.zip.blockmap dist/*-mac.yml
+
+      - name: Upload the release asset manifest
+        if: ${{ !inputs.qualification_only }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: release-asset-manifest-mac
+          path: ${{ runner.temp }}/release-asset-manifest/manifest.json
+          if-no-files-found: error
+          overwrite: true
 
       - name: Verify release remains draft after artifact upload
         if: ${{ !inputs.qualification_only }}
