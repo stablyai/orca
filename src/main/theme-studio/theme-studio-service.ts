@@ -23,6 +23,10 @@ import {
 } from './theme-studio-core'
 import { adjustDraft, applyDraft, checkDraft, editDraft, stepDraft } from './theme-studio-changes'
 import { reconcileSavedThemes, runSavedThemeAction } from './theme-studio-saved-actions'
+import {
+  THEME_STUDIO_ERROR_CODES,
+  ThemeStudioError
+} from '../../shared/theme-studio/theme-studio-errors'
 import type {
   ThemeStudioSavedAction,
   ThemeStudioSavedActionResult
@@ -174,6 +178,26 @@ export function createThemeStudioService(deps: ThemeStudioServiceDeps) {
       exclusive(async () => {
         await reconcileSavedThemes(core)
         return deps.savedThemes.list()
+      }),
+    /** What `orca theme publish` needs: the saved theme as data, and images drawn from it. */
+    publishKit: (pluginKey: string) =>
+      exclusive(async () => {
+        await reconcileSavedThemes(core)
+        const entry = deps.savedThemes.find(pluginKey)
+        if (!entry) {
+          throw new ThemeStudioError(
+            THEME_STUDIO_ERROR_CODES.invalid,
+            `${pluginKey} is not a theme saved with \`orca theme\`.`,
+            { nextSteps: ['Save the draft with `orca theme apply` first, then publish it.'] }
+          )
+        }
+        return {
+          pluginKey: entry.pluginKey,
+          id: entry.id,
+          name: entry.name,
+          draft: entry.draft,
+          images: await deps.renderImages(entry.draft)
+        }
       }),
     /** Plugins changed elsewhere (Settings → Plugins); forget saved themes that are gone. */
     reconcileSaved: () => exclusive(() => reconcileSavedThemes(core)),

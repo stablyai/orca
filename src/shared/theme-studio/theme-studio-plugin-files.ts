@@ -19,11 +19,19 @@ export function themeStudioPluginId(name: string): string {
   return id.startsWith(RESERVED_ID_PREFIX) ? `my-${id}` : id
 }
 
+/** What a published theme adds to its manifest: a version and the plugin page's images. */
+export type ThemeStudioListing = {
+  version?: string
+  cover?: { path: string; alt: string }
+  screenshots?: { path: string; caption?: string; theme?: ThemeStudioMode }[]
+}
+
 /** The files of a content-only theme plugin holding the draft: app themes for each mode the
  *  draft has, and terminal palettes where one is complete. Paths always use `/`. */
 export function themeStudioPluginFiles(
   draft: ThemeStudioDraft,
-  id = themeStudioPluginId(draft.name)
+  id = themeStudioPluginId(draft.name),
+  listing: ThemeStudioListing = {}
 ): { id: string; files: Record<string, string> } {
   const modes = THEME_STUDIO_MODES.filter((mode) => draft[mode] !== null)
   const terminalModes = modes.filter((mode) => {
@@ -54,6 +62,9 @@ export function themeStudioPluginFiles(
       input,
       modes.length > 1 ? 'A light and dark app theme.' : `A ${modes[0] ?? 'dark'} app theme.`,
       {
+        ...(listing.version ? { version: listing.version } : {}),
+        ...(listing.cover ? { cover: listing.cover } : {}),
+        ...(listing.screenshots?.length ? { screenshots: listing.screenshots } : {}),
         execution: 'data',
         contributes: {
           themes: modes.map((mode) => ({

@@ -82,3 +82,5 @@ export const ThemeStudioCallerParams = z.object(callerFields)
 export const ThemeStudioShotParams = z.object({ mode: modeSchema.optional() })
 
 export const ThemeStudioApplyParams = z.object({ name: nameSchema.optional(), ...callerFields })
+
+export const ThemeStudioPublishKitParams = z.object({ pluginKey: z.string().min(1).max(256) })

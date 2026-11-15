@@ -23,6 +23,7 @@ import {
 } from './theme-studio-draft-sources'
 import { fixPatch, paintOutcome, type ThemeStudioPaint } from './theme-studio-fixes'
 import type { ThemeStudioSavedThemes } from './theme-studio-saved'
+import type { ThemeSpecimenImages } from './theme-studio-specimen-render'
 
 export const REPORT_TIMEOUT_MS = 2_500
 const MAX_RESTORE_POINTS = 8
@@ -66,6 +67,8 @@ export type ThemeStudioServiceDeps = {
   savedThemes: ThemeStudioSavedThemes
   /** Removes a plugin Orca wrote; its theme choices go back to the built-in ones. */
   uninstall: (pluginKey: string) => Promise<boolean>
+  /** Draws a theme's cover and screenshots from its colors alone, for publishing. */
+  renderImages: (draft: ThemeStudioDraft) => Promise<ThemeSpecimenImages>
   /** Asks the person where to export a theme; null when they cancel. */
   chooseExportFolder: (suggestedName: string) => Promise<string | null>
   /** The theme slots in settings, read and written by main directly. */

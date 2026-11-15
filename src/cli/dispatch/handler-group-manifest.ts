@@ -273,7 +273,8 @@ export const HANDLER_GROUPS: readonly HandlerGroup[] = [
       'theme shot',
       'theme apply',
       'theme discard',
-      'theme export'
+      'theme export',
+      'theme publish'
     ],
     load: async () => (await import('../theme/theme-commands.js')).THEME_HANDLERS
   },
