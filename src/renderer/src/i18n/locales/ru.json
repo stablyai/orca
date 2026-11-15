@@ -21274,7 +21274,8 @@
       "TerminalContextMenu": {
         "copySessionId": "Копировать ID сессии",
         "copySessionIdSuccess": "ID сессии скопирован",
-        "copySessionIdError": "Не удалось скопировать ID сессии"
+        "copySessionIdError": "Не удалось скопировать ID сессии",
+        "copySessionIdUnavailable": "Нет ID сессии для копирования"
       },
       "hostFile": {
         "updateHostForOutsideFiles": "Обновите Orca на {{value0}}, чтобы открывать файлы вне рабочих пространств"
@@ -23369,6 +23370,7 @@
       "tabMoveRight": "Переместить активную вкладку вправо",
       "terminalClear": "Очистить активную панель",
       "terminalClosePane": "Закрыть активную панель",
+      "terminalCopySessionId": "Копировать ID сессии",
       "terminalCopySelection": "Скопировать выделенный текст терминала",
       "terminalEqualizePaneSizes": "Выровнять размеры панелей",
       "terminalExpandPane": "Развернуть / свернуть панель",

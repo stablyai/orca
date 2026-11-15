@@ -20600,7 +20600,8 @@
       "TerminalContextMenu": {
         "copySessionId": "Sitzungs-ID kopieren",
         "copySessionIdSuccess": "Sitzungs-ID kopiert",
-        "copySessionIdError": "Sitzungs-ID konnte nicht kopiert werden"
+        "copySessionIdError": "Sitzungs-ID konnte nicht kopiert werden",
+        "copySessionIdUnavailable": "Keine Sitzungs-ID zum Kopieren"
       },
       "hostFile": {
         "updateHostForOutsideFiles": "Orca auf {{value0}} aktualisieren, um Dateien außerhalb seiner Arbeitsbereiche zu öffnen"
@@ -22823,6 +22824,7 @@
       "chatFind": "Im Chat suchen",
       "terminalToggleNativeChat": "Zwischen Chat-Oberfläche und Terminal wechseln",
       "terminalClosePane": "Aktiven Bereich schließen",
+      "terminalCopySessionId": "Sitzungs-ID kopieren",
       "terminalSplitRight": "Terminal nach rechts teilen",
       "terminalSplitDown": "Terminal nach unten teilen",
       "terminalSwitchInputSource": "Eingabequelle / Sprache wechseln (nativ)",

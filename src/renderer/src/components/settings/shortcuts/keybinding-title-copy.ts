@@ -148,6 +148,8 @@ const STATIC_TITLE_COPY = {
   'sidebar.childWorkspaces.toggle': () =>
     translate('keybindings.title.8788e3be3a', 'Toggle child workspaces'),
   'terminal.clearPaneTitle': () => translate('keybindings.title.d286d1ab85', 'Clear pane title'),
+  'terminal.copySessionId': () =>
+    translate('keybindings.title.terminalCopySessionId', 'Copy Session ID'),
   'terminal.closePane': () => translate('keybindings.title.terminalClosePane', 'Close active pane'),
   'terminal.splitRight': () =>
     translate('keybindings.title.terminalSplitRight', 'Split terminal right'),
