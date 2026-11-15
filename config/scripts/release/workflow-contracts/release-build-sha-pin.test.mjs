@@ -28,7 +28,8 @@ describe('release builds check out the verified commit', () => {
         expect(next, name).toContain('Verify checkout is the release commit')
       }
     }
-    expect(checkouts).toBe(6)
+    // Draft creation reads the commit through the API, so it no longer checks out the source.
+    expect(checkouts).toBe(5)
   })
 
   it('pins the macOS build to the dispatched release SHA and keeps inputs out of shell', async () => {
@@ -48,7 +49,7 @@ describe('release builds check out the verified commit', () => {
     }
   })
 
-  const verifyRun = releaseCut.jobs['create-release'].steps.find(
+  const verifyRun = releaseCut.jobs['terminal-rendering-golden'].steps.find(
     (step) => step.name === 'Verify checkout is the release commit'
   ).run
   it.skipIf(process.platform === 'win32').each([

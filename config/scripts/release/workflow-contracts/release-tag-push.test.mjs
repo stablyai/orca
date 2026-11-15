@@ -29,47 +29,86 @@ describe('release-cut job split', () => {
   const cut = workflow.jobs.cut
   const prepare = workflow.jobs.prepare
 
-  it('keeps the App key and token out of every job but the privileged cut', () => {
+  // Each privileged job, the step its App token serves, and that step's required predecessor (if any).
+  const PRIVILEGED = {
+    'recover-drafts': ['publish_drafts'],
+    cut: ['Push main and the release tag'],
+    'create-release': ['draft'],
+    'publish-release': ['Verify release tag still matches the drafted source', 'Publish release']
+  }
+
+  it('keeps the App key out of every job but the privileged ones', () => {
     for (const [name, job] of Object.entries(workflow.jobs)) {
-      const text = JSON.stringify(job)
-      const privileged = name === 'cut'
+      const privileged = name in PRIVILEGED
       expect(job.environment === 'release', name).toBe(privileged)
-      expect(text.includes('RELEASE_APP_PRIVATE_KEY'), name).toBe(privileged)
+      expect(JSON.stringify(job).includes('RELEASE_APP_PRIVATE_KEY'), name).toBe(privileged)
     }
-    expect(prepare.needs).toBeUndefined()
+    expect(prepare.needs).toBe('recover-drafts')
+    expect(prepare.permissions).toEqual({ contents: 'read' })
     expect(cut.needs).toBe('prepare')
   })
 
-  it('runs only pinned actions and workflow-commit code in the privileged job, with hooks off', () => {
-    expect(cut.env).toEqual({
-      GIT_CONFIG_COUNT: '1',
-      GIT_CONFIG_KEY_0: 'core.hooksPath',
-      GIT_CONFIG_VALUE_0: '/dev/null'
-    })
-    const [workflowCheckout, sourceCheckout] = cut.steps
-    expect(workflowCheckout.with).toEqual({
-      ref: '${{ github.workflow_sha }}',
-      path: 'workflow',
-      'persist-credentials': false
-    })
-    expect(sourceCheckout.with.path).toBe('candidate')
-    expect(sourceCheckout.with['persist-credentials']).toBe(false)
-    for (const step of cut.steps) {
-      if (step.uses) {
-        expect(step.uses, step.name).toMatch(PINNED)
-        expect(workflowText).toMatch(new RegExp(`uses: ${step.uses} # v\\d+\\.\\d+\\.\\d+\\n`))
-        expect(step.uses, step.name).not.toMatch(/setup-node|install/)
+  it.each(Object.entries(PRIVILEGED))(
+    '%s runs only pinned actions and workflow-commit code, with hooks off',
+    (name, users) => {
+      const job = workflow.jobs[name]
+      expect(job.env).toEqual({
+        GIT_CONFIG_COUNT: '1',
+        GIT_CONFIG_KEY_0: 'core.hooksPath',
+        GIT_CONFIG_VALUE_0: '/dev/null'
+      })
+      const checkouts = job.steps.filter((step) => step.uses?.startsWith('actions/checkout'))
+      expect(checkouts[0].with.ref).toBe('${{ github.workflow_sha }}')
+      for (const checkout of checkouts) {
+        expect(checkout.with['persist-credentials']).toBe(false)
+        // Any other checkout is the release source, read as data from its own directory.
+        expect(checkout === checkouts[0] || checkout.with.path === 'candidate').toBe(true)
       }
-      const run = (step.run ?? '')
-        .split('\n')
-        .filter((line) => !line.trim().startsWith('#'))
-        .join('\n')
-      expect(run, step.name).not.toMatch(/\b(npm|npx|pnpm|yarn)\b/)
-      // Inline `node -e` is workflow code; any script must come from the workflow checkout.
-      for (const [, script] of run.matchAll(/node (?!-e )"?([^"\s]+)/g)) {
-        expect(script, step.name).toMatch(/^\$RELEASE_SCRIPTS\//)
+      const rootIsWorkflow = checkouts[0].with.path === undefined
+      for (const step of job.steps) {
+        if (step.uses) {
+          expect(step.uses, step.name).toMatch(PINNED)
+          expect(workflowText).toMatch(new RegExp(`uses: ${step.uses} # v\\d+\\.\\d+\\.\\d+\\n`))
+          expect(step.uses, step.name).not.toMatch(/setup-node|install/)
+        }
+        const run = (step.run ?? '')
+          .split('\n')
+          .filter((line) => !line.trim().startsWith('#'))
+          .join('\n')
+        expect(run, step.name).not.toMatch(/\b(npm|npx|pnpm|yarn)\b/)
+        // Inline `node -e` is workflow code; any script must come from the workflow checkout.
+        for (const [, script] of run.matchAll(/node (?!-e )"?([^"\s]+)/g)) {
+          const fromWorkflow =
+            /^\$(RELEASE_SCRIPTS|GITHUB_WORKSPACE\/workflow)\//.test(script) ||
+            (rootIsWorkflow && script.startsWith('config/scripts/'))
+          expect(fromWorkflow, `${step.name}: ${script}`).toBe(true)
+        }
       }
+      // The token is minted right before the steps that use it, and only they see it.
+      const mintIndex = job.steps.findIndex((step) => step.id === 'release-app-token')
+      const mint = job.steps[mintIndex]
+      expect(mint.with).toEqual({
+        'client-id': '${{ vars.RELEASE_APP_CLIENT_ID }}',
+        'private-key': '${{ secrets.RELEASE_APP_PRIVATE_KEY }}',
+        owner: '${{ github.repository_owner }}',
+        repositories: '${{ github.event.repository.name }}',
+        'permission-contents': 'write',
+        'permission-workflows': 'write'
+      })
+      const after = job.steps.slice(mintIndex + 1).map((step) => step.id ?? step.name)
+      expect(after).toEqual(users)
+      const tokenUsers = job.steps.filter((step) =>
+        JSON.stringify(step.env ?? {}).includes('steps.release-app-token.outputs.token')
+      )
+      expect(tokenUsers.length).toBe(1)
+      expect(
+        job.steps[mintIndex - 1].name === 'Require release App credentials' ||
+          name === 'publish-release'
+      ).toBe(true)
     }
+  )
+
+  it('runs the version script from the workflow checkout in the privileged cut', () => {
     expect(cut.steps.find((step) => step.id === 'version').env.RELEASE_SCRIPTS).toBe(
       '${{ github.workspace }}/workflow'
     )
