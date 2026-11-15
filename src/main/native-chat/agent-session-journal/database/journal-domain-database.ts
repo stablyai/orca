@@ -16,7 +16,10 @@ import {
 } from './journal-domain-migrations'
 import { importJournalDomainProfile } from './journal-domain-profile-import'
 import { openJournalLegacySource } from './journal-legacy-source'
-import { reconcileJournalLegacySource } from './journal-legacy-reconcile'
+import {
+  JOURNAL_LEGACY_REVISIONS_KEPT,
+  reconcileJournalLegacySource
+} from './journal-legacy-reconcile'
 import {
   captureJournalLegacySourceReceipt,
   JOURNAL_LEGACY_SOURCE_RECEIPT
@@ -54,10 +57,11 @@ export async function initializeJournalDomainDatabase(stateDirectory: string): P
           source.close()
         }
       }
-      db.prepare('INSERT OR REPLACE INTO agent_session_store_meta (key, value) VALUES (?, ?)').run(
-        JOURNAL_LEGACY_SOURCE_RECEIPT,
-        JSON.stringify(sourceReceipt)
+      const meta = db.prepare(
+        'INSERT OR REPLACE INTO agent_session_store_meta (key, value) VALUES (?, ?)'
       )
+      meta.run(JOURNAL_LEGACY_SOURCE_RECEIPT, JSON.stringify(sourceReceipt))
+      meta.run(JOURNAL_LEGACY_REVISIONS_KEPT, '1')
       const checkpoint = db.prepare('PRAGMA wal_checkpoint(TRUNCATE)').get()
       if (checkpoint?.busy !== 0 || checkpoint.log !== checkpoint.checkpointed) {
         throw new Error('chat initialization could not fold its private WAL')

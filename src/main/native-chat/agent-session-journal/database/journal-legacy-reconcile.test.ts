@@ -7,6 +7,7 @@ import type Database from '../../../sqlite/sync-database'
 import { openJournalDatabase, runJournalTransaction } from './journal-database'
 import {
   initializeJournalDomainDatabase,
+  journalDomainDatabasePath,
   openJournalDomainDatabase
 } from './journal-domain-database'
 import { journalDatabasePath } from './journal-host-database'
@@ -90,6 +91,9 @@ it('keeps every chat and turn an older Orca saved after a downgrade, without cha
   cleanup.push(() => original.close())
   olderOrcaChat(original, 'converted', rows)
   olderOrcaChat(original, 'unopened', rows)
+  original
+    .prepare('INSERT INTO agent_session_records VALUES(?,?)')
+    .run('empty', JSON.stringify({ sessionId: 'empty', lease: { sessionId: 'empty' } }))
 
   // Upgrade: one chat converts, then the user goes back to the older Orca.
   const first = await upgrade(root)
@@ -98,6 +102,7 @@ it('keeps every chat and turn an older Orca saved after a downgrade, without cha
   // Deleted here before the downgrade, then continued in the older Orca.
   first.db.prepare("DELETE FROM agent_session_records WHERE session_id='unopened'").run()
   first.db.prepare("DELETE FROM agent_session_tabs WHERE session_id='unopened'").run()
+  first.db.prepare("DELETE FROM agent_session_records WHERE session_id='empty'").run()
   await first.close()
 
   runJournalTransaction(original, () => {
@@ -113,7 +118,17 @@ it('keeps every chat and turn an older Orca saved after a downgrade, without cha
     .update(readFileSync(journalDatabasePath(root)))
     .digest('hex')
 
-  // Upgrade again.
+  // Upgrade again; one chat fails to join the first time and joins on the next launch.
+  const blocked = openJournalDomainDatabase(journalDomainDatabasePath(root)).db
+  blocked.exec(`CREATE TRIGGER blocked BEFORE INSERT ON agent_session_records
+    WHEN NEW.session_id='started-older' BEGIN SELECT RAISE(ABORT,'disk full'); END`)
+  blocked.close()
+  const failing = openJournalDomainDatabase(await initializeJournalDomainDatabase(root)).db
+  expect(
+    failing.prepare("SELECT 1 FROM agent_session_records WHERE session_id='started-older'").get()
+  ).toBeUndefined()
+  failing.exec('DROP TRIGGER blocked')
+  failing.close()
   const second = await upgrade(root)
   cleanup.push(second.close)
   const { db } = second
@@ -156,6 +171,9 @@ it('keeps every chat and turn an older Orca saved after a downgrade, without cha
       .digest('hex')
   ).toBe(originalBytes)
 
+  expect(
+    db.prepare("SELECT 1 FROM agent_session_records WHERE session_id='empty'").get()
+  ).toBeUndefined()
   // A later launch with nothing new written keeps exactly one copy.
   await second.close()
   cleanup.pop()
