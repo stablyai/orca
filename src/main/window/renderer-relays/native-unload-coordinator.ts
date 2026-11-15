@@ -77,33 +77,50 @@ export function installNativeUnloadCoordinator(
       const requestId = randomUUID()
       lastRequest = { frame, requestId }
       pending = new Promise<PrepareOutcome>((resolve) => {
+        const isOwnReply = (event: Electron.IpcMainEvent, replyId: unknown): boolean =>
+          event.sender === contents &&
+          event.senderFrame === frame &&
+          contents.mainFrame === frame &&
+          replyId === requestId
+        const onReceived = (event: Electron.IpcMainEvent, replyId: unknown): void => {
+          if (isOwnReply(event, replyId)) {
+            clearTimeout(receiptDeadline)
+          }
+        }
         const onReply = (
           event: Electron.IpcMainEvent,
           reply: { requestId?: unknown; ok?: unknown }
         ): void => {
-          if (
-            event.sender === contents &&
-            event.senderFrame === frame &&
-            contents.mainFrame === frame &&
-            reply?.requestId === requestId
-          ) {
+          if (isOwnReply(event, reply?.requestId)) {
             settle(reply.ok === true ? 'saved' : 'failed')
           }
         }
-        const deadline = setTimeout(() => {
-          console.warn('[window] Renderer did not finish its reload checkpoint; reloading anyway')
+        const giveUp = (reason: string): void => {
+          console.warn(`[window] Renderer ${reason}; reloading anyway`)
           // A slow renderer gets its ordinary unload guards back before the reload's beforeunload.
           cancelPreparedUnload(frame, requestId)
           settle('unreachable')
-        }, NATIVE_UNLOAD_PREPARE_DEADLINE_MS)
+        }
+        // A frozen renderer never acknowledges, so Force Reload stays its escape within quit's frozen-renderer bound.
+        const receiptDeadline = setTimeout(
+          () => giveUp('did not acknowledge its reload checkpoint'),
+          QUIT_RENDERER_ACK_TIMEOUT_MS
+        )
+        const deadline = setTimeout(
+          () => giveUp('did not finish its reload checkpoint'),
+          NATIVE_UNLOAD_PREPARE_DEADLINE_MS
+        )
         const settle = (outcome: PrepareOutcome): void => {
+          clearTimeout(receiptDeadline)
           clearTimeout(deadline)
+          ipcMain.removeListener('app:native-unload-received', onReceived)
           ipcMain.removeListener('app:native-unload-prepared', onReply)
           settlePending = undefined
           pending = undefined
           resolve(outcome)
         }
         settlePending = settle
+        ipcMain.on('app:native-unload-received', onReceived)
         ipcMain.on('app:native-unload-prepared', onReply)
       })
       const prepared = pending

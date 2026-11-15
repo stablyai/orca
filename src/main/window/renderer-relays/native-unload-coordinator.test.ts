@@ -82,6 +82,8 @@ describe('native reload checkpoint', () => {
     vi.useFakeTimers()
     const { contents, frame, reload } = fixture()
     const result = reload(true)
+    const requestId = frame.send.mock.calls[0]?.[1]
+    ipcMain.emit('app:native-unload-received', { sender: contents, senderFrame: frame }, requestId)
     await vi.advanceTimersByTimeAsync(29_999)
     expect(contents.reloadIgnoringCache).not.toHaveBeenCalled()
     await vi.advanceTimersByTimeAsync(1)

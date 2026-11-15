@@ -77,6 +77,8 @@ ipcRenderer.on('app:prepare-native-unload', (_event, requestId: unknown) => {
   if (typeof requestId !== 'string') {
     return
   }
+  // Acknowledge before preparing so main can tell a frozen renderer from a slow save.
+  ipcRenderer.send('app:native-unload-received', requestId)
   nativeUnloadRequests.add(requestId)
   void prepareAndInvokeAppRestart(
     window,

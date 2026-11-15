@@ -166,6 +166,10 @@ export function installMainWindowCloseLifecycle(args: {
       return
     }
     setWindowCloseInFlight(rendererWebContents, null)
+    // A page that never received an ordinary close (e.g. not yet subscribed after reload) was not closing.
+    if (lastAcknowledgedRequestId !== closeRequestSequence && quitRendererAckRequestId === null) {
+      return
+    }
     clearQuitRendererAckTimer()
     console.warn('[window] Renderer exited during a close request; destroying window')
     state.freezeBoundsOnQuit()
