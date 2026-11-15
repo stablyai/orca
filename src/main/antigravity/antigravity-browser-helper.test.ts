@@ -50,3 +50,24 @@ assert webbrowser.open(sys.argv[1])
     }
   }
 )
+
+it.runIf(process.platform === 'win32')(
+  'runs the Windows cscript browser helper and captures the auth URL',
+  async () => {
+    const helper = await import('./antigravity-browser-helper')
+    expect(await helper.antigravityBrowserHelperWorks()).toBe(true)
+    const link = "https://example.invalid/auth?state=colon:space%20quote'&code=fixture"
+    const [program = '', ...args] = helper.antigravityBrowserArgv(link)
+    const result = await runProcess({
+      program,
+      args,
+      timeoutMs: 5_000,
+      maxOutputBytes: 4_096
+    })
+    expect(result).toMatchObject({
+      code: 0,
+      stdout: '',
+      stderr: `${helper.ANTIGRAVITY_BROWSER_MARKER}${JSON.stringify(link)}\n`
+    })
+  }
+)

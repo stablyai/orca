@@ -111,7 +111,10 @@ const ANTIGRAVITY_HOST_LAUNCH_SPEC: AcpLaunchSpec = {
     }
   },
   minimumVersions: [ANTIGRAVITY_HOST_ACP_MINIMUM_VERSION],
-  installDirectories: ({ homePath }) => [join(homePath, '.local', 'bin')],
+  installDirectories: ({ homePath, env }) => [
+    join(homePath, '.local', 'bin'),
+    join(env.LOCALAPPDATA ?? join(homePath, 'AppData', 'Local'), 'agy', 'bin')
+  ],
   managedRuntime: undefined,
   resolveSessionMeta: undefined,
   // agy has no full-access mode, so its launch flag grants it; plan approvals still reach the chat.
