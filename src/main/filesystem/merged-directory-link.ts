@@ -11,7 +11,7 @@ import {
   unlink
 } from 'node:fs/promises'
 import type { BigIntStats } from 'node:fs'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
 import { isDefinitiveAbsence } from '../../shared/definitive-filesystem-absence'
 import { renameFileWithWindowsRetryAsync } from '../../shared/windows-retry-file-operations'
 
@@ -46,9 +46,16 @@ export type MergedDirectoryLinkArgs = {
   beforeShare?: (path: string) => void | Promise<void>
   /** Empty files that collide with a shared name are dropped (lock files hold no data). */
   dropEmptyConflicts?: boolean
+  /** Where a file joining `destination` at `to` waits instead; null shares it. */
+  setAsidePath?: (from: string, to: string) => Promise<string | null>
+  /** False merges a folder file by file, so `setAsidePath` sees each one. */
+  movesWhole?: (folder: string) => Promise<boolean>
 }
 
-type MoveOptions = Pick<MergedDirectoryLinkArgs, 'beforeShare' | 'dropEmptyConflicts'>
+type MoveOptions = Pick<
+  MergedDirectoryLinkArgs,
+  'beforeShare' | 'dropEmptyConflicts' | 'setAsidePath' | 'movesWhole'
+>
 
 export async function lstatIfPresent(file: string): Promise<BigIntStats | undefined> {
   try {
@@ -62,6 +69,19 @@ export async function lstatIfPresent(file: string): Promise<BigIntStats | undefi
 }
 
 type MoveResult = { retained: number; failed: unknown[] }
+
+// Never replaces a file already set aside, so a name kept there keeps waiting in the pending folder.
+async function setAside(from: string, aside: string, item: BigIntStats): Promise<boolean> {
+  await mkdir(dirname(aside), { recursive: true })
+  try {
+    return await moveEntry(from, aside, item)
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException | null)?.code === 'EEXIST') {
+      return false
+    }
+    throw error
+  }
+}
 
 const HARD_LINK_UNSUPPORTED = new Set(['EPERM', 'ENOTSUP', 'EOPNOTSUPP', 'EMLINK', 'EXDEV'])
 
@@ -101,7 +121,20 @@ async function moveTree(
         lstat(from, { bigint: true }),
         lstatIfPresent(to)
       ])
-      if (!existing) {
+      const aside = !existing && item.isFile() ? await options.setAsidePath?.(from, to) : null
+      if (aside) {
+        if (!(await setAside(from, aside, item))) {
+          result.retained += 1
+        }
+      } else if (
+        !existing &&
+        item.isDirectory() &&
+        options.movesWhole &&
+        !(await options.movesWhole(from))
+      ) {
+        await mkdir(to, { recursive: true })
+        await moveTree(from, to, result, options)
+      } else if (!existing) {
         await options.beforeShare?.(from)
         try {
           if (!(await moveEntry(from, to, item))) {

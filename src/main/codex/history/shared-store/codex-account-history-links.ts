@@ -1,6 +1,5 @@
-import { randomUUID } from 'node:crypto'
-import { mkdir, readFile, readdir, realpath, rename, unlink, writeFile } from 'node:fs/promises'
-import { basename, join } from 'node:path'
+import { mkdir, readdir, realpath, rename, unlink, writeFile } from 'node:fs/promises'
+import { basename, join, relative } from 'node:path'
 import { isDefinitiveAbsence } from '../../../../shared/definitive-filesystem-absence'
 import {
   DirectoryLinkError,
@@ -10,7 +9,21 @@ import {
   mergeDirectoryIntoLink,
   removeDirectoryLink
 } from '../../../filesystem/merged-directory-link'
-import { applyCodexSharedSqliteHome } from '../../configuration/toml/config-toml-shared-sqlite-home'
+import {
+  LINKED_MANAGED_HOME_MARKER,
+  MANAGED_HOME_MARKER
+} from '../../../codex-accounts/managed-homes/host-codex-managed-home-ownership'
+import { writeSharedSqliteHome } from './codex-account-sqlite-home-config'
+import {
+  CODEX_DATABASE_FILE,
+  PRE_SHARE_DATABASES_DIR,
+  SET_ASIDE_ROLLOUTS_DIR,
+  recordCodexHistoryLeftBehind
+} from './codex-account-history-cleanup-manifest'
+import {
+  holdsRolloutTwins,
+  isRolloutTwinKeptFromStore
+} from '../rollouts/codex-rollout-compressed-twin'
 import { parseCodexRolloutThreadId } from '../rollouts/codex-rollout-thread-id'
 
 // Created in the store when missing, so a first account still links its history.
@@ -44,8 +57,6 @@ const PRIVATE_DIRECTORIES = new Set([
 const HISTORY_DIRECTORIES = new Set(['sessions', 'archived_sessions'])
 // Linked before any history, so a home never writes shared rollouts under private locks.
 const WRITER_LOCKS = 'thread-writer-locks'
-/** The account's own databases from before sharing stopped; kept, never read again. */
-const PRE_SHARE_DATABASES_DIR = '.orca-pre-share-db'
 // Present from the first unlinked folder until the databases moved aside, so a retry finishes.
 const UNSHARE_PENDING = '.orca-unshare-pending'
 
@@ -136,40 +147,20 @@ async function recordIndexPending(pendingDir: string, path: string): Promise<voi
   }
 }
 
-async function readConfig(configPath: string): Promise<string> {
+/** False when the home has no ownership marker; a link must never land in an unowned home. */
+async function markHomeLinked(accountHome: string): Promise<boolean> {
   try {
-    return await readFile(configPath, 'utf8')
+    await rename(
+      join(accountHome, MANAGED_HOME_MARKER),
+      join(accountHome, LINKED_MANAGED_HOME_MARKER)
+    )
+    return true
   } catch (error) {
-    if (isDefinitiveAbsence(error)) {
-      return ''
+    if (!isDefinitiveAbsence(error)) {
+      throw error
     }
-    throw error
   }
-}
-
-/** Orca's sqlite_home line in the home's own config; never the user's ~/.codex config. */
-async function writeSharedSqliteHome(
-  accountHome: string,
-  sqliteHome: string | null
-): Promise<void> {
-  const configPath = join(accountHome, 'config.toml')
-  // A mirror writing meanwhile wins the race; the line is then applied to its content.
-  for (let attempt = 0; attempt < 5; attempt += 1) {
-    const current = await readConfig(configPath)
-    const next = applyCodexSharedSqliteHome(current, sqliteHome)
-    if (next === current) {
-      return
-    }
-    const staged = `${configPath}.${randomUUID()}.tmp`
-    // Mirrored MCP environment tokens require owner-only writes.
-    await writeFile(staged, next, { mode: 0o600 })
-    if ((await readConfig(configPath)) === current) {
-      await rename(staged, configPath)
-      return
-    }
-    await unlink(staged)
-  }
-  throw new Error(`Codex config kept changing; sqlite_home not updated in ${configPath}`)
+  return (await lstatIfPresent(join(accountHome, LINKED_MANAGED_HOME_MARKER)))?.isFile() ?? false
 }
 
 /** Both history folders: Codex archives by moving a rollout between them. */
@@ -188,7 +179,8 @@ export async function isCodexAccountHistoryLinked(
 /**
  * Replaces the account home's folders with links into the store (the user's ~/.codex), moving
  * the home's own entries there first; the store's copy wins a name conflict and the home's copy
- * stays in `<folder>.orca-profile-merge`. Nothing is deleted. Codex's databases follow once the
+ * stays in `<folder>.orca-profile-merge`, and a rollout form the store must not hold beside its
+ * twin waits in `.orca-set-aside-rollouts`. Nothing is deleted. Codex's databases follow once the
  * history is linked.
  */
 export async function shareCodexAccountHistory(
@@ -196,6 +188,10 @@ export async function shareCodexAccountHistory(
 ): Promise<CodexAccountHistoryShareResult> {
   if (await isSameDirectory(args.accountHome, args.storeHome)) {
     // Linking the store into itself would park its history in a pending folder.
+    return 'private'
+  }
+  // An older build's recursive removal would follow a junction and delete the store's history.
+  if (args.platform === 'win32' && !(await markHomeLinked(args.accountHome))) {
     return 'private'
   }
   if (await hasThreadWriter(args.accountHome)) {
@@ -221,6 +217,18 @@ export async function shareCodexAccountHistory(
       beforeShare: HISTORY_DIRECTORIES.has(name)
         ? (path) => recordIndexPending(args.indexPendingDir, path)
         : undefined,
+      ...(HISTORY_DIRECTORIES.has(name) && {
+        setAsidePath: async (from: string, to: string) =>
+          (await isRolloutTwinKeptFromStore(from, to))
+            ? join(
+                args.accountHome,
+                SET_ASIDE_ROLLOUTS_DIR,
+                name,
+                relative(join(args.storeHome, name), to)
+              )
+            : null,
+        movesWhole: async (folder: string) => !(await holdsRolloutTwins(folder))
+      }),
       dropEmptyConflicts: name.endsWith('-locks')
     })
   try {
@@ -250,7 +258,14 @@ export async function shareCodexAccountHistory(
     return 'private'
   }
   await writeSharedSqliteHome(args.accountHome, args.sqliteHome)
-  return failed ? 'incomplete' : 'shared'
+  const result = failed ? 'incomplete' : 'shared'
+  await recordCodexHistoryLeftBehind({
+    accountHome: args.accountHome,
+    storeHome: args.storeHome,
+    outcome: result,
+    databasesMovedToStore: args.sqliteHome !== null
+  }).catch(args.onWarning)
+  return result
 }
 
 /**
@@ -294,7 +309,7 @@ export async function unshareCodexAccountHistory(args: {
   }
   const holding = join(args.accountHome, PRE_SHARE_DATABASES_DIR, String(Date.now()))
   for (const entry of await readDirectoryEntries(args.accountHome)) {
-    if (!entry.isFile() || !/\.sqlite(?:-wal|-shm)?$/.test(entry.name)) {
+    if (!entry.isFile() || !CODEX_DATABASE_FILE.test(entry.name)) {
       continue
     }
     try {
@@ -308,6 +323,12 @@ export async function unshareCodexAccountHistory(args: {
   if (complete) {
     await unlink(pending)
   }
+  await recordCodexHistoryLeftBehind({
+    accountHome: args.accountHome,
+    storeHome: args.storeHome,
+    outcome: 'unshared',
+    databasesMovedToStore: false
+  }).catch(args.onWarning)
   return complete
 }
 

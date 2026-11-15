@@ -15,6 +15,10 @@ import type {
 } from '../account-management/codex-account-service-types'
 import { writeFileAtomically } from '../../filesystem/atomic-file-publication'
 import { MERGE_PENDING_SUFFIX, removeDirectoryLink } from '../../filesystem/merged-directory-link'
+import {
+  HISTORY_CLEANUP_MANIFEST,
+  SET_ASIDE_ROLLOUTS_DIR
+} from '../../codex/history/shared-store/codex-account-history-cleanup-manifest'
 import { ManagedCodexHomeTemporarilyUnavailableError } from './host-codex-managed-home-ownership'
 import type { CodexManagedHomePath } from './codex-managed-home-path'
 
@@ -22,15 +26,21 @@ const WSL_MANAGED_HOME_TIMEOUT_MS = 5_000
 
 // Codex recorded the account's conversations under its own path in the shared index, a home
 // that was busy at every launch may still hold its only copy, and a merge keeps conflicting
-// copies beside the links; all of it outlives the login.
-const KEPT_HISTORY = ['sessions', 'archived_sessions']
+// copies (and set-aside rollout forms, listed in the cleanup manifest) beside the links; all of
+// it outlives the login.
+const KEPT_HISTORY = [
+  'sessions',
+  'archived_sessions',
+  SET_ASIDE_ROLLOUTS_DIR,
+  HISTORY_CLEANUP_MANIFEST
+]
 const KEEP_ON_REMOVAL_SCRIPT = [
   'set -u',
   'home=$1',
   'kept() {',
   '  case "${1##*/}" in',
   '    *.orca-profile-merge) return 0 ;;',
-  '    sessions | archived_sessions) return 0 ;;',
+  `    ${KEPT_HISTORY.join(' | ')}) return 0 ;;`,
   '    *) return 1 ;;',
   '  esac',
   '}',

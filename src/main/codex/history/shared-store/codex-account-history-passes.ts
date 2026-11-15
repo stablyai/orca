@@ -4,8 +4,10 @@ import {
   getOrcaUserDataPath,
   getSystemCodexHomePath
 } from '../../configuration/homes/codex-home-paths'
+import { checkCodexHistoryLeftBehind } from './codex-account-history-content-check'
 import {
   hasIncompleteHostCodexIndexHeal,
+  isCodexAccountHistoryWorkStopping,
   requestHostCodexIndexHeal
 } from './codex-account-history-index'
 import { shareCodexAccountHistory, unshareCodexAccountHistory } from './codex-account-history-links'
@@ -25,6 +27,9 @@ export class CodexAccountHistoryPasses {
   private tail: Promise<void> = Promise.resolve()
   private readonly settledThisRun = new Map<string, boolean>()
   private activePasses = 0
+  // Homes whose left-behind rollouts still await a content check, checked once no pass runs.
+  private readonly owedChecks = new Map<string, string>()
+  private checking = false
   private startedPasses = 0
   private readonly passProgress = {
     isPaused: (): boolean => this.activePasses > 0,
@@ -58,6 +63,7 @@ export class CodexAccountHistoryPasses {
       }
       // Index once no pass is moving files.
       requestHostCodexIndexHeal(INDEX_PENDING_DIR(), getSystemCodexHomePath(), this.passProgress)
+      this.checkOwed()
     })
     this.tail = pass.catch(() => {})
     this.latest.set(key, { shared, pass })
@@ -95,8 +101,42 @@ export class CodexAccountHistoryPasses {
       if (result === 'shared') {
         this.settledThisRun.set(key, true)
       }
+      if (result === 'shared' || result === 'incomplete') {
+        this.owedChecks.set(key, accountHome)
+      }
     } catch (error) {
       onWarning(error)
     }
+  }
+
+  // Hashing a large history must not delay a launch: a starting pass stops it after one file.
+  private checkOwed(): void {
+    if (this.checking || this.activePasses > 0 || isCodexAccountHistoryWorkStopping()) {
+      return
+    }
+    const next = this.owedChecks.entries().next()
+    if (next.done) {
+      return
+    }
+    const [key, accountHome] = next.value
+    this.checking = true
+    void checkCodexHistoryLeftBehind({
+      accountHome,
+      storeHome: getSystemCodexHomePath(),
+      shouldStop: () => this.activePasses > 0 || isCodexAccountHistoryWorkStopping()
+    })
+      .then((finished) => {
+        if (finished) {
+          this.owedChecks.delete(key)
+        }
+      })
+      .catch((error: unknown) => {
+        this.owedChecks.delete(key)
+        console.warn('[codex-account-history] Checking left-behind history failed:', error)
+      })
+      .finally(() => {
+        this.checking = false
+        this.checkOwed()
+      })
   }
 }

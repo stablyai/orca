@@ -63,6 +63,22 @@ async function linkInGuest(
   return parseHelperOutput(stdout)
 }
 
+/** Compares the home's left-behind rollouts with the guest store; true when its budget ran out. */
+async function checkInGuest(
+  target: WslCodexAccountHistoryTarget,
+  dependencies: WslAccountHistoryDependencies
+): Promise<boolean> {
+  const stdout = await dependencies.runHelper({
+    distro: target.distro,
+    helperFilename: WSL_CODEX_ACCOUNT_HISTORY_HELPER_FILENAME,
+    helperLabel: 'Codex account history',
+    helperArgs: ['check', target.accountHome, target.storeHome],
+    timeoutMs: HELPER_TIMEOUT_MS,
+    requireRunning: () => dependencies.requireRunning(target.distro)
+  })
+  return parseHelperOutput(stdout)?.result === 'stopped'
+}
+
 /** Marker lines precede the summary; a missing summary means the list may be clipped. */
 function parseHelperOutput(stdout: string): HelperOutput | null {
   const lines = stdout
@@ -179,6 +195,9 @@ export class WslCodexAccountHistoryLaunches {
   private readonly startedPasses = new Map<string, number>()
   // A home settled in a mode this run skips later guest passes in it.
   private readonly settledThisRun = new Map<string, boolean>()
+  // Shared homes whose left-behind rollouts await a content check, one guest check per distro.
+  private readonly owedChecks = new Map<string, WslCodexAccountHistoryTarget>()
+  private readonly checks = new Set<string>()
 
   constructor(private readonly dependencies: WslAccountHistoryDependencies = defaultDependencies) {}
 
@@ -209,9 +228,13 @@ export class WslCodexAccountHistoryLaunches {
           if (output && output.pending.length > 0) {
             this.oweHeal(distroKey, { target, output })
           }
+          if (target.shared && (output?.result === 'shared' || output?.result === 'incomplete')) {
+            this.owedChecks.set(key, target)
+          }
         } finally {
           this.activePasses.set(distroKey, (this.activePasses.get(distroKey) ?? 1) - 1)
           this.startOwedHeal(distroKey)
+          this.startOwedCheck(distroKey)
         }
       })
       .catch((error: unknown) => {
@@ -273,5 +296,38 @@ export class WslCodexAccountHistoryLaunches {
         this.startOwedHeal(distroKey)
       })
     this.heals.set(distroKey, heal)
+  }
+
+  // Detached: hashing a large history must not hold up a launch's pass.
+  private startOwedCheck(distroKey: string): void {
+    if (
+      this.checks.has(distroKey) ||
+      (this.activePasses.get(distroKey) ?? 0) > 0 ||
+      isCodexAccountHistoryWorkStopping()
+    ) {
+      return
+    }
+    const owed = [...this.owedChecks].find(
+      ([, target]) => target.distro.toLowerCase() === distroKey
+    )
+    if (!owed) {
+      return
+    }
+    const [key, target] = owed
+    this.checks.add(distroKey)
+    void checkInGuest(target, this.dependencies)
+      .then((unfinished) => {
+        if (!unfinished) {
+          this.owedChecks.delete(key)
+        }
+      })
+      .catch((error: unknown) => {
+        this.owedChecks.delete(key)
+        console.warn('[codex-account-history] Checking WSL left-behind history failed:', error)
+      })
+      .finally(() => {
+        this.checks.delete(distroKey)
+        this.startOwedCheck(distroKey)
+      })
   }
 }

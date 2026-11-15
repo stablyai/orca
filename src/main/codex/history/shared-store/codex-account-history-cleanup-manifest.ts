@@ -1,0 +1,290 @@
+import { randomUUID } from 'node:crypto'
+import type { BigIntStats } from 'node:fs'
+import { readFile, readdir, unlink, writeFile } from 'node:fs/promises'
+import { join, relative } from 'node:path'
+import { isDefinitiveAbsence } from '../../../../shared/definitive-filesystem-absence'
+import { renameFileWithWindowsRetryAsync } from '../../../../shared/windows-retry-file-operations'
+import { MERGE_PENDING_SUFFIX, lstatIfPresent } from '../../../filesystem/merged-directory-link'
+import {
+  COMPRESSED_ROLLOUT_SUFFIX,
+  rolloutTwinPath
+} from '../rollouts/codex-rollout-compressed-twin'
+import { parseCodexRolloutThreadId } from '../rollouts/codex-rollout-thread-id'
+
+/**
+ * In each account home: the old data sharing left behind, for a later release to delete once the
+ * store has proven itself. This release deletes none of it.
+ */
+export const HISTORY_CLEANUP_MANIFEST = '.orca-history-cleanup.json'
+/** One form of a rollout whose other form the store holds, kept out so it holds one. */
+export const SET_ASIDE_ROLLOUTS_DIR = '.orca-set-aside-rollouts'
+/** The account's own databases from before sharing stopped; kept, never read again. */
+export const PRE_SHARE_DATABASES_DIR = '.orca-pre-share-db'
+export const CODEX_DATABASE_FILE = /\.sqlite(?:-wal|-shm)?$/
+
+const MANIFEST_VERSION = 1
+const HISTORY_FOLDERS = ['sessions', 'archived_sessions']
+
+/** `path` is relative to its home with `/` separators. */
+type FileFacts = { path: string; bytes: number; mtimeMs: number }
+
+export type ContentCheck = {
+  at: string
+  /** Byte-equal once either form is decompressed. */
+  sameContent: boolean
+  sha256: string
+  /** The store file as it was checked; a change since voids the check. */
+  store: FileFacts
+}
+
+export type LeftBehindRollout = FileFacts & {
+  kind: 'set-aside-twin' | 'merge-conflict'
+  /** The store file holding this content: the other form of a twin, else the same name. */
+  storePath: string | null
+  check: ContentCheck | null
+}
+
+type CodexHistoryCleanupManifest = {
+  version: typeof MANIFEST_VERSION
+  storeHome: string
+  /** The first and latest fully shared pass (about one per Orca run) since sharing was off. */
+  firstSharedAt: string | null
+  lastSharedAt: string | null
+  sharedPasses: number
+  /** Databases Codex no longer opens here: sqlite_home points at the store. */
+  databases: FileFacts[]
+  rollouts: LeftBehindRollout[]
+  /** Store rollouts holding both forms, left there (relative to the store, `.jsonl` form). */
+  storeTwinPairs: string[]
+  updatedAt: string
+}
+
+type CodexHistoryShareOutcome = 'shared' | 'incomplete' | 'unshared'
+
+function toManifestPath(root: string, path: string): string {
+  return relative(root, path).split(/[\\/]/).join('/')
+}
+
+export function fromManifestPath(root: string, path: string): string {
+  return join(root, ...path.split('/'))
+}
+
+export function factsOf(root: string, path: string, stats: BigIntStats): FileFacts {
+  return {
+    path: toManifestPath(root, path),
+    bytes: Number(stats.size),
+    mtimeMs: Number(stats.mtimeNs / 1_000_000n)
+  }
+}
+
+async function readEntries(path: string) {
+  try {
+    return await readdir(path, { withFileTypes: true })
+  } catch (error) {
+    if (isDefinitiveAbsence(error)) {
+      return []
+    }
+    throw error
+  }
+}
+
+async function* regularFiles(folder: string): AsyncGenerator<{ path: string; stats: BigIntStats }> {
+  for (const entry of await readEntries(folder)) {
+    const path = join(folder, entry.name)
+    if (entry.isDirectory()) {
+      yield* regularFiles(path)
+    } else if (entry.isFile()) {
+      const stats = await lstatIfPresent(path)
+      if (stats?.isFile()) {
+        yield { path, stats }
+      }
+    }
+  }
+}
+
+export async function storeFileFacts(storeHome: string, path: string): Promise<FileFacts | null> {
+  const stats = await lstatIfPresent(fromManifestPath(storeHome, path))
+  return stats?.isFile() ? factsOf(storeHome, fromManifestPath(storeHome, path), stats) : null
+}
+
+/** A newer version's manifest is left alone; anything unreadable is rebuilt. */
+export async function readManifest(
+  accountHome: string
+): Promise<CodexHistoryCleanupManifest | 'newer' | null> {
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(await readFile(join(accountHome, HISTORY_CLEANUP_MANIFEST), 'utf8'))
+  } catch (error) {
+    if (error instanceof SyntaxError || isDefinitiveAbsence(error)) {
+      return null
+    }
+    throw error
+  }
+  if (!parsed || typeof parsed !== 'object' || !('version' in parsed)) {
+    return null
+  }
+  if (typeof parsed.version === 'number' && parsed.version > MANIFEST_VERSION) {
+    return 'newer'
+  }
+  return parsed.version === MANIFEST_VERSION ? (parsed as CodexHistoryCleanupManifest) : null
+}
+
+async function writeManifest(
+  accountHome: string,
+  manifest: CodexHistoryCleanupManifest
+): Promise<void> {
+  const target = join(accountHome, HISTORY_CLEANUP_MANIFEST)
+  const staged = `${target}.${randomUUID()}.tmp`
+  await writeFile(staged, `${JSON.stringify(manifest, null, 2)}\n`)
+  try {
+    await renameFileWithWindowsRetryAsync(staged, target)
+  } catch (error) {
+    await unlink(staged).catch(() => {})
+    throw error
+  }
+}
+
+export async function updateManifest(
+  accountHome: string,
+  update: (current: CodexHistoryCleanupManifest | null) => Promise<CodexHistoryCleanupManifest>
+): Promise<void> {
+  const current = await readManifest(accountHome)
+  if (current !== 'newer') {
+    await writeManifest(accountHome, await update(current))
+  }
+}
+
+export function sameFacts(left: FileFacts, right: FileFacts | null): boolean {
+  return right !== null && left.bytes === right.bytes && left.mtimeMs === right.mtimeMs
+}
+
+async function leftBehindRollouts(
+  accountHome: string,
+  storeHome: string,
+  previous: Map<string, LeftBehindRollout>
+): Promise<LeftBehindRollout[]> {
+  // A pending folder is `<folder>[.<ms>].orca-profile-merge`; its files conflict by name.
+  const sources: { root: string; folder: string; kind: LeftBehindRollout['kind'] }[] = []
+  for (const folder of await readEntries(join(accountHome, SET_ASIDE_ROLLOUTS_DIR))) {
+    if (folder.isDirectory()) {
+      sources.push({
+        root: join(accountHome, SET_ASIDE_ROLLOUTS_DIR, folder.name),
+        folder: folder.name,
+        kind: 'set-aside-twin'
+      })
+    }
+  }
+  for (const entry of await readEntries(accountHome)) {
+    if (entry.isDirectory() && entry.name.endsWith(MERGE_PENDING_SUFFIX)) {
+      const folder = entry.name.slice(0, -MERGE_PENDING_SUFFIX.length).replace(/\.\d+$/, '')
+      sources.push({ root: join(accountHome, entry.name), folder, kind: 'merge-conflict' })
+    }
+  }
+  const rollouts: LeftBehindRollout[] = []
+  for (const source of sources) {
+    for await (const file of regularFiles(source.root)) {
+      const inFolder = `${source.folder}/${toManifestPath(source.root, file.path)}`
+      const twin = source.kind === 'set-aside-twin' ? rolloutTwinPath(inFolder) : null
+      const twinFacts = twin ? await storeFileFacts(storeHome, twin) : null
+      const store = twinFacts ?? (await storeFileFacts(storeHome, inFolder))
+      const facts = factsOf(accountHome, file.path, file.stats)
+      const prior = previous.get(facts.path)
+      const keepsCheck =
+        prior?.check &&
+        sameFacts(prior, facts) &&
+        prior.storePath === (store?.path ?? null) &&
+        sameFacts(prior.check.store, store)
+      rollouts.push({
+        ...facts,
+        kind: source.kind,
+        storePath: store?.path ?? null,
+        check: keepsCheck ? prior.check : null
+      })
+    }
+  }
+  return rollouts
+}
+
+async function databasesLeftBehind(
+  accountHome: string,
+  includeHomeRoot: boolean
+): Promise<FileFacts[]> {
+  const databases: FileFacts[] = []
+  if (includeHomeRoot) {
+    for (const entry of await readEntries(accountHome)) {
+      const stats = CODEX_DATABASE_FILE.test(entry.name)
+        ? await lstatIfPresent(join(accountHome, entry.name))
+        : undefined
+      if (stats?.isFile()) {
+        databases.push(factsOf(accountHome, join(accountHome, entry.name), stats))
+      }
+    }
+  }
+  for await (const file of regularFiles(join(accountHome, PRE_SHARE_DATABASES_DIR))) {
+    databases.push(factsOf(accountHome, file.path, file.stats))
+  }
+  return databases
+}
+
+/** Plain-form paths of store rollouts present in both forms; names only, no file reads. */
+async function storeTwinPairs(storeHome: string): Promise<string[]> {
+  const pairs: string[] = []
+  const walk = async (folder: string): Promise<void> => {
+    const entries = await readEntries(folder)
+    const names = new Set(entries.map((entry) => entry.name))
+    for (const entry of entries) {
+      if (entry.isDirectory()) {
+        await walk(join(folder, entry.name))
+      } else if (
+        entry.name.endsWith(COMPRESSED_ROLLOUT_SUFFIX) &&
+        names.has(rolloutTwinPath(entry.name)) &&
+        parseCodexRolloutThreadId(entry.name)
+      ) {
+        pairs.push(toManifestPath(storeHome, join(folder, rolloutTwinPath(entry.name))))
+      }
+    }
+  }
+  for (const folder of HISTORY_FOLDERS) {
+    await walk(join(storeHome, folder))
+  }
+  return pairs.sort()
+}
+
+/**
+ * Rewrites the home's manifest from what is on disk after a pass, keeping content checks whose
+ * files are unchanged. A fully shared pass extends the streak; turning sharing off resets it.
+ */
+export async function recordCodexHistoryLeftBehind(args: {
+  accountHome: string
+  storeHome: string
+  outcome: CodexHistoryShareOutcome
+  /** Whether sqlite_home now points the home's Codex at the store's databases. */
+  databasesMovedToStore: boolean
+}): Promise<void> {
+  await updateManifest(args.accountHome, async (current) => {
+    const now = new Date().toISOString()
+    const previous = new Map((current?.rollouts ?? []).map((rollout) => [rollout.path, rollout]))
+    const sharedNow = args.outcome === 'shared'
+    const streak = args.outcome !== 'unshared' && current?.storeHome === args.storeHome
+    const pairs = args.outcome === 'unshared' ? [] : await storeTwinPairs(args.storeHome)
+    if (pairs.length > 0) {
+      console.warn(
+        `[codex-account-history] ${pairs.length} rollouts are in ${args.storeHome} as both .jsonl and .jsonl.zst; both kept`
+      )
+    }
+    return {
+      version: MANIFEST_VERSION,
+      storeHome: args.storeHome,
+      firstSharedAt: (streak ? current?.firstSharedAt : null) ?? (sharedNow ? now : null),
+      lastSharedAt: sharedNow ? now : streak ? (current?.lastSharedAt ?? null) : null,
+      sharedPasses: (streak ? (current?.sharedPasses ?? 0) : 0) + (sharedNow ? 1 : 0),
+      databases: await databasesLeftBehind(
+        args.accountHome,
+        args.outcome !== 'unshared' && args.databasesMovedToStore
+      ),
+      rollouts: await leftBehindRollouts(args.accountHome, args.storeHome, previous),
+      storeTwinPairs: pairs,
+      updatedAt: now
+    }
+  })
+}

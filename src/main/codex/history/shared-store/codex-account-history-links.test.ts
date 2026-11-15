@@ -8,11 +8,14 @@ import {
   readdirSync,
   realpathSync,
   rmSync,
+  utimesSync,
   writeFileSync
 } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { zstdCompressSync } from 'node:zlib'
 import { afterEach, describe, expect, it } from 'vitest'
+import { checkCodexHistoryLeftBehind } from './codex-account-history-content-check'
 import { shareCodexAccountHistory, unshareCodexAccountHistory } from './codex-account-history-links'
 
 const ROLLOUT = 'rollout-2026-11-14T10-00-00-0199a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b.jsonl'
@@ -20,7 +23,7 @@ const OTHER = 'rollout-2026-11-14T11-00-00-0199a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5c.
 const DAY = join('2026', '11', '14')
 
 const roots: string[] = []
-function fixture() {
+function fixture(platform: NodeJS.Platform = 'linux') {
   const root = realpathSync(mkdtempSync(join(tmpdir(), 'codex-account-history-')))
   roots.push(root)
   const store = join(root, 'store')
@@ -35,7 +38,7 @@ function fixture() {
       storeHome: store,
       sqliteHome: store,
       indexPendingDir: pending,
-      platform: 'linux',
+      platform,
       onWarning: (error) => warnings.push(error)
     })
   const unshare = () =>
@@ -112,6 +115,84 @@ describe('shareCodexAccountHistory', () => {
     expect(readFileSync(join(f.account, 'sessions.orca-profile-merge', DAY, ROLLOUT), 'utf8')).toBe(
       'account version\n'
     )
+  })
+
+  it('keeps one form of a rollout in the store, sets the other aside and records it', async () => {
+    const f = fixture()
+    const at = (path: string, seconds: number) => utimesSync(path, seconds, seconds)
+    const compressed = zstdCompressSync(Buffer.from('plain\n'))
+    const storeDay = join(f.store, 'sessions', DAY)
+    const accountDay = join(f.account, 'sessions', DAY)
+    writeFileSync(join(storeDay, `${ROLLOUT}.zst`), compressed)
+    at(join(storeDay, `${ROLLOUT}.zst`), 1000)
+    writeFileSync(join(accountDay, ROLLOUT), 'plain\n')
+    at(join(accountDay, ROLLOUT), 1000)
+    writeFileSync(join(storeDay, `${OTHER}.zst`), compressed)
+    at(join(storeDay, `${OTHER}.zst`), 1000)
+    writeFileSync(join(accountDay, OTHER), 'plain\nappended after compression\n')
+    at(join(accountDay, OTHER), 2000)
+    // A day the store lacks, holding both forms, merges file by file.
+    const newDay = join(f.account, 'sessions', '2026', '11', '15')
+    mkdirSync(newDay, { recursive: true })
+    writeFileSync(join(newDay, ROLLOUT), 'plain\n')
+    writeFileSync(join(newDay, `${ROLLOUT}.zst`), compressed)
+    at(join(newDay, ROLLOUT), 1000)
+    at(join(newDay, `${ROLLOUT}.zst`), 1000)
+    writeFileSync(join(f.account, 'state_5.sqlite'), 'db')
+
+    expect(await f.share()).toBe('shared')
+    await checkCodexHistoryLeftBehind({
+      accountHome: f.account,
+      storeHome: f.store,
+      shouldStop: () => false
+    })
+
+    expect(readdirSync(storeDay).sort()).toEqual([`${ROLLOUT}.zst`, OTHER, `${OTHER}.zst`])
+    expect(readdirSync(join(f.store, 'sessions', '2026', '11', '15'))).toEqual([`${ROLLOUT}.zst`])
+    const manifest = JSON.parse(readFileSync(join(f.account, '.orca-history-cleanup.json'), 'utf8'))
+    expect(manifest).toMatchObject({
+      version: 1,
+      sharedPasses: 1,
+      databases: [{ path: 'state_5.sqlite', bytes: 2 }],
+      storeTwinPairs: [`sessions/2026/11/14/${OTHER}`]
+    })
+    const checked = {
+      kind: 'set-aside-twin',
+      check: {
+        sameContent: true,
+        sha256: 'dacf36547c7774a0a170806363b5d412991fbc0d6260b2c00b1d3a80a816c23f'
+      }
+    }
+    expect([...manifest.rollouts].sort((a, b) => a.path.localeCompare(b.path))).toMatchObject([
+      {
+        ...checked,
+        path: `.orca-set-aside-rollouts/sessions/2026/11/14/${ROLLOUT}`,
+        storePath: `sessions/2026/11/14/${ROLLOUT}.zst`
+      },
+      {
+        ...checked,
+        path: `.orca-set-aside-rollouts/sessions/2026/11/15/${ROLLOUT}`,
+        storePath: `sessions/2026/11/15/${ROLLOUT}.zst`
+      }
+    ])
+  })
+
+  it('renames the ownership marker before a Windows home gets junctions', async () => {
+    const f = fixture('win32')
+    writeFileSync(join(f.account, '.orca-managed-home'), 'account-1\n')
+
+    expect(await f.share()).toBe('shared')
+
+    expect(existsSync(join(f.account, '.orca-managed-home'))).toBe(false)
+    expect(readFileSync(join(f.account, '.orca-managed-home-linked'), 'utf8')).toBe('account-1\n')
+  })
+
+  it('links nothing into a Windows home without an ownership marker', async () => {
+    const f = fixture('win32')
+
+    expect(await f.share()).toBe('private')
+
+    expect(lstatSync(join(f.account, 'sessions')).isSymbolicLink()).toBe(false)
   })
 
   it('waits while a Codex in the home holds a thread lock', async () => {

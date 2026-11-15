@@ -11,6 +11,27 @@ type HostCodexManagedHomeOwnershipOptions = {
 
 export const MISSING_MANAGED_HOME_MESSAGE = 'Managed Codex home directory does not exist on disk.'
 
+export const MANAGED_HOME_MARKER = '.orca-managed-home'
+/**
+ * Replaces the marker before a Windows home gets junctions: older builds refuse to use or delete
+ * a home without the first one, and their recursive delete would follow a junction into ~/.codex.
+ */
+export const LINKED_MANAGED_HOME_MARKER = '.orca-managed-home-linked'
+
+// The linked marker is checked second: a share pass renames the first into it, never back.
+function lstatMarker(home: string): { path: string; isFile: boolean } {
+  const path = join(home, MANAGED_HOME_MARKER)
+  try {
+    return { path, isFile: lstatSync(path).isFile() }
+  } catch (error) {
+    if (!isDefinitiveAbsence(error)) {
+      throw error
+    }
+  }
+  const linked = join(home, LINKED_MANAGED_HOME_MARKER)
+  return { path: linked, isFile: lstatSync(linked).isFile() }
+}
+
 /** Only `untrusted` may clear selection; `indeterminate` must refuse use without erasing state. */
 export type HostCodexManagedHomeVerdict =
   | { kind: 'owned'; homePath: string }
@@ -127,12 +148,12 @@ function evaluate({
     }
   }
 
-  const markerPath = join(canonicalCandidate, '.orca-managed-home')
   let markerIsRegularFile: boolean
   let markerContents: string
   try {
-    markerIsRegularFile = lstatSync(markerPath).isFile()
-    markerContents = markerIsRegularFile ? readFileSync(markerPath, 'utf-8') : ''
+    const marker = lstatMarker(canonicalCandidate)
+    markerIsRegularFile = marker.isFile
+    markerContents = markerIsRegularFile ? readFileSync(marker.path, 'utf-8') : ''
   } catch (error) {
     // A missing ownership marker disproves trust; an unreadable one leaves it unknown.
     if (isDefinitiveAbsence(error)) {
