@@ -14,6 +14,7 @@ final class AccessibilityAttributeBatchTests: XCTestCase {
             values: [errorSlot, kCFNull, pointSlot, "AXButton" as CFString]
         ))
 
+        XCTAssertEqual(Set(decoded.keys), ["AXTitle", "AXDescription", "AXPosition", "AXRole"])
         XCTAssertNil(decoded["AXTitle"] ?? nil)
         XCTAssertNil(decoded["AXDescription"] ?? nil)
         XCTAssertEqual(decoded["AXRole"] as? String, "AXButton")
