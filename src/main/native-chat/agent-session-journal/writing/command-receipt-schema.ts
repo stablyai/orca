@@ -46,6 +46,7 @@ export const commandReceiptResultSchema = z.discriminatedUnion('kind', [
           })
         )
         .optional(),
+      feedback: z.string().optional(),
       resolvedBy: z.string().nullable(),
       resolvedAt: z.number().nullable()
     })

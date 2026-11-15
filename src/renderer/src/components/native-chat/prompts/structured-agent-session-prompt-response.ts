@@ -1,4 +1,5 @@
 import {
+  supportsStructuredAgentSessionApprovalFeedback,
   supportsStructuredAgentSessionQuestionAnswers,
   supportsStructuredAgentSessionPromptCancel
 } from '@/runtime/native-chat/host-capabilities/structured-agent-session-host-support'
@@ -27,7 +28,15 @@ export async function respondToStructuredAgentSessionPrompt({
   const promptTarget = { itemId: item.itemId, expectedRevision: item.revision }
   let fields: Record<string, unknown>
   if (response.kind === 'option') {
-    fields = { ...promptTarget, optionId: response.optionId }
+    if (response.feedback !== undefined) {
+      // Negotiated before mutate fingerprints the call: older hosts reject the strict field.
+      if (!(await supportsStructuredAgentSessionApprovalFeedback(action.target))) {
+        return null
+      }
+      fields = { ...promptTarget, optionId: response.optionId, feedback: response.feedback }
+    } else {
+      fields = { ...promptTarget, optionId: response.optionId }
+    }
   } else if (await supportsStructuredAgentSessionQuestionAnswers(action.target)) {
     // Negotiated before mutate fingerprints the call: older hosts reject the strict field.
     fields = { ...promptTarget, answers }

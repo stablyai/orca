@@ -131,6 +131,10 @@ export const AGENT_SESSION_TOOL_OUTPUT_APPEND_RUNTIME_CAPABILITY =
 // The host appends CI result lines to chats that opened or pushed to a PR; older hosts write none.
 export const AGENT_SESSION_PR_EVENTS_RUNTIME_CAPABILITY = 'agent-session.pr-events.v1' as const
 
+// Strict RespondParams rejects `feedback` on older hosts; send only when advertised.
+export const AGENT_SESSION_APPROVAL_FEEDBACK_RUNTIME_CAPABILITY =
+  'agent-session.approval-feedback.v1' as const
+
 // Individual client flags must not retain the unused host capability aggregate.
 export const AGENT_SESSION_RUNTIME_CAPABILITIES = /* @__PURE__ */ (() =>
   [
@@ -173,6 +177,7 @@ export const AGENT_SESSION_RUNTIME_CAPABILITIES = /* @__PURE__ */ (() =>
     AGENT_SESSION_SEND_RECORDED_RUNTIME_CAPABILITY,
     AGENT_SESSION_BACKGROUND_TASK_STOP_CAPABILITY,
     AGENT_SESSION_QUESTION_ANSWERS_RUNTIME_CAPABILITY,
+    AGENT_SESSION_APPROVAL_FEEDBACK_RUNTIME_CAPABILITY,
     AGENT_SESSION_ATTACHMENTS_RUNTIME_CAPABILITY,
     AGENT_SESSION_PHONE_ATTACHMENTS_RUNTIME_CAPABILITY,
     AGENT_SESSION_PHONE_THREAD_GOAL_RUNTIME_CAPABILITY,

@@ -11,13 +11,23 @@ import { AgentJournalThreadGoalStateSchema } from './agent-session-journal-threa
 import { AgentSessionFailureFactSchema } from '../failures/agent-session-failure-fact-schema'
 import { knownTags, openDiscriminatedUnion } from './agent-session-journal-open-union'
 import { SubagentEntry } from './agent-session-journal-subagent-schema'
+import {
+  AGENT_JOURNAL_APPROVAL_SUBJECT_KINDS,
+  ApprovalMatchedAskRule,
+  ApprovalSubject,
+  FreeTextInput,
+  PromptOption,
+  Question,
+  Resolution
+} from './agent-session-journal-prompt-schemas'
 import type {
   AgentJournalItemBody,
   AgentJournalMessageItem,
   AgentJournalResolution,
   AgentJournalRenderItem
 } from './agent-session-journal-types'
-import { AGENT_JOURNAL_PROMPT_INTENTS } from './agent-session-journal-types'
+
+export { AGENT_JOURNAL_APPROVAL_SUBJECT_KINDS }
 
 const BoundedPayload = z.object({
   head: z.string(),
@@ -105,67 +115,6 @@ const Block = openDiscriminatedUnion(
   ])
 )
 
-const PromptOption = z.object({
-  id: z.string(),
-  label: z.string(),
-  description: z.string().optional(),
-  preview: z.string().optional(),
-  intent: z.enum(AGENT_JOURNAL_PROMPT_INTENTS).optional()
-})
-
-const FreeTextInput = z.object({
-  allowEmpty: z.boolean().optional(),
-  multiline: z.boolean().optional(),
-  initialValue: z.string().optional(),
-  placeholder: z.string().optional()
-})
-
-const Question = z.object({
-  id: z.string(),
-  question: z.string(),
-  header: z.string().optional(),
-  multiSelect: z.boolean(),
-  options: z.array(PromptOption),
-  freeTextQuestionId: z.string().optional(),
-  freeTextInput: FreeTextInput.optional()
-})
-
-const Resolution = z.object({
-  state: z.string().min(1),
-  selectedOptionId: z.string().nullable(),
-  answers: z
-    .array(
-      z.object({
-        questionId: z.string(),
-        optionIds: z.array(z.string()),
-        other: z.string().optional()
-      })
-    )
-    .optional(),
-  resolvedBy: z.string().nullable(),
-  resolvedByDevice: z
-    .discriminatedUnion('kind', [
-      z.object({ kind: z.literal('current') }),
-      z.object({ kind: z.literal('named'), name: z.string() })
-    ])
-    .optional(),
-  resolvedAt: z.number().nullable()
-})
-
-const ApprovalMatchedAskRule = z.object({
-  source: z.string(),
-  toolName: z.string(),
-  ruleContent: z.string().optional()
-})
-
-const KnownApprovalSubject = z.discriminatedUnion('kind', [
-  z.object({ kind: z.literal('plan'), text: z.string().min(1), filePath: z.string().optional() })
-])
-export const AGENT_JOURNAL_APPROVAL_SUBJECT_KINDS = knownTags(KnownApprovalSubject)
-/** Open like blocks; a subject this build cannot draw is never approvable here
- *  (agent-session-approval-subject.ts). */
-const ApprovalSubject = openDiscriminatedUnion(KnownApprovalSubject)
-
 const MessageBody = z.object({
   kind: z.literal('message'),
   role: z.string().min(1),
@@ -232,6 +181,7 @@ const KnownItemBody = z.discriminatedUnion('kind', [
     personOnly: z.literal(true).optional(),
     detail: z.string().nullable(),
     options: z.array(PromptOption),
+    freeTextInput: FreeTextInput.optional(),
     resolution: Resolution
   }),
   z.object({

@@ -75,7 +75,11 @@ export function nativeChatReceiptAnswers(
     })
   }
   const option = body.options.find((option) => option.id === selected)
-  return [{ question: null, answer: option?.label ?? null }]
+  if (!option) {
+    return [{ question: null, answer: null }]
+  }
+  const feedback = body.resolution.feedback?.trim()
+  return [{ question: null, answer: feedback ? `${option.label} · ${feedback}` : option.label }]
 }
 
 /** Null for an approval, which shows its title instead. */

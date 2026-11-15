@@ -20,9 +20,9 @@ export type AgentSessionQuestionAnswer = {
   other?: string
 }
 
-/** What a client chose on a prompt: a decision id for an approval, per-question answers for a question. */
+/** What a client chose on a prompt: a decision id (with optional revision feedback) for an approval, per-question answers for a question. */
 export type AgentSessionPromptResponse =
-  | { kind: 'option'; optionId: string }
+  | { kind: 'option'; optionId: string; feedback?: string }
   | { kind: 'answers'; answers: AgentSessionQuestionAnswer[] }
 
 /** The questions an item asks: its grouped list, or the item itself as one question. */

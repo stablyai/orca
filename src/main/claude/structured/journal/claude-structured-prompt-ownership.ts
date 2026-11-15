@@ -162,7 +162,7 @@ export async function answerClaudeStructuredPrompt(input: {
     ) {
       throw new AgentSessionPromptUnavailableError(request.itemId)
     }
-    leaveClaudePlanModeOnApproval(session, claim.found.prompt, reply)
+    leaveClaudePlanModeOnApproval(session, claim.found.prompt, reply, request.response)
     await answerClaudePrompt(session, claim, reply)
   } catch (error) {
     session.prompts.releaseClaim(claim)

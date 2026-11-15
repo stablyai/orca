@@ -16,7 +16,10 @@ import * as z from 'zod'
 import { CREATE_TAB_FIELDS } from './structured-agent-session-create-tab-params'
 import { isStructuredAgentId } from '../../agent-session/lifecycle/provider-handles/agent-session-provider-handle-encoding'
 import { normalizeExecutionHostId } from '../../execution-host'
-import { AGENT_SESSION_RESPONSE_OPTION_ID_MAX_LENGTH as MAX_RESPONSE_OPTION_ID_LENGTH } from '../../agent-session/agent-session-question-answer'
+import {
+  AGENT_SESSION_QUESTION_ANSWER_MAX_BYTES,
+  AGENT_SESSION_RESPONSE_OPTION_ID_MAX_LENGTH as MAX_RESPONSE_OPTION_ID_LENGTH
+} from '../../agent-session/agent-session-question-answer'
 
 import { AGENT_SESSION_THREAD_GOAL_OBJECTIVE_MAX_LENGTH } from '../../agent-session/agent-session-thread-goal-wire'
 import { MutationEnvelope } from './structured-agent-session-mutation-envelope'
@@ -175,7 +178,18 @@ export const RespondParams = z
     itemId: Identifier('Invalid item id'),
     /** Compare-and-set: the revision the client had on screen. */
     expectedRevision: z.number().int().positive(),
-    optionId: Identifier('Invalid option id', MAX_RESPONSE_OPTION_ID_LENGTH)
+    optionId: Identifier('Invalid option id', MAX_RESPONSE_OPTION_ID_LENGTH),
+    // Gate on agent-session.approval-feedback.v1; older hosts' strict schema rejects it.
+    feedback: z
+      .string()
+      .max(AGENT_SESSION_QUESTION_ANSWER_MAX_BYTES)
+      .refine((value) => value.trim().length > 0, 'Feedback is empty')
+      .refine(
+        (value) =>
+          new TextEncoder().encode(value).byteLength <= AGENT_SESSION_QUESTION_ANSWER_MAX_BYTES,
+        'Feedback is too large'
+      )
+      .optional()
   })
   .strict()
 

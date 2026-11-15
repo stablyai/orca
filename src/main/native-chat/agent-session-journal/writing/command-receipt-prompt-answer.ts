@@ -12,7 +12,7 @@ export function promptRowAnswer(row: JournalRow | undefined): AgentSessionPrompt
 
 /** Capture replay data now so later revisions or rewind cannot change an accepted answer. */
 export function promptAnswerReceipt(answer: AgentSessionPromptResult): CommandReceiptResult {
-  const { state, selectedOptionId, answers, resolvedBy, resolvedAt } = answer.resolution
+  const { state, selectedOptionId, answers, feedback, resolvedBy, resolvedAt } = answer.resolution
   if (state !== 'resolved') {
     throw new Error('an accepted prompt answer is resolved')
   }
@@ -32,6 +32,7 @@ export function promptAnswerReceipt(answer: AgentSessionPromptResult): CommandRe
             }))
           }
         : {}),
+      ...(feedback === undefined ? {} : { feedback }),
       resolvedBy,
       resolvedAt
     }

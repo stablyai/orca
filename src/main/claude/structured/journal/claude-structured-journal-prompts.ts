@@ -1,3 +1,4 @@
+import type { PermissionMode } from '@anthropic-ai/claude-agent-sdk'
 import type {
   AgentJournalApprovalItem,
   AgentJournalProducerLinkage,
@@ -73,6 +74,7 @@ export class ClaudeJournalPrompts {
       producerOf?: (
         prompt: Extract<ClaudeStructuredSessionEvent, { type: 'prompt' }>['prompt']
       ) => AgentJournalProducerLinkage
+      planApprovalMode?: () => PermissionMode
     }
   ) {}
 
@@ -105,7 +107,7 @@ export class ClaudeJournalPrompts {
         sessionId: event.sessionId,
         promptKey: event.prompt.promptKey
       })
-      const body = claudeApprovalItem(event.prompt)
+      const body = claudeApprovalItem(event.prompt, this.deps.planApprovalMode?.())
       items.push({ identity, body, turnScope })
       append(identity, body)
       this.deps.bindPromptItemId?.(agentJournalItemKey(identity), event.prompt.promptKey)

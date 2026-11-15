@@ -80,7 +80,8 @@ export function boundJournalPromptBody(
               : body.subject
           }),
       detail: body.detail === null ? null : boundPromptText(body.detail),
-      options: boundPromptOptions(body.options)
+      options: boundPromptOptions(body.options),
+      ...(body.freeTextInput ? { freeTextInput: boundFreeTextInput(body.freeTextInput) } : {})
     }
   }
   return {
