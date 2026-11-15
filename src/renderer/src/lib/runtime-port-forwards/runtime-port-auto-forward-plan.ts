@@ -15,7 +15,56 @@ export type AutoForwardPlan = {
   missing: Map<number, number>
 }
 
-/** Dev servers a workspace started: attributed to a workspace, in range, and not Orca's own. */
+/**
+ * Agent CLIs open their own listeners (Codex's sign-in callback and app server, Claude's IDE and MCP
+ * bridges). Those are the agent's plumbing, not the user's app: never auto-forwarded or announced.
+ */
+const AGENT_CLI_PROCESS_NAMES: ReadonlySet<string> = new Set([
+  'claude',
+  'codex',
+  'opencode',
+  'opencode2',
+  'gemini',
+  'cursor-agent',
+  'grok',
+  'omp',
+  'pi',
+  'amp',
+  'goose',
+  'droid',
+  'qwen',
+  'copilot',
+  'aider'
+])
+
+/** The start of the OS ephemeral range (Linux's default; macOS and Windows start higher, at 49152). */
+export const EPHEMERAL_PORT_START = 32_768
+
+/** `codex`, `/usr/bin/codex`, `codex.exe` and `codex-linux-x64` all name Codex. */
+export function isAgentCliProcessName(processName: string | undefined): boolean {
+  if (!processName) {
+    return false
+  }
+  const base = (processName.trim().toLowerCase().split(/[\\/]/).at(-1) ?? '').replace(/\.exe$/, '')
+  return (
+    AGENT_CLI_PROCESS_NAMES.has(base) ||
+    [...AGENT_CLI_PROCESS_NAMES].some((name) => base.startsWith(`${name}-`))
+  )
+}
+
+/**
+ * Looks like a dev server: a well-known web port, or a URL the workspace printed for it. A listener
+ * on an ephemeral port with neither is some process's internal socket (an agent's MCP child, a
+ * language server, a debugger), so it isn't forwarded on its own.
+ */
+function looksLikeDevServer(port: Extract<WorkspacePort, { kind: 'workspace' }>): boolean {
+  return port.port < EPHEMERAL_PORT_START || port.protocol !== 'unknown' || !!port.advertisedUrl
+}
+
+/**
+ * Dev servers a workspace started: attributed to a workspace, in range, not Orca's own, not an
+ * agent CLI's own listener, and not an anonymous ephemeral port.
+ */
 export function isAutoForwardCandidate(
   port: WorkspacePort,
   settings: RuntimePortForwardSettings
@@ -24,7 +73,9 @@ export function isAutoForwardCandidate(
     port.kind === 'workspace' &&
     port.port >= settings.rangeStart &&
     port.port <= settings.rangeEnd &&
-    !RUNTIME_PORT_FORWARD_AUTO_EXCLUDED_PORTS.has(port.port)
+    !RUNTIME_PORT_FORWARD_AUTO_EXCLUDED_PORTS.has(port.port) &&
+    !isAgentCliProcessName(port.processName) &&
+    looksLikeDevServer(port)
   )
 }
 
