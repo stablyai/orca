@@ -6,6 +6,8 @@ export const COMPUTER_ERROR_CODES = {
   window_not_found: 'window_not_found',
   window_not_focused: 'window_not_focused',
   background_unavailable: 'background_unavailable',
+  secure_input_active: 'secure_input_active',
+  user_actively_typing: 'user_actively_typing',
   window_stale: 'window_stale',
   provider_incompatible: 'provider_incompatible',
   unsupported_capability: 'unsupported_capability',
