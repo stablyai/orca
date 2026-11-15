@@ -18,12 +18,14 @@ function isStrictAncestor(root: string, target: string): boolean {
 }
 
 function hostHomes(): string[] {
-  const homes = [homedir()]
-  try {
-    // A host may run with HOME pointed at a separate profile; the account's own Library still holds other apps' data.
-    homes.push(userInfo().homedir)
-  } catch {
-    // Accounts without a passwd entry only have HOME.
+  // A host may run with HOME pointed at a separate profile; the account's own Library still holds other apps' data.
+  const homes: string[] = []
+  for (const read of [() => homedir(), () => userInfo().homedir]) {
+    try {
+      homes.push(read())
+    } catch {
+      // An account without a passwd entry has only HOME; an unknown home adds no exclusion.
+    }
   }
   return homes
 }
@@ -37,13 +39,12 @@ export function macosProtectedWatchExclusions(
   if ((deps.platform ?? process.platform) !== 'darwin') {
     return []
   }
-  const realpath = deps.realpath ?? realpathSync.native
   const exclusions = new Set<string>()
   for (const home of deps.homes ?? hostHomes()) {
     let library: string
     try {
       // Canonical, like the subscribed root: aliases and case variants would otherwise miss it.
-      library = realpath(join(home, 'Library'))
+      library = (deps.realpath ?? realpathSync.native)(join(home, 'Library'))
     } catch {
       continue
     }
