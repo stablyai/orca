@@ -18,7 +18,7 @@ import { type PiRpcState, piRpcMessageSchema, piRpcSkippedEvent } from './rpc-pr
 export type PiRpcTurnDeps = {
   lane: JsonlRpcTimelineLane
   generation: string
-  send: (frame: JsonlRpcRecord) => Promise<void>
+  send: (frame: JsonlRpcRecord, assertWritable?: () => void) => Promise<void>
   request: (
     command: string,
     params?: Record<string, unknown>,
@@ -63,8 +63,11 @@ export class PiRpcTurns {
       failed: deps.failed
     })
     this.delivery = new PiRpcPromptDelivery({
-      send: (frame) =>
-        deps.send({ ...frame, streamingBehavior: this.working ? 'steer' : 'followUp' }),
+      send: (frame, assertWritable) =>
+        deps.send(
+          { ...frame, streamingBehavior: this.working ? 'steer' : 'followUp' },
+          assertWritable
+        ),
       settled: deps.settled,
       failed: deps.failed,
       accepted: (id, at) => {
@@ -99,15 +102,12 @@ export class PiRpcTurns {
   }
 
   async submit(
-    id: string,
-    at: number,
-    frame: JsonlRpcRecord,
-    before?: () => Promise<void>
+    ...args: Parameters<PiRpcPromptDelivery['submit']>
   ): Promise<AgentSessionDispatchOutcome> {
     if (this.ended) {
       throw new Error('Pi session ended before dispatch')
     }
-    return this.delivery.submit(id, at, frame, before)
+    return this.delivery.submit(...args)
   }
 
   receive(frame: JsonlRpcRecord): void {

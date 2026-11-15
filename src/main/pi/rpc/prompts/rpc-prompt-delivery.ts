@@ -8,6 +8,7 @@ import type { AgentSessionDispatchOutcome } from '../../../native-chat/agent-ses
 import type { JsonlRpcRecord } from '../../../jsonl-rpc/peer'
 import { piRpcPromptReplySchema } from '../rpc-protocol'
 import { PI_RPC_PEER_OPTIONS } from './rpc-prompt'
+import { StructuredAgentSessionInputNotAdmitted } from '../../../native-chat/agent-session-wire/delivery/structured-agent-session-input-admission'
 
 type Submission = {
   id: string
@@ -16,11 +17,12 @@ type Submission = {
   bytes: number
   accepted: boolean
   retries: number
+  assertWritable?: () => void
   /** Retain sign-in refusal until resubmission. */
   signInRefusal?: string
 }
 type DeliveryDeps = {
-  send: (frame: JsonlRpcRecord) => Promise<void>
+  send: (frame: JsonlRpcRecord, assertWritable?: () => void) => Promise<void>
   accepted: (id: string, at: number) => void
   commandOnly: () => void
   rejectedAfterAcceptance: (error: string) => void
@@ -96,7 +98,8 @@ export class PiRpcPromptDelivery {
     id: string,
     at: number,
     frame: JsonlRpcRecord,
-    before?: () => Promise<void>
+    before?: () => Promise<void>,
+    assertWritable?: () => void
   ): Promise<AgentSessionDispatchOutcome> {
     if (this.ended) {
       throw new Error('Pi prompt queue unavailable')
@@ -114,7 +117,15 @@ export class PiRpcPromptDelivery {
         })
       }
     }
-    const submission: Submission = { id, at, frame, bytes, accepted: false, retries: 0 }
+    const submission: Submission = {
+      id,
+      at,
+      frame,
+      bytes,
+      accepted: false,
+      retries: 0,
+      assertWritable
+    }
     this.pending.add(submission)
     this.heldBytes += bytes
     try {
@@ -122,14 +133,18 @@ export class PiRpcPromptDelivery {
       if (this.ended) {
         throw new Error('Pi ended before writing the prompt')
       }
+      assertWritable?.()
       this.deps.beforeWrite?.()
       this.acknowledgements.push(submission)
       this.waiting.push(submission)
-      await this.deps.send(frame)
+      await this.deps.send(frame, assertWritable)
       return { state: 'admitted' }
-    } catch {
+    } catch (error) {
       this.remove(submission)
       this.deps.refused?.()
+      if (error instanceof StructuredAgentSessionInputNotAdmitted) {
+        throw error
+      }
       return { state: 'unknown', reason: 'Pi prompt write did not settle' }
     }
   }
@@ -164,6 +179,14 @@ export class PiRpcPromptDelivery {
           if (this.ended) {
             return
           }
+          try {
+            submission.assertWritable?.()
+          } catch {
+            this.remove(submission)
+            this.deps.settled(submission.id, piRejection({ ...fact, neverReachedAgent: true }))
+            this.deps.refused?.()
+            return
+          }
           const frame = submission.frame
           if (!frame) {
             this.deps.failed(new Error('Pi retry lost its unaccepted prompt'))
@@ -172,11 +195,15 @@ export class PiRpcPromptDelivery {
           submission.signInRefusal = undefined
           this.acknowledgements.push(submission)
           this.waiting.push(submission)
-          void this.deps
-            .send(frame)
-            .catch((error: unknown) =>
+          void this.deps.send(frame, submission.assertWritable).catch((error: unknown) => {
+            if (error instanceof StructuredAgentSessionInputNotAdmitted) {
+              this.remove(submission)
+              this.deps.settled(submission.id, piRejection({ ...fact, neverReachedAgent: true }))
+              this.deps.refused?.()
+            } else {
               this.deps.failed(error instanceof Error ? error : new Error(String(error)))
-            )
+            }
+          })
         }, 250)
         timer.unref()
         this.retries.add(timer)

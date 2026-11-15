@@ -99,9 +99,13 @@ export async function acquiredCodexAdapter(input: {
   sink?: StructuredAgentSessionEventSink
   requestTimeoutMs?: number
   permissionMode?: AgentChatPermissionChoice
+  acquisitionGeneration?: string
   onHeldSendsChanged?: CodexStructuredSessionAdapterDeps['onHeldSendsChanged']
 }): Promise<CodexStructuredSessionAdapter> {
   const adapter = new CodexStructuredSessionAdapter({
+    ...(input.acquisitionGeneration
+      ? { mintAcquisitionGeneration: () => input.acquisitionGeneration! }
+      : {}),
     resolveLaunch: async () => ({
       command: 'codex',
       args: ['app-server'],

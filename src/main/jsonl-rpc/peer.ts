@@ -187,12 +187,16 @@ export class JsonlRpcPeer {
   }
 
   /** The dialect may track acknowledgements independently of transport correlation. */
-  send(record: JsonlRpcRecord, signal?: AbortSignal): Promise<void> {
+  send(record: JsonlRpcRecord, signal?: AbortSignal, assertWritable?: () => void): Promise<void> {
     if (this.terminalError) {
       return Promise.reject(this.terminalError)
     }
     try {
-      return this.writer.write(encodeNdjson(record, this.limits.maxLineBytes), signal)
+      return this.writer.write(
+        encodeNdjson(record, this.limits.maxLineBytes),
+        signal,
+        assertWritable
+      )
     } catch (error) {
       return Promise.reject(error)
     }

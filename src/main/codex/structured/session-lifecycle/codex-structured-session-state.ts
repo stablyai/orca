@@ -160,6 +160,8 @@ export type CodexSession = {
   }
   /** Wire-observed open primary turns; rewind and untargeted Stop use these before journal admission. */
   activeTurnIds?: Set<string>
+  /** This acquisition answered turn/steer as unsupported. */
+  steeringSupported?: boolean
   /** Interrupt-acknowledged turns cannot accept steers while awaiting turn/completed. */
   abortedTurnIds?: Set<string>
   turnOpenWaits: CodexTurnOpenWaits

@@ -2,7 +2,9 @@ import type { JournalCurrentWorkAuthority } from '../../agent-session-journal/jo
 import type { StructuredAgentSessionProviderChild } from '../host/structured-agent-session-host-types'
 import type { StructuredAgentSessionAdapter } from '../providers/structured-agent-session-adapter'
 import { structuredAgentSessionChildAcceptsInput } from './structured-agent-session-input-readiness'
-import { codexTurnOptionsDiffer } from '../options/structured-agent-session-message-options'
+import { captureStructuredMessageSteeringInputs } from '../options/structured-agent-session-message-options'
+import { structuredMessageSteeringFallback } from '../../../../shared/agent-session/options/structured-message-steering'
+import type { StructuredAgentRegistry } from '../providers/structured-agent-registry'
 import type { AgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-record'
 import type { SqlAgentSessionJournal as AgentSessionJournal } from '../../agent-session-journal/journal-sql-store'
 import type { QueuedMessageRow } from '../../agent-session-journal/queued-messages/queued-message-table'
@@ -61,6 +63,7 @@ export function canSteerStructuredQueuedMessage(
     child: StructuredAgentSessionProviderChild | null | undefined
     stopping: boolean
     adapter: StructuredAgentSessionAdapter
+    agents: Pick<StructuredAgentRegistry, 'capabilities'>
   },
   card: QueuedMessageRow
 ): boolean {
@@ -69,6 +72,10 @@ export function canSteerStructuredQueuedMessage(
     input.work &&
     input.child &&
     structuredAgentSessionChildAcceptsInput({ ...input, current: true }) &&
-    !codexTurnOptionsDiffer(input.record, card.options ?? undefined, input.child, input.adapter)
+    !structuredMessageSteeringFallback(
+      input.agents.capabilities(input.record.provider)?.steering === 'inject',
+      captureStructuredMessageSteeringInputs(input.record, input.child, input.adapter),
+      card.options ?? undefined
+    )
   )
 }

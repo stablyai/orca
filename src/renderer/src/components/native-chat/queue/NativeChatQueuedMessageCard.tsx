@@ -86,6 +86,24 @@ export function queuedMessageCardCaption(
       }
       return t('components.native-chat.queuedMessages.paused', 'Paused')
     case 'steer':
+      if (card.steerFallback === 'provider-queue-only') {
+        return t(
+          'components.native-chat.queuedMessages.providerQueueOnly',
+          'After this turn — provider cannot steer'
+        )
+      }
+      if (card.steerFallback === 'codex-options') {
+        return t(
+          'components.native-chat.queuedMessages.codexOptions',
+          'After this turn — options need a new turn'
+        )
+      }
+      if (card.steerFallback === 'codex-legacy') {
+        return t(
+          'components.native-chat.queuedMessages.codexLegacy',
+          'After this turn — Codex cannot steer'
+        )
+      }
       return t(
         'components.native-chat.queuedMessages.pendingSteer',
         'Pending steer — waiting to send'
@@ -172,7 +190,6 @@ export function NativeChatQueuedMessageCard({
   const t = useTranslate()
   const caption = queuedMessageCardCaption(card, agentName, statedFailures, t)
   const line = queuedMessageCardLine(card, nativeChatImageLabelCopy(t))
-  const returned = card.state === 'returned'
   const attention = queuedMessageCardNeedsAttention(card)
   const sendNow = queuedMessageCardSendNow(card, agentWorking, t)
   const busy = pending !== null
@@ -245,7 +262,7 @@ export function NativeChatQueuedMessageCard({
           {caption ? (
             <p
               className={
-                returned
+                card.state === 'returned'
                   ? 'truncate text-xs text-destructive'
                   : 'truncate text-xs text-muted-foreground'
               }

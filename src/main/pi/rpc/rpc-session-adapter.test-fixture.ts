@@ -73,7 +73,8 @@ export class FakeConnection implements PiRpcConnection {
     }
     return {}
   }
-  async send(frame: JsonlRpcRecord): Promise<void> {
+  async send(frame: JsonlRpcRecord, assertWritable?: () => void): Promise<void> {
+    assertWritable?.()
     this.sent.push(frame)
   }
   async close(): Promise<Awaited<ReturnType<PiRpcConnection['close']>>> {

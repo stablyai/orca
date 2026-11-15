@@ -10,6 +10,8 @@ export type AgentSessionQueuedMessagePausedReason =
   | typeof QUEUED_MESSAGE_PAUSED_SEND_FAILED
   | 'restarted'
 
+export type AgentSessionSteerFallback = 'provider-queue-only' | 'codex-options' | 'codex-legacy'
+
 /** Stop/failure pauses offer Resume; reopen-held steers publish a per-card pause instead. */
 export type AgentSessionQueuePause = { reason: 'stopped' | 'failed' }
 
@@ -44,6 +46,8 @@ export type AgentSessionQueuedMessage = {
   state: 'waiting' | 'returned'
   /** Accepted steer intent; not evidence of provider receipt. */
   deliveryMode?: 'queue' | 'steer'
+  /** Still unsent: this steer needs a new turn rather than active-turn injection. */
+  steerFallback?: AgentSessionSteerFallback
   /** Automatic delivery is held; an explicit Send can recover this card. */
   paused?: true
   /** Conversion failure or a steer held after reopening; unknown markers remain held. */

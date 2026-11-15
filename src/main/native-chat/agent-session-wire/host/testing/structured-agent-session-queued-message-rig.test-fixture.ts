@@ -54,6 +54,7 @@ export async function createQueuedMessageTestRig(
     probeOwner?: StructuredAgentSessionHostDeps['probeOwner']
     onRequestFailure?: StructuredAgentSessionHostDeps['onRequestFailure']
     usageLimitAutoContinue?: StructuredAgentSessionHostDeps['usageLimitAutoContinue']
+    agents?: StructuredAgentSessionHostDeps['agents']
   } = {}
 ) {
   const SESSION = options.sessionId ?? DEFAULT_SESSION
@@ -65,7 +66,7 @@ export async function createQueuedMessageTestRig(
   const journalDatabase = await openTestAgentSessionDatabase(root)
   const makeHost = () =>
     new StructuredAgentSessionHost({
-      agents: claudeAndCodexDeclared(),
+      agents: options.agents ?? claudeAndCodexDeclared(),
       logger: createStructuredAgentSessionLogger(),
       store,
       adapter: provider.adapter,

@@ -82,6 +82,8 @@ async function openChat(name: string, held: Set<string>) {
         journal,
         structuredQueueSendGate(
           {
+            agents: { capabilities: () => null },
+            adapter: {},
             store: {
               getConversation: () => null,
               replacedRuntime: () => undefined,

@@ -14,6 +14,7 @@ import { AgentSessionOptionRejectedError } from '../../native-chat/agent-session
 import { applyPiRpcSessionOption } from './options/rpc-options'
 import { PiRpcPromptError, preparePiRpcPrompt, type PiRpcPrompt } from './prompts/rpc-prompt'
 import type { PiRpcSession, PiRpcSessionDeps } from './rpc-session'
+import { StructuredAgentSessionInputNotAdmitted } from '../../native-chat/agent-session-wire/delivery/structured-agent-session-input-admission'
 
 type DispatchInput = Parameters<StructuredAgentSessionAdapter['dispatch']>[0]
 
@@ -94,14 +95,27 @@ export async function dispatchPiRpcMessage(
   if (!isCurrent() || session.connection.closed) {
     return exited()
   }
-  return submitPiRpcPrompt(session, input, prompt)
+  return submitPiRpcPrompt(session, input, prompt, () => {
+    if (input.signal?.aborted || !isCurrent() || session.connection.closed) {
+      throw new StructuredAgentSessionInputNotAdmitted({
+        state: 'rejected',
+        ...agentSessionFailureWords(
+          agentSessionFailureFact(input.signal?.aborted ? 'cancelled' : 'writeFailed', {
+            neverReachedAgent: true
+          }),
+          { agentName: 'Pi', surface: 'rejection' }
+        )
+      })
+    }
+  })
 }
 
 /** Pi runs the prompt on the model and effort it proved: its own state, never a stale report. */
 async function submitPiRpcPrompt(
   session: PiRpcSession,
   input: DispatchInput,
-  prompt: PiRpcPrompt
+  prompt: PiRpcPrompt,
+  assertWritable: () => void
 ): Promise<AgentSessionDispatchOutcome> {
   let ranOptions: Record<string, string> = {}
   const outcome = await session.submit(
@@ -112,7 +126,8 @@ async function submitPiRpcPrompt(
       await input.beforeDispatch?.()
       input.onExecutionSnapshot?.()
       ranOptions = Object.fromEntries(session.optionProof.current)
-    }
+    },
+    assertWritable
   )
   return outcome.state === 'accepted' || outcome.state === 'admitted'
     ? { ...outcome, ranOptions }

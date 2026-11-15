@@ -57,6 +57,7 @@ export type QueuedMessageCard = {
   /** A command card while the agent works: it offers no send until the agent is idle. */
   waitsForAgent?: true
   pausedReason?: string
+  steerFallback?: AgentSessionQueuedMessage['steerFallback']
   returnedReason?: string | null
   /** The typed fact the returned card's submission settled with; read like its `rejection`. */
   returnedRejection?: UnreadAgentSessionFailureFact
@@ -120,6 +121,7 @@ export function projectQueuedMessageCards(
           }
         : {}),
       ...(message.pausedReason !== undefined ? { pausedReason: message.pausedReason } : {}),
+      ...(message.steerFallback !== undefined ? { steerFallback: message.steerFallback } : {}),
       ...(message.returnedReason !== undefined ? { returnedReason: message.returnedReason } : {}),
       ...(message.returnedRejection !== undefined
         ? { returnedRejection: message.returnedRejection }

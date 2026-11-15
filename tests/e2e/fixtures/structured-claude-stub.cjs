@@ -34,10 +34,44 @@ const initializeResponse = {
 const TURN_MS = 500
 const SLOW_TURN_MS = 60_000
 let turnTimer = null
+let heldSteers = null
+let controlledTurn = false
 
-function startTurn(frame) {
+function releaseSteers() {
+  if (!fs.existsSync(`${launchLog}.release-echo`)) {
+    setTimeout(releaseSteers, 25)
+    return
+  }
+  const frames = heldSteers
+  heldSteers = null
+  clearTimeout(turnTimer)
+  turnTimer = null
+  for (const frame of frames) {
+    write({ ...frame, isReplay: true })
+  }
+  const finish = () => {
+    if (!fs.existsSync(`${launchLog}.finish-turn`)) {
+      setTimeout(finish, 25)
+      return
+    }
+    controlledTurn = false
+    startTurn(frames.at(-1), false)
+  }
+  finish()
+}
+
+function startTurn(frame, replay = true) {
+  if (heldSteers) {
+    heldSteers.push(frame)
+    return
+  }
   // The CLI's --replay-user-messages echo, which opens the turn.
-  write({ ...frame, isReplay: true })
+  if (replay) {
+    write({ ...frame, isReplay: true })
+  }
+  if (controlledTurn) {
+    return
+  }
   const prompt = JSON.stringify(frame.message ?? '')
   const slow = prompt.includes('slow')
   const pluginUi = prompt.includes('plugin-ui')
@@ -138,6 +172,18 @@ process.stdin.on('data', (chunk) => {
       })}\n`
     )
     if (frame?.type === 'user') {
+      const text = (frame.message?.content ?? []).map((block) => block.text ?? '').join('')
+      fs.appendFileSync(
+        `${launchLog}.user-prompts.jsonl`,
+        `${JSON.stringify({ text, sessionId, pid: process.pid })}\n`
+      )
+      if (text === 'A hold-echo') {
+        controlledTurn = true
+        heldSteers = [frame]
+        fs.writeFileSync(`${launchLog}.held`, '')
+        setTimeout(releaseSteers, 25)
+        continue
+      }
       startTurn(frame)
       continue
     }

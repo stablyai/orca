@@ -152,7 +152,8 @@ export function sendQueuedStructuredAgentMessage(
               work,
               child: context.sessions.get(ctx.sessionId)?.child,
               stopping: await context.readStopping(ctx.sessionId),
-              adapter: context.deps.adapter
+              adapter: context.deps.adapter,
+              agents: context.deps.agents
             },
             row
           ) ||

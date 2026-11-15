@@ -184,8 +184,8 @@ export class JsonlRpcAgentConnection {
     return this.peer.request(command, params, options)
   }
 
-  send(record: JsonlRpcRecord): Promise<void> {
-    return this.peer.send(record)
+  send(record: JsonlRpcRecord, assertWritable?: () => void): Promise<void> {
+    return this.peer.send(record, undefined, assertWritable)
   }
 
   pauseReading(): void {

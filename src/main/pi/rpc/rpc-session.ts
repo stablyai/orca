@@ -88,7 +88,7 @@ export class PiRpcSession {
     this.turns = new PiRpcTurns({
       lane: this.lane,
       generation,
-      send: (frame) => this.connection.send(frame),
+      send: (frame, assertWritable) => this.connection.send(frame, assertWritable),
       request: (command, params, options) => this.connection.request(command, params, options),
       prepareStateObservation: () =>
         this.optionObservations.prepareState((current) =>

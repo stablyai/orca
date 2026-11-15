@@ -1,4 +1,7 @@
-import { structuredMessageSteeringOptionsDiffer } from '../../../../shared/agent-session/options/codex-message-compiler'
+import {
+  structuredMessageSteeringOptionsDiffer,
+  type StructuredMessageSteeringInputs
+} from '../../../../shared/agent-session/options/codex-message-compiler'
 import type { AgentJournalSubmission } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentSessionJournalReads } from '../../agent-session-journal/journal-reads'
 import type { AgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-record'
@@ -30,13 +33,26 @@ export function codexTurnOptionsDiffer(
   child: StructuredAgentSessionProviderChild,
   adapter?: Pick<StructuredAgentSessionAdapter, 'captureMessageSteeringInputs'>
 ): boolean {
-  if (record.provider !== 'codex') {
-    return false
+  return structuredMessageSteeringOptionsDiffer(
+    captureStructuredMessageSteeringInputs(record, child, adapter),
+    options
+  )
+}
+
+export function captureStructuredMessageSteeringInputs(
+  record: Pick<AgentSessionRecord, 'provider' | 'sessionId'> | null,
+  child: StructuredAgentSessionProviderChild | null | undefined,
+  adapter?: Pick<StructuredAgentSessionAdapter, 'captureMessageSteeringInputs'>
+): StructuredMessageSteeringInputs {
+  if (record?.provider !== 'codex') {
+    return { kind: 'other' }
   }
-  const input = adapter?.captureMessageSteeringInputs?.({
-    sessionId: record.sessionId,
-    fence: child.fence,
-    acquisitionGeneration: child.generation
-  }) ?? { kind: 'codex-unavailable' }
-  return structuredMessageSteeringOptionsDiffer(input, options)
+  return (
+    (child &&
+      adapter?.captureMessageSteeringInputs?.({
+        sessionId: record.sessionId,
+        fence: child.fence,
+        acquisitionGeneration: child.generation
+      })) || { kind: 'codex-unavailable' }
+  )
 }

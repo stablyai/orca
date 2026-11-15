@@ -33,6 +33,7 @@ export type QueuedRigProviderOptions = {
   /** The model its child reports running; otherwise the agent's own `default`. */
   reportsModel?: string
   reportsEffort?: string
+  steeringSupported?: boolean
 }
 
 /** How long a winding-down child is given after the interrupt before the Stop ends it. */
@@ -118,6 +119,7 @@ export function createQueuedRigProvider(
     dispatch,
     captureMessageSteeringInputs: () => ({
       kind: 'codex',
+      steeringSupported: options.steeringSupported,
       compiler: {
         active: reported(),
         activeInput: reported(),

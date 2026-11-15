@@ -26,7 +26,7 @@ export type CodexMessageCompilerInputs = {
 export type StructuredMessageSteeringInputs =
   | { kind: 'other' }
   | { kind: 'codex-unavailable' }
-  | { kind: 'codex'; compiler: CodexMessageCompilerInputs }
+  | { kind: 'codex'; compiler: CodexMessageCompilerInputs; steeringSupported?: boolean }
 
 export function codexServiceTierForFastMode(
   encoded: string,
