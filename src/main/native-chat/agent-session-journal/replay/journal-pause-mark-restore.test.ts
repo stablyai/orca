@@ -14,7 +14,7 @@ import {
   AgentSessionJournalError,
   JournalOutcomeDecodeError
 } from '../writing/journal-write-guards'
-import { withTestAgentSessionDatabase } from '../../../runtime/agent-session/records/agent-session-record-store-test-harness'
+import { withTestAgentSessionDatabase } from '../../../runtime/agent-session/records/agent-session-record-store-persistence.test-fixture'
 
 const journals = createTrackedJournalOpener()
 let root: string

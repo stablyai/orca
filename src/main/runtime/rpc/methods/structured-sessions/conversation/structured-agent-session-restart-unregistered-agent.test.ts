@@ -21,9 +21,9 @@ import { setStructuredAgentSessionHost } from '../../../../../native-chat/agent-
 import { AgentSessionRecoveryCapsule } from '../../../../agent-session/records/agent-session-recovery-capsule'
 import {
   openTestAgentSessionRecordStore,
-  seedTestAgentSessionRecordStore,
   openTestAgentSessionDatabase
 } from '../../../../agent-session/records/agent-session-record-store-test-harness'
+import { seedTestAgentSessionRecordStore } from '../../../../agent-session/records/agent-session-record-store-persistence.test-fixture'
 import {
   call,
   clearStructuredHostStub
