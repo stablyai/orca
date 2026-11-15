@@ -27,7 +27,10 @@ export const AGENT_CONVERSATION_METHODS = [
     permission: 'workspace',
     params: AgentListParams,
     handler: async (params, { runtime }): Promise<AgentListResult> =>
-      projectAgentConversationList(await runtime.getWorktreePs(AGENT_LIST_WORKTREE_LIMIT), params)
+      projectAgentConversationList(
+        await runtime.getWorktreePs(AGENT_LIST_WORKTREE_LIMIT, true, false, params.worktreeId),
+        params
+      )
   }),
   defineMethod({
     name: 'agent.show',

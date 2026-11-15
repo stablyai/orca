@@ -62,7 +62,13 @@ async function readChat(
       `Agent ${orcaSessionId} runs on another host. Read it there, or add \`--environment <host>\`.`
     )
   }
-  const sessionId = running.kind === 'here' ? running.sessionId : record.sessionId
+  if (running.kind === 'unverifiable') {
+    throw new AgentConversationRefusal(
+      CODES.unavailable,
+      `Orca can't verify agent ${orcaSessionId}'s current conversation after /clear. Open the agent in Orca and try reading it again.`
+    )
+  }
+  const sessionId = running.sessionId
   const host = await requireInstalledStructuredHost(ctx, sessionId)
   const page = await host.reads.agentReadPage(sessionId, limit)
   return {

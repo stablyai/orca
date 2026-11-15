@@ -6,24 +6,36 @@ const hookServer = vi.hoisted(() => ({
   isTerminalAgentId: vi.fn<(id: string) => Promise<boolean | undefined>>(),
   terminalAgentIdsOfProviderSession: vi.fn<(id: string) => Promise<unknown>>()
 }))
-const chats = vi.hoisted(() => ({ ids: new Set<string>(), aliases: new Map<string, string>() }))
+const chats = vi.hoisted(() => ({
+  ids: new Set<string>(),
+  aliases: new Map<string, string>(),
+  installed: true
+}))
 
 vi.mock('../../agent-hooks/server/agent-hook-server', () => ({ agentHookServer: hookServer }))
 vi.mock('../orchestration/addressing/session-lineage/structured-session-lineage', async (load) => ({
   ...(await load<object>()),
-  readAgentSessionRecordStore: () => ({
-    getRecord: (id: string) =>
-      chats.ids.has(id) ? { sessionId: id, provider: 'codex', providerHandleChain: [] } : null,
-    listRecords: () => [],
-    providerAliasOwner: (id: string) => chats.aliases.get(id) ?? null
-  })
+  readAgentSessionRecordStore: () =>
+    chats.installed
+      ? {
+          getRecord: (id: string) =>
+            chats.ids.has(id)
+              ? { sessionId: id, provider: 'codex', providerHandleChain: [] }
+              : null,
+          listRecords: () => [],
+          providerAliasOwner: (id: string) => chats.aliases.get(id) ?? null
+        }
+      : null
 }))
 
 const CHAT = 'codex_0b8f2a4e_6c1d_4f7a_9e3b_5a2c8d1f0e47'
 const TERMINAL = 'claude_5688af50_12a0_4b0b_9a4a_098d87fe1e68'
-const runtime = { ensureStructuredAgentSessionHost: async () => undefined }
+const runtime = { openAgentSessionRecordStore: vi.fn(), ensureStructuredAgentSessionHost: vi.fn() }
 
 beforeEach(() => {
+  chats.installed = true
+  runtime.openAgentSessionRecordStore.mockReset()
+  runtime.ensureStructuredAgentSessionHost.mockReset()
   chats.ids = new Set([CHAT])
   chats.aliases = new Map()
   hookServer.isTerminalAgentId.mockReset().mockResolvedValue(false)
@@ -94,4 +106,19 @@ describe('resolveAgentConversation', () => {
       code: 'agent_unavailable'
     })
   })
+})
+
+it('resolves a terminal with only the record store open and no chat host', async () => {
+  chats.installed = false
+  runtime.openAgentSessionRecordStore.mockResolvedValue({
+    getConversation: () => null,
+    listConversations: () => [],
+    getVisibleSessionTabIndex: () => ({ present: false, sessionIds: [] })
+  })
+  hookServer.isTerminalAgentId.mockResolvedValue(true)
+  expect(await resolveAgentConversation(runtime, TERMINAL)).toEqual({
+    kind: 'terminal',
+    orcaSessionId: TERMINAL
+  })
+  expect(runtime.ensureStructuredAgentSessionHost).not.toHaveBeenCalled()
 })

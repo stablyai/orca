@@ -76,8 +76,7 @@ export function createStructuredAgentSessionConversationReads(context: () => Rea
       (await journalOf(sessionId)).reads.item(itemId),
     automationRun: async (sessionId: string, messageId: string, inputIds: readonly string[]) =>
       (await journalOf(sessionId)).reads.automationRun(messageId, inputIds),
-    /** One `orca agent read` page, opened at rest; a pending prompt waits only while the held
-     *  session can still answer it, and every pending one does with no session held. */
+    /** Opened at rest; pending prompts wait only while the conversation can answer them. */
     agentReadPage: async (sessionId: string, limit: number) => {
       const journal = await journalOf(sessionId)
       const { deps, sessions } = context()

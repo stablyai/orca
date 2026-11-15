@@ -9,11 +9,13 @@ import type { AgentSessionConversationView } from '../../../shared/agent-session
 import { AGENT_CONVERSATION_REFUSAL_CODES as CODES } from '../../../shared/agent-conversations/agent-conversation-contracts'
 import { lookupOrcaAgentSession } from '../orchestration/mailbox/routing/structured-session-mail-address'
 import {
+  conversationRecordReader,
   readAgentSessionRecordStore,
   type AgentSessionRecordReader
 } from '../orchestration/addressing/session-lineage/structured-session-lineage'
 import { canonicalOrcaSessionId } from '../orchestration/addressing/session-lineage/canonical-orca-session-id'
 import { agentHookServer } from '../../agent-hooks/server/agent-hook-server'
+import type { AgentSessionRecordStore } from '../agent-session/records/agent-session-record-store'
 import { AgentConversationRefusal } from './agent-conversation-refusal'
 import { isReverseLookupUnavailable } from '../../agent-hooks/identity/agent-identity-worker-protocol'
 
@@ -31,7 +33,7 @@ export type ResolvedAgentConversation =
  *  store alone, then this host's terminal agent ids. Resolution reads records only; it never
  *  needs, starts or wakes a running agent. */
 export async function resolveAgentConversation(
-  runtime: { ensureStructuredAgentSessionHost(): Promise<unknown> },
+  runtime: { openAgentSessionRecordStore(): Promise<AgentSessionRecordStore> },
   input: string
 ): Promise<ResolvedAgentConversation> {
   const text = input.trim()
@@ -42,9 +44,12 @@ export async function resolveAgentConversation(
     )
   }
   const id = orcaSessionIdOf(text)
-  // The chat store opens lazily; installing it reads records and starts no agent.
-  await runtime.ensureStructuredAgentSessionHost().catch(() => undefined)
-  const store = readAgentSessionRecordStore()
+  const store =
+    readAgentSessionRecordStore() ??
+    (await runtime
+      .openAgentSessionRecordStore()
+      .then(conversationRecordReader)
+      .catch(() => null))
   // A provider's own id is matched as typed; only Orca IDs are respelled.
   const asTyped = store ? lookupOrcaAgentSession(store, text) : null
   if (asTyped?.kind === 'provider-id') {

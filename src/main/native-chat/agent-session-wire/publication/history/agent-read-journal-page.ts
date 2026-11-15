@@ -1,9 +1,7 @@
 import type { AgentReadEntry } from '../../../../../shared/agent-conversations/agent-conversation-contracts'
 import { agentChatEntryOf } from '../../../../../shared/agent-conversations/agent-chat-entries'
-import {
-  AGENT_SESSION_HISTORY_MAX_LIMIT,
-  type AgentSessionHistoryRequest
-} from '../../../../../shared/agent-session/agent-session-wire'
+import { AGENT_SESSION_HISTORY_MAX_LIMIT } from '../../../../../shared/agent-session/agent-session-wire'
+import { isAgentSessionContextClear } from '../../../../../shared/agent-session/agent-session-context-clear'
 import type { AgentJournalRenderItem } from '../../../../../shared/agent-session/journal/agent-session-journal-types'
 import type { SqlAgentSessionJournal } from '../../../agent-session-journal/journal-sql-store'
 import { readAgentSessionHistory } from './agent-session-history-page'
@@ -14,50 +12,39 @@ import {
 
 export type AgentReadJournalPage = { entries: AgentReadEntry[]; limited: boolean }
 
-/** One `orca agent read` page from a chat's journal: its newest entries in the current context,
- *  walked back over the chat's own bounded history pages, so it never renders the timeline. A
- *  page stops at `limit` entries or the history page byte budget, whichever comes first; entries
- *  keep the history wire form (visibly shortened, or the too-large marker when even that can't
- *  fit). `waiting`: the live answer for a pending prompt. */
+/** One bounded root-only history window, from one snapshot. Stop at its latest `/clear`
+ *  divider; sparse non-entry rows spend the window too, so they cannot cause an unbounded walk. */
 export async function readAgentJournalPage(
   journal: SqlAgentSessionJournal,
   request: { sessionId: string; limit: number },
   waiting: (itemId: string) => boolean
 ): Promise<AgentReadJournalPage> {
   const page = new PageBudget(request.limit)
-  // The chat shows only what follows the latest `/clear`; its divider opens the read.
-  const floor = (await journal.reads.contextFloor())?.sequence ?? 0
+  const read = await readAgentSessionHistory(
+    journal,
+    {
+      sessionId: request.sessionId,
+      direction: 'tail',
+      limit: Math.min(AGENT_SESSION_HISTORY_MAX_LIMIT, 2 * request.limit + 1)
+    },
+    { scope: 'own-agent' }
+  )
   const newestFirst: AgentReadEntry[] = []
-  let history: AgentSessionHistoryRequest = {
-    sessionId: request.sessionId,
-    direction: 'tail',
-    limit: AGENT_SESSION_HISTORY_MAX_LIMIT
-  }
-  for (;;) {
-    const read = await readAgentSessionHistory(journal, history)
-    if (!read.ok && history.direction === 'before') {
-      // The history was replaced under the walk; the entries so far are all this page can vouch for.
-      return { entries: newestFirst.toReversed(), limited: true }
-    }
-    const { items, hasOlder, window } = read.page
-    for (const item of items.toReversed()) {
-      if (item.sequence < floor) {
-        return { entries: newestFirst.toReversed(), limited: false }
-      }
-      const entry = entryOf(item, waiting)
-      if (!entry) {
-        continue
-      }
+  let omitted = false
+  for (const item of read.page.items.toReversed()) {
+    const entry = entryOf(item, waiting)
+    if (entry) {
       if (!page.admit(entry)) {
         return { entries: newestFirst.toReversed(), limited: true }
       }
       newestFirst.push(entry)
+      omitted ||= entry.shortened === true
     }
-    if (!hasOlder || !window.oldest) {
-      return { entries: newestFirst.toReversed(), limited: false }
+    if (isAgentSessionContextClear(item.body)) {
+      return { entries: newestFirst.toReversed(), limited: omitted }
     }
-    history = { ...history, direction: 'before', cursor: window.oldest }
   }
+  return { entries: newestFirst.toReversed(), limited: omitted || read.page.hasOlder }
 }
 
 /** The entry a history item reads as. One no page could carry reads as the history's own
@@ -66,7 +53,10 @@ function entryOf(
   item: AgentJournalRenderItem,
   waiting: (itemId: string) => boolean
 ): AgentReadEntry | null {
-  const entry = agentChatEntryOf(item, waiting)
+  const entry: AgentReadEntry | null =
+    item.body.kind === 'status' && item.body.presentation === 'history-item-too-large'
+      ? { kind: 'message', role: 'system', text: String(item.body.text), shortened: true }
+      : agentChatEntryOf(item, waiting)
   if (!entry) {
     return null
   }
@@ -78,7 +68,8 @@ function entryOf(
   return {
     kind: 'message',
     role: 'system',
-    text: marker.kind === 'status' ? String(marker.text) : ''
+    text: marker.kind === 'status' ? String(marker.text) : '',
+    shortened: true
   }
 }
 
