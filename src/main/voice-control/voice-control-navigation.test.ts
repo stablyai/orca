@@ -10,7 +10,7 @@ import { navigateSurfaceForVerb } from './voice-control-navigation'
  * channel fails here instead of silently no-op'ing a voice command.
  */
 const PRELOAD_BRIDGE = readFileSync(
-  join(__dirname, '../../preload/api/ui-bridge-state-and-menu-commands.ts'),
+  join(__dirname, '../../preload/api/window-ui/ui-bridge-state-and-menu-commands.ts'),
   'utf8'
 )
 

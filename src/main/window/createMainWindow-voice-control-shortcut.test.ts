@@ -1,74 +1,60 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-vi.mock('electron', async () =>
-  (await import('./createMainWindow-test-harness')).electronModuleMock()
-)
-vi.mock('./macos-tahoe-release', async () =>
-  (await import('./createMainWindow-test-harness')).macosTahoeReleaseMock()
-)
-vi.mock('../app-icon', async () => (await import('./createMainWindow-test-harness')).appIconMock())
-vi.mock('../browser/browser-manager', async () =>
-  (await import('./createMainWindow-test-harness')).browserManagerMock()
-)
+vi.mock('electron', () => ({
+  app: { isPackaged: false }
+}))
 
-import { createMainWindow } from './createMainWindow'
-import { resetExpectedTeardownStateForTest } from '../crash-reporting/process-exits/expected-teardown-state'
-import { browserWindowMock, resetMainWindowMocks } from './createMainWindow-test-harness'
+import { installMainWindowShortcutRouting } from './main-window/main-window-shortcut-routing'
 
-describe('createMainWindow voice control shortcut', () => {
+type BeforeInputEvent = { preventDefault: () => void }
+type BeforeInput = {
+  type: string
+  code: string
+  key: string
+  meta: boolean
+  control: boolean
+  alt: boolean
+  shift: boolean
+  isAutoRepeat?: boolean
+}
+
+describe('main window voice control shortcut', () => {
   beforeEach(() => {
-    resetMainWindowMocks()
-    resetExpectedTeardownStateForTest()
     vi.useRealTimers()
   })
 
   it('intercepts the voice control chord only with the gate on, and only where voice.control is bound (macOS by default)', () => {
-    const windowHandlers: Record<string, (...args: any[]) => void> = {}
+    const windowHandlers: Record<string, (event: BeforeInputEvent, input: BeforeInput) => void> = {}
     const webContents = {
-      on: vi.fn((event, handler) => {
+      on: vi.fn((event: string, handler: (event: BeforeInputEvent, input: BeforeInput) => void) => {
         windowHandlers[event] = handler
       }),
-      setZoomLevel: vi.fn(),
-      setBackgroundThrottling: vi.fn(),
-      invalidate: vi.fn(),
-      setWindowOpenHandler: vi.fn(),
       send: vi.fn(),
-      setWebRTCIPHandlingPolicy: vi.fn(),
       isDevToolsOpened: vi.fn(),
       openDevTools: vi.fn(),
       closeDevTools: vi.fn()
     }
-    const browserWindowInstance = {
-      webContents,
-      on: vi.fn(),
-      isDestroyed: vi.fn(() => false),
-      isMaximized: vi.fn(() => true),
-      isFullScreen: vi.fn(() => false),
-      getSize: vi.fn(() => [1200, 800]),
-      setSize: vi.fn(),
-      maximize: vi.fn(),
-      show: vi.fn(),
-      loadFile: vi.fn(() => Promise.resolve()),
-      loadURL: vi.fn(() => Promise.resolve())
+    const focus = {
+      isFloatingPanelFocused: () => false,
+      isFloatingTerminalInputFocused: () => false,
+      isMarkdownEditorFocused: () => false,
+      isShortcutRecorderFocused: () => false,
+      isTerminalInputFocused: () => false
     }
-    browserWindowMock.mockImplementation(function () {
-      return browserWindowInstance
-    })
-
     const voice: { enabled: boolean; sttModel: string; control: { enabled: boolean } } = {
       enabled: true,
       sttModel: 'test-model',
       control: { enabled: false }
     }
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: partial deps mock; the shortcut path reads only getSettings().voice.control.enabled and never touches UI state.
-    createMainWindow({
-      getUI: () => ({}),
-      getSettings: () => ({ windowBackgroundBlur: false, voice }),
-      updateUI: vi.fn()
+    installMainWindowShortcutRouting({
+      focus,
+      mainWindow: { webContents, on: vi.fn() },
+      store: { getSettings: () => ({ voice }) }
     } as never)
 
     const isDarwin = process.platform === 'darwin'
-    const controlInput = {
+    const controlInput: BeforeInput = {
       type: 'keyDown',
       code: 'KeyV',
       key: 'v',
@@ -78,24 +64,24 @@ describe('createMainWindow voice control shortcut', () => {
       shift: true
     }
 
+    const beforeInput = windowHandlers['before-input-event']
+    expect(beforeInput).toBeDefined()
+
     const disabledPreventDefault = vi.fn()
-    windowHandlers['before-input-event']({ preventDefault: disabledPreventDefault }, controlInput)
+    beforeInput({ preventDefault: disabledPreventDefault }, controlInput)
     expect(disabledPreventDefault).not.toHaveBeenCalled()
     expect(webContents.send).not.toHaveBeenCalledWith('ui:voiceControlToggle')
 
     voice.control.enabled = true
     const enabledPreventDefault = vi.fn()
-    windowHandlers['before-input-event']({ preventDefault: enabledPreventDefault }, controlInput)
+    beforeInput({ preventDefault: enabledPreventDefault }, controlInput)
     if (isDarwin) {
       expect(enabledPreventDefault).toHaveBeenCalledTimes(1)
       expect(webContents.send).toHaveBeenCalledWith('ui:voiceControlToggle')
 
       webContents.send.mockClear()
       const repeatPreventDefault = vi.fn()
-      windowHandlers['before-input-event'](
-        { preventDefault: repeatPreventDefault },
-        { ...controlInput, isAutoRepeat: true }
-      )
+      beforeInput({ preventDefault: repeatPreventDefault }, { ...controlInput, isAutoRepeat: true })
       expect(repeatPreventDefault).toHaveBeenCalledTimes(1)
       expect(webContents.send).not.toHaveBeenCalled()
     } else {

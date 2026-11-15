@@ -29,7 +29,7 @@ import {
 } from './voice-control-tracing'
 import type { VoiceTranscriptEntry } from './voice-control-transcript-log'
 import { VoiceControlWorkLedger } from './voice-control-work-ledger'
-import type { RuntimeWorktreePsSummary } from '../../shared/runtime-worktree-contracts'
+import type { RuntimeWorktreePsSummary } from '../../shared/worktree/catalog/runtime-worktree-contracts'
 import type { TuiAgent } from '../../shared/agent-launch/catalog/tui-agent'
 
 /**

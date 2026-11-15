@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useShortcutLabel } from '@/hooks/useShortcutLabel'
-import type { VoiceSettings } from '../../../../../shared/speech-types'
+import type { VoiceSettings } from '../../../../../shared/speech/speech-types'
 import type {
   OpenAiRealtimeVoice,
   VoiceControlAgentVoiceMode,
@@ -76,10 +76,7 @@ function idleSuspendMinutesLabel(minutes: number): string {
 function voiceSpeedLabel(speed: number): string {
   switch (speed) {
     case 1.25:
-      return translate(
-        'auto.components.settings.VoiceControlSettingsSection.2620edd21a',
-        '1.25×'
-      )
+      return translate('auto.components.settings.VoiceControlSettingsSection.2620edd21a', '1.25×')
     case 1.5:
       return translate('auto.components.settings.VoiceControlSettingsSection.d6e8e02d37', '1.5×')
     default:

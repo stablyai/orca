@@ -9,7 +9,7 @@ import {
   getDefaultVoiceControlSettings,
   getDefaultVoiceSettings
 } from '../../../../../shared/constants'
-import type { VoiceSettings } from '../../../../../shared/speech-types'
+import type { VoiceSettings } from '../../../../../shared/speech/speech-types'
 import { OPENAI_REALTIME_VOICES } from '../../../../../shared/voice-control-types'
 import { VoiceControlSettingsSection } from './VoiceControlSettingsSection'
 

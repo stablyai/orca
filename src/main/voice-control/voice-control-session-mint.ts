@@ -1,5 +1,5 @@
 import type { MainHttpClient } from '../network/http-client'
-import type { RuntimeWorktreePsSummary } from '../../shared/runtime-worktree-contracts'
+import type { RuntimeWorktreePsSummary } from '../../shared/worktree/catalog/runtime-worktree-contracts'
 import type { VoiceControlSettings } from '../../shared/voice-control-types'
 import {
   mintRealtimeClientSecret,

@@ -10,7 +10,7 @@ import type {
   VoiceUiAction,
   VoiceUiActionResult
 } from '../../shared/voice-control-types'
-import type { RuntimeWorktreePsSummary } from '../../shared/runtime-worktree-contracts'
+import type { RuntimeWorktreePsSummary } from '../../shared/worktree/catalog/runtime-worktree-contracts'
 import { runVoiceCommand } from './voice-control-command-runner'
 import { openVoiceControlRun } from './voice-control-participant'
 import { VoiceControlSessionBackendImpl } from './voice-control-session-backend'
