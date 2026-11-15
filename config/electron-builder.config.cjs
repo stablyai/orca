@@ -701,15 +701,10 @@ module.exports = {
     mimeTypes: ['text/markdown', 'text/csv', 'text/tab-separated-values'],
     // Avoid GNOME Orca’s orca package and /usr/bin/orca names.
     executableName: 'orca-ide',
+    // Keep the desktop filename aligned with Electron's app_id and WM_CLASS.
+    syncDesktopName: true,
     // Use icns to generate hicolor sizes; some Linux docks ignore a lone 1024px PNG.
     icon: 'resources/build/icon.icns',
-    desktop: {
-      entry: {
-        // Why: Electron reports WM_CLASS=orca for the visible Linux window;
-        // GNOME docks need an exact match to group it with orca-ide.desktop.
-        StartupWMClass: 'orca'
-      }
-    },
     extraResources: [
       ...commonExtraResources,
       ...createPackagedRuntimeNodeModuleResources('linux'),
