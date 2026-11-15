@@ -191,6 +191,19 @@ fi
 "$ORCA_HOME/bin/orca-sandbox-env" >/dev/null || echo 'session env file unavailable; secrets apply at boot only' >&2
 unset ORCA_SECRET_ENV
 
+# OpenCode's first run in a VM installs its plugin SDK into ~/.config/opencode, creates its database
+# and fetches its model list: ~2.5 s more on the first launch (5.2 s vs 2.7 s warm, n72). orca-sandbox-env
+# just wrote that config, so do the first run now, in the background at low priority, with no
+# credentials (`opencode models` does all of it and exits). Skipped once it has run on this disk.
+if [ -x "$ORCA_HOME/tools/bin/opencode" ] && [ ! -d "$HOME/.config/opencode/node_modules" ]; then
+  (
+    cd "$HOME" || exit 0
+    env -i HOME="$HOME" USER="$(id -un)" LANG=C.UTF-8 PATH="$ORCA_HOME/tools/bin:/usr/local/bin:/usr/bin:/bin" \
+      OPENCODE_DISABLE_AUTOUPDATE=1 setsid nohup nice -n 19 timeout 120 \
+      "$ORCA_HOME/tools/bin/opencode" models </dev/null >/dev/null 2>&1 9>&- &
+  )
+fi
+
 # Agent CLIs installed with the image's npm (codex, gemini, ...) are `#!/usr/bin/env node` scripts:
 # terminals need that node on PATH, not only orcad's bundled runtime.
 system_node="$(command -v node 2>/dev/null || echo "$node")"
