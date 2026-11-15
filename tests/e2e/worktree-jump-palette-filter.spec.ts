@@ -1,6 +1,6 @@
 import type { Locator, Page } from '@stablyai/playwright-test'
 import type { ExecutionHostId } from '../../src/shared/execution-host'
-import { getPaletteWorktreeIdentity } from '../../src/renderer/src/lib/palette-repo-resolution'
+import { getPaletteWorktreeIdentity } from '../../src/renderer/src/lib/workspace/search/palette-repo-resolution'
 import { encodePaletteIdentity } from '../../src/shared/palette-match/palette-ranking'
 import { expect, test } from './helpers/orca-app'
 import { waitForActiveWorktree, waitForSessionReady } from './helpers/store'

@@ -1,11 +1,13 @@
-import type { MarkdownDocument } from '../../../../../../shared/filesystem-entry-types'
-import type { EditorFileOperationProvenance } from '@/lib/editor-file-operation-provenance'
+import type { MarkdownDocument } from '../../../../../../shared/file-listing/file-document'
+import type { EditorFileOperationProvenance } from '@/lib/editor/file-operations/editor-file-operation-provenance'
 
 export type MarkdownPreviewProps = {
   content: string
   filePath: string
   sourceFileId?: string | null
   sourceWorktreeId?: string | null
+  /** Workspace-relative path of the previewed file, as the editor names it. */
+  sourceRelativePath?: string | null
   sourceRuntimeEnvironmentId?: string | null
   scrollCacheKey: string
   initialAnchor?: string | null

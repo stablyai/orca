@@ -1,19 +1,20 @@
 import { WebSocketServer, type WebSocket } from 'ws'
 import { createServer, type Server } from 'node:http'
+import { randomBytes } from 'node:crypto'
 import type { WebContents } from 'electron'
 import { CdpClientResponseWriter } from './cdp-client-response-writer'
-import { CdpSyntheticSessionRegistry } from '../commands/cdp-synthetic-session-registry'
+import { CdpSyntheticSessionRegistry } from './cdp-synthetic-session-registry'
 import { CdpTargetDiscovery } from './cdp-target-discovery'
-import { CdpDebuggerChannel } from '../commands/cdp-debugger-channel'
+import { CdpDebuggerChannel } from '../debugger/cdp-debugger-channel'
 import { CdpPageNavigationCommands } from '../commands/cdp-page-navigation-commands'
-import { CdpDomFocusReplay } from '../commands/cdp-dom-focus-replay'
+import { CdpDomFocusReplay } from '../input/cdp-dom-focus-replay'
 import { CdpElementCapture } from '../commands/cdp-element-capture'
 import { CdpPageCaptureCommands } from '../commands/cdp-page-capture-commands'
-import type { CapturePaintHold } from '../commands/cdp-screenshot'
+import type { CapturePaintHold } from '../debugger/guest-paint-hold'
 import type { AgentInputFocusGuard } from '../input/agent-input-focus-guard'
-import { CdpPageInputCommands, type ShowAgentPointer } from '../commands/cdp-page-input-commands'
-import { isTrustedCdpLoopbackRequest } from './cdp-loopback-request-guard'
-import { parseCdpClientCommand } from '../commands/cdp-client-command'
+import { CdpPageInputCommands, type ShowAgentPointer } from '../input/cdp-page-input-commands'
+import { admitCdpProxyRequest, verifyCdpProxyUpgrade } from './cdp-loopback-request-guard'
+import { parseCdpClientCommand } from './cdp-client-command'
 import {
   assertRemoteCliPageAccess,
   runUnderRemoteCliPageAdmission
@@ -25,6 +26,7 @@ export class CdpWsProxy {
   private client: WebSocket | null = null
   private detachClientListeners: (() => void) | null = null
   private port = 0
+  private readonly token = randomBytes(32).toString('hex')
   private stopped = false
   private readonly responder = new CdpClientResponseWriter(() => this.client)
   private readonly sessions = new CdpSyntheticSessionRegistry()
@@ -43,11 +45,8 @@ export class CdpWsProxy {
     guardFocus: AgentInputFocusGuard = async () => () => {},
     showAgentPointer: ShowAgentPointer = async () => {}
   ) {
-    this.discovery = new CdpTargetDiscovery(
-      webContents,
-      this.responder,
-      this.sessions,
-      () => this.port
+    this.discovery = new CdpTargetDiscovery(webContents, this.responder, this.sessions, () =>
+      this.getEndpoint()
     )
     this.debuggerChannel = new CdpDebuggerChannel(
       webContents,
@@ -91,16 +90,17 @@ export class CdpWsProxy {
     }
     return new Promise<string>((resolve, reject) => {
       this.httpServer = createServer((req, res) => {
-        if (!isTrustedCdpLoopbackRequest(req, this.port)) {
-          res.writeHead(403)
+        const admission = admitCdpProxyRequest(req, this.port, this.token)
+        if ('status' in admission) {
+          res.writeHead(admission.status)
           res.end()
           return
         }
-        this.discovery.handleHttpRequest(req, res)
+        this.discovery.handleHttpRequest(admission.path, res)
       })
       this.wss = new WebSocketServer({
         server: this.httpServer,
-        verifyClient: ({ req }, done) => done(isTrustedCdpLoopbackRequest(req, this.port), 403)
+        verifyClient: ({ req }, done) => verifyCdpProxyUpgrade(req, this.port, this.token, done)
       })
       const failStart = (error: Error): void => {
         this.httpServer?.removeListener('error', onListenError)
@@ -148,7 +148,7 @@ export class CdpWsProxy {
         const addr = this.httpServer!.address()
         if (typeof addr === 'object' && addr) {
           this.port = addr.port
-          resolve(`ws://127.0.0.1:${this.port}`)
+          resolve(this.getEndpoint())
         } else {
           failStart(new Error('Failed to bind proxy server'))
         }
@@ -176,6 +176,10 @@ export class CdpWsProxy {
 
   getPort(): number {
     return this.port
+  }
+
+  getEndpoint(): string {
+    return `ws://127.0.0.1:${this.port}/${this.token}`
   }
 
   private closeClient(): void {

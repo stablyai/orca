@@ -1,4 +1,5 @@
 import { translate } from '@/i18n/i18n'
+import { useIntlLocale, useTranslate, type Translate } from '@/i18n/use-translate'
 import { Button } from '@/components/ui/button'
 import type { LargeDiffRenderLimit } from '../../../../../../shared/large-diff-render-limit'
 import { uiNumberFormat } from '@/i18n/ui-intl-formatters'
@@ -15,19 +16,21 @@ type LargeDiffFallbackProps = {
 
 const NUMBER_OPTIONS: Intl.NumberFormatOptions = {}
 
-function formatCount(value: number): string {
-  return uiNumberFormat(NUMBER_OPTIONS).format(value)
+function formatCount(value: number, intlLocale?: string): string {
+  return uiNumberFormat(NUMBER_OPTIONS, intlLocale).format(value)
 }
 
 function formatLineCount(
   renderLimit: Extract<LargeDiffRenderLimit, { limited: true }>,
-  side: 'original' | 'modified'
+  side: 'original' | 'modified',
+  t: Translate = translate,
+  intlLocale?: string
 ): string {
   if (!renderLimit.lineCounts) {
-    return translate('auto.components.editor.LargeDiffFallback.7944ed9fb8', 'Not counted')
+    return t('auto.components.editor.LargeDiffFallback.7944ed9fb8', 'Not counted')
   }
   const suffix = renderLimit.lineCountsAreMinimum?.[side] ? '+' : ''
-  return `${formatCount(renderLimit.lineCounts[side])}${suffix}`
+  return `${formatCount(renderLimit.lineCounts[side], intlLocale)}${suffix}`
 }
 
 export function LargeDiffFallback({
@@ -35,13 +38,15 @@ export function LargeDiffFallback({
   renderLimit,
   action
 }: LargeDiffFallbackProps): React.JSX.Element {
+  const t = useTranslate()
+  const intlLocale = useIntlLocale()
   const reason =
     renderLimit.reason === 'line-count'
-      ? translate(
+      ? t(
           'auto.components.editor.LargeDiffFallback.a3c74f8a21',
           'line count exceeds the safe display limit'
         )
-      : translate(
+      : t(
           'auto.components.editor.LargeDiffFallback.fd92fbde46',
           'character count exceeds the safe display limit'
         )
@@ -53,7 +58,7 @@ export function LargeDiffFallback({
     >
       <div className="max-w-xl space-y-3 text-center">
         <div className="text-sm font-medium text-foreground">
-          {translate(
+          {t(
             'auto.components.editor.LargeDiffFallback.7d424bb761',
             'This diff is too large to display safely.'
           )}
@@ -61,29 +66,29 @@ export function LargeDiffFallback({
         <div className="break-all text-xs">{filePath}</div>
         <div className="grid gap-1 text-xs sm:grid-cols-2 sm:text-left">
           <div>
-            {translate('auto.components.editor.LargeDiffFallback.28aa2cc90b', 'Original lines')}:{' '}
-            {formatLineCount(renderLimit, 'original')}
+            {t('auto.components.editor.LargeDiffFallback.28aa2cc90b', 'Original lines')}:{' '}
+            {formatLineCount(renderLimit, 'original', t, intlLocale)}
           </div>
           <div>
-            {translate('auto.components.editor.LargeDiffFallback.20857938dd', 'Modified lines')}:{' '}
-            {formatLineCount(renderLimit, 'modified')}
+            {t('auto.components.editor.LargeDiffFallback.20857938dd', 'Modified lines')}:{' '}
+            {formatLineCount(renderLimit, 'modified', t, intlLocale)}
           </div>
           <div>
-            {translate('auto.components.editor.LargeDiffFallback.e5f0d2182e', 'Characters')}:{' '}
-            {formatCount(renderLimit.characterCount)}
+            {t('auto.components.editor.LargeDiffFallback.e5f0d2182e', 'Characters')}:{' '}
+            {formatCount(renderLimit.characterCount, intlLocale)}
           </div>
           <div>
-            {translate('auto.components.editor.LargeDiffFallback.877c25a02f', 'Reason')}: {reason}
+            {t('auto.components.editor.LargeDiffFallback.877c25a02f', 'Reason')}: {reason}
           </div>
         </div>
         <div className="text-[11px]">
           {/* Both limits are large fixed values, so the plural form never varies. */}
-          {translate(
+          {t(
             'auto.components.editor.LargeDiffFallback.limitsSummary',
             'Limits: {{lines}} lines per side · {{characters}} combined characters',
             {
-              lines: formatCount(renderLimit.limits.maxLinesPerSide),
-              characters: formatCount(renderLimit.limits.maxCombinedCharacters)
+              lines: formatCount(renderLimit.limits.maxLinesPerSide, intlLocale),
+              characters: formatCount(renderLimit.limits.maxCombinedCharacters, intlLocale)
             }
           )}
         </div>

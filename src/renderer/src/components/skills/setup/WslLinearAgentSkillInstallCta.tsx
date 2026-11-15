@@ -8,15 +8,18 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import {
   GLOBAL_AGENT_SKILL_SOURCE_KINDS,
   useInstalledAgentSkillNames
-} from '@/hooks/useInstalledAgentSkills'
-import { LINEAR_AGENT_SKILL_NAMES, ORCA_LINEAR_SKILL_NAME } from '@/lib/agent-feature-skill-names'
+} from '@/hooks/skills/discovery/useInstalledAgentSkills'
+import {
+  LINEAR_AGENT_SKILL_NAMES,
+  ORCA_LINEAR_SKILL_NAME
+} from '@/lib/skills/installation/agent-feature-skill-names'
 import {
   ORCA_LINEAR_SKILL_INSTALL_COMMAND,
   buildAgentFeatureSkillInstallCommand
-} from '@/lib/agent-feature-install-commands'
-import { getLinearAgentSkillUpdateTarget } from '@/lib/linear-agent-skill-update-target'
+} from '@/lib/skills/installation/agent-feature-install-commands'
+import { getLinearAgentSkillUpdateTarget } from '@/lib/skills/installation/linear-agent-skill-update-target'
 
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import { getLinearAgentSkillSetupInlineRuntimeCopy } from '../../sidebar/linear-agent-skill-setup-copy'
 import {
   getLinearPromptSkillDiscoveryTarget,
@@ -25,12 +28,12 @@ import {
 import {
   type LocalAgentRuntime,
   buildSkillCommandForRuntime
-} from '../../../lib/skill-runtime-command'
+} from '../../../lib/skills/runtime/skill-runtime-command'
 import {
   useIntegrationCommandRowClass,
   useIntegrationSubordinateRowClass
 } from '../../integrations/presentation/integration-card-presentation'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 
 type LinearAgentSkillInstallCtaProps = {
   settings: LinearAgentSkillPromptSettings | null | undefined
@@ -41,6 +44,7 @@ type LinearAgentSkillInstallCtaProps = {
 export function WslLinearAgentSkillInstallCta({
   runtime
 }: LinearAgentSkillInstallCtaProps): React.JSX.Element {
+  const t = useTranslate()
   const agentRuntime = useMemo(() => runtime, [runtime])
   const skillDiscoveryTarget = useMemo(
     () => getLinearPromptSkillDiscoveryTarget(agentRuntime),
@@ -69,7 +73,7 @@ export function WslLinearAgentSkillInstallCta({
     try {
       await window.api.ui.writeClipboardText(command)
       toast.success(
-        translate(
+        t(
           'auto.components.settings.linear.agent.skill.install.cta.copiedCommand',
           'Copied command.'
         )
@@ -78,7 +82,7 @@ export function WslLinearAgentSkillInstallCta({
       toast.error(
         error instanceof Error
           ? error.message
-          : translate(
+          : t(
               'auto.components.settings.linear.agent.skill.install.cta.copyFailed',
               'Failed to copy command.'
             )
@@ -90,29 +94,20 @@ export function WslLinearAgentSkillInstallCta({
     <div className={subordinateRowClass}>
       <div className="flex flex-wrap items-center gap-2">
         <p className="text-xs font-medium text-foreground">
-          {translate(
-            'auto.components.settings.linear.agent.skill.install.cta.skillLabel',
-            'Agent skill:'
-          )}{' '}
+          {t('auto.components.settings.linear.agent.skill.install.cta.skillLabel', 'Agent skill:')}{' '}
           <span className="font-mono text-[11px]">{ORCA_LINEAR_SKILL_NAME}</span>
         </p>
         {skill.loading ? (
           <IntegrationStatusPill tone="neutral">
-            {translate(
-              'auto.components.settings.linear.agent.skill.install.cta.checking',
-              'Checking...'
-            )}
+            {t('auto.components.settings.linear.agent.skill.install.cta.checking', 'Checking...')}
           </IntegrationStatusPill>
         ) : skill.installed ? (
           <IntegrationStatusPill tone="connected">
-            {translate(
-              'auto.components.settings.linear.agent.skill.install.cta.installed',
-              'Installed'
-            )}
+            {t('auto.components.settings.linear.agent.skill.install.cta.installed', 'Installed')}
           </IntegrationStatusPill>
         ) : (
           <IntegrationStatusPill tone="attention">
-            {translate(
+            {t(
               'auto.components.settings.linear.agent.skill.install.cta.notInstalled',
               'Not installed'
             )}
@@ -127,7 +122,7 @@ export function WslLinearAgentSkillInstallCta({
           disabled={skill.loading}
         >
           <RefreshCw className={cn('size-3', skill.loading && 'animate-spin')} />
-          {translate('auto.components.settings.linear.agent.skill.install.cta.recheck', 'Re-check')}
+          {t('auto.components.settings.linear.agent.skill.install.cta.recheck', 'Re-check')}
         </Button>
       </div>
       {skill.error ? <p className="text-xs text-destructive">{skill.error}</p> : null}
@@ -135,11 +130,11 @@ export function WslLinearAgentSkillInstallCta({
         <>
           <p className="text-xs text-muted-foreground">
             {skill.installed
-              ? translate(
+              ? t(
                   'auto.components.settings.linear.agent.skill.install.cta.installedDescription',
                   'Agent skill installed. To update it, run:'
                 )
-              : translate(
+              : t(
                   'auto.components.settings.linear.agent.skill.install.cta.description',
                   'Let agents read and edit Linear tasks. Full guided setup (connect + skill + visibility) is under Settings → Task Sources.'
                 )}
@@ -155,7 +150,7 @@ export function WslLinearAgentSkillInstallCta({
                   variant="ghost"
                   size="icon-xs"
                   className="shrink-0"
-                  aria-label={translate(
+                  aria-label={t(
                     'auto.components.settings.linear.agent.skill.install.cta.copyCommand',
                     'Copy command'
                   )}
@@ -165,7 +160,7 @@ export function WslLinearAgentSkillInstallCta({
                 </Button>
               </TooltipTrigger>
               <TooltipContent side="top" sideOffset={4}>
-                {translate(
+                {t(
                   'auto.components.settings.linear.agent.skill.install.cta.copyCommand',
                   'Copy command'
                 )}
@@ -174,7 +169,7 @@ export function WslLinearAgentSkillInstallCta({
           </div>
           {agentRuntime.runtime === 'wsl' ? (
             <p className="text-[11px] text-muted-foreground/70">
-              {getLinearAgentSkillSetupInlineRuntimeCopy(false, agentRuntime)}
+              {getLinearAgentSkillSetupInlineRuntimeCopy(false, agentRuntime, t)}
             </p>
           ) : null}
         </>

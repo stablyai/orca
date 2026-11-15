@@ -59,5 +59,9 @@ export function parseGitChangeList(
     return entries
   }
   const statsByPath = parseNumstat(stdout.slice(offset))
-  return entries.map((entry) => ({ ...entry, ...statsByPath.get(entry.path) }))
+  // Why in place: entries are local records built above, so mutation is unobservable.
+  for (const entry of entries) {
+    Object.assign(entry, statsByPath.get(entry.path))
+  }
+  return entries
 }

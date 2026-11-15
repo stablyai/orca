@@ -1,8 +1,8 @@
 import { useEffect, useEffectEvent, useState } from 'react'
 import { resolveImageAbsolutePath } from '../markdown/link-routing/markdown-preview-links'
-import type { RuntimeFileOperationArgs } from '@/runtime/runtime-file-client-types'
+import type { RuntimeFileOperationArgs } from '@/runtime/files/runtime-file-client-types'
 import { readLocalImagePreview } from './local-image-src-reader'
-import type { LocalFileAccess } from '../../../../../shared/local-file-access'
+import type { LocalFileAccess } from '../../../../../shared/file-access/local-file-access'
 import {
   blobUrlCache,
   cacheLocalImageBlob,
@@ -12,7 +12,8 @@ import {
   subscribeToLocalImageCacheInvalidation as onImageCacheInvalidated
 } from './local-image-src-cache'
 import { pinLocalImageCacheKey as pinLocalImageCache } from './local-image-cache-pinning'
-import { runtimeTargetEnvironmentId } from '@/runtime/runtime-client-target'
+import { readBrowserAttachmentFile } from '@/lib/files/drop/browser-attachment-files'
+import { runtimeTargetEnvironmentId } from '@/runtime/rpc/targets/runtime-client-target'
 
 export function getLocalImageCacheKey(
   absolutePath: string,
@@ -70,6 +71,9 @@ function getLocalImageSrcCacheKey(
   runtimeContext?: LocalImageRuntimeContext | null,
   access?: LocalFileAccess
 ): string | null {
+  if (rawSrc && readBrowserAttachmentFile(rawSrc)) {
+    return getLocalImageCacheKey(rawSrc)
+  }
   if (!rawSrc || isExternalUrl(rawSrc) || runtimeContext === null) {
     return null
   }
@@ -94,6 +98,9 @@ export function useLocalImageSrc(
   // Key leases by semantic identity; equal rebuilt context objects must not revoke a still-displayed image URL.
   const cacheKey = getLocalImageSrcCacheKey(rawSrc, filePath, connectionId, runtimeContext, access)
   const readImage = useEffectEvent((): Promise<string | null> => {
+    if (rawSrc && readBrowserAttachmentFile(rawSrc)) {
+      return loadLocalImageAbsolutePath(rawSrc)
+    }
     const absolutePath = rawSrc ? resolveImageAbsolutePath(rawSrc, filePath) : null
     return absolutePath
       ? loadLocalImageAbsolutePath(absolutePath, connectionId, runtimeContext, access)
@@ -160,6 +167,9 @@ export async function loadLocalImageSrc(
     | null,
   access?: LocalFileAccess
 ): Promise<string | null> {
+  if (readBrowserAttachmentFile(rawSrc)) {
+    return loadLocalImageAbsolutePath(rawSrc)
+  }
   if (isExternalUrl(rawSrc)) {
     return rawSrc
   }
@@ -196,6 +206,12 @@ export function loadLocalImageAbsolutePath(
   const cached = blobUrlCache.get(cacheKey)
   if (cached) {
     return Promise.resolve(cached)
+  }
+
+  const browserFile = readBrowserAttachmentFile(absolutePath)
+  if (browserFile) {
+    const url = URL.createObjectURL(browserFile)
+    return Promise.resolve(cacheLocalImageBlob(cacheKey, url, browserFile.size) ? url : null)
   }
 
   const inFlight = inFlightBlobUrlLoads.get(cacheKey)

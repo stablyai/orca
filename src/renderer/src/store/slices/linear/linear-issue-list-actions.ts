@@ -11,7 +11,7 @@ import {
   credentialDecryptionMessage,
   isIntegrationCredentialDecryptionError
 } from '../../../../../shared/integration-credential-errors'
-import { linearListIssues, linearSearchIssues } from '@/runtime/runtime-linear-client'
+import { linearListIssues, linearSearchIssues } from '@/runtime/linear/runtime-linear-client'
 import {
   evictStaleEntries,
   getSelectedWorkspaceId,

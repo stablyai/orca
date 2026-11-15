@@ -26,9 +26,9 @@
   },
   "method": "Complete production cache read/decompress/verify/decode, scan, gzip, serialization and fsync/rename writes. Cross-arm output parity. Excludes app rendering, real worker/IPC queueing and network. Disk figures include source and report. Varied fixture has deterministic pseudo-random IDs and token totals.",
   "tools": {
-    "config/scripts/claude-usage-source-compression-benchmark.mjs": "e745a37bbd4161cab061062bb30adc0158d1856d198981d04c5b1f503f1bd5eb",
-    "config/scripts/claude-usage-benchmark-persistence.mjs": "9376c62d6ac1d7ae0697dd4584b47821c8dbe09bdeab51c6bae6f9953693f8ce",
-    "config/scripts/claude-usage-benchmark-scanner.mjs": "cbaf8140fd02f617419548db76bc46eb8235568d61b8ee06cdef6ed104b048a0"
+    "config/scripts/performance/claude-usage/claude-usage-source-compression-benchmark.mjs": "e745a37bbd4161cab061062bb30adc0158d1856d198981d04c5b1f503f1bd5eb",
+    "config/scripts/performance/claude-usage/claude-usage-benchmark-persistence.mjs": "9376c62d6ac1d7ae0697dd4584b47821c8dbe09bdeab51c6bae6f9953693f8ce",
+    "config/scripts/performance/claude-usage/claude-usage-benchmark-scanner.mjs": "cbaf8140fd02f617419548db76bc46eb8235568d61b8ee06cdef6ed104b048a0"
   },
   "fourArmBytes": {
     "artifact": "claude-source-compression-four-arm-bytes.json",

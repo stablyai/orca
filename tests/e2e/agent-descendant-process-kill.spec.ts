@@ -34,7 +34,11 @@ test('killing an agent PTY terminates its detached-pgid descendants', async ({ o
     ].join('\n')
   )
   const fakeAgentPath = join(stage, 'claude')
-  writeFileSync(fakeAgentPath, `#!/bin/sh\nexec "${process.execPath}" "${spawnerPath}" "$1"\n`)
+  // Orca prepends its own Claude flags (e.g. --plugin-dir), so the marker path cannot ride in argv.
+  writeFileSync(
+    fakeAgentPath,
+    `#!/bin/sh\nexec "${process.execPath}" "${spawnerPath}" "${markerPath}"\n`
+  )
   chmodSync(fakeAgentPath, 0o755)
 
   let detachedChildPid = 0
@@ -54,7 +58,7 @@ test('killing an agent PTY terminates its detached-pgid descendants', async ({ o
         })
         return result.id
       },
-      { command: `'${fakeAgentPath}' '${markerPath}'`, cwd: stage, worktreeId }
+      { command: `'${fakeAgentPath}'`, cwd: stage, worktreeId }
     )
     expect(ptyId).toBeTruthy()
 

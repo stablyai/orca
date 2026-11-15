@@ -3,19 +3,61 @@
 import type { AgentType } from '../../../shared/agent-status/contracts/agent-status-types'
 import type { ExecutionHostId } from '../../../shared/execution-host'
 import { applyLayoutCommand } from '../../../shared/workspace-layout/workspace-layout-commands'
-import { loadWorkspaceLayout } from '../../../shared/workspace-layout/workspace-layout-load'
-import { nameBasedLoadContext } from '../../../shared/workspace-layout/workspace-layout-minted-ids'
+import { loadWorkspaceLayout } from '../../../shared/workspace-layout/persistence/workspace-layout-load'
+import { nameBasedLoadContext } from '../../../shared/workspace-layout/persistence/workspace-layout-minted-ids'
 import type { CommandOf } from '../../../shared/workspace-layout/workspace-layout-command-types'
 import type { WorkspaceLayout } from '../../../shared/workspace-layout/workspace-layout-model'
-import { saveWorkspaceLayout } from '../../../shared/workspace-layout/workspace-layout-save'
+import { saveWorkspaceLayout } from '../../../shared/workspace-layout/persistence/workspace-layout-save'
 import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
 import { randomUUID } from 'node:crypto'
-import { getStructuredAgentSessionHost } from '../../native-chat/agent-session-wire/structured-agent-session-registry'
+import { getStructuredAgentSessionHost } from '../../native-chat/agent-session-wire/host/structured-agent-session-registry'
 import { structuredAgentSessionTabId } from '../../../shared/agent-session/view/structured-agent-session-projection'
 import { isReopenedChatTabId } from '../../../shared/agent-session/view/structured-agent-session-host-tab-id'
+import { resolveChatTabActivation } from './agent-session-tab-identity'
 
 /** Placement in the creating client's host-owned group/tab ids. */
 export type ChatTabPlacement = { groupId?: string; afterTabId?: string }
+
+/** Saved layouts and window-owned publications resolve the same captured source placement. */
+export function resolveChatTabPlacement(
+  groups: readonly { id: string; tabOrder: readonly string[] }[],
+  activeGroupId: string | undefined,
+  placement?: ChatTabPlacement,
+  chats: readonly { id: string; sessionId: string; type: 'agent-session' }[] = []
+): ChatTabPlacement {
+  const holds = (id: string | undefined) => groups.some((group) => group.id === id)
+  // A client without group ids (a phone) names only the tab to follow, so its group is the place.
+  const captured = placement?.afterTabId
+  let after = captured
+  if (
+    captured &&
+    !groups.some((group) => group.tabOrder.includes(captured)) &&
+    !isReopenedChatTabId(captured)
+  ) {
+    const ordinary = chats.filter(
+      (tab) =>
+        !isReopenedChatTabId(tab.id) && groups.some((group) => group.tabOrder.includes(tab.id))
+    )
+    const rowAnchor = resolveChatTabActivation(ordinary, captured)
+    after = ordinary.find(
+      (tab) =>
+        tab.id === rowAnchor ||
+        [structuredAgentSessionTabId(tab.sessionId), chatTabId(tab.sessionId)].includes(captured)
+    )?.id
+  }
+  const anchorGroupId = after
+    ? groups.find((group) => group.tabOrder.includes(after))?.id
+    : undefined
+  // Prefer an existing client group, then the anchor's, then the active group; otherwise open creates one.
+  const groupId = holds(placement?.groupId)
+    ? placement?.groupId
+    : (anchorGroupId ?? (holds(activeGroupId) ? activeGroupId : undefined))
+  const afterTabId =
+    after && groups.some((group) => group.id === groupId && group.tabOrder.includes(after))
+      ? after
+      : undefined
+  return { groupId, afterTabId }
+}
 
 export type ChatTabChange =
   | { open: { sessionId: string; agent: AgentType; tabId: string; placement?: ChatTabPlacement } }
@@ -32,20 +74,16 @@ export function chatTabLayoutCommand(
   worktreeId: string,
   change: ChatTabChange
 ): ChatTabLayoutCommand | null {
-  const placement = 'open' in change ? change.open.placement : undefined
-  const holds = (id: string | undefined) => workspace?.groups.some((group) => group.id === id)
-  // Prefer an existing client group, then the active group; otherwise open creates one.
-  const groupId = holds(placement?.groupId)
-    ? placement?.groupId
-    : holds(activeGroupId)
-      ? activeGroupId
-      : undefined
-  const after = placement?.afterTabId
-  const afterTabId =
-    after &&
-    workspace?.groups.some((group) => group.id === groupId && group.tabOrder.includes(after))
-      ? after
-      : undefined
+  const { groupId, afterTabId } = resolveChatTabPlacement(
+    workspace?.groups ?? [],
+    activeGroupId,
+    'open' in change ? change.open.placement : undefined,
+    workspace?.tabs.flatMap((tab) =>
+      tab.kind === 'agent-session'
+        ? [{ id: tab.id, sessionId: tab.entityId, type: 'agent-session' as const }]
+        : []
+    )
+  )
   const sessionId = 'close' in change ? change.close : change.open.sessionId
   const tabId =
     workspace?.tabs.find((tab) => tab.kind === 'agent-session' && tab.entityId === sessionId)?.id ??

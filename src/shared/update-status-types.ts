@@ -62,6 +62,13 @@ export type LinuxPackageInstallInstructions =
   | { ok: true; command: string; packageFileName: string }
   | { ok: false; reason: LinuxPackageCommandUnavailableReason; message: string }
 
+/** A newer release this Mac's macOS is too old to run; the updater keeps the current build. */
+export type UnsupportedSystemUpdate = {
+  version: string
+  /** Major macOS release the update needs, e.g. "13". */
+  minimumMacosVersion: string
+}
+
 export type UpdateInstallBlocker = {
   pid: number
   kind: 'window' | 'server' | 'browser' | 'unknown'
@@ -92,6 +99,8 @@ export type UpdateStatus = (
       userInitiated?: boolean
       /** Optional so older paired clients keep rendering "up to date". */
       delayedUpdate?: DelayedUpdate
+      /** Optional so older paired clients keep rendering "up to date". */
+      unsupportedSystemUpdate?: UnsupportedSystemUpdate
     }
   | { state: 'downloading'; percent: number; version: string; activeNudgeId?: string }
   | {

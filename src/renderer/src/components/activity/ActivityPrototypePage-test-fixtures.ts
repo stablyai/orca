@@ -1,9 +1,9 @@
+import { acceptedAgentStatuses } from '@/store/slices/agent-status/accepted-agent-statuses'
 import type { AgentStatusEntry } from '../../../../shared/agent-status/contracts/agent-status-types'
-import type { Repo } from '../../../../shared/repo-types'
+import type { Repo } from '../../../../shared/repository/repo-types'
 import { makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import type { TerminalTab } from '../../../../shared/workspace-layout/terminal-tab-types'
 import type { Worktree } from '../../../../shared/worktree/types'
-import type { RetainedAgentEntry } from '@/store/slices/agent-status/agent-status-contract'
 import { buildActivityEvents } from './activity-event-builder'
 import { buildAgentPaneThreads } from './activity-thread-builder'
 
@@ -119,31 +119,11 @@ export function makeWorkingEntryWithoutHistory(): AgentStatusEntry {
   }
 }
 
-export function makeRetainedDoneEntry(tab: TerminalTab): RetainedAgentEntry {
-  return {
-    entry: {
-      state: 'done',
-      prompt: 'Retained prior run',
-      updatedAt: 1_000,
-      stateStartedAt: 1_000,
-      paneKey: PANE_KEY,
-      terminalTitle: 'Claude',
-      stateHistory: [],
-      agentType: 'claude',
-      lastAssistantMessage: 'Retained response preview'
-    },
-    worktreeId: 'wt-1',
-    tab,
-    agentType: 'claude',
-    startedAt: 1_000
-  }
-}
-
 export function makeActivityResult(args: {
   entries?: Record<string, AgentStatusEntry>
-  retained?: Record<string, RetainedAgentEntry>
   tab?: TerminalTab
   tabs?: TerminalTab[]
+  ptyIdsByTabId?: Record<string, string[]>
   now?: number
 }): ReturnType<typeof buildActivityEvents> {
   const repo = makeRepo()
@@ -152,11 +132,11 @@ export function makeActivityResult(args: {
 
   return buildActivityEvents({
     chatNames: new Map(),
-    agentStatusByPaneKey: args.entries ?? {},
-    retainedAgentsByPaneKey: args.retained ?? {},
+    agentStatusByPaneKey: acceptedAgentStatuses(Object.entries(args.entries ?? {})),
     tabsByWorktree: {
       [worktree.id]: args.tabs ?? [tab]
     },
+    ptyIdsByTabId: args.ptyIdsByTabId,
     worktreeMap: new Map([[worktree.id, worktree]]),
     repoMap: new Map([[repo.id, repo]]),
     acknowledgedAgentsByPaneKey: {},

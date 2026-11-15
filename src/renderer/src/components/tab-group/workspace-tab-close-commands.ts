@@ -1,15 +1,15 @@
-import { createBrowserUuid } from '@/lib/browser-uuid'
+import { editorContentIsReferenced } from '@/store/slices/editor/tabs/workspace-editor-files'
+import { createNonSecureContextUuid as createBrowserUuid } from '../../../../shared/identifiers/non-secure-context-uuid'
 import type { Tab } from '../../../../shared/tab-types'
 import { useAppStore } from '../../store'
 import { needsSavePromptOnClose } from '@/store/slices/editor/buffers/editor-buffer-close-rule'
 import { requestEditorFileClose } from '../editor/autosave/editor-autosave'
 import { runAfterEditorFramesFlush } from '../editor/save/flush/editor-pending-flush'
 import { closeTerminalTab } from '../terminal/terminal-tab-actions'
-import { closeWorkspaceBrowserTab } from '@/lib/workspace-browser-tab-close'
+import { closeWorkspaceBrowserTab } from '@/lib/browser/workspace/workspace-browser-tab-close'
 import { isEditorTabContentType } from '@/store/slices/editor/tabs/editor-tab-content-type'
 import { admitStructuredAgentSession } from '@/lib/agent-session/structured-agent-session-busy'
-import { readStructuredChatTabName } from '@/runtime/structured-chat-tab-name'
-import { useRunningTerminalCloseConfirmStore } from '@/store/running-terminal-close-confirm'
+import { useRunningTerminalCloseConfirmStore } from '@/store/slices/tabs/closing/running-terminal-close-confirm'
 
 export function createWorkspaceTabCloseCommands({
   worktreeId,
@@ -18,26 +18,23 @@ export function createWorkspaceTabCloseCommands({
   worktreeId: string
   groupTabs: Tab[]
 }) {
-  const { closeUnifiedTab, closeFile } = useAppStore.getState()
+  const { closeUnifiedTab } = useAppStore.getState()
 
   const closeEditorIfUnreferenced = (
     entityId: string,
     closingTabId: string,
     whenEmptied: (() => void) | null
   ) => {
-    const otherReference = (useAppStore.getState().unifiedTabsByWorktree[worktreeId] ?? []).some(
-      (item) =>
-        item.id !== closingTabId &&
-        item.entityId === entityId &&
-        isEditorTabContentType(item.contentType)
-    )
+    const otherReference = editorContentIsReferenced(useAppStore.getState(), entityId, closingTabId)
     if (!otherReference) {
       if (needsSavePromptOnClose(useAppStore.getState(), entityId)) {
         // Why: route through Terminal.tsx so the unsaved-confirmation save/discard queue stays centralized across all close paths.
-        requestEditorFileClose(entityId, whenEmptied ? { onClosed: whenEmptied } : undefined)
+        requestEditorFileClose(entityId, {
+          tabId: closingTabId,
+          ...(whenEmptied ? { onClosed: whenEmptied } : {})
+        })
         return false
       }
-      closeFile(entityId)
     }
     return true
   }
@@ -83,7 +80,6 @@ export function createWorkspaceTabCloseCommands({
               useRunningTerminalCloseConfirmStore.getState().requestRunningTerminalCloseConfirm({
                 // Consent belongs to this attempt; a reused tab ID must not inherit its dialog.
                 terminalTabId: createBrowserUuid(),
-                tabLabel: readStructuredChatTabName(item, useAppStore.getState()),
                 copyKind: 'chat-agent',
                 onConfirm: confirmed,
                 onCancel: resolve
@@ -98,6 +94,7 @@ export function createWorkspaceTabCloseCommands({
     if (item.contentType === 'terminal') {
       // Run the empty check only after deferred pin/process confirmations actually close the tab.
       closeTerminalTab(item.entityId, {
+        reason: 'user',
         ...(opts?.skipRunningProcessConfirm ? { skipRunningProcessConfirm: true } : {}),
         ...(whenEmptied ? { onClosed: whenEmptied } : {})
       })

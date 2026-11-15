@@ -1,7 +1,7 @@
 import type { Stats } from 'node:fs'
 import { lstat } from 'node:fs/promises'
-import type { ImportSkipReason } from '../../../shared/filesystem-import-result-types'
-import { errorMessage } from '../../../shared/error-message'
+import type { ImportSkipReason } from '../../../shared/file-import/filesystem-import-result'
+import { errorMessage } from '../../../shared/errors/error-message'
 import { isPermissionError } from '../../filesystem/permission-errors'
 import { isENOENT } from './access/filesystem-path-containment'
 

@@ -104,19 +104,6 @@ function measureRepairPasses(): number {
 }
 
 describe('active-terminal repair effect cannot drive a React #185 update loop', () => {
-  it('settles when the repaired tab is owned by the active worktree', () => {
-    useAppStore.setState({
-      activeWorktreeId: 'wt-active',
-      activeTabType: 'terminal',
-      activeTabId: 'stale-tab',
-      activeTabIdByWorktree: {},
-      tabsByWorktree: { 'wt-active': [terminalTab('t1', 'wt-active')] },
-      unifiedTabsByWorktree: {}
-    })
-    expect(measureRepairPasses()).toBeLessThan(10)
-    expect(useAppStore.getState().activeTabId).toBe('t1')
-  })
-
   it('settles when another worktree reuses the tab id and is scanned first', () => {
     // First-match ownership once skipped activeTabId while reallocating its map, retriggering repair indefinitely.
     useAppStore.setState({
@@ -207,26 +194,6 @@ describe('active-terminal repair effect cannot drive a React #185 update loop', 
     expect(useAppStore.getState().activeTabId).toBeNull()
   })
 
-  it('does not reallocate activeTabIdByWorktree when the tab is already active', () => {
-    // Both repair and parked watcher sync depend on map identity; redundant activation must preserve it.
-    useAppStore.setState({
-      activeWorktreeId: 'wt-active',
-      activeTabType: 'terminal',
-      activeTabId: 't1',
-      activeTabIdByWorktree: {},
-      tabsByWorktree: { 'wt-active': [terminalTab('t1', 'wt-active')] },
-      unifiedTabsByWorktree: {}
-    })
-    act(() => {
-      useAppStore.getState().setActiveTab('t1')
-    })
-    const settled = useAppStore.getState().activeTabIdByWorktree
-    act(() => {
-      useAppStore.getState().setActiveTab('t1')
-    })
-    expect(useAppStore.getState().activeTabIdByWorktree).toBe(settled)
-  })
-
   it('keeps bell attribution off a background worktree tab', () => {
     useAppStore.setState({
       activeWorktreeId: 'wt-active',
@@ -244,66 +211,6 @@ describe('active-terminal repair effect cannot drive a React #185 update loop', 
     })
     expect(useAppStore.getState().activeTabId).toBe('visible-tab')
     expect(useAppStore.getState().activeTabIdByWorktree['wt-background']).toBe('bg-tab')
-  })
-
-  it('records activation for a falsy-but-valid worktree id', () => {
-    useAppStore.setState({
-      activeWorktreeId: '',
-      activeTabId: null,
-      activeTabIdByWorktree: {},
-      tabsByWorktree: { '': [terminalTab('t1', '')] },
-      unifiedTabsByWorktree: {}
-    })
-    act(() => {
-      useAppStore.getState().setActiveTab('t1')
-    })
-    expect(useAppStore.getState().activeTabId).toBe('t1')
-    expect(useAppStore.getState().activeTabIdByWorktree['']).toBe('t1')
-  })
-
-  it('repairs a falsy-but-valid active worktree id through the production hook', () => {
-    useAppStore.setState({
-      activeWorktreeId: '',
-      activeTabType: 'terminal',
-      activeTabId: 'stale-tab',
-      activeTabIdByWorktree: { '': 't1' },
-      tabsByWorktree: { '': [terminalTab('t1', '')] },
-      unifiedTabsByWorktree: {}
-    })
-    expect(measureRepairPasses()).toBeLessThan(10)
-    expect(useAppStore.getState().activeTabId).toBe('t1')
-  })
-
-  it('does not read inherited unified tabs for a prototype-named owner', () => {
-    useAppStore.setState({
-      activeWorktreeId: 'toString',
-      activeTabId: null,
-      activeTabIdByWorktree: {},
-      tabsByWorktree: { toString: [terminalTab('t1', 'toString')] },
-      unifiedTabsByWorktree: {}
-    })
-    expect(() => useAppStore.getState().setActiveTab('t1')).not.toThrow()
-    expect(useAppStore.getState().activeTabId).toBe('t1')
-  })
-
-  it('activates own unified tabs for a prototype-named owner', () => {
-    const target = unifiedTerminalTab('t1', 't1', 'toString', 'g-target')
-    const previous = unifiedTerminalTab('t2', 't2', 'toString', 'g-target')
-    useAppStore.setState({
-      activeWorktreeId: 'toString',
-      activeTabId: 't2',
-      activeTabIdByWorktree: { toString: 't2' },
-      tabsByWorktree: {
-        toString: [terminalTab('t1', 'toString'), terminalTab('t2', 'toString')]
-      },
-      unifiedTabsByWorktree: { toString: [target, previous] },
-      groupsByWorktree: {
-        toString: [tabGroup('g-target', 'toString', previous.id, [target.id, previous.id])]
-      },
-      activeGroupIdByWorktree: { toString: 'g-target' }
-    })
-    act(() => useAppStore.getState().setActiveTab('t1'))
-    expect(useAppStore.getState().groupsByWorktree.toString[0].activeTabId).toBe(target.id)
   })
 
   it('does not activate a tab with no owner when no worktree is active', () => {

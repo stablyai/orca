@@ -3,9 +3,9 @@ import {
   LOCAL_EXECUTION_HOST_ID,
   type ExecutionHostId
 } from '../../../../../../shared/execution-host'
-import type { WslHostWindowsDriveRefusal } from '../../../../../../shared/wsl-host-windows-drive-refusal'
-import type { AddRepoExistingWorkspaceSource } from '../../../../../../shared/telemetry-events'
-import { isWindowsDesktopClient } from '@/lib/windows-path-access'
+import type { WslHostWindowsDriveRefusal } from '../../../../../../shared/remote-runtime/wsl-hosts/wsl-host-windows-drive-refusal'
+import type { AddRepoExistingWorkspaceSource } from '../../../../../../shared/telemetry/schemas/telemetry-property-schemas'
+import { isWindowsDesktopClient } from '@/lib/files/os-open/windows-path-access'
 import type { AddRepoDialogStep } from '../dialog/add-repo-dialog-types'
 import { AddRepoWindowsDriveNotice } from './AddRepoWindowsDriveNotice'
 

@@ -3,9 +3,9 @@ import type { PluginManifest } from '../../../../../shared/plugins/manifest/plug
 import { isUsablePluginLanguagePack } from '../../../../../shared/plugins/languages/plugin-language-pack-coverage'
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store'
-import { usePluginLanguagePackStore } from '@/store/plugin-language-packs'
-import { collectActivePluginNewFiles } from '@/store/plugin-new-files'
-import { usePluginPanelsStore } from '@/store/plugin-panels'
+import { usePluginLanguagePackStore } from '@/store/plugins/localization/plugin-language-packs'
+import { collectActivePluginNewFiles } from '@/store/plugins/file-creation/plugin-new-files'
+import { usePluginPanelsStore } from '@/store/plugins/catalog/plugin-contribution-catalog'
 import { pluginPanelUnavailableReason } from '../page/plugin-contribution-action-availability'
 import {
   switchBackFromPluginLanguage,
@@ -13,7 +13,7 @@ import {
 } from '../page/PluginContributionActionLanguage'
 import { openPluginNewFileFromSettings } from '../page/PluginContributionActionNewFile'
 import { openPluginPanelFromSettings } from '../page/PluginContributionActionPanel'
-import { languageDisplayName } from '../presentation/plugin-contributions'
+import { languageDisplayName } from '@/i18n/ui-intl-formatters'
 import { PLUGIN_ACTION_TOAST_DURATION_MS } from './plugin-action-toast'
 
 /** Runs `act` over the workspace Settings came from, or says why it can't. */

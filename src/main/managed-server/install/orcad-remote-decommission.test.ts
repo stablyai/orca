@@ -25,8 +25,8 @@ import { writeAtomicOrcadRemoteRecord } from './orcad-remote-record-file'
 import { decommissionRemoteOrcad } from './orcad-remote-decommission'
 import { recoverInterruptedOrcadActivation } from '../activation/orcad-activation-recovery'
 import { parseOrcadActivationRecord } from '../activation/orcad-activation-record'
-import { getRemoteHostPlatform } from '../../ssh/ssh-remote-platform'
-import type { OrcadTerminalCensus } from '../../../shared/orcad-terminal-census'
+import { getRemoteHostPlatform } from '../../ssh/remote-host/ssh-remote-platform'
+import type { OrcadTerminalCensus } from '../../../shared/remote-runtime/orcad-lifecycle/orcad-terminal-census'
 import {
   FakeOrcadHost,
   OLD,

@@ -1,15 +1,16 @@
 import type { PtyCreationDisposition } from '../../../shared/terminal/pty/lifecycle/pty-creation-disposition'
-import type { TerminalCreationWork } from '../terminal-creation-work'
-import { createDaemonPtyPhysicalOwner, type DaemonPtyPhysicalOwner } from './subprocess-handle'
+import type { TerminalCreationWork } from '../terminal-host/terminal-creation-work'
+import { createDaemonPtyPhysicalOwner } from './daemon-pty-physical-owner'
+import type { DaemonPtyPhysicalOwner } from './subprocess-handle'
 import { assertWslDistroAllowed } from '@orca/process-host/wsl-distro-allowlist'
 import type * as pty from 'node-pty'
 import {
   hostReportsChildExitStatus,
   wrapShellSpawnForMacosTccAttribution
-} from '../../providers/macos-tcc-login-shell'
-import type { WindowsShellSpawnAttempt } from '../../providers/windows-shell-fallback-chain'
+} from '../../providers/shell-launch/macos/tcc-login-shell'
+import type { WindowsShellSpawnAttempt } from '../../providers/shell-launch/windows/shell-fallback-chain'
 import { assignHostProcessToKillOnCloseJob } from '../../windows/windows-pty-job'
-import { wrapPtySpawnInTerminalScope } from '../terminal-scopes-runtime'
+import { wrapPtySpawnInTerminalScope } from '../process-scopes/terminal-scopes-runtime'
 import { spawnConptyWithInputReader, type ConptyStartupEvents } from './conpty-startup-input-reader'
 
 async function loadNodePty(): Promise<typeof pty> {

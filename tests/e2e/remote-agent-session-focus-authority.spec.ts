@@ -8,7 +8,7 @@ import {
   launchPairedWebClient
 } from './helpers/paired-electron-client'
 import { toWebTerminalSurfaceTabId } from '../../src/shared/workspace-layout/terminal-surface-id'
-import type { RuntimeTerminalSummary } from '../../src/shared/runtime-types'
+import type { RuntimeTerminalSummary } from '../../src/shared/terminal/runtime/runtime-terminal-contracts'
 import { quotePosixShell } from '../../src/shared/shell/launch/shell-argument-quoting'
 
 type ClientMirror = {
@@ -25,12 +25,16 @@ const fixtureScript = path.join(
   process.cwd(),
   'config',
   'scripts',
+  'diagnostics',
+  'remote-agent-authority',
   'remote-agent-session-repro-fixture.mjs'
 )
 const writableShellScript = path.join(
   process.cwd(),
   'config',
   'scripts',
+  'diagnostics',
+  'remote-agent-authority',
   'remote-agent-session-repro-writable-shell.mjs'
 )
 

@@ -1,10 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { eventSchemas } from '../../shared/telemetry-events'
+import { eventSchemas } from '../../shared/telemetry/telemetry-event-registry'
 import {
   recordAuthenticatedInventory,
   type DaemonAuditContext
-} from '../daemon/daemon-audit-classifier'
-import { createDaemonAuditEligibilityTracker } from '../daemon/daemon-audit-eligibility-event'
+} from '../daemon/observability/daemon-audit-classifier'
+import { createDaemonAuditEligibilityTracker } from '../daemon/observability/daemon-audit-eligibility-event'
 import { track } from './client'
 import {
   BASE_COMMON,

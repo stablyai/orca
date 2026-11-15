@@ -5,18 +5,15 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { flushPendingEditorBuffer } from '../../save/flush/editor-pending-flush'
 import { parseIpynb } from './ipynb-parse'
 import { useIpynbDocumentEditing } from './useIpynbDocumentEditing'
-import { rebaseIpynbSourceDrafts } from './ipynb-source-drafts'
+
 import { EMPTY_EDITOR_BUFFER_VIEW_INDEX as NO_SHARING } from '@/store/slices/editor/buffers/editor-buffer-views'
 import type * as StaleViewEdit from '../../save/flush/editor-stale-view-edit'
-import {
-  notifyStaleViewEditRejected,
-  staleViewEditEpoch
-} from '../../save/flush/editor-stale-view-edit'
+import { notifyStaleViewEditRejected } from '../../save/flush/editor-stale-view-edit'
+import { discardEditorBuffer } from '../../save/flush/discard-editor-file-changes'
 
 vi.mock('../../save/flush/editor-stale-view-edit', async (importOriginal) => ({
   ...(await importOriginal<typeof StaleViewEdit>()),
-  notifyStaleViewEditRejected: vi.fn(),
-  staleViewEditEpoch: vi.fn(() => 0)
+  notifyStaleViewEditRejected: vi.fn()
 }))
 
 function renderSplitPanes(initialContent: string) {
@@ -130,6 +127,32 @@ describe('notebook document editing lifecycle', () => {
     const externalContent = notebookContent('external source')
     hook.rerender({ content: externalContent })
     expect(Object.hasOwn(hook.result.current.sourceDrafts, 'a')).toBe(false)
+  })
+
+  it('drops pending discarded cells and accepts typing begun afterwards', async () => {
+    const content = notebookContent()
+    const committed: string[] = []
+    const hook = renderHook(() =>
+      useIpynbDocumentEditing({
+        content,
+        fileId: 'discard-notebook',
+        notebook: parseIpynb(content),
+        onContentChange: (text) => committed.push(text),
+        onDirtyStateHint: vi.fn(),
+        onDeactivateEditor: vi.fn()
+      })
+    )
+    await act(async () => {
+      hook.result.current.updateCellSource(0, 'discarded draft')
+      const release = await discardEditorBuffer('discard-notebook')
+      release()
+    })
+    expect(parseIpynb(committed.at(-1)!).cells[0]?.source).toBe('a')
+    act(() => {
+      hook.result.current.updateCellSource(0, 'new draft')
+      flushPendingEditorBuffer(NO_SHARING, 'discard-notebook')
+    })
+    expect(parseIpynb(committed.at(-1)!).cells[0]?.source).toBe('new draft')
   })
 
   it('does not republish unchanged text when flushed with no pending typing', () => {
@@ -259,45 +282,6 @@ describe('notebook document editing lifecycle', () => {
     })
     expect(parseIpynb(text()).cells[0]?.source).toBe('same edit, then more')
     expect(notifyStaleViewEditRejected).not.toHaveBeenCalled()
-  })
-
-  it('drops typing silently after a Discard instead of re-dirtying the file', () => {
-    vi.mocked(notifyStaleViewEditRejected).mockClear()
-    const initial = notebookContent()
-    const { panes, text } = renderSplitPanes(initial)
-
-    act(() => panes.result.current.b.updateCellSource(0, 'typed before discard'))
-    vi.mocked(staleViewEditEpoch).mockReturnValue(1)
-    try {
-      act(() => vi.advanceTimersByTime(400))
-    } finally {
-      vi.mocked(staleViewEditEpoch).mockReturnValue(0)
-    }
-    expect(text()).toBe(initial)
-    expect(panes.result.current.b.sourceDrafts).toEqual({})
-    expect(notifyStaleViewEditRejected).not.toHaveBeenCalled()
-  })
-
-  it('rejects position-keyed drafts once cells were inserted or removed', () => {
-    const cell = (source: string) => ({
-      id: null,
-      kind: 'code' as const,
-      language: 'python',
-      source,
-      executionCount: null,
-      outputs: []
-    })
-    const drafts = { '0:code': 'typed' }
-    const bases = { '0:code': { source: 'a', cellKinds: ['code', 'code'] as const } }
-    expect(rebaseIpynbSourceDrafts([cell('a'), cell('b')], drafts, bases).dropped).toEqual([])
-    const shifted = rebaseIpynbSourceDrafts([cell('a'), cell('new'), cell('b')], drafts, bases)
-    expect(shifted).toEqual({ updates: [], dropped: ['0:code'], lostTyping: true })
-    const changedKinds = rebaseIpynbSourceDrafts(
-      [cell('a'), { ...cell('b'), kind: 'markdown' }],
-      drafts,
-      bases
-    )
-    expect(changedKinds).toEqual({ updates: [], dropped: ['0:code'], lostTyping: true })
   })
 
   it('commits pending drafts when focus leaves the notebook so the next view sees them', () => {

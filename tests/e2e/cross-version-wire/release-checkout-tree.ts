@@ -1,7 +1,7 @@
 import { readFile, readdir, rm, writeFile } from 'node:fs/promises'
 import { dirname, join, relative } from 'node:path'
 import { parse } from 'yaml'
-import { createWorkspaceSourceResolver } from '../../../config/scripts/workspace-source-exports.mjs'
+import { createWorkspaceSourceResolver } from '../../../config/scripts/workspace/source-exports/workspace-source-exports.mjs'
 import {
   collectPackageImports,
   installMissingPackageStandIns,

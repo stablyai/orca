@@ -9,8 +9,8 @@ import { launchPhoneMirrorTopology } from './helpers/phone-mirror-topology'
 import { pairMobileClient, type PairedMobileClient } from './helpers/paired-mobile-client'
 import { emitCodexHookStatus, readHookEndpoint } from './helpers/agent-hook-endpoint'
 import { cleanupE2EDaemons } from './helpers/electron-process-shutdown'
-import type { RuntimeWorktreePsSummary } from '../../src/shared/runtime-worktree-contracts'
-import type { RuntimeMobileSessionTabsResult } from '../../src/shared/runtime-session-contracts'
+import type { RuntimeWorktreePsSummary } from '../../src/shared/worktree/catalog/runtime-worktree-contracts'
+import type { RuntimeMobileSessionTabsResult } from '../../src/shared/remote-runtime/session-graph/runtime-session-contracts'
 
 const SESSION_ID = '0199a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b'
 

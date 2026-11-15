@@ -1,9 +1,9 @@
 import type { DispatchCreator } from '../db/dispatch-depth'
 import type { TerminalIdentityReadContext } from '../../terminal/query/terminal-identity-read-context'
 import type { AgentMessageSender } from '../../../../shared/agent-session/agent-session-message-source'
-import type { FleetAgentStatusEvidence } from '../../../../shared/orchestration-fleet-agent-status-evidence'
-import type { OrchestrationDb } from '../db'
-import type { AgentSessionRecordReader } from '../structured-session-lineage'
+import type { FleetAgentStatusEvidence } from '../../../../shared/orchestration/fleet/orchestration-fleet-agent-status-evidence'
+import type { OrchestrationDb } from '../db/orchestration-db'
+import type { AgentSessionRecordReader } from '../addressing/session-lineage/structured-session-lineage'
 
 export type CrewReadDependencies = {
   db: OrchestrationDb | null

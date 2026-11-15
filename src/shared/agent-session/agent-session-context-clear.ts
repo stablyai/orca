@@ -49,6 +49,18 @@ export function latestAgentSessionContextClearSequence(
   return sequence
 }
 
+/** A /clear sent while `sentTail` was the newest row drawn hides the rows up to it until a divider past it lands.
+ * Once none of those rows is loaded (a tail snapshot past the divider), nothing is left to hide. */
+export function agentSessionContextClearOutstanding(
+  items: readonly Pick<AgentJournalRenderItem, 'sequence'>[],
+  latestClear: number,
+  sentTail: number | null
+): sentTail is number {
+  return (
+    sentTail !== null && latestClear <= sentTail && (items[0]?.sequence ?? Infinity) <= sentTail
+  )
+}
+
 /** Show rows from the /clear divider onward; retain earlier journal rows for workers and archives. */
 export function agentSessionTranscriptRows<
   T extends Pick<AgentJournalRenderItem, 'sequence' | 'body'>
@@ -83,7 +95,19 @@ export function agentSessionCurrentContextRows(
         items: items.filter((item) => item.sequence > sequence),
         submissions: submissions.filter(
           (submission) => (submission.acceptedSequence ?? 0) > sequence
-        )
+        ),
+        sequence
       }
-    : { items, submissions }
+    : { items, submissions, sequence }
+}
+
+/** A body read that answers only for rows after the `/clear` at `sequence`, matching `agentSessionCurrentContextRows`. */
+export function agentSessionCurrentContextBody(
+  itemOf: (itemId: string) => Pick<AgentJournalRenderItem, 'sequence' | 'body'> | null,
+  sequence: number
+): (itemId: string) => AgentJournalRenderItem['body'] | undefined {
+  return (itemId) => {
+    const item = itemOf(itemId)
+    return item && (sequence === 0 || item.sequence > sequence) ? item.body : undefined
+  }
 }

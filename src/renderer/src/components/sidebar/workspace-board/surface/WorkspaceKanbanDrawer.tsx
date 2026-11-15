@@ -1,6 +1,7 @@
 import React, { useCallback, useMemo, useRef } from 'react'
 import { useAppStore } from '@/store'
-import { useAllWorktrees, useRepoMap } from '@/store/selectors'
+import { useAllWorktrees } from '@/store/slices/worktrees/listing/use-worktree-catalog'
+import { useRepoMap } from '@/store/repos/use-repository-catalog'
 import { useWorkspaceStatusDocumentDrop } from '../../worktree-list/drag/use-workspace-status-drop'
 import { useWorkspaceKanbanAreaSelection } from '../selection/use-workspace-kanban-area-selection'
 import { useWorkspaceKanbanCardPointerDrag } from '../drag/use-workspace-kanban-card-pointer-drag'
@@ -21,7 +22,7 @@ import { useWorkspaceKanbanNativeDrag } from '../drag/use-workspace-kanban-nativ
 import { useWorkspaceKanbanRenderLifecycle } from './use-workspace-kanban-render-lifecycle'
 import { useWorkspaceKanbanDrawerLingering } from './use-workspace-kanban-drawer-lingering'
 import { buildWorktreeManualOrderCatalog } from '../../worktree-list/drag/worktree-manual-order-catalog'
-import { selectFolderWorkspaces } from '@/store/workspace-record-selectors'
+import { selectFolderWorkspaces } from '@/store/workspaces/catalog/workspace-record-fields'
 import {
   useAllOfferedWorkspaceStatuses,
   useWorkspaceBoardStatuses

@@ -97,8 +97,8 @@ async function loadWorkingTreeBuild(): Promise<TerminalWireBuild> {
   const [codec, dispatcher, terminalMethods, client] = await Promise.all([
     import('../../../src/shared/terminal/stream/terminal-stream-protocol'),
     import('../../../src/main/runtime/rpc/dispatcher'),
-    import('../../../src/main/runtime/rpc/methods/terminal'),
-    import('../../../src/renderer/src/runtime/remote-runtime-terminal-multiplexer')
+    import('../../../src/main/runtime/rpc/methods/terminal/terminal'),
+    import('../../../src/renderer/src/runtime/hosted-terminals/streams/registry/remote-runtime-terminal-multiplexer-registry')
   ])
   return {
     label: WORKING_TREE,
@@ -119,7 +119,7 @@ async function loadReleaseBuild(checkout: ReleaseCheckout): Promise<TerminalWire
     importReleaseCheckoutModule(checkout, '/src/main/runtime/rpc/methods/terminal.ts'),
     importReleaseCheckoutModule(
       checkout,
-      '/src/renderer/src/runtime/remote-runtime-terminal-multiplexer.ts'
+      '/src/renderer/src/runtime/hosted-terminals/streams/registry/remote-runtime-terminal-multiplexer-registry.ts'
     )
   ])
   return {

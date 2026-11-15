@@ -1,7 +1,7 @@
 import { useRef, useState } from 'react'
 import { ChevronRight } from 'lucide-react'
 import { LoadingSpinner } from '@/components/LoadingSpinner'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import type { PluginDeclarativeProps } from '../../../../../shared/plugins/declarative/plugin-declarative-catalog'
 import { usePluginDeclarativeHostValue } from './plugin-declarative-host-value'
 import { usePluginDeclarativeActExpansion } from './plugin-declarative-act-targets'
@@ -19,6 +19,7 @@ export function PluginDeclarativeTree({
   props: PluginDeclarativeProps<'Tree'>
   emit: PluginDeclarativeEmit
 }): React.JSX.Element {
+  const t = useTranslate()
   // `expanded` is the plugin's record; a toggle shows at once and a changed list replaces it.
   const controlled = props.expanded?.join('\u0000')
   const [openItems, setOpenItems] = useState(() => ({
@@ -121,7 +122,7 @@ export function PluginDeclarativeTree({
             style={{ paddingLeft: `${(row.level - 1) * 12 + 28}px` }}
           >
             <LoadingSpinner className="size-3.5" />
-            {translate('auto.components.plugins.declarative.Tree.loading', 'Loading…')}
+            {t('auto.components.plugins.declarative.Tree.loading', 'Loading…')}
           </div>
         ) : (
           <div

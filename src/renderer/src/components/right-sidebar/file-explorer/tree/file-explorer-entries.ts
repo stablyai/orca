@@ -1,4 +1,4 @@
-import type { DirEntry } from '../../../../../../shared/filesystem-entry-types'
+import type { DirEntry } from '../../../../../../shared/file-listing/directory-entry'
 import { splitPathSegments } from '../../../../../../shared/cross-platform-path'
 
 export function shouldIncludeFileExplorerEntry(entry: DirEntry): boolean {

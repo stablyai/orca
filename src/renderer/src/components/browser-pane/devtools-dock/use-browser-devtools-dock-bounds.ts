@@ -1,10 +1,10 @@
 import { useEffect, useState } from 'react'
-import { hasVisibleOverlayOver } from '@/lib/visible-overlay'
+import { hasVisibleOverlayOver } from '@/lib/overlay-interaction/visible-overlay'
 import { registerBrowserClientPagePositionSync } from '../browser-client-page-position-driver'
 import {
   isWebviewDragPassthroughActive,
   registerWebviewDragPassthroughSurface
-} from '../host-guest/webview-drag-passthrough'
+} from '../host-guest/drag/webview-drag-passthrough'
 
 export type BrowserDevToolsDockSnapshot = { url: string; width: number; height: number }
 

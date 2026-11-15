@@ -2,7 +2,7 @@ import type { BrowserWindow, WebContents } from 'electron'
 import type { OrcaRuntimeService } from '../../runtime/orca-runtime'
 import type { Store } from '../../persistence/loading-store/store'
 import type { GlobalSettings } from '../../../shared/global-settings-types'
-import type { IPtyProvider } from '../../providers/pty-provider-contract'
+import type { IPtyProvider } from '../../providers/pty/provider-contract'
 import type { PtyModelRestoreReason } from '../../../shared/terminal/replay/pty-model-restore-marker'
 import type {
   PtyDeliveryWriteOff,
@@ -28,8 +28,8 @@ export type PtyDataPayload = {
   transformed?: boolean
   background?: boolean
   droppedOutput?: boolean
-  /** Escape left open by bytes dropped just before this chunk; lets an abandoned restore skip its tail. */
-  gapEscapeState?: string
+  /** The stream is inside an escape (or at an unknown point) where `data` begins, so it cannot resume a stream after a gap. */
+  midEscape?: true | 'unknown'
 }
 
 export type RendererPtyDeliveryAccounting = {

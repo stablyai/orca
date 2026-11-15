@@ -147,7 +147,7 @@
   opacity: 0.4 !important;
 }
 
-.pane.pane-focus-rim-flash::before {
+.pane-focus-rim-flash::before {
   content: '';
   position: absolute;
   inset: 1px;
@@ -193,7 +193,7 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .pane.pane-focus-rim-flash::before {
+  .pane-focus-rim-flash::before {
     animation: none;
   }
 }

@@ -1,7 +1,7 @@
 import { mkdirSync, readFileSync, rmSync } from 'node:fs'
 import { dirname } from 'node:path'
 import { normalizeRuntimePathForComparison } from '../../../../shared/cross-platform-path'
-import { writeFileAtomically } from '../../../codex-accounts/fs-utils'
+import { writeFileAtomically } from '../../../filesystem/atomic-file-publication'
 import {
   expandCodexSessionBackfillDatesThroughToday,
   getCodexSessionBackfillDate,

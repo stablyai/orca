@@ -1,3 +1,4 @@
+import type { PtyEscapeBoundary } from './pty-escape-boundary'
 import type { SynchronizedOutputLatchState } from '../../../../shared/terminal/protocol/escape/terminal-synchronized-output-scan'
 import type { Mode2031ReplyScanState } from '../../../../shared/terminal/protocol/queries/terminal-color-scheme-protocol'
 
@@ -7,8 +8,8 @@ export type PendingPtyData = {
   rawLength?: number
   transformed?: true
   containsBackgroundOutput?: boolean
-  /** Escape the stream was inside when `data` begins, set only right after a delivery gap. */
-  gapEscapeState?: string
+  /** Escape-parser boundary where `data` begins when not ground (null = unknown); see pty-escape-boundary. */
+  startEscapeBoundary?: PtyEscapeBoundary
   droppedOutput?: true
   droppedMode2031Data?: string
   droppedMode2031ScanState?: Mode2031ReplyScanState

@@ -1,9 +1,9 @@
 import {
   agentArgTerminatorIndex,
   removeAgentArgOption
-} from '../../agent-session/options/agent-session-option-agent-args'
+} from '../../agent-session/options/launch/agent-session-option-agent-args'
 import { getAgentSessionOptionLaunchCatalog } from '../../agent-session/options/agent-session-option-catalog'
-import { PI_THINKING_LEVELS } from '../../agent-session/options/structured-agent-session-effective-effort'
+import { PI_THINKING_LEVELS } from '../../agent-session/options/reconciliation/structured-agent-session-effective-effort'
 import { findOptionOccurrence } from '../../command-option-occurrence'
 import {
   quoteStartupArg,
@@ -37,6 +37,7 @@ const MODEL_OR_M_OPTION = { kind: 'model', aliases: ['-m', '--model'] } as const
 
 // Allowlist paired-client extras so they cannot alter permissions or Orca-owned prompt/resume/cwd/print/config/MCP flags.
 const EXTRA_AGENT_ARG_OPTIONS: Partial<Record<TuiAgent, readonly ExtraAgentArgOption[]>> = {
+  antigravity: [MODEL_OPTION, { kind: 'effort', aliases: ['--effort'] }],
   claude: [
     MODEL_OPTION,
     { kind: 'effort', aliases: ['--effort'] },

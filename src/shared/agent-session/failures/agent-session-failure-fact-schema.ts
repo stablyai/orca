@@ -1,4 +1,4 @@
-import { z } from 'zod'
+import * as z from 'zod'
 
 /** Keep newer kinds/audiences/refusal details readable like row state; the fact reader drops anything it cannot place. */
 export const AgentSessionFailureFactSchema = z.object({
@@ -8,5 +8,6 @@ export const AgentSessionFailureFactSchema = z.object({
   argumentProblem: z
     .object({ agent: z.string(), option: z.string(), problem: z.string() })
     .optional(),
-  requestTimeout: z.looseObject({}).optional()
+  requestTimeout: z.looseObject({}).optional(),
+  agentUpdate: z.string().max(64).optional()
 })

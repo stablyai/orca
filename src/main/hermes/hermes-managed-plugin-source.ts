@@ -188,7 +188,12 @@ def _post_to_orca(payload: dict[str, Any]) -> None:
 
 
 def _payload_for_event(event_name: str, kwargs: dict[str, Any]) -> dict[str, Any]:
-    payload: dict[str, Any] = {"hook_event_name": event_name, "cwd": os.getcwd()}
+    payload: dict[str, Any] = {"hook_event_name": event_name}
+    try:
+        payload["cwd"] = os.getcwd()
+    except OSError:
+        # Hermes Kanban cleanup can delete a worker's cwd; a status hook must not fail the tool.
+        pass
     for key in SELECTED_KEYS.get(event_name, ()):
         if key in kwargs:
             payload[key] = _jsonable(kwargs[key])

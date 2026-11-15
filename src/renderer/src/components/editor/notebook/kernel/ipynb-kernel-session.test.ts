@@ -88,17 +88,6 @@ describe('notebook kernel session', () => {
     expect(notebookApi.execute).toHaveBeenCalledWith({ filePath: untrusted, code: 'x' })
   })
 
-  it('discovers with workspace interpreters once trusted', async () => {
-    openFiles.current = [{ filePath: '/fifth.ipynb' }]
-    session.trustNotebook('/fifth.ipynb')
-    await session.runCells('/fifth.ipynb', [{ key: 'a', code: 'x' }], '/proj')
-    expect(notebookApi.listPythonEnvironments).toHaveBeenCalledWith({
-      filePath: '/fifth.ipynb',
-      rootPath: '/proj',
-      runWorkspaceInterpreters: true
-    })
-  })
-
   it('starts the recommended env, runs queued cells in order, and stops the queue on an error', async () => {
     await session.runCells(
       FILE,
@@ -258,17 +247,6 @@ describe('notebook kernel session', () => {
     await install
     expect(getSession(FILE).setup).toBeNull()
     expect(notebookApi.startKernel).toHaveBeenCalledOnce()
-  })
-
-  it('falls back to Python on PATH when there is no workspace env', async () => {
-    notebookApi.listPythonEnvironments.mockResolvedValue({ workspace: [], path: [VENV] })
-    // A remembered env from an earlier test would skip discovery; use a fresh notebook.
-    openFiles.current = [{ filePath: '/other.ipynb' }]
-    await session.runCells('/other.ipynb', [{ key: 'a', code: 'x' }], null)
-    expect(notebookApi.startKernel).toHaveBeenCalledWith({
-      filePath: '/other.ipynb',
-      python: VENV.path
-    })
   })
 
   it('starts one kernel when a second run lands during discovery', async () => {

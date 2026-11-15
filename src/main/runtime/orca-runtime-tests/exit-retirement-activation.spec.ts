@@ -1,6 +1,7 @@
 import type { AdoptStablePaneArgs } from '../../ipc/pty/ipc/spawn-types'
 import { describe, expect, it, vi } from 'vitest'
-import { OrcaRuntimeService } from '../orca-runtime-test-mocks.spec'
+import './runtime-test-module-registration.spec'
+import { OrcaRuntimeService } from '../orca-runtime'
 import {
   HEADLESS_LEAF_ID,
   HEADLESS_SECOND_LEAF_ID,
@@ -9,7 +10,7 @@ import {
   makeHeadlessTerminalLayout,
   makeRuntimeStoreWithWorkspaceSession,
   makeWorkspaceSessionWithHeadlessTerminal
-} from '../orca-runtime-test-fixtures.spec'
+} from './orca-runtime-test-fixtures.spec'
 
 async function startSplitHost() {
   const { runtimeStore, getSession } = makeRuntimeStoreWithWorkspaceSession(
@@ -52,7 +53,7 @@ async function startSplitHost() {
     getForegroundProcess: async () => null,
     listProcesses: async () => []
   })
-  runtime.syncWindowGraph(0, { tabs: [], leaves: [] })
+  await runtime.syncWindowGraph(0, { tabs: [], leaves: [] })
   const activate = (leafId: string, intent: 'user' | 'automatic') =>
     runtime.activateMobileSessionTab(`id:${TEST_WORKTREE_ID}`, 'host-tab', leafId, {
       notifyClients: false,
@@ -79,7 +80,7 @@ describe('OrcaRuntimeService', () => {
     const disk = makeDeferred()
     Object.assign(runtimeStore, { flushPendingOrThrowAsync: () => disk.promise })
     const published = vi.fn()
-    runtime.onMobileSessionTabsChanged(published)
+    runtime.onMobileSessionTabsChanged(published, undefined, 'mobile')
     // Model immediate paired-client reactivation on stream end.
     let reactivation: Promise<unknown> | undefined
     let observedAtStreamEnd: { binding?: string; publications: number } | undefined

@@ -1,5 +1,5 @@
 import type React from 'react'
-import { useAnyBrowserGuestNeedsPaint } from './browser-pane/host-guest/browser-guest-paint-retention'
+import { useAnyBrowserGuestNeedsPaint } from './browser-pane/host-guest/retention/browser-guest-paint-retention'
 
 // Keep hidden browser guests compositing while a phone/agent drives them; display:none silently stops screencasts.
 export function TerminalWorkbenchContainer({

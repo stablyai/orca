@@ -4,13 +4,14 @@ import {
   isWindowsRemoteHost,
   joinRemotePath,
   type RemoteHostPlatform
-} from '../../ssh/ssh-remote-platform'
+} from '../../ssh/remote-host/ssh-remote-platform'
 import {
   ORCAD_PID_FILENAME,
   ORCAD_PID_MACHINE_FILENAME,
   ORCAD_READINESS_FILENAME,
   ORCAD_READINESS_MAX_BYTES,
-  ORCAD_LAUNCH_MACHINE_COMMAND
+  ORCAD_LAUNCH_MACHINE_COMMAND,
+  POSIX_NO_SUCH_PROCESS_CASE
 } from './orcad-remote-host-support'
 import {
   parseOrcadReadinessOutput,
@@ -43,7 +44,7 @@ function posixReadinessWaitCommand(
     // Fail early only on proven exit from the launching machine; shared homes and unverified PIDs must keep waiting.
     `orcad_launch_here() { orcad_recorded=$(cat ${pidMachine} 2>/dev/null) && [ -n "$orcad_recorded" ] && [ "$orcad_recorded" = "$(${ORCAD_LAUNCH_MACHINE_COMMAND} 2>/dev/null)" ]; };`,
     `orcad_launch_exited() { orcad_launch_here || return 1; pid=$(cat ${pidFile} 2>/dev/null); case "$pid" in "" | *[!0-9]*) return 1;; esac;`,
-    'probe_error=$(LC_ALL=C kill -0 "$pid" 2>&1) || { case "$probe_error" in *"No such process"*) return 0;; esac; return 1; };',
+    `probe_error=$(LC_ALL=C kill -0 "$pid" 2>&1) || { case "$probe_error" in ${POSIX_NO_SUCH_PROCESS_CASE}) return 0;; esac; return 1; };`,
     'case "$(ps -o stat= -p "$pid" 2>/dev/null)" in Z*) return 0;; esac; return 1; };',
     // Probe fractional sleep once; POSIX hosts may support only integer seconds.
     'if sleep 0.25 2>/dev/null; then orcad_readiness_wait_step=0.25;',

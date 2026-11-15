@@ -2,8 +2,8 @@ import {
   buildMobileProjectSectionCatalog,
   type MobileProjectSectionCatalog
 } from '../../../../shared/mobile-project-sections-contract'
-import type { ProjectHostSetupProjection } from '../../../../shared/project-host-setup-projection'
-import { getProjectHostSetupProjectionFromState } from '@/store/project-host-setup-selector'
+import type { ProjectHostSetupProjection } from '../../../../shared/project/host-setup/project-host-setup-projection'
+import { getProjectHostSetupProjectionFromState } from '@/store/projects/project-host-setup-selector'
 import type { AppState } from '@/store/types'
 
 type CatalogSource = {

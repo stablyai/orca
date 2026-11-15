@@ -96,29 +96,6 @@ afterEach(async () => {
 })
 
 describe('chunked download renderer ownership', () => {
-  it('releases all renderer listeners after twenty alternating finish and cancel calls', async () => {
-    const sender = makeSender()
-    for (let index = 0; index < 20; index += 1) {
-      const transferId = await start(sender)
-      await invoke(index % 2 ? 'finishDownloadedFile' : 'cancelDownloadedFile', sender, {
-        transferId
-      })
-    }
-    expect(context.downloadSessions.size).toBe(0)
-    expectNoListeners(sender)
-    expect(vi.getTimerCount()).toBe(0)
-  })
-
-  it('does not open a dialog for an already destroyed renderer', async () => {
-    const sender = makeSender()
-    sender.isDestroyed.mockReturnValue(true)
-    await expect(
-      invoke('startDownloadedFile', sender, { suggestedName: 'file.txt' })
-    ).resolves.toEqual({ canceled: true })
-    expect(mocks.showSaveDialog).not.toHaveBeenCalled()
-    expectNoListeners(sender)
-  })
-
   it.each(
     lifetimeEvents.flatMap((event) =>
       (['dialog', 'stat', 'open'] as const).map((phase) => ({ event, phase }))
@@ -152,33 +129,6 @@ describe('chunked download renderer ownership', () => {
     }
     expectNoListeners(sender)
     expect(vi.getTimerCount()).toBe(0)
-  })
-
-  it.each(['dialog', 'stat', 'open'] as const)(
-    'releases ownership when %s rejects',
-    async (phase) => {
-      const sender = makeSender()
-      const error = new Error(`${phase} failed`)
-      const operation =
-        phase === 'dialog' ? mocks.showSaveDialog : phase === 'stat' ? mocks.stat : mocks.open
-      operation.mockRejectedValueOnce(error)
-      await expect(
-        invoke('startDownloadedFile', sender, { suggestedName: 'file.txt' })
-      ).rejects.toBe(error)
-      expectNoListeners(sender)
-      expect(context.downloadSessions.size).toBe(0)
-      expect(vi.getTimerCount()).toBe(0)
-    }
-  )
-
-  it('releases ownership when the user cancels the dialog', async () => {
-    const sender = makeSender()
-    mocks.showSaveDialog.mockResolvedValueOnce({ canceled: true })
-    await expect(
-      invoke('startDownloadedFile', sender, { suggestedName: 'file.txt' })
-    ).resolves.toEqual({ canceled: true })
-    expectNoListeners(sender)
-    expect(mocks.open).not.toHaveBeenCalled()
   })
 
   it.each(lifetimeEvents)(

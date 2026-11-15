@@ -1,8 +1,8 @@
 import { splitWorktreeIdForFilesystem } from '../../../../shared/worktree/id'
-import { triggerTerminalSpawnPushTargetMaterialization } from '../../../runtime/runtime-terminal-spawn-push-target-materialization'
+import { triggerTerminalSpawnPushTargetMaterialization } from '../../../runtime/terminal/launch/runtime-terminal-spawn-push-target-materialization'
 import type { PtySpawnIpcArgs, PtySpawnIpcDeps } from './spawn-types'
 import { getRepoExecutionHostId, LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
-import { isWslMoveWorktreeBlocked } from '../../../persistence/moving-wsl-projects/wsl-move-background-backoff'
+import { isWslMoveWorktreeBlocked } from '../../../persistence/moving-wsl-projects/orchestration/wsl-move-background-backoff'
 
 // GUI terminals can run Git before Orca sync; request deferred push-target setup on spawn and reattach (#17828).
 export function triggerPtySpawnPushTargetMaterialization(

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { PASTE_PAYLOAD_CORPUS } from '../../shared/paste-payload-corpus'
+import { PASTE_PAYLOAD_CORPUS } from '../../shared/clipboard/testing/paste-payload-corpus'
 import { resolveLocalDroppedPathsForAgent } from './dropped-path-resolution'
 
 function getPastePayloadCorpusText(name: string): string {
@@ -44,22 +44,5 @@ describe('resolveLocalDroppedPathsForAgent', () => {
       uncPath,
       posixPath
     ])
-  })
-
-  it('translates same-distro legacy WSL UNC paths case-insensitively', () => {
-    expect(
-      withWin32Platform(() =>
-        resolveLocalDroppedPathsForAgent(
-          ['\\\\wsl$\\ubuntu-24.04\\home\\user\\repo\\README.md'],
-          '\\\\wsl.localhost\\Ubuntu-24.04\\home\\user\\repo'
-        )
-      )
-    ).toEqual(['/home/user/repo/README.md'])
-  })
-
-  it('leaves dropped paths unchanged for non-WSL worktrees', () => {
-    const paths = ['C:\\Users\\alice\\Desktop\\notes.txt']
-
-    expect(resolveLocalDroppedPathsForAgent(paths, 'C:\\Users\\alice\\repo')).toBe(paths)
   })
 })

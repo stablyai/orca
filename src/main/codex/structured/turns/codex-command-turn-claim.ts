@@ -3,7 +3,7 @@ import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../../shared/agent-session/jou
 import type {
   StructuredAgentSessionEventSink,
   StructuredAgentSessionSinkAdmission
-} from '../../../native-chat/agent-session-wire/structured-agent-session-event-sink'
+} from '../../../native-chat/agent-session-wire/journal-ingress/structured-agent-session-event-sink'
 
 const CLAIM_BYTES = 4_096
 
@@ -19,12 +19,7 @@ export function recordCodexCommandTurnClaim(
   }
   return sink.tryReviseResolvedItemAndPublish(
     CLAIM_BYTES,
-    (journal) => {
-      const body = journal.itemBody(commandTurnItemId)
-      return body?.kind === 'turn' && body.state === 'running'
-        ? { identity, body: { ...body, providerTurnId } }
-        : null
-    },
+    { kind: 'turn-claim', identity, providerTurnId },
     { lifecycle: true, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
   )
 }

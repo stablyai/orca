@@ -32,7 +32,7 @@ Add `"$schema": "https://raw.githubusercontent.com/stablyai/orca/main/docs/schem
 | `contributes` | object | no | 1.4.160 | What the plugin adds to Orca. Every point defaults to empty. |
 | `contributes.panels` | [PanelContribution](#panelcontribution)[] | no | 1.4.160 | Sidebar panels. At most 64. |
 | `contributes.commands` | [CommandContribution](#commandcontribution)[] | no | 1.4.160 | Command palette entries. At most 256. |
-| `contributes.events` | [EventContribution](#eventcontribution)[] | no | 1.4.160 | Events delivered to the plugin worker. At most 4. |
+| `contributes.events` | [EventContribution](#eventcontribution)[] | no | 1.4.160 | Events delivered to the plugin worker. At most 5. |
 | `contributes.hooks` | [HookContribution](#hookcontribution)[] | no | 1.4.248 | Hooks the worker runs before or after Orca acts; Orca waits only on plugins that list one. At most 8. |
 | `contributes.languagePacks` | [LanguagePackContribution](#languagepackcontribution)[] | no | 1.4.160 | Interface translations. At most 16. |
 | `contributes.keybindings` | [KeybindingContribution](#keybindingcontribution)[] | no | 1.4.160 | Keyboard shortcuts for contributed commands. At most 256. |
@@ -40,6 +40,7 @@ Add `"$schema": "https://raw.githubusercontent.com/stablyai/orca/main/docs/schem
 | `contributes.themes` | [ThemeContribution](#themecontribution)[] | no | 1.4.245 | App color themes. At most 64. |
 | `contributes.terminalThemes` | [ThemeContribution](#themecontribution)[] | no | 1.4.245 | Terminal ANSI palettes. At most 64. |
 | `contributes.iconThemes` | [ThemeContribution](#themecontribution)[] | no | 1.4.245 | File icon themes. At most 32. |
+| `contributes.fonts` | [FontContribution](#fontcontribution)[] | no | 1.4.253 | Font families for the terminal, editor and interface font pickers. At most 8. |
 | `contributes.syntaxes` | [SyntaxContribution](#syntaxcontribution)[] | no | 1.4.245 | Syntax highlighting for editor languages. At most 16. |
 | `contributes.customEditors` | [CustomEditorContribution](#customeditorcontribution)[] | no | 1.4.245 | Editors that open files of given types in the editor tab. At most 16. |
 | `contributes.newFiles` | [NewFileContribution](#newfilecontribution)[] | no | 1.4.245 | Untitled files the user can create from the + menu and the command palette. At most 16. |
@@ -84,11 +85,11 @@ A command palette entry. Requires the `declarative` execution profile or higher.
 
 ## EventContribution
 
-An event subscription. Requires `main`, the `trusted-worker` execution profile and the capability of the event's domain: `workspace:read` for workspace events, `agent:read` for agent events.
+An event subscription. Requires `main`, the `trusted-worker` execution profile and the capability of the event's domain: `workspace:read` for workspace events, `agent:read` for agent events. Editor events need no capability.
 
 | Field | Type | Required | Since | Description |
 | --- | --- | --- | --- | --- |
-| `on` | `"workspace.created"` \| `"workspace.removed"` \| `"agent.status.changed"` \| `"workspace.changed"` | yes | 1.4.160 | Event delivered to the plugin worker. |
+| `on` | `"workspace.created"` \| `"workspace.removed"` \| `"agent.status.changed"` \| `"workspace.changed"` \| `"editor.typography.changed"` | yes | 1.4.160 | Event delivered to the plugin worker. |
 
 ## HookContribution
 
@@ -136,6 +137,25 @@ A titled theme file.
 | `id` | string | yes | 1.4.245 | Theme id, unique within its family in this plugin. The reserved names `constructor` and `prototype` are refused. Example: `"dusk"` |
 | `title` | string | yes | 1.4.245 | Name shown in the theme picker. Example: `"Dusk"` |
 | `path` | string | yes | 1.4.245 | JSON theme file, at most 16 KiB. Relative to the plugin root; `..` segments and Windows device names such as `CON` are refused. Example: `"themes/dusk.json"` |
+
+## FontContribution
+
+A font family the user can pick for the terminal, editor or interface. It applies only once picked.
+
+| Field | Type | Required | Since | Description |
+| --- | --- | --- | --- | --- |
+| `family` | string | yes | 1.4.253 | Family name shown in the font pickers. Orca adds the plugin id, so a plugin font never replaces an installed or built-in font of the same name. Example: `"Geist"` |
+| `faces` | [FontFaceContribution](#fontfacecontribution)[] | yes | 1.4.253 | The family's files, at most 8. All of a plugin's font files together may be at most 8 MB. |
+
+## FontFaceContribution
+
+One file of a font family.
+
+| Field | Type | Required | Since | Description |
+| --- | --- | --- | --- | --- |
+| `path` | string | yes | 1.4.253 | WOFF or WOFF2 file, at most 2 MB; its first bytes must match its extension. TTF, OTF and font collections are refused. Relative to the plugin root; `..` segments and Windows device names such as `CON` are refused. Example: `"fonts/Geist-Variable.woff2"` |
+| `weight` | string | no | 1.4.253 | CSS weight this file draws, or a range for a variable font. Defaults to `400`. Example: `"400"` |
+| `style` | `"normal"` \| `"italic"` | no | 1.4.253 | Whether this file is the italic face. Defaults to `normal`. |
 
 ## SyntaxContribution
 
@@ -217,7 +237,7 @@ A host API the plugin may call once the user consents.
 
 | Field | Type | Required | Since | Description |
 | --- | --- | --- | --- | --- |
-| `kind` | `"workspace:read"` \| `"workspace:write"` \| `"agent:read"` \| `"agent:launch"` \| `"terminal:send"` \| `"terminal:read"` \| `"notifications:show"` \| `"storage:own"` \| `"secrets:own"` \| `"settings:own"` | yes | 1.4.160 | Capability granted on user consent. |
+| `kind` | `"workspace:read"` \| `"workspace:write"` \| `"agent:read"` \| `"agent:launch"` \| `"terminal:send"` \| `"terminal:read"` \| `"notifications:show"` \| `"storage:own"` \| `"secrets:own"` \| `"settings:own"` \| `"appearance:write"` \| `"workspace:create"` \| `"automation:read"` \| `"automation:write"` \| `"history:read"` | yes | 1.4.160 | Capability granted on user consent. |
 
 ## Screenshot
 

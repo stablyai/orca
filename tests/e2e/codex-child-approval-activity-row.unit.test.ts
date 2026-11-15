@@ -1,3 +1,5 @@
+import { acceptedAgentStatuses } from '@/store/slices/agent-status/accepted-agent-statuses'
+import { readTestJournalItems } from '../../src/main/native-chat/agent-session-journal/journal-observation.test-support'
 // @vitest-environment happy-dom
 
 // Round-trip subagent approval through the real translator/journal/status/activity pipeline; answering must preserve done time and read state.
@@ -22,10 +24,10 @@ import type { AppState } from '../../src/renderer/src/store/types'
 import { createCodexJournalTranslator } from '../../src/main/codex/structured/journal/codex-structured-journal-translation'
 import '../../src/main/codex/structured/prompts/codex-structured-prompt-replies'
 import { CODEX_COMMAND_APPROVAL_METHOD } from '../../src/main/codex/structured/prompts/codex-prompt-registry'
-import { createTrackedJournalOpener } from '../../src/main/native-chat/agent-session-journal/journal-host-database-test-support'
-import { createDeferredStructuredAgentSessionEventSink } from '../../src/main/native-chat/agent-session-wire/structured-agent-session-event-sink'
-import { StructuredAgentSessionStatusFeed } from '../../src/main/native-chat/agent-session-wire/structured-agent-session-status-feed'
-import { indexedStatusFeedSession } from '../../src/main/native-chat/agent-session-wire/structured-agent-session-status-feed-test-session'
+import { createTrackedJournalOpener } from '../../src/main/native-chat/agent-session-journal/store-lifecycle/journal-host-database-test-support'
+import { createDeferredStructuredAgentSessionEventSink } from '../../src/main/native-chat/agent-session-wire/journal-ingress/structured-agent-session-event-sink'
+import { StructuredAgentSessionStatusFeed } from '../../src/main/native-chat/agent-session-wire/observations/structured-agent-session-status-feed'
+import { indexedStatusFeedSession } from '../../src/main/native-chat/agent-session-wire/observations/testing/structured-agent-session-status-feed-test-session.test-fixture'
 import {
   makeRepo,
   makeWorktree
@@ -52,23 +54,32 @@ const mocks = vi.hoisted(() => {
 })
 
 vi.mock('@/store', async () => {
-  const { createTestStore } = await import('@/store/slices/store-test-helpers')
+  const { createTestStore } = await import('@/store/testing/app-store-test-fixture')
   const useAppStore = createTestStore()
   mocks.store = useAppStore
   return { useAppStore }
 })
 
-vi.mock('@/runtime/structured-agent-session-client', () => ({
-  callStructuredAgentSession: vi.fn(),
-  subscribeStructuredAgentSession: vi.fn(),
-  subscribeStructuredAgentSessionStatus: mocks.subscribeStatus
-}))
+vi.mock(
+  '../../src/renderer/src/runtime/native-chat/requests/structured-agent-session-call',
+  () => ({
+    callStructuredAgentSession: vi.fn()
+  })
+)
 
-import { StructuredAgentSessionStatusBridge } from '../../src/renderer/src/components/native-chat/StructuredAgentSessionStatusBridge'
-import { resetStructuredAgentSessionStatusFeedsForTests } from '../../src/renderer/src/runtime/structured-agent-session-status-feed'
-import { createStructuredAgentSessionLogger } from '../../src/main/native-chat/agent-session-wire/structured-agent-session-logger'
-import { testEventSinkLogging } from '../../src/main/native-chat/agent-session-wire/structured-agent-session-logger-test-support'
-import { codexProviderHandle } from '../../src/shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
+vi.mock(
+  '../../src/renderer/src/runtime/native-chat/requests/structured-agent-session-subscriptions',
+  () => ({
+    subscribeStructuredAgentSession: vi.fn(),
+    subscribeStructuredAgentSessionStatus: mocks.subscribeStatus
+  })
+)
+
+import { StructuredAgentSessionStatusBridge } from '../../src/renderer/src/components/native-chat/session/status/StructuredAgentSessionStatusBridge'
+import { resetStructuredAgentSessionStatusFeedsForTests } from '../../src/renderer/src/runtime/native-chat/status/structured-agent-session-status-feed'
+import { createStructuredAgentSessionLogger } from '../../src/main/native-chat/agent-session-wire/host/structured-agent-session-logger'
+import { testEventSinkLogging } from '../../src/main/native-chat/agent-session-wire/host/testing/structured-agent-session-logger.test-fixture'
+import { codexProviderHandle } from '../../src/shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle-encoding'
 
 const SESSION = 'codex-child-approval'
 const CODEX_THREAD = 'thread-parent'
@@ -106,10 +117,10 @@ beforeEach(async () => {
   root = await mkdtemp(join(tmpdir(), 'orca-codex-child-approval-'))
   const worktree = makeWorktree()
   store().setState({
-    agentStatusByPaneKey: {},
+    agentStatusByPaneKey: acceptedAgentStatuses(Object.entries({})),
     acknowledgedAgentsByPaneKey: {},
     activityClearedAtByPaneKey: {},
-    retainedAgentsByPaneKey: {},
+
     refreshGitHubForWorktreeIfStale: vi.fn(),
     testRuntimeOwner: null,
     repos: [makeRepo()],
@@ -158,7 +169,7 @@ async function openHost() {
   const events: AgentSessionStatusEvent[] = []
   feed.subscribe({ id: 'renderer', emit: (event) => events.push(event) })
   const deferred = createDeferredStructuredAgentSessionEventSink(testEventSinkLogging())
-  const publish = (): void => feed.publish(SESSION, journal)
+  const publish = () => feed.publish(SESSION, journal)
   deferred.bind({ journal, fence: 1, publish })
   const prompts: string[] = []
   const translator = createCodexJournalTranslator({
@@ -187,7 +198,7 @@ async function openHost() {
   /** What the host's answer path commits before it tells Codex. */
   const answer = async (itemId: string): Promise<void> => {
     const identity = parseAgentJournalItemKey(itemId)
-    const asked = journal.snapshot().items.find((item) => item.itemId === itemId)?.body
+    const asked = (await readTestJournalItems(journal)).find((item) => item.itemId === itemId)?.body
     if (!identity || asked?.kind !== 'approval') {
       throw new Error(`approval ${itemId} missing`)
     }
@@ -204,7 +215,7 @@ async function openHost() {
       fence: 1,
       turnScope: AGENT_JOURNAL_THREAD_SCOPE
     })
-    publish()
+    await publish()
     translator.resolvePrompt(itemId)
   }
   return { journal, translator, on, drain, answer, prompts, events, tick, close: deferred.close }
@@ -231,7 +242,8 @@ describe("a Codex subagent's answered approval on the settled parent's Activity 
       }
       return latest.session
     }
-    const paneKey = (): string => Object.keys(store().getState().agentStatusByPaneKey)[0] ?? ''
+    const paneKey = (): string =>
+      Array.from(store().getState().agentStatusByPaneKey.keys())[0] ?? ''
 
     await host.journal.appendItem(
       { provider: 'orca', clientMessageId: 'prompt-1' },

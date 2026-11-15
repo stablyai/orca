@@ -2,25 +2,26 @@ import React from 'react'
 import { LoaderCircle, PanelRight, RefreshCw } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import CommentMarkdown from '@/components/sidebar/CommentMarkdown'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import { useAppStore } from '@/store/index'
 import type { GitLabProjectRef } from '../../../../../../shared/gitlab-types'
-import type { PRCheckDetail } from '../../../../../../shared/github/check-types'
-import type { GitHubRepositoryIdentity } from '../../../../../../shared/github/pull-request-types'
+import type { PRCheckDetail } from '../../../../../../shared/github/checks/check-types'
+import type { GitHubRepositoryIdentity } from '../../../../../../shared/github/repositories/repository-identity'
 import { CheckJobLogTail } from '../logs/check-job-log-tail'
-import { translate } from '@/i18n/i18n'
+import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
 import { checkJobIdentities } from '@/components/editor/check-details/reading/check-details-reading-cache'
 import { resolveStepOutcome } from '../../../../../../shared/source-control/checks/pr-check-step-status'
+import {
+  getCheckStatusLabel,
+  isGitLabAllowedFailureJob
+} from '@/components/github/pr-check-presentation'
 import {
   type CheckDetailsLoadState,
   type CheckDetailsStickySurface,
   formatCheckTimestamp,
   getCheckDetailsStickySurfaceClass
 } from './check-details-model'
-import {
-  getCheckConclusion,
-  getCheckStatusLabel
-} from '../../../../../../shared/source-control/checks/pr-check-status-label'
+import { getCheckConclusion } from '../../../../../../shared/source-control/checks/pr-check-status-label'
 
 function ViewFullCheckDetailsButton({
   onClick,
@@ -57,10 +58,12 @@ export function CheckRunDetails({
   githubRepository?: GitHubRepositoryIdentity | null
   onRetry: () => void
 }): React.JSX.Element {
+  const t = useTranslate()
+  const intlLocale = useIntlLocale()
   const openCheckRunDetails = useAppStore((s) => s.openCheckRunDetails)
   const details = state?.details
-  const startedAt = formatCheckTimestamp(details?.startedAt)
-  const completedAt = formatCheckTimestamp(details?.completedAt)
+  const startedAt = formatCheckTimestamp(details?.startedAt, intlLocale)
+  const completedAt = formatCheckTimestamp(details?.completedAt, intlLocale)
   const detailsStatusCheck: PRCheckDetail = {
     ...check,
     status: (details?.status as PRCheckDetail['status'] | undefined) ?? check.status,
@@ -72,7 +75,7 @@ export function CheckRunDetails({
   const hasOutput = Boolean(details?.title || details?.summary || details?.text)
   const hasAnnotations = (details?.annotations.length ?? 0) > 0
   const hasJobs = jobs.length > 0
-  const fullDetailsLabel = translate(
+  const fullDetailsLabel = t(
     'auto.components.right.sidebar.checks.panel.content.e4e3af15ee',
     'View full details'
   )
@@ -116,7 +119,7 @@ export function CheckRunDetails({
         <div role="status" aria-live="polite" className="flex min-w-0 flex-col gap-2 py-1.5">
           <div className="flex items-center gap-2 text-xs text-muted-foreground">
             <LoaderCircle className="size-3.5 animate-spin" />
-            {translate(
+            {t(
               'auto.components.right.sidebar.checks.panel.content.1f2b980522',
               'Loading check details…'
             )}
@@ -126,45 +129,30 @@ export function CheckRunDetails({
         <div className="flex min-w-0 flex-col gap-2.5 py-1.5">
           <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-0.5 text-2xs text-muted-foreground">
             <span>
-              {translate(
-                'auto.components.right.sidebar.checks.panel.content.a54ae21c6f',
-                'Status:'
-              )}{' '}
-              {details ? getCheckStatusLabel(detailsStatusCheck) : getCheckStatusLabel(check)}
+              {t('auto.components.right.sidebar.checks.panel.content.a54ae21c6f', 'Status:')}{' '}
+              {getCheckStatusLabel(detailsStatusCheck, t)}
             </span>
             {startedAt && (
               <span>
-                {translate(
-                  'auto.components.right.sidebar.checks.panel.content.fd46a70f1a',
-                  'Started'
-                )}{' '}
+                {t('auto.components.right.sidebar.checks.panel.content.fd46a70f1a', 'Started')}{' '}
                 {startedAt}
               </span>
             )}
             {completedAt && (
               <span>
-                {translate(
-                  'auto.components.right.sidebar.checks.panel.content.00e1c1658a',
-                  'Completed'
-                )}{' '}
+                {t('auto.components.right.sidebar.checks.panel.content.00e1c1658a', 'Completed')}{' '}
                 {completedAt}
               </span>
             )}
             {check.checkRunId && (
               <span className="font-mono">
-                {translate(
-                  'auto.components.right.sidebar.checks.panel.content.aa8494ae3c',
-                  'check #'
-                )}
+                {t('auto.components.right.sidebar.checks.panel.content.aa8494ae3c', 'check #')}
                 {check.checkRunId}
               </span>
             )}
             {check.workflowRunId && (
               <span className="font-mono">
-                {translate(
-                  'auto.components.right.sidebar.checks.panel.content.2dd5ddabc4',
-                  'workflow #'
-                )}
+                {t('auto.components.right.sidebar.checks.panel.content.2dd5ddabc4', 'workflow #')}
                 {check.workflowRunId}
               </span>
             )}
@@ -186,11 +174,8 @@ export function CheckRunDetails({
               >
                 <RefreshCw className={cn('size-3', state.loading && 'animate-spin')} />
                 {state.loading
-                  ? translate('githubChecks.retrying', 'Retrying…')
-                  : translate(
-                      'auto.components.right.sidebar.checks.panel.content.dcb3c546fe',
-                      'Retry'
-                    )}
+                  ? t('githubChecks.retrying', 'Retrying…')
+                  : t('auto.components.right.sidebar.checks.panel.content.dcb3c546fe', 'Retry')}
               </Button>
             </div>
           )}
@@ -204,14 +189,11 @@ export function CheckRunDetails({
                 <div key="jobs" className="min-w-0 border-t border-border/60 pt-2">
                   <div className="mb-1.5 text-3xs font-semibold uppercase tracking-wide text-muted-foreground">
                     {failedEntries.length > 0
-                      ? translate(
+                      ? t(
                           'auto.components.right.sidebar.checks.panel.content.066fedd446',
                           'Failed jobs'
                         )
-                      : translate(
-                          'auto.components.right.sidebar.checks.panel.content.49731703ea',
-                          'Jobs'
-                        )}
+                      : t('auto.components.right.sidebar.checks.panel.content.49731703ea', 'Jobs')}
                   </div>
                   <div className="flex flex-col gap-2">
                     {jobs.map(({ job, identity }) => (
@@ -221,12 +203,14 @@ export function CheckRunDetails({
                             {job.name}
                           </span>
                           <span className="shrink-0 text-2xs text-muted-foreground">
-                            {job.conclusion ??
-                              job.status ??
-                              translate(
-                                'auto.components.right.sidebar.checks.panel.content.ee07b33924',
-                                'unknown'
-                              )}
+                            {isGitLabAllowedFailureJob(check, job)
+                              ? getCheckStatusLabel(check, t)
+                              : (job.conclusion ??
+                                job.status ??
+                                t(
+                                  'auto.components.right.sidebar.checks.panel.content.ee07b33924',
+                                  'unknown'
+                                ))}
                           </span>
                         </div>
                         {job.steps.length > 0 && (
@@ -250,7 +234,7 @@ export function CheckRunDetails({
                   </div>
                   {(details?.jobs.length ?? 0) >= 100 && (
                     <div className="mt-1.5 text-3xs text-muted-foreground">
-                      {translate(
+                      {t(
                         'auto.components.right.sidebar.checks.panel.content.a2fb3f4408',
                         'Showing first 100 jobs'
                       )}
@@ -263,7 +247,7 @@ export function CheckRunDetails({
               return hasAnnotations ? (
                 <div key="annotations" className="min-w-0 border-t border-border/60 pt-2">
                   <div className="mb-1.5 text-3xs font-semibold uppercase tracking-wide text-muted-foreground">
-                    {translate(
+                    {t(
                       'auto.components.right.sidebar.checks.panel.content.f2fe8a4e8f',
                       'Annotations'
                     )}
@@ -274,7 +258,7 @@ export function CheckRunDetails({
                         <div className="flex min-w-0 items-center gap-2">
                           <span className="min-w-0 truncate font-mono text-2xs text-muted-foreground">
                             {annotation.path ??
-                              translate(
+                              t(
                                 'auto.components.right.sidebar.checks.panel.content.cdbfda4dec',
                                 'Annotation'
                               )}
@@ -304,7 +288,7 @@ export function CheckRunDetails({
                   </div>
                   {details!.annotations.length >= 20 && (
                     <div className="mt-1.5 text-3xs text-muted-foreground">
-                      {translate(
+                      {t(
                         'auto.components.right.sidebar.checks.panel.content.df137989b3',
                         'Showing first 20 annotations'
                       )}
@@ -339,11 +323,11 @@ export function CheckRunDetails({
           {!state?.error && !hasOutput && !hasAnnotations && !hasJobs && (
             <div className="text-xs text-muted-foreground">
               {getCheckConclusion(detailsStatusCheck) === 'action_required'
-                ? translate(
+                ? t(
                     'auto.components.right.sidebar.checks.panel.content.actionRequiredHint',
                     'Needs a manual action on GitHub (e.g. approving the run) to unblock merging.'
                   )
-                : translate(
+                : t(
                     'auto.components.right.sidebar.checks.panel.content.e15a8b77ef',
                     'No inline details are available for this check.'
                   )}

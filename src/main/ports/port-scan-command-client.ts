@@ -1,5 +1,6 @@
 import { existsSync } from 'node:fs'
-import { Worker } from 'node:worker_threads'
+import type { Worker } from 'node:worker_threads'
+import { spawnWorkerThread } from '../worker-threads/worker-thread-spawn'
 import type { WorkerThreadFactory } from '../worker-threads/worker-thread-transport'
 import {
   currentWorkerEntryLayout,
@@ -100,7 +101,7 @@ function defaultWorkerFactory(): Worker {
   if (!existsSync(workerPath)) {
     throw new Error(`Port scan command worker entry not found: ${workerPath}`)
   }
-  return new Worker(workerPath)
+  return spawnWorkerThread(workerPath)
 }
 
 let sharedClient: PortScanCommandClient | null = null

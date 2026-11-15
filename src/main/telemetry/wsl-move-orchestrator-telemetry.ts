@@ -2,8 +2,8 @@
  * The move orchestrator's telemetry (D3a): one enum-only row each time a distro's state changes,
  * so the rollout can see how many moves wait on busy terminals, back off or park, and why.
  */
-import type { EventProps } from '../../shared/telemetry-events'
-import { WSL_MOVE_REFUSAL_VALUES } from '../../shared/telemetry-wsl-move-event-schemas'
+import type { EventProps } from '../../shared/telemetry/telemetry-event-classification'
+import { WSL_MOVE_REFUSAL_VALUES } from '../../shared/telemetry/schemas/telemetry-wsl-move-event-schemas'
 import type { WslMovePreview, WslMoveResult } from '../../shared/wsl-move/wsl-move-driver-types'
 import type {
   WslMoveOrchestratorParkReason,

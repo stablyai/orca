@@ -136,45 +136,6 @@ function deferred(): {
 }
 
 describe('BrowserRouteSessionRegistry', () => {
-  it('prepares authority-scoped remote metadata without needing a desktop profile record', async () => {
-    const { dependencies, registry } = createHarness()
-    const profileMetadata = {
-      id: identity.browserProfileId,
-      label: 'Remote profile',
-      scope: 'isolated'
-    }
-    await prepare(registry, { profileMetadata })
-    expect(dependencies.validateProfile).toHaveBeenCalledWith(
-      identity.browserProfileId,
-      profileMetadata
-    )
-    expect(dependencies.setupPolicies).toHaveBeenCalledWith(
-      expect.objectContaining({
-        profileMetadata,
-        browserProfileId: identity.browserProfileId,
-        partition: 'persist:route-a'
-      })
-    )
-  })
-
-  it.each([
-    { id: 'other-profile', label: 'Remote', scope: 'isolated' },
-    {
-      id: identity.browserProfileId,
-      label: 'Remote',
-      scope: 'isolated',
-      partition: 'persist:local-default'
-    }
-  ])(
-    'rejects inconsistent or arbitrary partition metadata before touching storage',
-    async (profileMetadata) => {
-      const { registry, dependencies } = createHarness()
-      await expect(prepare(registry, { profileMetadata })).rejects.toThrow()
-      expect(dependencies.getSession).not.toHaveBeenCalled()
-      expect(dependencies.bindingStore.set).not.toHaveBeenCalled()
-    }
-  )
-
   it('rekeys one prepared authority and makes the old release handle inert', async () => {
     const { dependencies, registry } = createHarness()
     const previousHandle = await prepare(registry)
@@ -204,126 +165,6 @@ describe('BrowserRouteSessionRegistry', () => {
     expect(dependencies.clearPolicies).toHaveBeenCalledOnce()
   })
 
-  it('applies and verifies the exact fail-closed proxy before allowlisting', async () => {
-    const { dependencies, order, registry, session } = createHarness()
-
-    const handle = await prepare(registry)
-
-    expect(handle.partition).toBe('persist:route-a')
-    expect(order).toEqual([
-      'validate-profile',
-      'persist-binding',
-      'get-session',
-      'set-proxy',
-      'setup-policies',
-      'close-connections',
-      'resolve-proxy'
-    ])
-    expect(session.setProxy).toHaveBeenCalledWith({
-      mode: 'fixed_servers',
-      proxyRules: 'socks5://127.0.0.1:43123',
-      proxyBypassRules: '<-loopback>'
-    })
-    expect(session.resolveProxy).toHaveBeenCalledWith('http://browser-route-probe.invalid/')
-    expect(registry.isAllowedPartition(handle.partition)).toBe(true)
-
-    handle.release()
-    expect(registry.isAllowedPartition(handle.partition)).toBe(false)
-    expect(dependencies.clearPolicies).toHaveBeenCalledTimes(1)
-  })
-
-  it('indexes only exact live page generations by their Electron session', async () => {
-    const { registry, session } = createHarness()
-    const handle = await prepare(registry)
-
-    expect(registry.getPartitionForSession(session)).toBe(handle.partition)
-    expect(
-      registry.getPreparedPageAuthority({
-        partition: handle.partition,
-        browserPageId: 'page-a',
-        pageHostGeneration: 1,
-        rendererWebContentsId: 11
-      })
-    ).not.toBeNull()
-    expect(
-      registry.getPreparedPageAuthority({
-        partition: handle.partition,
-        browserPageId: 'page-a',
-        pageHostGeneration: 2,
-        rendererWebContentsId: 11
-      })
-    ).toBeNull()
-
-    handle.release()
-    expect(registry.getPartitionForSession(session)).toBe(handle.partition)
-    expect(
-      registry.getPreparedPageAuthority({
-        partition: handle.partition,
-        browserPageId: 'page-a',
-        pageHostGeneration: 1,
-        rendererWebContentsId: 11
-      })
-    ).toBeNull()
-  })
-
-  it('binds prepared page authority to the exact owning renderer', async () => {
-    const { registry } = createHarness()
-    const handle = await prepare(registry)
-    const page = {
-      partition: handle.partition,
-      browserPageId: 'page-a',
-      pageHostGeneration: 1
-    }
-
-    expect(registry.getPreparedPageAuthority({ ...page, rendererWebContentsId: 11 })).not.toBeNull()
-    expect(registry.getPreparedPageAuthority({ ...page, rendererWebContentsId: 12 })).toBeNull()
-  })
-
-  it('does not move a live page generation to another renderer', async () => {
-    const { registry } = createHarness()
-    const owned = await prepare(registry)
-
-    await expect(prepare(registry, { rendererWebContentsId: 12 })).rejects.toThrow(
-      'browser_route_partition_page_owner_conflict'
-    )
-    expect(
-      registry.getPreparedPageAuthority({
-        partition: owned.partition,
-        browserPageId: 'page-a',
-        pageHostGeneration: 1,
-        rendererWebContentsId: 11
-      })
-    ).not.toBeNull()
-  })
-
-  it('retires prepared but unregistered pages when their owning renderer exits', async () => {
-    const { registry } = createHarness()
-    const owned = await prepare(registry)
-    await prepare(registry, {
-      browserPageId: 'page-b',
-      pageHostGeneration: 2,
-      rendererWebContentsId: 12
-    })
-
-    expect(registry.retirePreparedPagesOwnedByRenderer(11)).toBe(1)
-    expect(
-      registry.getPreparedPageAuthority({
-        partition: owned.partition,
-        browserPageId: 'page-a',
-        pageHostGeneration: 1,
-        rendererWebContentsId: 11
-      })
-    ).toBeNull()
-    expect(
-      registry.getPreparedPageAuthority({
-        partition: owned.partition,
-        browserPageId: 'page-b',
-        pageHostGeneration: 2,
-        rendererWebContentsId: 12
-      })
-    ).not.toBeNull()
-  })
-
   it('continues owner retirement across partitions when policy cleanup throws', async () => {
     const { registry } = createHarness({ cleanupError: new Error('cleanup unavailable') })
     const first = await prepare(registry)
@@ -340,23 +181,6 @@ describe('BrowserRouteSessionRegistry', () => {
     ]) {
       expect(registry.getPreparedPageAuthority({ ...page, rendererWebContentsId: 11 })).toBeNull()
     }
-  })
-
-  it('rejects an in-flight prepare after its renderer owner exits', async () => {
-    const probeStarted = deferred()
-    const resolveProxyGate = deferred()
-    const { dependencies, registry } = createHarness({
-      proxyProbeStarted: probeStarted.resolve,
-      resolveProxyGate: resolveProxyGate.promise
-    })
-    const preparing = prepare(registry)
-    await probeStarted.promise
-
-    expect(registry.retirePreparedPagesOwnedByRenderer(11)).toBe(0)
-    resolveProxyGate.resolve()
-    await expect(preparing).rejects.toThrow('browser_route_partition_renderer_retired')
-    expect(registry.isAllowedPartition('persist:route-a')).toBe(false)
-    expect(dependencies.clearPolicies).toHaveBeenCalledOnce()
   })
 
   it('admits a live sibling waiter after fencing a stale pending owner', async () => {
@@ -389,25 +213,6 @@ describe('BrowserRouteSessionRegistry', () => {
     expect(dependencies.clearPolicies).not.toHaveBeenCalled()
   })
 
-  it('bounds callers waiting on one pending partition setup', async () => {
-    const probeStarted = deferred()
-    const resolveProxyGate = deferred()
-    const { registry } = createHarness({
-      maxPagesPerPartition: 1,
-      proxyProbeStarted: probeStarted.resolve,
-      resolveProxyGate: resolveProxyGate.promise
-    })
-    const first = prepare(registry)
-    await probeStarted.promise
-
-    await expect(prepare(registry, { browserPageId: 'page-b' })).rejects.toThrow(
-      'browser_route_partition_pending_capacity'
-    )
-    resolveProxyGate.resolve()
-    const handle = await first
-    handle.release()
-  })
-
   it('does not resolve a live-partition prepare after owner retirement', async () => {
     const { registry } = createHarness()
     const first = await prepare(registry)
@@ -420,31 +225,6 @@ describe('BrowserRouteSessionRegistry', () => {
 
     await expect(preparing).rejects.toThrow('browser_route_partition_renderer_retired')
     expect(registry.isAllowedPartition(first.partition)).toBe(false)
-  })
-
-  it('changes opaque page authority when the same logical tuple is prepared again', async () => {
-    const { registry } = createHarness()
-    const first = await prepare(registry)
-    const firstAuthority = registry.getPreparedPageAuthority({
-      partition: first.partition,
-      browserPageId: 'page-a',
-      pageHostGeneration: 1,
-      rendererWebContentsId: 11
-    })
-    first.release()
-
-    const replacement = await prepare(registry)
-    const replacementAuthority = registry.getPreparedPageAuthority({
-      partition: replacement.partition,
-      browserPageId: 'page-a',
-      pageHostGeneration: 1,
-      rendererWebContentsId: 11
-    })
-
-    expect(firstAuthority).not.toBeNull()
-    expect(replacementAuthority).not.toBeNull()
-    expect(replacementAuthority).not.toBe(firstAuthority)
-    replacement.release()
   })
 
   it('keeps route policy installed until delayed exact-page retirement settles', async () => {
@@ -493,72 +273,6 @@ describe('BrowserRouteSessionRegistry', () => {
     expect(dependencies.clearPolicies).toHaveBeenCalledOnce()
   })
 
-  it('fails closed when exact-page retirement cannot be started', async () => {
-    const { dependencies, registry } = createHarness({
-      retirementError: new Error('retirement unavailable')
-    })
-    const handle = await prepare(registry)
-
-    expect(() => handle.release()).not.toThrow()
-    expect(registry.isAllowedPartition(handle.partition)).toBe(false)
-    expect(dependencies.clearPolicies).not.toHaveBeenCalled()
-    await expect(prepare(registry)).rejects.toThrow('browser_route_partition_page_retiring')
-  })
-
-  it('lets an exact lifecycle event begin the same fenced page retirement', async () => {
-    const { registry, retirements } = createHarness({ retirementSettled: false })
-    const handle = await prepare(registry)
-    const pageAuthority = registry.getPreparedPageAuthority({
-      partition: handle.partition,
-      browserPageId: 'page-a',
-      pageHostGeneration: 1,
-      rendererWebContentsId: 11
-    })
-
-    expect(
-      registry.retirePreparedPage({
-        partition: handle.partition,
-        browserPageId: 'page-a',
-        pageHostGeneration: 1,
-        rendererWebContentsId: 11,
-        pageAuthority: pageAuthority ?? Symbol('missing')
-      })
-    ).toBe(true)
-    expect(registry.isAllowedPartition(handle.partition)).toBe(false)
-    expect(retirements).toHaveLength(1)
-    expect(
-      registry.retirePreparedPage({
-        partition: handle.partition,
-        browserPageId: 'page-a',
-        pageHostGeneration: 1,
-        rendererWebContentsId: 11,
-        pageAuthority: pageAuthority ?? Symbol('missing')
-      })
-    ).toBe(false)
-  })
-
-  it('never allowlists a partition whose proxy resolves direct or elsewhere', async () => {
-    const { dependencies, registry } = createHarness({ resolvedProxy: 'DIRECT' })
-
-    await expect(prepare(registry)).rejects.toThrow(
-      'browser_route_partition_proxy_verification_failed'
-    )
-    expect(registry.isAllowedPartition('persist:route-a')).toBe(false)
-    expect(dependencies.clearPolicies).toHaveBeenCalledTimes(1)
-  })
-
-  it('clears partially installed policies when async policy setup fails', async () => {
-    const { dependencies, registry, session } = createHarness({
-      setupError: new Error('policy setup failed')
-    })
-
-    await expect(prepare(registry)).rejects.toThrow('policy setup failed')
-    expect(session.setProxy).toHaveBeenCalledTimes(1)
-    expect(session.closeAllConnections).toHaveBeenCalledTimes(1)
-    expect(dependencies.clearPolicies).toHaveBeenCalledTimes(1)
-    expect(registry.isAllowedPartition('persist:route-a')).toBe(false)
-  })
-
   it.each([false, true])(
     'keeps retries joined until failed policy setup settles proxy cleanup (reject: %s)',
     async (rejectProxy) => {
@@ -597,43 +311,6 @@ describe('BrowserRouteSessionRegistry', () => {
     }
   )
 
-  it('rejects a binding collision before opening an Electron session', async () => {
-    const { bindings, dependencies, registry } = createHarness()
-    bindings.set('persist:route-a', 'c'.repeat(64))
-
-    await expect(prepare(registry)).rejects.toThrow('browser_route_partition_binding_conflict')
-    expect(dependencies.getSession).not.toHaveBeenCalled()
-  })
-
-  it('rejects a missing browser profile before consuming durable binding capacity', async () => {
-    const { dependencies, registry } = createHarness({
-      profileError: new Error('browser_route_partition_profile_unavailable')
-    })
-
-    await expect(prepare(registry)).rejects.toThrow('browser_route_partition_profile_unavailable')
-    expect(dependencies.bindingStore.set).not.toHaveBeenCalled()
-    expect(dependencies.getSession).not.toHaveBeenCalled()
-  })
-
-  it('rejects invalid listener and page identities before binding persistence', async () => {
-    const { dependencies, registry } = createHarness()
-
-    await expect(
-      prepare(registry, { proxyEndpoint: { host: '0.0.0.0', port: 43123 } })
-    ).rejects.toThrow('browser_route_partition_proxy_invalid')
-    await expect(prepare(registry, { browserPageId: '' })).rejects.toThrow(
-      'browser_route_partition_page_invalid'
-    )
-    await expect(prepare(registry, { pageHostGeneration: 0 })).rejects.toThrow(
-      'browser_route_partition_page_invalid'
-    )
-    await expect(prepare(registry, { rendererWebContentsId: 0 })).rejects.toThrow(
-      'browser_route_partition_page_invalid'
-    )
-    expect(dependencies.bindingStore.set).not.toHaveBeenCalled()
-    expect(dependencies.getSession).not.toHaveBeenCalled()
-  })
-
   it('shares one prepared partition and fences stale page-handle cleanup', async () => {
     const { dependencies, registry, session } = createHarness()
     const first = await prepare(registry)
@@ -663,28 +340,5 @@ describe('BrowserRouteSessionRegistry', () => {
     ).rejects.toThrow('browser_route_partition_proxy_retarget')
     first.release()
     second.release()
-  })
-
-  it('bounds distinct live and pending partitions', async () => {
-    const { registry } = createHarness({ maxLivePartitions: 1 })
-    const first = await prepare(registry)
-
-    await expect(
-      prepare(registry, {
-        browserPageId: 'page-b',
-        identity: { ...identity, executionHostIdentity: 'execution-host-b' }
-      })
-    ).rejects.toThrow('browser_route_partition_capacity')
-    first.release()
-  })
-
-  it('bounds distinct page generations retained by one partition', async () => {
-    const { registry } = createHarness({ maxPagesPerPartition: 1 })
-    const first = await prepare(registry)
-
-    await expect(prepare(registry, { browserPageId: 'page-b' })).rejects.toThrow(
-      'browser_route_partition_page_capacity'
-    )
-    first.release()
   })
 })

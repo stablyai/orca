@@ -1,7 +1,13 @@
-import { mkdtempSync, rmSync } from 'node:fs'
+import { mkdtempSync, renameSync, rmSync } from 'node:fs'
+import type * as Fs from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+
+vi.mock('node:fs', async (importOriginal) => {
+  const fs = await importOriginal<typeof Fs>()
+  return { ...fs, writeFileSync: vi.fn(fs.writeFileSync), renameSync: vi.fn(fs.renameSync) }
+})
 
 vi.mock('electron', () => ({ app: { getPath: () => tmpdir(), on: vi.fn() } }))
 
@@ -13,9 +19,11 @@ const OTHER = 'b'.repeat(32)
 let root: string
 
 beforeEach(() => {
+  vi.clearAllMocks()
   root = mkdtempSync(join(tmpdir(), 'orca-extension-state-'))
 })
 afterEach(() => {
+  vi.restoreAllMocks()
   rmSync(root, { recursive: true, force: true })
 })
 
@@ -29,6 +37,22 @@ const menu = {
 }
 
 describe('BrowserExtensionProfileStateStore', () => {
+  it('retries a failed rename and flushes pending changes before the debounce', () => {
+    const store = new BrowserExtensionProfileStateStore(root)
+    store.update('default', EXTENSION, (state) => ({ ...state, removalGeneration: 3 }))
+    const rename = vi.mocked(renameSync).mockImplementationOnce(() => {
+      throw new Error('rename failed')
+    })
+    expect(() => store.flush()).toThrow('rename failed')
+    store.flush()
+    expect(rename).toHaveBeenCalledTimes(2)
+    expect(new BrowserExtensionProfileStateStore(root).read('default', EXTENSION)).toMatchObject({
+      removalGeneration: 3
+    })
+    store.flush()
+    expect(rename).toHaveBeenCalledTimes(2)
+  })
+
   it('keeps each profile and extension apart and survives a restart', () => {
     const store = new BrowserExtensionProfileStateStore(root)
     store.update('default', EXTENSION, (state) => ({

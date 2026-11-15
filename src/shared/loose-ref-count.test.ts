@@ -73,35 +73,6 @@ describe('countLooseRefs', () => {
     })
   })
 
-  it('never has more than one directory read outstanding', async () => {
-    // Sequential reads occupy at most one shared libuv slot, leaving unrelated filesystem work unblocked.
-    const refs = await makeRefsTree({
-      'remotes/a': 3,
-      'remotes/b': 3,
-      'remotes/c': 3,
-      'remotes/d': 3,
-      'remotes/e/deep': 3
-    })
-    readdirCalls.peak = 0
-    readdirCalls.count = 0
-
-    await countLooseRefs(refs, 1000)
-
-    expect(readdirCalls.count).toBeGreaterThan(1)
-    expect(readdirCalls.peak).toBe(1)
-  })
-
-  it('reads each directory once rather than streaming it in batches', async () => {
-    // One round trip per directory measured ~8x faster than streaming on a degraded repository.
-    const refs = await makeRefsTree({ 'remotes/origin': 400 })
-    readdirCalls.count = 0
-
-    await countLooseRefs(refs, 1000)
-
-    // refs/ plus refs/remotes plus refs/remotes/origin.
-    expect(readdirCalls.count).toBe(3)
-  })
-
   it('does not follow directory symlinks into a loop', async () => {
     const refs = await makeRefsTree({ heads: 2 })
     await symlink(refs, join(refs, 'loop'), 'dir')

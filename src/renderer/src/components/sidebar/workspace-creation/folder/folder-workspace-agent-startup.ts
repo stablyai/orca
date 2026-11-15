@@ -2,19 +2,17 @@ import {
   resolveAgentStartupPlanInputs,
   type AgentStartupSettings
 } from '../../../../../../shared/agent-launch/startup/agent-startup-plan-inputs'
-import type { LinkedWorkItemSummary } from '@/lib/new-workspace'
-import {
-  resolveRepoExecutionHostPlatform,
-  type ExecutionHostPlatformFact
-} from '@/lib/execution-host-facts'
+import type { LinkedWorkItemSummary } from '@/lib/workspace/creation/new-workspace'
+import { resolveRepoExecutionHostPlatform } from '@/runtime/hosts/platform/execution-host-facts'
+import type { ExecutionHostPlatformFact } from '@/runtime/hosts/platform/execution-host-platform-fact'
 import type { AppState } from '@/store/types'
-import { resolveQuickCreateLinkedWorkItemPrompt } from '@/lib/linked-work-item-context'
+import { resolveQuickCreateLinkedWorkItemPrompt } from '@/lib/work-items/linked-work-item-context'
 import {
   buildAgentDraftLaunchPlan,
   buildAgentStartupPlan,
   type AgentStartupPlan
 } from '../../../../../../shared/agent-launch/startup/tui-agent-startup'
-import type { ProjectGroup } from '../../../../../../shared/project-group-types'
+import type { ProjectGroup } from '../../../../../../shared/project/groups/project-group-types'
 import type { SessionOptionValue } from '../../../../../../shared/native-chat/input/native-chat-session-options'
 import type { TuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-agent'
 import type { AgentStartupShell } from '../../../../../../shared/agent-launch/startup/tui-agent-startup-shell'

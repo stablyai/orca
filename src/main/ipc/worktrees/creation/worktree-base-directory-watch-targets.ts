@@ -2,15 +2,15 @@ import { normalize } from 'node:path'
 import { realpath, stat } from 'node:fs/promises'
 import type { Store } from '../../../persistence/loading-store/store'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
-import type { Repo } from '../../../../shared/repo-types'
+import type { Repo } from '../../../../shared/repository/repo-types'
 import { getRepoExecutionHostId, LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
-import { isFolderRepo } from '../../../../shared/repo-kind'
+import { isFolderRepo } from '../../../../shared/repository/repo-kind'
 import {
   getRuntimePathBasename,
   normalizeRuntimePathForComparison
 } from '../../../../shared/cross-platform-path'
-import { isWslUncPath } from '../../../../shared/wsl-paths'
-import { mapWithConcurrency } from '../../../../shared/map-with-concurrency'
+import { isWslUncPath } from '../../../../shared/file-access/wsl-paths'
+import { mapWithConcurrency } from '../../../../shared/concurrency/map-with-concurrency'
 import { getWorktreeMirrorDistro } from '../../../workspaces/execution-host/project-runtime-git-options'
 import {
   computeWorkspaceRoot,

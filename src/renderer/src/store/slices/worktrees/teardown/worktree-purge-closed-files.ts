@@ -1,7 +1,7 @@
 import type { AppState } from '../../../types'
-import type { WorktreePurgeTarget } from '../../worktree-helpers'
+import type { WorktreePurgeTarget } from './worktree-purge-target'
 import { collectRemovedHostTwinState } from '../../../repos/repo-removal-host-twin-attribution'
-import { collectHostTwinPurgeScopes } from './host-twin-worktree-purge'
+import { collectHostTwinPurgeScopes } from './host-twin-purge-scopes'
 
 /** Match purge policy: host targets close only attributable editor tabs while another host still publishes the ID. */
 export function worktreePurgeClosedFileIds(

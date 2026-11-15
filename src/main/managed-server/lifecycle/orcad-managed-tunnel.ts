@@ -1,12 +1,16 @@
 import type { KnownRuntimeEnvironment } from '../../../shared/remote-runtime/host-catalog/runtime-environments'
 import { resolveEnvironment } from '../../../shared/remote-runtime/host-store/runtime-environment-store'
-import type { SshTarget } from '../../../shared/ssh-types'
+import type { SshTarget } from '../../../shared/remote-runtime/ssh/ssh-types'
 import type { SshConnection } from '../../ssh/connection/ssh-connection'
 import { probeManagedOrcadTunnel } from './orcad-managed-tunnel-resume'
-import { ensureManagedOrcadServing } from './orcad-managed-serving'
+import {
+  ensureManagedOrcadServing,
+  forgetManagedOrcadServingVerdict
+} from './orcad-managed-serving'
+import { getManagedOrcadCrashLoopBrake } from './orcad-managed-crash-loop'
 import { OrcadManagedTunnelManager } from './orcad-managed-tunnel-manager'
 import { buildOnBindableLocalPort } from './orcad-managed-tunnel-local-port'
-import { getRemoteRuntimeSharedControlAnsweredAt } from '../../ipc/runtime-environments/runtime-environment-shared-control-answers'
+import { getRemoteRuntimeSharedControlAnsweredAt } from '../../ipc/runtime-environments/connections/runtime-environment-shared-control-answers'
 import {
   getSshConnectionManager,
   getSshTargetRegistryStore
@@ -46,11 +50,12 @@ function pairingRecovery(userDataPath: string): ManagedOrcadPairingRecovery {
     pairingRepairs.set(userDataPath, repairs)
   }
   return {
-    resolve: (environmentId) => resolveEnvironment(userDataPath, environmentId),
+    resolve: async (environmentId) => await resolveEnvironment(userDataPath, environmentId),
     repairs,
     ensure: (environment) =>
-      managedTunnels.ensure(environment, () =>
-        resolveEnvironmentOrNull(userDataPath, environment.id)
+      managedTunnels.ensure(
+        environment,
+        async () => await resolveEnvironmentOrNull(userDataPath, environment.id)
       )
   }
 }
@@ -60,23 +65,29 @@ export async function ensureOrcadManagedTunnel(
   userDataPath: string,
   selector: string
 ): Promise<KnownRuntimeEnvironment> {
-  const { id } = resolveEnvironment(userDataPath, selector)
+  const { id } = await resolveEnvironment(userDataPath, selector)
   await buildOnBindableLocalPort(userDataPath, id, () =>
     buildWithPairingRepair(pairingRecovery(userDataPath), id, (environment) =>
-      managedTunnels.ensure(environment, () => resolveEnvironmentOrNull(userDataPath, id))
+      managedTunnels.ensure(
+        environment,
+        async () => await resolveEnvironmentOrNull(userDataPath, id)
+      )
     )
   )
-  return resolveEnvironment(userDataPath, id)
+  return await resolveEnvironment(userDataPath, id)
 }
 
 export async function rebuildOrcadManagedTunnel(
   userDataPath: string,
   selector: string
 ): Promise<'built' | 'repaired'> {
-  const { id } = resolveEnvironment(userDataPath, selector)
+  const { id } = await resolveEnvironment(userDataPath, selector)
   return buildOnBindableLocalPort(userDataPath, id, () =>
     buildWithPairingRepair(pairingRecovery(userDataPath), id, (environment) =>
-      managedTunnels.rebuild(environment, () => resolveEnvironmentOrNull(userDataPath, id))
+      managedTunnels.rebuild(
+        environment,
+        async () => await resolveEnvironmentOrNull(userDataPath, id)
+      )
     )
   )
 }
@@ -90,11 +101,11 @@ export function recoverRefusedManagedOrcadPairing(
 }
 
 /** Ignore failures belonging to older pairing revisions. */
-export function managedOrcadPairingFailureStands(
+export async function managedOrcadPairingFailureStands(
   userDataPath: string,
   environmentId: string
-): boolean {
-  const environment = resolveEnvironmentOrNull(userDataPath, environmentId)
+): Promise<boolean> {
+  const environment = await resolveEnvironmentOrNull(userDataPath, environmentId)
   return (
     environment !== null &&
     (pairingRepairs
@@ -103,17 +114,19 @@ export function managedOrcadPairingFailureStands(
   )
 }
 
-/** Explicit connect clears recent repair failures. */
-export function forgetFailedManagedOrcadPairingRepair(
+/** Explicit connect clears recent repair failures and re-arms automatic starts. */
+export function forgetManagedOrcadAutomaticFailures(
   userDataPath: string,
   environmentId: string
 ): void {
   pairingRepairs.get(userDataPath)?.forgetFailures(environmentId)
+  getManagedOrcadCrashLoopBrake().forget(environmentId)
+  forgetManagedOrcadServingVerdict(environmentId)
 }
 
-function resolveEnvironmentOrNull(userDataPath: string, id: string) {
+async function resolveEnvironmentOrNull(userDataPath: string, id: string) {
   try {
-    return resolveEnvironment(userDataPath, id)
+    return await resolveEnvironment(userDataPath, id)
   } catch {
     return null
   }
@@ -138,7 +151,8 @@ export function recoverOrcadManagedTunnelsAfterHostResume(
 ): Promise<void> {
   return managedTunnels.recoverAfterHostResume({
     ...options,
-    resolveEnvironment: (environmentId) => resolveEnvironmentOrNull(userDataPath, environmentId)
+    resolveEnvironment: async (environmentId) =>
+      await resolveEnvironmentOrNull(userDataPath, environmentId)
   })
 }
 

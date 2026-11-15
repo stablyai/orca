@@ -1,8 +1,10 @@
 import { session } from 'electron'
 import { forgetBrowserExtensionActionProfile } from '../actions/browser-extension-action-registry'
-import { existsSync } from 'node:fs'
-import { join } from 'node:path'
-import type { BrowserSessionProfile } from '../../../../shared/browser-workspace-types'
+import {
+  registerBrowserSessionFramePreload,
+  unregisterBrowserSessionFramePreload
+} from '../../sessions/browser-session-frame-preloads'
+import type { BrowserSessionProfile } from '../../../../shared/browser/workspaces/browser-workspace-types'
 import type { InstalledBrowserExtension } from '../../../../shared/browser/extensions/browser-extension-types'
 import { isBrowserExtensionSupportEnabled } from '../browser-extension-support'
 import { getBrowserExtensionInstallStore } from '../installation/browser-extension-install-store'
@@ -34,8 +36,10 @@ import {
 type ProfileSessionState = {
   profile: BrowserSessionProfile
   session: Electron.Session
-  /** Startup's sweep and loads; later loads wait for it. */
+  /** The attach's sweep and loads; later loads wait for it. */
   loading: Promise<void>
+  /** Until `loading` settles, when the attach had extensions to load. */
+  loadingExtensions: boolean
   loads: BrowserExtensionProfileLoads
 }
 
@@ -62,32 +66,13 @@ export function setBrowserExtensionSessionHooks(hooks: BrowserExtensionSessionHo
 const stateByProfileId = new Map<string, ProfileSessionState>()
 const PRELOAD_FILE_NAME = 'browser-extension-preload.js'
 const PRELOAD_ID = 'orca-browser-extension-frame'
-const preloadedSessions = new WeakSet<Electron.Session>()
 
+// Workers load Orca's API shim through the background wrapper instead.
 function registerExtensionPreload(sess: Electron.Session): void {
-  if (preloadedSessions.has(sess)) {
-    return
-  }
-  // Why the parent too: this module can land in out/main/chunks, one level below the preload entry.
-  const filePath = [
-    join(__dirname, PRELOAD_FILE_NAME),
-    join(__dirname, '..', PRELOAD_FILE_NAME)
-  ].find((candidate) => existsSync(candidate))
-  if (!filePath) {
+  if (!registerBrowserSessionFramePreload(sess, PRELOAD_ID, PRELOAD_FILE_NAME)) {
     console.warn(
       '[browser-extensions] Extension preload is missing; extension APIs are unavailable'
     )
-    return
-  }
-  // Why frame only: a service-worker preload crashes the renderer during GC (electron#52310).
-  // Workers load Orca's API shim through the background wrapper instead.
-  sess.registerPreloadScript({ id: PRELOAD_ID, type: 'frame', filePath })
-  preloadedSessions.add(sess)
-}
-
-function unregisterExtensionPreload(sess: Electron.Session): void {
-  if (preloadedSessions.delete(sess)) {
-    sess.unregisterPreloadScript(PRELOAD_ID)
   }
 }
 
@@ -139,8 +124,19 @@ export function attachBrowserExtensionsToProfileSession(
       console.warn('[browser-extensions] Could not initialize extension storage:', error)
       throw error
     })
-  void loading.catch(() => {})
-  stateByProfileId.set(profile.id, { profile, session: sess, loading, loads })
+  const state: ProfileSessionState = {
+    profile,
+    session: sess,
+    loading,
+    loadingExtensions: enabledExtensionIds.length > 0,
+    loads
+  }
+  void loading
+    .catch(() => {})
+    .finally(() => {
+      state.loadingExtensions = false
+    })
+  stateByProfileId.set(profile.id, state)
 }
 
 /** Unloads a profile session's extensions and Orca's wiring; its saved extension data stays. */
@@ -151,7 +147,7 @@ async function unloadProfileSession(state: ProfileSessionState): Promise<void> {
     removeBrowserExtensionFromSession(state.session, extension.id)
   }
   forgetBrowserExtensionContexts(state.session)
-  unregisterExtensionPreload(state.session)
+  unregisterBrowserSessionFramePreload(state.session, PRELOAD_ID)
   sessionHooks?.detached(state.session)
 }
 
@@ -175,34 +171,29 @@ export async function detachBrowserExtensionsFromProfileSession(
     }
   } finally {
     forgetBrowserExtensionActionProfile(profile.id)
+    getBrowserExtensionProfileStateStore().forgetProfile(profile.id)
+    await Promise.all([
+      getBrowserExtensionSyncStorageStore().forgetProfile(profile.id),
+      getBrowserExtensionDnrStore().forgetProfile(profile.id)
+    ])
   }
-  getBrowserExtensionProfileStateStore().forgetProfile(profile.id)
-  getBrowserExtensionSyncStorageStore().forgetProfile(profile.id)
-  getBrowserExtensionDnrStore().forgetProfile(profile.id)
 }
 
-/** The experimental setting turned off: every profile drops its extensions until it turns on. */
+/** The extensions setting turned off: every profile drops its extensions until it turns on. */
 export async function detachBrowserExtensionsFromAllProfileSessions(): Promise<void> {
   const states = [...stateByProfileId.values()]
   stateByProfileId.clear()
   await Promise.all(states.map(unloadProfileSession))
 }
 
-/** One profile session's startup loads, restore hooks included. */
+/** One profile session's attach-time loads, restore hooks included. */
 export function whenBrowserExtensionProfileLoaded(profileId: string): Promise<void> {
   return stateByProfileId.get(profileId)?.loading.catch(() => {}) ?? Promise.resolve()
 }
 
-/** Startup waits briefly so restored tabs get content scripts; a slow load never blocks launch. */
-export async function whenBrowserExtensionSessionsLoaded(timeoutMs: number): Promise<void> {
-  let timer: NodeJS.Timeout | undefined
-  await Promise.race([
-    Promise.all([...stateByProfileId.values()].map((state) => state.loading.catch(() => {}))),
-    new Promise<void>((resolve) => {
-      timer = setTimeout(resolve, timeoutMs)
-    })
-  ])
-  clearTimeout(timer)
+/** Whether the profile's enabled extensions are still loading after its attach. */
+export function isBrowserExtensionProfileLoading(profileId: string): boolean {
+  return stateByProfileId.get(profileId)?.loadingExtensions ?? false
 }
 
 export function getBrowserExtensionSessionForProfile(profileId: string): Electron.Session | null {

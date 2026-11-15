@@ -3,8 +3,10 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import nacl from 'tweetnacl'
 import { beforeAll, describe, expect, it } from 'vitest'
-import { DeviceRegistry, type DeviceEntry } from '../../../src/main/runtime/device-registry'
-import { DEVICE_REGISTRY_FILENAME } from '../../../src/main/runtime/mobile-pairing-files'
+import { DeviceRegistry } from '../../../src/main/runtime/rpc/server/pairing/device-registry'
+
+import type { DeviceEntry } from '../../../src/main/runtime/rpc/server/pairing/device-entry'
+import { DEVICE_REGISTRY_FILENAME } from '../../../src/main/runtime/rpc/server/pairing/mobile-pairing-files'
 import { importReleaseCheckoutModule, materializeReleaseCheckout } from './release-checkout'
 
 // Across downgrade, preserve ephemeral key rows and token auth; only hosts advertising the capability may receive session-only registration.
@@ -23,7 +25,7 @@ beforeAll(async () => {
   const checkout = await materializeReleaseCheckout(PRE_EPHEMERAL_REF)
   const registryModule = await importReleaseCheckoutModule(
     checkout,
-    'src/main/runtime/device-registry.ts'
+    'src/main/runtime/rpc/server/pairing/device-registry.ts'
   )
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the pinned release's DeviceRegistry class; a changed shape fails the assertions below.
   ReleasedRegistry = registryModule.DeviceRegistry as typeof ReleasedRegistry

@@ -1,6 +1,6 @@
 import { lstatSync, mkdirSync, readFileSync, readdirSync, realpathSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
-import { writeFileAtomically } from '../../../codex-accounts/fs-utils'
+import { writeFileAtomically } from '../../../filesystem/atomic-file-publication'
 import { observe } from '../codex-path-observation'
 
 const RULES_DIR_NAME = 'rules'

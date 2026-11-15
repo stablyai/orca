@@ -5,6 +5,7 @@ import { readdir, rm, writeFile } from 'node:fs/promises'
 import { basename, dirname, join } from 'node:path'
 import { z } from 'zod'
 import { isDefinitiveAbsence } from '../../shared/definitive-filesystem-absence'
+import type { ProviderProcessExit } from '../provider-process/managed-provider-process'
 
 export type ManagedRuntimePin = {
   version: string
@@ -20,6 +21,23 @@ export type ManagedRuntime = {
   pin(): ManagedRuntimePin | null
   /** Validate startup without user credentials before publishing/reusing this pinned copy. */
   validate?(folder: string, pin: ManagedRuntimePin, signal: AbortSignal): Promise<void>
+}
+
+/** What a failed start check observed; the installer words it for the user. */
+export type ManagedRuntimeStartFailure =
+  | { kind: 'timeout'; timeoutMs: number }
+  | { kind: 'exit'; exit: ProviderProcessExit; stderr: string }
+  | { kind: 'version'; answered: string; expected: string }
+
+export class ManagedRuntimeStartError extends Error {
+  constructor(
+    message: string,
+    readonly failure: ManagedRuntimeStartFailure | null,
+    options?: ErrorOptions
+  ) {
+    super(message, options)
+    this.name = 'ManagedRuntimeStartError'
+  }
 }
 
 export const RUNTIME_RELEASE_RECEIPT = '.install-complete.json'

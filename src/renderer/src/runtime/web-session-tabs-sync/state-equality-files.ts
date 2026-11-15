@@ -1,7 +1,8 @@
 import type { Tab, TabGroup } from '../../../../shared/tab-types'
-import type { OpenFile } from '../../store/slices/editor'
+import type { OpenFile } from '../../store/slices/editor/types/open-file'
 import type { WebSessionTabsBatchContext, WebSessionTabsSyncState } from './state'
 import { sameStringArray } from './state-equality-core'
+import { sameAiVaultSessionTitle } from '../../../../shared/ai-vault/contracts/ai-vault-session-title'
 
 export function openFileEqual(a: OpenFile, b: OpenFile): boolean {
   return (
@@ -85,9 +86,7 @@ export function tabEqual(a: Tab, b: Tab): boolean {
     a.label === b.label &&
     // Include generated label in equality or unified titles diverge from terminal tabs.
     a.generatedLabel === b.generatedLabel &&
-    a.aiVaultTitle?.agent === b.aiVaultTitle?.agent &&
-    a.aiVaultTitle?.sessionId === b.aiVaultTitle?.sessionId &&
-    a.aiVaultTitle?.title === b.aiVaultTitle?.title &&
+    sameAiVaultSessionTitle(a.aiVaultTitle, b.aiVaultTitle) &&
     a.customLabel === b.customLabel &&
     a.color === b.color &&
     a.sortOrder === b.sortOrder &&

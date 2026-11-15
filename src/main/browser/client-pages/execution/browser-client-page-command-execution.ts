@@ -1,7 +1,7 @@
 import type { BrowserClientAutomationMethod } from '../../../../shared/browser/client-hosting/browser-client-automation-protocol'
 import type { BrowserClientHostCommandEvent } from '../../../../shared/browser/client-hosting/browser-client-host-protocol'
 import { requiresBrowserClientFileChannel } from '../../../../shared/browser/client-hosting/browser-client-file-channel-methods'
-import { normalizeBrowserNavigationUrl } from '../../../../shared/browser-url'
+import { normalizeBrowserNavigationUrl } from '../../../../shared/browser/navigation/browser-url'
 import { executeBrowserClientUploadCommand } from '../../client-hosts/file-transfers/browser-client-upload-command'
 import type { BrowserClientFileChannelTransport } from '../../client-hosts/file-transfers/browser-client-file-channel-transport'
 import type { BrowserClientUploadStaging } from '../../client-hosts/file-transfers/browser-client-upload-staging'
@@ -49,6 +49,7 @@ export async function executeBrowserClientPageAutomationCommand(
       browserProfileId: string
       method: BrowserClientAutomationMethod
       params: Record<string, unknown>
+      agent: boolean
       registration: BrowserClientRetainedPage['registration']
     },
     signal: AbortSignal
@@ -67,6 +68,7 @@ export async function executeBrowserClientPageAutomationCommand(
   assertBrowserClientPageCommandNotAborted(signal)
   assertCurrentBrowserClientPageRenderer(page.renderer)
   const method = event.command.method
+  const agent = event.command.agent !== false
   const run = (params: Record<string, unknown>): Promise<unknown> =>
     execute(
       {
@@ -75,6 +77,7 @@ export async function executeBrowserClientPageAutomationCommand(
         browserProfileId: page.inventory.browserProfileId,
         method,
         params,
+        agent,
         registration: page.registration
       },
       signal

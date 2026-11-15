@@ -1,9 +1,16 @@
+import { acceptedAgentStatuses } from '@/store/slices/agent-status/accepted-agent-statuses'
 import { describe, expect, it } from 'vitest'
+import { createTestStore } from '@/store/testing/app-store-test-fixture'
 import type { AiVaultSession } from '../../../../../../shared/ai-vault/contracts/ai-vault-types'
 import type { AgentStatusEntry } from '../../../../../../shared/agent-status/contracts/agent-status-types'
 import type { SleepingAgentSessionRecord } from '../../../../../../shared/agent-session/lifecycle/agent-session-resume'
+import {
+  buildAiVaultOriginalPaneIndex,
+  findOriginalAiVaultSessionPaneInIndex
+} from './ai-vault-original-pane-index'
 import { makePaneKey } from '../../../../../../shared/workspace-layout/stable-pane-id'
 import {
+  type OriginalPaneState,
   findAiVaultSessionLiveState,
   findOriginalAiVaultSessionPane
 } from './ai-vault-original-pane'
@@ -56,15 +63,15 @@ function makeLayout(leafId = LEAF_ID) {
   }
 }
 
-function makeState(overrides: Record<string, unknown> = {}) {
+function makeState(overrides: Partial<OriginalPaneState> = {}): OriginalPaneState {
   return {
-    agentStatusByPaneKey: {},
-    retainedAgentsByPaneKey: {},
+    agentStatusByPaneKey: acceptedAgentStatuses(Object.entries({})),
+    agentConversationsByPaneKey: {},
     sleepingAgentSessionsByPaneKey: {},
     tabsByWorktree: { 'wt-1': [makeTab()] },
     terminalLayoutsByTabId: { 'tab-1': makeLayout() },
     ...overrides
-  } as never
+  }
 }
 
 function makeEntry(overrides: Partial<AgentStatusEntry> = {}): AgentStatusEntry {
@@ -103,108 +110,18 @@ function makeSleepingRecord(
 }
 
 describe('findOriginalAiVaultSessionPane', () => {
-  it('finds a live pane with a matching provider session', () => {
-    const entry = makeEntry()
-
-    const target = findOriginalAiVaultSessionPane(
-      makeState({ agentStatusByPaneKey: { [entry.paneKey]: entry } }),
-      baseSession
-    )
-
-    expect(target).toEqual({
-      paneKey: entry.paneKey,
-      worktreeId: 'wt-1',
-      tabId: 'tab-1',
-      leafId: LEAF_ID
-    })
-  })
-
-  it('finds a unique live pane by prompt when provider session is not known yet', () => {
-    const entry = makeEntry({
-      providerSession: undefined,
-      prompt: 'Fix the pane focus'
-    })
-
-    const target = findOriginalAiVaultSessionPane(
-      makeState({ agentStatusByPaneKey: { [entry.paneKey]: entry } }),
-      baseSession
-    )
-
-    expect(target?.paneKey).toBe(entry.paneKey)
-  })
-
-  it('does not prompt-match when multiple panes are plausible', () => {
-    const firstPaneKey = makePaneKey('tab-1', LEAF_ID)
-    const secondPaneKey = makePaneKey('tab-2', OTHER_LEAF_ID)
-    const first = makeEntry({ paneKey: firstPaneKey, providerSession: undefined })
-    const second = makeEntry({
-      paneKey: secondPaneKey,
-      tabId: 'tab-2',
-      providerSession: undefined
-    })
-
-    const target = findOriginalAiVaultSessionPane(
-      makeState({
-        agentStatusByPaneKey: {
-          [first.paneKey]: first,
-          [second.paneKey]: second
-        },
-        tabsByWorktree: { 'wt-1': [makeTab('tab-1'), makeTab('tab-2')] },
-        terminalLayoutsByTabId: {
-          'tab-1': makeLayout(LEAF_ID),
-          'tab-2': makeLayout(OTHER_LEAF_ID)
-        }
-      }),
-      baseSession
-    )
-
-    expect(target).toBeNull()
-  })
-
   it('does not return a target when the original leaf is gone', () => {
     const entry = makeEntry()
 
     const target = findOriginalAiVaultSessionPane(
       makeState({
-        agentStatusByPaneKey: { [entry.paneKey]: entry },
+        agentStatusByPaneKey: acceptedAgentStatuses(Object.entries({ [entry.paneKey]: entry })),
         terminalLayoutsByTabId: { 'tab-1': makeLayout(OTHER_LEAF_ID) }
       }),
       baseSession
     )
 
     expect(target).toBeNull()
-  })
-
-  it('finds a retained completed pane when the tab and layout still exist', () => {
-    const entry = makeEntry({ state: 'done' })
-
-    const target = findOriginalAiVaultSessionPane(
-      makeState({
-        retainedAgentsByPaneKey: {
-          [entry.paneKey]: {
-            entry,
-            worktreeId: 'wt-1',
-            tab: makeTab(),
-            agentType: 'codex',
-            startedAt: 1
-          }
-        }
-      }),
-      baseSession
-    )
-
-    expect(target?.leafId).toBe(LEAF_ID)
-  })
-
-  it('finds a preserved sleeping pane from a matching session record', () => {
-    const record = makeSleepingRecord()
-
-    const target = findOriginalAiVaultSessionPane(
-      makeState({ sleepingAgentSessionsByPaneKey: { [record.paneKey]: record } }),
-      baseSession
-    )
-
-    expect(target?.paneKey).toBe(record.paneKey)
   })
 
   it('resolves legacy numeric pane keys through the current tab layout', () => {
@@ -220,14 +137,6 @@ describe('findOriginalAiVaultSessionPane', () => {
 })
 
 describe('findAiVaultSessionLiveState', () => {
-  it('returns the live entry state when the provider session id matches', () => {
-    const state = makeState({
-      agentStatusByPaneKey: { [makeEntry().paneKey]: makeEntry({ state: 'blocked' }) }
-    })
-
-    expect(findAiVaultSessionLiveState(state, baseSession)).toBe('blocked')
-  })
-
   it('falls back to a prompt match only when it is unambiguous', () => {
     const matching = makeEntry({
       providerSession: undefined,
@@ -236,35 +145,117 @@ describe('findAiVaultSessionLiveState', () => {
     })
     expect(
       findAiVaultSessionLiveState(
-        makeState({ agentStatusByPaneKey: { [matching.paneKey]: matching } }),
+        makeState({
+          agentStatusByPaneKey: acceptedAgentStatuses(
+            Object.entries({ [matching.paneKey]: matching })
+          )
+        }),
         baseSession
       )
     ).toBe('working')
 
     const otherPaneKey = makePaneKey('tab-1', OTHER_LEAF_ID)
     const ambiguous = makeState({
-      agentStatusByPaneKey: {
-        [matching.paneKey]: matching,
-        [otherPaneKey]: makeEntry({
-          providerSession: undefined,
-          prompt: baseSession.title,
-          paneKey: otherPaneKey,
-          state: 'waiting'
+      agentStatusByPaneKey: acceptedAgentStatuses(
+        Object.entries({
+          [matching.paneKey]: matching,
+          [otherPaneKey]: makeEntry({
+            providerSession: undefined,
+            prompt: baseSession.title,
+            paneKey: otherPaneKey,
+            state: 'waiting'
+          })
         })
-      }
+      )
     })
     expect(findAiVaultSessionLiveState(ambiguous, baseSession)).toBeNull()
   })
 
   it('returns null when no live pane matches the session', () => {
     const state = makeState({
-      agentStatusByPaneKey: {
-        [makeEntry().paneKey]: makeEntry({
-          providerSession: { key: 'session_id', id: 'other-session' }
+      agentStatusByPaneKey: acceptedAgentStatuses(
+        Object.entries({
+          [makeEntry().paneKey]: makeEntry({
+            providerSession: { key: 'session_id', id: 'other-session' }
+          })
         })
-      }
+      )
     })
 
     expect(findAiVaultSessionLiveState(state, baseSession)).toBeNull()
   })
 })
+
+it.each([true, false])(
+  'finds the original pane after live removal (provider known: %s)',
+  (known) => {
+    const paneKey = makePaneKey('tab-1', LEAF_ID)
+    const state = makeState({
+      agentConversationsByPaneKey: {
+        [paneKey]: {
+          paneKey,
+          worktreeId: 'wt-1',
+          executionHostId: 'local',
+          connectionId: null,
+          agent: 'codex',
+          ...(known
+            ? { providerSession: { key: 'session_id', id: 'session-1' } }
+            : { promptCandidates: ['fix the pane focus'] })
+        }
+      }
+    })
+    expect(findOriginalAiVaultSessionPane(state, baseSession)?.paneKey).toBe(paneKey)
+    expect(
+      findOriginalAiVaultSessionPaneInIndex(buildAiVaultOriginalPaneIndex(state), baseSession)
+        ?.paneKey
+    ).toBe(paneKey)
+  }
+)
+
+it.each([true, false])(
+  'forgets the preceding original-pane target after an unidentified successor (provider known: %s)',
+  (known) => {
+    const store = createTestStore()
+    store.setState({
+      tabsByWorktree: { 'wt-1': [makeTab()] },
+      terminalLayoutsByTabId: { 'tab-1': makeLayout() }
+    })
+    const paneKey = makePaneKey('tab-1', LEAF_ID)
+    store
+      .getState()
+      .setAgentStatus(
+        paneKey,
+        { state: 'done', agentType: 'codex', prompt: baseSession.title },
+        undefined,
+        { updatedAt: 1000 },
+        { worktreeId: 'wt-1' },
+        known ? { providerSession: { key: 'session_id', id: 'session-1' } } : undefined
+      )
+    store.getState().removeAgentStatus(paneKey)
+    expect(findOriginalAiVaultSessionPane(store.getState(), baseSession)?.paneKey).toBe(paneKey)
+    store
+      .getState()
+      .setAgentStatus(
+        paneKey,
+        { state: 'working', agentType: 'codex', prompt: 'Current task' },
+        undefined,
+        { updatedAt: 2000 },
+        { worktreeId: 'wt-1' }
+      )
+    store.getState().removeAgentStatus(paneKey)
+    expect(findOriginalAiVaultSessionPane(store.getState(), baseSession)).toBeNull()
+    expect(
+      findOriginalAiVaultSessionPaneInIndex(
+        buildAiVaultOriginalPaneIndex(store.getState()),
+        baseSession
+      )
+    ).toBeNull()
+    const current = { ...baseSession, sessionId: 'session-next', title: 'Current task' }
+    expect(findOriginalAiVaultSessionPane(store.getState(), current)?.paneKey).toBe(paneKey)
+    store
+      .getState()
+      .recordAgentProviderSession(paneKey, 'codex', { key: 'session_id', id: 'session-next' })
+    expect(findOriginalAiVaultSessionPane(store.getState(), baseSession)).toBeNull()
+    expect(findOriginalAiVaultSessionPane(store.getState(), current)?.paneKey).toBe(paneKey)
+  }
+)

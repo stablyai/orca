@@ -4,7 +4,7 @@ import {
   credentialDecryptionMessage,
   isIntegrationCredentialDecryptionError
 } from '../../../../../shared/integration-credential-errors'
-import { linearGetIssue } from '@/runtime/runtime-linear-issue-mutations'
+import { linearGetIssue } from '@/runtime/linear/runtime-linear-issue-client'
 import { inflightIssueRequests } from './linear-slice-request-state'
 import {
   getLinearReadScope,
@@ -13,7 +13,8 @@ import {
 } from './linear-slice-scope'
 import { evictStaleEntries } from './linear-cache'
 import { openStoreLinearIssueRead } from './linear-issue-read-actions'
-import { mapLinearIssueRead, invalidateLinearIssueReads } from './linear-issue-publication'
+import './linear-issue-read'
+import { mapLinearIssueRead, invalidateLinearIssueReads } from './linear-issue-read-lifecycle'
 
 export function createLinearIssueDetailActions(
   set: LinearSliceSet,

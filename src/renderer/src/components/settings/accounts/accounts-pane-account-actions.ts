@@ -1,36 +1,35 @@
 import type { Dispatch, SetStateAction } from 'react'
 import type { GlobalSettings } from '../../../../../shared/global-settings-types'
-import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
-import type { FeatureInteractionId } from '../../../../../shared/feature-interaction-catalog'
+import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
+import type { FeatureInteractionId } from '../../../../../shared/feature-education/interactions/feature-interaction-catalog'
 import type {
   ClaudeRateLimitAccountsState,
   CodexRateLimitAccountsState
-} from '../../../../../shared/managed-account-types'
+} from '../../../../../shared/agent-accounts/managed-account-types'
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 import {
   markLiveCodexSessionsForRestart,
   resolveCodexRestartPromptAccountLabel
-} from '@/lib/codex-session-restart'
+} from '@/lib/agent-session/accounts/codex/codex-session-restart'
 import {
   getProviderAccountActiveIdForView,
   getProviderAccountRuntime
 } from '../../provider-accounts/provider-account-visibility'
 import type {
-  ClaudeAccountAction,
+  ProviderAccountAction,
   ClaudeAccountActionRunner,
-  CodexAccountAction,
-  CodexAccountActionRunner,
-  LocalAccountRuntime
+  CodexAccountActionRunner
 } from './accounts-pane-types'
+import type { LocalAccountRuntime } from '../../../lib/provider-accounts/account-runtime-label'
 import {
   getClaudeAccountErrorDescription,
   getCodexAccountErrorDescription,
   isClaudeAccountCancellation,
   isCodexAccountCancellation
-} from './accounts-pane-action-errors'
-import { getClaudeAccountLabel } from '@/lib/claude-account-label'
-import { handleRunningClaudeSessionsAfterSwitch } from '@/lib/claude-account-switch-sessions'
+} from '../../../lib/provider-accounts/provider-account-action-errors'
+import { getClaudeAccountLabel } from '@/lib/provider-accounts/claude-account-label'
+import { handleRunningClaudeSessionsAfterSwitch } from '@/lib/provider-accounts/claude-account-switch-sessions'
 
 type CodexActionContext = {
   settings: GlobalSettings
@@ -41,7 +40,7 @@ type CodexActionContext = {
   codexAccounts: CodexRateLimitAccountsState
   setCodexAccounts: Dispatch<SetStateAction<CodexRateLimitAccountsState>>
   setCodexAccountsLoaded: Dispatch<SetStateAction<boolean>>
-  setCodexAction: Dispatch<SetStateAction<CodexAccountAction>>
+  setCodexAction: Dispatch<SetStateAction<ProviderAccountAction>>
   fetchSettings: () => Promise<void>
   recordFeatureInteraction: (featureId: FeatureInteractionId) => void
   /** False once the pane shows a different account owner than this action targeted. */
@@ -147,7 +146,7 @@ type ClaudeActionContext = {
   isRemoteAccountScope: boolean
   claudeAccounts: ClaudeRateLimitAccountsState
   setClaudeAccounts: Dispatch<SetStateAction<ClaudeRateLimitAccountsState>>
-  setClaudeAction: Dispatch<SetStateAction<ClaudeAccountAction>>
+  setClaudeAction: Dispatch<SetStateAction<ProviderAccountAction>>
   fetchSettings: () => Promise<void>
   recordFeatureInteraction: (featureId: FeatureInteractionId) => void
   /** False once the pane shows a different account owner than this action targeted. */

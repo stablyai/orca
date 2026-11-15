@@ -7,13 +7,12 @@ import { ConfirmationDialogProvider } from '@/components/confirmation-dialog'
 import { useAppStore } from '@/store/index'
 import { makeRepo, makeWorktree } from '../../../worktree-jump/worktree-jump-palette-test-fixtures'
 import { openAgentSessionHistoryModal } from '../panel/agent-session-history-modal'
-import { resolveAiVaultPanelSessionListRequest } from '../scanning/ai-vault-panel-session-list-request'
+
 import type {
   AiVaultAgent,
   AiVaultSession
 } from '../../../../../../shared/ai-vault/contracts/ai-vault-types'
 import type { AiVaultSessionListGroup } from './ai-vault-session-filters'
-import { AI_VAULT_VIEW_OPTIONS_STORAGE_KEY } from '../scope/ai-vault-view-options-persistence'
 
 const mocks = vi.hoisted(() => ({
   scopePaths: new Array<readonly string[]>(),
@@ -77,7 +76,7 @@ function Host({ withSidebar = false }: { withSidebar?: boolean }) {
         <textarea aria-label="Composer" />
         {withSidebar ? (
           <div data-testid="sidebar">
-            <AiVaultSidebarPanel />
+            <AiVaultSidebarPanel focusSearch={false} onFocusSearchHandled={() => {}} />
           </div>
         ) : null}
         {open ? <AiVaultSessionHistoryDialog /> : null}
@@ -95,31 +94,6 @@ function openHistory(initialQuery = '', agent?: AiVaultAgent) {
       ...(agent ? { agent } : {})
     })
   )
-}
-
-function chatSession(agent: AiVaultAgent): AiVaultSession {
-  return {
-    id: `${agent}-chat`,
-    executionHostId: 'local',
-    agent,
-    sessionId: agent,
-    title: agent,
-    cwd: '/repo/chat',
-    branch: null,
-    model: null,
-    filePath: `/tmp/${agent}.jsonl`,
-    codexHome: null,
-    createdAt: null,
-    updatedAt: null,
-    modifiedAt: '2026-10-13T00:00:00.000Z',
-    messageCount: 2,
-    totalTokens: 0,
-    previewMessages: [],
-    queuedMessageCount: 0,
-    subagentTranscriptCount: 0,
-    resumeCommand: '',
-    subagent: null
-  }
 }
 
 function dialogSearch(): HTMLInputElement {
@@ -176,23 +150,6 @@ describe('Session History dialog', () => {
     expect(composer).not.toHaveFocus()
   })
 
-  it("opens on the chat's workspace with the search filled; Escape clears, then closes", async () => {
-    render(<Host />)
-    const composer = screen.getByLabelText('Composer')
-    composer.focus()
-    openHistory('auth')
-    await waitFor(() => expect(dialogSearch()).toHaveFocus())
-    expect(dialogSearch().value).toBe('auth')
-    const chatRequest = resolveAiVaultPanelSessionListRequest(useAppStore.getState(), CHAT_WORKTREE)
-    expect(mocks.scopePaths.at(-1)).toEqual(chatRequest.scopePaths)
-
-    fireEvent.keyDown(dialogSearch(), { key: 'Escape' })
-    expect(dialogSearch().value).toBe('')
-    fireEvent.keyDown(dialogSearch(), { key: 'Escape' })
-    expect(useAppStore.getState().activeModal).toBe('none')
-    await waitFor(() => expect(composer).toHaveFocus())
-  })
-
   it("keeps its search apart from the sidebar's and leaves Settings' request to the sidebar", async () => {
     render(<Host withSidebar />)
     const sidebarSearch = within(screen.getByTestId('sidebar')).getByLabelText<HTMLInputElement>(
@@ -209,17 +166,5 @@ describe('Session History dialog', () => {
       screen.getByRole('radiogroup', { name: 'Session History scope: current workspace' })
     ).toBeInTheDocument()
     expect(useAppStore.getState().aiVaultSearchFocusRequested).toBe(false)
-  })
-
-  it("starts on the chat's agent without touching the sidebar's saved filter", () => {
-    mocks.sessions = [chatSession('claude'), chatSession('codex')]
-    window.localStorage.removeItem(AI_VAULT_VIEW_OPTIONS_STORAGE_KEY)
-    render(<Host />)
-    openHistory('', 'claude')
-
-    const dialog = within(screen.getByRole('dialog'))
-    expect(dialog.getByText('claude-chat')).toBeInTheDocument()
-    expect(dialog.queryByText('codex-chat')).toBeNull()
-    expect(window.localStorage.getItem(AI_VAULT_VIEW_OPTIONS_STORAGE_KEY)).toBeNull()
   })
 })

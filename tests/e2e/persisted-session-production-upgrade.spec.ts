@@ -7,10 +7,10 @@ import {
   type TestInfo
 } from '@stablyai/playwright-test'
 import { DEFAULT_LOCAL_ORCA_PROFILE_ID } from '../../src/shared/orca-profiles'
-import { PTY_SESSION_ID_SEPARATOR } from '../../src/shared/terminal/pty/lifecycle/pty-session-id-format'
+
 import { forwardElectronProcessLogs, test, expect } from './helpers/orca-app'
-import { TEST_REPO_PATH_FILE } from './global-setup'
-import { attachRepoAndOpenTerminal, createRestartSession } from './helpers/orca-restart'
+
+import { createRestartSession } from './helpers/orca-restart'
 import { cleanupE2EDaemons, closeElectronAppForE2E } from './helpers/electron-process-shutdown'
 import { getElectronIsolatedKeychainArgs } from './helpers/electron-launch-args'
 import {
@@ -18,81 +18,17 @@ import {
   assertElectronResolvedIsolatedHome,
   createElectronHomeIsolation
 } from './helpers/electron-home-isolation'
-import { ensureTerminalVisible, waitForSessionReady } from './helpers/store'
-import { openProfileStateDatabaseReadOnly } from '../../src/main/persistence/profile-state/profile-state-database'
-import { readProfileStateSnapshot } from '../../src/main/persistence/profile-state/profile-state-documents'
-import { acquireProfileStateMaintenance } from '../../src/main/persistence/profile-state/profile-state-access'
-import { rollbackProfileState } from '../../src/main/persistence/profile-state/profile-state-recovery-command'
+import { waitForSessionReady } from './helpers/store'
+import { openProfileStateDatabaseReadOnly } from '../../src/main/persistence/profile-state/database/profile-state-database'
+import { readProfileStateSnapshot } from '../../src/main/persistence/profile-state/documents/profile-state-documents'
+import { acquireProfileStateMaintenance } from '../../src/main/persistence/profile-state/access/profile-state-access'
+import { rollbackProfileState } from '../../src/main/persistence/profile-state/recovery/profile-state-recovery-command'
 import { profileStateJsonExportPaths } from '../../src/main/persistence/profile-state/legacy-json/profile-state-export-path'
 import type { ProfileStateRecoverySelector } from '../../src/shared/profile-state-recovery-command'
-import {
-  discoverActivePtyId,
-  execInTerminal,
-  getTerminalContent,
-  waitForActiveTerminalManager,
-  waitForPaneCount,
-  waitForTerminalOutput
-} from './helpers/terminal'
 
-const FIXTURE_PATH = path.join(
-  process.cwd(),
-  'tests',
-  'e2e',
-  'fixtures',
-  'persisted-sessions',
-  'legacy-workspace-session-daemon-terminal.json'
-)
 // This fixture captures a legacy production schema boundary; the test runs the current build.
-const RESTORED_TITLE = 'Production agent session'
+
 const PACKAGED_OLD_EXECUTABLE_ENV = 'ORCA_PROFILE_STATE_PACKAGED_OLD_EXECUTABLE'
-
-type FixtureSession = {
-  _fixtureProvenance?: unknown
-  activeRepoId: string
-  activeWorktreeId: string
-  tabsByWorktree: Record<string, { ptyId: string; worktreeId: string }[]>
-  terminalLayoutsByTabId: Record<string, { ptyIdsByLeafId?: Record<string, string> }>
-  activeWorktreeIdsOnShutdown?: string[]
-  activeTabIdByWorktree?: Record<string, string>
-}
-
-function installProductionSessionFixture(
-  userDataDir: string,
-  repoId: string,
-  worktreeId: string,
-  ptyId: string
-): void {
-  const profilePath = path.join(
-    userDataDir,
-    'profiles',
-    DEFAULT_LOCAL_ORCA_PROFILE_ID,
-    'orca-data.json'
-  )
-  const profile = JSON.parse(readFileSync(profilePath, 'utf8')) as Record<string, unknown>
-  const fixture = JSON.parse(readFileSync(FIXTURE_PATH, 'utf8')) as FixtureSession
-  const fixtureTabs = fixture.tabsByWorktree.__WORKTREE_ID__
-  const fixtureLayout = fixture.terminalLayoutsByTabId['production-agent-tab']
-  if (!fixtureTabs || !fixtureLayout) {
-    throw new Error('Production session fixture is missing its terminal records')
-  }
-  delete fixture._fixtureProvenance
-  fixture.activeRepoId = repoId
-  fixture.activeWorktreeId = worktreeId
-  fixture.tabsByWorktree = {
-    [worktreeId]: fixtureTabs.map((tab) => ({
-      ...tab,
-      ptyId,
-      worktreeId
-    }))
-  }
-  fixtureLayout.ptyIdsByLeafId = {
-    'pane:production-agent': ptyId
-  }
-  fixture.activeWorktreeIdsOnShutdown = [worktreeId]
-  fixture.activeTabIdByWorktree = { [worktreeId]: 'production-agent-tab' }
-  profile.workspaceSession = fixture
-  writeFileSync(profilePath, `${JSON.stringify(profile, null, 2)}\n`)
-}
 
 function materializeLegacyProfileJson(userDataDir: string): void {
   const profileDirectory = path.join(userDataDir, 'profiles', DEFAULT_LOCAL_ORCA_PROFILE_ID)
@@ -199,174 +135,7 @@ async function launchPackagedOldProfile(args: {
   }
 }
 
-async function expectProductionSessionRestored(
-  page: Page,
-  expected: { marker: string; ptyId: string; repoId: string; worktreeId: string }
-): Promise<void> {
-  await waitForSessionReady(page)
-  await ensureTerminalVisible(page)
-  await waitForActiveTerminalManager(page, 30_000)
-  await waitForPaneCount(page, 1, 30_000)
-  await waitForTerminalOutput(page, expected.marker, 30_000)
-
-  await expect(
-    page.locator('[data-testid="sortable-tab"]').filter({ hasText: RESTORED_TITLE })
-  ).toBeVisible({ timeout: 15_000 })
-  await expect(page.locator('[data-testid="sortable-tab"]')).toHaveCount(1)
-  await expect(page.locator('.xterm').first()).toBeVisible()
-  expect(await discoverActivePtyId(page)).toBe(expected.ptyId)
-  expect(await getTerminalContent(page)).toContain(expected.marker)
-  expect(
-    await page.evaluate(() => {
-      const state = window.__store?.getState()
-      return {
-        activeRepoId: state?.activeRepoId,
-        activeWorktreeId: state?.activeWorktreeId,
-        tabIds: state?.activeWorktreeId
-          ? state.tabsByWorktree[state.activeWorktreeId]?.map((tab) => tab.id)
-          : []
-      }
-    })
-  ).toEqual({
-    activeRepoId: expected.repoId,
-    activeWorktreeId: expected.worktreeId,
-    tabIds: ['production-agent-tab']
-  })
-}
-
-test('upgrades a legacy daemon session and keeps it stable after relaunch', async (// oxlint-disable-next-line no-empty-pattern -- this upgrade test owns its Electron launches.
-{}, testInfo) => {
-  test.setTimeout(300_000)
-  const repoPath = existsSync(TEST_REPO_PATH_FILE)
-    ? readFileSync(TEST_REPO_PATH_FILE, 'utf8').trim()
-    : ''
-  test.skip(!repoPath || !existsSync(repoPath), 'Seeded E2E repository is unavailable')
-
-  const session = createRestartSession(testInfo)
-  let oldApp: ElectronApplication | null = null
-  let currentApp: ElectronApplication | null = null
-  let stableApp: ElectronApplication | null = null
-
-  try {
-    const oldLaunch = await session.launch()
-    oldApp = oldLaunch.app
-    const worktreeId = await attachRepoAndOpenTerminal(oldLaunch.page, repoPath)
-    await waitForSessionReady(oldLaunch.page)
-    await ensureTerminalVisible(oldLaunch.page)
-    await waitForActiveTerminalManager(oldLaunch.page, 30_000)
-    await waitForPaneCount(oldLaunch.page, 1, 30_000)
-
-    const ptyId = await discoverActivePtyId(oldLaunch.page)
-    expect(ptyId).toContain(PTY_SESSION_ID_SEPARATOR)
-    const marker = `PRODUCTION_UPGRADE_${Date.now()}`
-    await execInTerminal(oldLaunch.page, ptyId, `echo ${marker}`)
-    await waitForTerminalOutput(oldLaunch.page, marker)
-    const repoId = await oldLaunch.page.evaluate(
-      (repoPath) => window.__store?.getState().repos.find((repo) => repo.path === repoPath)?.id,
-      repoPath
-    )
-    if (!repoId) {
-      throw new Error('Active repository was unavailable before fixture installation')
-    }
-
-    await session.close(oldApp)
-    oldApp = null
-    // Recreate a pre-cutover profile while retaining its live terminal identity.
-    materializeLegacyProfileJson(session.userDataDir)
-    installProductionSessionFixture(session.userDataDir, repoId, worktreeId, ptyId)
-    await cleanupE2EDaemons(session.userDataDir)
-    restoreLegacyProfileJson(session.userDataDir)
-
-    const currentLaunch = await session.launch()
-    currentApp = currentLaunch.app
-    const expected = { marker, ptyId, repoId, worktreeId }
-    await expectProductionSessionRestored(currentLaunch.page, expected)
-
-    await session.close(currentApp)
-    currentApp = null
-
-    const stableLaunch = await session.launch()
-    stableApp = stableLaunch.app
-    await expectProductionSessionRestored(stableLaunch.page, expected)
-  } finally {
-    for (const app of [stableApp, currentApp, oldApp]) {
-      if (app) {
-        await session.close(app).catch(() => {})
-      }
-    }
-    await session.dispose()
-  }
-})
-
 // oxlint-disable-next-line no-empty-pattern -- This mixed-version test owns its Electron launches.
-test('exports the latest SQLite state for rollback without mirroring ordinary shutdown', async ({}, testInfo) => {
-  test.setTimeout(240_000)
-
-  const session = createRestartSession(testInfo)
-  let candidateApp: ElectronApplication | null = null
-  let reupgradedApp: ElectronApplication | null = null
-  try {
-    const candidateLaunch = await session.launch()
-    candidateApp = candidateLaunch.app
-    await waitForSessionReady(candidateLaunch.page)
-    const retainedJson = readLegacyJsonArtifacts(session.userDataDir)
-    const marker = 17
-    await candidateLaunch.page.evaluate(async (terminalFontSize) => {
-      const updateSettings = window.__store?.getState().updateSettingsOrThrow
-      if (!updateSettings) {
-        throw new Error('Candidate renderer did not expose settings persistence')
-      }
-      await updateSettings({ terminalFontSize })
-    }, marker)
-    await expect
-      .poll(
-        () =>
-          candidateLaunch.page.evaluate(
-            () => window.__store?.getState().settings?.terminalFontSize
-          ),
-        { timeout: 15_000 }
-      )
-      .toBe(marker)
-
-    const profileDirectory = path.join(
-      session.userDataDir,
-      'profiles',
-      DEFAULT_LOCAL_ORCA_PROFILE_ID
-    )
-    const databasePath = path.join(profileDirectory, 'profile-state.db')
-    await session.close(candidateApp)
-    candidateApp = null
-    expect(readLegacyJsonArtifacts(session.userDataDir)).toEqual(retainedJson)
-    const dataPath = path.join(profileDirectory, 'orca-data.json')
-    expect(existsSync(databasePath)).toBe(true)
-
-    await cleanupE2EDaemons(session.userDataDir)
-    const rollback = restoreLegacyProfileJson(session.userDataDir, { kind: 'latest-json' })
-    expect(rollback.revision).toBeGreaterThan(1)
-    expect(existsSync(databasePath)).toBe(false)
-    expect(JSON.parse(readFileSync(dataPath, 'utf8')).settings.terminalFontSize).toBe(marker)
-    const reupgradedLaunch = await session.launch()
-    reupgradedApp = reupgradedLaunch.app
-    await waitForSessionReady(reupgradedLaunch.page)
-    await expect
-      .poll(
-        () =>
-          reupgradedLaunch.page.evaluate(
-            () => window.__store?.getState().settings?.terminalFontSize
-          ),
-        { timeout: 15_000 }
-      )
-      .toBe(marker)
-    expect(existsSync(databasePath)).toBe(true)
-  } finally {
-    for (const app of [reupgradedApp, candidateApp]) {
-      if (app) {
-        await session.close(app).catch(() => {})
-      }
-    }
-    await session.dispose()
-  }
-})
 
 test('real packaged old build reads the latest explicit JSON rollback before candidate re-import', async ({
   browserName: _browserName

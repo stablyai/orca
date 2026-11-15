@@ -1,6 +1,7 @@
 import type { AgentJournalMessageItem } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import type { NativeChatBlock } from '../../../../shared/native-chat/native-chat-types'
-import { buildImageDataUri } from '../../../../shared/image-data-uri'
+import { buildImageDataUri } from '../../../../shared/file-preview/image-data-uri'
+import { NATIVE_CHAT_GENERATED_IMAGE_PRESENTATION } from '../../../../shared/native-chat/native-chat-generated-image'
 import { readString } from '../../app-server/codex-item-field-readers'
 import type { CodexThreadItem } from './codex-thread-item-identity'
 
@@ -31,6 +32,7 @@ export function generatedImageUrl(item: CodexThreadItem): string | null {
 export function codexImageItemBody(item: CodexThreadItem): AgentJournalMessageItem {
   let image: Extract<NativeChatBlock, { type: 'image-ref' }> | null = null
   let text: string
+  let presentation: string | undefined
   if (item.type === 'imageView') {
     const path = imagePath(item, 'path')
     text = path ? 'Viewed image' : 'Image view: preview unavailable'
@@ -40,7 +42,11 @@ export function codexImageItemBody(item: CodexThreadItem): AgentJournalMessageIt
     if (item.failure || status === 'failed') {
       text = 'Image generation failed'
     } else if (status !== 'completed') {
-      text = status === 'inProgress' ? 'Generating image…' : 'Image generation: preview unavailable'
+      // Codex passes the Responses API status through, not the app-server's camelCase enum.
+      text =
+        status === 'in_progress' || status === 'generating'
+          ? 'Generating image…'
+          : 'Image generation: preview unavailable'
     } else {
       const path = imagePath(item, 'savedPath')
       const url = path ? null : generatedImageUrl(item)
@@ -50,11 +56,15 @@ export function codexImageItemBody(item: CodexThreadItem): AgentJournalMessageIt
           ? { type: 'image-ref', url, alt: 'Generated image' }
           : null
       text = image ? 'Generated image' : 'Image generated: preview unavailable'
+      presentation = image ? NATIVE_CHAT_GENERATED_IMAGE_PRESENTATION : undefined
     }
   }
   return {
     kind: 'message',
     role: 'assistant',
-    blocks: [{ type: 'text', text }, ...(image ? [image] : [])]
+    blocks: [
+      { type: 'text', text, ...(presentation ? { presentation } : {}) },
+      ...(image ? [image] : [])
+    ]
   }
 }

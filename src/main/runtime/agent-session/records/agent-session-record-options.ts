@@ -1,5 +1,5 @@
 import { agentSessionRefusalError } from '../../../../shared/agent-session/failures/agent-session-wire-refusals'
-import type { AgentSessionOptionsReplacement } from '../../../../shared/agent-session/options/agent-session-options-replacement'
+import type { AgentSessionOptionsReplacement } from '../../../../shared/agent-session/options/protocol/agent-session-options-replacement'
 import type { AgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-record'
 import type { AgentSessionModelOption } from '../../../../shared/agent-session/agent-session-wire'
 
@@ -59,7 +59,9 @@ export function recordAgentSessionRanOptions(
   if (saved.model !== undefined && saved.model !== model) {
     return record
   }
-  const added = Object.entries({ ...options, model }).filter(([key]) => saved[key] === undefined)
+  const added = Object.entries({ ...options, model }).filter(
+    ([key]) => key !== 'interactionMode' && saved[key] === undefined
+  )
   return added.length === 0
     ? record
     : replaceAgentSessionRecordOptions(record, {
