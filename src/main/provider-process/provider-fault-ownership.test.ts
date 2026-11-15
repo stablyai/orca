@@ -106,6 +106,7 @@ it('never uses a recycled root to authorize escalation of birth-second descendan
 })
 
 it('allows both bounded identity reads around a slow process-table capture', async () => {
+  // ast-grep-ignore: test-no-real-time-wait -- Fake timers model slow process reads without waiting on the wall clock.
   const wait = () => new Promise<void>((resolve) => setTimeout(resolve, 900))
   let live = true
   const sendSignal = vi.fn((_pid: number, signal: NodeJS.Signals) => {
