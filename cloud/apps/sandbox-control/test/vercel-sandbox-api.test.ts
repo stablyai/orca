@@ -80,6 +80,40 @@ describe('provider deadlines', () => {
   })
 })
 
+describe('read retries', () => {
+  it('asks a stalled read once more and answers from the retry; a stalled write is not repeated', async () => {
+    vi.useFakeTimers()
+    try {
+      let calls = 0
+      const stallFirst = (_input: unknown, init?: RequestInit): Promise<Response> => {
+        calls++
+        if (calls === 1) {
+          return new Promise((_, reject) => init?.signal?.addEventListener('abort', () => reject(init.signal!.reason)))
+        }
+        return Promise.resolve(Response.json(sandboxBody))
+      }
+      const reader = createVercelSandboxApi({ token: 't', teamId: 'team', projectId: 'prj', fetch: stallFirst as typeof fetch })
+      const read = reader.getSandbox('orca-dev-sbx_1', { resume: false })
+      await vi.advanceTimersByTimeAsync(21_000)
+      expect(await read).not.toBeNull()
+      expect(calls).toBe(2)
+
+      calls = 0
+      const stalled = (_input: unknown, init?: RequestInit): Promise<Response> => {
+        calls++
+        return new Promise((_, reject) => init?.signal?.addEventListener('abort', () => reject(init.signal!.reason)))
+      }
+      const writer = createVercelSandboxApi({ token: 't', teamId: 'team', projectId: 'prj', fetch: stalled as typeof fetch })
+      const stop = writer.stopSession('sess_1').then(() => 'answered', () => 'failed')
+      await vi.advanceTimersByTimeAsync(21_000)
+      expect(await stop).toBe('failed')
+      expect(calls).toBe(1)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+})
+
 describe('Vercel Sandbox REST client', () => {
   it('creates a persistent sandbox from the golden snapshot on the v3 endpoint', async () => {
     const { client, seen } = api(() => Response.json(sandboxBody))
