@@ -26,6 +26,7 @@ import {
 } from '../../agent-hooks/identity/agent-identity-worker-protocol'
 import type { ResolvedAgentConversation } from './agent-conversation-address'
 import { AgentConversationRefusal } from './agent-conversation-refusal'
+import { agentConversationState } from './agent-conversation-list'
 
 type ReadRequest = { limit?: number }
 
@@ -42,9 +43,12 @@ export async function readAgentConversation(
   request: ReadRequest
 ): Promise<AgentReadResult> {
   const limit = request.limit ?? AGENT_READ_DEFAULT_LIMIT
-  return resolved.kind === 'chat'
+  const page = await (resolved.kind === 'chat'
     ? readChat(ctx, resolved, limit)
-    : readTerminalTranscript(ctx, resolved.orcaSessionId, limit)
+    : readTerminalTranscript(ctx, resolved.orcaSessionId, limit))
+  // A running turn's prompt reads like a finished exchange; the state says it isn't.
+  const state = await agentConversationState(resolved)
+  return state ? { ...page, state } : page
 }
 
 async function readChat(

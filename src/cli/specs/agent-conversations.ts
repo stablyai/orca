@@ -37,6 +37,7 @@ export const AGENT_CONVERSATION_COMMAND_SPECS: CommandSpec[] = [
     notes: [
       "Reads the conversation, not a terminal screen: a chat's history, or a terminal agent's own transcript. The agent need not be running, and reading never starts it.",
       '--limit is the number of newest entries (default 20, at most 100).',
+      'While the agent is open, the output starts with its state, as `orca agent list` reports it: `working` means the turn is still running and its reply may not be there yet.',
       'A terminal agent can be read while Orca knows where its transcript is: while it is open, or asleep in a workspace. On Windows, a sleeping agent that ran in WSL can be read once its tab is reopened.'
     ],
     examples: [

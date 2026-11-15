@@ -156,6 +156,9 @@ function formatAgentRead(result: AgentReadResult): string {
   if (lines.length === 0) {
     lines.push('Nothing new.')
   }
+  if (result.state) {
+    lines.unshift(`state: ${result.state}`)
+  }
   return lines.join('\n')
 }
 

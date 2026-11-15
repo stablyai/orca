@@ -90,6 +90,53 @@ export async function agentConversationPlaces(
   resolved: ResolvedAgentConversation
 ): Promise<AgentConversationRow[]> {
   const { orcaSessionId } = resolved
+  // One namer per show, as one `worktree.ps` pass names its rows.
+  const name = runtime.orchestrationSenderNames.agentRowNamer()
+  const tabOf = (status: { paneKey: string; tabId?: string }) =>
+    status.tabId ?? parsePaneKey(status.paneKey)?.tabId
+  return (await agentConversationStatuses(resolved)).map(({ worktreeId, ...status }) => {
+    // The place's own host, from the row's connection evidence, so a same-id workspace on
+    // another host never lends its name.
+    const hostId = connectionEvidenceHostId(status.connectionId)
+    const orchestration = runtime.getAgentStatusOrchestrationContextForPaneKey(status.paneKey)
+    const parent = orchestration?.parentPaneKey
+      ? agentHookServer.getPublicStatusSnapshotForPane(orchestration.parentPaneKey)[0]
+      : undefined
+    const title = agentConversationTitle(
+      runtimeWorktreeAgentRowNames(
+        {
+          paneKey: status.paneKey,
+          tabId: tabOf(status),
+          worktreeId,
+          ptyId: status.terminalHandle
+            ? (runtime.getTerminalPtyIdForHandle(status.terminalHandle) ?? undefined)
+            : undefined,
+          agentType: status.agentType ?? null,
+          providerSessionId: status.providerSession?.id
+        },
+        orchestration,
+        parent && { tabId: tabOf(parent) },
+        name
+      )
+    )
+    return {
+      orcaSessionId,
+      kind: resolved.kind,
+      agent: status.agentType ?? null,
+      state: status.state,
+      worktreeId,
+      ...(runtime.getWorkspaceLabel(worktreeId, hostId) ?? { workspace: worktreeId }),
+      hostId,
+      paneKey: status.paneKey,
+      title,
+      lastAssistantMessage: status.lastAssistantMessage ?? null,
+      updatedAt: status.evidenceObservedAt ?? status.receivedAt
+    }
+  })
+}
+
+/** The conversation's own status rows, one per place it is open now: none when it isn't open. */
+async function agentConversationStatuses(resolved: ResolvedAgentConversation) {
   let paneKeys: string[]
   if (resolved.kind === 'chat') {
     // A chat's status row is keyed by the session that runs its conversation now.
@@ -104,63 +151,32 @@ export async function agentConversationPlaces(
           ]
         : []
   } else {
-    paneKeys = ((await agentHookServer.terminalAgentPlaces(orcaSessionId)) ?? []).map(
+    paneKeys = ((await agentHookServer.terminalAgentPlaces(resolved.orcaSessionId)) ?? []).map(
       (place) => place.paneKey
     )
   }
-  // One namer per show, as one `worktree.ps` pass names its rows.
-  const name = runtime.orchestrationSenderNames.agentRowNamer()
-  const tabOf = (status: { paneKey: string; tabId?: string }) =>
-    status.tabId ?? parsePaneKey(status.paneKey)?.tabId
   return paneKeys.flatMap((paneKey) =>
     agentHookServer.getPublicStatusSnapshotForPane(paneKey).flatMap((status) => {
       const { worktreeId } = status
       const ours =
         resolved.kind === 'chat'
           ? status.structuredHost !== undefined
-          : status.orcaSessionId === orcaSessionId
-      if (!worktreeId || !ours) {
-        return []
-      }
-      // The place's own host, from the row's connection evidence, so a same-id workspace on
-      // another host never lends its name.
-      const hostId = connectionEvidenceHostId(status.connectionId)
-      const orchestration = runtime.getAgentStatusOrchestrationContextForPaneKey(status.paneKey)
-      const parent = orchestration?.parentPaneKey
-        ? agentHookServer.getPublicStatusSnapshotForPane(orchestration.parentPaneKey)[0]
-        : undefined
-      const title = agentConversationTitle(
-        runtimeWorktreeAgentRowNames(
-          {
-            paneKey: status.paneKey,
-            tabId: tabOf(status),
-            worktreeId,
-            ptyId: status.terminalHandle
-              ? (runtime.getTerminalPtyIdForHandle(status.terminalHandle) ?? undefined)
-              : undefined,
-            agentType: status.agentType ?? null,
-            providerSessionId: status.providerSession?.id
-          },
-          orchestration,
-          parent && { tabId: tabOf(parent) },
-          name
-        )
-      )
-      return [
-        {
-          orcaSessionId,
-          kind: resolved.kind,
-          agent: status.agentType ?? null,
-          state: status.state,
-          worktreeId,
-          ...(runtime.getWorkspaceLabel(worktreeId, hostId) ?? { workspace: worktreeId }),
-          hostId,
-          paneKey: status.paneKey,
-          title,
-          lastAssistantMessage: status.lastAssistantMessage ?? null,
-          updatedAt: status.evidenceObservedAt ?? status.receivedAt
-        }
-      ]
+          : status.orcaSessionId === resolved.orcaSessionId
+      return worktreeId && ours ? [{ ...status, worktreeId }] : []
     })
   )
+}
+
+/** The state `agent list` and `agent show` report for the conversation, from the same status rows:
+ *  its most recently updated place's, or undefined when it isn't open. */
+export async function agentConversationState(
+  resolved: ResolvedAgentConversation
+): Promise<AgentStatusState | undefined> {
+  const latest = (await agentConversationStatuses(resolved)).reduce<
+    { state: AgentStatusState; at: number } | undefined
+  >((best, status) => {
+    const at = status.evidenceObservedAt ?? status.receivedAt
+    return !best || at > best.at ? { state: status.state, at } : best
+  }, undefined)
+  return latest?.state
 }

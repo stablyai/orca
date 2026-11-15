@@ -55,6 +55,9 @@ export type AgentReadResult = {
   agent: string | null
   /** `chat`: the chat's own history; `transcript`: the terminal agent's transcript file. */
   source: 'chat' | 'transcript'
+  /** What `agent list`/`show` report for it now (`working` while a turn runs); absent when it
+   *  isn't open. */
+  state?: AgentStatusState
   entries: AgentReadEntry[]
   /** Older entries exist that this page did not include. */
   limited: boolean
