@@ -1,3 +1,7 @@
+# Zotz
+
+Este repo es **Zotz**, un fork de Orca. El plan de trabajo y sus reglas están en [`docs/zotz/PLAN.md`](./docs/zotz/PLAN.md); léelo antes de cualquier tarea del fork.
+
 # Useful Commands
 
 - **Typecheck**: `pnpm tc` (or `tc:node` / `tc:cli` / `tc:web`)
