@@ -31,7 +31,7 @@ export type MobileProjectSectionCatalog = {
   projects: ProjectSectionProject[]
   setups: ProjectSectionSetup[]
   projectOrderBy: ProjectOrderBy
-  /** Every host's project groups, which a feed reader lists folder workspaces under; older desktops omit it. */
+  /** Every host's project groups, which the phone nests projects and folder workspaces under; older desktops omit it. */
   projectGroups?: ProjectGroup[]
 }
 
@@ -84,6 +84,9 @@ export function buildMobileProjectSectionCatalog(
       ...(setup.executionHostId ? { executionHostId: setup.executionHostId } : {})
     })),
     projectOrderBy,
-    ...(projectGroups ? { projectGroups: [...projectGroups] } : {})
+    // Why: like repos, groups reach phones without their hook commands.
+    ...(projectGroups
+      ? { projectGroups: projectGroups.map(({ hookSettings: _hooks, ...group }) => group) }
+      : {})
   }
 }

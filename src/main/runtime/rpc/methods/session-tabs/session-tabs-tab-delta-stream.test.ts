@@ -3,7 +3,7 @@ import { RUNTIME_CLIENT_CAPABILITY_METHODS } from '../client-events/runtime-clie
 import { visibleSnapshot } from './session-tabs-snapshot.test-fixture'
 import { describe, expect, it, vi } from 'vitest'
 import type { OrcaRuntimeService } from '../../../orca-runtime'
-import '../../../../../shared/protocol-version'
+import '../../../../../shared/remote-runtime/protocol/protocol-version'
 import {
   SESSION_TABS_RETIREMENT_PROOF_DELTA_RUNTIME_CAPABILITY,
   SESSION_TABS_TAB_DELTA_RUNTIME_CAPABILITY

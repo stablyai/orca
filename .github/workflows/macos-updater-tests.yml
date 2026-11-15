@@ -19,7 +19,7 @@ on:
       - 'src/main/providers/shell-launch/macos/tcc-login-shell*'
       - 'src/shared/process-observation/tables/process-table-snapshot*'
       - 'src/shared/process-observation/darwin/darwin-process-table-capture*'
-      - 'src/shared/update-status-types.ts'
+      - 'src/shared/updater/update-status-types.ts'
       - 'pnpm-lock.yaml'
   workflow_dispatch:
 

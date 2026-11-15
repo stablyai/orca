@@ -10,7 +10,7 @@ import { getHostHealthUnavailableDetail } from './project-host-health-detail'
 import { isHostLocalProjectId } from '../../../../../shared/project/host-setup/project-host-setup-projection'
 import { isEphemeralVmRuntimeEnvironment } from '../../../../../shared/remote-runtime/host-catalog/runtime-environments'
 import { isMergedAwayExecutionHost } from '../../../../../shared/execution-host/managed-orcad-execution-host'
-import '../../../../../shared/protocol-version'
+import '../../../../../shared/remote-runtime/protocol/protocol-version'
 import {
   PROJECT_HOST_SETUP_RUNTIME_CAPABILITY,
   WORKSPACE_RUN_CONTEXT_RUNTIME_CAPABILITY

@@ -14,7 +14,7 @@ import {
   DAEMON_AUDIT_STATE_VALUES,
   DAEMON_AUDIT_TRIGGER_VALUES,
   DAEMON_EVIDENCE_SOURCE_VALUES
-} from '../../daemon-audit-eligibility'
+} from '../../terminal/daemon/daemon-audit-eligibility'
 import {
   DAEMON_ADOPTED_APP_VERSION_MATCH,
   DAEMON_CODE_IDENTITY_VALUES,
@@ -41,7 +41,7 @@ import {
   TCC_SERVICE_VALUES,
   VOLUME_TYPE_VALUES,
   YES_NO_VALUES
-} from '../../daemon-tcc-denial-capture'
+} from '../../terminal/daemon/daemon-tcc-denial-capture'
 import { errorClassSchema, settingsChangedKeySchema } from './telemetry-property-schemas'
 
 // Enum-only start-failure signals diagnose fleet outages without sending raw stderr (v1.4.129-rc.1).

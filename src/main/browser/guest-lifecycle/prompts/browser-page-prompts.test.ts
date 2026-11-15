@@ -150,7 +150,7 @@ describe('browser page prompts', () => {
     expect(declined.settle).toHaveBeenCalledWith(null)
 
     guest.emit('did-start-navigation', { isMainFrame: true, initiator: {} })
-    guest.emit('input-event', {}, { type: 'mouseMove' })
+    guest.emit('before-mouse-event', {}, { type: 'mouseMove' })
     expect(ask(guest).opening).toBe('refused')
     // A null initiator models toolbar navigation.
     guest.emit('did-start-navigation', { isMainFrame: true, initiator: null })
@@ -158,7 +158,8 @@ describe('browser page prompts', () => {
 
     vi.advanceTimersByTime(BROWSER_PAGE_PROMPT_TIMEOUT_MS)
     expect(ask(guest).opening).toBe('refused')
-    guest.emit('input-event', {}, { type: 'mouseDown' })
+    // Clicks in out-of-process frames reach only before-mouse-event.
+    guest.emit('before-mouse-event', {}, { type: 'mouseDown' })
     expect(ask(guest).opening).toBe('prompting')
 
     await respondToBrowserPagePrompt(renderer, { requestId: latestId(renderer), answer: true })

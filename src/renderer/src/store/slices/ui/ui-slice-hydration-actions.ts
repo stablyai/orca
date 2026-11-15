@@ -38,7 +38,7 @@ import { normalizeUsagePercentageDisplay } from '../../../../../shared/agent-usa
 import { normalizeStatusBarUsageMode } from '../../../../../shared/status-bar/status-bar-usage-mode'
 import { normalizeBrowserPageZoomLevel } from '../../../../../shared/browser/site-settings/browser-page-zoom'
 import { normalizeKagiSessionLink } from '../../../../../shared/browser/navigation/browser-url'
-import { isReleaseChannel } from '../../../../../shared/release-channel'
+import { isReleaseChannel } from '../../../../../shared/updater/release-channel'
 import {
   filterSetupScriptPromptDismissalsToValidRepos,
   sanitizeSetupScriptPromptDismissals

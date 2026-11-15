@@ -8,7 +8,7 @@ import '../../../src/shared/agent-session/lifecycle/records/agent-session-record
 import '../../../src/shared/agent-session/lifecycle/records/agent-session-record-stored-form'
 import '../../../src/shared/agent-session/lifecycle/agent-session-record'
 import '../../../src/shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle-encoding'
-import '../../../src/shared/protocol-version'
+import '../../../src/shared/remote-runtime/protocol/protocol-version'
 import { STRUCTURED_AGENT_SESSION_REGISTERED_AGENTS_RUNTIME_CAPABILITY } from '../../../src/shared/agent-session/structured-agent-session-surface-capabilities'
 import '../../../src/shared/agent-session/agent-session-runtime-capabilities'
 import type { RuntimeMobileSessionTabsSnapshot } from '../../../src/shared/remote-runtime/session-graph/runtime-session-contracts'

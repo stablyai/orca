@@ -27,7 +27,8 @@ export function getStatusBarUsageSections(
     return []
   }
   if (mode === 'compact') {
-    const headline = getUsageHeadlineSection(p, t)
+    // Why 'all': the status bar keeps its original headline, Fable included.
+    const headline = getUsageHeadlineSection(p, t, 'all')
     return headline ? [{ key: 'headline', ...headline }] : []
   }
   if (p.buckets?.length) {

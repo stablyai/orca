@@ -189,7 +189,8 @@ function Harness(props: HarnessProps) {
     sessionId: null,
     getSendCompletionGeneration: () => 0,
     keyboardInset: 0,
-    hostName: null
+    hostName: null,
+    linkOpenMode: 'ask'
   })
 }
 export async function render(props: HarnessProps = lastProps ?? {}) {
