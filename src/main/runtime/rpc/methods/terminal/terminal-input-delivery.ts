@@ -66,6 +66,40 @@ export function resolveMobileFloorClientId(
   return null
 }
 
+function reserveMobileInputFloor(
+  runtime: OrcaRuntimeService,
+  ptyId: string,
+  clientId: string,
+  holder: MobileInputFloorClaimHolder
+): void {
+  const claim = runtime.beginMobileInputFloor(ptyId, clientId)
+  if (!claim) {
+    throw new Error('mobile_input_floor_unavailable')
+  }
+  holder.current = claim
+}
+
+/** What a send must pass in the writer's synchronous step right before its bytes go out. */
+export function terminalSendWriteReservation(
+  runtime: OrcaRuntimeService,
+  guard: {
+    expectInputGeneration: number | undefined
+    floorClientId: string | null
+    floorClaim: MobileInputFloorClaimHolder
+  }
+): ((ptyId: string) => void) | undefined {
+  const { expectInputGeneration, floorClientId, floorClaim } = guard
+  if (expectInputGeneration === undefined && !floorClientId) {
+    return undefined
+  }
+  return (ptyId) => {
+    assertTerminalInputUnchanged(runtime, ptyId, expectInputGeneration)
+    if (floorClientId) {
+      reserveMobileInputFloor(runtime, ptyId, floorClientId, floorClaim)
+    }
+  }
+}
+
 export type TerminalStreamInputOutcome = 'delivered' | 'rejected' | 'failed' | 'paused'
 
 function isTerminalStreamInputRejection(error: unknown): boolean {
@@ -96,13 +130,8 @@ export async function sendTerminalStreamInput(
       ...settlement,
       ...(clientId
         ? {
-            reserveWrite: (writePtyId: string) => {
-              const claim = runtime.beginMobileInputFloor(writePtyId, clientId)
-              if (!claim) {
-                throw new Error('mobile_input_floor_unavailable')
-              }
-              floorClaim.current = claim
-            },
+            reserveWrite: (writePtyId: string) =>
+              reserveMobileInputFloor(runtime, writePtyId, clientId, floorClaim),
             afterWrite: () => commitMobileInputFloorClaim(floorClaim)
           }
         : {})
@@ -152,8 +181,11 @@ export async function commitMobileInputFloorClaim(
 
 export function getTerminalSendGuardRefusedReason(
   error: unknown
-): 'no-agent' | 'permission' | undefined {
+): 'no-agent' | 'permission' | 'input-changed' | undefined {
   const message = error instanceof Error ? error.message : String(error)
+  if (message.includes('terminal_guard_input_changed')) {
+    return 'input-changed'
+  }
   if (message.includes('terminal_guard_permission')) {
     return 'permission'
   }
@@ -166,6 +198,20 @@ export function getTerminalSendGuardRefusedReason(
 export function isTerminalSendGuardNotWritable(error: unknown): boolean {
   const message = error instanceof Error ? error.message : String(error)
   return message.includes('terminal_guard_not_writable')
+}
+
+/** Refuses a guarded Enter once the terminal took any input after the paste that named `expected`. */
+function assertTerminalInputUnchanged(
+  runtime: OrcaRuntimeService,
+  ptyId: string | undefined,
+  expected: number | undefined
+): void {
+  if (
+    expected !== undefined &&
+    (!ptyId || runtime.terminalRunFacts.readInputGeneration(ptyId) !== expected)
+  ) {
+    throw new Error('terminal_guard_input_changed')
+  }
 }
 
 export function assertTerminalSendExactPtyBinding(

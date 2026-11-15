@@ -1,11 +1,9 @@
-import {
-  getWindowsInputRecordPasteBurstMs,
-  resolveAgentPromptSubmitDelayForAgent
-} from '../../../../shared/agent-launch/startup/agent-prompt-injection'
+import { getTerminalTextSubmitDelay } from '../../../../shared/agent-launch/startup/agent-prompt-injection'
 import type { TerminalAgent } from '../../../../shared/agent-status/identity/terminal-agent'
 import { iterateTerminalInputChunks } from '../../../../shared/terminal/input/terminal-input'
 import type { TerminalInputSource } from './terminal-input-admission'
 import type { TerminalInputKind } from '../../../../shared/terminal/input/terminal-input-kind'
+import type { OwnTerminalInputTrack } from '../lifecycle/terminal-run-facts'
 import {
   WRITE_ACCEPTED,
   writeRefused,
@@ -24,6 +22,9 @@ export type RuntimeTerminalWriteOptions = {
   requireWriteSettlement?: true
   /** Hold an Enter until a fresh launch's composer is up, refusing the send if it never comes (#34580). */
   waitForLaunchComposer?: true
+  /** A paste whose Enter the client sends itself, if at all. */
+  clientSubmit?: true
+  ownInput?: OwnTerminalInputTrack
 }
 
 export class RuntimeTerminalWriter {
@@ -89,19 +90,7 @@ export class RuntimeTerminalWriter {
       const claimStartedAt = performance.now()
       // A shell at its prompt reads one line as typed; agent TUIs need the paste to settle.
       if (text && !(isSingleLine(text) && (await this.claimIdleShellPrompt(ptyId)))) {
-        const platform = this.getWriteHostPlatform(ptyId)
-        const agent = this.getAgent(ptyId)
-        const ingestDelayMs = resolveAgentPromptSubmitDelayForAgent(platform, text, agent)
-        // Enter must wait for host ingestion; a flat 500ms cannot cover 16MB.
-        // Windows Codex also reads typed text one key event at a time and keeps a mid-burst Enter
-        // as a newline, so add that burst, capped so the send still answers inside a phone's RPC timeout.
-        const delayMs = Math.max(
-          ingestDelayMs,
-          Math.min(
-            ingestDelayMs + getWindowsInputRecordPasteBurstMs(platform, agent, text),
-            MAX_KEY_EVENT_BURST_SUBMIT_DELAY_MS
-          )
-        )
+        const delayMs = this.textSubmitDelay(ptyId, text).hostHeldMs
         // A failed idle proof already spent part of that wait, so a send is never slower than before.
         await waitForTerminalWriteDelay(
           Math.max(0, delayMs - (performance.now() - claimStartedAt)),
@@ -140,6 +129,26 @@ export class RuntimeTerminalWriter {
     return settlement
   }
 
+  /** How long an Enter must trail `text` on this PTY. */
+  textSubmitDelay(ptyId: string, text: string): ReturnType<typeof getTerminalTextSubmitDelay> {
+    return getTerminalTextSubmitDelay(this.getWriteHostPlatform(ptyId), this.getAgent(ptyId), text)
+  }
+
+  async clientSubmitDelay(ptyId: string, text: string): Promise<number> {
+    const platform = this.getWriteHostPlatform(ptyId)
+    const agent = this.getAgent(ptyId)
+    const base = getTerminalTextSubmitDelay(platform, agent, '').requiredMs
+    let requiredMs = base
+    // Round each bounded slice upward; split CRLFs and surrogate pairs only overestimate the wait.
+    for (let start = 0; start < text.length; start += 16_384) {
+      await yieldBetweenTerminalInputChunks()
+      requiredMs +=
+        getTerminalTextSubmitDelay(platform, agent, text.slice(start, start + 16_384)).requiredMs -
+        base
+    }
+    return requiredMs
+  }
+
   async writeChunks(
     ptyId: string,
     text: string,
@@ -169,7 +178,10 @@ export class RuntimeTerminalWriter {
     options: RuntimeTerminalWriteOptions
   ): Promise<WriteSettlement | undefined> {
     if (!options.requireWriteSettlement) {
-      if (!this.write(ptyId, data, options.inputKind)) {
+      options.ownInput?.beforeWrite()
+      const written = this.write(ptyId, data, options.inputKind)
+      options.ownInput?.afterWrite()
+      if (!written) {
         throw new Error(options.suffixFailureError ?? 'terminal_not_writable')
       }
       return undefined
@@ -178,16 +190,16 @@ export class RuntimeTerminalWriter {
       return writeRefused('provider_cannot_settle')
     }
     try {
-      return await this.writeWithSettlement(ptyId, data, options.inputKind)
+      options.ownInput?.beforeWrite()
+      const settlement = this.writeWithSettlement(ptyId, data, options.inputKind)
+      // Before the await: the input is recorded when the write is handed off.
+      options.ownInput?.afterWrite()
+      return await settlement
     } catch {
       return writeUnverifiable('provider_threw_after_handoff', true)
     }
   }
 }
-
-// Why 20 s: a phone's terminal.send times out at 30 s and a lost reply is unknown delivery, so the
-// held Enter leaves room for the launch-composer wait and relay latency.
-const MAX_KEY_EVENT_BURST_SUBMIT_DELAY_MS = 20_000
 
 function isSingleLine(text: string): boolean {
   return !text.includes('\n') && !text.includes('\r')

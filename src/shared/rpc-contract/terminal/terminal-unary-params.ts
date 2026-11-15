@@ -192,6 +192,8 @@ export const TerminalSend = TerminalHandle.extend({
     })
     .optional(),
   requireAgentStatus: z.enum(['sendable']).optional(),
+  // A guarded Enter is refused when the terminal took other input since the paste that named this. Older hosts strip it.
+  expectInputGeneration: z.number().int().min(0).max(Number.MAX_SAFE_INTEGER).optional(),
   // A startup-dialog card's choice: refused unless the screen still reads as this card. Older hosts strip it.
   requireStartupDialog: z
     .string()

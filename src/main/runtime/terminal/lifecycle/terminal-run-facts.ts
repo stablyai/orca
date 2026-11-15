@@ -40,6 +40,13 @@ function startedNewProcess(commit: TerminalSpawnCommit): boolean {
   return commit.isReattach !== true && commit.agentSessionEnsure?.disposition !== 'adopted'
 }
 
+export type OwnTerminalInputTrack = {
+  /** Call right before and right after each write, with nothing awaited in between. */
+  beforeWrite: () => void
+  afterWrite: () => void
+  generation: () => number | undefined
+}
+
 /** Main's per-process facts about one PTY run, keyed by the incarnation they describe. */
 export class TerminalRunFactsRegister {
   private readonly runsByPtyId = new Map<string, TerminalRunRecord>()
@@ -53,6 +60,12 @@ export class TerminalRunFactsRegister {
     { incarnationId: string | null; firstInputAt: number | null }
   >()
   private readonly inputListeners = new Set<(ptyId: string, now: number) => void>()
+  private readonly inputGenerationByPtyId = new Map<string, number>()
+  private readonly resolvedInputGenerationByPtyId = new Map<string, number>()
+  private readonly clientPasteSettlesAtByPtyId = new Map<string, number>()
+  private readonly writingClientPastesByPtyId = new Map<string, Set<symbol>>()
+  // One clock for every PTY, so a generation never repeats after a process or PTY is replaced.
+  private inputClock = 0
 
   /** Called on driving input from any client (not launch writes or replies); keep it cheap. */
   onInput(listener: (ptyId: string, now: number) => void): () => void {
@@ -94,6 +107,10 @@ export class TerminalRunFactsRegister {
       origin === 'reattach' && (incarnationId === null || !previous?.incarnationId)
     if (!sameProcess) {
       this.lastInputAtByPtyId.delete(commit.id)
+      this.inputGenerationByPtyId.delete(commit.id)
+      this.resolvedInputGenerationByPtyId.delete(commit.id)
+      this.clientPasteSettlesAtByPtyId.delete(commit.id)
+      this.writingClientPastesByPtyId.delete(commit.id)
       this.lastDrivingInputAtByPtyId.delete(commit.id)
       this.userOpenedByPtyId.delete(commit.id)
       this.unattributedDraftSeenAtByPtyId.delete(commit.id)
@@ -120,6 +137,15 @@ export class TerminalRunFactsRegister {
       return
     }
     this.lastInputAtByPtyId.set(ptyId, now)
+    this.inputClock += 1
+    this.inputGenerationByPtyId.set(ptyId, this.inputClock)
+    if (
+      (data === '\x03' || data === '\r') &&
+      !this.writingClientPastesByPtyId.has(ptyId) &&
+      now >= (this.clientPasteSettlesAtByPtyId.get(ptyId) ?? 0)
+    ) {
+      this.resolvedInputGenerationByPtyId.set(ptyId, this.inputClock)
+    }
     const run = this.runsByPtyId.get(ptyId)
     if (isDrivingInputKind(inputKind)) {
       if (inputKind === 'driving') {
@@ -153,6 +179,61 @@ export class TerminalRunFactsRegister {
    *  included; null if none has. */
   readLastInputAt(ptyId: string): number | null {
     return this.lastInputAtByPtyId.get(ptyId) ?? null
+  }
+
+  /** Names the last input `readLastInputAt` counts, from any client; 0 if none. Unchanged means
+   *  nothing was typed, pasted or sent to the PTY's process since it was read. */
+  readInputGeneration(ptyId: string): number {
+    return this.inputGenerationByPtyId.get(ptyId) ?? 0
+  }
+
+  beginClientPaste(ptyId: string): (settleMs?: number) => void {
+    const pending = this.writingClientPastesByPtyId.get(ptyId) ?? new Set<symbol>()
+    const token = Symbol()
+    pending.add(token)
+    this.writingClientPastesByPtyId.set(ptyId, pending)
+    return (settleMs) => {
+      if (this.writingClientPastesByPtyId.get(ptyId) !== pending || !pending.has(token)) {
+        return
+      }
+      if (settleMs !== undefined) {
+        this.recordClientPaste(ptyId, settleMs)
+      }
+      pending.delete(token)
+      if (pending.size === 0) {
+        this.writingClientPastesByPtyId.delete(ptyId)
+      }
+    }
+  }
+
+  recordClientPaste(ptyId: string, settleMs: number): void {
+    this.clientPasteSettlesAtByPtyId.set(
+      ptyId,
+      Math.max(Date.now(), this.clientPasteSettlesAtByPtyId.get(ptyId) ?? 0) + settleMs
+    )
+  }
+
+  /** A standalone submit after ingestion, or Ctrl+C, resolves a pending manual draft; edits do not. */
+  readResolvedInputGeneration(ptyId: string): number {
+    return this.resolvedInputGenerationByPtyId.get(ptyId) ?? 0
+  }
+
+  /** Follows one sender's writes to a PTY. `generation()` names its last write, and goes stale for
+   *  good once anyone else's input lands between two of them. */
+  trackOwnInput(ptyId: string): OwnTerminalInputTrack {
+    let last: number | undefined
+    let foreign = false
+    return {
+      beforeWrite: () => {
+        foreign ||= last !== undefined && this.readInputGeneration(ptyId) !== last
+      },
+      afterWrite: () => {
+        if (!foreign) {
+          last = this.readInputGeneration(ptyId)
+        }
+      },
+      generation: () => last
+    }
   }
 
   /** Like readLastInputAt, but only `driving` input, so Orca's own launch and orchestration writes don't count. */
@@ -198,6 +279,10 @@ export class TerminalRunFactsRegister {
   delete(ptyId: string): void {
     this.runsByPtyId.delete(ptyId)
     this.lastInputAtByPtyId.delete(ptyId)
+    this.inputGenerationByPtyId.delete(ptyId)
+    this.resolvedInputGenerationByPtyId.delete(ptyId)
+    this.clientPasteSettlesAtByPtyId.delete(ptyId)
+    this.writingClientPastesByPtyId.delete(ptyId)
     this.lastDrivingInputAtByPtyId.delete(ptyId)
     this.userOpenedByPtyId.delete(ptyId)
     this.unattributedDraftSeenAtByPtyId.delete(ptyId)

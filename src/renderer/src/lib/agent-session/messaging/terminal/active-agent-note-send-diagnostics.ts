@@ -16,6 +16,12 @@ export function reportNoteSendFailure(
   result: ActiveAgentNotesSendResult,
   noteTarget: ActiveTerminalNoteTarget | null
 ): ActiveAgentNotesSendResult {
+  if (result.status === 'pasted') {
+    if (result.code) {
+      console.warn('[review-notes] note left for the user to send', { code: result.code })
+    }
+    return { status: result.status, pasteSettleMs: result.pasteSettleMs }
+  }
   if (result.status === 'sent' || result.status === 'empty') {
     return result
   }
@@ -61,7 +67,7 @@ function isTimeoutError(error: unknown): boolean {
 }
 
 function codeForStatus(
-  status: Exclude<ActiveAgentNotesSendResult['status'], 'sent' | 'empty'>
+  status: Exclude<ActiveAgentNotesSendResult['status'], 'sent' | 'empty' | 'pasted'>
 ): ActiveAgentNotesSendFailureCode {
   switch (status) {
     case 'no-active-terminal':
