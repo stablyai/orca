@@ -1,5 +1,9 @@
 import { createHash } from 'node:crypto'
-import type { DiscoveredSkill, SkillDiscoverySource, SkillSourceKind } from '../../../shared/skills'
+import type {
+  DiscoveredSkill,
+  SkillDiscoverySource,
+  SkillSourceKind
+} from '../../../shared/skills/discovery/skills'
 import type { SkillScanRoot } from './skill-discovery-sources'
 
 export function stablePathId(pathValue: string): string {

@@ -2,7 +2,7 @@ import { parsePtyStartupIngressIntent } from '../../shared/terminal/pty/ingress/
 import { normalizeColorQueryReplyColors } from '../../shared/terminal/pty/ingress/pty-owner-color-query-colors'
 import { recognizeAgentLaunchCommand } from '../../shared/agent-launch/startup/agent-command-line-intent'
 import { isTuiAgent } from '../../shared/agent-launch/catalog/tui-agent-config'
-import { agentKindSchema } from '../../shared/telemetry-events'
+import { agentKindSchema } from '../../shared/telemetry/schemas/telemetry-property-schemas'
 import type { SleepingAgentLaunchConfig } from '../../shared/agent-session/lifecycle/agent-session-resume'
 
 function isAgentLaunch(args: {

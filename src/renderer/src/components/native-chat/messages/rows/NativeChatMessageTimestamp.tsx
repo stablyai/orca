@@ -2,11 +2,11 @@ import { useTranslation } from 'react-i18next'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { useIntlLocale } from '@/i18n/use-translate'
 import { useNowSnapshot } from '@/hooks/use-now'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import {
   getNativeChatMessageDay,
   getNativeChatMessageTimeFormatter
-} from '../../../../../../shared/native-chat/transcript/native-chat-message-time'
+} from '../../../../../../shared/native-chat/transcript/messages/native-chat-message-time'
 
 export function NativeChatMessageTimestamp({
   timestamp,

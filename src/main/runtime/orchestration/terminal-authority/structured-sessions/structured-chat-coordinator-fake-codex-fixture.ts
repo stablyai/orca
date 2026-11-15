@@ -1,11 +1,12 @@
+import { join } from 'node:path'
 import type {
   CodexAppServerConnection,
   CodexAppServerConnectionHandlers
 } from '../../../../codex/app-server/codex-app-server-connection-types'
 import type { openCodexAppServerConnection } from '../../../../codex/app-server/codex-app-server-connection'
-import { computeAgentSessionPayloadFingerprint } from '../../../../../shared/agent-session/lifecycle/agent-session-mutation-envelope'
+import { computeAgentSessionPayloadFingerprint } from '../../../../../shared/agent-session/lifecycle/operations/agent-session-mutation-envelope'
 import { attachFingerprintFields } from '../../../../native-chat/agent-session-wire/acquisition/structured-agent-session-attach'
-import { isRecord } from '../../../rpc/orchestration-session-caller-test-fixture'
+import { isRecord } from '../../../rpc/orchestration/callers/session.test-fixture'
 
 const WORKSPACE = 'workspace-1'
 
@@ -142,7 +143,7 @@ export function operationId(): string {
   return `${Date.now()}-${operations.toString(16).padStart(32, '0')}`
 }
 
-export function attachParams(sessionId: string) {
+export function attachParams(sessionId: string, fixtureRoot: string) {
   const params = {
     location: {
       executionHostId: 'local' as const,
@@ -152,7 +153,7 @@ export function attachParams(sessionId: string) {
     },
     provider: 'codex' as const,
     agent: 'codex' as const,
-    accountHome: { variable: 'CODEX_HOME' as const, path: '/home/dev/.codex' },
+    accountHome: { variable: 'CODEX_HOME' as const, path: join(fixtureRoot, 'codex-home') },
     runtimeKind: 'native' as const
   }
   const envelope = {
@@ -183,4 +184,16 @@ export function resetProviderFaults(): void {
   providerFaults.crashOnTurnStart = 'off'
   providerFaults.starts = 0
   providerFaults.turnStarts = 0
+}
+
+/** A chat got the whole orchestration message: its subject and its reply command. */
+export function isWholeMail(text: string): boolean {
+  return text.includes('\nSubject: ') && /\[[^\]\n]*: orca(-dev)? orchestration /.test(text)
+}
+
+export function turnText(turn: { text: string }): string {
+  const input: unknown = JSON.parse(turn.text)
+  return Array.isArray(input)
+    ? input.map((item: unknown) => (isRecord(item) ? String(item.text) : '')).join('')
+    : ''
 }

@@ -4,7 +4,8 @@ import {
   getParkVerdictUnparkPinUntilMs,
   type ParkVerdictFlipRecord
 } from '../verdict/terminal-park-verdict-flip-telemetry'
-import { canWatcherCoverParkedTerminalTab } from '../output-watchers/terminal-parked-tab-watchers'
+import '../output-watchers/terminal-parked-tab-watchers'
+import { canWatcherCoverParkedTerminalTab } from '../output-watchers/parked-terminal-tab-coverage'
 
 export type WithheldTerminalTabParking = {
   parkedTabIds: Set<string>

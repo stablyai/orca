@@ -4,7 +4,7 @@ import {
   findDomTextSearchRanges,
   type DomTextSearchInstance,
   type DomTextSearchScope
-} from '@/lib/dom-text-search-highlights'
+} from '@/lib/text-search/dom-text-search-highlights'
 import { nativeChatFindGeometry } from './native-chat-find-visibility'
 
 // Must match the ::highlight() selectors in native-chat-find.css.
@@ -15,7 +15,7 @@ const chatFindHighlights = createDomTextSearchHighlights({
 
 const TRANSCRIPT_COLUMN_SELECTOR = '[data-native-chat-transcript-column]'
 const TRANSCRIPT_SCROLL_SELECTOR = '[data-native-chat-scroll]'
-/** Row chrome that only shows on hover (timestamps, copy): marked, so counts never follow the mouse. */
+/** Row chrome, not transcript (timestamps, copy): marked, so find counts only message text. */
 const SKIPPED_TEXT_SELECTOR = '.sr-only, [hidden], [data-native-chat-find-skip]'
 /** A streamed reply's text node while its words fade in: each new word is its own element. */
 const WORD_GROUP_SELECTOR = '[data-word-group]'

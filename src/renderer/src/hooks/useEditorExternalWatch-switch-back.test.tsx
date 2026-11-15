@@ -43,7 +43,9 @@ vi.mock('./editor-external-watch-targets', async (importOriginal) => ({
 vi.mock('@/runtime/files/reads/runtime-file-read-client', () => ({
   readRuntimeFileContent: harness.readRuntimeFileContent
 }))
-vi.mock('@/lib/connection-context', () => ({ getConnectionIdForFile: () => undefined }))
+vi.mock('@/lib/workspace/ownership/connection-context', () => ({
+  getConnectionIdForFile: () => undefined
+}))
 
 import { createTestStore } from '@/store/testing/app-store-test-fixture'
 import { useEditorExternalWatch } from './useEditorExternalWatch'
@@ -206,8 +208,7 @@ describe('switching back to a workspace that was not watched', () => {
         gitStatusSignature: 'g',
         sections: [section('clean.ts', false), section('dirty.ts', true)],
         sectionHeights: {},
-        loadedIndices: [0, 1],
-        sideBySide: false
+        loadedIndices: [0, 1]
       }
     })
     harness.readRuntimeFileContent.mockResolvedValue({ content: 'v1', isBinary: false })

@@ -1,8 +1,11 @@
 import { selectWslHostsServing } from '@/components/sidebar/use-wsl-hosts-enabled'
-import type { WslHostCapability, WslHostStatus } from '../../../../shared/wsl-host-types'
+import type {
+  WslHostCapability,
+  WslHostStatus
+} from '../../../../shared/remote-runtime/wsl-hosts/wsl-host-types'
 import { isWslHostRuntimeEnvironment } from '../../../../shared/remote-runtime/host-catalog/runtime-environments'
 import { parseExecutionHostId } from '../../../../shared/execution-host'
-import { workspaceOwnerHostId } from '../../lib/workspace-row-owner-host'
+import { workspaceOwnerHostId } from '../../lib/workspace/ownership/workspace-row-owner-host'
 import type { AppState } from '../../store/types'
 import { useAppStore } from '../../store'
 import { selectFolderWorkspaces } from '@/store/workspaces/catalog/workspace-record-fields'

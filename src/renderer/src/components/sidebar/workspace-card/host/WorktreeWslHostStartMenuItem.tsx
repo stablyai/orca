@@ -2,7 +2,7 @@ import React from 'react'
 import { Play } from 'lucide-react'
 import { DropdownMenuItem, DropdownMenuSeparator } from '@/components/ui/dropdown-menu'
 import { useTranslate } from '@/i18n/use-translate'
-import { startWslHostAndReloadProjects } from '@/lib/wsl-host-user-start'
+import { startWslHostAndReloadProjects } from '@/runtime/hosts/wsl/wsl-host-user-start'
 import { useStoppedWslHost } from '../../../wsl-host-stopped/use-stopped-wsl-host'
 
 /** Start for a workspace on a stopped WSL distro. Mounted only inside the open menu, so idle rows add no subscription. */

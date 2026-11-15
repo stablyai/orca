@@ -3,10 +3,10 @@ import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-libra
 import type { ComponentProps } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { TooltipProvider } from '@/components/ui/tooltip'
-import { useAppStore } from '@/store'
+import { useAppStore } from '@/store/index'
 import { installClientHostedPaneApi } from './client-hosted-browser-pane-test-rig'
 import { ClientHostedBrowserPagePane } from './ClientHostedBrowserPagePane'
-import type { MarkupBaseImage } from './annotate/markup-base-image'
+import type { MarkupBaseImage } from './annotate/capture/markup-base-image'
 
 const mocks = vi.hoisted(() => ({
   attach: vi.fn(),
@@ -19,9 +19,11 @@ vi.mock('./browser-client-page-renderer-installation', () => ({
   attachBrowserClientPageToViewport: mocks.attach
 }))
 // Only image/native boundaries are mocked; the button, controller and overlay are real.
-vi.mock('./annotate/markup-base-image', () => ({ captureMarkupBaseImage: mocks.capture }))
-vi.mock('./annotate/markup-screenshot-compose', () => ({ composeMarkupDataUrl: mocks.compose }))
-vi.mock('./annotate/markup-canvas-render', () => ({
+vi.mock('./annotate/capture/markup-base-image', () => ({ captureMarkupBaseImage: mocks.capture }))
+vi.mock('./annotate/capture/markup-screenshot-compose', () => ({
+  composeMarkupDataUrl: mocks.compose
+}))
+vi.mock('./annotate/drawing/markup-canvas-render', () => ({
   renderCommittedLayer: vi.fn(),
   blitMarkupScene: vi.fn()
 }))

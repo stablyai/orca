@@ -7,10 +7,7 @@ import type {
 import type { RepoSourceControlAiOverrides } from '../../../../../../shared/source-control/ai/settings/source-control-ai-settings-types'
 import type { GlobalSettings } from '../../../../../../shared/global-settings-types'
 import { normalizeRepoAiDraft, setActionOverride } from './repository-source-control-ai-draft'
-
-type RepoActionRecipe = NonNullable<
-  NonNullable<RepoSourceControlAiOverrides['actionOverrides']>[SourceControlActionId]
->
+import type { RepoActionRecipe } from './repository-source-control-ai-recipe-completion'
 
 export function withRepoAiActionAgent(
   base: RepoSourceControlAiOverrides,

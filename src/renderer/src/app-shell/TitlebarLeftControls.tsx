@@ -8,13 +8,13 @@ import {
   ContextMenuItem,
   ContextMenuTrigger
 } from '@/components/ui/context-menu'
-import { shouldShowWorktreeHistoryControls } from '../lib/titlebar-worktree-history-controls'
+import { shouldShowWorktreeHistoryControls } from './chrome/titlebar-worktree-history-controls'
 import {
   canGoBackWorktreeHistory,
   canGoForwardWorktreeHistory
 } from '@/store/slices/ui/workspace-navigation-history'
 import { useShortcutLabel } from '../hooks/useShortcutLabel'
-import { useAppStore } from '../store'
+import { useAppStore } from '../store/index'
 import { hasCustomTitleBar, hasMacTrafficLights } from './app-window-chrome'
 import type { AppChromeLayout } from './use-app-chrome-layout'
 

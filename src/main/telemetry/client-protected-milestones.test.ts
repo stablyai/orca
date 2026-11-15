@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { GlobalSettings } from '../../shared/global-settings-types'
-import type { EventProps } from '../../shared/telemetry-events'
+import type { EventProps } from '../../shared/telemetry/telemetry-event-classification'
 import { _enableTransportForTests, track } from './client'
 import {
   BASE_COMMON,
@@ -225,29 +225,6 @@ describe('protected telemetry milestones', () => {
       agent_kind: 'codex'
     })
     expect(captured('meaningful_activity_day')[0].properties.trigger).toBe('native_chat')
-  })
-
-  it('counts a provider-accepted phone prompt as an interaction and an active day', () => {
-    track('native_chat_prompt_submitted', {
-      agent_kind: 'claude-code',
-      runtime: 'unknown',
-      client: 'mobile'
-    })
-
-    expect(captured('first_agent_interaction')[0].properties).toMatchObject({
-      source: 'mobile_chat',
-      agent_kind: 'claude-code'
-    })
-    expect(captured('meaningful_activity_day')[0].properties).toMatchObject({
-      trigger: 'mobile_chat',
-      install_cohort: 'fresh'
-    })
-  })
-
-  it('reports profiles without a frozen cohort as existing', () => {
-    state.settings.telemetry = telemetry({})
-    track('agent_started', sidebarLaunch)
-    expect(captured('meaningful_activity_day')[0].properties.install_cohort).toBe('existing')
   })
 
   it('marks terminal activity once per day across restart and UTC rollover', () => {

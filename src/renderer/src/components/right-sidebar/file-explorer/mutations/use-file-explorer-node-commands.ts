@@ -3,7 +3,7 @@ import type { RefObject } from 'react'
 import { useCallback, useMemo } from 'react'
 import { useAppStore } from '@/store/index'
 import { createNewTerminalTab } from '@/components/terminal/terminal-tab-create'
-import type { Repo } from '../../../../../../shared/repo-types'
+import type { Repo } from '../../../../../../shared/repository/repo-types'
 import {
   buildAddProjectFromFolderModalData,
   canShowAddAsProjectAction
@@ -15,7 +15,7 @@ import type { InlineInput } from './file-explorer-inline-input-row'
 import type { TreeNode } from '../tree/file-explorer-types'
 import { useFileDuplicate } from './useFileDuplicate'
 import { useFileExplorerKeys } from '../selection/useFileExplorerKeys'
-import type { LocalPathOpenOwner } from '@/lib/local-path-open-guard'
+import type { LocalPathOpenOwner } from '@/lib/files/os-open/local-path-open-guard'
 
 type UseFileExplorerNodeCommandsParams = {
   activeWorktreeId: string | null

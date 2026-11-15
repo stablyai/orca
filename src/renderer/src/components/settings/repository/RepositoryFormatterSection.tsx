@@ -1,5 +1,5 @@
 import { useId, useState } from 'react'
-import type { Repo } from '../../../../../shared/repo-types'
+import type { Repo } from '../../../../../shared/repository/repo-types'
 import {
   DEFAULT_FORMATTER_INCLUDE,
   editorFormatterSchema
@@ -15,7 +15,7 @@ import { SettingsGroup } from '../section-layout/SettingsGroup'
 
 export function getRepositoryFormatterSearchEntry(t: Translate = translate) {
   return {
-    title: t('settings.repositoryFormatter.title', 'Formatter Command'),
+    title: t('settings.repositoryFormatter.710343e374', 'Formatter command'),
     description: t(
       'settings.repositoryFormatter.description',
       'Use this project’s formatter for Format on Save.'

@@ -1,20 +1,16 @@
-import { useCallback } from 'react'
-import { openExternalLink } from '../../platform/external-link'
 import { useMobileFileTapHandlers } from './use-mobile-file-tap-handlers'
-import { resolveMobileNativeChatSessionId } from '../../session/native-chat/mobile-native-chat-eligibility'
+import { resolveMobileNativeChatSessionId } from '../../session/native-chat/conversation/mobile-native-chat-eligibility'
 import { useProvideSessionScreenHandlers } from '../../session/session-screen-handlers'
 import type { MobileSessionTab } from '../../session/tabs/mobile-session-tabs'
-import type { MobileSessionTerminalSendActionsModel } from '../../terminal/session/use-mobile-session-terminal-send-actions'
+import type { MobileSessionTerminalSendActionsModel } from '../../terminal/session/input-controls/use-mobile-session-terminal-send-actions'
 
 export function useMobileSessionFileActions(scope: MobileSessionTerminalSendActionsModel) {
   const {
     hostId,
     worktreeId,
     routeWorktreeName,
-    isFloatingWorkspaceRoute,
     client,
     sessionTabsRef,
-    terminalLinkOpenMode,
     activeSessionTabIdRef,
     terminalCwdRef,
     activeHandleRef,
@@ -52,25 +48,9 @@ export function useMobileSessionFileActions(scope: MobileSessionTerminalSendActi
     onResumedTerminal: switchTab
   })
 
-  const handleTerminalOpenUrl = useCallback(
-    (handle: string, url: string) => {
-      if (handle !== activeHandleRef.current) {
-        return
-      }
-      // Why: browser.tabCreate resolves a real worktree, which the floating
-      // sentinel doesn't have — open taps in the phone browser instead.
-      if (terminalLinkOpenMode === 'phone-browser' || isFloatingWorkspaceRoute) {
-        openExternalLink(url)
-        return
-      }
-      void handleCreateBrowserRef.current?.(url)
-    },
-    [terminalLinkOpenMode, isFloatingWorkspaceRoute]
-  )
   return {
     handleFileTap,
-    handleNativeChatFileTap,
-    handleTerminalOpenUrl
+    handleNativeChatFileTap
   }
 }
 

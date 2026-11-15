@@ -1,4 +1,5 @@
 import {
+  DEFAULT_NATIVE_CHAT_FONT_SIZE,
   normalizeNativeChatAppearanceSettings,
   resetNativeChatAppearanceSettings,
   resolveNativeChatAppearanceSettings,
@@ -54,7 +55,7 @@ export function AppearanceChatSection({
     )
   }
   return (
-    <div className="divide-y divide-border/40">
+    <>
       <AppearanceChatContrastControls
         appearance={appearance}
         onChange={update}
@@ -76,7 +77,7 @@ export function AppearanceChatSection({
           label={entries.textSize.title}
           description={matching ? chatTerminalControlledHint(t) : entries.textSize.description}
           value={appearance.fontSize}
-          defaultValue={matching ? undefined : 14}
+          defaultValue={matching ? undefined : DEFAULT_NATIVE_CHAT_FONT_SIZE}
           disabled={matching}
           disabledReason={chatTerminalControlledTooltip(t)}
           min={12}
@@ -144,6 +145,6 @@ export function AppearanceChatSection({
           }
         />
       </SearchableSetting>
-    </div>
+    </>
   )
 }

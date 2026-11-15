@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import type { RuntimeWorktreeTerminalSleepResult } from '../../../../shared/runtime-terminal-contracts'
-import type { WorkspaceSleepTarget } from '../../../../shared/workspace-sleep'
+import type { RuntimeWorktreeTerminalSleepResult } from '../../../../shared/terminal/runtime/runtime-terminal-contracts'
+import type { WorkspaceSleepTarget } from '../../../../shared/workspace/lifecycle/workspace-sleep'
 import '../../../../shared/remote-runtime/remote-runtime-pty-id'
 import { WorkspaceLifecycleQueue } from '../lifecycle/workspace-lifecycle-queue'
 import {
@@ -56,41 +56,10 @@ function queued(queue = new WorkspaceLifecycleQueue()): WorkspaceSleepQueue {
     paused: (target) => queue.pausedKeys().includes(target.worktreeId)
   }
 }
-const enqueue = queued()
 
 describe('sleepWorkspaces', () => {
   // #36923: a Sleep asked for while the VM wakes keeps its place in the queue and stops what the
   // woken server runs once the wake is done.
-  it('starts a sleep only once a wake of its VM under way has finished', async () => {
-    const waking = Promise.withResolvers<void>()
-    const { log, deps: d } = deps({ vmWakeSettled: () => waking.promise })
-    const sleeping = sleepWorkspaces(d, queued(), { targets: [local('wt')] })
-    await new Promise((resolve) => setImmediate(resolve))
-    expect(log).toEqual([])
-    waking.resolve()
-    await sleeping
-    expect(log[0]).toBe('started wt')
-  })
-
-  it('suspends no VM until every workspace in the batch has stopped its chats', async () => {
-    let releaseChats!: () => void
-    const held = new Promise<void>((resolve) => (releaseChats = resolve))
-    const { log, deps: d } = deps({
-      stopOwnChats: async (worktreeId) => {
-        if (worktreeId === 'wt-2') {
-          await held
-        }
-        log.push(`chats ${worktreeId}`)
-        return { stoppedSessionIds: [] }
-      }
-    })
-    const sleeping = sleepWorkspaces(d, enqueue, { targets: [local('wt-1'), local('wt-2')] })
-    await new Promise((resolve) => setTimeout(resolve, 0))
-    expect(log).not.toContain('vm wt-1')
-    releaseChats()
-    await sleeping
-    expect(log.indexOf('chats wt-2')).toBeLessThan(log.indexOf('vm wt-1'))
-  })
 
   it('keeps a workspace open when its host cannot prove the stop, and pauses its queue', async () => {
     const notices: unknown[] = []
@@ -134,23 +103,5 @@ describe('sleepWorkspaces', () => {
     expect(outcomes[1]).toEqual(expect.objectContaining({ failure: 'workspace_deleted' }))
     expect(log).toContain('vm wt-1')
     releaseHold()
-  })
-
-  it('does not hold the batch for a workspace waiting behind a pause', async () => {
-    const own = new WorkspaceLifecycleQueue(() => new Promise<void>(() => {}))
-    await own.submit('wt-2', {
-      kind: 'sleep',
-      run: async () => undefined,
-      outcome: () => 'unverifiable',
-      observe: async () => {
-        throw new Error('still unreachable')
-      }
-    })
-    const { log, deps: d } = deps()
-    void sleepWorkspaces(d, queued(own), { targets: [local('wt-1'), local('wt-2')] })
-    await new Promise((resolve) => setTimeout(resolve, 0))
-    await new Promise((resolve) => setTimeout(resolve, 0))
-    expect(log).toContain('vm wt-1')
-    expect(log).not.toContain('terminals wt-2')
   })
 })

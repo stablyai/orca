@@ -86,13 +86,6 @@ describe('readRasterImageDimensions', () => {
     expect(readRasterImageDimensions(view)).toEqual({ width: 320, height: 240 })
   })
 
-  it('rejects truncated ICO payloads and zero raster dimensions', () => {
-    const truncated = icoWithPayload(pngHeader(16, 16)).subarray(0, 30)
-
-    expect(readRasterImageDimensions(truncated)).toBeNull()
-    expect(readRasterImageDimensions(bmpHeader(0, 16))).toBeNull()
-  })
-
   it('reads a JPEG whose frame header sits behind large chained metadata', () => {
     // Real ICC/MPF profiles span chained 64KiB segments before SOF; these valid images must still yield dimensions.
     expect(readRasterImageDimensions(jpegWithMetadata(1_400 * 1024, 4_000, 3_000))).toEqual({

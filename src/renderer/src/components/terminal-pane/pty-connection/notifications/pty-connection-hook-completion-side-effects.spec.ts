@@ -80,8 +80,9 @@ export function registerPtyConnectionHookCompletionSideEffectsTests(): void {
       // The completion settings subscription is shared per module load.
       await loadFreshTerminalModules()
       const { connectPanePty } = await import('../connect-pane-pty')
-      const agentTitleMocks2 =
-        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+      const agentTitleMocks2 = await vi.importMock<PtyConnectionAgentTitleMocks>(
+        '@/lib/agent-status/aggregation/worktree-agent-status'
+      )
       const transport = createMockTransport('pty-hook')
       transportFactoryQueue.push(transport)
       enableActiveRuntimeEnvironment()
@@ -91,15 +92,20 @@ export function registerPtyConnectionHookCompletionSideEffectsTests(): void {
       ])
       vi.useFakeTimers()
       const paneKey = makePaneKey('tab-1', LEAF_1)
-      mockStoreState.agentStatusByPaneKey[paneKey] = {
-        state: 'working',
-        prompt: 'still working',
-        updatedAt: Date.now(),
-        stateStartedAt: Date.now(),
-        agentType: 'claude',
-        paneKey,
-        stateHistory: []
-      }
+      mockStoreState.agentStatusByPaneKey = mockStoreState.agentStatusByPaneKey.replace([
+        [
+          paneKey,
+          {
+            state: 'working',
+            prompt: 'still working',
+            updatedAt: Date.now(),
+            stateStartedAt: Date.now(),
+            agentType: 'claude',
+            paneKey,
+            stateHistory: []
+          }
+        ]
+      ])
 
       const pane = createPane(1)
       const manager = createManager(1)
@@ -188,8 +194,9 @@ export function registerPtyConnectionHookCompletionSideEffectsTests(): void {
       )
       await loadFreshTerminalModules()
       const { connectPanePty } = await import('../connect-pane-pty')
-      const agentTitleMocks4 =
-        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+      const agentTitleMocks4 = await vi.importMock<PtyConnectionAgentTitleMocks>(
+        '@/lib/agent-status/aggregation/worktree-agent-status'
+      )
       const transport = createMockTransport('pty-crashed-codex')
       transportFactoryQueue.push(transport)
       vi.useFakeTimers()
@@ -201,15 +208,20 @@ export function registerPtyConnectionHookCompletionSideEffectsTests(): void {
         const crashedTurnStartedAt = Date.now()
         const initialAgentType =
           hookUpdateBeforeDispatch === 'same-turn-known-agent' ? 'unknown' : 'codex'
-        mockStoreState.agentStatusByPaneKey[paneKey] = {
-          state: 'working',
-          prompt: 'crash before done hook',
-          updatedAt: crashedTurnStartedAt,
-          stateStartedAt: crashedTurnStartedAt,
-          agentType: initialAgentType,
-          paneKey,
-          stateHistory: []
-        }
+        mockStoreState.agentStatusByPaneKey = mockStoreState.agentStatusByPaneKey.replace([
+          [
+            paneKey,
+            {
+              state: 'working',
+              prompt: 'crash before done hook',
+              updatedAt: crashedTurnStartedAt,
+              stateStartedAt: crashedTurnStartedAt,
+              agentType: initialAgentType,
+              paneKey,
+              stateHistory: []
+            }
+          ]
+        ])
         const getForegroundProcess = vi.mocked(window.api.pty.getForegroundProcess)
         getForegroundProcess.mockResolvedValue('codex')
         const pane = createPane(1)
@@ -235,19 +247,24 @@ export function registerPtyConnectionHookCompletionSideEffectsTests(): void {
         getForegroundProcess.mockResolvedValue('pwsh.exe')
         await vi.advanceTimersByTimeAsync(3_000)
         if (hookUpdateBeforeDispatch !== 'none') {
-          mockStoreState.agentStatusByPaneKey[paneKey] = {
-            state: 'working',
-            prompt:
-              hookUpdateBeforeDispatch === 'new-turn'
-                ? 'new turn after the prior process exited'
-                : 'same turn hook detail refresh',
-            updatedAt: Date.now(),
-            stateStartedAt:
-              hookUpdateBeforeDispatch === 'new-turn' ? Date.now() : crashedTurnStartedAt,
-            agentType: 'codex',
-            paneKey,
-            stateHistory: []
-          }
+          mockStoreState.agentStatusByPaneKey = mockStoreState.agentStatusByPaneKey.replace([
+            [
+              paneKey,
+              {
+                state: 'working',
+                prompt:
+                  hookUpdateBeforeDispatch === 'new-turn'
+                    ? 'new turn after the prior process exited'
+                    : 'same turn hook detail refresh',
+                updatedAt: Date.now(),
+                stateStartedAt:
+                  hookUpdateBeforeDispatch === 'new-turn' ? Date.now() : crashedTurnStartedAt,
+                agentType: 'codex',
+                paneKey,
+                stateHistory: []
+              }
+            ]
+          ])
           notifyStoreSubscribers()
         }
         await vi.advanceTimersByTimeAsync(AGENT_TASK_COMPLETE_NOTIFICATION_MAX_WAIT_MS)
@@ -282,8 +299,9 @@ export function registerPtyConnectionHookCompletionSideEffectsTests(): void {
 
     it('drops an exited agent completion when a replacement agent hook row is active', async () => {
       const { connectPanePty } = await import('../connect-pane-pty')
-      const agentTitleMocks5 =
-        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+      const agentTitleMocks5 = await vi.importMock<PtyConnectionAgentTitleMocks>(
+        '@/lib/agent-status/aggregation/worktree-agent-status'
+      )
       const transport = createMockTransport('pty-replaced-codex')
       transportFactoryQueue.push(transport)
       vi.useFakeTimers()
@@ -309,15 +327,20 @@ export function registerPtyConnectionHookCompletionSideEffectsTests(): void {
 
       titleHandler('Codex working', 'Codex working')
       await vi.advanceTimersByTimeAsync(2_500)
-      mockStoreState.agentStatusByPaneKey[paneKey] = {
-        state: 'working',
-        prompt: 'replacement agent turn',
-        updatedAt: Date.now(),
-        stateStartedAt: Date.now(),
-        agentType: 'claude',
-        paneKey,
-        stateHistory: []
-      }
+      mockStoreState.agentStatusByPaneKey = mockStoreState.agentStatusByPaneKey.replace([
+        [
+          paneKey,
+          {
+            state: 'working',
+            prompt: 'replacement agent turn',
+            updatedAt: Date.now(),
+            stateStartedAt: Date.now(),
+            agentType: 'claude',
+            paneKey,
+            stateHistory: []
+          }
+        ]
+      ])
       getForegroundProcess.mockResolvedValue('claude')
       await vi.advanceTimersByTimeAsync(1_000)
       await vi.advanceTimersByTimeAsync(AGENT_TASK_COMPLETE_NOTIFICATION_MAX_WAIT_MS)
@@ -330,15 +353,20 @@ export function registerPtyConnectionHookCompletionSideEffectsTests(): void {
         expect.any(Function)
       )
 
-      mockStoreState.agentStatusByPaneKey[paneKey] = {
-        state: 'done',
-        prompt: 'replacement agent turn',
-        updatedAt: Date.now(),
-        stateStartedAt: Date.now(),
-        agentType: 'claude',
-        paneKey,
-        stateHistory: []
-      }
+      mockStoreState.agentStatusByPaneKey = mockStoreState.agentStatusByPaneKey.replace([
+        [
+          paneKey,
+          {
+            state: 'done',
+            prompt: 'replacement agent turn',
+            updatedAt: Date.now(),
+            stateStartedAt: Date.now(),
+            agentType: 'claude',
+            paneKey,
+            stateHistory: []
+          }
+        ]
+      ])
       titleHandler('Claude done', 'Claude done')
       await vi.advanceTimersByTimeAsync(AGENT_TASK_COMPLETE_NOTIFICATION_MAX_WAIT_MS)
 
@@ -355,8 +383,9 @@ export function registerPtyConnectionHookCompletionSideEffectsTests(): void {
       const { dispatchAgentHookTerminalLifecycle } =
         await import('../../agent-completion/agent-hook-terminal-lifecycle')
       const { connectPanePty } = await import('../connect-pane-pty')
-      const agentTitleMocks7 =
-        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+      const agentTitleMocks7 = await vi.importMock<PtyConnectionAgentTitleMocks>(
+        '@/lib/agent-status/aggregation/worktree-agent-status'
+      )
       const transport = createMockTransport('pty-replaced-codex')
       transportFactoryQueue.push(transport)
       vi.useFakeTimers()
@@ -385,15 +414,20 @@ export function registerPtyConnectionHookCompletionSideEffectsTests(): void {
 
       titleHandler('Codex working', 'Codex working')
       await vi.advanceTimersByTimeAsync(2_500)
-      mockStoreState.agentStatusByPaneKey[paneKey] = {
-        state: 'working',
-        prompt: 'replacement agent turn',
-        updatedAt: Date.now(),
-        stateStartedAt: Date.now(),
-        agentType: 'claude',
-        paneKey,
-        stateHistory: []
-      }
+      mockStoreState.agentStatusByPaneKey = mockStoreState.agentStatusByPaneKey.replace([
+        [
+          paneKey,
+          {
+            state: 'working',
+            prompt: 'replacement agent turn',
+            updatedAt: Date.now(),
+            stateStartedAt: Date.now(),
+            agentType: 'claude',
+            paneKey,
+            stateHistory: []
+          }
+        ]
+      ])
       idleHandler('Claude done')
       getForegroundProcess.mockResolvedValue('claude')
       await vi.advanceTimersByTimeAsync(1_000)

@@ -18,7 +18,11 @@ import type {
   SFTPWrapper,
   ShellOptions
 } from 'ssh2'
-import type { SshTarget, SshConnectionState, SshConnectionStatus } from '../../../shared/ssh-types'
+import type {
+  SshTarget,
+  SshConnectionState,
+  SshConnectionStatus
+} from '../../../shared/remote-runtime/ssh/ssh-types'
 import {
   getOrcaControlSocketPath,
   isOpenSshConfigBackedTarget,
@@ -56,7 +60,7 @@ import {
   requiresSystemSshForSecurityKey,
   shouldUseSystemSshTransport
 } from '../system-transport/ssh-transport-selection'
-import type { FileUploadSession } from '../../providers/filesystem-provider-contract'
+import type { FileUploadSession } from '../../providers/filesystem/provider-contract'
 import {
   openSshExecChannel,
   openSshSftpChannel,

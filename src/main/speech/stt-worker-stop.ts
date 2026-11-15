@@ -50,6 +50,12 @@ export function waitForSttWorkerStop(args: {
       if (message.type === 'stopped' && message.streamId === args.streamId) {
         receivedStopped = true
         finish('stopped')
+        return
+      }
+      // Sessions share one queue, so any answer means the engine is still working toward this stream, not hung.
+      // A cancel keeps its short deadline.
+      if (!args.discard) {
+        timeout?.refresh()
       }
     }
     const onError = (error: Error): void => finish('error', error)

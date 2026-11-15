@@ -1,6 +1,6 @@
 import type Database from '../../../sqlite/sync-database'
 import { DISPATCH_PANE_KEY_MATCH_SUFFIX_SQL } from './pane-key-match'
-import type { OrcaSessionId } from '../../../../shared/orca-session-address'
+import type { OrcaSessionId } from '../../../../shared/agent-session/identity/orca-session-address'
 
 /** Centralize live-worker inserts to enforce depth; callers retain transactions, receipts and companion writes. */
 

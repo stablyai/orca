@@ -1,4 +1,4 @@
-import { addWslEnvKeys } from '../../wsl-env'
+import { addWslEnvKeys } from '../../shell/wsl/wsl-env'
 
 const GIT_CONFIG_WSLENV_KEY_RE = /^GIT_CONFIG_(?:COUNT|KEY_\d+|VALUE_\d+)$/
 const GIT_CONFIG_INDEXED_KEY_RE = /^GIT_CONFIG_(?:KEY|VALUE)_(\d+)$/

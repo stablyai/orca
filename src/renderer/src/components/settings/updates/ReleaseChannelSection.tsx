@@ -11,10 +11,10 @@ import {
 } from '../form-controls/SettingsFormControls'
 import { Badge } from '../../ui/badge'
 import { useTranslate } from '@/i18n/use-translate'
-import { updaterMessageText } from '@/lib/updater-message-copy'
-import { errorMessage } from '../../../../../shared/error-message'
-import type { UpdaterCodedMessage } from '../../../../../shared/updater-failure-copy'
-import { getShortcutPlatform } from '@/lib/shortcut-platform'
+import { updaterMessageText } from '@/app-shell/updates/updater-message-copy'
+import { errorMessage } from '../../../../../shared/errors/error-message'
+import type { UpdaterCodedMessage } from '../../../../../shared/updater/updater-failure-copy'
+import { getShortcutPlatform } from '@/lib/keyboard/shortcut-platform'
 import {
   DEV_CHANNEL_PLATFORM_LABEL,
   RELEASE_CHANNELS,
@@ -26,7 +26,7 @@ import {
   type DedicatedRepoChannel,
   type ReleaseBuild,
   type ReleaseChannel
-} from '../../../../../shared/release-channel'
+} from '../../../../../shared/updater/release-channel'
 
 const CHANNEL_DESCRIPTIONS: Record<ReleaseChannel, string> = {
   stable: 'Shipped releases. What everyone else is running.',

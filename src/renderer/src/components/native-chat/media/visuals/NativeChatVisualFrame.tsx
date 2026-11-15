@@ -13,7 +13,7 @@ import type { NativeChatVisualDocument } from './native-chat-visual-read-client'
 import { createNativeChatVisualHeightGovernor } from '../../../../../../shared/native-chat/native-chat-visual-height-governor'
 import type { ReaderGesture } from '../../viewport/scroll/native-chat-autoscroll'
 import { useNativeChatVisualTheme } from './use-native-chat-visual-theme'
-import { useWebviewDragPassthroughActive } from '../../../browser-pane/host-guest/use-webview-drag-passthrough-active'
+import { useWebviewDragPassthroughActive } from '../../../browser-pane/host-guest/drag/use-webview-drag-passthrough-active'
 
 /** Height reserved before a visual reports its own, so the reply below does not jump far. */
 export const NATIVE_CHAT_VISUAL_RESERVED_HEIGHT = 160

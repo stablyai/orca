@@ -1,14 +1,14 @@
 import type { Store } from '../../persistence/loading-store/store'
 import type { GlobalSettings } from '../../../shared/global-settings-types'
-import type { Project } from '../../../shared/project-types'
-import type { Repo } from '../../../shared/repo-types'
+import type { Project } from '../../../shared/project/project-types'
+import type { Repo } from '../../../shared/repository/repo-types'
 import type { FolderWorkspace } from '../../../shared/folder-workspaces/folder-workspace-types'
-import type { ProjectGroup } from '../../../shared/project-group-types'
+import type { ProjectGroup } from '../../../shared/project/groups/project-group-types'
 import {
   findLocalFolderWorkspaceRuntimeRepo,
   resolveQualifiedFolderWorkspace
 } from '../../../shared/folder-workspaces/folder-workspace-execution-host'
-import { parseWorkspaceKey } from '../../../shared/workspace-scope'
+import { parseWorkspaceKey } from '../../../shared/workspace/identity/workspace-scope'
 import type { TerminalWorkspaceLaunchScope } from '../../runtime/orchestration/terminal-authority/structured-sessions/runtime-legacy-worker-terminal-recovery-types'
 import { getWorkspaceRuntimePreference } from '../../../shared/execution-host/project-runtime-preference'
 import {
@@ -21,8 +21,8 @@ import {
 } from '../../wsl/discovery/wsl-availability'
 import { getCachedWslDistros, hasCachedWslDistros } from '../../wsl/discovery/distro-catalog'
 import { getRepoIdFromWorktreeId } from '../../../shared/worktree/id'
-import { projectMatchesRepo } from '../../../shared/project-repo-match'
-import type { LocalWindowsTerminalRuntimeOptions } from '../../../shared/local-windows-terminal-runtime'
+import { projectMatchesRepo } from '../../../shared/project/project-repo-match'
+import type { LocalWindowsTerminalRuntimeOptions } from '../../../shared/shell/launch/local-windows-terminal-runtime'
 import { resolveLocalPtyOptions, type LocalPtySettings } from './local-project-runtime-pty-options'
 
 import {

@@ -16,7 +16,6 @@ export type FocusedAgentRowHighlightState = Pick<
   | 'tabsByWorktree'
   | 'terminalLayoutsByTabId'
   | 'agentStatusByPaneKey'
-  | 'retainedAgentsByPaneKey'
   | 'migrationUnsupportedByPtyId'
 >
 
@@ -78,11 +77,7 @@ export function getFocusedAgentPaneKeyForWorktree(
   }
 
   // Stale agents remain visible, so their focused rows must still highlight.
-  if (state.agentStatusByPaneKey[activePaneKey]) {
-    return activePaneKey
-  }
-
-  if (state.retainedAgentsByPaneKey[activePaneKey]?.worktreeId === worktreeId) {
+  if (state.agentStatusByPaneKey.get(activePaneKey)) {
     return activePaneKey
   }
 

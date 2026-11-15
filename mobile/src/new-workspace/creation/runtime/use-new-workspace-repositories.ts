@@ -1,0 +1,199 @@
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
+import {
+  getRepoExecutionHostId,
+  type ExecutionHostId
+} from '../../../../../src/shared/execution-host'
+import type { RpcClient } from '../../../transport/rpc/rpc-client-contract'
+import { cachedHostRepos } from '../../../host-screen/catalog/host-list-queries'
+import { listHostRepos } from '../../../worktree/repositories/server-repos'
+import { useServerRepos } from '../../../worktree/repositories/use-server-repos'
+import { useLastVisitedWorktreeRepoId } from '../../../worktree/navigation/use-last-visited-worktree-repo'
+import { refreshMobileNewWorkspaceDialogSelectedRepo } from '../../../worktree/repositories/new-workspace-dialog-repo-selection'
+import {
+  getNewWorkspaceDialogEligibleRepos,
+  resolveNewWorkspaceDialogRepoId
+} from '../../../../../src/shared/new-workspace-dialog-repo'
+import type { MobileWorkspaceRepo } from '../forms/new-worktree-modal-types'
+
+const NO_SERVER_CLIENTS: ReadonlyMap<ExecutionHostId, RpcClient> = new Map()
+
+function isServerExecutionHostId(host: string | null | undefined): host is ExecutionHostId {
+  return Boolean(host && host.startsWith('runtime:'))
+}
+
+/**
+ * The desktop's repos, then each reachable server's as it answers: a slow server never holds back
+ * the desktop's own list.
+ */
+export function useNewWorkspaceRepositories(args: {
+  client: RpcClient | null
+  serverClients?: ReadonlyMap<ExecutionHostId, RpcClient>
+  hostId?: string
+  visible: boolean
+  /** Picked once it is listed, in place of the last visited repo. */
+  initialRepo?: { id: string; executionHostId: ExecutionHostId }
+}): {
+  repos: MobileWorkspaceRepo[]
+  allRepos: MobileWorkspaceRepo[]
+  selectedRepo: MobileWorkspaceRepo | null
+  setSelectedRepo: (repo: MobileWorkspaceRepo | null) => void
+  upsertRepo: (repo: MobileWorkspaceRepo) => void
+  loading: boolean
+  /** Set when the project list failed to load and nothing is cached to show. */
+  loadError: string | null
+  retryLoad: () => void
+} {
+  const { client, serverClients = NO_SERVER_CLIENTS, hostId, visible, initialRepo } = args
+  const queryClient = useQueryClient()
+  // The host list's repos, so the form opens with them while repo.list answers.
+  const [initialRepos] = useState(() => cachedHostRepos<MobileWorkspaceRepo>(queryClient, hostId))
+  const [desktopRepos, setDesktopRepos] = useState<MobileWorkspaceRepo[]>(initialRepos ?? [])
+  const addedReposRef = useRef<Map<string, MobileWorkspaceRepo>>(new Map())
+  const [addedServerRepos, setAddedServerRepos] = useState<
+    ReadonlyMap<ExecutionHostId, MobileWorkspaceRepo[]>
+  >(() => new Map())
+  const serverRepos = useServerRepos<MobileWorkspaceRepo>(serverClients, visible)
+  const [pickedRepo, setSelectedRepo] = useState<MobileWorkspaceRepo | null>(null)
+  const [loading, setLoading] = useState(initialRepos == null)
+  // Null until a read fails; an empty string is a refusal with no reason to show.
+  const [loadError, setLoadError] = useState<string | null>(null)
+  const [loadAttempt, setLoadAttempt] = useState(0)
+  const lastVisitedRepo = useLastVisitedWorktreeRepoId(hostId, visible)
+  // Why: trust checks count same-id rows on every host, as desktop does; only the picker filters.
+  const allRepos = useMemo(() => {
+    const allServerHosts = new Set([...serverRepos.keys(), ...addedServerRepos.keys()])
+    const combinedServerRepos: MobileWorkspaceRepo[] = []
+    for (const host of allServerHosts) {
+      const base = serverRepos.get(host) ?? []
+      const added = addedServerRepos.get(host) ?? []
+      const addedIds = new Set(added.map((r) => r.id))
+      combinedServerRepos.push(...added, ...base.filter((r) => !addedIds.has(r.id)))
+    }
+    return combinedServerRepos.length === 0
+      ? desktopRepos
+      : [...desktopRepos, ...combinedServerRepos]
+  }, [desktopRepos, serverRepos, addedServerRepos])
+  const initialRepoId = initialRepo?.id
+  const initialRepoHost = initialRepo?.executionHostId
+  // Opened for one host's folder: every picker offers only that host, whose store holds the folder.
+  const repos = useMemo(() => {
+    const eligible = getNewWorkspaceDialogEligibleRepos(allRepos)
+    return initialRepoHost
+      ? eligible.filter((repo) => getRepoExecutionHostId(repo) === initialRepoHost)
+      : eligible
+  }, [allRepos, initialRepoHost])
+  // Derive the pick so it follows updated listings and disappears when its host stops listing it.
+  const selectedRepo = useMemo(
+    () => refreshMobileNewWorkspaceDialogSelectedRepo(repos, pickedRepo),
+    [pickedRepo, repos]
+  )
+
+  useEffect(() => {
+    if (!visible || selectedRepo || !initialRepoId) {
+      return
+    }
+    // Waits for its host's listing: a same-id repo on another host is a different repo.
+    const initial = repos.find(
+      (repo) => repo.id === initialRepoId && getRepoExecutionHostId(repo) === initialRepoHost
+    )
+    if (initial) {
+      setSelectedRepo(initial)
+    }
+  }, [initialRepoHost, initialRepoId, repos, selectedRepo, visible])
+
+  useEffect(() => {
+    if (
+      !visible ||
+      initialRepoId ||
+      !lastVisitedRepo.loaded ||
+      selectedRepo ||
+      repos.length === 0
+    ) {
+      return
+    }
+    const preferredRepoId = resolveNewWorkspaceDialogRepoId({
+      eligibleRepos: repos,
+      activeRepoId: lastVisitedRepo.repoId
+    })
+    const preferredRepo = repos.find((repo) => repo.id === preferredRepoId) ?? null
+    if (preferredRepo) {
+      setSelectedRepo(preferredRepo)
+    }
+  }, [initialRepoId, lastVisitedRepo.loaded, lastVisitedRepo.repoId, repos, selectedRepo, visible])
+
+  useEffect(() => {
+    if (!visible || !client) {
+      return
+    }
+    let stale = false
+    setLoading(true)
+    setLoadError(null)
+    void listHostRepos<MobileWorkspaceRepo>(client)
+      .then((listed) => {
+        if (stale) {
+          return
+        }
+        if (!listed) {
+          setLoadError('')
+          return
+        }
+        setDesktopRepos((previous) => {
+          const listedIds = new Set(listed.map((r) => r.id))
+          const addedPreserved = previous.filter(
+            (r) => !listedIds.has(r.id) && addedReposRef.current.has(r.id)
+          )
+          return [...addedPreserved, ...listed]
+        })
+      })
+      .catch((err: unknown) => {
+        if (!stale) {
+          setLoadError(err instanceof Error ? err.message : '')
+        }
+      })
+      .finally(() => {
+        if (!stale) {
+          setLoading(false)
+        }
+      })
+    return () => {
+      stale = true
+    }
+  }, [visible, client, hostId, loadAttempt])
+
+  function upsertRepo(repo: MobileWorkspaceRepo): void {
+    addedReposRef.current.set(repo.id, repo)
+    const host = repo.executionHostId
+    if (isServerExecutionHostId(host)) {
+      setAddedServerRepos((previous) => {
+        const currentList = previous.get(host) ?? []
+        const existingIndex = currentList.findIndex((candidate) => candidate.id === repo.id)
+        const nextList =
+          existingIndex !== -1
+            ? currentList.map((candidate, index) => (index === existingIndex ? repo : candidate))
+            : [repo, ...currentList]
+        return new Map(previous).set(host, nextList)
+      })
+    } else {
+      setDesktopRepos((previous) => {
+        const existingIndex = previous.findIndex((candidate) => candidate.id === repo.id)
+        return existingIndex !== -1
+          ? previous.map((candidate, index) => (index === existingIndex ? repo : candidate))
+          : [repo, ...previous]
+      })
+    }
+    setSelectedRepo(repo)
+  }
+
+  return {
+    repos,
+    allRepos,
+    selectedRepo,
+    setSelectedRepo,
+    upsertRepo,
+    loading: loading && repos.length === 0,
+    // Cached rows stay usable, so a failed refresh only matters when there is nothing to pick.
+    loadError: repos.length === 0 ? loadError : null,
+    retryLoad: () => setLoadAttempt((attempt) => attempt + 1)
+  }
+}

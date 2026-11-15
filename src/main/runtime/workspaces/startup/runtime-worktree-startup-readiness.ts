@@ -1,11 +1,11 @@
 import type { TerminalReadinessCreation } from '../../terminal/wait/launched-agent-composer-readiness'
 import { isShellProcess } from '../../../../shared/agent-status/process/shell-process-detection'
-import { isExpectedAgentProcess } from '../../../../shared/agent-status/process/agent-process-recognition'
+import { isAgentForegroundProcess } from '../../../../shared/agent-status/process/agent-process-recognition'
 import {
   createDraftPasteReadyScanner,
   resolvePasteReadySignal
-} from '../../../../shared/draft-paste-ready-scanner'
-import { resolveDraftPasteReadyTimeoutMs } from '../../../../shared/draft-paste-ready-timeout'
+} from '../../../../shared/agent-launch/startup/readiness/draft-paste-ready-scanner'
+import { resolveDraftPasteReadyTimeoutMs } from '../../../../shared/agent-launch/startup/readiness/draft-paste-ready-timeout'
 import { TUI_AGENT_CONFIG } from '../../../../shared/agent-launch/catalog/tui-agent-config'
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import type { TerminalInputKind } from '../../../../shared/terminal/input/terminal-input-kind'
@@ -70,8 +70,7 @@ export async function deliverStartupFollowupPrompt(
     const ptyId = host.getPtyId(handle)
     // Where no read proves the agent in front (Windows), its process must be seen first: a lone shell's prompt also reads as ready.
     if (ptyId && runtime.launchedAgentHostProvesAgent?.(ptyId) === false) {
-      const expected = TUI_AGENT_CONFIG[agent].expectedProcess
-      if (!(await waitForWorktreeStartupFollowup(host, handle, expected, signal))) {
+      if (!(await waitForWorktreeStartupFollowup(host, handle, agent, signal))) {
         console.warn(
           '[agent-startup] agent did not come to the front; its prompt was not delivered'
         )
@@ -102,7 +101,7 @@ export async function deliverStartupFollowupPrompt(
 export async function waitForWorktreeStartupFollowup(
   host: WorktreeStartupReadinessHost,
   handle: string,
-  expectedProcess: string,
+  agent: TuiAgent,
   signal?: AbortSignal
 ): Promise<string | null> {
   const ptyId = host.getPtyId(handle)
@@ -118,7 +117,7 @@ export async function waitForWorktreeStartupFollowup(
     }
     try {
       const foregroundProcess = await host.getForegroundProcess(ptyId)
-      if (isExpectedAgentProcess(foregroundProcess, expectedProcess)) {
+      if (isAgentForegroundProcess(foregroundProcess, agent)) {
         return ptyId
       }
       if (attempt >= 4 && !isShellProcess(foregroundProcess ?? '')) {

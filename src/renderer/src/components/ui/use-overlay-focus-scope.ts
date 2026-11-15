@@ -9,7 +9,7 @@ import {
   type RefObject
 } from 'react'
 import { useComposedRefs } from 'radix-ui/internal'
-import { registerOverlayFocusOwner } from '@/lib/overlay-focus-ownership'
+import { registerOverlayFocusOwner } from '@/lib/overlay-interaction/overlay-focus-ownership'
 
 export const OverlayFocusScope = createContext<RefObject<HTMLDivElement | null> | null>(null)
 

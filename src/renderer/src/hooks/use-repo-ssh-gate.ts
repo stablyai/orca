@@ -1,8 +1,11 @@
 import { useMemo } from 'react'
-import { useAppStore } from '@/store'
-import { getRepoSshConnection, selectRepoSshGateInput } from '@/lib/repo-ssh-connection'
+import { useAppStore } from '@/store/index'
+import {
+  getRepoSshConnection,
+  selectRepoSshGateInput
+} from '@/lib/workspace/catalog/repo-ssh-connection'
 import type { AppState } from '@/store/types'
-import type { Repo } from '../../../shared/repo-types'
+import type { Repo } from '../../../shared/repository/repo-types'
 
 type Gate = ReturnType<typeof selectRepoSshGateInput>
 const NO_GATE: Gate = { connectionId: null, status: null }

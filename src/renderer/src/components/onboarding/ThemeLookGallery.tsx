@@ -77,9 +77,24 @@ export function ThemeSlotControl({
       onChange={onChange}
       equalWidth
       size="sm"
+      overlayTooltip
       options={[
-        { value: 'dark', label: label('dark') },
-        { value: 'light', label: label('light') }
+        {
+          value: 'dark',
+          label: label('dark'),
+          tooltip: t(
+            'components.onboarding.theme.looks.showsWhenDark',
+            'Shows when your system is dark'
+          )
+        },
+        {
+          value: 'light',
+          label: label('light'),
+          tooltip: t(
+            'components.onboarding.theme.looks.showsWhenLight',
+            'Shows when your system is light'
+          )
+        }
       ]}
     />
   )

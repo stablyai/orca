@@ -1,6 +1,6 @@
 import type { Editor } from '@tiptap/react'
 import type { EditorView } from '@tiptap/pm/view'
-import { getOverlayFocusOwners } from '@/lib/overlay-focus-ownership'
+import { getOverlayFocusOwners } from '@/lib/overlay-interaction/overlay-focus-ownership'
 
 /** The editor's view once mounted; null before mount or after destroy, when tiptap's view throws. */
 export function mountedEditorView(editor: Editor): EditorView | null {

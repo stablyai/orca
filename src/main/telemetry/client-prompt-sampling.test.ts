@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { EventProps } from '../../shared/telemetry-events'
+import type { EventProps } from '../../shared/telemetry/telemetry-event-classification'
 import { track } from './client'
 import {
   BASE_COMMON,
