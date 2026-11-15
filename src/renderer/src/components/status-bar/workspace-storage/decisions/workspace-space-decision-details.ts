@@ -2,7 +2,7 @@ import type { AgentStatusEntry } from '../../../../../../shared/agent-status/con
 import type { MigrationUnsupportedPtyEntry } from '../../../../../../shared/agent-status/contracts/agent-status-ipc-payload'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
 import type { HostedReviewProvider } from '../../../../../../shared/source-control/hosted-review/hosted-review-contracts'
-import type { Repo } from '../../../../../../shared/repo-types'
+import type { Repo } from '../../../../../../shared/repository/repo-types'
 import type { TerminalTab } from '../../../../../../shared/workspace-layout/terminal-tab-types'
 import type { Worktree } from '../../../../../../shared/worktree/types'
 import { isGitHubPRSuppressed } from '../../../../../../shared/worktree/hosted-review/github-pr-suppression'
@@ -18,6 +18,7 @@ import { getWorkspaceSpaceBranchLabel } from '../workspace-space-format'
 import { formatHostedReviewLabel } from '../../resources/hosted-review-label'
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
+import { getWorktreeGitHubIssueRepository } from '../../../../../../shared/worktree/github-issue-repository'
 
 export type WorkspaceDecisionDetails = {
   isActive: boolean
@@ -170,7 +171,7 @@ export function getWorkspaceDecisionDetails(
         : null
   const linkedIssue = workspaceRecord?.linkedIssue ?? null
   const issueCacheKey =
-    linkedIssue && repo
+    linkedIssue && repo && workspaceRecord
       ? getIssueCacheKey(
           repo.path,
           repo.id,
@@ -178,7 +179,8 @@ export function getWorkspaceDecisionDetails(
           inputs.settings,
           repo.connectionId,
           ownerExecutionHostId,
-          true
+          true,
+          getWorktreeGitHubIssueRepository(workspaceRecord)
         )
       : null
   const issue = issueCacheKey ? inputs.issueCache[issueCacheKey]?.data : null

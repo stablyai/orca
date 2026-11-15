@@ -20632,7 +20632,7 @@
       "queuedMessages": {
         "steer": "Сейчас",
         "send": "Отправить",
-        "steerHint": "Отправить сообщение, не прерывая работу модели",
+        "steerHint": "Отправить сейчас, пока агент продолжает работу",
         "sendHint": "Отправить это сообщение сейчас",
         "delete": "Удалить",
         "moreActions": "Другие действия",
@@ -21274,7 +21274,8 @@
       "TerminalContextMenu": {
         "copySessionId": "Копировать ID сессии",
         "copySessionIdSuccess": "ID сессии скопирован",
-        "copySessionIdError": "Не удалось скопировать ID сессии"
+        "copySessionIdError": "Не удалось скопировать ID сессии",
+        "copySessionIdUnavailable": "Нет ID сессии для копирования"
       },
       "hostFile": {
         "updateHostForOutsideFiles": "Обновите Orca на {{value0}}, чтобы открывать файлы вне рабочих пространств"
@@ -23338,6 +23339,7 @@
       "chatFind": "Найти в чате",
       "editorFind": "Найти в редакторе",
       "editorReplace": "Заменить в редакторе",
+      "editorToggleChangesView": "Включить или выключить просмотр изменений",
       "fileExplorerCopyPath": "Скопировать путь к файлу",
       "fileExplorerCopyRelativePath": "Скопировать относительный путь к файлу",
       "fileExplorerDelete": "Удалить файл",
@@ -23368,6 +23370,7 @@
       "tabMoveRight": "Переместить активную вкладку вправо",
       "terminalClear": "Очистить активную панель",
       "terminalClosePane": "Закрыть активную панель",
+      "terminalCopySessionId": "Копировать ID сессии",
       "terminalCopySelection": "Скопировать выделенный текст терминала",
       "terminalEqualizePaneSizes": "Выровнять размеры панелей",
       "terminalExpandPane": "Развернуть / свернуть панель",

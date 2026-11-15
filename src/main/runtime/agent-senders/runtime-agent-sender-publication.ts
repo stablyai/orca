@@ -155,3 +155,7 @@ export class AgentSenderPublisher {
     return { principals, ...(peerFingerprint ? { peerFingerprint } : {}) }
   }
 }
+
+export function sameAgentSenderKey(key: unknown[], other: unknown[]): boolean {
+  return key.length === other.length && key.every((value, i) => value === other[i])
+}

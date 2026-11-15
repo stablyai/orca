@@ -143,7 +143,7 @@ export async function createTranscriptPane(
     title: 'Terminal'
   })
   runtime.attachWindow(1)
-  runtime.syncWindowGraph(
+  await runtime.syncWindowGraph(
     1,
     ORCA_LAYOUT_OWNER_IS_MAIN
       ? {

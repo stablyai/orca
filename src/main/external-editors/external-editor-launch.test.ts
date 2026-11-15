@@ -4,7 +4,7 @@ const { resolveCliCommandMock } = vi.hoisted(() => ({
   resolveCliCommandMock: vi.fn((command: string) => command)
 }))
 
-vi.mock('../../shared/node-cli-command-resolution', () => ({
+vi.mock('../../shared/shell/command-resolution/node-cli-command-resolution', () => ({
   resolveCliCommand: resolveCliCommandMock
 }))
 

@@ -1,5 +1,5 @@
 import { app } from 'electron'
-import type { BrowserUserAgentMode } from '../../../shared/browser-user-agent-mode'
+import type { BrowserUserAgentMode } from '../../../shared/browser/identity/browser-user-agent-mode'
 
 export type BrowserProcessUserAgentIdentity = Readonly<{
   mode: BrowserUserAgentMode

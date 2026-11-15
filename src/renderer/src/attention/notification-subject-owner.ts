@@ -5,7 +5,7 @@ import {
 } from '../../../shared/execution-host'
 import type { NotificationWorkspaceOwner } from '../../../shared/notification-source'
 import { parsePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
-import { parseWorkspaceKey } from '../../../shared/workspace-scope'
+import { parseWorkspaceKey } from '../../../shared/workspace/identity/workspace-scope'
 import { getPtyExecutionHost } from '../../../shared/terminal/pty/lifecycle/terminal-execution-host'
 import type { Tab } from '../../../shared/tab-types'
 import type { AppState } from '@/store/types'

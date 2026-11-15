@@ -1,5 +1,5 @@
 import { useAppStore } from '@/store/index'
-import { resolveStatusBarUsageTemplate } from '../../../../../shared/status-bar-usage-format'
+import { resolveStatusBarUsageTemplate } from '../../../../../shared/status-bar/status-bar-usage-format'
 import { buildUsageFormatValues, renderUsageFormatTemplate } from './usage-format-template'
 import { AlertTriangle } from 'lucide-react'
 import React from 'react'
@@ -7,18 +7,18 @@ import type {
   OwnerNotSetUpPlaceholder,
   ProviderRateLimits,
   RateLimitWindow
-} from '../../../../../shared/rate-limit-types'
+} from '../../../../../shared/agent-usage/rate-limits/rate-limit-types'
 import {
   type UsagePercentageDisplay,
   clampUsedPercent
-} from '../../../../../shared/usage-percentage-display'
-import type { StatusBarUsageMode } from '../../../../../shared/status-bar-usage-mode'
-import { formatCurrencyAmount } from '../../../../../shared/currency-format'
-import { formatCreditCount } from '../../../../../shared/credit-count-format'
+} from '../../../../../shared/agent-usage/display/usage-percentage-display'
+import type { StatusBarUsageMode } from '../../../../../shared/status-bar/status-bar-usage-mode'
+import { formatCurrencyAmount } from '../../../../../shared/agent-usage/display/currency-format'
+import { formatCreditCount } from '../../../../../shared/agent-usage/display/credit-count-format'
 import { ProviderIcon } from './provider-usage-panel'
 import { USAGE_URGENT_PERCENT, USAGE_WARNING_PERCENT, usageTextClass } from './usage-health-tone'
 import { UsageBar } from './usage-meter'
-import { getProviderDisplayName } from '../../../../../shared/usage-provider-windows'
+import { getProviderDisplayName } from '../../../../../shared/agent-usage/display/usage-provider-windows'
 import { getOwnerNotSetUpLabelParts } from './owner-not-set-up-copy'
 import {
   getProviderUsageErrorMessage,

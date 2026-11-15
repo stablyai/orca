@@ -43,7 +43,7 @@ function folderWorkspaceStore() {
   }) as never
 }
 
-function fixture(ptyId = PTY, connectionId: string | null = null, worktreeId = WORKSPACE) {
+async function fixture(ptyId = PTY, connectionId: string | null = null, worktreeId = WORKSPACE) {
   const runtime = new OrcaRuntimeService(folderWorkspaceStore())
   runtime.attachWindow(1)
   const handle = runtime.preAllocateHandleForPty(ptyId)
@@ -52,7 +52,7 @@ function fixture(ptyId = PTY, connectionId: string | null = null, worktreeId = W
     leafId: LEAF,
     incarnationId: 'file-incarnation'
   })
-  runtime.syncWindowGraph(1, {
+  await runtime.syncWindowGraph(1, {
     tabs: [{ tabId: 'file-tab', worktreeId, title: '', activeLeafId: LEAF, layout: null }],
     leaves: [{ tabId: 'file-tab', worktreeId, leafId: LEAF, paneRuntimeId: 1, ptyId }]
   })
@@ -65,7 +65,7 @@ beforeEach(() => {
 
 describe('Kitty file execution-host ownership', () => {
   it('drops a completed read after the PTY incarnation is replaced', async () => {
-    const { runtime, handle } = fixture()
+    const { runtime, handle } = await fixture()
     let release: (result: { base64: string }) => void = () => {
       throw new Error('read did not start')
     }

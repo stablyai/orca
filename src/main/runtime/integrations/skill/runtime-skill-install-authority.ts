@@ -10,7 +10,7 @@ import {
   type ExecutionHostId
 } from '../../../../shared/execution-host'
 import { getRepoIdFromWorktreeId } from '../../../../shared/worktree/id'
-import { parseWorkspaceKey } from '../../../../shared/workspace-scope'
+import { parseWorkspaceKey } from '../../../../shared/workspace/identity/workspace-scope'
 import type { SkillInstallDestinationAuthority } from '../../../skills/install/skill-install-destinations'
 import {
   resolveEnvironmentSkillProviderRoots,

@@ -1,6 +1,6 @@
 import React from 'react'
-import type { RateLimitBucket } from '../../../../../shared/rate-limit-types'
-import type { UsagePercentageDisplay } from '../../../../../shared/usage-percentage-display'
+import type { RateLimitBucket } from '../../../../../shared/agent-usage/rate-limits/rate-limit-types'
+import type { UsagePercentageDisplay } from '../../../../../shared/agent-usage/display/usage-percentage-display'
 import {
   formatPoolGroupLabel,
   formatPoolWindowLabel,

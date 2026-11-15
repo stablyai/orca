@@ -219,21 +219,21 @@ export function registerFilesystemMutationHandlers(store: Store): void {
     'fs:uploadExternalFileToRuntime',
     async (event, args: RuntimeUploadFileStreamRequest): Promise<{ byteLength: number }> => {
       const userDataPath = app.getPath('userData')
-      // Resolve selectors to the environment ID used by manual-disconnect checks.
-      const request = {
-        ...args,
-        environmentId: resolveEnvironment(userDataPath, args.environmentId).id
-      }
-      // Main-owned uploads must abort when the requesting renderer reloads or closes.
       const lifetime = abortWhenRendererGone(event.sender)
+      let request: RuntimeUploadFileStreamRequest | undefined
       try {
+        request = {
+          ...args,
+          environmentId: (await resolveEnvironment(userDataPath, args.environmentId)).id
+        }
+        lifetime.signal.throwIfAborted()
         return await streamExternalFileToRuntime({
           ...request,
           userDataPath,
           signal: lifetime.signal
         })
       } catch (error) {
-        if (lifetime.signal.aborted) {
+        if (lifetime.signal.aborted && request) {
           // The renderer cannot clean up its temp path after it disappears.
           await sweepAbandonedRuntimeUploadTempPath(userDataPath, request)
         }

@@ -34,7 +34,7 @@ import type {
   AgentKind,
   LaunchSource,
   RequestKind
-} from '../../../shared/telemetry-property-schemas'
+} from '../../../shared/telemetry/schemas/telemetry-property-schemas'
 import type { TerminalSideEffectBatch } from '../../../shared/terminal/output/terminal-side-effect-facts'
 import type { TerminalViewAttributes } from '../../../shared/terminal/protocol/queries/terminal-view-attributes'
 import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'

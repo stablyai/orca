@@ -4,7 +4,7 @@ import {
   isCodexHomeAuthReadyForLaunch,
   waitForManagedCodexAuthReady
 } from '../../../codex-accounts/credentials/managed-codex-auth-readiness'
-import type { CodexAccountSelectionTarget } from '../../../../shared/codex-selection-lane'
+import type { CodexAccountSelectionTarget } from '../../../../shared/agent-accounts/codex/codex-selection-lane'
 import {
   forgetCodexPaneAccount,
   getCodexPaneAccount,

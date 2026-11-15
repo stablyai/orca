@@ -5,8 +5,8 @@ import {
   collectDescendantsFromIndex,
   getProcessTableIndex,
   type ProcessIdentityRow
-} from '../../../../shared/process-table-index'
-import { getProcessTableSnapshot } from '../../../../shared/process-table-snapshot-reader'
+} from '../../../../shared/process-observation/tables/process-table-index'
+import { getProcessTableSnapshot } from '../../../../shared/process-observation/tables/process-table-snapshot-reader'
 import { readWindowsProcessTable } from '../../../windows/windows-process-table'
 import { fishArgsSkipConfig } from '../../../pty/shell-startup/fish-xdg-data-dirs-handoff'
 import { getSystemCodexHomePath } from '../homes/codex-home-paths'

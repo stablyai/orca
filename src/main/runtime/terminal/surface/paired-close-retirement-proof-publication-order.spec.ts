@@ -80,11 +80,11 @@ export function registerPairedCloseRetirementProofPublicationOrderTests(): void 
     }
   }
 
-  function createHost(): {
+  async function createHost(): Promise<{
     runtime: OrcaRuntimeService
     handle: string
     retirePersistedSurface: () => Promise<void>
-  } {
+  }> {
     let session = makePersistedSession()
     const runtime = new OrcaRuntimeService(
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This runtime fixture supplies the persistence and graph methods exercised by the test.
@@ -103,7 +103,7 @@ export function registerPairedCloseRetirementProofPublicationOrderTests(): void 
       }) as never
     )
     runtime.attachWindow(1)
-    runtime.syncWindowGraph(1, {
+    await runtime.syncWindowGraph(1, {
       tabs: [
         {
           tabId: 'tab',
@@ -152,8 +152,8 @@ export function registerPairedCloseRetirementProofPublicationOrderTests(): void 
   }
 
   /** What the host renderer publishes once it has retired the tab it was told to close. */
-  function republishWithoutTheSurface(runtime: OrcaRuntimeService): void {
-    runtime.syncWindowGraph(1, {
+  async function republishWithoutTheSurface(runtime: OrcaRuntimeService): Promise<void> {
+    await runtime.syncWindowGraph(1, {
       tabs: [],
       leaves: [],
       mobileSessionTabs: [
@@ -172,10 +172,10 @@ export function registerPairedCloseRetirementProofPublicationOrderTests(): void 
 
   describe('retirement proof publication vs. renderer republication order', () => {
     it('publishes the proof when the exit lands before the renderer drops the surface', async () => {
-      const { runtime, handle } = createHost()
+      const { runtime, handle } = await createHost()
 
       await runtime.onPtyExit('pty-left', 0, 'incarnation-a')
-      republishWithoutTheSurface(runtime)
+      await republishWithoutTheSurface(runtime)
 
       const published = await runtime.listMobileSessionTabs(`id:${WORKTREE_ID}`)
       expect(published.tabs).toEqual([])
@@ -185,10 +185,10 @@ export function registerPairedCloseRetirementProofPublicationOrderTests(): void 
     })
 
     it('publishes the proof when the renderer drops the surface before the exit lands', async () => {
-      const { runtime, handle, retirePersistedSurface } = createHost()
+      const { runtime, handle, retirePersistedSurface } = await createHost()
 
       await retirePersistedSurface()
-      republishWithoutTheSurface(runtime)
+      await republishWithoutTheSurface(runtime)
       await runtime.onPtyExit('pty-left', 0, 'incarnation-a')
 
       const published = await runtime.listMobileSessionTabs(`id:${WORKTREE_ID}`)
@@ -200,7 +200,7 @@ export function registerPairedCloseRetirementProofPublicationOrderTests(): void 
 
     // Assert subscriber frames: a proof stored without publication is invisible to the mirror.
     it('fans the proof out to a paired subscriber, not just into stored state', async () => {
-      const { runtime, handle, retirePersistedSurface } = createHost()
+      const { runtime, handle, retirePersistedSurface } = await createHost()
       const frames: RuntimeMobileSessionTabsResult[] = []
       const unsubscribe = runtime.onMobileSessionTabsChanged(
         (frame) => frames.push(frame),
@@ -209,7 +209,7 @@ export function registerPairedCloseRetirementProofPublicationOrderTests(): void 
 
       try {
         await retirePersistedSurface()
-        republishWithoutTheSurface(runtime)
+        await republishWithoutTheSurface(runtime)
         await runtime.onPtyExit('pty-left', 0, 'incarnation-a')
       } finally {
         unsubscribe()

@@ -6,7 +6,7 @@ import {
   type DashboardCardHostKind,
   type DashboardCardWorkspaceKind
 } from '../../../../../shared/dashboard-snapshot'
-import type { RepoIcon } from '../../../../../shared/repo-icon'
+import type { RepoIcon } from '../../../../../shared/repository/appearance/repo-icon'
 import {
   getWorktreeExecutionHostId,
   parseExecutionHostId,
@@ -16,7 +16,7 @@ import {
 } from '../../../../../shared/execution-host'
 import { folderWorkspaceToWorktree } from '../../../../../shared/folder-workspaces/folder-workspace-worktree'
 import { getHostDisplayLabelOverrides } from '../../../../../shared/execution-host/host-setting-overrides'
-import { isFolderRepo } from '../../../../../shared/repo-kind'
+import { isFolderRepo } from '../../../../../shared/repository/repo-kind'
 import { parseAppSshPtyId } from '../../../../../shared/remote-runtime/ssh/ssh-pty-id'
 import { selectWorktreesByRepo } from '@/store/workspaces/catalog/workspace-record-fields'
 

@@ -1,10 +1,10 @@
 import { StyleSheet, Text, View } from 'react-native'
-import type { BrowserLoadError } from '../../../../src/shared/browser-workspace-types'
+import type { BrowserLoadError } from '../../../../src/shared/browser/workspaces/browser-workspace-types'
 import {
   describeBrowserLoadFailure,
   formatBrowserLoadFailureText,
   isBrowserNetworkLoadFailure
-} from '../../../../src/shared/browser-load-failure'
+} from '../../../../src/shared/browser/navigation/browser-load-failure'
 import { colors, spacing, typography } from '../../theme/mobile-theme'
 import { themedStyleSheet } from '../../theme/themed-styles'
 import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'

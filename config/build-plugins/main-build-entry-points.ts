@@ -5,6 +5,9 @@ import { CLI_MAIN_ENTRY_NAMES } from './cli-main-entry-names'
 /** Main-build Rollup inputs: output file name (without .js) to its source entry. */
 export const MAIN_BUILD_ENTRY_POINTS: Record<string, string> = {
   index: resolve('src/main/index.ts'),
+  'runtime-environment-store-worker-entry': resolve(
+    'src/shared/remote-runtime/host-store/runtime-environment-store-worker-entry.ts'
+  ),
   'backend-entry': resolve('src/main/backend/backend-entry.ts'),
   'browser-extension-native-host-supervisor-entry': resolve(
     'src/main/browser/extensions/native-messaging/browser-extension-native-host-supervisor-entry.ts'

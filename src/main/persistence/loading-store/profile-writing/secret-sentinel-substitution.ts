@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto'
-import { escapeRegex } from '../../../../shared/string-utils'
+import { escapeRegex } from '../../../../shared/text/regex-escaping'
 
 export type SecretSentinelSubstitution = {
   sentinel: string

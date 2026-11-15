@@ -22,7 +22,7 @@ describe('session.tabs on a windowless server (switch on)', () => {
     vi.useFakeTimers()
     try {
       const { runtime } = surfaceRuntime()
-      runtime.syncWindowGraph(HEADLESS_RUNTIME_WINDOW_ID, { tabs: [], leaves: [] })
+      await runtime.syncWindowGraph(HEADLESS_RUNTIME_WINDOW_ID, { tabs: [], leaves: [] })
       await runtime.listMobileSessionTabs(`id:${TEST_WORKTREE_ID}`)
       const seen: RuntimeMobileSessionTabsResult[] = []
       runtime.onMobileSessionTabsChanged((snapshot) => {
@@ -51,7 +51,7 @@ describe('session.tabs on a windowless server (switch on)', () => {
     vi.useFakeTimers()
     try {
       const { runtime } = threeTabSurfaceRuntime()
-      runtime.syncWindowGraph(HEADLESS_RUNTIME_WINDOW_ID, { tabs: [], leaves: [] })
+      await runtime.syncWindowGraph(HEADLESS_RUNTIME_WINDOW_ID, { tabs: [], leaves: [] })
       expect(tabStrip(await runtime.listMobileSessionTabs(`id:${TEST_WORKTREE_ID}`))).toEqual(
         SAVED_STRIP
       )

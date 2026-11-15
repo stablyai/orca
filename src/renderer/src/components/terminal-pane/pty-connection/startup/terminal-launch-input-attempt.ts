@@ -1,7 +1,7 @@
 import {
   createGitBashConsoleCapacityDetector,
   type GitBashConsoleCapacityDetector
-} from '../../../../../../shared/git-bash-console-capacity'
+} from '../../../../../../shared/terminal/pty/lifecycle/git-bash-console-capacity'
 import type { PtyPaneStartup } from './pty-pane-startup'
 import type { ConnectPanePtySession } from '../connect-pane-pty-session'
 

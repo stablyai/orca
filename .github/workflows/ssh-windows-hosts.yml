@@ -23,7 +23,7 @@ on:
       - 'src/wsl-guest/**'
       - 'src/packages/process-host/**'
       - 'pnpm-workspace.yaml'
-      - 'src/shared/node-runtime-pin.ts'
+      - 'src/shared/node-runtime/node-runtime-pin.ts'
       - 'src/shared/remote-runtime/orcad-distribution/orcad-artifacts.ts'
       - 'config/scripts/build-orcad-*.mjs'
       - 'config/scripts/orcad-distribution/prebuilds/build-orcad-*.mjs'
@@ -46,7 +46,8 @@ on:
       - 'config/scripts/windows-process-tree-prepared-addon*.mjs'
       - 'config/scripts/native-build/windows/windows-process-tree-prepared-addon*.mjs'
       - 'config/scripts/native-build/windows/windows-process-tree-gyp-rebuild.mjs'
-      - 'src/shared/windows-breakaway-launch*.ts'
+      - 'src/shared/remote-runtime/orcad-lifecycle/windows-breakaway-launch.ts'
+      - 'src/main/orcad/runtime-launch/windows-breakaway-launcher*.ts'
       - 'src/main/ipc/ssh/ssh-host-server-*.ts'
       # The deploy runs over this SSH transport.
       - 'src/main/ssh/connection/**'

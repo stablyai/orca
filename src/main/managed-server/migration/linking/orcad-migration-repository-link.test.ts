@@ -1,3 +1,4 @@
+import '../../../../shared/remote-runtime/host-store/environment-store-worker-test-fixture'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -11,7 +12,7 @@ import {
   removeManagedOrcadEnvironment
 } from '../../../../shared/remote-runtime/host-store/runtime-environment-managed-orcad-store'
 import * as environments from '../../../../shared/remote-runtime/host-store/runtime-environment-store'
-import type { Repo } from '../../../../shared/repo-types'
+import type { Repo } from '../../../../shared/repository/repo-types'
 import { LOCAL_EXECUTION_HOST_ID, toSshExecutionHostId } from '../../../../shared/execution-host'
 import { hostWorktreeTarget } from '../../../../shared/worktree/host-qualified-identity'
 import type { SshTarget } from '../../../../shared/remote-runtime/ssh/ssh-types'
@@ -108,8 +109,8 @@ beforeEach(() => {
       if (!owner) {
         throw new Error('deploy without a fence')
       }
-      if (!environments.listEnvironments(path).some((entry) => entry.id === owner)) {
-        addManagedOrcadEnvironment(path, {
+      if (!(await environments.listEnvironments(path)).some((entry) => entry.id === owner)) {
+        await addManagedOrcadEnvironment(path, {
           id: owner,
           name: args.name,
           pairingCode: encodePairingOffer({
@@ -168,12 +169,12 @@ const serverRepoIds = () =>
 // #29560: `orca environment stop` unlinks the server but leaves its profile on the host.
 describe('moving the host again after its server was stopped', () => {
   // The local half of stop (unlinkEnvironmentLocally); the server keeps its profile.
-  function stopServer(): void {
+  async function stopServer(): Promise<void> {
     const owner = getManagedOrcadFenceEnvironmentId(store.getSshTarget(TARGET.id))
     if (!owner) {
       throw new Error('no managed server to stop')
     }
-    removeManagedOrcadEnvironment(userDataPath, owner)
+    await removeManagedOrcadEnvironment(userDataPath, owner)
     targetStore.getOrcadRuntimeClaims().release(TARGET.id, owner)
     removeOrcadMigrationJournalsForDestination(userDataPath, TARGET.id, owner)
   }
@@ -186,7 +187,7 @@ describe('moving the host again after its server was stopped', () => {
     server.setWorktreeMeta(onServer('desktop-repo::/root/migrepo'), {
       comment: 'edited on the server'
     })
-    stopServer()
+    await stopServer()
 
     await expect(convert()).resolves.toMatchObject({
       outcome: 'converted',

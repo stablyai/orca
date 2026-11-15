@@ -39,14 +39,14 @@ import { refreshMaintainedOrcadPairing } from './orcad-maintenance-pairing-refre
 import type { LifecycleArgs } from './orcad-managed-lifecycle'
 import { withManagedOrcadLifecycle, followLaunchedServerPort } from './orcad-managed-lifecycle'
 
-export function updateManagedOrcadEnvironment(
+export async function updateManagedOrcadEnvironment(
   userDataPath: string,
   args: LifecycleArgs & { force?: boolean; pastLiveTerminals?: OrcadManagedPastLiveTerminals }
 ): Promise<OrcadManagedDeployResult> {
   const { pastLiveTerminals } = args
   // Update anyway keeps Update's version admission even if a caller also passed force.
   const intent = args.force && !pastLiveTerminals ? 'force' : 'update'
-  return withManagedOrcadLifecycle(userDataPath, args.selector, async (managed) => {
+  return await withManagedOrcadLifecycle(userDataPath, args.selector, async (managed) => {
     const admitIntent = admitOrcadRecordForIntent(intent, getAppEnvironment().getVersion())
     // Checked under the host fence: another desktop may have activated a build since the confirm.
     const admitRecord: NonNullable<OrcadDeployOptions['admitRecord']> = pastLiveTerminals
@@ -72,7 +72,7 @@ export function updateManagedOrcadEnvironment(
 
 export async function runManagedOrcadUpdate(
   userDataPath: string,
-  { environment, deployment }: ReturnType<typeof requireManagedOrcadEnvironment>,
+  { environment, deployment }: Awaited<ReturnType<typeof requireManagedOrcadEnvironment>>,
   context: OrcadRemoteContext,
   args: {
     force?: OrcadUpdateForce
@@ -140,7 +140,7 @@ export async function runManagedOrcadUpdate(
     activeVersion: result.fullVersion,
     readiness
   })
-  const updated = refreshMaintainedOrcadPairing(userDataPath, environment.id, readiness)
+  const updated = await refreshMaintainedOrcadPairing(userDataPath, environment.id, readiness)
   if (started || result.outcome !== 'already-active') {
     await followLaunchedServerPort(userDataPath, environment.id)
   }

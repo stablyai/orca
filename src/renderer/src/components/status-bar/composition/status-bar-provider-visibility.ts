@@ -1,6 +1,6 @@
-import type { ProviderRateLimits } from '../../../../../shared/rate-limit-types'
+import type { ProviderRateLimits } from '../../../../../shared/agent-usage/rate-limits/rate-limit-types'
 import type { GlobalSettings } from '../../../../../shared/global-settings-types'
-import { hasUsageData } from '../../../../../shared/usage-provider-windows'
+import { hasUsageData } from '../../../../../shared/agent-usage/display/usage-provider-windows'
 
 export type UsageProviderSettings = Pick<
   GlobalSettings,

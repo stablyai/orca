@@ -4,6 +4,8 @@ import { findSqliteRuntimeTests } from './vitest-sqlite-runtime-scan.mjs'
 const NODE_RUNTIME_INCLUDE = [
   // Exercise the native fetch error and abort contracts used by the Linear SDK in Electron.
   'tests/e2e/linear-cli-recovery.unit.test.ts',
+  // Exercises a real peer reset through Node's native Socket.setTypeOfService.
+  'src/main/network/best-effort-socket-type-of-service.test.ts',
   'src/main/runtime/agent-session/lifecycle/structured-agent-cli-writers.test.ts',
   'config/scripts/ci/workflow-contracts/cloud-security-history-workflow.test.mjs',
   'src/main/ssh/legacy-relay/endpoints/ssh-relay-endpoint-incumbent-shell.integration.test.ts',
@@ -67,7 +69,7 @@ const NODE_RUNTIME_INCLUDE = [
   'src/**/*memory*.test.ts',
   'src/**/*allocation*.test.ts',
   'src/**/*expiry*.test.ts',
-  'src/shared/own-retained-string.test.ts',
+  'src/shared/text/own-retained-string.test.ts',
   'src/main/agent-hooks/server/testing/http/server-transport-interference.test.ts',
   'src/main/plugins/workers/plugin-worker-supervision.integration.test.ts',
   'src/main/plugins/workers/plugin-worker-dev-restart-storage.integration.test.ts',

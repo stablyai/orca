@@ -6,7 +6,7 @@ import type {
   SkillSourceKind
 } from '../../../shared/skills/discovery/skills'
 import type { AgentType } from '../../../shared/agent-status/contracts/agent-status-types'
-import type { Repo } from '../../../shared/repo-types'
+import type { Repo } from '../../../shared/repository/repo-types'
 import { getRepoExecutionHostId, LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host'
 import {
   SKILL_INSTALL_PROVIDERS,

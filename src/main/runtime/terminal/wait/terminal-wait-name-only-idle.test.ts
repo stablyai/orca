@@ -61,7 +61,7 @@ async function makeRuntime(launchAgent?: TuiAgent) {
     getForegroundProcess: async () => 'codex'
   })
   runtime.attachWindow(1)
-  runtime.syncWindowGraph(1, E2E_GRAPH)
+  await runtime.syncWindowGraph(1, E2E_GRAPH)
   if (launchAgent) {
     registerBoundPty(runtime, E2E_PTY_ID, E2E_WORKTREE_ID, null, {
       tabId: 'tab-1',

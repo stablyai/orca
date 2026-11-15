@@ -5,7 +5,7 @@ import type {
   ForkSyncMode,
   GitForkSyncResult
 } from '../../../../../../shared/git/remotes/git-fork-sync'
-import type { Repo } from '../../../../../../shared/repo-types'
+import type { Repo } from '../../../../../../shared/repository/repo-types'
 import { getRepoMainWorktreeId } from '../../../../../../shared/worktree/id'
 import { Button } from '../../../ui/button'
 import { SearchableSetting } from '../../section-layout/SearchableSetting'

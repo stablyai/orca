@@ -7,7 +7,7 @@ import {
   FILE_INVENTORY_MAX_PATH_BYTES,
   FileInventoryCapacityError
 } from '../../../../../shared/file-listing/file-inventory-budget'
-import { isUtf8ByteLengthWithinLimit } from '../../../../../shared/utf8-byte-limits'
+import { isUtf8ByteLengthWithinLimit } from '../../../../../shared/text/utf8-byte-limits'
 
 export function decodeLegacyQuickOpenInventory(
   value: unknown,

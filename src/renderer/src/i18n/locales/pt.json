@@ -21426,7 +21426,7 @@
       "queuedMessages": {
         "steer": "Orientar",
         "send": "Enviar",
-        "steerHint": "Enviar sem interromper o modelo",
+        "steerHint": "Enviar agora, enquanto o agente continua trabalhando",
         "sendHint": "Enviar esta mensagem agora",
         "delete": "Excluir",
         "moreActions": "Mais ações",
@@ -22124,7 +22124,8 @@
       "TerminalContextMenu": {
         "copySessionId": "Copiar ID da Sessão",
         "copySessionIdSuccess": "ID da sessão copiado",
-        "copySessionIdError": "Não foi possível copiar o ID da sessão"
+        "copySessionIdError": "Não foi possível copiar o ID da sessão",
+        "copySessionIdUnavailable": "Nenhum ID de sessão para copiar"
       },
       "hostFile": {
         "updateHostForOutsideFiles": "Atualize o Orca em {{value0}} para abrir arquivos fora dos espaços de trabalho dele"
@@ -23580,6 +23581,7 @@
       "tabOpenQuickCommandsMenu": "Alternar menu de Comandos Rápidos",
       "editorFind": "Localizar no editor",
       "editorReplace": "Substituir no editor",
+      "editorToggleChangesView": "Alternar Visualização de Alterações",
       "fileExplorerUndo": "Desfazer operação de arquivo",
       "fileExplorerRedo": "Refazer operação de arquivo",
       "fileExplorerCopyPath": "Copiar caminho do arquivo",
@@ -23597,6 +23599,7 @@
       "chatFind": "Localizar no chat",
       "terminalToggleNativeChat": "Alternar entre a interface de chat e o terminal",
       "terminalClosePane": "Fechar painel ativo",
+      "terminalCopySessionId": "Copiar ID da Sessão",
       "terminalSplitRight": "Dividir terminal para a direita",
       "terminalSplitDown": "Dividir terminal para baixo",
       "terminalSwitchInputSource": "Alternar fonte de entrada / idioma (nativo)",

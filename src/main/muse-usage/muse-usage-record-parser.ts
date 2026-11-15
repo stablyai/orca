@@ -4,7 +4,7 @@ import {
 } from '../../shared/agent-hook-listener/providers/codex/codex-rollout-jsonl-cursor'
 import { unwrapMuseLogRecords } from '../../shared/agent-hook-listener/providers/muse/muse-session-log'
 import { ensureNumber } from '../usage/source-input/usage-record-coercion'
-import { extractString } from '../../shared/trimmed-string'
+import { extractString } from '../../shared/text/trimmed-string'
 import type { MuseUsageParsedEvent } from './types'
 
 export type MuseUsageParseContext = {

@@ -15,7 +15,7 @@ vi.mock('../../guest-lifecycle/manager/browser-manager', () => ({
 }))
 
 import type { BrowserPagePromptRequest } from '../../../../shared/browser/prompts/browser-page-prompt'
-import type { BrowserSitePermission } from '../../../../shared/browser-site-permission'
+import type { BrowserSitePermission } from '../../../../shared/browser/site-settings/browser-site-permission'
 import {
   BROWSER_PAGE_PROMPT_TIMEOUT_MS,
   respondToBrowserPagePrompt

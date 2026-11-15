@@ -13,7 +13,10 @@ import {
   worktreeRemovalReplyTimeoutMs,
   type ArchiveHookOverride
 } from '../../shared/worktree/removal/archive-hook-removal-gate'
-import { folderIdOfSelector, folderWorkspaceKey } from '../../shared/workspace-scope'
+import {
+  folderIdOfSelector,
+  folderWorkspaceKey
+} from '../../shared/workspace/identity/workspace-scope'
 import { formatWorktreeShow } from './workspace-format'
 import { printHookWarning } from './worktree-removal-warnings'
 import { printResult } from '../output/command-result-output'

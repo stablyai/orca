@@ -1,6 +1,6 @@
 import type { TerminalLaunchResult } from '../../agent-session/lifecycle/agent-session-resume'
 import type { ExecutionHostId } from '../../execution-host'
-import type { StartupCwdFallback } from '../../startup-cwd-fallback'
+import type { StartupCwdFallback } from '../../shell/launch/startup-cwd-fallback'
 
 export type RuntimeTerminalCreate = TerminalLaunchResult & {
   coldRestore?: { scrollback: string; cwd: string; cols?: number; rows?: number }

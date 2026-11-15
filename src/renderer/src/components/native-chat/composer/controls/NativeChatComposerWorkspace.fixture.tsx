@@ -1,5 +1,5 @@
 import { defineFixture } from '../../../../component-fixtures/component-fixture'
-import type { Repo } from '../../../../../../shared/repo-types'
+import type { Repo } from '../../../../../../shared/repository/repo-types'
 import type { Worktree } from '../../../../../../shared/worktree/types'
 import { getDefaultSettings } from '../../../../../../shared/constants'
 import { NativeChatComposerWorkspace } from './NativeChatComposerWorkspace'

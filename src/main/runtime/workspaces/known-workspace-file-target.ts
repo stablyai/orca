@@ -1,4 +1,4 @@
-import { getRepoHostIdentityForParts } from '../../../shared/repo-host-identity'
+import { getRepoHostIdentityForParts } from '../../../shared/repository/repo-host-identity'
 import { createRepoRowExecutionHostLookup } from '../../../shared/execution-host/worktree-execution-host-resolution'
 import type { RuntimeWorkspaceCatalog } from './catalog/workspace-catalog'
 import type { OrcaRuntimeWithListManagedWorktrees } from './managed-workspace-operations'

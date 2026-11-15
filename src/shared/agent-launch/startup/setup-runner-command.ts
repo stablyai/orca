@@ -6,7 +6,7 @@ import { isWindowsAbsolutePathLike } from '../../cross-platform-path'
 import {
   buildWindowsCmdRunnerDelayedLaunchCommand,
   windowsRunnerPathNeedsCmdGuard
-} from '../../windows-cmd-runner-delayed-launch'
+} from '../../shell/launch/windows-cmd-runner-delayed-launch'
 
 export type SetupRunnerCommandPlatform = 'windows' | 'posix'
 export type SetupRunnerShellFamily = 'posix' | 'cmd'

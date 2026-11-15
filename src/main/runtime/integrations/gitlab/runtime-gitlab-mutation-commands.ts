@@ -4,7 +4,7 @@ import type {
   GitLabMRUpdate,
   GitLabProjectRef
 } from '../../../../shared/gitlab-types'
-import type { Repo } from '../../../../shared/repo-types'
+import type { Repo } from '../../../../shared/repository/repo-types'
 import { addIssueComment, createIssue } from '../../../gitlab/issues/gitlab-issue-queries'
 import {
   addMRComment,

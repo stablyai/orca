@@ -5,7 +5,10 @@ import {
   type ExecutionHostId
 } from '../../../../../shared/execution-host'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../shared/constants'
-import { folderWorkspaceKey, parseWorkspaceKey } from '../../../../../shared/workspace-scope'
+import {
+  folderWorkspaceKey,
+  parseWorkspaceKey
+} from '../../../../../shared/workspace/identity/workspace-scope'
 import {
   findIndexedFolderWorkspaceOwner,
   findIndexedProjectGroupOwner

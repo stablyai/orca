@@ -1,4 +1,4 @@
-import { quotePowerShellLiteral } from '../../src/shared/powershell-native-argument'
+import { quotePowerShellLiteral } from '../../src/shared/shell/launch/powershell-native-argument'
 import { quotePosixShell } from '../../src/shared/shell/launch/shell-argument-quoting'
 
 function quoteTerminalArg(value: string): string {

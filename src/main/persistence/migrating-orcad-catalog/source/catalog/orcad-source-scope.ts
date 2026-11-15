@@ -14,14 +14,14 @@ import type {
 import {
   normalizeWorkspaceSessionKeyToWorkspaceId,
   parseWorkspaceKey
-} from '../../../../../shared/workspace-scope'
+} from '../../../../../shared/workspace/identity/workspace-scope'
 import type { PersistedState } from '../../../../../shared/persisted-state-types'
 import {
   getExecutionHostIdFromWorktreeHostIdentity,
   getWorktreeIdFromHostIdentity,
   isWorktreeHostIdentity
 } from '../../../../../shared/worktree/host-qualified-identity'
-import type { Repo } from '../../../../../shared/repo-types'
+import type { Repo } from '../../../../../shared/repository/repo-types'
 import { ownerKeyBelongsToRepo } from '../../../../orca-profiles/project-transfer/profile-project-worktree-identity'
 import { repoBelongsToOrcadSource } from './orcad-source-ownership'
 

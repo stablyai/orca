@@ -53,6 +53,7 @@ export const ghPullRequestsAndWorkItemsApi = {
     repoId?: string | null
     sourceContext?: TaskSourceContext | null
     number: number
+    ownerRepo?: GitHubOwnerRepo
   }) => ipcRenderer.invoke('gh:issue', args),
   workItem: (args: {
     repoPath: string

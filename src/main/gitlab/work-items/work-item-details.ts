@@ -3,7 +3,7 @@ import type {
   GitLabWorkItem,
   GitLabWorkItemDetails
 } from '../../../shared/gitlab-types'
-import type { IssueSourcePreference } from '../../../shared/repo-types'
+import type { IssueSourcePreference } from '../../../shared/repository/repo-types'
 import {
   derivePipelineStatus,
   mapIssueToWorkItem,

@@ -1,6 +1,6 @@
 import type { GitPushTarget } from '../../../../shared/worktree/types'
-import type { Repo } from '../../../../shared/repo-types'
-import { isFolderRepo } from '../../../../shared/repo-kind'
+import type { Repo } from '../../../../shared/repository/repo-types'
+import { isFolderRepo } from '../../../../shared/repository/repo-kind'
 import { requireRepoLocalGitRoute } from '../../../workspaces/execution-host/repo-execution-host'
 import { fetchCompareBaseRefWithLocalFallback } from '../../../git/remotes/compare-base-ref-fetch'
 import { gitExecFileAsync } from '../../../git/command-runner/git-exec-file'

@@ -19236,7 +19236,7 @@
         "listLabel": "キュー内のメッセージ",
         "steer": "今すぐ送信",
         "send": "送信",
-        "steerHint": "モデルを中断せずに送信します",
+        "steerHint": "Agent の作業中に今すぐ送信します",
         "sendHint": "このメッセージを今すぐ送信します",
         "delete": "削除",
         "moreActions": "その他の操作",
@@ -19870,7 +19870,8 @@
       "TerminalContextMenu": {
         "copySessionId": "セッション ID をコピー",
         "copySessionIdSuccess": "セッション ID をコピーしました",
-        "copySessionIdError": "セッション ID のコピーに失敗しました"
+        "copySessionIdError": "セッション ID のコピーに失敗しました",
+        "copySessionIdUnavailable": "コピーできるセッション ID がありません"
       },
       "hostFile": {
         "updateHostForOutsideFiles": "ワークスペース外のファイルを開くには、{{value0}} の Orca を更新してください"
@@ -22348,6 +22349,7 @@
       "tabOpenQuickCommandsMenu": "クイックコマンドメニューの切り替え",
       "editorFind": "エディター内を検索",
       "editorReplace": "エディター内で置換",
+      "editorToggleChangesView": "変更点ビューの切り替え",
       "fileExplorerUndo": "ファイル操作を元に戻す",
       "fileExplorerRedo": "ファイル操作をやり直す",
       "fileExplorerCopyPath": "ファイルパスをコピー",
@@ -22365,6 +22367,7 @@
       "chatFind": "チャット内を検索",
       "terminalToggleNativeChat": "チャット UI とターミナルを切り替え",
       "terminalClosePane": "アクティブなペインを閉じる",
+      "terminalCopySessionId": "セッション ID をコピー",
       "terminalSplitRight": "ターミナルを右に分割",
       "terminalSplitDown": "ターミナルを下に分割",
       "terminalSwitchInputSource": "入力ソース / 言語を切り替え（ネイティブ）",

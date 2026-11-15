@@ -16,7 +16,7 @@ import { useAppStore } from '@/store'
 import type {
   BrowserWebAuthnAccount,
   BrowserWebAuthnAccountRequest
-} from '../../../shared/browser-webauthn-account'
+} from '../../../shared/browser/prompts/browser-webauthn-account'
 
 function accountLabels(
   account: BrowserWebAuthnAccount,

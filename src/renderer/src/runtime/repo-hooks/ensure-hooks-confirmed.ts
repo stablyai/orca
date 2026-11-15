@@ -1,5 +1,5 @@
 import { findHookRepo, hookRepoOwnerHostId } from './hook-owner-resolution'
-import { projectGroupHookTrustKey } from '../../../../shared/workspace-hook-owner'
+import { projectGroupHookTrustKey } from '../../../../shared/workspace-setup/hooks/workspace-hook-owner'
 import type { AppState } from '@/store/types'
 import type { OrcaHooks } from '../../../../shared/orca-yaml-hook-types'
 import { resolveHookCommandSourcePolicy } from '../../../../shared/hook-command-source-policy'

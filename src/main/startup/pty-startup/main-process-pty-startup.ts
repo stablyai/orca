@@ -1,6 +1,6 @@
 import { recordCodexMigrationPtySpawn } from '../../codex/history/backfill/desktop-codex-session-migration'
 import { app } from 'electron'
-import { parseWorkspaceKey } from '../../../shared/workspace-scope'
+import { parseWorkspaceKey } from '../../../shared/workspace/identity/workspace-scope'
 import { isLocalExecutionHost } from '../../../shared/execution-host'
 import { classifyError } from '../../telemetry/classify-error'
 import { track } from '../../telemetry/client'

@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import { agentJournalSubmissionKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
 import { claudePromptUuidForSubmission } from './claude-structured-session-id'
-import { isAbortSignalReason } from '../../../shared/abort-signal-reason'
+import { isAbortSignalReason } from '../../../shared/concurrency/abort-signal-reason'
 import {
   forgetRetiredWaiter,
   forgetWaiter,
@@ -131,7 +131,7 @@ export async function dispatchClaudeTurn(
     signal?: AbortSignal
     admitFreshInput?: StructuredAgentSessionAdmitFreshInput
   },
-  beforeDispatch?: () => Promise<void>
+  beforeDispatch?: () => Promise<{ steers: boolean }>
 ): Promise<AgentSessionDispatchOutcome> {
   let content: unknown[]
   try {
@@ -164,7 +164,7 @@ export async function dispatchClaudeTurn(
       input.requestedAt ?? null
     )
   }
-  const message = {
+  const message: Record<string, unknown> = {
     type: 'user',
     uuid: sentUuid,
     message: { role: 'user', content },
@@ -174,12 +174,19 @@ export async function dispatchClaudeTurn(
   const pending = { replay: beforeDispatch ? undefined : arm() }
   const authorize = beforeDispatch
     ? async () => {
-        await beforeDispatch()
+        const { steers } = await beforeDispatch()
+        // `now` ends the running step at once; its open turn carries on with this message.
+        if (steers) {
+          message.priority = 'now'
+        }
         await admitStructuredAgentSessionInput(input.admitFreshInput, () => {
           if (session.dispatchWaiters.length >= MAX_ACTIVE_DISPATCH_WAITERS) {
             throw claudeUnwrittenUserMessageError(new Error(DISPATCH_REJECTED_QUEUE_FULL))
           }
           pending.replay = arm()
+          if (message.priority === 'now') {
+            pending.replay.waiter.steers = true
+          }
         })
       }
     : undefined

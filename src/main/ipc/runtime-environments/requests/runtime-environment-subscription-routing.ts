@@ -1,5 +1,5 @@
 import { RemoteRuntimeClientError } from '../../../../shared/remote-runtime/remote-runtime-client-error'
-import { throwIfSignalAborted } from '../../../../shared/abort-signal-reason'
+import { throwIfSignalAborted } from '../../../../shared/concurrency/abort-signal-reason'
 import {
   type RuntimeEnvironmentSetupFailure,
   runtimeEnvironmentSetupFailure
@@ -48,7 +48,7 @@ export async function subscribeRuntimeEnvironment(
   signal?: AbortSignal,
   preparation?: ManagedRuntimeCallPreparation,
   crewAttempt?: {
-    assertCurrent: () => void
+    assertCurrent: () => Promise<void>
     observeFailure: (failure: RuntimeEnvironmentSetupFailure) => void
   }
 ): Promise<RemoteRuntimeTransportSubscription> {
@@ -69,11 +69,12 @@ export async function subscribeRuntimeEnvironment(
       rawCallbacks.onClose()
     }
   }
-  crewAttempt?.assertCurrent()
+  await crewAttempt?.assertCurrent()
   const environment = crewAttempt
-    ? resolveEnvironment(userDataPath, selector)
+    ? await resolveEnvironment(userDataPath, selector)
     : await resolveManagedRuntimeEnvironment(userDataPath, selector, preparation, method, signal)
-  crewAttempt?.assertCurrent()
+  await crewAttempt?.assertCurrent()
+  throwIfSignalAborted(signal)
   if (crewAttempt) {
     assertCrewSourceCurrent(environment)
   }
@@ -143,7 +144,8 @@ export async function subscribeRuntimeEnvironment(
       if (crewAttempt) {
         try {
           throwIfSignalAborted(signal)
-          crewAttempt.assertCurrent()
+          await crewAttempt.assertCurrent()
+          throwIfSignalAborted(signal)
           assertCrewSourceCurrent(environment)
         } catch (error) {
           subscription.close()

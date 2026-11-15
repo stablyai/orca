@@ -9,6 +9,7 @@ import { readJournalSqlDatabase } from './journal-sql-database-read'
 import { readJournalSqlPoint } from './journal-sql-point-read'
 import { readJournalDomainHistoryFrame } from './journal-domain-history-page'
 import { journalDomainImportState } from './journal-domain-import-rows'
+import { openJournalLegacySource } from './database/journal-legacy-source'
 
 if (
   !parentPort ||
@@ -90,13 +91,7 @@ port.on('message', ({ id, operation }: JournalSqlReaderRequest) => {
       case 'conversion-prepare': {
         // Each frozen-source read is its own short statement; no snapshot spans the restore.
         if (!original && existsSync(workerData.originalFilename)) {
-          const openSource = () =>
-            new Database(workerData.originalFilename, {
-              readonly: true,
-              fileMustExist: true,
-              timeout: 5000
-            })
-          original = openSource()
+          original = openJournalLegacySource(workerData.originalFilename, { timeout: 5000 })
         }
         const prepared = original
           ? (prepareJournalDomainImport(original, operation.sessionId) ??
@@ -169,10 +164,7 @@ function prepareEmptyConversion(
     return null
   }
   for (const table of ['journal_rows', 'queued_messages', 'journal_outcome_epochs']) {
-    if (
-      source.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name=?").get(table) &&
-      source.prepare(`SELECT 1 FROM ${table} WHERE session_id=? LIMIT 1`).get(sessionId)
-    ) {
+    if (source.prepare(`SELECT 1 FROM ${table} WHERE session_id=? LIMIT 1`).get(sessionId)) {
       return null
     }
   }

@@ -8,7 +8,7 @@ import {
   type OrcaProfileIndex
 } from '../../../shared/orca-profiles'
 import type { PersistedState } from '../../../shared/persisted-state-types'
-import type { Repo } from '../../../shared/repo-types'
+import type { Repo } from '../../../shared/repository/repo-types'
 import {
   exportProfileStateJson,
   importProfileStateJson

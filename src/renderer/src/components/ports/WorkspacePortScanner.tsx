@@ -19,7 +19,7 @@ import {
   reconcileTransientPortScanFailures,
   type PortScanDebounceState
 } from '@/lib/workspace-ports/workspace-port-scan-debounce'
-import type { WorkspacePortScanResult } from '../../../../shared/workspace-ports'
+import type { WorkspacePortScanResult } from '../../../../shared/workspace/ports/workspace-ports'
 import { buildExecutionHostRegistry } from '../../../../shared/execution-host/execution-host-registry'
 
 const WORKSPACE_PORT_SCAN_INTERVAL_MS = 30_000

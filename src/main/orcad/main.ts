@@ -28,8 +28,8 @@ import {
 import {
   ORCAD_WINDOWS_BREAKAWAY_CONTRACT,
   WINDOWS_BREAKAWAY_LAUNCH_FLAG
-} from '../../shared/windows-breakaway-launch'
-import { runWindowsBreakawayLaunchIfRequested } from '../../shared/windows-breakaway-launcher'
+} from '../../shared/remote-runtime/orcad-lifecycle/windows-breakaway-launch'
+import { runWindowsBreakawayLaunchIfRequested } from './runtime-launch/windows-breakaway-launcher'
 import { parseArgs } from './serve-startup/orcad-command-arguments'
 import { ORCAD_RECLAIM_STALE_LOCK_FLAG } from '../../shared/remote-runtime/orcad-lifecycle/orcad-stale-lock-reclaim'
 

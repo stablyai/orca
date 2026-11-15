@@ -1,6 +1,6 @@
 import { usePluginCommands } from '@/store/plugins/catalog/plugin-contribution-catalog'
 import { useEffect, useLayoutEffect, useRef } from 'react'
-import { matchesRecentTabSwitcherChord } from '../../../../../../shared/window-shortcut-policy'
+import { matchesRecentTabSwitcherChord } from '../../../../../../shared/keybindings/window-shortcut-policy'
 import {
   globalShortcutTargetYields,
   findPluginCommandForKeybinding
@@ -9,7 +9,7 @@ import { getKeybindingContext } from '../../../terminal-workspace-model'
 import {
   ModifierDoubleTapDetector,
   toModifierDoubleTapEvent
-} from '../../../../../../shared/modifier-double-tap-detector'
+} from '../../../../../../shared/keybindings/modifier-double-tap-detector'
 import { useAppStore } from '../../../../store/index'
 import type { AgentType } from '../../../../../../shared/agent-status/contracts/agent-status-types'
 import type { TerminalLayoutSnapshot } from '../../../../../../shared/workspace-layout/terminal-tab-types'
