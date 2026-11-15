@@ -9,6 +9,7 @@ import {
 import {
   dispatchWindowCloseRequest,
   isWindowCloseCheckpointInProgress,
+  prepareWindowCloseCheckpoint,
   registerWindowCloseGuard,
   setWindowCloseRequestHandler
 } from './window-close-request-coordinator'
@@ -18,6 +19,7 @@ vi.mock('sonner', () => ({ toast: { error: vi.fn() } }))
 describe('window-close-request-coordinator', () => {
   const confirmWindowClose = vi.fn()
   const cancelWindowClose = vi.fn()
+  const awaitBeforeUnloadCheckpoint = vi.fn(() => Promise.resolve())
   const unregisterFns: (() => void)[] = []
 
   const addGuard = (guard: () => boolean | Promise<boolean>): void => {
@@ -27,10 +29,11 @@ describe('window-close-request-coordinator', () => {
   beforeEach(() => {
     confirmWindowClose.mockClear()
     cancelWindowClose.mockClear()
+    awaitBeforeUnloadCheckpoint.mockReset().mockResolvedValue(undefined)
     vi.mocked(toast.error).mockClear()
     // Without a rich close handler, dispatch uses only this preload fallback surface.
     const windowTarget = Object.assign(new EventTarget(), {
-      api: { ui: { confirmWindowClose, cancelWindowClose } }
+      api: { ui: { confirmWindowClose, cancelWindowClose }, app: { awaitBeforeUnloadCheckpoint } }
     })
     ;(globalThis as unknown as { window: typeof windowTarget }).window = windowTarget
   })
@@ -74,6 +77,42 @@ describe('window-close-request-coordinator', () => {
       'Quit canceled: the session snapshot could not be saved (sendSync payload rejected).'
     )
     expect(consumeShutdownCheckpointFailureReason()).toBeNull()
+  })
+
+  it('counts one failed write once when a second close overlaps it', async () => {
+    awaitBeforeUnloadCheckpoint.mockRejectedValueOnce(new Error('disk full'))
+
+    const results = await Promise.all([
+      prepareWindowCloseCheckpoint(),
+      prepareWindowCloseCheckpoint()
+    ])
+
+    expect(results).toEqual([false, null])
+    expect(awaitBeforeUnloadCheckpoint).toHaveBeenCalledTimes(1)
+    // A later attempt stages its own write, which clears the failure.
+    await expect(prepareWindowCloseCheckpoint()).resolves.toBe(true)
+  })
+
+  it('cancels a close once when its staged checkpoint fails to reach disk, then closes anyway', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    awaitBeforeUnloadCheckpoint.mockRejectedValue(new Error('disk full'))
+    const aborted = vi.fn()
+    window.addEventListener('orca:renderer-shutdown-checkpoint-aborted', aborted)
+
+    await dispatchWindowCloseRequest({ isQuitting: true })
+
+    expect(confirmWindowClose).not.toHaveBeenCalled()
+    expect(cancelWindowClose).toHaveBeenCalledTimes(1)
+    expect(aborted).toHaveBeenCalledTimes(1)
+    expect(toast.error).toHaveBeenCalledWith(
+      'Quit canceled: the session snapshot could not be saved (disk full).'
+    )
+
+    await dispatchWindowCloseRequest({ isQuitting: true })
+
+    expect(confirmWindowClose).toHaveBeenCalledTimes(1)
+    expect(aborted).toHaveBeenCalledTimes(1)
+    window.removeEventListener('orca:renderer-shutdown-checkpoint-aborted', aborted)
   })
 
   it('cancels the close — no confirm, no handler — when a guard vetoes', async () => {
