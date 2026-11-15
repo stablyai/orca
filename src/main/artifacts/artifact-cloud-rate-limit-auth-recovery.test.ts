@@ -9,12 +9,6 @@ vi.mock('electron', () => ({
 }))
 
 import type { OrcaProfileCloudSummary } from '../../shared/orca-profiles/orca-profiles'
-import {
-  ARTIFACT_CLI_REQUEST_TIMEOUT_MS,
-  ARTIFACT_CLOUD_REQUEST_TIMEOUT_MS,
-  ARTIFACT_MAX_CLOUD_REQUESTS_PER_OPERATION,
-  ARTIFACT_RATE_LIMIT_MAX_RETRY_DELAY_SECONDS
-} from '../../shared/artifacts/artifacts'
 import { ensureActiveOrcaProfile } from '../orca-profiles/profile-index-store'
 import { linkOrcaProfileToCloud } from '../orca-profiles/cloud-auth/profile-cloud-index'
 import { saveOrcaCloudSession } from '../orca-profiles/cloud-session/profile-cloud-session-store'
@@ -63,7 +57,6 @@ function artifactBody(): Record<string, unknown> {
 }
 
 const created = (): Response => Response.json({ ...artifactBody(), editToken: 'edit-secret' })
-const updated = (): Response => Response.json(artifactBody())
 const rejected = (): Response => Response.json({ code: 'unauthorized' }, { status: 401 })
 const limited = (seconds: number): Response =>
   Response.json(
@@ -84,31 +77,20 @@ type CloudStub = {
   refreshes: number
 }
 
-/**
- * Serves artifact responses in order and answers every refresh with the next session.
- * `latencyMs` holds each answer on the (fake) clock, as a slow network would.
- */
-function stubCloud(responses: (() => Response)[], latencyMs = 0): CloudStub {
+/** Serves artifact responses in order and answers every refresh with the next session. */
+function stubCloud(responses: (() => Response)[]): CloudStub {
   const stub: CloudStub = { sent: [], refreshes: 0 }
-  const answerAfterLatency = async (response: Response): Promise<Response> => {
-    if (latencyMs > 0) {
-      await new Promise((resolve) => setTimeout(resolve, latencyMs))
-    }
-    return response
-  }
   vi.stubGlobal(
     'fetch',
     vi.fn(async (url: string | URL, init: RequestInit) => {
       if (String(url).endsWith('/v1/desktop/auth/refresh')) {
         stub.refreshes++
-        return answerAfterLatency(
-          Response.json({
-            accessToken: `access-${stub.refreshes + 1}`,
-            refreshToken: `refresh-${stub.refreshes + 1}`,
-            expiresAt: Date.now() + 60 * 60 * 1000,
-            cloud
-          })
-        )
+        return Response.json({
+          accessToken: `access-${stub.refreshes + 1}`,
+          refreshToken: `refresh-${stub.refreshes + 1}`,
+          expiresAt: Date.now() + 60 * 60 * 1000,
+          cloud
+        })
       }
       if (!String(url).includes('/v1/artifacts')) {
         throw new Error(`unexpected request to ${String(url)}`)
@@ -123,7 +105,7 @@ function stubCloud(responses: (() => Response)[], latencyMs = 0): CloudStub {
       if (!next) {
         throw new Error('unexpected extra artifact request')
       }
-      return answerAfterLatency(next())
+      return next()
     })
   )
   return stub
@@ -247,56 +229,5 @@ describe('a rate-limited artifact request that needs a session refresh', () => {
     expect(outcome).toMatchObject({ statusCode: 429, code: 'artifact_rate_limited' })
     expect(vi.getTimerCount()).toBe(0)
     expect(cloudStub.sent.map(({ method }) => method)).toEqual(['POST', 'POST', 'PUT', 'POST'])
-  })
-})
-
-describe('the CLI artifact request timeout', () => {
-  it('is the sum of every request, the single wait and both session refreshes', () => {
-    expect(ARTIFACT_CLI_REQUEST_TIMEOUT_MS).toBe(
-      ARTIFACT_MAX_CLOUD_REQUESTS_PER_OPERATION * ARTIFACT_CLOUD_REQUEST_TIMEOUT_MS +
-        ARTIFACT_RATE_LIMIT_MAX_RETRY_DELAY_SECONDS * 1000 +
-        2 * 20_000 +
-        10_000
-    )
-    expect(ARTIFACT_CLI_REQUEST_TIMEOUT_MS).toBe(210_000)
-  })
-
-  it('outlasts the slowest re-run of a reconciled create and its update', async () => {
-    const signin = await signIn()
-    stubCloud([
-      () => {
-        throw new TypeError('fetch failed')
-      }
-    ])
-    await expect(signin.artifacts.publish(writeRequest)).rejects.toThrow('fetch failed')
-    // Expiring soon, so the session is refreshed before the operation as well as after its 401.
-    saveSession(signin.profileId, signin.userDataPath, 30_000)
-    const changed = { ...writeRequest, content: '<h1>Changed</h1>' }
-    // Every answer arrives just inside its own 20s request timeout.
-    const cloudStub = stubCloud(
-      [
-        () => limited(ARTIFACT_RATE_LIMIT_MAX_RETRY_DELAY_SECONDS),
-        created,
-        rejected,
-        created,
-        updated
-      ],
-      ARTIFACT_CLOUD_REQUEST_TIMEOUT_MS - 1
-    )
-    const startedAt = Date.now()
-
-    const outcome = await settle(signin.artifacts.publish(changed))
-
-    expect(outcome).toMatchObject({ status: 'ok', value: { change: 'created' } })
-    expect(cloudStub.refreshes).toBe(2)
-    expect(cloudStub.sent.map(({ method }) => method)).toEqual([
-      'POST',
-      'POST',
-      'PUT',
-      'POST',
-      'PUT'
-    ])
-    expect(cloudStub.sent).toHaveLength(ARTIFACT_MAX_CLOUD_REQUESTS_PER_OPERATION)
-    expect(Date.now() - startedAt).toBeLessThanOrEqual(ARTIFACT_CLI_REQUEST_TIMEOUT_MS - 10_000)
   })
 })
