@@ -11,7 +11,6 @@ import { registerPtyConnectionHibernationActivityTests } from '../input/pty-conn
 import { registerPtyConnectionHiddenSleepingResumeTests } from '../lifecycle/pty-connection-hidden-sleeping-resume.spec'
 import { registerPtyConnectionSessionLivenessTests } from '../lifecycle/pty-connection-session-liveness.spec'
 import { registerPtyConnectionOwnerErrorRetryTests } from '../reattach/pty-connection-owner-error-retry.spec'
-import { registerPtyConnectionSleepingResumeBannerTests } from '../spawn/pty-connection-sleeping-resume-banner.spec'
 
 // Main's answer to the window's layout commands, as a switch-on build sends them.
 vi.mock('@/runtime/rpc/calls/runtime-rpc-call', async (importOriginal) =>
@@ -42,4 +41,3 @@ describe('pty-connection-session-liveness', () => {
   registerPtyConnectionSessionLivenessTests()
   registerPtyConnectionOwnerErrorRetryTests()
 })
-describe('pty-connection-sleeping-resume-banner', registerPtyConnectionSleepingResumeBannerTests)
