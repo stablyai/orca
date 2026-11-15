@@ -347,7 +347,8 @@ describe('scripts restored from the workflow ref', () => {
   ]) {
     for (const [job, { steps = [] }] of Object.entries(wf.jobs)) {
       for (const step of steps) {
-        const match = step.run?.match(/git checkout "\$WORKFLOW_SHA" --((?:\s|\\\n|[^\n])*)/)
+        // The path list runs to the first newline not escaped by a trailing backslash.
+        const match = step.run?.match(/git checkout "\$WORKFLOW_SHA" --((?:\\\n|[^\n])*)/)
         if (match) {
           const paths = match[1].replace(/\\\n/g, ' ').trim().split(/\s+/)
           copySteps.push([`${file} ${job} ${step.name}`, paths])
@@ -356,8 +357,13 @@ describe('scripts restored from the workflow ref', () => {
     }
   }
 
-  it('finds the copy steps', () => {
+  it('finds the copy steps and only their path lists', () => {
     expect(copySteps.length).toBeGreaterThanOrEqual(4)
+    for (const [name, paths] of copySteps) {
+      for (const path of paths) {
+        expect(path, name).toMatch(/^[\w.-]+(\/[\w.-]+)*$/)
+      }
+    }
   })
 
   it.each(copySteps)(
