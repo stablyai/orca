@@ -15,7 +15,9 @@ const REWRITES_PER_PAGE = 4
 export function pruneSettledChatOutputCopies(
   db: Database.Database,
   after: string,
-  chatIsReadable: (dispatchId: string) => boolean
+  chatIsReadable: (dispatchId: string) => boolean,
+  // Shared across a pass's pages, so a large settled Run is checked once per pass.
+  settledRuns = new Map<string, boolean>()
 ): { pruned: number; next: string | null } {
   db.exec('BEGIN IMMEDIATE')
   try {
@@ -40,7 +42,6 @@ export function pruneSettledChatOutputCopies(
          OR julianday(completed_at) >= julianday('now', '-1 day'))
        LIMIT 1`
     )
-    const settledRuns = new Map<string, boolean>()
     const runSettled = (runId: string): boolean => {
       let settled = settledRuns.get(runId)
       if (settled === undefined) {

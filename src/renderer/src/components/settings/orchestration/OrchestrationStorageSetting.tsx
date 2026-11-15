@@ -70,7 +70,7 @@ export function OrchestrationStorageSetting(): React.JSX.Element | null {
       ),
       description: t(
         'auto.components.settings.OrchestrationPane.storageReclaimWarning',
-        'Orca restarts and rewrites its orchestration database before it opens again. On a large database that can take a minute or more, and agents that use orchestration wait until Orca is back. Runs, tasks and messages are kept.'
+        'Orca closes, rewrites its orchestration database, then opens again. On a large database it stays closed for a minute or more, and agents that use orchestration wait until it is back. Runs, tasks and messages are kept.'
       ),
       confirmLabel: t(
         'auto.components.settings.OrchestrationPane.storageReclaimConfirm',

@@ -1,8 +1,9 @@
 import { getWorkerTerminalAutoReleaseScheduler } from '../terminal-authority/release/worker-terminal-auto-release-scheduler'
 import { OrchestrationDb } from './orchestration-db'
 import { OrchestrationDbMaintenance } from './maintenance/orchestration-db-maintenance'
-import { resolveStructuredWorkerForDispatch } from '../../rpc/methods/orchestration/structured-workers/orchestration-structured-worker-lifecycle'
-import { requireRunningStructuredWorker } from '../terminal-authority/structured-sessions/structured-worker-authority'
+import { structuredWorkerSession } from '../terminal-authority/structured-sessions/structured-worker-authority'
+import { structuredWorkerIdentityFromRow } from '../terminal-authority/structured-sessions/structured-worker-identity'
+import { isStructuredWorkerHandle } from '../../../../shared/orchestration/workers/structured-worker-handle'
 import { committedHandBackTypes, type MailHandBack } from './messages/helper-mailbox-hand-back'
 import { existsSync } from 'node:fs'
 import { closeOrphanedTerminalApprovals } from '../workers/approvals/terminal-approval-orphans'
@@ -98,14 +99,12 @@ export abstract class RuntimeOrchestrationDatabaseAccess extends OrcaRuntimeWith
 
 /** Whether a released chat worker's reference read would find its chat on this host. */
 function isReleasedChatReadable(db: OrchestrationDb, dispatchId: string): boolean {
-  const identity = resolveStructuredWorkerForDispatch(db, dispatchId)
-  if (!identity) {
-    return false
-  }
-  try {
-    requireRunningStructuredWorker(identity)
-    return true
-  } catch {
-    return false
-  }
+  const handle =
+    db.getWorkerDispatch(dispatchId)?.agent_terminal_handle ??
+    db.getDispatchContextById(dispatchId)?.assignee_handle
+  const row =
+    handle && isStructuredWorkerHandle(handle) ? db.getWorkerTerminalResourceByHandle(handle) : null
+  // From the row, not the identity registry: released workers must stay unregistered.
+  const identity = row ? structuredWorkerIdentityFromRow(row) : null
+  return identity !== null && structuredWorkerSession(identity).kind === 'here'
 }

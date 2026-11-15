@@ -1,4 +1,5 @@
-import { statfs } from 'node:fs/promises'
+import { access, constants, stat, statfs } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
 import { dirname } from 'node:path'
 import { setImmediate, setTimeout as delay } from 'node:timers/promises'
 import type Database from '../../../../sqlite/sync-database'
@@ -58,10 +59,20 @@ export class OrchestrationDbMaintenance {
   /** VACUUM copies the live pages to a temporary file, then writes them again to the WAL. */
   async reclaimRequest(): Promise<OrchestrationDbReclaimRequest> {
     const { databaseBytes, reclaimableBytes } = this.storage()
-    const neededBytes = 2 * Math.ceil((databaseBytes - reclaimableBytes) * 1.1)
-    const disk = await statfs(dirname(this.filename))
-    const freeBytes = disk.bavail * disk.bsize
-    return freeBytes < neededBytes ? { ok: false, neededBytes, freeBytes } : { ok: true }
+    const copyBytes = Math.ceil((databaseBytes - reclaimableBytes) * 1.1)
+    const [databaseDir, tempDir] = [dirname(this.filename), await sqliteTempDirectory()]
+    const [databaseFree, tempFree, databaseDevice, tempDevice] = await Promise.all([
+      freeBytes(databaseDir),
+      freeBytes(tempDir),
+      stat(databaseDir).then((info) => info.dev),
+      stat(tempDir).then((info) => info.dev)
+    ])
+    const shortfall =
+      databaseDevice === tempDevice
+        ? databaseFree < 2 * copyBytes && { neededBytes: 2 * copyBytes, freeBytes: databaseFree }
+        : (databaseFree < copyBytes && { neededBytes: copyBytes, freeBytes: databaseFree }) ||
+          (tempFree < copyBytes && { neededBytes: copyBytes, freeBytes: tempFree })
+    return shortfall ? { ok: false, ...shortfall } : { ok: true }
   }
 
   /**
@@ -84,7 +95,11 @@ export class OrchestrationDbMaintenance {
       this.recordReclaim(false)
     } catch (error) {
       // VACUUM rolls back whole; Settings says so after the restart.
-      this.recordReclaim(true)
+      try {
+        this.recordReclaim(true)
+      } catch {
+        // A full disk can refuse this write too; the VACUUM error is the one to report.
+      }
       throw error
     }
   }
@@ -182,4 +197,31 @@ export class OrchestrationDbMaintenance {
     }
     return result
   }
+}
+
+async function freeBytes(directory: string): Promise<number> {
+  const disk = await statfs(directory)
+  return disk.bavail * disk.bsize
+}
+
+// SQLite's search order for its temporary files (unixTempFileDir in os_unix.c); Windows uses the user temp folder.
+async function sqliteTempDirectory(): Promise<string> {
+  if (process.platform === 'win32') {
+    return tmpdir()
+  }
+  const { SQLITE_TMPDIR, TMPDIR } = process.env
+  for (const directory of [SQLITE_TMPDIR, TMPDIR, '/var/tmp', '/usr/tmp', '/tmp']) {
+    if (!directory) {
+      continue
+    }
+    try {
+      if ((await stat(directory)).isDirectory()) {
+        await access(directory, constants.W_OK | constants.X_OK)
+        return directory
+      }
+    } catch {
+      // SQLite skips folders it cannot write to and search.
+    }
+  }
+  return '.'
 }
