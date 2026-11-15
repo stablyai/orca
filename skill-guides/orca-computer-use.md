@@ -173,6 +173,8 @@ images.
 
 Use the tree for indexes/actions and the screenshot for visual confirmation; failed capture usually means hidden, minimized, off-screen, or permission-blocked.
 
+For smaller screenshots on any action or `get-app-state`, add `--screenshot-scale 1` (at most one pixel per window point, which halves a Retina capture), `--screenshot-max-edge <px>` and `--screenshot-format jpeg`. The result's `screenshot.format` and `screenshot.scale` say what came back; older runtimes ignore these flags and return the full PNG.
+
 Coordinates passed to `click`, `scroll`, and `drag` are window-local action coordinates. If the screenshot reports `scale` other than `1`, convert visual screenshot pixels before acting:
 
 ```text
