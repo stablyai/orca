@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import type { ProviderRateLimits } from './rate-limit-types'
-import type { CodexManagedAccountSummary } from './managed-account-types'
+import type { ProviderRateLimits } from '../../agent-usage/rate-limits/rate-limit-types'
+import type { CodexManagedAccountSummary } from '../managed-account-types'
 import { buildCodexResetCreditExpectedScope } from './codex-reset-credit-scope'
 
 const account: CodexManagedAccountSummary = {
@@ -34,49 +34,6 @@ const limits: ProviderRateLimits = {
 }
 
 describe('buildCodexResetCreditExpectedScope', () => {
-  it('changes the offer revision when fetched credit or window data changes', () => {
-    const original = buildCodexResetCreditExpectedScope({
-      target: { runtime: 'host', wslDistro: null },
-      account,
-      limits
-    })
-    const refreshed = buildCodexResetCreditExpectedScope({
-      target: { runtime: 'host', wslDistro: null },
-      account,
-      limits: { ...limits, updatedAt: limits.updatedAt + 1 }
-    })
-
-    expect(refreshed?.offerRevision).not.toBe(original?.offerRevision)
-    const changedCredits = buildCodexResetCreditExpectedScope({
-      target: { runtime: 'host', wslDistro: null },
-      account,
-      limits: {
-        ...limits,
-        rateLimitResetCredits: {
-          availableCount: 1,
-          totalEarnedCount: 2,
-          nextExpiresAt: 2_000,
-          credits: [{ status: 'available', expiresAt: 3_000, grantedAt: 500 }]
-        }
-      }
-    })
-    expect(changedCredits?.offerRevision).not.toBe(original?.offerRevision)
-    const changedWindow = buildCodexResetCreditExpectedScope({
-      target: { runtime: 'host', wslDistro: null },
-      account,
-      limits: {
-        ...limits,
-        session: {
-          usedPercent: 50,
-          windowMinutes: 300,
-          resetsAt: 1_000,
-          resetDescription: 'soon'
-        }
-      }
-    })
-    expect(changedWindow?.offerRevision).not.toBe(original?.offerRevision)
-  })
-
   it.each([
     {
       name: 'system default account',

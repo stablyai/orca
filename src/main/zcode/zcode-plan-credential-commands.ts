@@ -14,7 +14,7 @@ import {
 import { hasZcodeCliPlanCredentials } from '../rate-limits/providers/zcode/zcode-usage-credentials'
 import { refreshAfterCredentialChange } from '../ipc/credential-change-rate-limit-refresh'
 import type { RateLimitService } from '../rate-limits/service/rate-limit-service'
-import type { ZcodePlanCredentialsStatus } from '../../shared/zcode-plan-sites'
+import type { ZcodePlanCredentialsStatus } from '../../shared/agent-accounts/usage-credentials/zcode-plan-sites'
 
 type UsageRefresher = Pick<RateLimitService, 'refresh' | 'invalidateZcodeCredentialState'>
 

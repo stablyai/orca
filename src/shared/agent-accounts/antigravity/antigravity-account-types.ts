@@ -1,4 +1,4 @@
-import type { ProviderRateLimits } from './rate-limit-types'
+import type { ProviderRateLimits } from '../../agent-usage/rate-limits/rate-limit-types'
 
 export type AntigravityAccountSummary = {
   id: string

@@ -1,11 +1,14 @@
-import type { ExtraUsageBalance, ProviderRateLimits } from '../../../../../shared/rate-limit-types'
-import type { UsagePercentageDisplay } from '../../../../../shared/usage-percentage-display'
+import type {
+  ExtraUsageBalance,
+  ProviderRateLimits
+} from '../../../../../shared/agent-usage/rate-limits/rate-limit-types'
+import type { UsagePercentageDisplay } from '../../../../../shared/agent-usage/display/usage-percentage-display'
 import {
   clampUsedPercent,
   getDisplayedUsagePercentage
-} from '../../../../../shared/usage-percentage-display'
-import { formatCreditCount } from '../../../../../shared/credit-count-format'
-import { formatCurrencyAmount } from '../../../../../shared/currency-format'
+} from '../../../../../shared/agent-usage/display/usage-percentage-display'
+import { formatCreditCount } from '../../../../../shared/agent-usage/display/credit-count-format'
+import { formatCurrencyAmount } from '../../../../../shared/agent-usage/display/currency-format'
 import { translate } from '@/i18n/i18n'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { formatUsagePercentageLabel } from './usage-percentage-label'

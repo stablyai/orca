@@ -1,4 +1,4 @@
-import type { SecretAtRestProtection } from './secret-at-rest-protection'
+import type { SecretAtRestProtection } from '../../secure-storage/secret-at-rest-protection'
 
 /** GLM Coding Plan sites share provider ID zcode: international Z.AI and mainland BigModel. */
 export type ZcodePlanSite = 'zai' | 'bigmodel'

@@ -7,9 +7,9 @@ import type { WorkspaceCleanupUIState } from './workspace-cleanup/workspace-clea
 import type { FeatureTipSeenId } from './feature-education/feature-tips'
 import type { ContextualTourId } from './feature-education/contextual-tours/contextual-tours'
 import type { FeatureInteractionState } from './feature-education/interactions/feature-interactions'
-import type { UsagePercentageDisplay } from './usage-percentage-display'
-import type { StatusBarUsageMode } from './status-bar-usage-mode'
-import type { StatusBarUsageFormat } from './status-bar-usage-format'
+import type { UsagePercentageDisplay } from './agent-usage/display/usage-percentage-display'
+import type { StatusBarUsageMode } from './status-bar/status-bar-usage-mode'
+import type { StatusBarUsageFormat } from './status-bar/status-bar-usage-format'
 import type { PersistedTrustedOrcaHooks } from './orca-yaml-hook-types'
 import type { CustomPet } from './pet-types'
 import type {

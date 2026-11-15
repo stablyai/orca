@@ -1,4 +1,4 @@
-import type { AntigravityChatAuthConfig } from '../../../shared/antigravity-chat-auth-config'
+import type { AntigravityChatAuthConfig } from '../../../shared/agent-accounts/antigravity/antigravity-chat-auth-config'
 import { chmod, mkdir } from 'node:fs/promises'
 import { join } from 'node:path'
 import {
