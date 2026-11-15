@@ -233,7 +233,6 @@ const CROSS_VERSION_WIRE_PREFIXES = [
   'src/shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle.test.ts',
   'src/shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle.ts',
   'src/shared/agent-session/lifecycle/resume/agent-session-resume-marker.ts',
-  'src/shared/agent-session/failures/agent-session-wire-refusals.test.ts',
   'src/shared/agent-session/failures/agent-session-wire-refusals.ts',
   'src/shared/agent-session-mutation-envelope',
   // Cover client sends to release hosts and fingerprints re-derived by host ledger/journal.
