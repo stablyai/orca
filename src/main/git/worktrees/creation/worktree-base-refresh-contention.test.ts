@@ -57,7 +57,7 @@ function installGitFake(fake: GitFake): void {
       }
       throw Object.assign(new Error('not an ancestor'), { code: 1 })
     }
-    if (command === 'update-ref') {
+    if (command === 'fetch') {
       const result = await fake.mutate()
       localMain = 'remote-main'
       return result
@@ -73,7 +73,7 @@ function refresh(repoPath = '/repo') {
 function mutationCalls(): string[][] {
   return gitExecFileAsyncMock.mock.calls
     .map(([args]) => args)
-    .filter((args) => ['merge', 'update-ref', 'reset'].includes(commandOf(args)))
+    .filter((args) => ['merge', 'update-ref', 'fetch', 'reset'].includes(commandOf(args)))
 }
 
 describe('refreshLocalBaseRefForWorktreeCreate lock contention', () => {
@@ -84,10 +84,10 @@ describe('refreshLocalBaseRefForWorktreeCreate lock contention', () => {
   afterEach(() => vi.useRealTimers())
 
   it('does not retry a failure that is not lock contention', async () => {
-    const casMismatch = Object.assign(new Error('Command failed: git update-ref'), {
-      stderr: "fatal: cannot lock ref 'refs/heads/main': is at other-oid but expected old-main"
+    const failure = Object.assign(new Error('Command failed: git fetch'), {
+      stderr: 'fatal: bad object refs/remotes/origin/main'
     })
-    installGitFake({ mutate: () => Promise.reject(casMismatch) })
+    installGitFake({ mutate: () => Promise.reject(failure) })
 
     const pending = refresh()
     await vi.runAllTimersAsync()
@@ -95,21 +95,24 @@ describe('refreshLocalBaseRefForWorktreeCreate lock contention', () => {
     await expect(pending).resolves.toMatchObject({ status: 'skipped_error' })
     expect(mutationCalls()).toEqual([
       [
-        'update-ref',
-        '-m',
-        'orca: fast-forward to refs/remotes/origin/main',
-        'refs/heads/main',
-        'remote-main',
-        'old-main'
+        '-c',
+        'gc.auto=0',
+        '-c',
+        'maintenance.auto=false',
+        'fetch',
+        '--no-tags',
+        '--no-recurse-submodules',
+        '.',
+        'refs/remotes/origin/main:refs/heads/main'
       ]
     ])
   })
 
-  it('treats a lost update-ref race as success when someone else moved local to the target', async () => {
-    const casMismatch = Object.assign(new Error('Command failed: git update-ref'), {
-      stderr: "fatal: cannot lock ref 'refs/heads/main': is at remote-main but expected old-main"
+  it('treats a lost race as success when someone else moved local to the target', async () => {
+    const rejected = Object.assign(new Error('Command failed: git fetch'), {
+      stderr: ' ! [rejected]        origin/main -> main  (non-fast-forward)'
     })
-    installGitFake({ mutate: () => Promise.reject(casMismatch), localContainsTarget: () => true })
+    installGitFake({ mutate: () => Promise.reject(rejected), localContainsTarget: () => true })
 
     await expect(refresh()).resolves.toEqual({
       baseRef: 'origin/main',
@@ -144,7 +147,7 @@ describe('refreshLocalBaseRefForWorktreeCreate runs one refresh at a time per br
         if (command === 'worktree') {
           return { stdout: `worktree ${repoPath}\nHEAD ${localOid}\nbranch refs/heads/develop\n` }
         }
-        if (command === 'update-ref') {
+        if (command === 'fetch') {
           resolve()
           await new Promise<void>((release) => {
             finishMove = release

@@ -51,7 +51,7 @@ async function createBehindRepo(lock: 'main-ref' | 'index' = 'main-ref'): Promis
 }
 
 function isWrite(args: readonly string[]): boolean {
-  return args.includes('update-ref') || args.includes('merge')
+  return args.includes('fetch') || args.includes('merge')
 }
 
 /** Counts writes; `onFailure` runs after each failed one, before it is reported. */

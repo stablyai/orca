@@ -1,3 +1,4 @@
+import { readGitCommandFailureText } from '../../git/commands/git-command-failure-text'
 import { retryOnGitLockContention } from '../../git/commands/git-lock-contention'
 import { parseGitRevListAheadBehindCounts } from '../../git/refs/git-rev-list-output'
 import { isShowRefNoMatchError } from '../../git/refs/git-show-ref-no-match'
@@ -23,7 +24,7 @@ type LocalBaseRefRefreshStatus = LocalBaseRefRefreshResult['status']
 export type LocalBaseBranchInspection =
   /** Nothing Orca may move: local matches, does not exist yet (#15331), or a worktree has it checked out. */
   | { status: 'nothing_to_do' }
-  | { status: 'behind'; behind: number; localOid: string; remoteOid: string }
+  | { status: 'behind'; behind: number; remoteOid: string }
   | {
       status: Exclude<LocalBaseRefRefreshStatus, 'updated'>
       shallowHistory?: true
@@ -55,7 +56,7 @@ export async function inspectLocalBaseBranch(
   }
 
   try {
-    if (await isCheckedOut(git, repoPath, fullRef)) {
+    if ((await git.listWorktrees(repoPath)).some((wt) => wt.branch === fullRef)) {
       return { status: 'nothing_to_do' }
     }
   } catch {
@@ -73,14 +74,31 @@ export async function inspectLocalBaseBranch(
     return { status: 'skipped_not_fast_forward' }
   }
   if (counts.status === 'ok' && counts.ahead === 0 && counts.behind > 0) {
-    return { status: 'behind', behind: counts.behind, localOid, remoteOid }
+    return { status: 'behind', behind: counts.behind, remoteOid }
   }
   return (await isHistoryCutByShallowClone(git, repoPath, localOid, remoteOid))
     ? { status: 'skipped_not_fast_forward', shallowHistory: true }
     : { status: 'skipped_not_fast_forward' }
 }
 
-/** Fast-forward a branch no worktree has checked out with a compare-and-swap update-ref, never touching a working tree or index. Never rejects. */
+// Git refuses, in the process that writes, to move a branch any worktree has checked out (or is
+// rebasing/bisecting, Git 2.38+) or to move it other than forward. gc.auto/maintenance.auto keep the
+// fetch from starting housekeeping; the objects are already local, so nothing is transferred.
+function localFastForwardArgs(remoteTrackingRef: string, fullRef: string): string[] {
+  return [
+    '-c',
+    'gc.auto=0',
+    '-c',
+    'maintenance.auto=false',
+    'fetch',
+    '--no-tags',
+    '--no-recurse-submodules',
+    '.',
+    `${remoteTrackingRef}:${fullRef}`
+  ]
+}
+
+/** Fast-forward a branch no worktree has checked out, never touching a working tree or index. Never rejects. */
 export async function fastForwardLocalBaseBranch(
   git: LocalBaseBranchGit,
   refs: LocalBaseBranchRefs
@@ -90,31 +108,23 @@ export async function fastForwardLocalBaseBranch(
     return inspection
   }
   const { repoPath, fullRef, remoteTrackingRef } = refs
-  const { localOid, remoteOid } = inspection
   try {
-    const moved = await retryOnGitLockContention(async () => {
-      // A checkout made since the inspection owns the branch now; update-ref would strand its files.
-      if (await isCheckedOut(git, repoPath, fullRef)) {
-        return false
-      }
-      await git.exec(
-        [
-          'update-ref',
-          '-m',
-          `orca: fast-forward to ${remoteTrackingRef}`,
-          fullRef,
-          remoteOid,
-          localOid
-        ],
-        repoPath
-      )
-      return true
-    })
-    return moved ? { status: 'updated' } : { status: 'nothing_to_do' }
-  } catch {
+    await retryOnGitLockContention(() =>
+      git.exec(localFastForwardArgs(remoteTrackingRef, fullRef), repoPath)
+    )
+    return { status: 'updated' }
+  } catch (error) {
+    const text = readGitCommandFailureText(error)
+    // A checkout made since the inspection owns the branch now.
+    if (/refusing to fetch into (current )?branch/i.test(text)) {
+      return { status: 'nothing_to_do' }
+    }
     // A concurrent pull/Orca update may already have moved local.
-    return (await localContains(git, repoPath, fullRef, remoteOid))
-      ? { status: 'updated' }
+    if (await localContains(git, repoPath, fullRef, inspection.remoteOid)) {
+      return { status: 'updated' }
+    }
+    return /non-fast-forward/i.test(text)
+      ? { status: 'skipped_not_fast_forward' }
       : { status: 'skipped_error' }
   }
 }
@@ -133,14 +143,6 @@ export function toLocalBaseRefRefreshResult(
     ...(outcome.ownerWorktreePath ? { ownerWorktreePath: outcome.ownerWorktreePath } : {}),
     ...('shallowHistory' in outcome && outcome.shallowHistory ? { shallowHistory: true } : {})
   }
-}
-
-async function isCheckedOut(
-  git: LocalBaseBranchGit,
-  repoPath: string,
-  fullRef: string
-): Promise<boolean> {
-  return (await git.listWorktrees(repoPath)).some((wt) => wt.branch === fullRef)
 }
 
 async function revParseCommit(
