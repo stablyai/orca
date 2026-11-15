@@ -130,10 +130,14 @@ export async function claudeTookAnswer(
   if (!left) {
     return { taken: false, record: null }
   }
-  const record = await deps.readToolRecord(hold).catch(() => null)
+  // A deny is recorded at once, so only its record proves it; an allow's waits on its tool.
+  const record =
+    answer.decision === 'deny'
+      ? await firstWithin(deps.setTimer, () => deps.readToolRecord(hold))
+      : await deps.readToolRecord(hold).catch(() => null)
   const taken = record
     ? claudeTookHookAnswer(record, answer.decision, answer.message)
-    : !(hold.ranSeen && answer.decision === 'deny')
+    : answer.decision === 'allow'
   return { taken, record }
 }
 
