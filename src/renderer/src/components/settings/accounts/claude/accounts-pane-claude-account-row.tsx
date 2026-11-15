@@ -1,5 +1,5 @@
 import { Loader2, RefreshCw, Trash2 } from 'lucide-react'
-import type { ClaudeRateLimitAccountsState } from '../../../../../../shared/managed-account-types'
+import type { ClaudeRateLimitAccountsState } from '../../../../../../shared/agent-accounts/managed-account-types'
 import { getManagedAccountPrimaryLabel } from '../../../../../../shared/agent-accounts/managed-account-display-names'
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'

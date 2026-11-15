@@ -1,4 +1,4 @@
-import { RenameAccountParams } from '../../../../../shared/rpc-contract/accounts-params'
+import { RenameAccountParams } from '../../../../../shared/rpc-contract/accounts/accounts-params'
 import { defineMethod } from '../../core'
 
 // Separate methods so hosts older than account names answer method_not_found, not a wrong write.

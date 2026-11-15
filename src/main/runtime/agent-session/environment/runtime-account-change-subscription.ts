@@ -1,4 +1,4 @@
-import { hasAppEnvironment } from '../../../../shared/app-environment'
+import { hasAppEnvironment } from '../../../../shared/app-lifecycle/app-environment'
 import { getManagedDataAccountService } from '../../../managed-data-accounts/service'
 import type { AccountsSnapshot, RuntimeAccountServices } from './runtime-account-controller'
 

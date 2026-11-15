@@ -4,8 +4,8 @@ import { translate } from '@/i18n/i18n'
 import type {
   ClaudeRateLimitAccountsState,
   CodexRateLimitAccountsState
-} from '../../../../../shared/managed-account-types'
-import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
+} from '../../../../../shared/agent-accounts/managed-account-types'
+import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import {
   renameClaudeProviderAccount,
   renameCodexProviderAccount
