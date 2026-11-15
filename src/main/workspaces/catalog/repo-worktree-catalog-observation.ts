@@ -22,6 +22,7 @@ export type WorktreeCatalogObservation = {
   readonly outcome: WorktreeCatalogOutcome
   /** Scan start: verification never moves it, so the full-list ceiling cannot slide. */
   readonly startedAt: number
+  readonly completedAt: number
   readonly generation: number
   readonly revision: number
   /** Only runtime-started flights fingerprint first; without one the rows cannot be verified. */

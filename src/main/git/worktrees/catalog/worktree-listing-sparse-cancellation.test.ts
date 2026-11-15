@@ -10,6 +10,7 @@ const { sparseProbe } = vi.hoisted(() => ({
 }))
 
 vi.mock('../sparse-checkout/worktree-sparse-checkout-cache', () => ({
+  retainSparseCheckoutWorkingSet: vi.fn(),
   detectSparseCheckoutCached: sparseProbe
 }))
 vi.mock('./worktree-list-reader', () => ({
