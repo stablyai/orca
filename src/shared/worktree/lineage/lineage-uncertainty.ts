@@ -1,7 +1,7 @@
 import type { WorkspaceLineage } from '../lineage-types'
 import type { PersistedState } from '../../orca-profiles/persisted-state-types'
 import { parseWorkspaceKey } from '../../workspace/identity/workspace-scope'
-import { getRepoExecutionHostId, parseExecutionHostId } from '../../execution-host'
+import { getRepoExecutionHostId, parseExecutionHostId } from '../../execution-host/execution-host'
 import { getRepoIdFromWorktreeId } from '../id'
 
 export const UNKNOWN_LINEAGE_KEY = JSON.stringify([null, null])
@@ -74,8 +74,9 @@ export class LineageUncertaintyKeyIndex {
   private readonly parsed = new Map<string, ReturnType<typeof decodeLineageUncertaintyKey>>()
 
   decode(key: string): ReturnType<typeof decodeLineageUncertaintyKey> {
-    if (this.parsed.has(key)) {
-      return this.parsed.get(key)
+    const cached = this.parsed.get(key)
+    if (cached !== undefined || this.parsed.has(key)) {
+      return cached
     }
     const decoded = decodeLineageUncertaintyKey(key)
     this.parsed.set(key, decoded)

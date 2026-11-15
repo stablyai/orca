@@ -1,5 +1,5 @@
 import { worktreeWorkspaceKey } from '../workspace/identity/workspace-scope'
-import { getRepoExecutionHostId } from '../execution-host'
+import { getRepoExecutionHostId } from '../execution-host/execution-host'
 import {
   decodeLineageUncertaintyKey,
   isLineageUncertaintyMap,
@@ -8,7 +8,7 @@ import {
 import type { Repo } from '../repository/repo-types'
 import type { WorkspacePrSnapshot } from './workspace-pr-check'
 
-type Edge = { parent: string; childInstance?: string | null; parentInstance?: string | null }
+type Edge = { parent: string }
 
 export function possibleWorkspacePrRepositories(
   input: WorkspacePrSnapshot,
@@ -23,16 +23,17 @@ export function possibleWorkspacePrRepositories(
     hasCanonical = false,
     hasCross = false
   const candidateRepos = new Set<string>(),
-    targets: string[] = [],
-    markers = new Set<string>(),
-    neededParents = new Set<string>()
+    markers = new Set<string>()
   const nodeKey = (key: string) => (key.startsWith('worktree:') ? key.slice(9) : key)
   const primaries = new Set(input.primaries.map(nodeKey))
   const state = input.uncertainty
   const markerRows = isLineageUncertaintyMap(state) ? state : {}
-  let collectParents = false
-  for (const _key in markerRows) {
-    collectParents = true
+  for (const _key in input.workspaceLineage) {
+    hasCanonical = true
+    break
+  }
+  for (const _key in input.crossStoreLineage) {
+    hasCross = true
     break
   }
   const admit = () => {
@@ -41,64 +42,6 @@ export function possibleWorkspacePrRepositories(
     }
     incomplete = true
     return false
-  }
-  const relevantProjects = new Map<string, boolean>()
-  const consider = (child: string, unknownHost = false) => {
-    const project = projectOf(child)
-    if (!project) {
-      if (!child.startsWith('folder:')) {
-        incomplete = true
-      }
-      return
-    }
-    let relevant = unknownHost ? undefined : relevantProjects.get(project)
-    if (relevant === undefined) {
-      const owners = repos.get(project)
-      relevant =
-        unknownHost || !owners || owners.some((repo) => getRepoExecutionHostId(repo) === host)
-      if (relevant) {
-        const ids = identities(project)
-        relevant = !ids || [...ids].some((id) => interested.has(id))
-      }
-      if (!unknownHost) {
-        relevantProjects.set(project, relevant)
-      }
-    }
-    if (relevant) {
-      targets.push(child)
-    }
-  }
-  for (const child in input.lineage) {
-    if (!admit()) {
-      break
-    }
-    if (collectParents) {
-      const parent = input.lineage[child]?.parentWorktreeId
-      if (typeof parent === 'string') {
-        neededParents.add(parent)
-      }
-    }
-    consider(child)
-  }
-  for (const child in input.workspaceLineage) {
-    hasCanonical = true
-    if (!admit()) {
-      break
-    }
-    if (collectParents) {
-      const parent = input.workspaceLineage[child]?.parentWorkspaceKey
-      if (typeof parent === 'string') {
-        neededParents.add(nodeKey(parent))
-      }
-    }
-    consider(nodeKey(child))
-  }
-  for (const child in input.crossStoreLineage) {
-    hasCross = true
-    if (!admit()) {
-      break
-    }
-    consider(nodeKey(child))
   }
   if (state !== undefined && !isLineageUncertaintyMap(state)) {
     incomplete = true
@@ -137,9 +80,7 @@ export function possibleWorkspacePrRepositories(
       } else if (!project && !node.startsWith('folder:')) {
         return { candidateRepos, incomplete: true }
       }
-      if (neededParents.has(node)) {
-        markers.add(node)
-      }
+      markers.add(node)
     }
   }
   if (input.folders.length + input.repos.length > 200) {
@@ -158,10 +99,13 @@ export function possibleWorkspacePrRepositories(
   const meta = (key: string) => (key.startsWith('folder:') ? undefined : input.metadata(key, host))
   const parentInstances = new Map<string, string | undefined>()
   const parentInstanceOf = (key: string) => {
-    if (!parentInstances.has(key)) {
-      parentInstances.set(key, meta(key)?.instanceId)
+    const cached = parentInstances.get(key)
+    if (cached !== undefined || parentInstances.has(key)) {
+      return cached
     }
-    return parentInstances.get(key)
+    const instance = meta(key)?.instanceId
+    parentInstances.set(key, instance)
+    return instance
   }
   const edgeOf = (key: string): Edge | boolean | undefined => {
     const canonicalKey =
@@ -189,37 +133,29 @@ export function possibleWorkspacePrRepositories(
     ) {
       return true
     }
-    const edge: Edge = row
-      ? {
-          parent: nodeKey(row.parentWorkspaceKey),
-          childInstance: row.childInstanceId,
-          parentInstance: row.parentInstanceId
-        }
-      : {
-          parent: raw!.parentWorktreeId,
-          childInstance: raw!.worktreeInstanceId,
-          parentInstance: raw!.parentWorktreeInstanceId
-        }
+    const parent = row ? nodeKey(row.parentWorkspaceKey) : raw!.parentWorktreeId
+    const childInstance = row ? row.childInstanceId : raw!.worktreeInstanceId
+    const parentInstance = row ? row.parentInstanceId : raw!.parentWorktreeInstanceId
     const cm = meta(key)
-    if (!cm || !edge.childInstance || cm.instanceId !== edge.childInstance) {
+    if (!cm || !childInstance || cm.instanceId !== childInstance) {
       return true
     }
-    if (edge.parent.startsWith('folder:')) {
-      const folder = folders.get(edge.parent)
+    if (parent.startsWith('folder:')) {
+      const folder = folders.get(parent)
       if (
         !folder ||
         folder.isArchived ||
-        !edge.parentInstance ||
-        edge.parentInstance !== folder.id ||
+        !parentInstance ||
+        parentInstance !== folder.id ||
         (input.folderHost && input.folderHost(folder) !== host)
       ) {
         return true
       }
-    } else if (!edge.parentInstance || parentInstanceOf(edge.parent) !== edge.parentInstance) {
+    } else if (!parentInstance || parentInstanceOf(parent) !== parentInstance) {
       return true
     }
-    const knownParent = memo.get(edge.parent)
-    return typeof knownParent === 'boolean' ? knownParent : edge
+    const knownParent = memo.get(parent)
+    return typeof knownParent === 'boolean' ? knownParent : { parent }
   }
   // Memoized parent walks inspect only ancestors that could affect the reported repositories.
   const possible = (child: string): boolean => {
@@ -263,12 +199,29 @@ export function possibleWorkspacePrRepositories(
     }
     return answer
   }
-  for (const child of targets) {
-    if (!possible(child)) {
-      continue
-    }
+  const relevantProjects = new Map<string, boolean>()
+  const consider = (child: string) => {
     const project = projectOf(child)
-    const ids = project ? identities(project) : undefined
+    if (!project) {
+      if (!child.startsWith('folder:')) {
+        incomplete = true
+      }
+      return
+    }
+    let relevant = relevantProjects.get(project)
+    if (relevant === undefined) {
+      const owners = repos.get(project)
+      relevant = !owners || owners.some((repo) => getRepoExecutionHostId(repo) === host)
+      if (relevant) {
+        const ids = identities(project)
+        relevant = !ids || [...ids].some((id) => interested.has(id))
+      }
+      relevantProjects.set(project, relevant)
+    }
+    if (!relevant || !possible(child)) {
+      return
+    }
+    const ids = identities(project)
     if (!ids) {
       incomplete = true
     }
@@ -277,8 +230,16 @@ export function possibleWorkspacePrRepositories(
         candidateRepos.add(key)
       }
     }
-    if (candidateRepos.size === interested.size) {
-      break
+  }
+  for (const rows of [input.lineage, input.workspaceLineage, input.crossStoreLineage]) {
+    for (const child in rows) {
+      if (!admit()) {
+        return { candidateRepos, incomplete }
+      }
+      consider(rows === input.lineage ? child : nodeKey(child))
+      if (candidateRepos.size === interested.size) {
+        return { candidateRepos, incomplete }
+      }
     }
   }
   return { candidateRepos, incomplete }

@@ -4,7 +4,7 @@ import type { WorktreeMeta } from '../worktree/meta-types'
 import type { WorkspaceLineage, WorktreeLineage } from '../worktree/lineage-types'
 import type { FolderWorkspace } from '../folder-workspaces/folder-workspace-types'
 import type { decodeLineageUncertaintyKey } from '../worktree/lineage/lineage-uncertainty'
-import { getRepoExecutionHostId } from '../execution-host'
+import { getRepoExecutionHostId } from '../execution-host/execution-host'
 import { getRepoIdFromWorktreeId } from '../worktree/id'
 import {
   specNamesPr,
@@ -98,7 +98,8 @@ export function checkWorkspacePullRequests(
     const projectIdentities = identities(id)
     for (const key of projectIdentities ?? []) {
       hostRepos.add(key)
-      hosts.add(key.split('/')[0]!)
+      const slash = key.indexOf('/')
+      hosts.add(slash === -1 ? key : key.slice(0, slash))
     }
   }
   const projectOf = (workspace: string): string | undefined => {

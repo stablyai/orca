@@ -34,41 +34,70 @@ export function boundedUtf8(text: string, budget: number): { text: string; trunc
   return { text: '', truncated: true }
 }
 
+// Report scanning and spec matching share these boundaries so neither side accepts a token the other rejects.
+const URL_TOKEN = String.raw`https?:\/\/[^\s<>"\x60()[\]{}]+`
+const BEFORE_SHORT = String.raw`(?<![\p{L}\p{N}_/.#-])`
+const AFTER_NUMBER = String.raw`(?![\p{L}\p{N}_-]|\.[\p{L}\p{N}])`
+const URL_TOKEN_AT = new RegExp(URL_TOKEN, 'iy')
+const URL_TOKEN_TAIL = new RegExp(`${URL_TOKEN}$`, 'i')
+const SHORT_TAIL = new RegExp(
+  `${BEFORE_SHORT}([A-Za-z0-9][A-Za-z0-9-]*)\\/([A-Za-z0-9_.-]+)#$`,
+  'u'
+)
+const BARE_TAIL = new RegExp(`${BEFORE_SHORT}#$`, 'u')
+const REPORT_TOKENS = new RegExp(
+  `${URL_TOKEN}|${BEFORE_SHORT}([A-Za-z0-9][A-Za-z0-9-]*)\\/([A-Za-z0-9_.-]+)#([0-9]+)${AFTER_NUMBER}|${BEFORE_SHORT}#([0-9]+)${AFTER_NUMBER}`,
+  'giu'
+)
+
+function urlRefAt(text: string, index: number, token: string): PullRequestRef | undefined {
+  if (index > 0 && !/[\s([{<"'\x60>|*,;:]/.test(text[index - 1]!)) {
+    return undefined
+  }
+  if (/[([{]/.test(text[index + token.length] ?? '')) {
+    return undefined
+  }
+  try {
+    const url = new URL(token.replace(/[.,;:'!?*]+$/, ''))
+    const path = /^\/([A-Za-z0-9_.-]+)\/([A-Za-z0-9_.-]+)\/pull\/([0-9]+)(?:\/|$)/.exec(
+      url.pathname
+    )
+    const number = Number(path?.[3])
+    if (path && Number.isSafeInteger(number) && number > 0) {
+      return {
+        forgeHost: url.hostname.toLowerCase(),
+        owner: path[1]!.toLowerCase(),
+        repo: path[2]!.toLowerCase().replace(/\.git$/, ''),
+        number
+      }
+    }
+  } catch {
+    /* Invalid URLs cannot establish a PR identity. */
+  }
+  return undefined
+}
+
 export function* scanPrRefs(
   text: string,
   defaultHost: string | undefined,
   hosts: ReadonlySet<string>
 ): Generator<PullRequestRef | number | 'unknown-host'> {
-  const tokens =
-    /https?:\/\/[^\s<>"`]+|(?<![\w/.#-])([A-Za-z0-9][A-Za-z0-9-]*)\/([A-Za-z0-9_.-]+)#([0-9]+)(?![\w])|(?<![\w/.#-])#([0-9]+)(?![\w])/g
   const seenTokens = new Set<string>()
   let lastToken: string | undefined
-  for (const match of text.matchAll(tokens)) {
+  for (const match of text.matchAll(REPORT_TOKENS)) {
+    const isUrl = match[3] === undefined && match[4] === undefined
+    const url = isUrl ? urlRefAt(text, match.index, match[0]) : undefined
+    if (isUrl && !url) {
+      continue
+    }
     if (lastToken === match[0] || seenTokens.has(match[0])) {
       continue
     }
     lastToken = match[0]
     seenTokens.add(match[0])
-    if (match[0].startsWith('http')) {
-      try {
-        const url = new URL(match[0].replace(/[),.;]+$/, ''))
-        const path = /^\/([A-Za-z0-9_.-]+)\/([A-Za-z0-9_.-]+)\/pull\/([0-9]+)(?:\/|$)/.exec(
-          url.pathname
-        )
-        if (!path || !hosts.has(url.hostname.toLowerCase())) {
-          continue
-        }
-        const number = Number(path[3])
-        if (Number.isSafeInteger(number) && number > 0) {
-          yield {
-            forgeHost: url.hostname.toLowerCase(),
-            owner: path[1]!.toLowerCase(),
-            repo: path[2]!.toLowerCase().replace(/\.git$/, ''),
-            number
-          }
-        }
-      } catch {
-        /* Invalid URLs cannot establish a PR identity. */
+    if (url) {
+      if (hosts.has(url.forgeHost)) {
+        yield url
       }
     } else {
       const number = Number(match[3] ?? match[4])
@@ -97,7 +126,7 @@ export function specNamesPr(
   defaultHost: string | undefined,
   scope: { hostRepos: ReadonlySet<string>; primaryRepos: ReadonlySet<string> }
 ): boolean | 'unknown' {
-  const hits = new RegExp(`(?:#|/pull/)0*${ref.number}(?![\\w])`, 'g')
+  const hits = new RegExp(`(?:#|/pull/)0*${ref.number}${AFTER_NUMBER}`, 'gu')
   let unknown = false
   for (const hit of text.matchAll(hits)) {
     const end = hit.index + hit[0].length - String(ref.number).length
@@ -107,40 +136,39 @@ export function specNamesPr(
       unknown = true
       continue
     }
-    const url = /https?:\/\/([^/\s<>"`]+)\/([A-Za-z0-9_.-]+)\/([A-Za-z0-9_.-]+)\/pull\/$/i.exec(
-      before
-    )
+    const url = URL_TOKEN_TAIL.exec(before)
     if (url) {
       if (start > 0 && url.index === 0) {
         unknown = true
         continue
       }
-      if (
-        `${new URL(url[0]).hostname.toLowerCase()}/${url[2]!.toLowerCase()}/${url[3]!.toLowerCase().replace(/\.git$/, '')}` ===
-        repoKey(ref)
-      ) {
+      const position = start + url.index
+      URL_TOKEN_AT.lastIndex = position
+      const parsed = urlRefAt(text, position, URL_TOKEN_AT.exec(text)![0])
+      if (parsed && parsed.number === ref.number && repoKey(parsed) === repoKey(ref)) {
         return true
       }
       continue
     }
-    if (/https?:\/\/[^\s<>"`]*$/i.test(before)) {
-      continue
-    }
-    const short = /(?<![\w/.#-])([A-Za-z0-9][A-Za-z0-9-]*)\/([A-Za-z0-9_.-]+)#$/i.exec(before)
+    const short = SHORT_TAIL.exec(before)
     if (short) {
       if (start > 0 && short.index === 0) {
         unknown = true
         continue
       }
       if (
-        `${defaultHost}/${short[1]!.toLowerCase()}/${short[2]!.toLowerCase().replace(/\.git$/, '')}` ===
-        repoKey(ref)
+        short[1]!.toLowerCase() === ref.owner &&
+        short[2]!.toLowerCase().replace(/\.git$/, '') === ref.repo
       ) {
-        return true
+        if (!defaultHost) {
+          unknown = true
+        } else if (defaultHost === ref.forgeHost) {
+          return true
+        }
       }
       continue
     }
-    if (/(?<![\w/.#-])#$/.test(before) && bareSpecRefMatches(ref.number, ref, scope)) {
+    if (BARE_TAIL.test(before) && bareSpecRefMatches(ref.number, ref, scope)) {
       return true
     }
   }
