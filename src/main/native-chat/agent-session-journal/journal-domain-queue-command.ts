@@ -85,6 +85,13 @@ export function applyJournalDomainQueueCommand(
   }
   const cursor = { epoch: target.epoch, sequence: Number(head.last_sequence) }
   const current = (messageId: string) => journalDomainQueueRow(db, target, messageId)
+  const nextPosition = () => {
+    const last = db
+      .prepare(`SELECT MAX(position) AS position FROM journal_queue_cards
+        WHERE session_id=? AND epoch=?`)
+      .get(target.sessionId, target.epoch)
+    return Math.max(0, Number(last?.position ?? 0)) + 1
+  }
   const claim = (
     body: AgentJournalMessageItem,
     required: boolean,
@@ -114,14 +121,10 @@ export function applyJournalDomainQueueCommand(
         break
       }
       referencedUploads = claim(input.body, input.requireAttachments === true)
-      const last = db
-        .prepare(`SELECT MAX(position) AS position FROM journal_queue_cards
-          WHERE session_id=? AND epoch=?`)
-        .get(target.sessionId, target.epoch)
       const options = readAgentSessionExecutionOptions(input.options)
       const card: QueuedMessageRow = {
         messageId: input.messageId,
-        position: Math.max(0, Number(last?.position ?? 0)) + 1,
+        position: nextPosition(),
         body: input.body,
         fingerprint: agentSessionSendBodyFingerprint(target.sessionId, input.body),
         state: 'waiting',
@@ -166,15 +169,11 @@ export function applyJournalDomainQueueCommand(
       const prior = current(operation.messageId)
       if (prior && isUnsettledQueuedMessage(prior.card)) {
         if (prior.card.state !== 'waiting' || prior.card.deliveryMode !== 'steer') {
-          const last = db
-            .prepare(`SELECT MAX(position) AS position FROM journal_queue_cards
-              WHERE session_id=? AND epoch=?`)
-            .get(target.sessionId, target.epoch)
           // Promotion joins accepted steers at the tail, regardless of the draft's age.
           placements = [
             {
               messageId: operation.messageId,
-              position: Math.max(0, Number(last?.position ?? 0)) + 1
+              position: nextPosition()
             }
           ]
         }
