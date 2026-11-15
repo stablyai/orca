@@ -22302,6 +22302,8 @@
       "tabCloseAll": "關閉所有編輯器分頁",
       "tabRename": "重新命名目前分頁",
       "tabReopenClosed": "重新開啟已關閉的分頁",
+      "tabMoveLeft": "將使用中的分頁左移",
+      "tabMoveRight": "將使用中的分頁右移",
       "tabNextSameType": "下一個分頁（同類型）",
       "tabPreviousSameType": "上一個分頁（同類型）",
       "tabNextAllTypes": "下一個分頁（所有類型）",

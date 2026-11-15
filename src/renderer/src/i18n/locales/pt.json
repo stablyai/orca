@@ -23567,6 +23567,8 @@
       "tabCloseAll": "Fechar todas as abas do editor",
       "tabRename": "Renomear aba ativa",
       "tabReopenClosed": "Reabrir aba fechada",
+      "tabMoveLeft": "Mover aba ativa para a esquerda",
+      "tabMoveRight": "Mover aba ativa para a direita",
       "tabNextSameType": "Próxima aba (mesmo tipo)",
       "tabPreviousSameType": "Aba anterior (mesmo tipo)",
       "tabNextAllTypes": "Próxima aba (todos os tipos)",
