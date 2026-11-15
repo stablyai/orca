@@ -27,8 +27,14 @@ export function importJournalDomainProfile(
     )
   }
   copyChatCatalog(source, destination)
-  for (const { name, columns } of JOURNAL_DOMAIN_PROFILE_TABLES) {
-    copyProfileTable(source, destination, name, columns)
+  // The copy keeps rows as the original saved them, even a receipt whose chat record is gone.
+  destination.pragma('foreign_keys = OFF')
+  try {
+    for (const { name, columns } of JOURNAL_DOMAIN_PROFILE_TABLES) {
+      copyProfileTable(source, destination, name, columns)
+    }
+  } finally {
+    destination.pragma('foreign_keys = ON')
   }
   if (source.prepare("SELECT 1 FROM sqlite_schema WHERE name='sqlite_sequence'").get()) {
     const highWater = source

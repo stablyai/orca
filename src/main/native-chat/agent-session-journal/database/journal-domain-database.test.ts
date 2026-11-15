@@ -192,6 +192,22 @@ it('copies tables whose rowid is an INTEGER PRIMARY KEY alongside tables without
   ])
 })
 
+it('copies the original rows as saved when a receipt outlived its chat record', async () => {
+  const stateDirectory = directory()
+  const source = legacy(stateDirectory)
+  seedSource(source)
+  source.pragma('foreign_keys=OFF')
+  source.exec(`INSERT INTO agent_session_command_receipts VALUES('orphan','deleted-chat','caller',
+    'send','fingerprint','accepted','{"kind":"stop"}',NULL,100)`)
+  const current = open(await initializeJournalDomainDatabase(stateDirectory))
+  expect(
+    current.prepare('SELECT operation_id FROM agent_session_command_receipts ORDER BY rowid').all()
+  ).toEqual([{ operation_id: 'operation' }, { operation_id: 'orphan' }])
+  expect(current.prepare('SELECT session_id FROM agent_session_records').all()).toEqual([
+    { session_id: 'chat' }
+  ])
+})
+
 it('never reimports metadata or consults a broken original once the new file is published', async () => {
   const stateDirectory = directory()
   const source = legacy(stateDirectory)
