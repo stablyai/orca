@@ -15,7 +15,7 @@ import { restoreEveryCookieIdentity } from './browser-cookie-identity-restore'
 import { normalizeCookiePartitionSite } from './sources/browser-cookie-source-partition'
 import { cdpCookiesFromCommand, type CdpCookie } from './browser-cdp-cookie'
 
-function cdpSameSite(sameSite: Cookie['sameSite']): 'Strict' | 'Lax' | 'None' | undefined {
+export function cdpSameSite(sameSite: Cookie['sameSite']): 'Strict' | 'Lax' | 'None' | undefined {
   if (sameSite === 'strict') {
     return 'Strict'
   }

@@ -14,7 +14,7 @@ import {
   restoreBrowserSessionCookies
 } from '../cookies/session-restore/browser-session-cookie-restore'
 import { awaitBrowserSessionProxies } from './proxy/browser-session-proxy'
-import { withTimeout } from '../../../shared/promise-timeout-fallback'
+import { withTimeout } from '../../../shared/concurrency/promise-timeout-fallback'
 import { listenForBrowserPasskeyRequests } from '../webauthn/browser-passkey-requests'
 import { listenForBrowserSystemDialogs } from '../guest-lifecycle/prompts/browser-system-dialogs'
 

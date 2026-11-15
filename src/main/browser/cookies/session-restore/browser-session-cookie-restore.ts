@@ -5,16 +5,22 @@
  */
 import { app, session, type Cookie, type Session } from 'electron'
 import { join } from 'node:path'
-import type { BrowserSessionProfile } from '../../../../shared/browser-workspace-types'
+import type { BrowserSessionProfile } from '../../../../shared/browser/workspaces/browser-workspace-types'
 import type { CdpCookie } from '../browser-cdp-cookie'
-import {
-  cdpCookieScopeKey,
-  cookieScopeKey,
-  openCookieClearStore
-} from '../browser-cookie-clear-store'
+import { cdpCookieScopeKey, openCookieClearStore } from '../browser-cookie-clear-store'
 import { mergeCdpCookiesIntoSession } from '../browser-partition-cookie-copy'
+import { restoreUnpartitionedCookies } from './browser-session-cookie-unpartitioned-restore'
 import { withCookieMutationLock } from '../mutation/cookie-mutation-lock'
-import { mapWithConcurrency } from '../../../../shared/map-with-concurrency'
+import { mapWithConcurrency } from '../../../../shared/concurrency/map-with-concurrency'
+import { PrioritySemaphore } from '../../../../shared/concurrency/priority-semaphore'
+import {
+  groupByScope,
+  liveCookieScopeKey,
+  noteScopeChange,
+  sameSavedCookies,
+  savedCookiesAfterChanges,
+  type ScopeChange
+} from './browser-session-cookie-scopes'
 import {
   readSessionCookieSnapshot,
   removeSessionCookieSnapshot,
@@ -22,9 +28,11 @@ import {
 } from './browser-session-cookie-snapshot-file'
 
 const SNAPSHOT_DIRECTORY = 'browser-session-cookies'
-// Chromium commits its own cookie store this often; each save opens a hidden CDP target.
+// Chromium commits its own cookie store this often.
 const SAVE_DELAY_MS = 30_000
-const RESTORE_CONCURRENCY = 2
+// Each CDP read or partitioned restore opens a hidden renderer; managed profiles are unbounded in number.
+const HELPER_TARGET_CONCURRENCY = 2
+const helperTargetSlots = new PrioritySemaphore(HELPER_TARGET_CONCURRENCY)
 
 type SessionCookieTracker = {
   target: Session
@@ -32,9 +40,9 @@ type SessionCookieTracker = {
   /** What the file holds now, by scope. */
   saved: Map<string, CdpCookie[]>
   /** Scopes whose cookies changed since `saved` was read. */
-  changedScopes: Set<string>
+  changedScopes: Map<string, ScopeChange>
   /** Set while a save reads: scopes that changed meanwhile, which the read may have missed. */
-  changedDuringSave: Set<string> | null
+  changedDuringSave: Map<string, ScopeChange> | null
   timer: ReturnType<typeof setTimeout> | null
   onChanged: (event: Electron.Event, cookie: Cookie, cause: string, removed: boolean) => void
 }
@@ -56,35 +64,6 @@ function snapshotPath(profileId: string): string {
   )
 }
 
-function liveCookieScopeKey(cookie: Cookie): string | null {
-  return cookieScopeKey(
-    cookie.name,
-    cookie.domain,
-    cookie.path,
-    cookie.hostOnly ?? !cookie.domain?.startsWith('.')
-  )
-}
-
-function groupByScope<T>(
-  cookies: readonly T[],
-  scopeKey: (cookie: T) => string | null
-): Map<string, T[]> {
-  const groups = new Map<string, T[]>()
-  for (const cookie of cookies) {
-    const key = scopeKey(cookie)
-    if (!key) {
-      continue
-    }
-    const group = groups.get(key)
-    if (group) {
-      group.push(cookie)
-    } else {
-      groups.set(key, [cookie])
-    }
-  }
-  return groups
-}
-
 /** Puts back each profile's saved session cookies; tracking starts first so no change is missed. */
 export async function restoreBrowserSessionCookies(
   profiles: readonly BrowserSessionProfile[]
@@ -94,19 +73,52 @@ export async function restoreBrowserSessionCookies(
       const filePath = snapshotPath(profile.id)
       const target = session.fromPartition(profile.partition)
       const saved = await readSessionCookieSnapshot(filePath)
-      track(filePath, target, saved)
-      return { profile, target, saved }
+      return { profile, target, saved, tracker: track(filePath, target, saved) }
     })
   )
-  // Each restore opens a hidden CDP target; managed profiles are unbounded in number.
-  const pending = restores.filter(({ saved }) => saved.length > 0)
-  await mapWithConcurrency(pending, RESTORE_CONCURRENCY, async ({ profile, target, saved }) => {
-    try {
-      await mergeCdpCookiesIntoSession(saved, target, { sameJar: true })
-    } catch (error) {
-      console.warn('[browser-session-cookies] Restore failed for profile', profile.id, error)
+  const leftovers = await Promise.all(
+    restores
+      .filter(({ saved }) => saved.length > 0)
+      .map(async (restore) => {
+        try {
+          return {
+            ...restore,
+            saved: await restoreUnpartitionedCookies(restore.target, restore.saved)
+          }
+        } catch (error) {
+          console.warn(
+            '[browser-session-cookies] Restore failed for profile',
+            restore.profile.id,
+            error
+          )
+          return restore
+        }
+      })
+  )
+  await mapWithConcurrency(
+    leftovers.filter(({ saved }) => saved.length > 0),
+    HELPER_TARGET_CONCURRENCY,
+    async ({ profile, target, saved, tracker }) => {
+      let allWritten = false
+      try {
+        allWritten =
+          (await mergeCdpCookiesIntoSession(saved, target, { sameJar: true })).copied ===
+          saved.length
+      } catch (error) {
+        console.warn('[browser-session-cookies] Restore failed for profile', profile.id, error)
+      }
+      if (allWritten) {
+        return
+      }
+      // The jar may hold another cookie there, so only a CDP read can tell what a later change is.
+      for (const cookie of saved) {
+        const key = cdpCookieScopeKey(cookie)
+        if (key) {
+          noteScopeChange(tracker.changedScopes, key, 'other')
+        }
+      }
     }
-  })
+  )
 }
 
 /** For a profile created after launch: nothing to restore yet. */
@@ -114,15 +126,16 @@ export function trackBrowserSessionCookies(profile: BrowserSessionProfile): void
   track(snapshotPath(profile.id), session.fromPartition(profile.partition), [])
 }
 
-function track(filePath: string, target: Session, saved: CdpCookie[]): void {
-  if (trackers.has(filePath)) {
-    return
+function track(filePath: string, target: Session, saved: CdpCookie[]): SessionCookieTracker {
+  const existing = trackers.get(filePath)
+  if (existing) {
+    return existing
   }
   const tracker: SessionCookieTracker = {
     target,
     filePath,
     saved: groupByScope(saved, cdpCookieScopeKey),
-    changedScopes: new Set(),
+    changedScopes: new Map(),
     changedDuringSave: null,
     timer: null,
     onChanged: (_event, cookie, cause, removed) => {
@@ -139,21 +152,23 @@ function track(filePath: string, target: Session, saved: CdpCookie[]): void {
       if (!key) {
         return
       }
-      const savedInScope = tracker.saved.get(key) ?? []
-      // Restoring writes back exactly what the file holds; that is not a change.
-      const matchesSaved =
-        !removed && cookie.session && savedInScope.some((saved) => saved.value === cookie.value)
       // A saved cookie replaced by an expiring one must leave the file too.
-      if (matchesSaved || (!cookie.session && savedInScope.length === 0)) {
+      if (!cookie.session && !tracker.saved.has(key)) {
         return
       }
-      tracker.changedScopes.add(key)
-      tracker.changedDuringSave?.add(key)
+      // Even an insert matching the file counts: it may be a partitioned twin, which this event can't
+      // show. A removal or an expiring cookie can hide a partition change, so only CDP can tell.
+      const change: ScopeChange = removed || !cookie.session ? 'other' : 'value'
+      noteScopeChange(tracker.changedScopes, key, change)
+      if (tracker.changedDuringSave) {
+        noteScopeChange(tracker.changedDuringSave, key, change)
+      }
       scheduleSave(tracker)
     }
   }
   trackers.set(filePath, tracker)
   target.cookies.on('changed', tracker.onChanged)
+  return tracker
 }
 
 function scheduleSave(tracker: SessionCookieTracker): void {
@@ -171,21 +186,10 @@ function cancelPendingSave(tracker: SessionCookieTracker): void {
 
 async function saveSessionCookies(tracker: SessionCookieTracker): Promise<void> {
   tracker.timer = null
-  const changedDuringSave = new Set<string>()
+  const changedDuringSave = new Map<string, ScopeChange>()
   tracker.changedDuringSave = changedDuringSave
   try {
-    const cookies = await withCookieMutationLock(tracker.target, async () => {
-      // A save still queued behind an import when quit starts must not open a CDP target.
-      if (quitting) {
-        return null
-      }
-      const store = openCookieClearStore(tracker.target)
-      try {
-        return (await store.readAllCdpCookies()).filter((cookie) => cookie.session === true)
-      } finally {
-        store.dispose()
-      }
-    })
+    const cookies = await readSessionCookies(tracker)
     // After quit or deletion the file belongs to the quit prune or is gone.
     if (cookies && !quitting && trackers.get(tracker.filePath) === tracker) {
       const saved = groupByScope(cookies, cdpCookieScopeKey)
@@ -201,15 +205,49 @@ async function saveSessionCookies(tracker: SessionCookieTracker): Promise<void> 
   } finally {
     tracker.changedDuringSave = null
   }
-  if (tracker.changedScopes.size > 0) {
+  // A deleted profile's or a quitting app's leftover changes must not reopen a CDP target every 30 s.
+  if (tracker.changedScopes.size > 0 && !quitting && trackers.get(tracker.filePath) === tracker) {
     scheduleSave(tracker)
+  }
+}
+
+/** Sites that rotate a session cookie's value need no CDP read; anything else does, a few at a time. */
+async function readSessionCookies(tracker: SessionCookieTracker): Promise<CdpCookie[] | null> {
+  const updated = await withCookieMutationLock(tracker.target, async () =>
+    savedCookiesAfterChanges(
+      tracker.saved,
+      tracker.changedScopes,
+      await tracker.target.cookies.get({ session: true })
+    )
+  )
+  if (updated.certain) {
+    return updated.cookies
+  }
+  // Why the slot before the lock: a queued save must not hold its profile's imports and clears.
+  const release = await helperTargetSlots.acquire(0)
+  try {
+    return await withCookieMutationLock(tracker.target, async () => {
+      // A save still queued behind an import when quit starts must not open a CDP target.
+      if (quitting) {
+        return null
+      }
+      const store = openCookieClearStore(tracker.target)
+      try {
+        return (await store.readAllCdpCookies()).filter((cookie) => cookie.session === true)
+      } finally {
+        store.dispose()
+      }
+    })
+  } finally {
+    release()
   }
 }
 
 /**
  * Final save on quit, without a CDP target (not safe this late). Unchanged scopes keep what was
- * saved. A changed scope keeps its one unpartitioned cookie with the live value; anything else
- * there is dropped, so a sign-out sticks and a cookie is never restored into the wrong partition.
+ * saved. A changed scope keeps its one cookie with the live value when only that cookie was set
+ * again; anything else there is dropped, so a sign-out sticks and a cookie is never restored
+ * into the wrong partition.
  */
 export async function flushBrowserSessionCookiesOnQuit(): Promise<void> {
   quitting = true
@@ -223,41 +261,12 @@ export async function flushBrowserSessionCookiesOnQuit(): Promise<void> {
         const live = await tracker.target.cookies.get({ session: true })
         await writeSessionCookieSnapshot(
           tracker.filePath,
-          savedCookiesAfterChanges(tracker.saved, tracker.changedScopes, live)
+          savedCookiesAfterChanges(tracker.saved, tracker.changedScopes, live).cookies
         )
       } catch (error) {
         console.warn('[browser-session-cookies] Final save failed:', error)
       }
     })
-  )
-}
-
-function savedCookiesAfterChanges(
-  saved: ReadonlyMap<string, CdpCookie[]>,
-  changedScopes: ReadonlySet<string>,
-  live: readonly Cookie[]
-): CdpCookie[] {
-  const liveByScope = groupByScope(live, liveCookieScopeKey)
-  return [...saved].flatMap(([key, savedInScope]) => {
-    if (!changedScopes.has(key)) {
-      return savedInScope
-    }
-    // Electron's cookie list has no partition keys, so only a one-to-one match is certain.
-    const liveInScope = liveByScope.get(key) ?? []
-    const [cookie] = savedInScope
-    return savedInScope.length === 1 && !cookie.partitionKey && liveInScope.length === 1
-      ? [{ ...cookie, value: liveInScope[0].value }]
-      : []
-  })
-}
-
-function sameSavedCookies(
-  a: ReadonlyMap<string, CdpCookie[]>,
-  b: ReadonlyMap<string, CdpCookie[]>
-): boolean {
-  return (
-    a.size === b.size &&
-    [...a].every(([key, cookies]) => JSON.stringify(cookies) === JSON.stringify(b.get(key)))
   )
 }
 
